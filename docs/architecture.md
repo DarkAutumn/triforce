@@ -236,6 +236,13 @@ SHARE of a run's iterations (`charts/ent_coeff`; §6b). `--best-of-n RUNS` (`bes
 demo-regularization batch, at the start and every `--best-every` iterations, with the current policy's best
 `--best-keep` successful runs per seed start state out of RUNS (ranked by success, hearts lost, frames; played on a
 separate `EvalTask` pool), weighted `--best-coeff`; a batch larger than a minibatch is sampled per minibatch.
+`--sil-coeff C` (`PPOConfig.sil_coeff`, self-imitation learning, Oh et al. 2018; §3) is the alternative to best-of-N:
+after each rollout `ppo.SilReplay` keeps the rows whose λ = 1 return R (`RolloutBuffer.monte_carlo_returns`:
+frame-aware discount to the episode end, bootstrapped exactly like GAE, against the learner's recomputed values)
+beat the critic, R > V(s), in a CPU FIFO of `--sil-capacity` rows (default 32768). Every PPO minibatch adds
+C · (−log π(a|s) · max(0, R − V) + ½ β · max(0, R − V)²) over a minibatch-sized uniform sample (V from the current
+network, β = `--sil-value-coeff`, default 0.01; `losses/sil_policy_loss`, `losses/sil_value_loss`,
+`charts/sil_rows`, `charts/sil_positive_share` = the rollout's share of rows with R > V). 0 (default) = off.
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;

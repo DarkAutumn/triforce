@@ -98,6 +98,7 @@ class RolloutBuffer:
         self.advantages = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.bootstrap_value = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.interrupts = torch.zeros(n_envs, memory_length, dtype=torch.int64)
+        self.last_values = torch.zeros(n_envs, dtype=torch.float32)
 
     def rollout_buffers(self) -> dict:
         """numpy views of this buffer's memory in the layout ``EnvPool.rollout`` writes: ``obs`` (every key, the
@@ -140,11 +141,17 @@ class RolloutBuffer:
 
     def compute_returns(self, last_values):
         """Frame-aware GAE per env; ``last_values[i]`` is the value of env ``i``'s observation at index ``T``."""
-        last_values = torch.as_tensor(last_values).cpu()
+        self.last_values.copy_(torch.as_tensor(last_values).cpu().reshape(-1))
         returns, advantages = frame_aware_gae(self.rewards, self.logp_ent_val[:, :, 2], self.frames,
-                                              self.dones[:, 1:], last_values, self.gamma, self.lam)
+                                              self.dones[:, 1:], self.last_values, self.gamma, self.lam)
         self.returns.copy_(returns)
         self.advantages.copy_(advantages)
+
+    def monte_carlo_returns(self):
+        """(returns, returns − values) ``[n, T]`` with λ = 1: discounted to the episode's end, bootstrapped like
+        ``compute_returns`` (same values, the last values it was given, frame-aware discount)."""
+        return frame_aware_gae(self.rewards, self.logp_ent_val[:, :, 2], self.frames, self.dones[:, 1:],
+                               self.last_values, self.gamma, 1.0)
 
     def flatten(self, device) -> dict:
         """Batch tensors [n·T, ...] for optimization."""

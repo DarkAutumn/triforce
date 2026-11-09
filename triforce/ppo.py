@@ -2,7 +2,8 @@
 
 Kept from v1: KL early stop, KL rollback (weights *and* optimizer state restored when KL exceeds
 ``kl_rollback × target_kl``), checkpointable optimizer state, per-minibatch advantage normalization, legacy
-time-limit termination, optional demo-regularization (behavior-cloning loss on a fixed demo batch).
+time-limit termination, optional demo-regularization (behavior-cloning loss on a fixed demo batch), optional
+self-imitation learning (``SilReplay``; Oh et al., 2018).
 
 Changed for v2: dict observations, factored (kind, direction, duration) actions, flat masks, frame-aware GAE
 (see ``rollout_buffer``), and ``train`` counts PPO *iterations* (one rollout + one optimization each).
@@ -58,6 +59,11 @@ class PPOConfig:
     target_kl: Optional[float] = 0.02
     kl_rollback: Optional[float] = 4.0
     demo_bc_coeff: float = 0.0
+    # Self-imitation learning (better-play §3): weight of the SIL loss on replayed rows whose λ=1 return beat the
+    # critic (0 = off), its value-term weight β, and how many such rows the replay keeps (FIFO).
+    sil_coeff: float = 0.0
+    sil_value_coeff: float = 0.01
+    sil_capacity: int = 32768
 
     def to_dict(self) -> dict:
         """Plain-data form for checkpoints/logs."""
@@ -148,6 +154,62 @@ class Collector:
         return self.finish(network, device)
 
 
+class SilReplay:
+    """Self-imitation replay (Oh et al., 2018): the rollout rows whose Monte-Carlo return beat the critic.
+
+    ``add`` takes a readied ``RolloutBuffer`` (values recomputed by the learner, rewards bootstrapped) and keeps
+    the rows with λ = 1 return R > V(s) (``RolloutBuffer.monte_carlo_returns``): observation, mask, action and R,
+    on CPU in a ring of ``capacity`` rows (the oldest are overwritten first).  ``sample`` draws rows uniformly
+    without replacement.
+    """
+
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.size = 0
+        self._next = 0
+        self.obs: dict = {}
+        self.masks = self.actions = self.returns = None
+
+    def __len__(self) -> int:
+        return self.size
+
+    def add(self, buffer: RolloutBuffer) -> float:
+        """Stores ``buffer``'s rows with R > V; returns their share of the rollout's rows."""
+        length = buffer.memory_length
+        returns, gaps = buffer.monte_carlo_returns()
+        keep = (gaps > 0).reshape(-1)
+        count = int(keep.sum())
+        if count:
+            rows = {key: value[:, :length].reshape(-1, *value.shape[2:])[keep]
+                    for key, value in buffer.observation.items()}
+            self._write(rows, buffer.masks[:, :length].reshape(-1, buffer.masks.shape[-1])[keep],
+                        buffer.actions.reshape(-1, 3)[keep], returns.reshape(-1)[keep])
+        return count / keep.numel()
+
+    def _write(self, obs: dict, masks, actions, returns):
+        if self.masks is None:
+            self.obs = {key: value.new_empty(self.capacity, *value.shape[1:]) for key, value in obs.items()}
+            self.masks = masks.new_empty(self.capacity, *masks.shape[1:])
+            self.actions = actions.new_empty(self.capacity, 3)
+            self.returns = returns.new_empty(self.capacity)
+        count = returns.shape[0]
+        skip = max(0, count - self.capacity)            # more new rows than capacity: only the newest fit
+        positions = (self._next + torch.arange(skip, count)) % self.capacity
+        for key, value in obs.items():
+            self.obs[key][positions] = value[skip:]
+        self.masks[positions] = masks[skip:]
+        self.actions[positions] = actions[skip:]
+        self.returns[positions] = returns[skip:]
+        self._next = (self._next + count) % self.capacity
+        self.size = min(self.capacity, self.size + count)
+
+    def sample(self, count: int, device):
+        """``(obs, masks, actions, returns)`` of ``min(count, len(self))`` uniformly drawn rows on ``device``."""
+        pick = torch.randperm(self.size)[:count]
+        return ({key: value[pick].to(device) for key, value in self.obs.items()}, self.masks[pick].to(device),
+                self.actions[pick].to(device), self.returns[pick].to(device))
+
+
 class PPO:
     """PPO with factored heads and frame-aware GAE."""
 
@@ -159,6 +221,7 @@ class PPO:
         self.demo_batch = demo_batch
         self.total_steps = 0
         self.ent_coeff = self.config.ent_coeff     # this update's entropy bonus (ent_anneal lowers it)
+        self.sil: Optional[SilReplay] = None       # created by the first optimize with sil_coeff > 0
 
     # ------------------------------------------------------------------ optimizer
 
@@ -279,6 +342,14 @@ class PPO:
                     demo_targets.to(self.device))
         demo_bc_loss = torch.tensor(0.0)
 
+        sil = None
+        if cfg.sil_coeff > 0:
+            if self.sil is None:
+                self.sil = SilReplay(cfg.sil_capacity)
+            sil = self.sil
+        sil_positive_share = sil.add(buffer) if sil is not None else 0.0
+        sil_policy_loss = sil_value_loss = torch.tensor(0.0)
+
         rollback_threshold = None
         saved_state = saved_optimizer = None
         if cfg.kl_rollback and cfg.target_kl:
@@ -335,6 +406,13 @@ class PPO:
                         demo_out = network.evaluate(demo[0], demo[1], demo[2])
                     demo_bc_loss = -demo_out.log_prob.mean()
                     loss = loss + cfg.demo_bc_coeff * demo_bc_loss
+                if sil is not None and len(sil) > 0:
+                    sil_obs, sil_masks, sil_actions, sil_returns = sil.sample(minibatch_size, self.device)
+                    sil_out = network.evaluate(sil_obs, sil_masks, sil_actions)
+                    sil_gap = torch.clamp(sil_returns - sil_out.value.view(-1), min=0.0)
+                    sil_policy_loss = -(sil_out.log_prob * sil_gap.detach()).mean()
+                    sil_value_loss = 0.5 * sil_gap.pow(2).mean()
+                    loss = loss + cfg.sil_coeff * (sil_policy_loss + cfg.sil_value_coeff * sil_value_loss)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -386,4 +464,9 @@ class PPO:
             stats['losses/demo_bc_loss'] = demo_bc_loss.item()
             stats['charts/demo_bc_accuracy'] = demo_accuracy
             stats['charts/demo_bc_coeff'] = cfg.demo_bc_coeff
+        if sil is not None:
+            stats['losses/sil_policy_loss'] = sil_policy_loss.item()
+            stats['losses/sil_value_loss'] = sil_value_loss.item()
+            stats['charts/sil_rows'] = float(len(sil))
+            stats['charts/sil_positive_share'] = sil_positive_share
         return stats

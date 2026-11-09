@@ -4,7 +4,7 @@
         [--iterations N] [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
         [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
-        [--best-coeff C] [--best-parallel P]]
+        [--best-coeff C] [--best-parallel P]] [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
@@ -26,6 +26,10 @@ at 0, so the policy optimizes the health-scaled terminal outcome (plus ``reward.
 iterations the current policy plays RUNS episodes from every seed start state on its own ``EvalTask`` pool
 (``--best-parallel`` envs), and its best ``--best-keep`` successful runs per state (success, hearts lost, frames)
 become the behavior-cloning batch, weighted ``--best-coeff`` (the demo-regularization term; ``best/*`` metrics).
+``--sil-coeff C`` (self-imitation learning, §3; ``ppo.SilReplay``): each rollout's rows whose λ=1 return R beat the
+critic's value V(s) go into a FIFO replay of ``--sil-capacity`` rows; every minibatch adds
+``C · (−log π(a|s) · max(0, R − V) + ½ β · max(0, R − V)²)`` over a minibatch-sized uniform sample of it
+(β = ``--sil-value-coeff``; ``losses/sil_*``, ``charts/sil_rows``, ``charts/sil_positive_share``).  0 = off.
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
@@ -139,6 +143,12 @@ def parse_args(argv=None):
     parser.add_argument('--best-every', type=int, default=20)
     parser.add_argument('--best-coeff', type=float, default=0.2)
     parser.add_argument('--best-parallel', type=int, default=4, help="envs of the best-of-N collection pool")
+    parser.add_argument('--sil-coeff', type=float, default=PPOConfig.sil_coeff,
+                        help="self-imitation learning (better-play §3): weight of the SIL loss on replayed rows whose "
+                             "Monte-Carlo return beat the critic; 0 = off")
+    parser.add_argument('--sil-value-coeff', type=float, default=PPOConfig.sil_value_coeff,
+                        help="SIL value-term weight (beta)")
+    parser.add_argument('--sil-capacity', type=int, default=PPOConfig.sil_capacity, help="SIL replay rows (FIFO)")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop early once training success_rate >= this for --stop-patience iterations")
@@ -301,7 +311,9 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
 
     ppo_config = PPOConfig(target_steps=args.steps_per_update, learning_rate=args.learning_rate,
                            ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
-                           demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0)
+                           demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0,
+                           sil_coeff=args.sil_coeff, sil_value_coeff=args.sil_value_coeff,
+                           sil_capacity=args.sil_capacity)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
 
     # Built before the 'start' event so bad start states or trajectories fail the run up front.
