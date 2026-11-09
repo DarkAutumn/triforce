@@ -9,7 +9,7 @@ use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
 use zcore::ZCore;
 use zelda::actions::{NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS};
-use zelda::{Action, GameMap, LoadOptions, Session};
+use zelda::{Action, GameMap, LoadOptions, Nes, Session};
 
 struct Play<'a>(&'a mut ZCore);
 
@@ -62,4 +62,56 @@ fn zcore_snapshot_restore_is_exact() {
     }
     assert_eq!(&ram, s.nes().ram());
     assert_eq!(&prg, s.nes().prg_ram());
+}
+
+/// A sword stab into a Darknut's face plays the shield clink ($604 bit 0) and does no damage; it must not count as
+/// a projectile block (blocks need a blockable shot in flight with its bounce signature) nor as a hit. A stab in
+/// the back hurts him. (Lee, Nov 9: no false-positive blocks in Darknut rooms.)
+#[test]
+fn darknut_front_clink_is_not_a_block_or_a_hit() {
+    let Some(nes) = open_core() else { return };
+    let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
+    let machine = common::load_named_state("3_5bs_0");
+    let opts = LoadOptions {
+        randomize_rng: true,
+        fresh_room: true,
+        controllable: true,
+        overrides: Vec::new(),
+    };
+    for (front, expect_damage) in [(true, false), (false, true)] {
+        s.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(3)).unwrap();
+        s.press(0, 120);
+        let state = s.state().clone();
+        let darknut = state
+            .enemies
+            .iter()
+            .find(|e| matches!(e.id, 0x0B | 0x0C) && e.spawn_state == 0)
+            .expect("a Darknut");
+        let slot = darknut.index as u16;
+        let peek = |s: &mut Session<ZCore>, a: u16| s.nes_mut().peek(a);
+        let (x, y, dir) = (peek(&mut s, 0x70 + slot), peek(&mut s, 0x84 + slot), peek(&mut s, 0x98 + slot));
+        // Offset to the side his face points at (front) or the opposite side (back); Link faces him.
+        let (dx, dy, face): (i16, i16, u8) = match dir {
+            1 => (16, 0, 2),
+            2 => (-16, 0, 1),
+            4 => (0, 16, 8),
+            _ => (0, -16, 4),
+        };
+        let sign = if front { 1 } else { -1 };
+        let face = if front { face } else { [0, 2, 1, 0, 8, 0, 0, 0, 4][face as usize] };
+        s.nes_mut().poke(0x70, (x as i16 + sign * dx) as u8);
+        s.nes_mut().poke(0x84, (y as i16 + sign * dy) as u8);
+        s.nes_mut().poke(0x98, face);
+        let hp = peek(&mut s, 0x485 + slot);
+        let text = match face {
+            1 => "SWORD E",
+            2 => "SWORD W",
+            4 => "SWORD S",
+            _ => "SWORD N",
+        };
+        let change = s.act(Action::parse(text).unwrap()).unwrap();
+        assert_eq!(change.blocks(), 0, "front={front}");
+        assert_eq!(peek(&mut s, 0x485 + slot) != hp, expect_damage, "front={front}");
+        assert_eq!(change.hits() > 0, expect_damage, "front={front}");
+    }
 }
