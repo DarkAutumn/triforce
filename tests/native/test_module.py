@@ -26,6 +26,7 @@ def test_constants():
     assert native.INTERRUPTS[0] == 'none' and 'damage' in native.INTERRUPTS
     assert 'reward-terminal-success' in native.REWARD_TERMS
     assert native.OUTCOMES == ('success', 'hard-failure', 'soft-failure', 'neutral')
+    assert native.CHEAT_ITEMS == ('bombs', 'keys', 'rupees')
     assert native.ACTION_KINDS[0] == 'MOVE' and len(native.DIRECTIONS) == 8 and native.DURATIONS == (4, 8, 16, 32)
 
 

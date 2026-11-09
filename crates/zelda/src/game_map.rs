@@ -127,8 +127,11 @@ pub struct GameRoom {
     pub bomb_walls: Vec<String>,
     pub specialist: Option<String>,
     /// `requires_bombs: true`: the room can't be beaten without a bomb (Dodongo, the 0x2c secret), so a specialist
-    /// acting in it is never left with none (`env::bombs::BombLedger`).
+    /// acting in it is never left with none (a cheated bomb: `crate::cheats`).
     pub requires_bombs: bool,
+    /// `requires_rupees: N`: the route buys here (a shop's arrows or bait), so Link is topped up to N rupees when
+    /// he has fewer (cheated rupees: `crate::cheats`).  No room sets it yet.
+    pub requires_rupees: Option<u8>,
     /// `bomb_secret: [col, row]`: the top-left tile of an overworld rock wall hiding the room's cave (2x2 tiles,
     /// Z_04 UpdateRockWall).  A bomb blast there opens the cave; walking into the opening enters it.
     pub bomb_secret: Option<Tile>,
@@ -393,6 +396,9 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             bomb_walls,
             specialist: as_string(get(entry, "specialist")),
             requires_bombs: get(entry, "requires_bombs").and_then(Value::as_bool).unwrap_or(false),
+            requires_rupees: get(entry, "requires_rupees")
+                .map(|v| as_u8(v, &format!("{loc} requires_rupees")))
+                .transpose()?,
             bomb_secret: tile(get(entry, "bomb_secret")),
             treasure_tile: tile(get(entry, "treasure_tile")),
             push_block: get(entry, "push_block")
@@ -525,6 +531,11 @@ impl GameMap {
     /// The room is tagged `requires_bombs` (an unknown room isn't).
     pub fn requires_bombs(&self, location: MapLocation) -> bool {
         self.rooms.get(&location).is_some_and(|r| r.requires_bombs)
+    }
+
+    /// The room's `requires_rupees` (0 for an unknown or untagged room).
+    pub fn requires_rupees(&self, location: MapLocation) -> u8 {
+        self.rooms.get(&location).and_then(|r| r.requires_rupees).unwrap_or(0)
     }
 
     /// Rooms in game.yaml order.
@@ -891,6 +902,22 @@ mod tests {
         let cave = map.get(L::new(0, 0x2c, true)).unwrap();
         assert_eq!((cave.treasure.as_deref(), cave.treasure_tile), (Some("heart-container"), Some((19, 11))));
         assert_eq!(map.get(START).unwrap().bomb_secret, None);
+    }
+
+    /// `requires_rupees: N` parses as a byte (no room sets it yet); an unknown or untagged room needs none.
+    #[test]
+    fn requires_rupees_is_an_optional_byte() {
+        let map = GameMap::builtin();
+        assert!(map.rooms().values().all(|r| r.requires_rupees.is_none()));
+        assert_eq!(map.requires_rupees(loc(0, 0x2c)), 0);
+        let tagged = GAME_YAML.replacen("  requires_bombs: true", "  requires_rupees: 80\n  requires_bombs: true", 1);
+        assert_ne!(tagged, GAME_YAML);
+        let map = GameMap::from_yaml(&tagged, ROUTES_YAML).unwrap();
+        assert_eq!(map.requires_rupees(loc(0, 0x2c)), 80);
+        assert_eq!(map.requires_rupees(loc(9, 0x7f)), 0);
+        let over = GAME_YAML.replacen("  requires_bombs: true", "  requires_rupees: 300\n  requires_bombs: true", 1);
+        let e = GameMap::from_yaml(&over, ROUTES_YAML).unwrap_err().0;
+        assert!(e.contains("requires_rupees"), "{e}");
     }
 
     /// d2first: game start, D2 (its triforce), the 0x2c heart cave (a `heart` waypoint after D2, before D1), the

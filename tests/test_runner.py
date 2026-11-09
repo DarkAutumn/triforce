@@ -86,6 +86,21 @@ def test_chain_summary_counts_failures_by_room():
     assert summary['failures'] == {'1:0x44 stalfos-keese-gel death': 2, '1:0x73 stalfos-keese-gel stuck': 1}
 
 
+def test_chain_summary_totals_cheated_items_and_the_runs_that_used_any():
+    def run(*rooms):
+        r = RunResult('d2first', 0, result='success')
+        r.rooms.extend(RoomRecord(i, 1, '0x33', False, 'stalfos-keese-gel', cheated_bombs=bombs, cheated_keys=keys)
+                       for i, (bombs, keys) in enumerate(rooms))
+        return r
+    results = [run((1, 0), (1, 1)), run((0, 0)), run((0, 2))]
+    assert results[0].cheated == {'bombs': 2, 'keys': 1, 'rupees': 0}
+    summary = chain_summary(results)
+    assert (summary['cheated_bombs'], summary['runs_with_cheated_bombs']) == (2, 1)
+    assert (summary['cheated_keys'], summary['runs_with_cheated_keys']) == (3, 2)
+    assert (summary['cheated_rupees'], summary['runs_with_cheated_rupees']) == (0, 0)
+    assert 'bombs_cheated' not in summary
+
+
 def test_chain_summary_counts_keys_carried_into_the_milestone_separately():
     def run(result, keys):
         r = RunResult('d2first', 0, result=result)

@@ -372,6 +372,26 @@ impl GameCompletion {
         self.missed.as_deref()
     }
 
+    /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through: the step
+    /// [`GameCompletion::objectives`] picks for `state` coming from `prev` (None, or the same room: the current
+    /// step), without updating anything.  None off the route, in a sub-room, for steps leaving through a cave, stairs
+    /// or a triforce, and once the route is missed.  The cheated-items ledger asks it before the objective updates
+    /// (`crate::cheats`: a route exit behind a locked door needs a key).
+    pub fn route_edge_exit(&self, prev: Option<MapLocation>, state: &GameView) -> Option<Direction> {
+        let here = state.full_location();
+        if self.missed.is_some() || here.in_cave {
+            return None;
+        }
+        let step = match prev {
+            Some(prev) if prev != here => route_entry(prev, here).and_then(|entry| self.route_step_at(state, entry)),
+            _ => self.step,
+        }?;
+        let step = &self.map.routes[&self.route][step];
+        (step.location() == here)
+            .then(|| Direction::from_exit(&step.exit))
+            .flatten()
+    }
+
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
         if let Some(prev) = prev

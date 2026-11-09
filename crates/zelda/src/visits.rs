@@ -4,12 +4,14 @@
 //! the episode's end. The step that changes rooms belongs to the room Link left. Drops count dropped items per
 //! kind as they appear (a new slot, or a slot whose lifetime timer went up, as `HeartTracker` counts hearts; items
 //! on the floor when a visit starts count too); pickups are `Change.items_gained`; hits are steps that lost
-//! health; keys are rises of the key count; bombs are what the env's bomb ledger reports per step (placements, and
-//! cheated bombs placed: `env::bombs`), boss stuns/eats what the env's `env::critic::BossTransitions` reports (Dodongo
-//! stunned by a bomb's smoke, or swallowing a bomb). The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave`
-//! for stairs, caves and dungeon entrances), or how the episode ended in the room ([`VisitEnd`]).
+//! health; keys are rises of the key count (the env passes Link's natural keys: a cheated key is no gain); bombs
+//! used and cheated items used are what the env's cheat ledger reports per step (`crate::cheats`), boss stuns/eats
+//! what the env's `env::critic::BossTransitions` reports (Dodongo stunned by a bomb's smoke, or swallowing a bomb).
+//! The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave` for stairs, caves and dungeon entrances), or how
+//! the episode ended in the room ([`VisitEnd`]).
 
 use crate::change::Change;
+use crate::cheats::ItemCounts;
 use crate::enums::{MapLocation, item};
 use crate::game::GameView;
 
@@ -68,9 +70,9 @@ pub struct RoomVisit {
     /// Items picked up, per [`ITEM_KINDS`] index.
     pub pickups: [u32; 6],
     pub keys_gained: u32,
-    /// Bombs placed, and cheated bombs placed.
+    /// Bombs placed, and cheated items used ([`crate::cheats`]).
     pub bombs_used: u32,
-    pub bombs_cheated: u32,
+    pub cheated: ItemCounts,
     /// Dodongo stuns (a bomb's smoke) and bombs he swallowed.
     pub boss_stuns: u32,
     pub boss_eats: u32,
@@ -113,9 +115,9 @@ pub struct VisitStep<'a> {
     pub health_gained: f64,
     pub hits_dealt: u32,
     pub items_gained: &'a [i16],
-    /// Bombs placed this step, and cheated bombs placed (set by the env; 0 from [`VisitStep::of`]).
+    /// Bombs placed this step, and cheated items used (set by the env; 0 from [`VisitStep::of`]).
     pub bombs_used: u32,
-    pub bombs_cheated: u32,
+    pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs this step (set by the env; 0 from [`VisitStep::of`]).
     pub boss_stuns: u32,
     pub boss_eats: u32,
@@ -130,7 +132,7 @@ impl VisitStep<'_> {
             hits_dealt: change.hits() as u32,
             items_gained: &change.items_gained,
             bombs_used: 0,
-            bombs_cheated: 0,
+            cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
         }
@@ -183,7 +185,7 @@ impl VisitTracker {
         }
         visit.hits_dealt += step.hits_dealt;
         visit.bombs_used += step.bombs_used;
-        visit.bombs_cheated += step.bombs_cheated;
+        visit.cheated += step.cheated;
         visit.boss_stuns += step.boss_stuns;
         visit.boss_eats += step.boss_eats;
         for &id in step.items_gained {
@@ -235,7 +237,7 @@ impl VisitTracker {
             pickups: [0; 6],
             keys_gained: 0,
             bombs_used: 0,
-            bombs_cheated: 0,
+            cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
             exit: EXIT_OTHER,
@@ -294,7 +296,7 @@ mod tests {
             hits_dealt,
             items_gained,
             bombs_used: 0,
-            bombs_cheated: 0,
+            cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
         }

@@ -13,6 +13,7 @@ use env::specialist_env::{EnvOptions, SpecialistEnv};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
+use zelda::cheats::ItemCounts;
 use zelda::{Action, GameMap, MapLocation, Session};
 
 fn data() -> Arc<GameData> {
@@ -98,7 +99,7 @@ fn every_route_room_has_a_specialist() {
 
 #[test]
 fn chain_summary_counts_failures_by_room() {
-    let run = |result: &str, room: &str, outcome: &str, cheated: u32| RunResult {
+    let run = |result: &str, room: &str, outcome: &str, bombs: u32, keys: u32| RunResult {
         route: "d2first".into(),
         seed: Some(0),
         result: result.into(),
@@ -129,17 +130,21 @@ fn chain_summary_counts_failures_by_room() {
             linger: None,
             blocks: 0,
             no_damage_max: 0,
-            bombs_used: cheated,
-            bombs_cheated: cheated,
+            bombs_used: bombs,
+            cheated: ItemCounts {
+                bombs,
+                keys,
+                rupees: 0,
+            },
             boss_stuns: 0,
             boss_eats: 0,
         }],
     };
     let s = chain_summary(&[
-        run("success", "0x0e", "milestone", 2),
-        run("failure", "0x44", "death", 0),
-        run("failure", "0x44", "death", 1),
-        run("failure", "0x73", "stuck", 0),
+        run("success", "0x0e", "milestone", 2, 0),
+        run("failure", "0x44", "death", 0, 1),
+        run("failure", "0x44", "death", 1, 1),
+        run("failure", "0x73", "stuck", 0, 0),
     ]);
     assert_eq!(s["runs"], 4);
     assert_eq!(s["successes"], 1);
@@ -148,7 +153,14 @@ fn chain_summary_counts_failures_by_room() {
         s["failures"],
         serde_json::json!({"1:0x44 stalfos-keese-gel death": 2, "1:0x73 stalfos-keese-gel stuck": 1})
     );
-    assert_eq!((s["bombs_cheated"].as_u64(), s["runs_with_cheated_bombs"].as_u64()), (Some(3), Some(2)));
+    let counts = |item: &str| {
+        let n = |key: String| s[key.as_str()].as_u64();
+        (n(format!("cheated_{item}")), n(format!("runs_with_cheated_{item}")))
+    };
+    assert_eq!(counts("bombs"), (Some(3), Some(2)));
+    assert_eq!(counts("keys"), (Some(2), Some(2)));
+    assert_eq!(counts("rupees"), (Some(0), Some(0)));
+    assert!(s.get("bombs_cheated").is_none(), "the old name is gone");
 }
 
 /// The chain tests, run in sequence on one emulator.

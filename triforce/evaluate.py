@@ -15,11 +15,13 @@ same whichever env or thread runs it.  The checkpoint defaults to the specialist
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
 Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
-``hearts_left`` are means per episode (also per room and per start state).  ``mean_bombs_used`` /
-``mean_bombs_cheated`` are bombs placed per episode and the cheated ones among them (``records[i]['bombs']``; a
-``requires_bombs`` room such as Dodongo's gives Link a bomb whenever he has none: crates/env/src/bombs.rs), also per
-room and per start state.  ``mean_boss_stuns`` / ``mean_boss_eats`` are Dodongo stuns (a bomb's smoke; the sword can
-kill him then) and bombs he swallowed per episode (``records[i]['boss']``: ``stuns``, ``eats``;
+``hearts_left`` are means per episode (also per room and per start state).  ``mean_bombs_used`` are bombs placed per
+episode (``records[i]['bombs']``) and ``mean_cheated_bombs`` / ``mean_cheated_keys`` / ``mean_cheated_rupees``
+cheated items used per episode (``records[i]['cheated']``: a room that needs an item Link lacks grants it, a bomb in
+``requires_bombs`` rooms, a key at a locked route door, rupees in ``requires_rupees`` shops:
+crates/zelda/src/cheats.rs), also per room and per start state.  ``mean_boss_stuns`` / ``mean_boss_eats`` are
+Dodongo stuns (a bomb's smoke; the sword can kill him then) and bombs he swallowed per episode
+(``records[i]['boss']``: ``stuns``, ``eats``;
 crates/env/src/critic.rs ``BossTransitions``), and ``stun_kill_rate`` the share of successful episodes won by
 stun-and-sword alone (a stun, no swallow), also per room and per start state.
 Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
@@ -29,14 +31,16 @@ room and start-state aggregates report mean longest/tail steps and frames plus t
 episode's visits in order (``level``, ``room``, ``in_cave``, ``steps``, ``frames``, ``health_in``/``health_out``,
 ``max_health``, ``health_lost``/``health_gained`` summed over the visit, ``hits`` = steps that lost health,
 ``hits_dealt``, ``drops``/``pickups`` per item kind (bombs, rupee, blue_rupee, heart, fairy, clock; zeros
-omitted), ``keys_gained``, ``bombs_used``/``bombs_cheated`` (bombs placed, cheated ones among them),
+omitted), ``keys_gained`` (natural keys: a cheated key is no gain), ``bombs_used`` (bombs placed),
+``cheated_bombs``/``cheated_keys``/``cheated_rupees`` (cheated items used),
 ``boss_stuns``/``boss_eats`` (Dodongo stunned, bombs swallowed) and ``exit``:
 ``n``/``s``/``e``/``w`` or ``cave`` when Link left the room, else how the episode ended there,
 ``death``/``success``/``timeout``/``other``).  ``visited_rooms`` aggregates them per
 room entered (keyed like ``by_room``, which only knows start rooms): ``visits``, ``episodes``, ``deaths``,
 ``death_rate``, ``exits`` and per-visit means (``steps_per_visit``, ``health_lost/gained/change_per_visit``,
 ``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``keys_per_visit``, ``bombs_used_per_visit``,
-``bombs_cheated_per_visit``, ``boss_stuns_per_visit``, ``boss_eats_per_visit``, ``drops_per_visit``,
+``cheated_bombs_per_visit``, ``cheated_keys_per_visit``, ``cheated_rupees_per_visit``, ``boss_stuns_per_visit``,
+``boss_eats_per_visit``, ``drops_per_visit``,
 ``pickups_per_visit``), tagged with the ``specialist``.  Readers
 merging several evaluations weight by visits.
 """
@@ -126,13 +130,17 @@ def _block_stats(records: list[dict]) -> dict:
     return {'blocks': sum(measured) / len(measured)} if measured else {}
 
 
-def _bomb_stats(records: list[dict]) -> dict:
-    """Bombs placed and cheated bombs placed per episode, over records that count them."""
-    measured = [record['bombs'] for record in records if 'bombs' in record]
-    if not measured:
-        return {}
-    return {'mean_bombs_used': sum(b['used'] for b in measured) / len(measured),
-            'mean_bombs_cheated': sum(b['cheated'] for b in measured) / len(measured)}
+def _cheat_stats(records: list[dict]) -> dict:
+    """Bombs placed and cheated items used per episode, over records that count them."""
+    result = {}
+    bombs = [record['bombs'] for record in records if 'bombs' in record]
+    if bombs:
+        result['mean_bombs_used'] = sum(b['used'] for b in bombs) / len(bombs)
+    cheated = [record['cheated'] for record in records if 'cheated' in record]
+    if cheated:
+        result.update({f'mean_cheated_{item}': sum(c[item] for c in cheated) / len(cheated)
+                       for item in _native.CHEAT_ITEMS})
+    return result
 
 
 def _boss_stats(records: list[dict]) -> dict:
@@ -159,7 +167,7 @@ def _group(records: list[dict], key) -> dict:
                    **_heart_stats(items),
                    **_linger_stats(items),
                    **_block_stats(items),
-                   **_bomb_stats(items),
+                   **_cheat_stats(items),
                    **_boss_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items)),
                    # how the unsuccessful episodes ended, e.g. {'death': 4}
@@ -193,7 +201,8 @@ def _room_visit_stats(visits: list[dict]) -> dict:
         'hits_dealt_per_visit': mean(lambda v: v['hits_dealt']),
         'keys_per_visit': mean(lambda v: v['keys_gained']),
         'bombs_used_per_visit': mean(lambda v: v.get('bombs_used', 0)),
-        'bombs_cheated_per_visit': mean(lambda v: v.get('bombs_cheated', 0)),
+        **{f'cheated_{item}_per_visit': mean(lambda v, item=item: v.get(f'cheated_{item}', 0))
+           for item in _native.CHEAT_ITEMS},
         'boss_stuns_per_visit': mean(lambda v: v.get('boss_stuns', 0)),
         'boss_eats_per_visit': mean(lambda v: v.get('boss_eats', 0)),
         'drops_per_visit': items('drops'),
@@ -255,7 +264,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         **hearts,
         **_linger_stats(records),
         **_block_stats(records),
-        **_bomb_stats(records),
+        **_cheat_stats(records),
         **_boss_stats(records),
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,

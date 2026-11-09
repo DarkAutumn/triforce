@@ -8,8 +8,8 @@ playing at the same pace without rendering) and ``frame(game, since)`` copies a 
 through one status queue as dicts with ``game`` and ``event`` (``start``, ``room``, ``end``, ``crash``); ``room``
 carries ``rooms``, the rooms entered so far in the run (a change of the observation's room id: level, cave, room),
 ``stalled``: with ``stall_steps`` set, the room has gone that many actions without damage dealt or taken (the
-run ends ``stuck`` at twice as many), and ``bombs_cheated``: cheated bombs placed so far in the run (a
-``requires_bombs`` room gives Link a bomb whenever he has none; crates/env/src/bombs.rs).
+run ends ``stuck`` at twice as many), and ``cheated``: cheated items used so far in the run, ``{bombs, keys,
+rupees}`` (a room that needs an item Link lacks grants it; crates/zelda/src/cheats.rs).
 After a run ends its game holds its result for ``RESULT_PAUSE`` seconds, showing the run's last frame (the next
 run's reset publishes nothing until then), before the next seed plays (seeds are handed
 out in order to whichever game is free, so ``start`` carries no seed; ``end`` does).  A setup error (an error before
@@ -298,7 +298,7 @@ class GameGrid:
                                        'level': event['level'], 'room': event['room'],
                                        'health': float(event['health']), 'max_health': int(event['max_health']),
                                        'stalled': bool(event['stalled']),
-                                       'bombs_cheated': int(event['bombs_cheated'])})
+                                       'cheated': {item: int(n) for item, n in event['cheated'].items()}})
 
     def _release(self, chain: ChainPool, held: Dict[int, _Held]) -> None:
         now = self._now()

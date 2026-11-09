@@ -135,7 +135,7 @@ class GameState:
         self.specialist = self.level = self.room = self.health = self.max_health = None
         self.rooms = 0
         self.stalled = False
-        self.bombs_cheated = 0      # cheated bombs placed this run (requires-bombs rooms: not beaten naturally)
+        self.cheated = {}           # cheated items used this run, {bombs, keys, rupees}: not beaten naturally
 
     def apply(self, message: dict):
         event = message.get('event')
@@ -151,7 +151,7 @@ class GameState:
             self.health = message.get('health')
             self.max_health = message.get('max_health')
             self.stalled = bool(message.get('stalled', False))
-            self.bombs_cheated = int(message.get('bombs_cheated', self.bombs_cheated))
+            self.cheated = dict(message.get('cheated', self.cheated))
         elif event == 'end':
             self.seed = message.get('seed', self.seed)
             self.outcome = message.get('outcome')
@@ -174,11 +174,17 @@ class GameState:
         else:
             text = (f"{seed}{self.specialist}  L{self.level} 0x{self.room:02x}  "
                     f"♥ {self.health:g}/{self.max_health}")
-            if self.bombs_cheated:
-                text += f"  ·  cheated bombs {self.bombs_cheated}"
+            cheated = cheated_text(self.cheated)
+            if cheated:
+                text += f"  ·  cheated: {cheated}"
         if self.outcome in ('error', 'crash') and self.reason:
             text += f"  ·  {self.reason}"
         return text
+
+
+def cheated_text(cheated: dict) -> str:
+    """'2 bombs, 1 key' for the items used (zeros left out), '' when none."""
+    return ', '.join(f"{n} {item if n != 1 else item[:-1]}" for item, n in cheated.items() if n)
 
 
 def replacement(scores: list, shown: list, cell: int) -> Optional[int]:

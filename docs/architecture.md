@@ -129,27 +129,43 @@ health rose. A heart heals `min(1, max_health − health)`, so one picked up at 
 terminal `info['hearts']`; metrics log `health_change_total` and `hearts/{dropped,taken,left,wasted}` per
 episode; `evaluate` keeps it per episode and reports `mean_health_change_total` and `hearts_dropped/taken/left`
 overall, per room and per start state; runner `RoomRecord`s carry `hearts_dropped/taken/healed/wasted/left/expired`
-and `keys_in/keys_out` (keys carried into and out of the room; `chain_summary`'s `arrival_keys` counts milestone
-arrivals by keys carried, so full key carriage is reported separately from reaching Dodongo).
+and `keys_in/keys_out` (Link's natural keys carried into and out of the room, cheated keys left out; `chain_summary`'s
+`arrival_keys` counts milestone arrivals by keys carried, so full key carriage is reported separately from reaching
+Dodongo).
 
-### Bombs (`crates/env/src/bombs.rs`)
+### Cheated items (`crates/zelda/src/cheats.rs`)
 
-Bomb counts ($658) stay natural (never refilled; `items: {bombs: ...}` only masks the action) except in rooms
-game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e, the 0x2c rock wall, and off the route so far Dungeon 3's
-bombed wall 3:0x4c and Manhandla's room 3:0x4d). `BombLedger`, shared by `SpecialistEnv` and
-`ChainEnv` (one per episode or run), runs at episode/run start and after every action, writes any change with
-`Session::apply_ram(&[(Var::Bombs, n)])` and carries the rebuilt state on (mask, observation; the action's `Change`
-keeps what the action did). In a `requires_bombs` room a count of 0 becomes 1, a *cheated* bomb, marked
-outstanding. Every fall of the count is a placement (`used`); a fall while the cheated bomb is outstanding (1 → 0)
-is a *cheated bomb used* (`cheated`; a bomb merely granted never counts), and the floor re-arms. A natural rise (a
-pickup) clears the mark. Leaving the room with the cheated bomb outstanding sets the count back to 0; a natural
-last bomb is never touched, and outside such rooms counts go up and down naturally. Reports: terminal
-`info['bombs'] = {used, cheated}` → training `bombs/used`, `bombs/cheated` per episode (progress events too);
-eval records `bombs` and per-visit `bombs_used`/`bombs_cheated` → `mean_bombs_used`/`mean_bombs_cheated` (overall,
-per room and start state) and `visited_rooms` `bombs_used_per_visit`/`bombs_cheated_per_visit` (zelda-map's
-sidebar); chain `RoomRecord.bombs_used/bombs_cheated` and `chain_summary`'s `bombs_cheated` total and
-`runs_with_cheated_bombs`; room events carry the run's `bombs_cheated`, shown in the watch player's footer
-(`cheated bombs N`, when > 0): such a game wasn't beaten naturally.
+Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
+action) except where the room Link is in *needs* some (`cheats::needs`), Lee's Nov 8–9 rule:
+
+- **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e, the 0x2c rock wall, and off the
+  route so far Dungeon 3's bombed wall 3:0x4c and Manhandla's room 3:0x4d);
+- **keys:** 1 in a dungeon room whose route step leaves through an edge whose door is still locked (the game's door
+  tiles, and no opening animation on it: `$54` 6–8 with `$55`'s bit, the game spends the key as it starts), unless
+  Link has the magic key or the room's treasure is a key whose item-taken flag isn't set: that key comes first, and
+  the cheated one only appears once it is taken and spent (back to 0). The step is the one
+  `GameCompletion::route_edge_exit` picks for the state before the objective follows it, so one-room training (the
+  start state's step) and chains (the step of every room entered) agree; off the route there is no key need;
+- **rupees:** the game.yaml `requires_rupees: N` amount (a shop the route buys from; no room sets it yet), not while
+  a rupee change is pending (`$67D`/`$67E`: the game adds and takes rupees one per frame).
+
+`CheatLedger`, shared by `SpecialistEnv` and `ChainEnv` (one per episode or run), runs at episode/run start and after
+every action with one rule for every item, writes any change with `Session::apply_ram` and carries the rebuilt state
+on (mask, observation; the action's `Change` keeps what the action did, so a grant is never a pickup to the critic).
+Below the need, the count is topped up to it and the top-up is *granted* (outstanding). Every fall of the count is a
+use (`used`; bombs placed); a fall uses the grant first, and those units are *cheated* uses (`cheated`; a grant
+merely given never counts); while the need holds the floor re-arms. A natural rise (a pickup) repays the grant unit
+for unit (the count keeps them as natural ones: a bomb pickup over a cheated bomb leaves all of them natural, as
+before). Leaving the room takes back what is still granted, never natural units; elsewhere counts go up and down
+naturally. Visits count `keys_gained` on natural keys (`CheatLedger::natural`), so a cheated key is no gain.
+Reports (`_native.CHEAT_ITEMS` = bombs, keys, rupees): terminal `info['bombs'] = {used}` and
+`info['cheated'] = {bombs, keys, rupees}` → training `bombs/used` and `cheated/bombs`, `cheated/keys`,
+`cheated/rupees` per episode (progress events too); eval records `bombs`, `cheated` and per-visit `bombs_used`,
+`cheated_bombs`/`cheated_keys`/`cheated_rupees` → `mean_bombs_used`, `mean_cheated_<item>` (overall, per room and
+start state) and `visited_rooms` `bombs_used_per_visit`, `cheated_<item>_per_visit` (zelda-map's sidebar shows the
+non-zero ones); chain `RoomRecord.bombs_used`, `cheated_bombs/keys/rupees` and `chain_summary`'s `cheated_<item>`
+totals and `runs_with_cheated_<item>`; room events carry the run's `cheated` dict, shown in the watch player's
+footer (`cheated: 2 bombs, 1 key`, when any): such a game wasn't beaten naturally.
 
 Boss fights (`crates/env/src/critic.rs` `BossTransitions`): a Dodongo whose ObjState ($AC+slot) enters 2 was
 *stunned* by a bomb's smoke (the sword can kill him then; a stun timer that goes up is a new stun); a rise in

@@ -36,6 +36,11 @@ spawn (95%).
    the streak primed, drops bombs).
 4. If Lee hasn't answered by then: extend the route after D1 to D3 and train to beat it.
 
+- [x] **Cheated items** (Lee, Nov 9; branch `cheats`): bombs, keys and rupees share one ledger
+  (`crates/zelda/src/cheats.rs`, architecture.md "Cheated items"): a key is granted at a still-locked route door
+  once the room's own key is taken, rupees up to game.yaml `requires_rupees` (no room sets it yet); metrics are
+  `cheated/<item>` and friends. Watch `cheated/keys` once D3 trains (0x4b's wrong locked door).
+
 ### Kill streaks and forced drops (researched Nov 9; implement later)
 
 Lee's idea: when Link is about to make the 10th kill without taking damage, light up part of the observation so the
@@ -156,7 +161,8 @@ better)**. Train a model for (2).
   (game.yaml): whenever Link has none there he gets one *cheated* bomb (start, entry, after every action); placing
   it counts as a cheated bomb used, leaving with it unused takes it back. Training, eval (per visit) and chains
   report `bombs used` and `bombs cheated`; the watch player's footer shows a run's cheated bombs (not beaten
-  naturally). `crates/env/src/bombs.rs`, docs/architecture.md "Bombs".
+  naturally). Now one ledger for bombs, keys and rupees: `crates/zelda/src/cheats.rs`, docs/architecture.md
+  "Cheated items" (metrics `cheated/bombs` etc.).
 - A whole task of its own: expect plenty of experimentation and trial and error.
 - **The curriculum matters most:** it has to show how to do it against Dodongo's various movement patterns.
 - Mechanics (ASM-backed): `target/dodongo/README.md` (gitignored notes) and round 12.

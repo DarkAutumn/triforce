@@ -808,7 +808,7 @@ rooms:
   # Secret (d2first, Nov 8; emulator-checked): OW attr B cave index $11, a rock wall tile object (Z_04 UpdateRockWall)
   # at x=144 y=160, tiles (18-19, 12-13) in the middle rock.  A bomb there opens it (room flag $80) to the take-any
   # cave: potion ($20) on the left, heart container ($1A) on the right.
-  requires_bombs: true    # Lee (Nov 8): the d2first heart needs a bomb here (BombLedger cheats one in)
+  requires_bombs: true    # Lee (Nov 8): the d2first heart needs a bomb here (zelda::cheats cheats one in)
   bomb_secret: [18, 12]
   exits:
     N:
@@ -2630,7 +2630,7 @@ rooms:
 - level: 2
   location: '0x0e'
   specialist: boss-dodongo
-  requires_bombs: true    # Lee (Nov 8): Link always has a bomb here (BombLedger cheats one in when he has none)
+  requires_bombs: true    # Lee (Nov 8): Link always has a bomb here (zelda::cheats cheats one in when he has none)
   exits:
     S:
       level: 2

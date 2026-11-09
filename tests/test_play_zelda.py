@@ -217,14 +217,16 @@ def _room(game, rooms, health, stalled=False):
             'health': health, 'max_health': 3, 'stalled': stalled}
 
 
-def test_footer_shows_cheated_bombs_once_placed():
-    """The footer names the run's cheated bombs (a requires-bombs room's free bomb, placed) only when there are any;
-    a new run starts from none."""
+def test_footer_shows_cheated_items_once_used():
+    """The footer names the run's cheated items (a room's granted bomb, key or rupees, used) only when there are any,
+    leaving out the zeros; a new run starts from none."""
     state = play_zelda.GameState()
-    state.apply(_room(0, 1, 3.0))
+    state.apply({**_room(0, 1, 3.0), 'cheated': {'bombs': 0, 'keys': 0, 'rupees': 0}})
     assert 'cheated' not in state.strip_text()
-    state.apply({**_room(0, 1, 3.0), 'bombs_cheated': 2})
-    assert 'cheated bombs 2' in state.strip_text()
+    state.apply({**_room(0, 1, 3.0), 'cheated': {'bombs': 2, 'keys': 1, 'rupees': 0}})
+    assert state.strip_text().endswith('  ·  cheated: 2 bombs, 1 key')
+    state.apply({**_room(0, 1, 3.0), 'cheated': {'bombs': 1, 'keys': 3, 'rupees': 80}})
+    assert state.strip_text().endswith('  ·  cheated: 1 bomb, 3 keys, 80 rupees')
     state.apply({'game': 0, 'event': 'start', 'seed': 4})
     state.apply(_room(0, 1, 3.0))
     assert 'cheated' not in state.strip_text()

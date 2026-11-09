@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, 
                                QRadioButton, QScrollArea, QTabBar, QVBoxLayout, QWidget)
 
 from triforce import registry
-from triforce._native import Game, game_rooms, routes, specialist_for
+from triforce._native import CHEAT_ITEMS, Game, game_rooms, routes, specialist_for
 from triforce._native import route_steps as native_route_steps
 from triforce.paths import STATES_DIR
 from triforce.specialist import list_specialists
@@ -64,7 +64,7 @@ DETAILED_FORMAT = 2
 COUNT_KEYS = ('visits', 'episodes', 'deaths')
 MEAN_KEYS = ('steps_per_visit', 'health_lost_per_visit', 'health_gained_per_visit', 'health_change_per_visit',
              'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit', 'bombs_used_per_visit',
-             'bombs_cheated_per_visit', 'boss_stuns_per_visit', 'boss_eats_per_visit')
+             *(f'cheated_{item}_per_visit' for item in CHEAT_ITEMS), 'boss_stuns_per_visit', 'boss_eats_per_visit')
 KIND_MEAN_KEYS = ('drops_per_visit', 'pickups_per_visit')
 ITEM_KINDS = ('heart', 'fairy', 'clock', 'rupee', 'blue_rupee', 'bombs')
 EXIT_ORDER = ('n', 's', 'e', 'w', 'cave', 'success', 'death', 'timeout', 'other')
@@ -745,11 +745,13 @@ def stats_rows(stats: dict) -> list[tuple[str, str]]:
         ('Pickups / visit', fmt_kinds(stats.get('pickups_per_visit'))),
         ('Exits', fmt_exits(stats.get('exits'))),
     ]
-    # Evaluations from before the bomb ledger have no bomb counts: show the rows only when some do.
+    # Evaluations from before the bomb ledger have no bomb counts: show the row only when some do.
     if stats.get('bombs_used_per_visit') is not None:
         rows.insert(-3, ('Bombs used / visit', fmt_num(stats['bombs_used_per_visit'])))
-    if stats.get('bombs_cheated_per_visit') is not None:
-        rows.insert(-3, ('Bombs cheated / visit', fmt_num(stats['bombs_cheated_per_visit'])))
+    # Cheated items (crates/zelda/src/cheats.rs): only the items some visit used.
+    for item in CHEAT_ITEMS:
+        if stats.get(f'cheated_{item}_per_visit'):
+            rows.insert(-3, (f'Cheated {item} / visit', fmt_num(stats[f'cheated_{item}_per_visit'])))
     # Dodongo stuns and swallowed bombs: only in rooms where some happened (the boss room).
     if stats.get('boss_stuns_per_visit') or stats.get('boss_eats_per_visit'):
         rows.insert(-3, ('Boss stuns / visit', fmt_num(stats.get('boss_stuns_per_visit'))))

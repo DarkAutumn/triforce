@@ -82,6 +82,7 @@ vars! {
     RoomKills = ("room_kills", 0x34F, false),
     Rupees = ("rupees", 0x66D, false),
     RupeesToAdd = ("rupees_to_add", 0x67D, false),
+    RupeesToSubtract = ("rupees_to_subtract", 0x67E, false),
     Bombs = ("bombs", 0x658, false),
     BombMax = ("bomb_max", 0x67C, false),
     Keys = ("keys", 0x66E, false),
