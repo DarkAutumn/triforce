@@ -264,6 +264,9 @@ pub struct EnvOptions {
     pub seed: u64,
     /// Record per-room-visit statistics ([`SpecialistEnv::take_visits`]; evaluation).
     pub track_visits: bool,
+    /// Skip the weapon look-ahead: it only credits rewards on the firing step (endings and metrics count observed
+    /// effects), so evaluation, which ignores rewards, turns it off.
+    pub skip_look_ahead: bool,
 }
 
 impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
@@ -275,6 +278,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         opts: EnvOptions,
     ) -> Result<Self, EnvError> {
         let mut session = Session::new(nes, data.map.clone());
+        session.look_ahead = !opts.skip_look_ahead;
         let pool = if opts.start_state.is_none() && !opts.explicit_starts {
             Some(StartStatePool::new(&config, &data.states_dir)?)
         } else {

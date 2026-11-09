@@ -25,6 +25,22 @@ pub const LOOK_AHEAD_WEAPONS: [AnimationKind; 8] = [
     AnimationKind::Boomerang,
 ];
 
+/// Effects seen in the step itself (no look-ahead, nothing discounted): what endings, linger and visit metrics
+/// count. A hit is seen on the step it lands.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Observed {
+    /// (slot, damage).
+    pub enemies_hit: Vec<(u8, i32)>,
+    pub enemies_stunned: Vec<u8>,
+    pub items_gained: Vec<i16>,
+}
+
+impl Observed {
+    pub fn hits(&self) -> usize {
+        self.enemies_hit.len()
+    }
+}
+
 /// The changes between two consecutive controllable states.
 #[derive(Clone, Debug)]
 pub struct Change {
@@ -40,7 +56,9 @@ pub struct Change {
     pub action_mask: ActionMask,
     pub health_lost: f64,
     pub health_gained: f64,
-    /// (slot, damage), observed plus predicted, minus earlier predictions.
+    /// Seen this step (endings and metrics read these).
+    pub observed: Observed,
+    /// Credited (rewards read these): (slot, damage), observed plus predicted, minus earlier predictions.
     pub enemies_hit: Vec<(u8, i32)>,
     pub enemies_stunned: Vec<u8>,
     pub items_gained: Vec<i16>,
@@ -80,6 +98,7 @@ impl Change {
             action_mask,
             health_lost,
             health_gained,
+            observed: Observed::default(),
             enemies_hit: Vec::new(),
             enemies_stunned: Vec::new(),
             items_gained: Vec::new(),
@@ -88,13 +107,12 @@ impl Change {
             ledger.clear();
         } else {
             let (prev, curr) = (change.previous.clone(), change.state.clone());
-            observe_damage(
-                &prev,
-                &curr,
-                &mut change.enemies_hit,
-                &mut change.enemies_stunned,
-            );
-            observe_items(&prev, &curr, &mut change.items_gained);
+            let seen = &mut change.observed;
+            observe_damage(&prev, &curr, &mut seen.enemies_hit, &mut seen.enemies_stunned);
+            observe_items(&prev, &curr, &mut seen.items_gained);
+            change.enemies_hit = seen.enemies_hit.clone();
+            change.enemies_stunned = seen.enemies_stunned.clone();
+            change.items_gained = seen.items_gained.clone();
             ledger.discount(
                 curr.frame,
                 &mut change.enemies_hit,
@@ -456,6 +474,7 @@ mod tests {
             vec![(SLOT as u8, 1)],
             "credited when the beam leaves"
         );
+        assert_eq!(c.observed, Observed::default(), "nothing landed yet");
         assert_eq!(ledger.predictions().len(), 1);
         assert_eq!(ledger.predictions()[0].frame, 104);
         // The look-ahead ran on a copy: the machine, its frame counter and the other slot are untouched.
@@ -476,6 +495,7 @@ mod tests {
             true,
         );
         assert_eq!(c.enemies_hit, vec![]);
+        assert_eq!(c.observed.enemies_hit, vec![(SLOT as u8, 1)], "seen when it lands");
         assert!(ledger.predictions().is_empty());
 
         // Without look-ahead the hit is credited when observed.

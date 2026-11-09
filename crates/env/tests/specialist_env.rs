@@ -1911,3 +1911,68 @@ fn locked_route_exit_cheats_a_key_once_the_rooms_key_is_taken() {
         nes = release(env);
     }
 }
+
+/// One step's result without its rewards: what must not depend on the look-ahead.
+type Unrewarded = (Observation, bool, bool, Option<env::specialist_env::TerminalInfo>);
+
+/// Plays ten episodes of the Goriya room at full health, firing beams whenever they're legal (else mostly
+/// attacking); returns every step without its rewards, each episode's room visits and the total reward.
+fn goriya_episodes(nes: ZCore, skip_look_ahead: bool) -> (Vec<Unrewarded>, Vec<Vec<zelda::visits::RoomVisit>>, f64) {
+    let opts = EnvOptions {
+        start_state: Some("1_44w_0".into()),
+        seed: 3,
+        track_visits: true,
+        skip_look_ahead,
+        ..Default::default()
+    };
+    let mut env = make_env_with(nes, "goriya", opts, |c| {
+        c.ram_randomization = RamRandomization {
+            hp: Some((HpBound::Max, HpBound::Max)),
+            full_hp: Some(1.0),
+            ..Default::default()
+        };
+        c.max_steps = 120;
+    });
+    let mut rng = ChaCha8Rng::seed_from_u64(4);
+    let (mut steps, mut visits, mut total) = (Vec::new(), Vec::new(), 0.0);
+    for _ in 0..10 {
+        let (mut obs, _) = env.reset(None, None).unwrap();
+        loop {
+            let mut mask = ActionMask::from_flat(&obs.action_mask);
+            if mask.kind[ActionKind::Beams as usize] {
+                for kind in [ActionKind::Move, ActionKind::Wait, ActionKind::Sword] {
+                    mask.disallow_kind(kind);
+                }
+            } else if rng.random::<f32>() < 0.7 && mask.kind[ActionKind::Sword as usize] {
+                mask.disallow_kind(ActionKind::Move);
+                mask.disallow_kind(ActionKind::Wait);
+            }
+            let action = random_legal_action(&mask.to_flat(), &mut rng);
+            let r = env.step_indices(action).unwrap();
+            total += r.reward;
+            obs = r.obs.clone();
+            let mut terminal = r.info.terminal.clone();
+            if let Some(t) = &mut terminal {
+                (t.reward_total, t.episode_rewards) = (0.0, Default::default());
+            }
+            let done = r.terminated || r.truncated;
+            steps.push((r.obs, r.terminated, r.truncated, terminal));
+            if done {
+                visits.push(env.take_visits());
+                break;
+            }
+        }
+    }
+    (steps, visits, total)
+}
+
+#[test]
+fn endings_linger_and_visits_ignore_the_look_ahead() {
+    let (Some(a), Some(b)) = (open_core(), open_core()) else { return };
+    let (with, with_visits, with_reward) = goriya_episodes(a, false);
+    let (without, without_visits, without_reward) = goriya_episodes(b, true);
+    assert!(with.len() > 50);
+    assert!(with == without, "the same game, endings and linger with the look-ahead on or off");
+    assert!(with_visits == without_visits);
+    assert_ne!(with_reward, without_reward, "the look-ahead credited beams on their firing steps");
+}

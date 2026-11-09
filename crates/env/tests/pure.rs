@@ -219,6 +219,7 @@ fn block_change(events: Vec<ProjectileBlock>, room: MapLocation, map: &Arc<GameM
         action_mask: ActionMask::default(),
         health_lost: 0.0,
         health_gained: 0.0,
+        observed: Default::default(),
         enemies_hit: Vec::new(),
         enemies_stunned: Vec::new(),
         items_gained: Vec::new(),

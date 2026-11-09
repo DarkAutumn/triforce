@@ -509,13 +509,53 @@ fn replay(nes: &mut Counted, log: &InputLog) {
     }
 }
 
+/// What one recorded episode left: the machine's RAM and PRG-RAM at its end, every frame zcore ran since power-on
+/// (look-ahead included), the episode's input log, and its other events.
+type Recorded = ([u8; 0x800], [u8; 0x2000], u64, InputLog, Vec<ZeldaEvent>);
+
+/// Plays one episode of `env` with attacks preferred, recording it.
+fn play_recorded<E>(env: &mut E, control: &EnvControl, nes: impl Fn(&E) -> &Counted) -> Recorded
+where
+    E: PoolEnv<Action = ZeldaAction, Event = ZeldaEvent, Error = EnvError>,
+{
+    control.set_recording(true);
+    let mut obs = ObsData::new(Arc::new(obs_layout()));
+    let mut events = Vec::new();
+    let mut rng = ChaCha8Rng::seed_from_u64(2);
+    assert!(env.reset(obs.row(), &mut events).unwrap().is_some());
+    loop {
+        let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
+        let action = random_action(&prefer_attacks(ActionMask::from_flat(&flat)), &mut rng, None);
+        let outcome = env
+            .step(action.to_indices().map(|i| i as i64), obs.row(), &mut events)
+            .unwrap();
+        if outcome.terminated || outcome.truncated {
+            let nes = nes(env);
+            let (ram, prg_ram, emulated) = (*nes.ram(), *nes.prg_ram(), nes.1);
+            let at = events.iter().position(|e| matches!(e, ZeldaEvent::Movie(_))).expect("a movie");
+            let ZeldaEvent::Movie(log) = events.remove(at) else { unreachable!() };
+            return (ram, prg_ram, emulated, *log, events);
+        }
+    }
+}
+
+/// The Goriya room at full health (the NES full-health encoding), 30 steps: with attacks preferred, sword beams
+/// fire; the health pokes land after the gain-control frames.
+fn goriya_full_health(data: &GameData) -> Arc<env::SpecialistConfig> {
+    let mut config = (*specialist_config(data, "goriya", 30)).clone();
+    config.ram_randomization = RamRandomization {
+        hp: Some((HpBound::Max, HpBound::Max)),
+        full_hp: Some(1.0),
+        ..Default::default()
+    };
+    Arc::new(config)
+}
+
 #[test]
-fn recorded_episodes_replay_to_the_same_machine() {
+fn recorded_eval_episodes_replay_to_the_same_machine() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    // Eval: an explicit start and seed per episode. The Goriya room at full health (the NES full-health encoding)
-    // with attacks preferred: sword beams fire, so the session runs its look-ahead; the health pokes land after
-    // the gain-control frames.
+    // Eval: an explicit start and seed per episode.
     let start = "1_44w_0";
     let opts = EnvOptions {
         explicit_starts: true,
@@ -527,98 +567,55 @@ fn recorded_episodes_replay_to_the_same_machine() {
     }]);
     let init = init();
     let control = init.control.clone();
-    let mut config = (*specialist_config(&data, "goriya", 30)).clone();
-    config.ram_randomization = RamRandomization {
-        hp: Some((HpBound::Max, HpBound::Max)),
-        full_hp: Some(1.0),
-        ..Default::default()
-    };
-    let mut env = EvalEnv::new(
-        Arc::new(config),
-        data.clone(),
-        nes,
-        TfzStore,
-        opts,
-        jobs,
-        init,
-        None,
-    )
-    .unwrap();
-    control.set_recording(true);
-    let mut obs = ObsData::new(Arc::new(obs_layout()));
-    let mut events = Vec::new();
-    let mut rng = ChaCha8Rng::seed_from_u64(2);
-    assert!(env.reset(obs.row(), &mut events).unwrap().is_some());
-    let (ram, prg_ram, emulated, log, record) = loop {
-        let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
-        let action = random_action(
-            &prefer_attacks(ActionMask::from_flat(&flat)),
-            &mut rng,
-            None,
-        );
-        let outcome = env
-            .step(
-                action.to_indices().map(|i| i as i64),
-                obs.row(),
-                &mut events,
-            )
-            .unwrap();
-        if outcome.terminated || outcome.truncated {
-            let nes = env.env().session().nes().inner();
-            let (ram, prg_ram, emulated) = (*nes.ram(), *nes.prg_ram(), nes.1);
-            let mut log = None;
-            let mut record = None;
-            for e in events.drain(..) {
-                match e {
-                    ZeldaEvent::Movie(l) => log = Some(*l),
-                    ZeldaEvent::Eval(r) => record = Some(*r),
-                    _ => {}
-                }
-            }
-            break (
-                ram,
-                prg_ram,
-                emulated,
-                log.expect("a movie"),
-                record.expect("an eval record"),
-            );
-        }
-    };
+    let config = goriya_full_health(&data);
+    let mut env = EvalEnv::new(config, data.clone(), nes, TfzStore, opts, jobs, init, None).unwrap();
+    let (ram, prg_ram, emulated, log, events) = play_recorded(&mut env, &control, |e| e.env().session().nes().inner());
+    let record = events
+        .into_iter()
+        .find_map(|e| match e {
+            ZeldaEvent::Eval(r) => Some(*r),
+            _ => None,
+        })
+        .expect("an eval record");
     assert_eq!(log.origin.as_deref(), Some(start));
     assert_eq!((record.start_state.as_str(), record.seed), (start, 11));
     assert!(record.steps > 0 && record.frames > 0);
     // Room visits cover the episode: they start in the reset room and their steps, frames and health add up.
     let (first, last) = (&record.visits[0], record.visits.last().unwrap());
     let location = first.location;
-    assert_eq!(
-        (location.level, location.value, location.in_cave),
-        record.room
-    );
-    assert_eq!(
-        record.visits.iter().map(|v| v.steps as u64).sum::<u64>(),
-        record.steps
-    );
-    assert_eq!(
-        record.visits.iter().map(|v| v.frames).sum::<u64>(),
-        record.frames
-    );
-    assert_eq!(
-        (first.health_in, last.health_out),
-        (record.start_health, record.health)
-    );
-    assert_eq!(
-        record.to_json()["visits"].as_array().unwrap().len(),
-        record.visits.len()
-    );
+    assert_eq!((location.level, location.value, location.in_cave), record.room);
+    assert_eq!(record.visits.iter().map(|v| v.steps as u64).sum::<u64>(), record.steps);
+    assert_eq!(record.visits.iter().map(|v| v.frames).sum::<u64>(), record.frames);
+    assert_eq!((first.health_in, last.health_out), (record.start_health, record.health));
+    assert_eq!(record.to_json()["visits"].as_array().unwrap().len(), record.visits.len());
     // Load randomization pokes come first; the log covers the gain-control frames and every step.
     assert!(log.pokes.iter().any(|p| p.0 == 0));
     assert!(log.buttons.len() as u64 >= record.frames);
+    // Evaluation runs no look-ahead: zcore ran exactly the logged frames since it powered on.
+    assert_eq!(emulated, log.buttons.len() as u64);
+    let mut obs = ObsData::new(Arc::new(obs_layout()));
+    assert_eq!(env.reset(obs.row(), &mut Vec::new()).unwrap(), None, "one job");
+    let mut nes = env.into_env().into_parts().0.into_nes().into_inner();
+    replay(&mut nes, &log);
+    assert!(nes.ram() == &ram, "RAM after replay");
+    assert!(nes.prg_ram() == &prg_ram, "PRG-RAM after replay");
+}
+
+#[test]
+fn recorded_training_episodes_replay_past_their_look_aheads() {
+    let Some(nes) = open_core() else { return };
+    let data = data();
+    let opts = EnvOptions {
+        start_state: Some("1_44w_0".into()),
+        ..Default::default()
+    };
+    let init = init();
+    let control = init.control.clone();
+    let config = goriya_full_health(&data);
+    let mut env = TrainEnv::new(config, data.clone(), nes, TfzStore, opts, init, None).unwrap();
+    let (ram, prg_ram, emulated, log, _) = play_recorded(&mut env, &control, |e| e.env().session().nes().inner());
     // zcore ran every frame since it powered on, look-ahead included; the log kept only the real ones.
-    assert!(
-        emulated > log.buttons.len() as u64,
-        "look-ahead ran: {emulated} frames emulated"
-    );
-    assert_eq!(env.reset(obs.row(), &mut events).unwrap(), None, "one job");
+    assert!(emulated > log.buttons.len() as u64, "look-ahead ran: {emulated} frames emulated");
     let mut nes = env.into_env().into_parts().0.into_nes().into_inner();
     replay(&mut nes, &log);
     assert!(nes.ram() == &ram, "RAM after replay");

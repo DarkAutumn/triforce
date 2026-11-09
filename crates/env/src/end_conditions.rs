@@ -174,7 +174,7 @@ pub enum EndCondition {
     },
     /// The shared linger tracker's tail reached the limit (a bootstrapping truncation).
     NoRoomProgress { no_progress_steps: u32 },
-    /// `limit` actions in one room without damage dealt (a hit, look-ahead credit included) or taken (a
+    /// `limit` actions in one room without damage dealt (an observed hit: on the step it lands) or taken (a
     /// bootstrapping truncation): ends attack loops that never connect.
     NoDamage { limit: u32, quiet: u32 },
 }
@@ -257,7 +257,7 @@ impl EndCondition {
                 last_progress,
                 entered_rooms,
             } => {
-                if prev.link.position == curr.link.position && v.change.hits() == 0 {
+                if prev.link.position == curr.link.position && v.change.observed.hits() == 0 {
                     *position_duration += 1;
                     if *position_duration >= *position_timeout {
                         return Some(STUCK.to_owned());
@@ -278,7 +278,7 @@ impl EndCondition {
                 (v.linger_tail_steps >= *no_progress_steps).then(|| NO_ROOM_PROGRESS.to_owned())
             }
             EndCondition::NoDamage { limit, quiet } => {
-                let damage = v.change.health_lost > 0.0 || !v.change.enemies_hit.is_empty();
+                let damage = v.change.health_lost > 0.0 || !v.change.observed.enemies_hit.is_empty();
                 if damage || prev.full_location() != curr.full_location() {
                     *quiet = 0;
                 } else {

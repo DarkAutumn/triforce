@@ -234,13 +234,19 @@ Legacy max-step truncations retain their existing nonbootstrapping behavior. Run
 Nearby-item shaping and the measured cutoff remain disabled in promoted configs until their experiments.
 
 `no_damage_steps` (positive or null, **default 600**) ends an episode `no-damage` after that many actions in one
-room without damage dealt (an enemy hit, look-ahead credit included) or taken: a soft-failure truncation with
+room without damage dealt (an observed enemy hit, on the step it lands) or taken: a soft-failure truncation with
 `bootstrap_truncation=True`, like `no-room-progress`, so attack loops that never connect stop without a penalty.
 It is checked after the other conditions and coexists with the legacy timeout (50 still non-hitting steps →
 `stuck`). Chains use the same counter: `RoomRecord.no_damage_max` is each visit's longest such stretch, and
 `ChainEnv.stall_steps = N` (off by default; `ChainTask(stall_steps=)`, `ChainPool(stall_steps=)`, the watch
 player's `--stall-steps`, default 300) sets `stalled` on the room event after N actions and ends the run `stuck`
 at 2N. `eval-chain` leaves it off.
+
+Endings, linger, the chain's stall counter and the visit metrics read `Change.observed` (hits, stuns and pickups
+seen in the step itself); only the critic reads the credited fields, where the weapon look-ahead credits a beam,
+bomb, arrow or boomerang hit on its firing step and the ledger keeps the landing step from crediting it again.
+So the look-ahead changes rewards and nothing else (tested: the same game, endings, linger and visits with it on
+or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
 
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
 

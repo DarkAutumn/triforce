@@ -124,13 +124,14 @@ pub struct VisitStep<'a> {
 }
 
 impl VisitStep<'_> {
+    /// Observed effects only: a hit counts on the step it lands.
     pub fn of(change: &Change) -> VisitStep<'_> {
         VisitStep {
             frames: change.frames,
             health_lost: change.health_lost,
             health_gained: change.health_gained,
-            hits_dealt: change.hits() as u32,
-            items_gained: &change.items_gained,
+            hits_dealt: change.observed.hits() as u32,
+            items_gained: &change.observed.items_gained,
             bombs_used: 0,
             cheated: ItemCounts::default(),
             boss_stuns: 0,

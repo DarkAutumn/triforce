@@ -120,8 +120,8 @@ pub struct RoomRecord {
     /// None until the visit starts tracking (the milestone record has none: `{}`).
     pub linger: Option<LingerSummary>,
     pub blocks: u32,
-    /// Longest stretch of the visit's actions without damage dealt (an enemy hit, look-ahead credit included) or
-    /// taken.
+    /// Longest stretch of the visit's actions without damage dealt (an observed enemy hit: on the step it lands)
+    /// or taken.
     pub no_damage_max: u64,
     /// Bombs placed during the visit, and cheated items used (`zelda::cheats`; JSON `cheated_bombs`, `cheated_keys`,
     /// `cheated_rupees`).
@@ -305,9 +305,12 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
+    /// The chain runs no critic, so its session skips the weapon look-ahead (it only credits rewards).
     pub fn new(data: Arc<GameData>, nes: N, store: St, route: Route) -> Self {
+        let mut session = Session::new(nes, data.map.clone());
+        session.look_ahead = false;
         ChainEnv {
-            session: Session::new(nes, data.map.clone()),
+            session,
             data,
             store,
             configs: HashMap::new(),
@@ -461,7 +464,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.boss_eats += boss.eats;
         record.steps += 1;
         record.frames += change.frames as u64;
-        if change.health_lost > 0.0 || !change.enemies_hit.is_empty() {
+        if change.health_lost > 0.0 || !change.observed.enemies_hit.is_empty() {
             self.no_damage = 0;
         } else {
             self.no_damage += 1;

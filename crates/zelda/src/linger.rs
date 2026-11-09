@@ -67,12 +67,13 @@ pub struct LingerStep {
 }
 
 impl LingerStep {
+    /// Observed effects only: a hit counts on the step it lands.
     pub fn of(change: &Change) -> LingerStep {
         LingerStep {
             frames: change.frames,
-            items_gained: !change.items_gained.is_empty(),
+            items_gained: !change.observed.items_gained.is_empty(),
             gained_triforce: change.gained_triforce(),
-            enemies_hit: !change.enemies_hit.is_empty(),
+            enemies_hit: !change.observed.enemies_hit.is_empty(),
             health_gained: change.health_gained,
         }
     }

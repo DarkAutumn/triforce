@@ -293,6 +293,7 @@ where
     ) -> Result<Self, EnvError> {
         let opts = EnvOptions {
             track_visits: true,
+            skip_look_ahead: true,
             ..opts
         };
         let (env, control) = specialist_env(config, data, nes, store, opts, init, rgb)?;

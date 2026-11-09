@@ -25,7 +25,7 @@ use zelda::enums::enemy;
 use zelda::objectives::{Objective, ObjectiveKind};
 use zelda::room::{Target, Wavefront};
 use zelda::tables::{self, RAM_SIZE};
-use zelda::{Action, ActionMask, Change, GameMap, GameView, MapLocation, Var};
+use zelda::{Action, ActionMask, Change, GameMap, GameView, MapLocation, Observed, Var};
 
 static MAP: LazyLock<Arc<GameMap>> = LazyLock::new(|| Arc::new(GameMap::builtin()));
 
@@ -104,13 +104,22 @@ fn step(prev: &Ram, curr: &Ram, action: &str) -> Change {
         action_mask: ActionMask::default(),
         health_lost: (-delta).max(0.0),
         health_gained: delta.max(0.0),
+        observed: Observed::default(),
         enemies_hit: Vec::new(),
         enemies_stunned: Vec::new(),
         items_gained: Vec::new(),
     }
 }
 
+/// A step whose `hits` landed (observed) and are credited.
 fn hits(mut change: Change, hits: &[(u8, i32)]) -> Change {
+    change.enemies_hit = hits.to_vec();
+    change.observed.enemies_hit = hits.to_vec();
+    change
+}
+
+/// A step credited with `hits` a look-ahead predicted; nothing landed yet.
+fn predicted(mut change: Change, hits: &[(u8, i32)]) -> Change {
     change.enemies_hit = hits.to_vec();
     change
 }
@@ -975,6 +984,11 @@ fn no_damage_ends_attack_loops_that_never_connect() {
         assert!(swings(&mut c, 4).iter().all(Option::is_none));
     }
     assert_eq!(swings(&mut c, 1), [Some(NO_DAMAGE.to_owned())]);
+    // Endings count observed damage only: a look-ahead's credit on the firing step doesn't restart the count.
+    c.clear();
+    assert!(swings(&mut c, 4).iter().all(Option::is_none));
+    let fired = predicted(step(&base, &base, "SWORD E"), &[(1, 1)]);
+    assert_eq!(ends(&mut c, &fired, &[EAST], 0).as_deref(), Some(NO_DAMAGE));
     c.clear();
     assert!(swings(&mut c, 4).iter().all(Option::is_none), "reset starts over");
 }
