@@ -3,7 +3,8 @@
     python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--threads N]
         [--iterations N] [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
-        [--ent-anneal SHARE] [--shaping-anneal N]
+        [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
+        [--best-coeff C] [--best-parallel P]]
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
@@ -20,6 +21,11 @@ separately as ``curriculum/*``.
 ``--shaping-anneal N`` (outcome fine-tuning, better-play §1a) lowers the pool's shaping scale (``reward.shaping_scale``:
 every non-terminal reward and penalty is multiplied by it) linearly to 0 over the first N iterations, then keeps it
 at 0, so the policy optimizes the health-scaled terminal outcome (plus ``reward.frame_penalty``, if set).
+``--ent-anneal SHARE`` lowers the entropy bonus linearly to 0 over the last SHARE of the iterations (§6b).
+``--best-of-n RUNS`` (best-of-N self-distillation, §3; ``best_of_n.py``): at the start and every ``--best-every``
+iterations the current policy plays RUNS episodes from every seed start state on its own ``EvalTask`` pool
+(``--best-parallel`` envs), and its best ``--best-keep`` successful runs per state (success, hearts lost, frames)
+become the behavior-cloning batch, weighted ``--best-coeff`` (the demo-regularization term; ``best/*`` metrics).
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
@@ -50,6 +56,7 @@ import torch
 
 from . import registry
 from ._native import CurriculumSpec, Env, EnvPool, TrainTask
+from .best_of_n import collect_best
 from .demo import collect_demo_batch, parse_demo_actions
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir
 from .metrics import MetricsLogger, format_summary
@@ -124,6 +131,14 @@ def parse_args(argv=None):
     parser.add_argument('--demo-bc-coeff', type=float, default=0.1)
     parser.add_argument('--demo-allow-incomplete', action='store_true',
                         help="accept a demo that stops before the episode ends in success")
+    parser.add_argument('--best-of-n', type=int, default=0, metavar='RUNS',
+                        help="best-of-N self-distillation (better-play §3): every --best-every iterations, play RUNS "
+                             "episodes from every seed start state and behavior-clone the best --best-keep "
+                             "successful runs of each state (weight --best-coeff); 0 = off")
+    parser.add_argument('--best-keep', type=int, default=2)
+    parser.add_argument('--best-every', type=int, default=20)
+    parser.add_argument('--best-coeff', type=float, default=0.2)
+    parser.add_argument('--best-parallel', type=int, default=4, help="envs of the best-of-N collection pool")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop early once training success_rate >= this for --stop-patience iterations")
@@ -318,6 +333,20 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     early = EarlyStop(args.stop_success, args.stop_patience)
     ckpt = registry.checkpoint_path(specialist, run_id, root)
 
+    def refresh_best(collection: int) -> dict:
+        """Best-of-N: replaces the BC batch with the current policy's best runs; returns its metrics."""
+        best = collect_best(config, network.to_native(), args.best_of_n, args.best_keep,
+                            seed=(pool_seed + collection * 1_000_003) % (1 << 62), parallel=args.best_parallel,
+                            states_dir=args.states_dir)
+        ppo.demo_batch = best.batch if best.steps else None
+        ppo.config.demo_bc_coeff = args.best_coeff if best.steps else 0.0
+        return {'best/episodes': best.episodes, 'best/success_rate': best.successes / max(1, best.episodes),
+                'best/kept': best.kept, 'best/states': best.states, 'best/steps': best.steps}
+
+    if args.best_of_n > 0 and args.demo:
+        raise ValueError("--best-of-n and --demo both set the behavior-cloning batch; use one")
+    best_metrics = refresh_best(0) if args.best_of_n > 0 else {}
+
     def save():
         registry.save_checkpoint(specialist, run_id, network, ppo.optimizer, iterations=state['iteration'],
                                  steps=state['steps'], metrics=state['metrics'], root=root)
@@ -327,7 +356,10 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     def on_iteration(result: IterationResult):
         state['iteration'] = start_iteration + result.iteration
         state['steps'] = result.total_steps
-        metrics = {**result.rollout.summary(), **result.stats}
+        metrics = {**result.rollout.summary(), **result.stats, **best_metrics}
+        best_metrics.clear()
+        if args.best_of_n > 0 and result.iteration % args.best_every == 0 and result.iteration < args.iterations:
+            best_metrics.update(refresh_best(result.iteration // args.best_every))
         stop = early.update(result.rollout.start_results)
         if early.balanced is not None:
             metrics['balanced_success_rate'] = early.balanced

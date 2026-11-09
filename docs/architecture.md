@@ -231,6 +231,11 @@ penalties alike; the terminal terms (`reward-terminal-success`, already health-s
 `triforce.train --shaping-anneal N` (`PPOConfig.shaping_anneal`) lowers it linearly to 0 over the first N iterations
 (iteration k rolls out at start × max(0, 1 − (k−1)/N)) and reports it as `charts/shaping_scale` (better-play §1a
 outcome fine-tuning: after normal training, the policy optimizes the true outcome).
+`triforce.train --ent-anneal SHARE` (`PPOConfig.ent_anneal`) lowers the entropy bonus linearly to 0 over the last
+SHARE of a run's iterations (`charts/ent_coeff`; §6b). `--best-of-n RUNS` (`best_of_n.collect_best`; §3) replaces the
+demo-regularization batch, at the start and every `--best-every` iterations, with the current policy's best
+`--best-keep` successful runs per seed start state out of RUNS (ranked by success, hearts lost, frames; played on a
+separate `EvalTask` pool), weighted `--best-coeff`; a batch larger than a minibatch is sampled per minibatch.
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;

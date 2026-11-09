@@ -326,7 +326,13 @@ class PPO:
                 entropy_loss = out.entropy.mean()
                 loss = pg_loss - self.ent_coeff * entropy_loss + cfg.vf_coeff * v_loss
                 if demo is not None:
-                    demo_out = network.evaluate(demo[0], demo[1], demo[2])
+                    rows = demo[2].shape[0]
+                    if rows > minibatch_size:   # a large batch (best-of-N runs): a minibatch-sized sample each time
+                        pick = torch.randperm(rows, device=self.device)[:minibatch_size]
+                        demo_out = network.evaluate({k: v[pick] for k, v in demo[0].items()}, demo[1][pick],
+                                                    demo[2][pick])
+                    else:
+                        demo_out = network.evaluate(demo[0], demo[1], demo[2])
                     demo_bc_loss = -demo_out.log_prob.mean()
                     loss = loss + cfg.demo_bc_coeff * demo_bc_loss
 
