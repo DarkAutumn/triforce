@@ -893,3 +893,12 @@ entry below and `crates/zcore/UPSTREAM.md`.
   elsewhere), and the overlapped update now uses spare cores too; expected well under 15% for a deferred critic,
   settlement queue, separate emulators and helper threads. Backlog, with the barrier's other fix (more envs than
   threads, work-stealing).
+
+## 2026-11-09 — Inference stays on the CPU (no GPU backend)
+
+- **What:** the Rust CPU forward (`crates/policy`) is the only backend for training, evaluation, chains and the
+  watch player.
+- **Why (Lee's rule: GPU better for both → GPU; for mass play only → both; CPU better for both → CPU):** the forward
+  is ~10% of CPU in uncapped 128-game play (zcore 86%) and ~8% of rollout CPU in training, so a GPU could at most
+  win that back, by making workers wait on cross-worker batches with a second set of numerics. 128 games at 60 fps
+  use about a tenth of the machine. Evidence: `docs/rust-actor.md` "GPU vs CPU inference".

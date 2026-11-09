@@ -96,15 +96,16 @@ The learner recomputes `logp_old` and values with its own torch network over the
 5. Profile end to end; GPU vs CPU inference; fresh retrain of the team (baseline on the new stack), then
    better-play §0, §1a + §3, §6b, §2, §1b/§5/§6a.
 
-## Open: GPU vs CPU inference (Lee, Nov 9; a major step)
+## GPU vs CPU inference (Lee, Nov 9): CPU only
 
 Training runs 8–24 envs, but the watch player may run hundreds of games at once (~128+, no training), where a CPU
-forward per game could become the bottleneck. Measure both on the Rust side (CPU `crates/policy` vs a GPU
-backend, e.g. libtorch via `tch` or another GPU crate) for both workloads, and decide by the numbers:
+forward per game could become the bottleneck. The rule: GPU better for both → GPU only; GPU better for mass play
+only → both backends; CPU better for both → CPU only. Either way the determinism contract holds per backend and a
+replay record names its backend.
 
-- GPU better for both → drop the CPU path and use the GPU backend.
-- GPU better for mass play only, CPU better for training → keep both backends.
-- CPU better for both → CPU only.
-
-Either way the determinism contract holds per backend (Rust ↔ Rust bit for bit on the same backend, machine and
-binary); a replay record names the backend its probabilities came from.
+**Measured (Nov 9, after the AVX kernels, 0.31 ms per observation on one thread):** the forward is ~10% of all CPU
+in uncapped mass play (128 games, untrained models for every specialist: 78k emulated frames/s, ~610 per game, 10×
+real time; zcore 86%) and ~8% of rollout CPU in training. A GPU backend could at most win that share back, and only
+by batching decisions across workers (each would wait for the batch) on a second set of numerics. At the NES's
+60 fps the 128 games use about a tenth of the machine. So **CPU better for both: CPU only**, no GPU backend built.
+Revisit if the network grows several-fold.
