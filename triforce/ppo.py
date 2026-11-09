@@ -44,6 +44,9 @@ class PPOConfig:
     minibatches: int = 4
     clip_coeff: float = 0.2
     ent_coeff: float = 0.01
+    # Share of a train() call's iterations, at its end, over which ent_coeff falls linearly to 0 (better-play §6b:
+    # less sampling noise in the final policy).  0 = constant.
+    ent_anneal: float = 0.0
     vf_coeff: float = 0.5
     max_grad_norm: float = 0.5
     epsilon: float = 1e-5
@@ -152,6 +155,7 @@ class PPO:
         self._pending_optimizer_state = optimizer_state
         self.demo_batch = demo_batch
         self.total_steps = 0
+        self.ent_coeff = self.config.ent_coeff     # this update's entropy bonus (ent_anneal lowers it)
 
     # ------------------------------------------------------------------ optimizer
 
@@ -185,6 +189,7 @@ class PPO:
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         cfg = self.config
+        anneal = max(0, min(iterations, round(cfg.ent_anneal * iterations)))
         steps_per_env = max(1, cfg.target_steps // pool.num_envs)
         self.setup_optimizer(network)
         self.total_steps = start_steps
@@ -213,6 +218,9 @@ class PPO:
                 self.total_steps += batch_steps
 
                 optimize_start = time.time()
+                # entropy bonus: constant, then down to 0 at the last iteration over the final `anneal` ones
+                left = iterations - iteration
+                self.ent_coeff = cfg.ent_coeff * (min(1.0, left / anneal) if anneal else 1.0)
                 stats = self.optimize(network, buffer)
                 elapsed = time.time() - start
                 rollout_time = collector.rollout_seconds
@@ -298,7 +306,7 @@ class PPO:
                     v_loss = 0.5 * (new_value - b_returns[mb]).pow(2).mean()
 
                 entropy_loss = out.entropy.mean()
-                loss = pg_loss - cfg.ent_coeff * entropy_loss + cfg.vf_coeff * v_loss
+                loss = pg_loss - self.ent_coeff * entropy_loss + cfg.vf_coeff * v_loss
                 if demo is not None:
                     demo_out = network.evaluate(demo[0], demo[1], demo[2])
                     demo_bc_loss = -demo_out.log_prob.mean()
@@ -334,6 +342,7 @@ class PPO:
         explained_var = float('nan') if var_y == 0 else float(1 - torch.var(b_returns - b_values) / var_y)
         stats = {
             'charts/learning_rate': optimizer.param_groups[0]['lr'],
+            'charts/ent_coeff': self.ent_coeff,
             'losses/value_loss': v_loss.item(),
             'losses/policy_loss': pg_loss.item(),
             'losses/entropy': entropy_loss.item(),

@@ -106,6 +106,8 @@ def parse_args(argv=None):
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
     parser.add_argument('--save-every', type=int, default=10, help="checkpoint every N iterations (and at the end)")
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
+    parser.add_argument('--ent-anneal', type=float, default=PPOConfig.ent_anneal,
+                        help="share of the iterations, at the end, over which the entropy bonus falls to 0")
     parser.add_argument('--start-state', default=None, help="pin every episode to this savestate (name or path)")
     parser.add_argument('--states-dir', default=None,
                         help="where bare start-state names resolve (default: $TRIFORCE_STATES_DIR or triforce/states)")
@@ -277,6 +279,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                                         require_success=not args.demo_allow_incomplete)
 
     ppo_config = PPOConfig(target_steps=args.steps_per_update, learning_rate=args.learning_rate,
+                           ent_anneal=args.ent_anneal,
                            demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
 
