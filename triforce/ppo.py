@@ -27,6 +27,14 @@ room-entry episodes by positive value loss and sets the pool's seed-state weight
 before the next rollout starts.  One rollout of lag: the scores come from the update's input (values recomputed
 before it), and an env that resets at a rollout's last step has drawn its start state under the previous weights; the
 first rollout uses the pool's own failure-weighted draws.
+
+Phasic policy gradient (better-play §6a, Cobbe et al., 2021; ``PPGStore``, ``PPO.auxiliary_phase``): with ``ppg``
+the PPO updates are the policy phase, unchanged.  Each consumed rollout's observations, masks and value targets (the
+GAE returns) are kept on CPU; every ``ppg_every`` iterations an auxiliary phase runs ``ppg_aux_epochs`` epochs over
+them with ``½(V − R)² + ppg_clone_coeff · KL(π_old ‖ π_θ)`` (π_old: the joint action distributions from before the
+phase, an exact KL over the 224 joint actions), then the store is cleared.  The value head is the existing one: the
+encoders are shared by both towers, so the extra value epochs reach the shared features and the clone term keeps the
+policy where it was.  The phase has its own Adam (the paper's separate optimizer; not checkpointed).
 """
 
 import copy
@@ -86,6 +94,12 @@ class PPOConfig:
     plr_beta: float = 0.1
     plr_rho: float = 0.1
     plr_uniform: float = 0.1
+    # Phasic policy gradient (better-play §6a): an auxiliary phase every ``ppg_every`` iterations of ``ppg_aux_epochs``
+    # epochs over their rollouts, value loss + ``ppg_clone_coeff`` · KL(π_old ‖ π_θ).
+    ppg: bool = False
+    ppg_every: int = 8
+    ppg_aux_epochs: int = 6
+    ppg_clone_coeff: float = 1.0
 
     def to_dict(self) -> dict:
         """Plain-data form for checkpoints/logs."""
@@ -240,6 +254,36 @@ class SilReplay:
                 self.actions[pick].to(device), self.returns[pick].to(device))
 
 
+class PPGStore:
+    """Phasic policy gradient's auxiliary-phase data: the observations, masks and value targets (GAE returns) of the
+    rollouts since the last auxiliary phase, copied to CPU (the collector reuses its buffers)."""
+
+    def __init__(self):
+        self.rollouts: list[tuple[dict, torch.Tensor, torch.Tensor]] = []
+
+    def __len__(self) -> int:
+        return len(self.rollouts)
+
+    def add(self, buffer: RolloutBuffer):
+        """Keeps ``buffer``'s rows (a readied buffer: returns computed)."""
+        length = buffer.memory_length
+        obs = {key: value[:, :length].reshape(-1, *value.shape[2:]).clone()
+               for key, value in buffer.observation.items()}
+        masks = buffer.masks[:, :length].reshape(-1, buffer.masks.shape[-1]).clone()
+        self.rollouts.append((obs, masks, buffer.returns.reshape(-1).clone()))
+
+    def batch(self, device) -> tuple[dict, torch.Tensor, torch.Tensor]:
+        """Every stored row on ``device``: ``(obs, masks, returns)``."""
+        obs = {key: torch.cat([rollout[0][key] for rollout in self.rollouts]).to(device)
+               for key in self.rollouts[0][0]}
+        return (obs, torch.cat([rollout[1] for rollout in self.rollouts]).to(device),
+                torch.cat([rollout[2] for rollout in self.rollouts]).to(device))
+
+    def clear(self):
+        """Drops the stored rollouts."""
+        self.rollouts.clear()
+
+
 class PPO:
     """PPO with factored heads and frame-aware GAE."""
 
@@ -252,6 +296,8 @@ class PPO:
         self.total_steps = 0
         self.ent_coeff = self.config.ent_coeff     # this update's entropy bonus (ent_anneal lowers it)
         self.sil: Optional[SilReplay] = None       # created by the first optimize with sil_coeff > 0
+        self.ppg: Optional[PPGStore] = None        # created by the first train() with ppg
+        self.aux_optimizer: Optional[torch.optim.Optimizer] = None
 
     # ------------------------------------------------------------------ optimizer
 
@@ -339,6 +385,12 @@ class PPO:
                 left = iterations - iteration
                 self.ent_coeff = cfg.ent_coeff * (min(1.0, left / anneal) if anneal else 1.0)
                 stats = self.optimize(network, buffer)
+                if cfg.ppg:     # phasic policy gradient: keep the rollout; every ppg_every-th one, an auxiliary phase
+                    if self.ppg is None:
+                        self.ppg = PPGStore()
+                    self.ppg.add(buffer)
+                    if len(self.ppg) >= cfg.ppg_every:
+                        stats.update(self.auxiliary_phase(network))
                 elapsed = time.time() - start
                 rollout_time = collector.rollout_seconds
                 stats['charts/SPS'] = steps_this_run / elapsed if elapsed > 0 else 0.0
@@ -538,8 +590,67 @@ class PPO:
         stats.update(search_stats)
         return stats
 
+    def auxiliary_phase(self, network: nn.Module) -> dict:
+        """PPG's auxiliary phase over the stored rollouts (``self.ppg``), which it then clears: ``ppg_aux_epochs``
+        epochs in minibatches the policy phase's size of ``½(V − R)² + ppg_clone_coeff · KL(π_old ‖ π_θ)``, π_old the
+        joint action distributions before the phase.  Returns ``ppg/*`` stats over every stored row: value loss and
+        explained variance before (``_start``) and after, the final KL, rows and seconds."""
+        # pylint: disable=too-many-locals
+        cfg = self.config
+        began = time.time()
+        network.to(self.device)
+        network.train()
+        if self.aux_optimizer is None:
+            self.aux_optimizer = torch.optim.Adam(network.parameters(), lr=cfg.learning_rate, eps=cfg.epsilon)
+        obs, masks, returns = self.ppg.batch(self.device)
+        rows = returns.shape[0]
+        minibatch_size = max(1, -(-rows // (cfg.minibatches * len(self.ppg))))
+
+        def measure():
+            """(value loss, explained variance, joint log-probs [rows, 224]) over every stored row."""
+            values, joints = [], []
+            with torch.no_grad():
+                for begin in range(0, rows, minibatch_size):
+                    chunk = slice(begin, begin + minibatch_size)
+                    mb_obs = {k: v[chunk] for k, v in obs.items()}
+                    values.append(network.get_value(mb_obs))
+                    joints.append(network.joint_log_probs(mb_obs, masks[chunk]))
+            values = torch.cat(values)
+            var_y = torch.var(returns)
+            explained = float('nan') if var_y == 0 else float(1 - torch.var(returns - values) / var_y)
+            return float(0.5 * (values - returns).pow(2).mean()), explained, torch.cat(joints)
+
+        value_loss_start, explained_start, old_joint = measure()
+        for _ in range(cfg.ppg_aux_epochs):
+            for mb in torch.randperm(rows, device=self.device).split(minibatch_size):
+                mb_obs = {k: v[mb] for k, v in obs.items()}
+                v_loss = 0.5 * (network.get_value(mb_obs) - returns[mb]).pow(2).mean()
+                kl = joint_kl(old_joint[mb], network.joint_log_probs(mb_obs, masks[mb]))
+                loss = v_loss + cfg.ppg_clone_coeff * kl
+                self.aux_optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(network.parameters(), cfg.max_grad_norm)
+                self.aux_optimizer.step()
+
+        value_loss, explained, new_joint = measure()
+        kl = float(joint_kl(old_joint, new_joint))
+        self.ppg.clear()
+        network.to('cpu')
+        return {'ppg/value_loss': value_loss, 'ppg/value_loss_start': value_loss_start, 'ppg/kl': kl,
+                'ppg/explained_variance': explained, 'ppg/explained_variance_start': explained_start,
+                'ppg/rows': float(rows), 'ppg/seconds': time.time() - began}
+
 
 def search_cross_entropy(target: torch.Tensor, joint_log_probs: torch.Tensor) -> torch.Tensor:
     """Mean over rows of CE(π', π_θ) = −Σ_j π'_j log π_θ(j): ``target`` π' ``[B, J]`` (0 off the legal actions),
     ``joint_log_probs`` ``[B, J]`` (``ZeldaPolicy.joint_log_probs``, −inf where illegal; those j are skipped)."""
     return -(target * torch.where(target > 0, joint_log_probs, 0.0)).sum(dim=-1).mean()
+
+
+def joint_kl(old_log_probs: torch.Tensor, new_log_probs: torch.Tensor) -> torch.Tensor:
+    """Mean over rows of KL(π_old ‖ π_θ) = Σ_j π_old(j) (log π_old(j) − log π_θ(j)) over the legal joint actions
+    (``ZeldaPolicy.joint_log_probs`` ``[B, J]``, −inf where illegal; both under the same mask)."""
+    legal = torch.isfinite(old_log_probs)
+    old = torch.where(legal, old_log_probs, 0.0)
+    new = torch.where(legal, new_log_probs, 0.0)
+    return (old.exp() * (old - new)).sum(dim=-1).mean()

@@ -223,6 +223,9 @@ treasure) a PBRS target the same way, hearts and fairies only while Link is belo
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
+`reward.exit_health_weight` w (default 0.5, in [0, 1]; better-play §1b) sets how much of the success terminal rides
+on the health Link leaves with: `reward-terminal-success` = 20 × ((1 − w) + w × hp/max_hp) (`success_reward_value`;
+0.5 is the long-standing 20 × (0.5 + 0.5 × hp/max_hp), bit for bit; 1.0 pays 20 × hp/max_hp, 0 a flat 20).
 `reward.shaping_scale` (default 1.0, in [0, 1]) multiplies every term the critic produces each step, rewards and
 penalties alike; the terminal terms (`reward-terminal-success`, already health-scaled, and
 `penalty-terminal-failure`) are never scaled. `reward.frame_penalty` (default 0, ≥ 0; e.g. 0.001/8) adds an unscaled
@@ -273,6 +276,20 @@ when the state was last scored (uniform while all are 0); `--plr-beta` β, `--pl
 rollout of lag (the first rollout draws as without PLR; an env resetting at a rollout's last step drew under the
 previous weights). Stats: `plr/entropy` (nats), `plr/top_state` (largest weight), `plr/weight/<state>`,
 `plr/scored_episodes`.
+`--ppg` (`PPOConfig.ppg`, phasic policy gradient, Cobbe et al. 2021; §6a, `ppo.PPGStore`, `PPO.auxiliary_phase`)
+keeps the PPO update as the policy phase and copies each consumed rollout's observations, masks and value targets
+(the GAE returns) to CPU. After every `--ppg-every` N (default 8) iterations an auxiliary phase runs `--ppg-aux-epochs`
+(default 6) epochs over those N rollouts, in minibatches the policy phase's size, with its own Adam (the paper's
+separate optimizer; not checkpointed, so a resumed run starts it fresh), loss ½(V − R)² + `--ppg-clone-coeff` C
+(default 1) · KL(π_old ‖ π_θ), π_old the joint action distributions recorded before the phase (`joint_kl` over
+`ZeldaPolicy.joint_log_probs`, exact over the 224 joint actions), then clears the store. The network has separate
+policy and value towers on shared encoders (room embedding, entity transformer, grid CNN), so this is the
+single-network variant on the existing value head: the extra value epochs train the value tower and the shared
+encoders while the clone term holds the policy. A paper-style auxiliary value head on the policy tower was left out:
+it would add a weight the Rust `Policy` and old checkpoints don't know. Stats on the iterations that run a phase
+(over every stored row): `ppg/value_loss`, `ppg/kl`, `ppg/explained_variance` after the phase, `ppg/value_loss_start`
+and `ppg/explained_variance_start` before it, `ppg/rows`, `ppg/seconds` (also inside `charts/optimize_seconds`);
+`losses/explained_variance` stays per iteration. Off (default), training is unchanged.
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;
@@ -442,7 +459,7 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   `runs/runner.jsonl`. `--render` shows one chain env with rendering on; `--video` records the run's inputs, then
   renders them through `ffmpeg` (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
 - `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR]
-  [--act MODE] [--plays PATH] [--logs-dir DIR | --no-log]` → success
+  [--act MODE] [--plays PATH] [--harvest [DIR]] [--logs-dir DIR | --no-log]` → success
   rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.
@@ -451,6 +468,24 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   objects; the chain pool uses them instead of reloading canonical YAML. Runtime item masks, observations
   and room/cutoff budgets use these configs. Route selection and carried inventory/health remain chain-owned.
   Other families retain canonical configs; checkpoint overrides and promoted pointers are independent.
+- Handoff harvesting (better-play §1b): `eval-chain --harvest [DIR]` (`Runner(harvest=)`, `ChainPool(harvest=)`,
+  `ChainTask(harvest=)`, `ChainEnv::set_harvest`) turns on the session's pre-entry capture and, at every **handoff**
+  (a room entry through a correct exit where the acting specialist changes; not same-family entries, retreats,
+  wrong exits or the run's first room), saves the entry's pre-entry snapshot (the same kind of state
+  `SavestateCapture` and `entry_states` write: the frame before the room entry, so a load replays the entry and
+  redraws the spawn) as `DIR/<new specialist>/<level>_<room><side>_h<seed>_<n>.state` (`harvest_filename`: `side`
+  is the routes.yaml entry, `zelda::objectives::route_entry`, spelled like the seed states: n/s/e/w, `s` down a
+  level's stairs, `c` out of a cave, cellar or level, `cave` a cave or cellar interior; `n` = the room's index in the
+  run; a Wallmaster drag is no entry and isn't saved). Names depend on the run seed and room index only, so the
+  files are the same for any `--parallel`/`--threads`; a rerun of a seed overwrites its files. `DIR` defaults to
+  `paths.HARVESTED_DIR` (`<states dir>/harvested`), which is where every specialist's `harvested_dir`
+  (`harvested_states`, default `<states dir>/harvested/<name>`) reads, so a plain `--harvest` feeds training
+  directly; elsewhere, point a config at `DIR/<name>` with `harvested_states:`. Training
+  envs mix harvested states with seed states at `harvested_fraction` (default 0.5; the pool rescans the dir every
+  64 resets), `state_entry` reads the `_h<seed>_<n>` names like seed states (route step from the entry side and
+  progress), and a harvested start skips `ram_randomization`: it keeps the true health, keys and bombs the upstream
+  specialist handed over (positions too; enemies spawn as the entry draws them). Refresh the harvest after promoting
+  an upstream specialist.
 
 ## Entry states (`entry_states.py`)
 

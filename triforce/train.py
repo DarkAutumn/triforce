@@ -6,6 +6,7 @@
         [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
         [--best-coeff C] [--best-parallel P]] [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
         [--search JSON [--search-coeff C]] [--plr [--plr-beta B] [--plr-rho R] [--plr-uniform U]]
+        [--ppg [--ppg-every N] [--ppg-aux-epochs E] [--ppg-clone-coeff C]]
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
@@ -42,6 +43,12 @@ scored by their episodes' positive value loss (mean max(GAE advantage, 0)) and t
 states by rank-prioritized scores (temperature ``--plr-beta``) mixed with staleness (``--plr-rho``) and uniform
 (``--plr-uniform``) sampling instead of its failure-weighted draws (``plr/entropy``, ``plr/top_state``,
 ``plr/weight/<state>``, ``plr/scored_episodes``).  Curriculum and harvested starts are unaffected.
+``--ppg`` (phasic policy gradient, §6a; ``ppo.PPGStore``, ``PPO.auxiliary_phase``): the PPO updates stay as they
+are (the policy phase); every ``--ppg-every`` iterations an auxiliary phase trains ``--ppg-aux-epochs`` epochs over
+those iterations' rollouts with the value loss ``½(V − R)²`` (R: the GAE returns) plus ``C · KL(π_old ‖ π)`` toward
+the policy from before the phase (C = ``--ppg-clone-coeff``; ``ppg/value_loss``, ``ppg/value_loss_start``,
+``ppg/kl``, ``ppg/explained_variance``, ``ppg/explained_variance_start``, ``ppg/rows``, ``ppg/seconds`` on the
+iterations that run one).
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
@@ -184,6 +191,15 @@ def parse_args(argv=None):
     parser.add_argument('--plr-beta', type=float, default=PPOConfig.plr_beta, help="PLR rank temperature")
     parser.add_argument('--plr-rho', type=float, default=PPOConfig.plr_rho, help="PLR staleness share")
     parser.add_argument('--plr-uniform', type=float, default=PPOConfig.plr_uniform, help="PLR uniform share")
+    parser.add_argument('--ppg', action='store_true',
+                        help="phasic policy gradient (better-play §6a): every --ppg-every iterations, an auxiliary "
+                             "phase of value training with a KL clone term toward the policy from before it")
+    parser.add_argument('--ppg-every', type=int, default=PPOConfig.ppg_every,
+                        help="policy-phase iterations per auxiliary phase")
+    parser.add_argument('--ppg-aux-epochs', type=int, default=PPOConfig.ppg_aux_epochs,
+                        help="epochs of each auxiliary phase")
+    parser.add_argument('--ppg-clone-coeff', type=float, default=PPOConfig.ppg_clone_coeff,
+                        help="weight of KL(pi_old || pi) in the auxiliary phase")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop early once training success_rate >= this for --stop-patience iterations")
@@ -349,7 +365,9 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                            demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0,
                            sil_coeff=args.sil_coeff, sil_value_coeff=args.sil_value_coeff,
                            sil_capacity=args.sil_capacity, search=args.search, search_coeff=args.search_coeff,
-                           plr=args.plr, plr_beta=args.plr_beta, plr_rho=args.plr_rho, plr_uniform=args.plr_uniform)
+                           plr=args.plr, plr_beta=args.plr_beta, plr_rho=args.plr_rho, plr_uniform=args.plr_uniform,
+                           ppg=args.ppg, ppg_every=args.ppg_every, ppg_aux_epochs=args.ppg_aux_epochs,
+                           ppg_clone_coeff=args.ppg_clone_coeff)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
 
     # Built before the 'start' event so bad start states or trajectories fail the run up front.
