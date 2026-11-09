@@ -9,11 +9,15 @@ Goal until further notice: a set of specialists that carries the `d2first` chain
 triforce (Dungeon 2 and Dodongo first, the 0x2c heart cave, the white sword; `docs/routes/d2first.md`). The reset
 onto it is done (below, "d2-first route" item 2). In order:
 
-1. **Baseline:** retrain every family from scratch on d2first with the **current** training setup
-   (`scripts/train_round.py`, all 14 specialists, including the untrained ow-lynel, ow-tektite and ow-boulder), then
-   a chain baseline (full route plus the segments in AGENTS.md). Log it as round 13. The old milestone1 models stay
-   on disk for comparison only.
-2. **Then Lee's training ideas** (to come), measured against that baseline.
+1. [x] **Baseline** (round 13, Nov 9): every family retrained from scratch on d2first with the current setup
+   (r47; boss-dodongo r49 after fixing its success to the W exit). Full route **25/120 (21%)**; from D2's exit
+   29%; D1 from a full-health entry 96%. Losses: D2's Goriya rooms (0x5e, 0x1e) and Moldorm (one-room 91%/85%),
+   and health attrition from 0x2c to D1 (no healing on the way). Lynel room ~98% one-room for every spawn.
+2. **Next: Lee's training ideas** (to come), measured against that baseline.
+
+Findings from round 13 worth a look (not started): health attrition after D2 (Link reaches D1 with ~2 of 5
+hearts); the Goriya/Moldorm rooms; Lynel deaths on the way back out with the white sword; the near-cave Lynel
+spawn (95%).
 
 ## Next up (history before the d2-first reset)
 
@@ -130,7 +134,7 @@ better)**. Train a model for (2).
    - [x] **Reset done (Nov 8, `docs/decisions.md`):** d2first is the only route; milestone1/milestone1-fairy, the
      fairy waypoint and ow-leever-peahat removed; 0x2c to ow-tektite; route-step objectives (D1 key rooms in
      order); `retreat` at 0x0a; every state rebuilt (chains 0–2) and every curriculum re-explored.
-   - [ ] **Retrain pending:** the baseline retrain with the current setup ("Now" above), then Lee's training ideas.
+   - [x] **Baseline retrain done** (round 13): full route 25/120. Lee's training ideas next.
 3. Lee's ideas for improving training (to come, after the baseline).
 
 ### Done (report to Lee): heart experiments (Lee, Nov 7; a series)

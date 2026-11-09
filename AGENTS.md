@@ -27,8 +27,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   route's steps (the entry side and progress pick the step: 0x73 W, then E, then N). Round 12 before it beat Dodongo
   (r45, 300/300 on milestone1 states). The existing models are milestone1-trained and stay on disk; the baseline
   retrain replaces them.
-- **Now (Lee, Nov 8), in order:** (1) a baseline retrain of every family from scratch on d2first with the
-  **current** training setup, plus a chain baseline (`backlog.md` "Now"); (2) only then Lee's training ideas.
+- **Now (Lee, Nov 9):** the d2first baseline is set (round 13: every family retrained from scratch with the
+  current setup; full route 25/120, post-D2 29%, D1 from full health 96%). Next: Lee's training ideas.
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each

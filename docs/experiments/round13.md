@@ -5,11 +5,16 @@ family from scratch **with the current training setup** to set a new baseline (t
 ideas come after that baseline. The Lynel room 0:0x0a is its own experimentation area, tackled like Dodongo.
 Lee is away for the night: no questions until the retrain is done.
 
-## Summary (in progress)
+## Summary
 
 - Reset done (`c5659a2`, `4e24d95`, `eea1f1a`, `9307e86`, `b6d60b8`): d2first is the only route, 190 start states
   (chains 0–2), curricula re-explored. Observation fix for Lynel-style play (`37295b5`, §2).
-- Baseline retrain `r47-base-ow` / `r47-base-dg` running (§3).
+- **Baseline team** (r47, every family from scratch, current setup; boss-dodongo r49): one-room 85–100% (§6).
+- **Full d2first route: 25/120 (21%)** start to the D1 triforce (§7). Losses: D2's Goriya/Moldorm rooms and
+  health attrition after D2; D1 from a full-health entry is 96%.
+- **Lynel room:** three spawns, Lee's walk-through trick confirmed in the ASM; ~98% one-room for every spawn,
+  no pirouette needed, 3 losses in 65 chain crossings (§2, §4, §5).
+- Bug found and fixed: boss-dodongo still ended on the heart (milestone1's end) and stalled in chains (§6, §7).
 
 ## 1. Reset (subagent D2FirstReset; decisions.md 2026-11-08)
 
