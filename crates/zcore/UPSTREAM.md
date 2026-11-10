@@ -86,3 +86,11 @@ With every quirk restored, `oracle/`, `crates/oracle`, `tf`'s FCEUmm backend and
 `corpus/golden/` for the short movies), its unit tests and the test ROMs; `tf trace` dumps one build's
 instructions per frame for comparing two builds. The default RGB palette in `machine.rs` keeps its FCEUmm
 attribution.
+
+## After plan step 18
+
+| Change | Effect |
+|---|---|
+| Power-on RAM fill $00 (`Bus::POWER_ON_RAM`; Lee, Nov 8; `docs/decisions.md` 2026-11-08) | `TFZSTATE` v6, every state and trajectory regenerated (round 11). The 12 test ROMs that needed zero-filled RAM pass; none is ignored any more. Earlier `TFZSTATE` versions (and the `state_file::v1` decoder named above) are gone: older files are refused. |
+| Nov 7 speed work (idle-loop skip `bd71234` … `76272ea`) | Bit-identical under `tf ladder-diff`; see `docs/performance.md` "zcore speed". |
+| Review fix-up (Nov 10) | `Rom::from_ines` builds the console from a canonical iNES header; `TFZSTATE` bodies carry the zstd checksum and decoding refuses trailing bytes and states that fail `MachineState::validate`; a jam opcode sets `Cpu::corrupted`; `Bus::peek_data` returns palette entries like `read_data`; the test-ROM harness drives frames through `Bus::clock_frame`; the remaining TetaNES viewer/debugger API and `build.rs` are gone. No emulation change (`tf ladder-diff` 0). |
