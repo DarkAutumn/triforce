@@ -72,6 +72,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import signal
 import sys
 import time
@@ -344,16 +345,42 @@ def open_events(args, specialist: str, run_id: str, run_dir: Path):
     return EventLog(log_dir / f'{specialist}.jsonl', **context), plan
 
 
-def curriculum_spec(args, config, out_dir: Path) -> tuple[Optional[CurriculumSpec], Optional[str]]:
+def continued_run_dir(args, source: Optional[str], start_iteration: int) -> Optional[Path]:
+    """The run dir a ``--load`` continuation (same specialist: counters and optimizer restored) comes from."""
+    if not args.load or source is None or start_iteration == 0:
+        return None
+    path = Path(source)
+    return (path if path.is_dir() else path.parent).resolve()
+
+
+def _same_trajectories(run_dir: Path, trajectories: str) -> bool:
+    """Whether ``run_dir`` trained on ``trajectories`` (its ``run.json`` ``curriculum``; runs from before that
+    field count as the same: ``Curriculum::new`` drops or restarts any track that changed)."""
+    try:
+        recorded = json.loads((run_dir / 'run.json').read_text(encoding='utf-8')).get('curriculum')
+    except (OSError, ValueError):
+        recorded = None
+    return recorded is None or Path(recorded).resolve() == Path(trajectories).resolve()
+
+
+def curriculum_spec(args, config, out_dir: Path,
+                    continued: Optional[Path] = None) -> tuple[Optional[CurriculumSpec], Optional[str]]:
     """(spec, trajectories dir) of the run's curriculum: --curriculum, else the specialist's ``curriculum`` config
-    when enabled (and not --no-curriculum).  Progress (``<run dir>/curriculum.json``) restarts with every
-    training invocation."""
+    when enabled (and not --no-curriculum).  Progress (``<run dir>/curriculum.json``) starts fresh, except for a
+    ``--load`` continuation (``continued``: its run dir) on the same trajectories, which resumes the loaded run's
+    progress (copied; tracks whose length changed or that are new start fresh, ``Curriculum::new``)."""
     settings = config.curriculum
     if args.no_curriculum or not (args.curriculum or settings.enabled):
         return None, None
     trajectories = str(args.curriculum or settings.trajectories or TRAJECTORIES_DIR / config.name)
     state_path = out_dir / 'curriculum.json'
-    state_path.unlink(missing_ok=True)
+    resume = continued / 'curriculum.json' if continued is not None else None
+    if resume is not None and resume.is_file() and _same_trajectories(continued, trajectories):
+        if resume.resolve() != state_path.resolve():
+            shutil.copyfile(resume, state_path)
+        print(f"[train] curriculum resumes {resume}")
+    else:
+        state_path.unlink(missing_ok=True)
     fraction = settings.fraction if args.curriculum_fraction is None else args.curriculum_fraction
     threshold = settings.threshold if args.curriculum_threshold is None else args.curriculum_threshold
     return CurriculumSpec(trajectories, str(state_path), fraction=fraction, threshold=threshold), trajectories
@@ -401,7 +428,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     # pylint: disable=too-many-locals, too-many-statements
     config = load_specialist(args.specialist)
     network, optimizer_state, start_iteration, start_steps, source = initial_model(args, config, root)
-    curriculum, trajectories = curriculum_spec(args, config, out_dir)
+    continued = continued_run_dir(args, source, start_iteration)
+    curriculum, trajectories = curriculum_spec(args, config, out_dir, continued)
     capture_dir = str(args.states_dir or STATES_DIR) if args.capture_states else None
     task = TrainTask(config, str(out_dir), start_state=args.start_state, curriculum=curriculum,
                      capture_dir=capture_dir, states_dir=args.states_dir)
@@ -431,7 +459,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         json.dump({'args': vars(args), 'specialist': specialist, 'run_id': run_id, 'source': source,
                    'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                    'ppo_config': ppo_config.to_dict(), 'start_iteration': start_iteration,
-                   'start_steps': start_steps}, file, indent=2, default=str)
+                   'start_steps': start_steps, 'curriculum': trajectories}, file, indent=2, default=str)
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} "

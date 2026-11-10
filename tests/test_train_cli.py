@@ -6,6 +6,7 @@ import json
 import math
 import os
 import random
+import shutil
 import signal
 import subprocess
 import sys
@@ -340,6 +341,35 @@ def test_an_interrupted_run_saves_but_exits_130(states_dir, tmp_path):
     summary = json.loads((run_dir / 'train_summary.json').read_text())
     assert summary['status'] == train.run_status(run_dir) == 'interrupted' and summary['iterations_trained'] >= 1
     assert registry.load_checkpoint(run_dir)['iterations'] == summary['iterations']
+
+
+def test_a_load_continuation_resumes_the_curriculum(states_dir, tmp_path):
+    """A finished curriculum stays finished in a --load continuation; a fresh run starts it over (F088)."""
+    trajectories = tmp_path / 'trajectories'
+    track = trajectories / 'start'
+    track.mkdir(parents=True)
+    for index in range(4):
+        shutil.copyfile(states_dir / 'start.state', track / f'{index:04d}.state')
+    (track / 'trajectory.json').write_text(json.dumps({'start_state': 'start', 'success': True}))
+    config = tmp_path / 'short.yaml'
+    config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\n")
+    common = ['--specialist', str(config), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+              '--parallel', '2', '--steps-per-update', '32', '--iterations', '1', '--seed', '2',
+              '--curriculum', str(trajectories), '--curriculum-fraction', '1.0']
+    first = train.main(common + ['--run-id', 'first'])
+    assert read_jsonl(str(first / 'metrics.jsonl'))[-1]['curriculum/episodes'] > 0
+    progress = json.loads((first / 'curriculum.json').read_text())
+    progress['start'].update(point=0, stages_passed=4)
+    (first / 'curriculum.json').write_text(json.dumps(progress))
+
+    second = train.main(common + ['--run-id', 'second', '--load', str(first)])
+    assert 'curriculum/episodes' not in read_jsonl(str(second / 'metrics.jsonl'))[-1]
+    assert json.loads((second / 'curriculum.json').read_text())['start']['point'] == 0
+    assert json.loads((second / 'run.json').read_text())['curriculum'] == str(trajectories)
+
+    fresh = train.main(common + ['--run-id', 'fresh'])
+    assert json.loads((fresh / 'curriculum.json').read_text())['start']['point'] > 0
 
 
 def test_an_interrupt_mid_update_saves_the_last_finished_iteration(states_dir, tmp_path, monkeypatch):

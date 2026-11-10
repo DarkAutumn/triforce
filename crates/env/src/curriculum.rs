@@ -126,7 +126,9 @@ pub struct Curriculum {
 pub type SharedCurriculum = Arc<Mutex<Curriculum>>;
 
 impl Curriculum {
-    /// Loads the trajectories and the progress file (written with fresh progress when missing).
+    /// Loads the trajectories and the progress file, merged: a track keeps its saved progress when the file has
+    /// it with the same length, any other track (new, or re-explored to another length) starts fresh, and saved
+    /// tracks that are gone are dropped.  The merged progress is written back.
     pub fn new(spec: CurriculumSpec) -> Result<Curriculum, EnvError> {
         let tracks = load_trajectories(&spec.trajectories)?;
         if tracks.is_empty() {
@@ -135,26 +137,30 @@ impl Curriculum {
                 spec.trajectories.display()
             )));
         }
-        let progress = if spec.state_path.exists() {
+        let saved: IndexMap<String, Track> = if spec.state_path.exists() {
             let text = std::fs::read_to_string(&spec.state_path)?;
             serde_json::from_str(&text)
                 .map_err(|e| EnvError::State(format!("{}: {e}", spec.state_path.display())))?
         } else {
-            tracks
-                .iter()
-                .map(|(name, paths)| {
-                    let length = paths.len();
-                    let track = Track {
+            IndexMap::new()
+        };
+        let progress = tracks
+            .iter()
+            .map(|(name, paths)| {
+                let length = paths.len();
+                let track = match saved.get(name) {
+                    Some(track) if track.length == length => track.clone(),
+                    _ => Track {
                         length,
                         point: length.saturating_sub(stride_for(length, spec.stages)),
                         attempts: 0,
                         successes: 0,
                         stages_passed: 0,
-                    };
-                    (name.clone(), track)
-                })
-                .collect()
-        };
+                    },
+                };
+                (name.clone(), track)
+            })
+            .collect();
         let curriculum = Curriculum {
             spec,
             tracks,
@@ -325,6 +331,44 @@ mod tests {
         // A run that resumes reads the progress file.
         let again = Curriculum::new(c.spec.clone()).unwrap();
         assert_eq!(again.progress()["s"].point, 0);
+    }
+
+    #[test]
+    fn a_resumed_progress_file_is_merged_with_the_tracks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trajectories = tmp.path().join("t");
+        for name in ["kept", "changed", "gone"] {
+            make_track(&trajectories, name, 8, true);
+        }
+        let run = tmp.path().join("run");
+        let spec = spec(&trajectories, &run);
+        let done = Track {
+            length: 8,
+            point: 0,
+            attempts: 0,
+            successes: 0,
+            stages_passed: 3,
+        };
+        let saved: IndexMap<String, Track> = ["kept", "changed", "gone"]
+            .into_iter()
+            .map(|name| (name.to_owned(), done.clone()))
+            .collect();
+        std::fs::create_dir_all(&run).unwrap();
+        std::fs::write(&spec.state_path, serde_json::to_string(&saved).unwrap()).unwrap();
+        // A re-explore: "changed" is now 6 states long, "gone" was dropped, "new" appeared.
+        std::fs::remove_dir_all(trajectories.join("changed")).unwrap();
+        std::fs::remove_dir_all(trajectories.join("gone")).unwrap();
+        make_track(&trajectories, "changed", 6, true);
+        make_track(&trajectories, "new", 4, true);
+        let c = Curriculum::new(spec).unwrap();
+        let points: Vec<(&str, usize)> = c
+            .progress()
+            .iter()
+            .map(|(name, t)| (name.as_str(), t.point))
+            .collect();
+        assert_eq!(points, [("changed", 4), ("kept", 0), ("new", 3)]);
+        assert_eq!(c.progress()["kept"], done);
+        assert!(c.next(&mut ChaCha8Rng::seed_from_u64(0)).is_some());
     }
 
     #[test]
