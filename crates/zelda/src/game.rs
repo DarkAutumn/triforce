@@ -648,6 +648,11 @@ impl GameView {
             return false;
         }
         if self.var(Var::LinkGridOffset) != 0 {
+            // Just out of a cave, a step short of the grid below the mouth, any move but S walks Link back in
+            // (the game finishes the step along ObjDir first).
+            if self.just_exited_cave {
+                return direction == Direction::S;
+            }
             return true;
         }
         let doorway_dir = self.byte(Var::DoorwayDir);
