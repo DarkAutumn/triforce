@@ -11,7 +11,7 @@
 //! Progress lives in memory, shared by every env of a run through [`SharedCurriculum`], and is rewritten
 //! atomically to `state_path` (`<run dir>/curriculum.json`, the Python schema) on every change.
 
-use crate::config::glob;
+use crate::config::{ConfigError, glob};
 use crate::error::EnvError;
 use indexmap::IndexMap;
 use parking_lot::Mutex;
@@ -46,6 +46,23 @@ impl CurriculumSpec {
             window: 10,
             threshold,
         }
+    }
+
+    /// The rule `curriculum` in a specialist yaml follows, for every way a spec is built (CLI overrides too):
+    /// `stages` and `window` at least 1, `fraction` and `threshold` in [0, 1].
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.stages == 0 || self.window == 0 {
+            return Err(ConfigError(format!(
+                "curriculum stages ({}) and window ({}) must be at least 1",
+                self.stages, self.window
+            )));
+        }
+        for (name, value) in [("fraction", self.fraction), ("threshold", self.threshold)] {
+            if !(0.0..=1.0).contains(&value) {
+                return Err(ConfigError(format!("curriculum {name} {value} is not in [0, 1]")));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -140,6 +157,7 @@ impl Curriculum {
     /// it with the same length, any other track (new, or re-explored to another length) starts fresh, and saved
     /// tracks that are gone are dropped.  The merged progress is written back.
     pub fn new(spec: CurriculumSpec) -> Result<Curriculum, EnvError> {
+        spec.validate()?;
         let loaded = load_tracks(&spec.trajectories)?;
         let starts = loaded.iter().map(|(name, (start, _))| (name.clone(), start.clone())).collect();
         let tracks: IndexMap<String, Vec<PathBuf>> =
@@ -297,6 +315,26 @@ mod tests {
         s.stages = 4;
         s.window = 2;
         s
+    }
+
+    #[test]
+    fn out_of_range_settings_are_config_errors_not_panics() {
+        let tmp = tempfile::tempdir().unwrap();
+        make_track(tmp.path(), "1_44w_0", 7, true);
+        let edits: [fn(&mut CurriculumSpec); 6] = [
+            |s| s.stages = 0,
+            |s| s.window = 0,
+            |s| s.fraction = 2.0,
+            |s| s.fraction = f64::NAN,
+            |s| s.threshold = -0.1,
+            |s| s.threshold = 5.0,
+        ];
+        for edit in edits {
+            let mut s = spec(tmp.path(), tmp.path());
+            edit(&mut s);
+            assert!(matches!(Curriculum::new(s), Err(EnvError::Config(_))));
+        }
+        assert!(Curriculum::new(spec(tmp.path(), tmp.path())).is_ok());
     }
 
     #[test]

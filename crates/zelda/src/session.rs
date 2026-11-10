@@ -118,6 +118,11 @@ impl<N: Nes> Session<N> {
         self.state.as_ref().expect("call load() first")
     }
 
+    /// The current state, or None before the first `load`.
+    pub fn try_state(&self) -> Option<&Arc<GameView>> {
+        self.state.as_ref()
+    }
+
     pub fn mask(&self) -> &ActionMask {
         &self.mask
     }

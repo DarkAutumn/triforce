@@ -46,15 +46,19 @@ impl PyCurriculumSpec {
         stages: usize,
         window: u32,
         threshold: f64,
-    ) -> Self {
-        PyCurriculumSpec {
+    ) -> PyResult<Self> {
+        let spec = PyCurriculumSpec {
             trajectories,
             state_path,
             fraction,
             stages,
             window,
             threshold,
-        }
+        };
+        spec.spec(PathBuf::new())
+            .validate()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.0))?;
+        Ok(spec)
     }
 
     fn __repr__(&self) -> String {
@@ -71,6 +75,17 @@ impl PyCurriculumSpec {
 }
 
 impl PyCurriculumSpec {
+    fn spec(&self, state_path: PathBuf) -> CurriculumSpec {
+        CurriculumSpec {
+            trajectories: self.trajectories.clone(),
+            state_path,
+            fraction: self.fraction,
+            stages: self.stages,
+            window: self.window,
+            threshold: self.threshold,
+        }
+    }
+
     /// The shared curriculum, with progress in `state_path` or `default_state`.
     pub fn open(&self, default_state: Option<&Path>) -> PyResult<SharedCurriculum> {
         let state_path = self
@@ -80,15 +95,7 @@ impl PyCurriculumSpec {
             .ok_or_else(|| {
                 pyo3::exceptions::PyValueError::new_err("CurriculumSpec needs a state_path")
             })?;
-        let spec = CurriculumSpec {
-            trajectories: self.trajectories.clone(),
-            state_path,
-            fraction: self.fraction,
-            stages: self.stages,
-            window: self.window,
-            threshold: self.threshold,
-        };
-        Ok(Curriculum::new(spec).map_err(env_err)?.shared())
+        Ok(Curriculum::new(self.spec(state_path)).map_err(env_err)?.shared())
     }
 }
 
@@ -222,8 +229,11 @@ impl PyEnv {
     }
 
     #[getter]
-    fn state(&self) -> PyGameState {
-        PyGameState::new(self.inner.lock().env.session().state().clone())
+    fn state(&self) -> PyResult<PyGameState> {
+        let inner = self.inner.lock();
+        let state = inner.env.session().try_state();
+        let state = state.ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("call reset() first"))?;
+        Ok(PyGameState::new(state.clone()))
     }
 
     #[getter]
