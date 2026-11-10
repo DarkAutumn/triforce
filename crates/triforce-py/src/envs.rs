@@ -111,17 +111,16 @@ pub struct PyEnv {
 #[pymethods]
 impl PyEnv {
     /// `config`: a `SpecialistConfig` or name. `start_state` pins every reset; `explicit_starts` builds no
-    /// start-state pool (every reset names its state). `capture_dir` saves first-entry states;
-    /// `strict_actions=False` executes masked actions instead of raising.
+    /// start-state pool (every reset names its state); `strict_actions=False` executes masked actions instead of
+    /// raising.
     #[new]
-    #[pyo3(signature = (config, start_state=None, capture_dir=None, strict_actions=true, curriculum=None,
+    #[pyo3(signature = (config, start_state=None, strict_actions=true, curriculum=None,
                         seed=0, states_dir=None, render=false, explicit_starts=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         config: &Bound<'_, PyAny>,
         start_state: Option<String>,
-        capture_dir: Option<PathBuf>,
         strict_actions: bool,
         curriculum: Option<PyCurriculumSpec>,
         seed: u64,
@@ -136,7 +135,6 @@ impl PyEnv {
         let opts = EnvOptions {
             start_state,
             explicit_starts,
-            capture_dir,
             lenient_actions: !strict_actions,
             curriculum,
             seed,

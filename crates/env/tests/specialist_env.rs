@@ -20,7 +20,7 @@ use env::rewards::{
 };
 use env::observation::{Observation, ObservationBuilder, feature_names};
 use env::specialist_env::{EnvOptions, ShapingDial, SpecialistEnv, StepInfo, StepResult};
-use env::start_states::{SavestateCapture, StartWeights, ram_randomization_values, state_label};
+use env::start_states::{StartWeights, ram_randomization_values, state_label};
 use env::{EnvError, StateStore};
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -32,10 +32,9 @@ use zelda::enums::{SwordKind, enemy, item};
 use zelda::tables;
 use zelda::objectives::{FLAG_ITEM_TAKEN, Objective, ObjectiveKind};
 use zelda::room::Target;
-use zelda::room_entry::is_pre_entry;
 use zelda::room_state::room_flags_addr;
 use zelda::{
-    Action, ActionKind, ActionMask, Change, Direction, GameView, LoadOptions, MapLocation, Nes,
+    Action, ActionKind, ActionMask, Change, Direction, GameView, LoadOptions, MapLocation,
     Session, SessionSnapshot, Var,
 };
 
@@ -288,28 +287,6 @@ fn load(s: &mut S, name: &str, opts: LoadOptions) -> Arc<GameView> {
 
 fn session(nes: ZCore) -> S {
     Session::new(nes, data().map.clone())
-}
-
-fn act_until(
-    s: &mut S,
-    text: &str,
-    pred: impl Fn(&Change) -> bool,
-    max_steps: usize,
-) -> Vec<Change> {
-    let mut changes = Vec::new();
-    for _ in 0..max_steps {
-        let change = s.act(Action::parse(text).unwrap()).unwrap();
-        let done = pred(&change);
-        changes.push(change);
-        if done {
-            return changes;
-        }
-    }
-    panic!(
-        "'{text}' never satisfied the predicate in {max_steps} steps (at {:?}, pos {:?})",
-        s.state().full_location(),
-        s.state().link.position
-    );
 }
 
 /// A boomerang shot already in Link's shield box in D1 0x73 (`test_core._place_shield_projectile`).
@@ -1712,73 +1689,6 @@ fn full_hp_share_splits_resets_between_beams_and_no_beams() {
         assert!((1.5..=3.0).contains(&state.health()), "{}", state.health());
         assert_eq!(state.are_beams_available(), state.is_health_full());
     }
-}
-
-#[test]
-fn capture_saves_first_entry_once_before_monsters_spawn() {
-    let Some(nes) = open_core() else { return };
-    let dir = tempfile::tempdir().unwrap();
-    let store = TfzStore::new();
-    let mut capture = SavestateCapture::new(dir.path().to_path_buf());
-    let mut s = session(nes);
-    load(&mut s, "start", LoadOptions::default());
-    s.set_capture_pre_entry(true);
-    let changes = act_until(&mut s, "MOVE E 32", |c| c.changed_location(), 30);
-    let change = changes.last().unwrap();
-    assert!(s.last_pre_entry().is_some(), "the room entry was captured");
-    let path = capture
-        .on_step(change, s.last_pre_entry(), || s.snapshot(), &store)
-        .unwrap()
-        .expect("a captured state");
-    s.set_capture_pre_entry(false);
-    assert_eq!(path.file_name().unwrap(), "0_78w.state");
-    assert!(
-        capture
-            .on_step(change, s.last_pre_entry(), || s.snapshot(), &store)
-            .unwrap()
-            .is_none()
-    ); // exists
-    let machine = store.load(path.to_str().unwrap()).unwrap();
-    s.nes_mut().restore(&machine);
-    assert!(
-        is_pre_entry(|a| s.nes().peek(a)),
-        "saved before the room's monsters exist"
-    );
-    let state = load(&mut s, path.to_str().unwrap(), LoadOptions::default());
-    assert_eq!(state.full_location(), MapLocation::new(0, 0x78, false));
-    let change = s.act(Action::parse("MOVE E 8").unwrap()).unwrap();
-    assert!(
-        capture
-            .on_step(&change, s.last_pre_entry(), || s.snapshot(), &store)
-            .unwrap()
-            .is_none()
-    ); // no room change
-
-    // The env path (`capture_dir`): the step that enters a new room reports the written pre-entry state.
-    let env_dir = tempfile::tempdir().unwrap();
-    let opts = EnvOptions {
-        start_state: Some("start".into()),
-        capture_dir: Some(env_dir.path().to_path_buf()),
-        lenient_actions: true,
-        ..Default::default()
-    };
-    let mut env = make_env_with(s.into_nes(), "ow-start", opts, |_| {});
-    env.reset(Some(0), None).unwrap();
-    let mut captured = None;
-    for _ in 0..30 {
-        let r = act(&mut env, "MOVE E 32");
-        if r.info.room != (0, 0x77, false) {
-            captured = r.info.captured_state;
-            break;
-        }
-        assert!(r.info.captured_state.is_none());
-    }
-    let captured = captured.expect("entering 0x78 captured a state");
-    assert_eq!(captured, env_dir.path().join("0_78w.state"));
-    let machine = TfzStore::new().load(captured.to_str().unwrap()).unwrap();
-    let mut s = env.into_parts().0;
-    s.nes_mut().restore(&machine);
-    assert!(is_pre_entry(|a| s.nes().peek(a)));
 }
 
 /// game.yaml `requires_bombs` (Dodongo's room): with no bombs Link gets a cheated one; placing it counts one used and

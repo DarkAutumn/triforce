@@ -6,7 +6,6 @@
 //! - [`StartWeights`]: a training pool's shared seed-state weights (prioritized level replay); while set, seed draws
 //!   follow them instead of the selector's own weights.
 //! - Harvested states (`<harvested dir>/*.state`) mix with seed states at `harvested_fraction`.
-//! - [`SavestateCapture`]: the first entry of each (room, side) is saved as `<level>_<room><side>.state`.
 //! - [`ram_randomization_values`]: reset-time hp/bombs/keys.
 //!
 //! States are opaque here: a [`StateStore`] turns names into emulator states and writes captures.  Python's
@@ -19,9 +18,8 @@ use rand::{Rng, RngExt};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use zelda::enums::Direction;
 use zelda::objectives::route_entry;
-use zelda::{Change, MapLocation, SessionSnapshot, Var};
+use zelda::{MapLocation, SessionSnapshot, Var};
 
 pub const DECAY_FACTOR: f64 = 0.9;
 pub const FAILURE_WEIGHT: f64 = 2.0;
@@ -459,76 +457,6 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
     values
 }
 
-/// n/s/e/w side of `curr` that Link entered from, or 'c' for stairs/cave transitions.
-pub fn entry_side(prev: MapLocation, curr: MapLocation) -> char {
-    if prev.level != curr.level
-        || prev.in_cave != curr.in_cave
-        || prev.manhattan_distance(curr) != 1
-    {
-        return 'c';
-    }
-    match curr.direction_to(prev) {
-        Direction::N => 'n',
-        Direction::S => 's',
-        Direction::E => 'e',
-        Direction::W => 'w',
-        _ => 'c',
-    }
-}
-
-/// Saves the first entry of each (room, side) as `<level>_<room><side>.state` (the pre-entry snapshot when the
-/// session captures one, so every load redraws the spawn).
-#[derive(Clone, Debug)]
-pub struct SavestateCapture {
-    pub directory: PathBuf,
-    pub saved: Vec<PathBuf>,
-}
-
-impl SavestateCapture {
-    pub fn new(directory: PathBuf) -> SavestateCapture {
-        SavestateCapture {
-            directory,
-            saved: Vec::new(),
-        }
-    }
-
-    pub fn filename(prev: MapLocation, curr: MapLocation) -> String {
-        format!(
-            "{}_{:02x}{}.state",
-            curr.level,
-            curr.value,
-            entry_side(prev, curr)
-        )
-    }
-
-    /// Writes a state if this step entered a new (room, side); returns its path.
-    pub fn on_step<S, St: StateStore<S> + ?Sized>(
-        &mut self,
-        change: &Change,
-        pre_entry: Option<&SessionSnapshot<S>>,
-        current: impl FnOnce() -> SessionSnapshot<S>,
-        store: &St,
-    ) -> Result<Option<PathBuf>, EnvError> {
-        if !change.changed_location() || change.state.in_cave() || change.state.game_over() {
-            return Ok(None);
-        }
-        let path = self.directory.join(Self::filename(
-            change.previous.full_location(),
-            change.state.full_location(),
-        ));
-        if path.exists() {
-            return Ok(None);
-        }
-        std::fs::create_dir_all(&self.directory)?;
-        match pre_entry {
-            Some(snapshot) => store.save(&path, snapshot)?,
-            None => store.save(&path, &current())?,
-        }
-        self.saved.push(path.clone());
-        Ok(Some(path))
-    }
-}
-
 /// A chain handoff's harvested start-state file name, `<level>_<room><side>_h<seed>_<n>.state` (`n`: the run's room
 /// index; `side` the routes.yaml entry (`zelda::objectives::route_entry`) named as the seed states name it: n/s/e/w,
 /// `c` out of a cave, cellar or level, `cave` a cave or cellar interior), so [`state_entry`] reads back the entry.
@@ -815,19 +743,6 @@ mod tests {
             assert_eq!(state_entry(&harvested), route_entry(prev, curr), "{name}");
         }
         assert_eq!(harvest_filename(m(1, 0x45, false), m(1, 0x73, false), 0, 1), None);
-    }
-
-    #[test]
-    fn entry_side_letters() {
-        let m = MapLocation::new;
-        assert_eq!(entry_side(m(0, 0x77, false), m(0, 0x67, false)), 's');
-        assert_eq!(entry_side(m(0, 0x77, false), m(0, 0x78, false)), 'w');
-        assert_eq!(entry_side(m(0, 0x37, false), m(1, 0x73, false)), 'c');
-        assert_eq!(entry_side(m(0, 0x77, true), m(0, 0x77, false)), 'c');
-        assert_eq!(
-            SavestateCapture::filename(m(0, 0x77, false), m(0, 0x78, false)),
-            "0_78w.state"
-        );
     }
 
     fn hearts(values: &[(Var, u8)]) -> f64 {

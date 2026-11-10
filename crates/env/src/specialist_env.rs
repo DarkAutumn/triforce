@@ -26,7 +26,7 @@ use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{Outcome, SUCCESS, StepRewards, apply_terminal_rewards};
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
-    SavestateCapture, StartStatePool, StartWeights, StateStore, ram_randomization_values,
+    StartStatePool, StartWeights, StateStore, ram_randomization_values,
     state_entry, state_label, verify_start_room,
 };
 use indexmap::IndexMap;
@@ -34,7 +34,6 @@ use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::executor::Interrupt;
@@ -93,8 +92,6 @@ pub struct StepInfo {
     pub route: String,
     /// Reset only: the start state's name or path.
     pub start_state: Option<String>,
-    /// A first-entry state written this step.
-    pub captured_state: Option<PathBuf>,
     /// Cheated items used so far this episode (not in the info dict; room events carry it).
     pub cheated: ItemCounts,
     pub terminal: Option<TerminalInfo>,
@@ -149,9 +146,6 @@ impl StepInfo {
         let o = m.as_object_mut().unwrap();
         if let Some(s) = &self.start_state {
             o.insert("start_state".into(), json!(s));
-        }
-        if let Some(p) = &self.captured_state {
-            o.insert("captured_state".into(), json!(p.display().to_string()));
         }
         if let Some(t) = &self.terminal {
             o.insert("ending".into(), json!(t.ending));
@@ -210,8 +204,8 @@ pub struct StepResult {
 }
 
 /// An exact mid-episode checkpoint of a [`SpecialistEnv`] (search): the session's [`SessionCheckpoint`] and every
-/// per-episode tracker `step` reads or writes. Room visits, the start-state pool, the curriculum and capture are
-/// not in it: simulated steps don't touch them.
+/// per-episode tracker `step` reads or writes. Room visits, the start-state pool and the curriculum are not in it:
+/// simulated steps don't touch them.
 #[derive(Clone, Debug)]
 pub struct EnvSnapshot<S> {
     session: SessionCheckpoint<S>,
@@ -251,7 +245,6 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     visits: Option<VisitTracker>,
     pool: Option<StartStatePool>,
     curriculum: Option<SharedCurriculum>,
-    capture: Option<SavestateCapture>,
     critic: GameplayCritic,
     end_conditions: EndConditions,
     builder: ObservationBuilder,
@@ -299,8 +292,6 @@ pub struct EnvOptions {
     pub start_state: Option<String>,
     /// Every reset names its start state: no pool (a specialist without start states is fine).
     pub explicit_starts: bool,
-    /// Directory for first-entry captures (None disables capture).
-    pub capture_dir: Option<PathBuf>,
     /// Execute masked actions as given instead of erroring (`strict_actions=False`).
     pub lenient_actions: bool,
     pub curriculum: Option<SharedCurriculum>,
@@ -340,10 +331,6 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         } else {
             None
         };
-        let capture = opts.capture_dir.map(SavestateCapture::new);
-        if capture.is_some() {
-            session.set_capture_pre_entry(true);
-        }
         let critic = GameplayCritic::for_config(&config)?;
         let end_conditions = EndConditions::new(
             &config.rooms,
@@ -369,7 +356,6 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             visits: opts.track_visits.then(VisitTracker::default),
             pool,
             curriculum,
-            capture,
             critic,
             end_conditions,
             objectives: None,
@@ -638,7 +624,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// `step` without side effects outside the episode (search): the same rewards, endings and observation, but
-    /// no curriculum or start-state pool record, room visits or capture. Undo it with [`SpecialistEnv::load`].
+    /// no curriculum or start-state pool record or room visits. Undo it with [`SpecialistEnv::load`].
     pub fn simulate(&mut self, action: Action) -> Result<StepResult, EnvError> {
         self.step_as(action, true)
     }
@@ -793,18 +779,6 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             t.episode_rewards = self.episode_rewards.clone();
         }
 
-        let captured = match &mut self.capture {
-            Some(capture) if !sim => {
-                let session = &self.session;
-                capture.on_step(
-                    &change,
-                    session.last_pre_entry(),
-                    || session.snapshot(),
-                    &self.store,
-                )?
-            }
-            _ => None,
-        };
         let obs = self.builder.build(
             &change,
             &state,
@@ -818,7 +792,6 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         info.interrupt = change.interrupt;
         info.action = Some(action);
         info.rewards = rewards.terms().collect();
-        info.captured_state = captured;
         info.terminal = terminal;
         Ok(StepResult {
             obs,
@@ -847,7 +820,6 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             specialist: self.specialist.clone(),
             route: self.route.clone(),
             start_state: None,
-            captured_state: None,
             cheated: self.cheats.cheated,
             terminal: None,
         }

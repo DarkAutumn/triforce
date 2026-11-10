@@ -37,14 +37,13 @@ type Task = TaskEnv<ZCore, TfzStore>;
 const RGB: Option<RgbFn<ZCore>> = Some(rgb);
 
 /// One specialist's training episodes: resets draw from its start-state pool (or `start_state`), or from the
-/// curriculum. `capture_dir` saves first-entry states; `room_events` reports room changes.
+/// curriculum. `room_events` reports room changes.
 #[pyclass(module = "triforce._native", name = "TrainTask", frozen)]
 pub struct PyTrainTask {
     config: Arc<SpecialistConfig>,
     run_dir: PathBuf,
     start_state: Option<String>,
     curriculum: Option<PyCurriculumSpec>,
-    capture_dir: Option<PathBuf>,
     states_dir: Option<PathBuf>,
     room_events: bool,
 }
@@ -52,8 +51,7 @@ pub struct PyTrainTask {
 #[pymethods]
 impl PyTrainTask {
     #[new]
-    #[pyo3(signature = (config, run_dir, start_state=None, curriculum=None, capture_dir=None, states_dir=None,
-                        room_events=false))]
+    #[pyo3(signature = (config, run_dir, start_state=None, curriculum=None, states_dir=None, room_events=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -61,7 +59,6 @@ impl PyTrainTask {
         run_dir: PathBuf,
         start_state: Option<String>,
         curriculum: Option<PyCurriculumSpec>,
-        capture_dir: Option<PathBuf>,
         states_dir: Option<PathBuf>,
         room_events: bool,
     ) -> PyResult<Self> {
@@ -70,7 +67,6 @@ impl PyTrainTask {
             run_dir,
             start_state,
             curriculum,
-            capture_dir,
             states_dir,
             room_events,
         })
@@ -261,7 +257,6 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
         let make = |init: EnvInit| {
             let opts = EnvOptions {
                 start_state: t.start_state.clone(),
-                capture_dir: t.capture_dir.clone(),
                 curriculum: curriculum.clone(),
                 shaping: Some(shaping.clone()),
                 start_weights: start_weights.as_ref().map(|(w, _)| w.clone()),
