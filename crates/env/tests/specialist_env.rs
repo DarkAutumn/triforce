@@ -392,6 +392,15 @@ fn spaces_and_reset_contract() {
     assert_eq!(info.room, (1, 0x73, false));
 }
 
+/// F109: an underworld cellar is a sub-room in the info's room, like the visit records (`1:0x7f:cave`).
+#[test]
+fn cellar_info_room_is_in_cave() {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "equipment-room", Some("1_7fcave_0"), |_| {});
+    let (_, info) = env.reset(Some(0), None).unwrap();
+    assert_eq!(info.room, (1, 0x7f, true));
+}
+
 /// stalfos-keese-gel from a start state with random legal actions: every episode ends with a classified outcome,
 /// every step returns valid observations and the info contract.
 #[test]

@@ -133,6 +133,8 @@ pub struct EvalRecord {
     pub steps: u64,
     pub frames: u64,
     pub start_health: f64,
+    /// Heart containers at reset (`max_health` is the terminal step's: a container taken in the episode raises it).
+    pub start_max_health: i32,
     pub health: f64,
     pub max_health: i32,
     pub hearts: HeartSummary,
@@ -154,7 +156,8 @@ impl EvalRecord {
             "start_state": self.start_state,
             "room": [self.room.0, self.room.1, self.room.2],
             "seed": self.seed, "outcome": self.outcome, "ending": self.ending, "success": self.success,
-            "steps": self.steps, "frames": self.frames, "start_health": self.start_health, "health": self.health,
+            "steps": self.steps, "frames": self.frames, "start_health": self.start_health,
+            "start_max_health": self.start_max_health, "health": self.health,
             "max_health": self.max_health, "hearts": hearts_json(&self.hearts), "linger": linger_json(&self.linger),
             "blocks": self.blocks, "bombs": {"used": self.bombs_used}, "cheated": cheated_json(&self.cheated),
             "boss": {"stuns": self.boss_stuns, "eats": self.boss_eats},

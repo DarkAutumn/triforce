@@ -835,7 +835,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             interrupt: None,
             action: None,
             rewards: Vec::new(),
-            room: (state.level(), state.location(), state.in_cave()),
+            // full_location: an underworld cellar is a sub-room like a cave (`1:0x7f:cave`), as in the visits.
+            room: {
+                let l = state.full_location();
+                (l.level, l.value, l.in_cave)
+            },
             health: state.health(),
             max_health: state.max_health(),
             steps: self.session.steps,

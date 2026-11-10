@@ -302,6 +302,7 @@ struct EvalEpisode {
     job: EvalJob,
     room: (u8, u8, bool),
     start_health: f64,
+    start_max_health: i32,
 }
 
 /// Evaluation episodes (`EvalTask`): each reset takes the next [`EvalJob`] from a list shared by the pool's envs;
@@ -400,6 +401,7 @@ where
             job,
             room: info.room,
             start_health: info.health,
+            start_max_health: info.max_health,
         });
         Ok(Some(Start {
             policy: 0,
@@ -429,6 +431,7 @@ where
                 steps: t.episode_steps,
                 frames: t.episode_frames,
                 start_health: episode.start_health,
+                start_max_health: episode.start_max_health,
                 health: r.info.health,
                 max_health: r.info.max_health,
                 hearts: t.hearts,
@@ -575,7 +578,7 @@ where
                 specialist,
                 level: state.level(),
                 room: state.location(),
-                in_cave: state.in_cave(),
+                in_cave: state.full_location().in_cave,
                 rooms: 0,
                 health: state.health(),
                 max_health: state.max_health(),
