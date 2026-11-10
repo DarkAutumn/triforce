@@ -417,12 +417,12 @@ mod tests {
         half[Var::PartialHearts.addr() as usize] = 0x7F;
         let c = observe(&prev, &half, 4);
         assert_eq!((c.health_gained, c.health_lost), (0.0, 1.5));
-        // a container pickup in the step that also costs half a heart: 5 of 6 -> 5.5 of 7
+        // a container pickup (both nibbles +1) in the step that also costs half a heart: 5 of 6 -> 5.5 of 7
         let mut prev = playable();
         prev[Var::HeartsAndContainers.addr() as usize] = 0x54;
         prev[Var::PartialHearts.addr() as usize] = 0xFF;
         let mut curr = prev;
-        curr[Var::HeartsAndContainers.addr() as usize] = 0x64;
+        curr[Var::HeartsAndContainers.addr() as usize] = 0x65;
         curr[Var::PartialHearts.addr() as usize] = 0x7F;
         let c = observe(&prev, &curr, 4);
         assert_eq!((c.health_gained, c.health_lost), (1.0, 0.5));
