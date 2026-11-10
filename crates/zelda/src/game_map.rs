@@ -146,11 +146,88 @@ pub struct GameRoom {
     pub maze: Option<&'static Maze>,
 }
 
-/// A `[col, row]` game.yaml tile.
-fn tile(v: Option<&Value>) -> Option<Tile> {
-    let s = v?.as_sequence()?;
-    (s.len() == 2).then(|| (s[0].as_i64().unwrap_or(0) as i32, s[1].as_i64().unwrap_or(0) as i32))
+/// A `[col, row]` game.yaml tile (absent: None; anything but two integers: an error naming `what`).
+fn tile(v: Option<&Value>, what: &str) -> Result<Option<Tile>, MapError> {
+    v.map(|v| pair(v, what)).transpose()
 }
+
+/// Two integers `[a, b]`.
+fn pair(v: &Value, what: &str) -> Result<(i32, i32), MapError> {
+    let int = |x: &Value| x.as_i64().and_then(|n| i32::try_from(n).ok());
+    match v.as_sequence().map(Vec::as_slice) {
+        Some([a, b]) => match (int(a), int(b)) {
+            (Some(a), Some(b)) => Ok((a, b)),
+            _ => err(format!("{what}: expected two integers, got {v:?}")),
+        },
+        _ => err(format!("{what}: expected [a, b], got {v:?}")),
+    }
+}
+
+/// Every key of the mapping `v` is in `allowed` (a typo would otherwise drop a rule silently).
+fn check_keys(v: &Value, allowed: &[&str], what: &str) -> Result<(), MapError> {
+    let Some(map) = v.as_mapping() else {
+        return err(format!("{what}: expected a mapping, got {v:?}"));
+    };
+    for key in map.keys() {
+        match key.as_str() {
+            Some(k) if allowed.contains(&k) => {}
+            _ => return err(format!("{what}: unknown key {key:?} (known: {})", allowed.join(", "))),
+        }
+    }
+    Ok(())
+}
+
+/// An optional boolean key: absent or null is false; anything but true/false is an error (YAML 1.2 has no `yes`).
+fn flag(v: &Value, key: &str, what: &str) -> Result<bool, MapError> {
+    match get(v, key) {
+        None => Ok(false),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(other) => err(format!("{what}: {key} must be true or false, got {other:?}")),
+    }
+}
+
+/// An optional string key: absent or null is None; anything but a string is an error.
+fn opt_string(v: &Value, key: &str, what: &str) -> Result<Option<String>, MapError> {
+    match get(v, key) {
+        None => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        Some(other) => err(format!("{what}: {key} must be a string, got {other:?}")),
+    }
+}
+
+/// game.yaml room keys (several are read elsewhere: `entrance`, `edge_spawn`, `trigger`, `raft_exits`, `stairs`,
+/// `push_block_opens`).
+const ROOM_KEYS: [&str; 20] = [
+    "level",
+    "location",
+    "in_cave",
+    "exits",
+    "enemies",
+    "treasure",
+    "specialist",
+    "entrance",
+    "edge_spawn",
+    "bomb_walls",
+    "trigger",
+    "requires_bombs",
+    "requires_rupees",
+    "raft_exits",
+    "maze",
+    "bomb_secret",
+    "treasure_tile",
+    "push_block",
+    "push_block_opens",
+    "stairs",
+];
+const EXIT_KEYS: [&str; 5] = ["level", "location", "in_cave", "locked", "span"];
+const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
+const STEP_KEYS: [&str; 10] =
+    ["level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "note"];
+const STEP_ENTRIES: [&str; 6] = ["start", "N", "S", "E", "W", "cave"];
+/// `maze` ([`MAZE_EXIT`]) parses so `from_yaml` can say why a route may not take it.
+const STEP_EXITS: [&str; 8] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT];
+const WAYPOINTS: [&str; 3] = ["heart", "bow", "raft"];
+const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];
 
 impl GameRoom {
     pub fn neighbors(&self) -> impl Iterator<Item = MapLocation> + '_ {
@@ -268,12 +345,11 @@ fn as_u8(v: &Value, what: &str) -> Result<u8, MapError> {
         .ok_or_else(|| MapError(format!("{what}: expected a byte")))
 }
 
-/// `int(str(value), 16)`.
+/// A quoted hex room id (`'0x7f'`). An unquoted `0x10` is a YAML integer (16) and would read as room 0x16, so a
+/// number is an error.
 fn hex(v: &Value, what: &str) -> Result<u8, MapError> {
-    let text = match v {
-        Value::String(s) => s.clone(),
-        Value::Number(n) => n.to_string(),
-        _ => return err(format!("{what}: expected a hex room id")),
+    let Value::String(text) = v else {
+        return err(format!("{what}: expected a quoted hex room id like '0x7f', got {v:?}"));
     };
     let digits = text
         .trim()
@@ -283,39 +359,42 @@ fn hex(v: &Value, what: &str) -> Result<u8, MapError> {
         .map_err(|_| MapError(format!("{what}: bad hex room id {text:?}")))
 }
 
-fn as_bool(v: Option<&Value>) -> bool {
-    v.and_then(Value::as_bool).unwrap_or(false)
-}
-
-fn as_string(v: Option<&Value>) -> Option<String> {
-    v.and_then(Value::as_str).map(str::to_owned)
-}
-
 fn step_location(v: &Value) -> Result<MapLocation, MapError> {
     let level = as_u8(
-        get(v, "level").ok_or_else(|| MapError("step without level".into()))?,
+        get(v, "level").ok_or_else(|| MapError(format!("step without level: {v:?}")))?,
         "level",
     )?;
     let room = hex(
-        get(v, "room").ok_or_else(|| MapError("step without room".into()))?,
+        get(v, "room").ok_or_else(|| MapError(format!("step without room: {v:?}")))?,
         "room",
     )?;
-    Ok(MapLocation::new(level, room, as_bool(get(v, "in_cave"))))
+    Ok(MapLocation::new(level, room, flag(v, "in_cave", &format!("step {level}:{room:#04x}"))?))
 }
 
+/// One step: known keys only, `entry`/`exit` required and from their sets, `waypoint` and `retreat` checked.
 fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
     let loc = step_location(v)?;
+    let what = format!("routes.yaml step {loc}");
+    check_keys(v, &STEP_KEYS, &what)?;
+    let one_of = |key: &str, allowed: &[&str], required: bool| -> Result<Option<String>, MapError> {
+        match opt_string(v, key, &what)? {
+            None if required => err(format!("{what}: needs {key} (one of {})", allowed.join(", "))),
+            None => Ok(None),
+            Some(value) if allowed.contains(&value.as_str()) => Ok(Some(value)),
+            Some(value) => err(format!("{what}: {key} {value:?} is not one of {}", allowed.join(", "))),
+        }
+    };
+    let entry = one_of("entry", &STEP_ENTRIES, true)?.unwrap_or_default();
     Ok(RouteStep {
         level: loc.level,
         room: loc.value,
         in_cave: loc.in_cave,
-        specialist: as_string(get(v, "specialist")),
-        entry: as_string(get(v, "entry")).unwrap_or_default(),
-        exit: as_string(get(v, "exit")).unwrap_or_default(),
-        waypoint: as_string(get(v, "waypoint")).filter(|w| !w.is_empty()),
-        retreat: as_string(get(v, "retreat")).filter(|r| !r.is_empty()),
-        treasure: TreasureRule::parse(get(v, "treasure"))
-            .map_err(|e| MapError(format!("{loc} {}: {}", as_string(get(v, "entry")).unwrap_or_default(), e.0)))?,
+        specialist: opt_string(v, "specialist", &what)?,
+        exit: one_of("exit", &STEP_EXITS, true)?.unwrap_or_default(),
+        waypoint: one_of("waypoint", &WAYPOINTS, false)?,
+        retreat: one_of("retreat", &DIRECTIONS, false)?,
+        treasure: TreasureRule::parse(get(v, "treasure")).map_err(|e| MapError(format!("{loc} {entry}: {}", e.0)))?,
+        entry,
     })
 }
 
@@ -329,33 +408,40 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
         .ok_or_else(|| MapError("routes.yaml: not a mapping".into()))?;
     let mut routes = IndexMap::new();
     for (name, value) in map {
-        let name = name.as_str().unwrap_or_default();
-        if name != "alternates"
-            && let Some(list) = value.as_sequence()
-        {
-            routes.insert(
-                name.to_owned(),
-                list.iter().map(parse_step).collect::<Result<Vec<_>, _>>()?,
-            );
+        let Some(name) = name.as_str() else {
+            return err(format!("routes.yaml: a top-level key that isn't a name: {name:?}"));
+        };
+        if name == "alternates" || name == "families" {
+            continue;
         }
+        let Some(list) = value.as_sequence() else {
+            return err(format!("routes.yaml: route {name:?} is not a list of steps"));
+        };
+        routes.insert(
+            name.to_owned(),
+            list.iter().map(parse_step).collect::<Result<Vec<_>, _>>()?,
+        );
     }
     let mut alternates = Vec::new();
-    if let Some(list) = get(&data, "alternates").and_then(Value::as_sequence) {
+    if let Some(list) = get(&data, "alternates") {
+        let Some(list) = list.as_sequence() else {
+            return err("routes.yaml: alternates is not a list");
+        };
         for alt in list {
-            let replaces = alt["replaces"]
-                .as_sequence()
-                .map(|s| s.as_slice())
-                .unwrap_or_default();
-            let with = alt["with"]
-                .as_sequence()
-                .map(|s| s.as_slice())
-                .unwrap_or_default();
+            check_keys(alt, &["replaces", "with", "note"], "routes.yaml alternate")?;
+            let steps = |key: &str| -> Result<&[Value], MapError> {
+                alt[key]
+                    .as_sequence()
+                    .map(Vec::as_slice)
+                    .ok_or_else(|| MapError(format!("routes.yaml alternate: needs a {key} list")))
+            };
+            let replaces = steps("replaces")?;
+            for room in replaces {
+                check_keys(room, &["level", "room", "in_cave"], "routes.yaml alternate replaces")?;
+            }
             alternates.push(Alternate {
-                replaces: replaces
-                    .iter()
-                    .map(step_location)
-                    .collect::<Result<_, _>>()?,
-                with: with.iter().map(parse_step).collect::<Result<_, _>>()?,
+                replaces: replaces.iter().map(step_location).collect::<Result<_, _>>()?,
+                with: steps("with")?.iter().map(parse_step).collect::<Result<_, _>>()?,
             });
         }
     }
@@ -365,38 +451,35 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
 fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> {
     let data: Value =
         serde_yaml_ng::from_str(text).map_err(|e| MapError(format!("game.yaml: {e}")))?;
+    let Some(list) = data.get("rooms").and_then(Value::as_sequence) else {
+        return err("game.yaml: needs a `rooms:` list");
+    };
     let mut rooms = IndexMap::new();
-    for entry in data["rooms"]
-        .as_sequence()
-        .map(|s| s.as_slice())
-        .unwrap_or_default()
-    {
+    for entry in list {
         let level = as_u8(&entry["level"], "level")?;
-        let loc = MapLocation::new(
-            level,
-            hex(&entry["location"], "location")?,
-            as_bool(get(entry, "in_cave")),
-        );
+        let room_id = hex(&entry["location"], &format!("game.yaml room on level {level}: location"))?;
+        let what = format!("game.yaml room {level}:{room_id:#04x}");
+        let loc = MapLocation::new(level, room_id, flag(entry, "in_cave", &what)?);
+        let what = format!("game.yaml room {loc}");
         let mut exits = IndexMap::new();
-        if let Some(map) = get(entry, "exits").and_then(Value::as_mapping) {
+        if let Some(map) = get(entry, "exits") {
+            let Some(map) = map.as_mapping() else {
+                return err(format!("{what}: exits must be a mapping"));
+            };
             for (dir, dest) in map {
-                let dir = dir.as_str().unwrap_or_default().to_owned();
+                let dir = match dir.as_str() {
+                    Some(d) if EXIT_NAMES.contains(&d) => d.to_owned(),
+                    _ => return err(format!("{what}: exit {dir:?} is not one of {}", EXIT_NAMES.join(", "))),
+                };
+                let exit_what = format!("{what} exit {dir}");
+                check_keys(dest, &EXIT_KEYS, &exit_what)?;
                 let destination = MapLocation::new(
-                    as_u8(&dest["level"], "exit level")?,
-                    hex(&dest["location"], "exit location")?,
-                    as_bool(get(dest, "in_cave")),
+                    as_u8(&dest["level"], &format!("{exit_what}: level"))?,
+                    hex(&dest["location"], &format!("{exit_what}: location"))?,
+                    flag(dest, "in_cave", &exit_what)?,
                 );
-                let span = get(dest, "span")
-                    .and_then(Value::as_sequence)
-                    .and_then(|s| {
-                        (s.len() == 2).then(|| {
-                            (
-                                s[0].as_i64().unwrap_or(0) as i32,
-                                s[1].as_i64().unwrap_or(0) as i32,
-                            )
-                        })
-                    });
-                let locked = as_bool(get(dest, "locked"));
+                let span = get(dest, "span").map(|s| pair(s, &format!("{exit_what}: span"))).transpose()?;
+                let locked = flag(dest, "locked", &exit_what)?;
                 exits.insert(
                     dir.clone(),
                     RoomExit {
@@ -409,22 +492,24 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             }
         }
         let mut enemies = IndexMap::new();
-        if let Some(map) = get(entry, "enemies").and_then(Value::as_mapping) {
+        if let Some(map) = get(entry, "enemies") {
+            let Some(map) = map.as_mapping() else {
+                return err(format!("{what}: enemies must be a mapping"));
+            };
             for (k, v) in map {
-                enemies.insert(
-                    k.as_str().unwrap_or_default().to_owned(),
-                    v.as_i64().unwrap_or(0),
-                );
+                let (Some(name), Some(count)) = (k.as_str(), v.as_i64()) else {
+                    return err(format!("{what}: enemies: {k:?}: {v:?} is not a name and a count"));
+                };
+                enemies.insert(name.to_owned(), count);
             }
         }
-        let bomb_walls = get(entry, "bomb_walls")
-            .and_then(Value::as_sequence)
-            .map(|s| {
-                s.iter()
-                    .filter_map(|x| x.as_str().map(str::to_owned))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let bomb_walls = match get(entry, "bomb_walls") {
+            None => Vec::new(),
+            Some(walls) => walls
+                .as_sequence()
+                .and_then(|s| s.iter().map(|x| x.as_str().map(str::to_owned)).collect::<Option<Vec<_>>>())
+                .ok_or_else(|| MapError(format!("{what}: bomb_walls must be a list of exit names")))?,
+        };
         let maze = parse_maze(entry, loc)?;
         if let Some(maze) = maze {
             for exit in exits.values() {
@@ -449,31 +534,35 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             location: loc,
             exits,
             enemies,
-            treasure: as_string(get(entry, "treasure")),
+            treasure: opt_string(entry, "treasure", &what)?,
             bomb_walls,
-            specialist: as_string(get(entry, "specialist")),
-            requires_bombs: get(entry, "requires_bombs").and_then(Value::as_bool).unwrap_or(false),
+            specialist: opt_string(entry, "specialist", &what)?,
+            requires_bombs: flag(entry, "requires_bombs", &what)?,
             requires_rupees: get(entry, "requires_rupees")
                 .map(|v| as_u8(v, &format!("{loc} requires_rupees")))
                 .transpose()?,
-            bomb_secret: tile(get(entry, "bomb_secret")),
-            treasure_tile: tile(get(entry, "treasure_tile")),
-            push_block: get(entry, "push_block")
-                .and_then(Value::as_sequence)
-                .map(|s| {
-                    s.iter()
-                        .map(|d| {
-                            d.as_str()
-                                .and_then(Direction::from_exit)
-                                .ok_or_else(|| MapError(format!("{loc}: push_block: bad direction {d:?}")))
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                })
-                .transpose()?
-                .unwrap_or_default(),
+            bomb_secret: tile(get(entry, "bomb_secret"), &format!("{what}: bomb_secret"))?,
+            treasure_tile: tile(get(entry, "treasure_tile"), &format!("{what}: treasure_tile"))?,
+            push_block: match get(entry, "push_block") {
+                None => Vec::new(),
+                Some(list) => list
+                    .as_sequence()
+                    .ok_or_else(|| MapError(format!("{what}: push_block must be a list of directions")))?
+                    .iter()
+                    .map(|d| {
+                        d.as_str()
+                            .and_then(Direction::from_exit)
+                            .ok_or_else(|| MapError(format!("{loc}: push_block: bad direction {d:?}")))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            },
             maze,
         };
-        rooms.insert(loc, room);
+        // Unknown keys last: a missing required block (`maze:`) gets its own message first.
+        check_keys(entry, &ROOM_KEYS, &what)?;
+        if rooms.insert(loc, room).is_some() {
+            return err(format!("{what}: listed twice"));
+        }
     }
     Ok(rooms)
 }
@@ -545,7 +634,25 @@ impl GameMap {
         let steps = routes.iter().flat_map(|(name, steps)| steps.iter().map(move |s| (name.as_str(), s)));
         let alternate_steps = alternates.iter().flat_map(|a| a.with.iter().map(|s| ("alternates", s)));
         for (route, step) in steps.chain(alternate_steps) {
-            let Some(maze) = rooms.get(&step.location()).and_then(|r| r.maze) else {
+            let at = format!("routes.yaml: {route}: step {} {}", step.location(), step.entry);
+            let Some(room) = rooms.get(&step.location()) else {
+                return err(format!("{at}: game.yaml has no such room"));
+            };
+            for (key, exit) in [("exit", Some(&step.exit)), ("retreat", step.retreat.as_ref())] {
+                if let Some(exit) = exit
+                    && EXIT_NAMES.contains(&exit.as_str())
+                    && !room.exits.contains_key(exit)
+                {
+                    return err(format!(
+                        "{at}: {key} {exit} is not an exit of the room (game.yaml has {:?})",
+                        room.exits.keys().collect::<Vec<_>>()
+                    ));
+                }
+            }
+            if step.exit == "triforce" && room.treasure.as_deref() != Some("triforce") {
+                return err(format!("{at}: exit triforce, but the room's treasure is {:?}", room.treasure));
+            }
+            let Some(maze) = room.maze else {
                 continue;
             };
             let loops = Direction::from_exit(&step.exit).is_some_and(|d| d != maze.free);
@@ -1361,6 +1468,57 @@ mod tests {
         assert_ne!(through, ROUTES_YAML);
         let e = GameMap::from_yaml(GAME_YAML, &through).unwrap_err().0;
         assert!(e.contains("unsupported"), "{e}");
+    }
+
+    /// F165: every typo in game.yaml or routes.yaml that used to load as a default is an error naming the room or
+    /// step and the key.
+    #[test]
+    fn route_and_room_typos_are_errors() {
+        let step = "- {level: 0, room: '0x77', specialist: ow-start, entry: cave, exit: N}";
+        assert!(ROUTES_YAML.contains(step));
+        let route_cases = [
+            ("exit: Q", step.replace("exit: N", "exit: Q"), "exit \"Q\""),
+            ("exit: S (no such exit)", step.replace("exit: N", "exit: S"), "exit S is not an exit"),
+            ("no entry/exit", step.replace(", entry: cave, exit: N", ""), "needs entry"),
+            ("entry: n", step.replace("entry: cave", "entry: n"), "entry \"n\""),
+            ("retreat: Z", step.replace("exit: N", "exit: N, retreat: Z"), "retreat \"Z\""),
+            ("treasur: skip", step.replace("exit: N", "exit: N, treasur: skip"), "unknown key"),
+            ("waypoint: hart", step.replace("exit: N", "exit: N, waypoint: hart"), "waypoint \"hart\""),
+            ("in_cave: yes", step.replace("room: '0x77'", "room: '0x77', in_cave: yes"), "in_cave must be"),
+            ("missing room", step.replace("level: 0, room: '0x77'", "level: 9, room: '0x7f'"), "no such room"),
+            ("unquoted room", step.replace("'0x77'", "0x10"), "quoted hex room id"),
+        ];
+        for (name, line, expected) in route_cases {
+            let routes = ROUTES_YAML.replacen(step, &line, 1);
+            let e = GameMap::from_yaml(GAME_YAML, &routes).unwrap_err().0;
+            assert!(e.contains(expected), "{name}: {e}");
+            if name != "unquoted room" && name != "missing room" {
+                assert!(e.contains("0x77"), "{name} names the room: {e}");
+            }
+        }
+        let bombs = "requires_bombs: true    # Lee (Nov 8): the d2first";
+        let room_cases = [
+            ("requires_bombs: yes", bombs, bombs.replace(": true", ": yes"), "requires_bombs must be"),
+            ("require_bombs typo", bombs, bombs.replace("requires_", "require_"), "unknown key"),
+            ("locked: yes", "      locked: true", "      locked: yes".to_owned(), "locked must be"),
+            ("span: [0]", "span: [0, 9]", "span: [0]".to_owned(), "span"),
+            ("bomb_secret: [18]", "bomb_secret: [18, 12]", "bomb_secret: [18]".to_owned(), "bomb_secret"),
+            ("push_block: N", "push_block: [N, S]", "push_block: N".to_owned(), "push_block must be a list"),
+            ("unquoted location", "  location: '0x00'", "  location: 0x00".to_owned(), "quoted hex room id"),
+            ("no rooms", "rooms:", "chambers:".to_owned(), "needs a `rooms:` list"),
+        ];
+        for (name, from, to, expected) in room_cases {
+            assert!(GAME_YAML.contains(from), "{name}");
+            let game = GAME_YAML.replacen(from, &to, 1);
+            let e = GameMap::from_yaml(&game, ROUTES_YAML).unwrap_err().0;
+            assert!(e.contains(expected), "{name}: {e}");
+        }
+        // The first room listed twice.
+        let first = GAME_YAML.find("- level:").unwrap();
+        let second = first + GAME_YAML[first..].find("\n- level:").unwrap() + 1;
+        let duplicated = format!("{}{}", &GAME_YAML[..second], &GAME_YAML[first..]);
+        let e = GameMap::from_yaml(&duplicated, ROUTES_YAML).unwrap_err().0;
+        assert!(e.contains("listed twice"), "{e}");
     }
 
     /// Every overworld room is mapped; edge exits lead to the neighbouring room (a maze's loops to itself); each
