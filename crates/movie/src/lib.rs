@@ -39,6 +39,30 @@ pub trait Playback {
 /// `<name>.tfmovie`), then its inputs and pokes, including pokes tagged after the last frame.
 pub fn play(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()> {
     play_base(p, movie, movies_dir)?;
+    play_inputs(p, movie);
+    Ok(())
+}
+
+/// Bring a freshly powered-on machine to `movie`'s starting state: play its base (recursively), or
+/// nothing for a power-on movie. A base chain that loops is an error.
+pub fn play_base(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()> {
+    let mut chain = Vec::new();
+    let mut next = movie.base().map(str::to_owned);
+    while let Some(name) = next {
+        ensure!(chain.iter().all(|(n, _): &(String, Movie)| *n != name), "base chain loops at {name}");
+        let base = Movie::load(&movies_dir.join(format!("{name}.tfmovie")))?;
+        ensure!(base.rom_sha1 == movie.rom_sha1, "base movie {name} is for a different ROM");
+        next = base.base().map(str::to_owned);
+        chain.push((name, base));
+    }
+    for (_, base) in chain.iter().rev() {
+        play_inputs(p, base);
+    }
+    Ok(())
+}
+
+/// Play `movie`'s own pokes and inputs (no base).
+fn play_inputs(p: &mut dyn Playback, movie: &Movie) {
     let mut pokes = movie.pokes.iter().peekable();
     for (k, &x) in movie.inputs.iter().enumerate() {
         while let Some(q) = pokes.next_if(|q| q.frame as usize <= k) {
@@ -49,19 +73,11 @@ pub fn play(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()
     for q in pokes {
         p.poke(q.addr, q.value);
     }
-    Ok(())
 }
 
-/// Bring a freshly powered-on machine to `movie`'s starting state: play its base (recursively), or
-/// nothing for a power-on movie.
-pub fn play_base(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()> {
-    if let Some(name) = movie.base() {
-        let base = Movie::load(&movies_dir.join(format!("{name}.tfmovie")))?;
-        ensure!(base.rom_sha1 == movie.rom_sha1, "base movie {name} is for a different ROM");
-        play(p, &base, movies_dir)?;
-    }
-    Ok(())
-}
+/// The longest movie `Movie::decode` accepts: 10M frames (46 hours of play; the longest corpus
+/// movie is about 41k frames).
+pub const MAX_FRAMES: usize = 10_000_000;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Movie {
@@ -172,8 +188,10 @@ impl Movie {
         r.u16()?;
         let rom_sha1: [u8; 20] = r.take(20)?.try_into().unwrap();
         let frames = r.u32()? as usize;
-        // Each count is checked against the bytes (or frames) it describes before anything is
-        // allocated for it, so a corrupt count is an error rather than a huge reservation.
+        ensure!(frames <= MAX_FRAMES, "frame count {frames} exceeds the {MAX_FRAMES}-frame limit");
+        // The frame count is capped, and the run and poke counts are checked against the bytes
+        // they describe before anything is allocated for them, so a corrupt count is an error
+        // rather than a huge reservation.
         let run_count = r.u32()? as usize;
         let (runs, _) = r.take(run_count * 5)?.as_chunks::<5>();
         let run_len = |&[_, n @ ..]: &[u8; 5]| u32::from_le_bytes(n) as usize;
@@ -502,7 +520,16 @@ mod tests {
     fn corrupt_counts_are_refused_without_allocating_for_them() {
         let mut huge = movie_with(&[], &[]).encode();
         huge[RUNS_AT - 4..RUNS_AT].copy_from_slice(&u32::MAX.to_le_bytes()); // frames, no runs
-        assert!(decode_err(&huge).contains("cover 0 of 4294967295"));
+        assert!(decode_err(&huge).contains("exceeds the 10000000-frame limit"));
+        // One run claiming u32::MAX frames, matching the header: refused before allocating.
+        let mut bomb = movie_with(&[], &[]).encode();
+        bomb[RUNS_AT - 4..RUNS_AT].copy_from_slice(&u32::MAX.to_le_bytes());
+        bomb[RUNS_AT..RUNS_AT + 4].copy_from_slice(&1u32.to_le_bytes());
+        bomb.splice(RUNS_AT + 4..RUNS_AT + 4, [0, 0xFF, 0xFF, 0xFF, 0xFF]);
+        assert!(decode_err(&bomb).contains("frame limit"));
+        let mut at_limit = movie_with(&[], &[]).encode();
+        at_limit[RUNS_AT - 4..RUNS_AT].copy_from_slice(&(MAX_FRAMES as u32).to_le_bytes());
+        assert!(decode_err(&at_limit).contains("cover 0 of 10000000"));
         let mut huge = movie_with(&[], &[]).encode();
         huge[RUNS_AT..RUNS_AT + 4].copy_from_slice(&u32::MAX.to_le_bytes()); // runs
         assert!(decode_err(&huge).contains("truncated"));
@@ -587,6 +614,26 @@ mod tests {
         assert!(format!("{err:#}").contains("different ROM"), "{err:#}");
         top.meta["base"] = serde_json::json!("missing");
         assert!(play(&mut Recorder::default(), &top, &dir).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A base chain that loops (a movie based on itself, or a→b→a) is an error, not a stack overflow.
+    #[test]
+    fn play_refuses_a_looping_base_chain() {
+        let dir = std::env::temp_dir().join(format!("movie-loop-{}", std::process::id()));
+        let save = |name: &str, base: &str| {
+            let mut m = movie_with(&[1], &[]);
+            m.meta = serde_json::json!({"name": name, "base": base});
+            m.save(&dir.join(format!("{name}.tfmovie"))).unwrap();
+            m
+        };
+        let selfish = save("s", "s");
+        let a = save("a", "b");
+        save("b", "a");
+        for (m, at) in [(&selfish, "s"), (&a, "b")] {
+            let err = play(&mut Recorder::default(), m, &dir).unwrap_err();
+            assert!(format!("{err:#}").contains(&format!("base chain loops at {at}")), "{err:#}");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
