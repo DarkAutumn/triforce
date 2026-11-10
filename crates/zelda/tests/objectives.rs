@@ -97,6 +97,16 @@ fn unknown_route_names_the_known_ones() {
     assert!(err.contains("\"d2first\""), "{err}");
 }
 
+/// F048: a step index past the route's end is an error, not a later panic.
+#[test]
+fn an_out_of_range_step_is_an_error() {
+    let map = Arc::new(GameMap::builtin());
+    let n = map.routes[ROUTE].len();
+    let err = GameCompletion::new(map.clone(), ROUTE, Some(n)).unwrap_err();
+    assert!(err.contains("out of range"), "{err}");
+    assert!(GameCompletion::new(map, ROUTE, Some(n - 1)).is_ok());
+}
+
 #[test]
 fn exit_spans_bound_targets_and_correct_exits() {
     let tiles = [(0, 9), (0, 10), (0, 11), (0, 12)];

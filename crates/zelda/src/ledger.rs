@@ -11,6 +11,8 @@ pub struct Prediction {
     pub enemy_hits: Vec<(u8, i32)>,
     pub enemy_stuns: Vec<u8>,
     pub items: Vec<i16>,
+    /// The weapon whose look-ahead made it: its unconsumed entries go when that weapon is seen inactive again.
+    pub weapon: Option<crate::enums::AnimationKind>,
 }
 
 impl Prediction {
@@ -103,6 +105,12 @@ impl FutureCreditLedger {
         }
         self.predictions.retain(|p| !p.is_empty());
     }
+
+    /// Drops what weapons that have finished still had pending (`finished(weapon)`): such a prediction named a hit
+    /// that didn't land as predicted (another slot was hit, or nothing), and must not swallow a later real hit.
+    pub fn drop_finished(&mut self, finished: impl Fn(crate::enums::AnimationKind) -> bool) {
+        self.predictions.retain(|p| p.weapon.is_none_or(|w| !finished(w)));
+    }
 }
 
 #[cfg(test)]
@@ -115,6 +123,7 @@ mod tests {
             enemy_hits: hits.to_vec(),
             enemy_stuns: stuns.to_vec(),
             items: items.to_vec(),
+            weapon: None,
         }
     }
 

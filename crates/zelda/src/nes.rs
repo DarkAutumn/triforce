@@ -25,6 +25,17 @@ pub trait Nes {
 
     fn restore(&mut self, state: &Self::State);
 
+    /// Whether the last frame was rendered.
+    fn rendered(&self) -> bool {
+        false
+    }
+
+    /// `restore` after a detour that rendered no frame (a look-ahead), with the `rendered` flag from before it, so
+    /// the frame before the detour stays the screen.
+    fn restore_keeping_frame(&mut self, state: &Self::State, _rendered: bool) {
+        self.restore(state);
+    }
+
     /// Reads RAM or PRG-RAM by CPU address.
     fn peek(&self, addr: u16) -> u8 {
         match addr {
@@ -61,5 +72,13 @@ impl Nes for zcore::ZCore {
 
     fn restore(&mut self, state: &Self::State) {
         zcore::ZCore::restore(self, state);
+    }
+
+    fn rendered(&self) -> bool {
+        zcore::ZCore::rendered(self)
+    }
+
+    fn restore_keeping_frame(&mut self, state: &Self::State, rendered: bool) {
+        zcore::ZCore::restore_keeping_frame(self, state, rendered);
     }
 }

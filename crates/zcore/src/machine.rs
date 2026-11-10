@@ -257,6 +257,21 @@ impl ZCore {
         self.rendered = false;
     }
 
+    /// Return to a snapshot taken during this run and set whether the last frame counts as rendered: for a detour
+    /// that rendered no frame since the snapshot (a look-ahead; `run_frame(_, false)` leaves `pixels` alone), pass
+    /// the flag from before the detour so the frame before it stays the screen.
+    pub fn restore_keeping_frame(&mut self, state: &MachineState, rendered: bool) {
+        self.bus.state = state.state;
+        self.frame = state.frame;
+        self.cycles = state.cycles;
+        self.rendered = rendered;
+    }
+
+    /// The last frame was rendered (`pixels` is valid).
+    pub const fn rendered(&self) -> bool {
+        self.rendered
+    }
+
     /// Frames run since power-on (snapshot/restore carry it).
     pub const fn frame(&self) -> u64 {
         self.frame

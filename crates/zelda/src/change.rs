@@ -118,6 +118,9 @@ impl Change {
                 &mut change.enemies_stunned,
                 &mut change.items_gained,
             );
+            // A weapon that finished without its predicted hit landing predicted wrong: its credit was paid at the
+            // firing step already, so the leftover entries go rather than discount an unrelated later hit.
+            ledger.drop_finished(|w| curr.animation_state(w) == AnimationState::Inactive);
             if look_ahead {
                 for weapon in LOOK_AHEAD_WEAPONS {
                     if curr.animation_state(weapon) == AnimationState::Active
@@ -164,6 +167,7 @@ impl Change {
         ledger: &mut FutureCreditLedger,
     ) {
         let saved = m.nes.snapshot();
+        let rendered = m.nes.rendered();
         for var in disabled_slots(weapon) {
             m.nes.poke(var.addr(), 0);
         }
@@ -189,6 +193,7 @@ impl Change {
         }
         let mut prediction = Prediction {
             frame: start.frame,
+            weapon: Some(weapon),
             ..Default::default()
         };
         let (mut hits, mut stuns, mut items) = (Vec::new(), Vec::new(), Vec::new());
@@ -235,7 +240,8 @@ impl Change {
             .extend_from_slice(&prediction.enemy_stuns);
         self.items_gained.extend_from_slice(&prediction.items);
         ledger.add_prediction(prediction);
-        m.nes.restore(&saved);
+        // The look-ahead rendered nothing: the action's last frame stays the screen (`Game.screen()`).
+        m.nes.restore_keeping_frame(&saved, rendered);
     }
 }
 
@@ -630,5 +636,30 @@ mod tests {
         let c = change(&mut m, view(&arrow, 108), view(&landed, 112), &mut ledger, true);
         assert_eq!(c.observed.enemies_hit, vec![(SLOT as u8, 1)]);
         assert_eq!(c.enemies_hit, vec![], "the landing pays nothing more");
+    }
+
+    /// F054 (wrong slot): a beam predicted to hit the Stalfos finishes without hitting him; when the sword hits him
+    /// later, that hit is credited (the beam's leftover prediction went when the beam ended).
+    #[test]
+    fn a_finished_weapons_unused_prediction_does_not_swallow_a_later_hit() {
+        let prev = with_stalfos(3);
+        let mut fired = prev;
+        fired[Var::BeamAnimation.addr() as usize] = 16;
+        let mut ledger = FutureCreditLedger::default();
+        let mut m = scripted(fired, beam_script);
+        let c = change(&mut m, view(&prev, 100), view(&fired, 104), &mut ledger, true);
+        assert_eq!(c.enemies_hit, vec![(SLOT as u8, 1)]);
+        // The beam ends; the Stalfos is untouched (it hit something else).
+        let mut ended = fired;
+        ended[Var::BeamAnimation.addr() as usize] = 0;
+        let mut m = scripted(ended, |_, _| {});
+        let c = change(&mut m, view(&fired, 104), view(&ended, 112), &mut ledger, true);
+        assert!(c.enemies_hit.is_empty() && ledger.predictions().is_empty());
+        // A later sword hit on him is new credit.
+        let mut stabbed = ended;
+        stabbed[tables::OBJ_HEALTH.0 + SLOT] = 2 << 4;
+        let mut m = scripted(stabbed, |_, _| {});
+        let c = change(&mut m, view(&ended, 112), view(&stabbed, 120), &mut ledger, true);
+        assert_eq!(c.enemies_hit, vec![(SLOT as u8, 1)]);
     }
 }

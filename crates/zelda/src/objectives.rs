@@ -281,6 +281,14 @@ impl GameCompletion {
                 "Unknown route '{route}' (routes.yaml has {known:?})"
             ));
         };
+        if let Some(s) = step
+            && s >= steps.len()
+        {
+            return Err(format!(
+                "route '{route}' has {} steps; step {s} is out of range",
+                steps.len()
+            ));
+        }
         let waypoints = route_waypoints(steps)
             .into_iter()
             .filter(|w| step.is_none_or(|s| w.step >= s))

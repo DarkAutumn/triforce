@@ -275,3 +275,62 @@ fn every_legal_attack_starts_its_weapon() {
         }
     }
 }
+
+/// F094: walking out of a cave (0x0a's white-sword cave) or a dungeon (0_37c) and loading the pre-entry state of
+/// that exit give the same flag and mask: MOVE N back in is masked on the mouth, legal once Link left its tile.
+#[test]
+fn a_loaded_mouth_exit_matches_the_live_one() {
+    let Some(nes) = open_core() else { return };
+    let Some(nes2) = open_core() else { return };
+    let map = Arc::new(GameMap::builtin());
+    let (mut live, mut loaded) = (Session::new(nes, map.clone()), Session::new(nes2, map));
+    let opts = LoadOptions::default();
+    live.load(&common::load_named_state("0_0acave_0"), &opts, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    live.set_capture_pre_entry(true);
+    let north = Action::parse("MOVE N 16").unwrap();
+    for _ in 0..20 {
+        let c = live.act(Action::parse("MOVE S 16").unwrap()).unwrap();
+        if c.changed_location() {
+            break;
+        }
+    }
+    assert!(!live.state().in_cave());
+    assert!(live.just_exited_cave() && !live.mask().is_allowed(&north));
+    let pre = live.last_pre_entry().expect("pre-entry captured").machine.clone();
+    loaded.load(&pre, &LoadOptions { randomize_rng: false, ..opts.clone() }, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    assert_eq!(loaded.state().full_location(), live.state().full_location());
+    assert_eq!(loaded.just_exited_cave(), live.just_exited_cave());
+    assert_eq!(loaded.mask(), live.mask());
+    // Off the mouth tile (a spawn may cut the first steps short): MOVE N is legal again.
+    let tile = loaded.state().link.tile();
+    for _ in 0..8 {
+        if loaded.state().link.tile() != tile {
+            break;
+        }
+        loaded.act(Action::parse("MOVE S 4").unwrap()).unwrap();
+    }
+    assert_ne!(loaded.state().link.tile(), tile);
+    assert!(!loaded.just_exited_cave());
+
+    // A dungeon mouth (out of Dungeon 1 onto 0x37).
+    loaded.load(&common::load_named_state("0_37c_0"), &opts, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    assert!(loaded.just_exited_cave() && !loaded.mask().is_allowed(&north));
+}
+
+/// F177: an action whose weapon look-ahead runs (a beam) still leaves its last rendered frame as the screen.
+#[test]
+fn a_look_ahead_keeps_the_rendered_frame() {
+    let Some(nes) = open_core() else { return };
+    let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
+    s.set_render(true);
+    s.load(&common::load_named_state("0_67s_0"), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0))
+        .unwrap();
+    s.nes_mut().poke(0x66F, 0x22);
+    s.nes_mut().poke(0x670, 0xFF);
+    s.act(Action::parse("MOVE N 16").unwrap()).unwrap();
+    assert!(s.nes_mut().pixels().is_some(), "rendered after a move");
+    let beams = Action::parse("BEAMS N").unwrap();
+    let fired = s.act(beams).unwrap();
+    assert!(fired.frames > 3, "the sword swung");
+    assert!(s.nes_mut().pixels().is_some(), "the action's last frame is still the screen");
+}
