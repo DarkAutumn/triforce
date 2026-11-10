@@ -13,15 +13,16 @@ import pytest
 from triforce import _native, evaluate, registry, replay
 from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _start_health_fraction, _visited_rooms,
                                default_output, evaluate_specialist, format_report, read_evaluation, write_result)
-from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.observation import observation_space
+from triforce.model import ModelConfig
 from triforce.registry import save_checkpoint
+
+from .conftest import seeded_network
 
 SMALL = ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
 
 
 def test_evaluate_cli_uses_supplied_task_instead_of_reloading_its_name(states_dir, tmp_path):
-    checkpoint = save_checkpoint('ow-start', 'alternate-task', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    checkpoint = save_checkpoint('ow-start', 'alternate-task', seeded_network(1, SMALL), root=tmp_path)
     config = tmp_path / 'alternate.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
                       "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 1\n")
@@ -36,16 +37,15 @@ def test_evaluate_cli_uses_supplied_task_instead_of_reloading_its_name(states_di
     assert result['records'][0]['steps'] == 1
 
 
-def test_evaluate_cli_logs_a_folder_the_training_gui_reads(states_dir, tmp_path, monkeypatch):
-    monkeypatch.setenv('TRIFORCE_STATES_DIR', str(states_dir))
-    checkpoint = save_checkpoint('ow-start', 'logged', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+def test_evaluate_cli_logs_a_folder_the_training_gui_reads(states_dir, tmp_path):
+    checkpoint = save_checkpoint('ow-start', 'logged', seeded_network(2, SMALL), root=tmp_path)
     config = tmp_path / 'short.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
                       "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 3\n")
     logs = tmp_path / 'logs'
     assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--episodes-per-state', '3',
                           '--parallel', '2', '--output', str(tmp_path / 'eval.json'), '--logs-dir', str(logs)]) == 0
-    (folder,) = logs.iterdir()
+    (folder,) = (p for p in logs.iterdir() if p.is_dir())       # beside new_log_dir's .lock
     plan = json.loads((folder / 'training.json').read_text())
     assert (plan['kind'], plan['status'], plan['runs'][0]['status']) == ('eval', 'completed', 'ok')
     events = [json.loads(line) for line in (folder / 'ow-start.jsonl').read_text().splitlines()]
@@ -53,7 +53,7 @@ def test_evaluate_cli_logs_a_folder_the_training_gui_reads(states_dir, tmp_path,
     assert events[0]['episodes'] == 3 and events[-2]['episodes'] == 3 and events[-1]['status'] == 'ok'
     assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--episodes-per-state', '1',
                           '--output', str(tmp_path / 'eval.json'), '--logs-dir', str(logs), '--no-log']) == 0
-    assert len(list(logs.iterdir())) == 1
+    assert len([p for p in logs.iterdir() if p.is_dir()]) == 1
 
 
 def _short_config(tmp_path, name='ow-start'):
@@ -63,10 +63,9 @@ def _short_config(tmp_path, name='ow-start'):
     return config
 
 
-def test_only_the_canonical_evaluation_is_written_to_eval_json(states_dir, tmp_path, monkeypatch):
+def test_only_the_canonical_evaluation_is_written_to_eval_json(states_dir, tmp_path):
     """F125: another act mode, episode count, seed or specialist goes to its own file; eval.json is untouched."""
-    monkeypatch.setenv('TRIFORCE_STATES_DIR', str(states_dir))
-    checkpoint = save_checkpoint('ow-start', 'canon', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    checkpoint = save_checkpoint('ow-start', 'canon', seeded_network(3, SMALL), root=tmp_path)
     run = checkpoint.parent
     config = _short_config(tmp_path)
 
@@ -106,7 +105,7 @@ def test_write_result_keeps_the_old_file_when_the_write_fails(tmp_path, monkeypa
 
 def test_read_evaluation_finds_the_evaluation_in_the_act_mode_of_the_current_weights(tmp_path):
     """F027: a reader gets the evaluation matching the run's act mode and checkpoint, or a LookupError."""
-    checkpoint = save_checkpoint('ow-start', 'r', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    checkpoint = save_checkpoint('ow-start', 'r', seeded_network(4, SMALL), root=tmp_path)
     run = checkpoint.parent
     sha1 = registry.checkpoint_sha1(run)
     write_result({'deterministic': False, 'success_rate': 0.5}, run / 'eval.json')       # an old file, no sha1
@@ -134,7 +133,7 @@ def test_start_health_fraction_uses_the_max_hearts_at_the_start():
 
 def test_evaluation_names_its_inputs(states_dir, tmp_path):
     """F080 (2): the result carries the act mode, the checkpoint's sha1, the network hash and the config."""
-    checkpoint = save_checkpoint('ow-start', 'p', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    checkpoint = save_checkpoint('ow-start', 'p', seeded_network(5, SMALL), root=tmp_path)
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=3)
     result = evaluate_specialist(config, checkpoint, episodes_per_state=1, states_dir=states_dir,
                                  deterministic=True)
@@ -148,7 +147,7 @@ def test_evaluation_names_its_inputs(states_dir, tmp_path):
 
 
 def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tmp_path):
-    ckpt = save_checkpoint('ow-start', 'untrained', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    ckpt = save_checkpoint('ow-start', 'untrained', seeded_network(6, SMALL), root=tmp_path)
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=30)
     seen = []
 
@@ -206,7 +205,7 @@ np.save(sys.argv[2], np.concatenate([np.stack([r['log_prob'], r['entropy'], r['v
 def test_evaluation_plays_replay_exactly_here_and_in_a_fresh_process(states_dir, tmp_path):
     """An eval's replay file (seed + start state + actions per episode) replays every episode to the same record
     and the same per-decision probabilities and values, bit for bit, in this process and in a new one."""
-    ckpt = save_checkpoint('ow-start', 'untrained', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    ckpt = save_checkpoint('ow-start', 'untrained', seeded_network(7, SMALL), root=tmp_path)
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=25)
     path = tmp_path / 'plays.jsonl'
     result = evaluate_specialist(config, ckpt, episodes_per_state=4, parallel=3, threads=2, seed=11,
@@ -230,7 +229,7 @@ def test_evaluation_plays_replay_exactly_here_and_in_a_fresh_process(states_dir,
 
 
 def _record_short_plays(states_dir, tmp_path):
-    ckpt = save_checkpoint('ow-start', 'short', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    ckpt = save_checkpoint('ow-start', 'short', seeded_network(8, SMALL), root=tmp_path)
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=3)
     recorded = tmp_path / 'a'
     recorded.mkdir()

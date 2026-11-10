@@ -5,17 +5,18 @@ import json
 import pytest
 
 from triforce import cli, registry
-from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.observation import observation_space
+from triforce.model import ModelConfig
 from triforce.runner import RunnerError
 from triforce.specialist import list_specialists
+
+from .conftest import REPO_STATES_DIR, seeded_network
 
 SMALL = ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
 
 
 @pytest.fixture(scope='module')
 def network():
-    return ZeldaPolicy(observation_space(), SMALL)
+    return seeded_network(1, SMALL)
 
 
 def _listing(capsys):
@@ -92,7 +93,7 @@ def test_eval_chain_rejects_an_unknown_route(tmp_path, capsys):
 @pytest.mark.parametrize('args, message', [
     (['--from', 'nope_0'], "Unknown start state 'nope_0'"),
     (['--stop-at', '9:0x99'], "--stop-at 9:0x99 is not a room of route 'd2first' after the start step"),
-    (['--from', '2_7ds_0', '--stop-at', '0:0x67'], "--stop-at 0:0x67 is not a room"),   # only before Dungeon 2
+    (['--from', str(REPO_STATES_DIR / '2_7ds_0.state'), '--stop-at', '0:0x67'], "--stop-at 0:0x67 is not a room"),
     (['--stop-at', '1:73'], "is not a room (LEVEL:0xROOM"),
     (['--checkpoint', 'models/goriya/x'], "is not SPECIALIST=PATH"),
     (['--checkpoint', 'gorya=models/goriya'], "unknown specialist(s) ['gorya']"),

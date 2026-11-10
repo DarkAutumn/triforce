@@ -14,6 +14,7 @@ from triforce.observation import observation_space
 from triforce.ppo import PPO, Collector, PPOConfig
 
 from . import synthetic
+from .conftest import seeded_network
 
 
 def _trained(seed=0):
@@ -72,7 +73,7 @@ def _schema1_checkpoint(tmp_path, edit=None):
     del spec['target']
     if edit:
         edit(spec)
-    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec, **SMALL))
+    network = seeded_network(1, ModelConfig(obs_spec=spec, **SMALL))
     path = registry.save_checkpoint('ow-start', 'schema1', network, root=tmp_path)
     checkpoint = torch.load(path, weights_only=False)
     checkpoint['obs_schema_version'] = 1
@@ -116,7 +117,7 @@ def test_older_schema_checkpoint_trains_on_current_rows():
     """``--load`` of an older model: the rollout and update see the pool's extra keys and ignore them."""
     spec = obs_spec_from_space(synthetic.observation_space())
     del spec['objective']
-    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec, hidden_dim=32, grid_channels=(4, 4, 4)))
+    network = seeded_network(2, ModelConfig(obs_spec=spec, hidden_dim=32, grid_channels=(4, 4, 4)))
     collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 2), 16, 0.99, 0.95)
     collector.collect(network, 'cpu')
     assert 'objective' in collector.buffer.observation

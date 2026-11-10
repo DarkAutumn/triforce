@@ -10,10 +10,11 @@ import pytest
 
 from triforce import _native, chain_hp, cli, registry
 from triforce.actions import Action
-from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.observation import observation_space
+from triforce.model import ModelConfig
 from triforce.runner import RunResult, chain_summary
 from triforce.zelda_enums import ActionKind
+
+from .conftest import seeded_network
 
 # ow-start from the game start: west to the sword cave's column, north into the cave, take the sword, back out,
 # east to the north exit's column and north into 0x67 (its objective-correct exit once Link has the sword).
@@ -59,8 +60,7 @@ def test_scripted_walk_takes_the_sword_and_leaves_the_start_screen(game):
 
 def test_evaluate_the_promoted_network_through_the_cli(states_dir, tmp_path, capsys):
     root = tmp_path / 'models'
-    registry.save_checkpoint('ow-start', 'untrained', ZeldaPolicy(observation_space(), ModelConfig(hidden_dim=32)),
-                             root=root)
+    registry.save_checkpoint('ow-start', 'untrained', seeded_network(1, ModelConfig(hidden_dim=32)), root=root)
     registry.promote('ow-start', 'untrained', root=root)
     config = tmp_path / 'ow-start.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"

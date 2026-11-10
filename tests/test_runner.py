@@ -19,6 +19,7 @@ from triforce.runner import Policies, Route, RoomRecord, Runner, RunnerError, Ru
     parse_location, write_jsonl
 from triforce.zelda_enums import ActionKind, MapLocation
 
+from .conftest import REPO_STATES_DIR
 from .networks import scripted
 
 
@@ -27,7 +28,7 @@ def test_route_definition():
     assert route.start_state == 'start'
     assert route.terminal is None                   # the route ends on taking the D3 triforce
     assert Route.load('d2first', parse_location('1:0x73')).terminal == MapLocation(1, 0x73, False)
-    assert Route.load('d2first', start_from='2_7ds_0').start_state == '2_7ds_0'
+    assert Route.load('d2first', start_from='2_7ds_0', states_dir=REPO_STATES_DIR).start_state == '2_7ds_0'
     with pytest.raises(RunnerError, match='Unknown route'):
         Route.load('no-such-route')
 
@@ -38,13 +39,15 @@ def test_route_checks_the_start_state_and_the_stop_room(tmp_path):
     (tmp_path / '1_73s_0.state').write_bytes(b'')
     assert Route.load('d2first', start_from='1_73s_0', states_dir=tmp_path).start_state == '1_73s_0'
     # The stop room must come after the start state's step: 2:0x7d is D2's entrance, 1:0x73 is on the way on.
-    assert Route.load('d2first', parse_location('1:0x73'), '2_7ds_0').terminal == MapLocation(1, 0x73, False)
+    assert Route.load('d2first', parse_location('1:0x73'), '2_7ds_0',
+                      states_dir=REPO_STATES_DIR).terminal == MapLocation(1, 0x73, False)
     with pytest.raises(RunnerError, match=r"--stop-at 2:0x7d is not a room of route 'd2first' after the start"):
-        Route.load('d2first', parse_location('2:0x7d'), '2_7ds_0')
+        Route.load('d2first', parse_location('2:0x7d'), '2_7ds_0', states_dir=REPO_STATES_DIR)
     with pytest.raises(RunnerError, match='--stop-at 9:0x99'):
         Route.load('d2first', parse_location('9:0x99'))
     # 0x73 is entered from S first (step 46) and from W later (step 48): stopping at it again is after the start.
-    assert Route.load('d2first', parse_location('1:0x73'), '1_73s_0').terminal == MapLocation(1, 0x73, False)
+    assert Route.load('d2first', parse_location('1:0x73'), '1_73s_0',
+                      states_dir=REPO_STATES_DIR).terminal == MapLocation(1, 0x73, False)
 
 
 def test_checkpoint_overrides_must_name_a_specialist_and_a_checkpoint(models_dir, tmp_path):

@@ -86,9 +86,10 @@ def test_supplied_config_and_explicit_start_state(states_dir, tmp_path):
 def test_load_widens_an_older_checkpoint_only_with_obs_target(states_dir, tmp_path, target):
     from triforce.model import ModelConfig, ZeldaPolicy, obs_spec_from_space  # pylint: disable=import-outside-toplevel
     from triforce.observation import observation_space  # pylint: disable=import-outside-toplevel
+    from .conftest import seeded_network  # pylint: disable=import-outside-toplevel
     spec = obs_spec_from_space(observation_space())
     del spec['target']
-    old = registry.save_checkpoint(SPECIALIST, 'schema1', ZeldaPolicy(config=ModelConfig(obs_spec=spec, hidden_dim=32)),
+    old = registry.save_checkpoint(SPECIALIST, 'schema1', seeded_network(1, ModelConfig(obs_spec=spec, hidden_dim=32)),
                                    iterations=3, steps=96, root=tmp_path)
     checkpoint = torch.load(old, weights_only=False)
     checkpoint['obs_schema_version'] = 1
