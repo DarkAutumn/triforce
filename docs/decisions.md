@@ -902,3 +902,15 @@ entry below and `crates/zcore/UPSTREAM.md`.
   is ~10% of CPU in uncapped 128-game play (zcore 86%) and ~8% of rollout CPU in training, so a GPU could at most
   win that back, by making workers wait on cross-worker batches with a second set of numerics. 128 games at 60 fps
   use about a tenth of the machine. Evidence: `docs/rust-actor.md` "GPU vs CPU inference".
+
+## 2026-11-10 — Fresh team r56 promoted; act mode per model (better-play §6b)
+
+- **What:** the r56 team (every family from scratch on the Rust-actor stack) is promoted. Each run dir may carry an
+  `act` file (`sample`/`argmax`, `promote --act`), which evaluation, chains, `run` and the watch player follow;
+  15 families act by argmax, goriya, moldorm, stalfos-keese-gel, zol and darknut sample.
+- **Why:** argmax loses 5–28% fewer hearts per room in every family with damage, but loops (`stuck`) where the policy
+  has no good answer; the chosen mix wins D2 arrivals 102 → 115 and D3 arrivals 11 → 21 of 120 from the start
+  (round16.md §3). goriya was argmax in the first mix and looped in D1's 0x23 in chains, so a mode is only kept after
+  a chain check.
+- **Better-play tooling merged** (`55ef7ab`): yardstick, act mode, entropy annealing, outcome fine-tuning, best-of-N,
+  SIL, Gumbel search + expert iteration, PLR, PPG, chain harvesting, `exit_health_weight`; all off by default.
