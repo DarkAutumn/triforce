@@ -327,21 +327,34 @@ The order is bottom-up, so each layer is reviewed before the code that trusts it
 
 ## Hot spots worth extra attention
 
-These are recent, complex, or already known to have bitten:
+These are recent, complex, or already known to have bitten. For each, the ledger should end up with either
+findings or a "Checked and fine" line:
 
 - **Search and simulation:** `crates/pool/src/zelda/search.rs`, and `SpecialistEnv` `save`/`load`/`simulate`. The
   simulation mode must not publish frames, record, capture, or touch shared state.
 - **Two-buffer collector overlap and the learner-side recompute** (`ppo.Collector`, `RolloutBuffer.recompute`).
 - **Per-policy act mode end to end:** the act file → `Policies.deterministic` → `EnvPool.play(deterministic=[...])`
   → `PolicyActor`.
-- **Training success-rate bias** (round16 §5): early stop and `start_results`.
 - **Start-state machinery:** the failure-weighted selector, PLR weights (a one-rollout lag), harvested states
-  (no hp randomization), and `harvested_fraction`, which defaults to 0.5 for every specialist. Check whether that
-  default is intended.
+  (no hp randomization), and `harvested_fraction`.
+  - That fraction defaults to 0.5 for every specialist. Determine whether any training today draws harvested
+    states (what is in the default harvested dir; what the selector does when it's empty), and report what you
+    find.
 - **Look-ahead handling:** training credits on the firing step; eval and chains skip the look-ahead; the ledger and
   frame must be restored after a search.
 - **AVX kernels and feature detection** (`crates/policy/src/kernels.rs`).
 - **The process scan in `training-gui.py`:** `/proc` parsing, path resolution, symlinks.
+
+## Already known (don't re-report as new; do add the precise mechanism and fix if you pin it down)
+
+- **The training success rate undercounts slow failures** (round16 §5; `docs/experiments/backlog.md`).
+  - Episodes that run into the room's step budget rarely finish inside one rollout segment.
+  - `RolloutMetrics.start_results` and `train.EarlyStop` count the same episodes.
+  - Wanted: exact code locations and a concrete fix.
+- **Argmax policies loop** (`stuck`, `no-damage`) where the policy has no good answer (round16 §3). This is a
+  property of the models, not a code bug, unless you find the masks or the observation make it worse.
+- **A flaky test under load:** `tests/test_play_zelda.py::test_game_grid_streams_only_shown_games`. A frame
+  published just after `show(0, False)`. Report it only if you find the race in the player rather than in the test.
 
 ## Suggested pacing
 
@@ -349,3 +362,5 @@ These are recent, complex, or already known to have bitten:
 - Passes 7–8 (Python training and evaluation) about a quarter.
 - Passes 9–12 the rest.
 - If time runs short, finish the hot spots and passes 2, 3, 5 and 7 before anything else.
+- **Done** means every pass has a `Coverage` line and every hot spot has either a finding or a "Checked and fine"
+  line.
