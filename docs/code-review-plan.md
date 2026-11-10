@@ -84,7 +84,7 @@ reasoning) will take it and fix the problems. Write each entry for that agent.
     `$12 == 5` before reading the screen or tile map. Entry states are saved mid-scroll.
 - **Tests:**
   - Rust: `cargo test --release --workspace --features zelda/zcore --no-fail-fast` (627 pass, about 1 min).
-  - Python: `.venv/bin/python -m pytest -q -p no:cacheprovider` (266 pass, about 5 min).
+  - Python: `.venv/bin/python -m pytest -q -p no:cacheprovider` (266 pass, about 1 min on an idle machine).
   - Known flaky under heavy load: `tests/test_play_zelda.py::test_game_grid_streams_only_shown_games`.
   - Python probes can use `triforce._native` directly: `Game`, `Env`, `EnvPool`, `TrainTask`, `EvalTask`,
     `ChainTask`, `Policy`. `tests/` shows how; the tiny-model fixtures are in `tests/conftest.py` and
@@ -101,10 +101,10 @@ reasoning) will take it and fix the problems. Write each entry for that agent.
 | `crates/pool` (thread pool, rollouts, play, search) | 4,000 | 1,500 |
 | `crates/policy` (Rust forward pass, AVX) | 1,400 | 240 |
 | `crates/tools`, `crates/movie` | 1,800 | 230 |
-| `triforce/` (Python: PPO, model, train, eval, runner, ...) | 6,300 | |
+| `triforce/` (Python: PPO, model, train, eval, runner, ...) | 5,700 | |
 | apps: `training-gui.py`, `zelda-map.py`, `play-zelda.py` | 4,000 | |
-| `scripts/` | 2,400 | |
-| `tests/` (Python) | | 6,000 |
+| `scripts/` | 2,200 | |
+| `tests/` (Python) | | 5,500 |
 
 ## Cross-cutting checklists (apply in every pass)
 
@@ -302,7 +302,7 @@ The order is bottom-up, so each layer is reviewed before the code that trusts it
   - `triforce/game.yaml`: rooms, tags, exits, enemies, requires_bombs.
   - `triforce/routes.yaml`: d2first steps, retreats, families.
   - `specialists/*.yaml` (20), and the `specialists/arms/*` experiment copies.
-  - `triforce/states/` (297 start states, `TFZSTATE`).
+  - `triforce/states/` (295 start states, `TFZSTATE`).
 - **Focus:**
   - Cross-references: every route room has a family; family rooms match the specialists' `rooms`; start-state names
     parse (`<level>_<room><entry>_<chain>`).
