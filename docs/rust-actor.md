@@ -2,10 +2,10 @@
 
 Lee, Nov 9: inference moves to Rust. Python stops being called once per step; it calls once per rollout with
 the network's weights and gets the whole batch back. The same engine runs evaluation, chains and the watch player
-(play-zelda asks for ~60 steps at a time from a background thread). Search (expert iteration,
+(play-zelda lets every game act inside the pool and only follows events). Search (expert iteration,
 `~/Downloads/triforce-better-play.md` §2) is **for training only**: the agent always acts from the policy, never
-from a search. Everything here is a fresh start: only the current model config is supported, old checkpoints and
-old runs are not loaded or replayed (the team will be retrained). Background: `docs/all-rust.md` (why the learner,
+from a search. Only the current model config is supported; checkpoints from before r56 (`grid_encoder: 'conv'`)
+load again, since the conv encoder is the only one left. Background: `docs/all-rust.md` (why the learner,
 GUIs and scripting stay in Python).
 
 ## Contract
@@ -39,36 +39,33 @@ The learner recomputes `logp_old` and values with its own torch network over the
 2. **Rollouts in the pool.** `Pool::rollout(policy, steps)`: every worker drives its envs itself (observation →
    forward → action → step) and writes the rollout buffers (obs, mask, action, log-prob, value, reward, frames,
    dones, bootstrap observations, episode events); Python gets them in one call with the GIL released. GAE stays
-   in Python (cheap, and the learner recomputes values anyway).
+   in Python (cheap, and the learner recomputes values anyway). `close` (or Ctrl-C) stops a rollout before its
+   next step.
 3. **Evaluation, chains and the watch player** use the same in-pool policy (one network per specialist in a chain):
    `Pool::play(actor, record)` makes every env act on its own, one decision per turn on its worker (envs sharing a
    thread take turns), until its jobs run out. A chain run that ends with `hold_finished_frame` parks its env
    until `set_hold(env, false)` (the watch player's result pause). Python only follows events (`wait_idle`,
-   `poll_events`, `poll_plays`). The per-step `recv`/`send` path and `triforce/inference.py` are gone.
-4. **Deferred look-ahead (Lee's continuation queue).** Beam/bomb/arrow/boomerang look-ahead
-   (`zelda::change::predict`, `FutureCreditLedger`) leaves the step loop: the step records what it needs (the
-   snapshot at the firing step, the weapon), and the predictions, the credit ledger and the rewards are settled per
-   env, in order, by whichever worker is idle, before the rollout returns. Prerequisite (built): nothing that steers
-   the step loop reads predicted effects. `stuck`, `no-damage`, linger (`no-room-progress`), the chain stall check
-   and the visit metrics count `Change.observed` (a hit counts on the step it lands), so the look-ahead changes
-   rewards only, and evaluation and chains skip it (`EnvOptions.skip_look_ahead`; 12–35% of step time in
-   beam/bomb rooms under attack-heavy play). Checking endings only at rollout ends was considered and rejected: it
-   would make episodes depend on rollout length and env count, and eval/chains/play have no rollouts. **The
-   deferral itself waits for the profile (Lee, Nov 9: "profile first, then decide"):** it needs a deferred critic
-   (per-env queue of unsettled steps, Episode events after settlement), separate emulators for predictions and
-   helper threads, and only pays if training leaves cores or barrier time idle.
+   `poll_events`, `poll_plays`).
+4. **Look-ahead: inline in training, skipped in eval/chains** (deferral not built; `docs/decisions.md` 2026-11-09).
+   Beam/bomb/arrow/boomerang look-ahead (`zelda::change::predict`, `FutureCreditLedger`) runs inside
+   `Session::act`. Nothing that steers the step loop reads predicted effects: `stuck`, `no-damage`, linger
+   (`no-room-progress`), the chain stall check and the visit metrics count `Change.observed` (a hit counts on the
+   step it lands), so the look-ahead changes rewards only, and evaluation and chains skip it
+   (`EnvOptions.skip_look_ahead`; 12–35% of step time in beam/bomb rooms under attack-heavy play). Settling it on
+   a worker queue after the step was designed and decided against.
 5. **Replay records** (`triforce/replay.py`, built). `play(record='actions')` returns each finished episode as a
    `Play` (job key, per decision the acting policy, the action and the policy's log-prob/entropy/value, optionally
    the observations). Eval (`--plays`), `eval-chain --plays` and `play-zelda.py --plays` write replay files: a
    header (kind, the task's configs and options, model checkpoints and hashes, backend, `git describe`, the
-   game/route data hash) and one line per episode (job, start state, base64 actions, the result).
+   game/route data hash, the states dir and, for chains, `start_hash` of the `start_from` state) and one line per
+   episode (job, start state, eval lines also its `start_hash`, base64 actions, the result).
    `replay.replay(header, play)` rebuilds the task for that job and plays it with a replaying actor
    (`PolicyActor::replay`: the recorded action at each step, scored by the policy), returning every decision's
-   log-prob/entropy/value (bit for bit the original's) and observations; a replay that outlives its actions raises.
-6. **Search for training** (later; better-play §2): a second job type on the same worker queue, run over states
-   the rollout visited ("Reanalyse"): Gumbel-top-k candidates, K futures with perturbed RNG, the policy as the
-   rollout policy, value at the leaves. Needs a full `SpecialistEnv` snapshot (critic, objectives, trackers, end
-   conditions, cheat ledger), not just the machine snapshot.
+   log-prob/entropy/value (bit for bit the original's) and observations. A replay that outlives its actions, stops
+   before them or ends with another result raises; a changed data hash or start state file raises before playing
+   (`strict=False`: warns), a different code version warns. `read` drops a cut-off last line with a warning.
+6. **Search for training** (built; see "Search" below): inside training rollouts, at decision time, for a keyed
+   share of decisions.
 
 ## Tests (beyond each component's unit tests)
 
@@ -82,8 +79,8 @@ The learner recomputes `logp_old` and values with its own torch network over the
   the actions gives identical probabilities and the same game at every step; also across a fresh process.
 - **Recorded plays:** play episodes keeping only seed + actions, replay them: same endings, rooms, stats and
   probabilities.
-- **Deferred look-ahead:** inline vs deferred settlement gives identical rewards; the step loop's endings don't
-  change when predictions are switched off.
+- **Look-ahead:** endings, linger and visits are identical with predictions on or off
+  (`endings_linger_and_visits_ignore_the_look_ahead`).
 
 ## Order of work
 
@@ -92,9 +89,9 @@ The learner recomputes `logp_old` and values with its own torch network over the
    inference removed from training. (Done.)
 3. Eval, chains and play-zelda on the in-pool policy; replay records and the replay API with probabilities. (Done;
    the per-step `recv`/`send` path is gone.)
-4. Endings on observed effects (done); the deferred look-ahead on the worker queue (after the profile).
+4. Endings on observed effects (done); deferred look-ahead: not built (decisions 2026-11-09).
 5. Profile end to end; GPU vs CPU inference; fresh retrain of the team (baseline on the new stack), then
-   better-play §0, §1a + §3, §6b, §2, §1b/§5/§6a.
+   better-play §0, §1a + §3, §6b, §2, §1b/§5/§6a. (Done: round 16.)
 
 ## GPU vs CPU inference (Lee, Nov 9): CPU only
 
@@ -153,7 +150,8 @@ kind) + log p(duration | kind)); the learner's torch side computes the same fact
 docs/architecture.md): searched rows are distilled toward π', the rest train by PPO.
 
 **One evaluation.** Q of a future = Σ_t Γ_t r_t + Γ_d·V(leaf), Γ = γ^(frames/8) accumulated over the simulated
-steps (the candidate, then d policy decisions sampled with keyed noise, argmax when `deterministic`). V = 0 after a
+steps (the candidate, then d argmax policy decisions, so candidates differ only by their action and the shared RNG
+redraws). V = 0 after a
 terminal step or a max-steps truncation, V(final observation) after a bootstrap truncation (`no-room-progress`,
 `no-damage`), as training. Sims run the env's full reward pipeline (critic, weapon look-ahead, terminal rewards,
 shaping dial) through `SpecialistEnv::simulate`: `step` without the curriculum and start-state pool records, room
@@ -170,11 +168,12 @@ counters, RAM and the movie, step by step against an env that never searched).
 
 **Determinism.** Every search draw is keyed (`policy::noise::key_of`/`gumbel`): searched-or-not by (job, step), the
 root Gumbel noise by (job, step), a future's RNG redraw by (job, step, visit, future) (common random numbers: every
-candidate's i-th evaluation sees the same redraws), a sim's policy noise by (job, step, visit, future, candidate,
-depth). Nothing draws from the env's generator and sims touch no shared state, so search rollouts are bit-identical
+candidate's i-th evaluation sees the same redraws); the sims' policy decisions are argmax and draw nothing.
+Nothing draws from the env's generator and sims touch no shared state, so search rollouts are bit-identical
 across thread counts (`tests/native/test_search.py`).
 
 **Cost (Nov 9, d2-rope r56-rust-dg, 2 envs on 2 threads, machine shared with two trainings):** plain rollout
 4.2 ms per decision; k=8, n=16, K=4, d=6: 2.7 s per searched decision (448 simulated steps, ~640×); k=4, n=8, K=2,
 d=3: 0.38 s (64 simulated steps, ~90×). The emulator dominates (zcore's PPU and frame loop in the profile); search
 `fraction` scales the cost linearly.
+A searched rollout stops between simulations on `close` or Ctrl-C.
