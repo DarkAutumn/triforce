@@ -874,10 +874,18 @@ def read_tail(path: Path, limit: int = 192 * 1024) -> str:
     return '\n'.join(lines).rstrip('\n')
 
 
+def log_dir_key(path: Path) -> tuple:
+    """Sort key of a log folder ``<yymmdd>_<NNN>_<what>``: day, then NNN as a number (``_1000_`` follows
+    ``_999_``), then the name; other names sort by name before every numbered folder of the same day."""
+    day, _, rest = path.name.partition('_')
+    number = rest.partition('_')[0]
+    return (day, int(number) if number.isdigit() else -1, path.name)
+
+
 def find_log_dirs(root: Path) -> list[Path]:
-    """Log folders under root, newest first (names start yymmdd_NNN)."""
+    """Log folders under root, newest first (``log_dir_key``)."""
     try:
-        return sorted((path for path in root.iterdir() if (path / PLAN_FILE).is_file()), key=lambda p: p.name,
+        return sorted((path for path in root.iterdir() if (path / PLAN_FILE).is_file()), key=log_dir_key,
                       reverse=True)
     except OSError:
         return []
@@ -2331,7 +2339,7 @@ class Window(QMainWindow):
                     self.live_mode, self.kept = False, []
                     self._show_dirs([])
             else:
-                wanted = sorted(self.kept, key=lambda path: path.name, reverse=True)
+                wanted = sorted(self.kept, key=log_dir_key, reverse=True)
                 if wanted != self._shown_dirs():
                     self._show_dirs(wanted)
         elif self.auto_live:

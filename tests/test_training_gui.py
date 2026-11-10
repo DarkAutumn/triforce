@@ -191,6 +191,16 @@ def test_a_running_plan_still_evaluates(tmp_path):
     assert training.active_index() == 0
 
 
+def test_log_folders_sort_newest_first_by_day_then_number(tmp_path):
+    names = ['261110_999_a', '261110_1000_b', '261109_1200_c', '261110_002_d', '261111_001_e']
+    for name in names:
+        (tmp_path / name).mkdir()
+        (tmp_path / name / gui.PLAN_FILE).write_text('{}')
+    (tmp_path / '261112_007_no-plan').mkdir()           # not a log folder: no plan file
+    assert [p.name for p in gui.find_log_dirs(tmp_path)] == ['261111_001_e', '261110_1000_b', '261110_999_a',
+                                                            '261110_002_d', '261109_1200_c']
+
+
 def test_run_series_cache_follows_new_progress_and_clear(tmp_path):
     run = gui.Run(tmp_path, 0, {'specialist': 'ow-start'})
     for iteration in (1, 2, 3):
