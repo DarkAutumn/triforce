@@ -23,16 +23,19 @@ pub fn key_of(parts: &[u64]) -> u64 {
     parts.iter().fold(NOISE_TAG, |h, &p| mix(h ^ mix(p.wrapping_add(0x9E37_79B9_7F4A_7C15))))
 }
 
-/// A uniform in (0, 1) from `key` alone.
+/// The largest uniform: `x + 0.5` with the top 53-bit `x` rounds to 2^53 in f64, i.e. a uniform of exactly 1.0
+/// (a Gumbel of +inf); clamped to the value below.
+const UNIFORM_MAX: f64 = 1.0 - f64::EPSILON / 2.0;
+
+/// A uniform in (0, 1) from `key` alone (`[2^-54, 1 - 2^-53]`: never 0 or 1, so every Gumbel is finite).
 pub fn uniform(key: u64) -> f64 {
-    ((mix(key) >> 11) as f64 + 0.5) * 2f64.powi(-53)
+    (((mix(key) >> 11) as f64 + 0.5) * 2f64.powi(-53)).min(UNIFORM_MAX)
 }
 
 /// Standard Gumbel noise from `key` alone, `out.len()` columns ([`keyed_noise`] is this with a (job, step) key).
 pub fn gumbel(key: u64, out: &mut [f32]) {
     for (c, o) in out.iter_mut().enumerate() {
-        let bits = mix(key ^ (c as u64).wrapping_mul(0xD1B5_4A32_D192_ED03));
-        let uniform = ((bits >> 11) as f64 + 0.5) * 2f64.powi(-53);
+        let uniform = uniform(key ^ (c as u64).wrapping_mul(0xD1B5_4A32_D192_ED03));
         *o = (-(-uniform.ln()).ln()) as f32;
     }
 }
@@ -50,5 +53,41 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert!(a.iter().all(|v| v.is_finite()));
+    }
+
+    /// The inverse of [`mix`] (each xorshift and odd multiply is invertible).
+    fn unmix(x: u64) -> u64 {
+        fn unshift(y: u64, s: u32) -> u64 {
+            let mut x = y;
+            for _ in 0..(64 / s) {
+                x = y ^ (x >> s);
+            }
+            x
+        }
+        fn inverse(a: u64) -> u64 {
+            let mut x = a; // Newton: 5 steps reach 64 bits from 3
+            for _ in 0..5 {
+                x = x.wrapping_mul(2u64.wrapping_sub(a.wrapping_mul(x)));
+            }
+            x
+        }
+        let x = unshift(x, 31).wrapping_mul(inverse(0x94D0_49BB_1331_11EB));
+        let x = unshift(x, 27).wrapping_mul(inverse(0xBF58_476D_1CE4_E5B9));
+        unshift(x, 30)
+    }
+
+    #[test]
+    fn uniform_extremes_stay_inside_and_gumbel_finite() {
+        for top in [u64::MAX, 0] {
+            assert_eq!(mix(unmix(top)), top);
+        }
+        let high = uniform(unmix(u64::MAX));
+        let low = uniform(unmix(0));
+        assert!(high < 1.0 && low > 0.0, "{low} {high}");
+        for top in [u64::MAX, 0] {
+            let mut out = [0f32; 1];
+            gumbel(unmix(top), &mut out); // column 0: key ^ 0
+            assert!(out[0].is_finite(), "{top:#x} -> {}", out[0]);
+        }
     }
 }
