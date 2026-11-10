@@ -88,10 +88,10 @@ def test_eval_chain_command_harvests_into_the_default_harvested_dir(states_dir, 
     assert canonical.harvested_fraction == 0.0
     assert canonical.harvested_dir(str(states)) == str(states / 'harvested' / 'ow-moblin')
     assert [os.path.basename(p) for p in canonical.resolve_harvested_states(str(states))] == files
-    for seed_state in canonical.resolve_start_states(str(states_dir)):
-        shutil.copy(seed_state, states / os.path.basename(seed_state))
+    shutil.copy(require_state('0_5bw_0'), states / '0_5bw_0.state')     # one seed state: the pool has seeds
     env = native.Env(canonical, states_dir=str(states), seed=0)
-    assert all(os.path.basename(env.reset()[1]['start_state']) not in files for _ in range(20))
+    drawn = [os.path.basename(env.reset()[1]['start_state']) for _ in range(20)]
+    assert not set(drawn) & set(files), drawn
 
 
 def test_training_resets_from_harvested_states_with_their_true_health(states_dir, harvested, tmp_path):
