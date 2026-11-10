@@ -1,4 +1,4 @@
-//! Timed options frame by frame with interrupts, and uncontrollable-frame skipping (`triforce/frame_skip.py`).
+//! Timed options frame by frame with interrupts, and uncontrollable-frame skipping.
 
 use crate::actions::Action;
 use crate::blocks::{ProjectileBlock, ShieldWatch};

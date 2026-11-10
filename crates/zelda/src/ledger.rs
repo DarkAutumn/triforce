@@ -1,4 +1,4 @@
-//! Look-ahead predictions and their discounting (`state_change.Prediction`, `FutureCreditLedger`).
+//! Look-ahead predictions and their discounting (`Prediction`, `FutureCreditLedger`).
 
 /// Predictions older than this many frames are discarded.
 pub const PREDICTION_EXPIRY_FRAMES: u64 = 200;

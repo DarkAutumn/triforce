@@ -1,4 +1,4 @@
-//! Where Link should go next (`triforce/objectives.py`, live `GameCompletion` only).
+//! Where Link should go next (live `GameCompletion` only).
 //!
 //! `GameCompletion` follows the route step by step: in a room the route enters from the side Link came in, with the
 //! triforce pieces, sword, bow and raft the route has there, the step's exit is the correct one (Dungeon 1's key

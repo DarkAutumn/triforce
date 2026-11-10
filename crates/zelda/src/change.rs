@@ -1,4 +1,4 @@
-//! What changed over one option, with look-ahead credit for delayed weapons (`triforce/state_change.py`).
+//! What changed over one option, with look-ahead credit for delayed weapons.
 
 use crate::actions::{Action, ActionMask};
 use crate::blocks::ProjectileBlock;

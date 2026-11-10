@@ -1,10 +1,11 @@
 //! `SpecialistEnv` end to end on real savestates (zcore): episodes, endings, outcomes, terminal rewards,
 //! the info contract, objectives and routes, critic behaviour, RAM randomization, start states and capture.
 //!
-//! Ports of the emulator parts of tests/test_env.py, tests/test_nearby_items.py, tests/test_rewards.py and
-//! tests/test_specialist.py.  States are the regenerated `TFZSTATE` start states in `triforce/states`
-//! (`TfzStore`).  Python's `random` streams are not reproduced (the env draws from ChaCha8), so tests assert
-//! properties, not particular draws.  Every test skips when the ROM is missing.
+//! Ported from the emulator parts of the removed Python tests tests/test_env.py, tests/test_nearby_items.py,
+//! tests/test_rewards.py and tests/test_specialist.py.  States are the regenerated `TFZSTATE` start states in
+//! `triforce/states` (`TfzStore`).  Python's `random` streams are not reproduced (the env draws from ChaCha8), so
+//! tests assert properties, not particular draws.  Without the ROM every test fails (skips with
+//! `TRIFORCE_ALLOW_NO_ROM=1`).
 
 mod common;
 

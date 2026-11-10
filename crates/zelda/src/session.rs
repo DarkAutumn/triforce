@@ -1,4 +1,4 @@
-//! A game session: emulator, option executor and game model (`triforce/session.py`).
+//! A game session: emulator, option executor and game model.
 
 use crate::actions::{Action, ActionMask, compute_action_mask};
 use crate::change::Change;

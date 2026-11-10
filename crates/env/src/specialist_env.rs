@@ -1,4 +1,4 @@
-//! One specialist's task as an environment (`triforce/env.py`, `ZeldaEnv`).
+//! One specialist's task as an environment.
 //!
 //! An episode starts from a start state (verified by RAM to be in the specialist's rooms), applies the config's
 //! RAM randomization, and runs timed options through the session.  With a curriculum, a share of episodes start

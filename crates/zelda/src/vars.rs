@@ -1,4 +1,4 @@
-//! Named RAM variables (`name -> (address, signed)`), the table stable-retro's `data.json` used to hold.
+//! Named RAM variables (`name -> (address, signed)`; the names are those of the old stable-retro `data.json`).
 //!
 //! Every variable is one byte of CPU RAM; signed ones (`=i1`) decode as `i8`.
 

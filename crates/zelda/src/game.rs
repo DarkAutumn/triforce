@@ -1,4 +1,4 @@
-//! The decoded game state at one frame (`zelda_game.py`, `link.py`, `enemy.py`, `zelda_objects.py`).
+//! The decoded game state at one frame.
 //!
 //! A [`GameView`] owns a copy of the 10,240-byte RAM image and decodes Link, enemies, items, projectiles and hazards
 //! once ([`ObjectClass`] sorts the object slots).
@@ -97,7 +97,7 @@ impl Link {
     }
 }
 
-/// A monster in slots 1-11 (object type $01-$48 except $40).
+/// A monster in slots 1-11 ([`ObjectClass::Monster`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Enemy {
     pub index: u8,
