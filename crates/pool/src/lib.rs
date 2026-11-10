@@ -32,5 +32,5 @@ pub use control::{EnvControl, FramePacer};
 pub use jobs::Jobs;
 pub use layout::{Column, Dtype, KeySpec, ObsColumns, ObsData, ObsLayout, ObsRow};
 pub use pool::{
-    EnvInit, FRAME_SHAPE, Outcome, Pool, PoolEnv, PoolError, PoolOptions, Start, env_rng,
+    EnvInit, FRAME_SHAPE, Outcome, Pool, PoolEnv, PoolError, PoolOptions, SearchEnv, Start, env_rng,
 };

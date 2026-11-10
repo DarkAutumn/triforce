@@ -84,13 +84,13 @@ def chain_row(name: str, path: Path) -> dict:
     }
 
 
-def eval_path(models: Path, name: str, run: str) -> Path:
+def eval_path(models: Path, name: str, run: str, file: str = 'eval.json') -> Path:
     if run == 'promoted':
         pointer = models / name / 'promoted'
         if not pointer.is_file():
             return pointer
         run = pointer.read_text().strip()
-    return models / name / run / 'eval.json'
+    return models / name / run / file
 
 
 def fmt(interval: Interval, percent=False) -> str:
@@ -106,7 +106,7 @@ def report(args) -> int:
     models = Path(args.models_dir)
     specialists = []
     for name in sorted(p.stem for p in Path(args.specialists_dir).glob('*.yaml')):
-        evaluation = eval_path(models, name, args.run)
+        evaluation = eval_path(models, name, args.run, args.eval_name)
         if evaluation.is_file():
             specialists.append(specialist_row(name, json.loads(evaluation.read_text())))
     chains = []
@@ -174,6 +174,7 @@ def main(argv=None) -> int:
     rep = sub.add_parser('report')
     rep.add_argument('--run', default='promoted', help="run id of every specialist's eval.json, or 'promoted'")
     rep.add_argument('--models-dir', default='models')
+    rep.add_argument('--eval-name', default='eval.json', help="the evaluation file in each run dir")
     rep.add_argument('--specialists-dir', default='specialists', help="the specialists reported (one per yaml)")
     rep.add_argument('--chain', action='append', default=[], metavar='NAME=PATH', help='eval-chain JSON lines')
     rep.add_argument('--output', required=True)

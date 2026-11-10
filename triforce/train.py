@@ -3,6 +3,10 @@
     python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--threads N]
         [--iterations N] [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
+        [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
+        [--best-coeff C] [--best-parallel P]] [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
+        [--search JSON [--search-coeff C]] [--plr [--plr-beta B] [--plr-rho R] [--plr-uniform U]]
+        [--ppg [--ppg-every N] [--ppg-aux-epochs E] [--ppg-clone-coeff C]]
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
@@ -16,6 +20,35 @@ finished fixed-budget run.  ``--stop-success`` ends training once the start-stat
 (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for ``--stop-patience``
 consecutive iterations.  Only episodes that started at a room entry count; ``--curriculum`` episodes are reported
 separately as ``curriculum/*``.
+``--shaping-anneal N`` (outcome fine-tuning, better-play §1a) lowers the pool's shaping scale (``reward.shaping_scale``:
+every non-terminal reward and penalty is multiplied by it) linearly to 0 over the first N iterations, then keeps it
+at 0, so the policy optimizes the health-scaled terminal outcome (plus ``reward.frame_penalty``, if set).
+``--ent-anneal SHARE`` lowers the entropy bonus linearly to 0 over the last SHARE of the iterations (§6b).
+``--best-of-n RUNS`` (best-of-N self-distillation, §3; ``best_of_n.py``): at the start and every ``--best-every``
+iterations the current policy plays RUNS episodes from every seed start state on its own ``EvalTask`` pool
+(``--best-parallel`` envs), and its best ``--best-keep`` successful runs per state (success, hearts lost, frames)
+become the behavior-cloning batch, weighted ``--best-coeff`` (the demo-regularization term; ``best/*`` metrics).
+``--sil-coeff C`` (self-imitation learning, §3; ``ppo.SilReplay``): each rollout's rows whose λ=1 return R beat the
+critic's value V(s) go into a FIFO replay of ``--sil-capacity`` rows; every minibatch adds
+``C · (−log π(a|s) · max(0, R − V) + ½ β · max(0, R − V)²)`` over a minibatch-sized uniform sample of it
+(β = ``--sil-value-coeff``; ``losses/sil_*``, ``charts/sil_rows``, ``charts/sil_positive_share``).  0 = off.
+``--search JSON`` (Gumbel expert iteration, §2; docs/rust-actor.md "Search"): the pool searches a share of the
+training decisions (``EnvPool.rollout(search=JSON)``, e.g. ``'{"candidates":4,"simulations":8,"futures":2,"depth":3,
+"fraction":0.25}'``; missing keys take the Rust defaults) and executes the search's choice.  Those rows train the
+policy by distillation, ``C · CE(π', π_θ)`` toward the search's improved policy (C = ``--search-coeff``), in place of
+the PPO ratio term; value loss, entropy bonus and GAE cover every row (``losses/search_ce``, ``charts/search_rows``,
+``charts/search_agreement``).  Searched decisions cost about 100× a plain one.
+``--plr`` (prioritized level replay, §5; ``plr.PrioritizedReplay``): after each rollout the seed start states are
+scored by their episodes' positive value loss (mean max(GAE advantage, 0)) and the pool draws the next rollout's seed
+states by rank-prioritized scores (temperature ``--plr-beta``) mixed with staleness (``--plr-rho``) and uniform
+(``--plr-uniform``) sampling instead of its failure-weighted draws (``plr/entropy``, ``plr/top_state``,
+``plr/weight/<state>``, ``plr/scored_episodes``).  Curriculum and harvested starts are unaffected.
+``--ppg`` (phasic policy gradient, §6a; ``ppo.PPGStore``, ``PPO.auxiliary_phase``): the PPO updates stay as they
+are (the policy phase); every ``--ppg-every`` iterations an auxiliary phase trains ``--ppg-aux-epochs`` epochs over
+those iterations' rollouts with the value loss ``½(V − R)²`` (R: the GAE returns) plus ``C · KL(π_old ‖ π)`` toward
+the policy from before the phase (C = ``--ppg-clone-coeff``; ``ppg/value_loss``, ``ppg/value_loss_start``,
+``ppg/kl``, ``ppg/explained_variance``, ``ppg/explained_variance_start``, ``ppg/rows``, ``ppg/seconds`` on the
+iterations that run one).
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
@@ -46,6 +79,7 @@ import torch
 
 from . import registry
 from ._native import CurriculumSpec, Env, EnvPool, TrainTask
+from .best_of_n import collect_best
 from .demo import collect_demo_batch, parse_demo_actions
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir
 from .metrics import MetricsLogger, format_summary
@@ -90,6 +124,17 @@ class EarlyStop:
         return self.streak >= self.patience
 
 
+def _search_settings(text: str) -> dict:
+    """``--search``: a JSON object of ``EnvPool.rollout`` search settings (the pool validates the keys)."""
+    try:
+        settings = json.loads(text)
+    except json.JSONDecodeError as err:
+        raise argparse.ArgumentTypeError(f"not JSON: {err}") from err
+    if not isinstance(settings, dict):
+        raise argparse.ArgumentTypeError("expected a JSON object")
+    return settings
+
+
 def parse_args(argv=None):
     """Command line."""
     parser = argparse.ArgumentParser(prog='python -m triforce.train', description=__doc__.split('\n\n')[0])
@@ -106,6 +151,10 @@ def parse_args(argv=None):
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
     parser.add_argument('--save-every', type=int, default=10, help="checkpoint every N iterations (and at the end)")
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
+    parser.add_argument('--ent-anneal', type=float, default=PPOConfig.ent_anneal,
+                        help="share of the iterations, at the end, over which the entropy bonus falls to 0")
+    parser.add_argument('--shaping-anneal', type=int, default=PPOConfig.shaping_anneal,
+                        help="iterations over which the shaping scale falls linearly to 0 (outcome fine-tuning)")
     parser.add_argument('--start-state', default=None, help="pin every episode to this savestate (name or path)")
     parser.add_argument('--states-dir', default=None,
                         help="where bare start-state names resolve (default: $TRIFORCE_STATES_DIR or triforce/states)")
@@ -116,6 +165,41 @@ def parse_args(argv=None):
     parser.add_argument('--demo-bc-coeff', type=float, default=0.1)
     parser.add_argument('--demo-allow-incomplete', action='store_true',
                         help="accept a demo that stops before the episode ends in success")
+    parser.add_argument('--best-of-n', type=int, default=0, metavar='RUNS',
+                        help="best-of-N self-distillation (better-play §3): every --best-every iterations, play RUNS "
+                             "episodes from every seed start state and behavior-clone the best --best-keep "
+                             "successful runs of each state (weight --best-coeff); 0 = off")
+    parser.add_argument('--best-keep', type=int, default=2)
+    parser.add_argument('--best-every', type=int, default=20)
+    parser.add_argument('--best-coeff', type=float, default=0.2)
+    parser.add_argument('--best-parallel', type=int, default=4, help="envs of the best-of-N collection pool")
+    parser.add_argument('--sil-coeff', type=float, default=PPOConfig.sil_coeff,
+                        help="self-imitation learning (better-play §3): weight of the SIL loss on replayed rows whose "
+                             "Monte-Carlo return beat the critic; 0 = off")
+    parser.add_argument('--sil-value-coeff', type=float, default=PPOConfig.sil_value_coeff,
+                        help="SIL value-term weight (beta)")
+    parser.add_argument('--sil-capacity', type=int, default=PPOConfig.sil_capacity, help="SIL replay rows (FIFO)")
+    parser.add_argument('--search', type=_search_settings, default=None, metavar='JSON',
+                        help="Gumbel expert iteration (better-play §2): EnvPool.rollout search settings as a JSON "
+                             "object, e.g. '{\"candidates\":4,\"simulations\":8,\"futures\":2,\"depth\":3,"
+                             "\"fraction\":0.25}'; searched rows train by distillation toward the search's policy")
+    parser.add_argument('--search-coeff', type=float, default=PPOConfig.search_coeff,
+                        help="weight of the search distillation loss CE(pi', pi)")
+    parser.add_argument('--plr', action='store_true',
+                        help="prioritized level replay (better-play §5): draw seed start states by their recent "
+                             "positive value loss (rank-prioritized, plus staleness and uniform shares)")
+    parser.add_argument('--plr-beta', type=float, default=PPOConfig.plr_beta, help="PLR rank temperature")
+    parser.add_argument('--plr-rho', type=float, default=PPOConfig.plr_rho, help="PLR staleness share")
+    parser.add_argument('--plr-uniform', type=float, default=PPOConfig.plr_uniform, help="PLR uniform share")
+    parser.add_argument('--ppg', action='store_true',
+                        help="phasic policy gradient (better-play §6a): every --ppg-every iterations, an auxiliary "
+                             "phase of value training with a KL clone term toward the policy from before it")
+    parser.add_argument('--ppg-every', type=int, default=PPOConfig.ppg_every,
+                        help="policy-phase iterations per auxiliary phase")
+    parser.add_argument('--ppg-aux-epochs', type=int, default=PPOConfig.ppg_aux_epochs,
+                        help="epochs of each auxiliary phase")
+    parser.add_argument('--ppg-clone-coeff', type=float, default=PPOConfig.ppg_clone_coeff,
+                        help="weight of KL(pi_old || pi) in the auxiliary phase")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop early once training success_rate >= this for --stop-patience iterations")
@@ -277,7 +361,13 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                                         require_success=not args.demo_allow_incomplete)
 
     ppo_config = PPOConfig(target_steps=args.steps_per_update, learning_rate=args.learning_rate,
-                           demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0)
+                           ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
+                           demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0,
+                           sil_coeff=args.sil_coeff, sil_value_coeff=args.sil_value_coeff,
+                           sil_capacity=args.sil_capacity, search=args.search, search_coeff=args.search_coeff,
+                           plr=args.plr, plr_beta=args.plr_beta, plr_rho=args.plr_rho, plr_uniform=args.plr_uniform,
+                           ppg=args.ppg, ppg_every=args.ppg_every, ppg_aux_epochs=args.ppg_aux_epochs,
+                           ppg_clone_coeff=args.ppg_clone_coeff)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
 
     # Built before the 'start' event so bad start states or trajectories fail the run up front.
@@ -309,6 +399,20 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     early = EarlyStop(args.stop_success, args.stop_patience)
     ckpt = registry.checkpoint_path(specialist, run_id, root)
 
+    def refresh_best(collection: int) -> dict:
+        """Best-of-N: replaces the BC batch with the current policy's best runs; returns its metrics."""
+        best = collect_best(config, network.to_native(), args.best_of_n, args.best_keep,
+                            seed=(pool_seed + collection * 1_000_003) % (1 << 62), parallel=args.best_parallel,
+                            states_dir=args.states_dir)
+        ppo.demo_batch = best.batch if best.steps else None
+        ppo.config.demo_bc_coeff = args.best_coeff if best.steps else 0.0
+        return {'best/episodes': best.episodes, 'best/success_rate': best.successes / max(1, best.episodes),
+                'best/kept': best.kept, 'best/states': best.states, 'best/steps': best.steps}
+
+    if args.best_of_n > 0 and args.demo:
+        raise ValueError("--best-of-n and --demo both set the behavior-cloning batch; use one")
+    best_metrics = refresh_best(0) if args.best_of_n > 0 else {}
+
     def save():
         registry.save_checkpoint(specialist, run_id, network, ppo.optimizer, iterations=state['iteration'],
                                  steps=state['steps'], metrics=state['metrics'], root=root)
@@ -318,7 +422,10 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     def on_iteration(result: IterationResult):
         state['iteration'] = start_iteration + result.iteration
         state['steps'] = result.total_steps
-        metrics = {**result.rollout.summary(), **result.stats}
+        metrics = {**result.rollout.summary(), **result.stats, **best_metrics}
+        best_metrics.clear()
+        if args.best_of_n > 0 and result.iteration % args.best_every == 0 and result.iteration < args.iterations:
+            best_metrics.update(refresh_best(result.iteration // args.best_every))
         stop = early.update(result.rollout.start_results)
         if early.balanced is not None:
             metrics['balanced_success_rate'] = early.balanced

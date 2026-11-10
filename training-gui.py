@@ -677,7 +677,15 @@ class Training:
         return None
 
     def fraction(self, now: float) -> float:
-        """Whole plan 0..1 by target steps; finished runs count as complete."""
+        """Whole plan 0..1 by target steps; finished runs count as complete.  A plan without runs (a standalone
+        eval-chain): its chain's runs done."""
+        if not self.runs:
+            chain = self.chain()
+            if chain is None:
+                return 0.0
+            if chain['result'] is not None:
+                return 1.0
+            return min(1.0, (chain['progress'] or {}).get('done', 0) / chain['runs']) if chain['runs'] else 0.0
         total = done = 0.0
         for run, status in zip(self.runs, self.statuses()):
             weight = run.target_steps or 1
@@ -725,11 +733,13 @@ class Training:
     def chain(self):
         """eval-chain state from round.jsonl (None when this plan has no chain)."""
         runs = self.plan.get('chain_runs') or 0
-        start = result = error = None
+        start = result = error = progress = None
         for event in self.round_events:
             kind = event.get('event')
             if kind == 'chain_start':
-                start, result, error = event, None, None
+                start, result, error, progress = event, None, None, None
+            elif kind == 'chain_progress':
+                progress = event
             elif kind == 'chain':
                 result = event
             elif kind == 'error' and start is not None and str(event.get('message', '')).startswith('eval-chain'):
@@ -745,7 +755,7 @@ class Training:
         else:
             status = 'pending' if self.plan.get('status') == 'running' else 'skipped'
         return {'status': status, 'runs': (start or {}).get('runs') or runs, 'parallel': (start or {}).get('parallel'),
-                'start': start, 'result': result, 'error': error}
+                'start': start, 'result': result, 'error': error, 'progress': progress}
 
     def round_errors(self) -> list[dict]:
         return [event for event in self.round_events if event.get('event') == 'error']
@@ -1202,7 +1212,7 @@ class Header(Clickable):
         for status in statuses:
             counts[status] = counts.get(status, 0) + 1
         done = sum(counts.get(s, 0) for s in FINISHED)
-        summary = [f"{done} / {len(statuses)} done"]
+        summary = [f"{done} / {len(statuses)} done"] if statuses else []
         for key in ('early', 'failed', 'interrupted', 'lost'):
             if counts.get(key):
                 summary.append(f"{counts[key]} {STATUS[key][1]}")
@@ -1450,9 +1460,12 @@ class ChainCard(Clickable):
         right_w = 320.0 if rect.width() > 760 else 150.0
         bar = QRectF(rect.left() + 40 + name_w + 14, cy - 8, max(60.0, rect.width() - name_w - right_w - 70), 16)
         result = chain['result']
-        if result:
-            total = max(1, result.get('runs') or 1)
-            successes = result.get('successes') or 0
+        progress = chain['progress'] if status == 'running' else None
+        if result or progress:
+            # finished: every run, successes first; running: the runs done so far, the rest still empty
+            total = max(1, (result or {}).get('runs') or chain['runs'] or 1)
+            successes = (result or progress).get('successes') or 0
+            done = total if result else min(total, progress.get('done') or 0)
             path = rounded(bar, bar.height() / 2)
             p.fillPath(path, C.track)
             p.save()
@@ -1460,12 +1473,17 @@ class ChainCard(Clickable):
             if total <= 120:
                 gap = 2.0 if bar.width() / total > 6 else 0.0
                 width = bar.width() / total
-                for i in range(total):
+                for i in range(done):
                     block = QRectF(bar.left() + i * width, bar.top(), width - gap, bar.height())
                     p.fillRect(block, C.ok if i < successes else with_alpha(C.bad, 170))
             else:
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * successes / total, bar.height()), C.ok)
+                p.fillRect(QRectF(bar.left() + bar.width() * successes / total, bar.top(),
+                                  bar.width() * (done - successes) / total, bar.height()), with_alpha(C.bad, 170))
             p.restore()
+            if result is None:
+                paint_bar_label(p, bar, f"{done}/{total} runs · {successes} reached the end")
+                return
             paint_bar_label(p, bar, f"{successes}/{total} = {fmt_pct(result.get('success_rate'))}")
             p.setFont(font(9.5, QFont.Weight.DemiBold))
             p.setPen(rate_color(result.get('success_rate')))

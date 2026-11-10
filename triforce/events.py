@@ -34,15 +34,22 @@ Events written by ``triforce.train`` (one specialist):
 - ``train_end``: status (completed | early_stop | interrupted | error), iterations, steps, wall_seconds, sps,
   checkpoint.
 
-Added by ``scripts/train_round.py``: ``eval_start``, ``eval_progress`` (at most once a second: done, episodes,
-running success_rate) and ``eval`` (specialist evaluation: success_rate, episodes, health, health_change,
-health_change_total, hearts_dropped / hearts_taken / hearts_left per episode, flat ``linger_*`` means/maxima,
-by_room, by_state, by_room_linger, by_state_linger, path; it runs on a
+Added by ``scripts/train_round.py`` and ``triforce.evaluate``: ``eval_start``, ``eval_progress`` (at most once a
+second: done, episodes, running success_rate) and ``eval`` (specialist evaluation, ``evaluate.eval_event``:
+success_rate, episodes, deterministic, health, health_change, health_change_total, hearts_dropped / hearts_taken /
+hearts_left per episode, flat ``linger_*`` means/maxima, by_room, by_room_failures, by_state, by_room_linger,
+by_state_linger, path; in a round it runs on a
 background thread while the next specialist trains, so these can arrive after the next stream's ``start``) and
 ``error`` (non-zero exit, failed evaluation), ``skipped`` (``--skip-existing`` and the run finished) and
 ``partial_set_aside`` (run_dir, train_status: an unfinished run renamed ``<run>.partial-N`` before training fresh).
 The last line of every stream is ``end`` (status, plus a summary);
 nothing follows it.  A stream without ``end`` belongs to a run that is still going or was killed.
+
+Standalone jobs log too (``logged_job``): ``python -m triforce.evaluate`` writes ``<yymmdd>_<NNN>_eval-<name>``
+(plan kind ``eval``, one run evaluating, its ``<specialist>.jsonl`` with the eval events above) and ``triforce
+eval-chain`` writes ``<yymmdd>_<NNN>_eval-chain-<route>`` (plan kind ``chain``, no runs, ``round.jsonl`` with
+``chain_start`` (runs, parallel, overrides, act), ``chain_progress`` (done, runs, successes, at most once a second
+and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off.
 """
 
 import json
@@ -50,6 +57,7 @@ import os
 import socket
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -167,3 +175,21 @@ class TrainingPlan:
         with self._lock:
             self.data.update(status=status, finished=_now()['time'], **fields)
             self.save()
+
+
+@contextmanager
+def logged_job(what: str, kind: str, runs: list[dict], root=None, **extra):
+    """A log folder (``new_log_dir(what, root)``) with its ``training.json`` plan for a job outside a training
+    round, e.g. a standalone evaluation (``kind`` 'eval') or eval-chain ('chain'), so the training GUI shows it
+    while it runs.  Yields the ``TrainingPlan``; the plan finishes ``completed``, ``interrupted`` (Ctrl-C) or
+    ``failed`` with the block."""
+    plan = TrainingPlan(new_log_dir(what, root), what, kind, runs, **extra)
+    try:
+        yield plan
+    except KeyboardInterrupt:
+        plan.finish('interrupted')
+        raise
+    except BaseException as error:
+        plan.finish('failed', error=f"{type(error).__name__}: {error}")
+        raise
+    plan.finish('completed')

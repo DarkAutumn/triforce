@@ -1,17 +1,17 @@
 //! The pool adapters: training, evaluation and chain envs.
 
-use super::nes::{PoolNes, PoolStore, RgbFn};
+use super::nes::{PoolNes, PoolState, PoolStore, RgbFn};
 use super::{
     EvalRecord, RoomEvent, ZeldaAction, ZeldaEvent, interrupt_code, obs_layout, write_observation,
 };
 use crate::control::EnvControl;
 use crate::jobs::Jobs;
 use crate::layout::{ObsLayout, ObsRow};
-use crate::pool::{EnvInit, Outcome, PoolEnv, Start};
+use crate::pool::{EnvInit, Outcome, PoolEnv, SearchEnv, Start};
 use env::chain::{ChainEnv, ChainStatus, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
 use env::rewards::SUCCESS;
-use env::specialist_env::{EnvOptions, SpecialistEnv, StepInfo, StepResult};
+use env::specialist_env::{EnvOptions, EnvSnapshot, SpecialistEnv, StepInfo, StepResult};
 use env::{EnvError, StateStore};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
@@ -151,6 +151,8 @@ pub struct TrainEnv<N: Nes, St: StateStore<N::State>> {
     /// Episode job keys: `mix(job_base + episodes)`, from the env's seed (keyed action noise, replays).
     job_base: u64,
     episodes: u64,
+    /// The current episode's job key (reported with [`ZeldaEvent::Episode`]).
+    job: i64,
 }
 
 impl<N, St> TrainEnv<N, St>
@@ -179,6 +181,7 @@ where
             rooms: RoomWatch::default(),
             job_base,
             episodes: 0,
+            job: 0,
         })
     }
 
@@ -227,9 +230,9 @@ where
         let (o, info) = self.env.reset(None, None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
-        let job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
+        self.job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
         self.episodes += 1;
-        Ok(Some(Start { policy: 0, job }))
+        Ok(Some(Start { policy: 0, job: self.job }))
     }
 
     fn step(
@@ -243,10 +246,48 @@ where
         let outcome = specialist_outcome(&r);
         self.rooms.report_info(&r.info, events);
         if r.info.terminal.is_some() {
-            events.push(ZeldaEvent::Episode(Box::new(r.info)));
+            events.push(ZeldaEvent::Episode {
+                info: Box::new(r.info),
+                job: self.job,
+            });
             end_recording(self.env.session_mut().nes_mut(), events);
         }
         Ok(outcome)
+    }
+}
+
+impl<N, St> SearchEnv for TrainEnv<N, St>
+where
+    N: Nes + Send + 'static,
+    N::State: Send + 'static,
+    St: StateStore<N::State> + Send + 'static,
+{
+    type Snapshot = EnvSnapshot<PoolState<N::State>>;
+
+    fn begin_search(&mut self) -> Result<Self::Snapshot, EnvError> {
+        self.env.set_simulating(true);
+        Ok(self.env.save())
+    }
+
+    fn load(&mut self, snapshot: &Self::Snapshot) {
+        self.env.load(snapshot);
+    }
+
+    fn perturb(&mut self, key: u64) {
+        self.env.perturb_rng(key);
+    }
+
+    fn simulate(&mut self, action: ZeldaAction, mut obs: ObsRow<'_>) -> Result<Outcome, EnvError> {
+        let [k, d, u] = head_indices(action)?;
+        let action = Action::from_indices(k, d, u).map_err(|e| EnvError::InvalidAction(e.0))?;
+        let r = self.env.simulate(action)?;
+        write_observation(&r.obs, &mut obs);
+        Ok(specialist_outcome(&r))
+    }
+
+    fn end_search(&mut self, snapshot: &Self::Snapshot) {
+        self.env.load(snapshot);
+        self.env.set_simulating(false);
     }
 }
 
@@ -655,6 +696,52 @@ where
             TaskEnv::Train(e) => e.step(action, obs, events),
             TaskEnv::Eval(e) => e.step(action, obs, events),
             TaskEnv::Chain(e) => e.step(action, obs, events),
+        }
+    }
+}
+
+/// Search runs in training envs only: an eval or chain env fails `begin_search`.
+impl<N, St> SearchEnv for TaskEnv<N, St>
+where
+    N: Nes + Send + 'static,
+    N::State: Send + 'static,
+    St: StateStore<N::State> + Send + 'static,
+{
+    type Snapshot = EnvSnapshot<PoolState<N::State>>;
+
+    fn begin_search(&mut self) -> Result<Self::Snapshot, EnvError> {
+        match self {
+            TaskEnv::Train(e) => e.begin_search(),
+            TaskEnv::Eval(_) | TaskEnv::Chain(_) => Err(EnvError::Config(env::ConfigError(
+                "search runs in training envs only".into(),
+            ))),
+        }
+    }
+
+    fn load(&mut self, snapshot: &Self::Snapshot) {
+        if let TaskEnv::Train(e) = self {
+            e.load(snapshot);
+        }
+    }
+
+    fn perturb(&mut self, key: u64) {
+        if let TaskEnv::Train(e) = self {
+            e.perturb(key);
+        }
+    }
+
+    fn simulate(&mut self, action: ZeldaAction, obs: ObsRow<'_>) -> Result<Outcome, EnvError> {
+        match self {
+            TaskEnv::Train(e) => e.simulate(action, obs),
+            TaskEnv::Eval(_) | TaskEnv::Chain(_) => {
+                Err(EnvError::Config(env::ConfigError("search runs in training envs only".into())))
+            }
+        }
+    }
+
+    fn end_search(&mut self, snapshot: &Self::Snapshot) {
+        if let TaskEnv::Train(e) = self {
+            e.end_search(snapshot);
         }
     }
 }

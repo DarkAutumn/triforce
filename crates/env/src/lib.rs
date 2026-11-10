@@ -28,5 +28,5 @@ pub use curriculum::{Curriculum, CurriculumSpec, SharedCurriculum};
 pub use error::EnvError;
 pub use explore::{AcceptSpec, ExploreResult, Explorer};
 pub use observation::{OBS_SPEC, Observation, ObservationBuilder};
-pub use specialist_env::{SpecialistEnv, StepInfo, StepResult, TerminalInfo};
+pub use specialist_env::{EnvSnapshot, SpecialistEnv, StepInfo, StepResult, TerminalInfo};
 pub use start_states::StateStore;

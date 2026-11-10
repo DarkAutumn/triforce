@@ -320,12 +320,7 @@ class ZeldaPolicy(nn.Module):
         empty-kind-mask check, which needs a device sync."""
         # pylint: disable=too-many-locals
         obs = self._batch(obs)
-        if mask is None:
-            mask = obs[MASK_KEY]
-        mask = torch.as_tensor(mask, device=self.kind_head.weight.device).bool()
-        if mask.dim() == 1:
-            mask = mask.unsqueeze(0)
-        assert mask.shape[-1] == MASK_SIZE, f"mask has {mask.shape[-1]} entries, expected {MASK_SIZE}"
+        mask = self._mask(obs, mask)
 
         policy_features, value_features = self.mlp_extractor(self._features(obs))
         value = self.value_head(value_features).view(-1)
@@ -379,6 +374,52 @@ class ZeldaPolicy(nn.Module):
         log_prob, entropy, choice = _masked_head(logits, safe_mask, given, deterministic, noise)
         return (torch.where(applies, log_prob, 0.0), torch.where(applies, entropy, 0.0),
                 torch.where(applies, choice, 0), applies)
+
+    def _mask(self, obs: dict, mask) -> torch.Tensor:
+        """The flat action mask ``[B, MASK_SIZE]`` (bool, this module's device): ``mask``, else the batch's own."""
+        if mask is None:
+            mask = obs[MASK_KEY]
+        mask = torch.as_tensor(mask, device=self.kind_head.weight.device).bool()
+        if mask.dim() == 1:
+            mask = mask.unsqueeze(0)
+        assert mask.shape[-1] == MASK_SIZE, f"mask has {mask.shape[-1]} entries, expected {MASK_SIZE}"
+        return mask
+
+    def joint_log_probs(self, obs, mask=None) -> torch.Tensor:
+        """Log-prob ``[B, NUM_KINDS * NUM_DIRECTIONS * NUM_DURATIONS]`` of every joint action, index ``kind * 32 +
+        direction * 4 + duration`` (the search's ``search_policy`` order), ``-inf`` for illegal ones; differentiable.
+
+        The factorization ``evaluate(actions=...)`` scores: log p(kind) (0 with one legal kind) + log p(direction |
+        kind) + log p(duration | kind), where a kind-conditioned head whose row is all masked contributes 0 and only
+        its index 0 is legal.  The Rust ``Policy.joint_log_probs`` computes the same (tests/native/test_search.py)."""
+        obs = self._batch(obs)
+        mask = self._mask(obs, mask)
+        policy_features = self.mlp_extractor.policy_net(self._features(obs))
+        batch = policy_features.shape[0]
+        kind_mask = mask[:, :NUM_KINDS]
+        dir_masks = mask[:, NUM_KINDS:NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS].view(batch, NUM_KINDS, NUM_DIRECTIONS)
+        dur_masks = mask[:, NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS:].view(batch, NUM_KINDS, NUM_DURATIONS)
+
+        kind_lp = torch.log_softmax(self.kind_head(policy_features).masked_fill(~kind_mask, MASKED_LOGIT), dim=-1)
+        kind_lp = torch.where((kind_mask.sum(dim=-1) > 1).unsqueeze(-1), kind_lp, 0.0)
+        # Every kind's conditioning at once: [B, K, H].
+        conditioned = torch.relu(self.kind_condition(policy_features).unsqueeze(1) + self.kind_embedding.weight)
+        dir_lp, dir_legal = self._joint_sub_head(self.direction_head(conditioned), dir_masks)
+        dur_lp, dur_legal = self._joint_sub_head(self.duration_head(conditioned), dur_masks)
+
+        joint = (kind_lp[:, :, None, None] + dir_lp[:, :, :, None]) + dur_lp[:, :, None, :]
+        legal = kind_mask[:, :, None, None] & dir_legal[:, :, :, None] & dur_legal[:, :, None, :]
+        return joint.masked_fill(~legal, float('-inf')).reshape(batch, -1)
+
+    @staticmethod
+    def _joint_sub_head(logits, row_masks):
+        """(log-probs, legal) ``[B, K, n]`` of a kind-conditioned head for every kind, as ``_sub_head`` scores
+        them: a kind whose row is all masked contributes 0 and has only index 0 legal."""
+        applies = row_masks.any(dim=-1, keepdim=True)
+        safe_mask = row_masks | ~applies
+        log_probs = torch.log_softmax(logits.masked_fill(~safe_mask, MASKED_LOGIT), dim=-1)
+        first = torch.arange(row_masks.shape[-1], device=row_masks.device) == 0
+        return torch.where(applies, log_probs, 0.0), torch.where(applies, row_masks, first)
 
     def get_action_and_value(self, obs, mask=None, actions=None, deterministic=False):
         """(actions [B,3], log_prob [B], entropy [B], value [B]) — the v1 PPO interface."""

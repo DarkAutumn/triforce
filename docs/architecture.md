@@ -223,6 +223,73 @@ treasure) a PBRS target the same way, hearts and fairies only while Link is belo
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
+`reward.exit_health_weight` w (default 0.5, in [0, 1]; better-play §1b) sets how much of the success terminal rides
+on the health Link leaves with: `reward-terminal-success` = 20 × ((1 − w) + w × hp/max_hp) (`success_reward_value`;
+0.5 is the long-standing 20 × (0.5 + 0.5 × hp/max_hp), bit for bit; 1.0 pays 20 × hp/max_hp, 0 a flat 20).
+`reward.shaping_scale` (default 1.0, in [0, 1]) multiplies every term the critic produces each step, rewards and
+penalties alike; the terminal terms (`reward-terminal-success`, already health-scaled, and
+`penalty-terminal-failure`) are never scaled. `reward.frame_penalty` (default 0, ≥ 0; e.g. 0.001/8) adds an unscaled
+`penalty-frames` of −frame_penalty × the step's emulated frames. A train pool shares one scale across its envs
+(`ShapingDial`; `EnvPool.shaping` / `EnvPool.set_shaping`), starting at `reward.shaping_scale`;
+`triforce.train --shaping-anneal N` (`PPOConfig.shaping_anneal`) lowers it linearly to 0 over the first N iterations
+(iteration k rolls out at start × max(0, 1 − (k−1)/N)) and reports it as `charts/shaping_scale` (better-play §1a
+outcome fine-tuning: after normal training, the policy optimizes the true outcome).
+`triforce.train --ent-anneal SHARE` (`PPOConfig.ent_anneal`) lowers the entropy bonus linearly to 0 over the last
+SHARE of a run's iterations (`charts/ent_coeff`; §6b). `--best-of-n RUNS` (`best_of_n.collect_best`; §3) replaces the
+demo-regularization batch, at the start and every `--best-every` iterations, with the current policy's best
+`--best-keep` successful runs per seed start state out of RUNS (ranked by success, hearts lost, frames; played on a
+separate `EvalTask` pool), weighted `--best-coeff`; a batch larger than a minibatch is sampled per minibatch.
+`--sil-coeff C` (`PPOConfig.sil_coeff`, self-imitation learning, Oh et al. 2018; §3) is the alternative to best-of-N:
+after each rollout `ppo.SilReplay` keeps the rows whose λ = 1 return R (`RolloutBuffer.monte_carlo_returns`:
+frame-aware discount to the episode end, bootstrapped exactly like GAE, against the learner's recomputed values)
+beat the critic, R > V(s), in a CPU FIFO of `--sil-capacity` rows (default 32768). Every PPO minibatch adds
+C · (−log π(a|s) · max(0, R − V) + ½ β · max(0, R − V)²) over a minibatch-sized uniform sample (V from the current
+network, β = `--sil-value-coeff`, default 0.01; `losses/sil_policy_loss`, `losses/sil_value_loss`,
+`charts/sil_rows`, `charts/sil_positive_share` = the rollout's share of rows with R > V). 0 (default) = off.
+`--search JSON` (`PPOConfig.search`, Gumbel expert iteration; §2, docs/rust-actor.md "Search") passes the JSON
+object to `EnvPool.rollout(search=...)` (e.g. `{"candidates":4,"simulations":8,"futures":2,"depth":3,"fraction":0.25}`):
+the pool searches that share of the training decisions, executes the search's choice and writes `search_mask` and
+the improved policy `search_policy` π' over the 224 joint actions (`kind * 32 + direction * 4 + duration`), which the
+`RolloutBuffer` keeps only with search on. A searched row's action is not a sample of π, so `PPO.optimize` drops it
+from the clipped ratio term, its advantage normalization and the KL/clipfrac stats (KL early stop and rollback see
+only the sampled rows) and adds `--search-coeff` C (default 1) · CE(π', π_θ) = −Σ_j π'_j log π_θ(j) over the
+minibatch's searched rows instead (`ZeldaPolicy.joint_log_probs`: the factorized log-prob of every joint action, the
+same as the Rust `Policy.joint_log_probs`). Value loss, entropy bonus and GAE cover every row. Stats after the update,
+over the batch's searched rows: `losses/search_ce`, `charts/search_agreement` (argmax π' = argmax π_θ) and
+`charts/search_rows` (their share of the batch). Off (default), the update is bit for bit the plain PPO one.
+`--plr` (`PPOConfig.plr`, prioritized level replay, Jiang et al. 2021; §5, `triforce/plr.py`) replaces the seed
+start-state draw of the start-state pool (`crates/env/src/start_states.rs`: each env's `ProbabilisticSelector`,
+favouring its own recent failures and damage) with weights shared by the whole train pool: `StartWeights` (one
+`Arc<RwLock<…>>` handed to every env through `EnvOptions::start_weights`), set by `EnvPool.set_start_weights({state:
+weight} | None)` over `EnvPool.start_states` (the seed state labels; ValueError on eval/chain pools, unknown states,
+negative or all-zero weights). While set, every seed draw is `weighted_index` over them with the env's RNG; the
+selector keeps recording results, and unset its draws are exactly today's. Harvested states, backward-curriculum
+starts and the per-reset health/item randomization are untouched: a cell is a seed state, not a (state, health,
+items) combination. The scorer attributes rows to episodes by job key (`RolloutBuffer.jobs` from the rollout's `job`
+column; `poll_events` episode events carry the `job` and the `info['start_state']`), and scores each finished
+room-entry episode by its positive value loss, the mean over its steps of max(GAE advantage, 0) from the learner's
+recomputed values (an episode spanning rollouts sums its rows from each). A state's score S is an EMA over its
+episodes (α = 0.3), and the weights are (1 − u)·((1 − ρ)·P_S + ρ·P_C) + u/|states| with P_S ∝ rank(S)^(−1/β) (rank 1 =
+highest; ties share the best rank; unscored states take the top score) and P_C ∝ episodes scored so far − the count
+when the state was last scored (uniform while all are 0); `--plr-beta` β, `--plr-rho` ρ, `--plr-uniform` u default to
+0.1 each. `PPO.train` sets them after each rollout's `compute_returns`, before the next rollout starts, so there is one
+rollout of lag (the first rollout draws as without PLR; an env resetting at a rollout's last step drew under the
+previous weights). Stats: `plr/entropy` (nats), `plr/top_state` (largest weight), `plr/weight/<state>`,
+`plr/scored_episodes`.
+`--ppg` (`PPOConfig.ppg`, phasic policy gradient, Cobbe et al. 2021; §6a, `ppo.PPGStore`, `PPO.auxiliary_phase`)
+keeps the PPO update as the policy phase and copies each consumed rollout's observations, masks and value targets
+(the GAE returns) to CPU. After every `--ppg-every` N (default 8) iterations an auxiliary phase runs `--ppg-aux-epochs`
+(default 6) epochs over those N rollouts, in minibatches the policy phase's size, with its own Adam (the paper's
+separate optimizer; not checkpointed, so a resumed run starts it fresh), loss ½(V − R)² + `--ppg-clone-coeff` C
+(default 1) · KL(π_old ‖ π_θ), π_old the joint action distributions recorded before the phase (`joint_kl` over
+`ZeldaPolicy.joint_log_probs`, exact over the 224 joint actions), then clears the store. The network has separate
+policy and value towers on shared encoders (room embedding, entity transformer, grid CNN), so this is the
+single-network variant on the existing value head: the extra value epochs train the value tower and the shared
+encoders while the clone term holds the policy. A paper-style auxiliary value head on the policy tower was left out:
+it would add a weight the Rust `Policy` and old checkpoints don't know. Stats on the iterations that run a phase
+(over every stored row): `ppg/value_loss`, `ppg/kl`, `ppg/explained_variance` after the phase, `ppg/value_loss_start`
+and `ppg/explained_variance_start` before it, `ppg/rows`, `ppg/seconds` (also inside `charts/optimize_seconds`);
+`losses/explained_variance` stays per iteration. Off (default), training is unchanged.
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;
@@ -262,7 +329,11 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   (`model.widen_policy` via `registry.load_model(obs_spec=...)`): every weight is copied and the towers' input
   columns for the new keys start at zero, so it acts exactly as before; the optimizer state starts fresh (the
   iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
-- `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
+- `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id> [--act MODE]`
+  sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`): `sample` (keyed sampling; the default
+  without the file) or `argmax`, chosen by evaluating both (better-play §6b) and set with `promote --act`.
+  Evaluation, chains, `run` and the watch player follow it per model; their `--act sample|argmax` forces one mode
+  for every model (`--act model`, the default, follows the registry).
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
   `steps_trained`) iterations/steps, `stopped_early`, wall time and steps/sec (`train.run_status(run_dir)`). An
@@ -285,7 +356,10 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   `checkpoint`, `early_stop`, `error`, `train_end`; the round driver adds `eval_start`, `eval_progress` (≤1/s:
   done/episodes/running success_rate), `eval`) whose last line
   is `end`. `<specialist>.log` is its console output. `round.jsonl` / `round.log` cover the round (chain,
-  errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes `end`.
+  `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
+  `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
+  `eval` / `chain`; `--no-log` skips it). `training-gui.py`'s [currently running] shows every live folder on the
+  machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`).
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the start-state-balanced
   success rate (mean over start states of each state's last 20 room-entry episodes; logged as
   `balanced_success_rate`) is ≥ R for that many consecutive iterations. The raw `success_rate` is biased toward
@@ -309,10 +383,12 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   `triforce/chain_hp.json`, the hearts Link entered each room with in chain runs. A specialist with
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw.
-- `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=20, parallel=1, seed=0,
-  deterministic=False, *, threads=None, device='cpu')` plays every seed start state N times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed) and
+- `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
+  deterministic=None, *, threads=None, states_dir=None, plays=None, events=None)` plays every seed start state N
+  times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed; `deterministic` None
+  follows the run's act mode) and
   returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate
-  --specialist NAME` (or `triforce evaluate`) writes `eval.json` next to the checkpoint.
+  --specialist NAME [--act model|sample|argmax]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint.
 - `scripts/train_round.py --round ID` trains every trainable specialist (route order), promotes and
   evaluates each, then runs `eval-chain`; summaries go to `models/<round>-summary.json` and
   `models/<round>-chain-summary.json`. Only a run that finished (exit 0, status completed/early_stop) is
@@ -366,11 +442,12 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   taking its last step's triforce (d2first: Dungeon 3's, since Nov 9); `stop_at` ends it on entering that room
   instead. A missed `heart` waypoint ends the run as a failure (room outcome `missed`); so does a retreat beyond
   `MAX_RETREATS` (3) per run (`retreat-limit`; `RunResult.retreats` counts them).
-- `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=False,
+- `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=None,
   max_steps=50000, specialist_configs=None, networks=None, parallel=1, threads=None)` lets a `ChainTask` pool play
-  (`EnvPool.play` with each specialist's Rust network; sampled actions use Gumbel noise keyed to (run seed,
-  decision), so a seed's run doesn't depend on `--parallel` or `--threads`; `--deterministic` is each head's
-  argmax): `run(route, seed) -> RunResult`, `run_many(route, seeds, plays=None)` (`plays`: a replay file). On each
+  (`EnvPool.play` with each specialist's Rust network and its act mode, `Policies.deterministic`; sampled actions
+  use Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel` or `--threads`;
+  argmax is each head's argmax; `deterministic` True/False forces one mode for all):
+  `run(route, seed) -> RunResult`, `run_many(route, seeds, on_result=None, plays=None)` (`plays`: a replay file). On each
   room entry: `game.yaml` tag → specialist → promoted checkpoint. Untagged room or missing model →
   `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (specialist `max_steps` in
@@ -378,10 +455,11 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   Finalizing a room captures live ending health together with dropped-heart counts, including room/run budgets
   and measured cutoffs; death remains zero. `health_out` is never left at entry health on a timed-out visit.
 - `python -m triforce.run [--route d2first] [--seed N] [--render [--fps F] | --video PATH] [--from STATE]
-  [--stop-at L:0xRR] [--checkpoint S=PATH] [--deterministic]` prints one line per room and appends a JSON line to
+  [--stop-at L:0xRR] [--checkpoint S=PATH] [--act MODE]` prints one line per room and appends a JSON line to
   `runs/runner.jsonl`. `--render` shows one chain env with rendering on; `--video` records the run's inputs, then
   renders them through `ffmpeg` (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
-- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR] [--plays PATH]` → success
+- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR]
+  [--act MODE] [--plays PATH] [--harvest [DIR]] [--logs-dir DIR | --no-log]` → success
   rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.
@@ -390,6 +468,24 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   objects; the chain pool uses them instead of reloading canonical YAML. Runtime item masks, observations
   and room/cutoff budgets use these configs. Route selection and carried inventory/health remain chain-owned.
   Other families retain canonical configs; checkpoint overrides and promoted pointers are independent.
+- Handoff harvesting (better-play §1b): `eval-chain --harvest [DIR]` (`Runner(harvest=)`, `ChainPool(harvest=)`,
+  `ChainTask(harvest=)`, `ChainEnv::set_harvest`) turns on the session's pre-entry capture and, at every **handoff**
+  (a room entry through a correct exit where the acting specialist changes; not same-family entries, retreats,
+  wrong exits or the run's first room), saves the entry's pre-entry snapshot (the same kind of state
+  `SavestateCapture` and `entry_states` write: the frame before the room entry, so a load replays the entry and
+  redraws the spawn) as `DIR/<new specialist>/<level>_<room><side>_h<seed>_<n>.state` (`harvest_filename`: `side`
+  is the routes.yaml entry, `zelda::objectives::route_entry`, spelled like the seed states: n/s/e/w, `s` down a
+  level's stairs, `c` out of a cave, cellar or level, `cave` a cave or cellar interior; `n` = the room's index in the
+  run; a Wallmaster drag is no entry and isn't saved). Names depend on the run seed and room index only, so the
+  files are the same for any `--parallel`/`--threads`; a rerun of a seed overwrites its files. `DIR` defaults to
+  `paths.HARVESTED_DIR` (`<states dir>/harvested`), which is where every specialist's `harvested_dir`
+  (`harvested_states`, default `<states dir>/harvested/<name>`) reads, so a plain `--harvest` feeds training
+  directly; elsewhere, point a config at `DIR/<name>` with `harvested_states:`. Training
+  envs mix harvested states with seed states at `harvested_fraction` (default 0.5; the pool rescans the dir every
+  64 resets), `state_entry` reads the `_h<seed>_<n>` names like seed states (route step from the entry side and
+  progress), and a harvested start skips `ram_randomization`: it keeps the true health, keys and bombs the upstream
+  specialist handed over (positions too; enemies spawn as the entry draws them). Refresh the harvest after promoting
+  an upstream specialist.
 
 ## Entry states (`entry_states.py`)
 

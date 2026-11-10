@@ -205,7 +205,32 @@ impl PyPolicy {
         }
         Ok(PyArray1::from_vec(py, values))
     }
+
+    /// Joint log-probs `[B, J]` (J = kinds × directions × durations = 224; entry `kind * 32 + direction * 4 +
+    /// duration`; `-inf` where illegal) and values `[B]`, one trunk pass per row (`Policy::joint_log_probs`: what
+    /// `evaluate(actions=...)` gives each joint action, bit for bit).
+    fn joint_log_probs<'py>(
+        &self,
+        py: Python<'py>,
+        obs: &Bound<'py, PyDict>,
+    ) -> PyResult<JointOut<'py>> {
+        let batch = Batch::new(py, &self.inner, obs)?;
+        let joint = self.inner.joint_size();
+        let mut scratch = self.inner.scratch();
+        let mut out = vec![0f32; batch.rows * joint];
+        let mut values = Vec::with_capacity(batch.rows);
+        for (i, row) in out.chunks_exact_mut(joint).enumerate() {
+            let mut vectors = Vec::new();
+            let input = batch.row(i, &mut vectors)?;
+            values.push(self.inner.joint_log_probs(&input, &mut scratch, row).map_err(policy_err)?);
+        }
+        let out = PyArray1::from_vec(py, out).reshape([batch.rows, joint])?;
+        Ok((out, PyArray1::from_vec(py, values)))
+    }
 }
+
+/// `Policy.joint_log_probs`: (`[B, J]` log-probs, `[B]` values).
+type JointOut<'py> = (Bound<'py, PyArray2<f32>>, Bound<'py, PyArray1<f32>>);
 
 fn output_dict<'py>(py: Python<'py>, policy: &Policy, outs: &[Output]) -> PyResult<Bound<'py, PyDict>> {
     let [k, d, u] = policy.head_sizes();

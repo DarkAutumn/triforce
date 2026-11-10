@@ -215,15 +215,18 @@ def test_promoted_run_without_a_checkpoint_is_an_error(tmp_path):
         registry.promoted_checkpoint('d1-test', tmp_path)
 
 
-def test_registry_cli_lists_runs_marking_the_promoted_one(tmp_path, capsys):
+def test_registry_cli_lists_runs_marking_the_promoted_one_and_its_act_mode(tmp_path, capsys):
     network, _ = _trained()
     registry.save_checkpoint('d1-test', 'a', network, iterations=2, steps=64, metrics={'success_rate': 0.25},
                              root=tmp_path)
     registry.save_checkpoint('d1-test', 'b', network, root=tmp_path)
     registry.main(['--models-dir', str(tmp_path), 'list', 'd1-test'])
-    assert capsys.readouterr().out.splitlines() == [
-        '  a  iterations=2 steps=64 success_rate=0.25', '  b  iterations=0 steps=0 success_rate=None']
-    registry.main(['--models-dir', str(tmp_path), 'promote', 'd1-test', 'a'])
+    lines = capsys.readouterr().out.splitlines()
+    assert [line[:5] for line in lines] == ['  a  ', '  b  '] and all(line.endswith('act=sample') for line in lines)
+    registry.main(['--models-dir', str(tmp_path), 'promote', 'd1-test', 'a', '--act', 'argmax'])
     assert capsys.readouterr().out.strip() == str(tmp_path / 'd1-test' / 'promoted')
     registry.main(['--models-dir', str(tmp_path), 'list', 'd1-test'])
-    assert [line[0] for line in capsys.readouterr().out.splitlines()] == ['*', ' ']
+    lines = capsys.readouterr().out.splitlines()
+    assert [line[0] for line in lines] == ['*', ' ']
+    assert lines[0].endswith('act=argmax') and lines[1].endswith('act=sample')
+    assert registry.act_mode(tmp_path / 'd1-test' / 'a') == 'argmax'

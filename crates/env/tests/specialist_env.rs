@@ -19,8 +19,8 @@ use env::rewards::{
     TERMINAL_FAILURE_PENALTY_VALUE, success_reward_value,
 };
 use env::observation::{Observation, ObservationBuilder, feature_names};
-use env::specialist_env::{EnvOptions, SpecialistEnv, StepInfo, StepResult};
-use env::start_states::{SavestateCapture, ram_randomization_values};
+use env::specialist_env::{EnvOptions, ShapingDial, SpecialistEnv, StepInfo, StepResult};
+use env::start_states::{SavestateCapture, StartWeights, ram_randomization_values, state_label};
 use env::{EnvError, StateStore};
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -452,7 +452,7 @@ fn correct_exit_is_success_with_health_scaled_reward() {
     );
     let terminal = term(&info, REWARD_TERMINAL_SUCCESS).unwrap();
     assert!(
-        approx(terminal, success_reward_value(1.5, 3.0)) && approx(terminal, 15.0),
+        approx(terminal, success_reward_value(1.5, 3.0, 0.5)) && approx(terminal, 15.0),
         "{terminal}"
     );
     assert!(
@@ -460,6 +460,20 @@ fn correct_exit_is_success_with_health_scaled_reward() {
         "{reward} vs {:?}",
         info.rewards
     );
+}
+
+/// `reward.exit_health_weight` reaches the terminal: at 1.0 a half-health exit pays 20 × 1.5/3 = 10.
+#[test]
+fn exit_health_weight_scales_success_terminal() {
+    let Some(nes) = open_core() else { return };
+    let mut env = sworded_ow_start(nes, 0, |c| {
+        c.ram_randomization = hp(0.5, 0.5);
+        c.reward.exit_health_weight = 1.0;
+    });
+    let (_, info) = last_info(run_until_done(&mut env, greedy_step, 400).unwrap());
+    assert_eq!(info.outcome(), Some("success"));
+    let terminal = term(&info, REWARD_TERMINAL_SUCCESS).unwrap();
+    assert!(approx(terminal, 10.0), "{terminal}");
 }
 
 #[test]
@@ -1135,7 +1149,23 @@ fn placed_env_configured(
     hearts_and_containers: u8,
     update: impl FnOnce(&mut SpecialistConfig),
 ) -> (Env, SessionSnapshot<MachineState>, Observation) {
-    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |c| {
+    placed_env_opts(nes, drops, y, hearts_and_containers, EnvOptions::default(), update)
+}
+
+/// [`placed_env_configured`] with env options (start state 1_73e_0 is filled in).
+fn placed_env_opts(
+    nes: ZCore,
+    drops: &[(i16, u8, u8)],
+    y: u8,
+    hearts_and_containers: u8,
+    opts: EnvOptions,
+    update: impl FnOnce(&mut SpecialistConfig),
+) -> (Env, SessionSnapshot<MachineState>, Observation) {
+    let opts = EnvOptions {
+        start_state: Some("1_73e_0".to_owned()),
+        ..opts
+    };
+    let mut env = make_env_with(nes, "stalfos-keese-gel", opts, |c| {
         c.one_room = true;
         update(c);
     });
@@ -1975,4 +2005,69 @@ fn endings_linger_and_visits_ignore_the_look_ahead() {
     assert!(with == without, "the same game, endings and linger with the look-ahead on or off");
     assert!(with_visits == without_visits);
     assert_ne!(with_reward, without_reward, "the look-ahead credited beams on their firing steps");
+}
+
+/// Outcome fine-tuning: `reward.shaping_scale` (or the pool's dial) scales every non-terminal term;
+/// `frame_penalty` adds an unscaled `penalty-frames` per emulated frame.
+#[test]
+fn shaping_scale_and_frame_penalty() {
+    let Some(nes) = open_core() else { return };
+    let mut nes = Some(nes);
+    let mut run = |scale: f64, frame_penalty: f64| {
+        let reward = RewardConfig {
+            shaping_scale: scale,
+            frame_penalty,
+            ..Default::default()
+        };
+        let (mut env, _) = placed_env_with(nes.take().unwrap(), &[], 157, reward, 0x21);
+        act(&mut env, "MOVE E 4");
+        let r = act(&mut env, "MOVE E 8");
+        nes = Some(release(env));
+        r
+    };
+    let full = run(1.0, 0.0);
+    let half = run(0.5, 0.0);
+    assert!(pbrs_total(&full.info) != 0.0, "{:?}", full.info.rewards);
+    assert!((half.reward - full.reward * 0.5).abs() < 1e-9, "{} vs {}", half.reward, full.reward);
+    let zero = run(0.0, 0.001);
+    let frames = term(&zero.info, "penalty-frames").expect("penalty-frames");
+    assert!((frames + 0.001 * zero.info.frames as f64).abs() < 1e-12, "{frames}");
+    assert!((zero.reward - frames).abs() < 1e-12, "{:?}", zero.info.rewards);
+    for (name, value) in &zero.info.rewards {
+        assert!(*name == "penalty-frames" || *value == 0.0, "{name} = {value}");
+    }
+
+    // A dial set after construction applies to the next step.
+    let dial = ShapingDial::new(1.0);
+    let opts = EnvOptions {
+        shaping: Some(dial.clone()),
+        ..Default::default()
+    };
+    let (mut env, _, _) = placed_env_opts(nes.unwrap(), &[], 157, 0x21, opts, |_| {});
+    act(&mut env, "MOVE E 4");
+    dial.set(0.5);
+    let r = act(&mut env, "MOVE E 8");
+    assert!((r.reward - full.reward * 0.5).abs() < 1e-9, "{} vs {}", r.reward, full.reward);
+}
+
+/// Prioritized level replay: a pool's shared start weights decide every non-curriculum reset's seed state.
+#[test]
+fn shared_start_weights_pick_the_start_state() {
+    let Some(nes) = open_core() else { return };
+    let specialist = "stalfos-keese-gel";
+    let seeds = data().specialists[specialist].resolve_start_states(&data().states_dir);
+    assert!(seeds.len() > 2, "{seeds:?}");
+    let target = state_label(&seeds[seeds.len() / 2].to_string_lossy()).to_owned();
+    let weights = StartWeights::default();
+    weights.set(Some(std::collections::HashMap::from([(target.clone(), 1.0)])));
+    let opts = EnvOptions {
+        start_weights: Some(weights),
+        ..Default::default()
+    };
+    let mut env = make_env_with(nes, specialist, opts, |c| c.harvested_fraction = 0.0);
+    for _ in 0..6 {
+        let (_, info) = env.reset(None, None).unwrap();
+        let start = info.start_state.expect("start state");
+        assert_eq!(state_label(&start), target);
+    }
 }

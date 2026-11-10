@@ -372,6 +372,8 @@ pub struct Scratch {
     value_a: Vec<f32>,
     value_b: Vec<f32>,
     conditioned: Vec<f32>,
+    /// `kind_condition` of the policy features before a kind's embedding (joint log-probs).
+    condition_base: Vec<f32>,
     logits: Vec<f32>,
     empty: Vec<bool>,
     masked: Vec<bool>,
@@ -634,6 +636,7 @@ impl Policy {
             value_a: vec![0.0; hidden],
             value_b: vec![0.0; hidden],
             conditioned: vec![0.0; hidden],
+            condition_base: vec![0.0; hidden],
             logits: vec![0.0; MAX_HEAD],
             empty: vec![false; self.slots],
             masked: vec![false; self.slots],
@@ -860,6 +863,97 @@ impl Policy {
         out.entropy = (out.head_entropy[0] + out.head_entropy[1]) + out.head_entropy[2];
         Ok(out)
     }
+
+    /// Joint actions: `kinds * directions * durations` (7 × 8 × 4 = 224 for Zelda).
+    pub fn joint_size(&self) -> usize {
+        self.kinds * self.directions * self.durations
+    }
+
+    /// Index of (kind, direction, duration) among the joint actions: `(kind * directions + direction) * durations +
+    /// duration` (Zelda: `kind * 32 + direction * 4 + duration`).
+    pub fn joint_index(&self, action: [usize; 3]) -> usize {
+        (action[0] * self.directions + action[1]) * self.durations + action[2]
+    }
+
+    /// (kind, direction, duration) of joint action `index`.
+    pub fn joint_action(&self, index: usize) -> [usize; 3] {
+        let per_kind = self.directions * self.durations;
+        [index / per_kind, (index % per_kind) / self.durations, index % self.durations]
+    }
+
+    /// The log-prob of every joint action into `out` ([`Policy::joint_size`] values, [`Policy::joint_index`]
+    /// order) with one trunk pass, bit for bit what `evaluate` gives each with `Pick::Given`: log p(kind) (0 with one
+    /// legal kind) + log p(direction | kind) + log p(duration | kind), where a kind-conditioned head whose row is all
+    /// masked contributes 0 and only its index 0 is a joint action. Illegal joint actions are `-inf`. Returns the
+    /// value estimate.
+    pub fn joint_log_probs(&self, input: &Input, s: &mut Scratch, out: &mut [f32]) -> Result<f32, PolicyError> {
+        self.check(input)?;
+        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        if out.len() != self.joint_size() {
+            return err(format!("joint log-probs need {} values, got {}", self.joint_size(), out.len()));
+        }
+        let kind_mask = &input.mask[..kinds];
+        let legal_kinds = kind_mask.iter().filter(|&&m| m).count();
+        if legal_kinds == 0 {
+            return err("empty kind mask");
+        }
+        self.features(input, s);
+        self.policy_tower.apply(&s.features, &mut s.tower_a, &mut s.tower_b);
+        self.value_tower.apply(&s.features, &mut s.value_a, &mut s.value_b);
+        let mut value = [0f32];
+        self.value_head.apply(&s.value_a, &mut value);
+
+        out.fill(f32::NEG_INFINITY);
+        self.kind_head.apply(&s.tower_a, &mut s.logits);
+        let mut kind_lp = [0f32; MAX_HEAD];
+        masked_log_softmax(&s.logits[..kinds], kind_mask, MASKED_LOGIT, &mut kind_lp[..kinds]);
+        self.kind_condition.apply(&s.tower_a, &mut s.condition_base);
+        let dur_base = kinds + kinds * dirs;
+        for kind in (0..kinds).filter(|&k| kind_mask[k]) {
+            for (c, (b, e)) in s
+                .conditioned
+                .iter_mut()
+                .zip(s.condition_base.iter().zip(self.kind_embedding.row(kind as i64)))
+            {
+                *c = (*b + e).max(0.0);
+            }
+            let dir_mask = &input.mask[kinds + kind * dirs..kinds + (kind + 1) * dirs];
+            self.direction_head.apply(&s.conditioned, &mut s.logits);
+            let (dir_lp, dir_applies) = sub_log_probs(&s.logits[..dirs], dir_mask);
+            let dur_mask = &input.mask[dur_base + kind * durs..dur_base + (kind + 1) * durs];
+            self.duration_head.apply(&s.conditioned, &mut s.logits);
+            let (dur_lp, dur_applies) = sub_log_probs(&s.logits[..durs], dur_mask);
+            let lk = if legal_kinds > 1 { kind_lp[kind] } else { 0.0 };
+            for d in 0..dirs {
+                let ld = match dir_applies {
+                    true if dir_mask[d] => dir_lp[d],
+                    false if d == 0 => 0.0,
+                    _ => continue,
+                };
+                for u in 0..durs {
+                    let lu = match dur_applies {
+                        true if dur_mask[u] => dur_lp[u],
+                        false if u == 0 => 0.0,
+                        _ => continue,
+                    };
+                    out[(kind * dirs + d) * durs + u] = (lk + ld) + lu;
+                }
+            }
+        }
+        Ok(value[0])
+    }
+}
+
+/// A kind-conditioned head's log-probs as `sub_head` computes them, and whether the head applies.
+fn sub_log_probs(logits: &[f32], row_mask: &[bool]) -> ([f32; MAX_HEAD], bool) {
+    let applies = row_mask.iter().any(|&m| m);
+    let mut safe = [true; MAX_HEAD];
+    if applies {
+        safe[..row_mask.len()].copy_from_slice(row_mask);
+    }
+    let mut lp = [0f32; MAX_HEAD];
+    masked_log_softmax(logits, &safe[..row_mask.len()], MASKED_LOGIT, &mut lp[..logits.len()]);
+    (lp, applies)
 }
 
 /// A masked categorical head: log-probs, entropy, choice; writes them into `out` at head `index`.

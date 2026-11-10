@@ -1,15 +1,16 @@
 """Evaluate one specialist on its own rooms: N episodes from every seed start state.
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
-        [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--deterministic]
+        [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--act model|sample|argmax]
         [--output PATH] [--plays PATH]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
 ``--episodes-per-state`` times in a native ``EvalTask`` pool of ``--parallel`` envs (same rewards, end conditions
 and RAM randomization as training), episode ``i`` seeded with ``seed + i``.  The network acts inside the pool
-(``EnvPool.play`` with its Rust copy, docs/rust-actor.md); actions are sampled unless ``--deterministic``, with
-Gumbel noise keyed to (episode seed, decision), so an episode plays the same whichever env or thread runs it.
+(``EnvPool.play`` with its Rust copy, docs/rust-actor.md) the way the run acts (``--act model``, the default: its
+registry act mode, ``registry.act_mode``) or as told (``sample`` / ``argmax``); sampling uses Gumbel noise keyed to
+(episode seed, decision), so an episode plays the same whichever env or thread runs it.
 ``--plays`` keeps every episode in a replay file (``triforce.replay``).  The checkpoint defaults to the
 specialist's promoted model; results go to ``<checkpoint dir>/eval.json``, records sorted by seed.
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
@@ -47,11 +48,15 @@ merging several evaluations weight by visits.
 
 import argparse
 import json
+import time
+import traceback
 from collections import Counter
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Callable, Optional
 
 from . import _native, registry
+from .events import LOGS_DIR_ENV, EventLog, logged_job
 from .metrics import heart_change_total
 from .replay import ReplayWriter, header, models_header
 from .specialist import SpecialistConfig, load_specialist
@@ -215,13 +220,16 @@ def _visited_rooms(records: list[dict], specialist: str) -> dict:
 
 
 def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 100,
-                        parallel: int = 1, seed: int = 0, deterministic: bool = False,
+                        parallel: int = 1, seed: int = 0, deterministic: Optional[bool] = None,
                         on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
-                        threads: Optional[int] = None, states_dir=None, plays=None) -> dict:
+                        threads: Optional[int] = None, states_dir=None, plays=None, events=None) -> dict:
     """Plays every seed start state `episodes_per_state` times on `parallel` envs and returns the summary dict
     (see module doc).  ``on_episode(record, done, total)`` is called as each episode finishes (completion order).
+    ``deterministic``: argmax (True) or sampling (False); None follows the run's act mode (``registry.act_mode``).
     ``threads``: the pool's worker threads (default min(parallel, cores)); ``states_dir``: where start states
-    resolve (default the states directory); ``plays``: a replay file to write."""
+    resolve (default the states directory); ``plays``: a replay file to write; ``events``: an ``EventLog`` that
+    gets ``eval_start`` and ``eval_progress`` (at most once a second) for the training GUI (the caller emits
+    ``eval``, ``eval_event`` fields, once it has written the result)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     config = load_specialist(specialist) if isinstance(specialist, str) else specialist
     states_dir = None if states_dir is None else str(states_dir)
@@ -232,11 +240,17 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     jobs = [(state, seed + index) for index, state in enumerate(episode_states)]
 
     policy = registry.load_model(checkpoint)[0].to_native()
+    if deterministic is None:
+        deterministic = registry.act_mode(checkpoint) == 'argmax'
     writer = None
     if plays is not None:
-        models = models_header([config.name], [policy], {config.name: str(checkpoint)})
-        writer = ReplayWriter(plays, header('eval', {'config': config.to_json()}, models, deterministic, states_dir))
+        models = models_header([config.name], [policy], {config.name: str(checkpoint)}, [deterministic])
+        writer = ReplayWriter(plays, header('eval', {'config': config.to_json()}, models, states_dir))
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
+    if events is not None:
+        events.emit('eval_start', checkpoint=str(checkpoint), episodes_per_state=episodes_per_state,
+                    episodes=len(jobs), parallel=parallel, deterministic=deterministic)
+        on_episode = _progress_events(events, on_episode)
     try:
         with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
             records = _play(pool, policy, deterministic, len(jobs), on_episode, writer)
@@ -273,6 +287,44 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'visited_rooms': _visited_rooms(records, config.name),
         'records': records,
     }
+
+
+def _progress_events(events, on_episode):
+    """``on_episode`` that also emits ``eval_progress`` (done, episodes, running success_rate) at most once a
+    second and on the last episode."""
+    progress = {'successes': 0, 'last': 0.0}
+
+    def emit(record: dict, done: int, total: int):
+        progress['successes'] += bool(record['success'])
+        now = time.monotonic()
+        if now - progress['last'] >= 1.0 or done == total:
+            progress['last'] = now
+            events.emit('eval_progress', done=done, episodes=total, success_rate=progress['successes'] / done)
+        if on_episode is not None:
+            on_episode(record, done, total)
+    return emit
+
+
+def eval_event(result: dict) -> dict:
+    """The fields of an event stream's ``eval`` event (triforce/events.py) for an ``evaluate_specialist`` result:
+    headline numbers, per-room and per-state success, room failures and the flat ``linger_*`` stats plus
+    ``by_room_linger`` / ``by_state_linger``."""
+    linger = {key: value for key, value in result.items() if key.startswith('linger_')}
+    linger_groups = {
+        f'{group}_linger': {name: {key: value for key, value in stats.items() if key.startswith('linger_')}
+                            for name, stats in result[group].items() if 'linger_max_steps' in stats}
+        for group in ('by_room', 'by_state')}
+    return {'success_rate': result['success_rate'], 'episodes': result['episodes'],
+            'deterministic': result['deterministic'],
+            'health': result['mean_health_fraction'], 'start_health': result['mean_start_health_fraction'],
+            'health_change': result['mean_health_change'], 'health_change_total': result['mean_health_change_total'],
+            'hearts_dropped': result['hearts_dropped'], 'hearts_taken': result['hearts_taken'],
+            'hearts_left': result['hearts_left'],
+            'by_room': {room: stats['success_rate'] for room, stats in result['by_room'].items()},
+            'by_room_failures': {room: {'episodes': stats['episodes'], 'failures': stats['failures']}
+                                 for room, stats in result['by_room'].items()},
+            'by_state': {state: stats['success_rate'] for state, stats in result['by_state'].items()},
+            **linger, **linger_groups}
 
 
 def format_report(result: dict) -> str:
@@ -315,9 +367,12 @@ def main(argv=None):
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--deterministic', action='store_true', help="argmax actions instead of sampling")
+    parser.add_argument('--act', choices=registry.ACT_CHOICES, default='model',
+                        help="model: the run's act mode (registry); sample / argmax: act that way")
     parser.add_argument('--output', default=None, help="JSON output (default: <checkpoint dir>/eval.json)")
     parser.add_argument('--plays', default=None, help="write every episode to this replay file (triforce/replay.py)")
+    parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
+    parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
     args = parser.parse_args(argv)
 
     config = load_specialist(args.specialist)
@@ -332,12 +387,31 @@ def main(argv=None):
     if not checkpoint.is_file():
         raise FileNotFoundError(checkpoint)
 
-    result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
-                                 args.deterministic, threads=args.threads, plays=args.plays)
-    output = Path(args.output) if args.output else checkpoint.parent / 'eval.json'
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with open(output, 'w', encoding='utf-8') as file:
-        json.dump(result, file, indent=2)
+    run_id = checkpoint.parent.name
+    log = nullcontext() if args.no_log else logged_job(
+        f'eval-{name}', 'eval', [{'specialist': name, 'run_id': run_id, 'events': f'{name}.jsonl',
+                                  'run_dir': str(checkpoint.parent), 'status': 'evaluating'}], args.logs_dir)
+    with log as plan:
+        events = None if plan is None else EventLog(plan.directory / f'{name}.jsonl', specialist=name, run_id=run_id)
+        try:
+            result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
+                                         registry.act_override(args.act), threads=args.threads, plays=args.plays,
+                                         events=events)
+        except Exception as error:
+            if events is not None:
+                message = f"evaluation failed: {type(error).__name__}: {error}"
+                events.emit('error', message=message, traceback=traceback.format_exc())
+                events.emit('end', status='eval-failed', message=message)
+            raise
+        output = Path(args.output) if args.output else checkpoint.parent / 'eval.json'
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with open(output, 'w', encoding='utf-8') as file:
+            json.dump(result, file, indent=2)
+        if events is not None:
+            summary = {'eval_success_rate': result['success_rate'], 'eval_episodes': result['episodes']}
+            events.emit('eval', **eval_event(result), path=str(output))
+            events.emit('end', status='ok', **summary)
+            plan.update_run(0, status='ok', **summary)
     print(format_report(result))
     print(f"(written to {output})")
     return 0

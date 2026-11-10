@@ -1,8 +1,8 @@
 //! The pool: envs pinned to persistent worker threads that act with an in-pool [`Actor`] (rollouts and plays).
 
 use crate::control::EnvControl;
-use crate::layout::{ObsLayout, ObsRow, Staged};
-use crate::rollout::{Actor, EnvRollout, Play, Record};
+use crate::layout::{ObsData, ObsLayout, ObsRow, Staged};
+use crate::rollout::{Actor, Decision, EnvRollout, Play, PlanError, Planner, Record, SearchRow};
 use parking_lot::{Condvar, Mutex};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
@@ -44,6 +44,28 @@ pub trait PoolEnv: Send + 'static {
         obs: ObsRow<'_>,
         events: &mut Vec<Self::Event>,
     ) -> Result<Outcome, Self::Error>;
+}
+
+/// An env a search can simulate in ([`crate::rollout::Planner`]): exact save and load mid-episode, and steps with
+/// no side effects outside the episode (no events, records, capture or published frames). Between
+/// `begin_search` and `end_search` the env is in simulation mode.
+pub trait SearchEnv: PoolEnv {
+    type Snapshot;
+
+    /// Enters simulation mode and saves the episode where it stands. Fails for an env that can't search.
+    fn begin_search(&mut self) -> Result<Self::Snapshot, Self::Error>;
+
+    /// Returns to `snapshot` exactly.
+    fn load(&mut self, snapshot: &Self::Snapshot);
+
+    /// Redraws the env's hidden randomness from `key` alone (a search future).
+    fn perturb(&mut self, key: u64);
+
+    /// Executes `action` like `step`, writing the observation into `obs`, without side effects outside the episode.
+    fn simulate(&mut self, action: Self::Action, obs: ObsRow<'_>) -> Result<Outcome, Self::Error>;
+
+    /// Returns to `snapshot` and leaves simulation mode: the env continues as if no search had run.
+    fn end_search(&mut self, snapshot: &Self::Snapshot);
 }
 
 /// What `reset` returns besides the observation.
@@ -385,7 +407,27 @@ impl<E: PoolEnv> Pool<E> {
         &self,
         steps: usize,
         actor: Arc<Ac>,
-    ) -> Res<Vec<(usize, EnvRollout<E::Action>)>, E> {
+    ) -> Res<Rollouts<E::Action>, E> {
+        self.rollout_with(steps, actor, None::<Arc<NoPlanner>>)
+    }
+
+    /// [`Pool::rollout`] with `planner` deciding first ([`Planner`]: search): each decision it takes acts with its
+    /// action and reports its [`crate::rollout::SearchRow`] in [`EnvRollout::search`]; the rest are `actor`'s.
+    pub fn rollout_planned<Ac: Actor<E::Action> + 'static, P: Planner<E> + 'static>(
+        &self,
+        steps: usize,
+        actor: Arc<Ac>,
+        planner: Arc<P>,
+    ) -> Res<Rollouts<E::Action>, E> {
+        self.rollout_with(steps, actor, Some(planner))
+    }
+
+    fn rollout_with<Ac: Actor<E::Action> + 'static, P: Planner<E> + 'static>(
+        &self,
+        steps: usize,
+        actor: Arc<Ac>,
+        planner: Option<Arc<P>>,
+    ) -> Res<Rollouts<E::Action>, E> {
         let n = self.num_envs();
         let results: Results<E::Action> = Arc::new(Mutex::new((0..n).map(|_| None).collect()));
         let ids = self.claim_idle("rollout", false)?;
@@ -393,6 +435,7 @@ impl<E: PoolEnv> Pool<E> {
             let job = RolloutWork {
                 steps,
                 actor: actor.clone(),
+                planner: planner.clone(),
                 results: results.clone(),
             };
             self.dispatch(Cmd::Run(id, Box::new(job)), id);
@@ -653,32 +696,60 @@ fn start<E: PoolEnv>(
 
 type Results<A> = Arc<Mutex<Vec<Option<EnvRollout<A>>>>>;
 
+/// (env id, rollout) per env.
+type Rollouts<A> = Vec<(usize, EnvRollout<A>)>;
+
 /// [`Pool::rollout`]'s job for one env.
-struct RolloutWork<E: PoolEnv, Ac> {
+struct RolloutWork<E: PoolEnv, Ac, P> {
     steps: usize,
     actor: Arc<Ac>,
+    planner: Option<Arc<P>>,
     results: Results<E::Action>,
 }
 
-impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for RolloutWork<E, Ac> {
+impl<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>> Work<E> for RolloutWork<E, Ac, P> {
     fn run(&mut self, env: &mut E, id: usize, slot: &mut Staged, events: &mut Vec<E::Event>) -> Res<Flow, E> {
-        let rollout = run_rollout(env, id, slot, events, self.steps, &*self.actor)?;
+        let rollout = run_rollout(env, id, slot, events, self.steps, &*self.actor, self.planner.as_deref())?;
         self.results.lock()[id] = Some(rollout);
         Ok(Flow::Ready)
     }
 }
 
-/// One env's rollout on its worker: `steps` decisions by `actor` (a terminal step resets the env at once).
-fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>>(
+/// The planner of a plain [`Pool::rollout`]: never plans.
+struct NoPlanner;
+
+impl<E: PoolEnv> Planner<E> for NoPlanner {
+    type Scratch = ();
+
+    fn scratch(&self) {}
+
+    fn plan(
+        &self,
+        _: &mut E,
+        _: &ObsData,
+        _: i64,
+        _: i64,
+        _: i64,
+        _: &mut (),
+    ) -> Result<Option<(E::Action, Decision, SearchRow<E::Action>)>, PlanError<E::Error>> {
+        Ok(None)
+    }
+}
+
+/// One env's rollout on its worker: `steps` decisions by `planner` (if any, when it plans) or `actor` (a terminal
+/// step resets the env at once).
+fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
     env: &mut E,
     id: usize,
     slot: &mut Staged,
     events: &mut Vec<E::Event>,
     steps: usize,
     actor: &Ac,
+    planner: Option<&P>,
 ) -> Res<EnvRollout<E::Action>, E> {
     let usage = |e: String| PoolError::Usage(format!("env {id}: {e}"));
     let mut scratch = actor.scratch();
+    let mut plan_scratch = planner.map(P::scratch);
     let mut out = EnvRollout::new(slot.obs.layout(), steps);
     for _ in 0..steps {
         if slot.finished {
@@ -686,9 +757,29 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>>(
         }
         out.obs.push(&slot.obs);
         out.starts.push(slot.step == 0);
-        let (action, decision) = actor
-            .act(&slot.obs, slot.policy, slot.job, slot.step, &mut scratch)
-            .map_err(usage)?;
+        let planned = match (planner, plan_scratch.as_mut()) {
+            (Some(p), Some(s)) => p
+                .plan(env, &slot.obs, slot.policy, slot.job, slot.step, s)
+                .map_err(|e| match e {
+                    PlanError::Env(error) => PoolError::Env { env: id, error },
+                    PlanError::Usage(m) => usage(m),
+                })?,
+            _ => None,
+        };
+        let (action, decision) = match planned {
+            Some((action, decision, row)) => {
+                out.search.push(Some(row));
+                (action, decision)
+            }
+            None => {
+                if planner.is_some() {
+                    out.search.push(None);
+                }
+                actor
+                    .act(&slot.obs, slot.policy, slot.job, slot.step, &mut scratch)
+                    .map_err(usage)?
+            }
+        };
         out.job.push(slot.job);
         out.step.push(slot.step);
         out.actions.push(action.clone());

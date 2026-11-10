@@ -15,6 +15,21 @@ pub fn mix(x: u64) -> u64 {
 /// Standard Gumbel noise for decision `step` of job `job`, `out.len()` columns.
 pub fn keyed_noise(job: i64, step: i64, out: &mut [f32]) {
     let key = mix(mix(job as u64 ^ NOISE_TAG).wrapping_add((step as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)));
+    gumbel(key, out);
+}
+
+/// A key from a sequence of parts (search: job, decision, tag, visit, future, ...), order-sensitive.
+pub fn key_of(parts: &[u64]) -> u64 {
+    parts.iter().fold(NOISE_TAG, |h, &p| mix(h ^ mix(p.wrapping_add(0x9E37_79B9_7F4A_7C15))))
+}
+
+/// A uniform in (0, 1) from `key` alone.
+pub fn uniform(key: u64) -> f64 {
+    ((mix(key) >> 11) as f64 + 0.5) * 2f64.powi(-53)
+}
+
+/// Standard Gumbel noise from `key` alone, `out.len()` columns ([`keyed_noise`] is this with a (job, step) key).
+pub fn gumbel(key: u64, out: &mut [f32]) {
     for (c, o) in out.iter_mut().enumerate() {
         let bits = mix(key ^ (c as u64).wrapping_mul(0xD1B5_4A32_D192_ED03));
         let uniform = ((bits >> 11) as f64 + 0.5) * 2f64.powi(-53);

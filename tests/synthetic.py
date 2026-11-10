@@ -127,9 +127,9 @@ class ListPool:
     envs (``reset`` / ``step``), acting with the given ``_native.Policy``.
 
     A terminal step resets the env at once; ``bootstrap_truncation`` truncations get the policy's value of the
-    final observation in ``bootstrap_value``. Each finished episode emits an ``episode`` event whose info adds
-    ``episode_steps``, ``episode_frames``, ``reward_total`` and ``episode_rewards`` to the terminal step's info.
-    Each episode's job key is ``env * 1_000_003 + episode``.
+    final observation in ``bootstrap_value``. Each finished episode emits an ``episode`` event (with its ``job``) whose
+    info adds ``episode_steps``, ``episode_frames``, ``reward_total`` and ``episode_rewards`` to the terminal step's
+    info. Each episode's job key is ``env * 1_000_003 + episode`` (``out['job']`` when given).
     """
 
     def __init__(self, make_env, num_envs: int):
@@ -183,6 +183,8 @@ class ListPool:
                 result = policy.evaluate(batch, noise=_native.keyed_noise(self._job, self._step, policy.noise_size))
             out['actions'][:, t] = result['actions']
             out['logp_ent_val'][:, t] = np.stack([result['log_prob'], result['entropy'], result['value']], -1)
+            if 'job' in out:
+                out['job'][:, t] = self._job
             for i in range(n):
                 action = tuple(int(a) for a in result['actions'][i])
                 reward, frames, bootstrap_obs, interrupt = self._advance(i, action)
@@ -209,7 +211,7 @@ class ListPool:
         if terminated or truncated:
             if truncated and not terminated and info.get('bootstrap_truncation'):
                 bootstrap = obs
-            self._events.append({'env': i, 'type': 'episode', 'info': {
+            self._events.append({'env': i, 'type': 'episode', 'job': self._job[i], 'info': {
                 **info, 'episode_steps': episode['steps'], 'episode_frames': episode['frames'],
                 'reward_total': episode['reward'], 'episode_rewards': dict(episode['rewards'])}})
             self._begin(i)

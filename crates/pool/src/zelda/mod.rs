@@ -17,10 +17,12 @@
 mod actor;
 mod envs;
 mod nes;
+mod search;
 
 pub use actor::{ActorScratch, PolicyActor};
 pub use envs::{ChainRunEnv, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
 pub use nes::{InputLog, PoolNes, PoolState, PoolStore, RgbFn};
+pub use search::{FRAMES_PER_DISCOUNT, GumbelSearch, SearchConfig, SearchScratch, considered_visits};
 
 use crate::layout::{Dtype, KeySpec, ObsLayout, ObsRow};
 use env::chain::RunResult;
@@ -191,8 +193,9 @@ pub fn visit_json(v: &RoomVisit) -> Value {
 /// What Zelda pool envs report through `Pool::poll_events`.
 #[derive(Clone, Debug)]
 pub enum ZeldaEvent {
-    /// A training episode ended: the terminal step's info (`info.terminal` is set).
-    Episode(Box<StepInfo>),
+    /// A training episode ended: the terminal step's info (`info.terminal` is set) and the episode's job key (its
+    /// rows' `job`).
+    Episode { info: Box<StepInfo>, job: i64 },
     /// An evaluation episode ended.
     Eval(Box<EvalRecord>),
     /// A chain run ended.

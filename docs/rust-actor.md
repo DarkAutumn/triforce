@@ -109,3 +109,72 @@ real time; zcore 86%) and ~8% of rollout CPU in training. A GPU backend could at
 by batching decisions across workers (each would wait for the batch) on a second set of numerics. At the NES's
 60 fps the 128 games use about a tenth of the machine. So **CPU better for both: CPU only**, no GPU backend built.
 Revisit if the network grows several-fold.
+
+## Search (better-play §2)
+
+Gumbel expert iteration's search runs inside training rollouts (`crates/pool/src/zelda/search.rs`,
+`GumbelSearch`; Danihelka et al. 2022 as in DeepMind's `mctx` `gumbel_muzero_policy`, root only). Agents still act
+from the policy everywhere else: eval and chain pools refuse it.
+
+**API.** `EnvPool.rollout(policies, steps, out, deterministic=False, search=None)`. `search=None` is the plain
+rollout (same code path, no extra cost). `search` is a dict; missing keys take the defaults:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `candidates` (k) | 8 | Root candidates, Gumbel-top-k over the legal joint actions |
+| `simulations` (n) | 16 | Sequential-halving budget in candidate evaluations (`mctx`'s visit schedule: k=8, n=16 → 8 + 4 + 4) |
+| `futures` (K) | 4 | Futures averaged per evaluation; 1 = no RNG redraw (the clairvoyant ablation) |
+| `depth` (d) | 6 | Policy decisions after the candidate before the leaf value |
+| `gamma` | 0.99 | Discount per 8 frames, as the learner's frame-aware GAE |
+| `c_visit`, `c_scale` | 50.0, 0.1 | σ(q̂) = (c_visit + max visits) · c_scale · q̂ |
+| `fraction` | 1.0 | Share of decisions searched, keyed per (job, step) |
+| `perturb_rng` | True | Redraw the 12 RNG bytes per future (with K > 1) |
+
+A searched decision executes the search's choice (the last survivor of sequential halving); `actions` holds it and
+`logp_ent_val` the policy's log-prob, entropy and value of it (not a policy sample: the learner must not use a PPO
+ratio on those rows). Unsearched decisions are exactly a plain rollout's (`fraction=0` is bit for bit
+`search=None`). Optional `out` buffers, written whenever present (unsearched rows: false, 0, NaN, -1, 0):
+
+- `search_mask` `[n, steps]` bool: the row was searched.
+- `search_policy` `[n, steps, 224]` float32: the improved policy π' = softmax(log π + σ(completed Q)) over the
+  joint actions, index `kind * 32 + direction * 4 + duration` (7 kinds × 8 directions × 4 durations,
+  `zelda::actions`); 0 for illegal ones. A kind-conditioned head whose row is all masked (WAIT's direction, attacks'
+  duration) has only index 0, as the policy's factorization scores it.
+- `search_q` `[n, steps, k]` float32: each candidate's mean return; NaN where never evaluated (or fewer legal
+  actions than k).
+- `search_actions` `[n, steps, k, 3]` int64: the candidates, best g + log π first; -1 rows past the legal count.
+- `search_value` `[n, steps]` float32: the search's root value, `mctx`'s mixed value (V(root) mixed with the
+  prior-weighted Q of the evaluated candidates); V(root) alone is `logp_ent_val[..., 2]`.
+
+`Policy.joint_log_probs(obs)` → (`[B, 224]` log-probs, `-inf` illegal; `[B]` values): one trunk pass per row, bit
+for bit what `evaluate(actions=...)` gives each joint action (log p(kind), 0 with one legal kind, + log p(direction |
+kind) + log p(duration | kind)); the learner's torch side computes the same factorization
+(`ZeldaPolicy.joint_log_probs`). Training uses it through `triforce.train --search JSON` (`PPOConfig.search`;
+docs/architecture.md): searched rows are distilled toward π', the rest train by PPO.
+
+**One evaluation.** Q of a future = Σ_t Γ_t r_t + Γ_d·V(leaf), Γ = γ^(frames/8) accumulated over the simulated
+steps (the candidate, then d policy decisions sampled with keyed noise, argmax when `deterministic`). V = 0 after a
+terminal step or a max-steps truncation, V(final observation) after a bootstrap truncation (`no-room-progress`,
+`no-damage`), as training. Sims run the env's full reward pipeline (critic, weapon look-ahead, terminal rewards,
+shaping dial) through `SpecialistEnv::simulate`: `step` without the curriculum and start-state pool records, room
+visits or capture.
+
+**Exactness.** `SpecialistEnv::save`/`load` (`EnvSnapshot`) checkpoint the episode exactly: the session's
+`SessionCheckpoint` (machine snapshot, `Machine.frame`, which the look-ahead ledger's discount and expiry read, the
+credit ledger, the current state and mask) plus every tracker `step` touches (linger, hearts, cheats, critic, end
+conditions, observation builder, objectives). `Session::set_simulating` holds the frame sink, render flag and
+pre-entry capture aside during a search, so sims don't publish, pace, wait on a pause or snapshot room entries;
+`PoolNes` truncates a recording back on restoring its own snapshots, so movies stay real. After the search the env
+continues bit-identically (`a_search_leaves_the_env_exactly_where_it_was`: obs, outcome, events, ledger, frame
+counters, RAM and the movie, step by step against an env that never searched).
+
+**Determinism.** Every search draw is keyed (`policy::noise::key_of`/`gumbel`): searched-or-not by (job, step), the
+root Gumbel noise by (job, step), a future's RNG redraw by (job, step, visit, future) (common random numbers: every
+candidate's i-th evaluation sees the same redraws), a sim's policy noise by (job, step, visit, future, candidate,
+depth). Nothing draws from the env's generator and sims touch no shared state, so search rollouts are bit-identical
+across thread counts (`tests/native/test_search.py`).
+
+**Cost (Nov 9, d2-rope r56-rust-dg, 2 envs on 2 threads, machine shared with two trainings):** plain rollout
+4.2 ms per decision; k=8, n=16, K=4, d=6: 2.7 s per searched decision (448 simulated steps, ~640×); k=4, n=8, K=2,
+d=3: 0.38 s (64 simulated steps, ~90×). The emulator dominates (zcore's PPU and frame loop in the profile); search
+`fraction` scales the cost linearly.
