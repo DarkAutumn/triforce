@@ -107,17 +107,41 @@ def test_load_widens_an_older_checkpoint_only_with_obs_target(states_dir, tmp_pa
     assert (32, feature_dim) in {tuple(s['exp_avg'].shape) for s in resumed['optimizer']['state'].values()}
 
 
+LEARNER_KEYS = ('losses/approx_kl', 'losses/policy_loss', 'losses/value_loss')
+
+
+def _seeded_run(states_dir, tmp_path, run_id, parallel, threads, device, *extra):
+    # Four iterations: rollouts run one update behind, so rollouts 3 and 4 are the first to act with learned weights.
+    run = train.main(_common(states_dir, tmp_path, '--parallel', str(parallel), '--threads', str(threads),
+                             '--iterations', '4', '--steps-per-update', '24', '--no-curriculum',
+                             '--run-id', run_id, '--seed', '31', '--device', device, *extra))
+    history = _gameplay(run)
+    if device == 'cpu':     # the CPU update is bit-stable with one torch thread; CUDA compares gameplay only
+        for entry, record in zip(history, read_jsonl(str(run / 'metrics.jsonl'))):
+            entry.update({key: record[key] for key in LEARNER_KEYS})
+    return history
+
+
 @pytest.mark.parametrize('parallel,device', [(1, 'cpu'), (3, 'cpu'), pytest.param(
-    3, 'cuda', marks=pytest.mark.skipif(not torch.cuda.is_available(), reason='needs CUDA'))])
+    3, 'cuda', marks=pytest.mark.skipif(not torch.cuda.is_available(), reason='needs CUDA'))],
+    ids=['repeat-1-thread-cpu', '1-vs-3-threads-cpu', '1-vs-3-threads-cuda'])
 def test_seeded_training_repeats_gameplay_for_any_thread_count(states_dir, tmp_path, parallel, device):
-    histories = []
-    for run_id, threads in (('one-thread', 1), ('threads', parallel)):
-        run = train.main(_common(states_dir, tmp_path, '--parallel', str(parallel), '--threads', str(threads),
-                                 '--iterations', '2', '--steps-per-update', '48', '--no-curriculum',
-                                 '--run-id', f'{run_id}-{parallel}-{device}', '--seed', '31', '--device', device))
-        histories.append(_gameplay(run))
-    assert histories[0] == histories[1]
-    assert histories[0][0]['rollout/steps'] == 48
+    torch_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        first = _seeded_run(states_dir, tmp_path, f'one-thread-{parallel}-{device}', parallel, 1, device)
+        second = _seeded_run(states_dir, tmp_path, f'threads-{parallel}-{device}', parallel, parallel, device)
+        assert len(first) == 4 and first[0]['rollout/steps'] == 24
+        assert first == second
+        if parallel == 1 and device == 'cpu':
+            # The comparison sees the learner: a 10x learning rate leaves the first rollouts (initial weights) alike
+            # and changes the ones that act with updated weights.
+            faster = _seeded_run(states_dir, tmp_path, 'faster-lr', parallel, 1, device, '--learning-rate', '3e-3')
+            gameplay = [[{k: v for k, v in e.items() if k not in LEARNER_KEYS} for e in h] for h in (first, faster)]
+            assert gameplay[0][:2] == gameplay[1][:2]
+            assert gameplay[0][2:] != gameplay[1][2:]
+    finally:
+        torch.set_num_threads(torch_threads)
 
 
 def test_early_stop_balances_start_states():
