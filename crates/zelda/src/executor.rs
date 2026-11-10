@@ -58,6 +58,10 @@ const ADDR_TRIGGERED_DOOR_CMD: usize = 0x54;
 const ADDR_OPENED_DOORS: usize = 0xEE;
 const ADDR_HEARTS: usize = 0x66F;
 const ADDR_PARTIAL_HEARTS: usize = 0x670;
+const ADDR_LINK_DIRECTION: usize = 0x98;
+const ADDR_LINK_GRID_OFFSET: usize = 0x394;
+/// Frames an off-grid Link needs to reach the next grid point (at most 6 px at 1.5 px/frame, rounded up).
+const MAX_ALIGN_FRAMES: u32 = 6;
 const OBJ_X: usize = 0x70;
 const OBJ_Y: usize = 0x84;
 const OBJ_ID: usize = 0x34F;
@@ -478,6 +482,21 @@ impl<S> Executor<S> {
             Direction::SW | Direction::SE => Direction::S,
             d => d,
         };
+        // Off the grid the game moves Link along ObjDir without a tile test and snaps him at the next grid point
+        // (Z_07 Walker_Move / EnsureObjectAligned); it never turns him perpendicular there. So first walk him on to
+        // the grid point along his line (at most 6 frames), as the game would, then turn and attack.
+        let current = m.read(ADDR_LINK_DIRECTION);
+        let vertical = |d: u8| d & 0x0C != 0;
+        if m.read(ADDR_LINK_GRID_OFFSET) != 0 && vertical(current) != vertical(facing.value()) {
+            let along = direction_buttons(Direction::from_ram_value(current));
+            let mode = m.read(ADDR_MODE);
+            for _ in 0..MAX_ALIGN_FRAMES {
+                self.step(m, along, 1);
+                if m.read(ADDR_LINK_GRID_OFFSET) == 0 || m.read(ADDR_MODE) != mode {
+                    break;
+                }
+            }
+        }
         m.set_var(Var::LinkDirection, facing.value());
         let button = if item.is_some() {
             buttons::B

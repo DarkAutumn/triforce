@@ -182,3 +182,42 @@ fn octorok_and_darknut_colours_match_their_hit_points() {
     }
     assert!(seen.contains(&RED_SLOW_OCTOROK) && seen.contains(&RED_DARKNUT), "{seen:?}");
 }
+
+/// F160: an attack turned perpendicular while Link is between grid points first walks him on to the grid point,
+/// as the game would; he never ends up beside the S doorway of 1:0x53 inside the wall band, nor on a solid tile.
+#[test]
+fn a_perpendicular_attack_off_grid_aligns_link_first() {
+    let Some(nes) = open_core() else { return };
+    let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
+    s.load(&common::load_named_state("1_53s_0"), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(1))
+        .unwrap();
+    s.nes_mut().poke(0x658, 4); // bombs
+    s.nes_mut().poke(0x67C, 8); // max bombs
+    for a in ["MOVE N 4", "BOMB W", "MOVE N 4", "MOVE S 4", "MOVE N 8"] {
+        s.act(Action::parse(a).unwrap()).unwrap();
+        let (x, y) = (s.nes_mut().peek(0x70), s.nes_mut().peek(0x84));
+        assert!(y <= 0xBD || x == 0x78, "after {a}: Link at ({x},{y}) beside the doorway");
+        assert_eq!(s.nes_mut().peek(0x394) == 0 || s.nes_mut().peek(0x98) & 0x0C != 0, true, "after {a}");
+    }
+    // Random legal play: whenever Link stands on a grid point, the tile under his feet is walkable.
+    let mut rng = ChaCha8Rng::seed_from_u64(7);
+    for step in 0..2000 {
+        let hc = s.nes_mut().peek(0x66F);
+        s.nes_mut().poke(0x66F, (hc & 0xF0) | (hc >> 4));
+        let a = random_action(s.mask(), &mut rng);
+        s.act(a).unwrap();
+        let state = s.state().clone();
+        if state.full_location() != zelda::MapLocation::new(1, 0x53, false) {
+            break;
+        }
+        if s.nes_mut().peek(0x394) == 0 && state.mode() == 5 {
+            let (x, y) = (s.nes_mut().peek(0x70) as usize, s.nes_mut().peek(0x84) as usize);
+            let row = (y + 0x0B - 0x40) >> 3;
+            let first_unwalkable = s.nes_mut().peek(0x34A);
+            for col in [x >> 3, (x >> 3) + 1] {
+                let tile = s.nes_mut().peek((0x6530 + col * 22 + row) as u16);
+                assert!(tile < first_unwalkable, "step {step} {a}: Link at ({x},{y}) on tile {tile:#x}");
+            }
+        }
+    }
+}
