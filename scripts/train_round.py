@@ -18,7 +18,8 @@ provenance) and prints a markdown table.  Unknown or untrainable ``--specialists
 runs (exit 2).  A failed training or evaluation (or an error in the driver's handling of one specialist) is
 recorded for that specialist and the round moves on; the round then ends 'failed' with exit 1 (also when the chain
 fails), else 'completed' with exit 0.  Only finished trainings play in the chain.  Rerun with ``--skip-existing``
-to resume (runs that already have ``ckpt.pt`` are only re-evaluated, and promoted with ``--promote``).
+to resume (finished runs, train_summary.json status completed/early_stop, are only re-evaluated, and promoted with
+``--promote``; an unfinished run dir is renamed ``<run>.partial-N`` and trained fresh).
 ``--train-args`` passes extra training arguments (``{name}`` expands to the specialist).  ``--chain-runs 0`` skips
 the chain.  One SIGTERM/Ctrl-C stops the trainer and every evaluation (at its next episode) and ends every open
 run 'interrupted'.
@@ -79,12 +80,13 @@ def parse_args(argv=None):
     parser.add_argument('--eval-parallel', type=int, default=4,
                         help="envs in each specialist's evaluation pool, which runs while the next one trains")
     parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'])
-    parser.add_argument('--models-dir', default='models')
+    parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: all trainable)")
     parser.add_argument('--episodes-per-state', type=int, default=100)
     parser.add_argument('--chain-runs', type=int, default=20)
     parser.add_argument('--chain-parallel', type=int, default=10)
-    parser.add_argument('--skip-existing', action='store_true', help="don't retrain runs that have ckpt.pt")
+    parser.add_argument('--skip-existing', action='store_true',
+                        help="don't retrain finished runs (unfinished run dirs are set aside as <run>.partial-N)")
     parser.add_argument('--promote', action='store_true',
                         help="promote each run once its evaluation succeeded (the previous promoted run ids and act "
                              "modes go into the round summary); without it the promoted models stay and eval-chain "
@@ -361,7 +363,7 @@ def main(argv=None):
     Returns 0 when every specialist trained and evaluated and the chain (if any) ran, 1 otherwise, 2 for unknown
     specialists (nothing runs)."""
     args = parse_args(argv)
-    models = Path(args.models_dir).resolve()
+    models = registry.models_root(args.models_dir).resolve()
     names = args.specialists.split(',') if args.specialists else default_specialists()
     problem = check_names(names)
     if problem is not None:
