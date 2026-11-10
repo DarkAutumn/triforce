@@ -266,7 +266,7 @@ fn train_env_rows_match_the_env_played_directly() {
 fn chain_runs_in_a_pool_match_direct_runs() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let route = Route::load(&data.map, "d2first", None, None).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
     let seeds = [3u64, 4];
     let cap = 80;
 
@@ -358,7 +358,7 @@ fn chain_runs_in_a_pool_match_direct_runs() {
 fn a_chain_specialist_without_a_model_ends_the_run_as_error() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let route = Route::load(&data.map, "d2first", None, None).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
     let policies: Vec<Arc<str>> = data
         .families
         .keys()
@@ -689,6 +689,12 @@ fn eval_jobs_are_shared_and_each_result_is_independent_of_the_env() {
         }
     }
     assert_eq!(expected.len(), 3);
+    // F095: the record keeps the hearts at reset; no container is taken by waiting, so it equals the end's.
+    for r in &expected {
+        assert!(r.start_max_health >= 3, "{r:?}");
+        assert_eq!(r.start_max_health, r.max_health);
+        assert_eq!(r.to_json()["start_max_health"], r.start_max_health);
+    }
 
     // In a pool: two envs take jobs from one list; only env 0 reports rooms.
     let jobs = Jobs::new(eval_jobs());
@@ -732,7 +738,7 @@ fn eval_jobs_are_shared_and_each_result_is_independent_of_the_env() {
 fn a_chain_specialist_outside_the_pool_policies_ends_the_run_as_error() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let route = Route::load(&data.map, "d2first", None, None).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
     let only: Vec<Arc<str>> = vec![Arc::from("boss-aquamentus")];
     let mut env = ChainRunEnv::new(
         data.clone(),

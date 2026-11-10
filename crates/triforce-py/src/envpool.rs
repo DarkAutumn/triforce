@@ -186,8 +186,8 @@ impl PyChainTask {
                 parse_room(&text).map_err(|e| ConfigError::new_err(e.0))
             })
             .transpose()?;
-        let data = context::data(py, None)?;
-        Route::load(&data.map, &route, stop_at, start_from.as_deref())
+        let data = context::data(py, states_dir.as_deref())?;
+        Route::load(&data.map, &data.states_dir, &route, stop_at, start_from.as_deref())
             .map_err(ConfigError::new_err)?;
         Ok(PyChainTask {
             configs,
@@ -326,7 +326,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
         let t = t.get();
         let data: Arc<GameData> = context::data(py, t.states_dir.as_deref())?;
         let store = TfzStore::new(&data, rom.clone());
-        let route = Route::load(&data.map, &t.route, t.stop_at, t.start_from.as_deref())
+        let route = Route::load(&data.map, &data.states_dir, &t.route, t.stop_at, t.start_from.as_deref())
             .map_err(ConfigError::new_err)?;
         let seeds = Jobs::new(t.seeds.iter().copied());
         let policies: Vec<Arc<str>> = t

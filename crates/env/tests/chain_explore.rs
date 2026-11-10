@@ -48,7 +48,7 @@ fn chain(nes: ZCore, data: &Arc<GameData>, route: Route) -> ChainEnv<ZCore, TfzS
 }
 
 fn d2first(data: &GameData) -> Route {
-    Route::load(&data.map, "d2first", None, None).unwrap()
+    Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap()
 }
 
 /// The config of `name` with `edit` applied.
@@ -68,18 +68,19 @@ fn parse(a: &str) -> Action {
 
 #[test]
 fn route_definition() {
-    let map = GameMap::builtin();
-    let route = Route::load(&map, "d2first", None, None).unwrap();
+    let data = data();
+    let (map, states) = (&data.map, &data.states_dir);
+    let route = Route::load(map, states, "d2first", None, None).unwrap();
     assert_eq!(route.start_state, "start");
     assert_eq!((route.terminal, route.final_triforce), (None, Some(3)));
     let stop = MapLocation::new(1, 0x73, false);
     assert_eq!(
-        Route::load(&map, "d2first", Some(stop), None)
+        Route::load(map, states, "d2first", Some(stop), None)
             .unwrap()
             .terminal,
         Some(stop)
     );
-    assert!(Route::load(&map, "no-such-route", None, None).is_err());
+    assert!(Route::load(map, states, "no-such-route", None, None).is_err());
 }
 
 #[test]
@@ -107,6 +108,7 @@ fn chain_summary_counts_failures_by_room() {
         steps: 0,
         frames: 0,
         retreats: 0,
+        wrong_exits: 0,
         rooms: vec![RoomRecord {
             index: 0,
             level: 1,
@@ -178,6 +180,8 @@ fn chain_runs() {
         no_room_progress_preserves_global_guard_and_disabled_budget,
         room_exit_resets_visit_clock,
         lynel_retreat_continues_the_run,
+        cave_bounce_hits_the_wrong_exit_limit,
+        mid_route_triforce_is_the_correct_exit,
         target_observation_follows_the_acting_specialist,
     ] {
         nes = case(nes, &data);
@@ -374,7 +378,7 @@ fn no_room_progress_preserves_global_guard_and_disabled_budget(
 }
 
 fn room_exit_resets_visit_clock(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let route = Route::load(&data.map, "d2first", None, Some("0_77cave_0")).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_77cave_0")).unwrap();
     let mut c = chain(nes, data, route);
     c.max_steps = 100;
     c.configs.insert(
@@ -407,7 +411,7 @@ fn room_exit_resets_visit_clock(nes: ZCore, data: &Arc<GameData>) -> ZCore {
 /// run's cap (`MAX_RETREATS` = 3; 1 here) ends the run as a failure, `retreat-limit`.
 fn lynel_retreat_continues_the_run(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     assert_eq!(env::chain::MAX_RETREATS, 3);
-    let route = Route::load(&data.map, "d2first", None, Some("0_0as_0")).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_0as_0")).unwrap();
     let mut c = chain(nes, data, route);
     c.max_steps = 400;
     c.max_retreats = 1;
@@ -424,6 +428,82 @@ fn lynel_retreat_continues_the_run(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     assert_eq!(r.result, "failure");
     assert!(r.reason.starts_with("retreat-limit"), "{}", r.reason);
     assert_eq!(r.to_json()["retreats"], 2);
+    c.into_parts().0.into_nes()
+}
+
+/// F157: wrong exits into tagged rooms (here out of the sword cave S without the sword, and random walking after)
+/// are counted per run; the `max_wrong_exits`-th ends the run `stuck`, not the run cap.
+fn cave_bounce_hits_the_wrong_exit_limit(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    assert_eq!(env::chain::MAX_WRONG_EXITS, 20);
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_77cave_0")).unwrap();
+    let mut c = chain(nes, data, route);
+    c.max_steps = 5000;
+    c.max_wrong_exits = 3;
+    let south = parse("MOVE S 16");
+    let r = drive(&mut c, 0, |s, rng| {
+        if s.state().in_cave() && s.mask().is_allowed(&south) { south } else { random_policy(s, rng) }
+    });
+    let rooms: Vec<_> = r.rooms.iter().map(|x| (&x.room, x.in_cave, &x.outcome, x.steps)).collect();
+    assert_eq!(r.result, "failure", "{}", r.reason);
+    assert!(r.reason.starts_with("wrong-exit-limit"), "{} {rooms:?}", r.reason);
+    assert!(r.steps < 5000);
+    assert_eq!(r.wrong_exits, 3);
+    assert_eq!(r.to_json()["wrong_exits"], 3);
+    assert_eq!(r.rooms.last().unwrap().outcome, "stuck");
+    assert_eq!(r.rooms.iter().filter(|x| x.outcome == "exit-wrong").count(), 2);
+    c.into_parts().0.into_nes()
+}
+
+/// F135: taking a triforce the route takes before its last (Dungeon 2's in 2:0x0d) is that room's correct exit,
+/// and the handoff it causes (0:0x3c out of the dungeon) is harvested.
+fn mid_route_triforce_is_the_correct_exit(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("2_0de_0")).unwrap();
+    let mut c = chain(nes, data, route);
+    let dir = tempfile::tempdir().unwrap();
+    c.set_harvest(Some(dir.path().to_path_buf()));
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+    // A breadth-first search over Link's tiles finds the walk onto the triforce; the chain then plays it.
+    let start = c.session().snapshot();
+    let mut queue = std::collections::VecDeque::from([(start.clone(), Vec::new())]);
+    let mut seen = std::collections::HashSet::from([c.session().state().link.tile()]);
+    let mut path = None;
+    while let Some((snap, actions)) = queue.pop_front() {
+        c.session_mut().restore(&snap);
+        for d in c.session().mask().directions(zelda::ActionKind::Move) {
+            let a = zelda::Action::new(zelda::ActionKind::Move, d, 8).unwrap();
+            c.session_mut().restore(&snap);
+            let change = c.session_mut().act(a).unwrap();
+            let mut next = actions.clone();
+            next.push(a);
+            if change.gained_triforce() {
+                path = Some(next);
+                break;
+            }
+            if !change.changed_location() && seen.insert(change.state.link.tile()) {
+                queue.push_back((c.session().snapshot(), next));
+            }
+        }
+        if path.is_some() {
+            break;
+        }
+    }
+    c.session_mut().restore(&start);
+    for a in path.expect("a walk onto the triforce") {
+        if let ChainStatus::Done(r) = c.step(a).unwrap() {
+            panic!("run ended on the walk: {r:?}");
+        }
+    }
+    // The run goes on out of the dungeon (only the route's last triforce ends it); wait for the 0x3c entry.
+    while c.result().unwrap().rooms.len() < 2 {
+        if let ChainStatus::Done(r) = c.step(parse("WAIT 8")).unwrap() {
+            panic!("run ended before 0x3c: {r:?}");
+        }
+    }
+    let r = c.result().unwrap();
+    let rooms: Vec<_> = r.rooms.iter().map(|x| (x.level, x.room.as_str(), x.outcome.as_str())).collect();
+    assert_eq!(rooms, [(2, "0x0d", "exit-correct"), (0, "0x3c", "in-progress")]);
+    assert!(dir.path().join("ow-octorok/0_3cc_h0_1.state").is_file());
     c.into_parts().0.into_nes()
 }
 

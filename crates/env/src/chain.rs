@@ -18,18 +18,18 @@ use crate::error::EnvError;
 use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::specialist_env::linger_json;
-use crate::start_states::{StateStore, harvest_filename, state_entry};
+use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::GameMap;
 use zelda::hearts::{HeartTracker, HeartView};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
-use zelda::objectives::{GameCompletion, Objective, exit_is_correct, start_route};
+use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
 use zelda::room::Wavefront;
 use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
 
@@ -40,6 +40,9 @@ pub const MIN_ROOM_STEPS: u64 = 2000;
 /// Retreats (route steps' `retreat` exits) a run may take; one more ends it as `retreat-limit` (Lee, Nov 8: a chain
 /// must not loop on re-entering 0x0a forever).
 pub const MAX_RETREATS: u32 = 3;
+/// Wrong exits into tagged rooms a run may take; the `MAX_WRONG_EXITS`-th ends it `stuck` (`wrong-exit-limit`,
+/// Lee, Nov 10: a run that bounces between two tagged rooms must not go on to the run cap).
+pub const MAX_WRONG_EXITS: u32 = 20;
 
 /// Where a route starts and how it ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,9 +57,12 @@ pub struct Route {
 
 impl Route {
     /// A routes.yaml route; `stop_at` replaces the route's end with a room to enter and `start_from` (a state such
-    /// as `2_7ds_0`) the game start, for partial chain evals.
+    /// as `2_7ds_0`, a file under `states_dir` or a path) the game start, for partial chain evals. `start_from` must
+    /// exist and `stop_at` must be the room of a route step after the start state's step (the first step whose
+    /// room and entry the state's name encodes; the game start for other names).
     pub fn load(
         map: &GameMap,
+        states_dir: &Path,
         name: &str,
         stop_at: Option<MapLocation>,
         start_from: Option<&str>,
@@ -73,13 +79,33 @@ impl Route {
                 "Route '{name}' must begin at the game start (entry: start)"
             ));
         }
+        let start_state = start_from.unwrap_or("start");
+        let path = state_file_path(states_dir, start_state);
+        if !path.is_file() {
+            return Err(format!(
+                "Unknown start state '{start_state}': {} not found (states live in {})",
+                path.display(),
+                states_dir.display()
+            ));
+        }
         let route = |terminal, final_triforce| Route {
             name: name.to_owned(),
-            start_state: start_from.unwrap_or("start").to_owned(),
+            start_state: start_state.to_owned(),
             terminal,
             final_triforce,
         };
-        if stop_at.is_some() {
+        if let Some(stop) = stop_at {
+            let start = start_step(steps, start_state);
+            let after: Vec<MapLocation> = steps[start + 1..].iter().map(|s| s.location()).collect();
+            if !after.contains(&stop) {
+                let rooms: Vec<String> = after.iter().map(|l| describe(*l)).collect();
+                return Err(format!(
+                    "stop_at {} is not a room of route '{name}' after the start step of '{start_state}' \
+                     (rooms after it: {})",
+                    describe(stop),
+                    rooms.join(", ")
+                ));
+            }
             return Ok(route(stop_at, None));
         }
         let last = &steps[steps.len() - 1];
@@ -88,6 +114,38 @@ impl Route {
         }
         Err(format!("Route '{name}' doesn't end on a triforce"))
     }
+}
+
+/// Where a state store finds `name` (`TfzStore::path`): an absolute or existing path, else
+/// `<states_dir>/<name>.state`.
+fn state_file_path(states_dir: &Path, name: &str) -> PathBuf {
+    let p = Path::new(name);
+    if p.is_absolute() || p.exists() {
+        p.to_path_buf()
+    } else if name.ends_with(".state") {
+        states_dir.join(name)
+    } else {
+        states_dir.join(format!("{name}.state"))
+    }
+}
+
+/// The index of the first route step whose room and entry a state's name encodes (`<level>_<room><side>_…`,
+/// harvested `_h<seed>_<n>` alike); 0 for the game start and names that encode no step.
+fn start_step(steps: &[zelda::game_map::RouteStep], state: &str) -> usize {
+    let label = state_label(state);
+    steps
+        .iter()
+        .position(|s| {
+            let side = if s.in_cave {
+                "cave".to_owned()
+            } else if s.entry == "cave" {
+                "c".to_owned()
+            } else {
+                s.entry.to_ascii_lowercase()
+            };
+            label.starts_with(&format!("{}_{:02x}{side}_", s.level, s.room))
+        })
+        .unwrap_or(0)
 }
 
 /// One visit to one room.
@@ -213,6 +271,8 @@ pub struct RunResult {
     /// Rooms left through a route step's `retreat` exit (0x0a S before the white sword); the
     /// `MAX_RETREATS + 1`-th ends the run (`retreat-limit`).
     pub retreats: u32,
+    /// Wrong exits into tagged rooms (`exit-wrong` and the run goes on); the `MAX_WRONG_EXITS`-th ends the run.
+    pub wrong_exits: u32,
     pub rooms: Vec<RoomRecord>,
 }
 
@@ -239,7 +299,7 @@ impl RunResult {
     pub fn to_json(&self) -> Value {
         json!({
             "route": self.route, "seed": self.seed, "result": self.result, "reason": self.reason,
-            "steps": self.steps, "frames": self.frames, "retreats": self.retreats,
+            "steps": self.steps, "frames": self.frames, "retreats": self.retreats, "wrong_exits": self.wrong_exits,
             "rooms": self.rooms.iter().map(RoomRecord::to_json).collect::<Vec<_>>(),
         })
     }
@@ -287,6 +347,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     pub min_room_steps: u64,
     /// Retreats a run may take (`MAX_RETREATS`); one more ends it as `retreat-limit`.
     pub max_retreats: u32,
+    /// Wrong exits into tagged rooms a run may take (`MAX_WRONG_EXITS`); reaching it ends the run `stuck`.
+    pub max_wrong_exits: u32,
     /// Player stall budget (`play-zelda.py`; None = off): after this many actions in a room without damage dealt
     /// or taken [`ChainEnv::stalled`] turns true; after twice as many the run ends `stuck`.
     pub stall_steps: Option<u64>,
@@ -321,6 +383,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             max_steps: DEFAULT_MAX_STEPS,
             min_room_steps: MIN_ROOM_STEPS,
             max_retreats: MAX_RETREATS,
+            max_wrong_exits: MAX_WRONG_EXITS,
             stall_steps: None,
             harvest: None,
             no_damage: 0,
@@ -419,6 +482,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             steps: 0,
             frames: 0,
             retreats: 0,
+            wrong_exits: 0,
             rooms: Vec::new(),
         });
         self.current = None;
@@ -630,7 +694,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             if record_location.is_some() {
                 let (ok, retreat) = match (&self.change, &self.prev_objective) {
                     (Some(change), Some(prev)) => {
-                        let ok = exit_is_correct(&map, &change.previous, prev, location);
+                        // A triforce the route takes before its last (D2's, D1's) warps Link out of the dungeon:
+                        // the treasure objective has no next room, but taking it is the room's correct exit.
+                        let ok = exit_is_correct(&map, &change.previous, prev, location)
+                            || (change.gained_triforce() && prev.kind == ObjectiveKind::Treasure);
                         (ok, !ok && prev.retreats.contains(&location))
                     }
                     _ => (false, false),
@@ -683,6 +750,22 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 result.reason =
                     format!("{from} left the route into untagged {}", describe(location));
                 return Ok(ChainStatus::Done(result.clone()));
+            }
+            if correct == Some(false) {
+                result.wrong_exits += 1;
+                if result.wrong_exits >= self.max_wrong_exits {
+                    let record = result.rooms.last_mut().unwrap();
+                    record.outcome = "stuck".into();
+                    let from = record.specialist.clone();
+                    result.result = "failure".into();
+                    result.reason = format!(
+                        "wrong-exit-limit: {from} left into {}, the run's {}th wrong exit (at most {} per run)",
+                        describe(location),
+                        result.wrong_exits,
+                        self.max_wrong_exits
+                    );
+                    return Ok(ChainStatus::Done(result.clone()));
+                }
             }
             let Some(room) = room else {
                 return Err(format!("Room {} is not in game.yaml", describe(location)));
@@ -877,15 +960,25 @@ mod tests {
     #[test]
     fn routes_load() {
         let map = GameMap::builtin();
-        let r = Route::load(&map, "d2first", None, None).unwrap();
+        let states = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../triforce/states");
+        let r = Route::load(&map, &states, "d2first", None, None).unwrap();
         // d2first ends on taking the Dungeon 3 triforce (Nov 9), not Dungeon 1's.
         assert_eq!((r.terminal, r.final_triforce), (None, Some(3)));
         assert_eq!(r.start_state, "start");
         let stop = MapLocation::new(2, 0x0e, false);
-        let r = Route::load(&map, "d2first", Some(stop), Some("2_7ds_0")).unwrap();
+        let r = Route::load(&map, &states, "d2first", Some(stop), Some("2_7ds_0")).unwrap();
         assert_eq!((r.terminal, r.final_triforce), (Some(stop), None));
         assert_eq!(r.start_state, "2_7ds_0");
-        assert!(Route::load(&map, "nowhere", None, None).is_err());
+        assert!(Route::load(&map, &states, "nowhere", None, None).is_err());
+        // F190: a missing start state and a stop room off the route (or before the start step) fail up front.
+        let e = Route::load(&map, &states, "d2first", None, Some("nope_0")).unwrap_err();
+        assert!(e.contains("Unknown start state 'nope_0'"), "{e}");
+        let off = MapLocation::new(9, 0x99, false);
+        let e = Route::load(&map, &states, "d2first", Some(off), None).unwrap_err();
+        assert!(e.contains("is not a room of route 'd2first'"), "{e}");
+        let before = MapLocation::new(0, 0x77, true);
+        assert!(Route::load(&map, &states, "d2first", Some(before), Some("2_7ds_0")).is_err());
+        assert!(Route::load(&map, &states, "d2first", Some(before), None).is_ok());
         assert_eq!(
             describe(MapLocation::new(0, 0x77, true)),
             "(level 0, room 0x77, cave)"
