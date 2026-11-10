@@ -56,7 +56,8 @@ def _capture(game: Game, change, directory: str):
 def main(argv=None):
     """CLI entry point."""
     # pylint: disable=too-many-branches, too-many-statements
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(prog='python -m triforce.play', description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('actions', nargs='*', help="actions to run in order")
     parser.add_argument('--state', help="start fresh from this savestate (name like 1_44w_0, or a path)")
     parser.add_argument('--session', default=DEFAULT_SESSION, help="session snapshot file")
@@ -70,7 +71,9 @@ def main(argv=None):
     parser.add_argument('--set', action='append', default=[], metavar='NAME=VALUE',
                         help="write a named RAM variable before running actions (e.g. hearts_and_containers=0x22)")
     parser.add_argument('--capture', metavar='DIR',
-                        help="save a savestate in DIR whenever an action enters a new room (v1 naming)")
+                        help="save a post-entry savestate DIR/<level>_<room><heading>.state whenever an action "
+                             "enters a new room (old v1 naming: the heading moved, not the entry side; not a "
+                             "pre-entry training state: use triforce.entry_states for those)")
     args = parser.parse_args(argv)
 
     if args.list_states:

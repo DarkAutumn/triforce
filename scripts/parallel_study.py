@@ -11,7 +11,7 @@ Results append to target/perf/parallel/LABEL/{throughput,converge}.jsonl; a fini
 seed) is skipped on a rerun, so an interrupted study resumes.
 
     .venv/bin/python scripts/parallel_study.py LABEL throughput --specialists ow-moblin,goriya --parallel 4,8,16
-    .venv/bin/python scripts/parallel_study.py LABEL converge --specialists ow-leever-peahat --parallel 4,8,16 \
+    .venv/bin/python scripts/parallel_study.py LABEL converge --specialists ow-leever --parallel 4,8,16 \
         --seeds 1,2,3
     .venv/bin/python scripts/parallel_study.py LABEL report
 """
@@ -67,7 +67,7 @@ def run_throughput(out: Path, args) -> None:
             run = out / 'runs' / f'throughput-{specialist}-p{parallel}'
             train(run, specialist, parallel, 1,
                   ['--load', str(ROOT / 'models' / specialist / promoted), '--iterations', str(args.iterations)])
-            rates = progress_rates(run)[5:]
+            rates = progress_rates(run)[4:]     # rates[i] is iteration i + 2: skip the first 5 (train_bench.sh)
             row = {'specialist': specialist, 'parallel': parallel, 'seed': 1, 'iterations': args.iterations,
                    'steps_per_second': statistics.median(rates), 'rates': len(rates)}
             print(json.dumps(row), flush=True)
@@ -137,6 +137,8 @@ def main() -> None:
     parser.add_argument('--target', type=float, default=0.9)
     parser.add_argument('--patience', type=int, default=5)
     args = parser.parse_args()
+    if args.mode == 'throughput' and args.iterations < 7:
+        parser.error('throughput needs --iterations >= 7 (the first 5 iterations are warm-up)')
     out = ROOT / 'target' / 'perf' / 'parallel' / args.label
     out.mkdir(parents=True, exist_ok=True)
     if args.mode == 'throughput':

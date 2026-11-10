@@ -2,11 +2,11 @@
 
     .venv/bin/python scripts/env_speed.py [--steps 60] [--repeats 2] [--seed 0] [--json OUT]
 
-Every state in triforce/states (both routes: overworld, D1, D2) is loaded with seeded RNG/room entry, then
-plays ``--steps`` seeded random legal actions through ``Game.act`` with rendering off: the option executor,
-look-ahead, interrupts and masks. Reported per family (the routes.yaml specialist owning the state's room) and
-overall: real frames per second of ``act`` time (look-ahead frames are work but not counted as frames, so
-they lower it), steps per second, and load time separately. Run it on two builds (PYTHONPATH) to A/B.
+Every start state in triforce/states (one route, d2first: overworld, Dungeons 1-3) is loaded with seeded RNG/room
+entry, then plays ``--steps`` seeded random legal actions through ``Game.act`` with rendering off: the option
+executor, look-ahead, interrupts and masks. Reported per family (the routes.yaml specialist owning the state's room)
+and overall: real frames per second of ``act`` time (look-ahead frames are work but not counted as frames, so they
+lower it), steps per second, and load time separately. Run it on two builds (PYTHONPATH) to A/B.
 """
 
 import argparse

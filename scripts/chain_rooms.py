@@ -6,8 +6,8 @@ For every room visited (level:room[:cave]) in visit order of first appearance: v
 by each non-exit outcome (died, timeout, stuck...), mean health change per visit, mean steps, and the worst
 quiet stretch (linger max_steps). Then the overall success count.
 """
+import argparse
 import json
-import sys
 from collections import Counter, defaultdict
 
 
@@ -40,4 +40,6 @@ def main(paths):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('paths', nargs='+', metavar='CHAIN.jsonl', help="eval-chain run files")
+    main(parser.parse_args().paths)

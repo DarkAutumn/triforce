@@ -88,6 +88,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if args.compare:
         return compare(*args.compare)
+    if not args.out:
+        parser.error('OUT is required unless --compare')
     began, result, mismatched = time.time(), {}, []
     for i, path in enumerate(states(args.trajectories)):
         seed = args.seed + i
