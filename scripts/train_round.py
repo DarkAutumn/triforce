@@ -14,10 +14,14 @@ promoted run ids and act modes from before the round are kept in the summary (``
 promotion can be undone.  Then ``eval-chain`` runs the route: with ``--promote`` on the promoted models, else on
 this round's checkpoints for the trained specialists and the promoted models elsewhere.  Writes
 ``<models>/<round>-summary.json``, ``<round>-chain.jsonl`` and ``<round>-chain-summary.json`` (with the chain's
-provenance) and prints a markdown table.  A failed training run is recorded and the round moves on; rerun with
-``--skip-existing`` to resume (runs that already have ``ckpt.pt`` are only re-evaluated, and promoted with
-``--promote``).  ``--train-args`` passes extra training arguments (``{name}`` expands to the specialist).
-``--chain-runs 0`` skips the chain.
+provenance) and prints a markdown table.  Unknown or untrainable ``--specialists`` stop the round before anything
+runs (exit 2).  A failed training or evaluation (or an error in the driver's handling of one specialist) is
+recorded for that specialist and the round moves on; the round then ends 'failed' with exit 1 (also when the chain
+fails), else 'completed' with exit 0.  Only finished trainings play in the chain.  Rerun with ``--skip-existing``
+to resume (runs that already have ``ckpt.pt`` are only re-evaluated, and promoted with ``--promote``).
+``--train-args`` passes extra training arguments (``{name}`` expands to the specialist).  ``--chain-runs 0`` skips
+the chain.  One SIGTERM/Ctrl-C stops the trainer and every evaluation (at its next episode) and ends every open
+run 'interrupted'.
 
 Live monitoring: every round gets ``logs/<yymmdd>_<NNN>_<round>/`` (``--logs-dir``; see ``triforce/events.py``)
 with ``training.json`` (every specialist in run order with its status), ``<specialist>.jsonl`` event streams
@@ -36,6 +40,7 @@ import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -224,7 +229,9 @@ def train_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
     if not ckpt.is_file():
         record['status'] = 'train-failed'
         record['error'] = f"no checkpoint at {ckpt}"
-        events.emit('end', status=record['status'], message=record['error'])
+    if record['status'] != 'ok':
+        events.emit('end', status=record['status'],
+                    message=record.get('error') or f"training exited with code {record.get('train_exit_code')}")
     return record
 
 
@@ -238,16 +245,34 @@ def previous_promoted(name: str, models: Path) -> dict:
     return {'run': run, 'act': registry.act_mode(checkpoint) if checkpoint.is_file() else None}
 
 
-def evaluate_record(name: str, record: dict, args, log_dir: Path, models: Path) -> dict:
+class EvaluationCancelled(Exception):
+    """The round is stopping: an evaluation thread gives up at its next finished episode."""
+
+
+def evaluate_record(name: str, record: dict, args, log_dir: Path, models: Path,
+                    stop: Optional[threading.Event] = None) -> dict:
     """Evaluates a trained specialist (``triforce.evaluate`` in the run's act mode, ``--eval-parallel`` envs),
     writes the result (``evaluate.default_output``: ``eval.json`` for the canonical evaluation) and the stream's
-    eval/end events, fills ``record`` and, with ``--promote``, promotes the run once all of that succeeded.  Runs
-    on a background thread while the next specialist trains."""
+    eval/end events and, with ``--promote``, promotes the run once all of that succeeded.  Returns an updated copy
+    of ``record`` (the caller swaps it into the summary under its lock).  Runs on a background thread while the
+    next specialist trains; once ``stop`` is set it gives up at the next finished episode (status 'interrupted')."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    record = dict(record)
     events = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
+
+    def check_stop(*_):
+        if stop is not None and stop.is_set():
+            raise EvaluationCancelled("the round is stopping")
     try:
+        check_stop()
         result = evaluate_specialist(name, record['checkpoint'], args.episodes_per_state,
-                                     parallel=args.eval_parallel, seed=0, events=events)
+                                     parallel=args.eval_parallel, seed=0, events=events, on_episode=check_stop)
         path = write_result(result, default_output(record['checkpoint'], name, 'model', args.episodes_per_state, 0))
+    except EvaluationCancelled as error:
+        record.update(status='interrupted', error=f"evaluation stopped: {error}")
+        say(f"[round] {name}: {record['error']}")
+        events.emit('end', status=record['status'], message=record['error'])
+        return record
     except Exception as error:  # pylint: disable=broad-exception-caught
         record['status'] = 'eval-failed' if record['status'] == 'ok' else record['status']
         record['error'] = f"{type(error).__name__}: {error}"
@@ -314,12 +339,36 @@ def format_table(specialists: dict) -> str:
     return '\n'.join(lines)
 
 
+def check_names(names: list[str]) -> Optional[str]:
+    """Why the round can't train ``names`` (an unknown, untrainable or state-less specialist), else None."""
+    problems = []
+    for name in names:
+        try:
+            config = load_specialist(name)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            problems.append(f"{name}: {error}")
+            continue
+        if not config.trainable:
+            problems.append(f"{name}: not trainable")
+        elif not config.resolve_start_states():
+            problems.append(f"{name}: no seed start states")
+    if not problems:
+        return None
+    return '; '.join(problems) + f" (trainable: {', '.join(default_specialists())})"
+
+
 def main(argv=None):
-    """Runs the round with a log folder: training.json (plan), round.jsonl/round.log and per-specialist streams."""
+    """Runs the round with a log folder: training.json (plan), round.jsonl/round.log and per-specialist streams.
+    Returns 0 when every specialist trained and evaluated and the chain (if any) ran, 1 otherwise, 2 for unknown
+    specialists (nothing runs)."""
     args = parse_args(argv)
     models = Path(args.models_dir).resolve()
-    models.mkdir(parents=True, exist_ok=True)
     names = args.specialists.split(',') if args.specialists else default_specialists()
+    problem = check_names(names)
+    if problem is not None:
+        print(f"train_round: {problem}", file=sys.stderr)
+        return 2
+    models.mkdir(parents=True, exist_ok=True)
 
     log_dir = new_log_dir(args.round, args.logs_dir)
     _CONSOLE['file'] = open(log_dir / 'round.log', 'a', encoding='utf-8')  # pylint: disable=consider-using-with
@@ -334,38 +383,51 @@ def main(argv=None):
     events.emit('start', specialists=names, steps_budget=args.steps, models_dir=str(models), log_dir=str(log_dir),
                 promote=args.promote, train_args=args.train_args, pid=os.getpid())
     say(f"[round] {args.round}: {', '.join(names)}  (logs: {log_dir})")
-    current = {'index': None}
+    open_runs: dict[int, str] = {}      # plan runs still training or evaluating (index -> name)
     try:
-        summary = _run_round(args, names, models, log_dir, plan, events, current)
+        summary = _run_round(args, names, models, log_dir, plan, events, open_runs)
     except BaseException as error:
         status = 'interrupted' if isinstance(error, KeyboardInterrupt) else 'failed'
         message = f"{type(error).__name__}: {error}"
-        if current['index'] is not None:
-            name = names[current['index']]
+        for index, name in sorted(open_runs.items()):
             EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round).emit(
                 'end', status=status, message=message)
-            plan.update_run(current['index'], status=status)
+            plan.update_run(index, status=status)
         if status == 'failed':
             events.emit('error', message=message, traceback=traceback.format_exc())
         events.emit('end', status=status, message=message)
         plan.finish(status)
         raise
-    events.emit('end', status='completed', chain=summary['chain'],
+    failed = {name: rec['status'] for name, rec in summary['specialists'].items() if rec['status'] != 'ok'}
+    chain_failed = bool(summary['chain'] and 'error' in summary['chain'])
+    status = 'failed' if failed or chain_failed else 'completed'
+    message = ', '.join([f"{name} {state}" for name, state in failed.items()]
+                        + (['eval-chain failed'] if chain_failed else [])) or None
+    events.emit('end', status=status, message=message, chain=summary['chain'],
                 specialists={name: end_fields(rec) for name, rec in summary['specialists'].items()})
-    plan.finish('completed')
+    plan.finish(status, **({'error': message} if message else {}))
+    if message:
+        say(f"[round] {status}: {message}")
     _CONSOLE['file'].close()
-    return 0
+    return 1 if status == 'failed' else 0
 
 
-def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, events: EventLog, current: dict):
-    """Trains/evaluates every specialist, then runs the chain; returns the round summary."""
-    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+# Statuses of a specialist whose training finished (its checkpoint can play in the round's chain).
+TRAINED = ('ok', 'eval-failed', 'promote-failed')
+
+
+def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, events: EventLog,
+               open_runs: dict):
+    """Trains/evaluates every specialist, then runs the chain; returns the round summary.  ``open_runs`` holds
+    the plan runs not finished yet (main closes them when the round stops)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-statements
     summary_path = models / f"{args.round}-summary.json"
     # What was promoted before the round: a --promote round can be undone with `triforce promote S RUN --act MODE`.
     summary = {'round': args.round, 'steps_budget': args.steps, 'log_dir': str(log_dir), 'promote': args.promote,
                'previous_promoted': {name: previous_promoted(name, models) for name in names}, 'specialists': {},
                'chain': None}
 
+    # Every change to `summary` and every write of it holds this lock (evaluations finish on other threads).
     summary_lock = threading.Lock()
 
     def write_summary():
@@ -373,39 +435,71 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
             write_json_atomic(summary_path, summary)
 
     def finish(index: int, name: str, record: dict):
+        with summary_lock:
+            summary['specialists'][name] = record
         plan.update_run(index, **end_fields(record))
         events.emit('specialist_end', index=index, specialist=name, **end_fields(record))
+        open_runs.pop(index, None)
         write_summary()
 
     def evaluate_and_finish(index: int, name: str, record: dict):
-        finish(index, name, evaluate_record(name, record, args, log_dir, models))
+        try:
+            record = evaluate_record(name, record, args, log_dir, models, stop)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            record = {**record, 'status': 'eval-failed', 'error': f"{type(error).__name__}: {error}"}
+            stream = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
+            stream.emit('error', message=f"evaluation failed: {record['error']}", traceback=traceback.format_exc())
+            stream.emit('end', status=record['status'], message=record['error'])
+        try:
+            finish(index, name, record)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            say(f"[round] {name}: bookkeeping failed: {type(error).__name__}: {error}")
+            events.emit('error', message=f"{name}: bookkeeping failed: {type(error).__name__}: {error}",
+                        traceback=traceback.format_exc())
 
     write_summary()
 
     # Each evaluation runs on a background thread (its own native env pool) while the next specialist trains.
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix='eval') as evaluations:
+    # On an interrupt `stop` makes running evaluations give up at their next episode and queued ones are cancelled.
+    stop = threading.Event()
+    evaluations = ThreadPoolExecutor(max_workers=2, thread_name_prefix='eval')
+    try:
         pending = []
         for index, name in enumerate(names):
-            current['index'] = index
+            open_runs[index] = name
             plan.update_run(index, status='running')
             events.emit('specialist_start', index=index, specialist=name)
-            record = train_specialist(name, args, models, log_dir)
-            summary['specialists'][name] = record
-            current['index'] = None
+            try:
+                record = train_specialist(name, args, models, log_dir)
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                record = {'rooms': None, 'seed_states': None,
+                          **training_record(registry.run_dir(name, args.round, models)),
+                          'status': 'train-failed', 'error': f"{type(error).__name__}: {error}"}
+                say(f"[round] {name}: {record['error']}")
+                stream = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
+                stream.emit('error', message=record['error'], traceback=traceback.format_exc())
+                stream.emit('end', status=record['status'], message=record['error'])
             if record['status'] == 'ok':
+                with summary_lock:
+                    summary['specialists'][name] = record
                 plan.update_run(index, **(end_fields(record) | {'status': 'evaluating'}))
                 pending.append(evaluations.submit(evaluate_and_finish, index, name, record))
             else:
                 finish(index, name, record)
         for future in pending:
             future.result()
+    except BaseException:
+        stop.set()
+        evaluations.shutdown(wait=True, cancel_futures=True)   # running evaluations stop at their next episode
+        raise
+    evaluations.shutdown(wait=True)
 
     chain = None
     if args.chain_runs > 0:
         overrides = None
         if not args.promote:
             overrides = {name: str(registry.checkpoint_path(name, args.round, models)) for name in names
-                         if registry.checkpoint_path(name, args.round, models).is_file()}
+                         if summary['specialists'][name]['status'] in TRAINED}
         say(f"[round] eval-chain {_native.DEFAULT_ROUTE}: {args.chain_runs} runs, {args.chain_parallel} envs")
         events.emit('chain_start', runs=args.chain_runs, parallel=args.chain_parallel, overrides=overrides)
         try:
@@ -418,7 +512,8 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
             chain = {'error': f"{type(error).__name__}: {error}"}
             events.emit('error', message=f"eval-chain failed: {chain['error']}", traceback=traceback.format_exc())
         write_json_atomic(models / f"{args.round}-chain-summary.json", chain)
-        summary['chain'] = chain
+        with summary_lock:
+            summary['chain'] = chain
         write_summary()
 
     say()
