@@ -141,8 +141,8 @@ def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
 
 
 def training_record(run_dir: Path) -> dict:
-    """Iterations/steps/early stop/wall time from train_summary.json, plus the last-5 training success rate and
-    the last start-state-balanced success rate."""
+    """Iterations/steps/early stop/wall time from train_summary.json, plus the training success rate over the last
+    5 metrics rows (weighted by their finished episodes) and the last start-state-balanced success rate."""
     record = {'iterations': None, 'steps': None, 'stopped_early': None, 'wall_seconds': None,
               'steps_per_second': None, 'train_success_last5': None, 'train_balanced_last': None,
               'train_status': None}
@@ -157,9 +157,10 @@ def training_record(run_dir: Path) -> dict:
         metrics = read_jsonl(str(metrics_path))
         if metrics and record['iterations'] is None:
             record['iterations'], record['steps'] = metrics[-1]['iteration'], metrics[-1]['steps']
-        rates = [m['success_rate'] for m in metrics if 'success_rate' in m][-5:]
-        if rates:
-            record['train_success_last5'] = sum(rates) / len(rates)
+        rows = [m for m in metrics if 'success_rate' in m and m.get('episodes', 1) > 0][-5:]
+        episodes = sum(m.get('episodes', 1) for m in rows)
+        if episodes:
+            record['train_success_last5'] = sum(m['success_rate'] * m.get('episodes', 1) for m in rows) / episodes
         balanced = [m['balanced_success_rate'] for m in metrics if 'balanced_success_rate' in m]
         if balanced:
             record['train_balanced_last'] = balanced[-1]

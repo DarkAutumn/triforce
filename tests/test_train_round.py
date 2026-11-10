@@ -96,3 +96,11 @@ def test_a_specialist_without_a_promoted_model_records_none(round_, tmp_path, mo
     assert summary['previous_promoted'] == {SPECIALIST: {'run': None, 'act': None}}
     with pytest.raises(FileNotFoundError):
         registry.promoted_run(SPECIALIST, tmp_path)
+
+
+def test_training_success_weights_metrics_rows_by_their_episodes(round_, tmp_path):
+    rows = [{'iteration': i, 'steps': 100 * i, 'success_rate': rate, 'episodes': episodes}
+            for i, (rate, episodes) in enumerate([(0.0, 50), (1.0, 1), (0.5, 4), (0.0, 0), (0.25, 4), (1.0, 1)])]
+    (tmp_path / 'metrics.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    record = round_.training_record(tmp_path)
+    assert record['train_success_last5'] == pytest.approx((0 * 50 + 1 + 0.5 * 4 + 0.25 * 4 + 1) / 60)
