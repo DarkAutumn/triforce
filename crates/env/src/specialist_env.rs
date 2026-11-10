@@ -13,7 +13,7 @@
 //! [`BossTransitions`]), `bootstrap_truncation`, `curriculum`, plus `episode_steps`,
 //! `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
 
-use crate::config::{GameData, SpecialistConfig};
+use crate::config::{GameData, ItemsConfig, SpecialistConfig};
 use crate::critic::{BossTransitions, Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
 use crate::end_conditions::{
@@ -120,6 +120,20 @@ pub fn linger_json(s: &LingerSummary) -> Value {
            "tail_frames": s.tail_frames, "steps": s.steps, "frames": s.frames,
            "boss_kill_steps": s.boss_kill_steps, "boss_kill_frames": s.boss_kill_frames,
            "heart_container_steps": s.heart_container_steps, "heart_container_frames": s.heart_container_frames})
+}
+
+/// Action kinds disabled in `location`: the specialist's `items` switches, and BOMB outside the game.yaml
+/// `requires_bombs` rooms (Lee, F016: bombs only where the route needs them).
+pub fn room_disabled_kinds(
+    items: &ItemsConfig,
+    map: &zelda::GameMap,
+    location: zelda::MapLocation,
+) -> Vec<zelda::ActionKind> {
+    let mut kinds = items.disabled_kinds();
+    if !map.requires_bombs(location) && !kinds.contains(&zelda::ActionKind::Bomb) {
+        kinds.push(zelda::ActionKind::Bomb);
+    }
+    kinds
 }
 
 /// `{bombs, keys, rupees}`: cheated items used (`zelda::cheats`).
@@ -455,8 +469,6 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 }
             },
         };
-        self.session
-            .set_disabled_kinds(&self.config.items.disabled_kinds());
         let machine = self.store.load(&name)?;
         let opts = LoadOptions {
             randomize_rng: true,
@@ -509,14 +521,22 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         name: &str,
     ) -> Result<(Observation, StepInfo), EnvError> {
         self.curriculum_tag = None;
-        self.session
-            .set_disabled_kinds(&self.config.items.disabled_kinds());
         self.session.restore(snapshot);
         self.begin_episode(name.to_owned())
     }
 
+    /// The session's disabled kinds for the room Link is in: the config's `items` switches, and bombs outside the
+    /// `requires_bombs` rooms.
+    fn update_disabled_kinds(&mut self) {
+        let location = self.session.state().full_location();
+        let kinds = room_disabled_kinds(&self.config.items, &self.data.map, location);
+        self.session.set_disabled_kinds(&kinds);
+    }
+
     /// Starts an episode from the session's state (loaded or restored).
     fn begin_episode(&mut self, name: String) -> Result<(Observation, StepInfo), EnvError> {
+        // Bombs only in this family's `requires_bombs` rooms (Lee, F016).
+        self.update_disabled_kinds();
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
         // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
@@ -650,6 +670,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.objectives.as_ref().expect("episode started"),
             change.previous.full_location(),
         );
+        if change.changed_location() {
+            self.update_disabled_kinds();
+        }
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev = self.attached.take().expect("episode started");

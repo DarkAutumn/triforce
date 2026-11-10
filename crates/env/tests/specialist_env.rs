@@ -802,14 +802,9 @@ fn items_config_masks_bombs_even_when_link_has_them() {
         }
         let obs = obs.unwrap();
         assert!(state(&env).bombs() == 4 && state(&env).has_active_enemies());
-        assert_eq!(
-            env.session().mask().kind[ActionKind::Bomb.index()],
-            bombs_on
-        );
-        assert_eq!(
-            ActionMask::from_flat(&obs.action_mask).kind[ActionKind::Bomb.index()],
-            bombs_on
-        );
+        // F016: 1:0x44 is no `requires_bombs` room, so BOMB is masked even with `items.bombs` on.
+        assert!(!env.session().mask().kind[ActionKind::Bomb.index()]);
+        assert!(!ActionMask::from_flat(&obs.action_mask).kind[ActionKind::Bomb.index()]);
         nes = release(env);
     }
 }
@@ -2012,5 +2007,69 @@ fn shared_start_weights_pick_the_start_state() {
         let (_, info) = env.reset(None, None).unwrap();
         let start = info.start_state.expect("start state");
         assert_eq!(state_label(&start), target);
+    }
+}
+
+/// F132: the target block's direction is a move Link can make: at the W doorway entries of 1:0x43 and 1:0x73 (whose
+/// targets lie N/S, which the doorway forbids) and beside 1:0x42's idle push block.
+#[test]
+fn target_direction_is_a_legal_move() {
+    let Some(mut nes) = open_core() else { return };
+    for (name, place) in [("1_43w_0", None), ("1_73w_0", None), ("1_42s_0", Some((120u8, 149u8)))] {
+        let level = name[..1].parse::<u8>().unwrap();
+        let room = u8::from_str_radix(&name[2..4], 16).unwrap();
+        let specialist = data().specialist_for(MapLocation::new(level, room, false)).unwrap().to_owned();
+        let mut env = make_env(nes, &specialist, Some(name), |c| c.obs.target = true);
+        let (mut obs, _) = env.reset(Some(0), None).unwrap();
+        if let Some((x, y)) = place {
+            env.session_mut().apply_ram(&[(Var::LinkX, x), (Var::LinkY, y), (Var::LinkGridOffset, 0)]);
+            obs = env.restore(&env.session().snapshot(), name).unwrap().0;
+        }
+        let dir = obs.target[..4].iter().position(|&v| v == 1.0);
+        if let Some(i) = dir {
+            let d = [Direction::N, Direction::S, Direction::W, Direction::E][i];
+            let action = Action::new(ActionKind::Move, d, 8).unwrap();
+            assert!(env.session().mask().is_allowed(&action), "{name}: target {d:?} is masked");
+        }
+        nes = release(env);
+    }
+}
+
+/// F016: bombs are legal only in a family's `requires_bombs` rooms: trap-room in 3:0x5a has none, at 3:0x4c's wall
+/// it does; ow-tektite in 0:0x1a has none, at 0x2c's rock wall it does.
+#[test]
+fn bombs_only_in_requires_bombs_rooms() {
+    let Some(mut nes) = open_core() else { return };
+    for (specialist, name, legal) in [
+        ("trap-room", "3_5ae_0", false),
+        ("trap-room", "3_4cw_0", true),
+        ("ow-tektite", "0_1an_0", false),
+        ("ow-tektite", "0_2ce_0", true),
+    ] {
+        let mut env = make_env(nes, specialist, Some(name), |_| {});
+        env.reset(Some(0), None).unwrap();
+        env.session_mut().apply_ram(&[(Var::Bombs, 4)]);
+        // Walk into the room, away from the entry doorway (no attack crosses a doorway).
+        let walk = match name.as_bytes()[4] {
+            b'w' => "MOVE E 8",
+            b'e' => "MOVE W 8",
+            b'n' => "MOVE S 8",
+            _ => "MOVE N 8",
+        };
+        let mut any = false;
+        for _ in 0..40 {
+            any |= env.session().mask().direction[ActionKind::Bomb.index()].iter().any(|&b| b);
+            if any {
+                break;
+            }
+            let a = Action::parse(walk).unwrap();
+            let a = if env.session().mask().is_allowed(&a) { walk } else { "WAIT 8" };
+            let r = act(&mut env, a);
+            if r.terminated || r.truncated {
+                break;
+            }
+        }
+        assert_eq!(any, legal, "{specialist} {name}: {}", env.session().mask());
+        nes = release(env);
     }
 }

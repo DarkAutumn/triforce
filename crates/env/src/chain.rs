@@ -17,7 +17,7 @@ use crate::critic::BossTransitions;
 use crate::error::EnvError;
 use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
-use crate::specialist_env::linger_json;
+use crate::specialist_env::{linger_json, room_disabled_kinds};
 use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
@@ -798,14 +798,15 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 .last_mut()
                 .unwrap()
                 .linger = Some(summary);
+            // Bombs only in the acting family's `requires_bombs` rooms (F016), so set per room entry.
+            let config = self.config_for(&name)?;
+            self.session
+                .set_disabled_kinds(&room_disabled_kinds(&config.items, &map, location));
             let switch = self.current.as_ref().is_none_or(|c| *c.name != *name);
             if switch {
                 if exit_correct {
                     self.harvest_entry(&name, index)?;
                 }
-                let config = self.config_for(&name)?;
-                self.session
-                    .set_disabled_kinds(&config.items.disabled_kinds());
                 self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target);
                 self.current = Some(Acting {
                     name: Arc::from(name.as_str()),

@@ -892,19 +892,22 @@ fn objective_kind_index(kind: ObjectiveKind) -> usize {
 
 /// Neighbour tile deltas in `DIR_BITS` order (N, S, W, E).
 const TARGET_STEPS: [(i32, i32); 4] = [(0, -1), (0, 1), (-1, 0), (1, 0)];
+const TARGET_DIRECTIONS: [Direction; 4] = [Direction::N, Direction::S, Direction::W, Direction::E];
 
-/// The neighbour of `tile` with the lowest distance below `distance` (ties in N, S, W, E order): (direction
-/// index, tile, distance).
+/// The neighbour of `tile` Link can step to (`legal` by direction index) with the lowest distance below
+/// `distance` (ties in N, S, W, E order): (direction index, tile, distance).
 fn descend(
     wavefront: &Wavefront,
     tile: (i32, i32),
     distance: i32,
+    legal: impl Fn(usize) -> bool,
 ) -> Option<(usize, (i32, i32), i32)> {
     let mut best: Option<(usize, (i32, i32), i32)> = None;
     for (i, (dx, dy)) in TARGET_STEPS.into_iter().enumerate() {
         let next = (tile.0 + dx, tile.1 + dy);
         if let Some(d) = wavefront.get(next)
             && d < best.map_or(distance, |b| b.2)
+            && legal(i)
         {
             best = Some((i, next, d));
         }
@@ -929,7 +932,16 @@ fn target_features(state: &GameView, wavefront: Option<&Wavefront>) -> [f32; TAR
         if d == 0 {
             break;
         }
-        let Some((i, next, next_d)) = descend(wavefront, tile, d) else {
+        // Only steps Link can take: from his real position the mask's rule (doorways, room bounds, an idle push
+        // block is no step), further on the room's tile rule; the wavefront also holds tiles he can't step into.
+        // No legal lower step: no direction.
+        let step = if tile == start {
+            descend(wavefront, tile, d, |i| state.can_link_move(TARGET_DIRECTIONS[i]))
+        } else {
+            let room = state.room();
+            descend(wavefront, tile, d, |i| room.can_move(tile.0, tile.1, TARGET_DIRECTIONS[i]))
+        };
+        let Some((i, next, next_d)) = step else {
             break;
         };
         if tile == start {
@@ -1199,12 +1211,15 @@ mod tests {
     fn descent_takes_the_lowest_neighbour_n_s_w_e_first() {
         // (5, 5) at 4: N and E both at 3 → N; W at 2 → W.
         let w = Wavefront::from_distances([((5, 5), 4), ((5, 4), 3), ((6, 5), 3), ((5, 6), 5)]);
-        assert_eq!(descend(&w, (5, 5), 4), Some((0, (5, 4), 3)));
+        assert_eq!(descend(&w, (5, 5), 4, |_| true), Some((0, (5, 4), 3)));
+        // F132: only legal steps: with N illegal, E (also 3) is the step.
+        assert_eq!(descend(&w, (5, 5), 4, |i| i != 0), Some((3, (6, 5), 3)));
         let w = Wavefront::from_distances([((5, 5), 4), ((5, 4), 3), ((4, 5), 2)]);
-        assert_eq!(descend(&w, (5, 5), 4), Some((2, (4, 5), 2)));
-        // Nothing lower: no step.
+        assert_eq!(descend(&w, (5, 5), 4, |_| true), Some((2, (4, 5), 2)));
+        // Nothing lower (or nothing legal): no step.
+        assert_eq!(descend(&w, (5, 5), 4, |_| false), None);
         let w = Wavefront::from_distances([((5, 5), 0), ((5, 4), 1)]);
-        assert_eq!(descend(&w, (5, 5), 0), None);
+        assert_eq!(descend(&w, (5, 5), 0, |_| true), None);
     }
 
     #[test]
