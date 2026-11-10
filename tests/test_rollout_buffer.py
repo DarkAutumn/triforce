@@ -1,6 +1,7 @@
 """Rollout buffer and async collector: frame-aware GAE, storage layout, episode boundaries, resumption and
 rollout metrics."""
 
+from collections import Counter
 from types import SimpleNamespace
 
 import numpy as np
@@ -100,16 +101,29 @@ def test_collect_layout_dones_frames_and_resume():
     assert torch.equal(buffer.masks[1, 0], torch.as_tensor(synthetic.standard_mask().to_flat()))
     assert metrics.episodes == 4 and metrics.steps == 14 and metrics.episode_frames == 96
     assert metrics.frames == 2 * (4 + 8 + 12 + 4 + 8 + 12 + 4)
+    # Every env has the episode that started at row 6 in flight, one decision old; none started here ended all.
+    assert buffer.steps[1].tolist() == [0, 1, 2, 0, 1, 2, 0]
+    assert metrics.extra['in_flight/episodes'] == 2 and metrics.extra['in_flight/mean_steps'] == 1
+    assert metrics.extra['in_flight/max_steps'] == 1 and metrics.cohorts == []
+    first_jobs = set(buffer.jobs[:, [0, 3, 6]].reshape(-1).tolist())
+    first_events = collector.episodes
 
     # Resuming continues the open episode from the stored last observation without resetting, into the other
     # buffer: the first stays as it was (an update may still be reading it).
     first, first_dones = buffer, buffer.dones.clone()
-    collector.collect(model, 'cpu')
+    second = collector.collect(model, 'cpu')
     buffer = collector.buffer
     assert buffer is not first and torch.equal(first.dones, first_dones)
     assert env.resets == 5                      # boundaries after 2 carried-over steps and 3 more
     assert buffer.dones[1].tolist() == [0, 0, 1, 0, 0, 1, 0, 0]
     assert buffer.frames[1].tolist() == [8, 12, 4, 8, 12, 4, 8]
+    # The row-6 episodes ended at row 1: rollout 1's cohort (6 episodes) is released with exactly their outcomes.
+    started_first = [e for e in first_events + collector.episodes if e['job'] in first_jobs]
+    assert len(started_first) == 6 and sum(e['job'] in first_jobs for e in collector.episodes) == 2
+    assert [k for k, _ in second.cohorts] == [1]
+    assert second.cohorts[0][1] == Counter((None, e['info']['outcome'] == 'success') for e in started_first)
+    assert second.extra['started/episodes'] == 6 and second.extra['started/iteration'] == 1
+    assert second.extra['in_flight/mean_steps'] == 2 and second.extra['in_flight/max_steps'] == 2
 
     flat = buffer.flatten('cpu')
     assert flat['obs']['entity_features'].shape == (14, 12, synthetic.ENTITY_FEATURES)
@@ -194,7 +208,6 @@ def test_episode_metrics_merge():
     assert summary['kind/MOVE'] == 0.5 and summary['kind/SWORD'] == 0.25
     assert summary['duration/MOVE/16'] == 1.0 and summary['duration/WAIT/4'] == 1.0
     assert 'duration/SWORD/4' not in summary
-    assert first.start_results[(None, True)] == 1
 
 
 def test_linger_metrics_weighted_merge_curriculum_and_entry_rooms():

@@ -6,9 +6,17 @@
 
 - ``episodes``, ``success_rate``, ``outcome/<success|hard-failure|soft-failure|neutral>`` (fractions),
   ``ending/<end-condition>`` (fractions) — from ``info['outcome']`` / ``info['ending']``.  These and every other
-  per-episode metric count only episodes that started at a room entry (seed/harvested start states).
-  ``RolloutMetrics.start_results`` also counts them per (start state, success) for ``train.EarlyStop``; it is
-  not part of the flat dict.
+  per-episode metric count only episodes that started at a room entry (seed/harvested start states).  They count
+  the episodes that *ended* in the rollout, so slow failures arrive late (one to several rollouts after they start).
+- ``in_flight/episodes``, ``in_flight/mean_steps``, ``in_flight/max_steps`` and ``in_flight/over_half_budget``
+  (share of envs whose episode is older than half the step budget): the episode every env has running at the
+  rollout's end (curriculum ones included; an env that just reset counts with age 0).
+  ``success_rate_pessimistic``: this rollout's room-entry successes over its finished room-entry episodes plus the
+  in-flight episodes older than the slowest success seen so far (counted as failures).
+- ``started/success_rate``, ``started/episodes``, ``started/iteration``: the per-start cohort rate: the
+  room-entry episodes that *started* in a rollout, reported once every episode started in it (and in every earlier
+  rollout) has ended; a delayed but unbiased number.  ``RolloutMetrics.cohorts`` keeps the released cohorts' per
+  (start state, success) counts for ``train.EarlyStop``; ``EpisodeTracker`` follows the episodes by job key.
 - ``curriculum/episodes``, ``curriculum/success_rate``, ``curriculum/start_fraction`` (mean start index /
   trajectory length; 0 = room entry) and ``curriculum/point_fraction`` (mean current stage point / length)
   for episodes started partway along an explored trajectory (``info['curriculum']``).
@@ -93,7 +101,8 @@ class RolloutMetrics:
         self.curriculum_successes = 0
         self.curriculum_start = 0.0
         self.curriculum_point = 0.0
-        self.start_results = Counter()     # (start state label, success) -> episodes
+        self.cohorts: list[tuple[int, Counter]] = []    # released cohorts: (rollout, (start state, success) -> n)
+        self.extra: dict[str, float] = {}               # per-rollout values (in_flight/*, started/*): not summed
         self.linger_episodes = 0
         self.linger_sums = Counter()
         self.linger_worst = Counter()
@@ -107,13 +116,15 @@ class RolloutMetrics:
         self.curriculum_block_episodes = self.curriculum_blocks = 0
 
     def merge(self, other: 'RolloutMetrics') -> 'RolloutMetrics':
-        """Adds other's counts into self."""
+        """Adds other's counts into self (``cohorts`` concatenate; ``extra`` takes other's values)."""
         for name, value in vars(other).items():
             mine = getattr(self, name)
             if name in ('linger_worst', 'curriculum_linger_worst', 'linger_room_worst'):
                 for key, maximum in value.items():
                     mine[key] = max(mine[key], maximum)
             elif isinstance(mine, Counter):
+                mine.update(value)
+            elif isinstance(mine, dict):
                 mine.update(value)
             else:
                 setattr(self, name, mine + value)
@@ -154,7 +165,6 @@ class RolloutMetrics:
             return
         self.episodes += 1
         self.outcomes[info.get('outcome', 'unknown')] += 1
-        self.start_results[(info.get('start_state'), info.get('outcome') == 'success')] += 1
         self.endings[info.get('ending', 'unknown')] += 1
         for name, value in (info.get('episode_rewards') or {}).items():
             self.reward_terms[name] += float(value)
@@ -265,7 +275,73 @@ class RolloutMetrics:
             if total:
                 for duration in DURATIONS:
                     result[f'duration/{kind.name}/{duration}'] = self.durations[(kind.name, duration)] / total
+        result.update(self.extra)
         return result
+
+
+class EpisodeTracker:
+    """Follows a training pool's episodes across rollouts by their job keys (``ppo.Collector``).
+
+    ``update`` takes one rollout: each row's ``jobs`` / ``steps`` (decision index in the episode; 0 = its first row),
+    whether each env's next observation starts a new episode (``fresh``) and the rollout's ``episode`` events.  An
+    episode belongs to the cohort of the rollout holding its first row.  A cohort is released once every episode in
+    it, and in every earlier cohort, has ended; it carries the per (start state, success) counts of its room-entry
+    episodes (curriculum ones only close it).  ``budget``: the env's step limit (``max_steps``), for
+    ``in_flight/over_half_budget``."""
+
+    def __init__(self, budget: Optional[int] = None):
+        self.budget = budget
+        self.rollouts = 0
+        self.released = 0
+        self.slowest_success = 0
+        self._started: dict[int, int] = {}                  # job -> rollout of its first row
+        self._open: dict[int, list] = {}                    # rollout -> [episodes still running, Counter]
+
+    def update(self, jobs, steps, fresh, events) -> tuple[list[tuple[int, Counter]], dict[str, float]]:
+        """(released cohorts in rollout order, ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*``)."""
+        jobs, steps, fresh = np.asarray(jobs), np.asarray(steps), np.asarray(fresh, dtype=bool)
+        self.rollouts += 1
+        cohort = self._open[self.rollouts] = [0, Counter()]
+        for job in jobs[steps == 0].tolist():
+            self._started[job] = self.rollouts
+            cohort[0] += 1
+        finished = successes = 0
+        for event in events:
+            info = event['info']
+            start = self._started.pop(event['job'], None)
+            if start is not None:
+                self._open[start][0] -= 1
+            if info.get('curriculum'):
+                continue
+            success = info.get('outcome') == 'success'
+            finished += 1
+            successes += success
+            if success:
+                self.slowest_success = max(self.slowest_success, int(info.get('episode_steps', 0)))
+            if start is not None:
+                self._open[start][1][(info.get('start_state'), success)] += 1
+        released = []
+        while self.released < self.rollouts and self._open[self.released + 1][0] == 0:
+            self.released += 1
+            counts = self._open.pop(self.released)[1]
+            if counts:      # a cohort without room-entry episodes carries nothing
+                released.append((self.released, counts))
+
+        ages = np.where(fresh, 0, steps[:, -1] + 1) if steps.shape[-1] else np.zeros(len(fresh), np.int64)
+        values = {'in_flight/episodes': float(len(ages)), 'in_flight/mean_steps': float(ages.mean()),
+                  'in_flight/max_steps': float(ages.max())}
+        if self.budget:
+            values['in_flight/over_half_budget'] = float((ages > self.budget / 2).mean())
+        overdue = int((ages > self.slowest_success).sum())
+        if finished + overdue:
+            values['success_rate_pessimistic'] = successes / (finished + overdue)
+        started = sum((counts for _, counts in released), Counter())
+        total = sum(started.values())
+        if total:
+            values['started/success_rate'] = sum(n for (_, success), n in started.items() if success) / total
+            values['started/episodes'] = float(total)
+            values['started/iteration'] = float(released[-1][0])
+        return released, values
 
 
 class MetricsLogger:
@@ -306,14 +382,15 @@ def read_jsonl(path: str) -> list[dict]:
 
 def format_summary(metrics: dict[str, float], keys: Optional[list[str]] = None) -> str:
     """One-line human summary for the console."""
-    keys = keys or ['episodes', 'success_rate', 'reward/total', 'health_change', 'episode_steps',
-                    'episode_frames', 'linger/max_steps', 'linger/tail_steps', 'linger/worst_steps',
-                    'curriculum/success_rate', 'curriculum/point_fraction', 'entropy/kind',
+    keys = keys or ['episodes', 'success_rate', 'success_rate_pessimistic', 'started/success_rate',
+                    'in_flight/mean_steps', 'in_flight/max_steps', 'in_flight/over_half_budget', 'reward/total',
+                    'health_change', 'episode_steps', 'episode_frames', 'linger/max_steps', 'linger/tail_steps',
+                    'linger/worst_steps', 'curriculum/success_rate', 'curriculum/point_fraction', 'entropy/kind',
                     'entropy/direction', 'entropy/duration', 'losses/approx_kl', 'charts/SPS']
     parts = []
     for key in keys:
         if key in metrics:
             value = metrics[key]
-            label = key if key.startswith('curriculum/') else key.split('/')[-1]
+            label = key if key.startswith(('curriculum/', 'in_flight/', 'started/')) else key.split('/')[-1]
             parts.append(f"{label}={value:.3g}" if isinstance(value, float) else f"{label}={value}")
     return ' '.join(parts)

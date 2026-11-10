@@ -42,12 +42,13 @@ def rank_key(record: dict) -> tuple:
     return (not record['success'], record['start_health'] - record['health'], record['frames'])
 
 
-def collect_best(config, policy, runs: int, keep: int, seed: int = 0, parallel: int = 4,
-                 threads: Optional[int] = None, states_dir=None, deterministic: bool = False) -> BestRuns:
-    """Plays ``runs`` episodes from every seed start state of ``config`` with ``policy`` (a ``_native.Policy``)
-    and returns the top ``keep`` successful runs per state as demo tensors.  Episode ``i`` is seeded
-    ``seed + i``."""
-    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, threads: Optional[int] = None,
+                  states_dir=None, deterministic: bool = False,
+                  record: Optional[str] = None) -> tuple[dict[int, dict], dict[int, dict]]:
+    """Plays ``runs`` episodes from every seed start state of ``config`` with ``policy`` (a ``_native.Policy``) on
+    an ``EvalTask`` pool of ``parallel`` envs; episode ``i`` is seeded ``seed + i``.  Returns (eval records by seed,
+    recorded plays by job; ``record`` as ``EnvPool.play``'s)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     states_dir = None if states_dir is None else str(states_dir)
     states = sorted(Path(p).stem for p in config.resolve_start_states(states_dir))
     if not states:
@@ -57,7 +58,7 @@ def collect_best(config, policy, runs: int, keep: int, seed: int = 0, parallel: 
     plays: dict[int, dict] = {}
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
-        pool.play([policy], deterministic=deterministic, record='observations')
+        pool.play([policy], deterministic=deterministic, record=record)
         while True:
             idle = pool.wait_idle(timeout=0.1)
             for event in pool.poll_events():
@@ -66,6 +67,29 @@ def collect_best(config, policy, runs: int, keep: int, seed: int = 0, parallel: 
             plays.update((int(play['job']), play) for play in pool.poll_plays())
             if idle:
                 break
+    return records, plays
+
+
+def success_by_state(config, policy, runs: int, seed: int = 0, parallel: int = 4, threads: Optional[int] = None,
+                     states_dir=None, deterministic: bool = False) -> dict[str, tuple[int, int]]:
+    """``play_episodes`` without recording: start state -> (successes, episodes)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    records, _ = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, deterministic)
+    result: dict[str, tuple[int, int]] = {}
+    for record in records.values():
+        successes, episodes = result.get(record['start_state'], (0, 0))
+        result[record['start_state']] = (successes + bool(record['success']), episodes + 1)
+    return result
+
+
+def collect_best(config, policy, runs: int, keep: int, seed: int = 0, parallel: int = 4,
+                 threads: Optional[int] = None, states_dir=None, deterministic: bool = False) -> BestRuns:
+    """Plays ``runs`` episodes from every seed start state of ``config`` with ``policy`` (a ``_native.Policy``)
+    and returns the top ``keep`` successful runs per state as demo tensors.  Episode ``i`` is seeded
+    ``seed + i``."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    records, plays = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, deterministic,
+                                   record='observations')
     by_state: dict[str, list[dict]] = {}
     for record in records.values():
         by_state.setdefault(record['start_state'], []).append(record)

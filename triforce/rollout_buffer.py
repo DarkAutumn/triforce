@@ -13,6 +13,8 @@ Layout (``n`` envs, ``T`` steps per env; index ``T`` holds the observation to re
 - ``rewards``, ``frames``, ``returns``, ``advantages``: ``[n, T]``.
 - With ``search`` (expert iteration, ``ppo.PPOConfig.search``): ``search_mask`` bool ``[n, T]`` (the row was
   searched) and ``search_policy`` ``[n, T, JOINT_SIZE]`` (the search's improved policy π' over the joint actions).
+- ``jobs`` and ``steps``: int64 ``[n, T]``, each row's episode ``job`` key and its decision index in that episode
+  (0 = the episode's first decision): ``ppo.Collector`` follows episodes across rollouts with them.
 
 Frame-aware GAE (design §5.4).  Steps take different numbers of frames, so step ``t`` that lasted ``f_t``
 frames uses ``gamma_t = gamma ** (f_t / FRAMES_PER_DISCOUNT)`` and ``lambda_t = lambda ** (f_t /
@@ -77,10 +79,9 @@ class RolloutBuffer:
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, memory_length: int, n_envs: int, observation_space, gamma: float, lam: float,
-                 search: bool = False, jobs: bool = False):
+                 search: bool = False):
         """``observation_space``: a ``spaces.Dict``, or a pool's ``obs_spec`` (key → ``{'shape', 'dtype'}``).
-        ``search``: also keep the search's ``search_mask`` and ``search_policy``; ``jobs``: each row's episode
-        ``job`` key (prioritized level replay)."""
+        ``search``: also keep the search's ``search_mask`` and ``search_policy``."""
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.memory_length = memory_length
         self.n_envs = n_envs
@@ -106,24 +107,23 @@ class RolloutBuffer:
         self.last_values = torch.zeros(n_envs, dtype=torch.float32)
         self.search_mask = torch.zeros(n_envs, memory_length, dtype=torch.bool) if search else None
         self.search_policy = torch.zeros(n_envs, memory_length, JOINT_SIZE, dtype=torch.float32) if search else None
-        self.jobs = torch.zeros(n_envs, memory_length, dtype=torch.int64) if jobs else None
+        self.jobs = torch.zeros(n_envs, memory_length, dtype=torch.int64)
+        self.steps = torch.zeros(n_envs, memory_length, dtype=torch.int64)
 
     def rollout_buffers(self) -> dict:
         """numpy views of this buffer's memory in the layout ``EnvPool.rollout`` writes: ``obs`` (every key, the
         mask included), ``starts`` (``dones``), ``actions``, ``logp_ent_val``, ``rewards`` (raw step rewards),
-        ``frames``, ``bootstrap_value``, ``interrupts``, with search ``search_mask`` and ``search_policy``, and with
-        jobs ``job``."""
+        ``frames``, ``bootstrap_value``, ``interrupts``, ``job``, ``step``, and with search ``search_mask`` and
+        ``search_policy``."""
         obs = {key: value.numpy() for key, value in self.observation.items()}
         obs[MASK_KEY] = self.masks.numpy()
         views = {'obs': obs, 'starts': self.dones.numpy(), 'actions': self.actions.numpy(),
                  'logp_ent_val': self.logp_ent_val.numpy(), 'rewards': self.rewards.numpy(),
                  'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
-                 'interrupts': self.interrupts.numpy()}
+                 'interrupts': self.interrupts.numpy(), 'job': self.jobs.numpy(), 'step': self.steps.numpy()}
         if self.search_mask is not None:
             views['search_mask'] = self.search_mask.numpy()
             views['search_policy'] = self.search_policy.numpy()
-        if self.jobs is not None:
-            views['job'] = self.jobs.numpy()
         return views
 
     @torch.no_grad()

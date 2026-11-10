@@ -16,10 +16,14 @@ to ``<models>/<specialist>/<run-id>/``: ``ckpt.pt`` (see ``registry``), ``metric
 (TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (``status`` completed | early_stop |
 interrupted, total and this run's iterations/steps, early stop, wall time).  An interrupted run (SIGINT, or SIGTERM
 from the command line) still saves its checkpoint and summary but exits 130, so a driver never mistakes it for a
-finished fixed-budget run.  ``--stop-success`` ends training once the start-state-balanced training success rate
-(``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for ``--stop-patience``
-consecutive iterations.  Only episodes that started at a room entry count; ``--curriculum`` episodes are reported
-separately as ``curriculum/*``.
+finished fixed-budget run.  ``--stop-success`` proposes a stop once the start-state-balanced success rate of the
+per-start cohorts (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for
+``--stop-patience`` consecutive iterations (never before a budget failure could have been counted), and stops only
+if an evaluation of the current weights (``CONFIRM_EPISODES`` sampled episodes per seed start state on an
+``EvalTask`` pool, seed = pool seed + iteration) also reaches it; every check is an ``early_stop_check`` event.
+Only episodes that started at a room entry count; ``--curriculum`` episodes are reported separately as
+``curriculum/*``.  ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*`` (``metrics``) show the episodes
+still running at each rollout's end and the per-start cohort rate.
 ``--shaping-anneal N`` (outcome fine-tuning, better-play §1a) lowers the pool's shaping scale (``reward.shaping_scale``:
 every non-terminal reward and penalty is multiplied by it) linearly to 0 over the first N iterations, then keeps it
 at 0, so the policy optimizes the health-scaled terminal outcome (plus ``reward.frame_penalty``, if set).
@@ -66,6 +70,7 @@ before) and its optimizer state is dropped; with it off the checkpoint keeps its
 
 import argparse
 import json
+import math
 import os
 import signal
 import sys
@@ -79,7 +84,7 @@ import torch
 
 from . import registry
 from ._native import CurriculumSpec, Env, EnvPool, TrainTask
-from .best_of_n import collect_best
+from .best_of_n import collect_best, success_by_state
 from .demo import collect_demo_batch, parse_demo_actions
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir, write_json_atomic
 from .metrics import MetricsLogger, format_summary
@@ -90,37 +95,52 @@ from .ppo import PPO, IterationResult, PPOConfig
 from .specialist import SpecialistConfig, load_specialist
 
 
-class EarlyStop:
-    """Stop once the start-state-balanced training success rate >= threshold for `patience` consecutive iterations
-    that finished room-entry episodes.
+# Episodes per seed start state of the evaluation that confirms an early-stop proposal (``EarlyStop``).
+CONFIRM_EPISODES = 50
 
-    The start-state pool oversamples states that fail, so the raw ``success_rate`` mostly measures the hardest (or
-    an unwinnable) state and moves with the sampling as well as the policy.  Balanced = mean over start states of
-    each state's exact success rate over its most recent whole iterations that together cover at least ``window``
-    episodes (an iteration that finished 113 episodes of a state counts all 113); every state seen needs
-    ``min_episodes`` first.
+
+class EarlyStop:
+    """Proposes an early stop once the start-state-balanced success rate of the per-start cohorts >= threshold for
+    `patience` consecutive iterations; ``train`` confirms each proposal with an evaluation (``confirm_stop``).
+
+    Fed with the released cohorts (``metrics.EpisodeTracker``: the room-entry episodes that started in one rollout,
+    released once all of them ended), so a slow failure counts with the rollout it started in instead of arriving
+    late.  The start-state pool oversamples states that fail, so the raw ``success_rate`` mostly measures the hardest
+    (or an unwinnable) state and moves with the sampling as well as the policy.  Balanced = mean over start states of
+    each state's exact success rate over its most recent whole cohorts that together cover at least ``window``
+    episodes (a cohort with 113 episodes of a state counts all 113); every state seen needs ``min_episodes`` first.
+
+    Guards: no proposal before ``min_iterations`` updates (``ceil(max_steps / steps per env) + patience``: a budget
+    failure could not have been counted earlier); an iteration that finished no room-entry episode, or whose share
+    of envs with an episode older than half the step budget exceeds ``1 - threshold``, resets the streak.
     """
 
-    def __init__(self, threshold: Optional[float], patience: int, window: int = 20, min_episodes: int = 5):
+    def __init__(self, threshold: Optional[float], patience: int, window: int = 20, min_episodes: int = 5,
+                 min_iterations: int = 0):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.threshold = threshold
         self.patience = patience
         self.min_episodes = min_episodes
         self.window = window
-        self.results: Dict[str, Deque[tuple[int, int]]] = {}     # state -> per-iteration (successes, episodes)
+        self.min_iterations = min_iterations
+        self.results: Dict[str, Deque[tuple[int, int]]] = {}     # state -> per-cohort (successes, episodes)
         self.balanced: Optional[float] = None
         self.streak = 0
+        self.iterations = 0
 
     def state_rate(self, state: str) -> tuple[int, int]:
-        """(successes, episodes) of ``state`` over its covered iterations."""
+        """(successes, episodes) of ``state`` over its covered cohorts."""
         history = self.results[state]
         return sum(s for s, _ in history), sum(e for _, e in history)
 
-    def update(self, start_results: Counter) -> bool:
-        """Feeds one iteration's (start state, success) -> episodes counts; True = stop now."""
-        if not start_results:
-            return False
+    def rates(self) -> dict[str, float]:
+        """Each state's success rate over its covered cohorts."""
+        return {state: s / e for state, (s, e) in ((state, self.state_rate(state)) for state in self.results) if e}
+
+    def add(self, cohort: Counter):
+        """One cohort's (start state, success) -> episodes counts."""
         counts: Dict[str, list[int]] = {}
-        for (state, success), count in start_results.items():
+        for (state, success), count in cohort.items():
             entry = counts.setdefault(state, [0, 0])
             entry[0] += count if success else 0
             entry[1] += count
@@ -128,17 +148,32 @@ class EarlyStop:
             history = self.results.setdefault(state, deque())
             history.append((successes, episodes))
             total = sum(e for _, e in history)
-            while total - history[0][1] >= self.window:     # the older iterations aren't needed for the window
+            while total - history[0][1] >= self.window:     # the older cohorts aren't needed for the window
                 total -= history.popleft()[1]
+
+    def update(self, cohorts, finished: int, over_half_budget: Optional[float] = None) -> bool:
+        """One training iteration: its released ``cohorts`` (Counters, in rollout order), the room-entry episodes
+        it finished and its ``in_flight/over_half_budget``; True = propose a stop."""
+        self.iterations += 1
+        for cohort in cohorts:
+            self.add(cohort)
         rates = [self.state_rate(state) for state in self.results]
-        if any(episodes < self.min_episodes for _, episodes in rates):
+        if not rates or any(episodes < self.min_episodes for _, episodes in rates):
             self.balanced = None
-            return False
-        self.balanced = sum(successes / episodes for successes, episodes in rates) / len(rates)
+        else:
+            self.balanced = sum(successes / episodes for successes, episodes in rates) / len(rates)
         if self.threshold is None:
             return False
-        self.streak = self.streak + 1 if self.balanced >= self.threshold else 0
-        return self.streak >= self.patience
+        blind = finished == 0 or (over_half_budget is not None and over_half_budget > 1 - self.threshold)
+        if blind or self.balanced is None or self.balanced < self.threshold:
+            self.streak = 0
+        else:
+            self.streak += 1
+        return self.streak >= self.patience and self.iterations >= self.min_iterations
+
+    def reset(self):
+        """A proposal the confirmation evaluation turned down: the streak starts over."""
+        self.streak = 0
 
 
 def _search_settings(text: str) -> dict:
@@ -414,7 +449,9 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     logger = MetricsLogger(str(out_dir))
     state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'saved': None,
              'stopped_early': False}
-    early = EarlyStop(args.stop_success, args.stop_patience)
+    steps_per_env = max(1, args.steps_per_update // args.parallel)
+    early = EarlyStop(args.stop_success, args.stop_patience,
+                      min_iterations=math.ceil(config.max_steps / steps_per_env) + args.stop_patience)
     ckpt = registry.checkpoint_path(specialist, run_id, root)
 
     def refresh_best(collection: int) -> dict:
@@ -437,6 +474,25 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         state['saved'] = state['iteration']
         events.emit('checkpoint', iteration=state['iteration'], steps=state['steps'], path=str(ckpt))
 
+    def confirm_stop(iteration: int) -> bool:
+        """An early-stop proposal: evaluates the current weights (``CONFIRM_EPISODES`` sampled episodes per seed
+        start state); stops only if their success >= --stop-success, else the streak starts over."""
+        seed = pool_seed + start_iteration + iteration
+        by_state = success_by_state(config, network.to_native(), CONFIRM_EPISODES, seed=seed,
+                                    parallel=args.parallel, threads=args.threads, states_dir=args.states_dir)
+        successes = sum(s for s, _ in by_state.values())
+        episodes = sum(e for _, e in by_state.values())
+        rate = successes / episodes if episodes else 0.0
+        decision = 'stop' if episodes and rate >= args.stop_success else 'continue'
+        print(f"[train] early stop check: evaluation success {rate:.3f} over {episodes} episodes -> {decision}",
+              flush=True)
+        events.emit('early_stop_check', iteration=start_iteration + iteration, rate=rate, episodes=episodes,
+                    seed=seed, balanced_success_rate=early.balanced, train_rates=early.rates(),
+                    states={state: s / e for state, (s, e) in sorted(by_state.items()) if e}, decision=decision)
+        if decision != 'stop':
+            early.reset()
+        return decision == 'stop'
+
     def on_iteration(result: IterationResult):
         state['iteration'] = start_iteration + result.iteration
         state['steps'] = result.total_steps
@@ -444,9 +500,12 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         best_metrics.clear()
         if args.best_of_n > 0 and result.iteration % args.best_every == 0 and result.iteration < args.iterations:
             best_metrics.update(refresh_best(result.iteration // args.best_every))
-        stop = early.update(result.rollout.start_results)
+        stop = early.update([counts for _, counts in result.rollout.cohorts], result.rollout.episodes,
+                            metrics.get('in_flight/over_half_budget'))
         if early.balanced is not None:
             metrics['balanced_success_rate'] = early.balanced
+        if stop:
+            stop = confirm_stop(result.iteration)
         state['metrics'] = metrics
         logger.log(state['iteration'], state['steps'], metrics)
         print(f"[train] iter={state['iteration']} steps={state['steps']} " + format_summary(metrics), flush=True)
@@ -462,7 +521,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
             save()
         if stop:
             print(f"[train] early stop: balanced success_rate >= {args.stop_success} for {args.stop_patience} "
-                  "iterations", flush=True)
+                  "iterations, confirmed by an evaluation", flush=True)
             events.emit('early_stop', iteration=state['iteration'], steps=state['steps'],
                         balanced_success_rate=early.balanced)
             state['stopped_early'] = True
@@ -473,7 +532,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     status = 'completed'
     try:
         ppo.train(network, pool, args.iterations, callback=on_iteration, start_steps=start_steps,
-                  seed=args.seed)
+                  seed=args.seed, episode_budget=config.max_steps)
     except KeyboardInterrupt:
         print("[train] interrupted; saving checkpoint")
         status = 'interrupted'

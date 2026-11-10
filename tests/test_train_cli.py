@@ -3,7 +3,9 @@
 import argparse
 import importlib.util
 import json
+import math
 import os
+import random
 import signal
 import subprocess
 import sys
@@ -11,11 +13,12 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 
 from triforce import registry, train
-from triforce.metrics import read_jsonl
+from triforce.metrics import EpisodeTracker, read_jsonl
 
 SPECIALIST = 'ow-start'
 GAMEPLAY_PREFIXES = ('kind/', 'duration/', 'interrupt/', 'ending/', 'outcome/', 'reward/', 'health', 'hearts/',
@@ -117,18 +120,29 @@ def test_seeded_training_repeats_gameplay_for_any_thread_count(states_dir, tmp_p
 
 
 def test_early_stop_balances_start_states():
-    """An oversampled failing state counts as one state; iterations with no entry episodes keep the streak."""
+    """An oversampled failing state counts as one state; an iteration that finished no entry episode resets."""
     early = train.EarlyStop(0.75, 2, window=4, min_episodes=2)
-    sequence = [(Counter({('a', True): 1, ('b', False): 9}), False, None),     # a has too few episodes
-                (Counter({('a', True): 1}), False, 0.5),                       # a 2/2, b 0/9 (one whole iteration)
-                (Counter({('b', True): 4}), False, 1.0),                       # b 4/4 covers the window: streak 1
-                (Counter(), False, 1.0),                                       # unchanged
-                (Counter({('a', True): 1, ('b', False): 1}), True, 0.9)]       # b 4/5 (whole iterations): streak 2
-    for start_results, stop, balanced in sequence:
-        assert early.update(start_results) == stop
+    sequence = [([Counter({('a', True): 1, ('b', False): 9})], 10, False, None),   # a has too few episodes
+                ([Counter({('a', True): 1})], 1, False, 0.5),                     # a 2/2, b 0/9 (one whole cohort)
+                ([Counter({('b', True): 4})], 4, False, 1.0),                     # b 4/4 covers the window: streak 1
+                ([], 0, False, 1.0),                                              # nothing finished: reset
+                ([Counter({('b', True): 4})], 4, False, 1.0),                     # streak 1
+                ([Counter({('a', True): 1}), Counter({('b', False): 1})], 2, True, 0.9)]   # b 4/5: streak 2
+    for cohorts, finished, stop, balanced in sequence:
+        assert early.update(cohorts, finished) == stop
         assert early.balanced == balanced
     never = train.EarlyStop(None, 1, min_episodes=1)
-    assert not any(never.update(Counter({('a', True): 5})) for _ in range(10)) and never.balanced == 1.0
+    assert not any(never.update([Counter({('a', True): 5})], 5) for _ in range(10)) and never.balanced == 1.0
+
+
+def test_early_stop_guards_min_iterations_and_overdue_episodes():
+    early = train.EarlyStop(0.9, 1, min_episodes=1, min_iterations=3)
+    perfect = [Counter({('a', True): 20})]
+    assert [early.update(perfect, 20) for _ in range(3)] == [False, False, True]     # not before iteration 3
+    assert not early.update(perfect, 20, over_half_budget=0.2) and early.streak == 0  # 20% of envs overdue
+    assert early.update(perfect, 20, over_half_budget=0.05)
+    early.reset()
+    assert early.streak == 0
 
 
 @pytest.mark.parametrize('failure', [0, 49, 112])
@@ -136,7 +150,7 @@ def test_early_stop_rate_is_exact_over_whole_iterations(failure):
     """One iteration of 113 episodes with one failure reads 112/113 wherever the failure fell (F130)."""
     outcomes = [i != failure for i in range(113)]
     early = train.EarlyStop(0.99, 1)
-    early.update(Counter((('a', success) for success in outcomes)))
+    early.update([Counter((('a', success) for success in outcomes))], 113)
     assert early.balanced == pytest.approx(112 / 113)
 
 
@@ -144,10 +158,119 @@ def test_early_stop_rate_is_exact_over_whole_iterations(failure):
 def test_early_stop_half_rate_reads_half(order):
     outcomes = [i >= 20 for i in range(40)] if order == 'failures-first' else [i % 2 == 0 for i in range(40)]
     early = train.EarlyStop(0.99, 1)
-    early.update(Counter((('a', success) for success in outcomes)))
+    early.update([Counter((('a', success) for success in outcomes))], 40)
     assert early.balanced == pytest.approx(0.5)
-    early.update(Counter({('a', True): 25}))     # covers the window alone: the 40 drop out
+    early.update([Counter({('a', True): 25})], 25)     # covers the window alone: the 40 drop out
     assert early.balanced == 1.0
+
+
+def _stream(envs, success_rate, fail_steps, rollouts, seed, success_steps=50, states=('s0', 's1', 's2')):
+    """A synthetic training pool (as probe_synthetic.py): every env plays episodes back to back, each a success after
+    ``success_steps`` decisions with probability ``success_rate``, else a failure at the ``fail_steps`` budget.
+    Yields per rollout (jobs, steps, fresh, events, truth): the rollout's rows as ``EnvPool.rollout`` writes them,
+    and every episode's (start rollout, start state, success) by job."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    rng = random.Random(seed)
+    steps_per_env = 4096 // envs
+    truth, jobs_made = {}, iter(range(1, 1 << 40))
+    live = []
+
+    def begin(rollout):
+        job, ok = next(jobs_made), rng.random() < success_rate
+        truth[job] = (rollout, states[job % len(states)], ok)
+        return [job, 0, success_steps if ok else fail_steps]
+
+    live = [begin(1) for _ in range(envs)]
+    for rollout in range(1, rollouts + 1):
+        jobs = np.zeros((envs, steps_per_env), np.int64)
+        steps = np.zeros((envs, steps_per_env), np.int64)
+        fresh = np.zeros(envs, bool)
+        events = []
+        for env in range(envs):
+            for t in range(steps_per_env):
+                episode = live[env]
+                jobs[env, t], steps[env, t] = episode[0], episode[1]
+                episode[1] += 1
+                if episode[1] == episode[2]:
+                    _, state, ok = truth[episode[0]]
+                    events.append({'env': env, 'job': episode[0], 'info': {
+                        'outcome': 'success' if ok else 'soft-failure', 'start_state': state,
+                        'episode_steps': episode[2]}})
+                    live[env] = begin(rollout if t + 1 < steps_per_env else rollout + 1)
+            fresh[env] = live[env][1] == 0
+        yield jobs, steps, fresh, events, truth
+
+
+@pytest.mark.parametrize('envs,fail_steps', [(16, 2000), (8, 3000)])
+def test_a_cold_started_policy_with_slow_failures_does_not_trip_the_early_stop(envs, fail_steps):
+    """p = 0.9 with 2000/3000-step failures: completion-time counting read ~1.0 for the first rollouts and stopped
+    at iteration 5 in most runs (F071); the cohorts and guards never propose a stop."""
+    for seed in range(20):
+        tracker = EpisodeTracker(fail_steps)
+        early = train.EarlyStop(0.99, 5, min_iterations=math.ceil(fail_steps / (4096 // envs)) + 5)
+        for jobs, steps, fresh, events, _ in _stream(envs, 0.9, fail_steps, 30, seed):
+            cohorts, values = tracker.update(jobs, steps, fresh, events)
+            finished = len(events)
+            assert not early.update([c for _, c in cohorts], finished, values['in_flight/over_half_budget'])
+
+
+def test_an_iteration_with_every_env_in_flight_resets_the_streak():
+    early = train.EarlyStop(0.9, 3, min_episodes=1)
+    tracker = EpisodeTracker(600)
+    early.update([Counter({('a', True): 10})], 10)
+    early.update([Counter({('a', True): 10})], 10)
+    assert early.streak == 2
+    # Four envs, 64 rows each, all inside episodes that started earlier: nothing ends, nothing is released.
+    jobs = np.repeat(np.arange(1, 5)[:, None], 64, axis=1)
+    steps = np.tile(np.arange(400, 464), (4, 1))
+    cohorts, values = tracker.update(jobs, steps, np.zeros(4, bool), [])
+    assert cohorts == [] and values['in_flight/episodes'] == 4 and values['in_flight/over_half_budget'] == 1.0
+    assert values['in_flight/mean_steps'] == values['in_flight/max_steps'] == 464
+    assert not early.update(cohorts, 0, values['in_flight/over_half_budget']) and early.streak == 0
+
+
+def test_cohort_rate_is_the_success_of_the_episodes_started_in_that_rollout():
+    tracker = EpisodeTracker(2000)
+    released = []
+    for jobs, steps, fresh, events, truth in _stream(16, 0.7, 2000, 40, seed=3):
+        cohorts, values = tracker.update(jobs, steps, fresh, events)
+        released += cohorts
+        if cohorts:
+            pooled = sum((counts for _, counts in cohorts), Counter())
+            assert values['started/success_rate'] == sum(n for (_, ok), n in pooled.items() if ok) / sum(
+                pooled.values())
+    # In rollout order; every rollout that started episodes is released once they (and earlier ones) all ended.
+    started = sorted({start for start, _, _ in truth.values() if start <= tracker.released})
+    assert [k for k, _ in released] == started and len(released) > 10
+    for rollout, counts in released:
+        expected = Counter((state, ok) for start, state, ok in truth.values() if start == rollout)
+        assert counts == expected, rollout
+
+
+@pytest.mark.parametrize('evaluated,stops', [((10, 50), False), ((50, 50), True)])
+def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, logs_dir, monkeypatch, evaluated, stops):
+    """Every proposal runs an evaluation of the current weights; below --stop-success the run goes on."""
+    calls = []
+
+    def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, deterministic=False):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
+        calls.append((runs, seed, parallel, deterministic))
+        return {'start': evaluated}
+
+    monkeypatch.setattr(train, 'success_by_state', fake_eval)
+    monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
+    run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
+                          '--steps-per-update', '16', '--iterations', '3', '--models-dir', str(tmp_path),
+                          '--run-id', 'confirm', '--seed', '5', '--no-curriculum', '--stop-success', '0.5'])
+    assert train.run_status(run_dir) == ('early_stop' if stops else 'completed')
+    (log_dir,) = logs_dir.iterdir()
+    events = read_jsonl(str(next(log_dir.glob('*.jsonl'))))
+    checks = [e for e in events if e['event'] == 'early_stop_check']
+    assert len(checks) == (1 if stops else 3) and len(calls) == len(checks)
+    assert [c['decision'] for c in checks] == (['stop'] if stops else ['continue'] * 3)
+    assert checks[0]['rate'] == evaluated[0] / evaluated[1] and checks[0]['states'] == {'start': checks[0]['rate']}
+    assert calls[0] == (train.CONFIRM_EPISODES, 5 + 1, 2, False)
+    assert ('early_stop' in [e['event'] for e in events]) == stops
 
 
 def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, logs_dir):
@@ -165,8 +288,9 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     assert summary['status'] == train.run_status(run_dir) == 'early_stop'
     assert summary['iterations_trained'] == summary['iterations']      # a fresh run
     assert summary['iterations'] == checkpoint['iterations'] == len(records)
-    # Stops on the first iteration where every start state has min_episodes results (threshold 0).
-    assert 'balanced_success_rate' in records[-1] and all('balanced_success_rate' not in r for r in records[:-1])
+    # Proposed once every start state has min_episodes cohort results and the guards allow it (threshold 0), then
+    # confirmed by the evaluation.
+    assert 'balanced_success_rate' in records[-1] and records[-1]['iteration'] >= 2
 
     # Standalone training gets its own log folder: training.json plus one event stream ending in 'end'.
     (log_dir,) = logs_dir.iterdir()
@@ -177,6 +301,9 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     kinds = [e['event'] for e in events]
     assert kinds[0] == 'start' and kinds[-2:] == ['train_end', 'end'] and kinds.count('end') == 1
     assert kinds.index('early_stop') > max(i for i, k in enumerate(kinds) if k == 'progress')
+    (check,) = [e for e in events if e['event'] == 'early_stop_check']
+    assert check['decision'] == 'stop' and check['episodes'] == train.CONFIRM_EPISODES
+    assert kinds.index('early_stop_check') < kinds.index('early_stop')
     progress = [e for e in events if e['event'] == 'progress']
     assert [e['iteration'] for e in progress] == [r['iteration'] for r in records]
     assert progress[-1]['steps'] == checkpoint['steps'] and progress[-1]['target_steps'] == 50 * 16

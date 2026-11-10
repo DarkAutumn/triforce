@@ -49,7 +49,7 @@ import torch
 from torch import nn
 
 from .demo import compute_demo_accuracy
-from .metrics import RolloutMetrics
+from .metrics import EpisodeTracker, RolloutMetrics
 from .plr import PrioritizedReplay
 from .rollout_buffer import RolloutBuffer
 
@@ -126,18 +126,21 @@ class Collector:
     buffers (the GIL is released while the pool steps); ``finish(network, device)`` waits for it, then computes
     values, bootstrap rewards, returns and advantages and makes it ``buffer``. The other buffer stays untouched,
     so an update can read it meanwhile.  ``collect`` is both in a row.  ``search``: the pool's search settings
-    (``EnvPool.rollout(search=...)``); the buffers then keep ``search_mask`` and ``search_policy``.  ``jobs``: the
-    buffers keep each row's episode ``job`` key.  ``episodes``: the finished rollout's ``episode`` events.
+    (``EnvPool.rollout(search=...)``); the buffers then keep ``search_mask`` and ``search_policy``.  ``episodes``:
+    the finished rollout's ``episode`` events.  ``tracker`` (``metrics.EpisodeTracker``, step budget ``budget``)
+    follows the episodes across rollouts by their job keys: ``finish`` adds the in-flight and released-cohort
+    metrics to the rollout's ``RolloutMetrics`` (``extra``, ``cohorts``).
     """
 
     def __init__(self, pool, memory_length: int, gamma: float, lam: float, search: Optional[dict] = None,
-                 jobs: bool = False):
+                 budget: Optional[int] = None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.pool = pool
         self.n_envs = pool.num_envs
         self.search = search
         self._buffers = [RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam,
-                                       search=search is not None, jobs=jobs) for _ in range(2)]
+                                       search=search is not None) for _ in range(2)]
+        self.tracker = EpisodeTracker(budget)
         self._views = [buffer.rollout_buffers() for buffer in self._buffers]
         self._next = 0
         self.buffer = self._buffers[1]
@@ -190,6 +193,8 @@ class Collector:
                           buffer.interrupts.reshape(-1).numpy())
         for event in sorted(events, key=lambda e: e['env']):     # stable: per env in step order
             metrics.add_episode(event['info'])
+        metrics.cohorts, metrics.extra = self.tracker.update(buffer.jobs.numpy(), buffer.steps.numpy(),
+                                                             buffer.dones[:, -1].numpy() > 0, events)
         return metrics
 
     def collect(self, network: nn.Module, device) -> RolloutMetrics:
@@ -321,13 +326,14 @@ class PPO:
     # ------------------------------------------------------------------ training loop
 
     def train(self, network: nn.Module, pool, iterations: int, callback: Optional[Callable] = None,
-              start_steps: int = 0, seed: Optional[int] = None) -> nn.Module:
+              start_steps: int = 0, seed: Optional[int] = None, episode_budget: Optional[int] = None) -> nn.Module:
         """Runs ``iterations`` rounds of (collect ``target_steps`` env steps across ``pool``'s envs, optimize).
 
         Args:
             pool: a native ``EnvPool`` over a ``TrainTask`` (the caller owns and closes it).
             callback: called with an ``IterationResult`` after each iteration; return False to stop.
             seed: seeds the training RNGs (action sampling, minibatch order); the pool has its own seed.
+            episode_budget: the env's step limit (``max_steps``), for ``in_flight/over_half_budget``.
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         cfg = self.config
@@ -353,7 +359,7 @@ class PPO:
 
         plr = PrioritizedReplay(pool.start_states, beta=cfg.plr_beta, rho=cfg.plr_rho,
                                 uniform=cfg.plr_uniform) if cfg.plr else None
-        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search, jobs=plr is not None)
+        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search, budget=episode_budget)
         start = time.time()
         steps_this_run = 0
         shaping = shaping_for(1)

@@ -185,6 +185,8 @@ class ListPool:
             out['logp_ent_val'][:, t] = np.stack([result['log_prob'], result['entropy'], result['value']], -1)
             if 'job' in out:
                 out['job'][:, t] = self._job
+            if 'step' in out:
+                out['step'][:, t] = self._step
             for i in range(n):
                 action = tuple(int(a) for a in result['actions'][i])
                 reward, frames, bootstrap_obs, interrupt = self._advance(i, action)
