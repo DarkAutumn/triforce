@@ -13,6 +13,7 @@ use zelda::{GameMap, Var};
 static MAP: LazyLock<Arc<GameMap>> = LazyLock::new(|| Arc::new(GameMap::builtin()));
 
 /// A RAM image of a playable dungeon room with Link at (120, 141), facing north.
+#[derive(Clone)]
 struct Ram([u8; RAM_SIZE]);
 
 impl Ram {
@@ -384,22 +385,24 @@ fn weapon_directions_respect_screen_bounds() {
     };
     use Direction::*;
     assert_eq!(dirs(1, 120, 141), (vec![E, W, N, S], vec![E, W, N, S]));
-    // Dungeon: the sword's outer bounds per axis, items' inner bounds per direction.
-    assert_eq!(dirs(1, 24, 141).0, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 23, 141), (vec![N, S], vec![N, S]));
-    assert_eq!(
-        dirs(1, 31, 141).1,
-        vec![E, N, S],
-        "too close to the west wall to throw west"
-    );
-    assert_eq!(dirs(1, 216, 141).1, vec![W, N, S]);
-    assert_eq!(dirs(1, 120, 79), (vec![E, W], vec![E, W]));
-    assert_eq!(dirs(1, 120, 80).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 120, 192).1, vec![E, W, N]);
-    assert_eq!(dirs(1, 120, 200), (vec![E, W], vec![E, W]));
-    // Overworld bounds are wider.
-    assert_eq!(dirs(0, 8, 64).0, vec![E, W, N, S]);
-    assert_eq!(dirs(0, 7, 63), (vec![], vec![]));
+    // Dungeon: BorderBounds (Z_05.asm:2736): outer x 23..217 / y 85..198 for A and B on the facing's axis, inner
+    // E x < $D1, W x >= $1F, S y < $BE, N y >= $54 for B.
+    assert_eq!(dirs(1, 23, 141).0, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 22, 141), (vec![N, S], vec![N, S]));
+    assert_eq!(dirs(1, 30, 141).1, vec![E, N, S], "too close to the west wall to throw west");
+    assert_eq!(dirs(1, 31, 141).1, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 209, 141).1, vec![W, N, S]);
+    assert_eq!(dirs(1, 216, 141).0, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 217, 141).0, vec![N, S]);
+    assert_eq!(dirs(1, 120, 84), (vec![E, W], vec![E, W]));
+    assert_eq!(dirs(1, 120, 85).1, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 120, 190).1, vec![E, W, N]);
+    assert_eq!(dirs(1, 120, 197).0, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 120, 198), (vec![E, W], vec![E, W]));
+    // Overworld outer bounds: x 7..233, y 69..214.
+    assert_eq!(dirs(0, 7, 69).0, vec![E, W, N, S]);
+    assert_eq!(dirs(0, 6, 68), (vec![], vec![]));
+    assert_eq!(dirs(0, 233, 214), (vec![], vec![]));
     // Off every axis the sword is screen-locked: no beams.
     let mut r = Ram::new();
     r.set(Var::LinkX, 10)
@@ -409,6 +412,51 @@ fn weapon_directions_respect_screen_bounds() {
         .set(Var::PartialHearts, 0xFF);
     let v = r.view();
     assert!(v.is_sword_screen_locked() && !v.has_beams());
+}
+
+/// F182: the mask offers only attacks the game would start: a busy boomerang slot, a blocked sword, Link in an
+/// item state, a full bomb pair or a facing outside BorderBounds mask the option.
+#[test]
+fn the_mask_offers_only_attacks_the_game_starts() {
+    use zelda::actions::compute_action_mask;
+    use ActionKind::*;
+    let armed = |x: u8, y: u8| {
+        let mut r = Ram::new();
+        r.set(Var::LinkX, x)
+            .set(Var::LinkY, y)
+            .set(Var::Sword, 1)
+            .set(Var::HeartsAndContainers, 0x21)
+            .set(Var::Bombs, 4)
+            .set(Var::RegularBoomerang, 1)
+            .object(5, enemy::STALFOS, 60, 120);
+        r
+    };
+    let allowed = |r: &Ram, kind: ActionKind, d: Direction| {
+        compute_action_mask(&r.view()).is_allowed(&zelda::Action::new(kind, d, 0).unwrap())
+    };
+    let r = armed(120, 141);
+    for kind in [Sword, Boomerang, Bomb] {
+        assert!(allowed(&r, kind, Direction::N), "{kind:?}");
+    }
+    let mut busy = r.clone();
+    busy.table(tables::OBJ_STATUS, 0x0F, 0x10);
+    assert!(!allowed(&busy, Boomerang, Direction::N));
+    busy.table(tables::OBJ_STATUS, 0x0F, 0x90); // returning: the game lets Link throw again
+    assert!(allowed(&busy, Boomerang, Direction::N));
+    let mut blocked = r.clone();
+    blocked.0[0x4C] = 5;
+    assert!(!allowed(&blocked, Sword, Direction::N) && allowed(&blocked, Bomb, Direction::N));
+    let mut holding = r.clone();
+    holding.table(tables::OBJ_STATUS, 0, 0x20);
+    assert!(!allowed(&holding, Sword, Direction::N) && !allowed(&holding, Bomb, Direction::N));
+    let mut bombs = r.clone();
+    bombs.table(tables::OBJ_STATUS, 0x10, 0x12).table(tables::OBJ_STATUS, 0x11, 0x10);
+    assert!(!allowed(&bombs, Bomb, Direction::N), "both bomb slots hold unexploded bombs");
+    // Underworld bounds: y 83 / 199 no attack N/S; x 213 no B item E (the sword still swings E).
+    for y in [83, 199] {
+        assert!(!allowed(&armed(120, y), Sword, Direction::N) && !allowed(&armed(120, y), Bomb, Direction::S));
+    }
+    assert!(!allowed(&armed(213, 141), Bomb, Direction::E) && allowed(&armed(213, 141), Sword, Direction::E));
 }
 
 #[test]

@@ -169,6 +169,8 @@ fn north_shutter_is_barred_not_a_wall() {
     );
 }
 
+/// F188: a MOVE into the pending push block is legal only where UpdateBlock0Idle counts the push (Link's X equal
+/// to the block's for N/S, Y + 3 equal to its Y for E/W; the block in 1:0x22 is at (96, 144)).
 #[test]
 fn push_block_move_is_legal() {
     let Some(mut s) = session() else { return };
@@ -176,10 +178,39 @@ fn push_block_move_is_legal() {
     assert!(state.push_block_pending());
     assert!(state.is_push_block_direction(Direction::S));
     assert!(!state.can_link_move(Direction::S));
-    assert!(
-        compute_action_mask(&state)
-            .is_allowed(&Action::new(ActionKind::Move, Direction::S, 32).unwrap())
-    );
+    let legal = |state: &GameView, d: Direction| {
+        compute_action_mask(state).is_allowed(&Action::new(ActionKind::Move, d, 32).unwrap())
+    };
+    assert!(legal(&state, Direction::S));
+    for (x, y, d, pushes) in [
+        (80, 141, Direction::E, true),
+        (80, 133, Direction::E, false),
+        (88, 125, Direction::S, false),
+        (104, 125, Direction::S, false),
+    ] {
+        let state = s.apply_ram(&[(Var::LinkX, x), (Var::LinkY, y), (Var::LinkGridOffset, 0)]).clone();
+        assert_eq!(state.is_push_block_direction(d), pushes, "({x},{y}) {d:?}");
+        if !pushes {
+            assert!(!legal(&state, d), "({x},{y}) {d:?}: a misaligned push is no move");
+        }
+    }
+}
+
+/// F170: a key opens a locked door only at the room bound next to it: in 1:0x33 below the water on the N door's
+/// axis MOVE N stays illegal with a key; at the bound (120, 93) it is legal with a key and not without one.
+#[test]
+fn a_key_opens_a_locked_door_only_at_its_bound() {
+    let Some(mut s) = session() else { return };
+    // Link teleported out of the S doorway he entered by: no doorway direction.
+    let at = |s: &mut S, y: u8, keys: u8| {
+        let ram = [(Var::LinkX, 120), (Var::LinkY, y), (Var::LinkGridOffset, 0), (Var::DoorwayDir, 0), (Var::Keys, keys)];
+        let state = load_and_place(s, "1_33s_0", &ram);
+        assert!(state.is_door_locked(Direction::N));
+        state.can_link_move(Direction::N)
+    };
+    assert!(!at(&mut s, 133, 4));
+    assert!(at(&mut s, 93, 1));
+    assert!(!at(&mut s, 93, 0));
 }
 
 /// A boomerang shot already in Link's shield box in D1 0x73 (`_place_shield_projectile`).

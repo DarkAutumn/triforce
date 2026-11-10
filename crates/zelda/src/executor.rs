@@ -503,7 +503,12 @@ impl<S> Executor<S> {
         } else {
             buttons::A
         };
+        // In a busy room the game skips input on lag frames: a one-frame press can go unread. Hold the button one
+        // more frame when nothing started (holding it is no new press once the game has read it).
         self.step(m, direction_buttons(action.direction) | button, 1);
+        if m.read(ADDR_LINK_STATUS) == 0 && m.read(ADDR_SWORD_ANIMATION) == 0 {
+            self.step(m, direction_buttons(action.direction) | button, 1);
+        }
         for _ in 0..MAX_ANIMATION_WAIT {
             self.step(m, 0, 1);
             if m.read(ADDR_LINK_STATUS) == 0 && m.read(ADDR_SWORD_ANIMATION) == 0 {
@@ -678,13 +683,15 @@ pub(crate) mod tests {
 
     #[test]
     fn executor_counts_blocks_in_attack_settling_and_uncontrollable_frames() {
+        // The script never starts the sword (Link's state stays 0): the press is held a second frame, as on a lag
+        // frame.
         let mut m = machine(3, 0);
         let result = run(&mut m, "SWORD E");
         assert_eq!(
             (result.control_frames, result.frames, result.blocks()),
-            (2, 3, 1)
+            (3, 4, 1)
         );
-        assert_eq!(m.nes.buttons, vec![buttons::RIGHT | buttons::A, 0, 0]);
+        assert_eq!(m.nes.buttons, vec![buttons::RIGHT | buttons::A, buttons::RIGHT | buttons::A, 0, 0]);
 
         let mut m = machine(6, 6);
         let result = run(&mut m, "WAIT 4");

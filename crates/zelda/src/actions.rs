@@ -291,11 +291,9 @@ impl fmt::Display for ActionMask {
     }
 }
 
-const EDGE_TILE_MIN: i32 = 0x03;
-const EDGE_TILE_MAX_X: i32 = 0x1C;
-const EDGE_TILE_MAX_Y: i32 = 0x12;
-
-/// Legal actions of a state (`compute_action_mask`).
+/// Legal actions of a state (`compute_action_mask`). An attack is legal only where the game would start its weapon:
+/// [`GameView::weapon_ready`] and the facing inside Link_FilterInput's BorderBounds (`sword_directions`,
+/// `item_directions`; a diagonal throw faces N or S).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let mut mask = ActionMask::default();
     let available = state.available_actions();
@@ -313,17 +311,6 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let sword_dirs = state.sword_directions();
     let item_dirs = state.item_directions();
 
-    let mut blocked: Vec<Direction> = Vec::new();
-    if state.level() != 0 {
-        let (tx, ty) = state.link.tile();
-        if tx <= EDGE_TILE_MIN || tx >= EDGE_TILE_MAX_X {
-            blocked.extend([Direction::N, Direction::S]);
-        }
-        if ty <= EDGE_TILE_MIN || ty >= EDGE_TILE_MAX_Y {
-            blocked.extend([Direction::W, Direction::E]);
-        }
-    }
-
     for kind in [
         ActionKind::Sword,
         ActionKind::Beams,
@@ -331,7 +318,7 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
         ActionKind::Arrow,
         ActionKind::Bomb,
     ] {
-        if !available[kind.index()] {
+        if !available[kind.index()] || !state.weapon_ready(kind) {
             continue;
         }
         let pickup = matches!(
@@ -351,22 +338,18 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
             &item_dirs
         };
         for d in CARDINALS {
-            if dirs.contains(&d) && !blocked.contains(&d) {
+            if dirs.contains(&d) {
                 mask.allow(kind, Some(d));
             }
         }
         if is_diagonal(kind) {
-            for (diag, a, b) in [
-                (Direction::NW, Direction::N, Direction::W),
-                (Direction::NE, Direction::N, Direction::E),
-                (Direction::SW, Direction::S, Direction::W),
-                (Direction::SE, Direction::S, Direction::E),
+            for (diag, facing) in [
+                (Direction::NW, Direction::N),
+                (Direction::NE, Direction::N),
+                (Direction::SW, Direction::S),
+                (Direction::SE, Direction::S),
             ] {
-                if item_dirs.contains(&a)
-                    && item_dirs.contains(&b)
-                    && !blocked.contains(&a)
-                    && !blocked.contains(&b)
-                {
+                if item_dirs.contains(&facing) {
                     mask.allow(kind, Some(diag));
                 }
             }

@@ -588,11 +588,25 @@ impl GameView {
         ]
     }
 
-    /// Whether a MOVE in `direction` presses Link against the pending push block.
+    /// Whether a MOVE in `direction` pushes the pending push block: Link touches it, the room is clear
+    /// (RoomAllDead $34D) and he is aligned the way UpdateBlock0Idle counts a push (Z_04: same X for N/S, Y + 3 ==
+    /// block Y for E/W).
     pub fn is_push_block_direction(&self, direction: Direction) -> bool {
         let block = self.push_block_tiles();
-        !block.is_empty()
-            && Room::hotspot_tiles(self.link.position.x, self.link.position.y, direction)
+        if block.is_empty() || self.peek(0x34D) == 0 {
+            return false;
+        }
+        let (bx, by) = (
+            table(&self.ram, tables::OBJ_POS_X, PUSH_BLOCK_SLOT) as i32,
+            table(&self.ram, tables::OBJ_POS_Y, PUSH_BLOCK_SLOT) as i32,
+        );
+        let (x, y) = (self.link.position.x, self.link.position.y);
+        let aligned = match direction {
+            Direction::N | Direction::S => x == bx,
+            _ => y + 3 == by,
+        };
+        aligned
+            && Room::hotspot_tiles(x, y, direction)
                 .iter()
                 .any(|t| block.contains(t))
     }
@@ -649,14 +663,6 @@ impl GameView {
         }
         if room.is_cave_entry_direction(px, py, direction) && !self.just_exited_cave {
             return true;
-        }
-        if self.is_door_locked(direction) && (self.keys() > 0 || self.magic_key()) {
-            if matches!(direction, Direction::N | Direction::S) && px == DOORWAY_REQUIRED_X {
-                return true;
-            }
-            if matches!(direction, Direction::E | Direction::W) && py == DOORWAY_REQUIRED_Y {
-                return true;
-            }
         }
         false
     }
@@ -852,46 +858,73 @@ impl GameView {
         self.sword_directions().is_empty()
     }
 
-    /// Directions the sword can swing (outer BorderBounds, per axis).
+    /// Directions the sword can swing: Link_FilterInput's outer BorderBounds on the facing's axis (Z_05.asm:2736;
+    /// overworld x 7..233, y 69..214; underworld x 23..217, y 85..198, upper bounds exclusive).
     pub fn sword_directions(&self) -> Vec<Direction> {
         let (x, y) = (self.link.position.x, self.link.position.y);
-        let mut out = Vec::with_capacity(4);
         let (xr, yr) = if self.level() == 0 {
-            ((8, 239), (64, 215))
+            (0x07..0xE9, 0x45..0xD6)
         } else {
-            ((24, 223), (80, 199))
+            (0x17..0xD9, 0x55..0xC6)
         };
-        if (xr.0..=xr.1).contains(&x) {
+        let mut out = Vec::with_capacity(4);
+        if xr.contains(&x) {
             out.extend([Direction::E, Direction::W]);
         }
-        if (yr.0..=yr.1).contains(&y) {
+        if yr.contains(&y) {
             out.extend([Direction::N, Direction::S]);
         }
         out
     }
 
-    /// Directions B items can be used (inner bounds per direction, outer bounds per axis).
+    /// Directions B items can be used: the outer bounds as for the sword, and the inner BorderBounds of the facing
+    /// (E x < $D1, W x >= $1F, S y < $BE, N y >= $54).
     pub fn item_directions(&self) -> Vec<Direction> {
         let (x, y) = (self.link.position.x, self.link.position.y);
-        let (x_ok, y_ok) = if self.level() == 0 {
-            ((8..=239).contains(&x), (64..=215).contains(&y))
-        } else {
-            ((24..=223).contains(&x), (80..=199).contains(&y))
-        };
-        let mut out = Vec::with_capacity(4);
-        if x_ok && x <= 215 {
-            out.push(Direction::E);
+        self.sword_directions()
+            .into_iter()
+            .filter(|d| match d {
+                Direction::E => x < 0xD1,
+                Direction::W => x >= 0x1F,
+                Direction::S => y < 0xBE,
+                _ => y >= 0x54,
+            })
+            .collect()
+    }
+
+    /// The sword is blocked (a Bubble's touch: SwordBlockedLongTimer $4C, or SwordBlocked $52E); the game ignores
+    /// the A button meanwhile (Z_05 Link_HandleInput).
+    pub fn is_sword_blocked(&self) -> bool {
+        self.peek(0x4C) != 0 || self.peek(0x52E) != 0
+    }
+
+    /// The game would start `kind`'s weapon now (Link_HandleInput and the Wield* routines): Link is in his normal
+    /// state ($AC = 0), the sword is not blocked and its slot ($B9) is free for SWORD/BEAMS, the boomerang ($BB) and
+    /// arrow ($BE) slots are free or returning (bit 7), and WieldBomb finds a bomb slot ($BC/$BD).
+    pub fn weapon_ready(&self, kind: crate::enums::ActionKind) -> bool {
+        use crate::enums::ActionKind as K;
+        if self.link.status != 0 {
+            return false;
         }
-        if x_ok && x >= 32 {
-            out.push(Direction::W);
+        let free_or_back = |s: u8| s == 0 || s & 0x80 != 0;
+        match kind {
+            K::Sword | K::Beams => !self.is_sword_blocked() && self.peek(0xB9) == 0,
+            K::Boomerang => free_or_back(self.peek(0xBB)),
+            K::Arrow => free_or_back(self.peek(0xBE)),
+            K::Bomb => {
+                let (s10, s11) = (self.peek(0xBC), self.peek(0xBD));
+                let usable = |s: u8| s == 0 || s & 0xF0 != 0x10;
+                let other = if usable(s10) {
+                    s11
+                } else if usable(s11) {
+                    s10
+                } else {
+                    return false;
+                };
+                other == 0 || other >= 0x13
+            }
+            K::Move | K::Wait => true,
         }
-        if y_ok && y >= 80 {
-            out.push(Direction::N);
-        }
-        if y_ok && y <= 191 {
-            out.push(Direction::S);
-        }
-        out
     }
 
     /// State of a weapon animation slot.
