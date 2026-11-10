@@ -171,8 +171,8 @@ pub trait Map {
 
     /// Rebuild the page tables from this board's register state.
     ///
-    /// Page tables are derived state and are not serialized, so they must be reconstructed after
-    /// loading a save state. Also called after reset, where `Reset` has no access to [`Memory`].
+    /// The page tables are serialized with [`Memory`], so loading a state needs no rebuild; this
+    /// runs only on register writes and after reset, where `Reset` has no access to [`Memory`].
     fn update_banks(&mut self, _memory: &mut Memory) {}
 
     /// Reset the board given the [`ResetKind`].

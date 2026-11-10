@@ -322,6 +322,7 @@ impl Memory {
     }
 
     /// Unmap a window of the PPU address space, so it reads as zero and ignores writes.
+    #[cfg(test)]
     pub fn unmap_chr(&mut self, addr: u16, size: usize) {
         let slot = (addr as usize >> PAGE_SHIFT) & CHR_PAGE_MASK;
         for i in 0..(size >> PAGE_SHIFT).max(1) {
@@ -330,6 +331,7 @@ impl Memory {
     }
 
     /// Override whether a mapped CPU window below `$8000` accepts writes.
+    #[cfg(test)]
     pub fn set_prg_writable(&mut self, addr: u16, size: usize, writable: bool) {
         let slot = usize::from(addr) >> PAGE_SHIFT;
         for page in self.prg_pages.iter_mut().skip(slot).take(size >> PAGE_SHIFT) {

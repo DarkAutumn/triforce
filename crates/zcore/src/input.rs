@@ -6,7 +6,9 @@
 //! Up=0x10, Down=0x20, Left=0x40, Right=0x80), set by the caller as it is; opposing D-Pad
 //! directions are not filtered.
 
-use crate::{bus::Bus, common::ResetKind};
+use crate::bus::Bus;
+#[cfg(test)]
+use crate::common::ResetKind;
 use serde::{Deserialize, Serialize};
 
 /// A controller port.
@@ -21,6 +23,7 @@ pub enum Player {
 }
 
 /// A single controller button.
+#[cfg(test)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum JoypadBtn {
     /// Left D-Pad.
@@ -41,6 +44,7 @@ pub enum JoypadBtn {
     Start,
 }
 
+#[cfg(test)]
 impl JoypadBtn {
     /// The button's bit in the NES button byte.
     #[must_use]
@@ -74,11 +78,6 @@ impl Input {
         }
     }
 
-    /// Borrows one port's controller.
-    pub const fn joypad(&self, player: Player) -> &Joypad {
-        &self.joypads[player as usize]
-    }
-
     /// Mutably borrows one port's controller, which is how buttons are set.
     pub const fn joypad_mut(&mut self, player: Player) -> &mut Joypad {
         &mut self.joypads[player as usize]
@@ -102,6 +101,7 @@ impl Input {
     }
 
     /// Resets input state.
+    #[cfg(test)]
     pub const fn reset(&mut self, kind: ResetKind) {
         self.joypads[0].reset(kind);
         self.joypads[1].reset(kind);
@@ -145,12 +145,14 @@ impl Joypad {
     }
 
     /// Whether a button is currently held.
+    #[cfg(test)]
     #[must_use]
     pub const fn button(&self, button: JoypadBtn) -> bool {
         self.buttons & button.bit() != 0
     }
 
     /// Presses a button.
+    #[cfg(test)]
     pub const fn press(&mut self, button: JoypadBtn) {
         self.buttons |= button.bit();
     }
@@ -185,6 +187,7 @@ impl Joypad {
     }
 
     /// Resets the shift register and releases every button.
+    #[cfg(test)]
     pub const fn reset(&mut self, _kind: ResetKind) {
         self.buttons = 0;
         self.index = 0;

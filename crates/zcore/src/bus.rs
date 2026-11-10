@@ -22,7 +22,7 @@
 //! | PPU address space | [`Bus::ppu_bus_peek`] | |
 //! | cartridge, through the page tables | [`Bus::chr_peek`] | |
 //!
-//! [`Bus::poke`] is the write with no side effects, storing into RAM alone.
+//! The test-only `Bus::poke` is the write with no side effects, storing into RAM alone.
 //!
 //! # Stability
 //!
@@ -144,6 +144,7 @@ impl Bus {
     }
 
     /// Removes the cart, leaving the console with no board.
+    #[cfg(test)]
     pub fn unload_cart(&mut self) {
         self.prg_rom = NO_PRG_ROM.clone();
         self.state.mapper = Mapper::default();
@@ -152,12 +153,6 @@ impl Bus {
     /// The PRG-ROM image this console reads at `$8000-$FFFF`.
     pub fn prg_rom(&self) -> &Arc<PrgRom> {
         &self.prg_rom
-    }
-
-    /// Share another holder's copy of the same PRG-ROM image.
-    pub fn set_prg_rom(&mut self, prg_rom: Arc<PrgRom>) {
-        debug_assert!(prg_rom[..] == self.prg_rom[..], "the same PRG-ROM");
-        self.prg_rom = prg_rom;
     }
 
     /// The last frame drawn (pixels of frames run with `render` off are not updated).
@@ -307,22 +302,6 @@ impl State {
 }
 
 impl Bus {
-    /// The console's 2K of work RAM.
-    #[must_use]
-    #[inline]
-    #[allow(clippy::missing_const_for_fn)] // false positive on non-const deref coercion
-    pub fn wram(&self) -> &[u8; size::WRAM] {
-        &self.wram
-    }
-
-    /// The console's 2K of work RAM, for a debugger or a frontend's cheat engine to write.
-    #[must_use]
-    #[inline]
-    #[allow(clippy::missing_const_for_fn)] // false positive on non-const deref coercion
-    pub fn wram_mut(&mut self) -> &mut [u8; size::WRAM] {
-        &mut self.wram
-    }
-
     /// Store `val` at `addr` if RAM answers there, reporting whether it landed.
     ///
     /// The write a debugger makes, the counterpart of [`Bus::peek`]: it decodes the CPU address
@@ -330,6 +309,7 @@ impl Bus {
     /// writable, so poking a byte cannot clock a component or trip a mapper register. `false`
     /// where the address reaches ROM, an unmapped page, or the `$2000-$40FF` registers, none of
     /// which can be written without moving the console.
+    #[cfg(test)]
     pub fn poke(&mut self, addr: u16, val: u8) -> bool {
         match addr {
             0x0000..=0x1FFF => {
@@ -410,7 +390,7 @@ impl Bus {
 
     /// A read of `$2000-$2007`, after catching the PPU up to it.
     #[inline(never)]
-    fn ppu_register_read(&mut self, addr: u16) -> u8 {
+    pub(crate) fn ppu_register_read(&mut self, addr: u16) -> u8 {
         self.ppu_sync();
         match addr {
             0x2002 => self.ppu.read_status(),
@@ -480,7 +460,7 @@ impl Bus {
 
     /// A write to `$2000-$2007`, after catching the PPU up to it.
     #[inline(never)]
-    fn ppu_register_write(&mut self, addr: u16, val: u8) {
+    pub(crate) fn ppu_register_write(&mut self, addr: u16, val: u8) {
         self.ppu_sync();
         match addr {
             0x2000 => self.write_ctrl(val),

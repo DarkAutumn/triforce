@@ -1,8 +1,6 @@
 // Generates the NTSC filter's color lookup table.
 //
-// `include!`d by `build.rs`, which bakes the table into the binary, and by `video.rs`'s tests,
-// which assert the baked table is what this produces. It is deliberately free of crate imports
-// for that reason - `build.rs` cannot link the crate it is building.
+// A submodule of `video`, which builds its `NTSC_PALETTE` from it on first use.
 //
 // Amazing implementation Bisqwit! Much faster than my original, but boy what a pain to translate
 // it to Rust.

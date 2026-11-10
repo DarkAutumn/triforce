@@ -16,7 +16,7 @@
 use crate::{
     bus::Bus,
     common::ResetKind,
-    cpu::instr::{AddrMode, InstrRef},
+    cpu::instr::AddrMode,
 };
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
@@ -153,11 +153,6 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    /// NTSC Master Clock Rate in Hz.
-    pub const NTSC_MASTER_CLOCK_RATE: f32 = 21_477_272.0;
-    /// NTSC CPU Clock Rate in Hz.
-    pub const NTSC_CPU_CLOCK_RATE: f32 = Self::NTSC_MASTER_CLOCK_RATE / 12.0;
-
     // Represents CPU/PPU alignment and would range from 1..=ppu.clock_divider-1
     // if random PPU alignment was emulated
     // See: https://www.nesdev.org/wiki/PPU_frame_timing#CPU-PPU_Clock_Alignment
@@ -176,14 +171,6 @@ impl Cpu {
     /// Stack Pointer base address.
     pub const SP_BASE: u16 = 0x0100;
 
-    /// `BRK` opcode, takes the IRQ vector.
-    pub const BRK: u8 = 0x00;
-    /// `JSR` opcode, jumps to location, save return address.
-    pub const JSR: u8 = 0x20;
-    /// `RTI` opcode, return from interrupt.
-    pub const RTI: u8 = 0x40;
-    /// `RTS` opcode, return from subroutine.
-    pub const RTS: u8 = 0x60;
     /// `JMP` absolute opcode.
     pub const JMP_ABS: u8 = 0x4C;
 
@@ -326,20 +313,6 @@ impl Cpu {
 /// The CPU's view of the console: every access below moves the whole machine, so it takes the
 /// [`Bus`] rather than the [`Cpu`].
 impl Bus {
-    /// NTSC CPU clock rate.
-    #[inline]
-    #[must_use]
-    pub const fn clock_rate(&self) -> f32 {
-        Cpu::NTSC_CPU_CLOCK_RATE
-    }
-
-    /// Peek at the next instruction.
-    #[inline]
-    pub fn next_instr(&self) -> InstrRef {
-        let opcode = self.peek(self.cpu.pc);
-        Cpu::INSTR_REF[usize::from(opcode)]
-    }
-
     /// Process an interrupted request.
     ///
     /// <https://wiki.nesdev.org/w/index.php/IRQ>
@@ -572,22 +545,6 @@ impl Bus {
         self.read(Cpu::SP_BASE | u16::from(self.cpu.sp))
     }
 
-    /// Peek byte at the top of the stack.
-    #[inline]
-    #[must_use]
-    pub fn peek_stack(&self) -> u8 {
-        self.peek(Cpu::SP_BASE | u16::from(self.cpu.sp.wrapping_add(1)))
-    }
-
-    /// Peek at the top of the stack.
-    #[inline]
-    #[must_use]
-    pub fn peek_stack_u16(&self) -> u16 {
-        let lo = self.peek(Cpu::SP_BASE | u16::from(self.cpu.sp));
-        let hi = self.peek(Cpu::SP_BASE | u16::from(self.cpu.sp.wrapping_add(1)));
-        u16::from_le_bytes([lo, hi])
-    }
-
     /// Push a word (two bytes) to the stack
     #[inline(always)]
     pub(crate) fn push_word(&mut self, val: u16) {
@@ -698,15 +655,6 @@ impl Bus {
     pub fn read_word(&mut self, addr: u16) -> u16 {
         let lo = self.read(addr);
         let hi = self.read(addr.wrapping_add(1));
-        u16::from_le_bytes([lo, hi])
-    }
-
-    /// Peek a 16-bit word without side effects.
-    #[inline]
-    #[must_use]
-    pub fn peek_word(&self, addr: u16) -> u16 {
-        let lo = self.peek(addr);
-        let hi = self.peek(addr.wrapping_add(1));
         u16::from_le_bytes([lo, hi])
     }
 

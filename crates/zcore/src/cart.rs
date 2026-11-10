@@ -10,12 +10,9 @@ use crate::{
     memory::{CHR_SIZE, Memory, PRG_RAM_SIZE, PRG_ROM_SIZE, PrgRom, Src},
     ppu::Mirroring,
 };
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    path::Path,
-    sync::Arc,
-};
+use std::{io::Read, sync::Arc};
+#[cfg(test)]
+use std::{fs::File, io::BufReader, path::Path};
 
 const PRG_ROM_BANK_SIZE: usize = 0x4000;
 const CHR_ROM_BANK_SIZE: usize = 0x2000;
@@ -163,11 +160,13 @@ impl Cart {
     ///
     /// If the NES header is corrupted, the ROM file cannot be read, or the data does not match
     /// the header, then an error is returned.
+    #[cfg(test)]
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         Self::from_rom(path.to_string_lossy(), &mut Self::open(path)?)
     }
 
+    #[cfg(test)]
     fn open(path: &Path) -> Result<BufReader<File>> {
         Ok(BufReader::new(File::open(path).map_err(|err| {
             Error::io(err, format!("failed to open rom {path:?}"))
@@ -311,28 +310,6 @@ impl Cart {
         Ok(cart)
     }
 
-    /// The ROM's name.
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)] // false positive on non-const deref coercion
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Whether the header is iNES rather than NES 2.0.
-    #[must_use]
-    pub const fn is_ines(&self) -> bool {
-        matches!(
-            self.header.variant,
-            NesVariant::ArchaicINes | NesVariant::INes07 | NesVariant::INes
-        )
-    }
-
-    /// Whether the header is NES 2.0.
-    #[must_use]
-    pub const fn is_nes2(&self) -> bool {
-        matches!(self.header.variant, NesVariant::Nes2)
-    }
-
     /// Returns whether this cartridge has battery-backed Save RAM.
     #[must_use]
     pub const fn battery_backed(&self) -> bool {
@@ -354,22 +331,10 @@ impl Cart {
         self.header.mapper_num
     }
 
-    /// Returns the Sub-Mapper number for this Cart.
-    #[must_use]
-    pub const fn submapper_num(&self) -> u8 {
-        self.header.submapper_num
-    }
-
     /// The cart's PRG-ROM, exactly as the file contained it.
     #[must_use]
     pub fn prg_rom(&self) -> &[u8] {
         &self.prg_rom[..self.prg_rom_size]
-    }
-
-    /// The cart's CHR-ROM, exactly as the file contained it. Empty for a CHR-RAM cart.
-    #[must_use]
-    pub fn chr_rom(&self) -> &[u8] {
-        &self.memory.region_ref(Src::Chr)[..self.chr_rom_size]
     }
 
     /// Total RAM a NES 2.0 size byte asks for, volatile plus battery-backed.
@@ -462,10 +427,6 @@ pub struct NesHeader {
     pub prg_ram_shift: u8,
     /// NES 2.0 CHR-RAM size, as a shift count.
     pub chr_ram_shift: u8,
-    /// NES 2.0 NTSC/PAL indicator.
-    pub tv_mode: u8,
-    /// NES 2.0 VS System data.
-    pub vs_data: u8,
 }
 
 impl NesHeader {
@@ -475,6 +436,7 @@ impl NesHeader {
     ///
     /// If the NES header is corrupted, the ROM file cannot be read, or the data does not match
     /// the header, then an error is returned.
+    #[cfg(test)]
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let mut rom = BufReader::new(
@@ -537,8 +499,6 @@ impl NesHeader {
         let mut submapper_num = 0;
         let mut prg_ram_shift = 0;
         let mut chr_ram_shift = 0;
-        let mut tv_mode = 0;
-        let mut vs_data = 0;
         // If D2..D3 of flag 7 == 2, then NES 2.0 (supports bytes 0-15)
         let variant = if header[7] & 0x0C == 0x08 {
             // lower 4 bits of flag 8 = D8..D11 of mapper num
@@ -551,8 +511,6 @@ impl NesHeader {
             chr_rom_banks |= u16::from(header[9] & 0xF0) << 4;
             prg_ram_shift = header[10];
             chr_ram_shift = header[11];
-            tv_mode = header[12];
-            vs_data = header[13];
 
             if prg_ram_shift & 0x0F == 0x0F || prg_ram_shift & 0xF0 == 0xF0 {
                 return Err(Error::InvalidHeader {
@@ -569,20 +527,6 @@ impl NesHeader {
                 });
             }
             NesVariant::Nes2
-        } else if header[7] & 0x0C == 0x04 {
-            // If D2..D3 of flag 7 == 1, then archaic iNES (supports bytes 0-7)
-            for (i, value) in header.iter().enumerate().take(16).skip(8) {
-                if *value > 0 {
-                    return Err(Error::InvalidHeader {
-                        byte: i as u8,
-                        value: *value,
-                        message: format!(
-                            "unrecognized data found at header byte {i}. repair and try again"
-                        ),
-                    });
-                }
-            }
-            NesVariant::ArchaicINes
         } else if header[7] & 0x0C == 00 && header[12..=15].iter().all(|v| *v == 0) {
             // If D2..D3 of flag 7 == 0 and bytes 12-15 are all 0, then iNES (supports bytes 0-9)
             NesVariant::INes
@@ -609,8 +553,6 @@ impl NesHeader {
             chr_rom_banks,
             prg_ram_shift,
             chr_ram_shift,
-            tv_mode,
-            vs_data,
         })
     }
 }
@@ -626,8 +568,6 @@ impl std::fmt::Debug for NesHeader {
             .field("chr_rom_banks", &self.chr_rom_banks)
             .field("prg_ram_shift", &self.prg_ram_shift)
             .field("chr_ram_shift", &self.chr_ram_shift)
-            .field("tv_mode", &self.tv_mode)
-            .field("vs_data", &self.vs_data)
             .finish()
     }
 }
@@ -813,18 +753,21 @@ mod tests {
     fn a_loaded_cart_reports_its_file_contents_and_flags() {
         let cart = Cart::from_rom("test.nes", &mut &ines(2, 1, 0x13, 0)[..]).expect("loads");
         assert_eq!(cart.mapper_num(), 1);
-        assert!(cart.is_ines() && !cart.is_nes2());
+        assert_eq!(cart.header.variant, NesVariant::INes);
         assert_eq!(cart.mirroring(), Mirroring::Vertical);
         assert!(cart.battery_backed());
         assert_eq!(cart.prg_rom().len(), 2 * PRG_ROM_BANK_SIZE);
         assert_eq!(cart.prg_rom()[PRG_ROM_BANK_SIZE], 1, "second bank");
         assert_eq!(cart.prg_rom[2 * PRG_ROM_BANK_SIZE], 0, "mirrored image");
-        assert_eq!(cart.chr_rom(), &[0xC0; CHR_ROM_BANK_SIZE][..]);
+        assert_eq!(
+            &cart.memory.region_ref(Src::Chr)[..cart.chr_rom_size],
+            &[0xC0; CHR_ROM_BANK_SIZE][..]
+        );
 
         let cart = Cart::from_rom("test.nes", &mut &ines(1, 0, 0x00, 0)[..]).expect("loads");
         assert_eq!(cart.mirroring(), Mirroring::Horizontal);
         assert!(!cart.battery_backed());
-        assert!(cart.chr_rom().is_empty(), "CHR-RAM cart");
+        assert_eq!(cart.chr_rom_size, 0, "CHR-RAM cart");
     }
 
     /// The mapper number takes its low nibble from byte 6, its high nibble from byte 7 and, in
@@ -892,7 +835,7 @@ mod tests {
         }
         rom[11] = 0x07; // 8K of CHR-RAM
         let cart = Cart::from_rom("test.nes", &mut &rom[..]).expect("8K of CHR-RAM loads");
-        assert!(cart.is_nes2());
+        assert_eq!(cart.header.variant, NesVariant::Nes2);
     }
 
     /// With bits 2-3 of byte 7 clear, nonzero bytes 12-15 mean iNES 0.7 (bytes 8-15 may hold
