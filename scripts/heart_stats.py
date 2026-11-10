@@ -15,12 +15,19 @@ from pathlib import Path
 FIELDS = ('dropped', 'taken', 'healed', 'wasted', 'left', 'left_hurt')
 
 
+def room_text(level: int, room: int | str, in_cave: bool) -> str:
+    """'1:0x23' / '0:0x77:cave' for an eval record's ``[level, room, in_cave]`` or a chain record's fields."""
+    room = room if isinstance(room, str) else f"0x{room:02x}"
+    return f"{level}:{room}{':cave' if in_cave else ''}"
+
+
 def eval_rows(path: Path, data: dict):
     family = data.get('specialist', path.stem)
     for r in data['records']:
         h = r['hearts']
         hurt = r['health'] < r['max_health'] and r['health'] > 0
-        yield family, r.get('room', ''), {
+        room = room_text(*r['room']) if r.get('room') else ''
+        yield family, room, {
             'dropped': h['dropped'], 'taken': h['taken'], 'healed': h['healed'], 'wasted': h['wasted'],
             'left': h['left'], 'left_hurt': h['left'] if hurt else 0, 'success': bool(r['success']),
             'health_in': r['start_health'], 'health_change': r['health'] - r['start_health']}
@@ -30,8 +37,10 @@ def chain_rows(path: Path):
     for line in path.open():
         run = json.loads(line)
         for v in run['rooms']:
+            if v['outcome'] == 'milestone':     # the run's end marker, not a room a specialist played
+                continue
             hurt = 0 < v['health_out'] < v['max_health']
-            room = f"{v['level']}:{v['room']}{':cave' if v.get('in_cave') else ''}"
+            room = room_text(v['level'], v['room'], v.get('in_cave'))
             yield v['specialist'], room, {
                 'dropped': v['hearts_dropped'], 'taken': v['hearts_taken'], 'healed': v['hearts_healed'],
                 'wasted': v['hearts_wasted'], 'left': v['hearts_left'],

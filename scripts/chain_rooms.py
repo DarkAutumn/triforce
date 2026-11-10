@@ -18,6 +18,8 @@ def main(paths):
     for run in runs:
         rooms = run.get('rooms', [])
         for i, r in enumerate(rooms):
+            if r['outcome'] == 'milestone':     # the run's end marker, not a room a specialist played
+                continue
             key = f"{r['level']}:{r['room']}" + (':cave' if r['in_cave'] else '')
             if key not in visits:
                 order.append(key)
