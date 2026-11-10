@@ -317,6 +317,7 @@ class Run:
         self.eval_start = self.eval_progress = self.eval = self.end = self.checkpoint = None
         self.progress: list[dict] = []
         self.errors: list[dict] = []
+        self._series: dict[tuple[str, int], tuple[int, int, list]] = {}
 
     @property
     def name(self) -> str:
@@ -536,14 +537,22 @@ class Run:
         return self.entry.get('train_balanced_last')
 
     def series(self, key: str, skip: int = 0) -> list[tuple[float, float]]:
-        """(iteration, metric) points from progress events, leaving out the run's first ``skip`` iterations."""
+        """(iteration, metric) points from progress events, leaving out the run's first ``skip`` iterations.
+        Cached per (key, skip) and extended with new progress events only (rows repaint 30 times a second); the
+        returned list is never changed afterwards."""
         cutoff = self.first_iteration + skip
-        points = []
-        for event in self.progress:
-            iteration = event.get('iteration', len(points) + 1)
+        cached = self._series.get((key, skip))
+        if cached is not None and cached[0] == cutoff and cached[1] == len(self.progress):
+            return cached[2]
+        points, done = (cached[2], cached[1]) if cached is not None and cached[0] == cutoff else ([], 0)
+        new = []
+        for event in self.progress[done:]:
+            iteration = event.get('iteration', len(points) + len(new) + 1)
             value = (event.get('metrics') or {}).get(key)
             if iteration > cutoff and isinstance(value, (int, float)) and math.isfinite(value):
-                points.append((iteration, float(value)))
+                new.append((iteration, float(value)))
+        points = points + new if new else points
+        self._series[(key, skip)] = (cutoff, len(self.progress), points)
         return points
 
     def last(self, key: str):

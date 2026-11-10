@@ -189,3 +189,21 @@ def test_a_running_plan_still_evaluates(tmp_path):
     training = finished_plan_folder(tmp_path, 'running')
     assert training.statuses() == ['evaluating', 'interrupted']
     assert training.active_index() == 0
+
+
+def test_run_series_cache_follows_new_progress_and_clear(tmp_path):
+    run = gui.Run(tmp_path, 0, {'specialist': 'ow-start'})
+    for iteration in (1, 2, 3):
+        run.apply({'event': 'progress', 'iteration': iteration, 'metrics': {'success_rate': iteration / 10}})
+    first = run.series('success_rate')
+    assert first == [(1, 0.1), (2, 0.2), (3, 0.3)]
+    assert run.last('reward/total') is None
+    assert run.series('success_rate') is first
+    run.apply({'event': 'progress', 'iteration': 4, 'metrics': {'success_rate': 0.4}})
+    assert run.series('success_rate') == [(1, 0.1), (2, 0.2), (3, 0.3), (4, 0.4)]
+    assert first == [(1, 0.1), (2, 0.2), (3, 0.3)]          # a list handed out is never changed
+    assert run.series('success_rate', skip=2) == [(3, 0.3), (4, 0.4)]
+    run.apply({'event': 'start', 'start_iteration': 3})     # a resumed run: the cutoff moves
+    assert run.series('success_rate') == [(4, 0.4)]
+    run.clear()
+    assert run.series('success_rate') == []
