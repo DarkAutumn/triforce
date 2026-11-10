@@ -7,7 +7,7 @@ room and plays the route end to end.
 - Working on the repo (people or agents): `AGENTS.md` (standing rules, workflow, how to resume), then the newest
   `docs/experiments/round*.md` and `docs/experiments/backlog.md`.
 - Design and status: `docs/architecture.md` (modules and contracts), `docs/decisions.md` (departures from
-  the design), `docs/progress.md` (phase status), `docs/performance.md` (training throughput: benchmarks,
+  the design), `docs/progress.md` (Phase 0–2 status, historical), `docs/performance.md` (training throughput: benchmarks,
   profiles, `scripts/train_bench.sh` / `scripts/profile_train.sh`), `docs/rust-actor.md` (the agent acting in
   Rust: rollouts, plays, replay files).
 - Game knowledge: `docs/ram-catalog.md` (RAM features), `docs/routes/d2first.md` (the route; `docs/route.md` is the old milestone1 route),
@@ -46,14 +46,15 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python -m triforce.evaluate --specialist ow-start      # promoted model on its own rooms
 .venv/bin/python -m triforce.explore --specialist ow-zora --parallel 16   # Go-Explore: trajectories/ow-zora
 .venv/bin/python -m triforce.train --specialist ow-zora --parallel 16   # curriculum: on in ow-zora.yaml
-.venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist
+.venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist (promotes only with --promote)
 uv run training-gui.py                                          # live training monitor (newest logs/ folder)
 .venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--scale N, --plays PATH; keys u/+/-/p)
 .venv/bin/python zelda-map.py                                   # room map + per-room eval stats of the promoted models (--rerender)
 .venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
-.venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states (start/build/path/audit)
+.venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states into target/entry-states/<ts> (start/build/path/install/audit)
+.venv/bin/python -m triforce.entry_states install target/entry-states/<ts>   # then copy the finished build into triforce/states
 triforce promote <specialist> <run-id>
-triforce eval-chain --runs 20 --parallel 20                     # route d2first
+triforce eval-chain --runs 20 --parallel 20                     # route d2first; writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
 cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
 ```
 
@@ -63,15 +64,17 @@ restores the full 0–100% range. Health change encloses both real and total ser
 the "no change" reference appears only when zero is within that range.
 
 `zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
-first playable frames (cached in `screens/`, gitignored; `--rerender` rebuilds them) and overlays per-room
-statistics: hits taken, hearts ± and death rate per visit. They come from the promoted models' `eval.json`
-`visited_rooms` (eval format 2, every room an evaluation episode visited), merged across specialists weighted by
-visits; older evals are skipped. Click a room for everything known about it; wheel zooms, drag or arrows pan,
-Home fits, F5 reloads.
+first playable frames (cached in `screens/`, gitignored; `--rerender` rebuilds them); a dungeon's item cellars are
+drawn with their entrance room. It overlays per-room statistics: hits taken, hearts ± and death rate per visit.
+They come from each promoted model's evaluation of its current weights in its act mode (`eval.json` or
+`eval-<mode>.json`, `evaluate.read_evaluation`), `visited_rooms` (eval format 2, every room an evaluation episode
+visited), merged across specialists weighted by visits; other evals are skipped. Click a room for everything known
+about it; wheel zooms, drag or arrows pan, Home fits, F5 reloads.
 
 `triforce.play` is the debugging tool: it drives the game through the same Rust code path as training
 (option executor, interrupts, masks, look-ahead) and prints the room, entities, legal actions and an ASCII
-tile map. `--screenshot`, `--ram`, `--set`, `--save-state` and `--capture` help build and inspect savestates.
+tile map. `--screenshot`, `--ram`, `--set` and `--save-state` help inspect savestates; `--capture` saves post-entry
+states with the old v1 naming (not training start states: those come from `triforce.entry_states`).
 
 ## Emulator regression suite
 
@@ -120,7 +123,7 @@ Two suites, both about a minute: `cargo test --release --workspace --features ze
 | Formats | `crates/movie` | `TFMOVIE`/`TFGOLDEN` round trips and refusals |
 | Game model | `crates/zelda` (unit tests, `tests/game.rs`, `game_view.rs`, `objectives.rs`) | RAM decoding, masks, the option executor and its interrupts, look-ahead credit, room entry, objectives, hearts, linger |
 | Env | `crates/env` (unit tests, `tests/*.rs`) | configs, every reward/penalty term, end-condition precedence, observations, curriculum, chains, explorer |
-| Pool | `crates/pool` | lockstep determinism across thread counts, auto-reset, render toggle, pacing, failures, eval/chain adapters |
+| Pool | `crates/pool` | rollout and play determinism across thread counts, auto-reset, render toggle, pacing, failures, eval/chain adapters |
 | Python | `tests/` (`tests/native` for `triforce._native`) | PPO/buffer/metrics, CLIs (train, evaluate, eval-chain, run, play, entry_states, explore), watch grid, registry, the native wrapper's errors and pickling; `-m e2e` runs the end-to-end pipelines |
 
 Coverage (`cargo llvm-cov --release --workspace --features zelda/zcore --summary-only`,

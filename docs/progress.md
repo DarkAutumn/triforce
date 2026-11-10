@@ -1,6 +1,9 @@
-# Progress
+# Progress (historical)
 
-Status by design phase (§11). Numbers are from this machine (20 cores, RTX 4090).
+Historical: the status on Nov 2, before the Rust port and the d2first route. Current status: AGENTS.md "Where things
+stand" and the newest `docs/experiments/round*.md`.
+
+Status by design phase (§11). Numbers are from this machine (10 cores / 20 threads, RTX 4090).
 
 ## Phase 0 — Survey: docs written, awaiting Lee's review
 
