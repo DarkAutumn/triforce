@@ -597,6 +597,7 @@ fn measured_ending_credits_threshold_action_before_check() {
         objective_kind: ObjectiveKind::Move,
         next_rooms: [MapLocation::new(1, 0x63, false)].into_iter().collect(),
         has_targets: true,
+        targets: BTreeSet::new(),
     };
 
     // build_end_conditions: no_progress_steps swaps Timeout for NoRoomProgress.

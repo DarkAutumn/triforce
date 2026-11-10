@@ -2,7 +2,9 @@
 //!
 //! A frozen wavefront measures new best approaches: moving enemies cannot manufacture progress for a stationary
 //! Link, and walking the same loop cannot repeatedly reset the clock.  The distance baseline refreshes after a
-//! hit, kill, pickup/healing, room exit or objective phase change; a phase change by itself is not progress.
+//! hit, kill, pickup/healing, room exit or objective phase change (its kind, next rooms or, but in a fight, its
+//! targets: a shutter or bomb wall that opens, a pushed block), and while the frozen wavefront can't reach Link; a
+//! refresh by itself is not progress.
 
 use crate::change::Change;
 use crate::enums::{Direction, MapLocation, Tile, enemy};
@@ -26,6 +28,8 @@ pub struct LingerState {
     pub objective_kind: ObjectiveKind,
     pub next_rooms: BTreeSet<MapLocation>,
     pub has_targets: bool,
+    /// The objective's PBRS targets but in a fight (whose targets are the moving monsters): part of the phase.
+    pub targets: BTreeSet<Target>,
 }
 
 impl LingerState {
@@ -44,17 +48,26 @@ impl LingerState {
             objective_kind: objective.kind,
             next_rooms: objective.next_rooms.clone(),
             has_targets: !objective.pbrs_targets.is_empty(),
+            targets: if objective.kind == ObjectiveKind::Fight {
+                BTreeSet::new()
+            } else {
+                objective.pbrs_targets.clone()
+            },
         }
     }
 
-    fn phase(&self) -> (MapLocation, ObjectiveKind, BTreeSet<MapLocation>) {
+    fn phase(&self) -> Phase {
         (
             self.full_location,
             self.objective_kind,
             self.next_rooms.clone(),
+            self.targets.clone(),
         )
     }
 }
+
+/// What a frozen wavefront belongs to: room, objective kind, next rooms, targets (none in a fight).
+type Phase = (MapLocation, ObjectiveKind, BTreeSet<MapLocation>, BTreeSet<Target>);
 
 /// What the tracker reads from one step.
 #[derive(Clone, Copy, Debug, Default)]
@@ -122,7 +135,7 @@ pub struct LingerTracker {
     pub s: LingerSummary,
     /// (level, room, in cave) the visit started in.
     pub start_room: (u8, u8, bool),
-    phase: Option<(MapLocation, ObjectiveKind, BTreeSet<MapLocation>)>,
+    phase: Option<Phase>,
     has_targets: bool,
     wavefront: Option<Arc<Wavefront>>,
     best: Option<i32>,
@@ -204,7 +217,11 @@ impl LingerTracker {
             s.max_steps = s.max_steps.max(s.tail_steps);
             s.max_frames = s.max_frames.max(s.tail_frames);
         }
-        if tangible || !same_phase || (!self.has_targets && curr.has_targets) {
+        // A frozen wavefront that can't reach Link (built while the exit was still shut) measures nothing.
+        let blind = curr.has_targets
+            && self.best.is_none()
+            && self.wavefront.as_ref().is_none_or(|w| w.get(curr.tile).is_none());
+        if tangible || !same_phase || (!self.has_targets && curr.has_targets) || blind {
             self.baseline(curr, wavefront);
         }
     }
@@ -249,6 +266,7 @@ mod tests {
                 objective_kind: kind,
                 next_rooms: [MapLocation::new(1, 0x36, false)].into_iter().collect(),
                 has_targets: true,
+                targets: BTreeSet::new(),
             },
             target,
         }
@@ -302,6 +320,24 @@ mod tests {
             (s.max_steps, s.max_frames, s.tail_steps, s.tail_frames),
             (3, 52, 3, 52)
         );
+    }
+
+    /// F154: a baseline taken while the exit was shut (a wavefront that can't reach Link) refreshes once the
+    /// wavefront reaches him; then each step closer is progress.
+    #[test]
+    fn a_blind_baseline_refreshes_when_the_exit_opens() {
+        let mut t = LingerTracker::default();
+        let shut = base();
+        t.reset(&shut.st, || Arc::new(Wavefront::from_distances([((0, 1), 0)])));
+        let open = |tile| state(tile, 0, ObjectiveKind::Move, 0x35, 0, false, 3);
+        // The door opens: same phase, the new wavefront reaches Link (a refresh, not progress).
+        let (a, b, c) = (open(5), open(4), open(3));
+        update(&mut t, &shut, &a, 4, false, false, 0, 0.0);
+        assert_eq!(t.tail_steps(), 1);
+        update(&mut t, &a, &b, 4, false, false, 0, 0.0);
+        assert_eq!(t.tail_steps(), 0, "one tile closer to the open exit");
+        update(&mut t, &b, &c, 4, false, false, 0, 0.0);
+        assert_eq!(t.tail_steps(), 0);
     }
 
     #[test]
