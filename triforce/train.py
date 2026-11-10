@@ -203,7 +203,8 @@ def parse_args(argv=None):
     parser.add_argument('--steps-per-update', type=int, default=PPOConfig.target_steps)
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
     parser.add_argument('--run-id', default=None)
-    parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
+    parser.add_argument('--models-dir', default=None,
+                        help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
     parser.add_argument('--save-every', type=int, default=10, help="checkpoint every N iterations (and at the end)")
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
     parser.add_argument('--ent-anneal', type=float, default=PPOConfig.ent_anneal,
@@ -261,8 +262,8 @@ def parse_args(argv=None):
                              "see EarlyStop) >= this for --stop-patience iterations")
     parser.add_argument('--stop-patience', type=int, default=5)
     parser.add_argument('--curriculum', default=None,
-                        help="trajectories dir from triforce.explore: backward-curriculum starts (curriculum.py); "
-                             "default: the specialist's curriculum config")
+                        help="trajectories dir from triforce.explore: backward-curriculum starts "
+                             "(crates/env/src/curriculum.rs); default: the specialist's curriculum config")
     parser.add_argument('--no-curriculum', action='store_true', help="ignore the specialist's curriculum config")
     parser.add_argument('--curriculum-fraction', type=float, default=None,
                         help="share of resets that start on a trajectory while any is incomplete (default: config)")
@@ -331,7 +332,26 @@ def initial_model(args, config: SpecialistConfig, root):
     return network, None, 0, 0, source
 
 
-def open_events(args, specialist: str, run_id: str, run_dir: Path):
+def steps_per_iteration(args) -> int:
+    """Env steps one iteration trains: ``--steps-per-update`` rounded down to a multiple of ``--parallel`` (each env
+    steps ``steps_per_update // parallel`` decisions)."""
+    return (args.steps_per_update // args.parallel) * args.parallel
+
+
+def validate_args(args):
+    """Rejects values that would crash mid-run or train something other than what is reported (SystemExit)."""
+    checks = [(args.parallel >= 1, "--parallel must be >= 1"),
+              (args.iterations >= 1, "--iterations must be >= 1"),
+              (args.save_every >= 1, "--save-every must be >= 1"),
+              (args.stop_patience >= 1, "--stop-patience must be >= 1"),
+              (args.best_of_n <= 0 or args.best_every >= 1, "--best-every must be >= 1"),
+              (args.steps_per_update >= args.parallel, "--steps-per-update must be >= --parallel")]
+    for ok, message in checks:
+        if not ok:
+            raise SystemExit(message)
+
+
+def open_events(args, specialist: str, run_id: str, run_dir: Path, argv: list[str]):
     """(EventLog, TrainingPlan or None).  With --events the caller owns the stream; otherwise this training run
     gets its own log folder and writes the final 'end' event itself."""
     context = {'specialist': specialist, 'run_id': run_id}
@@ -340,8 +360,8 @@ def open_events(args, specialist: str, run_id: str, run_dir: Path):
     log_dir = new_log_dir(specialist, args.logs_dir)
     plan = TrainingPlan(log_dir, specialist, 'train', [{
         'specialist': specialist, 'run_id': run_id, 'events': f'{specialist}.jsonl', 'run_dir': str(run_dir),
-        'target_iterations': args.iterations, 'target_steps': args.iterations * args.steps_per_update}],
-                        command=['python', '-m', 'triforce.train', *sys.argv[1:]])
+        'target_iterations': args.iterations, 'target_steps': args.iterations * steps_per_iteration(args)}],
+                        command=['python', '-m', 'triforce.train', *argv])
     plan.update_run(0, status='running')
     print(f"[train] events: {log_dir / f'{specialist}.jsonl'}")
     return EventLog(log_dir / f'{specialist}.jsonl', **context), plan
@@ -390,11 +410,11 @@ def curriculum_spec(args, config, out_dir: Path,
 
 def main(argv=None) -> Path:
     """Runs training; returns the run directory."""
+    argv = sys.argv[1:] if argv is None else list(argv)
     args = parse_args(argv)
+    validate_args(args)
     if args.seed is not None:
         torch.manual_seed(args.seed)
-    if args.parallel < 1:
-        raise SystemExit("--parallel must be >= 1")
     if args.threads is None:
         args.threads = min(args.parallel, os.cpu_count() or 1)
     if args.threads < 1:
@@ -407,7 +427,7 @@ def main(argv=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(specialist, run_id, root)
     out_dir.mkdir(parents=True, exist_ok=True)
-    events, plan = open_events(args, specialist, run_id, out_dir)
+    events, plan = open_events(args, specialist, run_id, out_dir, argv)
     try:
         summary = _train(args, specialist, run_id, root, out_dir, events)
     except Exception as error:
@@ -493,12 +513,15 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} "
-          f"parallel={args.parallel} threads={args.threads} steps/update={args.steps_per_update} "
+          f"parallel={args.parallel} threads={args.threads} steps/update={steps_per_iteration(args)} "
           f"device={args.device}"
           + (f" from={source}" if source else ""))
-    target_steps = start_steps + args.iterations * args.steps_per_update
+    if steps_per_iteration(args) != args.steps_per_update:
+        print(f"[train] note: --steps-per-update {args.steps_per_update} is not a multiple of --parallel "
+              f"{args.parallel}; each iteration trains {steps_per_iteration(args)} steps")
+    target_steps = start_steps + args.iterations * steps_per_iteration(args)
     events.emit('start', target_iterations=start_iteration + args.iterations, target_steps=target_steps,
-                start_iteration=start_iteration, start_steps=start_steps, steps_per_update=args.steps_per_update,
+                start_iteration=start_iteration, start_steps=start_steps, steps_per_update=steps_per_iteration(args),
                 parallel=args.parallel, threads=args.threads, device=args.device,
                 curriculum=trajectories, source=source,
                 stop_success=args.stop_success, stop_patience=args.stop_patience, run_dir=str(out_dir),
@@ -507,7 +530,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     logger = MetricsLogger(str(out_dir))
     state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'saved': None,
              'stopped_early': False}
-    steps_per_env = max(1, args.steps_per_update // args.parallel)
+    steps_per_env = args.steps_per_update // args.parallel
     early = EarlyStop(args.stop_success, args.stop_patience,
                       min_iterations=math.ceil(config.max_steps / steps_per_env) + args.stop_patience)
     ckpt = registry.checkpoint_path(specialist, run_id, root)
@@ -609,7 +632,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         'iterations_trained': state['iteration'] - start_iteration, 'steps_trained': trained,
         'stopped_early': state['stopped_early'], 'wall_seconds': elapsed, 'steps_per_second': sps})
     print(f"[train] {'interrupted' if status == 'interrupted' else 'done'}: {state['iteration'] - start_iteration} "
-          f"iterations, {trained} steps in {elapsed:.1f}s ({sps:.1f} steps/sec); checkpoint {ckpt}")
+          f"iterations, {trained} steps in {elapsed:.1f}s ({sps:.1f} steps/sec); "
+          + (f"checkpoint {ckpt}" if ckpt.is_file() else "no checkpoint"))
     summary = {'status': status, 'iterations': state['iteration'],
                'steps': state['steps'], 'wall_seconds': round(elapsed, 1), 'sps': round(sps, 1),
                'checkpoint': str(ckpt) if ckpt.is_file() else None}

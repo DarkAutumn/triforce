@@ -447,6 +447,27 @@ def _train_round():
     return module
 
 
+@pytest.mark.parametrize('flags', [['--save-every', '0'], ['--iterations', '0'], ['--stop-patience', '0'],
+                                   ['--best-of-n', '1', '--best-every', '0'], ['--steps-per-update', '1']])
+def test_bad_counts_are_rejected_before_the_run_dir_is_written(states_dir, tmp_path, flags):
+    with pytest.raises(SystemExit):
+        train.main(_common(states_dir, tmp_path, '--parallel', '2', '--run-id', 'bad', *flags))
+    assert not (tmp_path / SPECIALIST).exists()
+
+
+def test_target_steps_are_what_the_parallel_envs_train(states_dir, tmp_path, logs_dir):
+    """--parallel 3 --steps-per-update 32 trains 30 steps per iteration; the targets say so (F136)."""
+    run_dir = train.main(_common(states_dir, tmp_path, '--parallel', '3', '--steps-per-update', '32',
+                                 '--iterations', '2', '--no-curriculum', '--run-id', 'thirty', '--seed', '1'))
+    (log_dir,) = logs_dir.iterdir()
+    plan = json.loads((log_dir / 'training.json').read_text())
+    events = read_jsonl(str(log_dir / plan['runs'][0]['events']))
+    start = next(e for e in events if e['event'] == 'start')
+    assert start['target_steps'] == 60 == plan['runs'][0]['target_steps']
+    assert registry.load_checkpoint(run_dir)['steps'] == 60
+    assert plan['command'][3:5] == ['--specialist', SPECIALIST]
+
+
 def test_round_driver_sets_unfinished_runs_aside_and_skips_finished_ones(tmp_path, monkeypatch):
     round_ = _train_round()
     monkeypatch.setattr(round_, 'say', lambda *_: None)
