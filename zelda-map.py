@@ -16,10 +16,14 @@ room (the sidebar shows what is known about it).  The overlay buttons draw a val
 location, hits taken per visit, hearts gained or lost per visit, or the share of visits that ended in death.
 Colours are colorblind-safe: blue is good, red is bad, purple in between.
 
-The statistics come from every promoted specialist's ``eval.json`` (``<models>/<specialist>/<run-id>``) in the
-detailed format (``"format": 2``, written by ``triforce.evaluate``): ``visited_rooms`` holds per-room means over
-every visit to a room during evaluation, not just the start rooms.  Rooms seen by several specialists are merged
-weighted by visits.  Reload (or F5) re-reads them.
+The statistics come from every promoted specialist's evaluation of its current weights in its act mode
+(``triforce.evaluate.read_evaluation``: ``eval.json`` or ``eval-<mode>.json`` in ``<models>/<specialist>/<run-id>``)
+in the detailed format (``"format": 2``, written by ``triforce.evaluate``): ``visited_rooms`` holds per-room means
+over every visit to a room during evaluation, not just the start rooms.  Rooms seen by several specialists are merged
+weighted by visits; the status line counts the act modes.  Reload (or F5) re-reads them.
+
+A dungeon's cellars (1:0x7f under 1:0x22, 3:0x0f under 3:0x69; ``game_rooms()`` 'cave' exits) are drawn with the
+room that has their stairs, as an overworld cave is with its room.
 
 ``--route NAME`` draws a ``routes.yaml`` route: its rooms outlined, arrows between consecutive rooms, each room's
 step numbers (``cave`` where the route takes a cave or dungeon stairs), and in the sidebar every step through the
@@ -48,6 +52,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, 
 from triforce import registry
 from triforce._native import CHEAT_ITEMS, Game, game_rooms, routes, specialist_for
 from triforce._native import route_steps as native_route_steps
+from triforce.evaluate import read_evaluation
 from triforce.paths import STATES_DIR
 from triforce.specialist import list_specialists
 
@@ -309,23 +314,27 @@ def merge_room_stats(entries: list[tuple[str, dict]]) -> dict:
     return merged
 
 
-def read_eval(path: Path) -> tuple[str, Optional[dict]]:
-    """(status, visited_rooms) of one eval.json: 'detailed', 'no eval.json', 'unreadable' or 'old format'."""
-    if not path.is_file():
-        return 'no eval.json', None
+def read_eval(run_dir: Path) -> tuple[str, Optional[dict], Optional[str], str]:
+    """(status, visited_rooms, act mode, why) of a run's evaluation of its current weights in its act mode
+    (``triforce.evaluate.read_evaluation``: ``eval.json`` or ``eval-<mode>.json``).  status: 'detailed', 'no eval'
+    (none in the run's act mode for these weights; ``why`` says what was found), 'unreadable' or 'old format'."""
     try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return 'unreadable', None
+        path, data = read_evaluation(run_dir)
+    except (FileNotFoundError, LookupError) as error:      # no ckpt.pt, or no evaluation of it in its act mode
+        return 'no eval', None, None, str(error)
+    except (OSError, ValueError) as error:
+        return 'unreadable', None, None, str(error)
+    mode = registry.eval_mode(data)
     if data.get('format') != DETAILED_FORMAT or not isinstance(data.get('visited_rooms'), dict):
-        return 'old format', None
-    return 'detailed', data['visited_rooms']
+        return 'old format', None, mode, path.name
+    return 'detailed', data['visited_rooms'], mode, path.name
 
 
 def load_evals(models_dir: Path, run_id: Optional[str] = None) -> tuple[dict[Key, dict], list[dict]]:
-    """The merged per-room stats of every promoted specialist's detailed eval, and one source entry per promoted
-    specialist: {'specialist', 'run', 'status', 'rooms', 'visits'}.  With ``run_id``, a specialist's
-    ``<run_id>/eval.json`` is used instead when it exists (e.g. a round trained with ``--no-promote``)."""
+    """The merged per-room stats of every promoted specialist's detailed eval (of its current weights, in its act
+    mode), and one source entry per promoted specialist: {'specialist', 'run', 'status', 'mode', 'file', 'rooms',
+    'visits'}.  With ``run_id``, a specialist's ``<run_id>`` evaluation is used instead when it has one (e.g. a round
+    trained with ``--no-promote``)."""
     per_room, sources = defaultdict(list), []
     root = Path(models_dir)
     current = set(list_specialists())
@@ -334,10 +343,16 @@ def load_evals(models_dir: Path, run_id: Optional[str] = None) -> tuple[dict[Key
         if directory.name not in current or not (directory / registry.PROMOTED_NAME).is_file():
             continue
         run = registry.promoted_run(directory.name, root)
-        if run_id and (directory / run_id / 'eval.json').is_file():
-            run = run_id
-        status, rooms = read_eval(directory / run / 'eval.json')
-        source = {'specialist': directory.name, 'run': run, 'status': status, 'rooms': 0, 'visits': 0}
+        read = None
+        if run_id and (directory / run_id / registry.CHECKPOINT_NAME).is_file():
+            read = read_eval(directory / run_id)
+            if read[0] == 'detailed':
+                run = run_id
+            else:
+                read = None
+        status, rooms, mode, file = read or read_eval(directory / run)
+        source = {'specialist': directory.name, 'run': run, 'status': status, 'mode': mode, 'file': file,
+                  'rooms': 0, 'visits': 0}
         for stats in (rooms or {}).values():
             if stats.get('visits'):
                 key = (int(stats['level']), int(stats['room']), bool(stats.get('in_cave')))
@@ -350,15 +365,17 @@ def load_evals(models_dir: Path, run_id: Optional[str] = None) -> tuple[dict[Key
 
 
 def eval_status(sources: list[dict]) -> str:
-    """'Eval data: 3 specialists (1,240 room visits) · 9 without detailed evals'."""
+    """'Eval data: 3 specialists (1,240 room visits; 2 argmax, 1 sample) · 9 without detailed evals'."""
     detailed = [s for s in sources if s['status'] == 'detailed']
     missing = len(sources) - len(detailed)
     if not sources:
         return 'Eval data: no promoted specialists'
     if not detailed:
         return f'Eval data: none of the {len(sources)} promoted specialists has a detailed eval'
+    modes = Counter(s['mode'] for s in detailed)
     text = (f"Eval data: {len(detailed)} specialist{'' if len(detailed) == 1 else 's'} "
-            f"({sum(s['visits'] for s in detailed):,} room visits)")
+            f"({sum(s['visits'] for s in detailed):,} room visits; "
+            f"{', '.join(f'{n} {mode}' for mode, n in sorted(modes.items()))})")
     return text + (f" · {missing} without detailed evals" if missing else '')
 
 
@@ -830,7 +847,7 @@ class MapWindow(QMainWindow):
         bar.addWidget(self.status)
         reload_button = QPushButton('Reload')
         reload_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        reload_button.setToolTip('Re-read the promoted models\' eval.json files (F5)')
+        reload_button.setToolTip('Re-read the promoted models\' evaluations (F5)')
         reload_button.clicked.connect(self.reload)
         bar.addWidget(reload_button)
         layout.addLayout(bar)
@@ -875,12 +892,14 @@ class MapWindow(QMainWindow):
 
     # data
     def reload(self):
-        """Re-reads every promoted specialist's eval.json."""
+        """Re-reads every promoted specialist's evaluation (of its current weights, in its act mode)."""
         self.stats, self.sources = load_evals(self.models_dir, self.run_id)
         self.status.setText(eval_status(self.sources))
         self.status.setToolTip('\n'.join(
-            f"{s['specialist']} ({s['run']}): {s['status']}"
-            + (f", {s['rooms']} rooms, {s['visits']:,} visits" if s['status'] == 'detailed' else '')
+            f"{s['specialist']} ({s['run']}"
+            + (f", {s['mode']}, {s['file']}" if s['mode'] else '') + f"): {s['status']}"
+            + (f", {s['rooms']} rooms, {s['visits']:,} visits" if s['status'] == 'detailed'
+               else f" ({s['file']})" if not s['mode'] else '')
             for s in self.sources) or f'no promoted specialists in {self.models_dir}')
         if self.tabs.count():
             self.show_level(self.level, keep_view=True)
@@ -992,7 +1011,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="room screenshot cache (default <repo>/screens)")
     parser.add_argument('--rerender', action='store_true', help="render every room screenshot again")
     parser.add_argument('--run-id', default=None,
-                        help="use each specialist's <run-id>/eval.json where it exists, else the promoted run's")
+                        help="use each specialist's <run-id> evaluation where it has one, else the promoted run's")
     parser.add_argument('--route', default=None, choices=routes(),
                         help="draw this routes.yaml route over the map (default: none)")
     return parser
