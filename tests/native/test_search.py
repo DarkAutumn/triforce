@@ -13,6 +13,7 @@ import torch
 from triforce import _native as native
 from triforce.rollout_buffer import RolloutBuffer
 
+from ..conftest import REPO_STATES_DIR, require_state
 from ..networks import random_network as network
 
 ENVS, STEPS, JOINT = 4, 6, 224
@@ -106,6 +107,77 @@ def test_independent_evaluations_of_a_candidate_agree(states_dir, tmp_path):
     assert np.isfinite(q1).all() and np.isfinite(q2).all()
     np.testing.assert_allclose(q1, q2, rtol=1e-6, atol=1e-6)
     assert (q1.argmax(axis=1) == q2.argmax(axis=1)).all()
+
+
+def argmax_rollout(p, policy, search, steps=STEPS):
+    """A deterministic rollout (no root noise, argmax rows) with every search buffer, as {key: copy}."""
+    k = search['candidates']
+    views = RolloutBuffer(steps, ENVS, p.obs_spec, 0.99, 0.95).rollout_buffers()
+    views.update(job=np.zeros((ENVS, steps), np.int64), step=np.zeros((ENVS, steps), np.int64),
+                 search_mask=np.zeros((ENVS, steps), bool), search_policy=np.zeros((ENVS, steps, JOINT), np.float32),
+                 search_q=np.zeros((ENVS, steps, k), np.float32), search_actions=np.zeros((ENVS, steps, k, 3), np.int64),
+                 search_value=np.zeros((ENVS, steps), np.float32))
+    p.rollout([policy], steps, views, deterministic=True, search=search)
+    rows = {f'obs/{key}': v.copy() for key, v in views['obs'].items()}
+    rows.update({key: v.copy() for key, v in views.items() if key != 'obs'})
+    return rows
+
+
+def test_the_executed_candidates_q_is_its_real_return(states_dir, tmp_path):
+    """One future without RNG redraws, argmax sims and argmax rows: a searched row's Q of the executed candidate is
+    the real continuation's discounted return over depth + 1 steps plus γ^… V(the observation after them)."""
+    policy = network().to_native()
+    depth, gamma, steps = 1, 0.9, 12
+    search = dict(candidates=3, simulations=8, futures=1, depth=depth, gamma=gamma, perturb_rng=False, fraction=0.3)
+    with pool(states_dir, tmp_path, threads=2) as p:
+        rows = argmax_rollout(p, policy, search, steps)
+    checked = 0
+    for env in range(ENVS):
+        for t in range(steps - depth - 1):
+            span = range(t, t + depth + 1)
+            if not rows['search_mask'][env, t] or rows['search_mask'][env, t + 1:t + depth + 1].any():
+                continue
+            if rows['starts'][env, t + 1:t + depth + 2].any():      # an episode ended inside: other V rules
+                continue
+            ret, discount = 0.0, 1.0
+            for i in span:
+                ret += discount * float(rows['rewards'][env, i])
+                discount *= gamma ** (float(rows['frames'][env, i]) / 8.0)
+            leaf = {k[4:]: v[env, t + depth + 1][None] for k, v in rows.items() if k.startswith('obs/')}
+            ret += discount * float(policy.value(leaf)[0])
+            candidates = [tuple(c) for c in rows['search_actions'][env, t]]
+            executed = candidates.index(tuple(rows['actions'][env, t]))
+            assert rows['search_q'][env, t, executed] == pytest.approx(ret, abs=1e-5), (env, t)
+            checked += 1
+    assert checked >= 3, checked
+
+
+def test_search_settings_reach_the_search(states_dir, tmp_path):
+    """Without RNG redraws every future is the same (futures 4 == futures 1 bit for bit); redraws change some Q;
+    gamma and depth change the Qs, c_scale the improved policy."""
+    policy = network().to_native()
+    base = dict(candidates=3, simulations=6, futures=1, depth=2, perturb_rng=False, fraction=1.0)
+    variants = {'base': base, 'futures': dict(base, futures=4), 'perturb': dict(base, futures=4, perturb_rng=True),
+                'gamma': dict(base, gamma=0.5), 'depth': dict(base, depth=4), 'c_scale': dict(base, c_scale=5.0)}
+    out = {}
+    for name, search in variants.items():
+        with pool(states_dir, tmp_path, threads=1, name=name) as p:
+            out[name] = argmax_rollout(p, policy, search)
+    first = lambda name, key: out[name][key][:, 0]          # every env's first decision: the same root everywhere
+    assert first('futures', 'search_q').tobytes() == first('base', 'search_q').tobytes()
+    # RNG redraws matter where enemies move: Dungeon 1's 0x44 (goriya).
+    require_state('1_44w_0')
+    config = native.SpecialistConfig.load('goriya').replace(start_states=['1_44w_0'], max_steps=50)
+    redraws = {}
+    for name, perturb in (('same', False), ('redrawn', True)):
+        task = native.TrainTask(config, str(tmp_path / f'goriya-{name}'), states_dir=str(REPO_STATES_DIR))
+        with native.EnvPool(task, num_envs=ENVS, threads=1, seed=9) as p:
+            redraws[name] = argmax_rollout(p, policy, dict(base, futures=4, depth=6, perturb_rng=perturb))
+    assert not np.array_equal(redraws['redrawn']['search_q'][:, 0], redraws['same']['search_q'][:, 0])
+    assert not np.array_equal(first('gamma', 'search_q'), first('base', 'search_q'))
+    assert not np.array_equal(first('depth', 'search_q'), first('base', 'search_q'))
+    assert first('c_scale', 'search_q').tobytes() == first('base', 'search_q').tobytes()
+    assert not np.allclose(first('c_scale', 'search_policy'), first('base', 'search_policy'))
 
 
 def test_search_runs_in_training_pools_only(states_dir, tmp_path):

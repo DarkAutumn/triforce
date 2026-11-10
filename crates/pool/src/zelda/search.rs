@@ -417,7 +417,7 @@ impl<E: SearchEnv<Action = ZeldaAction>> Planner<E> for GumbelSearch {
 
 #[cfg(test)]
 mod tests {
-    use super::SearchConfig;
+    use super::{Root, SearchConfig, considered_visits};
 
     #[test]
     fn search_constants_must_be_finite_and_non_negative() {
@@ -433,5 +433,119 @@ mod tests {
             let config = SearchConfig { c_visit, c_scale, ..SearchConfig::default() };
             assert!(config.validate().is_err(), "c_visit {c_visit} c_scale {c_scale}");
         }
+    }
+
+    #[test]
+    fn other_settings_are_validated_and_fraction_decides_searches() {
+        let bad = [
+            SearchConfig { candidates: 0, ..SearchConfig::default() },
+            SearchConfig { simulations: 0, ..SearchConfig::default() },
+            SearchConfig { futures: 0, ..SearchConfig::default() },
+            SearchConfig { gamma: 0.0, ..SearchConfig::default() },
+            SearchConfig { gamma: 1.5, ..SearchConfig::default() },
+            SearchConfig { fraction: -0.1, ..SearchConfig::default() },
+            SearchConfig { fraction: 1.1, ..SearchConfig::default() },
+        ];
+        for config in bad {
+            assert!(config.validate().is_err(), "{config:?}");
+        }
+        let never = SearchConfig { fraction: 0.0, ..SearchConfig::default() };
+        let always = SearchConfig { fraction: 1.0, ..SearchConfig::default() };
+        let half = SearchConfig { fraction: 0.5, ..SearchConfig::default() };
+        let searched = (0..1000).filter(|&s| half.searches(7, s)).count();
+        for step in 0..1000 {
+            assert!(!never.searches(7, step) && always.searches(7, step));
+            assert_eq!(half.searches(7, step), half.searches(7, step), "keyed: the same decision, the same answer");
+        }
+        assert!((400..600).contains(&searched), "{searched}");
+    }
+
+    /// The `mctx` `get_sequence_of_considered_visits` table.
+    #[test]
+    fn considered_visits_follow_sequential_halving() {
+        let mut eight = vec![0; 8];
+        eight.extend([1; 4]);
+        eight.extend([2, 2, 3, 3]);
+        assert_eq!(considered_visits(8, 16), eight);
+        assert_eq!(considered_visits(2, 16), (0..8).flat_map(|v| [v, v]).collect::<Vec<u32>>());
+        assert_eq!(considered_visits(3, 16), [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]);
+        assert_eq!(considered_visits(1, 5), [0, 1, 2, 3, 4]);
+        assert_eq!(considered_visits(8, 4), [0, 0, 0, 0]);
+    }
+
+    /// `Root::select` needs a candidate with exactly the considered visit count at every simulation (it returns
+    /// usize::MAX otherwise). Which candidate is picked among equals doesn't change the visit-count multiset.
+    #[test]
+    fn some_candidate_always_has_the_considered_count() {
+        for m in 2..=224 {
+            for n in 1..=64 {
+                let mut visits = vec![0u32; m];
+                for (sim, considered) in considered_visits(m, n).into_iter().enumerate() {
+                    let Some(i) = visits.iter().position(|&v| v == considered) else {
+                        panic!("m {m} n {n}: simulation {sim} considers {considered}, visits {visits:?}");
+                    };
+                    visits[i] += 1;
+                }
+            }
+        }
+    }
+
+    /// Three legal joint actions of four (the last illegal); candidate 0 visited twice (Q 1.0), 1 once (Q 0.5),
+    /// 2 never.
+    fn root() -> Root {
+        Root {
+            logits: vec![0.5f32.ln(), 0.3f32.ln(), 0.2f32.ln(), f32::NEG_INFINITY],
+            gumbel: vec![0.0; 4],
+            candidates: vec![0, 1, 2],
+            visits: vec![2, 1, 0],
+            q_sum: vec![2.0, 0.5, 0.0],
+            value: 0.4,
+            c_visit: 50.0,
+            c_scale: 0.1,
+        }
+    }
+
+    #[test]
+    fn root_statistics_match_mctx() {
+        let r = root();
+        let p = |a: usize| (r.logits[a] as f64).exp();
+        // Mixed value: (V + Σvisits · Σ p·q / Σ p over visited) / (Σvisits + 1).
+        let weighted = (p(0) * 1.0 + p(1) * 0.5) / (p(0) + p(1));
+        let mixed = (0.4 + 3.0 * weighted) / 4.0;
+        assert!((r.mixed_value() - mixed).abs() < 1e-12);
+        // σ: (q - min) / (max - min) over the visited Qs and the mixed value, times (c_visit + max visits) · c_scale.
+        let (lo, hi, factor) = (0.5f64.min(mixed), 1.0f64.max(mixed), (50.0 + 2.0) * 0.1);
+        let sigma = |q: f64| factor * (q - lo) / (hi - lo);
+        assert!((r.sigma(Some(1.0), mixed) - sigma(1.0)).abs() < 1e-12);
+        assert!((r.sigma(Some(0.5), mixed) - sigma(0.5)).abs() < 1e-12);
+        assert!((r.sigma(None, mixed) - sigma(mixed)).abs() < 1e-12);
+        // select: only candidates at the considered count.
+        assert_eq!(r.select(2), 0);
+        assert_eq!(r.select(1), 1);
+        assert_eq!(r.select(0), 2);
+        assert_eq!(r.select(5), usize::MAX);
+        // improved policy: softmax(logit + σ(completed Q)) over legal actions; illegal 0, unvisited σ(mixed).
+        let scores = [
+            r.logits[0] as f64 + sigma(1.0),
+            r.logits[1] as f64 + sigma(0.5),
+            r.logits[2] as f64 + sigma(mixed),
+        ];
+        let total: f64 = scores.iter().map(|s| s.exp()).sum();
+        let mut out = [0f32; 4];
+        r.improved_policy(&mut out);
+        for (o, s) in out.iter().zip(scores) {
+            assert!((*o as f64 - s.exp() / total).abs() < 1e-6, "{out:?}");
+        }
+        assert_eq!(out[3], 0.0);
+    }
+
+    #[test]
+    fn unvisited_root_mixes_to_its_value_and_ties_pick_the_first() {
+        let r = Root { visits: vec![0, 0, 0], q_sum: vec![0.0; 3], logits: vec![0.0; 4], ..root() };
+        assert_eq!(r.mixed_value(), 0.4);
+        assert_eq!(r.select(0), 0, "equal scores: the first candidate");
+        let mut out = [0f32; 4];
+        r.improved_policy(&mut out);
+        assert!(out.iter().all(|&p| (p - 0.25).abs() < 1e-6), "no visits: the prior ({out:?})");
     }
 }
