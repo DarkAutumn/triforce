@@ -561,3 +561,19 @@ fn flashing_or_stunned_monsters_do_not_hurt_on_touch() {
     assert_eq!(with(8, 0x20, 0), 1.0, "always invincible");
     assert_eq!(with(0, 0, 0), 1.0);
 }
+
+/// F187: the selected B item ($656, the executor's own poke) is not in the observation: two states that differ
+/// only there observe the same.
+#[test]
+fn selected_item_is_not_observed() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_44w_0");
+    let objective = no_objective();
+    let mut obs = Vec::new();
+    for item in [0u8, 1, 2] {
+        let state = s.apply_ram(&[(Var::SelectedItem, item)]).clone();
+        obs.push(ObservationBuilder::new(false, false).reset(&state, &objective, None, s.mask()).link);
+    }
+    assert!(obs[0] == obs[1] && obs[1] == obs[2]);
+    assert!(feature_names().link.iter().zip(&obs[0]).all(|(n, &v)| !n.starts_with("selected_") || v == 0.0));
+}

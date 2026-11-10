@@ -1138,10 +1138,8 @@ fn link(state: &GameView) -> [f32; LINK_SIZE] {
     v[l::BOOMERANG] = b(info(Var::RegularBoomerang) != 0);
     v[l::MAGIC_BOOMERANG] = b(info(Var::MagicBoomerang) != 0);
     v[l::MAGIC_SHIELD] = b(info(Var::MagicShield) != 0);
-    let selected = info(Var::SelectedItem);
-    if (0..=8).contains(&selected) {
-        v[l::SELECTED + selected as usize] = 1.0;
-    }
+    // The `selected_*` slice stays zero (Lee, F187): $656 is the executor's own poke for the last B-item action,
+    // not game input, so it would leak which specialist acted last into a chain.
     v
 }
 
