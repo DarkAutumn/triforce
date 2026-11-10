@@ -1,10 +1,10 @@
 //! Start states for specialist episodes (`triforce/start_states.py`).
 //!
 //! - Seed states: the config's savestate globs; the room is verified from RAM after loading.
-//! - [`ProbabilisticSelector`]: round-robin until a full window of results covers every state, then sampling
-//!   weighted by recent results (recency decay 0.9, failures ×2, damage ×1.5, last 128 results).
+//! - [`ProbabilisticSelector`]: round-robin from a random offset until every state has a result, then sampling
+//!   by each state's decayed mean badness (recency decay 0.9, failures ×2, damage ×1.5) over a 15% uniform floor.
 //! - [`StartWeights`]: a training pool's shared seed-state weights (prioritized level replay); while set, seed draws
-//!   follow them instead of the selector's result memory.
+//!   follow them instead of the selector's own weights.
 //! - Harvested states (`<harvested dir>/*.state`) mix with seed states at `harvested_fraction`.
 //! - [`SavestateCapture`]: the first entry of each (room, side) is saved as `<level>_<room><side>.state`.
 //! - [`ram_randomization_values`]: reset-time hp/bombs/keys.
@@ -16,7 +16,7 @@ use crate::config::{SpecialistConfig, format_room, glob};
 use crate::error::EnvError;
 use parking_lot::RwLock;
 use rand::{Rng, RngExt};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::enums::Direction;
@@ -26,7 +26,8 @@ use zelda::{Change, MapLocation, SessionSnapshot, Var};
 pub const DECAY_FACTOR: f64 = 0.9;
 pub const FAILURE_WEIGHT: f64 = 2.0;
 pub const DAMAGE_WEIGHT: f64 = 1.5;
-pub const MEMORY_SIZE: usize = 128;
+/// The share of a selector's draws spread uniformly over its states.
+pub const UNIFORM_FLOOR: f64 = 0.15;
 pub const HARVEST_RESCAN_RESETS: u64 = 64;
 /// Rooms with fewer chain visits keep the `hp` draw (`chain_hp.MIN_SAMPLES`).
 pub const MIN_CHAIN_SAMPLES: usize = 5;
@@ -53,89 +54,146 @@ pub fn weighted_index<R: Rng + ?Sized>(rng: &mut R, weights: &[f64]) -> usize {
     weights.iter().rposition(|w| *w > 0.0).unwrap_or(0)
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct StartResult {
-    state: String,
-    success: bool,
-    health_lost: bool,
+/// One state's decayed results: Σ(decay^age · term) and Σ(decay^age), both as of the state's last result (`last`, the
+/// selector's result clock).  The decay since then scales both alike, so their ratio needs no update in between.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct StateResults {
+    badness: f64,
+    mass: f64,
+    last: u64,
+    seen: bool,
 }
 
-/// Picks start states, favouring recent failures and damage.
+/// Picks start states, favouring states that recently failed or lost health.
+///
+/// - Warm-up: round-robin over the states, from an offset drawn from the caller's RNG on the first draw (so envs
+///   don't move in lockstep), until every state has a recorded result.
+/// - Then each state's weight is its decayed mean badness Σ(decay·term) / Σ(decay) over its own results (term: 1 for a
+///   success, [`FAILURE_WEIGHT`] for a failure, × [`DAMAGE_WEIGHT`] when health was lost; decay [`DECAY_FACTOR`] per
+///   result recorded since, for any state), and a draw picks a state with probability
+///   `UNIFORM_FLOOR / N + (1 - UNIFORM_FLOOR) · weight / Σ weights`.  A rate, not a count: drawing a state often
+///   doesn't raise its weight.
 #[derive(Clone, Debug)]
 pub struct ProbabilisticSelector {
-    pub states: Vec<String>,
-    memory: VecDeque<StartResult>,
-    memory_size: usize,
-    next_round_robin: usize,
+    states: Vec<String>,
+    index: HashMap<String, usize>,
+    results: Vec<StateResults>,
+    unseen: usize,
+    clock: u64,
+    /// The next round-robin index; None until the first draw picks the offset.
+    next_round_robin: Option<usize>,
+    /// The draw probabilities (reused across draws).
+    drawn: Vec<f64>,
 }
 
 impl ProbabilisticSelector {
-    pub fn new(states: Vec<String>, memory_size: usize) -> Result<Self, EnvError> {
+    pub fn new(states: Vec<String>) -> Result<Self, EnvError> {
         if states.is_empty() {
             return Err(EnvError::StartState(
                 "ProbabilisticSelector needs at least one state".into(),
             ));
         }
-        Ok(ProbabilisticSelector {
-            states,
-            memory: VecDeque::with_capacity(memory_size),
-            memory_size,
-            next_round_robin: 0,
-        })
+        let mut selector = ProbabilisticSelector {
+            states: Vec::new(),
+            index: HashMap::new(),
+            results: Vec::new(),
+            unseen: 0,
+            clock: 0,
+            next_round_robin: None,
+            drawn: Vec::new(),
+        };
+        selector.set_states(states);
+        Ok(selector)
+    }
+
+    pub fn states(&self) -> &[String] {
+        &self.states
+    }
+
+    /// Replaces the state list (a harvested rescan), keeping the results of states still listed; duplicates are
+    /// dropped.
+    pub fn set_states(&mut self, mut states: Vec<String>) {
+        let old: HashMap<String, StateResults> = self
+            .states
+            .drain(..)
+            .zip(self.results.drain(..))
+            .collect();
+        self.index.clear();
+        states.retain(|s| {
+            let i = self.index.len();
+            self.index.entry(s.clone()).or_insert(i) == &i
+        });
+        self.results = states
+            .iter()
+            .map(|s| old.get(s).copied().unwrap_or_default())
+            .collect();
+        self.unseen = self.results.iter().filter(|r| !r.seen).count();
+        self.states = states;
     }
 
     /// The next start state.
     pub fn next<R: Rng + ?Sized>(&mut self, rng: &mut R) -> String {
-        if self.memory.len() < self.memory_size || !self.all_states_seen() {
-            let state = self.states[self.next_round_robin % self.states.len()].clone();
-            self.next_round_robin += 1;
-            return state;
+        let n = self.states.len();
+        if self.unseen > 0 {
+            let i = *self
+                .next_round_robin
+                .get_or_insert_with(|| rng.random_range(0..n));
+            self.next_round_robin = Some(i + 1);
+            return self.states[i % n].clone();
         }
-        let weights = self.weights();
-        let w: Vec<f64> = weights.iter().map(|(_, w)| *w).collect();
-        weights[weighted_index(rng, &w)].0.clone()
+        let total: f64 = self.results.iter().map(StateResults::weight).sum();
+        let floor = UNIFORM_FLOOR / n as f64;
+        self.drawn.clear();
+        self.drawn.extend(
+            self.results
+                .iter()
+                .map(|r| floor + (1.0 - UNIFORM_FLOOR) * r.weight() / total),
+        );
+        self.states[weighted_index(rng, &self.drawn)].clone()
     }
 
-    /// Records an episode result for a state this selector returned.
+    /// Records an episode result for a state this selector returned (others are ignored).
     pub fn record(&mut self, state: &str, success: bool, health_lost: bool) {
-        if self.states.iter().any(|s| s == state) {
-            if self.memory.len() == self.memory_size {
-                self.memory.pop_front();
-            }
-            self.memory.push_back(StartResult {
-                state: state.to_owned(),
-                success,
-                health_lost,
-            });
+        let Some(&i) = self.index.get(state) else {
+            return;
+        };
+        self.clock += 1;
+        let r = &mut self.results[i];
+        let age = self.clock - r.last;
+        let decay = if age > 10_000 { 0.0 } else { DECAY_FACTOR.powi(age as i32) };
+        let mut term = if success { 1.0 } else { FAILURE_WEIGHT };
+        if health_lost {
+            term *= DAMAGE_WEIGHT;
+        }
+        r.badness = r.badness * decay + term;
+        r.mass = r.mass * decay + 1.0;
+        r.last = self.clock;
+        if !r.seen {
+            r.seen = true;
+            self.unseen -= 1;
         }
     }
 
-    /// Unnormalized weight per state from the result memory (newest decays least), in first-seen order.
+    /// Each state with results and its weight (decayed mean badness), in state order.
     pub fn weights(&self) -> Vec<(String, f64)> {
-        let mut out: Vec<(String, f64)> = Vec::new();
-        for (i, r) in self.memory.iter().rev().enumerate() {
-            let mut w = DECAY_FACTOR.powi(i as i32) * if r.success { 1.0 } else { FAILURE_WEIGHT };
-            if r.health_lost {
-                w *= DAMAGE_WEIGHT;
-            }
-            match out.iter_mut().find(|(s, _)| *s == r.state) {
-                Some((_, total)) => *total += w,
-                None => out.push((r.state.clone(), w)),
-            }
-        }
-        out
-    }
-
-    fn all_states_seen(&self) -> bool {
         self.states
             .iter()
-            .all(|s| self.memory.iter().any(|r| &r.state == s))
+            .zip(&self.results)
+            .filter(|(_, r)| r.seen)
+            .map(|(s, r)| (s.clone(), r.weight()))
+            .collect()
+    }
+}
+
+impl StateResults {
+    fn weight(&self) -> f64 {
+        if self.seen { self.badness / self.mass } else { 0.0 }
     }
 }
 
 /// Seed-state weights shared by a training pool's envs (prioritized level replay, better-play §5;
 /// `EnvPool.set_start_weights`): seed-state label → weight.  While set, every seed draw follows them (the env's RNG,
-/// [`weighted_index`]) instead of the selector's result memory, which keeps recording; unset (the default), draws are
+/// [`weighted_index`]) instead of the selector's own weights, whose results keep recording; unset (the default), draws are
 /// exactly the selector's.  Harvested states, curriculum starts and the per-reset RAM randomization are unaffected.
 #[derive(Clone, Debug, Default)]
 pub struct StartWeights(Arc<RwLock<Option<HashMap<String, f64>>>>);
@@ -193,7 +251,7 @@ impl StartStatePool {
             seed: if seeds.is_empty() {
                 None
             } else {
-                Some(ProbabilisticSelector::new(seeds, MEMORY_SIZE)?)
+                Some(ProbabilisticSelector::new(seeds)?)
             },
             harvested: None,
             weights: None,
@@ -218,11 +276,8 @@ impl StartStatePool {
             return;
         }
         match &mut self.harvested {
-            None => {
-                self.harvested =
-                    Some(ProbabilisticSelector::new(paths, MEMORY_SIZE).expect("non-empty"))
-            }
-            Some(h) => h.states = paths,
+            None => self.harvested = Some(ProbabilisticSelector::new(paths).expect("non-empty")),
+            Some(h) => h.set_states(paths),
         }
     }
 
@@ -482,48 +537,137 @@ mod tests {
         ChaCha8Rng::seed_from_u64(0)
     }
 
-    #[test]
-    fn selector_round_robins_until_memory_covers_every_state() {
-        let mut r = rng();
-        let mut s =
-            ProbabilisticSelector::new(vec!["a".into(), "b".into(), "c".into()], 6).unwrap();
-        let picks: Vec<String> = (0..4).map(|_| s.next(&mut r)).collect();
-        assert_eq!(picks, ["a", "b", "c", "a"]);
-        for _ in 0..6 {
-            s.record("a", true, false);
-        }
-        assert_eq!(s.next(&mut r), "b");
+    fn names(n: usize) -> Vec<String> {
+        (0..n).map(|i| format!("s{i}")).collect()
+    }
+
+    /// `draws` draws from a selector over `success.len()` states, each result simulated: success with the state's
+    /// probability, health lost 30% of the time.  Returns the drawn indices.
+    fn simulate(success: &[f64], draws: usize, seed: u64) -> Vec<usize> {
+        let states = names(success.len());
+        let mut s = ProbabilisticSelector::new(states.clone()).unwrap();
+        let (mut r, mut outcome) = (
+            ChaCha8Rng::seed_from_u64(seed),
+            ChaCha8Rng::seed_from_u64(seed + 1000),
+        );
+        (0..draws)
+            .map(|_| {
+                let name = s.next(&mut r);
+                let i = states.iter().position(|x| *x == name).unwrap();
+                let won = outcome.random::<f64>() < success[i];
+                s.record(&name, won, outcome.random::<f64>() < 0.3);
+                i
+            })
+            .collect()
     }
 
     #[test]
-    fn selector_weights_failures_damage_and_recency() {
-        let mut s = ProbabilisticSelector::new(vec!["a".into(), "b".into()], 4).unwrap();
+    fn selector_round_robins_from_an_offset_until_every_state_has_a_result() {
+        let mut r = rng();
+        let mut s = ProbabilisticSelector::new(vec!["a".into(), "b".into(), "c".into()]).unwrap();
+        let picks: Vec<String> = (0..4).map(|_| s.next(&mut r)).collect();
+        let first = s.states().iter().position(|x| *x == picks[0]).unwrap();
+        let expected: Vec<String> = (first..first + 4).map(|i| s.states()[i % 3].clone()).collect();
+        assert_eq!(picks, expected);
+        for _ in 0..6 {
+            s.record("a", true, false);
+        }
+        s.record("b", true, false);
+        assert_eq!(s.next(&mut r), expected[1]);
+        assert!(s.weights().len() == 2);
+    }
+
+    /// Two envs (different RNG seeds) start on different states; a 200-state pool (more than the old 128-result
+    /// memory) draws every state once during the warm-up and then leaves it.
+    #[test]
+    fn selector_offsets_differ_by_seed_and_large_pools_leave_the_warm_up() {
+        let firsts: std::collections::HashSet<String> = (0..16)
+            .map(|seed| {
+                let mut s = ProbabilisticSelector::new(names(3)).unwrap();
+                s.next(&mut ChaCha8Rng::seed_from_u64(seed))
+            })
+            .collect();
+        assert!(firsts.len() > 1, "{firsts:?}");
+
+        let draw = |seed: u64| {
+            let mut s = ProbabilisticSelector::new(names(300)).unwrap();
+            let mut r = ChaCha8Rng::seed_from_u64(seed);
+            (0..300).map(|_| s.next(&mut r)).collect::<Vec<_>>()
+        };
+        assert_ne!(draw(1), draw(2));
+
+        let mut s = ProbabilisticSelector::new(names(200)).unwrap();
+        let mut r = rng();
+        let warm: std::collections::HashSet<String> = (0..200)
+            .map(|_| {
+                let name = s.next(&mut r);
+                s.record(&name, true, false);
+                name
+            })
+            .collect();
+        assert_eq!(warm.len(), 200);
+        assert_eq!(s.unseen, 0);
+        // Out of the warm-up, results move the draw: one failing state gets far more than 1/200 of the draws.
+        let mut hard = 0;
+        for _ in 0..20_000 {
+            let name = s.next(&mut r);
+            hard += usize::from(name == "s7");
+            s.record(&name, name != "s7", name == "s7");
+        }
+        // floor 0.15/200 + 0.85 * 3 / (3 + 199) ≈ 0.0134 vs 0.005 uniform
+        assert!(hard > 200, "{hard}");
+    }
+
+    #[test]
+    fn selector_weights_are_decayed_mean_badness() {
+        let mut s = ProbabilisticSelector::new(vec!["a".into(), "b".into()]).unwrap();
         s.record("a", true, false);
         s.record("b", false, true);
         s.record("a", true, false);
         s.record("b", true, false);
-        let w: std::collections::HashMap<String, f64> = s.weights().into_iter().collect();
+        let w: HashMap<String, f64> = s.weights().into_iter().collect();
         let close = |a: f64, b: f64| (a - b).abs() < 1e-12;
+        let d2 = DECAY_FACTOR.powi(2);
         assert!(close(
             w["b"],
-            1.0 + DECAY_FACTOR.powi(2) * FAILURE_WEIGHT * DAMAGE_WEIGHT
+            (1.0 + d2 * FAILURE_WEIGHT * DAMAGE_WEIGHT) / (1.0 + d2)
         ));
-        assert!(close(w["a"], DECAY_FACTOR + DECAY_FACTOR.powi(3)));
+        assert!(close(w["a"], 1.0));
+        // A rate, not a count: many more results for one state don't raise its weight.
+        for _ in 0..50 {
+            s.record("a", true, false);
+        }
+        assert!(close(s.weights()[0].1, 1.0));
         s.record("c", false, false);
         assert_eq!(s.weights().len(), 2);
     }
 
+    /// The review's case (F185): three states at 50%/95%/95% success.  The failing state gets the most draws but
+    /// near `0.15/3 + 0.85·w/Σw` (mean badness 1.5·1.15 vs 1.05·1.15: ≈ 0.40), not the whole pool.
     #[test]
     fn selector_samples_failing_states_more() {
-        let mut r = rng();
-        let mut s = ProbabilisticSelector::new(vec!["easy".into(), "hard".into()], 128).unwrap();
-        for i in 0..128 {
-            s.record(if i % 2 == 1 { "easy" } else { "hard" }, i % 2 == 1, false);
+        let picks = simulate(&[0.5, 0.95, 0.95], 40_000, 0);
+        let share = |k: usize| picks.iter().filter(|i| **i == k).count() as f64 / picks.len() as f64;
+        let (w0, w1) = (1.5 * 1.15, 1.05 * 1.15);
+        let expected = 0.05 + 0.85 * w0 / (w0 + 2.0 * w1);
+        assert!((share(0) - expected).abs() < 0.04, "{} vs {expected}", share(0));
+        assert!(share(0) > share(1) && share(0) > share(2));
+        assert!(share(1) > 0.2 && share(2) > 0.2, "{} {}", share(1), share(2));
+    }
+
+    /// Equal success: no state takes over a window (the old count weights let one state fill 128 draws in a row).
+    #[test]
+    fn selector_equal_success_spreads_every_window() {
+        for n in [3, 12] {
+            let picks = simulate(&vec![0.9; n], 40_000, n as u64);
+            let worst = picks
+                .windows(256)
+                .step_by(16)
+                .map(|w| (0..n).map(|k| w.iter().filter(|i| **i == k).count()).max().unwrap())
+                .max()
+                .unwrap();
+            assert!(worst as f64 / 256.0 <= 2.0 / n as f64, "{n} states: {worst} of 256");
         }
-        let picks: Vec<String> = (0..2000).map(|_| s.next(&mut r)).collect();
-        let hard = picks.iter().filter(|p| *p == "hard").count() as f64;
-        let easy = picks.iter().filter(|p| *p == "easy").count() as f64;
-        assert!(hard > 1.6 * easy, "{hard} vs {easy}");
     }
 
     #[test]
@@ -594,7 +738,7 @@ mod tests {
         assert!(picks.iter().all(|p| state_label(p) == "1_73w_0"), "{picks:?}");
         shared.record(&picks[0], false, false);
         let selector = shared.seed.as_ref().unwrap();
-        assert_eq!(selector.memory.back().unwrap().state, picks[0]);
+        assert_eq!(selector.results[selector.index[&picks[0]]].last, selector.clock);
 
         weights.set(None);
         let mut unweighted = shared.clone();
