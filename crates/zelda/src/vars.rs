@@ -55,6 +55,8 @@ vars! {
     LinkStatus = ("link_status", 0x0AC, false),
     LinkDirection = ("link_direction", 0x098, false),
     LinkGridOffset = ("link_grid_offset", 0x394, true),
+    SwordBlockedLongTimer = ("sword_blocked_timer", 0x04C, false),
+    SwordBlocked = ("sword_blocked", 0x52E, false),
     Rng0 = ("rng_0", 0x018, false),
     Rng1 = ("rng_1", 0x019, false),
     Rng2 = ("rng_2", 0x01A, false),

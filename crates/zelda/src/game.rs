@@ -527,6 +527,15 @@ impl GameView {
             && self.map.get(self.full_location()).is_some_and(|r| r.bomb_secret.is_some())
     }
 
+    /// A bomb-wall door ($4) the game has opened (room flag or CurOpenedDoors bit): its hole is passable whatever
+    /// tile sits at the door position (the N and W holes' rims are unwalkable tiles; CheckDoorway goes by type).
+    pub fn is_bomb_door_open(&self, direction: Direction) -> bool {
+        self.level() != 0
+            && crate::room_state::decode_room_state(&self.ram)
+                .door(direction)
+                .is_some_and(|d| d.door_type == crate::room_state::DoorType::Bomb && d.is_open)
+    }
+
     /// Intact bombable walls of the current dungeon room (game.yaml `bomb_walls`).
     pub fn bomb_walls(&self) -> &[BombWall] {
         self.bomb_walls.get_or_init(|| {
@@ -540,7 +549,7 @@ impl GameView {
             room.bomb_walls
                 .iter()
                 .filter_map(|s| Direction::from_exit(s))
-                .filter(|&d| self.room().is_wall_intact(d, tiles))
+                .filter(|&d| self.room().is_wall_intact(d, tiles) && !self.is_bomb_door_open(d))
                 .map(|d| {
                     let position = BombWall::hotspot(d);
                     let (distance, vector) = distance_and_vector(position, self.link.position);
@@ -677,7 +686,7 @@ impl GameView {
             Direction::E | Direction::W if py != DOORWAY_REQUIRED_Y => return false,
             _ => {}
         }
-        if self.room().is_door_tile_walkable(direction) {
+        if self.room().is_door_tile_walkable(direction) || self.is_bomb_door_open(direction) {
             return true;
         }
         self.is_door_locked(direction) && (self.keys() > 0 || self.magic_key())
@@ -899,7 +908,7 @@ impl GameView {
     /// The sword is blocked (a Bubble's touch: SwordBlockedLongTimer $4C, or SwordBlocked $52E); the game ignores
     /// the A button meanwhile (Z_05 Link_HandleInput).
     pub fn is_sword_blocked(&self) -> bool {
-        self.peek(0x4C) != 0 || self.peek(0x52E) != 0
+        self.byte(Var::SwordBlockedLongTimer) != 0 || self.byte(Var::SwordBlocked) != 0
     }
 
     /// The game would start `kind`'s weapon now (Link_HandleInput and the Wield* routines): Link is in his normal

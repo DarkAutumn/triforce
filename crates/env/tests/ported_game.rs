@@ -515,3 +515,28 @@ fn no_attack_across_a_doorway() {
         }
     }
 }
+
+/// F124: Manhandla's room is entered through the W wall Link bombed open: no intact bomb wall is left, and Link
+/// can walk back W through the hole (its rim tiles are unwalkable, the door type says it is open).
+#[test]
+fn a_bombed_west_wall_is_open() {
+    let Some(mut s) = session() else { return };
+    let state = load(&mut s, "3_4dw_0", false, &[]);
+    assert!(state.bomb_walls().is_empty(), "{:?}", state.bomb_walls());
+    let state = load_and_place(&mut s, "3_4dw_0", &[(Var::LinkX, 32), (Var::LinkY, 141), (Var::LinkGridOffset, 0), (Var::DoorwayDir, 0)]);
+    assert!(state.can_link_move(Direction::W));
+}
+
+/// F105: while a Bubble has blocked the sword ($4C or $52E) SWORD and BEAMS are masked; B items stay legal.
+#[test]
+fn a_blocked_sword_is_masked() {
+    let Some(mut s) = session() else { return };
+    for var in [Var::SwordBlockedLongTimer, Var::SwordBlocked] {
+        let state = load_and_place(&mut s, "3_49s_0", &[(Var::LinkY, 141), (Var::LinkGridOffset, 0), (Var::DoorwayDir, 0), (Var::Bombs, 4), (var, 0x10)]);
+        assert!(state.is_sword_blocked());
+        let mask = compute_action_mask(&state);
+        for kind in [ActionKind::Sword, ActionKind::Beams] {
+            assert!(!mask.direction[kind.index()].iter().any(|&b| b), "{var:?} {kind:?}");
+        }
+    }
+}
