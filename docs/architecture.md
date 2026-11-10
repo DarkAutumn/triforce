@@ -5,14 +5,15 @@ This file lists the module boundaries and the interfaces between them.
 
 ```mermaid
 flowchart LR
-    PPO[Python: ppo / train / evaluate / runner<br/>batched torch inference] -->|actions| POOL[triforce._native.EnvPool<br/>crates/triforce-py]
+    PPO[Python: ppo / train / evaluate / runner<br/>PPO update, GAE, drivers] -->|Policy weights, rollout/play calls| POOL[triforce._native.EnvPool<br/>crates/triforce-py]
     POOL --> PL[pool::Pool<br/>env threads, auto-reset, render, events]
     PL --> TE[pool::zelda TrainEnv / EvalEnv / ChainRunEnv]
     TE --> ENV[env::SpecialistEnv / ChainEnv<br/>rewards, end conditions, observation]
     SPEC[env::SpecialistConfig<br/>specialists/*.yaml] --> ENV
     ENV --> SES[zelda::Session<br/>Executor, GameView, Change, ActionMask]
     SES --> CORE[zcore::ZCore<br/>NES core, MachineState]
-    POOL -->|obs, reward, frames, infos| PPO
+    POOL -->|rollout buffers, events, plays| PPO
+    PL --> POL[policy::Policy<br/>in-pool forward pass, keyed noise]
     SES --> GAME[triforce._native.Game<br/>play CLI, entry_states, tests]
 ```
 
@@ -21,13 +22,14 @@ flowchart LR
 | Crate / module | Owns |
 |---|---|
 | `crates/zcore` | Zelda-only NES core (MMC1), cut down from TetaNES (`UPSTREAM.md`), hardware timing. `machine.rs`: `Rom::from_ines`, `ZCore` (`power_on`, `run_frame(buttons, render)`, `pixels`/`rgb`, `ram`/`prg_ram`, `poke`, `snapshot`/`restore` of a `Copy` `MachineState`). `state_file.rs`: `TFZSTATE` `.state` files; gzip (legacy stable-retro) files raise `StateFormatError`. |
-| `crates/zelda` | Game model and session, ported from the old Python stack: `vars`/`tables` (RAM variables, game data), `game.rs` (`GameView`: Link, enemies, items, projectiles), `room`/`room_state`/`tiles` (wavefront, doors, tile grid), `actions.rs` (`Action`, `ActionMask`, `compute_action_mask`), `executor.rs` (option executor: timed options, interrupts, uncontrollable skip), `blocks.rs` (shield collisions), `change.rs` + `ledger.rs` (`Change`, look-ahead `FutureCreditLedger`), `room_entry.rs`, `game_map.rs` (`game.yaml`/`routes.yaml`), `objectives.rs` (`GameCompletion`), `hearts.rs`, `linger.rs`, `session.rs` (`Session`). The `Nes` trait (`nes.rs`) abstracts the core so tests can run on zcore or a scripted double. |
+| `crates/zelda` | Game model and session, ported from the old Python stack: `vars`/`tables` (RAM variables, game data), `enums.rs` (object ids and `ObjectClass`, the one classifier), `game.rs` (`GameView`: Link, enemies, items, projectiles, hazards), `room`/`room_state`/`tiles` (wavefront, doors, tile grid), `actions.rs` (`Action`, `ActionMask`, `compute_action_mask`), `executor.rs` (option executor: timed options, interrupts, uncontrollable skip), `blocks.rs` (shield collisions), `change.rs` + `ledger.rs` (`Change`, look-ahead `FutureCreditLedger`), `cheats.rs`, `room_entry.rs`, `game_map.rs` (`game.yaml`/`routes.yaml`), `objectives.rs` (`GameCompletion`), `hearts.rs`, `linger.rs`, `visits.rs`, `session.rs` (`Session`). The `Nes` trait (`nes.rs`) abstracts the core so tests can run on zcore or a scripted double. |
 | `crates/env` | `config.rs` (`SpecialistConfig`, `GameData`, cross-file validation), `rewards.rs` + `critic.rs`, `end_conditions.rs`, `observation.rs` (`ObservationBuilder`, schema v2), `objective.rs`, `start_states.rs`, `curriculum.rs`, `specialist_env.rs` (`SpecialistEnv`), `chain.rs` (`ChainEnv`, `Route`, `RoomRecord`, `RunResult`), `explore.rs` (`Explorer`, `AcceptSpec`). |
 | `crates/pool` | Generic threaded `Pool<E: PoolEnv>` (`pool.rs`), buffer layout (`layout.rs`), frame pacing/render control (`control.rs`); `zelda/` holds the Train/Eval/ChainRun envs and pool events. |
-| `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `SpecialistConfig`, `Explorer`/`explore_states`, `route_steps`, `families`, `specialist_for`, `OBS_SPEC` and other constants, exception types. |
+| `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `Policy`, `keyed_noise`, `SpecialistConfig`, `CurriculumSpec`, `Explorer`/`AcceptSpec`/`explore_states`, `route_steps`, `routes`, `route_alternates`, `game_rooms`, `families`, `specialist_for`, `paths`, `OBS_SPEC` and other constants, exception types. |
 | `crates/movie` | `TFMOVIE` input movies and `TFGOLDEN` per-frame digests. |
+| `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `demo.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -42,7 +44,10 @@ episode starts and bootstrap values. Evaluation, chains and the watch player cal
 on its own until its jobs run out (`active`, `wait_idle`); with `record` each finished episode comes back from
 `poll_plays()` (actions, per-decision log-prob/entropy/value, optionally the observations), which
 `triforce/replay.py` keeps as replay files. Envs auto-reset after a terminal step; terminal infos, eval records,
-chain results and room-change events come from `poll_events()`. Env `i` seeds a `ChaCha8Rng` from `(seed, i)`.
+chain results and room-change events come from `poll_events()`. Env `i` seeds a `ChaCha8Rng` from `(seed, i)`
+(seeds < 2**63). A usage error of an actor or planner fails the call, not the env; a `rollout` with no active env is
+an error; rollout buffers must be C-contiguous and only known keys are accepted. `close` (or Ctrl-C) stops a
+rollout before its next step and a searched rollout between simulations.
 Rendering (full 256×240) is off by default and toggled per env with `set_render`; `frame(env, since)` copies the
 latest frame. Tools and tests that need a single game use `triforce._native.Game`.
 
@@ -53,14 +58,24 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
 | `zelda::actions` | `ACTION_SCHEMA_VERSION`; `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=91] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
 | `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. |
-| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore keeps `steps`/`total_frames`), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`. Python: `triforce._native.Game`. |
+| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`. Python: `triforce._native.Game`. |
 | `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks. |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
+
+Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's UpdateObject jump table) and
+`GameView`, the executor's interrupts, `room_state` and the observation share it: `enemies` are monsters only;
+`projectiles` are monster shots ($53–$5C); `hazards` hold boulders and the boulder generator ($20/$1F), traps
+($49/$4A), Bubbles ($2B–$2D) and standing fire ($40), which hurt but can't be hurt and are not fight targets;
+people, dropped items and tile objects are in none of the lists. The observation's "hurts on touch" flag follows
+the classifier; HP, stun and killable are monster-only. The executor interrupts on anything that can hurt Link
+except standing fire and the boulder generator. A slot that empties because a hazard destroyed itself or a Zora
+dived is not a kill.
 
 ## Observation (`crates/env/src/observation.rs`)
 
 `ObservationBuilder::new(objective, target)`, `reset(state, objective, wavefront, mask)`,
-`build(change, objective, wavefront, mask)`. Python sees the layout as
+`build(change, state, objective, wavefront, mask)` (`state` = `change.state`, or the state a cheat grant rebuilt).
+Python sees the layout as
 `triforce._native.OBS_SPEC` (`key → {shape, vocab, dtype}`) plus `OBS_SCHEMA_VERSION`, `ROOM_VOCAB`,
 `ENTITY_VOCAB`, `NUM_TILE_CLASSES`, `NUM_ENTITY_SLOTS = 12` and the feature-name tuples;
 `triforce/observation.py` builds the `gymnasium.spaces.Dict` the policy uses.
@@ -91,11 +106,20 @@ target tile the steepest descent reaches (/256, /176; 0 if none) and `target_is_
 belongs to a dropped item. Chains rebuild the same wavefront (the acting specialist's `reward` decides the item
 targets) only for specialists with `obs.target` on. Schema 1 checkpoints still load (their layout is schema 2
 without `target`, which the network drops from its input), so they act, evaluate and train next to schema 2 ones.
+Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
+`ModelConfig.from_dict` drops that key and refuses any other encoder.
 
 Dungeon objectives fight for pending treasure or when every routed exit is closed by a living-monster shutter
 trigger (all-dead, ringleader, last-boss or clear-to-drop). An unrelated shutter or an open route exit does not
 force combat. The shutter rule excludes block/money triggers and non-foe-only rooms. Live barred-door
 classification covers vertical tiles 0xa8–0xab and horizontal tiles 0xac–0xaf. Routing resumes after clearing.
+A room's treasure counts as taken from the room's item-taken flag, and a fresh-room load reads the room flags
+through the level's room-flag pointer.
+
+`game.yaml` and `routes.yaml` are validated strictly: unknown keys, YAML 1.1 booleans such as `yes`, unquoted hex
+ids and route steps whose exit isn't an exit of the room are load errors. Dungeon exits follow one convention,
+checked against the ROM's door attributes (the comment block at the top of `game.yaml`); bomb walls are exits
+everywhere, and path searches pass a bomb-wall exit only in a `requires_bombs` room or once it is open.
 
 ## Specialist task and environment (`crates/env/src/specialist_env.rs`)
 
@@ -105,17 +129,18 @@ classification covers vertical tiles 0xa8–0xab and horizontal tiles 0xac–0xa
 `config.name` labels checkpoints and logs; it must not be used to reload the default YAML and discard overrides.
 
 `SpecialistEnv` runs one specialist on one `Session`: `reset`, `step(action)`, `restore(snapshot)`. Pools wrap it
-(`TrainTask`, `EvalTask`); `triforce._native.Env` exposes a single env with gym-like `reset`/`step` for
-`demo.py`, `scripts/behavior_clone.py` and tests. Action space: `MultiDiscrete([NUM_KINDS, NUM_DIRECTIONS,
-NUM_DURATIONS])`.
+(`TrainTask`, `EvalTask`); `triforce._native.Env` exposes a single env with gym-like `reset`/`step` for tests.
+Action space: `MultiDiscrete([NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS])`.
 
 `info` keys every step: `frames` (int, frames this step: used for frame-aware discounting), `interrupt`,
-`action` (str), `rewards` (dict name → value), `room` ((level, room, in_cave)), `health`, `max_health`,
-`steps`, `total_frames`, `specialist`, `route`. On the last step: `ending` (end-condition name) and `outcome`
-(the episode's entry room), plus `blocks`, `start_state`, `start_health`, `hearts`, `linger`,
-`linger_room`, `bootstrap_truncation`, `curriculum`, `episode_steps`, `episode_frames`, `reward_total` and
-`episode_rewards` (per-term episode totals; omitted `bootstrap_truncation`/`curriculum` mean false/none). `blocks` counts confirmed shield collisions over the
-episode. An end condition that is
+`action` (str), `rewards` (dict name → value), `room` (list [level, room, in_cave]), `health`, `max_health`,
+`steps`, `total_frames`, `specialist`, `route`; the reset info also has `start_state`. On the last step: `ending`
+(end-condition name) and `outcome` (its class: one of `_native.OUTCOMES` = success, hard-failure, soft-failure,
+neutral), plus `blocks`, `bombs` ({used}), `cheated` ({bombs, keys, rupees}), `boss` ({stuns, eats}),
+`start_state`, `start_health`, `hearts`, `linger`, `linger_room` ([level, room, in_cave] of the episode's entry
+room), `bootstrap_truncation`, `curriculum`, `episode_steps`, `episode_frames`, `reward_total` and
+`episode_rewards` (per-term episode totals; omitted `bootstrap_truncation`/`curriculum` mean false/none). `blocks`
+counts confirmed shield collisions over the episode. An end condition that is
 not classified raises. Evaluation reports mean `blocks` overall/per room/per state; training separates `blocks`
 and `curriculum/blocks`; runner room records retain the visit's count. Historical absence is not a measured zero.
 
@@ -186,7 +211,8 @@ chain `RoomRecord.boss_stuns/boss_eats`.
 `LingerTracker.reset(state)` / `update(change, hearts_taken=0)` measures progress without changing gameplay.
 Progress is a hit/kill, pickup, healing (including pond refills), a new best walking distance to the objective,
 or leaving a room. Damage alone is not progress. A frozen wavefront prevents enemy movement and Link's round
-trips from manufacturing new best approaches; hits/kills/pickups and objective phase changes rebaseline it.
+trips from manufacturing new best approaches; hits/kills/pickups and objective phase changes rebaseline it, and
+(outside fights) so do a change of the objective's targets and a frozen wavefront that can't reach Link.
 Phase changes alone do not reset the quiet clock. A progress action's frames do not count toward the quiet
 interval it closes. `summary()` returns `max_steps/max_frames`, `tail_steps/tail_frames`, elapsed `steps/frames`,
 and nullable boss-kill / heart-container-pickup action/frame timestamps.
@@ -210,8 +236,9 @@ The executor does not replace the user's frame callback, change inputs/timing, o
 `reward.quiet_enemy_penalty` (nonnegative, default 0) adds that cost per action after the shared quiet tail exceeds
 the existing room-stall grace, only while living targetable enemies remain. `critique_gameplay` requires the
 caller's measured `quiet_steps`; the env passes its already-updated tracker, without a second progress counter.
-Hits/pickups/real approach reset the shared tail; damage and round trips do not. No cost for post-fight pickup time
-or inactive/burrowed/dying enemies. This is separate from the existing room-stall ramp and remains default off.
+Hits/pickups/real approach reset the shared tail; damage and round trips do not. Any living, non-dying monster
+counts; there is no cost for post-fight pickup time. This is separate from the existing room-stall ramp and
+remains default off.
 
 `reward.nearby_items` (default false) adds heart/clock overlap tiles to the objective's PBRS targets alongside
 exits. Multi-source walking distance picks the nearer target; the task, accepted exits and observation schema do
@@ -258,8 +285,10 @@ same as the Rust `Policy.joint_log_probs`). Value loss, entropy bonus and GAE co
 over the batch's searched rows: `losses/search_ce`, `charts/search_agreement` (argmax π' = argmax π_θ) and
 `charts/search_rows` (their share of the batch). Off (default), the update is bit for bit the plain PPO one.
 `--plr` (`PPOConfig.plr`, prioritized level replay, Jiang et al. 2021; §5, `triforce/plr.py`) replaces the seed
-start-state draw of the start-state pool (`crates/env/src/start_states.rs`: each env's `ProbabilisticSelector`,
-favouring its own recent failures and damage) with weights shared by the whole train pool: `StartWeights` (one
+start-state draw of the start-state pool (`crates/env/src/start_states.rs`: each env's `ProbabilisticSelector`:
+round-robin from a random offset until every state has a result, then probability 0.15/N + 0.85·w/Σw, w = the
+state's decayed mean badness: success 1, failure ×2, damage ×1.5, decay 0.9) with weights shared by the whole
+train pool: `StartWeights` (one
 `Arc<RwLock<…>>` handed to every env through `EnvOptions::start_weights`), set by `EnvPool.set_start_weights({state:
 weight} | None)` over `EnvPool.start_states` (the seed state labels; ValueError on eval/chain pools, unknown states,
 negative or all-zero weights). While set, every seed draw is `weighted_index` over them with the env's RNG; the
@@ -296,7 +325,8 @@ lingering tail. Training ends `no-room-progress` as a soft-failure **truncation*
 success/death keep precedence and the absolute episode cap remains enforced. Its terminal info marks
 `bootstrap_truncation=True`: the PPO collector (`ppo.Collector`) adds `gamma**(frames/8) * V(final_observation)` to the
 learning reward before reset, while done flags still stop the GAE trace. Logged episode rewards stay unchanged.
-Legacy max-step truncations retain their existing nonbootstrapping behavior. Runner uses the per-visit tail for
+The legacy timeout's no-progress limit is the specialist's `max_steps`; legacy max-step truncations retain their
+existing nonbootstrapping behavior. Runner uses the per-visit tail for
 `stuck` instead of the flat room budget, retaining the global run cap; it resets on every room exit.
 Nearby-item shaping and the measured cutoff remain disabled in promoted configs until their experiments.
 
@@ -315,6 +345,16 @@ bomb, arrow or boomerang hit on its firing step and the ledger keeps the landing
 So the look-ahead changes rewards and nothing else (tested: the same game, endings, linger and visits with it on
 or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
 
+A bomb pickup pays `reward-gained-bombs` (0.5) like other item
+pickups (cheat grants don't count); the map/compass reward is not paid on a level change; dropped-item lifetimes
+count half-frames; the look-ahead credits only what a prediction adds over the ones still pending. Curriculum
+starts take their track's seed state's route step.
+
+PBRS (`critic.rs` `critique_movement`: F = (d(prev tile) − d(curr tile)) / `PBRS_SCALE` on the previous state's
+wavefront) telescopes exactly in the exit, treasure and item phases, whose targets don't move. In a fight room it
+is an approach reward, not potential-based: the targets are the moving enemies and the wavefront is rebuilt every
+step, so following an enemy that moves away pays again, and knockback resets the baseline for free.
+
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
 
 - Action heads: kind (K), direction (8), duration (4). Direction/duration log-probs and entropies count only
@@ -330,15 +370,28 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   columns for the new keys start at zero, so it acts exactly as before; the optimizer state starts fresh (the
   iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id> [--act MODE]`
-  sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`): `sample` (keyed sampling; the default
-  without the file) or `argmax`, chosen by evaluating both (better-play §6b) and set with `promote --act`.
+  sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`), one line `<mode> <ckpt.pt sha1>`:
+  `sample` (keyed sampling; the default without the file) or `argmax`, chosen by evaluating both (better-play §6b)
+  and set with `promote --act` (`registry.set_act_mode`, atomic). The mode is bound to the checkpoint: an `act`
+  file of other weights, or one without the hash (old format), means `sample` with a warning until the run is
+  re-measured and set again. `set_act_mode` renames an `eval.json` measured in the other mode to
+  `eval-<that mode>.json`, so `eval.json` stays the evaluation in the model's act mode.
   Evaluation, chains, `run` and the watch player follow it per model; their `--act sample|argmax` forces one mode
   for every model (`--act model`, the default, follows the registry).
-- Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
+- Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
+  arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
+  with its trajectory.json time); `train_summary.json`
   records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
   `steps_trained`) iterations/steps, `stopped_early`, wall time and steps/sec (`train.run_status(run_dir)`). An
   interrupted run (SIGINT, or SIGTERM from `python -m triforce.train` / `triforce train`) saves its checkpoint and
-  summary and exits 130 (`train.EXIT_INTERRUPTED`), so it never passes for a finished fixed-budget run.
+  summary and exits 130 (`train.EXIT_INTERRUPTED`), so it never passes for a finished fixed-budget run. Training
+  into an existing run dir first moves the earlier training's files to `<run>.prev-N` (`set_aside_previous`); only
+  a same-dir `--load` continuation keeps its checkpoint, curriculum and `metrics.jsonl` (appended to).
+- Besides the episode metrics, every iteration logs `in_flight/{episodes,mean_steps,max_steps,over_half_budget}`
+  (the episodes still running at the rollout's end), `success_rate_pessimistic` (unfinished episodes past the
+  budget counted as failures), `started/{success_rate,episodes,iteration}` (the per-start cohort rate: the
+  room-entry episodes that started in one rollout, released once all of them ended), `harvested/{success_rate,
+  episodes}` and `charts/recompute_seconds` (the learner's torch recompute of the rollout).
 - Training collects from one `EnvPool(TrainTask(...), num_envs=--parallel, threads=--threads)` (`ppo.Collector`):
   one `rollout` call per iteration, every env stepping `T = steps_per_update / parallel` decisions with the
   network's Rust copy on its own worker. The learner then recomputes log-probs, entropies and values with torch
@@ -355,44 +408,70 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   stream (`start`, one `progress` per PPO iteration with steps/target/fraction/sps/eta and headline metrics,
   `checkpoint`, `early_stop`, `error`, `train_end`; the round driver adds `eval_start`, `eval_progress` (≤1/s:
   done/episodes/running success_rate), `eval`) whose last line
-  is `end`. `<specialist>.log` is its console output. `round.jsonl` / `round.log` cover the round (chain,
+  is `end`. `<specialist>.log` (rounds only: `scripts/train_round.py` tees the training console there). The log
+  folder's `NNN` may have any width; it is allocated under `<logs>/.lock`. `round.jsonl` / `round.log` cover the round (chain,
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
-  `eval` / `chain`; `--no-log` skips it). `training-gui.py`'s [currently running] shows every live folder on the
+  `eval` / `chain`; `--no-log` skips it) and end it `interrupted` on SIGTERM. `training-gui.py`'s [currently running] shows every live folder on the
   machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`).
-- `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the start-state-balanced
-  success rate (mean over start states of each state's last 20 room-entry episodes; logged as
-  `balanced_success_rate`) is ≥ R for that many consecutive iterations. The raw `success_rate` is biased toward
-  the states the start-state pool oversamples (failures), so it is not used for stopping.
+- `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
+  success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
+  its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that
+  many consecutive iterations. Guards: no proposal before `ceil(max_steps / steps per env) + patience`
+  iterations; an iteration that finished no room-entry episode, or whose `in_flight/over_half_budget` exceeds
+  1 − R, resets the streak. A proposal stops training only if a confirmation evaluation of the current weights
+  (`CONFIRM_EPISODES` = 50 sampled episodes per seed start state on an `EvalTask` pool, seed = pool seed +
+  iteration, `--parallel` envs) also reaches R; otherwise the streak restarts. Every check is an
+  `early_stop_check` event with its rate. Harvested start states never move the rate (they are logged as
+  `harvested/*`). The raw `success_rate` is biased toward the states the start-state pool oversamples
+  (failures), so it is not used for stopping.
 - `python -m triforce.explore --specialist NAME` (Go-Explore phase A; `crates/env/src/explore.rs`, CLI `explore.py`): per seed start state, an
-  archive of cells (room, tile // 2, hearts, living enemies, keys, boomerang) with exact `Session`
+  archive of cells (level, room, in_cave, tile // 2, whole hearts, living enemies, their total health, keys,
+  boomerang) with exact `Session`
   snapshots; random legal actions from cells chosen by progress/closeness/novelty; the best success is replayed
   and written as `trajectories/<specialist>/<state>/NNNN.state` + `trajectory.json`. `SpecialistEnv::restore(snapshot)`
   starts an episode from an exact snapshot.
 - Backward curriculum (`crates/env/src/curriculum.rs`): on when the specialist's config has `curriculum: {enabled: on}`
   (trajectories default to `trajectories/<specialist>`; `train --curriculum DIR` overrides, `--no-curriculum`
   disables). Half of the resets start
-  on a trajectory near its end; each trajectory's start point moves `ceil(len/10)` steps earlier once 6 of the
-  last 10 episodes from the current stage succeed, until it reaches the room entry. Progress is kept in memory, shared by all
-  envs of the pool, and rewritten atomically to `<run dir>/curriculum.json` on every change. Curriculum episodes are reported as `curriculum/*` and excluded
+  on a trajectory near its end; each trajectory's start point moves `ceil(len/10)` steps earlier when, in a block of
+  10 episodes started in the current stage, at least 6 succeeded (the counters restart after every block), until
+  it reaches the room entry; a start is uniform in [point, point + stride). Progress is kept in memory, shared by all
+  envs of the pool, and rewritten atomically to `<run dir>/curriculum.json` on every change. It starts fresh with
+  each training, except a `--load` continuation on the same trajectories, which resumes the loaded run's progress
+  (tracks that changed length or are new start over). Curriculum episodes are reported as `curriculum/*` and excluded
   from the room-entry metrics.
   Saved curriculum frames are already controllable: resets use `Session::load` with `controllable: true`
   without idle input or a second cave-entry cooldown. RNG/HP randomization still applies. Ordinary entry-state
   resets keep transition/fresh-room handling unchanged.
 - Chain-matched health (`chain_hp.py`): `python -m triforce.chain_hp <chain jsonl ...>` writes
-  `triforce/chain_hp.json`, the hearts Link entered each room with in chain runs. A specialist with
+  `triforce/chain_hp.json`, the hearts Link entered each room with in chain runs (a run's start room isn't counted).
+  No profile ships: build one from current-route chains started at the game start. A specialist with
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
-  resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw.
+  resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
+  with at least 5 arrivals is refused.
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
-  deterministic=None, *, threads=None, states_dir=None, plays=None, events=None)` plays every seed start state N
+  deterministic=None, on_episode=None, *, threads=None, states_dir=None, plays=None, events=None)` plays every seed start state N
   times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed; `deterministic` None
   follows the run's act mode) and
   returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate
-  --specialist NAME [--act model|sample|argmax]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint.
-- `scripts/train_round.py --round ID` trains every trainable specialist (route order), promotes and
-  evaluates each, then runs `eval-chain`; summaries go to `models/<round>-summary.json` and
-  `models/<round>-chain-summary.json`. Only a run that finished (exit 0, status completed/early_stop) is
-  promoted. `--skip-existing` skips finished runs only; an unfinished run dir is renamed `<run>.partial-N`
+  --specialist NAME [--act model|sample|argmax]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint
+  only for a canonical run (the model's act mode, 100 episodes per state, seed 0, the checkpoint's specialist);
+  otherwise `eval[-<specialist>][-<act>][-e<N>][-s<seed>].json` with each part only where it differs
+  (`evaluate.default_output`). Writes are atomic. Results carry `act`, `checkpoint_sha1`, `model_hash`, `config`,
+  `code` and `data`, and per-episode records carry `start_max_health` (`mean_start_health_fraction` divides by it).
+  `evaluate.read_evaluation(run_dir, mode=None)` is the reader: `eval.json` if it was measured in that mode for the
+  current weights, else `eval-<mode>.json`, else LookupError.
+- `scripts/train_round.py --round ID` trains every trainable specialist (route order) and evaluates each
+  (`evaluate.default_output`), then runs `eval-chain`; summaries go to `models/<round>-summary.json`,
+  `models/<round>-chain.jsonl` (written run by run, with its `.meta.json`) and `models/<round>-chain-summary.json`.
+  Nothing is promoted unless `--promote` is given: then a run that finished (exit 0, status completed/early_stop)
+  and evaluated successfully is promoted, and the summary's `previous_promoted` keeps the replaced run ids and act
+  modes. Without `--promote` the chain uses the round's checkpoints for the trained specialists (only finished
+  trainings) and the promoted models elsewhere. Exit 0 completed, 1 failed (any specialist not ok, or a chain
+  error), 2 unknown or untrainable `--specialists` (before anything runs). One SIGTERM stops training and every
+  evaluation and ends open runs `interrupted`. `--train-args` expands only `{name}`; `--models-dir` defaults to
+  `$TRIFORCE_MODELS_DIR` or `<repo>/models`. `--skip-existing` skips finished runs only; an unfinished run dir is renamed `<run>.partial-N`
   (`partial_set_aside` event) and the specialist trains fresh.
 
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
@@ -438,30 +517,43 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   "toward the destination" into the sequence's next direction for `MazeStep` ($52F), used by the objective's exit
   targets (no route cache in a maze room) and the observation's objective direction. A routes.yaml step leaving
   through a maze's sequence is a load error: the envs don't model a room visit that loops back into itself.
-- `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and ends on
-  taking its last step's triforce (d2first: Dungeon 3's, since Nov 9); `stop_at` ends it on entering that room
-  instead. A missed `heart` waypoint ends the run as a failure (room outcome `missed`); so does a retreat beyond
-  `MAX_RETREATS` (3) per run (`retreat-limit`; `RunResult.retreats` counts them).
+- `Route.load(name, stop_at=None, start_from=None, states_dir=None)` reads `triforce/routes.yaml`. A route starts
+  at the `start` savestate (or `start_from`) and ends on taking its last step's triforce (d2first: Dungeon 3's,
+  since Nov 9); `stop_at` (`L:0xRR[:cave]`) ends it on entering that room instead. Both are checked up front:
+  `start_from` must exist, and `stop_at` must be a route room after the start step. A missed `heart` waypoint ends
+  the run as a failure (room outcome `missed`); so does a retreat beyond `MAX_RETREATS` (3) per run
+  (`retreat-limit`; `RunResult.retreats` counts them). The 20th wrong exit into a tagged room ends the run `stuck`
+  (`wrong-exit-limit: ...`; `RunResult.wrong_exits` counts them).
 - `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=None,
-  max_steps=50000, specialist_configs=None, networks=None, parallel=1, threads=None)` lets a `ChainTask` pool play
+  max_steps=50000, specialist_configs=None, networks=None, parallel=1, threads=None, states_dir=None,
+  harvest=None)` lets a `ChainTask` pool play
   (`EnvPool.play` with each specialist's Rust network and its act mode, `Policies.deterministic`; sampled actions
   use Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel` or `--threads`;
   argmax is each head's argmax; `deterministic` True/False forces one mode for all):
   `run(route, seed) -> RunResult`, `run_many(route, seeds, on_result=None, plays=None)` (`plays`: a replay file). On each
   room entry: `game.yaml` tag → specialist → promoted checkpoint. Untagged room or missing model →
   `result='error'` with the reason. Per-room outcomes:
-  `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (specialist `max_steps` in
-  one room), `milestone`.
+  `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (the room budget:
+  `max(specialist max_steps, 2000)` steps in one room, or its `no_progress_steps` quiet tail when set; the opt-in
+  stall budget, 2 × `stall_steps`; the run cap `max_steps`, default 50,000; or the wrong-exit limit), `milestone`.
+  Taking a triforce (2:0x0d, 1:0x36) is `exit-correct`.
   Finalizing a room captures live ending health together with dropped-heart counts, including room/run budgets
   and measured cutoffs; death remains zero. `health_out` is never left at entry health on a timed-out visit.
 - `python -m triforce.run [--route d2first] [--seed N] [--render [--fps F] | --video PATH] [--from STATE]
   [--stop-at L:0xRR] [--checkpoint S=PATH] [--act MODE]` prints one line per room and appends a JSON line to
-  `runs/runner.jsonl`. `--render` shows one chain env with rendering on; `--video` records the run's inputs, then
-  renders them through `ffmpeg` (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
+  `runs/runner.jsonl`; `--from`/`--stop-at` are checked as for `Route.load`. `--render` shows one chain env with
+  rendering on; `--video` checks its folder first, records the run's inputs, then renders them through `ffmpeg`
+  (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
 - `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR]
-  [--act MODE] [--plays PATH] [--harvest [DIR]] [--logs-dir DIR | --no-log]` → success
+  [--act MODE] [--checkpoint S=PATH] [--output PATH [--append]] [--plays PATH] [--harvest [DIR]]
+  [--logs-dir DIR | --no-log]` → success
   rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
-  `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
+  `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). Runs go to `--output` (default
+  `runs/eval-chain-<yymmdd-HHMMSS>.jsonl`) as they finish, with the provenance (models, checkpoints, act modes,
+  route, code, data) in `<output>.meta.json` (the batch is marked `finished` at the end), in the summary and in
+  the `chain_start` event; an existing `--output` is refused unless `--append` with the same provenance.
+  `--checkpoint` must name a known specialist and an existing checkpoint. Exit 2 on a bad `--from`, `--stop-at` or
+  `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.
 - Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
   its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded
@@ -472,7 +564,7 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   `ChainTask(harvest=)`, `ChainEnv::set_harvest`) turns on the session's pre-entry capture and, at every **handoff**
   (a room entry through a correct exit where the acting specialist changes; not same-family entries, retreats,
   wrong exits or the run's first room), saves the entry's pre-entry snapshot (the same kind of state
-  `SavestateCapture` and `entry_states` write: the frame before the room entry, so a load replays the entry and
+  `entry_states` writes: the frame before the room entry, so a load replays the entry and
   redraws the spawn) as `DIR/<new specialist>/<level>_<room><side>_h<seed>_<n>.state` (`harvest_filename`: `side`
   is the routes.yaml entry, `zelda::objectives::route_entry`, spelled like the seed states: n/s/e/w, `s` down a
   level's stairs, `c` out of a cave, cellar or level, `cave` a cave or cellar interior; `n` = the room's index in the
@@ -481,8 +573,10 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   `paths.HARVESTED_DIR` (`<states dir>/harvested`), which is where every specialist's `harvested_dir`
   (`harvested_states`, default `<states dir>/harvested/<name>`) reads, so a plain `--harvest` feeds training
   directly; elsewhere, point a config at `DIR/<name>` with `harvested_states:`. Training
-  envs mix harvested states with seed states at `harvested_fraction` (default 0.5; the pool rescans the dir every
-  64 resets), `state_entry` reads the `_h<seed>_<n>` names like seed states (route step from the entry side and
+  envs draw harvested states only when `harvested_fraction` > 0 (default 0: opt-in) or the specialist has no seed
+  states; then they mix them with seed states at that fraction (the pool rescans the dir every 64 resets, drops
+  it when empty and redraws once if a drawn file vanished; training warns and logs `harvested` when the folder
+  holds states), `state_entry` reads the `_h<seed>_<n>` names like seed states (route step from the entry side and
   progress), and a harvested start skips `ram_randomization`: it keeps the true health, keys and bombs the upstream
   specialist handed over (positions too; enemies spawn as the entry draws them). Refresh the harvest after promoting
   an upstream specialist.
@@ -493,9 +587,13 @@ Start states are `TFZSTATE` files in `triforce/states/` (`paths.STATES_DIR`, `$T
 `triforce/states/entry_states.json`. `python -m triforce.entry_states start` writes `start.state` from the base
 movie `corpus/movies/power_on_to_start.tfmovie` at its first controllable frame; `build [--chains 0,1,2]
 [--start-step N --source STATE]` follows the route; `path --source STATE --rooms 1:0x33,... [--chain C]
-[--route R]` enters off-route rooms in order; `audit [--specialist S] [--states GLOB]` checks them. All use
-`Game`, `Explorer` and `AcceptSpec` from `triforce._native`.
-
+[--route R]` enters off-route rooms in order. `start`, `build` and `path` write into a staging directory (`--out`,
+default `target/entry-states/<yymmdd-HHMMSS>`), merging each file's manifest entry into `<out>/entry_states.json`
+(atomically) as soon as the file is written, and exit 1 when a crossing failed; `install DIR [--partial]` copies a
+finished build into the states dir and merges its manifest. `audit [--dir DIR | --specialist S | --states GLOB]`
+checks start states against Lee's rules and exits 1 on any flag: NAME, MISNAMED, ENTRY, POST-ENTRY, SHORT, HEARTS,
+HP, OFFROUTE, BOSS-ENTRY and, for a whole directory, MISSING and ORPHAN (meanings in the module docstring). All
+use `Game`, `Explorer` and `AcceptSpec` from `triforce._native`.
 
 `build` follows route steps; `path` accepts explicit off-route destinations. `build` and `path` use `cross_room`: arriving
 in the target is insufficient when the source room declares a key. The source room's persistent item-taken
@@ -503,7 +601,7 @@ flag must be set in the same level. Carried keys must retain the source inventor
 minus the cost of the direct target door if initially locked; opening an unrelated side door is not an allowed
 cost. Discovery and exact replay both enforce these requirements before returning captured pre-entry bytes.
 This preserves intended off-route traversal without accepting premature key-room exits or depleted inventory.
-`step_config` masks bombs for milestone-1 state generation. Route changes still require rebuilding and auditing
+`step_config` turns bombs on only in `requires_bombs` rooms and masks them everywhere else. Route changes still require rebuilding and auditing
 downstream inventories and refreshing affected curriculum snapshots; old filenames alone do not prove progress.
 
 ## Emulator verification (`tf`, `corpus/`)
