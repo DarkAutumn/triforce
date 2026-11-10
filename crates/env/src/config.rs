@@ -453,7 +453,8 @@ pub struct SpecialistConfig {
     pub warm_start: Option<String>,
     #[serde(default)]
     pub harvested_states: Option<String>,
-    #[serde(default = "half")]
+    /// Share of resets drawn from the harvested dir (0, the default: harvested starts are opt-in).
+    #[serde(default)]
     pub harvested_fraction: f64,
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub trainable: bool,
@@ -576,6 +577,11 @@ impl SpecialistConfig {
             Some(dir) => PathBuf::from(dir),
             None => states_dir.join("harvested").join(&self.name),
         }
+    }
+
+    /// The harvested start states on disk ([`Self::harvested_dir`]`/*.state`, sorted).
+    pub fn resolve_harvested_states(&self, states_dir: &Path) -> Vec<PathBuf> {
+        glob(&self.harvested_dir(states_dir).join("*.state"))
     }
 
     /// Paths of the seed states matching `start_states` globs (relative globs under `states_dir`; `.state`
@@ -929,7 +935,7 @@ mod tests {
         );
         assert_eq!(c.max_steps, 2000);
         assert!(c.fresh_rooms && c.trainable && !c.one_room);
-        assert_eq!(c.harvested_fraction, 0.5);
+        assert_eq!(c.harvested_fraction, 0.0); // harvested starts are opt-in (review F069)
         assert_eq!(c.curriculum, CurriculumConfig::default());
         let again = SpecialistConfig::from_json(c.to_json(), None).unwrap();
         assert_eq!(again, c);

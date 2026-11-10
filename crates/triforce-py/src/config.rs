@@ -183,6 +183,26 @@ impl PySpecialistConfig {
             .collect())
     }
 
+    /// The harvested start-state directory (`harvested_states`, default `<states dir>/harvested/<name>`).
+    #[pyo3(signature = (states_dir=None))]
+    fn harvested_dir(&self, py: Python<'_>, states_dir: Option<PathBuf>) -> PyResult<String> {
+        let data = context::data(py, states_dir.as_deref())?;
+        Ok(self.inner.harvested_dir(&data.states_dir).to_string_lossy().into_owned())
+    }
+
+    /// Paths of the harvested start states on disk (`<harvested_dir>/*.state`, sorted); training draws them at
+    /// `harvested_fraction` (0 by default), or always when there are no seed states.
+    #[pyo3(signature = (states_dir=None))]
+    fn resolve_harvested_states(&self, py: Python<'_>, states_dir: Option<PathBuf>) -> PyResult<Vec<String>> {
+        let data = context::data(py, states_dir.as_deref())?;
+        Ok(self
+            .inner
+            .resolve_harvested_states(&data.states_dir)
+            .into_iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect())
+    }
+
     /// Action kind names masked out by `items`.
     fn disabled_kinds(&self) -> Vec<&'static str> {
         self.inner

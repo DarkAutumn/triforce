@@ -82,6 +82,16 @@ def test_eval_chain_command_harvests_into_the_default_harvested_dir(states_dir, 
     assert config.harvested_states is None
     _, info = native.Env(config, states_dir=str(states), seed=0).reset()
     assert os.path.basename(info['start_state']) in files
+    # Harvested starts are opt-in (review F069): the canonical yaml (fraction 0) never draws them, and the config
+    # reports the dir and its states for training's log.
+    canonical = native.SpecialistConfig.load('ow-moblin')
+    assert canonical.harvested_fraction == 0.0
+    assert canonical.harvested_dir(str(states)) == str(states / 'harvested' / 'ow-moblin')
+    assert [os.path.basename(p) for p in canonical.resolve_harvested_states(str(states))] == files
+    for seed_state in canonical.resolve_start_states(str(states_dir)):
+        shutil.copy(seed_state, states / os.path.basename(seed_state))
+    env = native.Env(canonical, states_dir=str(states), seed=0)
+    assert all(os.path.basename(env.reset()[1]['start_state']) not in files for _ in range(20))
 
 
 def test_training_resets_from_harvested_states_with_their_true_health(states_dir, harvested, tmp_path):

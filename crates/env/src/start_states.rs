@@ -258,7 +258,9 @@ impl StartStatePool {
             drawn: Vec::new(),
             resets: 0,
         };
-        pool.scan_harvested();
+        if pool.draws_harvested() {
+            pool.scan_harvested();
+        }
         if pool.seed.is_none() && pool.harvested.is_none() {
             return Err(EnvError::StartState(format!(
                 "Specialist {:?} has no start states (globs {:?}, harvested dir {})",
@@ -270,9 +272,19 @@ impl StartStatePool {
         Ok(pool)
     }
 
+    /// Harvested states are drawn at a positive `harvested_fraction`, or always when there are no seed states.
+    fn draws_harvested(&self) -> bool {
+        self.harvested_fraction > 0.0 || self.seed.is_none()
+    }
+
+    /// Re-reads the harvested dir.  An empty dir drops the harvested states (resets go back to the seed states); a
+    /// pool without seed states keeps its list, so its next load fails loudly.
     fn scan_harvested(&mut self) {
         let paths = path_strings(glob(&self.harvested_dir.join("*.state")));
         if paths.is_empty() {
+            if self.seed.is_some() {
+                self.harvested = None;
+            }
             return;
         }
         match &mut self.harvested {
@@ -281,16 +293,24 @@ impl StartStatePool {
         }
     }
 
-    /// Path of the next start state.
+    /// Path of the next start state.  A harvested file deleted since the last rescan triggers a rescan and one
+    /// redraw (from the seed states when the harvested dir is now empty).
     pub fn next<R: Rng + ?Sized>(&mut self, rng: &mut R) -> String {
         self.resets += 1;
-        if self.resets.is_multiple_of(HARVEST_RESCAN_RESETS) {
+        if self.draws_harvested() && self.resets.is_multiple_of(HARVEST_RESCAN_RESETS) {
             self.scan_harvested();
         }
         if let Some(h) = &mut self.harvested
             && (self.seed.is_none() || rng.random::<f64>() < self.harvested_fraction)
         {
-            return h.next(rng);
+            let path = h.next(rng);
+            if Path::new(&path).exists() {
+                return path;
+            }
+            self.scan_harvested();
+            if let Some(h) = &mut self.harvested {
+                return h.next(rng);
+            }
         }
         let seed = self.seed.as_mut().expect("seed states");
         if let Some(weights) = &self.weights
@@ -685,15 +705,31 @@ mod tests {
             harvested.display()
         );
         let config = SpecialistConfig::from_yaml(&text, "t.yaml", None).unwrap();
+        // Opt-in (F069): the default fraction 0 never draws the harvested files.
         let mut pool = StartStatePool::new(&config, &seeds).unwrap();
         let mut r = rng();
+        assert!(pool.harvested.is_none());
+        assert!((0..200).all(|_| pool.next(&mut r).ends_with("1_73s_0.state")));
+        let mut half = config.clone();
+        half.harvested_fraction = 0.5;
+        let mut pool = StartStatePool::new(&half, &seeds).unwrap();
         let picks: Vec<String> = (0..400).map(|_| pool.next(&mut r)).collect();
         let n = picks.iter().filter(|p| p.ends_with("h1.state")).count();
         assert!((150..250).contains(&n), "{n}");
+        // F159: deleting the harvested files sends the next resets back to the seed states instead of failing.
+        std::fs::remove_file(harvested.join("h1.state")).unwrap();
+        assert!((0..84).all(|_| pool.next(&mut r).ends_with("1_73s_0.state")));
+        assert!(pool.harvested.is_none());
+        std::fs::write(harvested.join("h1.state"), b"x").unwrap();
         let mut only = config.clone();
         only.harvested_fraction = 1.0;
         let mut pool = StartStatePool::new(&only, &seeds).unwrap();
         assert!((0..20).all(|_| pool.next(&mut r).ends_with("h1.state")));
+        // Without seed states the harvested files are drawn at any fraction.
+        let mut harvest_only = config.clone();
+        harvest_only.start_states.clear();
+        let mut pool = StartStatePool::new(&harvest_only, &seeds).unwrap();
+        assert!((0..5).all(|_| pool.next(&mut r).ends_with("h1.state")));
         let mut none = config.clone();
         none.start_states.clear();
         none.harvested_states = Some(dir.path().join("empty").display().to_string());
