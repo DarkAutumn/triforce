@@ -1850,10 +1850,12 @@ impl Bus {
     /// The CPU stays at the JAM address, re-reading the opcode each cycle. For
     /// addresses in PPU register space ($2000-$3FFF) this auto-increments PPUDATA,
     /// so the CPU eventually reads a non-JAM byte and resumes normal execution.
-    /// IRQ/NMI are suppressed while jammed (matches real 6502 hardware).
+    /// IRQ/NMI are suppressed while jammed (matches real 6502 hardware). Zelda never runs one, so
+    /// it flags `corrupted` and `ZCore::run_frame` stops at the end of the frame.
     #[inline(always)]
     pub fn hlt(&mut self) {
         self.cpu.pc = self.cpu.pc.wrapping_sub(1);
+        self.cpu.corrupted = true;
         self.cpu
             .clear_irq_flags(IrqFlags::PREV_RUN_IRQ | IrqFlags::PREV_NMI);
     }

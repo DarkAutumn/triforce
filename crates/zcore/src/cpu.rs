@@ -1154,5 +1154,6 @@ mod tests {
         assert_eq!(bus.cpu.pc, 0x0300, "still on the jam");
         assert_eq!(bus.cpu.acc, 0x42);
         assert!(bus.cpu.cycle - before >= 10, "time passes");
+        assert!(bus.cpu.corrupted, "the jam is reported");
     }
 }
