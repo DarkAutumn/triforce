@@ -139,3 +139,53 @@ def test_process_log_roots_finds_every_triforce_entry_point(checkout, case):
     fake_process(proc, 4242, args, cwd, environ)
     (proc / 'self').mkdir()                 # non-pid entries are skipped
     assert gui.process_log_roots(proc) == {path.resolve() for path in expected}
+
+
+def iso(ts):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat()
+
+
+def running_plan(pid, created):
+    import socket
+    return {'status': 'running', 'host': socket.gethostname(), 'pid': pid, 'created': iso(created)}
+
+
+def test_plan_alive_rejects_a_reused_pid():
+    import subprocess
+    import time
+    child = subprocess.Popen(['sleep', '5'])
+    try:
+        assert gui.plan_alive(running_plan(child.pid, time.time() - 3600)) is False
+    finally:
+        child.kill()
+        child.wait()
+    assert gui.plan_alive(running_plan(os.getpid(), time.time())) is True
+    assert gui.plan_alive(running_plan(child.pid, time.time())) is False      # reaped: no such process
+
+
+def finished_plan_folder(tmp_path, plan_status, pid=None):
+    import json
+    import time
+    plan = {**running_plan(pid or os.getpid(), time.time()), 'status': plan_status, 'name': 'r1',
+            'runs': [{'index': 0, 'specialist': 'ow-start', 'status': 'evaluating'},
+                     {'index': 1, 'specialist': 'ow-octorok', 'status': 'interrupted'}]}
+    (tmp_path / gui.PLAN_FILE).write_text(json.dumps(plan))
+    events = [{'event': 'start', 'target_steps': 100}, {'event': 'train_end'}, {'event': 'eval_start'}]
+    (tmp_path / 'ow-start.jsonl').write_text(''.join(json.dumps(event) + '\n' for event in events))
+    training = gui.Training(tmp_path)
+    training.poll()
+    return training
+
+
+def test_a_finished_plan_has_no_active_run(tmp_path):
+    training = finished_plan_folder(tmp_path, 'interrupted')
+    assert not set(training.statuses()) & set(gui.ACTIVE)
+    assert training.statuses() == ['interrupted', 'interrupted']
+    assert training.active_index() is None
+
+
+def test_a_running_plan_still_evaluates(tmp_path):
+    training = finished_plan_folder(tmp_path, 'running')
+    assert training.statuses() == ['evaluating', 'interrupted']
+    assert training.active_index() == 0

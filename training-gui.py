@@ -353,8 +353,12 @@ class Run:
 
     # -- derived state
 
-    def status(self, live) -> str:
-        """pending | starting | training | evaluating | ok | early | failed | interrupted | lost."""
+    def status(self, live, plan_status: str = 'running') -> str:
+        """pending | starting | training | evaluating | ok | early | failed | interrupted | lost.  ``live`` is the
+        plan's process (False: gone); an unfinished run of a finished plan is never active: 'interrupted' when the
+        plan was interrupted, else 'lost'."""
+        if plan_status != 'running':
+            live = False
         final = (self.end or {}).get('status')
         entry_status = self.entry.get('status')
         if final is None and entry_status not in (None, 'pending', 'running', 'evaluating'):
@@ -371,7 +375,7 @@ class Run:
                 and not self.events):
             return 'pending'
         if live is False:
-            return 'lost'
+            return 'interrupted' if plan_status == 'interrupted' else 'lost'
         if self.eval_start is not None or entry_status == 'evaluating':
             return 'evaluating'
         if not self.progress and self.train_end is None and self.skipped is None:
@@ -553,8 +557,25 @@ class Run:
         return sum(value for _, value in values) / len(values) if values else None
 
 
+def process_started(pid: int, proc: Path = Path('/proc')) -> float | None:
+    """When the process started (Unix seconds), from ``/proc/<pid>/stat`` field 22 and ``/proc/stat`` btime; None
+    without /proc or when the process is gone."""
+    try:
+        fields = (proc / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()
+        ticks = int(fields[19])         # field 22 overall; fields[0] is field 3 (state)
+        btime = next(int(line.split()[1]) for line in (proc / 'stat').read_text().splitlines()
+                     if line.startswith('btime '))
+        return btime + ticks / os.sysconf('SC_CLK_TCK')
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+
+
+PID_START_SLACK = 2.0   # seconds; the plan is written by its process after it started, never before
+
+
 def plan_alive(plan: dict) -> bool | None:
-    """Is a 'running' plan's training process still there?  None when unknown (finished, other host)."""
+    """Is a 'running' plan's training process still there?  None when unknown (finished, other host).  A process
+    that started after the plan was created has reused the pid: the plan's process is gone."""
     if plan.get('status') != 'running':
         return None
     pid = plan.get('pid')
@@ -565,9 +586,12 @@ def plan_alive(plan: dict) -> bool | None:
     except ProcessLookupError:
         return False
     except PermissionError:
-        return True
+        pass
     except OSError:
         return None
+    created, started = parse_time(plan.get('created')), process_started(pid)
+    if created is not None and started is not None and started > created + PID_START_SLACK:
+        return False
     return True
 
 
@@ -664,8 +688,12 @@ class Training:
     def finished_ts(self):
         return parse_time(self.plan.get('finished'))
 
+    def run_status(self, run: 'Run') -> str:
+        """The run's status under this plan: a finished plan's unfinished runs are not active."""
+        return run.status(self.live, self.plan.get('status') or 'running')
+
     def statuses(self) -> list[str]:
-        return [run.status(self.live) for run in self.runs]
+        return [self.run_status(run) for run in self.runs]
 
     def active_index(self):
         """The run being trained (background evaluations run alongside it), else the first one evaluating."""
@@ -1275,13 +1303,13 @@ class RunRow(Clickable):
         model = self.view.model
         if model is None or self.index >= len(model.runs):
             return False
-        return model.runs[self.index].status(model.live) in ACTIVE or abs(self.shown - self.target()) > 0.001
+        return model.run_status(model.runs[self.index]) in ACTIVE or abs(self.shown - self.target()) > 0.001
 
     def target(self) -> float:
         """Bar fill: training progress, or episodes evaluated while evaluating."""
         model = self.view.model
         run = model.runs[self.index]
-        status = run.status(model.live)
+        status = model.run_status(run)
         if status == 'evaluating':
             done, total = run.eval_done()
             return done / total if total else 0.0
@@ -1293,7 +1321,7 @@ class RunRow(Clickable):
             return
         run = model.runs[self.index]
         now, t = time.time(), self.view.owner.t
-        status = run.status(model.live)
+        status = model.run_status(run)
         color = STATUS.get(status, (C.muted, ''))[0]
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -1877,7 +1905,7 @@ class DetailPane(QWidget):
     # -- run
 
     def _show_run(self, model: Training, run: Run):
-        status = run.status(model.live)
+        status = model.run_status(run)
         color, label = STATUS.get(status, (C.muted, status))
         where = (run.start or {}).get('run_dir') or run.entry.get('run_dir') or ''
         self.title.setText(f"<span style='font-size:15pt; font-weight:700'>{run.name}</span>"
