@@ -5,7 +5,7 @@
 //! - `corpus/golden/<name>.tfgolden` — committed zcore goldens (all 11 domains) for the movies tagged
 //!   `short`: the reference a fresh clone diffs against (`tf ladder-diff`).
 
-use crate::formats::{Golden, LADDER_MASK, Movie, movie_file_hash};
+use crate::formats::{Golden, LADDER_MASK, Movie, movie_chain_hash};
 use crate::replay::{first_divergence, golden_of};
 use crate::rom::{RomInfo, workspace_root};
 use crate::zcore::Zcore;
@@ -146,7 +146,7 @@ pub fn ladder_golden(rom: &RomInfo, movies: &[PathBuf], short: bool, out: &Path,
     let results = par_map(&movies, jobs, |path| -> Result<()> {
         let movie = load_movie(rom, path)?;
         let mut b = Zcore::open(&rom.bytes)?;
-        let g = golden_of(&mut b, &movie, movie_file_hash(path)?, LADDER_MASK)?;
+        let g = golden_of(&mut b, &movie, movie_chain_hash(path, &corpus_dir().join("movies"))?, LADDER_MASK)?;
         g.save(&out.join(format!("{}.tfgolden", name_of(path))))
     });
     let mut bad = 0;
@@ -174,8 +174,8 @@ pub fn ladder_diff(rom: &RomInfo, dir: &Path, jobs: usize) -> Result<i32> {
         let movie = load_movie(rom, &path)?;
         let golden = Golden::load(g)?;
         ensure!(
-            golden.movie_hash == movie_file_hash(&path)?,
-            "{} is stale (recorded for another version of {}): regenerate it with `tf ladder-golden`",
+            golden.movie_hash == movie_chain_hash(&path, &corpus_dir().join("movies"))?,
+            "{} is stale (recorded for another version of {} or of its base movies): regenerate it with `tf ladder-golden`",
             g.display(),
             path.display()
         );

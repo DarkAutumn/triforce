@@ -89,8 +89,9 @@ tf ladder-diff                                  # the committed goldens of the s
 A change meant to be invisible (refactor, speed-up) must leave `ladder-diff` at 0. A deliberate behaviour change
 will diverge: check that the divergence is the intended one (`tf trace MOVIE --frame K` before and after, then
 `diff` the outputs), then regenerate the goldens, including the committed ones
-(`tf ladder-golden --short -o corpus/golden`), and commit those with the change. A re-recorded movie makes its
-golden stale (`ladder-diff` says so); regenerate it the same way.
+(`tf ladder-golden --short -o corpus/golden`), and commit those with the change. A re-recorded movie, or a
+re-recorded base movie it starts from (`power_on_to_start`), makes its golden stale (`ladder-diff` says so);
+regenerate it the same way.
 
 ## Testing
 

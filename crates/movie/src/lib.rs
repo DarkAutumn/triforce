@@ -375,6 +375,25 @@ pub fn movie_file_hash(path: &Path) -> Result<[u8; 32]> {
     Ok(*blake3::hash(&buf).as_bytes())
 }
 
+/// The BLAKE3 of a movie file followed by each file of its `base` chain (base, its base, ...,
+/// loaded from `movies_dir`): a golden's staleness key, so re-recording a base makes the goldens
+/// of every movie built on it stale. Equals `movie_file_hash` for a power-on movie.
+pub fn movie_chain_hash(path: &Path, movies_dir: &Path) -> Result<[u8; 32]> {
+    let mut h = blake3::Hasher::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut next = path.to_path_buf();
+    loop {
+        let buf = std::fs::read(&next).with_context(|| format!("reading {}", next.display()))?;
+        h.update(&buf);
+        let m = Movie::decode(&buf).with_context(|| format!("decoding {}", next.display()))?;
+        let Some(name) = m.base() else { break };
+        ensure!(!seen.iter().any(|n| n == name), "base chain loops at {name}");
+        seen.push(name.to_owned());
+        next = movies_dir.join(format!("{name}.tfmovie"));
+    }
+    Ok(*h.finalize().as_bytes())
+}
+
 pub fn parse_hex_u16(s: &str) -> Result<u16> {
     let t = s.trim();
     let t = t.strip_prefix("0x").or_else(|| t.strip_prefix('$')).unwrap_or(t);
@@ -634,6 +653,35 @@ mod tests {
             let err = play(&mut Recorder::default(), m, &dir).unwrap_err();
             assert!(format!("{err:#}").contains(&format!("base chain loops at {at}")), "{err:#}");
         }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A based movie's chain hash changes when its base's bytes change and not otherwise; a
+    /// power-on movie's equals its file hash.
+    #[test]
+    fn chain_hash_covers_the_base_chain() {
+        let dir = std::env::temp_dir().join(format!("movie-chain-{}", std::process::id()));
+        let save = |name: &str, base: Option<&str>, inputs: &[u8]| {
+            let mut m = movie_with(inputs, &[]);
+            m.meta = serde_json::json!({"name": name});
+            if let Some(b) = base {
+                m.meta["base"] = serde_json::json!(b);
+            }
+            m.save(&dir.join(format!("{name}.tfmovie"))).unwrap();
+        };
+        save("root", None, &[1]);
+        save("mid", Some("root"), &[2]);
+        let (root, mid) = (dir.join("root.tfmovie"), dir.join("mid.tfmovie"));
+        assert_eq!(movie_chain_hash(&root, &dir).unwrap(), movie_file_hash(&root).unwrap());
+        let before = movie_chain_hash(&mid, &dir).unwrap();
+        assert_ne!(before, movie_file_hash(&mid).unwrap());
+        assert_eq!(movie_chain_hash(&mid, &dir).unwrap(), before, "unchanged files, same hash");
+        save("root", None, &[1, 1]);
+        assert_ne!(movie_chain_hash(&mid, &dir).unwrap(), before, "re-recorded base");
+        save("root", None, &[1]);
+        assert_eq!(movie_chain_hash(&mid, &dir).unwrap(), before);
+        save("root", Some("mid"), &[1]);
+        assert!(format!("{:#}", movie_chain_hash(&mid, &dir).unwrap_err()).contains("loops"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
