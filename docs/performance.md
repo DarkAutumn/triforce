@@ -10,8 +10,9 @@ RTX 4090, idle unless noted.
 Since `docs/rust-actor.md` the policy acts inside the pool (Rust CPU forward, one `rollout` call per iteration) and
 the sections below about the Python forward, `recv`/`send` and CUDA graphs are history.
 
-**Training,** `scripts/train_bench.sh LABEL 25 fresh` (fresh models: the promoted ones are pre-refactor and don't
-load, so these numbers aren't comparable with the warm-started tables below; same machine load):
+**Training,** `scripts/train_bench.sh LABEL 25 fresh` (fresh models: at the time the promoted models were
+pre-refactor and didn't load, so these numbers aren't comparable with the warm-started tables below; same machine
+load):
 
 | config | synchronous (`ff194b8`) | rollout overlapped with the update | gain |
 |---|---:|---:|---:|
@@ -22,7 +23,7 @@ load, so these numbers aren't comparable with the warm-started tables below; sam
 
 - **Where an iteration went (synchronous, goriya p16):** rollout ~47%, PPO update ~35% (0.8 s: 40 minibatch
   steps, ~17k kernel launches; launch-bound, the GPU itself busy ~0.27 s), torch recompute of log-probs and
-  values ~8%.
+  values on the GPU ~8% (`charts/recompute_seconds`).
 - **Overlap (Lee, Nov 9: "yes"):** `PPO.train` starts the next rollout on a thread (the pool releases the GIL)
   with the weights from before the update, into the second of two buffers, then updates. The rollout runs one
   update behind. `logp_old` stays the learner's recomputed one: with the acting policy's log-prob the KL early stop
@@ -34,8 +35,8 @@ load, so these numbers aren't comparable with the warm-started tables below; sam
   (tested). Rollouts +11–17%. The forward was ~18% of rollout CPU before this change, emulation ~67%.
 - **Rollout barrier:** every env takes exactly `T` steps, and per-env rollout times differ, so workers idle
   13–32% of a goriya p16 rollout waiting for the slowest env (measured per env). 32 envs on 16 threads: +9%; 20
-  envs on 20 threads: +11% (rollout alone). Candidates: more envs than threads with work-stealing, or the deferred
-  look-ahead (`docs/rust-actor.md` item 4; the look-ahead is 12–35% of step time in beam/bomb rooms).
+  envs on 20 threads: +11% (rollout alone). Candidate: more envs than threads with work-stealing (the deferred
+  look-ahead was not built, `docs/rust-actor.md` item 4; the look-ahead is 12–35% of step time in beam/bomb rooms).
 - **Tried, not kept:** `torch.compile` of the update's `evaluate` (0.42–0.59 s vs 0.50–0.82 s per update, inside the
   noise, plus ~40 s compile); `cudnn.benchmark` (no gain); building everything with `target-cpu=x86-64-v3`
   (the forward gained a little, the emulator nothing).
@@ -60,10 +61,10 @@ noise on these benches is about ±4%: the curriculum's shared progress depends o
 seeded runs don't play the same episodes twice. These env counts are the historical ones, not the best:
 [How many envs](#how-many-envs---parallel) recommends `--parallel 16` for a run that has the machine to itself.
 
-## How it's measured
+## How it's measured (history: before the Rust actor, Nov 9)
 
 - **Old stack (stable-retro/FCEUmm, one subprocess per env, each running its own CPU inference):**
-  `scripts/old_stack_sps.py` reads every `logs/*/<specialist>.jsonl`, takes the `sps` of each run's `progress`
+  `scripts/old_stack_sps.py` (deleted since) reads every `logs/*/<specialist>.jsonl`, takes the `sps` of each run's `progress`
   events, drops the first 10% (startup) and reports the median per run. The table above lists every run with the
   same specialist and env count (goriya p8: `r17-goriya`, `r19-goriya-more`; d2-rope p8: `r34-east-key`,
   `r35-east-curriculum`; ow-moblin p12: five `r16`–`r26c` runs; ow-zora p16: `r3-baseline`, `r3c-curriculum`;
@@ -79,7 +80,7 @@ seeded runs don't play the same episodes twice. These env counts are the histori
   (`pyspy.speedscope.json`, `perf.data`, `perf_top.txt`). Call graphs inside the native module need a build with
   frame pointers (`RUSTFLAGS="-C force-frame-pointers=yes" maturin develop --release`); only one profile below
   used it.
-- **Rollout timeline:** `scripts/rollout_timeline.py SPECIALIST N` collects rollouts with the promoted model (no
+- **Rollout timeline:** `scripts/rollout_timeline.py SPECIALIST N` (script removed with the per-step path) collects rollouts with the promoted model (no
   PPO updates) and prints, per rollout, the share of time the main thread was blocked in `recv`, the number of
   forwards and their mean batch, and when the first, median and last env finished its `T` steps.
 
@@ -97,7 +98,7 @@ sword swing vs. a 32-frame move vs. a reset), so every lockstep step paid for it
 threads: `Bus::clock_frame` 48%, `render_span` 20% (headless; span bookkeeping, not pixels), route search ~1%,
 SipHash ~1.3%.
 
-## Changes
+## Changes (history: before the Rust actor, Nov 9)
 
 ### 1. Asynchronous collection, per-(env, step) noise, CUDA-graph forward (`47cf816`)
 
@@ -151,7 +152,7 @@ Result: −1% user CPU on a fixed seeded ow-moblin workload (237.2 s → 234.6 s
 steps/s within noise (goriya 1,246, d2-rope 1,119, ow-moblin 1,563–1,607, ow-zora 1,631). Route search and SipHash
 no longer show up in the profile.
 
-## Where the time goes now
+## Where the time goes now (history: before the Rust actor, Nov 9)
 
 Final long-haul profile (`profile-final`, ow-zora p16, 150 iterations under py-spy, perf for 150 s from 150 s in;
 rollout 2.17 s, update 0.38 s per iteration with the profilers attached):
@@ -181,7 +182,7 @@ For scale, the same pools stepped with random legal actions and no network at al
 (ow-zora p16, 13.5 frames/step) and 2,002 steps/s (goriya p8, 14.4 frames/step); the trained policies take
 longer actions (17.6 and 13.6 frames/step).
 
-## Tried and not kept
+## Tried and not kept (history: before the Rust actor, Nov 9)
 
 - **CPU inference** (async): ow-zora rollout 3.72 s vs 2.39 s with the CUDA graph.
 - **Eager CUDA inference** (async): 3.41 s vs 2.39 s.
@@ -203,17 +204,18 @@ perfect accuracy: every change had to leave the game's behaviour bit for bit as 
 ### Method
 
 - **Accuracy gate** (every change, before any timing; `target/opt/gate.sh`, gitignored):
-  - `tf ladder-diff` against goldens of the full movie corpus taken before the work (63 movies; per-frame digests
+  - `tf ladder-diff` against goldens of the full movie corpus taken before the work (63 movies then, 84 today; per-frame digests
     of RAM, PRG-RAM, CHR, CIRAM, palette, OAM, pixels and the CPU, PPU, mapper and APU state): 0 diverge;
   - the zcore and tools tests;
   - `scripts/state_walk.py`: every start state (481) stepped through the game path with seeded random legal actions,
     18,728 per-step digests against the pre-work walk: 0 differ;
   - a seeded CPU training run whose metrics digest must be identical.
 - **Core benchmark:** `tf bench --recordings target/bench-runs` replays 20 runs recorded with the promoted team
-  (`scripts/record_bench_runs.py`: full game on both routes, post-D1 and D2 segments) and times 10 windows of 500
-  frames spread over each run's whole length, headless and rendered, reported per level (L0 overworld, L1/L2 the
-  dungeons). The corpus agent movies can't be used for speed: they were recorded before hardware timing and
-  desync within a few thousand frames.
+  (`scripts/record_bench_runs.py`, then: full game on both routes, post-D1 and D2 segments; today it records the
+  route's six segments) and times 10 windows of 500 frames spread over each run's whole length, headless and
+  rendered, reported per level (L0 overworld, L1/L2 the dungeons). The corpus agent movies of the time couldn't be
+  used for speed (recorded before hardware timing, they desynced within a few thousand frames); the corpus now
+  holds re-recorded chain runs, which `tf bench --agent` replays.
 - **Env benchmark:** `scripts/env_speed.py` loads every start state and steps it through `Game.act` with seeded
   random legal actions (the game path training pays for: frame skip, look-ahead, observations), frames/s per room
   family.
@@ -328,11 +330,12 @@ steps/s than warm ones (1.7–1.8k at 16 envs): a fresh policy's episodes are sh
 **Recommendation:** `--parallel 16` for a run that has the machine to itself (`train_round.py`'s default
 already). Two rounds side by side: 8 each.
 
-## Evaluation and chain runs
+## Evaluation and chain runs (history: before the Rust actor, Nov 9)
 
 `evaluate.py` and `runner.py` (`ChainPool`, also behind `run.py`, `play_grid.py` and `eval-chain`) stepped their
 pools in lockstep too: `recv(min_ready=pool.active)`, one batched forward (per specialist for chains), `send`.
-They now use the same machinery as training:
+They then moved to the same machinery as training (since replaced by the Rust actor: `triforce/inference.py`,
+`tests/test_inference.py` and `--device` for evaluation are gone; `keyed_noise` is `triforce._native.keyed_noise`):
 
 - Ready envs act at once (`recv(min_ready=1)`); records and run results are still sorted by seed.
 - Each policy (the evaluated network; each chain specialist) has a fixed-shape forward over one row per env
@@ -347,8 +350,9 @@ They now use the same machinery as training:
   models, `eval-chain --route milestone1 --from 2_7ds_2 --runs 20 --parallel 20` gave identical run results with
   `--threads 1` and `--threads 20`.
 
-`scripts/port_gate.sh` (10 evaluations with `--parallel 16 --threads 16 --device cpu`, then five `eval-chain --runs
-40 --parallel 20 --device cpu` segments), wall time per step from the log files' modification times:
+`scripts/port_gate.sh` (then: 10 evaluations with `--parallel 16 --threads 16 --device cpu` and five `eval-chain`
+segments; today: evaluations with `--parallel 16 --threads 16`, then six `eval-chain --runs 40 --parallel 20`
+segments, no `--device`), wall time per step from the log files' modification times:
 
 | part | lockstep (`44403af`) | async, CPU (as the gate runs) | async, `--device cuda` |
 |---|---:|---:|---:|
@@ -376,18 +380,12 @@ In order of size, for ow-zora p16:
    is flat (no single item above ~5%; see [zcore speed](#zcore-speed-nov-7)): further gains mean many small
    changes or a rewrite of the dispatch, each held to the accuracy gate. 16 env threads on 10 physical cores
    already share cores.
-2. **The end-of-rollout tail** (~1–1.5 ms of each env's ~7–8 ms per step, 15–20%). Every env must take exactly
-   `T` steps and envs finish up to a second apart (workload differences between envs plus hyper-thread pairing), so
-   the early finishers idle. Rebalancing steps between envs or starting the next rollout early would change what a
-   rollout contains, so it stays.
-3. **Decision latency** (~0.65–1.0 ms per step). The GPU forward is ~0.33 ms of 168 small kernels; sending the
-   integer observation keys as uint8/int16 would save ~0.06 ms of copy; fusing kernels needs numerics changes
-   (above).
-4. **The PPO update** (0.3 s per iteration, ~12% of it, envs idle): a fused Adam and fewer host syncs per
-   minibatch would shave part of it.
-5. **Evaluation on CPU:** `port_gate.sh` passes `--device cpu` and `scripts/train_round.py`'s evaluations use
-   the default CPU; `--device cuda` takes the gate from 304 s to 179 s with the same results in this measurement.
-6. **Reset-bound specialists.** The round-10 r37 runs (10 envs each, two runs sharing the machine) trained
+2. **The rollout barrier.** Every env takes exactly `T` steps and per-env rollout times differ, so workers idle
+   13–32% of a rollout waiting for the slowest env (see "The Rust actor" above). More envs than threads with
+   work-stealing is the candidate; rebalancing steps between envs would change what a rollout contains.
+3. **The PPO update** (launch-bound: ~17k kernel launches per update, the GPU busy a third of it): a fused Adam
+   and fewer host syncs per minibatch would shave part of it.
+4. **Reset-bound specialists.** The round-10 r37 runs (10 envs each, two runs sharing the machine) trained
    ow-octorok/ow-zora/ow-leever-peahat/ow-moblin at 850–1,650 steps/s but ow-start at 430–470: its episodes are a
    handful of steps, so state loads, RNG/spawn randomization and the frames until Link is controllable dominate.
    Profile an ow-start run before optimizing (state decode + `restore`, `gain_control` frames, observation
