@@ -149,7 +149,7 @@ impl Curriculum {
             .map(|(name, paths)| {
                 let length = paths.len();
                 let track = match saved.get(name) {
-                    Some(track) if track.length == length => track.clone(),
+                    Some(track) if track.length == length && track.point < length => track.clone(),
                     _ => Track {
                         length,
                         point: length.saturating_sub(stride_for(length, spec.stages)),
@@ -368,6 +368,27 @@ mod tests {
             .collect();
         assert_eq!(points, [("changed", 4), ("kept", 0), ("new", 3)]);
         assert_eq!(c.progress()["kept"], done);
+        assert!(c.next(&mut ChaCha8Rng::seed_from_u64(0)).is_some());
+    }
+
+    #[test]
+    fn a_saved_point_past_the_track_end_starts_fresh() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trajectories = tmp.path().join("t");
+        make_track(&trajectories, "s", 8, true);
+        let spec = spec(&trajectories, &tmp.path().join("run"));
+        let broken = Track {
+            length: 8,
+            point: 8,
+            attempts: 1,
+            successes: 1,
+            stages_passed: 0,
+        };
+        std::fs::create_dir_all(spec.state_path.parent().unwrap()).unwrap();
+        let saved: IndexMap<String, Track> = [("s".to_owned(), broken)].into_iter().collect();
+        std::fs::write(&spec.state_path, serde_json::to_string(&saved).unwrap()).unwrap();
+        let c = Curriculum::new(spec).unwrap();
+        assert_eq!((c.progress()["s"].point, c.progress()["s"].attempts), (6, 0));
         assert!(c.next(&mut ChaCha8Rng::seed_from_u64(0)).is_some());
     }
 
