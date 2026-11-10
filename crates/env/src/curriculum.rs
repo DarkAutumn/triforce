@@ -74,6 +74,14 @@ pub struct CurriculumInfo {
 /// Track name (its directory: the seed state, or `<state>~s<seed>` for a variant) -> savestate paths along its
 /// successful path (index 0 = room entry).
 pub fn load_trajectories(directory: &Path) -> Result<IndexMap<String, Vec<PathBuf>>, EnvError> {
+    Ok(load_tracks(directory)?
+        .into_iter()
+        .map(|(name, (_, paths))| (name, paths))
+        .collect())
+}
+
+/// Track name -> (its trajectory.json `start_state`: the seed state the track was explored from, its paths).
+fn load_tracks(directory: &Path) -> Result<IndexMap<String, (String, Vec<PathBuf>)>, EnvError> {
     let mut tracks = IndexMap::new();
     let mut metas: Vec<PathBuf> = std::fs::read_dir(directory)
         .map(|it| {
@@ -95,15 +103,15 @@ pub fn load_trajectories(directory: &Path) -> Result<IndexMap<String, Vec<PathBu
             .unwrap_or(false)
             && !paths.is_empty()
         {
-            if meta.get("start_state").and_then(|v| v.as_str()).is_none() {
+            let Some(start_state) = meta.get("start_state").and_then(|v| v.as_str()) else {
                 return Err(EnvError::State(format!("{}: no start_state", meta_path.display())));
-            }
+            };
             let name = meta_path
                 .parent()
                 .and_then(Path::file_name)
                 .map(|n| n.to_string_lossy().into_owned())
                 .expect("a trajectory file lives in a track directory");
-            tracks.insert(name, paths);
+            tracks.insert(name, (start_state.to_owned(), paths));
         }
     }
     Ok(tracks)
@@ -119,6 +127,8 @@ pub fn stride_for(length: usize, stages: usize) -> usize {
 pub struct Curriculum {
     pub spec: CurriculumSpec,
     pub tracks: IndexMap<String, Vec<PathBuf>>,
+    /// Track name -> the seed state it was explored from (its episodes take that state's route step).
+    starts: IndexMap<String, String>,
     progress: IndexMap<String, Track>,
 }
 
@@ -130,7 +140,10 @@ impl Curriculum {
     /// it with the same length, any other track (new, or re-explored to another length) starts fresh, and saved
     /// tracks that are gone are dropped.  The merged progress is written back.
     pub fn new(spec: CurriculumSpec) -> Result<Curriculum, EnvError> {
-        let tracks = load_trajectories(&spec.trajectories)?;
+        let loaded = load_tracks(&spec.trajectories)?;
+        let starts = loaded.iter().map(|(name, (start, _))| (name.clone(), start.clone())).collect();
+        let tracks: IndexMap<String, Vec<PathBuf>> =
+            loaded.into_iter().map(|(name, (_, paths))| (name, paths)).collect();
         if tracks.is_empty() {
             return Err(EnvError::State(format!(
                 "No successful trajectories under {}",
@@ -164,6 +177,7 @@ impl Curriculum {
         let curriculum = Curriculum {
             spec,
             tracks,
+            starts,
             progress,
         };
         curriculum.write()?;
@@ -177,6 +191,11 @@ impl Curriculum {
     /// Name -> progress.
     pub fn progress(&self) -> &IndexMap<String, Track> {
         &self.progress
+    }
+
+    /// The seed state `track` was explored from (trajectory.json `start_state`).
+    pub fn start_state(&self, track: &str) -> Option<&str> {
+        self.starts.get(track).map(String::as_str)
     }
 
     fn write(&self) -> Result<(), EnvError> {

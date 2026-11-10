@@ -1096,6 +1096,35 @@ fn curriculum_reset_preserves_the_first_shield_turn() {
     );
 }
 
+/// F151: a curriculum start (a trajectory's `NNNN.state`) gets the route step of the seed state its track was
+/// explored from, as an episode from that seed state does.
+#[test]
+fn curriculum_start_takes_the_seed_states_route_step() {
+    let Some(nes) = open_core() else { return };
+    let src = common::repo().join("trajectories/goriya/1_23w_0");
+    if !src.is_dir() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let track = dir.path().join("goriya/1_23w_0");
+    std::fs::create_dir_all(&track).unwrap();
+    for entry in std::fs::read_dir(&src).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), track.join(entry.file_name())).unwrap();
+    }
+    let spec = CurriculumSpec::new(track.parent().unwrap().to_path_buf(), dir.path().join("p.json"), 1.0, 0.8);
+    let opts = EnvOptions { curriculum: Some(Curriculum::new(spec).unwrap().shared()), ..Default::default() };
+    let mut env = make_env_with(nes, "goriya", opts, |_| {});
+    let (_, info) = env.reset(Some(0), None).unwrap();
+    let start = info.start_state.clone().unwrap();
+    assert!(start.rsplit('/').next().unwrap().starts_with(|c: char| c.is_ascii_digit()), "{start}");
+    let curriculum = (env.route().0.to_owned(), env.route().1);
+    let mut seed = make_env(release(env), "goriya", Some("1_23w_0"), |_| {});
+    seed.reset(Some(0), None).unwrap();
+    assert!(seed.route().1.is_some());
+    assert_eq!(curriculum, (seed.route().0.to_owned(), seed.route().1));
+}
+
 // --- tests/test_nearby_items.py ---
 
 /// stalfos-keese-gel at 1_73e (one room) with Link hurt at (120, y) and `drops` (kind, x, y) placed in slots 3+;

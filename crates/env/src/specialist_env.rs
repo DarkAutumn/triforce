@@ -431,12 +431,15 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             .map(str::to_owned)
             .or_else(|| self.start_state.clone());
         self.curriculum_tag = None;
+        // A curriculum start (`NNNN.state`) takes its track's seed state's route entry, so it gets the seed's step.
+        let mut entry_name = None;
         if name.is_none()
             && let Some(c) = &self.curriculum
         {
-            let next = c.lock().next(&mut self.rng);
-            if let Some((path, tag)) = next {
+            let c = c.lock();
+            if let Some((path, tag)) = c.next(&mut self.rng) {
                 name = Some(path.to_string_lossy().into_owned());
+                entry_name = c.start_state(&tag.0).map(str::to_owned);
                 self.curriculum_tag = Some(tag);
             }
         }
@@ -487,7 +490,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let (route, step) = start_route(
             &self.data.map,
             state.full_location(),
-            state_entry(&name),
+            state_entry(entry_name.as_deref().unwrap_or(&name)),
             &mut self.rng,
             self.config.route.as_deref(),
             &state,
