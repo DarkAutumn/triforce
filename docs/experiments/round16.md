@@ -300,7 +300,7 @@ Chains with each goriya swapped into the promoted team (goriya samples, 120 runs
 | ctl | 81, 69, 68 = 72.7 | 25, 19, 13 = 19.0 | 85, 78, 85 = 82.7 | 105, 100, 103 = 102.7 |
 | sil | 72, 66, 78 = 72.0 | 25, 16, 18 = 19.7 | 83, 90, 80 = 84.3 | 109, 99, 108 = 105.3 |
 | exit | 69, 71, 75 = 71.7 | 22, 17, 25 = 21.3 | 81, 91, 88 = 86.7 | 103, 102, 108 = 104.3 |
-| harvest | 68, 75, 68 = 70.3 | 18, 25, 19 = 20.7 | 92, 81, 76 = 83.0 | 94, 109, ? |
+| harvest | 68, 75, 68 = 70.3 | 18, 25, 19 = 20.7 | 92, 81, 76 = 83.0 | 94, 109, 102 = 101.7 |
 
 - **PLR (IX.9):** β=0.1 is clearly worse (hearts 0.79 vs the controls' 0.51–0.65): with 12 start states it puts most
   draws on one state and the rest are forgotten. β=1 is level with the other arms. Not kept.
