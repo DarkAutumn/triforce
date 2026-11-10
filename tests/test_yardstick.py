@@ -70,7 +70,7 @@ def test_an_old_format_evaluation_is_an_error_naming_the_file():
 
 
 def test_compare_prints_rows_present_on_one_side(tmp_path, capsys):
-    row = {'success': [0.9, 0.85, 0.95], 'hearts_lost_per_visit': None, 'health_change': None,
+    row = {'act': 'argmax', 'success': [0.9, 0.85, 0.95], 'hearts_lost_per_visit': None, 'health_change': None,
            'frames_per_visit': None}
     base = {'specialists': [{'specialist': 'goriya', **row}, {'specialist': 'zol', **row}],
             'chains': [{'segment': 'full', 'arrivals': [0.1, 0.05, 0.2], 'hearts_at_arrival': None}]}
@@ -81,3 +81,66 @@ def test_compare_prints_rows_present_on_one_side(tmp_path, capsys):
     out = capsys.readouterr().out
     assert '| zol | - | present | missing | missing |' in out
     assert '| chain full | - | present | missing | missing |' in out
+
+
+def test_compare_refuses_rows_measured_in_different_act_modes(tmp_path, capsys):
+    row = {'specialist': 'goriya', 'success': [0.9, 0.85, 0.95], 'hearts_lost_per_visit': None,
+           'health_change': None, 'frames_per_visit': None}
+    (tmp_path / 'base.json').write_text(json.dumps({'specialists': [{**row, 'act': 'sample'}], 'chains': []}))
+    (tmp_path / 'new.json').write_text(json.dumps({'specialists': [{**row, 'act': 'argmax'}], 'chains': []}))
+    files = [str(tmp_path / 'base.json'), str(tmp_path / 'new.json')]
+    assert yardstick.main(['compare', *files]) == 1
+    captured = capsys.readouterr()
+    assert '| goriya | act | sample | argmax | refused: act modes differ |' in captured.out
+    assert '| goriya | success |' not in captured.out and 'goriya' in captured.err
+    assert yardstick.main(['compare', *files, '--allow-mode-mismatch']) == 0
+    assert '| goriya | success |' in capsys.readouterr().out
+
+
+def _evaluation(act):
+    record = {'success': act == 'argmax', 'health': 3.0, 'start_health': 3.0, 'visits': []}
+    return {'format': 2, 'specialist': 'goriya', 'act': act, 'deterministic': act == 'argmax',
+            'records': [record] * 4}
+
+
+@pytest.fixture(name='argmax_run')
+def fixture_argmax_run(tmp_path):
+    """A promoted goriya run that acts by argmax, with a sampled eval.json (as the round driver wrote them)."""
+    from triforce import registry   # pylint: disable=import-outside-toplevel
+    from triforce.model import ModelConfig, ZeldaPolicy   # pylint: disable=import-outside-toplevel
+    from triforce.observation import observation_space   # pylint: disable=import-outside-toplevel
+    models = tmp_path / 'models'
+    small = ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
+    checkpoint = registry.save_checkpoint('goriya', 'r1', ZeldaPolicy(observation_space(), small), root=models)
+    registry.promote('goriya', 'r1', root=models, act='argmax')
+    (checkpoint.parent / 'eval.json').write_text(json.dumps(_evaluation('sample')))
+    (tmp_path / 'specialists').mkdir()
+    (tmp_path / 'specialists' / 'goriya.yaml').write_text('name: goriya\n')
+    return tmp_path, checkpoint.parent
+
+
+def _report(root, *extra):
+    return yardstick.main(['report', '--models-dir', str(root / 'models'), '--specialists-dir',
+                           str(root / 'specialists'), '--output', str(root / 'ys.json'), *extra])
+
+
+def test_report_refuses_an_evaluation_in_the_other_act_mode(argmax_run, capsys):
+    root, _ = argmax_run
+    assert _report(root) == 1
+    assert 'goriya' in capsys.readouterr().err and not (root / 'ys.json').exists()
+    assert _report(root, '--allow-mode-mismatch') == 0
+    row, = json.loads((root / 'ys.json').read_text())['specialists']
+    assert (row['act'], row['run_act'], row['deterministic']) == ('sample', 'argmax', False)
+    assert '| goriya | sample (acts argmax) |' in capsys.readouterr().out
+
+
+def test_report_reads_the_evaluation_in_the_run_act_mode(argmax_run, capsys):
+    root, run = argmax_run
+    (run / 'eval-argmax.json').write_text(json.dumps(_evaluation('argmax')))
+    assert _report(root) == 0
+    row, = json.loads((root / 'ys.json').read_text())['specialists']
+    assert (row['act'], row['deterministic'], row['eval_file']) == ('argmax', True, 'eval-argmax.json')
+    assert row['success'][0] == 1.0 and '| goriya | argmax | 4 |' in capsys.readouterr().out
+    assert _report(root, '--mode', 'sample') == 0
+    row, = json.loads((root / 'ys.json').read_text())['specialists']
+    assert (row['act'], row['eval_file']) == ('sample', 'eval.json')

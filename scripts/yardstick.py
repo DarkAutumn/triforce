@@ -2,11 +2,15 @@
 """The better-play yardstick (`~/Downloads/triforce-better-play.md` §0): fixed measurements every experiment is
 judged on, with 95% confidence intervals.
 
-    python scripts/yardstick.py report --run RUN_ID [--models-dir DIR] [--chain NAME=PATH ...] --output OUT.json
+    python scripts/yardstick.py report --run RUN_ID [--models-dir DIR] [--mode sample|argmax] [--chain NAME=PATH ...]
+        --output OUT.json
     python scripts/yardstick.py compare BASE.json NEW.json
 
-`report` reads each specialist's `<models>/<name>/<RUN_ID>/eval.json` (format 2; `--run promoted` follows each
-specialist's promoted pointer; specialists are the `specialists/*.yaml` names) and the chain JSON lines given with
+`report` reads each specialist's evaluation of `<models>/<name>/<RUN_ID>` in the run's act mode (or `--mode`):
+`eval.json` when it was measured in that mode for the current weights, else `eval-<mode>.json`
+(`evaluate.read_evaluation`; format 2).  A run without one is an error unless `--allow-mode-mismatch` (then its
+`eval.json` stands in, labelled with the mode it measured).  `--run promoted` follows each specialist's promoted
+pointer; specialists are the `specialists/*.yaml` names.  It also reads the chain JSON lines given with
 `--chain NAME=PATH[@L:0xRR]` (an `eval-chain --output` file per segment), writes the numbers as JSON and prints
 markdown tables:
 
@@ -17,6 +21,7 @@ markdown tables:
   successful runs and their last room's entry health; plus the five rooms where the other runs ended.
 
 `compare` prints, per row, both values and whether the intervals separate (`better` / `worse` / `~` overlapping).
+Specialist rows measured in different act modes are not compared (exit 1) unless `--allow-mode-mismatch`.
 A change wins only where it is better at matched or better success.
 """
 
@@ -28,7 +33,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from triforce import _native
+from triforce import _native, registry
+from triforce.evaluate import read_evaluation
 from triforce.events import write_json_atomic
 
 Z = 1.96
@@ -164,13 +170,38 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
     }
 
 
-def eval_path(models: Path, name: str, run: str, file: str = 'eval.json') -> Path:
+def run_dir(models: Path, name: str, run: str) -> Optional[Path]:
+    """The specialist's run dir for `run` ('promoted' follows the pointer); None when there is no such run."""
     if run == 'promoted':
-        pointer = models / name / 'promoted'
+        pointer = models / name / registry.PROMOTED_NAME
         if not pointer.is_file():
-            return pointer
+            return None
         run = pointer.read_text().strip()
-    return models / name / run / file
+    directory = models / name / run
+    return directory if (directory / registry.CHECKPOINT_NAME).is_file() else None
+
+
+def read_specialist(directory: Path, args) -> tuple[Path, dict, str]:
+    """(path, result, expected mode) of the evaluation a row reports: the run's act mode (or `--mode`) through
+    `evaluate.read_evaluation`, or the named `--eval-name` file, whose measured mode must match.  With
+    `--allow-mode-mismatch` an evaluation in another mode (eval.json) stands in, labelled with its own mode."""
+    expected = args.mode or registry.act_mode(directory)
+    if args.eval_name is not None:
+        path = directory / args.eval_name
+        if not path.is_file():
+            raise LookupError(f"{path}: no such evaluation")
+        result = json.loads(path.read_text())
+        if registry.eval_mode(result) != expected and not args.allow_mode_mismatch:
+            raise LookupError(f"{path} was measured by {registry.eval_mode(result)}, the run acts by {expected}")
+        return path, result, expected
+    try:
+        path, result = read_evaluation(directory, expected)
+    except LookupError:
+        fallback = directory / 'eval.json'
+        if not (args.allow_mode_mismatch and fallback.is_file()):
+            raise
+        path, result = fallback, json.loads(fallback.read_text())
+    return path, result, expected
 
 
 def fmt(interval: Interval, percent=False) -> str:
@@ -186,13 +217,24 @@ def fmt(interval: Interval, percent=False) -> str:
 
 def report(args) -> int:
     models = Path(args.models_dir)
-    specialists, skipped = [], []
+    specialists, skipped, errors = [], [], []
     for name in sorted(p.stem for p in Path(args.specialists_dir).glob('*.yaml')):
-        evaluation = eval_path(models, name, args.run, args.eval_name)
-        if not evaluation.is_file():
+        directory = run_dir(models, name, args.run)
+        if directory is None:
             skipped.append(name)
             continue
-        specialists.append(specialist_row(name, json.loads(evaluation.read_text()), str(evaluation)))
+        try:
+            path, result, expected = read_specialist(directory, args)
+        except LookupError as error:
+            errors.append(f"{name}: {error}")
+            continue
+        row = specialist_row(name, result, str(path))
+        row.update(run=directory.name, eval_file=path.name, act=registry.eval_mode(result), run_act=expected,
+                   deterministic=result.get('deterministic'), checkpoint_sha1=result.get('checkpoint_sha1'))
+        specialists.append(row)
+    if errors:
+        raise YardstickError("no evaluation in the run's act mode (evaluate it, e.g. `python -m triforce.evaluate "
+                             "--specialist S`, or pass --allow-mode-mismatch):\n  " + '\n  '.join(errors))
     chains = []
     for item in args.chain:
         name, _, spec = item.partition('=')
@@ -200,14 +242,15 @@ def report(args) -> int:
         chains.append(chain_row(name, Path(file), target or None))
     out = {'run': args.run, 'specialists': specialists, 'skipped': skipped, 'chains': chains}
     write_json_atomic(Path(args.output), out)
-    print('| specialist | episodes | success | hearts lost / visit | health change | frames / visit |')
-    print('|---|---:|---|---|---|---|')
+    print('| specialist | act | episodes | success | hearts lost / visit | health change | frames / visit |')
+    print('|---|---|---:|---|---|---|---|')
     for row in specialists:
-        print(f"| {row['specialist']} | {row['episodes']} | {fmt(row['success'], True)} | "
+        act = row['act'] if row['act'] == row['run_act'] else f"{row['act']} (acts {row['run_act']})"
+        print(f"| {row['specialist']} | {act} | {row['episodes']} | {fmt(row['success'], True)} | "
               f"{fmt(row['hearts_lost_per_visit'])} | {fmt(row['health_change'])} | "
               f"{fmt(row['frames_per_visit'])} |")
     if skipped:
-        print(f"\nno evaluation for run {args.run!r}: {', '.join(skipped)}")
+        print(f"\nno run {args.run!r}: {', '.join(skipped)}")
     if chains:
         print('\n| segment | runs | arrivals | hearts at arrival | where runs end |')
         print('|---|---:|---|---|---|')
@@ -242,6 +285,7 @@ def compare(args) -> int:
     base, new = (json.loads(Path(p).read_text()) for p in (args.base, args.new))
     metrics = [('success', True, True), ('hearts_lost_per_visit', False, False), ('health_change', True, False),
                ('frames_per_visit', False, False)]
+    refused = []
     print('| row | metric | base | new | verdict |')
     print('|---|---|---|---|---|')
     for name, before, row in _paired(base['specialists'], new['specialists'], 'specialist'):
@@ -249,6 +293,13 @@ def compare(args) -> int:
             print(f"| {name} | - | {'missing' if before is None else 'present'} | "
                   f"{'missing' if row is None else 'present'} | missing |")
             continue
+        modes = before.get('act'), row.get('act')
+        if modes[0] != modes[1] or None in modes:
+            print(f"| {name} | act | {modes[0] or 'unknown'} | {modes[1] or 'unknown'} | "
+                  f"{'act modes differ' if args.allow_mode_mismatch else 'refused: act modes differ'} |")
+            if not args.allow_mode_mismatch:
+                refused.append(name)
+                continue
         for key, higher, percent in metrics:
             print(f"| {name} | {key} | {fmt(before[key], percent)} | {fmt(row[key], percent)} | "
                   f"{verdict(before[key], row[key], higher)} |")
@@ -260,6 +311,10 @@ def compare(args) -> int:
         for key, percent in (('arrivals', True), ('hearts_at_arrival', False)):
             print(f"| chain {name} | {key} | {fmt(before[key], percent)} | {fmt(row[key], percent)} | "
                   f"{verdict(before[key], row[key], True)} |")
+    if refused:
+        print(f"yardstick: not compared, measured in different (or unrecorded) act modes: {', '.join(refused)} "
+              f"(--allow-mode-mismatch compares them anyway)", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -267,9 +322,14 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     sub = parser.add_subparsers(dest='command', required=True)
     rep = sub.add_parser('report')
-    rep.add_argument('--run', default='promoted', help="run id of every specialist's eval.json, or 'promoted'")
+    rep.add_argument('--run', default='promoted', help="every specialist's run id, or 'promoted'")
     rep.add_argument('--models-dir', default='models')
-    rep.add_argument('--eval-name', default='eval.json', help="the evaluation file in each run dir")
+    rep.add_argument('--mode', choices=registry.ACT_MODES, default=None,
+                     help="report evaluations in this act mode (default: each run's own act mode)")
+    rep.add_argument('--eval-name', default=None,
+                     help="read this evaluation file in each run dir instead (it must be in the expected mode)")
+    rep.add_argument('--allow-mode-mismatch', action='store_true',
+                     help="report a run's eval.json even when it was measured in another act mode (labelled)")
     rep.add_argument('--specialists-dir', default='specialists', help="the specialists reported (one per yaml)")
     rep.add_argument('--chain', action='append', default=[], metavar='NAME=PATH[@L:0xRR]',
                      help='eval-chain JSON lines; @room: arrival = first entry into that room')
@@ -277,6 +337,8 @@ def main(argv=None) -> int:
     cmp = sub.add_parser('compare')
     cmp.add_argument('base')
     cmp.add_argument('new')
+    cmp.add_argument('--allow-mode-mismatch', action='store_true',
+                     help="compare specialist rows measured in different act modes too")
     args = parser.parse_args(argv)
     try:
         return report(args) if args.command == 'report' else compare(args)
