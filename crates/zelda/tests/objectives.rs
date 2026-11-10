@@ -745,3 +745,22 @@ fn a_stepless_completion_drops_every_finished_waypoint_at_once() {
     assert_eq!(with_step.next_rooms, [loc(1, 0x33)].into());
     assert_eq!(stepless.next_rooms, with_step.next_rooms);
 }
+
+/// F026: leaving a room whose treasure (an untaken map) still lies there for a room whose treasure is pending does
+/// not mark the new room's treasure as taken: the chain's objective equals a fresh episode's (the boomerang fight).
+#[test]
+fn a_treasure_left_behind_does_not_take_the_next_rooms() {
+    let Some(images) = images(&["1_43n_0", "1_44w_0"]) else { return };
+    let map = Arc::new(GameMap::builtin());
+    let (a, b) = (view(&map, &images[0], 0), view(&map, &images[1], 100));
+    assert!(a.treasure().is_some(), "the map lies in 0x43");
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let (route, step_a) = start_route(&map, loc(1, 0x43), Some("N"), &mut rng, None, &a);
+    let (_, step_b) = start_route(&map, loc(1, 0x44), Some("W"), &mut rng, None, &b);
+    let mut chain = GameCompletion::new(map.clone(), &route, step_a).unwrap();
+    chain.objectives(None, &a);
+    let walked = chain.objectives(Some(&a), &b);
+    let fresh = GameCompletion::new(map.clone(), &route, step_b).unwrap().objectives(None, &b);
+    assert_eq!(fresh.kind, ObjectiveKind::Fight);
+    assert_eq!((walked.kind, walked.next_rooms), (fresh.kind, fresh.next_rooms));
+}

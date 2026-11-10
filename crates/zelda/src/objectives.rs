@@ -429,7 +429,7 @@ impl GameCompletion {
         }
         self.update_exits(state);
         self.update_opened_doors(state);
-        let (mut kind, mut tiles, mut next_rooms) = self.room_objective(prev, state);
+        let (mut kind, mut tiles, mut next_rooms) = self.room_objective(state);
         if kind == ObjectiveKind::None {
             kind = ObjectiveKind::Move;
         }
@@ -704,16 +704,12 @@ impl GameCompletion {
             .is_some_and(|t| state.full_location() == t)
     }
 
-    fn room_objective(
-        &mut self,
-        prev: Option<&GameView>,
-        state: &GameView,
-    ) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
+    fn room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
         if state.full_location().in_cave {
             return self.subroom_objective(state);
         }
         if state.level() > 0 {
-            return self.dungeon_room_objective(prev, state);
+            return self.dungeon_room_objective(state);
         }
         let cave_tiles = self.cave_tiles(state);
         if !cave_tiles.is_empty()
@@ -780,20 +776,14 @@ impl GameCompletion {
         (exits.iter().map(|&t| Target::Tile(t)).collect(), rooms)
     }
 
-    fn dungeon_room_objective(
-        &mut self,
-        prev: Option<&GameView>,
-        state: &GameView,
-    ) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
+    fn dungeon_room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
         let loc = state.full_location();
         let Some(mut item) = self.rooms.get(&loc).cloned() else {
             return (ObjectiveKind::None, Vec::new(), Vec::new());
         };
-        if let Some(prev) = prev
-            && item.is_some()
-            && prev.treasure().is_some()
-            && state.treasure().is_none()
-        {
+        // The room's item-taken flag (set on the pickup frame, Z_01.asm TryTakeItem) says the treasure is gone,
+        // whichever room the previous state was in and whether or not its pickup was seen.
+        if item.is_some() && room_flags(state.ram(), loc.value) & FLAG_ITEM_TAKEN != 0 {
             if item.as_deref() == Some("key") && self.collected_key_rooms.insert(loc) {
                 self.closest.get_mut().clear();
             }
