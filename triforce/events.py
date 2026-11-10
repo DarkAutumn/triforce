@@ -55,8 +55,10 @@ eval-chain`` writes ``<yymmdd>_<NNN>_eval-chain-<route>`` (plan kind ``chain``, 
 and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off.
 """
 
+import fcntl
 import json
 import os
+import signal
 import socket
 import threading
 import time
@@ -94,19 +96,28 @@ def logs_root(root: Optional[str | os.PathLike] = None) -> Path:
 
 
 def new_log_dir(what: str, root=None, now: Optional[datetime] = None) -> Path:
-    """Creates ``<root>/<yymmdd>_<NNN>_<what>`` with the next free NNN for that day."""
+    """Creates ``<root>/<yymmdd>_<NNN>_<what>`` with the next free NNN for that day (any width: 999 is followed by
+    1000).  The scan and the mkdir hold an exclusive lock on ``<root>/.lock``, so concurrent jobs get distinct NNN
+    whatever their names."""
     base = logs_root(root)
     base.mkdir(parents=True, exist_ok=True)
     day = (now or datetime.now()).strftime('%y%m%d')
     safe = ''.join(c if c.isalnum() or c in '-_.' else '-' for c in what)
-    while True:
-        taken = [int(p.name.split('_')[1]) for p in base.glob(f'{day}_[0-9][0-9][0-9]_*') if p.is_dir()]
-        path = base / f"{day}_{max(taken, default=0) + 1:03d}_{safe}"
-        try:
-            path.mkdir()
-            return path
-        except FileExistsError:      # another process took the number; try the next one
-            continue
+    with open(base / '.lock', 'a', encoding='utf-8') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        while True:
+            taken = []
+            for p in base.glob(f'{day}_*'):
+                try:
+                    taken.append(int(p.name.split('_')[1]))
+                except (IndexError, ValueError):
+                    continue
+            path = base / f"{day}_{max(taken, default=0) + 1:03d}_{safe}"
+            try:
+                path.mkdir()
+                return path
+            except FileExistsError:      # a process without the lock took the number; the rescan sees it
+                continue
 
 
 def _now() -> dict:
@@ -200,9 +211,15 @@ class TrainingPlan:
 def logged_job(what: str, kind: str, runs: list[dict], root=None, **extra):
     """A log folder (``new_log_dir(what, root)``) with its ``training.json`` plan for a job outside a training
     round, e.g. a standalone evaluation (``kind`` 'eval') or eval-chain ('chain'), so the training GUI shows it
-    while it runs.  Yields the ``TrainingPlan``; the plan finishes ``completed``, ``interrupted`` (Ctrl-C) or
-    ``failed`` with the block."""
+    while it runs.  Yields the ``TrainingPlan``; the plan finishes ``completed``, ``interrupted`` (Ctrl-C, or
+    SIGTERM, which the block turns into KeyboardInterrupt when it runs in the main thread) or ``failed`` with the
+    block."""
     plan = TrainingPlan(new_log_dir(what, root), what, kind, runs, **extra)
+    installed = threading.current_thread() is threading.main_thread()
+    if installed:
+        def interrupt(signum, _frame):
+            raise KeyboardInterrupt(f"signal {signum}")
+        previous = signal.signal(signal.SIGTERM, interrupt)
     try:
         yield plan
     except KeyboardInterrupt:
@@ -211,4 +228,7 @@ def logged_job(what: str, kind: str, runs: list[dict], root=None, **extra):
     except BaseException as error:
         plan.finish('failed', error=f"{type(error).__name__}: {error}")
         raise
+    finally:
+        if installed:
+            signal.signal(signal.SIGTERM, previous)
     plan.finish('completed')
