@@ -1638,7 +1638,7 @@ rooms:
   enemies:
     RedSlowOctorok: 4
     Zora: 1
-  treasure: key
+  treasure: null  # attr E's item is underworld-only: the overworld room has none (was `key`)
 - level: 0
   location: '0x5b'
   specialist: ow-moblin
@@ -1706,15 +1706,16 @@ rooms:
     BlueMoblin: 4
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
-# 0x5e and 0x6d are not in the v1 data; added in round 6 when 0x5d joined a route.  Untagged, exits only
-# (overworld screen edges are two-way: the rooms whose exits lead here), enemies unknown.
+# 0x5e and 0x6d are not in the v1 data; added in round 6 when 0x5d joined a route.  Untagged; exits are the
+# overworld screen edges (two-way: the rooms whose exits lead here), enemies from attr C + FoeCounts.
 - level: 0
   location: '0x5e'
   exits:
     W:
       level: 0
       location: '0x5d'
-  enemies: {}
+  enemies:
+    BlueMoblin: 5  # attr C $83: object $03, FoeCounts[2]
   treasure: null
   entrance:  # cave index $1E (OW attr B >> 2)
     cave: '0x1e'
@@ -2039,7 +2040,8 @@ rooms:
     cave:  # Dungeon 8 entrance (mapping, Nov 9): burn the tree; LevelInfoUW8 StartRoomId
       level: 8
       location: '0x7e'
-  enemies: {}
+  enemies:
+    RedMoblin: 4  # attr C $44: object $04, FoeCounts[1]
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
   entrance:  # cave index $08 (OW attr B >> 2); tree (burn it) at x=160 y=96
@@ -2387,6 +2389,7 @@ rooms:
     BlueSlowOctorok: 1
     Zora: 1
   treasure: null
+# --- Dungeon 1 (level 1) --- (exit conventions: see Dungeon 2)
 - level: 1
   location: '0x22'
   specialist: trap-room  # the bow detour (Lee, Nov 9); emulator-checked through Game.load at mode 5
@@ -2443,6 +2446,7 @@ rooms:
     S:
       level: 1
       location: '0x45'
+      locked: true
   enemies:
     Aquamentus: 1
   treasure: heart-container
@@ -2473,6 +2477,10 @@ rooms:
     S:
       level: 1
       location: '0x52'
+      locked: true
+    W:  # shutter
+      level: 1
+      location: '0x41'
   enemies:
     BlueGel: 3
   treasure: null
@@ -2487,6 +2495,9 @@ rooms:
       level: 1
       location: '0x44'
       locked: true
+    S:  # bomb wall
+      level: 1
+      location: '0x53'
     W:
       level: 1
       location: '0x42'
@@ -2501,9 +2512,13 @@ rooms:
     E:
       level: 1
       location: '0x45'
+    S:  # bomb wall
+      level: 1
+      location: '0x54'
     W:
       level: 1
       location: '0x43'
+      locked: true
   enemies:
     RedGoriya: 3
   treasure: boomerang
@@ -2530,6 +2545,9 @@ rooms:
       level: 1
       location: '0x42'
       locked: true
+    E:  # shutter
+      level: 1
+      location: '0x53'
   enemies:
     BlueKeese: 6
   treasure: null
@@ -2537,6 +2555,9 @@ rooms:
   location: '0x53'
   specialist: stalfos-keese-gel
   exits:
+    N:  # bomb wall
+      level: 1
+      location: '0x43'
     E:
       level: 1
       location: '0x54'
@@ -2553,6 +2574,9 @@ rooms:
 - level: 1
   location: '0x54'
   exits:
+    N:  # bomb wall
+      level: 1
+      location: '0x44'
     W:
       level: 1
       location: '0x53'
@@ -2570,6 +2594,7 @@ rooms:
     S:
       level: 1
       location: '0x73'
+      locked: true
   enemies:
     Stalfos: 3
   treasure: null
@@ -2594,9 +2619,6 @@ rooms:
     E:
       level: 1
       location: '0x74'
-    S:
-      level: 1
-      location: '0x83'
     W:
       level: 1
       location: '0x72'
@@ -2628,7 +2650,10 @@ rooms:
 # doors from attr A/B (Z_05 FindDoorTypeByDoorBit), enemies from attr C/D + LevelInfo_FoeCounts
 # (Z_05 ~1697), item from attr E&$1F (Z_05 CreateRoomObjects). Same method reproduces v1's D1 entries.
 # '# shutter' exits open when the room's kill-all trigger fires. Counts are first-visit (no RAM check yet).
-# Entry room 0x7d: S leaves the dungeon (omitted, like v1 objectives' "no south exit" convention).
+# Exit conventions (D1-D3, checked against the ROM's attr A/B by crates/zelda game_map tests): every door is an
+# exit on both sides; a key door is `locked: true` on both sides; a bombable wall is an exit marked `# bomb wall`
+# and listed in `bomb_walls` (path searches pass it only in a `requires_bombs` room or once opened); the
+# entrance room's S door back to the overworld is no exit (leaving the dungeon is never a route step).
 - level: 2
   location: '0x0d'
   specialist: d2-rope  # d2first: the empty triforce room (like 1:0x36 in stalfos-keese-gel)
@@ -2659,6 +2684,9 @@ rooms:
     N:
       level: 2
       location: '0x0e'  # shutter
+    E:  # bomb wall
+      level: 2
+      location: '0x1f'
     S:
       level: 2
       location: '0x2e'  # shutter
@@ -2672,6 +2700,9 @@ rooms:
     S:
       level: 2
       location: '0x2f'
+    W:  # bomb wall
+      level: 2
+      location: '0x1e'
   enemies:
     Unknown_75: 1  # unverified: $4B UnderworldPerson (old man), Z_07 UpdateObject_JumpTable
   treasure: null
@@ -2699,6 +2730,9 @@ rooms:
     N:
       level: 2
       location: '0x1f'
+    S:  # bomb wall
+      level: 2
+      location: '0x3f'
     W:
       level: 2
       location: '0x2e'
@@ -2726,6 +2760,12 @@ rooms:
 - level: 2
   location: '0x3f'
   exits:
+    N:  # bomb wall
+      level: 2
+      location: '0x2f'
+    S:  # bomb wall
+      level: 2
+      location: '0x4f'
     W:
       level: 2
       location: '0x3e'
@@ -2753,6 +2793,12 @@ rooms:
 - level: 2
   location: '0x4f'
   exits:
+    N:  # bomb wall
+      level: 2
+      location: '0x3f'
+    S:  # bomb wall
+      level: 2
+      location: '0x5f'
     W:
       level: 2
       location: '0x4e'
@@ -2780,6 +2826,12 @@ rooms:
 - level: 2
   location: '0x5f'
   exits:
+    N:  # bomb wall
+      level: 2
+      location: '0x4f'
+    S:  # bomb wall
+      level: 2
+      location: '0x6f'
     W:
       level: 2
       location: '0x5e'
@@ -2835,6 +2887,9 @@ rooms:
 - level: 2
   location: '0x6f'
   exits:
+    N:  # bomb wall
+      level: 2
+      location: '0x5f'
     W:
       level: 2
       location: '0x6e'
@@ -2872,8 +2927,8 @@ rooms:
 # Rooms: LevelInfoUW3 SubmenuMapMask (rotation $0C) over LevelBlockUW1Q1; doors from attr A/B (N A>>5, S A>>2,
 # W B>>5, E B>>2; 0 open, 1 wall, 4 bomb, 5/6 key, 7 shutter), enemies from attr C/D + FoeCounts, item from
 # attr E & $1F, `trigger` from attr F & 7 (Z_05 CheckSecretTrigger).  Every room was loaded in the emulator
-# (room-id retarget from 0x7c) and Lee's route was walked there (docs/routes/d3.md).  Bomb walls are exits
-# here (marked `# bomb wall`, also in `bomb_walls`): the boss room's only open way in is 0x4c's E wall.
+# (room-id retarget from 0x7c) and Lee's route was walked there (docs/routes/d3.md).  The boss room's only open way
+# in is 0x4c's E bomb wall (exit conventions: see Dungeon 2).
 - level: 3
   location: '0x2a'
   exits:
@@ -3145,7 +3200,7 @@ rooms:
     Zol: 6
   treasure: key
 - level: 3
-  location: '0x7c'  # the entrance room (OW 0x74, cave index 3); S leaves the dungeon (omitted, as in D2)
+  location: '0x7c'  # the entrance room (OW 0x74, cave index 3); S leaves the dungeon (no exit: see Dungeon 2)
   specialist: zol
   exits:
     W:

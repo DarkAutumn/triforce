@@ -114,6 +114,9 @@ pub struct RoomExit {
     pub destination: MapLocation,
     pub locked: bool,
     pub span: Option<(i32, i32)>,
+    /// Through a bombable wall (the room's `bomb_walls`): path searches pass it only in a `requires_bombs` room
+    /// (where Link may bomb) or once it is open (`opened_doors`).
+    pub bomb_wall: bool,
 }
 
 /// A game.yaml room.
@@ -487,6 +490,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         destination,
                         locked,
                         span,
+                        bomb_wall: false,
                     },
                 );
             }
@@ -510,6 +514,13 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                 .and_then(|s| s.iter().map(|x| x.as_str().map(str::to_owned)).collect::<Option<Vec<_>>>())
                 .ok_or_else(|| MapError(format!("{what}: bomb_walls must be a list of exit names")))?,
         };
+        // One convention: every bombable wall is also an exit (game.yaml "Exit conventions").
+        for wall in &bomb_walls {
+            let Some(exit) = exits.get_mut(wall) else {
+                return err(format!("{what}: bomb wall {wall} is not an exit (a bombable wall is an exit too)"));
+            };
+            exit.bomb_wall = true;
+        }
         let maze = parse_maze(entry, loc)?;
         if let Some(maze) = maze {
             for exit in exits.values() {
@@ -527,6 +538,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     destination: maze.destination,
                     locked: false,
                     span: None,
+                    bomb_wall: false,
                 },
             );
         }
@@ -836,6 +848,10 @@ impl GameMap {
                     continue;
                 }
                 let opened = opened_doors.contains(&(current, exit.direction.clone()));
+                // An intact bomb wall: only where Link may bomb (BOMB is masked elsewhere, review F016).
+                if exit.bomb_wall && !opened && !room.requires_bombs {
+                    continue;
+                }
                 let (move_cost, mut next_keys) = if exit.locked && !opened {
                     if cur_keys <= 0 {
                         continue;
@@ -1468,6 +1484,45 @@ mod tests {
         assert_ne!(through, ROUTES_YAML);
         let e = GameMap::from_yaml(GAME_YAML, &through).unwrap_err().0;
         assert!(e.contains("unsupported"), "{e}");
+    }
+
+    /// F030: every non-maze N/S/E/W exit leads to a room that exists and has the opposite exit back, with the same
+    /// lock and bomb-wall marking (one convention on both sides of a door).
+    #[test]
+    fn exits_are_two_way_with_one_convention() {
+        let map = GameMap::builtin();
+        for (at, room) in map.rooms() {
+            if at.in_cave || room.maze.is_some() {
+                continue;
+            }
+            for exit in room.exits.values() {
+                let Some(d) = Direction::from_exit(&exit.direction).filter(|d| *d != Direction::None) else {
+                    continue;
+                };
+                let other = map.get(exit.destination).unwrap_or_else(|| panic!("{at} {d:?}: no room there"));
+                if other.maze.is_some() {
+                    continue;
+                }
+                let back = other.exits.get(d.opposite().name()).unwrap_or_else(|| panic!("{at} {d:?}: no way back"));
+                assert_eq!(back.destination, *at, "{at} {d:?}");
+                assert_eq!((back.locked, back.bomb_wall), (exit.locked, exit.bomb_wall), "{at} {d:?}");
+            }
+        }
+    }
+
+    /// F030: a path search passes an intact bomb wall only in a `requires_bombs` room or once it is open.
+    #[test]
+    fn path_searches_pass_bomb_walls_only_where_link_may_bomb() {
+        let map = GameMap::builtin();
+        // Dungeon 1: 0x43's S wall into 0x53 (no bombs there); the path goes round through 0x42 and 0x52.
+        let (a, b) = (loc(1, 0x43), loc(1, 0x53));
+        assert!(map.get(a).unwrap().exits["S"].bomb_wall);
+        assert_ne!(map.find_path(a, b), Some(vec![a, b]));
+        let opened = BTreeSet::from([(a, "S".to_owned())]);
+        assert_eq!(map.find_route(a, b, 99, &BTreeSet::new(), &opened), Some(vec![a, b]));
+        // Dungeon 3: 0x4c (requires_bombs) E into Manhandla's room.
+        let (c, m) = (loc(3, 0x4c), loc(3, 0x4d));
+        assert_eq!(map.find_path(c, m), Some(vec![c, m]));
     }
 
     /// F165: every typo in game.yaml or routes.yaml that used to load as a default is an error naming the room or
