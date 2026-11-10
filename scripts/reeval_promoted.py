@@ -51,7 +51,7 @@ def main(argv=None):
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: every promoted one)")
     parser.add_argument('--parallel', type=int, default=8, help="envs in each evaluation pool")
     parser.add_argument('--episodes-per-state', type=int, default=100)
-    parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
+    parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
     parser.add_argument('--run-id', default=None, help="evaluate this run instead of the promoted one")
     parser.add_argument('--output-dir', default=None,
                         help="write <dir>/<name>/<run-id>/eval.json instead of into the models directory")

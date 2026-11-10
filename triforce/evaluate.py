@@ -443,7 +443,7 @@ def main(argv=None):
     parser.add_argument('--specialist', required=True)
     parser.add_argument('--checkpoint', default=None, help="checkpoint file or run dir (default: promoted)")
     parser.add_argument('--run-id', default=None, help="evaluate <models>/<specialist>/<run-id>/ckpt.pt")
-    parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
+    parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
     parser.add_argument('--episodes-per-state', type=int, default=DEFAULT_EPISODES_PER_STATE)
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")

@@ -7,7 +7,7 @@ override; gitignored)::
         training.json        plan + status: every specialist run in order (pending / running / evaluating / final)
         <specialist>.jsonl   append-only event stream of one specialist's run
         <specialist>.log     its console output
-        round.jsonl          run-level events (scripts/train_round.py only)
+        round.jsonl          run-level events (scripts/train_round.py, triforce eval-chain)
 
 ``NNN`` counts up per day (001, 002, ...).  ``training.json`` is rewritten atomically on every status change, so a
 watcher can re-read it at any time.  Every JSONL line is one event object with:
@@ -22,7 +22,7 @@ Events written by ``triforce.train`` (one specialist):
   fraction, elapsed, sps, eta, and the iteration's headline metrics (``metrics``; ``health_change`` is the mean
   hearts at exit minus hearts at entry, signed; ``health_change_total`` adds the hearts wasted by picking up dropped
   hearts at full health; ``hearts/dropped``, ``hearts/taken``, ``hearts/healed``, ``hearts/left``,
-  ``hearts/wasted`` are dropped hearts per episode, see ``triforce/hearts.py``; ``bombs/used`` are bombs placed
+  ``hearts/wasted`` are dropped hearts per episode, see ``crates/zelda/src/hearts.rs``; ``bombs/used`` are bombs placed
   per episode and ``cheated/bombs``, ``cheated/keys``, ``cheated/rupees`` cheated items used per episode
   (crates/zelda/src/cheats.rs); ``boss/stuns``, ``boss/eats`` are Dodongo stuns and swallowed bombs per episode;
   ``linger/max_steps``,
