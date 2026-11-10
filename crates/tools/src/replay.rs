@@ -27,10 +27,13 @@ impl movie::Playback for Play<'_> {
     fn poke(&mut self, addr: u16, value: u8) {
         self.0.poke(addr, value);
     }
+    fn load_state(&mut self, state: &[u8]) -> Result<()> {
+        self.0.load_state(state)
+    }
 }
 
 /// Bring a freshly powered-on `b` to `movie`'s starting state: play its base movie (recursively),
-/// or nothing for a power-on movie.
+/// load its origin state, or nothing for a power-on movie.
 pub fn play_base(b: &mut Zcore, movie: &Movie) -> Result<()> {
     movie::play_base(&mut Play(b), movie, &crate::corpus::corpus_dir().join("movies"))
 }
@@ -38,7 +41,12 @@ pub fn play_base(b: &mut Zcore, movie: &Movie) -> Result<()> {
 /// Play `movie` (base included) on a freshly powered-on `b`, including pokes tagged after its last
 /// frame.
 pub fn play_movie(b: &mut Zcore, movie: &Movie) -> Result<()> {
-    movie::play(&mut Play(b), movie, &crate::corpus::corpus_dir().join("movies"))
+    play_movie_in(b, movie, &crate::corpus::corpus_dir().join("movies"))
+}
+
+/// [`play_movie`] with bases and origin states looked up next to `movies_dir` instead of the corpus.
+pub fn play_movie_in(b: &mut Zcore, movie: &Movie, movies_dir: &std::path::Path) -> Result<()> {
+    movie::play(&mut Play(b), movie, movies_dir)
 }
 
 /// Replay `movie` on a freshly powered-on `b`, calling `each(k, &digests)` for records `0..=frames`

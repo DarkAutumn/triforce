@@ -93,6 +93,21 @@ will diverge: check that the divergence is the intended one (`tf trace MOVIE --f
 re-recorded base movie it starts from (`power_on_to_start`), makes its golden stale (`ladder-diff` says so);
 regenerate it the same way.
 
+The corpus (`corpus/movies`, listed in `corpus/manifest.toml` by `tf corpus sync`) is the seven scripted short
+movies, five random-input movies and 72 chain runs of the trained team (`chain-<segment>-<seed>`, twelve per
+route segment), which start from copies of their start states in `corpus/states/`. To re-record the chain runs
+(after a retrain, or when a zcore change is meant to change gameplay):
+
+```bash
+.venv/bin/python scripts/record_bench_runs.py target/corpus-runs --runs 12 --first-seed 500
+for f in target/corpus-runs/*.json; do tf movie import "$f" -o "corpus/movies/chain-$(basename "$f" .json).tfmovie"; done
+tf corpus sync && tf corpus check
+```
+
+`tf movie import` refuses a recording whose replay doesn't end in the room the run ended in. `tf corpus check`
+replays every movie and requires ≥ 1M frames and ≥ 10,000 gameplay frames in each of the overworld and
+Dungeons 1-3.
+
 ## Testing
 
 Two suites, both about a minute: `cargo test --release --workspace --features zelda/zcore` and
@@ -101,7 +116,7 @@ Two suites, both about a minute: `cargo test --release --workspace --features ze
 | Layer | Where | What it guards |
 |---|---|---|
 | Emulator | `crates/zcore` unit tests, the TetaNES test ROMs (`src/common.rs`, `test_roms/`), `tests/machine.rs` | CPU (official and unofficial opcodes), PPU/APU timing, MMC1, iNES parsing, the `ZCore` API (render toggle, snapshot/restore, state files, the pinned power-on state), shipped states load |
-| Emulator regression | `tf ladder-diff` (above), `crates/tools/tests/cli.rs` | every corpus frame unchanged; the `tf` CLI end to end |
+| Emulator regression | `tf ladder-diff` (above), `crates/tools/tests/cli.rs` (diffs the committed goldens with the build under test) | every short-movie frame unchanged, corpus coverage; the `tf` CLI end to end |
 | Formats | `crates/movie` | `TFMOVIE`/`TFGOLDEN` round trips and refusals |
 | Game model | `crates/zelda` (unit tests, `tests/game.rs`, `game_view.rs`, `objectives.rs`) | RAM decoding, masks, the option executor and its interrupts, look-ahead credit, room entry, objectives, hearts, linger |
 | Env | `crates/env` (unit tests, `tests/*.rs`) | configs, every reward/penalty term, end-condition precedence, observations, curriculum, chains, explorer |

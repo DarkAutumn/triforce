@@ -232,6 +232,7 @@ fn state_bytes(nes: &ZCore) -> Vec<u8> {
 struct RenderTwins {
     on: ZCore,
     off: ZCore,
+    rom: Arc<Rom>,
     frames: usize,
 }
 
@@ -249,25 +250,34 @@ impl movie::Playback for RenderTwins {
         self.on.poke(addr, value);
         self.off.poke(addr, value);
     }
+
+    fn load_state(&mut self, state: &[u8]) -> anyhow::Result<()> {
+        let file = state_file::decode(&self.rom, state).map_err(|e| anyhow::anyhow!("{e}"))?;
+        self.on.restore(&file.machine);
+        self.off.restore(&file.machine);
+        Ok(())
+    }
 }
 
 /// Plan step 11, render toggle: the corpus has no scripted `transition_under_fire` (dropped, see
-/// `docs/decisions.md`), so this plays `chain-milestone1-111` from power-on: 13 rooms of agent
-/// play, scrolling between rooms with enemies active, taking hits, dying in 1:0x74. Every
-/// frame's complete machine state (CPU, PPU, APU, mapper, all memory) and cycle count must match
-/// between drawing every frame and drawing none.
+/// `docs/decisions.md`), so this plays the chain run `chain-post-d1-500` from its start state
+/// (0:0x37): 20 rooms of agent play across the overworld into Dungeon 3, scrolling between rooms
+/// with enemies active and taking hits. Every frame's complete machine state (CPU, PPU, APU,
+/// mapper, all memory) and cycle count must match between drawing every frame and drawing none.
 #[test]
 fn render_off_matches_render_on_through_a_chain() {
     let Some(rom) = rom() else { return };
     let dir = repo().join("corpus/movies");
-    let m = movie::Movie::load(&dir.join("chain-milestone1-111.tfmovie")).unwrap();
+    let m = movie::Movie::load(&dir.join("chain-post-d1-500.tfmovie")).unwrap();
     let mut twins = RenderTwins {
         on: ZCore::power_on(rom.clone()),
-        off: ZCore::power_on(rom),
+        off: ZCore::power_on(rom.clone()),
+        rom,
         frames: 0,
     };
     movie::play(&mut twins, &m, &dir).unwrap();
     assert!(twins.frames > 5_000);
+    assert_eq!(twins.on.ram()[0x10], 3, "the run ends in Dungeon 3");
 }
 
 /// Plan step 11, RGB output: frame 600 of `title_idle_3600` converts to a full 256x240 RGB frame

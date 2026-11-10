@@ -181,6 +181,67 @@ fn ladder_diff_passes_fresh_goldens_and_reports_tampered_ones() {
     assert!(text.contains(&format!("2 of {shorts} movies diverge")), "{text}");
 }
 
+/// The build under test replays the committed goldens (`corpus/golden/`) without divergence, and
+/// that set is exactly the manifest's `short` movies (a deleted golden would otherwise go unchecked).
+#[test]
+fn the_committed_goldens_match_this_build() {
+    if !have_rom() {
+        return;
+    }
+    let manifest = std::fs::read_to_string(repo().join("corpus/manifest.toml")).unwrap();
+    let manifest: toml::Value = toml::from_str(&manifest).unwrap();
+    let mut shorts: Vec<String> = manifest["movie"].as_array().unwrap().iter()
+        .filter(|e| e["tags"].as_array().unwrap().iter().any(|t| t.as_str() == Some("short")))
+        .map(|e| e["name"].as_str().unwrap().to_owned())
+        .collect();
+    shorts.sort();
+    let mut goldens: Vec<String> = std::fs::read_dir(repo().join("corpus/golden")).unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "tfgolden"))
+        .map(|p| p.file_stem().unwrap().to_string_lossy().into_owned())
+        .collect();
+    goldens.sort();
+    assert_eq!(goldens, shorts);
+
+    let out = tf(&["ladder-diff"]);
+    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(&out), stderr(&out));
+    assert!(stdout(&out).contains(&format!("0 of {} movies diverge", shorts.len())), "{}", stdout(&out));
+}
+
+/// `corpus check` measures coverage by replaying the movies: a corpus of only the short movies and
+/// one tagged `power-on-to-d2` that never gets there has no gameplay in Dungeons 2 and 3 and fails.
+#[test]
+fn corpus_check_fails_without_dungeon_2_gameplay() {
+    if !have_rom() {
+        return;
+    }
+    let tmp = TempDir::new("corpus-check");
+    std::fs::create_dir_all(tmp.join("movies")).unwrap();
+    let src = repo().join("corpus/movies");
+    for e in std::fs::read_dir(&src).unwrap() {
+        let p = e.unwrap().path();
+        let m = Movie::load(&p).unwrap();
+        if m.tags().iter().any(|t| t == "short") {
+            std::fs::copy(&p, tmp.join("movies").join(p.file_name().unwrap())).unwrap();
+        }
+    }
+    // A movie claiming Dungeon 2 by its tag, but playing only the base's last frames.
+    let mut liar = Movie::new(Movie::load(&src.join("pause_spam.tfmovie")).unwrap().rom_sha1,
+        serde_json::json!({"name": "liar", "base": "power_on_to_start", "tags": ["power-on-to-d2"]}));
+    liar.inputs = vec![0; 10];
+    liar.save(&tmp.join("movies/liar.tfmovie")).unwrap();
+    let corpus = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_tf")).args(args).env("TF_CORPUS", &tmp.0).current_dir(repo()).output().unwrap()
+    };
+    let out = corpus(&["corpus", "sync"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let out = corpus(&["corpus", "check"]);
+    let text = stdout(&out);
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(text.contains("level 2: 0 gameplay frames (need 10000) FAIL"), "{text}");
+    assert!(text.contains("corpus check FAILED"), "{text}");
+}
+
 /// `ladder-golden` takes explicit movies only from corpus/movies (where `ladder-diff` looks for a
 /// golden's movie); a movie elsewhere is refused with a message naming the corpus, and a corpus
 /// movie given by path works.

@@ -1,10 +1,12 @@
 //! Portable artifact formats: `TFMOVIE` v1 input movies and `TFGOLDEN` v1 per-frame digests.
 //! Shared by the `tf` tools, tests that replay corpus movies and the pool's movie recording.
 //!
-//! A movie starts from power-on, or — when its metadata names a `base` corpus movie (normally
+//! A movie starts from power-on; or — when its metadata names a `base` corpus movie (normally
 //! `power_on_to_start`, which ends on the first gameplay frame after registering LINK) — from the
-//! state at the end of that base. Every backend reaches the base state by playing the base movie
-//! once; nothing replays the title and registration screens per movie.
+//! state at the end of that base; or — when its metadata names an `origin` — from the `TFZSTATE`
+//! file `<movies_dir>/../states/<origin>.tfzstate` (recorded chain runs, `tf movie import`). Every
+//! backend reaches the base state by playing the base movie once; nothing replays the title and
+//! registration screens per movie. A movie names at most one of `base` and `origin`.
 //!
 //! Frame numbering: a movie has `frames` inputs, indexed `0..frames`. A poke tagged `frame = k` is
 //! applied after input `k - 1` has run and before input `k` runs (`k = 0`: right at the start).
@@ -33,6 +35,15 @@ pub fn poke_addr_allowed(addr: u16) -> bool {
 pub trait Playback {
     fn run_frame(&mut self, buttons: u8);
     fn poke(&mut self, addr: u16, value: u8);
+    /// Resume a `TFZSTATE` file (an `origin` movie's start). Players that can't are refused.
+    fn load_state(&mut self, _state: &[u8]) -> Result<()> {
+        bail!("this player cannot start a movie from a saved state")
+    }
+}
+
+/// The start state file of an `origin` movie.
+pub fn origin_path(movies_dir: &Path, origin: &str) -> std::path::PathBuf {
+    movies_dir.parent().unwrap_or(movies_dir).join("states").join(format!("{origin}.tfzstate"))
 }
 
 /// Play `movie` on a freshly powered-on machine: its `base` chain first (loaded from `movies_dir`,
@@ -43,15 +54,22 @@ pub fn play(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()
     Ok(())
 }
 
-/// Bring a freshly powered-on machine to `movie`'s starting state: play its base (recursively), or
-/// nothing for a power-on movie. A base chain that loops is an error.
+/// Bring a freshly powered-on machine to `movie`'s starting state: play its base (recursively),
+/// load its origin state, or nothing for a power-on movie. A base chain that loops is an error.
 pub fn play_base(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()> {
+    if let Some(origin) = movie.origin() {
+        ensure!(movie.base().is_none(), "movie {} names both a base and an origin", movie.name());
+        let path = origin_path(movies_dir, origin);
+        let state = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+        return p.load_state(&state).with_context(|| format!("loading {}", path.display()));
+    }
     let mut chain = Vec::new();
     let mut next = movie.base().map(str::to_owned);
     while let Some(name) = next {
         ensure!(chain.iter().all(|(n, _): &(String, Movie)| *n != name), "base chain loops at {name}");
         let base = Movie::load(&movies_dir.join(format!("{name}.tfmovie")))?;
         ensure!(base.rom_sha1 == movie.rom_sha1, "base movie {name} is for a different ROM");
+        ensure!(base.origin().is_none(), "base movie {name} starts from a saved state");
         next = base.base().map(str::to_owned);
         chain.push((name, base));
     }
@@ -121,6 +139,11 @@ impl Movie {
     /// The corpus movie this one starts after (`meta.base`), if any.
     pub fn base(&self) -> Option<&str> {
         self.meta.get("base").and_then(|v| v.as_str())
+    }
+
+    /// The start state this one plays from (`meta.origin`, `origin_path`), if any.
+    pub fn origin(&self) -> Option<&str> {
+        self.meta.get("origin").and_then(|v| v.as_str())
     }
 
     pub fn tags(&self) -> Vec<String> {
@@ -386,6 +409,10 @@ pub fn movie_chain_hash(path: &Path, movies_dir: &Path) -> Result<[u8; 32]> {
         let buf = std::fs::read(&next).with_context(|| format!("reading {}", next.display()))?;
         h.update(&buf);
         let m = Movie::decode(&buf).with_context(|| format!("decoding {}", next.display()))?;
+        if let Some(origin) = m.origin() {
+            let state = origin_path(movies_dir, origin);
+            h.update(&std::fs::read(&state).with_context(|| format!("reading {}", state.display()))?);
+        }
         let Some(name) = m.base() else { break };
         ensure!(!seen.iter().any(|n| n == name), "base chain loops at {name}");
         seen.push(name.to_owned());
@@ -600,6 +627,49 @@ mod tests {
         fn poke(&mut self, addr: u16, value: u8) {
             self.0.push(format!("poke {addr:04X}={value}"));
         }
+        fn load_state(&mut self, state: &[u8]) -> Result<()> {
+            self.0.push(format!("state {}", String::from_utf8_lossy(state)));
+            Ok(())
+        }
+    }
+
+    /// A player without `load_state`.
+    struct PowerOnOnly;
+
+    impl Playback for PowerOnOnly {
+        fn run_frame(&mut self, _: u8) {}
+        fn poke(&mut self, _: u16, _: u8) {}
+    }
+
+    /// An `origin` movie loads `../states/<origin>.tfzstate` before its frames; its chain hash
+    /// covers the state file; a player that can't load states, a missing state and a movie naming
+    /// both a base and an origin are refused.
+    #[test]
+    fn origin_movies_start_from_their_state() {
+        let root = std::env::temp_dir().join(format!("movie-origin-{}", std::process::id()));
+        let (movies, states) = (root.join("movies"), root.join("states"));
+        std::fs::create_dir_all(&states).unwrap();
+        std::fs::write(states.join("s0.tfzstate"), b"S0").unwrap();
+        let mut m = movie_with(&[5], &[(0, 0x10)]);
+        m.meta = serde_json::json!({"name": "run", "origin": "s0"});
+        m.save(&movies.join("run.tfmovie")).unwrap();
+
+        let mut r = Recorder::default();
+        play(&mut r, &m, &movies).unwrap();
+        assert_eq!(r.0, ["state S0", "poke 0010=90", "frame 5"]);
+        let err = play(&mut PowerOnOnly, &m, &movies).unwrap_err();
+        assert!(format!("{err:#}").contains("cannot start a movie from a saved state"), "{err:#}");
+
+        let path = movies.join("run.tfmovie");
+        let before = movie_chain_hash(&path, &movies).unwrap();
+        std::fs::write(states.join("s0.tfzstate"), b"S1").unwrap();
+        assert_ne!(movie_chain_hash(&path, &movies).unwrap(), before);
+
+        m.meta["origin"] = serde_json::json!("missing");
+        assert!(play(&mut Recorder::default(), &m, &movies).is_err());
+        m.meta = serde_json::json!({"name": "run", "origin": "s0", "base": "x"});
+        assert!(format!("{:#}", play(&mut Recorder::default(), &m, &movies).unwrap_err()).contains("both"));
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     /// `play` runs the base chain first, applies a frame-`k` poke before input `k`, and applies

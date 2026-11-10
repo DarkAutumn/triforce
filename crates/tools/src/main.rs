@@ -68,14 +68,13 @@ enum Cmd {
     Bench {
         #[arg(long, default_value_t = 20_000)]
         frames: usize,
-        /// Corpus movie names to replay instead (e.g. chain-milestone1-137); repeatable.
+        /// Corpus movie names to replay instead (e.g. chain-d2-500); repeatable.
         #[arg(long = "movie")]
         movies: Vec<String>,
-        /// Replay every corpus movie tagged `agent` (recorded chain runs of the trained models).
+        /// Replay every corpus movie tagged `agent` (chain runs of the trained models, `tf movie import`).
         #[arg(long)]
         agent: bool,
-        /// Replay every `*.json` recording in this directory (`scripts/record_bench_runs.py`: chain runs of the
-        /// current team recorded on the current core, which the corpus agent movies predate).
+        /// Replay every `*.json` recording in this directory (`scripts/record_bench_runs.py`).
         #[arg(long)]
         recordings: Option<PathBuf>,
         /// With movies: timed windows per movie, evenly spaced from its first to its last frame.
@@ -123,14 +122,25 @@ enum MovieCmd {
         #[arg(short, long)]
         out: PathBuf,
     },
+    /// Turn a chain-run recording (`scripts/record_bench_runs.py` JSON: origin state, buttons, pokes)
+    /// into a corpus movie that starts from a copy of its origin state (`corpus/states/`).
+    Import {
+        recording: PathBuf,
+        /// Output movie (normally `corpus/movies/chain-<segment>-<seed>.tfmovie`).
+        #[arg(short, long)]
+        out: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
 enum CorpusCmd {
     /// Rebuild corpus/manifest.toml from corpus/movies/*.tfmovie.
     Sync,
-    /// Coverage gate.
-    Check,
+    /// Coverage gate: manifest up to date, ≥ 1M frames, and (replayed) gameplay in the overworld and Dungeons 1-3.
+    Check {
+        #[arg(long)]
+        jobs: Option<usize>,
+    },
 }
 
 fn jobs(j: Option<usize>) -> usize {
@@ -162,7 +172,7 @@ fn run(cli: Cli) -> Result<i32> {
         Cmd::Trace { movie, frame, count } => trace(&rom, &movie, frame, count),
         Cmd::Corpus { cmd } => match cmd {
             CorpusCmd::Sync => corpus::sync(),
-            CorpusCmd::Check => corpus::check(&rom),
+            CorpusCmd::Check { jobs: j } => corpus::check(&rom, jobs(j)),
         },
         Cmd::Bench { frames, mut movies, agent, recordings, windows, window_frames, cache, render } => {
             if agent {
@@ -265,7 +275,78 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
             println!("{}: {} frames after {base}", out.display(), r.inputs.len());
             Ok(0)
         }
+        MovieCmd::Import { recording, out } => import(rom, &recording, &out),
     }
+}
+
+/// A recording's origin state bytes, inputs, pokes (`(frame, addr, value)`) and metadata.
+struct Recording {
+    origin: PathBuf,
+    state: Vec<u8>,
+    inputs: Vec<u8>,
+    pokes: Vec<(usize, u16, u8)>,
+    meta: serde_json::Value,
+}
+
+fn read_recording(path: &Path) -> Result<Recording> {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).with_context(|| format!("reading {}", path.display()))?)?;
+    let origin = PathBuf::from(v["origin"].as_str().context("recording origin")?);
+    let state = std::fs::read(&origin).with_context(|| format!("reading {}", origin.display()))?;
+    let inputs = v["buttons"].as_array().context("buttons")?.iter()
+        .map(|b| b.as_u64().and_then(|b| u8::try_from(b).ok()).context("button byte")).collect::<Result<_>>()?;
+    let pokes = v["pokes"].as_array().context("pokes")?.iter().map(|p| -> Result<_> {
+        let p = p.as_array().context("poke")?;
+        let n = |i: usize| p.get(i).and_then(serde_json::Value::as_u64).context("poke field");
+        Ok((n(0)? as usize, n(1)? as u16, n(2)? as u8))
+    }).collect::<Result<_>>()?;
+    Ok(Recording { origin, state, inputs, pokes, meta: v.get("meta").cloned().unwrap_or_default() })
+}
+
+/// `tf movie import`: the recording as a TFMOVIE whose `origin` is a copy of its start state in
+/// `<out dir>/../states/<state stem>-<digest>.tfzstate` (shared by recordings from the same state).
+fn import(rom: &rom::RomInfo, path: &Path, out: &Path) -> Result<i32> {
+    let r = read_recording(path)?;
+    let mut b = zcore::Zcore::open(&rom.bytes)?;
+    b.load_state(&r.state).with_context(|| format!("{} does not load on this core", r.origin.display()))?;
+    let name = out.file_stem().context("output name")?.to_string_lossy().into_owned();
+    let stem = r.origin.file_stem().context("origin name")?.to_string_lossy().into_owned();
+    let origin = format!("{stem}-{:016x}", formats::digest8(&r.state));
+    let movies_dir = out.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let state_path = formats::origin_path(movies_dir, &origin);
+    if !state_path.exists() {
+        formats::write_atomic(&state_path, &r.state)?;
+    }
+    let mut tags = vec![serde_json::json!("agent"), serde_json::json!("chain")];
+    if let Some(segment) = r.meta.get("segment") {
+        tags.push(segment.clone());
+    }
+    let mut movie = Movie::new(
+        rom.payload_sha1,
+        serde_json::json!({"name": name, "origin": origin, "tags": tags, "source": r.meta}),
+    );
+    movie.inputs = r.inputs;
+    let mut pokes = r.pokes;
+    pokes.sort_by_key(|&(f, _, _)| f);
+    for (f, addr, value) in pokes {
+        ensure!(f <= movie.inputs.len(), "poke at frame {f} after the last frame");
+        ensure!(formats::poke_addr_allowed(addr), "poke address ${addr:04X} is outside RAM and PRG-RAM");
+        movie.pokes.push(formats::Poke { frame: f as u32, addr, value });
+    }
+    // The replay must end in the recorded last room: otherwise the core no longer reproduces the run
+    // (the old agent movies desynced this way) and nothing is written.
+    replay::play_movie_in(&mut b, &movie, movies_dir)?;
+    let ends = format!("{}:0x{:02x}", b.ram()[0x10], b.ram()[0xEB]);
+    if let Some(last) = movie.meta["source"].get("last_room").and_then(|v| v.as_str()) {
+        ensure!(last == ends, "{}: replay ends in {ends}, the run ended in {last}: the recording desyncs", path.display());
+    }
+    movie.save(out)?;
+    println!(
+        "{}: {} frames, {} pokes, from {origin}; replay ends in {ends}",
+        out.display(),
+        movie.inputs.len(),
+        movie.pokes.len()
+    );
+    Ok(0)
 }
 
 /// One line per instruction of records `frame..frame + count`, prefixed with the record number, so
@@ -356,15 +437,7 @@ impl BenchRun {
 
     /// A recording: JSON with `origin` (state file path), `buttons` and `pokes` (`[frame, addr, value]`).
     fn from_recording(path: &Path) -> Result<BenchRun> {
-        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
-        let origin = std::fs::read(v["origin"].as_str().context("recording origin")?)?;
-        let inputs: Vec<u8> = v["buttons"].as_array().context("buttons")?.iter()
-            .map(|b| b.as_u64().map(|b| b as u8).context("button byte")).collect::<Result<_>>()?;
-        let pokes: Vec<(usize, u16, u8)> = v["pokes"].as_array().context("pokes")?.iter().map(|p| -> Result<_> {
-            let p = p.as_array().context("poke")?;
-            let n = |i: usize| p.get(i).and_then(serde_json::Value::as_u64).context("poke field");
-            Ok((n(0)? as usize, n(1)? as u16, n(2)? as u8))
-        }).collect::<Result<_>>()?;
+        let Recording { state: origin, inputs, pokes, .. } = read_recording(path)?;
         let name = path.file_stem().context("recording name")?.to_string_lossy().into_owned();
         let mut bytes = origin.clone();
         bytes.extend_from_slice(&inputs);
