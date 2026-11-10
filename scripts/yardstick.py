@@ -28,8 +28,22 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from triforce import _native
+from triforce.events import write_json_atomic
+
 Z = 1.96
-Interval = Optional[tuple[float, float, float]]
+# t(0.975, df) for df 1..30; beyond 30 the Cornish-Fisher expansion around Z (error < 1e-4).
+T_975 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131,
+         2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042)
+# (value, low, high); low/high are None when the interval is undefined (a mean of one value).
+Interval = Optional[tuple[float, Optional[float], Optional[float]]]
+
+
+def t_975(df: int) -> float:
+    """The two-sided 95% Student t quantile for ``df`` degrees of freedom (df >= 1)."""
+    if df <= len(T_975):
+        return T_975[df - 1]
+    return Z + (Z ** 3 + Z) / (4 * df) + (5 * Z ** 5 + 16 * Z ** 3 + 3 * Z) / (96 * df * df)
 
 
 def wilson(successes: int, n: int) -> Interval:
@@ -43,19 +57,25 @@ def wilson(successes: int, n: int) -> Interval:
 
 
 def mean_ci(values: list[float]) -> Interval:
-    """Mean and its normal 95% interval (None without values)."""
+    """Mean and its Student-t 95% interval (None without values; no bounds for a single value)."""
     n = len(values)
     if n == 0:
         return None
     mean = sum(values) / n
     if n == 1:
-        return mean, mean, mean
+        return mean, None, None
     sd = math.sqrt(sum((v - mean) ** 2 for v in values) / (n - 1))
-    half = Z * sd / math.sqrt(n)
+    half = t_975(n - 1) * sd / math.sqrt(n)
     return mean, mean - half, mean + half
 
 
-def specialist_row(name: str, result: dict) -> dict:
+class YardstickError(ValueError):
+    """An input the yardstick can't measure honestly (unknown room, duplicated runs, old eval format...)."""
+
+
+def specialist_row(name: str, result: dict, source: str = 'evaluation') -> dict:
+    if result.get('format') != 2 or 'records' not in result:
+        raise YardstickError(f"{source}: evaluation format {result.get('format')!r} is not 2 (re-evaluate {name})")
     records = result['records']
     visits = [v for r in records for v in r.get('visits', ())]
     return {
@@ -69,25 +89,64 @@ def specialist_row(name: str, result: dict) -> dict:
     }
 
 
+def parse_target(target: str) -> list[tuple[int, int]]:
+    """'2:0x7d,0:0x3C' → [(2, 0x7d), (0, 0x3c)]; anything else raises."""
+    rooms = []
+    for room in target.split(','):
+        level, sep, number = room.strip().partition(':')
+        try:
+            if not sep or not number.lower().startswith('0x'):
+                raise ValueError(room)
+            rooms.append((int(level), int(number, 16)))
+        except ValueError:
+            raise YardstickError(f"arrival target {room!r} is not L:0xRR (in {target!r})") from None
+    return rooms
+
+
+def _location(record: dict) -> tuple[int, int]:
+    return int(record['level']), int(str(record['room']), 16)
+
+
 def arrival(run: dict, target: str | None):
     """The room record where `run` arrived: the first entry into `target` ('L:0xRR', outside caves) after its start
     room, or with no target the last room of a successful run; None if it never got there.  `target` may list
     rooms in order ('2:0x7d,0:0x3c'): the arrival is the entry into the last one after entering the others in turn."""
     if target is None:
         return run['rooms'][-1] if run['result'] == 'success' and run['rooms'] else None
-    rooms = [room.partition(':') for room in target.split(',')]
+    rooms = parse_target(target)
     at = 0
     for record in run['rooms'][1:]:
-        level, _, room = rooms[at]
-        if str(record['level']) == level and record['room'] == room and not record['in_cave']:
+        if _location(record) == rooms[at] and not record['in_cave']:
             at += 1
             if at == len(rooms):
                 return record
     return None
 
 
-def chain_row(name: str, path: Path, target: str | None = None) -> dict:
+def read_chain(path: Path) -> list[dict]:
+    """The runs of one eval-chain output; one run per seed and one route, else it raises (an appended file)."""
     runs = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    if not runs:
+        raise YardstickError(f"{path}: no chain runs")
+    seeds = Counter(run['seed'] for run in runs)
+    repeated = sorted(seed for seed, count in seeds.items() if count > 1)
+    if repeated:
+        raise YardstickError(f"{path}: seeds {repeated[:10]} appear more than once (several chain evals in one file)")
+    routes = sorted({run['route'] for run in runs})
+    if len(routes) > 1:
+        raise YardstickError(f"{path}: runs of several routes {routes}")
+    return runs
+
+
+def chain_row(name: str, path: Path, target: str | None = None) -> dict:
+    runs = read_chain(path)
+    if target is not None:
+        route = runs[0]['route']
+        rooms = {(step['level'], step['room']) for step in _native.route_steps(route) if not step['in_cave']}
+        unknown = [room for room in parse_target(target) if room not in rooms]
+        if unknown:
+            raise YardstickError(f"{path}: target rooms {[f'{l}:0x{r:02x}' for l, r in unknown]} are not rooms "
+                                 f"of route {route!r}")
     arrived = [room for room in (arrival(r, target) for r in runs) if room is not None]
     ends = Counter()
     for r in runs:
@@ -98,6 +157,7 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
         'segment': name,
         'target': target,
         'runs': len(runs),
+        'arrived': len(arrived),
         'arrivals': wilson(len(arrived), len(runs)),
         'hearts_at_arrival': mean_ci([room['health_in'] for room in arrived]),
         'where_runs_end': ends.most_common(5),
@@ -117,6 +177,8 @@ def fmt(interval: Interval, percent=False) -> str:
     if interval is None:
         return '-'
     value, lo, hi = interval
+    if lo is None or hi is None:
+        return f"{100 * value:.1f}% (n=1)" if percent else f"{value:.2f} (n=1)"
     if percent:
         return f"{100 * value:.1f}% [{100 * lo:.1f}, {100 * hi:.1f}]"
     return f"{value:.2f} [{lo:.2f}, {hi:.2f}]"
@@ -124,38 +186,42 @@ def fmt(interval: Interval, percent=False) -> str:
 
 def report(args) -> int:
     models = Path(args.models_dir)
-    specialists = []
+    specialists, skipped = [], []
     for name in sorted(p.stem for p in Path(args.specialists_dir).glob('*.yaml')):
         evaluation = eval_path(models, name, args.run, args.eval_name)
-        if evaluation.is_file():
-            specialists.append(specialist_row(name, json.loads(evaluation.read_text())))
+        if not evaluation.is_file():
+            skipped.append(name)
+            continue
+        specialists.append(specialist_row(name, json.loads(evaluation.read_text()), str(evaluation)))
     chains = []
     for item in args.chain:
         name, _, spec = item.partition('=')
         file, _, target = spec.partition('@')
         chains.append(chain_row(name, Path(file), target or None))
-    out = {'run': args.run, 'specialists': specialists, 'chains': chains}
-    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.output).write_text(json.dumps(out, indent=2))
+    out = {'run': args.run, 'specialists': specialists, 'skipped': skipped, 'chains': chains}
+    write_json_atomic(Path(args.output), out)
     print('| specialist | episodes | success | hearts lost / visit | health change | frames / visit |')
     print('|---|---:|---|---|---|---|')
     for row in specialists:
         print(f"| {row['specialist']} | {row['episodes']} | {fmt(row['success'], True)} | "
               f"{fmt(row['hearts_lost_per_visit'])} | {fmt(row['health_change'])} | "
               f"{fmt(row['frames_per_visit'])} |")
+    if skipped:
+        print(f"\nno evaluation for run {args.run!r}: {', '.join(skipped)}")
     if chains:
         print('\n| segment | runs | arrivals | hearts at arrival | where runs end |')
         print('|---|---:|---|---|---|')
         for row in chains:
             ends = ', '.join(f"{k} ×{n}" for k, n in row['where_runs_end'])
-            print(f"| {row['segment']} | {row['runs']} | {fmt(row['arrivals'], True)} | "
+            print(f"| {row['segment']} | {row['runs']} | {row['arrived']}: {fmt(row['arrivals'], True)} | "
                   f"{fmt(row['hearts_at_arrival'])} | {ends} |")
     return 0
 
 
 def verdict(base: Interval, new: Interval, higher_is_better: bool) -> str:
-    """`better` / `worse` when the 95% intervals don't overlap, else `~`."""
-    if base is None or new is None:
+    """`better` / `worse` when the 95% intervals don't overlap, else `~`; `-` without an interval on either side
+    (no values, or a single one)."""
+    if base is None or new is None or None in base[1:] or None in new[1:]:
         return '-'
     if new[1] > base[2]:
         return 'better' if higher_is_better else 'worse'
@@ -164,27 +230,35 @@ def verdict(base: Interval, new: Interval, higher_is_better: bool) -> str:
     return '~'
 
 
+def _paired(base: list[dict], new: list[dict], key: str):
+    """(name, base row or None, new row or None) for every row on either side, base order first."""
+    old = {row[key]: row for row in base}
+    now = {row[key]: row for row in new}
+    names = list(old) + [name for name in now if name not in old]
+    return [(name, old.get(name), now.get(name)) for name in names]
+
+
 def compare(args) -> int:
     base, new = (json.loads(Path(p).read_text()) for p in (args.base, args.new))
     metrics = [('success', True, True), ('hearts_lost_per_visit', False, False), ('health_change', True, False),
                ('frames_per_visit', False, False)]
-    old = {row['specialist']: row for row in base['specialists']}
     print('| row | metric | base | new | verdict |')
     print('|---|---|---|---|---|')
-    for row in new['specialists']:
-        before = old.get(row['specialist'])
-        if before is None:
+    for name, before, row in _paired(base['specialists'], new['specialists'], 'specialist'):
+        if before is None or row is None:
+            print(f"| {name} | - | {'missing' if before is None else 'present'} | "
+                  f"{'missing' if row is None else 'present'} | missing |")
             continue
         for key, higher, percent in metrics:
-            print(f"| {row['specialist']} | {key} | {fmt(before[key], percent)} | {fmt(row[key], percent)} | "
+            print(f"| {name} | {key} | {fmt(before[key], percent)} | {fmt(row[key], percent)} | "
                   f"{verdict(before[key], row[key], higher)} |")
-    old_chains = {row['segment']: row for row in base['chains']}
-    for row in new['chains']:
-        before = old_chains.get(row['segment'])
-        if before is None:
+    for name, before, row in _paired(base['chains'], new['chains'], 'segment'):
+        if before is None or row is None:
+            print(f"| chain {name} | - | {'missing' if before is None else 'present'} | "
+                  f"{'missing' if row is None else 'present'} | missing |")
             continue
         for key, percent in (('arrivals', True), ('hearts_at_arrival', False)):
-            print(f"| chain {row['segment']} | {key} | {fmt(before[key], percent)} | {fmt(row[key], percent)} | "
+            print(f"| chain {name} | {key} | {fmt(before[key], percent)} | {fmt(row[key], percent)} | "
                   f"{verdict(before[key], row[key], True)} |")
     return 0
 
@@ -204,7 +278,11 @@ def main(argv=None) -> int:
     cmp.add_argument('base')
     cmp.add_argument('new')
     args = parser.parse_args(argv)
-    return report(args) if args.command == 'report' else compare(args)
+    try:
+        return report(args) if args.command == 'report' else compare(args)
+    except YardstickError as error:
+        print(f"yardstick: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == '__main__':
