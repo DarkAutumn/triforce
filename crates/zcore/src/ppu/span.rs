@@ -426,3 +426,94 @@ impl Bus {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{bus::Bus, cart::Cart, common::ResetKind};
+
+    /// A PPU on an NROM board with CHR-RAM, nametables, palette and OAM filled from `seed`.
+    fn bus(seed: u64, render: bool) -> Bus {
+        let mut bus = Bus::default();
+        let mut cart = Cart::empty_sized(0x4000, 0);
+        cart.mapper = crate::mapper::Nrom::load(&mut cart).unwrap();
+        bus.load_cart(cart);
+        bus.reset(ResetKind::Hard);
+        bus.render = render;
+        let mut rng = Lcg(seed);
+        for addr in 0..0x3F20u16 {
+            bus.ppu_bus_write(addr, rng.byte());
+        }
+        for i in 0..256 {
+            bus.ppu.oamdata[i] = rng.byte();
+        }
+        bus
+    }
+
+    struct Lcg(u64);
+
+    impl Lcg {
+        fn next(&mut self) -> u64 {
+            self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+            self.0 >> 33
+        }
+        fn byte(&mut self) -> u8 {
+            self.next() as u8
+        }
+    }
+
+    /// One register access, the same on every bus; returns what a read gave.
+    fn access(bus: &mut Bus, kind: u64, val: u8) -> u8 {
+        // The CPU's view: $2000-$2007 as `cpu_bus_read`/`cpu_bus_write` reach them (no NMI enable:
+        // nothing here services one).
+        match kind % 10 {
+            0 => bus.ppu_register_write(0x2000, val & 0x7F),
+            k @ 1..=7 => bus.ppu_register_write(0x2000 + k as u16, val),
+            8 => return bus.ppu_register_read(0x2002),
+            _ => return bus.ppu_register_read(0x2007),
+        }
+        0
+    }
+
+    /// span.rs's promise, checked directly: the span runner (`ppu_clock_to`, whole and randomly
+    /// split) leaves exactly the state, read values and picture the per-dot loop (`ppu_clock`)
+    /// leaves, with rendering on and off, under random register traffic at CPU-like spacing
+    /// (multiples of 3 dots) and at any spacing.
+    #[test]
+    fn spans_match_the_dot_loop() {
+        for seed in 1..=6u64 {
+            for render in [true, false] {
+                let mut dot = bus(seed, render);
+                let mut span = bus(seed, render);
+                let mut split = bus(seed, render);
+                let mut rng = Lcg(seed * 977);
+                let cpu_like = seed % 2 == 0;
+                for step in 0..1500 {
+                    let gap = if cpu_like { 3 * (rng.next() % 120) } else { rng.next() % 400 } as u32;
+                    for _ in 0..gap {
+                        let divider = u32::from(dot.ppu.clock_divider);
+                        dot.ppu.master_clock += divider;
+                        dot.ppu_clock();
+                    }
+                    let target = span.ppu.master_clock + gap * u32::from(span.ppu.clock_divider);
+                    span.ppu_clock_to(target);
+                    while split.ppu.master_clock < target {
+                        let part = 1 + (rng.next() % 50) as u32;
+                        let to = (split.ppu.master_clock + part * u32::from(split.ppu.clock_divider)).min(target);
+                        split.ppu_clock_to(to);
+                    }
+                    let (kind, val) = (rng.next(), rng.byte());
+                    let read = [access(&mut dot, kind, val), access(&mut span, kind, val), access(&mut split, kind, val)];
+                    assert!(read[0] == read[1] && read[0] == read[2], "seed {seed} render {render} step {step}: reads {read:?}");
+                    let state = |b: &Bus| postcard::to_allocvec(&b.state).unwrap();
+                    let want = state(&dot);
+                    assert!(state(&span) == want, "seed {seed} render {render} step {step}: span state");
+                    assert!(state(&split) == want, "seed {seed} render {render} step {step}: split state");
+                    if render {
+                        assert!(dot.frame()[..] == span.frame()[..], "seed {seed} step {step}: span picture");
+                        assert!(dot.frame()[..] == split.frame()[..], "seed {seed} step {step}: split picture");
+                    }
+                }
+            }
+        }
+    }
+}
