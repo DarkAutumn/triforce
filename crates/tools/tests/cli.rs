@@ -145,6 +145,18 @@ fn random_is_seeded_and_rebase_strips_the_base() {
     assert!(stderr(&out).contains("does not start with power_on_to_start"), "{}", stderr(&out));
 }
 
+/// `--out` without a file name is an error (exit 2), not a panic.
+#[test]
+fn movie_out_needs_a_file_name() {
+    if !have_rom() {
+        return;
+    }
+    let tmp = TempDir::new("outname");
+    let out = tf(&["movie", "random", "--seed", "1", "--frames", "1", "-o", &format!("{}/..", tmp.0.display())]);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(stderr(&out).contains("needs a file name"), "{}", stderr(&out));
+}
+
 /// Fresh goldens of the short movies replay without divergence; a golden whose digest was changed
 /// reports the record and domain, one recorded for another version of its movie is stale, and
 /// either makes `ladder-diff` exit 1.

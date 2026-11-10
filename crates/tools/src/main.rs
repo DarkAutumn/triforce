@@ -194,12 +194,21 @@ fn run(cli: Cli) -> Result<i32> {
     }
 }
 
+/// The movie name `--out` gives (its file stem): a path without a file name (`dir/..`) is an error.
+fn out_name(out: &Path) -> Result<String> {
+    Ok(out
+        .file_stem()
+        .with_context(|| format!("--out {} needs a file name", out.display()))?
+        .to_string_lossy()
+        .into_owned())
+}
+
 fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
     match cmd {
         MovieCmd::Script { script: path, out } => {
             let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
             let mut directives = script::parse(&text)?;
-            let name = out.file_stem().unwrap().to_string_lossy().into_owned();
+            let name = out_name(&out)?;
             let mut b = zcore::Zcore::open(&rom.bytes)?;
             let mut movie = Movie::new(
                 rom.payload_sha1,
@@ -207,7 +216,7 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
             );
             if let Some(script::Directive::Base(p)) = directives.first().cloned() {
                 let base = Movie::load(&corpus::movie_path(&p))?;
-                check_movie_rom(&base, rom, &path)?;
+                check_movie_rom(&base, rom, &corpus::movie_path(&p))?;
                 replay::play_movie(&mut b, &base)?;
                 movie.meta["base"] = serde_json::json!(p);
                 directives.remove(0);
@@ -218,11 +227,11 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
             Ok(0)
         }
         MovieCmd::Random { base, seed, frames, out } => {
+            let name = out_name(&out)?;
             let p = Movie::load(&corpus::movie_path(&base))?;
             check_movie_rom(&p, rom, &corpus::movie_path(&base))?;
             let mut b = zcore::Zcore::open(&rom.bytes)?;
             replay::play_movie(&mut b, &p)?;
-            let name = out.file_stem().unwrap().to_string_lossy().into_owned();
             let mut movie = Movie::new(
                 rom.payload_sha1,
                 serde_json::json!({"name": name, "base": base, "tags": ["random"], "source": {"seed": seed}}),
