@@ -19,9 +19,9 @@ does not apply: its log-prob and entropy are 0 and its sampled index is 0 (match
 When only one kind is legal, the kind head is excluded from log-prob and entropy (v1's forced-type rule).
 
 Sampling uses ``torch.multinomial`` (the global torch RNG) unless the caller passes Gumbel ``noise`` (one row of
-``NOISE_SIZE`` values per sample, see ``gumbel_noise``): then each head picks ``argmax(log_probs + noise)``, so a
-row's choice depends only on its own inputs and noise.  The agent itself acts with the Rust copy of this network
-(``to_native``, ``crates/policy``); torch is the learner.
+``NOISE_SIZE`` values per sample, e.g. ``_native.keyed_noise``): then each head picks ``argmax(log_probs + noise)``,
+so a row's choice depends only on its own inputs and noise.  The agent itself acts with the Rust copy of this
+network (``to_native``, ``crates/policy``); torch is the learner.
 """
 
 import json
@@ -39,12 +39,6 @@ MASKED_LOGIT = -1e9
 
 # Gumbel noise columns per sample: kind, direction, duration heads.
 NOISE_SIZE = NUM_KINDS + NUM_DIRECTIONS + NUM_DURATIONS
-
-
-def gumbel_noise(shape, generator: torch.Generator) -> torch.Tensor:
-    """Standard Gumbel samples (float32, finite) of ``shape`` from ``generator``."""
-    uniform = torch.rand(shape, generator=generator).clamp_min_(torch.finfo(torch.float32).tiny)
-    return -torch.log(-torch.log(uniform))
 
 
 # Observation keys with special encoders; every other non-mask key is a float vector concatenated directly.
@@ -426,11 +420,6 @@ class ZeldaPolicy(nn.Module):
         first = torch.arange(row_masks.shape[-1], device=row_masks.device) == 0
         return torch.where(applies, log_probs, 0.0), torch.where(applies, row_masks, first)
 
-    def get_action_and_value(self, obs, mask=None, actions=None, deterministic=False):
-        """(actions [B,3], log_prob [B], entropy [B], value [B]) — the v1 PPO interface."""
-        out = self.evaluate(obs, mask, actions, deterministic)
-        return out.actions, out.log_prob, out.entropy, out.value
-
     def get_action(self, obs, mask=None, deterministic=False) -> torch.Tensor:
         """Actions [B, 3]."""
         return self.evaluate(obs, mask, deterministic=deterministic).actions
@@ -456,11 +445,6 @@ class ZeldaPolicy(nn.Module):
         weights = {name: value.detach().to('cpu', torch.float32).contiguous().numpy()
                    for name, value in self.state_dict().items()}
         return Policy(json.dumps(self.config.to_dict()), weights)
-
-
-def build_model(config: ModelConfig | dict, observation_space: Optional[spaces.Dict] = None) -> ZeldaPolicy:
-    """Builds a policy from a checkpoint's model_config (obs_spec inside) or a config plus space."""
-    return ZeldaPolicy(observation_space, config)
 
 
 _FIRST_LAYERS = ('mlp_extractor.policy_net.0.weight', 'mlp_extractor.value_net.0.weight')

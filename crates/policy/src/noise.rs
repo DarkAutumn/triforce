@@ -1,6 +1,7 @@
-//! Keyed Gumbel noise (`triforce/inference.py` `keyed_noise`): a pure function of (job, decision step, column),
-//! counter-based, so a decision's noise doesn't depend on which worker draws it or when. A play's actions can be
-//! sampled again exactly from its job key.
+//! Keyed Gumbel noise (Python: `triforce._native.keyed_noise`, which tests feed to the torch twin
+//! `ZeldaPolicy.evaluate(noise=)`): a pure function of (job, decision step, column), counter-based, so a decision's
+//! noise doesn't depend on which worker draws it or when. A play's actions can be sampled again exactly from its job
+//! key. Every uniform behind it lies in `[2^-54, 1 - 2^-53]`, so every Gumbel value is finite.
 
 const NOISE_TAG: u64 = 0x7F4A_7C15_9E37_79B9;
 
