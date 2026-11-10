@@ -849,41 +849,67 @@ def find_log_dirs(root: Path) -> list[Path]:
 TRIFORCE_ARGS = ('triforce.', 'train_round.py')
 
 
-def process_log_roots() -> set[Path]:
+def is_checkout(path: Path) -> bool:
+    """A triforce checkout (its ``logs/`` is the default logs root of the code it holds)."""
+    return (path / 'triforce' / 'events.py').is_file()
+
+
+def process_log_roots(proc: Path = Path('/proc')) -> set[Path]:
     """Where the triforce Python processes running on this machine write their event logs (Linux ``/proc``; empty
-    elsewhere): each one's ``--logs-dir``, its ``--log-dir``'s parent, its ``$TRIFORCE_LOGS_DIR``, and ``logs/`` of
-    the checkout it runs from (its working directory for ``-m triforce...``, the script's checkout otherwise).
-    Only existing directories."""
+    elsewhere).  A process counts when it runs ``-m triforce...``, a ``triforce...``/``train_round.py`` script or
+    the ``triforce`` console script.  Its roots: each ``--logs-dir``, a non-empty ``$TRIFORCE_LOGS_DIR``, ``logs/``
+    of its working directory, ``logs/`` of the ``.py`` script's checkout, and ``logs/`` of every checkout its code
+    comes from (the console script's or the venv python's checkout, ``$VIRTUAL_ENV/..``): a ``python -m
+    triforce.X`` started outside a checkout writes to the venv's checkout.  Only existing directories."""
     roots: set[Path] = set()
     try:
-        entries = [entry for entry in Path('/proc').iterdir() if entry.name.isdigit()]
+        entries = [entry for entry in proc.iterdir() if entry.name.isdigit()]
     except OSError:
         return roots
     for entry in entries:
         try:
             args = [arg.decode(errors='replace') for arg in (entry / 'cmdline').read_bytes().split(b'\0') if arg]
-            if not args or not Path(args[0]).name.startswith('python') \
-                    or not any(key in arg for arg in args[1:] for key in TRIFORCE_ARGS):
+            if not args or not Path(args[0]).name.startswith('python'):
+                continue
+            console = len(args) > 1 and Path(args[1]).name == 'triforce'
+            if not console and not any(key in arg for arg in args[1:] for key in TRIFORCE_ARGS):
                 continue
             cwd = Path(os.readlink(entry / 'cwd'))
-            environ = (entry / 'environ').read_bytes().split(b'\0')
         except OSError:
             continue
+        try:
+            environ = (entry / 'environ').read_bytes().split(b'\0')
+        except OSError:
+            environ = []
         found = [cwd / 'logs']
+        checkouts = []
         for index, arg in enumerate(args):
             value = args[index + 1] if index + 1 < len(args) else None
             if arg == '--logs-dir' and value:
                 found.append(cwd / value)
             elif arg.startswith('--logs-dir='):
                 found.append(cwd / arg.split('=', 1)[1])
-            elif arg == '--log-dir' and value:
-                found.append((cwd / value).parent)
             elif arg.endswith('.py') and not arg.startswith('-'):
                 script = (cwd / arg).parent
                 found.append((script.parent if script.name == 'scripts' else script) / 'logs')
+        if console:
+            checkouts.append((cwd / args[1], 'resolve'))
+        python = cwd / args[0]
+        if python.parent.name == 'bin' and python.parent.parent.name == '.venv':
+            checkouts.append((python, 'plain'))
         for item in environ:
-            if item.startswith(LOGS_DIR_ENV.encode() + b'='):
-                found.append(cwd / item.split(b'=', 1)[1].decode(errors='replace'))
+            name, _, value = item.decode(errors='replace').partition('=')
+            if name == LOGS_DIR_ENV and value:
+                found.append(cwd / value)
+            elif name == 'VIRTUAL_ENV' and value:
+                checkouts.append((cwd / value / 'bin' / 'python', 'plain'))
+        for path, how in checkouts:
+            try:
+                path = path.resolve() if how == 'resolve' else path
+            except OSError:
+                continue
+            if len(path.parents) > 2 and is_checkout(path.parents[2]):
+                found.append(path.parents[2] / 'logs')
         for path in found:
             try:
                 path = path.resolve()

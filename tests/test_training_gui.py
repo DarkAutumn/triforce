@@ -75,3 +75,67 @@ def test_chart_range_updates_when_switching_runs(qapp):
     assert chart.y_bounds() == (0.0, 1.0)
     chart.set_data([series([0.96, 0.99])])
     assert chart.y_bounds() == (0.90, 1.0)
+
+
+def fake_process(proc: Path, pid: int, args: list[str], cwd: Path, environ: dict | None = None):
+    entry = proc / str(pid)
+    entry.mkdir(parents=True)
+    (entry / 'cmdline').write_bytes(b''.join(arg.encode() + b'\0' for arg in args))
+    (entry / 'cwd').symlink_to(cwd)
+    if environ is None:
+        (entry / 'environ').mkdir()     # unreadable as a file
+    else:
+        (entry / 'environ').write_bytes(b''.join(f'{k}={v}'.encode() + b'\0' for k, v in environ.items()))
+
+
+@pytest.fixture
+def checkout(tmp_path):
+    """A checkout with logs/ and a venv, plus an unrelated working directory with logs/ of its own."""
+    repo = tmp_path / 'repo'
+    (repo / 'triforce').mkdir(parents=True)
+    (repo / 'triforce' / 'events.py').write_text('')
+    (repo / 'logs').mkdir()
+    (repo / '.venv' / 'bin').mkdir(parents=True)
+    (repo / '.venv' / 'bin' / 'triforce').write_text('#!python\n')
+    elsewhere = tmp_path / 'elsewhere'
+    (elsewhere / 'logs').mkdir(parents=True)
+    (elsewhere / 'rel').mkdir()
+    (elsewhere / 'envlogs').mkdir()
+    (tmp_path / 'abs').mkdir()
+    (tmp_path / 'link').symlink_to(repo)
+    return tmp_path
+
+
+@pytest.mark.parametrize('case', [
+    'module', 'logs-dir-rel', 'logs-dir-abs', 'console', 'console-logs-dir', 'env-empty', 'env-rel', 'symlink',
+    'empty-cmdline', 'no-environ', 'module-outside', 'not-triforce'])
+def test_process_log_roots_finds_every_triforce_entry_point(checkout, case):
+    repo, elsewhere, absdir = checkout / 'repo', checkout / 'elsewhere', checkout / 'abs'
+    python, console = str(repo / '.venv/bin/python'), str(repo / '.venv/bin/triforce')
+    env = {'HOME': '/home/x'}
+    shapes = {
+        'module': (['python3', '-m', 'triforce.train'], repo, env, {repo / 'logs'}),
+        'logs-dir-rel': (['python', '-m', 'triforce.train', '--logs-dir', 'rel'], elsewhere, env,
+                         {elsewhere / 'logs', elsewhere / 'rel'}),
+        'logs-dir-abs': (['python', '-m', 'triforce.train', f'--logs-dir={absdir}'], elsewhere, env,
+                         {elsewhere / 'logs', absdir}),
+        'console': ([python, console, 'eval-chain', '--runs', '20'], elsewhere, env,
+                    {elsewhere / 'logs', repo / 'logs'}),
+        'console-logs-dir': ([python, console, 'eval-chain', '--logs-dir', str(absdir)], elsewhere, env,
+                             {elsewhere / 'logs', repo / 'logs', absdir}),
+        'env-empty': (['python', '-m', 'triforce.evaluate'], elsewhere, {**env, gui.LOGS_DIR_ENV: ''},
+                      {elsewhere / 'logs'}),
+        'env-rel': (['python', '-m', 'triforce.evaluate'], elsewhere, {**env, gui.LOGS_DIR_ENV: 'envlogs'},
+                    {elsewhere / 'logs', elsewhere / 'envlogs'}),
+        'symlink': (['python', '-m', 'triforce.train'], checkout / 'link', env, {repo / 'logs'}),
+        'empty-cmdline': ([], repo, env, set()),
+        'no-environ': (['python', '-m', 'triforce.train'], repo, None, {repo / 'logs'}),
+        'module-outside': ([python, '-m', 'triforce.evaluate'], elsewhere, {**env, 'VIRTUAL_ENV': str(repo / '.venv')},
+                           {elsewhere / 'logs', repo / 'logs'}),
+        'not-triforce': (['python', '-m', 'http.server'], repo, env, set()),
+    }
+    args, cwd, environ, expected = shapes[case]
+    proc = checkout / 'proc'
+    fake_process(proc, 4242, args, cwd, environ)
+    (proc / 'self').mkdir()                 # non-pid entries are skipped
+    assert gui.process_log_roots(proc) == {path.resolve() for path in expected}
