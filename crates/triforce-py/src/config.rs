@@ -72,9 +72,9 @@ fn fields_json(
 
 pub fn build(py: Python<'_>, value: Value) -> PyResult<Arc<Config>> {
     let data = context::data(py, None)?;
-    Config::from_json(value, Some(&data.map))
-        .map(Arc::new)
-        .map_err(|e| ConfigError::new_err(e.0))
+    let config = Config::from_json(value, Some(&data.map)).map_err(|e| ConfigError::new_err(e.0))?;
+    data.check_chain_hp(&config).map_err(|e| ConfigError::new_err(e.0))?;
+    Ok(Arc::new(config))
 }
 
 /// A config argument: a `SpecialistConfig`, a specialist name or a `.yaml` path.

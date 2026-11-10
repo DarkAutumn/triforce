@@ -13,6 +13,7 @@ use crate::end_conditions::{
     validate_success_kind,
 };
 use crate::rewards::OUTCOMES;
+use crate::start_states::MIN_CHAIN_SAMPLES;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
@@ -715,7 +716,7 @@ pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// '1:0x44', '0:0x77:cave' (`chain_hp.room_key`).
+/// '1:0x44', '0:0x77:cave': the `triforce/chain_hp.json` key format (`triforce.chain_hp.build_profile` writes it).
 pub fn room_key(location: MapLocation) -> String {
     format!(
         "{}:0x{:02x}{}",
@@ -785,6 +786,7 @@ impl GameData {
             ));
         }
         for (name, config) in &self.specialists {
+            self.check_chain_hp(config)?;
             let rooms: BTreeSet<MapLocation> = config.rooms.iter().copied().collect();
             let tagged: BTreeSet<MapLocation> =
                 self.map.rooms_for_specialist(name).into_iter().collect();
@@ -838,7 +840,9 @@ impl GameData {
         if name_or_path.ends_with(".yaml") && Path::new(name_or_path).exists() {
             let text = std::fs::read_to_string(name_or_path)
                 .map_err(|e| ConfigError(format!("{name_or_path}: {e}")))?;
-            return SpecialistConfig::from_yaml(&text, name_or_path, Some(&self.map)).map(Arc::new);
+            let config = SpecialistConfig::from_yaml(&text, name_or_path, Some(&self.map))?;
+            self.check_chain_hp(&config)?;
+            return Ok(Arc::new(config));
         }
         let known: Vec<&String> = self.specialists.keys().collect();
         err(format!(
@@ -849,6 +853,28 @@ impl GameData {
     /// Hearts chain runs entered `location` with (empty when unknown).
     pub fn chain_profile(&self, location: MapLocation) -> Option<&[f64]> {
         self.chain_hp.get(&room_key(location)).map(Vec::as_slice)
+    }
+
+    /// A config that draws chain health (`ram_randomization.chain_hp > 0`) needs a chain profile with at least
+    /// [`MIN_CHAIN_SAMPLES`] arrivals for one of its rooms; without one every reset would silently fall back to the
+    /// `hp` draw (`start_states::ram_randomization_values`).
+    pub fn check_chain_hp(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
+        if !config.ram_randomization.chain_hp.is_some_and(|p| p > 0.0) {
+            return Ok(());
+        }
+        let profiled = config
+            .rooms
+            .iter()
+            .any(|room| self.chain_profile(*room).is_some_and(|s| s.len() >= MIN_CHAIN_SAMPLES));
+        if profiled {
+            return Ok(());
+        }
+        err(format!(
+            "{}: ram_randomization.chain_hp needs triforce/chain_hp.json profiles with at least {MIN_CHAIN_SAMPLES} \
+             arrivals for one of its rooms {} (build them with `python -m triforce.chain_hp <chain jsonl>`)",
+            config.name,
+            fmt_rooms(&config.rooms.iter().copied().collect())
+        ))
     }
 
     /// The specialist tagged on a room.
@@ -1033,9 +1059,26 @@ mod tests {
             let name = step.specialist.as_deref().unwrap();
             assert!(data.specialists[name].rooms.contains(&step.location()));
         }
-        assert!(
-            data.chain_profile(MapLocation::new(0, 0x28, false))
-                .is_some()
-        );
+    }
+
+    /// F042/F133: a config drawing chain health needs a profile for one of its rooms (MIN_CHAIN_SAMPLES arrivals).
+    #[test]
+    fn chain_hp_needs_a_profile_for_one_of_its_rooms() {
+        let data = GameData::load_default().expect("repo data");
+        let mut config = (*data.specialists["goriya"]).clone();
+        config.ram_randomization.chain_hp = Some(0.5);
+        let mut empty = (*data).clone();
+        empty.chain_hp.clear();
+        let e = empty.check_chain_hp(&config).unwrap_err().0;
+        assert!(e.contains("goriya") && e.contains("chain_hp"), "{e}");
+        let room = room_key(config.rooms[0]);
+        let mut few = empty.clone();
+        few.chain_hp.insert(room.clone(), vec![1.0; MIN_CHAIN_SAMPLES - 1]);
+        assert!(few.check_chain_hp(&config).is_err(), "too few arrivals");
+        let mut enough = empty.clone();
+        enough.chain_hp.insert(room, vec![1.0; MIN_CHAIN_SAMPLES]);
+        assert!(enough.check_chain_hp(&config).is_ok());
+        config.ram_randomization.chain_hp = Some(0.0);
+        assert!(empty.check_chain_hp(&config).is_ok(), "chain_hp 0 needs nothing");
     }
 }

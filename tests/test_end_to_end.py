@@ -115,4 +115,4 @@ def test_eval_chain_to_an_early_room_writes_runs_that_round_trip(models_dir, tmp
     # The chain jsonl feeds the chain-hp profile; its keys are the native lookup's room keys.
     profile = chain_hp.build_profile([str(output)])
     assert all(ROOM_KEY.match(key) for key in profile)
-    assert sum(map(len, profile.values())) == sum(len(r.rooms) for r in results)
+    assert sum(map(len, profile.values())) == sum(len(r.rooms) - 1 for r in results)    # start rooms aren't arrivals

@@ -21,17 +21,26 @@ def test_profile_keys_rooms_and_sorts_arrival_hearts_over_files(tmp_path):
     with open(second, 'a', encoding='utf-8') as file:
         file.write('\n   \n')                                  # blank lines are skipped
     profile = chain_hp.build_profile([str(first), str(second)])
-    assert profile == {'0:0x77': [0.5, 2.5, 3.0], '0:0x77:cave': [3.0], '1:0x73': [1.5, 2.0]}
+    # Each run's first room is its start state, not an arrival.
+    assert profile == {'0:0x77': [2.5], '0:0x77:cave': [3.0], '1:0x73': [2.0]}
     assert list(profile) == sorted(profile)
     assert chain_hp.build_profile([]) == {}
 
 
-def test_cli_writes_the_profile_and_prints_per_room_means(tmp_path, capsys):
+def test_a_segment_runs_start_room_is_not_an_arrival(tmp_path):
+    """F133: a `--from 2_7ds_0` segment begins in 2:0x7d with the state file's health; only a later visit counts."""
+    chain = tmp_path / 'segment.jsonl'
+    write_jsonl(str(chain), [_run(0, (2, '0x7d', False, 3.0), (2, '0x7e', False, 2.5), (2, '0x7d', False, 1.5))])
+    assert chain_hp.build_profile([str(chain)])['2:0x7d'] == [1.5]
+
+
+def test_cli_writes_the_profile_atomically_and_prints_per_room_means(tmp_path, capsys):
     chain = tmp_path / 'chain.jsonl'
-    write_jsonl(str(chain), [_run(0, (2, '0x7d', False, 4.0)), _run(1, (2, '0x7d', False, 3.0))])
+    write_jsonl(str(chain), [_run(0, (0, '0x77', False, 3.0), (2, '0x7d', False, 4.0)),
+                             _run(1, (0, '0x77', False, 3.0), (2, '0x7d', False, 3.0))])
     out = tmp_path / 'profile.json'
     assert chain_hp.main([str(chain), '--out', str(out)]) == 0
     assert json.loads(out.read_text()) == {'2:0x7d': [3.0, 4.0]}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['chain.jsonl', 'profile.json']     # no temp file left
     line, = capsys.readouterr().out.splitlines()
     assert line.split() == ['2:0x7d', '2', 'visits', 'mean', '3.50', 'hearts']
-

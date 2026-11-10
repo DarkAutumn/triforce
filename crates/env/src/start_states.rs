@@ -27,7 +27,8 @@ pub const DAMAGE_WEIGHT: f64 = 1.5;
 /// The share of a selector's draws spread uniformly over its states.
 pub const UNIFORM_FLOOR: f64 = 0.15;
 pub const HARVEST_RESCAN_RESETS: u64 = 64;
-/// Rooms with fewer chain visits keep the `hp` draw (`chain_hp.MIN_SAMPLES`).
+/// Rooms with fewer chain visits keep the `hp` draw; a config with `chain_hp` and no room this well profiled is
+/// refused (`GameData::check_chain_hp`).
 pub const MIN_CHAIN_SAMPLES: usize = 5;
 
 /// Loads named or path savestates and writes captured ones.  Names are bare state names (`'1_44w_0'`, `'start'`)
