@@ -182,7 +182,7 @@ Recommended grid: 16×11 of 16-px squares (row r covers y=$40+16r), class = max-
 | Address(es) | Meaning | Encoding | Valid when | Include? | Source |
 |---|---|---|---|---|---|
 | `$15` FrameCounter | frame counter | — | both | no (leaks time; use History) | ASM Variables.inc; ram.md |
-| `$18–$24` Random | LFSR RNG bytes (13; ScrambleRandom rotates $18–$24, monsters read `Random+1,X` up to $24; v1 rng_0..11 cover $18–$23) | — | both | no — v1 only randomizes them | v1 gd.txt; ASM Variables.inc, Z_07 ScrambleRandom |
+| `$18–$24` Random | LFSR RNG bytes, 13 (rng_0..12; ScrambleRandom rotates $18–$24, monsters read `Random+1,X` up to $24) | — | both | no — load randomization redraws all 13 (`RNG_VARS`) | v1 gd.txt; ASM Variables.inc, Z_07 ScrambleRandom |
 | `$3C` FluteTimer | freeze while flute plays | timer | both | no | ASM Z_07:UpdateMode5Play |
 | `$26` StunCycle | stun pacing | — | both | no | ASM Variables.inc |
 | `$4A`, `$4B`, `$4D` long timers | chase / edge-spawn / red-leever | timer | per type | no | ASM Variables.inc |

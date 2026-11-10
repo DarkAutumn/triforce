@@ -73,9 +73,19 @@ dived is not a kill.
 
 The action mask (`zelda::actions::compute_action_mask`) offers only what the game would do. An attack is legal
 only where the game would start the weapon: Link's state allows it, the weapon's slot is free, the sword isn't
-blocked (`$4C`/`$52E`: SWORD and BEAMS masked), Link is inside the exact BorderBounds, and a diagonal throw checks
-its N/S facing; no attack across the doorway Link stands in. BOMB is legal only in game.yaml `requires_bombs`
-rooms (in `SpecialistEnv` and chains; a family's `items: {bombs: true}` enables it there and nowhere else) and
+blocked (`$4C`/`$52E`: SWORD and BEAMS masked), Link is inside the game's BorderBounds for the facing, and a
+diagonal throw checks its N/S facing; no attack across the doorway Link stands in. The bounds are the measured
+inclusive ranges (`GameView::sword_directions` for A, the sword; `GameView::item_directions` for B items):
+
+| | E | W | N | S |
+|---|---|---|---|---|
+| Dungeon A | x 23–216 | x 23–216 | y 84–197 | y 85–197 |
+| Dungeon B | x 23–208 | x 31–216 | y 84–197 | y 85–189 |
+| Overworld A | x 7–232 | x 7–232 | y 69–213 | y 69–213 |
+| Overworld B | x 7–208 | x 31–232 | y 84–213 | y 69–189 |
+
+BOMB is legal only in game.yaml `requires_bombs` rooms (in `SpecialistEnv` and chains; a family's
+`items: {bombs: true}` enables it there and nowhere else) and
 stays legal at an unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
