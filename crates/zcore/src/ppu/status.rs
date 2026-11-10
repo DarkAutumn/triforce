@@ -49,15 +49,6 @@ bitflags! {
 }
 
 impl Ppu {
-    /// Decode a $2002 PPUSTATUS write into the `status_*` fields.
-    #[inline]
-    pub const fn write_status(&mut self, val: u8) {
-        let bits = Bits::from_bits_truncate(val);
-        self.status_spr_overflow = bits.contains(Bits::SPR_ZERO_HIT);
-        self.status_spr_zero_hit = bits.contains(Bits::SPR_ZERO_HIT);
-        self.status_in_vblank = bits.contains(Bits::VBLANK_STARTED);
-    }
-
     /// The raw $2002 PPUSTATUS bits, without the read side effects.
     //
     // Composed from the three flags rather than kept alongside them: the register has no other

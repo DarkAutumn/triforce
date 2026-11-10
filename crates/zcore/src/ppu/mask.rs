@@ -90,9 +90,8 @@ impl Ppu {
 
     /// Recompute the dot thresholds the pixel path compares against.
     ///
-    /// Public because they are derived rather than stored: a state restored from disk carries
-    /// `bits` and the flags but not these, and [`Bus::load_state`](crate::bus::Bus::load_state)
-    /// puts them back.
+    /// The thresholds are derived from `mask_bits` and kept in step by `write_mask`; they are
+    /// ordinary serialized `Ppu` fields, so a restored state carries them.
     pub const fn update_draw_thresholds(&mut self) {
         // The left-column clips hide the first 8 pixels, i.e. everything up to and including dot 8.
         self.mask_min_draw_bg_cycle = if self.show_bg() {
