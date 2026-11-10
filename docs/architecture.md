@@ -554,7 +554,14 @@ step, so following an enemy that moves away pays again, and knockback resets the
   the `chain_start` event; an existing `--output` is refused unless `--append` with the same provenance.
   `--checkpoint` must name a known specialist and an existing checkpoint. Exit 2 on a bad `--from`, `--stop-at` or
   `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
-  `triforce train|run|play|evaluate ...` forward to the module CLIs.
+  `triforce train|run|play|evaluate ...` forward to the module CLIs (`triforce --models-dir DIR train|run|evaluate`
+  forwards the models dir).
+- `scripts/yardstick.py report --run RUN [--mode sample|argmax] [--chain NAME=PATH[@L:0xRR] ...] --output OUT.json`
+  reads each specialist's evaluation in the run's act mode (`evaluate.read_evaluation`; a missing one is an error
+  unless `--allow-mode-mismatch`) and the chain files, and reports success (Wilson intervals), hearts and chain
+  arrivals; it refuses appended chain files and `@` targets that aren't route rooms. `compare BASE NEW` marks rows
+  `better`/`worse`/`~`, refuses rows measured in different act modes (unless `--allow-mode-mismatch`) and labels
+  one-sided rows `missing`.
 - Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
   its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded
   objects; the chain pool uses them instead of reloading canonical YAML. Runtime item masks, observations
