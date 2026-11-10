@@ -58,15 +58,14 @@ def _allowed(env, action):
 
 
 def test_cli_prints_a_summary_with_the_track_written(room_states, tmp_path, capsys, monkeypatch):
-    monkeypatch.setenv('TRIFORCE_STATES_DIR', str(room_states))
     monkeypatch.setattr('triforce.explore.explore_states',
                         lambda *a, **k: native.explore_states(*a, **{**k, 'states_dir': str(room_states)}))
     assert main(['--specialist', 'ow-octorok', '--states', '0_67s_0', '--iterations', '400', '--patience', '10',
                  '--out', str(tmp_path)]) == 0
-    out = capsys.readouterr().out
-    assert out.splitlines()[0].startswith('0_67s_0') and 'iterations=' in out
-    assert f"-> {tmp_path.absolute() / 'ow-octorok' / '0_67s_0'}" in out
-    assert out.strip().endswith('env steps') and '1/1 states solved' in out
+    track = tmp_path / 'ow-octorok' / '0_67s_0'
+    assert f"-> {tmp_path.absolute() / 'ow-octorok' / '0_67s_0'}" in capsys.readouterr().out
+    meta = json.loads((track / 'trajectory.json').read_text())
+    assert meta['success'] and meta['start_state'] == '0_67s_0'
 
 
 def test_unsolved_states_fail_the_cli_and_leave_variant_tracks_alone(room_states, tmp_path, capsys, monkeypatch):

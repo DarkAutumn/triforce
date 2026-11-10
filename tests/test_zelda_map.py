@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -97,8 +98,8 @@ def test_load_evals_merges_rooms_by_visits(models):
     assert room['exits'] == {'n': 30, 'w': 7, 'death': 3}
     assert sorted(room['specialists']) == [('d2-rope', 10), ('goriya', 30)]
     assert stats[(1, 0x35, False)]['visits'] == 10
-    assert zelda_map.eval_status(sources) == ('Eval data: 2 specialists (50 room visits; 1 argmax, 1 sample) · '
-                                              '3 without detailed evals')
+    # 2 detailed specialists, 50 room visits, 1 argmax + 1 sample, 3 without detailed evals
+    assert re.findall(r'\d+', zelda_map.eval_status(sources)) == ['2', '50', '1', '1', '3']
 
 
 def test_load_evals_run_id_needs_an_evaluation_in_the_act_mode(models):

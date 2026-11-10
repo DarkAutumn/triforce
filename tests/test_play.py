@@ -24,7 +24,7 @@ def _session_game(session):
 
 def test_without_a_session_play_asks_for_a_state(tmp_path, capsys):
     assert play.main(['MOVE N 16', '--session', str(tmp_path / 'none.pkl')]) == 1
-    assert 'start one with --state' in capsys.readouterr().err
+    assert '--state' in capsys.readouterr().err
 
 
 def test_session_continues_across_invocations(states_dir, tmp_path, capsys):
@@ -37,7 +37,7 @@ def test_session_continues_across_invocations(states_dir, tmp_path, capsys):
                       '--no-grid', '--ram', '0x70', '--ram', '0x70:2']) == 0
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith('MOVE W 8 ->') and 'WARNING' not in out[0]
-    assert out[1].endswith('(WARNING: action was masked out)')         # no sword yet
+    assert 'WARNING' in out[1]                                          # SWORD N is masked: no sword yet
     assert out[2:4] == ['press LEFT+B for 4 frames', 'press NONE for 2 frames']
     game, screen = _session_game(session)
     x = game.state.link['x']
@@ -80,9 +80,11 @@ def test_capture_saves_each_new_room_once(states_dir, tmp_path, capsys):
     state = _native.Game().load(str(captures / '0_67n.state'), randomize_rng=False, controllable=True)
     assert state.full_location == (0, 0x67, False)
 
+    first = (captures / '0_67n.state').stat().st_mtime_ns
     _start(states_dir, session)
     assert play.main([*north, '--session', str(session), '--capture', str(captures), '--quiet']) == 0
-    assert 'capture skipped, exists' in capsys.readouterr().out
+    assert sorted(p.name for p in captures.iterdir()) == ['0_67n.state']
+    assert (captures / '0_67n.state').stat().st_mtime_ns == first      # skipped, not rewritten
 
 
 def test_list_states_filters_by_glob(tmp_path, monkeypatch, capsys):

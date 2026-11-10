@@ -7,17 +7,22 @@ import pytest
 from triforce import _native as native
 
 
-def test_load_and_fields():
-    config = native.SpecialistConfig.load('ow-start')
+def test_load_and_fields(tmp_path):
+    path = tmp_path / 'ow-start.yaml'
+    path.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x1c)']\nstart_states: ['start']\n"
+                    "success: [exit-correct]\nmax_steps: 321\nreward: {pbrs: false}\nitems: {bombs: false}\n"
+                    "curriculum: {enabled: false}\nram_randomization: {hp: [0.25, max], full_hp: 0.3}\n")
+    config = native.SpecialistConfig.load(str(path))
     assert config.name == 'ow-start'
-    assert config.rooms == [(0, 0x77, False), (0, 0x77, True), (0, 0x1c, False), (0, 0x1b, False)]
+    assert config.rooms == [(0, 0x77, False), (0, 0x77, True), (0, 0x1c, False)]
     assert config.success == ['exit-correct']
-    assert config.max_steps == 1000
-    assert config.reward.pbrs is True and config.items.bombs is False
+    assert config.max_steps == 321
+    assert config.reward.pbrs is False and config.items.bombs is False
     assert config.curriculum.enabled is False
     assert config.disabled_kinds() == ['BOMB']
-    assert config.to_dict()['ram_randomization'] == {'hp': [0.15, 'max'], 'full_hp': 0.5, 'chain_hp': None,
-                                                      'bombs': None, 'keys': None}
+    ram = config.to_dict()['ram_randomization']
+    assert (ram['hp'], ram['full_hp']) == ([0.25, 'max'], 0.3)
+    assert native.SpecialistConfig.load('ow-start').name == 'ow-start'
     assert 'ow-start' in native.SpecialistConfig.names()
     with pytest.raises(AttributeError):
         _ = config.no_such_field

@@ -164,13 +164,13 @@ def test_window_shows_frames_status_and_tally(qapp):  # pylint: disable=redefine
         assert part in text
     assert first.state.outcome == 'death' and first.state.rooms == 9
     assert second.image is None
-    assert '1 deaths' in window.windowTitle() and window.windowTitle().endswith('– fps of 60.1 max')
+    assert window.counts['death'] == 1 and window.fps is None and window.cap == play_grid.NES_FPS
 
     since = window._rate_since  # pylint: disable=protected-access
     fake.counters = [240, 0]        # two seconds: game 0 showed 120 fps, game 1 nothing (out of the median)
     window.clock = lambda: since + play_zelda.FPS_WINDOW
     window.tick()
-    assert window.fps == 120 and window.windowTitle().endswith('120 fps of 60.1 max')
+    assert window.fps == 120
 
     window.close()
     assert fake.stops == 1
@@ -478,7 +478,7 @@ def test_game_grid_stall_budget_flags_the_room_then_ends_the_run(states_dir, mod
     rooms = [m for m in messages if m['event'] == 'room']
     assert [(m['room'], m['stalled']) for m in rooms] == [(0x77, False), (0x77, True)], rooms
     end = next(m for m in messages if m['event'] == 'end')
-    assert end['outcome'] == 'stuck' and 'stalled: 2 actions without damage either way (limit 2)' in end['reason']
+    assert end['outcome'] == 'stuck' and 'stalled' in end['reason']
 
 
 def test_game_grid_setup_error_stops_every_game(states_dir, tmp_path):

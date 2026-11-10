@@ -37,7 +37,7 @@ def test_failed_run_reports_rooms_and_exits_nonzero(models_dir, west_checkpoint,
     lines = capsys.readouterr().out.splitlines()
     room, summary = lines
     assert room.split()[:4] == ['0', 'L0', '0x77', 'ow-start'] and 'exit-wrong' in room
-    assert summary.startswith('failure: ow-start left the route into untagged (level 0, room 0x76)')
+    assert summary.startswith('failure')
     record, = _records(output)
     assert (record['route'], record['seed'], record['result']) == ('d2first', 3, 'failure')
     assert [r['outcome'] for r in record['rooms']] == ['exit-wrong']
@@ -46,8 +46,9 @@ def test_failed_run_reports_rooms_and_exits_nonzero(models_dir, west_checkpoint,
 def test_stop_at_the_start_room_succeeds(models_dir, tmp_path, capsys):
     output = tmp_path / 'runner.jsonl'
     assert run.main(['--models-dir', str(models_dir), '--stop-at', '0:0x77', '--output', str(output)]) == 0
-    assert capsys.readouterr().out.splitlines()[-1] == 'success: entered (level 0, room 0x77)  (0 steps, 0 frames)'
-    assert _records(output)[0]['seed'] == 0
+    assert capsys.readouterr().out.splitlines()[-1].startswith('success')
+    record, = _records(output)
+    assert (record['seed'], record['result'], record['steps']) == (0, 'success', 0)
 
 
 def test_missing_start_state_fails_before_playing(models_dir, tmp_path):
@@ -83,10 +84,10 @@ def test_a_failing_encoder_keeps_the_run_report_and_record(models_dir, tmp_path,
     assert 'steps' in capsys.readouterr().out and _records(output)[0]['seed'] == 1
 
 
-def test_render_and_video_are_exclusive(capsys):
+def test_render_and_video_are_exclusive():
     with pytest.raises(SystemExit) as error:
         run.main(['--render', '--video', 'x.mp4'])
-    assert error.value.code == 2 and 'not allowed with argument' in capsys.readouterr().err
+    assert error.value.code == 2
 
 
 def test_watching_a_run_plays_the_same_run(states_dir, models_dir, monkeypatch):

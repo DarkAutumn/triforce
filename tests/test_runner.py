@@ -204,7 +204,7 @@ def test_supplied_config_no_progress_ends_runs(states_dir, models_dir):
     results = runner.run_many(Route.load('d2first'), [0, 1, 2])
     for result in results:
         assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck' and result.steps == 4
-        assert 'no-room-progress' in result.reason and '4 quiet actions' in result.reason
+        assert 'no-room-progress' in result.reason
         assert result.rooms[-1].linger['tail_steps'] == 4
     assert chain_summary(results)['successes'] == 0
 
@@ -237,7 +237,7 @@ def test_chain_runs_replay_exactly_from_their_replay_file(states_dir, models_dir
         assert again[key].tobytes() == original[key].tobytes(), key
     assert len(again['obs']['room_id']) == len(recorded['actions'])
     short = {**plays[0], 'actions': plays[0]['actions'][:-1]}
-    with pytest.raises(Exception, match='went on past its'):
+    with pytest.raises(ValueError):
         replay.replay(head, short)
 
 

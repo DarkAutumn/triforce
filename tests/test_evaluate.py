@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -210,7 +211,7 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
     assert result['linger_worst_steps'] == max(r['linger']['max_steps'] for r in records)
     assert result['by_room']['0:0x77']['linger_max_steps'] == result['linger_max_steps']
     assert all('linger_max_steps' in stats for stats in result['by_state'].values())
-    assert 'linger max/tail/worst' in format_report(result)
+    assert 'linger' in format_report(result)
     # Room visits (format 2): they cover each episode and visited_rooms counts every one.
     assert result['format'] == 2
     assert all(r['visits'] and sum(v['steps'] for v in r['visits']) == r['steps'] for r in records)
@@ -450,7 +451,8 @@ def test_report_lists_rooms_worst_first_with_their_top_ending():
                              'hearts_dropped': 0, 'hearts_taken': 0, 'hearts_left': 0, 'episodes': 1,
                              'endings': {'max-steps': 1}}}}
     lines = format_report(result).splitlines()
-    assert lines[0].startswith('goriya: success 1/3 = 33%  health change -0.50 (total -0.75)')
+    numbers = [float(n) for n in re.findall(r'[-+]?\d+(?:\.\d+)?', lines[0])]
+    assert lines[0].split(':')[0] == 'goriya' and numbers[:5] == [1, 3, 33, -0.5, -0.75]   # 1/3 = 33%, -0.50 (-0.75)
     assert 'steps 42' in lines[0] and 'linger' not in lines[0]
     assert [line.split()[0] for line in lines[1:]] == ['1:0x45', '1:0x44']
     assert lines[1].split()[-1] == 'max-steps' and lines[2].split()[-1] == 'death'

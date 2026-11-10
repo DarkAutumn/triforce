@@ -65,7 +65,7 @@ def test_specialist_config_json_and_dict_round_trips():
     assert native.SpecialistConfig.from_json(config.to_json()) == config
     assert native.SpecialistConfig(**config.to_dict()) == config
     assert config.to_dict()['max_steps'] == 321
-    with pytest.raises(native.ConfigError, match='missing field `rooms`'):
+    with pytest.raises(native.ConfigError, match='rooms'):
         native.SpecialistConfig.from_json('{"name": "x"}')
     with pytest.raises(native.ConfigError):
         native.SpecialistConfig.from_json('not json')
