@@ -27,8 +27,12 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   follows the route's steps (the entry side and progress pick the step: 0x73 W, then E, then N). Round 12 before it
   beat Dodongo (r45, 300/300 on milestone1 states). The existing models are milestone1-trained and stay on disk; the
   baseline retrain replaces them.
-- **Now (Lee, Nov 9):** the d2first baseline is set (round 13: every family retrained from scratch with the
-  current setup; full route 25/120, post-D2 29%, D1 from full health 96%). Next: Lee's training ideas.
+- **Now (Nov 10, round 16):** inference runs in Rust (`docs/rust-actor.md`); the team was retrained from scratch on
+  it (r56) and improved by Lee's better-play list (`~/Downloads/triforce-better-play.md`): an act mode per model
+  (`<run dir>/act`: argmax for most families, sampling where argmax loops) and self-imitation learning (11 families
+  `r57-sil-s60`). Chains from the start: Dungeon 3 reached 34/120, the D3 triforce 4/120; D1 115/120, D3 30/120.
+  The other better-play ideas were measured and not kept (flags stay, off). Every new checkpoint needs its act mode
+  re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
 - **The bow detour (Lee, Nov 9; `docs/decisions.md` 2026-11-09, `docs/routes/d2first.md`):** from 0x43 N through
   0x33 and 0x23 to the blade-trap room 0x22 (push the west block N or S), down its stairs into the bow cellar 0x7f
   (an `in_cave` sub-room, side view), and back the same way to 0x43 → 0x44. New families `trap-room` (0x22) and

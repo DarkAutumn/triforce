@@ -914,3 +914,14 @@ entry below and `crates/zcore/UPSTREAM.md`.
   a chain check.
 - **Better-play tooling merged** (`55ef7ab`): yardstick, act mode, entropy annealing, outcome fine-tuning, best-of-N,
   SIL, Gumbel search + expert iteration, PLR, PPG, chain harvesting, `exit_health_weight`; all off by default.
+
+## 2026-11-10 — Self-imitation learning in the team (better-play §3); the other better-play ideas not kept
+
+- **What:** 11 families (ow-octorok, ow-zora, ow-moblin, ow-lynel, ow-boulder, equipment-room, d2-rope, goriya,
+  stalfos-keese-gel, darknut, zol) are promoted as `r57-sil-s60`: their r56 run continued 1M steps with
+  `--sil-coeff 0.1`, each kept only where its paired evaluation was not worse in success and lost fewer hearts.
+- **Why:** SIL was the only one of the one-family arms better than the control over three training seeds (goriya,
+  moldorm). The team with it reaches Dungeon 3 in 34/120 runs from the start and completes the route 4/120 (with the
+  act mix alone: 21 and 1; round16.md §7).
+- **Not kept** (round16.md §4–§6): entropy annealing, outcome fine-tuning, best-of-N, PLR, PPG, the exit-health
+  weight, harvested handoff states, Gumbel expert iteration. The flags stay (all off by default).

@@ -18,6 +18,14 @@ scratch on the new stack (the old checkpoints don't load), then the better-play 
 - **Act mode (IX.1):** argmax loses fewer hearts in every room family but loops (`stuck`) in some; argmax for 15
   families, sampling for goriya, moldorm, stalfos-keese-gel, zol, darknut (`act` files): D2 arrivals 102 → 115,
   D3 arrivals 11 → 21 of 120 from the start (§3).
+- **One-family A/B arms (goriya, 3 seeds; moldorm for SIL):** SIL kept (+1–2 pp success, −7 to −15% hearts); entropy
+  annealing, outcome fine-tuning, best-of-N, PLR, PPG, `exit_health_weight` and harvested handoff states level with
+  the control (training seed spread ±2 pp); Gumbel expert iteration no better on Dodongo and worse on goriya at
+  6–14× the training time (§4–§6).
+- **SIL team (IX.11):** 11 families continued with SIL and promoted. With the act mix: **D3 arrivals 34/120 from the
+  start, full route to the D3 triforce 4/120** (r56 sampled: 11 and 0), D1 115/120, D3 30/120 (§7).
+- **Found:** the training success rate hides slow failures (a Dodongo continuation read ~1.0 in training and was
+  54%; §5); argmax loops where a policy has no answer (§3). Both in the backlog.
 - **training-gui** (Lee, Nov 9): [currently running] shows every live training on the machine (other logs roots
   found from the running triforce processes; `0bc2949`); standalone `evaluate`/`eval-chain` log folders of their
   own (branch `better-play`, merged after r56).
@@ -254,7 +262,12 @@ depth 3; `ei-k1`: the same with one unperturbed future (the clairvoyant ablation
   failures**, because an episode that runs into the 600-step budget rarely finishes inside one 512-step rollout
   segment, so few of them are counted per iteration (and the early stop, which counts the same episodes, can be
   fooled the same way). Logged in the backlog. The search arm on the same seed did not collapse.
-- Next: the non-boss family (IX.7, goriya: headroom, 245 iterations, running), where cost and effect matter more.
+- **Goriya (IX.7)**, same search settings, 245 iterations from `goriya/r56-rust-dg`, seed 57: 6.0 h of training
+  (46 steps/s; the plain continuation takes 25 min at the same 4 envs, so 14×). Sampled 89.5%, 0.793 hearts lost per
+  episode; argmax 92.1%, 0.599: worse than every control seed (90.5–94.5%, 0.51–0.65) and than SIL. At this budget
+  (k=4, n=8, K=2, d=3 on a quarter of the decisions) the search's targets are worse than PPO's own gradient, and a
+  bigger budget costs proportionally more. **Not kept.** The machinery (`EnvPool.rollout(search=...)`, `--search`)
+  stays for later (e.g. search as a test-time tool for the hard rooms rather than a teacher).
 
 ## 6. SIL on a second family; PLR, PPG and chain-aware arms on goriya (IX.5, IX.8–IX.10)
 
@@ -309,3 +322,50 @@ Chains with each goriya swapped into the promoted team (goriya samples, 120 runs
   handoff states change nothing in single rooms. In chains, one goriya swapped in moves no segment by more than the
   seed-to-seed spread (±6 arrivals) for any arm, SIL included: a single family's few hearts don't show in 120-run
   chains. Not kept on its own; `exit_health_weight` is a candidate to stack on SIL if the SIL team helps.
+
+## 7. The SIL team (IX.11)
+
+SIL is the only arm kept (§4, §6). Every family with something to gain (all but ow-start, ow-leever, wallmaster and
+boss-dodongo) continued from its promoted r56 run for 245 iterations with `--sil-coeff 0.1` at 8 envs, seed 60
+(`r57-sil-s60`), two streams, 3.9 h; then the paired evaluation against the r56 run in the family's act mode.
+Promotion rule: success not significantly worse, mean success at most 0.5 pp lower, fewer hearts lost:
+
+| family | act | Δ success pp [95% CI] | Δ hearts lost / episode [95% CI] | verdict |
+|---|---|---|---|---|
+| ow-octorok | argmax | 0.0 [−0.4, +0.4] | −0.007 [−0.015, −0.000] | promoted |
+| ow-zora | argmax | +0.7 [+0.3, +1.1] | −0.059 [−0.070, −0.048] | promoted |
+| ow-moblin | argmax | +0.7 [+0.1, +1.3] | −0.001 [−0.011, +0.009] | promoted |
+| ow-tektite | argmax | −0.5 [−0.9, −0.1] | −0.007 [−0.019, +0.004] | r56 kept |
+| ow-lynel | argmax | +1.0 [+0.1, +1.9] | −0.062 [−0.121, −0.003] | promoted |
+| ow-boulder | argmax | +0.6 [+0.1, +1.0] | −0.024 [−0.039, −0.009] | promoted |
+| trap-room | argmax | +0.4 [−0.2, +1.0] | +0.004 [−0.011, +0.020] | r56 kept |
+| equipment-room | argmax | +1.0 [+0.1, +1.9] | −0.067 [−0.098, −0.036] | promoted |
+| d2-rope | argmax | +0.6 [−0.2, +1.3] | −0.011 [−0.022, −0.001] | promoted |
+| goriya | sample | +1.1 [−0.2, +2.3] | −0.028 [−0.064, +0.008] | promoted |
+| moldorm | sample | −2.0 [−6.2, +2.2] | −0.055 [−0.123, +0.013] | r56 kept |
+| stalfos-keese-gel | sample | +0.4 [+0.1, +0.7] | −0.102 [−0.113, −0.091] | promoted |
+| boss-aquamentus | argmax | −0.7 [−1.6, +0.3] | +0.003 [−0.005, +0.011] | r56 kept |
+| darknut | sample | +0.9 [−0.1, +1.8] | −0.055 [−0.095, −0.014] | promoted |
+| zol | sample | +0.8 [+0.3, +1.3] | −0.113 [−0.140, −0.086] | promoted |
+| boss-manhandla | argmax | +1.7 [−2.4, +5.7] | +0.020 [−0.117, +0.157] | r56 kept |
+
+11 of 16 promoted, each with its family's act mode (the argmax-vs-sampled check on the new runs agrees with
+§3's choices). Chains with the new team (`r60-sil`, act mix, 120 runs, seeds 0–119):
+
+| segment | r56 sampled | r56 act mix | SIL team | Δ vs act mix [95% CI] |
+|---|---:|---:|---:|---|
+| full → D2 | 102 | 115 | 110 | −4.2 [−10.5, +2.1] |
+| full → after D2 | 55 | 67 | 72 | +4.2 [−9.0, +17.4] |
+| full → D1 | 40 | 54 | 57 | +2.5 [−10.7, +15.7] |
+| full → D3 | 11 | 21 | **34** | +10.8 [+0.0, +21.7] |
+| full (D3 triforce) | 0 | 1 | **4** | +2.5 [−1.1, +6.1] |
+| D2 | 92 | 85 | 89 | +3.3 [−8.0, +14.7] |
+| after D2 | 88 | 91 | 98 | +5.8 [−5.1, +16.8] |
+| D1 | 95 | 102 | **115** | +10.8 [+3.6, +18.1] |
+| after D1 | 118 | 120 | 120 | 0 |
+| D3 | 12 | 21 | 30 | +7.5 [−2.9, +17.9] |
+
+**Kept.** Against the r56 baseline as first measured (all sampled), the two kept changes together: D3 arrivals from
+the start 11 → 34 of 120, the full route to the D3 triforce 0 → 4 (the first full d2first runs), D1 95 → 115, D3
+12 → 30. Where runs still end: D2's Moldorm (0x3e, 11 from the start) and Goriya rooms (0x5e, 0x1e), d2-rope
+looping under argmax in 0x4e (10 of 120 in the D2 segment), and D3's Darknut room 0x59.
