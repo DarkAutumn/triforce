@@ -57,12 +57,35 @@ def _allowed(env, action):
     return ActionMask.from_flat(env.mask).is_allowed(Action.parse(action))
 
 
-def test_cli_prints_a_summary(room_states, tmp_path, capsys, monkeypatch):
+def test_cli_prints_a_summary_with_the_track_written(room_states, tmp_path, capsys, monkeypatch):
     monkeypatch.setenv('TRIFORCE_STATES_DIR', str(room_states))
     monkeypatch.setattr('triforce.explore.explore_states',
                         lambda *a, **k: native.explore_states(*a, **{**k, 'states_dir': str(room_states)}))
-    assert main(['--specialist', 'ow-octorok', '--states', '0_67s_0', '--iterations', '3', '--explore-steps', '3',
-                 '--patience', '1', '--out', str(tmp_path)]) == 0
+    assert main(['--specialist', 'ow-octorok', '--states', '0_67s_0', '--iterations', '400', '--patience', '10',
+                 '--out', str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert out.splitlines()[0].startswith('0_67s_0') and 'iterations=' in out
-    assert out.strip().endswith('env steps') and '/1 states solved' in out
+    assert f"-> {tmp_path.absolute() / 'ow-octorok' / '0_67s_0'}" in out
+    assert out.strip().endswith('env steps') and '1/1 states solved' in out
+
+
+def test_unsolved_states_fail_the_cli_and_leave_variant_tracks_alone(room_states, tmp_path, capsys, monkeypatch):
+    results = explore_specialist('ow-octorok', str(tmp_path), states=['0_67s_0'], iterations=1, patience=1,
+                                 states_dir=str(room_states), variant=True, seed=7)
+    [(result, replayed)] = results
+    assert not result.success and not replayed and not (tmp_path / 'ow-octorok').exists()
+    monkeypatch.setattr('triforce.explore.explore_states',
+                        lambda *a, **k: native.explore_states(*a, **{**k, 'states_dir': str(room_states)}))
+    assert main(['--specialist', 'ow-octorok', '--states', '0_67s_0', '--iterations', '1', '--patience', '1',
+                 '--out', str(tmp_path)]) == 1
+    assert '0/1 states solved' in capsys.readouterr().out
+
+
+def test_out_must_be_the_trajectories_root(tmp_path):
+    with pytest.raises(ValueError, match='trajectories root'):
+        explore_specialist('ow-octorok', str(tmp_path / 'ow-octorok'), states=['0_67s_0'])
+    track = tmp_path / 'tracks' / '0_67s_0'
+    track.mkdir(parents=True)
+    (track / 'trajectory.json').write_text('{}')
+    with pytest.raises(ValueError, match='track directory'):
+        explore_specialist('ow-octorok', str(tmp_path / 'tracks'), states=['0_67s_0'])
