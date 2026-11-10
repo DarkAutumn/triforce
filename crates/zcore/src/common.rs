@@ -36,10 +36,22 @@ pub(crate) mod tests {
         time::{Duration, Instant},
     };
 
-    pub(crate) const RESULT_DIR: &str = "test_results";
-
-    static PASS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    static FAIL_DIR: OnceLock<PathBuf> = OnceLock::new();
+    /// Screenshots of snapshot frames go under the build's target directory (never the source tree):
+    /// `fail/` for a mismatch, `pass/` only with `UPDATE_SNAPSHOT`. The hashes in `test_roms/*.json` are the
+    /// reference.
+    fn result_dir(kind: &str) -> PathBuf {
+        static DIRS: OnceLock<PathBuf> = OnceLock::new();
+        let root = DIRS.get_or_init(|| {
+            env::var_os("CARGO_TARGET_DIR")
+                .map_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target"), PathBuf::from)
+                .join("zcore-test-results")
+        });
+        let directory = root.join(kind);
+        if let Err(err) = fs::create_dir_all(&directory) {
+            panic!("created test results dir: {directory:?}. {err}");
+        }
+        directory
+    }
 
     /// Declares one `#[test]` per named ROM in a `test_roms/` directory.
     ///
@@ -283,42 +295,29 @@ pub(crate) mod tests {
                 let mut hasher = DefaultHasher::new();
                 deck.frame_buffer().hash(&mut hasher);
                 let actual = hasher.finish();
-                let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-                let result_dir = if env::var("UPDATE_SNAPSHOT").is_ok() || expected == actual {
-                    PASS_DIR.get_or_init(|| {
-                        let directory = base_dir.join(PathBuf::from(RESULT_DIR)).join("pass");
-                        if let Err(err) = fs::create_dir_all(&directory) {
-                            panic!("created pass test results dir: {directory:?}. {err}",);
-                        }
-                        directory
-                    })
-                } else {
-                    FAIL_DIR.get_or_init(|| {
-                        let directory = base_dir.join(PathBuf::from(RESULT_DIR)).join("fail");
-                        if let Err(err) = fs::create_dir_all(&directory) {
-                            panic!("created fail test results dir: {directory:?}. {err}",);
-                        }
-                        directory
-                    })
-                };
+                let update = env::var("UPDATE_SNAPSHOT").is_ok();
                 let mut filename = test.to_owned();
                 if let Some(ref name) = test_frame.name {
                     let _ = write!(filename, "_{name}");
                 } else if count > 0 {
                     let _ = write!(filename, "_{}", count + 1);
                 }
-                let screenshot = result_dir
-                    .join(PathBuf::from(filename))
-                    .with_extension("png");
-
-                ImageBuffer::<Rgba<u8>, &[u8]>::from_raw(
-                    u32::from(size::WIDTH),
-                    u32::from(size::HEIGHT),
-                    deck.frame_buffer(),
-                )
-                .expect("valid frame")
-                .save(&screenshot)
-                .with_context(|| format!("failed to save screenshot: {screenshot:?}"))?;
+                let filename = PathBuf::from(filename).with_extension("png");
+                let screenshot = result_dir(if update || expected == actual { "pass" } else { "fail" }).join(&filename);
+                if expected == actual {
+                    // A passing frame clears its stale failure screenshot.
+                    let _ = fs::remove_file(result_dir("fail").join(&filename));
+                }
+                if update || expected != actual {
+                    ImageBuffer::<Rgba<u8>, &[u8]>::from_raw(
+                        u32::from(size::WIDTH),
+                        u32::from(size::HEIGHT),
+                        deck.frame_buffer(),
+                    )
+                    .expect("valid frame")
+                    .save(&screenshot)
+                    .with_context(|| format!("failed to save screenshot: {screenshot:?}"))?;
+                }
 
                 Ok(Some((expected, actual, test_frame.number, screenshot)))
             }
