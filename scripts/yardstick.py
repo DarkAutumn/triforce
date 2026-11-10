@@ -7,12 +7,14 @@ judged on, with 95% confidence intervals.
 
 `report` reads each specialist's `<models>/<name>/<RUN_ID>/eval.json` (format 2; `--run promoted` follows each
 specialist's promoted pointer; specialists are the `specialists/*.yaml` names) and the chain JSON lines given with
-`--chain` (an `eval-chain --output` file per segment), writes the numbers as JSON and prints markdown tables:
+`--chain NAME=PATH[@L:0xRR]` (an `eval-chain --output` file per segment), writes the numbers as JSON and prints
+markdown tables:
 
 - per specialist: success rate (Wilson interval), hearts lost per room visit, health change per episode, frames
   per room visit (tie-breaker only);
-- per chain segment: arrivals (successes per runs, Wilson interval), hearts at arrival (the milestone room's
-  entry health of successful runs), and the five rooms where most runs ended.
+- per chain segment: arrivals (Wilson interval) and hearts at arrival: with `@L:0xRR` the runs that entered that
+  room (the segment's end, e.g. the next segment's start room) and their health on entering it, else the
+  successful runs and their last room's entry health; plus the five rooms where the other runs ended.
 
 `compare` prints, per row, both values and whether the intervals separate (`better` / `worse` / `~` overlapping).
 A change wins only where it is better at matched or better success.
@@ -67,19 +69,37 @@ def specialist_row(name: str, result: dict) -> dict:
     }
 
 
-def chain_row(name: str, path: Path) -> dict:
+def arrival(run: dict, target: str | None):
+    """The room record where `run` arrived: the first entry into `target` ('L:0xRR', outside caves) after its start
+    room, or with no target the last room of a successful run; None if it never got there.  `target` may list
+    rooms in order ('2:0x7d,0:0x3c'): the arrival is the entry into the last one after entering the others in turn."""
+    if target is None:
+        return run['rooms'][-1] if run['result'] == 'success' and run['rooms'] else None
+    rooms = [room.partition(':') for room in target.split(',')]
+    at = 0
+    for record in run['rooms'][1:]:
+        level, _, room = rooms[at]
+        if str(record['level']) == level and record['room'] == room and not record['in_cave']:
+            at += 1
+            if at == len(rooms):
+                return record
+    return None
+
+
+def chain_row(name: str, path: Path, target: str | None = None) -> dict:
     runs = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-    wins = [r for r in runs if r['result'] == 'success']
+    arrived = [room for room in (arrival(r, target) for r in runs) if room is not None]
     ends = Counter()
     for r in runs:
-        if r['result'] != 'success' and r['rooms']:
+        if arrival(r, target) is None and r['rooms']:
             room = r['rooms'][-1]
             ends[f"{room['level']}:{room['room']}{':cave' if room['in_cave'] else ''} {room['outcome']}"] += 1
     return {
         'segment': name,
+        'target': target,
         'runs': len(runs),
-        'arrivals': wilson(len(wins), len(runs)),
-        'hearts_at_arrival': mean_ci([r['rooms'][-1]['health_in'] for r in wins if r['rooms']]),
+        'arrivals': wilson(len(arrived), len(runs)),
+        'hearts_at_arrival': mean_ci([room['health_in'] for room in arrived]),
         'where_runs_end': ends.most_common(5),
     }
 
@@ -111,8 +131,9 @@ def report(args) -> int:
             specialists.append(specialist_row(name, json.loads(evaluation.read_text())))
     chains = []
     for item in args.chain:
-        name, _, file = item.partition('=')
-        chains.append(chain_row(name, Path(file)))
+        name, _, spec = item.partition('=')
+        file, _, target = spec.partition('@')
+        chains.append(chain_row(name, Path(file), target or None))
     out = {'run': args.run, 'specialists': specialists, 'chains': chains}
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(json.dumps(out, indent=2))
@@ -176,7 +197,8 @@ def main(argv=None) -> int:
     rep.add_argument('--models-dir', default='models')
     rep.add_argument('--eval-name', default='eval.json', help="the evaluation file in each run dir")
     rep.add_argument('--specialists-dir', default='specialists', help="the specialists reported (one per yaml)")
-    rep.add_argument('--chain', action='append', default=[], metavar='NAME=PATH', help='eval-chain JSON lines')
+    rep.add_argument('--chain', action='append', default=[], metavar='NAME=PATH[@L:0xRR]',
+                     help='eval-chain JSON lines; @room: arrival = first entry into that room')
     rep.add_argument('--output', required=True)
     cmp = sub.add_parser('compare')
     cmp.add_argument('base')
