@@ -6,6 +6,7 @@ use crate::context::{self, TfzStore};
 use crate::envs::info_dict;
 use crate::errors::env_err;
 use crate::game::{PyGameState, PySnapshot};
+use crate::signals::interruptible;
 use env::config::{GameData, SpecialistConfig};
 use env::explore::{AcceptSpec, ExploreResult, Explorer};
 use env::start_states::state_label;
@@ -13,7 +14,7 @@ use parking_lot::Mutex;
 use pyo3::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use zcore::{Rom, ZCore};
 
 /// Success for route-state builds: Link entered `target` (level, room, in_cave) holding at least `min_keys`,
@@ -169,7 +170,8 @@ impl PyExplorer {
         })
     }
 
-    /// Searches for a successful path from `start_state` (GIL released); returns the best one found.
+    /// Searches for a successful path from `start_state` (GIL released); returns the best one found. Ctrl-C stops
+    /// it at its next iteration (KeyboardInterrupt).
     #[pyo3(signature = (start_state, iterations=3000, explore_steps=25, patience=300, accept=None))]
     fn explore(
         &self,
@@ -181,17 +183,19 @@ impl PyExplorer {
         accept: Option<PyAcceptSpec>,
     ) -> PyResult<PyExploreResult> {
         let accept = accept.map(|a| a.spec());
-        let result = py
-            .detach(|| {
-                self.inner.lock().explore(
-                    start_state,
-                    iterations,
-                    explore_steps,
-                    patience,
-                    accept.as_ref(),
-                )
-            })
-            .map_err(env_err)?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let result = interruptible(
+            py,
+            || {
+                let mut explorer = self.inner.lock();
+                explorer.set_stop(Some(stop.clone()));
+                let result = explorer.explore(start_state, iterations, explore_steps, patience, accept.as_ref());
+                explorer.set_stop(None);
+                result
+            },
+            || stop.store(true, Ordering::Relaxed),
+        )?
+        .map_err(env_err)?;
         Ok(PyExploreResult { result })
     }
 
@@ -229,8 +233,11 @@ impl PyExplorer {
 
     /// The explorer's current game state.
     #[getter]
-    fn state(&self) -> PyGameState {
-        PyGameState::new(self.inner.lock().env.session().state().clone())
+    fn state(&self) -> PyResult<PyGameState> {
+        let inner = self.inner.lock();
+        let state = inner.env.session().try_state();
+        let state = state.ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("call explore() first"))?;
+        Ok(PyGameState::new(state.clone()))
     }
 
     fn snapshot(&self) -> PySnapshot {
@@ -246,6 +253,7 @@ impl PyExplorer {
 type Explored = Result<(ExploreResult, bool), env::EnvError>;
 
 /// Explores one start state with a fresh explorer and writes a success to `<out>/<state>`.
+#[allow(clippy::too_many_arguments)]
 fn explore_one(
     config: &SpecialistConfig,
     data: &Arc<GameData>,
@@ -254,8 +262,10 @@ fn explore_one(
     out: &Path,
     budget: (u32, u32, u32),
     seed: u64,
+    stop: &Arc<AtomicBool>,
 ) -> Explored {
     let mut explorer = new_explorer(config, data.clone(), rom.clone(), seed)?;
+    explorer.set_stop(Some(stop.clone()));
     let (iterations, explore_steps, patience) = budget;
     let result = explorer.explore(state, iterations, explore_steps, patience, None)?;
     let replayed = if result.success {
@@ -268,7 +278,8 @@ fn explore_one(
 
 /// Explores every seed start state of `specialist` (or `states`), writing each success to
 /// `<out>/<specialist>/<state>` (`out` is the trajectories root). Each state gets a fresh explorer seeded with
-/// `seed`, so results don't depend on `parallel`. Returns [(ExploreResult, replayed)] in state order.
+/// `seed`, so results don't depend on `parallel`. Returns [(ExploreResult, replayed)] in state order. Ctrl-C stops
+/// every worker at its next iteration (KeyboardInterrupt; states already written stay written).
 #[pyfunction]
 #[pyo3(signature = (specialist, out, states=None, iterations=3000, explore_steps=25, patience=300, parallel=1,
                     seed=0, states_dir=None))]
@@ -305,20 +316,25 @@ pub fn explore_states(
     let results: Vec<Mutex<Option<Explored>>> = states.iter().map(|_| Mutex::new(None)).collect();
     let next = AtomicUsize::new(0);
     let workers = parallel.clamp(1, states.len().max(1));
-    py.detach(|| {
-        std::thread::scope(|scope| {
-            for _ in 0..workers {
-                scope.spawn(|| {
-                    loop {
-                        let i = next.fetch_add(1, Ordering::Relaxed);
-                        let Some(state) = states.get(i) else { break };
-                        let r = explore_one(&config, &data, &rom, state, &out, budget, seed);
-                        *results[i].lock() = Some(r);
-                    }
-                });
-            }
-        });
-    });
+    let stop = Arc::new(AtomicBool::new(false));
+    interruptible(
+        py,
+        || {
+            std::thread::scope(|scope| {
+                for _ in 0..workers {
+                    scope.spawn(|| {
+                        while !stop.load(Ordering::Relaxed) {
+                            let i = next.fetch_add(1, Ordering::Relaxed);
+                            let Some(state) = states.get(i) else { break };
+                            let r = explore_one(&config, &data, &rom, state, &out, budget, seed, &stop);
+                            *results[i].lock() = Some(r);
+                        }
+                    });
+                }
+            });
+        },
+        || stop.store(true, Ordering::Relaxed),
+    )?;
     results
         .into_iter()
         .map(|r| {

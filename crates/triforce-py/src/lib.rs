@@ -15,6 +15,7 @@ mod errors;
 mod explore;
 mod game;
 mod policy;
+mod signals;
 
 use pyo3::prelude::*;
 

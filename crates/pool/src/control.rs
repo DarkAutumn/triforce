@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// Holds a frame rate (`play_grid.FramePacer`): each frame is due one period after the previous one. Falling more
-/// than [`FramePacer::RESYNC`] behind restarts the schedule instead of fast-forwarding to catch up; `fps <= 0`
-/// disables pacing.
+/// than [`FramePacer::RESYNC`] behind restarts the schedule instead of fast-forwarding to catch up; `fps <= 0`, NaN,
+/// infinite, or so small its period doesn't fit a [`Duration`] disables pacing.
 #[derive(Clone, Debug)]
 pub struct FramePacer {
     fps: f64,
@@ -22,7 +22,7 @@ impl FramePacer {
     pub fn new(fps: f64) -> FramePacer {
         FramePacer {
             fps,
-            period: (fps > 0.0).then(|| Duration::from_secs_f64(1.0 / fps)),
+            period: (fps > 0.0).then(|| Duration::try_from_secs_f64(1.0 / fps).ok()).flatten(),
             next: None,
         }
     }
@@ -34,7 +34,9 @@ impl FramePacer {
     /// Advances the schedule by one frame at `now`; returns how long to sleep before the frame is due.
     pub fn tick(&mut self, now: Instant) -> Option<Duration> {
         let period = self.period?;
-        let next = *self.next.get_or_insert(now) + period;
+        let Some(next) = self.next.get_or_insert(now).checked_add(period) else {
+            return None;
+        };
         self.next = Some(next);
         if next > now {
             Some(next - now)
@@ -298,6 +300,18 @@ mod tests {
         assert_eq!(p.tick(t0 + ms(400)), Some(ms(10)));
         assert_eq!(FramePacer::new(0.0).tick(t0), None);
         assert_eq!(FramePacer::new(-1.0).tick(t0), None);
+    }
+
+    #[test]
+    fn extreme_frame_rates_do_not_panic() {
+        let t0 = Instant::now();
+        for fps in [1e-300, f64::MIN_POSITIVE, f64::NAN, f64::INFINITY] {
+            assert_eq!(FramePacer::new(fps).tick(t0), None, "{fps}");
+        }
+        // A period that fits a Duration but not an Instant: no deadline, no panic.
+        let mut slow = FramePacer::new(1e-12);
+        let _ = slow.tick(t0);
+        let _ = slow.tick(t0);
     }
 
     #[test]

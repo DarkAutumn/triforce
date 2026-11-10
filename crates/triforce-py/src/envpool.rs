@@ -6,7 +6,8 @@ use crate::context::{self, TfzStore};
 use crate::convert::{LAYOUT, json_to_py, room_of};
 use crate::envs::PyCurriculumSpec;
 use crate::errors::{ConfigError, pool_err};
-use crate::game::{FRAME_BYTES, FRAME_SHAPE, rgb};
+use crate::game::{FRAME_SHAPE, rgb};
+use crate::signals::interruptible;
 use env::SharedCurriculum;
 use env::chain::Route;
 use env::config::{GameData, SpecialistConfig, parse_room};
@@ -105,6 +106,7 @@ impl PyEvalTask {
         states_dir: Option<PathBuf>,
         room_events: bool,
     ) -> PyResult<Self> {
+        check_seeds(jobs.iter().map(|(_, seed)| *seed))?;
         Ok(PyEvalTask {
             config: extract_config(py, config)?,
             jobs: jobs
@@ -122,6 +124,16 @@ impl PyEvalTask {
             .iter()
             .map(|j| (j.start_state.clone(), j.seed))
             .collect()
+    }
+}
+
+/// Seeds key the episode's noise and its replay record as an i64 `job`: a seed that key can't hold is refused.
+fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
+    match seeds.into_iter().find(|&s| i64::try_from(s).is_err()) {
+        Some(seed) => Err(PyValueError::new_err(format!(
+            "seed {seed} is too large: seeds must be < 2**63 (they key the episode's noise and replay record)"
+        ))),
+        None => Ok(()),
     }
 }
 
@@ -170,6 +182,7 @@ impl PyChainTask {
         hold_finished_frame: bool,
         harvest: Option<PathBuf>,
     ) -> PyResult<Self> {
+        check_seeds(seeds.iter().copied())?;
         let configs = configs
             .iter()
             .map(|c| extract_config(py, c))
@@ -389,7 +402,8 @@ fn as_int64<'py>(
         .map_err(|e| PyValueError::new_err(format!("{what}: {e}")))
 }
 
-/// A numpy array of `out[key]` with exactly `shape` and dtype `T`, borrowed for writing.
+/// A numpy array of `out[key]` with exactly `shape` and dtype `T`, C-contiguous and aligned, borrowed for writing:
+/// every check happens before the rollout runs.
 fn rollout_array<'py, T: numpy::Element>(
     d: &Bound<'py, PyDict>,
     key: &str,
@@ -407,11 +421,38 @@ fn rollout_array<'py, T: numpy::Element>(
             array.shape()
         )));
     }
-    let rw = array
+    // A Fortran-ordered buffer passes `as_slice_mut` (storage order) and would be filled scrambled.
+    if !array.is_c_contiguous() {
+        return Err(PyValueError::new_err(format!("rollout buffer {key:?} must be C-contiguous")));
+    }
+    let mut rw = array
         .try_readwrite()
+        .map_err(|e| PyValueError::new_err(format!("rollout buffer {key:?}: {e}")))?;
+    rw.as_slice_mut()
         .map_err(|e| PyValueError::new_err(format!("rollout buffer {key:?}: {e}")))?;
     Ok(Some(rw))
 }
+
+/// The `EnvPool.rollout` buffer keys (`obs` holds one per observation key).
+const ROLLOUT_KEYS: [&str; 17] = [
+    "obs",
+    "starts",
+    "actions",
+    "logp_ent_val",
+    "rewards",
+    "frames",
+    "bootstrap_value",
+    "interrupts",
+    "job",
+    "step",
+    "terminated",
+    "truncated",
+    "search_mask",
+    "search_policy",
+    "search_q",
+    "search_actions",
+    "search_value",
+];
 
 /// `EnvPool.rollout`'s `search` dict as a [`SearchConfig`] (missing keys keep their defaults).
 fn search_config(d: &Bound<'_, PyDict>) -> PyResult<SearchConfig> {
@@ -571,6 +612,21 @@ impl<'py> RolloutOut<'py> {
             .get_item("obs")?
             .ok_or_else(|| PyKeyError::new_err("rollout buffers need 'obs'"))?
             .cast_into::<PyDict>()?;
+        for key in out.keys() {
+            let key: String = key.extract()?;
+            if !ROLLOUT_KEYS.contains(&key.as_str()) {
+                return Err(PyValueError::new_err(format!(
+                    "unknown rollout buffer {key:?} (known: {})",
+                    ROLLOUT_KEYS.join(", ")
+                )));
+            }
+        }
+        for key in obs.keys() {
+            let key: String = key.extract()?;
+            if !LAYOUT.keys().iter().any(|k| k.name == key) {
+                return Err(PyValueError::new_err(format!("unknown observation buffer {key:?}")));
+            }
+        }
         let mut columns = Vec::with_capacity(LAYOUT.keys().len());
         for key in LAYOUT.keys() {
             let mut shape = vec![n, steps + 1];
@@ -882,6 +938,7 @@ impl PyEnvPool {
         deterministic: bool,
         search: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<usize> {
+        self.check_policies(policies.len())?;
         let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
         let flags = vec![deterministic; nets.len()];
         let actor = Arc::new(PolicyActor::new(&LAYOUT, nets, flags).map_err(PyValueError::new_err)?);
@@ -890,13 +947,22 @@ impl PyEnvPool {
             return Err(PyValueError::new_err("search needs a TrainTask pool"));
         }
         let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps, search.as_ref().map(|s| s.candidates))?;
-        let rollouts = match search {
-            None => py.detach(|| self.pool.rollout(steps, actor)),
-            Some(config) => {
-                let planner = GumbelSearch::new(&LAYOUT, actor.clone(), config).map_err(PyValueError::new_err)?;
-                py.detach(|| self.pool.rollout_planned(steps, actor, Arc::new(planner)))
-            }
-        }
+        // Ctrl-C (on the main thread) cancels the rollout before its next step or search simulation and raises
+        // KeyboardInterrupt; the envs stay ready.
+        let planner = match search {
+            None => None,
+            Some(config) => Some(Arc::new(
+                GumbelSearch::new(&LAYOUT, actor.clone(), config).map_err(PyValueError::new_err)?,
+            )),
+        };
+        let rollouts = interruptible(
+            py,
+            || match planner {
+                None => self.pool.rollout(steps, actor),
+                Some(planner) => self.pool.rollout_planned(steps, actor, planner),
+            },
+            || self.pool.cancel_rollouts(),
+        )?
         .map_err(pool_err)?;
         buffers.write(&rollouts)?;
         Ok(rollouts.len())
@@ -930,6 +996,7 @@ impl PyEnvPool {
                 )));
             }
         };
+        self.check_policies(policies.len())?;
         let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
         let flags: Vec<bool> = match deterministic {
             None => vec![false; nets.len()],
@@ -965,7 +1032,12 @@ impl PyEnvPool {
     /// returns whether none is. Raises an env's failure.
     #[pyo3(signature = (timeout=None))]
     fn wait_idle(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<bool> {
-        let deadline = timeout.map(|t| Instant::now() + Duration::from_secs_f64(t.max(0.0)));
+        // An infinite or unrepresentable timeout waits like None (Python's usual spelling of "no timeout"); NaN
+        // and negative ones don't wait.
+        let deadline = timeout
+            .filter(|t| *t != f64::INFINITY)
+            .and_then(|t| Duration::try_from_secs_f64(t.max(0.0)).ok())
+            .and_then(|d| Instant::now().checked_add(d));
         let tick = Duration::from_millis(50);
         loop {
             let wait = match deadline {
@@ -1027,10 +1099,22 @@ impl PyEnvPool {
         py: Python<'py>,
         env: usize,
         since: u64,
-        out: Option<Bound<'py, PyArrayDyn<u8>>>,
+        out: Option<Bound<'py, PyAny>>,
     ) -> PyResult<Option<(u64, Bound<'py, PyAny>)>> {
         let array = match out {
-            Some(a) => a,
+            Some(a) => {
+                let a = a.cast_into::<PyArrayDyn<u8>>().map_err(|_| {
+                    PyTypeError::new_err(format!("frame out must be a uint8 array of shape {FRAME_SHAPE:?}"))
+                })?;
+                if a.shape() != FRAME_SHAPE || !a.is_c_contiguous() {
+                    return Err(PyValueError::new_err(format!(
+                        "frame out must be a C-contiguous {FRAME_SHAPE:?} uint8 array, got {:?}{}",
+                        a.shape(),
+                        if a.is_c_contiguous() { "" } else { " (not C-contiguous)" }
+                    )));
+                }
+                a
+            }
             None => PyArray::<u8, _>::zeros(py, FRAME_SHAPE, false)
                 .to_dyn()
                 .clone(),
@@ -1040,14 +1124,8 @@ impl PyEnvPool {
                 .try_readwrite()
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             let buf = rw.as_slice_mut().map_err(|e| {
-                PyValueError::new_err(format!("frame buffer must be C-contiguous: {e}"))
+                PyValueError::new_err(format!("frame buffer must be C-contiguous and aligned: {e}"))
             })?;
-            if buf.len() != FRAME_BYTES {
-                return Err(PyValueError::new_err(format!(
-                    "frame buffer has {} bytes, frames have {FRAME_BYTES}",
-                    buf.len()
-                )));
-            }
             self.pool.frame(env, since, buf).map_err(pool_err)?
         };
         Ok(counter.map(|c| (c, array.into_any())))
@@ -1109,4 +1187,20 @@ impl PyEnvPool {
 /// (level, room, in_cave) tuples, for Python.
 pub fn rooms(locations: &[zelda::MapLocation]) -> Vec<(u8, u8, bool)> {
     locations.iter().map(|l| room_of(*l)).collect()
+}
+
+impl PyEnvPool {
+    /// The pool acts with one policy per name in `policies` (a train pool: its specialist; a chain pool: its
+    /// configs): a list of another length is refused before any env runs (an env would fail on its first decision
+    /// and stay failed).
+    fn check_policies(&self, got: usize) -> PyResult<()> {
+        if got == self.policies.len() {
+            return Ok(());
+        }
+        Err(PyValueError::new_err(format!(
+            "the pool has {} policies {:?}, got {got}",
+            self.policies.len(),
+            self.policies
+        )))
+    }
 }

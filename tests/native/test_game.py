@@ -85,6 +85,18 @@ def test_ram_read_write_and_variables(game):
         game.set_value('no_such_variable', 1)
 
 
+def test_ram_values_must_fit_a_byte(game):
+    game.load('start')
+    with pytest.raises(ValueError, match='rupees = 300 does not fit a byte'):
+        game.set_value('rupees', 300)
+    with pytest.raises(ValueError, match='does not fit a byte'):
+        game.apply_ram({'rupees': 256})
+    with pytest.raises(ValueError, match='does not fit a byte'):
+        game.load('start', ram_overrides={'rupees': 300})
+    assert game.set_value('rupees', 255).rupees == 255
+    assert game.set_value('rupees', -1).rupees == 255                     # two's complement of a signed byte
+
+
 def test_rendering(game):
     game.load('start')
     with pytest.raises(native.RenderDisabledError):

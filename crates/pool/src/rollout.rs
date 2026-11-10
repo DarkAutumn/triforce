@@ -44,8 +44,9 @@ pub trait Planner<E: crate::PoolEnv>: Send + Sync {
     fn scratch(&self) -> Self::Scratch;
 
     /// The action for `obs` (decision `step` of the episode keyed `job`, policy `policy`), the policy's
-    /// [`Decision`] for it and the planner's [`SearchRow`]; None to let the actor decide.
-    #[allow(clippy::type_complexity)]
+    /// [`Decision`] for it and the planner's [`SearchRow`]; None to let the actor decide. A long plan checks `stop`
+    /// (the pool is closing) and ends with [`PlanError::Stopped`] once it is set.
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     fn plan(
         &self,
         env: &mut E,
@@ -54,14 +55,16 @@ pub trait Planner<E: crate::PoolEnv>: Send + Sync {
         job: i64,
         step: i64,
         scratch: &mut Self::Scratch,
+        stop: &std::sync::atomic::AtomicBool,
     ) -> Result<Option<(E::Action, Decision, SearchRow<E::Action>)>, PlanError<E::Error>>;
 }
 
-/// Why a [`Planner`] failed: the env's error, or the planner's own (policy, arguments).
+/// Why a [`Planner`] failed: the env's error, the planner's own (policy, arguments), or the pool closing.
 #[derive(Debug)]
 pub enum PlanError<X> {
     Env(X),
     Usage(String),
+    Stopped,
 }
 
 /// What a [`Planner`] reports for one searched decision.

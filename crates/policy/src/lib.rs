@@ -611,6 +611,19 @@ impl Policy {
         &self.vector_keys
     }
 
+    /// How many values each input key holds per row (what `evaluate` checks): `entity_types`, `entity_features`,
+    /// `grid`, every vector key, `action_mask`. A pool compares them with its layout once, up front.
+    pub fn input_sizes(&self) -> Vec<(&str, usize)> {
+        let mut sizes = vec![
+            (ENTITY_TYPES_KEY, self.slots),
+            (ENTITY_FEATURES_KEY, self.slots * self.entity_features),
+            (GRID_KEY, self.grid_rows * self.grid_cols),
+        ];
+        sizes.extend(self.vector_keys.iter().map(String::as_str).zip(self.vector_sizes.iter().copied()));
+        sizes.push((MASK_KEY, self.kinds * (1 + self.directions + self.durations)));
+        sizes
+    }
+
     /// A hash of the config and every weight's name, shape and bits: identifies the model in replay records.
     pub fn hash(&self) -> u64 {
         self.hash

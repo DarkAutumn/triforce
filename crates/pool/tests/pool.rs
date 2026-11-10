@@ -580,7 +580,7 @@ fn an_env_error_fails_that_env() {
 }
 
 #[test]
-fn an_actor_error_fails_that_env() {
+fn an_actor_error_fails_the_call_not_the_env() {
     struct Refuses;
     impl Actor<i64> for Refuses {
         type Scratch = ();
@@ -597,7 +597,10 @@ fn an_actor_error_fails_that_env() {
         Err(PoolError::Usage(message)) => assert_eq!(message, "env 1: no policy 1"),
         other => panic!("expected env 1's actor error, got {other:?}"),
     }
-    assert_eq!(pool.active(), 1);
+    assert_eq!(pool.active(), 2, "an actor error leaves the env usable");
+    assert!(pool.wait_idle(None).unwrap(), "the rollout reported the error; nothing is left queued");
+    let got = pool.rollout(3, actor()).unwrap();
+    assert_eq!(got.iter().map(|(env, _)| *env).collect::<Vec<_>>(), [0, 1]);
 }
 
 #[test]
@@ -625,5 +628,5 @@ fn finished_envs_leave_the_pool() {
     let pool = pool(3, 2, 0, cfg);
     assert!(pool.wait_idle(None).unwrap());
     assert_eq!(pool.active(), 0, "no env had an episode");
-    assert!(pool.rollout(4, actor()).unwrap().is_empty());
+    assert!(matches!(pool.rollout(4, actor()), Err(PoolError::Usage(_))), "no env to roll out is an error");
 }

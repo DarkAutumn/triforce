@@ -199,7 +199,8 @@ struct Shared<E: PoolEnv> {
 }
 
 impl<E: PoolEnv> Shared<E> {
-    /// Settles a job that left its env ready, finished or failed.
+    /// Settles a job that left its env ready, finished or failed. A usage error in a rollout (the actor or planner
+    /// refused, e.g. a policy that doesn't fit) fails the call, not the env: it stays ready (the worker keeps it).
     fn finish(&self, env: usize, result: Res<Flow, E>) {
         let mut st = self.state.lock();
         if st.status[env] != Status::Running {
@@ -213,6 +214,10 @@ impl<E: PoolEnv> Shared<E> {
                 st.inactive += 1;
             }
             Ok(Flow::Again | Flow::Park) => unreachable!("the worker requeues or parks these"),
+            Err(PoolError::Usage(message)) if !st.playing => {
+                st.status[env] = Status::Ready;
+                st.errors.push_back((env, PoolError::Usage(message)));
+            }
             Err(e) => {
                 st.status[env] = Status::Failed;
                 st.inactive += 1;
@@ -262,6 +267,9 @@ pub struct Pool<E: PoolEnv> {
     handles: Mutex<Vec<JoinHandle<()>>>,
     layout: Arc<ObsLayout>,
     stop: Arc<AtomicBool>,
+    /// Ends the running rollouts before their next step or search simulation: set by `close` and
+    /// `cancel_rollouts`, cleared when a rollout starts.
+    halt: Arc<AtomicBool>,
 }
 
 type Res<T, E> = Result<T, PoolError<<E as PoolEnv>::Error>>;
@@ -332,6 +340,7 @@ impl<E: PoolEnv> Pool<E> {
             handles: Mutex::new(Vec::with_capacity(threads)),
             layout,
             stop,
+            halt: Arc::new(AtomicBool::new(false)),
         };
         for (t, envs) in per_thread.into_iter().enumerate() {
             let (tx, rx) = mpsc::channel();
@@ -423,6 +432,12 @@ impl<E: PoolEnv> Pool<E> {
         self.rollout_with(steps, actor, Some(planner))
     }
 
+    /// Ends the running rollouts before their next step or search simulation: they return a usage error and their
+    /// envs stay ready (episodes continue in the next rollout). For a caller that was interrupted (Ctrl-C).
+    pub fn cancel_rollouts(&self) {
+        self.halt.store(true, Ordering::SeqCst);
+    }
+
     fn rollout_with<Ac: Actor<E::Action> + 'static, P: Planner<E> + 'static>(
         &self,
         steps: usize,
@@ -432,6 +447,11 @@ impl<E: PoolEnv> Pool<E> {
         let n = self.num_envs();
         let results: Results<E::Action> = Arc::new(Mutex::new((0..n).map(|_| None).collect()));
         let ids = self.claim_idle("rollout", false)?;
+        if ids.is_empty() {
+            return Err(PoolError::Usage("no active env to roll out (every env finished or failed)".into()));
+        }
+        // A new rollout: a cancel of an earlier one no longer applies (`close` is seen through `stop` too).
+        self.halt.store(false, Ordering::SeqCst);
         for &id in &ids {
             let job = RolloutWork {
                 steps,
@@ -439,6 +459,7 @@ impl<E: PoolEnv> Pool<E> {
                 planner: planner.clone(),
                 results: results.clone(),
                 stop: self.stop.clone(),
+                halt: self.halt.clone(),
             };
             self.dispatch(Cmd::Run(id, Box::new(job)), id);
         }
@@ -453,10 +474,12 @@ impl<E: PoolEnv> Pool<E> {
                 }
                 self.shared.ready_cv.wait(&mut st);
             }
-            // A claimed env that failed: report its error (the first of them; the others' envs are failed too,
-            // see `active`), taken from the queue so no later call reports it again. Another caller
-            // (`wait_idle`) may have reported it already.
-            let failed: Vec<usize> = ids.iter().copied().filter(|&i| st.status[i] == Status::Failed).collect();
+            // A claimed env without a rollout failed (an env error or panic fails the env; an actor or planner
+            // error fails only this call): report its error (the first of them; a failed env is out of `active`),
+            // taken from the queue so no later call reports it again. Another caller (`wait_idle`) may have
+            // reported it already.
+            let results = results.lock();
+            let failed: Vec<usize> = ids.iter().copied().filter(|&i| results[i].is_none()).collect();
             if !failed.is_empty() {
                 let mut first = None;
                 st.errors.retain_mut(|(env, e)| {
@@ -477,14 +500,10 @@ impl<E: PoolEnv> Pool<E> {
             }
         }
         let mut results = results.lock();
-        ids.iter()
-            .map(|&id| {
-                results[id]
-                    .take()
-                    .map(|r| (id, r))
-                    .ok_or_else(|| PoolError::Usage(format!("env {id} left no rollout")))
-            })
-            .collect()
+        Ok(ids
+            .iter()
+            .map(|&id| (id, results[id].take().expect("checked above under the state lock")))
+            .collect())
     }
 
     /// Lets every env act with `actor` on its own, decision after decision on its worker, until its jobs run out
@@ -656,6 +675,7 @@ impl<E: PoolEnv> Pool<E> {
             self.shared.ready_cv.notify_all();
         }
         self.stop.store(true, Ordering::SeqCst);
+        self.halt.store(true, Ordering::SeqCst);
         for tx in &self.senders {
             let _ = tx.send(Cmd::Stop);
         }
@@ -743,8 +763,9 @@ struct RolloutWork<E: PoolEnv, Ac, P> {
     actor: Arc<Ac>,
     planner: Option<Arc<P>>,
     results: Results<E::Action>,
-    /// The pool's stop flag: `close` ends the rollout before its next step.
+    /// The pool's stop flag (`close`) and halt flag (`close`, `cancel_rollouts`): checked before every step.
     stop: Arc<AtomicBool>,
+    halt: Arc<AtomicBool>,
 }
 
 impl<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>> Work<E> for RolloutWork<E, Ac, P> {
@@ -757,7 +778,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>> Work<E> for RolloutWork<E,
             self.steps,
             &*self.actor,
             self.planner.as_deref(),
-            &self.stop,
+            (&self.stop, &self.halt),
         )?;
         self.results.lock()[id] = Some(rollout);
         Ok(Flow::Ready)
@@ -780,13 +801,15 @@ impl<E: PoolEnv> Planner<E> for NoPlanner {
         _: i64,
         _: i64,
         _: &mut (),
+        _: &AtomicBool,
     ) -> Result<Option<(E::Action, Decision, SearchRow<E::Action>)>, PlanError<E::Error>> {
         Ok(None)
     }
 }
 
 /// One env's rollout on its worker: `steps` decisions by `planner` (if any, when it plans) or `actor` (a terminal
-/// step resets the env at once). Ends with [`PoolError::Closed`] before a step once `stop` is set.
+/// step resets the env at once). Once `halt` is set it ends before the next step (and the planner before its next
+/// simulation): [`PoolError::Closed`] when the pool closes (`stop`), else a usage error (cancelled; the env stays).
 #[allow(clippy::too_many_arguments)]
 fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
     env: &mut E,
@@ -796,15 +819,22 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
     steps: usize,
     actor: &Ac,
     planner: Option<&P>,
-    stop: &AtomicBool,
+    (stop, halt): (&AtomicBool, &AtomicBool),
 ) -> Res<EnvRollout<E::Action>, E> {
     let usage = |e: String| PoolError::Usage(format!("env {id}: {e}"));
+    let halted = || {
+        if stop.load(Ordering::Relaxed) {
+            PoolError::Closed
+        } else {
+            PoolError::Usage(format!("env {id}: the rollout was cancelled"))
+        }
+    };
     let mut scratch = actor.scratch();
     let mut plan_scratch = planner.map(P::scratch);
     let mut out = EnvRollout::new(slot.obs.layout(), steps);
     for _ in 0..steps {
-        if stop.load(Ordering::Relaxed) {
-            return Err(PoolError::Closed);
+        if halt.load(Ordering::Relaxed) || stop.load(Ordering::Relaxed) {
+            return Err(halted());
         }
         if slot.finished {
             return Err(PoolError::Usage(format!("env {id} has no episode left to roll out")));
@@ -813,10 +843,11 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
         out.starts.push(slot.step == 0);
         let planned = match (planner, plan_scratch.as_mut()) {
             (Some(p), Some(s)) => p
-                .plan(env, &slot.obs, slot.policy, slot.job, slot.step, s)
+                .plan(env, &slot.obs, slot.policy, slot.job, slot.step, s, halt)
                 .map_err(|e| match e {
                     PlanError::Env(error) => PoolError::Env { env: id, error },
                     PlanError::Usage(m) => usage(m),
+                    PlanError::Stopped => halted(),
                 })?,
             _ => None,
         };
@@ -947,7 +978,10 @@ impl<E: PoolEnv> Worker<E> {
                     .lock()
                     .extend(events.drain(..).map(|e| (id, e)));
             }
-            if result.is_err() {
+            // An env error or panic leaves the env unusable; a usage error (actor, planner) in a rollout doesn't
+            // touch it (a playing pool never runs another job, so there it fails the env as before).
+            let usage = matches!(&result, Err(PoolError::Usage(_)));
+            if result.is_err() && (!usage || self.shared.state.lock().playing) {
                 Self::drop_env(self.envs[local].take());
             }
             match (result, job) {

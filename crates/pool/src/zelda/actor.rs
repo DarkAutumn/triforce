@@ -42,9 +42,17 @@ impl PolicyActor {
         }
         let key = |name: &str| layout.key(name).ok_or_else(|| format!("the pool's observations have no '{name}'"));
         let mut vectors = Vec::new();
-        for p in &policies {
+        for (i, p) in policies.iter().enumerate() {
             if p.vector_keys().len() > MAX_VECTORS {
                 return Err(format!("a policy reads {} vector keys (at most {MAX_VECTORS})", p.vector_keys().len()));
+            }
+            // Every key the policy reads must hold what it expects: a network of another observation layout is
+            // refused here, before any env runs, not by each env's first decision.
+            for (name, want) in p.input_sizes() {
+                let have = layout.keys()[key(name)?].len();
+                if have != want {
+                    return Err(format!("policy {i} reads {name} as {want} values, the pool's has {have}"));
+                }
             }
             vectors.push(p.vector_keys().iter().map(|k| key(k)).collect::<Result<Vec<_>, _>>()?);
         }

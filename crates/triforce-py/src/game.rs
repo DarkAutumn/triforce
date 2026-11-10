@@ -5,6 +5,7 @@ use crate::context::{self, TfzStore};
 use crate::convert::{action_indices, extract_action, room_of};
 use crate::describe;
 use crate::errors::{RenderDisabledError, StateFormatError};
+use crate::signals::interruptible;
 use numpy::{PyArray, PyArray1, PyArrayMethods};
 use parking_lot::Mutex;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
@@ -14,6 +15,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use zcore::{MachineState, ZCore, state_file};
 use zelda::enums::Direction;
 use zelda::executor::buttons;
@@ -25,6 +27,8 @@ use zelda::{
 
 pub const FRAME_SHAPE: [usize; 3] = [240, 256, 3];
 pub const FRAME_BYTES: usize = 240 * 256 * 3;
+/// `Game.press` emulates this many frames (about a minute of play) between Ctrl-C checks.
+const PRESS_CHUNK: u32 = 3600;
 
 pub fn zelda_err(e: ZeldaError) -> PyErr {
     PyRuntimeError::new_err(e.to_string())
@@ -531,12 +535,14 @@ fn extract_buttons(obj: &Bound<'_, PyAny>) -> PyResult<u8> {
     })
 }
 
-/// `movie::Playback` over a session's emulator.
-struct Player<'a>(&'a mut Session<ZCore>, bool);
+/// `movie::Playback` over a session's emulator; once `stop` is set (Ctrl-C) the remaining frames are skipped.
+struct Player<'a>(&'a mut Session<ZCore>, bool, &'a AtomicBool);
 
 impl movie::Playback for Player<'_> {
     fn run_frame(&mut self, buttons: u8) {
-        zelda::Nes::run_frame(self.0.nes_mut(), buttons, self.1);
+        if !self.2.load(Ordering::Relaxed) {
+            zelda::Nes::run_frame(self.0.nes_mut(), buttons, self.1);
+        }
     }
 
     fn poke(&mut self, addr: u16, value: u8) {
@@ -591,13 +597,23 @@ pub fn resolve_state(
     Ok(snapshot_from_file(file))
 }
 
+/// A RAM variable's value as its byte: 0..=255, or -128..=-1 as the two's-complement spelling of a signed one.
+fn ram_byte(name: &str, value: i64) -> PyResult<u8> {
+    u8::try_from(value)
+        .or_else(|_| i8::try_from(value).map(|v| v as u8))
+        .map_err(|_| PyValueError::new_err(format!("{name} = {value} does not fit a byte")))
+}
+
 fn overrides(values: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<(Var, u8)>> {
     let Some(values) = values else {
         return Ok(Vec::new());
     };
     values
         .iter()
-        .map(|(k, v)| Ok((var(&k.extract::<String>()?)?, v.extract::<i64>()? as u8)))
+        .map(|(k, v)| {
+            let name = k.extract::<String>()?;
+            Ok((var(&name)?, ram_byte(&name, v.extract::<i64>()?)?))
+        })
         .collect()
 }
 
@@ -688,7 +704,7 @@ impl PyGame {
     }
 
     fn set_value(&self, name: &str, value: i64) -> PyResult<PyGameState> {
-        let values = [(var(name)?, value as u8)];
+        let values = [(var(name)?, ram_byte(name, value)?)];
         let mut g = self.inner.lock();
         g.loaded = true;
         Ok(PyGameState::new(g.session.apply_ram(&values).clone()))
@@ -720,13 +736,24 @@ impl PyGame {
     }
 
     /// Holds raw buttons (`'UP+A'`, `['UP', 'A']` or a controller byte) for `frames` frames, bypassing the
-    /// option executor.
+    /// option executor (GIL released; Ctrl-C stops it between chunks of `PRESS_CHUNK` frames).
     #[pyo3(signature = (buttons, frames=1))]
-    fn press(&self, buttons: &Bound<'_, PyAny>, frames: u32) -> PyResult<PyGameState> {
+    fn press(&self, py: Python<'_>, buttons: &Bound<'_, PyAny>, frames: u32) -> PyResult<PyGameState> {
         let b = extract_buttons(buttons)?;
-        let mut g = self.inner.lock();
-        g.loaded = true;
-        Ok(PyGameState::new(g.session.press(b, frames).clone()))
+        let mut remaining = frames;
+        loop {
+            let n = remaining.min(PRESS_CHUNK);
+            let state = py.detach(|| {
+                let mut g = self.inner.lock();
+                g.loaded = true;
+                g.session.press(b, n).clone()
+            });
+            remaining -= n;
+            if remaining == 0 {
+                return Ok(PyGameState::new(state));
+            }
+            py.check_signals()?;
+        }
     }
 
     /// Plays a `TFMOVIE` (its `base` movies first, from the same directory) on the current machine: from
@@ -741,11 +768,19 @@ impl PyGame {
             )));
         }
         let dir = path.parent().map(PathBuf::from).unwrap_or_default();
-        let mut g = self.inner.lock();
-        let render = g.render;
-        movie::play(&mut Player(&mut g.session, render), &m, &dir)
-            .map_err(|e| PyValueError::new_err(format!("{e:#}")))?;
-        Ok(PyGameState::new(g.rebuild()))
+        let stop = AtomicBool::new(false);
+        let played = interruptible(
+            py,
+            || {
+                let mut g = self.inner.lock();
+                let render = g.render;
+                movie::play(&mut Player(&mut g.session, render, &stop), &m, &dir)
+                    .map_err(|e| format!("{e:#}"))?;
+                Ok::<_, String>(g.rebuild())
+            },
+            || stop.store(true, Ordering::Relaxed),
+        )?;
+        Ok(PyGameState::new(played.map_err(PyValueError::new_err)?))
     }
 
     fn snapshot(&self) -> PySnapshot {

@@ -18,6 +18,7 @@ use rand_chacha::ChaCha8Rng;
 use serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use zelda::actions::{ActionMask, DURATIONS, is_directional, is_timed};
 use zelda::enums::{ActionKind, Direction};
@@ -194,6 +195,8 @@ pub struct Explorer<N: Nes, St: StateStore<N::State>> {
     pub seed: u64,
     rng: ChaCha8Rng,
     root: Option<SessionSnapshot<N::State>>,
+    /// Set from another thread (Ctrl-C on the caller's): `explore` stops at its next iteration.
+    stop: Option<Arc<AtomicBool>>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
@@ -218,7 +221,14 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             seed,
             rng: ChaCha8Rng::seed_from_u64(seed),
             root: None,
+            stop: None,
         })
+    }
+
+    /// A flag that, once set, ends the running or next `explore` at its next iteration with an "interrupted"
+    /// error (the caller's thread handles the signal; the search runs elsewhere).
+    pub fn set_stop(&mut self, stop: Option<Arc<AtomicBool>>) {
+        self.stop = stop;
     }
 
     /// Searches for a successful path from `start_state`; returns the best (most health, then fewest steps).
@@ -254,6 +264,9 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
         let mut iteration = 0;
         for i in 1..=iterations {
             iteration = i;
+            if self.stop.as_ref().is_some_and(|s| s.load(Ordering::Relaxed)) {
+                return Err(EnvError::State(format!("exploring {start_state} was interrupted")));
+            }
             if first_success.is_some_and(|f| i - f > patience) {
                 break;
             }

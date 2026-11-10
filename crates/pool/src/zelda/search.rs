@@ -20,6 +20,7 @@ use crate::rollout::{Actor, Decision, PlanError, Planner, SearchRow};
 use policy::Pick;
 use policy::noise::{gumbel, key_of, uniform};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Frames per discount step (`rollout_buffer.FRAMES_PER_DISCOUNT`): a step of `f` frames discounts by `γ^(f/8)`.
 pub const FRAMES_PER_DISCOUNT: f64 = 8.0;
@@ -78,8 +79,10 @@ impl SearchConfig {
         if !(0.0..=1.0).contains(&self.fraction) {
             return Err(format!("search fraction {} is not in [0, 1]", self.fraction));
         }
-        if !(self.c_visit >= 0.0 && self.c_scale >= 0.0) {
-            return Err("search c_visit and c_scale must be non-negative".into());
+        // `sigma` multiplies (c_visit + visits) * c_scale by a value in [0, 1]: an infinite product times 0 is NaN.
+        let sigma_max = (self.c_visit + self.simulations as f64) * self.c_scale;
+        if !(self.c_visit >= 0.0 && self.c_scale >= 0.0 && sigma_max.is_finite()) {
+            return Err("search c_visit and c_scale must be finite and non-negative".into());
         }
         Ok(())
     }
@@ -324,6 +327,7 @@ impl<E: SearchEnv<Action = ZeldaAction>> Planner<E> for GumbelSearch {
         job: i64,
         step: i64,
         s: &mut SearchScratch,
+        stop: &AtomicBool,
     ) -> Result<Option<(ZeldaAction, Decision, SearchRow<ZeldaAction>)>, PlanError<E::Error>> {
         let c = &self.config;
         if !c.searches(job, step) {
@@ -363,6 +367,12 @@ impl<E: SearchEnv<Action = ZeldaAction>> Planner<E> for GumbelSearch {
             let snapshot = env.begin_search().map_err(PlanError::Env)?;
             let mut searched = Ok(());
             for considered in considered_visits(m, c.simulations) {
+                // One simulation runs futures × depth emulated steps (docs/rust-actor.md "Cost": the whole search
+                // can take seconds): `close` doesn't wait for the rest.
+                if stop.load(Ordering::Relaxed) {
+                    searched = Err(PlanError::Stopped);
+                    break;
+                }
                 let i = r.select(considered);
                 match self.evaluate(env, &snapshot, p, job, step, r.candidates[i], r.visits[i], s) {
                     Ok(q) => {
@@ -402,5 +412,26 @@ impl<E: SearchEnv<Action = ZeldaAction>> Planner<E> for GumbelSearch {
             value: r.mixed_value() as f32,
         };
         Ok(Some((action.map(|i| i as i64), decision, row)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SearchConfig;
+
+    #[test]
+    fn search_constants_must_be_finite_and_non_negative() {
+        assert!(SearchConfig::default().validate().is_ok());
+        let bad = [
+            (f64::INFINITY, 0.1),
+            (50.0, f64::INFINITY),
+            (1e308, 1e308),
+            (f64::NAN, 0.1),
+            (-1.0, 0.1),
+        ];
+        for (c_visit, c_scale) in bad {
+            let config = SearchConfig { c_visit, c_scale, ..SearchConfig::default() };
+            assert!(config.validate().is_err(), "c_visit {c_visit} c_scale {c_scale}");
+        }
     }
 }

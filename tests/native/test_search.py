@@ -120,6 +120,36 @@ def test_search_runs_in_training_pools_only(states_dir, tmp_path):
         views = RolloutBuffer(STEPS, ENVS, p.obs_spec, 0.99, 0.95).rollout_buffers()
         with pytest.raises(ValueError, match='unknown search setting'):
             p.rollout([policy], STEPS, views, search={'candidate': 2})
+        for bad in ({'c_scale': float('inf')}, {'c_visit': float('inf')}, {'c_visit': 1e308, 'c_scale': 1e308}):
+            with pytest.raises(ValueError, match='finite and non-negative'):
+                p.rollout([policy], STEPS, views, search=bad)
+
+
+def test_close_stops_a_search_between_simulations(states_dir, tmp_path):
+    """A searched decision runs simulations × futures × depth emulated steps; `close` waits for one simulation,
+    not the rest of the search (nor the rest of the rollout)."""
+    import threading
+    import time
+    policy = network().to_native()
+    search = {'candidates': 8, 'simulations': 200, 'futures': 4, 'depth': 30}
+    p = pool(states_dir, tmp_path, threads=1, name='close')
+    views = RolloutBuffer(50, ENVS, p.obs_spec, 0.99, 0.95).rollout_buffers()
+    raised = []
+
+    def roll():
+        try:
+            p.rollout([policy], 50, views, search=search)
+        except RuntimeError as error:
+            raised.append(str(error))
+    thread = threading.Thread(target=roll)
+    thread.start()
+    time.sleep(1.0)
+    t0 = time.monotonic()
+    p.close()
+    took = time.monotonic() - t0
+    thread.join()
+    assert took < 1.0, took
+    assert raised and 'closed' in raised[0]
 
 
 def test_joint_log_probs_match_torch(states_dir, tmp_path):
