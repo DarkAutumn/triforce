@@ -207,6 +207,49 @@ fn ladder_golden_refuses_movies_outside_the_corpus() {
     assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
 }
 
+/// `bench --recordings` caches window-start states per run content: re-recording a run under the
+/// same name with other inputs makes new cache files instead of reusing the old run's states.
+#[test]
+fn bench_cache_is_keyed_by_the_run_content() {
+    if !have_rom() {
+        return;
+    }
+    let tmp = TempDir::new("bench-cache");
+    let origin = repo().join("triforce/states/0_77c_0.state");
+    let record = |button: u8| {
+        let rec = serde_json::json!({"origin": origin, "buttons": vec![button; 60], "pokes": []});
+        std::fs::create_dir_all(tmp.join("rec")).unwrap();
+        std::fs::write(tmp.join("rec/full-500.json"), rec.to_string()).unwrap();
+        let out = tf(&[
+            "bench", "--recordings", &tmp.arg("rec"), "--windows", "2", "--window-frames", "10", "--cache",
+            &tmp.arg("cache"), "--render", "off",
+        ]);
+        assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
+    };
+    let files = || -> Vec<(String, Vec<u8>)> {
+        let mut v: Vec<_> = std::fs::read_dir(tmp.join("cache")).unwrap()
+            .map(|e| e.unwrap().path())
+            .map(|p| (p.file_name().unwrap().to_string_lossy().into_owned(), std::fs::read(&p).unwrap()))
+            .collect();
+        v.sort();
+        v
+    };
+    record(0x80); // RIGHT
+    let first = files();
+    assert_eq!(first.len(), 2, "one state per window start");
+    record(0x80);
+    assert_eq!(files(), first, "the same run reuses its cache");
+    record(0x40); // LEFT
+    let both = files();
+    assert_eq!(both.len(), 4, "a changed run gets its own window states");
+    let late = |v: &[(String, Vec<u8>)], suffix: &str| -> Vec<Vec<u8>> {
+        v.iter().filter(|(n, _)| n.ends_with(suffix)).map(|(_, b)| b.clone()).collect()
+    };
+    let ends = late(&both, "-50.tfzstate");
+    assert_eq!(ends.len(), 2);
+    assert_ne!(ends[0], ends[1], "the late window starts from each run's own state");
+}
+
 #[test]
 fn corpus_check_passes() {
     if !have_rom() {

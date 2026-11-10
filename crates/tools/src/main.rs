@@ -84,7 +84,8 @@ enum Cmd {
         /// With movies: frames per timed window.
         #[arg(long, default_value_t = 500)]
         window_frames: usize,
-        /// Window-start states, made by an untimed replay the first time (keyed by the state format).
+        /// Window-start states, made by an untimed replay the first time (keyed by the state format and a digest
+        /// of the run's origin, inputs and pokes).
         #[arg(long, default_value = "target/bench-cache")]
         cache: PathBuf,
         /// Only this render mode ("on" or "off"); default both.
@@ -331,6 +332,9 @@ struct BenchRun {
     inputs: Vec<u8>,
     /// `(frame, addr, value)`, frames non-decreasing: written before input `frame` runs.
     pokes: Vec<(usize, u16, u8)>,
+    /// Digest of everything the run's frames depend on (origin, inputs, pokes): part of the window cache key, so
+    /// a re-recorded run with the same name misses the old run's cached states.
+    digest: u64,
 }
 
 enum Origin {
@@ -345,22 +349,32 @@ impl BenchRun {
         let movie = Movie::load(&corpus::movie_path(name))?;
         let pokes = movie.pokes.iter().map(|p| (p.frame as usize, p.addr, p.value)).collect();
         let inputs = movie.inputs.clone();
-        Ok(BenchRun { name: name.to_owned(), origin: Origin::Base(movie), inputs, pokes })
+        let chain = formats::movie_chain_hash(&corpus::movie_path(name), &corpus::corpus_dir().join("movies"))?;
+        let digest = formats::digest8(&chain);
+        Ok(BenchRun { name: name.to_owned(), origin: Origin::Base(movie), inputs, pokes, digest })
     }
 
     /// A recording: JSON with `origin` (state file path), `buttons` and `pokes` (`[frame, addr, value]`).
     fn from_recording(path: &Path) -> Result<BenchRun> {
         let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
         let origin = std::fs::read(v["origin"].as_str().context("recording origin")?)?;
-        let inputs = v["buttons"].as_array().context("buttons")?.iter()
+        let inputs: Vec<u8> = v["buttons"].as_array().context("buttons")?.iter()
             .map(|b| b.as_u64().map(|b| b as u8).context("button byte")).collect::<Result<_>>()?;
-        let pokes = v["pokes"].as_array().context("pokes")?.iter().map(|p| -> Result<_> {
+        let pokes: Vec<(usize, u16, u8)> = v["pokes"].as_array().context("pokes")?.iter().map(|p| -> Result<_> {
             let p = p.as_array().context("poke")?;
             let n = |i: usize| p.get(i).and_then(serde_json::Value::as_u64).context("poke field");
             Ok((n(0)? as usize, n(1)? as u16, n(2)? as u8))
         }).collect::<Result<_>>()?;
         let name = path.file_stem().context("recording name")?.to_string_lossy().into_owned();
-        Ok(BenchRun { name, origin: Origin::State(origin), inputs, pokes })
+        let mut bytes = origin.clone();
+        bytes.extend_from_slice(&inputs);
+        for &(f, a, v) in &pokes {
+            bytes.extend_from_slice(&(f as u64).to_le_bytes());
+            bytes.extend_from_slice(&a.to_le_bytes());
+            bytes.push(v);
+        }
+        let digest = formats::digest8(&bytes);
+        Ok(BenchRun { name, origin: Origin::State(origin), inputs, pokes, digest })
     }
 
     /// A machine at the run's frame 0.
@@ -391,9 +405,10 @@ impl BenchRun {
 /// caching them.
 fn window_state(rom: &rom::RomInfo, run: &BenchRun, starts: &[usize], start: usize, w: &Windows)
     -> Result<Vec<u8>> {
-    // Keyed by the state format and the machine's layout, so a cached start never decodes into another build's.
+    // Keyed by the state format and the machine's layout, so a cached start never decodes into another build's,
+    // and by the run's digest, so a changed run with the same name never starts from the old run's states.
     let key = format!("v{}-{}", ::zcore::state_file::VERSION, std::mem::size_of::<::zcore::MachineState>());
-    let path = |s: usize| w.cache.join(format!("{key}-{}-{s}.tfzstate", run.name));
+    let path = |s: usize| w.cache.join(format!("{key}-{}-{:016x}-{s}.tfzstate", run.name, run.digest));
     if let Ok(bytes) = std::fs::read(path(start)) {
         let mut probe = zcore::Zcore::open(&rom.bytes)?;
         if probe.load_state(&bytes).is_ok() {
