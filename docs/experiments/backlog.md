@@ -8,16 +8,25 @@ round docs still call it that.)
 1. **Rust actor** (`docs/rust-actor.md`, decisions 2026-11-09): the policy's forward pass in Rust, rollouts in
    one call, eval/chains/play-zelda on the in-pool policy, replayable plays (seed + actions, with probabilities),
    endings on observed effects. **Done.** Profile done (`docs/performance.md`, Nov 9): AVX policy kernels and the
-   rollout overlapped with the PPO update (+20–45% training). Next: GPU vs CPU inference (mass play). The deferred
-   look-ahead was not built (Lee's rule: sub-15% is iffy; decisions 2026-11-09).
+   rollout overlapped with the PPO update (+20–45% training). GPU vs CPU: CPU only (decisions 2026-11-09). The
+   deferred look-ahead was not built (Lee's rule: sub-15% is iffy; decisions 2026-11-09).
    - Perf leftovers, each expected under 15%: the rollout barrier (workers idle 13–32% of a p16 rollout waiting
      for the slowest env: more envs than threads with work-stealing envs, or the deferred look-ahead); the PPO
      update's kernel-launch overhead (~17k launches per update; fewer host syncs, fused Adam, CUDA graphs).
-2. **Fresh retrain** on the new stack (the team trained with Python inference is not loaded).
-3. **Better play** (`~/Downloads/triforce-better-play.md`, written without the source: take the ideas, adapt the
-   prescriptions): §0 yardstick, §1a outcome fine-tuning + §3 best-of-N self-distillation, §6b entropy annealing
-   and deterministic eval, §2 Gumbel expert iteration (training only; starting with boss-dodongo), §1b/§5/§6a.
-   Baselines: rounds 13–15.
+2. [x] **Fresh retrain** on the new stack: r56 promoted (round 16 §1).
+3. **Better play** (`~/Downloads/triforce-better-play.md`; round 16): [x] §0 yardstick, [x] §6b act mode (argmax for
+   15 families, round 16 §3), §6b entropy annealing (not kept), §1a outcome fine-tuning (not kept alone), §3
+   best-of-N (not kept) vs SIL (best arm on goriya; second family running), §2 Gumbel expert iteration (Dodongo: no
+   gain at the ceiling; goriya running), §1b exit-health weight / harvested handoff states, §5 PLR, §6a PPG (goriya
+   arms running).
+   - **Problem (round 16 §5): the training success rate hides slow failures.** An episode that runs into the room's
+     step budget (600 for Dodongo) rarely ends inside one rollout segment, so per-iteration success counts the fast
+     episodes: a Dodongo continuation read 0.96–1.0 in training and was 54% in evaluation. The early stop counts
+     the same episodes. Fix idea: count every episode that *started* in a window once it ends, or report the share
+     of envs whose current episode is older than the budget's half; a periodic small evaluation during training.
+   - **Argmax loops** where a policy has no good answer (stuck / no-damage, round 16 §3): an argmax with a loop
+     breaker (sample when the same observation repeats, or after N steps without progress) could keep argmax's
+     hearts without the loops.
 
 ## Before (Lee, Nov 8): baseline retrain on d2first (done)
 

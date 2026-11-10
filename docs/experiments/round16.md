@@ -200,7 +200,58 @@ rate, `frame_penalty` 0.000125), `bon` (`--best-of-n 16 --best-keep 2 --best-eve
 | bon | argmax | −1.4 [−2.9, +0.1] | +0.047 [+0.012, +0.081] | +30 [+8, +53] |
 | sil | argmax | +1.2 [−0.1, +2.5] | −0.032 [−0.064, +0.001] | −8 [−25, +8] |
 
-One training seed: these intervals hold the evaluation noise only, not the run-to-run spread of training. Entropy
-annealing, outcome fine-tuning and best-of-N show nothing better (bon and ent lose hearts under argmax; outcome
-loses success under argmax). SIL is the only arm better in both modes, at the edge of significance. Seeds 58 and 59
-of `ctl` and `sil` are running to measure the training spread before deciding.
+One training seed: these intervals hold the evaluation noise only, not the run-to-run spread of training. Seeds 58
+and 59 of every arm show that spread is the larger one: the control alone ranges 90.5–94.5% (sampled) between seeds.
+All five arms over seeds 57, 58, 59 (1500 episodes each):
+
+| arm | act | success per seed | mean | hearts lost / episode per seed | mean |
+|---|---|---|---:|---|---:|
+| ctl | sample | 94.5, 90.5, 93.3 | 92.8 | 0.512, 0.652, 0.573 | 0.579 |
+| ent | sample | 94.4, 94.9, 93.3 | 94.2 | 0.545, 0.490, 0.584 | 0.540 |
+| outcome | sample | 93.6, 95.6, 93.7 | 94.3 | 0.550, 0.484, 0.518 | 0.517 |
+| bon | sample | 95.2, 94.1, 93.5 | 94.3 | 0.540, 0.536, 0.529 | 0.535 |
+| sil | sample | 95.7, 94.8, 94.2 | **94.9** | 0.477, 0.504, 0.493 | **0.492** |
+| ctl | argmax | 94.3, 91.1, 93.1 | 92.8 | 0.450, 0.623, 0.495 | 0.523 |
+| ent | argmax | 94.2, 95.1, 82.9 | 90.7 | 0.492, 0.448, 0.564 | 0.501 |
+| outcome | argmax | 92.3, 93.9, 93.7 | 93.3 | 0.462, 0.425, 0.468 | 0.452 |
+| bon | argmax | 92.9, 94.9, 93.1 | 93.6 | 0.496, 0.497, 0.487 | 0.494 |
+| sil | argmax | 95.5, 93.9, 93.6 | **94.3** | 0.418, 0.456, 0.441 | **0.438** |
+
+- **SIL (IX.5) is the best arm** in both modes on both measures: every SIL seed loses fewer hearts than every
+  control seed (sampled), mean +2.1 pp success and −15% hearts. Against best-of-N (IX.4) it is ahead on all four
+  means, with a third of best-of-N's cost (no extra episodes). Training noise is ±2 pp, so it is confirmed on a
+  second family before it goes into the team (moldorm, 3 seeds each, running).
+- **Best-of-N (IX.4):** level with entropy annealing and outcome fine-tuning; faster rooms (−37 frames per episode
+  in seed 57) but no hearts gain. Not kept.
+- **Entropy annealing (IX.2):** argmax looped badly on seed 59 (82.9%): a policy with its entropy annealed away
+  gives argmax nothing to break ties with. Not kept.
+- **Outcome fine-tuning (IX.3):** level on success, second-best hearts under argmax. Not kept on its own; a
+  candidate to combine with SIL later.
+
+## 5. Gumbel expert iteration on Dodongo (IX.6)
+
+`scripts/experiments/r58_expert_iteration.sh`: boss-dodongo `r56-rust-dg` continued 100 iterations (409,600 steps)
+at 4 envs; `ei`: search on a quarter of the decisions, k=4 candidates, 8 simulations, K=2 RNG-perturbed futures,
+depth 3; `ei-k1`: the same with one unperturbed future (the clairvoyant ablation). Evaluation 100 per start state
+(300 episodes):
+
+| run | seed | sampled success | hearts lost / ep | argmax success | hearts lost / ep | train time |
+|---|---|---:|---:|---:|---:|---:|
+| r56 (start) | – | 99.3% | 0.027 | 99.3% | 0.010 | – |
+| ctl | 57 | 99.3% | 0.070 | 98.7% | 0.037 | 9 min |
+| ctl | 58 | **53.7%** | 0.068 | **24.3%** | 0.035 | 9 min |
+| ctl | 59 | 97.7% | 0.122 | 100.0% | 0.050 | 9 min |
+| ei (K=2) | 58 | 98.3% | 0.198 | 99.0% | 0.053 | 52 min |
+| ei-k1 (K=1) | 58 | 96.7% | 0.250 | 96.7% | 0.090 | 116 min |
+
+- Dodongo starts at the ceiling (99.3%), so there is little to gain: expert iteration does not beat the start
+  model or the healthy controls on hearts, at 6–13× the training time.
+- The K=1 (clairvoyant) arm is worse than K=2 on every measure, as §2.3 predicts, but one seed and 300 episodes
+  can't separate them.
+- **Control seed 58 collapsed:** in evaluation it stuns Dodongo, hits him once and waits out the 600-step budget
+  (136 of 300 episodes `max-steps`), while its training success stayed 0.96–1.0. A check in the training env
+  (no curriculum) gives the same 57%, so the env agrees with the evaluation: **the training success rate hides slow
+  failures**, because an episode that runs into the 600-step budget rarely finishes inside one 512-step rollout
+  segment, so few of them are counted per iteration (and the early stop, which counts the same episodes, can be
+  fooled the same way). Logged in the backlog. The search arm on the same seed did not collapse.
+- Next: the non-boss family (IX.7, goriya: headroom, 245 iterations, running), where cost and effect matter more.
