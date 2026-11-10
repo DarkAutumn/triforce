@@ -638,7 +638,7 @@ fn quiet_enemy_penalty_needs_a_live_active_enemy_past_the_grace() {
         ROOM_STEP_GRACE,
     );
     assert!(!r.contains("penalty-quiet-enemies"));
-    // Off by default, and not for a spawning (inactive) or zero-health enemy.
+    // Off by default, and not for a spawning (inactive) or dying enemy.
     let r = critique_with(&mut critic(), &wait, &objective(&[EAST]), None, 1000);
     assert!(!r.contains("penalty-quiet-enemies"));
     let mut spawning = base.clone();
@@ -651,11 +651,23 @@ fn quiet_enemy_penalty_needs_a_live_active_enemy_past_the_grace() {
         1000,
     );
     assert!(!r.contains("penalty-quiet-enemies"));
-    let mut empty = base.clone();
-    empty.0[tables::OBJ_HEALTH.0 + 3] = 0;
+    // F122: a living 0-HP monster (Gels, Keese have ObjHP 0) still counts; one in the death sparkle doesn't.
+    let mut keese = Ram::new();
+    keese.enemy(3, enemy::BLUE_KEESE, 40, 100);
+    keese.0[tables::OBJ_HEALTH.0 + 3] = 0;
     let r = critique_with(
         &mut quiet,
-        &step(&empty, &empty, "WAIT 8"),
+        &step(&keese, &keese, "WAIT 8"),
+        &objective(&[EAST]),
+        None,
+        1000,
+    );
+    assert_eq!(value(&r, "penalty-quiet-enemies"), -0.03);
+    let mut dying = keese.clone();
+    dying.0[tables::OBJ_SPAWN_STATE.0 + 3] = 0x10;
+    let r = critique_with(
+        &mut quiet,
+        &step(&dying, &dying, "WAIT 8"),
         &objective(&[EAST]),
         None,
         1000,

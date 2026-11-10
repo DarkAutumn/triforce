@@ -246,7 +246,7 @@ impl GameplayCritic {
                 .state
                 .enemies
                 .iter()
-                .any(|e| e.is_active() && e.health > 0)
+                .any(|e| e.is_active() && !e.is_dying())
         {
             rewards.add(Outcome::penalty(
                 "penalty-quiet-enemies",
