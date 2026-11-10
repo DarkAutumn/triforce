@@ -223,9 +223,11 @@ def test_sigterm_stops_training_and_evaluation_and_closes_every_run(tmp_path, lo
     import os, signal, subprocess, sys, time   # pylint: disable=import-outside-toplevel,multiple-imports
     script = tmp_path / 'driver.py'
     script.write_text(DRIVER)
+    # The repo's states (the session `states_dir` fixture may have pointed TRIFORCE_STATES_DIR at a bare one).
+    env = {**{k: v for k, v in os.environ.items() if k != 'TRIFORCE_STATES_DIR'}, 'CUDA_VISIBLE_DEVICES': ''}
     with subprocess.Popen([sys.executable, str(script), str(Path(__file__).parents[1] / 'scripts' /
                                                          'train_round.py'), str(tmp_path / 'models')],
-                          env={**os.environ, 'CUDA_VISIBLE_DEVICES': ''}, stdout=subprocess.DEVNULL,
+                          env=env, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL) as process:
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
