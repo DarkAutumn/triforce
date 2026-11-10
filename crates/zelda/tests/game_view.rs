@@ -4,7 +4,7 @@
 use std::sync::{Arc, LazyLock};
 use zelda::enums::{
     ActionKind, AnimationKind, AnimationState, ArrowKind, BoomerangKind, Direction, ObjectClass,
-    Position, SwordKind, enemy, item, projectile, sound,
+    Position, SwordKind, enemy, item, projectile,
 };
 use zelda::game::{GameView, MODE_CAVE, MODE_DYING, MODE_GAME_OVER};
 use zelda::tables::{self, RAM_SIZE};
@@ -492,15 +492,6 @@ fn animation_slots_decode_their_states() {
     ] {
         assert_eq!(state(var, value, kind), want, "{var:?}={value:#x} {kind:?}");
     }
-}
-
-#[test]
-fn shield_sound_means_blocking() {
-    let mut r = Ram::new();
-    r.set(Var::SoundPulse1, sound::BOOMERANG_STUN);
-    assert!(!r.view().is_blocking());
-    r.set(Var::SoundPulse1, sound::ARROW_DEFLECTED | sound::KEY_PICKUP);
-    assert!(r.view().is_blocking());
 }
 
 #[test]

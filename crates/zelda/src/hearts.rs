@@ -171,11 +171,6 @@ impl HeartTracker {
     }
 }
 
-/// Real health change plus hearts wasted by picking them up near full health.
-pub fn heart_change_total(health_change: f64, hearts: Option<&HeartSummary>) -> f64 {
-    health_change + hearts.map_or(0.0, |h| h.wasted)
-}
-
 #[cfg(test)]
 mod tests {
     //! Port of tests/test_hearts.py.

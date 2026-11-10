@@ -6,7 +6,7 @@
 
 use crate::enums::{
     AnimationKind, AnimationState, ArrowKind, BoomerangKind, Direction, MapLocation, ObjectClass,
-    Position, SwordKind, Tile, enemy, sound,
+    Position, SwordKind, Tile, enemy,
 };
 use crate::game_map::GameMap;
 use crate::room::{Room, Tiles};
@@ -254,15 +254,6 @@ impl BombWall {
     }
 }
 
-/// One NES object slot of `all_entities`.
-#[derive(Clone, Copy, Debug)]
-pub enum Entity<'a> {
-    Enemy(&'a Enemy),
-    Item(&'a Item),
-    Projectile(&'a Projectile),
-    BombWall(&'a BombWall),
-}
-
 /// The decoded state of one frame.
 pub struct GameView {
     ram: Box<[u8; RAM_SIZE]>,
@@ -478,10 +469,6 @@ impl GameView {
         self.items.iter().find(|e| e.index == index)
     }
 
-    pub fn projectile_by_index(&self, index: u8) -> Option<&Projectile> {
-        self.projectiles.iter().find(|e| e.index == index)
-    }
-
     /// Enemies alive and active.
     pub fn active_enemies(&self) -> impl Iterator<Item = &Enemy> {
         self.enemies
@@ -491,10 +478,6 @@ impl GameView {
 
     pub fn has_active_enemies(&self) -> bool {
         self.active_enemies().next().is_some()
-    }
-
-    pub fn is_sound_playing(&self, bits: u8) -> bool {
-        self.byte(Var::SoundPulse1) & bits != 0
     }
 
     /// The room treasure position while it is on screen (treasure_flag == 0).
@@ -562,26 +545,6 @@ impl GameView {
                 })
                 .collect()
         })
-    }
-
-    /// Entities for object slots 1-11 in slot order; bomb walls take the first empty slots.
-    pub fn all_entities(&self) -> [Option<Entity<'_>>; 11] {
-        let mut result: [Option<Entity<'_>>; 11] = [None; 11];
-        for e in self.active_enemies() {
-            result[e.index as usize - 1] = Some(Entity::Enemy(e));
-        }
-        for i in &self.items {
-            result[i.index as usize - 1] = Some(Entity::Item(i));
-        }
-        for p in &self.projectiles {
-            result[p.index as usize - 1] = Some(Entity::Projectile(p));
-        }
-        for w in self.bomb_walls() {
-            if let Some(slot) = result.iter_mut().find(|s| s.is_none()) {
-                *slot = Some(Entity::BombWall(w));
-            }
-        }
-        result
     }
 
     /// A push block that hasn't been pushed yet (block object state 0, Z_04.asm:633).
@@ -829,10 +792,6 @@ impl GameView {
             9 => self.byte(Var::Map9) != 0,
             l => self.byte(Var::Map) as u32 & crate::room_state::level_bit(l) != 0,
         }
-    }
-
-    pub fn is_blocking(&self) -> bool {
-        self.is_sound_playing(sound::ARROW_DEFLECTED)
     }
 
     // --- Link: weapons ---

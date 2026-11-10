@@ -52,14 +52,6 @@ impl ActionKind {
     pub fn from_name(name: &str) -> Option<ActionKind> {
         Self::ALL.into_iter().find(|k| k.name() == name)
     }
-
-    /// Kinds that use the B button with a selected item.
-    pub const fn is_b_item(self) -> bool {
-        matches!(
-            self,
-            ActionKind::Bomb | ActionKind::Boomerang | ActionKind::Arrow
-        )
-    }
 }
 
 /// Directions as the game encodes them (E1 W2 S4 N8, diagonals are unions).
@@ -228,17 +220,6 @@ pub mod selected {
     pub const FOOD: u8 = 6;
     pub const POTION: u8 = 7;
     pub const WAND: u8 = 8;
-}
-
-/// Sound bits of `sound_pulse_1` ($605).
-pub mod sound {
-    pub const ARROW_DEFLECTED: u8 = 0x01;
-    pub const BOOMERANG_STUN: u8 = 0x02;
-    pub const MAGIC_CAST: u8 = 0x04;
-    pub const KEY_PICKUP: u8 = 0x08;
-    pub const SMALL_HEART_PICKUP: u8 = 0x10;
-    pub const SET_BOMB: u8 = 0x20;
-    pub const HEART_WARNING: u8 = 0x40;
 }
 
 /// State of a weapon animation slot.
@@ -496,20 +477,6 @@ impl MapLocation {
         MapLocation::new(level, ((y << 4) | x) as u8, in_cave)
     }
 
-    /// The adjacent room in a cardinal direction (None off the 16x16 map or for other directions).
-    pub fn location_in_direction(self, direction: Direction) -> Option<MapLocation> {
-        let (mut x, mut y) = (self.x(), self.y());
-        match direction {
-            Direction::N => y -= 1,
-            Direction::S => y += 1,
-            Direction::E => x += 1,
-            Direction::W => x -= 1,
-            _ => return None,
-        }
-        ((0..=0xF).contains(&x) && (0..=0xF).contains(&y))
-            .then(|| MapLocation::from_coordinates(self.level, x, y, self.in_cave))
-    }
-
     /// Direction of movement from this room to `next` (`get_direction_to`): out of a cave S, out of a cellar N (up
     /// its ladder).
     pub fn direction_to(self, next: MapLocation) -> Direction {
@@ -619,7 +586,7 @@ mod tests {
     }
 
     #[test]
-    fn action_kinds_round_trip_and_b_items() {
+    fn action_kinds_round_trip() {
         for (i, k) in ActionKind::ALL.into_iter().enumerate() {
             assert_eq!(ActionKind::from_index(i), Some(k));
             assert_eq!(k.index(), i);
@@ -627,14 +594,6 @@ mod tests {
         }
         assert_eq!(ActionKind::from_index(7), None);
         assert_eq!(ActionKind::from_name("move"), None);
-        let b: Vec<_> = ActionKind::ALL
-            .into_iter()
-            .filter(|k| k.is_b_item())
-            .collect();
-        assert_eq!(
-            b,
-            [ActionKind::Bomb, ActionKind::Boomerang, ActionKind::Arrow]
-        );
     }
 
     #[test]
@@ -656,27 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn adjacent_rooms_stop_at_the_map_edge() {
-        let corner = MapLocation::new(1, 0x00, false);
-        assert_eq!(corner.location_in_direction(Direction::N), None);
-        assert_eq!(corner.location_in_direction(Direction::W), None);
-        assert_eq!(
-            corner.location_in_direction(Direction::E),
-            Some(MapLocation::new(1, 0x01, false))
-        );
-        assert_eq!(
-            corner.location_in_direction(Direction::S),
-            Some(MapLocation::new(1, 0x10, false))
-        );
-        let far = MapLocation::new(0, 0xFF, true);
-        assert_eq!(far.location_in_direction(Direction::S), None);
-        assert_eq!(far.location_in_direction(Direction::E), None);
-        assert_eq!(
-            far.location_in_direction(Direction::N),
-            Some(MapLocation::new(0, 0xEF, true)),
-            "level and cave flag carry over"
-        );
-        assert_eq!(far.location_in_direction(Direction::NW), None);
+    fn rooms_from_coordinates() {
         assert_eq!(
             MapLocation::from_coordinates(2, 0xE, 0x7, false).value,
             0x7E
