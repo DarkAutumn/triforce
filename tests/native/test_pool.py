@@ -1,12 +1,15 @@
 """`EnvPool` with train, eval and chain tasks, the policy acting inside the pool: episode events, eval records,
-chain runs and room events, held frames, pausing, rendering."""
+chain runs and room events, per-policy act modes across a handoff, held frames, pausing, rendering."""
 
 import numpy as np
 import pytest
+import torch
 
 from triforce import _native as native
+from triforce.actions import Action
 from triforce.rollout_buffer import RolloutBuffer
 
+from ..conftest import require_state
 from ..networks import random_network, scripted
 
 
@@ -143,3 +146,45 @@ def test_rendering_toggles_per_env(states_dir, tmp_path):
         out = np.zeros(native.FRAME_SHAPE, dtype=np.uint8)
         again, same = pool.frame(0, out=out)
         assert again == counter and same is out and np.array_equal(out, frame)
+
+
+def leaning(seed, action, push=4.0):
+    """``random_network(seed)`` with ``push`` added to ``action``'s head biases: it mostly plays ``action``, and its
+    argmax and keyed samples still differ at some decisions."""
+    network = random_network(seed)
+    with torch.no_grad():
+        heads = (network.kind_head, network.direction_head, network.duration_head)
+        for head, index in zip(heads, Action.parse(action).to_indices()):
+            head.bias[int(index)] += push
+    return network
+
+
+@pytest.mark.parametrize('flags', [[False, True], [True, False]])
+def test_each_policy_acts_in_its_own_mode_across_a_handoff(states_dir, flags):
+    """F129/F153/F162: a chain from 0x5a W (ow-zora leans E into ow-moblin's 0x5b) with per-policy act modes: every
+    decision is taken by the room's specialist (the policy column follows the rooms' step counts) and is that
+    policy's argmax where its flag is set, else its sample under ``keyed_noise([run seed], [decision in the run])``."""
+    names = ['ow-moblin', 'ow-zora']
+    policies = [random_network(1).to_native(), leaning(2, 'MOVE E 16').to_native()]
+    task = native.ChainTask(names, 'd2first', seeds=[0, 1, 2], start_from=str(require_state('0_5aw_0')),
+                            max_steps=60, states_dir=str(states_dir))
+    with native.EnvPool(task, num_envs=2, seed=0) as pool:
+        events = play_to_the_end(pool, policies, deterministic=flags, record='observations')
+        plays = {play['job']: play for play in pool.poll_plays()}
+    runs = {e['result']['seed']: e['result'] for e in events if e['type'] == 'run'}
+    assert sorted(plays) == sorted(runs) == [0, 1, 2]
+    sampled_not_argmax = 0
+    for seed, play in plays.items():
+        rooms = runs[seed]['rooms']
+        assert [room['specialist'] for room in rooms[:2]] == ['ow-zora', 'ow-moblin'], rooms
+        expected = np.concatenate([[names.index(room['specialist'])] * room['steps'] for room in rooms])
+        np.testing.assert_array_equal(play['policy'], expected)
+        for step, p in enumerate(play['policy']):
+            obs = {k: v[step:step + 1] for k, v in play['obs'].items()}
+            argmax = policies[p].evaluate(obs, deterministic=True)['actions'][0]
+            noise = native.keyed_noise([seed], [step], policies[p].noise_size)
+            sample = policies[p].evaluate(obs, noise=noise)['actions'][0]
+            np.testing.assert_array_equal(play['actions'][step], argmax if flags[p] else sample,
+                                          err_msg=f'run {seed} decision {step} policy {names[p]}')
+            sampled_not_argmax += not flags[p] and not np.array_equal(argmax, sample)
+    assert sampled_not_argmax > 0, "the sampled policy's decisions tell sampling from argmax"

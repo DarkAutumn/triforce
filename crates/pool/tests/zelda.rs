@@ -354,6 +354,99 @@ fn chain_runs_in_a_pool_match_direct_runs() {
     }
 }
 
+/// A test actor that records (policy, job, step) of every decision: the zora policy walks E (MOVE E 16), any
+/// other waits (WAIT 8), each falling back to a legal action where the mask forbids it.
+struct Recorder {
+    zora: i64,
+    decisions: Mutex<Vec<(i64, i64, i64)>>,
+}
+
+impl Actor<ZeldaAction> for Recorder {
+    type Scratch = ();
+
+    fn scratch(&self) {}
+
+    fn act(&self, obs: &ObsData, policy: i64, job: i64, step: i64, _: &mut ()) -> Result<(ZeldaAction, Decision), String> {
+        self.decisions.lock().push((policy, job, step));
+        let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
+        let mask = ActionMask::from_flat(&flat);
+        let wanted = zelda::Action::parse(if policy == self.zora { "MOVE E 16" } else { "WAIT 8" }).unwrap();
+        let action = if mask.is_allowed(&wanted) {
+            wanted
+        } else {
+            random_action(&mask, &mut ChaCha8Rng::seed_from_u64(0), None)
+        };
+        Ok((action.to_indices().map(|i| i as i64), Decision::default()))
+    }
+
+    fn value(&self, _: &ObsData, _: i64, _: &mut ()) -> Result<f32, String> {
+        Ok(1.0)
+    }
+}
+
+/// F153: past a handoff (ow-zora walks E out of 0x5a into ow-moblin's 0x5b) every decision is acted on by the
+/// room's specialist's policy index, keyed by the run's seed, and `step` counts the run's decisions from 0 across
+/// rooms (the keyed noise of a sampled policy depends on it).
+#[test]
+fn chain_decisions_carry_the_room_specialists_policy_and_the_run_step() {
+    let Some(nes) = open_core() else { return };
+    let data = data();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_5aw_0")).unwrap();
+    let seeds = [5u64, 6];
+    let policies: Vec<Arc<str>> = vec![Arc::from("ow-moblin"), Arc::from("ow-zora")];
+    let mut nes = Some(nes);
+    let jobs = Jobs::new(seeds);
+    let pool = Pool::new(PoolOptions::new(1, 1, 0), |init| {
+        let mut env = ChainRunEnv::new(
+            data.clone(),
+            nes.take().unwrap(),
+            TfzStore,
+            route.clone(),
+            jobs.clone(),
+            policies.clone(),
+            init,
+            None,
+        );
+        env.chain_mut().max_steps = 40;
+        Ok::<_, EnvError>(env)
+    })
+    .unwrap();
+    let actor = Arc::new(Recorder {
+        zora: 1,
+        decisions: Mutex::new(Vec::new()),
+    });
+    pool.play(actor.clone(), Record::Off).unwrap();
+    assert!(pool.wait_idle(None).unwrap());
+    let runs: Vec<RunResult> = pool
+        .poll_events()
+        .into_iter()
+        .filter_map(|(_, e)| match e {
+            ZeldaEvent::Run(r) => Some((*r).clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(runs.len(), seeds.len());
+    let decisions = actor.decisions.lock();
+    for run in &runs {
+        let job = run.seed.unwrap() as i64;
+        let names: Vec<&str> = run.rooms.iter().map(|r| r.specialist.as_str()).collect();
+        assert_eq!(names[..2], ["ow-zora", "ow-moblin"], "{run:?}");
+        let expected: Vec<(i64, i64, i64)> = run
+            .rooms
+            .iter()
+            .flat_map(|room| {
+                let p = policies.iter().position(|n| **n == *room.specialist).unwrap() as i64;
+                std::iter::repeat_n(p, room.steps as usize)
+            })
+            .enumerate()
+            .map(|(step, p)| (p, job, step as i64))
+            .collect();
+        let recorded: Vec<(i64, i64, i64)> = decisions.iter().copied().filter(|d| d.1 == job).collect();
+        assert_eq!(recorded.len() as u64, run.steps);
+        assert_eq!(recorded, expected);
+    }
+}
+
 #[test]
 fn a_chain_specialist_without_a_model_ends_the_run_as_error() {
     let Some(nes) = open_core() else { return };

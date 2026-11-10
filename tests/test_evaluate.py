@@ -146,6 +146,40 @@ def test_evaluation_names_its_inputs(states_dir, tmp_path):
     assert json.loads(json.dumps(result)) == result
 
 
+def test_evaluation_acts_the_way_the_run_is_registered_unless_told(states_dir, tmp_path):
+    """F129: ``deterministic=None`` (``--act model``) follows the run's act file; True/False and ``--act`` override
+    it. The replay header names the mode and the recorded actions are the ones that mode plays."""
+    checkpoint = save_checkpoint('ow-start', 'act', seeded_network(7, SMALL), root=tmp_path)
+    config = tmp_path / 'ow-start.yaml'
+    config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 20\n")
+
+    def played(result, path):
+        """(result's act, the replay header's deterministic flag, every episode's actions by seed)."""
+        head, plays = replay.read(path)
+        return (result['act'], head['models'][0]['deterministic'],
+                [p['actions'].tolist() for p in sorted(plays, key=lambda p: p['job'])])
+
+    def play(name, deterministic):
+        path = tmp_path / f'{name}.jsonl'
+        return played(evaluate_specialist(str(config), checkpoint, episodes_per_state=2, states_dir=states_dir,
+                                          deterministic=deterministic, plays=path), path)
+
+    def cli(name, act):
+        path, output = tmp_path / f'{name}.jsonl', tmp_path / f'{name}.json'
+        assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--no-log', '--act', act,
+                              '--episodes-per-state', '2', '--plays', str(path), '--output', str(output)]) == 0
+        return played(json.loads(output.read_text()), path)
+
+    sampled, argmax = play('sampled', False), play('argmax', True)
+    assert sampled[:2] == ('sample', False) and argmax[:2] == ('argmax', True)
+    assert sampled[2] != argmax[2], "argmax and sampling play differently"
+    assert play('unregistered', None) == sampled == cli('model-sample', 'model')
+    registry.set_act_mode(checkpoint.parent, 'argmax')
+    assert play('registered', None) == argmax == cli('model-argmax', 'model')
+    assert cli('sample', 'sample') == sampled
+
+
 def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tmp_path):
     ckpt = save_checkpoint('ow-start', 'untrained', seeded_network(6, SMALL), root=tmp_path)
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=30)
