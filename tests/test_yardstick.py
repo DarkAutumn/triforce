@@ -144,3 +144,71 @@ def test_report_reads_the_evaluation_in_the_run_act_mode(argmax_run, capsys):
     assert _report(root, '--mode', 'sample') == 0
     row, = json.loads((root / 'ys.json').read_text())['specialists']
     assert (row['act'], row['eval_file']) == ('sample', 'eval.json')
+
+
+@pytest.mark.parametrize('base,new,higher,expected', [
+    ([1, 1.1, 0.9], [3, 3.1, 2.9], True, 'better'),
+    ([1, 1.1, 0.9], [3, 3.1, 2.9], False, 'worse'),
+    ([3, 3.1, 2.9], [1, 1.1, 0.9], True, 'worse'),
+    ([3, 3.1, 2.9], [1, 1.1, 0.9], False, 'better'),
+    ([1, 2, 3], [2, 3, 4], True, '~'),            # overlapping intervals
+    ([], [1, 2], True, '-'),                      # no values on one side
+])
+def test_verdict_compares_non_overlapping_intervals_in_the_metric_direction(base, new, higher, expected):
+    assert yardstick.verdict(yardstick.mean_ci(base), yardstick.mean_ci(new), higher) == expected
+
+
+def test_empty_inputs_have_no_interval_and_format_as_a_dash():
+    assert yardstick.wilson(0, 0) is None and yardstick.mean_ci([]) is None
+    assert yardstick.fmt(None) == '-'
+    assert yardstick.fmt((0.5, None, None), percent=True) == '50.0% (n=1)'
+    assert yardstick.fmt((2.0, 1.5, 2.5)) == '2.00 [1.50, 2.50]'
+    assert yardstick.fmt((0.5, 0.25, 0.75), percent=True) == '50.0% [25.0, 75.0]'
+
+
+def test_specialist_row_measures_episodes_and_visits():
+    records = [{'success': True, 'health': 2.0, 'start_health': 3.0,
+                'visits': [{'health_lost': 1.0, 'frames': 300}, {'health_lost': 0.0, 'frames': 100}]},
+               {'success': False, 'health': 0.0, 'start_health': 3.0, 'visits': [{'health_lost': 3.0, 'frames': 200}]}]
+    row = yardstick.specialist_row('goriya', {'format': 2, 'records': records, 'checkpoint': 'ckpt.pt'})
+    assert (row['specialist'], row['checkpoint'], row['episodes']) == ('goriya', 'ckpt.pt', 2)
+    assert row['success'] == yardstick.wilson(1, 2)
+    assert row['hearts_lost_per_visit'] == yardstick.mean_ci([1.0, 0.0, 3.0])
+    assert row['health_change'] == yardstick.mean_ci([-1.0, -3.0])
+    assert row['frames_per_visit'] == yardstick.mean_ci([300.0, 100.0, 200.0])
+
+
+def test_arrival_without_a_target_is_the_last_room_of_a_success():
+    done = _run(0, [_room(0, '0x77'), _room(1, '0x73', health=4.0)], result='success')
+    assert yardstick.arrival(done, None) == done['rooms'][-1]
+    assert yardstick.arrival(_run(1, done['rooms']), None) is None
+    assert yardstick.arrival(_run(2, [], result='success'), None) is None
+
+
+def test_arrival_follows_an_ordered_target_and_skips_the_start_room_and_caves():
+    cave = {**_room(0, '0x3c'), 'in_cave': True}
+    run = _run(0, [_room(0, '0x3c'), cave, _room(2, '0x7d'), _room(0, '0x3c', health=2.0)])
+    assert yardstick.arrival(run, '0:0x3c') is run['rooms'][3]          # not the start room, not the cave
+    assert yardstick.arrival(run, '2:0x7d,0:0x3c') is run['rooms'][3]
+    assert yardstick.arrival(_run(1, [_room(0, '0x77'), _room(0, '0x3c'), _room(2, '0x7d')]), '2:0x7d,0:0x3c') is None
+
+
+def test_chain_row_counts_arrivals_hearts_and_where_the_others_end(tmp_path):
+    runs = [_run(0, [_room(0, '0x77'), _room(1, '0x73', health=4.0)], result='success'),
+            _run(1, [_room(0, '0x77'), _room(1, '0x73', health=2.0)], result='success'),
+            _run(2, [_room(0, '0x77'), _room(2, '0x7e', outcome='death')]),
+            _run(3, [_room(0, '0x77'), _room(2, '0x7e', outcome='death')]),
+            _run(4, [_room(0, '0x77'), {**_room(0, '0x2c', outcome='timeout'), 'in_cave': True}])]
+    row = yardstick.chain_row('full', _chain(tmp_path, runs))
+    assert (row['segment'], row['target'], row['runs'], row['arrived']) == ('full', None, 5, 2)
+    assert row['arrivals'] == yardstick.wilson(2, 5)
+    assert row['hearts_at_arrival'] == yardstick.mean_ci([4.0, 2.0])
+    assert row['where_runs_end'] == [('2:0x7e death', 2), ('0:0x2c:cave timeout', 1)]
+
+
+def test_chain_files_without_runs_or_with_several_routes_are_errors(tmp_path):
+    with pytest.raises(yardstick.YardstickError, match='no chain runs'):
+        yardstick.chain_row('full', _chain(tmp_path, []))
+    other = {**_run(1, [_room(0, '0x77')]), 'route': 'other'}
+    with pytest.raises(yardstick.YardstickError, match='several routes'):
+        yardstick.chain_row('full', _chain(tmp_path, [_run(0, [_room(0, '0x77')]), other]))

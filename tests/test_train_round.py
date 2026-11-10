@@ -13,6 +13,20 @@ from triforce.observation import observation_space
 
 SPECIALIST = 'goriya'
 SMALL = ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
+REPO_STATES_DIR = Path(__file__).resolve().parents[1] / 'triforce' / 'states'
+
+
+class _RepoStates:     # pylint: disable=too-few-public-methods
+    """A specialist config whose seed states resolve in the repo's route states (the session default holds only
+    ``start.state``)."""
+    def __init__(self, config):
+        self._config = config
+
+    def __getattr__(self, name):
+        return getattr(self._config, name)
+
+    def resolve_start_states(self, states_dir=None):
+        return self._config.resolve_start_states(str(states_dir or REPO_STATES_DIR))
 
 
 @pytest.fixture(name='round_')
@@ -22,6 +36,8 @@ def fixture_round(monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, 'say', lambda *_: None)
+    load_specialist = module.load_specialist
+    monkeypatch.setattr(module, 'load_specialist', lambda name: _RepoStates(load_specialist(name)))
     network = ZeldaPolicy(observation_space(), SMALL)
 
     def train(name, args, models, run_dir, _log_dir):
@@ -249,3 +265,63 @@ def test_sigterm_stops_training_and_evaluation_and_closes_every_run(tmp_path, lo
     assert [run['status'] for run in plan['runs']] == ['interrupted', 'interrupted']
     assert streams['goriya'][-1] == 'end' and streams['zol'][-1] == 'end'
     assert not (registry.run_dir('goriya', 'r', tmp_path / 'models') / 'eval.json').exists()
+
+
+def _chain_stub(calls, error=None):
+    def eval_chain(route, runs, parallel, **kwargs):
+        calls.append({'route': route, 'runs': runs, 'parallel': parallel, **kwargs})
+        if error is not None:
+            raise error
+        return [], {'runs': runs, 'successes': 1, 'success_rate': 1 / runs, 'failures': {'0:0x77 death': 1},
+                    'errors': []}
+    return eval_chain
+
+
+def test_a_promoted_round_chains_the_promoted_models_and_keeps_the_chain_summary(round_, tmp_path, monkeypatch,
+                                                                                  logs_dir):
+    monkeypatch.setattr(round_, 'evaluate_specialist', _evaluate())
+    calls = []
+    monkeypatch.setattr(round_, 'eval_chain', _chain_stub(calls))
+    stale = tmp_path / 'r-chain.jsonl'
+    stale.write_text('{"seed": 0}\n')
+    summary = _round(round_, tmp_path, '--promote', '--chain-runs', '2', '--chain-parallel', '1')
+    call, = calls
+    assert call['overrides'] is None and (call['runs'], call['parallel']) == (2, 1)    # promoted models play
+    assert call['output'] == stale and not stale.exists()      # a rerun replaces the chain file
+    assert summary['chain']['successes'] == 1
+    assert json.loads((tmp_path / 'r-chain-summary.json').read_text()) == summary['chain']
+    record = summary['specialists'][SPECIALIST]
+    assert (record['eval_success_rate'], record['eval_episodes'], record['eval_health_change']) == (0.75, 2, -0.5)
+    assert record['eval_by_room'] == {'1:0x23': 0.75}
+    plan, _ = _plan(logs_dir)
+    assert plan['status'] == 'completed'
+
+
+def test_an_unpromoted_round_chains_its_trained_checkpoints_and_a_chain_error_fails_it(round_, tmp_path,
+                                                                                         monkeypatch, logs_dir):
+    monkeypatch.setattr(round_, 'evaluate_specialist', _evaluate(fail=True))
+    calls = []
+    monkeypatch.setattr(round_, 'eval_chain', _chain_stub(calls, RuntimeError("route broke")))
+    summary = _round(round_, tmp_path, '--chain-runs', '1', code=1)
+    # A run whose evaluation failed still finished training: its checkpoint plays in the chain.
+    assert calls[0]['overrides'] == {SPECIALIST: str(registry.checkpoint_path(SPECIALIST, 'r', tmp_path))}
+    assert summary['chain'] == {'error': 'RuntimeError: route broke'}
+    assert json.loads((tmp_path / 'r-chain-summary.json').read_text()) == summary['chain']
+    plan, _ = _plan(logs_dir)
+    assert plan['status'] == 'failed' and 'eval-chain failed' in plan['error']
+
+
+def test_format_table_shows_each_specialist_status_and_its_worst_room(round_):
+    base = {'rooms': 3, 'seed_states': 6, 'steps': 1000, 'stopped_early': True, 'train_success_last5': 0.9,
+            'train_balanced_last': 0.8, 'steps_per_second': 1234.4}
+    table = round_.format_table({
+        'goriya': {**base, 'status': 'ok', 'eval_success_rate': 0.95,
+                   'eval_by_room': {'1:0x23': 0.9, '1:0x33': 0.5, '1:0x44': 0.5}},
+        'zol': {**base, 'status': 'eval-failed', 'stopped_early': False},
+        'wallmaster': {'rooms': None, 'seed_states': None, 'steps': None, 'stopped_early': None,
+                       'train_success_last5': None, 'steps_per_second': None, 'status': 'train-failed'},
+    }).splitlines()
+    assert len(table) == 5 and table[0].startswith('| specialist |')
+    assert table[2] == '| goriya | 3 | 6 | 1000 | yes | 90% | 80% | 95% | 1:0x33 (50%) | 1234 |'
+    assert table[3] == '| zol | 3 | 6 | 1000 | no | 90% | 80% | eval-failed | - | 1234 |'
+    assert table[4] == '| wallmaster | None | None | - | - | - | - | train-failed; - | - | - |'

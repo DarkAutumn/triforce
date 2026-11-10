@@ -2,6 +2,7 @@
 
 import pytest
 
+from triforce import _native, actions
 from triforce.zelda_enums import ActionKind, Direction, MapLocation
 
 
@@ -46,3 +47,12 @@ def test_ram_directions_and_b_item_kinds():
     assert Direction.from_ram_value(0) == Direction.from_ram_value(3) == Direction.NONE
     assert Direction.NE.value == Direction.N.value | Direction.E.value
     assert {k for k in ActionKind if k.is_b_item} == {ActionKind.BOMB, ActionKind.BOOMERANG, ActionKind.ARROW}
+
+
+def test_python_action_heads_match_the_native_schema():
+    """``ActionKind`` values are the kind-head indices and ``DIRECTIONS``/``DURATIONS`` the other heads' labels:
+    reordering either side mislabels every action."""
+    assert tuple(k.name for k in ActionKind) == _native.ACTION_KINDS
+    assert [k.value for k in ActionKind] == list(range(len(_native.ACTION_KINDS)))
+    assert tuple(d.name for d in actions.DIRECTIONS) == _native.DIRECTIONS
+    assert tuple(actions.DURATIONS) == _native.DURATIONS
