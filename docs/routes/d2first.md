@@ -9,7 +9,7 @@ D1 triforce to Dungeon 3 (the raft, Manhandla); it now ends on the D3 triforce. 
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step
 ```
 
-The D1 part is trained (rounds 13–14); everything after the D1 triforce (steps 68–97) is not trained yet. Everything
+The whole route is trained since round 16 (r56/r57): from the start, D3 reached 34/120 and its triforce 4/120. Everything
 below was checked in the emulator (rooms loaded through `Game.load`, mode 5) unless it says otherwise.
 
 ## Route
@@ -36,7 +36,7 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white.
 | 42–44 | 0:27, 28, 38 | N→E, W→S, N→W | ow-zora | 5 / Wh |
 | 45 | 0:37 | E → cave (D1 stairs) | ow-octorok | 5 / Wh |
 | 46–50 | 1:73, 72, 73, 74, 73 | S→W, E→E (key), W→E, W→W (key), E→N | stalfos-keese-gel | 5 / Wh, 3 → 5 keys |
-| 51–55 | 1:63 53 52 42 43 | S→N, S→W, E→N, S→E, W→**N** | stalfos-keese-gel | 5 / Wh, 5 keys |
+| 51–55 | 1:63 53 52 42 43 | S→N, S→W, E→N, S→E, W→**N** | stalfos-keese-gel | 5 / Wh, 5 → 4 keys |
 | 56–63 | 1:33 23 22 7f(cellar) 22 23 33 43 | the bow detour (below): S→N (key), S→W (key), E→stairs, S→N (bow), stairs→E, W→S, N→S, N→E | stalfos-keese-gel, goriya, **trap-room**, **equipment-room** | 5 / Wh, bow |
 | 64–66 | 1:44 45 35 | W→E (boomerang), W→N, S→E | goriya, wallmaster, boss-aquamentus | 5 / Wh, bow |
 | 67 | 1:36 | W → triforce (warps to 0:37) | stalfos-keese-gel | 6 / Wh |

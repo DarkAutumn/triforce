@@ -188,10 +188,8 @@ container (existing `treasure`; needs the ladder); fairy ponds at 0x39 and 0x43 
 
 ## Kept as they were
 
-The existing entries' data stays even where the ROM says more: 0x5e and 0x6d list `enemies: {}` (ROM: 5 Blue
-Moblins; 4 Red Moblins walking in from the edges), the boulder rooms list the boulders (`Unknown_32`) the ROM list
-doesn't hold (the generator spawns them), and 0x5a keeps `treasure: key`. Three existing rooms got exits they lacked:
-0x1b's maze loops, 0x1f N (the wall gap) and 0x6d E plus its level-8 `cave`.
+The boulder rooms list the boulders (`Unknown_32`) the ROM list doesn't hold (the generator spawns them). Three
+existing rooms got exits they lacked: 0x1b's maze loops, 0x1f N (the wall gap) and 0x6d E plus its level-8 `cave`.
 
 ## Open questions
 
