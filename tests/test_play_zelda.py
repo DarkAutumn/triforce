@@ -332,6 +332,20 @@ def _collect(grid, until, seconds=90.0):
     return messages
 
 
+def _settled_counter(grid, game, seconds=10.0):
+    """``game``'s frame counter once it stops moving (two reads 50 ms apart agree): a hidden game publishes at
+    most the one frame that was in flight when it was hidden."""
+    deadline = time.monotonic() + seconds
+    counter = grid.frame_counters()[game]
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        now = grid.frame_counters()[game]
+        if now == counter:
+            return counter
+        counter = now
+    raise AssertionError(f"game {game}'s frame counter is still moving after {seconds} s")
+
+
 def test_game_grid_streams_only_shown_games(states_dir, models_dir):
     grid = GameGrid(2, fps=0, models_dir=models_dir, shown=[0], states_dir=states_dir)
     try:
@@ -351,10 +365,14 @@ def test_game_grid_streams_only_shown_games(states_dir, models_dir):
         while grid.frame(1, 0) is None and time.monotonic() < deadline:
             time.sleep(0.01)
         assert grid.frame(1, 0) is not None
-        stopped_at = grid.frame(0, 0)[0]
-        assert grid.show(0, True) == stopped_at and grid.show(0, False) == stopped_at
+        stopped_at = _settled_counter(grid, 0)              # the frame in flight when it was hidden is out
+        grid.set_paused(True)                               # no frame starts while show() is toggled
+        try:
+            assert grid.show(0, True) == stopped_at and grid.show(0, False) == stopped_at
+        finally:
+            grid.set_paused(False)
         time.sleep(0.5)
-        assert grid.frame(0, stopped_at) is None            # no new frames once hidden
+        assert grid.frame_counters()[0] == stopped_at and grid.frame(0, stopped_at) is None  # nothing once hidden
         assert stopped_at >= number
     finally:
         began = time.monotonic()
@@ -367,32 +385,45 @@ def test_game_grid_holds_a_result_before_the_next_run(states_dir, models_dir, mo
     monkeypatch.setattr(play_grid, 'RESULT_PAUSE', 0.5)
     monkeypatch.setattr(play_grid, 'ChainPool', functools.partial(play_grid.ChainPool, max_steps=3))
     grid = GameGrid(1, fps=0, models_dir=models_dir, states_dir=states_dir)
-    stamped, frames = [], []      # (time, message); (time, latest frame number) sampled before each poll
+    # One row per poll: (time before it, time after it, latest frame number sampled before it, its messages).
+    # Sampling before the poll orders the two: a poll without the next run's `start` means the frame sampled
+    # before it was taken while the result was still held.
+    polls = []
     try:
+        started = time.monotonic()
         grid.start()
         deadline = time.monotonic() + 90
-        while time.monotonic() < deadline and sum(m['event'] == 'end' for _, m in stamped) < 2:
+        while time.monotonic() < deadline and sum(m['event'] == 'end' for p in polls for m in p[3]) < 2:
+            before = time.monotonic()
             latest = grid.frame(0, 0)
-            frames.append((time.monotonic(), latest[0] if latest else 0))
-            stamped += [(time.monotonic(), m) for m in grid.poll_status()]
+            messages = grid.poll_status()
+            polls.append((before, time.monotonic(), latest[0] if latest else 0, messages))
             time.sleep(0.005)
+        final = grid.frame_counters()[0]
     finally:
         grid.stop()
-    events = [m['event'] for _, m in stamped]
+    events = [m['event'] for p in polls for m in p[3]]
+    stamped = [m for p in polls for m in p[3]]
     assert events[:2] == ['start', 'room'] and events.count('end') >= 2, events
-    assert stamped[1][1]['rooms'] == 1
-    ends = [(t, m) for t, m in stamped if m['event'] == 'end']
-    assert [m['seed'] for _, m in ends[:2]] == [0, 1]
-    assert all(m['result'] == 'failure' and m['outcome'] == 'stuck' for _, m in ends)
+    assert stamped[1]['rooms'] == 1
+    ends = [m for m in stamped if m['event'] == 'end']
+    assert [m['seed'] for m in ends[:2]] == [0, 1]
+    assert all(m['result'] == 'failure' and m['outcome'] == 'stuck' for m in ends)
     first_end = events.index('end')
     assert events[first_end + 1:first_end + 3] == ['start', 'room']     # the next run's room after its start
-    assert stamped[first_end + 2][1]['rooms'] == 1                       # counted from the new run's first room
-    assert stamped[first_end + 1][0] - ends[0][0] >= 0.4                 # the result stayed up
+    assert stamped[first_end + 2]['rooms'] == 1                          # counted from the new run's first room
+    end_poll = next(i for i, p in enumerate(polls) if any(m['event'] == 'end' for m in p[3]))
+    after_end = [m['event'] for m in polls[end_poll][3]].index('end') + 1
+    start_poll = next(i for i in range(end_poll, len(polls))
+                      if any(m['event'] == 'start' for m in polls[i][3][(after_end if i == end_poll else 0):]))
+    # The result stayed up: `end` was put after the poll before end_poll began, `start` before start_poll ended.
+    end_put_after = polls[end_poll - 1][0] if end_poll else started
+    assert polls[start_poll][1] - end_put_after >= 0.5
     # ... on the finished run's last frame: nothing new publishes while it shows, then the next run plays.
-    seen_end, next_start = ends[0][0], stamped[first_end + 1][0]
-    during = {n for t, n in frames if seen_end < t < next_start - 0.05}
-    assert len(during) == 1, during
-    assert max(n for t, n in frames if t > next_start) > during.pop()
+    during = {p[2] for p in polls[end_poll + 1:start_poll]}
+    assert len(during) <= 1, during
+    held = during.pop() if during else polls[end_poll][2]
+    assert final > held
 
 
 def test_game_grid_stall_budget_flags_the_room_then_ends_the_run(states_dir, models_dir):
