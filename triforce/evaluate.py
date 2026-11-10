@@ -12,8 +12,16 @@ and RAM randomization as training), episode ``i`` seeded with ``seed + i``.  The
 registry act mode, ``registry.act_mode``) or as told (``sample`` / ``argmax``); sampling uses Gumbel noise keyed to
 (episode seed, decision), so an episode plays the same whichever env or thread runs it.
 ``--plays`` keeps every episode in a replay file (``triforce.replay``).  The checkpoint defaults to the
-specialist's promoted model; results go to ``<checkpoint dir>/eval.json``, records sorted by seed.
-``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
+specialist's promoted model; records are sorted by seed.  The result goes to ``<checkpoint dir>/eval.json`` only
+for the canonical evaluation (the run's own act mode, ``--episodes-per-state 100``, ``--seed 0``, and the
+specialist the checkpoint was trained for); otherwise to ``eval[-<specialist>][-<act>][-e<N>][-s<seed>].json``,
+each part only where it differs (``default_output``).  Writes are atomic (``write_result``).  Every result names
+what produced it: ``act`` (``sample``/``argmax``) and ``deterministic``, ``checkpoint_sha1`` (of ``ckpt.pt``),
+``model_hash`` (the Rust network's), ``config`` (the specialist config as JSON), ``code`` and ``data``
+(``replay.code_version``/``data_hash``).  ``read_evaluation`` finds a run's evaluation in a given act mode.
+``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization);
+``mean_start_health_fraction`` divides the start hearts by the max hearts at the start (``start_max_health``; a
+heart container picked up later doesn't count), ``mean_health_fraction`` the end hearts by the max at the end.
 Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
 ``hearts_left`` are means per episode (also per room and per start state).  ``mean_bombs_used`` are bombs placed per
@@ -56,13 +64,15 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import _native, registry
-from .events import LOGS_DIR_ENV, EventLog, logged_job
+from .events import LOGS_DIR_ENV, EventLog, logged_job, write_json_atomic
 from .metrics import heart_change_total
-from .replay import ReplayWriter, header, models_header
+from .replay import ReplayWriter, code_version, data_hash, header, models_header
 from .specialist import SpecialistConfig, load_specialist
 
 
 FORMAT = 2
+DEFAULT_EPISODES_PER_STATE = 100
+DEFAULT_SEED = 0
 # Dropped-item kinds of the visit records (zelda::visits::ITEM_KINDS).
 ITEM_KINDS = ('bombs', 'rupee', 'blue_rupee', 'heart', 'fairy', 'clock')
 
@@ -242,6 +252,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     policy = registry.load_model(checkpoint)[0].to_native()
     if deterministic is None:
         deterministic = registry.act_mode(checkpoint) == 'argmax'
+    checkpoint_sha1 = registry.checkpoint_sha1(checkpoint)
     writer = None
     if plays is not None:
         models = models_header([config.name], [policy], {config.name: str(checkpoint)}, [deterministic])
@@ -264,13 +275,15 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     return {
         'format': FORMAT,
         'specialist': config.name, 'checkpoint': str(checkpoint), 'episodes_per_state': episodes_per_state,
-        'seed': seed, 'deterministic': deterministic, 'episodes': count,
+        'seed': seed, 'deterministic': deterministic, 'act': 'argmax' if deterministic else 'sample',
+        'checkpoint_sha1': checkpoint_sha1, 'model_hash': f'{policy.hash:016x}',
+        'config': json.loads(config.to_json()), 'code': code_version(), 'data': data_hash(),
+        'episodes': count,
         'success_rate': sum(r['success'] for r in records) / count,
         'mean_health_fraction': sum(r['health'] / r['max_health'] if r['max_health'] else 0.0
                                     for r in records) / count,
         # the same at reset (hp is randomized there), so the end figure has something to compare with
-        'mean_start_health_fraction': sum(r['start_health'] / r['max_health'] if r['max_health'] else 0.0
-                                          for r in records) / count,
+        'mean_start_health_fraction': _start_health_fraction(records),
         'mean_health_change': sum(r['health'] - r['start_health'] for r in records) / count,
         'mean_health_change_total': hearts['health_change_total'],
         **hearts,
@@ -287,6 +300,74 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'visited_rooms': _visited_rooms(records, config.name),
         'records': records,
     }
+
+
+def _start_health_fraction(records: list[dict]) -> float:
+    """Mean start hearts over the max hearts at the start (``start_max_health``; ``max_health`` in records that
+    predate it)."""
+    def fraction(record):
+        maximum = record.get('start_max_health', record['max_health'])
+        return record['start_health'] / maximum if maximum else 0.0
+    return sum(map(fraction, records)) / len(records)
+
+
+def write_result(result: dict, path) -> Path:
+    """Writes an evaluation result atomically (the file is the previous one or complete); returns the path."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return write_json_atomic(path, result)
+
+
+def default_output(checkpoint, specialist: str, act: str, episodes_per_state: int, seed: int) -> Path:
+    """Where an evaluation goes by default: ``<run dir>/eval.json`` for the canonical one, else
+    ``eval[-<specialist>][-<act>][-e<N>][-s<seed>].json`` with each part only where it differs from canonical:
+    ``specialist`` other than the checkpoint's, ``act`` (``model|sample|argmax``) other than the run's act mode,
+    episodes per state other than 100, seed other than 0."""
+    path = Path(checkpoint)
+    path = path / registry.CHECKPOINT_NAME if path.is_dir() else path
+    parts = ['eval']
+    if registry.load_checkpoint(path, check_schema=False).get('specialist') != specialist:
+        parts.append(specialist)
+    if act not in registry.ACT_CHOICES:
+        raise ValueError(f"act {act!r} is not one of {registry.ACT_CHOICES}")
+    if act != 'model' and act != registry.act_mode(path):
+        parts.append(act)
+    if episodes_per_state != DEFAULT_EPISODES_PER_STATE:
+        parts.append(f'e{episodes_per_state}')
+    if seed != DEFAULT_SEED:
+        parts.append(f's{seed}')
+    return path.parent / ('-'.join(parts) + '.json')
+
+
+def read_evaluation(run_dir, mode: Optional[str] = None) -> tuple[Path, dict]:
+    """(path, result) of the evaluation of the run's current checkpoint in ``mode`` (default: the run's act mode):
+    ``eval.json`` if it was measured in that mode and (when it records one) for the current ``ckpt.pt`` sha1, else
+    ``eval-<mode>.json`` under the same checks.  Raises LookupError naming what it found otherwise."""
+    path = Path(run_dir)
+    checkpoint = path / registry.CHECKPOINT_NAME if path.is_dir() else path
+    mode = registry.act_mode(checkpoint) if mode is None else mode
+    if mode not in registry.ACT_MODES:
+        raise ValueError(f"act mode {mode!r} is not one of {registry.ACT_MODES}")
+    sha1 = registry.checkpoint_sha1(checkpoint)
+    found = []
+    for name in ('eval.json', f'eval-{mode}.json'):
+        candidate = checkpoint.parent / name
+        if not candidate.is_file():
+            continue
+        try:
+            result = json.loads(candidate.read_text(encoding='utf-8'))
+        except ValueError as error:
+            found.append(f"{name} is unreadable ({error})")
+            continue
+        measured = registry.eval_mode(result)
+        if measured != mode:
+            found.append(f"{name} was measured by {measured}")
+        elif result.get('checkpoint_sha1') not in (None, sha1):
+            found.append(f"{name} is of other weights (sha1 {result['checkpoint_sha1']})")
+        else:
+            return candidate, result
+    raise LookupError(f"{checkpoint.parent}: no {mode} evaluation of the current checkpoint "
+                      f"({'; '.join(found) if found else f'no eval.json or eval-{mode}.json'})")
 
 
 def _progress_events(events, on_episode):
@@ -363,13 +444,15 @@ def main(argv=None):
     parser.add_argument('--checkpoint', default=None, help="checkpoint file or run dir (default: promoted)")
     parser.add_argument('--run-id', default=None, help="evaluate <models>/<specialist>/<run-id>/ckpt.pt")
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
-    parser.add_argument('--episodes-per-state', type=int, default=100)
+    parser.add_argument('--episodes-per-state', type=int, default=DEFAULT_EPISODES_PER_STATE)
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
-    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--seed', type=int, default=DEFAULT_SEED)
     parser.add_argument('--act', choices=registry.ACT_CHOICES, default='model',
                         help="model: the run's act mode (registry); sample / argmax: act that way")
-    parser.add_argument('--output', default=None, help="JSON output (default: <checkpoint dir>/eval.json)")
+    parser.add_argument('--output', default=None,
+                        help="JSON output (default: <checkpoint dir>/eval.json for the canonical evaluation, else "
+                             "eval[-<specialist>][-<act>][-e<N>][-s<seed>].json)")
     parser.add_argument('--plays', default=None, help="write every episode to this replay file (triforce/replay.py)")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
@@ -403,10 +486,9 @@ def main(argv=None):
                 events.emit('error', message=message, traceback=traceback.format_exc())
                 events.emit('end', status='eval-failed', message=message)
             raise
-        output = Path(args.output) if args.output else checkpoint.parent / 'eval.json'
-        output.parent.mkdir(parents=True, exist_ok=True)
-        with open(output, 'w', encoding='utf-8') as file:
-            json.dump(result, file, indent=2)
+        output = (Path(args.output) if args.output else
+                  default_output(checkpoint, name, args.act, args.episodes_per_state, args.seed))
+        write_result(result, output)
         if events is not None:
             summary = {'eval_success_rate': result['success_rate'], 'eval_episodes': result['episodes']}
             events.emit('eval', **eval_event(result), path=str(output))

@@ -65,7 +65,7 @@ def test_evaluate_the_promoted_network_through_the_cli(states_dir, tmp_path, cap
 
     assert cli.main(['evaluate', '--specialist', str(config), '--models-dir', str(root),
                      '--episodes-per-state', '3', '--parallel', '2', '--seed', '4']) == 0
-    output = root / 'ow-start' / 'untrained' / 'eval.json'
+    output = root / 'ow-start' / 'untrained' / 'eval-e3-s4.json'      # not the canonical 100 episodes, seed 0
     assert f"(written to {output})" in capsys.readouterr().out
     result = json.loads(output.read_text())
     records = result['records']

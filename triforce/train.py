@@ -81,7 +81,7 @@ from . import registry
 from ._native import CurriculumSpec, Env, EnvPool, TrainTask
 from .best_of_n import collect_best
 from .demo import collect_demo_batch, parse_demo_actions
-from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir
+from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir, write_json_atomic
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
@@ -487,11 +487,10 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     trained = state['steps'] - start_steps
     sps = trained / elapsed if elapsed else 0.0
     status = 'early_stop' if state['stopped_early'] else status
-    with open(out_dir / 'train_summary.json', 'w', encoding='utf-8') as file:
-        json.dump({'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
-                   'iterations_trained': state['iteration'] - start_iteration, 'steps_trained': trained,
-                   'stopped_early': state['stopped_early'], 'wall_seconds': elapsed,
-                   'steps_per_second': sps}, file, indent=2)
+    write_json_atomic(out_dir / 'train_summary.json', {
+        'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
+        'iterations_trained': state['iteration'] - start_iteration, 'steps_trained': trained,
+        'stopped_early': state['stopped_early'], 'wall_seconds': elapsed, 'steps_per_second': sps})
     print(f"[train] {'interrupted' if status == 'interrupted' else 'done'}: {state['iteration'] - start_iteration} "
           f"iterations, {trained} steps in {elapsed:.1f}s ({sps:.1f} steps/sec); checkpoint {ckpt}")
     summary = {'status': status, 'iterations': state['iteration'],

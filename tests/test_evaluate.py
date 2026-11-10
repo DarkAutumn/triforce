@@ -6,10 +6,11 @@ import subprocess
 import sys
 
 import numpy as np
+import pytest
 
-from triforce import _native, evaluate, replay
-from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _visited_rooms, evaluate_specialist,
-                               format_report)
+from triforce import _native, evaluate, registry, replay
+from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _start_health_fraction, _visited_rooms,
+                               default_output, evaluate_specialist, format_report, read_evaluation, write_result)
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import observation_space
 from triforce.registry import save_checkpoint
@@ -51,6 +52,97 @@ def test_evaluate_cli_logs_a_folder_the_training_gui_reads(states_dir, tmp_path,
     assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--episodes-per-state', '1',
                           '--output', str(tmp_path / 'eval.json'), '--logs-dir', str(logs), '--no-log']) == 0
     assert len(list(logs.iterdir())) == 1
+
+
+def _short_config(tmp_path, name='ow-start'):
+    config = tmp_path / f'{name}.yaml'
+    config.write_text(f"name: {name}\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 1\n")
+    return config
+
+
+def test_only_the_canonical_evaluation_is_written_to_eval_json(states_dir, tmp_path, monkeypatch):
+    """F125: another act mode, episode count, seed or specialist goes to its own file; eval.json is untouched."""
+    monkeypatch.setenv('TRIFORCE_STATES_DIR', str(states_dir))
+    checkpoint = save_checkpoint('ow-start', 'canon', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    run = checkpoint.parent
+    config = _short_config(tmp_path)
+
+    def main(*extra):
+        return evaluate.main(['--specialist', str(config), '--checkpoint', str(run), '--no-log', *extra])
+
+    assert main() == 0
+    canonical = (run / 'eval.json').read_text()
+    assert json.loads(canonical)['episodes'] == 100
+    assert main('--act', 'argmax', '--episodes-per-state', '1') == 0
+    assert main('--act', 'sample', '--seed', '2', '--episodes-per-state', '1') == 0
+    assert main('--specialist', str(_short_config(tmp_path, 'ow-zora')), '--episodes-per-state', '1') == 0
+    assert (run / 'eval.json').read_text() == canonical
+    assert sorted(p.name for p in run.glob('eval*.json')) == [
+        'eval-argmax-e1.json', 'eval-e1-s2.json', 'eval-ow-zora-e1.json', 'eval.json']
+    assert json.loads((run / 'eval-argmax-e1.json').read_text())['act'] == 'argmax'
+    # --act argmax on a model that acts by argmax is its canonical evaluation
+    registry.set_act_mode(run, 'argmax')
+    assert default_output(run, 'ow-start', 'argmax', 100, 0) == run / 'eval.json'
+    assert default_output(run, 'ow-start', 'sample', 100, 0) == run / 'eval-sample.json'
+    assert default_output(run, 'ow-start', 'model', 100, 0) == run / 'eval.json'
+
+
+def test_write_result_keeps_the_old_file_when_the_write_fails(tmp_path, monkeypatch):
+    """F125/F126: a failed write leaves the previous eval.json whole."""
+    path = write_result({'episodes': 3}, tmp_path / 'run' / 'eval.json')
+
+    def fail(*_args, **_kwargs):
+        raise OSError('disk full')
+
+    monkeypatch.setattr(json, 'dump', fail)
+    with pytest.raises(OSError):
+        write_result({'episodes': 1}, path)
+    assert json.loads(path.read_text()) == {'episodes': 3}
+    assert [p.name for p in path.parent.iterdir()] == ['eval.json']
+
+
+def test_read_evaluation_finds_the_evaluation_in_the_act_mode_of_the_current_weights(tmp_path):
+    """F027: a reader gets the evaluation matching the run's act mode and checkpoint, or a LookupError."""
+    checkpoint = save_checkpoint('ow-start', 'r', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    run = checkpoint.parent
+    sha1 = registry.checkpoint_sha1(run)
+    write_result({'deterministic': False, 'success_rate': 0.5}, run / 'eval.json')       # an old file, no sha1
+    assert read_evaluation(run) == (run / 'eval.json', {'deterministic': False, 'success_rate': 0.5})
+    with pytest.raises(LookupError, match='eval.json was measured by sample'):
+        read_evaluation(run, 'argmax')
+    registry.set_act_mode(run, 'argmax')      # renames the sampled eval.json
+    with pytest.raises(LookupError, match='no eval.json or eval-argmax.json'):
+        read_evaluation(run)
+    assert read_evaluation(run, 'sample')[0] == run / 'eval-sample.json'
+    write_result({'act': 'argmax', 'deterministic': True, 'checkpoint_sha1': 'f' * 40}, run / 'eval-argmax.json')
+    with pytest.raises(LookupError, match='other weights'):
+        read_evaluation(run)
+    write_result({'act': 'argmax', 'deterministic': True, 'checkpoint_sha1': sha1}, run / 'eval-argmax.json')
+    assert read_evaluation(run)[0] == run / 'eval-argmax.json'
+
+
+def test_start_health_fraction_uses_the_max_hearts_at_the_start():
+    """F095: a heart container taken during the episode doesn't shrink the start fraction."""
+    record = {'start_health': 2.0, 'start_max_health': 3, 'health': 3.0, 'max_health': 4}
+    assert _start_health_fraction([record]) == pytest.approx(2 / 3)
+    old = {'start_health': 2.0, 'health': 3.0, 'max_health': 4}     # records written before start_max_health
+    assert _start_health_fraction([old]) == pytest.approx(0.5)
+
+
+def test_evaluation_names_its_inputs(states_dir, tmp_path):
+    """F080 (2): the result carries the act mode, the checkpoint's sha1, the network hash and the config."""
+    checkpoint = save_checkpoint('ow-start', 'p', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=3)
+    result = evaluate_specialist(config, checkpoint, episodes_per_state=1, states_dir=states_dir,
+                                 deterministic=True)
+    assert (result['act'], result['deterministic']) == ('argmax', True)
+    assert result['checkpoint_sha1'] == registry.checkpoint_sha1(checkpoint)
+    assert result['model_hash'] == f"{registry.load_model(checkpoint)[0].to_native().hash:016x}"
+    assert result['code'] == replay.code_version() and result['data'] == replay.data_hash()
+    again = _native.SpecialistConfig.from_json(json.dumps(result['config']))
+    assert (again.name, again.max_steps, again.start_states) == ('ow-start', 3, ['start'])
+    assert json.loads(json.dumps(result)) == result
 
 
 def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tmp_path):

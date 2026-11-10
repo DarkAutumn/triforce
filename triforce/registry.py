@@ -9,16 +9,26 @@ same shape and vocabulary (schema 1 is schema 2 without ``target``).  The networ
 
 The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``.
 
-How a run's model acts (better-play §6b) is ``<run dir>/act``: ``sample`` (keyed sampling, the default when the
-file is absent) or ``argmax``, chosen by evaluating both and set with ``promote --act``.  Chains, the watch player
-and evaluation follow it unless told otherwise.
+How a run's model acts (better-play §6b) is ``<run dir>/act``: ``<mode> <sha1 of ckpt.pt>``, ``mode`` being
+``sample`` (keyed sampling, the default when the file is absent) or ``argmax``, chosen by evaluating both and set
+with ``promote --act``.  The mode belongs to the weights it was measured for: when ``ckpt.pt`` no longer has that
+hash (retrained or replaced in place) or the file is the old one-word format, ``act_mode`` warns and returns
+``sample``.  Chains, the watch player and evaluation follow it unless told otherwise.
+
+Checkpoints load with ``torch.load(weights_only=True)`` (no pickled code runs); ``save_checkpoint`` keeps
+``metrics`` plain floats/ints so that stays true.
 
 CLI: ``python -m triforce.registry list <specialist>`` / ``promote <specialist> <run-id> [--act MODE]``.
 """
 
 import argparse
+import hashlib
+import json
+import numbers
 import os
+import pickle
 import time
+import warnings
 from pathlib import Path
 from typing import Optional
 
@@ -91,7 +101,7 @@ def save_checkpoint(specialist: str, run_id: str, network, optimizer=None, *, it
         'optimizer': optimizer.state_dict() if optimizer is not None else None,
         'iterations': int(iterations),
         'steps': int(steps),
-        'metrics': dict(metrics or {}),
+        'metrics': _plain_metrics(metrics or {}),
         **(extra or {}),
     }
     tmp = path.with_suffix('.tmp')
@@ -100,9 +110,56 @@ def save_checkpoint(specialist: str, run_id: str, network, optimizer=None, *, it
     return path
 
 
+def _plain_metrics(metrics: dict) -> dict:
+    """``metrics`` with numpy/torch scalars as Python floats/ints, so the checkpoint loads with
+    ``weights_only=True``."""
+    def plain(value):
+        if isinstance(value, (bool, str)) or value is None:
+            return value
+        if isinstance(value, dict):
+            return {str(k): plain(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [plain(v) for v in value]
+        if isinstance(value, numbers.Integral):
+            return int(value)
+        if isinstance(value, numbers.Real):
+            return float(value)
+        if hasattr(value, 'item'):      # 0-d tensors / arrays
+            return plain(value.item())
+        raise TypeError(f"checkpoint metric value {value!r} ({type(value).__name__}) is not a plain number")
+    return {str(key): plain(value) for key, value in metrics.items()}
+
+
 def _resolve(path) -> Path:
     path = Path(path)
     return path / CHECKPOINT_NAME if path.is_dir() else path
+
+
+_SHA1_CACHE: dict = {}
+
+
+def checkpoint_sha1(checkpoint) -> str:
+    """Hex sha1 of a checkpoint's ``ckpt.pt`` bytes (file or run dir); cached per (path, mtime, size)."""
+    path = _resolve(checkpoint).resolve()
+    stat = path.stat()
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    digest = _SHA1_CACHE.get(key)
+    if digest is None:
+        sha = hashlib.sha1()
+        with open(path, 'rb') as file:
+            for chunk in iter(lambda: file.read(1 << 20), b''):
+                sha.update(chunk)
+        digest = _SHA1_CACHE[key] = sha.hexdigest()
+    return digest
+
+
+def _torch_load(path: Path) -> dict:
+    """``torch.load`` with the safe loader; a file that needs pickled code raises ``pickle.UnpicklingError``
+    naming the path."""
+    try:
+        return torch.load(path, map_location='cpu', weights_only=True)
+    except pickle.UnpicklingError as error:
+        raise pickle.UnpicklingError(f"{path}: not a plain checkpoint (refusing to unpickle code): {error}") from error
 
 
 def _obs_layout_problem(checkpoint: dict) -> Optional[str]:
@@ -124,7 +181,7 @@ def load_checkpoint(path, check_schema: bool = True) -> dict:
     """Loads a checkpoint (file or run directory).  Raises SchemaMismatchError when the action schema differs or
     the observation schema is newer, or older with a layout that isn't a subset of the current one."""
     path = _resolve(path)
-    checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+    checkpoint = _torch_load(path)
     if check_schema:
         action = checkpoint.get('action_schema_version')
         if action != ACTION_SCHEMA_VERSION:
@@ -178,23 +235,58 @@ def promote(specialist: str, run_id: str, root=None, act: Optional[str] = None) 
     return pointer
 
 
+def eval_mode(result: dict) -> Optional[str]:
+    """The act mode an evaluation result was measured in (``act``, else its ``deterministic`` flag)."""
+    if result.get('act') in ACT_MODES:
+        return result['act']
+    deterministic = result.get('deterministic')
+    return None if deterministic is None else ('argmax' if deterministic else 'sample')
+
+
 def act_mode(checkpoint) -> str:
-    """How the model in ``checkpoint`` (file or run dir) acts: its run dir's ``act``, ``sample`` without one."""
-    path = _resolve(checkpoint).parent / ACT_NAME
+    """How the model in ``checkpoint`` (file or run dir) acts: its run dir's ``act`` when that was set for these
+    weights (its sha1 matches ``ckpt.pt``), else ``sample`` (a warning says why when an ``act`` file exists)."""
+    ckpt = _resolve(checkpoint)
+    path = ckpt.parent / ACT_NAME
     if not path.is_file():
         return 'sample'
-    mode = path.read_text(encoding='utf-8').strip()
+    fields = path.read_text(encoding='utf-8').split()
+    mode = fields[0] if fields else ''
     if mode not in ACT_MODES:
         raise ValueError(f"{path}: act mode {mode!r} is not one of {ACT_MODES}")
+    if len(fields) != 2:
+        warnings.warn(f"{path}: act file without the checkpoint hash (old format); the model samples", stacklevel=2)
+        return 'sample'
+    if fields[1] != checkpoint_sha1(ckpt):
+        warnings.warn(f"{path}: act mode {mode!r} was set for other weights (sha1 {fields[1]}, {ckpt.name} is "
+                      f"{checkpoint_sha1(ckpt)}); the model samples", stacklevel=2)
+        return 'sample'
     return mode
 
 
 def set_act_mode(checkpoint, mode: str) -> Path:
-    """Sets how the model in ``checkpoint`` (file or run dir) acts; returns the ``act`` file."""
+    """Sets how the model in ``checkpoint`` (file or run dir) acts, bound to the current ``ckpt.pt``'s sha1;
+    returns the ``act`` file (written atomically).  An ``eval.json`` measured in the other mode is renamed to
+    ``eval-<its mode>.json`` (an existing file of that name is kept as ``eval-<its mode>.replaced.json``), so
+    ``eval.json`` stays the evaluation in the model's act mode."""
     if mode not in ACT_MODES:
         raise ValueError(f"act mode {mode!r} is not one of {ACT_MODES}")
-    path = _resolve(checkpoint).parent / ACT_NAME
-    path.write_text(mode + '\n', encoding='utf-8')
+    ckpt = _resolve(checkpoint)
+    path = ckpt.parent / ACT_NAME
+    tmp = path.with_name(f'.{ACT_NAME}.{os.getpid()}.tmp')
+    tmp.write_text(f'{mode} {checkpoint_sha1(ckpt)}\n', encoding='utf-8')
+    os.replace(tmp, path)
+    evaluation = ckpt.parent / 'eval.json'
+    if evaluation.is_file():
+        try:
+            old = eval_mode(json.loads(evaluation.read_text(encoding='utf-8')))
+        except ValueError:
+            old = None
+        if old is not None and old != mode:
+            target = evaluation.with_name(f'eval-{old}.json')
+            if target.is_file():
+                os.replace(target, target.with_name(f'eval-{old}.replaced.json'))
+            os.replace(evaluation, target)
     return path
 
 
@@ -233,7 +325,7 @@ def main(argv=None):
             current = None
         for run_id in list_runs(args.specialist, args.models_dir):
             path = checkpoint_path(args.specialist, run_id, args.models_dir)
-            ckpt = torch.load(path, map_location='cpu', weights_only=False)
+            ckpt = _torch_load(path)
             mark = '*' if run_id == current else ' '
             success = ckpt.get('metrics', {}).get('success_rate')
             print(f"{mark} {run_id}  iterations={ckpt.get('iterations')} steps={ckpt.get('steps')} "

@@ -1,5 +1,6 @@
 """Model registry: checkpoint round trip, schema checks, promotion."""
 
+import pickle
 from pathlib import Path
 
 import numpy as np
@@ -230,3 +231,53 @@ def test_registry_cli_lists_runs_marking_the_promoted_one_and_its_act_mode(tmp_p
     assert [line[0] for line in lines] == ['*', ' ']
     assert lines[0].endswith('act=argmax') and lines[1].endswith('act=sample')
     assert registry.act_mode(tmp_path / 'd1-test' / 'a') == 'argmax'
+
+
+def test_act_mode_belongs_to_the_weights_it_was_set_for(tmp_path):
+    """F064: retraining into a run dir whose act file says argmax leaves an unmeasured checkpoint that samples."""
+    registry.save_checkpoint('d1-test', 'a', _trained(0)[0], root=tmp_path)
+    run = tmp_path / 'd1-test' / 'a'
+    registry.promote('d1-test', 'a', root=tmp_path, act='argmax')
+    assert (run / 'act').read_text().split() == ['argmax', registry.checkpoint_sha1(run)]
+    assert registry.act_mode(run) == 'argmax'
+    registry.save_checkpoint('d1-test', 'a', _trained(1)[0], root=tmp_path)
+    with pytest.warns(UserWarning, match='other weights'):
+        assert registry.act_mode(run) == 'sample'
+    (run / 'act').write_text('argmax\n')
+    with pytest.warns(UserWarning, match='old format'):
+        assert registry.act_mode(run / 'ckpt.pt') == 'sample'
+    assert [p.name for p in run.iterdir() if p.name.startswith('.')] == []
+
+
+def test_set_act_mode_moves_an_evaluation_of_the_other_mode_aside(tmp_path):
+    """F027: after ``promote --act argmax`` no reader takes a sampled eval.json for the model's evaluation."""
+    registry.save_checkpoint('d1-test', 'a', _trained()[0], root=tmp_path)
+    run = tmp_path / 'd1-test' / 'a'
+    (run / 'eval.json').write_text('{"deterministic": false, "success_rate": 0.5}')
+    registry.set_act_mode(run, 'sample')
+    assert (run / 'eval.json').is_file()
+    registry.set_act_mode(run, 'argmax')
+    assert not (run / 'eval.json').exists()
+    assert (run / 'eval-sample.json').read_text() == '{"deterministic": false, "success_rate": 0.5}'
+    (run / 'eval.json').write_text('{"act": "argmax", "deterministic": true}')
+    registry.set_act_mode(run, 'argmax')
+    assert (run / 'eval.json').is_file()
+
+
+def test_checkpoints_load_safely_with_numpy_metrics_and_refuse_pickled_code(tmp_path):
+    """F123: weights_only loads; numpy metric values are stored as plain numbers."""
+    path = registry.save_checkpoint('d1-test', 'np', _trained()[0], metrics={'success_rate': np.float32(0.5),
+                                                                            'episodes': np.int64(3)}, root=tmp_path)
+    metrics = registry.load_checkpoint(path)['metrics']
+    assert metrics == {'success_rate': 0.5, 'episodes': 3} and type(metrics['episodes']) is int
+
+    class Payload:  # pylint: disable=too-few-public-methods
+        def __reduce__(self):
+            return (Path.touch, (tmp_path / 'pwned',))
+
+    evil = tmp_path / 'evil' / 'ckpt.pt'
+    evil.parent.mkdir()
+    torch.save({'payload': Payload()}, evil)
+    with pytest.raises(pickle.UnpicklingError, match='refusing'):
+        registry.load_checkpoint(evil)
+    assert not (tmp_path / 'pwned').exists()
