@@ -1,6 +1,6 @@
 """Training metrics (design §12, "Measure before tuning").
 
-``RolloutMetrics`` accumulates raw counts and sums that merge exactly: ``add_steps`` takes batches of env steps
+``RolloutMetrics`` accumulates raw counts and sums: ``add_steps`` takes batches of env steps
 (actions, frames, interrupt codes) and ``add_episode`` every terminal info (the pool's ``episode`` events).
 ``RolloutMetrics.summary()`` turns them into the flat metric dict logged per iteration:
 
@@ -114,21 +114,6 @@ class RolloutMetrics:
         self.linger_room_worst = Counter()
         self.block_episodes = self.blocks = 0
         self.curriculum_block_episodes = self.curriculum_blocks = 0
-
-    def merge(self, other: 'RolloutMetrics') -> 'RolloutMetrics':
-        """Adds other's counts into self (``cohorts`` concatenate; ``extra`` takes other's values)."""
-        for name, value in vars(other).items():
-            mine = getattr(self, name)
-            if name in ('linger_worst', 'curriculum_linger_worst', 'linger_room_worst'):
-                for key, maximum in value.items():
-                    mine[key] = max(mine[key], maximum)
-            elif isinstance(mine, Counter):
-                mine.update(value)
-            elif isinstance(mine, dict):
-                mine.update(value)
-            else:
-                setattr(self, name, mine + value)
-        return self
 
     def add_steps(self, actions, frames, interrupts):
         """Counts one batch of env steps: ``actions`` ``[n, 3]`` (kind, direction, duration indices), ``frames``

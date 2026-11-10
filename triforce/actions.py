@@ -112,12 +112,6 @@ class ActionMask:
         if kind in TIMED_KINDS:
             self.duration[kind, :] = True
 
-    def disallow_kind(self, kind: ActionKind):
-        """Removes a kind entirely."""
-        self.kind[kind] = False
-        self.direction[kind, :] = False
-        self.duration[kind, :] = False
-
     def is_allowed(self, action: Action) -> bool:
         """Whether a concrete action is legal under this mask."""
         if not self.kind[action.kind]:

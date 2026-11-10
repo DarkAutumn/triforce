@@ -194,14 +194,14 @@ def test_every_recompute_forward_runs_on_the_training_device(device):
     assert {weights for _, _, weights in forwards} == {expected}
 
 
-def test_episode_metrics_merge():
+def test_episode_metrics_summary():
     def info(steps, frames, reward_total, rewards, **extra):
         return {'episode_steps': steps, 'episode_frames': frames, 'reward_total': reward_total,
                 'episode_rewards': rewards, **extra}
 
     move16, sword_e, wait4 = [0, 0, 2], [2, 3, 0], [1, 0, 0]
     code = INTERRUPTS.index
-    first, second = RolloutMetrics(), RolloutMetrics()
+    first = second = RolloutMetrics()          # one rollout's metrics; two names for the two batches
     first.add_steps([move16, sword_e], [16, 10], [0, code('damage')])
     hearts = {'dropped': 3, 'taken': 2, 'healed': 0.5, 'wasted': 1.5, 'left': 1, 'expired': 0}
     first.add_episode(info(2, 26, 20.5, {'move-closer': 0.5, 'success': 20.0}, ending='exit-correct',
@@ -213,7 +213,7 @@ def test_episode_metrics_merge():
     second.add_episode(info(1, 12, -20.0, {'failure': -20.0}, ending='link-died', outcome='hard-failure',
                             health=0.0, max_health=3.0, start_health=2.5))
 
-    summary = first.merge(second).summary()
+    summary = first.summary()
     assert summary['episodes'] == 2 and summary['success_rate'] == 0.5
     assert summary['ending/exit-correct'] == 0.5 and summary['outcome/hard-failure'] == 0.5
     assert summary['reward/total'] == pytest.approx(0.25)                        # (20.5 - 20) / 2
@@ -240,8 +240,8 @@ def test_episode_metrics_merge():
     assert 'duration/SWORD/4' not in summary
 
 
-def test_linger_metrics_weighted_merge_curriculum_and_entry_rooms():
-    first, second = RolloutMetrics(), RolloutMetrics()
+def test_linger_metrics_weighted_curriculum_and_entry_rooms():
+    first = second = RolloutMetrics()
 
     def episode(metrics, steps, frames, room=(1, 0x35, False), curriculum=False):
         info = {'outcome': 'success', 'linger_room': list(room),
@@ -256,7 +256,7 @@ def test_linger_metrics_weighted_merge_curriculum_and_entry_rooms():
     episode(second, 20, 180, room=(0, 0x77, True))
     episode(first, 90, 400, curriculum=True)
     episode(second, 60, 500, curriculum=True)
-    summary = first.merge(second).summary()
+    summary = first.summary()
     assert summary['linger/max_steps'] == 20
     assert summary['linger/max_frames'] == pytest.approx(530 / 3)
     assert summary['linger/tail_steps'] == 10
