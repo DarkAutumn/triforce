@@ -2,7 +2,8 @@
 
 Lee, Nov 9: inference moves to Rust (one call per rollout; eval, chains and play-zelda on the same in-pool policy;
 replayable plays), then profile and fix performance, then GPU vs CPU inference, then retrain the whole team from
-scratch on the new stack (the old checkpoints don't load), then the better-play experiments one at a time.
+scratch on the new stack (the old checkpoints didn't load then; since review F066 pre-r56 checkpoints load again),
+then the better-play experiments one at a time.
 
 ## Summary
 
@@ -24,8 +25,9 @@ scratch on the new stack (the old checkpoints don't load), then the better-play 
   6–14× the training time (§4–§6).
 - **SIL team (IX.11):** 11 families continued with SIL and promoted. With the act mix: **D3 arrivals 34/120 from the
   start, full route to the D3 triforce 4/120** (r56 sampled: 11 and 0), D1 115/120, D3 30/120 (§7).
-- **Found:** the training success rate hides slow failures (a Dodongo continuation read ~1.0 in training and was
-  54%; §5); argmax loops where a policy has no answer (§3). Both in the backlog.
+- **Found:** the training success rate lags slow failures and a late collapse (a Dodongo continuation read ~1.0 in
+  training and was 54%; §5, mechanism corrected by review F071); argmax loops where a policy has no answer (§3).
+  Both in the backlog.
 - **training-gui** (Lee, Nov 9): [currently running] shows every live training on the machine (other logs roots
   found from the running triforce processes; `0bc2949`); standalone `evaluate`/`eval-chain` log folders of their
   own (branch `better-play`, merged after r56).
@@ -257,11 +259,13 @@ depth 3; `ei-k1`: the same with one unperturbed future (the clairvoyant ablation
 - The K=1 (clairvoyant) arm is worse than K=2 on every measure, as §2.3 predicts, but one seed and 300 episodes
   can't separate them.
 - **Control seed 58 collapsed:** in evaluation it stuns Dodongo, hits him once and waits out the 600-step budget
-  (136 of 300 episodes `max-steps`), while its training success stayed 0.96–1.0. A check in the training env
-  (no curriculum) gives the same 57%, so the env agrees with the evaluation: **the training success rate hides slow
-  failures**, because an episode that runs into the 600-step budget rarely finishes inside one 512-step rollout
-  segment, so few of them are counted per iteration (and the early stop, which counts the same episodes, can be
-  fooled the same way). Logged in the backlog. The search arm on the same seed did not collapse.
+  (136 of 300 episodes `max-steps`), while its training success read 0.96–1.0. A check in the training env
+  (no curriculum) gives the same 57%, so the env agrees with the evaluation. Correction (review F071, Nov 10): the
+  training success rate doesn't drop slow failures, it counts each episode when it ends, so a failure that runs
+  into the 600-step budget shows up 1–3 rollouts after it started, plus the actor's lag and the 20-episode window;
+  this run collapsed in its last few updates, which its last metric rows do show, and the rate lagged the
+  collapse (the early stop counted the same lagging episodes). Logged in the backlog; fixed in the review fix-up.
+  The search arm on the same seed did not collapse.
 - **Goriya (IX.7)**, same search settings, 245 iterations from `goriya/r56-rust-dg`, seed 57: 6.0 h of training
   (46 steps/s; the plain continuation takes 25 min at the same 4 envs, so 14×). Sampled 89.5%, 0.793 hearts lost per
   episode; argmax 92.1%, 0.599: worse than every control seed (90.5–94.5%, 0.51–0.65) and than SIL. At this budget

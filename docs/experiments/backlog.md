@@ -19,11 +19,17 @@ round docs still call it that.)
    best-of-N (not kept) vs SIL (best arm on goriya; second family running), §2 Gumbel expert iteration (Dodongo: no
    gain at the ceiling; goriya running), §1b exit-health weight / harvested handoff states, §5 PLR, §6a PPG (goriya
    arms running).
-   - **Problem (round 16 §5): the training success rate hides slow failures.** An episode that runs into the room's
-     step budget (600 for Dodongo) rarely ends inside one rollout segment, so per-iteration success counts the fast
-     episodes: a Dodongo continuation read 0.96–1.0 in training and was 54% in evaluation. The early stop counts
-     the same episodes. Fix idea: count every episode that *started* in a window once it ends, or report the share
-     of envs whose current episode is older than the budget's half; a periodic small evaluation during training.
+   - [x] **Problem (round 16 §5): the training success rate lagged the policy.** Episodes were counted when they
+     ended, so a slow failure (one that runs into the room's step budget, 600 for Dodongo) was counted iterations
+     after the rollout it started in, and the rate lagged a policy that collapsed late in the run: a Dodongo
+     continuation read 0.96–1.0 in training and was 54% in evaluation. It was a lag plus a late collapse, not a
+     steady undercount. Fixed in the review fix-up (F071): per-start cohorts feed the early stop, `in_flight/*`,
+     `success_rate_pessimistic` and `started/*` are logged, and every proposed stop is confirmed by an evaluation.
+   - **Freeze the fight wavefront (review F111).** In fight rooms PBRS is an approach reward, not potential-based:
+     the targets move and the wavefront is rebuilt every step, so following an enemy that moves away pays again
+     and knockback resets the baseline for free (`docs/architecture.md`). Experiment: freeze the fight wavefront
+     between progress events (hit, kill, pickup, phase change) as `LingerTracker` does; A/B on one fight family,
+     watching `linger/*`, `no-damage`/`stuck` endings and success.
    - **Argmax loops** where a policy has no good answer (stuck / no-damage, round 16 §3): an argmax with a loop
      breaker (sample when the same observation repeats, or after N steps without progress) could keep argmax's
      hearts without the loops.
@@ -200,7 +206,8 @@ better)**. Train a model for (2).
 - **Paused by Lee** (Nov 8): the training changes coming next will change how this is trained. What I would have
   done next to cut bombs per fight (the metric to minimize; 1 = perfect), in order:
   1. **One-bomb curriculum.** Explore many more seeds (`python -m triforce.explore --specialist boss-dodongo
-     --seed S --variant --out <root>` for S in 10..40+), keep only tracks with exactly one BOMB and no swallow
+     --seed S --variant --out <root>` for S in 10..40+; explore exits 1 on an unsolved or mismatched state, so a
+     shell loop can rely on its exit code), keep only tracks with exactly one BOMB and no swallow
      (`target/dodongo/how_killed.py <root>/boss-dodongo` prints BOMB count and max BombHits per track), and
      train from scratch on those against r45 (same budget). Today's 25 tracks spend 1–13 bombs (random
      placement), so the demonstrations themselves are wasteful. Go-Explore could also rank successes by bombs
@@ -500,18 +507,18 @@ the remaining list is deferred until Lee resumes work.
 - [x] **Rust port: finish plan step 17** (`round8.md`).
 - [x] **Chains on the hardware core and regenerated states (round 9 §18b).** Round 10 §1: at 120 runs per
   segment the team matches the FCEUmm rates; the round-9 dip was 40-run noise. No fine-tune needed.
-- [ ] **Power-on RAM fill (Lee to decide).** zcore powers on with $FF (FCEUmm's fill); real RAM is indeterminate.
-  Twelve TetaNES test ROMs only match their screenshots with $00. Switching changes the base state (regenerate
-  states and trajectories again).
+- [x] **Power-on RAM fill.** Decided: $00 since Nov 8 (round 11; `TFZSTATE` v6, every state and trajectory
+  regenerated; decisions 2026-11-08).
 - [ ] **Scratch-team convergence and Zora stalls (r36 §21; deferred).** At the matched 2,007,040-action budget,
   both fresh teams fail all full/post-D1 chains. Bundle Zora is worse in success, health and mean quiet time;
   its full-route 0x48 stalls last 2,000 actions. Baseline post-D1 fairy has 58/80 stalls in 0x59; baseline D2
   worst quiet gap is 2,978. Separate convergence/coverage from representation effects before drawing a general
   observation conclusion. One training-seed pair is not seed-robust evidence. No further run started.
-  - **Prerequisite (Nov 6):** schema 2 exists only in the old Python dev tree (`round4-dev` `4d35155`); the Rust
-    env is schema 1 (`OBS_SCHEMA_VERSION = 1`). Answering this means porting schema 2 into `crates/env`, then
-    two scratch teams at a larger budget (roughly 10 families × 2 arms × 5M steps, a day of GPU). Lee to decide
-    whether schema 2 is worth porting (r36: no better, Zora worse).
+  - **Prerequisite (Nov 6):** the r36 bundle observation exists only in the old Python dev tree (`round4-dev`
+    `4d35155`) and was never ported (the current `OBS_SCHEMA_VERSION = 2` is the `target` block, not that bundle).
+    Answering this means porting the bundle into `crates/env`, then two scratch teams at a larger budget (roughly
+    10 families × 2 arms × 5M steps, a day of GPU). Lee to decide whether it is worth porting (r36: no better,
+    Zora worse).
 - [ ] **Arrival health is the D2 loss (round 10 §5).** 2:0x5e kills 24/28 arrivals at ≤1 heart and 4/130 above 3;
   post-D1 main reaches it with 1.64 hearts (fairy 2.39) after ~2.3 hearts of overworld damage spread over
   0x2b/0x3d/0x4c/0x2a/0x2d, with almost no drops there. Already ruled out: crossing-room damage penalty (round 6),
@@ -627,8 +634,9 @@ the remaining list is deferred until Lee resumes work.
   and the items in `progress_events` to the cell. Consider exploring room by room instead of per family.
   Round 3 added enemy health to the cell (Aquamentus 0/3 → 3/3); ow-zora and d1-wallmaster were explored before
   that, and d1-wallmaster `1_44w_2` is still unexplored: re-run it with the new cell.
-- **Training-time `balanced_success_rate` lags** when a specialist finishes few room-entry episodes per iteration
-  (d1-melee: 26 states, 5–17 episodes per iteration). Consider a time-based window.
+- [x] **Training-time `balanced_success_rate` lags** when a specialist finishes few room-entry episodes per iteration
+  (d1-melee: 26 states, 5–17 episodes per iteration). Fixed by the per-start cohorts and the confirmation
+  evaluation (review F071); no time-based window (Lee).
 - **Long episodes starve the curriculum** (round 3; fixed for boss-aquamentus in round 5 with `max_steps: 400`,
   0% → 93%). `max_steps` sets the episode rate; set it from the explored path length for any curriculum specialist
   whose failures are slow (fleeing, waiting) rather than quick deaths.
