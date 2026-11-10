@@ -30,8 +30,6 @@ features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not slow'"
 markers = [
-    "slow: long-running tests (deselect with '-m \"not slow\"')",
     "e2e: end-to-end tests over the whole stack (run by default; select with '-m e2e')",
 ]
