@@ -247,3 +247,16 @@ def test_collector_episodes_do_not_depend_on_completion_order():
         weights.append(plr.weights())
     assert episodes[0] == episodes[1] == sorted(episodes[0], key=lambda e: e[0])
     assert weights[0] == weights[1]
+
+
+@pytest.mark.parametrize('anneal,expected', [(0.5, [1.0, 1.0, 0.5, 0.0]), (0.0, [1.0] * 4),
+                                             (1.0, [0.75, 0.5, 0.25, 0.0])])
+def test_entropy_bonus_anneals_to_zero_over_the_last_share_of_iterations(anneal, expected):
+    _seed()
+    coeff = 0.02
+    network = ZeldaPolicy(synthetic.observation_space(), SMALL)
+    ppo = PPO(PPOConfig(target_steps=8, num_epochs=1, ent_coeff=coeff, ent_anneal=anneal))
+    charted = []
+    ppo.train(network, _bandit_pool(), iterations=4, callback=lambda result: charted.append(
+        result.stats['charts/ent_coeff']))
+    assert charted == pytest.approx([coeff * share for share in expected])

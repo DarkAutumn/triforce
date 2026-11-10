@@ -291,3 +291,84 @@ def test_linger_metrics_keep_historical_absence_and_measured_zero_distinct():
     assert summary['linger/max_steps'] == 12      # absent historical data does not dilute the mean
     assert summary['linger/tail_steps'] == summary['linger/tail_frames'] == 0
     assert not any(key.startswith('linger/room/') for key in summary)
+
+
+class TruncatingEnv(synthetic.BanditEnv):
+    """Two-step episodes: the second step is a 16-frame truncation that opts into bootstrapping; keeps the final
+    observations it returned there."""
+    def __init__(self):
+        super().__init__(seed=0)
+        self.t = 0
+        self.finals = []
+
+    def reset(self, seed=None, options=None):
+        self.t = 0
+        return super().reset()
+
+    def step(self, action):
+        obs, _, _, _, info = super().step(action)
+        self.t += 1
+        reward = 0.5 * self.t
+        info['frames'] = 8 * self.t
+        truncated = self.t == 2
+        if truncated:
+            info['bootstrap_truncation'] = True
+            self.finals.append(obs)
+        return obs, reward, False, truncated, info
+
+
+def test_a_bootstrapped_truncation_through_the_collector_adds_the_final_value_and_stops_the_trace():
+    """``ListPool`` writes the acting policy's value of a truncation's final observation; ``Collector.finish`` adds
+    it discounted by the step's frames, and the return of that step ends there (the next episode's values don't
+    reach it)."""
+    torch.manual_seed(0)
+    gamma = 0.9
+    pool = synthetic.ListPool(TruncatingEnv, 1)
+    model = ZeldaPolicy(synthetic.observation_space(), ModelConfig(hidden_dim=32))
+    collector = Collector(pool, 6, gamma, 0.95)
+    collector.collect(model, 'cpu')
+    buffer = collector.buffer
+    assert buffer.dones[0].tolist() == [1, 0, 1, 0, 1, 0, 1]
+    finals = pool.envs[0].finals
+    assert len(finals) == 3
+    with torch.no_grad():
+        final_values = model.get_value({k: torch.as_tensor(np.stack([np.asarray(o[k]) for o in finals]))
+                                        for k in buffer.observation})
+    truncations = [1, 3, 5]
+    assert buffer.bootstrap_value[0, truncations].tolist() == pytest.approx(final_values.tolist(), abs=1e-4)
+    assert buffer.bootstrap_value[0, [0, 2, 4]].tolist() == [0.0, 0.0, 0.0]
+    expected = [1.0 + gamma ** 2 * value for value in final_values.tolist()]      # r + gamma**(16/8) * V(final)
+    assert buffer.rewards[0, truncations].tolist() == pytest.approx(expected, abs=1e-4)
+    assert buffer.returns[0, truncations].tolist() == pytest.approx(expected, abs=1e-4)
+    assert buffer.rewards[0, [0, 2, 4]].tolist() == [0.5, 0.5, 0.5]
+
+
+class _FailingPool(synthetic.ListPool):
+    """A pool whose rollout raises."""
+    def rollout(self, policies, steps, out, deterministic=False):
+        raise RuntimeError("the pool broke")
+
+
+def test_a_failed_rollout_raises_from_finish_and_from_train():
+    torch.manual_seed(0)
+    model = ZeldaPolicy(synthetic.observation_space(), ModelConfig(hidden_dim=32))
+    collector = Collector(_FailingPool(synthetic.BanditEnv, 1), 4, 0.99, 0.95)
+    collector.start(model)
+    with pytest.raises(RuntimeError, match='the pool broke'):
+        collector.finish(model, 'cpu')
+    with pytest.raises(RuntimeError, match='the pool broke'):
+        PPO(PPOConfig(target_steps=4, num_epochs=1)).train(model, _FailingPool(synthetic.BanditEnv, 1), iterations=2)
+
+
+def test_a_second_start_while_a_rollout_runs_raises():
+    torch.manual_seed(0)
+    model = ZeldaPolicy(synthetic.observation_space(), ModelConfig(hidden_dim=32))
+    collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 1), 4, 0.99, 0.95)
+    collector.start(model)
+    try:
+        with pytest.raises(RuntimeError, match='already running'):
+            collector.start(model)
+    finally:
+        collector.finish(model, 'cpu')
+    collector.start(model)          # after finish the next rollout starts
+    collector.finish(model, 'cpu')
