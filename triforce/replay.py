@@ -6,21 +6,25 @@ pool was built from: the specialist config(s) as JSON, and for chains the route,
 ``max_steps``, ``stall_steps`` and ``missing``), ``models`` (in policy-index order: ``name``, ``checkpoint``, the
 Rust network's ``hash`` and ``deterministic``, whether it acted by argmax), ``backend`` (where the probabilities came
 from), ``code`` (``git describe --always --dirty``), ``data`` (a hash of game.yaml and routes.yaml) and
-``states_dir``.  Every further line
-is one played episode: ``job`` (its key: the eval seed or the chain run seed), ``start_state`` (eval),
-``actions`` (base64, one byte per head index, three per decision) and ``result`` (the eval record or the run
-result).
+``states_dir`` (and, for chains, ``start_hash``: the ``start_from`` state file's hash).  Every further line
+is one played episode: ``job`` (its key: the eval seed or the chain run seed), ``start_state`` and ``start_hash``
+(eval: the start state's name and its file's hash), ``actions`` (base64, one byte per head index, three per
+decision) and ``result`` (the eval record or the run result).
 
 ``replay(header, play)`` rebuilds the task for that one job, feeds the recorded actions to the same models and
 returns what the pool reports: every decision's ``log_prob``, ``entropy`` and ``value`` under the policy that acted
 (bit for bit the original play's when the code and models match), ``obs`` with ``observations=True``, and the
-episode's ``events``.  A replay that runs past its recorded actions has diverged and raises.
+episode's ``events``.  A replay that runs past its recorded actions, stops before them, or ends with another result
+than the recorded one has diverged and raises.  Before playing, a changed game/route data hash or start state file
+raises (``strict=False``: warns); a different code version warns.  ``read`` drops a cut-off last line (a writer
+killed mid-write) with a warning.
 """
 
 import base64
 import hashlib
 import json
 import subprocess
+import warnings
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Optional
@@ -79,11 +83,27 @@ def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, d
             for name, policy, argmax in zip(names, policies, deterministic)]
 
 
+def state_hash(name: str, states_dir=None) -> Optional[str]:
+    """Hash of the start state file ``name`` resolves to (as the native store resolves it: an absolute path as is,
+    else ``<states_dir>/<name>.state``), None when there is no such file."""
+    path = Path(name)
+    if not path.is_absolute():
+        base = Path(states_dir) if states_dir is not None else Path(_native.paths()['states_dir'])
+        path = base / (name if name.endswith('.state') else f'{name}.state')
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    except OSError:
+        return None
+
+
 def header(kind: str, task: dict, models: list, states_dir=None) -> dict:
     """A replay file's first line."""
-    return {'format': FORMAT, 'kind': kind, 'task': task, 'models': models, 'backend': BACKEND,
+    head = {'format': FORMAT, 'kind': kind, 'task': task, 'models': models, 'backend': BACKEND,
             'code': code_version(), 'data': data_hash(),
             'states_dir': None if states_dir is None else str(states_dir)}
+    if kind == 'chain' and task.get('start_from'):
+        head['start_hash'] = state_hash(task['start_from'], states_dir)
+    return head
 
 
 class ReplayWriter:
@@ -92,6 +112,8 @@ class ReplayWriter:
     def __init__(self, path, head: dict):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._states_dir = head.get('states_dir')
+        self._hashes: dict = {}
         self._file = open(self.path, 'w', encoding='utf-8')  # pylint: disable=consider-using-with
         self._file.write(json.dumps(head) + '\n')
 
@@ -99,7 +121,10 @@ class ReplayWriter:
         """One played episode (a ``poll_plays`` dict) and its result."""
         line = {'job': int(play['job']), 'actions': encode_actions(play['actions']), 'result': result}
         if start_state is not None:
+            if start_state not in self._hashes:
+                self._hashes[start_state] = state_hash(start_state, self._states_dir)
             line['start_state'] = start_state
+            line['start_hash'] = self._hashes[start_state]
         self._file.write(json.dumps(line) + '\n')
         self._file.flush()
 
@@ -114,9 +139,22 @@ class ReplayWriter:
 
 
 def read(path) -> tuple[dict, list[dict]]:
-    """(header, plays) of a replay file; each play's ``actions`` decoded to [n, 3]."""
+    """(header, plays) of a replay file; each play's ``actions`` decoded to [n, 3].  A cut-off last line (the
+    writer died mid-write) is dropped with a warning; a bad line before it raises ValueError naming the line."""
     with open(path, encoding='utf-8') as f:
-        lines = [json.loads(line) for line in f if line.strip()]
+        numbered = [(number, text) for number, text in enumerate(f, 1) if text.strip()]
+    lines = []
+    for index, (number, text) in enumerate(numbered):
+        try:
+            line = json.loads(text)
+            if index and not {'job', 'actions', 'result'} <= set(line):
+                raise ValueError("a play line needs job, actions and result")
+        except ValueError as error:
+            if index == len(numbered) - 1 and index > 0:
+                warnings.warn(f"{path}: dropped a truncated last line ({number})", stacklevel=2)
+                break
+            raise ValueError(f"{path}:{number}: not a replay line: {error}") from error
+        lines.append(line)
     if not lines or lines[0].get('format') != FORMAT:
         raise ValueError(f"{path} is not a replay file (format {FORMAT})")
     return lines[0], [{**line, 'actions': decode_actions(line['actions'])} for line in lines[1:]]
@@ -155,11 +193,40 @@ def _task(head: dict, play: dict):
     raise ValueError(f"unknown replay kind {head['kind']!r}")
 
 
-def replay(head: dict, play: dict, observations: bool = False, policies: Optional[list] = None) -> dict:
+def _check_world(head: dict, play: dict, strict: bool) -> None:
+    """Raises (``strict``) or warns when the data or start state the play was recorded with changed; warns on
+    another code version."""
+    problems = []
+    if head.get('data') != data_hash():
+        problems.append(f"game/route data hash is {data_hash()}, recorded {head.get('data')}")
+    if head['kind'] == 'eval' and 'start_hash' in play:
+        now = state_hash(play['start_state'], head['states_dir'])
+        if now != play['start_hash']:
+            problems.append(f"start state {play['start_state']} hash is {now}, recorded {play['start_hash']}")
+    if head['kind'] == 'chain' and 'start_hash' in head:
+        now = state_hash(head['task']['start_from'], head['states_dir'])
+        if now != head['start_hash']:
+            problems.append(f"start state {head['task']['start_from']} hash is {now}, recorded {head['start_hash']}")
+    if problems:
+        message = f"job {play['job']} was recorded in another world: " + '; '.join(problems)
+        if strict:
+            raise ValueError(message)
+        warnings.warn(message, stacklevel=3)
+    if head.get('code') != code_version():
+        warnings.warn(f"replaying code {code_version()}, the play was recorded with {head.get('code')}", stacklevel=3)
+
+
+def _plain(value):
+    return json.loads(json.dumps(value))
+
+
+def replay(head: dict, play: dict, observations: bool = False, policies: Optional[list] = None,
+           strict: bool = True) -> dict:
     """Replays one recorded play (see the module doc); ``policies`` (Rust networks in policy-index order) replace
-    loading the header's checkpoints."""
+    loading the header's checkpoints; ``strict=False`` only warns about a changed data hash or start state."""
     if head['backend'] != BACKEND:
         raise ValueError(f"the play's probabilities came from {head['backend']!r}, this replays on {BACKEND!r}")
+    _check_world(head, play, strict)
     policies = load_policies(head) if policies is None else policies
     job = int(play['job'])
     with _native.EnvPool(_task(head, play), num_envs=1, threads=1) as pool:
@@ -172,4 +239,10 @@ def replay(head: dict, play: dict, observations: bool = False, policies: Optiona
     if len(plays[0]['actions']) != len(play['actions']):
         raise RuntimeError(f"the replay of job {job} diverged: it ended after {len(plays[0]['actions'])} of "
                            f"{len(play['actions'])} recorded decisions")
+    if head['kind'] == 'eval':
+        results = [event['record'] for event in events if event['type'] == 'eval']
+    else:
+        results = [event['result'] for event in events if event['type'] == 'run' and event['result']['steps'] > 0]
+    if _plain(results) != [_plain(play['result'])]:
+        raise RuntimeError(f"the replay of job {job} diverged: it ended with {results}, recorded {play['result']}")
     return {**plays[0], 'events': events}

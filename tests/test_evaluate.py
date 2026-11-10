@@ -2,8 +2,10 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -225,6 +227,53 @@ def test_evaluation_plays_replay_exactly_here_and_in_a_fresh_process(states_dir,
     order = sorted(range(len(plays)), key=lambda i: plays[i]['job'])
     fresh = np.split(np.load(out), np.cumsum([len(plays[i]['actions']) for i in range(len(plays))])[:-1], axis=1)
     assert all(fresh[i].tobytes() == here[k].tobytes() for k, i in enumerate(order))
+
+
+def _record_short_plays(states_dir, tmp_path):
+    ckpt = save_checkpoint('ow-start', 'short', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=3)
+    recorded = tmp_path / 'a'
+    recorded.mkdir()
+    shutil.copy(states_dir / 'start.state', recorded / 'start.state')
+    path = tmp_path / 'plays.jsonl'
+    evaluate_specialist(config, ckpt, episodes_per_state=3, seed=1, states_dir=recorded, plays=path)
+    return path
+
+
+def test_a_replay_in_a_changed_world_raises_instead_of_returning_another_episode(states_dir, tmp_path):
+    """F073: every episode ends on the step budget, so only the start state hash, the data hash and the result
+    comparison can tell that the replay played something else."""
+    head, plays = replay.read(_record_short_plays(states_dir, tmp_path))
+    assert all(play['start_hash'] == replay.state_hash('start', head['states_dir']) for play in plays)
+    replay.replay(head, plays[0])
+    other = tmp_path / 'b'
+    other.mkdir()
+    shutil.copy(Path(registry.__file__).parent / 'states' / '0_77c_0.state', other / 'start.state')
+    moved = {**head, 'states_dir': str(other)}
+    with pytest.raises(ValueError, match='start state start hash'):
+        replay.replay(moved, plays[0])
+    with pytest.warns(UserWarning, match='another world'), pytest.raises(Exception):     # diverges some way
+        replay.replay(moved, plays[0], strict=False)
+    changed = {**plays[0], 'result': {**plays[0]['result'], 'frames': plays[0]['result']['frames'] + 1}}
+    with pytest.raises(RuntimeError, match='ended with'):       # same world, not the recorded result
+        replay.replay(head, changed)
+    with pytest.raises(ValueError, match='data hash'):
+        replay.replay({**head, 'data': '0' * 16}, plays[0])
+
+
+def test_replay_read_drops_a_cut_off_last_line_and_names_a_bad_middle_one(states_dir, tmp_path):
+    """F074: a writer killed mid-line leaves the complete plays readable."""
+    path = _record_short_plays(states_dir, tmp_path)
+    head, plays = replay.read(path)
+    text = path.read_text()
+    path.write_text(text[:-20])
+    with pytest.warns(UserWarning, match='truncated last line'):
+        again, kept = replay.read(path)
+    assert again == head and [p['job'] for p in kept] == [p['job'] for p in plays[:-1]]
+    lines = text.splitlines(keepends=True)
+    path.write_text(lines[0] + lines[1][:-20] + '\n' + ''.join(lines[2:]))
+    with pytest.raises(ValueError, match=r'plays\.jsonl:2:'):
+        replay.read(path)
 
 
 def test_linger_evaluation_aggregates_only_measured_records():
