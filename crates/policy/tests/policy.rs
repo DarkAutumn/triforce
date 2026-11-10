@@ -38,7 +38,9 @@ fn weights(seed: u64) -> HashMap<String, Tensor> {
         let n: usize = shape.iter().product();
         let data = (0..n)
             .map(|i| {
-                let h = policy::noise::mix(seed ^ (i as u64) ^ name.bytes().fold(7u64, |a, b| a * 31 + b as u64));
+                let h = policy::noise::mix(
+                    seed ^ (i as u64) ^ name.bytes().fold(7u64, |a, b| a.wrapping_mul(31).wrapping_add(b as u64)),
+                );
                 ((h >> 40) as f32 / (1u64 << 24) as f32 - 0.5) * 0.9
             })
             .collect();
