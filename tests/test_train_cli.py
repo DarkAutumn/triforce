@@ -120,15 +120,34 @@ def test_early_stop_balances_start_states():
     """An oversampled failing state counts as one state; iterations with no entry episodes keep the streak."""
     early = train.EarlyStop(0.75, 2, window=4, min_episodes=2)
     sequence = [(Counter({('a', True): 1, ('b', False): 9}), False, None),     # a has too few episodes
-                (Counter({('a', True): 1}), False, 0.5),                       # a 2/2, b 0/4 (window)
-                (Counter({('b', True): 4}), False, 1.0),                       # streak 1
+                (Counter({('a', True): 1}), False, 0.5),                       # a 2/2, b 0/9 (one whole iteration)
+                (Counter({('b', True): 4}), False, 1.0),                       # b 4/4 covers the window: streak 1
                 (Counter(), False, 1.0),                                       # unchanged
-                (Counter({('a', True): 1, ('b', False): 1}), True, 0.875)]     # b 3/4: streak 2
+                (Counter({('a', True): 1, ('b', False): 1}), True, 0.9)]       # b 4/5 (whole iterations): streak 2
     for start_results, stop, balanced in sequence:
         assert early.update(start_results) == stop
         assert early.balanced == balanced
     never = train.EarlyStop(None, 1, min_episodes=1)
     assert not any(never.update(Counter({('a', True): 5})) for _ in range(10)) and never.balanced == 1.0
+
+
+@pytest.mark.parametrize('failure', [0, 49, 112])
+def test_early_stop_rate_is_exact_over_whole_iterations(failure):
+    """One iteration of 113 episodes with one failure reads 112/113 wherever the failure fell (F130)."""
+    outcomes = [i != failure for i in range(113)]
+    early = train.EarlyStop(0.99, 1)
+    early.update(Counter((('a', success) for success in outcomes)))
+    assert early.balanced == pytest.approx(112 / 113)
+
+
+@pytest.mark.parametrize('order', ['failures-first', 'alternating'])
+def test_early_stop_half_rate_reads_half(order):
+    outcomes = [i >= 20 for i in range(40)] if order == 'failures-first' else [i % 2 == 0 for i in range(40)]
+    early = train.EarlyStop(0.99, 1)
+    early.update(Counter((('a', success) for success in outcomes)))
+    assert early.balanced == pytest.approx(0.5)
+    early.update(Counter({('a', True): 25}))     # covers the window alone: the 40 drop out
+    assert early.balanced == 1.0
 
 
 def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, logs_dir):

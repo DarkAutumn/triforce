@@ -96,7 +96,9 @@ class EarlyStop:
 
     The start-state pool oversamples states that fail, so the raw ``success_rate`` mostly measures the hardest (or
     an unwinnable) state and moves with the sampling as well as the policy.  Balanced = mean over start states of
-    each state's success over its last ``window`` episodes; every state seen needs ``min_episodes`` first.
+    each state's exact success rate over its most recent whole iterations that together cover at least ``window``
+    episodes (an iteration that finished 113 episodes of a state counts all 113); every state seen needs
+    ``min_episodes`` first.
     """
 
     def __init__(self, threshold: Optional[float], patience: int, window: int = 20, min_episodes: int = 5):
@@ -104,20 +106,35 @@ class EarlyStop:
         self.patience = patience
         self.min_episodes = min_episodes
         self.window = window
-        self.results: Dict[str, Deque[bool]] = {}
+        self.results: Dict[str, Deque[tuple[int, int]]] = {}     # state -> per-iteration (successes, episodes)
         self.balanced: Optional[float] = None
         self.streak = 0
+
+    def state_rate(self, state: str) -> tuple[int, int]:
+        """(successes, episodes) of ``state`` over its covered iterations."""
+        history = self.results[state]
+        return sum(s for s, _ in history), sum(e for _, e in history)
 
     def update(self, start_results: Counter) -> bool:
         """Feeds one iteration's (start state, success) -> episodes counts; True = stop now."""
         if not start_results:
             return False
+        counts: Dict[str, list[int]] = {}
         for (state, success), count in start_results.items():
-            self.results.setdefault(state, deque(maxlen=self.window)).extend([success] * count)
-        if any(len(results) < self.min_episodes for results in self.results.values()):
+            entry = counts.setdefault(state, [0, 0])
+            entry[0] += count if success else 0
+            entry[1] += count
+        for state, (successes, episodes) in counts.items():
+            history = self.results.setdefault(state, deque())
+            history.append((successes, episodes))
+            total = sum(e for _, e in history)
+            while total - history[0][1] >= self.window:     # the older iterations aren't needed for the window
+                total -= history.popleft()[1]
+        rates = [self.state_rate(state) for state in self.results]
+        if any(episodes < self.min_episodes for _, episodes in rates):
             self.balanced = None
             return False
-        self.balanced = sum(sum(r) / len(r) for r in self.results.values()) / len(self.results)
+        self.balanced = sum(successes / episodes for successes, episodes in rates) / len(rates)
         if self.threshold is None:
             return False
         self.streak = self.streak + 1 if self.balanced >= self.threshold else 0
@@ -202,7 +219,8 @@ def parse_args(argv=None):
                         help="weight of KL(pi_old || pi) in the auxiliary phase")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--stop-success', type=float, default=None,
-                        help="stop early once training success_rate >= this for --stop-patience iterations")
+                        help="stop early once the start-state-balanced training success (balanced_success_rate, "
+                             "see EarlyStop) >= this for --stop-patience iterations")
     parser.add_argument('--stop-patience', type=int, default=5)
     parser.add_argument('--curriculum', default=None,
                         help="trajectories dir from triforce.explore: backward-curriculum starts (curriculum.py); "
