@@ -1,0 +1,8 @@
+[package]
+name = "test-rom"
+description = "The Zelda ROM for tests and benches: missing means failed, unless TRIFORCE_ALLOW_NO_ROM=1"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false

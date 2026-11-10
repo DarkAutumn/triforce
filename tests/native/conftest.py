@@ -5,22 +5,18 @@ import os
 
 import pytest
 
+from ..conftest import require_rom
+
 native = pytest.importorskip('triforce._native')
 
 ROOT = native.paths()['root']
 MOVIE = os.path.join(ROOT, 'corpus', 'movies', 'power_on_to_start.tfmovie')
 
 
-def _require_rom():
-    rom = native.paths()['rom']
-    if not os.path.exists(rom):
-        pytest.skip(f"ROM not found: set TRIFORCE_ROM or create roms/zelda.nes ({rom})")
-
-
 @pytest.fixture(scope='session')
 def states_dir(tmp_path_factory):
     """A states directory holding `start.state`: the first gameplay frame after registering LINK."""
-    _require_rom()
+    require_rom()
     directory = tmp_path_factory.mktemp('states')
     game = native.Game()
     state = game.play_movie(MOVIE)

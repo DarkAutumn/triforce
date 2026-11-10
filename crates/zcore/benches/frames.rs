@@ -1,18 +1,15 @@
 //! Frames per second of [`zcore::ZCore`] on Zelda, rendering on and off.
 //!
-//! `cargo bench -p zcore` (needs `roms/zelda.nes`). Plays `power_on_to_start`, then times
+//! `cargo bench -p zcore` (needs the ROM: `$TRIFORCE_ROM`, else `roms/zelda.nes`). Plays `power_on_to_start`, then times
 //! `ZCORE_BENCH_FRAMES` (default 20,000) frames of seeded random input with START and SELECT
 //! masked, so the game keeps playing rather than pausing.
 
-use std::{hint::black_box, path::Path, time::Instant};
+use std::{hint::black_box, time::Instant};
 use zcore::{Rom, ZCore};
 
 fn main() {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let Ok(bytes) = std::fs::read(repo.join("roms/zelda.nes")) else {
-        eprintln!("ROM not found: set up roms/zelda.nes");
-        return;
-    };
+    let repo = test_rom::repo();
+    let Some(bytes) = test_rom::bytes() else { return };
     let rom = Rom::from_ines(&bytes).expect("Zelda ROM");
     let movie = movie::Movie::load(&repo.join("corpus/movies/power_on_to_start.tfmovie"))
         .expect("power_on_to_start movie");

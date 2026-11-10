@@ -18,6 +18,7 @@ from triforce.registry import promote, save_checkpoint
 from triforce.specialist import list_specialists
 
 ROM_MISSING = "ROM not found: set TRIFORCE_ROM or create roms/zelda.nes"
+ALLOW_NO_ROM_ENV = 'TRIFORCE_ALLOW_NO_ROM'     # =1: a missing ROM skips ROM tests instead of failing them
 REPO_STATES_DIR = paths.PACKAGE_DIR / 'states'       # where step 17 writes the route states
 
 
@@ -26,10 +27,18 @@ def rom_path() -> Path:
     return Path(os.environ.get('TRIFORCE_ROM', paths.ROOT / 'roms' / 'zelda.nes'))
 
 
+def rom_missing_allowed() -> bool:
+    """True when ``TRIFORCE_ALLOW_NO_ROM=1``: ROM tests skip instead of failing."""
+    return os.environ.get(ALLOW_NO_ROM_ENV) == '1'
+
+
 def require_rom():
-    """Skips the calling test when the ROM isn't available."""
+    """Fails the calling test when the ROM isn't available (skips it with ``TRIFORCE_ALLOW_NO_ROM=1``)."""
     if not rom_path().exists():
-        pytest.skip(ROM_MISSING)
+        message = f"{ROM_MISSING} ({rom_path()}); {ALLOW_NO_ROM_ENV}=1 skips the ROM tests"
+        if rom_missing_allowed():
+            pytest.skip(message)
+        pytest.fail(message, pytrace=False)
 
 
 def require_state(name: str) -> Path:

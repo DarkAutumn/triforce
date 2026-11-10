@@ -263,6 +263,7 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "tempfile",
+ "test-rom",
  "zcore",
  "zelda",
 ]
@@ -621,6 +622,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "serde_json",
+ "test-rom",
  "zcore",
  "zelda",
 ]
@@ -991,6 +993,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-rom"
+version = "0.1.0"
+
+[[package]]
 name = "thiserror"
 version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1064,6 +1070,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "serde_json",
+ "test-rom",
  "zcore",
  "zelda",
 ]
@@ -1080,6 +1087,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1_smol",
+ "test-rom",
  "toml",
  "zcore",
 ]
@@ -1136,6 +1144,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1_smol",
+ "test-rom",
  "zstd",
 ]
 
@@ -1148,6 +1157,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "serde_yaml_ng",
+ "test-rom",
  "zcore",
 ]
 

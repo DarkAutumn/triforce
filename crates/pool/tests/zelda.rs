@@ -69,24 +69,17 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The ROM (`$TRIFORCE_ROM`, else `roms/zelda.nes`), or None when it is missing.
+/// The ROM (`$TRIFORCE_ROM`, else `roms/zelda.nes`). Missing: panics (`test_rom`), or None with
+/// `TRIFORCE_ALLOW_NO_ROM=1`.
 fn rom() -> Option<Arc<Rom>> {
-    static ROM: LazyLock<Option<Arc<Rom>>> = LazyLock::new(|| {
-        let path = std::env::var_os("TRIFORCE_ROM")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| repo().join("roms/zelda.nes"));
-        let bytes = std::fs::read(path).ok()?;
-        Some(Rom::from_ines(&bytes).expect("valid Zelda ROM"))
-    });
+    test_rom::path()?; // before the LazyLock, so every test fails with the ROM message, not a poisoned lock
+    static ROM: LazyLock<Option<Arc<Rom>>> =
+        LazyLock::new(|| test_rom::bytes().map(|bytes| Rom::from_ines(&bytes).expect("valid Zelda ROM")));
     ROM.clone()
 }
 
 fn open_core() -> Option<Counted> {
-    let Some(rom) = rom() else {
-        eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
-        return None;
-    };
-    Some(Counted(ZCore::power_on(rom), 0))
+    Some(Counted(ZCore::power_on(rom()?), 0))
 }
 
 /// The regenerated start states, `triforce/states/<name>.state` (read-only).

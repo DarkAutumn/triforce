@@ -43,18 +43,12 @@ pub fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The ROM (`$TRIFORCE_ROM`, else `roms/zelda.nes`), or None (with the reason on stderr) when it is missing.
+/// The ROM (`$TRIFORCE_ROM`, else `roms/zelda.nes`). Missing: panics (`test_rom`), or None with
+/// `TRIFORCE_ALLOW_NO_ROM=1`.
 pub fn rom() -> Option<Arc<Rom>> {
-    static ROM: LazyLock<Option<Arc<Rom>>> = LazyLock::new(|| {
-        let path = std::env::var_os("TRIFORCE_ROM")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| repo().join("roms/zelda.nes"));
-        let bytes = std::fs::read(path).ok()?;
-        Some(Rom::from_ines(&bytes).expect("valid Zelda ROM"))
-    });
-    if ROM.is_none() {
-        eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
-    }
+    test_rom::path()?; // before the LazyLock, so every test fails with the ROM message, not a poisoned lock
+    static ROM: LazyLock<Option<Arc<Rom>>> =
+        LazyLock::new(|| test_rom::bytes().map(|bytes| Rom::from_ines(&bytes).expect("valid Zelda ROM")));
     ROM.clone()
 }
 

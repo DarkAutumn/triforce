@@ -23,3 +23,6 @@ rand_chacha = "0.10.0"
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 zcore = { path = "../zcore" }
 zelda = { path = "../zelda", features = ["zcore"] }
+
+[dev-dependencies]
+test-rom = { path = "../test-rom" }

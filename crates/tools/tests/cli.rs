@@ -9,13 +9,9 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Whether `tf` can find the ROM; without it every test here is skipped, like zcore's.
+/// Whether `tf` can find the ROM. Missing: panics (`test_rom`), or false with `TRIFORCE_ALLOW_NO_ROM=1`.
 fn have_rom() -> bool {
-    let found = std::env::var_os("TRIFORCE_ROM").is_some() || repo().join("roms/zelda.nes").exists();
-    if !found {
-        eprintln!("roms/zelda.nes missing: skipping");
-    }
-    found
+    test_rom::path().is_some()
 }
 
 fn tf(args: &[&str]) -> Output {

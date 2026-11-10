@@ -17,5 +17,6 @@ zelda = { path = "../zelda" }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+test-rom = { path = "../test-rom" }
 zcore = { path = "../zcore" }
 zelda = { path = "../zelda", features = ["zcore"] }

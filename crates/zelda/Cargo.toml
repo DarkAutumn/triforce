@@ -14,6 +14,7 @@ zcore = { version = "0.1.0", path = "../zcore", optional = true }
 [dev-dependencies]
 movie = { path = "../movie" }
 rand_chacha = "0.10.0"
+test-rom = { path = "../test-rom" }
 
 [features]
 zcore = ["dep:zcore"]

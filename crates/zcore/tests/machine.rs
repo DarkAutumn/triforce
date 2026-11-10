@@ -8,15 +8,9 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// The ROM; missing panics (`test_rom`), or None with `TRIFORCE_ALLOW_NO_ROM=1`.
 fn rom() -> Option<Arc<Rom>> {
-    let path = repo().join("roms/zelda.nes");
-    match std::fs::read(&path) {
-        Ok(bytes) => Some(Rom::from_ines(&bytes).expect("roms/zelda.nes is Zelda")),
-        Err(_) => {
-            eprintln!("{} missing: skipping", path.display());
-            None
-        }
-    }
+    test_rom::bytes().map(|bytes| Rom::from_ines(&bytes).expect("the ROM is Zelda"))
 }
 
 /// `power_on_to_start`'s inputs (it has no pokes).
@@ -144,9 +138,9 @@ fn state_file_errors() {
 
 #[test]
 fn rom_validation() {
-    let Some(rom) = rom() else { return };
+    let Some(bytes) = test_rom::bytes() else { return };
+    let rom = Rom::from_ines(&bytes).expect("the ROM is Zelda");
     assert_eq!(rom.payload_sha1(), zcore::machine::ZELDA_PAYLOAD_SHA1);
-    let bytes = std::fs::read(repo().join("roms/zelda.nes")).unwrap();
     assert!(matches!(
         Rom::from_ines(&bytes[1..]),
         Err(zcore::RomError::NotInes)
@@ -166,12 +160,17 @@ fn rom_validation() {
 }
 
 #[test]
-#[should_panic(expected = "outside")]
 fn poke_outside_ram_panics() {
-    let Some(rom) = rom() else {
-        panic!("outside (no ROM)")
-    };
-    ZCore::power_on(rom).poke(0x2000, 0);
+    let Some(rom) = rom() else { return };
+    let mut nes = ZCore::power_on(rom);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| nes.poke(0x2000, 0)));
+    let message = result.expect_err("poke outside RAM panics");
+    let text = message
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| message.downcast_ref::<&str>().copied())
+        .unwrap_or_default();
+    assert!(text.contains("outside"), "{text}");
 }
 
 /// Poke reaches the last byte of work RAM and both ends of PRG-RAM; the first byte past either

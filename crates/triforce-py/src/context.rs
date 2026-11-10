@@ -203,13 +203,9 @@ mod tests {
     use super::*;
     use zcore::ZCore;
 
+    /// The ROM; missing panics (`test_rom`), or None with `TRIFORCE_ALLOW_NO_ROM=1`.
     fn rom() -> Option<Arc<Rom>> {
-        let path = rom_path(&env::config::repo_root());
-        let Ok(bytes) = std::fs::read(&path) else {
-            eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
-            return None;
-        };
-        Some(Rom::from_ines(&bytes).expect("valid ROM"))
+        test_rom::bytes().map(|bytes| Rom::from_ines(&bytes).expect("valid ROM"))
     }
 
     #[test]

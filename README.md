@@ -31,7 +31,8 @@ uv pip install --python .venv/bin/python -e '.[dev]'             # builds trifor
 
 The ROM isn't checked in. Put an uncompressed *Legend of Zelda (U)* ROM at `roms/zelda.nes` or point
 `$TRIFORCE_ROM` at it. The ROM payload (after the 16-byte iNES header) must have SHA-1
-`a12d74c73a0481599a5d832361d168f4737bbcf6`. ROM-dependent tests skip without it.
+`a12d74c73a0481599a5d832361d168f4737bbcf6`. ROM-dependent tests fail without it; `TRIFORCE_ALLOW_NO_ROM=1` makes
+them skip instead (both suites).
 
 ## Use
 
