@@ -1,5 +1,6 @@
 """Model registry: checkpoint round trip, schema checks, promotion."""
 
+import math
 import pickle
 from pathlib import Path
 
@@ -121,7 +122,18 @@ def test_older_schema_checkpoint_trains_on_current_rows():
     collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 2), 16, 0.99, 0.95)
     collector.collect(network, 'cpu')
     assert 'objective' in collector.buffer.observation
-    PPO(PPOConfig(num_epochs=1)).optimize(network, collector.buffer)
+    buffer = collector.buffer
+    rows = {key: value[:, :-1].flatten(0, 1) for key, value in buffer.observation.items()}
+    mask, actions = buffer.masks[:, :-1].flatten(0, 1), buffer.actions.flatten(0, 1)
+    before = {key: value.clone() for key, value in network.state_dict().items()}
+    stats = PPO(PPOConfig(num_epochs=1)).optimize(network, buffer)
+    assert all(math.isfinite(value) for value in stats.values() if isinstance(value, (int, float))), stats
+    assert any(not torch.equal(before[key], value) for key, value in network.state_dict().items())
+    with torch.no_grad():
+        scored = network.evaluate(rows, mask=mask, actions=actions)
+        rows['objective'] = rows['objective'] + 1          # the extra key's rows don't reach the network
+        again = network.evaluate(rows, mask=mask, actions=actions)
+    assert torch.equal(scored.log_prob, again.log_prob) and torch.equal(scored.value, again.value)
 
 
 def _random_observations(space, rows, seed):

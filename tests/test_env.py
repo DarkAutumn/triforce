@@ -58,11 +58,6 @@ def test_change_action_round_trips_through_the_python_parser(game):
 
 
 def test_error_types(states_dir, game):
-    assert issubclass(native.InvalidActionError, ValueError)
-    assert issubclass(native.StateFormatError, ValueError)
-    assert issubclass(native.ConfigError, ValueError)
-    assert issubclass(native.RenderDisabledError, RuntimeError)
-    assert issubclass(native.EpisodeFinishedError, RuntimeError)
     env = make_env(states_dir)
     env.reset()
     with pytest.raises(native.InvalidActionError):

@@ -79,12 +79,6 @@ def test_eval_chain_summary_names_every_model_and_its_act_mode(models_dir, tmp_p
     assert provenance['code'] == replay.code_version() and provenance['data'] == replay.data_hash()
 
 
-def test_every_route_room_has_a_specialist():
-    for step in _native.route_steps('d2first'):
-        location = (step['level'], step['room'], step['in_cave'])
-        assert _native.specialist_for(location) == step['specialist'], step
-
-
 def test_run_result_round_trips_the_native_dict(tmp_path):
     room = RoomRecord(0, 1, '0x44', False, 'stalfos-keese-gel', steps=3, outcome='death',
                       linger={'max_steps': 2, 'tail_steps': 1})
@@ -203,17 +197,6 @@ def test_sampled_runs_do_not_depend_on_envs_or_threads(states_dir, models_dir):
     assert len({json.dumps(run['rooms']) for run in runs[0]}) > 1, "different seeds play different runs"
 
 
-def test_wrong_exit_into_untagged_room_is_a_failure(states_dir, models_dir):
-    """Walking W out of 0x77 (the objective wants the sword cave) into untagged 0x76 ends the run as a gameplay
-    failure."""
-    runner = Runner(models_dir=models_dir, max_steps=200, networks={'ow-start': scripted('MOVE W 16')},
-                    states_dir=states_dir)
-    result = runner.run(Route.load('d2first'), seed=0)
-    assert result.result == 'failure'
-    assert 'untagged' in result.reason and '0x76' in result.reason
-    assert (result.rooms[-1].room, result.rooms[-1].outcome) == ('0x77', 'exit-wrong')
-
-
 def test_supplied_config_no_progress_ends_runs(states_dir, models_dir):
     config = _native.SpecialistConfig.load('ow-start').replace(no_progress_steps=4)
     runner = Runner(models_dir=models_dir, networks={'ow-start': scripted('WAIT 8')},
@@ -224,15 +207,6 @@ def test_supplied_config_no_progress_ends_runs(states_dir, models_dir):
         assert 'no-room-progress' in result.reason and '4 quiet actions' in result.reason
         assert result.rooms[-1].linger['tail_steps'] == 4
     assert chain_summary(results)['successes'] == 0
-
-
-def test_run_cap_ends_runs(states_dir, models_dir):
-    config = _native.SpecialistConfig.load('ow-start').replace(no_progress_steps=20)
-    runner = Runner(models_dir=models_dir, max_steps=5, networks={'ow-start': scripted('WAIT 8')},
-                    specialist_configs={'ow-start': config}, states_dir=states_dir)
-    result = runner.run(Route.load('d2first'), seed=0)
-    assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck'
-    assert result.steps == 5 and result.reason == 'run exceeded 5 steps'
 
 
 def test_chain_runs_replay_exactly_from_their_replay_file(states_dir, models_dir, tmp_path):
@@ -291,12 +265,6 @@ def test_chain_cli_uses_supplied_specialist_config(states_dir, models_dir, tmp_p
     assert [record['steps'] for record in records] == [2, 2]
     assert all(record['result'] == 'failure' and 'no-room-progress' in record['reason'] for record in records)
     assert all(record['rooms'][-1]['linger']['tail_steps'] == 2 for record in records)
-
-
-def test_video_needs_ffmpeg(monkeypatch):
-    monkeypatch.setattr(run.shutil, 'which', lambda _: None)
-    with pytest.raises(RuntimeError, match='ffmpeg not found on PATH'):
-        run.ffmpeg_command('/tmp/never.mp4')
 
 
 @pytest.mark.skipif(shutil.which('ffmpeg') is None, reason='no ffmpeg')

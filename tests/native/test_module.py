@@ -1,6 +1,4 @@
-"""Module constants, route helpers and exception classes of `triforce._native`."""
-
-import pytest
+"""Module constants and exception classes of `triforce._native` (route helpers: tests/test_game_map.py)."""
 
 from triforce import _native as native
 
@@ -44,19 +42,3 @@ def test_exception_classes():
     for cls, base in bases.items():
         assert issubclass(cls, base), cls
         assert cls.__module__ == 'triforce._native'
-
-
-def test_routes_and_families():
-    steps = native.route_steps('d2first')
-    assert steps[0]['entry'] == 'start' and (steps[0]['level'], steps[0]['room']) == (0, 0x77)
-    assert steps[0]['specialist'] == 'ow-start'
-    assert [s['index'] for s in steps] == list(range(len(steps)))
-    assert native.routes() == ['d2first'] and native.DEFAULT_ROUTE == 'd2first'
-    families = native.families()
-    assert (0, 0x77, False) in families['ow-start']
-    assert native.specialist_for((1, 0x44)) == 'goriya'
-    assert native.specialist_for('(0, 0x77, cave)') == 'ow-start'
-    assert native.specialist_for((9, 0x00)) is None
-    with pytest.raises(native.ConfigError):
-        native.route_steps('no-such-route')
-    assert all('replaces' in a and 'with' in a for a in native.route_alternates())

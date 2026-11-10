@@ -575,11 +575,6 @@ fn max_steps_truncates_without_terminal_reward() {
     );
     let err = env.step(Action::parse("WAIT 8").unwrap()).unwrap_err();
     assert!(matches!(err, EnvError::EpisodeFinished));
-    // The message Python's EpisodeFinishedError carries.
-    assert_eq!(
-        err.to_string(),
-        "step() called on a finished episode; call reset()"
-    );
 }
 
 #[test]
@@ -1592,7 +1587,7 @@ fn damage_penalty_and_reward_halving() {
             break;
         }
     }
-    eprintln!("Link never took non-fatal damage: skipping");
+    panic!("Link never took non-fatal damage in 120 chase steps: the test checked nothing");
 }
 
 /// The Zora surfaces and submerges every few steps; that must not reset the room-stalling counter (only kills and

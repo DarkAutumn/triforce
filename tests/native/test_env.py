@@ -62,9 +62,14 @@ def test_episode_end_and_errors(states_dir):
 
 
 def test_lenient_actions(states_dir):
+    strict = make_env(states_dir)
+    strict.reset()
+    with pytest.raises(native.InvalidActionError):
+        strict.step('SWORD N')                # masked without a sword
     env = make_env(states_dir, strict_actions=False)
     env.reset()
-    env.step('SWORD N')                       # executed as given
+    info = env.step('SWORD N')[-1]            # executed as given
+    assert info['action'] == 'SWORD N' and info['steps'] == 1
 
 
 def test_start_state_outside_rooms(states_dir):

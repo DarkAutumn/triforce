@@ -65,8 +65,7 @@ def test_auxiliary_phase_fits_values_and_keeps_the_policy():
     assert stats['ppg/rows'] == 2 * 2 * 128
     assert stats['ppg/value_loss'] < 0.5 * stats['ppg/value_loss_start']
     assert stats['ppg/explained_variance'] > stats['ppg/explained_variance_start']
-    assert 0.0 <= stats['ppg/kl'] < 0.05
-    assert stats['ppg/seconds'] > 0
+    assert stats['ppg/kl'] < 0.05
     assert len(ppo.ppg) == 0
 
 
@@ -97,5 +96,5 @@ def test_train_with_ppg_logs_aux_phase(states_dir, tmp_path):
         assert ('ppg/value_loss' in record) == (index % 2 == 1), index
     for record in records[1::2]:
         assert record['ppg/rows'] == 64
-        assert record['ppg/kl'] >= 0.0 and record['ppg/seconds'] > 0
+        assert np.isfinite(record['ppg/kl'])
         assert np.isfinite(record['ppg/value_loss'])

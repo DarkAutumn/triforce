@@ -39,7 +39,7 @@ def test_forward_backward_reaches_every_parameter():
     (out.log_prob.sum() + out.value.sum() + out.entropy.sum()).backward()
     missing = [name for name, p in model.named_parameters() if p.grad is None or not p.grad.abs().sum() > 0]
     assert not missing, f"parameters without gradient: {missing}"
-    assert 10_000 < model.parameter_count() < 5_000_000
+    assert model.parameter_count() == sum(p.numel() for p in model.parameters())
 
 
 def test_masked_actions_are_never_sampled():

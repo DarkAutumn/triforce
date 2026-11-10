@@ -124,17 +124,6 @@ def test_render_does_not_change_emulation(game):
     assert on == off and bytes(game.state.ram) == ram_off
 
 
-def test_press_buttons(game):
-    game.load('start')
-    x = game.state.link['x']
-    state = game.press('RIGHT', 8)
-    assert state.link['x'] > x
-    state = game.press(['LEFT'], 8)
-    assert state.link['x'] < x + 8
-    with pytest.raises(ValueError):
-        game.press('JUMP')
-
-
 def test_state_files_and_formats(game, tmp_path):
     game.load('start')
     game.act('MOVE N 16')

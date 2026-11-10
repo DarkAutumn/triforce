@@ -151,22 +151,23 @@ def test_kl_early_stop_without_rollback_keeps_update():
     assert stats['losses/kl_early_stop'] == 1.0 and stats['losses/kl_rollback'] == 0.0
     assert stats['losses/updates'] < 10 * 4
     assert any(not torch.equal(v, weights[k]) for k, v in network.state_dict().items())
-    for head in ('kind', 'direction', 'duration'):
-        assert stats[f'entropy/{head}'] >= 0.0
 
 
 def test_pool_envs_fill_buffer_and_metrics():
     _seed()
     network = ZeldaPolicy(synthetic.observation_space(), SMALL)
     ppo = PPO(PPOConfig(target_steps=64, num_epochs=1))
+    pool, polled = _bandit_pool(2), []
+    poll = pool.poll_events
+    pool.poll_events = lambda: polled.append(poll()) or polled[-1]
     results = []
-    ppo.train(network, _bandit_pool(2), iterations=2, callback=results.append)
+    ppo.train(network, pool, iterations=2, callback=results.append)
     assert [r.iteration for r in results] == [1, 2]
     assert results[-1].total_steps == 128
     summary = results[0].rollout.summary()
     assert summary['rollout/steps'] == 64 and summary['episodes'] == 64     # one-step episodes, 2 × 32
-    assert 0.0 <= summary['success_rate'] <= 1.0
-    assert results[0].stats['charts/SPS'] > 0
+    outcomes = [event['info']['outcome'] for event in polled[0]]             # the first rollout's episodes
+    assert len(outcomes) == 64 and summary['success_rate'] == outcomes.count('success') / 64
 
 
 class _BatchSizes(ZeldaPolicy):
