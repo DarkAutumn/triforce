@@ -484,15 +484,19 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             )?;
             self.verified.insert(name.clone());
         }
-        let spec = &self.config.ram_randomization;
-        let chain = if spec.chain_hp.is_some_and(|p| p != 0.0) && self.curriculum_tag.is_none() {
-            self.data.chain_profile(state.full_location())
-        } else {
-            None
-        };
-        let values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
-        if !values.is_empty() {
-            state = self.session.apply_ram(&values).clone();
+        // A harvested start (a real chain handoff) keeps the health and items the upstream specialist handed over.
+        if !self.pool.as_ref().is_some_and(|p| p.is_harvested(&name)) {
+            let spec = &self.config.ram_randomization;
+            let chain =
+                if spec.chain_hp.is_some_and(|p| p != 0.0) && self.curriculum_tag.is_none() {
+                    self.data.chain_profile(state.full_location())
+                } else {
+                    None
+                };
+            let values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
+            if !values.is_empty() {
+                state = self.session.apply_ram(&values).clone();
+            }
         }
         let (route, step) = start_route(
             &self.data.map,
@@ -724,6 +728,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 terminated,
                 state.health(),
                 state.max_health() as f64,
+                self.config.reward.exit_health_weight,
             );
             self.hearts.finish(Some(&HeartView::of(&state)));
             let curriculum = match &self.curriculum_tag {

@@ -452,7 +452,7 @@ fn correct_exit_is_success_with_health_scaled_reward() {
     );
     let terminal = term(&info, REWARD_TERMINAL_SUCCESS).unwrap();
     assert!(
-        approx(terminal, success_reward_value(1.5, 3.0)) && approx(terminal, 15.0),
+        approx(terminal, success_reward_value(1.5, 3.0, 0.5)) && approx(terminal, 15.0),
         "{terminal}"
     );
     assert!(
@@ -460,6 +460,20 @@ fn correct_exit_is_success_with_health_scaled_reward() {
         "{reward} vs {:?}",
         info.rewards
     );
+}
+
+/// `reward.exit_health_weight` reaches the terminal: at 1.0 a half-health exit pays 20 × 1.5/3 = 10.
+#[test]
+fn exit_health_weight_scales_success_terminal() {
+    let Some(nes) = open_core() else { return };
+    let mut env = sworded_ow_start(nes, 0, |c| {
+        c.ram_randomization = hp(0.5, 0.5);
+        c.reward.exit_health_weight = 1.0;
+    });
+    let (_, info) = last_info(run_until_done(&mut env, greedy_step, 400).unwrap());
+    assert_eq!(info.outcome(), Some("success"));
+    let terminal = term(&info, REWARD_TERMINAL_SUCCESS).unwrap();
+    assert!(approx(terminal, 10.0), "{terminal}");
 }
 
 #[test]

@@ -136,7 +136,9 @@ impl PyEvalTask {
 /// default): room events carry `stalled` once a room has gone that many actions without damage dealt or taken,
 /// and the run ends `stuck` at twice as many; room events also carry `cheated` (`{bombs, keys, rupees}`), the run's
 /// cheated items used so far (`zelda::cheats`). `hold_finished_frame`: a finished run keeps its env's last frame
-/// published (the next run doesn't publish) until `EnvPool.set_hold(env, False)`.
+/// published (the next run doesn't publish) until `EnvPool.set_hold(env, False)`. `harvest` (a directory, off by
+/// default): every correct room entry where the acting specialist changes saves its pre-entry state as
+/// `harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state` (`ChainEnv::set_harvest`).
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
     configs: Vec<Arc<SpecialistConfig>>,
@@ -149,13 +151,14 @@ pub struct PyChainTask {
     hold_finished_frame: bool,
     missing: HashMap<String, String>,
     states_dir: Option<PathBuf>,
+    harvest: Option<PathBuf>,
 }
 
 #[pymethods]
 impl PyChainTask {
     #[new]
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
-                        states_dir=None, stall_steps=None, hold_finished_frame=false))]
+                        states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -169,6 +172,7 @@ impl PyChainTask {
         states_dir: Option<PathBuf>,
         stall_steps: Option<u64>,
         hold_finished_frame: bool,
+        harvest: Option<PathBuf>,
     ) -> PyResult<Self> {
         let configs = configs
             .iter()
@@ -196,6 +200,7 @@ impl PyChainTask {
             hold_finished_frame,
             missing: missing.unwrap_or_default(),
             states_dir,
+            harvest,
         })
     }
 
@@ -349,6 +354,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             chain.configs = configs.clone();
             chain.max_steps = t.max_steps;
             chain.stall_steps = t.stall_steps;
+            chain.set_harvest(t.harvest.clone());
             env.missing_mut().extend(t.missing.clone());
             env.set_hold_finished(t.hold_finished_frame);
             Ok(TaskEnv::Chain(env))

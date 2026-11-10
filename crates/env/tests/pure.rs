@@ -77,25 +77,33 @@ fn health_halving_exempts_equipment() {
 
 #[test]
 fn success_reward_scales_with_health() {
+    // exit_health_weight 0.5 (the default) is the long-standing 20 × (0.5 + 0.5 × hp/max), bit for bit.
     for (health, max_health, expected) in [
         (3.0, 3.0, 20.0),
         (1.5, 3.0, 15.0),
         (0.5, 16.0, 10.3125),
         (0.0, 3.0, 10.0),
     ] {
-        let value = success_reward_value(health, max_health);
+        let value = success_reward_value(health, max_health, 0.5);
+        let frac = (health / max_health).clamp(0.0, 1.0);
+        assert_eq!(value, 20.0 * (0.5 + 0.5 * frac), "{health}/{max_health}");
         assert!(
             approx(value, expected),
             "{health}/{max_health}: {value} != {expected}"
         );
+        // w = 1: the whole terminal is health (20 × hp/max); w = 0: a flat 20.
+        assert!(approx(success_reward_value(health, max_health, 1.0), 20.0 * frac));
+        assert_eq!(success_reward_value(health, max_health, 0.0), 20.0);
     }
+    assert!(approx(success_reward_value(1.5, 3.0, 1.0), 10.0));
+    assert!(approx(success_reward_value(1.5, 3.0, 0.25), 17.5));
 }
 
 #[test]
 fn success_terminal_escapes_step_clamp() {
     let mut rewards = StepRewards::default();
     rewards.add(Outcome::reward("reward-new-location", 1.0));
-    apply_terminal_rewards(&mut rewards, "exit-correct", SUCCESS, true, 3.0, 3.0);
+    apply_terminal_rewards(&mut rewards, "exit-correct", SUCCESS, true, 3.0, 3.0, 0.5);
     assert_eq!(rewards.value(), 20.0); // 21 clamped to the terminal maximum
     assert_eq!(rewards.ending.as_deref(), Some("exit-correct"));
     assert_eq!(rewards.outcome, Some(SUCCESS));
@@ -106,7 +114,7 @@ fn hard_failure_drops_rewards_soft_keeps_them() {
     let mut hard = StepRewards::default();
     hard.add(Outcome::reward("reward-hit", 0.25));
     hard.add(Outcome::penalty("penalty-lost-health", -0.5));
-    apply_terminal_rewards(&mut hard, "death", HARD_FAILURE, true, 0.0, 3.0);
+    apply_terminal_rewards(&mut hard, "death", HARD_FAILURE, true, 0.0, 3.0, 0.5);
     assert_eq!(
         terms(&hard),
         [
@@ -118,13 +126,13 @@ fn hard_failure_drops_rewards_soft_keeps_them() {
 
     let mut soft = StepRewards::default();
     soft.add(Outcome::reward("reward-hit", 0.25));
-    apply_terminal_rewards(&mut soft, "exit-wrong", SOFT_FAILURE, true, 3.0, 3.0);
+    apply_terminal_rewards(&mut soft, "exit-wrong", SOFT_FAILURE, true, 3.0, 3.0, 0.5);
     assert!(approx(soft.value(), -19.75), "{}", soft.value());
 
     // A neutral ending (a retreat) keeps the step's rewards and adds nothing.
     let mut neutral = StepRewards::default();
     neutral.add(Outcome::reward("reward-hit", 0.25));
-    apply_terminal_rewards(&mut neutral, "retreat", NEUTRAL, true, 3.0, 3.0);
+    apply_terminal_rewards(&mut neutral, "retreat", NEUTRAL, true, 3.0, 3.0, 0.5);
     assert_eq!(terms(&neutral), [("reward-hit", 0.25)]);
     assert_eq!(neutral.outcome, Some(NEUTRAL));
 }
@@ -133,7 +141,7 @@ fn hard_failure_drops_rewards_soft_keeps_them() {
 fn truncation_records_but_adds_no_terminal() {
     let mut rewards = StepRewards::default();
     rewards.add(Outcome::penalty("penalty-room-stalling", -0.01));
-    apply_terminal_rewards(&mut rewards, "max-steps", SOFT_FAILURE, false, 3.0, 3.0);
+    apply_terminal_rewards(&mut rewards, "max-steps", SOFT_FAILURE, false, 3.0, 3.0, 0.5);
     assert_eq!(rewards.outcome, Some(SOFT_FAILURE));
     assert!(approx(rewards.value(), -0.01), "{}", rewards.value());
 }

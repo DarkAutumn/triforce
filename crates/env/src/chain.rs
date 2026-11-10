@@ -10,7 +10,7 @@
 //! room, the per-room budget (`no_progress_steps` quiet actions, else `max(max_steps, 2000)` steps), the opt-in
 //! stall budget (`stall_steps`: twice that many actions without damage dealt or taken) or the run cap; error on
 //! an unknown/untagged room the route needed, a masked action, a missing state or [`ChainEnv::fail`] (e.g. no
-//! promoted model).
+//! promoted model).  [`ChainEnv::set_harvest`] saves every handoff's pre-entry state as a harvested start state.
 
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::BossTransitions;
@@ -18,10 +18,11 @@ use crate::error::EnvError;
 use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::specialist_env::linger_json;
-use crate::start_states::{StateStore, state_entry};
+use crate::start_states::{StateStore, harvest_filename, state_entry};
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
@@ -289,6 +290,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     /// Player stall budget (`play-zelda.py`; None = off): after this many actions in a room without damage dealt
     /// or taken [`ChainEnv::stalled`] turns true; after twice as many the run ends `stuck`.
     pub stall_steps: Option<u64>,
+    /// Handoff harvesting ([`ChainEnv::set_harvest`]): the root the pre-entry states go under.
+    harvest: Option<PathBuf>,
     /// Actions since entering the room or the last damage dealt or taken.
     no_damage: u64,
     result: Option<RunResult>,
@@ -319,6 +322,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             min_room_steps: MIN_ROOM_STEPS,
             max_retreats: MAX_RETREATS,
             stall_steps: None,
+            harvest: None,
             no_damage: 0,
             result: None,
             objectives: None,
@@ -363,6 +367,42 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// Cheated items used so far this run.
     pub fn cheated(&self) -> ItemCounts {
         self.cheats.cheated
+    }
+
+    /// Harvest handoff states into `dir` (None = off): every correct room entry where the acting specialist changes
+    /// saves its pre-entry savestate as `dir/<new specialist>/<level>_<room><side>_h<seed>_<n>.state`
+    /// ([`harvest_filename`]; `n` = the room's index in the run, a run without a seed counts as seed 0), the true
+    /// health, position and items the upstream specialist handed over. The run's first room (the route's start
+    /// state) is not a handoff.
+    pub fn set_harvest(&mut self, dir: Option<PathBuf>) {
+        self.session.set_capture_pre_entry(dir.is_some());
+        self.harvest = dir;
+    }
+
+    /// Saves the pre-entry state of the room entry just made (a handoff to `name`, room index `n`).
+    fn harvest_entry(&self, name: &str, n: usize) -> Result<(), String> {
+        let (Some(dir), Some(change), Some(pre_entry)) = (
+            &self.harvest,
+            &self.change,
+            self.session.last_pre_entry(),
+        ) else {
+            return Ok(());
+        };
+        let seed = self.result.as_ref().and_then(|r| r.seed).unwrap_or(0);
+        let Some(file) = harvest_filename(
+            change.previous.full_location(),
+            change.state.full_location(),
+            seed,
+            n,
+        ) else {
+            return Ok(());
+        };
+        let dir = dir.join(name);
+        let path = dir.join(file);
+        std::fs::create_dir_all(&dir)
+            .map_err(EnvError::from)
+            .and_then(|()| self.store.save(&path, pre_entry))
+            .map_err(|e| format!("harvest {}: {e}", path.display()))
     }
 
     /// Starts a run from the route's start state; `rng` draws the load's RNG bytes and spawn.
@@ -586,6 +626,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         if record_location != Some(location) {
             new_room = true;
             let mut correct = None;
+            let mut exit_correct = false;
             if record_location.is_some() {
                 let (ok, retreat) = match (&self.change, &self.prev_objective) {
                     (Some(change), Some(prev)) => {
@@ -595,6 +636,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     _ => (false, false),
                 };
                 correct = Some(ok || retreat);
+                exit_correct = ok;
                 let limit = retreat && self.result.as_ref().unwrap().retreats >= self.max_retreats;
                 let result = self.result.as_mut().unwrap();
                 if retreat {
@@ -675,6 +717,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 .linger = Some(summary);
             let switch = self.current.as_ref().is_none_or(|c| *c.name != *name);
             if switch {
+                if exit_correct {
+                    self.harvest_entry(&name, index)?;
+                }
                 let config = self.config_for(&name)?;
                 self.session
                     .set_disabled_kinds(&config.items.disabled_kinds());

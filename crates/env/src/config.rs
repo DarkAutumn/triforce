@@ -236,6 +236,10 @@ pub struct RewardConfig {
     /// `penalty-frames` per emulated frame (positive magnitude, unscaled by `shaping_scale`; 0 = off).
     #[serde(default)]
     pub frame_penalty: f64,
+    /// How much of the success terminal rides on the health Link leaves with, in [0, 1]: success pays
+    /// 20 × ((1 − w) + w × hp/max_hp) (better-play §1b; 0.5 is the long-standing formula).
+    #[serde(default = "half")]
+    pub exit_health_weight: f64,
 }
 
 impl Default for RewardConfig {
@@ -250,6 +254,7 @@ impl Default for RewardConfig {
             boss_ate_bomb_penalty: 0.5,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
+            exit_health_weight: 0.5,
         }
     }
 }
@@ -524,6 +529,9 @@ impl SpecialistConfig {
         }
         if !(self.reward.frame_penalty >= 0.0) {
             return Err(fail("reward.frame_penalty", "must be >= 0".into()));
+        }
+        if !(0.0..=1.0).contains(&self.reward.exit_health_weight) {
+            return Err(fail("reward.exit_health_weight", "must be in [0, 1]".into()));
         }
         self.ram_randomization
             .validate()
@@ -888,6 +896,8 @@ mod tests {
             "reward: {block_reward: -1}",
             "reward: {shaping_scale: 1.5}",
             "reward: {frame_penalty: -0.1}",
+            "reward: {exit_health_weight: 1.5}",
+            "reward: {exit_health_weight: -0.1}",
             "curriculum: {fraction: 1.5}",
             "curriculum: {threshold: -0.1}",
             "harvested_fraction: 2",

@@ -20,6 +20,7 @@ use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::enums::Direction;
+use zelda::objectives::route_entry;
 use zelda::{Change, MapLocation, SessionSnapshot, Var};
 
 pub const DECAY_FACTOR: f64 = 0.9;
@@ -251,6 +252,11 @@ impl StartStatePool {
             selector.record(state, success, health_lost);
         }
     }
+
+    /// `path` is one of the harvested states (it lies in the harvested dir).
+    pub fn is_harvested(&self, path: &str) -> bool {
+        Path::new(path).parent() == Some(self.harvested_dir.as_path())
+    }
 }
 
 /// A start state's short name: '…/0_38s.state' or '0_38s' -> '0_38s'.
@@ -260,7 +266,8 @@ pub fn state_label(name: &str) -> &str {
 }
 
 /// The routes.yaml `entry` an entry-state name encodes (`<level>_<room><side>_<chain>`: n/s/e/w, `c` = out of a
-/// cave or dungeon stairs, `cave` = a cave interior, entered from S), 'start' for the game start, else None.
+/// cave or dungeon stairs, `cave` = a cave interior, entered from S; harvested chain handoffs
+/// `<level>_<room><side>_h<seed>_<n>` read the same), 'start' for the game start, else None.
 pub fn state_entry(name: &str) -> Option<&'static str> {
     let label = state_label(name);
     if label == "start" {
@@ -270,6 +277,16 @@ pub fn state_entry(name: &str) -> Option<&'static str> {
     if chain.is_empty() || !chain.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
+    let head = match head.rsplit_once('_') {
+        Some((rest, tag))
+            if tag.len() > 1
+                && tag.starts_with('h')
+                && tag.bytes().skip(1).all(|b| b.is_ascii_digit()) =>
+        {
+            rest
+        }
+        _ => head,
+    };
     let (level, rest) = head.split_once('_')?;
     if level.is_empty() || !level.bytes().all(|b| b.is_ascii_digit()) || rest.len() < 3 {
         return None;
@@ -437,6 +454,23 @@ impl SavestateCapture {
     }
 }
 
+/// A chain handoff's harvested start-state file name, `<level>_<room><side>_h<seed>_<n>.state` (`n`: the run's room
+/// index; `side` the routes.yaml entry (`zelda::objectives::route_entry`) named as the seed states name it: n/s/e/w,
+/// `c` out of a cave, cellar or level, `cave` a cave or cellar interior), so [`state_entry`] reads back the entry.
+/// Keyed by run seed and room index alone, so a chain writes the same files on any thread count.  None for a jump
+/// that isn't one room's entry (a Wallmaster's drag).
+pub fn harvest_filename(prev: MapLocation, curr: MapLocation, seed: u64, n: usize) -> Option<String> {
+    let entry = route_entry(prev, curr)?;
+    let side = if curr.in_cave {
+        "cave".to_owned()
+    } else if entry == "cave" {
+        "c".to_owned()
+    } else {
+        entry.to_ascii_lowercase()
+    };
+    Some(format!("{}_{:02x}{side}_h{seed}_{n}.state", curr.level, curr.value))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -580,6 +614,27 @@ mod tests {
         assert_eq!(state_entry("0_38s"), None);
         assert_eq!(state_entry("0_3Gs_1"), None);
         assert_eq!(state_entry("0012"), None);
+        assert_eq!(state_entry("/h/1_73s_h42_3.state"), Some("S"));
+        assert_eq!(state_entry("1_7fcave_h7_12"), Some("S"));
+        assert_eq!(state_entry("0_37c_h0_0"), Some("cave"));
+        assert_eq!(state_entry("1_73s_hx_3"), None);
+    }
+
+    #[test]
+    fn harvest_names_read_back_the_route_entry() {
+        let m = MapLocation::new;
+        for (prev, curr, name) in [
+            (m(1, 0x74, false), m(1, 0x73, false), "1_73e_h42_3.state"),
+            (m(0, 0x3c, false), m(2, 0x7d, false), "2_7ds_h42_3.state"), // down the level's stairs
+            (m(2, 0x0d, false), m(0, 0x3c, false), "0_3cc_h42_3.state"), // the triforce's warp out
+            (m(1, 0x22, false), m(1, 0x7f, true), "1_7fcave_h42_3.state"), // down into the cellar
+            (m(1, 0x7f, true), m(1, 0x22, false), "1_22c_h42_3.state"),   // back up
+        ] {
+            let harvested = harvest_filename(prev, curr, 42, 3).unwrap();
+            assert_eq!(harvested, name);
+            assert_eq!(state_entry(&harvested), route_entry(prev, curr), "{name}");
+        }
+        assert_eq!(harvest_filename(m(1, 0x45, false), m(1, 0x73, false), 0, 1), None);
     }
 
     #[test]

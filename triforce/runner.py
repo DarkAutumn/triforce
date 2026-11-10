@@ -186,13 +186,16 @@ class ChainPool:
     (watch player): a finished run's last frame stays published, and its env waits, until
     ``pool.set_hold(env, False)``.  ``plays``: write every run to this replay file (``triforce.replay``).
     ``deterministic``: None = each policy's act mode (``Policies.deterministic``), else argmax (True) or sampling
-    (False) for every policy."""
+    (False) for every policy.  ``harvest`` (a directory; None = off): every correct room entry where the acting
+    specialist changes (a handoff) saves its pre-entry state as
+    ``harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state`` (``n``: the room's index in the run), a start
+    state for that specialist's ``harvested_dir``."""
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
                  deterministic: Optional[bool] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: bool = False,
-                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False, plays=None):
+                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False, plays=None, harvest=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.route = route
         self.policies = policies
@@ -203,7 +206,8 @@ class ChainPool:
         task = _native.ChainTask(policies.configs, route.name, [int(s) for s in seeds], stop_at=route.terminal,
                                  start_from=start_from, max_steps=max_steps, missing=policies.missing,
                                  states_dir=states_dir, stall_steps=stall_steps,
-                                 hold_finished_frame=hold_finished_frame)
+                                 hold_finished_frame=hold_finished_frame,
+                                 harvest=None if harvest is None else str(harvest))
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
         self.writer = None
@@ -274,13 +278,14 @@ class Runner:
                  max_steps: int = DEFAULT_MAX_STEPS,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
-                 states_dir=None):
+                 states_dir=None, harvest=None):
         """
         checkpoints: specialist name → checkpoint path, overriding the registry's promoted model.
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
         networks: specialist name → a ``ZeldaPolicy`` to act with instead of a checkpoint.
         parallel: envs in the chain pool; threads: its worker threads (default min(parallel, cores)).
         deterministic: None = each model's act mode (registry), else argmax (True) or sampling (False) for all.
+        harvest: save every handoff's pre-entry state under this directory (``ChainPool``).
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.policies = Policies(models_dir, checkpoints, specialist_configs, networks)
@@ -289,6 +294,7 @@ class Runner:
         self.parallel = parallel
         self.threads = threads
         self.states_dir = states_dir
+        self.harvest = harvest
 
     def pool(self, route: Route, seeds: Sequence[int], **kwargs) -> ChainPool:
         """A chain pool over this runner's policies (``kwargs``: ``num_envs``, ``threads``, ``fps``, ``seed``,
@@ -296,7 +302,7 @@ class Runner:
         kwargs.setdefault('num_envs', self.parallel)
         kwargs.setdefault('threads', self.threads)
         return ChainPool(route, seeds, self.policies, deterministic=self.deterministic, max_steps=self.max_steps,
-                         states_dir=self.states_dir, **kwargs)
+                         states_dir=self.states_dir, harvest=self.harvest, **kwargs)
 
     def run_many(self, route: Route, seeds: Sequence[int],
                  on_result: Optional[Callable[[RunResult], None]] = None, plays=None) -> List[RunResult]:

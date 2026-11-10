@@ -210,18 +210,20 @@ impl StepRewards {
     }
 }
 
-/// Success pays +20 × (0.5 + 0.5 × hp/max_hp): health is handed to the next specialist.
-pub fn success_reward_value(health: f64, max_health: f64) -> f64 {
+/// Success pays +20 × ((1 − w) + w × hp/max_hp), w = `reward.exit_health_weight` (default 0.5): health is handed to
+/// the next specialist.
+pub fn success_reward_value(health: f64, max_health: f64, exit_health_weight: f64) -> f64 {
     let frac = if max_health > 0.0 {
         (health / max_health).clamp(0.0, 1.0)
     } else {
         0.0
     };
-    TERMINAL_SUCCESS_REWARD_VALUE * (0.5 + 0.5 * frac)
+    TERMINAL_SUCCESS_REWARD_VALUE * ((1.0 - exit_health_weight) + exit_health_weight * frac)
 }
 
-/// Records the ending/outcome and adds the terminal reward: success + health-scaled reward; hard failure drops
-/// the step's rewards (penalties kept) and adds −20; soft failure adds −20; neutral and truncation add nothing.
+/// Records the ending/outcome and adds the terminal reward: success + health-scaled reward
+/// (`success_reward_value`); hard failure drops the step's rewards (penalties kept) and adds −20; soft failure adds
+/// −20; neutral and truncation add nothing.
 pub fn apply_terminal_rewards(
     rewards: &mut StepRewards,
     ending: &str,
@@ -229,6 +231,7 @@ pub fn apply_terminal_rewards(
     terminated: bool,
     health: f64,
     max_health: f64,
+    exit_health_weight: f64,
 ) {
     assert!(OUTCOMES.contains(&outcome), "Unknown outcome {outcome:?}");
     rewards.ending = Some(ending.to_owned());
@@ -239,7 +242,7 @@ pub fn apply_terminal_rewards(
     if outcome == SUCCESS {
         rewards.add(Outcome::reward(
             REWARD_TERMINAL_SUCCESS,
-            success_reward_value(health, max_health),
+            success_reward_value(health, max_health, exit_health_weight),
         ));
     } else if outcome != NEUTRAL {
         if outcome == HARD_FAILURE {
