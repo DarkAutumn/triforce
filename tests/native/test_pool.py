@@ -107,6 +107,17 @@ def test_a_finished_chain_run_can_hold_its_last_frame(states_dir, hold):
             assert pool.frame_counter(0) == last_frame + first_reset + runs[1]['frames']
 
 
+def test_releasing_a_parked_env_after_close_is_an_error(states_dir):
+    task = native.ChainTask(['ow-start'], 'd2first', seeds=[0, 1], max_steps=3, states_dir=str(states_dir),
+                            hold_finished_frame=True)
+    pool = native.EnvPool(task, num_envs=1, seed=0)
+    play_to_the_end(pool, [random_network().to_native()])
+    assert pool.active == 1                                  # parked after its first run
+    pool.close()
+    with pytest.raises(RuntimeError, match='the pool is closed'):
+        pool.set_hold(0, False)
+
+
 def test_a_paused_pool_stops_before_the_next_frame(states_dir):
     """set_paused(True): a playing env doesn't emulate a frame until set_paused(False)."""
     task = native.ChainTask(['ow-start'], 'd2first', seeds=[0], max_steps=3, states_dir=str(states_dir))
