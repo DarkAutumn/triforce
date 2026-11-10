@@ -519,8 +519,9 @@ fn push_block_is_pending_until_pushed() {
 }
 
 #[test]
-fn overworld_screen_edges_stop_link() {
-    // Moving N at the top edge (or W at x = 0) would scroll: not allowed. One step before it, always allowed.
+fn overworld_screen_edges_scroll() {
+    // F059: at the top edge (y = $3D) or one step before it, MOVE N scrolls to the room above (CheckScreenEdge), as
+    // W does at the west edge.
     let can = |x: u8, y: u8, d: Direction| {
         let mut r = Ram::new();
         r.set(Var::Level, 0)
@@ -529,7 +530,7 @@ fn overworld_screen_edges_stop_link() {
             .set(Var::LinkY, y);
         r.view().can_link_move(d)
     };
-    assert!(!can(120, 0x3D, Direction::N));
+    assert!(can(120, 0x3D, Direction::N));
     assert!(can(120, 0x45, Direction::N));
     assert!(can(8, 120, Direction::W));
     // In a cave Link can't walk north past the old man's line.

@@ -518,6 +518,15 @@ impl GameView {
         })
     }
 
+    /// An overworld room's game.yaml `bomb_secret` rock wall is still closed (no cave mouth in the room's tiles):
+    /// a bomb target, as an intact dungeon bomb wall is.
+    pub fn ow_bomb_secret_closed(&self) -> bool {
+        self.level() == 0
+            && !self.in_cave()
+            && self.room().cave_tile.is_none()
+            && self.map.get(self.full_location()).is_some_and(|r| r.bomb_secret.is_some())
+    }
+
     /// Intact bombable walls of the current dungeon room (game.yaml `bomb_walls`).
     pub fn bomb_walls(&self) -> &[BombWall] {
         self.bomb_walls.get_or_init(|| {
@@ -640,14 +649,9 @@ impl GameView {
         {
             return false;
         }
-        if self.level() == 0 {
-            let (at_edge, approaching) = check_ow_screen_edge(px, py, direction);
-            if at_edge {
-                return false;
-            }
-            if approaching {
-                return true;
-            }
+        // Overworld: on or one step before the N/W screen edge a move scrolls to the next room (CheckScreenEdge).
+        if self.level() == 0 && leaves_ow_screen(px, py, direction) {
+            return true;
         }
         // A cellar has no doorways or room bounds (Z_07 Walker_Move skips both in mode 9): only its tiles block.
         let underworld_room = self.level() > 0 && !self.in_cellar();
@@ -977,15 +981,13 @@ fn bomb_state(value: u8) -> AnimationState {
     }
 }
 
-/// Overworld screen edges (PlayerScreenEdgeBounds): (at the edge, one step before it).
-fn check_ow_screen_edge(px: i32, py: i32, direction: Direction) -> (bool, bool) {
+/// On or one step before an overworld screen edge, moving on scrolls (PlayerScreenEdgeBounds, CheckScreenEdge
+/// Z_07.asm:3003-3035, which runs even when the tile ahead is unwalkable).
+fn leaves_ow_screen(px: i32, py: i32, direction: Direction) -> bool {
     match direction {
-        Direction::N => {
-            let at_edge = py <= OW_EDGE_N;
-            (at_edge, !at_edge && py - 8 <= OW_EDGE_N)
-        }
-        Direction::W => (false, px > OW_EDGE_W && px - 8 <= OW_EDGE_W),
-        _ => (false, false),
+        Direction::N => py - 8 <= OW_EDGE_N,
+        Direction::W => px > OW_EDGE_W && px - 8 <= OW_EDGE_W,
+        _ => false,
     }
 }
 

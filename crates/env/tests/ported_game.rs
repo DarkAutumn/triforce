@@ -474,3 +474,44 @@ fn fresh_room_refills_a_room_the_game_remembers_as_cleared() {
         MapLocation::new(0, 0x58, false)
     );
 }
+
+/// F059: at the overworld's top edge MOVE N is legal and scrolls to the room above (0x27 -> 0x17).
+#[test]
+fn move_north_at_the_overworld_top_edge_scrolls() {
+    let Some(mut s) = session() else { return };
+    let state = load(&mut s, "0_27n_0", false, &[]);
+    assert!(compute_action_mask(&state).is_allowed(&Action::new(ActionKind::Move, Direction::N, 8).unwrap()));
+    act(&mut s, "MOVE N 8");
+    assert_eq!(s.state().full_location(), MapLocation::new(0, 0x17, false));
+}
+
+/// F186: in 0:0x2c with the rock wall still closed, BOMB stays legal after the Tektites are gone.
+#[test]
+fn bombs_stay_legal_at_a_closed_overworld_rock_wall() {
+    let Some(mut s) = session() else { return };
+    load_and_place(&mut s, "0_2ce_0", &[(Var::Bombs, 4)]);
+    for slot in 1..0xC {
+        s.nes_mut().poke(0x34F + slot, 0);
+    }
+    let state = s.apply_ram(&[]).clone();
+    assert!(state.enemies.is_empty() && state.ow_bomb_secret_closed());
+    assert!(compute_action_mask(&state).direction[ActionKind::Bomb.index()].iter().any(|&b| b));
+}
+
+/// F183: in a doorway ($53 set) no attack crosses the doorway's axis: S doorway of 1:0x53, E doorway of 1:0x72.
+#[test]
+fn no_attack_across_a_doorway() {
+    let Some(mut s) = session() else { return };
+    for (name, step, across) in [("1_53s_0", "MOVE N 4", [Direction::W, Direction::E]), ("1_72e_0", "MOVE W 4", [Direction::N, Direction::S])] {
+        load(&mut s, name, false, &[(Var::Bombs, 4)]);
+        act(&mut s, step);
+        let state = s.state().clone();
+        assert_ne!(state.var(Var::DoorwayDir), 0, "{name}");
+        let mask = compute_action_mask(&state);
+        for kind in [ActionKind::Sword, ActionKind::Beams, ActionKind::Bomb] {
+            for d in across {
+                assert!(!mask.is_allowed(&Action::new(kind, d, 0).unwrap()), "{name} {kind:?} {d:?}");
+            }
+        }
+    }
+}

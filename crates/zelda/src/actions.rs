@@ -307,9 +307,15 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
 
     let has_enemies = state.has_active_enemies();
     let has_items = !state.items.is_empty();
-    let has_bomb_walls = !state.bomb_walls().is_empty();
-    let sword_dirs = state.sword_directions();
-    let item_dirs = state.item_directions();
+    let has_bomb_walls = !state.bomb_walls().is_empty() || state.ow_bomb_secret_closed();
+    // In a doorway ($53) the game never turns Link sideways: no attack across the doorway's axis.
+    let doorway = Direction::from_value(state.var(crate::vars::Var::DoorwayDir) as u8)
+        .filter(|_| state.var(crate::vars::Var::DoorwayDir) != 0);
+    let across = |d: Direction| {
+        doorway.is_some_and(|dw| d != dw && d != dw.opposite())
+    };
+    let sword_dirs: Vec<Direction> = state.sword_directions().into_iter().filter(|&d| !across(d)).collect();
+    let item_dirs: Vec<Direction> = state.item_directions().into_iter().filter(|&d| !across(d)).collect();
 
     for kind in [
         ActionKind::Sword,
