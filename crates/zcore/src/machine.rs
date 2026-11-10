@@ -67,6 +67,9 @@ impl std::fmt::Debug for Rom {
     }
 }
 
+/// The iNES header of the Zelda image every console is built from (that of the common dump).
+const CANONICAL_HEADER: [u8; 16] = [b'N', b'E', b'S', 0x1A, 8, 0, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
 impl Rom {
     /// Validate an iNES image (header, cartridge shape, payload SHA-1).
     pub fn from_ines(bytes: &[u8]) -> Result<Arc<Rom>, RomError> {
@@ -92,8 +95,13 @@ impl Rom {
             .into_boxed_slice()
             .try_into()
             .expect("128 KiB PRG-ROM");
+        // The machine is built from a canonical header (mapper 1, 8 PRG banks, CHR-RAM, battery
+        // PRG-RAM, iNES 1.0) plus the validated payload, so header bits the cart loader would refuse
+        // or interpret (trainer, four-screen, NES 2.0 sizes, battery) can't fail or change it.
+        let mut canonical = CANONICAL_HEADER.to_vec();
+        canonical.extend_from_slice(&bytes[16..]);
         Ok(Arc::new(Rom {
-            bytes: bytes.to_vec(),
+            bytes: canonical,
             prg: Arc::from(prg),
             payload_sha1,
         }))

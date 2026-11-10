@@ -159,6 +159,29 @@ fn rom_validation() {
     ));
 }
 
+/// Header bits outside mapper/bank counts (trainer, four-screen, archaic/NES 2.0 byte 7, NES 2.0
+/// RAM sizes, no battery) don't fail or change the machine: it is built from a canonical header.
+#[test]
+fn header_variants_power_on_like_the_pristine_rom() {
+    let Some(bytes) = test_rom::bytes() else { return };
+    let pristine = Rom::from_ines(&bytes).unwrap();
+    let mut want = ZCore::power_on(pristine.clone());
+    want.run_frame(0, false);
+    let want = state_file::encode(&pristine, &want.snapshot(), 0);
+    let mutations: [&[(usize, u8)]; 5] =
+        [&[(6, 0x16)], &[(6, 0x1A)], &[(7, 0x04)], &[(7, 0x08), (10, 0x08)], &[(6, 0x10)]];
+    for m in mutations {
+        let mut b = bytes.clone();
+        for &(i, v) in m {
+            b[i] = v;
+        }
+        let rom = Rom::from_ines(&b).unwrap_or_else(|e| panic!("{m:?}: {e:?}"));
+        let mut nes = ZCore::power_on(rom.clone());
+        nes.run_frame(0, false);
+        assert!(state_file::encode(&rom, &nes.snapshot(), 0) == want, "{m:?}");
+    }
+}
+
 #[test]
 fn poke_outside_ram_panics() {
     let Some(rom) = rom() else { return };
