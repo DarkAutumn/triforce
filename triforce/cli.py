@@ -224,10 +224,22 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     passthrough = {'train': ('triforce.train', 'cli'), 'run': ('triforce.run', 'main'),
                    'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main')}
-    if argv and argv[0] in passthrough:
+    # `triforce [--models-dir DIR] train|run|play|evaluate ...` forwards the rest to the module's own CLI.
+    models_dir, rest = None, argv
+    if rest and rest[0] == '--models-dir' and len(rest) > 1:
+        models_dir, rest = rest[1], rest[2:]
+    elif rest and rest[0].startswith('--models-dir='):
+        models_dir, rest = rest[0].split('=', 1)[1], rest[1:]
+    if rest and rest[0] in passthrough:
         import importlib  # pylint: disable=import-outside-toplevel
-        module, entry = passthrough[argv[0]]
-        return getattr(importlib.import_module(module), entry)(argv[1:])
+        module, entry = passthrough[rest[0]]
+        forwarded = rest[1:]
+        if models_dir is not None:
+            if rest[0] == 'play':
+                print("triforce: error: play has no --models-dir (it plays one game, no models)", file=sys.stderr)
+                return 2
+            forwarded = ['--models-dir', models_dir, *forwarded]
+        return getattr(importlib.import_module(module), entry)(forwarded)
     from ._native import DEFAULT_ROUTE  # pylint: disable=import-outside-toplevel
     from .paths import HARVESTED_DIR  # pylint: disable=import-outside-toplevel
     from .registry import ACT_CHOICES, ACT_MODES  # pylint: disable=import-outside-toplevel
@@ -272,11 +284,14 @@ def main(argv=None):
     chain.add_argument('--harvest', nargs='?', const=str(HARVESTED_DIR), default=None, metavar='DIR',
                        help="save every handoff's pre-entry state (a correct room entry where the acting specialist "
                             "changes) as DIR/<specialist>/<level>_<room><side>_h<seed>_<n>.state; without DIR: "
-                            f"{HARVESTED_DIR}, where each specialist's harvested_dir reads by default")
+                            f"{HARVESTED_DIR}, each specialist's default harvested_dir (read in training only "
+                            "by a config with harvested_fraction > 0, or one without seed states)")
     chain.add_argument('--logs-dir', default=None, help="event logs root (default $TRIFORCE_LOGS_DIR or <repo>/logs)")
     chain.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
 
     args = parser.parse_args(argv)
+    if args.command in passthrough:     # reached only through options the passthrough above doesn't take
+        parser.error(f"{args.command}: put its options after the command (triforce {args.command} --help)")
     if args.command == 'eval-chain':
         from .runner import RunnerError  # pylint: disable=import-outside-toplevel
         try:

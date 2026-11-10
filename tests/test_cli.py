@@ -68,6 +68,20 @@ def test_passthrough_commands_hand_their_arguments_to_the_module(capsys):
     assert 'python -m triforce.run' in capsys.readouterr().err
 
 
+def test_passthrough_after_the_global_models_dir(tmp_path, capsys, monkeypatch):
+    with pytest.raises(SystemExit) as error:
+        cli.main(['--models-dir', str(tmp_path), 'evaluate', '--help'])
+    assert error.value.code == 0 and 'python -m triforce.evaluate' in capsys.readouterr().out
+    with pytest.raises(SystemExit) as error:
+        cli.main(['--models-dir', 'x', 'train'])            # the trainer's own usage error, not a KeyError
+    assert error.value.code == 2 and 'python -m triforce.train' in capsys.readouterr().err
+    seen = []
+    monkeypatch.setattr('triforce.run.main', lambda argv: seen.append(argv) or 0)
+    assert cli.main([f'--models-dir={tmp_path}', 'run', '--seed', '3']) == 0
+    assert seen == [['--models-dir', str(tmp_path), '--seed', '3']]
+    assert cli.main(['--models-dir', 'x', 'play']) == 2
+
+
 def test_eval_chain_rejects_an_unknown_route(tmp_path, capsys):
     assert cli.main(['eval-chain', '--route', 'no-such-route', '--runs', '1', '--output',
                      str(tmp_path / 'c.jsonl')]) == 2
