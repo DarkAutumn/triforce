@@ -13,11 +13,16 @@ def native_spec() -> dict:
     return {k: {'shape': list(v['shape']), 'vocab': v['vocab']} for k, v in _native.OBS_SPEC.items()}
 
 
-def random_network(seed: int = 0, sharpen: float = 30.0) -> ZeldaPolicy:
-    """Random weights; the heads scaled by ``sharpen`` so actions vary with the observation, not just the noise."""
+def random_network(seed: int = 0, sharpen: float = 1.0) -> ZeldaPolicy:
+    """Random weights, every parameter perturbed by 0.05·N(0, 1): a fresh network's biases are 0 and its LayerNorms
+    1/0, so a native port that dropped any of them would still match it, and the perturbed heads (5× their init
+    scale) make actions vary with the observation, not just the noise. ``sharpen`` scales the heads' weights further
+    (logits grow, and so do float differences between torch and Rust)."""
     torch.manual_seed(seed)
     network = ZeldaPolicy(config=ModelConfig(obs_spec=native_spec())).eval()
     with torch.no_grad():
+        for param in network.parameters():
+            param.add_(0.05 * torch.randn_like(param))
         for head in (network.kind_head, network.direction_head, network.duration_head):
             head.weight.mul_(sharpen)
     return network

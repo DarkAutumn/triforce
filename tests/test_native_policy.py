@@ -18,6 +18,7 @@ from triforce import _native
 from triforce.model import ModelConfig, ZeldaPolicy
 
 from .conftest import REPO_STATES_DIR, require_state
+from .networks import random_network
 
 STATES = ['0_0as_0', '1_22e_0', '1_7fcave_0', '3_5bs_0', '2_0es_0', '0_59w_0']
 SPECIALISTS = {'0_0as_0': 'ow-lynel', '1_22e_0': 'trap-room', '1_7fcave_0': 'equipment-room',
@@ -27,14 +28,8 @@ ATOL = 2e-5
 
 
 def make_network(seed=0) -> ZeldaPolicy:
-    """A default-config network with sharpened heads (fresh heads are near uniform; trained ones aren't)."""
-    torch.manual_seed(seed)
-    spec = {k: {'shape': list(v['shape']), 'vocab': v['vocab']} for k, v in _native.OBS_SPEC.items()}
-    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec)).eval()
-    with torch.no_grad():
-        for head in (network.kind_head, network.direction_head, network.duration_head):
-            head.weight.mul_(60.0)
-    return network
+    """A default-config network with every parameter perturbed (``random_network``)."""
+    return random_network(seed)
 
 
 @pytest.fixture(scope='module')
@@ -49,7 +44,8 @@ def native(network):
 
 @pytest.fixture(scope='module')
 def observations(native):
-    """Real observations: each state played for a few steps by the Rust policy with keyed noise."""
+    """Real observations, each state played for a few steps by the Rust policy with keyed noise, then the
+    ``synthetic_rows`` edge cases."""
     rows = []
     for state in STATES:
         require_state(state)
@@ -63,7 +59,33 @@ def observations(native):
             obs, _, terminated, truncated, _ = env.step([int(a) for a in action])
             if terminated or truncated:
                 obs, _ = env.reset(seed=4 + step)
-    return {k: np.stack([np.asarray(r[k]) for r in rows]) for k in rows[0]}
+    observations = {k: np.stack([np.asarray(r[k]) for r in rows]) for k in rows[0]}
+    extra = synthetic_rows(observations)
+    return {k: np.concatenate([v, extra[k]]) for k, v in observations.items()}
+
+
+def synthetic_rows(observations):
+    """Edge cases play rarely reaches, on copies of real rows: all-empty entity rows; exactly one legal kind with its
+    direction and duration rows full or empty (each combination, every kind); all-True masks."""
+    kinds, dirs, durs = 7, 8, 4
+    n = len(observations['action_mask'])
+
+    def pick(count):
+        return {k: v[np.arange(count) * (n // count)].copy() for k, v in observations.items()}
+
+    empty = pick(6)
+    empty['entity_features'][:, :, 0] = 0
+    one_kind = pick(kinds * 4)
+    mask = one_kind['action_mask']
+    mask[:] = False
+    for row in range(kinds * 4):
+        kind, dir_full, dur_full = row % kinds, row // kinds % 2 == 0, row // (2 * kinds) == 0
+        mask[row, kind] = True
+        mask[row, kinds + kind * dirs:kinds + (kind + 1) * dirs] = dir_full
+        mask[row, kinds + kinds * dirs + kind * durs:kinds + kinds * dirs + (kind + 1) * durs] = dur_full
+    full = pick(6)
+    full['action_mask'][:] = True
+    return {k: np.concatenate([empty[k], one_kind[k], full[k]]) for k in observations}
 
 
 def torch_heads(network, obs, actions):
@@ -110,7 +132,23 @@ def test_matches_torch_on_real_observations(network, native, observations):
     # The same noise picks the same action everywhere but at near ties.
     differ = np.flatnonzero((rust['actions'] != sampled.actions.numpy()).any(axis=1))
     assert len(differ) <= max(1, n // 100), differ
-    assert set(np.unique(observations['action_mask'][:, :7].sum(axis=1))) - {0}, "masks vary"
+    legal_kinds = observations['action_mask'][:, :7].sum(axis=1)
+    present = observations['entity_features'][:, :, 0].astype(bool).sum(axis=1)
+    assert len(set(legal_kinds)) > 1 and (legal_kinds == 1).any() and (legal_kinds == 7).any()
+    assert (present == 0).any() and (present > 0).any()
+
+
+def test_joint_log_probs_match_torch(network, native, observations):
+    """Every joint action's log-prob, also with one legal kind (its direction or duration row empty) and in an
+    empty room: the same legal set as the learner's ``ZeldaPolicy.joint_log_probs``, the same values."""
+    joint, value = native.joint_log_probs(observations)
+    with torch.no_grad():
+        torch_joint = network.joint_log_probs(observations).numpy()
+        values = network.get_value({k: v for k, v in observations.items() if k != 'action_mask'}).numpy()
+    assert (np.isfinite(joint) == np.isfinite(torch_joint)).all()
+    compared = np.isfinite(joint) & (torch_joint > -20)
+    np.testing.assert_allclose(joint[compared], torch_joint[compared], atol=1e-5, rtol=0)
+    np.testing.assert_allclose(value, values, atol=ATOL)
 
 
 def test_scoring_and_argmax_and_value_match_torch(network, native, observations):
