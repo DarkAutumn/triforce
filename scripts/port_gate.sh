@@ -1,5 +1,5 @@
 #!/bin/bash
-# Behaviour gate for emulator changes (plan step 18): evaluate every promoted specialist and run the four chain
+# Behaviour gate for emulator changes (plan step 18): evaluate every promoted specialist and run the six chain
 # segments of the route on the current build of triforce._native; compare two labels (before and after a change).
 #
 #   scripts/port_gate.sh LABEL [SEED]
@@ -34,6 +34,8 @@ chain full
 chain d2 --from 2_7ds_0
 chain post-d2 --from 0_3cc_0
 chain d1 --from 1_73s_0
+chain post-d1 --from 0_37c_0
+chain d3 --from 3_7cs_0
 
 $PY - "$OUT" "$RUNS" <<'EOF'
 import json, os, sys

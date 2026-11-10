@@ -1,12 +1,12 @@
-"""Record chain runs of the promoted team on the current core, for `tf bench --recordings`.
+"""Record chain runs of the promoted team on the current core, for `tf bench --recordings` and the ladder corpus.
 
     .venv/bin/python scripts/record_bench_runs.py OUT_DIR [--runs 6] [--first-seed 500]
 
-The corpus agent movies were recorded on the FCEUmm-era core and desync on zcore's hardware timing after a few
-thousand frames, so they no longer show gameplay. This plays ``--runs`` seeded chain runs on each of four
-segments of the route (full, D2 from 2_7ds_0, after D2 from 0_3cc_0, D1 from 1_73s_0) with every input
-and poke recorded, and writes each as OUT_DIR/<segment>-<seed>.json: the origin state file, one controller byte
-per frame and the pokes, plus the run's outcome.
+Plays ``--runs`` seeded chain runs on each of the six segments of the route (full, D2 from 2_7ds_0, after D2
+from 0_3cc_0, D1 from 1_73s_0, after D1 from 0_37c_0, D3 from 3_7cs_0) with every input and poke recorded, and
+writes each as OUT_DIR/<segment>-<seed>.json: the origin state file, one controller byte per frame and the pokes,
+plus the run's outcome. `tf movie import` turns a recording into a corpus movie (README, "Emulator regression
+suite").
 """
 
 import argparse
@@ -19,7 +19,8 @@ from triforce.run import record_movie
 from triforce.runner import Route, Runner
 
 SEGMENTS = [('full', _native.DEFAULT_ROUTE, None), ('d2', _native.DEFAULT_ROUTE, '2_7ds_0'),
-            ('post-d2', _native.DEFAULT_ROUTE, '0_3cc_0'), ('d1', _native.DEFAULT_ROUTE, '1_73s_0')]
+            ('post-d2', _native.DEFAULT_ROUTE, '0_3cc_0'), ('d1', _native.DEFAULT_ROUTE, '1_73s_0'),
+            ('post-d1', _native.DEFAULT_ROUTE, '0_37c_0'), ('d3', _native.DEFAULT_ROUTE, '3_7cs_0')]
 
 
 def origin_path(origin: str) -> str:
