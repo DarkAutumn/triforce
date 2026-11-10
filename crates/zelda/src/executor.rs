@@ -333,6 +333,7 @@ fn detect_interrupt(before: &FrameWatch, after: &FrameWatch, start_near: u16) ->
 /// Runs actions until Link is controllable again (`OptionExecutor`).
 pub struct Executor<S> {
     pub was_in_cave: bool,
+    /// Link just came out of a cave or dungeon mouth and stands on it (kept by `Session`, which sets and clears it).
     pub just_exited_cave: bool,
     /// Keep the last frame before each room entry an action causes.
     pub capture_pre_entry: bool,
@@ -452,7 +453,6 @@ impl<S> Executor<S> {
             }
             if is_move {
                 if after.link != before.link {
-                    self.just_exited_cave = false;
                     stalled = 0;
                 } else if !pushing {
                     // Link moves at least every other frame; two still frames means he hit something.
@@ -523,7 +523,6 @@ impl<S> Executor<S> {
         start_location: Option<(u8, u8, bool)>,
         capture: &mut dyn FnMut(&Machine<N>, &Self) -> S,
     ) -> Result<(), ZeldaError> {
-        let prev_in_cave = self.was_in_cave;
         let mut controllable = false;
         for _ in 0..MAX_UNCONTROLLABLE_FRAMES {
             let mode = m.read(ADDR_MODE);
@@ -555,9 +554,6 @@ impl<S> Executor<S> {
             });
         }
         self.was_in_cave = m.read(ADDR_MODE) == MODE_CAVE;
-        if prev_in_cave && !self.was_in_cave {
-            self.just_exited_cave = true;
-        }
         self.step(m, 0, 1);
         Ok(())
     }

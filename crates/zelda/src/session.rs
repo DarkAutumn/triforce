@@ -2,7 +2,7 @@
 
 use crate::actions::{Action, ActionMask, compute_action_mask};
 use crate::change::Change;
-use crate::enums::ActionKind;
+use crate::enums::{ActionKind, Direction};
 use crate::executor::{Executor, FrameSink, MODE_CAVE, Machine, ZeldaError};
 use crate::game::GameView;
 use crate::game_map::GameMap;
@@ -211,6 +211,8 @@ impl<N: Nes> Session<N> {
         }
         self.total_frames = 0;
         self.steps = 0;
+        // A loaded state gets the flag a live entry would: on the cave or dungeon mouth, Link just came out.
+        self.executor.just_exited_cave = on_mouth(&self.build_state());
         self.rebuild();
         Ok(self.state())
     }
@@ -318,7 +320,17 @@ impl<N: Nes> Session<N> {
         )?;
         self.total_frames += result.frames as u64;
         self.steps += 1;
-        let curr = Arc::new(self.build_state());
+        let mut curr = Arc::new(self.build_state());
+        // Just out of a cave or dungeon mouth: no walking straight back in until Link leaves the mouth tile.
+        let flag = if prev.full_location() != curr.full_location() {
+            on_mouth(&curr)
+        } else {
+            self.executor.just_exited_cave && curr.link.tile() == prev.link.tile() && on_mouth(&curr)
+        };
+        if flag != self.executor.just_exited_cave {
+            self.executor.just_exited_cave = flag;
+            curr = Arc::new(self.build_state());
+        }
         self.mask = self.compute_mask(&curr);
         let change = Change::new(
             &mut self.machine,
@@ -356,6 +368,15 @@ impl<N: Nes> Session<N> {
         }
         mask
     }
+}
+
+/// Link stands on an overworld cave or dungeon mouth (the entrance tile is right above him).
+fn on_mouth(state: &GameView) -> bool {
+    state.level() == 0
+        && !state.in_cave()
+        && state
+            .room()
+            .is_cave_entry_direction(state.link.position.x, state.link.position.y, Direction::N)
 }
 
 /// Builds `last_pre_entry` snapshots during an option.
