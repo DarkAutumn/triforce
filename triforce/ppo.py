@@ -469,8 +469,8 @@ class PPO:
                 break
             epochs_run += 1
             indices = torch.randperm(batch_size, device=self.device)
-            for begin in range(0, batch_size, minibatch_size):
-                mb = indices[begin:begin + minibatch_size]
+            # Exactly `minibatches` near-equal parts (sizes differ by at most 1): no tiny tail minibatch.
+            for mb in torch.tensor_split(indices, min(cfg.minibatches, batch_size)):
                 mb_obs = {k: v[mb] for k, v in b_obs.items()}
                 out = network.evaluate(mb_obs, b_masks[mb], b_actions[mb])
 

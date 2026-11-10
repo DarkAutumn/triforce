@@ -110,6 +110,28 @@ def test_pool_envs_fill_buffer_and_metrics():
     assert results[0].stats['charts/SPS'] > 0
 
 
+class _BatchSizes(ZeldaPolicy):
+    """Records the batch size of every train-mode ``evaluate``."""
+    sizes: list
+
+    def evaluate(self, obs, masks, actions):
+        if self.training:
+            self.sizes.append(int(actions.shape[0]))
+        return super().evaluate(obs, masks, actions)
+
+
+def test_minibatches_split_the_batch_into_equal_parts():
+    """63 rows in 4 minibatches: 16/16/16/15 each epoch, never a tiny tail that decides the KL stop (F167)."""
+    _seed()
+    network = _BatchSizes(synthetic.observation_space(), SMALL)
+    network.sizes = []
+    buffer = _filled_buffer(network, n_envs=3, steps=21)
+    network.sizes.clear()
+    stats = PPO(PPOConfig(num_epochs=2, minibatches=4, target_kl=None, kl_rollback=None)).optimize(network, buffer)
+    assert len(network.sizes) == 8 and min(network.sizes) >= 15 and sum(network.sizes) == 2 * 63
+    assert stats['losses/updates'] == 8
+
+
 def _demo_batch():
     rng = np.random.default_rng(5)
     observations, targets = [], []
