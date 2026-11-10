@@ -5,9 +5,50 @@ that matters most, in an order where each pass builds on the last. Deviate whene
 something is more fragile than expected, dig in; if a pass turns out to be clean, move on. Reorder, split or merge
 passes as you see fit, and add areas this plan missed.
 
-Goal: find bugs, correctness problems, hidden invariants that aren't enforced, races, numerical issues, dead or
-misleading code, test gaps, and docs that no longer match the code. **Report, don't fix**, unless a fix is trivial
-and obviously safe. Even then, list it.
+## What to produce: a raw findings ledger, not a document
+
+The deliverable is a **ledger of things you found wrong**. Another agent (with none of your context, notes or
+reasoning) will take it and fix the problems. Write each entry for that agent.
+
+- **Do not modify the repo.** No code, test, config or doc changes, not even trivial fixes. The only file you write
+  in the repo is the ledger. Throwaway scripts, probes and reproductions go in `/tmp`.
+- **Investigate, don't defer.** Every entry is a conclusion you reached, not a suggestion to look into something.
+  - Read the code paths involved.
+  - Check the game's behaviour against the disassembly.
+  - Run a probe or a test to reproduce it.
+  - Then state what is wrong and show why.
+
+  If you can't settle a question after real effort, add the entry anyway with `confidence: low`. Say exactly what
+  you checked and what is still unknown, and what single experiment would settle it.
+- **Write it as you go**, appending to the file, so a stopped review loses nothing.
+- **Location:** `/home/leculver/git/triforce2/target/review-ledger.md`. `target/` is gitignored.
+- **Format:** plain markdown, one entry per finding, these fields in this order. Keep the entries terse. Use
+  complete facts, not prose.
+
+  ```
+  ## F017 [bug|risk|perf|cleanup|docs|test] confidence:high|medium|low  area:<pass name>
+  where: crates/env/src/critic.rs:412-430, triforce/ppo.py:288 (every location the fix must touch)
+  claim: one sentence: what is wrong.
+  evidence: the code excerpt(s) that show it; for game facts, the disassembly label/line (Z_07.asm:L1890
+    UpdateGoriya) or RAM address; for runtime facts, the exact command run and its output (trimmed).
+  repro: command or /tmp script path that demonstrates it, with what to look for (omit if purely static).
+  expected vs actual: what the code should do and what it does, concretely (values, frames, shapes).
+  impact: who is affected (training rewards / endings / eval numbers / chains / replays / determinism / GUI) and
+    how badly; whether existing models or results are invalidated.
+  fix: the change you would make, specific enough to implement (function, condition, constant); alternatives if
+    the right fix depends on a decision Lee must make (say so).
+  test: the regression test that would have caught it (where it belongs, what it asserts).
+  related: other finding ids, or "none".
+  ```
+
+- **Two extra sections at the end of the ledger, kept up to date as you go:**
+  - `## Checked and fine`: things that looked suspicious but turned out correct, one line each with the reason.
+    This saves the next agent from re-investigating them.
+  - `## Coverage`: per pass, which files you read fully, skimmed or skipped.
+- **What not to write:** style nits, naming preferences, "consider refactoring" without a concrete defect, or
+  restating what the code does.
+- **Ordering:** no summary or ranking is needed. Ids in the order found are fine; severity and confidence carry
+  the priority.
 
 ## Before you start
 
@@ -17,24 +58,37 @@ and obviously safe. Even then, list it.
   - `docs/architecture.md`: the module map. It is long; skim it, then use it as a reference.
   - `docs/rust-actor.md`: inference, rollouts, replays and search.
   - `docs/experiments/round16.md` §0–§2, for what changed most recently.
+- **References outside the repo:**
+  - **Zelda 1 disassembly**, the ground truth for game behaviour and RAM:
+    - `/home/leculver/work/git/zelda1-disassembly/src`: the copy `docs/ram-catalog.md` cites. It carries this
+      project's `; TRIFORCE:` annotations (61 of them). Some are known to be wrong, e.g. the sword-slot note in
+      `Variables.inc` lines 49–59; see the note at the top of `docs/ram-catalog.md`.
+    - `/home/leculver/git/zelda1-disassembly/src`: a near-clean copy. Use it to tell original disassembly
+      comments from project annotations.
+    - Variable names: `Variables.inc`, `ObjVars.inc`, `CommonVars.inc`, `CaveVars.inc`.
+    - Code: `Z_00.asm`–`Z_07.asm`. Citation style used in the repo: `Z_07:UpdateGoriya` or `Z_07 L1888`.
+  - `docs/ram-catalog.md`: every RAM variable the project reads, with its disassembly citation. Verify the Rust
+    decoders (`crates/zelda/src/vars.rs`, `room_state.rs`, `game.rs`, `hearts.rs`, …) against the disassembly,
+    not just against this catalog.
+  - **TetaNES** (`/home/leculver/git/tetanes`, `tetanes-core/src`): the emulator `crates/zcore` was cut down from.
+    Diff behaviour-relevant code against it when something in zcore looks off.
+  - **libretro-fceumm** (`/home/leculver/git/libretro-fceumm/src`): the previous emulator, the old stack's ground
+    truth. zcore deliberately drops FCEUmm's quirks (`docs/decisions.md`), so differences from it are not bugs by
+    themselves.
 - **Ground rules:**
-  - Don't change code in `/home/leculver/git/triforce2` while a training job is running there (`ps` for
-    `train_round`, `triforce.train`). Trainings import the code fresh.
-  - Use a worktree for any experiment, as `AGENTS.md` describes.
-  - A ROM is needed for the integration tests (`roms/zelda.nes`).
+  - Never edit `/home/leculver/git/triforce2`. Trainings may be running from it (`ps` for `train_round`,
+    `triforce.train`), and they import the code fresh.
+  - Running tests and read-only probes there is fine, but keep heavy jobs small (`--parallel` 4 or less) when a
+    training is running.
+  - The ROM is `roms/zelda.nes`. Load states through `Game.load` (it runs to the first playable frame) and check
+    `$12 == 5` before reading the screen or tile map. Entry states are saved mid-scroll.
 - **Tests:**
   - Rust: `cargo test --release --workspace --features zelda/zcore --no-fail-fast` (627 pass, about 1 min).
   - Python: `.venv/bin/python -m pytest -q -p no:cacheprovider` (266 pass, about 5 min).
-  - After any crate change, run `.venv/bin/maturin develop --release`.
   - Known flaky under heavy load: `tests/test_play_zelda.py::test_game_grid_streams_only_shown_games`.
-- **Output:** write findings to `docs/code-review.md`, one entry each, in this shape:
-  - severity: **bug** (wrong behaviour), **risk** (works today, breaks easily), **perf**, **cleanup** or **docs**;
-  - `file:line`;
-  - what is wrong, the evidence (a code quote, a failing input, a reproduction command), why it matters, and a
-    suggested fix.
-
-  Put a short summary at the top, worst first. Keep a findings section per pass, so a stopped review is still
-  useful.
+  - Python probes can use `triforce._native` directly: `Game`, `Env`, `EnvPool`, `TrainTask`, `EvalTask`,
+    `ChainTask`, `Policy`. `tests/` shows how; the tiny-model fixtures are in `tests/conftest.py` and
+    `tests/networks.py`.
 
 ## Size of the code (lines, to budget time)
 
@@ -101,14 +155,18 @@ The order is bottom-up, so each layer is reviewed before the code that trusts it
   - Snapshot/restore completeness. Any state not in `MachineState` breaks replay, search and savestates.
   - Perf-motivated shortcuts that change behaviour.
   - Dead TetaNES leftovers.
-- **Tools:** `tf ladder-golden` / `tf ladder-diff` and `scripts/port_gate.sh` exist for behaviour checks (README).
-  `crates/zcore/tests/machine.rs` has the snapshot tests.
+- **Tools:**
+  - `tf ladder-diff` replays the committed golden movies (`corpus/golden/`) and reports the first frame that
+    diverges (README, "Emulator regression"). Run it, but write any new goldens only under `target/` or `/tmp`.
+  - `crates/zcore/tests/machine.rs` has the snapshot tests.
+  - TetaNES (`/home/leculver/git/tetanes/tetanes-core/src`) is the reference for what was cut.
 - **Budget:** largest by lines, but much of it is table-like. Skim the instruction tables and spend the time on
   timing, snapshot and mapper code.
 
 ### Pass 2: Zelda game layer (`crates/zelda`)
 - **Files, in order:**
-  - `vars.rs`, `enums.rs`, `tables.rs`: RAM addresses, against `docs/ram-catalog.md`.
+  - `vars.rs`, `enums.rs`, `tables.rs`: RAM addresses. Check each against the disassembly (`Variables.inc` and
+    friends, and the routines that read or write the address), not only against `docs/ram-catalog.md`.
   - `nes.rs`, `session.rs`: load, randomization, snapshot/restore, `SessionCheckpoint`, the frame sink.
   - `executor.rs`: running actions frame by frame, cave entry/exit, the frame counter.
   - `change.rs`, `ledger.rs`: the weapon look-ahead and future-credit ledger, the 400-frame cap, 200-frame
@@ -118,9 +176,13 @@ The order is bottom-up, so each layer is reviewed before the code that trusts it
   - `objectives.rs`, `game_map.rs`: route steps, wavefront/objective targets.
   - `hearts.rs`, `linger.rs`, `visits.rs`, `cheats.rs`: the metric trackers and item cheats.
 - **Focus:**
-  - Game-state decoding errors (wrong address, wrong bit, signedness).
+  - Game-state decoding errors (wrong address, wrong bit, signedness). Settle each one in the disassembly: cite the
+    routine that writes the variable, and, where it helps, confirm with a probe on a real state.
+  - Game-mechanics assumptions written in comments and docs. Check every one in the ASM; at least one known claim
+    was wrong in a way that matters (`AGENTS.md`, "shadow Link": the ASM's "last frame" comment is wrong). Examples:
+    invincibility frames, the beam rules, Dodongo stun/swallow, the Lynel walk-through, item lifetimes.
   - The look-ahead must credit rewards only. Endings use observed effects (`Change.observed`).
-  - Room-transition edge cases: mid-scroll states, caves, dungeon stairs, side-view cellar 0x7f.
+  - Room-transition edge cases: mid-scroll states, caves, dungeon stairs, the side-view cellar 0x7f.
   - Cheat items poking RAM, and whether they leak into observations or metrics.
 
 ### Pass 3: environment (`crates/env`)
