@@ -9,12 +9,17 @@ import re
 import pytest
 
 from triforce import _native, chain_hp, cli, registry
+from triforce.actions import Action
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import observation_space
 from triforce.runner import RunResult, chain_summary
 from triforce.zelda_enums import ActionKind
 
-from .test_demo import CAVE_ACTIONS
+# ow-start from the game start: west to the sword cave's column, north into the cave, take the sword, back out,
+# east to the north exit's column and north into 0x67 (its objective-correct exit once Link has the sword).
+CAVE_ACTIONS = ([Action.parse('MOVE W 4')] * 10 + [Action.parse('MOVE N 8')] * 7 + [Action.parse('MOVE E 4')]
+                + [Action.parse('MOVE N 8')] * 6 + [Action.parse('MOVE S 8')] * 8 + [Action.parse('MOVE E 4')] * 11
+                + [Action.parse('MOVE N 8')] * 4)
 
 pytestmark = pytest.mark.e2e
 

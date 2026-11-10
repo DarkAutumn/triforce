@@ -264,7 +264,7 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
                           '--steps-per-update', '16', '--iterations', '3', '--models-dir', str(tmp_path),
                           '--run-id', 'confirm', '--seed', '5', '--no-curriculum', '--stop-success', '0.5'])
     assert train.run_status(run_dir) == ('early_stop' if stops else 'completed')
-    (log_dir,) = logs_dir.iterdir()
+    (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
     events = read_jsonl(str(next(log_dir.glob('*.jsonl'))))
     checks = [e for e in events if e['event'] == 'early_stop_check']
     assert len(checks) == (1 if stops else 3) and len(calls) == len(checks)
@@ -294,7 +294,7 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     assert 'balanced_success_rate' in records[-1] and records[-1]['iteration'] >= 2
 
     # Standalone training gets its own log folder: training.json plus one event stream ending in 'end'.
-    (log_dir,) = logs_dir.iterdir()
+    (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
     plan = json.loads((log_dir / 'training.json').read_text())
     assert plan['status'] == 'completed' and [r['specialist'] for r in plan['runs']] == [SPECIALIST]
     assert plan['runs'][0]['status'] == 'early_stop' and plan['runs'][0]['steps'] == checkpoint['steps']
@@ -459,7 +459,7 @@ def test_target_steps_are_what_the_parallel_envs_train(states_dir, tmp_path, log
     """--parallel 3 --steps-per-update 32 trains 30 steps per iteration; the targets say so (F136)."""
     run_dir = train.main(_common(states_dir, tmp_path, '--parallel', '3', '--steps-per-update', '32',
                                  '--iterations', '2', '--no-curriculum', '--run-id', 'thirty', '--seed', '1'))
-    (log_dir,) = logs_dir.iterdir()
+    (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
     plan = json.loads((log_dir / 'training.json').read_text())
     events = read_jsonl(str(log_dir / plan['runs'][0]['events']))
     start = next(e for e in events if e['event'] == 'start')

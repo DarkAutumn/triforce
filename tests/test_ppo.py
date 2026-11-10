@@ -1,4 +1,5 @@
-"""PPO trainer: learning a synthetic dict-obs bandit, KL rollback/early stop, pool rollouts, demo regularization."""
+"""PPO trainer: learning a synthetic dict-obs bandit, KL rollback/early stop, pool rollouts, the behavior-cloning
+(``demo_batch``) term."""
 
 import copy
 import itertools
@@ -9,9 +10,9 @@ import pytest
 import torch
 
 from triforce.actions import Action
-from triforce.demo import behavior_clone, compute_demo_accuracy, stack_observations
+from triforce.model import MASK_KEY
 from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.ppo import PPO, Collector, PPGStore, PPOConfig
+from triforce.ppo import PPO, Collector, PPGStore, PPOConfig, compute_demo_accuracy
 
 from . import synthetic
 
@@ -198,15 +199,8 @@ def _demo_batch():
             observations.append(synthetic.random_observation(rng, room=room, present=2))
             targets.append(action.to_indices())
     masks = torch.as_tensor(np.stack([o['action_mask'] for o in observations]))
-    return stack_observations(observations), masks, torch.as_tensor(np.stack(targets))
-
-
-def test_behavior_clone_fits_demo():
-    _seed()
-    network = ZeldaPolicy(synthetic.observation_space(), SMALL)
-    batch = _demo_batch()
-    result = behavior_clone(network, batch, epochs=150, lr=1e-3)
-    assert result['final_loss'] < result['first_loss'] and result['accuracy'] == 1.0
+    stacked = {k: torch.as_tensor(np.stack([o[k] for o in observations])) for k in observations[0] if k != MASK_KEY}
+    return stacked, masks, torch.as_tensor(np.stack(targets))
 
 
 def test_demo_regularization_pulls_policy_toward_demo():

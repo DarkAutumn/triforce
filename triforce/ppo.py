@@ -2,8 +2,9 @@
 
 Kept from v1: KL early stop, KL rollback (weights *and* optimizer state restored when KL exceeds
 ``kl_rollback × target_kl``), checkpointable optimizer state, per-minibatch advantage normalization, legacy
-time-limit termination, optional demo-regularization (behavior-cloning loss on a fixed demo batch), optional
-self-imitation learning (``SilReplay``; Oh et al., 2018), optional Gumbel expert iteration (``PPOConfig.search``).
+time-limit termination, optional behavior-cloning term on a fixed batch (``demo_batch``: best-of-N's best runs),
+optional self-imitation learning (``SilReplay``; Oh et al., 2018), optional Gumbel expert iteration
+(``PPOConfig.search``).
 
 Changed for v2: dict observations, factored (kind, direction, duration) actions, flat masks, frame-aware GAE
 (see ``rollout_buffer``), and ``train`` counts PPO *iterations* (one rollout + one optimization each).
@@ -48,7 +49,6 @@ import numpy as np
 import torch
 from torch import nn
 
-from .demo import compute_demo_accuracy
 from .metrics import EpisodeTracker, RolloutMetrics
 from .plr import PrioritizedReplay
 from .rollout_buffer import RolloutBuffer
@@ -676,3 +676,8 @@ def joint_kl(old_log_probs: torch.Tensor, new_log_probs: torch.Tensor) -> torch.
     old = torch.where(legal, old_log_probs, 0.0)
     new = torch.where(legal, new_log_probs, 0.0)
     return (old.exp() * (old - new)).sum(dim=-1).mean()
+
+
+def compute_demo_accuracy(pred_actions: torch.Tensor, target_actions: torch.Tensor) -> float:
+    """Exact (kind, direction, duration) accuracy of ``demo_batch`` targets; heads that don't apply are 0 in both."""
+    return (pred_actions.long() == target_actions.long()).all(dim=-1).float().mean().item()

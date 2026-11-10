@@ -86,14 +86,13 @@ from typing import Deque, Dict, Optional
 import torch
 
 from . import registry
-from ._native import CurriculumSpec, Env, EnvPool, TrainTask
+from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
-from .demo import collect_demo_batch, parse_demo_actions
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir, write_json_atomic
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
-from .paths import STATES_DIR, TRAJECTORIES_DIR
+from .paths import TRAJECTORIES_DIR
 from .ppo import PPO, IterationResult, PPOConfig
 from .specialist import SpecialistConfig, load_specialist
 
@@ -214,13 +213,6 @@ def parse_args(argv=None):
     parser.add_argument('--start-state', default=None, help="pin every episode to this savestate (name or path)")
     parser.add_argument('--states-dir', default=None,
                         help="where bare start-state names resolve (default: $TRIFORCE_STATES_DIR or triforce/states)")
-    parser.add_argument('--capture-states', action='store_true',
-                        help="let envs write first-entry savestates into the states dir (off by default: "
-                             "parallel envs would race on the same files)")
-    parser.add_argument('--demo', default=None, help="demo trace (Action.parse lines) for demo regularization")
-    parser.add_argument('--demo-bc-coeff', type=float, default=0.1)
-    parser.add_argument('--demo-allow-incomplete', action='store_true',
-                        help="accept a demo that stops before the episode ends in success")
     parser.add_argument('--best-of-n', type=int, default=0, metavar='RUNS',
                         help="best-of-N self-distillation (better-play §3): every --best-every iterations, play RUNS "
                              "episodes from every seed start state and behavior-clone the best --best-keep "
@@ -480,26 +472,17 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     if aside is not None:
         print(f"[train] moved the previous files of {out_dir} to {aside}")
     curriculum, trajectories = curriculum_spec(args, config, out_dir, continued)
-    capture_dir = str(args.states_dir or STATES_DIR) if args.capture_states else None
     task = TrainTask(config, str(out_dir), start_state=args.start_state, curriculum=curriculum,
-                     capture_dir=capture_dir, states_dir=args.states_dir)
-
-    demo_batch = None
-    if args.demo:
-        demo_env = Env(config, start_state=args.start_state, capture_dir=None, states_dir=args.states_dir,
-                       seed=args.seed or 0)
-        demo_batch = collect_demo_batch(demo_env, parse_demo_actions(args.demo),
-                                        require_success=not args.demo_allow_incomplete)
+                     states_dir=args.states_dir)
 
     ppo_config = PPOConfig(target_steps=args.steps_per_update, learning_rate=args.learning_rate,
                            ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
-                           demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0,
                            sil_coeff=args.sil_coeff, sil_value_coeff=args.sil_value_coeff,
                            sil_capacity=args.sil_capacity, search=args.search, search_coeff=args.search_coeff,
                            plr=args.plr, plr_beta=args.plr_beta, plr_rho=args.plr_rho, plr_uniform=args.plr_uniform,
                            ppg=args.ppg, ppg_every=args.ppg_every, ppg_aux_epochs=args.ppg_aux_epochs,
                            ppg_clone_coeff=args.ppg_clone_coeff)
-    ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
+    ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state)
 
     # Built before the 'start' event so bad start states or trajectories fail the run up front.
     pool_seed = args.seed if args.seed is not None else int.from_bytes(os.urandom(8), 'little') >> 1
@@ -545,8 +528,6 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         return {'best/episodes': best.episodes, 'best/success_rate': best.successes / max(1, best.episodes),
                 'best/kept': best.kept, 'best/states': best.states, 'best/steps': best.steps}
 
-    if args.best_of_n > 0 and args.demo:
-        raise ValueError("--best-of-n and --demo both set the behavior-cloning batch; use one")
     best_metrics = refresh_best(0) if args.best_of_n > 0 else {}
 
     def save():
