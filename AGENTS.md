@@ -4,44 +4,19 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 8)
+## Where things stand (Nov 10)
 
-- **The Rust port is merged** (`docs/decisions.md` 2026-11-05 entries; plan steps 1–18): the emulator is
-  `crates/zcore` (Zelda-only NES core cut down from TetaNES, hardware timing, no FCEUmm quirks left), the game,
-  env and pool logic is Rust (`crates/zelda`, `crates/env`, `crates/pool`), and Python drives it through
-  `triforce._native` (`crates/triforce-py`). stable-retro and the Python game stack are gone. All start states
-  and trajectories were regenerated on zcore (`round8.md`, `round9.md`).
-- **Round 11 (`round11.md`, Nov 8):** power-on RAM $00 (state file v6), every state and trajectory regenerated,
-  the Moldorm room split into its own specialist, per-room-visit evaluation (format 2, 100 episodes per start
-  state) with `zelda-map.py`. The fresh retrain `r44-fresh` was stopped by Lee; its finished runs are kept, not
-  promoted. Round 10 before it: ow-start r38b-rebalance (swordless departures fixed); `no-damage` endings after
-  600 actions without damage; zcore 1.6× faster under an exact accuracy gate; `--parallel 16`; the heart series
-  (§8–§10): **observation schema 2** (the `target` block, `obs.target`) on every route family plus
-  `reward.item_targets` in the dungeon families; Dodongo arrivals per 120: D2 44 → 74, post-D1 12/18 → 43/61,
-  full routes 3/6 → 27/46. Schema-1 checkpoints still load; `--load` with `obs.target` widens them.
-- **The d2-first reset (Lee, Nov 8; `docs/decisions.md` 2026-11-08):** `d2first` is the only route
-  (`docs/routes/d2first.md`): game start → Dungeon 2 (Dodongo, his heart, the D2 triforce) → the 0x2c heart cave →
-  the white sword at 0x0a → Dungeon 1 (both key rooms, the bow detour, the boomerang) → the D1 triforce, where the
-  route ends. `milestone1`, `milestone1-fairy`, the fairy waypoint, `ow-leever-peahat` and every D1-first start
-  state are gone; all states were rebuilt on d2first as chains 0–2 and every curriculum re-explored. The objective
-  follows the route's steps (the entry side and progress pick the step: 0x73 W, then E, then N). Round 12 before it
-  beat Dodongo (r45, 300/300 on milestone1 states). The existing models are milestone1-trained and stay on disk; the
-  baseline retrain replaces them.
-- **Now (Nov 10, round 16):** inference runs in Rust (`docs/rust-actor.md`); the team was retrained from scratch on
-  it (r56) and improved by Lee's better-play list (`~/Downloads/triforce-better-play.md`): an act mode per model
-  (`<run dir>/act`: argmax for most families, sampling where argmax loops) and self-imitation learning (11 families
-  `r57-sil-s60`). Chains from the start: Dungeon 3 reached 34/120, the D3 triforce 4/120; D1 115/120, D3 30/120.
-  The other better-play ideas were measured and not kept (flags stay, off). Every new checkpoint needs its act mode
-  re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
-- **The bow detour (Lee, Nov 9; `docs/decisions.md` 2026-11-09, `docs/routes/d2first.md`):** from 0x43 N through
-  0x33 and 0x23 to the blade-trap room 0x22 (push the west block N or S), down its stairs into the bow cellar 0x7f
-  (an `in_cave` sub-room, side view), and back the same way to 0x43 → 0x44. New families `trap-room` (0x22) and
-  `equipment-room` (the cellar); states and curricula rebuilt from the detour on; trained in round 14.
-- **On to Dungeon 3 (Lee, Nov 9; `docs/decisions.md` 2026-11-09, `docs/routes/d3.md`):** after the D1 triforce
-  (warp to 0x37) the route walks 0x37 E … 0x55 S, 0x65, 0x64, 0x63, 0x73 to 0x74 and through Dungeon 3 by Lee's
-  directions (the raft cellar 0x0f, 0x4c's bomb wall, Manhandla) and **ends on the D3 triforce** (steps 68–97).
-  routes.yaml steps take `treasure: skip` / `{if_bombs_below: 4}` (Lee's treasure rules for 0x69 and 0x5b). New
-  families `ow-leever`, `zol`, `darknut`, `boss-manhandla`; states built; curricula not explored, not trained yet.
+- **Now (Nov 10, round 16):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives them
+  through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only route
+  (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white sword
+  → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. The team was
+  retrained from scratch (r56) and improved by Lee's better-play list (`~/Downloads/triforce-better-play.md`): an
+  act mode per model (`<run dir>/act`, bound to the checkpoint's sha1: argmax for most families, sampling where
+  argmax loops; retrained or replaced weights sample, with a warning, until re-measured) and self-imitation
+  learning (11 families `r57-sil-s60`). Chains from the start: Dungeon 3 reached 34/120, the D3 triforce 4/120;
+  D1 115/120, D3 30/120. The other better-play ideas were measured and not kept (flags stay, off). Every new
+  checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
+- Nov 10: the review fix-up is in progress, `docs/experiments/round17.md`.
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -75,14 +50,16 @@ up with ideas, test them, keep what helps, and log everything.
   rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
   the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
   Manhandla). States are chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build
-  states with `python -m triforce.entry_states build|path` and check them with `... audit`.
+  states with `python -m triforce.entry_states build|path` (staged under `target/entry-states/<ts>`, then
+  `entry_states install <dir>`) and check them with `... audit` (it enforces these rules and exits 1 on a problem).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
 - **Bombs** are on only where the route needs them: Dodongo (`boss-dodongo`), the 0x2c rock wall (`ow-tektite`), D3's
   0x4c bomb wall (`trap-room`) and Manhandla (`boss-manhandla`), all `requires_bombs` in game.yaml; everywhere else
   `items: {bombs: false}`.
-- **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`): a neutral one-room ending,
-  and a chain run goes on (0x1a sends Link back N). Whether a model learns to use it is open.
+- **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
+  ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
+  Whether a model learns to use it is open.
 - **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
 - A damage penalty for rooms Link only has to cross was tried twice (round 6) and dropped: it didn't help the
   chains, and a penalty like that could also discourage required bombing later.
@@ -97,7 +74,7 @@ up with ideas, test them, keep what helps, and log everything.
   the goriya model do exactly that in the Red Goriya room: Link in the top left not fighting, the Goriyas chasing
   shadow Link in the bottom right, no hits either way, "for ages". In training the room-stalling penalty does fire
   then (after 150 steps without a kill, item or damage taken: −0.01 to −0.02 per step), but it may be too weak;
-  in a chain nothing stops it short of the runner's 2000-step room budget.
+  in a chain nothing stops it short of the runner's room budget (max(`max_steps`, 2000) steps).
 - **Track how long Link lingers in a room, in every training run** (Lee, Nov 3). A long stretch without progress
   (kill, hit, pickup, getting closer to the objective, leaving) is a problem to investigate and fix, even when the
   success rate looks fine (Aquamentus: high success, yet Link walks back and forth after the kill). Watch
@@ -106,7 +83,7 @@ up with ideas, test them, keep what helps, and log everything.
 
 ## Environment
 
-- Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 20 cores. ROM at
+- Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`). After changing any crate, rebuild the module:
   `.venv/bin/maturin develop --release`.
 - Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (about a
@@ -114,7 +91,9 @@ up with ideas, test them, keep what helps, and log everything.
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
 - Training GUI: `uv run training-gui.py` (PEP 723 script; PySide6 isn't in the venv).
 - `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
-  `metrics.jsonl`, `eval.json`, `train.log`; `models/<specialist>/promoted` names the promoted run.
+  `metrics.jsonl`, `run.json`, `train.log`, `act` (`<mode> <ckpt.pt sha1>`) and `eval.json`, the canonical
+  evaluation (the model's act mode, 100 episodes per state, seed 0); other evaluations are
+  `eval[-<specialist>][-<act>][-e<N>][-s<seed>].json`. `models/<specialist>/promoted` names the promoted run.
   `triforce list` shows them.
 
 ## Working rules learned the hard way
@@ -137,13 +116,17 @@ up with ideas, test them, keep what helps, and log everything.
   that wins 3% more but takes twice the damage loses in a chain.
 - **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10` (route `d2first`, the
   default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`; after
-  Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`. Per-room hp loss and deaths come from the chain jsonl
-  (`RoomRecord` also has `hearts_dropped/taken/left/...`).
+  Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`. `--from`/`--stop-at` are checked before any run
+  (`--stop-at` must be a route room after the start step; exit 2 otherwise). Each call writes a fresh
+  `runs/eval-chain-<yymmdd-HHMMSS>.jsonl` (or `--output`, refused if it exists unless `--append` with the same
+  provenance) plus `<output>.meta.json`; exit 1 if any run ends `error`. A run ends `stuck` (`wrong-exit-limit`)
+  on its 20th wrong exit into a tagged room. Per-room hp loss and deaths come from the chain jsonl (`RoomRecord`
+  also has `hearts_dropped/taken/left/...`).
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
-  room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`): from a
-  worktree pass `--out /home/leculver/git/triforce2/trajectories`, not `.../trajectories/NAME` (round 6 r26 trained
-  without its new trajectories that way). Check `curriculum.json` in the run dir lists the states you expect.
+  room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`; it refuses
+  `--out <trajectories>/<specialist>`, prints each track it writes and exits 1 on an unsolved or mismatched state).
+  Check `run.json` `curriculum_tracks` (track names and trajectory.json times) lists the tracks you expect.
 - `max_steps` sets how many episodes finish per iteration. A curriculum specialist whose failures are slow
   (fleeing, waiting) needs `max_steps` near its explored path length (Aquamentus: 2000 → 400 took it from 0% to 93%).
 - Continuing a trained model with `--stop-success 0.99` (`--train-args "--load <run dir> --stop-success 0.99"`)
@@ -153,11 +136,15 @@ up with ideas, test them, keep what helps, and log everything.
 ## Running a round
 
 ```bash
-.venv/bin/python scripts/train_round.py --round r20-name --specialists goriya,wallmaster --no-promote \
+.venv/bin/python scripts/train_round.py --round r20-name --specialists goriya,wallmaster \
     --chain-runs 0 --parallel 16 --eval-parallel 3 --train-args "--load $PWD/models/goriya/r19-goriya-more"
 ```
 
-Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input). `--parallel 16` is the measured best for a
-run alone; two rounds at once take `--parallel 8` each (20 hardware threads; `docs/performance.md` "How many
-envs"). Then compare, `triforce promote <specialist> <run-id>`, run the chain segments,
-write the results into the round doc, commit.
+Nothing is promoted unless `--promote` is given (then only after a successful evaluation; `<round>-summary.json`
+`previous_promoted` keeps the replaced run ids and act modes). Exit 0 completed, 1 failed (any specialist not ok,
+or a chain error), 2 unknown or untrainable `--specialists`. One SIGTERM stops training and evaluations and ends
+open runs `interrupted`. `--train-args` expands only `{name}`; `--models-dir` defaults to `$TRIFORCE_MODELS_DIR`
+or `<repo>/models`. Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input). `--parallel 16` is the
+measured best for a run alone; two rounds at once take `--parallel 8` each (20 hardware threads;
+`docs/performance.md` "How many envs"). Then compare, `triforce promote <specialist> <run-id>`, run the chain
+segments, write the results into the round doc, commit.
