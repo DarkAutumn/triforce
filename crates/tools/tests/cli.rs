@@ -181,6 +181,32 @@ fn ladder_diff_passes_fresh_goldens_and_reports_tampered_ones() {
     assert!(text.contains(&format!("2 of {shorts} movies diverge")), "{text}");
 }
 
+/// `ladder-golden` takes explicit movies only from corpus/movies (where `ladder-diff` looks for a
+/// golden's movie); a movie elsewhere is refused with a message naming the corpus, and a corpus
+/// movie given by path works.
+#[test]
+fn ladder_golden_refuses_movies_outside_the_corpus() {
+    if !have_rom() {
+        return;
+    }
+    let tmp = TempDir::new("ladder-ext");
+    let out = tf(&["movie", "random", "--seed", "3", "--frames", "50", "-o", &tmp.arg("rnd.tfmovie")]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let out = tf(&["ladder-golden", &tmp.arg("rnd.tfmovie"), "-o", &tmp.arg("g")]);
+    assert_ne!(out.status.code(), Some(0));
+    assert!(stderr(&out).contains("is not a corpus movie"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("corpus/movies"), "{}", stderr(&out));
+    // Same stem as a corpus movie, but another file: refused too.
+    std::fs::copy(tmp.join("rnd.tfmovie"), tmp.join("pause_spam.tfmovie")).unwrap();
+    let out = tf(&["ladder-golden", &tmp.arg("pause_spam.tfmovie"), "-o", &tmp.arg("g")]);
+    assert!(stderr(&out).contains("is not a corpus movie"), "{}", stderr(&out));
+
+    let out = tf(&["ladder-golden", "corpus/movies/pause_spam.tfmovie", "-o", &tmp.arg("g")]);
+    assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
+    let out = tf(&["ladder-diff", &tmp.arg("g")]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+}
+
 #[test]
 fn corpus_check_passes() {
     if !have_rom() {

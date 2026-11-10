@@ -127,9 +127,22 @@ fn manifest_movies(short: bool) -> Result<Vec<PathBuf>> {
 }
 
 /// Write an all-domain zcore golden for each movie (default: the whole manifest) into `out`.
+/// Explicit movies must be corpus movies (`corpus/movies/<name>.tfmovie`): `ladder-diff` finds a
+/// golden's movie there by name.
 pub fn ladder_golden(rom: &RomInfo, movies: &[PathBuf], short: bool, out: &Path, jobs: usize) -> Result<i32> {
+    for path in movies {
+        let canon = |p: &Path| std::fs::canonicalize(p).ok();
+        ensure!(
+            canon(path).is_some() && canon(path) == canon(&movie_path(&name_of(path))),
+            "{} is not a corpus movie: ladder goldens are for movies in {} (copy it there first)",
+            path.display(),
+            corpus_dir().join("movies").display()
+        );
+    }
     std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
-    let movies = if movies.is_empty() { manifest_movies(short)? } else { movies.to_vec() };
+    let mut movies = if movies.is_empty() { manifest_movies(short)? } else { movies.to_vec() };
+    movies.sort_by_key(|p| name_of(p));
+    movies.dedup_by_key(|p| name_of(p));
     let results = par_map(&movies, jobs, |path| -> Result<()> {
         let movie = load_movie(rom, path)?;
         let mut b = Zcore::open(&rom.bytes)?;
