@@ -385,8 +385,8 @@ fn weapon_directions_respect_screen_bounds() {
     };
     use Direction::*;
     assert_eq!(dirs(1, 120, 141), (vec![E, W, N, S], vec![E, W, N, S]));
-    // Dungeon: BorderBounds (Z_05.asm:2736): outer x 23..217 / y 85..198 for A and B on the facing's axis, inner
-    // E x < $D1, W x >= $1F, S y < $BE, N y >= $54 for B.
+    // Dungeon (measured, N006): A on E/W x 23..=216, N y 84..=197, S y 85..=197; B also E x <= 208, W x >= 31,
+    // S y <= 189.
     assert_eq!(dirs(1, 23, 141).0, vec![E, W, N, S]);
     assert_eq!(dirs(1, 22, 141), (vec![N, S], vec![N, S]));
     assert_eq!(dirs(1, 30, 141).1, vec![E, N, S], "too close to the west wall to throw west");
@@ -394,13 +394,14 @@ fn weapon_directions_respect_screen_bounds() {
     assert_eq!(dirs(1, 209, 141).1, vec![W, N, S]);
     assert_eq!(dirs(1, 216, 141).0, vec![E, W, N, S]);
     assert_eq!(dirs(1, 217, 141).0, vec![N, S]);
-    assert_eq!(dirs(1, 120, 84), (vec![E, W], vec![E, W]));
+    assert_eq!(dirs(1, 120, 83), (vec![E, W], vec![E, W]));
+    assert_eq!(dirs(1, 120, 84), (vec![E, W, N], vec![E, W, N]));
     assert_eq!(dirs(1, 120, 85).1, vec![E, W, N, S]);
     assert_eq!(dirs(1, 120, 190).1, vec![E, W, N]);
     assert_eq!(dirs(1, 120, 197).0, vec![E, W, N, S]);
     assert_eq!(dirs(1, 120, 198), (vec![E, W], vec![E, W]));
-    // Overworld outer bounds: x 7..233, y 69..214.
-    assert_eq!(dirs(0, 7, 69).0, vec![E, W, N, S]);
+    // Overworld: A on x 7..=232, y 69..=213; B also N y >= 84.
+    assert_eq!(dirs(0, 7, 69), (vec![E, W, N, S], vec![E, S]));
     assert_eq!(dirs(0, 6, 68), (vec![], vec![]));
     assert_eq!(dirs(0, 233, 214), (vec![], vec![]));
     // Off every axis the sword is screen-locked: no beams.

@@ -334,3 +334,43 @@ fn a_look_ahead_keeps_the_rendered_frame() {
     assert!(fired.frames > 3, "the sword swung");
     assert!(s.nes_mut().pixels().is_some(), "the action's last frame is still the screen");
 }
+
+/// N006: the attack directions follow the game's BorderBounds exactly. On a dungeon and an overworld state, for every
+/// coordinate on each facing's axis, a 2-frame A (sword) or B (bomb) press starts the weapon iff
+/// `sword_directions`/`item_directions` include the facing.
+#[test]
+fn attack_directions_match_the_game_at_every_coordinate() {
+    let Some(nes) = open_core() else { return };
+    let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
+    let dirs = [(Direction::N, 0x10u8, 8u8), (Direction::S, 0x20, 4), (Direction::W, 0x40, 2), (Direction::E, 0x80, 1)];
+    for name in ["1_44w_0", "0_67s_0"] {
+        s.load(&common::load_named_state(name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+        for _ in 0..5 {
+            s.act(Action::parse("WAIT 8").unwrap()).unwrap();
+        }
+        for slot in 1..12u16 {
+            s.nes_mut().poke(0x34F + slot, 0);
+        }
+        s.nes_mut().poke(0x658, 8);
+        let base = s.snapshot();
+        for (d, button, face) in dirs {
+            let vertical = matches!(d, Direction::N | Direction::S);
+            for v in 0..=255u8 {
+                for (b_item, press) in [(false, 0x01u8), (true, 0x02)] {
+                    s.restore(&base);
+                    let (x, y) = if vertical { (120, v) } else { (v, 141) };
+                    for (addr, val) in [(0x70, x), (0x84, y), (0x394, 0), (0x53, 0), (0x98, face), (0xAC, 0), (0x656, 1)] {
+                        s.nes_mut().poke(addr, val);
+                    }
+                    let view = s.apply_ram(&[]).clone();
+                    let expected =
+                        if b_item { view.item_directions() } else { view.sword_directions() }.contains(&d);
+                    let bombs = s.nes_mut().peek(0x658);
+                    s.press(button | press, 2);
+                    let started = if b_item { s.nes_mut().peek(0x658) < bombs } else { s.nes_mut().peek(0xB9) != 0 };
+                    assert_eq!(started, expected, "{name} {d:?} at {v} ({})", if b_item { "B" } else { "A" });
+                }
+            }
+        }
+    }
+}

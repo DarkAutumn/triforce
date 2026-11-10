@@ -835,37 +835,34 @@ impl GameView {
         self.sword_directions().is_empty()
     }
 
-    /// Directions the sword can swing: Link_FilterInput's outer BorderBounds on the facing's axis (Z_05.asm:2736;
-    /// overworld x 7..233, y 69..214; underworld x 23..217, y 85..198, upper bounds exclusive).
+    /// Directions the sword (A) can swing: Link_FilterInput's BorderBounds on the facing's axis, as the game applies
+    /// them (Z_05.asm:2736; measured by pressing A on every coordinate, N006). Inclusive ranges:
+    /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.
     pub fn sword_directions(&self) -> Vec<Direction> {
-        let (x, y) = (self.link.position.x, self.link.position.y);
-        let (xr, yr) = if self.level() == 0 {
-            (0x07..0xE9, 0x45..0xD6)
-        } else {
-            (0x17..0xD9, 0x55..0xC6)
-        };
-        let mut out = Vec::with_capacity(4);
-        if xr.contains(&x) {
-            out.extend([Direction::E, Direction::W]);
-        }
-        if yr.contains(&y) {
-            out.extend([Direction::N, Direction::S]);
-        }
-        out
+        self.attack_directions(false)
     }
 
-    /// Directions B items can be used: the outer bounds as for the sword, and the inner BorderBounds of the facing
-    /// (E x < $D1, W x >= $1F, S y < $BE, N y >= $54).
+    /// Directions B items can be used: the A ranges narrowed by the inner bounds of the facing (E x <= 208,
+    /// W x >= 31, S y <= 189; overworld N y >= 84).
     pub fn item_directions(&self) -> Vec<Direction> {
+        self.attack_directions(true)
+    }
+
+    fn attack_directions(&self, b_item: bool) -> Vec<Direction> {
         let (x, y) = (self.link.position.x, self.link.position.y);
-        self.sword_directions()
+        let ow = self.level() == 0;
+        let (x_lo, x_hi) = if ow { (7, 232) } else { (23, 216) };
+        let (n_lo, s_lo, y_hi) = if ow { (69, 69, 213) } else { (84, 85, 197) };
+        let ranges = [
+            (Direction::E, x, x_lo, if b_item { 208 } else { x_hi }),
+            (Direction::W, x, if b_item { 31 } else { x_lo }, x_hi),
+            (Direction::N, y, if b_item { n_lo.max(84) } else { n_lo }, y_hi),
+            (Direction::S, y, s_lo, if b_item { 189 } else { y_hi }),
+        ];
+        ranges
             .into_iter()
-            .filter(|d| match d {
-                Direction::E => x < 0xD1,
-                Direction::W => x >= 0x1F,
-                Direction::S => y < 0xBE,
-                _ => y >= 0x54,
-            })
+            .filter(|&(_, v, lo, hi)| (lo..=hi).contains(&v))
+            .map(|(d, ..)| d)
             .collect()
     }
 
