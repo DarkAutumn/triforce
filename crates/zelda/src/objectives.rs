@@ -412,7 +412,8 @@ impl GameCompletion {
                 .and_then(|entry| self.route_step_at(state, entry));
         }
         self.check_heart_waypoint(prev, state);
-        if let Some(i) = self.active_waypoint(state)
+        // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first).
+        while let Some(i) = self.active_waypoint(state)
             && waypoint_done(&self.waypoints[i], state)
         {
             self.waypoints.remove(i);

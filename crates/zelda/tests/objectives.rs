@@ -729,3 +729,19 @@ fn d3_bomb_wall_exit_targets_its_bomb_spot_then_the_doorway() {
     }
     assert_eq!(s.state().full_location(), boss);
 }
+
+/// F189: a completion without a route step drops every finished waypoint before its first objective (the 0x2c heart
+/// and the bow are done in 1_23w_0): the first objective already equals the one with the state's own step.
+#[test]
+fn a_stepless_completion_drops_every_finished_waypoint_at_once() {
+    let Some(images) = images(&["1_23w_0"]) else { return };
+    let map = Arc::new(GameMap::builtin());
+    let state = view(&map, &images[0], 0);
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let (route, step) = start_route(&map, loc(1, 0x23), Some("W"), &mut rng, None, &state);
+    assert!(step.is_some());
+    let with_step = GameCompletion::new(map.clone(), &route, step).unwrap().objectives(None, &state);
+    let stepless = GameCompletion::new(map.clone(), &route, None).unwrap().objectives(None, &state);
+    assert_eq!(with_step.next_rooms, [loc(1, 0x33)].into());
+    assert_eq!(stepless.next_rooms, with_step.next_rooms);
+}
