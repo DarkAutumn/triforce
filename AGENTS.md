@@ -55,8 +55,9 @@ up with ideas, test them, keep what helps, and log everything.
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
 - **Bombs** are on only where the route needs them: Dodongo (`boss-dodongo`), the 0x2c rock wall (`ow-tektite`), D3's
-  0x4c bomb wall (`trap-room`) and Manhandla (`boss-manhandla`), all `requires_bombs` in game.yaml; everywhere else
-  `items: {bombs: false}`.
+  0x4c bomb wall (`trap-room`) and Manhandla (`boss-manhandla`), all `requires_bombs` in game.yaml. BOMB is masked
+  per room (training and chains): a family's `items: {bombs: true}` enables it only in its `requires_bombs` rooms;
+  everywhere else the families say `items: {bombs: false}`.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.

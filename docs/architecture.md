@@ -57,9 +57,9 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 |---|---|
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
 | `zelda::actions` | `ACTION_SCHEMA_VERSION`; `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=91] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
-| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. |
-| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`. Python: `triforce._native.Game`. |
-| `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks. |
+| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. An off-grid attack perpendicular to Link's travel first walks him to the grid point (holding `ObjDir` until `$394 == 0`, at most 6 frames); an attack press the game didn't read (a lag frame) is held one more frame. |
+| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`. `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game`. |
+| `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
 Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's UpdateObject jump table) and
@@ -70,6 +70,16 @@ people, dropped items and tile objects are in none of the lists. The observation
 the classifier; HP, stun and killable are monster-only. The executor interrupts on anything that can hurt Link
 except standing fire and the boulder generator. A slot that empties because a hazard destroyed itself or a Zora
 dived is not a kill.
+
+The action mask (`zelda::actions::compute_action_mask`) offers only what the game would do. An attack is legal
+only where the game would start the weapon: Link's state allows it, the weapon's slot is free, the sword isn't
+blocked (`$4C`/`$52E`: SWORD and BEAMS masked), Link is inside the exact BorderBounds, and a diagonal throw checks
+its N/S facing; no attack across the doorway Link stands in. BOMB is legal only in game.yaml `requires_bombs`
+rooms (in `SpecialistEnv` and chains; a family's `items: {bombs: true}` enables it there and nowhere else) and
+stays legal at an unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
+room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
+an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
+Link back in).
 
 ## Observation (`crates/env/src/observation.rs`)
 
@@ -84,7 +94,7 @@ Python sees the layout as
 |---|---|---|
 | `room_id` | int64 [1] | index < `ROOM_VOCAB` |
 | `room_state` | float32 [84] | per-room flags from `docs/ram-catalog.md` |
-| `link` | float32 [81] | |
+| `link` | float32 [81] | `selected_0..8` (the selected B item) always zero, kept in the layout |
 | `entity_types` | int64 [12] | 0 = empty slot |
 | `entity_features` | float32 [12, 33] | feature 0 = presence |
 | `grid` | int64 [22, 32] | tile class per 8px tile, row-major |
@@ -99,12 +109,13 @@ the builder.
 Schema v2 added `target` (`TARGET_FEATURES`), filled only with `obs.target: true` (default false; the key always
 exists, so every specialist shares one layout). It reads the PBRS wavefront, which the env computes whenever
 `reward.pbrs` or `obs.target` is on (dropped items are targets as `reward.item_targets`/`nearby_items` say):
-`target_N/S/W/E` is a one-hot of the neighbour of Link's tile with the lowest distance below his own (ties
-N, S, W, E; all 0 on a target tile or unreachable), `target_distance` is Link's wavefront distance / 32 clamped
+`target_N/S/W/E` is a one-hot of the neighbour of Link's tile with the lowest distance below his own, over legal
+steps only (ties N, S, W, E; all 0 on a target tile, when unreachable or when no legal step goes lower), `target_distance` is Link's wavefront distance / 32 clamped
 to 1 (1 when unreachable or without a wavefront), `target_dx`/`target_dy` are the pixel offset from Link to the
 target tile the steepest descent reaches (/256, /176; 0 if none) and `target_is_item` says whether that tile
 belongs to a dropped item. Chains rebuild the same wavefront (the acting specialist's `reward` decides the item
-targets) only for specialists with `obs.target` on. Schema 1 checkpoints still load (their layout is schema 2
+targets) only for specialists with `obs.target` on. A chain resets the observation builder on every room entry of
+a `one_room` specialist (also from a room of its own family), as at a training episode's start. Schema 1 checkpoints still load (their layout is schema 2
 without `target`, which the network drops from its input), so they act, evaluate and train next to schema 2 ones.
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
@@ -157,14 +168,15 @@ health rose. A heart heals `min(1, max_health − health)`, so one picked up at 
 terminal `info['hearts']`; metrics log `health_change_total` and `hearts/{dropped,taken,left,wasted}` per
 episode; `evaluate` keeps it per episode and reports `mean_health_change_total` and `hearts_dropped/taken/left`
 overall, per room and per start state; runner `RoomRecord`s carry `hearts_dropped/taken/healed/wasted/left/expired`
-and `keys_in/keys_out` (Link's natural keys carried into and out of the room, cheated keys left out; `chain_summary`'s
+and `keys_in/keys_out` (Link's natural keys carried into and out of the room, cheated keys left out; `runner.chain_summary`'s
 `arrival_keys` counts milestone arrivals by keys carried, so full key carriage is reported separately from reaching
 Dodongo).
 
 ### Cheated items (`crates/zelda/src/cheats.rs`)
 
 Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
-action) except where the room Link is in *needs* some (`cheats::needs`), Lee's Nov 8–9 rule:
+action, and BOMB is masked outside `requires_bombs` rooms anyway) except where the room Link is in *needs* some
+(`cheats::needs`), Lee's Nov 8–9 rule:
 
 - **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e, the 0x2c rock wall, and off the
   route so far Dungeon 3's bombed wall 3:0x4c and Manhandla's room 3:0x4d);
@@ -182,16 +194,16 @@ every action with one rule for every item, writes any change with `Session::appl
 on (mask, observation; the action's `Change` keeps what the action did, so a grant is never a pickup to the critic).
 Below the need, the count is topped up to it and the top-up is *granted* (outstanding). Every fall of the count is a
 use (`used`; bombs placed); a fall uses the grant first, and those units are *cheated* uses (`cheated`; a grant
-merely given never counts); while the need holds the floor re-arms. A natural rise (a pickup) repays the grant unit
-for unit (the count keeps them as natural ones: a bomb pickup over a cheated bomb leaves all of them natural, as
-before). Leaving the room takes back what is still granted, never natural units; elsewhere counts go up and down
+merely given never counts); while the need holds the floor re-arms. A natural rise (a pickup) leaves the grant alone:
+the granted units are used first, so a pickup over a cheated bomb still counts that bomb as cheated when it is placed
+(0x2c: Link leaves with exactly the 4 bombs he picked up, 1 cheated). Leaving the room takes back what is still granted, never natural units; elsewhere counts go up and down
 naturally. Visits count `keys_gained` on natural keys (`CheatLedger::natural`), so a cheated key is no gain.
 Reports (`_native.CHEAT_ITEMS` = bombs, keys, rupees): terminal `info['bombs'] = {used}` and
 `info['cheated'] = {bombs, keys, rupees}` → training `bombs/used` and `cheated/bombs`, `cheated/keys`,
 `cheated/rupees` per episode (progress events too); eval records `bombs`, `cheated` and per-visit `bombs_used`,
 `cheated_bombs`/`cheated_keys`/`cheated_rupees` → `mean_bombs_used`, `mean_cheated_<item>` (overall, per room and
 start state) and `visited_rooms` `bombs_used_per_visit`, `cheated_<item>_per_visit` (zelda-map's sidebar shows the
-non-zero ones); chain `RoomRecord.bombs_used`, `cheated_bombs/keys/rupees` and `chain_summary`'s `cheated_<item>`
+non-zero ones); chain `RoomRecord.bombs_used`, `cheated_bombs/keys/rupees` and `runner.chain_summary`'s `cheated_<item>`
 totals and `runs_with_cheated_<item>`; room events carry the run's `cheated` dict, shown in the watch player's
 footer (`cheated: 2 bombs, 1 key`, when any): such a game wasn't beaten naturally.
 
@@ -547,7 +559,7 @@ step, so following an enemy that moves away pays again, and knockback resets the
 - `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR]
   [--act MODE] [--checkpoint S=PATH] [--output PATH [--append]] [--plays PATH] [--harvest [DIR]]
   [--logs-dir DIR | --no-log]` → success
-  rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
+  rate and per-room failure counts (`runner.chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). Runs go to `--output` (default
   `runs/eval-chain-<yymmdd-HHMMSS>.jsonl`) as they finish, with the provenance (models, checkpoints, act modes,
   route, code, data) in `<output>.meta.json` (the batch is marked `finished` at the end), in the summary and in
@@ -585,8 +597,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   it when empty and redraws once if a drawn file vanished; training warns and logs `harvested` when the folder
   holds states), `state_entry` reads the `_h<seed>_<n>` names like seed states (route step from the entry side and
   progress), and a harvested start skips `ram_randomization`: it keeps the true health, keys and bombs the upstream
-  specialist handed over (positions too; enemies spawn as the entry draws them). Refresh the harvest after promoting
-  an upstream specialist.
+  specialist handed over (positions too; enemies spawn as the entry draws them). Units granted in the previous room
+  are taken out of the saved snapshot, as the game takes them back on leaving; entry-state builds do the same.
+  Refresh the harvest after promoting an upstream specialist.
 
 ## Entry states (`entry_states.py`)
 

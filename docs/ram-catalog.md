@@ -50,8 +50,8 @@ Encoding vocabulary: `categorical(n)` · `ordinal/scale (÷max)` · `bitfield` �
 | `$28` ObjTimer[0] | Link's object timer, e.g. $20 block after unlocking door | timer (÷$40) | both | maybe | ASM Z_05 L4005; data.json `link_obj_timer` |
 | `$53` DoorwayDir | direction of doorway Link is standing in (UW); 0 = none; restricts movement to that axis | categorical(5) | dungeon | yes — cheap and affects legal moves | ASM Z_05 L1622, Link_ModifyDirInDoorway; data.json `doorway_dir` |
 | `$512` LinkParalyzed | grabbed by Like-Like | bool | both | yes | ASM Z_04 L6866, Z_07 L2094 |
-| `$52E` SwordBlocked | sword disabled (red bubble) | bool | dungeon | maybe | ASM Z_04 L1171, Z_05 L6937; ram.md |
-| `$4C` SwordBlockedLongTimer | timer before sword re-enabled | timer | dungeon | maybe | ASM Variables.inc; ram.md `$4C` |
+| `$52E` SwordBlocked | sword disabled (red bubble) | bool | dungeon | yes — decoded (`sword_blocked`); masks SWORD and BEAMS (`GameView::is_sword_blocked`) | ASM Z_04 L1171, Z_05 L6937; ram.md |
+| `$4C` SwordBlockedLongTimer | timer before sword re-enabled (non-zero: blocked) | timer | dungeon | yes — decoded (`sword_blocked_timer`); masks SWORD and BEAMS | ASM Variables.inc; ram.md `$4C` |
 | `$66F` HeartValues | hi nibble = containers−1, lo nibble = full hearts | ordinal: max_hp=(hi+1)/16, hp | both | yes — hp/max_hp and max_hp | ASM Variables.inc comment; v1 link.py |
 | `$670` HeartPartial | 0 empty, $01–$7F half, $80–$FF full partial | ordinal (0/0.5/1) | both | yes — folded into hp float | v1 link.py `health` |
 | derived: beams ready | sword>0 ∧ (hi==lo nibble of `$66F`) ∧ `$670`≥$80 ∧ beam slot `$BA`==0 | bool | both | yes | v1 link.py `_is_health_full_for_beams` (cites Z_07 L4632) |
