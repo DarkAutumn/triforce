@@ -383,7 +383,8 @@ def read_jsonl(path: str) -> list[dict]:
 def format_summary(metrics: dict[str, float], keys: Optional[list[str]] = None) -> str:
     """One-line human summary for the console."""
     keys = keys or ['episodes', 'success_rate', 'success_rate_pessimistic', 'started/success_rate',
-                    'in_flight/mean_steps', 'in_flight/max_steps', 'in_flight/over_half_budget', 'reward/total',
+                    'harvested/success_rate', 'in_flight/mean_steps', 'in_flight/max_steps',
+                    'in_flight/over_half_budget', 'reward/total',
                     'health_change', 'episode_steps', 'episode_frames', 'linger/max_steps', 'linger/tail_steps',
                     'linger/worst_steps', 'curriculum/success_rate', 'curriculum/point_fraction', 'entropy/kind',
                     'entropy/direction', 'entropy/duration', 'losses/approx_kl', 'charts/SPS']
@@ -391,6 +392,7 @@ def format_summary(metrics: dict[str, float], keys: Optional[list[str]] = None) 
     for key in keys:
         if key in metrics:
             value = metrics[key]
-            label = key if key.startswith(('curriculum/', 'in_flight/', 'started/')) else key.split('/')[-1]
+            label = (key if key.startswith(('curriculum/', 'in_flight/', 'started/', 'harvested/'))
+                     else key.split('/')[-1])
             parts.append(f"{label}={value:.3g}" if isinstance(value, float) else f"{label}={value}")
     return ' '.join(parts)

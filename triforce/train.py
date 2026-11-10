@@ -23,9 +23,13 @@ per-start cohorts (``balanced_success_rate``, see ``EarlyStop``) stays at or abo
 ``--stop-patience`` consecutive iterations (never before a budget failure could have been counted), and stops only
 if an evaluation of the current weights (``CONFIRM_EPISODES`` sampled episodes per seed start state on an
 ``EvalTask`` pool, seed = pool seed + iteration) also reaches it; every check is an ``early_stop_check`` event.
-Only episodes that started at a room entry count; ``--curriculum`` episodes are reported separately as
-``curriculum/*``.  ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*`` (``metrics``) show the episodes
-still running at each rollout's end and the per-start cohort rate.
+Only episodes that started at a room entry count, and the balance is over the seed start states only: episodes of
+harvested start states (chain handoffs) are reported as ``harvested/*`` and never move it; ``--curriculum`` episodes
+are reported separately as ``curriculum/*``.  ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*``
+(``metrics``) show the episodes still running at each rollout's end and the per-start cohort rate.  ``run.json``
+and the ``start`` event record the harvested source (``harvested``: dir, state count, fraction, whether resets
+draw them; a warning is printed when the dir holds states) and the curriculum tracks loaded with their
+trajectory.json times (``curriculum_tracks``).
 ``--shaping-anneal N`` (outcome fine-tuning, better-play §1a) lowers the pool's shaping scale (``reward.shaping_scale``:
 every non-terminal reward and penalty is multiplied by it) linearly to 0 over the first N iterations, then keeps it
 at 0, so the policy optimizes the health-scaled terminal outcome (plus ``reward.frame_penalty``, if set).
@@ -80,8 +84,9 @@ import sys
 import time
 import traceback
 from collections import Counter, deque
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Deque, Dict, Optional
+from typing import Deque, Dict, Iterable, Optional
 
 import torch
 
@@ -111,6 +116,10 @@ class EarlyStop:
     (or an unwinnable) state and moves with the sampling as well as the policy.  Balanced = mean over start states of
     each state's exact success rate over its most recent whole cohorts that together cover at least ``window``
     episodes (a cohort with 113 episodes of a state counts all 113); every state seen needs ``min_episodes`` first.
+    ``seed_states`` (the pool's seed labels, ``EnvPool.start_states``; None = every label, e.g. one pinned
+    ``--start-state``) are the states balanced over: other room-entry episodes (harvested chain handoffs, one label
+    per file) never move the rate; ``harvested`` holds their (successes, episodes) of the last update, logged as
+    ``harvested/success_rate``.
 
     Guards: no proposal before ``min_iterations`` updates (``ceil(max_steps / steps per env) + patience``: a budget
     failure could not have been counted earlier); an iteration that finished no room-entry episode, or whose share
@@ -118,14 +127,16 @@ class EarlyStop:
     """
 
     def __init__(self, threshold: Optional[float], patience: int, window: int = 20, min_episodes: int = 5,
-                 min_iterations: int = 0):
+                 min_iterations: int = 0, seed_states: Optional[Iterable[str]] = None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.threshold = threshold
         self.patience = patience
         self.min_episodes = min_episodes
         self.window = window
         self.min_iterations = min_iterations
+        self.seed_states = None if seed_states is None else frozenset(seed_states)
         self.results: Dict[str, Deque[tuple[int, int]]] = {}     # state -> per-cohort (successes, episodes)
+        self.harvested = (0, 0)
         self.balanced: Optional[float] = None
         self.streak = 0
         self.iterations = 0
@@ -140,9 +151,13 @@ class EarlyStop:
         return {state: s / e for state, (s, e) in ((state, self.state_rate(state)) for state in self.results) if e}
 
     def add(self, cohort: Counter):
-        """One cohort's (start state, success) -> episodes counts."""
+        """One cohort's (start state, success) -> episodes counts; states outside ``seed_states`` add to
+        ``harvested`` instead."""
         counts: Dict[str, list[int]] = {}
         for (state, success), count in cohort.items():
+            if self.seed_states is not None and state not in self.seed_states:
+                self.harvested = (self.harvested[0] + (count if success else 0), self.harvested[1] + count)
+                continue
             entry = counts.setdefault(state, [0, 0])
             entry[0] += count if success else 0
             entry[1] += count
@@ -157,6 +172,7 @@ class EarlyStop:
         """One training iteration: its released ``cohorts`` (Counters, in rollout order), the room-entry episodes
         it finished and its ``in_flight/over_half_budget``; True = propose a stop."""
         self.iterations += 1
+        self.harvested = (0, 0)
         for cohort in cohorts:
             self.add(cohort)
         rates = [self.state_rate(state) for state in self.results]
@@ -462,6 +478,31 @@ def set_aside_previous(out_dir: Path, continuing: bool) -> Optional[Path]:
     return aside
 
 
+def harvested_source(args, config) -> dict:
+    """Where the run's harvested start states would come from (F069): ``dir``, ``states`` (files there now),
+    ``fraction`` (``harvested_fraction``) and ``drawn`` (whether and how resets draw them)."""
+    states = len(config.resolve_harvested_states(args.states_dir))
+    if args.start_state is not None:
+        drawn = "not drawn: --start-state pins every reset"
+    elif not config.resolve_start_states(args.states_dir):
+        drawn = "drawn on every reset: the specialist has no seed start states"
+    elif config.harvested_fraction > 0:
+        drawn = f"drawn on {config.harvested_fraction:.0%} of the resets (harvested_fraction)"
+    else:
+        drawn = "not drawn: harvested_fraction is 0"
+    return {'dir': config.harvested_dir(args.states_dir), 'states': states,
+            'fraction': config.harvested_fraction, 'drawn': drawn}
+
+
+def curriculum_tracks(trajectories: Optional[str]) -> Optional[Dict[str, str]]:
+    """The curriculum's tracks (``<trajectories>/<track>/trajectory.json``, what the native loader reads) and each
+    trajectory.json's modification time (ISO, UTC); None without a curriculum (F131: stale tracks show)."""
+    if trajectories is None:
+        return None
+    return {path.parent.name: datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+            .isoformat(timespec='seconds') for path in sorted(Path(trajectories).glob('*/trajectory.json'))}
+
+
 def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: EventLog) -> dict:
     """The training run proper; returns the train_end event fields."""
     # pylint: disable=too-many-locals, too-many-statements
@@ -488,11 +529,14 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     pool_seed = args.seed if args.seed is not None else int.from_bytes(os.urandom(8), 'little') >> 1
     pool = EnvPool(task, num_envs=args.parallel, threads=args.threads, seed=pool_seed)
 
+    harvested = harvested_source(args, config)
+    tracks = curriculum_tracks(trajectories)
     with open(out_dir / 'run.json', 'w', encoding='utf-8') as file:
         json.dump({'args': vars(args), 'specialist': specialist, 'run_id': run_id, 'source': source,
                    'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                    'ppo_config': ppo_config.to_dict(), 'start_iteration': start_iteration,
-                   'start_steps': start_steps, 'curriculum': trajectories}, file, indent=2, default=str)
+                   'start_steps': start_steps, 'curriculum': trajectories, 'curriculum_tracks': tracks,
+                   'harvested': harvested}, file, indent=2, default=str)
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} "
@@ -502,11 +546,17 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     if steps_per_iteration(args) != args.steps_per_update:
         print(f"[train] note: --steps-per-update {args.steps_per_update} is not a multiple of --parallel "
               f"{args.parallel}; each iteration trains {steps_per_iteration(args)} steps")
+    if tracks is not None:
+        print(f"[train] curriculum {trajectories}: {len(tracks)} tracks "
+              + (', '.join(f"{name} ({mtime})" for name, mtime in tracks.items()) or '(none)'))
+    if harvested['states']:
+        print(f"[train] warning: {harvested['states']} harvested start states in {harvested['dir']}: "
+              f"{harvested['drawn']}", flush=True)
     target_steps = start_steps + args.iterations * steps_per_iteration(args)
     events.emit('start', target_iterations=start_iteration + args.iterations, target_steps=target_steps,
                 start_iteration=start_iteration, start_steps=start_steps, steps_per_update=steps_per_iteration(args),
                 parallel=args.parallel, threads=args.threads, device=args.device,
-                curriculum=trajectories, source=source,
+                curriculum=trajectories, curriculum_tracks=tracks, harvested=harvested, source=source,
                 stop_success=args.stop_success, stop_patience=args.stop_patience, run_dir=str(out_dir),
                 pid=os.getpid(), set_aside=str(aside) if aside is not None else None)
 
@@ -515,7 +565,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
              'stopped_early': False}
     steps_per_env = args.steps_per_update // args.parallel
     early = EarlyStop(args.stop_success, args.stop_patience,
-                      min_iterations=math.ceil(config.max_steps / steps_per_env) + args.stop_patience)
+                      min_iterations=math.ceil(config.max_steps / steps_per_env) + args.stop_patience,
+                      seed_states=pool.start_states or None)    # empty: one --start-state pins every reset
     ckpt = registry.checkpoint_path(specialist, run_id, root)
 
     def refresh_best(collection: int) -> dict:
@@ -566,6 +617,9 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                             metrics.get('in_flight/over_half_budget'))
         if early.balanced is not None:
             metrics['balanced_success_rate'] = early.balanced
+        if early.harvested[1]:
+            metrics['harvested/episodes'] = early.harvested[1]
+            metrics['harvested/success_rate'] = early.harvested[0] / early.harvested[1]
         if stop:
             stop = confirm_stop(result.iteration)
         state['metrics'] = metrics

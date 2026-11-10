@@ -136,6 +136,44 @@ def test_early_stop_balances_start_states():
     assert not any(never.update([Counter({('a', True): 5})], 5) for _ in range(10)) and never.balanced == 1.0
 
 
+def test_early_stop_balances_seed_states_only():
+    """F140: 3 seed states at 50% and 100 harvested labels at 100%: the rate stays 0.5 and needs only the seeds."""
+    early = train.EarlyStop(0.9, 1, min_episodes=2, seed_states=['a', 'b', 'c'])
+    harvested = Counter({(f'0_77s_h{i}_3', True): 1 for i in range(100)})
+    assert not early.update([harvested], 100) and early.balanced is None and early.harvested == (100, 100)
+    seeds = Counter({(s, ok): 1 for s in 'abc' for ok in (True, False)})
+    for _ in range(5):
+        assert not early.update([seeds, harvested], 106)
+        assert early.balanced == 0.5 and early.harvested == (100, 100)
+    assert set(early.results) == {'a', 'b', 'c'}
+    pinned = train.EarlyStop(0.9, 1, min_episodes=1)          # --start-state: no seed list, every label counts
+    assert pinned.update([Counter({('x', True): 2})], 2) and pinned.harvested == (0, 0)
+
+
+def test_training_logs_its_harvested_source_and_rate(states_dir, tmp_path, logs_dir):
+    """F069/F140: run.json and the start event name the harvested dir, its state count and fraction; harvested
+    episodes are logged as harvested/success_rate and the early stop balances over the seed state only."""
+    harvest = tmp_path / 'harvest'
+    harvest.mkdir()
+    shutil.copyfile(states_dir / 'start.state', harvest / '0_77s_h1_0.state')
+    config = tmp_path / 'short.yaml'
+    config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      f"start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\n"
+                      f"harvested_states: {harvest}\nharvested_fraction: 0.5\n")
+    run_dir = train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '4',
+                          '--steps-per-update', '32', '--iterations', '4', '--models-dir', str(tmp_path),
+                          '--run-id', 'harvest', '--seed', '3'])
+    harvested = json.loads((run_dir / 'run.json').read_text())['harvested']
+    assert (harvested['dir'], harvested['states'], harvested['fraction']) == (str(harvest), 1, 0.5)
+    assert harvested['drawn'] == 'drawn on 50% of the resets (harvested_fraction)'
+    (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
+    plan = json.loads((log_dir / 'training.json').read_text())
+    start = next(e for e in read_jsonl(str(log_dir / plan['runs'][0]['events'])) if e['event'] == 'start')
+    assert start['harvested'] == harvested and start['curriculum_tracks'] is None
+    records = read_jsonl(str(run_dir / 'metrics.jsonl'))
+    assert any('harvested/success_rate' in r for r in records)
+
+
 def test_early_stop_guards_min_iterations_and_overdue_episodes():
     early = train.EarlyStop(0.9, 1, min_episodes=1, min_iterations=3)
     perfect = [Counter({('a', True): 20})]
@@ -394,6 +432,8 @@ def test_a_load_continuation_resumes_the_curriculum(states_dir, tmp_path):
               '--curriculum', str(trajectories), '--curriculum-fraction', '1.0']
     first = train.main(common + ['--run-id', 'first'])
     assert read_jsonl(str(first / 'metrics.jsonl'))[-1]['curriculum/episodes'] > 0
+    tracks = json.loads((first / 'run.json').read_text())['curriculum_tracks']       # F131: what it loaded
+    assert list(tracks) == ['start'] and tracks['start'].endswith('+00:00')
     progress = json.loads((first / 'curriculum.json').read_text())
     progress['start'].update(point=0, stages_passed=4)
     (first / 'curriculum.json').write_text(json.dumps(progress))

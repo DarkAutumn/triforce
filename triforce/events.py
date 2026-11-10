@@ -80,7 +80,8 @@ PROGRESS_METRICS = ('episodes', 'success_rate', 'balanced_success_rate', 'reward
                     'curriculum/point_fraction', 'losses/approx_kl', 'charts/SPS')
 PROGRESS_METRICS += ('blocks', 'curriculum/blocks', 'success_rate_pessimistic', 'started/success_rate',
                      'started/episodes', 'started/iteration', 'in_flight/episodes', 'in_flight/mean_steps',
-                     'in_flight/max_steps', 'in_flight/over_half_budget')
+                     'in_flight/max_steps', 'in_flight/over_half_budget', 'harvested/success_rate',
+                     'harvested/episodes')
 PROGRESS_METRICS += tuple(f'{prefix}/{key}' for prefix in ('linger', 'curriculum/linger')
                           for key in ('max_steps', 'max_frames', 'tail_steps', 'tail_frames',
                                       'worst_steps', 'worst_frames'))
