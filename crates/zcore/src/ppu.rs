@@ -1804,9 +1804,8 @@ impl Bus {
         if addr < addr::PALETTE_START {
             self.ppu.vram_buffer
         } else {
-            // Since we're reading from > $3EFF subtract $1000
-            // Hi 2 bits of palette should be open bus
-            self.ppu_bus_peek(addr - 0x1000) | (self.ppu.open_bus_now() & 0xC0)
+            // A palette entry is six bits: the top two read the I/O latch (as `read_data`).
+            (self.ppu_bus_peek(addr) & 0x3F) | (self.ppu.open_bus_now() & 0xC0)
         }
     }
 
@@ -2179,6 +2178,19 @@ mod tests {
             bus.ppu_clock_to(clock);
         }
         assert_eq!((bus.ppu.scanline, bus.ppu.cycle), (241, 1));
+    }
+
+    /// Peeking $2007 at a palette address gives what reading it gives: the palette entry, not
+    /// the nametable byte under it that the read only buffers.
+    #[test]
+    fn peek_data_matches_read_data_on_the_palette() {
+        let mut bus = Bus::default();
+        bus.ppu_bus_write(0x3F01, 0x2A);
+        bus.ppu_bus_write(0x2F01, 0x55);
+        bus.ppu.scroll.v = 0x3F01;
+        let peeked = bus.peek_data();
+        assert_eq!(peeked & 0x3F, 0x2A);
+        assert_eq!(peeked, bus.read_data());
     }
 
     #[test]
