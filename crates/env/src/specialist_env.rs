@@ -338,6 +338,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             config.one_room,
             config.no_progress_steps.map(|n| n as u32),
             config.no_damage_steps.map(|n| n as u32),
+            config.max_steps as u32,
         );
         Ok(SpecialistEnv {
             builder: ObservationBuilder::new(config.obs.objective, config.obs.target),

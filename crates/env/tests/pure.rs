@@ -600,7 +600,7 @@ fn measured_ending_credits_threshold_action_before_check() {
     };
 
     // build_end_conditions: no_progress_steps swaps Timeout for NoRoomProgress.
-    let conditions = EndConditions::new(&[], &[], false, Some(3), None);
+    let conditions = EndConditions::new(&[], &[], false, Some(3), None, 2000);
     assert!(matches!(
         conditions.0.last(),
         Some(EndCondition::NoRoomProgress {
@@ -614,8 +614,8 @@ fn measured_ending_credits_threshold_action_before_check() {
             .any(|c| matches!(c, EndCondition::Timeout { .. }))
     );
     assert!(matches!(
-        EndConditions::new(&[], &[], false, None, None).0.last(),
-        Some(EndCondition::Timeout { .. })
+        EndConditions::new(&[], &[], false, None, None, 3000).0.last(),
+        Some(EndCondition::Timeout { no_progress_timeout: 3000, .. })
     ));
     // Python's ValueErrors ('shared LingerTracker', 'positive') can't happen here: the env always passes its own
     // tracker's tail, and config validation rejects a non-positive no_progress_steps.

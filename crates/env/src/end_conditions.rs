@@ -165,7 +165,8 @@ pub enum EndCondition {
         enter_rooms: HashSet<MapLocation>,
         one_room: bool,
     },
-    /// Link stuck in one position, or no new correct room (v1 Timeout).
+    /// Link stuck in one position, or no new correct room for longer than the specialist's `max_steps` (v1
+    /// Timeout; in a one_room episode the `max-steps` truncation always comes first).
     Timeout {
         position_timeout: u32,
         no_progress_timeout: u32,
@@ -181,10 +182,10 @@ pub enum EndCondition {
 }
 
 impl EndCondition {
-    pub fn timeout() -> EndCondition {
+    pub fn timeout(max_steps: u32) -> EndCondition {
         EndCondition::Timeout {
             position_timeout: 50,
-            no_progress_timeout: 2000,
+            no_progress_timeout: max_steps,
             position_duration: 0,
             last_progress: 0,
             entered_rooms: HashSet::new(),
@@ -294,7 +295,7 @@ impl EndCondition {
 /// The end conditions of a specialist, in priority order (`build_end_conditions`).  Triforce and heart-container
 /// conditions only for specialists that list them as success; `no_progress_steps` replaces Timeout with the
 /// shared-linger NoRoomProgress (which the env truncates rather than terminates); `no_damage_steps` adds NoDamage
-/// last (also a truncation).
+/// last (also a truncation). Timeout's no-new-room limit is `max_steps`.
 #[derive(Clone, Debug)]
 pub struct EndConditions(pub Vec<EndCondition>);
 
@@ -305,6 +306,7 @@ impl EndConditions {
         one_room: bool,
         no_progress_steps: Option<u32>,
         no_damage_steps: Option<u32>,
+        max_steps: u32,
     ) -> EndConditions {
         let enter_rooms = success
             .iter()
@@ -324,7 +326,7 @@ impl EndConditions {
             one_room,
         });
         list.push(match no_progress_steps {
-            None => EndCondition::timeout(),
+            None => EndCondition::timeout(max_steps),
             Some(n) => EndCondition::NoRoomProgress {
                 no_progress_steps: n,
             },
@@ -408,6 +410,7 @@ mod tests {
             false,
             Some(5),
             Some(7),
+            2000,
         );
         let kinds: Vec<&str> =
             c.0.iter()
