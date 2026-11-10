@@ -132,7 +132,9 @@ class RolloutBuffer:
         returns the values ``[n]`` of the observations at index ``T``: the update then compares torch with torch,
         never with the Rust actor's numerics.  Rollouts run one update behind the learner (``ppo.PPO.train``); the
         log-prob is the learner's current policy's, not the acting one's (measured: with the acting policy's, the
-        KL early stop spends its budget on that lag and learning halves)."""
+        KL early stop spends its budget on that lag and learning halves).  The network is moved to ``device`` first,
+        so the forward runs there."""
+        network.to(device)
         network.eval()
         length = self.memory_length
         obs = {key: value[:, :length].reshape(-1, *value.shape[2:]) for key, value in self.observation.items()}

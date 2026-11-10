@@ -148,6 +148,7 @@ class Collector:
         self._thread: Optional[threading.Thread] = None
         self._result: dict = {}
         self.rollout_seconds = 0.0
+        self.recompute_seconds = 0.0
 
     def start(self, network: nn.Module):
         """Starts the next rollout with ``network``'s current weights."""
@@ -184,7 +185,9 @@ class Collector:
         buffer = self.buffer = self._buffers[self._next]
         self._next = 1 - self._next
         events = self.episodes = [e for e in self.pool.poll_events() if e['type'] == 'episode']
+        began = time.time()
         last_values = buffer.recompute(network, device)
+        self.recompute_seconds = time.time() - began
         buffer.add_bootstrap()
         buffer.compute_returns(last_values)
 
@@ -403,6 +406,7 @@ class PPO:
                 stats['charts/rollout_SPS'] = batch_steps / rollout_time if rollout_time > 0 else 0.0
                 stats['charts/rollout_seconds'] = rollout_time
                 stats['charts/rollout_wait_seconds'] = wait_time
+                stats['charts/recompute_seconds'] = collector.recompute_seconds
                 stats['charts/optimize_seconds'] = time.time() - optimize_start
                 if rollout_shaping is not None:
                     stats['charts/shaping_scale'] = rollout_shaping
@@ -568,7 +572,6 @@ class PPO:
                     search_stats['charts/search_agreement'] = float(
                         (target.argmax(dim=-1) == joint.argmax(dim=-1)).float().mean())
         network.train()
-        network.to('cpu')
 
         var_y = torch.var(b_returns)
         explained_var = float('nan') if var_y == 0 else float(1 - torch.var(b_returns - b_values) / var_y)
@@ -655,7 +658,6 @@ class PPO:
         value_loss, explained, new_joint = measure()
         kl = float(joint_kl(old_joint, new_joint))
         self.ppg.clear()
-        network.to('cpu')
         return {'ppg/value_loss': value_loss, 'ppg/value_loss_start': value_loss_start, 'ppg/kl': kl,
                 'ppg/explained_variance': explained, 'ppg/explained_variance_start': explained_start,
                 'ppg/rows': float(rows), 'ppg/seconds': time.time() - began}

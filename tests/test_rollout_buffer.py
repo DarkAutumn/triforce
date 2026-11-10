@@ -12,7 +12,7 @@ from triforce._native import INTERRUPTS
 from triforce.actions import MASK_SIZE
 from triforce.metrics import RolloutMetrics
 from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.ppo import Collector
+from triforce.ppo import PPO, Collector, PPOConfig
 from triforce.rollout_buffer import RolloutBuffer, frame_aware_gae
 
 from . import synthetic
@@ -162,6 +162,36 @@ def test_opted_in_truncation_uses_final_value_and_stops_trace_across_reset():
     buffer.add_bootstrap()
     buffer.compute_returns(torch.tensor([12.0]))
     assert buffer.returns[0].tolist() == pytest.approx([4, 5, 6 + 0.5 * 12])
+
+
+class _DeviceLog(ZeldaPolicy):
+    """Logs ``to()`` calls and every forward (with the device of the weights and the train/eval mode)."""
+    log: list
+
+    def to(self, *args, **kwargs):
+        self.log.append(('to', str(torch.device(args[0]))))
+        return super().to(*args, **kwargs)
+
+    def evaluate(self, obs, masks, actions):
+        self.log.append(('forward', self.training, str(self.kind_head.weight.device)))
+        return super().evaluate(obs, masks, actions)
+
+
+@pytest.mark.parametrize('device', ['cpu', pytest.param('cuda', marks=pytest.mark.skipif(
+    not torch.cuda.is_available(), reason='needs CUDA'))])
+def test_every_recompute_forward_runs_on_the_training_device(device):
+    """Every forward (recompute included) runs with the network on the PPO device, which nothing moves it off: before
+    F019, ``optimize`` ended with ``network.to('cpu')`` and every recompute after the first ran on the CPU."""
+    torch.manual_seed(0)
+    network = _DeviceLog(synthetic.observation_space(), ModelConfig(hidden_dim=32))
+    network.log = []
+    PPO(PPOConfig(target_steps=16, num_epochs=1), device=device).train(
+        network, synthetic.ListPool(synthetic.BanditEnv, 2), iterations=3)
+    expected = str(torch.device(device if device == 'cpu' else 'cuda:0'))
+    assert {entry[1] for entry in network.log if entry[0] == 'to'} == {device}
+    forwards = [entry for entry in network.log if entry[0] == 'forward']
+    assert sum(not training for _, training, _ in forwards) >= 3      # recomputes (and post-update stats)
+    assert {weights for _, _, weights in forwards} == {expected}
 
 
 def test_episode_metrics_merge():
