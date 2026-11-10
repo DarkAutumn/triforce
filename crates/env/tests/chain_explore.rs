@@ -5,7 +5,7 @@ mod common;
 
 use common::{MachineState, TfzStore, ZCore, open_core};
 use env::StateStore;
-use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult, chain_summary};
+use env::chain::{ChainEnv, ChainStatus, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
 use env::curriculum::{Curriculum, CurriculumSpec, load_trajectories};
 use env::explore::{Explorer, random_action};
@@ -13,7 +13,6 @@ use env::specialist_env::{EnvOptions, SpecialistEnv};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
-use zelda::cheats::ItemCounts;
 use zelda::{Action, GameMap, MapLocation, Session};
 
 fn data() -> Arc<GameData> {
@@ -96,73 +95,6 @@ fn every_route_room_has_a_specialist() {
             );
         }
     }
-}
-
-#[test]
-fn chain_summary_counts_failures_by_room() {
-    let run = |result: &str, room: &str, outcome: &str, bombs: u32, keys: u32| RunResult {
-        route: "d2first".into(),
-        seed: Some(0),
-        result: result.into(),
-        reason: String::new(),
-        steps: 0,
-        frames: 0,
-        retreats: 0,
-        wrong_exits: 0,
-        rooms: vec![RoomRecord {
-            index: 0,
-            level: 1,
-            room: room.into(),
-            in_cave: false,
-            specialist: "stalfos-keese-gel".into(),
-            steps: 0,
-            frames: 0,
-            health_in: 0.0,
-            health_out: 0.0,
-            max_health: 0,
-            keys_in: 0,
-            keys_out: 0,
-            outcome: outcome.into(),
-            hearts_dropped: 0,
-            hearts_taken: 0,
-            hearts_healed: 0.0,
-            hearts_wasted: 0.0,
-            hearts_left: 0,
-            hearts_expired: 0,
-            linger: None,
-            blocks: 0,
-            no_damage_max: 0,
-            bombs_used: bombs,
-            cheated: ItemCounts {
-                bombs,
-                keys,
-                rupees: 0,
-            },
-            boss_stuns: 0,
-            boss_eats: 0,
-        }],
-    };
-    let s = chain_summary(&[
-        run("success", "0x0e", "milestone", 2, 0),
-        run("failure", "0x44", "death", 0, 1),
-        run("failure", "0x44", "death", 1, 1),
-        run("failure", "0x73", "stuck", 0, 0),
-    ]);
-    assert_eq!(s["runs"], 4);
-    assert_eq!(s["successes"], 1);
-    assert_eq!(s["success_rate"], 0.25);
-    assert_eq!(
-        s["failures"],
-        serde_json::json!({"1:0x44 stalfos-keese-gel death": 2, "1:0x73 stalfos-keese-gel stuck": 1})
-    );
-    let counts = |item: &str| {
-        let n = |key: String| s[key.as_str()].as_u64();
-        (n(format!("cheated_{item}")), n(format!("runs_with_cheated_{item}")))
-    };
-    assert_eq!(counts("bombs"), (Some(3), Some(2)));
-    assert_eq!(counts("keys"), (Some(2), Some(2)));
-    assert_eq!(counts("rupees"), (Some(0), Some(0)));
-    assert!(s.get("bombs_cheated").is_none(), "the old name is gone");
 }
 
 /// The chain tests, run in sequence on one emulator.
@@ -337,7 +269,6 @@ fn no_room_progress_threshold_replaces_flat_budget(
     let linger = last.linger.unwrap();
     assert_eq!(linger.tail_steps, 4);
     assert_eq!(linger.tail_frames as u64, last.frames);
-    assert_eq!(chain_summary(&[r])["successes"], 0);
     c.into_parts().0.into_nes()
 }
 

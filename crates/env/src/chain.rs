@@ -277,24 +277,6 @@ pub struct RunResult {
 }
 
 impl RunResult {
-    /// The room the run ended in, if it didn't succeed.
-    pub fn failed_room(&self) -> Option<&RoomRecord> {
-        if self.result != "success" {
-            self.rooms.last()
-        } else {
-            None
-        }
-    }
-
-    /// Cheated items used in the run (its rooms' total).
-    pub fn cheated(&self) -> ItemCounts {
-        let mut total = ItemCounts::default();
-        for room in &self.rooms {
-            total += room.cheated;
-        }
-        total
-    }
-
     /// `asdict(RunResult)`.
     pub fn to_json(&self) -> Value {
         json!({
@@ -921,53 +903,6 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         }
         objective::target_wavefront(objective, self.session.state(), &config.reward)
     }
-}
-
-/// The milestone metric and a per-room failure breakdown (`chain_summary`).
-pub fn chain_summary(results: &[RunResult]) -> Value {
-    let runs = results.len();
-    let successes = results.iter().filter(|r| r.result == "success").count();
-    let mut failures: Vec<(String, usize)> = Vec::new();
-    for r in results {
-        if let Some(room) = r.failed_room() {
-            let key = format!(
-                "{}:{}{} {} {}",
-                room.level,
-                room.room,
-                if room.in_cave { ":cave" } else { "" },
-                room.specialist,
-                room.outcome
-            );
-            match failures.iter_mut().find(|(k, _)| *k == key) {
-                Some((_, n)) => *n += 1,
-                None => failures.push((key, 1)),
-            }
-        }
-    }
-    failures.sort_by_key(|f| std::cmp::Reverse(f.1));
-    let mut errors: Vec<&str> = results
-        .iter()
-        .filter(|r| r.result == "error")
-        .map(|r| r.reason.as_str())
-        .collect();
-    errors.sort();
-    errors.dedup();
-    let cheated: Vec<ItemCounts> = results.iter().map(RunResult::cheated).collect();
-    let mut summary = json!({
-        "runs": runs,
-        "successes": successes,
-        "success_rate": if runs > 0 { successes as f64 / runs as f64 } else { 0.0 },
-        "failures": failures.into_iter().map(|(k, v)| (k, json!(v))).collect::<serde_json::Map<_, _>>(),
-        "errors": errors,
-    });
-    // Cheated items used (`zelda::cheats`): runs that used any weren't beaten naturally.
-    let o = summary.as_object_mut().expect("object");
-    for item in CheatItem::ALL {
-        let name = item.name();
-        o.insert(format!("cheated_{name}"), json!(cheated.iter().map(|c| c[item]).sum::<u32>()));
-        o.insert(format!("runs_with_cheated_{name}"), json!(cheated.iter().filter(|c| c[item] > 0).count()));
-    }
-    summary
 }
 
 #[cfg(test)]
