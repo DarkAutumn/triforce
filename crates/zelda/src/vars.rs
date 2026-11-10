@@ -69,6 +69,7 @@ vars! {
     Rng9 = ("rng_9", 0x021, false),
     Rng10 = ("rng_10", 0x022, false),
     Rng11 = ("rng_11", 0x023, false),
+    Rng12 = ("rng_12", 0x024, false),
     SwordAnimation = ("sword_animation", 0x0B9, false),
     BeamAnimation = ("beam_animation", 0x0BA, false),
     BaitOrBoomerangAnimation = ("bait_or_boomerang_animation", 0x0BB, false),
@@ -129,8 +130,8 @@ vars! {
     ObjHealthC = ("obj_health_c", 0x491, false),
 }
 
-/// The RNG bytes `GameSession.load(randomize_rng=True)` redraws.
-pub const RNG_VARS: [Var; 12] = [
+/// The 13 LFSR bytes $18-$24 (Z_07 @ScrambleRandom rotates 13; monsters read `Random+1, X` up to $24).
+pub const RNG_VARS: [Var; 13] = [
     Var::Rng0,
     Var::Rng1,
     Var::Rng2,
@@ -143,11 +144,18 @@ pub const RNG_VARS: [Var; 12] = [
     Var::Rng9,
     Var::Rng10,
     Var::Rng11,
+    Var::Rng12,
 ];
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rng_vars_cover_all_13_lfsr_bytes() {
+        let addrs: Vec<u16> = RNG_VARS.iter().map(|v| v.addr()).collect();
+        assert_eq!(addrs, (0x18..=0x24).collect::<Vec<u16>>());
+    }
 
     #[test]
     fn names_round_trip_and_signed_vars_decode_as_i8() {
