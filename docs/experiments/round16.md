@@ -255,3 +255,57 @@ depth 3; `ei-k1`: the same with one unperturbed future (the clairvoyant ablation
   segment, so few of them are counted per iteration (and the early stop, which counts the same episodes, can be
   fooled the same way). Logged in the backlog. The search arm on the same seed did not collapse.
 - Next: the non-boss family (IX.7, goriya: headroom, 245 iterations, running), where cost and effect matter more.
+
+## 6. SIL on a second family; PLR, PPG and chain-aware arms on goriya (IX.5, IX.8–IX.10)
+
+**SIL on moldorm** (same recipe, 300 episodes per start state, 900 per run):
+
+| arm | act | success per seed | mean | hearts lost / episode per seed | mean |
+|---|---|---|---:|---|---:|
+| ctl | sample | 86.1, 84.4, 84.8 | 85.1 | 0.862, 0.963, 0.879 | 0.901 |
+| sil | sample | 85.6, 87.1, 85.9 | 86.2 | 0.872, 0.808, 0.846 | 0.842 |
+| ctl | argmax | 83.9, 79.4, 87.8 | 83.7 | 0.777, 0.838, 0.803 | 0.806 |
+| sil | argmax | 82.9, 81.8, 84.1 | 82.9 | 0.808, 0.709, 0.728 | 0.748 |
+
+Same direction as goriya, smaller: hearts −7% in both modes, success +1.1 pp sampled. **SIL is kept** (IX.5) and
+goes into the team (§7).
+
+**More goriya arms** (seeds 57–59; ctl and sil from §4 repeated for reference): `plr` (`--plr`, the paper's
+β=0.1), `plr-b1` (β=1), `ppg` (`--ppg`), `exit` (`reward.exit_health_weight: 1.0`: the success terminal pays only
+for health at the exit), `harvest` (half the resets from 546 goriya handoff states harvested from 240 chain runs of
+the promoted team, `eval-chain --harvest`):
+
+| arm | act | success per seed | mean | hearts lost / episode per seed | mean |
+|---|---|---|---:|---|---:|
+| ctl | sample | 94.5, 90.5, 93.3 | 92.8 | 0.512, 0.652, 0.573 | 0.579 |
+| sil | sample | 95.7, 94.8, 94.2 | 94.9 | 0.477, 0.504, 0.493 | 0.492 |
+| plr | sample | 91.0 | – | 0.790 | – |
+| plr-b1 | sample | 94.3, 94.5, 94.1 | 94.3 | 0.511, 0.556, 0.526 | 0.531 |
+| ppg | sample | 93.7, 92.6, 94.0 | 93.4 | 0.524, 0.609, 0.602 | 0.578 |
+| exit | sample | 94.5, 94.3, 93.1 | 93.9 | 0.491, 0.478, 0.503 | 0.491 |
+| harvest | sample | 94.5, 94.4, 93.3 | 94.1 | 0.546, 0.513, 0.611 | 0.557 |
+| ctl | argmax | 94.3, 91.1, 93.1 | 92.8 | 0.450, 0.623, 0.495 | 0.523 |
+| sil | argmax | 95.5, 93.9, 93.6 | 94.3 | 0.418, 0.456, 0.441 | 0.438 |
+| plr | argmax | 91.1 | – | 0.707 | – |
+| plr-b1 | argmax | 93.7, 93.1, 94.3 | 93.7 | 0.459, 0.523, 0.477 | 0.487 |
+| ppg | argmax | 93.5, 91.8, 92.8 | 92.7 | 0.493, 0.524, 0.474 | 0.497 |
+| exit | argmax | 92.4, 92.1, 93.7 | 92.7 | 0.481, 0.444, 0.428 | 0.451 |
+| harvest | argmax | 93.7, 93.9, 92.4 | 93.3 | 0.510, 0.452, 0.532 | 0.498 |
+
+Chains with each goriya swapped into the promoted team (goriya samples, 120 runs per seed; arrivals per 120):
+
+| goriya | full → after D2 | full → D3 | D2 segment | D1 segment |
+|---|---|---|---|---|
+| r56 (team) | 67 | 21 | 85 | 102 |
+| ctl | 81, 69, 68 = 72.7 | 25, 19, 13 = 19.0 | 85, 78, 85 = 82.7 | 105, 100, 103 = 102.7 |
+| sil | 72, 66, 78 = 72.0 | 25, 16, 18 = 19.7 | 83, 90, 80 = 84.3 | 109, 99, 108 = 105.3 |
+| exit | 69, 71, 75 = 71.7 | 22, 17, 25 = 21.3 | 81, 91, 88 = 86.7 | 103, 102, 108 = 104.3 |
+| harvest | 68, 75, 68 = 70.3 | 18, 25, 19 = 20.7 | 92, 81, 76 = 83.0 | 94, 109, ? |
+
+- **PLR (IX.9):** β=0.1 is clearly worse (hearts 0.79 vs the controls' 0.51–0.65): with 12 start states it puts most
+  draws on one state and the rest are forgotten. β=1 is level with the other arms. Not kept.
+- **PPG (IX.10):** level with the control (explained variance 0.6–0.7 was not the bottleneck). Not kept.
+- **Chain-aware (IX.8):** `exit_health_weight` 1.0 loses as few hearts as SIL, at the control's success; harvested
+  handoff states change nothing in single rooms. In chains, one goriya swapped in moves no segment by more than the
+  seed-to-seed spread (±6 arrivals) for any arm, SIL included: a single family's few hearts don't show in 120-run
+  chains. Not kept on its own; `exit_health_weight` is a candidate to stack on SIL if the SIL team helps.
