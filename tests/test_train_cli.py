@@ -447,7 +447,7 @@ def _train_round():
     return module
 
 
-def test_round_driver_retrains_unfinished_runs_and_promotes_only_finished_ones(tmp_path, monkeypatch):
+def test_round_driver_sets_unfinished_runs_aside_and_skips_finished_ones(tmp_path, monkeypatch):
     round_ = _train_round()
     monkeypatch.setattr(round_, 'say', lambda *_: None)
     run_dir = registry.run_dir(SPECIALIST, 'r', tmp_path)
@@ -464,13 +464,12 @@ def test_round_driver_retrains_unfinished_runs_and_promotes_only_finished_ones(t
 
     calls = []
     monkeypatch.setattr(round_, 'train', finish('interrupted', train.EXIT_INTERRUPTED))
-    args = argparse.Namespace(round='r', skip_existing=True, no_promote=False)
+    args = argparse.Namespace(round='r', skip_existing=True)
     record = round_.train_specialist(SPECIALIST, args, tmp_path, tmp_path)
     assert record['status'] == 'train-failed' and record['train_status'] == 'interrupted'
-    assert not (tmp_path / SPECIALIST / registry.PROMOTED_NAME).exists()     # never promoted
+    assert not (tmp_path / SPECIALIST / registry.PROMOTED_NAME).exists()
 
     monkeypatch.setattr(round_, 'train', finish('completed'))
-    args.no_promote = True
     record = round_.train_specialist(SPECIALIST, args, tmp_path, tmp_path)
     assert calls == [run_dir, run_dir] and record['status'] == 'ok' and record['train_status'] == 'completed'
     partial = run_dir.with_name('r.partial-1')
