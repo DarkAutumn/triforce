@@ -176,6 +176,24 @@ def test_route_plan_and_overlay(qapp, models):
     assert zelda_map.build_parser().parse_args([]).route is None
 
 
+def test_dungeon_cellars_are_drawn_with_their_entrance(qapp, models):
+    rooms = zelda_map.game_rooms()
+    assert zelda_map.cellar_entrances(rooms) == {(1, 0x7f, True): 0x22, (3, 0x0f, True): 0x69}
+    states = {(1, 0x22, False): ['1_22e_0'], (1, 0x7f, True): ['1_7fcave_0']}
+    window = zelda_map.MapWindow(models, {}, states)
+    assert 0x7f not in window.level_rooms(1) and 0x0f not in window.level_rooms(3)
+    assert zelda_map.level_bounds(1, window.level_rooms(1))[2] <= 6
+    assert zelda_map.level_bounds(3, window.level_rooms(3))[2:] == (5, 6)
+    html = window.room_html(1, 0x22)
+    assert '1_7fcave_0' in html and 'cellar 0x7f' in html
+    assert zelda_map.specialist_for((1, 0x7f, True)) == 'equipment-room' and 'equipment-room' in html
+    plan = zelda_map.route_plan('d2first')
+    if any((s['level'], s['room'], s['in_cave']) == (1, 0x7f, True) for s in plan):
+        assert 0x7f not in zelda_map.route_rooms(plan, 1, window.cellars)
+        assert 0x22 in zelda_map.route_rooms(plan, 1, window.cellars)
+    window.close()
+
+
 def test_render_screens_caches_playfields(tmp_path):
     states_dir = tmp_path / 'states'
     states_dir.mkdir()

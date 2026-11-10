@@ -109,7 +109,8 @@ fn families(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
 }
 
 /// game.yaml rooms: `(level, room, in_cave)` -> `{'enemies': {name: count}, 'treasure': str or None,
-/// 'requires_bombs': bool}`.
+/// 'requires_bombs': bool, 'cave': (level, room, in_cave) or None}`.  `cave` is where the room's cave exit leads:
+/// the room's own interior on the overworld, a separate room id for a dungeon cellar (1:0x22 -> 1:0x7f).
 #[pyfunction]
 fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     let data = context::data(py, None)?;
@@ -123,6 +124,11 @@ fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
         info.set_item("enemies", enemies)?;
         info.set_item("treasure", room.treasure.as_deref())?;
         info.set_item("requires_bombs", room.requires_bombs)?;
+        let cave = room.exits.get("cave").map(|exit| {
+            let to = &exit.destination;
+            (to.level, to.value, to.in_cave)
+        });
+        info.set_item("cave", cave)?;
         d.set_item((location.level, location.value, location.in_cave), info)?;
     }
     Ok(d)

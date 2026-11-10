@@ -417,12 +417,15 @@ def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
     return plan
 
 
-def route_rooms(plan: list[dict], level: int) -> dict[int, list[int]]:
-    """Room -> the route step indices in it (its cave's included) on ``level``."""
+def route_rooms(plan: list[dict], level: int, cellars: Optional[dict] = None) -> dict[int, list[int]]:
+    """Room -> the route step indices in it (its cave's included, a dungeon cellar's on its entrance room: see
+    ``cellar_entrances``) on ``level``."""
+    cellars = cellars or {}
     result = defaultdict(list)
     for step in plan:
         if step['level'] == level:
-            result[step['room']].append(step['index'])
+            key = (step['level'], step['room'], step['in_cave'])
+            result[cellars.get(key, step['room'])].append(step['index'])
     return dict(result)
 
 
@@ -436,6 +439,18 @@ def route_segments(plan: list[dict], level: int) -> list[tuple[int, int]]:
 def route_caves(plan: list[dict], level: int) -> set[int]:
     """Rooms on ``level`` where the route goes into a cave or down dungeon stairs."""
     return {s['room'] for s in plan if s['level'] == level and not s['in_cave'] and s['exit'] == 'cave'}
+
+
+def cellar_entrances(rooms: dict) -> dict[Key, int]:
+    """Dungeon cellar -> the room with its stairs: a room's cave exit (``game_rooms()`` 'cave') into an in-cave
+    room with another id on the same level (1:0x22 -> 1:0x7f).  An overworld cave shares its room's id and a
+    dungeon entrance leads to another level: neither is a cellar."""
+    cellars = {}
+    for (level, room, in_cave), info in rooms.items():
+        cave = info.get('cave')
+        if not in_cave and cave and cave[2] and cave[0] == level and cave[1] != room:
+            cellars[tuple(cave)] = room
+    return cellars
 
 
 def step_text(step: dict) -> str:
@@ -776,6 +791,8 @@ class MapWindow(QMainWindow):
         self.run_id = run_id
         self.states = states
         self.rooms = game_rooms() if rooms is None else rooms
+        self.cellars = cellar_entrances(self.rooms)                 # cellar key -> its entrance room
+        self.cellar_of = {(key[0], room): key for key, room in self.cellars.items()}
         self.route = route
         self.plan = route_plan(route, self.rooms) if route else []
         self.pixmaps = {key: QPixmap(str(path)) for key, path in screens.items()}
@@ -868,13 +885,19 @@ class MapWindow(QMainWindow):
         if self.tabs.count():
             self.show_level(self.level, keep_view=True)
 
+    def cave_key(self, level: int, room: int) -> Key:
+        """The key of a room's cave: its own id in a cave, or its dungeon cellar (1:0x22 -> (1, 0x7f, True))."""
+        return self.cellar_of.get((level, room), (level, room, True))
+
     def room_stats(self, level: int, room: int) -> Optional[dict]:
-        """The stats a room's overlay shows: the room itself, else its cave."""
-        return self.stats.get((level, room, False)) or self.stats.get((level, room, True))
+        """The stats a room's overlay shows: the room itself, else its cave (or cellar)."""
+        return self.stats.get((level, room, False)) or self.stats.get(self.cave_key(level, room))
 
     def level_rooms(self, level: int) -> set[int]:
-        """Rooms known on a level: game.yaml, savestates, eval data."""
-        return {key[1] for source in (self.rooms, self.states, self.stats) for key in source if key[0] == level}
+        """Rooms known on a level: game.yaml, savestates, eval data.  A dungeon's in-cave keys (its cellars, drawn
+        with their entrance room) are not map rooms."""
+        return {key[1] for source in (self.rooms, self.states, self.stats) for key in source
+                if key[0] == level and not (level > 0 and key[2])}
 
     # view
     def show_level(self, level: int, keep_view: bool = False):
@@ -885,7 +908,7 @@ class MapWindow(QMainWindow):
         bounds = level_bounds(level, self.level_rooms(level))
         view = self.view.view_state() if keep_view and bounds == self.view.bounds else self.views.get(level)
         self.view.set_level(bounds, tiles, view)
-        self.view.set_route(route_rooms(self.plan, level), route_segments(self.plan, level),
+        self.view.set_route(route_rooms(self.plan, level, self.cellars), route_segments(self.plan, level),
                             route_caves(self.plan, level))
         self.update_badges()
         self.view.set_selected(self.selected.get(level))
@@ -918,24 +941,26 @@ class MapWindow(QMainWindow):
             self.details.setText('<p style="color:#8a93a6">Click a room to see its details.</p>')
             return
         self.title.setText(f'{level_name(self.level)} · 0x{room:02x}')
-        for label, in_cave in ((self.picture, False), (self.cave_picture, True)):
-            pixmap = self.pixmaps.get((self.level, room, in_cave))
+        cave = self.cave_key(self.level, room)
+        for label, key in ((self.picture, (self.level, room, False)), (self.cave_picture, cave)):
+            pixmap = self.pixmaps.get(key)
             if pixmap:
                 label.setPixmap(pixmap.scaledToWidth(340, Qt.TransformationMode.SmoothTransformation))
         self.details.setText(self.room_html(self.level, room))
 
     def room_html(self, level: int, room: int) -> str:
         """The sidebar text for a room: location, savestates, game.yaml, then the eval stats of the room and of
-        its cave."""
-        has_cave = any((level, room, True) in source for source in (self.rooms, self.states, self.stats))
+        its cave (a dungeon room's cellar)."""
+        cave = self.cave_key(level, room)
+        has_cave = any(cave in source for source in (self.rooms, self.states, self.stats))
+        cave_text = 'yes' if cave[1] == room else f'cellar 0x{cave[1]:02x}'
         rows = [('Location', level_name(level)), ('Room', f'0x{room:02x} (column {room % GRID_COLS:X}, '
                                                           f'row {room // GRID_COLS})'),
-                ('Cave', 'yes (pictured below the room)' if (level, room, True) in self.pixmaps
-                 else 'yes' if has_cave else 'no')]
+                ('Cave', f'{cave_text} (pictured below the room)' if cave in self.pixmaps
+                 else cave_text if has_cave else 'no')]
         parts = [html_rows(rows)]
-        for in_cave in (False, True) if has_cave else (False,):
-            key = (level, room, in_cave)
-            where = 'Cave' if in_cave else 'Room'
+        for key in ((level, room, False), cave) if has_cave else ((level, room, False),):
+            where = 'Cave' if key[2] else 'Room'
             names = self.states.get(key, [])
             pictured = pick_state(names) if names else None
             states = '<br>'.join(f"{name}{' (pictured)' if name == pictured else ''}" for name in names)
@@ -950,7 +975,8 @@ class MapWindow(QMainWindow):
             body = (html_rows(stats_rows(stats)) if stats
                     else '<p style="color:#8a93a6">No detailed eval data for this room.</p>')
             parts.append(html_section(f'{where} · eval (every visit)', body))
-        steps = [s for s in self.plan if (s['level'], s['room']) == (level, room)]
+        steps = [s for s in self.plan if s['level'] == level
+                 and self.cellars.get((s['level'], s['room'], s['in_cave']), s['room']) == room]
         if steps:
             parts.append(html_section(f'Route {self.route}', '<br>'.join(step_text(s) for s in steps)))
         return ''.join(parts)
