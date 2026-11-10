@@ -5,8 +5,8 @@
 //! ([`policy::Policy::joint_log_probs`]) plus keyed Gumbel noise pick `candidates` actions without replacement
 //! (Gumbel-top-k); sequential halving spends `simulations` candidate evaluations on them. One evaluation of a
 //! candidate averages `futures` simulated futures from the decision's exact state: the RNG bytes redrawn (common
-//! random numbers: every candidate's i-th evaluation sees the same redraws), the candidate, then `depth` decisions
-//! of the policy itself, then the value of the last observation. The env executes the last survivor; the row
+//! random numbers: every candidate's i-th evaluation sees the same redraws), the candidate, then `depth` argmax
+//! decisions of the policy itself, then the value of the last observation. The env executes the last survivor; the row
 //! reports the improved policy `softmax(logits + σ(completed Q))` over the joint actions.
 //!
 //! All randomness is keyed by (job, decision step, ...) through `policy::noise`, never drawn from the env, so a
@@ -28,7 +28,6 @@ pub const FRAMES_PER_DISCOUNT: f64 = 8.0;
 const TAG_SEARCHED: u64 = 0x5EA2_C4ED;
 const TAG_ROOT: u64 = 0x2007_6E1B;
 const TAG_PERTURB: u64 = 0x9E27_0B5E;
-const TAG_POLICY: u64 = 0x90_11C7;
 
 /// The search's settings (`EnvPool.rollout(search=...)` keys).
 #[derive(Clone, Debug, PartialEq)]
@@ -207,8 +206,9 @@ impl Root {
     }
 }
 
-/// Gumbel search over a [`PolicyActor`]'s policies (their `deterministic` flags: no root noise and argmax policy
-/// decisions inside the futures).
+/// Gumbel search over a [`PolicyActor`]'s policies (their `deterministic` flags: no root noise).  Inside the futures
+/// the policies always act by argmax, so a candidate's Q differs from another's by the candidate and the env's RNG
+/// redraws alone, not by per-candidate action sampling (review F180: sampled sims made the ranking mostly noise).
 pub struct GumbelSearch {
     actor: Arc<PolicyActor>,
     config: SearchConfig,
@@ -276,8 +276,7 @@ impl GumbelSearch {
                 if t == c.depth {
                     break;
                 }
-                let key = key_of(&[job as u64, step as u64, TAG_POLICY, visit as u64, f as u64, candidate as u64, t as u64]);
-                action = self.act(acting, key, s)?;
+                action = self.act(acting, s)?;
             }
             if leaf {
                 ret += discount * self.value(acting, s)?;
@@ -297,19 +296,12 @@ impl GumbelSearch {
         Ok(v as f64)
     }
 
-    /// Policy `p`'s decision on the simulated observation, sampled with noise from `key` (argmax if deterministic).
-    fn act<X>(&self, p: usize, key: u64, s: &mut SearchScratch) -> Result<ZeldaAction, PlanError<X>> {
+    /// Policy `p`'s argmax decision on the simulated observation.
+    fn act<X>(&self, p: usize, s: &mut SearchScratch) -> Result<ZeldaAction, PlanError<X>> {
         let net = &self.actor.policies[p];
-        let noise = &mut s.actor.noise[..net.noise_size()];
-        let pick = if self.actor.deterministic[p] {
-            Pick::Argmax
-        } else {
-            gumbel(key, noise);
-            Pick::Sample(noise)
-        };
         let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
         let inp = input(&self.actor, p, &s.obs, &mut vectors);
-        let out = net.evaluate(&inp, pick, &mut s.actor.scratches[p]).map_err(|e| PlanError::Usage(e.0))?;
+        let out = net.evaluate(&inp, Pick::Argmax, &mut s.actor.scratches[p]).map_err(|e| PlanError::Usage(e.0))?;
         Ok(out.action.map(|i| i as i64))
     }
 }

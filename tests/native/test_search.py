@@ -92,6 +92,22 @@ def test_searching_no_decisions_is_a_plain_rollout(states_dir, tmp_path):
     assert not none['search_mask'].any()
 
 
+def test_independent_evaluations_of_a_candidate_agree(states_dir, tmp_path):
+    """Sims act by argmax (review F180): without RNG redraws (one future) a candidate's later visits repeat its first
+    evaluation exactly, so a search that visits every candidate once and one that visits them again agree on every
+    candidate's Q at the same root, hence on the best candidate."""
+    policy = network().to_native()
+    once = dict(SEARCH, futures=1, simulations=3)
+    again = dict(SEARCH, futures=1, simulations=9)
+    with pool(states_dir, tmp_path, threads=2, name='a') as a, pool(states_dir, tmp_path, threads=2, name='b') as b:
+        one, more = rollout(a, policy, once), rollout(b, policy, again)
+    assert one['search_actions'][:, 0].tobytes() == more['search_actions'][:, 0].tobytes()
+    q1, q2 = one['search_q'][:, 0], more['search_q'][:, 0]      # every env's first decision: the same root
+    assert np.isfinite(q1).all() and np.isfinite(q2).all()
+    np.testing.assert_allclose(q1, q2, rtol=1e-6, atol=1e-6)
+    assert (q1.argmax(axis=1) == q2.argmax(axis=1)).all()
+
+
 def test_search_runs_in_training_pools_only(states_dir, tmp_path):
     config = native.SpecialistConfig.load('ow-start')
     task = native.EvalTask(config, [('start', 1)], states_dir=str(states_dir))
