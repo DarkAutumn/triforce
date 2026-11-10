@@ -255,6 +255,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     pub hearts: HeartTracker,
     /// Cheated bombs, keys and rupees (`zelda::cheats`).
     pub cheats: CheatLedger,
+    /// The counts the last action's room was left with, without the grants taken back (F148).
+    left_with: ItemCounts<Option<u8>>,
     /// Per-room-visit statistics (only with `EnvOptions::track_visits`).
     visits: Option<VisitTracker>,
     pool: Option<StartStatePool>,
@@ -368,6 +370,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             linger: LingerTracker::default(),
             hearts: HeartTracker::default(),
             cheats: CheatLedger::default(),
+            left_with: ItemCounts::default(),
             visits: opts.track_visits.then(VisitTracker::default),
             pool,
             curriculum,
@@ -393,6 +396,18 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     pub fn session(&self) -> &Session<N> {
         &self.session
+    }
+
+    /// The pre-entry snapshot of the last room entry (`Session::last_pre_entry`) with the item counts the run really
+    /// carried: the grants taken back on leaving the previous room are not in it (F148). Save this, not the raw one.
+    pub fn last_pre_entry(&self) -> Option<SessionSnapshot<N::State>> {
+        let mut snapshot = self.session.last_pre_entry()?.clone();
+        for item in CheatItem::ALL {
+            if let Some(n) = self.left_with[item] {
+                N::poke_state(&mut snapshot.machine, item.var().addr(), n);
+            }
+        }
+        Some(snapshot)
     }
 
     /// Direct session access (tools, explore); `restore` starts a new episode from its snapshot.
@@ -670,6 +685,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.objectives.as_ref().expect("episode started"),
             change.previous.full_location(),
         );
+        self.left_with = cheats.left_with;
         if change.changed_location() {
             self.update_disabled_kinds();
         }
