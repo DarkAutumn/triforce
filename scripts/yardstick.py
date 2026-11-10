@@ -216,7 +216,7 @@ def fmt(interval: Interval, percent=False) -> str:
 
 
 def report(args) -> int:
-    models = Path(args.models_dir)
+    models = registry.models_root(args.models_dir)
     specialists, skipped, errors = [], [], []
     for name in sorted(p.stem for p in Path(args.specialists_dir).glob('*.yaml')):
         directory = run_dir(models, name, args.run)
@@ -323,7 +323,8 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest='command', required=True)
     rep = sub.add_parser('report')
     rep.add_argument('--run', default='promoted', help="every specialist's run id, or 'promoted'")
-    rep.add_argument('--models-dir', default='models')
+    rep.add_argument('--models-dir', default=None,
+                     help="models root (default: $TRIFORCE_MODELS_DIR, else <repo>/models, like every other CLI)")
     rep.add_argument('--mode', choices=registry.ACT_MODES, default=None,
                      help="report evaluations in this act mode (default: each run's own act mode)")
     rep.add_argument('--eval-name', default=None,
