@@ -14,9 +14,11 @@ thread count): one ``EnvPool.rollout`` call in which the network's Rust copy act
 (``ppo.Collector``, docs/rust-actor.md).  Then one PPO update on ``--device``.  Output goes
 to ``<models>/<specialist>/<run-id>/``: ``ckpt.pt`` (see ``registry``), ``metrics.jsonl``, ``tb/``
 (TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (``status`` completed | early_stop |
-interrupted, total and this run's iterations/steps, early stop, wall time).  An interrupted run (SIGINT, or SIGTERM
-from the command line) still saves its checkpoint and summary but exits 130, so a driver never mistakes it for a
-finished fixed-budget run.  ``--stop-success`` proposes a stop once the start-state-balanced success rate of the
+interrupted, total and this run's iterations/steps, early stop, wall time).  Training into an existing run dir first
+moves the earlier training's files to ``<run>.prev-N`` (``set_aside_previous``); only a same-dir ``--load``
+continuation keeps its checkpoint, curriculum and ``metrics.jsonl`` (appended to).  An interrupted run (SIGINT, or
+SIGTERM from the command line) still saves its checkpoint and summary but exits 130, so a driver never mistakes it for
+a finished fixed-budget run.  ``--stop-success`` proposes a stop once the start-state-balanced success rate of the
 per-start cohorts (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for
 ``--stop-patience`` consecutive iterations (never before a budget failure could have been counted), and stops only
 if an evaluation of the current weights (``CONFIRM_EPISODES`` sampled episodes per seed start state on an
@@ -423,12 +425,40 @@ def main(argv=None) -> Path:
     return out_dir
 
 
+# A run dir's files from an earlier training (``set_aside_previous``); train.log belongs to the caller
+# (scripts/train_round.py tees the current run's output into it).
+PREVIOUS_RUN_FILES = ('ckpt.pt', 'metrics.jsonl', 'train_summary.json', 'act', 'curriculum.json', 'run.json', 'tb')
+
+
+def set_aside_previous(out_dir: Path, continuing: bool) -> Optional[Path]:
+    """Moves an earlier training's files out of ``out_dir`` into ``<run>.prev-N`` (first free N) so the dir never
+    claims the old run's status or metrics; returns that dir, or None when nothing was there.  A same-dir
+    ``--load`` continuation (``continuing``) keeps its checkpoint, metrics.jsonl (appended to), curriculum and tb;
+    its train_summary.json, act and eval files still go (they describe the old weights)."""
+    stale = sorted(path for path in out_dir.iterdir()
+                   if path.name in ('train_summary.json', 'act')
+                   or (path.name.startswith('eval') and path.suffix == '.json')
+                   or (not continuing and path.name in PREVIOUS_RUN_FILES))
+    if not stale:
+        return None
+    n = 1
+    while (aside := out_dir.with_name(f"{out_dir.name}.prev-{n}")).exists():
+        n += 1
+    aside.mkdir()
+    for path in stale:
+        path.rename(aside / path.name)
+    return aside
+
+
 def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: EventLog) -> dict:
     """The training run proper; returns the train_end event fields."""
     # pylint: disable=too-many-locals, too-many-statements
     config = load_specialist(args.specialist)
     network, optimizer_state, start_iteration, start_steps, source = initial_model(args, config, root)
     continued = continued_run_dir(args, source, start_iteration)
+    aside = set_aside_previous(out_dir, continuing=continued == out_dir.resolve())
+    if aside is not None:
+        print(f"[train] moved the previous files of {out_dir} to {aside}")
     curriculum, trajectories = curriculum_spec(args, config, out_dir, continued)
     capture_dir = str(args.states_dir or STATES_DIR) if args.capture_states else None
     task = TrainTask(config, str(out_dir), start_state=args.start_state, curriculum=curriculum,
@@ -472,7 +502,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                 parallel=args.parallel, threads=args.threads, device=args.device,
                 curriculum=trajectories, source=source,
                 stop_success=args.stop_success, stop_patience=args.stop_patience, run_dir=str(out_dir),
-                pid=os.getpid())
+                pid=os.getpid(), set_aside=str(aside) if aside is not None else None)
 
     logger = MetricsLogger(str(out_dir))
     state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'saved': None,

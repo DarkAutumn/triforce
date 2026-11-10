@@ -343,6 +343,41 @@ def test_an_interrupted_run_saves_but_exits_130(states_dir, tmp_path):
     assert registry.load_checkpoint(run_dir)['iterations'] == summary['iterations']
 
 
+def test_training_into_an_existing_run_dir_sets_the_old_run_aside(states_dir, tmp_path, monkeypatch):
+    """A second training into run x moves x's files to x.prev-1 first: a crash in its first iteration leaves no
+    'completed' status and no doubled metrics behind (F172)."""
+    common = _common(states_dir, tmp_path, '--parallel', '2', '--steps-per-update', '32', '--iterations', '1',
+                     '--seed', '4', '--no-curriculum', '--run-id', 'x')
+    run_dir = train.main(common)
+    (run_dir / 'act').write_text('argmax\n')
+    (run_dir / 'eval.json').write_text('{}')
+    assert train.run_status(run_dir) == 'completed'
+
+    def crash(*_args, **_kwargs):
+        raise RuntimeError("crash in the first iteration")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(train.MetricsLogger, 'log', crash)
+        with pytest.raises(RuntimeError):
+            train.main(common)
+    assert train.run_status(run_dir) not in ('completed', 'early_stop')
+    assert not (run_dir / 'metrics.jsonl').exists() and not (run_dir / 'eval.json').exists()
+    previous = run_dir.with_name('x.prev-1')
+    assert train.run_status(previous) == 'completed'
+    assert [r['iteration'] for r in read_jsonl(str(previous / 'metrics.jsonl'))] == [1]
+    assert {'ckpt.pt', 'act', 'eval.json', 'run.json'} <= {p.name for p in previous.iterdir()}
+
+    # A same-dir --load continuation appends its metrics; act/eval files of the old weights still go.
+    train.main(common)
+    (run_dir / 'act').write_text('argmax\n')
+    (run_dir / 'eval-sample.json').write_text('{}')
+    train.main(common + ['--load', str(run_dir)])
+    assert [r['iteration'] for r in read_jsonl(str(run_dir / 'metrics.jsonl'))] == [1, 2]
+    assert not (run_dir / 'act').exists() and not (run_dir / 'eval-sample.json').exists()
+    assert (run_dir.with_name('x.prev-3') / 'eval-sample.json').is_file()
+    assert registry.load_checkpoint(run_dir)['iterations'] == 2
+
+
 def test_a_load_continuation_resumes_the_curriculum(states_dir, tmp_path):
     """A finished curriculum stays finished in a --load continuation; a fresh run starts it over (F088)."""
     trajectories = tmp_path / 'trajectories'
