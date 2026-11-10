@@ -230,18 +230,19 @@ impl ControlDeck {
         Ok(())
     }
 
-    /// Clocks exactly one NES frame.
+    /// Clocks exactly one NES frame through [`Bus::clock_frame`], the driver `ZCore::run_frame`
+    /// uses, so the test ROMs exercise its carried deadlines and lazy PPU.
     ///
     /// # Errors
     ///
     /// If no ROM is loaded, or the CPU encounters an invalid opcode, then an error is returned.
     pub fn clock_frame(&mut self) -> Result<()> {
         self.begin_clock()?;
-        let frame = self.frame_number();
-        while frame == self.frame_number() {
-            self.step_instr()?;
+        self.bus.clock_frame();
+        if self.cpu_corrupted() {
+            self.running = false;
+            return Err(Error::CpuCorrupted);
         }
-        self.bus.clock_sync();
         Ok(())
     }
 
@@ -323,6 +324,24 @@ mod tests {
         let mut rom = File::open(path).expect("test rom exists");
         deck.load_rom(path, &mut rom).expect("test rom loads");
         deck
+    }
+
+    /// `Bus::clock_frame` (deadlines and the lazy PPU carried across instructions) leaves exactly
+    /// the state that per-instruction `Bus::clock_instr` (re-derived and synced every instruction)
+    /// plus the closing `clock_sync` leaves, frame after frame.
+    #[test]
+    fn frame_driver_matches_the_instruction_driver() {
+        let (mut fast, mut slow) = (spritecans(), spritecans());
+        for _ in 0..60 {
+            fast.bus.clock_frame();
+            let frame = slow.bus.ppu.frame_number();
+            while frame == slow.bus.ppu.frame_number() {
+                slow.bus.clock_instr();
+            }
+            slow.bus.clock_sync();
+            let bytes = |d: &ControlDeck| postcard::to_allocvec(&d.bus().state).unwrap();
+            assert!(bytes(&fast) == bytes(&slow), "frame {}", fast.bus.ppu.frame_number());
+        }
     }
 
     /// Clock `frames` and return a hash of what ends up on screen.
