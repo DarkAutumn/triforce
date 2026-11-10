@@ -15,20 +15,34 @@ const DIRS: usize = 4;
 const DURS: usize = 2;
 const MASK: usize = KINDS * (1 + DIRS + DURS);
 
+const CONFIG: &str = r#"{"room_embed_dim": 4, "entity_embed_dim": 4, "entity_d_model": 8, "entity_heads": 2,
+    "entity_layers": 1, "entity_ff_dim": 16, "entity_out_dim": 8, "tile_embed_dim": 3,
+    "grid_channels": [4, 6, 6], "grid_out_dim": 8, "hidden_dim": 16,
+    "obs_spec": {"room_id": {"shape": [1], "vocab": 10},
+                 "entity_types": {"shape": [SLOTS], "vocab": 7},
+                 "entity_features": {"shape": [SLOTS, FEATURES], "vocab": null},
+                 "grid": {"shape": [ROWS, COLS], "vocab": 5},
+                 "link": {"shape": [3], "vocab": null},
+                 "history": {"shape": [2], "vocab": null},
+                 "action_mask": {"shape": [MASK], "vocab": null}}}"#;
+
+/// The test config's JSON with `edits` (from, to) applied.
+fn config_json(edits: &[(&str, &str)]) -> String {
+    let mut json = CONFIG
+        .replace("SLOTS", &SLOTS.to_string())
+        .replace("FEATURES", &FEATURES.to_string())
+        .replace("ROWS", &ROWS.to_string())
+        .replace("COLS", &COLS.to_string())
+        .replace("MASK", &MASK.to_string());
+    for (from, to) in edits {
+        assert!(json.contains(from), "{from}");
+        json = json.replace(from, to);
+    }
+    json
+}
+
 fn config() -> ModelConfig {
-    ModelConfig::from_json(&format!(
-        r#"{{"room_embed_dim": 4, "entity_embed_dim": 4, "entity_d_model": 8, "entity_heads": 2,
-            "entity_layers": 1, "entity_ff_dim": 16, "entity_out_dim": 8, "tile_embed_dim": 3,
-            "grid_channels": [4, 6, 6], "grid_out_dim": 8, "hidden_dim": 16,
-            "obs_spec": {{"room_id": {{"shape": [1], "vocab": 10}},
-                          "entity_types": {{"shape": [{SLOTS}], "vocab": 7}},
-                          "entity_features": {{"shape": [{SLOTS}, {FEATURES}], "vocab": null}},
-                          "grid": {{"shape": [{ROWS}, {COLS}], "vocab": 5}},
-                          "link": {{"shape": [3], "vocab": null}},
-                          "history": {{"shape": [2], "vocab": null}},
-                          "action_mask": {{"shape": [{MASK}], "vocab": null}}}}}}"#
-    ))
-    .unwrap()
+    ModelConfig::from_json(&config_json(&[])).unwrap()
 }
 
 /// Every weight the config needs, with values from a fixed hash of (name, index).
@@ -202,6 +216,55 @@ fn bad_inputs_are_errors() {
     let mut w = weights(1);
     w.remove("value_head.bias");
     assert!(Policy::new(config(), w).is_err());
+}
+
+#[test]
+fn out_of_range_given_actions_are_errors() {
+    let p = policy();
+    let o = obs(6);
+    let v = [&o.history[..], &o.link[..]];
+    for action in [[KINDS, 0, 0], [0, DIRS, 0], [0, 0, DURS], [usize::MAX, 0, 0]] {
+        let e = p.evaluate(&input(&o, &v), Pick::Given(action), &mut p.scratch()).unwrap_err();
+        assert!(e.0.contains("is outside the"), "{action:?}: {}", e.0);
+    }
+    assert!(p.evaluate(&input(&o, &v), Pick::Given([KINDS - 1, DIRS - 1, DURS - 1]), &mut p.scratch()).is_ok());
+}
+
+#[test]
+fn non_finite_weights_and_inputs_are_errors() {
+    let mut w = weights(1);
+    w.get_mut("kind_head.weight").unwrap().data[3] = f32::NAN;
+    let e = Policy::new(config(), w).err().expect("a NaN weight is refused");
+    assert!(e.0.contains("kind_head.weight") && e.0.contains("non-finite"), "{}", e.0);
+
+    let p = policy();
+    let mut o = obs(7);
+    o.link[1] = f32::NAN;
+    let v = [&o.history[..], &o.link[..]];
+    let e = p.evaluate(&input(&o, &v), Pick::Argmax, &mut p.scratch()).unwrap_err();
+    assert!(e.0.contains("link") && e.0.contains("non-finite"), "{}", e.0);
+    assert!(p.value(&input(&o, &v), &mut p.scratch()).is_err());
+    let mut joint = vec![0f32; p.joint_size()];
+    assert!(p.joint_log_probs(&input(&o, &v), &mut p.scratch(), &mut joint).is_err());
+    let mut o = obs(7);
+    o.features[1] = f32::INFINITY;
+    let v = [&o.history[..], &o.link[..]];
+    assert!(p.evaluate(&input(&o, &v), Pick::Argmax, &mut p.scratch()).is_err());
+}
+
+#[test]
+fn degenerate_configs_are_errors_not_panics() {
+    let no_heads = ModelConfig::from_json(&config_json(&[("\"entity_heads\": 2", "\"entity_heads\": 0")])).unwrap();
+    let e = Policy::new(no_heads, weights(1)).err().expect("entity_heads 0 is refused");
+    assert!(e.0.contains("unsupported model config"), "{}", e.0);
+
+    let no_convs = ModelConfig::from_json(&config_json(&[("[4, 6, 6]", "[]")])).unwrap();
+    let mut w = weights(1);
+    w.retain(|name, _| !name.starts_with("grid_encoder.body."));
+    let head = Tensor { shape: vec![8, 3 * ROWS * COLS], data: vec![0.1; 8 * 3 * ROWS * COLS] };
+    w.insert("grid_encoder.head.0.weight".into(), head);
+    let e = Policy::new(no_convs, w).err().expect("an empty grid_channels is refused");
+    assert!(e.0.contains("unsupported model config"), "{}", e.0);
 }
 
 #[test]

@@ -26,13 +26,28 @@ fn contiguous<'py, T: numpy::Element>(
 ) -> PyResult<PyReadonlyArrayDyn<'py, T>> {
     let np = py.import("numpy")?;
     let arr = np.getattr("ascontiguousarray")?.call1((obj, dtype))?;
-    Ok(arr
-        .cast_into::<PyArrayDyn<T>>()
+    arr.cast_into::<PyArrayDyn<T>>()
         .map_err(|_| PyTypeError::new_err(format!("{what} must convert to a {dtype} array")))?
-        .readonly())
+        .try_readonly()
+        .map_err(|e| PyValueError::new_err(format!("{what}: {e}")))
 }
 
-/// Batched observation arrays borrowed from a dict of numpy arrays.
+/// Given actions as int64, refusing a non-integer dtype (floats would be truncated to other actions).
+fn integer_actions<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<PyReadonlyArrayDyn<'py, i64>> {
+    let arr = py.import("numpy")?.getattr("asarray")?.call1((obj,))?;
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    if kind != "i" && kind != "u" {
+        return Err(PyValueError::new_err(format!("actions must be integers, got dtype kind '{kind}'")));
+    }
+    contiguous(py, &arr, "int64", "actions")
+}
+
+/// One given action index as usize: a negative one is an error, not a huge index.
+fn action_index(value: i64) -> PyResult<usize> {
+    usize::try_from(value).map_err(|_| PyValueError::new_err(format!("action index {value} is negative")))
+}
+
+/// Batched observation arrays borrowed from a dict of numpy arrays; every key has the mask's batch size.
 struct Batch<'py> {
     room: PyReadonlyArrayDyn<'py, i64>,
     types: PyReadonlyArrayDyn<'py, i64>,
@@ -49,45 +64,55 @@ impl<'py> Batch<'py> {
             obs.get_item(key)?
                 .ok_or_else(|| PyKeyError::new_err(format!("observation has no '{key}'")))
         };
-        let mask = contiguous::<bool>(py, &get("action_mask")?, "bool", "action_mask")?;
+        // Any numpy-truthy mask byte is True: normalise to 0/1 bools (a Rust bool holding 2 is undefined).
+        let truthy = py.import("numpy")?.getattr("not_equal")?.call1((get("action_mask")?, 0))?;
+        let mask = contiguous::<bool>(py, &truthy, "bool", "action_mask")?;
         let rows = mask.shape().first().copied().unwrap_or(0);
+        let lead = |what: &str, shape: &[usize]| -> PyResult<()> {
+            match shape.first() {
+                Some(&n) if n == rows => Ok(()),
+                n => Err(PyValueError::new_err(format!(
+                    "{what} has {} rows, action_mask has {rows}",
+                    n.map_or("no".to_owned(), |n| n.to_string())
+                ))),
+            }
+        };
         let mut vectors = Vec::new();
         for key in policy.vector_keys() {
-            vectors.push(contiguous::<f32>(py, &get(key)?, "float32", key)?);
+            let v = contiguous::<f32>(py, &get(key)?, "float32", key)?;
+            lead(key, v.shape())?;
+            vectors.push(v);
         }
-        Ok(Batch {
-            room: contiguous(py, &get("room_id")?, "int64", "room_id")?,
-            types: contiguous(py, &get("entity_types")?, "int64", "entity_types")?,
-            features: contiguous(py, &get("entity_features")?, "float32", "entity_features")?,
-            grid: contiguous(py, &get("grid")?, "int64", "grid")?,
-            vectors,
-            mask,
-            rows,
-        })
+        let room = contiguous::<i64>(py, &get("room_id")?, "int64", "room_id")?;
+        lead("room_id", room.shape())?;
+        if room.len() != rows {
+            return Err(PyValueError::new_err(format!("room_id has {} values for {rows} rows", room.len())));
+        }
+        let types = contiguous::<i64>(py, &get("entity_types")?, "int64", "entity_types")?;
+        lead("entity_types", types.shape())?;
+        let features = contiguous::<f32>(py, &get("entity_features")?, "float32", "entity_features")?;
+        lead("entity_features", features.shape())?;
+        let grid = contiguous::<i64>(py, &get("grid")?, "int64", "grid")?;
+        lead("grid", grid.shape())?;
+        Ok(Batch { room, types, features, grid, vectors, mask, rows })
     }
 
+    /// Row `i` (`Policy::check` validates each row's lengths).
     fn row<'a>(&'a self, i: usize, vectors: &'a mut Vec<&'a [f32]>) -> PyResult<Input<'a>> {
-        let slice = |n: usize, total: usize| -> PyResult<usize> {
-            if !total.is_multiple_of(self.rows.max(1)) {
-                return Err(PyValueError::new_err("observation arrays disagree on the batch size"));
-            }
-            Ok(n * (total / self.rows.max(1)))
-        };
+        let per = |a: usize| a / self.rows.max(1);
         let room = self.room.as_slice()?;
         let types = self.types.as_slice()?;
         let features = self.features.as_slice()?;
         let grid = self.grid.as_slice()?;
         let mask = self.mask.as_slice()?;
-        let per = |a: usize| a / self.rows.max(1);
-        let (r, t, f, g, m) = (per(room.len()), per(types.len()), per(features.len()), per(grid.len()), per(mask.len()));
+        let (t, f, g, m) = (per(types.len()), per(features.len()), per(grid.len()), per(mask.len()));
         for v in &self.vectors {
             let v = v.as_slice()?;
             let n = per(v.len());
-            slice(i, v.len())?;
             vectors.push(&v[i * n..(i + 1) * n]);
         }
         Ok(Input {
-            room_id: room[i * r],
+            room_id: room[i],
             entity_types: &types[i * t..(i + 1) * t],
             entity_features: &features[i * f..(i + 1) * f],
             grid: &grid[i * g..(i + 1) * g],
@@ -163,7 +188,7 @@ impl PyPolicy {
             return Err(PyValueError::new_err("empty batch"));
         }
         let noise = noise.map(|n| contiguous::<f32>(py, n, "float32", "noise")).transpose()?;
-        let actions = actions.map(|a| contiguous::<i64>(py, a, "int64", "actions")).transpose()?;
+        let actions = actions.map(|a| integer_actions(py, a)).transpose()?;
         if noise.is_none() && actions.is_none() && !deterministic {
             return Err(PyValueError::new_err("pass noise, actions or deterministic=True"));
         }
@@ -182,7 +207,7 @@ impl PyPolicy {
             let mut vectors = Vec::new();
             let input = batch.row(i, &mut vectors)?;
             let pick = if let Some(a) = action_slice {
-                Pick::Given([a[i * 3] as usize, a[i * 3 + 1] as usize, a[i * 3 + 2] as usize])
+                Pick::Given([action_index(a[i * 3])?, action_index(a[i * 3 + 1])?, action_index(a[i * 3 + 2])?])
             } else if let Some(n) = noise_slice {
                 Pick::Sample(&n[i * ns..(i + 1) * ns])
             } else {

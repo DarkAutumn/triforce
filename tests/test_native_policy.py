@@ -178,3 +178,34 @@ def test_hash_tracks_the_weights_and_mismatches_are_errors(network):
         _native.Policy(config, {**weights, 'extra.weight': np.zeros(3, np.float32)})
     with pytest.raises(ValueError, match='shape'):
         _native.Policy(config, {**weights, 'value_head.bias': np.zeros(2, np.float32)})
+
+
+def test_non_finite_weights_and_bad_actions_are_value_errors(native, observations):
+    poisoned = make_network(seed=2)
+    with torch.no_grad():
+        poisoned.kind_head.weight.fill_(float('nan'))
+    with pytest.raises(ValueError, match='non-finite'):
+        poisoned.to_native()
+    rows = {k: v[:1] for k, v in observations.items()}
+    for actions in ([[7, 0, 0]], [[-1, 0, 0]], [[0, 8, 0]], [[0, 0, 99]], [[0, -1, 0]]):
+        with pytest.raises(ValueError):
+            native.evaluate(rows, actions=np.array(actions, np.int64))
+    with pytest.raises(ValueError, match='integers'):
+        native.evaluate(rows, actions=np.array([[0.9, 0.2, 0.7]]))
+    link = rows['link'].copy()
+    link[0, 0] = np.nan
+    with pytest.raises(ValueError, match='non-finite'):
+        native.evaluate({**rows, 'link': link}, deterministic=True)
+
+
+def test_batch_keys_must_match_the_mask_and_any_truthy_mask_byte_counts(native, observations):
+    rows = {k: v[:4] for k, v in observations.items()}
+    for room in (rows['room_id'][:1], rows['room_id'][:0], np.concatenate([rows['room_id']] * 2),
+                 np.int64(rows['room_id'].flat[0])):
+        with pytest.raises(ValueError):
+            native.value({**rows, 'room_id': room})
+    with pytest.raises(ValueError, match='rows'):
+        native.value({**rows, 'grid': rows['grid'][:2]})
+    reference = native.evaluate(rows, deterministic=True)['actions']
+    twos = (rows['action_mask'].astype(np.uint8) * 2).view(np.bool_)
+    assert np.array_equal(native.evaluate({**rows, 'action_mask': twos}, deterministic=True)['actions'], reference)

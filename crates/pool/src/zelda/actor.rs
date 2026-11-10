@@ -138,8 +138,10 @@ impl Actor<ZeldaAction> for PolicyActor {
                     recorded.len()
                 )
             })?;
-            let index = |i: i64| usize::try_from(i).map_err(|_| format!("bad recorded action {action:?}"));
-            Pick::Given([index(action[0])?, index(action[1])?, index(action[2])?])
+            let bad = || format!("bad recorded action {action:?} of job {job} (heads {:?})", net.head_sizes());
+            let index = |i: i64, n: usize| usize::try_from(i).ok().filter(|&i| i < n).ok_or_else(bad);
+            let [kinds, dirs, durs] = net.head_sizes();
+            Pick::Given([index(action[0], kinds)?, index(action[1], dirs)?, index(action[2], durs)?])
         } else if self.deterministic[p] {
             Pick::Argmax
         } else {

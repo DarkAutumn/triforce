@@ -110,6 +110,9 @@ impl Weights {
         if t.data.len() != shape.iter().product::<usize>() {
             return err(format!("weight '{name}' has {} values for shape {shape:?}", t.data.len()));
         }
+        if !t.data.iter().all(|v| v.is_finite()) {
+            return err(format!("weight '{name}' has non-finite values"));
+        }
         Ok(t.data)
     }
 
@@ -437,6 +440,20 @@ impl Policy {
             }
             vector_sizes.push(spec.shape[0]);
         }
+        if config.entity_heads == 0
+            || config.entity_layers == 0
+            || config.grid_channels.is_empty()
+            || slots == 0
+            || room_vocab == 0
+            || type_vocab == 0
+            || tile_vocab == 0
+        {
+            return err(format!(
+                "unsupported model config: entity_heads {}, entity_layers {}, grid_channels {:?}, entity slots \
+                 {slots}, vocabs room {room_vocab} / type {type_vocab} / tile {tile_vocab} (each must be at least 1)",
+                config.entity_heads, config.entity_layers, config.grid_channels
+            ));
+        }
 
         let room_embedding = Embedding {
             w: w.take("room_embedding.weight", &[room_vocab, config.room_embed_dim])?,
@@ -654,7 +671,15 @@ impl Policy {
         for ((v, &n), key) in input.vectors.iter().zip(&self.vector_sizes).zip(&self.vector_keys) {
             expect(key, v.len(), n)?;
         }
-        expect("action_mask", input.mask.len(), self.kinds * (1 + self.directions + self.durations))
+        expect("action_mask", input.mask.len(), self.kinds * (1 + self.directions + self.durations))?;
+        let finite = |what: &str, values: &[f32]| {
+            if values.iter().all(|v| v.is_finite()) { Ok(()) } else { err(format!("{what} has non-finite values")) }
+        };
+        finite("entity_features", input.entity_features)?;
+        for (v, key) in input.vectors.iter().zip(&self.vector_keys) {
+            finite(key, v)?;
+        }
+        Ok(())
     }
 
     /// The concatenated features (room, entities, grid, vectors) into `s.features`.
@@ -805,13 +830,18 @@ impl Policy {
         self.value_tower.apply(&s.features, &mut s.value_a, &mut s.value_b);
         let mut v = [0f32];
         self.value_head.apply(&s.value_a, &mut v);
-        Ok(v[0])
+        finite_output(v[0], 0.0)
     }
 
     /// Evaluates one observation and picks an action (`model.py` `ZeldaPolicy.evaluate`).
     pub fn evaluate(&self, input: &Input, pick: Pick, s: &mut Scratch) -> Result<Output, PolicyError> {
         self.check(input)?;
         let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        if let Pick::Given([k, d, u]) = pick
+            && (k >= kinds || d >= dirs || u >= durs)
+        {
+            return err(format!("action [{k}, {d}, {u}] is outside the {kinds}/{dirs}/{durs} heads"));
+        }
         if let Pick::Sample(noise) = pick
             && noise.len() != kinds + dirs + durs
         {
@@ -861,6 +891,7 @@ impl Policy {
         out.action[0] = kind;
         out.log_prob = (out.head_log_prob[0] + out.head_log_prob[1]) + out.head_log_prob[2];
         out.entropy = (out.head_entropy[0] + out.head_entropy[1]) + out.head_entropy[2];
+        finite_output(out.value, out.log_prob)?;
         Ok(out)
     }
 
@@ -940,7 +971,10 @@ impl Policy {
                 }
             }
         }
-        Ok(value[0])
+        if out.iter().any(|v| v.is_nan()) {
+            return err("non-finite policy output");
+        }
+        finite_output(value[0], 0.0)
     }
 }
 
@@ -977,7 +1011,7 @@ fn head(logits: &[f32], mask: &[bool], pick: Pick, noise_at: usize, out: &mut Ou
         }
     };
     out.head_entropy[index] = entropy;
-    out.head_log_prob[index] = lp[choice.min(n - 1)];
+    out.head_log_prob[index] = lp[choice];
     choice
 }
 
@@ -997,6 +1031,12 @@ fn sub_head(logits: &[f32], row_mask: &[bool], pick: Pick, noise_at: usize, out:
         out.head_entropy[index] = 0.0;
         out.head_log_prob[index] = 0.0;
     }
+}
+
+/// The value and chosen log-prob, or an error when either is NaN or infinite (a NaN-poisoned network or input:
+/// `relu`/`argmax` would otherwise turn NaN into ordinary numbers).
+fn finite_output(value: f32, log_prob: f32) -> Result<f32, PolicyError> {
+    if value.is_finite() && log_prob.is_finite() { Ok(value) } else { err("non-finite policy output") }
 }
 
 /// FNV-1a over the config JSON and every weight (sorted by name): name, shape, bits.
