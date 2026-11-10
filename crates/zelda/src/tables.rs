@@ -1,8 +1,5 @@
-//! RAM object tables (`triforce/zelda_game_data.txt` `[tables]`): `(offset, length)` into the 10,240-byte RAM
-//! image (CPU RAM then PRG-RAM, so PRG-RAM address `A` is at index `A - 0x5800`).
-//!
-//! The file's `[memory]` section duplicates data.json (`vars`) and its `[rooms]` section is unused; neither is
-//! ported.
+//! RAM object tables: `(offset, length)` into the 10,240-byte RAM image (CPU RAM then PRG-RAM, so PRG-RAM
+//! address `A` is at index `A - 0x5800`).
 
 /// RAM image size: 2 KiB CPU RAM followed by 8 KiB PRG-RAM.
 pub const RAM_SIZE: usize = 0x800 + 0x2000;

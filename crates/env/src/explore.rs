@@ -1,11 +1,11 @@
-//! Go-Explore phase A (`triforce/explore.py`): find one successful path per start state by restoring snapshots.
+//! Go-Explore phase A (CLI `triforce/explore.py`): find one successful path per start state by restoring snapshots.
 //!
 //! The archive holds *cells* (coarse state summaries, [`cell_key`]), each with the exact session snapshot of the
 //! shortest path found to it.  Each iteration picks a cell (weight `(1 + progress)(1 + closeness) /
 //! sqrt(1 + chosen)`), restores it and takes up to `explore_steps` random legal actions; new cells, or known cells
 //! reached in fewer steps, are archived.  Endings come from the specialist's own env without RAM randomization,
-//! so "success" is what training rewards, unless an [`AcceptSpec`] decides instead (route-state builds for rooms
-//! off the milestone route).  The search stops `patience` iterations after the first success.
+//! so "success" is what training rewards, unless an [`AcceptSpec`] decides instead (entry-state builds for rooms
+//! off the route).  The search stops `patience` iterations after the first success.
 
 use crate::config::{GameData, RamRandomization, SpecialistConfig};
 use crate::error::EnvError;

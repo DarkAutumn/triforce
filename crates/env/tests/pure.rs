@@ -1,6 +1,6 @@
-//! Emulator-free ports of `tests/test_rewards.py` (StepRewards, terminal rewards, ending classification, the
-//! projectile-block reward), `tests/test_curriculum.py`, the config tests of `tests/test_specialist.py` and
-//! `tests/test_env.py::test_measured_ending_credits_threshold_action_before_check`.
+//! Emulator-free tests ported from the removed Python tests `tests/test_rewards.py` (StepRewards, terminal rewards,
+//! ending classification, the projectile-block reward), `tests/test_curriculum.py`, the config tests of
+//! `tests/test_specialist.py` and `tests/test_env.py::test_measured_ending_credits_threshold_action_before_check`.
 
 mod common;
 

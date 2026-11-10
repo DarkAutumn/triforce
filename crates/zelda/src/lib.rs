@@ -1,6 +1,6 @@
 //! Zelda game model and session, emulator-agnostic over [`Nes`].
 //!
-//! A mechanical port of the Python game stack (`triforce/`): see each module's docs for its Python source.
+//! Ported from the old Python game stack (removed; history in docs/decisions.md 2026-11-05).
 
 pub mod actions;
 pub mod blocks;

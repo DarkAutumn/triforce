@@ -1,4 +1,4 @@
-//! Start states for specialist episodes (`triforce/start_states.py`).
+//! Start states for specialist episodes.
 //!
 //! - Seed states: the config's savestate globs; the room is verified from RAM after loading.
 //! - [`ProbabilisticSelector`]: round-robin from a random offset until every state has a result, then sampling

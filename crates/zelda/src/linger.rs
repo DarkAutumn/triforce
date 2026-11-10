@@ -1,4 +1,4 @@
-//! Behavior-neutral progress timing for episodes and room visits (`triforce/linger.py`).
+//! Behavior-neutral progress timing for episodes and room visits.
 //!
 //! A frozen wavefront measures new best approaches: moving enemies cannot manufacture progress for a stationary
 //! Link, and walking the same loop cannot repeatedly reset the clock.  The distance baseline refreshes after a

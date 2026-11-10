@@ -1,4 +1,4 @@
-//! Named reward/penalty outcomes, per-step clamping and terminal rewards (`triforce/rewards.py`).
+//! Named reward/penalty outcomes, per-step clamping and terminal rewards.
 
 pub const REWARD_MINIMUM: f64 = 0.01;
 pub const REWARD_TINY: f64 = 0.05;

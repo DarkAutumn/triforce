@@ -1,4 +1,4 @@
-//! Confirmed shield collisions from consecutive executed frames (`triforce/projectile_blocks.py`).
+//! Confirmed shield collisions from consecutive executed frames.
 //!
 //! Z_01 CheckLinkCollision, Z_04 CheckShotLinkCollision / UpdateFireball / UpdateMonsterArrow and Z_07
 //! DrawBoomerangAndCheckCollision: require the projectile's collision signature, the shield eligibility, facing

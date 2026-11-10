@@ -1,4 +1,4 @@
-//! The static room graph (`triforce/game.yaml`) and routes (`triforce/routes.yaml`) (`triforce/game_map.py`).
+//! The static room graph (`triforce/game.yaml`) and routes (`triforce/routes.yaml`).
 //!
 //! Key-aware Dijkstra over (room, keys, collected key rooms) with every shortest path, plus per-route successor
 //! tables used to break ties toward the route.  Iteration orders follow the YAML files, as the Python dicts do.

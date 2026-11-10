@@ -1,5 +1,5 @@
-//! Room entry: when the game decides monster spawns and kill history, and how to vary them on load
-//! (`triforce/room_entry.py`; see its docstring and docs/ram-catalog.md).
+//! Room entry: when the game decides monster spawns and kill history, and how to vary them on load (see
+//! docs/ram-catalog.md, room entry).
 //!
 //! A pre-entry state (taken during the scroll/transition, before Z_05 InitMode_EnterRoom) can get a new spawn
 //! layout (`randomize_spawn`) and a full room (`make_room_fresh`) by editing RAM before EnterRoom runs.

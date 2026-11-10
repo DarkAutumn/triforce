@@ -1,4 +1,4 @@
-//! Human/LLM-readable text dumps of the game state (`triforce/describe.py`), used by the `play` tool.
+//! Human/LLM-readable text dumps of the game state, used by the `play` tool.
 
 use zelda::actions::ActionMask;
 use zelda::enums::{ArrowKind, BoomerangKind, Direction, SwordKind};

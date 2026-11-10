@@ -1,4 +1,4 @@
-//! Backward curriculum over explored trajectories (`triforce/curriculum.py`; Salimans & Chen 2018).
+//! Backward curriculum over explored trajectories (Salimans & Chen 2018).
 //!
 //! `Explorer::write` stores one successful path per seed state as `<dir>/<state>/NNNN.state` plus
 //! `trajectory.json`; more paths from the same seed state (other explore seeds, so other RNG draws: Dodongo's

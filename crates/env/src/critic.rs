@@ -1,8 +1,8 @@
-//! Gameplay critic: per-step rewards (`triforce/critics.py`, profile `default`).
+//! Gameplay critic: per-step rewards (profile `default`).
 //!
-//! Term names, magnitudes, clamps and the order the critiques run in are identical to Python: combat decay per
-//! room, health halving of positive rewards, the room-stall ramp, Wallmaster shaping, one-time puzzle rewards and
-//! PBRS on the previous state's wavefront.
+//! Term names, magnitudes, clamps and the order the critiques run in are those of the old Python critic: combat
+//! decay per room, health halving of positive rewards, the room-stall ramp, Wallmaster shaping, one-time puzzle
+//! rewards and PBRS on the previous state's wavefront.
 
 use crate::config::{ConfigError, SpecialistConfig};
 use crate::end_conditions::RETREAT;

@@ -1,5 +1,4 @@
-//! End conditions for specialist episodes and their deny-by-default classification
-//! (`triforce/end_conditions.py`).
+//! End conditions for specialist episodes and their deny-by-default classification.
 //!
 //! | ending | default class |
 //! |---|---|

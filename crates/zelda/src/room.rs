@@ -1,4 +1,4 @@
-//! Room walkability, exits and the wavefront (`triforce/room.py`, `triforce/wavefront.py`).
+//! Room walkability, exits and the wavefront.
 //!
 //! Walkability uses the NES threshold system from GetCollidingTileMoving (Z_07.asm:2161-2320).
 

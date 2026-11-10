@@ -1,4 +1,4 @@
-//! Per-room state decoded from RAM/PRG-RAM (`triforce/room_state.py`, docs/ram-catalog.md §5 and §R).
+//! Per-room state decoded from RAM/PRG-RAM (docs/ram-catalog.md §5 and §R).
 
 use crate::enums::{Direction, ObjectClass, object};
 use crate::tables::{RAM_SIZE, SRAM_OFFSET};

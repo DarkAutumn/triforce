@@ -1,4 +1,4 @@
-//! Room grid: PlayAreaTiles mapped to tile classes (`triforce/tiles.py`, design §4.2).
+//! Room grid: PlayAreaTiles mapped to tile classes (design §4.2).
 
 use crate::enums::Direction;
 use crate::game::GameView;

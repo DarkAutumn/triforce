@@ -1,4 +1,4 @@
-//! Dropped-heart tracking through one room visit (`triforce/hearts.py`; see its docstring for the rules).
+//! Dropped-heart tracking through one room visit (rules: docs/architecture.md "Heart drops").
 
 use crate::enums::{MapLocation, item};
 use crate::game::GameView;

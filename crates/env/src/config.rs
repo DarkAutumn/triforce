@@ -1,7 +1,8 @@
-//! Specialist task configs (`specialists/<name>.yaml`, `triforce/specialist.py`) and the shared game data
-//! (`game.yaml`, `routes.yaml` with its families, `chain_hp.json`), loaded once into an `Arc<GameData>`.
+//! Specialist task configs (`specialists/<name>.yaml`; the Python `triforce/specialist.py` only wraps them) and the
+//! shared game data (`game.yaml`, `routes.yaml` with its families, `chain_hp.json`), loaded once into an
+//! `Arc<GameData>`.
 //!
-//! Keys, defaults and validators follow `specialist.py`; additionally `curriculum.fraction`,
+//! Keys, defaults and validators are defined here; `curriculum.fraction`,
 //! `curriculum.threshold` and `harvested_fraction` must lie in [0, 1], `route` must name a routes.yaml route, reward
 //! weights must be finite, `endings` keys must name an ending the override can change, step limits must fit a u32,
 //! `reward_profile` must be known, and the configs, game.yaml `specialist:` tags and routes.yaml `families` must
