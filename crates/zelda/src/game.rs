@@ -160,6 +160,7 @@ pub struct Item {
     pub index: i8,
     pub id: i16,
     pub position: Position,
+    /// Lifetime left in half-frames (the game decrements it every other frame; 255 for the treasure).
     pub timer: u8,
     pub distance: f32,
     pub vector: (f32, f32),

@@ -301,11 +301,13 @@ fn observe_damage(
     }
 }
 
-/// Items gone from `prev` to `curr` before their timers ran out (picked up).
+/// Items gone from `prev` to `curr` before their timers ran out (picked up). The lifetime byte counts half-frames
+/// (UpdateItem decrements it every other frame, Z_04.asm:11209-11218): an item expires 2·timer−1 or 2·timer
+/// frames after `prev`, by frame parity.
 fn observe_items(prev: &GameView, curr: &GameView, items: &mut Vec<i16>) {
     let elapsed = curr.frame.saturating_sub(prev.frame);
     for item in &prev.items {
-        if curr.item_by_index(item.index).is_none() && elapsed < item.timer as u64 {
+        if curr.item_by_index(item.index).is_none() && elapsed + 1 < 2 * item.timer as u64 {
             items.push(item.id);
         }
     }
@@ -447,9 +449,10 @@ mod tests {
         prev[tables::ITEM_TIMER.0 + 2] = 8;
         let mut curr = prev;
         curr[tables::OBJ_ID.0 + 2] = 0;
-        assert_eq!(observe(&prev, &curr, 7).items_gained, vec![item::HEART]);
+        // The timer counts half-frames: timer 8 lives 15 or 16 more frames.
+        assert_eq!(observe(&prev, &curr, 14).items_gained, vec![item::HEART]);
         assert_eq!(
-            observe(&prev, &curr, 8).items_gained,
+            observe(&prev, &curr, 15).items_gained,
             vec![],
             "expired, not taken"
         );
