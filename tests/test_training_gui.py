@@ -217,3 +217,84 @@ def test_run_series_cache_follows_new_progress_and_clear(tmp_path):
     assert run.series('success_rate') == [(4, 0.4)]
     run.clear()
     assert run.series('success_rate') == []
+
+
+def test_jsonl_tail_reads_complete_lines_and_resets_on_truncation_or_replacement(tmp_path):
+    import json
+    path = tmp_path / 'a.jsonl'
+    tail = gui.JsonlTail(path)
+
+    def line(n):
+        return json.dumps({'seq': n, 'event': 'progress'}) + '\n'
+
+    def poll():
+        reset, events = tail.poll()
+        return reset, [event['seq'] for event in events]
+
+    assert poll() == (False, [])                                # no file yet
+    path.write_text(line(0) + line(1)[:10])
+    assert poll() == (False, [0])                               # a partial line waits for its newline
+    with open(path, 'a', encoding='utf-8') as file:
+        file.write(line(1)[10:])
+    assert poll() == (False, [1])
+    assert poll() == (False, [])                                # nothing new
+    with open(path, 'a', encoding='utf-8') as file:
+        file.write('not json\n[1, 2]\n\n' + line(2))
+    assert poll() == (False, [2])                               # garbage, a non-object and a blank line skipped
+    with open(path, 'ab') as file:
+        file.write(b'\xff\xfe{"seq": 9}\n' + line(3).encode())
+    assert poll() == (False, [3])                               # a non-UTF-8 line skipped
+    path.write_text(line(10))
+    assert poll() == (True, [10])                               # truncated in place
+    replacement = tmp_path / 'b.jsonl'
+    replacement.write_text(line(20) + line(21))
+    os.replace(replacement, path)
+    assert poll() == (True, [20, 21])                           # replaced (new inode)
+
+
+def test_plan_alive_is_unknown_for_finished_and_other_host_plans():
+    import time
+    now = time.time()
+    other = {**running_plan(os.getpid(), now), 'host': 'not-' + running_plan(0, now)['host']}
+    finished = {**running_plan(os.getpid(), now), 'status': 'completed'}
+    no_pid = {**running_plan(0, now), 'pid': None}
+    assert gui.plan_alive(other) is None and gui.plan_alive(finished) is None and gui.plan_alive(no_pid) is None
+    assert gui.plan_is_live(other)                  # can't be checked: counts as live
+    assert not gui.plan_is_live(finished)
+    assert gui.plan_is_live(running_plan(os.getpid(), now))
+
+
+def test_a_real_triforce_process_its_log_roots_and_liveness(tmp_path):
+    """A child whose argv looks like a triforce run: process_log_roots on the real /proc finds its roots, its plan
+    is live while it runs and not once it is killed; unreadable and non-object plans are skipped."""
+    import json
+    import subprocess
+    import sys
+    import time
+    work = tmp_path / 'work'
+    for folder in ('logs', 'out', 'envlogs'):
+        (work / folder).mkdir(parents=True)
+    env = {**os.environ, gui.LOGS_DIR_ENV: 'envlogs'}
+    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)', '-m', 'triforce.train',
+                              '--logs-dir', 'out'], cwd=work, env=env)
+    try:
+        plan_dir, broken, listed = tmp_path / 'run', tmp_path / 'broken', tmp_path / 'listed'
+        for folder in (plan_dir, broken, listed):
+            folder.mkdir()
+        (plan_dir / gui.PLAN_FILE).write_text(json.dumps(running_plan(child.pid, time.time())))
+        (broken / gui.PLAN_FILE).write_text('{"status": "running", ')
+        (listed / gui.PLAN_FILE).write_text('[1, 2]')
+        deadline = time.monotonic() + 10
+        while (work / 'logs').resolve() not in gui.process_log_roots() and time.monotonic() < deadline:
+            time.sleep(0.05)                    # until the child's cwd and environ are set up
+        base = tmp_path.resolve()
+        roots = {root for root in gui.process_log_roots() if root == base or base in root.parents}
+        assert roots == {(work / folder).resolve() for folder in ('logs', 'out', 'envlogs')}
+        scanner = gui.LiveScanner()
+        assert scanner.live([broken, plan_dir, listed, tmp_path / 'missing']) == [plan_dir]
+        assert gui.plan_alive(json.loads((plan_dir / gui.PLAN_FILE).read_text())) is True
+    finally:
+        child.kill()
+        child.wait()
+    assert gui.plan_alive(json.loads((plan_dir / gui.PLAN_FILE).read_text())) is False
+    assert scanner.live([plan_dir]) == []       # the cached plan (same file) is checked again
