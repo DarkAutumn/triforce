@@ -63,7 +63,7 @@ evaluate() {
       file=eval.json; [ $act = argmax ] && file=eval-argmax.json
       [ -f $MODELS/$SPEC/$run/$file ] && continue
       $PY -m triforce.evaluate --specialist $SPEC --run-id $run --act $act --parallel $EVAL_PARALLEL \
-        --output $MODELS/$SPEC/$run/$file | head -1
+        --episodes-per-state ${EPISODES:-100} --output $MODELS/$SPEC/$run/$file > /dev/null
     done
   done
 }
