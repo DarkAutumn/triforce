@@ -108,7 +108,8 @@ def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir,
     assert [(r['seed'], r['result'], r['steps']) for r in runs] == [(0, 'success', 0), (1, 'success', 0)]
     meta = json.loads(cli.meta_path(output).read_text())
     models = {model['name']: model for model in meta['provenance']['models']}
-    assert sorted(models) == list_specialists() and meta['batches'] == [{'first_seed': 0, 'runs': 2}]
+    assert sorted(models) == list_specialists()
+    assert meta['batches'] == [{'first_seed': 0, 'runs': 2, 'finished': True}]
     goriya = registry.promoted_checkpoint('goriya', models_dir)
     assert models['goriya']['checkpoint'] == str(goriya)
     assert models['goriya']['checkpoint_sha1'] == registry.checkpoint_sha1(goriya)
@@ -123,4 +124,24 @@ def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir,
     assert 'seeds [1] are already in' in capsys.readouterr().err
     assert cli.main([*chain, '--runs', '1', '--first-seed', '5', '--append']) == 0
     assert [json.loads(line)['seed'] for line in output.read_text().splitlines()] == [0, 1, 5]
-    assert json.loads(cli.meta_path(output).read_text())['batches'][1] == {'first_seed': 5, 'runs': 1}
+    assert json.loads(cli.meta_path(output).read_text())['batches'][1] == {'first_seed': 5, 'runs': 1,
+                                                                            'finished': True}
+
+
+def test_eval_chain_keeps_the_runs_that_finished_before_a_failure(models_dir, tmp_path, monkeypatch):
+    def failing_progress(_events, _runs):
+        calls = []
+
+        def on_result(_result):
+            calls.append(1)
+            if len(calls) == 2:
+                raise RuntimeError("stopped after two runs")
+        return on_result
+    monkeypatch.setattr(cli, 'chain_progress_events', failing_progress)
+    output = tmp_path / 'chain.jsonl'
+    with pytest.raises(RuntimeError, match='stopped after two runs'):
+        cli.main(['--models-dir', str(models_dir), 'eval-chain', '--runs', '3', '--stop-at', '0:0x77',
+                  '--output', str(output)])
+    assert len(output.read_text().splitlines()) == 2
+    assert json.loads(cli.meta_path(output).read_text())['batches'] == [{'first_seed': 0, 'runs': 3,
+                                                                          'finished': False}]

@@ -46,11 +46,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # pylint: disable=wrong-import-position
 from triforce import _native, registry
-from triforce.cli import chain_progress_events, eval_chain
+from triforce.cli import chain_progress_events, eval_chain, meta_path
 from triforce.evaluate import default_output, eval_event, evaluate_specialist, write_result
 from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir, write_json_atomic
 from triforce.metrics import read_jsonl
-from triforce.runner import write_jsonl
 from triforce.specialist import list_specialists, load_specialist
 from triforce.train import interrupt_on_sigterm, run_status
 
@@ -502,11 +501,13 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
                          if summary['specialists'][name]['status'] in TRAINED}
         say(f"[round] eval-chain {_native.DEFAULT_ROUTE}: {args.chain_runs} runs, {args.chain_parallel} envs")
         events.emit('chain_start', runs=args.chain_runs, parallel=args.chain_parallel, overrides=overrides)
+        chain_path = models / f"{args.round}-chain.jsonl"
+        for stale in (chain_path, meta_path(chain_path)):     # a rerun of the round replaces its chain
+            stale.unlink(missing_ok=True)
         try:
-            results, chain = eval_chain(_native.DEFAULT_ROUTE, args.chain_runs, args.chain_parallel,
-                                        models_dir=str(models), overrides=overrides,
-                                        on_result=chain_progress_events(events, args.chain_runs))
-            write_jsonl(models / f"{args.round}-chain.jsonl", results)
+            _, chain = eval_chain(_native.DEFAULT_ROUTE, args.chain_runs, args.chain_parallel,
+                                  models_dir=str(models), overrides=overrides,
+                                  on_result=chain_progress_events(events, args.chain_runs), output=chain_path)
             events.emit('chain', **chain)
         except Exception as error:  # pylint: disable=broad-exception-caught
             chain = {'error': f"{type(error).__name__}: {error}"}

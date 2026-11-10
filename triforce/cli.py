@@ -22,18 +22,29 @@ def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
                deterministic=None, stop_at=None, first_seed: int = 0, start_from=None,
-               specialist_configs=None, threads=None, plays=None, on_result=None, harvest=None):
+               specialist_configs=None, threads=None, plays=None, on_result=None, harvest=None, output=None):
     """Runs the route once per seed in one chain pool of ``parallel`` envs (``threads`` worker threads), with
     optional checkpoint overrides and loaded specialist configs; ``plays``: a replay file to write;
     ``deterministic``: None = each model's act mode, else argmax (True) or sampling (False) for all;
     ``on_result(result)`` as each run finishes; ``harvest``: save every handoff's pre-entry state under this
-    directory (``runner.ChainPool``).  Returns (results sorted by seed, summary); the summary's ``provenance``
-    names what played (``Runner.provenance`` plus ``first_seed`` and ``runs``)."""
+    directory (``runner.ChainPool``); ``output``: a new JSON-lines file each run is written to as it finishes
+    (``ChainOutput``, refused if it exists).  Returns (results sorted by seed, summary); the summary's
+    ``provenance`` names what played (``Runner.provenance`` plus ``first_seed`` and ``runs``)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     route, runner = prepare_chain(route_name, parallel, models_dir, overrides, deterministic, stop_at, start_from,
                                   specialist_configs, threads, harvest)
     provenance = {**runner.provenance(route), 'first_seed': first_seed, 'runs': runs}
-    return play_chain(route, runner, provenance, plays=plays, on_result=on_result)
+    if output is None:
+        return play_chain(route, runner, provenance, plays=plays, on_result=on_result)
+    chain_output = ChainOutput(output, provenance, check_output(output, provenance, append=False))
+
+    def record(result):
+        chain_output.add(result)
+        if on_result is not None:
+            on_result(result)
+    results, summary = play_chain(route, runner, provenance, plays=plays, on_result=record)
+    chain_output.finish()
+    return results, summary
 
 
 def play_chain(route, runner, provenance: dict, plays=None, on_result=None):
@@ -81,18 +92,40 @@ def check_output(output, provenance: dict, append: bool) -> Optional[dict]:
     return existing
 
 
-def write_output(output, results, provenance: dict, existing: Optional[dict]):
-    """Writes (or, with ``existing`` sidecar, appends) the runs and the provenance sidecar."""
-    # pylint: disable=import-outside-toplevel
-    from .events import write_json_atomic
-    from .runner import write_jsonl
-    batch = {k: provenance[k] for k in BATCH_FIELDS}
-    if existing is None:
-        meta = {'provenance': {k: v for k, v in provenance.items() if k not in BATCH_FIELDS}, 'batches': [batch]}
-    else:
-        meta = {**existing, 'batches': existing['batches'] + [batch]}
-    write_jsonl(output, results, append=existing is not None)
-    write_json_atomic(meta_path(output), meta)
+class ChainOutput:
+    """An eval-chain output while it is written: the provenance sidecar first (this batch marked unfinished), each
+    run appended the moment it finishes (an interrupted chain keeps its finished runs), then ``finish`` sorts the
+    file by seed and marks the batch finished.  ``existing``: the sidecar of the file appended to (``check_output``)."""
+
+    def __init__(self, output, provenance: dict, existing: Optional[dict]):
+        # pylint: disable=import-outside-toplevel
+        from .events import write_json_atomic
+        self.path = Path(output)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        batch = {**{k: provenance[k] for k in BATCH_FIELDS}, 'finished': False}
+        if existing is None:
+            self.meta = {'provenance': {k: v for k, v in provenance.items() if k not in BATCH_FIELDS},
+                         'batches': [batch]}
+            self.path.write_text('', encoding='utf-8')
+        else:
+            self.meta = {**existing, 'batches': existing['batches'] + [batch]}
+        write_json_atomic(meta_path(self.path), self.meta)
+
+    def add(self, result):
+        """Appends one finished run."""
+        from .runner import write_jsonl  # pylint: disable=import-outside-toplevel
+        write_jsonl(self.path, [result], append=True)
+
+    def finish(self):
+        """Sorts the file's runs by seed (atomic rewrite) and marks this batch finished in the sidecar."""
+        # pylint: disable=import-outside-toplevel
+        from .events import write_json_atomic
+        from .runner import RunResult, write_jsonl
+        runs = [RunResult.from_dict(json.loads(line))
+                for line in self.path.read_text(encoding='utf-8').splitlines() if line.strip()]
+        write_jsonl(self.path, sorted(runs, key=lambda r: (r.seed is None, r.seed)))
+        self.meta['batches'][-1]['finished'] = True
+        write_json_atomic(meta_path(self.path), self.meta)
 
 
 def chain_progress_events(events, runs: int):
@@ -137,8 +170,15 @@ def _cmd_eval_chain(args):
                         act=args.act, route=args.route, start_from=args.start_from, stop_at=args.stop_at,
                         output=output, provenance=provenance)
         try:
-            results, summary = play_chain(route, runner, provenance, plays=args.plays, on_result=None
-                                          if events is None else chain_progress_events(events, args.runs))
+            chain_output = ChainOutput(output, provenance, existing)
+            progress = None if events is None else chain_progress_events(events, args.runs)
+
+            def on_result(result):
+                chain_output.add(result)
+                if progress is not None:
+                    progress(result)
+            results, summary = play_chain(route, runner, provenance, plays=args.plays, on_result=on_result)
+            chain_output.finish()
         except Exception as error:
             if events is not None:
                 import traceback
@@ -147,8 +187,6 @@ def _cmd_eval_chain(args):
             raise
         if events is not None:
             events.emit('chain', **summary)
-    os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
-    write_output(output, results, provenance, existing)
     print(json.dumps(summary, indent=2))
     print(f"route {args.route}: {summary['successes']}/{summary['runs']} = {summary['success_rate']:.0%}  "
           f"(per-run JSON lines {'appended to' if existing else 'in'} {output}, provenance in {meta_path(output)})")
