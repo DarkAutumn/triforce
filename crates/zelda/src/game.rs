@@ -1,11 +1,12 @@
 //! The decoded game state at one frame (`zelda_game.py`, `link.py`, `enemy.py`, `zelda_objects.py`).
 //!
-//! A [`GameView`] owns a copy of the 10,240-byte RAM image and decodes Link, enemies, items and projectiles once.
+//! A [`GameView`] owns a copy of the 10,240-byte RAM image and decodes Link, enemies, items, projectiles and hazards
+//! once ([`ObjectClass`] sorts the object slots).
 //! The room model and bomb walls are decoded on first use.
 
 use crate::enums::{
-    AnimationKind, AnimationState, ArrowKind, BoomerangKind, Direction, MapLocation, Position,
-    SwordKind, Tile, enemy, sound,
+    AnimationKind, AnimationState, ArrowKind, BoomerangKind, Direction, MapLocation, ObjectClass,
+    Position, SwordKind, Tile, enemy, sound,
 };
 use crate::game_map::GameMap;
 use crate::room::{Room, Tiles};
@@ -18,7 +19,6 @@ pub const MODE_CELLAR: u8 = 9;
 pub const MODE_CAVE: u8 = 11;
 pub const MODE_DYING: u8 = 17;
 
-const OBJ_ITEM_ID: u8 = 0x60;
 const OBJ_BLOCK_ID: u8 = 0x68;
 const PUSH_BLOCK_SLOT: usize = 11;
 
@@ -179,7 +179,7 @@ impl Item {
     }
 }
 
-/// A hostile or player projectile (object type > $48, not an item/block/decoration).
+/// A monster shot (object types $53-$5C, [`ObjectClass::Shot`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Projectile {
     pub index: u8,
@@ -203,6 +203,28 @@ impl Projectile {
     pub fn blockable(&self) -> bool {
         use crate::enums::projectile::*;
         matches!(self.id, OCTOROK_ROCK | BOOMERANG | ARROW)
+    }
+}
+
+/// An object that hurts Link but can't be fought ([`ObjectClass::Hazard`]: boulders and their generator, traps,
+/// bubbles). Not an enemy: no Fight target, no kill when its slot empties.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Hazard {
+    pub index: u8,
+    pub id: u8,
+    pub position: Position,
+    pub direction: Direction,
+    pub distance: f32,
+    pub vector: (f32, f32),
+}
+
+impl Hazard {
+    pub fn dims(&self) -> (i32, i32) {
+        (2, 2)
+    }
+
+    pub fn tile(&self) -> Tile {
+        self.position.tile()
     }
 }
 
@@ -248,10 +270,13 @@ pub struct GameView {
     /// Link just left a cave (he can't walk straight back in).
     pub just_exited_cave: bool,
     pub link: Link,
-    /// Enemies by distance from Link (ties keep slot order).
+    /// Monsters ([`ObjectClass::Monster`]) by distance from Link (ties keep slot order).
     pub enemies: Vec<Enemy>,
     pub items: Vec<Item>,
+    /// Monster shots by distance from Link.
     pub projectiles: Vec<Projectile>,
+    /// Hazards by distance from Link.
+    pub hazards: Vec<Hazard>,
     map: Arc<GameMap>,
     room: OnceLock<Room>,
     bomb_walls: OnceLock<Vec<BombWall>>,
@@ -286,14 +311,6 @@ fn read_direction(ram: &[u8; RAM_SIZE], index: usize) -> Direction {
     Direction::from_ram_value(table(ram, tables::OBJ_DIRECTION, index))
 }
 
-fn is_enemy_id(id: u8) -> bool {
-    (1..=0x48).contains(&id) && id != 0x40
-}
-
-fn is_projectile_id(id: u8) -> bool {
-    id > 0x48 && !matches!(id, 0x60 | 0x63 | 0x64 | 0x68 | 0x6A)
-}
-
 fn by_distance<T>(v: &mut [T], key: impl Fn(&T) -> f32) {
     v.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap());
 }
@@ -312,25 +329,22 @@ impl GameView {
             direction: read_direction(&ram, 0),
             status: table(&ram, tables::OBJ_STATUS, 0),
         };
-        let (mut enemies, mut items, mut projectiles) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut enemies, mut items, mut projectiles, mut hazards) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for index in 1..0xC {
             let id = table(&ram, tables::OBJ_ID, index);
-            if id == 0 {
-                continue;
-            }
             let position = read_position(&ram, index);
             let (distance, vector) = distance_and_vector(position, link.position);
-            if id == OBJ_ITEM_ID {
-                items.push(Item {
+            match ObjectClass::of(id) {
+                ObjectClass::Item => items.push(Item {
                     index: index as i8,
                     id: table(&ram, tables::OBJ_STATUS, index) as i16,
                     position,
                     timer: table(&ram, tables::ITEM_TIMER, index),
                     distance,
                     vector,
-                });
-            } else if is_enemy_id(id) {
-                enemies.push(Enemy {
+                }),
+                ObjectClass::Monster => enemies.push(Enemy {
                     index: index as u8,
                     id,
                     position,
@@ -341,21 +355,30 @@ impl GameView {
                     status: table(&ram, tables::OBJ_STATUS, index),
                     distance,
                     vector,
-                });
-            } else if is_projectile_id(id) {
-                projectiles.push(Projectile {
+                }),
+                ObjectClass::Shot => projectiles.push(Projectile {
                     index: index as u8,
                     id,
                     position,
                     direction: read_direction(&ram, index),
                     distance,
                     vector,
-                });
+                }),
+                ObjectClass::Hazard => hazards.push(Hazard {
+                    index: index as u8,
+                    id,
+                    position,
+                    direction: read_direction(&ram, index),
+                    distance,
+                    vector,
+                }),
+                _ => {}
             }
         }
         by_distance(&mut enemies, |e| e.distance);
         by_distance(&mut items, |e| e.distance);
         by_distance(&mut projectiles, |e| e.distance);
+        by_distance(&mut hazards, |e| e.distance);
         GameView {
             ram,
             frame,
@@ -364,6 +387,7 @@ impl GameView {
             enemies,
             items,
             projectiles,
+            hazards,
             map,
             room: OnceLock::new(),
             bomb_walls: OnceLock::new(),

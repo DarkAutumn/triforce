@@ -115,3 +115,34 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         assert_eq!(change.hits() > 0, expect_damage, "front={front}");
     }
 }
+
+/// F038/F067: in a boulder room, waiting earns no hits (boulders that leave the screen and Zora dives are no kills),
+/// the boulders and their invisible generator are hazards, never enemies; a cave's old man is no projectile.
+#[test]
+fn boulders_are_hazards_and_waiting_hits_nothing() {
+    let Some(nes) = open_core() else { return };
+    let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
+    let opts = LoadOptions { randomize_rng: true, fresh_room: true, controllable: true, overrides: Vec::new() };
+    s.load(&common::load_named_state("0_18e_0"), &opts, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    let wait = Action::parse("WAIT 32").unwrap();
+    let mut boulders = 0;
+    for step in 0..300 {
+        // Keep Link alive: hearts = containers.
+        let hc = s.nes_mut().peek(0x66F);
+        s.nes_mut().poke(0x66F, (hc & 0xF0) | (hc >> 4));
+        let change = s.act(wait).unwrap();
+        assert!(change.enemies_hit.is_empty(), "step {step}: {:?}", change.enemies_hit);
+        let state = s.state();
+        assert!(state.enemies.iter().all(|e| !matches!(e.id, 0x1F | 0x20)), "step {step}");
+        boulders += state.hazards.iter().filter(|h| h.id == 0x20).count();
+    }
+    assert!(boulders > 0, "boulders fell");
+
+    s.load(&common::load_named_state("0_2ccave_0"), &opts, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    s.press(0, 120);
+    assert!(s.state().in_cave());
+    let state = s.state();
+    assert!(state.projectiles.is_empty() && state.enemies.is_empty(), "{state:?}");
+    // The cave's two standing fires hurt on touch: hazards.
+    assert!(!state.hazards.is_empty() && state.hazards.iter().all(|h| h.id == 0x40), "{:?}", state.hazards);
+}

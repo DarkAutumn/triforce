@@ -2,7 +2,7 @@
 
 use crate::actions::{Action, ActionMask};
 use crate::blocks::ProjectileBlock;
-use crate::enums::{AnimationKind, AnimationState};
+use crate::enums::{AnimationKind, AnimationState, enemy};
 use crate::executor::{Interrupt, Machine, OptionResult};
 use crate::game::GameView;
 use crate::ledger::{FutureCreditLedger, Prediction, add_hit};
@@ -259,6 +259,10 @@ fn observe_damage(
                     stuns.push(enemy.index);
                 }
             }
+            // A Zora destroys itself after a dive (Z_04 UpdateZora @DestroyWhenDone, ObjState 0): only one that
+            // could be hit (ObjState 2-4) can have been killed. Boulders, which destroy themselves off screen,
+            // are hazards, not enemies, so they never get here.
+            None if enemy.id == enemy::ZORA && !enemy.is_active() => {}
             None => add_hit(
                 hits,
                 enemy.index,
@@ -374,6 +378,26 @@ mod tests {
         );
         // Already dying before the step: nothing more to credit.
         assert_eq!(observe(&dying, &gone, 4).enemies_hit, vec![]);
+
+        // F038: objects that destroy themselves are no kills: a boulder that left the screen (a hazard) and a
+        // Zora whose dive ended (ObjState 5 -> gone).
+        let mut boulder = playable();
+        boulder[tables::OBJ_ID.0 + SLOT] = 0x20;
+        boulder[tables::OBJ_HEALTH.0 + SLOT] = 0xF0;
+        boulder[tables::OBJ_POS_Y.0 + SLOT] = 0xEE;
+        let mut empty = boulder;
+        empty[tables::OBJ_ID.0 + SLOT] = 0;
+        assert_eq!(observe(&boulder, &empty, 4).enemies_hit, vec![]);
+        let mut zora = playable();
+        zora[tables::OBJ_ID.0 + SLOT] = enemy::ZORA;
+        zora[tables::OBJ_HEALTH.0 + SLOT] = 0x20;
+        zora[tables::OBJ_STATUS.0 + SLOT] = 5;
+        let mut dived = zora;
+        dived[tables::OBJ_ID.0 + SLOT] = 0;
+        assert_eq!(observe(&zora, &dived, 4).enemies_hit, vec![]);
+        // A surfaced Zora (ObjState 3) gone from its slot was killed.
+        zora[tables::OBJ_STATUS.0 + SLOT] = 3;
+        assert_eq!(observe(&zora, &dived, 4).enemies_hit, vec![(SLOT as u8, 2)]);
 
         let mut stunned = prev;
         stunned[tables::OBJ_STUN_TIMER.0 + SLOT] = 0x10;

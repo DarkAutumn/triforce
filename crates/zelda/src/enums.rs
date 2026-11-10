@@ -364,6 +364,76 @@ pub mod item {
     pub const FAIRY: i16 = 0x23;
 }
 
+/// Non-monster object types the classifier names.
+pub mod object {
+    /// The invisible generator of the overworld boulder rooms (UpdateBoulderSet).
+    pub const BOULDER_SET: u8 = 0x1F;
+    /// A falling boulder (UpdateTektiteOrBoulder; it destroys itself off screen).
+    pub const BOULDER: u8 = 0x20;
+    /// UpdateGuardFire: the fires beside an underworld person (CheckMonsterCollisions: they hurt).
+    pub const GUARD_FIRE: u8 = 0x3F;
+    pub const STANDING_FIRE: u8 = 0x40;
+    pub const TRAP: u8 = 0x49;
+    pub const TRAP2: u8 = 0x4A;
+    pub const DROPPED_ITEM: u8 = 0x60;
+    /// The first cave person type (UpdateCavePerson, Z_07.asm `CMP #$6A`).
+    pub const CAVE_PERSON: u8 = 0x6A;
+}
+
+/// What an object type is, from UpdateObject_JumpTable (Z_07.asm:5348-5454): the one classifier `GameView`, the
+/// executor's interrupts, `room_state` and the observation share.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectClass {
+    /// An empty slot.
+    Empty,
+    /// A monster that can be fought ($01-$48 but the types below and the bubbles).
+    Monster,
+    /// Hurts (or, the boulder generator, makes things that hurt) but can't be hurt: boulders $1F/$20, traps
+    /// $49/$4A, bubbles $2B-$2D (the game leaves them out of its living monsters, CheckHasLivingMonsters), the
+    /// cave's standing fires $40 (UpdateStandingFire: CheckLinkCollision only).
+    Hazard,
+    /// A monster shot ($53-$5C: rocks, fireballs, arrows, boomerangs, sword/magic shots).
+    Shot,
+    /// A dropped item ($60).
+    Item,
+    /// An underworld person ($4B-$52) or a cave person ($6A and up).
+    Person,
+    /// A tile object ($61-$68: dock, rocks, gravestones, rock walls, tree, block).
+    TileObject,
+    /// Everything else: DoNothing types, whirlwind, pond fairy, rupee stash, Grumble, Zelda, the dead dummy, the
+    /// flute secret.
+    Other,
+}
+
+impl ObjectClass {
+    pub fn of(id: u8) -> ObjectClass {
+        use object::*;
+        match id {
+            0 => ObjectClass::Empty,
+            BOULDER_SET | BOULDER | TRAP | TRAP2 | STANDING_FIRE | enemy::BUBBLE..=enemy::RED_BUBBLE => {
+                ObjectClass::Hazard
+            }
+            0x19 | 0x29 | 0x2E | 0x2F | 0x35..=0x37 => ObjectClass::Other,
+            0x01..=0x48 => ObjectClass::Monster,
+            0x4B..=0x52 => ObjectClass::Person,
+            0x53..=0x5C => ObjectClass::Shot,
+            DROPPED_ITEM => ObjectClass::Item,
+            0x61..=0x68 => ObjectClass::TileObject,
+            CAVE_PERSON..=0xFF => ObjectClass::Person,
+            _ => ObjectClass::Other,
+        }
+    }
+
+    /// Touching it (or its contact) can hurt Link: monsters, shots and hazards but the invisible boulder generator.
+    pub fn can_hurt(id: u8) -> bool {
+        match ObjectClass::of(id) {
+            ObjectClass::Monster | ObjectClass::Shot => true,
+            ObjectClass::Hazard => id != object::BOULDER_SET,
+            _ => false,
+        }
+    }
+}
+
 /// Hostile projectile ids (`ZeldaProjectileId`).
 pub mod projectile {
     pub const OCTOROK_ROCK: u8 = 83;

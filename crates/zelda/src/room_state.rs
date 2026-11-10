@@ -1,6 +1,6 @@
 //! Per-room state decoded from RAM/PRG-RAM (`triforce/room_state.py`, docs/ram-catalog.md §5 and §R).
 
-use crate::enums::Direction;
+use crate::enums::{Direction, ObjectClass, object};
 use crate::tables::{RAM_SIZE, SRAM_OFFSET};
 
 const LEVEL: usize = 0x10;
@@ -59,9 +59,6 @@ const CAVE_WARE_XS: [i32; 3] = [0x58, 0x78, 0x98];
 const CAVE_WARE_Y: i32 = 0x98;
 const CAVE_FLAG_PICK_UP: u8 = 0x01;
 const CAVE_FLAG_SHOW_ITEMS: u8 = 0x04;
-
-/// Non-foe object types below $49 (whirlwind, fairy, people and their fires).
-pub const NON_FOE_TYPES: [u8; 7] = [0x2E, 0x2F, 0x35, 0x36, 0x37, 0x3F, 0x40];
 
 /// Door order of `RoomState::doors`.
 pub const DOOR_DIRECTIONS: [Direction; 4] =
@@ -256,11 +253,9 @@ fn sram(ram: &[u8; RAM_SIZE], address: usize) -> u8 {
     ram[address - SRAM_OFFSET]
 }
 
+/// A monster still to kill ([`ObjectClass::Monster`]; the guard fires beside an underworld person don't count).
 fn is_living_monster(obj_type: u8) -> bool {
-    0 < obj_type
-        && obj_type < 0x49
-        && !(0x2B..=0x2D).contains(&obj_type)
-        && !NON_FOE_TYPES.contains(&obj_type)
+    ObjectClass::of(obj_type) == ObjectClass::Monster && obj_type != object::GUARD_FIRE
 }
 
 /// Room item position from attr F bits 4-5 (Z_01:GetShortcutOrItemXYForRoom).

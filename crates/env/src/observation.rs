@@ -10,7 +10,7 @@ use zelda::actions::{
     ActionMask, DIRECTIONS, DURATIONS, MASK_SIZE, direction_index, duration_index, is_directional,
     is_timed,
 };
-use zelda::enums::{ActionKind, Direction, GAMEPLAY_START_Y};
+use zelda::enums::{ActionKind, Direction, GAMEPLAY_START_Y, ObjectClass, object};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::objectives::{Objective, ObjectiveKind};
@@ -591,11 +591,6 @@ fn b(v: bool) -> f32 {
     v as u8 as f32
 }
 
-/// Every ZeldaEnemyKind value.
-fn is_foe(t: u8) -> bool {
-    matches!(t, 0x01..=0x1E | 0x21..=0x28 | 0x2A..=0x2D | 0x30..=0x34 | 0x38..=0x3E | 0x41..=0x48)
-}
-
 /// Which room edge Link stands at (seeds `entered_from` on reset).
 fn entry_side_from_position(level: u8, x: i32, y: i32) -> Option<Direction> {
     let (up, down, left, right) = if level == 0 {
@@ -753,7 +748,8 @@ impl ObservationBuilder {
                 0x27 => obj_state == 1,
                 _ => meta == 0,
             };
-            let monster = t < 0x49;
+            let class = ObjectClass::of(t);
+            let monster = class == ObjectClass::Monster;
             f[e::HP] = if monster {
                 ((at(OBJ_HP, i) >> 4) as f64 / 15.0) as f32
             } else {
@@ -770,10 +766,8 @@ impl ObservationBuilder {
             f[e::FACING + 1] = b(d & 4 != 0);
             f[e::FACING + 2] = b(d & 2 != 0);
             f[e::FACING + 3] = b(d & 1 != 0);
-            let projectile = (0x53..=0x5C).contains(&t);
-            let harmful = (monster && !matches!(t, 0x29 | 0x2E | 0x2F | 0x35 | 0x36 | 0x37))
-                || matches!(t, 0x49 | 0x4A)
-                || projectile;
+            let projectile = class == ObjectClass::Shot;
+            let harmful = ObjectClass::can_hurt(t);
             // A stunned Dodongo (ObjState 2, the bomb smoke) can't hurt Link: that's when to stab him.
             let stunned_dodongo = matches!(t, 0x31 | 0x32) && obj_state == 2;
             // Z_01 CheckMonsterCollisions/CheckLinkCollision: a monster whose stun timer runs, or that was just hit
@@ -783,7 +777,7 @@ impl ObservationBuilder {
             let harmless = monster && (at(OBJ_STUN, i) > 0 || flashing);
             f[e::HURTS_ON_TOUCH] =
                 b(harmful && active && !dying && !clock && !stunned_dodongo && !harmless);
-            f[e::KILLABLE] = b(is_foe(t) && !matches!(t, 0x2B..=0x2D));
+            f[e::KILLABLE] = b(monster && t != object::GUARD_FIRE);
             f[e::PROJECTILE] = b(projectile);
             f[e::BLOCKABLE] = b(matches!(t, 0x53 | 0x5B | 0x5C));
             f[e::SPAWNING] = b(spawning);

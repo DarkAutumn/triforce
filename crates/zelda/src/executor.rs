@@ -2,7 +2,7 @@
 
 use crate::actions::Action;
 use crate::blocks::{ProjectileBlock, ShieldWatch};
-use crate::enums::{ActionKind, Direction, selected};
+use crate::enums::{ActionKind, Direction, ObjectClass, selected};
 use crate::game::GameView;
 use crate::nes::Nes;
 use crate::room_entry::is_pre_entry;
@@ -63,7 +63,6 @@ const OBJ_Y: usize = 0x84;
 const OBJ_ID: usize = 0x34F;
 const OBJ_SPAWN_STATE: usize = 0x405;
 const INVENTORY: (usize, usize) = (0x657, 0x67E);
-const NON_THREAT_IDS: [u8; 6] = [0x40, 0x60, 0x63, 0x64, 0x68, 0x6A];
 
 /// NES controller bits.
 pub mod buttons {
@@ -238,8 +237,10 @@ impl<N: Nes> Machine<N> {
     }
 }
 
+/// A spawn or an object near Link that interrupts: anything that can hurt Link ([`ObjectClass::can_hurt`]) but the
+/// cave's standing fires, which never move (the walk to a cave's ware passes them).
 fn is_threat(id: u8) -> bool {
-    id != 0 && !NON_THREAT_IDS.contains(&id)
+    ObjectClass::can_hurt(id) && id != crate::enums::object::STANDING_FIRE
 }
 
 /// The RAM fields interrupts compare.
@@ -749,7 +750,8 @@ pub(crate) mod tests {
     #[test]
     fn spawns_count_threats_only() {
         let before = playable();
-        for id in NON_THREAT_IDS {
+        // Items, tile objects, people (the cave old men), the standing fire and the invisible boulder generator.
+        for id in [0x40, 0x60, 0x63, 0x64, 0x68, 0x6A, 0x6B, 0x6C, 0x1F, 0x2F] {
             let mut after = playable();
             object(&mut after, 2, id, 20, 20);
             assert_eq!(interrupt(&before, &after), None, "{id:#x}");

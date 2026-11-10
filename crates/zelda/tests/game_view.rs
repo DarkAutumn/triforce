@@ -3,8 +3,8 @@
 
 use std::sync::{Arc, LazyLock};
 use zelda::enums::{
-    ActionKind, AnimationKind, AnimationState, ArrowKind, BoomerangKind, Direction, Position,
-    SwordKind, enemy, item, projectile, sound,
+    ActionKind, AnimationKind, AnimationState, ArrowKind, BoomerangKind, Direction, ObjectClass,
+    Position, SwordKind, enemy, item, projectile, sound,
 };
 use zelda::game::{GameView, MODE_CAVE, MODE_DYING, MODE_GAME_OVER};
 use zelda::tables::{self, RAM_SIZE};
@@ -93,6 +93,70 @@ fn object_slots_decode_into_enemies_items_and_projectiles_by_distance() {
     assert!(v.projectiles[0].blockable());
     assert_eq!(v.link.position, Position::new(120, 141));
     assert_eq!(v.link.direction, Direction::N);
+}
+
+/// F067: every object type's class follows UpdateObject_JumpTable (Z_07.asm:5348-5454; types >= $6A are cave
+/// people).
+#[test]
+fn object_classes_follow_the_jump_table() {
+    use ObjectClass::*;
+    let table: [(&str, ObjectClass); 0x6A] = [
+        ("DoNothing", Empty),
+        ("Lynel", Monster), ("Lynel", Monster), ("Moblin", Monster), ("Moblin", Monster),
+        ("Goriya", Monster), ("Goriya", Monster), ("Octorock", Monster), ("Octorock", Monster),
+        ("Octorock", Monster), ("Octorock", Monster), ("Darknut", Monster), ("Darknut", Monster),
+        ("TektiteOrBoulder", Monster), ("TektiteOrBoulder", Monster), ("BlueLeever", Monster),
+        ("RedLeever", Monster), ("Zora", Monster), ("Vire", Monster), ("Zol", Monster), ("Gel", Monster),
+        ("Gel", Monster), ("PolsVoice", Monster), ("LikeLike", Monster), ("Digdogger", Monster),
+        ("DoNothing", Other), ("Peahat", Monster), ("Keese", Monster), ("Keese", Monster), ("Keese", Monster),
+        ("Armos", Monster), ("BoulderSet", Hazard), ("TektiteOrBoulder", Hazard), ("Ghini", Monster),
+        ("FlyingGhini", Monster), ("BlueWizzrobe", Monster), ("RedWizzrobe", Monster), ("PatraChild", Monster),
+        ("PatraChild", Monster), ("Wallmaster", Monster), ("Rope", Monster), ("DoNothing", Other),
+        ("Stalfos", Monster), ("Bubble", Hazard), ("Bubble", Hazard), ("Bubble", Hazard), ("Whirlwind", Other),
+        ("PondFairy", Other), ("Gibdo", Monster), ("Dodongo", Monster), ("Dodongo", Monster), ("Gohma", Monster),
+        ("Gohma", Monster), ("RupeeStash", Other), ("Grumble", Other), ("Zelda", Other), ("Digdogger", Monster),
+        ("Digdogger", Monster), ("Lamnola", Monster), ("Lamnola", Monster), ("Manhandla", Monster),
+        ("Aquamentus", Monster), ("Ganon", Monster), ("GuardFire", Monster), ("StandingFire", Hazard),
+        ("Moldorm", Monster), ("Gleeok", Monster), ("Gleeok", Monster), ("Gleeok", Monster), ("Gleeok", Monster),
+        ("GleeokHead", Monster), ("Patra", Monster), ("Patra", Monster), ("Trap", Hazard), ("Trap", Hazard),
+        ("UnderworldPerson", Person), ("UnderworldPerson", Person), ("UnderworldPerson", Person),
+        ("UnderworldPerson", Person), ("UnderworldPerson", Person), ("UnderworldPerson", Person),
+        ("UnderworldPersonLifeOrMoney", Person), ("UnderworldPerson", Person), ("MonsterShot", Shot),
+        ("MonsterShot", Shot), ("Fireball", Shot), ("Fireball", Shot), ("MonsterShot", Shot),
+        ("MonsterShot", Shot), ("MonsterShot", Shot), ("MonsterShot", Shot), ("MonsterArrow", Shot),
+        ("ArrowOrBoomerang", Shot), ("DeadDummy", Other), ("FluteSecret", Other), ("DoNothing", Other),
+        ("Item", Item), ("Dock", TileObject), ("RockOrGravestone", TileObject), ("RockWall", TileObject),
+        ("Tree", TileObject), ("RockOrGravestone", TileObject), ("RockOrGravestone", TileObject),
+        ("RockWall", TileObject), ("Block", TileObject), ("DoNothing", Other),
+    ];
+    for (id, (name, class)) in table.iter().enumerate() {
+        assert_eq!(ObjectClass::of(id as u8), *class, "${id:02X} {name}");
+    }
+    for id in 0x6A..=0xFF {
+        assert_eq!(ObjectClass::of(id), Person, "${id:02X} CavePerson");
+    }
+    // Hazards hurt but the invisible boulder generator; people, items and tile objects never do.
+    assert!(ObjectClass::can_hurt(0x20) && ObjectClass::can_hurt(0x49) && ObjectClass::can_hurt(0x2B));
+    assert!(!ObjectClass::can_hurt(0x1F) && !ObjectClass::can_hurt(0x6B) && !ObjectClass::can_hurt(0x61));
+}
+
+/// F067/F038: boulders, traps and bubbles are hazards; old men, docks and the boulder generator are neither enemies
+/// nor projectiles.
+#[test]
+fn hazards_and_non_entities_leave_the_enemy_and_projectile_lists() {
+    let mut r = Ram::new();
+    r.object(1, 0x1F, 112, 157)
+        .object(2, 0x20, 100, 100)
+        .object(3, 0x49, 60, 100)
+        .object(4, enemy::BUBBLE, 80, 100)
+        .object(5, 0x6B, 120, 120)
+        .object(6, 0x61, 140, 120);
+    let v = r.view();
+    assert!(v.enemies.is_empty(), "{:?}", v.enemies);
+    assert!(!v.has_active_enemies());
+    let hazards: std::collections::BTreeSet<u8> = v.hazards.iter().map(|h| h.index).collect();
+    assert_eq!(hazards, [1, 2, 3, 4].into());
+    assert!(v.projectiles.is_empty());
 }
 
 #[test]
