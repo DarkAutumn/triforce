@@ -3,18 +3,21 @@
 
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
         [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100]
-        [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--no-promote] [--train-args '...{name}...']
+        [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--promote] [--train-args '...{name}...']
 
 Specialists (trainable, with seed start states; route order of the route, ``d2first``) train one at a time as
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
-``<models>/<name>/<round>/train.log``.  Each trained run is promoted and evaluated with
-``triforce.evaluate`` (``eval.json`` in the run dir).  Then ``eval-chain`` runs the route with every promoted
-model.  Writes ``<models>/<round>-summary.json``, ``<round>-chain.jsonl`` and ``<round>-chain-summary.json``
-and prints a markdown table.  A failed training run is recorded and the round moves on; rerun with
-``--skip-existing`` to resume (runs that already have ``ckpt.pt`` are only promoted and re-evaluated).
-Experiments use ``--no-promote`` (the chain then uses this round's checkpoints for the trained specialists and
-the promoted models elsewhere) and ``--train-args`` (``{name}`` expands to the specialist).  ``--chain-runs 0``
-skips the chain.
+``<models>/<name>/<round>/train.log``.  Each trained run is evaluated with ``triforce.evaluate`` in its act mode
+(``eval.json`` in the run dir, ``evaluate.default_output``).  Nothing is promoted unless ``--promote`` is given:
+then each run whose evaluation succeeded is promoted (pointer only; the run's own act mode).  The specialists'
+promoted run ids and act modes from before the round are kept in the summary (``previous_promoted``) so a
+promotion can be undone.  Then ``eval-chain`` runs the route: with ``--promote`` on the promoted models, else on
+this round's checkpoints for the trained specialists and the promoted models elsewhere.  Writes
+``<models>/<round>-summary.json``, ``<round>-chain.jsonl`` and ``<round>-chain-summary.json`` (with the chain's
+provenance) and prints a markdown table.  A failed training run is recorded and the round moves on; rerun with
+``--skip-existing`` to resume (runs that already have ``ckpt.pt`` are only re-evaluated, and promoted with
+``--promote``).  ``--train-args`` passes extra training arguments (``{name}`` expands to the specialist).
+``--chain-runs 0`` skips the chain.
 
 Live monitoring: every round gets ``logs/<yymmdd>_<NNN>_<round>/`` (``--logs-dir``; see ``triforce/events.py``)
 with ``training.json`` (every specialist in run order with its status), ``<specialist>.jsonl`` event streams
@@ -39,8 +42,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # pylint: disable=wrong-import-position
 from triforce import _native, registry
 from triforce.cli import chain_progress_events, eval_chain
-from triforce.evaluate import eval_event, evaluate_specialist
-from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
+from triforce.evaluate import default_output, eval_event, evaluate_specialist, write_result
+from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir, write_json_atomic
 from triforce.metrics import read_jsonl
 from triforce.runner import write_jsonl
 from triforce.specialist import list_specialists, load_specialist
@@ -78,9 +81,10 @@ def parse_args(argv=None):
     parser.add_argument('--chain-runs', type=int, default=20)
     parser.add_argument('--chain-parallel', type=int, default=10)
     parser.add_argument('--skip-existing', action='store_true', help="don't retrain runs that have ckpt.pt")
-    parser.add_argument('--no-promote', action='store_true',
-                        help="experiment mode: keep the promoted models; eval-chain uses this round's checkpoints "
-                             "for the trained specialists and the promoted ones for the rest")
+    parser.add_argument('--promote', action='store_true',
+                        help="promote each run once its evaluation succeeded (the previous promoted run ids and act "
+                             "modes go into the round summary); without it the promoted models stay and eval-chain "
+                             "uses this round's checkpoints for the trained specialists, the promoted ones elsewhere")
     parser.add_argument('--train-args', default='', help="extra arguments for triforce.train (one string)")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     return parser.parse_args(argv)
@@ -180,10 +184,11 @@ def _tail(path: Path, lines: int = 20) -> str:
 
 def train_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
     """Trains (or skips) one specialist; returns its summary record.  record['status'] is 'ok' when training
-    finished and there is a checkpoint to evaluate; only then is it promoted.  ``--skip-existing`` skips a run only
-    if it finished (train_summary.json status completed/early_stop); an interrupted or crashed run dir is set aside
-    as ``<run>.partial-N`` and the specialist trains fresh.  Appends driver events (skipped, error, end on failure)
-    to log_dir/<name>.jsonl after the training subprocess is done with it."""
+    finished and there is a checkpoint to evaluate (promotion, with ``--promote``, waits for the evaluation).
+    ``--skip-existing`` skips a run only if it finished (train_summary.json status completed/early_stop); an
+    interrupted or crashed run dir is set aside as ``<run>.partial-N`` and the specialist trains fresh.  Appends
+    driver events (skipped, error, end on failure) to log_dir/<name>.jsonl after the training subprocess is done
+    with it."""
     config = load_specialist(name)
     run_dir = registry.run_dir(name, args.round, models)
     ckpt = registry.checkpoint_path(name, args.round, models)
@@ -217,21 +222,29 @@ def train_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
         record['status'] = 'train-failed'
         record['error'] = f"no checkpoint at {ckpt}"
         events.emit('end', status=record['status'], message=record['error'])
-        return record
-    if not args.no_promote and record['status'] == 'ok':
-        registry.promote(name, args.round, models)
     return record
 
 
-def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
-    """Evaluates a trained specialist (``triforce.evaluate``, ``--eval-parallel`` envs), writes eval.json and
-    the stream's eval/end events, and fills ``record``.  Runs on a background thread while the next specialist
-    trains."""
+def previous_promoted(name: str, models: Path) -> dict:
+    """The specialist's promoted run id and its act mode before the round (both None when none is promoted)."""
+    try:
+        run = registry.promoted_run(name, models)
+    except FileNotFoundError:
+        return {'run': None, 'act': None}
+    checkpoint = registry.checkpoint_path(name, run, models)
+    return {'run': run, 'act': registry.act_mode(checkpoint) if checkpoint.is_file() else None}
+
+
+def evaluate_record(name: str, record: dict, args, log_dir: Path, models: Path) -> dict:
+    """Evaluates a trained specialist (``triforce.evaluate`` in the run's act mode, ``--eval-parallel`` envs),
+    writes the result (``evaluate.default_output``: ``eval.json`` for the canonical evaluation) and the stream's
+    eval/end events, fills ``record`` and, with ``--promote``, promotes the run once all of that succeeded.  Runs
+    on a background thread while the next specialist trains."""
     events = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
-    run_dir = Path(record['run_dir'])
     try:
         result = evaluate_specialist(name, record['checkpoint'], args.episodes_per_state,
                                      parallel=args.eval_parallel, seed=0, events=events)
+        path = write_result(result, default_output(record['checkpoint'], name, 'model', args.episodes_per_state, 0))
     except Exception as error:  # pylint: disable=broad-exception-caught
         record['status'] = 'eval-failed' if record['status'] == 'ok' else record['status']
         record['error'] = f"{type(error).__name__}: {error}"
@@ -239,17 +252,26 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
         events.emit('error', message=f"evaluation failed: {record['error']}", traceback=traceback.format_exc())
         events.emit('end', status=record['status'], message=record['error'])
         return record
-    with open(run_dir / 'eval.json', 'w', encoding='utf-8') as file:
-        json.dump(result, file, indent=2)
     fields = eval_event(result)
     record.update(eval_success_rate=result['success_rate'], eval_episodes=result['episodes'],
+                  eval_act=result.get('act'), eval_path=str(path),
                   eval_health=result['mean_health_fraction'], eval_health_change=result['mean_health_change'],
                   eval_health_change_total=result['mean_health_change_total'],
                   eval_hearts_dropped=result['hearts_dropped'], eval_hearts_taken=result['hearts_taken'],
                   eval_hearts_left=result['hearts_left'], eval_by_room=fields['by_room'])
     record.update({f'eval_{key}': value for key, value in fields.items()
                    if key.startswith('linger_') or key in ('by_room_linger', 'by_state_linger')})
-    events.emit('eval', **fields, path=str(run_dir / 'eval.json'))
+    if args.promote and record['status'] == 'ok':
+        try:
+            registry.promote(name, args.round, models)
+            record['promoted'] = True
+            say(f"[round] {name}: promoted {args.round}")
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            record['status'] = 'promote-failed'
+            record['error'] = f"{type(error).__name__}: {error}"
+            say(f"[round] {name}: promotion failed: {record['error']}")
+            events.emit('error', message=f"promotion failed: {record['error']}", traceback=traceback.format_exc())
+    events.emit('eval', **fields, path=str(path))
     events.emit('end', **end_fields(record))
     say(f"[round] {name}: eval success {result['success_rate']:.0%} over {result['episodes']} episodes")
     return record
@@ -259,7 +281,7 @@ def end_fields(record: dict) -> dict:
     """The summary a specialist's 'end' event and training.json entry carry."""
     return {**{key: record.get(key) for key in ('status', 'iterations', 'steps', 'stopped_early', 'wall_seconds',
                                                'steps_per_second', 'train_balanced_last', 'eval_success_rate',
-                                               'eval_episodes')},
+                                               'eval_episodes', 'eval_act', 'promoted')},
             **{key: value for key, value in record.items() if key.startswith('eval_linger_')
                or key in ('eval_by_room_linger', 'eval_by_state_linger')}}
 
@@ -307,7 +329,7 @@ def main(argv=None):
                         events='round.jsonl', log='round.log', chain_runs=args.chain_runs)
     events = EventLog(log_dir / 'round.jsonl', round=args.round)
     events.emit('start', specialists=names, steps_budget=args.steps, models_dir=str(models), log_dir=str(log_dir),
-                no_promote=args.no_promote, train_args=args.train_args, pid=os.getpid())
+                promote=args.promote, train_args=args.train_args, pid=os.getpid())
     say(f"[round] {args.round}: {', '.join(names)}  (logs: {log_dir})")
     current = {'index': None}
     try:
@@ -336,14 +358,16 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
     """Trains/evaluates every specialist, then runs the chain; returns the round summary."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     summary_path = models / f"{args.round}-summary.json"
-    summary = {'round': args.round, 'steps_budget': args.steps, 'log_dir': str(log_dir), 'specialists': {},
+    # What was promoted before the round: a --promote round can be undone with `triforce promote S RUN --act MODE`.
+    summary = {'round': args.round, 'steps_budget': args.steps, 'log_dir': str(log_dir), 'promote': args.promote,
+               'previous_promoted': {name: previous_promoted(name, models) for name in names}, 'specialists': {},
                'chain': None}
 
     summary_lock = threading.Lock()
 
     def write_summary():
-        with summary_lock, open(summary_path, 'w', encoding='utf-8') as file:
-            json.dump(summary, file, indent=2)
+        with summary_lock:
+            write_json_atomic(summary_path, summary)
 
     def finish(index: int, name: str, record: dict):
         plan.update_run(index, **end_fields(record))
@@ -351,7 +375,9 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
         write_summary()
 
     def evaluate_and_finish(index: int, name: str, record: dict):
-        finish(index, name, evaluate_record(name, record, args, log_dir))
+        finish(index, name, evaluate_record(name, record, args, log_dir, models))
+
+    write_summary()
 
     # Each evaluation runs on a background thread (its own native env pool) while the next specialist trains.
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix='eval') as evaluations:
@@ -374,7 +400,7 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
     chain = None
     if args.chain_runs > 0:
         overrides = None
-        if args.no_promote:
+        if not args.promote:
             overrides = {name: str(registry.checkpoint_path(name, args.round, models)) for name in names
                          if registry.checkpoint_path(name, args.round, models).is_file()}
         say(f"[round] eval-chain {_native.DEFAULT_ROUTE}: {args.chain_runs} runs, {args.chain_parallel} envs")
@@ -383,15 +409,12 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
             results, chain = eval_chain(_native.DEFAULT_ROUTE, args.chain_runs, args.chain_parallel,
                                         models_dir=str(models), overrides=overrides,
                                         on_result=chain_progress_events(events, args.chain_runs))
-            chain_path = models / f"{args.round}-chain.jsonl"
-            chain_path.unlink(missing_ok=True)      # write_jsonl appends
-            write_jsonl(str(chain_path), results)
+            write_jsonl(models / f"{args.round}-chain.jsonl", results)
             events.emit('chain', **chain)
         except Exception as error:  # pylint: disable=broad-exception-caught
             chain = {'error': f"{type(error).__name__}: {error}"}
             events.emit('error', message=f"eval-chain failed: {chain['error']}", traceback=traceback.format_exc())
-        with open(models / f"{args.round}-chain-summary.json", 'w', encoding='utf-8') as file:
-            json.dump(chain, file, indent=2)
+        write_json_atomic(models / f"{args.round}-chain-summary.json", chain)
         summary['chain'] = chain
         write_summary()
 
