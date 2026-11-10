@@ -109,11 +109,25 @@ def _now() -> dict:
     return {'ts': round(ts, 3), 'time': datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec='seconds')}
 
 
+def write_json_atomic(path, data, *, indent: Optional[int] = 2, default=None) -> Path:
+    """Writes ``data`` as JSON to ``path`` through a temp file in the same directory and ``os.replace``: the file
+    is either the previous one (or absent) or complete, never cut off.  A failed write leaves no temp file."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(tmp, 'w', encoding='utf-8') as file:
+            json.dump(data, file, indent=indent, default=default)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return path
+
+
 def _write_json(path: Path, data: dict):
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with open(tmp, 'w', encoding='utf-8') as file:
-        json.dump(data, file, indent=2, default=str)
-    os.replace(tmp, path)
+    write_json_atomic(path, data, default=str)
 
 
 class EventLog:

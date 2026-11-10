@@ -3,8 +3,25 @@
 import json
 from datetime import datetime
 
-from triforce.events import EventLog, TrainingPlan, new_log_dir
+import pytest
+
+from triforce import events
+from triforce.events import EventLog, TrainingPlan, new_log_dir, write_json_atomic
 from triforce.metrics import read_jsonl
+
+
+def test_a_failed_json_write_keeps_the_previous_file(tmp_path, monkeypatch):
+    path = tmp_path / 'eval.json'
+    write_json_atomic(path, {'episodes': 3})
+
+    def half_then_fail(data, file, **_):
+        file.write('{"episodes": ')
+        raise OSError("disk full")
+    monkeypatch.setattr(events.json, 'dump', half_then_fail)
+    with pytest.raises(OSError):
+        write_json_atomic(path, {'episodes': 1})
+    assert json.loads(path.read_text()) == {'episodes': 3}
+    assert [p.name for p in tmp_path.iterdir()] == ['eval.json']
 
 
 def test_log_dirs_count_up_per_day(tmp_path):
