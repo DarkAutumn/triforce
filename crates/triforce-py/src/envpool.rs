@@ -369,13 +369,24 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
     ))
 }
 
+/// `obj` as a C-contiguous int64 array: a non-empty array of another kind than integers is refused (floats would be
+/// truncated to other actions), and an array a running call holds is a ValueError, not a panic.
 fn as_int64<'py>(
     py: Python<'py>,
     obj: &Bound<'py, PyAny>,
+    what: &str,
 ) -> PyResult<PyReadonlyArrayDyn<'py, i64>> {
     let np = py.import("numpy")?;
-    let arr = np.getattr("ascontiguousarray")?.call1((obj, "int64"))?;
-    Ok(arr.cast_into::<PyArrayDyn<i64>>()?.readonly())
+    let arr = np.getattr("asarray")?.call1((obj,))?;
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    let size: usize = arr.getattr("size")?.extract()?;
+    if size > 0 && kind != "i" && kind != "u" {
+        return Err(PyValueError::new_err(format!("{what} must be integers, got dtype kind '{kind}'")));
+    }
+    let arr = np.getattr("ascontiguousarray")?.call1((arr, "int64"))?;
+    arr.cast_into::<PyArrayDyn<i64>>()?
+        .try_readonly()
+        .map_err(|e| PyValueError::new_err(format!("{what}: {e}")))
 }
 
 /// A numpy array of `out[key]` with exactly `shape` and dtype `T`, borrowed for writing.
@@ -932,7 +943,7 @@ impl PyEnvPool {
             Some(plays) => {
                 let mut actions = HashMap::new();
                 for (job, a) in plays {
-                    let a = as_int64(py, &a)?;
+                    let a = as_int64(py, &a, &format!("replay actions of job {job}"))?;
                     if a.shape().len() != 2 || a.shape()[1] != 3 {
                         return Err(PyValueError::new_err(format!(
                             "replay actions of job {job} must be [n, 3], got {:?}",
