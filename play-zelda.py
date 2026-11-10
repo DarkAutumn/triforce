@@ -16,8 +16,9 @@ All games play in one native chain pool, each on its own thread, the models acti
 copies; see triforce/play_grid.py).  When a game ends its result shows for a few seconds and the game starts the next
 seed; the seed shows once the run ends.  With more games than cells the rest play unseen (emulated, not rendered).
 A shown game can only lose its cell when it enters a new room, starts its next run (after its result has shown) or
-stalls (--stall-steps actions in one room without damage dealt or taken): then, if the best hidden game (most
-rooms entered this run, then most hearts) is ahead of it, that game fades in.  Never otherwise mid-room, and shown
+stalls (--stall-steps actions in one room without damage dealt or taken): then, if the best hidden game still
+playing (most rooms entered this run, then most hearts; a hidden game showing its result has no picture) is ahead of
+it, that game fades in.  Never otherwise mid-room, and shown
 games never move between cells.  A game that goes twice --stall-steps without damage either way ends STUCK and
 starts its next seed, replacement or not.
 """
@@ -52,9 +53,14 @@ BG = '#0e1116'
 STRIP = '#161a22'
 TEXT = '#e7e9ee'
 MUTED = '#8a93a6'
-# colorblind-safe: never red vs green
+# colorblind-safe: never red vs green.  Every last-room outcome a chain run can end with (chain.rs); anything else
+# still shows (its name in gold) and is tallied as 'other'.
 OUTCOME_STYLE = {'milestone': ('MILESTONE', '#3d8bff'), 'death': ('DIED', '#ff4d5e'), 'stuck': ('STUCK', '#f2c14e'),
+                 'exit-wrong': ('LEFT ROUTE', '#f2c14e'), 'missed': ('MISSED', '#f2c14e'),
+                 'retreat-limit': ('RETREATS', '#f2c14e'),
                  'error': ('ERROR', '#a95cf0'), 'crash': ('CRASH', '#a95cf0')}
+OTHER_COLOR = '#f2c14e'
+TITLE_COUNTS = ('milestone', 'death', 'stuck', 'error', 'crash')    # the rest of a run's endings count as 'other'
 
 FRAME_HEIGHT, FRAME_WIDTH, _ = FRAME_SHAPE
 
@@ -186,9 +192,10 @@ def cheated_text(cheated: dict) -> str:
     return ', '.join(f"{n} {item if n != 1 else item[:-1]}" for item, n in cheated.items() if n)
 
 
-def replacement(scores: list, shown: list, cell: int) -> Optional[int]:
-    """The best hidden game if it scores strictly higher than the game in ``cell`` (``shown[cell]``), else None."""
-    hidden = [game for game in range(len(scores)) if game not in shown]
+def replacement(scores: list, shown: list, cell: int, playing: list) -> Optional[int]:
+    """The best hidden game still playing (``playing[game]``: its run hasn't ended; an ended run has no picture
+    while its result pauses) if it scores strictly higher than the game in ``cell`` (``shown[cell]``), else None."""
+    hidden = [game for game in range(len(scores)) if game not in shown and playing[game]]
     if not hidden:
         return None
     game = max(hidden, key=lambda g: scores[g])
@@ -285,7 +292,7 @@ class GameView(QWidget):
         painter.drawText(strip.adjusted(6, 0, -6, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
 
         if self.state.outcome:
-            label, color = OUTCOME_STYLE.get(self.state.outcome, (self.state.outcome.upper(), TEXT))
+            label, color = OUTCOME_STYLE.get(self.state.outcome, (self.state.outcome.upper(), OTHER_COLOR))
             band_height = 60 * self.scale
             band = QRect(0, game.center().y() - band_height // 2, game.width(), band_height)
             painter.fillRect(band, QColor(0, 0, 0, 170))
@@ -359,7 +366,7 @@ class Window(QMainWindow):
         self.shown = list(range(len(self.views)))       # the game each cell shows (or is fading to)
         for view, game in zip(self.views, self.shown):
             view.attach(game, self.states[game])
-        self.counts = {'milestone': 0, 'death': 0, 'stuck': 0, 'error': 0, 'crash': 0}
+        self.counts = dict.fromkeys(TITLE_COUNTS, 0)
         self.swaps = 0
         self._crashed = {}      # crashed shown-or-hidden game -> when its cell may be offered
         self.fps: Optional[float] = None
@@ -505,13 +512,14 @@ class Window(QMainWindow):
         """Each of ``games`` still on screen gives its cell to the best hidden game if that one is ahead: the cell
         fades out, switches at black and fades the new game in.  Nothing else moves."""
         scores = [state.score() for state in self.states]
+        playing = [state.outcome is None for state in self.states]
         for game in dict.fromkeys(games):
             if game not in self.shown:
                 continue
             cell = self.shown.index(game)
             if self.views[cell].fading:
                 continue
-            better = replacement(scores, self.shown, cell)
+            better = replacement(scores, self.shown, cell, playing)
             if better is None:
                 continue
             frame_no = self.grid.show(better, True)     # its frames are ready when the cell reaches black
@@ -525,6 +533,9 @@ class Window(QMainWindow):
         shown = f"{len(self.views)} of {games}" if games > len(self.views) else f"×{games}"
         title = (f"Zelda {shown} — {counts['milestone']} milestones · {counts['death']} deaths · "
                  f"{counts['stuck']} stuck")
+        other = sum(n for outcome, n in counts.items() if outcome not in TITLE_COUNTS)
+        if other:
+            title += f" · {other} other"
         errors = counts['error'] + counts['crash']
         if errors:
             title += f" · {errors} errors"

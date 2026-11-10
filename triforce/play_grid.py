@@ -42,8 +42,9 @@ NES_FPS = 60.0988           # frames per second of an NTSC NES
 
 def end_message(game: int, seed: Optional[int], result: RunResult) -> tuple[dict, bool]:
     """The 'end' status message for a finished ``RunResult`` and whether it was a setup error.  ``outcome`` is the
-    last room's (milestone | death | stuck) or 'error' for any error.  An error before the first step (e.g. no
-    promoted model) is a setup error; one mid-game (e.g. wandering into an untagged room) is just another ending."""
+    last room's (milestone | death | stuck | exit-wrong | missed | retreat-limit; see triforce/runner.py), the run's
+    result when it has no rooms, or 'error' for any error.  An error before the first step (e.g. no promoted model)
+    is a setup error; one mid-game (e.g. wandering into an untagged room) is just another ending."""
     if result.result == 'error':
         outcome = 'error'
     else:

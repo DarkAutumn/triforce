@@ -5,6 +5,7 @@ import functools
 import importlib.util
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -69,6 +70,26 @@ def test_only_setup_errors_stop_a_cell():
     assert message == {'game': 1, 'event': 'end', 'seed': 3, 'result': 'failure', 'outcome': 'death',
                        'reason': 'why'}
     assert not setup_error
+    message, setup_error = end_message(1, 3, run('failure', 300, 'exit-wrong'))  # left the route into a tagged room
+    assert (message['result'], message['outcome'], setup_error) == ('failure', 'exit-wrong', False)
+
+
+def test_every_ending_is_tallied_in_the_title(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    """Runs ending exit-wrong, missed, retreat-limit (or an outcome the player doesn't know) count in the title and
+    get a styled banner: the counts shown add up to the runs ended."""
+    outcomes = ['exit-wrong', 'missed', 'retreat-limit', 'death', 'something-new']
+    fake = FakeGrid(games=1, messages=[{'game': 0, 'event': 'end', 'seed': n, 'result': 'failure', 'outcome': outcome,
+                                        'reason': ''} for n, outcome in enumerate(outcomes)])
+    window = play_zelda.Window(fake, cols=1, rows=1, scale=1)
+    window.start()
+    window.tick()
+    title = window.windowTitle()
+    assert '0 milestones · 1 deaths · 0 stuck · 4 other' in title
+    shown = sum(int(n) for n in re.findall(r'(\d+) (?:milestones|deaths|stuck|other|errors)', title))
+    assert shown == len(outcomes)
+    for outcome in ('exit-wrong', 'missed', 'retreat-limit'):
+        assert play_zelda.OUTCOME_STYLE[outcome][1] != play_zelda.TEXT
+    window.shutdown()
 
 
 class FakeGrid:
@@ -259,6 +280,21 @@ def test_a_cell_changes_game_only_when_its_game_enters_a_room_or_restarts(qapp):
     fake.messages = [{'game': 1, 'event': 'start', 'seed': None}]
     window.tick()
     assert window.shown == [2, 3] and window.swaps == 2         # game 3 (3 rooms) is ahead of game 0 (2 rooms)
+    window.shutdown()
+
+
+def test_a_hidden_game_that_ended_never_takes_a_cell(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    """A hidden game whose run ended (its result pause: no picture) doesn't take a cell, however far it got."""
+    fake = FakeGrid(games=3, messages=[_room(0, 3, 3.0)])
+    window = play_zelda.Window(fake, cols=1, rows=1, scale=1)
+    window.start()
+    window.tick()
+    fake.messages = [_room(1, 5, 0.5), {'game': 1, 'event': 'end', 'seed': 1, 'result': 'failure',
+                                        'outcome': 'death', 'reason': ''}, _room(2, 2, 3.0)]
+    window.tick()
+    fake.messages = [_room(0, 4, 3.0)]
+    window.tick()
+    assert window.shown == [0] and window.swaps == 0
     window.shutdown()
 
 
