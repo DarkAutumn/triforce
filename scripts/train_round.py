@@ -85,7 +85,9 @@ def parse_args(argv=None):
                         help="promote each run once its evaluation succeeded (the previous promoted run ids and act "
                              "modes go into the round summary); without it the promoted models stay and eval-chain "
                              "uses this round's checkpoints for the trained specialists, the promoted ones elsewhere")
-    parser.add_argument('--train-args', default='', help="extra arguments for triforce.train (one string)")
+    parser.add_argument('--train-args', default='',
+                        help="extra arguments for triforce.train (one string; {name} expands to the specialist, "
+                             "everything else, braces included, is passed as is)")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     return parser.parse_args(argv)
 
@@ -116,7 +118,7 @@ def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
                '--parallel', str(args.parallel), '--device', args.device, '--models-dir', str(models),
                '--stop-success', str(STOP_SUCCESS), '--stop-patience', str(STOP_PATIENCE),
                '--events', str(log_dir / f'{name}.jsonl')]
-    command += shlex.split(args.train_args.format(name=name))
+    command += shlex.split(args.train_args.replace('{name}', name))
     run_dir.mkdir(parents=True, exist_ok=True)
     say(f"[round] training {name}: {' '.join(command)}")
     with open(run_dir / 'train.log', 'w', encoding='utf-8') as log, \

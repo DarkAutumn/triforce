@@ -28,6 +28,7 @@ def fixture_round(monkeypatch):
         registry.save_checkpoint(name, args.round, network, root=models)
         (run_dir / 'train_summary.json').write_text(json.dumps({'status': 'completed', 'iterations': 3}))
         return 0
+    module.real_train = module.train
     monkeypatch.setattr(module, 'train', train)
     return module
 
@@ -104,3 +105,23 @@ def test_training_success_weights_metrics_rows_by_their_episodes(round_, tmp_pat
     (tmp_path / 'metrics.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
     record = round_.training_record(tmp_path)
     assert record['train_success_last5'] == pytest.approx((0 * 50 + 1 + 0.5 * 4 + 0.25 * 4 + 1) / 60)
+
+
+def test_train_args_expand_only_the_name_placeholder(round_, tmp_path, monkeypatch):
+    commands = []
+
+    class Popen:    # pylint: disable=too-few-public-methods
+        """Records the command; prints nothing and exits 0."""
+        def __init__(self, command, **_kwargs):
+            commands.append(command)
+            self.stdout, self.returncode = [], 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+    monkeypatch.setattr(round_.subprocess, 'Popen', Popen)
+    args = round_.parse_args(['--round', 'r', '--train-args', '--load /x/{name} --search \'{"candidates": 4}\''])
+    assert round_.real_train(SPECIALIST, args, tmp_path, tmp_path / 'run', tmp_path) == 0
+    assert commands[0][-4:] == ['--load', '/x/goriya', '--search', '{"candidates": 4}']
