@@ -74,8 +74,10 @@ STAGING_ROOT = ROOT / 'target' / 'entry-states'
 CHAINS = (0, 1, 2)
 START_STATE = 'start'
 # Not part of the room's monster list at entry: Zoras (spawned by water rooms) and the overworld boulders ($32, named
-# '32' natively and 'Unknown_32' in game.yaml), which the boulder generator ($31) drops later.
-NOT_ROOM_MONSTERS = ('Zora', 'Unknown_32', '32')
+# '32' natively and 'Unknown_32' in game.yaml), which the boulder generator ($31) drops later.  Hazards (the boulder
+# generator $31 = game.yaml 'Unknown_31', Bubbles, traps) are not enemies at all: a state's enemy list leaves them out
+# (zelda's object classifier, review F067).
+NOT_ROOM_MONSTERS = ('Zora', 'Unknown_32', '32', 'Unknown_31', 'Bubble', 'BlueBubble', 'RedBubble', 'Trap')
 BASE_HEARTS = 3                      # Link's containers at the start; each heart container on the route adds one
 
 # RAM (docs/ram-catalog.md; zelda::room_entry, zelda::room_state).

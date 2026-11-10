@@ -114,7 +114,7 @@ def test_game_rooms_reads_game_yaml():
     assert rooms[(1, 0x44, False)]['treasure'] == 'boomerang'
     assert rooms[(0, 0x17, False)]['enemies'] == {'Unknown_31': 1, 'Unknown_32': 2, 'Zora': 1}
     counts = full_monster_counts()
-    assert counts[(0, 0x17)] == 1                   # only the boulder generator: Zoras and boulders come later
+    assert counts[(0, 0x17)] == 0                   # boulder generator (a hazard), Zoras and boulders: no monsters
     assert (0, 0x77) in counts
     assert counts[(1, 0x7f)] == 4                   # the bow cellar's Blue Keese (an underworld in_cave room)
 
