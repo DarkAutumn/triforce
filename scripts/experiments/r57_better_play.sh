@@ -59,11 +59,14 @@ arm_yamls() {
   fi
 }
 
+# A run is trained only when its summary says it finished (an interrupted training also writes train_summary.json).
+finished() { grep -qE '"status": "(completed|early_stop)"' "$MODELS/$SPEC/$1/train_summary.json" 2>/dev/null; }
+
 train() {
   arm_yamls
   for arm in $ARMS; do
     run=r57-$arm-s$SEED
-    [ -f $MODELS/$SPEC/$run/train_summary.json ] && { echo "$run: trained"; continue; }
+    finished $run && { echo "$run: trained"; continue; }
     # the arm's --specialist (outcome) comes last and wins over the canonical one
     $PY -m triforce.train --specialist $SPEC --load $MODELS/$SPEC/$FROM --run-id $run --iterations $ITERS \
       --parallel $PARALLEL --seed $SEED --device cuda $(arm_args $arm) > $OUT/$SPEC-$run.train.log 2>&1 \
@@ -75,7 +78,7 @@ evaluate() {
   for arm in $ARMS; do
     run=r57-$arm-s$SEED
     for act in sample argmax; do
-      file=eval.json; [ $act = argmax ] && file=eval-argmax.json
+      file=eval-$act.json             # evaluate.read_evaluation finds it for --mode $act (eval.json is the act mode's)
       [ -f $MODELS/$SPEC/$run/$file ] && continue
       $PY -m triforce.evaluate --specialist $SPEC --run-id $run --act $act --parallel $EVAL_PARALLEL \
         --episodes-per-state ${EPISODES:-100} --output $MODELS/$SPEC/$run/$file > /dev/null
@@ -85,9 +88,8 @@ evaluate() {
 
 report() {
   for act in sample argmax; do
-    file=eval.json; [ $act = argmax ] && file=eval-argmax.json
     for run in $FROM $(for a in $ARMS; do echo r57-$a-s$SEED; done); do
-      $PY scripts/yardstick.py report --models-dir $MODELS --run $run --eval-name $file \
+      $PY scripts/yardstick.py report --models-dir $MODELS --run $run --mode $act \
         --output $OUT/$SPEC-$run-$act.json > /dev/null
     done
     ctl=$OUT/$SPEC-r57-ctl-s$SEED-$act.json
