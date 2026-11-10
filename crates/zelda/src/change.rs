@@ -154,7 +154,8 @@ impl Change {
 
     /// Simulates until the weapon deactivates on a cloned machine state (no input, invincible hearts, other
     /// weapon slots zeroed, no render, no frame sink, no shield watch), credits and records the prediction, then
-    /// restores the machine.
+    /// restores the machine. Only the marginal effect is credited: what other weapons' pending predictions already
+    /// promise (damage up to the enemy's hit value, a stun, an item) is not paid again.
     fn predict<N: Nes>(
         &mut self,
         m: &mut Machine<N>,
@@ -190,14 +191,42 @@ impl Change {
             frame: start.frame,
             ..Default::default()
         };
-        observe_damage(
-            start,
-            &curr,
-            &mut prediction.enemy_hits,
-            &mut prediction.enemy_stuns,
-        );
+        let (mut hits, mut stuns, mut items) = (Vec::new(), Vec::new(), Vec::new());
+        observe_damage(start, &curr, &mut hits, &mut stuns);
         if matches!(weapon, AnimationKind::Boomerang | AnimationKind::Arrow) {
-            observe_items(start, &curr, &mut prediction.items);
+            observe_items(start, &curr, &mut items);
+        }
+        let pending = ledger.predictions();
+        for (slot, dmg) in hits {
+            let promised: i32 = pending
+                .iter()
+                .flat_map(|p| &p.enemy_hits)
+                .filter(|(s, _)| *s == slot)
+                .map(|(_, d)| d)
+                .sum();
+            let value = start
+                .enemy_by_index(slot)
+                .map_or(dmg, |e| if e.health > 0 { e.health } else { 1 });
+            let dmg = dmg.min(value - promised);
+            if dmg > 0 {
+                add_hit(&mut prediction.enemy_hits, slot, dmg);
+            }
+        }
+        let mut pending_stuns: Vec<u8> = pending.iter().flat_map(|p| p.enemy_stuns.iter().copied()).collect();
+        for slot in stuns {
+            if let Some(i) = pending_stuns.iter().position(|&s| s == slot) {
+                pending_stuns.swap_remove(i);
+            } else {
+                prediction.enemy_stuns.push(slot);
+            }
+        }
+        let mut pending_items: Vec<i16> = pending.iter().flat_map(|p| p.items.iter().copied()).collect();
+        for item in items {
+            if let Some(i) = pending_items.iter().position(|&x| x == item) {
+                pending_items.swap_remove(i);
+            } else {
+                prediction.items.push(item);
+            }
         }
         for &(slot, dmg) in &prediction.enemy_hits {
             add_hit(&mut self.enemies_hit, slot, dmg);
@@ -565,5 +594,38 @@ mod tests {
             true,
         );
         assert!(c.enemies_hit.is_empty() && ledger.predictions().is_empty());
+    }
+
+    /// F054: a second weapon fired at an enemy another weapon's pending prediction already kills is not credited
+    /// again; over the firing steps and the landing step the 1-hp Stalfos pays one hit.
+    #[test]
+    fn a_second_weapon_is_credited_only_its_marginal_effect() {
+        let kill = |frame: u64, ram: &mut [u8; 0x800]| {
+            if frame >= 5 {
+                ram[tables::OBJ_ID.0 + SLOT] = 0;
+            }
+            if frame >= 8 {
+                ram[Var::BeamAnimation.addr() as usize] = 0;
+                ram[Var::ArrowMagicAnimation.addr() as usize] = 0;
+            }
+        };
+        let prev = with_stalfos(1);
+        let mut beam = prev;
+        beam[Var::BeamAnimation.addr() as usize] = 16;
+        let mut ledger = FutureCreditLedger::default();
+        let mut m = scripted(beam, kill);
+        let a = change(&mut m, view(&prev, 100), view(&beam, 104), &mut ledger, true);
+        assert_eq!(a.enemies_hit, vec![(SLOT as u8, 1)]);
+        let mut arrow = beam;
+        arrow[Var::ArrowMagicAnimation.addr() as usize] = 10;
+        let mut m = scripted(arrow, kill);
+        let b = change(&mut m, view(&beam, 104), view(&arrow, 108), &mut ledger, true);
+        assert_eq!(b.enemies_hit, vec![], "already promised by the beam");
+        let mut landed = arrow;
+        landed[tables::OBJ_ID.0 + SLOT] = 0;
+        let mut m = scripted(landed, |_, _| {});
+        let c = change(&mut m, view(&arrow, 108), view(&landed, 112), &mut ledger, true);
+        assert_eq!(c.observed.enemies_hit, vec![(SLOT as u8, 1)]);
+        assert_eq!(c.enemies_hit, vec![], "the landing pays nothing more");
     }
 }
