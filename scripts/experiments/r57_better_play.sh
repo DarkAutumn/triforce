@@ -10,6 +10,10 @@
 #   outcome  --shaping-anneal 50 at 0.3x the learning rate, reward.frame_penalty 0.000125 (§1a)
 #   bon      --best-of-n 16 --best-keep 2 --best-every 20 --best-coeff 0.2 (§3 filtered BC)
 #   sil      --sil-coeff 0.1 (§3 Self-Imitation Learning)
+#   plr      --plr (§5, the paper's beta 0.1); plr-b1: --plr --plr-beta 1.0
+#   ppg      --ppg (§6a, aux phase every 8 iterations)
+#   exit     reward.exit_health_weight 1.0 (§1b: the success terminal pays health at the handoff only)
+#   harvest  harvested handoff states from chains (§1b): HARVEST=<dir from eval-chain --harvest>, fraction 0.5
 # Runs from this worktree's code; models and logs go to the main checkout (training-gui sees them).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
@@ -26,7 +30,7 @@ LR=${LR:-1e-4}
 OUT=${OUT:-$MAIN/target/r57}
 MODELS=${MODELS:-$MAIN/models}
 export TRIFORCE_MODELS_DIR=$MODELS TRIFORCE_LOGS_DIR=${LOGS:-$MAIN/logs}
-mkdir -p $OUT specialists/arms/r57-outcome
+mkdir -p $OUT specialists/arms/r57-outcome specialists/arms/r57-exit specialists/arms/r57-harvest
 
 arm_args() {
   case $1 in
@@ -35,17 +39,28 @@ arm_args() {
     outcome) echo "--shaping-anneal 50 --learning-rate $(python3 -c "print($LR * 0.3)") --specialist specialists/arms/r57-outcome/$SPEC.yaml" ;;
     bon) echo "--best-of-n 16 --best-keep 2 --best-every 20 --best-coeff 0.2" ;;
     sil) echo "--sil-coeff 0.1" ;;
+    plr) echo "--plr" ;;
+    plr-b1) echo "--plr --plr-beta 1.0" ;;
+    ppg) echo "--ppg" ;;
+    exit) echo "--specialist specialists/arms/r57-exit/$SPEC.yaml" ;;
+    harvest) echo "--specialist specialists/arms/r57-harvest/$SPEC.yaml" ;;
     *) echo "unknown arm $1" >&2; exit 2 ;;
   esac
 }
 
-outcome_yaml() {
+arm_yamls() {
   sed -e "s|^reward: {|reward: {frame_penalty: 0.000125, |" specialists/$SPEC.yaml > specialists/arms/r57-outcome/$SPEC.yaml
   grep -q 'frame_penalty: 0.000125' specialists/arms/r57-outcome/$SPEC.yaml || { echo "$SPEC: reward line not rewritten" >&2; exit 1; }
+  sed -e "s|^reward: {|reward: {exit_health_weight: 1.0, |" specialists/$SPEC.yaml > specialists/arms/r57-exit/$SPEC.yaml
+  grep -q 'exit_health_weight: 1.0' specialists/arms/r57-exit/$SPEC.yaml || { echo "$SPEC: reward line not rewritten" >&2; exit 1; }
+  if [ -n "${HARVEST:-}" ]; then
+    { grep -v '^harvested_' specialists/$SPEC.yaml; echo "harvested_states: $HARVEST/$SPEC"; echo "harvested_fraction: 0.5"; } \
+      > specialists/arms/r57-harvest/$SPEC.yaml
+  fi
 }
 
 train() {
-  outcome_yaml
+  arm_yamls
   for arm in $ARMS; do
     run=r57-$arm-s$SEED
     [ -f $MODELS/$SPEC/$run/train_summary.json ] && { echo "$run: trained"; continue; }
