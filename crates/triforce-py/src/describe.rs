@@ -19,12 +19,12 @@ pub fn enemy_name(id: u8) -> String {
         0x04 => "RedMoblin",
         0x05 => "BlueGoriya",
         0x06 => "RedGoriya",
-        0x07 => "BlueOctorok",
+        0x07 => "RedSlowOctorok",
         0x08 => "RedOctorok",
         0x09 => "BlueSlowOctorok",
-        0x0A => "RedSlowOctorok",
-        0x0B => "BlueDarknut",
-        0x0C => "RedDarknut",
+        0x0A => "BlueOctorok",
+        0x0B => "RedDarknut",
+        0x0C => "BlueDarknut",
         0x0D => "BlueTektite",
         0x0E => "RedTektite",
         0x0F => "BlueLeever",
@@ -36,8 +36,7 @@ pub fn enemy_name(id: u8) -> String {
         0x15 => "BlueGel",
         0x16 => "PolsVoice",
         0x17 => "LikeLike",
-        0x18 => "Digdogger",
-        0x19 => "DigdoggerChild",
+        0x18 => "DigdoggerChild",
         0x1A => "Peahat",
         0x1B => "BlueKeese",
         0x1C => "RedKeese",
@@ -62,8 +61,8 @@ pub fn enemy_name(id: u8) -> String {
         0x34 => "RedGohma",
         0x38 => "Digdogger2",
         0x39 => "Digdogger3",
-        0x3A => "BlueLamnola",
-        0x3B => "RedLamnola",
+        0x3A => "RedLamnola",
+        0x3B => "BlueLamnola",
         0x3C => "Manhandla",
         0x3D => "Aquamentus",
         0x3E => "Ganon",
@@ -218,10 +217,11 @@ pub fn describe_state(state: &GameView, mask: Option<&ActionMask>) -> String {
         ));
     }
     lines.push(format!(
-        "Entities ({} enemies, {} items, {} projectiles):",
+        "Entities ({} enemies, {} items, {} projectiles, {} hazards):",
         state.enemies.len(),
         state.items.len(),
-        state.projectiles.len()
+        state.projectiles.len(),
+        state.hazards.len()
     ));
     let mut enemies: Vec<_> = state.enemies.iter().collect();
     enemies.sort_by_key(|e| e.index);
@@ -277,6 +277,22 @@ pub fn describe_state(state: &GameView, mask: Option<&ActionMask>) -> String {
             p.distance
         ));
     }
+    let mut hazards: Vec<_> = state.hazards.iter().collect();
+    hazards.sort_by_key(|h| h.index);
+    for h in hazards {
+        let name = match h.id {
+            0x1F => "BoulderSet".to_owned(),
+            0x20 => "Boulder".to_owned(),
+            0x2B..=0x2D => enemy_name(h.id),
+            0x40 => "StandingFire".to_owned(),
+            0x49 | 0x4A => "Trap".to_owned(),
+            id => id.to_string(),
+        };
+        lines.push(format!(
+            "  [{:2}] hazard {} pos=({},{}) dist={:.0}",
+            h.index, name, h.position.x, h.position.y, h.distance
+        ));
+    }
     if let Some(mask) = mask {
         lines.push(format!("Legal: {mask}"));
     }
@@ -284,7 +300,8 @@ pub fn describe_state(state: &GameView, mask: Option<&ActionMask>) -> String {
 }
 
 /// ASCII map of the 32x22 tile grid. Legend: '.' walkable, '#' blocked, 'L' Link, 'E'/'e' active/inactive
-/// enemy, 'i' item, '*' projectile, 'T' treasure, 'K' locked door, '=' barred door, 'P' push block, 'C' cave.
+/// enemy, 'i' item, '*' projectile, 'H' hazard, 'T' treasure, 'K' locked door, '=' barred door, 'P' push block,
+/// 'C' cave.
 pub fn render_grid(state: &GameView) -> String {
     let room = state.room();
     let (cols, rows) = (COLS, ROWS);
@@ -347,6 +364,9 @@ pub fn render_grid(state: &GameView) -> String {
     }
     for p in &state.projectiles {
         mark(&mut grid, p.tile(), '*', 1, 1);
+    }
+    for h in &state.hazards {
+        mark(&mut grid, h.tile(), 'H', 2, 2);
     }
     for e in &state.enemies {
         mark(

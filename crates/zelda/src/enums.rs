@@ -263,7 +263,8 @@ pub enum AnimationKind {
     Bait,
 }
 
-/// Enemy object types (`ZeldaEnemyKind`, UpdateObject_JumpTable Z_07.asm:5321).
+/// Enemy object types (`ZeldaEnemyKind`, UpdateObject_JumpTable Z_07.asm:5348; colours from ObjectTypeToHpPairs and
+/// the Octorok/Darknut/Lanmola code).
 pub mod enemy {
     pub const BLUE_LYNEL: u8 = 0x01;
     pub const RED_LYNEL: u8 = 0x02;
@@ -271,12 +272,12 @@ pub mod enemy {
     pub const RED_MOBLIN: u8 = 0x04;
     pub const BLUE_GORIYA: u8 = 0x05;
     pub const RED_GORIYA: u8 = 0x06;
-    pub const BLUE_OCTOROK: u8 = 0x07;
+    pub const RED_SLOW_OCTOROK: u8 = 0x07;
     pub const RED_OCTOROK: u8 = 0x08;
     pub const BLUE_SLOW_OCTOROK: u8 = 0x09;
-    pub const RED_SLOW_OCTOROK: u8 = 0x0A;
-    pub const BLUE_DARKNUT: u8 = 0x0B;
-    pub const RED_DARKNUT: u8 = 0x0C;
+    pub const BLUE_OCTOROK: u8 = 0x0A;
+    pub const RED_DARKNUT: u8 = 0x0B;
+    pub const BLUE_DARKNUT: u8 = 0x0C;
     pub const BLUE_TEKTITE: u8 = 0x0D;
     pub const RED_TEKTITE: u8 = 0x0E;
     pub const BLUE_LEEVER: u8 = 0x0F;
@@ -288,8 +289,8 @@ pub mod enemy {
     pub const BLUE_GEL: u8 = 0x15;
     pub const POLS_VOICE: u8 = 0x16;
     pub const LIKE_LIKE: u8 = 0x17;
-    pub const DIGDOGGER: u8 = 0x18;
-    pub const DIGDOGGER_CHILD: u8 = 0x19;
+    /// A child Digdogger (the boss splits into these); $19 is no object (DoNothing).
+    pub const DIGDOGGER_CHILD: u8 = 0x18;
     pub const PEAHAT: u8 = 0x1A;
     pub const BLUE_KEESE: u8 = 0x1B;
     pub const RED_KEESE: u8 = 0x1C;
@@ -314,8 +315,8 @@ pub mod enemy {
     pub const RED_GOHMA: u8 = 0x34;
     pub const DIGDOGGER2: u8 = 0x38;
     pub const DIGDOGGER3: u8 = 0x39;
-    pub const BLUE_LAMNOLA: u8 = 0x3A;
-    pub const RED_LAMNOLA: u8 = 0x3B;
+    pub const RED_LAMNOLA: u8 = 0x3A;
+    pub const BLUE_LAMNOLA: u8 = 0x3B;
     pub const MANHANDLA: u8 = 0x3C;
     pub const AQUAMENTUS: u8 = 0x3D;
     pub const GANON: u8 = 0x3E;
@@ -329,14 +330,13 @@ pub mod enemy {
     pub const PATRA2: u8 = 0x48;
 
     /// Boss object types (`critics.BOSS_KINDS`).
-    pub const BOSS_KINDS: [u8; 16] = [
+    pub const BOSS_KINDS: [u8; 15] = [
         AQUAMENTUS,
         DODONGO,
         DODONGO2,
         MANHANDLA,
         BLUE_GOHMA,
         RED_GOHMA,
-        DIGDOGGER,
         DIGDOGGER2,
         DIGDOGGER3,
         GLEEOK,

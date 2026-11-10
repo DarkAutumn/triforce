@@ -1092,7 +1092,7 @@ rooms:
       level: 2
       location: '0x7d'
   enemies:
-    RedSlowOctorok: 1  # ROM obj template $0A and RAM ObjType $0A in 0_3cs (v1 had BlueSlowOctorok)
+    BlueOctorok: 1  # RAM ObjType $0A in 0_3cs: the blue fast Octorok (UpdateOctorock, 2 HP)
   treasure: null
   entrance:  # cave index $02 (OW attr B >> 2)
     cave: '0x02'
@@ -1211,7 +1211,7 @@ rooms:
       level: 0
       location: '0x54'
   enemies:
-    BlueOctorok: 4
+    RedSlowOctorok: 4
     Zora: 1
   treasure: null
   entrance:  # cave index $1D (OW attr B >> 2)
@@ -1426,8 +1426,8 @@ rooms:
       level: 0
       location: '0x5f'
   enemies:
-    RedSlowOctorok: 2
-    BlueOctorok: 3
+    BlueOctorok: 2
+    RedSlowOctorok: 3
     Zora: 1
   treasure: null
 - level: 0
@@ -1517,7 +1517,7 @@ rooms:
       location: '0x53'
   enemies:
     RedOctorok: 2
-    BlueOctorok: 2
+    RedSlowOctorok: 2
     Zora: 1
   treasure: null
 - level: 0
@@ -1536,7 +1536,7 @@ rooms:
       level: 0
       location: '0x54'
   enemies:
-    BlueOctorok: 1
+    RedSlowOctorok: 1
     Zora: 1
   treasure: null
   raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
@@ -1557,7 +1557,7 @@ rooms:
       level: 0
       location: '0x55'
   enemies:
-    BlueOctorok: 4
+    RedSlowOctorok: 4
     Zora: 1
   treasure: null
   entrance:  # cave index $23 (OW attr B >> 2); tree (burn it) at x=160 y=160
@@ -1577,7 +1577,7 @@ rooms:
       level: 0
       location: '0x56'
   enemies:
-    BlueOctorok: 2
+    RedSlowOctorok: 2
     RedOctorok: 2
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
@@ -1598,7 +1598,7 @@ rooms:
       level: 0
       location: '0x57'
   enemies:
-    BlueOctorok: 2
+    RedSlowOctorok: 2
     RedOctorok: 2
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
@@ -1636,7 +1636,7 @@ rooms:
       level: 0
       location: '0x59'
   enemies:
-    BlueOctorok: 4
+    RedSlowOctorok: 4
     Zora: 1
   treasure: key
 - level: 0
@@ -1818,7 +1818,7 @@ rooms:
       location: '0x62'
   enemies:
     BlueMoblin: 1
-    RedSlowOctorok: 2
+    BlueOctorok: 2
     RedMoblin: 3
   treasure: null
   entrance:  # cave index $17 (OW attr B >> 2); tree (burn it) at x=96 y=160
@@ -1867,7 +1867,7 @@ rooms:
       level: 0
       location: '0x64'
   enemies:
-    BlueOctorok: 2
+    RedSlowOctorok: 2
     RedOctorok: 2
     Zora: 1
   treasure: null
@@ -1885,7 +1885,7 @@ rooms:
       location: '0x65'
   enemies:
     RedOctorok: 2
-    BlueOctorok: 2
+    RedSlowOctorok: 2
   treasure: null
   entrance:  # cave index $1E (OW attr B >> 2)
     cave: '0x1e'
@@ -1907,7 +1907,7 @@ rooms:
       level: 0
       location: '0x66'
   enemies:
-    BlueOctorok: 4
+    RedSlowOctorok: 4
   treasure: null
   entrance:  # cave index $21 (OW attr B >> 2); rock wall (bomb it) at x=112 y=80
     cave: '0x21'
@@ -1932,7 +1932,7 @@ rooms:
       level: 0
       location: '0x67'
   enemies:
-    BlueOctorok: 4
+    RedSlowOctorok: 4
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
   entrance:  # cave index $17 (OW attr B >> 2); tree (burn it) at x=32 y=160
@@ -1954,7 +1954,7 @@ rooms:
       level: 0
       location: '0x68'
   enemies:
-    BlueOctorok: 4
+    RedSlowOctorok: 4
     Zora: 1
   treasure: null
 - level: 0
@@ -1970,7 +1970,7 @@ rooms:
       level: 0
       location: '0x69'
   enemies:
-    BlueOctorok: 2
+    RedSlowOctorok: 2
     RedOctorok: 2
     Zora: 1
   treasure: null
@@ -1998,7 +1998,7 @@ rooms:
   enemies:
     BlueMoblin: 1
     RedMoblin: 3
-    RedSlowOctorok: 2
+    BlueOctorok: 2
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
   entrance:  # cave index $22 (OW attr B >> 2); tree (burn it) at x=128 y=160
@@ -2058,7 +2058,7 @@ rooms:
       location: '0x6d'
   enemies:
     BlueMoblin: 1
-    RedSlowOctorok: 2
+    BlueOctorok: 2
     RedMoblin: 3
   treasure: null
 - level: 0
@@ -2263,7 +2263,7 @@ rooms:
       level: 0
       location: '0x77'
   enemies:
-    BlueOctorok: 4
+    RedSlowOctorok: 4
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
   entrance:  # cave index $1A (OW attr B >> 2); tree (burn it) at x=64 y=160
@@ -3028,7 +3028,7 @@ rooms:
       level: 3
       location: '0x69'
   enemies:
-    BlueDarknut: 5
+    RedDarknut: 5
   treasure: null
   trigger: kill-all  # attr F & 7 = 1
 - level: 3
@@ -3065,7 +3065,7 @@ rooms:
       level: 3
       location: '0x5a'
   enemies:
-    BlueDarknut: 3
+    RedDarknut: 3
   treasure: bombs
   bomb_walls: [E]
   trigger: kill-all-item  # attr F & 7 = 7
@@ -3082,7 +3082,7 @@ rooms:
       level: 3
       location: '0x5b'
   enemies:
-    BlueDarknut: 3
+    RedDarknut: 3
   treasure: null
   bomb_walls: [W]
   trigger: kill-all  # attr F & 7 = 1
@@ -3113,7 +3113,7 @@ rooms:
       location: '0x0f'
       in_cave: true
   enemies:
-    BlueDarknut: 8
+    RedDarknut: 8
   treasure: bombs
   trigger: kill-all-item  # attr F & 7 = 7
   stairs: [26, 10]

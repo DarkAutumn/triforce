@@ -146,3 +146,39 @@ fn boulders_are_hazards_and_waiting_hits_nothing() {
     // The cave's two standing fires hurt on touch: hazards.
     assert!(!state.hazards.is_empty() && state.hazards.iter().all(|h| h.id == 0x40), "{:?}", state.hazards);
 }
+
+/// F070: the Octorok and Darknut names match their ObjHP in the shipped states (red Octoroks 1 HP, blue 2; Red
+/// Darknut 4, Blue 8).
+#[test]
+fn octorok_and_darknut_colours_match_their_hit_points() {
+    use zelda::enums::enemy::*;
+    let Some(nes) = open_core() else { return };
+    let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
+    let mut seen = std::collections::BTreeSet::new();
+    let mut names: Vec<_> = std::fs::read_dir(repo().join("triforce/states"))
+        .unwrap()
+        .filter_map(|e| e.unwrap().file_name().into_string().ok()?.strip_suffix(".state").map(str::to_owned))
+        .filter(|n| n.starts_with("0_") || n.starts_with("3_"))
+        .collect();
+    names.sort();
+    for name in names {
+        s.load(&common::load_named_state(&name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0))
+            .unwrap();
+        s.press(0, 90);
+        for e in s.state().enemies.clone() {
+            let expected = match e.id {
+                RED_SLOW_OCTOROK | RED_OCTOROK => 1,
+                BLUE_SLOW_OCTOROK | BLUE_OCTOROK => 2,
+                RED_DARKNUT => 4,
+                BLUE_DARKNUT => 8,
+                _ => continue,
+            };
+            if e.is_dying() || e.spawn_state != 0 {
+                continue;
+            }
+            assert_eq!(e.health, expected, "{name}: type ${:02X}", e.id);
+            seen.insert(e.id);
+        }
+    }
+    assert!(seen.contains(&RED_SLOW_OCTOROK) && seen.contains(&RED_DARKNUT), "{seen:?}");
+}
