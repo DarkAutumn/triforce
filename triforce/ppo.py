@@ -184,7 +184,10 @@ class Collector:
         self.rollout_seconds = self._result['seconds']
         buffer = self.buffer = self._buffers[self._next]
         self._next = 1 - self._next
-        events = self.episodes = [e for e in self.pool.poll_events() if e['type'] == 'episode']
+        # By env, each env's in step order (the sort is stable): the pool appends events as each env's job finishes,
+        # so the raw order follows thread timing, and PLR's EMA and staleness clock depend on the order.
+        events = self.episodes = sorted((e for e in self.pool.poll_events() if e['type'] == 'episode'),
+                                        key=lambda e: e['env'])
         began = time.time()
         last_values = buffer.recompute(network, device)
         self.recompute_seconds = time.time() - began
@@ -194,7 +197,7 @@ class Collector:
         metrics = RolloutMetrics()
         metrics.add_steps(buffer.actions.reshape(-1, 3).numpy(), buffer.frames.reshape(-1).numpy(),
                           buffer.interrupts.reshape(-1).numpy())
-        for event in sorted(events, key=lambda e: e['env']):     # stable: per env in step order
+        for event in events:
             metrics.add_episode(event['info'])
         metrics.cohorts, metrics.extra = self.tracker.update(buffer.jobs.numpy(), buffer.steps.numpy(),
                                                              buffer.dones[:, -1].numpy() > 0, events)

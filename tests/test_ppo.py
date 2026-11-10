@@ -214,3 +214,36 @@ def test_demo_regularization_pulls_policy_toward_demo():
         stats = ppo.optimize(network, buffer)
     assert stats['charts/demo_bc_accuracy'] > before
     assert stats['charts/demo_bc_accuracy'] == pytest.approx(1.0)
+
+
+class _ReversedEvents:
+    """A pool whose ``poll_events`` returns the envs' episodes in another order (another thread finished first)."""
+
+    def __init__(self, pool):
+        self.pool = pool
+
+    def __getattr__(self, name):
+        return getattr(self.pool, name)
+
+    def poll_events(self):
+        """The last env's episodes first; each env's still in step order (what a pool can produce)."""
+        return sorted(self.pool.poll_events(), key=lambda e: -e['env'])
+
+
+def test_collector_episodes_do_not_depend_on_completion_order():
+    from triforce.plr import PrioritizedReplay  # pylint: disable=import-outside-toplevel
+    episodes, weights = [], []
+    for wrap in (lambda pool: pool, _ReversedEvents):
+        _seed()
+        network = ZeldaPolicy(synthetic.observation_space(), SMALL)
+        collector = Collector(wrap(_bandit_pool(3)), 16, 0.99, 0.95)
+        collector.collect(network, 'cpu')
+        assert len({e['env'] for e in collector.episodes}) > 1
+        episodes.append([(e['env'], e['job']) for e in collector.episodes])
+        plr = PrioritizedReplay(['a', 'b'])
+        for i, event in enumerate(collector.episodes):          # give the episodes start states to score
+            event['info']['start_state'] = 'ab'[i % 2]
+        plr.update(collector.buffer.jobs.numpy(), collector.buffer.advantages.numpy(), collector.episodes)
+        weights.append(plr.weights())
+    assert episodes[0] == episodes[1] == sorted(episodes[0], key=lambda e: e[0])
+    assert weights[0] == weights[1]
