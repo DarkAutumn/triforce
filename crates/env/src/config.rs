@@ -2,10 +2,16 @@
 //! (`game.yaml`, `routes.yaml` with its families, `chain_hp.json`), loaded once into an `Arc<GameData>`.
 //!
 //! Keys, defaults and validators follow `specialist.py`; additionally `curriculum.fraction`,
-//! `curriculum.threshold` and `harvested_fraction` must lie in [0, 1], `route` must name a routes.yaml route, and
-//! the configs, game.yaml `specialist:` tags and routes.yaml `families` must agree (checked at load).
+//! `curriculum.threshold` and `harvested_fraction` must lie in [0, 1], `route` must name a routes.yaml route, reward
+//! weights must be finite, `endings` keys must name an ending the override can change, step limits must fit a u32,
+//! `reward_profile` must be known, and the configs, game.yaml `specialist:` tags and routes.yaml `families` must
+//! agree (checked at load).
 
-use crate::end_conditions::validate_success_kind;
+use crate::critic::REWARD_PROFILES;
+use crate::end_conditions::{
+    DEFAULT_ENDINGS, ENTER_ROOM_PREFIX, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, SUCCESS_KINDS,
+    validate_success_kind,
+};
 use crate::rewards::OUTCOMES;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -515,21 +521,46 @@ impl SpecialistConfig {
                     ),
                 ));
             }
+            let known = DEFAULT_ENDINGS.iter().any(|(name, _)| name == ending)
+                || SUCCESS_KINDS.contains(&ending.as_str())
+                || (ending.starts_with(ENTER_ROOM_PREFIX)
+                    && validate_success_kind(ending).as_deref() == Ok(ending.as_str()));
+            if !known {
+                return Err(fail("endings", format!("unknown ending {ending:?}")));
+            }
+            if self.success.contains(ending) {
+                return Err(fail(
+                    "endings",
+                    format!("ending {ending:?} is also in success (success wins; the override does nothing)"),
+                ));
+            }
+            if [MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS].contains(&ending.as_str()) {
+                return Err(fail(
+                    "endings",
+                    format!(
+                        "ending {ending:?} is a truncation: an override would relabel it without changing its reward"
+                    ),
+                ));
+            }
         }
-        if self.reward.block_reward < 0.0 {
-            return Err(fail("reward.block_reward", "must be >= 0".into()));
+        if !REWARD_PROFILES.contains(&self.reward_profile.as_str()) {
+            return Err(fail(
+                "reward_profile",
+                format!("unknown {:?}; known: {REWARD_PROFILES:?}", self.reward_profile),
+            ));
         }
-        if self.reward.quiet_enemy_penalty < 0.0 {
-            return Err(fail("reward.quiet_enemy_penalty", "must be >= 0".into()));
-        }
-        if self.reward.boss_ate_bomb_penalty < 0.0 {
-            return Err(fail("reward.boss_ate_bomb_penalty", "must be >= 0".into()));
+        for (key, value) in [
+            ("reward.block_reward", self.reward.block_reward),
+            ("reward.quiet_enemy_penalty", self.reward.quiet_enemy_penalty),
+            ("reward.boss_ate_bomb_penalty", self.reward.boss_ate_bomb_penalty),
+            ("reward.frame_penalty", self.reward.frame_penalty),
+        ] {
+            if !(value >= 0.0 && value.is_finite()) {
+                return Err(fail(key, format!("must be finite and >= 0, got {value}")));
+            }
         }
         if !(0.0..=1.0).contains(&self.reward.shaping_scale) {
             return Err(fail("reward.shaping_scale", "must be in [0, 1]".into()));
-        }
-        if !(self.reward.frame_penalty >= 0.0) {
-            return Err(fail("reward.frame_penalty", "must be >= 0".into()));
         }
         if !(0.0..=1.0).contains(&self.reward.exit_health_weight) {
             return Err(fail("reward.exit_health_weight", "must be in [0, 1]".into()));
@@ -537,18 +568,19 @@ impl SpecialistConfig {
         self.ram_randomization
             .validate()
             .map_err(|e| fail("ram_randomization", e))?;
-        if self.max_steps <= 0 {
-            return Err(fail("max_steps", "max_steps must be positive".into()));
+        let steps = 1..=i64::from(u32::MAX);
+        if !steps.contains(&self.max_steps) {
+            return Err(fail("max_steps", format!("max_steps must be in {steps:?}")));
         }
         if let Some(n) = self.no_progress_steps
-            && n <= 0
+            && !steps.contains(&n)
         {
-            return Err(fail("no_progress_steps", "must be > 0".into()));
+            return Err(fail("no_progress_steps", format!("must be in {steps:?}")));
         }
         if let Some(n) = self.no_damage_steps
-            && n <= 0
+            && !steps.contains(&n)
         {
-            return Err(fail("no_damage_steps", "must be > 0 (null: off)".into()));
+            return Err(fail("no_damage_steps", format!("must be in {steps:?} (null: off)")));
         }
         for (key, value) in [
             ("curriculum.fraction", self.curriculum.fraction),
@@ -908,8 +940,32 @@ mod tests {
             "curriculum: {threshold: -0.1}",
             "harvested_fraction: 2",
             "route: nowhere",
+            // review F085
+            "reward: {block_reward: .nan}",
+            "reward: {quiet_enemy_penalty: .nan}",
+            "reward: {boss_ate_bomb_penalty: .nan}",
+            "reward: {frame_penalty: .inf}",
+            "reward: {block_reward: .inf}",
+            "reward_profile: nonsense",
+            "endings: {exit-wrnog: hard-failure}",
+            "endings: {exit-correct: hard-failure}",
+            "endings: {max-steps: hard-failure}",
+            "endings: {no-damage: success}",
+            "endings: {no-room-progress: neutral}",
+            "endings: {'enter-room:1:0x7A': hard-failure}",
+            "endings: {'enter-room:1:72': hard-failure}",
+            "no_damage_steps: 4294967297",
+            "no_progress_steps: 4294967296",
+            "max_steps: 4294967296",
         ] {
             assert!(minimal(extra).is_err(), "{extra} should be rejected");
+        }
+        for ok in [
+            "endings: {exit-wrong: hard-failure, retreat: soft-failure, death: neutral}",
+            "endings: {'enter-room:1:0x72': hard-failure, triforce-collected: soft-failure}",
+            "max_steps: 4294967295",
+        ] {
+            assert!(minimal(ok).is_ok(), "{ok} should load: {:?}", minimal(ok).err());
         }
         let bad = |text: &str| SpecialistConfig::from_yaml(text, "t.yaml", None).is_err();
         assert!(bad(

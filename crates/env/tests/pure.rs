@@ -197,7 +197,7 @@ fn enter_room_kinds_round_trip() {
         enter_room_name(parse_enter_room("enter-room:0:0x77:cave").unwrap()),
         "enter-room:0:0x77:cave"
     );
-    for bad in ["exit-sideways", "enter-room:2", "enter-room:x:0x0e"] {
+    for bad in ["exit-sideways", "enter-room:2", "enter-room:x:0x0e", "enter-room:0:77"] {
         assert!(validate_success_kind(bad).is_err(), "{bad}");
     }
 }

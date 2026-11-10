@@ -60,9 +60,10 @@ impl fmt::Display for UnclassifiedEndingError {
 
 impl std::error::Error for UnclassifiedEndingError {}
 
-/// 'enter-room:2:0x0e' (optionally ':cave') -> MapLocation.
+/// 'enter-room:2:0x0e' (optionally ':cave') -> MapLocation.  The room needs its `0x` (a bare '77' would read as hex
+/// here but decimal in a `rooms:` entry, so it's rejected).
 pub fn parse_enter_room(kind: &str) -> Result<MapLocation, String> {
-    let bad = || format!("Bad success kind {kind:?}; expected enter-room:<level>:<room>[:cave]");
+    let bad = || format!("Bad success kind {kind:?}; expected enter-room:<level>:0x<room>[:cave]");
     let rest = kind.strip_prefix(ENTER_ROOM_PREFIX).ok_or_else(bad)?;
     let parts: Vec<&str> = rest.split(':').collect();
     if !(2..=3).contains(&parts.len()) || (parts.len() == 3 && parts[2] != "cave") {
@@ -73,7 +74,7 @@ pub fn parse_enter_room(kind: &str) -> Result<MapLocation, String> {
     let hex = hex
         .strip_prefix("0x")
         .or_else(|| hex.strip_prefix("0X"))
-        .unwrap_or(hex);
+        .ok_or_else(bad)?;
     let room = u8::from_str_radix(hex, 16).map_err(|_| bad())?;
     Ok(MapLocation::new(level, room, parts.len() == 3))
 }
@@ -358,8 +359,9 @@ mod tests {
             validate_success_kind("enter-room:2:0x0E").unwrap(),
             "enter-room:2:0x0e"
         );
+        assert!(validate_success_kind("enter-room:0:77:cave").is_err());
         assert_eq!(
-            validate_success_kind("enter-room:0:77:cave").unwrap(),
+            validate_success_kind("enter-room:0:0x77:cave").unwrap(),
             "enter-room:0:0x77:cave"
         );
         assert!(validate_success_kind("enter-room:2").is_err());
