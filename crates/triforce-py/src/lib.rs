@@ -261,6 +261,19 @@ mod _native {
             "DURATIONS",
             pyo3::types::PyTuple::new(py, zelda::actions::DURATIONS)?,
         )?;
+        // The kinds each head applies to (zelda::actions::{is_timed, is_directional, is_diagonal}).
+        for (name, applies) in [
+            ("TIMED_KINDS", zelda::actions::is_timed as fn(zelda::ActionKind) -> bool),
+            ("DIRECTIONAL_KINDS", zelda::actions::is_directional),
+            ("DIAGONAL_KINDS", zelda::actions::is_diagonal),
+        ] {
+            let kinds: Vec<&str> = zelda::ActionKind::ALL
+                .iter()
+                .filter(|&&k| applies(k))
+                .map(|k| k.name())
+                .collect();
+            m.add(name, pyo3::types::PyTuple::new(py, kinds)?)?;
+        }
         Ok(())
     }
 }

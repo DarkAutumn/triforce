@@ -16,11 +16,13 @@ from .zelda_enums import ActionKind, Direction
 
 ACTION_SCHEMA_VERSION = _native.ACTION_SCHEMA_VERSION
 
-KINDS = tuple(ActionKind)
-DIRECTIONS = (Direction.N, Direction.S, Direction.W, Direction.E,
-              Direction.NW, Direction.NE, Direction.SW, Direction.SE)
-CARDINALS = DIRECTIONS[:4]
-DURATIONS = (4, 8, 16, 32)
+# The schema comes from the native one (zelda::actions); the enums' values must be the native head indices.
+KINDS = tuple(ActionKind[name] for name in _native.ACTION_KINDS)
+assert [int(kind) for kind in KINDS] == list(range(len(KINDS))) and set(KINDS) == set(ActionKind), \
+    "ActionKind != the native action kinds (names, order and count)"
+DIRECTIONS = tuple(Direction[name] for name in _native.DIRECTIONS)
+CARDINALS = tuple(d for d in DIRECTIONS if d in (Direction.N, Direction.S, Direction.W, Direction.E))
+DURATIONS = tuple(int(d) for d in _native.DURATIONS)
 
 NUM_KINDS = len(KINDS)
 NUM_DIRECTIONS = len(DIRECTIONS)
@@ -30,9 +32,9 @@ DIRECTION_INDEX = {d: i for i, d in enumerate(DIRECTIONS)}
 DURATION_INDEX = {d: i for i, d in enumerate(DURATIONS)}
 
 # Which heads apply to each kind.
-TIMED_KINDS = frozenset({ActionKind.MOVE, ActionKind.WAIT})
-DIRECTIONAL_KINDS = frozenset(KINDS) - {ActionKind.WAIT}
-DIAGONAL_KINDS = frozenset({ActionKind.BOOMERANG})
+TIMED_KINDS = frozenset(ActionKind[name] for name in _native.TIMED_KINDS)
+DIRECTIONAL_KINDS = frozenset(ActionKind[name] for name in _native.DIRECTIONAL_KINDS)
+DIAGONAL_KINDS = frozenset(ActionKind[name] for name in _native.DIAGONAL_KINDS)
 
 # Flat mask layout: [kind (K) | direction (K×D) | duration (K×U)].
 MASK_SIZE = NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS + NUM_KINDS * NUM_DURATIONS
