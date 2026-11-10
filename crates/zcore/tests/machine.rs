@@ -360,17 +360,51 @@ fn trace_hook_observes_without_changing_anything() {
     assert!(rows.iter().filter(|r| r.pc >= 0xC000).all(|r| r.opcode == plain.bus().peek(r.pc)));
 }
 
-/// Pins the encoded power-on state file: any change to `MachineState`'s layout or to the power-on
-/// state changes these bytes and must bump `state_file::VERSION` (then update this digest).
+/// Pins the `postcard` body of the power-on state (not the zstd file, whose bytes a zstd upgrade may
+/// change): any change to `MachineState`'s layout or to the power-on state changes it and must bump
+/// `state_file::VERSION` (then update this digest).
 #[test]
-fn power_on_state_file_is_pinned() {
+fn power_on_state_body_is_pinned() {
     let Some(rom) = rom() else { return };
-    let bytes = state_file::encode(&rom, &ZCore::power_on(rom.clone()).snapshot(), 0);
+    let body = postcard::to_allocvec(&ZCore::power_on(rom.clone()).snapshot()).unwrap();
     assert_eq!(state_file::VERSION, 6);
     assert_eq!(
-        blake3::hash(&bytes).to_hex().as_str(),
-        "fa9491132aea95ba8782ba8c9fdf3f7a1470b55596d89ce98ef65d6c31866bf2"
+        blake3::hash(&body).to_hex().as_str(),
+        "6d71c4d4481ba5590740e2c14198d3c22694a91ba7a3edc0e4f485b5738ba0d4"
     );
+}
+
+/// Mid-game pins, sensitive to field order and meaning where the power-on state is all zeros:
+/// shipped states of different kinds (game start, a dungeon entry mid-scroll, an overworld walk, a
+/// Dungeon 3 entry) decode, play 120 frames of a fixed input pattern, and hash RAM, PRG-RAM and the
+/// cycle count. Regenerate the digests together with the states (a `VERSION` bump or an
+/// `entry_states build`).
+#[test]
+fn shipped_states_replay_to_pinned_digests() {
+    let Some(rom) = rom() else { return };
+    let pins = [
+        ("start", "5b39e90eb7f699a4a2efc605df7b0b118fa16ec2978971203a6404657c5d4945"),
+        ("2_7ds_0", "bbf8281a386c7148422472e8ae6435d386ea9cb8293fe034c385245711e9b8d2"),
+        ("0_3cc_0", "e5e05613391e8f35fecaaba43a0a0c5337c66a5ee708ee29b18362e1ce9f819c"),
+        ("3_7cs_0", "511bc1ff53ab6ce34958c196fe4460f03c07f13c7794ed13f5bf703dc69a19f5"),
+    ];
+    let mut got = Vec::new();
+    for (name, _) in pins {
+        let bytes = std::fs::read(repo().join(format!("triforce/states/{name}.state"))).unwrap();
+        let f = state_file::decode(&rom, &bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let mut nes = ZCore::power_on(rom.clone());
+        nes.restore(&f.machine);
+        for k in 0..120u32 {
+            nes.run_frame([0x80, 0x10, 0x40, 0x20, 0x01, 0][(k / 10 % 6) as usize], false);
+        }
+        let mut h = blake3::Hasher::new();
+        h.update(nes.ram());
+        h.update(nes.prg_ram());
+        h.update(&nes.cycles().to_le_bytes());
+        got.push((name, h.finalize().to_hex().to_string()));
+    }
+    let want: Vec<_> = pins.iter().map(|&(n, d)| (n, d.to_owned())).collect();
+    assert_eq!(got, want);
 }
 
 /// The shipped start states are current-version files: each decodes, restores and plays on. A layout

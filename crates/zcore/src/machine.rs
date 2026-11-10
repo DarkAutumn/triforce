@@ -118,9 +118,30 @@ impl Rom {
 /// nor is the frame buffer.
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct MachineState {
-    state: State,
+    pub(crate) state: State,
     frame: u64,
     cycles: u64,
+}
+
+impl MachineState {
+    /// The checks a decoded state must pass before a [`ZCore`] runs it: the fields that only ever
+    /// hold one value, positions in range and indexes that can't leave their tables. A state that
+    /// fails them would load a different machine, panic or never finish a frame.
+    pub fn validate(&self) -> Result<(), String> {
+        let s = &self.state;
+        let checks = [
+            (s.cpu.start_cycles == 6 && s.cpu.end_cycles == 6, "CPU cycle constants"),
+            (s.ppu.clock_divider == 4, "PPU clock divider"),
+            (s.ppu.vblank_scanline == 241 && s.ppu.prerender_scanline == 261, "PPU scanline constants"),
+            (s.ppu.scanline <= 261 && s.ppu.cycle <= 340, "PPU position"),
+            (s.apu.frame_counter.step < s.apu.frame_counter.step_cycles.len(), "APU frame counter step"),
+            (s.memory.pages_in_arena(), "memory page outside the arena"),
+        ];
+        match checks.iter().find(|(ok, _)| !ok) {
+            Some((_, what)) => Err(format!("invalid machine state: {what}")),
+            None => Ok(()),
+        }
+    }
 }
 
 /// One Zelda console.

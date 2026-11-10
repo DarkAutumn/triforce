@@ -7,10 +7,12 @@
 //! | ROM payload SHA-1 | 20 bytes |
 //! | executor flags | `u8`: bit 0 `was_in_cave`, bit 1 `just_exited_cave` |
 //! | zstd length | `u32` LE |
-//! | body | zstd (level 3) of the `postcard` encoding of [`MachineState`] |
+//! | body | zstd (level 3, with the zstd content checksum) of the `postcard` encoding of [`MachineState`] |
 //!
 //! Every layout change of [`MachineState`] bumps the version; older versions are refused (regenerate
-//! states with `python -m triforce.entry_states`).
+//! states with `python -m triforce.entry_states`). Decoding refuses a damaged file: a bad checksum
+//! (files written before the checksum have none and still load), bytes after the body or after the
+//! state, an oversized body, and a state that fails [`MachineState::validate`].
 
 use crate::machine::{MachineState, Rom};
 
@@ -46,7 +48,9 @@ pub struct StateFile {
 /// Encode `machine` for `rom`.
 pub fn encode(rom: &Rom, machine: &MachineState, flags: u8) -> Vec<u8> {
     let body = postcard::to_allocvec(machine).expect("MachineState serializes");
-    let z = zstd::bulk::compress(&body, 3).expect("zstd compress");
+    let mut c = zstd::bulk::Compressor::new(3).expect("zstd compressor");
+    c.set_parameter(zstd::zstd_safe::CParameter::ChecksumFlag(true)).expect("zstd checksum flag");
+    let z = c.compress(&body).expect("zstd compress");
     let mut out = Vec::with_capacity(HEADER + z.len());
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&VERSION.to_le_bytes());
@@ -86,9 +90,80 @@ pub fn decode(rom: &Rom, bytes: &[u8]) -> Result<StateFile, StateFormatError> {
     let Some(z) = bytes.get(HEADER..HEADER + len) else {
         return err("truncated TFZSTATE file");
     };
-    let body =
-        zstd::stream::decode_all(z).map_err(|e| StateFormatError(format!("bad zstd body: {e}")))?;
-    let machine = postcard::from_bytes(&body)
+    if bytes.len() != HEADER + len {
+        return err("trailing bytes after the TFZSTATE body");
+    }
+    let cap = 4 * std::mem::size_of::<MachineState>();
+    let body = zstd::bulk::decompress(z, cap)
+        .map_err(|e| StateFormatError(format!("bad zstd body: {e}")))?;
+    let (machine, rest): (MachineState, _) = postcard::take_from_bytes(&body)
         .map_err(|e| StateFormatError(format!("bad state body: {e}")))?;
+    if !rest.is_empty() {
+        return err("trailing bytes after the machine state");
+    }
+    machine.validate().map_err(StateFormatError)?;
     Ok(StateFile { machine, flags })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::machine::ZCore;
+
+    fn rom() -> Option<std::sync::Arc<Rom>> {
+        test_rom::bytes().map(|b| Rom::from_ines(&b).expect("Zelda ROM"))
+    }
+
+    /// A state 600 frames in (mid-title), encoded.
+    fn sample(rom: &std::sync::Arc<Rom>) -> MachineState {
+        let mut nes = ZCore::power_on(rom.clone());
+        for _ in 0..600 {
+            nes.run_frame(0, false);
+        }
+        nes.snapshot()
+    }
+
+    /// Every single-bit flip of the body either is refused or decodes to the identical state.
+    #[test]
+    fn flipped_bits_are_refused() {
+        let Some(rom) = rom() else { return };
+        let good = encode(&rom, &sample(&rom), 0);
+        let want = postcard::to_allocvec(&decode(&rom, &good).unwrap().machine).unwrap();
+        let body = good.len() - HEADER;
+        for k in 0..200 {
+            let pos = HEADER + k * body / 200;
+            let mut bad = good.clone();
+            bad[pos] ^= 1 << (k % 8);
+            if let Ok(s) = decode(&rom, &bad) {
+                assert_eq!(postcard::to_allocvec(&s.machine).unwrap(), want, "flip at {pos} loaded another state");
+            }
+        }
+        let mut long = good.clone();
+        long.push(0);
+        assert!(decode(&rom, &long).err().expect("refused").0.contains("trailing"));
+    }
+
+    /// States that postcard accepts but that would hang or panic the machine are refused.
+    #[test]
+    fn invalid_states_are_refused() {
+        let Some(rom) = rom() else { return };
+        let base = sample(&rom);
+        let mutants: [fn(&mut MachineState); 4] = [
+            |m| m.state.ppu.vblank_scanline = 1,
+            |m| m.state.apu.frame_counter.step = 9,
+            |m| m.state.cpu.start_cycles = 7,
+            |m| m.state.ppu.cycle = 400,
+        ];
+        for (i, f) in mutants.iter().enumerate() {
+            let mut m = base;
+            f(&mut m);
+            let e = decode(&rom, &encode(&rom, &m, 0)).err().unwrap_or_else(|| panic!("mutant {i} decoded"));
+            assert!(e.0.contains("invalid machine state"), "{i}: {e}");
+        }
+        let mut m = base;
+        m.state.memory.break_page_for_test();
+        let e = decode(&rom, &encode(&rom, &m, 0)).err().expect("a page past the arena is refused");
+        assert!(e.0.contains("memory page outside the arena"), "{e}");
+        assert!(decode(&rom, &encode(&rom, &base, 0)).is_ok());
+    }
 }

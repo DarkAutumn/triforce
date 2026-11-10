@@ -192,6 +192,17 @@ impl Memory {
         memory
     }
 
+    /// Whether every mapped PRG/CHR page lies inside the arena (a decoded state is checked with it).
+    pub fn pages_in_arena(&self) -> bool {
+        self.prg_pages.iter().chain(&self.chr_pages).all(|p| p.offset() + PAGE_SIZE <= ARENA_SIZE)
+    }
+
+    /// Points the first PRG page past the arena (0x7C00), as a corrupt state could.
+    #[cfg(test)]
+    pub(crate) fn break_page_for_test(&mut self) {
+        self.prg_pages[0] = Page(0x7C00);
+    }
+
     #[inline(always)]
     fn arena(&self) -> &[u8; ARENA_SIZE] {
         &self.data
