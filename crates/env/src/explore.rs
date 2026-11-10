@@ -425,7 +425,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             Ok(info)
         };
         let outcome = run();
-        let pre_entry = self.env.session().last_pre_entry().cloned();
+        let pre_entry = self.env.last_pre_entry();
         self.env.session_mut().set_capture_pre_entry(false);
         Ok((outcome?, pre_entry))
     }
