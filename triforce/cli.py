@@ -4,6 +4,20 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
+from typing import Optional
+
+
+def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, deterministic=None,
+                  stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None):
+    """The route (``--from`` and ``--stop-at`` checked, ``runner.Route.load``) and a ``Runner`` with its models
+    loaded (``--checkpoint`` overrides checked); raises ``RunnerError`` before anything plays."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
+    from .runner import Route, Runner, parse_location
+    route = Route.load(route_name, parse_location(stop_at) if stop_at else None, start_from)
+    runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
+                    specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest)
+    return route, runner
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
@@ -13,15 +27,72 @@ def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, o
     optional checkpoint overrides and loaded specialist configs; ``plays``: a replay file to write;
     ``deterministic``: None = each model's act mode, else argmax (True) or sampling (False) for all;
     ``on_result(result)`` as each run finishes; ``harvest``: save every handoff's pre-entry state under this
-    directory (``runner.ChainPool``).  Returns (results sorted by seed, summary)."""
+    directory (``runner.ChainPool``).  Returns (results sorted by seed, summary); the summary's ``provenance``
+    names what played (``Runner.provenance`` plus ``first_seed`` and ``runs``)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    from .runner import Route, Runner, chain_summary, parse_location  # pylint: disable=import-outside-toplevel
-    route = Route.load(route_name, parse_location(stop_at) if stop_at else None, start_from)
-    seeds = list(range(first_seed, first_seed + runs))
-    runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
-                    specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest)
+    route, runner = prepare_chain(route_name, parallel, models_dir, overrides, deterministic, stop_at, start_from,
+                                  specialist_configs, threads, harvest)
+    provenance = {**runner.provenance(route), 'first_seed': first_seed, 'runs': runs}
+    return play_chain(route, runner, provenance, plays=plays, on_result=on_result)
+
+
+def play_chain(route, runner, provenance: dict, plays=None, on_result=None):
+    """Plays ``provenance['runs']`` seeds from ``provenance['first_seed']``; (results, summary with provenance)."""
+    from .runner import chain_summary  # pylint: disable=import-outside-toplevel
+    seeds = list(range(provenance['first_seed'], provenance['first_seed'] + provenance['runs']))
     results = runner.run_many(route, seeds, on_result=on_result, plays=plays)
-    return results, chain_summary(results)
+    return results, {**chain_summary(results), 'provenance': provenance}
+
+
+# Provenance fields that may differ between batches appended to one eval-chain output.
+BATCH_FIELDS = ('first_seed', 'runs')
+
+
+def meta_path(output) -> Path:
+    """The provenance sidecar of an eval-chain output: ``<output>.meta.json``."""
+    return Path(f'{output}.meta.json')
+
+
+def check_output(output, provenance: dict, append: bool) -> Optional[dict]:
+    """Refuses an existing ``output`` unless ``append``; an appended batch must have the existing sidecar's
+    provenance (``BATCH_FIELDS`` aside) and new seeds.  Returns the sidecar to extend (None for a new file)."""
+    # pylint: disable=import-outside-toplevel
+    from .runner import RunnerError
+    output, meta = Path(output), meta_path(output)
+    if not output.exists():
+        if append and meta.exists():
+            raise RunnerError(f"{meta} exists without {output}; remove it")
+        return None
+    if not append:
+        raise RunnerError(f"{output} exists; pass --append to add runs of the same team, or choose a new --output")
+    if not meta.is_file():
+        raise RunnerError(f"--append: {output} has no provenance sidecar {meta}; write a new --output")
+    existing = json.loads(meta.read_text(encoding='utf-8'))
+    batch = {k: v for k, v in provenance.items() if k not in BATCH_FIELDS}
+    if existing['provenance'] != batch:
+        differ = sorted(k for k in existing['provenance'].keys() | batch.keys()
+                        if existing['provenance'].get(k) != batch.get(k))
+        raise RunnerError(f"--append: {output} was played by different inputs ({', '.join(differ)} differ; "
+                          f"see {meta}); write a new --output")
+    seeds = set(range(provenance['first_seed'], provenance['first_seed'] + provenance['runs']))
+    taken = {s for b in existing['batches'] for s in range(b['first_seed'], b['first_seed'] + b['runs'])}
+    if seeds & taken:
+        raise RunnerError(f"--append: seeds {sorted(seeds & taken)[:10]} are already in {output}")
+    return existing
+
+
+def write_output(output, results, provenance: dict, existing: Optional[dict]):
+    """Writes (or, with ``existing`` sidecar, appends) the runs and the provenance sidecar."""
+    # pylint: disable=import-outside-toplevel
+    from .events import write_json_atomic
+    from .runner import write_jsonl
+    batch = {k: provenance[k] for k in BATCH_FIELDS}
+    if existing is None:
+        meta = {'provenance': {k: v for k, v in provenance.items() if k not in BATCH_FIELDS}, 'batches': [batch]}
+    else:
+        meta = {**existing, 'batches': existing['batches'] + [batch]}
+    write_jsonl(output, results, append=existing is not None)
+    write_json_atomic(meta_path(output), meta)
 
 
 def chain_progress_events(events, runs: int):
@@ -42,13 +113,20 @@ def chain_progress_events(events, runs: int):
 
 def _cmd_eval_chain(args):
     # pylint: disable=import-outside-toplevel
+    import time
     from contextlib import nullcontext
     from .events import EventLog, logged_job
     from .registry import act_override
-    from .runner import write_jsonl
+    from .runner import parse_overrides
     from .specialist import load_specialist
     configs = [load_specialist(path) for path in args.specialist_config]
-    overrides = dict(item.split('=', 1) for item in args.checkpoint)
+    overrides = parse_overrides(args.checkpoint)
+    output = args.output or os.path.join('runs', f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl")
+    route, runner = prepare_chain(args.route, args.parallel, args.models_dir, overrides, act_override(args.act),
+                                  args.stop_at, args.start_from, {config.name: config for config in configs},
+                                  args.threads, args.harvest)
+    provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
+    existing = check_output(output, provenance, args.append)
     what = f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
     log = nullcontext() if args.no_log else logged_job(what, 'chain', [], args.logs_dir, events='round.jsonl',
                                                        chain_runs=args.runs)
@@ -56,13 +134,11 @@ def _cmd_eval_chain(args):
         events = None if plan is None else EventLog(plan.directory / 'round.jsonl')
         if events is not None:
             events.emit('chain_start', runs=args.runs, parallel=args.parallel, overrides=overrides or None,
-                        act=args.act, route=args.route, start_from=args.start_from, stop_at=args.stop_at)
+                        act=args.act, route=args.route, start_from=args.start_from, stop_at=args.stop_at,
+                        output=output, provenance=provenance)
         try:
-            results, summary = eval_chain(args.route, args.runs, args.parallel, args.models_dir, overrides,
-                                          act_override(args.act), args.stop_at, args.first_seed, args.start_from,
-                                          specialist_configs={config.name: config for config in configs},
-                                          threads=args.threads, plays=args.plays, on_result=None if events is None
-                                          else chain_progress_events(events, args.runs), harvest=args.harvest)
+            results, summary = play_chain(route, runner, provenance, plays=args.plays, on_result=None
+                                          if events is None else chain_progress_events(events, args.runs))
         except Exception as error:
             if events is not None:
                 import traceback
@@ -71,13 +147,18 @@ def _cmd_eval_chain(args):
             raise
         if events is not None:
             events.emit('chain', **summary)
-    os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
-    write_jsonl(args.output, results)
+    os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
+    write_output(output, results, provenance, existing)
     print(json.dumps(summary, indent=2))
     print(f"route {args.route}: {summary['successes']}/{summary['runs']} = {summary['success_rate']:.0%}  "
-          f"(per-run JSON lines appended to {args.output})")
+          f"(per-run JSON lines {'appended to' if existing else 'in'} {output}, provenance in {meta_path(output)})")
     if args.harvest is not None:
         print(f"handoff states harvested under {args.harvest}")
+    errors = sum(r.result == 'error' for r in results)
+    if errors:
+        print(f"triforce eval-chain: {errors} of {len(results)} runs ended in an error: {summary['errors']}",
+              file=sys.stderr)
+        return 1
     return 0
 
 
@@ -141,7 +222,13 @@ def main(argv=None):
     chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH')
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
                        help="override specialist config, selected by config.name (repeatable YAML paths)")
-    chain.add_argument('--output', default=os.path.join('runs', 'eval-chain.jsonl'))
+    chain.add_argument('--output', default=None,
+                       help="per-run JSON lines (default runs/eval-chain-<yymmdd-HHMMSS>.jsonl), with its provenance "
+                            "(models, checkpoints, act modes, route, code, data) in <output>.meta.json; an existing "
+                            "file is refused unless --append")
+    chain.add_argument('--append', action='store_true',
+                       help="add these runs to an existing --output played by the same models, act modes, route, "
+                            "code and data (its .meta.json), with new seeds")
     chain.add_argument('--plays', default=None, metavar='PATH',
                        help="write every run to this replay file (triforce/replay.py)")
     chain.add_argument('--harvest', nargs='?', const=str(HARVESTED_DIR), default=None, metavar='DIR',
@@ -152,7 +239,14 @@ def main(argv=None):
     chain.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
 
     args = parser.parse_args(argv)
-    return {'promote': _cmd_promote, 'eval-chain': _cmd_eval_chain, 'list': _cmd_list}[args.command](args)
+    if args.command == 'eval-chain':
+        from .runner import RunnerError  # pylint: disable=import-outside-toplevel
+        try:
+            return _cmd_eval_chain(args)
+        except RunnerError as error:
+            print(f"triforce eval-chain: error: {error}", file=sys.stderr)
+            return 2
+    return {'promote': _cmd_promote, 'list': _cmd_list}[args.command](args)
 
 
 if __name__ == '__main__':

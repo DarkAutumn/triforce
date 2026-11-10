@@ -38,8 +38,10 @@ run() {
     out=$OUT/$TAG-$name.jsonl
     [ -s $out ] && { echo "$name: done"; continue; }
     from_args=(); [ $from != start ] && from_args=(--from $from)
+    rm -f $out.tmp $out.tmp.meta.json     # eval-chain refuses an existing --output
     $PY -m triforce.cli eval-chain --runs $RUNS --parallel $PARALLEL --act $ACT "${from_args[@]}" \
-      --output $out.tmp > $OUT/$TAG-$name.log 2>&1 && mv $out.tmp $out || echo "$name: eval-chain failed ($OUT/$TAG-$name.log)"
+      --output $out.tmp > $OUT/$TAG-$name.log 2>&1 && mv $out.tmp.meta.json $out.meta.json && mv $out.tmp $out \
+      || echo "$name: eval-chain failed ($OUT/$TAG-$name.log)"
     tail -1 $OUT/$TAG-$name.log
   done
 }

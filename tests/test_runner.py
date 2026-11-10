@@ -32,6 +32,50 @@ def test_route_definition():
         Route.load('no-such-route')
 
 
+def test_route_checks_the_start_state_and_the_stop_room(tmp_path):
+    with pytest.raises(RunnerError, match=r"Unknown start state 'nope_0'.*states in"):
+        Route.load('d2first', start_from='nope_0')
+    (tmp_path / '1_73s_0.state').write_bytes(b'')
+    assert Route.load('d2first', start_from='1_73s_0', states_dir=tmp_path).start_state == '1_73s_0'
+    # The stop room must come after the start state's step: 2:0x7d is D2's entrance, 1:0x73 is on the way on.
+    assert Route.load('d2first', parse_location('1:0x73'), '2_7ds_0').terminal == MapLocation(1, 0x73, False)
+    with pytest.raises(RunnerError, match=r"--stop-at 2:0x7d is not a room of route 'd2first' after the start"):
+        Route.load('d2first', parse_location('2:0x7d'), '2_7ds_0')
+    with pytest.raises(RunnerError, match='--stop-at 9:0x99'):
+        Route.load('d2first', parse_location('9:0x99'))
+    # 0x73 is entered from S first (step 46) and from W later (step 48): stopping at it again is after the start.
+    assert Route.load('d2first', parse_location('1:0x73'), '1_73s_0').terminal == MapLocation(1, 0x73, False)
+
+
+def test_checkpoint_overrides_must_name_a_specialist_and_a_checkpoint(models_dir, tmp_path):
+    checkpoint = registry.promoted_checkpoint('ow-start', models_dir)
+    with pytest.raises(RunnerError, match=r"unknown specialist\(s\) \['no-such'\]"):
+        Policies(models_dir, checkpoints={'no-such': str(checkpoint)})
+    with pytest.raises(RunnerError, match='no checkpoint file there'):
+        Policies(models_dir, checkpoints={'ow-start': str(tmp_path / 'nope')})
+    policies = Policies(models_dir, checkpoints={'ow-start': str(checkpoint.parent)})
+    assert policies.checkpoints['ow-start'] == str(checkpoint.parent)
+
+
+def test_eval_chain_summary_names_every_model_and_its_act_mode(models_dir, tmp_path):
+    from triforce.cli import eval_chain     # pylint: disable=import-outside-toplevel
+    root = tmp_path / 'models'
+    shutil.copytree(models_dir, root)
+    registry.promote('goriya', 'untrained', root=root, act='argmax')
+    other = registry.save_checkpoint('zol', 'other', registry.load_model(
+        registry.promoted_checkpoint('zol', root))[0], root=root)
+    _, summary = eval_chain('d2first', 1, models_dir=root, overrides={'zol': str(other)}, stop_at='0:0x77')
+    provenance = summary['provenance']
+    models = {model['name']: model for model in provenance['models']}
+    assert sorted(models) == sorted(Policies(root).names)
+    assert models['goriya']['act'] == 'argmax' and models['ow-start']['act'] == 'sample'
+    assert models['zol']['checkpoint'] == str(other)
+    assert models['zol']['checkpoint_sha1'] == registry.checkpoint_sha1(other)
+    assert (provenance['route'], provenance['start_from'], provenance['stop_at']) == ('d2first', None, '0:0x77')
+    assert provenance['first_seed'] == 0 and provenance['runs'] == 1
+    assert provenance['code'] == replay.code_version() and provenance['data'] == replay.data_hash()
+
+
 def test_every_route_room_has_a_specialist():
     for step in _native.route_steps('d2first'):
         location = (step['level'], step['room'], step['in_cave'])

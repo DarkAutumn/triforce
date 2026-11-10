@@ -103,7 +103,9 @@ def test_eval_chain_to_an_early_room_writes_runs_that_round_trip(models_dir, tmp
         else:
             assert result.result == 'failure' and last.outcome != 'in-progress'
     summary = json.loads(printed[:printed.rindex('}') + 1])
+    provenance = summary.pop('provenance')
     assert summary == chain_summary(results)
+    assert (provenance['route'], provenance['stop_at'], provenance['runs']) == ('d2first', '0:0x67', 3)
 
     # The chain jsonl feeds the chain-hp profile; its keys are the native lookup's room keys.
     profile = chain_hp.build_profile([str(output)])

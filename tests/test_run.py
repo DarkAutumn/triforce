@@ -8,7 +8,7 @@ import torch
 
 from triforce import registry, run
 from triforce.actions import Action
-from triforce.runner import Route, Runner
+from triforce.runner import Route, Runner, RunnerError
 
 
 @pytest.fixture(scope='module')
@@ -50,12 +50,11 @@ def test_stop_at_the_start_room_succeeds(models_dir, tmp_path, capsys):
     assert _records(output)[0]['seed'] == 0
 
 
-def test_missing_start_state_is_an_error_result(models_dir, tmp_path, capsys):
+def test_missing_start_state_fails_before_playing(models_dir, tmp_path):
     output = tmp_path / 'runner.jsonl'
-    assert run.main(['--models-dir', str(models_dir), '--from', 'no_such_state', '--output', str(output)]) == 1
-    assert capsys.readouterr().out.startswith('error: ')
-    record, = _records(output)
-    assert record['result'] == 'error' and 'no_such_state' in record['reason'] and record['rooms'] == []
+    with pytest.raises(RunnerError, match="Unknown start state 'no_such_state'"):
+        run.main(['--models-dir', str(models_dir), '--from', 'no_such_state', '--output', str(output)])
+    assert not output.exists()
 
 
 def test_video_without_ffmpeg_fails_before_playing(models_dir, tmp_path, monkeypatch):

@@ -19,7 +19,7 @@ import numpy as np
 
 from . import _native
 from .registry import ACT_CHOICES, act_override
-from .runner import Route, Runner, RunResult, parse_location, write_jsonl
+from .runner import Route, Runner, RunResult, parse_location, parse_overrides, write_jsonl
 
 FRAME_RATE = 60.0988
 FFMPEG_ARGS = ['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', '256x240', '-r', str(FRAME_RATE), '-i', '-',
@@ -154,7 +154,7 @@ def main(argv=None):
     if args.video:
         ffmpeg_command(args.video)      # fail before playing when ffmpeg is missing
     route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None, args.start_from)
-    overrides = dict(item.split('=', 1) for item in args.checkpoint)
+    overrides = parse_overrides(args.checkpoint)
     runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=act_override(args.act))
     if args.video:
         result, movie = record_movie(runner, route, args.seed)
@@ -172,7 +172,7 @@ def main(argv=None):
     print(f"{result.result}: {result.reason}  ({result.steps} steps, {result.frames} frames)")
 
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
-    write_jsonl(args.output, [result])
+    write_jsonl(args.output, [result], append=True)
     return 0 if result.result == 'success' else 1
 
 

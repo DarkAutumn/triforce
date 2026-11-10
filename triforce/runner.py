@@ -10,15 +10,21 @@ same run whichever env or thread runs it.  A specialist without a promoted model
 gameplay failure.  With ``plays`` set every run is kept in a replay file (``triforce.replay``).
 """
 
+import difflib
+import hashlib
 import json
+import os
+import re
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import torch
 
 from . import _native
-from .registry import act_mode, load_model, promoted_checkpoint
-from .replay import ReplayWriter, header, location_text, models_header
+from .paths import STATES_DIR
+from .registry import CHECKPOINT_NAME, act_mode, checkpoint_sha1, load_model, promoted_checkpoint
+from .replay import ReplayWriter, code_version, data_hash, header, location_text, models_header
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
 
@@ -39,10 +45,13 @@ class Route:
     terminal: Optional[MapLocation] = None
 
     @staticmethod
-    def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None) -> 'Route':
+    def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None,
+             states_dir=None) -> 'Route':
         """Loads a route from routes.yaml.  ``stop_at`` ends it on entering that room instead of on its last step's
-        triforce, and ``start_from`` (a savestate, e.g. a route entry state like ``2_7ds_0``) replaces the game
-        start, for partial chain evals."""
+        triforce, and ``start_from`` (a savestate, e.g. a route entry state like ``2_7ds_0``, in ``states_dir``,
+        default ``paths.STATES_DIR``, or a path) replaces the game start, for partial chain evals.  The start state
+        must exist and ``stop_at`` must be the room of a route step after the start state's step (the native
+        ``Route::load`` checks the same when the chain task is built)."""
         try:
             steps = _native.route_steps(name)
         except _native.ConfigError as err:
@@ -53,7 +62,46 @@ class Route:
             raise RunnerError(f"Route '{name}' must begin at the game start (entry: start)")
         if stop_at is None and steps[-1]['exit'] != 'triforce':
             raise RunnerError(f"Route '{name}' doesn't end on a triforce")
+        start = 0
+        if start_from is not None and start_from != 'start':
+            path = _start_state_path(start_from, states_dir)
+            if not path.is_file():
+                near = difflib.get_close_matches(path.stem, [p.stem for p in path.parent.glob('*.state')], n=5)
+                raise RunnerError(f"Unknown start state '{start_from}': {path} not found (states in {path.parent}"
+                                  + (f"; close: {near}" if near else '') + ')')
+            start = _start_step(steps, path.stem)
+        if stop_at is not None:
+            later = [(s['level'], s['room'], s['in_cave']) for s in steps[start + 1:]]
+            if (stop_at.level, stop_at.value, stop_at.in_cave) not in later:
+                rooms = sorted(set(later), key=later.index)
+                raise RunnerError(f"--stop-at {location_text(stop_at)} is not a room of route '{name}' after the start "
+                                  f"step; rooms: {[location_text(MapLocation(*room)) for room in rooms]}")
         return Route(name, start_from or 'start', stop_at)
+
+
+def _start_state_path(name: str, states_dir=None) -> Path:
+    """Where the chain looks for start state ``name``: a ``.state`` path as is, else ``<states_dir>/<name>.state``."""
+    path = Path(name)
+    if path.suffix == '.state' and (path.is_absolute() or path.parent != Path('.')):
+        return path
+    return Path(states_dir or STATES_DIR) / (name if name.endswith('.state') else f'{name}.state')
+
+
+_STATE_NAME = re.compile(r'^(\d+)_([0-9a-f]{2})(n|s|e|w|c|cave)(?:_h\d+)?_\d+$')
+_STATE_SIDES = {'n': ('N', False), 's': ('S', False), 'e': ('E', False), 'w': ('W', False), 'c': ('cave', False),
+                'cave': ('S', True)}
+
+
+def _start_step(steps: List[dict], label: str) -> int:
+    """The first route step a start state named ``<level>_<room><side>_<chain>`` (or a harvested
+    ``..._h<seed>_<n>``) begins: same room and entry (``start_states::state_entry``); 0 when the name doesn't say."""
+    match = _STATE_NAME.match(label)
+    if match is None:
+        return 0
+    entry, in_cave = _STATE_SIDES[match.group(3)]
+    room = (int(match.group(1)), int(match.group(2), 16), in_cave)
+    return next((s['index'] for s in steps if (s['level'], s['room'], s['in_cave']) == room and s['entry'] == entry),
+                0)
 
 
 @dataclass
@@ -107,6 +155,7 @@ class RunResult:
     steps: int = 0
     frames: int = 0
     retreats: int = 0               # rooms left through a route step's `retreat` exit (4 end the run: retreat-limit)
+    wrong_exits: int = 0            # wrong exits into tagged rooms (the 20th ends the run stuck: wrong-exit-limit)
     rooms: List[RoomRecord] = field(default_factory=list)
 
     @property
@@ -130,11 +179,24 @@ class RunResult:
         return RunResult(**{**data, 'rooms': rooms})
 
 
-def write_jsonl(path: str, results: List[RunResult]):
-    """Appends results (one per line) to path."""
-    with open(path, 'a', encoding='utf-8') as f:
-        for result in results:
-            f.write(json.dumps(result.to_dict()) + '\n')
+def write_jsonl(path, results: List[RunResult], append: bool = False):
+    """Writes results (one per line) to path: a complete new file (temp file + ``os.replace``), or appended to it
+    with ``append``."""
+    path = Path(path)
+    lines = ''.join(json.dumps(result.to_dict()) + '\n' for result in results)
+    if append:
+        with open(path, 'a', encoding='utf-8') as f:
+            f.write(lines)
+        return
+    tmp = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(lines)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 class Policies:
@@ -153,23 +215,33 @@ class Policies:
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
         given = dict(networks or {})
+        known = set(names if names is not None else list_specialists()) | set(given) | set(configs)
+        unknown = sorted(set(overrides) - known)
+        if unknown:
+            raise RunnerError(f"--checkpoint for unknown specialist(s) {unknown}; known: {sorted(known)}")
+        for name, path in overrides.items():
+            if not Path(path).is_file() and not (Path(path) / CHECKPOINT_NAME).is_file():
+                raise RunnerError(f"--checkpoint {name}={path}: no checkpoint file there")
         self.names: List[str] = []
         self.configs: List[SpecialistConfig] = []
         self.policies: list = []
         self.checkpoints: Dict[str, str] = {}
         self.deterministic: List[bool] = []
         self.missing: Dict[str, str] = {}
-        for name in sorted(set(names if names is not None else list_specialists()) | set(given) | set(configs)):
+        for name in sorted(known):
             network = given.get(name)
             argmax = False
             if network is None:
-                try:
-                    path = overrides.get(name) or promoted_checkpoint(name, models_dir)
-                    with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
-                        network, _ = load_model(path)
-                except FileNotFoundError as err:
-                    self.missing[name] = str(err)
-                    continue
+                if name in overrides:
+                    path = overrides[name]
+                else:
+                    try:
+                        path = promoted_checkpoint(name, models_dir)
+                    except FileNotFoundError as err:
+                        self.missing[name] = str(err)
+                        continue
+                with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
+                    network, _ = load_model(path)
                 self.checkpoints[name] = str(path)
                 argmax = act_mode(path) == 'argmax'
             self.names.append(name)
@@ -304,6 +376,24 @@ class Runner:
         return ChainPool(route, seeds, self.policies, deterministic=self.deterministic, max_steps=self.max_steps,
                          states_dir=self.states_dir, harvest=self.harvest, **kwargs)
 
+    def provenance(self, route: Route) -> dict:
+        """What plays ``route``: per policy its name, checkpoint, ``ckpt.pt`` sha1, Rust network hash, act mode and
+        config hash; the specialists without a model; the route, start, end and step cap; the code version and the
+        game data hash (``replay``).  Stored with every chain result (``chain_summary``, ``eval-chain``'s
+        ``<output>.meta.json``)."""
+        policies = self.policies
+        deterministic = (list(policies.deterministic) if self.deterministic is None
+                         else [bool(self.deterministic)] * len(policies.policies))
+        models = models_header(policies.names, policies.policies, policies.checkpoints, deterministic)
+        for model, config in zip(models, policies.configs):
+            checkpoint = model['checkpoint']
+            model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
+            model['act'] = 'argmax' if model['deterministic'] else 'sample'
+            model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
+        return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
+                'stop_at': location_text(route.terminal), 'max_steps': self.max_steps, 'models': models,
+                'missing': dict(sorted(policies.missing.items())), 'code': code_version(), 'data': data_hash()}
+
     def run_many(self, route: Route, seeds: Sequence[int],
                  on_result: Optional[Callable[[RunResult], None]] = None, plays=None) -> List[RunResult]:
         """Plays route once per seed; results sorted by seed.  Never raises for gameplay failures.  ``plays``: a
@@ -320,9 +410,26 @@ class Runner:
 
 
 def parse_location(text: str) -> MapLocation:
-    """'2:0x0e', '0:0x77:cave' → MapLocation."""
+    """'2:0x0e', '0:0x77:cave' → MapLocation; anything else raises ``RunnerError``."""
     parts = text.split(':')
-    return MapLocation(int(parts[0]), int(parts[1], 16), len(parts) > 2 and parts[2] == 'cave')
+    try:
+        if (not 2 <= len(parts) <= 3 or (len(parts) == 3 and parts[2] != 'cave')
+                or not parts[1].lower().startswith('0x')):
+            raise ValueError(text)
+        return MapLocation(int(parts[0]), int(parts[1], 16), len(parts) == 3)
+    except ValueError:
+        raise RunnerError(f"'{text}' is not a room (LEVEL:0xROOM[:cave], e.g. 1:0x73)") from None
+
+
+def parse_overrides(items: Iterable[str]) -> Dict[str, str]:
+    """``SPECIALIST=PATH`` command-line items → {specialist: path}; a malformed item raises ``RunnerError``."""
+    overrides = {}
+    for item in items:
+        name, sep, path = item.partition('=')
+        if not sep or not name or not path:
+            raise RunnerError(f"--checkpoint '{item}' is not SPECIALIST=PATH")
+        overrides[name] = path
+    return overrides
 
 
 def chain_summary(results: List[RunResult]) -> dict:
