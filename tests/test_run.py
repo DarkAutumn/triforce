@@ -65,6 +65,24 @@ def test_video_without_ffmpeg_fails_before_playing(models_dir, tmp_path, monkeyp
     assert not output.exists() and not (tmp_path / 'run.mp4').exists()
 
 
+def test_video_into_a_missing_directory_fails_before_playing(models_dir, tmp_path, monkeypatch):
+    monkeypatch.setattr(run.shutil, 'which', lambda _: '/usr/bin/ffmpeg')
+    output = tmp_path / 'runner.jsonl'
+    with pytest.raises(RuntimeError, match='missing.*not a writable directory'):
+        run.main(['--models-dir', str(models_dir), '--video', str(tmp_path / 'missing' / 'run.mp4'),
+                  '--output', str(output)])
+    assert not output.exists()
+
+
+def test_a_failing_encoder_keeps_the_run_report_and_record(models_dir, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(run, 'ffmpeg_command', lambda _path: ['sh', '-c', 'exit 3'])    # exits before any frame
+    output = tmp_path / 'runner.jsonl'
+    with pytest.raises(RuntimeError, match='ffmpeg failed with exit code 3'):
+        run.main(['--models-dir', str(models_dir), '--stop-at', '0:0x67', '--seed', '1', '--video',
+                  str(tmp_path / 'run.mp4'), '--output', str(output)])
+    assert 'steps' in capsys.readouterr().out and _records(output)[0]['seed'] == 1
+
+
 def test_render_and_video_are_exclusive(capsys):
     with pytest.raises(SystemExit) as error:
         run.main(['--render', '--video', 'x.mp4'])

@@ -120,15 +120,18 @@ def write_video(movie: dict, path: str, states_dir=None) -> int:
     buttons = movie['buttons']
     with subprocess.Popen(command, stdin=subprocess.PIPE) as encoder:
         poke = 0
-        for frame, byte in enumerate(buttons):
-            while poke < len(pokes) and pokes[poke][0] == frame:
-                game.write(pokes[poke][1], pokes[poke][2])
-                poke += 1
-            game.press(byte)
-            encoder.stdin.write(game.screen().tobytes())
-        encoder.stdin.close()
+        try:
+            for frame, byte in enumerate(buttons):
+                while poke < len(pokes) and pokes[poke][0] == frame:
+                    game.write(pokes[poke][1], pokes[poke][2])
+                    poke += 1
+                game.press(byte)
+                encoder.stdin.write(game.screen().tobytes())
+            encoder.stdin.close()
+        except BrokenPipeError:     # ffmpeg exited early (its reason is on stderr); its exit code says so below
+            pass
         if encoder.wait():
-            raise RuntimeError(f"ffmpeg failed with exit code {encoder.returncode}")
+            raise RuntimeError(f"ffmpeg failed with exit code {encoder.returncode} writing {path}")
     return len(buttons)
 
 
@@ -153,13 +156,15 @@ def main(argv=None):
 
     if args.video:
         ffmpeg_command(args.video)      # fail before playing when ffmpeg is missing
+        folder = os.path.dirname(os.path.abspath(args.video))
+        if not os.path.isdir(folder) or not os.access(folder, os.W_OK):
+            raise RuntimeError(f"--video {args.video}: {folder} is not a writable directory")
     route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None, args.start_from)
     overrides = parse_overrides(args.checkpoint)
     runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=act_override(args.act))
+    movie = None
     if args.video:
         result, movie = record_movie(runner, route, args.seed)
-        frames = write_video(movie, args.video)
-        print(f"video: {frames} frames written to {args.video}")
     elif args.render:
         result = watch(runner, route, args.seed, args.fps)
     else:
@@ -173,6 +178,9 @@ def main(argv=None):
 
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     write_jsonl(args.output, [result], append=True)
+    if movie is not None:               # the run is reported and recorded before the video can fail
+        frames = write_video(movie, args.video)
+        print(f"video: {frames} frames written to {args.video}")
     return 0 if result.result == 'success' else 1
 
 
