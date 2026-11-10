@@ -76,8 +76,19 @@ def _schema1_checkpoint(tmp_path, edit=None):
     path = registry.save_checkpoint('ow-start', 'schema1', network, root=tmp_path)
     checkpoint = torch.load(path, weights_only=False)
     checkpoint['obs_schema_version'] = 1
+    checkpoint['model_config']['grid_encoder'] = 'conv'     # every checkpoint saved before r56 carries it
     torch.save(checkpoint, path)
     return path
+
+
+def test_a_pre_r56_checkpoint_loads_and_another_grid_encoder_does_not(tmp_path):
+    path = _schema1_checkpoint(tmp_path)
+    network, checkpoint = registry.load_model(path)
+    assert checkpoint['model_config']['grid_encoder'] == 'conv' and network.config.obs_spec
+    checkpoint['model_config']['grid_encoder'] = 'linear'
+    torch.save(checkpoint, path)
+    with pytest.raises(ValueError, match="grid_encoder 'linear' is not supported"):
+        registry.load_model(path)
 
 
 def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states_dir):

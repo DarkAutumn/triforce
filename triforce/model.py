@@ -84,8 +84,13 @@ class ModelConfig:
 
     @staticmethod
     def from_dict(data: Optional[dict]) -> 'ModelConfig':
-        """Inverse of to_dict.  Unknown keys raise so typos in configs are caught."""
+        """Inverse of to_dict.  Unknown keys raise so typos in configs are caught.  Checkpoints saved before r56
+        (commit 3f48268) carry ``grid_encoder: 'conv'``: the conv encoder is the only one left, so that key is
+        accepted and dropped; any other encoder raises."""
         data = dict(data or {})
+        encoder = data.pop('grid_encoder', 'conv')
+        if encoder != 'conv':
+            raise ValueError(f"model_config grid_encoder {encoder!r} is not supported (only 'conv' remains)")
         known = {f.name for f in fields(ModelConfig)}
         unknown = set(data) - known
         if unknown:
