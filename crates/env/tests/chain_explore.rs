@@ -516,6 +516,7 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
     let tmp = tempfile::tempdir().unwrap();
     let config = data.specialists["ow-zora"].clone();
     let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), 0).unwrap();
+    assert!(!explorer.env.session().look_ahead, "the explorer pays no weapon look-ahead (F176)");
     let result = explorer.explore("0_38n_0", 400, 25, 20, None).unwrap();
     assert!(result.success, "{result:?}");
     assert_eq!(result.ending.as_deref(), Some("exit-correct"));

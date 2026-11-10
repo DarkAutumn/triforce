@@ -204,8 +204,11 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
         store: St,
         seed: u64,
     ) -> Result<Self, EnvError> {
+        // No weapon look-ahead: it only credits rewards on the firing step, and the explorer reads only endings,
+        // health, the game state and the wavefront (review F176).
         let opts = EnvOptions {
             explicit_starts: true,
+            skip_look_ahead: true,
             seed,
             ..Default::default()
         };
