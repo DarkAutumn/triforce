@@ -234,10 +234,6 @@ impl GumbelSearch {
         })
     }
 
-    pub fn config(&self) -> &SearchConfig {
-        &self.config
-    }
-
     /// One evaluation of joint action `candidate` (visit `visit`): the mean return of `futures` futures.
     #[allow(clippy::too_many_arguments)]
     fn evaluate<E: SearchEnv<Action = ZeldaAction>>(

@@ -22,7 +22,7 @@ mod search;
 pub use actor::{ActorScratch, PolicyActor};
 pub use envs::{ChainRunEnv, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
 pub use nes::{InputLog, PoolNes, PoolState, PoolStore, RgbFn};
-pub use search::{FRAMES_PER_DISCOUNT, GumbelSearch, SearchConfig, SearchScratch, considered_visits};
+pub use search::{GumbelSearch, SearchConfig, SearchScratch};
 
 use crate::layout::{Dtype, KeySpec, ObsLayout, ObsRow};
 use env::chain::RunResult;

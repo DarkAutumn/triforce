@@ -185,14 +185,12 @@ where
         })
     }
 
+    /// The wrapped env (read-only; the crate's integration tests inspect it).
     pub fn env(&self) -> &PoolSpecialistEnv<N, St> {
         &self.env
     }
 
-    pub fn env_mut(&mut self) -> &mut PoolSpecialistEnv<N, St> {
-        &mut self.env
-    }
-
+    /// The wrapped env back (the crate's integration tests reuse its emulator).
     pub fn into_env(self) -> PoolSpecialistEnv<N, St> {
         self.env
     }
@@ -348,14 +346,12 @@ where
         })
     }
 
+    /// The wrapped env (read-only; the crate's integration tests inspect it).
     pub fn env(&self) -> &PoolSpecialistEnv<N, St> {
         &self.env
     }
 
-    pub fn env_mut(&mut self) -> &mut PoolSpecialistEnv<N, St> {
-        &mut self.env
-    }
-
+    /// The wrapped env back (the crate's integration tests reuse its emulator).
     pub fn into_env(self) -> PoolSpecialistEnv<N, St> {
         self.env
     }
@@ -506,14 +502,6 @@ where
     /// The chain (configs, run cap, room budget floor).
     pub fn chain_mut(&mut self) -> &mut PoolChainEnv<N, St> {
         &mut self.chain
-    }
-
-    pub fn into_chain(self) -> PoolChainEnv<N, St> {
-        self.chain
-    }
-
-    pub fn policies(&self) -> &[Arc<str>] {
-        &self.policies
     }
 
     /// Specialist name → the reason a run it would act in ends as `error`.

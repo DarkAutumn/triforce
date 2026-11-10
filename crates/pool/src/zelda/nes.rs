@@ -85,10 +85,6 @@ impl<N: Nes> PoolNes<N> {
         &self.inner
     }
 
-    pub fn inner_mut(&mut self) -> &mut N {
-        &mut self.inner
-    }
-
     pub fn into_inner(self) -> N {
         self.inner
     }
@@ -104,10 +100,6 @@ impl<N: Nes> PoolNes<N> {
         if !on {
             self.log = None;
         }
-    }
-
-    pub fn recording(&self) -> bool {
-        self.record
     }
 
     pub fn log(&self) -> Option<&InputLog> {
