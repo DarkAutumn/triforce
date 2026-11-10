@@ -17,7 +17,12 @@ pub const EDGE_SPAWN_CELL: u16 = 0x525;
 pub const ROOM_HISTORY: u16 = 0x621;
 pub const LEVEL_KILL_COUNTS: u16 = 0x560;
 pub const ROOM_FLAGS_OW: u16 = 0x67F;
+/// Room flags of levels 1-6 (levels 7-9: `ROOM_FLAGS_UW_7_9`); the game reads them through the level block's
+/// pointer at `WORLD_FLAGS_POINTER` (Z_07 GetRoomFlags), which `room_flags_base` follows.
 pub const ROOM_FLAGS_UW: u16 = 0x6FF;
+pub const ROOM_FLAGS_UW_7_9: u16 = 0x77F;
+/// LevelInfo_WorldFlagsAddr (2 bytes, little endian).
+pub const WORLD_FLAGS_POINTER: u16 = 0x6BAF;
 pub const HISTORY_LENGTH: u16 = 6;
 pub const SPAWN_CYCLE_LENGTH: u8 = 9;
 pub const NO_ROOM: u8 = 0xFF;
@@ -78,6 +83,21 @@ pub fn randomize_spawn<N: Nes, R: Rng + ?Sized>(nes: &mut N, rng: &mut R) {
     }
 }
 
+/// Where `level`'s room flags start: the level block's pointer when it is set (it is in every state that reaches
+/// EnterRoom), else the fixed block of the level ($67F overworld, $6FF levels 1-6, $77F levels 7-9).
+pub fn room_flags_base<N: Nes>(nes: &N, level: u8) -> u16 {
+    let pointer = nes.peek(WORLD_FLAGS_POINTER) as u16 | (nes.peek(WORLD_FLAGS_POINTER + 1) as u16) << 8;
+    if pointer > 0 && pointer < 0x800 {
+        pointer
+    } else if level == 0 {
+        ROOM_FLAGS_OW
+    } else if level >= 7 {
+        ROOM_FLAGS_UW_7_9
+    } else {
+        ROOM_FLAGS_UW
+    }
+}
+
 /// Clears a room's kill history so EnterRoom spawns its full monster count.
 pub fn make_room_fresh<N: Nes>(nes: &mut N, level: u8, room: u8) {
     for i in 0..HISTORY_LENGTH {
@@ -85,14 +105,13 @@ pub fn make_room_fresh<N: Nes>(nes: &mut N, level: u8, room: u8) {
             nes.poke(ROOM_HISTORY + i, NO_ROOM);
         }
     }
-    let room = room as u16;
+    let flags = room_flags_base(nes, level) + room as u16;
+    let v = nes.peek(flags);
     if level == 0 {
-        let v = nes.peek(ROOM_FLAGS_OW + room);
-        nes.poke(ROOM_FLAGS_OW + room, v & 0xF8);
+        nes.poke(flags, v & 0xF8);
     } else {
-        let v = nes.peek(ROOM_FLAGS_UW + room);
-        nes.poke(ROOM_FLAGS_UW + room, v & 0x3F);
-        nes.poke(LEVEL_KILL_COUNTS + room, 0);
+        nes.poke(flags, v & 0x3F);
+        nes.poke(LEVEL_KILL_COUNTS + room as u16, 0);
     }
 }
 
@@ -283,5 +302,24 @@ mod tests {
         nes.0[EDGE_SPAWN_CELL as usize] = 0x99;
         randomize_spawn(&mut nes, &mut rng);
         assert_eq!(nes.peek(EDGE_SPAWN_CELL), 0x99);
+    }
+
+    /// F058: levels 7-9 keep their room flags at $77F (the level block's pointer says so); a fresh room clears
+    /// the kill bits there and leaves the level 1-6 block alone.
+    #[test]
+    fn make_room_fresh_follows_the_level_flag_pointer() {
+        let mut nes = ram();
+        nes.poke(WORLD_FLAGS_POINTER, 0x7F);
+        nes.poke(WORLD_FLAGS_POINTER + 1, 0x07);
+        nes.poke(ROOM_FLAGS_UW_7_9 + 0x44, 0xC5);
+        nes.poke(ROOM_FLAGS_UW + 0x44, 0xC5);
+        make_room_fresh(&mut nes, 7, 0x44);
+        assert_eq!(nes.peek(ROOM_FLAGS_UW_7_9 + 0x44), 0x05);
+        assert_eq!(nes.peek(ROOM_FLAGS_UW + 0x44), 0xC5, "level 1-6 flags untouched");
+        // Without a pointer the level picks the block.
+        let mut nes = ram();
+        nes.poke(ROOM_FLAGS_UW_7_9 + 0x44, 0xC5);
+        make_room_fresh(&mut nes, 8, 0x44);
+        assert_eq!(nes.peek(ROOM_FLAGS_UW_7_9 + 0x44), 0x05);
     }
 }
