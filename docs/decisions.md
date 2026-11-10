@@ -78,7 +78,7 @@ Format: date — what changed — why — evidence.
 - GAE scales λ by frames like γ: per-step λ^(frames/8), λ = 0.95, so the bias/variance trade covers a fixed
   amount of game time.
 - `--iterations` counts PPO updates (rollout + optimize), not env steps.
-- Training doesn't write savestates unless `--capture-states` is passed: parallel workers would race on files.
+- Training never writes savestates (`--capture-states` removed, review F164): parallel workers would race on files.
 - Demo traces are text files, one action per line (`MOVE N 16`).
 - Network: 848,672 parameters with the conv grid encoder, 998,032 with `linear`.
 
@@ -202,7 +202,8 @@ Format: date — what changed — why — evidence.
   differ. Fixtures and parity use `randomize_rng=False`.
 - **Parity fixtures:** `scripts/record_env_parity.py` writes `crates/env/tests/fixtures/parity/<room>.npz` for
   14 rooms (0x77 start and cave, 0x67, 0x38, 1:0x73/72/74/44/45/35/36, 2:0x7d/5e from
-  `chain-milestone1-97`, 0x39 from `chain-milestone1-fairy-0`). At the last pre-entry frame before Link first
+  `chain-milestone1-97`, 0x39 from `chain-milestone1-fairy-0`; both movies were dropped from the corpus since, review
+  F089). At the last pre-entry frame before Link first
   controls the room (the base position for the start room), it stores the oracle state, loads it with
   `GameSession.load(randomize_rng=False, fresh_room=True)` and plays 200 `ZeldaEnv(strict_actions=True)`
   steps: 40 scripted (`scripts/parity_actions.toml`; a masked one is replaced by a random legal action), then
@@ -232,7 +233,9 @@ Format: date — what changed — why — evidence.
   classification, observation schema v1 (feature names, sizes and float arithmetic) are Python's. Departures:
   - **Config.** `serde_yaml_ng` with `deny_unknown_fields`, Python's keys, defaults and validators, plus
     `curriculum.fraction`, `curriculum.threshold`, `harvested_fraction` in [0, 1] and `route` naming a
-    routes.yaml route. Errors are `ConfigError` naming the file and key. `GameData::load` reads game.yaml,
+    routes.yaml route. Errors are `ConfigError` naming the file and key. Since the review fix-up it also requires
+    finite reward weights, known `endings` keys (no success kinds or timeout endings), step limits ≤ `u32::MAX`,
+    a known `reward_profile` and `enter-room` rooms written with `0x`. `GameData::load` reads game.yaml,
     routes.yaml (with its `families`), `chain_hp.json` and every `specialists/*.yaml` once and cross-checks
     them: configs = game.yaml `specialist:` tags = families, every route step's room is tagged, and a step's
     `specialist:` equals the tag. `reward_profile` is still checked when the critic is built, as in Python.
@@ -386,7 +389,7 @@ Format: date — what changed — why — evidence.
     `from_json`), `to_dict`, `disabled_kinds()`, `rooms` as `(level, room, in_cave)`; every other field through
     `__getattr__`, nested blocks as `types.SimpleNamespace` (`config.curriculum.enabled` keeps working).
     Pickles via JSON. `GameData` gained `Clone` for per-`states_dir` copies.
-  - **Tasks.** `TrainTask(config, run_dir, start_state=None, curriculum=None, capture_dir=None, states_dir=None,
+  - **Tasks.** `TrainTask(config, run_dir, start_state=None, curriculum=None, states_dir=None,
     room_events=False)` with `curriculum` a `CurriculumSpec(trajectories, state_path=None, fraction, stages,
     window, threshold)` (state path defaults to `<run_dir>/curriculum.json`). `EvalTask(config, jobs)` with
     `jobs` a list of `(start_state, seed)`. `ChainTask(configs, route, seeds, stop_at=None, start_from=None,
@@ -500,7 +503,8 @@ Format: date — what changed — why — evidence.
   game.yaml also lists 'key' for overworld 0x5a (its room-item byte), so every `milestone1-fairy` build stopped
   there. The guard now applies to `level != 0` only.
 - **Manifest.** Concurrent `build`/`path` runs into one directory lock `entry_states.json` while merging; new
-  entries record the exact `python -m triforce.entry_states ...` command (plan step 17.9).
+  entries record the exact `python -m triforce.entry_states ...` command (plan step 17.9). Since the review
+  fix-up each file's entry is merged as soon as the file is written, and the manifest is written atomically.
 - **FQ-13 and two TetaNES fixes** (open-bus latch) landed in zcore before regeneration; see the FCEUmm quirk
   history entry below and `crates/zcore/UPSTREAM.md`.
 - Results so far and the open chain-2 0x5c dead-end entry: `docs/experiments/round8.md`.
@@ -925,3 +929,54 @@ entry below and `crates/zcore/UPSTREAM.md`.
   act mix alone: 21 and 1; round16.md §7).
 - **Not kept** (round16.md §4–§6): entropy annealing, outcome fine-tuning, best-of-N, PLR, PPG, the exit-health
   weight, harvested handoff states, Gumbel expert iteration. The flags stay (all off by default).
+
+## 2026-11-10 — Review fix-up decisions (Lee)
+
+A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked through (round17.md). Lee's decisions:
+
+- **Retrain:** one full retrain of every family from scratch after all fixes; no continuation of current models.
+- **SIL:** on from the start of that retrain (`--sil-coeff 0.1` in every family).
+- **F016:** bombs are legal only in game.yaml `requires_bombs` rooms, in `SpecialistEnv` and in chains.
+- **F038 + F067:** a Hazard class (boulders $20/$1F, traps $49/$4A, Bubbles $2B–$2D): not enemies, not fight
+  targets; true non-entities leave the enemy and projectile lists; one jump-table classifier shared by the game
+  model, executor, `room_state` and observation; an emptied hazard or diving-Zora slot is not a kill.
+- **F132:** `descend()` picks only legal steps (the first via `can_link_move`); no schema bump; `Wavefront::compute`
+  unchanged.
+- **F160:** walk to the grid first; an off-grid perpendicular attack holds `ObjDir` until `$394 == 0` (≤ 6 frames).
+- **F182:** mask every attack option the game ignores (busy weapon slot, sword blocked, outside `BorderBounds`,
+  Link in an item/catch state).
+- **F187:** zero the observation's selected-B-item slice; layout and size unchanged.
+- **F094:** carry `just_exited_cave` through loads; extend it to dungeon mouths (0_37c, 0_3cc), cleared once Link
+  leaves the mouth tile.
+- **F105:** decode `$4C`/`$52E` and mask SWORD and BEAMS while the sword is blocked; no observation bit.
+- **F040 (+F101):** reset the observation builder on one_room entries in chains; training unchanged.
+- **F078:** the no-progress timeout follows `max_steps`.
+- **F092:** bomb pickups pay like other item pickups (bombs in the equipment value); cheat grants don't count.
+- **F111:** no code change; the fight-room PBRS term is documented as an approach reward, plus a backlog experiment.
+- **F157:** a chain run ends as a failure on its 20th wrong exit into a tagged room.
+- **F173:** a cheat grant is used first; a natural pickup leaves the grant alone.
+- **F185:** start-state draws: 0.15/N uniform floor + 0.85 · decayed mean badness / Σ; round-robin warm-up kept.
+- **F158:** every selector starts at a random offset from the env's rng; the >128-state case is fixed.
+- **F069:** `harvested_fraction` defaults to 0.0; training logs the harvested dir, count and fraction and warns
+  when the count is non-zero.
+- **F140:** the early stop balances over seed start states only; harvested results are logged separately.
+- **F071:** in-flight metrics, per-start cohort rates for the early stop, guards, and every candidate stop
+  confirmed by an evaluation (50 sampled episodes per seed state); no `best.pt`, no time-based window.
+- **F088:** a `--load` continuation resumes the loaded run's curriculum when the trajectories match.
+- **F172:** training into an existing run dir sets the old files aside; a same-dir `--load` appends metrics.
+- **F084:** the PPO update is all-or-nothing (snapshot, restore on `BaseException`).
+- **F130:** exact per-state counts over whole recent cohorts covering at least the window.
+- **F167:** minibatches by `torch.tensor_split`; the KL rollback stays on the last minibatch.
+- **F180:** search simulations act by argmax.
+- **F025:** no promotion by default (`--promote`); the round summary keeps the previous promoted ids.
+- **F027 + F125 (+F126):** every reader checks the act mode; `eval.json` only for a canonical run, else
+  `eval-<...>.json`; `set_act_mode` renames a mismatching `eval.json`; all writes atomic.
+- **F007:** `entry_states build` defaults to `--chains 0,1,2`.
+- **F011:** a missing ROM fails tests by default; `TRIFORCE_ALLOW_NO_ROM=1` skips; one ROM helper per language.
+- **F066:** pre-r56 checkpoints load again (`grid_encoder: 'conv'` accepted and dropped).
+- **Deletions:** `specialists/arms/` (F033), `scripts/old_stack_sps.py` (F044), `--capture-states` and its
+  machinery (F164; `set_capture_pre_entry` stays for `--harvest`), `--demo*`, `triforce/demo.py` and
+  `scripts/behavior_clone.py` (F192; `PPO.demo_batch` stays), the round-10 scripts (F049–F053, F060).
+- **Accepted as recommended:** F017 (golden staleness covers the base-movie chain), F089 (desynced milestone1
+  movies dropped, chain recordings replayed as goldens), F152 (only still-playing hidden games take a cell), F178
+  (cellars drawn with their entrance), F018 (doc edits as written).
