@@ -11,7 +11,7 @@ one_room: true                          # round 5: per-room episodes
 max_steps: 600
 warm_start: null
 notes: >-
-  Tektite rooms (Lee, Nov 8: their jump patterns are their own). Not trained yet. 0x1a (Red Tektite x6 and a Zora),
+  Tektite rooms (Lee, Nov 8: their jump patterns are their own). 0x1a (Red Tektite x6 and a Zora),
   crossed twice: from E to N (to the white sword at 0x0a), then from N to W; from N without the white sword (a
   retreat from 0x0a) the objective sends Link back N. 0x2c (Red Tektite x4, Lee Nov 8): from E bomb the rock wall
   and enter the take-any cave, take the heart container (right ware; the potion or leaving without it is
