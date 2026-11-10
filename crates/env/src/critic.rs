@@ -263,6 +263,10 @@ impl GameplayCritic {
     fn critique_equipment_pickup(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let (prev, curr) = (&c.change.previous, &c.change.state);
         for (attr, name, value) in EQUIPMENT {
+            // The map and compass are the current level's: walking into a dungeon whose map Link holds is no pickup.
+            if matches!(attr, "map" | "compass") && prev.level() != curr.level() {
+                continue;
+            }
             if equipment_value(prev, attr) < equipment_value(curr, attr) {
                 rewards.add(Outcome::reward(name, value));
             }

@@ -533,6 +533,19 @@ fn equipment_pickups_count_increases_only() {
     assert!(r.is_empty(), "{:?}", names(&r));
 }
 
+/// F043: walking from the overworld into a dungeon whose map and compass Link already holds is no pickup; taking
+/// them inside the dungeon still pays.
+#[test]
+fn entering_a_dungeon_with_its_map_is_no_pickup() {
+    let held = Ram::new().with(Var::Map, 0b1).with(Var::Compass, 0b1);
+    let outside = held.room(MapLocation::new(0, 0x37, false));
+    let r = critique(&mut critic(), &step(&outside, &held, "MOVE N 8"));
+    assert!(!names(&r).iter().any(|n| n.starts_with("reward-gained-")), "{:?}", names(&r));
+    let base = Ram::new();
+    let r = critique(&mut critic(), &step(&base, &base.with(Var::Map, 0b1), "MOVE N 8"));
+    assert_eq!(value(&r, "reward-gained-map"), REWARD_MAXIMUM);
+}
+
 // --- movement, rooms and stalling ---
 
 #[test]
@@ -813,7 +826,7 @@ fn ends(
 
 fn conditions(success: &[&str], one_room: bool, no_progress: Option<u32>) -> EndConditions {
     let success: Vec<String> = success.iter().map(|s| s.to_string()).collect();
-    EndConditions::new(&[ROOM, EAST], &success, one_room, no_progress, None)
+    EndConditions::new(&[ROOM, EAST], &success, one_room, no_progress, None, 2000)
 }
 
 #[test]
@@ -944,6 +957,20 @@ fn timeout_catches_stuck_link_and_rooms_without_progress() {
     assert_eq!((ending.as_deref(), n), (Some(NO_PROGRESS), 2001));
 }
 
+/// F078: the no-new-room limit follows the specialist's max_steps: with max_steps 3000 a one_room episode moving
+/// in its room has no ending through step 3000 (the env's `max-steps` truncation comes first).
+#[test]
+fn the_no_progress_limit_follows_max_steps() {
+    let base = Ram::new();
+    let (a, b) = (base.link(120, 133), base.link(120, 141));
+    let (there, back) = (step(&a, &b, "MOVE S 8"), step(&b, &a, "MOVE N 8"));
+    let success = vec![EXIT_CORRECT.to_owned()];
+    let mut c = EndConditions::new(&[ROOM, EAST], &success, true, None, None, 3000);
+    for n in 1..=3000 {
+        assert_eq!(ends(&mut c, if n % 2 == 0 { &there } else { &back }, &[EAST], 0), None, "step {n}");
+    }
+}
+
 #[test]
 fn no_room_progress_replaces_the_timeout() {
     let base = Ram::new();
@@ -967,7 +994,7 @@ fn no_damage_ends_attack_loops_that_never_connect() {
     let base = Ram::new();
     let swing = step(&base, &base, "SWORD E");
     let success = vec![EXIT_CORRECT.to_owned()];
-    let mut c = EndConditions::new(&[ROOM, EAST], &success, false, Some(1000), Some(5));
+    let mut c = EndConditions::new(&[ROOM, EAST], &success, false, Some(1000), Some(5), 2000);
     let swings = |c: &mut EndConditions, n: usize| {
         (0..n)
             .map(|_| ends(c, &swing, &[EAST], 0))
