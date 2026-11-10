@@ -181,6 +181,9 @@ mod tests {
         }
         fn snapshot(&self) {}
         fn restore(&mut self, _: &()) {}
+        fn poke_state(_: &mut (), _: u16, _: u8) {
+            unreachable!()
+        }
     }
 
     fn ram() -> Ram {

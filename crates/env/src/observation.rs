@@ -200,6 +200,8 @@ mod l {
     pub const BOOMERANG: usize = 69;
     pub const MAGIC_BOOMERANG: usize = 70;
     pub const MAGIC_SHIELD: usize = 71;
+    /// The `selected_*` slice: kept in the layout, always zero (F187).
+    #[allow(dead_code)]
     pub const SELECTED: usize = 72;
 }
 

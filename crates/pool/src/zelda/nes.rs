@@ -180,6 +180,10 @@ impl<N: Nes> Nes for PoolNes<N> {
         });
     }
 
+    fn poke_state(state: &mut Self::State, addr: u16, value: u8) {
+        N::poke_state(&mut state.inner, addr, value);
+    }
+
     fn peek(&self, addr: u16) -> u8 {
         self.inner.peek(addr)
     }
@@ -246,6 +250,12 @@ mod tests {
         }
         fn restore(&mut self, s: &Self::State) {
             (self.ram, self.prg) = *s;
+        }
+        fn poke_state(s: &mut Self::State, addr: u16, value: u8) {
+            match addr {
+                0..0x800 => s.0[addr as usize] = value,
+                _ => s.1[addr as usize - 0x6000] = value,
+            }
         }
     }
 

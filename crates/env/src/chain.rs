@@ -366,6 +366,9 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     linger: LingerTracker,
     /// The run's cheated bombs, keys and rupees (`zelda::cheats`).
     cheats: CheatLedger,
+    /// The counts the last action's room was left with, without the grants taken back (`CheatStep::left_with`):
+    /// written into a harvested pre-entry snapshot, which was taken before the take-back (F148).
+    left_with: ItemCounts<Option<u8>>,
     builder: ObservationBuilder,
 }
 
@@ -396,6 +399,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             hearts: HeartTracker::default(),
             linger: LingerTracker::default(),
             cheats: CheatLedger::default(),
+            left_with: ItemCounts::default(),
             builder: ObservationBuilder::new(true, false),
         }
     }
@@ -462,9 +466,15 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         };
         let dir = dir.join(name);
         let path = dir.join(file);
+        let mut snapshot = pre_entry.clone();
+        for item in CheatItem::ALL {
+            if let Some(n) = self.left_with[item] {
+                N::poke_state(&mut snapshot.machine, item.var().addr(), n);
+            }
+        }
         std::fs::create_dir_all(&dir)
             .map_err(EnvError::from)
-            .and_then(|()| self.store.save(&path, pre_entry))
+            .and_then(|()| self.store.save(&path, &snapshot))
             .map_err(|e| format!("harvest {}: {e}", path.display()))
     }
 
@@ -541,6 +551,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             self.objectives.as_ref().expect("run started"),
             change.previous.full_location(),
         );
+        self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev_objective = self.objective.take().expect("run started");
@@ -803,6 +814,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             self.session
                 .set_disabled_kinds(&room_disabled_kinds(&config.items, &map, location));
             let switch = self.current.as_ref().is_none_or(|c| *c.name != *name);
+            // A one_room specialist trains on episodes that start at the room (a reset observation): give it the
+            // same on every room entry, also from a room of its own family (F040).
+            let fresh = switch || config.one_room;
             if switch {
                 if exit_correct {
                     self.harvest_entry(&name, index)?;
@@ -812,6 +826,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     name: Arc::from(name.as_str()),
                     config,
                 });
+            }
+            if fresh {
                 let wavefront = self.target_wavefront(&objective);
                 obs = self.builder.reset(
                     &state,

@@ -631,6 +631,10 @@ pub(crate) mod tests {
         fn restore(&mut self, state: &Self::State) {
             (self.ram, self.frame) = *state;
         }
+
+        fn poke_state(state: &mut Self::State, addr: u16, value: u8) {
+            state.0[addr as usize] = value;
+        }
     }
 
     fn machine(collision: u64, stunned_until: u64) -> Machine<Scripted> {
@@ -871,6 +875,10 @@ pub(crate) mod tests {
 
         fn restore(&mut self, state: &Self::State) {
             (self.ram, self.frame) = *state;
+        }
+
+        fn poke_state(state: &mut Self::State, addr: u16, value: u8) {
+            state.0[addr as usize] = value;
         }
     }
 

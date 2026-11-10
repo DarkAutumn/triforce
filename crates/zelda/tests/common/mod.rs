@@ -37,6 +37,10 @@ impl Nes for Counted {
     fn restore(&mut self, state: &MachineState) {
         self.0.restore(state);
     }
+
+    fn poke_state(state: &mut MachineState, addr: u16, value: u8) {
+        state.poke(addr, value);
+    }
 }
 
 pub fn repo() -> PathBuf {

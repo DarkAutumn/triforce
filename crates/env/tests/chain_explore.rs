@@ -182,6 +182,8 @@ fn chain_runs() {
         lynel_retreat_continues_the_run,
         cave_bounce_hits_the_wrong_exit_limit,
         mid_route_triforce_is_the_correct_exit,
+        harvested_states_hold_no_granted_bomb,
+        one_room_entries_reset_the_observation,
         target_observation_follows_the_acting_specialist,
     ] {
         nes = case(nes, &data);
@@ -570,4 +572,109 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
     }
     let terminal = terminal.expect("episode ended");
     assert_eq!(terminal.curriculum.unwrap().track, "0_38n_0");
+}
+
+/// The moves a breadth-first search over Link's tiles finds from the chain's current state to the first step
+/// `goal` accepts (the session is put back where it was).
+fn bfs_walk<St: StateStore<MachineState>>(
+    c: &mut ChainEnv<ZCore, St>,
+    goal: impl Fn(&zelda::Change) -> bool,
+) -> Vec<Action> {
+    let start = c.session().snapshot();
+    let mut queue = std::collections::VecDeque::from([(start.clone(), Vec::new())]);
+    let mut seen = std::collections::HashSet::from([c.session().state().link.position]);
+    while let Some((snap, actions)) = queue.pop_front() {
+        c.session_mut().restore(&snap);
+        for d in c.session().mask().directions(zelda::ActionKind::Move) {
+            let a = Action::new(zelda::ActionKind::Move, d, 4).unwrap();
+            c.session_mut().restore(&snap);
+            let hc = c.session().state().hearts_and_containers();
+            c.session_mut().apply_ram(&[(zelda::Var::HeartsAndContainers, (hc & 0xF0) | (hc >> 4))]);
+            let change = c.session_mut().act(a).unwrap();
+            let mut next = actions.clone();
+            next.push(a);
+            if goal(&change) {
+                c.session_mut().restore(&start);
+                return next;
+            }
+            if !change.changed_location() && seen.insert(change.state.link.position) {
+                queue.push_back((c.session().snapshot(), next));
+            }
+        }
+    }
+    panic!("no walk to the goal ({} tiles reached)", seen.len());
+}
+
+/// F148: leaving 0x2c (a `requires_bombs` room) with a granted bomb outstanding: the harvested pre-entry state of
+/// 0x1c holds the bombs the run really carried (0), not the granted one the live run takes back afterwards.
+fn harvested_states_hold_no_granted_bomb(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let dir = tempfile::tempdir().unwrap();
+    let mut source = common::read_state_file(&common::state_path("0_2cc_0")).unwrap();
+    source.machine.poke(0x658, 0);
+    let start = dir.path().join("0_2cc_0.state");
+    TfzStore::new().save(&start, &source).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some(start.to_str().unwrap())).unwrap();
+    let mut c = chain(nes, data, route);
+    let harvest = dir.path().join("harvested");
+    c.set_harvest(Some(harvest.clone()));
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+    assert_eq!(c.session().state().bombs(), 1, "the room's granted bomb");
+    let n1c = MapLocation::new(0, 0x1c, false);
+    for a in bfs_walk(&mut c, |ch| ch.state.full_location() == n1c) {
+        if let ChainStatus::Done(r) = c.step(a).unwrap() {
+            panic!("run ended on the walk: {r:?}");
+        }
+    }
+    assert_eq!(c.session().state().full_location(), n1c);
+    assert_eq!(c.session().state().bombs(), 0, "taken back on leaving");
+    let files: Vec<_> = glob_files(&harvest);
+    assert_eq!(files.len(), 1, "{files:?}");
+    let saved = common::read_state_file(&files[0]).unwrap();
+    assert_eq!(saved.machine.peek(0x658), 0, "{}", files[0].display());
+    c.into_parts().0.into_nes()
+}
+
+fn glob_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(glob_files(&p));
+        } else {
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// F040: a one_room specialist entering a room of its own family in a chain sees a reset observation, as at the
+/// start of its training episodes: the history block is empty but the entry side.
+fn one_room_entries_reset_the_observation(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("1_73s_0")).unwrap();
+    let mut c = chain(nes, data, route);
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+    let west = MapLocation::new(1, 0x72, false);
+    let walk = bfs_walk(&mut c, |ch| ch.state.full_location() == west);
+    let mut entry = None;
+    for a in walk {
+        match c.step(a).unwrap() {
+            ChainStatus::Done(r) => panic!("run ended on the walk: {r:?}"),
+            ChainStatus::Act { specialist, obs, new_room } => {
+                if new_room && c.session().state().full_location() == west {
+                    assert_eq!(&*specialist, "stalfos-keese-gel");
+                    entry = Some(obs);
+                }
+            }
+        }
+    }
+    let obs = entry.expect("entered 0x72");
+    let names = &env::observation::feature_names().history;
+    for (name, &v) in names.iter().zip(obs.history.iter()) {
+        if !name.starts_with("entered_from_") {
+            assert_eq!(v, 0.0, "{name}");
+        }
+    }
+    c.into_parts().0.into_nes()
 }

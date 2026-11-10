@@ -173,6 +173,10 @@ pub struct CheatStep {
     pub cheated: ItemCounts,
     /// The count to write, when the rule changed it.
     pub set: ItemCounts<Option<u8>>,
+    /// On leaving a room with granted units outstanding: the count the room was left with, without them. The
+    /// pre-entry snapshot of the next room was taken during the action, before this take-back, so a state saved
+    /// from it gets these counts written in (F148).
+    pub left_with: ItemCounts<Option<u8>>,
 }
 
 /// One item's count after the last settle (the ledger's own write included) and how much of it is granted.
@@ -220,11 +224,13 @@ impl CheatLedger {
                 held.granted -= cheated;
                 step.used[item] = fall as u32;
                 step.cheated[item] = cheated as u32;
-            } else if now > held.count {
-                held.granted = (held.granted - (now - held.count)).max(0);
             }
+            // A natural pickup leaves the grant alone (Lee, F173): the grant is used first, and leaving takes it back.
             let mut target = now;
             if left {
+                if held.granted > 0 {
+                    step.left_with[item] = Some((now - held.granted).max(0) as u8);
+                }
                 target -= held.granted;
                 held.granted = 0;
             }
@@ -337,10 +343,10 @@ mod tests {
         // The natural last bomb: placing it is used, not cheated; then a cheated one arrives.
         let s = l.settle(DODONGO, BOMB, of(0, 0, 0));
         assert_eq!((s.used, s.cheated, s.set.bombs), (cheats(1, 0, 0), cheats(0, 0, 0), Some(1)));
-        // A pickup repays the grant: placing the next one isn't cheated.
+        // A pickup leaves the grant alone (F173): the next bomb placed is the granted one, cheated.
         assert_eq!(l.settle(DODONGO, BOMB, of(5, 0, 0)).set, set(None, None, None));
-        assert_eq!(l.settle(DODONGO, BOMB, of(4, 0, 0)).cheated, cheats(0, 0, 0));
-        assert_eq!((l.used.bombs, l.cheated.bombs), (3, 0));
+        assert_eq!(l.settle(DODONGO, BOMB, of(4, 0, 0)).cheated, cheats(1, 0, 0));
+        assert_eq!((l.used.bombs, l.cheated.bombs), (3, 1));
     }
 
     #[test]
@@ -359,7 +365,7 @@ mod tests {
         let mut l = CheatLedger::default();
         l.reset(DODONGO, BOMB, of(1, 0, 0));
         assert_eq!(l.settle(SOUTH, NONE, of(1, 0, 0)), CheatStep::default());
-        // A cheated bomb repaid by a pickup is natural too.
+        // A cheated bomb used up after a pickup: what is left is natural.
         let mut l = CheatLedger::default();
         l.reset(DODONGO, BOMB, of(0, 0, 0));
         for bombs in [4, 3, 2, 1] {
@@ -400,10 +406,11 @@ mod tests {
         assert_eq!(l.reset(ROOM, KEY, of(0, 1, 0)).set, set(None, None, None));
         let s = l.settle(ROOM, KEY, of(0, 0, 0));
         assert_eq!((s.used.keys, s.cheated.keys, s.set.keys), (1, 0, Some(1)));
-        // The key picked up in the room repays the grant: it's natural and leaves with Link.
+        // The key picked up in the room leaves the grant alone (F173): leaving takes the granted one back.
         assert_eq!(l.settle(ROOM, KEY, of(0, 2, 0)).set, set(None, None, None));
-        assert_eq!(l.granted(CheatItem::Keys), 0);
-        assert_eq!(l.settle(NEXT, NONE, of(0, 2, 0)), CheatStep::default());
+        assert_eq!(l.granted(CheatItem::Keys), 1);
+        let s = l.settle(NEXT, NONE, of(0, 2, 0));
+        assert_eq!((s.set, s.left_with), (set(None, Some(1), None), set(None, Some(1), None)));
     }
 
     /// The key-treasure-first rule as the ledger sees it: while the room's key treasure is left the need is 0 (no
@@ -419,8 +426,8 @@ mod tests {
         assert_eq!(l.granted(CheatItem::Keys), 1);
     }
 
-    /// Rupees: topped up to the need; spending uses the top-up first (cheated), a natural rise repays it, and leaving
-    /// takes back only what is left of the top-up, never natural rupees.
+    /// Rupees: topped up to the need; spending uses the top-up first (cheated), a natural rise leaves it alone
+    /// (F173), and leaving takes back what is left of the top-up, never natural rupees.
     #[test]
     fn rupees_top_up_to_the_need_and_leave_natural_ones_alone() {
         let need = of(0, 0, 80);
@@ -432,12 +439,12 @@ mod tests {
         let s = l.settle(SHOP, NONE, of(0, 0, 20));
         assert_eq!((s.used.rupees, s.cheated.rupees, s.set.rupees), (30, 20, None), "the top-up first");
         assert_eq!(l.granted(CheatItem::Rupees), 0);
-        // Settled at 20: topped up again (60 granted); a natural 5 repays 5 of it.
+        // Settled at 20: topped up again (60 granted); a natural 5 leaves the grant as it is.
         assert_eq!(l.settle(SHOP, need, of(0, 0, 20)).set.rupees, Some(80));
         assert_eq!(l.settle(SHOP, need, of(0, 0, 85)), CheatStep::default());
-        assert_eq!(l.granted(CheatItem::Rupees), 55);
-        // Leaving takes back the 55 still granted.
-        assert_eq!(l.settle(OUTSIDE, NONE, of(0, 0, 85)).set, set(None, None, Some(30)));
+        assert_eq!(l.granted(CheatItem::Rupees), 60);
+        // Leaving takes back the 60 still granted: Link leaves with his 20 plus the 5 he found.
+        assert_eq!(l.settle(OUTSIDE, NONE, of(0, 0, 85)).set, set(None, None, Some(25)));
         assert_eq!((l.used.rupees, l.cheated.rupees), (60, 50));
         // Natural rupees above the need are never touched.
         let mut l = CheatLedger::default();
@@ -445,6 +452,19 @@ mod tests {
         assert_eq!(l.settle(SHOP, need, of(0, 0, 100)).set, set(None, None, None));
         assert_eq!(l.settle(OUTSIDE, NONE, of(0, 0, 100)), CheatStep::default());
         assert_eq!(l.cheated, cheats(0, 0, 0));
+    }
+
+    /// F173, the 0x2c example: no natural bomb, one granted, a 4-bomb pickup, the wall bomb placed: the grant is used
+    /// first (1 cheated), and Link leaves with exactly his 4 picked-up bombs.
+    #[test]
+    fn a_pickup_leaves_the_grant_alone() {
+        let mut l = CheatLedger::default();
+        assert_eq!(l.reset(DODONGO, BOMB, of(0, 0, 0)).set, set(Some(1), None, None));
+        l.settle(DODONGO, BOMB, of(5, 0, 0));
+        l.settle(DODONGO, BOMB, of(4, 0, 0));
+        let s = l.settle(SOUTH, NONE, of(4, 0, 0));
+        assert_eq!(s.set, set(None, None, None), "nothing left to take back");
+        assert_eq!((l.used.bombs, l.cheated.bombs), (1, 1));
     }
 
     /// Items are independent: a bomb room that is also a key room grants both and counts each separately.

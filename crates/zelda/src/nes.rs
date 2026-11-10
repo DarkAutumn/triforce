@@ -25,6 +25,9 @@ pub trait Nes {
 
     fn restore(&mut self, state: &Self::State);
 
+    /// Write RAM or PRG-RAM of a saved state (a snapshot fixed up before it is saved).
+    fn poke_state(state: &mut Self::State, addr: u16, value: u8);
+
     /// Whether the last frame was rendered.
     fn rendered(&self) -> bool {
         false
@@ -72,6 +75,10 @@ impl Nes for zcore::ZCore {
 
     fn restore(&mut self, state: &Self::State) {
         zcore::ZCore::restore(self, state);
+    }
+
+    fn poke_state(state: &mut Self::State, addr: u16, value: u8) {
+        state.poke(addr, value);
     }
 
     fn rendered(&self) -> bool {

@@ -124,6 +124,25 @@ pub struct MachineState {
 }
 
 impl MachineState {
+    /// Write RAM ($0000-$07FF) or PRG-RAM ($6000-$7FFF) of a saved state, as [`ZCore::poke`] does on a running
+    /// machine (a snapshot fixed up before it is written to a file). Panics on any other address.
+    pub fn poke(&mut self, addr: u16, value: u8) {
+        match addr {
+            0x0000..0x0800 => self.state.wram[usize::from(addr)] = value,
+            0x6000..0x8000 => self.state.memory.prg_ram_mut()[usize::from(addr) - 0x6000] = value,
+            _ => panic!("poke address ${addr:04X} is outside $0000-$07FF/$6000-$7FFF"),
+        }
+    }
+
+    /// Read RAM or PRG-RAM of a saved state. Panics on any other address.
+    pub fn peek(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..0x0800 => self.state.wram[usize::from(addr)],
+            0x6000..0x8000 => self.state.memory.prg_ram()[usize::from(addr) - 0x6000],
+            _ => panic!("peek address ${addr:04X} is outside $0000-$07FF/$6000-$7FFF"),
+        }
+    }
+
     /// The checks a decoded state must pass before a [`ZCore`] runs it: the fields that only ever
     /// hold one value, positions in range and indexes that can't leave their tables. A state that
     /// fails them would load a different machine, panic or never finish a frame.
