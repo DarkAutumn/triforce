@@ -342,6 +342,38 @@ def test_an_interrupted_run_saves_but_exits_130(states_dir, tmp_path):
     assert registry.load_checkpoint(run_dir)['iterations'] == summary['iterations']
 
 
+def test_an_interrupt_mid_update_saves_the_last_finished_iteration(states_dir, tmp_path, monkeypatch):
+    """KeyboardInterrupt on the 2nd optimizer step of iteration 2: the checkpoint holds iteration 1's weights and
+    optimizer state, not a partial update (F084)."""
+    from triforce.ppo import PPO  # pylint: disable=import-outside-toplevel
+    original, seen = PPO.optimize, {}
+
+    def optimize(self, network, buffer):
+        seen['calls'] = seen.get('calls', 0) + 1
+        if seen['calls'] == 2:
+            step, steps = self.optimizer.step, []
+
+            def interrupted(*args, **kwargs):
+                steps.append(1)
+                if len(steps) == 2:
+                    raise KeyboardInterrupt("test")
+                return step(*args, **kwargs)
+            self.optimizer.step = interrupted
+        stats = original(self, network, buffer)
+        seen['weights'] = {k: v.detach().clone() for k, v in network.state_dict().items()}
+        seen['adam_steps'] = {int(s['step']) for s in self.optimizer.state_dict()['state'].values()}
+        return stats
+
+    monkeypatch.setattr(PPO, 'optimize', optimize)
+    run_dir = train.main(_common(states_dir, tmp_path, '--parallel', '2', '--steps-per-update', '32', '--iterations',
+                                 '5', '--learning-rate', '1e-6', '--run-id', 'cut-mid', '--seed', '3'))
+    assert train.run_status(run_dir) == 'interrupted' and seen['calls'] == 2
+    checkpoint = registry.load_checkpoint(run_dir)
+    assert checkpoint['iterations'] == 1
+    assert all(torch.equal(value, seen['weights'][key]) for key, value in checkpoint['state_dict'].items())
+    assert {int(s['step']) for s in checkpoint['optimizer']['state'].values()} == seen['adam_steps']
+
+
 def _train_round():
     spec = importlib.util.spec_from_file_location('train_round', Path(__file__).parents[1] / 'scripts' /
                                                   'train_round.py')

@@ -418,7 +418,8 @@ class PPO:
     # ------------------------------------------------------------------ optimization
 
     def optimize(self, network: nn.Module, buffer: RolloutBuffer) -> dict:
-        """One PPO update over the buffer.  Returns loss/KL/entropy stats.
+        """One PPO update over the buffer.  Returns loss/KL/entropy stats.  All-or-nothing: an exception mid-update
+        (an interrupt included) restores the weights and optimizer state from before it, then re-raises.
 
         Rows the search chose (``buffer.search_mask``) train the policy by distillation toward the search's π'
         instead of the clipped ratio term (and stay out of its KL/clipfrac stats)."""
@@ -451,12 +452,11 @@ class PPO:
         sil_positive_share = sil.add(buffer) if sil is not None else 0.0
         sil_policy_loss = sil_value_loss = torch.tensor(0.0)
 
-        rollback_threshold = None
-        saved_state = saved_optimizer = None
-        if cfg.kl_rollback and cfg.target_kl:
-            rollback_threshold = cfg.target_kl * cfg.kl_rollback
-            saved_state = {k: v.detach().clone() for k, v in network.state_dict().items()}
-            saved_optimizer = copy.deepcopy(optimizer.state_dict())
+        # The update is all-or-nothing: an exception (an interrupt included) restores this snapshot, as does the KL
+        # rollback.
+        rollback_threshold = cfg.target_kl * cfg.kl_rollback if cfg.kl_rollback and cfg.target_kl else None
+        saved_state = {k: v.detach().clone() for k, v in network.state_dict().items()}
+        saved_optimizer = copy.deepcopy(optimizer.state_dict())
 
         clipfracs = []
         approx_kl = old_approx_kl = torch.tensor(0.0)
@@ -464,84 +464,90 @@ class PPO:
         kl_exceeded = False
         epochs_run = 0
         updates = 0
-        for _ in range(cfg.num_epochs):
-            if kl_exceeded:
-                break
-            epochs_run += 1
-            indices = torch.randperm(batch_size, device=self.device)
-            # Exactly `minibatches` near-equal parts (sizes differ by at most 1): no tiny tail minibatch.
-            for mb in torch.tensor_split(indices, min(cfg.minibatches, batch_size)):
-                mb_obs = {k: v[mb] for k, v in b_obs.items()}
-                out = network.evaluate(mb_obs, b_masks[mb], b_actions[mb])
-
-                # The PPO term covers the rows the policy sampled; searched rows executed the search's choice.
-                pg_rows, searched = slice(None), None
-                if b_searched is not None:
-                    searched = mb[b_searched[mb]]
-                    pg_rows = ~b_searched[mb]
-                logratio = out.log_prob[pg_rows] - b_logprobs[mb][pg_rows]
-                ratio = logratio.exp()
-                if logratio.numel():
-                    with torch.no_grad():
-                        old_approx_kl = (-logratio).mean()
-                        approx_kl = ((ratio - 1) - logratio).mean()
-                        clipfracs.append(((ratio - 1.0).abs() > cfg.clip_coeff).float().mean().item())
-
-                    mb_adv = b_advantages[mb][pg_rows]
-                    if cfg.norm_advantages and mb_adv.numel() > 1:
-                        mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
-
-                    pg_loss = torch.max(-mb_adv * ratio,
-                                        -mb_adv * torch.clamp(ratio, 1 - cfg.clip_coeff, 1 + cfg.clip_coeff)).mean()
-                else:
-                    pg_loss = torch.zeros((), device=self.device)
-
-                new_value = out.value.view(-1)
-                if cfg.clip_val_loss:
-                    clipped = b_values[mb] + torch.clamp(new_value - b_values[mb], -cfg.clip_coeff, cfg.clip_coeff)
-                    v_loss = 0.5 * torch.max((new_value - b_returns[mb]) ** 2, (clipped - b_returns[mb]) ** 2).mean()
-                else:
-                    v_loss = 0.5 * (new_value - b_returns[mb]).pow(2).mean()
-
-                entropy_loss = out.entropy.mean()
-                loss = pg_loss - self.ent_coeff * entropy_loss + cfg.vf_coeff * v_loss
-                if searched is not None and searched.numel():
-                    joint = network.joint_log_probs({k: v[searched] for k, v in b_obs.items()}, b_masks[searched])
-                    search_ce = search_cross_entropy(b_search_policy[searched], joint)
-                    loss = loss + cfg.search_coeff * search_ce
-                if demo is not None:
-                    rows = demo[2].shape[0]
-                    if rows > minibatch_size:   # a large batch (best-of-N runs): a minibatch-sized sample each time
-                        pick = torch.randperm(rows, device=self.device)[:minibatch_size]
-                        demo_out = network.evaluate({k: v[pick] for k, v in demo[0].items()}, demo[1][pick],
-                                                    demo[2][pick])
-                    else:
-                        demo_out = network.evaluate(demo[0], demo[1], demo[2])
-                    demo_bc_loss = -demo_out.log_prob.mean()
-                    loss = loss + cfg.demo_bc_coeff * demo_bc_loss
-                if sil is not None and len(sil) > 0:
-                    sil_obs, sil_masks, sil_actions, sil_returns = sil.sample(minibatch_size, self.device)
-                    sil_out = network.evaluate(sil_obs, sil_masks, sil_actions)
-                    sil_gap = torch.clamp(sil_returns - sil_out.value.view(-1), min=0.0)
-                    sil_policy_loss = -(sil_out.log_prob * sil_gap.detach()).mean()
-                    sil_value_loss = 0.5 * sil_gap.pow(2).mean()
-                    loss = loss + cfg.sil_coeff * (sil_policy_loss + cfg.sil_value_coeff * sil_value_loss)
-
-                optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(network.parameters(), cfg.max_grad_norm)
-                optimizer.step()
-                updates += 1
-
-                if cfg.target_kl is not None and approx_kl > cfg.target_kl:
-                    kl_exceeded = True
+        try:
+            for _ in range(cfg.num_epochs):
+                if kl_exceeded:
                     break
+                epochs_run += 1
+                indices = torch.randperm(batch_size, device=self.device)
+                # Exactly `minibatches` near-equal parts (sizes differ by at most 1): no tiny tail minibatch.
+                for mb in torch.tensor_split(indices, min(cfg.minibatches, batch_size)):
+                    mb_obs = {k: v[mb] for k, v in b_obs.items()}
+                    out = network.evaluate(mb_obs, b_masks[mb], b_actions[mb])
 
-        rolled_back = False
-        if rollback_threshold is not None and approx_kl > rollback_threshold:
+                    # The PPO term covers the rows the policy sampled; searched rows executed the search's choice.
+                    pg_rows, searched = slice(None), None
+                    if b_searched is not None:
+                        searched = mb[b_searched[mb]]
+                        pg_rows = ~b_searched[mb]
+                    logratio = out.log_prob[pg_rows] - b_logprobs[mb][pg_rows]
+                    ratio = logratio.exp()
+                    if logratio.numel():
+                        with torch.no_grad():
+                            old_approx_kl = (-logratio).mean()
+                            approx_kl = ((ratio - 1) - logratio).mean()
+                            clipfracs.append(((ratio - 1.0).abs() > cfg.clip_coeff).float().mean().item())
+
+                        mb_adv = b_advantages[mb][pg_rows]
+                        if cfg.norm_advantages and mb_adv.numel() > 1:
+                            mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
+
+                        pg_loss = torch.max(-mb_adv * ratio, -mb_adv * torch.clamp(ratio, 1 - cfg.clip_coeff,
+                                                                                    1 + cfg.clip_coeff)).mean()
+                    else:
+                        pg_loss = torch.zeros((), device=self.device)
+
+                    new_value = out.value.view(-1)
+                    if cfg.clip_val_loss:
+                        clipped = b_values[mb] + torch.clamp(new_value - b_values[mb], -cfg.clip_coeff,
+                                                             cfg.clip_coeff)
+                        v_loss = 0.5 * torch.max((new_value - b_returns[mb]) ** 2,
+                                                 (clipped - b_returns[mb]) ** 2).mean()
+                    else:
+                        v_loss = 0.5 * (new_value - b_returns[mb]).pow(2).mean()
+
+                    entropy_loss = out.entropy.mean()
+                    loss = pg_loss - self.ent_coeff * entropy_loss + cfg.vf_coeff * v_loss
+                    if searched is not None and searched.numel():
+                        joint = network.joint_log_probs({k: v[searched] for k, v in b_obs.items()},
+                                                        b_masks[searched])
+                        search_ce = search_cross_entropy(b_search_policy[searched], joint)
+                        loss = loss + cfg.search_coeff * search_ce
+                    if demo is not None:
+                        rows = demo[2].shape[0]
+                        if rows > minibatch_size:   # a large batch (best-of-N runs): a minibatch-sized sample
+                            pick = torch.randperm(rows, device=self.device)[:minibatch_size]
+                            demo_out = network.evaluate({k: v[pick] for k, v in demo[0].items()}, demo[1][pick],
+                                                        demo[2][pick])
+                        else:
+                            demo_out = network.evaluate(demo[0], demo[1], demo[2])
+                        demo_bc_loss = -demo_out.log_prob.mean()
+                        loss = loss + cfg.demo_bc_coeff * demo_bc_loss
+                    if sil is not None and len(sil) > 0:
+                        sil_obs, sil_masks, sil_actions, sil_returns = sil.sample(minibatch_size, self.device)
+                        sil_out = network.evaluate(sil_obs, sil_masks, sil_actions)
+                        sil_gap = torch.clamp(sil_returns - sil_out.value.view(-1), min=0.0)
+                        sil_policy_loss = -(sil_out.log_prob * sil_gap.detach()).mean()
+                        sil_value_loss = 0.5 * sil_gap.pow(2).mean()
+                        loss = loss + cfg.sil_coeff * (sil_policy_loss + cfg.sil_value_coeff * sil_value_loss)
+
+                    optimizer.zero_grad()
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(network.parameters(), cfg.max_grad_norm)
+                    optimizer.step()
+                    updates += 1
+
+                    if cfg.target_kl is not None and approx_kl > cfg.target_kl:
+                        kl_exceeded = True
+                        break
+        except BaseException:
             network.load_state_dict(saved_state)
             optimizer.load_state_dict(saved_optimizer)
-            rolled_back = True
+            raise
+        rolled_back = rollback_threshold is not None and bool(approx_kl > rollback_threshold)
+        if rolled_back:
+            network.load_state_dict(saved_state)
+            optimizer.load_state_dict(saved_optimizer)
 
         network.eval()
         with torch.no_grad():
@@ -627,16 +633,24 @@ class PPO:
             return float(0.5 * (values - returns).pow(2).mean()), explained, torch.cat(joints)
 
         value_loss_start, explained_start, old_joint = measure()
-        for _ in range(cfg.ppg_aux_epochs):
-            for mb in torch.randperm(rows, device=self.device).split(minibatch_size):
-                mb_obs = {k: v[mb] for k, v in obs.items()}
-                v_loss = 0.5 * (network.get_value(mb_obs) - returns[mb]).pow(2).mean()
-                kl = joint_kl(old_joint[mb], network.joint_log_probs(mb_obs, masks[mb]))
-                loss = v_loss + cfg.ppg_clone_coeff * kl
-                self.aux_optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(network.parameters(), cfg.max_grad_norm)
-                self.aux_optimizer.step()
+        # All-or-nothing, like optimize: an exception (an interrupt included) restores the weights and aux_optimizer.
+        saved_state = {k: v.detach().clone() for k, v in network.state_dict().items()}
+        saved_optimizer = copy.deepcopy(self.aux_optimizer.state_dict())
+        try:
+            for _ in range(cfg.ppg_aux_epochs):
+                for mb in torch.randperm(rows, device=self.device).split(minibatch_size):
+                    mb_obs = {k: v[mb] for k, v in obs.items()}
+                    v_loss = 0.5 * (network.get_value(mb_obs) - returns[mb]).pow(2).mean()
+                    kl = joint_kl(old_joint[mb], network.joint_log_probs(mb_obs, masks[mb]))
+                    loss = v_loss + cfg.ppg_clone_coeff * kl
+                    self.aux_optimizer.zero_grad()
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(network.parameters(), cfg.max_grad_norm)
+                    self.aux_optimizer.step()
+        except BaseException:
+            network.load_state_dict(saved_state)
+            self.aux_optimizer.load_state_dict(saved_optimizer)
+            raise
 
         value_loss, explained, new_joint = measure()
         kl = float(joint_kl(old_joint, new_joint))

@@ -11,7 +11,7 @@ import torch
 from triforce.actions import Action
 from triforce.demo import behavior_clone, compute_demo_accuracy, stack_observations
 from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.ppo import PPO, Collector, PPOConfig
+from triforce.ppo import PPO, Collector, PPGStore, PPOConfig
 
 from . import synthetic
 
@@ -80,6 +80,64 @@ def test_kl_rollback_restores_weights_and_optimizer_state():
     for param_id, state in optimizer_state['state'].items():
         for key, value in state.items():
             assert torch.equal(restored['state'][param_id][key], value), (param_id, key)
+
+
+def _assert_same(network, weights, optimizer, optimizer_state):
+    for key, value in network.state_dict().items():
+        assert torch.equal(value, weights[key]), key
+    restored = optimizer.state_dict()
+    assert restored['state'].keys() == optimizer_state['state'].keys()
+    for param_id, state in optimizer_state['state'].items():
+        for key, value in state.items():
+            assert torch.equal(torch.as_tensor(restored['state'][param_id][key]), torch.as_tensor(value)), key
+
+
+def _interrupt_on_step(optimizer, call):
+    """Makes ``optimizer.step`` raise KeyboardInterrupt on its ``call``-th call (after stepping the earlier ones)."""
+    step, calls = optimizer.step, []
+
+    def interrupted(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == call:
+            raise KeyboardInterrupt("test")
+        return step(*args, **kwargs)
+
+    optimizer.step = interrupted
+    return calls
+
+
+@pytest.mark.parametrize('rollback', [True, False])
+def test_an_interrupted_update_leaves_weights_and_optimizer_as_before(rollback):
+    """An exception mid-epoch restores the weights and the optimizer state from before the update (F084)."""
+    _seed()
+    network = ZeldaPolicy(synthetic.observation_space(), SMALL)
+    buffer = _filled_buffer(network)
+    config = PPOConfig(num_epochs=2) if rollback else PPOConfig(num_epochs=2, target_kl=None, kl_rollback=None)
+    ppo = PPO(config)
+    ppo.optimize(network, buffer)              # real Adam moments
+    weights = copy.deepcopy(network.state_dict())
+    optimizer_state = copy.deepcopy(ppo.optimizer.state_dict())
+    calls = _interrupt_on_step(ppo.optimizer, 3)
+    with pytest.raises(KeyboardInterrupt):
+        ppo.optimize(network, buffer)
+    assert len(calls) == 3
+    _assert_same(network, weights, ppo.optimizer, optimizer_state)
+
+
+def test_an_interrupted_auxiliary_phase_leaves_weights_and_its_optimizer_as_before():
+    _seed()
+    network = ZeldaPolicy(synthetic.observation_space(), SMALL)
+    ppo = PPO(PPOConfig(num_epochs=1, ppg=True, ppg_aux_epochs=2))
+    ppo.ppg = PPGStore()
+    ppo.ppg.add(_filled_buffer(network))
+    ppo.auxiliary_phase(network)               # builds the aux optimizer's moments
+    ppo.ppg.add(_filled_buffer(network))
+    weights = copy.deepcopy(network.state_dict())
+    optimizer_state = copy.deepcopy(ppo.aux_optimizer.state_dict())
+    _interrupt_on_step(ppo.aux_optimizer, 3)
+    with pytest.raises(KeyboardInterrupt):
+        ppo.auxiliary_phase(network)
+    _assert_same(network, weights, ppo.aux_optimizer, optimizer_state)
 
 
 def test_kl_early_stop_without_rollback_keeps_update():
