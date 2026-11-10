@@ -58,7 +58,7 @@ Encoding vocabulary: `categorical(n)` · `ordinal/scale (÷max)` · `bitfield` �
 | `$B9` ObjState[$D] | sword (melee) slot state; 0 idle | categorical(small) / bool active | both | maybe — "attacking" bit | v1 gd.txt `sword_animation`; frame_skip_wrapper.py |
 | `$BA` ObjState[$E] | beam/rod shot: 0 none, $10 flying, $11 spreading, $80 rod shot | categorical | both | yes — beam in flight blocks beams | v1 link.py ANIMATION_*; ram.md |
 | `$BB` ObjState[$F] | boomerang $10–$57 / bait $80–$82 | categorical (active bool) | both | maybe | v1 link.py; ram.md |
-| `$BC,$BD` ObjState[$10,$11] | bomb $12 lit, $13/$14 exploding; fire $21 moving, $22 standing | categorical | both | yes — bomb active/exploding (needed for bomb walls) | v1 link.py; ram.md |
+| `$BC,$BD` ObjState[$10,$11] | bomb $11 placed (one update), $12 lit, $13/$14 exploding; fire $21 moving, $22 standing | categorical | both | yes — bomb active/exploding (needed for bomb walls) | v1 link.py; ram.md; ASM Z_01 WieldBomb, Z_07 UpdateBomb |
 | `$BE` ObjState[$12] | arrow $10 flying, $20/$28 hit; rod $31–35 | categorical | both | maybe | v1 link.py; ram.md |
 | `$7D–$82`, `$91–$96`, `$A5–$AA` | x, y, dir of slots $D–$12 (Link weapons) | position | both | maybe — weapon entities for later | ASM ObjX/ObjY/ObjDir + slot; ram.md |
 | `$56,$57` Link_GoStraight* | input smoothing flags | bool | both | no | ASM Variables.inc |
@@ -182,7 +182,7 @@ Recommended grid: 16×11 of 16-px squares (row r covers y=$40+16r), class = max-
 | Address(es) | Meaning | Encoding | Valid when | Include? | Source |
 |---|---|---|---|---|---|
 | `$15` FrameCounter | frame counter | — | both | no (leaks time; use History) | ASM Variables.inc; ram.md |
-| `$18–$23` Random | LFSR RNG bytes (v1 rng_0..11) | — | both | no — v1 only randomizes them | v1 gd.txt; ASM Variables.inc |
+| `$18–$24` Random | LFSR RNG bytes (13; ScrambleRandom rotates $18–$24, monsters read `Random+1,X` up to $24; v1 rng_0..11 cover $18–$23) | — | both | no — v1 only randomizes them | v1 gd.txt; ASM Variables.inc, Z_07 ScrambleRandom |
 | `$3C` FluteTimer | freeze while flute plays | timer | both | no | ASM Z_07:UpdateMode5Play |
 | `$26` StunCycle | stun pacing | — | both | no | ASM Variables.inc |
 | `$4A`, `$4B`, `$4D` long timers | chase / edge-spawn / red-leever | timer | per type | no | ASM Variables.inc |
@@ -193,8 +193,8 @@ Recommended grid: 16×11 of 16-px squares (row r covers y=$40+16r), class = max-
 
 | Address(es) | Meaning | Encoding | Valid when | Include? | Source |
 |---|---|---|---|---|---|
-| `$605` Tune0 | sfx: 1 arrow deflected (shield block), 2 boomerang stun, 4 magic, 8 key pickup, $10 heart pickup, $20 set bomb, $40 low-heart warning | bitfield | both | no (obs) — reward/event signal | ram.md; v1 SoundKind |
-| `$607` Tune1 | 1 rupee, 2 **item appears / key appears**, 4 **secret revealed**, 8 bomb pickup, $10 whistle, $20 enemy burst, $40 continue, $80 death | bitfield | both | no (obs) — reward/event signal | ram.md; ASM Z_05 L2366, Z_04 L749 |
+| `$605` Tune0 | sfx: 1 parry (shield block, Darknut shield, boomerang on an immune monster), 2 monster hit (also a boomerang stun), 4 magic, 8 key pickup, $10 heart pickup, $20 set bomb, $40 low-heart warning | bitfield | both | no (obs) — reward/event signal | ram.md; v1 SoundKind; ASM Z_01 L5711-5715, L5900-5979 |
+| `$607` Tune1 | 1 rupee, 2 **item appears / key appears**, 4 **secret revealed**, 8 item taken (every item but $0E), $10 whistle, $20 enemy burst, $40 continue, $80 death | bitfield | both | no (obs) — reward/event signal | ram.md; ASM Z_05 L2366, Z_04 L749, Z_01 TakeItem L4462-4464 |
 | `$E0` Paused, `$E1` MenuState | pause / submenu | bool | both | no | ASM Variables.inc |
 | `$F8/$FA` ButtonsPressed/Down | controller | — | both | no | ASM Variables.inc |
 | `$5E` SubmenuScrollProgress, `$FC/$FD` scroll | screen scroll | — | transitions | no | ASM Variables.inc |
@@ -318,11 +318,14 @@ Item ids (`Z_01:ItemIdToSlot` → inventory slot `$657+s`; names from slot table
 
 At room init every monster is written into `ObjType[1..count]` immediately (`Z_05` L1771–1777) with `ObjMetastate=1` (spawn cloud), so:
 ```
-monsters    = [i for i in 1..0xB if 1 <= ObjType[i] < 0x53 and ObjType[i] not in (0x2B,0x2C,0x2D)]   # CheckHasLivingMonsters
+monsters    = [i for i in 1..0xB if 1 <= ObjType[i] < 0x49 and ObjType[i] not in (0x2B,0x2C,0x2D)]   # CheckHasLivingMonsters
 unspawned   = [i in monsters if 1 <= ObjMetastate[i] <= 4]
 dying       = [i in monsters if 0x10 <= ObjMetastate[i] <= 0x13]
 remaining   = len(monsters) - len(dying)
 ```
+The game counts $01–$2A and $2E–$48 as living (traps $49/$4A and persons $4B–$52 don't). `room_state.rs` counts
+`ObjectClass::Monster` minus the guard fires $3F, so it deliberately also leaves out the hazards the game counts
+(boulders $1F/$20, standing fire $40).
 Cross-check: `RoomObjCount($34E) − RoomKillCount($34F)`. Persistent across visits: UW `flags[6:7]`, `LevelKillCounts[$560+r]`; OW `flags[0:2]`. Exceptions: Digdogger children reset `RoomObjCount` (Z_04 L5213); some bosses set 8 (Z_04 L4839, L9523); OW edge-spawn rooms (F bit 3) place monsters at edges later (`Z_07` L5532).
 
 ## R.6 Push block
