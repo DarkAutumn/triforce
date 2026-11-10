@@ -76,16 +76,15 @@ impl Change {
         ledger: &mut FutureCreditLedger,
         look_ahead: bool,
     ) -> Change {
-        let same_max = prev.max_health() == curr.max_health();
-        let health_lost = if same_max {
-            (prev.health() - curr.health()).max(0.0)
+        // A container pickup adds one filled heart along with the container, so take the container delta out
+        // of the filled-heart delta: what is left is a hit or a refill in the same step. A container loss (a
+        // cheat or a reload) keeps counting the container as lost.
+        let delta = curr.health() - prev.health();
+        let grown = (curr.max_health() - prev.max_health()) as f64;
+        let (health_gained, health_lost) = if grown >= 0.0 {
+            (grown + (delta - grown).max(0.0), (grown - delta).max(0.0))
         } else {
-            ((prev.max_health() - curr.max_health()) as f64).max(0.0)
-        };
-        let health_gained = if same_max {
-            (curr.health() - prev.health()).max(0.0)
-        } else {
-            ((curr.max_health() - prev.max_health()) as f64).max(0.0)
+            (0.0, -grown)
         };
         let mut change = Change {
             action,
@@ -418,6 +417,15 @@ mod tests {
         half[Var::PartialHearts.addr() as usize] = 0x7F;
         let c = observe(&prev, &half, 4);
         assert_eq!((c.health_gained, c.health_lost), (0.0, 1.5));
+        // a container pickup in the step that also costs half a heart: 5 of 6 -> 5.5 of 7
+        let mut prev = playable();
+        prev[Var::HeartsAndContainers.addr() as usize] = 0x54;
+        prev[Var::PartialHearts.addr() as usize] = 0xFF;
+        let mut curr = prev;
+        curr[Var::HeartsAndContainers.addr() as usize] = 0x64;
+        curr[Var::PartialHearts.addr() as usize] = 0x7F;
+        let c = observe(&prev, &curr, 4);
+        assert_eq!((c.health_gained, c.health_lost), (1.0, 0.5));
     }
 
     #[test]
