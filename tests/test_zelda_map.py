@@ -191,3 +191,24 @@ def test_render_screens_caches_playfields(tmp_path):
     assert not rendered
     _, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir, rerender=True)
     assert rendered == {1: 1}
+
+
+def test_a_failed_rerender_keeps_the_cache(tmp_path, monkeypatch):
+    states_dir = tmp_path / 'states'
+    states_dir.mkdir()
+    shutil.copy(require_state('1_73s_0'), states_dir)
+    states = zelda_map.scan_states(states_dir)
+    screens, _ = zelda_map.render_screens(states, tmp_path / 'screens', states_dir)
+    path = screens[(1, 0x73, False)]
+    stray = tmp_path / 'screens' / zelda_map.screen_name((1, 0x22, False))      # a room whose savestate went
+    shutil.copy(path, stray)
+
+    def no_rom(*_args, **_kwargs):
+        raise FileNotFoundError('ROM not found')
+    monkeypatch.setattr(zelda_map, 'Game', no_rom)
+    with pytest.raises(FileNotFoundError):
+        zelda_map.render_screens(states, tmp_path / 'screens', states_dir, rerender=True)
+    assert path.is_file() and stray.is_file()
+    monkeypatch.undo()
+    zelda_map.render_screens(states, tmp_path / 'screens', states_dir, rerender=True)
+    assert path.is_file() and not stray.exists()

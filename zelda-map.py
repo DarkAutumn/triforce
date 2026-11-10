@@ -249,19 +249,18 @@ def cached_screens(screens_dir: Path) -> dict[Key, Path]:
 def render_screens(states: dict[Key, list[str]], screens_dir: Path, states_dir: Path = STATES_DIR,
                    rerender: bool = False) -> tuple[dict[Key, Path], Counter]:
     """Renders the playfield (256x176) of each room with a savestate into ``screens_dir`` unless its PNG is newer
-    than the savestate.  Returns the room -> PNG map (rooms with savestates only) and how many were rendered per
-    level.  The game is loaded through ``Game.load``, which runs to the first playable frame (game mode 5)."""
+    than the savestate (``rerender``: every room).  Returns the room -> PNG map (rooms with savestates only) and how
+    many were rendered per level.  The game is loaded through ``Game.load``, which runs to the first playable frame
+    (game mode 5).  Each PNG is replaced only by its new render, so a failed render keeps the cache; ``rerender``
+    drops the PNGs of rooms without a savestate once every room has rendered."""
     screens_dir = Path(screens_dir)
     screens_dir.mkdir(parents=True, exist_ok=True)
-    if rerender:
-        for path in cached_screens(screens_dir).values():
-            path.unlink()
     screens, rendered = {}, Counter()
     game = None
     for key, names in sorted(states.items()):
         state = Path(states_dir) / f'{pick_state(names)}.state'
         out = screens_dir / screen_name(key)
-        if not out.exists() or out.stat().st_mtime < state.stat().st_mtime:
+        if rerender or not out.exists() or out.stat().st_mtime < state.stat().st_mtime:
             game = game or Game(render=True, states_dir=str(states_dir))
             game.load(str(state), randomize_rng=False)
             playfield = game.screen()[HUD_ROWS:HUD_ROWS + TILE_H]
@@ -270,6 +269,10 @@ def render_screens(states: dict[Key, list[str]], screens_dir: Path, states_dir: 
             os.replace(tmp, out)
             rendered[key[0]] += 1
         screens[key] = out
+    if rerender:
+        for key, path in cached_screens(screens_dir).items():
+            if key not in states:
+                path.unlink()
     return screens, rendered
 
 
