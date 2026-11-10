@@ -41,6 +41,34 @@ def test_obs_spec_episode_events_and_truncations(states_dir, tmp_path):
     assert views['starts'].tolist() == [[1, 0, 1, 0, 1]] * 2
 
 
+def test_a_no_damage_truncation_bootstraps_with_the_final_observations_value(states_dir, tmp_path):
+    """F168: `no-damage` (bootstrapped) truncations through the real env and pool: those rows' bootstrap_value is
+    the policy's value of the episode's final observation (a twin Env's), not of the next episode's first one, and
+    every other row's is 0."""
+    config = native.SpecialistConfig.load('ow-start').replace(
+        start_states=['start'], no_damage_steps=3, max_steps=100,
+        ram_randomization={'hp': None, 'full_hp': 1.0, 'chain_hp': None, 'bombs': None, 'keys': None})
+    policy = scripted('WAIT 8').to_native()
+    task = native.TrainTask(config, str(tmp_path / 'run'), states_dir=str(states_dir))
+    with native.EnvPool(task, num_envs=2, threads=2, seed=1) as pool:
+        views = rollout(pool, policy, 7)
+        infos = [e['info'] for e in pool.poll_events() if e['type'] == 'episode']
+    assert infos and all(i['ending'] == 'no-damage' and i.get('bootstrap_truncation') for i in infos)
+    assert views['truncated'].tolist() == [[False, False, True] * 2 + [False]] * 2
+
+    twin = native.Env(config, states_dir=str(states_dir), seed=1)
+    reset_obs, _ = twin.reset(seed=1)
+    for _ in range(3):
+        final_obs, _, _, truncated, info = twin.step('WAIT 8')
+    assert truncated and info['ending'] == 'no-damage' and info['bootstrap_truncation']
+    batch = lambda obs: {k: np.asarray(v)[None] for k, v in obs.items()}
+    final_value, reset_value = policy.value(batch(final_obs))[0], policy.value(batch(reset_obs))[0]
+    assert final_value != reset_value
+    rows = views['truncated']
+    assert (views['bootstrap_value'][rows] == final_value).all()
+    assert (views['bootstrap_value'][~rows] == 0).all()
+
+
 def play_to_the_end(pool, policies, **kwargs):
     pool.play(policies, **kwargs)
     assert pool.wait_idle(timeout=60)
