@@ -546,6 +546,19 @@ fn entering_a_dungeon_with_its_map_is_no_pickup() {
     assert_eq!(value(&r, "reward-gained-map"), REWARD_MAXIMUM);
 }
 
+/// F092: a bomb pickup pays `reward-gained-bombs` (like rupees); placing a bomb pays nothing; the term is a known
+/// reward term.
+#[test]
+fn bomb_pickups_pay_like_rupees() {
+    let base = Ram::new().with(Var::Bombs, 2);
+    let r = critique(&mut critic(), &step(&base, &base.with(Var::Bombs, 6), "MOVE N 8"));
+    assert_eq!(names(&r), ["reward-gained-bombs"]);
+    assert_eq!(value(&r, "reward-gained-bombs"), REWARD_MEDIUM);
+    let r = critique(&mut critic(), &step(&base, &base.with(Var::Bombs, 1), "BOMB N"));
+    assert!(!r.contains("reward-gained-bombs"));
+    assert!(env::rewards::REWARD_TERMS.contains(&"reward-gained-bombs"));
+}
+
 // --- movement, rooms and stalling ---
 
 #[test]

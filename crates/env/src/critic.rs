@@ -37,8 +37,9 @@ pub const REWARD_PROFILES: [&str; 1] = ["default"];
 /// ObjDir of the push block (object slot $B): the direction it was pushed (Z_04 UpdateBlock0Idle).
 const PUSH_BLOCK_DIRECTION: u16 = 0x98 + 0x0B;
 
-/// Equipment pickups, in `_EQUIPMENT_ATTRS` order: (name, value).
-const EQUIPMENT: [(&str, &str, f64); 20] = [
+/// Equipment pickups, in `_EQUIPMENT_ATTRS` order: (name, value). Bombs pay like rupees (a dropped resource); the
+/// cheat ledger's grants happen outside the action's `Change`, so a grant is no pickup.
+const EQUIPMENT: [(&str, &str, f64); 21] = [
     ("sword", "reward-gained-sword", REWARD_MAXIMUM),
     ("arrows", "reward-gained-arrows", REWARD_MAXIMUM),
     ("bow", "reward-gained-bow", REWARD_MAXIMUM),
@@ -63,6 +64,7 @@ const EQUIPMENT: [(&str, &str, f64); 20] = [
     ("map", "reward-gained-map", REWARD_MAXIMUM),
     ("rupees", "reward-gained-rupees", REWARD_MEDIUM),
     ("keys", "reward-gained-keys", REWARD_MAXIMUM),
+    ("bombs", "reward-gained-bombs", REWARD_MEDIUM),
 ];
 
 /// The value `link.<attr>` compares by (enum value, bool as int, raw count).
@@ -89,6 +91,7 @@ fn equipment_value(state: &GameView, attr: &str) -> i32 {
         "map" => state.has_map() as i32,
         "rupees" => state.rupees(),
         "keys" => state.keys(),
+        "bombs" => state.bombs(),
         _ => unreachable!("equipment {attr}"),
     }
 }
