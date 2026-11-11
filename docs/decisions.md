@@ -992,3 +992,14 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   cave-mouth flag, target directions, the zeroed selected-item slice), so the old models no longer matched the code.
   Against the old team on the fixed measurement code (B1): D2 89 → 100, after D2 34 → 92 (the 0x0a bounce is gone),
   from the start to D1 14 → 55 arrivals of 120; D1 115 → 80 is the one regression (round17.md §5).
+
+## 2026-11-11 — The early stop waits for hearts too; chains measured with 1000 runs (round 18)
+
+- **What:** a confirmed early stop also needs the hearts lost per episode in its confirmation evaluation to have
+  stopped improving (`--stop-hearts-delta 0.02`, `--stop-hearts-gap 50`, both defaults; 0 turns it off). The team
+  was continued under that rule and promoted where better (round18.md §2); chains are measured with 1000 runs per
+  segment (Lee). `triforce.train --device` defaults to `cuda`; CPU training is opt-in (`--device cpu`, Lee).
+- **Why:** stalfos-keese-gel stopped after 4 minutes at a confirmed 99% success while still losing hearts it went
+  on to stop losing (+0.10 → −0.07 per episode), and that cost Dungeon 1 115 → 80 of 120 in chains. Success alone
+  can't see it. With the rule and the continuations every chain segment is back at or above the previous team.
+  120-run chains have ±8-point intervals; the differences that matter here are a few points.
