@@ -621,6 +621,7 @@ dependencies = [
  "policy",
  "rand",
  "rand_chacha",
+ "replay",
  "serde_json",
  "test-rom",
  "zcore",
@@ -791,6 +792,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
  "bitflags",
+]
+
+[[package]]
+name = "replay"
+version = "1.3.1"
+dependencies = [
+ "blake3",
+ "serde_json",
+ "test-rom",
+ "zcore",
 ]
 
 [[package]]
@@ -1084,6 +1095,7 @@ dependencies = [
  "movie",
  "rand",
  "rand_chacha",
+ "replay",
  "serde",
  "serde_json",
  "sha1_smol",

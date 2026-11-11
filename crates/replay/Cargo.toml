@@ -1,0 +1,16 @@
+[package]
+name = "replay"
+description = "TFREPLAY: self-contained, bit-exact recordings of emulator runs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+# Playback and verification on the emulator (`player`).  Without it the crate only builds and parses bytes.
+zcore = ["dep:zcore"]
+
+[dependencies]
+blake3 = "1.8.7"
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+zcore = { path = "../zcore", optional = true }
