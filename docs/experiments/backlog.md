@@ -780,8 +780,12 @@ the remaining list is deferred until Lee resumes work.
     title screen opens on Bb/F and the overworld theme on Bb4, each within 8 cents, and picking up the sword
     plays F5 A5 C6 E6 G6 (spectra of `corpus/replays`). Through a PipeWire null sink 12 s of live play came out
     without dropouts at the device's 44.1 kHz (rms 0.034).
-  - Cost: 313 µs per frame for the one cell that is heard (a frame of emulation: 185 µs).
-  - [ ] **Lee listens** (the sample video): pitch and rhythm are checked, timbre and balance are not.
+  - Cost: 313 µs per frame for the one cell that is heard (a frame of emulation: 185 µs). Training, evaluation
+    and chains never turn sound on (no `set_sound` caller in `crates/pool`, `env` or `zelda`); what they do pay
+    is the tap's note of each sound-register write (a byte and a bit) and a counter per frame. `tf bench
+    --agent --render off`, three alternating runs each, a busy machine: 7373 / 7972 / 7835 frames/s before
+    (mean 7727), 7497 / 7751 / 7737 with the tap (mean 7662): −0.8%, inside the 8% spread between runs.
+  - [x] **Lee listened** to the sample videos (Nov 11): "Perfect".
   - [ ] **A replay from a savestate starts silent** until the game writes each sound register again (its next
     note per voice; a held note or a looping effect stays missing longer). The registers are not in a state
     file and must not go into `MachineState`. Fix idea: record the 24 register bytes the tap holds with each
