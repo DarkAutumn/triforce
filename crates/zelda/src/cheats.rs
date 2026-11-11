@@ -252,6 +252,12 @@ impl CheatLedger {
         self.held[item].granted
     }
 
+    /// The granted (outstanding) part of every item's count: what a run continued from this state must
+    /// know is not Link's own.
+    pub fn grants(&self) -> ItemCounts<u8> {
+        ItemCounts::from_fn(|item| self.held[item].granted.clamp(0, 255) as u8)
+    }
+
     /// `state`'s count of `item` without the granted part.
     pub fn natural(&self, item: CheatItem, state: &GameView) -> i32 {
         state.var(item.var()) - self.granted(item)

@@ -427,6 +427,12 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.cheats.cheated
     }
 
+    /// What a run continuing from the current state needs beyond the machine: the route step Link is
+    /// playing (None off the route or before the first reset) and the cheat-granted items he holds.
+    pub fn context(&self) -> (Option<usize>, ItemCounts<u8>) {
+        (self.objectives.as_ref().and_then(GameCompletion::step), self.cheats.grants())
+    }
+
     /// Harvest handoff states into `dir` (None = off): every correct room entry where the acting specialist changes
     /// saves its pre-entry savestate as `dir/<new specialist>/<level>_<room><side>_h<seed>_<n>.state`
     /// ([`harvest_filename`]; `n` = the room's index in the run, a run without a seed counts as seed 0), the true

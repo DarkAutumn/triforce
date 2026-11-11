@@ -8,7 +8,7 @@ use crate::control::EnvControl;
 use crate::jobs::Jobs;
 use crate::layout::{ObsLayout, ObsRow};
 use crate::pool::{EnvInit, Outcome, PoolEnv, SearchEnv, Start};
-use env::chain::{ChainEnv, ChainStatus, Route, RunResult};
+use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
 use env::end_conditions::{DEATH, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, STUCK};
 use env::rewards::SUCCESS;
@@ -16,9 +16,10 @@ use env::specialist_env::{EnvOptions, EnvSnapshot, SpecialistEnv, StepInfo, Step
 use env::{EnvError, StateStore};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
-use replay::{Context, Ending, Event, Source};
+use replay::{Context, Ending, Event, Source, StateKind};
 use std::collections::HashMap;
 use std::sync::Arc;
+use zelda::cheats::{CheatItem, ItemCounts};
 use zelda::{Action, Nes, Session};
 
 pub type PoolSpecialistEnv<N, St> = SpecialistEnv<PoolNes<N>, PoolStore<St>>;
@@ -168,6 +169,61 @@ fn finish_recording<N: Nes, St: StateStore<N::State>>(
     Ok(())
 }
 
+/// A recorded state's context from an env's `context()`: the route step and the granted items.
+fn context((step, granted): (Option<usize>, ItemCounts<u8>)) -> Context {
+    Context {
+        step: step.and_then(|s| u16::try_from(s).ok()),
+        granted: [granted.bombs, granted.keys, granted.rupees],
+    }
+}
+
+/// Records the cheated items spent since `seen` (the episode's count then) and moves `seen` on to `now`.
+fn record_cheats<N: Nes>(nes: &mut PoolNes<N>, seen: &mut ItemCounts, now: ItemCounts) {
+    if let Some(rec) = nes.recorder_mut() {
+        for (index, item) in CheatItem::ALL.into_iter().enumerate() {
+            if now[item] > seen[item] {
+                rec.cheat(index as u8, now[item] - seen[item]);
+            }
+        }
+    }
+    *seen = now;
+}
+
+/// After a step the episode goes on from (an action boundary): a KEYFRAME state once the recording's
+/// `keyframe_frames` have run since its last state.  Playback can seek to it and a run can continue from it.
+fn record_keyframe<N: Nes, St: StateStore<N::State>>(
+    session: &mut Session<PoolNes<N>>,
+    store: &PoolStore<St>,
+    context: Context,
+) -> Result<(), EnvError> {
+    let due = session.nes().recorder().is_some_and(|rec| {
+        let every = rec.options().keyframe_frames;
+        every > 0 && rec.frames_since_keyframe() >= every
+    });
+    if due {
+        let state = store.encode(&session.snapshot())?;
+        let rec = session.nes_mut().recorder_mut().expect("recording");
+        rec.state(StateKind::Keyframe, context, &state);
+    }
+    Ok(())
+}
+
+/// A specialist step's part of the recording: the cheated items it spent and, unless it ended the episode,
+/// a keyframe when one is due.
+fn record_specialist_step<N: Nes, St: StateStore<N::State>>(
+    env: &mut PoolSpecialistEnv<N, St>,
+    cheated: &mut ItemCounts,
+    info: &StepInfo,
+) -> Result<(), EnvError> {
+    record_cheats(env.session_mut().nes_mut(), cheated, info.cheated);
+    if info.terminal.is_some() {
+        return Ok(());
+    }
+    let context = context(env.context());
+    let (session, store) = env.session_and_store();
+    record_keyframe(session, store, context)
+}
+
 /// How a specialist episode ended, for its replay: a win is a success; a failure is a death, being stuck
 /// (the stuck, no-progress and step-budget endings) or something else.
 fn specialist_ending(terminal: &TerminalInfo) -> Ending {
@@ -251,6 +307,8 @@ pub struct TrainEnv<N: Nes, St: StateStore<N::State>> {
     episodes: u64,
     /// The current episode's job key (reported with [`ZeldaEvent::Episode`]).
     job: i64,
+    /// Cheated items of the episode already in its recording.
+    cheated: ItemCounts,
 }
 
 impl<N, St> TrainEnv<N, St>
@@ -280,6 +338,7 @@ where
             job_base,
             episodes: 0,
             job: 0,
+            cheated: ItemCounts::default(),
         })
     }
 
@@ -324,8 +383,10 @@ where
             &mut self.rooms,
         );
         let (o, info) = self.env.reset(None, None)?;
+        self.cheated = info.cheated;
+        let context = context(self.env.context());
         let (session, store) = self.env.session_and_store();
-        start_recording(session, store, Context::default(), None)?;
+        start_recording(session, store, context, None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
         self.job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
@@ -343,13 +404,15 @@ where
         write_observation(&r.obs, &mut obs);
         let outcome = specialist_outcome(&r);
         self.rooms.report_info(&r.info, events);
+        record_specialist_step(&mut self.env, &mut self.cheated, &r.info)?;
         if let Some(ending) = r.info.terminal.as_ref().map(specialist_ending) {
             events.push(ZeldaEvent::Episode {
                 info: Box::new(r.info),
                 job: self.job,
             });
+            let context = context(self.env.context());
             let (session, store) = self.env.session_and_store();
-            finish_recording(session, store, self.job, ending, Context::default(), events)?;
+            finish_recording(session, store, self.job, ending, context, events)?;
         }
         Ok(outcome)
     }
@@ -412,6 +475,8 @@ pub struct EvalEnv<N: Nes, St: StateStore<N::State>> {
     jobs: Jobs<EvalJob>,
     episode: Option<EvalEpisode>,
     rooms: RoomWatch,
+    /// Cheated items of the episode already in its recording.
+    cheated: ItemCounts,
 }
 
 impl<N, St> EvalEnv<N, St>
@@ -444,6 +509,7 @@ where
             jobs,
             episode: None,
             rooms: RoomWatch::default(),
+            cheated: ItemCounts::default(),
         })
     }
 
@@ -492,8 +558,10 @@ where
             &mut self.rooms,
         );
         let (o, info) = self.env.reset(Some(job.seed), Some(&job.start_state))?;
+        self.cheated = info.cheated;
+        let context = context(self.env.context());
         let (session, store) = self.env.session_and_store();
-        start_recording(session, store, Context::default(), None)?;
+        start_recording(session, store, context, None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
         self.episode = Some(EvalEpisode {
@@ -518,6 +586,7 @@ where
         write_observation(&r.obs, &mut obs);
         let outcome = specialist_outcome(&r);
         self.rooms.report_info(&r.info, events);
+        record_specialist_step(&mut self.env, &mut self.cheated, &r.info)?;
         if let Some(t) = &r.info.terminal {
             let episode = self.episode.take().expect("episode started");
             events.push(ZeldaEvent::Eval(Box::new(EvalRecord {
@@ -543,8 +612,9 @@ where
                 visits: self.env.take_visits(),
             })));
             let (ending, job) = (specialist_ending(t), episode.job.seed as i64);
+            let context = context(self.env.context());
             let (session, store) = self.env.session_and_store();
-            finish_recording(session, store, job, ending, Context::default(), events)?;
+            finish_recording(session, store, job, ending, context, events)?;
         }
         Ok(outcome)
     }
@@ -564,6 +634,9 @@ pub struct ChainRunEnv<N: Nes, St: StateStore<N::State>> {
     missing: HashMap<String, String>,
     rooms: RoomWatch,
     hold_finished: bool,
+    /// Rooms and cheated items of the run already in its recording.
+    rooms_seen: usize,
+    cheated: ItemCounts,
 }
 
 impl<N, St> ChainRunEnv<N, St>
@@ -597,6 +670,8 @@ where
                 last: None,
             },
             hold_finished: false,
+            rooms_seen: 0,
+            cheated: ItemCounts::default(),
         }
     }
 
@@ -627,14 +702,63 @@ where
         self.chain.result().map_or(0, |r| r.frames)
     }
 
+    /// The run's part of the recording since the last call: the cheated items spent, a ROOM event per room
+    /// entered (each closes the visit before it with an OUTCOME event) and, unless the run is `done` (its
+    /// result; then the last visit's OUTCOME), a keyframe when one is due.
+    fn record_progress(&mut self, done: Option<&RunResult>) -> Result<(), EnvError> {
+        let cheated = self.chain.cheated();
+        record_cheats(self.chain.session_mut().nes_mut(), &mut self.cheated, cheated);
+        if self.chain.session().nes().recorder().is_none() {
+            return Ok(());
+        }
+        let step = context(self.chain.context()).step;
+        let rooms: &[RoomRecord] = match done {
+            Some(result) => &result.rooms,
+            None => self.chain.result().map_or(&[], |result| &result.rooms),
+        };
+        let mut entered = Vec::new();
+        for (index, record) in rooms.iter().enumerate().skip(self.rooms_seen) {
+            if index > 0 {
+                entered.push(Event::Outcome(rooms[index - 1].outcome.clone()));
+            }
+            let location = record.location();
+            let policy = self.policies.iter().position(|p| **p == *record.specialist);
+            entered.push(Event::Room {
+                level: location.level,
+                room: location.value,
+                in_cave: location.in_cave,
+                step,
+                policy: policy.and_then(|p| u8::try_from(p).ok()),
+            });
+        }
+        if done.is_some()
+            && let Some(last) = rooms.last()
+        {
+            entered.push(Event::Outcome(last.outcome.clone()));
+        }
+        self.rooms_seen = rooms.len();
+        let context = context(self.chain.context());
+        let (session, store) = self.chain.session_and_store();
+        let rec = session.nes_mut().recorder_mut().expect("recording");
+        for event in entered {
+            rec.event(event);
+        }
+        if done.is_none() {
+            record_keyframe(session, store, context)?;
+        }
+        Ok(())
+    }
+
     fn end_run(&mut self, result: RunResult, events: &mut Vec<ZeldaEvent>) -> Result<(), EnvError> {
         if self.hold_finished {
             self.control.set_hold(true);
         }
+        self.record_progress(Some(&result))?;
         let (ending, job) = (chain_ending(&result), result.seed.unwrap_or(0) as i64);
         events.push(ZeldaEvent::Run(Box::new(result)));
+        let context = context(self.chain.context());
         let (session, store) = self.chain.session_and_store();
-        finish_recording(session, store, job, ending, Context::default(), events)
+        finish_recording(session, store, job, ending, context, events)
     }
 
     /// The policy acting next, or None when the run ended (reported).
@@ -712,9 +836,14 @@ where
                 &mut self.rooms,
             );
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            (self.rooms_seen, self.cheated) = (0, ItemCounts::default());
             let status = self.chain.reset(Some(seed), &mut rng)?;
+            let context = context(self.chain.context());
             let (session, store) = self.chain.session_and_store();
-            start_recording(session, store, Context::default(), None)?;
+            start_recording(session, store, context, None)?;
+            if matches!(status, ChainStatus::Act { .. }) {
+                self.record_progress(None)?;
+            }
             if let Some(policy) = self.settle(status, &mut obs, events)? {
                 return Ok(Some(Start {
                     policy,
@@ -737,6 +866,9 @@ where
         let before = self.frames();
         let status = self.chain.step(action)?;
         let frames = (self.frames() - before) as i64;
+        if matches!(status, ChainStatus::Act { .. }) {
+            self.record_progress(None)?;
+        }
         Ok(match self.settle(status, &mut obs, events)? {
             Some(policy) => Outcome {
                 frames,

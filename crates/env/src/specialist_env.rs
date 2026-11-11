@@ -438,6 +438,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         (&self.route, self.route_step)
     }
 
+    /// What a run continuing from the current state needs beyond the machine: the route step Link is
+    /// playing (None off the route) and the cheat-granted items he holds.
+    pub fn context(&self) -> (Option<usize>, ItemCounts<u8>) {
+        (self.objectives.as_ref().and_then(GameCompletion::step), self.cheats.grants())
+    }
+
     /// Sets the route for the next `restore` (a reset draws its own).
     pub fn set_route(&mut self, route: &str, step: Option<usize>) {
         self.route = route.to_owned();

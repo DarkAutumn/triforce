@@ -18,7 +18,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use replay::{Event, Player, RecordOptions, Replay, Source};
+use replay::{Event, Player, RecordOptions, Replay, Source, StateKind};
 use std::sync::{Arc, LazyLock};
 use zcore::{MachineState, Rom, ZCore, state_file};
 use zelda::{ActionKind, ActionMask, MASK_SIZE, Nes, SessionSnapshot};
@@ -87,7 +87,11 @@ fn open_core() -> Option<Counted> {
     Some(Counted(ZCore::power_on(rom()?), 0))
 }
 
+/// A named state of `triforce/states`, or a path as given.
 fn state_path(name: &str) -> PathBuf {
+    if Path::new(name).is_absolute() {
+        return PathBuf::from(name);
+    }
     repo().join(format!("triforce/states/{name}.state"))
 }
 
@@ -776,6 +780,163 @@ fn recorded_training_episodes_replay_past_their_look_aheads() {
     let (replayed_ram, replayed_prg_ram) = replayed(&replay);
     assert!(replayed_ram == ram, "RAM after replay");
     assert!(replayed_prg_ram == prg_ram, "PRG-RAM after replay");
+}
+
+/// The names of every family, in the order chain pools index their policies.
+fn all_policies(data: &GameData) -> Vec<Arc<str>> {
+    data.families.keys().map(|k| Arc::from(k.as_str())).collect()
+}
+
+/// Plays the next chain run of `env` to its end with `pick`, recorded with `options`: (the run, its replay).
+fn play_chain_recorded<St>(
+    env: &mut ChainRunEnv<Counted, St>,
+    control: &EnvControl,
+    options: RecordOptions,
+    mut pick: impl FnMut(&ActionMask) -> zelda::Action,
+) -> (RunResult, Replay)
+where
+    St: StateStore<MachineState> + Send + 'static,
+{
+    control.set_recording(Some(Arc::new(options)));
+    let mut obs = ObsData::new(Arc::new(obs_layout()));
+    let mut events = Vec::new();
+    let start = env.reset(obs.row(), &mut events).unwrap().expect("a run");
+    loop {
+        let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
+        let action = pick(&ActionMask::from_flat(&flat)).to_indices().map(|i| i as i64);
+        if env.step(action, obs.row(), &mut events).unwrap().terminated {
+            break;
+        }
+    }
+    let (mut run, mut replay) = (None, None);
+    for event in events {
+        match event {
+            ZeldaEvent::Run(r) => run = Some(*r),
+            ZeldaEvent::Replay { job, data } => {
+                assert_eq!(job, start.job);
+                replay = Some(Replay::parse(data).expect("a readable replay"));
+            }
+            _ => {}
+        }
+    }
+    (run.expect("a run result"), replay.expect("a replay"))
+}
+
+/// A recorded chain run carries its rooms (each with the policy that acted and the outcome of the visit), a
+/// keyframe at the first action boundary after every `keyframe_frames` frames, and verifies: every keyframe is
+/// the machine the replay reaches there.
+#[test]
+fn recorded_chain_runs_carry_rooms_outcomes_and_keyframes() {
+    let Some(nes) = open_core() else { return };
+    let data = data();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
+    let policies = all_policies(&data);
+    let init = init();
+    let control = init.control.clone();
+    let mut env = ChainRunEnv::new(data.clone(), nes, TfzStore, route, Jobs::new([3u64]), policies.clone(), init, None);
+    env.chain_mut().max_steps = 150;
+    let options = RecordOptions {
+        embed_start: true,
+        keyframe_frames: 120,
+        ..Default::default()
+    };
+    let mut rng = ChaCha8Rng::seed_from_u64(103);
+    let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask| random_action(mask, &mut rng, None));
+    assert_eq!((run.result.as_str(), replay.ending_name()), ("failure", "stuck"), "{}", run.reason);
+    assert_eq!(replay.meta().unwrap()["ending"]["reason"], run.reason.as_str());
+    replayed(&replay);
+
+    let states: Vec<_> = replay.states().collect();
+    let frames: Vec<u32> = states.iter().map(|s| s.frame).collect();
+    let kinds: Vec<StateKind> = states.iter().map(|s| s.kind).collect();
+    assert_eq!((kinds[0], *kinds.last().unwrap()), (StateKind::Start, StateKind::End));
+    assert!(kinds.len() >= 4 && kinds[1..kinds.len() - 1].iter().all(|&k| k == StateKind::Keyframe), "{kinds:?}");
+    let keyframes = &frames[..frames.len() - 1];
+    assert!(keyframes.windows(2).all(|w| w[1] - w[0] >= 120), "{frames:?}");
+    // The longest action is 32 frames (plus a room change's scroll): keyframes come as soon as they are due.
+    assert!(keyframes.windows(2).all(|w| w[1] - w[0] < 120 + 400), "{frames:?}");
+    // The run starts on the route's first step; a random walk leaves the route (no step) sooner or later.
+    assert_eq!(states[0].context.step, Some(0));
+
+    let events: Vec<_> = replay.events().map(|e| e.unwrap().event).collect();
+    assert_eq!(events[0], Event::Control);
+    let rooms: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Room { level, room, in_cave, policy, .. } => Some((*level, *room, *in_cave, *policy)),
+            _ => None,
+        })
+        .collect();
+    let expected: Vec<_> = run
+        .rooms
+        .iter()
+        .map(|r| {
+            let location = r.location();
+            let policy = policies.iter().position(|p| **p == *r.specialist).map(|p| p as u8);
+            (location.level, location.value, location.in_cave, policy)
+        })
+        .collect();
+    assert_eq!(rooms, expected);
+    assert_eq!(rooms[0], (0, 0x77, false, policies.iter().position(|p| &**p == "ow-start").map(|p| p as u8)));
+    let outcomes: Vec<&str> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Outcome(outcome) => Some(outcome.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(outcomes, run.rooms.iter().map(|r| r.outcome.as_str()).collect::<Vec<_>>());
+    assert_eq!(replay.cheats().count(), 0, "no room on the way needs an item");
+}
+
+/// The cheat ledger of a recorded run: every granted bomb placed in 0x2c (a `requires_bombs` room entered with
+/// none) is in the replay, at the frame after the action that placed it.
+#[test]
+fn recorded_chain_runs_carry_the_cheated_items_spent() {
+    let Some(nes) = open_core() else { return };
+    let data = data();
+    let mut source = TfzStore.decode(&read_state("0_2cc_0").unwrap()).unwrap();
+    source.machine.poke(0x658, 0); // no bombs
+    let start = std::env::temp_dir().join(format!("pool-cheats-{}-0_2cc_0.state", std::process::id()));
+    std::fs::write(&start, TfzStore.encode(&source).unwrap()).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some(start.to_str().unwrap())).unwrap();
+    let init = init();
+    let control = init.control.clone();
+    let mut env = ChainRunEnv::new(data.clone(), nes, TfzStore, route, Jobs::new([0u64]), all_policies(&data), init, None);
+    env.chain_mut().max_steps = 40;
+    let options = RecordOptions {
+        embed_start: true,
+        ..Default::default()
+    };
+    let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask| {
+        match mask.directions(ActionKind::Bomb).first() {
+            Some(&direction) => zelda::Action::new(ActionKind::Bomb, direction, 0).unwrap(),
+            None => zelda::Action::parse("WAIT 8").unwrap(),
+        }
+    });
+    std::fs::remove_file(&start).unwrap();
+    replayed(&replay);
+    let placed: u32 = run.rooms.iter().map(|r| r.cheated.bombs).sum();
+    assert!(placed >= 2, "{run:?}");
+    let cheats: Vec<_> = replay.cheats().map(|c| c.unwrap()).collect();
+    assert!(cheats.iter().all(|c| replay::CHEAT_ITEMS[c.item as usize] == "bombs"), "{cheats:?}");
+    assert_eq!(cheats.iter().map(|c| c.count).sum::<u32>(), placed);
+    assert!(cheats.windows(2).all(|w| w[0].frame < w[1].frame) && cheats[0].frame > 0, "{cheats:?}");
+    // The granted bomb Link holds at the end is the end state's context, not a spent one.
+    assert_eq!(replay.end_state().context.granted, [u8::from(run.rooms.last().unwrap().outcome != "death"), 0, 0]);
+}
+
+/// The tables a replay's streams index are the game's: the action space of the decision stream and the cheat
+/// items.
+#[test]
+fn the_replay_tables_are_the_games() {
+    use replay::actions;
+    assert_eq!(actions::KINDS.to_vec(), ActionKind::ALL.map(|k| k.name()).to_vec());
+    assert_eq!(actions::DIRECTIONS.to_vec(), zelda::actions::DIRECTIONS.map(|d| d.name()).to_vec());
+    assert_eq!(actions::DURATIONS, zelda::actions::DURATIONS);
+    assert_eq!(actions::DISTRIBUTION, MASK_SIZE);
+    assert_eq!(replay::CHEAT_ITEMS.to_vec(), zelda::cheats::CheatItem::ALL.map(|i| i.name()).to_vec());
+    assert_eq!(replay::OUTCOME_CLASSES.to_vec(), env::rewards::OUTCOMES.to_vec());
 }
 
 fn wait_action() -> [i64; 3] {
