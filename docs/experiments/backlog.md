@@ -757,6 +757,11 @@ the remaining list is deferred until Lee resumes work.
     route step and nothing counts it. The room budget and the stall counter are per room visit and never fire.
     None of the 120 registered-mode runs did it (most rooms entered: 99). Fix idea: end a run `stuck` when the
     route step goes backwards more than a few times, or count a crossing back onto an earlier step as a retreat.
+    The watch player's simulations hit this too: one such run holds one of its `--parallel` games for those 12
+    minutes.
+  - `hold_finished_frame` / `EnvPool.set_hold` (a finished chain run parks its env on its last frame) have no
+    caller since `play-zelda.py` plays replays (Nov 11). Left in the pool until Lee confirms the replay-driven
+    viewer stays; then remove them with their tests (`crates/pool/tests/pool.rs`, `tests/native/test_pool.py`).
 
 ## Start states
 

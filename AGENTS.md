@@ -96,11 +96,15 @@ up with ideas, test them, keep what helps, and log everything.
   ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
   refusing it (replays embed states). Play (play-zelda, zelda-headless, the golden path) is stochastic by default
   (`--act sample`; `--act argmax|model` are options); evaluation follows each model's act mode.
-- **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path"):
-  `triforce eval-chain|evaluate --replays DIR`, `play-zelda.py --replays DIR`, `zelda-headless.py OUT [COUNT]
+- **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",
+  "Watching"): `triforce eval-chain|evaluate --replays DIR`, `zelda-headless.py OUT [COUNT]
   [--wins-only|--deaths-only|--stuck-only] [--golden]`; optional streams `--streams rewards,decisions,keyframes`.
   `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
+  `play-zelda.py` only ever plays replays: of runs it simulates in the background and files into queues
+  (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
+  simulations run unpaced on `--parallel` (8) cores until the queues are full: mind that next to a training
+  round.
 
 ## Game mechanics that matter for training
 

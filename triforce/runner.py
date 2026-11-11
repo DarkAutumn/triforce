@@ -100,7 +100,8 @@ class Route:
                 raise RunnerError(f"the checkpoint's step {start!r} is not a step of route '{name}' "
                                   f"(0..={len(steps) - 1})")
             checkpoint = {'state': bytes(checkpoint['state']), 'step': start,
-                          'granted': list(checkpoint.get('granted') or (0, 0, 0))}
+                          'granted': list(checkpoint.get('granted') or (0, 0, 0)),
+                          'randomize_rng': bool(checkpoint.get('randomize_rng', False))}
         if stop_at is not None:
             later = [(s['level'], s['room'], s['in_cave']) for s in steps[start + 1:]]
             if (stop_at.level, stop_at.value, stop_at.in_cave) not in later:
@@ -307,10 +308,9 @@ class Policies:
 class ChainPool:
     """An ``EnvPool`` of chain runs of one route (one run per seed, shared by ``num_envs`` envs) and the policies
     acting in it.  ``run()`` plays every seed; watchers call ``play()`` and follow ``poll_events()`` themselves.
-    ``stall_steps`` (watch player only; None = off): room events carry ``stalled`` after that many actions in a
-    room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``hold_finished_frame``
-    (watch player): a finished run's last frame stays published, and its env waits, until
-    ``pool.set_hold(env, False)``.  ``record`` (``replay.record_options``; None = off): every run is recorded
+    ``stall_steps`` (the watch player's simulations; None = off): room events carry ``stalled`` after that many
+    actions in a room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``record``
+    (``replay.record_options``; None = off): every run is recorded
     as a TFREPLAY file and reported as a ``replay`` event; ``replays`` (a ``ReplayDir``) keeps those as files.
     ``deterministic``: None = each policy's act mode (``Policies.deterministic``), else argmax (True) or sampling
     (False) for every policy.  ``harvest`` (a directory; None = off): every correct room entry where the acting
@@ -322,8 +322,7 @@ class ChainPool:
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
                  deterministic: Optional[bool] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: Optional[dict] = None,
-                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False,
-                 replays: Optional[ReplayDir] = None, harvest=None):
+                 stall_steps: Optional[int] = None, replays: Optional[ReplayDir] = None, harvest=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         if replays is not None and record is None:
             raise ValueError("a replay folder needs record options (replay.record_options)")
@@ -338,7 +337,6 @@ class ChainPool:
         task = _native.ChainTask(policies.configs, route.name, [int(s) for s in seeds], stop_at=route.terminal,
                                  start_from=start_from, max_steps=max_steps, missing=policies.missing,
                                  states_dir=states_dir, stall_steps=stall_steps,
-                                 hold_finished_frame=hold_finished_frame,
                                  harvest=None if harvest is None else str(harvest),
                                  stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint)
         num_envs = max(1, min(num_envs, len(seeds)))
@@ -418,7 +416,7 @@ class Runner:
 
     def pool(self, route: Route, seeds: Sequence[int], **kwargs) -> ChainPool:
         """A chain pool over this runner's policies (``kwargs``: ``num_envs``, ``threads``, ``fps``, ``seed``,
-        ``record``, ``replays``, ``stall_steps``, ``hold_finished_frame``)."""
+        ``record``, ``replays``, ``stall_steps``)."""
         kwargs.setdefault('num_envs', self.parallel)
         kwargs.setdefault('threads', self.threads)
         return ChainPool(route, seeds, self.policies, deterministic=self.deterministic, max_steps=self.max_steps,
@@ -443,6 +441,7 @@ class Runner:
             model['act'] = 'argmax' if model['deterministic'] else 'sample'
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
         checkpoint = route.checkpoint and {'step': route.checkpoint['step'], 'granted': route.checkpoint['granted'],
+                                           'randomize_rng': route.checkpoint['randomize_rng'],
                                            'state_sha1': hashlib.sha1(route.checkpoint['state']).hexdigest()}
         return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
                 'power_on': route.power_on, 'checkpoint': checkpoint,

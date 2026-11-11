@@ -57,8 +57,9 @@ pub enum RunStart {
     /// file-select screen (None: drawn per run from `0..=max_delay`).  No memory is written.
     PowerOn { name: String, delay: Option<u32>, max_delay: u32 },
     /// From a state another run reached (a state file's bytes: a replay's end state or keyframe), exactly as
-    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.
-    Checkpoint { state: Arc<[u8]>, step: usize, granted: ItemCounts<u8> },
+    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.  With `redraw_rng` the
+    /// game's RNG bytes are redrawn per run after the state is restored ([`Route::redrawing_rng`]).
+    Checkpoint { state: Arc<[u8]>, step: usize, granted: ItemCounts<u8>, redraw_rng: bool },
 }
 
 /// Where a route starts and how it ends.
@@ -201,8 +202,19 @@ impl Route {
                 self.name
             ));
         }
-        self.start = RunStart::Checkpoint { state, step, granted };
+        self.start = RunStart::Checkpoint { state, step, granted, redraw_rng: false };
         Ok(self)
+    }
+
+    /// Whether a checkpoint start redraws the game's RNG bytes per run (as a start state's load does).  A
+    /// checkpoint is otherwise the same machine for every run, and models that act by argmax then play the
+    /// same game every time; the redraw is the only thing written, and a recording keeps it as edits.  Nothing
+    /// changes for the other starts (a start state always redraws; a power-on start writes nothing).
+    pub fn redrawing_rng(mut self, on: bool) -> Route {
+        if let RunStart::Checkpoint { redraw_rng, .. } = &mut self.start {
+            *redraw_rng = on;
+        }
+        self
     }
 
     /// The route ended on entering route step `step`'s room by the route's own exit from the room before it
@@ -680,10 +692,21 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.game_start_route("start", rng)
     }
 
-    /// A checkpoint restored exactly (no frame runs, nothing is written) on its route step.
-    fn start_from_checkpoint(&mut self, state: &[u8], step: usize) -> Result<GameCompletion, EnvError> {
+    /// A checkpoint restored on its route step: no frame runs, and nothing is written unless `redraw_rng`
+    /// (then the game's RNG bytes, from `rng`).
+    fn start_from_checkpoint(
+        &mut self,
+        state: &[u8],
+        step: usize,
+        redraw_rng: bool,
+        rng: &mut ChaCha8Rng,
+    ) -> Result<GameCompletion, EnvError> {
         let snapshot = self.store.decode(state)?;
         self.session.restore(&snapshot);
+        if redraw_rng {
+            let bytes = zelda::vars::RNG_VARS.map(|var| (var, rng.random_range(1..=255u8)));
+            self.session.apply_ram(&bytes);
+        }
         GameCompletion::new(self.data.map.clone(), &self.route.name, Some(step)).map_err(EnvError::State)
     }
 
@@ -717,8 +740,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             RunStart::PowerOn { name, delay, max_delay } => {
                 (self.start_from_power_on(&name, delay, max_delay, rng), None)
             }
-            RunStart::Checkpoint { state, step, granted } => {
-                (self.start_from_checkpoint(&state, step), Some(granted))
+            RunStart::Checkpoint { state, step, granted, redraw_rng } => {
+                (self.start_from_checkpoint(&state, step, redraw_rng, rng), Some(granted))
             }
         };
         let mut gc = match started {

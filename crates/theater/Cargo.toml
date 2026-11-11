@@ -1,0 +1,16 @@
+[package]
+name = "theater"
+description = "Replays for watching: queues of finished runs filled by a background thread, and paced playback"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+parking_lot = "0.12.5"
+pool = { path = "../pool", default-features = false }
+replay = { path = "../replay", features = ["zcore"] }
+zcore = { path = "../zcore" }
+
+[dev-dependencies]
+test-rom = { path = "../test-rom" }

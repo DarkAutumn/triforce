@@ -109,7 +109,7 @@ def test_runs_without_models_end_in_errors_and_a_failed_exit(tmp_path, capsys):
 
 
 @pytest.mark.parametrize('argv, message', [
-    (['--golden', '--act', 'argmax'], 'the golden path needs sampling'),
+    (['--golden', '--act', 'argmax', '--power-on', '--delay', '5'], 'every game of the first leg would be the same'),
     (['--golden', '--wins-only'], '--golden saves the golden path'),
     (['--golden', '--stop-at', 'step:24'], "--golden plays to the route's end"),
     (['--wins-only', '--deaths-only'], 'not allowed with argument'),

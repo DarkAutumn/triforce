@@ -17,6 +17,7 @@ mod game;
 mod policy;
 mod replay;
 mod signals;
+mod theater;
 
 use pyo3::prelude::*;
 
@@ -187,6 +188,8 @@ mod _native {
     use crate::policy::{PyPolicy, keyed_noise};
     #[pymodule_export]
     use crate::replay::{PyReplay, PyReplayPlayer, replay_stitch, replay_truncate, replay_verify};
+    #[pymodule_export]
+    use crate::theater::{PyReplayFeed, PyReplayScreen};
 
     #[pymodule_init]
     fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {

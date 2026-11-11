@@ -2,7 +2,8 @@
 
 Lee, Nov 9: inference moves to Rust. Python stops being called once per step; it calls once per rollout with
 the network's weights and gets the whole batch back. The same engine runs evaluation, chains and the watch player
-(play-zelda lets every game act inside the pool and only follows events). Search (expert iteration,
+(play-zelda's simulations act inside the pool; since Nov 11 its picture is replays of their finished runs,
+`docs/architecture.md` "Watching"). Search (expert iteration,
 `~/Downloads/triforce-better-play.md` §2) is **for training only**: the agent always acts from the policy, never
 from a search. Only the current model config is supported; checkpoints from before r56 (`grid_encoder: 'conv'`)
 load again, since the conv encoder is the only one left. Background: `docs/all-rust.md` (why the learner,
@@ -41,11 +42,13 @@ The learner recomputes `logp_old` and values with its own torch network over the
    dones, bootstrap observations, episode events); Python gets them in one call with the GIL released. GAE stays
    in Python (cheap, and the learner recomputes values anyway). `close` (or Ctrl-C) stops a rollout before its
    next step.
-3. **Evaluation, chains and the watch player** use the same in-pool policy (one network per specialist in a chain):
+3. **Evaluation, chains and the watch player's simulations** use the same in-pool policy (one network per
+   specialist in a chain):
    `Pool::play(actor, record)` makes every env act on its own, one decision per turn on its worker (envs sharing a
-   thread take turns), until its jobs run out. A chain run that ends with `hold_finished_frame` parks its env
-   until `set_hold(env, false)` (the watch player's result pause). Python only follows events (`wait_idle`,
-   `poll_events`, `poll_plays`).
+   thread take turns), until its jobs run out. Python only follows events (`wait_idle`,
+   `poll_events`, `poll_plays`), or hands them to a Rust thread (`ReplayFeed`, the watch player). A chain run
+   that ends with `hold_finished_frame` parks its env until `set_hold(env, false)`: the result pause of the
+   watch player while it showed live games; nothing uses it since it shows replays (backlog, Driver).
 4. **Look-ahead: inline in training, skipped in eval/chains** (deferral not built; `docs/decisions.md` 2026-11-09).
    Beam/bomb/arrow/boomerang look-ahead (`zelda::change::predict`, `FutureCreditLedger`) runs inside
    `Session::act`. Nothing that steers the step loop reads predicted effects: `stuck`, `no-damage`, linger

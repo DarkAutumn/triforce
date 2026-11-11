@@ -11,6 +11,7 @@ members = [
     "crates/policy",
     "crates/replay",
     "crates/test-rom",
+    "crates/theater",
 ]
 
 [workspace.package]

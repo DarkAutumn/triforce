@@ -1028,3 +1028,37 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
     saved; a golden path that fails a segment is still saved, under the failed run's ending.
   - `replay_stitch` renumbers reward terms instead of requiring equal term tables (terms are numbered by first
     use, so two segments rarely agree).
+
+## 2026-11-11 — play-zelda plays replays from queues, not live games (Lee)
+
+- **What Lee asked for:** the GUI driven by queues of replays that a background thread in Rust fills: `success`,
+  `stuck`, `died`, `random` (a copy of any run, so it is not skewed by what the others take) and `best` (a heap
+  like the old "best on screen": furthest, most hearts, shortest), about 32 entries each; taking a `best` run
+  queues `parallelism × missing` runs and keeps the best of them; the simulations pause once every queue is
+  full; a single replay file plays on loop; a folder's top-level replays go round, as many as there are cells;
+  a golden-route mode; argmax or random acting chosen at startup, with the game's random numbers perturbed when
+  a start state is loaded so that argmax runs differ. "Don't ask, build it, freestyle."
+- **Built:** `crates/theater` (queues, feed thread, playback screen), `play_grid.ReplayGrid`, `play-zelda.py`
+  (`docs/architecture.md` "Watching"). The live-game grid (`GameGrid`, `--games`, the swap-to-a-better-game
+  logic) is gone.
+- **Choices made while building (say so if they should change):**
+  - `best` ranks a win first, then the furthest route step reached (not rooms entered: wandering and retreats
+    inflate those), then hearts at the end, then frames counted from the moment the models took over (a
+    power-on run's idle doesn't count).
+  - `best` hands out runs once it was half full (16 of 32), not full, so the first picture comes sooner (with
+    the trained team from the start state, 8 games, the round training: 11 runs had finished after 9 s and 32
+    after 18 s); the heap only gets better from there.
+  - **Patience** (`--patience`, default 64): a queue for an ending that hardly happens (a full-route win is 5–9%
+    of runs, `stuck` rarer) would keep `--parallel` cores simulating for good, next to a training round. After
+    64 finished runs in a row that no queue took, the simulations wait for the next run to be taken.
+    `--patience 0` is the literal rule (run until every queue is full).
+  - A cell's next replay loads behind the result of the one that just ended, so a power-on run's idle (up to
+    32,766 frames to skip) doesn't show as a blank cell.
+  - Golden paths are a source like the queues (`--show golden`, key `g`): made in the background while fewer
+    than one per cell wait, failed paths dropped, the strip showing the leg.
+  - Argmax: a start state's load already redrew the random numbers per seed (measured: 4 of 4 argmax runs from
+    `start` differ). New: the same redraw at a golden path's checkpoints unless every model samples
+    (`Route::redrawing_rng`), so `--golden --act argmax` works (16 runs, 9 s, verifies); from power on the idle
+    delay is the only randomness, so `play-zelda.py --act argmax --power-on --delay N` is refused.
+  - `play-zelda.py` sets torch to one thread: the models act in Rust, and torch's default thread pool made
+    loading the team take about 20 s next to a training round (backlog, Driver).

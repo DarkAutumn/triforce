@@ -22,6 +22,7 @@ rand = "0.10.3"
 rand_chacha = "0.10.0"
 replay = { path = "../replay", features = ["zcore"] }
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
+theater = { path = "../theater" }
 zcore = { path = "../zcore" }
 zelda = { path = "../zelda", features = ["zcore"] }
 

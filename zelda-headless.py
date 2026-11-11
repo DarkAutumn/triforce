@@ -16,7 +16,9 @@ other, error): each replays bit for bit on the emulator alone (`tf replay info|v
 triforce._native.Replay / ReplayPlayer).
 
 The models sample their actions by default (every seed is a different game); --act model plays each model's
-registered act mode, --act argmax every model's most likely action.  --power-on starts every run from console
+registered act mode, --act argmax every model's most likely action (the runs then differ by the game's random
+numbers, redrawn from the seed when a start state or a golden path's checkpoint is loaded).  --power-on starts
+every run from console
 power on by controller inputs alone; the run's randomness is then --delay, the idle frames on the file-select
 screen (0..=32766, or random: drawn from each run's seed).
 
@@ -105,14 +107,15 @@ def parse_args(argv=None) -> argparse.Namespace:
                          "--stuck-only")
         if args.stop_at is not None:
             parser.error("--golden plays to the route's end: no --stop-at")
-        if args.act == 'argmax':
-            parser.error("the golden path needs sampling: every worker would play the same game from a checkpoint")
     try:
         args.power_on = power_on_options(args)
         args.streams = replay.parse_streams(args.streams)
         args.stop = parse_stop(args.stop_at)
     except (RunnerError, ValueError) as error:
         parser.error(str(error))
+    if args.golden and args.act == 'argmax' and args.power_on is not None and args.power_on['delay'] is not None:
+        parser.error("--golden --act argmax with a fixed --delay: every game of the first leg would be the same "
+                     "(use --delay random, or --act sample)")
     return args
 
 

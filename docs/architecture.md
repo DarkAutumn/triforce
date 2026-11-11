@@ -25,9 +25,10 @@ flowchart LR
 | `crates/zelda` | Game model and session, ported from the old Python stack: `vars`/`tables` (RAM variables, game data), `enums.rs` (object ids and `ObjectClass`, the one classifier), `game.rs` (`GameView`: Link, enemies, items, projectiles, hazards), `room`/`room_state`/`tiles` (wavefront, doors, tile grid), `actions.rs` (`Action`, `ActionMask`, `compute_action_mask`), `executor.rs` (option executor: timed options, interrupts, uncontrollable skip), `blocks.rs` (shield collisions), `change.rs` + `ledger.rs` (`Change`, look-ahead `FutureCreditLedger`), `cheats.rs`, `room_entry.rs`, `game_map.rs` (`game.yaml`/`routes.yaml`), `objectives.rs` (`GameCompletion`), `hearts.rs`, `linger.rs`, `visits.rs`, `session.rs` (`Session`). The `Nes` trait (`nes.rs`) abstracts the core so tests can run on zcore or a scripted double. |
 | `crates/env` | `config.rs` (`SpecialistConfig`, `GameData`, cross-file validation), `rewards.rs` + `critic.rs`, `end_conditions.rs`, `observation.rs` (`ObservationBuilder`, schema v2), `objective.rs`, `start_states.rs`, `curriculum.rs`, `specialist_env.rs` (`SpecialistEnv`), `chain.rs` (`ChainEnv`, `Route`, `RoomRecord`, `RunResult`), `explore.rs` (`Explorer`, `AcceptSpec`). |
 | `crates/pool` | Generic threaded `Pool<E: PoolEnv>` (`pool.rs`), buffer layout (`layout.rs`), frame pacing/render control (`control.rs`); `zelda/` holds the Train/Eval/ChainRun envs and pool events. |
-| `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `Policy`, `keyed_noise`, `SpecialistConfig`, `CurriculumSpec`, `Explorer`/`AcceptSpec`/`explore_states`, `route_steps`, `routes`, `route_alternates`, `game_rooms`, `families`, `specialist_for`, `paths`, `OBS_SPEC` and other constants, exception types. |
+| `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `Policy`, `keyed_noise`, `SpecialistConfig`, `CurriculumSpec`, `Explorer`/`AcceptSpec`/`explore_states`, `Replay`/`ReplayPlayer`/`replay_verify|stitch|truncate`, `ReplayFeed`/`ReplayScreen`, `route_steps`, `routes`, `route_alternates`, `game_rooms`, `families`, `specialist_for`, `paths`, `OBS_SPEC` and other constants, exception types. |
 | `crates/movie` | `TFMOVIE` input movies and `TFGOLDEN` per-frame digests. |
 | `crates/replay` | `TFREPLAY` recordings: the format (`format.rs`), `Recorder`, the reader `Replay`, `stitch`/`truncate` (`edit.rs`) and, with feature `zcore`, `Player`/`verify` (playback on the emulator alone). No dependency on `zelda` or `env`. |
+| `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
 | `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
@@ -41,10 +42,12 @@ sampling with Gumbel noise keyed to (episode job, decision) or taking each head'
 or chain run's seed, or a per-episode key in training, so an episode plays the same on any env or thread.
 Training makes one `rollout(policies, T, buffers)` call per rollout: every env steps `T` decisions and the buffers
 get, per env, the `T + 1` observations, the actions, the Rust policy's log-prob/entropy/value, rewards, frames,
-episode starts and bootstrap values. Evaluation, chains and the watch player call `play(policies)`: every env acts
-on its own until its jobs run out (`active`, `wait_idle`); with `record` each finished episode comes back from
-`poll_plays()` (actions, per-decision log-prob/entropy/value, optionally the observations), which
-`triforce/replay.py` keeps as replay files. Envs auto-reset after a terminal step; terminal infos, eval records,
+episode starts and bootstrap values. Evaluation, chains and the watch player's simulations call `play(policies)`:
+every env acts
+on its own until its jobs run out (`active`, `wait_idle`); with `record='actions'` each finished episode comes
+back from `poll_plays()` (actions, per-decision log-prob/entropy/value, optionally the observations), and a pool
+built with `record=` reports every finished run as a `replay` event (Replays, below). Envs auto-reset after a
+terminal step; terminal infos, eval records,
 chain results and room-change events come from `poll_events()`. Env `i` seeds a `ChaCha8Rng` from `(seed, i)`
 (seeds < 2**63). A usage error of an actor or planner fails the call, not the env; a `rollout` with no active env is
 an error; rollout buffers must be C-contiguous and only known keys are accepted. `close` (or Ctrl-C) stops a
@@ -701,12 +704,52 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
   checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
   written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
-  triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. The games of a segment differ only by the models'
-  sampling noise (keyed to the run seed), so `--act argmax` is refused. A segment without a success in
+  triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model sampling (the default) the games of a
+  segment differ only by the models' sampling noise (keyed to the run seed). Models that act by argmax would
+  play one game from a checkpoint, so unless all sample (`--act argmax`, `--act model`) each game of a later
+  segment has the game's random numbers redrawn from its seed when the checkpoint is restored
+  (`checkpoint={..., 'randomize_rng': True}`, `Route::redrawing_rng`: the write a start state's load makes),
+  recorded as edits at the checkpoint. A segment without a success in
   `--attempts` runs (default 320) ends the path as a failure: its part is the run that got furthest (most
-  rooms, then most frames), and the file is saved under that run's ending. A golden replay's memory edits are
-  what any chain run's are: the action executor's writes of Link's facing (`$98`) and the selected B item
-  (`$656`), and cheat grants; from power on there is no other write and none to the game's random numbers.
+  rooms, then most frames), and the file is saved under that run's ending. Besides that redraw, a golden
+  replay's memory edits are what any chain run's are: the action executor's writes of Link's facing (`$98`) and
+  the selected B item (`$656`), and cheat grants; from power on there is no other write.
+
+## Watching (`play-zelda.py`, `play_grid.py`, `crates/theater`)
+
+`play-zelda.py [COLUMNSxROWS] [PATH]` shows a grid of cells, and every cell plays a replay: nothing on screen is
+a live game. `play_grid.ReplayGrid` decides what each cell plays next; `_native.ReplayScreen` (`theater::Screen`)
+plays it, one thread per cell on the emulator alone, paced at the frame rate (keys `u`, `+`, `-`; `p` pauses).
+A power-on run is shown from the frame the models took over. When a replay ends its result stays up
+`RESULT_PAUSE` (3 s) while the cell's next replay loads behind it (`play(hold=True)`, then `release`).
+
+- **The queues** (no PATH; `--show best|success|stuck|died|random`, keys `b s k d r`). The promoted models play
+  the route in a chain pool (`--parallel` games, no picture, unpaced, every run recorded) and
+  `_native.ReplayFeed` (`theater::Feed`, a Rust thread) takes every finished run off the pool: into its ending's
+  queue, a copy of any run into `random`, and into `best`, which keeps the best runs seen and not yet watched (a
+  win, then the furthest route step, then the most hearts at the end, then the fewest frames from the moment the
+  models took over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
+  `best` `--parallel` candidate runs per missing entry; `best` hands out runs once it was half full. The feed
+  pauses the pool (`Pool::set_paused`) while no queue wants a run and resumes it when a cell takes one. A queue
+  that would never fill (an ending that hardly happens) does not keep the simulations running: after
+  `--patience` (64) finished runs in a row that no queue took they wait for the next take (0: never).
+  `--replays DIR` saves every simulated run. `--from`, `--power-on`, `--stop-at`, `--stall-steps` and `--act`
+  shape the runs as in `zelda-headless.py`.
+- **Acting** (`--act`, chosen at startup): `sample` (default) draws every action from the model's
+  probabilities, `argmax` takes the most likely one, `model` follows each model's registered mode. Runs that
+  don't sample differ by the game's random numbers alone: those are redrawn from the run seed when a start
+  state is loaded (the game start, `--from`) and at a golden path's checkpoints; from power on they come from
+  the idle delay, so `--act argmax` with a fixed `--delay` is refused.
+- **Golden paths** (`--show golden`, key `g`): `play_grid.GoldenSource` makes golden paths one after another
+  on a Python thread while fewer than one per cell wait; failed paths are dropped. The strip shows the leg
+  (`leg 2/3`).
+- **Replay files** (PATH): one file plays on loop (in one cell unless a grid is given); a folder's top-level
+  `*.tfreplay` files go round in name order, each cell taking the next one no other cell shows, and the folder
+  is read again each time round. More cells than files leaves the rest dark.
+- `n` sends every cell to its next replay. The title shows the source, the queues' stock, the runs simulated
+  and how they ended, whether the simulations run, and the cells' frame rate; a cell's strip shows the run's
+  seed, Link's hearts, the room, the acting specialist and cheated items used. `--benchmark SECONDS` prints
+  the frame rate as JSON and quits.
 
 ## Entry states (`entry_states.py`)
 

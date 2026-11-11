@@ -151,9 +151,10 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 /// A run starts from the game start state, or from one of: `start_from` (a state name or path); `power_on`
 /// (`{'name': 'LINK', 'delay': None, 'max_delay': 32766}`: console power on, the name registered after `delay`
 /// idle frames on the file-select screen, None = drawn per run seed from `0..=max_delay`; no memory is
-/// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees]}`: a state another
-/// run reached, as is; an entry of `Replay.states()` is one). It ends at the route's end, or on entering
-/// `stop_at` (a room) or route step `stop_step`'s room (on the route).
+/// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees], 'randomize_rng':
+/// False}`: a state another run reached, as is, or with `randomize_rng` the game's RNG bytes redrawn per run
+/// seed, so that runs acting by argmax differ; an entry of `Replay.states()` is one). It ends at the route's
+/// end, or on entering `stop_at` (a room) or route step `stop_step`'s room (on the route).
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
     configs: Vec<Arc<SpecialistConfig>>,
@@ -208,7 +209,12 @@ fn with_checkpoint(route: Route, map: &zelda::GameMap, checkpoint: &Bound<'_, Py
         keys: granted[1],
         rupees: granted[2],
     };
-    route.with_checkpoint(map, Arc::from(state), step, granted).map_err(config_err)
+    let redraw = match checkpoint.get_item("randomize_rng")? {
+        Some(value) => value.extract().map_err(|_| config_err("checkpoint['randomize_rng'] must be a bool"))?,
+        None => false,
+    };
+    let route = route.with_checkpoint(map, Arc::from(state), step, granted).map_err(config_err)?;
+    Ok(route.redrawing_rng(redraw))
 }
 
 #[pymethods]
@@ -1312,5 +1318,25 @@ impl PyEnvPool {
             self.policies.len(),
             self.policies
         )))
+    }
+
+    pub(crate) fn env_count(&self) -> usize {
+        self.pool.num_envs()
+    }
+
+    /// For the replay feed's thread (no interpreter lock needed): waits up to `timeout` for the pool to go
+    /// idle, then takes its events and returns the recordings of the runs and episodes that finished, as
+    /// (job, TFREPLAY bytes).  The other events are dropped.  An env's failure is the error.
+    pub(crate) fn take_replays(&self, timeout: Duration) -> Result<Vec<(i64, Vec<u8>)>, String> {
+        self.pool.wait_idle(Some(timeout)).map_err(|e| e.to_string())?;
+        let replays = self.pool.poll_events().into_iter().filter_map(|(_, event)| match event {
+            ZeldaEvent::Replay { job, data } => Some((job, data)),
+            _ => None,
+        });
+        Ok(replays.collect())
+    }
+
+    pub(crate) fn pause(&self, on: bool) {
+        self.pool.set_paused(on);
     }
 }

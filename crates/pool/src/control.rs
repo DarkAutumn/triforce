@@ -89,7 +89,8 @@ impl EnvControl {
     /// How often a paused env checks whether it was resumed.
     pub const PAUSE_POLL: Duration = Duration::from_millis(5);
 
-    pub(crate) fn new(index: usize, fps: f64, frame_bytes: usize, stop: Arc<AtomicBool>) -> Self {
+    /// A control that stops pacing and pausing once `stop` is set (a pool's envs share its flag).
+    pub fn new(index: usize, fps: f64, frame_bytes: usize, stop: Arc<AtomicBool>) -> Self {
         EnvControl {
             shared: Arc::new(Shared {
                 index,

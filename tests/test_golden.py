@@ -153,9 +153,20 @@ def test_the_fastest_winner_of_a_poll_becomes_the_next_checkpoint(stitchable, mo
     assert (seeds_a, seeds_b) == (list(range(0, 20)), list(range(20, 40)))
     assert (route_a.stop_step, route_a.checkpoint, route_b.stop_step) == (SEGMENT_STOP_STEP, None, None)
     end = _native.Replay(first).states()[-1]
-    assert route_b.checkpoint == {'state': end['state'], 'step': SEGMENT_STOP_STEP, 'granted': end['granted']}
+    assert route_b.checkpoint == {'state': end['state'], 'step': SEGMENT_STOP_STEP, 'granted': end['granted'],
+                                  'randomize_rng': False}
     assert (kwargs_a['num_envs'], kwargs_a['threads'], kwargs_a['deterministic'], kwargs_a['record']) == (
         4, 3, False, {'record': True})
+
+    # Unless every model samples, the games of the next segment would be one game: their random numbers are
+    # redrawn at the checkpoint.
+    for deterministic in (True, None):
+        FakePool.built = []
+        golden.golden_path(object(), 'd2first', 4, 0, {}, start_from=str(require_state(SEGMENT_STATE)),
+                           stops=[SEGMENT_STOP_STEP, None], attempts=20, deterministic=deterministic)
+        (_, _, kwargs_a), (route_b, _, kwargs_b) = FakePool.built
+        assert route_b.checkpoint['randomize_rng'] is True
+        assert kwargs_a['deterministic'] is kwargs_b['deterministic'] is deterministic
 
 
 def test_a_segment_without_a_win_keeps_the_run_that_got_furthest(stitchable, monkeypatch):

@@ -502,6 +502,22 @@ fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc
     // The run goes on from there (the stop step is not the room it starts in).
     assert!(matches!(c.step(parse("WAIT 8")).unwrap(), ChainStatus::Act { .. }));
 
+    // With the RNG redrawn, the checkpoint is another game per seed (models acting by argmax would otherwise
+    // play the same one every time): the game's RNG bytes ($18-$24) differ, and nothing else.
+    let redrawn = load(None).with_checkpoint(&data.map, end.clone(), 25, ItemCounts::default()).unwrap();
+    let mut c = chain(c.into_parts().0.into_nes(), data, redrawn.redrawing_rng(true));
+    let mut draw = |seed: u64| {
+        assert!(matches!(c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap(), ChainStatus::Act { .. }));
+        assert_eq!((c.session().frame(), c.context().0), (0, Some(25)));
+        (c.session().nes().ram().to_vec(), c.session().nes().prg_ram().to_vec())
+    };
+    let ((five, prg_five), (again, _), (six, _)) = (draw(5), draw(5), draw(6));
+    assert!(five == again && prg_five == prg_ram.to_vec(), "the same seed is the same game");
+    assert_ne!(five[0x18..=0x24], six[0x18..=0x24], "another seed is another one");
+    assert_ne!(five[0x18..=0x24], ram[0x18..=0x24]);
+    let differ: Vec<usize> = (0..ram.len()).filter(|&at| five[at] != ram[at]).collect();
+    assert!(differ.iter().all(|at| (0x18..=0x24).contains(at)), "only the RNG bytes are written: {differ:?}");
+
     // Bytes that are no state end the run as an error, like a start state that can't be loaded.
     let junk = load(None).with_checkpoint(&data.map, Arc::from(&b"not a state"[..]), 25, ItemCounts::default());
     let mut c = chain(c.into_parts().0.into_nes(), data, junk.unwrap());

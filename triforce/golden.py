@@ -7,13 +7,16 @@ seeds, every run recorded): the first run to get there wins, its end state becom
 the next segment starts from, and the other games are dropped.  The winners' replays, joined
 (``_native.replay_stitch``), are one replay from the start to the route's end: the golden path.
 
-The games of a segment differ only by the models' sampling noise (keyed to the run seed): nothing is written to
-the machine and no frame is inserted at a checkpoint, so the stitched replay plays straight through, as one
-game.  (A power-on start with a random delay also gives every game of the first segment its own delay.)  What
-a golden replay's EDITS hold is what any chain run's do: the action executor's writes (Link's facing ``$98``
-before an attack, the selected B item ``$656``) and cheat grants; from power on there is no other write, and
-none to the game's random numbers.  A segment nobody wins in ``attempts`` runs ends the path as a failure, with
-the run that got furthest as its last part.
+When every model samples (the default), the games of a segment differ only by the models' sampling noise (keyed
+to the run seed): nothing is written to the machine and no frame is inserted at a checkpoint, so the stitched
+replay plays straight through, as one game.  (A power-on start with a random delay also gives every game of the
+first segment its own delay.)  Models that act by argmax would play the same game from a checkpoint every time,
+so unless every model samples, each game of a later segment starts with the game's random numbers redrawn from
+its seed (``Route.load(checkpoint={..., 'randomize_rng': True})``, the write a start state's load makes); the
+replay keeps those bytes as edits at the checkpoint.  Besides that, a golden replay's EDITS hold what any chain
+run's do: the action executor's writes (Link's facing ``$98`` before an attack, the selected B item ``$656``)
+and cheat grants.  A segment nobody wins in ``attempts`` runs ends the path as a failure, with the run that got
+furthest as its last part.
 """
 
 from typing import Callable, List, Optional, Tuple
@@ -25,6 +28,10 @@ DEFAULT_ATTEMPTS = 320      # runs per segment before the path fails
 POLL_SECONDS = 0.05
 
 
+class Cancelled(Exception):
+    """A race was stopped by its ``cancel`` callback."""
+
+
 def checkpoints(route_name: str) -> List[int]:
     """The route steps entered right after a triforce that is not the route's last step (d2first: [24, 68])."""
     steps = _native.route_steps(route_name)
@@ -32,13 +39,14 @@ def checkpoints(route_name: str) -> List[int]:
 
 
 def race(route: Route, seeds, policies: Policies, parallel: int, record: dict, *, threads: Optional[int] = None,
-         states_dir=None, deterministic: Optional[bool] = False,
-         max_steps: int = DEFAULT_MAX_STEPS) -> Tuple[dict, bytes, int]:
+         states_dir=None, deterministic: Optional[bool] = False, max_steps: int = DEFAULT_MAX_STEPS,
+         cancel: Optional[Callable[[], bool]] = None) -> Tuple[dict, bytes, int]:
     """Plays ``route`` from ``seeds`` on ``parallel`` games until one run succeeds.  Returns (the chosen run's
     result dict, its recording, the runs that finished).  The winner is the success with the fewest frames, then
     the lowest seed, among those finished when the first success is seen; the other games are dropped.  Without
     a success: the failed run with the most rooms, then the most frames, then the lowest seed.  ``RunnerError``
-    when every run ended in an error (e.g. a specialist without a model)."""
+    when every run ended in an error (e.g. a specialist without a model).  ``cancel()`` is asked between polls:
+    True drops every game and raises ``Cancelled``."""
     # pylint: disable=too-many-arguments, too-many-locals
     results, recordings, wins = {}, {}, []
     with ChainPool(route, seeds, policies, num_envs=parallel, threads=threads, deterministic=deterministic,
@@ -46,6 +54,8 @@ def race(route: Route, seeds, policies: Policies, parallel: int, record: dict, *
         pool.play()
         idle = False
         while not idle and not wins:
+            if cancel is not None and cancel():
+                raise Cancelled()
             idle = pool.pool.wait_idle(timeout=POLL_SECONDS)
             for event in pool.poll_events():
                 if event['type'] == 'run':
@@ -68,15 +78,18 @@ def golden_path(policies: Policies, route_name: str, parallel: int, first_seed: 
                 start_from: Optional[str] = None, power_on: Optional[dict] = None,
                 attempts: int = DEFAULT_ATTEMPTS, stops: Optional[list] = None, states_dir=None,
                 threads: Optional[int] = None, on_segment: Optional[Callable[[dict], None]] = None,
-                deterministic: Optional[bool] = False, max_steps: int = DEFAULT_MAX_STEPS) -> Tuple[bytes, dict]:
+                deterministic: Optional[bool] = False, max_steps: int = DEFAULT_MAX_STEPS,
+                cancel: Optional[Callable[[], bool]] = None) -> Tuple[bytes, dict]:
     """Plays the golden path of ``route_name`` (module doc) and returns (the stitched replay, a summary).
 
     ``record``: ``replay.record_options`` of every run; ``start_from`` / ``power_on``: the first segment's start
     (``Route.load``; neither: the game start state); ``stops``: the route step that ends each segment, None for
     the route's own end (default: the ``checkpoints`` after the start's route step, then None); segment ``s``
     plays seeds ``first_seed + s * attempts`` onward, at most ``attempts`` of them; ``deterministic``: how the
-    models act (False: all sample, the default; None: each model's registered mode; True makes every game of a
-    segment the same); ``on_segment(entry)`` is called with each segment's summary entry as it ends.
+    models act (False: all sample, the default; None: each model's registered mode; True: all argmax; unless
+    False, the games of a later segment get their random numbers redrawn at the checkpoint, module doc);
+    ``on_segment(entry)`` is called with each segment's summary entry as it ends;
+    ``cancel()`` is asked between polls of a race: True stops the path with ``Cancelled``.
 
     Summary: ``{'result': 'success' | 'failure', 'frames', 'segments': [{'index', 'stop_step', 'seed', 'frames',
     'runs_played', 'ending'}]}`` (``frames``: the replay's; a segment's: its own replay's)."""
@@ -98,7 +111,8 @@ def golden_path(policies: Policies, route_name: str, parallel: int, first_seed: 
             route = Route.load(route_name, states_dir=states_dir, stop_step=stop, checkpoint=checkpoint)
         seeds = range(first_seed + index * attempts, first_seed + (index + 1) * attempts)
         result, recording, played = race(route, seeds, policies, parallel, record, threads=threads,
-                                         states_dir=states_dir, deterministic=deterministic, max_steps=max_steps)
+                                         states_dir=states_dir, deterministic=deterministic, max_steps=max_steps,
+                                         cancel=cancel)
         segment = _native.Replay(recording)
         entry = {'index': index, 'stop_step': stop, 'seed': int(result['seed']), 'frames': segment.frames,
                  'runs_played': played, 'ending': segment.ending}
@@ -108,7 +122,7 @@ def golden_path(policies: Policies, route_name: str, parallel: int, first_seed: 
         data = recording if data is None else _native.replay_stitch(data, recording)
         if result['result'] != 'success':
             break
-        checkpoint = segment.states()[-1]
+        checkpoint = {**segment.states()[-1], 'randomize_rng': deterministic is not False}
     won = len(segments) == len(stops) and segments[-1]['ending'] == 'win'
     return data, {'result': 'success' if won else 'failure', 'frames': _native.Replay(data).frames,
                   'segments': segments}

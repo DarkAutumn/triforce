@@ -216,6 +216,37 @@ def test_a_chain_started_on_the_segment_state_continues_from_its_win(scripted_mo
     assert recording.states()[-1]['step'] == SEGMENT_STOP_STEP
 
 
+def _rng_edits(recording):
+    """{address: value} of a recording's writes to the game's random numbers ($18-$24) before its first frame
+    of play."""
+    control = next(event['frame'] for event in recording.events() if event['type'] == 'control')
+    return {int(addr): int(value) for frame, addr, _, value in recording.edits()
+            if frame <= control and 0x18 <= addr <= 0x24}
+
+
+def test_runs_that_start_from_a_state_differ_by_the_random_numbers_drawn_for_their_seed(scripted_models, states_dir):
+    """What makes two argmax runs two games.  A start state's load redraws the game's random numbers from the run
+    seed; a checkpoint is restored as it is unless asked (``randomize_rng``, the golden path's when its models
+    don't all sample), and then the redraw is recorded as edits the stitched replay replays."""
+    runner = Runner(models_dir=scripted_models, max_steps=40, states_dir=states_dir, deterministic=True)
+    route = Route.load('d2first', start_from=str(require_state(SEGMENT_STATE)), stop_step=SEGMENT_STOP_STEP)
+    (_, first), (_, again), (_, other) = (record(runner, route, seed) for seed in (0, 0, 1))
+    assert first.data == again.data, "the same seed is the same run"
+    assert len(_rng_edits(first)) == 13 and _rng_edits(first) != _rng_edits(other)
+    assert all(model['deterministic'] for model in first.meta['models'])
+
+    end = first.states()[-1]
+    onward = Route.load('d2first', checkpoint=end)
+    assert not record(runner, onward, 5)[1].edits()[:, 0].tolist().count(0), "a checkpoint as it is: no write"
+    runner.max_steps = 6
+    redrawn = Route.load('d2first', checkpoint={**end, 'randomize_rng': True})
+    (_, five), (_, six) = (record(runner, redrawn, seed) for seed in (5, 6))
+    assert len(_rng_edits(five)) == 13 and _rng_edits(five) != _rng_edits(six)
+    assert five.states()[0]['state'] == end['state'], "the redraw is an edit, not another start state"
+    joined = _native.Replay(_native.replay_stitch(first.data, five.data))
+    assert _native.replay_verify(joined.data)['frames'] == first.frames + five.frames
+
+
 def test_evaluation_episodes_are_recorded_with_their_endings(scripted_models, states_dir, tmp_path):
     checkpoint = registry.promoted_checkpoint('ow-start', scripted_models)
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=25)
