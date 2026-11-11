@@ -1,6 +1,6 @@
 //! The pool adapters: training, evaluation and chain envs.
 
-use super::nes::{PoolNes, PoolState, PoolStore, RgbFn};
+use super::nes::{Origin, PoolNes, PoolState, PoolStore, RgbFn};
 use super::{
     EvalRecord, RoomEvent, ZeldaAction, ZeldaEvent, interrupt_code, obs_layout, write_observation,
 };
@@ -10,11 +10,13 @@ use crate::layout::{ObsLayout, ObsRow};
 use crate::pool::{EnvInit, Outcome, PoolEnv, SearchEnv, Start};
 use env::chain::{ChainEnv, ChainStatus, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
+use env::end_conditions::{DEATH, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, STUCK};
 use env::rewards::SUCCESS;
-use env::specialist_env::{EnvOptions, EnvSnapshot, SpecialistEnv, StepInfo, StepResult};
+use env::specialist_env::{EnvOptions, EnvSnapshot, SpecialistEnv, StepInfo, StepResult, TerminalInfo};
 use env::{EnvError, StateStore};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
+use replay::{Context, Ending, Event, Source};
 use std::collections::HashMap;
 use std::sync::Arc;
 use zelda::{Action, Nes, Session};
@@ -95,16 +97,112 @@ impl RoomWatch {
     }
 }
 
-/// At every episode or run start: record it while the pool's record flag is set (the log starts with the
-/// start-state load), and report its first room even if the previous episode ended in the same one.
+/// At every episode or run start: record it while the pool has recording options (the recording starts with
+/// the start-state load), and report its first room even if the previous episode ended in the same one.
 fn begin_episode<N: Nes>(nes: &mut PoolNes<N>, control: &EnvControl, rooms: &mut RoomWatch) {
-    nes.set_recording(control.recording());
+    nes.take_recorder(); // left by an episode that failed before its end
+    nes.set_recording(control.record_options());
     rooms.last = None;
 }
 
-fn end_recording<N: Nes>(nes: &mut PoolNes<N>, events: &mut Vec<ZeldaEvent>) {
-    if let Some(log) = nes.take_log() {
-        events.push(ZeldaEvent::Movie(Box::new(log)));
+/// Once the episode's start is loaded and Link is controllable: says where the recording starts (the state
+/// file, embedded or by name and hash; `booted`: a power-on start's name and delay) and marks the models
+/// taking over.  `context`: what a run continuing from the start state needs.
+fn start_recording<N: Nes, St: StateStore<N::State>>(
+    session: &mut Session<PoolNes<N>>,
+    store: &PoolStore<St>,
+    context: Context,
+    booted: Option<(&str, u32)>,
+) -> Result<(), EnvError> {
+    let nes = session.nes_mut();
+    let Some(origin) = nes.origin().cloned() else {
+        return Ok(());
+    };
+    let Some(rec) = nes.recorder_mut() else {
+        return Ok(());
+    };
+    match origin {
+        Origin::Name(name) => {
+            let bytes = store.bytes(&name)?;
+            if rec.options().embed_start {
+                rec.embed_start(Some(&name), context, &bytes);
+            } else {
+                rec.set_source(Source::File {
+                    name: name.to_string(),
+                    file_hash: replay::file_hash(&bytes),
+                });
+            }
+        }
+        Origin::PowerOn => {
+            if let Some((name, delay)) = booted {
+                rec.set_source(Source::PowerOn {
+                    name: name.to_owned(),
+                    delay,
+                });
+            }
+        }
+        Origin::Bytes(_) => {}
+    }
+    rec.event(Event::Control);
+    Ok(())
+}
+
+/// Ends the episode's recording (if any) with the machine as it stands and reports the replay.  `job`: the
+/// episode's key and the replay's seed; `context`: what a run continuing from the end state needs.
+fn finish_recording<N: Nes, St: StateStore<N::State>>(
+    session: &mut Session<PoolNes<N>>,
+    store: &PoolStore<St>,
+    job: i64,
+    ending: Ending,
+    context: Context,
+    events: &mut Vec<ZeldaEvent>,
+) -> Result<(), EnvError> {
+    let Some(rec) = session.nes_mut().take_recorder() else {
+        return Ok(());
+    };
+    let end = store.encode(&session.snapshot())?;
+    events.push(ZeldaEvent::Replay {
+        job,
+        data: rec.finish(job, ending, context, &end),
+    });
+    Ok(())
+}
+
+/// How a specialist episode ended, for its replay: a win is a success; a failure is a death, being stuck
+/// (the stuck, no-progress and step-budget endings) or something else.
+fn specialist_ending(terminal: &TerminalInfo) -> Ending {
+    let kind = if terminal.outcome == SUCCESS {
+        replay::ENDING_WIN
+    } else if terminal.ending == DEATH {
+        replay::ENDING_DEATH
+    } else if [STUCK, NO_ROOM_PROGRESS, NO_DAMAGE, MAX_STEPS].contains(&terminal.ending.as_str()) {
+        replay::ENDING_STUCK
+    } else {
+        replay::ENDING_OTHER
+    };
+    Ending {
+        kind,
+        result: terminal.outcome.to_owned(),
+        outcome: terminal.ending.clone(),
+        reason: String::new(),
+    }
+}
+
+/// How a chain run ended, for its replay: by its result, then its last room's outcome.
+fn chain_ending(result: &RunResult) -> Ending {
+    let outcome = result.rooms.last().map_or("", |room| room.outcome.as_str());
+    let kind = match (result.result.as_str(), outcome) {
+        ("success", _) => replay::ENDING_WIN,
+        ("error", _) => replay::ENDING_ERROR,
+        (_, "death") => replay::ENDING_DEATH,
+        (_, "stuck") => replay::ENDING_STUCK,
+        _ => replay::ENDING_OTHER,
+    };
+    Ending {
+        kind,
+        result: result.result.clone(),
+        outcome: outcome.to_owned(),
+        reason: result.reason.clone(),
     }
 }
 
@@ -226,6 +324,8 @@ where
             &mut self.rooms,
         );
         let (o, info) = self.env.reset(None, None)?;
+        let (session, store) = self.env.session_and_store();
+        start_recording(session, store, Context::default(), None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
         self.job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
@@ -243,12 +343,13 @@ where
         write_observation(&r.obs, &mut obs);
         let outcome = specialist_outcome(&r);
         self.rooms.report_info(&r.info, events);
-        if r.info.terminal.is_some() {
+        if let Some(ending) = r.info.terminal.as_ref().map(specialist_ending) {
             events.push(ZeldaEvent::Episode {
                 info: Box::new(r.info),
                 job: self.job,
             });
-            end_recording(self.env.session_mut().nes_mut(), events);
+            let (session, store) = self.env.session_and_store();
+            finish_recording(session, store, self.job, ending, Context::default(), events)?;
         }
         Ok(outcome)
     }
@@ -391,6 +492,8 @@ where
             &mut self.rooms,
         );
         let (o, info) = self.env.reset(Some(job.seed), Some(&job.start_state))?;
+        let (session, store) = self.env.session_and_store();
+        start_recording(session, store, Context::default(), None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
         self.episode = Some(EvalEpisode {
@@ -439,7 +542,9 @@ where
                 boss_eats: t.boss.eats,
                 visits: self.env.take_visits(),
             })));
-            end_recording(self.env.session_mut().nes_mut(), events);
+            let (ending, job) = (specialist_ending(t), episode.job.seed as i64);
+            let (session, store) = self.env.session_and_store();
+            finish_recording(session, store, job, ending, Context::default(), events)?;
         }
         Ok(outcome)
     }
@@ -522,12 +627,14 @@ where
         self.chain.result().map_or(0, |r| r.frames)
     }
 
-    fn end_run(&mut self, result: RunResult, events: &mut Vec<ZeldaEvent>) {
+    fn end_run(&mut self, result: RunResult, events: &mut Vec<ZeldaEvent>) -> Result<(), EnvError> {
         if self.hold_finished {
             self.control.set_hold(true);
         }
+        let (ending, job) = (chain_ending(&result), result.seed.unwrap_or(0) as i64);
         events.push(ZeldaEvent::Run(Box::new(result)));
-        end_recording(self.chain.session_mut().nes_mut(), events);
+        let (session, store) = self.chain.session_and_store();
+        finish_recording(session, store, job, ending, Context::default(), events)
     }
 
     /// The policy acting next, or None when the run ended (reported).
@@ -536,14 +643,14 @@ where
         status: ChainStatus,
         obs: &mut ObsRow<'_>,
         events: &mut Vec<ZeldaEvent>,
-    ) -> Option<i64> {
+    ) -> Result<Option<i64>, EnvError> {
         let (specialist, o) = match status {
             ChainStatus::Act {
                 specialist, obs, ..
             } => (specialist, obs),
             ChainStatus::Done(result) => {
-                self.end_run(result, events);
-                return None;
+                self.end_run(result, events)?;
+                return Ok(None);
             }
         };
         let policy = self.policies.iter().position(|p| *p == specialist);
@@ -556,8 +663,8 @@ where
         };
         if let Some(reason) = failure {
             let result = self.chain.fail(reason);
-            self.end_run(result, events);
-            return None;
+            self.end_run(result, events)?;
+            return Ok(None);
         }
         write_observation(&o, obs);
         if self.rooms.on {
@@ -575,7 +682,7 @@ where
             };
             self.rooms.report(event, events);
         }
-        policy.map(|p| p as i64)
+        Ok(policy.map(|p| p as i64))
     }
 }
 
@@ -606,7 +713,9 @@ where
             );
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
             let status = self.chain.reset(Some(seed), &mut rng)?;
-            if let Some(policy) = self.settle(status, &mut obs, events) {
+            let (session, store) = self.chain.session_and_store();
+            start_recording(session, store, Context::default(), None)?;
+            if let Some(policy) = self.settle(status, &mut obs, events)? {
                 return Ok(Some(Start {
                     policy,
                     job: seed as i64,
@@ -628,7 +737,7 @@ where
         let before = self.frames();
         let status = self.chain.step(action)?;
         let frames = (self.frames() - before) as i64;
-        Ok(match self.settle(status, &mut obs, events) {
+        Ok(match self.settle(status, &mut obs, events)? {
             Some(policy) => Outcome {
                 frames,
                 policy,

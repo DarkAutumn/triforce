@@ -32,12 +32,39 @@ pub const HARVEST_RESCAN_RESETS: u64 = 64;
 pub const MIN_CHAIN_SAMPLES: usize = 5;
 
 /// Loads named or path savestates and writes captured ones.  Names are bare state names (`'1_44w_0'`, `'start'`)
-/// or paths; the store owns the file format.
+/// or paths; the store owns the file format.  The provided methods are what recording (`crates/replay`) and
+/// the chain's power-on and checkpoint starts need; a store without them fails those runs with a state error.
 pub trait StateStore<S> {
     fn load(&self, name: &str) -> Result<S, EnvError>;
 
     /// Writes a snapshot atomically (parallel workers may race on the same file).
     fn save(&self, path: &Path, snapshot: &SessionSnapshot<S>) -> Result<(), EnvError>;
+
+    /// The bytes of the state file `load(name)` reads.
+    fn bytes(&self, _name: &str) -> Result<Vec<u8>, EnvError> {
+        Err(EnvError::State("this store cannot read a state file's bytes".into()))
+    }
+
+    /// A snapshot as state-file bytes (what `save` writes).
+    fn encode(&self, _snapshot: &SessionSnapshot<S>) -> Result<Vec<u8>, EnvError> {
+        Err(EnvError::State("this store cannot encode a state".into()))
+    }
+
+    /// State-file bytes as a snapshot: the machine and the file's flags, `total_frames` and `steps` 0.
+    fn decode(&self, _bytes: &[u8]) -> Result<SessionSnapshot<S>, EnvError> {
+        Err(EnvError::State("this store cannot decode a state".into()))
+    }
+
+    /// The machine at console power on, before any frame.
+    fn power_on(&self) -> Result<S, EnvError> {
+        Err(EnvError::State("this store cannot power a console on".into()))
+    }
+
+    /// The checked-in machine `frames` idle frames into the file-select screen (`zelda::power_on`), None when
+    /// the store has none: the run then idles those frames itself.
+    fn power_on_idle(&self, _frames: u32) -> Result<Option<S>, EnvError> {
+        Ok(None)
+    }
 }
 
 /// Index of a weighted draw (`random.choices(..., weights)`); weights must not all be zero.

@@ -3,8 +3,8 @@
 
 Prints one line per room (specialist, outcome, health) and appends the run as a JSON line to ``--output``.
 ``--render`` shows the game live (one chain env with rendering on, paced at ``--fps`` frames per second).
-``--video PATH`` writes every frame of the run as an H.264 mp4 through ``ffmpeg``: the run's inputs are recorded
-as it plays, then the recording is rendered frame by frame.
+``--video PATH`` writes every frame of the run as an H.264 mp4 through ``ffmpeg``: the run is recorded as a
+replay (``triforce.replay``) as it plays, then the replay is rendered frame by frame on the emulator alone.
 """
 
 import argparse
@@ -12,12 +12,11 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
 
-from . import _native
+from . import _native, replay
 from .registry import ACT_CHOICES, act_override, set_allow_incompatible
 from .runner import Route, Runner, RunResult, parse_location, parse_overrides, write_jsonl
 
@@ -86,53 +85,37 @@ def watch(runner: Runner, route: Route, seed: int, fps: float) -> RunResult:
     return results[0]
 
 
-def _state_bytes(origin: str, states_dir=None) -> bytes:
-    """The TFZSTATE file a recording starts from: a path, or a name under the states directory."""
-    path = Path(origin)
-    if not path.is_file():
-        directory = Path(states_dir) if states_dir is not None else Path(_native.paths()['states_dir'])
-        path = directory / (origin if origin.endswith('.state') else f'{origin}.state')
-    return path.read_bytes()
-
-
-def record_movie(runner: Runner, route: Route, seed: int) -> tuple[RunResult, dict]:
-    """Plays one run with its inputs recorded.  Returns (the run, its ``movie`` event)."""
-    with runner.pool(route, [seed], num_envs=1, threads=1, record=True) as chain:
+def record_replay(runner: Runner, route: Route, seed: int, **extra) -> tuple[RunResult, bytes]:
+    """Plays one run recorded as a replay.  Returns (the run, the TFREPLAY file's bytes); ``extra``: more META
+    entries."""
+    provenance = runner.provenance(route)
+    meta = replay.meta('chain', provenance['models'], route.name, provenance['stop_at'], **extra)
+    with runner.pool(route, [seed], num_envs=1, threads=1, record=replay.record_options(meta)) as chain:
         chain.play()
         chain.pool.wait_idle()
         events = chain.poll_events()
     results = [result for _, result in chain.results(events)]
-    movies = [event for event in events if event['type'] == 'movie']
-    if len(results) != 1 or len(movies) != 1:
-        raise RuntimeError(f"seed {seed}: expected one run and one recording, got {len(results)} and {len(movies)}")
-    return results[0], movies[0]
+    replays = [event['data'] for event in events if event['type'] == 'replay']
+    if len(results) != 1 or len(replays) != 1:
+        raise RuntimeError(f"seed {seed}: expected one run and one recording, got {len(results)} and {len(replays)}")
+    return results[0], replays[0]
 
 
-def write_video(movie: dict, path: str, states_dir=None) -> int:
-    """Renders a ``movie`` event (start state, every frame's buttons, pokes) frame by frame into an mp4 at
-    ``path``.  Returns the frame count."""
+def write_video(data: bytes, path: str, states_dir=None) -> int:
+    """Renders a replay (a TFREPLAY file's bytes) frame by frame into an mp4 at ``path``.  Returns the frame
+    count.  ``states_dir``: where a replay recorded from a named state file finds it."""
     command = ffmpeg_command(path)
-    if movie['origin'] is None:
-        raise RuntimeError("the recording has no start state to replay from")
-    game = _native.Game(render=True, states_dir=None if states_dir is None else str(states_dir))
-    game.restore(_native.Snapshot.from_state_file(_state_bytes(movie['origin'], states_dir)))
-    pokes = sorted(movie['pokes'], key=lambda poke: poke[0])
-    buttons = movie['buttons']
+    player = _native.ReplayPlayer(data, states_dir=None if states_dir is None else str(states_dir))
     with subprocess.Popen(command, stdin=subprocess.PIPE) as encoder:
-        poke = 0
         try:
-            for frame, byte in enumerate(buttons):
-                while poke < len(pokes) and pokes[poke][0] == frame:
-                    game.write(pokes[poke][1], pokes[poke][2])
-                    poke += 1
-                game.press(byte)
-                encoder.stdin.write(game.screen().tobytes())
+            while player.step(1, render=True):
+                encoder.stdin.write(player.screen().tobytes())
             encoder.stdin.close()
         except BrokenPipeError:     # ffmpeg exited early (its reason is on stderr); its exit code says so below
             pass
         if encoder.wait():
             raise RuntimeError(f"ffmpeg failed with exit code {encoder.returncode} writing {path}")
-    return len(buttons)
+    return player.frames
 
 
 def main(argv=None):
@@ -165,9 +148,9 @@ def main(argv=None):
     route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None, args.start_from)
     overrides = parse_overrides(args.checkpoint)
     runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=act_override(args.act))
-    movie = None
+    recording = None
     if args.video:
-        result, movie = record_movie(runner, route, args.seed)
+        result, recording = record_replay(runner, route, args.seed)
     elif args.render:
         result = watch(runner, route, args.seed, args.fps)
     else:
@@ -181,8 +164,8 @@ def main(argv=None):
 
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     write_jsonl(args.output, [result], append=True)
-    if movie is not None:               # the run is reported and recorded before the video can fail
-        frames = write_video(movie, args.video)
+    if recording is not None:           # the run is reported and recorded before the video can fail
+        frames = write_video(recording, args.video)
         print(f"video: {frames} frames written to {args.video}")
     return 0 if result.result == 'success' else 1
 

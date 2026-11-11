@@ -4,6 +4,9 @@
 use movie::{Golden, Movie};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::Arc;
+use tfreplay::{Context, Ending, RecordOptions, Recorder, Replay};
+use zcore::{Rom, ZCore, state_file};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -280,6 +283,25 @@ fn ladder_golden_refuses_movies_outside_the_corpus() {
     assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
 }
 
+const RECORDING_START: &str = "triforce/states/0_77c_0.state";
+
+/// A recorded run as `scripts/record_bench_runs.py` writes it: a TFREPLAY that embeds its start state
+/// (`0_77c_0`), here 60 frames of `button`.
+fn recording(button: u8) -> Vec<u8> {
+    let rom = Rom::from_ines(&test_rom::bytes().unwrap()).unwrap();
+    let start = std::fs::read(repo().join(RECORDING_START)).unwrap();
+    let mut nes = ZCore::power_on(rom.clone());
+    nes.restore(&state_file::decode(&rom, &start).unwrap().machine);
+    let options = RecordOptions { meta: serde_json::json!({"triforce": "test", "segment": "full"}), ..Default::default() };
+    let mut rec = Recorder::new(Arc::new(options));
+    rec.embed_start(Some("0_77c_0"), Context::default(), &start);
+    for _ in 0..60 {
+        nes.run_frame(button, false);
+        rec.frame(button);
+    }
+    rec.finish(500, Ending::default(), Context::default(), &state_file::encode(&rom, &nes.snapshot(), 0))
+}
+
 /// `bench --recordings` caches window-start states per run content: re-recording a run under the
 /// same name with other inputs makes new cache files instead of reusing the old run's states.
 #[test]
@@ -288,11 +310,9 @@ fn bench_cache_is_keyed_by_the_run_content() {
         return;
     }
     let tmp = TempDir::new("bench-cache");
-    let origin = repo().join("triforce/states/0_77c_0.state");
     let record = |button: u8| {
-        let rec = serde_json::json!({"origin": origin, "buttons": vec![button; 60], "pokes": []});
         std::fs::create_dir_all(tmp.join("rec")).unwrap();
-        std::fs::write(tmp.join("rec/full-500.json"), rec.to_string()).unwrap();
+        std::fs::write(tmp.join("rec/full-500.tfreplay"), recording(button)).unwrap();
         let out = tf(&[
             "bench", "--recordings", &tmp.arg("rec"), "--windows", "2", "--window-frames", "10", "--cache",
             &tmp.arg("cache"), "--render", "off",
@@ -321,6 +341,67 @@ fn bench_cache_is_keyed_by_the_run_content() {
     let ends = late(&both, "-50.tfzstate");
     assert_eq!(ends.len(), 2);
     assert_ne!(ends[0], ends[1], "the late window starts from each run's own state");
+}
+
+/// `movie import` turns a recording into a corpus movie that starts from a copy of the recording's start
+/// state and plays to the machine the recording ended on; a recording the core no longer reproduces, or one
+/// without its start state, is refused.  `replay info` and `replay verify` read the recording itself.
+#[test]
+fn movie_import_writes_a_movie_that_plays_to_the_recorded_end() {
+    if !have_rom() {
+        return;
+    }
+    let tmp = TempDir::new("import");
+    std::fs::create_dir_all(tmp.join("movies")).unwrap();
+    let bytes = recording(0x80);
+    std::fs::write(tmp.join("full-500.tfreplay"), &bytes).unwrap();
+    let out = tf(&["replay", "verify", &tmp.arg("full-500.tfreplay")]);
+    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(&out), stderr(&out));
+    assert!(stdout(&out).ends_with("full-500.tfreplay: ok, 60 frames, 0 edits, 2 states\n"), "{}", stdout(&out));
+    let out = tf(&["replay", "info", &tmp.arg("full-500.tfreplay")]);
+    let info = stdout(&out);
+    for line in ["frames:   60", "source:   embedded state 0_77c_0", "triforce: test", "states:   1 START, 1 END"] {
+        assert!(info.contains(line), "{line:?} missing from:\n{info}");
+    }
+
+    let out = tf(&["movie", "import", &tmp.arg("full-500.tfreplay"), "-o", &tmp.arg("movies/chain-full-500.tfmovie")]);
+    assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
+    let movie = Movie::load(&tmp.join("movies/chain-full-500.tfmovie")).unwrap();
+    assert_eq!((movie.inputs.len(), movie.pokes.len()), (60, 0));
+    assert_eq!(movie.meta["tags"], serde_json::json!(["agent", "chain", "full"]));
+    assert_eq!(movie.meta["source"]["seed"], 500);
+    let origin = movie.meta["origin"].as_str().unwrap();
+    assert!(origin.starts_with("0_77c_0-"), "{origin}");
+    let start = std::fs::read(movie::origin_path(&tmp.join("movies"), origin)).unwrap();
+    assert_eq!(start, std::fs::read(repo().join(RECORDING_START)).unwrap());
+    let rom = Rom::from_ines(&test_rom::bytes().unwrap()).unwrap();
+    let mut nes = ZCore::power_on(rom.clone());
+    nes.restore(&state_file::decode(&rom, &start).unwrap().machine);
+    for &buttons in &movie.inputs {
+        nes.run_frame(buttons, false);
+    }
+    let replay = Replay::parse(bytes.clone()).unwrap();
+    let end = state_file::decode(&rom, replay.end_state().blob).unwrap().machine;
+    assert!(state_file::machines_equal(&end, &nes.snapshot()), "the movie ends on the recorded machine");
+
+    // The same inputs recorded against another end state: the core does not reproduce the recording.
+    let other = Replay::parse(recording(0x40)).unwrap();
+    let stitched = {
+        let mut rec = Recorder::new(Arc::new(RecordOptions::default()));
+        rec.embed_start(Some("0_77c_0"), Context::default(), replay.start_state().unwrap().blob);
+        for buttons in replay.inputs() {
+            rec.frame(buttons);
+        }
+        rec.finish(500, Ending::default(), Context::default(), other.end_state().blob)
+    };
+    std::fs::write(tmp.join("desync.tfreplay"), stitched).unwrap();
+    let out = tf(&["movie", "import", &tmp.arg("desync.tfreplay"), "-o", &tmp.arg("movies/chain-desync.tfmovie")]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("the recording desyncs"), "{}", stderr(&out));
+    assert!(!tmp.join("movies/chain-desync.tfmovie").exists());
+    let out = tf(&["replay", "verify", &tmp.arg("full-500.tfreplay"), &tmp.arg("desync.tfreplay")]);
+    assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
+    assert!(stdout(&out).contains("desync.tfreplay: diverged at frame 60"), "{}", stdout(&out));
 }
 
 #[test]

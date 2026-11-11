@@ -15,6 +15,7 @@ mod errors;
 mod explore;
 mod game;
 mod policy;
+mod replay;
 mod signals;
 
 use pyo3::prelude::*;
@@ -175,7 +176,7 @@ mod _native {
     use crate::envs::{PyCurriculumSpec, PyEnv};
     #[pymodule_export]
     use crate::errors::{
-        ConfigError, EpisodeFinishedError, InvalidActionError, RenderDisabledError, RomError,
+        ConfigError, EpisodeFinishedError, InvalidActionError, RenderDisabledError, ReplayError, RomError,
         StartStateError, StateFormatError, UnclassifiedEndingError,
     };
     #[pymodule_export]
@@ -184,6 +185,8 @@ mod _native {
     use crate::game::{PyChange, PyGame, PyGameState, PySnapshot};
     #[pymodule_export]
     use crate::policy::{PyPolicy, keyed_noise};
+    #[pymodule_export]
+    use crate::replay::{PyReplay, PyReplayPlayer, replay_stitch, replay_truncate, replay_verify};
 
     #[pymodule_init]
     fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {

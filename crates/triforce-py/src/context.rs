@@ -196,6 +196,30 @@ impl StateStore<MachineState> for TfzStore {
         self.write(path, &self.encode(snapshot))
             .map_err(|e| EnvError::State(format!("{}: {e}", path.display())))
     }
+
+    fn bytes(&self, name: &str) -> Result<Vec<u8>, EnvError> {
+        let path = self.path(name);
+        std::fs::read(&path).map_err(|e| EnvError::State(format!("{}: {e}", path.display())))
+    }
+
+    fn encode(&self, snapshot: &SessionSnapshot<MachineState>) -> Result<Vec<u8>, EnvError> {
+        Ok(TfzStore::encode(self, snapshot))
+    }
+
+    fn decode(&self, bytes: &[u8]) -> Result<SessionSnapshot<MachineState>, EnvError> {
+        let file = state_file::decode(&self.rom, bytes).map_err(|e| EnvError::State(e.0))?;
+        Ok(SessionSnapshot {
+            machine: file.machine,
+            was_in_cave: file.flags & 1 != 0,
+            just_exited_cave: file.flags & 2 != 0,
+            total_frames: 0,
+            steps: 0,
+        })
+    }
+
+    fn power_on(&self) -> Result<MachineState, EnvError> {
+        Ok(zcore::ZCore::power_on(self.rom.clone()).snapshot())
+    }
 }
 
 #[cfg(test)]

@@ -273,12 +273,15 @@ def test_chain_cli_uses_supplied_specialist_config(states_dir, models_dir, tmp_p
 @pytest.mark.skipif(shutil.which('ffmpeg') is None, reason='no ffmpeg')
 def test_video_replays_every_frame_of_the_run(states_dir, models_dir, tmp_path):
     runner = Runner(models_dir=models_dir, max_steps=6, states_dir=states_dir)
-    result, movie = run.record_movie(runner, Route.load('d2first'), seed=2)
-    assert result.steps == 6 and movie['origin'] == 'start'
-    assert len(movie['buttons']) >= result.frames
+    result, data = run.record_replay(runner, Route.load('d2first'), seed=2)
+    recorded = _native.Replay(data)
+    assert result.steps == 6 and recorded.source == {'kind': 'state', 'name': 'start'}
+    assert recorded.frames >= result.frames and recorded.meta['seed'] == 2
+    assert recorded.meta['kind'] == 'chain' and recorded.meta['route'] == 'd2first'
+    assert _native.replay_verify(data) == {'frames': recorded.frames, 'edits': len(recorded.edits()), 'states': 2}
     path = tmp_path / 'run.mp4'
-    assert run.write_video(movie, str(path), states_dir) == len(movie['buttons'])
+    assert run.write_video(data, str(path)) == recorded.frames     # the start state is in the replay
     probe = subprocess.run(['ffprobe', '-v', 'error', '-count_frames', '-show_entries',
                             'stream=width,height,nb_read_frames', '-of', 'csv=p=0', str(path)],
                            check=True, capture_output=True, text=True)
-    assert probe.stdout.strip() == f"256,240,{len(movie['buttons'])}"
+    assert probe.stdout.strip() == f"256,240,{recorded.frames}"

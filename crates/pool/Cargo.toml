@@ -15,11 +15,13 @@ env = { path = "../env", optional = true }
 parking_lot = "0.12.5"
 policy = { path = "../policy", optional = true }
 rand_chacha = "0.10.0"
+replay = { path = "../replay" }
 serde_json = { version = "1.0.154", features = ["preserve_order"], optional = true }
 zelda = { path = "../zelda", optional = true }
 
 [dev-dependencies]
 rand = "0.10.3"
+replay = { path = "../replay", features = ["zcore"] }
 test-rom = { path = "../test-rom" }
 zcore = { path = "../zcore" }
 zelda = { path = "../zelda", features = ["zcore"] }

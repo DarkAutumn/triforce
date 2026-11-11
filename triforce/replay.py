@@ -18,21 +18,49 @@ episode's ``events``.  A replay that runs past its recorded actions, stops befor
 than the recorded one has diverged and raises.  Before playing, a changed game/route data hash or start state file
 raises (``strict=False``: warns); a different code version warns.  ``read`` drops a cut-off last line (a writer
 killed mid-write) with a warning.
+
+``meta`` and ``record_options`` are for the binary TFREPLAY recordings (``crates/replay``; ``EnvPool(record=...)``
+reports each finished episode or run as a ``replay`` event).
 """
 
 import base64
 import json
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 import numpy as np
 
-from . import _native
+from . import __version__, _native
 from .provenance import code_version, data_hash, state_hash
 
 BACKEND = 'rust-cpu'
 FORMAT = 2
+
+STREAMS = ('rewards', 'decisions', 'keyframes')     # the optional streams of a TFREPLAY recording
+DEFAULT_KEYFRAME_FRAMES = 600
+
+
+def meta(kind: str, models: list, route: Optional[str] = None, stop_at: Optional[str] = None, **extra) -> dict:
+    """The META base object of a recording: what played.  ``kind``: 'chain', 'eval' or 'train'; ``models``: per
+    policy index its name, checkpoint, hash, act mode and version (``provenance.models_header``)."""
+    return {'triforce': __version__, 'code': code_version(), 'data': data_hash(), 'kind': kind, 'route': route,
+            'stop_at': stop_at, 'models': models, **extra}
+
+
+def record_options(meta: dict, streams: Iterable[str] = (), state: str = 'embed',
+                   keyframe_frames: int = DEFAULT_KEYFRAME_FRAMES) -> dict:
+    """``EnvPool(record=...)``: record every episode or run as a TFREPLAY file.  ``streams``: the optional ones
+    to keep (``STREAMS``); ``state``: 'embed' (a replay that starts from a state file carries it) or 'path' (it
+    names it); ``keyframe_frames``: with 'keyframes', a state every that many frames."""
+    # pylint: disable=redefined-outer-name
+    streams = set(streams)
+    if streams - set(STREAMS):
+        raise ValueError(f"unknown replay stream(s) {sorted(streams - set(STREAMS))}; streams: {STREAMS}")
+    if state not in ('embed', 'path'):
+        raise ValueError(f"state must be 'embed' or 'path', not {state!r}")
+    return {'state': state, 'rewards': 'rewards' in streams, 'decisions': 'decisions' in streams,
+            'keyframe_frames': int(keyframe_frames) if 'keyframes' in streams else 0, 'meta': json.dumps(meta)}
 
 
 def encode_actions(actions) -> str:

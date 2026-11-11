@@ -259,7 +259,9 @@ class ChainPool:
     ``stall_steps`` (watch player only; None = off): room events carry ``stalled`` after that many actions in a
     room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``hold_finished_frame``
     (watch player): a finished run's last frame stays published, and its env waits, until
-    ``pool.set_hold(env, False)``.  ``plays``: write every run to this replay file (``triforce.replay``).
+    ``pool.set_hold(env, False)``.  ``record`` (``replay.record_options``; None = off): every run is recorded
+    as a TFREPLAY file and reported as a ``replay`` event.  ``plays``: write every run to this replay file
+    (``triforce.replay``).
     ``deterministic``: None = each policy's act mode (``Policies.deterministic``), else argmax (True) or sampling
     (False) for every policy.  ``harvest`` (a directory; None = off): every correct room entry where the acting
     specialist changes (a handoff) saves its pre-entry state as
@@ -269,7 +271,7 @@ class ChainPool:
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
                  deterministic: Optional[bool] = None,
-                 max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: bool = False,
+                 max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: Optional[dict] = None,
                  stall_steps: Optional[int] = None, hold_finished_frame: bool = False, plays=None, harvest=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.route = route

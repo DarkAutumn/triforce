@@ -1080,6 +1080,7 @@ dependencies = [
  "pyo3",
  "rand",
  "rand_chacha",
+ "replay",
  "serde_json",
  "test-rom",
  "zcore",

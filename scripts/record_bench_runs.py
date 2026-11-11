@@ -3,31 +3,22 @@
     .venv/bin/python scripts/record_bench_runs.py OUT_DIR [--runs 6] [--first-seed 500]
 
 Plays ``--runs`` seeded chain runs on each of the six segments of the route (full, D2 from 2_7ds_0, after D2
-from 0_3cc_0, D1 from 1_73s_0, after D1 from 0_37c_0, D3 from 3_7cs_0) with every input and poke recorded, and
-writes each as OUT_DIR/<segment>-<seed>.json: the origin state file, one controller byte per frame and the pokes,
-plus the run's outcome. `tf movie import` turns a recording into a corpus movie (README, "Emulator regression
-suite").
+from 0_3cc_0, D1 from 1_73s_0, after D1 from 0_37c_0, D3 from 3_7cs_0), each recorded as a replay
+(``triforce.replay``: the start state, every input and memory edit), and writes OUT_DIR/<segment>-<seed>.tfreplay.
+`tf movie import` turns a recording into a corpus movie (README, "Emulator regression suite").
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
 from triforce import _native
-from triforce.run import record_movie
+from triforce.run import record_replay
 from triforce.runner import Route, Runner
 
 SEGMENTS = [('full', _native.DEFAULT_ROUTE, None), ('d2', _native.DEFAULT_ROUTE, '2_7ds_0'),
             ('post-d2', _native.DEFAULT_ROUTE, '0_3cc_0'), ('d1', _native.DEFAULT_ROUTE, '1_73s_0'),
             ('post-d1', _native.DEFAULT_ROUTE, '0_37c_0'), ('d3', _native.DEFAULT_ROUTE, '3_7cs_0')]
-
-
-def origin_path(origin: str) -> str:
-    path = Path(origin)
-    if not path.is_file():
-        path = Path(_native.paths()['states_dir']) / (origin if origin.endswith('.state') else f'{origin}.state')
-    return str(path.resolve())
 
 
 def main(argv=None) -> int:
@@ -42,16 +33,10 @@ def main(argv=None) -> int:
     for name, route_name, start in SEGMENTS:
         route = Route.load(route_name, start_from=start)
         for seed in range(args.first_seed, args.first_seed + args.runs):
-            result, movie = record_movie(runner, route, seed)
-            last = result.rooms[-1] if result.rooms else None
-            record = {'origin': origin_path(movie['origin']), 'buttons': list(movie['buttons']),
-                      'pokes': [list(p) for p in movie['pokes']],
-                      'meta': {'segment': name, 'route': route_name, 'start': start, 'seed': seed,
-                               'result': result.result, 'rooms': len(result.rooms),
-                               'last_room': f"{last.level}:{last.room}" if last else None}}
-            (out / f'{name}-{seed}.json').write_text(json.dumps(record))
-            print(f"{name} seed {seed}: {result.result}, {len(result.rooms)} rooms, {len(movie['buttons'])} frames",
-                  flush=True)
+            result, data = record_replay(runner, route, seed, segment=name)
+            (out / f'{name}-{seed}.tfreplay').write_bytes(data)
+            print(f"{name} seed {seed}: {result.result}, {len(result.rooms)} rooms, "
+                  f"{_native.Replay(data).frames} frames", flush=True)
     return 0
 
 

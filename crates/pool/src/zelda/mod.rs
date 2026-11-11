@@ -10,8 +10,8 @@
 //!
 //! Rows: actions are `[kind, direction, duration]` head indices ([`ZeldaAction`]); observations follow
 //! `env::OBS_SPEC` ([`obs_layout`], [`write_observation`]; the action mask is the `action_mask` key); `interrupt` is
-//! [`interrupt_code`]. Each env runs on a [`PoolNes`] (render gating and input recording); its session renders every
-//! real frame and publishes rendered frames through the pool's [`EnvControl`](crate::EnvControl) with an
+//! [`interrupt_code`]. Each env runs on a [`PoolNes`] (render gating and replay recording); its session renders
+//! every real frame and publishes rendered frames through the pool's [`EnvControl`](crate::EnvControl) with an
 //! [`RgbFn`], then paces.
 
 mod actor;
@@ -21,7 +21,7 @@ mod search;
 
 pub use actor::{ActorScratch, PolicyActor};
 pub use envs::{ChainRunEnv, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
-pub use nes::{InputLog, PoolNes, PoolState, PoolStore, RgbFn};
+pub use nes::{Origin, PoolNes, PoolState, PoolStore, RgbFn};
 pub use search::{GumbelSearch, SearchConfig, SearchScratch};
 
 use crate::layout::{Dtype, KeySpec, ObsLayout, ObsRow};
@@ -205,8 +205,9 @@ pub enum ZeldaEvent {
     Run(Box<RunResult>),
     /// The acting specialist, room or health changed (only with room events on).
     Room(RoomEvent),
-    /// The inputs of the episode or run that just ended (only while recording).
-    Movie(Box<InputLog>),
+    /// The episode or run that just ended, as a `TFREPLAY` file (only while recording; `job`: the episode's
+    /// key, which is the eval or run seed).
+    Replay { job: i64, data: Vec<u8> },
 }
 
 #[cfg(test)]

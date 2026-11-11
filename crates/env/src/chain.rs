@@ -394,6 +394,15 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         &mut self.session
     }
 
+    pub fn store(&self) -> &St {
+        &self.store
+    }
+
+    /// The session and the store at once (a recorder in the emulator needs the store's encoding).
+    pub fn session_and_store(&mut self) -> (&mut Session<N>, &St) {
+        (&mut self.session, &self.store)
+    }
+
     pub fn into_parts(self) -> (Session<N>, St) {
         (self.session, self.store)
     }

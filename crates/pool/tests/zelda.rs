@@ -9,8 +9,8 @@ use env::specialist_env::{EnvOptions, SpecialistEnv};
 use env::{EnvError, StateStore};
 use pool::rollout::{Actor, Decision, EnvRollout, Record};
 use pool::zelda::{
-    ACTION_MASK, ChainRunEnv, EvalEnv, EvalJob, InputLog, TrainEnv, ZeldaAction, ZeldaEvent, interrupt_code,
-    obs_layout, write_observation,
+    ACTION_MASK, ChainRunEnv, EvalEnv, EvalJob, TrainEnv, ZeldaAction, ZeldaEvent, interrupt_code, obs_layout,
+    write_observation,
 };
 use parking_lot::Mutex;
 use pool::{Column, EnvControl, EnvInit, Jobs, ObsData, Pool, PoolEnv, PoolOptions, SearchEnv};
@@ -18,8 +18,9 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use replay::{Event, Player, RecordOptions, Replay, Source};
 use std::sync::{Arc, LazyLock};
-use zcore::{MachineState, Rom, ZCore};
+use zcore::{MachineState, Rom, ZCore, state_file};
 use zelda::{ActionKind, ActionMask, MASK_SIZE, Nes, SessionSnapshot};
 
 /// zcore as a `zelda::Nes`; `.1` counts every frame run (look-ahead included; restores don't rewind it).
@@ -86,22 +87,54 @@ fn open_core() -> Option<Counted> {
     Some(Counted(ZCore::power_on(rom()?), 0))
 }
 
+fn state_path(name: &str) -> PathBuf {
+    repo().join(format!("triforce/states/{name}.state"))
+}
+
+fn read_state(name: &str) -> std::io::Result<Vec<u8>> {
+    std::fs::read(state_path(name))
+}
+
+fn state_error(e: impl std::fmt::Display) -> EnvError {
+    EnvError::State(e.to_string())
+}
+
 /// The regenerated start states, `triforce/states/<name>.state` (read-only).
 struct TfzStore;
 
 impl StateStore<MachineState> for TfzStore {
     fn load(&self, name: &str) -> Result<MachineState, EnvError> {
-        let path = repo().join(format!("triforce/states/{name}.state"));
-        let err = |e: &dyn std::fmt::Display| EnvError::State(format!("{}: {e}", path.display()));
-        let bytes = std::fs::read(&path).map_err(|e| err(&e))?;
-        let rom = rom().ok_or_else(|| EnvError::State("ROM not found".into()))?;
-        Ok(zcore::state_file::decode(&rom, &bytes)
-            .map_err(|e| err(&e))?
-            .machine)
+        Ok(self.decode(&self.bytes(name)?)?.machine)
     }
 
     fn save(&self, _: &Path, _: &SessionSnapshot<MachineState>) -> Result<(), EnvError> {
         Err(EnvError::State("read-only store".into()))
+    }
+
+    fn bytes(&self, name: &str) -> Result<Vec<u8>, EnvError> {
+        read_state(name).map_err(|e| state_error(format!("{}: {e}", state_path(name).display())))
+    }
+
+    fn encode(&self, snapshot: &SessionSnapshot<MachineState>) -> Result<Vec<u8>, EnvError> {
+        let rom = rom().ok_or_else(|| state_error("ROM not found"))?;
+        let flags = snapshot.was_in_cave as u8 | (snapshot.just_exited_cave as u8) << 1;
+        Ok(state_file::encode(&rom, &snapshot.machine, flags))
+    }
+
+    fn decode(&self, bytes: &[u8]) -> Result<SessionSnapshot<MachineState>, EnvError> {
+        let rom = rom().ok_or_else(|| state_error("ROM not found"))?;
+        let file = state_file::decode(&rom, bytes).map_err(state_error)?;
+        Ok(SessionSnapshot {
+            machine: file.machine,
+            was_in_cave: file.flags & 1 != 0,
+            just_exited_cave: file.flags & 2 != 0,
+            total_frames: 0,
+            steps: 0,
+        })
+    }
+
+    fn power_on(&self) -> Result<MachineState, EnvError> {
+        Ok(ZCore::power_on(rom().ok_or_else(|| state_error("ROM not found"))?).snapshot())
     }
 }
 
@@ -594,35 +627,43 @@ fn prefer_attacks(mask: ActionMask) -> ActionMask {
     }
 }
 
-/// Replays a log on the bare emulator from its origin state (TFMOVIE poke order).
-fn replay(nes: &mut Counted, log: &InputLog) {
-    nes.restore(&TfzStore.load(log.origin.as_deref().unwrap()).unwrap());
-    let mut pokes = log.pokes.iter().peekable();
-    for (frame, &buttons) in log.buttons.iter().enumerate() {
-        while let Some(&(_, addr, value)) = pokes.next_if(|p| p.0 as usize == frame) {
-            nes.poke(addr, value);
-        }
-        nes.run_frame(buttons, false);
-    }
-    for &(_, addr, value) in pokes {
-        nes.poke(addr, value);
-    }
+/// Verifies `replay` on a bare zcore (every recorded state is the machine the replay reaches) and returns the
+/// RAM and PRG-RAM it ends with.
+fn replayed(replay: &Replay) -> ([u8; 0x800], [u8; 0x2000]) {
+    let rom = rom().expect("the ROM");
+    replay::verify(rom.clone(), replay.clone(), &read_state).expect("the replay verifies");
+    let mut player = Player::open(rom, replay.clone(), &read_state).unwrap();
+    while player.step(false).unwrap() {}
+    player.finish().unwrap();
+    (*player.nes().ram(), *player.nes().prg_ram())
+}
+
+fn recording(embed_start: bool) -> Option<Arc<RecordOptions>> {
+    Some(Arc::new(RecordOptions {
+        embed_start,
+        ..Default::default()
+    }))
 }
 
 /// What one recorded episode left: the machine's RAM and PRG-RAM at its end, every frame zcore ran since power-on
-/// (look-ahead included), the episode's input log, and its other events.
-type Recorded = ([u8; 0x800], [u8; 0x2000], u64, InputLog, Vec<ZeldaEvent>);
+/// (look-ahead included), the episode's replay, and its other events.
+type Recorded = ([u8; 0x800], [u8; 0x2000], u64, Replay, Vec<ZeldaEvent>);
 
-/// Plays one episode of `env` with attacks preferred, recording it.
-fn play_recorded<E>(env: &mut E, control: &EnvControl, nes: impl Fn(&E) -> &Counted) -> Recorded
+/// Plays one episode of `env` with attacks preferred, recording it with `options`.
+fn play_recorded<E>(
+    env: &mut E,
+    control: &EnvControl,
+    options: Option<Arc<RecordOptions>>,
+    nes: impl Fn(&E) -> &Counted,
+) -> Recorded
 where
     E: PoolEnv<Action = ZeldaAction, Event = ZeldaEvent, Error = EnvError>,
 {
-    control.set_recording(true);
+    control.set_recording(options);
     let mut obs = ObsData::new(Arc::new(obs_layout()));
     let mut events = Vec::new();
     let mut rng = ChaCha8Rng::seed_from_u64(2);
-    assert!(env.reset(obs.row(), &mut events).unwrap().is_some());
+    let start = env.reset(obs.row(), &mut events).unwrap().expect("an episode");
     loop {
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
         let action = random_action(&prefer_attacks(ActionMask::from_flat(&flat)), &mut rng, None);
@@ -632,9 +673,10 @@ where
         if outcome.terminated || outcome.truncated {
             let nes = nes(env);
             let (ram, prg_ram, emulated) = (*nes.ram(), *nes.prg_ram(), nes.1);
-            let at = events.iter().position(|e| matches!(e, ZeldaEvent::Movie(_))).expect("a movie");
-            let ZeldaEvent::Movie(log) = events.remove(at) else { unreachable!() };
-            return (ram, prg_ram, emulated, *log, events);
+            let at = events.iter().position(|e| matches!(e, ZeldaEvent::Replay { .. })).expect("a replay");
+            let ZeldaEvent::Replay { job, data } = events.remove(at) else { unreachable!() };
+            assert_eq!(job, start.job, "the replay carries its episode's job key");
+            return (ram, prg_ram, emulated, Replay::parse(data).expect("a readable replay"), events);
         }
     }
 }
@@ -669,7 +711,8 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
     let control = init.control.clone();
     let config = goriya_full_health(&data);
     let mut env = EvalEnv::new(config, data.clone(), nes, TfzStore, opts, jobs, init, None).unwrap();
-    let (ram, prg_ram, emulated, log, events) = play_recorded(&mut env, &control, |e| e.env().session().nes().inner());
+    let (ram, prg_ram, emulated, replay, events) =
+        play_recorded(&mut env, &control, recording(false), |e| e.env().session().nes().inner());
     let record = events
         .into_iter()
         .find_map(|e| match e {
@@ -677,7 +720,14 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
             _ => None,
         })
         .expect("an eval record");
-    assert_eq!(log.origin.as_deref(), Some(start));
+    // Recorded by name: the replay names the start state and pins its content.
+    let file_hash = replay::file_hash(&read_state(start).unwrap());
+    assert_eq!(replay.source().unwrap(), Source::File { name: start.into(), file_hash });
+    assert!(replay.start_state().is_none());
+    let meta = replay.meta().unwrap();
+    assert_eq!(meta["seed"], 11);
+    assert_eq!(meta["ending"]["outcome"], record.ending.as_str());
+    assert_eq!(replay.ending_name() == "win", record.success);
     assert_eq!((record.start_state.as_str(), record.seed), (start, 11));
     assert!(record.steps > 0 && record.frames > 0);
     // Room visits cover the episode: they start in the reset room and their steps, frames and health add up.
@@ -688,17 +738,19 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
     assert_eq!(record.visits.iter().map(|v| v.frames).sum::<u64>(), record.frames);
     assert_eq!((first.health_in, last.health_out), (record.start_health, record.health));
     assert_eq!(record.to_json()["visits"].as_array().unwrap().len(), record.visits.len());
-    // Load randomization pokes come first; the log covers the gain-control frames and every step.
-    assert!(log.pokes.iter().any(|p| p.0 == 0));
-    assert!(log.buttons.len() as u64 >= record.frames);
-    // Evaluation runs no look-ahead: zcore ran exactly the logged frames since it powered on.
-    assert_eq!(emulated, log.buttons.len() as u64);
+    // Load randomization edits come first, the models take over once Link is controllable; the replay covers
+    // the gain-control frames and every step.
+    assert!(replay.edits().any(|e| e.unwrap().frame == 0));
+    let control_frame = replay.events().next().unwrap().unwrap();
+    assert_eq!(control_frame.event, Event::Control);
+    assert!(u64::from(replay.frames() - control_frame.frame) >= record.frames);
+    // Evaluation runs no look-ahead: zcore ran exactly the recorded frames since it powered on.
+    assert_eq!(emulated, u64::from(replay.frames()));
     let mut obs = ObsData::new(Arc::new(obs_layout()));
     assert_eq!(env.reset(obs.row(), &mut Vec::new()).unwrap(), None, "one job");
-    let mut nes = env.into_env().into_parts().0.into_nes().into_inner();
-    replay(&mut nes, &log);
-    assert!(nes.ram() == &ram, "RAM after replay");
-    assert!(nes.prg_ram() == &prg_ram, "PRG-RAM after replay");
+    let (replayed_ram, replayed_prg_ram) = replayed(&replay);
+    assert!(replayed_ram == ram, "RAM after replay");
+    assert!(replayed_prg_ram == prg_ram, "PRG-RAM after replay");
 }
 
 #[test]
@@ -713,13 +765,17 @@ fn recorded_training_episodes_replay_past_their_look_aheads() {
     let control = init.control.clone();
     let config = goriya_full_health(&data);
     let mut env = TrainEnv::new(config, data.clone(), nes, TfzStore, opts, init, None).unwrap();
-    let (ram, prg_ram, emulated, log, _) = play_recorded(&mut env, &control, |e| e.env().session().nes().inner());
-    // zcore ran every frame since it powered on, look-ahead included; the log kept only the real ones.
-    assert!(emulated > log.buttons.len() as u64, "look-ahead ran: {emulated} frames emulated");
-    let mut nes = env.into_env().into_parts().0.into_nes().into_inner();
-    replay(&mut nes, &log);
-    assert!(nes.ram() == &ram, "RAM after replay");
-    assert!(nes.prg_ram() == &prg_ram, "PRG-RAM after replay");
+    let (ram, prg_ram, emulated, replay, _) =
+        play_recorded(&mut env, &control, recording(true), |e| e.env().session().nes().inner());
+    // zcore ran every frame since it powered on, look-ahead included; the replay kept only the real ones.
+    assert!(emulated > u64::from(replay.frames()), "look-ahead ran: {emulated} frames emulated");
+    // Embedded: the replay carries the start state file (and still says which it was).
+    assert_eq!(replay.source().unwrap(), Source::Embedded);
+    assert_eq!(replay.start_state().unwrap().blob, read_state("1_44w_0").unwrap());
+    assert_eq!(replay.meta().unwrap()["source"], serde_json::json!({"kind": "state", "name": "1_44w_0"}));
+    let (replayed_ram, replayed_prg_ram) = replayed(&replay);
+    assert!(replayed_ram == ram, "RAM after replay");
+    assert!(replayed_prg_ram == prg_ram, "PRG-RAM after replay");
 }
 
 fn wait_action() -> [i64; 3] {
@@ -906,7 +962,7 @@ fn a_search_leaves_the_env_exactly_where_it_was() {
     let (init_a, init_b) = (init(), init());
     let (control_a, control_b) = (init_a.control.clone(), init_b.control.clone());
     for control in [&control_a, &control_b] {
-        control.set_recording(true);
+        control.set_recording(recording(true));
         control.set_render(true);
     }
     let mut a = TrainEnv::new(config.clone(), data.clone(), nes_a, TfzStore, opts(), init_a, Some(rgb)).unwrap();
@@ -945,5 +1001,5 @@ fn a_search_leaves_the_env_exactly_where_it_was() {
         events_b.clear();
     }
     assert!(predicted > 0, "searches started with look-ahead credit pending");
-    assert!(episodes > 0, "an episode ended (its movie and terminal info matched)");
+    assert!(episodes > 0, "an episode ended (its replay and terminal info matched)");
 }

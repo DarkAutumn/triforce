@@ -103,11 +103,12 @@ route segment), which start from copies of their start states in `corpus/states/
 
 ```bash
 .venv/bin/python scripts/record_bench_runs.py target/corpus-runs --runs 12 --first-seed 500
-for f in target/corpus-runs/*.json; do tf movie import "$f" -o "corpus/movies/chain-$(basename "$f" .json).tfmovie"; done
+for f in target/corpus-runs/*.tfreplay; do tf movie import "$f" -o "corpus/movies/chain-$(basename "$f" .tfreplay).tfmovie"; done
 tf corpus sync && tf corpus check
 ```
 
-`tf movie import` refuses a recording whose replay doesn't end in the room the run ended in. `tf corpus check`
+`tf movie import` refuses a recording that no longer plays to the machine states it recorded (`tf replay verify`
+checks the same; the recordings are replays, `triforce/replay.py`). `tf corpus check`
 replays every movie and requires ≥ 1M frames and ≥ 10,000 gameplay frames in each of the overworld and
 Dungeons 1-3.
 

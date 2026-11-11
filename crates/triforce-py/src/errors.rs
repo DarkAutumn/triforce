@@ -14,6 +14,7 @@ create_exception!(triforce._native, StateFormatError, PyValueError);
 create_exception!(triforce._native, RomError, PyException);
 create_exception!(triforce._native, RenderDisabledError, PyRuntimeError);
 create_exception!(triforce._native, EpisodeFinishedError, PyRuntimeError);
+create_exception!(triforce._native, ReplayError, PyValueError);
 
 /// The Python exception of an env error.
 pub fn env_err(e: EnvError) -> PyErr {

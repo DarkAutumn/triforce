@@ -47,6 +47,10 @@ pub trait Nes {
             _ => panic!("peek address ${addr:04X} is outside $0000-$07FF/$6000-$7FFF"),
         }
     }
+
+    /// `frames` frames of `buttons` ran before the state just restored (a start that skips its first frames by
+    /// loading a saved state): a recording wrapper logs them without emulating.  The machine is not touched.
+    fn skipped(&mut self, _buttons: u8, _frames: u32) {}
 }
 
 #[cfg(feature = "zcore")]

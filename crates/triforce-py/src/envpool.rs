@@ -705,6 +705,49 @@ impl<'py> RolloutOut<'py> {
     }
 }
 
+/// `EnvPool(record=...)` as recording options; an unknown key or a bad value is a `ValueError`.
+fn record_options(record: Option<&Bound<'_, PyDict>>) -> PyResult<Option<Arc<::replay::RecordOptions>>> {
+    let Some(record) = record else {
+        return Ok(None);
+    };
+    let mut options = ::replay::RecordOptions {
+        embed_start: true,
+        meta: serde_json::json!({}),
+        ..Default::default()
+    };
+    for (key, value) in record.iter() {
+        let key: String = key.extract()?;
+        let bad = |want: &str| PyValueError::new_err(format!("record[{key:?}] must be {want}, not {value:?}"));
+        match key.as_str() {
+            "state" => {
+                options.embed_start = match value.extract::<String>().ok().as_deref() {
+                    Some("embed") => true,
+                    Some("path") => false,
+                    _ => return Err(bad("'embed' or 'path'")),
+                }
+            }
+            "rewards" => options.rewards = value.extract().map_err(|_| bad("a bool"))?,
+            "decisions" => options.decisions = value.extract().map_err(|_| bad("a bool"))?,
+            "keyframe_frames" => {
+                options.keyframe_frames = value.extract().map_err(|_| bad("a frame count"))?
+            }
+            "meta" => {
+                let text: String = value.extract().map_err(|_| bad("a JSON object as text"))?;
+                options.meta = match serde_json::from_str(&text) {
+                    Ok(meta @ serde_json::Value::Object(_)) => meta,
+                    _ => return Err(bad("a JSON object as text")),
+                }
+            }
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "unknown record key {key:?} (state, rewards, decisions, keyframe_frames, meta)"
+                )));
+            }
+        }
+    }
+    Ok(Some(Arc::new(options)))
+}
+
 fn event_dict<'py>(
     py: Python<'py>,
     env: usize,
@@ -738,11 +781,10 @@ fn event_dict<'py>(
             d.set_item("stalled", r.stalled)?;
             d.set_item("cheated", json_to_py(py, &cheated_json(&r.cheated))?)?;
         }
-        ZeldaEvent::Movie(log) => {
-            d.set_item("type", "movie")?;
-            d.set_item("origin", log.origin.as_deref())?;
-            d.set_item("buttons", PyBytes::new(py, &log.buttons))?;
-            d.set_item("pokes", log.pokes.clone())?;
+        ZeldaEvent::Replay { job, data } => {
+            d.set_item("type", "replay")?;
+            d.set_item("job", job)?;
+            d.set_item("data", PyBytes::new(py, data))?;
         }
     }
     Ok(d)
@@ -781,10 +823,14 @@ fn play_dict<'py>(py: Python<'py>, env: usize, play: &Play<ZeldaAction>) -> PyRe
 #[pymethods]
 impl PyEnvPool {
     /// `num_envs` envs of `task` on `threads` worker threads (env `i` on thread `i % threads`), env `i` seeded
-    /// from (`seed`, `i`); `fps > 0` paces every env's real frames; `record` records every env's inputs from
-    /// its first episode on (as `set_record(env, True)` for all, but in time for the episodes started here).
+    /// from (`seed`, `i`); `fps > 0` paces every env's real frames.  `record` (None: off) records every
+    /// episode or run as a TFREPLAY file, reported as a `replay` event when it ends: a dict with `state`
+    /// ('embed', the default: a replay that starts from a state file carries it; 'path': it names it),
+    /// `rewards`, `decisions` (bools: the optional streams; decisions also need `play(distributions=True)`),
+    /// `keyframe_frames` (a keyframe state once that many frames ran since the last; 0: none) and `meta` (the
+    /// JSON text of the replay's META base object).
     #[new]
-    #[pyo3(signature = (task, num_envs, threads=None, seed=0, fps=0.0, record=false))]
+    #[pyo3(signature = (task, num_envs, threads=None, seed=0, fps=0.0, record=None))]
     fn new(
         py: Python<'_>,
         task: &Bound<'_, PyAny>,
@@ -792,7 +838,7 @@ impl PyEnvPool {
         threads: Option<usize>,
         seed: u64,
         fps: f64,
-        record: bool,
+        record: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let threads = threads.unwrap_or_else(|| {
             num_envs.min(std::thread::available_parallelism().map_or(1, |n| n.get()))
@@ -800,7 +846,7 @@ impl PyEnvPool {
         let mut opts = PoolOptions::new(num_envs, threads, seed);
         opts.fps = fps;
         opts.frame_shape = FRAME_SHAPE;
-        opts.record = record;
+        opts.record = record_options(record)?;
         build(py, task, opts)
     }
 
@@ -1084,11 +1130,6 @@ impl PyEnvPool {
     /// Paces env `env` at `fps` real frames per second (`<= 0`: unthrottled).
     fn set_fps(&self, env: usize, fps: f64) -> PyResult<()> {
         self.pool.set_fps(env, fps).map_err(pool_err)
-    }
-
-    /// Records env `env`'s episode inputs from its next episode on (`movie` events).
-    fn set_record(&self, env: usize, on: bool) -> PyResult<()> {
-        self.pool.set_record(env, on).map_err(pool_err)
     }
 
     /// Env `env`'s latest frame if newer than counter `since`: `(counter, frame)` with a (240, 256, 3) uint8

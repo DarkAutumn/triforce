@@ -87,12 +87,10 @@ pub fn state_path(name: &str) -> PathBuf {
     states_dir().join(file)
 }
 
-/// A decoded `TFZSTATE` file as a session snapshot (executor flags from the file, no frames or steps).
-pub fn read_state_file(path: &Path) -> Result<zelda::SessionSnapshot<MachineState>, env::EnvError> {
-    let err = |e: &dyn std::fmt::Display| env::EnvError::State(format!("{}: {e}", path.display()));
+/// A `TFZSTATE` file's bytes as a session snapshot (executor flags from the file, no frames or steps).
+pub fn decode_state(bytes: &[u8]) -> Result<zelda::SessionSnapshot<MachineState>, env::EnvError> {
     let rom = rom().ok_or_else(|| env::EnvError::State("ROM not found".into()))?;
-    let bytes = std::fs::read(path).map_err(|e| err(&e))?;
-    let file = zcore::state_file::decode(&rom, &bytes).map_err(|e| err(&e))?;
+    let file = zcore::state_file::decode(&rom, bytes).map_err(|e| env::EnvError::State(e.to_string()))?;
     Ok(zelda::SessionSnapshot {
         machine: file.machine,
         was_in_cave: file.flags & 1 != 0,
@@ -100,6 +98,19 @@ pub fn read_state_file(path: &Path) -> Result<zelda::SessionSnapshot<MachineStat
         total_frames: 0,
         steps: 0,
     })
+}
+
+/// A session snapshot as a `TFZSTATE` file's bytes.
+pub fn encode_state(snapshot: &zelda::SessionSnapshot<MachineState>) -> Result<Vec<u8>, env::EnvError> {
+    let rom = rom().ok_or_else(|| env::EnvError::State("ROM not found".into()))?;
+    let flags = snapshot.was_in_cave as u8 | (snapshot.just_exited_cave as u8) << 1;
+    Ok(zcore::state_file::encode(&rom, &snapshot.machine, flags))
+}
+
+/// A decoded `TFZSTATE` file as a session snapshot.
+pub fn read_state_file(path: &Path) -> Result<zelda::SessionSnapshot<MachineState>, env::EnvError> {
+    let err = |e: &dyn std::fmt::Display| env::EnvError::State(format!("{}: {e}", path.display()));
+    decode_state(&std::fs::read(path).map_err(|e| err(&e))?).map_err(|e| err(&e))
 }
 
 /// THE state loader of the env tests: every test that starts from a named state (directly or through
@@ -142,13 +153,30 @@ impl env::StateStore<MachineState> for TfzStore {
         path: &Path,
         snapshot: &zelda::SessionSnapshot<MachineState>,
     ) -> Result<(), env::EnvError> {
-        let rom = rom().ok_or_else(|| env::EnvError::State("ROM not found".into()))?;
-        let flags = snapshot.was_in_cave as u8 | (snapshot.just_exited_cave as u8) << 1;
-        let bytes = zcore::state_file::encode(&rom, &snapshot.machine, flags);
+        let bytes = encode_state(snapshot)?;
         let tmp = PathBuf::from(format!("{}.{}.tmp", path.display(), std::process::id()));
         std::fs::write(&tmp, bytes)?;
         std::fs::rename(&tmp, path)?;
         Ok(())
+    }
+
+    fn bytes(&self, name: &str) -> Result<Vec<u8>, env::EnvError> {
+        let path = state_path(name);
+        std::fs::read(&path).map_err(|e| env::EnvError::State(format!("{}: {e}", path.display())))
+    }
+
+    fn encode(&self, snapshot: &zelda::SessionSnapshot<MachineState>) -> Result<Vec<u8>, env::EnvError> {
+        encode_state(snapshot)
+    }
+
+    fn decode(&self, bytes: &[u8]) -> Result<zelda::SessionSnapshot<MachineState>, env::EnvError> {
+        decode_state(bytes)
+    }
+
+    fn power_on(&self) -> Result<MachineState, env::EnvError> {
+        open_core()
+            .map(|core| core.snapshot())
+            .ok_or_else(|| env::EnvError::State("ROM not found".into()))
     }
 }
 

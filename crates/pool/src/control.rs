@@ -1,7 +1,8 @@
 //! Per-env controls the pool shares with its env: the render flag, frame publishing (double buffer + counter,
-//! optionally held on its latest frame), frame pacing, pausing and the record flag.
+//! optionally held on its latest frame), frame pacing, pausing and the recording options.
 
 use parking_lot::Mutex;
+use replay::RecordOptions;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -59,7 +60,7 @@ struct Shared {
     index: usize,
     frame_bytes: usize,
     render: AtomicBool,
-    record: AtomicBool,
+    record: Mutex<Option<Arc<RecordOptions>>>,
     /// Publishing is suspended: the front keeps the latest frame (a finished run's last screen).
     hold: AtomicBool,
     /// The env stops before its next real frame until unpaused (`pace` blocks).
@@ -76,8 +77,8 @@ struct Shared {
 /// One env's controls, shared between the pool (caller side) and the env (worker side). Cheap to clone.
 ///
 /// The env calls [`EnvControl::render`] before each real (non-look-ahead) emulated frame and renders only if it
-/// returns true, then [`EnvControl::end_frame`] (or `publish` + `pace`) after it. [`EnvControl::recording`] asks
-/// the env to record the inputs of its episodes, checked when an episode starts.
+/// returns true, then [`EnvControl::end_frame`] (or `publish` + `pace`) after it. [`EnvControl::record_options`]
+/// asks the env to record its episodes as replays, checked when an episode starts.
 #[derive(Clone)]
 pub struct EnvControl {
     shared: Arc<Shared>,
@@ -94,7 +95,7 @@ impl EnvControl {
                 index,
                 frame_bytes,
                 render: AtomicBool::new(false),
-                record: AtomicBool::new(false),
+                record: Mutex::new(None),
                 hold: AtomicBool::new(false),
                 pause: AtomicBool::new(false),
                 fps: AtomicU64::new(fps.to_bits()),
@@ -135,13 +136,13 @@ impl EnvControl {
         self.shared.render.store(on, Ordering::Relaxed);
     }
 
-    /// Whether episodes starting now should be recorded.
-    pub fn recording(&self) -> bool {
-        self.shared.record.load(Ordering::Relaxed)
+    /// How episodes starting now should be recorded (None: not at all).
+    pub fn record_options(&self) -> Option<Arc<RecordOptions>> {
+        self.shared.record.lock().clone()
     }
 
-    pub fn set_recording(&self, on: bool) {
-        self.shared.record.store(on, Ordering::Relaxed);
+    pub fn set_recording(&self, options: Option<Arc<RecordOptions>>) {
+        *self.shared.record.lock() = options;
     }
 
     pub fn fps(&self) -> f64 {
@@ -273,7 +274,7 @@ impl std::fmt::Debug for EnvControl {
         f.debug_struct("EnvControl")
             .field("index", &self.index())
             .field("render", &self.render())
-            .field("recording", &self.recording())
+            .field("recording", &self.record_options().is_some())
             .field("fps", &self.fps())
             .field("frames", &self.frame_counter())
             .finish()

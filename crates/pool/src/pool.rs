@@ -119,8 +119,9 @@ pub struct PoolOptions {
     /// Initial pacing of every env in real frames per second (`<= 0`: unthrottled).
     pub fps: f64,
     pub frame_shape: [usize; 3],
-    /// Initial record flag of every env, so the episodes started while the pool is built are recorded too.
-    pub record: bool,
+    /// How every env records its episodes as replays (None: it doesn't), from the episodes started while the
+    /// pool is built on.
+    pub record: Option<Arc<replay::RecordOptions>>,
 }
 
 impl PoolOptions {
@@ -131,7 +132,7 @@ impl PoolOptions {
             seed,
             fps: 0.0,
             frame_shape: FRAME_SHAPE,
-            record: false,
+            record: None,
         }
     }
 }
@@ -294,7 +295,7 @@ impl<E: PoolEnv> Pool<E> {
         let controls: Vec<EnvControl> = (0..n)
             .map(|i| {
                 let control = EnvControl::new(i, opts.fps, frame_bytes, stop.clone());
-                control.set_recording(opts.record);
+                control.set_recording(opts.record.clone());
                 control
             })
             .collect();
@@ -633,12 +634,6 @@ impl<E: PoolEnv> Pool<E> {
     /// time.
     pub fn set_fps(&self, env: usize, fps: f64) -> Res<(), E> {
         self.control(env)?.set_fps(fps);
-        Ok(())
-    }
-
-    /// Records the inputs of env `env`'s episodes from its next episode on (or stops).
-    pub fn set_record(&self, env: usize, on: bool) -> Res<(), E> {
-        self.control(env)?.set_recording(on);
         Ok(())
     }
 
