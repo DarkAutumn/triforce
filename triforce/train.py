@@ -22,7 +22,9 @@ a finished fixed-budget run.  ``--stop-success`` proposes a stop once the start-
 per-start cohorts (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for
 ``--stop-patience`` consecutive iterations (never before a budget failure could have been counted), and stops only
 if an evaluation of the current weights (``CONFIRM_EPISODES`` sampled episodes per seed start state on an
-``EvalTask`` pool, seed = pool seed + iteration) also reaches it; every check is an ``early_stop_check`` event.
+``EvalTask`` pool, seed = pool seed + iteration) also reaches it; every check is an ``early_stop_check`` event.  The
+evaluation ends early once its failures rule the threshold out (``aborted``, with the partial ``rate``, ``failures``
+and ``rate_upper_bound``, the best rate it could still have reached): the decision is the full evaluation's.
 Only episodes that started at a room entry count, and the balance is over the seed start states only: episodes of
 harvested start states (chain handoffs) are reported as ``harvested/*`` and never move it; ``--curriculum`` episodes
 are reported separately as ``curriculum/*``.  ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*``
@@ -589,17 +591,32 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
 
     def confirm_stop(iteration: int) -> bool:
         """An early-stop proposal: evaluates the current weights (``CONFIRM_EPISODES`` sampled episodes per seed
-        start state); stops only if their success >= --stop-success, else the streak starts over."""
+        start state); stops only if their success >= --stop-success, else the streak starts over.  The evaluation
+        ends as soon as its failures rule the threshold out (``aborted``): the decision is the full one's."""
         seed = pool_seed + start_iteration + iteration
+        states_dir = None if args.states_dir is None else str(args.states_dir)
+        planned = CONFIRM_EPISODES * len(config.resolve_start_states(states_dir))
+        failures, aborted = 0, False
+
+        def hopeless(record: dict) -> bool:
+            nonlocal failures, aborted
+            failures += not record['success']
+            aborted = (planned - failures) / planned < args.stop_success
+            return aborted
+
         by_state = success_by_state(config, network.to_native(), CONFIRM_EPISODES, seed=seed,
-                                    parallel=args.parallel, threads=args.threads, states_dir=args.states_dir)
+                                    parallel=args.parallel, threads=args.threads, states_dir=args.states_dir,
+                                    stop=hopeless)
         successes = sum(s for s, _ in by_state.values())
         episodes = sum(e for _, e in by_state.values())
         rate = successes / episodes if episodes else 0.0
-        decision = 'stop' if episodes and rate >= args.stop_success else 'continue'
-        print(f"[train] early stop check: evaluation success {rate:.3f} over {episodes} episodes -> {decision}",
-              flush=True)
+        # An aborted evaluation's rate is partial and below its upper bound, which is below the threshold.
+        decision = 'stop' if episodes and not aborted and rate >= args.stop_success else 'continue'
+        upper = (planned - (episodes - successes)) / planned if planned else 0.0
+        print(f"[train] early stop check: evaluation success {rate:.3f} over {episodes} of {planned} episodes"
+              + (f" (aborted: at most {upper:.3f} reachable)" if aborted else '') + f" -> {decision}", flush=True)
         events.emit('early_stop_check', iteration=start_iteration + iteration, rate=rate, episodes=episodes,
+                    planned=planned, failures=episodes - successes, aborted=aborted, rate_upper_bound=upper,
                     seed=seed, balanced_success_rate=early.balanced, train_rates=early.rates(),
                     states={state: s / e for state, (s, e) in sorted(by_state.items()) if e}, decision=decision)
         if decision != 'stop':

@@ -10,7 +10,7 @@ state supply ``(observation, mask, action)`` rows, kept per state so rare hard s
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import torch
@@ -43,11 +43,12 @@ def rank_key(record: dict) -> tuple:
 
 
 def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, threads: Optional[int] = None,
-                  states_dir=None, deterministic: bool = False,
-                  record: Optional[str] = None) -> tuple[dict[int, dict], dict[int, dict]]:
+                  states_dir=None, deterministic: bool = False, record: Optional[str] = None,
+                  stop: Optional[Callable[[dict], bool]] = None) -> tuple[dict[int, dict], dict[int, dict]]:
     """Plays ``runs`` episodes from every seed start state of ``config`` with ``policy`` (a ``_native.Policy``) on
     an ``EvalTask`` pool of ``parallel`` envs; episode ``i`` is seeded ``seed + i``.  Returns (eval records by seed,
-    recorded plays by job; ``record`` as ``EnvPool.play``'s)."""
+    recorded plays by job; ``record`` as ``EnvPool.play``'s).  ``stop(record)`` is called with each record as it
+    arrives: True ends the evaluation there (the pool closes; episodes still running are dropped)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     states_dir = None if states_dir is None else str(states_dir)
     states = sorted(Path(p).stem for p in config.resolve_start_states(states_dir))
@@ -59,22 +60,25 @@ def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, t
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
         pool.play([policy], deterministic=deterministic, record=record)
-        while True:
+        stopped = False
+        while not stopped:
             idle = pool.wait_idle(timeout=0.1)
             for event in pool.poll_events():
-                if event['type'] == 'eval':
+                if event['type'] == 'eval' and not stopped:
                     records[int(event['record']['seed'])] = event['record']
+                    stopped = stop is not None and stop(event['record'])
             plays.update((int(play['job']), play) for play in pool.poll_plays())
-            if idle:
-                break
+            stopped = stopped or idle
     return records, plays
 
 
 def success_by_state(config, policy, runs: int, seed: int = 0, parallel: int = 4, threads: Optional[int] = None,
-                     states_dir=None, deterministic: bool = False) -> dict[str, tuple[int, int]]:
-    """``play_episodes`` without recording: start state -> (successes, episodes)."""
+                     states_dir=None, deterministic: bool = False,
+                     stop: Optional[Callable[[dict], bool]] = None) -> dict[str, tuple[int, int]]:
+    """``play_episodes`` without recording: start state -> (successes, episodes) (only the episodes played before
+    ``stop`` ended it, if it did)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    records, _ = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, deterministic)
+    records, _ = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, deterministic, stop=stop)
     result: dict[str, tuple[int, int]] = {}
     for record in records.values():
         successes, episodes = result.get(record['start_state'], (0, 0))

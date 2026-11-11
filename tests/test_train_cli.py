@@ -311,15 +311,26 @@ def test_cohort_rate_is_the_success_of_the_episodes_started_in_that_rollout():
         assert counts == expected, rollout
 
 
-@pytest.mark.parametrize('evaluated,stops', [((10, 50), False), ((50, 50), True)])
-def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, logs_dir, monkeypatch, evaluated, stops):
-    """Every proposal runs an evaluation of the current weights; below --stop-success the run goes on."""
+@pytest.mark.parametrize('outcomes,stops,played', [
+    ([False] * 40 + [True] * 10, False, 26),   # the 26th failure leaves at most 24/50 < 0.5: aborted there
+    ([True] * 30 + [False] * 20, True, 50),    # 20 failures still allow 0.5: played to the end, stops
+    ([True] * 50, True, 50)])
+def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, logs_dir, monkeypatch, outcomes, stops,
+                                                       played):
+    """Every proposal runs an evaluation of the current weights; below --stop-success the run goes on.  The
+    evaluation ends as soon as its failures rule the threshold out, with the same decision."""
     calls = []
 
-    def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, deterministic=False):
+    def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, deterministic=False,
+                  stop=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
         calls.append((runs, seed, parallel, deterministic))
-        return {'start': evaluated}
+        successes = episodes = 0
+        for ok in outcomes[:runs]:
+            successes, episodes = successes + ok, episodes + 1
+            if stop({'success': ok, 'start_state': 'start'}):
+                break
+        return {'start': (successes, episodes)}
 
     monkeypatch.setattr(train, 'success_by_state', fake_eval)
     monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
@@ -332,7 +343,13 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
     checks = [e for e in events if e['event'] == 'early_stop_check']
     assert len(checks) == (1 if stops else 3) and len(calls) == len(checks)
     assert [c['decision'] for c in checks] == (['stop'] if stops else ['continue'] * 3)
-    assert checks[0]['rate'] == evaluated[0] / evaluated[1] and checks[0]['states'] == {'start': checks[0]['rate']}
+    check = checks[0]
+    successes = sum(outcomes[:played])
+    assert (check['episodes'], check['planned'], check['failures']) == (played, 50, played - successes)
+    assert check['aborted'] == (played < 50)
+    assert check['rate'] == successes / played and check['states'] == {'start': check['rate']}
+    assert check['rate_upper_bound'] == (50 - (played - successes)) / 50
+    assert check['aborted'] == (check['rate_upper_bound'] < 0.5)
     assert calls[0] == (train.CONFIRM_EPISODES, 5 + 1, 2, False)
     assert ('early_stop' in [e['event'] for e in events]) == stops
 
