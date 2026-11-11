@@ -13,7 +13,8 @@ Rollouts come from a native ``EnvPool`` (``TrainTask``) in one call per rollout 
 threads step their envs ``T`` decisions each, acting with the Rust copy of the network (``ZeldaPolicy.to_native``)
 and keyed Gumbel noise (per episode job and decision), and write the env-major buffer (docs/rust-actor.md). Envs
 auto-reset and episodes continue across rollouts. ``train`` overlaps each PPO update with the next rollout (Lee,
-Nov 9): that rollout acts with the weights from before the update, one update behind. The learner recomputes every
+Nov 9): that rollout acts with the weights from before the update, one update behind (without PLR it starts as soon
+as the last one ends, before that one's buffer is readied). The learner recomputes every
 step's log-prob, entropy and value with its current torch network (``RolloutBuffer.recompute``), so the update never
 mixes the Rust actor's numerics in and its KL budget isn't spent on the lag. Opted-in no-progress truncations add
 ``gamma ** (frames / 8) * V(final_obs)`` (the actor's value) to that step's reward without crossing the reset.
@@ -179,15 +180,26 @@ class Collector:
             raise self._result['error']
 
     def finish(self, network: nn.Module, device) -> RolloutMetrics:
-        """Waits for the rollout ``start`` began and readies its buffer (now ``buffer``) for an update."""
+        """Waits for the rollout ``start`` began and readies its buffer (now ``buffer``) for an update:
+        ``take`` then ``ready``."""
+        self.take()
+        return self.ready(network, device)
+
+    def take(self):
+        """Waits for the rollout ``start`` began and makes its buffer ``buffer`` and its episode events ``episodes``.
+        The next ``start`` may come before ``ready``: it fills the other buffer."""
         self.wait()
         self.rollout_seconds = self._result['seconds']
-        buffer = self.buffer = self._buffers[self._next]
+        self.buffer = self._buffers[self._next]
         self._next = 1 - self._next
         # By env, each env's in step order (the sort is stable): the pool appends events as each env's job finishes,
         # so the raw order follows thread timing, and PLR's EMA and staleness clock depend on the order.
-        events = self.episodes = sorted((e for e in self.pool.poll_events() if e['type'] == 'episode'),
-                                        key=lambda e: e['env'])
+        self.episodes = sorted((e for e in self.pool.poll_events() if e['type'] == 'episode'), key=lambda e: e['env'])
+
+    def ready(self, network: nn.Module, device) -> RolloutMetrics:
+        """Readies the taken ``buffer`` for an update (the learner's log-probs and values, returns) and returns its
+        metrics."""
+        buffer, events = self.buffer, self.episodes
         began = time.time()
         last_values = buffer.recompute(network, device)
         self.recompute_seconds = time.time() - began
@@ -376,18 +388,27 @@ class PPO:
         try:
             for iteration in range(1, iterations + 1):
                 wait_start = time.time()
-                rollout = collector.finish(network, self.device)
+                collector.take()
                 wait_time = time.time() - wait_start
-                buffer = collector.buffer
                 rollout_shaping = shaping
+                # The next rollout acts with these weights while the buffer is readied and the update below changes
+                # them. Without PLR it starts at once: readying the buffer (the learner's recompute, returns) needs
+                # the same weights, and the envs no longer idle through it. PLR's next weights need the advantages.
+                started = plr is None and iteration < iterations
+                if started:
+                    shaping = shaping_for(iteration + 1)
+                    collector.start(network)
+                ready_start = time.time()
+                rollout = collector.ready(network, self.device)
+                wait_time += time.time() - ready_start
+                buffer = collector.buffer
                 plr_stats = {}
                 if plr is not None:     # this rollout's scores weigh the next rollout's seed states
                     scored = plr.update(buffer.jobs.numpy(), buffer.advantages.numpy(), collector.episodes)
                     weights = plr.weights()
                     pool.set_start_weights(weights)
                     plr_stats = {**plr.stats(weights), 'plr/scored_episodes': scored}
-                # The next rollout acts with these weights while the update below changes them.
-                if iteration < iterations:
+                if not started and iteration < iterations:
                     shaping = shaping_for(iteration + 1)
                     collector.start(network)
 
