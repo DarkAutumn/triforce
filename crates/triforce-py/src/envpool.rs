@@ -1021,9 +1021,11 @@ impl PyEnvPool {
     /// `poll_plays`, `active` and `wait_idle`. A chain run that ends with `hold_finished_frame` parks its env
     /// until `set_hold(env, False)`. `record`: None, 'actions' or 'observations' (see `poll_plays`).
     /// `replay` {job: [n, 3] actions}: replay those recorded episodes instead (the policies score the recorded
-    /// actions; a job outside `replay` or a replay running past its actions fails the env). After `play` the
-    /// pool only plays (`rollout` and another `play` raise).
-    #[pyo3(signature = (policies, deterministic=None, record=None, replay=None))]
+    /// actions; a job outside `replay` or a replay running past its actions fails the env). `distributions`:
+    /// every decision's whole action distribution goes to the env's recording (`EnvPool(record={'decisions':
+    /// True})`; it costs the other kinds' heads per decision). After `play` the pool only plays (`rollout` and
+    /// another `play` raise).
+    #[pyo3(signature = (policies, deterministic=None, record=None, replay=None, distributions=false))]
     fn play(
         &self,
         py: Python<'_>,
@@ -1031,6 +1033,7 @@ impl PyEnvPool {
         deterministic: Option<&Bound<'_, PyAny>>,
         record: Option<&str>,
         replay: Option<HashMap<i64, Bound<'_, PyAny>>>,
+        distributions: bool,
     ) -> PyResult<()> {
         let record = match record {
             None => Record::Off,
@@ -1069,7 +1072,8 @@ impl PyEnvPool {
                 PolicyActor::replay(&LAYOUT, nets, actions)
             }
         }
-        .map_err(PyValueError::new_err)?;
+        .map_err(PyValueError::new_err)?
+        .with_distributions(distributions);
         py.detach(|| self.pool.play(Arc::new(actor), record))
             .map_err(pool_err)
     }

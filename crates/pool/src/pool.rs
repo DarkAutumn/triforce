@@ -44,6 +44,17 @@ pub trait PoolEnv: Send + 'static {
         obs: ObsRow<'_>,
         events: &mut Vec<Self::Event>,
     ) -> Result<Outcome, Self::Error>;
+
+    /// [`Pool::play`] only: policy `policy` decided `action` on the current observation (`decision`; with its
+    /// whole distribution when the actor keeps one), just before `step` executes it.  For recording.
+    fn decided(
+        &mut self,
+        _policy: i64,
+        _action: &Self::Action,
+        _decision: &Decision,
+        _distribution: Option<&[f32]>,
+    ) {
+    }
 }
 
 /// An env a search can simulate in ([`crate::rollout::Planner`]): exact save and load mid-episode, and steps with
@@ -913,6 +924,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
                 obs.push(&slot.obs);
             }
         }
+        env.decided(slot.policy, &action, &decision, self.actor.distribution(&self.scratch));
         Worker::<E>::execute(env, id, Some(action), slot, events)?;
         let o = slot.outcome;
         self.shared.controls[id].add_emulated_frames(o.frames.max(0) as u64);

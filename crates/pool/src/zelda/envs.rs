@@ -8,6 +8,7 @@ use crate::control::EnvControl;
 use crate::jobs::Jobs;
 use crate::layout::{ObsLayout, ObsRow};
 use crate::pool::{EnvInit, Outcome, PoolEnv, SearchEnv, Start};
+use crate::rollout::Decision;
 use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
 use env::end_conditions::{DEATH, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, STUCK};
@@ -262,6 +263,21 @@ fn chain_ending(result: &RunResult) -> Ending {
     }
 }
 
+/// A decision for the recording's decision stream, when it keeps one and the actor reports distributions.
+fn record_decision<N: Nes>(
+    nes: &mut PoolNes<N>,
+    policy: i64,
+    action: &ZeldaAction,
+    decision: &Decision,
+    distribution: Option<&[f32]>,
+) {
+    if let (Some(rec), Some(distribution)) = (nes.recorder_mut(), distribution)
+        && rec.options().decisions
+    {
+        rec.decision(policy as u8, action.map(|index| index as u8), decision.value, distribution);
+    }
+}
+
 /// The row fields of a specialist step (`bootstrap`: a `no-room-progress` truncation, as `RolloutBuffer.collect`).
 fn specialist_outcome(r: &StepResult) -> Outcome {
     Outcome {
@@ -370,6 +386,10 @@ where
 
     fn layout(&self) -> ObsLayout {
         obs_layout()
+    }
+
+    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+        record_decision(self.env.session_mut().nes_mut(), policy, action, decision, distribution);
     }
 
     fn reset(
@@ -541,6 +561,10 @@ where
 
     fn layout(&self) -> ObsLayout {
         obs_layout()
+    }
+
+    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+        record_decision(self.env.session_mut().nes_mut(), policy, action, decision, distribution);
     }
 
     fn reset(
@@ -824,6 +848,10 @@ where
         obs_layout()
     }
 
+    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+        record_decision(self.chain.session_mut().nes_mut(), policy, action, decision, distribution);
+    }
+
     fn reset(
         &mut self,
         mut obs: ObsRow<'_>,
@@ -904,6 +932,14 @@ where
 
     fn layout(&self) -> ObsLayout {
         obs_layout()
+    }
+
+    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+        match self {
+            TaskEnv::Train(e) => e.decided(policy, action, decision, distribution),
+            TaskEnv::Eval(e) => e.decided(policy, action, decision, distribution),
+            TaskEnv::Chain(e) => e.decided(policy, action, decision, distribution),
+        }
     }
 
     fn reset(

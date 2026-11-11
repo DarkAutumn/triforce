@@ -306,3 +306,54 @@ fn joint_log_probs_match_scoring_each_action() {
         assert_eq!(legal, if masked { 2 + DIRS } else { KINDS * DIRS * DURS });
     }
 }
+
+/// `evaluate_with_distribution` is `evaluate` plus the whole factored distribution: the output's bits are the
+/// same, and each joint action's three entries add up to its `joint_log_probs` value, bit for bit (`-inf` when
+/// the action is illegal).
+#[test]
+fn the_distribution_holds_every_joint_log_prob() {
+    let p = policy();
+    assert_eq!(p.distribution_size(), MASK);
+    let (mut s, mut plain) = (p.scratch(), p.scratch());
+    let mut noise = vec![0f32; p.noise_size()];
+    let mut dist = vec![0f32; p.distribution_size()];
+    let mut joint = vec![0f32; p.joint_size()];
+    let mut illegal = 0;
+    for seed in 0..50u64 {
+        let mut o = obs(seed);
+        // A random mask (every other seed keeps all legal) with at least one legal kind.
+        if seed % 2 == 1 {
+            for (i, m) in o.mask.iter_mut().enumerate() {
+                *m = policy::noise::mix(seed * 7919 + i as u64) % 5 < 3;
+            }
+            o.mask[(seed % KINDS as u64) as usize] = true;
+        }
+        let v = [&o.history[..], &o.link[..]];
+        keyed_noise(seed as i64, 3, &mut noise);
+        let pick = match seed % 3 {
+            0 => Pick::Argmax,
+            1 => Pick::Sample(&noise),
+            _ => Pick::Given(p.evaluate(&input(&o, &v), Pick::Argmax, &mut plain).unwrap().action),
+        };
+        let expected = p.evaluate(&input(&o, &v), pick, &mut plain).unwrap();
+        let out = p.evaluate_with_distribution(&input(&o, &v), pick, &mut s, &mut dist).unwrap();
+        assert_eq!(format!("{out:?}"), format!("{expected:?}"), "seed {seed}");
+        p.joint_log_probs(&input(&o, &v), &mut plain, &mut joint).unwrap();
+        for (i, &lp) in joint.iter().enumerate() {
+            let [k, d, u] = p.joint_action(i);
+            let sum = (dist[k] + dist[KINDS + k * DIRS + d]) + dist[KINDS + KINDS * DIRS + k * DURS + u];
+            assert_eq!(sum.to_bits(), lp.to_bits(), "seed {seed} action {:?}: {sum} vs {lp}", [k, d, u]);
+            illegal += (lp == f32::NEG_INFINITY) as usize;
+        }
+        // The taken action's entries are its head log-probs.
+        let [k, d, u] = out.action;
+        let taken = (dist[k] + dist[KINDS + k * DIRS + d]) + dist[KINDS + KINDS * DIRS + k * DURS + u];
+        assert_eq!(taken.to_bits(), out.log_prob.to_bits(), "seed {seed}");
+        assert!(dist.iter().all(|v| !v.is_nan()));
+    }
+    assert!(illegal > 200, "the masks made illegal actions: {illegal}");
+    let mut short = vec![0f32; MASK - 1];
+    let o = obs(1);
+    let v = [&o.history[..], &o.link[..]];
+    assert!(p.evaluate_with_distribution(&input(&o, &v), Pick::Argmax, &mut s, &mut short).is_err());
+}

@@ -26,11 +26,16 @@ pub struct PolicyActor {
     pub(super) deterministic: Vec<bool>,
     /// Replaying: each episode's (job's) recorded actions, by decision step.
     replay: Option<HashMap<i64, Vec<ZeldaAction>>>,
+    /// Keep every decision's whole distribution (`Actor::distribution`; for recordings).
+    distributions: bool,
 }
 
 pub struct ActorScratch {
     pub(super) scratches: Vec<policy::Scratch>,
     pub(super) noise: Vec<f32>,
+    /// The last decision's distribution (`dist[..dist_len]`; `dist_len` 0: not kept).
+    dist: Vec<f32>,
+    dist_len: usize,
 }
 
 impl PolicyActor {
@@ -66,7 +71,15 @@ impl PolicyActor {
             policies,
             deterministic,
             replay: None,
+            distributions: false,
         })
+    }
+
+    /// Keep every decision's whole distribution for the pool's envs (`PoolEnv::decided`: a recording's
+    /// decision stream).  Costs the other kinds' direction and duration heads per decision.
+    pub fn with_distributions(mut self, on: bool) -> Self {
+        self.distributions = on;
+        self
     }
 
     /// Replays recorded episodes: decision `t` of the episode keyed `job` takes `actions[job][t]` (and reports
@@ -117,9 +130,12 @@ impl Actor<ZeldaAction> for PolicyActor {
 
     fn scratch(&self) -> ActorScratch {
         let size = self.policies.iter().map(|p| p.noise_size()).max().unwrap_or(0);
+        let dist = self.policies.iter().map(|p| p.distribution_size()).max().unwrap_or(0);
         ActorScratch {
             scratches: self.policies.iter().map(|p| p.scratch()).collect(),
             noise: vec![0.0; size],
+            dist: vec![0.0; if self.distributions { dist } else { 0 }],
+            dist_len: 0,
         }
     }
 
@@ -156,7 +172,13 @@ impl Actor<ZeldaAction> for PolicyActor {
             keyed_noise(job, step, noise);
             Pick::Sample(noise)
         };
-        let out = net.evaluate(&input, pick, &mut s.scratches[p]).map_err(|e| e.0)?;
+        let out = if self.distributions {
+            s.dist_len = net.distribution_size();
+            net.evaluate_with_distribution(&input, pick, &mut s.scratches[p], &mut s.dist[..s.dist_len])
+        } else {
+            net.evaluate(&input, pick, &mut s.scratches[p])
+        }
+        .map_err(|e| e.0)?;
         let [k, d, u] = out.action;
         Ok((
             [k as i64, d as i64, u as i64],
@@ -173,5 +195,9 @@ impl Actor<ZeldaAction> for PolicyActor {
         let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
         let input = input(self, p, obs, &mut vectors);
         self.policies[p].value(&input, &mut s.scratches[p]).map_err(|e| e.0)
+    }
+
+    fn distribution<'a>(&self, s: &'a ActorScratch) -> Option<&'a [f32]> {
+        (s.dist_len > 0).then(|| &s.dist[..s.dist_len])
     }
 }

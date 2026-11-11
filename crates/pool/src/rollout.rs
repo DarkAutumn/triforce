@@ -30,6 +30,12 @@ pub trait Actor<A>: Send + Sync {
         scratch: &mut Self::Scratch,
     ) -> Result<(A, Decision), String>;
 
+    /// The whole action distribution of the decision `act` just made with `scratch`, when the actor keeps it
+    /// (the layout is the actor's: the Zelda policy's is `policy::Policy::evaluate_with_distribution`).
+    fn distribution<'a>(&self, _scratch: &'a Self::Scratch) -> Option<&'a [f32]> {
+        None
+    }
+
     /// The value estimate of `obs` for policy `policy` (bootstrapping a truncation).
     fn value(&self, obs: &ObsData, policy: i64, scratch: &mut Self::Scratch) -> Result<f32, String>;
 }

@@ -638,6 +638,12 @@ impl Policy {
         [self.kinds, self.directions, self.durations]
     }
 
+    /// Values of one decision's whole distribution ([`Policy::evaluate_with_distribution`]): the action mask's
+    /// layout, `kinds + kinds * directions + kinds * durations` (7 + 56 + 28 = 91 for Zelda).
+    pub fn distribution_size(&self) -> usize {
+        self.kinds + self.kinds * self.directions + self.kinds * self.durations
+    }
+
     pub fn scratch(&self) -> Scratch {
         let d = self.config.entity_d_model;
         let hidden = self.config.hidden_dim;
@@ -925,6 +931,55 @@ impl Policy {
         [index / per_kind, (index % per_kind) / self.durations, index % self.durations]
     }
 
+    /// [`Policy::evaluate`] (the same `Output`, bit for bit) that also writes the whole factored distribution
+    /// into `dist` ([`Policy::distribution_size`] values in the action mask's layout: kind, then each kind's
+    /// directions, then each kind's durations): natural-log probabilities, `-inf` where masked.  A kind's entry
+    /// is 0 when it is the only legal kind; a direction or duration row that doesn't apply to its kind (all
+    /// masked) is 0 at index 0; an illegal kind's rows are all `-inf`.  So for every joint action
+    /// `(dist[kind] + dist[its direction]) + dist[its duration]` is the log-prob [`Policy::joint_log_probs`]
+    /// gives it.
+    pub fn evaluate_with_distribution(
+        &self,
+        input: &Input,
+        pick: Pick,
+        s: &mut Scratch,
+        dist: &mut [f32],
+    ) -> Result<Output, PolicyError> {
+        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        if dist.len() != self.distribution_size() {
+            return err(format!("the distribution needs {} values, got {}", self.distribution_size(), dist.len()));
+        }
+        let out = self.evaluate(input, pick, s)?;
+        // `s.tower_a` still holds the policy tower's output: the heads again, every kind's this time.
+        let kind_mask = &input.mask[..kinds];
+        let legal_kinds = kind_mask.iter().filter(|&&m| m).count();
+        dist.fill(f32::NEG_INFINITY);
+        self.kind_head.apply(&s.tower_a, &mut s.logits);
+        let mut kind_lp = [0f32; MAX_HEAD];
+        masked_log_softmax(&s.logits[..kinds], kind_mask, MASKED_LOGIT, &mut kind_lp[..kinds]);
+        self.kind_condition.apply(&s.tower_a, &mut s.condition_base);
+        let dur_base = kinds + kinds * dirs;
+        for kind in (0..kinds).filter(|&k| kind_mask[k]) {
+            dist[kind] = if legal_kinds > 1 { kind_lp[kind] } else { 0.0 };
+            for (c, (b, e)) in s
+                .conditioned
+                .iter_mut()
+                .zip(s.condition_base.iter().zip(self.kind_embedding.row(kind as i64)))
+            {
+                *c = (*b + e).max(0.0);
+            }
+            let dir_at = kinds + kind * dirs;
+            self.direction_head.apply(&s.conditioned, &mut s.logits);
+            let (lp, applies) = sub_log_probs(&s.logits[..dirs], &input.mask[dir_at..dir_at + dirs]);
+            distribution_row(&mut dist[dir_at..dir_at + dirs], &lp, &input.mask[dir_at..dir_at + dirs], applies);
+            let dur_at = dur_base + kind * durs;
+            self.duration_head.apply(&s.conditioned, &mut s.logits);
+            let (lp, applies) = sub_log_probs(&s.logits[..durs], &input.mask[dur_at..dur_at + durs]);
+            distribution_row(&mut dist[dur_at..dur_at + durs], &lp, &input.mask[dur_at..dur_at + durs], applies);
+        }
+        Ok(out)
+    }
+
     /// The log-prob of every joint action into `out` ([`Policy::joint_size`] values, [`Policy::joint_index`]
     /// order) with one trunk pass, bit for bit what `evaluate` gives each with `Pick::Given`: log p(kind) (0 with one
     /// legal kind) + log p(direction | kind) + log p(duration | kind), where a kind-conditioned head whose row is all
@@ -988,6 +1043,20 @@ impl Policy {
             return err("non-finite policy output");
         }
         finite_output(value[0], 0.0)
+    }
+}
+
+/// One kind's direction or duration row of a distribution (`row` starts all `-inf`): the legal entries'
+/// log-probs, or 0 at index 0 when the head doesn't apply to the kind.
+fn distribution_row(row: &mut [f32], lp: &[f32; MAX_HEAD], mask: &[bool], applies: bool) {
+    if !applies {
+        row[0] = 0.0;
+        return;
+    }
+    for ((r, &p), &legal) in row.iter_mut().zip(lp).zip(mask) {
+        if legal {
+            *r = p;
+        }
     }
 }
 
