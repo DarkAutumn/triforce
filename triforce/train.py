@@ -1,7 +1,7 @@
 """Train one specialist with PPO (design §7.1).
 
     python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--threads N]
-        [--iterations N] [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
+        [--iterations N] [--steps-per-update N] [--device cuda|cpu] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
         [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
         [--best-coeff C] [--best-parallel P]] [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
@@ -223,7 +223,9 @@ def parse_args(argv=None):
                         help="env worker threads (default: min(parallel, cpu count))")
     parser.add_argument('--iterations', type=int, default=100, help="PPO iterations (rollout + update)")
     parser.add_argument('--steps-per-update', type=int, default=PPOConfig.target_steps)
-    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+    parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'],
+                        help="where the PPO update runs (default cuda; without a GPU this is an error: training on "
+                             "the CPU is opt-in, --device cpu)")
     parser.add_argument('--run-id', default=None)
     parser.add_argument('--models-dir', default=None,
                         help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
@@ -368,7 +370,9 @@ def validate_args(args):
               (args.stop_hearts_delta >= 0, "--stop-hearts-delta must be >= 0"),
               (args.stop_hearts_gap >= 1, "--stop-hearts-gap must be >= 1"),
               (args.best_of_n <= 0 or args.best_every >= 1, "--best-every must be >= 1"),
-              (args.steps_per_update >= args.parallel, "--steps-per-update must be >= --parallel")]
+              (args.steps_per_update >= args.parallel, "--steps-per-update must be >= --parallel"),
+              (args.device != 'cuda' or torch.cuda.is_available(),
+               "--device cuda (the default) needs a GPU, and none is available: pass --device cpu to train on the CPU")]
     for ok, message in checks:
         if not ok:
             raise SystemExit(message)

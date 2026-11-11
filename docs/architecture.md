@@ -410,7 +410,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   interrupted run (SIGINT, or SIGTERM from `python -m triforce.train` / `triforce train`) saves its checkpoint and
   summary and exits 130 (`train.EXIT_INTERRUPTED`), so it never passes for a finished fixed-budget run. Training
   into an existing run dir first moves the earlier training's files to `<run>.prev-N` (`set_aside_previous`); only
-  a same-dir `--load` continuation keeps its checkpoint, curriculum and `metrics.jsonl` (appended to).
+  a same-dir `--load` continuation keeps its checkpoint, curriculum and `metrics.jsonl` (appended to). The PPO
+  update runs on the GPU (`--device cuda`, the default; without a GPU that is an error): training on the CPU is
+  opt-in, `--device cpu` (the tests use it). Round 18: a CPU update next to a running training took 80–170 s.
 - Besides the episode metrics, every iteration logs `in_flight/{episodes,mean_steps,max_steps,over_half_budget}`
   (the episodes still running at the rollout's end), `success_rate_pessimistic` (unfinished episodes past the
   budget counted as failures), `started/{success_rate,episodes,iteration}` (the per-start cohort rate: the

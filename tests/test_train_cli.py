@@ -28,7 +28,9 @@ GAMEPLAY_KEYS = ('episodes', 'episode_steps', 'episode_frames', 'success_rate', 
 
 
 def _common(states_dir, tmp_path, *extra):
-    return ['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--models-dir', str(tmp_path), *extra]
+    """Training on the CPU is opt-in (--device defaults to cuda); a later --device in extra wins."""
+    return ['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+            '--device', 'cpu', *extra]
 
 
 def _check_run(run_dir, iterations):
@@ -75,7 +77,8 @@ def test_supplied_config_and_explicit_start_state(states_dir, tmp_path):
                       "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 1\n")
     run = train.main(['--specialist', str(config), '--parallel', '2', '--iterations', '1',
                       '--steps-per-update', '8', '--no-curriculum', '--models-dir', str(tmp_path),
-                      '--start-state', str(states_dir / 'start.state'), '--run-id', 'alternate', '--seed', '7'])
+                      '--start-state', str(states_dir / 'start.state'), '--run-id', 'alternate', '--seed', '7',
+                      '--device', 'cpu'])
     metrics = read_jsonl(str(run / 'metrics.jsonl'))[-1]
     assert metrics.get('ending/max-steps') == 1
     assert metrics['episode_steps'] == 1
@@ -99,7 +102,7 @@ def test_load_widens_an_older_checkpoint_only_with_obs_target(states_dir, tmp_pa
                       f"start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\nobs: {{target: {target}}}\n")
     run = train.main(['--specialist', str(config), '--parallel', '2', '--iterations', '1', '--steps-per-update', '16',
                       '--no-curriculum', '--models-dir', str(tmp_path), '--start-state', str(states_dir / 'start.state'),
-                      '--run-id', 'continued', '--seed', '7', '--load', str(old.parent)])
+                      '--run-id', 'continued', '--seed', '7', '--load', str(old.parent), '--device', 'cpu'])
     resumed = registry.load_checkpoint(run)
     assert ('target' in resumed['model_config']['obs_spec']) == target
     assert resumed['iterations'] == 4 and resumed['steps'] == 96 + 16
@@ -187,7 +190,7 @@ def test_training_logs_its_harvested_source_and_rate(states_dir, tmp_path, logs_
                       f"harvested_states: {harvest}\nharvested_fraction: 0.5\n")
     run_dir = train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '4',
                           '--steps-per-update', '32', '--iterations', '4', '--models-dir', str(tmp_path),
-                          '--run-id', 'harvest', '--seed', '3'])
+                          '--run-id', 'harvest', '--seed', '3', '--device', 'cpu'])
     harvested = json.loads((run_dir / 'run.json').read_text())['harvested']
     assert (harvested['dir'], harvested['states'], harvested['fraction']) == (str(harvest), 1, 0.5)
     assert harvested['drawn'] == 'drawn on 50% of the resets (harvested_fraction)'
@@ -337,7 +340,7 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
     run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '3', '--models-dir', str(tmp_path),
                           '--run-id', 'confirm', '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
-                          '--stop-hearts-delta', '0'])
+                          '--stop-hearts-delta', '0', '--device', 'cpu'])
     assert train.run_status(run_dir) == ('early_stop' if stops else 'completed')
     (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
     events = read_jsonl(str(next(log_dir.glob('*.jsonl'))))
@@ -376,7 +379,7 @@ def test_a_stop_also_waits_for_the_hearts_lost_to_stop_improving(states_dir, tmp
     run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '8', '--models-dir', str(tmp_path),
                           '--run-id', 'hearts', '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
-                          '--stop-hearts-gap', '2'])
+                          '--stop-hearts-gap', '2', '--device', 'cpu'])
     assert train.run_status(run_dir) == 'early_stop'
     (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
     checks = [e for e in read_jsonl(str(next(log_dir.glob('*.jsonl')))) if e['event'] == 'early_stop_check']
@@ -392,7 +395,7 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     run_dir = train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '4',
                           '--steps-per-update', '16', '--iterations', '50', '--models-dir', str(tmp_path),
                           '--run-id', 'early', '--seed', '1', '--stop-success', '0.0', '--stop-patience', '1',
-                          '--stop-hearts-delta', '0'])
+                          '--stop-hearts-delta', '0', '--device', 'cpu'])
     with open(run_dir / 'train_summary.json', encoding='utf-8') as file:
         summary = json.load(file)
     checkpoint = registry.load_checkpoint(run_dir)
@@ -503,7 +506,7 @@ def test_a_load_continuation_resumes_the_curriculum(states_dir, tmp_path):
                       "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\n")
     common = ['--specialist', str(config), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
               '--parallel', '2', '--steps-per-update', '32', '--iterations', '1', '--seed', '2',
-              '--curriculum', str(trajectories), '--curriculum-fraction', '1.0']
+              '--curriculum', str(trajectories), '--curriculum-fraction', '1.0', '--device', 'cpu']
     first = train.main(common + ['--run-id', 'first'])
     assert read_jsonl(str(first / 'metrics.jsonl'))[-1]['curriculum/episodes'] > 0
     tracks = json.loads((first / 'run.json').read_text())['curriculum_tracks']       # F131: what it loaded
@@ -566,6 +569,17 @@ def _train_round():
 def test_bad_counts_are_rejected_before_the_run_dir_is_written(states_dir, tmp_path, flags):
     with pytest.raises(SystemExit):
         train.main(_common(states_dir, tmp_path, '--parallel', '2', '--run-id', 'bad', *flags))
+    assert not (tmp_path / SPECIALIST).exists()
+
+
+def test_training_runs_on_cuda_unless_cpu_is_asked_for(states_dir, tmp_path, monkeypatch):
+    """--device defaults to cuda; without a GPU that is an error naming --device cpu, before anything is written."""
+    assert train.parse_args(['--specialist', SPECIALIST]).device == 'cuda'
+    monkeypatch.setattr(train.torch.cuda, 'is_available', lambda: False)
+    args = ['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+            '--parallel', '2', '--run-id', 'nogpu']
+    with pytest.raises(SystemExit, match='--device cpu'):
+        train.main(args)
     assert not (tmp_path / SPECIALIST).exists()
 
 
