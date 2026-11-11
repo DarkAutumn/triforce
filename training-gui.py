@@ -1492,11 +1492,13 @@ class RunRow(Clickable):
 class ChainCard(Clickable):
     """eval-chain after the round: one block per chain run once results are in."""
 
+    TOP = RunRow.HEIGHT + 12         # three lines on the left: name, runs, time and throughput
+
     def __init__(self, view):
         super().__init__('round')
         self.view = view
         self.lines: list[tuple[str, QColor]] = []
-        self.setFixedHeight(RunRow.HEIGHT)
+        self.setFixedHeight(self.TOP)
 
     def refresh(self):
         chain = self.view.model.chain() if self.view.model else None
@@ -1511,7 +1513,7 @@ class ChainCard(Clickable):
         elif chain and chain['error']:
             lines.append((str(chain['error'].get('message', '')), C.bad))
         self.lines = lines
-        self.setFixedHeight(RunRow.HEIGHT + (len(lines) * 18 + 6 if lines else 0))
+        self.setFixedHeight(self.TOP + (len(lines) * 18 + 6 if lines else 0))
         self.setVisible(chain is not None)
 
     def animating(self) -> bool:
@@ -1530,7 +1532,7 @@ class ChainCard(Clickable):
         status = chain['status']
         color = STATUS.get(status, (C.muted, ''))[0]
         icon_status = status if status != 'running' else 'evaluating'
-        top = QRectF(rect.left(), rect.top(), rect.width(), RunRow.HEIGHT)
+        top = QRectF(rect.left(), rect.top(), rect.width(), self.TOP)
         cy = top.center().y()
         paint_status_icon(p, QPointF(rect.left() + 22, cy), icon_status, t)
         name_w = min(210.0, max(140.0, rect.width() * 0.2))
@@ -1540,19 +1542,31 @@ class ChainCard(Clickable):
         p.setFont(font(9))
         p.setPen(C.muted)
         runs = chain['runs']
+        # Second line: the run count; third: elapsed time and throughput (each elided to the name column).
         sub = f"{runs} runs" + (f" · {chain['parallel']} parallel" if chain['parallel'] else '')
+        timing = []
         if status == 'running' and chain['start']:
-            sub += f" · {fmt_duration(now - chain['start']['ts'])}"
+            timing.append(fmt_duration(now - chain['start']['ts']))
         elif status in ('pending', 'skipped'):
             sub = STATUS[status][1] + f" · {runs} runs"
         speed = chain_speed(chain)
         if speed:
-            sub += f" · {speed}"
-        p.drawText(QPointF(rect.left() + 40, rect.top() + 41), sub)
+            timing.append(speed)
+        metrics = p.fontMetrics()
+        p.drawText(QPointF(rect.left() + 40, rect.top() + 41),
+                   metrics.elidedText(sub, Qt.TextElideMode.ElideRight, int(name_w)))
+        if timing:
+            p.drawText(QPointF(rect.left() + 40, rect.top() + 57),
+                       metrics.elidedText(' · '.join(timing), Qt.TextElideMode.ElideRight, int(name_w)))
 
-        right_w = 320.0 if rect.width() > 760 else 150.0
-        bar = QRectF(rect.left() + 40 + name_w + 14, cy - 8, max(60.0, rect.width() - name_w - right_w - 70), 16)
         result = chain['result']
+        # Right of the bar only a finished chain's "NN% success" (bold); otherwise the bar runs to the edge.
+        p.setFont(font(9.5, QFont.Weight.DemiBold))
+        right_w = p.fontMetrics().horizontalAdvance('100.0% success') + 32.0 if result else 0.0
+        p.setFont(font(9))
+        left = rect.left() + 40 + name_w + 14
+        bar = QRectF(left, cy - 8, max(60.0, rect.right() - 16 - right_w - left), 16)
+
         progress = chain['progress'] if status == 'running' else None
         if result or progress:
             # finished: every run, successes first; running: the runs done so far, the rest still empty
@@ -1580,13 +1594,13 @@ class ChainCard(Clickable):
             paint_bar_label(p, bar, f"{successes}/{total} = {fmt_pct(result.get('success_rate'))}")
             p.setFont(font(9.5, QFont.Weight.DemiBold))
             p.setPen(rate_color(result.get('success_rate')))
-            p.drawText(QPointF(bar.right() + 16, rect.top() + 24), f"{fmt_pct(result.get('success_rate'))} success")
+            p.drawText(QPointF(bar.right() + 16, cy + 5), f"{fmt_pct(result.get('success_rate'))} success")
         else:
             paint_bar(p, bar, 1.0 if status == 'running' else 0.0, color, t, stripes=True,
                       label='running' if status == 'running' else '')
 
         p.setFont(font(9, mono=True))
-        y = rect.top() + RunRow.HEIGHT + 2
+        y = rect.top() + self.TOP + 2
         for text, line_color in self.lines:
             p.setPen(line_color)
             p.drawText(QPointF(rect.left() + 40, y + 12),
