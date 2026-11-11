@@ -1015,6 +1015,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Golden path:** games race to the next triforce; the first to stand on the overworld with it is the
   checkpoint every game restarts from. The games of a segment differ only by policy sampling: no memory write
   and no inserted frame at a checkpoint.
+- **The action executor keeps writing memory for attacks** (Lee, Nov 11): Link's facing (`$98`) and the selected
+  B item (`$656`) are set directly instead of through the d-pad and the inventory screen, and a replay records
+  those writes as edits (184–217 in a golden path). Runs made of controller inputs alone are not a goal.
 - **Decided while building (not Lee's; say so if they should change):**
   - `--stop-at step:N` ends a run only when the step's room is entered by the route's own exit. A wrong exit can
     land in that room with the step's progress (measured: 8 of the 15 one-move segments from shipped states that
@@ -1023,7 +1026,5 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
     objective.
   - `zelda-headless.py` exits 1 when a run ended in an error (as `eval-chain` does), even if COUNT replays were
     saved; a golden path that fails a segment is still saved, under the failed run's ending.
-  - A recording keeps the action executor's own memory writes (Link's facing `$98`, the selected B item `$656`)
-    as edits, including writes of the value already there.
   - `replay_stitch` renumbers reward terms instead of requiring equal term tables (terms are numbered by first
     use, so two segments rarely agree).

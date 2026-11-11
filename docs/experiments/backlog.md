@@ -736,16 +736,27 @@ the remaining list is deferred until Lee resumes work.
     per game: 1226 without, 1229 with `--replays`, 1198 with every optional stream.
   - A power-on start with `--delay 32766`: 6.7 s with the idle states, 10.0 s without; the two replays are
     byte-identical.
-  - Open, not measured: **does sampling every model (the new default for play) lose games the registered act
-    modes win?** Seen: both full-route power-on runs of `zelda-headless.py` (seeds 7 and 8, delay 1234) died
-    (seed 7 in Dungeon 2's 0x5e), and the four runs that finished in a `play-zelda.py --power-on` benchmark
-    died; 16 of the 20 families are registered argmax because they evaluated better that way (round 17). The
-    golden path still wins because it needs one of several runs per segment. `--act model` plays the
-    registered modes. To measure: the full-route win rate under `--act sample` and `--act model`, 120 seeds.
-  - Open: the action executor writes Link's facing (`$98`) and the selected B item (`$656`) instead of
-    pressing buttons; a replay records those as edits (184–217 in a golden path, many of them writes of the
-    value already there). A run that is inputs alone would need the executor to turn Link and pick the item
-    with the controller.
+  - **Sampling every model (the new default for play) plays worse than the registered act modes, not
+    randomly** (measured Nov 11: `eval-chain --runs 120 --parallel 8 --power-on`, the same seeds and delays,
+    main's promoted team):
+
+    | arrivals of 120 | `--act sample` | `--act model` |
+    |---|---|---|
+    | Dungeon 2's triforce | 60 | 74 |
+    | Dungeon 1's triforce | 25 | 35 |
+    | Dungeon 3's triforce (the route) | 6 | 11 |
+    | median rooms entered | 38.5 | 43 |
+
+    Both die in the same rooms first (goriya 2:0x5e 16 and 16, moldorm 2:0x3e 12 and 9, darknut 3:0x59 8 and
+    10). The golden path wins with sampling because it needs one of several runs per segment.
+  - [ ] **Problem: a run can bounce between 0x4c and 0x4d for its whole step budget, every exit "correct".**
+    Two of the 120 sampled runs (seed 64: 49,020 rooms entered; another: 48,599) alternated 0:0x4c (ow-octorok)
+    and 0:0x4d (ow-moblin), one action per room, 24,505 times each, until `run exceeded 50000 steps`: 5.2
+    million frames, about 12 minutes of one core, `wrong_exits` 1, `retreats` 0. The route crosses the pair in
+    both directions (0x4d → 0x4c on the way to Dungeon 2, 0x4c → 0x4d after it), so each crossing matches a
+    route step and nothing counts it. The room budget and the stall counter are per room visit and never fire.
+    None of the 120 registered-mode runs did it (most rooms entered: 99). Fix idea: end a run `stuck` when the
+    route step goes backwards more than a few times, or count a crossing back onto an earlier step as a retreat.
 
 ## Start states
 
