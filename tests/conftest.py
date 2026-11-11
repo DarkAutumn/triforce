@@ -72,7 +72,11 @@ def seeded_network(seed: int, config=None):
 
 
 def pytest_configure(config):  # pylint: disable=unused-argument
-    """Points ``TRIFORCE_STATES_DIR`` at a fresh session directory before any test module imports ``triforce``."""
+    """Points ``TRIFORCE_STATES_DIR`` at a fresh session directory before any test module imports ``triforce``, and
+    gives torch one thread (``OMP_NUM_THREADS``, inherited by child processes; an explicit value is kept).  The
+    tests' networks are tiny: more threads only wait for each other, and on a machine a training round keeps busy
+    they made saving and loading the test team 20-40x slower (backlog, Nov 11)."""
+    os.environ.setdefault('OMP_NUM_THREADS', '1')
     _session['old_env'] = os.environ.get(STATES_DIR_ENV)
     _session['states_dir'] = Path(tempfile.mkdtemp(prefix='triforce-states-'))
     os.environ[STATES_DIR_ENV] = str(_session['states_dir'])

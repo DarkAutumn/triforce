@@ -98,34 +98,43 @@ fn every_route_room_has_a_specialist() {
     }
 }
 
-/// The chain tests, run in sequence on one emulator.
-#[test]
-fn chain_runs() {
-    let Some(mut nes) = open_core() else { return };
-    let data = data();
-    for case in [
-        untagged_room_stops_with_clear_error,
-        wrong_exit_into_untagged_room_is_a_failure,
-        missing_model_is_an_error,
-        run_records_rooms_and_ends_cleanly,
-        same_seed_same_run,
-        no_room_progress_threshold_replaces_flat_budget,
-        no_room_progress_preserves_global_guard_and_disabled_budget,
-        room_exit_resets_visit_clock,
-        lynel_retreat_continues_the_run,
-        cave_bounce_hits_the_wrong_exit_limit,
-        mid_route_triforce_is_the_correct_exit,
-        harvested_states_hold_no_granted_bomb,
-        one_room_entries_reset_the_observation,
-        target_observation_follows_the_acting_specialist,
-        a_stop_step_ends_the_run_and_a_checkpoint_continues_it,
-        a_stop_step_after_a_triforce_ends_the_run_on_the_overworld,
-        a_power_on_start_boots_the_game_by_inputs_alone,
-        chain_rewards_are_the_training_rewards,
-    ] {
-        nes = case(nes, &data);
-    }
+/// The chain tests, one test each (`chain_runs::<case>`), so they run in parallel.  A case takes a powered-on
+/// emulator and hands it back.
+macro_rules! chain_runs {
+    ($($case:ident),* $(,)?) => {
+        mod chain_runs {
+            $(
+                #[test]
+                fn $case() {
+                    let Some(nes) = super::open_core() else { return };
+                    super::$case(nes, &super::data());
+                }
+            )*
+        }
+    };
 }
+
+chain_runs!(
+    untagged_room_stops_with_clear_error,
+    wrong_exit_into_untagged_room_is_a_failure,
+    missing_model_is_an_error,
+    run_records_rooms_and_ends_cleanly,
+    same_seed_same_run,
+    no_room_progress_threshold_replaces_flat_budget,
+    no_room_progress_preserves_global_guard_and_disabled_budget,
+    room_exit_resets_visit_clock,
+    lynel_retreat_continues_the_run,
+    cave_bounce_hits_the_wrong_exit_limit,
+    back_and_forth_hits_the_bounce_limit,
+    mid_route_triforce_is_the_correct_exit,
+    harvested_states_hold_no_granted_bomb,
+    one_room_entries_reset_the_observation,
+    target_observation_follows_the_acting_specialist,
+    a_stop_step_ends_the_run_and_a_checkpoint_continues_it,
+    a_stop_step_after_a_triforce_ends_the_run_on_the_overworld,
+    a_power_on_start_boots_the_game_by_inputs_alone,
+    chain_rewards_are_the_training_rewards,
+);
 
 fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let mut map = GameMap::builtin();
@@ -381,6 +390,36 @@ fn cave_bounce_hits_the_wrong_exit_limit(nes: ZCore, data: &Arc<GameData>) -> ZC
     assert_eq!(r.to_json()["wrong_exits"], 3);
     assert_eq!(r.rooms.last().unwrap().outcome, "stuck");
     assert_eq!(r.rooms.iter().filter(|x| x.outcome == "exit-wrong").count(), 2);
+    c.into_parts().0.into_nes()
+}
+
+/// Lee, Nov 11: walking back into the room before the last and forward again once or twice is fine; the 5th return
+/// in a row (`MAX_BOUNCES`) ends the run `stuck` (`bounce-limit`), before the wrong-exit limit.  Here Link walks
+/// between 0x4d and 0x4c from 0x4d's route entry.
+fn back_and_forth_hits_the_bounce_limit(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    assert_eq!(env::chain::MAX_BOUNCES, 5);
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_4ds_0")).unwrap();
+    let mut c = chain(nes, data, route);
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+    let (east, west) = (MapLocation::new(0, 0x4d, false), MapLocation::new(0, 0x4c, false));
+    let mut done = None;
+    while done.is_none() {
+        let target = if c.session().state().full_location() == east { west } else { east };
+        for a in walk_to(&mut c, target) {
+            if let ChainStatus::Done(r) = c.step(a).unwrap() {
+                done = Some(r);
+                break;
+            }
+        }
+    }
+    let r = done.unwrap();
+    let rooms: Vec<_> = r.rooms.iter().map(|x| (x.room.as_str(), x.outcome.as_str())).collect();
+    assert_eq!(r.result, "failure", "{rooms:?}");
+    assert!(r.reason.starts_with("bounce-limit"), "{} {rooms:?}", r.reason);
+    assert_eq!(rooms.len(), 6, "0x4d, then 0x4c and 4 returns: {rooms:?}");
+    assert_eq!(rooms.last().unwrap(), &("0x4c", "stuck"));
+    assert!(r.wrong_exits < env::chain::MAX_WRONG_EXITS);
     c.into_parts().0.into_nes()
 }
 
@@ -709,16 +748,27 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
     assert_eq!(terminal.curriculum.unwrap().track, "0_38n_0");
 }
 
-/// The moves a breadth-first search over Link's tiles finds from the chain's current state to the first step
-/// `goal` accepts (the session is put back where it was).
-fn bfs_walk<St: StateStore<MachineState>>(
-    c: &mut ChainEnv<ZCore, St>,
-    goal: impl Fn(&zelda::Change) -> bool,
-) -> Vec<Action> {
+/// The moves a best-first search over Link's positions finds from the chain's current state into the neighbouring
+/// room `target` (the session is put back where it was): positions nearer `target`'s side of the room first, so
+/// the search doesn't flood the whole room before walking out.
+fn walk_to<St: StateStore<MachineState>>(c: &mut ChainEnv<ZCore, St>, target: MapLocation) -> Vec<Action> {
+    use std::cmp::Reverse;
+    let here = c.session().state().full_location();
+    let side = here.direction_to(target);
+    let distance = |p: zelda::Position| match side {
+        zelda::Direction::N => p.y,
+        zelda::Direction::S => 255 - p.y,
+        zelda::Direction::W => p.x,
+        zelda::Direction::E => 255 - p.x,
+        other => panic!("{target:?} is not beside {here:?} ({other:?})"),
+    };
     let start = c.session().snapshot();
-    let mut queue = std::collections::VecDeque::from([(start.clone(), Vec::new())]);
-    let mut seen = std::collections::HashSet::from([c.session().state().link.position]);
-    while let Some((snap, actions)) = queue.pop_front() {
+    let position = c.session().state().link.position;
+    let mut nodes = vec![(start.clone(), Vec::new())];
+    let mut queue = std::collections::BinaryHeap::from([Reverse((distance(position), 0usize))]);
+    let mut seen = std::collections::HashSet::from([position]);
+    while let Some(Reverse((_, node))) = queue.pop() {
+        let (snap, actions) = nodes[node].clone();
         c.session_mut().restore(&snap);
         for d in c.session().mask().directions(zelda::ActionKind::Move) {
             let a = Action::new(zelda::ActionKind::Move, d, 4).unwrap();
@@ -728,16 +778,18 @@ fn bfs_walk<St: StateStore<MachineState>>(
             let change = c.session_mut().act(a).unwrap();
             let mut next = actions.clone();
             next.push(a);
-            if goal(&change) {
+            if change.state.full_location() == target {
                 c.session_mut().restore(&start);
                 return next;
             }
-            if !change.changed_location() && seen.insert(change.state.link.position) {
-                queue.push_back((c.session().snapshot(), next));
+            let p = change.state.link.position;
+            if !change.changed_location() && seen.insert(p) {
+                queue.push(Reverse((distance(p), nodes.len())));
+                nodes.push((c.session().snapshot(), next));
             }
         }
     }
-    panic!("no walk to the goal ({} tiles reached)", seen.len());
+    panic!("no walk to {target:?} ({} positions reached)", seen.len());
 }
 
 /// F148: leaving 0x2c (a `requires_bombs` room) with a granted bomb outstanding: the harvested pre-entry state of
@@ -756,7 +808,7 @@ fn harvested_states_hold_no_granted_bomb(nes: ZCore, data: &Arc<GameData>) -> ZC
     let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
     assert_eq!(c.session().state().bombs(), 1, "the room's granted bomb");
     let n1c = MapLocation::new(0, 0x1c, false);
-    for a in bfs_walk(&mut c, |ch| ch.state.full_location() == n1c) {
+    for a in walk_to(&mut c, n1c) {
         if let ChainStatus::Done(r) = c.step(a).unwrap() {
             panic!("run ended on the walk: {r:?}");
         }
@@ -791,7 +843,7 @@ fn one_room_entries_reset_the_observation(nes: ZCore, data: &Arc<GameData>) -> Z
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
     let west = MapLocation::new(1, 0x72, false);
-    let walk = bfs_walk(&mut c, |ch| ch.state.full_location() == west);
+    let walk = walk_to(&mut c, west);
     let mut entry = None;
     for a in walk {
         match c.step(a).unwrap() {

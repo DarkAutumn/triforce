@@ -321,11 +321,8 @@ pub struct Alternate {
     pub with: Vec<RouteStep>,
 }
 
-/// (room -> rooms the route exits it toward, room -> main-route exit -> index of the first step taking it).
-type RouteTable = (
-    HashMap<MapLocation, BTreeSet<MapLocation>>,
-    HashMap<MapLocation, HashMap<MapLocation, usize>>,
-);
+/// room -> main-route exit -> index of the first step taking it.
+type RouteRanks = HashMap<MapLocation, HashMap<MapLocation, usize>>;
 
 /// The game map.
 #[derive(Debug)]
@@ -335,7 +332,7 @@ pub struct GameMap {
     pub routes: IndexMap<String, Vec<RouteStep>>,
     /// routes.yaml `alternates`, in file order.
     pub alternates: Vec<Alternate>,
-    route_tables: HashMap<String, RouteTable>,
+    route_ranks: HashMap<String, RouteRanks>,
 }
 
 fn get<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
@@ -679,16 +676,14 @@ impl GameMap {
         let mut map = GameMap {
             rooms,
             routes,
-            alternates: Vec::new(),
-            route_tables: HashMap::new(),
+            alternates,
+            route_ranks: HashMap::new(),
         };
-        let tables = map
+        map.route_ranks = map
             .routes
             .iter()
-            .map(|(name, steps)| (name.clone(), map.route_table(steps, &alternates)))
+            .map(|(name, steps)| (name.clone(), map.route_ranks(steps)))
             .collect();
-        map.route_tables = tables;
-        map.alternates = alternates;
         Ok(map)
     }
 
@@ -905,15 +900,6 @@ impl GameMap {
         paths
     }
 
-    /// Rooms `route` (with alternates) leaves `location` toward; empty off the route.
-    pub fn route_next_rooms(&self, location: MapLocation, route: &str) -> BTreeSet<MapLocation> {
-        self.route_tables
-            .get(route)
-            .and_then(|t| t.0.get(&location))
-            .cloned()
-            .unwrap_or_default()
-    }
-
     /// Of `candidates`, the main-route exits taken earliest on the route plus candidates that aren't
     /// main-route exits.
     pub fn route_first(
@@ -924,9 +910,9 @@ impl GameMap {
     ) -> BTreeSet<MapLocation> {
         let empty = HashMap::new();
         let ranks = self
-            .route_tables
+            .route_ranks
             .get(route)
-            .and_then(|t| t.1.get(&location))
+            .and_then(|t| t.get(&location))
             .unwrap_or(&empty);
         let Some(first) = candidates
             .iter()
@@ -943,44 +929,19 @@ impl GameMap {
             .collect()
     }
 
-    fn route_table(&self, main: &[RouteStep], alternates: &[Alternate]) -> RouteTable {
-        let visited: BTreeSet<MapLocation> = main.iter().map(RouteStep::location).collect();
-        let alternates: Vec<&Alternate> = alternates
-            .iter()
-            .filter(|a| a.replaces.iter().all(|r| visited.contains(r)))
-            .collect();
-        let mut successors: IndexMap<MapLocation, BTreeSet<MapLocation>> = IndexMap::new();
-        let mut ranks: HashMap<MapLocation, HashMap<MapLocation, usize>> = HashMap::new();
-        let steps = main
-            .iter()
-            .chain(alternates.iter().flat_map(|a| a.with.iter()));
-        for (index, step) in steps.enumerate() {
+    fn route_ranks(&self, main: &[RouteStep]) -> RouteRanks {
+        let mut ranks = RouteRanks::new();
+        for (index, step) in main.iter().enumerate() {
             let loc = step.location();
             if let Some(exit) = self.rooms.get(&loc).and_then(|r| r.exits.get(&step.exit)) {
-                successors.entry(loc).or_default().insert(exit.destination);
-                if index < main.len() {
-                    ranks
-                        .entry(loc)
-                        .or_default()
-                        .entry(exit.destination)
-                        .or_insert(index);
-                }
+                ranks
+                    .entry(loc)
+                    .or_default()
+                    .entry(exit.destination)
+                    .or_insert(index);
             }
         }
-        for alt in &alternates {
-            let replaced: BTreeSet<MapLocation> = alt.replaces.iter().copied().collect();
-            for alternate in alt.with.iter().map(RouteStep::location) {
-                for (loc, nexts) in successors.iter_mut() {
-                    let room = &self.rooms[loc];
-                    if nexts.iter().any(|n| replaced.contains(n))
-                        && room.neighbors().any(|n| n == alternate)
-                    {
-                        nexts.insert(alternate);
-                    }
-                }
-            }
-        }
-        (successors.into_iter().collect(), ranks)
+        ranks
     }
 }
 
@@ -1331,40 +1292,6 @@ mod tests {
         assert!(with_key == set(&[loc(1, 0x63)]) && !without.contains(&loc(1, 0x63)));
     }
 
-    #[test]
-    fn route_successors_follow_progress_and_alternates() {
-        let map = GameMap::builtin();
-        let m = DEFAULT_ROUTE;
-        assert_eq!(
-            map.route_next_rooms(START, m),
-            set(&[L::new(0, 0x77, true), loc(0, 0x67), loc(0, 0x78)])
-        );
-        assert_eq!(
-            map.route_next_rooms(L::new(0, 0x77, true), m),
-            set(&[START])
-        );
-        assert_eq!(map.route_next_rooms(loc(0, 0x38), m), set(&[loc(0, 0x37), loc(0, 0x48)]));
-        assert_eq!(
-            map.route_next_rooms(D1_START, m),
-            set(&[loc(1, 0x72), loc(1, 0x74), loc(1, 0x63)])
-        );
-        assert_eq!(map.route_next_rooms(loc(2, 0x7d), m), set(&[loc(2, 0x7e)]));
-        assert_eq!(map.route_next_rooms(loc(2, 0x7e), m), set(&[loc(2, 0x6e)]));
-        assert_eq!(map.route_next_rooms(loc(0, 0x37), m), set(&[D1_START, loc(0, 0x38)]));
-        assert_eq!(map.route_next_rooms(loc(0, 0x74), m), set(&[loc(3, 0x7c)]));
-        assert_eq!(
-            map.route_next_rooms(loc(3, 0x59), m),
-            set(&[loc(3, 0x49), loc(3, 0x69), loc(3, 0x5a)])
-        );
-        assert_eq!(map.route_next_rooms(loc(3, 0x4c), m), set(&[loc(3, 0x4d)]));
-        assert_eq!(
-            map.route_next_rooms(loc(0, 0x1a), m),
-            set(&[loc(0, 0x0a), loc(0, 0x19)])
-        );
-        assert!(map.route_next_rooms(loc(0, 0x0c), m).is_empty());
-        assert!(map.route_next_rooms(loc(0, 0x49), m).is_empty());
-    }
-
     /// Only the d2-first route's rooms (the bow detour included) and its alternate have a specialist.
     #[test]
     fn only_route_rooms_are_tagged() {
@@ -1392,9 +1319,6 @@ mod tests {
             map.find_path(loc(1, 0x43), cellar).unwrap(),
             [loc(1, 0x43), loc(1, 0x33), loc(1, 0x23), loc(1, 0x22), cellar]
         );
-        assert_eq!(map.route_next_rooms(loc(1, 0x22), DEFAULT_ROUTE), set(&[cellar, loc(1, 0x23)]));
-        assert_eq!(map.route_next_rooms(cellar, DEFAULT_ROUTE), set(&[loc(1, 0x22)]));
-        assert_eq!(map.route_next_rooms(loc(1, 0x43), DEFAULT_ROUTE), set(&[loc(1, 0x33), loc(1, 0x44)]));
     }
 
     fn exits_of(map: &GameMap, at: L) -> Vec<(String, L)> {

@@ -1109,3 +1109,16 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   - Videos: `OUT` is the first argument (as in `zelda-headless.py`); H.264 CRF 18 yuv420p at the console's
     exact frame rate, AAC 192 kbit mono 48 kHz; the container follows the file name; default scale 2 as in the
     viewer; a result is held 3 s as in the viewer, the last one too, then the video ends.
+
+## 2026-11-11 — The endless 0x4c/0x4d bounce: off-route objectives and a bounce limit (Lee)
+
+- **What Lee asked for:** walking back and forward once or twice is fine; the infinite bounce is not.
+- **Cause:** off the route, when no shortest way to the target left through a route exit, the objective took the
+  route's exits of every step in the room, whatever Link held. A run that left 0x77 without the sword was led
+  along the whole route to 0x4d, then sent W there and E back from 0x4c, every crossing a correct exit (backlog,
+  Driver: 3 and 5 million frames).
+- **What:** (1) off the route the objective prefers only the route exits of the steps Link plays with his
+  progress (triforce pieces, sword, bow, raft); none, and the shortest way decides. (2) Chains end `stuck` on the
+  5th return in a row into the room before the last (`bounce-limit`, `MAX_BOUNCES`), whatever the exits are
+  judged; `retreat` crossings don't count (their own cap stays 3). REV bump to `1.3.1.1`: off-route objectives
+  (rewards, the target observation) change; models stay loadable.

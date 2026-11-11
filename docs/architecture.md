@@ -515,7 +515,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   with the route's progress there (triforce pieces, sword, bow, raft) makes its edge exit the correct one (plus
   alternates replacing its next room); off the route and on
   cave, stairs and triforce steps the key-aware shortest path to the target decides (the route's triforce steps in
-  route order, ties broken toward the route), and `waypoint:` steps are targets while they apply (`heart`: a cave's
+  route order; ties, or no shortest way through a route exit, go toward the route exits of the steps there that
+  Link plays with his progress, so without the sword the way leads back to the sword cave, not along the route),
+  and `waypoint:` steps are targets while they apply (`heart`: a cave's
   heart container, game.yaml `treasure_tile`; leaving its room other than into the cave before the heart, or taking
   the other ware, is `missed`: no exit is correct any more; `bow`, `raft`: a cellar's item). A step's `retreat` exit
   (0x0a S before the white sword) is no wrong exit: a one-room episode ends `retreat` (outcome from the specialist's
@@ -565,7 +567,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   stop must be after the start's route step. A missed `heart` waypoint ends
   the run as a failure (room outcome `missed`); so does a retreat beyond `MAX_RETREATS` (3) per run
   (`retreat-limit`; `RunResult.retreats` counts them). The 20th wrong exit into a tagged room ends the run `stuck`
-  (`wrong-exit-limit: ...`; `RunResult.wrong_exits` counts them).
+  (`wrong-exit-limit: ...`; `RunResult.wrong_exits` counts them), and so does the 5th return in a row into the room
+  before the last, back and forth between two rooms whatever the exits (`bounce-limit: ...`, `MAX_BOUNCES`;
+  crossings through a `retreat` exit don't count).
 - `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=None,
   max_steps=50000, specialist_configs=None, networks=None, parallel=1, threads=None, states_dir=None,
   harvest=None)` lets a `ChainTask` pool play
@@ -579,7 +583,7 @@ step, so following an enemy that moves away pays again, and knockback resets the
   `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (the room budget:
   `max(specialist max_steps, 2000)` steps in one room, or its `no_progress_steps` quiet tail when set; the opt-in
-  stall budget, 2 × `stall_steps`; the run cap `max_steps`, default 50,000; or the wrong-exit limit), `milestone`.
+  stall budget, 2 × `stall_steps`; the run cap `max_steps`, default 50,000; the wrong-exit or bounce limit), `milestone`.
   Taking a triforce (2:0x0d, 1:0x36) is `exit-correct`.
   Finalizing a room captures live ending health together with dropped-heart counts, including room/run budgets
   and measured cutoffs; death remains zero. `health_out` is never left at entry health on a timed-out visit.

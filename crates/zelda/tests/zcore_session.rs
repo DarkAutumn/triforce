@@ -240,54 +240,62 @@ fn a_perpendicular_attack_off_grid_aligns_link_first() {
 }
 
 /// F182: over random legal play in the Bubble room (3:0x49) and Manhandla's room (3:0x4d), every legal attack
-/// option starts its weapon (the step runs the weapon's animation rather than a 1-3 frame no-op).
+/// option starts its weapon (the step runs the weapon's animation rather than a 1-3 frame no-op).  One test per
+/// room, so the two run in parallel.
 #[test]
-fn every_legal_attack_starts_its_weapon() {
+fn every_legal_attack_starts_its_weapon_in_the_bubble_room() {
+    every_legal_attack_starts_its_weapon("3_49s_0");
+}
+
+#[test]
+fn every_legal_attack_starts_its_weapon_in_manhandlas_room() {
+    every_legal_attack_starts_its_weapon("3_4dw_0");
+}
+
+fn every_legal_attack_starts_its_weapon(name: &str) {
     use zelda::ActionKind;
     let Some(nes) = open_core() else { return };
     let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
-    for name in ["3_49s_0", "3_4dw_0"] {
-        s.load(&common::load_named_state(name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0))
-            .unwrap();
-        s.nes_mut().poke(0x658, 8);
-        let mut rng = ChaCha8Rng::seed_from_u64(3);
-        for step in 0..500 {
-            let hc = s.nes_mut().peek(0x66F);
-            s.nes_mut().poke(0x66F, (hc & 0xF0) | (hc >> 4));
-            if s.state().game_over() || s.state().mode() != 5 {
-                break;
-            }
-            let snap = s.snapshot();
-            let mask = s.mask().clone();
-            for kind in [ActionKind::Sword, ActionKind::Beams, ActionKind::Boomerang, ActionKind::Arrow, ActionKind::Bomb] {
-                for d in mask.directions(kind) {
-                    let a = Action::new(kind, d, 0).unwrap();
-                    // An off-grid perpendicular attack first walks Link to the grid (F160); what happens to him on
-                    // the way is the room's doing, not the mask's.
-                    let facing_vertical = matches!(d, Direction::N | Direction::S | Direction::NW | Direction::NE | Direction::SW | Direction::SE);
-                    let line_vertical = s.nes_mut().peek(0x98) & 0x0C != 0;
-                    if s.nes_mut().peek(0x394) != 0 && facing_vertical != line_vertical {
-                        continue;
-                    }
-                    let bombs = s.nes_mut().peek(0x658);
-                    let c = s.act(a).unwrap();
-                    let started = match kind {
-                        ActionKind::Bomb => s.nes_mut().peek(0x658) < bombs,
-                        ActionKind::Boomerang => s.nes_mut().peek(0xBB) != 0 || c.frames > 3,
-                        _ => c.frames > 3,
-                    };
-                    // A hit during the step (Manhandla's room) may knock Link out of his attack: not the mask's fault.
-                    assert!(
-                        started || c.health_lost > 0.0,
-                        "{name} step {step}: {a:?} did nothing ({} frames)",
-                        c.frames
-                    );
-                    s.restore(&snap);
-                }
-            }
-            let a = random_action(s.mask(), &mut rng);
-            s.act(a).unwrap();
+    s.load(&common::load_named_state(name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0))
+        .unwrap();
+    s.nes_mut().poke(0x658, 8);
+    let mut rng = ChaCha8Rng::seed_from_u64(3);
+    for step in 0..500 {
+        let hc = s.nes_mut().peek(0x66F);
+        s.nes_mut().poke(0x66F, (hc & 0xF0) | (hc >> 4));
+        if s.state().game_over() || s.state().mode() != 5 {
+            break;
         }
+        let snap = s.snapshot();
+        let mask = s.mask().clone();
+        for kind in [ActionKind::Sword, ActionKind::Beams, ActionKind::Boomerang, ActionKind::Arrow, ActionKind::Bomb] {
+            for d in mask.directions(kind) {
+                let a = Action::new(kind, d, 0).unwrap();
+                // An off-grid perpendicular attack first walks Link to the grid (F160); what happens to him on
+                // the way is the room's doing, not the mask's.
+                let facing_vertical = matches!(d, Direction::N | Direction::S | Direction::NW | Direction::NE | Direction::SW | Direction::SE);
+                let line_vertical = s.nes_mut().peek(0x98) & 0x0C != 0;
+                if s.nes_mut().peek(0x394) != 0 && facing_vertical != line_vertical {
+                    continue;
+                }
+                let bombs = s.nes_mut().peek(0x658);
+                let c = s.act(a).unwrap();
+                let started = match kind {
+                    ActionKind::Bomb => s.nes_mut().peek(0x658) < bombs,
+                    ActionKind::Boomerang => s.nes_mut().peek(0xBB) != 0 || c.frames > 3,
+                    _ => c.frames > 3,
+                };
+                // A hit during the step (Manhandla's room) may knock Link out of his attack: not the mask's fault.
+                assert!(
+                    started || c.health_lost > 0.0,
+                    "{name} step {step}: {a:?} did nothing ({} frames)",
+                    c.frames
+                );
+                s.restore(&snap);
+            }
+        }
+        let a = random_action(s.mask(), &mut rng);
+        s.act(a).unwrap();
     }
 }
 

@@ -95,12 +95,21 @@ pub struct StepProgress {
 }
 
 impl StepProgress {
+    /// What Link holds in `state`.
+    pub fn of(state: &GameView) -> StepProgress {
+        StepProgress {
+            triforces: (1..=8u8)
+                .filter(|&level| state.has_triforce(level))
+                .fold(0, |bits, level| bits | 1 << (level - 1)),
+            sword: state.sword(),
+            bow: state.bow(),
+            raft: state.raft(),
+        }
+    }
+
     /// Link holds exactly this progress.
     pub fn matches(&self, state: &GameView) -> bool {
-        state.sword() == self.sword
-            && state.bow() == self.bow
-            && state.raft() == self.raft
-            && (1..=8).all(|level| state.has_triforce(level) == (self.triforces & (1 << (level - 1)) != 0))
+        *self == StepProgress::of(state)
     }
 }
 
@@ -219,7 +228,8 @@ fn overlap(tiles: Vec<Tile>) -> impl Iterator<Item = Target> {
 }
 
 /// What the map objective's next rooms come from: the route step Link plays in this room, or the shortest way to
-/// the target (location, target, keys, collected key rooms, opened doors).
+/// the target (location, target, keys, collected key rooms, opened doors, Link's progress: it picks the route
+/// exits the way may prefer).
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum RouteKey {
     /// (room, step, the room the step leaves toward).
@@ -230,6 +240,7 @@ enum RouteKey {
         i32,
         BTreeSet<MapLocation>,
         BTreeSet<(MapLocation, String)>,
+        StepProgress,
     ),
 }
 /// Exit targets and next rooms of the map objective.
@@ -371,6 +382,39 @@ impl GameCompletion {
                 && room.neighbors().any(|n| n == first.location())
             {
                 rooms.insert(first.location());
+            }
+        }
+        rooms
+    }
+
+    /// The rooms the route leaves `location` toward from its steps there that Link plays with his progress (the
+    /// triforce pieces, sword, bow and raft he holds), alternates bordering this room included; empty when no step
+    /// here has his progress.  An off-route objective prefers these exits: the route's exits for other progress
+    /// lead away from his target (without the sword the whole route to Dungeon 2 does, and 0x4d's exit W and
+    /// 0x4c's exit E, taken at different points of the route, sent him back and forth between the two forever).
+    /// An alternate's steps (routes.yaml `alternates`) have the progress of the first step they replace.
+    fn route_next_with_progress(&self, location: MapLocation, state: &GameView) -> BTreeSet<MapLocation> {
+        let progress = StepProgress::of(state);
+        let steps = &self.map.routes[&self.route];
+        let mut rooms = BTreeSet::new();
+        for (i, step) in steps.iter().enumerate() {
+            if step.location() == location
+                && self.progress[i] == progress
+                && let Some(next) = self.step_exit(location, &step.exit)
+            {
+                rooms.extend(self.step_next_rooms(location, next));
+            }
+        }
+        for alternate in &self.map.alternates {
+            let replaced = alternate
+                .replaces
+                .first()
+                .and_then(|r| steps.iter().position(|s| s.location() == *r));
+            if replaced.is_none_or(|i| self.progress[i] != progress) {
+                continue;
+            }
+            for step in alternate.with.iter().filter(|s| s.location() == location) {
+                rooms.extend(self.step_exit(location, &step.exit));
             }
         }
         rooms
@@ -875,6 +919,7 @@ impl GameCompletion {
                     state.keys(),
                     self.collected_key_rooms.clone(),
                     self.opened_doors.clone(),
+                    StepProgress::of(state),
                 )
             }
         };
@@ -893,13 +938,13 @@ impl GameCompletion {
         }
         let next_rooms = match &key {
             RouteKey::Step(_, _, next) => self.step_next_rooms(loc, *next),
-            RouteKey::Target(_, target, keys, collected, opened) => {
+            RouteKey::Target(_, target, keys, collected, opened, _) => {
                 let mut next_rooms = self.map.find_next_rooms(loc, *target, *keys, collected, opened);
                 if next_rooms.is_empty() {
                     self.last_route = Some((key, walls, (Vec::new(), BTreeSet::new())));
                     return (Vec::new(), BTreeSet::new());
                 }
-                let route_next = self.map.route_next_rooms(loc, &self.route);
+                let route_next = self.route_next_with_progress(loc, state);
                 if !route_next.is_empty() {
                     let both: BTreeSet<MapLocation> =
                         next_rooms.intersection(&route_next).copied().collect();
