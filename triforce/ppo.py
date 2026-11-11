@@ -214,12 +214,14 @@ class SilReplay:
 
     ``add`` takes a readied ``RolloutBuffer`` (values recomputed by the learner, rewards bootstrapped) and keeps
     the rows with λ = 1 return R > V(s) (``RolloutBuffer.monte_carlo_returns``): observation, mask, action and R,
-    on CPU in a ring of ``capacity`` rows (the oldest are overwritten first).  ``sample`` draws rows uniformly
-    without replacement.
+    in a ring of ``capacity`` rows on ``device`` (the oldest are overwritten first).  ``sample`` draws rows uniformly
+    without replacement (the draw on CPU, the gather on ``device``: every PPO minibatch samples, and a CPU gather plus
+    copy per minibatch stalled the GPU queue and woke torch's OpenMP pool).
     """
 
-    def __init__(self, capacity: int):
+    def __init__(self, capacity: int, device='cpu'):
         self.capacity = capacity
+        self.device = torch.device(device)
         self.size = 0
         self._next = 0
         self.obs: dict = {}
@@ -242,25 +244,26 @@ class SilReplay:
         return count / keep.numel()
 
     def _write(self, obs: dict, masks, actions, returns):
+        def ring(value):
+            return torch.empty(self.capacity, *value.shape[1:], dtype=value.dtype, device=self.device)
+
         if self.masks is None:
-            self.obs = {key: value.new_empty(self.capacity, *value.shape[1:]) for key, value in obs.items()}
-            self.masks = masks.new_empty(self.capacity, *masks.shape[1:])
-            self.actions = actions.new_empty(self.capacity, 3)
-            self.returns = returns.new_empty(self.capacity)
+            self.obs = {key: ring(value) for key, value in obs.items()}
+            self.masks, self.actions, self.returns = ring(masks), ring(actions), ring(returns)
         count = returns.shape[0]
         skip = max(0, count - self.capacity)            # more new rows than capacity: only the newest fit
-        positions = (self._next + torch.arange(skip, count)) % self.capacity
+        positions = ((self._next + torch.arange(skip, count)) % self.capacity).to(self.device)
         for key, value in obs.items():
-            self.obs[key][positions] = value[skip:]
-        self.masks[positions] = masks[skip:]
-        self.actions[positions] = actions[skip:]
-        self.returns[positions] = returns[skip:]
+            self.obs[key][positions] = value[skip:].to(self.device)
+        self.masks[positions] = masks[skip:].to(self.device)
+        self.actions[positions] = actions[skip:].to(self.device)
+        self.returns[positions] = returns[skip:].to(self.device)
         self._next = (self._next + count) % self.capacity
         self.size = min(self.capacity, self.size + count)
 
     def sample(self, count: int, device):
         """``(obs, masks, actions, returns)`` of ``min(count, len(self))`` uniformly drawn rows on ``device``."""
-        pick = torch.randperm(self.size)[:count]
+        pick = torch.randperm(self.size)[:count].to(self.device)
         return ({key: value[pick].to(device) for key, value in self.obs.items()}, self.masks[pick].to(device),
                 self.actions[pick].to(device), self.returns[pick].to(device))
 
@@ -454,7 +457,7 @@ class PPO:
         sil = None
         if cfg.sil_coeff > 0:
             if self.sil is None:
-                self.sil = SilReplay(cfg.sil_capacity)
+                self.sil = SilReplay(cfg.sil_capacity, self.device)
             sil = self.sil
         sil_positive_share = sil.add(buffer) if sil is not None else 0.0
         sil_policy_loss = sil_value_loss = torch.tensor(0.0)
