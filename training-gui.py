@@ -246,6 +246,17 @@ def heart_drop_row(label: str, dropped: float, taken: float, left: float) -> tup
     return label, share, fmt_drops(dropped, taken, left) if dropped > 0 else 'no drops', rate_color(share)
 
 
+def bomb_row(label: str, ev: dict) -> tuple:
+    """BarList row for evaluation bombs per episode: the bar is the share of placed bombs that hit something
+    (blue = every bomb hit)."""
+    placed = ev.get('mean_bomb_placed') or 0.0
+    share = max(0.0, min(1.0, 1.0 - ev.get('mean_bomb_misses', 0.0) / placed)) if placed > 0 else None
+    text = ' · '.join(f"{name} {ev.get(f'mean_bomb_{stat}', 0.0):.2f}" for name, stat in (
+        ('placed', 'placed'), ('hits', 'hits'), ('misses', 'misses'), ('armed', 'armed'),
+        ('picked up', 'picked_up'))) + ' / episode'
+    return label, share, text, rate_color(share)
+
+
 def ease(shown: float, target: float) -> float:
     """One animation frame of a bar's displayed fraction moving toward its real one."""
     return shown + (target - shown) * 0.2 if abs(target - shown) > 0.0005 else target
@@ -1901,6 +1912,8 @@ class DetailPane(QWidget):
             'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
             'linger': LineChart('No progress (action steps)', fmt=lambda v: f'{v:.0f}', legend_below=True,
                                 empty='unavailable (no lingering measurements)'),
+            'bombs': LineChart('Bombs / episode', fmt=lambda v: f'{v:.2f}', legend_below=True,
+                               empty='unavailable (no bomb measurements)'),
         }
         self.charts['linger'].setMinimumHeight(230)
         self.charts['linger'].setToolTip(
@@ -1910,12 +1923,27 @@ class DetailPane(QWidget):
             'Worst longest: largest episode streak in that iteration, not a run-wide maximum.\n'
             'Progress: enemy kill or hit, pickup, new best objective distance, or room exit.\n'
             'Units are agent action steps, not emulator frames or seconds.')
+        self.charts['bombs'].setMinimumHeight(320)
+        self.charts['bombs'].setToolTip(
+            'Means per completed episode in each PPO iteration.\n'
+            'Placed: bombs Link placed. Hits: enemy hits credited to bombs. Misses: bombs that hit nothing.\n'
+            'Armed: forced bomb drops armed. Picked up: bomb pickups.\n'
+            '10th kills: 10th damage-free kills (any weapon). 10th tries: bombs placed while the next kill was '
+            'the 10th.')
         grid_page = QWidget()
         grid = QGridLayout(grid_page)
         grid.setContentsMargins(10, 10, 10, 10)
         grid.setSpacing(10)
-        for i, chart in enumerate(self.charts.values()):
-            grid.addWidget(chart, i // 2, i % 2, 1, 2 if chart is self.charts['linger'] else 1)
+        wide = (self.charts['linger'], self.charts['bombs'])
+        row = col = 0
+        for chart in self.charts.values():
+            if chart in wide and col:
+                row, col = row + 1, 0
+            grid.addWidget(chart, row, col, 1, 2 if chart in wide else 1)
+            if chart in wide or col:
+                row, col = row + 1, 0
+            else:
+                col = 1
         self.summary = BarList()
         self.chart_stack = QStackedWidget()
         self.chart_stack.addWidget(scrolling(grid_page))
@@ -2003,6 +2031,17 @@ class DetailPane(QWidget):
             {'label': 'mean final tail / episode', 'color': C.ok, 'points': run.series('linger/tail_steps', skip)},
             {'label': 'worst longest / update', 'color': C.bad, 'points': run.series('linger/worst_steps', skip)},
         ], (), overlay)
+        self.charts['bombs'].set_data([
+            {'label': 'placed', 'color': C.accent, 'points': run.series('bombs/placed', skip)},
+            {'label': 'hits', 'color': C.ok, 'points': run.series('bombs/hits', skip)},
+            {'label': 'misses', 'color': C.bad, 'points': run.series('bombs/misses', skip)},
+            {'label': 'armed', 'color': C.eval, 'points': run.series('bombs/armed', skip)},
+            {'label': 'picked up', 'color': C.text, 'points': run.series('bombs/picked_up', skip)},
+            {'label': '10th kills', 'color': C.muted, 'points': run.series('bombs/tenth_kills', skip),
+             'width': 1.2},
+            {'label': '10th tries', 'color': C.warn, 'points': run.series('bombs/tenth_tries', skip),
+             'width': 1.2},
+        ], (), overlay)
 
         sections = []
         if run.eval:
@@ -2020,6 +2059,8 @@ class DetailPane(QWidget):
             if ev.get('hearts_dropped') is not None:
                 rows.append(heart_drop_row('dropped hearts', ev['hearts_dropped'], ev['hearts_taken'],
                                            ev['hearts_left']))
+            if ev.get('mean_bomb_placed') is not None:
+                rows.append(bomb_row('bombs', ev))
             sections.append(('bars', 'Evaluation', rows))
             sections.append(('text', 'No progress · evaluation (action steps)', [
                 (fmt_linger(ev), C.warn if ev.get('linger_max_steps') is not None else C.faint),
