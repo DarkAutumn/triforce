@@ -105,6 +105,18 @@ pub fn decode(rom: &Rom, bytes: &[u8]) -> Result<StateFile, StateFormatError> {
     Ok(StateFile { machine, flags })
 }
 
+/// Whether two machine states are equal in every emulated byte (their `postcard` encodings match).
+pub fn machines_equal(a: &MachineState, b: &MachineState) -> bool {
+    let encode = |m: &MachineState| postcard::to_allocvec(m).expect("MachineState serializes");
+    encode(a) == encode(b)
+}
+
+/// Whether two state files written for `rom` hold the same machine (their executor flags may differ; so
+/// may their bytes: zstd output is not part of the format).
+pub fn same_machine(rom: &Rom, a: &[u8], b: &[u8]) -> Result<bool, StateFormatError> {
+    Ok(machines_equal(&decode(rom, a)?.machine, &decode(rom, b)?.machine))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

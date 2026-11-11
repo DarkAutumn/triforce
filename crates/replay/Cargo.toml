@@ -14,3 +14,10 @@ zcore = ["dep:zcore"]
 blake3 = "1.8.7"
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 zcore = { path = "../zcore", optional = true }
+
+[dev-dependencies]
+test-rom = { path = "../test-rom" }
+
+[[test]]
+name = "player"
+required-features = ["zcore"]

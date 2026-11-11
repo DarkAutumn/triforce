@@ -1,4 +1,4 @@
-//! `tf`: movie, zcore self-diff, trace, corpus and benchmark tooling for zcore.
+//! `tf`: movie, replay, zcore self-diff, trace, corpus and benchmark tooling for zcore.
 
 mod corpus;
 use movie as formats;
@@ -91,6 +91,11 @@ enum Cmd {
         #[arg(long)]
         render: Option<String>,
     },
+    /// Inspect or check TFREPLAY files (`crates/replay`).
+    Replay {
+        #[command(subcommand)]
+        cmd: ReplayCmd,
+    },
 }
 
 #[derive(Subcommand)]
@@ -129,6 +134,20 @@ enum MovieCmd {
         /// Output movie (normally `corpus/movies/chain-<segment>-<seed>.tfmovie`).
         #[arg(short, long)]
         out: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReplayCmd {
+    /// Print a replay's header, start, ending and sections.
+    Info { file: PathBuf },
+    /// Play replays on zcore, comparing the machine with every state they recorded; exit 1 if any fails.
+    Verify {
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Where a replay recorded from a named state file finds it (default: triforce/states).
+        #[arg(long)]
+        states_dir: Option<PathBuf>,
     },
 }
 
@@ -174,6 +193,7 @@ fn run(cli: Cli) -> Result<i32> {
             CorpusCmd::Sync => corpus::sync(),
             CorpusCmd::Check { jobs: j } => corpus::check(&rom, jobs(j)),
         },
+        Cmd::Replay { cmd } => replay_cmd(cmd, &rom),
         Cmd::Bench { frames, mut movies, agent, recordings, windows, window_frames, cache, render } => {
             if agent {
                 movies.extend(corpus::Manifest::load()?.movie.into_iter()
@@ -356,6 +376,87 @@ fn import(rom: &rom::RomInfo, path: &Path, out: &Path) -> Result<i32> {
         movie.pokes.len()
     );
     Ok(0)
+}
+
+fn read_replay(path: &Path) -> Result<tfreplay::Replay> {
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    tfreplay::Replay::parse(bytes).with_context(|| path.display().to_string())
+}
+
+/// A state file by the name a replay recorded: an absolute or existing path as is, else `<dir>/<name>.state`
+/// (as the native state store resolves names).
+fn state_path(dir: &Path, name: &str) -> PathBuf {
+    let path = Path::new(name);
+    if path.is_absolute() || path.exists() {
+        path.to_path_buf()
+    } else if name.ends_with(".state") {
+        dir.join(name)
+    } else {
+        dir.join(format!("{name}.state"))
+    }
+}
+
+fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
+    match cmd {
+        ReplayCmd::Info { file } => {
+            let replay = read_replay(&file)?;
+            let meta = replay.meta()?;
+            let source = match replay.source()? {
+                tfreplay::Source::PowerOn { name, delay } => format!("power-on {name} {delay}"),
+                tfreplay::Source::File { name, file_hash } => format!("state {name} ({file_hash:016x})"),
+                tfreplay::Source::Embedded => match meta.get("source").and_then(|s| s.get("name")) {
+                    Some(name) => format!("embedded state {}", name.as_str().unwrap_or("?")),
+                    None => "embedded checkpoint".to_owned(),
+                },
+            };
+            println!("version:  {}", replay.version());
+            println!("frames:   {}", replay.frames());
+            println!("ending:   {}", replay.ending_name());
+            println!("source:   {source}");
+            println!("rom:      {}", rom::hex(&replay.rom_sha1()));
+            println!("triforce: {}", meta.get("triforce").and_then(|v| v.as_str()).unwrap_or("?"));
+            if let Some(ending) = meta.get("ending") {
+                println!("result:   {ending}");
+            }
+            if let Some(segments) = meta.get("segments").and_then(|s| s.as_array()) {
+                println!("segments: {}", segments.len());
+            }
+            let mut states = [0usize; tfreplay::STATE_KINDS.len()];
+            for state in replay.states() {
+                states[state.kind as usize] += 1;
+            }
+            let kinds: Vec<String> = tfreplay::STATE_KINDS.iter().zip(states).filter(|&(_, n)| n > 0)
+                .map(|(name, n)| format!("{n} {}", name.to_uppercase())).collect();
+            println!("states:   {}", kinds.join(", "));
+            let control = replay.events().filter_map(|e| e.ok())
+                .find(|e| e.event == tfreplay::Event::Control).map(|e| e.frame);
+            if let Some(control) = control {
+                let before = replay.edits().filter_map(|e| e.ok()).filter(|e| e.frame < control).count();
+                println!("control:  frame {control} ({before} edits before it)");
+            }
+            for (kind, count, len) in replay.sections() {
+                let name = tfreplay::section::NAMES.get(kind as usize).copied().unwrap_or("?");
+                println!("  {kind:2} {name:10} {count:9} records {len:10} bytes");
+            }
+            Ok(0)
+        }
+        ReplayCmd::Verify { files, states_dir } => {
+            let rom = ::zcore::Rom::from_ines(&rom.bytes)?;
+            let dir = states_dir.unwrap_or_else(|| rom::workspace_root().join("triforce/states"));
+            let resolve = |name: &str| std::fs::read(state_path(&dir, name));
+            let mut failed = false;
+            for file in &files {
+                match read_replay(file).and_then(|replay| Ok(tfreplay::verify(rom.clone(), replay, &resolve)?)) {
+                    Ok(r) => println!("{}: ok, {} frames, {} edits, {} states", file.display(), r.frames, r.edits, r.states),
+                    Err(e) => {
+                        failed = true;
+                        println!("{}: {e:#}", file.display());
+                    }
+                }
+            }
+            Ok(i32::from(failed))
+        }
+    }
 }
 
 /// One line per instruction of records `frame..frame + count`, prefixed with the record number, so

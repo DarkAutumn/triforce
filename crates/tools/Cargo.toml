@@ -17,6 +17,8 @@ rand = "0.10.3"
 rand_chacha = "0.10.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+# Renamed: `tf` has a `replay` module of its own (TFMOVIE playback).
+tfreplay = { package = "replay", path = "../replay", features = ["zcore"] }
 sha1_smol = "1.0.1"
 toml = "1.2.0"
 zcore = { path = "../zcore" }
