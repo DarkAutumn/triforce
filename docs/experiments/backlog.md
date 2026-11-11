@@ -703,26 +703,38 @@ the remaining list is deferred until Lee resumes work.
   per room/state attempts, iterations, cells, env steps, best progress, success/failure. Then teach
   `training-gui.py` to recognize a mapper log folder and show it sensibly (likely a different view that opens for
   that kind of folder: route steps as rows, per-attempt progress).
-- **The test suites are slow (Lee, Nov 11; deferred).** Target: most test runs under 5 minutes, 10 for a first
-  run. Measured in the `replays` worktree while round r63a trained on main (load average 35 on 20 threads;
+- [x] **The test suites are slow (Lee, Nov 11).** Target: about 10 minutes for both, every test worth its time.
+  Measured in the `replays` worktree while round r63a trained on main (load average 35 on 20 threads;
   one core still ran `tf bench` at 7,743 frames/s, so it is oversubscription, not slower cores):
   `cargo test --release --workspace --features zelda/zcore` 276–307 s (one test binary 87 s for 9 tests, three
   more 30–36 s each; binaries run one after another), `pytest -q` 651–911 s for 458 tests, run serially (no
-  pytest-xdist in the venv). Not yet measured: which pytest tests dominate (`pytest --durations=40`) and both
-  suites on an idle machine (AGENTS.md says "about a minute each"). Until fixed: run the tests of what changed
-  per step and the full suites before a merge.
+  pytest-xdist in the venv).
   - **Found along the way (Nov 11): torch's thread pool is most of the pytest time on a busy machine.** With
     the load average at 26–35, the same script measured with torch's default threads (20) and with
     `OMP_NUM_THREADS=1`: saving and promoting the 20 untrained test models (`conftest.promote_untrained`)
     12.3 s vs 0.6 s; loading them for a chain (`Runner(models_dir=...)`: 20 × `load_model` + `to_native`) 22 s
     vs 0.6 s; `tests/test_replay.py` 92–185 s with the default. The tests' networks are tiny, so the threads
-    only wait for each other and for the cores the round holds. Not changed (deferred): the one-line fix is
-    `torch.set_num_threads(1)` in `tests/conftest.py` `pytest_configure` (or `OMP_NUM_THREADS=1` in the test
-    command). The same cost hits real use: `eval-chain`, `play-zelda.py` and `zelda-headless.py` spend those
-    ~20 s loading the team while a round trains; `Policies` could load under one torch thread (the networks
-    act in Rust afterwards).
+    only wait for each other and for the cores the round holds. The same cost hits real use: `eval-chain` and
+    `zelda-headless.py` spend those ~20 s loading the team while a round trains (`play-zelda.py` sets one
+    thread); `Policies` could load under one torch thread (the networks act in Rust afterwards; open).
     Measured with `OMP_NUM_THREADS=1` on the command line, the round still training: the whole `pytest -q`
     310 s (485 tests) and 338 s (513 tests); the Rust workspace suite stays 228–244 s (727 tests).
+  - **Idle machine (Nov 11, before the fixes):** Rust test binaries 118 s (after a no-op build), pytest 177 s (514
+    tests): about 5 minutes together. So the long runs were oversubscription plus a handful of tests that held most
+    of the time: `zcore_session::every_legal_attack_starts_its_weapon` 48 s (one test, two rooms in sequence),
+    `tools cli::corpus_check_passes` 25 s, `env chain_explore::chain_runs` 23 s (18 cases in sequence; one of
+    them, a breadth-first walk out of 0x2c, 17 s), `test_search_settings_reach_the_search` 35 s (6-step rollouts
+    of which it compares the first decision; one variant unused), `test_scoring_buffers_a_running_rollout_...`
+    11 s (waited for a 3000-step rollout after its errors were in).
+  - **Fixed:** the attack test is one test per room (26 s, they run in parallel); the chain cases are one test
+    each and walk with a best-first search toward the target room (`walk_to`; the 0x2c walk 17 → 0.5 s, the
+    binary 24 → 6 s); the search-settings test rolls out one step (35 → 5 s); the rollout-error test closes the
+    pool once 5 calls were refused (11 → 0.1 s); `tests/conftest.py` gives torch one thread (`OMP_NUM_THREADS=1`
+    unless set). After: pytest 140 s (load average 3–5); Rust test binaries 98 s with another worktree's tests
+    running (load average 19), about 80 s expected on a quiet machine.
+  - Left as they are: `corpus_check_passes` (replays the whole corpus, over a million frames, in parallel: its
+    length is the longest movie) and the slower room of the attack test (about 26 s: 500 random steps, every legal
+    attack tried at each).
 - [x] **Versioning, power-on starts, TFREPLAY replays, `zelda-headless.py`, the golden path (Lee, Nov 11;
   branch `replays`, `docs/decisions.md` 2026-11-11).** Measured with main's promoted team (r61–r63 runs, all
   models sampling), the round still training:
@@ -749,25 +761,30 @@ the remaining list is deferred until Lee resumes work.
 
     Both die in the same rooms first (goriya 2:0x5e 16 and 16, moldorm 2:0x3e 12 and 9, darknut 3:0x59 8 and
     10). The golden path wins with sampling because it needs one of several runs per segment.
-  - [ ] **Problem: a run can bounce between 0x4c and 0x4d for its whole step budget, every exit "correct".**
+  - [x] **Problem: a run can bounce between 0x4c and 0x4d for its whole step budget, every exit "correct"**
+    (fixed Nov 11, Lee: walking back and forward once or twice is fine, the endless bounce is not).
     Two of the 120 sampled runs (seed 64: 49,020 rooms entered; another: 48,599) alternated 0:0x4c (ow-octorok)
     and 0:0x4d (ow-moblin), one action per room, 24,505 times each, until `run exceeded 50000 steps`: 5.2
-    million frames, about 12 minutes of one core, `wrong_exits` 1, `retreats` 0. The route crosses the pair in
-    both directions (0x4d → 0x4c on the way to Dungeon 2, 0x4c → 0x4d after it), so each crossing matches a
-    route step and nothing counts it. The room budget and the stall counter are per room visit and never fire.
-    None of the 120 registered-mode runs did it (most rooms entered: 99). Fix idea: end a run `stuck` when the
-    route step goes backwards more than a few times, or count a crossing back onto an earlier step as a retreat.
-    The watch player's simulations hit this too: one such run holds one of its `--parallel` games for those 12
-    minutes.
-    Reproduced on `main` after the merge (Nov 11): `zelda-headless.py OUT 4 --parallel 4 --stop-at step:14`
-    (sampling, the game start), seed 1 of seeds 0–3. This one is *before* Dungeon 2: Link enters 0x4d from the
-    south (step 11), crosses W into 0x4c (step 12, whose exit is N), leaves E again 112 frames later, and then
-    alternates every 106 frames, 13,997 visits of 0x4d and 13,996 of 0x4c, until he dies in 0x4d after
-    2,978,547 frames (6.5 minutes). So the "each crossing matches a route step" explanation above does not
-    cover every case: before Dungeon 2, 0x4d entered from W is not a route step with Link's progress
-    (`GameCompletion::route_step_at`). Not diagnosed: what objective each room gives Link on those visits, and
-    why the crossings don't run into the wrong-exit limit (20). Record one with `--streams decisions,rewards`
-    and read the objective at the first three crossings.
+    million frames, about 12 minutes of one core, `wrong_exits` 1, `retreats` 0; `zelda-headless.py
+    --stop-at step:14` seed 1 did it for 2,978,547 frames until Link died. The watch player's simulations hit it
+    too (one such run holds one of its `--parallel` games for those 12 minutes).
+    - **Cause (both runs):** ow-start left 0x77 N without taking the sword (the run's one wrong exit). Off the
+      route the objective takes the shortest way to the target (the sword cave), but when no shortest way left
+      through a route exit it took the route's exits instead, of every step in the room whatever Link's
+      progress: so it led him along the whole route to Dungeon 2 without the sword (every exit "correct"), and
+      in 0x4d (entered from W: off the route) it took the route's exit W, in 0x4c (from E, off the route
+      without the sword) the shortest way back E, which is also a route exit (after Dungeon 2). Every crossing was
+      a correct exit, so no limit counted it.
+    - **Fix 1, the objective:** off the route it prefers only the route exits of the steps Link plays with his
+      progress (`GameCompletion::route_next_with_progress`; `GameMap::route_next_rooms` is gone). Without the
+      sword that is none, so the way leads back to the sword cave. Seed 1 now reaches Dungeon 2's entrance (4,306
+      frames); seed 64 goes back to 0x77 for the sword and on to Dungeon 2. Test
+      `off_route_objectives_follow_only_the_route_steps_with_links_progress` (fails on the old code).
+    - **Fix 2, a backstop in chains:** the 5th return in a row into the room before the last ends the run `stuck`
+      (`bounce-limit`, `MAX_BOUNCES`; crossings through a `retreat` exit don't count, they have their own cap),
+      whatever the exits are judged. Test `chain_runs::back_and_forth_hits_the_bounce_limit`.
+    - Not changed: why ow-start sometimes leaves 0x77 N without the sword when sampling (the off-route objective
+      now brings Link back).
   - `hold_finished_frame` / `EnvPool.set_hold` (a finished chain run parks its env on its last frame) have no
     caller since `play-zelda.py` plays replays (Nov 11). Left in the pool until Lee confirms the replay-driven
     viewer stays; then remove them with their tests (`crates/pool/tests/pool.rs`, `tests/native/test_pool.py`).

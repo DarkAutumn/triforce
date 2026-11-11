@@ -528,6 +528,37 @@ fn lynel_room_retreat_and_return() {
     assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(0, 0x19)]);
 }
 
+/// Off the route, the objective prefers only the route exits of steps Link plays with his progress.  Without the
+/// sword (he left 0x77 N instead of taking it: seed 1 of the sampled headless runs, Nov 11) every step but the
+/// sword cave's needs it, so the way leads back to the cave rather than along the route; it used to lead him along
+/// the route to 0x4d, whose route exit W and 0x4c's route exit E (taken there after Dungeon 2) then sent him back
+/// and forth between the two, every crossing a correct exit, for 3 million frames.  With the sword, 0x4d entered
+/// from W (off the route before Dungeon 2) still sends him W, onto the route.
+#[test]
+fn off_route_objectives_follow_only_the_route_steps_with_links_progress() {
+    let Some(images) = images(&["0_4ds_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let room = |id: u8, sword: u8| {
+        let mut ram = in_room(&images[0], id);
+        clear_objects(&mut ram);
+        set(&mut ram, Var::Sword, sword);
+        ram
+    };
+    let next = |from: u8, to: u8, sword: u8| {
+        let (prev, here) = (room(from, sword), room(to, sword));
+        let objective = completion(&map).objectives(Some(&view(&map, &prev, 0)), &view(&map, &here, 0));
+        objective.next_rooms.iter().copied().collect::<Vec<_>>()
+    };
+    assert_eq!(view(&map, &images[0], 0).sword(), SwordKind::Wood);
+    assert_eq!(next(0x77, 0x67, 0), [loc(0, 0x77)], "0x67 from S without the sword: back to the cave");
+    let (at_4c, at_4d) = (next(0x4d, 0x4c, 0), next(0x4c, 0x4d, 0));
+    assert!(!(at_4c.contains(&loc(0, 0x4d)) && at_4d.contains(&loc(0, 0x4c))), "{at_4c:?} {at_4d:?}");
+    assert!(!at_4d.contains(&loc(0, 0x4c)), "0x4d from W without the sword: {at_4d:?}");
+    assert_eq!(next(0x4c, 0x4d, 1), [loc(0, 0x4c)], "0x4d from W with the sword: onto the route");
+}
+
 fn act<N: zelda::Nes>(s: &mut Session<N>, text: &str) -> zelda::Change {
     s.act(Action::parse(text).unwrap()).unwrap()
 }

@@ -47,6 +47,12 @@ pub const MAX_RETREATS: u32 = 3;
 /// Wrong exits into tagged rooms a run may take; the `MAX_WRONG_EXITS`-th ends it `stuck` (`wrong-exit-limit`,
 /// Lee, Nov 10: a run that bounces between two tagged rooms must not go on to the run cap).
 pub const MAX_WRONG_EXITS: u32 = 20;
+/// Returns in a row into the room before the one Link just left (back and forth between two rooms) a run may make;
+/// the `MAX_BOUNCES`-th ends it `stuck` (`bounce-limit`).  Lee, Nov 11: walking back and forward again once or twice
+/// is fine, the endless bounce is not (one run crossed between 0x4c and 0x4d 28,000 times, every crossing a correct
+/// exit, until it died 3 million frames later).  Crossings through a route step's `retreat` exit don't count (their
+/// own cap is `MAX_RETREATS`).
+pub const MAX_BOUNCES: u32 = 5;
 
 /// How a run starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -431,6 +437,24 @@ pub fn describe(location: MapLocation) -> String {
     )
 }
 
+/// How many room entries in a row, ending with entering `location` after `rooms`, went back into the room before
+/// the last one (A B A B ...: 2 after A B A B).  An entry through a `retreat` exit doesn't count and doesn't break
+/// the run of them.
+fn returns_in_a_row(rooms: &[RoomRecord], location: MapLocation) -> u32 {
+    let entered = |i: usize| rooms.get(i).map_or(location, RoomRecord::location);
+    let mut count = 0;
+    for i in (2..=rooms.len()).rev() {
+        if entered(i) != entered(i - 2) {
+            break;
+        }
+        // Room i was entered by leaving room i - 1.
+        if !rooms[i - 1].outcome.starts_with("retreat") {
+            count += 1;
+        }
+    }
+    count
+}
+
 struct Acting {
     name: Arc<str>,
     config: Arc<SpecialistConfig>,
@@ -452,6 +476,9 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     pub max_retreats: u32,
     /// Wrong exits into tagged rooms a run may take (`MAX_WRONG_EXITS`); reaching it ends the run `stuck`.
     pub max_wrong_exits: u32,
+    /// Returns in a row into the room before the last a run may make (`MAX_BOUNCES`); reaching it ends the run
+    /// `stuck`.
+    pub max_bounces: u32,
     /// Player stall budget (`play-zelda.py`; None = off): after this many actions in a room without damage dealt
     /// or taken [`ChainEnv::stalled`] turns true; after twice as many the run ends `stuck`.
     pub stall_steps: Option<u64>,
@@ -499,6 +526,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             min_room_steps: MIN_ROOM_STEPS,
             max_retreats: MAX_RETREATS,
             max_wrong_exits: MAX_WRONG_EXITS,
+            max_bounces: MAX_BOUNCES,
             stall_steps: None,
             harvest: None,
             no_damage: 0,
@@ -1023,6 +1051,20 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     );
                     return Ok(ChainStatus::Done(result.clone()));
                 }
+            }
+            let bounces = returns_in_a_row(&result.rooms, location);
+            if bounces >= self.max_bounces {
+                let record = result.rooms.last_mut().unwrap();
+                record.outcome = "stuck".into();
+                let from = record.specialist.clone();
+                result.result = "failure".into();
+                result.reason = format!(
+                    "bounce-limit: {from} left into {}, the {bounces}th return in a row into the room before the last \
+                     (at most {} in a row)",
+                    describe(location),
+                    self.max_bounces - 1
+                );
+                return Ok(ChainStatus::Done(result.clone()));
             }
             let Some(room) = room else {
                 return Err(format!("Room {} is not in game.yaml", describe(location)));

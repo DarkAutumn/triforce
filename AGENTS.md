@@ -74,7 +74,7 @@ up with ideas, test them, keep what helps, and log everything.
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.3.1.0`). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.3.1.1`). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
@@ -137,8 +137,9 @@ up with ideas, test them, keep what helps, and log everything.
 - Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`). After changing any crate, rebuild the module:
   `.venv/bin/maturin develop --release`.
-- Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (about a
-  minute each). Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
+- Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (on an idle
+  machine about 2.5 and 1.5 minutes after the build; next to a training round 2-3x that, from oversubscription).
+  Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
 - Training GUI: `uv run training-gui.py` (PEP 723 script; PySide6 isn't in the venv).
 - `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
@@ -173,7 +174,8 @@ up with ideas, test them, keep what helps, and log everything.
   starts from console power on instead of the `start` state (Game mechanics). Each call writes a fresh
   `runs/eval-chain-<yymmdd-HHMMSS>.jsonl` (or `--output`, refused if it exists unless `--append` with the same
   provenance) plus `<output>.meta.json`; exit 1 if any run ends `error`. A run ends `stuck` (`wrong-exit-limit`)
-  on its 20th wrong exit into a tagged room. Per-room hp loss and deaths come from the chain jsonl (`RoomRecord`
+  on its 20th wrong exit into a tagged room, or (`bounce-limit`) on its 5th return in a row into the room before
+  the last (back and forth between two rooms). Per-room hp loss and deaths come from the chain jsonl (`RoomRecord`
   also has `hearts_dropped/taken/left/...`).
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
