@@ -1115,6 +1115,10 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   - Training resets draw `bombs: [0, 8]` and `help_count: [0, 9]` (a damage-free streak) in every family.
   - Every session looks ahead for bombs (`zelda::LookAhead::Bombs` in evaluation, chains and exploration; `All` in
     training), so bomb hits are counted everywhere (`zelda::bombs::BombStats`).
+  - The early stop waits for bombs too (Lee): a confirmed check also needs the bomb value per episode in its
+    confirmation evaluation (the bomb reward terms: 0.5 per hit, 0.75 per drop armed, 0.5 per pickup, −0.25 per
+    bomb; `train.BOMB_VALUE`) to have stopped improving, like the hearts lost: not above every earlier check's by
+    more than max(`--stop-bombs-delta` 0.05, 2 SE). `--stop-hearts-gap` became `--stop-check-gap` (both rules).
 - **Checked:** the ASM (Z_01 HandleMonsterDied, Z_04 SetUpDroppedItem) and the emulator: a bomb kill on the 9th→10th
   damage-free kill sets `$51` and the next drop is a bombs item (test
   `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`). Lee's Darknut claim holds and is broader: the front-shield
