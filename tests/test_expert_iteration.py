@@ -122,7 +122,7 @@ def test_train_with_search_distills_searched_rows(states_dir, tmp_path):
     search = {'candidates': 2, 'simulations': 2, 'futures': 1, 'depth': 1, 'fraction': 0.5}
     run = train.main(['--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
                       '--parallel', '2', '--steps-per-update', '64', '--iterations', '1', '--seed', '1',
-                      '--no-curriculum', '--run-id', 'search', '--search', json.dumps(search)])
+                      '--no-curriculum', '--run-id', 'search', '--search', json.dumps(search), '--device', 'cpu'])
     metrics = read_jsonl(str(run / 'metrics.jsonl'))[-1]
     assert abs(metrics['charts/search_rows'] - 0.5) < 0.2
     assert np.isfinite(metrics['losses/search_ce']) and 0.0 <= metrics['charts/search_agreement'] <= 1.0

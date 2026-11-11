@@ -126,7 +126,7 @@ def test_train_refreshes_the_best_runs_every_best_every_iterations(states_dir, t
     run = train.main(['--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
                       '--parallel', '2', '--steps-per-update', '16', '--iterations', '4', '--no-curriculum',
                       '--seed', '3', '--best-of-n', '3', '--best-keep', '1', '--best-every', '2',
-                      '--best-parallel', '2'])
+                      '--best-parallel', '2', '--device', 'cpu'])
     # Collected before iteration 1 and after iteration 2; none after the last iteration (4).
     assert [(runs, keep, parallel) for runs, keep, _, parallel, _ in collections] == [(3, 1, 2), (3, 1, 2)]
     assert collections[0][2] != collections[1][2] and collections[0][4] == str(states_dir)

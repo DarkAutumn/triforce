@@ -90,7 +90,7 @@ def test_train_with_plr_logs_start_weights(tmp_path):
                       "success: [exit-correct]\none_room: true\nmax_steps: 4\n")
     run = train.main(['--specialist', str(config), '--states-dir', str(REPO_STATES_DIR), '--models-dir', str(tmp_path),
                       '--parallel', '2', '--steps-per-update', '32', '--iterations', '3', '--seed', '1',
-                      '--no-curriculum', '--run-id', 'plr', '--plr'])
+                      '--no-curriculum', '--run-id', 'plr', '--plr', '--device', 'cpu'])
     records = read_jsonl(str(run / 'metrics.jsonl'))
     assert len(records) == 3
     for record in records:

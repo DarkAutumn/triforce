@@ -310,3 +310,19 @@ def test_eval_chain_throughput_reads_episodes_per_second_or_seconds_per_episode(
     assert gui.chain_speed({'start': start, 'result': {'ts': 400.0, 'runs': 100}, 'progress': None}) == '3.0 s/ep'
     assert gui.chain_speed({'start': start, 'result': None, 'progress': {'ts': 160.0, 'done': 20}}) == '3.0 s/ep'
     assert gui.chain_speed({'start': start, 'result': None, 'progress': None}) == ''
+
+
+def test_machine_status_reads_cpu_gpu_and_load(tmp_path):
+    stat = tmp_path / 'stat'
+    stat.write_text("cpu  100 0 50 800 50 0 0 0 0 0\ncpu0 1 2 3 4\n")
+    first = gui.read_cpu_times(str(stat))
+    assert first == (850, 1000)                     # idle + iowait, user..steal
+    stat.write_text("cpu  400 0 150 1100 50 0 0 0 0 0\n")
+    second = gui.read_cpu_times(str(stat))
+    assert gui.cpu_percent(first, second) == pytest.approx(400 / 700 * 100)
+    assert gui.cpu_percent(None, second) is None and gui.cpu_percent(second, second) is None
+    assert gui.read_cpu_times(str(tmp_path / 'missing')) is None
+    assert gui.parse_gpu_utilization("22\n40\n") == 31.0
+    assert gui.parse_gpu_utilization("NVIDIA-SMI has failed\n") is None
+    assert gui.machine_text(63.4, 22.0, (14.21, 12.8, 11.0)) == "CPU 63%    GPU 22%    load 14.2 12.8 11.0"
+    assert gui.machine_text(None, None, None) == "CPU –    GPU –    load –"
