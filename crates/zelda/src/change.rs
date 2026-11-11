@@ -159,6 +159,9 @@ impl Change {
     /// weapon slots zeroed, no render, no frame sink, no shield watch), credits and records the prediction, then
     /// restores the machine. Only the marginal effect is credited: what other weapons' pending predictions already
     /// promise (damage up to the enemy's hit value, a stun, an item) is not paid again.
+    ///
+    /// A look-ahead that can't credit anything isn't run: the prediction only follows `start`'s live enemies (and,
+    /// for a boomerang or arrow, its items), so without them it is empty and changes nothing.
     fn predict<N: Nes>(
         &mut self,
         m: &mut Machine<N>,
@@ -166,6 +169,10 @@ impl Change {
         weapon: AnimationKind,
         ledger: &mut FutureCreditLedger,
     ) {
+        let fetches = matches!(weapon, AnimationKind::Boomerang | AnimationKind::Arrow);
+        if start.enemies.iter().all(|e| e.is_dying()) && (!fetches || start.items.is_empty()) {
+            return;
+        }
         let saved = m.nes.snapshot();
         let rendered = m.nes.rendered();
         for var in disabled_slots(weapon) {
@@ -198,7 +205,7 @@ impl Change {
         };
         let (mut hits, mut stuns, mut items) = (Vec::new(), Vec::new(), Vec::new());
         observe_damage(start, &curr, &mut hits, &mut stuns);
-        if matches!(weapon, AnimationKind::Boomerang | AnimationKind::Arrow) {
+        if fetches {
             observe_items(start, &curr, &mut items);
         }
         let pending = ledger.predictions();
@@ -603,6 +610,30 @@ mod tests {
             true,
         );
         assert!(c.enemies_hit.is_empty() && ledger.predictions().is_empty());
+    }
+
+    /// A look-ahead only runs when it can credit something: a beam fired in a room without a live enemy emulates no
+    /// frame (and predicts nothing); with a Stalfos there, it runs.
+    #[test]
+    fn no_look_ahead_without_a_live_enemy() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static FRAMES: AtomicU64 = AtomicU64::new(0);
+        fn counted(frame: u64, ram: &mut [u8; 0x800]) {
+            FRAMES.fetch_add(1, Ordering::Relaxed);
+            beam_script(frame, ram);
+        }
+        for (prev, runs) in [(playable(), false), (with_stalfos(3), true)] {
+            let mut fired = prev;
+            fired[Var::BeamAnimation.addr() as usize] = 16;
+            let mut m = scripted(fired, counted);
+            let mut ledger = FutureCreditLedger::default();
+            FRAMES.store(0, Ordering::Relaxed);
+            let c = change(&mut m, view(&prev, 100), view(&fired, 104), &mut ledger, true);
+            assert_eq!(FRAMES.load(Ordering::Relaxed) > 0, runs);
+            assert_eq!(c.enemies_hit.is_empty(), !runs);
+            assert_eq!(ledger.predictions().is_empty(), !runs);
+            assert_eq!(m.nes.ram, fired);
+        }
     }
 
     /// F054: a second weapon fired at an enemy another weapon's pending prediction already kills is not credited

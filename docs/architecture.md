@@ -365,7 +365,9 @@ Endings, linger, the chain's stall counter and the visit metrics read `Change.ob
 seen in the step itself); only the critic reads the credited fields, where the weapon look-ahead credits a beam,
 bomb, arrow or boomerang hit on its firing step and the ledger keeps the landing step from crediting it again.
 So the look-ahead changes rewards and nothing else (tested: the same game, endings, linger and visits with it on
-or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
+or off). It runs only when it can credit something: a live enemy in the room (for a boomerang or arrow, also an item
+on the floor); otherwise its prediction would be empty. Evaluation (`EnvOptions.skip_look_ahead`) and chains run
+without it.
 
 A bomb pickup pays `reward-gained-bombs` (0.5) like other item
 pickups (cheat grants don't count); the map/compass reward is not paid on a level change; dropped-item lifetimes
