@@ -697,6 +697,31 @@ the remaining list is deferred until Lee resumes work.
     command). The same cost hits real use: `eval-chain`, `play-zelda.py` and `zelda-headless.py` spend those
     ~20 s loading the team while a round trains; `Policies` could load under one torch thread (the networks
     act in Rust afterwards).
+    Measured with `OMP_NUM_THREADS=1` on the command line, the round still training: the whole `pytest -q`
+    310 s (485 tests) and 338 s (513 tests); the Rust workspace suite stays 228–244 s (727 tests).
+- [x] **Versioning, power-on starts, TFREPLAY replays, `zelda-headless.py`, the golden path (Lee, Nov 11;
+  branch `replays`, `docs/decisions.md` 2026-11-11).** Measured with main's promoted team (r61–r63 runs, all
+  models sampling), the round still training:
+  - Golden path from power on to the D3 triforce, 8 games: won twice in two tries, 19 and 15 runs in 22 s
+    (segments: to D2's triforce 5 and 4 runs, to D1's 7 and 6, to D3's 7 and 5); 61,480 and 61,551 frames
+    (about 17 minutes of play); the replay is 50 KB and verifies; both checkpoints are on the overworld
+    (0x3c, 0x37) at full health; no write to the game's random numbers; no edit before the models take over.
+  - `eval-chain --power-on --stop-at step:14` (D2's entrance): 6 of 6. `zelda-headless.py --wins-only
+    --stop-at step:14`: 3 wins in 5 runs, 7 s.
+  - Recording costs nothing measurable: `play-zelda.py 3x2 --games 12 --fps 0 --act model`, frames per second
+    per game: 1226 without, 1229 with `--replays`, 1198 with every optional stream.
+  - A power-on start with `--delay 32766`: 6.7 s with the idle states, 10.0 s without; the two replays are
+    byte-identical.
+  - Open, not measured: **does sampling every model (the new default for play) lose games the registered act
+    modes win?** Seen: both full-route power-on runs of `zelda-headless.py` (seeds 7 and 8, delay 1234) died
+    (seed 7 in Dungeon 2's 0x5e), and the four runs that finished in a `play-zelda.py --power-on` benchmark
+    died; 16 of the 20 families are registered argmax because they evaluated better that way (round 17). The
+    golden path still wins because it needs one of several runs per segment. `--act model` plays the
+    registered modes. To measure: the full-route win rate under `--act sample` and `--act model`, 120 seeds.
+  - Open: the action executor writes Link's facing (`$98`) and the selected B item (`$656`) instead of
+    pressing buttons; a replay records those as edits (184–217 in a golden path, many of them writes of the
+    value already there). A run that is inputs alone would need the executor to turn Link and pick the item
+    with the controller.
 
 ## Start states
 
