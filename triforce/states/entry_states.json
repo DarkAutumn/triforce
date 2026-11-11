@@ -14,11 +14,11 @@
   "alternate": false,
   "env_steps": 4322,
   "attempts": 1,
-  "seconds": 6.966311077,
+  "seconds": 7.215510568,
   "steps": 13,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_77c_0.state",
@@ -35,11 +35,11 @@
   "alternate": false,
   "env_steps": 5813,
   "attempts": 1,
-  "seconds": 10.514231079,
+  "seconds": 15.003070747,
   "steps": 23,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_67s_0.state",
@@ -54,13 +54,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4238,
+  "env_steps": 3981,
   "attempts": 1,
-  "seconds": 6.783718843,
-  "steps": 10,
+  "seconds": 13.080849238,
+  "steps": 16,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_78w_0.state",
@@ -75,13 +75,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": true,
-  "env_steps": 4649,
+  "env_steps": 4363,
   "attempts": 1,
-  "seconds": 7.187003159,
-  "steps": 15,
+  "seconds": 14.527064306,
+  "steps": 19,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_68w_0.state",
@@ -96,13 +96,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4306,
+  "env_steps": 4101,
   "attempts": 1,
-  "seconds": 8.76951952,
-  "steps": 58,
+  "seconds": 15.922975304,
+  "steps": 30,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_58s_0.state",
@@ -117,13 +117,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3402,
+  "env_steps": 3405,
   "attempts": 1,
-  "seconds": 8.585786683,
-  "steps": 27,
+  "seconds": 7.697911883,
+  "steps": 19,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_59w_0.state",
@@ -138,13 +138,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3787,
+  "env_steps": 3786,
   "attempts": 1,
-  "seconds": 8.751870121,
-  "steps": 31,
+  "seconds": 8.170426633,
+  "steps": 30,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5aw_0.state",
@@ -159,13 +159,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3367,
+  "env_steps": 3307,
   "attempts": 1,
-  "seconds": 7.826152049,
-  "steps": 37,
+  "seconds": 7.389694466,
+  "steps": 35,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5bw_0.state",
@@ -180,13 +180,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4021,
+  "env_steps": 3842,
   "attempts": 1,
-  "seconds": 8.417649827,
-  "steps": 31,
+  "seconds": 8.312848535,
+  "steps": 79,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5cw_0.state",
@@ -201,13 +201,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3594,
+  "env_steps": 3695,
   "attempts": 1,
-  "seconds": 10.05576833,
-  "steps": 23,
+  "seconds": 11.560902883,
+  "steps": 53,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5dw_0.state",
@@ -222,13 +222,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3717,
+  "env_steps": 3385,
   "attempts": 1,
-  "seconds": 7.8864348490000005,
-  "steps": 51,
-  "health": 2.5,
+  "seconds": 17.167090715,
+  "steps": 37,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_4ds_0.state",
@@ -243,13 +243,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3951,
+  "env_steps": 3718,
   "attempts": 1,
-  "seconds": 8.759950435,
-  "steps": 47,
-  "health": 2.5,
+  "seconds": 9.428624758,
+  "steps": 22,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_4ce_0.state",
@@ -264,13 +264,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3903,
+  "env_steps": 4036,
   "attempts": 1,
-  "seconds": 9.870126624,
-  "steps": 25,
+  "seconds": 9.947263283,
+  "steps": 30,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_3cs_0.state",
@@ -285,13 +285,13 @@
   "entry": "S",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 9030,
+  "env_steps": 4129,
   "attempts": 1,
-  "seconds": 18.025760459,
-  "steps": 54,
-  "health": 1.5,
+  "seconds": 8.375814494,
+  "steps": 68,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_7ds_0.state",
@@ -306,13 +306,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 2217,
+  "env_steps": 3434,
   "attempts": 1,
-  "seconds": 4.010913044,
-  "steps": 11,
-  "health": 3.0,
+  "seconds": 6.229402058,
+  "steps": 10,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_7ew_0.state",
@@ -329,11 +329,11 @@
   "alternate": false,
   "env_steps": 6701,
   "attempts": 1,
-  "seconds": 11.849495924,
+  "seconds": 11.789909071,
   "steps": 11,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_6es_0.state",
@@ -348,13 +348,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6726,
+  "env_steps": 16267,
   "attempts": 1,
-  "seconds": 14.49428784,
-  "steps": 113,
-  "health": 1.5,
+  "seconds": 34.336401207,
+  "steps": 117,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_5es_0.state",
@@ -369,13 +369,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 9104,
+  "env_steps": 8256,
   "attempts": 1,
-  "seconds": 17.197573934,
-  "steps": 95,
+  "seconds": 17.659135018,
+  "steps": 84,
   "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_4es_0.state",
@@ -390,13 +390,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5981,
+  "env_steps": 9468,
   "attempts": 1,
-  "seconds": 13.423489651,
-  "steps": 58,
-  "health": 2.0,
+  "seconds": 24.156440678,
+  "steps": 77,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_3es_0.state",
@@ -411,13 +411,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 10015,
+  "env_steps": 10353,
   "attempts": 1,
-  "seconds": 21.531152813,
-  "steps": 125,
-  "health": 2.0,
+  "seconds": 25.964544055,
+  "steps": 155,
+  "health": 0.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_2es_0.state",
@@ -432,13 +432,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 111357,
-  "attempts": 2,
-  "seconds": 307.420757322,
-  "steps": 250,
-  "health": 2.0,
+  "env_steps": 55773,
+  "attempts": 1,
+  "seconds": 163.334159154,
+  "steps": 269,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_1es_0.state",
@@ -453,13 +453,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 13081,
-  "attempts": 1,
-  "seconds": 29.003338876,
-  "steps": 149,
+  "env_steps": 40831,
+  "attempts": 2,
+  "seconds": 95.263670336,
+  "steps": 94,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "2_0es_0.state",
@@ -474,13 +474,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 48138,
+  "env_steps": 120407,
   "attempts": 1,
-  "seconds": 111.778435696,
-  "steps": 369,
-  "health": 0.5,
+  "seconds": 278.259108339,
+  "steps": 183,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "2_0de_0.state",
@@ -495,13 +495,13 @@
   "entry": "E",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 10603,
+  "env_steps": 13644,
   "attempts": 1,
-  "seconds": 26.092638388,
-  "steps": 83,
-  "health": 2.0,
+  "seconds": 30.069614982,
+  "steps": 81,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_3cc_0.state",
@@ -516,13 +516,13 @@
   "entry": "cave",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4463,
+  "env_steps": 8536,
   "attempts": 1,
-  "seconds": 10.165851347,
-  "steps": 10,
+  "seconds": 19.516183773,
+  "steps": 8,
   "health": 4.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_4cn_0.state",
@@ -537,13 +537,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3244,
+  "env_steps": 7635,
   "attempts": 1,
-  "seconds": 5.959641828,
-  "steps": 6,
+  "seconds": 14.334530629,
+  "steps": 7,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_4dw_0.state",
@@ -558,13 +558,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5074,
+  "env_steps": 8662,
   "attempts": 1,
-  "seconds": 9.572195678,
-  "steps": 90,
-  "health": 3.0,
+  "seconds": 16.124027019,
+  "steps": 40,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_3ds_0.state",
@@ -579,13 +579,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3957,
+  "env_steps": 7923,
   "attempts": 1,
-  "seconds": 10.006806702,
-  "steps": 22,
+  "seconds": 18.463644949,
+  "steps": 12,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_2ds_0.state",
@@ -600,13 +600,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4474,
+  "env_steps": 7079,
   "attempts": 1,
-  "seconds": 10.649666454,
-  "steps": 58,
+  "seconds": 15.686289202,
+  "steps": 23,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_2ce_0.state",
@@ -621,13 +621,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 3600,
+  "env_steps": 7612,
   "attempts": 1,
-  "seconds": 7.091582902,
-  "steps": 20,
-  "health": 3.5,
+  "seconds": 16.14050499,
+  "steps": 15,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_2ccave_0.state",
@@ -642,13 +642,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4035,
+  "env_steps": 8497,
   "attempts": 1,
-  "seconds": 10.063135801,
-  "steps": 61,
+  "seconds": 19.110627841,
+  "steps": 36,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_2cc_0.state",
@@ -663,13 +663,13 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7418,
+  "env_steps": 10360,
   "attempts": 1,
-  "seconds": 12.550692526,
-  "steps": 39,
+  "seconds": 20.202292738,
+  "steps": 30,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_1cs_0.state",
@@ -684,13 +684,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5929,
+  "env_steps": 7032,
   "attempts": 1,
-  "seconds": 15.132440554,
-  "steps": 69,
-  "health": 4.5,
+  "seconds": 16.06585159,
+  "steps": 52,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_1be_0.state",
@@ -705,13 +705,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3420,
+  "env_steps": 6681,
   "attempts": 1,
-  "seconds": 7.08226972,
-  "steps": 18,
+  "seconds": 13.739191868,
+  "steps": 22,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_1ae_0.state",
@@ -726,13 +726,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4641,
+  "env_steps": 9383,
   "attempts": 1,
-  "seconds": 6.583097313,
+  "seconds": 15.466917075,
   "steps": 2,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_0as_0.state",
@@ -747,13 +747,13 @@
   "entry": "S",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 5752,
+  "env_steps": 8500,
   "attempts": 1,
-  "seconds": 11.79555699,
-  "steps": 137,
-  "health": 2.0,
+  "seconds": 19.269485572,
+  "steps": 41,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_0acave_0.state",
@@ -768,13 +768,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5978,
+  "env_steps": 8915,
   "attempts": 1,
-  "seconds": 10.652887106,
-  "steps": 82,
-  "health": 0.5,
+  "seconds": 15.930834248,
+  "steps": 67,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_0ac_0.state",
@@ -789,13 +789,13 @@
   "entry": "cave",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5056,
+  "env_steps": 10367,
   "attempts": 1,
-  "seconds": 10.060521645,
-  "steps": 15,
+  "seconds": 23.278047495,
+  "steps": 20,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_1an_0.state",
@@ -810,13 +810,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 6427,
+  "env_steps": 10251,
   "attempts": 1,
-  "seconds": 10.957360766,
-  "steps": 73,
+  "seconds": 18.08892064,
+  "steps": 81,
   "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_19e_0.state",
@@ -831,13 +831,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4522,
+  "env_steps": 8804,
   "attempts": 1,
-  "seconds": 9.542478089,
-  "steps": 104,
-  "health": 5.0,
+  "seconds": 17.900961057,
+  "steps": 171,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_18e_0.state",
@@ -852,13 +852,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3865,
+  "env_steps": 6405,
   "attempts": 1,
-  "seconds": 6.982893943,
-  "steps": 70,
+  "seconds": 12.348893801,
+  "steps": 26,
   "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_17e_0.state",
@@ -873,13 +873,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 3845,
+  "env_steps": 7218,
   "attempts": 1,
-  "seconds": 7.502577937,
-  "steps": 26,
-  "health": 4.5,
+  "seconds": 13.953980626,
+  "steps": 15,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_27n_0.state",
@@ -894,13 +894,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3210,
+  "env_steps": 6622,
   "attempts": 1,
-  "seconds": 5.992424485,
-  "steps": 15,
-  "health": 4.5,
+  "seconds": 12.369845041,
+  "steps": 25,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_28w_0.state",
@@ -915,13 +915,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 3347,
+  "env_steps": 5761,
   "attempts": 1,
-  "seconds": 7.9554741700000005,
-  "steps": 29,
+  "seconds": 15.282748263,
+  "steps": 30,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_38n_0.state",
@@ -936,13 +936,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3939,
+  "env_steps": 8147,
   "attempts": 1,
-  "seconds": 9.0194546,
-  "steps": 39,
+  "seconds": 17.614793749,
+  "steps": 15,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_37e_0.state",
@@ -957,13 +957,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 5024,
+  "env_steps": 9181,
   "attempts": 1,
-  "seconds": 9.357221117,
-  "steps": 53,
-  "health": 3.5,
+  "seconds": 19.66091495,
+  "steps": 194,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_73s_0.state",
@@ -978,13 +978,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5146,
+  "env_steps": 9733,
   "attempts": 1,
-  "seconds": 7.798169209,
-  "steps": 43,
+  "seconds": 14.548541851,
+  "steps": 27,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_72e_0.state",
@@ -999,13 +999,13 @@
   "entry": "E",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5546,
+  "env_steps": 10187,
   "attempts": 1,
-  "seconds": 9.718567894,
-  "steps": 51,
+  "seconds": 18.480731937,
+  "steps": 19,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_73w_0.state",
@@ -1020,13 +1020,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 9365,
+  "env_steps": 15205,
   "attempts": 1,
-  "seconds": 19.383713746,
-  "steps": 176,
+  "seconds": 31.8955391,
+  "steps": 69,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_74w_0.state",
@@ -1041,13 +1041,13 @@
   "entry": "W",
   "exit": "W",
   "alternate": false,
-  "env_steps": 10946,
-  "attempts": 2,
-  "seconds": 18.904780893999998,
-  "steps": 22,
+  "env_steps": 10679,
+  "attempts": 1,
+  "seconds": 19.749426754,
+  "steps": 40,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_73e_0.state",
@@ -1062,13 +1062,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6059,
+  "env_steps": 13735,
   "attempts": 1,
-  "seconds": 12.421336742,
-  "steps": 162,
-  "health": 4.0,
+  "seconds": 31.111924578,
+  "steps": 75,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_63s_0.state",
@@ -1083,13 +1083,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 9591,
+  "env_steps": 14112,
   "attempts": 1,
-  "seconds": 18.135834831,
-  "steps": 36,
+  "seconds": 25.572783877,
+  "steps": 23,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_53s_0.state",
@@ -1104,13 +1104,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5213,
+  "env_steps": 10319,
   "attempts": 1,
-  "seconds": 10.754739357,
-  "steps": 61,
-  "health": 4.5,
+  "seconds": 21.997831163,
+  "steps": 27,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_52e_0.state",
@@ -1125,13 +1125,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 17093,
+  "env_steps": 28880,
   "attempts": 1,
-  "seconds": 36.716796881,
-  "steps": 95,
-  "health": 5.0,
+  "seconds": 65.589089118,
+  "steps": 110,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_42s_0.state",
@@ -1146,13 +1146,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 15623,
+  "env_steps": 12497,
   "attempts": 1,
-  "seconds": 34.171406566,
-  "steps": 159,
-  "health": 1.0,
+  "seconds": 27.618172674,
+  "steps": 61,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_43w_0.state",
@@ -1165,15 +1165,15 @@
   "room": "0x43",
   "in_cave": false,
   "entry": "W",
-  "exit": "E",
+  "exit": "N",
   "alternate": false,
-  "env_steps": 6335,
+  "env_steps": 11424,
   "attempts": 1,
-  "seconds": 13.201321739,
-  "steps": 44,
+  "seconds": 23.779132205,
+  "steps": 39,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_33s_0.state",
@@ -1188,13 +1188,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5354,
+  "env_steps": 10166,
   "attempts": 1,
-  "seconds": 12.364848365,
-  "steps": 44,
-  "health": 5.0,
+  "seconds": 23.645254171,
+  "steps": 37,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_23s_0.state",
@@ -1209,13 +1209,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 7099,
+  "env_steps": 11774,
   "attempts": 1,
-  "seconds": 13.268274705,
-  "steps": 37,
-  "health": 4.5,
+  "seconds": 21.177026867,
+  "steps": 108,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_22e_0.state",
@@ -1230,13 +1230,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 57560,
+  "env_steps": 36090,
   "attempts": 1,
-  "seconds": 113.866041404,
-  "steps": 106,
-  "health": 3.5,
+  "seconds": 67.967886816,
+  "steps": 124,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_7fcave_0.state",
@@ -1251,13 +1251,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4381,
+  "env_steps": 9229,
   "attempts": 1,
-  "seconds": 8.762015367,
-  "steps": 62,
-  "health": 3.0,
+  "seconds": 18.968132189,
+  "steps": 68,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_22c_0.state",
@@ -1272,13 +1272,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 8967,
-  "attempts": 1,
-  "seconds": 17.749318436,
-  "steps": 98,
-  "health": 4.0,
+  "env_steps": 203176,
+  "attempts": 2,
+  "seconds": 406.636472705,
+  "steps": 135,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_23w_0.state",
@@ -1293,13 +1293,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5732,
+  "env_steps": 8523,
   "attempts": 1,
-  "seconds": 11.696397112,
-  "steps": 48,
-  "health": 3.0,
+  "seconds": 17.21413704,
+  "steps": 17,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_33n_0.state",
@@ -1314,13 +1314,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 7599,
+  "env_steps": 9146,
   "attempts": 1,
-  "seconds": 16.249885161999998,
-  "steps": 24,
+  "seconds": 18.155104777,
+  "steps": 153,
   "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_43n_0.state",
@@ -1335,13 +1335,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5387,
+  "env_steps": 11073,
   "attempts": 1,
-  "seconds": 10.021461399,
-  "steps": 42,
-  "health": 3.5,
+  "seconds": 21.70391006,
+  "steps": 69,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_44w_0.state",
@@ -1356,13 +1356,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 7529,
+  "env_steps": 14087,
   "attempts": 1,
-  "seconds": 18.029328734,
-  "steps": 80,
-  "health": 4.5,
+  "seconds": 31.620862929,
+  "steps": 131,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_45w_0.state",
@@ -1377,13 +1377,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 16337,
+  "env_steps": 12740,
   "attempts": 1,
-  "seconds": 34.255819666,
-  "steps": 171,
-  "health": 2.5,
+  "seconds": 27.156255325,
+  "steps": 150,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_35s_0.state",
@@ -1398,13 +1398,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 14747,
+  "env_steps": 58816,
   "attempts": 1,
-  "seconds": 44.575810843,
-  "steps": 88,
+  "seconds": 144.427812274,
+  "steps": 141,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "1_36w_0.state",
@@ -1419,13 +1419,13 @@
   "entry": "W",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 12847,
+  "env_steps": 15270,
   "attempts": 1,
-  "seconds": 29.172967215,
-  "steps": 130,
-  "health": 4.0,
+  "seconds": 31.154597025,
+  "steps": 107,
+  "health": 5.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 55 --source 1_43w_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_37c_0.state",
@@ -1440,11 +1440,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4178,
-  "seconds": 9.0,
-  "steps": 24,
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 67 --source 1_36w_0",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain0.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 8261,
+  "attempts": 1,
+  "seconds": 18.934447647,
+  "steps": 12,
+  "health": 6.0,
+  "ending": "triforce-collected",
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_38w_0.state",
@@ -1459,11 +1461,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5756,
-  "seconds": 11.0,
-  "steps": 24,
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 67 --source 1_36w_0",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain0.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 10222,
+  "attempts": 1,
+  "seconds": 15.124812225,
+  "steps": 17,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_48n_0.state",
@@ -1478,11 +1482,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4976,
-  "seconds": 12.0,
-  "steps": 72,
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 67 --source 1_36w_0",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain0.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 8728,
+  "attempts": 1,
+  "seconds": 17.578541669,
+  "steps": 71,
+  "health": 4.5,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_58n_0.state",
@@ -1497,11 +1503,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5127,
-  "seconds": 10.0,
-  "steps": 73,
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 67 --source 1_36w_0",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain0.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 9668,
+  "attempts": 1,
+  "seconds": 18.680321935,
+  "steps": 76,
+  "health": 4.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_57e_0.state",
@@ -1516,11 +1524,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3864,
-  "seconds": 10.0,
-  "steps": 12,
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 67 --source 1_36w_0",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain0.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 7052,
+  "attempts": 1,
+  "seconds": 15.726503759,
+  "steps": 21,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_56e_0.state",
@@ -1535,11 +1545,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3835,
-  "seconds": 9.0,
-  "steps": 40,
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 67 --source 1_36w_0",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain0.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 7601,
+  "attempts": 1,
+  "seconds": 15.165025917,
+  "steps": 30,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_55e_0.state",
@@ -1554,13 +1566,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4380,
+  "env_steps": 7903,
   "attempts": 1,
-  "seconds": 10.449062013,
-  "steps": 57,
-  "health": 4.0,
+  "seconds": 18.055142981,
+  "steps": 60,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_65n_0.state",
@@ -1575,13 +1587,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3775,
+  "env_steps": 7028,
   "attempts": 1,
-  "seconds": 7.288306925,
+  "seconds": 13.184468951,
   "steps": 41,
-  "health": 5.5,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_64e_0.state",
@@ -1596,13 +1608,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4642,
+  "env_steps": 9476,
   "attempts": 1,
-  "seconds": 10.643757488,
-  "steps": 65,
-  "health": 4.5,
+  "seconds": 18.689545169,
+  "steps": 161,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_63e_0.state",
@@ -1617,13 +1629,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 6299,
+  "env_steps": 8549,
   "attempts": 1,
-  "seconds": 14.300963886,
-  "steps": 56,
+  "seconds": 18.400609544,
+  "steps": 79,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_73n_0.state",
@@ -1638,13 +1650,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3863,
+  "env_steps": 7334,
   "attempts": 1,
-  "seconds": 10.823349703,
-  "steps": 9,
+  "seconds": 15.997555199,
+  "steps": 15,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_74w_0.state",
@@ -1659,13 +1671,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 4450,
+  "env_steps": 8341,
   "attempts": 1,
-  "seconds": 11.011661561,
-  "steps": 13,
+  "seconds": 17.584689631,
+  "steps": 26,
   "health": 5.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_7cs_0.state",
@@ -1680,13 +1692,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4727,
+  "env_steps": 9060,
   "attempts": 1,
-  "seconds": 9.970485384,
-  "steps": 123,
-  "health": 3.0,
+  "seconds": 17.536612801,
+  "steps": 31,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_7be_0.state",
@@ -1701,13 +1713,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7371,
+  "env_steps": 12253,
   "attempts": 1,
-  "seconds": 12.111204349,
-  "steps": 17,
+  "seconds": 21.37188995,
+  "steps": 12,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_6bs_0.state",
@@ -1722,13 +1734,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6643,
+  "env_steps": 10947,
   "attempts": 1,
-  "seconds": 16.991035155,
-  "steps": 65,
-  "health": 5.0,
+  "seconds": 25.662156977,
+  "steps": 55,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_5bs_0.state",
@@ -1743,13 +1755,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 24427,
+  "env_steps": 13597,
   "attempts": 1,
-  "seconds": 51.871121756,
-  "steps": 150,
-  "health": 5.0,
+  "seconds": 27.910200604,
+  "steps": 73,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_5ae_0.state",
@@ -1764,13 +1776,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4405,
+  "env_steps": 9756,
   "attempts": 1,
-  "seconds": 10.955837482,
-  "steps": 30,
-  "health": 5.0,
+  "seconds": 21.387164584,
+  "steps": 17,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_59e_0.state",
@@ -1785,13 +1797,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 11040,
+  "env_steps": 9585,
   "attempts": 1,
-  "seconds": 26.164921491,
-  "steps": 66,
-  "health": 1.0,
+  "seconds": 22.897638,
+  "steps": 87,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_49s_0.state",
@@ -1806,13 +1818,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 6247,
+  "env_steps": 8150,
   "attempts": 1,
-  "seconds": 15.171844927,
-  "steps": 35,
-  "health": 5.0,
+  "seconds": 19.379582963,
+  "steps": 29,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_59n_0.state",
@@ -1827,13 +1839,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 6950,
+  "env_steps": 12590,
   "attempts": 1,
-  "seconds": 16.709151468,
-  "steps": 103,
-  "health": 4.5,
+  "seconds": 30.897966635,
+  "steps": 72,
+  "health": 5.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_69n_0.state",
@@ -1848,13 +1860,13 @@
   "entry": "N",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 32827,
+  "env_steps": 43908,
   "attempts": 1,
-  "seconds": 77.755786265,
-  "steps": 166,
+  "seconds": 104.928810899,
+  "steps": 149,
   "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_0fcave_0.state",
@@ -1869,13 +1881,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4223,
+  "env_steps": 6474,
   "attempts": 1,
-  "seconds": 11.708595764,
+  "seconds": 17.315668206,
   "steps": 39,
-  "health": 4.0,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_69c_0.state",
@@ -1890,13 +1902,13 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 40050,
+  "env_steps": 27744,
   "attempts": 1,
-  "seconds": 77.484575105,
-  "steps": 150,
-  "health": 3.5,
+  "seconds": 57.757736237,
+  "steps": 71,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_59s_0.state",
@@ -1911,13 +1923,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5044,
+  "env_steps": 7126,
   "attempts": 1,
-  "seconds": 13.176605529,
-  "steps": 42,
+  "seconds": 20.076053224,
+  "steps": 61,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_5aw_0.state",
@@ -1932,13 +1944,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4437,
+  "env_steps": 9420,
   "attempts": 1,
-  "seconds": 9.974311096,
-  "steps": 63,
-  "health": 2.0,
+  "seconds": 21.110874017,
+  "steps": 64,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_5bw_0.state",
@@ -1953,13 +1965,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3805,
+  "env_steps": 8228,
   "attempts": 1,
-  "seconds": 9.56572998,
-  "steps": 43,
-  "health": 1.0,
+  "seconds": 18.805325155,
+  "steps": 91,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_4bs_0.state",
@@ -1974,13 +1986,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 7880,
+  "env_steps": 36147,
   "attempts": 1,
-  "seconds": 18.62379206,
-  "steps": 84,
-  "health": 4.0,
+  "seconds": 82.880400302,
+  "steps": 177,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_4cw_0.state",
@@ -1995,13 +2007,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 64043,
-  "attempts": 2,
-  "seconds": 130.31215699400002,
-  "steps": 219,
+  "env_steps": 17555,
+  "attempts": 1,
+  "seconds": 33.974565978,
+  "steps": 156,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_4dw_0.state",
@@ -2016,13 +2028,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 15989,
+  "env_steps": 8717,
   "attempts": 1,
-  "seconds": 44.949272848,
-  "steps": 90,
+  "seconds": 23.746844897,
+  "steps": 48,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "3_3ds_0.state",
@@ -2037,13 +2049,13 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 11562,
+  "env_steps": 12295,
   "attempts": 1,
-  "seconds": 30.201865518,
-  "steps": 108,
-  "health": 2.0,
+  "seconds": 29.608101091,
+  "steps": 97,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 0 --start-step 73 --source 0_56e_0"
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 20 --source /home/leculver/git/triforce2/target/entry-states/r61/2_2es_0.state --iterations 8000 --patience 400 --out target/entry-states/r61-c0"
  },
  {
   "file": "0_77cave_1.state",
@@ -2058,13 +2070,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4041,
+  "env_steps": 4028,
   "attempts": 1,
-  "seconds": 6.519507456,
-  "steps": 17,
+  "seconds": 7.029758472,
+  "steps": 16,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_77c_1.state",
@@ -2081,11 +2093,11 @@
   "alternate": false,
   "env_steps": 4750,
   "attempts": 1,
-  "seconds": 8.836692133,
+  "seconds": 10.084923329,
   "steps": 13,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_67s_1.state",
@@ -2100,13 +2112,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4140,
+  "env_steps": 4300,
   "attempts": 1,
-  "seconds": 6.71240968,
-  "steps": 20,
+  "seconds": 14.281427651,
+  "steps": 21,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_78w_1.state",
@@ -2121,13 +2133,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": true,
-  "env_steps": 4140,
+  "env_steps": 4300,
   "attempts": 1,
-  "seconds": 6.662316746,
-  "steps": 22,
+  "seconds": 14.764886472,
+  "steps": 26,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_68w_1.state",
@@ -2142,13 +2154,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4344,
+  "env_steps": 4442,
   "attempts": 1,
-  "seconds": 9.445890138,
-  "steps": 43,
-  "health": 3.0,
+  "seconds": 18.265846981,
+  "steps": 62,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_58s_1.state",
@@ -2163,13 +2175,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3542,
+  "env_steps": 3434,
   "attempts": 1,
-  "seconds": 8.308731072,
-  "steps": 29,
+  "seconds": 7.925178479,
+  "steps": 68,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_59w_1.state",
@@ -2184,13 +2196,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3404,
+  "env_steps": 3773,
   "attempts": 1,
-  "seconds": 7.703239346,
-  "steps": 62,
-  "health": 2.5,
+  "seconds": 7.954858444,
+  "steps": 51,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5aw_1.state",
@@ -2205,13 +2217,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3929,
+  "env_steps": 3350,
   "attempts": 1,
-  "seconds": 9.71373657,
-  "steps": 35,
-  "health": 3.0,
+  "seconds": 7.315560476,
+  "steps": 29,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5bw_1.state",
@@ -2226,13 +2238,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3785,
+  "env_steps": 3780,
   "attempts": 1,
-  "seconds": 8.666229649,
-  "steps": 113,
-  "health": 3.0,
+  "seconds": 8.045275413,
+  "steps": 38,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5cw_1.state",
@@ -2247,13 +2259,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4645,
+  "env_steps": 4063,
   "attempts": 1,
-  "seconds": 11.29701118,
-  "steps": 105,
-  "health": 1.0,
+  "seconds": 10.50194529,
+  "steps": 54,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5dw_1.state",
@@ -2268,13 +2280,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3576,
+  "env_steps": 3683,
   "attempts": 1,
-  "seconds": 8.017789253,
-  "steps": 46,
+  "seconds": 18.735124608,
+  "steps": 53,
   "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_4ds_1.state",
@@ -2289,13 +2301,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4541,
+  "env_steps": 2997,
   "attempts": 1,
-  "seconds": 9.995976959,
-  "steps": 23,
-  "health": 2.5,
+  "seconds": 7.673256093,
+  "steps": 57,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_4ce_1.state",
@@ -2310,13 +2322,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4020,
+  "env_steps": 4786,
   "attempts": 1,
-  "seconds": 10.179466954,
-  "steps": 57,
+  "seconds": 10.198064495,
+  "steps": 13,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_3cs_1.state",
@@ -2331,13 +2343,13 @@
   "entry": "S",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 12241,
+  "env_steps": 7091,
   "attempts": 1,
-  "seconds": 23.01121768,
-  "steps": 169,
+  "seconds": 13.7261271,
+  "steps": 134,
   "health": 0.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_7ds_1.state",
@@ -2352,13 +2364,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3377,
+  "env_steps": 3360,
   "attempts": 1,
-  "seconds": 6.032269952,
-  "steps": 6,
+  "seconds": 5.45320571,
+  "steps": 7,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_7ew_1.state",
@@ -2375,11 +2387,11 @@
   "alternate": false,
   "env_steps": 4686,
   "attempts": 1,
-  "seconds": 8.402873814,
+  "seconds": 8.401916753,
   "steps": 14,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_6es_1.state",
@@ -2394,13 +2406,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 8993,
+  "env_steps": 6803,
   "attempts": 1,
-  "seconds": 18.501751764,
-  "steps": 66,
-  "health": 1.0,
+  "seconds": 14.39101543,
+  "steps": 113,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_5es_1.state",
@@ -2415,13 +2427,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 19374,
-  "attempts": 2,
-  "seconds": 37.751696772,
-  "steps": 35,
-  "health": 3.0,
+  "env_steps": 5777,
+  "attempts": 1,
+  "seconds": 11.515080164,
+  "steps": 79,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_4es_1.state",
@@ -2436,13 +2448,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4776,
+  "env_steps": 5032,
   "attempts": 1,
-  "seconds": 11.566630454,
-  "steps": 66,
+  "seconds": 12.264059323,
+  "steps": 64,
   "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_3es_1.state",
@@ -2457,13 +2469,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 9823,
+  "env_steps": 7947,
   "attempts": 1,
-  "seconds": 20.086982875,
-  "steps": 116,
-  "health": 2.5,
+  "seconds": 18.558887611,
+  "steps": 124,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_2es_1.state",
@@ -2478,13 +2490,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 134115,
-  "attempts": 1,
-  "seconds": 362.369708188,
-  "steps": 271,
-  "health": 3.0,
+  "env_steps": 123526,
+  "attempts": 2,
+  "seconds": 354.87543206099997,
+  "steps": 286,
+  "health": 0.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_1es_1.state",
@@ -2499,13 +2511,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 11268,
-  "attempts": 1,
-  "seconds": 25.636413146,
-  "steps": 103,
-  "health": 2.0,
+  "env_steps": 28073,
+  "attempts": 2,
+  "seconds": 74.575060529,
+  "steps": 149,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_0es_1.state",
@@ -2520,13 +2532,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 73636,
-  "attempts": 1,
-  "seconds": 168.33667536,
-  "steps": 147,
-  "health": 0.5,
+  "env_steps": 293965,
+  "attempts": 2,
+  "seconds": 690.456700773,
+  "steps": 212,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "2_0de_1.state",
@@ -2541,13 +2553,13 @@
   "entry": "E",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 16788,
+  "env_steps": 12846,
   "attempts": 1,
-  "seconds": 40.296371233,
-  "steps": 60,
-  "health": 3.0,
+  "seconds": 27.275370788,
+  "steps": 90,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_3cc_1.state",
@@ -2564,11 +2576,11 @@
   "alternate": false,
   "env_steps": 9280,
   "attempts": 1,
-  "seconds": 20.960079458,
+  "seconds": 22.579448358,
   "steps": 12,
   "health": 4.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_4cn_1.state",
@@ -2583,13 +2595,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 9576,
+  "env_steps": 5944,
   "attempts": 1,
-  "seconds": 16.854047871,
-  "steps": 17,
-  "health": 4.0,
+  "seconds": 12.038189569,
+  "steps": 52,
+  "health": 0.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_4dw_1.state",
@@ -2604,13 +2616,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7158,
+  "env_steps": 7488,
   "attempts": 1,
-  "seconds": 13.581323837,
-  "steps": 136,
-  "health": 3.0,
+  "seconds": 15.284204957,
+  "steps": 101,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_3ds_1.state",
@@ -2625,13 +2637,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7737,
+  "env_steps": 7552,
   "attempts": 1,
-  "seconds": 18.112997491,
-  "steps": 12,
+  "seconds": 16.420961525,
+  "steps": 21,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_2ds_1.state",
@@ -2646,13 +2658,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 8775,
+  "env_steps": 7928,
   "attempts": 1,
-  "seconds": 21.876875092,
-  "steps": 65,
-  "health": 2.5,
+  "seconds": 19.154539091,
+  "steps": 79,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_2ce_1.state",
@@ -2667,13 +2679,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 7352,
+  "env_steps": 6591,
   "attempts": 1,
-  "seconds": 16.605045292,
-  "steps": 14,
-  "health": 4.0,
+  "seconds": 15.16129866,
+  "steps": 52,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_2ccave_1.state",
@@ -2688,13 +2700,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 8459,
+  "env_steps": 7879,
   "attempts": 1,
-  "seconds": 20.604478128,
-  "steps": 71,
-  "health": 4.0,
+  "seconds": 16.913819771,
+  "steps": 105,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_2cc_1.state",
@@ -2709,13 +2721,13 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 20285,
+  "env_steps": 16444,
   "attempts": 1,
-  "seconds": 37.010985583,
-  "steps": 28,
+  "seconds": 30.205862419,
+  "steps": 15,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_1cs_1.state",
@@ -2730,13 +2742,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 7478,
+  "env_steps": 10125,
   "attempts": 1,
-  "seconds": 16.125772282,
-  "steps": 46,
+  "seconds": 20.695198384,
+  "steps": 132,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_1be_1.state",
@@ -2751,13 +2763,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 6936,
+  "env_steps": 5983,
   "attempts": 1,
-  "seconds": 14.196618173,
-  "steps": 10,
+  "seconds": 13.465720848,
+  "steps": 21,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_1ae_1.state",
@@ -2772,13 +2784,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 9399,
+  "env_steps": 9423,
   "attempts": 1,
-  "seconds": 13.654332765,
+  "seconds": 14.585188871,
   "steps": 2,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_0as_1.state",
@@ -2793,13 +2805,13 @@
   "entry": "S",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 8720,
+  "env_steps": 10494,
   "attempts": 1,
-  "seconds": 17.970306431,
-  "steps": 123,
-  "health": 4.0,
+  "seconds": 19.170067722,
+  "steps": 112,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_0acave_1.state",
@@ -2814,13 +2826,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 7680,
+  "env_steps": 16657,
   "attempts": 1,
-  "seconds": 13.895823799,
-  "steps": 57,
-  "health": 2.5,
+  "seconds": 31.159414509,
+  "steps": 87,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_0ac_1.state",
@@ -2835,13 +2847,13 @@
   "entry": "cave",
   "exit": "S",
   "alternate": false,
-  "env_steps": 9460,
+  "env_steps": 9229,
   "attempts": 1,
-  "seconds": 18.591508358,
-  "steps": 9,
+  "seconds": 18.300581869,
+  "steps": 13,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_1an_1.state",
@@ -2856,13 +2868,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 8136,
+  "env_steps": 9117,
   "attempts": 1,
-  "seconds": 13.431237236,
-  "steps": 66,
-  "health": 4.5,
+  "seconds": 13.706476505,
+  "steps": 67,
+  "health": 0.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_19e_1.state",
@@ -2877,13 +2889,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 8391,
+  "env_steps": 8839,
   "attempts": 1,
-  "seconds": 17.417004838,
-  "steps": 78,
-  "health": 4.0,
+  "seconds": 17.408940171,
+  "steps": 52,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_18e_1.state",
@@ -2898,13 +2910,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 7362,
+  "env_steps": 7315,
   "attempts": 1,
-  "seconds": 14.57613281,
-  "steps": 51,
-  "health": 3.5,
+  "seconds": 13.358093826,
+  "steps": 20,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_17e_1.state",
@@ -2919,13 +2931,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 7322,
+  "env_steps": 7160,
   "attempts": 1,
-  "seconds": 13.921809901,
-  "steps": 81,
-  "health": 4.5,
+  "seconds": 13.125642212,
+  "steps": 29,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_27n_1.state",
@@ -2940,13 +2952,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6452,
+  "env_steps": 5849,
   "attempts": 1,
-  "seconds": 12.700896531,
-  "steps": 18,
-  "health": 4.5,
+  "seconds": 12.343401803,
+  "steps": 37,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_28w_1.state",
@@ -2961,13 +2973,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5945,
+  "env_steps": 6173,
   "attempts": 1,
-  "seconds": 15.018794576,
-  "steps": 39,
-  "health": 4.5,
+  "seconds": 16.212361682,
+  "steps": 36,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_38n_1.state",
@@ -2982,13 +2994,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 8781,
+  "env_steps": 7425,
   "attempts": 1,
-  "seconds": 19.531134466,
-  "steps": 51,
-  "health": 5.0,
+  "seconds": 16.7781332,
+  "steps": 58,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_37e_1.state",
@@ -3003,13 +3015,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 9111,
+  "env_steps": 13601,
   "attempts": 1,
-  "seconds": 17.935664757,
-  "steps": 167,
-  "health": 4.5,
+  "seconds": 26.907144873,
+  "steps": 131,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_73s_1.state",
@@ -3024,13 +3036,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 9485,
+  "env_steps": 10223,
   "attempts": 1,
-  "seconds": 14.188583946,
-  "steps": 32,
-  "health": 5.0,
+  "seconds": 16.030086255,
+  "steps": 53,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_72e_1.state",
@@ -3047,11 +3059,11 @@
   "alternate": false,
   "env_steps": 9536,
   "attempts": 1,
-  "seconds": 17.336340156,
+  "seconds": 17.019668622,
   "steps": 22,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_73w_1.state",
@@ -3066,13 +3078,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 15770,
+  "env_steps": 10740,
   "attempts": 1,
-  "seconds": 33.956856586,
-  "steps": 49,
+  "seconds": 22.867013966000002,
+  "steps": 103,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_74w_1.state",
@@ -3089,11 +3101,11 @@
   "alternate": false,
   "env_steps": 10250,
   "attempts": 1,
-  "seconds": 18.487319528,
+  "seconds": 18.167036911,
   "steps": 25,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_73e_1.state",
@@ -3108,13 +3120,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 11765,
+  "env_steps": 10544,
   "attempts": 1,
-  "seconds": 24.509329881,
-  "steps": 90,
-  "health": 4.0,
+  "seconds": 24.179724013,
+  "steps": 97,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_63s_1.state",
@@ -3131,11 +3143,11 @@
   "alternate": false,
   "env_steps": 10685,
   "attempts": 1,
-  "seconds": 19.81442725,
+  "seconds": 18.738035214,
   "steps": 36,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_53s_1.state",
@@ -3150,13 +3162,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 10489,
+  "env_steps": 11299,
   "attempts": 1,
-  "seconds": 21.928047595,
-  "steps": 54,
-  "health": 4.0,
+  "seconds": 23.21334824,
+  "steps": 83,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_52e_1.state",
@@ -3171,13 +3183,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 21712,
+  "env_steps": 21372,
   "attempts": 1,
-  "seconds": 49.544241525,
-  "steps": 116,
-  "health": 1.5,
+  "seconds": 48.998397668,
+  "steps": 135,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_42s_1.state",
@@ -3192,13 +3204,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 16444,
+  "env_steps": 12018,
   "attempts": 1,
-  "seconds": 40.070907049,
-  "steps": 125,
-  "health": 3.5,
+  "seconds": 24.114542603,
+  "steps": 24,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_43w_1.state",
@@ -3211,15 +3223,15 @@
   "room": "0x43",
   "in_cave": false,
   "entry": "W",
-  "exit": "E",
+  "exit": "N",
   "alternate": false,
-  "env_steps": 10991,
+  "env_steps": 10229,
   "attempts": 1,
-  "seconds": 25.658008984,
-  "steps": 37,
+  "seconds": 21.85708013,
+  "steps": 38,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 19 --source 2_3es_1 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_33s_1.state",
@@ -3234,13 +3246,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5684,
+  "env_steps": 10278,
   "attempts": 1,
-  "seconds": 14.130228288,
-  "steps": 84,
+  "seconds": 23.494284782,
+  "steps": 83,
   "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_23s_1.state",
@@ -3255,13 +3267,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 10501,
+  "env_steps": 14592,
   "attempts": 1,
-  "seconds": 18.945157113,
-  "steps": 91,
-  "health": 5.0,
+  "seconds": 25.163776123,
+  "steps": 126,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_22e_1.state",
@@ -3276,13 +3288,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 87929,
-  "attempts": 2,
-  "seconds": 171.97278267,
-  "steps": 163,
-  "health": 3.0,
+  "env_steps": 75988,
+  "attempts": 1,
+  "seconds": 151.602385655,
+  "steps": 139,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_7fcave_1.state",
@@ -3297,13 +3309,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4225,
+  "env_steps": 8315,
   "attempts": 1,
-  "seconds": 9.329280938,
-  "steps": 68,
-  "health": 2.0,
+  "seconds": 17.402411929,
+  "steps": 55,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_22c_1.state",
@@ -3318,13 +3330,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 16754,
+  "env_steps": 18593,
   "attempts": 1,
-  "seconds": 34.588159525,
-  "steps": 107,
-  "health": 3.0,
+  "seconds": 36.818976195,
+  "steps": 138,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_23w_1.state",
@@ -3339,13 +3351,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5690,
+  "env_steps": 8564,
   "attempts": 1,
-  "seconds": 11.786232018,
-  "steps": 50,
+  "seconds": 16.692169079,
+  "steps": 38,
   "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_33n_1.state",
@@ -3360,13 +3372,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4707,
+  "env_steps": 9729,
   "attempts": 1,
-  "seconds": 10.251882252,
-  "steps": 28,
-  "health": 4.5,
+  "seconds": 19.405553801,
+  "steps": 88,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_43n_1.state",
@@ -3381,13 +3393,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6379,
+  "env_steps": 11966,
   "attempts": 1,
-  "seconds": 13.032218626,
-  "steps": 69,
-  "health": 5.0,
+  "seconds": 21.546173191,
+  "steps": 58,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_44w_1.state",
@@ -3402,13 +3414,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 7721,
+  "env_steps": 12722,
   "attempts": 1,
-  "seconds": 16.3409038,
-  "steps": 103,
-  "health": 3.0,
+  "seconds": 28.508149923,
+  "steps": 93,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_45w_1.state",
@@ -3423,13 +3435,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 10340,
+  "env_steps": 25820,
   "attempts": 1,
-  "seconds": 22.927952926,
-  "steps": 176,
-  "health": 2.0,
+  "seconds": 53.207522624,
+  "steps": 187,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_35s_1.state",
@@ -3444,13 +3456,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 15174,
+  "env_steps": 11341,
   "attempts": 1,
-  "seconds": 45.467291509,
-  "steps": 162,
+  "seconds": 28.786075066,
+  "steps": 149,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "1_36w_1.state",
@@ -3465,13 +3477,13 @@
   "entry": "W",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 6704,
+  "env_steps": 11199,
   "attempts": 1,
-  "seconds": 15.585741568,
-  "steps": 58,
-  "health": 5.5,
+  "seconds": 22.921408557,
+  "steps": 70,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 55 --source 1_43w_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_37c_1.state",
@@ -3486,11 +3498,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4492,
-  "seconds": 9.0,
-  "steps": 33,
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 67 --source 1_36w_1",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain1.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 8649,
+  "attempts": 1,
+  "seconds": 19.750684353,
+  "steps": 21,
+  "health": 6.0,
+  "ending": "triforce-collected",
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_38w_1.state",
@@ -3505,11 +3519,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4913,
-  "seconds": 8.0,
-  "steps": 33,
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 67 --source 1_36w_1",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain1.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 9252,
+  "attempts": 1,
+  "seconds": 13.834793172,
+  "steps": 26,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_48n_1.state",
@@ -3524,11 +3540,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4644,
-  "seconds": 10.0,
-  "steps": 35,
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 67 --source 1_36w_1",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain1.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 8845,
+  "attempts": 1,
+  "seconds": 16.380770084,
+  "steps": 77,
+  "health": 5.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_58n_1.state",
@@ -3543,11 +3561,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4960,
-  "seconds": 10.0,
-  "steps": 152,
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 67 --source 1_36w_1",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain1.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 8801,
+  "attempts": 1,
+  "seconds": 17.826082006,
+  "steps": 57,
+  "health": 4.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_57e_1.state",
@@ -3562,11 +3582,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4413,
-  "seconds": 10.0,
-  "steps": 81,
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 67 --source 1_36w_1",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain1.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 7604,
+  "attempts": 1,
+  "seconds": 14.744623997,
+  "steps": 63,
+  "health": 4.5,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_56e_1.state",
@@ -3581,11 +3603,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4214,
-  "seconds": 10.0,
-  "steps": 46,
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 67 --source 1_36w_1",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain1.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 7746,
+  "attempts": 1,
+  "seconds": 15.182399495,
+  "steps": 32,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_55e_1.state",
@@ -3600,13 +3624,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5403,
+  "env_steps": 8363,
   "attempts": 1,
-  "seconds": 13.515351003,
-  "steps": 53,
-  "health": 5.0,
+  "seconds": 17.654584302,
+  "steps": 112,
+  "health": 5.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_65n_1.state",
@@ -3621,13 +3645,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3725,
+  "env_steps": 6940,
   "attempts": 1,
-  "seconds": 7.457046125,
-  "steps": 25,
-  "health": 5.5,
+  "seconds": 13.87751204,
+  "steps": 13,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_64e_1.state",
@@ -3642,13 +3666,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4604,
+  "env_steps": 11406,
   "attempts": 1,
-  "seconds": 10.691422399,
-  "steps": 107,
+  "seconds": 24.24098997,
+  "steps": 126,
   "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_63e_1.state",
@@ -3663,13 +3687,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5554,
+  "env_steps": 8948,
   "attempts": 1,
-  "seconds": 13.283576557,
-  "steps": 48,
-  "health": 5.0,
+  "seconds": 17.825142312,
+  "steps": 46,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_73n_1.state",
@@ -3684,13 +3708,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4087,
+  "env_steps": 7949,
   "attempts": 1,
-  "seconds": 11.485152522,
-  "steps": 68,
-  "health": 6.0,
+  "seconds": 18.296589709,
+  "steps": 39,
+  "health": 5.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_74w_1.state",
@@ -3705,13 +3729,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 4148,
+  "env_steps": 8268,
   "attempts": 1,
-  "seconds": 9.826731494,
-  "steps": 68,
+  "seconds": 16.846165431,
+  "steps": 24,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_7cs_1.state",
@@ -3726,13 +3750,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4303,
+  "env_steps": 8470,
   "attempts": 1,
-  "seconds": 8.289680421,
-  "steps": 65,
-  "health": 4.5,
+  "seconds": 14.574784173,
+  "steps": 112,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_7be_1.state",
@@ -3747,13 +3771,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4860,
+  "env_steps": 9671,
   "attempts": 1,
-  "seconds": 8.250737957,
+  "seconds": 16.625172521,
   "steps": 14,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_6bs_1.state",
@@ -3768,13 +3792,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6310,
+  "env_steps": 10106,
   "attempts": 1,
-  "seconds": 15.837410501,
-  "steps": 147,
-  "health": 3.0,
+  "seconds": 22.73554877,
+  "steps": 153,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_5bs_1.state",
@@ -3789,13 +3813,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 16329,
+  "env_steps": 35824,
   "attempts": 1,
-  "seconds": 36.164244743,
-  "steps": 100,
-  "health": 6.0,
+  "seconds": 69.380407714,
+  "steps": 131,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_5ae_1.state",
@@ -3810,13 +3834,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4899,
+  "env_steps": 9304,
   "attempts": 1,
-  "seconds": 11.953726303,
-  "steps": 104,
-  "health": 2.0,
+  "seconds": 20.549062251,
+  "steps": 47,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_59e_1.state",
@@ -3831,13 +3855,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3258,
+  "env_steps": 7410,
   "attempts": 1,
-  "seconds": 8.782341731,
-  "steps": 68,
+  "seconds": 17.174735346,
+  "steps": 82,
   "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_49s_1.state",
@@ -3852,13 +3876,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4977,
+  "env_steps": 8007,
   "attempts": 1,
-  "seconds": 13.331788657,
-  "steps": 74,
-  "health": 5.0,
+  "seconds": 18.715261739,
+  "steps": 25,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_59n_1.state",
@@ -3873,13 +3897,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 8952,
+  "env_steps": 10886,
   "attempts": 1,
-  "seconds": 21.568068684,
-  "steps": 81,
-  "health": 5.5,
+  "seconds": 27.296442402,
+  "steps": 73,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_69n_1.state",
@@ -3894,13 +3918,13 @@
   "entry": "N",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 54432,
+  "env_steps": 71429,
   "attempts": 1,
-  "seconds": 124.617891711,
-  "steps": 170,
-  "health": 4.0,
+  "seconds": 169.512431117,
+  "steps": 114,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_0fcave_1.state",
@@ -3915,13 +3939,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3605,
+  "env_steps": 7170,
   "attempts": 1,
-  "seconds": 9.557793968,
-  "steps": 102,
-  "health": 3.0,
+  "seconds": 20.923621526,
+  "steps": 21,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_69c_1.state",
@@ -3936,13 +3960,13 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 55603,
+  "env_steps": 38405,
   "attempts": 1,
-  "seconds": 108.007985274,
-  "steps": 228,
-  "health": 0.5,
+  "seconds": 75.080973026,
+  "steps": 183,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_59s_1.state",
@@ -3957,13 +3981,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3698,
+  "env_steps": 5911,
   "attempts": 1,
-  "seconds": 9.895247295,
-  "steps": 30,
+  "seconds": 14.761273188,
+  "steps": 64,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_5aw_1.state",
@@ -3978,13 +4002,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4308,
+  "env_steps": 11920,
   "attempts": 1,
-  "seconds": 10.218677853,
-  "steps": 31,
-  "health": 6.0,
+  "seconds": 29.394665787,
+  "steps": 95,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_5bw_1.state",
@@ -3999,13 +4023,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4249,
+  "env_steps": 10458,
   "attempts": 1,
-  "seconds": 11.030402992,
-  "steps": 76,
-  "health": 1.0,
+  "seconds": 26.324690725,
+  "steps": 116,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_4bs_1.state",
@@ -4020,13 +4044,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5810,
+  "env_steps": 9308,
   "attempts": 1,
-  "seconds": 13.764699566,
-  "steps": 69,
-  "health": 5.0,
+  "seconds": 25.633356667,
+  "steps": 36,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_4cw_1.state",
@@ -4041,13 +4065,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 59769,
-  "attempts": 2,
-  "seconds": 121.519129007,
-  "steps": 194,
-  "health": 2.0,
+  "env_steps": 20254,
+  "attempts": 1,
+  "seconds": 40.35746612,
+  "steps": 120,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_4dw_1.state",
@@ -4062,13 +4086,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7600,
+  "env_steps": 17606,
   "attempts": 1,
-  "seconds": 22.145595338,
-  "steps": 81,
+  "seconds": 42.802705087,
+  "steps": 73,
   "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "3_3ds_1.state",
@@ -4083,13 +4107,13 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 5899,
+  "env_steps": 10854,
   "attempts": 1,
-  "seconds": 15.150791901,
-  "steps": 68,
-  "health": 4.0,
+  "seconds": 22.745508996,
+  "steps": 112,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 1 --start-step 73 --source 0_56e_1"
+  "command": "python -m triforce.entry_states build --chains 1 --start-step 21 --source /home/leculver/git/triforce2/target/entry-states/r61/2_1es_1.state --iterations 8000 --patience 400 --out target/entry-states/r61-c1"
  },
  {
   "file": "0_77cave_2.state",
@@ -4104,13 +4128,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4488,
+  "env_steps": 4927,
   "attempts": 1,
-  "seconds": 7.079163209,
-  "steps": 11,
+  "seconds": 9.002162504,
+  "steps": 14,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_77c_2.state",
@@ -4127,11 +4151,11 @@
   "alternate": false,
   "env_steps": 6484,
   "attempts": 1,
-  "seconds": 11.934205203,
+  "seconds": 18.554400839,
   "steps": 13,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_67s_2.state",
@@ -4146,13 +4170,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4112,
+  "env_steps": 3961,
   "attempts": 1,
-  "seconds": 6.655491977,
-  "steps": 7,
+  "seconds": 13.588346992,
+  "steps": 4,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_78w_2.state",
@@ -4167,13 +4191,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": true,
-  "env_steps": 4347,
+  "env_steps": 3961,
   "attempts": 1,
-  "seconds": 6.926929851,
-  "steps": 13,
+  "seconds": 13.026423397,
+  "steps": 10,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_68w_2.state",
@@ -4188,13 +4212,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4631,
+  "env_steps": 4878,
   "attempts": 1,
-  "seconds": 9.651667284,
-  "steps": 80,
-  "health": 1.0,
+  "seconds": 15.519032031,
+  "steps": 29,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_58s_2.state",
@@ -4209,13 +4233,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3560,
+  "env_steps": 3471,
   "attempts": 1,
-  "seconds": 9.778451781,
-  "steps": 25,
+  "seconds": 9.252680802,
+  "steps": 27,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_59w_2.state",
@@ -4230,13 +4254,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3474,
+  "env_steps": 3448,
   "attempts": 1,
-  "seconds": 8.559765336,
-  "steps": 35,
-  "health": 1.5,
+  "seconds": 7.807644739,
+  "steps": 12,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5aw_2.state",
@@ -4251,13 +4275,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3258,
+  "env_steps": 3501,
   "attempts": 1,
-  "seconds": 7.8454028220000005,
-  "steps": 24,
-  "health": 2.5,
+  "seconds": 7.479907179,
+  "steps": 18,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5bw_2.state",
@@ -4272,13 +4296,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4412,
+  "env_steps": 3774,
   "attempts": 1,
-  "seconds": 10.147045631,
-  "steps": 25,
-  "health": 2.5,
+  "seconds": 8.289488448,
+  "steps": 69,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5cw_2.state",
@@ -4293,13 +4317,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4143,
+  "env_steps": 3970,
   "attempts": 1,
-  "seconds": 11.775361811,
-  "steps": 49,
-  "health": 2.5,
+  "seconds": 20.728956843,
+  "steps": 64,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_5dw_2.state",
@@ -4314,13 +4338,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5159,
+  "env_steps": 3356,
   "attempts": 1,
-  "seconds": 11.217921605,
-  "steps": 38,
-  "health": 2.5,
+  "seconds": 11.179521773,
+  "steps": 23,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_4ds_2.state",
@@ -4335,13 +4359,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3870,
+  "env_steps": 3912,
   "attempts": 1,
-  "seconds": 9.526333061,
-  "steps": 50,
-  "health": 1.5,
+  "seconds": 9.40657925,
+  "steps": 22,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_4ce_2.state",
@@ -4356,13 +4380,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3843,
+  "env_steps": 3876,
   "attempts": 1,
-  "seconds": 8.881096636,
-  "steps": 102,
-  "health": 0.5,
+  "seconds": 8.642301731,
+  "steps": 69,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "0_3cs_2.state",
@@ -4377,13 +4401,13 @@
   "entry": "S",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 7504,
+  "env_steps": 6698,
   "attempts": 1,
-  "seconds": 15.159379627,
-  "steps": 68,
-  "health": 2.5,
+  "seconds": 12.635458434,
+  "steps": 98,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_7ds_2.state",
@@ -4398,13 +4422,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3957,
+  "env_steps": 3763,
   "attempts": 1,
-  "seconds": 7.411250052,
-  "steps": 60,
-  "health": 0.5,
+  "seconds": 6.250371816,
+  "steps": 68,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_7ew_2.state",
@@ -4421,11 +4445,11 @@
   "alternate": false,
   "env_steps": 5669,
   "attempts": 1,
-  "seconds": 10.671198439,
+  "seconds": 9.882908804,
   "steps": 25,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_6es_2.state",
@@ -4440,13 +4464,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 8023,
+  "env_steps": 8648,
   "attempts": 1,
-  "seconds": 18.417777969,
-  "steps": 90,
-  "health": 0.5,
+  "seconds": 18.584166432,
+  "steps": 120,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_5es_2.state",
@@ -4461,13 +4485,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5520,
+  "env_steps": 5060,
   "attempts": 1,
-  "seconds": 11.588962664,
-  "steps": 77,
-  "health": 1.0,
+  "seconds": 10.650390802,
+  "steps": 81,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_4es_2.state",
@@ -4482,13 +4506,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5237,
+  "env_steps": 4696,
   "attempts": 1,
-  "seconds": 13.1225255,
-  "steps": 68,
+  "seconds": 12.702756437,
+  "steps": 54,
   "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_3es_2.state",
@@ -4503,13 +4527,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 12959,
+  "env_steps": 6128,
   "attempts": 1,
-  "seconds": 28.452204164,
-  "steps": 98,
-  "health": 1.0,
+  "seconds": 14.916245905,
+  "steps": 116,
+  "health": 0.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --out target/entry-states/r61"
  },
  {
   "file": "2_2es_2.state",
@@ -4524,13 +4548,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 22573,
+  "env_steps": 135150,
   "attempts": 1,
-  "seconds": 63.293308477,
-  "steps": 192,
-  "health": 0.5,
+  "seconds": 343.99827488,
+  "steps": 222,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "2_1es_2.state",
@@ -4545,13 +4569,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 12196,
+  "env_steps": 12359,
   "attempts": 1,
-  "seconds": 31.947286879,
-  "steps": 122,
-  "health": 2.0,
+  "seconds": 25.732114538,
+  "steps": 115,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d2first --chains 0,1,2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "2_0es_2.state",
@@ -4566,13 +4590,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 117808,
-  "attempts": 1,
-  "seconds": 287.654899912,
-  "steps": 174,
+  "env_steps": 229351,
+  "attempts": 2,
+  "seconds": 540.316538055,
+  "steps": 129,
   "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "2_0de_2.state",
@@ -4587,13 +4611,13 @@
   "entry": "E",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 15536,
+  "env_steps": 15392,
   "attempts": 1,
-  "seconds": 37.266387172,
-  "steps": 81,
+  "seconds": 33.161203929,
+  "steps": 75,
   "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_3cc_2.state",
@@ -4610,11 +4634,11 @@
   "alternate": false,
   "env_steps": 8438,
   "attempts": 1,
-  "seconds": 19.18415721,
+  "seconds": 19.730400528,
   "steps": 6,
   "health": 4.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_4cn_2.state",
@@ -4629,13 +4653,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4755,
+  "env_steps": 6286,
   "attempts": 1,
-  "seconds": 8.563068179,
-  "steps": 9,
+  "seconds": 11.635113901,
+  "steps": 16,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_4dw_2.state",
@@ -4650,13 +4674,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 9713,
+  "env_steps": 9391,
   "attempts": 1,
-  "seconds": 18.235739357,
-  "steps": 32,
-  "health": 4.0,
+  "seconds": 17.913458064,
+  "steps": 93,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_3ds_2.state",
@@ -4671,13 +4695,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7785,
+  "env_steps": 8102,
   "attempts": 1,
-  "seconds": 17.153464576,
-  "steps": 16,
+  "seconds": 19.105174431,
+  "steps": 30,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_2ds_2.state",
@@ -4692,13 +4716,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 6870,
+  "env_steps": 7640,
   "attempts": 1,
-  "seconds": 15.811834977,
-  "steps": 41,
-  "health": 4.0,
+  "seconds": 17.999482769,
+  "steps": 96,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_2ce_2.state",
@@ -4713,13 +4737,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 6782,
+  "env_steps": 7154,
   "attempts": 1,
-  "seconds": 15.975764333,
-  "steps": 70,
-  "health": 2.5,
+  "seconds": 16.172812304,
+  "steps": 57,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_2ccave_2.state",
@@ -4734,13 +4758,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 9991,
+  "env_steps": 7063,
   "attempts": 1,
-  "seconds": 23.882654214,
-  "steps": 69,
-  "health": 4.0,
+  "seconds": 15.039002705,
+  "steps": 41,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_2cc_2.state",
@@ -4755,13 +4779,13 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 17707,
+  "env_steps": 12417,
   "attempts": 1,
-  "seconds": 31.172170732,
-  "steps": 24,
+  "seconds": 23.570417204,
+  "steps": 27,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_1cs_2.state",
@@ -4776,13 +4800,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 14103,
+  "env_steps": 7401,
   "attempts": 1,
-  "seconds": 32.301838017,
-  "steps": 72,
+  "seconds": 15.20343343,
+  "steps": 75,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_1be_2.state",
@@ -4797,13 +4821,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 6547,
+  "env_steps": 7472,
   "attempts": 1,
-  "seconds": 12.925850753,
-  "steps": 12,
+  "seconds": 14.625757262,
+  "steps": 88,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_1ae_2.state",
@@ -4818,13 +4842,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 9536,
+  "env_steps": 9423,
   "attempts": 1,
-  "seconds": 13.23983694,
-  "steps": 2,
+  "seconds": 13.98845811,
+  "steps": 3,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_0as_2.state",
@@ -4839,13 +4863,13 @@
   "entry": "S",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 8036,
+  "env_steps": 9480,
   "attempts": 1,
-  "seconds": 16.605858545,
-  "steps": 51,
+  "seconds": 17.9260801,
+  "steps": 94,
   "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_0acave_2.state",
@@ -4860,13 +4884,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 8933,
+  "env_steps": 9905,
   "attempts": 1,
-  "seconds": 15.638528536,
-  "steps": 56,
+  "seconds": 16.930594706,
+  "steps": 87,
   "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_0ac_2.state",
@@ -4881,13 +4905,13 @@
   "entry": "cave",
   "exit": "S",
   "alternate": false,
-  "env_steps": 10223,
+  "env_steps": 11113,
   "attempts": 1,
-  "seconds": 20.1533006,
+  "seconds": 23.132322689,
   "steps": 13,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_1an_2.state",
@@ -4902,13 +4926,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 15168,
+  "env_steps": 9632,
   "attempts": 1,
-  "seconds": 26.07373165,
-  "steps": 134,
+  "seconds": 17.832553776,
+  "steps": 88,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_19e_2.state",
@@ -4923,13 +4947,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 8390,
+  "env_steps": 8254,
   "attempts": 1,
-  "seconds": 15.486390975,
-  "steps": 64,
+  "seconds": 16.018050172,
+  "steps": 150,
   "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_18e_2.state",
@@ -4944,13 +4968,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 7689,
+  "env_steps": 7064,
   "attempts": 1,
-  "seconds": 14.104724176,
-  "steps": 37,
+  "seconds": 14.155269693,
+  "steps": 21,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_17e_2.state",
@@ -4965,13 +4989,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 7617,
+  "env_steps": 7366,
   "attempts": 1,
-  "seconds": 14.494540505,
-  "steps": 35,
-  "health": 4.5,
+  "seconds": 13.739740213,
+  "steps": 28,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_27n_2.state",
@@ -4986,13 +5010,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 7085,
+  "env_steps": 6261,
   "attempts": 1,
-  "seconds": 14.496790475,
-  "steps": 21,
+  "seconds": 12.586929278,
+  "steps": 18,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_28w_2.state",
@@ -5007,13 +5031,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 6183,
+  "env_steps": 6199,
   "attempts": 1,
-  "seconds": 16.966095996,
-  "steps": 22,
+  "seconds": 15.715712107,
+  "steps": 34,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_38n_2.state",
@@ -5028,13 +5052,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 8501,
+  "env_steps": 8003,
   "attempts": 1,
-  "seconds": 19.569658919,
-  "steps": 78,
-  "health": 4.5,
+  "seconds": 17.285500106,
+  "steps": 89,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_37e_2.state",
@@ -5049,13 +5073,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 9225,
+  "env_steps": 8816,
   "attempts": 1,
-  "seconds": 18.107049805,
-  "steps": 53,
+  "seconds": 17.817588319,
+  "steps": 112,
   "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_73s_2.state",
@@ -5070,13 +5094,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 9593,
+  "env_steps": 9810,
   "attempts": 1,
-  "seconds": 15.824018624,
-  "steps": 44,
+  "seconds": 15.222354133,
+  "steps": 31,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_72e_2.state",
@@ -5093,11 +5117,11 @@
   "alternate": false,
   "env_steps": 10610,
   "attempts": 1,
-  "seconds": 18.555114078,
+  "seconds": 18.231081434,
   "steps": 17,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_73w_2.state",
@@ -5112,13 +5136,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 22599,
+  "env_steps": 23373,
   "attempts": 1,
-  "seconds": 45.907065784,
-  "steps": 59,
+  "seconds": 47.274923895,
+  "steps": 86,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_74w_2.state",
@@ -5135,11 +5159,11 @@
   "alternate": false,
   "env_steps": 9807,
   "attempts": 1,
-  "seconds": 17.521203373,
+  "seconds": 18.441070133,
   "steps": 31,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_73e_2.state",
@@ -5154,13 +5178,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 13498,
+  "env_steps": 12111,
   "attempts": 1,
-  "seconds": 29.125649747,
-  "steps": 185,
-  "health": 2.0,
+  "seconds": 25.727934263,
+  "steps": 94,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_63s_2.state",
@@ -5177,11 +5201,11 @@
   "alternate": false,
   "env_steps": 12417,
   "attempts": 1,
-  "seconds": 21.638655329,
+  "seconds": 21.555198312,
   "steps": 24,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_53s_2.state",
@@ -5196,13 +5220,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 10808,
+  "env_steps": 10420,
   "attempts": 1,
-  "seconds": 22.240453877,
-  "steps": 58,
-  "health": 4.5,
+  "seconds": 21.145527666,
+  "steps": 46,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_52e_2.state",
@@ -5217,13 +5241,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 11981,
+  "env_steps": 24115,
   "attempts": 1,
-  "seconds": 24.414887659,
-  "steps": 147,
-  "health": 1.0,
+  "seconds": 54.440630202,
+  "steps": 155,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_42s_2.state",
@@ -5238,13 +5262,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 16136,
+  "env_steps": 17335,
   "attempts": 1,
-  "seconds": 35.258884273,
-  "steps": 159,
-  "health": 3.0,
+  "seconds": 35.878905555,
+  "steps": 100,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_43w_2.state",
@@ -5257,15 +5281,15 @@
   "room": "0x43",
   "in_cave": false,
   "entry": "W",
-  "exit": "E",
+  "exit": "N",
   "alternate": false,
-  "env_steps": 10579,
+  "env_steps": 10918,
   "attempts": 1,
-  "seconds": 23.798746576,
-  "steps": 57,
+  "seconds": 22.469290378,
+  "steps": 72,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 21 --source 2_1es_2 --iterations 8000 --patience 400"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_33s_2.state",
@@ -5280,13 +5304,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5317,
-  "attempts": 1,
-  "seconds": 12.920139717,
-  "steps": 48,
-  "health": 4.0,
+  "env_steps": 24004,
+  "attempts": 2,
+  "seconds": 52.422501886999996,
+  "steps": 101,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_23s_2.state",
@@ -5301,13 +5325,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5924,
+  "env_steps": 10351,
   "attempts": 1,
-  "seconds": 12.270194215,
-  "steps": 86,
+  "seconds": 17.81951552,
+  "steps": 90,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_22e_2.state",
@@ -5322,13 +5346,13 @@
   "entry": "E",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 50483,
+  "env_steps": 57466,
   "attempts": 1,
-  "seconds": 106.046405396,
-  "steps": 163,
-  "health": 0.5,
+  "seconds": 115.277666729,
+  "steps": 156,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_7fcave_2.state",
@@ -5343,13 +5367,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7002,
+  "env_steps": 10874,
   "attempts": 1,
-  "seconds": 13.944494756,
-  "steps": 38,
-  "health": 4.0,
+  "seconds": 22.882754931,
+  "steps": 40,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_22c_2.state",
@@ -5364,13 +5388,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 9810,
+  "env_steps": 14212,
   "attempts": 1,
-  "seconds": 20.751339777,
-  "steps": 140,
-  "health": 4.5,
+  "seconds": 31.041673747,
+  "steps": 121,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_23w_2.state",
@@ -5385,13 +5409,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4782,
+  "env_steps": 8740,
   "attempts": 1,
-  "seconds": 9.57517605,
-  "steps": 30,
-  "health": 3.0,
+  "seconds": 17.783596074,
+  "steps": 14,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_33n_2.state",
@@ -5406,13 +5430,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 6872,
+  "env_steps": 9916,
   "attempts": 1,
-  "seconds": 14.378298921,
-  "steps": 77,
-  "health": 4.0,
+  "seconds": 19.883134116,
+  "steps": 46,
+  "health": 2.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_43n_2.state",
@@ -5427,13 +5451,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5878,
+  "env_steps": 14259,
   "attempts": 1,
-  "seconds": 10.600497515,
-  "steps": 77,
+  "seconds": 26.293631212,
+  "steps": 66,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_44w_2.state",
@@ -5448,13 +5472,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 18685,
+  "env_steps": 12917,
   "attempts": 1,
-  "seconds": 39.255554878,
-  "steps": 144,
-  "health": 5.0,
+  "seconds": 27.692884643,
+  "steps": 94,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_45w_2.state",
@@ -5469,13 +5493,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 20609,
+  "env_steps": 20911,
   "attempts": 1,
-  "seconds": 43.891035491,
-  "steps": 117,
-  "health": 3.5,
+  "seconds": 45.968810094,
+  "steps": 126,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_35s_2.state",
@@ -5490,13 +5514,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 25969,
+  "env_steps": 20966,
   "attempts": 1,
-  "seconds": 75.424576113,
-  "steps": 211,
+  "seconds": 55.081266031,
+  "steps": 85,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "1_36w_2.state",
@@ -5511,13 +5535,13 @@
   "entry": "W",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 7496,
+  "env_steps": 13094,
   "attempts": 1,
-  "seconds": 17.61537834,
-  "steps": 66,
-  "health": 4.0,
+  "seconds": 26.506214199,
+  "steps": 90,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 55 --source 1_43w_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_37c_2.state",
@@ -5532,11 +5556,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4331,
-  "seconds": 10.0,
+  "env_steps": 8340,
+  "attempts": 1,
+  "seconds": 19.077956859,
   "steps": 10,
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 67 --source 1_36w_2",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain2.log); the build was stopped before its end-of-run manifest merge"
+  "health": 6.0,
+  "ending": "triforce-collected",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_38w_2.state",
@@ -5551,11 +5577,13 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5143,
-  "seconds": 7.0,
-  "steps": 61,
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 67 --source 1_36w_2",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain2.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 9838,
+  "attempts": 1,
+  "seconds": 14.463749012,
+  "steps": 20,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_48n_2.state",
@@ -5570,11 +5598,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4601,
-  "seconds": 11.0,
-  "steps": 99,
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 67 --source 1_36w_2",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain2.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 8319,
+  "attempts": 1,
+  "seconds": 16.667885779,
+  "steps": 109,
+  "health": 5.5,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_58n_2.state",
@@ -5589,11 +5619,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4549,
-  "seconds": 9.0,
-  "steps": 54,
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 67 --source 1_36w_2",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain2.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 8997,
+  "attempts": 1,
+  "seconds": 15.91162346,
+  "steps": 75,
+  "health": 4.5,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_57e_2.state",
@@ -5608,11 +5640,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3780,
-  "seconds": 9.0,
-  "steps": 100,
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 67 --source 1_36w_2",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain2.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 7293,
+  "attempts": 1,
+  "seconds": 17.165233601,
+  "steps": 17,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_56e_2.state",
@@ -5627,11 +5661,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4087,
-  "seconds": 9.0,
-  "steps": 72,
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 67 --source 1_36w_2",
-  "regenerated": "2026-11-10 from that build's log (/tmp/d3build/chain2.log); the build was stopped before its end-of-run manifest merge"
+  "env_steps": 7600,
+  "attempts": 1,
+  "seconds": 19.830023348,
+  "steps": 12,
+  "health": 6.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_55e_2.state",
@@ -5646,13 +5682,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5481,
+  "env_steps": 8333,
   "attempts": 1,
-  "seconds": 12.687596502,
-  "steps": 64,
-  "health": 5.5,
+  "seconds": 16.5378084,
+  "steps": 89,
+  "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_65n_2.state",
@@ -5667,13 +5703,13 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 3542,
+  "env_steps": 6742,
   "attempts": 1,
-  "seconds": 6.746888125,
-  "steps": 15,
+  "seconds": 12.782417104,
+  "steps": 38,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_64e_2.state",
@@ -5688,13 +5724,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4550,
+  "env_steps": 6980,
   "attempts": 1,
-  "seconds": 10.521318407,
-  "steps": 112,
+  "seconds": 14.837295955,
+  "steps": 42,
   "health": 4.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_63e_2.state",
@@ -5709,13 +5745,13 @@
   "entry": "E",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4201,
+  "env_steps": 8661,
   "attempts": 1,
-  "seconds": 9.359902421,
-  "steps": 72,
-  "health": 4.0,
+  "seconds": 18.715315509,
+  "steps": 44,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_73n_2.state",
@@ -5730,13 +5766,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4447,
+  "env_steps": 7599,
   "attempts": 1,
-  "seconds": 12.087105958,
-  "steps": 19,
-  "health": 6.0,
+  "seconds": 16.856185261,
+  "steps": 72,
+  "health": 5.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "0_74w_2.state",
@@ -5751,13 +5787,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 4753,
+  "env_steps": 8688,
   "attempts": 1,
-  "seconds": 12.001922779,
-  "steps": 83,
+  "seconds": 18.845400884,
+  "steps": 10,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_7cs_2.state",
@@ -5772,13 +5808,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5109,
+  "env_steps": 7068,
   "attempts": 1,
-  "seconds": 8.694502831,
-  "steps": 76,
-  "health": 2.0,
+  "seconds": 12.896564121,
+  "steps": 35,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_7be_2.state",
@@ -5793,13 +5829,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 8100,
+  "env_steps": 12832,
   "attempts": 1,
-  "seconds": 13.539756956,
+  "seconds": 22.9404435,
   "steps": 11,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_6bs_2.state",
@@ -5814,13 +5850,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5689,
+  "env_steps": 12795,
   "attempts": 1,
-  "seconds": 14.45900041,
-  "steps": 92,
-  "health": 6.0,
+  "seconds": 30.029926972,
+  "steps": 62,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_5bs_2.state",
@@ -5835,13 +5871,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 24422,
+  "env_steps": 20612,
   "attempts": 1,
-  "seconds": 53.554322005,
-  "steps": 203,
-  "health": 3.0,
+  "seconds": 42.382280372,
+  "steps": 136,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_5ae_2.state",
@@ -5856,13 +5892,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5304,
+  "env_steps": 11069,
   "attempts": 1,
-  "seconds": 13.5476194,
-  "steps": 66,
-  "health": 1.0,
+  "seconds": 24.287288437,
+  "steps": 185,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_59e_2.state",
@@ -5877,13 +5913,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 15871,
+  "env_steps": 15862,
   "attempts": 1,
-  "seconds": 36.120516693,
-  "steps": 69,
-  "health": 2.5,
+  "seconds": 39.14145934,
+  "steps": 65,
+  "health": 3.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_49s_2.state",
@@ -5898,13 +5934,13 @@
   "entry": "S",
   "exit": "S",
   "alternate": false,
-  "env_steps": 3781,
+  "env_steps": 5875,
   "attempts": 1,
-  "seconds": 9.099302215,
-  "steps": 113,
-  "health": 1.0,
+  "seconds": 14.616336331,
+  "steps": 41,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_59n_2.state",
@@ -5919,13 +5955,13 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5412,
+  "env_steps": 14320,
   "attempts": 1,
-  "seconds": 14.195715428,
-  "steps": 66,
+  "seconds": 36.627738467,
+  "steps": 143,
   "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_69n_2.state",
@@ -5940,13 +5976,13 @@
   "entry": "N",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 31365,
+  "env_steps": 95984,
   "attempts": 1,
-  "seconds": 72.917589312,
-  "steps": 200,
-  "health": 2.0,
+  "seconds": 229.746128725,
+  "steps": 165,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_0fcave_2.state",
@@ -5961,13 +5997,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 2734,
+  "env_steps": 6050,
   "attempts": 1,
-  "seconds": 7.957329819,
-  "steps": 73,
+  "seconds": 16.518566702,
+  "steps": 57,
   "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_69c_2.state",
@@ -5982,13 +6018,13 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 52174,
+  "env_steps": 44802,
   "attempts": 1,
-  "seconds": 100.180104667,
-  "steps": 171,
+  "seconds": 88.462648322,
+  "steps": 304,
   "health": 0.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_59s_2.state",
@@ -6003,13 +6039,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5689,
+  "env_steps": 10391,
   "attempts": 1,
-  "seconds": 15.813086476,
-  "steps": 64,
-  "health": 5.0,
+  "seconds": 27.453023994,
+  "steps": 86,
+  "health": 2.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_5aw_2.state",
@@ -6024,13 +6060,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4606,
+  "env_steps": 10142,
   "attempts": 1,
-  "seconds": 12.085691964,
-  "steps": 18,
-  "health": 6.0,
+  "seconds": 25.565325392,
+  "steps": 55,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_5bw_2.state",
@@ -6045,13 +6081,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6586,
+  "env_steps": 8541,
   "attempts": 1,
-  "seconds": 14.930383176,
-  "steps": 54,
-  "health": 4.5,
+  "seconds": 21.012080233,
+  "steps": 36,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_4bs_2.state",
@@ -6066,13 +6102,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 8933,
+  "env_steps": 9123,
   "attempts": 1,
-  "seconds": 21.716028895,
-  "steps": 66,
-  "health": 4.0,
+  "seconds": 19.998005989,
+  "steps": 48,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_4cw_2.state",
@@ -6087,13 +6123,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 47025,
+  "env_steps": 36211,
   "attempts": 1,
-  "seconds": 94.999736594,
-  "steps": 192,
-  "health": 3.0,
+  "seconds": 75.666832864,
+  "steps": 163,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_4dw_2.state",
@@ -6108,13 +6144,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4365,
+  "env_steps": 25075,
   "attempts": 1,
-  "seconds": 12.942694755,
-  "steps": 64,
-  "health": 3.0,
+  "seconds": 58.922315134,
+  "steps": 74,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  },
  {
   "file": "3_3ds_2.state",
@@ -6129,12 +6165,12 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 9766,
+  "env_steps": 9923,
   "attempts": 1,
-  "seconds": 24.634425419,
-  "steps": 41,
+  "seconds": 22.584128646,
+  "steps": 45,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --chains 2 --start-step 73 --source 0_56e_2"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 19 --source /home/leculver/git/triforce2/target/entry-states/r61/2_3es_2.state --iterations 8000 --patience 400 --out target/entry-states/r61-c2"
  }
 ]

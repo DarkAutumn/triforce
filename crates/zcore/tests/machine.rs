@@ -384,9 +384,9 @@ fn shipped_states_replay_to_pinned_digests() {
     let Some(rom) = rom() else { return };
     let pins = [
         ("start", "5b39e90eb7f699a4a2efc605df7b0b118fa16ec2978971203a6404657c5d4945"),
-        ("2_7ds_0", "bbf8281a386c7148422472e8ae6435d386ea9cb8293fe034c385245711e9b8d2"),
-        ("0_3cc_0", "e5e05613391e8f35fecaaba43a0a0c5337c66a5ee708ee29b18362e1ce9f819c"),
-        ("3_7cs_0", "511bc1ff53ab6ce34958c196fe4460f03c07f13c7794ed13f5bf703dc69a19f5"),
+        ("2_7ds_0", "f79fc3c6ea73241a00b7d1592c1c55b4f9ce3afaea64861feb52136bb7efdd86"),
+        ("0_3cc_0", "c8f12d0c2942212951568ac6a62805c3555931e5b80c302f6964ac8fa76dfa27"),
+        ("3_7cs_0", "9f73cd2962a5844ad61e038affe1558c32f19612f8334879ba68f9298a0d508f"),
     ];
     let mut got = Vec::new();
     for (name, _) in pins {
