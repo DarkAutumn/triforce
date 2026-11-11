@@ -65,24 +65,29 @@ def test_collect_best_keeps_the_top_successes_of_each_state(monkeypatch):
     assert empty.obs == {} and empty.targets.shape == (0, 3)
 
 
-@pytest.fixture(name='walk_west')
-def fixture_walk_west():
-    """ow-start's 0x1b east-entry states, where walking west succeeds in some runs and times out in others."""
+@pytest.fixture(name='walk_north')
+def fixture_walk_north():
+    """ow-start's 0x1b east-entry states, where walking north succeeds in some runs and times out in others (Link
+    enters at the east edge; west of his entry row is blocked in the rebuilt states, north is open in some)."""
     for chain in range(3):
         require_state(f'0_1be_{chain}')
     return _native.SpecialistConfig.load('ow-start').replace(start_states=['0_1be_*'], max_steps=30)
 
 
-def test_collect_best_on_the_native_pool(walk_west):
-    policy = scripted('MOVE W 16').to_native()
-    records, _ = best_of_n.play_episodes(walk_west, policy, 4, seed=11, parallel=4, states_dir=REPO_STATES_DIR)
-    best = best_of_n.collect_best(walk_west, policy, 4, 1, seed=11, parallel=4, states_dir=REPO_STATES_DIR)
-    assert best.episodes == len(records) == 4 * 3
-    assert best.successes == sum(r['success'] for r in records.values())
+def test_collect_best_on_the_native_pool(walk_north):
+    policy = scripted('MOVE N 16').to_native()
+    records, _ = best_of_n.play_episodes(walk_north, policy, 4, seed=11, parallel=4, states_dir=REPO_STATES_DIR)
     by_state = {}
     for record in sorted(records.values(), key=lambda r: (best_of_n.rank_key(r), r['seed'])):
         if record['success']:
             by_state.setdefault(record['start_state'], []).append(record)
+    # The precondition the selection checks below need: some runs fail, and some state has two successes (so
+    # keeping one per state drops one). If rebuilt states break it, pick another scripted move or state set.
+    assert not all(r['success'] for r in records.values()), "every run succeeded"
+    assert any(len(runs) >= 2 for runs in by_state.values()), f"no state with two successes: {by_state.keys()}"
+    best = best_of_n.collect_best(walk_north, policy, 4, 1, seed=11, parallel=4, states_dir=REPO_STATES_DIR)
+    assert best.episodes == len(records) == 4 * 3
+    assert best.successes == sum(r['success'] for r in records.values())
     kept = [r for runs in by_state.values() for r in runs[:1]]
     assert 0 < best.kept == len(kept) < best.successes and best.states == len(by_state)
     assert best.steps == sum(r['steps'] for r in kept)
@@ -92,11 +97,22 @@ def test_collect_best_on_the_native_pool(walk_west):
                for mask, target in zip(best.masks, best.targets))
 
 
-def test_collect_best_without_a_success_is_empty(walk_west):
-    best = best_of_n.collect_best(walk_west.replace(max_steps=3), scripted('WAIT 8').to_native(), 2, 2,
+def test_collect_best_without_a_success_is_empty(walk_north):
+    best = best_of_n.collect_best(walk_north.replace(max_steps=3), scripted('WAIT 8').to_native(), 2, 2,
                                   parallel=4, states_dir=REPO_STATES_DIR)
     assert (best.episodes, best.successes, best.kept, best.states, best.steps) == (6, 0, 0, 0, 0)
     assert best.batch[0] == {}
+
+
+def test_play_episodes_ends_when_stop_says_so(walk_north):
+    """``stop`` sees each record as it arrives; True ends the evaluation there (the pool closes mid-play)."""
+    seen = []
+    records, _ = best_of_n.play_episodes(walk_north, scripted('MOVE N 16').to_native(), 20, seed=11, parallel=4,
+                                         states_dir=REPO_STATES_DIR, stop=lambda r: seen.append(r) or len(seen) == 2)
+    assert len(seen) == len(records) == 2 and sorted(records) == sorted(r['seed'] for r in seen)
+    by_state = best_of_n.success_by_state(walk_north, scripted('MOVE N 16').to_native(), 20, seed=11, parallel=4,
+                                          states_dir=REPO_STATES_DIR, stop=lambda r: not r['success'])
+    assert sum(e for _, e in by_state.values()) - sum(s for s, _ in by_state.values()) == 1
 
 
 def test_train_refreshes_the_best_runs_every_best_every_iterations(states_dir, tmp_path, monkeypatch):
