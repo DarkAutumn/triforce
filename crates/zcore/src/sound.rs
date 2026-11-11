@@ -499,8 +499,10 @@ impl OnePole {
 /// The mixer's output is averaged down to this many times the output rate, then low-passed and decimated.
 const OVERSAMPLE: usize = 4;
 const TAPS: usize = 64;
-/// Output level: the mixer's full scale is about 1.0 before the high-pass filters centre it.
-const GAIN: f32 = 1.25;
+/// Output level.  The mixer's full scale is about 1.0, but music uses a fraction of it: eleven minutes of
+/// play (the corpus's golden path) peak at 0.38 of full scale after the filters, so 2.0 leaves headroom and
+/// the rare louder moment is clipped.
+const GAIN: f32 = 2.0;
 
 /// The console's sound from its register writes (module docs): mono samples in `-1.0..=1.0`.
 #[derive(Debug, Clone)]
