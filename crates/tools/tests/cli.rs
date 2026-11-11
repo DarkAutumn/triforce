@@ -404,6 +404,49 @@ fn movie_import_writes_a_movie_that_plays_to_the_recorded_end() {
     assert!(stdout(&out).contains("desync.tfreplay: diverged at frame 60"), "{}", stdout(&out));
 }
 
+/// The compatibility corpus (`corpus/replays/`; AGENTS.md "Versioning"): every replay recorded by an earlier
+/// build still plays on this one to the states it recorded.  It holds a power-on start with every optional
+/// stream, a state-file start, and a golden path from power on to the Dungeon 3 triforce.  A failure here
+/// means replays people kept no longer replay: read the AGENTS.md rule before touching the files.
+#[test]
+fn the_replay_corpus_still_verifies() {
+    if !have_rom() {
+        return;
+    }
+    let mut files: Vec<String> = std::fs::read_dir(repo().join("corpus/replays")).unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".tfreplay"))
+        .map(|name| format!("corpus/replays/{name}"))
+        .collect();
+    files.sort();
+    for needed in ["v0-golden", "v0-power-on", "v0-state"] {
+        assert!(files.contains(&format!("corpus/replays/{needed}.tfreplay")), "{needed} is missing: {files:?}");
+    }
+    let mut args = vec!["replay", "verify"];
+    args.extend(files.iter().map(String::as_str));
+    let out = tf(&args);
+    let text = stdout(&out);
+    assert_eq!(out.status.code(), Some(0), "{text}{}", stderr(&out));
+    for file in &files {
+        assert!(text.contains(&format!("{file}: ok, ")), "{text}");
+    }
+
+    let info = |name: &str| stdout(&tf(&["replay", "info", &format!("corpus/replays/{name}.tfreplay")]));
+    let golden = info("v0-golden");
+    for line in ["version:  0", "ending:   win", "segments: 3", "states:   1 END, 2 CHECKPOINT", "took the level 3 triforce"] {
+        assert!(golden.contains(line), "{line}: {golden}");
+    }
+    assert!(golden.contains("source:   power-on LINK ") && golden.contains("(0 edits before it)"), "{golden}");
+    let power_on = info("v0-power-on");
+    for line in ["source:   power-on LINK 100", "KEYFRAME", " REWARDS ", " DECISIONS ", "(0 edits before it)"] {
+        assert!(power_on.contains(line), "{line}: {power_on}");
+    }
+    let state = info("v0-state");
+    for line in ["source:   embedded state 0_3cc_0", "1 START, 1 END", " REWARDS ", " DECISIONS "] {
+        assert!(state.contains(line), "{line}: {state}");
+    }
+}
+
 #[test]
 fn corpus_check_passes() {
     if !have_rom() {

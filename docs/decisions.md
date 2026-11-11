@@ -992,3 +992,38 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   cave-mouth flag, target directions, the zeroed selected-item slice), so the old models no longer matched the code.
   Against the old team on the fixed measurement code (B1): D2 89 → 100, after D2 34 → 92 (the 0x0a bounce is gone),
   from the start to D1 14 → 55 arrivals of 120; D1 115 → 80 is the one regression (round17.md §5).
+
+## 2026-11-11 — Versioning, power-on starts, TFREPLAY replays, headless play, the golden path (Lee)
+
+- **Version `1.3.1.0`** (`VERSION`; MAJOR.dungeons.model-breaking.revision; AGENTS.md "Versioning"). Every run
+  dir carries the version that saved it; a model whose first three numbers differ from the code's (or with no
+  stamp) is refused unless `--allow-incompatible-models`. Models are not checked in (too large; a backup
+  strategy comes later).
+- **A run can start from console power on** (`zelda::power_on`, `--power-on --name --delay`): the title screen,
+  an idle on the file-select screen, the name entry, the game start, by controller inputs alone. The idle
+  (0..=32766 frames, the period of the game's random numbers minus one) is the run's only randomness; the game's
+  random numbers are never written. Fifteen saved machine states (`triforce/states/power_on`) skip most of the
+  idle; a run is the same with or without them.
+- **New replays replace both old recorders** (the `--plays` action files and the pool's `movie` event):
+  `TFREPLAY`, one binary file per run that replays bit for bit on the emulator alone, with its own integer
+  version (0). `TFMOVIE` stays for the scripted corpus and the goldens. Chosen by Lee: the decision stream is the
+  whole factored joint (91 × f32); state blobs are zstd `TFZSTATE` files (a keyframe is a loadable state);
+  streams are not compressed; chain rewards are scored by the code training uses; `play-zelda.py` gets flags
+  only (no golden mode, no playback UI).
+- **Play is stochastic by default** (`play-zelda.py`, `zelda-headless.py`, the golden path: `--act sample`;
+  `--act argmax|model` are options); evaluation keeps following each model's registered act mode.
+- **Golden path:** games race to the next triforce; the first to stand on the overworld with it is the
+  checkpoint every game restarts from. The games of a segment differ only by policy sampling: no memory write
+  and no inserted frame at a checkpoint.
+- **Decided while building (not Lee's; say so if they should change):**
+  - `--stop-at step:N` ends a run only when the step's room is entered by the route's own exit. A wrong exit can
+    land in that room with the step's progress (measured: 8 of the 15 one-move segments from shipped states that
+    reach their next step's room do it through a wrong exit, e.g. leaving Dungeon 1's
+    0x72 at once without its key reads as step 48); counting that would make "wins" of runs that skipped a room's
+    objective.
+  - `zelda-headless.py` exits 1 when a run ended in an error (as `eval-chain` does), even if COUNT replays were
+    saved; a golden path that fails a segment is still saved, under the failed run's ending.
+  - A recording keeps the action executor's own memory writes (Link's facing `$98`, the selected B item `$656`)
+    as edits, including writes of the value already there.
+  - `replay_stitch` renumbers reward terms instead of requiring equal term tables (terms are numbered by first
+    use, so two segments rarely agree).

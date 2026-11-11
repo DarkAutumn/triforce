@@ -18,6 +18,11 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   D1 55, the D3 triforce 1. Open: the D1 regression (stalfos-keese-gel early-stopped in 4 minutes and loses more
   hearts; goriya and Aquamentus die after it). Every new checkpoint needs its act mode re-measured, in single
   rooms and in chains (argmax is fragile per checkpoint).
+- **Branch `replays` (Nov 11; not merged while a round trains on `main`):** versioning (`VERSION` 1.3.1.0, model
+  stamps), starts from console power on, `TFREPLAY` replays (`--replays DIR`; they replaced `--plays` and the
+  `movie` event), `zelda-headless.py` and the golden path (`--golden`). With the r61–r63 team the golden path
+  from power on to the D3 triforce took 15–19 runs and 22 s on 8 games (`corpus/replays/v0-golden.tfreplay`,
+  61,551 frames). After the merge: `triforce stamp` (stamps every promoted run 1.3.1.0), then `git tag v1.3.1.0`.
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -91,6 +96,11 @@ up with ideas, test them, keep what helps, and log everything.
   ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
   refusing it (replays embed states). Play (play-zelda, zelda-headless, the golden path) is stochastic by default
   (`--act sample`; `--act argmax|model` are options); evaluation follows each model's act mode.
+- **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path"):
+  `triforce eval-chain|evaluate --replays DIR`, `play-zelda.py --replays DIR`, `zelda-headless.py OUT [COUNT]
+  [--wins-only|--deaths-only|--stuck-only] [--golden]`; optional streams `--streams rewards,decisions,keyframes`.
+  `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
+  is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
 
 ## Game mechanics that matter for training
 

@@ -118,6 +118,17 @@ checks the same; the recordings are replays, `triforce/replay.py`). `tf corpus c
 replays every movie and requires ≥ 1M frames and ≥ 10,000 gameplay frames in each of the overworld and
 Dungeons 1-3.
 
+`corpus/replays/` is the replay compatibility corpus (`AGENTS.md`, Versioning): replays recorded by the trained
+team that every later build must still replay (`tf replay verify corpus/replays/*.tfreplay`; a cargo test runs
+it). It is not re-recorded for a retrain, only after a deliberate break (then the old files move to
+`corpus/replays/retired/` and `REPLAY_VERSION` goes up):
+
+```bash
+.venv/bin/python zelda-headless.py target/replays/po 1 --wins-only --power-on --name LINK --delay 100 --stop-at step:3 --streams rewards,decisions,keyframes --keyframe-frames 300    # -> v<N>-power-on.tfreplay
+.venv/bin/python zelda-headless.py target/replays/state 1 --wins-only --from 0_3cc_0 --stop-at step:27 --streams rewards,decisions,keyframes --keyframe-frames 300                    # -> v<N>-state.tfreplay
+.venv/bin/python zelda-headless.py target/replays/golden 1 --golden --power-on --parallel 8                                                                                           # -> v<N>-golden.tfreplay
+```
+
 ## Testing
 
 Two suites, both about a minute: `cargo test --release --workspace --features zelda/zcore` and
