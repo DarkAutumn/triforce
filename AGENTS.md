@@ -6,23 +6,23 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 11)
 
-- **Now (Nov 11, round 17):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives them
+- **Now (Nov 11, round 18):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives them
   through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only route
   (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white sword
   → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. The whole-repo
-  code review is worked through (`target/review-progress.md`: 186 fixed, the rest duplicates or decided; Lee's
-  decisions in `docs/decisions.md` 2026-11-10), states and curricula rebuilt, and the team retrained from scratch
-  with SIL on the fixed code (**r61, promoted**; `docs/experiments/round17.md`). Act mode per model (`<run
-  dir>/act`, bound to the checkpoint's sha1): argmax for 16 families, sampling for d2-rope, darknut,
-  stalfos-keese-gel and zol. Chains (120 seeds): D2 100, after D2 92, D1 80, after D1 120, D3 23; from the start
-  D1 55, the D3 triforce 1. Open: the D1 regression (stalfos-keese-gel early-stopped in 4 minutes and loses more
-  hearts; goriya and Aquamentus die after it). Every new checkpoint needs its act mode re-measured, in single
-  rooms and in chains (argmax is fragile per checkpoint).
-- **Branch `replays` (Nov 11; not merged while a round trains on `main`):** versioning (`VERSION` 1.3.1.0, model
-  stamps), starts from console power on, `TFREPLAY` replays (`--replays DIR`; they replaced `--plays` and the
-  `movie` event), `zelda-headless.py` and the golden path (`--golden`). With the r61–r63 team the golden path
-  from power on to the D3 triforce took 15–19 runs and 22 s on 8 games (`corpus/replays/v0-golden.tfreplay`,
-  61,551 frames). After the merge: `triforce stamp` (stamps every promoted run 1.3.1.0), then `git tag v1.3.1.0`.
+  code review is worked through (`target/review-progress.md`; Lee's decisions in `docs/decisions.md` 2026-11-10),
+  the team was retrained from scratch on the fixed code (r61, round 17) and continued with a hearts-aware early
+  stop (round 18): every chain segment is at or above the previous team (1000 runs per segment: D2 87.6%, after
+  D2 81.9%, D1 97.8%, after D1 100%, D3 40.6%; from the start to the D3 triforce 10.6%). Act mode per model
+  (`<run dir>/act`, bound to the checkpoint's sha1): argmax except d2-rope, darknut and stalfos-keese-gel. Measure
+  chains with 1000 runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog top):
+  wallmaster heart gathering and goriya heart loss. Every new checkpoint needs its act mode re-measured, in
+  single rooms and in chains (argmax is fragile per checkpoint).
+- **Replays (merged Nov 11):** versioning (`VERSION` 1.3.1.0, model stamps), starts from console power on,
+  `TFREPLAY` replays (`--replays DIR`; they replaced `--plays` and the `movie` event), `zelda-headless.py` and
+  the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
+  r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
+  (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
