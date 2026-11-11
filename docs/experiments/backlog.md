@@ -759,6 +759,15 @@ the remaining list is deferred until Lee resumes work.
     route step goes backwards more than a few times, or count a crossing back onto an earlier step as a retreat.
     The watch player's simulations hit this too: one such run holds one of its `--parallel` games for those 12
     minutes.
+    Reproduced on `main` after the merge (Nov 11): `zelda-headless.py OUT 4 --parallel 4 --stop-at step:14`
+    (sampling, the game start), seed 1 of seeds 0–3. This one is *before* Dungeon 2: Link enters 0x4d from the
+    south (step 11), crosses W into 0x4c (step 12, whose exit is N), leaves E again 112 frames later, and then
+    alternates every 106 frames, 13,997 visits of 0x4d and 13,996 of 0x4c, until he dies in 0x4d after
+    2,978,547 frames (6.5 minutes). So the "each crossing matches a route step" explanation above does not
+    cover every case: before Dungeon 2, 0x4d entered from W is not a route step with Link's progress
+    (`GameCompletion::route_step_at`). Not diagnosed: what objective each room gives Link on those visits, and
+    why the crossings don't run into the wrong-exit limit (20). Record one with `--streams decisions,rewards`
+    and read the objective at the first three crossings.
   - `hold_finished_frame` / `EnvPool.set_hold` (a finished chain run parks its env on its last frame) have no
     caller since `play-zelda.py` plays replays (Nov 11). Left in the pool until Lee confirms the replay-driven
     viewer stays; then remove them with their tests (`crates/pool/tests/pool.rs`, `tests/native/test_pool.py`).
