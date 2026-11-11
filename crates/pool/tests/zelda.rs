@@ -390,12 +390,13 @@ impl Actor<ZeldaAction> for Recorder {
 
 /// F153: past a handoff (ow-zora walks E out of 0x5a into ow-moblin's 0x5b) every decision is acted on by the
 /// room's specialist's policy index, keyed by the run's seed, and `step` counts the run's decisions from 0 across
-/// rooms (the keyed noise of a sampled policy depends on it).
+/// rooms (the keyed noise of a sampled policy depends on it). Chain 1's entry state: walking straight E from it
+/// reaches 0x5b (chain 0's Link enters in line with an obstacle).
 #[test]
 fn chain_decisions_carry_the_room_specialists_policy_and_the_run_step() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_5aw_0")).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_5aw_1")).unwrap();
     let seeds = [5u64, 6];
     let policies: Vec<Arc<str>> = vec![Arc::from("ow-moblin"), Arc::from("ow-zora")];
     let mut nes = Some(nes);
