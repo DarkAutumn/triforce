@@ -10,6 +10,16 @@ whole team from scratch with SIL on from the start (`--sil-coeff 0.1`). No conti
   backlog experiment, no code); 6 new findings (N001–N006) found while fixing, 4 fixed, 2 closed as probe artifacts.
   Per-finding commits in `target/review-progress.md`; the changes that matter for training are in §2. Suites after
   the last code fix: Rust 699 pass (also with overflow checks), Python 450 pass, `tf ladder-diff` 0 of 7 diverge.
+- **Data rebuilt on the fixed code:** all 294 route and alternate entry states (staged builds, restarts for chains
+  0/1/2 at D2's 0x2e/0x3e/0x1e; audit clean; 180 states lose the granted bomb that used to leak in, F148) and all 203
+  curriculum tracks of the 14 curriculum families (old tracks in `trajectories.prev-r60`). Four tests that leaned on
+  the old states' layouts were made layout-independent; one real bug surfaced (N007: a 32-frame step can span a
+  Zora's surface-and-dive cycle, so a surfaced Zora that vanished was still counted as killed).
+- **Re-profile before the retrain (Lee):** no hotspot from the fixes (code above the emulator stays ~1% of cycles;
+  +1.4 frames per sword/beam action and real bomb/boomerang throws by design). Three wins taken: the SIL replay ring
+  on the GPU (`--parallel 16` SIL training ~+45%), the next rollout starts before the last one's buffer is
+  prepared (+2–5%), no weapon look-ahead without a live target; and a failing early-stop confirmation ends as soon
+  as it cannot pass (~45% of its time). Details: `docs/performance.md` "Review fix-up re-profile (Nov 10)".
 - **Baseline B1** (§1): the promoted team (r56 + r57-sil-s60, their act modes) measured on the fixed measurement
   code. Single rooms match round 16; chains match `r60-sil` except where the new per-run wrong-exit cap (F157) ends
   the 0x0a ↔ white-sword-cave bounce (F094) as a failure: after D2 98 → 34 arrivals, full route to D1 57 → 14.
