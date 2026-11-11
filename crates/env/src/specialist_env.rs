@@ -13,7 +13,7 @@
 //! [`BossTransitions`]), `bootstrap_truncation`, `curriculum`, plus `episode_steps`,
 //! `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
 
-use crate::config::{GameData, ItemsConfig, SpecialistConfig};
+use crate::config::{GameData, SpecialistConfig};
 use crate::critic::{BossTransitions, Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
 use crate::end_conditions::{
@@ -35,6 +35,7 @@ use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::sync::Arc;
+use zelda::bombs::BombStats;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
@@ -60,8 +61,10 @@ pub struct TerminalInfo {
     pub linger: LingerSummary,
     pub linger_room: (u8, u8, bool),
     pub blocks: u32,
-    /// Bombs placed, and cheated items used (`zelda::cheats`).
+    /// Bombs placed (the cheat ledger's count), and cheated items used (`zelda::cheats`).
     pub bombs_used: u32,
+    /// What the bombs did, the 10th kills and the bomb pickups ([`BombStats`]).
+    pub bomb_stats: BombStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs ([`BossTransitions`]).
     pub boss: BossTransitions,
@@ -122,23 +125,20 @@ pub fn linger_json(s: &LingerSummary) -> Value {
            "heart_container_steps": s.heart_container_steps, "heart_container_frames": s.heart_container_frames})
 }
 
-/// Action kinds disabled in `location`: the specialist's `items` switches, and BOMB outside the game.yaml
-/// `requires_bombs` rooms (Lee, F016: bombs only where the route needs them).
-pub fn room_disabled_kinds(
-    items: &ItemsConfig,
-    map: &zelda::GameMap,
-    location: zelda::MapLocation,
-) -> Vec<zelda::ActionKind> {
-    let mut kinds = items.disabled_kinds();
-    if !map.requires_bombs(location) && !kinds.contains(&zelda::ActionKind::Bomb) {
-        kinds.push(zelda::ActionKind::Bomb);
-    }
-    kinds
-}
-
 /// `{bombs, keys, rupees}`: cheated items used (`zelda::cheats`).
 pub fn cheated_json(c: &ItemCounts) -> Value {
     Value::Object(CheatItem::ALL.iter().map(|&item| (item.name().to_owned(), json!(c[item]))).collect())
+}
+
+/// `{used, placed, hits, misses, tenth_kills, tenth_tries, armed, picked_up}`: bombs used (the cheat ledger's
+/// count) and [`BombStats`].
+pub fn bombs_json(used: u32, stats: &BombStats) -> Value {
+    let mut o = serde_json::Map::new();
+    o.insert("used".into(), json!(used));
+    for (name, value) in stats.fields() {
+        o.insert(name.into(), json!(value));
+    }
+    Value::Object(o)
 }
 
 impl StepInfo {
@@ -173,7 +173,7 @@ impl StepInfo {
                 json!([t.linger_room.0, t.linger_room.1, t.linger_room.2]),
             );
             o.insert("blocks".into(), json!(t.blocks));
-            o.insert("bombs".into(), json!({"used": t.bombs_used}));
+            o.insert("bombs".into(), bombs_json(t.bombs_used, &t.bomb_stats));
             o.insert("cheated".into(), cheated_json(&t.cheated));
             o.insert("boss".into(), json!({"stuns": t.boss.stuns, "eats": t.boss.eats}));
             if t.bootstrap_truncation {
@@ -234,6 +234,7 @@ pub struct EnvSnapshot<S> {
     done: bool,
     blocks: u32,
     boss: BossTransitions,
+    bomb_stats: BombStats,
     episode_steps: u64,
     episode_frames: u64,
     reward_total: f64,
@@ -276,6 +277,7 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     route_step: Option<usize>,
     blocks: u32,
     boss: BossTransitions,
+    bomb_stats: BombStats,
     episode_steps: u64,
     episode_frames: u64,
     reward_total: f64,
@@ -315,8 +317,9 @@ pub struct EnvOptions {
     pub seed: u64,
     /// Record per-room-visit statistics ([`SpecialistEnv::take_visits`]; evaluation).
     pub track_visits: bool,
-    /// Skip the weapon look-ahead: it only credits rewards on the firing step (endings and metrics count observed
-    /// effects), so evaluation, which ignores rewards, turns it off.
+    /// Look ahead for bombs only: the look-ahead credits rewards on the firing step (endings and metrics count
+    /// observed effects), so evaluation, which ignores rewards, keeps it for bombs alone, whose hits
+    /// [`BombStats`] counts.
     pub skip_look_ahead: bool,
     /// The shaping scale's source; None reads `reward.shaping_scale` from the config.
     pub shaping: Option<ShapingDial>,
@@ -334,7 +337,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         opts: EnvOptions,
     ) -> Result<Self, EnvError> {
         let mut session = Session::new(nes, data.map.clone());
-        session.look_ahead = !opts.skip_look_ahead;
+        session.look_ahead = if opts.skip_look_ahead { zelda::LookAhead::Bombs } else { zelda::LookAhead::All };
         let pool = if opts.start_state.is_none() && !opts.explicit_starts {
             let mut pool = StartStatePool::new(&config, &data.states_dir)?;
             pool.weights = opts.start_weights;
@@ -387,6 +390,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             route_step: None,
             blocks: 0,
             boss: BossTransitions::default(),
+            bomb_stats: BombStats::default(),
             episode_steps: 0,
             episode_frames: 0,
             reward_total: 0.0,
@@ -551,18 +555,18 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.begin_episode(name.to_owned())
     }
 
-    /// The session's disabled kinds for the room Link is in: the config's `items` switches, and bombs outside the
-    /// `requires_bombs` rooms.
+    /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
+    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation.  Recomputed
+    /// every step: the 10th kill and the bomb count change within a room.
     fn update_disabled_kinds(&mut self) {
-        let location = self.session.state().full_location();
-        let kinds = room_disabled_kinds(&self.config.items, &self.data.map, location);
+        let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
+        let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
+        self.builder.bomb_reserve = reserve;
     }
 
     /// Starts an episode from the session's state (loaded or restored).
     fn begin_episode(&mut self, name: String) -> Result<(Observation, StepInfo), EnvError> {
-        // Bombs only in this family's `requires_bombs` rooms (Lee, F016).
-        self.update_disabled_kinds();
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
         // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
@@ -575,6 +579,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             needs_wavefront(&self.config),
         );
         self.objectives = Some(gc);
+        self.update_disabled_kinds();
         self.critic.clear();
         self.end_conditions.clear();
         self.start_health = state.health();
@@ -588,6 +593,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             });
         self.blocks = 0;
         self.boss = BossTransitions::default();
+        self.bomb_stats = BombStats::default();
         self.episode_steps = 0;
         self.episode_frames = 0;
         self.reward_total = 0.0;
@@ -632,6 +638,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             done: self.done,
             blocks: self.blocks,
             boss: self.boss,
+            bomb_stats: self.bomb_stats,
             episode_steps: self.episode_steps,
             episode_frames: self.episode_frames,
             reward_total: self.reward_total,
@@ -654,10 +661,13 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.done = snapshot.done;
         self.blocks = snapshot.blocks;
         self.boss = snapshot.boss;
+        self.bomb_stats = snapshot.bomb_stats;
         self.episode_steps = snapshot.episode_steps;
         self.episode_frames = snapshot.episode_frames;
         self.reward_total = snapshot.reward_total;
         self.episode_rewards.clone_from(&snapshot.episode_rewards);
+        // The disabled kinds depend on the state (the 10th kill, the bomb count) and aren't in the session snapshot.
+        self.update_disabled_kinds();
     }
 
     /// Simulation mode for search (`Session::set_simulating`): no rendering, frame sink or pre-entry capture.
@@ -697,9 +707,6 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             change.previous.full_location(),
         );
         self.left_with = cheats.left_with;
-        if change.changed_location() {
-            self.update_disabled_kinds();
-        }
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev = self.attached.take().expect("episode started");
@@ -710,6 +717,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &self.config.reward,
             needs_wavefront(&self.config),
         );
+        self.update_disabled_kinds();
         self.linger.update(
             &LingerState::of(&change.previous, &prev.objective),
             &LingerState::of(&state, &curr.objective),
@@ -720,6 +728,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.blocks += change.blocks() as u32;
         let boss = BossTransitions::of(&change);
         self.boss += boss;
+        self.bomb_stats.update(&change);
         let scale = self.shaping.as_ref().map_or(self.config.reward.shaping_scale, ShapingDial::get);
         let Scored { rewards, ending, outcome, terminated, truncated } = score_step(
             &self.config,
@@ -775,6 +784,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 linger_room: self.linger.start_room,
                 blocks: self.blocks,
                 bombs_used: self.cheats.used.bombs,
+                bomb_stats: self.bomb_stats,
                 cheated: self.cheats.cheated,
                 boss: self.boss,
                 curriculum,
@@ -788,6 +798,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             let end = terminal.as_ref().map_or(VisitEnd::Continue, |t| visit_end(&t.ending, t.outcome));
             let mut step = VisitStep::of(&change);
             step.bombs_used = cheats.used.bombs;
+            step.bombs.update(&change);
             step.cheated = cheats.cheated;
             step.boss_stuns = boss.stuns;
             step.boss_eats = boss.eats;

@@ -747,7 +747,10 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
     }]);
     let init = init();
     let control = init.control.clone();
-    let config = goriya_full_health(&data);
+    // No bombs: evaluation looks ahead for bombs alone (`zelda::LookAhead::Bombs`), so none runs here.
+    let mut config = (*goriya_full_health(&data)).clone();
+    config.items.bombs = env::config::BombUse::Never;
+    let config = Arc::new(config);
     let mut env = EvalEnv::new(config, data.clone(), nes, TfzStore, opts, jobs, init, None).unwrap();
     let (ram, prg_ram, emulated, replay, events) =
         play_recorded(&mut env, &control, recording(false), |e| e.env().session().nes().inner());
@@ -782,7 +785,7 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
     let control_frame = replay.events().next().unwrap().unwrap();
     assert_eq!(control_frame.event, Event::Control);
     assert!(u64::from(replay.frames() - control_frame.frame) >= record.frames);
-    // Evaluation runs no look-ahead: zcore ran exactly the recorded frames since it powered on.
+    // Evaluation runs no look-ahead but for bombs: zcore ran exactly the recorded frames since it powered on.
     assert_eq!(emulated, u64::from(replay.frames()));
     let mut obs = ObsData::new(Arc::new(obs_layout()));
     assert_eq!(env.reset(obs.row(), &mut Vec::new()).unwrap(), None, "one job");

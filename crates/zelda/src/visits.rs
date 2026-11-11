@@ -10,6 +10,7 @@
 //! The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave` for stairs, caves and dungeon entrances), or how
 //! the episode ended in the room ([`VisitEnd`]).
 
+use crate::bombs::BombStats;
 use crate::change::Change;
 use crate::cheats::ItemCounts;
 use crate::enums::{MapLocation, item};
@@ -72,6 +73,8 @@ pub struct RoomVisit {
     pub keys_gained: u32,
     /// Bombs placed, and cheated items used ([`crate::cheats`]).
     pub bombs_used: u32,
+    /// What the bombs did, the 10th kills and the bomb pickups ([`BombStats`]).
+    pub bombs: BombStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns (a bomb's smoke) and bombs he swallowed.
     pub boss_stuns: u32,
@@ -115,8 +118,10 @@ pub struct VisitStep<'a> {
     pub health_gained: f64,
     pub hits_dealt: u32,
     pub items_gained: &'a [i16],
-    /// Bombs placed this step, and cheated items used (set by the env; 0 from [`VisitStep::of`]).
+    /// Bombs placed this step, its [`BombStats`] and cheated items used (set by the env; 0 from
+    /// [`VisitStep::of`]).
     pub bombs_used: u32,
+    pub bombs: BombStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs this step (set by the env; 0 from [`VisitStep::of`]).
     pub boss_stuns: u32,
@@ -133,6 +138,7 @@ impl VisitStep<'_> {
             hits_dealt: change.observed.hits() as u32,
             items_gained: &change.observed.items_gained,
             bombs_used: 0,
+            bombs: BombStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
@@ -186,6 +192,7 @@ impl VisitTracker {
         }
         visit.hits_dealt += step.hits_dealt;
         visit.bombs_used += step.bombs_used;
+        visit.bombs += step.bombs;
         visit.cheated += step.cheated;
         visit.boss_stuns += step.boss_stuns;
         visit.boss_eats += step.boss_eats;
@@ -238,6 +245,7 @@ impl VisitTracker {
             pickups: [0; 6],
             keys_gained: 0,
             bombs_used: 0,
+            bombs: BombStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
@@ -297,6 +305,7 @@ mod tests {
             hits_dealt,
             items_gained,
             bombs_used: 0,
+            bombs: BombStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,

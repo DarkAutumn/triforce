@@ -224,8 +224,9 @@ const ROOM_KEYS: [&str; 20] = [
 ];
 const EXIT_KEYS: [&str; 5] = ["level", "location", "in_cave", "locked", "span"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
-const STEP_KEYS: [&str; 10] =
-    ["level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "note"];
+const STEP_KEYS: [&str; 11] = [
+    "level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "bomb_reserve", "note",
+];
 const STEP_ENTRIES: [&str; 6] = ["start", "N", "S", "E", "W", "cave"];
 /// `maze` ([`MAZE_EXIT`]) parses so `from_yaml` can say why a route may not take it.
 const STEP_EXITS: [&str; 8] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT];
@@ -306,6 +307,10 @@ pub struct RouteStep {
     pub retreat: Option<String>,
     /// `treasure:` ([`TreasureRule`]): whether this visit takes the room's treasure.
     pub treasure: TreasureRule,
+    /// `bomb_reserve: N`: from this step on (until a later step sets another), bombs Link may not spend outside a
+    /// `requires_bombs` room: they are saved for what the route needs them for (Dungeon 3: its bomb wall and
+    /// Manhandla).  None keeps the reserve of the steps before; the route starts at 0.
+    pub bomb_reserve: Option<u8>,
 }
 
 impl RouteStep {
@@ -394,6 +399,7 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         waypoint: one_of("waypoint", &WAYPOINTS, false)?,
         retreat: one_of("retreat", &DIRECTIONS, false)?,
         treasure: TreasureRule::parse(get(v, "treasure")).map_err(|e| MapError(format!("{loc} {entry}: {}", e.0)))?,
+        bomb_reserve: get(v, "bomb_reserve").map(|n| as_u8(n, &format!("{what}: bomb_reserve"))).transpose()?,
         entry,
     })
 }
@@ -1110,9 +1116,11 @@ mod tests {
                 (loc(3, 0x5b), "S", TreasureRule::Skip),
                 (loc(3, 0x69), "N", TreasureRule::Skip),
                 (loc(3, 0x69), "cave", TreasureRule::Skip),
-                (loc(3, 0x5b), "W", TreasureRule::IfBombsBelow(4)),
+                (loc(3, 0x5b), "W", TreasureRule::IfBombsBelow(5)),
             ]
         );
+        let reserves: Vec<_> = steps.iter().filter_map(|s| Some((s.location(), s.bomb_reserve?))).collect();
+        assert_eq!(reserves, [(L::new(3, 0x7c, false), 5)], "Dungeon 3 keeps 5 bombs from its entrance");
     }
 
     /// routes.yaml `treasure:` parses `skip`, `take` and `{if_bombs_below: N}`; anything else is a load error.

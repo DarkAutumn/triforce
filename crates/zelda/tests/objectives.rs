@@ -660,12 +660,13 @@ fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameC
     GameCompletion::new(map.clone(), &route, Some(step)).unwrap()
 }
 
-/// Dungeon 3's route-step treasure rules (Lee, Nov 9).  0x69 from N (`treasure: skip`) heads for the stairs down to
-/// the raft cellar past its Darknuts, where the default rule (off the route) fights them for the bombs they guard;
-/// 0x5b from S (`skip`) leaves W at once; 0x5b from W (`if_bombs_below: 4`) fights for its bombs and takes them only
-/// while Link holds fewer than 4, else leaves N.
+/// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11: take at 4 bombs or fewer) and bomb reserve.  0x69 from
+/// N (`treasure: skip`) heads for the stairs down to the raft cellar past its Darknuts, where the default rule (off
+/// the route) fights them for the bombs they guard; 0x5b from S (`skip`) leaves W at once; 0x5b from W
+/// (`if_bombs_below: 5`) fights for its bombs and takes them only while Link holds 4 or fewer, else leaves N.  The
+/// reserve is 5 from the dungeon's entrance on (routes.yaml `bomb_reserve`).
 #[test]
-fn d3_treasure_rules_skip_and_take_below_four_bombs() {
+fn d3_treasure_rules_skip_and_take_at_four_bombs_or_fewer() {
     let Some(images) = images(&["3_69n_0", "3_5bs_0", "3_5bw_0"]) else {
         return;
     };
@@ -680,14 +681,16 @@ fn d3_treasure_rules_skip_and_take_below_four_bombs() {
 
     let central = view(&map, &images[1], 0);
     assert!(!central.enemies.is_empty());
-    let objective = d3_step(&map, &central, 0x5b, "S").objectives(None, &central);
+    let mut central_step = d3_step(&map, &central, 0x5b, "S");
+    assert_eq!(central_step.bomb_reserve(), 5);
+    let objective = central_step.objectives(None, &central);
     assert_eq!(objective.kind, ObjectiveKind::Move);
     assert_eq!(objective.next_rooms, [loc(3, 0x5a)].into_iter().collect());
 
     for (bombs, kind) in [
         (0, ObjectiveKind::Fight),
-        (3, ObjectiveKind::Fight),
-        (4, ObjectiveKind::Move),
+        (4, ObjectiveKind::Fight),
+        (5, ObjectiveKind::Move),
         (8, ObjectiveKind::Move),
     ] {
         let mut ram = images[2].clone();
@@ -699,8 +702,8 @@ fn d3_treasure_rules_skip_and_take_below_four_bombs() {
         let next = if kind == ObjectiveKind::Move { vec![loc(3, 0x4b)] } else { vec![] };
         assert_eq!(objective.next_rooms, next.into_iter().collect(), "{bombs} bombs");
     }
-    // The Darknuts dead and their bombs on the floor: taken below 4 bombs, left from 4 on.
-    for (bombs, kind) in [(3, ObjectiveKind::Treasure), (4, ObjectiveKind::Move)] {
+    // The Darknuts dead and their bombs on the floor: taken at 4 bombs or fewer, left from 5 on.
+    for (bombs, kind) in [(4, ObjectiveKind::Treasure), (5, ObjectiveKind::Move)] {
         let mut ram = images[2].clone();
         clear_objects(&mut ram);
         show_treasure(&mut ram, 120, 141);

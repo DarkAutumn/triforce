@@ -12,6 +12,9 @@
 # run go on (the next room's objective sends Link back).
 # `treasure:` whether this visit takes the room's game.yaml treasure (fights for it when the kills make it appear):
 # absent = take it, `skip` = leave it, `{if_bombs_below: N}` = take it only while Link holds fewer than N bombs.
+# `bomb_reserve: N`: from this step on (until a later step sets another; 0 at the start) Link keeps N bombs for what
+# the route needs them for: outside `requires_bombs` rooms (game.yaml) BOMB is masked while he holds N or fewer, but
+# for the 10th damage-free kill, which arms a forced bomb drop (Lee, Nov 11; docs/decisions.md).
 # in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.  An underworld item cellar is an
 # in_cave room too, under its own room id (Dungeon 1's bow cellar 0x7f under 0x22, Dungeon 3's raft cellar 0x0f
 # under 0x69), left N up its ladder.
@@ -112,9 +115,10 @@ d2first:
 - {level: 0, room: '0x73', specialist: ow-moblin, entry: N, exit: E}
 - {level: 0, room: '0x74', specialist: ow-tektite, entry: W, exit: cave}
 # Dungeon 3 (Lee, Nov 9; docs/routes/d3.md): W N N W W N S S (stairs: the raft) N E E N E E (bomb the E wall) N.
-# Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit and only below 4 bombs
-# (D4 needs 2); 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to the stairs.
-- {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W}
+# Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit and only at 4 bombs or
+# fewer (Lee, Nov 11); 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to the stairs.
+# Bomb reserve 5 (Lee, Nov 11): 3 for the bomb wall into Manhandla's room (3:0x4c), 2 for Manhandla.
+- {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 5}
 - {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
 - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N}
 - {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: W, treasure: skip}
@@ -127,7 +131,7 @@ d2first:
 - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
 - {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
 - {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
-- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: N, treasure: {if_bombs_below: 4}}
+- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: N, treasure: {if_bombs_below: 5}}
 - {level: 3, room: '0x4b', specialist: zol, entry: S, exit: E}
 - {level: 3, room: '0x4c', specialist: trap-room, entry: W, exit: E}
 - {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N}

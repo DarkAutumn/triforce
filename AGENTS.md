@@ -60,10 +60,15 @@ up with ideas, test them, keep what helps, and log everything.
   `entry_states install <dir>`) and check them with `... audit` (it enforces these rules and exits 1 on a problem).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
-- **Bombs** are on only where the route needs them: Dodongo (`boss-dodongo`), the 0x2c rock wall (`ow-tektite`), D3's
-  0x4c bomb wall (`trap-room`) and Manhandla (`boss-manhandla`), all `requires_bombs` in game.yaml. BOMB is masked
-  per room (training and chains): a family's `items: {bombs: true}` enables it only in its `requires_bombs` rooms;
-  everywhere else the families say `items: {bombs: false}`.
+- **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
+  (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
+  Manhandla: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
+  (ow-tektite, trap-room: their `requires_bombs` rooms, the 0x2c rock wall and D3's bomb wall), `tenth` (the rest:
+  only the 10th damage-free kill, `$50` = 9, whose bomb kill arms a forced drop of 4 bombs; allowed in every mode
+  but `never`, below any reserve). routes.yaml `bomb_reserve: 5` from Dungeon 3's entrance (3 for the bomb wall, 2
+  for Manhandla); D3's central Darknut room takes its bombs at 4 or fewer. Every family trains with
+  `ram_randomization: {bombs: [0, 8], help_count: [0, 9]}`. A Darknut facing opposite to Link's facing when he placed
+  a bomb takes no damage from it (ASM and measured, round 19). Overworld families don't bomb but for the 10th kill.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.

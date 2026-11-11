@@ -11,7 +11,7 @@ mod common;
 
 use common::{MachineState, TfzStore, ZCore, assert_obs_valid, open_core};
 use env::config::{
-    GameData, HpBound, ItemsConfig, RamRandomization, RewardConfig, SpecialistConfig,
+    BombUse, GameData, HpBound, RamRandomization, RewardConfig, SpecialistConfig,
 };
 use env::critic::{Critique, GameplayCritic};
 use env::curriculum::{Curriculum, CurriculumSpec};
@@ -777,37 +777,104 @@ fn triforce_pickup_is_success_in_the_triforce_room() {
     );
 }
 
+/// Lee, Nov 11: BOMB by the family's mode, in 1:0x44 (no `requires_bombs` room; no reserve in Dungeon 1) with 4
+/// bombs: `free` allows it, `tenth` only on the 10th damage-free kill (`$50` = 9), `never` not even then; and in
+/// Dungeon 3 (reserve 5, 3:0x5b) `free` only above the reserve.  The observation's `bomb_usable` says the same.
 #[test]
-fn items_config_masks_bombs_even_when_link_has_them() {
+fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
     let Some(mut nes) = open_core() else { return };
-    for bombs_on in [true, false] {
-        let items = ItemsConfig {
-            bombs: bombs_on,
-            ..data().specialists["goriya"].items.clone()
-        };
-        let mut env = make_env(nes, "goriya", Some("1_44w_0"), |c| {
+    let usable = |obs: &env::observation::Observation| {
+        let at = feature_names().link.iter().position(|n| n == "bomb_usable").unwrap();
+        obs.link[at] == 1.0
+    };
+    let cases = [
+        ("goriya", "1_44w_0", "MOVE E 16", BombUse::Free, 4, 0, true),
+        ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 0, false),
+        ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 9, true),
+        ("goriya", "1_44w_0", "MOVE E 16", BombUse::Never, 4, 9, false),
+        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 5, 0, false),
+        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 6, 0, true),
+        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 1, 9, true),
+    ];
+    for (family, start, walk, mode, bombs, help, legal) in cases {
+        let mut env = make_env(nes, family, Some(start), |c| {
             c.ram_randomization = RamRandomization {
-                bombs: Some((4, 4)),
+                bombs: Some((bombs, bombs)),
+                help_count: Some((help, help)),
                 ..Default::default()
             };
-            c.items = items;
+            c.items.bombs = mode;
         });
         env.reset(Some(0), None).unwrap();
-        // Off the door tile (items can't be used there) and the Goriyas out of their clouds.
+        // Off the door tile (items can't be used there) and the enemies out of their clouds.
         let mut obs = None;
         for _ in 0..10 {
-            obs = Some(act(&mut env, "MOVE E 16").obs);
-            if state(&env).link.position.x >= 32 && state(&env).has_active_enemies() {
+            obs = Some(act(&mut env, walk).obs);
+            let p = state(&env).link.position;
+            if (0x20..=0xD0).contains(&p.x) && (0x5E..0xBD).contains(&p.y) && state(&env).has_active_enemies() {
                 break;
             }
         }
         let obs = obs.unwrap();
-        assert!(state(&env).bombs() == 4 && state(&env).has_active_enemies());
-        // F016: 1:0x44 is no `requires_bombs` room, so BOMB is masked even with `items.bombs` on.
-        assert!(!env.session().mask().kind[ActionKind::Bomb.index()]);
-        assert!(!ActionMask::from_flat(&obs.action_mask).kind[ActionKind::Bomb.index()]);
+        let what = format!("{family} {mode:?} bombs {bombs} help {help}");
+        assert!(state(&env).bombs() == bombs as i32 && state(&env).help_drop_count() == help as i32, "{what}");
+        assert_eq!(env.session().mask().kind[ActionKind::Bomb.index()], legal, "{what}");
+        assert_eq!(ActionMask::from_flat(&obs.action_mask).kind[ActionKind::Bomb.index()], legal, "{what}");
+        assert_eq!(usable(&obs), legal, "{what}");
         nes = release(env);
     }
+}
+
+/// The 10th damage-free kill made with a bomb arms a forced bomb drop (`$51`, Z_01 HandleMonsterDied) and the
+/// drop falls as bombs: the step of the kill pays `reward-armed-bomb-drop`, once.  The search tries every legal
+/// bomb from each position (`save`/`load`) until one kills a Goriya.
+#[test]
+fn a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop() {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "goriya", Some("1_44w_0"), |c| {
+        c.ram_randomization = RamRandomization {
+            hp: Some((HpBound::Max, HpBound::Max)),
+            full_hp: Some(1.0),
+            bombs: Some((8, 8)),
+            help_count: Some((9, 9)),
+            ..Default::default()
+        };
+        c.max_steps = 2000;
+    });
+    env.reset(Some(0), None).unwrap();
+    let walk = ["MOVE E 8", "MOVE N 8", "MOVE W 8", "MOVE S 8"];
+    let mut armed = None;
+    'search: for step in 0..300 {
+        let root = env.save();
+        for d in ["N", "S", "E", "W"] {
+            let bomb = format!("BOMB {d}");
+            if !env.session().mask().is_allowed(&Action::parse(&bomb).unwrap()) {
+                continue;
+            }
+            let mut results = vec![act(&mut env, &bomb)];
+            while state(&env).help_drop_count() == 9 && results.len() < 12 && !results.last().unwrap().terminated {
+                results.push(act(&mut env, "WAIT 8"));
+            }
+            if state(&env).help_drop_count() == 10 {
+                armed = Some(results);
+                break 'search;
+            }
+            env.load(&root);
+        }
+        let w = walk[(step / 6) % 4];
+        let w = if env.session().mask().is_allowed(&Action::parse(w).unwrap()) { w } else { "WAIT 8" };
+        act(&mut env, w);
+    }
+    let results = armed.expect("a bomb killed a Goriya on the 10th kill");
+    assert!(state(&env).help_drop_is_bombs(), "a bomb's 10th kill arms bombs");
+    let arming = results.iter().filter(|r| term(&r.info, "reward-armed-bomb-drop").is_some()).count();
+    assert_eq!(arming, 1, "paid once, on the step the kill happened");
+    // The drop falls as bombs once the death spark ends.
+    for _ in 0..8 {
+        act(&mut env, "WAIT 8");
+    }
+    assert!(state(&env).items.iter().any(|i| i.id == item::BOMBS), "{:?}", state(&env).items);
+    assert_eq!((state(&env).help_drop_count(), state(&env).help_drop_is_bombs()), (0, false), "spent");
 }
 
 #[test]

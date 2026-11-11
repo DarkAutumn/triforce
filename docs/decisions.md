@@ -1086,3 +1086,38 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   5th return in a row into the room before the last (`bounce-limit`, `MAX_BOUNCES`), whatever the exits are
   judged; `retreat` crossings don't count (their own cap stays 3). REV bump to `1.3.1.1`: off-route objectives
   (rewards, the target observation) change; models stay loadable.
+
+## 2026-11-11 — Bombs as a weapon, a bomb reserve and the 10th kill's forced bomb drop (Lee; version 1.3.2.0)
+
+- **What Lee asked for** (his list was suggestions, not rules): bombs where enemies take more than 3 hits (goriya,
+  darknut), moldorm too, not Aquamentus, not on the overworld; save bombs for what the route needs (D2: none, the 4
+  before Dodongo are enough; D1: none; D3: 3 for the bomb wall, 2 for Manhandla, and the central Darknut room's bombs
+  taken at 4 or fewer); machinery for "from here to there never drop below X"; train every family to bomb the 10th
+  damage-free kill (a bomb kill there arms a forced drop of 4 bombs), even below the reserve, rewarded for arming
+  and for the pickup; a miss penalty that doesn't put the models off bombs; track hits, misses, 10th-kill
+  opportunities and tries; retrain everything regardless (this is the new baseline).
+- **Choices:**
+  - `items.bombs` is a mode (`env::config::BombUse`): `never`, `tenth` (default), `required`, `free`. `free`:
+    goriya, darknut, moldorm (Red/Blue Goriya 3/5 wood-sword hits, Darknut 4/8, Moldorm a 10-segment chain), and
+    Dodongo/Manhandla; `required`: ow-tektite and trap-room (their bomb walls only); `tenth`: the other 13
+    families, Aquamentus included (3 white-sword hits against 2 bombs; low-health bombing left for later), zol and
+    wallmaster (1 white-sword hit each), the overworld.
+  - The reserve is a route-step key (`bomb_reserve: N`, in force until a later step sets another); only D3 sets it
+    (5 from its entrance). It doesn't apply in `requires_bombs` rooms (that's what the bombs are kept for) or to
+    the 10th kill's bomb.
+  - The mask is recomputed every step (the 10th kill and the bomb count change within a room).
+  - Observation schema 3: `link`'s always-zero `selected_*` slice became `bomb_usable` (the mask is no network
+    input), `bomb_reserve`, `bombs_spare`, `help_count`, `next_kill_arms`, `drop_armed`, `drop_is_bombs`,
+    `fairy_next` (a fairy at `$627` = 16 overrides an armed drop). COMPAT bump to 1.3.2.0: no older model loads.
+  - Rewards: `penalty-bomb-used` (−0.25, unchanged) is the miss cost, `reward-bomb-hit` (+0.5 per credited hit)
+    unchanged; new `reward-armed-bomb-drop` (+0.75) on the step the arming kill happens; `reward-gained-bombs` (+0.5)
+    pays the pickup. No penalty for a 10th kill made without a bomb (Lee: they may choose not to).
+  - Training resets draw `bombs: [0, 8]` and `help_count: [0, 9]` (a damage-free streak) in every family.
+  - Every session looks ahead for bombs (`zelda::LookAhead::Bombs` in evaluation, chains and exploration; `All` in
+    training), so bomb hits are counted everywhere (`zelda::bombs::BombStats`).
+- **Checked:** the ASM (Z_01 HandleMonsterDied, Z_04 SetUpDroppedItem) and the emulator: a bomb kill on the 9th→10th
+  damage-free kill sets `$51` and the next drop is a bombs item (test
+  `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`). Lee's Darknut claim holds and is broader: the front-shield
+  check (Z_01 HandleMonsterWeaponCollision) compares only directions, so a bomb never hurts a Darknut facing opposite
+  to Link's facing when he placed it, wherever it stands (measured over 6 seeds in 3:0x5b: 434 such cases, 0 hits;
+  951 of 1478 others hit). No special handling: the observation has each Darknut's direction.

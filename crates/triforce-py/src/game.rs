@@ -667,7 +667,7 @@ impl PyGame {
         let data = context::data(py, states_dir.as_deref())?;
         let mut session = Session::new(ZCore::power_on(rom.clone()), data.map.clone());
         session.set_render(render);
-        session.look_ahead = look_ahead;
+        session.look_ahead = if look_ahead { zelda::LookAhead::All } else { zelda::LookAhead::Off };
         Ok(PyGame {
             inner: Mutex::new(GameInner {
                 session,
@@ -955,14 +955,15 @@ impl PyGame {
         self.inner.lock().session.steps
     }
 
+    /// Every fired weapon is simulated forward (`zelda::LookAhead::All`); False: none.
     #[getter]
     fn get_look_ahead(&self) -> bool {
-        self.inner.lock().session.look_ahead
+        self.inner.lock().session.look_ahead == zelda::LookAhead::All
     }
 
     #[setter]
     fn set_look_ahead(&self, on: bool) {
-        self.inner.lock().session.look_ahead = on;
+        self.inner.lock().session.look_ahead = if on { zelda::LookAhead::All } else { zelda::LookAhead::Off };
     }
 
     /// Location, Link, inventory, room, entities and legal actions as text.

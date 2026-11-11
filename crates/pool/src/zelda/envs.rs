@@ -608,8 +608,10 @@ where
             &self.control,
             &mut self.rooms,
         );
-        // Evaluation skips the weapon look-ahead (it only credits rewards) unless the rewards are recorded.
-        self.env.session_mut().look_ahead = self.control.record_options().is_some_and(|o| o.rewards);
+        // Evaluation looks ahead for bombs only (their hits are counted; the rest only credits rewards) unless the
+        // rewards are recorded.
+        let rewards = self.control.record_options().is_some_and(|o| o.rewards);
+        self.env.session_mut().look_ahead = if rewards { zelda::LookAhead::All } else { zelda::LookAhead::Bombs };
         let (o, info) = self.env.reset(Some(job.seed), Some(&job.start_state))?;
         self.cheated = info.cheated;
         let context = context(self.env.context());
@@ -659,6 +661,7 @@ where
                 linger: t.linger,
                 blocks: t.blocks,
                 bombs_used: t.bombs_used,
+                bomb_stats: t.bomb_stats,
                 cheated: t.cheated,
                 boss_stuns: t.boss.stuns,
                 boss_eats: t.boss.eats,

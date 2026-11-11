@@ -22,7 +22,7 @@ use zelda::room_state::{
 use zelda::tiles::{Grid, NUM_TILE_CLASSES, build_grid};
 use zelda::{Action, Change};
 
-pub const OBS_SCHEMA_VERSION: u32 = 2;
+pub const OBS_SCHEMA_VERSION: u32 = 3;
 
 /// NES object slots 1-$B, then the room item ("treasure").
 pub const NUM_ENTITY_SLOTS: usize = 12;
@@ -36,7 +36,7 @@ pub const ITEM_TYPE_BASE: i64 = 0x80;
 pub const ENTITY_VOCAB: usize = ITEM_TYPE_BASE as usize + NUM_ITEM_IDS as usize;
 
 pub const ROOM_STATE_SIZE: usize = 84;
-pub const LINK_SIZE: usize = 81;
+pub const LINK_SIZE: usize = 80;
 pub const ENTITY_FEATURE_SIZE: usize = 33;
 pub const HISTORY_SIZE: usize = 34;
 pub const OBJECTIVE_SIZE: usize = 10;
@@ -200,9 +200,15 @@ mod l {
     pub const BOOMERANG: usize = 69;
     pub const MAGIC_BOOMERANG: usize = 70;
     pub const MAGIC_SHIELD: usize = 71;
-    /// The `selected_*` slice: kept in the layout, always zero (F187).
-    #[allow(dead_code)]
-    pub const SELECTED: usize = 72;
+    /// Bombs and the forced drop (schema 3, Lee Nov 11; replaced the always-zero `selected_*` slice).
+    pub const BOMB_USABLE: usize = 72;
+    pub const BOMB_RESERVE: usize = 73;
+    pub const BOMBS_SPARE: usize = 74;
+    pub const HELP_COUNT: usize = 75;
+    pub const NEXT_KILL_ARMS: usize = 76;
+    pub const DROP_ARMED: usize = 77;
+    pub const DROP_IS_BOMBS: usize = 78;
+    pub const FAIRY_NEXT: usize = 79;
 }
 
 // entity offsets
@@ -372,7 +378,16 @@ fn build_feature_names() -> FeatureNames {
         "magic_boomerang",
         "magic_shield",
     ]));
-    link.extend((0..9).map(|i| format!("selected_{i}")));
+    link.extend(s(&[
+        "bomb_usable",
+        "bomb_reserve",
+        "bombs_spare",
+        "help_count",
+        "next_kill_arms",
+        "drop_armed",
+        "drop_is_bombs",
+        "fairy_next",
+    ]));
 
     let entity = s(&[
         "presence",
@@ -620,6 +635,9 @@ pub struct ObservationBuilder {
     pub objective: bool,
     /// Fill the `target` block (`obs.target`).
     pub target: bool,
+    /// The route's bomb reserve at the step Link plays (`GameCompletion::bomb_reserve`), for the `link` block;
+    /// the env sets it before every observation.
+    pub bomb_reserve: u8,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
@@ -631,6 +649,7 @@ impl ObservationBuilder {
         ObservationBuilder {
             objective,
             target,
+            bomb_reserve: 0,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
@@ -698,7 +717,7 @@ impl ObservationBuilder {
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs),
-            link: link(state),
+            link: link(state, mask, self.bomb_reserve),
             entity_types,
             entity_features,
             grid: build_grid(state, &rs),
@@ -1054,7 +1073,7 @@ fn room_state(rs: &RoomState) -> [f32; ROOM_STATE_SIZE] {
     v
 }
 
-fn link(state: &GameView) -> [f32; LINK_SIZE] {
+fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8) -> [f32; LINK_SIZE] {
     use zelda::Var;
     let ram = state.ram();
     let info = |v: Var| state.var(v);
@@ -1140,8 +1159,17 @@ fn link(state: &GameView) -> [f32; LINK_SIZE] {
     v[l::BOOMERANG] = b(info(Var::RegularBoomerang) != 0);
     v[l::MAGIC_BOOMERANG] = b(info(Var::MagicBoomerang) != 0);
     v[l::MAGIC_SHIELD] = b(info(Var::MagicShield) != 0);
-    // The `selected_*` slice stays zero (Lee, F187): $656 is the executor's own poke for the last B-item action,
-    // not game input, so it would leak which specialist acted last into a chain.
+    // Bombs and the forced drop (Z_01 HandleMonsterDied, Z_04 SetUpDroppedItem).  The mask is no network input,
+    // so whether BOMB is legal now (the specialist's bomb rule, the reserve, the 10th kill) is spelled out.
+    v[l::BOMB_USABLE] = b(mask.kind[ActionKind::Bomb.index()]);
+    v[l::BOMB_RESERVE] = (f64::from(bomb_reserve) / bomb_max as f64).min(1.0) as f32;
+    v[l::BOMBS_SPARE] = ((bomb_count - i32::from(bomb_reserve)).max(0) as f64 / bomb_max as f64).min(1.0) as f32;
+    let help = state.help_drop_count();
+    v[l::HELP_COUNT] = (help.min(10) as f64 / 10.0) as f32;
+    v[l::NEXT_KILL_ARMS] = b(state.next_kill_arms_drop());
+    v[l::DROP_ARMED] = b(help >= 10);
+    v[l::DROP_IS_BOMBS] = b(state.help_drop_is_bombs());
+    v[l::FAIRY_NEXT] = b(state.kill_streak() == 15);
     v
 }
 
@@ -1180,7 +1208,8 @@ mod tests {
             (l::TRIFORCE, "triforce_1"),
             (l::ARROW_WOOD, "arrow_wood"),
             (l::MAGIC_SHIELD, "magic_shield"),
-            (l::SELECTED, "selected_0"),
+            (l::BOMB_USABLE, "bomb_usable"),
+            (l::FAIRY_NEXT, "fairy_next"),
         ] {
             assert_eq!(n.link[offset], name);
         }

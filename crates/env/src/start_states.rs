@@ -482,6 +482,11 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
     if let Some((lo, hi)) = spec.keys {
         values.push((Var::Keys, rng.random_range(lo..=hi) as u8));
     }
+    if let Some((lo, hi)) = spec.help_count {
+        // A damage-free streak of `n` kills: the forced-drop count, no drop armed yet, the kill count with it.
+        let n = rng.random_range(lo..=hi) as u8;
+        values.extend([(Var::HelpDropCount, n), (Var::HelpDropValue, 0), (Var::KillStreak, n)]);
+    }
     values
 }
 

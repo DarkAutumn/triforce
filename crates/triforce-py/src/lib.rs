@@ -22,7 +22,8 @@ mod theater;
 use pyo3::prelude::*;
 
 /// The route's room visits as dicts (`index`, `level`, `room`, `in_cave`, `entry`, `exit`, `specialist`,
-/// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip` or `if_bombs_below: N`).
+/// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip` or `if_bombs_below: N`,
+/// `bomb_reserve`: the step's routes.yaml `bomb_reserve` or None).
 #[pyfunction]
 #[pyo3(signature = (route=zelda::game_map::DEFAULT_ROUTE))]
 fn route_steps<'py>(
@@ -63,6 +64,7 @@ fn step_dict<'py>(
     d.set_item("waypoint", s.waypoint.as_deref())?;
     d.set_item("retreat", s.retreat.as_deref())?;
     d.set_item("treasure", s.treasure.describe())?;
+    d.set_item("bomb_reserve", s.bomb_reserve)?;
     Ok(d)
 }
 
@@ -258,6 +260,10 @@ mod _native {
         m.add(
             "CHEAT_ITEMS",
             pyo3::types::PyTuple::new(py, zelda::cheats::CheatItem::ALL.iter().map(|i| i.name()))?,
+        )?;
+        m.add(
+            "BOMB_STATS",
+            pyo3::types::PyTuple::new(py, zelda::bombs::BombStats::default().fields().map(|(name, _)| name))?,
         )?;
         m.add(
             "ACTION_KINDS",

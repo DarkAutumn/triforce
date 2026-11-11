@@ -316,12 +316,46 @@ impl Default for CurriculumConfig {
     }
 }
 
-/// `items:` block: inventory items the specialist may use (false = masked out even when Link has it).
+/// `items: {bombs: ...}`: when the specialist may place bombs (Lee, Nov 11).  Every mode but `never` also allows
+/// the 10th damage-free kill's bomb (`$50` = 9: a bomb kill then arms a forced bomb drop), whatever the room and the
+/// reserve: that bomb pays itself back.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BombUse {
+    /// Never (state building and exploration, where the bomb count must stay what the route carries).
+    Never,
+    /// Only for the 10th kill.
+    #[default]
+    Tenth,
+    /// In the family's game.yaml `requires_bombs` rooms (the 0x2c rock wall, D3's bomb wall), and the 10th kill.
+    Required,
+    /// Wherever there is something to bomb: in `requires_bombs` rooms always, elsewhere while Link holds more than
+    /// the route's bomb reserve (routes.yaml `bomb_reserve`); and the 10th kill.
+    Free,
+}
+
+impl BombUse {
+    /// Whether BOMB may be placed in `state` (the game's own rules aside: bombs held, a free slot, something to
+    /// bomb), with `reserve` bombs to keep.
+    pub fn allows(self, map: &zelda::GameMap, state: &zelda::GameView, reserve: u8) -> bool {
+        let required = || map.requires_bombs(state.full_location());
+        match self {
+            BombUse::Never => false,
+            _ if state.next_kill_arms_drop() => true,
+            BombUse::Tenth => false,
+            BombUse::Required => required(),
+            BombUse::Free => required() || state.bombs() > i32::from(reserve),
+        }
+    }
+}
+
+/// `items:` block: inventory items the specialist may use (false = masked out even when Link has it; bombs:
+/// [`BombUse`]).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ItemsConfig {
-    #[serde(default = "yes", deserialize_with = "de_bool")]
-    pub bombs: bool,
+    #[serde(default)]
+    pub bombs: BombUse,
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub boomerang: bool,
     #[serde(default = "yes", deserialize_with = "de_bool")]
@@ -331,7 +365,7 @@ pub struct ItemsConfig {
 impl Default for ItemsConfig {
     fn default() -> Self {
         ItemsConfig {
-            bombs: true,
+            bombs: BombUse::default(),
             boomerang: true,
             arrows: true,
         }
@@ -339,22 +373,29 @@ impl Default for ItemsConfig {
 }
 
 impl ItemsConfig {
-    /// Action kinds masked out for this specialist, in kind order.
-    pub fn disabled_kinds(&self) -> Vec<ActionKind> {
-        [
-            (self.bombs, ActionKind::Bomb),
-            (self.boomerang, ActionKind::Boomerang),
-            (self.arrows, ActionKind::Arrow),
-        ]
-        .into_iter()
-        .filter(|(enabled, _)| !enabled)
-        .map(|(_, kind)| kind)
-        .collect()
+    /// Action kinds masked out in `state` with `reserve` bombs to keep, in kind order.
+    pub fn disabled_kinds(&self, map: &zelda::GameMap, state: &zelda::GameView, reserve: u8) -> Vec<ActionKind> {
+        self.kinds_off(self.bombs.allows(map, state, reserve))
+    }
+
+    /// Action kinds masked out whatever the state (`bombs: never`, `boomerang: false`, `arrows: false`).
+    pub fn fixed_disabled_kinds(&self) -> Vec<ActionKind> {
+        self.kinds_off(self.bombs != BombUse::Never)
+    }
+
+    fn kinds_off(&self, bombs: bool) -> Vec<ActionKind> {
+        [(bombs, ActionKind::Bomb), (self.boomerang, ActionKind::Boomerang), (self.arrows, ActionKind::Arrow)]
+            .into_iter()
+            .filter(|(enabled, _)| !enabled)
+            .map(|(_, kind)| kind)
+            .collect()
     }
 }
 
 /// Reset-time RAM randomization (`RamRandomization`): hp bounds are fractions of max hp (or 'max'); bombs/keys
-/// inclusive ranges; `full_hp`/`chain_hp` shares of resets (see `start_states::ram_randomization_values`).
+/// inclusive ranges; `full_hp`/`chain_hp` shares of resets (see `start_states::ram_randomization_values`);
+/// `help_count: [lo, hi]` a damage-free kill streak (`$50`, 0-9, and `$627` with it, no forced drop armed), so the
+/// 10th kill (a bomb kill arms a forced bomb drop) comes up in training.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RamRandomization {
@@ -368,6 +409,8 @@ pub struct RamRandomization {
     pub bombs: Option<(i64, i64)>,
     #[serde(default)]
     pub keys: Option<(i64, i64)>,
+    #[serde(default)]
+    pub help_count: Option<(i64, i64)>,
 }
 
 impl RamRandomization {
@@ -389,12 +432,12 @@ impl RamRandomization {
                 ));
             }
         }
-        for (key, value) in [("bombs", self.bombs), ("keys", self.keys)] {
+        for (key, value, max) in [("bombs", self.bombs, 255), ("keys", self.keys, 255), ("help_count", self.help_count, 9)] {
             if let Some((lo, hi)) = value
-                && !(0 <= lo && lo <= hi && hi <= 255)
+                && !(0 <= lo && lo <= hi && hi <= max)
             {
                 return Err(format!(
-                    "{key}: range must satisfy 0 <= lo <= hi <= 255, got [{lo}, {hi}]"
+                    "{key}: range must satisfy 0 <= lo <= hi <= {max}, got [{lo}, {hi}]"
                 ));
             }
         }
@@ -1024,17 +1067,38 @@ mod tests {
         assert_eq!(again, c);
     }
 
+    /// Bombs by mode: `never` never; the 10th kill (`$50` = 9) in every other mode; `required` in requires_bombs
+    /// rooms; `free` there always and elsewhere above the reserve.
     #[test]
-    fn disabled_kinds() {
-        let items = ItemsConfig {
-            bombs: false,
-            boomerang: true,
-            arrows: false,
+    fn bomb_use_modes() {
+        use zelda::{GameView, Var, tables::RAM_SIZE};
+        let map = std::sync::Arc::new(zelda::GameMap::builtin());
+        let view = |room: u8, bombs: u8, help: u8| {
+            let mut ram = [0u8; RAM_SIZE];
+            ram[Var::Mode.addr() as usize] = 5;
+            ram[Var::Location.addr() as usize] = room;
+            ram[Var::Bombs.addr() as usize] = bombs;
+            ram[Var::HelpDropCount.addr() as usize] = help;
+            GameView::new(&ram, 0, false, map.clone())
         };
-        assert_eq!(
-            items.disabled_kinds(),
-            vec![ActionKind::Bomb, ActionKind::Arrow]
-        );
+        let (wall, field) = (0x2c, 0x2b);
+        assert!(map.requires_bombs(view(wall, 0, 0).full_location()));
+        assert!(!map.requires_bombs(view(field, 0, 0).full_location()));
+        let allows = |mode: BombUse, room, bombs, help, reserve| mode.allows(&map, &view(room, bombs, help), reserve);
+        for help in [0, 8, 10] {
+            assert!(!allows(BombUse::Tenth, field, 4, help, 0));
+            assert!(allows(BombUse::Required, wall, 4, help, 3) && !allows(BombUse::Required, field, 4, help, 0));
+            assert!(allows(BombUse::Free, wall, 2, help, 5) && allows(BombUse::Free, field, 4, help, 3));
+            assert!(!allows(BombUse::Free, field, 3, help, 3), "at the reserve");
+        }
+        for mode in [BombUse::Tenth, BombUse::Required, BombUse::Free] {
+            assert!(allows(mode, field, 1, 9, 5), "{mode:?}: the 10th kill's bomb goes below the reserve");
+        }
+        assert!(!allows(BombUse::Never, wall, 4, 9, 0));
+        let items = ItemsConfig { bombs: BombUse::Tenth, boomerang: true, arrows: false };
+        assert_eq!(items.fixed_disabled_kinds(), vec![ActionKind::Arrow]);
+        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 0), 0), vec![ActionKind::Bomb, ActionKind::Arrow]);
+        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 9), 0), vec![ActionKind::Arrow]);
     }
 
     #[test]

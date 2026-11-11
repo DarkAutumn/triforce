@@ -218,9 +218,10 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
                 rooms: Optional[dict] = None) -> SpecialistConfig:
     """A one-room task from ``source``: leave this step's room through an objective-correct exit (or pick up the
     triforce).  Bombs are usable only in a ``requires_bombs`` room (Dodongo, the 0x2c rock wall), where the bomb
-    rule keeps Link from running out."""
+    rule keeps Link from running out (``required``; elsewhere ``never``, not even the 10th kill's, so a built state
+    carries the bombs the route does)."""
     rooms = game_rooms() if rooms is None else rooms
-    bombs = bool(rooms.get(step.location.as_tuple(), {}).get('requires_bombs'))
+    bombs = 'required' if rooms.get(step.location.as_tuple(), {}).get('requires_bombs') else 'never'
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
                             items={'bombs': bombs}, fresh_rooms=True, route=route)

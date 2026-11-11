@@ -260,6 +260,10 @@ pub struct GameCompletion {
     /// The route step Link is playing (`route_step_at`): the episode's start step, then the step of every room he
     /// enters; None off the route.
     step: Option<usize>,
+    /// The last route step Link was on (`step`, kept while he is off the route).
+    last_step: Option<usize>,
+    /// The bomb reserve (routes.yaml `bomb_reserve`) in force at each route step.
+    reserves: Vec<u8>,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
     /// The last map objective, keyed by its route key and the intact bomb walls' direction bits.
@@ -304,11 +308,20 @@ impl GameCompletion {
             .into_iter()
             .filter(|w| step.is_none_or(|s| w.step >= s))
             .collect();
+        let reserves = steps
+            .iter()
+            .scan(0u8, |reserve, s| {
+                *reserve = s.bomb_reserve.unwrap_or(*reserve);
+                Some(*reserve)
+            })
+            .collect();
         Ok(GameCompletion {
             map: map.clone(),
             route: route.to_owned(),
             progress: route_progress(&map, steps),
             step,
+            last_step: step,
+            reserves,
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -328,6 +341,12 @@ impl GameCompletion {
     /// The route step Link is playing, None off the route.
     pub fn step(&self) -> Option<usize> {
         self.step
+    }
+
+    /// Bombs Link keeps for what the route needs them for (routes.yaml `bomb_reserve`) at the route step he is on,
+    /// or was on last while off the route; 0 before any step.
+    pub fn bomb_reserve(&self) -> u8 {
+        self.step.or(self.last_step).map_or(0, |s| self.reserves[s])
     }
 
     /// The step of the route that enters Link's room from `entry` with exactly Link's progress (`StepProgress`);
@@ -462,6 +481,7 @@ impl GameCompletion {
         {
             self.step = route_entry(prev.full_location(), state.full_location())
                 .and_then(|entry| self.route_step_at(state, entry));
+            self.last_step = self.step.or(self.last_step);
         }
         self.check_heart_waypoint(prev, state);
         // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first).

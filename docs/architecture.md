@@ -88,8 +88,14 @@ inclusive ranges (`GameView::sword_directions` for A, the sword; `GameView::item
 | Overworld A | x 7–232 | x 7–232 | y 69–213 | y 69–213 |
 | Overworld B | x 7–208 | x 31–232 | y 84–213 | y 69–189 |
 
-BOMB is legal only in game.yaml `requires_bombs` rooms (in `SpecialistEnv` and chains; a family's
-`items: {bombs: true}` enables it there and nowhere else) and
+BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, Lee Nov 11; in `SpecialistEnv` and
+chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
+bomb kill then arms a forced drop of 4 bombs, Z_01 HandleMonsterDied); `required`, in game.yaml `requires_bombs`
+rooms and the 10th kill; `free`, in `requires_bombs` rooms, elsewhere while Link holds more than the route's bomb
+reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 5 from Dungeon 3's entrance), and the 10th
+kill (whatever the reserve). Families: `free` goriya, darknut, moldorm, boss-dodongo, boss-manhandla; `required`
+ow-tektite, trap-room; `tenth` the rest. The game's own rule comes first (bombs held, a free slot, an enemy or a
+bomb wall) and BOMB
 stays legal at an unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
@@ -108,7 +114,7 @@ Python sees the layout as
 |---|---|---|
 | `room_id` | int64 [1] | index < `ROOM_VOCAB` |
 | `room_state` | float32 [84] | per-room flags from `docs/ram-catalog.md` |
-| `link` | float32 [81] | `selected_0..8` (the selected B item) always zero, kept in the layout |
+| `link` | float32 [80] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15) |
 | `entity_types` | int64 [12] | 0 = empty slot |
 | `entity_features` | float32 [12, 33] | feature 0 = presence |
 | `grid` | int64 [22, 32] | tile class per 8px tile, row-major |
@@ -129,8 +135,9 @@ to 1 (1 when unreachable or without a wavefront), `target_dx`/`target_dy` are th
 target tile the steepest descent reaches (/256, /176; 0 if none) and `target_is_item` says whether that tile
 belongs to a dropped item. Chains rebuild the same wavefront (the acting specialist's `reward` decides the item
 targets) only for specialists with `obs.target` on. A chain resets the observation builder on every room entry of
-a `one_room` specialist (also from a room of its own family), as at a training episode's start. Schema 1 checkpoints still load (their layout is schema 2
-without `target`, which the network drops from its input), so they act, evaluate and train next to schema 2 ones.
+a `one_room` specialist (also from a room of its own family), as at a training episode's start. Schema 3 (version
+1.3.2.0, Nov 11) replaced `link`'s always-zero `selected_*` slice with the bomb and forced-drop features (the table),
+so schema 1 and 2 checkpoints no longer load (their `link` is 81 wide): every family retrained.
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
 
@@ -220,6 +227,13 @@ start state) and `visited_rooms` `bombs_used_per_visit`, `cheated_<item>_per_vis
 non-zero ones); chain `RoomRecord.bombs_used`, `cheated_bombs/keys/rupees` and `runner.chain_summary`'s `cheated_<item>`
 totals and `runs_with_cheated_<item>`; room events carry the run's `cheated` dict, shown in the watch player's
 footer (`cheated: 2 bombs, 1 key`, when any): such a game wasn't beaten naturally.
+
+Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, Lee Nov 11): `placed`, `hits` (credited to the placing
+step: every session looks ahead for bombs), `misses` (placed, no hit), `tenth_kills` (`$50` 9 → 10, any weapon),
+`tenth_tries` (placed while the next kill was the 10th), `armed` (the 10th kill made with a bomb: a forced bomb drop),
+`picked_up` (bomb pickups). Terminal `info['bombs']` holds them next to `used` → training `bombs/<stat>` per episode
+(progress events too); eval `mean_bomb_<stat>` and per-visit `bomb_<stat>` / `bomb_<stat>_per_visit`; chain
+`RoomRecord.bomb_<stat>`.
 
 Boss fights (`crates/env/src/critic.rs` `BossTransitions`): a Dodongo whose ObjState ($AC+slot) enters 2 was
 *stunned* by a bomb's smoke (the sword can kill him then; a stun timer that goes up is a new stun); a rise in
@@ -366,14 +380,19 @@ player's `--stall-steps`, default 300) sets `stalled` on the room event after N 
 at 2N. `eval-chain` leaves it off.
 
 Endings, linger, the chain's stall counter and the visit metrics read `Change.observed` (hits, stuns and pickups
-seen in the step itself); only the critic reads the credited fields, where the weapon look-ahead credits a beam,
-bomb, arrow or boomerang hit on its firing step and the ledger keeps the landing step from crediting it again.
-So the look-ahead changes rewards and nothing else (tested: the same game, endings, linger and visits with it on
-or off). It runs only when it can credit something: a live enemy in the room (for a boomerang or arrow, also an item
-on the floor); otherwise its prediction would be empty. Evaluation (`EnvOptions.skip_look_ahead`) and chains run
-without it.
+seen in the step itself); only the critic and the bomb counts (`zelda::bombs::BombStats`) read the credited fields,
+where the weapon look-ahead credits a beam, bomb, arrow or boomerang hit on its firing step and the ledger keeps the
+landing step from crediting it again. So the look-ahead changes rewards and bomb hit counts and nothing else
+(tested: the same game, endings, linger and visits with it on or off). It runs only when it can credit something: a
+live enemy in the room (for a boomerang or arrow, also an item on the floor); otherwise its prediction would be
+empty. `Session.look_ahead` (`zelda::LookAhead`): `All` in training, `Bombs` in evaluation
+(`EnvOptions.skip_look_ahead`), chains and exploration (bombs only: their hits are counted, the rest credits only
+rewards), `Off` only by request (`Game(look_ahead=False)`).
 
-A bomb pickup pays `reward-gained-bombs` (0.5) like other item
+Bombs (Lee, Nov 11): placing one costs `penalty-bomb-used` (−0.25, also what a bomb that hits nothing costs), each
+hit the look-ahead credits to it pays `reward-bomb-hit` (0.5, plus the usual `reward-hit`), a 10th damage-free kill
+made with a bomb (it arms a forced drop of 4 bombs) pays `reward-armed-bomb-drop` (0.75) on the step it happens, and
+a bomb pickup pays `reward-gained-bombs` (0.5) like other item
 pickups (cheat grants don't count); the map/compass reward is not paid on a level change; dropped-item lifetimes
 count half-frames; the look-ahead credits only what a prediction adds over the ones still pending. Curriculum
 starts take their track's seed state's route step.
@@ -481,6 +500,10 @@ step, so following an enemy that moves away pays again, and knockback resets the
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
+- Bombs and the kill streak at reset (Lee, Nov 11; every family): `ram_randomization: {bombs: [0, 8],
+  help_count: [0, 9]}` draws Link's bomb count and a damage-free kill streak (`$50` = `$627` = n, `$51` = 0), so
+  bomb use and the 10th kill's forced bomb drop come up in every family's training. Curriculum starts get them too
+  (like hp); harvested starts don't (they keep what the upstream specialist handed over).
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
   deterministic=None, on_episode=None, *, threads=None, states_dir=None, events=None, replays=None, streams=(),
   state='embed', keyframe_frames=600)` plays every seed start state N
