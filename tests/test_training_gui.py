@@ -298,3 +298,15 @@ def test_a_real_triforce_process_its_log_roots_and_liveness(tmp_path):
         child.wait()
     assert gui.plan_alive(json.loads((plan_dir / gui.PLAN_FILE).read_text())) is False
     assert scanner.live([plan_dir]) == []       # the cached plan (same file) is checked again
+
+
+def test_eval_chain_throughput_reads_episodes_per_second_or_seconds_per_episode():
+    start = {'event': 'chain_start', 'ts': 100.0, 'runs': 1000}
+    running = {'start': start, 'result': None, 'progress': {'ts': 110.0, 'done': 250, 'runs': 1000}}
+    assert gui.chain_speed(running) == '25.0 ep/s'
+    slow = {'start': start, 'result': {'ts': 400.0, 'runs': 120}, 'progress': {'ts': 390.0, 'done': 119}}
+    assert gui.chain_speed(slow) == '2.5 s/ep'                          # the result's count and time once done
+    assert gui.chain_speed({'start': start, 'result': {'ts': 110.0, 'runs': 60}, 'progress': None}) == '6.0 ep/s'
+    assert gui.chain_speed({'start': start, 'result': {'ts': 400.0, 'runs': 100}, 'progress': None}) == '3.0 s/ep'
+    assert gui.chain_speed({'start': start, 'result': None, 'progress': {'ts': 160.0, 'done': 20}}) == '3.0 s/ep'
+    assert gui.chain_speed({'start': start, 'result': None, 'progress': None}) == ''

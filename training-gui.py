@@ -798,6 +798,25 @@ class Training:
         return [event for event in self.round_events if event.get('event') == 'error']
 
 
+def fmt_episode_rate(episodes: float, seconds: float) -> str:
+    """Throughput: 'N ep/s', or 'N s/ep' when below one episode a second ('' without a measurement)."""
+    if episodes <= 0 or seconds <= 0:
+        return ''
+    rate = episodes / seconds
+    return f"{rate:.1f} ep/s" if rate >= 1 else f"{1 / rate:.1f} s/ep"
+
+
+def chain_speed(chain: dict) -> str:
+    """An eval-chain's throughput: finished runs over the time since its start (the last progress event while
+    running, the result once done)."""
+    start = chain.get('start')
+    end = chain.get('result') or chain.get('progress')
+    if not start or not end or 'ts' not in start or 'ts' not in end:
+        return ''
+    done = (end.get('runs') if chain.get('result') else end.get('done')) or 0
+    return fmt_episode_rate(done, end['ts'] - start['ts'])
+
+
 def describe(event: dict) -> str:
     """One-line summary of an event for the Events tab."""
     kind = event.get('event')
@@ -1526,6 +1545,9 @@ class ChainCard(Clickable):
             sub += f" · {fmt_duration(now - chain['start']['ts'])}"
         elif status in ('pending', 'skipped'):
             sub = STATUS[status][1] + f" · {runs} runs"
+        speed = chain_speed(chain)
+        if speed:
+            sub += f" · {speed}"
         p.drawText(QPointF(rect.left() + 40, rect.top() + 41), sub)
 
         right_w = 320.0 if rect.width() > 760 else 150.0
