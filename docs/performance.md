@@ -80,6 +80,10 @@ stalfos-keese-gel (42) 36.7 s, boss-dodongo (3) 2.7 s; it shares the CPU with th
 only once the cohort rate has held `--stop-success` for `--stop-patience` iterations, and a failed check resets the
 streak, so at most one check per 5 iterations: on a plateau just under 0.99 a check per ~9 s of training (5
 iterations at p8) doubles the time there for ow-zora (9 s per check) and quintuples it for stalfos-keese-gel (37 s).
+Since `54b862a` a check that can no longer reach `--stop-success` ends there (same decision, `aborted` in the event):
+a failing check at 0.99 took 40.5 → 22.2 s for stalfos-keese-gel (1,541 of 2,100 episodes) and 11.3 → 6.6 s for
+goriya (469 of 750), the same seed, two runs each; the jobs go state by state, so the failures of a weak state late
+in the order end it late.
 
 **Chains and evaluation** (`eval-chain --runs 20 --parallel 10 --from 1_73s_0` under py-spy): 20.4 of the main
 thread's 24.3 s wait in the native pool; `checkpoint_sha1` 0.26 s once (cached per path, mtime and size),
@@ -106,9 +110,9 @@ PASSIVE gained nothing measurable and would change process-wide behaviour, so ne
 1. **Emulation** (zcore ~75% of rollout cycles), unchanged; see [zcore speed](#zcore-speed-nov-7).
 2. **The rollout barrier** (workers idle 13–32% at the end of a rollout): more envs than threads with
    work-stealing.
-3. **The early-stop confirmation** on a plateau near the threshold: stopping the evaluation once its failures already
-   exceed what `--stop-success` allows would keep every decision and save most of a failing check (up to ~37 s), but
-   the logged rate would then be partial (Lee's call).
+3. **The early-stop confirmation** on a plateau near the threshold: aborted checks (`54b862a`) still play ~60–75% of
+   their episodes; interleaving the states in the job order (same (state, seed) pairs) would reach the deciding
+   failures sooner, if the episodes' noise keys don't depend on the job order.
 4. **Weapon look-ahead** in fights: ~27–53 Mcyc per beam/bomb/boomerang (45–90 emulated frames) against 9–11 for
    the action's real frames. The deferred look-ahead (`docs/rust-actor.md` item 4) or ending it once every enemy it
    could credit is dead.

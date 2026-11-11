@@ -31,8 +31,9 @@ Events written by ``triforce.train`` (one specialist):
 - ``checkpoint``: iteration, steps, path.
 - ``early_stop``: iteration, steps, balanced_success_rate.
 - ``early_stop_check``: an early-stop proposal's confirmation evaluation (``train.EarlyStop``): iteration, rate
-  (the evaluation's success), episodes, seed, balanced_success_rate, train_rates (per start state, training
-  cohorts), states (per start state, evaluation), decision (stop | continue).
+  (the evaluation's success; partial when aborted), episodes (played), planned, failures, aborted (ended once the
+  failures ruled the threshold out), rate_upper_bound (the best rate still reachable), seed, balanced_success_rate,
+  train_rates (per start state, training cohorts), states (per start state, evaluation), decision (stop | continue).
 - ``error``: message, traceback.
 - ``train_end``: status (completed | early_stop | interrupted | error), iterations, steps, wall_seconds, sps,
   checkpoint.

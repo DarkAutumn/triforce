@@ -445,8 +445,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   iterations; an iteration that finished no room-entry episode, or whose `in_flight/over_half_budget` exceeds
   1 − R, resets the streak. A proposal stops training only if a confirmation evaluation of the current weights
   (`CONFIRM_EPISODES` = 50 sampled episodes per seed start state on an `EvalTask` pool, seed = pool seed +
-  iteration, `--parallel` envs) also reaches R; otherwise the streak restarts. Every check is an
-  `early_stop_check` event with its rate. Harvested start states never move the rate (they are logged as
+  iteration, `--parallel` envs) also reaches R; otherwise the streak restarts. The evaluation ends as soon as its
+  failures rule R out (same decision; the event says `aborted`, with `failures` and `rate_upper_bound`). Every check
+  is an `early_stop_check` event with its rate. Harvested start states never move the rate (they are logged as
   `harvested/*`). The raw `success_rate` is biased toward the states the start-state pool oversamples
   (failures), so it is not used for stopping.
 - `python -m triforce.explore --specialist NAME` (Go-Explore phase A; `crates/env/src/explore.rs`, CLI `explore.py`): per seed start state, an
