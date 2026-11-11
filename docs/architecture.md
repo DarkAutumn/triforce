@@ -28,10 +28,10 @@ flowchart LR
 | `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `Policy`, `keyed_noise`, `SpecialistConfig`, `CurriculumSpec`, `Explorer`/`AcceptSpec`/`explore_states`, `Replay`/`ReplayPlayer`/`replay_verify|stitch|truncate`, `ReplayFeed`/`ReplayScreen`, `route_steps`, `routes`, `route_alternates`, `game_rooms`, `families`, `specialist_for`, `paths`, `OBS_SPEC` and other constants, exception types. |
 | `crates/movie` | `TFMOVIE` input movies and `TFGOLDEN` per-frame digests. |
 | `crates/replay` | `TFREPLAY` recordings: the format (`format.rs`), `Recorder`, the reader `Replay`, `stitch`/`truncate` (`edit.rs`) and, with feature `zcore`, `Player`/`verify` (playback on the emulator alone). No dependency on `zelda` or `env`. |
-| `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate). Knows replays and the emulator only. |
+| `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -715,15 +715,16 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   replay's memory edits are what any chain run's are: the action executor's writes of Link's facing (`$98`) and
   the selected B item (`$656`), and cheat grants; from power on there is no other write.
 
-## Watching (`play-zelda.py`, `play_grid.py`, `crates/theater`)
+## Watching (`play-zelda.py`, `play_grid.py`, `play_view.py`, `crates/theater`)
 
 `play-zelda.py [COLUMNSxROWS] [PATH]` shows a grid of cells, and every cell plays a replay: nothing on screen is
 a live game. `play_grid.ReplayGrid` decides what each cell plays next; `_native.ReplayScreen` (`theater::Screen`)
 plays it, one thread per cell on the emulator alone, paced at the frame rate (keys `u`, `+`, `-`; `p` pauses).
+`play_view.Window` is the Qt window (cells, strips, keys), shared with `create-video.py`.
 A power-on run is shown from the frame the models took over. When a replay ends its result stays up
 `RESULT_PAUSE` (3 s) while the cell's next replay loads behind it (`play(hold=True)`, then `release`).
 
-- **The queues** (no PATH; `--show best|success|stuck|died|random`, keys `b s k d r`). The promoted models play
+- **The queues** (no PATH; `--show best|success|stuck|died|random`, keys `b w k d r`). The promoted models play
   the route in a chain pool (`--parallel` games, no picture, unpaced, every run recorded) and
   `_native.ReplayFeed` (`theater::Feed`, a Rust thread) takes every finished run off the pool: into its ending's
   queue, a copy of any run into `random`, and into `best`, which keeps the best runs seen and not yet watched (a
@@ -741,15 +742,62 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   state is loaded (the game start, `--from`) and at a golden path's checkpoints; from power on they come from
   the idle delay, so `--act argmax` with a fixed `--delay` is refused.
 - **Golden paths** (`--show golden`, key `g`): `play_grid.GoldenSource` makes golden paths one after another
-  on a Python thread while fewer than one per cell wait; failed paths are dropped. The strip shows the leg
-  (`leg 2/3`).
+  on a Python thread while fewer than one per cell wait; failed paths are dropped.
 - **Replay files** (PATH): one file plays on loop (in one cell unless a grid is given); a folder's top-level
   `*.tfreplay` files go round in name order, each cell taking the next one no other cell shows, and the folder
   is read again each time round. More cells than files leaves the rest dark.
 - `n` sends every cell to its next replay. The title shows the source, the queues' stock, the runs simulated
-  and how they ended, whether the simulations run, and the cells' frame rate; a cell's strip shows the run's
-  seed, Link's hearts, the room, the acting specialist and cheated items used. `--benchmark SECONDS` prints
-  the frame rate as JSON and quits.
+  and how they ended, whether the simulations run, the cells' frame rate and the sound; a cell's strip shows
+  the run's seed, the room, the acting specialist and cheated items used. `--benchmark SECONDS` prints
+  the frame rate as JSON and quits (silent).
+- **Sound.** One cell is heard: the top left one at first, a click on a cell moves it, `s` turns it off and on
+  (`--no-sound` starts off). In a grid of several cells the heard one has a yellow frame while it sounds.
+  `ReplayScreen.set_sound(cell)` opens the default sound device (`theater::Speaker`, `cpal`) and the cell's
+  thread pushes each frame's samples into its `Ring`; the ring tells the cell what rate to make samples at
+  (the device's ± 0.5%) to stay about 60 ms ahead, since the frame clock and the device's drift apart. Sound is
+  made as frames are played, so it is on only at the console's frame rate: at any other cap, or uncapped, no
+  cell is heard and the frame is hidden. No sound device: the title says why, the picture plays on.
+- **The controller** (`--controller`, off by default): `theater::overlay::draw_controller` draws the pad into
+  each frame at the console's resolution, top right over the HUD's `-LIFE-` (x 182–243, y 14–37; the hearts
+  start at y 40): a translucent grey plate, idle buttons dark, the buttons held on that frame opaque white.
+
+## Sound (`crates/zcore/src/sound.rs`)
+
+The emulated APU keeps only what the CPU can observe and `MachineState` holds no sound state, so states, replays
+and training are untouched by sound. It is computed beside the machine: the bus notes every write to
+`$4000–$4017` and every sample byte the DMC fetches (`sound::Tap`: the last value of each register always; the
+frame's timed events while `ZCore::set_sound(true)`), and a `sound::Synth` replays a frame's events
+(`ZCore::sound()`) through its own two pulse channels, triangle, noise and DMC output unit, frame sequencer,
+the lookup mixer and the console's output filters (high-pass 90 Hz and 440 Hz, low-pass 14 kHz), averaging the
+1.79 MHz signal down to four times the output rate and decimating with a 64-tap low-pass. `Synth::run` makes
+`cycles × rate / CPU_HZ` mono float samples per frame (about 798.7 at 48 kHz); `set_rate` nudges that for a
+device. The machine is bit-identical with sound on or off (`crates/zcore/tests/sound.rs`).
+
+- **Joining mid-run** (`Synth::resume`, used when the heard cell changes and after a seek): the synth takes the
+  registers the tap has seen and the machine's length counters and frame-sequencer position, so held notes go
+  on; envelopes restart and the oscillators' phase is new.
+- **After a restore** (`ZCore::restore`, so every replay that starts from a savestate) the registers are
+  unknown: each channel is silent until the game writes it again, which its music driver does with the next
+  note. A power-on replay has everything from the first frame.
+- `replay::Player::set_sound(Some(rate))` / `audio()` / `buttons()` and `_native.ReplayPlayer.set_sound(rate)` /
+  `audio()` / `buttons` / `screen(controller=True)` expose it per replay.
+
+## Videos (`create-video.py`, `video.py`)
+
+`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound] [--controller] [--states-dir DIR]` films
+replays as `play-zelda.py` shows them (the same `play_view.Window`, rendered offscreen without its title bar)
+into `OUT`: H.264 yuv420p (CRF 18) at 39375000/655171 fps (the NES's 60.0988), with `--sound` AAC 48 kHz mono,
+in the container the file name asks for (`.mp4`, `.mkv`, `.mov`); it needs `ffmpeg`. The grid defaults to 1x1;
+the replays (files, or folders: their top-level `*.tfreplay` in name order) must be at least one per cell.
+`video.VideoGrid` is `ReplayGrid`'s counterpart stepped one frame per `step()`: the first replays start in the
+cells in order, a finished one's result stays `RESULT_PAUSE`, then the cell takes the next replay not yet
+played, and when none is left it keeps its last picture and result; the film ends when every replay has played
+and the last result has had its pause. `--sound` adds the sound of the middle cell (both sides odd: 3x3, 5x3),
+else of the top left one; `VideoGrid.audio()` hands out each film frame's exact share of samples (silence while
+that cell shows a result), so sound and picture stay together. In a grid of several cells that cell has the
+yellow frame. The picture is piped to ffmpeg as it is made; the sound goes to a temporary WAV beside `OUT` and
+is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`,
+`sound`, `heard`, `took`); exit 1 when a replay can't be played or ffmpeg fails, 2 on a bad command line.
 
 ## Entry states (`entry_states.py`)
 

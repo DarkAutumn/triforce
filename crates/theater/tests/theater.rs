@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use replay::{Context, ENDING_DEATH, ENDING_STUCK, ENDING_WIN, Ending, Event, Player, RecordOptions, Recorder, Replay, Source};
 use theater::screen::FRAME_BYTES;
-use theater::{Entry, Feed, Producer, Queue, Queues, Resolver, Screen, Status};
+use theater::{Entry, Feed, Producer, Queue, Queues, Resolver, Ring, Screen, Status, overlay};
 use zcore::{Rom, ZCore, state_file};
 
 fn rom() -> Option<Arc<Rom>> {
@@ -170,9 +170,6 @@ fn a_cell_plays_a_replay_from_its_start_frame_to_its_end() {
     assert_eq!(screen.frame(0, 0, &mut out), Some(140));
     assert!(out == frame_at(&rom, &data, 240), "the cell's last frame is the replay's");
     assert!(screen.frame(0, 140, &mut out).is_none(), "nothing newer");
-    let end = Replay::parse(data.clone()).unwrap();
-    let end = state_file::decode(&rom, end.end_state().blob).unwrap().machine;
-    assert_eq!((state.hearts, state.containers), theater::hearts(end.peek(0x66F), end.peek(0x670)));
     assert_eq!((screen.state(1).status, screen.played(1)), (Status::Idle, 0), "the other cell is its own");
 
     // Played again, the counters go on; a start past the end shows nothing and finishes.
@@ -195,6 +192,76 @@ fn a_cell_plays_a_replay_from_its_start_frame_to_its_end() {
     screen.release(0);
     wait_for("the released replay's end", || screen.state(0).status == Status::Finished);
     assert_eq!(screen.frame_counter(0), before + 140);
+}
+
+#[test]
+fn one_cell_is_heard_and_its_sound_moves_with_set_sound() {
+    let Some(rom) = rom() else { return };
+    // The title screen from power on: its music starts within the first seconds.
+    let data = recording(&rom, 420, 0, 0, &[], ENDING_WIN);
+    let screen = Screen::new(rom.clone(), 2, 0.0, no_files());
+    let ring = Arc::new(Ring::new(48_000));
+    let drain = |ring: &Ring| {
+        let mut out = vec![0.0; ring.len()];
+        ring.pop(&mut out);
+        out
+    };
+
+    // Nobody is heard: a cell plays and the ring stays empty.
+    screen.play(0, Arc::from(data.clone()), 0, false);
+    wait_for("the unheard replay", || screen.state(0).status == Status::Finished);
+    assert!(ring.is_empty());
+
+    // Cell 1 is heard; cell 0 plays too and adds nothing.  420 frames at 48 kHz are about 7 seconds, of
+    // which the ring (never emptied here) keeps the newest: a few targets of title music.
+    screen.set_sound(Some((1, ring.clone())));
+    screen.play(0, Arc::from(data.clone()), 0, false);
+    wait_for("cell 0", || screen.state(0).status == Status::Finished);
+    assert!(ring.is_empty(), "cell 0 is not the one heard");
+    screen.play(1, Arc::from(data.clone()), 0, false);
+    wait_for("cell 1", || screen.state(1).status == Status::Finished);
+    let heard = drain(&ring);
+    assert!(heard.len() >= ring.target());
+    let loudness = (heard.iter().map(|x| x * x).sum::<f32>() / heard.len() as f32).sqrt();
+    assert!(loudness > 0.01, "the title music, rms {loudness}");
+
+    // The picture is the same heard or not.
+    let (mut with, mut without) = (vec![0; FRAME_BYTES], vec![0; FRAME_BYTES]);
+    screen.frame(1, 0, &mut with).unwrap();
+    screen.frame(0, 0, &mut without).unwrap();
+    assert!(with == without);
+
+    // Sound off: the cell plays on in silence.
+    screen.set_sound(None);
+    screen.play(1, Arc::from(data), 0, false);
+    wait_for("cell 1 again", || screen.state(1).status == Status::Finished);
+    assert!(ring.is_empty());
+    screen.close();
+}
+
+#[test]
+fn the_controller_is_drawn_into_the_frames_while_it_is_on() {
+    let Some(rom) = rom() else { return };
+    // START held all the way: the pad's START is lit in the last frame, its A is not.
+    let data = recording(&rom, 60, overlay::START, 0, &[], ENDING_WIN);
+    let plain = frame_at(&rom, &data, 60);
+    let mut drawn = plain.clone();
+    overlay::draw_controller(&mut drawn, overlay::START);
+    assert!(drawn != plain);
+
+    let screen = Screen::new(rom.clone(), 1, 0.0, no_files());
+    let mut out = vec![0; FRAME_BYTES];
+    screen.play(0, Arc::from(data.clone()), 0, false);
+    wait_for("the plain replay", || screen.state(0).status == Status::Finished);
+    screen.frame(0, 0, &mut out).unwrap();
+    assert!(out == plain, "off unless asked for");
+
+    screen.set_controller(true);
+    screen.play(0, Arc::from(data), 0, false);
+    wait_for("the replay with the controller", || screen.state(0).status == Status::Finished);
+    screen.frame(0, 0, &mut out).unwrap();
+    assert!(out == drawn);
+    screen.close();
 }
 
 #[test]

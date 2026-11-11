@@ -162,3 +162,23 @@ def scripted_models(tmp_path_factory):
     save_checkpoint('ow-octorok', 'south', scripted('MOVE S 16'), root=root)
     promote('ow-octorok', 'south', root=root)
     return root
+
+
+@pytest.fixture(scope='session')
+def recordings(scripted_models, states_dir, tmp_path_factory):  # pylint: disable=redefined-outer-name
+    """A folder of three replays (read only): two wins of the scripted segment (seeds 0 and 1) and a run from
+    power on that ends on its step budget (seed 2)."""
+    # pylint: disable=import-outside-toplevel
+    from triforce import replay
+    from triforce.runner import Route, Runner
+    folder = tmp_path_factory.mktemp('recordings')
+    runner = Runner(models_dir=scripted_models, max_steps=20, parallel=2, states_dir=states_dir)
+    segment = Route.load('d2first', start_from=str(require_state(SEGMENT_STATE)), stop_step=SEGMENT_STOP_STEP)
+    record = replay.record_options(runner.record_meta(segment))
+    runner.run_many(segment, [0, 1], record=record, replays=replay.ReplayDir(folder))
+    boot = Route.load('d2first', power_on={'delay': 40})
+    runner.run_many(boot, [2], record=replay.record_options(runner.record_meta(boot)),
+                    replays=replay.ReplayDir(folder))
+    assert sorted(p.name for p in folder.iterdir()) == [
+        '00000000-win.tfreplay', '00000001-win.tfreplay', '00000002-stuck.tfreplay']
+    return folder

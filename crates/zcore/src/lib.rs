@@ -31,6 +31,7 @@ mod control_deck;
 mod video;
 
 pub mod machine;
+pub mod sound;
 pub mod state_file;
 pub use cpu::{TraceHook, TraceRow};
 pub use machine::{MachineState, Rom, RomError, ZCore};

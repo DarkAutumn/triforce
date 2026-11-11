@@ -1,4 +1,4 @@
-"""A grid of cells that play replays, for ``play-zelda.py``.
+"""A grid of cells that play replays, for ``play-zelda.py`` (the window is ``triforce.play_view``).
 
 Nothing on screen is a live game.  Every cell plays a replay (a TFREPLAY file's bytes) on the emulator alone
 (``_native.ReplayScreen``: one thread per cell at the grid's frame rate), and the grid decides which replay a cell
@@ -26,13 +26,17 @@ sends every cell to its next replay.
 
 ``poll_status()`` returns what happened since the last call, as dicts with ``cell`` and ``event``: ``wait`` (the
 source has nothing yet), ``start`` (``seed``, ``source``, ``name``), ``room`` (``specialist``, ``level``,
-``room``, ``rooms``: rooms entered so far, ``health``, ``max_health``, ``cheated``: cheated items used so far,
-``part``: (segment, segments) of a stitched replay, else None), ``end`` (``seed``, ``result``, ``outcome``,
-``reason``) and ``crash`` (``reason``: the cell's replay could not be played, or the source failed).  A finished
+``room``, ``rooms``: rooms entered so far, ``cheated``: cheated items used so far), ``end`` (``seed``,
+``result``, ``outcome``, ``reason``) and ``crash`` (``reason``: the cell's replay could not be played, or the
+source failed).  A finished
 replay's last frame stays up for ``RESULT_PAUSE`` seconds before the cell's next one.  ``frame(cell, since)``
 copies a cell's latest frame; ``set_fps`` changes every cell's frame rate (``<= 0``: as fast as it plays;
 ``NES_FPS`` is the console's own); ``set_paused(True)`` stops every cell before its next frame and the result
 clock with it (the simulations are not the picture: they keep filling their queues).
+
+``set_sound(cell)`` makes one cell heard on the sound device (None: none), from whatever its game is playing at
+that moment; a cell's sound is made as its frames are played, so it is only right at ``NES_FPS``.  ``controller``
+draws the controller, its held buttons lit, into every frame.
 """
 
 import bisect
@@ -86,19 +90,16 @@ class Show:
                       for event in events if event['type'] == 'room']
         self._room_frames = [room[0] for room in self.rooms]
         self.cheats = recording.cheats()
-        self.segments = [event['frame'] for event in events if event['type'] == 'segment']
 
     def status(self, frame: int) -> dict:
-        """The ``room`` message's fields ``frame`` input frames into the replay (health aside)."""
+        """The ``room`` message's fields ``frame`` input frames into the replay."""
         entered = bisect.bisect_right(self._room_frames, frame)
         _, specialist, level, room = self.rooms[entered - 1] if entered else (0, self.specialist, None, None)
         cheated = dict.fromkeys(_native.CHEAT_ITEMS, 0)
         for at, item, count in self.cheats:
             if at <= frame:
                 cheated[item] += count
-        part = (bisect.bisect_right(self.segments, frame) + 1, len(self.segments) + 1) if self.segments else None
-        return {'specialist': specialist, 'level': level, 'room': room, 'rooms': entered, 'cheated': cheated,
-                'part': part}
+        return {'specialist': specialist, 'level': level, 'room': room, 'rooms': entered, 'cheated': cheated}
 
 
 class FileSource:
@@ -230,7 +231,7 @@ class ReplayGrid:
     ``start_from``, ``power_on``: ``Route.load``'s) on ``parallel`` games with the promoted models of
     ``models_dir`` acting as ``act`` says (``sample``, ``argmax``, ``model``).  ``replays``: a folder every
     simulated run is also saved into; ``streams``, ``state`` and
-    ``keyframe_frames``: ``replay.record_options``'s."""
+    ``keyframe_frames``: ``replay.record_options``'s.  ``controller``: draw the controller into every frame."""
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, cells: int, fps: float, source: str = 'best', *, path=None, models_dir=None, states_dir=None,
@@ -239,7 +240,7 @@ class ReplayGrid:
                  power_on: Optional[dict] = None, start_from: Optional[str] = None, stop_at=None,
                  stop_step: Optional[int] = None, stall_steps: Optional[int] = None, first_seed: int = 0,
                  attempts: int = golden.DEFAULT_ATTEMPTS, replays=None, streams=(), state: str = 'embed',
-                 keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES):
+                 keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES, controller: bool = False):
         # pylint: disable=too-many-arguments, too-many-locals
         if path is None and source not in SOURCES:
             raise ValueError(f"unknown source {source!r}; sources: {SOURCES}")
@@ -256,6 +257,9 @@ class ReplayGrid:
         self.stall_steps, self.first_seed, self.attempts = stall_steps, first_seed, attempts
         self.replays = replays
         self.record = {'streams': streams, 'state': state, 'keyframe_frames': keyframe_frames}
+        self.controller = controller
+        self._sound: Optional[int] = None   # the cell that is heard
+        self._sound_error: Optional[str] = None
         self._source = FILES if path is not None else source
         self._selection = 0                 # bumped by `select` and `skip`: every cell starts over
         self._status: queue.Queue = queue.Queue()
@@ -323,6 +327,23 @@ class ReplayGrid:
             if self._screen is not None:
                 self._screen.set_paused(on)
 
+    def set_sound(self, cell: Optional[int]) -> None:
+        """Makes ``cell`` the one that is heard (None: none).  Without a usable sound device nothing is heard and
+        ``stats()['sound_error']`` says why."""
+        with self._lock:
+            self._sound = cell
+            self._apply_sound()
+
+    def _apply_sound(self) -> None:
+        """Tells the screen who is heard (the lock is held)."""
+        if self._screen is None:
+            return
+        try:
+            self._screen.set_sound(self._sound)
+            self._sound_error = None
+        except RuntimeError as error:       # no sound device
+            self._sound_error = str(error)
+
     @property
     def paused(self) -> bool:
         return self._paused_at is not None
@@ -346,11 +367,12 @@ class ReplayGrid:
     def stats(self) -> dict:
         """``source``; ``feed`` (``ReplayFeed.stats()``: the queues' fill, the runs simulated and their endings,
         whether the simulations run) once the simulations started, else None; ``golden``
-        (``GoldenSource.stats()``) once golden paths are being made, else None; ``files`` (how many, or None)."""
+        (``GoldenSource.stats()``) once golden paths are being made, else None; ``files`` (how many, or None);
+        ``sound_error`` (why no cell can be heard, else None)."""
         feed, paths = self._feed, self._golden
         return {'source': self._source, 'feed': None if feed is None else feed.stats(),
                 'golden': None if paths is None else paths.stats(),
-                'files': None if self.files is None else len(self.files.files)}
+                'files': None if self.files is None else len(self.files.files), 'sound_error': self._sound_error}
 
     def poll_status(self) -> List[dict]:
         """Every status message since the last call."""
@@ -383,8 +405,10 @@ class ReplayGrid:
             return
         with self._lock:
             self._screen = screen
-            screen.set_fps(self.fps)                # in case set_fps or set_paused ran before the screen existed
+            screen.set_fps(self.fps)                # in case these ran before the screen existed
             screen.set_paused(self._paused_at is not None)
+            screen.set_controller(self.controller)
+            self._apply_sound()
         cells = [_Cell() for _ in range(self.cells)]
         selection = -1
         try:
@@ -492,7 +516,7 @@ class ReplayGrid:
                 cell.phase, cell.until = 'result', now + RESULT_PAUSE
                 return
             show = cell.show
-            room = {**show.status(state['frame']), 'health': state['health'], 'max_health': state['max_health']}
+            room = show.status(state['frame'])
             if room != cell.sent:
                 cell.sent = room
                 self._status.put({'cell': index, 'event': 'room', **room})

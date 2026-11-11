@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use zcore::sound::Synth;
 use zcore::state_file::{self, StateFormatError};
 use zcore::{MachineState, Rom, ZCore};
 
@@ -30,6 +31,11 @@ pub struct Player {
     edit: usize,
     /// The next STATES entry [`verify`] compares.
     state: usize,
+    /// The controller byte of the last frame run.
+    buttons: u8,
+    /// The sound of the frames run since [`Player::set_sound`] turned it on, not yet taken.
+    sound: Option<Synth>,
+    audio: Vec<f32>,
 }
 
 /// What [`verify`] played and compared.
@@ -98,6 +104,9 @@ impl Player {
             frame: 0,
             edit: 0,
             state: 0,
+            buttons: 0,
+            sound: None,
+            audio: Vec::new(),
         })
     }
 
@@ -118,6 +127,36 @@ impl Player {
     /// The machine.
     pub fn nes(&self) -> &ZCore {
         &self.nes
+    }
+
+    /// The controller byte of the last frame run (0 before the first).
+    pub fn buttons(&self) -> u8 {
+        self.buttons
+    }
+
+    /// Turns sound on at `rate` samples per second, or off (None).  The sound starts from what the machine's
+    /// program last wrote (`zcore::sound::Synth::resume`); each frame run from now on adds its samples to
+    /// [`Player::audio`].  Playback is the same with or without it.
+    pub fn set_sound(&mut self, rate: Option<f64>) {
+        self.nes.set_sound(rate.is_some());
+        self.audio.clear();
+        self.sound = rate.map(|rate| {
+            let mut synth = Synth::new(rate);
+            synth.resume(&self.nes);
+            synth
+        });
+    }
+
+    /// Nudges the sample rate (a player keeping a sound device's buffer level).  Nothing with sound off.
+    pub fn tune(&mut self, rate: f64) {
+        if let Some(synth) = &mut self.sound {
+            synth.set_rate(rate);
+        }
+    }
+
+    /// The samples (mono, `-1.0..=1.0`) of the frames run with sound on; the caller drains what it takes.
+    pub fn audio(&mut self) -> &mut Vec<f32> {
+        &mut self.audio
     }
 
     fn peek(&self, addr: u16) -> u8 {
@@ -181,6 +220,10 @@ impl Player {
         };
         self.apply_edits(compare)?;
         self.nes.run_frame(buttons, render);
+        self.buttons = buttons;
+        if let (Some(synth), Some(frame)) = (&mut self.sound, self.nes.sound()) {
+            synth.run(frame, &mut self.audio);
+        }
         self.frame += 1;
         Ok(true)
     }
@@ -218,9 +261,15 @@ impl Player {
                 }
             }
         }
+        // The frames on the way are not heard: sound picks up where the seek lands.
+        let mut sound = self.sound.take();
         while self.frame < frame {
             self.advance(false, false)?;
         }
+        if let Some(synth) = &mut sound {
+            synth.resume(&self.nes);
+        }
+        self.sound = sound;
         Ok(())
     }
 

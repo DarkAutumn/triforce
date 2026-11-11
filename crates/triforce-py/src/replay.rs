@@ -4,7 +4,7 @@
 use crate::context::{self, TfzStore};
 use crate::convert::json_to_py;
 use crate::errors::{ReplayError, StateFormatError};
-use crate::game::screen;
+use crate::game::screen_with;
 use ::replay::{Event, OUTCOME_CLASSES, Player, Replay};
 use numpy::{PyArray, PyArray1, PyArrayMethods};
 use parking_lot::Mutex;
@@ -322,9 +322,42 @@ impl PyReplayPlayer {
         PyArray::from_vec(py, out)
     }
 
-    /// The last frame as a (240, 256, 3) uint8 array; it must have been run with `render=True`.
-    fn screen<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        screen(py, self.player.lock().nes(), true)
+    /// The last frame as a (240, 256, 3) uint8 array; it must have been run with `render=True`.  With
+    /// `controller` the pad is drawn into it, the buttons held on that frame lit (as `ReplayScreen` draws it).
+    #[pyo3(signature = (controller=false))]
+    fn screen<'py>(&self, py: Python<'py>, controller: bool) -> PyResult<Bound<'py, PyAny>> {
+        let player = self.player.lock();
+        let buttons = player.buttons();
+        screen_with(py, player.nes(), true, |frame| {
+            if controller {
+                ::theater::draw_controller(frame, buttons);
+            }
+        })
+    }
+
+    /// The controller byte of the last frame run (A 1, B 2, SELECT 4, START 8, UP 16, DOWN 32, LEFT 64,
+    /// RIGHT 128; 0 before the first frame).
+    #[getter]
+    fn buttons(&self) -> u8 {
+        self.player.lock().buttons()
+    }
+
+    /// Turns sound on at `rate` samples per second, or off (None).  It starts from whatever the game is
+    /// playing at that moment; every frame stepped from now on adds its samples to what `audio()` returns.
+    /// A `seek` is silent: the sound picks up where it lands.  Playback is the same with or without sound.
+    #[pyo3(signature = (rate=None))]
+    fn set_sound(&self, rate: Option<f64>) -> PyResult<()> {
+        if rate.is_some_and(|rate| !(8000.0..=384_000.0).contains(&rate)) {
+            return Err(pyo3::exceptions::PyValueError::new_err("rate must be 8000 to 384000 samples per second"));
+        }
+        self.player.lock().set_sound(rate);
+        Ok(())
+    }
+
+    /// The sound of the frames stepped since the last call (or since `set_sound`): a float32 array of mono
+    /// samples in -1..1.  A frame is 1/60.0988 s: about 798.7 samples at 48 kHz.
+    fn audio<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        PyArray::from_vec(py, std::mem::take(self.player.lock().audio()))
     }
 
     /// The machine as a TFZSTATE file's bytes.

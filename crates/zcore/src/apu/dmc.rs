@@ -13,9 +13,10 @@ use serde::{Deserialize, Serialize};
 /// left (`$4015` bit 4) and its IRQ.
 ///
 /// The output unit went with audio synthesis (ladder stage Z4): what the reader fetches is not
-/// kept, only when it fetches. The timer runs whether or not a sample plays; each expiry shifts
-/// out one bit, and every eighth starts a new output cycle, which empties the sample buffer into
-/// the shifter and asks for the next byte (nesdev "APU DMC", memory reader).
+/// kept here, only when it fetches ([`crate::sound`] plays the bytes). The timer runs whether or
+/// not a sample plays; each expiry shifts out one bit, and every eighth starts a new output cycle,
+/// which empties the sample buffer into the shifter and asks for the next byte (nesdev "APU DMC",
+/// memory reader).
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Dmc {

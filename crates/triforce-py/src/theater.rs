@@ -1,11 +1,12 @@
 //! Replays for watching, for Python (`crates/theater`): `ReplayFeed` (queues of finished runs filled from a
-//! chain pool by a background thread) and `ReplayScreen` (cells that play replays at a frame rate).
+//! chain pool by a background thread) and `ReplayScreen` (cells that play replays at a frame rate, one of
+//! them heard on the sound device).
 
 use crate::context::{self, TfzStore};
 use crate::envpool::PyEnvPool;
 use crate::game::FRAME_SHAPE;
 use ::replay::ENDINGS;
-use ::theater::{Entry, Feed, Producer, QUEUES, Queue, Queues, Screen};
+use ::theater::{Entry, Feed, Producer, QUEUES, Queue, Queues, Screen, Speaker};
 use numpy::{PyArray, PyArrayMethods};
 use parking_lot::Mutex;
 use pyo3::exceptions::{PyIndexError, PyRuntimeError, PyValueError};
@@ -147,6 +148,8 @@ impl PyReplayFeed {
 #[pyclass(module = "triforce._native", name = "ReplayScreen", frozen)]
 pub struct PyReplayScreen {
     screen: Screen,
+    /// The sound device, opened the first time a cell is to be heard.
+    speaker: Mutex<Option<Speaker>>,
 }
 
 impl PyReplayScreen {
@@ -166,7 +169,7 @@ impl PyReplayScreen {
         let rom = context::rom(py)?;
         let store = TfzStore::new(&*context::data(py, states_dir.as_deref())?, rom.clone());
         let resolve = Arc::new(move |name: &str| std::fs::read(store.path(name)));
-        Ok(PyReplayScreen { screen: Screen::new(rom, cells, fps, resolve) })
+        Ok(PyReplayScreen { screen: Screen::new(rom, cells, fps, resolve), speaker: Mutex::new(None) })
     }
 
     #[getter]
@@ -195,8 +198,8 @@ impl PyReplayScreen {
     }
 
     /// `show` (the number `play` returned; 0: nothing yet), `status` (`idle`, `loading`, `ready`, `playing`,
-    /// `finished`, `failed`), `frame` and `frames` (input frames run, and the replay's), `health` and
-    /// `max_health` (Link's hearts as of `frame`) and `error` (why it failed, else None).
+    /// `finished`, `failed`), `frame` and `frames` (input frames run, and the replay's) and `error` (why it
+    /// failed, else None).
     fn state<'py>(&self, py: Python<'py>, cell: usize) -> PyResult<Bound<'py, PyDict>> {
         let state = self.screen.state(self.cell(cell)?);
         let d = PyDict::new(py);
@@ -204,8 +207,6 @@ impl PyReplayScreen {
         d.set_item("status", state.status.name())?;
         d.set_item("frame", state.frame)?;
         d.set_item("frames", state.frames)?;
-        d.set_item("health", f64::from(state.hearts) / 2.0)?;
-        d.set_item("max_health", state.containers)?;
         d.set_item("error", state.error)?;
         Ok(d)
     }
@@ -246,8 +247,39 @@ impl PyReplayScreen {
         self.screen.set_paused(on);
     }
 
-    /// Stops and joins the cell threads (idempotent).
+    /// Makes `cell` the one that is heard on the default sound device (opened on the first call), from its
+    /// next frame on and from whatever its game is playing at that moment; None: no cell is heard.  Sound
+    /// is made at the pace the cell's frames are played, so it is only right at the console's frame rate.
+    /// `RuntimeError` when there is no usable sound device (nothing changes then).
+    #[pyo3(signature = (cell=None))]
+    fn set_sound(&self, py: Python<'_>, cell: Option<usize>) -> PyResult<()> {
+        let Some(cell) = cell else {
+            self.screen.set_sound(None);
+            return Ok(());
+        };
+        let cell = self.cell(cell)?;
+        let ring = py.detach(|| {
+            let mut speaker = self.speaker.lock();
+            if speaker.is_none() {
+                *speaker = Some(Speaker::open()?);
+            }
+            Ok(speaker.as_ref().expect("just opened").ring().clone())
+        });
+        self.screen.set_sound(Some((cell, ring.map_err(PyRuntimeError::new_err::<String>)?)));
+        Ok(())
+    }
+
+    /// Draws the controller into every frame from the next one on, its held buttons lit (top right, over
+    /// the HUD's -LIFE-), or stops drawing it.
+    fn set_controller(&self, on: bool) {
+        self.screen.set_controller(on);
+    }
+
+    /// Stops and joins the cell threads and closes the sound device (idempotent).
     fn close(&self, py: Python<'_>) {
-        py.detach(|| self.screen.close());
+        py.detach(|| {
+            self.screen.close();
+            drop(self.speaker.lock().take());
+        });
     }
 }

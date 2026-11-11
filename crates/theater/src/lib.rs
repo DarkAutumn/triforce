@@ -1,4 +1,4 @@
-//! Replays for watching (`play-zelda.py`).
+//! Replays for watching (`play-zelda.py`, `create-video.py`).
 //!
 //! Nothing here plays the game live.  Simulations run headless and record every run as a replay
 //! (`crates/replay`); the viewer only ever plays replays back:
@@ -9,17 +9,23 @@
 //! - [`feed`]: the background thread between the simulations (a [`Producer`]) and the queues.  It offers every
 //!   finished run to the queues and pauses the simulations while nothing wants a run.
 //! - [`screen`]: cells that play replays on the emulator alone, paced at a frame rate, each publishing its
-//!   latest frame and Link's hearts.
+//!   latest frame; one of them is heard.
+//! - [`speaker`]: where that cell's sound goes (a [`Ring`] of samples, played by the default sound device).
+//! - [`overlay`]: the controller drawn into a frame, its held buttons lit.
 //!
 //! The crate knows replays and the emulator, not the game model, the envs or the models.
 
 pub mod feed;
+pub mod overlay;
 pub mod queues;
 pub mod screen;
+pub mod speaker;
 
 pub use feed::{Feed, Producer, Stats};
+pub use overlay::draw_controller;
 pub use queues::{Entry, QUEUES, Queue, Queues};
 pub use screen::{CellState, Resolver, Screen, Status};
+pub use speaker::{Ring, Speaker};
 
 /// Link's health in half hearts and his heart containers, from `$66F` (containers - 1 in the high nibble,
 /// filled hearts in the low one) and `$670` (the partial heart): `zelda::GameView::health` and `max_health`.

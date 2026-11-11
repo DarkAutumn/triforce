@@ -3,8 +3,13 @@
 //! A [`Screen`] has one thread per cell.  [`Screen::play`] hands a cell a replay; its thread opens it on the
 //! emulator ([`replay::Player`]: no env, reward or model code), runs unrendered to the frame watching starts
 //! at (the boot and idle of a power-on run are skipped), then plays on at the screen's frame rate, publishing
-//! every frame and Link's hearts.  A later `play` (or [`Screen::clear`]) replaces what the cell shows; the
-//! last frame stays up until the next one.  Pausing stops every cell before its next frame.
+//! every frame.  A later `play` (or [`Screen::clear`]) replaces what the cell shows; the last frame stays up
+//! until the next one.  Pausing stops every cell before its next frame.
+//!
+//! One cell at most is heard ([`Screen::set_sound`]): its frames' sound goes to a [`Ring`], made at the rate
+//! the ring asks for.  The sound starts from what the cell's game last wrote to the sound registers, so
+//! moving it to another cell picks that game's music up mid-note.  [`Screen::set_controller`] draws the
+//! held buttons into every frame ([`crate::overlay`]).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -16,6 +21,9 @@ use pool::EnvControl;
 use replay::{Player, Replay, ReplayError};
 use zcore::machine::{HEIGHT, WIDTH};
 use zcore::Rom;
+
+use crate::overlay::draw_controller;
+use crate::speaker::Ring;
 
 /// Bytes of one frame: RGB, 240 rows of 256.
 pub const FRAME_BYTES: usize = WIDTH * HEIGHT * 3;
@@ -61,9 +69,6 @@ pub struct CellState {
     /// Input frames run, and the replay's total.
     pub frame: u32,
     pub frames: u32,
-    /// Link's health in half hearts and his heart containers, as of `frame`.
-    pub hearts: u16,
-    pub containers: u8,
     pub error: Option<String>,
 }
 
@@ -97,8 +102,19 @@ impl Cell {
     }
 }
 
+/// What the cells share: who is heard, and whether the controller is drawn.
+#[derive(Default)]
+struct Shared {
+    /// The cell that is heard and where its sound goes.
+    sound: Mutex<Option<(usize, Arc<Ring>)>>,
+    /// Bumped whenever `sound` changes: a cell looks at `sound` only then.
+    sound_version: AtomicU64,
+    controller: AtomicBool,
+}
+
 pub struct Screen {
     cells: Vec<Arc<Cell>>,
+    shared: Arc<Shared>,
     threads: Mutex<Vec<JoinHandle<()>>>,
     stop: Arc<AtomicBool>,
 }
@@ -120,25 +136,25 @@ impl Screen {
                         status: Status::Idle,
                         frame: 0,
                         frames: 0,
-                        hearts: 0,
-                        containers: 0,
                         error: None,
                     }),
                     played: AtomicU64::new(0),
                 })
             })
             .collect();
+        let shared = Arc::new(Shared::default());
         let threads = cells
             .iter()
             .map(|cell| {
                 let (cell, rom, resolve, stop) = (cell.clone(), rom.clone(), resolve.clone(), stop.clone());
+                let shared = shared.clone();
                 std::thread::Builder::new()
                     .name(format!("replay-cell-{}", cell.control.index()))
-                    .spawn(move || run(&cell, &rom, &resolve, &stop))
+                    .spawn(move || run(&cell, &shared, &rom, &resolve, &stop))
                     .expect("a cell thread starts")
             })
             .collect();
-        Screen { cells, threads: Mutex::new(threads), stop }
+        Screen { cells, shared, threads: Mutex::new(threads), stop }
     }
 
     pub fn cells(&self) -> usize {
@@ -158,8 +174,6 @@ impl Screen {
             status: Status::Loading,
             frame: 0,
             frames: 0,
-            hearts: 0,
-            containers: 0,
             error: None,
         };
         *pending = Some(Job { show, data, start, hold });
@@ -217,6 +231,21 @@ impl Screen {
         }
     }
 
+    /// Makes `cell` the one that is heard, its sound going to `ring` from its next frame on; None: no cell
+    /// is.  The cell heard before falls silent.  Panics on a cell the screen doesn't have.
+    pub fn set_sound(&self, to: Option<(usize, Arc<Ring>)>) {
+        assert!(to.as_ref().is_none_or(|(cell, _)| *cell < self.cells.len()), "a cell of this screen");
+        let mut sound = self.shared.sound.lock();
+        *sound = to;
+        // Never 0: that is a cell thread's "nothing seen yet".
+        self.shared.sound_version.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Draws the held buttons into every frame from the next one on ([`crate::overlay`]), or stops.
+    pub fn set_controller(&self, on: bool) {
+        self.shared.controller.store(on, Ordering::Relaxed);
+    }
+
     /// Stops and joins the cell threads (idempotent).
     pub fn close(&self) {
         self.stop.store(true, Ordering::Release);
@@ -236,7 +265,7 @@ impl Drop for Screen {
     }
 }
 
-fn run(cell: &Cell, rom: &Arc<Rom>, resolve: &Resolver, stop: &AtomicBool) {
+fn run(cell: &Cell, shared: &Shared, rom: &Arc<Rom>, resolve: &Resolver, stop: &AtomicBool) {
     loop {
         let job = {
             let mut pending = cell.pending.lock();
@@ -251,7 +280,7 @@ fn run(cell: &Cell, rom: &Arc<Rom>, resolve: &Resolver, stop: &AtomicBool) {
             }
         };
         let live = || !stop.load(Ordering::Acquire) && cell.requested.load(Ordering::Acquire) == job.show;
-        match play(cell, rom, resolve, &job, &live) {
+        match play(cell, shared, rom, resolve, &job, &live) {
             Ok(true) => cell.set(job.show, |state| state.status = Status::Finished),
             Ok(false) => {}
             Err(error) => cell.set(job.show, |state| {
@@ -265,6 +294,7 @@ fn run(cell: &Cell, rom: &Arc<Rom>, resolve: &Resolver, stop: &AtomicBool) {
 /// Plays `job` to its end (true), or until it is replaced or the screen closes (false).
 fn play(
     cell: &Cell,
+    shared: &Shared,
     rom: &Arc<Rom>,
     resolve: &Resolver,
     job: &Job,
@@ -281,12 +311,9 @@ fn play(
         }
         player.step(false)?;
     }
-    let (hearts, containers) = crate::hearts(player.nes().ram()[0x66F], player.nes().ram()[0x670]);
     cell.set(job.show, |state| {
         state.status = if job.hold { Status::Ready } else { Status::Playing };
         state.frame = start;
-        state.hearts = hearts;
-        state.containers = containers;
     });
     if job.hold {
         while cell.released.load(Ordering::Acquire) != job.show {
@@ -297,25 +324,44 @@ fn play(
         }
         cell.set(job.show, |state| state.status = Status::Playing);
     }
+    // The version of `shared.sound` this replay acted on (0: none yet), and the ring while it is heard.
+    let mut seen = 0;
+    let mut heard: Option<Arc<Ring>> = None;
     loop {
         cell.control.wait_while_paused();
         if !live() {
             return Ok(false);
         }
+        let version = shared.sound_version.load(Ordering::Acquire);
+        if version != seen {
+            seen = version;
+            heard = match &*shared.sound.lock() {
+                Some((index, ring)) if *index == cell.control.index() => Some(ring.clone()),
+                _ => None,
+            };
+            player.set_sound(heard.as_ref().map(|ring| f64::from(ring.rate())));
+        }
         if !player.step(true)? {
             player.finish()?;
             return Ok(true);
         }
-        let nes = player.nes();
-        cell.control.publish(|out| nes.rgb(out.try_into().expect("a frame buffer")));
-        cell.played.fetch_add(1, Ordering::Relaxed);
-        let (hearts, containers) = crate::hearts(nes.ram()[0x66F], nes.ram()[0x670]);
-        let frame = player.frame();
-        cell.set(job.show, |state| {
-            state.frame = frame;
-            state.hearts = hearts;
-            state.containers = containers;
+        if let Some(ring) = &heard {
+            ring.push(player.audio());
+            player.audio().clear();
+            player.tune(ring.feed_rate());
+        }
+        let (nes, buttons) = (player.nes(), player.buttons());
+        let controller = shared.controller.load(Ordering::Relaxed);
+        cell.control.publish(|out| {
+            let rendered = nes.rgb((&mut *out).try_into().expect("a frame buffer"));
+            if rendered && controller {
+                draw_controller(out, buttons);
+            }
+            rendered
         });
+        cell.played.fetch_add(1, Ordering::Relaxed);
+        let frame = player.frame();
+        cell.set(job.show, |state| state.frame = frame);
         cell.control.pace();
     }
 }

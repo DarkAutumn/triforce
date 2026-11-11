@@ -1073,3 +1073,39 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   on to stop losing (+0.10 → −0.07 per episode), and that cost Dungeon 1 115 → 80 of 120 in chains. Success alone
   can't see it. With the rule and the continuations every chain segment is back at or above the previous team.
   120-run chains have ±8-point intervals; the differences that matter here are a few points.
+
+## 2026-11-11 — Sound, videos and the controller overlay (Lee)
+
+- **What Lee asked for:** sound when watching replays: in `play-zelda.py` one cell is heard, the top left one
+  at first, with a yellow frame; `S` turns sound off and on; a click on another cell moves the sound there.
+  `create-video.py`: a grid (1x1 by default) and a list of replays, at least one per cell, rendered as
+  `play-zelda.py` shows them but finite, the last screens held until every replay is done; `--sound` adds the
+  sound of the middle cell, or of the top left one when the grid has no middle. A controller overlay in the top
+  right of the picture, over `-LIFE-`: a translucent grey pad whose buttons light up opaque white while held.
+- **Lee's answers and later instructions:** `S` is sound and the success queue moves to `W`. Extra replays of a
+  video play next in whichever cell is free. Sound is muted unless the cells play at the console's speed. The
+  heard cell is framed in videos too. The controller is off unless `--controller`. No frame around a lone cell
+  (1x1), in the viewer or a video; while sound is muted or off the frame is hidden. The strip under a cell
+  loses the golden path's leg and Link's hearts (they are on screen).
+- **Built:** `crates/zcore/src/sound.rs` (the synthesizer and the bus tap), `replay::Player` sound and buttons,
+  `theater::{speaker, overlay}` and the heard cell of `theater::Screen`, `triforce/play_view.py` (the window,
+  moved out of `play-zelda.py` so the video uses the same one), `triforce/video.py`, `create-video.py`
+  (`docs/architecture.md` "Sound", "Videos", "Watching").
+- **Choices made while building (say so if they should change):**
+  - **Sound is computed beside the emulator, from the APU register writes, and no sound state enters
+    `MachineState`.** zcore dropped its synthesizer at ladder stage Z4; putting channel state back into the
+    machine would change the state format, every state file and every replay's embedded states. The price: a
+    replay that starts from a savestate has no sound registers to start from, so each voice comes in with its
+    next note (backlog: record the registers with a replay's states). A power-on replay has everything.
+  - The sound device is opened in Rust (`cpal`), not through Qt: the cell's thread makes the samples, and the
+    venv's `pyside6-essentials` has no QtMultimedia. Building the module now needs the ALSA headers.
+  - The device and the frame clock drift apart, so the heard cell makes its samples at the device's rate ± 0.5%
+    to stay about 60 ms ahead of it; that is the added latency.
+  - Moving the sound to another cell starts from the registers that cell's game last wrote and the machine's
+    own length counters, so its music is there at once rather than voice by voice.
+  - `--no-sound` starts the viewer silent; `--benchmark` is always silent.
+  - The controller is drawn into the frame at the console's resolution (62 x 24 pixels at x 182, y 14), in
+    Rust, so it scales with the picture, is the same in the viewer and in a video, and can't be a frame late.
+  - Videos: `OUT` is the first argument (as in `zelda-headless.py`); H.264 CRF 18 yuv420p at the console's
+    exact frame rate, AAC 192 kbit mono 48 kHz; the container follows the file name; default scale 2 as in the
+    viewer; a result is held 3 s as in the viewer, the last one too, then the video ends.

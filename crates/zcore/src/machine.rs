@@ -208,7 +208,9 @@ impl ZCore {
         self.bus.render = render;
         self.bus.input.joypad_mut(Player::One).buttons = buttons;
         let start = self.bus.cpu.cycle;
+        self.bus.sound.begin_frame(self.bus.apu.cpu_cycle);
         self.bus.clock_frame();
+        self.bus.sound.end_frame(self.bus.apu.cpu_cycle);
         assert!(!self.bus.cpu.corrupted, "zcore: the CPU jammed");
         self.cycles += u64::from(self.bus.cpu.cycle.wrapping_sub(start));
         self.frame += 1;
@@ -218,6 +220,23 @@ impl ZCore {
                 *dst = (src & 0x3F) as u8;
             }
         }
+    }
+
+    /// Starts or stops keeping each frame's sound events ([`ZCore::sound`]). Emulation is identical either
+    /// way: sound is computed beside the machine ([`crate::sound`]).
+    pub fn set_sound(&mut self, on: bool) {
+        self.bus.sound.set_logging(on);
+    }
+
+    /// The sound events of the last frame run, for [`Synth::run`](crate::sound::Synth::run); `None` unless
+    /// [`ZCore::set_sound`] is on.
+    pub fn sound(&self) -> Option<crate::sound::Frame<'_>> {
+        self.bus.sound.frame()
+    }
+
+    /// The tap and the APU a synthesizer resumes from.
+    pub(crate) fn sound_source(&self) -> (&crate::sound::Tap, &crate::apu::Apu) {
+        (&self.bus.sound, &self.bus.state.apu)
     }
 
     /// Palette indices (0..=63) of the last frame, row-major, or `None` if it was not rendered.
@@ -274,6 +293,7 @@ impl ZCore {
         self.frame = state.frame;
         self.cycles = state.cycles;
         self.rendered = false;
+        self.bus.sound.forget();
     }
 
     /// Return to a snapshot taken during this run and set whether the last frame counts as rendered: for a detour
@@ -284,6 +304,7 @@ impl ZCore {
         self.frame = state.frame;
         self.cycles = state.cycles;
         self.rendered = rendered;
+        self.bus.sound.forget();
     }
 
     /// The last frame was rendered (`pixels` is valid).

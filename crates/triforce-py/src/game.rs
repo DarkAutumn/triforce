@@ -42,6 +42,16 @@ pub fn rgb(core: &ZCore, out: &mut [u8]) -> bool {
 
 /// The last rendered frame as a (240, 256, 3) uint8 array.
 pub fn screen<'py>(py: Python<'py>, core: &ZCore, render: bool) -> PyResult<Bound<'py, PyAny>> {
+    screen_with(py, core, render, |_| {})
+}
+
+/// [`screen`], after `draw` has drawn over the frame's RGB bytes.
+pub fn screen_with<'py>(
+    py: Python<'py>,
+    core: &ZCore,
+    render: bool,
+    draw: impl FnOnce(&mut [u8]),
+) -> PyResult<Bound<'py, PyAny>> {
     if !render {
         return Err(RenderDisabledError::new_err(
             "rendering is off: set render = True and run a frame first",
@@ -53,6 +63,7 @@ pub fn screen<'py>(py: Python<'py>, core: &ZCore, render: bool) -> PyResult<Boun
             "no rendered frame yet: run a frame with rendering on",
         ));
     }
+    draw(&mut buf);
     Ok(PyArray::from_vec(py, buf).reshape(FRAME_SHAPE)?.into_any())
 }
 

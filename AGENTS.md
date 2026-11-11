@@ -104,7 +104,14 @@ up with ideas, test them, keep what helps, and log everything.
   `play-zelda.py` only ever plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
   simulations run unpaced on `--parallel` (8) cores until the queues are full: mind that next to a training
-  round.
+  round. One cell is heard (yellow frame; key `s`, click to move; `--no-sound`), `--controller` draws the held
+  buttons; `create-video.py OUT [GRID] REPLAY... [--sound] [--controller]` films replays the same way into a
+  video file (`ffmpeg`).
+- **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
+  "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and
+  training don't change with it, and must not: no sound state goes into `MachineState`. A replay that starts
+  from a savestate therefore starts silent, each voice coming in with its next note. Building `triforce._native`
+  now needs the ALSA headers (`alsa-lib`; `cpal`).
 
 ## Game mechanics that matter for training
 

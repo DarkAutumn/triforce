@@ -2,10 +2,10 @@
 //!
 //! See: <https://www.nesdev.org/wiki/APU>
 //!
-//! zcore produces no sound (ladder stage Z4). What stays is every APU effect the CPU can see: the
+//! The emulated APU makes no sound (ladder stage Z4). What stays is every APU effect the CPU can see: the
 //! register writes' timing side effects, the four length counters `$4015` reports, the frame
 //! counter and its IRQ, and the DMC's sample reader, whose fetches steal CPU cycles (DMA), and its
-//! IRQ.
+//! IRQ. Sound is computed beside the machine, from the register writes ([`crate::sound`]).
 //!
 //! # Stability
 //!

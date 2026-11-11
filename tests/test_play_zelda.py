@@ -1,5 +1,5 @@
-"""play-zelda.py: command line, the window (offscreen, a fake grid) and the replay grid with real replays: files
-on loop, the queues filled by simulations, golden paths."""
+"""play-zelda.py: command line, the window (offscreen, a fake grid; ``triforce.play_view``) and the replay grid
+with real replays: files on loop, the queues filled by simulations, golden paths."""
 
 import argparse
 import importlib.util
@@ -16,9 +16,10 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtCore import Qt  # noqa: E402  pylint: disable=wrong-import-position
 from PySide6.QtGui import QColor  # noqa: E402  pylint: disable=wrong-import-position
+from PySide6.QtTest import QTest  # noqa: E402  pylint: disable=wrong-import-position
 from PySide6.QtWidgets import QApplication  # noqa: E402  pylint: disable=wrong-import-position
 
-from triforce import _native, play_grid, replay  # noqa: E402  pylint: disable=wrong-import-position
+from triforce import _native, play_grid, play_view, replay  # noqa: E402  pylint: disable=wrong-import-position
 from triforce._native import FRAME_SHAPE  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.play_grid import FileSource, GoldenSource, ReplayGrid, Show  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.runner import Policies, Route, Runner, chain_meta  # noqa: E402  pylint: disable=wrong-import-position
@@ -51,6 +52,10 @@ def test_parse_args_grid_path_and_sources(tmp_path):
     # Play samples by default, saves nothing, and starts from the start state.
     assert (args.act, args.replays, args.state, args.streams, args.power_on) == ('sample', None, 'embed', (), None)
     assert (args.parallel, args.capacity, args.patience, args.first_seed, args.stop) == (8, 32, 64, 0, (None, None))
+    # A cell is heard and the controller is not drawn, unless asked otherwise.
+    assert (args.sound, args.controller) == (True, False)
+    args = play_zelda.parse_args(['--no-sound', '--controller'])
+    assert (args.sound, args.controller) == (False, True)
     args = play_zelda.parse_args(['3x2', '--scale', '2', '--show', 'died', '--parallel', '4', '--capacity', '8',
                                   '--patience', '0', '--replays', 'out', '--streams', 'keyframes,rewards', '--act',
                                   'model', '--power-on', '--name', 'zed', '--delay', '77', '--stop-at', 'step:24'])
@@ -86,44 +91,41 @@ def test_parse_args_grid_path_and_sources(tmp_path):
     assert play_zelda.parse_grid('8X12') == (8, 12)
     for bad in ('0x3', 'x3', '4*3', ''):
         with pytest.raises(argparse.ArgumentTypeError):
-            play_zelda.parse_grid(bad)
+            play_view.parse_grid(bad)
 
 
 def test_frame_rate_cap_steps_by_ten_around_the_nes_rate():
-    nes, step = play_grid.NES_FPS, play_zelda.step_cap
+    nes, step = play_grid.NES_FPS, play_view.step_cap
     assert [step(nes, -1), step(step(nes, -1), -1)] == [50, 40]
     assert [step(nes, 1), step(step(nes, 1), 1)] == [70, 80]
     assert step(50, 1) == step(70, -1) == nes             # 60 is always the NES's 60.0988
-    assert step(play_zelda.MIN_FPS, -1) == play_zelda.MIN_FPS
-    assert [play_zelda.cap_label(c) for c in (nes, 70.0, 0.0)] == ['60.1', '70', '∞']
+    assert step(play_view.MIN_FPS, -1) == play_view.MIN_FPS
+    assert [play_view.cap_label(c) for c in (nes, 70.0, 0.0)] == ['60.1', '70', '∞']
 
 
 # ---------------------------------------------------------------------------------------------- strips and title
 
-def _room(cell, rooms, health, **more):
+def _room(cell, rooms, **more):
     return {'cell': cell, 'event': 'room', 'specialist': 'ow-zora', 'level': 0, 'room': 0x38, 'rooms': rooms,
-            'health': health, 'max_health': 3, 'cheated': {'bombs': 0, 'keys': 0, 'rupees': 0}, 'part': None, **more}
+            'cheated': {'bombs': 0, 'keys': 0, 'rupees': 0}, **more}
 
 
 def test_a_cell_says_where_its_replay_is_from_and_how_it_goes():
-    state = play_zelda.CellState()
+    state = play_view.CellState()
     assert (state.placeholder(), state.strip_text()) == ('starting…', 'starting…')
     state.apply({'cell': 0, 'event': 'wait', 'source': 'success'})
     assert state.waiting and state.placeholder() == 'waiting for a success run…' == state.strip_text().strip()
     state.apply({'cell': 0, 'event': 'start', 'seed': 29, 'source': 'best', 'name': None})
     assert not state.waiting and state.strip_text() == '#29  loading…'
-    state.apply(_room(0, 4, 2.5))
-    assert state.strip_text() == '#29  ♥ 2.5/3  L0 0x38  ow-zora' and state.rooms == 4
+    state.apply(_room(0, 4))
+    assert state.strip_text() == '#29  L0 0x38  ow-zora' and state.rooms == 4
     state.apply({'cell': 0, 'event': 'end', 'seed': 29, 'result': 'failure', 'outcome': 'death', 'reason': 'died'})
-    assert state.outcome == 'death' and state.strip_text() == '#29  ♥ 2.5/3  L0 0x38  ow-zora'
+    assert state.outcome == 'death' and state.strip_text() == '#29  L0 0x38  ow-zora'
 
-    # A golden path names its leg; a file its name; an evaluation episode has no room.
-    state.apply({'cell': 0, 'event': 'start', 'seed': 640, 'source': 'golden', 'name': None})
-    state.apply(_room(0, 30, 6.0, part=(2, 3)))
-    assert state.outcome is None and state.strip_text() == '#640  ♥ 6/3  L0 0x38  ow-zora  leg 2/3'
+    # A file shows its name; an evaluation episode has no room.
     state.apply({'cell': 0, 'event': 'start', 'seed': 7, 'source': 'files', 'name': '00000007-win.tfreplay'})
-    state.apply(_room(0, 0, 3.0, level=None, room=None))
-    assert state.strip_text() == '00000007-win  ♥ 3/3  ow-zora'
+    state.apply(_room(0, 0, level=None, room=None))
+    assert state.outcome is None and state.strip_text() == '00000007-win  ow-zora'
 
     # A cell whose replay can't play says why; a dark cell of a file grid says nothing.
     state.apply({'cell': 0, 'event': 'crash', 'reason': 'ReplayError: not a TFREPLAY file'})
@@ -135,16 +137,16 @@ def test_a_cell_says_where_its_replay_is_from_and_how_it_goes():
 def test_footer_shows_cheated_items_once_used():
     """The strip names the run's cheated items (a room's granted bomb, key or rupees, used) only when there are
     any, leaving out the zeros; the next replay starts from none."""
-    state = play_zelda.CellState()
+    state = play_view.CellState()
     state.apply({'cell': 0, 'event': 'start', 'seed': 1, 'source': 'random', 'name': None})
-    state.apply(_room(0, 1, 3.0))
+    state.apply(_room(0, 1))
     assert 'cheated' not in state.strip_text()
-    state.apply(_room(0, 1, 3.0, cheated={'bombs': 2, 'keys': 1, 'rupees': 0}))
+    state.apply(_room(0, 1, cheated={'bombs': 2, 'keys': 1, 'rupees': 0}))
     assert state.strip_text().endswith('  ·  cheated: 2 bombs, 1 key')
-    state.apply(_room(0, 1, 3.0, cheated={'bombs': 1, 'keys': 3, 'rupees': 80}))
+    state.apply(_room(0, 1, cheated={'bombs': 1, 'keys': 3, 'rupees': 80}))
     assert state.strip_text().endswith('  ·  cheated: 1 bomb, 3 keys, 80 rupees')
     state.apply({'cell': 0, 'event': 'start', 'seed': 4, 'source': 'random', 'name': None})
-    state.apply(_room(0, 1, 3.0))
+    state.apply(_room(0, 1))
     assert 'cheated' not in state.strip_text()
 
 
@@ -154,7 +156,7 @@ FEED = {'queues': {'best': 32, 'success': 3, 'stuck': 12, 'died': 32, 'random': 
 
 
 def test_the_title_shows_the_source_its_stock_and_the_simulations():
-    title = play_zelda.title_text
+    title = play_view.title_text
     stats = {'source': 'died', 'feed': FEED, 'golden': None, 'files': None}
     assert title(stats, 59.6, play_grid.NES_FPS, False) == (
         'Zelda — died — best 32 · success 3 · stuck 12 · died 32 · random 32 (of 32) — '
@@ -173,6 +175,13 @@ def test_the_title_shows_the_source_its_stock_and_the_simulations():
     assert title(files, 30.0, 60.0, False) == 'Zelda — files — 1 replay file — 30 fps of 60 max'
     assert '12 replay files' in title({**files, 'files': 12}, 30.0, 60.0, False)
 
+    # The last word is the sound: on, muted off the console's frame rate, off, or why there is none.
+    nes, sound = play_grid.NES_FPS, play_view.sound_text
+    assert title(files, 30.0, nes, False, sound(True, nes, None)).endswith('— 30 fps of 60.1 max — sound on')
+    assert [sound(True, 50.0, None), sound(True, 0.0, None)] == ['sound muted (not at 60.1 fps)'] * 2
+    assert [sound(False, nes, None), sound(False, nes, 'no device')] == ['sound off'] * 2
+    assert sound(True, nes, 'no sound output device') == 'no sound: no sound output device'
+
 
 # ---------------------------------------------------------------------------------------------- the window
 
@@ -188,6 +197,8 @@ class FakeGrid:
         self.started = False
         self.stops = self.polls = self.skips = 0
         self.selected = []
+        self.heard = []         # every set_sound call
+        self.sound_error = None
         self.played = [0] * cells
         self.counters = [0] * cells     # frames shown (published) per cell
         self.pixels = np.zeros(FRAME_SHAPE, dtype=np.uint8)
@@ -195,7 +206,7 @@ class FakeGrid:
         self.framed = {0}       # cells with a picture
         self.messages = messages if messages is not None else [
             {'cell': 0, 'event': 'start', 'seed': 5, 'source': 'best', 'name': None},
-            _room(0, 9, 2.5, specialist='stalfos-keese-gel', level=1, room=0x73),
+            _room(0, 9, specialist='stalfos-keese-gel', level=1, room=0x73),
             {'cell': 0, 'event': 'end', 'seed': 5, 'result': 'failure', 'outcome': 'death', 'reason': 'died'},
             {'cell': 1, 'event': 'wait', 'source': 'best'},
         ]
@@ -216,7 +227,7 @@ class FakeGrid:
 
     def stats(self):
         return {'source': self.source, 'feed': FEED if self.source != 'files' else None, 'golden': None,
-                'files': 3 if self.source == 'files' else None}
+                'files': 3 if self.source == 'files' else None, 'sound_error': self.sound_error}
 
     def select(self, source):
         self.selected.append(source)
@@ -231,6 +242,9 @@ class FakeGrid:
     def set_paused(self, on):
         self.paused = on
 
+    def set_sound(self, cell):
+        self.heard.append(cell)
+
     def poll_status(self):
         self.polls += 1
         messages, self.messages = self.messages, []
@@ -242,17 +256,17 @@ class FakeGrid:
 
 def test_window_shows_frames_status_and_the_frame_rate(qapp):  # pylint: disable=redefined-outer-name, unused-argument
     fake = FakeGrid()
-    window = play_zelda.Window(fake, cols=2, rows=1, scale=2)
+    window = play_view.Window(fake, cols=2, rows=1, scale=2)
     window.start()
     window.tick()
     first, second = window.views
     assert fake.started
     for view in window.views:
-        assert (view.width(), view.height()) == (256 * 2, 240 * 2 + play_zelda.STRIP_HEIGHT)
+        assert (view.width(), view.height()) == (256 * 2, 240 * 2 + play_view.STRIP_HEIGHT)
 
     assert first.grab().toImage().pixelColor(20, 20) == QColor(10, 200, 30)
     text = first.strip_text()
-    for part in ('#5', 'stalfos-keese-gel', 'L1 0x73', '2.5/3'):
+    for part in ('#5', 'stalfos-keese-gel', 'L1 0x73'):
         assert part in text
     assert first.state.outcome == 'death' and first.state.rooms == 9
     assert second.image is None and second.state.placeholder() == 'waiting for a best run…'
@@ -261,7 +275,7 @@ def test_window_shows_frames_status_and_the_frame_rate(qapp):  # pylint: disable
 
     since = window._rate_since  # pylint: disable=protected-access
     fake.counters = [240, 0]        # two seconds: cell 0 showed 120 fps, cell 1 nothing (out of the median)
-    window.clock = lambda: since + play_zelda.FPS_WINDOW
+    window.clock = lambda: since + play_view.FPS_WINDOW
     window.tick()
     assert window.fps == 120 and '120 fps of 60.1 max' in window.windowTitle()
 
@@ -281,15 +295,15 @@ def test_window_shows_frames_status_and_the_frame_rate(qapp):  # pylint: disable
 
 
 def test_keys_choose_the_source_skip_step_the_cap_and_pause(qapp):  # pylint: disable=redefined-outer-name, unused-argument
-    """b s k d r g cut every cell to that source, n skips, u toggles uncapped / the NES rate, +/- (either key)
+    """b w k d r g cut every cell to that source, n skips, u toggles uncapped / the NES rate, +/- (either key)
     step the cap only while capped, p pauses the cells and the window: no messages or frames are taken."""
     keys = Qt.Key
     fake = FakeGrid(cells=1, messages=[])
     clock = {'now': 0.0}
-    window = play_zelda.Window(fake, cols=1, rows=1, scale=1)
+    window = play_view.Window(fake, cols=1, rows=1, scale=1)
     window.clock = lambda: clock['now']
     window.start()
-    for key, source in ((keys.Key_D, 'died'), (keys.Key_S, 'success'), (keys.Key_K, 'stuck'), (keys.Key_R, 'random'),
+    for key, source in ((keys.Key_D, 'died'), (keys.Key_W, 'success'), (keys.Key_K, 'stuck'), (keys.Key_R, 'random'),
                         (keys.Key_G, 'golden'), (keys.Key_B, 'best')):
         assert window.handle_key(key) and fake.source == source
         assert window.windowTitle().startswith(f'Zelda — {source}')
@@ -304,33 +318,89 @@ def test_keys_choose_the_source_skip_step_the_cap_and_pause(qapp):  # pylint: di
             assert 'of ∞ max' in window.windowTitle()
     assert not window.handle_key(keys.Key_Q)
 
-    assert window.handle_key(keys.Key_P) and fake.paused and window.windowTitle().endswith('· paused')
+    assert window.handle_key(keys.Key_P) and fake.paused and '· paused' in window.windowTitle()
     polls = fake.polls
     clock['now'] += 60
     fake.messages = [{'cell': 0, 'event': 'start', 'seed': None, 'source': 'best', 'name': None}]
     window.tick()
     assert fake.polls == polls and window.now() == 0.0        # frozen
     window.handle_key(keys.Key_P)
-    assert not fake.paused and not window.windowTitle().endswith('paused')
+    assert not fake.paused and 'paused' not in window.windowTitle()
     window.tick()
     assert fake.polls == polls + 1 and window.now() == 0.0    # resumes where it stopped
     window.shutdown()
 
     # A grid that plays files has no queues to switch to.
     files = FakeGrid(cells=1, messages=[], source='files')
-    window = play_zelda.Window(files, cols=1, rows=1, scale=1)
+    window = play_view.Window(files, cols=1, rows=1, scale=1)
     assert window.handle_key(keys.Key_D) and files.selected == [] and files.source == 'files'
     assert window.windowTitle().startswith('Zelda — files — 3 replay files')
     window.shutdown()
 
 
+def test_one_cell_is_heard_s_toggles_it_a_click_moves_it_and_it_is_muted_off_the_nes_rate(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    keys, nes = Qt.Key, play_grid.NES_FPS
+    fake = FakeGrid(cells=4, messages=[])
+    window = play_view.Window(fake, cols=2, rows=2, scale=1)
+    window.show()
+    heard = lambda: [view.heard for view in window.views]   # noqa: E731
+    yellow = lambda view: view.grab().toImage().pixelColor(1, 100) == QColor(play_view.HEARD)   # noqa: E731
+
+    # The top left cell at first: the grid plays its sound, and it alone has the yellow frame.
+    assert fake.heard[-1] == 0 and heard() == [True, False, False, False]
+    assert [yellow(view) for view in window.views] == heard()
+    assert window.windowTitle().endswith('— sound on')
+
+    # s: off (no cell framed) and on again, the same cell.
+    assert window.handle_key(keys.Key_S) and fake.heard[-1] is None and not any(heard())
+    assert not yellow(window.views[0]) and window.windowTitle().endswith('— sound off')
+    assert window.handle_key(keys.Key_S) and fake.heard[-1] == 0 and heard()[0]
+
+    # A click on a cell moves the sound there; clicking while it is off turns it on.
+    QTest.mouseClick(window.views[3], Qt.MouseButton.LeftButton)
+    assert fake.heard[-1] == 3 and heard() == [False, False, False, True] and yellow(window.views[3])
+    window.handle_key(keys.Key_S)
+    QTest.mouseClick(window.views[1], Qt.MouseButton.LeftButton)
+    assert window.sound and fake.heard[-1] == 1 and heard() == [False, True, False, False]
+
+    # Off the console's frame rate nothing is played, and the frame is gone until there is sound again.
+    window.handle_key(keys.Key_Minus)
+    assert fake.heard[-1] is None and not any(heard()) and not yellow(window.views[1])
+    assert 'sound muted (not at 60.1 fps)' in window.windowTitle()
+    window.handle_key(keys.Key_U)
+    assert fake.heard[-1] is None and not any(heard())
+    window.handle_key(keys.Key_U)
+    assert window.cap == nes and fake.heard[-1] == 1 and heard() == [False, True, False, False]
+    assert window.windowTitle().endswith('— sound on')
+
+    # No sound device: the title says why.
+    fake.sound_error = 'no sound output device'
+    window.update_title()
+    assert window.windowTitle().endswith('— no sound: no sound output device')
+    window.shutdown()
+
+    # Started silent: nothing is framed until s or a click.
+    quiet = FakeGrid(cells=2, messages=[])
+    window = play_view.Window(quiet, cols=2, rows=1, scale=1, sound=False, heard=1)
+    assert quiet.heard == [None] and not any(view.heard for view in window.views)
+    window.handle_key(keys.Key_S)
+    assert quiet.heard[-1] == 1 and window.views[1].heard
+    window.shutdown()
+
+    # A single cell is heard without a frame: there is nothing to tell it from.
+    lone = FakeGrid(cells=1, messages=[])
+    window = play_view.Window(lone, cols=1, rows=1, scale=1)
+    assert lone.heard == [0] and not window.views[0].heard and window.windowTitle().endswith('— sound on')
+    window.shutdown()
+
+
 def test_benchmark_measures_once_every_cell_with_a_replay_shows(qapp, monkeypatch, capsys):  # pylint: disable=redefined-outer-name, unused-argument
-    monkeypatch.setattr(play_zelda.QTimer, 'singleShot', lambda *_: None)   # don't quit the shared QApplication
+    monkeypatch.setattr(play_view.QTimer, 'singleShot', lambda *_: None)   # don't quit the shared QApplication
     clock = {'now': 0.0}
     start = [{'cell': cell, 'event': 'start', 'seed': cell, 'source': 'best', 'name': None} for cell in range(2)]
     fake = FakeGrid(cells=3, messages=start + [{'cell': 2, 'event': 'wait', 'source': 'best'}])
     fake.framed = {0}
-    window = play_zelda.Window(fake, cols=3, rows=1, scale=1, benchmark=4.0)
+    window = play_view.Window(fake, cols=3, rows=1, scale=1, benchmark=4.0)
     window.clock = lambda: clock['now']
     window.start()
     window.tick()
@@ -339,7 +409,7 @@ def test_benchmark_measures_once_every_cell_with_a_replay_shows(qapp, monkeypatc
     window.views[1].frame_no = 0
     window.tick()
     assert window.benchmark.phase == 'settling'             # cell 2 only waits: it doesn't hold the benchmark up
-    clock['now'] = play_zelda.BENCHMARK_SETTLE
+    clock['now'] = play_view.BENCHMARK_SETTLE
     window.tick()
     assert window.benchmark.phase == 'measuring'
     fake.played = [240, 240, 0]
@@ -370,30 +440,13 @@ def _events(messages, event, cell=None):
     return [m for m in messages if m['event'] == event and cell in (None, m['cell'])]
 
 
-@pytest.fixture(scope='module')
-def recordings(scripted_models, states_dir, tmp_path_factory):
-    """A folder of three replays: two wins of the scripted segment (seeds 0 and 1) and a run from power on that
-    ends on its step budget (seed 2)."""
-    folder = tmp_path_factory.mktemp('recordings')
-    runner = Runner(models_dir=scripted_models, max_steps=20, parallel=2, states_dir=states_dir)
-    segment = Route.load('d2first', start_from=str(require_state(SEGMENT_STATE)), stop_step=SEGMENT_STOP_STEP)
-    record = replay.record_options(runner.record_meta(segment))
-    runner.run_many(segment, [0, 1], record=record, replays=replay.ReplayDir(folder))
-    boot = Route.load('d2first', power_on={'delay': 40})
-    runner.run_many(boot, [2], record=replay.record_options(runner.record_meta(boot)),
-                    replays=replay.ReplayDir(folder))
-    assert sorted(p.name for p in folder.iterdir()) == [
-        '00000000-win.tfreplay', '00000001-win.tfreplay', '00000002-stuck.tfreplay']
-    return folder
-
-
 def test_a_show_reads_what_the_strip_says_from_the_replay(recordings):  # pylint: disable=redefined-outer-name
     win = Show((recordings / '00000000-win.tfreplay').read_bytes(), 'files', '00000000-win.tfreplay')
     assert (win.seed, win.result, win.outcome, win.source) == (0, 'success', 'milestone', 'files')
     assert win.reason == f'reached route step {SEGMENT_STOP_STEP} (level 0, room 0x4c)'
     first, last = win.status(win.start), win.status(win.frames)
     assert (first['specialist'], first['level'], first['room'], first['rooms']) == ('ow-octorok', 0, 0x3c, 1)
-    assert (last['room'], last['rooms'], last['part']) == (0x4c, 2, None)
+    assert (last['room'], last['rooms']) == (0x4c, 2)
     assert last['cheated'] == {'bombs': 0, 'keys': 0, 'rupees': 0}
 
     # A run from power on is watched from the moment the models took over; before it there is no room.
@@ -409,7 +462,8 @@ def test_one_replay_file_plays_on_loop(recordings, monkeypatch):  # pylint: disa
     show = Show(path.read_bytes(), 'files')
     watched = show.frames - show.start          # the frames before the models took over are skipped
     grid = ReplayGrid(2, fps=0, path=path)
-    assert (grid.source, grid.stats()) == ('files', {'source': 'files', 'feed': None, 'golden': None, 'files': 1})
+    assert (grid.source, grid.stats()) == ('files', {'source': 'files', 'feed': None, 'golden': None, 'files': 1,
+                                                     'sound_error': None})
     try:
         grid.start()
         messages = _collect(grid, lambda m: len(_events(m, 'end', 0)) >= 3)
@@ -419,7 +473,6 @@ def test_one_replay_file_plays_on_loop(recordings, monkeypatch):  # pylint: disa
         assert all((m['outcome'], m['seed']) == ('milestone', 0) for m in _events(messages, 'end'))
         rooms = _events(messages, 'room', 0)
         assert rooms[0]['specialist'] == 'ow-octorok' and {m['room'] for m in rooms} == {0x3c, 0x4c}
-        assert all(m['max_health'] == 4 and 0 < m['health'] <= 4 for m in rooms)
         number, picture = grid.frame(0, 0)
         assert picture.shape == FRAME_SHAPE and picture.dtype == np.uint8 and picture.any()
         assert grid.frame(1, 0) is None and number >= 1
@@ -485,7 +538,7 @@ def test_cells_play_the_queues_the_simulations_fill(scripted_models, states_dir,
     monkeypatch.setattr(play_grid, 'RESULT_PAUSE', 0.05)
     saved = tmp_path / 'saved'
     grid = _segment_grid(scripted_models, states_dir, source='success', replays=saved)
-    assert grid.stats() == {'source': 'success', 'feed': None, 'golden': None, 'files': None}
+    assert grid.stats() == {'source': 'success', 'feed': None, 'golden': None, 'files': None, 'sound_error': None}
     try:
         grid.start()
         messages = _collect(grid, lambda m: len(_events(m, 'end')) >= 4)

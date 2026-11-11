@@ -85,6 +85,9 @@ pub struct Bus {
     /// interrupt polling ([`Bus::handle_interrupts`]) would change nothing and is skipped. Cleared
     /// wherever an input can rise; set again between instructions once all is quiet.
     pub(crate) irq_quiet: bool,
+    /// What a sound synthesizer needs of the APU's register writes ([`crate::sound`]). Written,
+    /// never read by the machine, and no part of its state.
+    pub(crate) sound: crate::sound::Tap,
 }
 
 impl Deref for Bus {
@@ -133,6 +136,7 @@ impl Bus {
             ppu_deadline: 0,
             tick_deadline: 0,
             irq_quiet: false,
+            sound: crate::sound::Tap::default(),
         }
     }
 
@@ -449,6 +453,7 @@ impl Bus {
                 0x4000..=0x4013 | 0x4015 | 0x4017 => {
                     self.tick_deadline = 0;
                     self.irq_quiet = false;
+                    self.sound.write(self.state.apu.cpu_cycle, addr, val);
                     self.apu.write(addr, val);
                 }
                 0x4016 => self.input.write(val),

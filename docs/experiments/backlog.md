@@ -771,6 +771,25 @@ the remaining list is deferred until Lee resumes work.
   - `hold_finished_frame` / `EnvPool.set_hold` (a finished chain run parks its env on its last frame) have no
     caller since `play-zelda.py` plays replays (Nov 11). Left in the pool until Lee confirms the replay-driven
     viewer stays; then remove them with their tests (`crates/pool/tests/pool.rs`, `tests/native/test_pool.py`).
+- [x] **Sound, `create-video.py`, the controller overlay (Lee, Nov 11; branch `sound`; decisions 2026-11-11,
+  architecture "Sound", "Videos", "Watching").** Sound is a synthesizer beside the emulator
+  (`crates/zcore/src/sound.rs`), fed by the APU register writes; nothing in `MachineState` changed.
+  - Checked without ears: a pulse and the triangle play the pitch of their period (440.4 and 220.2 Hz), the
+    envelope decays, length counters cut notes, noise has no pitch, DMC bytes move the level (unit tests); the
+    machine is bit-identical with sound on (600 frames from power on) and `tf ladder-diff` is unchanged; the
+    title screen opens on Bb/F and the overworld theme on Bb4, each within 8 cents, and picking up the sword
+    plays F5 A5 C6 E6 G6 (spectra of `corpus/replays`). Through a PipeWire null sink 12 s of live play came out
+    without dropouts at the device's 44.1 kHz (rms 0.034).
+  - Cost: 313 µs per frame for the one cell that is heard (a frame of emulation: 185 µs).
+  - [ ] **Lee listens** (the sample video): pitch and rhythm are checked, timbre and balance are not.
+  - [ ] **A replay from a savestate starts silent** until the game writes each sound register again (its next
+    note per voice; a held note or a looping effect stays missing longer). The registers are not in a state
+    file and must not go into `MachineState`. Fix idea: record the 24 register bytes the tap holds with each
+    START / KEYFRAME / CHECKPOINT state of a replay (a new optional section, readers skip unknown ones) and
+    hand them to `Synth::resume`; start states made by `entry_states` would still lack them.
+  - Not checked: which of Zelda's effects use the DMC channel (its bytes are played; no test hears one), and
+    the 5-step frame sequencer mode on the real ROM.
+  - Sound at other speeds than the console's is muted (Lee); a pitch-shifted fast-forward was the alternative.
 
 ## Start states
 

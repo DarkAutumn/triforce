@@ -487,8 +487,11 @@ impl Bus {
                 {
                     // The DMC's fetch, its halt and dummy cycles done.
                     self.start_dma_cycle();
-                    self.cpu_bus_read(self.apu.dmc.dma_addr());
+                    let sample = self.cpu_bus_read(self.apu.dmc.dma_addr());
                     self.end_cycle(self.cpu.start_cycles + 1);
+                    if self.apu.dmc.bytes_remaining > 0 {
+                        self.sound.sample(self.state.apu.cpu_cycle, sample);
+                    }
                     self.apu.dmc.load_buffer();
                     self.cpu.clear_irq_flags(IrqFlags::DMA_DMC);
                     // The buffer moved the DMC's next fetch, and the last byte may raise its IRQ.
