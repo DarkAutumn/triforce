@@ -78,14 +78,26 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         controllable: true,
         overrides: Vec::new(),
     };
+    // A Darknut well inside the room, so Link fits on either side of him (the state's layout decides where they
+    // stand after 2 s; try seeds until one is).
+    let interior = |e: &zelda::game::Enemy| {
+        (48..=192).contains(&e.position.x) && (101..=165).contains(&e.position.y) && e.distance > 48.0
+    };
+    let seed = (0..64u64)
+        .find(|&seed| {
+            s.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+            s.press(0, 120);
+            s.state().enemies.iter().any(|e| matches!(e.id, 0x0B | 0x0C) && e.spawn_state == 0 && interior(e))
+        })
+        .expect("a seed with a Darknut inside the room");
     for (front, expect_damage) in [(true, false), (false, true)] {
-        s.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(3)).unwrap();
+        s.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
         s.press(0, 120);
         let state = s.state().clone();
         let darknut = state
             .enemies
             .iter()
-            .find(|e| matches!(e.id, 0x0B | 0x0C) && e.spawn_state == 0)
+            .find(|e| matches!(e.id, 0x0B | 0x0C) && e.spawn_state == 0 && interior(e))
             .expect("a Darknut");
         let slot = darknut.index as u16;
         let peek = |s: &mut Session<ZCore>, a: u16| s.nes_mut().peek(a);
@@ -102,6 +114,9 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         s.nes_mut().poke(0x70, (x as i16 + sign * dx) as u8);
         s.nes_mut().poke(0x84, (y as i16 + sign * dy) as u8);
         s.nes_mut().poke(0x98, face);
+        // Hold the Darknut still (stun timer): one that turns toward Link during the swing makes a back stab a
+        // front one.
+        s.nes_mut().poke(0x3D + slot, 0x40);
         let hp = peek(&mut s, 0x485 + slot);
         let text = match face {
             1 => "SWORD E",
