@@ -6,8 +6,10 @@ whole team from scratch with SIL on from the start (`--sil-coeff 0.1`). No conti
 
 ## Summary
 
-- [in progress] Review fixes, phase by phase (the plan's order: measurement first, then training loop, rewards and
-  endings, masks, handoff state, start states, tools; docs last).
+- **Review fixes: done.** 186 findings fixed, 5 closed as duplicates, 1 (F111) closed by Lee's decision (docs and a
+  backlog experiment, no code); 6 new findings (N001–N006) found while fixing, 4 fixed, 2 closed as probe artifacts.
+  Per-finding commits in `target/review-progress.md`; the changes that matter for training are in §2. Suites after
+  the last code fix: Rust 699 pass (also with overflow checks), Python 450 pass, `tf ladder-diff` 0 of 7 diverge.
 - **Baseline B1** (§1): the promoted team (r56 + r57-sil-s60, their act modes) measured on the fixed measurement
   code. Single rooms match round 16; chains match `r60-sil` except where the new per-run wrong-exit cap (F157) ends
   the 0x0a ↔ white-sword-cave bounce (F094) as a failure: after D2 98 → 34 arrivals, full route to D1 57 → 14.
@@ -67,3 +69,41 @@ the training mask and the chain mask disagree there); before, the chain let it b
 wrong exit (`wrong-exit-limit: ow-lynel left into 0:0x0a`). F094 itself is fixed in Phase 5 and its model side by
 the retrain. Measurement fixes that did not move these numbers: F135 (the D2/D1 triforce rooms now record
 `exit-correct`), F109 (cellar keys), F095 (start health fraction of boss rooms), F036 (milestone records).
+
+## 2. What the fixes change for training
+
+Every change below is in the code the r61 team trains on (§3); none of the current models was retrained on it.
+
+- **What a model sees or may do** (guide §8 class 1; the reason for the retrain from scratch):
+  - one object classifier from the game's jump table: hazards (boulders and their generator, traps, Bubbles, the
+    standing fire) are not enemies or fight targets; people and tile objects are in no list (F067, F038);
+  - attacks are legal only where the game starts the weapon (busy slot, blocked sword `$4C`/`$52E`, Link's state,
+    BorderBounds measured at every coordinate, no attack across the doorway Link stands in) (F182, F105, F183,
+    N006); an off-grid perpendicular attack first walks to the grid point (F160); the attack press is held a second
+    frame on a lag frame (N003);
+  - BOMB legal only in `requires_bombs` rooms (F016) and at an unopened overworld rock wall (F186); MOVE N scrolls
+    at the overworld top edge (F059); keys only at the locked door's bound (F170); pushes only when aligned in a
+    cleared room (F188); an opened bomb wall is passable (F124);
+  - `just_exited_cave` on cave and dungeon mouths, the same for loaded and live states (F094);
+  - `target_*` follows legal steps only (F132); the selected-B-item slice is always zero (F187); chains reset the
+    observation on every one_room entry (F040, F101).
+- **Rewards, endings, start draws** (class 2): self-destroyed boulders and dived Zoras are no kills (F038);
+  look-ahead credit is marginal over pending predictions and a finished weapon's leftovers drop (F054); the
+  no-progress limit follows `max_steps` (F078); no map/compass reward on a level change (F043); item lifetimes count
+  half-frames (F065); the quiet-enemy penalty counts 0-HP monsters (F122); a bomb pickup pays 0.5 (F092); linger
+  rebaselines when its wavefront is blind or the targets change (F154); a treasure counts as taken by its room flag
+  (F026); curriculum starts take their track's route step (F151, F189); the start-state selector weights states by
+  decayed failure rate with a 15% uniform floor and starts at a random offset (F185, F158); harvested starts are
+  opt-in (`harvested_fraction` 0) (F069).
+- **The training loop:** early stop on exact per-state cohort counts over seed states only, with guards and every
+  candidate stop confirmed by a 50-episode-per-state sampled evaluation of the current weights (F130, F071, F140);
+  minibatches by `tensor_split` (F167); all-or-nothing updates (F084); the recompute on the GPU (F019); a `--load`
+  continuation resumes its curriculum (F088); a reused run dir is moved aside (F172); search simulations act by
+  argmax (F180).
+- **Measurement:** canonical `eval.json` only in the model's act mode, `act` files bound to the checkpoint's sha1,
+  every reader checks the mode (F027, F125, F064); chain results carry provenance and never append silently (F080,
+  F063); a mid-route triforce is a correct exit (F135); a chain run ends after 20 wrong exits into tagged rooms
+  (F157); `--promote` is opt-in (F025).
+- **Data:** game.yaml's dungeon exits follow one convention checked against the ROM (F030); enemy names match the
+  ROM (F070); no chain-hp profile ships (F042, F133); harvested and built states no longer keep a granted bomb
+  (F148).
