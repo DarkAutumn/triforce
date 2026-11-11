@@ -301,10 +301,11 @@ fn observe_damage(
                     stuns.push(enemy.index);
                 }
             }
-            // A Zora destroys itself after a dive (Z_04 UpdateZora @DestroyWhenDone, ObjState 0): only one that
-            // could be hit (ObjState 2-4) can have been killed. Boulders, which destroy themselves off screen,
-            // are hazards, not enemies, so they never get here.
-            None if enemy.id == enemy::ZORA && !enemy.is_active() => {}
+            // A Zora destroys itself after a dive (Z_04 UpdateZora @DestroyWhenDone), and a step can span a whole
+            // surface-and-dive cycle. A killed one turns into a dropped item ($60, Z_07 metastate $14) in its slot
+            // (or is still dying, handled above): only that is a kill. Boulders, which destroy themselves off
+            // screen, are hazards, not enemies, so they never get here.
+            None if enemy.id == enemy::ZORA && curr.item_by_index(enemy.index as i8).is_none() => {}
             None => add_hit(
                 hits,
                 enemy.index,
@@ -424,7 +425,8 @@ mod tests {
         assert_eq!(observe(&dying, &gone, 4).enemies_hit, vec![]);
 
         // F038: objects that destroy themselves are no kills: a boulder that left the screen (a hazard) and a
-        // Zora whose dive ended (ObjState 5 -> gone).
+        // Zora whose dive ended (gone, whatever ObjState it had at the step's start: a step can span a whole
+        // surface-and-dive cycle).
         let mut boulder = playable();
         boulder[tables::OBJ_ID.0 + SLOT] = 0x20;
         boulder[tables::OBJ_HEALTH.0 + SLOT] = 0xF0;
@@ -439,9 +441,12 @@ mod tests {
         let mut dived = zora;
         dived[tables::OBJ_ID.0 + SLOT] = 0;
         assert_eq!(observe(&zora, &dived, 4).enemies_hit, vec![]);
-        // A surfaced Zora (ObjState 3) gone from its slot was killed.
         zora[tables::OBJ_STATUS.0 + SLOT] = 3;
-        assert_eq!(observe(&zora, &dived, 4).enemies_hit, vec![(SLOT as u8, 2)]);
+        assert_eq!(observe(&zora, &dived, 4).enemies_hit, vec![]);
+        // A killed Zora becomes a dropped item ($60) in its slot.
+        let mut dropped = dived;
+        dropped[tables::OBJ_ID.0 + SLOT] = 0x60;
+        assert_eq!(observe(&zora, &dropped, 4).enemies_hit, vec![(SLOT as u8, 2)]);
 
         let mut stunned = prev;
         stunned[tables::OBJ_STUN_TIMER.0 + SLOT] = 0x10;
