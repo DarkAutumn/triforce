@@ -142,3 +142,23 @@ def promote_untrained(root: Path) -> Path:
 def models_dir(tmp_path_factory):
     """Every specialist promoted to a small untrained network, the same weights whatever ran before."""
     return promote_untrained(tmp_path_factory.mktemp('models'))
+
+
+# A chain segment a scripted network wins whatever the seed: from the shipped state 0_3cc_0 (0x3c, where Link
+# comes out of Dungeon 2, route step 24) straight south is 0x4c (route step 25), ow-octorok's room all the way.
+SEGMENT_STATE = '0_3cc_0'
+SEGMENT_START_STEP = 24
+SEGMENT_STOP_STEP = 25
+
+
+@pytest.fixture(scope='session')
+def scripted_models(tmp_path_factory):
+    """``models_dir``'s untrained team with ``ow-octorok`` promoted to a network that walks south
+    (``networks.scripted('MOVE S 16')``): it wins the ``SEGMENT_STATE`` segment."""
+    # pylint: disable=import-outside-toplevel
+    from triforce.registry import promote, save_checkpoint
+    from .networks import scripted
+    root = promote_untrained(tmp_path_factory.mktemp('scripted-models'))
+    save_checkpoint('ow-octorok', 'south', scripted('MOVE S 16'), root=root)
+    promote('ow-octorok', 'south', root=root)
+    return root

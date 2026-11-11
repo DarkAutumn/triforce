@@ -25,38 +25,49 @@ def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
                deterministic=None, stop_at=None, first_seed: int = 0, start_from=None,
-               specialist_configs=None, threads=None, plays=None, on_result=None, harvest=None, output=None,
-               power_on=None):
+               specialist_configs=None, threads=None, on_result=None, harvest=None, output=None,
+               power_on=None, replays=None, streams=(), state='embed', keyframe_frames=None):
     """Runs the route once per seed in one chain pool of ``parallel`` envs (``threads`` worker threads), with
-    optional checkpoint overrides and loaded specialist configs; ``plays``: a replay file to write;
+    optional checkpoint overrides and loaded specialist configs;
     ``deterministic``: None = each model's act mode, else argmax (True) or sampling (False) for all;
     ``on_result(result)`` as each run finishes; ``harvest``: save every handoff's pre-entry state under this
     directory (``runner.ChainPool``); ``output``: a new JSON-lines file each run is written to as it finishes
-    (``ChainOutput``, refused if it exists); ``stop_at`` and ``power_on``: ``prepare_chain``'s.  Returns (results
-    sorted by seed, summary); the summary's ``provenance`` names what played (``Runner.provenance`` plus
-    ``first_seed`` and ``runs``)."""
-    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    (``ChainOutput``, refused if it exists); ``stop_at`` and ``power_on``: ``prepare_chain``'s; ``replays``: a
+    folder every run is recorded into (``replay.ReplayDir``; ``streams``, ``state`` and ``keyframe_frames`` as
+    ``replay.record_options``).  Returns (results sorted by seed, summary); the summary's ``provenance`` names
+    what played (``Runner.provenance`` plus ``first_seed`` and ``runs``)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, import-outside-toplevel
+    from . import replay
     route, runner = prepare_chain(route_name, parallel, models_dir, overrides, deterministic, stop_at, start_from,
                                   specialist_configs, threads, harvest, power_on)
     provenance = {**runner.provenance(route), 'first_seed': first_seed, 'runs': runs}
+    record = None
+    if replays is not None:
+        record = replay.record_options(runner.record_meta(route), streams, state,
+                                       keyframe_frames or replay.DEFAULT_KEYFRAME_FRAMES)
     if output is None:
-        return play_chain(route, runner, provenance, plays=plays, on_result=on_result)
+        return play_chain(route, runner, provenance, on_result=on_result, record=record, replays=replays)
     chain_output = ChainOutput(output, provenance, check_output(output, provenance, append=False))
 
-    def record(result):
+    def add(result):
         chain_output.add(result)
         if on_result is not None:
             on_result(result)
-    results, summary = play_chain(route, runner, provenance, plays=plays, on_result=record)
+    results, summary = play_chain(route, runner, provenance, on_result=add, record=record, replays=replays)
     chain_output.finish()
     return results, summary
 
 
-def play_chain(route, runner, provenance: dict, plays=None, on_result=None):
-    """Plays ``provenance['runs']`` seeds from ``provenance['first_seed']``; (results, summary with provenance)."""
-    from .runner import chain_summary  # pylint: disable=import-outside-toplevel
+def play_chain(route, runner, provenance: dict, on_result=None, record=None, replays=None):
+    """Plays ``provenance['runs']`` seeds from ``provenance['first_seed']``; (results, summary with provenance).
+    ``record`` (``replay.record_options``) and ``replays`` (a folder): every run recorded as
+    ``<replays>/<seed>-<ending>.tfreplay``."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
+    from .replay import ReplayDir
+    from .runner import chain_summary
     seeds = list(range(provenance['first_seed'], provenance['first_seed'] + provenance['runs']))
-    results = runner.run_many(route, seeds, on_result=on_result, plays=plays)
+    folder = None if replays is None else ReplayDir(replays)
+    results = runner.run_many(route, seeds, on_result=on_result, record=record, replays=folder)
     return results, {**chain_summary(results), 'provenance': provenance}
 
 
@@ -150,12 +161,13 @@ def chain_progress_events(events, runs: int):
 
 
 def _cmd_eval_chain(args):
-    # pylint: disable=import-outside-toplevel
+    # pylint: disable=import-outside-toplevel, too-many-locals
     import time
     from contextlib import nullcontext
+    from . import replay
     from .events import EventLog, logged_job
     from .registry import act_override
-    from .runner import parse_overrides, power_on_options
+    from .runner import RunnerError, parse_overrides, power_on_options
     from .specialist import load_specialist
     configs = [load_specialist(path) for path in args.specialist_config]
     overrides = parse_overrides(args.checkpoint)
@@ -164,6 +176,10 @@ def _cmd_eval_chain(args):
                                   args.stop_at, args.start_from, {config.name: config for config in configs},
                                   args.threads, args.harvest, power_on_options(args))
     provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
+    try:
+        record = replay.options_from(args, runner.record_meta(route))
+    except ValueError as error:
+        raise RunnerError(str(error)) from error
     existing = check_output(output, provenance, args.append)
     what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
             + ('-power-on' if args.power_on else ''))
@@ -174,7 +190,7 @@ def _cmd_eval_chain(args):
         if events is not None:
             events.emit('chain_start', runs=args.runs, parallel=args.parallel, overrides=overrides or None,
                         act=args.act, route=args.route, start_from=args.start_from, stop_at=args.stop_at,
-                        power_on=route.power_on, output=output, provenance=provenance)
+                        power_on=route.power_on, output=output, replays=args.replays, provenance=provenance)
         try:
             chain_output = ChainOutput(output, provenance, existing)
             progress = None if events is None else chain_progress_events(events, args.runs)
@@ -183,7 +199,8 @@ def _cmd_eval_chain(args):
                 chain_output.add(result)
                 if progress is not None:
                     progress(result)
-            results, summary = play_chain(route, runner, provenance, plays=args.plays, on_result=on_result)
+            results, summary = play_chain(route, runner, provenance, on_result=on_result, record=record,
+                                          replays=args.replays)
             chain_output.finish()
         except Exception as error:
             if events is not None:
@@ -198,6 +215,8 @@ def _cmd_eval_chain(args):
           f"(per-run JSON lines {'appended to' if existing else 'in'} {output}, provenance in {meta_path(output)})")
     if args.harvest is not None:
         print(f"handoff states harvested under {args.harvest}")
+    if args.replays is not None:
+        print(f"replays in {args.replays} (<seed>-<ending>{replay.SUFFIX}; `tf replay info|verify FILE`)")
     errors = sum(r.result == 'error' for r in results)
     if errors:
         print(f"triforce eval-chain: {errors} of {len(results)} runs ended in an error: {summary['errors']}",
@@ -300,6 +319,7 @@ def main(argv=None):
     from ._native import DEFAULT_ROUTE  # pylint: disable=import-outside-toplevel
     from .paths import HARVESTED_DIR  # pylint: disable=import-outside-toplevel
     from .registry import ACT_CHOICES, ACT_MODES, set_allow_incompatible  # pylint: disable=import-outside-toplevel
+    from .replay import add_arguments as replay_arguments  # pylint: disable=import-outside-toplevel
     from .runner import STOP_AT_HELP, add_power_on_arguments  # pylint: disable=import-outside-toplevel
 
     allow_help = "load models whose version differs from this code's in its first three numbers"
@@ -347,8 +367,7 @@ def main(argv=None):
     chain.add_argument('--append', action='store_true',
                        help="add these runs to an existing --output played by the same models, act modes, route, "
                             "code and data (its .meta.json), with new seeds")
-    chain.add_argument('--plays', default=None, metavar='PATH',
-                       help="write every run to this replay file (triforce/replay.py)")
+    replay_arguments(chain, default_state='embed')
     chain.add_argument('--harvest', nargs='?', const=str(HARVESTED_DIR), default=None, metavar='DIR',
                        help="save every handoff's pre-entry state (a correct room entry where the acting specialist "
                             "changes) as DIR/<specialist>/<level>_<room><side>_h<seed>_<n>.state; without DIR: "

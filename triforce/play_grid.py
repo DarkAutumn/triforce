@@ -15,7 +15,10 @@ After a run ends its game holds its result for ``RESULT_PAUSE`` seconds, showing
 run has reset but waits, parked in the pool, and its messages wait too), before the next seed plays (seeds are
 handed out in order to whichever game is free, so ``start`` carries no seed; ``end`` does).  A setup error (an
 error before the first step, e.g. a missing promoted model for the route's first room) stops the game instead of
-retrying in a loop.  ``plays``: keep every run in a replay file (``triforce.replay``).
+retrying in a loop.  ``act``: how the models act (``sample``, the default: every game differs; ``argmax``;
+``model``: each model's registered act mode).  ``power_on`` (``Route.load``'s): every run starts from console
+power on.  ``replays``: a folder every run is recorded into as a replay file (``triforce.replay``; ``streams``,
+``state`` and ``keyframe_frames`` as ``replay.record_options``).
 
 ``set_fps(fps)`` changes every game's frame-rate cap (``<= 0``: uncapped, as fast as they run; ``NES_FPS`` is the
 console's own rate).  ``set_paused(True)`` stops every game before its next emulated frame (a step in progress
@@ -29,8 +32,9 @@ from typing import Dict, Iterable, List, Optional
 
 import numpy as np
 
-from . import _native
-from .runner import ChainPool, Policies, Route, RunResult
+from . import _native, registry, replay
+from .replay import ReplayDir
+from .runner import ChainPool, Policies, Route, RunResult, chain_meta
 
 FRAME_SHAPE = _native.FRAME_SHAPE   # rows, columns, RGB
 ROUTE = _native.DEFAULT_ROUTE
@@ -68,14 +72,19 @@ class GameGrid:
     messages.  ``shown``: the games that render (default all)."""
 
     def __init__(self, games: int, fps: float, models_dir=None, shown: Optional[Iterable[int]] = None,
-                 states_dir=None, stall_steps: Optional[int] = None, plays=None):
+                 states_dir=None, stall_steps: Optional[int] = None, replays=None, act: str = 'sample',
+                 power_on: Optional[dict] = None, streams=(), state: str = 'path',
+                 keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.games = games
         self.fps = fps
         self.models_dir = None if models_dir is None else str(models_dir)
         self.states_dir = states_dir
         self.stall_steps = stall_steps
-        self.plays = plays
+        self.deterministic = registry.act_override(act)
+        self.power_on = power_on
+        self.replays = replays
+        self.record = {'streams': streams, 'state': state, 'keyframe_frames': keyframe_frames}
         self._shown = set(range(games)) if shown is None else set(shown)
         self._status: queue.Queue = queue.Queue()
         self._stop = threading.Event()
@@ -177,7 +186,7 @@ class GameGrid:
 
     def _run(self) -> None:
         try:
-            route = Route.load(ROUTE)
+            route = Route.load(ROUTE, power_on=self.power_on)
             policies = Policies(self.models_dir)
             first = _native.route_steps(ROUTE)[0]['specialist']
             if first in policies.missing:
@@ -188,9 +197,14 @@ class GameGrid:
                     self._status.put(end_message(game, None, result)[0])
                 return
             seeds = range(self.games * SEEDS_PER_GAME)
+            record = folder = None
+            if self.replays is not None:
+                record = replay.record_options(chain_meta(policies, self.deterministic, route), **self.record)
+                folder = ReplayDir(self.replays)
             chain = ChainPool(route, seeds, policies, num_envs=self.games, threads=self.games, fps=self.fps,
-                              states_dir=self.states_dir, stall_steps=self.stall_steps, hold_finished_frame=True,
-                              plays=self.plays)
+                              deterministic=self.deterministic, states_dir=self.states_dir,
+                              stall_steps=self.stall_steps, hold_finished_frame=True, record=record,
+                              replays=folder)
         except Exception as err:  # pylint: disable=broad-exception-caught
             self._crash(err)
             return

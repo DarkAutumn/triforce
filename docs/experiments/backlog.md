@@ -687,6 +687,16 @@ the remaining list is deferred until Lee resumes work.
   pytest-xdist in the venv). Not yet measured: which pytest tests dominate (`pytest --durations=40`) and both
   suites on an idle machine (AGENTS.md says "about a minute each"). Until fixed: run the tests of what changed
   per step and the full suites before a merge.
+  - **Found along the way (Nov 11): torch's thread pool is most of the pytest time on a busy machine.** With
+    the load average at 26–35, the same script measured with torch's default threads (20) and with
+    `OMP_NUM_THREADS=1`: saving and promoting the 20 untrained test models (`conftest.promote_untrained`)
+    12.3 s vs 0.6 s; loading them for a chain (`Runner(models_dir=...)`: 20 × `load_model` + `to_native`) 22 s
+    vs 0.6 s; `tests/test_replay.py` 92–185 s with the default. The tests' networks are tiny, so the threads
+    only wait for each other and for the cores the round holds. Not changed (deferred): the one-line fix is
+    `torch.set_num_threads(1)` in `tests/conftest.py` `pytest_configure` (or `OMP_NUM_THREADS=1` in the test
+    command). The same cost hits real use: `eval-chain`, `play-zelda.py` and `zelda-headless.py` spend those
+    ~20 s loading the team while a round trains; `Policies` could load under one torch thread (the networks
+    act in Rust afterwards).
 
 ## Start states
 

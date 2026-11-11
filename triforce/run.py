@@ -88,9 +88,8 @@ def watch(runner: Runner, route: Route, seed: int, fps: float) -> RunResult:
 def record_replay(runner: Runner, route: Route, seed: int, **extra) -> tuple[RunResult, bytes]:
     """Plays one run recorded as a replay.  Returns (the run, the TFREPLAY file's bytes); ``extra``: more META
     entries."""
-    provenance = runner.provenance(route)
-    meta = replay.meta('chain', provenance['models'], route.name, provenance['stop_at'], **extra)
-    with runner.pool(route, [seed], num_envs=1, threads=1, record=replay.record_options(meta)) as chain:
+    record = replay.record_options(runner.record_meta(route, **extra))
+    with runner.pool(route, [seed], num_envs=1, threads=1, record=record) as chain:
         chain.play()
         chain.pool.wait_idle()
         events = chain.poll_events()

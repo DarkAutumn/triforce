@@ -43,9 +43,20 @@ def qapp():
 
 def test_parse_args_grid_scale_and_games():
     args = play_zelda.parse_args([])
-    assert (args.grid, args.scale, args.fps, args.games, args.plays) == ((4, 3), 2, play_grid.NES_FPS, 12, None)
-    args = play_zelda.parse_args(['3x2', '--scale', '2', '--games', '64', '--plays', 'p.jsonl'])
-    assert (args.grid, args.scale, args.games, args.plays) == ((3, 2), 2, 64, 'p.jsonl')
+    assert (args.grid, args.scale, args.fps, args.games) == ((4, 3), 2, play_grid.NES_FPS, 12)
+    # Play samples by default, records nothing, and starts from the start state.
+    assert (args.act, args.replays, args.state, args.streams, args.power_on) == ('sample', None, 'path', (), None)
+    args = play_zelda.parse_args(['3x2', '--scale', '2', '--games', '64', '--replays', 'out', '--state', 'embed',
+                                  '--streams', 'keyframes,rewards', '--act', 'model', '--power-on', '--name', 'zed',
+                                  '--delay', '77'])
+    assert (args.grid, args.scale, args.games, args.replays) == ((3, 2), 2, 64, 'out')
+    assert (args.act, args.state, args.streams) == ('model', 'embed', ('rewards', 'keyframes'))
+    assert args.power_on == {'name': 'ZED', 'delay': 77, 'max_delay': 32766}
+    assert play_zelda.parse_args(['--power-on']).power_on == {'name': 'LINK', 'delay': None, 'max_delay': 32766}
+    for bad in (['--delay', '5'], ['--power-on', '--name', 'ZELDA'], ['--streams', 'rewards'],
+                ['--replays', 'out', '--streams', 'sound'], ['--act', 'greedy']):
+        with pytest.raises(SystemExit):
+            play_zelda.parse_args(bad)
     assert play_zelda.parse_args(['--fps', '60']).fps == play_grid.NES_FPS      # 60 always means 60.1
     assert play_zelda.parse_args(['--fps', '70']).fps == 70
     assert play_zelda.parse_grid('8X12') == (8, 12)

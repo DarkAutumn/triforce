@@ -7,7 +7,7 @@ index into the loaded-model list), and the specialists act inside the pool (``En
 networks, docs/rust-actor.md).  Sampled actions use Gumbel noise keyed to (run seed, decision), so a seed plays the
 same run whichever env or thread runs it.  A specialist without a promoted model ends the runs that need it as
 ``error`` with the registry's reason; an untagged room the route needs is an error too, a wrong exit into one a
-gameplay failure.  With ``plays`` set every run is kept in a replay file (``triforce.replay``).
+gameplay failure.  With ``record`` set every run is recorded as a replay (``triforce.replay``).
 """
 
 import difflib
@@ -21,12 +21,12 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import torch
 
-from . import __version__, _native
+from . import __version__, _native, replay
 from .paths import STATES_DIR
 from .provenance import code_version, data_hash, location_text, models_header
 from .registry import (CHECKPOINT_NAME, act_mode, checkpoint_sha1, load_model, promoted_checkpoint,
                        require_compatible)
-from .replay import ReplayWriter, header
+from .replay import ReplayDir
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
 
@@ -44,14 +44,16 @@ class Route:
     """Where a route starts and what ends it.  The start: ``start_state`` (``'start'``: the game start state), or
     ``power_on`` (``{'name', 'delay', 'max_delay'}``: console power on, ``delay`` None = drawn per run seed from
     ``0..=max_delay``), or ``checkpoint`` (``{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees]}``:
-    the state another run ended in, e.g. ``Replay.end_state()``).  The end: ``terminal`` (a room), or
-    ``stop_step`` (a route step, reached by the route's own exit), or neither: the route's last triforce."""
+    the state another run ended in, e.g. ``Replay.states()[-1]``).  The end: ``terminal`` (a room), or
+    ``stop_step`` (a route step, reached by the route's own exit), or neither: the route's last triforce.
+    ``start_step``: the route step the start is on."""
     name: str
     start_state: str
     terminal: Optional[MapLocation] = None
     stop_step: Optional[int] = None
     power_on: Optional[dict] = None
     checkpoint: Optional[dict] = None
+    start_step: int = 0
 
     @staticmethod
     def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None,
@@ -108,7 +110,7 @@ class Route:
         if stop_step is not None and not start < stop_step < len(steps):
             raise RunnerError(f"--stop-at step:{stop_step} is not a step of route '{name}' after the start step "
                               f"{start}; steps: {start + 1}..={len(steps) - 1}")
-        return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint)
+        return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint, start)
 
 
 def _power_on(options: dict) -> dict:
@@ -309,8 +311,7 @@ class ChainPool:
     room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``hold_finished_frame``
     (watch player): a finished run's last frame stays published, and its env waits, until
     ``pool.set_hold(env, False)``.  ``record`` (``replay.record_options``; None = off): every run is recorded
-    as a TFREPLAY file and reported as a ``replay`` event.  ``plays``: write every run to this replay file
-    (``triforce.replay``).
+    as a TFREPLAY file and reported as a ``replay`` event; ``replays`` (a ``ReplayDir``) keeps those as files.
     ``deterministic``: None = each policy's act mode (``Policies.deterministic``), else argmax (True) or sampling
     (False) for every policy.  ``harvest`` (a directory; None = off): every correct room entry where the acting
     specialist changes (a handoff) saves its pre-entry state as
@@ -321,12 +322,17 @@ class ChainPool:
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
                  deterministic: Optional[bool] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: Optional[dict] = None,
-                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False, plays=None, harvest=None):
+                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False,
+                 replays: Optional[ReplayDir] = None, harvest=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
+        if replays is not None and record is None:
+            raise ValueError("a replay folder needs record options (replay.record_options)")
         self.route = route
         self.policies = policies
         self.deterministic = (list(policies.deterministic) if deterministic is None
                               else [bool(deterministic)] * len(policies.policies))
+        self.record = record
+        self.replays = replays
         start_from = None if route.start_state == 'start' else route.start_state
         states_dir = None if states_dir is None else str(states_dir)
         task = _native.ChainTask(policies.configs, route.name, [int(s) for s in seeds], stop_at=route.terminal,
@@ -337,31 +343,20 @@ class ChainPool:
                                  stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
-        self.writer = None
-        if plays is not None:
-            task = {'configs': [config.to_json() for config in policies.configs], 'route': route.name,
-                    'start_from': start_from, 'stop_at': location_text(route.terminal), 'max_steps': max_steps,
-                    'stall_steps': stall_steps, 'missing': policies.missing}
-            models = models_header(policies.names, policies.policies, policies.checkpoints, self.deterministic)
-            self.writer = ReplayWriter(plays, header('chain', task, models, states_dir))
-        self._plays: Dict[int, dict] = {}
-        self._results: Dict[int, dict] = {}
 
     def play(self):
         """Every env starts acting on its own (``EnvPool.play``)."""
         self.pool.play(self.policies.policies, deterministic=self.deterministic,
-                       record=None if self.writer is None else 'actions')
+                       distributions=bool(self.record and self.record.get('decisions')))
 
     def poll_events(self) -> List[dict]:
-        """The pool's events since the last call; with ``plays`` set, writes each finished run's replay line."""
+        """The pool's events since the last call; with ``replays`` set, every finished run's recording (a
+        ``replay`` event) is written to the folder first."""
         events = self.pool.poll_events()
-        if self.writer is not None:
-            self._plays.update((int(play['job']), play) for play in self.pool.poll_plays())
+        if self.replays is not None:
             for event in events:
-                if event['type'] == 'run' and event['result']['steps'] > 0:
-                    self._results[int(event['result']['seed'])] = event['result']
-            for seed in sorted(self._plays.keys() & self._results.keys()):
-                self.writer.write(self._plays.pop(seed), self._results.pop(seed))
+                if event['type'] == 'replay':
+                    self.replays.add(int(event['job']), event['data'])
         return events
 
     @staticmethod
@@ -383,10 +378,8 @@ class ChainPool:
                 return sorted(results, key=lambda r: (r.seed is None, r.seed))
 
     def close(self):
-        """Stops the pool's worker threads and closes the replay file (idempotent)."""
+        """Stops the pool's worker threads (idempotent)."""
         self.pool.close()
-        if self.writer is not None:
-            self.writer.close()
 
     def __enter__(self):
         return self
@@ -425,11 +418,15 @@ class Runner:
 
     def pool(self, route: Route, seeds: Sequence[int], **kwargs) -> ChainPool:
         """A chain pool over this runner's policies (``kwargs``: ``num_envs``, ``threads``, ``fps``, ``seed``,
-        ``record``, ``plays``)."""
+        ``record``, ``replays``, ``stall_steps``, ``hold_finished_frame``)."""
         kwargs.setdefault('num_envs', self.parallel)
         kwargs.setdefault('threads', self.threads)
         return ChainPool(route, seeds, self.policies, deterministic=self.deterministic, max_steps=self.max_steps,
                          states_dir=self.states_dir, harvest=self.harvest, **kwargs)
+
+    def record_meta(self, route: Route, **extra) -> dict:
+        """The META object of recordings of ``route`` played by this runner (``chain_meta``)."""
+        return chain_meta(self.policies, self.deterministic, route, **extra)
 
     def provenance(self, route: Route) -> dict:
         """What plays ``route``: per policy its name, checkpoint, ``ckpt.pt`` sha1, Rust network hash, act mode and
@@ -455,13 +452,14 @@ class Runner:
                 'data': data_hash()}
 
     def run_many(self, route: Route, seeds: Sequence[int],
-                 on_result: Optional[Callable[[RunResult], None]] = None, plays=None) -> List[RunResult]:
-        """Plays route once per seed; results sorted by seed.  Never raises for gameplay failures.  ``plays``: a
-        replay file to write."""
+                 on_result: Optional[Callable[[RunResult], None]] = None, record: Optional[dict] = None,
+                 replays: Optional[ReplayDir] = None) -> List[RunResult]:
+        """Plays route once per seed; results sorted by seed.  Never raises for gameplay failures.  ``record``
+        and ``replays``: ``ChainPool``'s (every run recorded into a folder)."""
         seeds = list(seeds)
         if not seeds:
             return []
-        with self.pool(route, seeds, plays=plays) as pool:
+        with self.pool(route, seeds, record=record, replays=replays) as pool:
             return pool.run(on_result)
 
     def run(self, route: Route, seed: Optional[int] = None) -> RunResult:
@@ -491,6 +489,11 @@ def parse_stop(text: Optional[str]) -> Tuple[Optional[MapLocation], Optional[int
             raise RunnerError(f"'{text}' is not a route step (step:N, e.g. step:24)")
         return None, int(text[5:])
     return parse_location(text), None
+
+
+def stop_text(route: 'Route') -> Optional[str]:
+    """What ends ``route`` as ``--stop-at`` takes it (``1:0x73``, ``step:24``); None: the route's own end."""
+    return location_text(route.terminal) if route.stop_step is None else f'step:{route.stop_step}'
 
 
 STOP_AT_HELP = ("end the route on entering this room (e.g. 1:0x73), or on reaching this route step by the route's "
@@ -570,3 +573,11 @@ def chain_summary(results: List[RunResult]) -> dict:
         summary[f'cheated_{item}'] = sum(c[item] for c in cheated)
         summary[f'runs_with_cheated_{item}'] = sum(c[item] > 0 for c in cheated)
     return summary
+
+
+def chain_meta(policies: Policies, deterministic: Optional[bool], route: Route, **extra) -> dict:
+    """The META object of recordings of ``route`` played by ``policies`` (``replay.meta``; ``deterministic``:
+    ``ChainPool``'s; ``extra``: more entries): what ``replay.record_options`` takes."""
+    modes = list(policies.deterministic) if deterministic is None else [bool(deterministic)] * len(policies.policies)
+    models = models_header(policies.names, policies.policies, policies.checkpoints, modes)
+    return replay.meta('chain', models, route.name, stop_text(route), **extra)

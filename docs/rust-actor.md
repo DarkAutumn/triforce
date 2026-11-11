@@ -53,17 +53,18 @@ The learner recomputes `logp_old` and values with its own torch network over the
    step it lands), so the look-ahead changes rewards only, and evaluation and chains skip it
    (`EnvOptions.skip_look_ahead`; 12–35% of step time in beam/bomb rooms under attack-heavy play). Settling it on
    a worker queue after the step was designed and decided against.
-5. **Replay records** (`triforce/replay.py`, built). `play(record='actions')` returns each finished episode as a
-   `Play` (job key, per decision the acting policy, the action and the policy's log-prob/entropy/value, optionally
-   the observations). Eval (`--plays`), `eval-chain --plays` and `play-zelda.py --plays` write replay files: a
-   header (kind, the task's configs and options, model checkpoints and hashes, backend, `git describe`, the
-   game/route data hash, the states dir and, for chains, `start_hash` of the `start_from` state) and one line per
-   episode (job, start state, eval lines also its `start_hash`, base64 actions, the result).
-   `replay.replay(header, play)` rebuilds the task for that job and plays it with a replaying actor
-   (`PolicyActor::replay`: the recorded action at each step, scored by the policy), returning every decision's
-   log-prob/entropy/value (bit for bit the original's) and observations. A replay that outlives its actions, stops
-   before them or ends with another result raises; a changed data hash or start state file raises before playing
-   (`strict=False`: warns), a different code version warns. `read` drops a cut-off last line with a warning.
+5. **Replays** (`crates/replay`, `triforce/replay.py`; rebuilt Nov 11). A pool built with `record=` records every
+   episode or run as a TFREPLAY file (inputs, memory edits, cheats, states, events, and the optional reward,
+   decision and keyframe streams; `docs/architecture.md` "Replays") and reports it as a `replay` event;
+   `--replays DIR` on evaluate, `eval-chain`, `play-zelda.py` and `zelda-headless.py` keeps them as
+   `DIR/<seed>-<ending>.tfreplay`. A replay plays back on the emulator alone (`_native.ReplayPlayer`,
+   `replay_verify`, `tf replay verify`): no env, reward or model code. It replaced the action files
+   (`--plays`: per episode the seed and base64 actions, replayed through the env) and the `movie` event.
+   What stays of the old mechanism is the pool's own: `play(record='actions')` returns each finished episode as
+   a `Play` (job key, per decision the acting policy, the action and the policy's log-prob/entropy/value,
+   optionally the observations; `poll_plays`), and `play(replay={job: actions})` feeds recorded actions back
+   (`PolicyActor::replay`: the recorded action at each step, scored by the policy), giving every decision's
+   log-prob/entropy/value bit for bit; a replay that outlives its actions raises. `best_of_n.py` uses it.
 6. **Search for training** (built; see "Search" below): inside training rollouts, at decision time, for a keyed
    share of decisions.
 

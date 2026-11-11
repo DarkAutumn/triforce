@@ -298,36 +298,31 @@ def test_supplied_config_no_progress_ends_runs(states_dir, models_dir):
     assert chain_summary(results)['successes'] == 0
 
 
-def test_chain_runs_replay_exactly_from_their_replay_file(states_dir, models_dir, tmp_path):
-    """Every run of a chain eval is kept as seed + actions; replaying one gives the same run and, decision by
-    decision, the same probabilities and values, bit for bit.  A replay that outlives its actions raises."""
-    path = tmp_path / 'plays.jsonl'
+def test_a_chain_run_replays_its_actions_to_the_same_probabilities(states_dir, models_dir):
+    """A chain run's recorded actions (``EnvPool.play(record='actions')``) fed back to the same models
+    (``replay=``) give the same run and, decision by decision, the same probabilities and values, bit for bit.  A
+    replay that outlives its actions raises."""
     runner = Runner(models_dir=models_dir, max_steps=40, parallel=3, threads=2, states_dir=states_dir)
-    results = runner.run_many(Route.load('d2first'), [3, 4, 5], plays=path)
-    head, plays = replay.read(path)
-    assert head['kind'] == 'chain' and head['backend'] == replay.BACKEND and head['models'][0]['checkpoint']
-    assert sorted(play['job'] for play in plays) == [3, 4, 5]
-    by_seed = {result.seed: result.to_dict() for result in results}
-    for play in plays:
-        assert play['result'] == by_seed[play['job']] and len(play['actions']) == play['result']['steps']
-        again = replay.replay(head, play)
-        assert np.array_equal(again['actions'], play['actions'])
-        runs = [e['result'] for e in again['events'] if e['type'] == 'run']
-        assert runs == [play['result']]
-    # Probabilities: a fresh play of seed 4 (recorded in the pool, one env) against the replay's, bit for bit.
-    with runner.pool(Route.load('d2first'), [4], num_envs=1) as chain:
-        chain.pool.play(runner.policies.policies, record='actions')
-        chain.pool.wait_idle()
-        original = chain.pool.poll_plays()[0]
-    recorded = next(p for p in plays if p['job'] == 4)
-    assert np.array_equal(original['actions'], recorded['actions'])
-    again = replay.replay(head, recorded, observations=True)
-    for key in ('log_prob', 'entropy', 'value', 'policy'):
-        assert again[key].tobytes() == original[key].tobytes(), key
-    assert len(again['obs']['room_id']) == len(recorded['actions'])
-    short = {**plays[0], 'actions': plays[0]['actions'][:-1]}
+    route, policies = Route.load('d2first'), runner.policies.policies
+
+    def play(seeds, **kwargs):
+        with runner.pool(route, seeds) as chain:
+            chain.pool.play(policies, deterministic=chain.deterministic, **kwargs)
+            chain.pool.wait_idle()
+            plays = {int(p['job']): p for p in chain.pool.poll_plays()}
+            runs = {r.seed: r.to_dict() for _, r in chain.results(chain.poll_events())}
+        return plays, runs
+
+    plays, runs = play([3, 4, 5], record='actions')
+    assert sorted(plays) == sorted(runs) == [3, 4, 5]
+    assert all(len(plays[seed]['actions']) == runs[seed]['steps'] for seed in runs)
+    again, replayed = play([4], record='observations', replay={4: plays[4]['actions']})
+    assert replayed == {4: runs[4]}
+    for key in ('actions', 'log_prob', 'entropy', 'value', 'policy'):
+        assert again[4][key].tobytes() == plays[4][key].tobytes(), key
+    assert len(again[4]['obs']['room_id']) == runs[4]['steps']
     with pytest.raises(ValueError):
-        replay.replay(head, short)
+        play([3], record='actions', replay={3: plays[3]['actions'][:-1]})
 
 
 def test_chain_cli_uses_supplied_specialist_config(states_dir, models_dir, tmp_path):

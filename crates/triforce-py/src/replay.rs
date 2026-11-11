@@ -199,7 +199,7 @@ impl PyReplay {
             d.set_item("frame", state.frame)?;
             d.set_item("kind", state.kind.name())?;
             d.set_item("step", state.context.step)?;
-            d.set_item("granted", state.context.granted.to_vec())?;
+            d.set_item("granted", state.context.granted.map(u32::from).to_vec())?;
             d.set_item("edits", state.edits)?;
             d.set_item("state", PyBytes::new(py, state.blob))?;
             out.append(d)?;

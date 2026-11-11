@@ -151,28 +151,31 @@ def test_evaluation_names_its_inputs(states_dir, tmp_path):
 
 def test_evaluation_acts_the_way_the_run_is_registered_unless_told(states_dir, tmp_path):
     """F129: ``deterministic=None`` (``--act model``) follows the run's act file; True/False and ``--act`` override
-    it. The replay header names the mode and the recorded actions are the ones that mode plays."""
+    it. The recordings name the mode and their inputs are the ones that mode plays."""
     checkpoint = save_checkpoint('ow-start', 'act', seeded_network(7, SMALL), root=tmp_path)
     config = tmp_path / 'ow-start.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
                       "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 20\n")
 
-    def played(result, path):
-        """(result's act, the replay header's deterministic flag, every episode's actions by seed)."""
-        head, plays = replay.read(path)
-        return (result['act'], head['models'][0]['deterministic'],
-                [p['actions'].tolist() for p in sorted(plays, key=lambda p: p['job'])])
+    def played(result, folder):
+        """(result's act, the recordings' deterministic flag, every episode's inputs by seed)."""
+        files = sorted(folder.iterdir())
+        assert [f.name[:8] for f in files] == ['00000000', '00000001'] and all(f.suffix == '.tfreplay' for f in files)
+        recordings = [_native.Replay(f.read_bytes()) for f in files]
+        flag, = {r.meta['models'][0]['deterministic'] for r in recordings}
+        assert all(r.meta['kind'] == 'eval' and r.meta['specialist'] == 'ow-start' for r in recordings)
+        return result['act'], flag, [r.inputs().tobytes() for r in recordings]
 
     def play(name, deterministic):
-        path = tmp_path / f'{name}.jsonl'
+        folder = tmp_path / name
         return played(evaluate_specialist(str(config), checkpoint, episodes_per_state=2, states_dir=states_dir,
-                                          deterministic=deterministic, plays=path), path)
+                                          deterministic=deterministic, replays=folder), folder)
 
     def cli(name, act):
-        path, output = tmp_path / f'{name}.jsonl', tmp_path / f'{name}.json'
+        folder, output = tmp_path / name, tmp_path / f'{name}.json'
         assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--no-log', '--act', act,
-                              '--episodes-per-state', '2', '--plays', str(path), '--output', str(output)]) == 0
-        return played(json.loads(output.read_text()), path)
+                              '--episodes-per-state', '2', '--replays', str(folder), '--output', str(output)]) == 0
+        return played(json.loads(output.read_text()), folder)
 
     sampled, argmax = play('sampled', False), play('argmax', True)
     assert sampled[:2] == ('sample', False) and argmax[:2] == ('argmax', True)
@@ -181,6 +184,8 @@ def test_evaluation_acts_the_way_the_run_is_registered_unless_told(states_dir, t
     registry.set_act_mode(checkpoint.parent, 'argmax')
     assert play('registered', None) == argmax == cli('model-argmax', 'model')
     assert cli('sample', 'sample') == sampled
+    with pytest.raises(SystemExit):
+        evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--streams', 'rewards'])
 
 
 def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tmp_path):
@@ -228,88 +233,6 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
     assert evaluate()['records'] == records
     assert evaluate(parallel=3, threads=3)['records'] == records
     assert evaluate(parallel=2, threads=2)['records'] == records
-
-
-REPLAY_IN_A_FRESH_PROCESS = """
-import sys, numpy as np
-from triforce import replay
-head, plays = replay.read(sys.argv[1])
-np.save(sys.argv[2], np.concatenate([np.stack([r['log_prob'], r['entropy'], r['value']])
-                                     for r in (replay.replay(head, p) for p in plays)], axis=1))
-"""
-
-
-def test_evaluation_plays_replay_exactly_here_and_in_a_fresh_process(states_dir, tmp_path):
-    """An eval's replay file (seed + start state + actions per episode) replays every episode to the same record
-    and the same per-decision probabilities and values, bit for bit, in this process and in a new one."""
-    ckpt = save_checkpoint('ow-start', 'untrained', seeded_network(7, SMALL), root=tmp_path)
-    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=25)
-    path = tmp_path / 'plays.jsonl'
-    result = evaluate_specialist(config, ckpt, episodes_per_state=4, parallel=3, threads=2, seed=11,
-                                 states_dir=states_dir, plays=path)
-    head, plays = replay.read(path)
-    assert head['kind'] == 'eval' and head['models'][0]['checkpoint'] == str(ckpt)
-    assert sorted((p['start_state'], p['job']) for p in plays) == [('start', s) for s in range(11, 15)]
-    records = {r['seed']: r for r in result['records']}
-    here = []
-    for play in sorted(plays, key=lambda p: p['job']):
-        again = replay.replay(head, play)
-        assert [e['record'] for e in again['events'] if e['type'] == 'eval'] == [records[play['job']]] \
-            == [play['result']]
-        here.append(np.stack([again['log_prob'], again['entropy'], again['value']]))
-    out = tmp_path / 'fresh.npy'
-    subprocess.run([sys.executable, '-c', REPLAY_IN_A_FRESH_PROCESS, str(path), str(out)], check=True,
-                   capture_output=True, text=True, env={**os.environ, 'TRIFORCE_STATES_DIR': str(states_dir)})
-    order = sorted(range(len(plays)), key=lambda i: plays[i]['job'])
-    fresh = np.split(np.load(out), np.cumsum([len(plays[i]['actions']) for i in range(len(plays))])[:-1], axis=1)
-    assert all(fresh[i].tobytes() == here[k].tobytes() for k, i in enumerate(order))
-
-
-def _record_short_plays(states_dir, tmp_path):
-    ckpt = save_checkpoint('ow-start', 'short', seeded_network(8, SMALL), root=tmp_path)
-    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=3)
-    recorded = tmp_path / 'a'
-    recorded.mkdir()
-    shutil.copy(states_dir / 'start.state', recorded / 'start.state')
-    path = tmp_path / 'plays.jsonl'
-    evaluate_specialist(config, ckpt, episodes_per_state=3, seed=1, states_dir=recorded, plays=path)
-    return path
-
-
-def test_a_replay_in_a_changed_world_raises_instead_of_returning_another_episode(states_dir, tmp_path):
-    """F073: every episode ends on the step budget, so only the start state hash, the data hash and the result
-    comparison can tell that the replay played something else."""
-    head, plays = replay.read(_record_short_plays(states_dir, tmp_path))
-    assert all(play['start_hash'] == replay.state_hash('start', head['states_dir']) for play in plays)
-    replay.replay(head, plays[0])
-    other = tmp_path / 'b'
-    other.mkdir()
-    shutil.copy(Path(registry.__file__).parent / 'states' / '0_77c_0.state', other / 'start.state')
-    moved = {**head, 'states_dir': str(other)}
-    with pytest.raises(ValueError, match='start state start hash'):
-        replay.replay(moved, plays[0])
-    with pytest.warns(UserWarning, match='another world'), pytest.raises(Exception):     # diverges some way
-        replay.replay(moved, plays[0], strict=False)
-    changed = {**plays[0], 'result': {**plays[0]['result'], 'frames': plays[0]['result']['frames'] + 1}}
-    with pytest.raises(RuntimeError, match='ended with'):       # same world, not the recorded result
-        replay.replay(head, changed)
-    with pytest.raises(ValueError, match='data hash'):
-        replay.replay({**head, 'data': '0' * 16}, plays[0])
-
-
-def test_replay_read_drops_a_cut_off_last_line_and_names_a_bad_middle_one(states_dir, tmp_path):
-    """F074: a writer killed mid-line leaves the complete plays readable."""
-    path = _record_short_plays(states_dir, tmp_path)
-    head, plays = replay.read(path)
-    text = path.read_text()
-    path.write_text(text[:-20])
-    with pytest.warns(UserWarning, match='truncated last line'):
-        again, kept = replay.read(path)
-    assert again == head and [p['job'] for p in kept] == [p['job'] for p in plays[:-1]]
-    lines = text.splitlines(keepends=True)
-    path.write_text(lines[0] + lines[1][:-20] + '\n' + ''.join(lines[2:]))
-    with pytest.raises(ValueError, match=r'plays\.jsonl:2:'):
-        replay.read(path)
 
 
 def test_linger_evaluation_aggregates_only_measured_records():

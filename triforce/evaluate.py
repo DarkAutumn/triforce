@@ -2,7 +2,7 @@
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
         [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--act model|sample|argmax]
-        [--output PATH] [--plays PATH]
+        [--output PATH] [--replays DIR [--streams LIST] [--keyframe-frames N] [--state embed|path]]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
@@ -11,7 +11,7 @@ and RAM randomization as training), episode ``i`` seeded with ``seed + i``.  The
 (``EnvPool.play`` with its Rust copy, docs/rust-actor.md) the way the run acts (``--act model``, the default: its
 registry act mode, ``registry.act_mode``) or as told (``sample`` / ``argmax``); sampling uses Gumbel noise keyed to
 (episode seed, decision), so an episode plays the same whichever env or thread runs it.
-``--plays`` keeps every episode in a replay file (``triforce.replay``).  The checkpoint defaults to the
+``--replays`` records every episode as a replay file (``triforce.replay``).  The checkpoint defaults to the
 specialist's promoted model; records are sorted by seed.  The result goes to ``<checkpoint dir>/eval.json`` only
 for the canonical evaluation (the run's own act mode, ``--episodes-per-state 100``, ``--seed 0``, and the
 specialist the checkpoint was trained for); otherwise to ``eval[-<specialist>][-<act>][-e<N>][-s<seed>].json``,
@@ -63,11 +63,11 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import __version__, _native, registry
+from . import __version__, _native, registry, replay
 from .events import LOGS_DIR_ENV, EventLog, logged_job, write_json_atomic
 from .metrics import heart_change_total
 from .provenance import code_version, data_hash, models_header
-from .replay import ReplayWriter, header
+from .replay import ReplayDir
 from .specialist import SpecialistConfig, load_specialist
 
 
@@ -84,26 +84,21 @@ def _room_key(room) -> str:
 
 
 def _play(pool, policy, deterministic: bool, total: int, on_episode: Optional[Callable[[dict, int, int], None]],
-          writer: Optional[ReplayWriter]) -> list[dict]:
-    """Lets the eval pool play until every job ran; returns the records in completion order."""
+          replays: Optional[ReplayDir], distributions: bool) -> list[dict]:
+    """Lets the eval pool play until every job ran; returns the records in completion order.  ``replays``: the
+    folder every episode's recording (a ``replay`` event) is written to."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     records = []
-    plays: dict[int, dict] = {}
-    unwritten: dict[int, dict] = {}
-    pool.play([policy], deterministic=deterministic, record=None if writer is None else 'actions')
+    pool.play([policy], deterministic=deterministic, distributions=distributions)
     while True:
         idle = pool.wait_idle(timeout=0.1)
         for event in pool.poll_events():
             if event['type'] == 'eval':
                 records.append(event['record'])
-                unwritten[int(event['record']['seed'])] = event['record']
                 if on_episode is not None:
                     on_episode(records[-1], len(records), total)
-        if writer is not None:    # a play is reported before its episode's event
-            plays.update((int(play['job']), play) for play in pool.poll_plays())
-            for seed in sorted(plays.keys() & unwritten.keys()):
-                record = unwritten.pop(seed)
-                writer.write(plays.pop(seed), record, start_state=record['start_state'])
+            elif event['type'] == 'replay' and replays is not None:
+                replays.add(int(event['job']), event['data'])
         if idle:
             return records
 
@@ -233,14 +228,18 @@ def _visited_rooms(records: list[dict], specialist: str) -> dict:
 def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 100,
                         parallel: int = 1, seed: int = 0, deterministic: Optional[bool] = None,
                         on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
-                        threads: Optional[int] = None, states_dir=None, plays=None, events=None) -> dict:
+                        threads: Optional[int] = None, states_dir=None, events=None, replays=None,
+                        streams=(), state: str = 'embed',
+                        keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES) -> dict:
     """Plays every seed start state `episodes_per_state` times on `parallel` envs and returns the summary dict
     (see module doc).  ``on_episode(record, done, total)`` is called as each episode finishes (completion order).
     ``deterministic``: argmax (True) or sampling (False); None follows the run's act mode (``registry.act_mode``).
     ``threads``: the pool's worker threads (default min(parallel, cores)); ``states_dir``: where start states
-    resolve (default the states directory); ``plays``: a replay file to write; ``events``: an ``EventLog`` that
+    resolve (default the states directory); ``events``: an ``EventLog`` that
     gets ``eval_start`` and ``eval_progress`` (at most once a second) for the training GUI (the caller emits
-    ``eval``, ``eval_event`` fields, once it has written the result)."""
+    ``eval``, ``eval_event`` fields, once it has written the result).  ``replays``: a folder every episode is
+    recorded into as ``<seed>-<ending>.tfreplay`` (``streams``, ``state`` and ``keyframe_frames`` as
+    ``replay.record_options``)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     config = load_specialist(specialist) if isinstance(specialist, str) else specialist
     states_dir = None if states_dir is None else str(states_dir)
@@ -255,21 +254,21 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     if deterministic is None:
         deterministic = registry.act_mode(checkpoint) == 'argmax'
     checkpoint_sha1 = registry.checkpoint_sha1(checkpoint)
-    writer = None
-    if plays is not None:
+    record = None
+    if replays is not None:
         models = models_header([config.name], [policy], {config.name: str(checkpoint)}, [deterministic])
-        writer = ReplayWriter(plays, header('eval', {'config': config.to_json()}, models, states_dir))
+        record = replay.record_options(replay.meta('eval', models, specialist=config.name), streams, state,
+                                       keyframe_frames)
+        replays = ReplayDir(replays)
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
     if events is not None:
         events.emit('eval_start', checkpoint=str(checkpoint), episodes_per_state=episodes_per_state,
                     episodes=len(jobs), parallel=parallel, deterministic=deterministic)
         on_episode = _progress_events(events, on_episode)
-    try:
-        with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
-            records = _play(pool, policy, deterministic, len(jobs), on_episode, writer)
-    finally:
-        if writer is not None:
-            writer.close()
+    with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed,
+                         record=record) as pool:
+        records = _play(pool, policy, deterministic, len(jobs), on_episode, replays,
+                        bool(record and record['decisions']))
     records.sort(key=lambda r: r['seed'])
 
     count = len(records)
@@ -456,13 +455,19 @@ def main(argv=None):
     parser.add_argument('--output', default=None,
                         help="JSON output (default: <checkpoint dir>/eval.json for the canonical evaluation, else "
                              "eval[-<specialist>][-<act>][-e<N>][-s<seed>].json)")
-    parser.add_argument('--plays', default=None, help="write every episode to this replay file (triforce/replay.py)")
+    replay.add_arguments(parser, default_state='embed')
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
     parser.add_argument('--allow-incompatible-models', action='store_true',
                         help="load a model whose version differs from this code's in its first three numbers")
     args = parser.parse_args(argv)
     registry.set_allow_incompatible(args.allow_incompatible_models)
+    try:
+        streams = replay.parse_streams(args.streams)
+    except ValueError as error:
+        parser.error(str(error))
+    if streams and args.replays is None:
+        parser.error("--streams needs --replays")
 
     config = load_specialist(args.specialist)
     name = config.name
@@ -484,8 +489,9 @@ def main(argv=None):
         events = None if plan is None else EventLog(plan.directory / f'{name}.jsonl', specialist=name, run_id=run_id)
         try:
             result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
-                                         registry.act_override(args.act), threads=args.threads, plays=args.plays,
-                                         events=events)
+                                         registry.act_override(args.act), threads=args.threads, events=events,
+                                         replays=args.replays, streams=streams, state=args.state,
+                                         keyframe_frames=args.keyframe_frames)
         except Exception as error:
             if events is not None:
                 message = f"evaluation failed: {type(error).__name__}: {error}"

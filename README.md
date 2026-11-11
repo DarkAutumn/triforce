@@ -48,7 +48,7 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python -m triforce.train --specialist ow-zora --parallel 16   # curriculum: on in ow-zora.yaml
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist (promotes only with --promote)
 uv run training-gui.py                                          # live training monitor (newest logs/ folder)
-.venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--scale N, --plays PATH; keys u/+/-/p)
+.venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--scale N, --act, --power-on, --replays DIR; keys u/+/-/p)
 .venv/bin/python zelda-map.py                                   # room map + per-room eval stats of the promoted models (--rerender)
 .venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states into target/entry-states/<ts> (start/build/path/install/audit)
@@ -57,6 +57,8 @@ uv run training-gui.py                                          # live training 
 triforce promote <specialist> <run-id>
 triforce eval-chain --runs 20 --parallel 20                     # route d2first; writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
 triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 2's triforce
+triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
+cargo run --release -p triforce-tools --bin tf -- replay verify runs/replays/*.tfreplay   # replay them on the emulator alone (replay info FILE prints one)
 cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
 ```
 

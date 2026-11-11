@@ -3,9 +3,13 @@
 
     .venv/bin/python play-zelda.py                     # 4x3 = 12 games, 2x scale
     .venv/bin/python play-zelda.py 8x6 --scale 1       # COLUMNSxROWS
-    .venv/bin/python play-zelda.py 2x2 --plays runs/plays.jsonl   # keep every run in a replay file
+    .venv/bin/python play-zelda.py 2x2 --replays runs/replays     # record every run as a replay file
+    .venv/bin/python play-zelda.py 2x2 --power-on      # every game from console power on (a random idle per seed)
     .venv/bin/python play-zelda.py 3x2 --games 64      # 64 games, the 6 furthest along on screen
     .venv/bin/python play-zelda.py 3x2 --games 64 --benchmark 30   # print the frame rate on screen, then quit
+
+The models sample their actions by default (every game differs); --act model plays each model's registered act
+mode, --act argmax every model's most likely action.
 
 Keys: u uncaps the games' frame rate (as fast as they run) or caps it again at the NES's 60.1 fps; while capped,
 +/- (keypad or the keys by the number row) raise/lower the cap in steps of 10 (60.1 -> 50 -> 40, 60.1 -> 70, ...);
@@ -35,8 +39,9 @@ from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
 
-from triforce import registry
+from triforce import registry, replay
 from triforce.play_grid import FRAME_SHAPE, NES_FPS, RESULT_PAUSE, GameGrid
+from triforce.runner import RunnerError, add_power_on_arguments, power_on_options
 
 DEFAULT_GRID = '4x3'
 DEFAULT_SCALE = 2
@@ -92,8 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--stall-steps', type=int, default=DEFAULT_STALL_STEPS, metavar='N',
                         help="a game N actions into a room without damage dealt or taken may give its cell to a "
                              f"game further along; at 2N it ends STUCK (default {DEFAULT_STALL_STEPS}, 0 = off)")
-    parser.add_argument('--plays', default=None, metavar='PATH',
-                        help="keep every run in this replay file (triforce/replay.py)")
+    parser.add_argument('--act', choices=('sample', 'argmax', 'model'), default='sample',
+                        help="sample: every model samples its actions (default: games differ); argmax: every "
+                             "model's most likely action; model: each model's registered act mode")
+    add_power_on_arguments(parser)
+    replay.add_arguments(parser, default_state='path')
     parser.add_argument('--allow-incompatible-models', action='store_true',
                         help="play models whose version differs from this code's in its first three numbers")
     return parser
@@ -112,6 +120,13 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
         parser.error(f"--games must be at least the {cells} cells of the grid, got {args.games}")
     if args.fps == 60:
         args.fps = NES_FPS          # 60 always means the NES's 60.0988
+    try:
+        args.power_on = power_on_options(args)
+        args.streams = replay.parse_streams(args.streams)
+    except (RunnerError, ValueError) as error:
+        parser.error(str(error))
+    if args.streams and args.replays is None:
+        parser.error("--streams needs --replays")
     registry.set_allow_incompatible(args.allow_incompatible_models)
     return args
 
@@ -572,7 +587,9 @@ def main(argv=None) -> int:
     # for a destroyed Wayland surface, which segfaults in QtWaylandClient).
     signal.signal(signal.SIGINT, lambda *_: QTimer.singleShot(0, app.quit))
     grid = GameGrid(args.games, args.fps, args.models_dir, shown=range(cols * rows),
-                    stall_steps=args.stall_steps or None, plays=args.plays)
+                    stall_steps=args.stall_steps or None, act=args.act, power_on=args.power_on,
+                    replays=args.replays, streams=args.streams, state=args.state,
+                    keyframe_frames=args.keyframe_frames)
     window = Window(grid, cols, rows, args.scale, benchmark=args.benchmark)
     app.aboutToQuit.connect(window.shutdown)
     window.start()

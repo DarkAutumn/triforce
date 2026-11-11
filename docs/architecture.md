@@ -27,6 +27,7 @@ flowchart LR
 | `crates/pool` | Generic threaded `Pool<E: PoolEnv>` (`pool.rs`), buffer layout (`layout.rs`), frame pacing/render control (`control.rs`); `zelda/` holds the Train/Eval/ChainRun envs and pool events. |
 | `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `Policy`, `keyed_noise`, `SpecialistConfig`, `CurriculumSpec`, `Explorer`/`AcceptSpec`/`explore_states`, `route_steps`, `routes`, `route_alternates`, `game_rooms`, `families`, `specialist_for`, `paths`, `OBS_SPEC` and other constants, exception types. |
 | `crates/movie` | `TFMOVIE` input movies and `TFGOLDEN` per-frame digests. |
+| `crates/replay` | `TFREPLAY` recordings: the format (`format.rs`), `Recorder`, the reader `Replay`, `stitch`/`truncate` (`edit.rs`) and, with feature `zcore`, `Player`/`verify` (playback on the emulator alone). No dependency on `zelda` or `env`. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
 | `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
@@ -476,9 +477,10 @@ step, so following an enemy that moves away pays again, and knockback resets the
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
-  deterministic=None, on_episode=None, *, threads=None, states_dir=None, plays=None, events=None)` plays every seed start state N
+  deterministic=None, on_episode=None, *, threads=None, states_dir=None, events=None, replays=None, streams=(),
+  state='embed', keyframe_frames=600)` plays every seed start state N
   times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed; `deterministic` None
-  follows the run's act mode) and
+  follows the run's act mode; `replays`: a folder every episode is recorded into, `--replays DIR`) and
   returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate
   --specialist NAME [--act model|sample|argmax]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint
   only for a canonical run (the model's act mode, 100 episodes per state, seed 0, the checkpoint's specialist);
@@ -565,7 +567,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   (`EnvPool.play` with each specialist's Rust network and its act mode, `Policies.deterministic`; sampled actions
   use Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel` or `--threads`;
   argmax is each head's argmax; `deterministic` True/False forces one mode for all):
-  `run(route, seed) -> RunResult`, `run_many(route, seeds, on_result=None, plays=None)` (`plays`: a replay file). On each
+  `run(route, seed) -> RunResult`, `run_many(route, seeds, on_result=None, record=None, replays=None)` (`record`:
+  `replay.record_options(runner.record_meta(route), ...)`, `replays`: a `replay.ReplayDir`; every run recorded as
+  `<seed>-<ending>.tfreplay`). On each
   room entry: `game.yaml` tag → specialist → promoted checkpoint. Untagged room or missing model →
   `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (the room budget:
@@ -581,7 +585,8 @@ step, so following an enemy that moves away pays again, and knockback resets the
   (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
 - `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE | --power-on
   [--name NAME] [--delay N|random]] [--stop-at L:0xRR | step:N]
-  [--act MODE] [--checkpoint S=PATH] [--output PATH [--append]] [--plays PATH] [--harvest [DIR]]
+  [--act MODE] [--checkpoint S=PATH] [--output PATH [--append]] [--replays DIR [--streams LIST]
+  [--keyframe-frames N] [--state embed|path]] [--harvest [DIR]]
   [--logs-dir DIR | --no-log]` → success
   rate and per-room failure counts (`runner.chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). Runs go to `--output` (default
@@ -624,6 +629,55 @@ step, so following an enemy that moves away pays again, and knockback resets the
   specialist handed over (positions too; enemies spawn as the entry draws them). Units granted in the previous room
   are taken out of the saved snapshot, as the game takes them back on leaving; entry-state builds do the same.
   Refresh the harvest after promoting an upstream specialist.
+
+## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
+
+A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 0) is one run or episode, exact enough to play back bit for
+bit on the emulator alone: no env, reward or model code is needed, so a replay outlives changes to all three.
+The file layout is in `crates/replay/src/lib.rs`. It holds:
+
+| Section | What |
+|---|---|
+| META | JSON: what played (`triforce` version, `code`, `data`, `kind` chain/eval/train, `route`, `stop_at`, `models`), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), and the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions`) |
+| SOURCE | where the machine starts: console power on (name, idle delay), a state file by name (and its hash), or the embedded START state |
+| INPUTS | the controller byte of every frame, run-length encoded |
+| EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
+| CHEATS | cheated items spent: `(frame, item, count)` |
+| STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, so a chain can continue from it |
+| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary) |
+| REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
+| DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (91 log-probabilities: kind[7], direction[kind][8], duration[kind][4]) |
+
+A record at frame `k` applies after input frame `k - 1` and before input frame `k`.
+
+- **Recording.** `PoolNes` (`crates/pool/src/zelda/nes.rs`) is the one place every real frame and poke of a pool
+  env passes; with `EnvPool(record=replay.record_options(meta, streams, state, keyframe_frames))` it feeds a
+  `replay::Recorder` (look-ahead frames are cut back out), the envs add cheats, events, keyframes, rewards and
+  decisions, and each finished run or episode is reported as a `replay` event (`{'type': 'replay', 'env', 'job',
+  'data'}`; a run that ends in an error once its start has loaded, e.g. a room without a model, is recorded
+  too, with ending `error`; one whose start can't be loaded records nothing). `state='embed'` carries the start state,
+  `'path'` names it. `replay.ReplayDir(path, only=None)` writes them as `<seed:08d>-<ending>.tfreplay`
+  (`ending`: `win`, `death`, `stuck`, `other`, `error`; `only` keeps the named endings). Command lines:
+  `--replays DIR [--streams rewards,decisions,keyframes] [--keyframe-frames N] [--state embed|path]` on
+  `triforce eval-chain`, `triforce.evaluate` and `play-zelda.py`; `zelda-headless.py OUT` always records.
+  Recording rewards turns the look-ahead on for that run (rewards need it), so its steps are scored as training
+  scores them; a chain run's observations, inputs, edits and result are the same with rewards on or off
+  (`crates/pool/tests/zelda.rs`).
+- **Reading.** `_native.Replay(data)`: `version`, `frames`, `ending`, `meta`, `source`, `inputs()`, `edits()`,
+  `cheats()`, `events()`, `rewards()`, `decisions()`, `states()`, `end_ram()`. `tf replay info FILE` prints the
+  same.
+- **Playing.** `_native.ReplayPlayer(data, states_dir=None)` (`step(frames, render)`, `seek(frame)`: from the
+  nearest state at or before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
+  FILE...` plays the whole replay and compares the machine with every recorded state (`ReplayError` naming the
+  frame where it diverges). `run.write_video` renders a replay to mp4.
+- **Cutting and joining.** `replay_truncate(data, state_index)` ends a replay at one of its keyframes or
+  checkpoints; a chain started from that state (`Route.load(checkpoint=replay.states()[i])`) records a replay
+  whose embedded START is that state; `replay_stitch(a, b)` joins the two (frames shifted, a SEGMENT event and a
+  CHECKPOINT state at the boundary, reward terms renumbered) when `b` starts in the machine `a` ends in and both
+  were played by the same models with the same streams.
+- **Compatibility.** `REPLAY_VERSION` is its own integer, bumped only when an existing replay can no longer be
+  replayed bit for bit; a reader refuses a newer version by name. `corpus/replays/` holds recorded replays that
+  must keep verifying (`AGENTS.md`, Versioning).
 
 ## Entry states (`entry_states.py`)
 
