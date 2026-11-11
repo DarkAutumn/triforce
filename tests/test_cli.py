@@ -1,12 +1,14 @@
 """The ``triforce`` command (``triforce.cli.main``) in-process: list, promote, argument errors and passthrough."""
 
 import json
+import shutil
 
 import pytest
 
+import triforce
 from triforce import cli, registry
 from triforce.model import ModelConfig
-from triforce.runner import RunnerError
+from triforce.runner import Policies, RunnerError
 from triforce.specialist import list_specialists
 
 from .conftest import REPO_STATES_DIR, seeded_network
@@ -164,3 +166,51 @@ def test_eval_chain_keeps_the_runs_that_finished_before_a_failure(models_dir, tm
     assert len(output.read_text().splitlines()) == 2
     assert json.loads(cli.meta_path(output).read_text())['batches'] == [{'first_seed': 0, 'runs': 3,
                                                                           'finished': False}]
+
+
+def test_an_incompatible_model_plays_only_with_the_override(models_dir, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(registry.ALLOW_INCOMPATIBLE_ENV, '0')       # restored afterwards whatever the CLI sets
+    root = tmp_path / 'models'
+    shutil.copytree(models_dir, root)
+    registry.write_model_version(registry.promoted_checkpoint('goriya', root), '1.2.9.9')
+    with pytest.raises(registry.IncompatibleModelError, match='goriya.*model version 1.2.9.9'):
+        Policies(root)
+    chain = ['--models-dir', str(root), 'eval-chain', '--runs', '1', '--stop-at', '0:0x77', '--no-log']
+    assert cli.main([*chain, '--output', str(tmp_path / 'a.jsonl')]) == 2
+    assert 'pass --allow-incompatible-models' in capsys.readouterr().err
+    assert not (tmp_path / 'a.jsonl').exists()
+    with pytest.warns(UserWarning, match='model version 1.2.9.9 is not compatible'):
+        assert cli.main([*chain, '--allow-incompatible-models', '--output', str(tmp_path / 'b.jsonl')]) == 0
+    provenance = json.loads(cli.meta_path(tmp_path / 'b.jsonl').read_text())['provenance']
+    versions = {model['name']: model['version'] for model in provenance['models']}
+    assert versions['goriya'] == '1.2.9.9' and versions['ow-start'] == provenance['version'] == triforce.__version__
+    monkeypatch.setenv(registry.ALLOW_INCOMPATIBLE_ENV, '0')
+    with pytest.warns(UserWarning, match='model version 1.2.9.9'):       # the flag before the command works too
+        assert cli.main(['--allow-incompatible-models', *chain, '--output', str(tmp_path / 'c.jsonl')]) == 0
+
+
+def test_stamp_writes_missing_versions_and_refuses_to_change_one(tmp_path, network, capsys):
+    for name, run_id in (('ow-start', 'a'), ('ow-start', 'b'), ('goriya', 'x')):
+        checkpoint = registry.save_checkpoint(name, run_id, network, root=tmp_path)
+        (checkpoint.parent / registry.VERSION_NAME).unlink()
+    registry.promote('ow-start', 'b', root=tmp_path)
+    registry.promote('goriya', 'x', root=tmp_path)
+    sha1 = registry.checkpoint_sha1(tmp_path / 'ow-start' / 'b')
+    stamp = ['--models-dir', str(tmp_path), 'stamp']
+    assert cli.main(stamp) == 0                                 # every promoted run, this code's version
+    assert capsys.readouterr().out.splitlines() == [f'goriya/x: {triforce.__version__}',
+                                                    f'ow-start/b: {triforce.__version__}']
+    assert registry.model_version(tmp_path / 'ow-start' / 'b') == triforce.__version__
+    assert registry.model_version(tmp_path / 'ow-start' / 'a') is None
+    assert registry.checkpoint_sha1(tmp_path / 'ow-start' / 'b') == sha1        # the checkpoint is not rewritten
+    assert cli.main([*stamp, 'ow-start', 'a', '--version', '1.2.0.4']) == 0
+    assert registry.model_version(tmp_path / 'ow-start' / 'a') == '1.2.0.4'
+    assert cli.main([*stamp, 'ow-start', 'a']) == 1             # stamped otherwise: refused, both named
+    error = capsys.readouterr().err
+    assert 'ow-start/a is stamped 1.2.0.4' in error and triforce.__version__ in error
+    assert registry.model_version(tmp_path / 'ow-start' / 'a') == '1.2.0.4'
+    assert cli.main([*stamp, 'ow-start', 'a', '--force']) == 0
+    assert registry.model_version(tmp_path / 'ow-start' / 'a') == triforce.__version__
+    assert cli.main([*stamp, 'ow-start', 'nope']) == 1
+    assert cli.main([*stamp, 'zol']) == 1                       # nothing promoted
+    assert cli.main([*stamp, 'goriya', '--version', '1.3']) == 2

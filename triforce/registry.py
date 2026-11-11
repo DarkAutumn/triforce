@@ -18,6 +18,13 @@ hash (retrained or replaced in place) or the file is the old one-word format, ``
 Checkpoints load with ``torch.load(weights_only=True)`` (no pickled code runs); ``save_checkpoint`` keeps
 ``metrics`` plain floats/ints so that stays true.
 
+Every run dir also carries ``version``: the triforce version (``triforce.__version__``) that saved the checkpoint,
+written by ``save_checkpoint``.  A model whose first three numbers differ from the code's is refused
+(``require_compatible``, called wherever a model is loaded to act or to continue training) unless
+``$TRIFORCE_ALLOW_INCOMPATIBLE_MODELS`` is ``1`` (``--allow-incompatible-models``); ``triforce stamp`` stamps runs
+known to be compatible.  The stamp is a file of its own because ``act`` and ``eval.json`` bind to ``ckpt.pt``'s
+sha1: stamping must not rewrite the checkpoint.
+
 CLI: ``python -m triforce.registry list <specialist>`` / ``promote <specialist> <run-id> [--act MODE]``.
 """
 
@@ -34,12 +41,15 @@ from typing import Optional
 
 import torch
 
+from . import __version__
 from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
 
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
+ALLOW_INCOMPATIBLE_ENV = 'TRIFORCE_ALLOW_INCOMPATIBLE_MODELS'
 CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
 ACT_NAME = 'act'
+VERSION_NAME = 'version'
 ACT_MODES = ('sample', 'argmax')
 ACT_CHOICES = ('model',) + ACT_MODES
 
@@ -54,6 +64,10 @@ def act_override(choice: str) -> Optional[bool]:
 
 class SchemaMismatchError(ValueError):
     """A checkpoint was saved with a different observation or action schema."""
+
+
+class IncompatibleModelError(ValueError):
+    """A model's version is not compatible with this code's (the first three numbers differ, or it has none)."""
 
 
 def obs_schema_version() -> int:
@@ -107,6 +121,7 @@ def save_checkpoint(specialist: str, run_id: str, network, optimizer=None, *, it
     tmp = path.with_suffix('.tmp')
     torch.save(checkpoint, tmp)
     os.replace(tmp, path)
+    write_model_version(path)
     return path
 
 
@@ -128,6 +143,52 @@ def _plain_metrics(metrics: dict) -> dict:
             return plain(value.item())
         raise TypeError(f"checkpoint metric value {value!r} ({type(value).__name__}) is not a plain number")
     return {str(key): plain(value) for key, value in metrics.items()}
+
+
+def model_version(checkpoint) -> Optional[str]:
+    """The triforce version the model in ``checkpoint`` (file or run dir) was saved or stamped with: its run dir's
+    ``version`` file, None when there is none."""
+    try:
+        return (_resolve(checkpoint).parent / VERSION_NAME).read_text(encoding='utf-8').strip()
+    except FileNotFoundError:
+        return None
+
+
+def write_model_version(checkpoint, version: str = __version__) -> Path:
+    """Stamps the run dir of ``checkpoint`` (file or run dir) with ``version`` (written atomically); returns the
+    ``version`` file."""
+    path = _resolve(checkpoint).parent / VERSION_NAME
+    tmp = path.with_name(f'.{VERSION_NAME}.{os.getpid()}.tmp')
+    tmp.write_text(version + '\n', encoding='utf-8')
+    os.replace(tmp, path)
+    return path
+
+
+def compatible(a: str, b: str) -> bool:
+    """Whether two versions can share models: their first three numbers (MAJOR.MINOR.COMPAT) are equal."""
+    return a.split('.')[:3] == b.split('.')[:3]
+
+
+def set_allow_incompatible(on: bool) -> None:
+    """``--allow-incompatible-models``: when ``on``, incompatible models load with a warning, here and in every
+    child process (the environment variable is inherited).  Never switches it back off."""
+    if on:
+        os.environ[ALLOW_INCOMPATIBLE_ENV] = '1'
+
+
+def require_compatible(checkpoint) -> None:
+    """Raises ``IncompatibleModelError`` unless the model in ``checkpoint`` (file or run dir) carries a version
+    compatible with this code's; with ``$TRIFORCE_ALLOW_INCOMPATIBLE_MODELS=1`` it warns instead."""
+    found = model_version(checkpoint)
+    if found is not None and compatible(found, __version__):
+        return
+    message = (f"{_resolve(checkpoint)}: model version {found or 'unversioned'} is not compatible with triforce "
+               f"{__version__} (the first three numbers must match)")
+    if os.environ.get(ALLOW_INCOMPATIBLE_ENV) == '1':
+        warnings.warn(message, stacklevel=2)
+        return
+    raise IncompatibleModelError(f"{message}; stamp a model known to be compatible with `triforce stamp`, or pass "
+                                 "--allow-incompatible-models")
 
 
 def _resolve(path) -> Path:

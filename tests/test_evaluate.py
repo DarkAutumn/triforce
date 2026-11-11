@@ -11,7 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from triforce import _native, evaluate, registry, replay
+import triforce
+from triforce import _native, evaluate, provenance, registry, replay
 from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _start_health_fraction, _visited_rooms,
                                default_output, evaluate_specialist, format_report, read_evaluation, write_result)
 from triforce.model import ModelConfig
@@ -141,7 +142,8 @@ def test_evaluation_names_its_inputs(states_dir, tmp_path):
     assert (result['act'], result['deterministic']) == ('argmax', True)
     assert result['checkpoint_sha1'] == registry.checkpoint_sha1(checkpoint)
     assert result['model_hash'] == f"{registry.load_model(checkpoint)[0].to_native().hash:016x}"
-    assert result['code'] == replay.code_version() and result['data'] == replay.data_hash()
+    assert result['code'] == provenance.code_version() and result['data'] == provenance.data_hash()
+    assert result['version'] == triforce.__version__
     again = _native.SpecialistConfig.from_json(json.dumps(result['config']))
     assert (again.name, again.max_steps, again.start_states) == ('ow-start', 3, ['start'])
     assert json.loads(json.dumps(result)) == result

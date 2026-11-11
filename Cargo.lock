@@ -253,7 +253,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "env"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "indexmap",
  "parking_lot",
@@ -475,7 +475,7 @@ dependencies = [
 
 [[package]]
 name = "movie"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "anyhow",
  "blake3",
@@ -606,7 +606,7 @@ dependencies = [
 
 [[package]]
 name = "policy"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -614,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "pool"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "env",
  "parking_lot",
@@ -994,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "test-rom"
-version = "0.1.0"
+version = "1.3.1"
 
 [[package]]
 name = "thiserror"
@@ -1057,7 +1057,7 @@ checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "triforce-py"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "env",
  "indexmap",
@@ -1077,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "triforce-tools"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1133,7 +1133,7 @@ checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 
 [[package]]
 name = "zcore"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -1150,7 +1150,7 @@ dependencies = [
 
 [[package]]
 name = "zelda"
-version = "0.1.0"
+version = "1.3.1"
 dependencies = [
  "indexmap",
  "movie",

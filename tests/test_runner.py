@@ -14,7 +14,8 @@ import numpy as np
 import pytest
 import torch
 
-from triforce import _native, registry, replay, run
+import triforce
+from triforce import _native, provenance as provenance_module, registry, replay, run
 from triforce.runner import Policies, Route, RoomRecord, Runner, RunnerError, RunResult, chain_summary, \
     parse_location, write_jsonl
 from triforce.zelda_enums import ActionKind, MapLocation
@@ -76,7 +77,9 @@ def test_eval_chain_summary_names_every_model_and_its_act_mode(models_dir, tmp_p
     assert models['zol']['checkpoint_sha1'] == registry.checkpoint_sha1(other)
     assert (provenance['route'], provenance['start_from'], provenance['stop_at']) == ('d2first', None, '0:0x77')
     assert provenance['first_seed'] == 0 and provenance['runs'] == 1
-    assert provenance['code'] == replay.code_version() and provenance['data'] == replay.data_hash()
+    assert provenance['code'] == provenance_module.code_version()
+    assert provenance['data'] == provenance_module.data_hash() and provenance['version'] == triforce.__version__
+    assert models['zol']['version'] == models['ow-start']['version'] == triforce.__version__
 
 
 def test_run_result_round_trips_the_native_dict(tmp_path):

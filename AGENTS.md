@@ -67,6 +67,31 @@ up with ideas, test them, keep what helps, and log everything.
   chains, and a penalty like that could also discourage required bombing later.
 - Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (`backlog.md`, Driver section).
 
+## Versioning (Lee, Nov 11)
+
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.3.1.0`). It is the single source:
+  `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
+  is its first three numbers (`tests/test_version.py` checks all of them).
+  - `MAJOR` changes only when Lee says so.
+  - `MINOR` is the number of dungeons the route completes (1.3 = three); +1 per dungeon added, up to .9.
+  - `COMPAT` +1 on any change that makes previously trained models unusable (observation layout or meaning, action
+    space, network architecture, anything a loaded model would misread); it resets `REV` to 0.
+  - `REV` +1 for a compatible change to rewards, env or training code, or when the promoted models are replaced.
+  - Doc, GUI and tool-only changes bump nothing. A bump is its own line in the commit that causes it.
+- **Every run dir carries a `version` file**, written when the checkpoint is saved. Loading a model whose first three
+  numbers differ from the code's (or that has no stamp) is refused: chains, evaluation, `--load`. Override with
+  `--allow-incompatible-models` (or `TRIFORCE_ALLOW_INCOMPATIBLE_MODELS=1`); stamp runs known to be compatible with
+  `triforce stamp [SPECIALIST [RUN_ID]] [--version V] [--force]` (default: every promoted run, the code's version).
+- Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; Lee will pick a backup strategy).
+- **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
+  independent of the repo version. It is bumped only when an existing replay can no longer be replayed bit-exactly
+  (a container change the reader does not handle, a zcore behaviour change, a dropped state decoder); the reader
+  keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
+  test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
+  ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
+  refusing it (replays embed states). Play (play-zelda, zelda-headless, the golden path) is stochastic by default
+  (`--act sample`; `--act argmax|model` are options); evaluation follows each model's act mode.
+
 ## Game mechanics that matter for training
 
 - **Monsters don't always chase Link; they often chase "shadow Link"** (Lee; `docs/ram-catalog.md` `$60–$62`,

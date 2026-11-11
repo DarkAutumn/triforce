@@ -1,4 +1,4 @@
-"""The ``triforce`` command: promote, eval-chain, list, and shortcuts to train/run/play."""
+"""The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play."""
 
 import argparse
 import json
@@ -219,17 +219,65 @@ def _cmd_list(args):
     return 0
 
 
+def _cmd_stamp(args):
+    """``triforce stamp``: writes the ``version`` file of the given run, or of every promoted run."""
+    # pylint: disable=import-outside-toplevel
+    import re
+    from . import __version__
+    from .registry import checkpoint_path, model_version, promoted_run, write_model_version
+    from .specialist import list_specialists
+    version = args.version or __version__
+    if not re.fullmatch(r'\d+(\.\d+){3}', version):
+        print(f"triforce stamp: error: --version {version!r} is not MAJOR.MINOR.COMPAT.REV", file=sys.stderr)
+        return 2
+    if args.specialist is None:
+        runs = []
+        for name in list_specialists():
+            try:
+                runs.append((name, promoted_run(name, args.models_dir)))
+            except FileNotFoundError:
+                continue
+    else:
+        try:
+            runs = [(args.specialist, args.run_id or promoted_run(args.specialist, args.models_dir))]
+        except FileNotFoundError as error:
+            print(f"triforce stamp: error: {error}", file=sys.stderr)
+            return 1
+    failed = False
+    for name, run_id in runs:
+        checkpoint = checkpoint_path(name, run_id, args.models_dir)
+        found = model_version(checkpoint)
+        if not checkpoint.is_file():
+            print(f"triforce stamp: error: {name}/{run_id}: no checkpoint at {checkpoint}", file=sys.stderr)
+            failed = True
+        elif found is not None and found != version and not args.force:
+            print(f"triforce stamp: error: {name}/{run_id} is stamped {found}, not {version} (--force overwrites)",
+                  file=sys.stderr)
+            failed = True
+        else:
+            if found != version:
+                write_model_version(checkpoint, version)
+            print(f"{name}/{run_id}: {version}")
+    return 1 if failed else 0
+
+
 def main(argv=None):
     """Entry point for the ``triforce`` console script."""
     argv = list(sys.argv[1:] if argv is None else argv)
     passthrough = {'train': ('triforce.train', 'cli'), 'run': ('triforce.run', 'main'),
                    'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate ...` forwards the rest to the module's own CLI.
-    models_dir, rest = None, argv
-    if rest and rest[0] == '--models-dir' and len(rest) > 1:
-        models_dir, rest = rest[1], rest[2:]
-    elif rest and rest[0].startswith('--models-dir='):
-        models_dir, rest = rest[0].split('=', 1)[1], rest[1:]
+    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate ...` forwards the rest to
+    # the module's own CLI.
+    models_dir, allow, rest = None, False, argv
+    while rest:
+        if rest[0] == '--models-dir' and len(rest) > 1:
+            models_dir, rest = rest[1], rest[2:]
+        elif rest[0].startswith('--models-dir='):
+            models_dir, rest = rest[0].split('=', 1)[1], rest[1:]
+        elif rest[0] == '--allow-incompatible-models':
+            allow, rest = True, rest[1:]
+        else:
+            break
     if rest and rest[0] in passthrough:
         import importlib  # pylint: disable=import-outside-toplevel
         module, entry = passthrough[rest[0]]
@@ -239,13 +287,18 @@ def main(argv=None):
                 print("triforce: error: play has no --models-dir (it plays one game, no models)", file=sys.stderr)
                 return 2
             forwarded = ['--models-dir', models_dir, *forwarded]
+        if allow:
+            from .registry import set_allow_incompatible  # pylint: disable=import-outside-toplevel
+            set_allow_incompatible(True)
         return getattr(importlib.import_module(module), entry)(forwarded)
     from ._native import DEFAULT_ROUTE  # pylint: disable=import-outside-toplevel
     from .paths import HARVESTED_DIR  # pylint: disable=import-outside-toplevel
-    from .registry import ACT_CHOICES, ACT_MODES  # pylint: disable=import-outside-toplevel
+    from .registry import ACT_CHOICES, ACT_MODES, set_allow_incompatible  # pylint: disable=import-outside-toplevel
 
+    allow_help = "load models whose version differs from this code's in its first three numbers"
     parser = argparse.ArgumentParser(prog='triforce')
     parser.add_argument('--models-dir', default=None)
+    parser.add_argument('--allow-incompatible-models', action='store_true', help=allow_help)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('train', help="python -m triforce.train ...")
     sub.add_parser('run', help="python -m triforce.run ...")
@@ -257,6 +310,13 @@ def main(argv=None):
     promote.add_argument('specialist')
     promote.add_argument('run_id')
     promote.add_argument('--act', choices=ACT_MODES, default=None, help="also set how the run acts")
+
+    stamp = sub.add_parser('stamp', help="stamp runs with the triforce version their models are compatible with "
+                                         "(default: every promoted run, this code's version)")
+    stamp.add_argument('specialist', nargs='?', default=None, help="default: every specialist with a promoted run")
+    stamp.add_argument('run_id', nargs='?', default=None, help="default: the promoted run")
+    stamp.add_argument('--version', default=None, help="default: this code's version")
+    stamp.add_argument('--force', action='store_true', help="overwrite a different existing stamp")
 
     chain = sub.add_parser('eval-chain', help="run the route N times; the milestone metric")
     chain.add_argument('--route', default=DEFAULT_ROUTE)
@@ -288,18 +348,22 @@ def main(argv=None):
                             "by a config with harvested_fraction > 0, or one without seed states)")
     chain.add_argument('--logs-dir', default=None, help="event logs root (default $TRIFORCE_LOGS_DIR or <repo>/logs)")
     chain.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
+    chain.add_argument('--allow-incompatible-models', action='store_true', default=argparse.SUPPRESS,
+                       help=allow_help)
 
     args = parser.parse_args(argv)
+    set_allow_incompatible(args.allow_incompatible_models)
     if args.command in passthrough:     # reached only through options the passthrough above doesn't take
         parser.error(f"{args.command}: put its options after the command (triforce {args.command} --help)")
     if args.command == 'eval-chain':
+        from .registry import IncompatibleModelError  # pylint: disable=import-outside-toplevel
         from .runner import RunnerError  # pylint: disable=import-outside-toplevel
         try:
             return _cmd_eval_chain(args)
-        except RunnerError as error:
+        except (RunnerError, IncompatibleModelError) as error:
             print(f"triforce eval-chain: error: {error}", file=sys.stderr)
             return 2
-    return {'promote': _cmd_promote, 'list': _cmd_list}[args.command](args)
+    return {'promote': _cmd_promote, 'list': _cmd_list, 'stamp': _cmd_stamp}[args.command](args)
 
 
 if __name__ == '__main__':

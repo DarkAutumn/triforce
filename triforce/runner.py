@@ -21,10 +21,12 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import torch
 
-from . import _native
+from . import __version__, _native
 from .paths import STATES_DIR
-from .registry import CHECKPOINT_NAME, act_mode, checkpoint_sha1, load_model, promoted_checkpoint
-from .replay import ReplayWriter, code_version, data_hash, header, location_text, models_header
+from .provenance import code_version, data_hash, location_text, models_header
+from .registry import (CHECKPOINT_NAME, act_mode, checkpoint_sha1, load_model, promoted_checkpoint,
+                       require_compatible)
+from .replay import ReplayWriter, header
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
 
@@ -240,6 +242,7 @@ class Policies:
                     except FileNotFoundError as err:
                         self.missing[name] = str(err)
                         continue
+                require_compatible(path)
                 with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
                     network, _ = load_model(path)
                 self.checkpoints[name] = str(path)
@@ -392,7 +395,8 @@ class Runner:
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
         return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
                 'stop_at': location_text(route.terminal), 'max_steps': self.max_steps, 'models': models,
-                'missing': dict(sorted(policies.missing.items())), 'code': code_version(), 'data': data_hash()}
+                'missing': dict(sorted(policies.missing.items())), 'version': __version__, 'code': code_version(),
+                'data': data_hash()}
 
     def run_many(self, route: Route, seeds: Sequence[int],
                  on_result: Optional[Callable[[RunResult], None]] = None, plays=None) -> List[RunResult]:

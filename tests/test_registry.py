@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 
+import triforce
 from triforce import _native, registry
 from triforce.evaluate import evaluate_specialist
 from triforce.model import NOISE_SIZE, ModelConfig, ZeldaPolicy, obs_spec_from_space, widen_policy
@@ -305,3 +306,26 @@ def test_checkpoints_load_safely_with_numpy_metrics_and_refuse_pickled_code(tmp_
     with pytest.raises(pickle.UnpicklingError, match='refusing'):
         registry.load_checkpoint(evil)
     assert not (tmp_path / 'pwned').exists()
+
+
+def test_a_saved_checkpoint_is_stamped_and_only_a_compatible_model_loads(tmp_path, monkeypatch):
+    monkeypatch.setenv(registry.ALLOW_INCOMPATIBLE_ENV, '0')
+    path = registry.save_checkpoint('d1-test', 'a', _trained()[0], root=tmp_path)
+    assert registry.model_version(path) == registry.model_version(path.parent) == triforce.__version__
+    registry.require_compatible(path)
+    major, minor, compat, _ = triforce.__version__.split('.')
+    registry.write_model_version(path, f'{major}.{minor}.{compat}.7')        # another revision: compatible
+    registry.require_compatible(path.parent)
+    registry.write_model_version(path, '1.2.9.9')
+    with pytest.raises(registry.IncompatibleModelError, match=r"model version 1\.2\.9\.9 is not compatible"):
+        registry.require_compatible(path)
+    (path.parent / registry.VERSION_NAME).unlink()
+    assert registry.model_version(path) is None
+    with pytest.raises(registry.IncompatibleModelError, match="model version unversioned.*triforce stamp"):
+        registry.require_compatible(path)
+    registry.set_allow_incompatible(False)                                   # never switches anything on
+    with pytest.raises(registry.IncompatibleModelError):
+        registry.require_compatible(path)
+    monkeypatch.setenv(registry.ALLOW_INCOMPATIBLE_ENV, '1')
+    with pytest.warns(UserWarning, match='unversioned is not compatible'):
+        registry.require_compatible(path)

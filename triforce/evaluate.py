@@ -63,10 +63,11 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import _native, registry
+from . import __version__, _native, registry
 from .events import LOGS_DIR_ENV, EventLog, logged_job, write_json_atomic
 from .metrics import heart_change_total
-from .replay import ReplayWriter, code_version, data_hash, header, models_header
+from .provenance import code_version, data_hash, models_header
+from .replay import ReplayWriter, header
 from .specialist import SpecialistConfig, load_specialist
 
 
@@ -249,6 +250,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     episode_states = [state for state in states for _ in range(episodes_per_state)]
     jobs = [(state, seed + index) for index, state in enumerate(episode_states)]
 
+    registry.require_compatible(checkpoint)
     policy = registry.load_model(checkpoint)[0].to_native()
     if deterministic is None:
         deterministic = registry.act_mode(checkpoint) == 'argmax'
@@ -277,7 +279,8 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'specialist': config.name, 'checkpoint': str(checkpoint), 'episodes_per_state': episodes_per_state,
         'seed': seed, 'deterministic': deterministic, 'act': 'argmax' if deterministic else 'sample',
         'checkpoint_sha1': checkpoint_sha1, 'model_hash': f'{policy.hash:016x}',
-        'config': json.loads(config.to_json()), 'code': code_version(), 'data': data_hash(),
+        'config': json.loads(config.to_json()), 'version': __version__, 'code': code_version(),
+        'data': data_hash(),
         'episodes': count,
         'success_rate': sum(r['success'] for r in records) / count,
         'mean_health_fraction': sum(r['health'] / r['max_health'] if r['max_health'] else 0.0
@@ -456,7 +459,10 @@ def main(argv=None):
     parser.add_argument('--plays', default=None, help="write every episode to this replay file (triforce/replay.py)")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
+    parser.add_argument('--allow-incompatible-models', action='store_true',
+                        help="load a model whose version differs from this code's in its first three numbers")
     args = parser.parse_args(argv)
+    registry.set_allow_incompatible(args.allow_incompatible_models)
 
     config = load_specialist(args.specialist)
     name = config.name

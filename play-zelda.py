@@ -35,6 +35,7 @@ from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
 
+from triforce import registry
 from triforce.play_grid import FRAME_SHAPE, NES_FPS, RESULT_PAUSE, GameGrid
 
 DEFAULT_GRID = '4x3'
@@ -93,6 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
                              f"game further along; at 2N it ends STUCK (default {DEFAULT_STALL_STEPS}, 0 = off)")
     parser.add_argument('--plays', default=None, metavar='PATH',
                         help="keep every run in this replay file (triforce/replay.py)")
+    parser.add_argument('--allow-incompatible-models', action='store_true',
+                        help="play models whose version differs from this code's in its first three numbers")
     return parser
 
 
@@ -109,6 +112,7 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
         parser.error(f"--games must be at least the {cells} cells of the grid, got {args.games}")
     if args.fps == 60:
         args.fps = NES_FPS          # 60 always means the NES's 60.0988
+    registry.set_allow_incompatible(args.allow_incompatible_models)
     return args
 
 

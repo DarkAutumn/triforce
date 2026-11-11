@@ -189,6 +189,7 @@ mod _native {
     fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {
         use env::observation as obs;
         let py = m.py();
+        m.add("VERSION", include_str!("../../../VERSION").trim())?;
         m.add("OBS_SCHEMA_VERSION", obs::OBS_SCHEMA_VERSION)?;
         m.add(
             "ACTION_SCHEMA_VERSION",

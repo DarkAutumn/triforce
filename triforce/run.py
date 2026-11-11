@@ -18,7 +18,7 @@ from typing import List, Optional
 import numpy as np
 
 from . import _native
-from .registry import ACT_CHOICES, act_override
+from .registry import ACT_CHOICES, act_override, set_allow_incompatible
 from .runner import Route, Runner, RunResult, parse_location, parse_overrides, write_jsonl
 
 FRAME_RATE = 60.0988
@@ -152,7 +152,10 @@ def main(argv=None):
     parser.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH',
                         help="use this checkpoint instead of the promoted one")
     parser.add_argument('--output', default=os.path.join('runs', 'runner.jsonl'))
+    parser.add_argument('--allow-incompatible-models', action='store_true',
+                        help="play models whose version differs from this code's in its first three numbers")
     args = parser.parse_args(argv)
+    set_allow_incompatible(args.allow_incompatible_models)
 
     if args.video:
         ffmpeg_command(args.video)      # fail before playing when ffmpeg is missing
