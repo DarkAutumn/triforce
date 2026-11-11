@@ -1,9 +1,121 @@
-# Training and evaluation throughput (Nov 5–9)
+# Training and evaluation throughput (Nov 5–10)
 
 How fast the Rust port trains and evaluates compared with the old stack, what limited it, what changed, and what
 limits it now.
 Everything here is real `triforce.train` runs on the workstation: i9-10900X (10 cores, 20 hardware threads),
 RTX 4090, idle unless noted.
+
+## Review fix-up re-profile (Nov 10)
+
+About 155 commits fixed the whole-repo code review (`ab17fc5..aa40d8e`, `target/review-progress.md`). Several add
+work per step by design (the jump-table object classifier F067, exact attack masks with measured BorderBounds
+F182/N006, legal-step target descent F132, per-room bomb masks F016, the mouth flag F094, off-grid alignment and the
+held attack press F160/N003, marginal look-ahead credit F054, the linger rebaseline F154, the selector F185) or per
+iteration (in-flight metrics and cohorts F071, GPU recompute F019, `tensor_split` F167, the all-or-nothing snapshot
+F084). Before the retrain everything was profiled again, old (`ab17fc5`, worktree `../triforce2-better`) against new
+(`aa40d8e`), with the machine partly busy (state builds, then explores) for the first half, quiet for the second.
+Load-insensitive measures first: per-thread user instructions and cycles (`perf_event_open` around each
+`Game.act`), `perf record` user-cycle shares, py-spy for Python; wall-clock steps/s only on the quiet machine.
+Scripts are throwaway (`/tmp/perf`).
+
+### What changed per measure
+
+**Emulator** (`tf bench --recordings target/bench-runs`, 20 recorded runs, 91,000 headless window frames, perf
+stat, two interleaved runs each): 112.917G vs 112.927G user instructions (+0.01%), 46.0G vs 46.0G cycles,
+8,220–8,419 vs 8,301–8,389 frames/s. The Phase 12 zcore changes cost nothing.
+
+**Env stepping** (`env_speed.py`'s workload: all 295 start states × 60 seeded random legal steps, 2 repeats, 2
+interleaved runs per build; the same `.state` files for both; perf counters per call). Instructions are the
+load-insensitive number (cycles moved up to ±20% per family with the builders running):
+
+| family | steps (new) | frames/step old → new | Minstr/frame | Mcyc/frame | Minstr/step | Δ instr/step |
+|---|---:|---:|---:|---:|---:|---:|
+| stalfos-keese-gel | 10,080 | 16.92 → 17.51 | 1.87 → 1.82 | 0.79 → 0.78 | 31.6 → 31.8 | +1% |
+| ow-octorok | 9,262 | 16.84 → 18.74 | 1.91 → 1.86 | 0.85 → 0.83 | 32.2 → 34.9 | +8% |
+| ow-zora | 7,200 | 16.71 → 18.19 | 2.11 → 2.00 | 0.93 → 0.89 | 35.2 → 36.5 | +4% |
+| darknut | 5,040 | 13.75 → 16.49 | 3.26 → 2.83 | 1.42 → 1.23 | 44.8 → 46.6 | +4% |
+| ow-moblin | 5,756 | 16.16 → 17.97 | 2.36 → 2.27 | 1.06 → 1.02 | 38.1 → 40.7 | +7% |
+| zol | 4,320 | 15.48 → 17.61 | 2.61 → 2.52 | 1.13 → 1.09 | 40.5 → 44.4 | +10% |
+| ow-tektite | 4,320 | 17.94 → 19.55 | 1.78 → 1.70 | 0.77 → 0.79 | 31.9 → 33.3 | +5% |
+| trap-room | 3,420 | 14.63 → 16.14 | 2.39 → 2.39 | 1.03 → 1.03 | 35.0 → 38.5 | +10% |
+| d2-rope | 4,246 | 17.66 → 18.50 | 1.53 → 1.54 | 0.64 → 0.65 | 27.0 → 28.6 | +6% |
+| goriya | 3,446 | 14.83 → 15.69 | 2.13 → 2.12 | 0.92 → 0.92 | 31.6 → 33.2 | +5% |
+| ow-boulder | 2,160 | 18.23 → 16.24 | 1.75 → 1.56 | 0.77 → 0.80 | 31.9 → 25.3 | −21% |
+| ow-start | 3,120 | 17.48 → 18.27 | 1.22 → 1.29 | 0.52 → 0.56 | 21.4 → 23.6 | +11% |
+| other 8 families | 7,844 | | | | | −2 to +17% |
+| **all** | 70,214 | **16.30 → 17.70** | **2.07 → 2.00** | **0.90 → 0.88** | **33.7 → 35.4** | **+5%** |
+
+Per action kind (one run each, the same states and seeds; frames/step, Mcyc/step): WAIT 14.48 → 14.45, 8.89 → 8.87
+(unchanged); MOVE 20.8 → 22.2 frames (other moves are legal now, F059/F170/F188); SWORD 16.99 → 18.40 frames, 14.7
+→ 15.7 Mcyc and BEAMS 16.5 → 18.1 frames: the F160 walk to the grid and the N003 held press, by design (+1.4
+frames per attack); BOMB 9.7 → 14.9 frames, 37 → 62 Mcyc and BOOMERANG 9.4 → 15.5 frames, 23 → 39 Mcyc: before
+F182 many presses were ignored by the game (busy slot, outside BorderBounds) and returned after a few frames; now
+every one is a real throw, with its look-ahead. Cycles per frame of each kind are unchanged or lower. The code above
+the emulator stays negligible: in training profiles `zelda::`, `env::` and `pool::` together are 0.11–0.12 Mcyc per
+step of 11–15 in both builds, the new classifier `ObjectClass::of` 0.01% of samples, `GameView::new` 0.03%.
+
+**Training** (fresh models, CUDA, `--sil-coeff 0.1 --stop-success 0.99` as the r61 retrain, 4,096 steps per update,
+seed 1, median of 30 iterations; two interleaved repeats on the quiet machine; "fixed" = with the commits below):
+
+| config | steps/s old | new | fixed | update s old / new / fixed | frames/step old / new |
+|---|---:|---:|---:|---:|---:|
+| ow-zora p8 | 2,027 / 2,058 | 2,038 / 2,046 | **2,173 / 2,213** | 1.15 / 1.12 / 1.01 | 13.3–13.6 / 14.6 |
+| goriya p8 | 2,232 / 2,188 | 2,205 / 2,216 | **2,379 / 2,379** | 1.14 / 1.14 / 0.99–1.03 | 14.3 / 14.7 |
+| ow-start p8 | 2,544 / 2,516 | 2,639 / 2,617 | **2,823 / 2,821** | 1.13 / 1.13 / 1.00–1.05 | 17.4–18.8 / 18.6 |
+| ow-zora p16 | 1,741 / 1,699 | 1,794 / 1,744 | **2,588 / 2,552** | 2.10–2.15 / 2.13 / 1.17–1.23 | 13.5 / 14.6 |
+| goriya p16 | 1,814 / 1,783 | 1,851 / 1,846 | **2,714 / 2,680** | 2.0 / 2.1 / 1.19 | 14.1–15.2 / 14.6 |
+| ow-zora p16, no SIL | 2,722 / 2,671 | 2,691 / 2,733 | **2,841 / 2,857** | 0.63 / 0.63 / 0.65 | 13.5 / 14.2 |
+
+The review left training speed where it was: its extra frames per step (+3–9%) were paid back by F019's GPU
+recompute. Per iteration on the main thread (ow-zora p8, a timing wrapper, no profiler): the serial gap between
+two rollouts (the envs idle) was 170 ms old (CPU recompute 148 ms, GAE 14 ms) and 66 ms new (recompute 37 ms, GAE
+20 ms, `EpisodeTracker.update` 0.23 ms); the F084 snapshot (`deepcopy` of weights and Adam state, now on every
+update) is 11–14 ms per update, off the critical path; `tensor_split` costs nothing visible; `on_iteration`
+(metrics, logs, events) 20–30 ms as before. Whole-run user cycles per step (perf, ow-zora p8): zcore 10.9 → 11.8
+(the extra frames), the Rust policy forward 1.05–1.08 unchanged, torch/CUDA 1.4 → 1.05 (the recompute).
+
+**Early-stop confirmation** (F071: 50 sampled episodes per seed state, `--parallel 8`, timed with the promoted
+models): ow-start (13 states) 4.5 s, ow-zora (30) 9.2 s, goriya (15) 11.3 s, d2-rope (18) 11.1 s,
+stalfos-keese-gel (42) 36.7 s, boss-dodongo (3) 2.7 s; it shares the CPU with the overlapped next rollout. It runs
+only once the cohort rate has held `--stop-success` for `--stop-patience` iterations, and a failed check resets the
+streak, so at most one check per 5 iterations: on a plateau just under 0.99 a check per ~9 s of training (5
+iterations at p8) doubles the time there for ow-zora (9 s per check) and quintuples it for stalfos-keese-gel (37 s).
+
+**Chains and evaluation** (`eval-chain --runs 20 --parallel 10 --from 1_73s_0` under py-spy): 20.4 of the main
+thread's 24.3 s wait in the native pool; `checkpoint_sha1` 0.26 s once (cached per path, mtime and size),
+`ChainOutput.add` 0.07 s for all 20 runs (one appended line each), the final sort 0.02 s; `code_version` and
+`data_hash` are cached. Nothing hashes or rewrites a big file per run or episode. `evaluate` writes its result once.
+
+**Pool:** the F082/F155 stop and halt flags are two relaxed atomic loads per step; F005's buffer checks and F047's
+policy input check run once per `rollout` call; the policy's per-forward finiteness check covers ~600 floats
+against a 0.3 ms forward (the policy share of cycles is unchanged).
+
+### Fixes
+
+| commit | change | effect |
+|---|---|---|
+| `ca17578` | **SIL replay ring on the training device.** Every PPO minibatch drew its SIL sample with a CPU gather (OpenMP) and a pageable copy to the GPU, which stalled the GPU queue and kept torch's OpenMP pool spinning (`gomp_barrier_wait_end`) on the cores the env threads need: 30–40% of all user cycles with the machine busy, 3.5–4 Mcyc per step quiet. The draw stays on CPU (the same `randperm`), the gather runs on the device; samples are bit-identical (checked on CPU and CUDA). The ring takes 272 MB of GPU memory per training. | update 2.1 → 1.2 s at p16, 1.12–1.14 → 1.0 s at p8; OpenMP spin 3.7 → 0.25 Mcyc/step; with `3e868b5` SIL steps/s +45% at p16; alone +4% at p8 quiet, +15–22% at p8 with the builders running |
+| `3e868b5` | **Next rollout before the buffer is readied** (without PLR): `Collector.take` then `start`, then `ready` (recompute, returns, metrics) while the envs already run; PLR still readies first (its weights need the advantages). Same weights, same draws: seeded CPU training is bit-identical. | the 66 ms gap per iteration goes; +2–5% steps/s (ow-zora/goriya p8, also without SIL) |
+| `af891de` | **No look-ahead that can't credit anything:** the prediction follows only the firing state's live enemies (boomerang and arrow: also its floor items), so without any it is empty and was emulated for nothing (snapshot, up to the weapon's whole flight, restore). | random-play bench (2 interleaved runs): BOMB −4.5%, BEAMS −3.7%, BOOMERANG −3% cycles per action, −0.3% instructions overall (there, rooms nearly always hold an enemy); `state_walk` 33,850 steps, 0 differ |
+
+`OMP_WAIT_POLICY=PASSIVE` and `OMP_NUM_THREADS=1` (each tried alone) removed the spin as well; on top of `ca17578`
+PASSIVE gained nothing measurable and would change process-wide behaviour, so neither was kept.
+
+### What's left after the fix-up, by expected gain
+
+1. **Emulation** (zcore ~75% of rollout cycles), unchanged; see [zcore speed](#zcore-speed-nov-7).
+2. **The rollout barrier** (workers idle 13–32% at the end of a rollout): more envs than threads with
+   work-stealing.
+3. **The early-stop confirmation** on a plateau near the threshold: stopping the evaluation once its failures already
+   exceed what `--stop-success` allows would keep every decision and save most of a failing check (up to ~37 s), but
+   the logged rate would then be partial (Lee's call).
+4. **Weapon look-ahead** in fights: ~27–53 Mcyc per beam/bomb/boomerang (45–90 emulated frames) against 9–11 for
+   the action's real frames. The deferred look-ahead (`docs/rust-actor.md` item 4) or ending it once every enemy it
+   could credit is dead.
+5. **The PPO update** (launch-bound, ~1.0 s at p8, now off the critical path at p8 but close to the rollout at p16):
+   fused Adam, fewer syncs per minibatch.
+6. Small: the residual OpenMP spin from once-per-update CPU ops (0.25 Mcyc/step), the 12 ms snapshot per update,
+   and the SIL ring's 184 MB `grid` stored as int64 (int16 would do; memory only).
 
 ## The Rust actor (Nov 9)
 
