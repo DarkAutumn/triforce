@@ -542,10 +542,20 @@ step, so following an enemy that moves away pays again, and knockback resets the
   "toward the destination" into the sequence's next direction for `MazeStep` ($52F), used by the objective's exit
   targets (no route cache in a maze room) and the observation's objective direction. A routes.yaml step leaving
   through a maze's sequence is a load error: the envs don't model a room visit that loops back into itself.
-- `Route.load(name, stop_at=None, start_from=None, states_dir=None)` reads `triforce/routes.yaml`. A route starts
-  at the `start` savestate (or `start_from`) and ends on taking its last step's triforce (d2first: Dungeon 3's,
-  since Nov 9); `stop_at` (`L:0xRR[:cave]`) ends it on entering that room instead. Both are checked up front:
-  `start_from` must exist, and `stop_at` must be a route room after the start step. A missed `heart` waypoint ends
+- `Route.load(name, stop_at=None, start_from=None, states_dir=None, *, stop_step=None, power_on=None,
+  checkpoint=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate, or at one of:
+  `start_from` (a savestate); `power_on` (`{'name', 'delay', 'max_delay'}`: console power on, the game booted by
+  controller inputs alone, `zelda::power_on`; the delay, the idle frames on the file-select screen, 0..=32766, is
+  the run's only randomness and is drawn from the run seed when None; no memory is written and the load
+  randomization is skipped; the idle is skipped through `triforce/states/power_on/idle_<frames>.state` when the
+  files are there); `checkpoint` (`{'state': TFZSTATE bytes, 'step', 'granted'}`: the state another run ended
+  in, restored as is on its route step with the cheat ledger's grants, no frame run and nothing redrawn; an
+  entry of a recording's `Replay.states()` is one). It ends on taking its last step's triforce (d2first:
+  Dungeon 3's, since Nov 9); `stop_at` (`L:0xRR[:cave]`) ends it on entering that room instead, `stop_step`
+  (`--stop-at step:N`) on entering route step N's room by the route's own exit from the room before it (a
+  wrong exit that lands there with the step's progress doesn't count; reason `reached route step N (...)`).
+  All are checked up front: `start_from` must exist, the three starts and the two stops are exclusive, and a
+  stop must be after the start's route step. A missed `heart` waypoint ends
   the run as a failure (room outcome `missed`); so does a retreat beyond `MAX_RETREATS` (3) per run
   (`retreat-limit`; `RunResult.retreats` counts them). The 20th wrong exit into a tagged room ends the run `stuck`
   (`wrong-exit-limit: ...`; `RunResult.wrong_exits` counts them).
@@ -569,7 +579,8 @@ step, so following an enemy that moves away pays again, and knockback resets the
   `runs/runner.jsonl`; `--from`/`--stop-at` are checked as for `Route.load`. `--render` shows one chain env with
   rendering on; `--video` checks its folder first, records the run's inputs, then renders them through `ffmpeg`
   (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
-- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR]
+- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE | --power-on
+  [--name NAME] [--delay N|random]] [--stop-at L:0xRR | step:N]
   [--act MODE] [--checkpoint S=PATH] [--output PATH [--append]] [--plays PATH] [--harvest [DIR]]
   [--logs-dir DIR | --no-log]` → success
   rate and per-room failure counts (`runner.chain_summary`); `--from` starts mid-route at a route entry state (e.g.

@@ -21,6 +21,7 @@ use crate::reward_track::RewardTrack;
 use crate::rewards::Scored;
 use crate::specialist_env::{linger_json, room_disabled_kinds};
 use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
+use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -32,6 +33,7 @@ use zelda::game_map::GameMap;
 use zelda::hearts::{HeartTracker, HeartView};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
+use zelda::power_on;
 use zelda::room::Wavefront;
 use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
 
@@ -46,14 +48,32 @@ pub const MAX_RETREATS: u32 = 3;
 /// Lee, Nov 10: a run that bounces between two tagged rooms must not go on to the run cap).
 pub const MAX_WRONG_EXITS: u32 = 20;
 
+/// How a run starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RunStart {
+    /// From the route's start state ([`Route::start_state`]): the RNG bytes and spawns are redrawn per run.
+    State,
+    /// From console power on (`zelda::power_on`): `name` is registered after `delay` idle frames on the
+    /// file-select screen (None: drawn per run from `0..=max_delay`).  No memory is written.
+    PowerOn { name: String, delay: Option<u32>, max_delay: u32 },
+    /// From a state another run reached (a state file's bytes: a replay's end state or keyframe), exactly as
+    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.
+    Checkpoint { state: Arc<[u8]>, step: usize, granted: ItemCounts<u8> },
+}
+
 /// Where a route starts and how it ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Route {
     pub name: String,
     pub start_state: String,
+    /// How a run starts ([`Route::load`]: from `start_state`).
+    pub start: RunStart,
     /// Entering this room ends the run (`stop_at`, a partial chain eval); None: the route's end.
     pub terminal: Option<MapLocation>,
-    /// Taking this level's triforce ends the run (the route's last step exits `triforce`; None with `stop_at`).
+    /// Entering the room of this route step, on the route, ends the run ([`Route::with_stop_step`]).
+    pub terminal_step: Option<usize>,
+    /// Taking this level's triforce ends the run (the route's last step exits `triforce`; None with `stop_at`
+    /// or a stop step).
     pub final_triforce: Option<u8>,
 }
 
@@ -93,7 +113,9 @@ impl Route {
         let route = |terminal, final_triforce| Route {
             name: name.to_owned(),
             start_state: start_state.to_owned(),
+            start: RunStart::State,
             terminal,
+            terminal_step: None,
             final_triforce,
         };
         if let Some(stop) = stop_at {
@@ -115,6 +137,91 @@ impl Route {
             return Ok(route(None, Some(last.level)));
         }
         Err(format!("Route '{name}' doesn't end on a triforce"))
+    }
+
+    /// The route step a run starts on: the checkpoint's, else the start state's (0 from the game start).
+    fn first_step(&self, map: &GameMap) -> usize {
+        match &self.start {
+            RunStart::Checkpoint { step, .. } => *step,
+            RunStart::PowerOn { .. } => 0,
+            RunStart::State => start_step(&map.routes[&self.name], &self.start_state),
+        }
+    }
+
+    fn from_game_start(&self, what: &str) -> Result<(), String> {
+        if self.start_state == "start" && self.start == RunStart::State {
+            return Ok(());
+        }
+        Err(format!("{what} replaces the game start: the route can't also start from a state or another way"))
+    }
+
+    /// The route started from console power on instead of its start state (see [`RunStart::PowerOn`]; `delay`
+    /// and `max_delay` at most `power_on::MAX_DELAY`).  Only for a route loaded without `start_from`.
+    pub fn with_power_on(mut self, name: &str, delay: Option<u32>, max_delay: u32) -> Result<Route, String> {
+        self.from_game_start("power on")?;
+        power_on::name_cells(name).map_err(|e| e.to_string())?;
+        if delay.unwrap_or(0).max(max_delay) > power_on::MAX_DELAY {
+            return Err(format!(
+                "the power-on delay is at most {} (the game RNG's period is 32767 frames)",
+                power_on::MAX_DELAY
+            ));
+        }
+        self.start = RunStart::PowerOn {
+            name: name.to_ascii_uppercase(),
+            delay,
+            max_delay,
+        };
+        Ok(self)
+    }
+
+    /// The route continued from a checkpoint (see [`RunStart::Checkpoint`]).  Only for a route loaded without
+    /// `start_from`; a `stop_at` room must come after `step`.
+    pub fn with_checkpoint(
+        mut self,
+        map: &GameMap,
+        state: Arc<[u8]>,
+        step: usize,
+        granted: ItemCounts<u8>,
+    ) -> Result<Route, String> {
+        self.from_game_start("a checkpoint")?;
+        let steps = &map.routes[&self.name];
+        if step >= steps.len() {
+            return Err(format!(
+                "checkpoint step {step} is not a step of route '{}' ({} steps)",
+                self.name,
+                steps.len()
+            ));
+        }
+        if let Some(stop) = self.terminal
+            && !steps[step + 1..].iter().any(|s| s.location() == stop)
+        {
+            return Err(format!(
+                "stop_at {} is not a room of route '{}' after checkpoint step {step}",
+                describe(stop),
+                self.name
+            ));
+        }
+        self.start = RunStart::Checkpoint { state, step, granted };
+        Ok(self)
+    }
+
+    /// The route ended on entering route step `step`'s room by the route's own exit from the room before it
+    /// (a wrong exit that lands in that room doesn't end the run), instead of at its end: a later step than the
+    /// run starts on (set the start first).  Not together with a `stop_at` room.
+    pub fn with_stop_step(mut self, map: &GameMap, step: usize) -> Result<Route, String> {
+        if self.terminal.is_some() {
+            return Err("a stop step and a stop_at room are exclusive".into());
+        }
+        let (steps, first) = (map.routes[&self.name].len(), self.first_step(map));
+        if step >= steps || step <= first {
+            return Err(format!(
+                "stop step {step} is not a step of route '{}' after its start step {first} ({steps} steps)",
+                self.name
+            ));
+        }
+        self.terminal_step = Some(step);
+        self.final_triforce = None;
+        Ok(self)
     }
 }
 
@@ -360,6 +467,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     track: Option<RewardTrack>,
     /// What the last step earned ([`ChainEnv::take_scored`]).
     scored: Option<Scored>,
+    /// The name and delay the current run booted with (a power-on start).
+    booted: Option<(String, u32)>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
@@ -395,6 +504,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             rewards: false,
             track: None,
             scored: None,
+            booted: None,
         }
     }
 
@@ -443,6 +553,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// playing (None off the route or before the first reset) and the cheat-granted items he holds.
     pub fn context(&self) -> (Option<usize>, ItemCounts<u8>) {
         (self.objectives.as_ref().and_then(GameCompletion::step), self.cheats.grants())
+    }
+
+    /// The name registered and the idle frames of the current run's power-on start (None for other starts).
+    pub fn booted(&self) -> Option<(&str, u32)> {
+        self.booted.as_ref().map(|(name, delay)| (name.as_str(), *delay))
     }
 
     /// From the next reset on, score every step with the acting specialist's training rewards
@@ -501,7 +616,80 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             .map_err(|e| format!("harvest {}: {e}", path.display()))
     }
 
-    /// Starts a run from the route's start state; `rng` draws the load's RNG bytes and spawn.
+    /// The route's start state loaded as a fresh run (RNG bytes and spawns redrawn from `rng`) and its route
+    /// state.
+    fn start_from_state(&mut self, rng: &mut ChaCha8Rng) -> Result<GameCompletion, EnvError> {
+        let machine = self.store.load(&self.route.start_state)?;
+        let opts = LoadOptions {
+            randomize_rng: true,
+            fresh_room: true,
+            ..Default::default()
+        };
+        self.session.load(&machine, &opts, rng)?;
+        self.game_start_route(&self.route.start_state.clone(), rng)
+    }
+
+    /// The route state of a run whose session stands at the state named `start_state` would load.
+    fn game_start_route(&mut self, start_state: &str, rng: &mut ChaCha8Rng) -> Result<GameCompletion, EnvError> {
+        let state = self.session.state().clone();
+        let (route, step) = start_route(
+            &self.data.map,
+            state.full_location(),
+            state_entry(start_state),
+            rng,
+            Some(&self.route.name),
+            &state,
+        );
+        GameCompletion::new(self.data.map.clone(), &route, step).map_err(EnvError::State)
+    }
+
+    /// Console power on to the first controllable frame by inputs alone (`zelda::power_on`): the run's delay
+    /// (drawn from `rng` unless fixed) is idled on the file-select screen, from the store's nearest saved idle
+    /// state when it has one (the emulator is told the inputs that state stands for, so a recording is the
+    /// same either way).
+    fn start_from_power_on(
+        &mut self,
+        name: &str,
+        delay: Option<u32>,
+        max_delay: u32,
+        rng: &mut ChaCha8Rng,
+    ) -> Result<GameCompletion, EnvError> {
+        let delay = delay.unwrap_or_else(|| rng.random_range(0..=max_delay));
+        let base = power_on::nearest_idle(delay);
+        let idle = if base > 0 { self.store.power_on_idle(base)? } else { None };
+        let nes = self.session.nes_mut();
+        match idle {
+            Some(idle) => {
+                nes.restore(&idle);
+                for (buttons, frames) in power_on::TO_FILE_SELECT {
+                    nes.skipped(buttons, frames);
+                }
+                nes.skipped(0, base);
+                power_on::idle(nes, delay - base);
+            }
+            None => {
+                nes.restore(&self.store.power_on()?);
+                power_on::to_file_select(nes)?;
+                power_on::idle(nes, delay);
+            }
+        }
+        power_on::register_and_start(nes, name)?;
+        let live = self.session.nes().snapshot();
+        self.session.load(&live, &LoadOptions::default(), rng)?;
+        self.booted = Some((name.to_owned(), delay));
+        self.game_start_route("start", rng)
+    }
+
+    /// A checkpoint restored exactly (no frame runs, nothing is written) on its route step.
+    fn start_from_checkpoint(&mut self, state: &[u8], step: usize) -> Result<GameCompletion, EnvError> {
+        let snapshot = self.store.decode(state)?;
+        self.session.restore(&snapshot);
+        GameCompletion::new(self.data.map.clone(), &self.route.name, Some(step)).map_err(EnvError::State)
+    }
+
+    /// Starts a run as the route says ([`RunStart`]); `rng` draws what the start leaves to chance (a start
+    /// state's RNG bytes and spawn, a power-on start's delay).  A start that can't be loaded ends the run as
+    /// `error`.
     pub fn reset(
         &mut self,
         seed: Option<u64>,
@@ -523,31 +711,25 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.prev_objective = None;
         self.track = None;
         self.scored = None;
-        let machine = match self.store.load(&self.route.start_state) {
-            Ok(m) => m,
+        self.booted = None;
+        let (started, granted) = match self.route.start.clone() {
+            RunStart::State => (self.start_from_state(rng), None),
+            RunStart::PowerOn { name, delay, max_delay } => {
+                (self.start_from_power_on(&name, delay, max_delay, rng), None)
+            }
+            RunStart::Checkpoint { state, step, granted } => {
+                (self.start_from_checkpoint(&state, step), Some(granted))
+            }
+        };
+        let mut gc = match started {
+            Ok(gc) => gc,
             Err(EnvError::State(reason)) => return Ok(self.error(reason)),
             Err(e) => return Err(e),
         };
-        let opts = LoadOptions {
-            randomize_rng: true,
-            fresh_room: true,
-            ..Default::default()
+        let state = match granted {
+            Some(granted) => self.cheats.resume(&mut self.session, &gc, granted),
+            None => self.cheats.begin(&mut self.session, &gc),
         };
-        self.session.load(&machine, &opts, rng)?;
-        let state = self.session.state().clone();
-        let (route, step) = start_route(
-            &self.data.map,
-            state.full_location(),
-            state_entry(&self.route.start_state),
-            rng,
-            Some(&self.route.name),
-            &state,
-        );
-        let mut gc = match GameCompletion::new(self.data.map.clone(), &route, step) {
-            Ok(gc) => gc,
-            Err(reason) => return Ok(self.error(reason)),
-        };
-        let state = self.cheats.begin(&mut self.session, &gc);
         self.objective = Some(gc.objectives(None, &state));
         self.objectives = Some(gc);
         Ok(self.advance())
@@ -778,10 +960,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 }
             }
             let keys = self.cheats.natural(CheatItem::Keys, &state);
+            let on_step = self.objectives.as_ref().and_then(GameCompletion::step);
             let result = self.result.as_mut().unwrap();
-            if Some(location) == self.route.terminal {
+            // The stop room, or the stop step's room entered by the route's own exit from the room before it
+            // (a wrong exit can land there too, with the step's progress: that is not reaching the step).
+            let stop_step = self.route.terminal_step.filter(|&k| exit_correct && on_step == Some(k));
+            if Some(location) == self.route.terminal || stop_step.is_some() {
                 result.result = "success".into();
-                result.reason = format!("entered {}", describe(location));
+                result.reason = match stop_step {
+                    Some(k) => format!("reached route step {k} {}", describe(location)),
+                    None => format!("entered {}", describe(location)),
+                };
                 let index = result.rooms.len();
                 result
                     .rooms

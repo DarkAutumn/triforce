@@ -9,12 +9,15 @@ from typing import Optional
 
 
 def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, deterministic=None,
-                  stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None):
-    """The route (``--from`` and ``--stop-at`` checked, ``runner.Route.load``) and a ``Runner`` with its models
-    loaded (``--checkpoint`` overrides checked); raises ``RunnerError`` before anything plays."""
+                  stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
+                  power_on=None):
+    """The route (``--from``, ``--stop-at`` and the power-on start checked, ``runner.Route.load``) and a ``Runner``
+    with its models loaded (``--checkpoint`` overrides checked); raises ``RunnerError`` before anything plays.
+    ``stop_at``: a room or ``step:N`` (``runner.parse_stop``); ``power_on``: ``Route.load``'s."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
-    from .runner import Route, Runner, parse_location
-    route = Route.load(route_name, parse_location(stop_at) if stop_at else None, start_from)
+    from .runner import Route, Runner, parse_stop
+    stop_room, stop_step = parse_stop(stop_at)
+    route = Route.load(route_name, stop_room, start_from, stop_step=stop_step, power_on=power_on)
     runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
                     specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest)
     return route, runner
@@ -22,17 +25,19 @@ def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
                deterministic=None, stop_at=None, first_seed: int = 0, start_from=None,
-               specialist_configs=None, threads=None, plays=None, on_result=None, harvest=None, output=None):
+               specialist_configs=None, threads=None, plays=None, on_result=None, harvest=None, output=None,
+               power_on=None):
     """Runs the route once per seed in one chain pool of ``parallel`` envs (``threads`` worker threads), with
     optional checkpoint overrides and loaded specialist configs; ``plays``: a replay file to write;
     ``deterministic``: None = each model's act mode, else argmax (True) or sampling (False) for all;
     ``on_result(result)`` as each run finishes; ``harvest``: save every handoff's pre-entry state under this
     directory (``runner.ChainPool``); ``output``: a new JSON-lines file each run is written to as it finishes
-    (``ChainOutput``, refused if it exists).  Returns (results sorted by seed, summary); the summary's
-    ``provenance`` names what played (``Runner.provenance`` plus ``first_seed`` and ``runs``)."""
+    (``ChainOutput``, refused if it exists); ``stop_at`` and ``power_on``: ``prepare_chain``'s.  Returns (results
+    sorted by seed, summary); the summary's ``provenance`` names what played (``Runner.provenance`` plus
+    ``first_seed`` and ``runs``)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     route, runner = prepare_chain(route_name, parallel, models_dir, overrides, deterministic, stop_at, start_from,
-                                  specialist_configs, threads, harvest)
+                                  specialist_configs, threads, harvest, power_on)
     provenance = {**runner.provenance(route), 'first_seed': first_seed, 'runs': runs}
     if output is None:
         return play_chain(route, runner, provenance, plays=plays, on_result=on_result)
@@ -150,17 +155,18 @@ def _cmd_eval_chain(args):
     from contextlib import nullcontext
     from .events import EventLog, logged_job
     from .registry import act_override
-    from .runner import parse_overrides
+    from .runner import parse_overrides, power_on_options
     from .specialist import load_specialist
     configs = [load_specialist(path) for path in args.specialist_config]
     overrides = parse_overrides(args.checkpoint)
     output = args.output or os.path.join('runs', f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl")
     route, runner = prepare_chain(args.route, args.parallel, args.models_dir, overrides, act_override(args.act),
                                   args.stop_at, args.start_from, {config.name: config for config in configs},
-                                  args.threads, args.harvest)
+                                  args.threads, args.harvest, power_on_options(args))
     provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
     existing = check_output(output, provenance, args.append)
-    what = f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
+    what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
+            + ('-power-on' if args.power_on else ''))
     log = nullcontext() if args.no_log else logged_job(what, 'chain', [], args.logs_dir, events='round.jsonl',
                                                        chain_runs=args.runs)
     with log as plan:
@@ -168,7 +174,7 @@ def _cmd_eval_chain(args):
         if events is not None:
             events.emit('chain_start', runs=args.runs, parallel=args.parallel, overrides=overrides or None,
                         act=args.act, route=args.route, start_from=args.start_from, stop_at=args.stop_at,
-                        output=output, provenance=provenance)
+                        power_on=route.power_on, output=output, provenance=provenance)
         try:
             chain_output = ChainOutput(output, provenance, existing)
             progress = None if events is None else chain_progress_events(events, args.runs)
@@ -294,6 +300,7 @@ def main(argv=None):
     from ._native import DEFAULT_ROUTE  # pylint: disable=import-outside-toplevel
     from .paths import HARVESTED_DIR  # pylint: disable=import-outside-toplevel
     from .registry import ACT_CHOICES, ACT_MODES, set_allow_incompatible  # pylint: disable=import-outside-toplevel
+    from .runner import STOP_AT_HELP, add_power_on_arguments  # pylint: disable=import-outside-toplevel
 
     allow_help = "load models whose version differs from this code's in its first three numbers"
     parser = argparse.ArgumentParser(prog='triforce')
@@ -326,9 +333,10 @@ def main(argv=None):
     chain.add_argument('--first-seed', type=int, default=0)
     chain.add_argument('--act', choices=ACT_CHOICES, default='model',
                        help="model: each model's act mode (registry); sample / argmax: that for every model")
-    chain.add_argument('--stop-at', help="end the route on entering this room, e.g. 1:0x73")
+    chain.add_argument('--stop-at', help=STOP_AT_HELP)
     chain.add_argument('--from', dest='start_from', help="start from this savestate instead of the game start, "
                                                          "e.g. a route entry state like 2_7ds_0")
+    add_power_on_arguments(chain)
     chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH')
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
                        help="override specialist config, selected by config.name (repeatable YAML paths)")

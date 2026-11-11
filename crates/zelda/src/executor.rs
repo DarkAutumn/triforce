@@ -146,6 +146,8 @@ pub enum ZeldaError {
     LinkNeverControllable { mode: u8 },
     /// `act` before `load`.
     NotLoaded,
+    /// The power-on sequence (`power_on`) can't run or left the screens it expects.
+    Boot(String),
 }
 
 impl fmt::Display for ZeldaError {
@@ -155,6 +157,7 @@ impl fmt::Display for ZeldaError {
                 write!(f, "Link never became controllable (mode={mode})")
             }
             ZeldaError::NotLoaded => f.write_str("call load() first"),
+            ZeldaError::Boot(reason) => write!(f, "power on: {reason}"),
         }
     }
 }

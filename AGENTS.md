@@ -107,6 +107,16 @@ up with ideas, test them, keep what helps, and log everything.
   success rate looks fine (Aquamentus: high success, yet Link walks back and forth after the kill). Watch
   `linger/max_steps`, `linger/tail_steps`, `linger/worst_steps` (and frames), eval's per-room summaries and chain
   `RoomRecord.linger`, alongside success, health and selected replays. Metric semantics are in architecture.md.
+- **A run can start from console power on, and its only randomness is then one number** (Nov 11; `zelda::power_on`,
+  `eval-chain --power-on [--name NAME] [--delay N|random]`). The game's random numbers (`$18–$24`) shift once per
+  frame in every game mode and depend on nothing else, with a period of 32767 frames. So the run idles `delay`
+  frames on the file-select screen before entering the name: **valid delays are 0..=32766**, every value a
+  different game, and no memory is written (no RNG poke, no spawn-cycle or edge-cell draw). `random` (the
+  default) draws the delay from the run's seed. The idle frames are skipped through saved machine states
+  (`triforce/states/power_on/idle_<frames>.state`, one every 2000 frames); the run is the same with or without
+  them. **Regenerate them with `python -m triforce.entry_states idle` whenever the state format or the emulator's
+  behaviour changes** (`cargo test -p env --test power_on_idle` fails until then). The name is 1 to 8 of A–Z, 0–9
+  and space; `ZELDA` is refused (it starts the second quest).
 
 ## Environment
 
@@ -144,7 +154,9 @@ up with ideas, test them, keep what helps, and log everything.
 - **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10` (route `d2first`, the
   default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`; after
   Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`. `--from`/`--stop-at` are checked before any run
-  (`--stop-at` must be a route room after the start step; exit 2 otherwise). Each call writes a fresh
+  (`--stop-at` must be a route room after the start step, or `step:N`, a later route step, reached only by the
+  route's own exit: `step:24` is back on the overworld with Dungeon 2's triforce; exit 2 otherwise). `--power-on`
+  starts from console power on instead of the `start` state (Game mechanics). Each call writes a fresh
   `runs/eval-chain-<yymmdd-HHMMSS>.jsonl` (or `--output`, refused if it exists unless `--append` with the same
   provenance) plus `<output>.meta.json`; exit 1 if any run ends `error`. A run ends `stuck` (`wrong-exit-limit`)
   on its 20th wrong exit into a tagged room. Per-room hp loss and deaths come from the chain jsonl (`RoomRecord`

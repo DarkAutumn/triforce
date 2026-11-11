@@ -182,7 +182,7 @@ mod _native {
     #[pymodule_export]
     use crate::explore::{PyAcceptSpec, PyExploreResult, PyExplorer, explore_states};
     #[pymodule_export]
-    use crate::game::{PyChange, PyGame, PyGameState, PySnapshot};
+    use crate::game::{PyChange, PyGame, PyGameState, PySnapshot, power_on_idle_states, power_on_name};
     #[pymodule_export]
     use crate::policy::{PyPolicy, keyed_noise};
     #[pymodule_export]
@@ -193,6 +193,8 @@ mod _native {
         use env::observation as obs;
         let py = m.py();
         m.add("VERSION", include_str!("../../../VERSION").trim())?;
+        m.add("MAX_POWER_ON_DELAY", zelda::power_on::MAX_DELAY)?;
+        m.add("POWER_ON_IDLE_STEP", zelda::power_on::IDLE_STEP)?;
         m.add("OBS_SCHEMA_VERSION", obs::OBS_SCHEMA_VERSION)?;
         m.add(
             "ACTION_SCHEMA_VERSION",

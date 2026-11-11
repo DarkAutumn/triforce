@@ -44,6 +44,10 @@ Lee's start-state rules: a name that isn't ``<level>_<room><entry>_<chain>`` wit
 (HEARTS), less than full health (HP), no route step and no manifest entry (OFFROUTE), a boss room entered other
 than by the route's fight entry (BOSS-ENTRY).  Auditing a whole directory (the default) also lists route states
 missing for a chain 0-2 (MISSING) and files no specialist uses (ORPHAN).  It exits 1 when anything is flagged.
+
+``idle`` writes the power-on idle states (``<states>/power_on/idle_<frames>.state``: the machine after 2000,
+4000, ..., 30000 idle frames on the file-select screen), which let a power-on run skip most of its delay.
+Regenerate them whenever the state format or the emulator's behaviour changes.
 """
 
 import argparse
@@ -60,7 +64,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
-from ._native import DEFAULT_ROUTE, AcceptSpec, Explorer, Game, Snapshot, game_rooms, route_alternates
+from ._native import DEFAULT_ROUTE, AcceptSpec, Explorer, Game, Snapshot, game_rooms, power_on_idle_states
+from ._native import route_alternates
 from ._native import route_steps as native_route_steps
 from ._native import specialist_for
 from .events import write_json_atomic
@@ -189,6 +194,22 @@ def write_start_state(out: str = STATES_DIR, max_frames: int = 600) -> str:
     path = os.path.join(out, f'{START_STATE}.state')
     game.save_state_file(path)
     return path
+
+
+def write_idle_states(out: Optional[str] = None) -> List[str]:
+    """Writes the power-on idle states (``_native.power_on_idle_states``) as ``<out>/<name>.state``, atomically;
+    ``out`` defaults to ``<states dir>/power_on``, where power-on runs look for them.  Returns the paths."""
+    out = out or os.path.join(STATES_DIR, 'power_on')
+    os.makedirs(out, exist_ok=True)
+    paths = []
+    for name, data in power_on_idle_states():
+        path = os.path.join(out, f'{name}.state')
+        tmp = f'{path}.{os.getpid()}.tmp'
+        with open(tmp, 'wb') as file:
+            file.write(data)
+        os.replace(tmp, path)
+        paths.append(path)
+    return paths
 
 
 # --- build ---
@@ -751,6 +772,9 @@ def build_parser() -> argparse.ArgumentParser:
     audit_parser.add_argument('--loads', type=int, default=9)
     audit_parser.add_argument('--route', default=DEFAULT_ROUTE)
     audit_parser.add_argument('--output', default=None, help="also write the rows as JSON")
+    idle_parser = sub.add_parser('idle', help="write the power-on idle states (the file-select screen after 2000, "
+                                              "4000, ..., 30000 idle frames)")
+    idle_parser.add_argument('--out', default=None, help="directory (default <states dir>/power_on)")
     return parser
 
 
@@ -762,6 +786,11 @@ def main(argv=None):
 
     if args.command == 'start':
         print(f"wrote {write_start_state(args.out or default_out())}")
+        return 0
+
+    if args.command == 'idle':
+        for path in write_idle_states(args.out):
+            print(path)
         return 0
 
     if args.command == 'install':

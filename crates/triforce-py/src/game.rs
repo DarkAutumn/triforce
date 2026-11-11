@@ -617,6 +617,33 @@ fn overrides(values: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<(Var, u8)>> {
         .collect()
 }
 
+/// The saved idle states of a power-on start (`zelda::power_on`), made in one pass from power on: the machine
+/// after every `POWER_ON_IDLE_STEP` idle frames on the file-select screen, as `(name, TFZSTATE bytes)` with
+/// names `idle_02000` ... `idle_30000`.  `python -m triforce.entry_states idle` writes them under
+/// `<states>/power_on/`, where a power-on run finds the one nearest below its delay.
+#[pyfunction]
+pub fn power_on_idle_states(py: Python<'_>) -> PyResult<Vec<(String, Bound<'_, PyBytes>)>> {
+    use zelda::power_on::{IDLE_STATES, IDLE_STEP, idle, to_file_select};
+    let rom = context::rom(py)?;
+    let mut nes = ZCore::power_on(rom.clone());
+    to_file_select(&mut nes).map_err(zelda_err)?;
+    let mut states = Vec::new();
+    for index in 1..=IDLE_STATES {
+        idle(&mut nes, IDLE_STEP);
+        let bytes = state_file::encode(&rom, &nes.snapshot(), 0);
+        states.push((format!("idle_{:05}", index * IDLE_STEP), PyBytes::new(py, &bytes)));
+    }
+    Ok(states)
+}
+
+/// The name a power-on start registers for `name`: upper-cased.  ValueError if it can't be registered (1 to 8
+/// of A-Z, 0-9 and space, not all spaces) or starts the second quest (ZELDA).
+#[pyfunction]
+pub fn power_on_name(name: &str) -> PyResult<String> {
+    zelda::power_on::name_cells(name).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(name.to_ascii_uppercase())
+}
+
 /// One game session: load states, act, poke, render, snapshot.
 #[pyclass(module = "triforce._native", name = "Game", frozen)]
 pub struct PyGame {
@@ -680,6 +707,32 @@ impl PyGame {
         let GameInner { session, rng, .. } = &mut *g;
         let view = session
             .load(&snap.machine, &opts, rng)
+            .map_err(zelda_err)?
+            .clone();
+        g.loaded = true;
+        Ok(PyGameState::new(view))
+    }
+
+    /// Boots the game from console power on by controller inputs alone (`zelda::power_on`): the file-select
+    /// screen, `delay` idle frames there (0..=32766: the game RNG's phase at the start), `name` registered in
+    /// slot 1 (1 to 8 of A-Z, 0-9 and space; not ZELDA), the game started, and control of Link gained.  No
+    /// memory is written.  The machine must be at power on (a fresh `Game`).
+    #[pyo3(signature = (name="LINK", delay=0))]
+    fn boot(&self, name: &str, delay: u32) -> PyResult<PyGameState> {
+        let mut g = self.inner.lock();
+        if g.loaded || g.session.nes().frame() != 0 {
+            return Err(PyValueError::new_err(
+                "boot() needs a machine at power on: this one has run frames or loaded a state",
+            ));
+        }
+        let GameInner { session, rng, .. } = &mut *g;
+        zelda::power_on::boot(session.nes_mut(), name, delay).map_err(|e| match e {
+            ZeldaError::Boot(_) => PyValueError::new_err(e.to_string()),
+            e => zelda_err(e),
+        })?;
+        let live = session.nes().snapshot();
+        let view = session
+            .load(&live, &LoadOptions::default(), rng)
             .map_err(zelda_err)?
             .clone();
         g.loaded = true;

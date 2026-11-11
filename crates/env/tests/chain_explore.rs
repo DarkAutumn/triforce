@@ -13,7 +13,8 @@ use env::specialist_env::{EnvOptions, SpecialistEnv};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
-use zelda::{Action, GameMap, MapLocation, Session};
+use zelda::cheats::ItemCounts;
+use zelda::{Action, GameMap, LoadOptions, MapLocation, Nes, Session, power_on};
 
 fn data() -> Arc<GameData> {
     common::game_data()
@@ -117,6 +118,10 @@ fn chain_runs() {
         harvested_states_hold_no_granted_bomb,
         one_room_entries_reset_the_observation,
         target_observation_follows_the_acting_specialist,
+        a_stop_step_ends_the_run_and_a_checkpoint_continues_it,
+        a_stop_step_after_a_triforce_ends_the_run_on_the_overworld,
+        a_power_on_start_boots_the_game_by_inputs_alone,
+        chain_rewards_are_the_training_rewards,
     ] {
         nes = case(nes, &data);
     }
@@ -388,7 +393,26 @@ fn mid_route_triforce_is_the_correct_exit(nes: ZCore, data: &Arc<GameData>) -> Z
     c.set_harvest(Some(dir.path().to_path_buf()));
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
-    // A breadth-first search over Link's tiles finds the walk onto the triforce; the chain then plays it.
+    if let Some(r) = walk_onto_the_triforce(&mut c) {
+        panic!("run ended on the walk: {r:?}");
+    }
+    // The run goes on out of the dungeon (only the route's last triforce ends it); wait for the 0x3c entry.
+    while c.result().unwrap().rooms.len() < 2 {
+        if let ChainStatus::Done(r) = c.step(parse("WAIT 8")).unwrap() {
+            panic!("run ended before 0x3c: {r:?}");
+        }
+    }
+    let r = c.result().unwrap();
+    let rooms: Vec<_> = r.rooms.iter().map(|x| (x.level, x.room.as_str(), x.outcome.as_str())).collect();
+    assert_eq!(rooms, [(2, "0x0d", "exit-correct"), (0, "0x3c", "in-progress")]);
+    assert!(dir.path().join("ow-octorok/0_3cc_h0_1.state").is_file());
+    c.into_parts().0.into_nes()
+}
+
+/// Walks the chain onto the triforce of the room it is in: a breadth-first search over Link's tiles finds the
+/// walk, the chain then plays it.  Returns the run's result if the walk ended it (the step that takes the
+/// triforce goes on until Link stands outside the dungeon).
+fn walk_onto_the_triforce(c: &mut ChainEnv<ZCore, TfzStore>) -> Option<RunResult> {
     let start = c.session().snapshot();
     let mut queue = std::collections::VecDeque::from([(start.clone(), Vec::new())]);
     let mut seen = std::collections::HashSet::from([c.session().state().link.tile()]);
@@ -416,20 +440,184 @@ fn mid_route_triforce_is_the_correct_exit(nes: ZCore, data: &Arc<GameData>) -> Z
     c.session_mut().restore(&start);
     for a in path.expect("a walk onto the triforce") {
         if let ChainStatus::Done(r) = c.step(a).unwrap() {
-            panic!("run ended on the walk: {r:?}");
+            return Some(r);
         }
     }
-    // The run goes on out of the dungeon (only the route's last triforce ends it); wait for the 0x3c entry.
-    while c.result().unwrap().rooms.len() < 2 {
-        if let ChainStatus::Done(r) = c.step(parse("WAIT 8")).unwrap() {
-            panic!("run ended before 0x3c: {r:?}");
-        }
+    None
+}
+
+/// A route with a stop step ends the run, a success, on entering that step's room by the route's exit; a
+/// route with a checkpoint starts from the state another run ended in, exactly as it is, on its route step.
+fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let load = |start: Option<&str>| Route::load(&data.map, &data.states_dir, "d2first", None, start).unwrap();
+    let steps = data.map.routes["d2first"].len();
+    // 0x3c, where Link comes out of Dungeon 2 (step 24): straight south is 0x4c (step 25).
+    let mut c = chain(nes, data, load(Some("0_3cc_0")).with_stop_step(&data.map, 25).unwrap());
+    let r = drive(&mut c, 0, |_, _| parse("MOVE S 16"));
+    assert_eq!((r.result.as_str(), r.reason.as_str()), ("success", "reached route step 25 (level 0, room 0x4c)"));
+    let rooms: Vec<_> = r.rooms.iter().map(|x| (x.room.as_str(), x.specialist.as_str(), x.outcome.as_str())).collect();
+    assert_eq!(rooms, [("0x3c", "ow-octorok", "exit-correct"), ("0x4c", "-", "milestone")]);
+    assert_eq!(c.context(), (Some(25), ItemCounts::default()));
+    let end: Arc<[u8]> = Arc::from(common::encode_state(&c.session().snapshot()).unwrap());
+    let (ram, prg_ram) = (*c.session().nes().ram(), *c.session().nes().prg_ram());
+
+    // A wrong exit that lands in the stop step's room is not reaching the step: Dungeon 1's 0x72 (step 47, a key
+    // to take) left at once the way Link came is 0x73 with step 48's progress, and the run goes on.
+    let mut c = chain(c.into_parts().0.into_nes(), data, load(Some("1_72e_0")).with_stop_step(&data.map, 48).unwrap());
+    assert!(matches!(c.reset(Some(0), &mut ChaCha8Rng::seed_from_u64(0)).unwrap(), ChainStatus::Act { .. }));
+    assert!(matches!(c.step(parse("MOVE E 16")).unwrap(), ChainStatus::Act { new_room: true, .. }));
+    let rooms: Vec<_> = c.result().unwrap().rooms.iter().map(|x| (x.room.as_str(), x.outcome.as_str())).collect();
+    assert_eq!((rooms, c.context().0), (vec![("0x72", "exit-wrong"), ("0x73", "in-progress")], Some(48)));
+
+    // What a route refuses: a stop step not after the start step or off the route, two ways to stop, two starts.
+    let error = |route: Result<Route, String>| route.expect_err("refused");
+    assert!(error(load(Some("0_3cc_0")).with_stop_step(&data.map, 24)).contains("after its start step 24"));
+    assert!(error(load(None).with_stop_step(&data.map, 0)).contains("after its start step 0"));
+    assert!(error(load(None).with_stop_step(&data.map, steps)).contains("is not a step of route 'd2first'"));
+    let stop_at = Route::load(&data.map, &data.states_dir, "d2first", Some(MapLocation::new(1, 0x73, false)), None);
+    assert!(error(stop_at.unwrap().with_stop_step(&data.map, 3)).contains("exclusive"));
+    assert!(error(load(Some("0_3cc_0")).with_power_on("LINK", Some(0), 0)).contains("replaces the game start"));
+    assert!(error(load(Some("0_3cc_0")).with_checkpoint(&data.map, end.clone(), 25, ItemCounts::default()))
+        .contains("replaces the game start"));
+    assert!(error(load(None).with_checkpoint(&data.map, end.clone(), steps, ItemCounts::default()))
+        .contains("is not a step"));
+    assert!(error(load(None).with_power_on("ZELDA", None, 0)).contains("second quest"));
+    assert!(error(load(None).with_power_on("LINK", None, power_on::MAX_DELAY + 1)).contains("at most 32766"));
+    let checkpoint = load(None).with_checkpoint(&data.map, end.clone(), 25, ItemCounts::default()).unwrap();
+    assert!(error(checkpoint.clone().with_stop_step(&data.map, 25)).contains("after its start step 25"));
+
+    // From the checkpoint: no frame runs and nothing is written, whatever the seed.
+    let mut c = chain(c.into_parts().0.into_nes(), data, checkpoint.with_stop_step(&data.map, 26).unwrap());
+    let acting = data.specialist_for(MapLocation::new(0, 0x4c, false)).unwrap();
+    for seed in [5, 6] {
+        let status = c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+        let ChainStatus::Act { specialist, new_room, .. } = status else { panic!("run ended at reset") };
+        assert_eq!((&*specialist, new_room), (acting, true));
+        assert_eq!(c.session().frame(), 0, "the checkpoint runs no frame");
+        assert!(c.session().nes().ram() == &ram && c.session().nes().prg_ram() == &prg_ram);
+        assert_eq!(c.context().0, Some(25));
+        let rooms = &c.result().unwrap().rooms;
+        assert_eq!((rooms.len(), rooms[0].level, rooms[0].room.as_str()), (1, 0, "0x4c"));
     }
-    let r = c.result().unwrap();
-    let rooms: Vec<_> = r.rooms.iter().map(|x| (x.level, x.room.as_str(), x.outcome.as_str())).collect();
-    assert_eq!(rooms, [(2, "0x0d", "exit-correct"), (0, "0x3c", "in-progress")]);
-    assert!(dir.path().join("ow-octorok/0_3cc_h0_1.state").is_file());
+    // The run goes on from there (the stop step is not the room it starts in).
+    assert!(matches!(c.step(parse("WAIT 8")).unwrap(), ChainStatus::Act { .. }));
+
+    // Bytes that are no state end the run as an error, like a start state that can't be loaded.
+    let junk = load(None).with_checkpoint(&data.map, Arc::from(&b"not a state"[..]), 25, ItemCounts::default());
+    let mut c = chain(c.into_parts().0.into_nes(), data, junk.unwrap());
+    let ChainStatus::Done(r) = c.reset(Some(0), &mut ChaCha8Rng::seed_from_u64(0)).unwrap() else { panic!() };
+    assert_eq!(r.result, "error");
+    assert!(r.reason.contains("TFZSTATE"), "{}", r.reason);
     c.into_parts().0.into_nes()
+}
+
+/// The golden path's checkpoints: the step after a mid-route triforce is the overworld room Link comes out
+/// in.  A run stopped on that step ends there with Link controllable, and its end state is a checkpoint.
+fn a_stop_step_after_a_triforce_ends_the_run_on_the_overworld(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let steps = &data.map.routes["d2first"];
+    let triforce = steps.iter().position(|s| s.exit == "triforce").unwrap();
+    assert_eq!((steps[triforce].level, steps[triforce].room, triforce), (2, 0x0d, 23));
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("2_0de_0")).unwrap();
+    let mut c = chain(nes, data, route.with_stop_step(&data.map, triforce + 1).unwrap());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+    let r = walk_onto_the_triforce(&mut c).expect("taking the triforce ends the run outside the dungeon");
+    assert_eq!((r.result.as_str(), r.reason.as_str()), ("success", "reached route step 24 (level 0, room 0x3c)"));
+    let rooms: Vec<_> = r.rooms.iter().map(|x| (x.level, x.room.as_str(), x.outcome.as_str())).collect();
+    assert_eq!(rooms, [(2, "0x0d", "exit-correct"), (0, "0x3c", "milestone")]);
+    let state = c.session().state().clone();
+    assert_eq!((c.session().nes().peek(0x12), state.level(), state.location()), (5, 0, 0x3c));
+    assert!(state.has_triforce(2));
+    assert_eq!(c.context().0, Some(triforce + 1));
+    c.into_parts().0.into_nes()
+}
+
+/// A power-on start plays the boot inputs and nothing else: the machine is the one a bare emulator reaches
+/// with `power_on::boot` (and control gained), on the route's first step; a random delay is the run seed's.
+fn a_power_on_start_boots_the_game_by_inputs_alone(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let mut c = chain(nes, data, d2first(data).with_power_on("link", Some(0), 0).unwrap());
+    let status = c.reset(Some(9), &mut ChaCha8Rng::seed_from_u64(9)).unwrap();
+    let ChainStatus::Act { specialist, .. } = status else { panic!("run ended at reset") };
+    assert_eq!(&*specialist, "ow-start");
+    assert_eq!(c.booted(), Some(("LINK", 0)));
+    assert_eq!(c.session().state().full_location(), MapLocation::new(0, 0x77, false));
+    assert_eq!(c.context(), (Some(0), ItemCounts::default()));
+    let mut bare = open_core().unwrap();
+    power_on::boot(&mut bare, "LINK", 0).unwrap();
+    let mut session = Session::new(bare, data.map.clone());
+    let live = session.nes().snapshot();
+    session.load(&live, &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    assert!(session.nes().ram() == c.session().nes().ram(), "RAM");
+    assert!(session.nes().prg_ram() == c.session().nes().prg_ram(), "PRG-RAM");
+
+    // A delay left to chance is drawn from the run's generator: the same run for the same seed.
+    let mut c = chain(c.into_parts().0.into_nes(), data, d2first(data).with_power_on("LINK", None, 50).unwrap());
+    let mut boot = |seed: u64| {
+        let status = c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+        assert!(matches!(status, ChainStatus::Act { .. }));
+        (c.booted().unwrap().1, c.session().nes().ram().to_vec())
+    };
+    let ((delay, ram), (again_delay, again), (other_delay, other)) = (boot(1), boot(1), boot(2));
+    assert!(delay <= 50 && other_delay <= 50);
+    assert!((delay, &ram) == (again_delay, &again), "seed 1 twice");
+    assert_ne!(delay, other_delay, "seeds 1 and 2 draw different delays");
+    assert_ne!(ram[0x18..=0x24], other[0x18..=0x24], "another delay is another RNG phase");
+    c.into_parts().0.into_nes()
+}
+
+/// A chain's reward recording pays what training pays: from the same state, on the same route step, a
+/// specialist env and a chain with rewards on score the same actions with the same terms, to the episode's end.
+fn chain_rewards_are_the_training_rewards(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let location = MapLocation::new(0, 0x3c, false);
+    let step = data.map.routes["d2first"].iter().position(|s| s.location() == location).unwrap();
+    let mut compared = 0;
+    let mut nes = Some(nes);
+    for seed in 0..4u64 {
+        // A controllable snapshot of 0x3c (where Link comes out of Dungeon 2).
+        let mut session = Session::new(nes.take().unwrap(), data.map.clone());
+        let start = common::load_named_state("0_3cc_0").unwrap();
+        session.load(&start, &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+        let snapshot = session.snapshot();
+        assert_eq!(session.state().full_location(), location);
+        let name = data.specialist_for(location).unwrap().to_owned();
+
+        let opts = EnvOptions {
+            explicit_starts: true,
+            ..Default::default()
+        };
+        let config = data.specialist(&name).unwrap();
+        let mut env = SpecialistEnv::new(config, data.clone(), session.into_nes(), TfzStore::new(), opts).unwrap();
+        env.set_route("d2first", Some(step));
+        env.restore(&snapshot, "0_3cc_0").unwrap();
+
+        let state: Arc<[u8]> = Arc::from(common::encode_state(&snapshot).unwrap());
+        let route = d2first(data).with_checkpoint(&data.map, state, step, ItemCounts::default()).unwrap();
+        let mut c = chain(open_core().unwrap(), data, route);
+        c.set_rewards(true);
+        let status = c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+        assert!(matches!(status, ChainStatus::Act { ref specialist, .. } if **specialist == *name));
+        assert!(c.take_scored().is_none(), "nothing is scored before the first step");
+
+        let mut rng = ChaCha8Rng::seed_from_u64(40 + seed);
+        for _ in 0..40 {
+            assert!(env.session().mask() == c.session().mask(), "the same legal actions");
+            let action = random_action(env.session().mask(), &mut rng, None);
+            let trained = env.step(action).unwrap();
+            let status = c.step(action).unwrap();
+            let scored = c.take_scored().expect("every step is scored");
+            assert_eq!(scored.rewards.terms().collect::<Vec<_>>(), trained.info.rewards, "{action}");
+            assert_eq!((scored.terminated, scored.truncated), (trained.terminated, trained.truncated));
+            let ended = trained.info.terminal.as_ref().map(|t| (t.ending.clone(), t.outcome));
+            assert_eq!(scored.ending.clone().zip(scored.outcome), ended);
+            compared += 1;
+            if ended.is_some() || matches!(status, ChainStatus::Done(_)) {
+                break;
+            }
+        }
+        nes = Some(env.into_parts().0.into_nes());
+    }
+    assert!(compared >= 40, "{compared} steps compared");
+    nes.unwrap()
 }
 
 /// `test_explore_finds_replays_and_writes_a_curriculum_trajectory`: 0x38 from the north, the W exit past Octoroks

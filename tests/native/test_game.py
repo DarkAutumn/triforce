@@ -177,3 +177,36 @@ def test_play_movie_from_power_on():
         _ = game.state
     state = game.play_movie(MOVIE)
     assert (state.mode, state.level, state.location) == (5, 0, 0x77)
+
+
+def test_boot_from_power_on_is_the_start_state(game):
+    """The inputs `boot` plays are the base movie's: with no idle, the machine is the shipped start state."""
+    start = game.load('start', randomize_rng=False)
+    booted = native.Game()
+    state = booted.boot('link', 0)
+    assert (state.mode, state.full_location, state.health) == (5, start.full_location, start.health)
+    assert np.array_equal(booted.ram(), game.ram())
+    with pytest.raises(ValueError, match='needs a machine at power on'):
+        booted.boot()
+    # Another idle is another phase of the game's random numbers ($18-$24), and nothing else.
+    later = native.Game()
+    later.boot('LINK', 3)
+    differ = np.flatnonzero(later.ram() != booted.ram())
+    assert differ.size and set(range(0x18, 0x25)) & set(differ.tolist())
+
+
+@pytest.mark.parametrize('name, message', [
+    ('ZELDA', 'second quest'), ('zelda 2', 'second quest'), ('', '1 to 8 characters'), ('NINELTTRS', '1 to 8'),
+    ('   ', 'all spaces'), ('L!NK', 'only A-Z, 0-9 and spaces'),
+])
+def test_boot_refuses_names_the_game_does_not_take(name, message):
+    with pytest.raises(ValueError, match=message):
+        native.Game().boot(name)
+    with pytest.raises(ValueError, match=message):
+        native.power_on_name(name)
+
+
+def test_boot_delay_is_limited_to_the_rng_period():
+    assert native.MAX_POWER_ON_DELAY == 32766 and native.power_on_name('link 2') == 'LINK 2'
+    with pytest.raises(ValueError, match='32766'):
+        native.Game().boot('LINK', 32767)

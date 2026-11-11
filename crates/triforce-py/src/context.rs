@@ -220,6 +220,17 @@ impl StateStore<MachineState> for TfzStore {
     fn power_on(&self) -> Result<MachineState, EnvError> {
         Ok(zcore::ZCore::power_on(self.rom.clone()).snapshot())
     }
+
+    fn power_on_idle(&self, frames: u32) -> Result<Option<MachineState>, EnvError> {
+        let path = self.path(&zelda::power_on::idle_state_name(frames));
+        if !path.is_file() {
+            return Ok(None);
+        }
+        match self.read(&path) {
+            Ok(file) => Ok(Some(file.machine)),
+            Err(StoreError::Io(m) | StoreError::Format(m)) => Err(EnvError::State(m)),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -272,6 +272,23 @@ impl CheatLedger {
         Self::write(session, step)
     }
 
+    /// [`CheatLedger::begin`] on a state a run is continued from, where `granted` of each item's count was
+    /// granted (and not used) when the state was taken: those units stay granted, so using them counts as
+    /// cheated and leaving the room takes them back.
+    pub fn resume<N: Nes>(
+        &mut self,
+        session: &mut Session<N>,
+        completion: &GameCompletion,
+        granted: ItemCounts<u8>,
+    ) -> Arc<GameView> {
+        let state = self.begin(session, completion);
+        for item in CheatItem::ALL {
+            let held = &mut self.held[item];
+            held.granted = (held.granted + i32::from(granted[item])).min(held.count);
+        }
+        state
+    }
+
     /// [`CheatLedger::settle`] on the session's state after an action from room `prev`, writing the counts the rule
     /// sets; returns the step and the state to carry on (the action's `Change` keeps what the action itself did).
     /// `completion` hasn't followed the action yet.

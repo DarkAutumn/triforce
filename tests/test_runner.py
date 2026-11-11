@@ -17,10 +17,10 @@ import torch
 import triforce
 from triforce import _native, provenance as provenance_module, registry, replay, run
 from triforce.runner import Policies, Route, RoomRecord, Runner, RunnerError, RunResult, chain_summary, \
-    parse_location, write_jsonl
+    parse_location, parse_stop, write_jsonl
 from triforce.zelda_enums import ActionKind, MapLocation
 
-from .conftest import REPO_STATES_DIR
+from .conftest import REPO_STATES_DIR, require_state
 from .networks import scripted
 
 
@@ -136,6 +136,92 @@ def test_policies_load_promoted_models_and_name_the_missing(models_dir, tmp_path
     assert [config.name for config in policies.configs] == policies.names
     empty = Policies(tmp_path)
     assert not empty.names and 'ow-start' in empty.missing['ow-start']
+
+
+def test_route_checks_a_stop_step_a_power_on_start_and_a_checkpoint():
+    assert parse_stop('step:24') == (None, 24) and parse_stop(None) == (None, None)
+    assert parse_stop('1:0x73') == (MapLocation(1, 0x73, False), None)
+    route = Route.load('d2first', stop_step=24)
+    assert (route.stop_step, route.terminal, route.start_state) == (24, None, 'start')
+    assert Route.load('d2first', power_on={}).power_on == {'name': 'LINK', 'delay': None, 'max_delay': 32766}
+    assert Route.load('d2first', power_on={'name': 'bob 2', 'delay': 9}).power_on == {
+        'name': 'BOB 2', 'delay': 9, 'max_delay': 32766}
+    checkpoint = {'state': b'a state', 'step': 24, 'granted': [1, 0, 0], 'kind': 'end', 'frame': 7}
+    route = Route.load('d2first', checkpoint=checkpoint, stop_step=25)
+    assert route.checkpoint == {'state': b'a state', 'step': 24, 'granted': [1, 0, 0]}
+    from_3c = {'start_from': '0_3cc_0', 'states_dir': REPO_STATES_DIR}
+    for kwargs, message in [
+            ({'stop_step': 0}, "--stop-at step:0 is not a step of route 'd2first' after the start step 0"),
+            ({'stop_step': 10_000}, 'is not a step of route'),
+            ({'stop_step': 24, **from_3c}, 'after the start step 24; steps: 25..='),
+            ({'stop_step': 24, 'checkpoint': checkpoint}, 'after the start step 24'),
+            ({'stop_step': 30, 'stop_at': parse_location('1:0x73')}, 'a stop room and a stop step are exclusive'),
+            ({'power_on': {}, **from_3c}, r'a start state \(--from\) and a power-on start are exclusive'),
+            ({'power_on': {}, 'checkpoint': checkpoint}, 'a power-on start and a checkpoint are exclusive'),
+            ({'checkpoint': {**checkpoint, 'step': 10_000}}, "the checkpoint's step 10000 is not a step"),
+            ({'power_on': {'name': 'ZELDA'}}, 'second quest'),
+            ({'power_on': {'delay': 32767}}, r'the power-on delay 32767 must be a frame count in 0\.\.=32766'),
+            ({'power_on': {'max_delay': -1}}, 'the power-on max delay -1 must be'),
+            ({'power_on': {'frames': 3}}, r"unknown power-on options \['frames'\]")]:
+        with pytest.raises(RunnerError, match=message):
+            Route.load('d2first', **kwargs)
+
+
+def test_power_on_runs_start_the_game_by_inputs_and_draw_their_delay_from_the_seed(states_dir, models_dir):
+    runner = Runner(models_dir=models_dir, max_steps=12, parallel=2, states_dir=states_dir)
+    drawn = Route.load('d2first', power_on={'max_delay': 40})
+    twice = [[r.to_dict() for r in runner.run_many(drawn, [1, 2, 3])] for _ in range(2)]
+    assert twice[0] == twice[1]
+    for result in twice[0]:
+        room = result['rooms'][0]
+        assert (room['level'], room['room'], room['specialist'], room['health_in']) == (0, '0x77', 'ow-start', 3.0)
+        assert result['steps'] == 12 or result['result'] == 'failure'
+    provenance = runner.provenance(drawn)
+    assert provenance['power_on'] == {'name': 'LINK', 'delay': None, 'max_delay': 40}
+    assert (provenance['start_from'], provenance['checkpoint'], provenance['stop_step']) == (None, None, None)
+
+
+def _play_recorded(runner, route, seed):
+    """(the run's result, its recording) of one recorded chain run."""
+    record = replay.record_options(replay.meta('chain', [], route.name))
+    events = []
+    with runner.pool(route, [seed], record=record) as pool:
+        pool.play()
+        idle = False
+        while not idle:
+            idle = pool.pool.wait_idle(timeout=0.1)
+            events += pool.poll_events()
+    (_, result), = pool.results(events)
+    recording, = [_native.Replay(e['data']) for e in events if e['type'] == 'replay']
+    return result, recording
+
+
+def test_a_run_ends_on_its_stop_step_and_another_continues_from_its_end(states_dir, models_dir):
+    """0x3c (step 24), where Link comes out of Dungeon 2: straight south is 0x4c (step 25)."""
+    runner = Runner(models_dir=models_dir, max_steps=40, states_dir=states_dir,
+                    networks={'ow-octorok': scripted('MOVE S 16')})
+    route = Route.load('d2first', start_from=str(require_state('0_3cc_0')), stop_step=25)
+    result, recording = _play_recorded(runner, route, 0)
+    assert (result.result, result.reason) == ('success', 'reached route step 25 (level 0, room 0x4c)')
+    assert [(r.room, r.outcome) for r in result.rooms] == [('0x3c', 'exit-correct'), ('0x4c', 'milestone')]
+    assert recording.ending == 'win'
+    end = recording.states()[-1]
+    assert (end['kind'], end['step'], end['frame']) == ('end', 25, recording.frames)
+    health = result.rooms[-1].health_in
+
+    onward = Route.load('d2first', checkpoint=end, stop_step=26)
+    provenance = runner.provenance(onward)
+    assert provenance['checkpoint']['step'] == 25 and len(provenance['checkpoint']['state_sha1']) == 40
+    runner.max_steps = 6
+    result, continued = _play_recorded(runner, onward, 3)
+    room = result.rooms[0]
+    assert (room.level, room.room, room.health_in) == (0, '0x4c', health)
+    assert continued.source == {'kind': 'checkpoint'}
+    assert continued.states()[0]['state'] == end['state'] and continued.events()[0] == {'frame': 0, 'type': 'control'}
+    joined = _native.Replay(_native.replay_stitch(recording.data, continued.data))
+    assert joined.frames == recording.frames + continued.frames
+    assert _native.replay_verify(joined.data)['frames'] == joined.frames
+
 
 
 def test_missing_promoted_model_is_an_error(states_dir, tmp_path):

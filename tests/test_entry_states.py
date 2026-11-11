@@ -107,6 +107,18 @@ def test_start_state_is_the_first_controllable_frame(tmp_path):
     assert state.max_health == BASE_HEARTS
 
 
+def test_idle_writes_the_shipped_power_on_idle_states(tmp_path, capsys):
+    """The command that regenerates ``triforce/states/power_on`` writes what is checked in."""
+    require_rom()
+    assert entry_states.main(['idle', '--out', str(tmp_path)]) == 0
+    written = sorted(p.name for p in tmp_path.iterdir())
+    assert written == [f'idle_{frames:05}.state' for frames in range(2000, 30001, 2000)]
+    assert capsys.readouterr().out.splitlines() == [str(tmp_path / name) for name in written]
+    shipped = REPO_STATES_DIR / 'power_on'
+    stale = [name for name in written if (tmp_path / name).read_bytes() != (shipped / name).read_bytes()]
+    assert not stale, f"regenerate them with `python -m triforce.entry_states idle`: {stale}"
+
+
 def test_game_rooms_reads_game_yaml():
     rooms = game_rooms()
     assert rooms[(0, 0x77, True)]['treasure'] == 'wood-sword'

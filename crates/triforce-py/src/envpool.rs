@@ -147,13 +147,18 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 /// published (the next run doesn't publish) until `EnvPool.set_hold(env, False)`. `harvest` (a directory, off by
 /// default): every correct room entry where the acting specialist changes saves its pre-entry state as
 /// `harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state` (`ChainEnv::set_harvest`).
+///
+/// A run starts from the game start state, or from one of: `start_from` (a state name or path); `power_on`
+/// (`{'name': 'LINK', 'delay': None, 'max_delay': 32766}`: console power on, the name registered after `delay`
+/// idle frames on the file-select screen, None = drawn per run seed from `0..=max_delay`; no memory is
+/// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees]}`: a state another
+/// run reached, as is; an entry of `Replay.states()` is one). It ends at the route's end, or on entering
+/// `stop_at` (a room) or route step `stop_step`'s room (on the route).
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
     configs: Vec<Arc<SpecialistConfig>>,
-    route: String,
+    route: Route,
     seeds: Vec<u64>,
-    stop_at: Option<zelda::MapLocation>,
-    start_from: Option<String>,
     max_steps: u64,
     stall_steps: Option<u64>,
     hold_finished_frame: bool,
@@ -162,11 +167,56 @@ pub struct PyChainTask {
     harvest: Option<PathBuf>,
 }
 
+fn config_err(message: impl Into<String>) -> PyErr {
+    ConfigError::new_err(message.into())
+}
+
+/// `route` with a `power_on` dict's start.
+fn with_power_on(route: Route, options: &Bound<'_, PyDict>) -> PyResult<Route> {
+    let (mut name, mut delay, mut max_delay) = (zelda::power_on::DEFAULT_NAME.to_owned(), None, zelda::power_on::MAX_DELAY);
+    for (key, value) in options.iter() {
+        let key: String = key.extract()?;
+        let bad = |want: &str| config_err(format!("power_on[{key:?}] must be {want}, not {value:?}"));
+        match key.as_str() {
+            "name" => name = value.extract().map_err(|_| bad("a name"))?,
+            "delay" => delay = value.extract().map_err(|_| bad("a frame count or None"))?,
+            "max_delay" => max_delay = value.extract().map_err(|_| bad("a frame count"))?,
+            _ => return Err(config_err(format!("unknown power_on key {key:?} (name, delay, max_delay)"))),
+        }
+    }
+    route.with_power_on(&name, delay, max_delay).map_err(config_err)
+}
+
+/// `route` continued from a `checkpoint` dict's state.
+fn with_checkpoint(route: Route, map: &zelda::GameMap, checkpoint: &Bound<'_, PyDict>) -> PyResult<Route> {
+    let field = |key: &str| {
+        checkpoint
+            .get_item(key)?
+            .filter(|value| !value.is_none())
+            .ok_or_else(|| config_err(format!("the checkpoint has no {key}")))
+    };
+    let state: Vec<u8> = field("state")?.extract().map_err(|_| config_err("checkpoint['state'] must be bytes"))?;
+    let step: usize = field("step")?.extract().map_err(|_| config_err("checkpoint['step'] must be a route step"))?;
+    let granted: [u8; 3] = match checkpoint.get_item("granted")? {
+        Some(granted) => granted
+            .extract()
+            .map_err(|_| config_err("checkpoint['granted'] must be [bombs, keys, rupees]"))?,
+        None => [0; 3],
+    };
+    let granted = zelda::cheats::ItemCounts {
+        bombs: granted[0],
+        keys: granted[1],
+        rupees: granted[2],
+    };
+    route.with_checkpoint(map, Arc::from(state), step, granted).map_err(config_err)
+}
+
 #[pymethods]
 impl PyChainTask {
     #[new]
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
-                        states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None))]
+                        states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None,
+                        stop_step=None, power_on=None, checkpoint=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -181,6 +231,9 @@ impl PyChainTask {
         stall_steps: Option<u64>,
         hold_finished_frame: bool,
         harvest: Option<PathBuf>,
+        stop_step: Option<usize>,
+        power_on: Option<&Bound<'_, PyDict>>,
+        checkpoint: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         check_seeds(seeds.iter().copied())?;
         let configs = configs
@@ -195,15 +248,28 @@ impl PyChainTask {
                 parse_room(&text).map_err(|e| ConfigError::new_err(e.0))
             })
             .transpose()?;
+        if usize::from(start_from.is_some()) + usize::from(power_on.is_some()) + usize::from(checkpoint.is_some()) > 1 {
+            return Err(config_err("a chain starts from one of start_from, power_on and checkpoint"));
+        }
+        if stop_at.is_some() && stop_step.is_some() {
+            return Err(config_err("a chain stops at one of stop_at and stop_step"));
+        }
         let data = context::data(py, states_dir.as_deref())?;
-        Route::load(&data.map, &data.states_dir, &route, stop_at, start_from.as_deref())
+        let mut route = Route::load(&data.map, &data.states_dir, &route, stop_at, start_from.as_deref())
             .map_err(ConfigError::new_err)?;
+        if let Some(options) = power_on {
+            route = with_power_on(route, options)?;
+        }
+        if let Some(checkpoint) = checkpoint {
+            route = with_checkpoint(route, &data.map, checkpoint)?;
+        }
+        if let Some(step) = stop_step {
+            route = route.with_stop_step(&data.map, step).map_err(config_err)?;
+        }
         Ok(PyChainTask {
             configs,
             route,
             seeds,
-            stop_at,
-            start_from,
             max_steps,
             stall_steps,
             hold_finished_frame,
@@ -334,8 +400,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
         let t = t.get();
         let data: Arc<GameData> = context::data(py, t.states_dir.as_deref())?;
         let store = TfzStore::new(&data, rom.clone());
-        let route = Route::load(&data.map, &data.states_dir, &t.route, t.stop_at, t.start_from.as_deref())
-            .map_err(ConfigError::new_err)?;
+        let route = t.route.clone();
         let seeds = Jobs::new(t.seeds.iter().copied());
         let policies: Vec<Arc<str>> = t
             .configs

@@ -41,19 +41,29 @@ class RunnerError(RuntimeError):
 
 @dataclass
 class Route:
-    """Where a route starts and which room ends it (``terminal``; None: the route ends on its last triforce)."""
+    """Where a route starts and what ends it.  The start: ``start_state`` (``'start'``: the game start state), or
+    ``power_on`` (``{'name', 'delay', 'max_delay'}``: console power on, ``delay`` None = drawn per run seed from
+    ``0..=max_delay``), or ``checkpoint`` (``{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees]}``:
+    the state another run ended in, e.g. ``Replay.end_state()``).  The end: ``terminal`` (a room), or
+    ``stop_step`` (a route step, reached by the route's own exit), or neither: the route's last triforce."""
     name: str
     start_state: str
     terminal: Optional[MapLocation] = None
+    stop_step: Optional[int] = None
+    power_on: Optional[dict] = None
+    checkpoint: Optional[dict] = None
 
     @staticmethod
     def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None,
-             states_dir=None) -> 'Route':
-        """Loads a route from routes.yaml.  ``stop_at`` ends it on entering that room instead of on its last step's
-        triforce, and ``start_from`` (a savestate, e.g. a route entry state like ``2_7ds_0``, in ``states_dir``,
-        default ``paths.STATES_DIR``, or a path) replaces the game start, for partial chain evals.  The start state
-        must exist and ``stop_at`` must be the room of a route step after the start state's step (the native
-        ``Route::load`` checks the same when the chain task is built)."""
+             states_dir=None, *, stop_step: Optional[int] = None, power_on: Optional[dict] = None,
+             checkpoint: Optional[dict] = None) -> 'Route':
+        """Loads a route from routes.yaml.  ``stop_at`` ends it on entering that room, ``stop_step`` on reaching
+        that route step, instead of on its last step's triforce.  One of ``start_from`` (a savestate, e.g. a
+        route entry state like ``2_7ds_0``, in ``states_dir``, default ``paths.STATES_DIR``, or a path),
+        ``power_on`` and ``checkpoint`` replaces the game start (``Route``).  The start state must exist, the
+        stop must be after the start's route step, and a power-on name and delay must be ones the game takes
+        (the native ``Route`` checks the same when the chain task is built)."""
+        # pylint: disable=too-many-arguments, too-many-branches
         try:
             steps = _native.route_steps(name)
         except _native.ConfigError as err:
@@ -62,23 +72,62 @@ class Route:
             raise RunnerError(f"Unknown route '{name}'")
         if steps[0]['entry'] != 'start':
             raise RunnerError(f"Route '{name}' must begin at the game start (entry: start)")
-        if stop_at is None and steps[-1]['exit'] != 'triforce':
+        if stop_at is None and stop_step is None and steps[-1]['exit'] != 'triforce':
             raise RunnerError(f"Route '{name}' doesn't end on a triforce")
+        if stop_at is not None and stop_step is not None:
+            raise RunnerError("a stop room and a stop step are exclusive")
+        if start_from == 'start':
+            start_from = None
+        starts = [what for what, given in (('a start state (--from)', start_from), ('a power-on start', power_on),
+                                           ('a checkpoint', checkpoint)) if given is not None]
+        if len(starts) > 1:
+            raise RunnerError(f"{' and '.join(starts)} are exclusive: each replaces the game start")
         start = 0
-        if start_from is not None and start_from != 'start':
+        if start_from is not None:
             path = _start_state_path(start_from, states_dir)
             if not path.is_file():
                 near = difflib.get_close_matches(path.stem, [p.stem for p in path.parent.glob('*.state')], n=5)
                 raise RunnerError(f"Unknown start state '{start_from}': {path} not found (states in {path.parent}"
                                   + (f"; close: {near}" if near else '') + ')')
             start = _start_step(steps, path.stem)
+        if power_on is not None:
+            power_on = _power_on(power_on)
+        if checkpoint is not None:
+            start = checkpoint.get('step')
+            if not isinstance(start, int) or not 0 <= start < len(steps):
+                raise RunnerError(f"the checkpoint's step {start!r} is not a step of route '{name}' "
+                                  f"(0..={len(steps) - 1})")
+            checkpoint = {'state': bytes(checkpoint['state']), 'step': start,
+                          'granted': list(checkpoint.get('granted') or (0, 0, 0))}
         if stop_at is not None:
             later = [(s['level'], s['room'], s['in_cave']) for s in steps[start + 1:]]
             if (stop_at.level, stop_at.value, stop_at.in_cave) not in later:
                 rooms = sorted(set(later), key=later.index)
                 raise RunnerError(f"--stop-at {location_text(stop_at)} is not a room of route '{name}' after the start "
                                   f"step; rooms: {[location_text(MapLocation(*room)) for room in rooms]}")
-        return Route(name, start_from or 'start', stop_at)
+        if stop_step is not None and not start < stop_step < len(steps):
+            raise RunnerError(f"--stop-at step:{stop_step} is not a step of route '{name}' after the start step "
+                              f"{start}; steps: {start + 1}..={len(steps) - 1}")
+        return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint)
+
+
+def _power_on(options: dict) -> dict:
+    """A power-on start's ``{'name', 'delay', 'max_delay'}`` checked and filled in (name LINK, a random delay over
+    the whole range); ``RunnerError`` for a name the game can't register or a delay out of range."""
+    unknown = sorted(set(options) - {'name', 'delay', 'max_delay'})
+    if unknown:
+        raise RunnerError(f"unknown power-on options {unknown} (name, delay, max_delay)")
+    limit = _native.MAX_POWER_ON_DELAY
+    try:
+        name = _native.power_on_name(options.get('name') or 'LINK')
+    except ValueError as err:
+        raise RunnerError(str(err)) from err
+    delay, max_delay = options.get('delay'), options.get('max_delay')
+    max_delay = limit if max_delay is None else max_delay
+    for what, value in (('delay', delay), ('max delay', max_delay)):
+        if value is not None and (not isinstance(value, int) or not 0 <= value <= limit):
+            raise RunnerError(f"the power-on {what} {value!r} must be a frame count in 0..={limit}")
+    return {'name': name, 'delay': delay, 'max_delay': max_delay}
 
 
 def _start_state_path(name: str, states_dir=None) -> Path:
@@ -284,7 +333,8 @@ class ChainPool:
                                  start_from=start_from, max_steps=max_steps, missing=policies.missing,
                                  states_dir=states_dir, stall_steps=stall_steps,
                                  hold_finished_frame=hold_finished_frame,
-                                 harvest=None if harvest is None else str(harvest))
+                                 harvest=None if harvest is None else str(harvest),
+                                 stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
         self.writer = None
@@ -395,8 +445,12 @@ class Runner:
             model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
             model['act'] = 'argmax' if model['deterministic'] else 'sample'
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
+        checkpoint = route.checkpoint and {'step': route.checkpoint['step'], 'granted': route.checkpoint['granted'],
+                                           'state_sha1': hashlib.sha1(route.checkpoint['state']).hexdigest()}
         return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
-                'stop_at': location_text(route.terminal), 'max_steps': self.max_steps, 'models': models,
+                'power_on': route.power_on, 'checkpoint': checkpoint,
+                'stop_at': location_text(route.terminal), 'stop_step': route.stop_step,
+                'max_steps': self.max_steps, 'models': models,
                 'missing': dict(sorted(policies.missing.items())), 'version': __version__, 'code': code_version(),
                 'data': data_hash()}
 
@@ -425,6 +479,55 @@ def parse_location(text: str) -> MapLocation:
         return MapLocation(int(parts[0]), int(parts[1], 16), len(parts) == 3)
     except ValueError:
         raise RunnerError(f"'{text}' is not a room (LEVEL:0xROOM[:cave], e.g. 1:0x73)") from None
+
+
+def parse_stop(text: Optional[str]) -> Tuple[Optional[MapLocation], Optional[int]]:
+    """``--stop-at``: (room, None) for a room (``1:0x73``), (None, step) for a route step (``step:24``), (None,
+    None) without one; anything else raises ``RunnerError``."""
+    if not text:
+        return None, None
+    if text.startswith('step:'):
+        if not text[5:].isdecimal():
+            raise RunnerError(f"'{text}' is not a route step (step:N, e.g. step:24)")
+        return None, int(text[5:])
+    return parse_location(text), None
+
+
+STOP_AT_HELP = ("end the route on entering this room (e.g. 1:0x73), or on reaching this route step by the route's "
+                "own exit (step:N, e.g. step:24: back on the overworld with Dungeon 2's triforce)")
+
+
+def add_power_on_arguments(parser) -> None:
+    """``--power-on``, ``--name`` and ``--delay``: a start from console power on (``power_on_options``)."""
+    limit = _native.MAX_POWER_ON_DELAY
+    parser.add_argument('--power-on', action='store_true',
+                        help="start every run from console power on, by controller inputs alone (title screen, "
+                             "name entry, game start): no state file and no memory write; the run's randomness is "
+                             "--delay")
+    parser.add_argument('--name', default=None, metavar='NAME',
+                        help="with --power-on: the name to register (1 to 8 of A-Z, 0-9 and space; default LINK; "
+                             "ZELDA is refused, it starts the second quest)")
+    parser.add_argument('--delay', default=None, metavar='N|random',
+                        help=f"with --power-on: idle frames on the file-select screen before the name is entered, "
+                             f"which set the game's random numbers: N in 0..={limit} (every value is a different "
+                             f"game), or 'random' (default): drawn from that range by each run's seed")
+
+
+def power_on_options(args) -> Optional[dict]:
+    """The ``Route.load`` ``power_on`` of parsed ``add_power_on_arguments`` flags (None without ``--power-on``);
+    ``RunnerError`` for ``--name`` or ``--delay`` without it, or a delay that is no frame count."""
+    if not args.power_on:
+        given = [flag for flag, value in (('--name', args.name), ('--delay', args.delay)) if value is not None]
+        if given:
+            raise RunnerError(f"{' and '.join(given)} need{'s' if len(given) == 1 else ''} --power-on")
+        return None
+    delay = None
+    if args.delay not in (None, 'random'):
+        if not args.delay.isdecimal():
+            raise RunnerError(f"--delay {args.delay!r} must be a frame count in 0..={_native.MAX_POWER_ON_DELAY}, "
+                              f"or 'random'")
+        delay = int(args.delay)
+    return _power_on({'name': args.name, 'delay': delay})
 
 
 def parse_overrides(items: Iterable[str]) -> Dict[str, str]:

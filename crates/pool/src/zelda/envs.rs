@@ -903,8 +903,9 @@ where
             self.chain.set_rewards(self.control.record_options().is_some_and(|o| o.rewards));
             let status = self.chain.reset(Some(seed), &mut rng)?;
             let context = context(self.chain.context());
+            let booted = self.chain.booted().map(|(name, delay)| (name.to_owned(), delay));
             let (session, store) = self.chain.session_and_store();
-            start_recording(session, store, context, None)?;
+            start_recording(session, store, context, booted.as_ref().map(|(name, delay)| (name.as_str(), *delay)))?;
             if matches!(status, ChainStatus::Act { .. }) {
                 self.record_progress(None)?;
             }

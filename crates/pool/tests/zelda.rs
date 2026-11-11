@@ -140,6 +140,40 @@ impl StateStore<MachineState> for TfzStore {
     fn power_on(&self) -> Result<MachineState, EnvError> {
         Ok(ZCore::power_on(rom().ok_or_else(|| state_error("ROM not found"))?).snapshot())
     }
+
+    /// The checked-in idle states (`triforce/states/power_on`).
+    fn power_on_idle(&self, frames: u32) -> Result<Option<MachineState>, EnvError> {
+        Ok(Some(self.load(&zelda::power_on::idle_state_name(frames))?))
+    }
+}
+
+/// [`TfzStore`] without the idle states: a power-on run idles every frame of its delay.
+struct NoIdleStore;
+
+impl StateStore<MachineState> for NoIdleStore {
+    fn load(&self, name: &str) -> Result<MachineState, EnvError> {
+        TfzStore.load(name)
+    }
+
+    fn save(&self, path: &Path, snapshot: &SessionSnapshot<MachineState>) -> Result<(), EnvError> {
+        TfzStore.save(path, snapshot)
+    }
+
+    fn bytes(&self, name: &str) -> Result<Vec<u8>, EnvError> {
+        TfzStore.bytes(name)
+    }
+
+    fn encode(&self, snapshot: &SessionSnapshot<MachineState>) -> Result<Vec<u8>, EnvError> {
+        TfzStore.encode(snapshot)
+    }
+
+    fn decode(&self, bytes: &[u8]) -> Result<SessionSnapshot<MachineState>, EnvError> {
+        TfzStore.decode(bytes)
+    }
+
+    fn power_on(&self) -> Result<MachineState, EnvError> {
+        TfzStore.power_on()
+    }
 }
 
 const SPECIALIST: &str = "stalfos-keese-gel";
@@ -979,6 +1013,114 @@ fn recording_rewards_leaves_the_chain_run_as_it_was() {
         .collect();
     assert!(!episodes.is_empty() && episodes.iter().all(|(_, class)| (*class as usize) < 4), "{episodes:?}");
     assert!(plain.events().all(|e| !matches!(e.unwrap().event, Event::Episode { .. })));
+}
+
+/// A power-on run's replay is its inputs alone: the boot, the idle and the game, no memory edit before the
+/// models take over.  The saved idle states only spare the emulator the idle frames: the replay is the same,
+/// byte for byte, as the one of a run that idled them all.
+#[test]
+fn a_power_on_run_replays_from_its_inputs_alone() {
+    let (Some(fast), Some(slow)) = (open_core(), open_core()) else { return };
+    let data = data();
+    const DELAY: u32 = 4321;
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
+    let route = route.with_power_on("LINK", Some(DELAY), 0).unwrap();
+    fn play<St: StateStore<MachineState> + Send + 'static>(
+        nes: Counted,
+        store: St,
+        data: &Arc<GameData>,
+        route: Route,
+    ) -> (RunResult, Replay, u64) {
+        let init = init();
+        let control = init.control.clone();
+        let mut env = ChainRunEnv::new(data.clone(), nes, store, route, Jobs::new([7u64]), all_policies(data), init, None);
+        env.chain_mut().max_steps = 30;
+        let options = RecordOptions {
+            embed_start: true,
+            ..Default::default()
+        };
+        let mut rng = ChaCha8Rng::seed_from_u64(107);
+        let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask, _| random_action(mask, &mut rng, None));
+        (run, replay, env.chain().session().nes().inner().1)
+    }
+    let (run, replay, emulated) = play(fast, TfzStore, &data, route.clone());
+    let (slow_run, slow_replay, slow_emulated) = play(slow, NoIdleStore, &data, route);
+    assert_eq!(slow_run, run);
+    assert!(slow_replay.bytes() == replay.bytes(), "the same replay with and without the idle states");
+    // The run from idle_04000 skipped the 151 frames to the file-select screen and 4000 idle frames.
+    assert_eq!(slow_emulated - emulated, 151 + 4000);
+    assert_eq!(slow_emulated, u64::from(replay.frames()));
+
+    assert_eq!(replay.source().unwrap(), Source::PowerOn { name: "LINK".into(), delay: DELAY });
+    assert!(replay.start_state().is_none() && replay.states().count() == 1);
+    let inputs = replay.inputs();
+    let idle_end = 151 + DELAY as usize;
+    assert!(inputs[..120].iter().all(|&b| b == 0) && inputs[120] == 0x08, "the title screen, then START");
+    assert!(inputs[121..idle_end].iter().all(|&b| b == 0), "the file-select screen and the idle");
+    assert_eq!(inputs[idle_end], 0x08, "START opens REGISTER YOUR NAME");
+    let events: Vec<_> = replay.events().map(|e| e.unwrap()).collect();
+    assert_eq!(events[0].event, Event::Control);
+    assert!(events[0].frame as usize > idle_end);
+    assert!(matches!(events[1].event, Event::Room { level: 0, room: 0x77, in_cave: false, step: Some(0), .. }));
+    assert_eq!(events[1].frame, events[0].frame);
+    assert!(replay.edits().all(|e| e.unwrap().frame >= events[0].frame), "no edit before the models take over");
+    replayed(&replay);
+}
+
+/// A run that reaches its stop step is a win, and its end state is a checkpoint: a run started from it embeds
+/// it as its start, and the two replays stitch into one that verifies.
+#[test]
+fn a_run_continued_from_a_checkpoint_stitches_onto_the_run_that_made_it() {
+    let (Some(a), Some(b)) = (open_core(), open_core()) else { return };
+    let data = data();
+    let options = || RecordOptions {
+        embed_start: true,
+        ..Default::default()
+    };
+    // 0x3c (step 24), straight south, is 0x4c (step 25).
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("0_3cc_0")).unwrap();
+    let init_a = init();
+    let control = init_a.control.clone();
+    let route = route.with_stop_step(&data.map, 25).unwrap();
+    let mut env = ChainRunEnv::new(data.clone(), a, TfzStore, route, Jobs::new([1u64]), all_policies(&data), init_a, None);
+    let (run, first) = play_chain_recorded(&mut env, &control, options(), |_, _| zelda::Action::parse("MOVE S 16").unwrap());
+    assert_eq!((run.result.as_str(), first.ending_name()), ("success", "win"));
+    assert_eq!(first.meta().unwrap()["ending"]["reason"], "reached route step 25 (level 0, room 0x4c)");
+    let end = first.end_state();
+    assert_eq!(end.context.step, Some(25));
+
+    let granted = zelda::cheats::ItemCounts {
+        bombs: end.context.granted[0],
+        keys: end.context.granted[1],
+        rupees: end.context.granted[2],
+    };
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
+    let route = route.with_checkpoint(&data.map, Arc::from(end.blob), 25, granted).unwrap();
+    let init_b = init();
+    let control = init_b.control.clone();
+    let mut env = ChainRunEnv::new(data.clone(), b, TfzStore, route, Jobs::new([2u64]), all_policies(&data), init_b, None);
+    env.chain_mut().max_steps = 20;
+    let mut rng = ChaCha8Rng::seed_from_u64(3);
+    let (_, second) = play_chain_recorded(&mut env, &control, options(), |mask, _| random_action(mask, &mut rng, None));
+    assert_eq!(second.source().unwrap(), Source::Embedded);
+    assert!(second.start_state().unwrap().blob == end.blob, "the checkpoint is the second run's start state");
+    assert_eq!(second.meta().unwrap()["source"], serde_json::json!({"kind": "checkpoint"}));
+    let events: Vec<_> = second.events().map(|e| e.unwrap()).collect();
+    assert_eq!((events[0].frame, &events[0].event), (0, &Event::Control));
+    assert!(matches!(events[1].event, Event::Room { level: 0, room: 0x4c, step: Some(25), .. }));
+    assert!(second.edits().count() == 0 || second.edits().all(|e| e.unwrap().frame > 0), "nothing is redrawn");
+
+    let joined = Replay::parse(replay::stitch(&first, &second, &|_, _| false).unwrap()).unwrap();
+    replayed(&joined);
+    assert_eq!(joined.frames(), first.frames() + second.frames());
+    let kinds: Vec<_> = joined.states().map(|s| (s.kind, s.frame)).collect();
+    assert_eq!(
+        kinds,
+        [(StateKind::Start, 0), (StateKind::Checkpoint, first.frames()), (StateKind::End, joined.frames())]
+    );
+    assert_eq!(joined.meta().unwrap()["segments"].as_array().unwrap().len(), 2);
+    let boundary = joined.events().map(|e| e.unwrap()).find(|e| e.event == Event::Segment).unwrap();
+    assert_eq!(boundary.frame, first.frames());
 }
 
 /// The tables a replay's streams index are the game's: the action space of the decision stream and the cheat
