@@ -3,14 +3,38 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
-## Now (Nov 11): after the r61 retrain (round 17)
+## Next projects (Lee, Nov 11): top of the list
 
-1. **The D1 regression** (round17.md §5): D1 arrivals 115 → 80. stalfos-keese-gel early-stopped after 80 iterations
-   (4 minutes) at a confirmed 99% success but loses 0.23 hearts per visit (old model 0.06); goriya (1:0x23, 1:0x44)
-   and Aquamentus (1:0x35) then die with the hearts it left. Try first: continue stalfos-keese-gel and zol with a
-   longer minimum (or `--stop-success 0.995`), then re-measure D1. Underlying: the early stop and its confirmation
-   look at success only; a hearts-lost condition (or confirming on `mean_health_change` too) would catch this.
-2. **D3 still ends in 3:0x59** (darknut, 47 of 97 failed D3 runs). darknut samples (argmax looped 26 times).
+Each is a project of its own, not a sub-item of the round 18 recovery.
+
+1. **Wallmaster doesn't collect the hearts its kills drop** (round18.md). The old model (r56) landed about 6 hits
+   per room on the Wallmasters and picked up the drops: +0.33 hearts per room in single-room evaluation, +0.85 per visit
+   in the full route, where Link reaches 1:0x45 low on hearts and hands them on to Aquamentus and the rest of
+   Dungeon 1. Every model trained on the current code rushes the exit instead (19–23 steps, 0.0 hearts): 100%
+   success, nothing gathered. Measured so far:
+   - Under γ = 0.99 rushing is worth more than fighting for the drops (the gathering run's ~45 extra steps cost
+     about a third of the discounted +18 terminal), so this is the objective, not a bug: the old model had stopped
+     training before it unlearned the habit. Continuing the old model on the current code loses it in about 150
+     iterations (`r64-oldcontb`: +1.0 → 0.0 hearts, 67 → 19 steps).
+   - The old model evaluated on the current code still gathers (+0.51 hearts) but succeeds 90% (28 `stuck`
+     endings by argmax): the new masks and executor make its old fights riskier.
+   - `exit_health_weight 1.0` on the rushing model (`r64-ehw1b`, 600 iterations) does not bring gathering back.
+   Ideas: value hearts the way the chain does (a per-family `gamma`, or a terminal bonus scaled by the hearts Link
+   brings into the next room, or a larger `reward-gained-health` at low health); start from the old model with
+   that change; a curriculum of low-health starts; measure in the full route, where it matters.
+2. **goriya heart loss** (round18.md §2). goriya loses about +0.26 hearts per room (93% success) after 8M + 4M
+   steps; Lee's target is −0.1 to −0.2, i.e. a net gain like stalfos-keese-gel's. More training of the same
+   objective doesn't move it (r61 → r63a: +0.266 → +0.262). Likely needs shaping (boomerang blocks with the shield,
+   the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
+   (52 `stuck` per 6000 runs), so it samples.
+
+## Done (Nov 11): after the r61 retrain (round 17)
+
+1. [x] **The D1 regression** (round17.md §5): D1 arrivals 115 → 80. stalfos-keese-gel early-stopped after 80
+   iterations at a confirmed 99% success while its hearts were still improving. Fixed in round 18: the early stop
+   also waits for the hearts lost to stop improving (`--stop-hearts-delta`), stalfos-keese-gel and zol continued;
+   every chain segment is back at or above the previous team (round18.md §3).
+2. **D3 still ends in 3:0x59** (darknut). D3 is 40.6% now (previous team 23.8%), still mostly 3:0x59 deaths.
 
 ## Now (Lee, Nov 9): Rust actor, then better play
 
