@@ -18,28 +18,32 @@ def test_scoring_buffers_a_running_rollout_writes_is_an_error_not_a_panic(states
     policy = random_network().to_native()
     config = native.SpecialistConfig.load('ow-start')
     task = native.TrainTask(config, str(tmp_path / 'run'), states_dir=str(states_dir))
-    with native.EnvPool(task, num_envs=ENVS, threads=1, seed=9) as pool:
-        views = RolloutBuffer(STEPS, ENVS, pool.obs_spec, 0.99, 0.95).rollout_buffers()
-        done = threading.Event()
+    pool = native.EnvPool(task, num_envs=ENVS, threads=1, seed=9)
+    views = RolloutBuffer(STEPS, ENVS, pool.obs_spec, 0.99, 0.95).rollout_buffers()
+    done, ended = threading.Event(), []
 
-        def roll():
-            try:
-                pool.rollout([policy], STEPS, views)
-            finally:
-                done.set()
-        thread = threading.Thread(target=roll)
-        thread.start()
-        raised = []
-        while not done.is_set():
-            # env 0's rows: contiguous views of the buffers the rollout holds
-            rows = {key: value[0] for key, value in views['obs'].items()}
-            try:
-                policy.value(rows)
-            except ValueError as error:         # a PanicException (BaseException) would escape this test
-                raised.append(str(error))
-            time.sleep(0.01)
-        thread.join()
+    def roll():
+        try:
+            pool.rollout([policy], STEPS, views)
+        except RuntimeError as error:   # closed below, once enough calls have been refused
+            ended.append(str(error))
+        finally:
+            done.set()
+    thread = threading.Thread(target=roll)
+    thread.start()
+    raised = []
+    while not done.is_set() and len(raised) < 5:
+        # env 0's rows: contiguous views of the buffers the rollout holds
+        rows = {key: value[0] for key, value in views['obs'].items()}
+        try:
+            policy.value(rows)
+        except ValueError as error:         # a PanicException (BaseException) would escape this test
+            raised.append(str(error))
+        time.sleep(0.01)
+    pool.close()
+    thread.join()
     assert raised and all('borrowed' in message for message in raised), raised[:3]
+    assert all('closed' in message for message in ended), ended
 
 
 def test_replayed_actions_must_be_integers_in_range(states_dir):

@@ -154,16 +154,17 @@ def test_the_executed_candidates_q_is_its_real_return(states_dir, tmp_path):
 
 def test_search_settings_reach_the_search(states_dir, tmp_path):
     """Without RNG redraws every future is the same (futures 4 == futures 1 bit for bit); redraws change some Q;
-    gamma and depth change the Qs, c_scale the improved policy."""
+    gamma and depth change the Qs, c_scale the improved policy.  Only every env's first decision is compared (the
+    same root everywhere), so each rollout is one step long."""
     policy = network().to_native()
     base = dict(candidates=3, simulations=6, futures=1, depth=2, perturb_rng=False, fraction=1.0)
-    variants = {'base': base, 'futures': dict(base, futures=4), 'perturb': dict(base, futures=4, perturb_rng=True),
-                'gamma': dict(base, gamma=0.5), 'depth': dict(base, depth=4), 'c_scale': dict(base, c_scale=5.0)}
+    variants = {'base': base, 'futures': dict(base, futures=4), 'gamma': dict(base, gamma=0.5),
+                'depth': dict(base, depth=4), 'c_scale': dict(base, c_scale=5.0)}
     out = {}
     for name, search in variants.items():
         with pool(states_dir, tmp_path, threads=1, name=name) as p:
-            out[name] = argmax_rollout(p, policy, search)
-    first = lambda name, key: out[name][key][:, 0]          # every env's first decision: the same root everywhere
+            out[name] = argmax_rollout(p, policy, search, steps=1)
+    first = lambda name, key: out[name][key][:, 0]
     assert first('futures', 'search_q').tobytes() == first('base', 'search_q').tobytes()
     # RNG redraws matter where enemies move: Dungeon 1's 0x44 (goriya).
     require_state('1_44w_0')
@@ -172,7 +173,7 @@ def test_search_settings_reach_the_search(states_dir, tmp_path):
     for name, perturb in (('same', False), ('redrawn', True)):
         task = native.TrainTask(config, str(tmp_path / f'goriya-{name}'), states_dir=str(REPO_STATES_DIR))
         with native.EnvPool(task, num_envs=ENVS, threads=1, seed=9) as p:
-            redraws[name] = argmax_rollout(p, policy, dict(base, futures=4, depth=6, perturb_rng=perturb))
+            redraws[name] = argmax_rollout(p, policy, dict(base, futures=4, depth=6, perturb_rng=perturb), steps=1)
     assert not np.array_equal(redraws['redrawn']['search_q'][:, 0], redraws['same']['search_q'][:, 0])
     assert not np.array_equal(first('gamma', 'search_q'), first('base', 'search_q'))
     assert not np.array_equal(first('depth', 'search_q'), first('base', 'search_q'))
