@@ -67,7 +67,17 @@ pub fn attach(
     reward: &RewardConfig,
     wavefront: bool,
 ) -> Attached {
-    let mut objective = gc.objectives(prev, state);
+    attach_objective(gc.objectives(prev, state), state, reward, wavefront)
+}
+
+/// [`attach`] for a route objective computed elsewhere (a chain's): the dropped items `reward` makes PBRS
+/// targets join its targets and, with `wavefront`, the wavefront to them is built.
+pub fn attach_objective(
+    mut objective: Objective,
+    state: &GameView,
+    reward: &RewardConfig,
+    wavefront: bool,
+) -> Attached {
     objective.pbrs_targets.extend(item_targets(reward, state));
     let wavefront = (wavefront && !state.game_over()).then(|| {
         let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();

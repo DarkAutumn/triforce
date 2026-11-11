@@ -787,12 +787,13 @@ fn all_policies(data: &GameData) -> Vec<Arc<str>> {
     data.families.keys().map(|k| Arc::from(k.as_str())).collect()
 }
 
-/// Plays the next chain run of `env` to its end with `pick`, recorded with `options`: (the run, its replay).
+/// Plays the next chain run of `env` to its end with `pick` (the mask and the whole observation of each
+/// decision), recorded with `options`: (the run, its replay).
 fn play_chain_recorded<St>(
     env: &mut ChainRunEnv<Counted, St>,
     control: &EnvControl,
     options: RecordOptions,
-    mut pick: impl FnMut(&ActionMask) -> zelda::Action,
+    mut pick: impl FnMut(&ActionMask, &ObsData) -> zelda::Action,
 ) -> (RunResult, Replay)
 where
     St: StateStore<MachineState> + Send + 'static,
@@ -803,7 +804,7 @@ where
     let start = env.reset(obs.row(), &mut events).unwrap().expect("a run");
     loop {
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
-        let action = pick(&ActionMask::from_flat(&flat)).to_indices().map(|i| i as i64);
+        let action = pick(&ActionMask::from_flat(&flat), &obs).to_indices().map(|i| i as i64);
         if env.step(action, obs.row(), &mut events).unwrap().terminated {
             break;
         }
@@ -841,7 +842,7 @@ fn recorded_chain_runs_carry_rooms_outcomes_and_keyframes() {
         ..Default::default()
     };
     let mut rng = ChaCha8Rng::seed_from_u64(103);
-    let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask| random_action(mask, &mut rng, None));
+    let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask, _| random_action(mask, &mut rng, None));
     assert_eq!((run.result.as_str(), replay.ending_name()), ("failure", "stuck"), "{}", run.reason);
     assert_eq!(replay.meta().unwrap()["ending"]["reason"], run.reason.as_str());
     replayed(&replay);
@@ -908,7 +909,7 @@ fn recorded_chain_runs_carry_the_cheated_items_spent() {
         embed_start: true,
         ..Default::default()
     };
-    let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask| {
+    let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask, _| {
         match mask.directions(ActionKind::Bomb).first() {
             Some(&direction) => zelda::Action::new(ActionKind::Bomb, direction, 0).unwrap(),
             None => zelda::Action::parse("WAIT 8").unwrap(),
@@ -924,6 +925,60 @@ fn recorded_chain_runs_carry_the_cheated_items_spent() {
     assert!(cheats.windows(2).all(|w| w[0].frame < w[1].frame) && cheats[0].frame > 0, "{cheats:?}");
     // The granted bomb Link holds at the end is the end state's context, not a spent one.
     assert_eq!(replay.end_state().context.granted, [u8::from(run.rooms.last().unwrap().outcome != "death"), 0, 0]);
+}
+
+/// Recording a chain run's rewards scores every step with the acting specialist's training rewards and leaves
+/// the run as it was: the same observations, inputs, edits and result as the run recorded without them.
+#[test]
+fn recording_rewards_leaves_the_chain_run_as_it_was() {
+    let (Some(a), Some(b)) = (open_core(), open_core()) else { return };
+    let data = data();
+    let play = |nes: Counted, rewards: bool| {
+        let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
+        let init = init();
+        let control = init.control.clone();
+        let mut env =
+            ChainRunEnv::new(data.clone(), nes, TfzStore, route, Jobs::new([3u64]), all_policies(&data), init, None);
+        env.chain_mut().max_steps = 150;
+        let options = RecordOptions {
+            embed_start: true,
+            rewards,
+            ..Default::default()
+        };
+        let mut rng = ChaCha8Rng::seed_from_u64(103);
+        let mut seen = Vec::new();
+        let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask, obs| {
+            seen.push(obs.clone());
+            random_action(mask, &mut rng, None)
+        });
+        (run, replay, seen)
+    };
+    let (plain_run, plain, plain_obs) = play(a, false);
+    let (scored_run, scored, scored_obs) = play(b, true);
+    assert_eq!(scored_run, plain_run);
+    assert!(scored_obs == plain_obs, "the observations of every decision");
+    assert_eq!(scored.inputs(), plain.inputs());
+    let edits = |r: &Replay| r.edits().map(|e| e.unwrap()).collect::<Vec<_>>();
+    assert_eq!(edits(&scored), edits(&plain));
+    replayed(&scored);
+
+    assert!(!plain.has(replay::section::REWARDS) && plain.rewards().count() == 0);
+    let meta = scored.meta().unwrap();
+    let terms: Vec<&str> = meta["reward_terms"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert!(!terms.is_empty() && terms.iter().all(|t| env::rewards::REWARD_TERMS.contains(t)), "{terms:?}");
+    let rewards: Vec<_> = scored.rewards().map(|r| r.unwrap()).collect();
+    assert!(rewards.len() >= scored_run.steps as usize / 4, "{} terms in {} steps", rewards.len(), scored_run.steps);
+    assert!(rewards.iter().all(|r| r.frame > 0 && r.value.is_finite() && (r.term as usize) < terms.len()));
+    // The run is cut into training episodes: leaving a specialist's rooms ends one (with its terminal reward).
+    let episodes: Vec<_> = scored
+        .events()
+        .filter_map(|e| match e.unwrap().event {
+            Event::Episode { ending, class, .. } => Some((ending, class)),
+            _ => None,
+        })
+        .collect();
+    assert!(!episodes.is_empty() && episodes.iter().all(|(_, class)| (*class as usize) < 4), "{episodes:?}");
+    assert!(plain.events().all(|e| !matches!(e.unwrap().event, Event::Episode { .. })));
 }
 
 /// The tables a replay's streams index are the game's: the action space of the decision stream and the cheat

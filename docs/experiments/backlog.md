@@ -679,6 +679,14 @@ the remaining list is deferred until Lee resumes work.
   per room/state attempts, iterations, cells, env steps, best progress, success/failure. Then teach
   `training-gui.py` to recognize a mapper log folder and show it sensibly (likely a different view that opens for
   that kind of folder: route steps as rows, per-attempt progress).
+- **The test suites are slow (Lee, Nov 11; deferred).** Target: most test runs under 5 minutes, 10 for a first
+  run. Measured in the `replays` worktree while round r63a trained on main (load average 35 on 20 threads;
+  one core still ran `tf bench` at 7,743 frames/s, so it is oversubscription, not slower cores):
+  `cargo test --release --workspace --features zelda/zcore` 276–307 s (one test binary 87 s for 9 tests, three
+  more 30–36 s each; binaries run one after another), `pytest -q` 651–911 s for 458 tests, run serially (no
+  pytest-xdist in the venv). Not yet measured: which pytest tests dominate (`pytest --durations=40`) and both
+  suites on an idle machine (AGENTS.md says "about a minute each"). Until fixed: run the tests of what changed
+  per step and the full suites before a merge.
 
 ## Start states
 

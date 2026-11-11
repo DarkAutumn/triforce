@@ -12,6 +12,7 @@ pub mod error;
 pub mod explore;
 pub mod objective;
 pub mod observation;
+pub mod reward_track;
 pub mod rewards;
 pub mod specialist_env;
 pub mod start_states;

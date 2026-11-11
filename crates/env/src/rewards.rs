@@ -1,4 +1,10 @@
-//! Named reward/penalty outcomes, per-step clamping and terminal rewards.
+//! Named reward/penalty outcomes, per-step clamping, terminal rewards and the scoring of one step.
+
+use crate::config::SpecialistConfig;
+use crate::critic::{Critique, GameplayCritic};
+use crate::end_conditions::{EndConditions, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, StepView, classify_ending};
+use crate::error::EnvError;
+use zelda::game::GameView;
 
 pub const REWARD_MINIMUM: f64 = 0.01;
 pub const REWARD_TINY: f64 = 0.05;
@@ -253,4 +259,76 @@ pub fn apply_terminal_rewards(
             -TERMINAL_FAILURE_PENALTY_VALUE,
         ));
     }
+}
+
+/// What one step of a specialist's episode earned and whether it ended the episode.
+#[derive(Clone, Debug)]
+pub struct Scored {
+    pub rewards: StepRewards,
+    /// The end condition that fired (`end_conditions`), or `max-steps`.
+    pub ending: Option<String>,
+    /// The ending's class ([`OUTCOMES`]).
+    pub outcome: Option<&'static str>,
+    pub terminated: bool,
+    pub truncated: bool,
+}
+
+/// Scores one step of `config`'s specialist: the critic's terms (scaled by `scale`, the shaping scale), the
+/// frame penalty, the end conditions (a `no-room-progress`, `no-damage` or `max-steps` ending truncates) and
+/// the terminal reward.  `c.quiet_steps` is the linger tail after the step; `steps` the actions of the episode
+/// including this one; `state` the state the step ended in.  Training (`SpecialistEnv`) and a chain's reward
+/// recording (`RewardTrack`) both score with this.
+pub fn score_step(
+    config: &SpecialistConfig,
+    critic: &mut GameplayCritic,
+    end_conditions: &mut EndConditions,
+    c: &Critique,
+    scale: f64,
+    steps: u64,
+    state: &GameView,
+) -> Result<Scored, EnvError> {
+    let mut rewards = StepRewards::default();
+    critic.critique(c, &mut rewards);
+    if scale != 1.0 {
+        rewards.scale_all(scale);
+    }
+    if config.reward.frame_penalty > 0.0 {
+        rewards.add(Outcome::penalty(
+            "penalty-frames",
+            -config.reward.frame_penalty * c.change.frames as f64,
+        ));
+    }
+    let mut ending = end_conditions.check(&StepView {
+        change: c.change,
+        prev_objective: c.prev_objective,
+        map: c.map,
+        linger_tail_steps: c.quiet_steps,
+    });
+    let mut truncated = matches!(ending.as_deref(), Some(NO_ROOM_PROGRESS | NO_DAMAGE));
+    if ending.is_none() && steps >= config.max_steps as u64 {
+        ending = Some(MAX_STEPS.to_owned());
+        truncated = true;
+    }
+    let terminated = ending.is_some() && !truncated;
+    let mut outcome = None;
+    if let Some(ending) = &ending {
+        let class = classify_ending(ending, &config.success, &config.endings)?;
+        apply_terminal_rewards(
+            &mut rewards,
+            ending,
+            class,
+            terminated,
+            state.health(),
+            state.max_health() as f64,
+            config.reward.exit_health_weight,
+        );
+        outcome = Some(class);
+    }
+    Ok(Scored {
+        rewards,
+        ending,
+        outcome,
+        terminated,
+        truncated,
+    })
 }

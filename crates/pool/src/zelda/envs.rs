@@ -12,7 +12,7 @@ use crate::rollout::Decision;
 use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
 use env::end_conditions::{DEATH, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, STUCK};
-use env::rewards::SUCCESS;
+use env::rewards::{OUTCOMES, SUCCESS};
 use env::specialist_env::{EnvOptions, EnvSnapshot, SpecialistEnv, StepInfo, StepResult, TerminalInfo};
 use env::{EnvError, StateStore};
 use rand_chacha::ChaCha8Rng;
@@ -209,15 +209,42 @@ fn record_keyframe<N: Nes, St: StateStore<N::State>>(
     Ok(())
 }
 
-/// A specialist step's part of the recording: the cheated items it spent and, unless it ended the episode,
-/// a keyframe when one is due.
+/// A step's reward terms for the recording's reward stream (when it keeps one) and, when the step ended a
+/// training episode, its EPISODE event: `ended` is (ending, outcome class, terminated, truncated).
+fn record_rewards<N: Nes>(
+    nes: &mut PoolNes<N>,
+    terms: impl Iterator<Item = (&'static str, f64)>,
+    ended: Option<(&str, &str, bool, bool)>,
+) {
+    let Some(rec) = nes.recorder_mut().filter(|rec| rec.options().rewards) else {
+        return;
+    };
+    for (term, value) in terms {
+        rec.reward(term, value as f32);
+    }
+    if let Some((ending, outcome, terminated, truncated)) = ended {
+        let class = OUTCOMES.iter().position(|class| *class == outcome).unwrap_or(OUTCOMES.len());
+        rec.event(Event::Episode {
+            ending: ending.to_owned(),
+            class: class as u8,
+            terminated,
+            truncated,
+        });
+    }
+}
+
+/// A specialist step's part of the recording: its rewards, the cheated items it spent and, unless it ended
+/// the episode, a keyframe when one is due.
 fn record_specialist_step<N: Nes, St: StateStore<N::State>>(
     env: &mut PoolSpecialistEnv<N, St>,
     cheated: &mut ItemCounts,
-    info: &StepInfo,
+    r: &StepResult,
 ) -> Result<(), EnvError> {
-    record_cheats(env.session_mut().nes_mut(), cheated, info.cheated);
-    if info.terminal.is_some() {
+    let nes = env.session_mut().nes_mut();
+    let ended = r.info.terminal.as_ref().map(|t| (t.ending.as_str(), t.outcome, r.terminated, r.truncated));
+    record_rewards(nes, r.info.rewards.iter().copied(), ended);
+    record_cheats(nes, cheated, r.info.cheated);
+    if r.info.terminal.is_some() {
         return Ok(());
     }
     let context = context(env.context());
@@ -424,7 +451,7 @@ where
         write_observation(&r.obs, &mut obs);
         let outcome = specialist_outcome(&r);
         self.rooms.report_info(&r.info, events);
-        record_specialist_step(&mut self.env, &mut self.cheated, &r.info)?;
+        record_specialist_step(&mut self.env, &mut self.cheated, &r)?;
         if let Some(ending) = r.info.terminal.as_ref().map(specialist_ending) {
             events.push(ZeldaEvent::Episode {
                 info: Box::new(r.info),
@@ -581,6 +608,8 @@ where
             &self.control,
             &mut self.rooms,
         );
+        // Evaluation skips the weapon look-ahead (it only credits rewards) unless the rewards are recorded.
+        self.env.session_mut().look_ahead = self.control.record_options().is_some_and(|o| o.rewards);
         let (o, info) = self.env.reset(Some(job.seed), Some(&job.start_state))?;
         self.cheated = info.cheated;
         let context = context(self.env.context());
@@ -610,7 +639,7 @@ where
         write_observation(&r.obs, &mut obs);
         let outcome = specialist_outcome(&r);
         self.rooms.report_info(&r.info, events);
-        record_specialist_step(&mut self.env, &mut self.cheated, &r.info)?;
+        record_specialist_step(&mut self.env, &mut self.cheated, &r)?;
         if let Some(t) = &r.info.terminal {
             let episode = self.episode.take().expect("episode started");
             events.push(ZeldaEvent::Eval(Box::new(EvalRecord {
@@ -726,10 +755,16 @@ where
         self.chain.result().map_or(0, |r| r.frames)
     }
 
-    /// The run's part of the recording since the last call: the cheated items spent, a ROOM event per room
+    /// The run's part of the recording since the last call: the last step's rewards (with rewards on; an
+    /// EPISODE event when it ended a training episode), the cheated items spent, a ROOM event per room
     /// entered (each closes the visit before it with an OUTCOME event) and, unless the run is `done` (its
     /// result; then the last visit's OUTCOME), a keyframe when one is due.
     fn record_progress(&mut self, done: Option<&RunResult>) -> Result<(), EnvError> {
+        if let Some(scored) = self.chain.take_scored() {
+            let ended = scored.ending.as_deref().zip(scored.outcome);
+            let ended = ended.map(|(ending, outcome)| (ending, outcome, scored.terminated, scored.truncated));
+            record_rewards(self.chain.session_mut().nes_mut(), scored.rewards.terms(), ended);
+        }
         let cheated = self.chain.cheated();
         record_cheats(self.chain.session_mut().nes_mut(), &mut self.cheated, cheated);
         if self.chain.session().nes().recorder().is_none() {
@@ -865,6 +900,7 @@ where
             );
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
             (self.rooms_seen, self.cheated) = (0, ItemCounts::default());
+            self.chain.set_rewards(self.control.record_options().is_some_and(|o| o.rewards));
             let status = self.chain.reset(Some(seed), &mut rng)?;
             let context = context(self.chain.context());
             let (session, store) = self.chain.session_and_store();

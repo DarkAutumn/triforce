@@ -17,6 +17,8 @@ use crate::critic::BossTransitions;
 use crate::error::EnvError;
 use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
+use crate::reward_track::RewardTrack;
+use crate::rewards::Scored;
 use crate::specialist_env::{linger_json, room_disabled_kinds};
 use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
 use rand_chacha::ChaCha8Rng;
@@ -352,10 +354,17 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     /// written into a harvested pre-entry snapshot, which was taken before the take-back (F148).
     left_with: ItemCounts<Option<u8>>,
     builder: ObservationBuilder,
+    /// Score every step as the acting specialist's training would ([`ChainEnv::set_rewards`]).
+    rewards: bool,
+    /// The acting specialist's episode, while rewards are on.
+    track: Option<RewardTrack>,
+    /// What the last step earned ([`ChainEnv::take_scored`]).
+    scored: Option<Scored>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
-    /// The chain runs no critic, so its session skips the weapon look-ahead (it only credits rewards).
+    /// The chain runs no critic unless [`ChainEnv::set_rewards`] is on, so its session skips the weapon
+    /// look-ahead (it only credits rewards).
     pub fn new(data: Arc<GameData>, nes: N, store: St, route: Route) -> Self {
         let mut session = Session::new(nes, data.map.clone());
         session.look_ahead = false;
@@ -383,6 +392,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             cheats: CheatLedger::default(),
             left_with: ItemCounts::default(),
             builder: ObservationBuilder::new(true, false),
+            rewards: false,
+            track: None,
+            scored: None,
         }
     }
 
@@ -431,6 +443,20 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// playing (None off the route or before the first reset) and the cheat-granted items he holds.
     pub fn context(&self) -> (Option<usize>, ItemCounts<u8>) {
         (self.objectives.as_ref().and_then(GameCompletion::step), self.cheats.grants())
+    }
+
+    /// From the next reset on, score every step with the acting specialist's training rewards
+    /// ([`ChainEnv::take_scored`]; the session then runs the weapon look-ahead those rewards credit).  A run is
+    /// cut into the episodes training would see: a new one whenever the acting specialist changes or the
+    /// acting specialist's own end conditions fire.
+    pub fn set_rewards(&mut self, on: bool) {
+        self.rewards = on;
+        self.session.look_ahead = on;
+    }
+
+    /// What the last step earned under the acting specialist's training rewards (once; None with rewards off).
+    pub fn take_scored(&mut self) -> Option<Scored> {
+        self.scored.take()
     }
 
     /// Harvest handoff states into `dir` (None = off): every correct room entry where the acting specialist changes
@@ -495,6 +521,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.current = None;
         self.change = None;
         self.prev_objective = None;
+        self.track = None;
+        self.scored = None;
         let machine = match self.store.load(&self.route.start_state) {
             Ok(m) => m,
             Err(EnvError::State(reason)) => return Ok(self.error(reason)),
@@ -541,6 +569,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             );
             return Ok(self.error(reason));
         }
+        if let Some(track) = &mut self.track
+            && track.ended()
+        {
+            track.restart(self.session.state(), self.objective.as_ref().expect("run started"));
+        }
         let change = self.session.act(action)?;
         // The cheated items' state carries on (mask, observation); `change` keeps what the action did.
         let (cheats, state) = self.cheats.after_action(
@@ -564,6 +597,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             self.hearts.taken - taken,
             || linger_wavefront(&state, &objective, None),
         );
+        self.scored = match &mut self.track {
+            Some(track) => Some(track.step(&self.data.map, &change, &state, &objective)?),
+            None => None,
+        };
         let summary = self.linger.summary();
         let result = self.result.as_mut().unwrap();
         let record = result.rooms.last_mut().expect("room record");
@@ -819,6 +856,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     self.harvest_entry(&name, index)?;
                 }
                 self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target);
+                self.track = match self.rewards {
+                    true => Some(RewardTrack::new(config.clone(), &state, &objective).map_err(|e| e.0)?),
+                    false => None,
+                };
                 self.current = Some(Acting {
                     name: Arc::from(name.as_str()),
                     config,

@@ -18,12 +18,12 @@ use crate::critic::{BossTransitions, Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
 use crate::end_conditions::{
     DEATH, ENTER_ROOM_PREFIX, EXIT_CORRECT, EXIT_WRONG, EndConditions, MAX_STEPS, NO_DAMAGE, NO_PROGRESS,
-    NO_ROOM_PROGRESS, RETREAT, StepView, classify_ending,
+    NO_ROOM_PROGRESS, RETREAT,
 };
 use crate::error::EnvError;
 use crate::objective::{Attached, attach, needs_wavefront};
 use crate::observation::{Observation, ObservationBuilder};
-use crate::rewards::{Outcome, SUCCESS, StepRewards, apply_terminal_rewards};
+use crate::rewards::{SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
     StartStatePool, StartWeights, StateStore, ram_randomization_values,
@@ -720,56 +720,28 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.blocks += change.blocks() as u32;
         let boss = BossTransitions::of(&change);
         self.boss += boss;
-        let mut rewards = StepRewards::default();
-        let tail = self.linger.tail_steps();
-        self.critic.critique(
+        let scale = self.shaping.as_ref().map_or(self.config.reward.shaping_scale, ShapingDial::get);
+        let Scored { rewards, ending, outcome, terminated, truncated } = score_step(
+            &self.config,
+            &mut self.critic,
+            &mut self.end_conditions,
             &Critique {
                 change: &change,
                 map: &self.data.map,
                 prev_objective: &prev.objective,
                 objective: &curr.objective,
                 prev_wavefront: prev.wavefront.as_deref(),
-                quiet_steps: tail,
+                quiet_steps: self.linger.tail_steps(),
             },
-            &mut rewards,
-        );
-        let scale = self.shaping.as_ref().map_or(self.config.reward.shaping_scale, ShapingDial::get);
-        if scale != 1.0 {
-            rewards.scale_all(scale);
-        }
-        if self.config.reward.frame_penalty > 0.0 {
-            rewards.add(Outcome::penalty(
-                "penalty-frames",
-                -self.config.reward.frame_penalty * change.frames as f64,
-            ));
-        }
-        let mut ending = self.end_conditions.check(&StepView {
-            change: &change,
-            prev_objective: &prev.objective,
-            map: &self.data.map,
-            linger_tail_steps: tail,
-        });
-        let mut truncated = matches!(ending.as_deref(), Some(NO_ROOM_PROGRESS | NO_DAMAGE));
-        if ending.is_none() && self.session.steps >= self.config.max_steps as u64 {
-            ending = Some(MAX_STEPS.to_owned());
-            truncated = true;
-        }
-        let terminated = ending.is_some() && !truncated;
+            scale,
+            self.session.steps,
+            &state,
+        )?;
 
         self.episode_steps += 1;
         self.episode_frames += change.frames as u64;
         let mut terminal = None;
-        if let Some(ending) = ending {
-            let outcome = classify_ending(&ending, &self.config.success, &self.config.endings)?;
-            apply_terminal_rewards(
-                &mut rewards,
-                &ending,
-                outcome,
-                terminated,
-                state.health(),
-                state.max_health() as f64,
-                self.config.reward.exit_health_weight,
-            );
+        if let (Some(ending), Some(outcome)) = (ending, outcome) {
             self.hearts.finish(Some(&HeartView::of(&state)));
             let curriculum = match &self.curriculum_tag {
                 _ if sim => None,
