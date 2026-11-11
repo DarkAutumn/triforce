@@ -30,7 +30,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QPointF, QProcess, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QLinearGradient, QPainter, QPainterPath,
                            QPalette, QPen)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
@@ -2239,6 +2239,94 @@ class FolderView(QWidget):
         self.header.update()
 
 
+MACHINE_MS = 2000      # status bar refresh
+NVIDIA_SMI = ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits']
+
+
+def read_cpu_times(path: str = '/proc/stat') -> tuple[int, int] | None:
+    """(idle, total) jiffies of all CPUs from /proc/stat's first line (idle includes iowait), or None."""
+    try:
+        with open(path, encoding='utf-8') as file:
+            fields = [int(value) for value in file.readline().split()[1:]]
+    except (OSError, ValueError):
+        return None
+    if len(fields) < 4:
+        return None
+    idle = fields[3] + (fields[4] if len(fields) > 4 else 0)
+    return idle, sum(fields[:8])        # user nice system idle iowait irq softirq steal (guest is inside user)
+
+
+def cpu_percent(previous: tuple[int, int] | None, current: tuple[int, int] | None) -> float | None:
+    """Busy share of all CPUs between two read_cpu_times samples, in percent (None without two samples)."""
+    if previous is None or current is None or current[1] <= previous[1]:
+        return None
+    idle, total = current[0] - previous[0], current[1] - previous[1]
+    return max(0.0, min(100.0, 100.0 * (total - idle) / total))
+
+
+def parse_gpu_utilization(text: str) -> float | None:
+    """Mean utilization.gpu of nvidia-smi's csv lines (one per GPU), or None."""
+    values = []
+    for line in text.splitlines():
+        try:
+            values.append(float(line.strip()))
+        except ValueError:
+            continue
+    return sum(values) / len(values) if values else None
+
+
+def machine_text(cpu: float | None, gpu: float | None, load: tuple[float, float, float] | None) -> str:
+    """The status bar line: 'CPU 63%   GPU 22%   load 14.2 12.8 11.0' ('–' for an unknown value)."""
+    pct = lambda value: '–' if value is None else f"{value:.0f}%"   # noqa: E731
+    loads = '–' if load is None else ' '.join(f"{value:.1f}" for value in load)
+    return f"CPU {pct(cpu)}    GPU {pct(gpu)}    load {loads}"
+
+
+class MachineStatus(QObject):
+    """CPU %, GPU % and load average for the status bar.  ``sample()`` reads /proc/stat and the load average and
+    starts one nvidia-smi query in the background (none while one is running); ``changed`` fires on each new
+    value.  Without nvidia-smi the GPU stays unknown."""
+
+    changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.cpu = self.gpu = None
+        self.load = None
+        self._times = read_cpu_times()
+        self._process = QProcess(self)
+        self._process.finished.connect(self._gpu_done)
+        self._process.errorOccurred.connect(self._gpu_error)
+        self._gpu_available = True
+
+    def sample(self):
+        times = read_cpu_times()
+        self.cpu = cpu_percent(self._times, times) if times is not None else None
+        self._times = times or self._times
+        try:
+            self.load = os.getloadavg()
+        except OSError:
+            self.load = None
+        if self._gpu_available and self._process.state() == QProcess.ProcessState.NotRunning:
+            self._process.start(NVIDIA_SMI[0], NVIDIA_SMI[1:])
+        self.changed.emit()
+
+    def _gpu_done(self, code: int, _status):
+        text = bytes(self._process.readAllStandardOutput().data()).decode('utf-8', 'replace')
+        self.gpu = parse_gpu_utilization(text) if code == 0 else None
+        self.changed.emit()
+
+    def _gpu_error(self, error):
+        """No nvidia-smi (or it can't start): the GPU stays unknown and is not asked again."""
+        if error == QProcess.ProcessError.FailedToStart:
+            self._gpu_available = False
+            self.gpu = None
+            self.changed.emit()
+
+    def text(self) -> str:
+        return machine_text(self.cpu, self.gpu, self.load)
+
+
 class Window(QMainWindow):
     """Folder picker on top; one log folder, or every live one ([currently running]), on the left; details on
     the right.  ``auto_live`` (set by picking [currently running], or at startup without a folder; cleared by
@@ -2320,6 +2408,19 @@ class Window(QMainWindow):
         self.frame_timer = QTimer(self)
         self.frame_timer.timeout.connect(self.frame)
         self.frame_timer.start(FRAME_MS)
+
+        # Machine load, like btop's header: CPU % (from /proc/stat between two samples), GPU % (nvidia-smi, run
+        # asynchronously so the window never waits for it) and the load average.
+        self.machine = MachineStatus(self)
+        self.machine_label = QLabel()
+        self.machine_label.setStyleSheet(f"color: {C.muted.name()}; padding: 0 8px;")
+        self.statusBar().addPermanentWidget(self.machine_label)
+        self.statusBar().setSizeGripEnabled(False)
+        self.machine.changed.connect(lambda: self.machine_label.setText(self.machine.text()))
+        self.machine.sample()
+        self.machine_timer = QTimer(self)
+        self.machine_timer.timeout.connect(self.machine.sample)
+        self.machine_timer.start(MACHINE_MS)
 
     # -- folders and modes
 
