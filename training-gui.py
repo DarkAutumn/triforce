@@ -246,6 +246,33 @@ def heart_drop_row(label: str, dropped: float, taken: float, left: float) -> tup
     return label, share, fmt_drops(dropped, taken, left) if dropped > 0 else 'no drops', rate_color(share)
 
 
+def bomb_row(label: str, ev: dict) -> tuple:
+    """BarList row for evaluation bombs per episode: the bar is the share of placed bombs that hit something
+    (blue = every bomb hit)."""
+    placed = ev.get('mean_bomb_placed') or 0.0
+    share = max(0.0, min(1.0, 1.0 - ev.get('mean_bomb_misses', 0.0) / placed)) if placed > 0 else None
+    text = ' · '.join(f"{name} {ev.get(f'mean_bomb_{stat}', 0.0):.2f}" for name, stat in (
+        ('placed', 'placed'), ('hits', 'hits'), ('misses', 'misses'), ('armed', 'armed'),
+        ('picked up', 'picked_up'))) + ' / episode'
+    return label, share, text, rate_color(share)
+
+
+# The bomb reward terms (crates/env/src/critic.rs critique_item_usage, EQUIPMENT): per hit, per forced bomb drop
+# armed, per pickup, per bomb placed.
+BOMB_REWARDS = {'bombs/hits': 0.5, 'bombs/armed': 0.75, 'bombs/picked_up': 0.5}
+BOMB_COST = -0.25
+
+
+def bomb_reward_series(run, skip: int = 0) -> tuple[list, list, list]:
+    """(earned, cost, net) bomb reward per episode at each iteration with all the counts, from `bombs/*`
+    (`BOMB_REWARDS`, `BOMB_COST`)."""
+    series = {key: dict(run.series(key, skip)) for key in (*BOMB_REWARDS, 'bombs/placed')}
+    iterations = sorted(set.intersection(*(set(s) for s in series.values())))
+    earned = [(i, sum(series[k][i] * v for k, v in BOMB_REWARDS.items())) for i in iterations]
+    cost = [(i, series['bombs/placed'][i] * BOMB_COST) for i in iterations]
+    return earned, cost, [(i, e + c) for (i, e), (_, c) in zip(earned, cost)]
+
+
 def ease(shown: float, target: float) -> float:
     """One animation frame of a bar's displayed fraction moving toward its real one."""
     return shown + (target - shown) * 0.2 if abs(target - shown) > 0.0005 else target
@@ -1899,23 +1926,35 @@ class DetailPane(QWidget):
             'length': LineChart('Episode steps', fmt=lambda v: f'{v:.0f}'),
             'kl': LineChart('Approx KL', fmt=lambda v: f'{v:.3f}'),
             'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
-            'linger': LineChart('No progress (action steps)', fmt=lambda v: f'{v:.0f}', legend_below=True,
-                                empty='unavailable (no lingering measurements)'),
+            'bombs': LineChart('Bombs / episode', fmt=lambda v: f'{v:.2f}',
+                               empty='unavailable (no bomb measurements)'),
+            'bomb_reward': LineChart('Bomb reward / episode', fmt=lambda v: f'{v:+.2f}',
+                                     empty='unavailable (no bomb measurements)'),
         }
-        self.charts['linger'].setMinimumHeight(230)
-        self.charts['linger'].setToolTip(
-            'Completed room-entry episodes in each PPO iteration; curriculum starts are excluded.\n'
-            'Mean longest: average episode longest streak without progress.\n'
-            'Mean tail: average steps since the last progress at episode end.\n'
-            'Worst longest: largest episode streak in that iteration, not a run-wide maximum.\n'
-            'Progress: enemy kill or hit, pickup, new best objective distance, or room exit.\n'
-            'Units are agent action steps, not emulator frames or seconds.')
+        self.charts['bombs'].setToolTip(
+            'Means per completed episode in each PPO iteration.\n'
+            'Placed: bombs Link placed. Hits: enemy hits credited to bombs (the look-ahead credits a bomb\'s hits '
+            'to the step that placed it). Misses: bombs that hit nothing.\n'
+            'Armed: 10th damage-free kills made with a bomb, each arming a forced drop of 4 bombs.')
+        self.charts['bomb_reward'].setToolTip(
+            'The bomb reward terms per completed episode, from the counts: earned = 0.5 per bomb hit '
+            '(reward-bomb-hit) + 0.75 per forced drop armed (reward-armed-bomb-drop) + 0.5 per bomb pickup '
+            '(reward-gained-bombs); cost = -0.25 per bomb placed (penalty-bomb-used); net = earned + cost.\n'
+            'Net above zero: bombs pay for themselves.')
         grid_page = QWidget()
         grid = QGridLayout(grid_page)
         grid.setContentsMargins(10, 10, 10, 10)
         grid.setSpacing(10)
-        for i, chart in enumerate(self.charts.values()):
-            grid.addWidget(chart, i // 2, i % 2, 1, 2 if chart is self.charts['linger'] else 1)
+        wide = ()
+        row = col = 0
+        for chart in self.charts.values():
+            if chart in wide and col:
+                row, col = row + 1, 0
+            grid.addWidget(chart, row, col, 1, 2 if chart in wide else 1)
+            if chart in wide or col:
+                row, col = row + 1, 0
+            else:
+                col = 1
         self.summary = BarList()
         self.chart_stack = QStackedWidget()
         self.chart_stack.addWidget(scrolling(grid_page))
@@ -1998,11 +2037,18 @@ class DetailPane(QWidget):
                                    (), overlay)
         self.charts['sps'].set_data([{'label': 'sps', 'color': C.muted, 'points': run.series('charts/SPS', skip),
                                       'area': True}], (), overlay)
-        self.charts['linger'].set_data([
-            {'label': 'mean longest / episode', 'color': C.warn, 'points': run.series('linger/max_steps', skip)},
-            {'label': 'mean final tail / episode', 'color': C.ok, 'points': run.series('linger/tail_steps', skip)},
-            {'label': 'worst longest / update', 'color': C.bad, 'points': run.series('linger/worst_steps', skip)},
+        self.charts['bombs'].set_data([
+            {'label': 'placed', 'color': C.accent, 'points': run.series('bombs/placed', skip), 'width': 1.4},
+            {'label': 'hits', 'color': C.ok, 'points': run.series('bombs/hits', skip), 'area': True},
+            {'label': 'misses', 'color': C.bad, 'points': run.series('bombs/misses', skip), 'width': 1.4},
+            {'label': 'armed', 'color': C.eval, 'points': run.series('bombs/armed', skip), 'width': 2.4},
         ], (), overlay)
+        earned, cost, net = bomb_reward_series(run, skip)
+        self.charts['bomb_reward'].set_data([
+            {'label': 'earned', 'color': C.ok, 'points': earned, 'width': 1.4},
+            {'label': 'cost', 'color': C.bad, 'points': cost, 'width': 1.4},
+            {'label': 'net', 'color': C.accent, 'points': net, 'area': True, 'width': 2.4},
+        ], [(0.0, C.faint, 'break-even')], overlay)
 
         sections = []
         if run.eval:
@@ -2020,6 +2066,8 @@ class DetailPane(QWidget):
             if ev.get('hearts_dropped') is not None:
                 rows.append(heart_drop_row('dropped hearts', ev['hearts_dropped'], ev['hearts_taken'],
                                            ev['hearts_left']))
+            if ev.get('mean_bomb_placed') is not None:
+                rows.append(bomb_row('bombs', ev))
             sections.append(('bars', 'Evaluation', rows))
             sections.append(('text', 'No progress · evaluation (action steps)', [
                 (fmt_linger(ev), C.warn if ev.get('linger_max_steps') is not None else C.faint),
