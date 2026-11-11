@@ -4,19 +4,20 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 10)
+## Where things stand (Nov 11)
 
-- **Now (Nov 10, round 16):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives them
+- **Now (Nov 11, round 17):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives them
   through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only route
   (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white sword
-  → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. The team was
-  retrained from scratch (r56) and improved by Lee's better-play list (`~/Downloads/triforce-better-play.md`): an
-  act mode per model (`<run dir>/act`, bound to the checkpoint's sha1: argmax for most families, sampling where
-  argmax loops; retrained or replaced weights sample, with a warning, until re-measured) and self-imitation
-  learning (11 families `r57-sil-s60`). Chains from the start: Dungeon 3 reached 34/120, the D3 triforce 4/120;
-  D1 115/120, D3 30/120. The other better-play ideas were measured and not kept (flags stay, off). Every new
-  checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
-- Nov 10: the review fix-up is in progress, `docs/experiments/round17.md`.
+  → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. The whole-repo
+  code review is worked through (`target/review-progress.md`: 186 fixed, the rest duplicates or decided; Lee's
+  decisions in `docs/decisions.md` 2026-11-10), states and curricula rebuilt, and the team retrained from scratch
+  with SIL on the fixed code (**r61, promoted**; `docs/experiments/round17.md`). Act mode per model (`<run
+  dir>/act`, bound to the checkpoint's sha1): argmax for 16 families, sampling for d2-rope, darknut,
+  stalfos-keese-gel and zol. Chains (120 seeds): D2 100, after D2 92, D1 80, after D1 120, D3 23; from the start
+  D1 55, the D3 triforce 1. Open: the D1 regression (stalfos-keese-gel early-stopped in 4 minutes and loses more
+  hearts; goriya and Aquamentus die after it). Every new checkpoint needs its act mode re-measured, in single
+  rooms and in chains (argmax is fragile per checkpoint).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each

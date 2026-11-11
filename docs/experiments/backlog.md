@@ -3,6 +3,15 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
+## Now (Nov 11): after the r61 retrain (round 17)
+
+1. **The D1 regression** (round17.md §5): D1 arrivals 115 → 80. stalfos-keese-gel early-stopped after 80 iterations
+   (4 minutes) at a confirmed 99% success but loses 0.23 hearts per visit (old model 0.06); goriya (1:0x23, 1:0x44)
+   and Aquamentus (1:0x35) then die with the hearts it left. Try first: continue stalfos-keese-gel and zol with a
+   longer minimum (or `--stop-success 0.995`), then re-measure D1. Underlying: the early stop and its confirmation
+   look at success only; a hearts-lost condition (or confirming on `mean_health_change` too) would catch this.
+2. **D3 still ends in 3:0x59** (darknut, 47 of 97 failed D3 runs). darknut samples (argmax looped 26 times).
+
 ## Now (Lee, Nov 9): Rust actor, then better play
 
 1. **Rust actor** (`docs/rust-actor.md`, decisions 2026-11-09): the policy's forward pass in Rust, rollouts in

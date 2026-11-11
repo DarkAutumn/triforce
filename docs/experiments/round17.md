@@ -23,6 +23,15 @@ whole team from scratch with SIL on from the start (`--sil-coeff 0.1`). No conti
 - **Baseline B1** (§1): the promoted team (r56 + r57-sil-s60, their act modes) measured on the fixed measurement
   code. Single rooms match round 16; chains match `r60-sil` except where the new per-run wrong-exit cap (F157) ends
   the 0x0a ↔ white-sword-cave bounce (F094) as a failure: after D2 98 → 34 arrivals, full route to D1 57 → 14.
+- **r61, the fresh team (§3–§5, promoted):** all 20 families trained from scratch on the fixed code with SIL, two
+  streams at `--parallel 8`, about 8 h wall. Single rooms level with the old team (boss-manhandla 88.7% → 95.7%;
+  goriya, stalfos-keese-gel and zol 0.7–1.0 points lower and losing more hearts). Act modes: argmax for 16 families,
+  sampling for stalfos-keese-gel and zol (argmax 3–6 points worse) and for darknut and d2-rope (argmax loops in
+  chains). Chains, paired by seed against B1: D2 89 → 100, after D2 34 → 92, full route to D1 14 → 55, D3 30 → 23
+  (p = 0.32), **D1 115 → 80** (39 lost, 4 gained: stalfos-keese-gel dies in 1:0x43, goriya in 1:0x23/0x44,
+  Aquamentus in 1:0x35), full route to the D3 triforce 1/120.
+- **Next:** the D1 families. stalfos-keese-gel and zol early-stopped after 4–5 minutes (80–96 iterations): the
+  confirmed 99% success says nothing about hearts lost, which the chain pays for (backlog).
 
 ## 1. Baseline B1 (review Phase 2)
 
@@ -117,3 +126,99 @@ Every change below is in the code the r61 team trains on (§3); none of the curr
 - **Data:** game.yaml's dungeon exits follow one convention checked against the ROM (F030); enemy names match the
   ROM (F070); no chain-hp profile ships (F042, F133); harvested and built states no longer keep a granted bomb
   (F148).
+
+## 3. r61: training
+
+Code at `5bec275`; states and curricula as rebuilt (§ Summary). `scripts/train_round.py --steps 8000000 --parallel 8
+--eval-parallel 3 --chain-runs 0 --train-args "--stop-success 0.99 --sil-coeff 0.1"` in two streams (`r61-ow`: the
+ten overworld and D1-side families; `r61-dg`: the dungeon families). When `r61-ow` finished (4.4 h), a watcher
+(`/tmp/r61-rebalance.py`) started `r61-dg2` on the later half of `r61-dg`'s pending families and stopped `r61-dg`
+when it reached one of them; a second split gave darknut its own stream (`r61-dg3`). Every stopped training was
+moved aside as `<run>.partial-killed` and trained again by the other stream; three evaluations stopped with their
+driver were redone below. Wall time from start to the last family: about 8 h.
+
+Act modes from 100 episodes per start state in each mode (seed 0, paired by start state and seed); the rule:
+argmax unless the paired difference's 95% CI upper bound is below 0, then the chain check of §4.
+
+| family | run | ending | iterations | steps | wall | sample | argmax | Δ (95% CI) | act |
+|---|---|---|---:|---:|---:|---:|---:|---|---|
+| ow-start | r61-ow | early_stop | 43 | 0.18M | 2 min | 99.7% | 100.0% | +0.3% [+0.0%, +0.6%] | argmax |
+| ow-octorok | r61-ow | early_stop | 379 | 1.55M | 19 min | 98.5% | 98.6% | +0.1% [-0.2%, +0.4%] | argmax |
+| ow-zora | r61-ow | early_stop | 379 | 1.55M | 19 min | 98.9% | 99.3% | +0.5% [+0.2%, +0.8%] | argmax |
+| ow-moblin | r61-ow | completed | 1954 | 8.00M | 93 min | 98.0% | 98.4% | +0.3% [-0.1%, +0.8%] | argmax |
+| ow-tektite | r61-ow | early_stop | 283 | 1.16M | 12 min | 99.2% | 99.4% | +0.3% [-0.2%, +0.7%] | argmax |
+| ow-lynel | r61-ow | early_stop | 1706 | 6.99M | 95 min | 98.7% | 98.9% | +0.2% [-0.6%, +1.0%] | argmax |
+| ow-boulder | r61-ow | early_stop | 24 | 0.10M | 1 min | 100.0% | 99.9% | -0.1% [-0.3%, +0.1%] | argmax |
+| ow-leever | r61-ow | early_stop | 40 | 0.16M | 2 min | 100.0% | 100.0% | +0.0% [+0.0%, +0.0%] | argmax |
+| trap-room | r61-ow | early_stop | 165 | 0.68M | 10 min | 99.6% | 99.7% | +0.1% [-0.3%, +0.5%] | argmax |
+| equipment-room | r61-ow | early_stop | 133 | 0.54M | 6 min | 97.5% | 99.0% | +1.5% [+0.2%, +2.8%] | argmax |
+| d2-rope | r61-dg | early_stop | 1359 | 5.57M | 66 min | 98.3% | 97.9% | -0.4% [-1.1%, +0.3%] | sample (§4) |
+| goriya | r61-dg | completed | 1954 | 8.00M | 88 min | 92.3% | 93.0% | +0.7% [-0.7%, +2.1%] | argmax |
+| moldorm | r61-dg | completed | 1954 | 8.00M | 83 min | 85.7% | 86.7% | +1.0% [-2.6%, +4.6%] | argmax |
+| boss-dodongo | r61-dg | early_stop | 563 | 2.31M | 29 min | 99.7% | 99.0% | -0.7% [-2.0%, +0.6%] | argmax |
+| stalfos-keese-gel | r61-dg | early_stop | 80 | 0.33M | 4 min | 99.1% | 95.8% | -3.3% [-4.0%, -2.7%] | sample |
+| wallmaster | r61-dg | early_stop | 244 | 1.00M | 12 min | 99.7% | 100.0% | +0.3% [-0.3%, +1.0%] | argmax |
+| boss-aquamentus | r61-dg | early_stop | 225 | 0.92M | 10 min | 97.3% | 100.0% | +2.7% [+0.8%, +4.5%] | argmax |
+| darknut | r61-dg3 | completed | 1954 | 8.00M | 93 min | 96.4% | 97.1% | +0.7% [-0.1%, +1.5%] | sample (§4) |
+| zol | r61-dg2 | early_stop | 96 | 0.39M | 5 min | 98.8% | 93.1% | -5.8% [-7.0%, -4.5%] | sample |
+| boss-manhandla | r61-dg2 | completed | 1954 | 8.00M | 114 min | 93.3% | 95.7% | +2.3% [-0.7%, +5.3%] | argmax |
+
+Every early stop was confirmed by its evaluation (50 sampled episodes per seed state); the log shows many aborted
+checks at 0.984–0.989 before the one that passed. Each run's `eval.json` is now its canonical evaluation in its
+act mode; both modes' files are kept as `eval-r61-sample.json` / `eval-r61-argmax.json`.
+
+## 4. Act modes in chains
+
+With the rule's modes (18 argmax, 2 sample) the chain segments (`TAG=r61-mix`) showed `stuck` loops: darknut 26
+(3:0x59), d2-rope 6, goriya 5. Plan rule: more than 5 `stuck`/`no-damage` endings across the six segments sends a
+family back to sampling: darknut and d2-rope (promoted again with `--act sample`). `TAG=r61-mix2`: goriya 5,
+darknut 2, ow-octorok 1, boss-aquamentus 1 stuck; no family above 5. Final: argmax for 16 families, sampling for
+d2-rope, darknut, stalfos-keese-gel and zol (`target/r61/r61-modes.txt`; the team before is in
+`target/r61/promoted-before-r61.txt`).
+
+## 5. r61 against B1
+
+Single rooms (canonical evaluations, each model's act mode; B1 on the old states, r61 on the rebuilt ones):
+
+| specialist | B1 (act) | B1 success | B1 hearts lost | r61 (act) | r61 success | r61 hearts lost |
+|---|---|---:|---:|---|---:|---:|
+| boss-aquamentus | r56-rust-dg (argmax) | 100.0% | 0.25 | r61-dg (argmax) | 100.0% | 0.25 |
+| boss-dodongo | r56-rust-dg (argmax) | 99.3% | 0.01 | r61-dg (argmax) | 99.0% | 0.08 |
+| boss-manhandla | r56-rust-dg3 (argmax) | 88.7% | 1.50 | r61-dg2 (argmax) | 95.7% | 1.22 |
+| d2-rope | r57-sil-s60 (argmax) | 98.7% | 0.07 | r61-dg (sample) | 98.3% | 0.10 |
+| darknut | r57-sil-s60 (sample) | 96.7% | 0.62 | r61-dg3 (sample) | 96.4% | 0.65 |
+| equipment-room | r57-sil-s60 (argmax) | 99.8% | 0.19 | r61-ow (argmax) | 99.0% | 0.23 |
+| goriya | r57-sil-s60 (sample) | 94.4% | 0.52 | r61-dg (argmax) | 93.0% | 0.45 |
+| moldorm | r56-rust-dg (sample) | 85.7% | 0.87 | r61-dg (argmax) | 86.7% | 0.71 |
+| ow-boulder | r57-sil-s60 (argmax) | 100.0% | 0.14 | r61-ow (argmax) | 99.9% | 0.17 |
+| ow-leever | r56-rust-ow (argmax) | 100.0% | 0.06 | r61-ow (argmax) | 100.0% | 0.04 |
+| ow-lynel | r57-sil-s60 (argmax) | 99.3% | 0.21 | r61-ow (argmax) | 98.9% | 0.13 |
+| ow-moblin | r57-sil-s60 (argmax) | 97.9% | 0.15 | r61-ow (argmax) | 98.4% | 0.12 |
+| ow-octorok | r57-sil-s60 (argmax) | 98.6% | 0.10 | r61-ow (argmax) | 98.6% | 0.10 |
+| ow-start | r56-rust-ow (argmax) | 100.0% | 0.00 | r61-ow (argmax) | 100.0% | 0.00 |
+| ow-tektite | r56-rust-ow (argmax) | 99.7% | 0.12 | r61-ow (argmax) | 99.4% | 0.19 |
+| ow-zora | r57-sil-s60 (argmax) | 99.3% | 0.16 | r61-ow (argmax) | 99.3% | 0.18 |
+| stalfos-keese-gel | r57-sil-s60 (sample) | 99.8% | 0.06 | r61-dg (sample) | 99.1% | 0.23 |
+| trap-room | r56-rust-ow (argmax) | 99.0% | 0.34 | r61-ow (argmax) | 99.7% | 0.37 |
+| wallmaster | r56-rust-dg (argmax) | 99.7% | 0.00 | r61-dg (argmax) | 100.0% | 0.00 |
+| zol | r57-sil-s60 (sample) | 99.8% | 0.10 | r61-dg2 (sample) | 98.8% | 0.30 |
+
+Chains, 120 seeds per segment, paired by seed (`TAG=r61-mix2` vs `TAG=r61-b1`; sign test on the discordant
+seeds):
+
+| segment | B1 | r61 | gained | lost | p |
+|---|---:|---:|---:|---:|---:|
+| D2 (`2_7ds_0` → 0:0x3c) | 89 | 100 | 23 | 12 | 0.09 |
+| after D2 (`0_3cc_0` → 1:0x73) | 34 | 92 | 67 | 9 | <0.0001 |
+| D1 (`1_73s_0` → 0:0x37) | 115 | 80 | 4 | 39 | <0.0001 |
+| after D1 (`0_37c_0` → 3:0x7c) | 120 | 120 | 0 | 0 | 1 |
+| D3 (`3_7cs_0` → triforce) | 30 | 23 | 15 | 22 | 0.32 |
+| full route (D3 triforce) | 0 | 1 | 1 | 0 | 1 |
+
+Full route arrivals (r61-mix2): D2 118, after D2 68, D1 55, after D1 6, D3 6, the D3 triforce 1 (B1: 110, 72, 14,
+6, 6, 0). After D2 is the F094 + F157 story of §1 resolved: the cave-mouth mask is the same live and loaded, and the
+new ow-lynel never bounces. D1 is the one regression: of the 40 failed D1 runs, stalfos-keese-gel dies in 1:0x43
+(12), goriya in 1:0x23 (8) and 1:0x44 (5), Aquamentus in 1:0x35 (5). stalfos-keese-gel early-stopped after 80
+iterations (4 minutes): its single-room success is 99.1% but it loses 0.23 hearts per visit (old model: 0.06), and
+in a chain those hearts are the ones Link brings to goriya and Aquamentus. D3 still ends mostly in 3:0x59 (darknut,
+47 deaths). The comparison mixes the new models with the rebuilt states (B1 played the old ones).

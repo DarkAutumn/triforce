@@ -980,3 +980,15 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Accepted as recommended:** F017 (golden staleness covers the base-movie chain), F089 (desynced milestone1
   movies dropped, chain recordings replayed as goldens), F152 (only still-playing hidden games take a cell), F178
   (cellars drawn with their entrance), F018 (doc edits as written).
+
+## 2026-11-11 — Fresh team r61 promoted (review fix-up, round 17)
+
+- **What:** every family retrained from scratch on the review-fixed code, rebuilt states and re-explored curricula,
+  with SIL (`--sil-coeff 0.1`) and `--stop-success 0.99` (early stops confirmed by an evaluation), and promoted.
+  Act modes: argmax for 16 families; sampling for stalfos-keese-gel and zol (argmax 3–6 points worse in single
+  rooms) and for darknut and d2-rope (argmax looped in chains: more than 5 `stuck` endings across the six
+  segments). The replaced team is listed in `target/r61/promoted-before-r61.txt`.
+- **Why:** the fixes change what a model observes and may do (object classes, attack masks, bombs per room, the
+  cave-mouth flag, target directions, the zeroed selected-item slice), so the old models no longer matched the code.
+  Against the old team on the fixed measurement code (B1): D2 89 → 100, after D2 34 → 92 (the 0x0a bounce is gone),
+  from the start to D1 14 → 55 arrivals of 120; D1 115 → 80 is the one regression (round17.md §5).
