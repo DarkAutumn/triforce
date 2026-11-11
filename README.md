@@ -49,6 +49,8 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist (promotes only with --promote)
 uv run training-gui.py                                          # live training monitor (newest logs/ folder)
 .venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--scale N, --act, --power-on, --replays DIR; keys u/+/-/p)
+.venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N)
+.venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path: games race triforce to triforce from each winner's state, stitched into one replay
 .venv/bin/python zelda-map.py                                   # room map + per-room eval stats of the promoted models (--rerender)
 .venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states into target/entry-states/<ts> (start/build/path/install/audit)

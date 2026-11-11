@@ -30,7 +30,7 @@ flowchart LR
 | `crates/replay` | `TFREPLAY` recordings: the format (`format.rs`), `Recorder`, the reader `Replay`, `stitch`/`truncate` (`edit.rs`) and, with feature `zcore`, `Player`/`verify` (playback on the emulator alone). No dependency on `zelda` or `env`. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -678,6 +678,33 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
 - **Compatibility.** `REPLAY_VERSION` is its own integer, bumped only when an existing replay can no longer be
   replayed bit for bit; a reader refuses a newer version by name. `corpus/replays/` holds recorded replays that
   must keep verifying (`AGENTS.md`, Versioning).
+
+## Headless play and the golden path (`zelda-headless.py`, `golden.py`)
+
+- `zelda-headless.py OUT [COUNT] [--wins-only | --deaths-only | --stuck-only] [--parallel N] [--first-seed S]
+  [--max-runs M] [--route R] [--from STATE | --power-on [--name NAME] [--delay N|random]]
+  [--stop-at ROOM|step:N] [--act sample|argmax|model] [--streams LIST] [--keyframe-frames N]
+  [--state embed|path] [--golden [--attempts A]] [--models-dir DIR] [--allow-incompatible-models]` plays the
+  route in one chain pool without a window or rendering and writes replays into `OUT`
+  (`<seed>-<ending>.tfreplay`). Without a filter it plays seeds `S .. S+COUNT-1` and saves them all; with one
+  it plays on (at most `--max-runs`, default 1000 × COUNT) until COUNT runs ended that way and drops the
+  others. It prints one line per saved file (`path  ending  frames  seed`) and a JSON summary (`saved`, `runs`,
+  `endings`, `out`). Exit 0 when COUNT replays were saved and no run ended in an error, 1 otherwise, 2 on a
+  bad command line, route or model set. Play samples by default (`--act`), so every seed is another game.
+- **The golden path** (`--golden`; `golden.golden_path(policies, route, parallel, first_seed, record, ...)`):
+  the route is cut at its checkpoints, the overworld rooms Link stands in right after a triforce that is not the
+  route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
+  `parallel` games race from the same state to the segment's stop (`golden.race`: a `ChainPool` of the
+  segment's seeds with `stop_step`, every run recorded). The first success seen wins (of several in one poll:
+  the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
+  checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
+  written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
+  triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. The games of a segment differ only by the models'
+  sampling noise (keyed to the run seed), so `--act argmax` is refused. A segment without a success in
+  `--attempts` runs (default 320) ends the path as a failure: its part is the run that got furthest (most
+  rooms, then most frames), and the file is saved under that run's ending. A golden replay's memory edits are
+  what any chain run's are: the action executor's writes of Link's facing (`$98`) and the selected B item
+  (`$656`), and cheat grants; from power on there is no other write and none to the game's random numbers.
 
 ## Entry states (`entry_states.py`)
 
