@@ -7,62 +7,62 @@
 ;           (type $46), which cannot be hurt.
 ; SEE ALSO: bank4/gleeok-head-body.asm (Gleeok_MoveHead, head and segment drawing, collisions, a head
 ;           being cut off, the boss dying, Gleeok_DrawBody); bank4/gleeok-manhandla-gohma-inits.asm
-;           (InitGleeok, InitGleeokHead, start values); bank4/fairy-flyer-common.asm (MoveFlyer,
-;           Flyer_SpeedUp, Flyer_Chase, Flyer_Wander); bank4/bubble-keese.asm (Flyer_SetStateAndTurns);
-;           bank4/monster-shots-fireballs.asm (ShootFireball, UpdateFireball).
+;           (Gleeok_Init, Gleeok_InitFlyingHead, start values); bank4/fairy-flyer-common.asm (Flyer_Move,
+;           Flyer_State0SpeedUp, Flyer_State2Chase, Flyer_State3Wander); bank4/bubble-keese.asm (Flyer_SetStateAndTurns);
+;           bank4/monster-shots-fireballs.asm (Fireball_Shoot, Fireball_Update).
 ; KEY FACTS:
 ;   - Number of necks = type of object slot 1 - $41 ($42 has 1 neck, $45 has 4); neck n is skipped once bit n
-;     of GleeokDeadNeckMask is set. UpdateGleeok
+;     of GleeokDeadNeckMask is set. Gleeok_Update
 ;   - A neck is 5 drawn segments worked on in object slots 1 (base) to 5 (head); its X, Y and head
 ;     movement block live in per-neck arrays and are copied in and out every frame.
-;     UpdateGleeok@LoadNeckBytes, UpdateGleeok@SaveNeckBytes, Gleeok_FetchNeckAddrs
+;     Gleeok_Update@LoadNeckBytes, Gleeok_Update@SaveNeckBytes, Gleeok_FetchNeckAddrs
 ;   - ObjHP and ObjInvincibilityTimer of slot 5 are not part of the copied neck data, so all attached
-;     heads share them. UpdateGleeok@LoadNeckBytes
+;     heads share them. Gleeok_Update@LoadNeckBytes
 ;   - Each neck moves, and its head may shoot, only on frames where (FrameCounter AND 3) = neck index:
-;     once every 4 frames. Every living neck is drawn and collision-tested every frame. UpdateGleeok
+;     once every 4 frames. Every living neck is drawn and collision-tested every frame. Gleeok_Update
 ;   - An attached head shoots fireball type $56 when Random+5 < $20 (1 in 8 of its move frames) and
 ;     object slot $0B is empty; a flying head does so on frames where its distance travelled is even,
 ;     Random+1,X < $20 and slot $0B is empty. So one Gleeok fireball exists at a time (it takes slot
-;     $0B). UpdateGleeok, UpdateGleeokHead
+;     $0B). Gleeok_Update, Gleeok_UpdateFlyingHead
 ;   - The flying head cannot be harmed, shoved or killed: after its collision test its metastate,
-;     shove info and invincibility timer are zeroed every frame. UpdateGleeokHead
+;     shove info and invincibility timer are zeroed every frame. Gleeok_UpdateFlyingHead
 ;   - Flying head flight states: 0 speed up, 1 decide, 2 chase Link, 3 wander. Decide picks chase when
 ;     Random+1,X < $D0 (13 in 16), else wander. It has no slow-down or rest state.
-;     ControlGleeokHeadFlight_JumpTable, Flyer_GleeokHeadDecideState
+;     Gleeok_FlyingHeadFlight_JumpTable, Flyer_GleeokHeadDecideState
 ;   - Gleeok_StretchNeck subtracts ObjX+3,X from itself, so its horizontal distance is always 0:
-;     table entries 2, 5 and 8 are never used, so Gleeok_ContractSegmentX and Gleeok_ContractSegment
+;     table entries 2, 5 and 8 are never used, so Gleeok_ContractSegmentX and Gleeok_ContractSegmentXOrY
 ;     never run. Gleeok_StretchNeck, Gleeok_StretchNeck_JumpTable
 ;   - Neck spacing limits per axis from d = |head - base| / 4: tier 1 = min(d, 4), tier 2 = tier 1 + 4,
 ;     tier 3 = min(tier 2 + 4, $B) pixels. Gleeok_CalcSegmentLimits
 ; CONTENTS: (generated; L = line in this file)
-;   L0075 UpdateGleeokHead                   code  Updates a cut-off flying Gleeok head (type $46): flies, may shoot a fireball, draws, harms Link.
-;   L0110 ControlGleeokHeadFlight            code  Runs the flying Gleeok head's current flight state.
-;   L0115 ControlGleeokHeadFlight_JumpTable  data  TABLE: flight state handlers of the flying Gleeok head; index = Flyer_ObjFlyingState.
+;   L0075 Gleeok_UpdateFlyingHead            code  Updates a cut-off flying Gleeok head (type $46): flies, may shoot a fireball, draws, harms Link.
+;   L0110 Gleeok_ControlFlyingHeadFlight     code  Runs the flying Gleeok head's current flight state.
+;   L0115 Gleeok_FlyingHeadFlight_JumpTable  data  TABLE: flight state handlers of the flying Gleeok head; index = Flyer_ObjFlyingState.
 ;   L0127 Flyer_GleeokHeadDecideState        code  Flying Gleeok head flight state 1: picks chase (Random+1,X < $D0) or wander; turn counter 6.
-;   L0140 GleeokNeckXAddrsLo                 data  TABLE: low address bytes of each neck's segment X array; index = neck 0-3; Gleeok_NeckXs0-3.
-;   L0144 GleeokNeckXAddrsHi                 data  TABLE: high address bytes of each neck's segment X array; index = neck 0-3.
-;   L0148 GleeokNeckYAddrsLo                 data  TABLE: low address bytes of each neck's segment Y array; index = neck 0-3; Gleeok_NeckYs0-3.
-;   L0152 GleeokNeckYAddrsHi                 data  TABLE: high address bytes of each neck's segment Y array; index = neck 0-3.
-;   L0156 GleeokNeckMiscAddrsLo              data  TABLE: low address bytes of each neck's head movement block; index = neck 0-3; Gleeok_HeadInfo0-3.
-;   L0160 GleeokNeckMiscAddrsHi              data  TABLE: high address bytes of each neck's head movement block; index = neck 0-3.
-;   L0172 UpdateGleeok                       code  Updates Gleeok (types $42-$45): draws the body, then moves, draws and hit-tests every living neck.
+;   L0140 Gleeok_NeckXAddrsLo                data  TABLE: low address bytes of each neck's segment X array; index = neck 0-3; Gleeok_NeckXs0-3.
+;   L0144 Gleeok_NeckXAddrsHi                data  TABLE: high address bytes of each neck's segment X array; index = neck 0-3.
+;   L0148 Gleeok_NeckYAddrsLo                data  TABLE: low address bytes of each neck's segment Y array; index = neck 0-3; Gleeok_NeckYs0-3.
+;   L0152 Gleeok_NeckYAddrsHi                data  TABLE: high address bytes of each neck's segment Y array; index = neck 0-3.
+;   L0156 Gleeok_NeckHeadInfoAddrsLo         data  TABLE: low address bytes of each neck's head movement block; index = neck 0-3; Gleeok_HeadInfo0-3.
+;   L0160 Gleeok_NeckHeadInfoAddrsHi         data  TABLE: high address bytes of each neck's head movement block; index = neck 0-3.
+;   L0172 Gleeok_Update                      code  Updates Gleeok (types $42-$45): draws the body, then moves, draws and hit-tests every living neck.
 ;   L0256 Gleeok_FetchNeckAddrs              code  Loads the addresses of the current neck's X, Y and head movement arrays.
-;   L0274 L_Gleeok_UDiv4                     code  Gleeok_MoveNeck branches here when the head is not left of the base: A = distance / 4.
+;   L0274 Gleeok_MoveNeck_DivideBy4Unsigned  code  Gleeok_MoveNeck branches here when the head is not left of the base: A = distance / 4.
 ;   L0287 Gleeok_MoveNeck                    code  Bends the current neck (object slots 1-5) so its segments follow the head.
-;   L0303 L_Gleeok_StoreRefSegDistance       code  Both paths of Gleeok_MoveNeck join here with A = signed (head X - base X) / 4.
+;   L0303 Gleeok_MoveNeck_StoreRefDistance   code  Both paths of Gleeok_MoveNeck join here with A = signed (head X - base X) / 4.
 ;   L0453 Gleeok_CalcSegmentLimits           code  Derives the three neck segment spacing limits of one axis from a quarter head-to-base distance.
 ;   L0490 Gleeok_StretchNeck                 code  Moves one middle neck segment 2 pixels away from or toward the next segment, or leaves it.
 ;   L0533 Gleeok_StretchNeck_JumpTable       data  TABLE: segment handlers of Gleeok_StretchNeck; index = h + 3 * v (h = horizontal limits reached,
 ;   L0550 Gleeok_ExpandSegment               code  Moves a neck segment 2 pixels away from the next segment, horizontally or vertically at random.
-;   L0564 L_Gleeok_DecSegmentY               code  Shared tail: turns the prepared segment Y + 2 into segment Y - 2.
-;   L0571 L_Gleeok_SetSegmentY               code  Shared tail: stores the Y register as the Y of the segment in slot 2+X.
+;   L0564 Gleeok_StepSegmentYMinus2          code  Shared tail: turns the prepared segment Y + 2 into segment Y - 2.
+;   L0571 Gleeok_StoreSegmentY               code  Shared tail: stores the Y register as the Y of the segment in slot 2+X.
 ;   L0575 Gleeok_IgnoreSegment               code  Segment handler that does nothing (also the return of the handlers above).
 ;   L0583 Gleeok_ContractSegmentY            code  Moves a neck segment 2 pixels toward the next segment vertically.
-;   L0594 L_Gleeok_ExpandHorizontally        code  Horizontal half of Gleeok_ExpandSegment: X + 2 if this segment's X >= the next one's, else - 2.
+;   L0594 Gleeok_ExpandSegmentX              code  Horizontal half of Gleeok_ExpandSegment: X + 2 if this segment's X >= the next one's, else - 2.
 ;   L0609 Gleeok_ContractSegmentX            code  Moves a neck segment 2 pixels toward the next segment horizontally.
-;   L0618 L_Gleeok_DecSegmentX               code  Shared tail: turns the prepared segment X + 2 into segment X - 2.
-;   L0625 L_Gleeok_SetSegmentX               code  Shared tail: stores the Y register as the X of the segment in slot 2+X.
-;   L0633 Gleeok_ContractSegment             code  Moves a neck segment toward the next one, horizontally or vertically at random.
+;   L0618 Gleeok_StepSegmentXMinus2          code  Shared tail: turns the prepared segment X + 2 into segment X - 2.
+;   L0625 Gleeok_StoreSegmentX               code  Shared tail: stores the Y register as the X of the segment in slot 2+X.
+;   L0633 Gleeok_ContractSegmentXOrY         code  Moves a neck segment toward the next one, horizontally or vertically at random.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -70,14 +70,14 @@
 ; IN:   X = object slot (7 + neck index; set where the head is cut off).
 ; NOTE: Shoots fireball type $56 on a frame where bit 0 of Flyer_ObjDistTraveled is clear,
 ;       Random+1,X < $20 and object slot $0B is empty. The head cannot be harmed: whatever
-;       CheckMonsterCollisions did to its metastate, shove info and invincibility timer is undone.
+;       Collision_CheckMonsterVsWeaponsAndLink did to its metastate, shove info and invincibility timer is undone.
 ; ----------------------------------------------------------------------------
-UpdateGleeokHead:
-    JSR ControlGleeokHeadFlight
-    JSR MoveFlyer
+Gleeok_UpdateFlyingHead:
+    JSR Gleeok_ControlFlyingHeadFlight
+    JSR Flyer_Move
 
     ; Shoot only if the distance travelled is even, Random+1,X < $20 (1 in 8),
-    ; and object slot $0B is empty. ShootFireball takes the highest empty monster slot,
+    ; and object slot $0B is empty. Fireball_Shoot takes the highest empty monster slot,
     ; so the fireball goes into slot $0B and blocks further shots until it is gone.
     LDA Flyer_ObjDistTraveled, X
     AND #$01
@@ -88,18 +88,18 @@ UpdateGleeokHead:
     LDA ObjType+11              ; Slot $0B in use?
     BNE :+
     LDA #$56                    ; Fireball type $56.
-    JSR ShootFireball
+    JSR Fireball_Shoot
 :
     LDA #$01                    ; Animation counter reload: switch frames every frame.
     JSR Anim_AdvanceAnimCounterAndSetObjPosForSpriteDescriptor
     LDA ObjAnimFrame, X
-    JSR DrawObjectMirrored
-    JSR CheckMonsterCollisions
+    JSR Anim_DrawObjectMirrored
+    JSR Collision_CheckMonsterVsWeaponsAndLink
 
     ; Undo any hit: metastate 0 (alive), no shove, no invincibility frames.
-    ; ResetObjMetastate returns A = 0, which the next two stores use.
-    JSR ResetObjMetastate
-    JSR SetShoveInfoWith0
+    ; Obj_ResetMetastate returns A = 0, which the next two stores use.
+    JSR Obj_ResetMetastate
+    JSR Shove_SetDirAndDistance
     STA ObjInvincibilityTimer, X
     RTS
 
@@ -107,16 +107,16 @@ UpdateGleeokHead:
 ; Runs the flying Gleeok head's current flight state.
 ; IN:   X = object slot; Flyer_ObjFlyingState,X = 0-3.
 ; ----------------------------------------------------------------------------
-ControlGleeokHeadFlight:
+Gleeok_ControlFlyingHeadFlight:
     LDA Flyer_ObjFlyingState, X
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: flight state handlers of the flying Gleeok head; index = Flyer_ObjFlyingState.
-ControlGleeokHeadFlight_JumpTable:
-    .ADDR Flyer_SpeedUp                 ; 0: +1 speed per frame up to FlyerMaxSpeedFrac, then state 1
+Gleeok_FlyingHeadFlight_JumpTable:
+    .ADDR Flyer_State0SpeedUp                 ; 0: +1 speed per frame up to FlyerMaxSpeedFrac, then state 1
     .ADDR Flyer_GleeokHeadDecideState   ; 1: choose chase or wander
-    .ADDR Flyer_Chase                   ; 2: turn toward Link, $10 frames between turns, then state 1
-    .ADDR Flyer_Wander                  ; 3: turn at random, then state 1
+    .ADDR Flyer_State2Chase                   ; 2: turn toward Link, $10 frames between turns, then state 1
+    .ADDR Flyer_State3Wander                  ; 3: turn at random, then state 1
 
 ; ----------------------------------------------------------------------------
 ; Flying Gleeok head flight state 1: picks chase (Random+1,X < $D0) or wander; turn counter 6.
@@ -137,27 +137,27 @@ Flyer_GleeokHeadDecideState:
 ; Gleeok_FetchNeckAddrs reads them.
 
 ; TABLE: low address bytes of each neck's segment X array; index = neck 0-3; Gleeok_NeckXs0-3.
-GleeokNeckXAddrsLo:
+Gleeok_NeckXAddrsLo:
     .BYTE $38, $52, $6C, $95    ; $0438, $0452, $046C, $0395
 
 ; TABLE: high address bytes of each neck's segment X array; index = neck 0-3.
-GleeokNeckXAddrsHi:
+Gleeok_NeckXAddrsHi:
     .BYTE $04, $04, $04, $03
 
 ; TABLE: low address bytes of each neck's segment Y array; index = neck 0-3; Gleeok_NeckYs0-3.
-GleeokNeckYAddrsLo:
+Gleeok_NeckYAddrsLo:
     .BYTE $45, $5F, $79, $BD    ; $0445, $045F, $0479, $03BD
 
 ; TABLE: high address bytes of each neck's segment Y array; index = neck 0-3.
-GleeokNeckYAddrsHi:
+Gleeok_NeckYAddrsHi:
     .BYTE $04, $04, $04, $03
 
 ; TABLE: low address bytes of each neck's head movement block; index = neck 0-3; Gleeok_HeadInfo0-3.
-GleeokNeckMiscAddrsLo:
+Gleeok_NeckHeadInfoAddrsLo:
     .BYTE $20, $2D, $81, $A9    ; $0420, $042D, $0381, $03A9
 
 ; TABLE: high address bytes of each neck's head movement block; index = neck 0-3.
-GleeokNeckMiscAddrsHi:
+Gleeok_NeckHeadInfoAddrsHi:
     .BYTE $04, $04, $03, $03
 
 ; ----------------------------------------------------------------------------
@@ -169,7 +169,7 @@ GleeokNeckMiscAddrsHi:
 ;       A neck moves and may shoot only when (FrameCounter AND 3) = its index (every 4th frame).
 ;       Its head shoots fireball type $56 when Random+5 < $20 and object slot $0B is empty.
 ; ----------------------------------------------------------------------------
-UpdateGleeok:
+Gleeok_Update:
     JSR Gleeok_DrawBody
 
     ; Index of the last neck = object type of slot 1 - $42 (0 for the one-headed Gleeok).
@@ -181,7 +181,7 @@ UpdateGleeok:
 @LoopNeck:
     ; Skip this neck if its head has been cut off (its bit is set in the dead neck mask).
     LDY GleeokCurNeck
-    LDA LevelMasks, Y           ; Bit mask 1 << neck index.
+    LDA Util_BitMasks, Y           ; Bit mask 1 << neck index.
     BIT GleeokDeadNeckMask
     BEQ :+
     JMP @NextLoopNeck
@@ -221,12 +221,12 @@ UpdateGleeok:
     LDA ObjType+11              ; Slot $0B in use?
     BNE @DrawAndCheckCollisions
     LDA #$56
-    JSR ShootFireball
+    JSR Fireball_Shoot
 
 @DrawAndCheckCollisions:
     ; Every living neck, every frame: draw slots 5 to 1 and test the head and the base
     ; against Link and his weapons.
-    JSR Gleeok_DrawHeadAndCheckCollisions
+    JSR Gleeok_DrawNeckAndCheckCollisions
 
     ; Copy the neck from the object slots back to its arrays.
     JSR Gleeok_FetchNeckAddrs
@@ -255,26 +255,26 @@ UpdateGleeok:
 ; ----------------------------------------------------------------------------
 Gleeok_FetchNeckAddrs:
     LDX GleeokCurNeck
-    LDA GleeokNeckXAddrsLo, X
+    LDA Gleeok_NeckXAddrsLo, X
     STA $00
-    LDA GleeokNeckXAddrsHi, X
+    LDA Gleeok_NeckXAddrsHi, X
     STA $01
-    LDA GleeokNeckYAddrsLo, X
+    LDA Gleeok_NeckYAddrsLo, X
     STA $02
-    LDA GleeokNeckYAddrsHi, X
+    LDA Gleeok_NeckYAddrsHi, X
     STA $03
-    LDA GleeokNeckMiscAddrsLo, X
+    LDA Gleeok_NeckHeadInfoAddrsLo, X
     STA $04
-    LDA GleeokNeckMiscAddrsHi, X
+    LDA Gleeok_NeckHeadInfoAddrsHi, X
     STA $05
     LDY #$05                    ; Callers copy from index 5 down to 0.
     RTS
 
 ; Gleeok_MoveNeck branches here when the head is not left of the base: A = distance / 4.
-L_Gleeok_UDiv4:
+Gleeok_MoveNeck_DivideBy4Unsigned:
     LSR
     LSR
-    JMP L_Gleeok_StoreRefSegDistance
+    JMP Gleeok_MoveNeck_StoreRefDistance
 
 ; ----------------------------------------------------------------------------
 ; Bends the current neck (object slots 1-5) so its segments follow the head.
@@ -291,21 +291,21 @@ Gleeok_MoveNeck:
     SBC ObjX+1
 
     ; Not negative: divide by 4 with two shifts.
-    BPL L_Gleeok_UDiv4
+    BPL Gleeok_MoveNeck_DivideBy4Unsigned
 
     ; Negative: negate, divide by 4, negate again.
-    JSR Negate
+    JSR Math_Negate
     LSR
     LSR
-    JSR Negate
+    JSR Math_Negate
 
 ; Both paths of Gleeok_MoveNeck join here with A = signed (head X - base X) / 4.
-L_Gleeok_StoreRefSegDistance:
+Gleeok_MoveNeck_StoreRefDistance:
     ; This is the signed X spacing of the reference points used further down.
     STA GleeokSignedRefSegmentDistance
 
     ; Its absolute value gives the three horizontal spacing limits.
-    JSR Abs
+    JSR Math_Abs
     LDX #$00                    ; 0 = horizontal limits.
     JSR Gleeok_CalcSegmentLimits
 
@@ -314,7 +314,7 @@ L_Gleeok_StoreRefSegDistance:
     LDA ObjY+5
     SEC
     SBC ObjY+1
-    JSR Abs
+    JSR Math_Abs
     LSR
     LSR
 
@@ -330,7 +330,7 @@ L_Gleeok_StoreRefSegDistance:
     LDA ObjX+1, X
     SEC
     SBC ObjX+2, X
-    JSR Abs
+    JSR Math_Abs
 
     ; Less than the tier 3 horizontal limit: leave X alone.
     CMP GleeokTertiarySegmentLimits
@@ -355,7 +355,7 @@ L_Gleeok_StoreRefSegDistance:
     LDA ObjY+1, X
     SEC
     SBC ObjY+2, X
-    JSR Abs
+    JSR Math_Abs
 
     ; Less than the tier 3 vertical limit: leave Y alone.
     CMP GleeokTertiarySegmentLimits+1
@@ -496,7 +496,7 @@ Gleeok_StretchNeck:
     LDA ObjX+3, X
     SEC
     SBC ObjX+3, X
-    JSR Abs
+    JSR Math_Abs
     CMP GleeokPrimarySegmentLimits
     BCC :+
     INY
@@ -511,7 +511,7 @@ Gleeok_StretchNeck:
     LDA ObjY+3, X
     SEC
     SBC ObjY+2, X
-    JSR Abs
+    JSR Math_Abs
     CMP GleeokPrimarySegmentLimits+1
     BCC :+
     INY
@@ -526,7 +526,7 @@ Gleeok_StretchNeck:
     INY
 :
     TYA
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: segment handlers of Gleeok_StretchNeck; index = h + 3 * v (h = horizontal limits reached,
 ; v = vertical limits reached). Entries 2, 5 and 8 are never used (h is never 2).
@@ -539,7 +539,7 @@ Gleeok_StretchNeck_JumpTable:
     .ADDR Gleeok_ContractSegmentX       ; 5: h 2, v 1 (never)
     .ADDR Gleeok_ContractSegmentY       ; 6: h 0, v 2: too far vertically, move closer
     .ADDR Gleeok_ContractSegmentY       ; 7: h 1, v 2
-    .ADDR Gleeok_ContractSegment        ; 8: h 2, v 2 (never)
+    .ADDR Gleeok_ContractSegmentXOrY        ; 8: h 2, v 2 (never)
 
 ; ----------------------------------------------------------------------------
 ; Moves a neck segment 2 pixels away from the next segment, horizontally or vertically at random.
@@ -549,7 +549,7 @@ Gleeok_StretchNeck_JumpTable:
 ; ----------------------------------------------------------------------------
 Gleeok_ExpandSegment:
     LDA Random
-    BPL L_Gleeok_ExpandHorizontally
+    BPL Gleeok_ExpandSegmentX
 
     ; Vertical. Y register := segment Y + 2, kept if the segment's Y is greater than the next one's.
     LDA ObjY+2, X
@@ -557,18 +557,18 @@ Gleeok_ExpandSegment:
     INY
     INY
     CMP ObjY+3, X
-    BEQ L_Gleeok_DecSegmentY
-    BCS L_Gleeok_SetSegmentY
+    BEQ Gleeok_StepSegmentYMinus2
+    BCS Gleeok_StoreSegmentY
 
 ; Shared tail: turns the prepared segment Y + 2 into segment Y - 2.
-L_Gleeok_DecSegmentY:
+Gleeok_StepSegmentYMinus2:
     DEY
     DEY
     DEY
     DEY
 
 ; Shared tail: stores the Y register as the Y of the segment in slot 2+X.
-L_Gleeok_SetSegmentY:
+Gleeok_StoreSegmentY:
     STY ObjY+2, X
 
 ; Segment handler that does nothing (also the return of the handlers above).
@@ -586,19 +586,19 @@ Gleeok_ContractSegmentY:
     INY
     INY
     CMP ObjY+3, X
-    BEQ L_Gleeok_SetSegmentY
-    BCC L_Gleeok_SetSegmentY
-    BCS L_Gleeok_DecSegmentY
+    BEQ Gleeok_StoreSegmentY
+    BCC Gleeok_StoreSegmentY
+    BCS Gleeok_StepSegmentYMinus2
 
 ; Horizontal half of Gleeok_ExpandSegment: X + 2 if this segment's X >= the next one's, else - 2.
-L_Gleeok_ExpandHorizontally:
+Gleeok_ExpandSegmentX:
     LDA ObjX+2, X
     TAY
     INY
     INY
     CMP ObjX+3, X
-    BCS L_Gleeok_SetSegmentX
-    BCC L_Gleeok_DecSegmentX
+    BCS Gleeok_StoreSegmentX
+    BCC Gleeok_StepSegmentXMinus2
 
 ; ----------------------------------------------------------------------------
 ; Moves a neck segment 2 pixels toward the next segment horizontally.
@@ -612,17 +612,17 @@ Gleeok_ContractSegmentX:
     INY
     INY
     CMP ObjX+3, X
-    BCC L_Gleeok_SetSegmentX
+    BCC Gleeok_StoreSegmentX
 
 ; Shared tail: turns the prepared segment X + 2 into segment X - 2.
-L_Gleeok_DecSegmentX:
+Gleeok_StepSegmentXMinus2:
     DEY
     DEY
     DEY
     DEY
 
 ; Shared tail: stores the Y register as the X of the segment in slot 2+X.
-L_Gleeok_SetSegmentX:
+Gleeok_StoreSegmentX:
     STY ObjX+2, X
     RTS
 
@@ -630,7 +630,7 @@ L_Gleeok_SetSegmentX:
 ; Moves a neck segment toward the next one, horizontally or vertically at random.
 ; NOTE: Bit 7 of Random clear = horizontal, set = vertical. Never reached (table index 8).
 ; ----------------------------------------------------------------------------
-Gleeok_ContractSegment:
+Gleeok_ContractSegmentXOrY:
     LDA Random
     BPL Gleeok_ContractSegmentX
     BMI Gleeok_ContractSegmentY

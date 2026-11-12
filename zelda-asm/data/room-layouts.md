@@ -5,14 +5,14 @@ square indexes (hex, without `$`; column `c0` is the left edge, row `r0` the top
 at the end give the tiles of each square index. The formats are in `README.md`. Find a layout with
 `grep '^OW \$22 '` or `grep '^UW \$0A '`; its grid follows the line.
 
-- Overworld layouts: 16 columns x 11 rows. [`LayoutRoomOW`](../src/bank5/layout-room-ow.asm#L106), [`LayoutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141)
-- Underworld layouts: 12 columns x 7 rows of floor inside the walls. [`LayoutUWFloor`](../src/bank5/uw-floor-push-block.asm#L66)
-- A column descriptor is `table number, column number`: high and low nibble. [`ColumnDirectoryOW`](../src/bank6/level-blocks-common-data.asm#L171), [`ColumnDirectoryUW`](../src/bank5/uw-floor-push-block.asm#L40)
-- `rooms` lists the rooms whose level block byte D selects the layout (Q2 only where it differs). [`GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40)
+- Overworld layouts: 16 columns x 11 rows. [`RoomLayout_LayOutRoomOW`](../src/bank5/layout-room-ow.asm#L106), [`RoomLayout_LayOutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141)
+- Underworld layouts: 12 columns x 7 rows of floor inside the walls. [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
+- A column descriptor is `table number, column number`: high and low nibble. [`RoomLayout_ColumnDirectoryOW`](../src/bank6/level-blocks-common-data.asm#L171), [`RoomLayout_UWColumnHeapAddrs`](../src/bank5/uw-floor-push-block.asm#L40)
+- `rooms` lists the rooms whose level block byte D selects the layout (Q2 only where it differs). [`Room_GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40)
 
 # Overworld layouts
 
-Layouts `$00`-`$78` are [`RoomLayoutsOW`](../src/bank5/room-layouts-ow.asm#L58); ids `$79`, `$7A`, `$7B` fall on the tables that follow it in the ROM: [`RoomLayoutOWCave0`](../src/bank5/room-layouts-ow.asm#L63), [`RoomLayoutOWCave1`](../src/bank5/room-layouts-ow.asm#L69), [`RoomLayoutOWCave2`](../src/bank5/room-layouts-ow.asm#L77).
+Layouts `$00`-`$78` are [`RoomLayout_RoomsOW`](../src/bank5/room-layouts-ow.asm#L58); ids `$79`, `$7A`, `$7B` fall on the tables that follow it in the ROM: [`RoomLayout_CaveOW`](../src/bank5/room-layouts-ow.asm#L63), [`RoomLayout_ShortcutCaveOW`](../src/bank5/room-layouts-ow.asm#L69), [`RoomLayout_RoomOW7B`](../src/bank5/room-layouts-ow.asm#L77).
 
 ```
 OW $00  columns: $00 $00 $00 $00 $00 $00 $00 $50 $01 $01 $81 $01 $01 $01 $01 $01  rooms: $00
@@ -1830,7 +1830,7 @@ r9   05 05 05 05 05 05 05 05 05 05 05 05 05 05 05 05
 r10  05 05 05 05 05 05 05 05 05 05 05 05 05 05 05 05
 ```
 ```
-OW $79  columns: $00 $00 $95 $95 $95 $95 $95 $C2 $C2 $95 $95 $95 $95 $95 $00 $00  rooms: -  (RoomLayoutOWCave0)
+OW $79  columns: $00 $00 $95 $95 $95 $95 $95 $C2 $C2 $95 $95 $95 $95 $95 $00 $00  rooms: -  (RoomLayout_CaveOW)
      c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 cA cB cC cD cE cF
 r0   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
 r1   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
@@ -1845,7 +1845,7 @@ r9   1B 1B 1A 1A 1A 1A 1A 0D 0D 1A 1A 1A 1A 1A 1B 1B
 r10  1B 1B 1B 1B 1B 1B 1B 0D 0D 1B 1B 1B 1B 1B 1B 1B
 ```
 ```
-OW $7A  columns: $00 $00 $95 $95 $95 $F8 $95 $C2 $F8 $95 $95 $F8 $95 $95 $00 $00  rooms: -  (RoomLayoutOWCave1)
+OW $7A  columns: $00 $00 $95 $95 $95 $F8 $95 $C2 $F8 $95 $95 $F8 $95 $95 $00 $00  rooms: -  (RoomLayout_ShortcutCaveOW)
      c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 cA cB cC cD cE cF
 r0   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
 r1   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
@@ -1860,7 +1860,7 @@ r9   1B 1B 1A 1A 1A 1A 1A 0D 1A 1A 1A 1A 1A 1A 1B 1B
 r10  1B 1B 1B 1B 1B 1B 1B 0D 1B 1B 1B 1B 1B 1B 1B 1B
 ```
 ```
-OW $7B  columns: $00 $A9 $64 $66 $02 $53 $54 $D1 $54 $54 $56 $02 $64 $66 $A8 $00  rooms: - (Q2: $0B,$3C)  (RoomLayoutOWCave2)
+OW $7B  columns: $00 $A9 $64 $66 $02 $53 $54 $D1 $54 $54 $56 $02 $64 $66 $A8 $00  rooms: - (Q2: $0B,$3C)  (RoomLayout_RoomOW7B)
      c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 cA cB cC cD cE cF
 r0   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
 r1   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
@@ -1877,11 +1877,11 @@ r10  1B 1B 1B 1B 1B 1B 1B 0E 1B 1B 1B 1B 1B 1B 1B 1B
 
 # Cave and cellar layouts
 
-Laid out by the overworld routine from [`SubroomLayoutAddrs`](../src/bank5/layout-room-ow.asm#L387): entry 0 the cave, 1 the shortcut cave, 2 the tunnel cellar
-(room layout id `$3E`), 3 the treasure cellar (`$3F`). Cellars read column table 0 from [`ColumnHeapUWCellar`](../src/bank5/room-layouts-uw.asm#L285). [`LayoutCaveAndAvanceSubmode`](../src/bank5/layout-room-ow.asm#L398), [`LayoutShortcutAndAdvanceSubmode`](../src/bank5/layout-room-ow.asm#L409), [`LayoutCellarAndAdvanceSubmode`](../src/bank5/layout-room-ow.asm#L418)
+Laid out by the overworld routine from [`RoomLayout_SubroomLayoutAddrs`](../src/bank5/layout-room-ow.asm#L387): entry 0 the cave, 1 the shortcut cave, 2 the tunnel cellar
+(room layout id `$3E`), 3 the treasure cellar (`$3F`). Cellars read column table 0 from [`RoomLayout_ColumnHeapUWCellar`](../src/bank5/room-layouts-uw.asm#L285). [`ModeBCave_Init_LayOutCave`](../src/bank5/layout-room-ow.asm#L398), [`ModeCShortcut_Init_LayOutShortcut`](../src/bank5/layout-room-ow.asm#L409), [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418)
 
 ```
-SUB 0  cave  columns: $00 $00 $95 $95 $95 $95 $95 $C2 $C2 $95 $95 $95 $95 $95 $00 $00  (RoomLayoutOWCave0)
+SUB 0  cave  columns: $00 $00 $95 $95 $95 $95 $95 $C2 $C2 $95 $95 $95 $95 $95 $00 $00  (RoomLayout_CaveOW)
      c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 cA cB cC cD cE cF
 r0   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
 r1   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
@@ -1896,7 +1896,7 @@ r9   1B 1B 1A 1A 1A 1A 1A 0D 0D 1A 1A 1A 1A 1A 1B 1B
 r10  1B 1B 1B 1B 1B 1B 1B 0D 0D 1B 1B 1B 1B 1B 1B 1B
 ```
 ```
-SUB 1  shortcut cave  columns: $00 $00 $95 $95 $95 $F8 $95 $C2 $F8 $95 $95 $F8 $95 $95 $00 $00  (RoomLayoutOWCave1)
+SUB 1  shortcut cave  columns: $00 $00 $95 $95 $95 $F8 $95 $C2 $F8 $95 $95 $F8 $95 $95 $00 $00  (RoomLayout_ShortcutCaveOW)
      c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 cA cB cC cD cE cF
 r0   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
 r1   1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B 1B
@@ -1911,7 +1911,7 @@ r9   1B 1B 1A 1A 1A 1A 1A 0D 1A 1A 1A 1A 1A 1A 1B 1B
 r10  1B 1B 1B 1B 1B 1B 1B 0D 1B 1B 1B 1B 1B 1B 1B 1B
 ```
 ```
-SUB 2  tunnel cellar  columns: $04 $04 $00 $01 $00 $00 $00 $00 $00 $00 $00 $00 $01 $00 $04 $04  (RoomLayoutUWCellar0)
+SUB 2  tunnel cellar  columns: $04 $04 $00 $01 $00 $00 $00 $00 $00 $00 $00 $00 $01 $00 $04 $04  (RoomLayout_CellarUW0)
      c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 cA cB cC cD cE cF
 r0   02 02 02 00 02 02 02 02 02 02 02 02 00 02 02 02
 r1   03 03 03 01 03 03 03 03 03 03 03 03 01 03 03 03
@@ -1926,7 +1926,7 @@ r9   03 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03
 r10  03 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03
 ```
 ```
-SUB 3  treasure cellar  columns: $04 $04 $00 $01 $00 $00 $00 $03 $03 $03 $03 $02 $03 $03 $04 $04  (RoomLayoutUWCellar1)
+SUB 3  treasure cellar  columns: $04 $04 $00 $01 $00 $00 $00 $03 $03 $03 $03 $02 $03 $03 $04 $04  (RoomLayout_CellarUW1)
      c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 cA cB cC cD cE cF
 r0   02 02 02 00 02 02 02 02 02 02 02 02 02 02 02 02
 r1   03 03 03 01 03 03 03 03 03 03 03 03 03 03 03 03
@@ -1943,7 +1943,7 @@ r10  03 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03
 
 # Underworld layouts
 
-Layouts `$00`-$29 of [`RoomLayoutsUW`](../src/bank5/room-layouts-uw.asm#L174). Rooms are listed per level block: `1-6` and `7-9` are the level groups.
+Layouts `$00`-$29 of [`RoomLayout_RoomsUW`](../src/bank5/room-layouts-uw.asm#L174). Rooms are listed per level block: `1-6` and `7-9` are the level groups.
 
 ```
 UW $00  columns: $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00
@@ -2578,9 +2578,9 @@ r6   01 01 01 01 01 01 01 01 01 01 01 01
 
 # Overworld squares
 
-Square index to tiles. Index < `$10`: the four tiles of [`SecondarySquaresOW`](../src/bank5/layout-room-ow.asm#L88) (top left, bottom left, top right, bottom
-right). Other indexes: primary tile from [`PrimarySquaresOW`](../src/bank5/layout-room-ow.asm#L73) and the three tile numbers after it, in the same order.
-`object` = the tile object type the square creates and the primary tile it is drawn with. [`WriteSquareOW`](../src/bank5/layout-room-ow.asm#L311), [`CheckTileObject`](../src/bank5/layout-room-ow.asm#L267)
+Square index to tiles. Index < `$10`: the four tiles of [`RoomLayout_OWSecondarySquareTiles`](../src/bank5/layout-room-ow.asm#L88) (top left, bottom left, top right, bottom
+right). Other indexes: primary tile from [`RoomLayout_OWSquareTiles`](../src/bank5/layout-room-ow.asm#L73) and the three tile numbers after it, in the same order.
+`object` = the tile object type the square creates and the primary tile it is drawn with. [`RoomLayout_WriteSquareOW`](../src/bank5/layout-room-ow.asm#L311), [`RoomLayout_CheckTileObj`](../src/bank5/layout-room-ow.asm#L267)
 
 ```
 sq  primary  tiles            object
@@ -2644,9 +2644,9 @@ sq  primary  tiles            object
 
 # Underworld squares
 
-Square index to primary tile ([`PrimarySquaresUW`](../src/bank5/uw-floor-push-block.asm#L56)). A primary from `$70` to `$F2` is the first of four consecutive
+Square index to primary tile ([`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L57)). A primary from `$70` to `$F2` is the first of four consecutive
 tiles; any other fills the square with one tile. Tile `$B0` is the block a push block object is placed
-on; tiles `$70`-`$73` are stairs. [`WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L176), [`FindAndCreatePushBlockObject`](../src/bank5/uw-floor-push-block.asm#L227), [`CheckWarps`](../src/bank5/warps-stairs-caves.asm#L54)
+on; tiles `$70`-`$73` are stairs. [`RoomLayout_WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L177), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L228), [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L54)
 
 ```
 sq  primary  tiles
@@ -2665,242 +2665,242 @@ sq  primary  tiles
 The square descriptors of every column table, one line per column (`table.column`), as stored.
 Overworld descriptor: bit 7 column start, bit 6 two rows, bits 5-0 square index. Underworld descriptor:
 bit 7 column start, bits 6-4 extra rows, bits 2-0 square index. A column that holds fewer rows than the
-room needs (11 or 7) continues with the bytes of the next line. [`LayoutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141), [`LayoutUWFloor`](../src/bank5/uw-floor-push-block.asm#L66)
+room needs (11 or 7) continues with the bytes of the next line. [`RoomLayout_LayOutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
 
 ```
-column         table               square descriptors
-OWCOL 0.0      ColumnHeapOW0       $DB $5B $5B
-OWCOL 0.1                          $DB $5B $1B $0E $1A $5B
-OWCOL 0.2                          $DB $4E $4E $4E $0E $1A $1B
-OWCOL 0.3                          $DB $4E $32 $1B $34 $4E $1A $1B
-OWCOL 0.4                          $DB $5B $1B $4E $4E $4E
-OWCOL 0.5                          $DB $0E $32 $5B $1B $4E $1A $1B
-OWCOL 0.6                          $DB $5B $1B $4E $4E $1A $1B
-OWCOL 0.7                          $DB
-OWCOL 0.8                          $CE $4E $4E $4E $0E $1A $1B
-OWCOL 1.0      ColumnHeapOW1       $9B $0C $4E $4E $4E $0E $1A $1B
-OWCOL 1.1                          $CA $4E $0E $4E $4E $4A
-OWCOL 1.2                          $C5 $45 $05 $0B
-OWCOL 1.3                          $C5 $45 $05 $45 $45 $45
-OWCOL 1.4                          $D9 $28 $59
-OWCOL 1.5                          $D9 $59 $59 $19
-OWCOL 1.6                          $D9 $59 $4E $0E $59
-OWCOL 1.7                          $D9 $4E $4E $4E $0E $59
-OWCOL 1.8                          $8E $4E $4E
-OWCOL 1.9                          $CE $4E $4E $0E
-OWCOL 2.0      ColumnHeapOW2       $D9 $59 $0E $4E $4E $4E
-OWCOL 2.1                          $DB $0E $5B $5B $4E $1A $1B
-OWCOL 2.2                          $DB $0E $33 $5B $1B $4E $1A $1B
-OWCOL 2.3                          $CE $4E $4E $4E $0E $59
-OWCOL 2.4                          $DB $4E $33 $1B $35 $4E $1A $1B
-OWCOL 2.5                          $D9 $4E $19 $0E $19 $4E
-OWCOL 2.6                          $D9 $0E $19 $0E $19 $0E $19 $0E
-OWCOL 2.7                          $D9 $4E $0E $19 $0E $4E
-OWCOL 2.8                          $D9 $19 $4E $4E $0E $19
-OWCOL 2.9                          $D9 $0E $59 $59 $59
-OWCOL 3.0      ColumnHeapOW3       $D9 $0E $59 $59 $19 $0E
-OWCOL 3.1                          $D9 $4E $19 $0E $28 $4E $59
-OWCOL 3.2                          $DB $4E $13 $0E $13 $4E $1A $1B
-OWCOL 3.3                          $DB $0E $13 $0E $13 $0E $13 $0E $1A $1B
-OWCOL 3.4                          $DB $4E $0E $13 $4E $0E $1A $1B
-OWCOL 3.5                          $C8 $48 $17 $4E $4E $1A $1B
-OWCOL 3.6                          $C5 $45 $07 $4E $4E $1A $1B
-OWCOL 3.7                          $C5 $45 $07 $0E $1A
-OWCOL 3.8                          $DB $5B $1B $4E $4E $4A
-OWCOL 3.9                          $DB $4E $4E $15
-OWCOL 4.0      ColumnHeapOW4       $C8 $48 $17 $4E $4E $59
-OWCOL 4.1                          $C9 $49 $18 $4E $4E
-OWCOL 4.2                          $D9 $59 $4E $06
-OWCOL 4.3                          $C5 $45 $45
-OWCOL 4.4                          $C9 $49 $09 $0B $49 $49 $09
-OWCOL 4.5                          $C8 $48 $08 $48
-OWCOL 4.6                          $C8 $48 $17 $4E $4E $4E
-OWCOL 4.7                          $DB $4E $4E $06
-OWCOL 4.8                          $C5 $45 $07 $4E $4E
-OWCOL 4.9                          $D9 $4E $2C $4E $4E $59
-OWCOL 5.0      ColumnHeapOW5       $DB $5B $1B $0E $4A $4A $0A
-OWCOL 5.1                          $DB $5B $4E $06
-OWCOL 5.2                          $C5 $45 $07 $4E $4E $4E
-OWCOL 5.3                          $DB $0E $15 $48 $17 $4E $1A $1B
-OWCOL 5.4                          $DB $0E $06 $45 $07 $4E $1A $1B
-OWCOL 5.5                          $DB $0E $06 $05 $45 $45 $45
-OWCOL 5.6                          $DB $0E $16 $49 $18 $4E $1A $1B
-OWCOL 5.7                          $D9 $0E $59 $59 $19 $0E
-OWCOL 5.8                          $CE $4E $4E $06 $45 $45
-OWCOL 6.0      ColumnHeapOW6       $D9 $4E $4E $16 $49 $49
-OWCOL 6.1                          $D9 $4E $4E $06
-OWCOL 6.2                          $C5 $45 $07 $4E
-OWCOL 6.3                          $D9 $59 $4E $15 $48 $48
-OWCOL 6.4                          $DB $0E $1C $1F $4E $4E $1A $1B
-OWCOL 6.5                          $DB $0E $1D $0C $4E $4E $1A $1B
-OWCOL 6.6                          $DB $0E $1E $20 $4E $4E $1A $1B
-OWCOL 6.7                          $DB $0E $21 $24 $4E $4E $1A $1B
-OWCOL 6.8                          $DB $0E $22 $0C $4E $4E $4A
-OWCOL 7.0      ColumnHeapOW7       $DB $0E $23 $25 $4E $4E $1A $1B
-OWCOL 7.1                          $DB $4E $0E $26 $4E $0E $1A $1B
-OWCOL 7.2                          $DB $5B $07 $4E $1A $1B
-OWCOL 7.3                          $DB $5B $07 $4E $4E $1A $1B
-OWCOL 7.4                          $CE $0E $59 $59 $19 $0E
-OWCOL 7.5                          $D9 $4E $0E $26 $4E $0E
-OWCOL 7.6                          $D9 $4E $4E $4E $4E $0E
-OWCOL 7.7                          $DB $4E $19 $0E $19 $4E $1A $1B
-OWCOL 7.8                          $DB $5B $5B $45
-OWCOL 8.0      ColumnHeapOW8       $C5 $05 $5B $5B
-OWCOL 8.1                          $DB $5B $27 $0E $1A $5B
-OWCOL 8.2                          $DB $0E $14 $0E $14 $0E $14 $4E $0E
-OWCOL 8.3                          $CA $4A $0A $4E $4E $1A $1B
-OWCOL 8.4                          $DB $1B $35 $4E $4E $0E $1A $1B
-OWCOL 8.5                          $9B $27 $4E $4E $06
-OWCOL 8.6                          $C5 $45 $05 $2F $4E $4E $0E
-OWCOL 8.7                          $DB $0E $22 $0C $4E $4E $4A
-OWCOL 8.8                          $DB $0E $14 $0E $29 $0E $14 $4E $0E
-OWCOL 9.0      ColumnHeapOW9       $DB $35 $4E $4E $4E $1A $1B
-OWCOL 9.1                          $DB $1B $34 $4E $06
-OWCOL 9.2                          $C5 $45 $05 $2E $4E $4E $0E
-OWCOL 9.3                          $CE $0E $14 $0E $14 $0E $14 $0E $1A $1B
-OWCOL 9.4                          $CE $0E $14 $0E $14 $0E $14 $4E $0E
-OWCOL 9.5                          $DB $4D $4D $4D $0D $1A $1B
-OWCOL 9.6                          $C5 $05 $1B $0C $4E $0E $4A $0A
-OWCOL 9.7                          $DB $1B $35 $4E $06 $45
-OWCOL 9.8                          $C5 $4E $4E $4E $0E $45
-OWCOL A.0      ColumnHeapOWA       $DB $5B $34 $4E $4E $1A $1B
-OWCOL A.1                          $DB $5B $35 $4E $4E $1A $1B
-OWCOL A.2                          $9B $35 $4E $4E $4E $0E $33 $1B
-OWCOL A.3                          $9B $34 $4E $4E $4E $0E $32 $1B
-OWCOL A.4                          $9B $34 $4E $4E $4E $0E $1A $1B
-OWCOL A.5                          $9B $35 $4E $4E $4E $0E $1A $1B
-OWCOL A.6                          $DB $5B $34 $0E $32
-OWCOL A.7                          $DB $5B $35 $0E $33 $5B
-OWCOL A.8                          $DB $34 $4E $4E $0E $32
-OWCOL A.9                          $DB $35 $4E $4E $0E $33
-OWCOL B.0      ColumnHeapOWB       $DB $5B $07 $4E $4E $4E
-OWCOL B.1                          $DB $0E $06 $05 $45 $2F $0E $1A $1B
-OWCOL B.2                          $DB $0E $06 $05 $45 $2E $0E $1A $1B
-OWCOL B.3                          $CA $4A $0A $0E $1A
-OWCOL B.4                          $DB $5B $15 $45 $45 $45
-OWCOL B.5                          $DB $4E $4E $4E $0E
-OWCOL B.6                          $CA $4E $4E $4E $0E $1A $1B
-OWCOL B.7                          $DB $4E $2C $0E $2C $4E $1A $1B
-OWCOL B.8                          $CA $4A $4E $06 $45 $45
-OWCOL C.0      ColumnHeapOWC       $9B $35 $4E $0E $13 $4E $0E $1A $1B
-OWCOL C.1                          $F6 $76 $0F $4E $1A $1B $5B
-OWCOL C.2                          $DB $4D $4D $4D $4D $0D
-OWCOL C.3                          $CE $4E $0E $30 $45 $45 $05
-OWCOL C.4                          $DB
-OWCOL C.5                          $F7
-OWCOL C.6                          $F7 $77 $77 $37 $77 $1A $1B
-OWCOL C.7                          $DB $1B $34 $4E $4E $0E $1A $1B
-OWCOL C.8                          $DB $34 $0E $4E $4E $0E $1A $1B
-OWCOL D.0      ColumnHeapOWD       $C5 $45 $0B $4E $4E $4E
-OWCOL D.1                          $DB $0E $06 $45 $07 $4E $4E
-OWCOL D.2                          $9B $27 $4E $4E $4E $0E $1A $1B
-OWCOL D.3                          $9B $27 $4E $4E $4E $4E $0E
-OWCOL D.4                          $DB $1B $27 $07 $4E $1A $5B $1B
-OWCOL D.5                          $CE $4E $4E $4E $33 $5B
-OWCOL D.6                          $DB $5B $1B $0E $15 $48 $48
-OWCOL D.7                          $DB $0E $2D $0C $4E $4E $4A
-OWCOL D.8                          $DB $0E $1C $1F $0E $1E $20 $0E $1A $1B
-OWCOL E.0      ColumnHeapOWE       $C8 $48 $08
-OWCOL E.1                          $C5 $45 $45 $08 $48 $48
-OWCOL E.2                          $DB $35
-OWCOL E.3                          $CE $4E $4E $4E $0E $33 $1B
-OWCOL E.4                          $DB $0E $33 $5B $27 $4E $1A $1B
-OWCOL E.5                          $DB $4E $4E $1C $1F $0E $1A $1B
-OWCOL E.6                          $DB $5B $1B $35 $4E $33
-OWCOL E.7                          $DB $5B $1B $34 $4E $32
-OWCOL E.8                          $DB $4E $4E $4E $0E $33
-OWCOL F.0      ColumnHeapOWF       $9B $5B $34 $4E $0E $32
-OWCOL F.1                          $DB $1B $35 $4E $0E $33 $1B
-OWCOL F.2                          $DB $0E $1E $20 $0E $1C $1F $0E $1A $1B
-OWCOL F.3                          $DB $4E $4E $1E $20 $0E $1A $1B
-OWCOL F.4                          $D9 $59 $19 $4E $4E $59
-OWCOL F.5                          $DB $0E $2D $0C $4E $4E $1A $1B
-OWCOL F.6                          $CE $4E $0E $31 $05
-OWCOL F.7                          $C5 $45 $07 $4E $28 $59 $19
-OWCOL F.8                          $DB $4D $4D $12 $4D $1A $1B
-OWCOL F.9                          $DB $77 $77 $77 $37 $1A $1B
-UWCOL 0.0      ColumnHeapUW0       $E1
-UWCOL 0.1                          $80
-UWCOL 0.2                          $C1 $00 $01
-UWCOL 0.3                          $A0 $04
-UWCOL 0.4                          $A0 $01
-UWCOL 0.5                          $A0 $31
-UWCOL 0.6                          $90 $21
-UWCOL 0.7                          $90 $21 $00
-UWCOL 1.0      ColumnHeapUW1       $81 $00 $01 $04
-UWCOL 1.1                          $81 $00 $01 $00 $01 $00
-UWCOL 1.2                          $81 $00 $21 $00
-UWCOL 1.3                          $81 $40
-UWCOL 1.4                          $81 $20 $01 $00
-UWCOL 1.5                          $81 $00 $04 $00 $01 $00 $01
-UWCOL 1.6                          $90 $41
-UWCOL 1.7                          $80
-UWCOL 2.0      ColumnHeapUW2       $D1
-UWCOL 2.1                          $80 $21 $00
-UWCOL 2.2                          $91 $20
-UWCOL 2.3                          $91 $00 $01 $00 $11
-UWCOL 2.4                          $D0
-UWCOL 2.5                          $81 $00 $41
-UWCOL 2.6                          $B1 $00
-UWCOL 3.0      ColumnHeapUW3       $91 $00
-UWCOL 3.1                          $A1 $00 $21
-UWCOL 3.2                          $B1 $06
-UWCOL 3.3                          $91 $00
-UWCOL 3.4                          $B1 $00
-UWCOL 3.5                          $81 $00 $21
-UWCOL 3.6                          $90 $17 $02
-UWCOL 4.0      ColumnHeapUW4       $91 $17 $01 $17
-UWCOL 4.1                          $81 $16
-UWCOL 4.2                          $B1 $07
-UWCOL 4.3                          $91 $06 $31
-UWCOL 4.4                          $87 $31 $17
-UWCOL 4.5                          $81 $00 $01 $03
-UWCOL 4.6                          $81 $00 $01 $02 $01
-UWCOL 5.0      ColumnHeapUW5       $80 $01 $10 $11
-UWCOL 5.1                          $83 $47
-UWCOL 5.2                          $83 $41 $03
-UWCOL 5.3                          $D1 $03
-UWCOL 5.4                          $90 $01 $10
-UWCOL 5.5                          $91 $00 $11
-UWCOL 5.6                          $90 $17 $03 $11
-UWCOL 5.7                          $C0 $11
-UWCOL 6.0      ColumnHeapUW6       $E0
-UWCOL 6.1                          $E6
-UWCOL 6.2                          $81
-UWCOL 6.3                          $C6
-UWCOL 6.4                          $81
-UWCOL 6.5                          $86 $01 $06 $01 $06
-UWCOL 6.6                          $81 $06 $21
-UWCOL 6.7                          $86 $01 $26 $01
-UWCOL 7.0      ColumnHeapUW7       $86 $41
-UWCOL 7.1                          $86 $01 $46
-UWCOL 7.2                          $D1 $02
-UWCOL 7.3                          $A6 $01 $26
-UWCOL 7.4                          $81 $56
-UWCOL 7.5                          $81 $16 $11 $16
-UWCOL 7.6                          $E7
-UWCOL 7.7                          $E5
-UWCOL 8.0      ColumnHeapUW8       $81 $10 $01 $10
-UWCOL 8.1                          $81 $27
-UWCOL 8.2                          $A1 $06 $21
-UWCOL 8.3                          $80 $01 $10 $11
-UWCOL 8.4                          $82 $47
-UWCOL 8.5                          $82 $41 $02
-UWCOL 8.6                          $80 $01 $10
-UWCOL 8.7                          $A1 $02
-UWCOL 8.8                          $A1 $03 $21
-UWCOL 9.0      ColumnHeapUW9       $80 $27 $21
-UWCOL 9.1                          $81 $00 $02 $11 $00
-UWCOL 9.2                          $81 $00 $03 $11 $00
-UWCOL 9.3                          $81 $02
-UWCOL 9.4                          $81 $02 $01 $02 $01 $02 $05
-UWCOL 9.5                          $C1 $15
-UWCOL 9.6                          $B1 $25
-UWCOL 9.7                          $81 $03
-UWCOL 9.8                          $81 $03 $01 $03 $01 $03 $05
-CELLARCOL 0.0  ColumnHeapUWCellar  $82 $43 $43 $43 $02 $0C $43
-CELLARCOL 0.1                      $80 $41 $41 $41 $41 $43
-CELLARCOL 0.2                      $82 $43 $42 $0C $01 $41 $43
-CELLARCOL 0.3                      $82 $43 $42 $0C $03 $02 $0C $43
-CELLARCOL 0.4                      $82 $43 $43 $43 $43 $43
+column         table                          square descriptors
+OWCOL 0.0      RoomLayout_ColumnHeapOW0       $DB $5B $5B
+OWCOL 0.1                                     $DB $5B $1B $0E $1A $5B
+OWCOL 0.2                                     $DB $4E $4E $4E $0E $1A $1B
+OWCOL 0.3                                     $DB $4E $32 $1B $34 $4E $1A $1B
+OWCOL 0.4                                     $DB $5B $1B $4E $4E $4E
+OWCOL 0.5                                     $DB $0E $32 $5B $1B $4E $1A $1B
+OWCOL 0.6                                     $DB $5B $1B $4E $4E $1A $1B
+OWCOL 0.7                                     $DB
+OWCOL 0.8                                     $CE $4E $4E $4E $0E $1A $1B
+OWCOL 1.0      RoomLayout_ColumnHeapOW1       $9B $0C $4E $4E $4E $0E $1A $1B
+OWCOL 1.1                                     $CA $4E $0E $4E $4E $4A
+OWCOL 1.2                                     $C5 $45 $05 $0B
+OWCOL 1.3                                     $C5 $45 $05 $45 $45 $45
+OWCOL 1.4                                     $D9 $28 $59
+OWCOL 1.5                                     $D9 $59 $59 $19
+OWCOL 1.6                                     $D9 $59 $4E $0E $59
+OWCOL 1.7                                     $D9 $4E $4E $4E $0E $59
+OWCOL 1.8                                     $8E $4E $4E
+OWCOL 1.9                                     $CE $4E $4E $0E
+OWCOL 2.0      RoomLayout_ColumnHeapOW2       $D9 $59 $0E $4E $4E $4E
+OWCOL 2.1                                     $DB $0E $5B $5B $4E $1A $1B
+OWCOL 2.2                                     $DB $0E $33 $5B $1B $4E $1A $1B
+OWCOL 2.3                                     $CE $4E $4E $4E $0E $59
+OWCOL 2.4                                     $DB $4E $33 $1B $35 $4E $1A $1B
+OWCOL 2.5                                     $D9 $4E $19 $0E $19 $4E
+OWCOL 2.6                                     $D9 $0E $19 $0E $19 $0E $19 $0E
+OWCOL 2.7                                     $D9 $4E $0E $19 $0E $4E
+OWCOL 2.8                                     $D9 $19 $4E $4E $0E $19
+OWCOL 2.9                                     $D9 $0E $59 $59 $59
+OWCOL 3.0      RoomLayout_ColumnHeapOW3       $D9 $0E $59 $59 $19 $0E
+OWCOL 3.1                                     $D9 $4E $19 $0E $28 $4E $59
+OWCOL 3.2                                     $DB $4E $13 $0E $13 $4E $1A $1B
+OWCOL 3.3                                     $DB $0E $13 $0E $13 $0E $13 $0E $1A $1B
+OWCOL 3.4                                     $DB $4E $0E $13 $4E $0E $1A $1B
+OWCOL 3.5                                     $C8 $48 $17 $4E $4E $1A $1B
+OWCOL 3.6                                     $C5 $45 $07 $4E $4E $1A $1B
+OWCOL 3.7                                     $C5 $45 $07 $0E $1A
+OWCOL 3.8                                     $DB $5B $1B $4E $4E $4A
+OWCOL 3.9                                     $DB $4E $4E $15
+OWCOL 4.0      RoomLayout_ColumnHeapOW4       $C8 $48 $17 $4E $4E $59
+OWCOL 4.1                                     $C9 $49 $18 $4E $4E
+OWCOL 4.2                                     $D9 $59 $4E $06
+OWCOL 4.3                                     $C5 $45 $45
+OWCOL 4.4                                     $C9 $49 $09 $0B $49 $49 $09
+OWCOL 4.5                                     $C8 $48 $08 $48
+OWCOL 4.6                                     $C8 $48 $17 $4E $4E $4E
+OWCOL 4.7                                     $DB $4E $4E $06
+OWCOL 4.8                                     $C5 $45 $07 $4E $4E
+OWCOL 4.9                                     $D9 $4E $2C $4E $4E $59
+OWCOL 5.0      RoomLayout_ColumnHeapOW5       $DB $5B $1B $0E $4A $4A $0A
+OWCOL 5.1                                     $DB $5B $4E $06
+OWCOL 5.2                                     $C5 $45 $07 $4E $4E $4E
+OWCOL 5.3                                     $DB $0E $15 $48 $17 $4E $1A $1B
+OWCOL 5.4                                     $DB $0E $06 $45 $07 $4E $1A $1B
+OWCOL 5.5                                     $DB $0E $06 $05 $45 $45 $45
+OWCOL 5.6                                     $DB $0E $16 $49 $18 $4E $1A $1B
+OWCOL 5.7                                     $D9 $0E $59 $59 $19 $0E
+OWCOL 5.8                                     $CE $4E $4E $06 $45 $45
+OWCOL 6.0      RoomLayout_ColumnHeapOW6       $D9 $4E $4E $16 $49 $49
+OWCOL 6.1                                     $D9 $4E $4E $06
+OWCOL 6.2                                     $C5 $45 $07 $4E
+OWCOL 6.3                                     $D9 $59 $4E $15 $48 $48
+OWCOL 6.4                                     $DB $0E $1C $1F $4E $4E $1A $1B
+OWCOL 6.5                                     $DB $0E $1D $0C $4E $4E $1A $1B
+OWCOL 6.6                                     $DB $0E $1E $20 $4E $4E $1A $1B
+OWCOL 6.7                                     $DB $0E $21 $24 $4E $4E $1A $1B
+OWCOL 6.8                                     $DB $0E $22 $0C $4E $4E $4A
+OWCOL 7.0      RoomLayout_ColumnHeapOW7       $DB $0E $23 $25 $4E $4E $1A $1B
+OWCOL 7.1                                     $DB $4E $0E $26 $4E $0E $1A $1B
+OWCOL 7.2                                     $DB $5B $07 $4E $1A $1B
+OWCOL 7.3                                     $DB $5B $07 $4E $4E $1A $1B
+OWCOL 7.4                                     $CE $0E $59 $59 $19 $0E
+OWCOL 7.5                                     $D9 $4E $0E $26 $4E $0E
+OWCOL 7.6                                     $D9 $4E $4E $4E $4E $0E
+OWCOL 7.7                                     $DB $4E $19 $0E $19 $4E $1A $1B
+OWCOL 7.8                                     $DB $5B $5B $45
+OWCOL 8.0      RoomLayout_ColumnHeapOW8       $C5 $05 $5B $5B
+OWCOL 8.1                                     $DB $5B $27 $0E $1A $5B
+OWCOL 8.2                                     $DB $0E $14 $0E $14 $0E $14 $4E $0E
+OWCOL 8.3                                     $CA $4A $0A $4E $4E $1A $1B
+OWCOL 8.4                                     $DB $1B $35 $4E $4E $0E $1A $1B
+OWCOL 8.5                                     $9B $27 $4E $4E $06
+OWCOL 8.6                                     $C5 $45 $05 $2F $4E $4E $0E
+OWCOL 8.7                                     $DB $0E $22 $0C $4E $4E $4A
+OWCOL 8.8                                     $DB $0E $14 $0E $29 $0E $14 $4E $0E
+OWCOL 9.0      RoomLayout_ColumnHeapOW9       $DB $35 $4E $4E $4E $1A $1B
+OWCOL 9.1                                     $DB $1B $34 $4E $06
+OWCOL 9.2                                     $C5 $45 $05 $2E $4E $4E $0E
+OWCOL 9.3                                     $CE $0E $14 $0E $14 $0E $14 $0E $1A $1B
+OWCOL 9.4                                     $CE $0E $14 $0E $14 $0E $14 $4E $0E
+OWCOL 9.5                                     $DB $4D $4D $4D $0D $1A $1B
+OWCOL 9.6                                     $C5 $05 $1B $0C $4E $0E $4A $0A
+OWCOL 9.7                                     $DB $1B $35 $4E $06 $45
+OWCOL 9.8                                     $C5 $4E $4E $4E $0E $45
+OWCOL A.0      RoomLayout_ColumnHeapOWA       $DB $5B $34 $4E $4E $1A $1B
+OWCOL A.1                                     $DB $5B $35 $4E $4E $1A $1B
+OWCOL A.2                                     $9B $35 $4E $4E $4E $0E $33 $1B
+OWCOL A.3                                     $9B $34 $4E $4E $4E $0E $32 $1B
+OWCOL A.4                                     $9B $34 $4E $4E $4E $0E $1A $1B
+OWCOL A.5                                     $9B $35 $4E $4E $4E $0E $1A $1B
+OWCOL A.6                                     $DB $5B $34 $0E $32
+OWCOL A.7                                     $DB $5B $35 $0E $33 $5B
+OWCOL A.8                                     $DB $34 $4E $4E $0E $32
+OWCOL A.9                                     $DB $35 $4E $4E $0E $33
+OWCOL B.0      RoomLayout_ColumnHeapOWB       $DB $5B $07 $4E $4E $4E
+OWCOL B.1                                     $DB $0E $06 $05 $45 $2F $0E $1A $1B
+OWCOL B.2                                     $DB $0E $06 $05 $45 $2E $0E $1A $1B
+OWCOL B.3                                     $CA $4A $0A $0E $1A
+OWCOL B.4                                     $DB $5B $15 $45 $45 $45
+OWCOL B.5                                     $DB $4E $4E $4E $0E
+OWCOL B.6                                     $CA $4E $4E $4E $0E $1A $1B
+OWCOL B.7                                     $DB $4E $2C $0E $2C $4E $1A $1B
+OWCOL B.8                                     $CA $4A $4E $06 $45 $45
+OWCOL C.0      RoomLayout_ColumnHeapOWC       $9B $35 $4E $0E $13 $4E $0E $1A $1B
+OWCOL C.1                                     $F6 $76 $0F $4E $1A $1B $5B
+OWCOL C.2                                     $DB $4D $4D $4D $4D $0D
+OWCOL C.3                                     $CE $4E $0E $30 $45 $45 $05
+OWCOL C.4                                     $DB
+OWCOL C.5                                     $F7
+OWCOL C.6                                     $F7 $77 $77 $37 $77 $1A $1B
+OWCOL C.7                                     $DB $1B $34 $4E $4E $0E $1A $1B
+OWCOL C.8                                     $DB $34 $0E $4E $4E $0E $1A $1B
+OWCOL D.0      RoomLayout_ColumnHeapOWD       $C5 $45 $0B $4E $4E $4E
+OWCOL D.1                                     $DB $0E $06 $45 $07 $4E $4E
+OWCOL D.2                                     $9B $27 $4E $4E $4E $0E $1A $1B
+OWCOL D.3                                     $9B $27 $4E $4E $4E $4E $0E
+OWCOL D.4                                     $DB $1B $27 $07 $4E $1A $5B $1B
+OWCOL D.5                                     $CE $4E $4E $4E $33 $5B
+OWCOL D.6                                     $DB $5B $1B $0E $15 $48 $48
+OWCOL D.7                                     $DB $0E $2D $0C $4E $4E $4A
+OWCOL D.8                                     $DB $0E $1C $1F $0E $1E $20 $0E $1A $1B
+OWCOL E.0      RoomLayout_ColumnHeapOWE       $C8 $48 $08
+OWCOL E.1                                     $C5 $45 $45 $08 $48 $48
+OWCOL E.2                                     $DB $35
+OWCOL E.3                                     $CE $4E $4E $4E $0E $33 $1B
+OWCOL E.4                                     $DB $0E $33 $5B $27 $4E $1A $1B
+OWCOL E.5                                     $DB $4E $4E $1C $1F $0E $1A $1B
+OWCOL E.6                                     $DB $5B $1B $35 $4E $33
+OWCOL E.7                                     $DB $5B $1B $34 $4E $32
+OWCOL E.8                                     $DB $4E $4E $4E $0E $33
+OWCOL F.0      RoomLayout_ColumnHeapOWF       $9B $5B $34 $4E $0E $32
+OWCOL F.1                                     $DB $1B $35 $4E $0E $33 $1B
+OWCOL F.2                                     $DB $0E $1E $20 $0E $1C $1F $0E $1A $1B
+OWCOL F.3                                     $DB $4E $4E $1E $20 $0E $1A $1B
+OWCOL F.4                                     $D9 $59 $19 $4E $4E $59
+OWCOL F.5                                     $DB $0E $2D $0C $4E $4E $1A $1B
+OWCOL F.6                                     $CE $4E $0E $31 $05
+OWCOL F.7                                     $C5 $45 $07 $4E $28 $59 $19
+OWCOL F.8                                     $DB $4D $4D $12 $4D $1A $1B
+OWCOL F.9                                     $DB $77 $77 $77 $37 $1A $1B
+UWCOL 0.0      RoomLayout_ColumnHeapUW0       $E1
+UWCOL 0.1                                     $80
+UWCOL 0.2                                     $C1 $00 $01
+UWCOL 0.3                                     $A0 $04
+UWCOL 0.4                                     $A0 $01
+UWCOL 0.5                                     $A0 $31
+UWCOL 0.6                                     $90 $21
+UWCOL 0.7                                     $90 $21 $00
+UWCOL 1.0      RoomLayout_ColumnHeapUW1       $81 $00 $01 $04
+UWCOL 1.1                                     $81 $00 $01 $00 $01 $00
+UWCOL 1.2                                     $81 $00 $21 $00
+UWCOL 1.3                                     $81 $40
+UWCOL 1.4                                     $81 $20 $01 $00
+UWCOL 1.5                                     $81 $00 $04 $00 $01 $00 $01
+UWCOL 1.6                                     $90 $41
+UWCOL 1.7                                     $80
+UWCOL 2.0      RoomLayout_ColumnHeapUW2       $D1
+UWCOL 2.1                                     $80 $21 $00
+UWCOL 2.2                                     $91 $20
+UWCOL 2.3                                     $91 $00 $01 $00 $11
+UWCOL 2.4                                     $D0
+UWCOL 2.5                                     $81 $00 $41
+UWCOL 2.6                                     $B1 $00
+UWCOL 3.0      RoomLayout_ColumnHeapUW3       $91 $00
+UWCOL 3.1                                     $A1 $00 $21
+UWCOL 3.2                                     $B1 $06
+UWCOL 3.3                                     $91 $00
+UWCOL 3.4                                     $B1 $00
+UWCOL 3.5                                     $81 $00 $21
+UWCOL 3.6                                     $90 $17 $02
+UWCOL 4.0      RoomLayout_ColumnHeapUW4       $91 $17 $01 $17
+UWCOL 4.1                                     $81 $16
+UWCOL 4.2                                     $B1 $07
+UWCOL 4.3                                     $91 $06 $31
+UWCOL 4.4                                     $87 $31 $17
+UWCOL 4.5                                     $81 $00 $01 $03
+UWCOL 4.6                                     $81 $00 $01 $02 $01
+UWCOL 5.0      RoomLayout_ColumnHeapUW5       $80 $01 $10 $11
+UWCOL 5.1                                     $83 $47
+UWCOL 5.2                                     $83 $41 $03
+UWCOL 5.3                                     $D1 $03
+UWCOL 5.4                                     $90 $01 $10
+UWCOL 5.5                                     $91 $00 $11
+UWCOL 5.6                                     $90 $17 $03 $11
+UWCOL 5.7                                     $C0 $11
+UWCOL 6.0      RoomLayout_ColumnHeapUW6       $E0
+UWCOL 6.1                                     $E6
+UWCOL 6.2                                     $81
+UWCOL 6.3                                     $C6
+UWCOL 6.4                                     $81
+UWCOL 6.5                                     $86 $01 $06 $01 $06
+UWCOL 6.6                                     $81 $06 $21
+UWCOL 6.7                                     $86 $01 $26 $01
+UWCOL 7.0      RoomLayout_ColumnHeapUW7       $86 $41
+UWCOL 7.1                                     $86 $01 $46
+UWCOL 7.2                                     $D1 $02
+UWCOL 7.3                                     $A6 $01 $26
+UWCOL 7.4                                     $81 $56
+UWCOL 7.5                                     $81 $16 $11 $16
+UWCOL 7.6                                     $E7
+UWCOL 7.7                                     $E5
+UWCOL 8.0      RoomLayout_ColumnHeapUW8       $81 $10 $01 $10
+UWCOL 8.1                                     $81 $27
+UWCOL 8.2                                     $A1 $06 $21
+UWCOL 8.3                                     $80 $01 $10 $11
+UWCOL 8.4                                     $82 $47
+UWCOL 8.5                                     $82 $41 $02
+UWCOL 8.6                                     $80 $01 $10
+UWCOL 8.7                                     $A1 $02
+UWCOL 8.8                                     $A1 $03 $21
+UWCOL 9.0      RoomLayout_ColumnHeapUW9       $80 $27 $21
+UWCOL 9.1                                     $81 $00 $02 $11 $00
+UWCOL 9.2                                     $81 $00 $03 $11 $00
+UWCOL 9.3                                     $81 $02
+UWCOL 9.4                                     $81 $02 $01 $02 $01 $02 $05
+UWCOL 9.5                                     $C1 $15
+UWCOL 9.6                                     $B1 $25
+UWCOL 9.7                                     $81 $03
+UWCOL 9.8                                     $81 $03 $01 $03 $01 $03 $05
+CELLARCOL 0.0  RoomLayout_ColumnHeapUWCellar  $82 $43 $43 $43 $02 $0C $43
+CELLARCOL 0.1                                 $80 $41 $41 $41 $41 $43
+CELLARCOL 0.2                                 $82 $43 $42 $0C $01 $41 $43
+CELLARCOL 0.3                                 $82 $43 $42 $0C $03 $02 $0C $43
+CELLARCOL 0.4                                 $82 $43 $43 $43 $43 $43
 ```

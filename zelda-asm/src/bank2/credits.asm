@@ -1,49 +1,49 @@
 ; ============================================================================
 ; FILE:     bank2/credits.asm            BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 3672-4032
-; SUBJECTS: (none)
+; SUBJECTS: Credits, Mode13WinGame
 ; TOPIC:    Mode $13 update submode 3: the credits. The screen scrolls up half a pixel per frame and
 ;           one tile row (brick frame, text line, attributes) is drawn for every 8 pixels scrolled.
 ;           Holds the credits text lines and the tables that place them.
-; SEE ALSO: bank2/mode13-win-game.asm (the jump table that reaches UpdateMode13WinGame_Sub3, and
-;           submode 4 that follows); bank2/mode13-ending-init.asm (InitMode13_Sub4 presets
-;           CreditsTileOffset); bank1/format-decimal-hearts.asm (FormatDecimalByte).
+; SEE ALSO: bank2/mode13-win-game.asm (the jump table that reaches Mode13WinGame_Update_Sub3Credits, and
+;           submode 4 that follows); bank2/mode13-ending-init.asm (Mode13WinGame_Init_Sub4BeginUpdate presets
+;           CreditsTileOffset); bank1/format-decimal-hearts.asm (Text_FormatDecimalByte).
 ; KEY FACTS:
 ;   - Scroll speed is 0.5 pixel per frame: $80 is added to a fraction (VScrollAddrHi, reused) each
-;     frame and the carry goes into CurVScroll and CreditsTileOffset. UpdateMode13WinGame_Sub3
+;     frame and the carry goes into CurVScroll and CreditsTileOffset. Mode13WinGame_Update_Sub3Credits
 ;   - CurVScroll wraps at $F0; each wrap toggles the base nametable (SwitchNameTablesReq) and counts
 ;     one screen in VScrollAddrLo (reused; nothing in this file sets its start value).
-;     UpdateMode13WinGame_Sub3
+;     Mode13WinGame_Update_Sub3Credits
 ;   - The scroll ends, by the quest of the current save slot (QuestNumbers): Q1 at screen 2 with
 ;     CurVScroll $78, Q2 at screen 3 with CurVScroll 0. Then ObjTimer = $40 and submode 4 follows.
-;     CreditsLastScreenList, CreditsLastVscrollList
-;   - No controller input is read: the credits cannot be skipped. UpdateMode13WinGame_Sub3
-;   - There are $17 text lines. Q1 shows lines $00-$0F; Q2 shows $00-$0B and $10-$16. DrawCredits
+;     Credits_LastScreens, Credits_LastVScrolls
+;   - No controller input is read: the credits cannot be skipped. Mode13WinGame_Update_Sub3Credits
+;   - There are $17 text lines. Q1 shows lines $00-$0F; Q2 shows $00-$0B and $10-$16. Credits_DrawRow
 ;   - Line $11 (Q2 only) gets the save slot's name (8 characters from SaveSlotNames, columns 9-16)
-;     and its death count (DeathCounts, 3 decimal characters, columns 19-21). DrawCredits
+;     and its death count (DeathCounts, 3 decimal characters, columns 19-21). Credits_DrawRow
 ;   - Which tile rows carry text is a bit mask per nametable page of 8 rows (6 rows in pages 3, 7
-;     and $B), bit 7 = first row. CreditsPagesTextMasks
+;     and $B), bit 7 = first row. Credits_PageTextMasks
 ;   - Text line record: byte 0 = character count, byte 1 = starting column, then the tile codes.
-;     CreditsTextLines, CreditsTextAddrsLo, CreditsTextAddrsHi
+;     Credits_TextLines, Credits_TextAddrsLo, Credits_TextAddrsHi
 ; CONTENTS: (generated; L = line in this file)
-;   L0042 CreditsLastScreenList     data  TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
-;   L0046 CreditsLastVscrollList    data  TABLE: CurVScroll within that last screen at which the credits end; index = 0 Q1, 1 Q2; pixels.
-;   L0054 UpdateMode13WinGame_Sub3  code  Update submode 3: scrolls the credits 0.5 pixel per frame and draws a row per 8 pixels.
-;   L0120 CreditLineVramAddrsHi     data  TABLE: high nametable address byte of a page of 8 tile rows; index = CreditsVramPage (0-$B).
-;   L0125 CreditsPagesTextMasks     data  TABLE: which rows of a page take a text line; index = CreditsVramPage; bit 7 = row 0 .. bit 0 = row 7.
-;   L0130 CreditsTextAddrsLo        data  TABLE: low address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-;   L0134 CreditsTextAddrsHi        data  TABLE: high address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-;   L0138 CreditsTextLines          data  DATA: credits text line records: character count, starting column, then that many tile codes.
-;   L0142 CreditsAttrs              data  TABLE: attribute byte for the middle 6 blocks of an attribute row; index = CreditsRow / 4.
-;   L0158 DrawCredits               code  Builds the transfer records for the next credits tile row: bricks, text line, attributes.
+;   L0042 Credits_LastScreens               data  TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
+;   L0046 Credits_LastVScrolls              data  TABLE: CurVScroll within that last screen at which the credits end; index = 0 Q1, 1 Q2; pixels.
+;   L0054 Mode13WinGame_Update_Sub3Credits  code  Update submode 3: scrolls the credits 0.5 pixel per frame and draws a row per 8 pixels.
+;   L0120 Credits_PageVramAddrsHi           data  TABLE: high nametable address byte of a page of 8 tile rows; index = CreditsVramPage (0-$B).
+;   L0125 Credits_PageTextMasks             data  TABLE: which rows of a page take a text line; index = CreditsVramPage; bit 7 = row 0 .. bit 0 = row 7.
+;   L0130 Credits_TextAddrsLo               data  TABLE: low address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
+;   L0134 Credits_TextAddrsHi               data  TABLE: high address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
+;   L0138 Credits_TextLines                 data  DATA: credits text line records: character count, starting column, then that many tile codes.
+;   L0142 Credits_RowAttrs                  data  TABLE: attribute byte for the middle 6 blocks of an attribute row; index = CreditsRow / 4.
+;   L0158 Credits_DrawRow                   code  Builds the transfer records for the next credits tile row: bricks, text line, attributes.
 ; ============================================================================
 
 ; TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
-CreditsLastScreenList:
+Credits_LastScreens:
     .BYTE $02, $03
 
 ; TABLE: CurVScroll within that last screen at which the credits end; index = 0 Q1, 1 Q2; pixels.
-CreditsLastVscrollList:
+Credits_LastVScrolls:
     .BYTE $78, $00
 
 ; ----------------------------------------------------------------------------
@@ -51,7 +51,7 @@ CreditsLastVscrollList:
 ; OUT:  at the end position for the quest: GameSubmode + 1 and ObjTimer = $40.
 ; NOTE: VScrollAddrHi serves as the scroll fraction and VScrollAddrLo as the screen count here.
 ; ----------------------------------------------------------------------------
-UpdateMode13WinGame_Sub3:
+Mode13WinGame_Update_Sub3Credits:
     ; After scrolling 8 pixels, draw another tile row.
     LDA CreditsTileOffset
     CMP #$08
@@ -59,7 +59,7 @@ UpdateMode13WinGame_Sub3:
     LDA CreditsTileOffset
     SBC #$08
     STA CreditsTileOffset
-    JSR DrawCredits
+    JSR Credits_DrawRow
 :
     ; Add $80 to the scroll speed fraction.
     LDA VScrollAddrHi
@@ -98,13 +98,13 @@ UpdateMode13WinGame_Sub3:
 :
     ; If we're not showing the last screen, then return.
     LDA a:VScrollAddrLo
-    CMP CreditsLastScreenList, Y
+    CMP Credits_LastScreens, Y
     BCC @Exit
 
     ; If we haven't scrolled the last amount in the last screen,
     ; then return.
     LDA CurVScroll
-    CMP CreditsLastVscrollList, Y
+    CMP Credits_LastVScrolls, Y
     BCC @Exit
 
     ; But if we have, then go to the next submode, and set a timer
@@ -117,34 +117,34 @@ UpdateMode13WinGame_Sub3:
     RTS
 
 ; TABLE: high nametable address byte of a page of 8 tile rows; index = CreditsVramPage (0-$B).
-CreditLineVramAddrsHi:
+Credits_PageVramAddrsHi:
     .BYTE $28, $29, $2A, $2B, $20, $21, $22, $23
     .BYTE $28, $29, $2A, $2B
 
 ; TABLE: which rows of a page take a text line; index = CreditsVramPage; bit 7 = row 0 .. bit 0 = row 7.
-CreditsPagesTextMasks:
+Credits_PageTextMasks:
     .BYTE $46, $10, $90, $84, $24, $30, $01, $48
     .BYTE $03, $25, $05, $40
 
 ; TABLE: low address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-CreditsTextAddrsLo:
+Credits_TextAddrsLo:
     .INCLUDE "dat/CreditsTextAddrsLo.inc"
 
 ; TABLE: high address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-CreditsTextAddrsHi:
+Credits_TextAddrsHi:
     .INCLUDE "dat/CreditsTextAddrsHi.inc"
 
 ; DATA: credits text line records: character count, starting column, then that many tile codes.
-CreditsTextLines:
+Credits_TextLines:
     .INCBIN "dat/CreditsTextLines.dat"
 
 ; TABLE: attribute byte for the middle 6 blocks of an attribute row; index = CreditsRow / 4.
-CreditsAttrs:
+Credits_RowAttrs:
     .BYTE $00, $AA, $FF, $FF, $55, $AA, $AA, $FF
     .BYTE $FF, $FF, $55, $00, $00, $00, $00, $00
     .BYTE $00, $00, $50, $00, $00, $00, $AA, $00
 
-; One more byte without a label: it is CreditsAttrs+24, the entry DrawCredits would read for
+; One more byte without a label: it is Credits_RowAttrs+24, the entry Credits_DrawRow would read for
 ; CreditsRow $60. If CreditsRow and the screen count start at 0 (not set in this file, (unverified)),
 ; the last row drawn is CreditsRow $5D in Q2 ($4E in Q1) and this byte is never read.
     .BYTE $00
@@ -155,7 +155,7 @@ CreditsAttrs:
 ;       CreditsRow, CreditsVramLine, CreditsVramPage and CreditsLineIndex advanced.
 ; NOTE: CreditsRow skips $1E and $1F of every $20 (a nametable has 30 tile rows).
 ; ----------------------------------------------------------------------------
-DrawCredits:
+Credits_DrawRow:
     ; Make a transfer record of a full row of blank tiles.
     LDY #$1F
     LDA #$24
@@ -202,7 +202,7 @@ DrawCredits:
 
     ; Write the high byte of the current VRAM page.
     LDX CreditsVramPage
-    LDA CreditLineVramAddrsHi, X
+    LDA Credits_PageVramAddrsHi, X
     STA DynTileBuf
 
     ; The line number will be used to shift the task mask below.
@@ -218,7 +218,7 @@ DrawCredits:
     STA DynTileBuf+1
 
     ; Get the mask for the current VRAM page.
-    LDA CreditsPagesTextMasks, X
+    LDA Credits_PageTextMasks, X
 :
     ; Shift left as many times as the current VRAM line number,
     ; to get the bit that indicates whether this line has text.
@@ -250,9 +250,9 @@ DrawCredits:
     CPY #$10
     BCC @IncLine
 :
-    LDA CreditsTextAddrsLo, Y
+    LDA Credits_TextAddrsLo, Y
     STA $00
-    LDA CreditsTextAddrsHi, Y
+    LDA Credits_TextAddrsHi, Y
     STA $01
 
     ; First read the length of the string.
@@ -303,7 +303,7 @@ DrawCredits:
     ; Format the death count for the current save slot.
     LDY a:CurSaveSlot
     LDA DeathCounts, Y
-    JSR FormatDecimalByte
+    JSR Text_FormatDecimalByte
 
     ; Copy the decimal death count at offset 19 in string to transfer.
     LDX #$02
@@ -368,7 +368,7 @@ DrawCredits:
     ; NT attribute block row. Look up the attribute byte to use
     ; for almost every block in this NT attribute block row.
     TAY
-    LDA CreditsAttrs, Y
+    LDA Credits_RowAttrs, Y
 
     ; Fill a record with this byte, so the whole NT attribute block
     ; row is changed.

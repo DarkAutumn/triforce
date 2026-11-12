@@ -1,36 +1,36 @@
 ; ============================================================================
 ; FILE:     bank0/drive-audio-tune0.asm  BANK: 0 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_00.asm 106-221
-; SUBJECTS: (none)
-; TOPIC:    The sound driver's per-frame entry point (DriveAudio) and tune channel 0: short jingles on
+; SUBJECTS: Audio
+; TOPIC:    The sound driver's per-frame entry point (Audio_Drive) and tune channel 0: short jingles on
 ;           square channel 0, one script byte per frame (among them the low-hearts warning beep).
-; SEE ALSO: bank7/run-game-nmi.asm (the NMI handler calls DriveAudio once per frame);
-;           bank0/sound-effects.asm (DriveEffect), bank0/tune1-and-samples.asm (DriveTune1, DriveSample),
-;           bank0/drive-song.asm (DriveSong, SilenceSong); bank0/note-emit-vibrato.asm (EmitSquareNote0).
+; SEE ALSO: bank7/run-game-nmi.asm (the NMI handler calls Audio_Drive once per frame);
+;           bank0/sound-effects.asm (Sfx_Drive), bank0/tune1-and-samples.asm (Audio_DriveTune1, Sample_Drive),
+;           bank0/drive-song.asm (Song_Drive, Song_Silence); bank0/note-emit-vibrato.asm (Audio_EmitSquareNote0).
 ; KEY FACTS:
-;   - DriveAudio runs the five drivers in the order tune 1, noise effect, sample, song, tune 0, then
-;     zeroes all five request bytes: a request lasts one frame. DriveAudio.
+;   - Audio_Drive runs the five drivers in the order tune 1, noise effect, sample, song, tune 0, then
+;     zeroes all five request bytes: a request lasts one frame. Audio_Drive.
 ;   - While PauseState is nonzero all channels are cut every frame (ApuStatus 0 then $0F) and only tune
 ;     channel 0 is driven; song, tune 1, effect and sample positions freeze, and requests for them made
-;     in such a frame are dropped (the request bytes are still zeroed). DriveAudio.
+;     in such a frame are dropped (the request bytes are still zeroed). Audio_Drive.
 ;   - Tune0Request is a bit mask; the lowest set bit picks the tune. $80 is not a tune: it silences the
 ;     song. $40 (heart warning) starts only when no tune 0 is playing; any other request preempts.
-;     DriveTune0.
+;     Audio_DriveTune0.
 ;   - A tune 0 script is read one byte per frame: $00 ends the tune, a byte with bit 7 set is written to
-;     Sq0Duty and the next byte is its note, any other byte is a note id for EmitSquareNote0. DriveTune0.
-;   - While CurTune0 is nonzero the song's square 0 track is muted (see DriveSong).
+;     Sq0Duty and the next byte is its note, any other byte is a note id for Audio_EmitSquareNote0. Audio_DriveTune0.
+;   - While CurTune0 is nonzero the song's square 0 track is muted (see Song_Drive).
 ; CONTENTS: (generated; L = line in this file)
-;   L0033 DriveAudio         code  Runs the sound driver for one frame: all channel drivers, then clears the sound requests.
-;   L0073 TuneScripts0       data  TABLE: tune channel 0 scripts. Bytes 0-6 = script offset (from TuneScripts0) of tune bit 0-6; the
-;   L0090 L18C9_SilenceSong  code  Jump to SilenceSong for tune 0 request $80 (within branch range of DriveTune0).
-;   L0097 DriveTune0         code  Starts a requested tune on square channel 0 or plays the next script byte of the current one.
+;   L0033 Audio_Drive                   code  Runs the sound driver for one frame: all channel drivers, then clears the sound requests.
+;   L0073 Audio_Tune0Scripts            data  TABLE: tune channel 0 scripts. Bytes 0-6 = script offset (from Audio_Tune0Scripts) of tune bit 0-6; the
+;   L0090 Audio_DriveTune0_SilenceSong  code  Jump to Song_Silence for tune 0 request $80 (within branch range of Audio_DriveTune0).
+;   L0097 Audio_DriveTune0              code  Starts a requested tune on square channel 0 or plays the next script byte of the current one.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Runs the sound driver for one frame: all channel drivers, then clears the sound requests.
 ; NOTE: Called once per frame from the NMI handler. While paused only tune channel 0 plays.
 ; ----------------------------------------------------------------------------
-DriveAudio:
+Audio_Drive:
     ; If the game is paused, then silence all channels
     ; by first disabling them, then enabling them.
     ;
@@ -51,13 +51,13 @@ DriveAudio:
     STA Ctrl2FrameCtr
 
     ; Drive each game sound channel.
-    JSR DriveTune1
-    JSR DriveEffect
-    JSR DriveSample
-    JSR DriveSong
+    JSR Audio_DriveTune1
+    JSR Sfx_Drive
+    JSR Sample_Drive
+    JSR Song_Drive
 
 @Paused:
-    JSR DriveTune0
+    JSR Audio_DriveTune0
 
     ; Reset all requests for sound.
     LDA #$00
@@ -68,9 +68,9 @@ DriveAudio:
     STA SongRequest
     RTS
 
-; TABLE: tune channel 0 scripts. Bytes 0-6 = script offset (from TuneScripts0) of tune bit 0-6; the
+; TABLE: tune channel 0 scripts. Bytes 0-6 = script offset (from Audio_Tune0Scripts) of tune bit 0-6; the
 ; scripts follow. The offset for bit 6 ($40, heart warning) is 7, the byte right after the offsets.
-TuneScripts0:
+Audio_Tune0Scripts:
     .BYTE $1C, $4C, $27, $5C, $46, $67, $07, $95
     .BYTE $50, $08, $08, $08, $08, $08, $90, $08
     .BYTE $08, $08, $08, $08, $08, $08, $08, $08
@@ -86,19 +86,19 @@ TuneScripts0:
     .BYTE $56, $08, $08, $00, $08, $08, $00, $9F
     .BYTE $40, $30, $40, $3A, $28, $00
 
-; Jump to SilenceSong for tune 0 request $80 (within branch range of DriveTune0).
-L18C9_SilenceSong:
-    JMP SilenceSong
+; Jump to Song_Silence for tune 0 request $80 (within branch range of Audio_DriveTune0).
+Audio_DriveTune0_SilenceSong:
+    JMP Song_Silence
 
 ; ----------------------------------------------------------------------------
 ; Starts a requested tune on square channel 0 or plays the next script byte of the current one.
 ; OUT:  CurTune0 = the Tune0Request byte of the tune playing, 0 when the script ends.
 ; ----------------------------------------------------------------------------
-DriveTune0:
+Audio_DriveTune0:
     LDA Tune0Request
 
     ; Tune $80 is only a signal to silence the song.
-    BMI L18C9_SilenceSong
+    BMI Audio_DriveTune0_SilenceSong
     BEQ @CheckCurrentTune
 
     ; If the requested tune is not "heart warning", then go play it.
@@ -122,13 +122,13 @@ DriveTune0:
     INY
     LSR
     BCC :-
-    LDA TuneScripts0-1, Y
+    LDA Audio_Tune0Scripts-1, Y
     STA Tune0ScriptOffset
 
 @KeepPlaying:
     LDY Tune0ScriptOffset
     INC Tune0ScriptOffset
-    LDA TuneScripts0, Y
+    LDA Audio_Tune0Scripts, Y
     BMI @PrepNote
     BNE @PlayNote
 
@@ -146,10 +146,10 @@ DriveTune0:
     STA Sq0Duty
     LDY Tune0ScriptOffset
     INC Tune0ScriptOffset
-    LDA TuneScripts0, Y
+    LDA Audio_Tune0Scripts, Y
 
 @PlayNote:
-    JSR EmitSquareNote0
+    JSR Audio_EmitSquareNote0
     LDA #$7F
     STA Sq0Sweep
     RTS

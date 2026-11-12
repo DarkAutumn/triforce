@@ -1,35 +1,35 @@
 ; ============================================================================
 ; FILE:     bank5/cave-cellar-exits.asm  BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 3059-3217
-; SUBJECTS: (none)
+; SUBJECTS: Mode, ModeALeaveCellar, Warp
 ; TOPIC:    Leaving a cellar (up its stairs), a cave (off the screen edge) or the shortcut cave (down one
 ;           of its three stairs): picks the destination room and starts mode $A.
-; SEE ALSO: bank7/walker-move.asm (Walker_Move calls CheckSubroom for Link in modes 9, $B, $C);
-;           bank7/walker-collision-screen-edge.asm (CheckScreenEdge, PlayerScreenEdgeBounds);
-;           bank1/modeb-cave-save-sprites.asm (CheckPersonBlocking); bank5/cave-cellar-enter.asm (mode $A);
-;           bank5/warps-stairs-caves.asm (the way in; also jumps to EndPrepareMode).
+; SEE ALSO: bank7/walker-move.asm (Walker_Move calls Warp_CheckSubroomExit for Link in modes 9, $B, $C);
+;           bank7/walker-collision-screen-edge.asm (Link_CheckScreenEdge, Link_ScreenEdgeBounds);
+;           bank1/modeb-cave-save-sprites.asm (Person_BlockLinkMovingUp); bank5/cave-cellar-enter.asm (mode $A);
+;           bank5/warps-stairs-caves.asm (the way in; also jumps to Mode_EndPrepareMode).
 ; KEY FACTS:
 ;   - Cellar (mode 9): Link leaves when his Y < $40 and Up is held. Destination room =
-;     LevelBlockAttrsA[cellar room] if his X < $80, else LevelBlockAttrsB[cellar room] (CheckSubroom).
+;     LevelBlockAttrsA[cellar room] if his X < $80, else LevelBlockAttrsB[cellar room] (Warp_CheckSubroomExit).
 ;   - He comes out at X = high nibble of LevelBlockAttrsC[cellar room] * $10, Y = low nibble * $10 + $0D,
-;     the same spot whichever of the two rooms he goes to (CheckSubroom).
-;   - Cave (modes $B, $C): Link cannot move up while his Y < $8E (CheckPersonBlocking is called whether
+;     the same spot whichever of the two rooms he goes to (Warp_CheckSubroomExit).
+;   - Cave (modes $B, $C): Link cannot move up while his Y < $8E (Person_BlockLinkMovingUp is called whether
 ;     or not a person is there). Reaching a screen edge bound while moving toward it leaves the cave:
-;     mode $A with RoomId unchanged (CheckCaveEdge).
+;     mode $A with RoomId unchanged (Warp_CheckCaveEdgeExit).
 ;   - Shortcut cave (mode $C): with grid offset 0 and Y = $9D, X = $50, $80 or $B0 selects stairs 1, 2
 ;     or 3. Destination = LevelInfo_CellarRoomIdArray[(i + n) AND 3], i = index of the current room in
-;     that array, n = stairs number (CheckSubroom).
+;     that array, n = stairs number (Warp_CheckSubroomExit).
 ;   - Every exit clears Link's state, knockback and invincibility timer and the moving direction [0F]
-;     (EndPrepareMode).
-;   - CheckCaveEdge calls CheckScreenEdge directly, so the mode 5, ladder and grid offset 0 conditions
+;     (Mode_EndPrepareMode).
+;   - Warp_CheckCaveEdgeExit calls Link_CheckScreenEdge directly, so the mode 5, ladder and grid offset 0 conditions
 ;     that guard it in Walker_CheckTileCollision do not apply in a cave.
 ; CONTENTS: (generated; L = line in this file)
-;   L0043 CheckSubroom         code  Tests whether Link is leaving the cellar or cave he is in, and starts mode $A if so.
-;   L0173 GoToModeAFromCellar  code  Makes room A the current room, marks it visited and starts mode $A (leave cellar or cave).
-;   L0178 GoToModeAFromCave    code  Starts mode $A without changing RoomId: Link leaves a cave back into the room it belongs to.
-;   L0188 EndPrepareMode       code  Ends the current mode's update so the new GameMode starts with its init next frame.
-;   L0199 L14F72_Exit          code  Shared exit of CheckSubroom and EndPrepareMode.
-;   L0209 CheckCaveEdge        code  Lets Link leave a cave by walking off a screen edge: turns the edge's mode change into mode $A.
+;   L0043 Warp_CheckSubroomExit          code  Tests whether Link is leaving the cellar or cave he is in, and starts mode $A if so.
+;   L0173 ModeALeaveCellar_GoFromCellar  code  Makes room A the current room, marks it visited and starts mode $A (leave cellar or cave).
+;   L0178 ModeALeaveCellar_GoFromCave    code  Starts mode $A without changing RoomId: Link leaves a cave back into the room it belongs to.
+;   L0188 Mode_EndPrepareMode            code  Ends the current mode's update so the new GameMode starts with its init next frame.
+;   L0199 Mode_EndPrepareMode_Return     code  Shared exit of Warp_CheckSubroomExit and Mode_EndPrepareMode.
+;   L0209 Warp_CheckCaveEdgeExit         code  Lets Link leave a cave by walking off a screen edge: turns the edge's mode change into mode $A.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -40,7 +40,7 @@
 ; NOTE: Cellar exit: Y < $40 with Up held; left half (X < $80) and right half lead to different rooms.
 ;       Shortcut stairs: Y = $9D, X = $50 / $80 / $B0, grid offset 0.
 ; ----------------------------------------------------------------------------
-CheckSubroom:
+Warp_CheckSubroomExit:
     LDA GameMode
     CMP #$09
     BNE @InCave
@@ -50,10 +50,10 @@ CheckSubroom:
     ; If Link's Y >= $40 or Up is not held, return.
     LDA ObjY
     CMP #$40
-    BCS L14EC6_Exit
+    BCS Potion_Wield_Return
     LDA ObjInputDir
     AND #$08
-    BEQ L14EC6_Exit
+    BEQ Potion_Wield_Return
 
     ; Look for this room's ID in the 6-element cellar room array.
     ; The index found is not used (Y is overwritten below); the loop has no end test, so it relies on
@@ -82,7 +82,7 @@ CheckSubroom:
 @GetRightSideRoom:
     LDA LevelBlockAttrsB, Y
 :
-    JSR GoToModeAFromCellar
+    JSR ModeALeaveCellar_GoFromCellar
 
     ; Set Link's position in the destination room from attribute C of the cellar room:
     ; X = high nibble * $10; Y = low nibble * $10 + $0D.
@@ -107,23 +107,23 @@ CheckSubroom:
     ; Stop upward movement while Link's Y < $8E: the upper part of the room,
     ; where the person and wares are. This runs whether or not a person is present.
     PHA
-    JSR CheckPersonBlocking
+    JSR Person_BlockLinkMovingUp
     PLA
 
     ; If mode is not $C (shortcuts), go check the screen edge.
     CMP #$0C
-    BNE CheckCaveEdge
+    BNE Warp_CheckCaveEdgeExit
 
     ; In a shortcut cave (mode $C).
     ;
     ; If grid offset <> 0, return.
     LDA ObjGridOffset
-    BNE L14F72_Exit
+    BNE Mode_EndPrepareMode_Return
 
     ; If Link's Y <> $9D, go check the screen edge.
     LDA ObjY
     CMP #$9D
-    BNE CheckCaveEdge
+    BNE Warp_CheckCaveEdgeExit
 
     ; See if Link is on one of the 3 shortcut stairs.
     ; X = $50: 1
@@ -140,7 +140,7 @@ CheckSubroom:
     BEQ @FoundStairs
     INY
     CMP #$B0
-    BNE L14F72_Exit
+    BNE Mode_EndPrepareMode_Return
 
 @FoundStairs:
     ; Look for the current room in the shortcut room array (in the overworld's level info this
@@ -170,12 +170,12 @@ CheckSubroom:
 ; Makes room A the current room, marks it visited and starts mode $A (leave cellar or cave).
 ; IN:   A = destination room ID.
 ; ----------------------------------------------------------------------------
-GoToModeAFromCellar:
+ModeALeaveCellar_GoFromCellar:
     STA RoomId
-    JSR MarkRoomVisited
+    JSR RoomFlags_MarkVisited
 
 ; Starts mode $A without changing RoomId: Link leaves a cave back into the room it belongs to.
-GoToModeAFromCave:
+ModeALeaveCellar_GoFromCave:
     LDA #$0A
     STA GameMode
 
@@ -185,7 +185,7 @@ GoToModeAFromCave:
 ;       ObjShoveDistance and ObjInvincibilityTimer = 0.
 ; NOTE: Link's invincibility frames and knockback do not survive a mode change made through here.
 ; ----------------------------------------------------------------------------
-EndPrepareMode:
+Mode_EndPrepareMode:
     LDA #$00
     STA GameSubmode
     STA IsUpdatingMode
@@ -195,22 +195,22 @@ EndPrepareMode:
     STA ObjShoveDistance
     STA ObjInvincibilityTimer
 
-; Shared exit of CheckSubroom and EndPrepareMode.
-L14F72_Exit:
+; Shared exit of Warp_CheckSubroomExit and Mode_EndPrepareMode.
+Mode_EndPrepareMode_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Lets Link leave a cave by walking off a screen edge: turns the edge's mode change into mode $A.
-; NOTE: CheckScreenEdge fires when ObjInputDir <> 0 and Link's coordinate on the axis of its single
-;       direction equals PlayerScreenEdgeBounds for that direction; it then increments GameMode and
+; NOTE: Link_CheckScreenEdge fires when ObjInputDir <> 0 and Link's coordinate on the axis of its single
+;       direction equals Link_ScreenEdgeBounds for that direction; it then increments GameMode and
 ;       clears IsUpdatingMode, which is the signal tested here. Called this way it skips the mode 5,
 ;       ladder and grid offset tests made in Walker_CheckTileCollision.
 ; ----------------------------------------------------------------------------
-CheckCaveEdge:
-    JSR CheckScreenEdge
+Warp_CheckCaveEdgeExit:
+    JSR Link_CheckScreenEdge
 
-    ; If Link reached the screen edge, CheckScreenEdge cleared IsUpdatingMode and incremented
+    ; If Link reached the screen edge, Link_CheckScreenEdge cleared IsUpdatingMode and incremented
     ; GameMode. Go replace that mode with $A.
     LDA IsUpdatingMode
-    BEQ GoToModeAFromCave
+    BEQ ModeALeaveCellar_GoFromCave
     RTS

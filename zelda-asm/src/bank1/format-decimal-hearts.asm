@@ -1,25 +1,25 @@
 ; ============================================================================
 ; FILE:     bank1/format-decimal-hearts.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 3153-3304
-; SUBJECTS: (none)
+; SUBJECTS: Math, Text
 ; TOPIC:    Turns a byte into three decimal digit tiles (leading blanks), and turns the heart bytes into
 ;           the two rows of eight heart tiles shown in the status bar and on the file-select screen.
-; SEE ALSO: bank1/status-bar-rupees.asm (FormatStatusBarText: hearts, rupee, key and bomb counts);
+; SEE ALSO: bank1/status-bar-rupees.asm (StatusBar_FormatText: hearts, rupee, key and bomb counts);
 ;           bank1/cave-person-prices.asm (prices); bank2/mode1-slot-tiles.asm (save-slot hearts and deaths);
 ;           bank2/credits.asm (death count).
 ; KEY FACTS:
 ;   - Heart byte format: high nibble = heart containers - 1, low nibble = number of completely full
 ;     hearts; the next heart is drawn from the partial byte: 0 empty, $01-$7F half, $80-$FF full
-;     (FormatHeartsInTextBuf).
-;   - A heart byte of 0 draws 16 blank tiles, not one container (FormatHeartsInTextBuf).
-;   - Hearts 1-8 are the bottom row, 9-16 the top row, both left to right (FormatHeartsInTextBuf).
-;   - Tiles: $24 blank, $F2 full heart, $65 half heart, $66 empty heart (FormatHeartsInTextBuf).
-;   - Drawing a half heart writes 0 to IsSwordShotForced (FormatHeartsInTextBuf).
-;   - FormatDecimalByte gives hundreds, tens, ones in [01], [02], [03]; leading zeros become tile $24.
+;     (Text_FormatHeartRows).
+;   - A heart byte of 0 draws 16 blank tiles, not one container (Text_FormatHeartRows).
+;   - Hearts 1-8 are the bottom row, 9-16 the top row, both left to right (Text_FormatHeartRows).
+;   - Tiles: $24 blank, $F2 full heart, $65 half heart, $66 empty heart (Text_FormatHeartRows).
+;   - Drawing a half heart writes 0 to IsSwordShotForced (Text_FormatHeartRows).
+;   - Text_FormatDecimalByte gives hundreds, tens, ones in [01], [02], [03]; leading zeros become tile $24.
 ; CONTENTS: (generated; L = line in this file)
-;   L0032 FormatDecimalByte      code  Converts a byte to three decimal digit tiles, with blank tiles ($24) in place of leading zeros.
-;   L0058 DivideBy10             code  Divides A by 10 by repeated subtraction.
-;   L0081 FormatHeartsInTextBuf  code  Writes the two rows of eight heart tiles for a heart byte and partial byte into DynTileBuf.
+;   L0032 Text_FormatDecimalByte  code  Converts a byte to three decimal digit tiles, with blank tiles ($24) in place of leading zeros.
+;   L0058 Math_DivideBy10         code  Divides A by 10 by repeated subtraction.
+;   L0081 Text_FormatHeartRows    code  Writes the two rows of eight heart tiles for a heart byte and partial byte into DynTileBuf.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -29,11 +29,11 @@
 ;       Y = [01]; A = [02]
 ; NOTE: Digit tiles are the digit values themselves ($00-$09).
 ; ----------------------------------------------------------------------------
-FormatDecimalByte:
-    JSR DivideBy10
+Text_FormatDecimalByte:
+    JSR Math_DivideBy10
     STA $03                     ; Ones digit.
     TYA
-    JSR DivideBy10              ; A = tens digit, Y = hundreds digit.
+    JSR Math_DivideBy10              ; A = tens digit, Y = hundreds digit.
     CPY #$00
     BNE @WriteHighChars         ; Hundreds digit is not 0: keep both digits.
     LDY #$24                    ; Blank tile for the hundreds place.
@@ -45,17 +45,17 @@ FormatDecimalByte:
     STA $02
     STY $01
 :
-    ; This RTS also ends DivideBy10 (its loop branches back here).
+    ; This RTS also ends Math_DivideBy10 (its loop branches back here).
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Divides A by 10 by repeated subtraction.
 ; IN:   A = value
 ; OUT:  Y = quotient; A = remainder
-; NOTE: Returns through the RTS at the end of FormatDecimalByte. The BNE below is always taken (the
-;       quotient is at most 25), so execution never runs on into FormatHeartsInTextBuf.
+; NOTE: Returns through the RTS at the end of Text_FormatDecimalByte. The BNE below is always taken (the
+;       quotient is at most 25), so execution never runs on into Text_FormatHeartRows.
 ; ----------------------------------------------------------------------------
-DivideBy10:
+Math_DivideBy10:
     LDY #$00
 
 @Loop:
@@ -78,7 +78,7 @@ DivideBy10:
 ;       $01-$7F = half, $80-$FF = full) and hearts above it are empty. A heart byte of 0 draws only blank
 ;       tiles. Drawing a half heart also writes 0 to IsSwordShotForced.
 ; ----------------------------------------------------------------------------
-FormatHeartsInTextBuf:
+Text_FormatHeartRows:
     STY $0D                     ; [0D] = starting offset in DynTileBuf.
     LDA $0E
     PHA
@@ -116,14 +116,14 @@ FormatHeartsInTextBuf:
 
 @LoopHeartSlot:
     CPY #$FF
-    BNE @FinishedFirstRow       ; Top row not finished yet (or already in the bottom row).
+    BNE @ChooseTile       ; Top row not finished yet (or already in the bottom row).
     LDA $0D                     ; Top row finished: move to the bottom row.
     CLC
     ADC #$12
     STA $0B                     ; [0B] = offset of the last (rightmost) tile of the bottom row.
     LDY #$12                    ; Any value that will not reach $FF again in 8 more steps.
 
-@FinishedFirstRow:
+@ChooseTile:
     ; Blank tile if the heart byte is 0 (empty save slot), or if this position is above the number
     ; of heart containers.
     LDA $0E

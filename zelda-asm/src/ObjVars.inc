@@ -5,22 +5,24 @@
 ; means depends on the object type in the slot; the names below give each type's meaning.
 ; "per slot" = indexed by object slot (X or Y register). "scalar" = one fixed byte.
 
-; ---- Wanderers and shooters (UpdateCommonWanderer; Goriya, Moblin, Lynel, Octorok, Stalfos) ----
+; ---- Wanderers and shooters (Wanderer_Update; Goriya, Moblin, Lynel, Octorok, Stalfos) ----
 Shooter_ObjWantsToShoot := $412     ; per slot; walking shooters: 1 = may shoot now, 0 = may not.
-;   _ShootIfWanted fails when 0. Wanderer_TargetPlayer sets 1 when it turns toward the chase target and 0
-;   otherwise; UpdateGoriya sets 1 when the longer-axis distance to the target is < $51 pixels. Cleared
-;   after a successful shot.
-Wanderer_ObjTurnRate := $41F        ; per slot; wanderers: turn rate $00-$FF given to UpdateCommonWanderer.
+;   Shooter_ShootIfWanted fails when 0. On a grid point Wanderer_Update sets 1 whenever the monster turns
+;   (toward the chase target, or the timed perpendicular turn) and 0 when it does not turn; Goriya_Update
+;   sets 1 when the longer-axis distance to the target is < $51 pixels. Cleared after a successful shot.
+Shooter_ObjShotCounter := $437      ; per slot; walking shooters: decremented once per shot made. Never read.
+;   Written by Shooter_ShootAndSetTimer (Moblin, Lynel, Octorok) and the Q2 Stalfos; no code reads it for them.
+Wanderer_ObjTurnRate := $41F        ; per slot; wanderers: turn rate $00-$FF given to Wanderer_Update.
 ;   On each grid square: if rate >= Random+1,X and Link's ObjState is not $FF, the monster may turn toward
 ;   the chase target when within 8 pixels of it on one axis; otherwise it turns only when
 ;   Wanderer_ObjTurnTimer is 0.
 Wanderer_ObjTurnTimer := $478       ; per slot; wanderers: frames until a perpendicular turn is allowed.
-;   Set to Random,X (0-$FF) when the monster turns toward the chase target; decremented every frame
-;   while > 0.
+;   Set to Random,X (0-$FF) on every turn (toward the chase target or perpendicular); decremented every
+;   frame while > 0.
 
 ; ---- Remaining distance (Pols Voice, Blue Wizzrobe, Ganon) ----
 ObjRemDistance := $394              ; per slot; pixels left to move. Alias of ObjGridOffset.
-;   Pols Voice: walk distance left ($30 or $70 at random after a jump); at 0 it jumps. Blue Wizzrobe:
+;   Pols Voice: walk distance left ($31 or $71 at random after a jump); at 0 it jumps. Blue Wizzrobe:
 ;   teleport distance left ($20 at start); nonzero = teleporting (drawn every other frame, no shooting).
 ;   Ganon: set to 1 every frame so that he moves like a teleporting Blue Wizzrobe.
 
@@ -29,30 +31,32 @@ PushBlock_ObjPushTimer := $412      ; per slot; push block: frames Link has push
 ;   Counts only while Link is aligned with the block (within $10 pixels) and holds the required direction;
 ;   reset to 0 otherwise.
 
-; ---- Orbiting objects (Patra's children, pond fairy hearts; RotateObjectLocation) ----
+; ---- Orbiting objects (Patra's children, pond fairy hearts; Obj_MoveAlongOrbit) ----
 ObjAngleFrac := $380                ; per slot; orbiters: orbit angle fraction (low byte).
 ;   Alias of ObjMovingLimit.
-ObjAngleWhole := $394               ; per slot; orbiters: orbit angle $00-$1F (32 steps a circle; $18 = up).
-;   DecreaseObjectAngle subtracts a 16-bit amount each frame (Patra child type $25: $70, type $26: $60) and
-;   masks the result with $1F. Alias of ObjGridOffset. The orbit code keeps the X and Y position fractions
-;   in $412,X and $41F,X (no symbol).
+ObjAngleWhole := $394               ; per slot; orbiters: angle $00-$1F (32 steps a circle), a direction.
+;   Obj_MoveAlongOrbit moves the object up at $00, right at $08, down at $10, left at $18.
+;   Obj_DecreaseOrbitAngle subtracts a 16-bit amount each frame (Patra child type $25: $70, type $26: $60) and
+;   masks the result with $1F. Alias of ObjGridOffset.
+ObjOrbitFracX := $412               ; per slot; orbiters: X position fraction (Obj_MoveAlongOrbit).
+ObjOrbitFracY := $41F               ; per slot; orbiters: Y position fraction (Obj_MoveAlongOrbit).
 
-; ---- Monster shots (BounceShot, CheckShotLinkCollision) ----
+; ---- Monster shots (MonsterShot_Bounce, MonsterShot_CheckLinkCollision) ----
 MonsterShot_ObjBounceDir := $380    ; per slot; monster shot: Link's facing direction when it hit his shield.
-;   The shot then bounces (state $30), displaced by ShotBounceWidths/Heights for the opposite direction.
+;   The shot then bounces (state $30), displaced by MonsterShot_BounceStepsX/Heights for the opposite direction.
 MonsterShot_ObjBounceDist := $394   ; per slot; monster shot: pixels bounced, +2 per frame; destroyed at $20.
-;   Reset to 0 by CheckShotLinkCollision.
+;   Reset to 0 by MonsterShot_CheckLinkCollision.
 
 ; ---- Rock and gravestone (tile object types $62, $65) ----
 Rock_ObjRoomId := $412              ; per slot; pushed rock or gravestone: RoomId when the push began.
 ;   Used when the object has moved $10 pixels: that room is marked visited and its stairs position is
 ;   looked up.
 
-; ---- Fireball (types $55, $56; UpdateFireball) ----
+; ---- Fireball (types $55, $56; Fireball_Update) ----
 Fireball_ObjDirToTargetX := $412    ; per slot; fireball: horizontal direction toward Link when fired.
-Fireball_ObjQSpeedX := $41F         ; per slot; fireball: horizontal q-speed from FireballQSpeedsX ($10-$70).
+Fireball_ObjQSpeedX := $41F         ; per slot; fireball: horizontal q-speed from Fireball_QSpeedsX ($10-$70).
 Fireball_ObjDirToTargetY := $437    ; per slot; fireball: vertical direction toward Link when fired.
-Fireball_ObjQSpeedY := $444         ; per slot; fireball: vertical q-speed from FireballQSpeedsY ($00-$70).
+Fireball_ObjQSpeedY := $444         ; per slot; fireball: vertical q-speed from Fireball_QSpeedsY ($00-$70).
 Fireball_ObjPosFracX := $451        ; per slot; fireball: X position fraction.
 Fireball_ObjPosFracY := $45E        ; per slot; fireball: Y position fraction.
 
@@ -61,15 +65,15 @@ Aquamentus_ObjFireballOffset := $478 ; per fireball slot; Y step of an Aquamentu
 ;   0 middle, 1 lower, $FF upper fireball (type $55). Added to the fireball's ObjY every other frame while
 ;   Aquamentus's ObjTimer is running.
 
-; ---- Flyers (Keese, Peahat, flying Ghini, Moldorm, Patra, Gleeok head, item fairy; MoveFlyer) ----
+; ---- Flyers (Keese, Peahat, flying Ghini, Moldorm, Patra, Gleeok head, item fairy; Flyer_Move) ----
 Flyer_ObjPosFrac := $412            ; per slot; flyer: position fraction; 1 pixel is moved on each carry.
-;   MoveFlyer adds (Flyer_ObjSpeed AND $E0) to it every frame.
+;   Flyer_Move adds (Flyer_ObjSpeed AND $E0) to it every frame.
 Flyer_ObjSpeed := $41F              ; per slot; flyer: speed in 1/256 pixel per frame (bits 5-7 count).
-;   +1 per frame in Flyer_SpeedUp, -1 per frame in Flyer_SlowDown; compared with FlyerMaxSpeedFrac. Start
+;   +1 per frame in Flyer_State0SpeedUp, -1 per frame in Flyer_State4SlowDown; compared with FlyerMaxSpeedFrac. Start
 ;   values: blue Keese $1F, red and black Keese $7F, item fairy $7F, Moldorm $80, Gleeok head $BF.
-Flyer_ObjTurns := $42C              ; per slot; flyer: turns left in the chase or wander state.
-;   6 for Keese and the item fairy, 8 for Moldorm. Each turn is followed by a $10-frame delay; at 0 the
-;   flyer goes to flying state 1.
+Flyer_ObjTurns := $42C              ; per slot; flyer: turn counter of the chase or wander state.
+;   6 for Keese and the item fairy, 8 for Moldorm and Patra. The counter is decremented before each turn
+;   and at 0 the flyer goes to flying state 1, so a counter of N gives N - 1 turns, $10 frames apart.
 Flyer_ObjDistTraveled := $437       ; per slot; flyer: pixels moved (wraps at $100).
 ;   Drives the wing animation; the flying Gleeok head may shoot only when bit 0 is clear.
 Flyer_ObjFlyingState := $444        ; per slot; flyer: flight state, index into the type's flight table.
@@ -82,20 +86,22 @@ Flyer_ObjOffsetY := $478            ; per slot; flyer: signed pixels moved verti
 ; ---- Jumpers (Tektite, Boulder) ----
 Jumper_ObjSpeedWholeY := $412       ; per slot; jumper: vertical speed, pixels per frame, signed (up < 0).
 Jumper_ObjSpeedFracY := $41F        ; per slot; jumper: vertical speed fraction (1/256 pixel per frame).
-;   The acceleration from JumperYAccelerations is added each frame; the falling speed is capped at
+;   The acceleration from Jumper_YAccelerations is added each frame; the falling speed is capped at
 ;   2 pixels per frame.
 Jumper_ObjTargetY := $444           ; per slot; jumper: Y where the jump ends.
 ;   The jump ends when the jumper is falling and within 3 pixels of it.
-Jumper_ObjReversalCount := $451     ; per slot; jumper: consecutive jumps stopped by the room boundary.
+Jumper_ObjReversalCount := $451     ; per slot; jumper: consecutive frames the room boundary reversed it.
+;   +1 on each frame of a jump on which Flyer_BoundByRoom reversed the direction (a new jump is then set up);
+;   zeroed by every frame that moves.
 ;   At 2 the horizontal direction is flipped and the count reset, which breaks a loop in the room's corner.
 
 ; ---- Statues (dungeon statue fireballs) ----
 Statue_FireballTimers := $4E8       ; [4] by fireball number in the statue pattern (not by slot): countdown.
 ;   Decremented on every statue update; when it was 0, a fireball may be shot (Random,X < $F0) and the
-;   timer is reloaded from StatueFireballStartTimes.
+;   timer is reloaded from Statue_FireballStartTimes.
 
 ; ---- Wallmaster (type $27) ----
-Wallmaster_ObjStep := $412          ; per slot; Wallmaster: index of its step in WallmasterDirsAndAttrsLeft.
+Wallmaster_ObjStep := $412          ; per slot; Wallmaster: index of its step in Wallmaster_StepsLeft.
 ;   Entry: low nibble = direction, high nibble = sprite attributes. Base 0 for the left and right walls,
 ;   $20 for top and bottom; +8 when Link faces the decreasing direction; +$10 for the far wall; +1 per $10
 ;   pixels moved.
@@ -110,8 +116,9 @@ Moldorm_ObjBounceDir := $3BC        ; per slot; Moldorm head: direction to take 
 
 ; ---- Digdogger (types $38, $39; child $18) ----
 Digdogger_ObjSpeedFrac := $41F      ; per slot; Digdogger: speed low byte (1/256 pixel per frame); starts $3F.
-;   The 16-bit speed changes by 1 per frame toward the target speed. The position fraction is $412,X
-;   (no symbol).
+;   The 16-bit speed changes by 1 per frame toward the target speed.
+Digdogger_ObjPosFrac := $412        ; per slot; Digdogger: position fraction.
+;   Digdogger_Move adds (speed low byte AND $E0) per frame; the carry adds 1 pixel to the movement.
 Digdogger_ObjSpeedWhole := $42C     ; per slot; Digdogger: speed high byte (pixels per frame).
 Digdogger_ObjTargetSpeedFrac := $437 ; per slot; Digdogger: target speed low byte.
 ;   $80 while speeding up, $40 while slowing down.
@@ -128,19 +135,21 @@ Dodongo_ObjBloatedSubstate := $42C  ; per slot; Dodongo in state 1 (bloated): su
 Dodongo_ObjBombHits := $437         ; per slot; Dodongo: bombs swallowed; the second one kills it.
 ;   +1 when bloated substate 0 arms its timer.
 Dodongo_ObjBloatedTimer := $45E     ; per slot; Dodongo: frames left in the bloated wait substate.
-;   Loaded from DodongoBloatedWaitTimes by substate.
+;   Loaded from Dodongo_BloatedWaitTimes by substate.
 
 ; ---- Pols Voice (type $16) ----
-PolsVoice_ObjSpeedWhole := $412     ; per slot; Pols Voice: jump speed, pixels per frame, signed (up < 0).
+PolsVoice_ObjSpeedWhole := $412     ; per slot; Pols Voice: jump speed, pixels per moving frame (up < 0).
+;   Pols Voice moves only on even frames (FrameCounter bit 0 clear), so per frame it is half of this.
 PolsVoice_ObjLastTile := $41F       ; per slot; Pols Voice: tile under it at the last walkability test.
 PolsVoice_ObjTargetY := $42C        ; per slot; Pols Voice: Y where the jump ends.
-PolsVoice_ObjSpeedFrac := $444      ; per slot; Pols Voice: jump speed fraction; +$38 per frame in a jump.
+PolsVoice_ObjSpeedFrac := $444      ; per slot; Pols Voice: jump speed fraction; +$38 per moving frame.
 
 ; ---- Wizzrobe (blue $23, red $24) ----
 Wizzrobe_ObjLastTile := $41F        ; per slot; Wizzrobe: tile found by its last collision test.
 Wizzrobe_ObjBlueTurnCounter := $412 ; per slot; Blue Wizzrobe: step counter that times its turns.
 ;   It turns toward Link when the low 6 bits are 0: horizontally when bit 6 is clear, vertically when set.
-;   Starting a teleport flips bit 6.
+;   Starting a teleport flips bit 6. The draw code reads the same byte as Wizzrobe_ObjRedAnimCounter, so
+;   bit 2 of this counter selects the Blue Wizzrobe's frame image too.
 Wizzrobe_ObjRedFadeCounter := $394  ; per slot; Red Wizzrobe: +1 per frame while fading; bit 0 = skip drawing.
 ;   Alias of ObjGridOffset (read through ObjRemDistance).
 Wizzrobe_ObjRedAnimCounter := $412  ; per slot; Red Wizzrobe: +1 per frame; bit 2 selects the frame image.
@@ -155,11 +164,14 @@ Manhandla_ObjPrevFrame := $437      ; per slot; Manhandla hand: Manhandla_ObjFra
 Manhandla_ObjFrameAccum := $451     ; per slot; Manhandla: animation accumulator; bit 4 = animation frame.
 ;   Each frame it gains the pixels moved plus a random 0-3.
 Manhandla_ObjFrame := $478          ; per slot; Manhandla: frame image and sprite attributes.
-;   Bit 0 = animation frame, bit 7 = vertical flip. Start value from ManhandlaBaseFrameImagesAndAttrs.
+;   Bit 0 = animation frame, bit 7 = vertical flip. Start value from Manhandla_BaseFrameImagesAndAttrs.
 Manhandla_SegmentJustDied := $383   ; scalar; Manhandla: nonzero = a hand died; the base then speeds up.
 ;   Cleared by the base (slot 5) after it adds $80 to every segment's speed.
 Manhandla_BounceDir := $385         ; scalar; Manhandla: direction the base gives all segments, 0 = none.
 ;   Set on each turn of the base and when a segment's direction changes on moving (room boundary).
+Manhandla_BaseDirBeforeMove := $384 ; scalar; Manhandla: the base's ObjDir before it moved this frame.
+;   Every segment compares its own direction after moving with it; a difference (the room boundary
+;   reversed the segment) is copied to Manhandla_BounceDir.
 
 ; ---- Gohma (types $33, $34) ----
 Gohma_ObjShootTimer := $380         ; per slot; Gohma: frames until the next fireball; reload $41.
@@ -172,8 +184,8 @@ Gohma_ObjEyeOpenTimer := $444       ; per slot; Gohma: frames the eye stays open
 Gohma_ObjGoStraight := $451         ; per slot; Gohma: 0 = pick a new direction now, nonzero = keep going.
 ;   The new direction is right, left or down at random. Cleared after every second sprint.
 Gohma_ObjSprints := $45E            ; per slot; Gohma: number of $20-pixel sprints completed.
-Gohma_ObjEyeState := $46B           ; per slot; Gohma: eye frame image 0-3; an arrow harms Gohma only at 3.
-;   0/1 closed (alternating every 8 frames); 2 while the open timer is >= $70 or < $10; 3 in between.
+; Gohma_ObjEyeState ($46B) is defined with the symbols shared between banks: the knockback code in bank 1
+; reads it too.
 Gohma_ObjEyeAnimCounter := $478     ; per slot; Gohma: frames since the closed eye changed image; wraps at 8.
 
 ; ---- Lanmola (types $3A, $3B) ----
@@ -191,21 +203,21 @@ Ganon_ObjDyingCount := $42C         ; per slot; Ganon: 0 = fighting; nonzero = d
 ;   At $50 he becomes ashes and the burst starts; the burst is drawn while the value is < $A0.
 Ganon_ScenePhase := $445            ; scalar; Ganon's room: 0 Triforce lifted in dark, 1 in light, 2 fight.
 Ganon_ObjAnimationFrame := $46B     ; per slot; Ganon: body animation frame 0-5; +1 per frame while moving.
-Ganon_ObjCloudDist := $478          ; per slot; Ganon: pixel distance of the 4 burst clouds from his position.
+Ganon_ObjCloudDist := $478          ; per slot; Ganon: pixel distance of the 8 burst clouds from his position.
 ;   Set to 8 when the arrow hits; -1 every 8 frames.
 
 ; ---- Gleeok (types $42-$45): stored neck data, 6 bytes per neck, index = segment 0-5 ----
-; UpdateGleeok copies one neck at a time into ObjX/ObjY of slots 1-6 and Gleeok_CurHeadInfo, updates it,
+; Gleeok_Update copies one neck at a time into ObjX/ObjY of slots 1-6 and Gleeok_CurHeadInfo, updates it,
 ; and copies it back (Gleeok_FetchNeckAddrs).
 Gleeok_NeckXs0 := $438              ; [6] Gleeok neck 0: X of segments 0-5 (all start at $7C).
 Gleeok_NeckXs1 := $452              ; [6] Gleeok neck 1: X of segments 0-5.
 Gleeok_NeckXs2 := $46C              ; [6] Gleeok neck 2: X of segments 0-5.
 Gleeok_NeckXs3 := $395              ; [6] Gleeok neck 3: X of segments 0-5.
-Gleeok_NeckYs0 := $445              ; [6] Gleeok neck 0: Y of segments 0-5 (start values GleeokSegmentYs).
+Gleeok_NeckYs0 := $445              ; [6] Gleeok neck 0: Y of segments 0-5 (start values Gleeok_SegmentStartYs).
 Gleeok_NeckYs1 := $45F              ; [6] Gleeok neck 1: Y of segments 0-5.
 Gleeok_NeckYs2 := $479              ; [6] Gleeok neck 2: Y of segments 0-5.
 Gleeok_NeckYs3 := $3BD              ; [6] Gleeok neck 3: Y of segments 0-5.
-Gleeok_HeadInfo0 := $420            ; [6] Gleeok neck 0: head movement block (fields: GLEEOK_* offsets).
+Gleeok_HeadInfo0 := $420            ; [6] Gleeok neck 0: head movement block (fields: GleeokHead_* offsets).
 Gleeok_HeadInfo1 := $42D            ; [6] Gleeok neck 1: head movement block.
 Gleeok_HeadInfo2 := $381            ; [6] Gleeok neck 2: head movement block.
 Gleeok_HeadInfo3 := $3A9            ; [6] Gleeok neck 3: head movement block.
@@ -226,7 +238,7 @@ Gleeok_WrithingCounter := $510      ; scalar; Gleeok body: fast animation steps 
 ;   ActiveRedLeeverCount.
 
 ; ---- Gleeok head movement block: field offsets (constants, not addresses) ----
-; Added to Gleeok_HeadInfo0-3 in InitGleeok. Gleeok_CurHeadInfo + offset gives the Gleeok_ObjHead* names.
+; Added to Gleeok_HeadInfo0-3 in Gleeok_Init. Gleeok_CurHeadInfo + offset gives the Gleeok_CurHead* names.
 GleeokHead_DirCounterH = 0          ; offset 0: horizontal direction counter (starts at 6).
 GleeokHead_DirCounterV = 1          ; offset 1: vertical direction counter (starts at 3).
 GleeokHead_SpeedFlagX = 2           ; offset 2: X step flag (starts $FF on necks 0 and 2, else 0).

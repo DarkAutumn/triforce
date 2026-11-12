@@ -5,8 +5,8 @@
 
 ; Imports from program bank 07
 
-.IMPORT TurnOffAllVideo
+.IMPORT Ppu_TurnOffAllVideo
 
-.EXPORT TransferLevelPatternBlocks
+.EXPORT Chr_TransferLevelPatterns
 
 .INCLUDE "bank3/level-pattern-blocks.asm"

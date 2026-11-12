@@ -1,16 +1,16 @@
 # Person text
 
-How to read this: one row per text string of [`PersonText`](../src/bank1/cave-init-person-text.asm#L54) (`dat/PersonText.dat`), in the order of [`PersonTextAddrs`](../src/bank1/cave-init-person-text.asm#L47). `sel` is the text
-selector (the value stored in [`PersonTextSelector`](../src/CaveVars.inc#L7)); `offset` and `len` locate the string in the blob. `text` is
+How to read this: one row per text string of [`Person_Text`](../src/bank1/cave-init-person-text.asm#L54) (`dat/PersonText.dat`), in the order of [`Person_TextAddrs`](../src/bank1/cave-init-person-text.asm#L47). `sel` is the text
+selector (the value stored in [`PersonTextSelector`](../src/CaveVars.inc#L6)); `offset` and `len` locate the string in the blob. `text` is
 what the textbox shows, lines separated by ` / `, with the blanks at both ends of each line removed;
 `indent` is the number of leading blank cells of each line (`f` = fast blanks, code `$25`, that take no
 time; `s` = ordinary blanks, code `$24`); `line` is the textbox line each part goes to. `said by` comes
-from the selector tables. The encoding is in `README.md`. [`UpdatePersonState_Textbox`](../src/bank1/person-textbox.asm#L51)
+from the selector tables. The encoding is in `README.md`. [`Person_UpdateState_Textbox`](../src/bank1/person-textbox.asm#L51)
 
-- Cave persons: [`OverworldPersonTextSelectors`](../src/bank1/cave-init-person-text.asm#L71), indexed by person type - `$6A`. [`InitCaveContinue`](../src/bank1/cave-init-person-text.asm#L145)
-- Hint caves, after Link pays: [`HintCaveTextSelectors0`](../src/bank1/cave-hint-money-game.asm#L42) for person type `$75`, [`HintCaveTextSelectors1`](../src/bank1/cave-hint-money-game.asm#L48) for the others, indexed by the ware touched. [`UpdateCavePersonState_HintOrMoneyGame`](../src/bank1/cave-hint-money-game.asm#L61)
-- Dungeon persons: selector tables by level through [`InitUnderworldPerson_Full_JumpTable`](../src/bank1/underworld-person-init.asm#L53), indexed by object type - `$4B`. [`UnderworldPersonTextSelectorsA`](../src/bank1/underworld-person-init.asm#L67), [`UnderworldPersonTextSelectorsB`](../src/bank1/underworld-person-init.asm#L134), [`UnderworldPersonTextSelectorsC`](../src/bank1/underworld-person-init.asm#L162)
-- The life-or-money person and Grumble set their selector directly. [`InitUnderworldPersonLifeOrMoney_Full`](../src/bank1/underworld-person-init.asm#L105), [`InitGrumble_Full`](../src/bank1/underworld-person-init.asm#L216)
+- Cave persons: [`Cave_PersonTextSelectors`](../src/bank1/cave-init-person-text.asm#L71), indexed by person type - `$6A`. [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
+- Hint caves, after Link pays: [`Cave_HintTextSelectorsType75`](../src/bank1/cave-hint-money-game.asm#L42) for person type `$75`, [`Cave_HintTextSelectorsOther`](../src/bank1/cave-hint-money-game.asm#L48) for the others, indexed by the ware touched. [`Cave_State5HintOrMoneyGame`](../src/bank1/cave-hint-money-game.asm#L61)
+- Dungeon persons: selector tables by level through [`Person_InitUnderworld_JumpTable`](../src/bank1/underworld-person-init.asm#L53), indexed by object type - `$4B`. [`Person_TextSelectorsLevels1257`](../src/bank1/underworld-person-init.asm#L67), [`Person_TextSelectorsLevels3468`](../src/bank1/underworld-person-init.asm#L134), [`Person_TextSelectorsLevel9`](../src/bank1/underworld-person-init.asm#L162)
+- The life-or-money person and Grumble set their selector directly. [`Person_InitLifeOrMoney_Full`](../src/bank1/underworld-person-init.asm#L105), [`Grumble_Init_Full`](../src/bank1/underworld-person-init.asm#L216)
 
 ```
 sel  | n   | offset  | len  | line   | indent    | text                                                                 | said by

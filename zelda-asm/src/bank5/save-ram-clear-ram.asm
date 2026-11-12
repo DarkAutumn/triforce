@@ -1,26 +1,26 @@
 ; ============================================================================
 ; FILE:     bank5/save-ram-clear-ram.asm BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 7409-7480
-; SUBJECTS: (none)
+; SUBJECTS: Reset, Save
 ; TOPIC:    Power-on memory setup: zeroing the working part of save RAM when it carries no valid
 ;           markers, and clearing the console RAM with the few starting values that are not 0 (the
 ;           random number seed, the first screen-edge spawn cell, the two menu options).
-; SEE ALSO: bank7/run-game-nmi.asm (RunGame calls both at reset); bank5/mode-inits-obj-lists.asm
-;           (InitModeD calls InitSaveRam before saving and resets the game if it cleared anything);
-;           bank7/ppu-tablejump-input.asm (ClearRam0300UpTo); bank5/edge-spawn-cell.asm
-;           (FindNextEdgeSpawnCell continues from CurEdgeSpawnCell).
+; SEE ALSO: bank7/run-game-nmi.asm (Reset_RunGame calls both at reset); bank5/mode-inits-obj-lists.asm
+;           (ModeDSave_Init calls Save_InitSaveRam before saving and resets the game if it cleared anything);
+;           bank7/ppu-tablejump-input.asm (Util_ClearRam0300UpTo); bank5/edge-spawn-cell.asm
+;           (EdgeSpawn_FindNextCell continues from CurEdgeSpawnCell).
 ; KEY FACTS:
 ;   - Save RAM counts as initialized when SaveRamBegin ($6001) = $5A and SaveRamEnd ($7FFF) = $A5;
 ;     otherwise $6530-$7FFF is zeroed and the three IsSaveFileBCommitted bytes are set to $FF
-;     (InitSaveRam). The markers are not written here.
+;     (Save_InitSaveRam). The markers are not written here.
 ;   - The random number shift register starts every power-on and reset as Random = $40 with the other
-;     12 bytes 0 (ClearRam): the sequence after reset is the same every time.
-;   - CurEdgeSpawnCell starts at $40 (ClearRam).
-;   - ClearRam zeroes $0000-$00EF, $F3, $F5, $F6, $F7 and $0300-$07FE. It leaves $F0-$F2, $F4
-;     (IsGameInitialized), $F8-$FF, pages 1 and 2 and $07FF alone (ClearRam).
+;     12 bytes 0 (Reset_ClearRam): the sequence after reset is the same every time.
+;   - CurEdgeSpawnCell starts at $40 (Reset_ClearRam).
+;   - Reset_ClearRam zeroes $0000-$00EF, $F3, $F5, $F6, $F7 and $0300-$07FE. It leaves $F0-$F2, $F4
+;     (IsGameInitialized), $F8-$FF, pages 1 and 2 and $07FF alone (Reset_ClearRam).
 ; CONTENTS: (generated; L = line in this file)
-;   L0035 InitSaveRam  code  Zeroes save RAM from $6530 up when its two validity markers are missing.
-;   L0081 ClearRam     code  Clears the console RAM at reset and sets the few variables that do not start at 0.
+;   L0035 Save_InitSaveRam  code  Zeroes save RAM from $6530 up when its two validity markers are missing.
+;   L0081 Reset_ClearRam    code  Clears the console RAM at reset and sets the few variables that do not start at 0.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -30,9 +30,9 @@
 ;       $6530-$7FFF holds the play area tiles, the level block and level info copies and the RAM
 ;       copy of the common code; the saved files below $6530 are not zeroed, only their three
 ;       IsSaveFileBCommitted bytes are set to $FF.
-; NOTE: Callers: RunGame at reset, and InitModeD, which jumps to the reset handler when C = 1.
+; NOTE: Callers: Reset_RunGame at reset, and ModeDSave_Init, which jumps to the reset handler when C = 1.
 ; ----------------------------------------------------------------------------
-InitSaveRam:
+Save_InitSaveRam:
     LDA SaveRamBegin            ; Both markers present: return C = 0.
     CMP #$5A
     BNE :+
@@ -78,10 +78,10 @@ InitSaveRam:
 ; NOTE: Not cleared: $F0-$F2, $F4 (IsGameInitialized), $F8-$FF (controller state, scroll values and
 ;       PPU register copies), pages 1 and 2 (stack, sprites) and $07FF.
 ; ----------------------------------------------------------------------------
-ClearRam:
+Reset_ClearRam:
     LDA #$07                    ; Clear $0300-$07FE ($07FF is left alone).
     LDY #$FE
-    JSR ClearRam0300UpTo
+    JSR Util_ClearRam0300UpTo
     LDA #$00                    ; Clear four variables above $EF one by one.
     STA ReturnToBank4
     STA HasCommonPatterns

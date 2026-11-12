@@ -7,68 +7,68 @@
 ;           to the silver arrow), and the death sequence that ends with the room item appearing.
 ; SEE ALSO: bank4/ganon-draw-collisions.asm (Ganon_CheckCollisions: sword and silver arrow rules;
 ;           Ganon_DrawBody, burst, ashes, palettes, Ganon_ActivateRoomItem);
-;           bank4/patra-ganon-inits.asm (InitGanon: mask $FA, halts Link, Link's timer $40);
-;           bank4/wizzrobe.asm (BlueWizzrobe_TurnSometimesAndMoveAndCheckTile: Ganon's movement);
-;           bank4/monster-shots-fireballs.asm (ShootFireball, UpdateFireball);
-;           bank4/shoot-helpers-candle.asm (UpdateCandle: the room brightening).
+;           bank4/patra-ganon-inits.asm (Ganon_Init: mask $FA, halts Link, Link's timer $40);
+;           bank4/wizzrobe.asm (Wizzrobe_Blue_TurnSometimesAndMoveAndCheckTile: Ganon's movement);
+;           bank4/monster-shots-fireballs.asm (Fireball_Shoot, Fireball_Update);
+;           bank4/shoot-helpers-candle.asm (Candle_UpdateRoomLight: the room brightening).
 ; KEY FACTS:
 ;   - Ganon_ScenePhase: 0 = Link halted holding item $1B in the dark; 1 = the same in the light
-;     for $C0 frames; 2 = fight (UpdateGanon_JumpTable).
-;   - Phase 0 waits for Link's ObjTimer ($40 from InitGanon), then fades the room to light with
-;     UpdateCandle and ends when FadeCycle's low nibble is 4 (Ganon_ScenePhase0).
+;     for $C0 frames; 2 = fight (Ganon_Update_JumpTable).
+;   - Phase 0 waits for Link's ObjTimer ($40 from Ganon_Init), then fades the room to light with
+;     Candle_UpdateRoomLight and ends when FadeCycle's low nibble is 4 (Ganon_ScenePhase0_LiftInDark).
 ;   - In the fight Ganon has ObjState 0 = blue, nonzero = brown. Blue with ObjTimer 0 he is not
 ;     drawn, moves 1 pixel per frame like a teleporting Blue Wizzrobe and shoots a fireball (type
-;     $56) whenever FrameCounter AND $3F = 0 (Ganon_ScenePhase2, Ganon_MoveAndShoot).
+;     $56) whenever FrameCounter AND $3F = 0 (Ganon_ScenePhase2_Fight, Ganon_MoveAndShoot).
 ;   - Blue with ObjTimer nonzero (set to $40 by a sword hit in Ganon_CheckCollisions) he stands
 ;     still and is drawn; when the timer reaches 1 he jumps to Y = $A0, X = $30 or $B0 by bit 0 of
-;     FrameCounter (Ganon_ScenePhase2, Ganon_RandomizeLocation, GanonStartXs).
+;     FrameCounter (Ganon_ScenePhase2_Fight, Ganon_RandomizeLocation, Ganon_StartXs).
 ;   - Brown: ObjState starts at $FF (set in Ganon_CheckCollisions when his HP runs out) and drops
 ;     by 1 on every odd FrameCounter, about 510 frames; he does not move or shoot; he is drawn
 ;     every frame while the state is >= $30, then only on odd frames. At 0 he turns blue again
 ;     at a new start spot (Ganon_UpdateBrownState).
 ;   - Dying (Ganon_ObjDyingCount nonzero, started by the silver arrow in Ganon_CheckCollisions):
 ;     +1 per frame; body drawn below $50; at $50 ashes and burst; burst drawn below $A0; at $A0
-;     the room item appears at the ashes and RoomKillCount is incremented (Ganon_Dying).
-;   - Ganon's object is never destroyed and never becomes a dropped item (Ganon_Dying).
+;     the room item appears at the ashes and RoomKillCount is incremented (Ganon_UpdateDying).
+;   - Ganon's object is never destroyed and never becomes a dropped item (Ganon_UpdateDying).
 ;   - Collisions (Link's touch included) are tested every fight frame, also while Ganon is not
-;     drawn (Ganon_ScenePhase2).
+;     drawn (Ganon_ScenePhase2_Fight).
 ; CONTENTS: (generated; L = line in this file)
-;   L0054 UpdateGanon              code  Updates Ganon: runs the handler of the current scene phase (Ganon_ScenePhase).
-;   L0059 UpdateGanon_JumpTable    data  TABLE: scene phase handlers; index = Ganon_ScenePhase.
-;   L0071 Ganon_ScenePhase0        code  Scene phase 0: Link holds up a Triforce piece in the dark; then the room fades to light.
-;   L0127 Ganon_ScenePhase1        code  Scene phase 1: Link holds up the Triforce piece in the lit room until his timer ($C0) runs out.
-;   L0144 Ganon_DrawBodyFrame0     code  Draws Ganon with animation frame 0 (the pose used during the entry scene).
-;   L0156 Ganon_ScenePhase2        code  Scene phase 2, the fight: collisions, then the blue (state 0) or brown state, or the death.
-;   L0180 Ganon_RandomizeLocation  code  Puts Ganon at Y = $A0 and X = $30 (FrameCounter even) or $B0 (FrameCounter odd).
-;   L0195 Ganon_MoveAndShoot       code  Blue Ganon, not visible: steps his animation frame, moves 1 pixel, shoots every $40 frames.
-;   L0223 GanonStartXs             data  TABLE: Ganon's start X coordinates; index = FrameCounter AND 1; value = pixels.
-;   L0234 Ganon_UpdateBrownState   code  Brown Ganon: counts ObjState down every other frame; at 0 he turns blue at a new start spot.
-;   L0256 L_Ganon_DrawBody         code  Draws Ganon's body and returns; shared by the blue, brown and dying code.
-;   L0270 Ganon_Dying              code  Ganon's death: counts Ganon_ObjDyingCount up each frame; body, then ashes and burst, then the item.
+;   L0054 Ganon_Update                   code  Updates Ganon: runs the handler of the current scene phase (Ganon_ScenePhase).
+;   L0059 Ganon_Update_JumpTable         data  TABLE: scene phase handlers; index = Ganon_ScenePhase.
+;   L0071 Ganon_ScenePhase0_LiftInDark   code  Scene phase 0: Link holds up a Triforce piece in the dark; then the room fades to light.
+;   L0127 Ganon_ScenePhase1_LiftInLight  code  Scene phase 1: Link holds up the Triforce piece in the lit room until his timer ($C0) runs out.
+;   L0144 Ganon_DrawBodyFrame0           code  Draws Ganon with animation frame 0 (the pose used during the entry scene).
+;   L0156 Ganon_ScenePhase2_Fight        code  Scene phase 2, the fight: collisions, then the blue (state 0) or brown state, or the death.
+;   L0180 Ganon_RandomizeLocation        code  Puts Ganon at Y = $A0 and X = $30 (FrameCounter even) or $B0 (FrameCounter odd).
+;   L0195 Ganon_MoveAndShoot             code  Blue Ganon, not visible: steps his animation frame, moves 1 pixel, shoots every $40 frames.
+;   L0223 Ganon_StartXs                  data  TABLE: Ganon's start X coordinates; index = FrameCounter AND 1; value = pixels.
+;   L0234 Ganon_UpdateBrownState         code  Brown Ganon: counts ObjState down every other frame; at 0 he turns blue at a new start spot.
+;   L0256 Ganon_DrawBodyAndReturn        code  Draws Ganon's body and returns; shared by the blue, brown and dying code.
+;   L0270 Ganon_UpdateDying              code  Ganon's death: counts Ganon_ObjDyingCount up each frame; body, then ashes and burst, then the item.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Updates Ganon: runs the handler of the current scene phase (Ganon_ScenePhase).
 ; IN:   X = object slot.
 ; ----------------------------------------------------------------------------
-UpdateGanon:
+Ganon_Update:
     LDA Ganon_ScenePhase
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: scene phase handlers; index = Ganon_ScenePhase.
-UpdateGanon_JumpTable:
-    .ADDR Ganon_ScenePhase0         ; 0: Link holds up the Triforce piece, room dark, then fading in
-    .ADDR Ganon_ScenePhase1         ; 1: Link holds it up in the lit room for $C0 frames
-    .ADDR Ganon_ScenePhase2         ; 2: the fight and Ganon's death
+Ganon_Update_JumpTable:
+    .ADDR Ganon_ScenePhase0_LiftInDark         ; 0: Link holds up the Triforce piece, room dark, then fading in
+    .ADDR Ganon_ScenePhase1_LiftInLight         ; 1: Link holds it up in the lit room for $C0 frames
+    .ADDR Ganon_ScenePhase2_Fight         ; 2: the fight and Ganon's death
 
 ; ----------------------------------------------------------------------------
 ; Scene phase 0: Link holds up a Triforce piece in the dark; then the room fades to light.
-; IN:   X = object slot; ObjTimer (Link's, slot 0) = frames left in the dark ($40 from InitGanon).
+; IN:   X = object slot; ObjTimer (Link's, slot 0) = frames left in the dark ($40 from Ganon_Init).
 ; OUT:  Ganon_ScenePhase = 1 and Link's ObjTimer = $C0 when the fade is done.
-; NOTE: Link is halted (ObjState $40, set by InitGanon) through phases 0 and 1. Ganon is not
+; NOTE: Link is halted (ObjState $40, set by Ganon_Init) through phases 0 and 1. Ganon is not
 ;       drawn while Link's timer runs; during the fade he is drawn with animation frame 0.
 ; ----------------------------------------------------------------------------
-Ganon_ScenePhase0:
+Ganon_ScenePhase0_LiftInDark:
     LDA #$1B                    ; Item $1B (Triforce piece) is drawn held above Link.
     STA ItemTypeToLift
 
@@ -79,11 +79,11 @@ Ganon_ScenePhase0:
     ; Timer expired: fade the room to light with the candle code (X is saved around the call).
     TXA
     PHA
-    JSR UpdateCandle
+    JSR Candle_UpdateRoomLight
     PLA
     TAX
 
-    ; UpdateCandle sets IsRoomBrightening; clear it, because the fade is driven from here.
+    ; Candle_UpdateRoomLight sets IsRoomBrightening; clear it, because the fade is driven from here.
     LDA #$00
     STA IsRoomBrightening
 
@@ -124,7 +124,7 @@ Ganon_ScenePhase0:
 ; OUT:  at the end: Link's ObjState = 0 (control returns), ItemTypeToLift = 0, song $20 (level 9)
 ;       requested, Ganon_ScenePhase = 2.
 ; ----------------------------------------------------------------------------
-Ganon_ScenePhase1:
+Ganon_ScenePhase1_LiftInLight:
     LDA #$1B                    ; Item $1B (Triforce piece) stays above Link.
     STA ItemTypeToLift
 
@@ -153,12 +153,12 @@ Ganon_DrawBodyFrame0:
 ;       standing still; timer = 1 = moved to a start spot, not drawn that frame.
 ; NOTE: Falls through into Ganon_RandomizeLocation when the timer is 1.
 ; ----------------------------------------------------------------------------
-Ganon_ScenePhase2:
+Ganon_ScenePhase2_Fight:
     ; Dying: nothing else runs.
     LDA Ganon_ObjDyingCount, X
-    BNE Ganon_Dying
+    BNE Ganon_UpdateDying
     JSR Ganon_CheckCollisions
-    JSR PlayBossHitCryIfNeeded
+    JSR Sample_PlayBossHitCryIfHit
 
     ; State nonzero: brown.
     LDA ObjState, X
@@ -171,7 +171,7 @@ Ganon_ScenePhase2:
     ; Timer > 1: visible after a hit; only draw (collisions were tested above).
     ; Timer = 1: fall through and put Ganon at a start spot before he moves again next frame.
     CMP #$01
-    BNE L_Ganon_DrawBody
+    BNE Ganon_DrawBodyAndReturn
 
 ; ----------------------------------------------------------------------------
 ; Puts Ganon at Y = $A0 and X = $30 (FrameCounter even) or $B0 (FrameCounter odd).
@@ -183,7 +183,7 @@ Ganon_RandomizeLocation:
     LDA FrameCounter
     AND #$01
     TAY
-    LDA GanonStartXs, Y
+    LDA Ganon_StartXs, Y
     STA ObjX, X
     RTS
 
@@ -207,20 +207,20 @@ Ganon_MoveAndShoot:
     ; moves 1 pixel per call.
     LDA #$01
     STA ObjRemDistance, X
-    JSR BlueWizzrobe_TurnSometimesAndMoveAndCheckTile
+    JSR Wizzrobe_Blue_TurnSometimesAndMoveAndCheckTile
 
     ; Shoot when the low 6 bits of FrameCounter are 0: once every $40 frames.
     LDA FrameCounter
     AND #$3F
     BNE @Exit
     LDA #$56                    ; Fireball, object type $56
-    JSR ShootFireball
+    JSR Fireball_Shoot
 
 @Exit:
     RTS
 
 ; TABLE: Ganon's start X coordinates; index = FrameCounter AND 1; value = pixels.
-GanonStartXs:
+Ganon_StartXs:
     .BYTE $30, $B0
 
 ; ----------------------------------------------------------------------------
@@ -247,13 +247,13 @@ Ganon_UpdateBrownState:
     ; State >= $30: draw every frame. Below: draw on odd frames only (flicker before turning blue).
     LDA ObjState, X
     CMP #$30
-    BCS L_Ganon_DrawBody
+    BCS Ganon_DrawBodyAndReturn
     LDA FrameCounter
     LSR
     BCC :+
 
 ; Draws Ganon's body and returns; shared by the blue, brown and dying code.
-L_Ganon_DrawBody:
+Ganon_DrawBodyAndReturn:
     JSR Ganon_DrawBody
 :
     RTS
@@ -267,7 +267,7 @@ L_Ganon_DrawBody:
 ;       makes the body flash is (unverified)). $50-$9F: ashes and burst. From $A0: ashes only.
 ;       The count stops at $FF.
 ; ----------------------------------------------------------------------------
-Ganon_Dying:
+Ganon_UpdateDying:
     INC Ganon_ObjDyingCount, X
 
     ; Hold the count at $FF instead of wrapping to 0.
@@ -278,7 +278,7 @@ Ganon_Dying:
 :
     ; Count < $50: only draw the body.
     CMP #$50
-    BCC L_Ganon_DrawBody
+    BCC Ganon_DrawBodyAndReturn
 
     ; Count > $50: ashes (and burst).
     BNE @HandleAshes
@@ -296,7 +296,7 @@ Ganon_Dying:
     ADC #$08
     STA ObjY, X
     JSR Ganon_SetUpBurstRays
-    JSR PlayBossDeathCry
+    JSR Sample_PlayBossDeathCry
     LDA #$02                    ; Song $02, the same request as when the room lit up.
     STA SongRequest
 

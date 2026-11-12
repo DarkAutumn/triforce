@@ -1,46 +1,46 @@
 ; ============================================================================
 ; FILE:     bank7/tile-collision.asm     BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 2137-2321
-; SUBJECTS: (none)
+; SUBJECTS: Tile
 ; TOPIC:    Tile lookup for collision: which play-area tile lies under an object or one step ahead of
 ;           it in a direction, the overworld's list of extra walkable tiles, and the walk-through wall
 ;           of overworld room $1F.
 ; SEE ALSO: bank7/walker-collision-screen-edge.asm (Walker_CheckTileCollision: the main caller, compares
 ;           the result with RoomFirstUnwalkableTile); bank7/shove.asm (knockback uses the same test);
 ;           bank5/link-handle-input.asm (Link's turning tests); bank7/run-game-nmi.asm
-;           (PlayAreaColumnAddrs); bank7/flute-secret-pond.asm (raises RoomFirstUnwalkableTile to $99).
+;           (Tile_PlayAreaColumnAddrs); bank7/flute-secret-pond.asm (raises RoomFirstUnwalkableTile to $99).
 ; KEY FACTS:
 ;   - A tile is walkable when its number is below RoomFirstUnwalkableTile ($89 OW, $78 UW); the compare
-;     is done by the callers. In the OW the nine tiles of WalkableTiles are reported as $26, so they
-;     pass too (GetCollidableTile@CheckWalkable).
+;     is done by the callers. In the OW the nine tiles of Tile_WalkableTilesOW are reported as $26, so they
+;     pass too (Tile_GetAtObjOffset@CheckWalkable).
 ;   - The reference point (hotspot) of every object is (ObjX, ObjY + $0B). The play area starts at
-;     Y = $40; column = X / 8, row = (hotspot Y - $40) / 8 (GetCollidableTile@FetchTile).
-;   - Offsets added to the hotspot per direction (GetCollidingTileMoving): up -8 for Link, -$10 for
+;     Y = $40; column = X / 8, row = (hotspot Y - $40) / 8 (Tile_GetAtObjOffset@FetchTile).
+;   - Offsets added to the hotspot per direction (Tile_GetAheadOfObj): up -8 for Link, -$10 for
 ;     other objects; left -8 for Link, -$10 for others; down +8; right +$10. Direction 0 is treated
 ;     like left.
 ;   - Moving up or down, two tiles are read: columns X / 8 and X / 8 + 1 of the same row; the higher
 ;     tile number is the result. Moving left or right only one tile is read, in the hotspot's row
-;     (GetCollidableTile@FetchTile). So for an object aligned to the grid (Y = 8k + 5) only the
+;     (Tile_GetAtObjOffset@FetchTile). So for an object aligned to the grid (Y = 8k + 5) only the
 ;     8-pixel-high band ObjY + $0B..$12 is tested horizontally, and the upper half of the sprite may
 ;     overlap solid tiles.
 ;   - No offset is added going down when ObjY + $0B >= $DD, going right when ObjX >= $F0, or going
-;     left (or direction 0) when ObjX < $10: the tile under the hotspot is used (GetCollidableTile).
+;     left (or direction 0) when ObjX < $10: the tile under the hotspot is used (Tile_GetAtObjOffset).
 ;   - There is no range check on the row: a hotspot Y below $40 or at $F0 and above indexes past the
-;     22 rows of its column into the following column's bytes (GetCollidableTile@FetchTile).
+;     22 rows of its column into the following column's bytes (Tile_GetAtObjOffset@FetchTile).
 ;   - OW room $1F (CurLevel = 0 and RoomId = $1F): for Link tested up or down at X = $80 with
 ;     Y < $56, the tile is forced to $26 (walkable): a wall that can be walked through
-;     (GetCollidableTile@SetTile).
-;   - The result is also left in ObjCollidedTile,X (GetCollidableTile).
+;     (Tile_GetAtObjOffset@SetTile).
+;   - The result is also left in ObjCollidedTile,X (Tile_GetAtObjOffset).
 ; CONTENTS: (generated; L = line in this file)
-;   L0043 WalkableTiles           data  TABLE: overworld tiles at or above $89 that are walkable all the same; index = 0-8 (search order 8
-;   L0052 GetCollidableTileStill  code  Gets the tile under an object's hotspot (ObjX, ObjY + $0B), with no look-ahead.
-;   L0065 GetCollidingTileMoving  code  Gets the tile one step ahead of an object in direction [0F].
-;   L0097 GetCollidableTile       code  Reads the play-area tile at an object's hotspot moved by Y pixels along the axis of [0F].
+;   L0043 Tile_WalkableTilesOW  data  TABLE: overworld tiles at or above $89 that are walkable all the same; index = 0-8 (search order 8
+;   L0052 Tile_GetUnderObj      code  Gets the tile under an object's hotspot (ObjX, ObjY + $0B), with no look-ahead.
+;   L0065 Tile_GetAheadOfObj    code  Gets the tile one step ahead of an object in direction [0F].
+;   L0097 Tile_GetAtObjOffset   code  Reads the play-area tile at an object's hotspot moved by Y pixels along the axis of [0F].
 ; ============================================================================
 
 ; TABLE: overworld tiles at or above $89 that are walkable all the same; index = 0-8 (search order 8
-; down to 0); value = tile number. GetCollidableTile reports a match as tile $26. Not used in the UW.
-WalkableTiles:
+; down to 0); value = tile number. Tile_GetAtObjOffset reports a match as tile $26. Not used in the UW.
+Tile_WalkableTilesOW:
     .BYTE $8D, $91, $9C, $AC, $AD, $CC, $D2, $D5
     .BYTE $DF
 
@@ -49,10 +49,10 @@ WalkableTiles:
 ; IN:   X = object slot.
 ; OUT:  A = ObjCollidedTile,X = tile (an OW walkable tile is returned as $26); [0F] = 0; [04] = 0.
 ; ----------------------------------------------------------------------------
-GetCollidableTileStill:
+Tile_GetUnderObj:
     LDY #$00
     STY $0F
-    BEQ GetCollidableTile       ; Always taken.
+    BEQ Tile_GetAtObjOffset       ; Always taken.
 
 ; ----------------------------------------------------------------------------
 ; Gets the tile one step ahead of an object in direction [0F].
@@ -62,7 +62,7 @@ GetCollidableTileStill:
 ;       down +8; right +$10. With [0F] = 0 the up/left offset is applied to X, as for left.
 ; NOTE: Callers compare A with RoomFirstUnwalkableTile: carry set (A >= it) means blocked.
 ; ----------------------------------------------------------------------------
-GetCollidingTileMoving:
+Tile_GetAheadOfObj:
     LDY #$F8                    ; Link: -8 for up and left.
     CPX #$00
     BEQ :+
@@ -71,12 +71,12 @@ GetCollidingTileMoving:
     ; Up, left or 0 (no right or down bit): keep that offset.
     LDA $0F
     AND #$05
-    BEQ GetCollidableTile
+    BEQ Tile_GetAtObjOffset
 
     ; Down: +8.
     LDY #$08
     AND #$04
-    BNE GetCollidableTile
+    BNE Tile_GetAtObjOffset
 
     ; Right: +$10.
     LDY #$10
@@ -84,7 +84,7 @@ GetCollidingTileMoving:
 ; ----------------------------------------------------------------------------
 ; Reads the play-area tile at an object's hotspot moved by Y pixels along the axis of [0F].
 ; IN:   X = object slot; Y = signed pixel offset; [0F] = direction, or 0 (then Y is added to X).
-; OUT:  A = ObjCollidedTile,X = tile; in the OW a tile listed in WalkableTiles is returned as $26.
+; OUT:  A = ObjCollidedTile,X = tile; in the OW a tile listed in Tile_WalkableTilesOW is returned as $26.
 ;       Uses [00:01] (column address) and [04] (the offset).
 ; NOTE: Vertical directions read the tiles of two adjacent columns (X / 8 and the next) in the same row
 ;       and keep the higher number; horizontal directions and 0 read one tile.
@@ -94,7 +94,7 @@ GetCollidingTileMoving:
 ;       rows 22-23, which read bytes of the following column (a column is 22 bytes).
 ; NOTE: OW room $1F, Link only, [0F] vertical, ObjX = $80, ObjY < $56: the result is forced to $26.
 ; ----------------------------------------------------------------------------
-GetCollidableTile:
+Tile_GetAtObjOffset:
     STY $04
     LDA ObjY, X                 ; Hotspot Y = ObjY + $0B.
     CLC
@@ -150,9 +150,9 @@ GetCollidableTile:
     LSR
     LSR
     TAY
-    LDA PlayAreaColumnAddrs, Y  ; [00:01] = address of the column (22 tiles, top to bottom).
+    LDA Tile_PlayAreaColumnAddrs, Y  ; [00:01] = address of the column (22 tiles, top to bottom).
     STA $00
-    LDA PlayAreaColumnAddrs+1, Y
+    LDA Tile_PlayAreaColumnAddrs+1, Y
     STA $01
     PLA                         ; Y coordinate to test.
     SEC                         ; The play area starts below the status bar, at Y = $40.
@@ -184,7 +184,7 @@ GetCollidableTile:
     LDY CurLevel
     BNE @Exit                   ; In the UW, return the tile as read.
 
-    ; In the OW, look the tile up in WalkableTiles (entries 8 down to 0). A listed tile is replaced
+    ; In the OW, look the tile up in Tile_WalkableTilesOW (entries 8 down to 0). A listed tile is replaced
     ; with $26, which is below RoomFirstUnwalkableTile, so the callers' compare sees it as walkable.
     LDA ObjCollidedTile, X
     LDY #$09
@@ -192,7 +192,7 @@ GetCollidableTile:
 @MatchWalkableTile:
     DEY
     BMI @SetTile                ; Not in the list: keep the tile.
-    CMP WalkableTiles, Y
+    CMP Tile_WalkableTilesOW, Y
     BNE @MatchWalkableTile
     LDA #$26
 

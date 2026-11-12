@@ -1,40 +1,40 @@
 ; ============================================================================
 ; FILE:     bank1/copy-code-demo-patterns.asm BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 1569-1743
-; SUBJECTS: (none)
+; SUBJECTS: Bank, Chr
 ; TOPIC:    Copies the common code segment from bank 1 to RAM; sends the title/story demo pattern
 ;           (CHR) blocks to the PPU; the two pattern blobs; filler.
 ; SEE ALSO: bank1/common-code-header.asm (the BANK_01_CODE segment that is copied);
-;           bank7/init-mode-dispatch.asm (the callers: InitializeGameOrMode, InitMode2, InitMode0);
+;           bank7/init-mode-dispatch.asm (the callers: Mode_InitGameOrMode, Mode2Load_Init, Mode0Demo_InitPatternsOrDemo);
 ;           bank2/common-patterns.asm (the same transfer for the common patterns);
 ;           bank3/level-pattern-blocks.asm (the per-level pattern transfer).
 ; KEY FACTS:
 ;   - The common code runs from RAM at $6C90-$7EFF; it is copied there once after reset and again at the
-;     start of every level load (mode 2, submode 0). CopyCommonCodeToRam
+;     start of every level load (mode 2, submode 0). Bank_CopyCommonCodeToRam
 ;   - The demo patterns are two blocks: $0900 bytes to PPU address $0700 (sprite table) and $0820
-;     bytes to $1700 (background table). DemoPatternBlockSizes, DemoPatternVramAddrs
+;     bytes to $1700 (background table). Chr_DemoPatternBlockSizes, Chr_DemoPatternPpuAddrs
 ;   - HasDemoPatterns = $A5 marks the demo patterns as loaded; mode 0 init calls the transfer only
-;     when it holds another value. TransferDemoPatterns
-;   - Both blocks go out in one call with video turned off. TransferDemoPatterns
+;     when it holds another value. Chr_TransferDemoPatterns
+;   - Both blocks go out in one call with video turned off. Chr_TransferDemoPatterns
 ; CONTENTS: (generated; L = line in this file)
-;   L0037 CopyCommonCodeToRam         code  Copies the BANK_01_CODE segment (common code) from this bank to RAM, where it runs.
-;   L0078 DemoPatternBlockAddrs       data  TABLE: addresses of the demo pattern blocks; index = PatternBlockIndex (0 sprites, 1 background);
-;   L0083 DemoPatternBlockSizes       data  TABLE: sizes of the demo pattern blocks; index = PatternBlockIndex; value = bytes, high byte first.
-;   L0089 DemoPatternVramAddrs        data  TABLE: PPU destination of the demo pattern blocks; index = PatternBlockIndex; value = PPU address,
-;   L0098 TransferDemoPatterns        code  Sends both demo pattern blocks to the PPU with video off and marks them loaded.
-;   L0141 TransferPatternBlock_Bank1  code  Writes one pattern block to the PPU and increments PatternBlockIndex.
-;   L0179 DemoSpritePatterns          data  DATA: demo sprite patterns (CHR), $0900 bytes = 144 tiles of 16 bytes, sent to PPU $0700.
-;   L0183 DemoBackgroundPatterns      data  DATA: demo background patterns (CHR), $0820 bytes = 130 tiles of 16 bytes, sent to PPU $1700.
+;   L0037 Bank_CopyCommonCodeToRam        code  Copies the BANK_01_CODE segment (common code) from this bank to RAM, where it runs.
+;   L0078 Chr_DemoPatternBlockAddrs       data  TABLE: addresses of the demo pattern blocks; index = PatternBlockIndex (0 sprites, 1 background);
+;   L0083 Chr_DemoPatternBlockSizes       data  TABLE: sizes of the demo pattern blocks; index = PatternBlockIndex; value = bytes, high byte first.
+;   L0089 Chr_DemoPatternPpuAddrs         data  TABLE: PPU destination of the demo pattern blocks; index = PatternBlockIndex; value = PPU address,
+;   L0098 Chr_TransferDemoPatterns        code  Sends both demo pattern blocks to the PPU with video off and marks them loaded.
+;   L0141 Chr_TransferPatternBlock_Bank1  code  Writes one pattern block to the PPU and increments PatternBlockIndex.
+;   L0179 Chr_DemoSpritePatterns          data  DATA: demo sprite patterns (CHR), $0900 bytes = 144 tiles of 16 bytes, sent to PPU $0700.
+;   L0183 Chr_DemoBackgroundPatterns      data  DATA: demo background patterns (CHR), $0820 bytes = 130 tiles of 16 bytes, sent to PPU $1700.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Copies the BANK_01_CODE segment (common code) from this bank to RAM, where it runs.
 ; OUT:  RAM from __BANK_01_CODE_RUN__ ($6C90) up to __BANK_01_CODE_RUN_END__ ($7F00) filled;
 ;       [00]-[03] and A, Y changed.
-; NOTE: Bank 1 must be switched in. Called once after reset (InitializeGameOrMode) and at the start of
-;       every level load (InitMode2, submode 0).
+; NOTE: Bank 1 must be switched in. Called once after reset (Mode_InitGameOrMode) and at the start of
+;       every level load (Mode2Load_Init, submode 0).
 ; ----------------------------------------------------------------------------
-CopyCommonCodeToRam:
+Bank_CopyCommonCodeToRam:
     LDA #<__BANK_01_CODE_LOAD__ ; Source address $A500 -> [00:01].
     STA $00
     LDA #>__BANK_01_CODE_LOAD__
@@ -75,18 +75,18 @@ CopyCommonCodeToRam:
 
 ; TABLE: addresses of the demo pattern blocks; index = PatternBlockIndex (0 sprites, 1 background);
 ;        value = address in this bank.
-DemoPatternBlockAddrs:
-    .ADDR DemoSpritePatterns
-    .ADDR DemoBackgroundPatterns
+Chr_DemoPatternBlockAddrs:
+    .ADDR Chr_DemoSpritePatterns
+    .ADDR Chr_DemoBackgroundPatterns
 
 ; TABLE: sizes of the demo pattern blocks; index = PatternBlockIndex; value = bytes, high byte first.
-DemoPatternBlockSizes:
+Chr_DemoPatternBlockSizes:
     .DBYT $0900
     .DBYT $0820
 
 ; TABLE: PPU destination of the demo pattern blocks; index = PatternBlockIndex; value = PPU address,
 ;        high byte first.
-DemoPatternVramAddrs:
+Chr_DemoPatternPpuAddrs:
     .DBYT $0700                 ; In pattern table 0 (sprites), from tile $70.
     .DBYT $1700                 ; In pattern table 1 (background), from tile $70.
 
@@ -95,8 +95,8 @@ DemoPatternVramAddrs:
 ; OUT:  HasDemoPatterns = $A5; PatternBlockIndex = 0; [00]-[03] changed.
 ; NOTE: Called from mode 0 init while HasDemoPatterns <> $A5. Assumes PatternBlockIndex = 0 on entry.
 ; ----------------------------------------------------------------------------
-TransferDemoPatterns:
-    JSR TurnOffAllVideo
+Chr_TransferDemoPatterns:
+    JSR Ppu_TurnOffAllVideo
     LDA PpuStatus          ; Clear address latch.
 
 @LoopBlock:
@@ -108,19 +108,19 @@ TransferDemoPatterns:
     ; Put block address in [00:01] and size in [03:02].
     ; Load destination VRAM address and set it.
     ; The size and VRAM address have the high byte first.
-    LDA DemoPatternBlockAddrs, X
+    LDA Chr_DemoPatternBlockAddrs, X
     STA $00
-    LDA DemoPatternBlockSizes, X
+    LDA Chr_DemoPatternBlockSizes, X
     STA $02
-    LDA DemoPatternVramAddrs, X
+    LDA Chr_DemoPatternPpuAddrs, X
     STA PpuAddr
     INX
-    LDA DemoPatternBlockAddrs, X
+    LDA Chr_DemoPatternBlockAddrs, X
     STA $01
-    LDA DemoPatternBlockSizes, X
+    LDA Chr_DemoPatternBlockSizes, X
     STA $03
-    LDA DemoPatternVramAddrs, X
-    JSR TransferPatternBlock_Bank1
+    LDA Chr_DemoPatternPpuAddrs, X
+    JSR Chr_TransferPatternBlock_Bank1
 
     ; Loop until pattern block index = 2.
     LDA PatternBlockIndex
@@ -138,7 +138,7 @@ TransferDemoPatterns:
 ;       PPU address (the high byte was already written to PpuAddr).
 ; OUT:  PatternBlockIndex incremented; [00:01] advanced past the block; [02], [03] = 0.
 ; ----------------------------------------------------------------------------
-TransferPatternBlock_Bank1:
+Chr_TransferPatternBlock_Bank1:
     STA PpuAddr
     LDY #$00
 
@@ -176,11 +176,11 @@ TransferPatternBlock_Bank1:
     RTS
 
 ; DATA: demo sprite patterns (CHR), $0900 bytes = 144 tiles of 16 bytes, sent to PPU $0700.
-DemoSpritePatterns:
+Chr_DemoSpritePatterns:
     .INCBIN "dat/DemoSpritePatterns.dat"
 
 ; DATA: demo background patterns (CHR), $0820 bytes = 130 tiles of 16 bytes, sent to PPU $1700.
-DemoBackgroundPatterns:
+Chr_DemoBackgroundPatterns:
     .INCBIN "dat/DemoBackgroundPatterns.dat"
 
 ; DATA: filler ($FF), 300 bytes, not referenced.

@@ -1,44 +1,44 @@
 ; ============================================================================
 ; FILE:     bank1/mazes-lost-woods-hills.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 4832-4935
-; SUBJECTS: Filler
+; SUBJECTS: Filler, Maze, Ppu
 ; TOPIC:    The Lost Woods (overworld room $61) and Lost Hills (overworld room $1B) direction puzzles,
 ;           applied on every overworld room change; a pixel-to-nametable-address helper; 10 filler bytes.
-; SEE ALSO: bank5/next-room-calc.asm (CalculateNextRoomForDoor sets NextRoomId, then calls CheckMazes when
-;           CurLevel is 0); bank7/next-room-room-flags.asm (CalculateNextRoom, CalculateNextRoomOW);
-;           bank5/mode7-scroll-init.asm (InitMode7_Sub1 asks for the next room once per room scroll);
-;           bank7/tile-obj-tiles.asm (ChangeTileObjTiles calls MapScreenPosToPpuAddr).
+; SEE ALSO: bank5/next-room-calc.asm (Room_CalcNextRoomForDoor sets NextRoomId, then calls Maze_CheckStep when
+;           CurLevel is 0); bank7/next-room-room-flags.asm (Room_CalcNext, Room_CalcNext_OW);
+;           bank5/mode7-scroll-init.asm (Mode7Scroll_Init_Sub1 asks for the next room once per room scroll);
+;           bank7/tile-obj-tiles.asm (Tile_ChangeTileObjTiles calls Ppu_MapScreenPosToAddr).
 ; KEY FACTS:
-;   - Lost Woods = room $61: leave up, left, down, left (ForestMazeDirs). Lost Hills = room $1B: leave
-;     up four times (MountainMazeDirs). CheckMazes
+;   - Lost Woods = room $61: leave up, left, down, left (Maze_LostWoodsDirs). Lost Hills = room $1B: leave
+;     up four times (Maze_LostHillsDirs). Maze_CheckStep
 ;   - A correct step other than the fourth adds 1 to MazeStep and sets NextRoomId = RoomId: the scroll
-;     brings up the same room again. CheckMazes@AdvanceMaze
+;     brings up the same room again. Maze_CheckStep@AdvanceMaze
 ;   - The fourth correct step plays the "secret found" tune (Tune1Request = 4) and keeps the NextRoomId the
 ;     caller computed: $60 (left of the Lost Woods) or $0B (above the Lost Hills). MazeStep stays 3.
-;     CheckMazes@PlaySecretTune
+;     Maze_CheckStep@PlaySecretTune
 ;   - A wrong step sets MazeStep = 0 and repeats the room. The wrong exit itself is not counted as step 0,
-;     even if its direction is the first of the sequence. CheckMazes@Reset
+;     even if its direction is the first of the sequence. Maze_CheckStep@Reset
 ;   - Free exits: right out of the Lost Woods (to $62) and left out of the Lost Hills (to $1A), at any
-;     step. They leave MazeStep unchanged. CheckMazes@Mismatch, CheckMazes@CheckMountainMaze
-;   - The direction tested is Link's facing direction ObjDir at the room change. CheckMazes
+;     step. They leave MazeStep unchanged. Maze_CheckStep@Mismatch, Maze_CheckStep@CheckMountainMaze
+;   - The direction tested is Link's facing direction ObjDir at the room change. Maze_CheckStep
 ;   - A room change out of any other overworld room sets MazeStep = 0. Dungeon room changes do not call
-;     CheckMazes, and no other code writes MazeStep. CheckMazes@ResetMazeStep
+;     Maze_CheckStep, and no other code writes MazeStep. Maze_CheckStep@ResetMazeStep
 ; CONTENTS: (generated; L = line in this file)
-;   L0036 ForestMazeDirs         data  TABLE: Lost Woods (room $61) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
-;   L0041 MountainMazeDirs       data  TABLE: Lost Hills (room $1B) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
-;   L0056 CheckMazes             code  Applies the Lost Woods ($61) and Lost Hills ($1B) rules to an overworld room change.
-;   L0125 MapScreenPosToPpuAddr  code  Converts a screen pixel position to the nametable 0 address of the tile that covers it.
-;   L0149 Filler_6DFA            data  DATA: filler ($FF), 10 bytes after the maze and address code.
+;   L0036 Maze_LostWoodsDirs      data  TABLE: Lost Woods (room $61) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
+;   L0041 Maze_LostHillsDirs      data  TABLE: Lost Hills (room $1B) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
+;   L0056 Maze_CheckStep          code  Applies the Lost Woods ($61) and Lost Hills ($1B) rules to an overworld room change.
+;   L0125 Ppu_MapScreenPosToAddr  code  Converts a screen pixel position to the nametable 0 address of the tile that covers it.
+;   L0149 Filler_6DFA             data  DATA: filler ($FF), 10 bytes after the maze and address code.
 ; ============================================================================
 
 ; TABLE: Lost Woods (room $61) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
 ; (8 up, 2 left, 4 down, 2 left).
-ForestMazeDirs:
+Maze_LostWoodsDirs:
     .BYTE $08, $02, $04, $02
 
 ; TABLE: Lost Hills (room $1B) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
 ; (8 up, four times).
-MountainMazeDirs:
+Maze_LostHillsDirs:
     .BYTE $08, $08, $08, $08
 
 ; ----------------------------------------------------------------------------
@@ -47,19 +47,19 @@ MountainMazeDirs:
 ;       direction (set by the caller); MazeStep = correct steps so far, 0-3.
 ; OUT:  NextRoomId = RoomId when the room repeats, else unchanged; MazeStep + 1, kept or 0;
 ;       Tune1Request = 4 on the fourth correct step. Uses A, X, Y.
-; NOTE: Called only by CalculateNextRoomForDoor, and only with CurLevel = 0: once per overworld room
+; NOTE: Called only by Room_CalcNextRoomForDoor, and only with CurLevel = 0: once per overworld room
 ;       scroll. In every room but $61 and $1B it only zeroes MazeStep.
 ;       Lost Woods: up, left, down, left leaves to room $60; right always leaves to $62.
 ;       Lost Hills: up four times leaves to room $0B; left always leaves to $1A.
 ;       Any other exit repeats the room and starts the sequence over.
 ; ----------------------------------------------------------------------------
-CheckMazes:
+Maze_CheckStep:
     LDX MazeStep
     LDA ObjDir                  ; A = Link's facing direction, compared against the tables below.
     LDY RoomId
     CPY #$61                    ; Lost Woods?
     BNE @CheckMountainMaze
-    CMP ForestMazeDirs, X
+    CMP Maze_LostWoodsDirs, X
     BNE @Mismatch
 
     ; Right direction for this step. The fourth one (step 3) lets Link out.
@@ -97,7 +97,7 @@ CheckMazes:
 @CheckMountainMaze:
     CPY #$1B                    ; Lost Hills?
     BNE @ResetMazeStep          ; Any other room: MazeStep := 0; NextRoomId stays as computed.
-    CMP MountainMazeDirs, X
+    CMP Maze_LostHillsDirs, X
     BEQ @Match
 
     ; Wrong direction in the Lost Hills. Left (2) is the free exit: return with NextRoomId ($1A) and
@@ -122,7 +122,7 @@ CheckMazes:
 ; IN:   [02] = Y in pixels (screen coordinate, status bar rows included); [03] = X in pixels.
 ; OUT:  [00] = high byte, [01] = low byte of $2000 + (Y / 8) * 32 + (X / 8); A = [01].
 ; ----------------------------------------------------------------------------
-MapScreenPosToPpuAddr:
+Ppu_MapScreenPosToAddr:
     ; A row of tiles is 32 bytes and 8 pixels tall, so the row offset is (Y AND $F8) * 4.
     ; Shift Y left twice through [00], which starts at $08: the two bits shifted out of Y land in the
     ; low bits of [00] and the 8 becomes $20, giving the high byte $20-$23.

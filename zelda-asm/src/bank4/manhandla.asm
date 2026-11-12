@@ -5,37 +5,37 @@
 ; TOPIC:    Manhandla (object type $3C) per-frame update: the base in object slot 5 steers and speeds up
 ;           all five segments, the four hands in slots 1-4 shoot fireballs; movement, collisions, the
 ;           death of hands and base, and drawing.
-; SEE ALSO: bank4/gleeok-manhandla-gohma-inits.asm (InitManhandla: segment layout, HP copy, invincibility
-;           mask $E2, start speed); bank4/fairy-flyer-common.asm (TurnRandomlyDir8, TurnTowardsPlayer8,
-;           BoundFlyer, Directions8); bank4/monster-shots-fireballs.asm (ShootFireball, UpdateFireball);
-;           bank1/monster-collisions.asm (CheckMonsterCollisions); bank1/weapon-damage-death.asm
-;           (DealDamage, HandleMonsterDied); bank7/object-update-table.asm (UpdateMetaObjectEnd: what a
+; SEE ALSO: bank4/gleeok-manhandla-gohma-inits.asm (Manhandla_Init: segment layout, HP copy, invincibility
+;           mask $E2, start speed); bank4/fairy-flyer-common.asm (Dir_TurnObjRandomly8, Dir_TurnObjTowardTarget8,
+;           Flyer_BoundByRoom, Dir_EightWayDirs); bank4/monster-shots-fireballs.asm (Fireball_Shoot, Fireball_Update);
+;           bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink); bank1/weapon-damage-death.asm
+;           (Damage_DealToMonster, Damage_KillMonster); bank7/object-update-table.asm (Obj_EndMetastate: what a
 ;           dying segment turns into).
 ; KEY FACTS:
 ;   - Five objects of type $3C: hands in slots 1-4 (up, down, left, right of the base), base in slot 5.
-;     UpdateManhandla runs once per segment per frame; slot 5 runs before slots 4-1.
+;     Manhandla_Update runs once per segment per frame; slot 5 runs before slots 4-1.
 ;   - Only hands can be killed. A killed hand that is not the last becomes a dead dummy ($5D: no
 ;     RoomKillCount or WorldKillCycle step, no drop). When the last hand dies the base becomes a dying
 ;     dead dummy and the last hand keeps type $3C, so it is the one death counted there. Every hand
-;     death adds 1 to WorldKillCount and HelpDropCount (HandleMonsterDied). Manhandla_CheckCollisions
+;     death adds 1 to WorldKillCount and HelpDropCount (Damage_KillMonster). Manhandla_CheckCollisions
 ;   - The base takes weapon hits but its death is cancelled (metastate reset to 0) and its invincibility
 ;     timer is cleared every frame, so a weapon overlapping it hits every frame. Each hit after its HP
-;     ran out still runs HandleMonsterDied (WorldKillCount, HelpDropCount). Manhandla_CheckCollisions
+;     ran out still runs Damage_KillMonster (WorldKillCount, HelpDropCount). Manhandla_CheckCollisions
 ;   - A hand that was hit has ObjInvincibilityTimer $10 (about 32 frames); meanwhile it is tested
-;     against neither weapons nor Link (CheckMonsterCollisions returns early). The base always is.
+;     against neither weapons nor Link (Collision_CheckMonsterVsWeaponsAndLink returns early). The base always is.
 ;   - Speed is 16-bit, pixels.fraction per frame on each axis of the direction: $0080 (0.5) at start,
 ;     +$0080 after a frame in which any hands died: 1.0, 1.5, 2.0 with 3, 2, 1 hands left. Two hands
-;     dying in the same frame add only one step. UpdateManhandla, Manhandla_Move
-;   - Every $10 frames the base turns: Random,X >= $80 toward the chase target (TurnTowardsPlayer8;
+;     dying in the same frame add only one step. Manhandla_Update, Manhandla_Move
+;   - Every $10 frames the base turns: Random,X >= $80 toward the chase target (Dir_TurnObjTowardTarget8;
 ;     ChaseTargetX/Y, Link's position unless monsters are chasing the decoy point), else
-;     TurnRandomlyDir8 (one 45-degree step or none). All segments copy the base's direction.
-;   - A segment that the room boundary turns around (BoundFlyer) stores its new direction in
-;     Manhandla_BounceDir; the base gives it to all segments on its next update. UpdateManhandla
+;     Dir_TurnObjRandomly8 (one 45-degree step or none). All segments copy the base's direction.
+;   - A segment that the room boundary turns around (Flyer_BoundByRoom) stores its new direction in
+;     Manhandla_BounceDir; the base gives it to all segments on its next update. Manhandla_Update
 ;   - A hand shoots fireball type $56 (the shield cannot block it) when its animation frame changes
-;     to 0, Random+1,X >= $E0 (1 in 8) and object slot 7 is empty. UpdateManhandla
+;     to 0, Random+1,X >= $E0 (1 in 8) and object slot 7 is empty. Manhandla_Update
 ;   - Segments are never moved by knockback: nothing here calls the shove routine. Manhandla_Move
 ; CONTENTS: (generated; L = line in this file)
-;   L0060 UpdateManhandla                    code  Updates one Manhandla segment: the base steers and speeds up all, each moves, collides, draws.
+;   L0060 Manhandla_Update                   code  Updates one Manhandla segment: the base steers and speeds up all, each moves, collides, draws.
 ;   L0206 Manhandla_CheckCollisions          code  Checks one segment against Link and his weapons; handles the death of a hand and of the base.
 ;   L0300 Manhandla_SetAllSegmentsDirection  code  Sets the facing direction of all five segments (object slots 1-5).
 ;   L0316 Manhandla_Move                     code  Moves a segment by its 16-bit speed along its direction and turns it around at the room boundary.
@@ -50,17 +50,17 @@
 ; NOTE: Speed-up: one step of $0080 (0.5 pixel per frame) per frame in which Manhandla_SegmentJustDied
 ;       is nonzero, however many hands died since the base last looked.
 ; NOTE: Turns come every $10 frames (ObjTimer of slot 5); 1 in 2 toward the chase target (Random,X >=
-;       $80; ChaseTargetX/Y), else TurnRandomlyDir8: Random+1,X >= $A0 keep, >= $50 one step
-;       clockwise, else one step counterclockwise in Directions8.
+;       $80; ChaseTargetX/Y), else Dir_TurnObjRandomly8: Random+1,X >= $A0 keep, >= $50 one step
+;       clockwise, else one step counterclockwise in Dir_EightWayDirs.
 ; NOTE: Hand fireballs (type $56): tested only on the frame the hand's frame byte changes to animation
-;       frame 0; needs Random+1,X >= $E0 and ObjType of slot 7 = 0. ShootFireball takes the highest
+;       frame 0; needs Random+1,X >= $E0 and ObjType of slot 7 = 0. Fireball_Shoot takes the highest
 ;       empty slot from $0B down, so at most slots $0B-$07 hold fireballs (5), fewer once other objects
 ;       sit in those slots.
 ; ----------------------------------------------------------------------------
-UpdateManhandla:
+Manhandla_Update:
     ; Only the base (slot 5) speeds up and turns the segments.
     CPX #$05
-    BNE @MoveBase
+    BNE @MoveSegment
 
     ; If no hand died since the last check, then skip increasing the speed.
     LDA Manhandla_SegmentJustDied
@@ -98,27 +98,27 @@ UpdateManhandla:
     ; 2. turn toward Link (Random,X >= $80) or turn randomly
     ; 3. assign the base's direction to the bounce direction and all segments
     LDA ObjTimer, X
-    BNE @MoveBase
+    BNE @MoveSegment
     LDA #$10
     STA ObjTimer, X
     LDA Random, X
     CMP #$80
-    BCS @TurnTowardLink
-    JSR TurnRandomlyDir8
+    BCS @TurnTowardTarget
+    JSR Dir_TurnObjRandomly8
 
 @CopyDirToHands:
     LDA ObjDir+5
     STA Manhandla_BounceDir
     JSR Manhandla_SetAllSegmentsDirection
 
-@MoveBase:
+@MoveSegment:
     ; All segments get here. If this is the base, then remember its
-    ; facing direction before moving in $0384. The hands, updated later
+    ; facing direction before moving (Manhandla_BaseDirBeforeMove). The hands, updated later
     ; in the frame, compare against the same saved value.
     CPX #$05
     BNE :+
     LDA ObjDir, X
-    STA $0384
+    STA Manhandla_BaseDirBeforeMove
 :
     JSR Manhandla_Move
     JSR Manhandla_CheckCollisions
@@ -127,7 +127,7 @@ UpdateManhandla:
     ; before moving (the room boundary reversed it), then
     ; copy it to the bounce direction.
     LDA ObjDir, X
-    CMP $0384
+    CMP Manhandla_BaseDirBeforeMove
     BEQ :+
     STA Manhandla_BounceDir
 :
@@ -170,20 +170,20 @@ UpdateManhandla:
     ; the next slot up >= $E0 (1 in 8) and object slot 7 is empty.
     ;
     ; The second condition caps the fireballs: new objects take the
-    ; highest empty slot from $0B down (FindEmptyMonsterSlot).
+    ; highest empty slot from $0B down (Obj_FindEmptyMonsterSlot).
     LDA Random+1, X
     CMP #$E0
     BCC @Draw
     LDA ObjType+7
     BNE @Draw
     LDA #$56                    ; Fireball object type $56 (the shield cannot block it)
-    JSR ShootFireball
+    JSR Fireball_Shoot
 
 @Draw:
     JMP Manhandla_Draw
 
-@TurnTowardLink:
-    JSR TurnTowardsPlayer8
+@TurnTowardTarget:
+    JSR Dir_TurnObjTowardTarget8
     JMP @CopyDirToHands
 
 ; ----------------------------------------------------------------------------
@@ -192,14 +192,14 @@ UpdateManhandla:
 ; OUT:  ObjDir,X and ObjTimer,X unchanged; Manhandla_SegmentJustDied incremented when a hand died.
 ; NOTE: The base cannot die by itself: its dying metastate is reset to 0 at once. Its invincibility
 ;       timer is cleared every frame, so it has no invincibility frames; a weapon touching it deals
-;       damage every frame, and once its HP is used up every such hit runs HandleMonsterDied again
+;       damage every frame, and once its HP is used up every such hit runs Damage_KillMonster again
 ;       (WorldKillCount and HelpDropCount go up, death sound).
 ; NOTE: A hand that dies while other hands (type $3C in slots 1-4) remain becomes type $5D (dead dummy)
-;       in its dying metastate: UpdateMetaObjectEnd then steps neither RoomKillCount nor
+;       in its dying metastate: Obj_EndMetastate then steps neither RoomKillCount nor
 ;       WorldKillCycle, and $5D never drops an item. The last hand keeps type $3C (counted there, and
-;       handed to SetUpDroppedItem as type $3C) and turns the base into a dead dummy with metastate $10.
-;       WorldKillCount and HelpDropCount went up for every hand when it died (HandleMonsterDied).
-; NOTE: A hit hand is skipped by CheckMonsterCollisions (weapons and Link's touch) while its
+;       handed to Drop_SetUpItem as type $3C) and turns the base into a dead dummy with metastate $10.
+;       WorldKillCount and HelpDropCount went up for every hand when it died (Damage_KillMonster).
+; NOTE: A hit hand is skipped by Collision_CheckMonsterVsWeaponsAndLink (weapons and Link's touch) while its
 ;       ObjInvincibilityTimer runs ($10, minus 1 every second frame).
 ; NOTE: Killing two hands in one frame is handled per hand; only the speed-up step is shared.
 ; ----------------------------------------------------------------------------
@@ -209,7 +209,7 @@ Manhandla_CheckCollisions:
     PHA                         ; Save the direction
     LDA ObjTimer, X
     PHA                         ; Save the timer
-    JSR CheckMonsterCollisions
+    JSR Collision_CheckMonsterVsWeaponsAndLink
     PLA                         ; Restore the timer
     STA ObjTimer, X
     PLA                         ; Restore the direction
@@ -223,12 +223,12 @@ Manhandla_CheckCollisions:
 :
     ; Request the boss cry if the invincibility timer = $10 (just hit).
     ; Never true for the base, whose timer was just cleared.
-    JSR PlayBossHitCryIfNeeded
+    JSR Sample_PlayBossHitCryIfHit
 
     ; If still alive (metastate 0), then return.
     LDA ObjMetastate, X
     BEQ @Exit
-    JSR ResetShoveInfo          ; Returns A = 0.
+    JSR Shove_Reset          ; Returns A = 0.
 
     ; Don't let the base die on its own.
     ; If this is the base, then reset metastate to 0, and return.
@@ -273,7 +273,7 @@ Manhandla_CheckCollisions:
     ; of waiting for the dead dummy object's update routine to do it.
     ; Also set its timer to $10 frames.
     ; This hand keeps type $3C while it dies.
-    JSR PlayBossDeathCry
+    JSR Sample_PlayBossDeathCry
     LDA #$5D
     STA ObjType+5
     LDA #$10
@@ -308,7 +308,7 @@ Manhandla_SetAllSegmentsDirection:
 ; ----------------------------------------------------------------------------
 ; Moves a segment by its 16-bit speed along its direction and turns it around at the room boundary.
 ; IN:   X = object slot
-; OUT:  [03] = pixels moved this frame on each axis of the direction; ObjDir,X reversed by BoundFlyer
+; OUT:  [03] = pixels moved this frame on each axis of the direction; ObjDir,X reversed by Flyer_BoundByRoom
 ;       when the room boundary blocked it; [00],[01] = ObjX,X, ObjY,X; [0F] = 0
 ; NOTE: A diagonal direction moves the full amount on both axes (no diagonal slow-down).
 ; NOTE: No tile collision and no knockback: only the room boundary limits a segment.
@@ -396,7 +396,7 @@ Manhandla_Move:
     STA Manhandla_ObjFrameAccum, X
 
     ; Reverse the direction if the room boundary blocks it.
-    JSR BoundFlyer
+    JSR Flyer_BoundByRoom
 
     ; Not needed (an RTS would do): the callers' next steps do not use
     ; [00], [01], [0F], and Manhandla_Draw fetches the position again.
@@ -440,6 +440,6 @@ Manhandla_Draw:
     BEQ :+
     CMP #$03
     BEQ :+
-    JMP DrawObjectMirrored
+    JMP Anim_DrawObjectMirrored
 :
-    JMP DrawObjectNotMirrored
+    JMP Anim_DrawObjectNotMirrored

@@ -1,47 +1,47 @@
 ; ============================================================================
 ; FILE:     bank2/register-cursor-sprites.asm BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 2081-2222
-; SUBJECTS: (none)
+; SUBJECTS: ModeERegister
 ; TOPIC:    Modes $E and $F: the slot cursor, name cursor and character-board cursor sprites, and
 ;           Select moving the slot cursor.
-; SEE ALSO: bank2/register-eliminate-init.asm (ModeEandFCursorSprites, ModeEandFSlotCursorYs, caller of
+; SEE ALSO: bank2/register-eliminate-init.asm (ModeERegister_CursorSprites, ModeERegister_SlotCursorYs, caller of
 ;           the setup); bank2/register-eliminate-update.asm (callers); bank2/register-name-input.asm
 ;           (moves the cursors).
 ; KEY FACTS:
 ;   - Sprite 0 is the slot cursor, sprite 1 the name cursor, sprite 2 the character-board cursor
-;     (ModeEandF_SetUpCursorSprites).
-;   - Select steps CurSaveSlot through 0, 1, 2, 3 ("End") and wraps (UpdateModeEandF_Idle).
+;     (ModeERegister_SetUpCursorSprites).
+;   - Select steps CurSaveSlot through 0, 1, 2, 3 ("End") and wraps (ModeERegister_CycleSlotOnSelect).
 ;   - In mode $E Select skips slots that are already active, so a registered name cannot be edited;
-;     in mode $F every slot can be chosen (UpdateModeEandF_Idle).
+;     in mode $F every slot can be chosen (ModeERegister_CycleSlotOnSelect).
 ;   - Changing the slot in mode $E restarts name entry at the first character of the new slot
-;     (UpdateModeEandF_Idle).
+;     (ModeERegister_CycleSlotOnSelect).
 ;   - The two block cursors blink: shown 8 frames, hidden 8 frames, by FrameCounter bit 3
-;     (ModifyFlashingCursorY). Both are hidden while the slot cursor is on "End" (ObjY = $77).
+;     (ModeERegister_FlashCursorY). Both are hidden while the slot cursor is on "End" (ObjY = $77).
 ; CONTENTS: (generated; L = line in this file)
-;   L0032 ModeEandF_SetUpCursorSprites                  code  Writes the three cursor sprites for modes $E and $F and the starting cursor positions for mode $E.
-;   L0077 ModeEandF_WriteNameCursorSpritePosition       code  Writes the name cursor sprite's Y (blinking; hidden on "End") and X.
-;   L0091 ModeE_SetNameCursorSpriteX                    code  Copies the name cursor X (ObjX of object slot 0) to its sprite; also the tail of name entry.
-;   L0099 ModeEandF_WriteCharBoardCursorSpritePosition  code  Writes the character-board cursor sprite's Y (blinking; hidden on "End") and X.
-;   L0121 ModifyFlashingCursorY                         code  Turns a cursor Y into its sprite Y, hiding the sprite on alternate 8-frame periods.
-;   L0135 UpdateModeEandF_Idle                          code  Modes $E and $F: on Select, moves the slot cursor to the next slot or "End".
+;   L0032 ModeERegister_SetUpCursorSprites          code  Writes the three cursor sprites for modes $E and $F and the starting cursor positions for mode $E.
+;   L0077 ModeERegister_WriteNameCursorSprite       code  Writes the name cursor sprite's Y (blinking; hidden on "End") and X.
+;   L0091 ModeERegister_SetNameCursorSpriteX        code  Copies the name cursor X (ObjX of object slot 0) to its sprite; also the tail of name entry.
+;   L0099 ModeERegister_WriteCharBoardCursorSprite  code  Writes the character-board cursor sprite's Y (blinking; hidden on "End") and X.
+;   L0121 ModeERegister_FlashCursorY                code  Turns a cursor Y into its sprite Y, hiding the sprite on alternate 8-frame periods.
+;   L0135 ModeERegister_CycleSlotOnSelect           code  Modes $E and $F: on Select, moves the slot cursor to the next slot or "End".
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Writes the three cursor sprites for modes $E and $F and the starting cursor positions for mode $E.
 ; ----------------------------------------------------------------------------
-ModeEandF_SetUpCursorSprites:
+ModeERegister_SetUpCursorSprites:
     ; Copy almost 3 sprite records ($B bytes) to byte 1 of
     ; Sprites block. Only sprite 0 byte 0 is missing.
     ; These are the cursor sprites.
     LDY #$0A
 
 @CopySprites:
-    LDA ModeEandFCursorSprites, Y
+    LDA ModeERegister_CursorSprites, Y
     STA Sprites+1, Y
     DEY
     BPL @CopySprites
     LDY CurSaveSlot             ; Set the Y of the slot cursor sprite (#0) according to current save slot.
-    LDA ModeEandFSlotCursorYs, Y
+    LDA ModeERegister_SlotCursorYs, Y
     STA ObjY
     STA Sprites
     LDA GameMode
@@ -74,7 +74,7 @@ ModeEandF_SetUpCursorSprites:
 ; ----------------------------------------------------------------------------
 ; Writes the name cursor sprite's Y (blinking; hidden on "End") and X.
 ; ----------------------------------------------------------------------------
-ModeEandF_WriteNameCursorSpritePosition:
+ModeERegister_WriteNameCursorSprite:
     LDA ObjY
     CMP #$77                    ; If name cursor Y corresponds to a save slot,
     BNE @WriteCursorY           ; then go write the appropriate Y to name cursor sprite.
@@ -84,11 +84,11 @@ ModeEandF_WriteNameCursorSpritePosition:
 
 @WriteCursorY:
     LDA ObjY
-    JSR ModifyFlashingCursorY   ; This returns the adjusted coordinate or $F8 to hide it.
+    JSR ModeERegister_FlashCursorY   ; This returns the adjusted coordinate or $F8 to hide it.
     STY Sprites+4               ; Set name cursor sprite Y.
 
 ; Copies the name cursor X (ObjX of object slot 0) to its sprite; also the tail of name entry.
-ModeE_SetNameCursorSpriteX:
+ModeERegister_SetNameCursorSpriteX:
     LDA ObjX
     STA Sprites+7               ; Set name cursor sprite X.
     RTS
@@ -96,7 +96,7 @@ ModeE_SetNameCursorSpriteX:
 ; ----------------------------------------------------------------------------
 ; Writes the character-board cursor sprite's Y (blinking; hidden on "End") and X.
 ; ----------------------------------------------------------------------------
-ModeEandF_WriteCharBoardCursorSpritePosition:
+ModeERegister_WriteCharBoardCursorSprite:
     LDA ObjY
     CMP #$77                    ; If name cursor Y corresponds to a save slot,
     BNE @WriteCursorCoords      ; then go write the appropriate Y to char-board sprite.
@@ -106,7 +106,7 @@ ModeEandF_WriteCharBoardCursorSpritePosition:
 
 @WriteCursorCoords:
     LDA ObjY+1
-    JSR ModifyFlashingCursorY
+    JSR ModeERegister_FlashCursorY
     STY Sprites+8               ; Set char-board cursor sprite Y.
     LDA ObjX+1
     STA Sprites+11              ; Set char-board cursor sprite X.
@@ -118,7 +118,7 @@ ModeEandF_WriteCharBoardCursorSpritePosition:
 ; OUT:  Y = A - 8 (the visible part of the block cursor is the bottom half of the sprite), or $F8
 ;       (off screen) while FrameCounter bit 3 is clear.
 ; ----------------------------------------------------------------------------
-ModifyFlashingCursorY:
+ModeERegister_FlashCursorY:
     SEC
     SBC #$08
     TAY
@@ -132,7 +132,7 @@ ModifyFlashingCursorY:
 ; ----------------------------------------------------------------------------
 ; Modes $E and $F: on Select, moves the slot cursor to the next slot or "End".
 ; ----------------------------------------------------------------------------
-UpdateModeEandF_Idle:
+ModeERegister_CycleSlotOnSelect:
     LDA ButtonsPressed
     AND #$20
     BEQ @Exit                   ; If Select was not pressed, then return.
@@ -147,7 +147,7 @@ UpdateModeEandF_Idle:
     LDY #$00
     STY CurSaveSlot
 :
-    LDA ModeEandFSlotCursorYs, Y    ; Set sprite Y for new selection.
+    LDA ModeERegister_SlotCursorYs, Y    ; Set sprite Y for new selection.
     STA Sprites
     LDA GameMode
     CMP #$0F

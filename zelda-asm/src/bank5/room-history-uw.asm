@@ -1,35 +1,35 @@
 ; ============================================================================
 ; FILE:     bank5/room-history-uw.asm    BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 4019-4127
-; SUBJECTS: (none)
+; SUBJECTS: RoomHistory
 ; TOPIC:    The dungeon side of the room history: how many monsters a dungeon room makes on entry
 ;           (kills banked in LevelKillCounts, non-recurring monsters) and how its kills are saved on
 ;           leaving.
 ; SEE ALSO: bank5/room-history-ow.asm (the overworld versions); bank5/enter-room.asm
-;           (InitMode_EnterRoom builds list id [02] and count [03], calls ModifyObjCountByHistoryUW,
-;           and stores RoomObjTemplateType); bank5/warps-stairs-caves.asm (SaveKillCount);
-;           bank7/init-mode5-play.asm (RunCrossRoomTasksAndBeginUpdateMode adds the room to
-;           RoomHistory); bank7/init-mode-dispatch.asm (ClearRoomHistory; LevelKillCounts zeroed when
+;           (Room_EnterCommon builds list id [02] and count [03], calls RoomHistory_ModifyObjCountUW,
+;           and stores RoomObjTemplateType); bank5/warps-stairs-caves.asm (RoomHistory_SaveKillCount);
+;           bank7/init-mode5-play.asm (Room_RunEntryTasks adds the room to
+;           RoomHistory); bank7/init-mode-dispatch.asm (RoomHistory_Clear; LevelKillCounts zeroed when
 ;           a level loads); bank5/boss-sound-door-face.asm (the boss room's "all dead" flag stops
 ;           the roar).
 ; KEY FACTS:
 ;   - Two stores: LevelKillCounts[RoomId] (RAM, per loaded level; $0F = all dead) is what reduces the
 ;     monster count; room flags bits 6-7 (saved) hold min(count, 2), or 3 for all dead.
-;     SaveKillCountUW, ModifyObjCountByHistoryUW
+;     RoomHistory_SaveKillCountUW, RoomHistory_ModifyObjCountUW
 ;   - On entry the room makes [03] - LevelKillCounts[RoomId] monsters (none if negative), unless the
-;     room is outside the 6-room history and its flags say all dead. ModifyObjCountByHistoryUW
+;     room is outside the 6-room history and its flags say all dead. RoomHistory_ModifyObjCountUW
 ;   - All dead and out of the history: a room whose monster list id is $32-$48 except $3A and $3B
 ;     (non-recurring: bosses and the like) makes nothing, permanently; any other room has its flags
-;     bits 6-7 and LevelKillCounts cleared and refills. ModifyObjCountByHistoryUW
+;     bits 6-7 and LevelKillCounts cleared and refills. RoomHistory_ModifyObjCountUW
 ;   - Partial flags (1 or 2 in bits 6-7) never reduce the count by themselves; after a level reload
-;     (LevelKillCounts zeroed) a partly cleared room is full again. ModifyObjCountByHistoryUW
+;     (LevelKillCounts zeroed) a partly cleared room is full again. RoomHistory_ModifyObjCountUW
 ;   - A room is saved as all dead when it made no monsters, when RoomKillCount >= RoomObjCount, or
 ;     when at least one kill was made and the room's first monster type (RoomObjTemplateType) is
-;     non-recurring. SaveKillCountUW
-;   - Lanmola ($3A, $3B) and Dodongo type $31 are outside the non-recurring range. SaveKillCountUW
+;     non-recurring. RoomHistory_SaveKillCountUW
+;   - Lanmola ($3A, $3B) and Dodongo type $31 are outside the non-recurring range. RoomHistory_SaveKillCountUW
 ; CONTENTS: (generated; L = line in this file)
-;   L0050 ModifyObjCountByHistoryUW  code  Reduces the monster count of the dungeon room being entered by the kills banked for it.
-;   L0110 SaveKillCountUW            code  Banks the kills made in the dungeon room being left: LevelKillCounts and room flags bits 6-7.
+;   L0050 RoomHistory_ModifyObjCountUW  code  Reduces the monster count of the dungeon room being entered by the kills banked for it.
+;   L0110 RoomHistory_SaveKillCountUW   code  Banks the kills made in the dungeon room being left: LevelKillCounts and room flags bits 6-7.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -47,7 +47,7 @@
 ;       $3E Ganon, $3F guard fire, $40 standing fire, $41 Moldorm, $42-$45 Gleeok, $46 Gleeok head, $47/$48
 ;       Patra. $3A/$3B (Lanmola) are excluded; $31 (Dodongo) is below the range.
 ; ----------------------------------------------------------------------------
-ModifyObjCountByHistoryUW:
+RoomHistory_ModifyObjCountUW:
     ; Look for the room in the history (6 entries).
     LDY #$05
     LDA RoomId
@@ -58,7 +58,7 @@ ModifyObjCountByHistoryUW:
     BPL :-
 
     ; Not in the history. Bits 6-7 of the room flags = 3 means all dead.
-    JSR GetRoomFlags
+    JSR RoomFlags_Get
     AND #$C0
     CMP #$C0
     BNE @CalcObjCount           ; Not all dead: subtract the banked kills.
@@ -107,8 +107,8 @@ ModifyObjCountByHistoryUW:
 ;       the first monster's type is $32-$48 except $3A and $3B (one kill clears a boss room), or
 ;       (c) RoomKillCount >= RoomObjCount.
 ; ----------------------------------------------------------------------------
-SaveKillCountUW:
-    JSR GetRoomFlags
+RoomHistory_SaveKillCountUW:
+    JSR RoomFlags_Get
     AND #$3F                    ; Clear the kill count bits (6-7) of the room's flags.
     STA ($00), Y
     LDA RoomObjCount

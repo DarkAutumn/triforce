@@ -1,28 +1,28 @@
 # Overworld level block
 
-How to read this: one row per overworld room `$00`-`$7F` of [`LevelBlockOW`](../src/bank6/level-blocks-common-data.asm#L66) (`dat/LevelBlockOW.dat`), first quest. Each row gives the
+How to read this: one row per overworld room `$00`-`$7F` of [`Level_BlockOW`](../src/bank6/level-blocks-common-data.asm#L66) (`dat/LevelBlockOW.dat`), first quest. Each row gives the
 six raw attribute bytes A-F, then the fields the game reads from them. The formats are in `README.md`.
 The second-quest overworld is the same block with a few bytes patched; those rooms are listed again at
 the end. Find a room with `grep '^\$77 '`.
 
 Columns:
 
-- `exit`: X,Y where Link appears when he comes out of a cave or level (`A & $F0`, `(F & 7) * 16 + $4D`). [`InitMode_EnterRoom`](../src/bank5/enter-room.asm#L137)
-- `zo`: `Z` = a Zora lives here (A bit 3). `se`: `S` = sea sound (A bit 2). [`CheckZora`](../src/bank4/zora-ow-inits.asm#L75), [`BeginUpdateWorld`](../src/bank7/mode5-play-update.asm#L129)
-- `po`, `pi`: outer and inner palette selectors (A bits 1-0, B bits 1-0). [`FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L379)
-- `dest`: where a stairs or cave entrance tile of the room leads (B bits 7-2). [`HandleWarpOW`](../src/bank5/warps-stairs-caves.asm#L174)
+- `exit`: X,Y where Link appears when he comes out of a cave or level (`A & $F0`, `(F & 7) * 16 + $4D`). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- `zo`: `Z` = a Zora lives here (A bit 3). `se`: `S` = sea sound (A bit 2). [`Zora_TrySpawn`](../src/bank4/zora-ow-inits.asm#L75), [`Mode5Play_UpdateWorld`](../src/bank7/mode5-play-update.asm#L129)
+- `po`, `pi`: outer and inner palette selectors (A bits 1-0, B bits 1-0). [`Room_FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L379)
+- `dest`: where a stairs or cave entrance tile of the room leads (B bits 7-2). [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L174)
   `level n` is the internal level number ([`CurLevel`](../src/Variables.inc#L12)); in Q2 the number shown on screen differs for some
-  levels (see `levelinfo.md`). [`LevelInfo_LevelNumber`](../src/Variables.inc#L672)
-- `cnt`: monster count selected by C bits 7-6 from [`LevelInfo_FoeCounts`](../src/Variables.inc#L663) ($01 $04 $05 $06); `list`: monster list id (C bits 5-0, D bit 7).
-  The `monsters` text applies the rules of `objlists.md`. [`InitMode_EnterRoom`](../src/bank5/enter-room.asm#L137)
-- `lay`: room layout id (D bits 6-0), see `room-layouts.md`. [`LayoutRoomOW`](../src/bank5/layout-room-ow.asm#L106)
-- `qs`: quest in which the room's tile-object secret works (F bits 7-6): `-` both, `Q1`, `Q2`. [`IsQuestSecretMismatch`](../src/bank4/rock-wall-tree-secrets.asm#L331)
-- `stairs`: position index (F bits 5-4) and the X,Y it selects in [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L665), where secret stairs appear. [`GetShortcutOrItemXYForRoom`](../src/bank1/bomb-candle-wield.asm#L280)
-- `ed`: `E` = monsters enter from the screen edges (F bit 3). [`AssignObjSpawnPositions`](../src/bank5/spawn-positions.asm#L64)
-- `tileobj`: the tile object the room's layout creates (type, X, Y), or the dock. [`CheckTileObject`](../src/bank5/layout-room-ow.asm#L267), [`SetupTileObjectOW`](../src/bank5/enter-room.asm#L423)
+  levels (see `levelinfo.md`). [`LevelInfo_LevelNumber`](../src/Variables.inc#L724)
+- `cnt`: monster count selected by C bits 7-6 from [`LevelInfo_FoeCounts`](../src/Variables.inc#L715) ($01 $04 $05 $06); `list`: monster list id (C bits 5-0, D bit 7).
+  The `monsters` text applies the rules of `objlists.md`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- `lay`: room layout id (D bits 6-0), see `room-layouts.md`. [`RoomLayout_LayOutRoomOW`](../src/bank5/layout-room-ow.asm#L106)
+- `qs`: quest in which the room's tile-object secret works (F bits 7-6): `-` both, `Q1`, `Q2`. [`Secret_IsForOtherQuest`](../src/bank4/rock-wall-tree-secrets.asm#L331)
+- `stairs`: position index (F bits 5-4) and the X,Y it selects in [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L717), where secret stairs appear. [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280)
+- `ed`: `E` = monsters enter from the screen edges (F bit 3). [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64)
+- `tileobj`: the tile object the room's layout creates (type, X, Y), or the dock. [`RoomLayout_CheckTileObj`](../src/bank5/layout-room-ow.asm#L267), [`Room_SetUpTileObjOW`](../src/bank5/enter-room.asm#L423)
 - `monsters; cave`: the monsters made on entry (before the kill count is subtracted), then for a cave
-  room the person's object type and wares (`@n` = price). [`InitMode_EnterRoom`](../src/bank5/enter-room.asm#L137), [`InitCaveContinue`](../src/bank1/cave-init-person-text.asm#L145)
-- Raw byte E is not a room attribute in the overworld (cave wares, table below). [`InitCaveContinue`](../src/bank1/cave-init-person-text.asm#L145)
+  room the person's object type and wares (`@n` = price). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137), [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
+- Raw byte E is not a room attribute in the overworld (cave wares, table below). [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
 
 # Rooms (first quest)
 
@@ -161,8 +161,8 @@ $7F   $0F  $03  $09  $78  $FF  $00  $00,$4D  Z   S   3   3   -                  
 # Caves
 
 One row per cave index (B bits 7-2 of a room): the person's object type, the text it says, its cave
-flags and its three wares with prices, from overworld array E and [`OverworldPersonTextSelectors`](../src/bank1/cave-init-person-text.asm#L71). Flags are explained in
-`README.md`. `rooms` are the first-quest rooms that lead to the cave. [`InitCaveContinue`](../src/bank1/cave-init-person-text.asm#L145)
+flags and its three wares with prices, from overworld array E and [`Cave_PersonTextSelectors`](../src/bank1/cave-init-person-text.asm#L71). Flags are explained in
+`README.md`. `rooms` are the first-quest rooms that lead to the cave. [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
 
 ```
 cave  person  sel  text  ware bytes   price bytes  flags                                               wares                                                        says                                      rooms
@@ -190,7 +190,7 @@ $23   $7D     $62  $22   $3F $98 $7F  $00 $0A $00  pick-up,show-items,money     
 
 # Rooms patched for the second quest
 
-The rooms whose bytes the second-quest patch changes, decoded with the patched values. [`UpdateMode2Load_Full`](../src/bank6/level-load-mode2.asm#L297)
+The rooms whose bytes the second-quest patch changes, decoded with the patched values. [`Mode2Load_Update_Full`](../src/bank6/level-load-mode2.asm#L297)
 
 ```
 room  A    B    C    D    E    F    exit     zo  se  po  pi  dest      cnt  list  lay  qs  stairs     ed  tileobj  monsters; cave

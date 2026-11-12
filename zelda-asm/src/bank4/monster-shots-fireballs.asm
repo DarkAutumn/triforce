@@ -1,49 +1,49 @@
 ; ============================================================================
 ; FILE:     bank4/monster-shots-fireballs.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 790-1093
-; SUBJECTS: Fireball
+; SUBJECTS: Fireball, MonsterShot
 ; TOPIC:    Monster projectiles: creating a fireball (types $55/$56), the update of straight-line shots
 ;           (flying rock $53, $54, sword shot $57, magic shots $58/$59, $5A), the bounce off Link's
 ;           shield, destroying shots, and the aimed fireball's flight.
-; SEE ALSO: bank1/link-collision-harm.asm (CheckLinkCollision: which shots the shields block, damage);
-;           bank4/shoot-helpers-candle.asm (ShootLimited/Shoot: counted shots, limit of 4);
-;           bank4/walker-wanderer-common.asm (InitMonsterShot: shot q-speed);
+; SEE ALSO: bank1/link-collision-harm.asm (Link_CheckMonsterTouch: which shots the shields block, damage);
+;           bank4/shoot-helpers-candle.asm (Shooter_ShootLimited/Shoot: counted shots, limit of 4);
+;           bank4/walker-wanderer-common.asm (MonsterShot_Init: shot q-speed);
 ;           bank4/moblin-lynel-shooting.asm (monster arrow $5B reuses the bounce and destroy code);
-;           bank1/shot-aim-boomerang-speed.asm (aiming helpers used by UpdateFireball).
+;           bank1/shot-aim-boomerang-speed.asm (aiming helpers used by Fireball_Update).
 ; KEY FACTS:
 ;   - Fireballs ($55, $56) are not counted in MonsterShotCount and have no limit except a free object
-;     slot in $01-$0B (ShootFireball, DestroyMonsterShot). Other shots are counted.
+;     slot in $01-$0B (Fireball_Shoot, MonsterShot_Destroy). Other shots are counted.
 ;   - A fireball appears 4 pixels right of its shooter and aims once at Link's position. For the next
 ;     $0F frames it stays in place (it can already hit Link); from the $10th it flies in that fixed
-;     direction (UpdateFireball).
+;     direction (Fireball_Update).
 ;   - Fireball speed is one of 9 (X, Y) q-speed pairs from $70/$00 (1.75 px/frame along one axis) through
-;     $50/$50 (1.25 px/frame on both) (FireballQSpeedsX, FireballQSpeedsY).
+;     $50/$50 (1.25 px/frame on both) (Fireball_QSpeedsX, Fireball_QSpeedsY).
 ;   - A fireball is destroyed at the room boundary or on any touch of Link, blocked or not; it never
-;     tests tiles and never bounces (UpdateFireball).
+;     tests tiles and never bounces (Fireball_Update).
 ;   - Straight shots are destroyed at the room boundary or when they harm Link; only types $53 and $54
-;     are also destroyed by unwalkable tiles (UpdateMonsterShot).
+;     are also destroyed by unwalkable tiles (MonsterShot_Update).
 ;   - A shot that Link's shield blocks goes to state $30 and drifts 2 pixels per frame the way Link
-;     faces for $10 frames, harmless, then is destroyed (CheckShotLinkCollision, BounceShot).
-;   - A shot can hurt Link only while its state is $1x (CheckLinkCollision tests this; BounceShot never
+;     faces for $10 frames, harmless, then is destroyed (MonsterShot_CheckLinkCollision, MonsterShot_Bounce).
+;   - A shot can hurt Link only while its state is $1x (Link_CheckMonsterTouch tests this; MonsterShot_Bounce never
 ;     calls it).
-;   - While Link's invincibility timer, the clock or Link's stun timer is nonzero, CheckLinkCollision
-;     reports no touch: shots and fireballs fly through Link (CheckShotLinkCollision).
+;   - While Link's invincibility timer, the clock or Link's stun timer is nonzero, Link_CheckMonsterTouch
+;     reports no touch: shots and fireballs fly through Link (MonsterShot_CheckLinkCollision).
 ;   - A fireball's ObjDir always holds one horizontal and one vertical bit, even when it flies along
-;     an axis; the shield test accepts either one opposing Link's facing (UpdateFireball).
+;     an axis; the shield test accepts either one opposing Link's facing (Fireball_Update).
 ; CONTENTS: (generated; L = line in this file)
-;   L0058 ShootFireball              code  Creates a fireball object of the given type 4 pixels right of the shooter.
-;   L0088 ShotBounceWidths           data  TABLE: X step per frame of a bouncing shot; index = reverse direction index of Link's facing
-;   L0092 ShotBounceHeights          data  TABLE: Y step per frame of a bouncing shot; same index; value = signed pixels.
-;   L0102 UpdateMonsterShot          code  Updates a straight-flying monster shot: types $53, $54, $57, $58, $59 and $5A.
-;   L0144 L_DrawShot                 code  Draws a monster shot according to its type; also the draw step of fireballs and bouncing shots.
-;   L0189 DestroyMonsterShot         code  Destroys a monster shot; MonsterShotCount is decremented unless it is a fireball ($55, $56).
-;   L0198 DestroyCountedMonsterShot  code  Destroys a counted shot (also monster arrows and boomerangs): decrements MonsterShotCount first.
-;   L0209 BounceShot                 code  Moves a shot that Link's shield blocked: 2 pixels per frame the way Link faced, for $10 frames.
-;   L0249 CheckShotLinkCollision     code  Tests a shot against Link and starts its bounce (state $30) when it touched him.
-;   L0268 FireballQSpeedsX           data  TABLE: fireball horizontal q-speed; index = aim index 0-8 from _CalcDiagonalSpeedIndex (0 = along
-;   L0272 FireballQSpeedsY           data  TABLE: fireball vertical q-speed; same index; value = q-speed ($70 = 1.75, $50 = 1.25 px/frame).
-;   L0286 UpdateFireball             code  Updates a fireball (types $55, $56): aims at Link once, holds still, then flies straight.
-;   L0382 Fireball_MoveOneAxis       code  Moves a fireball along one axis with that axis's own q-speed and position fraction.
+;   L0058 Fireball_Shoot                  code  Creates a fireball object of the given type 4 pixels right of the shooter.
+;   L0088 MonsterShot_BounceStepsX        data  TABLE: X step per frame of a bouncing shot; index = reverse direction index of Link's facing
+;   L0092 MonsterShot_BounceStepsY        data  TABLE: Y step per frame of a bouncing shot; same index; value = signed pixels.
+;   L0102 MonsterShot_Update              code  Updates a straight-flying monster shot: types $53, $54, $57, $58, $59 and $5A.
+;   L0144 MonsterShot_Draw                code  Draws a monster shot according to its type; also the draw step of fireballs and bouncing shots.
+;   L0189 MonsterShot_Destroy             code  Destroys a monster shot; MonsterShotCount is decremented unless it is a fireball ($55, $56).
+;   L0198 MonsterShot_DestroyCounted      code  Destroys a counted shot (also monster arrows and boomerangs): decrements MonsterShotCount first.
+;   L0209 MonsterShot_Bounce              code  Moves a shot that Link's shield blocked: 2 pixels per frame the way Link faced, for $10 frames.
+;   L0249 MonsterShot_CheckLinkCollision  code  Tests a shot against Link and starts its bounce (state $30) when it touched him.
+;   L0268 Fireball_QSpeedsX               data  TABLE: fireball horizontal q-speed; index = aim index 0-8 from Dir_CalcAimSpeedIndex (0 = along
+;   L0272 Fireball_QSpeedsY               data  TABLE: fireball vertical q-speed; same index; value = q-speed ($70 = 1.75, $50 = 1.25 px/frame).
+;   L0286 Fireball_Update                 code  Updates a fireball (types $55, $56): aims at Link once, holds still, then flies straight.
+;   L0382 Fireball_MoveOneAxis            code  Moves a fireball along one axis with that axis's own q-speed and position fraction.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -52,21 +52,21 @@
 ;       X = shooter's object slot.
 ; OUT:  X = shooter's slot; Y = the new slot, or 0 when none was free; [00] = object type.
 ; NOTE: No shot limit and no MonsterShotCount: the only condition is a free slot in $01-$0B. The new
-;       object is uninitialized: its next update runs its init (InitMonsterShot, no spawn cloud), and
-;       the update after that is UpdateFireball in state 0, which aims it.
+;       object is uninitialized: its next update runs its init (MonsterShot_Init, no spawn cloud), and
+;       the update after that is Fireball_Update in state 0, which aims it.
 ; ----------------------------------------------------------------------------
-ShootFireball:
+Fireball_Shoot:
     STA $00                     ; [00] holds the object type.
 
-    ; Return, if there's no empty slot (Z set by FindEmptyMonsterSlot).
-    JSR FindEmptyMonsterSlot
+    ; Return, if there's no empty slot (Z set by Obj_FindEmptyMonsterSlot).
+    JSR Obj_FindEmptyMonsterSlot
     BEQ @Exit
     TXA                         ; Save the shooter's object slot.
     PHA
     TYA                         ; Switch to the new object's slot.
     TAX
     LDA $00
-    JSR SetTypeAndClearObject
+    JSR Obj_SetTypeAndClear
     TXA                         ; Y = the new object's slot.
     TAY
     PLA                         ; Restore the shooter's object slot.
@@ -84,22 +84,22 @@ ShootFireball:
 
 ; TABLE: X step per frame of a bouncing shot; index = reverse direction index of Link's facing
 ; (0 up, 1 down, 2 left, 3 right); value = signed pixels. Only two bytes belong to this label: indexes
-; 2 and 3 read the first two bytes of ShotBounceHeights ($FE, $02).
-ShotBounceWidths:
+; 2 and 3 read the first two bytes of MonsterShot_BounceStepsY ($FE, $02).
+MonsterShot_BounceStepsX:
     .BYTE $01, $FF              ; Link facing up: +1; down: -1 (left: -2; right: +2 from the next table)
 
 ; TABLE: Y step per frame of a bouncing shot; same index; value = signed pixels.
-ShotBounceHeights:
+MonsterShot_BounceStepsY:
     .BYTE $FE, $02, $FF, $FF    ; Link facing up: -2; down: +2; left: -1; right: -1
 
 ; ----------------------------------------------------------------------------
 ; Updates a straight-flying monster shot: types $53, $54, $57, $58, $59 and $5A.
 ; IN:   X = object slot.
-; NOTE: State $1x = flying; any other state runs BounceShot. The q-speed comes from the type's init
-;       routine (InitMonsterShot). Destroyed when it reaches the room boundary or harms Link; types
+; NOTE: State $1x = flying; any other state runs MonsterShot_Bounce. The q-speed comes from the type's init
+;       routine (MonsterShot_Init). Destroyed when it reaches the room boundary or harms Link; types
 ;       $53 and $54 also when the tile ahead is unwalkable. A blocked shot starts to bounce instead.
 ; ----------------------------------------------------------------------------
-UpdateMonsterShot:
+MonsterShot_Update:
     ; Set moving direction [0F] to facing direction.
     LDA ObjDir, X
     STA $0F
@@ -108,7 +108,7 @@ UpdateMonsterShot:
     LDA ObjState, X
     AND #$F0
     CMP #$10
-    BNE BounceShot
+    BNE MonsterShot_Bounce
 
     ; If object type < $55 (flying rock $53, or $54), then
     ; check for tile collision in addition to other checks.
@@ -122,38 +122,38 @@ UpdateMonsterShot:
     BNE @CheckLinkCollision
 
     ; If the tile ahead is unwalkable, then go destroy the shot.
-    JSR GetCollidingTileMoving
+    JSR Tile_GetAheadOfObj
     CMP RoomFirstUnwalkableTile
-    BCS DestroyMonsterShot
+    BCS MonsterShot_Destroy
 
 @CheckBoundary:
-    ; No shots can cross the room boundary (BoundByRoom returns 0 when crossed).
-    JSR BoundByRoom
-    BEQ DestroyMonsterShot
+    ; No shots can cross the room boundary (Room_BoundDir returns 0 when crossed).
+    JSR Room_BoundDir
+    BEQ MonsterShot_Destroy
 
     ; Move the object, and check for a collision with Link.
     ; Go destroy the shot object, if there was a harmful collision.
-    JSR MoveObject
+    JSR Obj_MoveByQSpeed
 
 @CheckLinkCollision:
-    JSR CheckShotLinkCollision
+    JSR MonsterShot_CheckLinkCollision
     LDA $06                     ; 1 if Link was harmed; 0 if no touch or the shield blocked it.
-    BNE DestroyMonsterShot
+    BNE MonsterShot_Destroy
 
 ; Draws a monster shot according to its type; also the draw step of fireballs and bouncing shots.
-L_DrawShot:
+MonsterShot_Draw:
     ; If object type = arrow ($5B), then draw an arrow, and return.
     LDA ObjType, X
     CMP #$5B
     BNE :+
-    JMP DrawArrow
+    JMP Arrow_Draw
 :
     ; If object type = sword shot ($57) or magic shot ($58, $59), then go draw, and return.
     CMP #$57
     BCC @DrawOthers
     CMP #$5A
     BCS @DrawOthers
-    JMP DrawSwordShotOrMagicShot
+    JMP SwordShot_DrawOrMagicShot
 
 @DrawOthers:
     ; Prepare to draw other shot types ($53-$56, $5A).
@@ -180,13 +180,13 @@ L_DrawShot:
 @Draw:
     JSR Anim_SetSpriteDescriptorAttributes
     LDA $0D                     ; [0D] frame image
-    JMP DrawObjectNotMirrored
+    JMP Anim_DrawObjectNotMirrored
 
 ; ----------------------------------------------------------------------------
 ; Destroys a monster shot; MonsterShotCount is decremented unless it is a fireball ($55, $56).
 ; IN:   X = object slot.
 ; ----------------------------------------------------------------------------
-DestroyMonsterShot:
+MonsterShot_Destroy:
     ; Fireballs are not counted, so skip the decrement for them.
     LDA ObjType, X
     CMP #$55
@@ -195,32 +195,32 @@ DestroyMonsterShot:
     BEQ :+
 
 ; Destroys a counted shot (also monster arrows and boomerangs): decrements MonsterShotCount first.
-DestroyCountedMonsterShot:
+MonsterShot_DestroyCounted:
     DEC MonsterShotCount
 :
-    JMP DestroyMonster
+    JMP Obj_DestroyMonster
 
 ; ----------------------------------------------------------------------------
 ; Moves a shot that Link's shield blocked: 2 pixels per frame the way Link faced, for $10 frames.
 ; IN:   X = object slot.
-; NOTE: The sideways step is 1 pixel per frame (ShotBounceWidths/Heights). No collision test of any
+; NOTE: The sideways step is 1 pixel per frame (MonsterShot_BounceStepsX/Heights). No collision test of any
 ;       kind runs in this state. At bounce distance $20 the shot is destroyed.
 ; ----------------------------------------------------------------------------
-BounceShot:
+MonsterShot_Bounce:
     ; Y = reverse direction index of the bounce direction (8 up -> 0, 4 down -> 1, 2 left -> 2,
     ; 1 right -> 3). The opposite direction returned in A is not used.
     LDA MonsterShot_ObjBounceDir, X
-    JSR GetOppositeDir
+    JSR Dir_GetOpposite
 
     ; Modify the coordinates according to the displacements for
     ; the bounce direction.
     LDA ObjY, X
     CLC
-    ADC ShotBounceHeights, Y
+    ADC MonsterShot_BounceStepsY, Y
     STA ObjY, X
     LDA ObjX, X
     CLC
-    ADC ShotBounceWidths, Y
+    ADC MonsterShot_BounceStepsX, Y
     STA ObjX, X
 
     ; Add 2 to the bounce distance.
@@ -233,8 +233,8 @@ BounceShot:
     ; Go destroy the shot, if the bounce distance has reached the limit ($20).
     ; Otherwise, go draw.
     CMP #$20
-    BCS DestroyMonsterShot
-    BCC L_DrawShot
+    BCS MonsterShot_Destroy
+    BCC MonsterShot_Draw
 
 ; ----------------------------------------------------------------------------
 ; Tests a shot against Link and starts its bounce (state $30) when it touched him.
@@ -243,13 +243,13 @@ BounceShot:
 ;       [0C] = 1 if Link was harmed; [00] = 0 (Link's slot); [09] = 0 (no damage type);
 ;       IsShotCollidingWithLink = 1 on any touch, blocked or not.
 ; NOTE: Clears MonsterShot_ObjBounceDist every call. That byte is also the shot's ObjGridOffset, so
-;       MoveObject's grid-offset limit never stops a flying shot. State $30 is set on a harmful touch
+;       Obj_MoveByQSpeed's grid-offset limit never stops a flying shot. State $30 is set on a harmful touch
 ;       too; the callers destroy the shot in that case.
 ; ----------------------------------------------------------------------------
-CheckShotLinkCollision:
+MonsterShot_CheckLinkCollision:
     LDA #$00
     STA MonsterShot_ObjBounceDist, X
-    JSR CheckLinkCollision
+    JSR Link_CheckMonsterTouch
     LDA IsShotCollidingWithLink
     BEQ @Exit
 
@@ -262,14 +262,14 @@ CheckShotLinkCollision:
 @Exit:
     RTS
 
-; TABLE: fireball horizontal q-speed; index = aim index 0-8 from _CalcDiagonalSpeedIndex (0 = along
+; TABLE: fireball horizontal q-speed; index = aim index 0-8 from Dir_CalcAimSpeedIndex (0 = along
 ; the X axis, 4 = diagonal, 8 = along the Y axis); value = q-speed (pixels per frame = value / 64).
-; Index 8 reads the first byte of FireballQSpeedsY ($00).
-FireballQSpeedsX:
+; Index 8 reads the first byte of Fireball_QSpeedsY ($00).
+Fireball_QSpeedsX:
     .BYTE $70, $68, $60, $58, $50, $3C, $26, $10
 
 ; TABLE: fireball vertical q-speed; same index; value = q-speed ($70 = 1.75, $50 = 1.25 px/frame).
-FireballQSpeedsY:
+Fireball_QSpeedsY:
     .BYTE $00, $10, $26, $3C, $50, $58, $60, $68
     .BYTE $70
 
@@ -283,9 +283,9 @@ FireballQSpeedsY:
 ;       frame. Destroyed at the room boundary and on any touch of Link (harmful or blocked). No tile
 ;       test. Not counted in MonsterShotCount.
 ; ----------------------------------------------------------------------------
-UpdateFireball:
+Fireball_Update:
     LDA ObjState, X
-    BNE @State1
+    BNE @Flying
 
     ; State 0.
     ;
@@ -294,7 +294,7 @@ UpdateFireball:
     STA Fireball_ObjPosFracY, X
 
     ; Link is the target. So, register A has 0 -- his object slot.
-    JSR GetDirectionsAndDistancesToTarget
+    JSR Dir_GetDirsAndDistancesToTarget
 
     ; Remember the horizontal ([0B]: 1 or 2) and vertical ([0A]: 4 or 8) directions toward Link.
     ; On equal coordinates the direction is left or up.
@@ -310,12 +310,12 @@ UpdateFireball:
     ; Y = aim index 0-8, starting from 4 (diagonal) and stepping toward the axis
     ; with the longer distance.
     LDY #$04
-    JSR _CalcDiagonalSpeedIndex
+    JSR Dir_CalcAimSpeedIndex
 
     ; Look up and set the horizontal and vertical q-speeds.
-    LDA FireballQSpeedsX, Y
+    LDA Fireball_QSpeedsX, Y
     STA Fireball_ObjQSpeedX, X
-    LDA FireballQSpeedsY, Y
+    LDA Fireball_QSpeedsY, Y
     STA Fireball_ObjQSpeedY, X
 
     ; Set state to $10: monster shot active.
@@ -325,7 +325,7 @@ UpdateFireball:
     STA ObjTimer, X
     RTS
 
-@State1:
+@Flying:
     ; Any state other than 0.
     ;
     ; Fireballs are visible and can hit Link while they wait to move.
@@ -335,11 +335,11 @@ UpdateFireball:
 
     ; If the fireball has reached the room boundary in its (diagonal) direction, then destroy it.
     LDA ObjDir, X
-    JSR BoundByRoomWithA
+    JSR Room_BoundDirA
     BNE @Move
 
-@DestroyMonster:
-    JMP DestroyMonster
+@Destroy:
+    JMP Obj_DestroyMonster
 
 @Move:
     ; A movement routine is used that works along one axis.
@@ -369,10 +369,10 @@ UpdateFireball:
 
 @CheckCollisionAndDraw:
     ; Check for collision with Link. If touched (harmed or blocked), then go destroy the fireball.
-    JSR CheckShotLinkCollision
+    JSR MonsterShot_CheckLinkCollision
     LDA IsShotCollidingWithLink
-    BNE @DestroyMonster
-    JMP L_DrawShot
+    BNE @Destroy
+    JMP MonsterShot_Draw
 
 ; ----------------------------------------------------------------------------
 ; Moves a fireball along one axis with that axis's own q-speed and position fraction.
@@ -383,7 +383,7 @@ Fireball_MoveOneAxis:
     STA ObjQSpeedFrac, X
     TYA
     STA ObjPosFrac, X
-    JSR MoveObject
+    JSR Obj_MoveByQSpeed
 
     ; Return the updated position fraction.
     LDA ObjPosFrac, X

@@ -1,39 +1,39 @@
 ; ============================================================================
 ; FILE:     bank7/flute.asm              BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 2496-2598
-; SUBJECTS: (none)
+; SUBJECTS: Flute
 ; TOPIC:    Using the recorder (flute): tune, $98-frame freeze, and its effect by place: in the UW a
 ;           "flute used" flag (Digdogger reads it); in the OW a flute secret in the listed rooms,
 ;           the whirlwind elsewhere.
-; SEE ALSO: bank5/wield-items.asm (WieldItem_JumpTable calls WieldFlute for selected slot 5);
-;           bank7/mode5-play-update.asm (UpdateMode5Play: the freeze while FluteTimer runs);
-;           bank1/whirlwind.asm (SummonWhirlwind: conditions and destinations);
+; SEE ALSO: bank5/wield-items.asm (Link_WieldItem_JumpTable calls Flute_Wield for selected slot 5);
+;           bank7/mode5-play-update.asm (Mode5Play_Update: the freeze while FluteTimer runs);
+;           bank1/whirlwind.asm (Whirlwind_Summon: conditions and destinations);
 ;           bank7/flute-secret-pond.asm (object $5E: the pond drains and stairs appear);
 ;           bank4/digdogger.asm (FluteUsedState splits Digdogger); bank5/warps-stairs-caves.asm
-;           (SetTargetMode clears FluteTimer).
+;           (Warp_StartStairsMode clears FluteTimer).
 ; KEY FACTS:
 ;   - Every use requests the flute tune (Tune1Request = $10) and sets FluteTimer = $98 (152 frames),
-;     wherever Link is (WieldFlute). While it runs, play is not updated at all (UpdateMode5Play).
+;     wherever Link is (Flute_Wield). While it runs, play is not updated at all (Mode5Play_Update).
 ;   - UW (CurLevel <> 0): FluteUsedState goes 0 -> 1; a use while it is nonzero changes nothing
-;     (WieldFlute@FlagFluteUsed). Digdogger's update reads it.
+;     (Flute_Wield@FlagFluteUsed). Digdogger's update reads it.
 ;   - OW, GameMode <> 5 (the play update also runs mode $B, a cave, and mode $C, the shortcut
-;     stairs room): tune and freeze only (WieldFlute).
-;   - OW rooms with a flute secret (FluteRoomSecretsOW): $42 in Q1 only; $06, $29, $2B, $30, $3A,
+;     stairs room): tune and freeze only (Flute_Wield).
+;   - OW rooms with a flute secret (Flute_SecretRoomIdsOW): $42 in Q1 only; $06, $29, $2B, $30, $3A,
 ;     $3C, $58, $60, $6E, $72 in Q2 only. There the flute makes a flute secret object (type $5E)
-;     and does not summon the whirlwind (WieldFlute@RevealSecret).
+;     and does not summon the whirlwind (Flute_Wield@RevealSecret).
 ;   - The secret is made only when SecretColorCycle = 0 (not already started in this room) and one of
-;     object slots $01-$09 is empty; the highest empty slot is used (WieldFlute@FindEmptySlot).
+;     object slots $01-$09 is empty; the highest empty slot is used (Flute_Wield@FindEmptySlot).
 ;   - Everywhere else in the OW, including $42 in Q2 and the ten Q2 rooms in Q1, the flute calls
-;     SummonWhirlwind (WieldFlute@SummonWhirlwind).
+;     Whirlwind_Summon (Flute_Wield@SummonWhirlwind).
 ; CONTENTS: (generated; L = line in this file)
-;   L0036 FluteRoomSecretsOW  data  TABLE: overworld rooms where the flute reveals a secret; index = 0-10; value = room id.
-;   L0049 WieldFlute          code  Uses the flute: plays the tune, freezes play for $98 frames, then acts by level, room and quest.
-;   L0134 L1EFCF_Exit         code  Shared return; also the early exit of Walker_Move (bank7/walker-move.asm).
+;   L0036 Flute_SecretRoomIdsOW  data  TABLE: overworld rooms where the flute reveals a secret; index = 0-10; value = room id.
+;   L0049 Flute_Wield            code  Uses the flute: plays the tune, freezes play for $98 frames, then acts by level, room and quest.
+;   L0134 Flute_Wield_Return     code  Shared return; also the early exit of Walker_Move (bank7/walker-move.asm).
 ; ============================================================================
 
 ; TABLE: overworld rooms where the flute reveals a secret; index = 0-10; value = room id.
-; Entry 0 ($42) is the Q1 room; entries 1-10 are the Q2 rooms (WieldFlute tests the quest).
-FluteRoomSecretsOW:
+; Entry 0 ($42) is the Q1 room; entries 1-10 are the Q2 rooms (Flute_Wield tests the quest).
+Flute_SecretRoomIdsOW:
     .BYTE $42, $06, $29, $2B, $30, $3A, $3C, $58
     .BYTE $60, $6E, $72
 
@@ -41,12 +41,12 @@ FluteRoomSecretsOW:
 ; Uses the flute: plays the tune, freezes play for $98 frames, then acts by level, room and quest.
 ; OUT:  FluteTimer = $98; Tune1Request = $10; bank 5 switched in after the whirlwind path.
 ; NOTE: UW: sets FluteUsedState to 1 if it was 0. Nothing else happens here.
-; NOTE: OW, mode 5 only: in a FluteRoomSecretsOW room of the current quest, creates object $5E (flute
+; NOTE: OW, mode 5 only: in a Flute_SecretRoomIdsOW room of the current quest, creates object $5E (flute
 ;       secret) in the highest empty slot of $09-$01 unless SecretColorCycle <> 0; otherwise calls
-;       SummonWhirlwind (which has its own conditions).
+;       Whirlwind_Summon (which has its own conditions).
 ; NOTE: The object and the whirlwind are created in this frame but first update when the freeze ends.
 ; ----------------------------------------------------------------------------
-WieldFlute:
+Flute_Wield:
     LDA #$10                    ; Flute tune
     STA Tune1Request
 
@@ -73,7 +73,7 @@ WieldFlute:
     LDY #$0A
 
 @FindSecretRoom:
-    CMP FluteRoomSecretsOW, Y
+    CMP Flute_SecretRoomIdsOW, Y
     BEQ @Found
     DEY
     BPL @FindSecretRoom
@@ -119,17 +119,17 @@ WieldFlute:
 
 @SummonWhirlwind:
     LDA #$01
-    JSR SwitchBank
-    JSR SummonWhirlwind
-    LDA #$05                    ; Switch back to bank 5, where the caller (WieldItem) lives.
-    JMP SwitchBank
+    JSR Mmc1_SwitchBank
+    JSR Whirlwind_Summon
+    LDA #$05                    ; Switch back to bank 5, where the caller (Link_WieldItem) lives.
+    JMP Mmc1_SwitchBank
 
 @FlagFluteUsed:
     ; UW: FluteUsedState 0 -> 1; left alone if already nonzero.
     LDA FluteUsedState
-    BNE L1EFCF_Exit
+    BNE Flute_Wield_Return
     INC FluteUsedState
 
 ; Shared return; also the early exit of Walker_Move (bank7/walker-move.asm).
-L1EFCF_Exit:
+Flute_Wield_Return:
     RTS

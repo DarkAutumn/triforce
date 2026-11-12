@@ -1,49 +1,49 @@
 ; ============================================================================
 ; FILE:     bank1/room-bounds.asm        BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 3306-3509
-; SUBJECTS: (none)
+; SUBJECTS: Audio, Link, Room, Sprite
 ; TOPIC:    Silencing the sound channels; drawing Link behind the background inside the left and right
 ;           dungeon doorways; the room bound test that stops objects and shots at the room's border.
-; SEE ALSO: bank5/mode3-mode6-init.asm (SetupObjRoomBounds and the bound values);
-;           bank7/walker-move.asm (Walker_Move calls BoundByRoom); bank7/walker-collision-screen-edge.asm
-;           (ResetMovingDir; Link's screen-edge test, which is separate from these bounds);
-;           bank1/shot-aim-boomerang-speed.asm (MoveShot); bank4/wallmaster.asm (other user of
-;           SpriteRelativeExtents).
+; SEE ALSO: bank5/mode3-mode6-init.asm (Room_SetUpObjBounds and the bound values);
+;           bank7/walker-move.asm (Walker_Move calls Room_BoundDir); bank7/walker-collision-screen-edge.asm
+;           (Obj_ResetMovingDir; Link's screen-edge test, which is separate from these bounds);
+;           bank1/shot-aim-boomerang-speed.asm (Obj_MoveShot); bank4/wallmaster.asm (other user of
+;           Sprite_HalfOffsetsX).
 ; KEY FACTS:
 ;   - Link and monsters: moving left is refused when X < RoomBoundLeft ($11 OW, $21 UW), right when
-;     X >= RoomBoundRight ($E0 OW, $D0 UW) (BoundDirectionHorizontally).
+;     X >= RoomBoundRight ($E0 OW, $D0 UW) (Room_BoundDirHorizontally).
 ;   - Link and monsters: moving up is refused when Y < RoomBoundUp ($4E OW, $5E UW), down when
-;     Y >= RoomBoundDown ($CD OW, $BD UW) (BoundDirectionVertically).
+;     Y >= RoomBoundDown ($CD OW, $BD UW) (Room_BoundDirVertically).
 ;   - Object slots $0D and up (Link's weapons) and a monster's boomerang (type $5C) get wider bounds:
 ;     left X < bound - $0B, right X >= bound + $0C, up Y < bound - $0F, down Y >= bound + $12
-;     (BoundDirectionHorizontally, BoundDirectionVertically).
-;   - A refused direction zeroes the whole of [0F], not just the offending bit (BoundDirectionReturn).
+;     (Room_BoundDirHorizontally, Room_BoundDirVertically).
+;   - A refused direction zeroes the whole of [0F], not just the offending bit (Room_BoundDir_Cancel).
 ;   - [0F] is zeroed only if it holds the direction bit of the bound that failed, so an object
-;     outside a bound may still move back in or along it (BoundDirectionReturn).
-;   - The test never moves or clamps a coordinate; it only cancels the move (BoundByRoom).
+;     outside a bound may still move back in or along it (Room_BoundDir_Cancel).
+;   - The test never moves or clamps a coordinate; it only cancels the move (Room_BoundDir).
 ;   - In a dungeon the sprite at Sprites+$48 gets the behind-background bit while Link's X is < $10
-;     or >= $E9, and the one at Sprites+$4C while X + 8 is (ShowLinkSpritesBehindHorizontalDoors).
-;   - SilenceAllSound requests $80 on Tune0Request (stops the song) and EffectRequest (stops samples
+;     or >= $E9, and the one at Sprites+$4C while X + 8 is (Link_PutSpritesBehindSideDoorways).
+;   - Audio_SilenceAll requests $80 on Tune0Request (stops the song) and EffectRequest (stops samples
 ;     and tune 1) and clears CurTune0 and CurTune1.
 ; CONTENTS: (generated; L = line in this file)
-;   L0046 SilenceAllSound                       code  Stops the song, the samples and both tune channels.
-;   L0056 SpriteRelativeExtents                 data  TABLE: X offset of each half of a 16-pixel-wide object; index 0 = right half, 1 = left half; pixels.
-;   L0067 ShowLinkSpritesBehindHorizontalDoors  code  Puts Link's sprites behind the background where he overlaps a left or right dungeon doorway.
-;   L0116 BoundDirectionHorizontally            code  Cancels the move in [0F] when it would take the object past the room's left or right bound.
-;   L0163 BoundDirectionReturn                  code  A bound test failed with Y = that bound's direction bit: zero [0F] if it contains that bit.
-;   L0185 BoundDirectionVertically              code  Cancels the move in [0F] when it would take the object past the room's top or bottom bound.
-;   L0232 L6825_Exit                            code  Shared RTS of the bound tests above.
-;   L0240 BoundByRoomWithA                      code  Stores direction A in [0F], then tests it against the room bounds (falls into BoundByRoom).
-;   L0254 BoundByRoom                           code  Zeroes the moving direction in [0F] if it leads past any of the room's four bounds.
+;   L0046 Audio_SilenceAll                   code  Stops the song, the samples and both tune channels.
+;   L0056 Sprite_HalfOffsetsX                data  TABLE: X offset of each half of a 16-pixel-wide object; index 0 = right half, 1 = left half; pixels.
+;   L0067 Link_PutSpritesBehindSideDoorways  code  Puts Link's sprites behind the background where he overlaps a left or right dungeon doorway.
+;   L0116 Room_BoundDirHorizontally          code  Cancels the move in [0F] when it would take the object past the room's left or right bound.
+;   L0163 Room_BoundDir_Cancel               code  A bound test failed with Y = that bound's direction bit: zero [0F] if it contains that bit.
+;   L0185 Room_BoundDirVertically            code  Cancels the move in [0F] when it would take the object past the room's top or bottom bound.
+;   L0232 Room_BoundDir_Return               code  Shared RTS of the bound tests above.
+;   L0240 Room_BoundDirA                     code  Stores direction A in [0F], then tests it against the room bounds (falls into Room_BoundDir).
+;   L0254 Room_BoundDir                      code  Zeroes the moving direction in [0F] if it leads past any of the room's four bounds.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Stops the song, the samples and both tune channels.
 ; OUT:  Tune0Request = EffectRequest = $80; CurTune0 = CurTune1 = 0; A = 0
 ; NOTE: The sound driver treats $80 in Tune0Request as "silence the song" and $80 in EffectRequest as
-;       "silence samples and tune 1" (bank 0, DriveTune0 and DriveEffect).
+;       "silence samples and tune 1" (bank 0, Audio_DriveTune0 and Sfx_Drive).
 ; ----------------------------------------------------------------------------
-SilenceAllSound:
+Audio_SilenceAll:
     LDA #$80
     STA Tune0Request
     STA EffectRequest
@@ -53,7 +53,7 @@ SilenceAllSound:
     RTS
 
 ; TABLE: X offset of each half of a 16-pixel-wide object; index 0 = right half, 1 = left half; pixels.
-SpriteRelativeExtents:
+Sprite_HalfOffsetsX:
     .BYTE $08, $00
 
 ; ----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ SpriteRelativeExtents:
 ;       sprite is put behind when that X is < $10 or >= $E9. Called every frame in a dungeon after
 ;       Link's sprites are written; nothing here tests Y or whether a doorway exists.
 ; ----------------------------------------------------------------------------
-ShowLinkSpritesBehindHorizontalDoors:
+Link_PutSpritesBehindSideDoorways:
     LDY #$0A                    ; Sprites+64+$0A = attribute byte of the sprite at Sprites+$48.
     LDX #$00
     LDA ObjX, X
@@ -74,7 +74,7 @@ ShowLinkSpritesBehindHorizontalDoors:
 @LoopSprite:
     LDA $00
     CLC
-    ADC SpriteRelativeExtents, X
+    ADC Sprite_HalfOffsetsX, X
     CMP #$E9
     BCS @AddPriority            ; This half is at X >= $E9: inside the right wall.
     CMP #$10
@@ -113,7 +113,7 @@ ShowLinkSpritesBehindHorizontalDoors:
 ;       the overworld ObjX $06-$0B gives a negative value that fails the right test.
 ; NOTE: When the left test fails the right test is skipped, whether or not [0F] was cancelled.
 ; ----------------------------------------------------------------------------
-BoundDirectionHorizontally:
+Room_BoundDirHorizontally:
     LDY #$02                    ; Direction bit to cancel if the left test fails.
     LDA ObjX, X
     STA $00                     ; [00] = X coordinate to test.
@@ -136,7 +136,7 @@ BoundDirectionHorizontally:
     ; If the coordinate is < the left bound, go cancel a leftward move.
     LDA $00
     CMP RoomBoundLeft
-    BCC BoundDirectionReturn
+    BCC Room_BoundDir_Cancel
 
     ; Weapons and monster boomerangs again: subtract $17, so the right test uses X - $0C.
     CPX #$00
@@ -157,17 +157,17 @@ BoundDirectionHorizontally:
     LDY #$01                    ; Direction bit to cancel if the right test fails.
     LDA $00
     CMP RoomBoundRight
-    BCC L6825_Exit
+    BCC Room_BoundDir_Return
 
 ; A bound test failed with Y = that bound's direction bit: zero [0F] if it contains that bit.
-BoundDirectionReturn:
+Room_BoundDir_Cancel:
     ; Shared by the horizontal and vertical tests. If the object is not moving toward the bound it
-    ; is beyond, leave [0F] alone; else ResetMovingDir sets [0F] to 0 (all bits, so a diagonal
+    ; is beyond, leave [0F] alone; else Obj_ResetMovingDir sets [0F] to 0 (all bits, so a diagonal
     ; direction loses its other axis too).
     TYA
     AND $0F
-    BEQ L6825_Exit
-    JMP ResetMovingDir
+    BEQ Room_BoundDir_Return
+    JMP Obj_ResetMovingDir
 
 ; ----------------------------------------------------------------------------
 ; Cancels the move in [0F] when it would take the object past the room's top or bottom bound.
@@ -182,7 +182,7 @@ BoundDirectionReturn:
 ;       ObjY >= $DF OW / $CF UW. The sums are 8-bit: ObjY >= $F1 wraps and fails the top test.
 ; NOTE: When the top test fails the bottom test is skipped, whether or not [0F] was cancelled.
 ; ----------------------------------------------------------------------------
-BoundDirectionVertically:
+Room_BoundDirVertically:
     LDY #$08                    ; Direction bit to cancel if the top test fails.
     LDA ObjY, X
     STA $00                     ; [00] = Y coordinate to test.
@@ -205,7 +205,7 @@ BoundDirectionVertically:
     ; If the coordinate is < the top bound, go cancel an upward move.
     LDA $00
     CMP RoomBoundUp
-    BCC BoundDirectionReturn
+    BCC Room_BoundDir_Cancel
 
     ; Weapons and monster boomerangs again: subtract $21, so the bottom test uses Y - $12.
     CPX #$00
@@ -226,18 +226,18 @@ BoundDirectionVertically:
     LDY #$04                    ; Direction bit to cancel if the bottom test fails.
     LDA $00
     CMP RoomBoundDown
-    BCS BoundDirectionReturn    ; At or past (>=) the bottom bound: go cancel a downward move.
+    BCS Room_BoundDir_Cancel    ; At or past (>=) the bottom bound: go cancel a downward move.
 
 ; Shared RTS of the bound tests above.
-L6825_Exit:
+Room_BoundDir_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
-; Stores direction A in [0F], then tests it against the room bounds (falls into BoundByRoom).
+; Stores direction A in [0F], then tests it against the room bounds (falls into Room_BoundDir).
 ; IN:   A = moving direction; X = object slot
-; OUT:  as BoundByRoom
+; OUT:  as Room_BoundDir
 ; ----------------------------------------------------------------------------
-BoundByRoomWithA:
+Room_BoundDirA:
     STA $0F
 
 ; ----------------------------------------------------------------------------
@@ -248,11 +248,11 @@ BoundByRoomWithA:
 ; NOTE: Z is also set when the caller passed direction 0. No coordinate is changed: an object
 ;       already outside a bound is not pulled back and may move in any direction except farther out.
 ; NOTE: For Link, Walker_Move calls this only in a dungeon while DoorwayDir is 0 (and not in mode 9);
-;       in the overworld Link is not held by these bounds. Knockback (Obj_Shove) and shots use
-;       BoundByRoomWithA directly.
+;       in the overworld Link is not held by these bounds. Knockback (Shove_Update) and shots use
+;       Room_BoundDirA directly.
 ; ----------------------------------------------------------------------------
-BoundByRoom:
-    JSR BoundDirectionHorizontally
-    JSR BoundDirectionVertically
+Room_BoundDir:
+    JSR Room_BoundDirHorizontally
+    JSR Room_BoundDirVertically
     LDA $0F
     RTS

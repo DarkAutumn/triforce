@@ -1,37 +1,37 @@
 ; ============================================================================
 ; FILE:     bank4/orbit-rotation-math.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 11870-12071
-; SUBJECTS: (none)
+; SUBJECTS: Math, Obj
 ; TOPIC:    Orbit movement for Patra's children and the pond fairy's hearts: sine table, per-frame step
 ;           along a circle, shift multiply, angle decrease. Then bank 4's tail: reset stub and vectors.
-; SEE ALSO: bank4/patra.asm (PatraChild_State1: angle step and bit counts per maneuver);
-;           bank4/pond-fairy.asm (the orbiting hearts); bank7/reset-mmc1-vectors.asm (IsrReset, the
+; SEE ALSO: bank4/patra.asm (Patra_UpdateChild_State1Orbit: angle step and bit counts per maneuver);
+;           bank4/pond-fairy.asm (the orbiting hearts); bank7/reset-mmc1-vectors.asm (Reset_Handler, the
 ;           labelled original of the reset stub at the end of this file).
 ; KEY FACTS:
 ;   - An orbit angle has 32 steps a circle (ObjAngleWhole $00-$1F) plus a fraction byte; the callers
 ;     subtract $60 or $70 from the 16-bit angle each frame: 85.3 or 73.1 frames a circle.
-;     DecreaseObjectAngle
+;     Obj_DecreaseOrbitAngle
 ;   - The object is not placed on a circle around a centre: each frame it moves by a velocity
 ;     (+sin, -cos of the angle) scaled by ObjQSpeedFrac, so the radius follows from speed and angle
-;     rate. RotateObjectLocation
+;     rate. Obj_MoveAlongOrbit
 ;   - The step per axis is q-speed * (sine >> (8 - bits)) / 256 pixels; the caller chooses the bit
-;     count per axis (5 or 6), 6 giving twice the step of 5. RotateObjectLocation, ShiftMultiply
-;   - The orbit keeps its X and Y position fractions in $0412,X and $041F,X, the bytes flyers use as
-;     Flyer_ObjPosFrac and Flyer_ObjSpeed. RotateObjectLocation
+;     count per axis (5 or 6), 6 giving twice the step of 5. Obj_MoveAlongOrbit, Math_ShiftMultiply
+;   - The orbit keeps its X and Y position fractions in ObjOrbitFracX,X and ObjOrbitFracY,X, the bytes
+;     flyers use as Flyer_ObjPosFrac and Flyer_ObjSpeed. Obj_MoveAlongOrbit
 ;   - The new Y is returned in A and stored by the caller; the new X is stored here.
-;     RotateObjectLocation
-;   - The bytes after DecreaseObjectAngle are bank 4's copy of the reset handler ($BF50) and of the
+;     Obj_MoveAlongOrbit
+;   - The bytes after Obj_DecreaseOrbitAngle are bank 4's copy of the reset handler ($BF50) and of the
 ;     interrupt vectors ($BFFA); they have no labels.
 ; CONTENTS: (generated; L = line in this file)
-;   L0034 PatraSines            data  TABLE: half sine wave, amplitude $80; index = angle AND $0F (16 steps = 180 degrees);
-;   L0051 RotateObjectLocation  code  Moves an orbiting object one frame along its circle, from its angle and q-speed.
-;   L0151 ShiftMultiply         code  Multiplies A by the top Y bits of [00], giving a 16-bit product in [02] (low) and [03] (high).
-;   L0181 DecreaseObjectAngle   code  Subtracts a 16-bit amount from an orbiting object's angle and wraps it to $00-$1F.
+;   L0034 Math_OrbitSines         data  TABLE: half sine wave, amplitude $80; index = angle AND $0F (16 steps = 180 degrees);
+;   L0051 Obj_MoveAlongOrbit      code  Moves an orbiting object one frame along its circle, from its angle and q-speed.
+;   L0151 Math_ShiftMultiply      code  Multiplies A by the top Y bits of [00], giving a 16-bit product in [02] (low) and [03] (high).
+;   L0181 Obj_DecreaseOrbitAngle  code  Subtracts a 16-bit amount from an orbiting object's angle and wraps it to $00-$1F.
 ; ============================================================================
 
 ; TABLE: half sine wave, amplitude $80; index = angle AND $0F (16 steps = 180 degrees);
 ;        value = $80 * sin(index * 11.25 degrees). The sign comes from the angle's bit 4.
-PatraSines:
+Math_OrbitSines:
     .BYTE $00, $18, $30, $47, $5A, $6A, $76, $7D
     .BYTE $80, $7D, $76, $6A, $5A, $47, $30, $18
 
@@ -41,14 +41,14 @@ PatraSines:
 ;       Y = number of high bits of the sine to use for the X step (callers pass 5 or 6);
 ;       A = number of high bits of the cosine to use for the Y step.
 ; OUT:  ObjX,X updated; A = new Y coordinate, which the caller must store in ObjY,X.
-;       Uses [00]-[03], [05], [06]. The X and Y position fractions are kept in $0412,X and $041F,X.
+;       Uses [00]-[03], [05], [06]. The position fractions are ObjOrbitFracX,X and ObjOrbitFracY,X.
 ; NOTE: X step = +sin(angle), Y step = -cos(angle), each = q-speed * (table value >> (8 - bits)) / 256
 ;       pixels. With q-speed $20 the largest step is 4 pixels with 6 bits and 2 pixels with 5 bits.
 ;       Angle $18 moves left, $00 up, $08 right, $10 down; the callers decrease the angle each
-;       frame (DecreaseObjectAngle), which makes the path counter-clockwise on screen. Different bit
+;       frame (Obj_DecreaseOrbitAngle), which makes the path counter-clockwise on screen. Different bit
 ;       counts for X and Y give an ellipse. Used by Patra's children and the pond fairy's hearts.
 ; ----------------------------------------------------------------------------
-RotateObjectLocation:
+Obj_MoveAlongOrbit:
     STA $06                     ; [06] = bits of cosine to use (Y step)
     STY $05                     ; [05] = bits of sine to use (X step)
 
@@ -56,14 +56,14 @@ RotateObjectLocation:
     LDA ObjAngleWhole, X
     AND #$0F
     TAY
-    LDA PatraSines, Y
+    LDA Math_OrbitSines, Y
     STA $00
 
     ; [02:03] = q-speed * (high [05] bits of [00]): [02] fraction, [03] whole pixels.
     ; (This routine does not set the q-speed; it is whatever the object's slot holds.)
     LDA ObjQSpeedFrac, X
     LDY $05
-    JSR ShiftMultiply
+    JSR Math_ShiftMultiply
 
     ; Sign of the X step: angle $10-$1F (sine negative) moves left, $00-$0F moves right.
     ; AND #$18 keeps bits 3-4, enough for the compare with $10.
@@ -72,11 +72,11 @@ RotateObjectLocation:
     CMP #$10
     BCC @AddToX
 
-    ; Moving left: subtract the fraction from the X fraction ($0412,X) ...
-    LDA $0412, X
+    ; Moving left: subtract the fraction from the X fraction ...
+    LDA ObjOrbitFracX, X
     SEC
     SBC $02
-    STA $0412, X
+    STA ObjOrbitFracX, X
 
     ; ... and the whole pixels, with borrow, from ObjX.
     LDA ObjX, X
@@ -84,11 +84,11 @@ RotateObjectLocation:
     JMP @SetXRotateY
 
 @AddToX:
-    ; Moving right: add the fraction to the X fraction ($0412,X) ...
-    LDA $0412, X
+    ; Moving right: add the fraction to the X fraction ...
+    LDA ObjOrbitFracX, X
     CLC
     ADC $02
-    STA $0412, X
+    STA ObjOrbitFracX, X
 
     ; ... and the whole pixels, with carry, to ObjX.
     LDA ObjX, X
@@ -103,13 +103,13 @@ RotateObjectLocation:
     ADC #$08
     AND #$0F
     TAY
-    LDA PatraSines, Y
+    LDA Math_OrbitSines, Y
     STA $00
 
     ; [02:03] = q-speed * (high [06] bits of [00]).
     LDA ObjQSpeedFrac, X
     LDY $06
-    JSR ShiftMultiply
+    JSR Math_ShiftMultiply
 
     ; Sign of the Y step: (angle - 8) AND $1F in $10-$1F, that is angle $18-$1F or $00-$07
     ; (cosine positive), moves up; otherwise down. The AND also discards the borrow of angles < 8.
@@ -120,11 +120,11 @@ RotateObjectLocation:
     CMP #$10
     BCC @AddToY
 
-    ; Moving up: subtract the fraction from the Y fraction ($041F,X) ...
-    LDA $041F, X
+    ; Moving up: subtract the fraction from the Y fraction ...
+    LDA ObjOrbitFracY, X
     SEC
     SBC $02
-    STA $041F, X
+    STA ObjOrbitFracY, X
 
     ; ... and the whole pixels, with borrow, from ObjY. The result is returned in A, not stored.
     LDA ObjY, X
@@ -132,11 +132,11 @@ RotateObjectLocation:
     RTS
 
 @AddToY:
-    ; Moving down: add the fraction to the Y fraction ($041F,X) ...
-    LDA $041F, X
+    ; Moving down: add the fraction to the Y fraction ...
+    LDA ObjOrbitFracY, X
     CLC
     ADC $02
-    STA $041F, X
+    STA ObjOrbitFracY, X
 
     ; ... and the whole pixels, with carry, to ObjY. The result is returned in A, not stored.
     LDA ObjY, X
@@ -148,7 +148,7 @@ RotateObjectLocation:
 ; IN:   A = multiplicand; [00] = multiplier (destroyed); Y = how many of its high bits to use (>= 1).
 ; OUT:  [03:02] = A * ([00] >> (8 - Y)); [01] = multiplicand; Y = 0.
 ; ----------------------------------------------------------------------------
-ShiftMultiply:
+Math_ShiftMultiply:
     STA $01
     LDA #$00
     STA $02
@@ -178,7 +178,7 @@ ShiftMultiply:
 ; NOTE: The callers pass [0B] = 0 and A = $70 (Patra child type $25) or $60 (type $26 and the pond
 ;       fairy's hearts): a full circle takes 32 * 256 / $70 = 73.1 or 32 * 256 / $60 = 85.3 frames.
 ; ----------------------------------------------------------------------------
-DecreaseObjectAngle:
+Obj_DecreaseOrbitAngle:
     STA $0A
     LDA ObjAngleFrac, X
     SEC
@@ -200,12 +200,12 @@ DecreaseObjectAngle:
 
 
 ; DATA: bank 4's copy of the reset handler, at $BF50 (no labels; stored as bytes). Same instructions
-;       as the fixed bank's IsrReset (a copy for the case that this bank holds the vectors at reset):
+;       as the fixed bank's Reset_Handler (a copy for the case that this bank holds the vectors at reset):
 ;       SEI, CLD, PPU control = 0, stack = $01FF, wait for two vertical blanks ($2002 bit 7),
 ;       write $FF to $8000/$A000/$C000/$E000 (reset the MMC1 shift registers),
 ;       A = $0F, JSR $BF98 (MMC1 control), write 0 to $A000 five times (CHR bank 0),
-;       A = 7, JSR $BFAC (switch to PRG bank 7), JMP $E440 (an address in the fixed bank; that it is
-;       the game's entry routine is unverified here: no label, raw address).
+;       A = 7, JSR $BFAC (switch to PRG bank 7), JMP $E440 (Reset_RunGame in the fixed bank, the target of
+;       Reset_Handler's final jump; no label here, raw address).
 ;       $BF98 (row 10): five serial writes of A to $8000, RTS. $BFAC (row 12, 5th byte): five serial
 ;       writes of A to $E000, RTS.
     .BYTE $78, $D8, $A9, $00, $8D, $00, $20, $A2

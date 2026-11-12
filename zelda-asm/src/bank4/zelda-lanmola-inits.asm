@@ -1,39 +1,39 @@
 ; ============================================================================
 ; FILE:     bank4/zelda-lanmola-inits.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 9456-9524
-; SUBJECTS: (none)
+; SUBJECTS: Lanmola, Zelda
 ; TOPIC:    Init routines: Zelda (type $37) with her four guard fires (type $3F) and their start
 ;           positions; Lanmola (types $3A, $3B), which fills slots $01-$0A with two 5-segment worms.
-; SEE ALSO: bank4/zelda-guard-fire.asm (UpdateZelda, UpdateGuardFire); bank4/lanmola.asm (UpdateLamnola:
-;           movement, segment death); bank7/object-init-table.asm (InitObject, which calls these and
-;           sets ObjAttr and ObjHP first); bank7/object-update-table.asm (ObjectTypeToHpPairs).
+; SEE ALSO: bank4/zelda-guard-fire.asm (Zelda_Update, GuardFire_Update); bank4/lanmola.asm (Lanmola_Update:
+;           movement, segment death); bank7/object-init-table.asm (Obj_Init, which calls these and
+;           sets ObjAttr and ObjHP first); bank7/object-update-table.asm (Obj_TypeHpPairs).
 ; KEY FACTS:
 ;   - Zelda is object slot 1 at ($78, $88); the guard fires are slots 2-5 at ($60, $B5), ($70, $9D),
-;     ($80, $9D), ($90, $B5) (InitZelda, GuardFireXs, GuardFireYs).
+;     ($80, $9D), ($90, $B5) (Zelda_Init, Zelda_RoomObjXs, Zelda_RoomObjYs).
 ;   - A Lanmola room has 10 segments in slots $01-$0A, all starting at ($40, $8D): two worms, heads in
-;     slots $05 and $0A, tails in slots $01 and $06 (InitLamnola).
+;     slots $05 and $0A, tails in slots $01 and $06 (Lanmola_Init).
 ;   - Only the heads start with a direction (8 = up); a segment with direction 0 has not started
-;     moving, and directions are handed down the worm by UpdateLamnola (InitLamnola).
+;     moving, and directions are handed down the worm by Lanmola_Update (Lanmola_Init).
 ;   - Lanmola speed is (object type - $39) pixels per frame: 1 for type $3A, 2 for type $3B
-;     (InitLamnola, Lanmola_Speed).
-;   - Every segment gets the HP of slot 1, $20 for both types (InitLamnola, ObjectTypeToHpPairs).
-;   - InitLamnola sets RoomObjCount to 8, not 10. Only the two heads' deaths add to RoomKillCount, so
+;     (Lanmola_Init, Lanmola_Speed).
+;   - Every segment gets the HP of slot 1, $20 for both types (Lanmola_Init, Obj_TypeHpPairs).
+;   - Lanmola_Init sets RoomObjCount to 8, not 10. Only the two heads' deaths add to RoomKillCount, so
 ;     killing both worms never reaches the "killed everything" test of the room history code.
 ; CONTENTS: (generated; L = line in this file)
-;   L0031 GuardFireXs  data  TABLE: start X of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
-;   L0036 GuardFireYs  data  TABLE: start Y of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
-;   L0045 InitZelda    code  Places Zelda in object slot 1 and four guard fires in slots 2-5.
-;   L0074 InitLamnola  code  Makes the ten Lanmola segments (two worms of five) in object slots $01-$0A.
+;   L0031 Zelda_RoomObjXs  data  TABLE: start X of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
+;   L0036 Zelda_RoomObjYs  data  TABLE: start Y of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
+;   L0045 Zelda_Init       code  Places Zelda in object slot 1 and four guard fires in slots 2-5.
+;   L0074 Lanmola_Init     code  Makes the ten Lanmola segments (two worms of five) in object slots $01-$0A.
 ; ============================================================================
 
 ; TABLE: start X of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
 ;        fires); value = X in pixels.
-GuardFireXs:
+Zelda_RoomObjXs:
     .BYTE $78, $60, $70, $80, $90
 
 ; TABLE: start Y of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
 ;        fires); value = Y in pixels.
-GuardFireYs:
+Zelda_RoomObjYs:
     .BYTE $88, $B5, $9D, $9D, $B5
 
 ; ----------------------------------------------------------------------------
@@ -42,14 +42,14 @@ GuardFireYs:
 ; NOTE: Slots 2-5 keep the uninitialized flag they got on room entry, so each guard fire is
 ;       initialized as a type $3F object (attributes, HP) on its own first update.
 ; ----------------------------------------------------------------------------
-InitZelda:
+Zelda_Init:
     ; For object slots 5 down to 1:
     LDX #$05
 :
     ; Position from the tables (index = slot - 1), type $3F.
-    LDA GuardFireXs-1, X
+    LDA Zelda_RoomObjXs-1, X
     STA ObjX, X
-    LDA GuardFireYs-1, X
+    LDA Zelda_RoomObjYs-1, X
     STA ObjY, X
     LDA #$3F                    ; Guard fire object type
     STA ObjType, X
@@ -71,7 +71,7 @@ InitZelda:
 ;       RoomKillCount (tails die as type $5D), so the count compared with it on leaving the room
 ;       is at most 2.
 ; ----------------------------------------------------------------------------
-InitLamnola:
+Lanmola_Init:
     ; For Y = 9 down to 0, object slots $0A down to $01:
     LDY #$09
 :

@@ -1,58 +1,58 @@
 ; ============================================================================
 ; FILE:     bank2/mode1-menu-update.asm  BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 2735-2913
-; SUBJECTS: (none)
+; SUBJECTS: Mode1Menu
 ; TOPIC:    Mode 1 (file select) update: Select moves the cursor, Start either loads the chosen save
 ;           slot into the profile and goes on to the next mode, or enters Register / Eliminate.
 ; SEE ALSO: bank2/mode1-slot-tiles.asm and bank2/mode1-init-save-files.asm (menu init);
-;           bank1/modeb-cave-save-sprites.asm (FetchFileAAddressSet); bank2/register-eliminate-init.asm
-;           (modes $E and $F); bank7/update-mode-dispatch.asm (GoToNextMode, EndGameMode).
+;           bank1/modeb-cave-save-sprites.asm (Save_FetchFileAAddressSet); bank2/register-eliminate-init.asm
+;           (modes $E and $F); bank7/update-mode-dispatch.asm (Mode_GoToNext, Mode_End).
 ; KEY FACTS:
 ;   - CurSaveSlot is the menu choice: 0-2 save slots, 3 Register, 4 Eliminate. Select steps to the next
 ;     choice whose IsSaveSlotActive entry is nonzero, so unregistered slots are skipped
-;     (UpdateMode1Menu_Sub0).
+;     (Mode1Menu_Update_Sub0Choose).
 ;   - Start on Register or Eliminate sets GameMode to CurSaveSlot + $B = $E or $F
-;     (UpdateMode1Menu_Sub1).
+;     (Mode1Menu_Update_Sub1Load).
 ;   - Start on a slot copies file A's items block ($28 bytes) to InvItems and its world flags ($180
-;     bytes) to WorldFlags, then goes to the next mode (UpdateMode1Menu_Sub1).
+;     bytes) to WorldFlags, then goes to the next mode (Mode1Menu_Update_Sub1Load).
 ;   - Loading a slot zeroes IsSwordBlocked, Link's ObjState and InvClock; Start in the menu also sets
-;     CurLevel = 0 (overworld) and SelectedItemSlot = 0 (UpdateMode1Menu_Sub1).
+;     CurLevel = 0 (overworld) and SelectedItemSlot = 0 (Mode1Menu_Update_Sub1Load).
 ;   - A slot in Q2 (QuestNumbers nonzero) shows a sword sprite beside its Link
-;     (Mode1_WriteLinkSprites).
+;     (Mode1Menu_WriteLinkSprites).
 ; CONTENTS: (generated; L = line in this file)
-;   L0033 Mode1CursorSpriteTriplet   data  DATA: tile, attributes and X of the menu cursor sprite (heart tile $F3 at X $28).
-;   L0037 Mode1CursorSpriteYs        data  TABLE: Y of the menu cursor sprite; index = CurSaveSlot (0-2 save slots, 3 Register, 4 Eliminate).
-;   L0043 UpdateMode1Menu            code  Mode 1 (file select) update: runs the handler selected by GameSubmode.
-;   L0048 UpdateMode1Menu_JumpTable  data  TABLE: mode 1 update handlers; index = GameSubmode (0 choose, 1 act on the choice).
-;   L0055 UpdateMode1Menu_Sub0       code  Mode 1 submode 0: Select moves the cursor to the next enabled choice; Start goes to submode 1.
-;   L0104 UpdateMode1Menu_Sub1       code  Mode 1 submode 1: loads the chosen save slot into the profile, or enters mode $E or $F.
-;   L0162 Mode1_WriteLinkSprites     code  Draws one Link per save slot down the menu, and a sword beside each slot that is in Q2.
+;   L0033 Mode1Menu_CursorSpriteTriplet  data  DATA: tile, attributes and X of the menu cursor sprite (heart tile $F3 at X $28).
+;   L0037 Mode1Menu_CursorSpriteYs       data  TABLE: Y of the menu cursor sprite; index = CurSaveSlot (0-2 save slots, 3 Register, 4 Eliminate).
+;   L0043 Mode1Menu_Update               code  Mode 1 (file select) update: runs the handler selected by GameSubmode.
+;   L0048 Mode1Menu_Update_JumpTable     data  TABLE: mode 1 update handlers; index = GameSubmode (0 choose, 1 act on the choice).
+;   L0055 Mode1Menu_Update_Sub0Choose    code  Mode 1 submode 0: Select moves the cursor to the next enabled choice; Start goes to submode 1.
+;   L0104 Mode1Menu_Update_Sub1Load      code  Mode 1 submode 1: loads the chosen save slot into the profile, or enters mode $E or $F.
+;   L0162 Mode1Menu_WriteLinkSprites     code  Draws one Link per save slot down the menu, and a sword beside each slot that is in Q2.
 ; ============================================================================
 
 ; DATA: tile, attributes and X of the menu cursor sprite (heart tile $F3 at X $28).
-Mode1CursorSpriteTriplet:
+Mode1Menu_CursorSpriteTriplet:
     .BYTE $F3, $03, $28
 
 ; TABLE: Y of the menu cursor sprite; index = CurSaveSlot (0-2 save slots, 3 Register, 4 Eliminate).
-Mode1CursorSpriteYs:
+Mode1Menu_CursorSpriteYs:
     .BYTE $5C, $74, $8C, $A8, $B8
 
 ; ----------------------------------------------------------------------------
 ; Mode 1 (file select) update: runs the handler selected by GameSubmode.
 ; ----------------------------------------------------------------------------
-UpdateMode1Menu:
+Mode1Menu_Update:
     LDA GameSubmode
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: mode 1 update handlers; index = GameSubmode (0 choose, 1 act on the choice).
-UpdateMode1Menu_JumpTable:
-    .ADDR UpdateMode1Menu_Sub0
-    .ADDR UpdateMode1Menu_Sub1
+Mode1Menu_Update_JumpTable:
+    .ADDR Mode1Menu_Update_Sub0Choose
+    .ADDR Mode1Menu_Update_Sub1Load
 
 ; ----------------------------------------------------------------------------
 ; Mode 1 submode 0: Select moves the cursor to the next enabled choice; Start goes to submode 1.
 ; ----------------------------------------------------------------------------
-UpdateMode1Menu_Sub0:
+Mode1Menu_Update_Sub0Choose:
     LDA ButtonsPressed
     AND #$10
     BNE @Exit                   ; If Start was pressed, the go to the next submode.
@@ -81,18 +81,18 @@ UpdateMode1Menu_Sub0:
     LDY #$02                    ; Write the tile, attributes, and X for the sprite record.
 
 @WriteCursorSprite:
-    LDA Mode1CursorSpriteTriplet, Y
+    LDA Mode1Menu_CursorSpriteTriplet, Y
     STA Sprites+1, Y
     DEY
     BPL @WriteCursorSprite
     LDY CurSaveSlot
-    LDA Mode1CursorSpriteYs, Y
+    LDA Mode1Menu_CursorSpriteYs, Y
     STA Sprites                 ; Set the sprite Y for current option.
     LDA #$58                    ; The base Y of Link sprites is $58.
     STA $01
     LDA #$30                    ; The X coordinate of Link sprites is $30.
     STA $00
-    JMP Mode1_WriteLinkSprites
+    JMP Mode1Menu_WriteLinkSprites
 
 @Exit:
     INC GameSubmode
@@ -101,13 +101,13 @@ UpdateMode1Menu_Sub0:
 ; ----------------------------------------------------------------------------
 ; Mode 1 submode 1: loads the chosen save slot into the profile, or enters mode $E or $F.
 ; ----------------------------------------------------------------------------
-UpdateMode1Menu_Sub1:
+Mode1Menu_Update_Sub1Load:
     LDA #$00
     STA CurTune1
     LDA #$00
     STA CurLevel                ; Begin in OW.
     STA SelectedItemSlot        ; Reset item index.
-    JSR TurnOffAllVideo
+    JSR Ppu_TurnOffAllVideo
     LDA CurSaveSlot
     CMP #$03
     BCC @ChoseSlot              ; If not a save slot,
@@ -115,12 +115,12 @@ UpdateMode1Menu_Sub1:
     CLC
     ADC #$0B
     STA GameMode
-    JMP EndGameMode
+    JMP Mode_End
 
 @ChoseSlot:
     ; A save slot was chosen.
-    JSR TurnOffAllVideo
-    JSR FetchFileAAddressSet
+    JSR Ppu_TurnOffAllVideo
+    JSR Save_FetchFileAAddressSet
     LDY #$27                    ; Copy Items block from file A to profile.
 
 @CopyItems:
@@ -153,13 +153,13 @@ UpdateMode1Menu_Sub1:
     LDA $0F
     CMP #$07
     BNE @CopyWorldFlags         ; If not done (destination address < $07FF), then copy more.
-    JMP GoToNextMode
+    JMP Mode_GoToNext
 
 ; ----------------------------------------------------------------------------
 ; Draws one Link per save slot down the menu, and a sword beside each slot that is in Q2.
 ; IN:   [00] = X, [01] = Y of the first Link.
 ; ----------------------------------------------------------------------------
-Mode1_WriteLinkSprites:
+Mode1Menu_WriteLinkSprites:
     LDA #$08                    ; Put the left tile of Link in [$02].
     STA $02
     LDA #$0A                    ; Put the right tile of Link in [$03].

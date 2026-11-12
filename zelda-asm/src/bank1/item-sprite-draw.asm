@@ -5,14 +5,14 @@
 ; TOPIC:    Item and weapon sprites: the frame tile table indexed by item slot, the routine that decides
 ;           from the tile number whether an item is one sprite, a mirrored pair or a flippable pair, and
 ;           the single-sprite writers used by multi-part monsters.
-; SEE ALSO: bank1/object-animation-draw.asm (Anim_WriteSpritePair and the hit flash; SpriteOffsets);
-;           bank1/take-item.asm (ItemIdToSlot: item id to item slot); bank7/room-item-draw.asm
-;           (DrawItemBySlot chooses the palette row); bank7/sword-and-rod.asm,
+; SEE ALSO: bank1/object-animation-draw.asm (Anim_WriteSpritePair and the hit flash; Sprite_RollingOffsets);
+;           bank1/take-item.asm (Item_IdToSlot: item id to item slot); bank7/room-item-draw.asm
+;           (Item_DrawBySlot chooses the palette row); bank7/sword-and-rod.asm,
 ;           bank7/sword-shot-magic-shot.asm, bank7/boomerang-return-draw.asm, bank7/bomb.asm (weapon draw
 ;           calls); bank7/object-animation.asm (death sparkle, slot $24); bank7/status-bar-lift-item.asm
-;           (Link lifting an item, slot $21); bank1/modeb-cave-save-sprites.asm (CycleCurSpriteIndex).
+;           (Link lifting an item, slot $21); bank1/modeb-cave-save-sprites.asm (Sprite_CycleCurIndex).
 ; KEY FACTS:
-;   - Items are drawn by item slot, not item id: slot = ItemIdToSlot[id] = the item's inventory byte
+;   - Items are drawn by item slot, not item id: slot = Item_IdToSlot[id] = the item's inventory byte
 ;     offset from InvItems ($00 sword ... $1F magic shield). Slots $20-$24 exist only as images: $20
 ;     magic sword, $21 Link lifting an item, $22 sword shot, $23 magic shot, $24 death sparkle.
 ;     Anim_ItemFrameOffsets
@@ -32,7 +32,7 @@
 ;   - Anim_WriteSprite and Anim_WriteSpecificSprite write one sprite at the object's ObjX, ObjY and
 ;     advance RollingSpriteIndex by one. Anim_EndWriteSprite
 ; CONTENTS: (generated; L = line in this file)
-;   L0051 Anim_ItemFrameOffsets                      data  TABLE: where each item's frames start; index = item slot (ItemIdToSlot; $20-$24 are image-only
+;   L0051 Anim_ItemFrameOffsets                      data  TABLE: where each item's frames start; index = item slot (Item_IdToSlot; $20-$24 are image-only
 ;   L0069 Anim_ItemFrameTiles                        data  TABLE: left tile of every item frame; index = Anim_ItemFrameOffsets[item slot] + frame; value = tile.
 ;   L0097 Anim_WriteStaticItemSpritesWithAttributes  code  Draws frame 0 of an item, unflipped, with attributes A on both sprites.
 ;   L0111 Anim_WriteItemSprites                      code  Draws an item frame in the next rolling sprite records.
@@ -46,7 +46,7 @@
 ;   L0255 Anim_EndWriteSprite                        code  Entry with A = the sprite's Y coordinate; tile and X are already in the record at offset Y.
 ; ============================================================================
 
-; TABLE: where each item's frames start; index = item slot (ItemIdToSlot; $20-$24 are image-only
+; TABLE: where each item's frames start; index = item slot (Item_IdToSlot; $20-$24 are image-only
 ; slots); value = offset of frame 0 in Anim_ItemFrameTiles.
 Anim_ItemFrameOffsets:
     ; $00 sword, $01 bomb, $02 arrow, $03 bow, $04 candle, $05 flute, $06 food, $07 potion
@@ -106,17 +106,17 @@ Anim_WriteStaticItemSpritesWithAttributes:
 ;       slot; [00] = X; [01] = Y; [04], [05] = left, right attributes; [0C] = frame; [0F] = flip
 ;       horizontally (used only by tiles $7C and up).
 ; OUT:  IsDrawnItemNarrow = 1 when one sprite was drawn, else 0; X = object slot; LeftSpriteOffset,
-;       RightSpriteOffset set from SpriteOffsets.
+;       RightSpriteOffset set from Sprite_RollingOffsets.
 ; ----------------------------------------------------------------------------
 Anim_WriteItemSprites:
-    TYA                         ; Keep the item slot on the stack while Y indexes SpriteOffsets.
+    TYA                         ; Keep the item slot on the stack while Y indexes Sprite_RollingOffsets.
     PHA
     LDA #$00
     STA IsDrawnItemNarrow
     LDY RollingSpriteIndex
-    LDA SpriteOffsets, Y
+    LDA Sprite_RollingOffsets, Y
     STA LeftSpriteOffset
-    LDA SpriteOffsets+1, Y
+    LDA Sprite_RollingOffsets+1, Y
     STA RightSpriteOffset
     PLA
     TAY
@@ -173,12 +173,12 @@ Anim_WriteSpecificItemSprites:
 @Wide:
     ; A = left tile, below $20 or $62 and up (not $F3).
     CMP #$6C
-    BCC @_Slim                  ; Below $6C: mirrored pair, 7 pixels apart.
+    BCC @Slim                  ; Below $6C: mirrored pair, 7 pixels apart.
     CMP #$7C
     BCC Anim_WriteMirroredSpritePair    ; $6C-$7B: mirrored pair, 8 pixels apart.
     JMP Anim_WriteHorizontallyFlippableSpritePair    ; $7C and up: two halves, flippable by [0F].
 
-@_Slim:
+@Slim:
     LDA #$07
     STA $0A                     ; [0A] := 7: the two sprites overlap by one pixel column.
 
@@ -234,7 +234,7 @@ Anim_WriteSprite:
     STA $03
 :
     LDY RollingSpriteIndex      ; Y := offset of the next rolling sprite record.
-    LDA SpriteOffsets, Y
+    LDA Sprite_RollingOffsets, Y
     TAY
     PLA
 
@@ -251,9 +251,9 @@ Anim_WriteSpecificSprite:
     LDA ObjY, X
 
 ; Entry with A = the sprite's Y coordinate; tile and X are already in the record at offset Y.
-; Stores Y coordinate and attributes [03], then advances RollingSpriteIndex (CycleCurSpriteIndex).
+; Stores Y coordinate and attributes [03], then advances RollingSpriteIndex (Sprite_CycleCurIndex).
 Anim_EndWriteSprite:
     STA Sprites, Y
     LDA $03
     STA Sprites+2, Y
-    JMP CycleCurSpriteIndex
+    JMP Sprite_CycleCurIndex

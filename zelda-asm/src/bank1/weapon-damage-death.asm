@@ -1,41 +1,41 @@
 ; ============================================================================
 ; FILE:     bank1/weapon-damage-death.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 5830-6035
-; SUBJECTS: (none)
+; SUBJECTS: Boomerang, Collision, Damage, Shove
 ; TOPIC:    A weapon of Link's touching a monster: the boomerang's stun, the invincibility mask, the Gohma,
 ;           Zol/Vire and Darknut special cases, HP subtraction, monster death and the kill counters.
-; SEE ALSO: bank1/monster-collisions.asm (CheckMonsterCollisions: the order the weapon slots are tested);
-;           bank1/sword-bomb-arrow-collision.asm (the other weapons' entry routines, PlayParryTune);
-;           bank1/object-overlap-test.asm (DoObjectsCollideWithThresholds); bank1/shove-knockback.asm
-;           (BeginShove); bank4/gohma.asm (Gohma_HandleWeaponCollision); bank4/drop-items.asm (how the kill
+; SEE ALSO: bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink: the order the weapon slots are tested);
+;           bank1/sword-bomb-arrow-collision.asm (the other weapons' entry routines, Damage_PlayParryTune);
+;           bank1/object-overlap-test.asm (Collision_TestPointsWithThresholds); bank1/shove-knockback.asm
+;           (Shove_Begin); bank4/gohma.asm (Gohma_HandleWeaponCollision); bank4/drop-items.asm (how the kill
 ;           counters choose a drop); bank1/link-collision-harm.asm (where the counters are zeroed).
 ; KEY FACTS:
 ;   - HP is ObjHP (HP x $10); a hit subtracts the damage points in [07]; the monster dies when HP < damage
-;     or the result is 0 (DealDamage).
+;     or the result is 0 (Damage_DealToMonster).
 ;   - Damage types in [09], tested against ObjInvincibilityMask: 1 sword/rod/sword shot, 2 boomerang,
-;     4 arrow, 8 bomb, $10 magic shot, $20 fire (HandleMonsterWeaponCollision).
+;     4 arrow, 8 bomb, $10 magic shot, $20 fire (Damage_HandleWeaponHit).
 ;   - The boomerang (slot $0F) does 0 damage and sets the monster's stun timer to $10; a monster whose HP
 ;     is already 0 dies from it. It always turns back (state $50) on touching a monster
-;     (CheckMonsterWeaponCollision, DealDamage).
-;   - Food in slot $0F (state bit 7) never collides (CheckMonsterBoomerangOrFoodCollision).
+;     (Collision_CheckWeaponPointVsMonster, Damage_DealToMonster).
+;   - Food in slot $0F (state bit 7) never collides (Boomerang_CheckMonsterCollision).
 ;   - A Darknut ($0B, $0C) takes no damage when the weapon's direction and its own are exact opposites
-;     (HandleMonsterWeaponCollision@CheckDarknut).
+;     (Damage_HandleWeaponHit@CheckDarknut).
 ;   - A Zol ($13) or Vire ($12) hit by anything but the boomerang takes the weapon's direction
-;     (HandleMonsterWeaponCollision@CheckZolVire).
+;     (Damage_HandleWeaponHit@CheckZolVire).
 ;   - Each death adds 1 to WorldKillCount (no cap) and to HelpDropCount (stops at $0A); IsHelpDropBomb is
-;     set only when the kill that brings HelpDropCount to exactly $0A is a bomb kill (HandleMonsterDied).
+;     set only when the kill that brings HelpDropCount to exactly $0A is a bomb kill (Damage_KillMonster).
 ;   - Death sets ObjMetastate to $10 and clears the stun timer, knockback and invincibility timer;
-;     WorldKillCycle is not changed here (HandleMonsterDied, ResetShoveInfoAndInvincibilityTimer).
-;   - An immune hit plays the parry tune, except for bomb and fire (L_PlayParrySoundForDamageType).
+;     WorldKillCycle is not changed here (Damage_KillMonster, Shove_ResetAndClearInvincibility).
+;   - An immune hit plays the parry tune, except for bomb and fire (Damage_PlayParryTuneUnlessBombOrFire).
 ; CONTENTS: (generated; L = line in this file)
-;   L0048 CheckMonsterBoomerangOrFoodCollision  code  Tests Link's boomerang (not food) in slot Y against the monster in slot X; a hit stuns the monster.
-;   L0082 CheckMonsterWeaponCollision           code  Tests a weapon point against a monster and, on overlap, applies the hit (stun, damage or parry).
-;   L0127 HandleMonsterWeaponCollision          code  Applies a weapon hit to a monster: immunity mask, Gohma, Zol/Vire turning, Darknut parry, then damage.
-;   L0181 DealDamage                            code  Subtracts the damage points in [07] from the monster's HP and starts its death when none is left.
-;   L0195 L74D8_Exit                            code  Shared exit of the weapon collision routines in this file.
-;   L0199 L_PlayParrySoundForDamageType         code  Plays the parry tune for a hit that did no damage, unless the damage type in [09] is bomb or fire.
-;   L0216 HandleMonsterDied                     code  Counts a kill in the drop counters and puts the monster into the dying metastate.
-;   L0245 ResetShoveInfoAndInvincibilityTimer   code  Clears the slot's knockback direction, knockback distance and invincibility timer.
+;   L0048 Boomerang_CheckMonsterCollision             code  Tests Link's boomerang (not food) in slot Y against the monster in slot X; a hit stuns the monster.
+;   L0082 Collision_CheckWeaponPointVsMonster         code  Tests a weapon point against a monster and, on overlap, applies the hit (stun, damage or parry).
+;   L0127 Damage_HandleWeaponHit                      code  Applies a weapon hit to a monster: immunity mask, Gohma, Zol/Vire turning, Darknut parry, then damage.
+;   L0181 Damage_DealToMonster                        code  Subtracts the damage points in [07] from the monster's HP and starts its death when none is left.
+;   L0195 Collision_CheckWeaponPointVsMonster_Return  code  Shared exit of the weapon collision routines in this file.
+;   L0199 Damage_PlayParryTuneUnlessBombOrFire        code  Plays the parry tune for a hit that did no damage, unless the damage type in [09] is bomb or fire.
+;   L0216 Damage_KillMonster                          code  Counts a kill in the drop counters and puts the monster into the dying metastate.
+;   L0245 Shove_ResetAndClearInvincibility            code  Clears the slot's knockback direction, knockback distance and invincibility timer.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -43,9 +43,9 @@
 ; IN:   X = monster slot; Y = weapon slot ($0F); [02],[03] = monster's middle.
 ; OUT:  [00] = weapon slot; [06] = 1 when they overlap (left unchanged when the slot holds food).
 ; NOTE: Box: the boomerang's point (X+4, Y+8) within less than $0A pixels of the monster's middle on both
-;       axes. Falls into CheckMonsterWeaponCollision.
+;       axes. Falls into Collision_CheckWeaponPointVsMonster.
 ; ----------------------------------------------------------------------------
-CheckMonsterBoomerangOrFoodCollision:
+Boomerang_CheckMonsterCollision:
     ; Food has bit 7 of its state set: it never collides. Return.
     LDA a:ObjState, Y
     ASL
@@ -79,7 +79,7 @@ CheckMonsterBoomerangOrFoodCollision:
 ; NOTE: Boomerang (slot $0F): it is set to return fast (state $50) on any overlap; if the monster is not
 ;       immune to type 2 its stun timer becomes $10 and the damage is 0.
 ; ----------------------------------------------------------------------------
-CheckMonsterWeaponCollision:
+Collision_CheckWeaponPointVsMonster:
     STA $05
 
     LDA #$00
@@ -88,21 +88,21 @@ CheckMonsterWeaponCollision:
     ; Return if the weapon slot is inactive (state 0).
     LDY $00
     LDA a:ObjState, Y
-    BEQ L74D8_Exit
+    BEQ Collision_CheckWeaponPointVsMonster_Return
 
     ; Return if the two points are not within the thresholds. Sets [06] = 1 when they are.
-    JSR DoObjectsCollideWithThresholds
-    BEQ L74D8_Exit
+    JSR Collision_TestPointsWithThresholds
+    BEQ Collision_CheckWeaponPointVsMonster_Return
 
     ; Every weapon but the boomerang goes straight to the hit handling.
     CPY #$0F
-    BNE HandleMonsterWeaponCollision
+    BNE Damage_HandleWeaponHit
 
     ; Boomerang. If the monster is immune to it, play the parry tune.
     LDA ObjInvincibilityMask, X
     AND $09
     BEQ :+
-    JSR PlayParryTune
+    JSR Damage_PlayParryTune
 :
     ; Immune or not, the boomerang turns back: state $50 (returning fast).
     LDA #$50
@@ -111,7 +111,7 @@ CheckMonsterWeaponCollision:
     ; If the monster is immune, that is all.
     LDA ObjInvincibilityMask, X
     AND $09
-    BNE L74D8_Exit
+    BNE Collision_CheckWeaponPointVsMonster_Return
 
     ; Damage := 0, and stun the monster: stun timer := $10 (counted in 10-frame units).
     LDA #$00
@@ -124,12 +124,12 @@ CheckMonsterWeaponCollision:
 ; IN:   X = monster slot; Y = weapon slot; [07] = damage points; [09] = damage type.
 ; NOTE: Entered directly by the bomb and fire test; the other weapons fall in from above.
 ; ----------------------------------------------------------------------------
-HandleMonsterWeaponCollision:
+Damage_HandleWeaponHit:
     ; If the monster's invincibility mask holds this damage type, no damage: play the parry tune
     ; (not for bomb or fire) and return.
     LDA ObjInvincibilityMask, X
     AND $09
-    BNE L_PlayParrySoundForDamageType
+    BNE Damage_PlayParryTuneUnlessBombOrFire
 
     ; Gohma ($33, $34) has its own handler (only an arrow in the open eye hurts it).
     LDA ObjType, X
@@ -149,10 +149,10 @@ HandleMonsterWeaponCollision:
     BNE @CheckDarknut
 :
     CPY #$0F
-    BEQ DealDamage
+    BEQ Damage_DealToMonster
     LDA a:ObjDir, Y
     STA ObjDir, X
-    JMP DealDamage
+    JMP Damage_DealToMonster
 
 @CheckDarknut:
     ; Darknut ($0B red, $0C blue): if the weapon's direction and the Darknut's direction together are
@@ -161,14 +161,14 @@ HandleMonsterWeaponCollision:
     CMP #$0B
     BEQ :+
     CMP #$0C
-    BNE DealDamage
+    BNE Damage_DealToMonster
 :
     LDA a:ObjDir, Y
     ORA ObjDir, X
     CMP #$0C
-    BEQ L_PlayParrySoundForDamageType
+    BEQ Damage_PlayParryTuneUnlessBombOrFire
     CMP #$03
-    BEQ L_PlayParrySoundForDamageType
+    BEQ Damage_PlayParryTuneUnlessBombOrFire
 
 ; ----------------------------------------------------------------------------
 ; Subtracts the damage points in [07] from the monster's HP and starts its death when none is left.
@@ -178,31 +178,31 @@ HandleMonsterWeaponCollision:
 ;       The monster dies when HP < damage or HP - damage = 0, so damage 0 kills a monster whose HP is 0.
 ;       No immunity test here: callers that jump in directly bypass the invincibility mask.
 ; ----------------------------------------------------------------------------
-DealDamage:
+Damage_DealToMonster:
     ; Request the "monster harmed" tune.
     LDA #$02
     STA Tune0Request
 
     LDA ObjHP, X
     CMP $07                     ; HP < damage: dies (HP is left as it was).
-    BCC HandleMonsterDied
+    BCC Damage_KillMonster
     SEC
     SBC $07
     STA ObjHP, X
-    BEQ HandleMonsterDied       ; HP reached 0: dies.
+    BEQ Damage_KillMonster       ; HP reached 0: dies.
 
 ; Shared exit of the weapon collision routines in this file.
-L74D8_Exit:
+Collision_CheckWeaponPointVsMonster_Return:
     RTS
 
 ; Plays the parry tune for a hit that did no damage, unless the damage type in [09] is bomb or fire.
-L_PlayParrySoundForDamageType:
+Damage_PlayParryTuneUnlessBombOrFire:
     LDA $09
     CMP #$20                    ; Fire damage type
-    BEQ L74D8_Exit
+    BEQ Collision_CheckWeaponPointVsMonster_Return
     CMP #$08                    ; Bomb damage type
-    BEQ L74D8_Exit
-    JMP PlayParryTune
+    BEQ Collision_CheckWeaponPointVsMonster_Return
+    JMP Damage_PlayParryTune
 
 ; ----------------------------------------------------------------------------
 ; Counts a kill in the drop counters and puts the monster into the dying metastate.
@@ -213,7 +213,7 @@ L_PlayParrySoundForDamageType:
 ; NOTE: WorldKillCount has no cap here. Once HelpDropCount is $0A neither it nor IsHelpDropBomb changes
 ;       again until the forced drop is made or Link is harmed. WorldKillCycle is not touched here.
 ; ----------------------------------------------------------------------------
-HandleMonsterDied:
+Damage_KillMonster:
     INC WorldKillCount
 
     ; Count toward the help drop, up to $0A.
@@ -234,7 +234,7 @@ HandleMonsterDied:
 
 @SetDyingMetastate:
     ; Death tune, ObjMetastate := $10 (first step of the death sparkle); clear the stun timer.
-    JSR UpdateDeadDummy
+    JSR DeadDummy_StartDeathSparkle
     LDA #$00
     STA ObjStunTimer, X
 
@@ -242,7 +242,7 @@ HandleMonsterDied:
 ; Clears the slot's knockback direction, knockback distance and invincibility timer.
 ; IN:   A = 0; X = object slot.
 ; ----------------------------------------------------------------------------
-ResetShoveInfoAndInvincibilityTimer:
-    JSR SetShoveInfoWith0
+Shove_ResetAndClearInvincibility:
+    JSR Shove_SetDirAndDistance
     STA ObjInvincibilityTimer, X
     RTS

@@ -1,42 +1,42 @@
 ; ============================================================================
 ; FILE:     bank1/qspeed-direction-math.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 3511-3636
-; SUBJECTS: (none)
+; SUBJECTS: Dir, Math, Obj
 ; TOPIC:    The two routines that turn an object's q-speed into whole-pixel steps and count them in the
 ;           grid offset (with its limits); opposite direction and direction index; Abs and Negate.
-; SEE ALSO: bank7/walker-move.asm (MoveObject: sets the limits, calls these four times a frame and moves
+; SEE ALSO: bank7/walker-move.asm (Obj_MoveByQSpeed: sets the limits, calls these four times a frame and moves
 ;           the coordinate by the returned carry); bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate
 ;           sets Link's grid offset back to 0 at a multiple of 8); bank5/link-handle-input.asm (turning
 ;           rules that read and rewrite the grid offset); bank7/walker-collision-screen-edge.asm
-;           (CheckScreenEdge needs grid offset 0); bank1/shot-aim-boomerang-speed.asm (MoveShot).
+;           (Link_CheckScreenEdge needs grid offset 0); bank1/shot-aim-boomerang-speed.asm (Obj_MoveShot).
 ; KEY FACTS:
-;   - One call adds (or subtracts) ObjQSpeedFrac to ObjPosFrac and yields at most one pixel; MoveObject
-;     calls four times a frame, so pixels per frame = q-speed / 64 (AddQSpeedToPositionFraction).
-;   - ObjGridOffset counts the pixels: +1 per pixel right or down (AddQSpeedToPositionFraction), -1 per
-;     pixel left or up (SubQSpeedFromPositionFraction).
+;   - One call adds (or subtracts) ObjQSpeedFrac to ObjPosFrac and yields at most one pixel; Obj_MoveByQSpeed
+;     calls four times a frame, so pixels per frame = q-speed / 64 (Obj_AddQSpeedToPosFrac).
+;   - ObjGridOffset counts the pixels: +1 per pixel right or down (Obj_AddQSpeedToPosFrac), -1 per
+;     pixel left or up (Obj_SubQSpeedFromPosFrac).
 ;   - Limits: when ObjGridOffset equals PositiveGridCellSize or NegativeGridCellSize (+8/-8 for Link,
-;     +$10/-$10 for every other object, set by MoveObject) the pixel is withheld, in BOTH routines: an
+;     +$10/-$10 for every other object, set by Obj_MoveByQSpeed) the pixel is withheld, in BOTH routines: an
 ;     object at either limit cannot move either way until other code changes the offset.
 ;   - 0 is not a limit: the offset counts through 0 freely (+1, 0, -1 = $FF, ...); nothing here stops
-;     or snaps an object at a grid point (AddQSpeedToPositionFraction, SubQSpeedFromPositionFraction).
+;     or snaps an object at a grid point (Obj_AddQSpeedToPosFrac, Obj_SubQSpeedFromPosFrac).
 ;   - At a limit the fraction still accumulates; only the pixel is dropped.
 ;   - The test is for equality with a limit before the step, so an offset already beyond a limit is
-;     not stopped (AddQSpeedToPositionFraction).
-;   - GetOppositeDir uses the lowest set direction bit (right, then left, then down, then up) and also
+;     not stopped (Obj_AddQSpeedToPosFrac).
+;   - Dir_GetOpposite uses the lowest set direction bit (right, then left, then down, then up) and also
 ;     returns the direction index in Y: right 3, left 2, down 1, up 0. Direction 0 is not handled.
 ;   - Abs and Negate leave $80 as $80.
 ; CONTENTS: (generated; L = line in this file)
-;   L0052 AddQSpeedToPositionFraction    code  Adds the q-speed to the position fraction for a step right or down; a carry is one pixel.
-;   L0094 SubQSpeedFromPositionFraction  code  Subtracts the q-speed from the position fraction for a step left or up; a borrow is one pixel.
-;   L0125 OppositeDirs                   data  TABLE: opposite of each direction; index = direction index (0 up, 1 down, 2 left, 3 right);
-;   L0137 GetOppositeDir                 code  Gives the opposite of a direction in A and the direction's index (0 up .. 3 right) in Y.
-;   L0155 Abs                            code  Takes the absolute value of a signed byte (falls into Negate when A is negative).
-;   L0163 Negate                         code  Negates a byte (two's complement).
+;   L0052 Obj_AddQSpeedToPosFrac    code  Adds the q-speed to the position fraction for a step right or down; a carry is one pixel.
+;   L0094 Obj_SubQSpeedFromPosFrac  code  Subtracts the q-speed from the position fraction for a step left or up; a borrow is one pixel.
+;   L0125 Dir_Opposites             data  TABLE: opposite of each direction; index = direction index (0 up, 1 down, 2 left, 3 right);
+;   L0137 Dir_GetOpposite           code  Gives the opposite of a direction in A and the direction's index (0 up .. 3 right) in Y.
+;   L0155 Math_Abs                  code  Takes the absolute value of a signed byte (falls into Negate when A is negative).
+;   L0163 Math_Negate               code  Negates a byte (two's complement).
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Adds the q-speed to the position fraction for a step right or down; a carry is one pixel.
-; IN:   X = object slot; PositiveGridCellSize, NegativeGridCellSize = grid offset limits (MoveObject
+; IN:   X = object slot; PositiveGridCellSize, NegativeGridCellSize = grid offset limits (Obj_MoveByQSpeed
 ;       stores 8 and $F8 for Link, $10 and $F0 for any other object)
 ; OUT:  C = 1 if the object moves one pixel (the caller adds C to ObjX or ObjY); ObjPosFrac,X
 ;       updated; ObjGridOffset,X = itself + C
@@ -46,10 +46,10 @@
 ; NOTE: 0 is not a limit. An offset of -1 ($FF) steps to 0 and on to +1 like any other value, so an
 ;       object heading right or down with a negative offset walks through the grid point (offset 0)
 ;       and continues up to the positive limit.
-; NOTE: MoveObject calls this four times per frame, each call giving 0 or 1 pixel: q-speed $60 gives
+; NOTE: Obj_MoveByQSpeed calls this four times per frame, each call giving 0 or 1 pixel: q-speed $60 gives
 ;       1 and 2 pixels on alternate frames (1.5 per frame); q-speed $40 gives 1 pixel every frame.
 ; ----------------------------------------------------------------------------
-AddQSpeedToPositionFraction:
+Obj_AddQSpeedToPosFrac:
     LDA ObjPosFrac, X
     CLC
     ADC ObjQSpeedFrac, X
@@ -80,7 +80,7 @@ AddQSpeedToPositionFraction:
 
 ; ----------------------------------------------------------------------------
 ; Subtracts the q-speed from the position fraction for a step left or up; a borrow is one pixel.
-; IN:   X = object slot; PositiveGridCellSize, NegativeGridCellSize = grid offset limits (MoveObject
+; IN:   X = object slot; PositiveGridCellSize, NegativeGridCellSize = grid offset limits (Obj_MoveByQSpeed
 ;       stores 8 and $F8 for Link, $10 and $F0 for any other object)
 ; OUT:  C = 0 if the object moves one pixel (the caller subtracts the borrow from ObjX or ObjY);
 ;       ObjPosFrac,X updated; ObjGridOffset,X = itself - 1 when C = 0
@@ -91,7 +91,7 @@ AddQSpeedToPositionFraction:
 ;       up with a positive offset walks through the grid point (offset 0) and continues down to the
 ;       negative limit.
 ; ----------------------------------------------------------------------------
-SubQSpeedFromPositionFraction:
+Obj_SubQSpeedFromPosFrac:
     LDA ObjPosFrac, X
     SEC
     SBC ObjQSpeedFrac, X
@@ -122,7 +122,7 @@ SubQSpeedFromPositionFraction:
 
 ; TABLE: opposite of each direction; index = direction index (0 up, 1 down, 2 left, 3 right);
 ; value = direction bits.
-OppositeDirs:
+Dir_Opposites:
     .BYTE $04, $08, $01, $02    ; up -> down, down -> up, left -> right, right -> left
 
 ; ----------------------------------------------------------------------------
@@ -132,9 +132,9 @@ OppositeDirs:
 ; NOTE: With several bits set the lowest wins: right, then left, then down, then up. Many callers use
 ;       this only to reduce a diagonal input to one direction or to get the index in Y.
 ; NOTE: With none of the low four bits set the loop ends with Y = $FF and A is read from
-;       OppositeDirs+$FF, a byte outside the table: callers must pass a direction.
+;       Dir_Opposites+$FF, a byte outside the table: callers must pass a direction.
 ; ----------------------------------------------------------------------------
-GetOppositeDir:
+Dir_GetOpposite:
     LDY #$03
 
 @Loop:
@@ -143,7 +143,7 @@ GetOppositeDir:
     DEY
     BPL @Loop
 :
-    LDA OppositeDirs, Y
+    LDA Dir_Opposites, Y
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -152,7 +152,7 @@ GetOppositeDir:
 ; OUT:  A = |A| ($80 stays $80)
 ; NOTE: The branch for a non-negative value goes to the RTS at the end of Negate.
 ; ----------------------------------------------------------------------------
-Abs:
+Math_Abs:
     BPL :+
 
 ; ----------------------------------------------------------------------------
@@ -160,7 +160,7 @@ Abs:
 ; IN:   A = value
 ; OUT:  A = -A (0 stays 0, $80 stays $80); C = 1 only when A was 0
 ; ----------------------------------------------------------------------------
-Negate:
+Math_Negate:
     EOR #$FF
     CLC
     ADC #$01

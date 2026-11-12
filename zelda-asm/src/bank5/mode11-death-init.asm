@@ -1,33 +1,33 @@
 ; ============================================================================
 ; FILE:     bank5/mode11-death-init.asm  BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 2039-2097
-; SUBJECTS: (none)
+; SUBJECTS: Audio, Mode11Death
 ; TOPIC:    Init half of the death mode ($11): Link flashes in the frozen room for 33 frames, then the
 ;           death sequence is set up (red fade series, four spins) and all sound is silenced.
 ; SEE ALSO: bank1/link-collision-harm.asm (where Link's hearts reach 0 and mode $11 is entered);
 ;           bank5/mode11-death.asm (the update half: spin, fade, spark, GAME OVER);
-;           bank7/init-mode-dispatch.asm (InitMode_JumpTable calls InitMode11 every frame until
-;           IsUpdatingMode is set); bank5/submenu-states.asm (jumps to SilenceSound).
+;           bank7/init-mode-dispatch.asm (Mode_Init_JumpTable calls Mode11Death_Init every frame until
+;           IsUpdatingMode is set); bank5/submenu-states.asm (jumps to Audio_SilenceSongTune1AndSample).
 ; KEY FACTS:
 ;   - The init runs once per frame in two steps selected by GameSubmode: step 0 lasts one frame,
-;     step 1 waits for Link's ObjTimer. InitMode11, InitMode11_Sub1.
+;     step 1 waits for Link's ObjTimer. Mode11Death_Init, Mode11Death_Init_Sub1.
 ;   - Step 0 empties HeartPartial, clears PauseState, redraws the status bar, and starts the flash:
 ;     Link's ObjInvincibilityTimer = $10 (counts every second frame = 32 frames) and ObjTimer = $21
-;     (33 frames). InitMode11.
+;     (33 frames). Mode11Death_Init.
 ;   - Monsters and other objects are not updated during the death mode; only Link is redrawn.
-;     InitMode11.
+;     Mode11Death_Init.
 ;   - Step 1, once the 33 frames are over: FadeCycle = $60 (the death palette series),
 ;     DeathModeCounter = 4 spins, Link faces down (ObjDir = 4), ObjState = 0, GameSubmode = 0, then
-;     the update half takes over. InitMode11_Sub1.
+;     the update half takes over. Mode11Death_Init_Sub1.
 ;   - Outside a cellar (unique room ids $3E, $3F) the room's doors are laid out again from
-;     CurOpenedDoors before the sequence. InitMode11_Sub1.
-;   - SilenceSound requests $80 on tune channel 0 (stops the song) and $80 as the effect request
-;     (stops the DMC sample and tune channel 1). SilenceSound.
+;     CurOpenedDoors before the sequence. Mode11Death_Init_Sub1.
+;   - Audio_SilenceSongTune1AndSample requests $80 on tune channel 0 (stops the song) and $80 as the effect request
+;     (stops the DMC sample and tune channel 1). Audio_SilenceSongTune1AndSample.
 ; CONTENTS: (generated; L = line in this file)
-;   L0041 InitMode11       code  Death mode init, run each frame: step 0 freezes the room and starts Link's 33-frame flash.
-;   L0073 InitMode11_Sub1  code  Death mode init step 1: waits out the flash, then sets up the death sequence and starts updating.
-;   L0101 SilenceSound     code  Requests silence: $80 to tune channel 0 (stops the song) and $80 as the effect request.
-;   L0107 L14A96_Exit      code  Shared return of the routines above.
+;   L0041 Mode11Death_Init                 code  Death mode init, run each frame: step 0 freezes the room and starts Link's 33-frame flash.
+;   L0073 Mode11Death_Init_Sub1            code  Death mode init step 1: waits out the flash, then sets up the death sequence and starts updating.
+;   L0101 Audio_SilenceSongTune1AndSample  code  Requests silence: $80 to tune channel 0 (stops the song) and $80 as the effect request.
+;   L0107 Mode11Death_Init_Return          code  Shared return of the routines above.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -38,23 +38,23 @@
 ; NOTE: Every frame of both steps Link's invincibility timer is counted down and Link is redrawn, so
 ;       he flashes while the timer runs.
 ; ----------------------------------------------------------------------------
-InitMode11:
+Mode11Death_Init:
     LDX #$00                    ; Link's slot: count down his invincibility timer (the flash in step 1).
-    JSR DecrementInvincibilityTimer
+    JSR Obj_DecInvincibilityTimer
     JSR Link_EndMoveAndAnimate
     LDA GameSubmode
-    BNE InitMode11_Sub1
+    BNE Mode11Death_Init_Sub1
 
     ; Step 0 (one frame).
-    JSR HideAllSprites
-    JSR UpdateTriforcePositionMarker
-    JSR DrawLinkBetweenRooms
-    JSR DrawStatusBarItemsAndEnsureItemSelected
-    JSR MaskCurPpuMaskGrayscale ; Clears bit 0 (grayscale) of CurPpuMask.
+    JSR Sprite_HideAll
+    JSR StatusBar_UpdateTriforceMarker
+    JSR Link_DrawBetweenRooms
+    JSR StatusBar_DrawItemsAndEnsureSelection
+    JSR Ppu_ClearGrayscaleInMask ; Clears bit 0 (grayscale) of CurPpuMask.
     LDA #$00
     STA PauseState
     STA HeartPartial
-    JSR FormatStatusBarText
+    JSR StatusBar_FormatText
     INC GameSubmode
     LDA #$10                    ; Link flashes while this is nonzero: $10 * 2 = 32 frames.
     STA ObjInvincibilityTimer
@@ -68,18 +68,18 @@ InitMode11:
 ; ----------------------------------------------------------------------------
 ; Death mode init step 1: waits out the flash, then sets up the death sequence and starts updating.
 ; OUT:  FadeCycle = $60; DeathModeCounter = 4; ObjDir = 4 (down); ObjState = 0; GameSubmode = 0;
-;       CurRow = 0; IsUpdatingMode set; falls into SilenceSound.
+;       CurRow = 0; IsUpdatingMode set; falls into Audio_SilenceSongTune1AndSample.
 ; ----------------------------------------------------------------------------
-InitMode11_Sub1:
+Mode11Death_Init_Sub1:
     LDA ObjTimer
-    BNE L14A96_Exit             ; Still flashing: wait.
-    JSR GetUniqueRoomId
+    BNE Mode11Death_Init_Return             ; Still flashing: wait.
+    JSR Room_GetUniqueRoomId
     AND #$3E
     CMP #$3E
     BEQ :+                      ; Unique room ids $3E and $3F are cellars: they have no doors.
     LDA CurOpenedDoors          ; Elsewhere, lay out the doors again with the current open-door mask
-    STA PrevOpenedDoors         ; (LayOutDoorsPrev lays them out from PrevOpenedDoors; it does
-    JSR LayOutDoorsPrev         ; nothing in the OW).
+    STA PrevOpenedDoors         ; (Door_LayOutWithPrevOpened lays them out from PrevOpenedDoors; it does
+    JSR Door_LayOutWithPrevOpened         ; nothing in the OW).
 :
     LDA #$60                    ; Fade series 6, step 0: the death palette series.
     STA FadeCycle
@@ -96,13 +96,13 @@ InitMode11_Sub1:
 
 ; ----------------------------------------------------------------------------
 ; Requests silence: $80 to tune channel 0 (stops the song) and $80 as the effect request.
-; NOTE: An effect request with bit 7 set stops the DMC sample and tune channel 1 (DriveEffect).
+; NOTE: An effect request with bit 7 set stops the DMC sample and tune channel 1 (Sfx_Drive).
 ; ----------------------------------------------------------------------------
-SilenceSound:
+Audio_SilenceSongTune1AndSample:
     LDA #$80
     STA Tune0Request
     STA EffectRequest
 
 ; Shared return of the routines above.
-L14A96_Exit:
+Mode11Death_Init_Return:
     RTS

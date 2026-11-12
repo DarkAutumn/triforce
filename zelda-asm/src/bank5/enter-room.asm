@@ -1,52 +1,52 @@
 ; ============================================================================
 ; FILE:     bank5/enter-room.asm         BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 1450-1868
-; SUBJECTS: (none)
+; SUBJECTS: Link, Mode4Enter, Palette, Room
 ; TOPIC:    Mode 4 (enter room) init submodes, and the room-entry routine shared by modes 4, 9, $B and $C:
 ;           clears per-room RAM, places Link, decodes the room's monster list and count (reduced by the
 ;           room history), fills the object types, and sets the overworld tile object.
-; SEE ALSO: bank5/spawn-positions.asm (AssignObjSpawnPositions: where the monsters are put; cellar Keese;
+; SEE ALSO: bank5/spawn-positions.asm (Spawn_AssignPositions: where the monsters are put; cellar Keese;
 ;           cave person); bank5/room-history-ow.asm and bank5/room-history-uw.asm (how remembered kills
-;           cut the monster count); bank5/mode-inits-obj-lists.asm (ObjLists, ObjListAddrs,
-;           EnteringRoomRelativePositions); bank7/init-mode5-play.asm (room history insert, room item
+;           cut the monster count); bank5/mode-inits-obj-lists.asm (Spawn_ObjLists, Spawn_ObjListAddrs,
+;           Mode4Enter_WalkInGridOffsets); bank7/init-mode5-play.asm (room history insert, room item
 ;           creation after entry); bank7/update-mode-dispatch.asm (mode 4 update: Link's walk-in);
 ;           bank5/mode7-scroll-update.asm (enters mode 4 at submode 1); bank5/layout-room-ow.asm (finds
 ;           the tile object).
 ; KEY FACTS:
 ;   - Monster list id = attribute byte C bits 5-0, plus $40 when attribute byte D bit 7 is set. Ids
-;     below $62 are one object type repeated; ids $62-$7F pick a list of types. InitMode_EnterRoom.
+;     below $62 are one object type repeated; ids $62-$7F pick a list of types. Room_EnterCommon.
 ;   - Monster count = LevelInfo_FoeCounts[attribute byte C bits 7-6], but forced to 1 for ids $32-$61
-;     (bosses and other single objects). InitMode_EnterRoom.
-;   - The count is then cut by kills remembered for the room (ModifyObjCountByHistoryOW / UW); a
+;     (bosses and other single objects). Room_EnterCommon.
+;   - The count is then cut by kills remembered for the room (RoomHistory_ModifyObjCountOW / UW); a
 ;     result below 0 (or a cleared room) gives count 0 and list id 0. The final count is RoomObjCount.
-;     InitMode_EnterRoom@StoreObjCount.
+;     Room_EnterCommon@StoreObjCount.
 ;   - Types go to object slots 1..count (ObjType+1..); slot 1's type is kept as RoomObjTemplateType.
-;     Count 0 or id 0 makes no monsters. InitMode_EnterRoom@StoreObjTemplate.
+;     Count 0 or id 0 makes no monsters. Room_EnterCommon@StoreObjTemplate.
 ;   - In mode 9 (cellar) the room's list and count are discarded (4 blue Keese are made by
-;     AssignObjSpawnPositions instead). InitMode_EnterRoom.
+;     Spawn_AssignPositions instead). Room_EnterCommon.
 ;   - All of $0300-$051F is zeroed on every room entry, then object slots $0B..1 get: uninitialized
 ;     flag, state 0, direction 0, no stun or knockback, metastate 1 (spawn cloud), q-speed $20.
-;     InitMode_EnterRoom@ResetObjLoop.
+;     Room_EnterCommon@ResetObjLoop.
 ;   - Coming out of a cave or dungeon onto the overworld: X = attribute byte A high nibble * $10,
 ;     Y = (attribute byte F bits 2-0) * $10 + $4D, facing down. If Link went in through an entrance
-;     tile ($24) he starts $10 pixels lower and walks up to that Y. InitMode_EnterRoom.
+;     tile ($24) he starts $10 pixels lower and walks up to that Y. Room_EnterCommon.
 ;   - Room to room in a dungeon: X = $00 entering facing right, $F0 facing left; ObjGridOffset =
 ;     +/-$18 through an open or key door, +/-$28 through any other door type. Overworld: offset 0,
-;     position as the scroll left it. InitMode_EnterRoom@ChooseWalkDistance.
+;     position as the scroll left it. Room_EnterCommon@ChooseWalkDistance.
 ;   - If the door Link came through is open (CurOpenedDoors), a close command (TriggeredDoorCmd = 2)
-;     is issued for it. InitMode_EnterRoom@Method2.
+;     is issued for it. Room_EnterCommon@Method2.
 ;   - Overworld rooms $3F and $55 get the dock (object type $61) in slot $0B; other rooms get the
-;     tile object found by the room layout. SetupTileObjectOW.
+;     tile object found by the room layout. Room_SetUpTileObjOW.
 ;   - Mode 4 submodes: 1 redraw rows (only after scrolling into a dark room), 2 decide whether to
-;     fade in after leaving an unlit dark room, 3 run the fade, 0 enter the room. InitMode4.
+;     fade in after leaving an unlit dark room, 3 run the fade, 0 enter the room. Mode4Enter_Init.
 ; CONTENTS: (generated; L = line in this file)
-;   L0059 InitMode4                      code  Mode 4 (enter room) init: runs submode 1, 2 or 3, or (submode 0) the common room entry.
-;   L0107 SetFadeCycleAndAdvanceSubmode  code  Starts a palette fade and advances the submode.
-;   L0114 InitMode4_Sub3                 code  Mode 4 init submode 3: runs the fade-in each frame; when it is done, falls into the next label.
-;   L0119 InitMode4_GoToSub0             code  Sets mode 4's submode to 0 (enter the room next frame) and clears CandleState.
-;   L0137 InitMode_EnterRoom             code  Common room entry: clears per-room state, places Link, creates the room's monsters and tile object.
-;   L0402 DrawLinkBetweenRooms           code  Draws Link for a frame between rooms; behind the background while he is leaving underground.
-;   L0423 SetupTileObjectOW              code  Puts the overworld room's tile object in object slot $0B and activates it.
+;   L0059 Mode4Enter_Init                        code  Mode 4 (enter room) init: runs submode 1, 2 or 3, or (submode 0) the common room entry.
+;   L0107 Palette_SetFadeCycleAndAdvanceSubmode  code  Starts a palette fade and advances the submode.
+;   L0114 Mode4Enter_Init_Sub3                   code  Mode 4 init submode 3: runs the fade-in each frame; when it is done, falls into the next label.
+;   L0119 Mode4Enter_Init_GoToSub0               code  Sets mode 4's submode to 0 (enter the room next frame) and clears CandleState.
+;   L0137 Room_EnterCommon                       code  Common room entry: clears per-room state, places Link, creates the room's monsters and tile object.
+;   L0402 Link_DrawBetweenRooms                  code  Draws Link for a frame between rooms; behind the background while he is leaving underground.
+;   L0423 Room_SetUpTileObjOW                    code  Puts the overworld room's tile object in object slot $0B and activates it.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -56,16 +56,16 @@
 ;       scrolling into a dark dungeon room (CurRow = 0); it then sends all $16 play-area rows to
 ;       NT 0 again, one per frame. Why that redraw is needed is (unverified).
 ; ----------------------------------------------------------------------------
-InitMode4:
+Mode4Enter_Init:
     LDX GameSubmode
-    BEQ InitMode_EnterRoom      ; Submode 0: the common room entry.
+    BEQ Room_EnterCommon      ; Submode 0: the common room entry.
     DEX
     BNE @CheckSub2
 
     ; Submode 1: copy the play area to NT 0, one row each frame, if CurRow is valid.
     LDA CurRow
     BMI :+                      ; CurRow = $FF: nothing to copy.
-    JSR CopyNextRowToTransferBuf
+    JSR Transfer_CopyNextPlayAreaRow
     BCC @Exit                   ; C clear: more rows to go.
 :
     INC GameSubmode
@@ -75,48 +75,48 @@ InitMode4:
 
 @CheckSub2:
     DEX
-    BNE InitMode4_Sub3
+    BNE Mode4Enter_Init_Sub3
 
     ; Submode 2: decide whether the palette must fade back in.
     LDY RoomId
-    JSR IsDarkRoom_Bank5
-    BNE InitMode4_GoToSub0      ; This room is dark: no fade-in.
+    JSR Room_IsDark_Bank5
+    BNE Mode4Enter_Init_GoToSub0      ; This room is dark: no fade-in.
 
     ; This room is not dark. Find the room Link came from: the room one step from here in the
     ; direction opposite to Link's.
     LDA ObjDir
-    JSR CalcNextRoomByDir
+    JSR Room_CalcNextRoomByDir
     SEC
     SBC RoomId                  ; Room id offset in Link's direction ...
-    JSR Negate                  ; ... negated ...
+    JSR Math_Negate                  ; ... negated ...
     CLC
     ADC RoomId                  ; ... and applied to this room: the previous room's id.
     TAY
-    JSR IsDarkRoom_Bank5
-    BEQ InitMode4_GoToSub0      ; The previous room was not dark.
+    JSR Room_IsDark_Bank5
+    BEQ Mode4Enter_Init_GoToSub0      ; The previous room was not dark.
 
     ; The previous room was dark.
     LDA CandleState
-    BNE InitMode4_GoToSub0      ; It had been lit by a candle: the palette is already bright.
+    BNE Mode4Enter_Init_GoToSub0      ; It had been lit by a candle: the palette is already bright.
     LDA #$C0                    ; Fade series $C: dark to light (the reverse of series 4).
 
 ; ----------------------------------------------------------------------------
 ; Starts a palette fade and advances the submode.
 ; IN:   A = FadeCycle start value (high nibble = fade series, low nibble = step).
 ; ----------------------------------------------------------------------------
-SetFadeCycleAndAdvanceSubmode:
+Palette_SetFadeCycleAndAdvanceSubmode:
     STA FadeCycle
     INC GameSubmode
 :
     RTS
 
 ; Mode 4 init submode 3: runs the fade-in each frame; when it is done, falls into the next label.
-InitMode4_Sub3:
-    JSR AnimateWorldFading
+Mode4Enter_Init_Sub3:
+    JSR Palette_AnimateFade
     BNE :-                      ; Still fading.
 
 ; Sets mode 4's submode to 0 (enter the room next frame) and clears CandleState.
-InitMode4_GoToSub0:
+Mode4Enter_Init_GoToSub0:
     LDA #$00
     STA GameSubmode
     STA CandleState
@@ -132,16 +132,16 @@ InitMode4_GoToSub0:
 ;       LevelInfo_FoeCounts[attr C bits 7-6], or 1 for ids $32-$61. The room history then lowers the
 ;       count by remembered kills; in mode 9 both are zeroed. Ids < $62 fill slots 1..count with that
 ;       object type; ids $62-$7F copy count types from list id - $62.
-;       Ends by falling into DrawLinkBetweenRooms.
+;       Ends by falling into Link_DrawBetweenRooms.
 ; ----------------------------------------------------------------------------
-InitMode_EnterRoom:
-    JSR DrawSpritesBetweenRooms
-    JSR ResetPlayerState        ; Link's state = 0; clock item off.
+Room_EnterCommon:
+    JSR Sprite_DrawBetweenRooms
+    JSR Link_ResetStateAndClock        ; Link's state = 0; clock item off.
 
     ; Zero $0300-$051F (per-room object arrays and room variables).
     LDA #$05
     LDY #$1F
-    JSR ClearRam0300UpTo
+    JSR Util_ClearRam0300UpTo
 
     ; No door is opening or closing.
     LDA #$00
@@ -152,7 +152,7 @@ InitMode_EnterRoom:
     LDY RoomId
     LDA LevelBlockAttrsF, Y
     STA RoomAttrsF
-    JSR ResetInvObjState        ; No ladder in use; weapon slots $0D-$12 inactive.
+    JSR Obj_ResetWeaponSlotsAndLadder        ; No ladder in use; weapon slots $0D-$12 inactive.
 
     ; Two ways into a room:
     ;   1. out of a cave, dungeon or cellar (UndergroundExitType <> 0):
@@ -206,7 +206,7 @@ InitMode_EnterRoom:
     ; Way 2: room to room. Link's direction is the direction he travelled.
     LDA ObjDir
     STA DoorwayDir              ; Link is in the doorway on that axis.
-    JSR GetOppositeDir          ; The side of this room he came in through.
+    JSR Dir_GetOpposite          ; The side of this room he came in through.
 
     ; If the door on that side is one of the room's open true doors, command it to close.
     AND CurOpenedDoors
@@ -232,12 +232,12 @@ InitMode_EnterRoom:
     STY ObjX
 
 @ChooseWalkDistance:
-    ; Choose how far Link walks in. GetPassedDoorType returns the type of the door on the side he
+    ; Choose how far Link walks in. Door_GetPassedType returns the type of the door on the side he
     ; came through (A) and Y = 1 if he faces right or down, else 0.
     ; Door types 0 (open), 5 and 6 (key doors): table entries 0 and 1 ($18, -$18).
     ; Other types (1 wall, 2 and 3 false wall, 4 bombable, 7 shutter): entries 2 and 3 ($28, -$28),
     ; to get clear of the wall or door.
-    JSR GetPassedDoorType
+    JSR Door_GetPassedType
     AND #$07
     BEQ :+
     CMP #$05
@@ -247,11 +247,11 @@ InitMode_EnterRoom:
     INY
     INY
 :
-    LDA EnteringRoomRelativePositions, Y
+    LDA Mode4Enter_WalkInGridOffsets, Y
 
 @PlaceObjects:
     STA ObjGridOffset           ; Link's signed walk-in distance (0 in the overworld and for way 1).
-    JSR SetupObjRoomBounds
+    JSR Room_SetUpObjBounds
 
     ; The play-mode update walks the object slots from $0B down; start it at $0B.
     LDX #$0B
@@ -259,7 +259,7 @@ InitMode_EnterRoom:
 @ResetObjLoop:
     ; Reset object slots $0B..1 (the arrays at $0300-$051F were zeroed above).
     DEC ObjUninitialized, X     ; 0 -> $FF: the type's init routine has not run yet.
-    JSR ResetShoveInfo          ; No knockback; returns A = 0.
+    JSR Shove_Reset          ; No knockback; returns A = 0.
     STA ObjState, X
     STA ObjDir, X
     STA ObjStunTimer, X
@@ -309,10 +309,10 @@ InitMode_EnterRoom:
     ; list id ([02]) when nothing is left.
     LDA CurLevel
     BNE :+
-    JSR ModifyObjCountByHistoryOW
+    JSR RoomHistory_ModifyObjCountOW
     JMP @StoreObjCount
 :
-    JSR ModifyObjCountByHistoryUW
+    JSR RoomHistory_ModifyObjCountUW
 
     ; Mode 9 (cellar): no monsters from the room's list at all.
     LDA GameMode
@@ -354,10 +354,10 @@ InitMode_EnterRoom:
     ; [04:05] = address of the list.
     ASL
     TAY
-    LDA ObjListAddrs, Y
+    LDA Spawn_ObjListAddrs, Y
     STA $04
     INY
-    LDA ObjListAddrs, Y
+    LDA Spawn_ObjListAddrs, Y
     STA $05
 
     ; Copy the first [03] types of the list to slots 1..count (a type of 0 leaves a slot empty).
@@ -375,12 +375,12 @@ InitMode_EnterRoom:
     STA RoomObjTemplateType
 
 @SkipObjects:
-    JSR AssignObjSpawnPositions ; Positions for slots 1-9; cellar Keese; cave person. Uses [02].
+    JSR Spawn_AssignPositions ; Positions for slots 1-9; cellar Keese; cave person. Uses [02].
     LDA CurLevel
     BNE :+
-    JSR SetupTileObjectOW       ; Overworld: dock, or the tile object the layout found.
+    JSR Room_SetUpTileObjOW       ; Overworld: dock, or the tile object the layout found.
 :
-    JSR UpdatePlayerPositionMarker
+    JSR StatusBar_UpdateLinkPositionMarker
 
     ; Link: no stun, no knockback, animation counter 4, default speed.
     LDA #$00
@@ -389,18 +389,18 @@ InitMode_EnterRoom:
     STA ObjShoveDistance
     LDA #$04
     STA ObjAnimCounter
-    JSR InitLinkSpeed
-    JSR RunCrossRoomTasksAndBeginUpdateMode_EnterPlayModes
+    JSR Link_InitSpeed
+    JSR Room_RunEntryTasks_MarkVisited
 
 ; ----------------------------------------------------------------------------
 ; Draws Link for a frame between rooms; behind the background while he is leaving underground.
 ; NOTE: Skips the draw in modes $B and $C; in a dungeon Link_EndMoveAndAnimateBetweenRooms returns
 ;       without drawing. When UndergroundExitType is nonzero (leaving a cave, cellar or dungeon)
-;       Link's two sprites get background priority. Called from DrawSpritesBetweenRooms (bank 7),
+;       Link's two sprites get background priority. Called from Sprite_DrawBetweenRooms (bank 7),
 ;       the death init and, by fall-through, the common room entry.
 ; ----------------------------------------------------------------------------
-DrawLinkBetweenRooms:
-    JSR ResetCurSpriteIndex
+Link_DrawBetweenRooms:
+    JSR Sprite_ResetCurIndex
     LDA GameMode
     CMP #$0B
     BEQ :+
@@ -410,7 +410,7 @@ DrawLinkBetweenRooms:
 :
     LDA UndergroundExitType
     BEQ :+
-    JSR PutLinkBehindBackground
+    JSR Link_PutSpritesBehindBackground
 :
     RTS
 
@@ -420,7 +420,7 @@ DrawLinkBetweenRooms:
 ;       get RoomTileObjType at (RoomTileObjX, RoomTileObjY), found while the room was laid out
 ;       (type 0 when the room has none). The RoomTileObj variables are cleared afterwards.
 ; ----------------------------------------------------------------------------
-SetupTileObjectOW:
+Room_SetUpTileObjOW:
     LDA RoomId
     CMP #$3F
     BEQ :+
@@ -439,6 +439,6 @@ SetupTileObjectOW:
 
 @SetType:
     STA ObjType+11
-    JSR ResetRoomTileObjInfo    ; Returns A = 0.
+    JSR Room_ResetTileObjInfo    ; Returns A = 0.
     STA ObjState+11             ; State 0.
     RTS

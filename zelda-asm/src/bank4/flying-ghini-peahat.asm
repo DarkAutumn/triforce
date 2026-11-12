@@ -1,53 +1,53 @@
 ; ============================================================================
 ; FILE:     bank4/flying-ghini-peahat.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 3976-4104
-; SUBJECTS: Flyer
+; SUBJECTS: Flyer, Ghini, Peahat, Sfx
 ; TOPIC:    Update routines and flight-state tables of the flying Ghini (type $22) and the Peahat (type
 ;           $1A), both built on the shared flyer code; the "secret found" tune request; padding.
-; SEE ALSO: bank4/fairy-flyer-common.asm (Flyer_SpeedUp, Flyer_Chase, Flyer_Wander, Flyer_SlowDown,
-;           Flyer_Delay, MoveFlyer); bank4/zora-ow-inits.asm (InitPeahat, EndInitFlyer: start speed);
-;           bank4/ghini-armos.asm (InitArmosOrFlyingGhini, DrawGhiniAndCheckCollisions, UpdateGhini
+; SEE ALSO: bank4/fairy-flyer-common.asm (Flyer_State0SpeedUp, Flyer_State2Chase, Flyer_State3Wander, Flyer_State4SlowDown,
+;           Flyer_State5Delay, Flyer_Move); bank4/zora-ow-inits.asm (Peahat_Init, Flyer_FinishInit: start speed);
+;           bank4/ghini-armos.asm (Armos_InitOrFlyingGhiniFadeIn, Ghini_DrawAndCheckLinkCollision, Ghini_Update
 ;           kills every flying Ghini); bank1/armos-ghini-spawn.asm (a touched gravestone makes type $22).
 ; KEY FACTS:
 ;   - Flight states (Flyer_ObjFlyingState) for both: 0 speed up, 1 decide, 2 chase, 3 wander, 4 slow
-;     down, 5 wait without moving. ControlPeahatFlight_JumpTable, ControlFlyingGhiniFlight_JumpTable.
+;     down, 5 wait without moving. Peahat_ControlFlight_JumpTable, Ghini_ControlFlight_JumpTable.
 ;   - A Peahat can be hit by Link's weapons only in flight state 5 (stopped); in states 0-4 only its
-;     touch on Link is tested. UpdatePeahat.
-;   - A flying Ghini never tests Link's weapons: it only harms Link (DrawGhiniAndCheckCollisions ends
-;     in CheckLinkCollision). UpdateFlyingGhini.
+;     touch on Link is tested. Peahat_Update.
+;   - A flying Ghini never tests Link's weapons: it only harms Link (Ghini_DrawAndCheckLinkCollision ends
+;     in Link_CheckMonsterTouch). Ghini_UpdateFlying.
 ;   - Decide state, Peahat: Random >= $B0 chase (80/256), >= $20 wander (144/256), else slow down
-;     (32/256). Flyer_PeahatDecideState.
+;     (32/256). Peahat_DecideFlightState.
 ;   - Decide state, flying Ghini: Random >= $A0 chase (96/256), >= $08 wander (152/256), else slow down
-;     (8/256). Flyer_GhiniDecideState.
+;     (8/256). Ghini_DecideFlightState.
 ;   - Chase and wander start with Flyer_ObjTurns = 6. Flyer_SetFlyingStateAnd6Turns.
 ;   - The clock (InvClock) freezes both; a stun timer or a knockback also stops a Peahat's flight
-;     code. UpdateFlyingGhini, UpdatePeahat.
-;   - PlaySecretFoundTune requests square-1 tune $04; the dock, Armos and rock/tree secrets call it.
+;     code. Ghini_UpdateFlying, Peahat_Update.
+;   - Sfx_PlaySecretFoundTune requests square-1 tune $04; the dock, Armos and rock/tree secrets call it.
 ; CONTENTS: (generated; L = line in this file)
-;   L0045 UpdateFlyingGhini                   code  Updates a flying Ghini (type $22): flies unless the clock is held, draws, harms Link on touch.
-;   L0064 ControlFlyingGhiniFlight            code  Runs the flying Ghini's handler for its flight state (Flyer_ObjFlyingState).
-;   L0069 ControlFlyingGhiniFlight_JumpTable  data  TABLE: flying Ghini flight-state handlers; index = Flyer_ObjFlyingState; value = routine address.
-;   L0083 Flyer_GhiniDecideState              code  Flying Ghini flight state 1: picks the next flight state at random and sets 6 turns.
-;   L0101 UpdatePeahat                        code  Updates a Peahat (type $1A): knockback or flight, draws, and checks collisions by flight state.
-;   L0142 ControlPeahatFlight                 code  Runs the Peahat's handler for its flight state (Flyer_ObjFlyingState).
-;   L0147 ControlPeahatFlight_JumpTable       data  TABLE: Peahat flight-state handlers; index = Flyer_ObjFlyingState; value = routine address.
-;   L0162 Flyer_PeahatDecideState             code  Peahat flight state 1: picks the next flight state at random and sets 6 turns.
-;   L0179 Flyer_SetFlyingStateAnd6Turns       code  Sets a flyer's flight state to Y and its turn counter to 6.
-;   L0190 PlaySecretFoundTune                 code  Requests the "secret found" tune (square-1 tune request $04).
+;   L0045 Ghini_UpdateFlying              code  Updates a flying Ghini (type $22): flies unless the clock is held, draws, harms Link on touch.
+;   L0064 Ghini_ControlFlight             code  Runs the flying Ghini's handler for its flight state (Flyer_ObjFlyingState).
+;   L0069 Ghini_ControlFlight_JumpTable   data  TABLE: flying Ghini flight-state handlers; index = Flyer_ObjFlyingState; value = routine address.
+;   L0083 Ghini_DecideFlightState         code  Flying Ghini flight state 1: picks the next flight state at random and sets 6 turns.
+;   L0101 Peahat_Update                   code  Updates a Peahat (type $1A): knockback or flight, draws, and checks collisions by flight state.
+;   L0142 Peahat_ControlFlight            code  Runs the Peahat's handler for its flight state (Flyer_ObjFlyingState).
+;   L0147 Peahat_ControlFlight_JumpTable  data  TABLE: Peahat flight-state handlers; index = Flyer_ObjFlyingState; value = routine address.
+;   L0162 Peahat_DecideFlightState        code  Peahat flight state 1: picks the next flight state at random and sets 6 turns.
+;   L0179 Flyer_SetFlyingStateAnd6Turns   code  Sets a flyer's flight state to Y and its turn counter to 6.
+;   L0190 Sfx_PlaySecretFoundTune         code  Requests the "secret found" tune (square-1 tune request $04).
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Updates a flying Ghini (type $22): flies unless the clock is held, draws, harms Link on touch.
 ; IN:   X = object slot
-; NOTE: Link's weapons are never tested against it; DrawGhiniAndCheckCollisions only checks Link.
+; NOTE: Link's weapons are never tested against it; Ghini_DrawAndCheckLinkCollision only checks Link.
 ;       It is not stopped by ObjStunTimer, only by InvClock.
 ; ----------------------------------------------------------------------------
-UpdateFlyingGhini:
+Ghini_UpdateFlying:
     ; With the clock, don't move.
     LDA InvClock
     BNE :+
-    JSR ControlFlyingGhiniFlight
-    JSR MoveFlyer
+    JSR Ghini_ControlFlight
+    JSR Flyer_Move
 :
     JSR Anim_FetchObjPosForSpriteDescriptor
 
@@ -55,24 +55,24 @@ UpdateFlyingGhini:
     ; begins by calling Anim_FetchObjPosForSpriteDescriptor, which overwrites A.
     LDA Flyer_ObjDistTraveled, X
     AND #$01
-    JMP DrawGhiniAndCheckCollisions
+    JMP Ghini_DrawAndCheckLinkCollision
 
 ; ----------------------------------------------------------------------------
 ; Runs the flying Ghini's handler for its flight state (Flyer_ObjFlyingState).
 ; IN:   X = object slot
 ; ----------------------------------------------------------------------------
-ControlFlyingGhiniFlight:
+Ghini_ControlFlight:
     LDA Flyer_ObjFlyingState, X
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: flying Ghini flight-state handlers; index = Flyer_ObjFlyingState; value = routine address.
-ControlFlyingGhiniFlight_JumpTable:
-    .ADDR Flyer_SpeedUp             ; 0: speed +1 per frame up to FlyerMaxSpeedFrac, then state 1
-    .ADDR Flyer_GhiniDecideState    ; 1: pick state 2, 3 or 4 at random
-    .ADDR Flyer_Chase               ; 2: turn toward the chase target every $10 frames
-    .ADDR Flyer_Wander              ; 3: turn at random every $10 frames
-    .ADDR Flyer_SlowDown            ; 4: speed -1 per frame until below $20, then state 5
-    .ADDR Flyer_Delay               ; 5: wait for ObjTimer ($40-$7F frames), then state 0
+Ghini_ControlFlight_JumpTable:
+    .ADDR Flyer_State0SpeedUp             ; 0: speed +1 per frame up to FlyerMaxSpeedFrac, then state 1
+    .ADDR Ghini_DecideFlightState    ; 1: pick state 2, 3 or 4 at random
+    .ADDR Flyer_State2Chase               ; 2: turn toward the chase target every $10 frames
+    .ADDR Flyer_State3Wander              ; 3: turn at random every $10 frames
+    .ADDR Flyer_State4SlowDown            ; 4: speed -1 per frame until below $20, then state 5
+    .ADDR Flyer_State5Delay               ; 5: wait for ObjTimer ($40-$7F frames), then state 0
 
 ; ----------------------------------------------------------------------------
 ; Flying Ghini flight state 1: picks the next flight state at random and sets 6 turns.
@@ -80,7 +80,7 @@ ControlFlyingGhiniFlight_JumpTable:
 ; OUT:  Flyer_ObjFlyingState,X = 2, 3 or 4; Flyer_ObjTurns,X = 6
 ; NOTE: Random,X >= $A0: 2 chase (96/256). >= $08: 3 wander (152/256). Else: 4 slow down (8/256).
 ; ----------------------------------------------------------------------------
-Flyer_GhiniDecideState:
+Ghini_DecideFlightState:
     LDY #$02
     LDA Random, X
     CMP #$A0
@@ -98,24 +98,24 @@ Flyer_GhiniDecideState:
 ; NOTE: Link's weapons can hit it only in flight state 5 (stopped after slowing down); in every
 ;       other state only its touch on Link is tested. The clock or a stun stops its flight code.
 ; ----------------------------------------------------------------------------
-UpdatePeahat:
+Peahat_Update:
     ; If the Peahat is being knocked back, then move it that way and go draw
     ; and check for collisions.
     LDA ObjShoveDir, X
     BEQ :+
-    JSR Obj_Shove
+    JSR Shove_Update
 
-@L_DrawAndCheckCollisions:
+@GoDrawAndCheckCollisions:
     JMP @DrawAndCheckCollisions
 :
     ; With the clock, or while stunned, go draw and check for collisions.
     LDA InvClock
     ORA ObjStunTimer, X
-    BNE @L_DrawAndCheckCollisions
+    BNE @GoDrawAndCheckCollisions
 
     ; Else fly.
-    JSR ControlPeahatFlight
-    JSR MoveFlyer
+    JSR Peahat_ControlFlight
+    JSR Flyer_Move
 
 @DrawAndCheckCollisions:
     JSR Anim_FetchObjPosForSpriteDescriptor
@@ -124,33 +124,33 @@ UpdatePeahat:
     ; so the faster it moves, the faster it animates.
     LDA Flyer_ObjDistTraveled, X
     AND #$01
-    JSR DrawObjectMirrored
+    JSR Anim_DrawObjectMirrored
 
     ; In flight state 5 (stopped, waiting), check all collisions, so Link's weapons can hurt it.
     ; In all other states, only check for a collision with Link.
     LDA Flyer_ObjFlyingState, X
     CMP #$05
     BEQ :+
-    JMP CheckLinkCollision
+    JMP Link_CheckMonsterTouch
 :
-    JMP CheckMonsterCollisions
+    JMP Collision_CheckMonsterVsWeaponsAndLink
 
 ; ----------------------------------------------------------------------------
 ; Runs the Peahat's handler for its flight state (Flyer_ObjFlyingState).
 ; IN:   X = object slot
 ; ----------------------------------------------------------------------------
-ControlPeahatFlight:
+Peahat_ControlFlight:
     LDA Flyer_ObjFlyingState, X
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: Peahat flight-state handlers; index = Flyer_ObjFlyingState; value = routine address.
-ControlPeahatFlight_JumpTable:
-    .ADDR Flyer_SpeedUp             ; 0: speed +1 per frame up to FlyerMaxSpeedFrac, then state 1
-    .ADDR Flyer_PeahatDecideState   ; 1: pick state 2, 3 or 4 at random
-    .ADDR Flyer_Chase               ; 2: turn toward the chase target every $10 frames
-    .ADDR Flyer_Wander              ; 3: turn at random every $10 frames
-    .ADDR Flyer_SlowDown            ; 4: speed -1 per frame until below $20, then state 5
-    .ADDR Flyer_Delay               ; 5: wait for ObjTimer ($40-$7F frames), then state 0
+Peahat_ControlFlight_JumpTable:
+    .ADDR Flyer_State0SpeedUp             ; 0: speed +1 per frame up to FlyerMaxSpeedFrac, then state 1
+    .ADDR Peahat_DecideFlightState   ; 1: pick state 2, 3 or 4 at random
+    .ADDR Flyer_State2Chase               ; 2: turn toward the chase target every $10 frames
+    .ADDR Flyer_State3Wander              ; 3: turn at random every $10 frames
+    .ADDR Flyer_State4SlowDown            ; 4: speed -1 per frame until below $20, then state 5
+    .ADDR Flyer_State5Delay               ; 5: wait for ObjTimer ($40-$7F frames), then state 0
 
 ; ----------------------------------------------------------------------------
 ; Peahat flight state 1: picks the next flight state at random and sets 6 turns.
@@ -159,7 +159,7 @@ ControlPeahatFlight_JumpTable:
 ; NOTE: Random,X >= $B0: 2 chase (80/256). >= $20: 3 wander (144/256). Else: 4 slow down (32/256),
 ;       the only way to the vulnerable state 5.
 ; ----------------------------------------------------------------------------
-Flyer_PeahatDecideState:
+Peahat_DecideFlightState:
     LDY #$02
     LDA Random, X
     CMP #$B0
@@ -173,7 +173,7 @@ Flyer_PeahatDecideState:
 ; Sets a flyer's flight state to Y and its turn counter to 6.
 ; IN:   X = object slot; Y = flight state
 ; OUT:  Flyer_ObjFlyingState,X = Y; Flyer_ObjTurns,X = 6
-; NOTE: Flyer_Chase and Flyer_Wander decrement the counter before each turn and leave for state 1
+; NOTE: Flyer_State2Chase and Flyer_State3Wander decrement the counter before each turn and leave for state 1
 ;       when it reaches 0, so 6 gives 5 turns, $10 frames apart.
 ; ----------------------------------------------------------------------------
 Flyer_SetFlyingStateAnd6Turns:
@@ -187,7 +187,7 @@ Flyer_SetFlyingStateAnd6Turns:
 ; Requests the "secret found" tune (square-1 tune request $04).
 ; OUT:  A = $04; Tune1Request = $04
 ; ----------------------------------------------------------------------------
-PlaySecretFoundTune:
+Sfx_PlaySecretFoundTune:
     LDA #$04
     STA Tune1Request
     RTS

@@ -1,33 +1,33 @@
 ; ============================================================================
 ; FILE:     bank1/life-or-money.asm      BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 1328-1480
-; SUBJECTS: (none)
+; SUBJECTS: Person
 ; TOPIC:    Update of the life-or-money man (dungeon person type $51): Link must give up a heart
 ;           container or 50 rupees; paying opens the room's shutters.
-; SEE ALSO: bank1/underworld-person-init.asm (InitUnderworldPersonLifeOrMoney_Full: text, removal once
+; SEE ALSO: bank1/underworld-person-init.asm (Person_InitLifeOrMoney_Full: text, removal once
 ;           paid); bank1/underworld-person-update.asm (Person_DrawAndCheckCollisions, state 4);
-;           bank1/grumble-goriya.asm (L_Person_FlagItemTakenAndAdvanceState); bank1/person-textbox.asm.
+;           bank1/grumble-goriya.asm (Person_FlagTakenAndBlankText); bank1/person-textbox.asm.
 ; KEY FACTS:
 ;   - Two items are shown at Y = $98: a heart container at X = $58 and a rupee at X = $98. Link
 ;     chooses by standing at exactly that X with Y within 5 pixels of $98, once the text has ended.
-;     LifeOrMoneyItemXs, LifeOrMoneyItemTypes, UpdateUnderworldPersonLifeOrMoneyState_2
+;     Person_LifeOrMoneyItemXs, Person_LifeOrMoneyItemIds, Person_LifeOrMoneyState2Choose
 ;   - The rupee costs 50 and is ignored while InvRupees < 50; the heart container has no
-;     requirement. UpdateUnderworldPersonLifeOrMoneyState_2
+;     requirement. Person_LifeOrMoneyState2Choose
 ;   - Heart container with 4 or more containers: one container and one full heart are removed (full
-;     hearts stop at 0; HeartPartial is kept). UpdateUnderworldPersonLifeOrMoneyState_2@Reduce
+;     hearts stop at 0; HeartPartial is kept). Person_LifeOrMoneyState2Choose@Reduce
 ;   - Heart container with 3 or fewer containers: no container is removed; instead full hearts and
-;     HeartPartial are both set to 0. UpdateUnderworldPersonLifeOrMoneyState_2@PayWithHeartContainer
+;     HeartPartial are both set to 0. Person_LifeOrMoneyState2Choose@PayWithHeartContainer
 ;   - Either payment sets ShutterTrigger = 1 and the room's item-taken flag and starts a $40-frame
 ;     timer; the man flickers until it ends and is gone for good.
-;     UpdateUnderworldPersonLifeOrMoneyState_2@EndLifeOrMoney
+;     Person_LifeOrMoneyState2Choose@EndLifeOrMoney
 ; CONTENTS: (generated; L = line in this file)
-;   L0038 UpdateUnderworldPersonLifeOrMoney_Full            code  Updates the life-or-money man (type $51): draws him and the two items, then runs his state.
-;   L0055 UpdateUnderworldPersonLifeOrMoney_Full_JumpTable  data  TABLE: states of the life-or-money man; index = ObjState+1; value = routine address.
-;   L0063 LifeOrMoneyItemXs                                 data  TABLE: X of the two items offered (Y is $98); index = 0 heart container, 1 rupee; value = pixels.
-;   L0067 LifeOrMoneyItemTypes                              data  TABLE: item ids drawn for the two choices; index = 0, 1; value = item id.
-;   L0074 DrawLifeOrMoneyItems                              code  Draws the heart container at ($58, $98) and the rupee at ($98, $98) through object slot $13.
-;   L0104 UpdateUnderworldPersonLifeOrMoneyState_0          code  Life-or-money state 0: shows the costs "-1" and "-50" and waits $0A frames before the text starts.
-;   L0121 UpdateUnderworldPersonLifeOrMoneyState_2          code  Life-or-money state 2: takes a heart container or 50 rupees when Link stands on one of the items.
+;   L0038 Person_UpdateLifeOrMoney_Full       code  Updates the life-or-money man (type $51): draws him and the two items, then runs his state.
+;   L0055 Person_UpdateLifeOrMoney_JumpTable  data  TABLE: states of the life-or-money man; index = ObjState+1; value = routine address.
+;   L0063 Person_LifeOrMoneyItemXs            data  TABLE: X of the two items offered (Y is $98); index = 0 heart container, 1 rupee; value = pixels.
+;   L0067 Person_LifeOrMoneyItemIds           data  TABLE: item ids drawn for the two choices; index = 0, 1; value = item id.
+;   L0074 Person_DrawLifeOrMoneyItems         code  Draws the heart container at ($58, $98) and the rupee at ($98, $98) through object slot $13.
+;   L0104 Person_LifeOrMoneyState0ShowCosts   code  Life-or-money state 0: shows the costs "-1" and "-50" and waits $0A frames before the text starts.
+;   L0121 Person_LifeOrMoneyState2Choose      code  Life-or-money state 2: takes a heart container or 50 rupees when Link stands on one of the items.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -35,7 +35,7 @@
 ; IN:   X = object slot (1). ObjState+1 = person state (0-4).
 ; NOTE: In state 4 he and the items are drawn, and he is checked for collisions, only on even frames.
 ; ----------------------------------------------------------------------------
-UpdateUnderworldPersonLifeOrMoney_Full:
+Person_UpdateLifeOrMoney_Full:
     ; In state 4, skip drawing on odd frames (the person and the items flicker).
     LDA ObjState+1
     CMP #$04
@@ -46,67 +46,67 @@ UpdateUnderworldPersonLifeOrMoney_Full:
 
 @Draw:
     JSR Person_DrawAndCheckCollisions
-    JSR DrawLifeOrMoneyItems
+    JSR Person_DrawLifeOrMoneyItems
 :
     LDA ObjState+1
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: states of the life-or-money man; index = ObjState+1; value = routine address.
-UpdateUnderworldPersonLifeOrMoney_Full_JumpTable:
-    .ADDR UpdateUnderworldPersonLifeOrMoneyState_0          ; 0: show the costs, set the text delay
-    .ADDR UpdatePersonState_Textbox                         ; 1: type the text, then unhalt Link
-    .ADDR UpdateUnderworldPersonLifeOrMoneyState_2          ; 2: wait for Link to choose and pay
-    .ADDR UpdatePersonState_CueTransferBlankPersonWares     ; 3: blank text line 3 and the costs row
-    .ADDR UpdateUnderworldPersonComplexState_DelayAndQuit   ; 4: flicker, then remove the person
+Person_UpdateLifeOrMoney_JumpTable:
+    .ADDR Person_LifeOrMoneyState0ShowCosts          ; 0: show the costs, set the text delay
+    .ADDR Person_UpdateState_Textbox                         ; 1: type the text, then unhalt Link
+    .ADDR Person_LifeOrMoneyState2Choose          ; 2: wait for Link to choose and pay
+    .ADDR Person_UpdateState_BlankPriceRow     ; 3: blank text line 3 and the costs row
+    .ADDR Person_State4DelayAndQuit   ; 4: flicker, then remove the person
 
 ; TABLE: X of the two items offered (Y is $98); index = 0 heart container, 1 rupee; value = pixels.
-LifeOrMoneyItemXs:
+Person_LifeOrMoneyItemXs:
     .BYTE $58, $98
 
 ; TABLE: item ids drawn for the two choices; index = 0, 1; value = item id.
-LifeOrMoneyItemTypes:
+Person_LifeOrMoneyItemIds:
     .BYTE $1A, $18              ; $1A heart container, $18 rupee
 
 ; ----------------------------------------------------------------------------
 ; Draws the heart container at ($58, $98) and the rupee at ($98, $98) through object slot $13.
 ; OUT:  ObjX+$13, ObjY+$13 changed; X = $FF.
 ; ----------------------------------------------------------------------------
-DrawLifeOrMoneyItems:
+Person_DrawLifeOrMoneyItems:
     ; Loop over each item to draw, from 1 to 0.
     LDX #$01
 
-@LoopWare:
+@LoopItem:
     TXA                         ; Save loop index.
     PHA
 
     ; Look up and set the X coordinate of the item.
-    LDA LifeOrMoneyItemXs, X
+    LDA Person_LifeOrMoneyItemXs, X
     STA ObjX+19
 
     ; Set Y=$98, and look up the item id.
     LDA #$98
     STA ObjY+19
-    LDA LifeOrMoneyItemTypes, X
+    LDA Person_LifeOrMoneyItemIds, X
 
     ; Switch to the room item object slot.
     LDX #$13
-    JSR AnimateItemObject
+    JSR Item_DrawObject
     PLA                         ; Restore loop index.
     TAX
     DEX
-    BPL @LoopWare
+    BPL @LoopItem
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Life-or-money state 0: shows the costs "-1" and "-50" and waits $0A frames before the text starts.
 ; OUT:  ObjTimer+1 = $0A; TileBufSelector = $76; ObjState+1 = 1.
 ; ----------------------------------------------------------------------------
-UpdateUnderworldPersonLifeOrMoneyState_0:
+Person_LifeOrMoneyState0ShowCosts:
     ; Delay in the next state $A frames before showing the first character.
     LDA #$0A
     STA ObjTimer+1
     LDA #$76                    ; Transfer selector: the "-1   -50" cost text.
-    JMP CueTransferBufAndAdvanceState
+    JMP Person_CueTransferBufAndAdvanceState
 
 ; ----------------------------------------------------------------------------
 ; Life-or-money state 2: takes a heart container or 50 rupees when Link stands on one of the items.
@@ -118,28 +118,28 @@ UpdateUnderworldPersonLifeOrMoneyState_0:
 ; NOTE: The rupee choice needs InvRupees >= 50; below that, standing on the rupee does nothing.
 ;       InvRupeesToSubtract is not tested, so rupees still being counted off count as owned.
 ; ----------------------------------------------------------------------------
-UpdateUnderworldPersonLifeOrMoneyState_2:
+Person_LifeOrMoneyState2Choose:
     ; Loop over each item to check, from 1 (rupee) to 0 (heart container).
     LDX #$01
 
-@LoopWare:
+@LoopItem:
     ; If Link's X doesn't match the item's, then go loop again.
     LDA ObjX
-    CMP LifeOrMoneyItemXs, X
-    BNE @NextWare
+    CMP Person_LifeOrMoneyItemXs, X
+    BNE @NextItem
 
     ; If the vertical distance between the item and Link < 6, then
     ; go handle paying appropriately.
     LDA ObjY
     SEC
     SBC #$98
-    JSR Abs
+    JSR Math_Abs
     CMP #$06
     BCC @Pay
 
-@NextWare:
+@NextItem:
     DEX
-    BPL @LoopWare
+    BPL @LoopItem
 
 @Exit:
     RTS
@@ -161,7 +161,7 @@ UpdateUnderworldPersonLifeOrMoneyState_2:
     CLC
     ADC InvRupeesToSubtract
     STA InvRupeesToSubtract
-    JMP @EndLifeOrMoney
+    JMP @Paid
 
 @PayWithHeartContainer:
     ; Link chose the heart container.
@@ -179,7 +179,7 @@ UpdateUnderworldPersonLifeOrMoneyState_2:
     STA HeartValues
     LDA #$00
     STA HeartPartial
-    JMP @EndLifeOrMoney
+    JMP @Paid
 
 @Reduce:
     ; Store the high nibble less one heart container in [00].
@@ -204,9 +204,9 @@ UpdateUnderworldPersonLifeOrMoneyState_2:
     ORA $00
     STA HeartValues
 
-@EndLifeOrMoney:
+@Paid:
     LDA #$08                    ; "key taken" sound effect
     STA Tune0Request
     LDA #$01                    ; Open the room's shutter doors.
     STA ShutterTrigger
-    JMP L_Person_FlagItemTakenAndAdvanceState
+    JMP Person_FlagTakenAndBlankText

@@ -1,15 +1,15 @@
 ; ============================================================================
 ; FILE:     bank5/submenu-map.asm        BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 7567-7750
-; SUBJECTS: Submenu
+; SUBJECTS: Inv, Submenu
 ; TOPIC:    The dungeon map sheet of the item submenu: builds one row of 16 room marks per call from
 ;           the rooms' visited flags and doors; plus the tests "does Link have this level's compass /
 ;           map".
 ; SEE ALSO: bank5/submenu-row-transfer.asm (Submenu_CueTransferRowUW calls the row writer for submenu
-;           rows $0D-$14); bank5/door-flags-dark-room.asm (CalcOpenDoorwayMask); bank5/fill-walls.asm
-;           (FindDoorTypeByDoorBit); bank7/next-room-room-flags.asm (GetRoomFlags, LevelMasks,
-;           MarkRoomVisited, the compass marker); bank5/submenu-items.asm and
-;           bank5/mode3-mode6-init.asm (other callers of HasCompass and HasMap).
+;           rows $0D-$14); bank5/door-flags-dark-room.asm (Door_ShiftOpenDoorwayMask); bank5/fill-walls.asm
+;           (Door_FindTypeByDirBit); bank7/next-room-room-flags.asm (RoomFlags_Get, Util_BitMasks,
+;           RoomFlags_MarkVisited, the compass marker); bank5/submenu-items.asm and
+;           bank5/mode3-mode6-init.asm (other callers of Inv_HasCompass and Inv_HasMap).
 ; KEY FACTS:
 ;   - The map sheet shows only rooms whose room flag bit $20 (visited) is set; it does not depend on
 ;     owning the map (Submenu_WriteScanningMapRoomMark).
@@ -17,21 +17,21 @@
 ;     1 right); an unvisited room is tile $F5 (Submenu_WriteScanningMapRoomMark).
 ;   - A side counts as passable when its door type is 0 (open), or is 4 or more and the room flag
 ;     bit for that direction is set (door opened); types 1-3 never do
-;     (Submenu_WriteScanningMapRoomMark through CalcOpenDoorwayMask).
+;     (Submenu_WriteScanningMapRoomMark through Door_ShiftOpenDoorwayMask).
 ;   - Each row is rotated right by LevelInfo_SubmenuMapRotation columns and then blanked wherever
 ;     LevelInfo_SubmenuMapMask says no room exists (Submenu_WriteSheetMapRowTransferRecord).
 ;   - Compasses and maps of levels 1-8 are bit (level - 1) of item slots $10 and $11; level 9 uses
-;     bit 0 of slots $12 and $13. Both tests return 0 in the OW (HasCompass, HasMap).
+;     bit 0 of slots $12 and $13. Both tests return 0 in the OW (Inv_HasCompass, Inv_HasMap).
 ; CONTENTS: (generated; L = line in this file)
-;   L0034 MapRowMasks                             data  TABLE: bit of LevelInfo_SubmenuMapMask for a map row; index = map row 0 (top) to 7; value = $80 >> row.
+;   L0034 Submenu_MapRowMasks                     data  TABLE: bit of LevelInfo_SubmenuMapMask for a map row; index = map row 0 (top) to 7; value = $80 >> row.
 ;   L0049 Submenu_WriteSheetMapRowTransferRecord  code  Builds the PPU transfer record for one row (16 room marks) of the submenu's dungeon map sheet.
-;   L0143 HasCompass                              code  Tests whether Link has the compass of the current level.
-;   L0153 HasMap                                  code  Tests whether Link has the map of the current level.
+;   L0143 Inv_HasCompass                          code  Tests whether Link has the compass of the current level.
+;   L0153 Inv_HasMap                              code  Tests whether Link has the map of the current level.
 ;   L0183 Submenu_WriteScanningMapRoomMark        code  Writes the map sheet tile for room SubmenuScanRoomId into the row being built.
 ; ============================================================================
 
 ; TABLE: bit of LevelInfo_SubmenuMapMask for a map row; index = map row 0 (top) to 7; value = $80 >> row.
-MapRowMasks:
+Submenu_MapRowMasks:
     .BYTE $80, $40, $20, $10, $08, $04, $02, $01
 
 ; ----------------------------------------------------------------------------
@@ -124,7 +124,7 @@ Submenu_WriteSheetMapRowTransferRecord:
     ; For columns $0F down to 0: if the column's mask byte lacks this row's bit,
     ; write the blank map tile $F5.
     LDA LevelInfo_SubmenuMapMask, Y
-    AND MapRowMasks, X
+    AND Submenu_MapRowMasks, X
     BNE :+
     LDA #$F5
     STA DynTileBuf+3, Y
@@ -138,9 +138,9 @@ Submenu_WriteSheetMapRowTransferRecord:
 ; OUT:  A = 0 (Z set) when in the OW or the compass is missing; nonzero when he has it. In a
 ;       dungeon X = the item slot read and Y = the bit number.
 ; NOTE: Levels 1-8: bit (level - 1) of item slot $10 (InvCompass). Level 9: bit 0 of slot $12
-;       (InvCompass9). Shares its code with HasMap.
+;       (InvCompass9). Shares its code with Inv_HasMap.
 ; ----------------------------------------------------------------------------
-HasCompass:
+Inv_HasCompass:
     LDX #$10                    ; Item slot of the compasses.
     BNE :+
 
@@ -150,7 +150,7 @@ HasCompass:
 ;       X = the item slot read and Y = the bit number.
 ; NOTE: Levels 1-8: bit (level - 1) of item slot $11 (InvMap). Level 9: bit 0 of slot $13 (InvMap9).
 ; ----------------------------------------------------------------------------
-HasMap:
+Inv_HasMap:
     LDX #$11                    ; Item slot of the maps.
 :
     LDA CurLevel
@@ -165,7 +165,7 @@ HasMap:
     AND #$07                    ; Bit number: 0-7 for levels 1-8, 0 for level 9.
     TAY
     LDA InvItems, X
-    AND LevelMasks, Y
+    AND Util_BitMasks, Y
 
 @Exit:
     RTS
@@ -176,14 +176,14 @@ HasMap:
 ; OUT:  Y and RoomId preserved; OpenDoorwayMask = the room's passable sides, or $13 if unvisited
 ; NOTE: Unvisited (room flag bit $20 clear): tile $F5, blank. Visited: tile $E2 + mask, where the
 ;       mask has bit 8 up, 4 down, 2 left, 1 right set for each side that is door type 0 (open) or
-;       a door of type 4 or more whose "opened" room flag bit is set (CalcOpenDoorwayMask).
+;       a door of type 4 or more whose "opened" room flag bit is set (Door_ShiftOpenDoorwayMask).
 ; NOTE: RoomId is set to the scanned room for the duration, because the door lookups work on
 ;       RoomId.
 ; ----------------------------------------------------------------------------
 Submenu_WriteScanningMapRoomMark:
     TYA                         ; Save the column position.
     PHA
-    JSR GetRoomFlags            ; For [00:01] = address of the level's room flags.
+    JSR RoomFlags_Get            ; For [00:01] = address of the level's room flags.
     LDA RoomId                  ; Save the real room.
     PHA
 
@@ -207,8 +207,8 @@ Submenu_WriteScanningMapRoomMark:
     STA $02                     ; [02] = direction bit of the side.
     LDX #$03
 :
-    JSR FindDoorTypeByDoorBit
-    JSR CalcOpenDoorwayMask
+    JSR Door_FindTypeByDirBit
+    JSR Door_ShiftOpenDoorwayMask
     DEX
     LSR $02
     BNE :-

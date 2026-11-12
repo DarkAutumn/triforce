@@ -1,42 +1,42 @@
 ; ============================================================================
 ; FILE:     bank2/register-name-input.asm BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 1798-2079
-; SUBJECTS: (none)
+; SUBJECTS: ModeERegister
 ; TOPIC:    Mode $E name entry: moving the character-board cursor with the direction buttons (with
 ;           auto-repeat) and typing a character (A) or skipping one (B) in the chosen slot's name.
-; SEE ALSO: bank2/register-eliminate-init.asm (ModeE_CharMap, ModeE_CharBoardYOffsetsAndBounds,
-;           SlotToNameOffset, transfer header templates); bank2/register-eliminate-update.asm (caller);
-;           bank2/register-cursor-sprites.asm (cursor sprites, ModeE_SetNameCursorSpriteX).
+; SEE ALSO: bank2/register-eliminate-init.asm (ModeERegister_CharMap, ModeERegister_CharBoardYStepsAndBounds,
+;           ModeERegister_SlotNameOffsets, transfer header templates); bank2/register-eliminate-update.asm (caller);
+;           bank2/register-cursor-sprites.asm (cursor sprites, ModeERegister_SetNameCursorSpriteX).
 ; KEY FACTS:
-;   - The character board is 4 rows of 11 ($2C entries of ModeE_CharMap); the cursor is object slot 1's
-;     ObjX/ObjY: X $30-$D0 in steps of $10, Y $87-$B7 in steps of $10 (ModeE_HandleDirectionButton,
-;     CycleCharBoardCursorY).
+;   - The character board is 4 rows of 11 ($2C entries of ModeERegister_CharMap); the cursor is object slot 1's
+;     ObjX/ObjY: X $30-$D0 in steps of $10, Y $87-$B7 in steps of $10 (ModeERegister_MoveCharBoardCursor,
+;     ModeERegister_StepCharBoardCursorY).
 ;   - A held direction moves at once, again $11 frames later (timer $10), then every 9 frames (timer
-;     8); only a single direction counts (ModeE_HandleDirectionButton).
+;     8); only a single direction counts (ModeERegister_MoveCharBoardCursor).
 ;   - Right past the last column moves to the first column of the next row, Left the reverse; all four
-;     directions wrap around the board (ModeE_HandleDirectionButton).
+;     directions wrap around the board (ModeERegister_MoveCharBoardCursor).
 ;   - A writes the highlighted character into SaveSlotNames and the nametable and advances; B only
-;     advances. There is no delete: the name cursor wraps after 8 characters (ModeE_HandleAOrB).
-;   - The name cursor is object slot 0's ObjX: $70-$A8 in steps of 8 (ModeE_HandleAOrB).
+;     advances. There is no delete: the name cursor wraps after 8 characters (ModeERegister_HandleAOrB).
+;   - The name cursor is object slot 0's ObjX: $70-$A8 in steps of 8 (ModeERegister_HandleAOrB).
 ; CONTENTS: (generated; L = line in this file)
-;   L0033 ModeE_HandleDirections       code  Reads the held direction buttons for the character board; none held resets the repeat state.
-;   L0039 ResetButtonRepeatState       code  Clears the button hold/repeat state; IN: A = 0.
-;   L0049 ModeE_HandleDirectionButton  code  Moves the character-board cursor one step in the held direction, with auto-repeat and wrapping.
-;   L0187 CycleCharBoardCursorY        code  Moves the character-board cursor one row down or up, wrapping at the bottom or top.
-;   L0205 LA10A_Exit                   code  Shared return of the routines above and below.
-;   L0211 ModeE_HandleAOrB             code  Sets up the name field for the chosen slot once, then handles A (type a character) and B (skip).
+;   L0033 ModeERegister_HandleDirections             code  Reads the held direction buttons for the character board; none held resets the repeat state.
+;   L0039 ModeERegister_ResetButtonRepeat            code  Clears the button hold/repeat state; IN: A = 0.
+;   L0049 ModeERegister_MoveCharBoardCursor          code  Moves the character-board cursor one step in the held direction, with auto-repeat and wrapping.
+;   L0187 ModeERegister_StepCharBoardCursorY         code  Moves the character-board cursor one row down or up, wrapping at the bottom or top.
+;   L0205 ModeERegister_StepCharBoardCursorY_Return  code  Shared return of the routines above and below.
+;   L0211 ModeERegister_HandleAOrB                   code  Sets up the name field for the chosen slot once, then handles A (type a character) and B (skip).
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Reads the held direction buttons for the character board; none held resets the repeat state.
 ; ----------------------------------------------------------------------------
-ModeE_HandleDirections:
+ModeERegister_HandleDirections:
     LDA ButtonsDown
     AND #$0F                    ; Filter and keep direction buttons.
-    BNE ModeE_HandleDirectionButton    ; If no button is down, then reset repeat state.
+    BNE ModeERegister_MoveCharBoardCursor    ; If no button is down, then reset repeat state.
 
 ; Clears the button hold/repeat state; IN: A = 0.
-ResetButtonRepeatState:
+ModeERegister_ResetButtonRepeat:
     STA IsHoldingButton
     STA IsButtonRepeating
     STA ButtonRepeatTimer
@@ -46,7 +46,7 @@ ResetButtonRepeatState:
 ; Moves the character-board cursor one step in the held direction, with auto-repeat and wrapping.
 ; IN:   A = direction bits held (nonzero).
 ; ----------------------------------------------------------------------------
-ModeE_HandleDirectionButton:
+ModeERegister_MoveCharBoardCursor:
     TAY
     LDA IsHoldingButton
     BNE @CheckSameButton        ; If we weren't holding a button last frame,
@@ -59,7 +59,7 @@ ModeE_HandleDirectionButton:
     CMP HeldButton
     BEQ @CheckRepeat            ; If it's not the same button as before,
     LDA #$00                    ; then reset repeat state.
-    JSR ResetButtonRepeatState
+    JSR ModeERegister_ResetButtonRepeat
 
 @CheckRepeat:
     LDA ButtonRepeatTimer
@@ -95,7 +95,7 @@ ModeE_HandleDirectionButton:
     LDA #$30                    ; Otherwise, move the cursor to the left end.
     STA ObjX+1
     LDX #$00                    ; Cycle down.
-    JSR CycleCharBoardCursorY
+    JSR ModeERegister_StepCharBoardCursorY
     LDA ModeE_HasWrappedBoardY
     BEQ :+                      ; If wrapped around to the top,
     LDA #$00                    ; then reset CharBoardIndex.
@@ -120,7 +120,7 @@ ModeE_HandleDirectionButton:
     LDA #$D0                    ; Otherwise, move the cursor to the right end.
     STA ObjX+1
     LDX #$03                    ; Cycle up.
-    JSR CycleCharBoardCursorY
+    JSR ModeERegister_StepCharBoardCursorY
     LDA ModeE_HasWrappedBoardY
     BEQ :+                      ; If wrapped around to the bottom,
     LDA #$2B                    ; then set CharBoardIndex to the last index.
@@ -140,7 +140,7 @@ ModeE_HandleDirectionButton:
     ADC #$0B
     STA CharBoardIndex
     LDX #$00                    ; Cycle down.
-    JSR CycleCharBoardCursorY
+    JSR ModeERegister_StepCharBoardCursorY
     LDA ModeE_HasWrappedBoardY
     BEQ @Finish                 ; If didn't wrap around, then go finish.
     LDA CharBoardIndex          ; Wrapped around. So, move to top row.
@@ -163,7 +163,7 @@ ModeE_HandleDirectionButton:
     SBC #$0B
     STA CharBoardIndex
     LDX #$03                    ; Cycle up.
-    JSR CycleCharBoardCursorY
+    JSR ModeERegister_StepCharBoardCursorY
     LDA ModeE_HasWrappedBoardY
     BEQ @FinishInput            ; If didn't wrap around, then go finish.
     LDA CharBoardIndex          ; Wrapped around. So, move to bottom row.
@@ -181,20 +181,20 @@ ModeE_HandleDirectionButton:
 
 ; ----------------------------------------------------------------------------
 ; Moves the character-board cursor one row down or up, wrapping at the bottom or top.
-; IN:   X = 0 for down, 3 for up (offset of a triplet in ModeE_CharBoardYOffsetsAndBounds).
+; IN:   X = 0 for down, 3 for up (offset of a triplet in ModeERegister_CharBoardYStepsAndBounds).
 ; OUT:  ModeE_HasWrappedBoardY = 1 if the cursor wrapped around, else 0.
 ; ----------------------------------------------------------------------------
-CycleCharBoardCursorY:
+ModeERegister_StepCharBoardCursorY:
     LDY #$00                    ; Assume we don't wrap around.
     LDA ObjY+1                  ; Move the char board cursor Y one spot in given direction.
     CLC
-    ADC ModeE_CharBoardYOffsetsAndBounds, X    ; Add $10 or -$10 ($F0), depending on X passed in (0 or 3).
+    ADC ModeERegister_CharBoardYStepsAndBounds, X    ; Add $10 or -$10 ($F0), depending on X passed in (0 or 3).
     STA ObjY+1
     INX                         ; Look at boundaries.
-    CMP ModeE_CharBoardYOffsetsAndBounds, X
+    CMP ModeERegister_CharBoardYStepsAndBounds, X
     BNE @ReturnValue            ; If we didn't reach the boundary, then return Y=0.
     INX                         ; Set cursor Y to wrapped around position.
-    LDA ModeE_CharBoardYOffsetsAndBounds, X
+    LDA ModeERegister_CharBoardYStepsAndBounds, X
     STA ObjY+1
     INY                         ; Return ModeE_HasWrappedBoardY [$042A]=1.
 
@@ -202,13 +202,13 @@ CycleCharBoardCursorY:
     STY ModeE_HasWrappedBoardY
 
 ; Shared return of the routines above and below.
-LA10A_Exit:
+ModeERegister_StepCharBoardCursorY_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Sets up the name field for the chosen slot once, then handles A (type a character) and B (skip).
 ; ----------------------------------------------------------------------------
-ModeE_HandleAOrB:
+ModeERegister_HandleAOrB:
     LDA IsNameFieldInitialized
 
     ; If IsNameFieldInitialized [$0420] is set, then skip initializing
@@ -216,20 +216,20 @@ ModeE_HandleAOrB:
     BNE @CheckAB
     LDY CurSaveSlot
     CPY #$03
-    BEQ LA10A_Exit              ; If at the "End" option, then return.
+    BEQ ModeERegister_StepCharBoardCursorY_Return              ; If at the "End" option, then return.
 
     ; Set NameCharOffset [$0421] to the offset of first char
     ; in the current slot's name.
-    LDA SlotToNameOffset, Y
+    LDA ModeERegister_SlotNameOffsets, Y
     STA NameCharOffset
 
     ; Get the offset of the end of the initial name character
     ; transfer record header for the current slot.
-    LDX SlotToInitialNameCharTransferHeaderEndOffsets, Y
+    LDX ModeERegister_NameCharHeaderEndOffsets, Y
     LDY #$02                    ; Each transfer record header is 3 bytes.
 
 @CopyHeaderTemplate:
-    LDA SlotToInitialNameCharTransferHeaders, X
+    LDA ModeERegister_NameCharTransferHeaders, X
     STA NameInputCharBuf, Y     ; Copy a byte of transfer header for current slot to [$0422][Y].
     DEX
     DEY
@@ -266,7 +266,7 @@ ModeE_HandleAOrB:
     STY DynTileBuf+4            ; Write the end marker to dynamic transfer buf.
     LDX NameCharOffset
     LDY CharBoardIndex          ; CharBoardIndex in [$041F] will index into character map.
-    LDA ModeE_CharMap, Y        ; Get the character that's highlighted.
+    LDA ModeERegister_CharMap, Y        ; Get the character that's highlighted.
     STA DynTileBuf+3            ; Write the chosen character to dynamic transfer buf.
     STA SaveSlotNames, X                ; Set the character in the name.
 
@@ -307,7 +307,7 @@ ModeE_HandleAOrB:
     ; It also means that we went past the end of the save slot
     ; info name. Set the offset to the beginning of the name.
     LDY CurSaveSlot
-    LDA SlotToNameOffset, Y
+    LDA ModeERegister_SlotNameOffsets, Y
     STA NameCharOffset
 
     ; If the name cursor has gone past the end of the field,
@@ -319,4 +319,4 @@ ModeE_HandleAOrB:
     STA ObjX
 
 @Exit:
-    JMP ModeE_SetNameCursorSpriteX    ; Go set the name cursor sprite X.
+    JMP ModeERegister_SetNameCursorSpriteX    ; Go set the name cursor sprite X.

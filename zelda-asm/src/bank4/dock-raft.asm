@@ -1,31 +1,31 @@
 ; ============================================================================
 ; FILE:     bank4/dock-raft.asm          BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 3860-3974
-; SUBJECTS: (none)
+; SUBJECTS: Dock
 ; TOPIC:    The dock tile object (type $61) of OW rooms $3F and $55: with the raft it carries Link from
 ;           the dock up to the top screen edge and into the room above, or from the top edge down to it.
-; SEE ALSO: bank5/enter-room.asm (SetupTileObjectOW puts type $61 in slot $0B in rooms $3F and $55);
-;           bank7/walker-collision-screen-edge.asm (GoToNextModeFromPlay: leaving the room);
-;           bank4/flying-ghini-peahat.asm (PlaySecretFoundTune); bank1/item-sprite-draw.asm (raft sprite).
+; SEE ALSO: bank5/enter-room.asm (Room_SetUpTileObjOW puts type $61 in slot $0B in rooms $3F and $55);
+;           bank7/walker-collision-screen-edge.asm (Mode5Play_GoToNextMode: leaving the room);
+;           bank4/flying-ghini-peahat.asm (Sfx_PlaySecretFoundTune); bank1/item-sprite-draw.asm (raft sprite).
 ; KEY FACTS:
-;   - Docks exist only in OW rooms $3F and $55 (SetupTileObjectOW); UpdateDock uses dock X $80 in room
+;   - Docks exist only in OW rooms $3F and $55 (Room_SetUpTileObjOW); Dock_Update uses dock X $80 in room
 ;     $55 and $60 in any other room (that is, $3F).
-;   - Nothing happens without the raft (InvRaft = 0): UpdateDock returns at once.
+;   - Nothing happens without the raft (InvRaft = 0): Dock_Update returns at once.
 ;   - A ride starts only when Link's X equals the dock X exactly and his Y is exactly $7D (at the
-;     dock: ride up, state 2) or $3D (top screen edge: ride down, state 1). UpdateDock.
-;   - Link is halted (ObjState $40) for the whole ride and faces RaftDirections (up or down).
+;     dock: ride up, state 2) or $3D (top screen edge: ride down, state 1). Dock_Update.
+;   - Link is halted (ObjState $40) for the whole ride and faces Dock_RaftLinkDirs (up or down).
 ;   - The raft and Link move 1 pixel per frame: 64 frames up ($7D to $3D), 66 frames down ($3D to
-;     $7F). UpdateDock@HandleOtherStates, @State1.
-;   - Riding up ends in GoToNextModeFromPlay (the room above is entered facing up). Riding down ends
+;     $7F). Dock_Update@HandleOtherStates, @State1.
+;   - Riding up ends in Mode5Play_GoToNextMode (the room above is entered facing up). Riding down ends
 ;     at Y $7F with Link's grid offset set to 2, which is not $7D, so the ride up does not restart.
-;   - The raft sprite is drawn only during a ride, 6 pixels below Link's Y. UpdateDock@Draw.
+;   - The raft sprite is drawn only during a ride, 6 pixels below Link's Y. Dock_Update@Draw.
 ; CONTENTS: (generated; L = line in this file)
-;   L0028 RaftDirections  data  TABLE: direction Link faces during a raft ride; index = dock state - 1; value = direction bits.
-;   L0039 UpdateDock      code  Updates the dock (type $61): starts a raft ride when Link stands on it, then carries him 1 px/frame.
+;   L0028 Dock_RaftLinkDirs  data  TABLE: direction Link faces during a raft ride; index = dock state - 1; value = direction bits.
+;   L0039 Dock_Update        code  Updates the dock (type $61): starts a raft ride when Link stands on it, then carries him 1 px/frame.
 ; ============================================================================
 
 ; TABLE: direction Link faces during a raft ride; index = dock state - 1; value = direction bits.
-RaftDirections:
+Dock_RaftLinkDirs:
     .BYTE $04, $08              ; State 1 (ride down from the top edge): down. State 2 (ride up): up.
 
 ; ----------------------------------------------------------------------------
@@ -36,7 +36,7 @@ RaftDirections:
 ;       Link's Y = $7D (ride up) or $3D (ride down). Up takes 64 frames and ends by leaving the room
 ;       through the top; down takes 66 frames and ends at Y = $7F.
 ; ----------------------------------------------------------------------------
-UpdateDock:
+Dock_Update:
     ; Without the raft, return.
     LDA InvRaft
     BEQ @Exit
@@ -80,12 +80,12 @@ UpdateDock:
     STA ObjY, X
 
     ; Play the "secret found" tune, and halt Link (ObjState $40: no input, no movement of his own).
-    JSR PlaySecretFoundTune
+    JSR Sfx_PlaySecretFoundTune
     LDA #$40
     STA ObjState
 
     ; Make Link face the way the raft goes: down in state 1, up in state 2.
-    LDA RaftDirections-1, Y
+    LDA Dock_RaftLinkDirs-1, Y
     STA ObjDir
 
 @Exit:
@@ -102,14 +102,14 @@ UpdateDock:
     DEC ObjY
 
     ; Until Link's Y = $3D (the top screen edge), only draw.
-    ; There, leave the room: GoToNextModeFromPlay goes to mode 6 and clears Link's state.
+    ; There, leave the room: Mode5Play_GoToNextMode goes to mode 6 and clears Link's state.
     ; Link still faces up (set when the ride began).
     LDA ObjY
     CMP #$3D
     BNE @Draw
     TXA                         ; Save the dock's object slot (the call returns X = 0).
     PHA
-    JSR GoToNextModeFromPlay
+    JSR Mode5Play_GoToNextMode
     PLA
     TAX
     JMP @ResetLinkAndRaftStateAndDraw
@@ -139,13 +139,13 @@ UpdateDock:
 @Draw:
     TXA                         ; Save the dock's object slot.
     PHA
-    JSR Link_EndMoveAndAnimate_Bank4    ; Draw Link at his new position.
+    JSR Link_EndMoveAndAnimate_ReturnToBank4    ; Draw Link at his new position.
     PLA                         ; Restore the dock's object slot.
     TAX
 
     ; Called for its outputs [00], [01] = the raft's X, Y. It also counts down the dock's
     ; ObjAnimCounter and sets [0F], which the sprite writer below resets.
-    JSR AnimateObjectWalking
+    JSR Anim_AnimateObjWalking
     LDA #$00                    ; Sprite attributes 0: in front of the background, sprite palette 0.
     LDY #$09                    ; Item slot 9: the raft.
     JMP Anim_WriteStaticItemSpritesWithAttributes

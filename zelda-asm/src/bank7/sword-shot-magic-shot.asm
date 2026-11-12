@@ -1,85 +1,85 @@
 ; ============================================================================
 ; FILE:     bank7/sword-shot-magic-shot.asm BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 3450-3761
-; SUBJECTS: (none)
+; SUBJECTS: SwordShot
 ; TOPIC:    Link's sword shot (beam) and the rod's magic shot in object slot $0E: flight, what happens when
 ;           the shot is stopped (the beam bursts into four corners, the magic shot lights a fire if Link
 ;           has the book), and drawing (also used to draw monsters' sword and magic shots).
-; SEE ALSO: bank7/sword-and-rod.asm (MakeSwordShot, SetUpWeaponWithState: when a shot is made, its speed);
-;           bank1/shot-aim-boomerang-speed.asm (MoveShot); bank1/room-bounds.asm (BoundByRoom: where a
-;           shot stops); bank1/sword-bomb-arrow-collision.asm (CheckMonsterSwordShotOrMagicShotCollision:
-;           damage, and the call to HandleShotBlocked on a hit); bank1/bomb-candle-wield.asm (WieldCandle);
+; SEE ALSO: bank7/sword-and-rod.asm (SwordShot_Make, SwordShot_SetUpWithState: when a shot is made, its speed);
+;           bank1/shot-aim-boomerang-speed.asm (Obj_MoveShot); bank1/room-bounds.asm (Room_BoundDir: where a
+;           shot stops); bank1/sword-bomb-arrow-collision.asm (SwordShot_CheckMonsterCollision:
+;           damage, and the call to SwordShot_HandleBlocked on a hit); bank1/bomb-candle-wield.asm (Candle_Wield);
 ;           bank7/fire.asm (the fire the book makes); bank4/monster-shots-fireballs.asm (monsters' shots).
 ; KEY FACTS:
 ;   - Slot $0E state: 0 = no shot; $10 = sword shot flying; $11 = sword shot spreading; $80 = magic shot
-;       flying. Bit 7 = magic shot, bit 0 = spreading. UpdateSwordShotOrMagicShot, HandleShotBlocked
+;       flying. Bit 7 = magic shot, bit 0 = spreading. SwordShot_UpdateOrMagicShot, SwordShot_HandleBlocked
 ;   - Only one shot exists at a time (one slot), and the slot stays busy while the beam spreads: 22 frames
-;       after the frame on which it was stopped. SpreadShot
-;   - A flying shot stops only at the room bounds (BoundByRoom inside MoveShot; tiles are not tested) or
-;       when the collision code reports a hit on a monster. UpdateSwordShotOrMagicShot, HandleShotBlocked
+;       after the frame on which it was stopped. SwordShot_UpdateSpread
+;   - A flying shot stops only at the room bounds (Room_BoundDir inside Obj_MoveShot; tiles are not tested) or
+;       when the collision code reports a hit on a monster. SwordShot_UpdateOrMagicShot, SwordShot_HandleBlocked
 ;   - A stopped sword shot spreads: four corner sprites move diagonally 1 pixel a frame, from 2 to 23
-;       pixels away from the point of impact. SetShotSpreadingState, SpreadShot
+;       pixels away from the point of impact. SwordShot_StartSpread, SwordShot_UpdateSpread
 ;   - A stopped magic shot disappears at once. With the book (InvBook nonzero) it first makes a standing
-;       fire (state $22, ObjTimer $4F) at its position in fire slot $10 or $11. HandleShotBlocked
+;       fire (state $22, ObjTimer $4F) at its position in fire slot $10 or $11. SwordShot_HandleBlocked
 ;   - The book's fire needs no candle and does not use up the blue candle's once-per-room use
-;       (HasUsedCandle is saved and restored). HandleShotBlocked
+;       (HasUsedCandle is saved and restored). SwordShot_HandleBlocked
 ;   - While the shot is spreading, the slot's ObjDir holds the corner offset ($FE down to $E9), not a
-;       direction. SetShotSpreadingState, SpreadShot
+;       direction. SwordShot_StartSpread, SwordShot_UpdateSpread
 ; CONTENTS: (generated; L = line in this file)
-;   L0043 SwordShotSpreadBaseAttr     data  TABLE: sprite attributes of the four corners of a spreading sword shot; index = corner loop index in
-;   L0056 UpdateSwordShotOrMagicShot  code  Updates Link's sword shot or magic shot each frame: moves it, stops it at the room bounds, draws it.
-;   L0091 DrawSwordShotOrMagicShot    code  Draws a flying sword shot or magic shot, flashing through the four sprite palettes.
-;   L0166 HandleShotBlocked           code  Stops Link's shot: a sword shot starts spreading; a magic shot vanishes (leaving a fire with the book).
-;   L0219 DeactivateLinkShot          code  Deactivates Link's shot in slot $0E; second entry of HandleShotBlocked and the end of SpreadShot.
-;   L0223 DeactivateShot              code  Deactivates the shot in slot X (state = 0).
-;   L0233 SetShotSpreadingState       code  Puts a stopped sword shot into the spreading state ($10 becomes $11) with corner offset -2.
-;   L0249 SpreadShot                  code  Draws the four corners of a spreading sword shot, moves them 1 pixel outward, and ends the shot.
-;   L0379 L1F49F_Exit                 code  Shared return (RTS) of SpreadShot, UpdateBoomerangOrFood and UpdateArrowOrBoomerang.
+;   L0043 SwordShot_SpreadCornerAttrs  data  TABLE: sprite attributes of the four corners of a spreading sword shot; index = corner loop index in
+;   L0056 SwordShot_UpdateOrMagicShot  code  Updates Link's sword shot or magic shot each frame: moves it, stops it at the room bounds, draws it.
+;   L0091 SwordShot_DrawOrMagicShot    code  Draws a flying sword shot or magic shot, flashing through the four sprite palettes.
+;   L0166 SwordShot_HandleBlocked      code  Stops Link's shot: a sword shot starts spreading; a magic shot vanishes (leaving a fire with the book).
+;   L0219 SwordShot_DeactivateSlot0E   code  Deactivates Link's shot in slot $0E; second entry of SwordShot_HandleBlocked and the end of SwordShot_Updat...
+;   L0223 SwordShot_Deactivate         code  Deactivates the shot in slot X (state = 0).
+;   L0233 SwordShot_StartSpread        code  Puts a stopped sword shot into the spreading state ($10 becomes $11) with corner offset -2.
+;   L0249 SwordShot_UpdateSpread       code  Draws the four corners of a spreading sword shot, moves them 1 pixel outward, and ends the shot.
+;   L0379 SwordShot_Return             code  Shared return (RTS) of SwordShot_UpdateSpread, Boomerang_UpdateOrFood and Boomerang_UpdateOrArrow.
 ; ============================================================================
 
 ; TABLE: sprite attributes of the four corners of a spreading sword shot; index = corner loop index in
-;   SpreadShot; value = OAM flip bits ($40 horizontal, $80 vertical).
+;   SwordShot_UpdateSpread; value = OAM flip bits ($40 horizontal, $80 vertical).
 ;   0: top-right ($40), 1: bottom-right ($C0), 2: bottom-left ($80), 3: top-left ($00, the image as stored).
-SwordShotSpreadBaseAttr:
+SwordShot_SpreadCornerAttrs:
     .BYTE $40, $C0, $80, $00
 
 ; ----------------------------------------------------------------------------
 ; Updates Link's sword shot or magic shot each frame: moves it, stops it at the room bounds, draws it.
-; IN:   X = object slot ($0E; called once a frame by UpdateMode5Play)
-; NOTE: State 0 = inactive; bit 0 set = sword shot spreading (SpreadShot); bit 7 set = magic shot.
-;       Speed is ObjQSpeedFrac (set by SetUpWeaponWithState: $C0 = 3 pixels a frame for the sword shot,
-;       $A0 = 2.5 for the magic shot; MoveObject adds the q-speed to the position fraction 4 times a frame).
-;       The shot is stopped here only by the room bounds (MoveShot calls BoundByRoomWithA, which zeroes
+; IN:   X = object slot ($0E; called once a frame by Mode5Play_Update)
+; NOTE: State 0 = inactive; bit 0 set = sword shot spreading (SwordShot_UpdateSpread); bit 7 set = magic shot.
+;       Speed is ObjQSpeedFrac (set by SwordShot_SetUpWithState: $C0 = 3 pixels a frame for the sword shot,
+;       $A0 = 2.5 for the magic shot; Obj_MoveByQSpeed adds the q-speed to the position fraction 4 times a frame).
+;       The shot is stopped here only by the room bounds (Obj_MoveShot calls Room_BoundDirA, which zeroes
 ;       [0F]); walls and other tiles inside the bounds do not stop it. A hit on a monster stops it from
-;       the collision code, which calls HandleShotBlocked itself.
+;       the collision code, which calls SwordShot_HandleBlocked itself.
 ; ----------------------------------------------------------------------------
-UpdateSwordShotOrMagicShot:
+SwordShot_UpdateOrMagicShot:
     ; If the shot is not active, return.
     LDA ObjState, X
-    BEQ L1F36A_Exit
+    BEQ Link_EndMoveAndAnimate_Return
 
     ; If bit 0 of the state is set, the sword shot is spreading out.
     LSR
     BCC :+
-    JMP SpreadShot
+    JMP SwordShot_UpdateSpread
 :
     ; This test has no effect: both outcomes continue at the next instruction.
     LDA ObjGridOffset, X
     BNE :+
 :
-    ; Move the shot in its direction. [0E] is not set up here, so whether MoveShot accumulates
+    ; Move the shot in its direction. [0E] is not set up here, so whether Obj_MoveShot accumulates
     ; ObjGridOffset depends on the value left in [0E] by earlier code.
     LDA ObjDir, X
-    JSR MoveShot
+    JSR Obj_MoveShot
 
     ; [0F] = 0 means the shot was at a room bound and did not move: go handle it being blocked.
     LDA $0F
-    BEQ HandleShotBlocked
+    BEQ SwordShot_HandleBlocked
 
     ; If the low 3 bits of the grid offset are 0, reset the grid offset to 0.
     LDA ObjGridOffset, X
     AND #$07
-    BNE DrawSwordShotOrMagicShot
+    BNE SwordShot_DrawOrMagicShot
     STA ObjGridOffset, X
 
 ; ----------------------------------------------------------------------------
@@ -88,7 +88,7 @@ UpdateSwordShotOrMagicShot:
 ;       (object type $57 sword shot, $58/$59 magic shot; called by the monster shot update in bank 4)
 ; NOTE: The palette is (FrameCounter AND 3), so it changes every frame.
 ; ----------------------------------------------------------------------------
-DrawSwordShotOrMagicShot:
+SwordShot_DrawOrMagicShot:
     ; Prepare the sprite position: [00] = X, [01] = Y, [0F] = 0 (no horizontal flip).
     JSR Anim_FetchObjPosForSpriteDescriptor
 
@@ -107,14 +107,14 @@ DrawSwordShotOrMagicShot:
 
     ; Set the sprite attributes to (base attribute OR (frame counter AND 3)).
     ; This makes the shot flash by cycling all the palettes, one each frame.
-    JSR GetOppositeDir          ; Only for Y = reverse direction index: 0 up, 1 down, 2 left, 3 right.
+    JSR Dir_GetOpposite          ; Only for Y = reverse direction index: 0 up, 1 down, 2 left, 3 right.
     LDA FrameCounter
     AND #$03
-    ORA RDirectionToWeaponBaseAttribute, Y
+    ORA Anim_WeaponBaseAttrsByRDir, Y
     JSR Anim_SetSpriteDescriptorAttributes
 
     ; Set [0C] to the frame for the direction: 0 vertical, 1 horizontal.
-    LDA RDirectionToWeaponFrame, Y
+    LDA Anim_WeaponFramesByRDir, Y
     STA $0C
 
     ; If the direction is left, flip the right-facing image by setting [0F] to 1.
@@ -127,13 +127,13 @@ DrawSwordShotOrMagicShot:
     ; type => $23 (the only other types the caller sends here are $58 and $59, magic shots).
     LDY #$22
     CPX #$0D
-    BCS @PlayerShot
+    BCS @LinkShot
     LDA ObjType, X
     CMP #$57
     BEQ @WriteSprites
     BNE @WriteMagicSprites
 
-@PlayerShot:
+@LinkShot:
     ; Link's shot chooses by state: bit 7 set (magic shot) => $23; clear (sword shot) => $22.
     LDA ObjState, X
     ASL
@@ -147,38 +147,38 @@ DrawSwordShotOrMagicShot:
 
 ; ----------------------------------------------------------------------------
 ; Stops Link's shot: a sword shot starts spreading; a magic shot vanishes (leaving a fire with the book).
-; IN:   X = shot object slot (always $0E: from UpdateSwordShotOrMagicShot at a room bound, and from
-;       CheckMonsterSwordShotOrMagicShotCollision when the shot hits a monster)
+; IN:   X = shot object slot (always $0E: from SwordShot_UpdateOrMagicShot at a room bound, and from
+;       SwordShot_CheckMonsterCollision when the shot hits a monster)
 ; OUT:  X = $0E if the magic shot path ran with the book; else unchanged. A = 0 after a deactivation.
 ; NOTE: Without the book (InvBook = 0) the magic shot is simply deactivated.
-;       With the book, WieldCandle is called to claim fire slot $10 or $11 (it plays the flame sound
+;       With the book, Candle_Wield is called to claim fire slot $10 or $11 (it plays the flame sound
 ;       effect when it makes a fire). HasUsedCandle is cleared
 ;       for the call and restored after it, so the fire needs no candle, is not refused after the blue
 ;       candle was used in this room, and does not count as that use. Link's state is also restored,
 ;       so he is not put into the item-use state.
 ;       The new fire becomes a standing fire (state $22) at the shot's position, with the shot's
-;       direction and ObjTimer = $4F (79 frames); a candle's standing fire gets $3F in UpdateFire.
-;       Quirk: if both fire slots are busy, WieldCandle returns with X = $11. If slot $11 then holds
+;       direction and ObjTimer = $4F (79 frames); a candle's standing fire gets $3F in Fire_Update.
+;       Quirk: if both fire slots are busy, Candle_Wield returns with X = $11. If slot $11 then holds
 ;       a moving candle fire (state $21), the test below passes and that fire is turned into the
 ;       standing fire at the shot's position. Any other state in slot $11 (a bomb, a standing fire):
 ;       no fire is made.
 ; ----------------------------------------------------------------------------
-HandleShotBlocked:
+SwordShot_HandleBlocked:
     ; Bit 7 of the state clear: a sword shot. Go start spreading it.
     LDA ObjState, X
     ASL
-    BCC SetShotSpreadingState
+    BCC SwordShot_StartSpread
 
     ; This is a magic shot.
     ;
     ; If Link does not have the book, go deactivate the shot object.
     LDA InvBook
-    BEQ DeactivateShot
+    BEQ SwordShot_Deactivate
 
     ; Try to activate a fire object. Temporarily mark the candle unused, so that success depends
     ; only on finding an empty fire slot.
     ;
-    ; WieldCandle also sets Link's state to $10 (using an item), which is not wanted here.
+    ; Candle_Wield also sets Link's state to $10 (using an item), which is not wanted here.
     ;
     ; For both these reasons, save Link's state and HasUsedCandle, and restore them afterward.
     LDA ObjState
@@ -187,17 +187,17 @@ HandleShotBlocked:
     PHA
     LDA #$00
     STA HasUsedCandle
-    JSR WieldCandle             ; Returns X = the fire slot it used, or $11 if it found none.
+    JSR Candle_Wield             ; Returns X = the fire slot it used, or $11 if it found none.
     PLA
     STA HasUsedCandle
     PLA
     STA ObjState
 
-    ; State $21 (moving fire) in slot X means WieldCandle made a fire, or that slot $11 already held
+    ; State $21 (moving fire) in slot X means Candle_Wield made a fire, or that slot $11 already held
     ; a moving fire (see NOTE above). Any other value: go deactivate the shot object only.
     LDA ObjState, X
     CMP #$21
-    BNE DeactivateLinkShot
+    BNE SwordShot_DeactivateSlot0E
 
     ; Make the state $22: a standing fire.
     INC ObjState, X
@@ -215,13 +215,13 @@ HandleShotBlocked:
     LDA #$4F
     STA ObjTimer, X
 
-; Deactivates Link's shot in slot $0E; second entry of HandleShotBlocked and the end of SpreadShot.
-DeactivateLinkShot:
+; Deactivates Link's shot in slot $0E; second entry of SwordShot_HandleBlocked and the end of SwordShot_UpdateSpread.
+SwordShot_DeactivateSlot0E:
     LDX #$0E
 
 ; Deactivates the shot in slot X (state = 0).
-DeactivateShot:
-    JMP ResetObjState
+SwordShot_Deactivate:
+    JMP Obj_ResetState
 
 ; ----------------------------------------------------------------------------
 ; Puts a stopped sword shot into the spreading state ($10 becomes $11) with corner offset -2.
@@ -230,7 +230,7 @@ DeactivateShot:
 ;       left and top corners from the shot's position (the centre of the spread). The right and
 ;       bottom corners use the same distance with the opposite sign.
 ; ----------------------------------------------------------------------------
-SetShotSpreadingState:
+SwordShot_StartSpread:
     INC ObjState, X             ; Set bit 0: spreading.
     LDA #$FE                    ; Offset -2 pixels.
     STA ObjDir, X
@@ -242,11 +242,11 @@ SetShotSpreadingState:
 ; NOTE: Runs on 22 frames, with offsets $FE down to $E9 (2 to 23 pixels on each axis). After the
 ;       frame drawn at $E9 the offset becomes $E8 and the slot is deactivated, so a new sword shot
 ;       can be made from the next frame on. The shot does no damage in this state
-;       (CheckMonsterSwordShotOrMagicShotCollision returns when bit 0 of the state is set).
+;       (SwordShot_CheckMonsterCollision returns when bit 0 of the state is set).
 ;       A corner is not drawn when its X would wrap around the screen, or in the underworld when
 ;       its Y is less than $3E or at least $E8.
 ; ----------------------------------------------------------------------------
-SpreadShot:
+SwordShot_UpdateSpread:
     ; Copy the negative offset in ObjDir to [02] (X offset) and [03] (Y offset).
     ; These will be negated in turn for each corner.
     LDA ObjDir, X
@@ -277,7 +277,7 @@ SpreadShot:
     ; cycling through the four sprite palettes, one each frame.
     LDA FrameCounter
     AND #$03
-    ORA SwordShotSpreadBaseAttr, Y
+    ORA SwordShot_SpreadCornerAttrs, Y
     JSR Anim_SetSpriteDescriptorAttributes
 
     ; Add the object's X (the center of the spread) and the
@@ -372,9 +372,9 @@ SpreadShot:
     ; Once the negative offset reaches $E8, go deactivate the shot object.
     LDA ObjDir, X
     CMP #$E8
-    BNE L1F49F_Exit
-    JMP DeactivateLinkShot
+    BNE SwordShot_Return
+    JMP SwordShot_DeactivateSlot0E
 
-; Shared return (RTS) of SpreadShot, UpdateBoomerangOrFood and UpdateArrowOrBoomerang.
-L1F49F_Exit:
+; Shared return (RTS) of SwordShot_UpdateSpread, Boomerang_UpdateOrFood and Boomerang_UpdateOrArrow.
+SwordShot_Return:
     RTS

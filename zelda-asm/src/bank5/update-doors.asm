@@ -1,48 +1,48 @@
 ; ============================================================================
 ; FILE:     bank5/update-doors.asm       BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 5038-5309
-; SUBJECTS: (none)
+; SUBJECTS: Door
 ; TOPIC:    Carrying out a door command in a dungeon room: the two-step opening or closing of the
 ;           triggered door, the tiles sent to the screen, the saved door flags in this room and the
 ;           room behind the door, and CurOpenedDoors.
-; SEE ALSO: bank5/shutters-door-flags.asm (CheckShutters and TriggerOpenDoor start an open command;
-;           SetDoorFlag, ResetDoorFlag); bank5/touch-door.asm (TouchDoorKey spends the key and starts
+; SEE ALSO: bank5/shutters-door-flags.asm (Shutter_OpenTriggered and Door_TriggerOpen start an open command;
+;           RoomFlags_SetDoorOpened, RoomFlags_ClearDoorOpened); bank5/touch-door.asm (Door_TouchKey spends the key and starts
 ;           the open command); bank7/bomb.asm (a bomb near a bombable wall starts the open command);
-;           bank5/enter-room.asm (InitMode_EnterRoom starts the close command);
-;           bank5/lay-out-doors.asm (LayOutDoors, the door tables, the shared RTS L165D4_Exit);
-;           bank5/fill-walls.asm (FindDoorTypeByDoorBit); bank5/boss-sound-door-face.asm
-;           (WriteDoorFaceTileHorizontally); bank5/room-layouts-uw.asm (the door faces);
-;           bank7/mode5-play-update.asm (UpdateMode5Play calls UpdateDoors when CurLevel is not 0).
+;           bank5/enter-room.asm (Room_EnterCommon starts the close command);
+;           bank5/lay-out-doors.asm (Door_LayOut, the door tables, the shared RTS Door_Return);
+;           bank5/fill-walls.asm (Door_FindTypeByDirBit); bank5/boss-sound-door-face.asm
+;           (Door_WriteFaceTileHorizontally); bank5/room-layouts-uw.asm (the door faces);
+;           bank7/mode5-play-update.asm (Mode5Play_Update calls Door_Update when CurLevel is not 0).
 ; KEY FACTS:
 ;   - A door command is TriggeredDoorCmd (6 = open, 2 = close) plus TriggeredDoorDir (the side's
 ;     direction bit). It takes two steps 8 frames apart (DoorTimer): 6 -> 7 -> done, 2 -> 3 -> done;
-;     then TriggeredDoorCmd is 0 again. Only one command runs at a time. UpdateDoors.
-;   - UpdateDoors is called on every frame on which the play update runs in a dungeon, after Link,
-;     his weapons and the monsters have been updated and right after CheckShutters, so a command
+;     then TriggeredDoorCmd is 0 again. Only one command runs at a time. Door_Update.
+;   - Door_Update is called on every frame on which the play update runs in a dungeon, after Link,
+;     his weapons and the monsters have been updated and right after Shutter_OpenTriggered, so a command
 ;     set on a frame gets its first step on that frame. It does nothing while GameMode is $12 (end
-;     of level) or DoorTimer is not 0. UpdateDoors (UpdateMode5Play).
+;     of level) or DoorTimer is not 0. Door_Update (Mode5Play_Update).
 ;   - Opening: the first step sends the closed tiles again (nothing changes on screen); the second
 ;     step, 8 frames later, sends the open tiles and on that frame adds the side to CurOpenedDoors
-;     and redraws the doors in the tile map. The side counts as closed until then. UpdateDoors.
+;     and redraws the doors in the tile map. The side counts as closed until then. Door_Update.
 ;   - Opening a key door (types 5, 6) or bombable wall (type 4) sets its saved door flag in this room
 ;     and the flag of the opposite side in the room behind it (room flags bits 0-3), so it is open
 ;     from both sides from then on. The neighbouring room id is not range-checked and the door type
-;     of the neighbour's side is not looked at. UpdateDoors.
-;   - A shutter (type 7) that opens only enters CurOpenedDoors; no flag is saved. UpdateDoors.
+;     of the neighbour's side is not looked at. Door_Update.
+;   - A shutter (type 7) that opens only enters CurOpenedDoors; no flag is saved. Door_Update.
 ;   - The close command is issued when Link enters a room through a side that is in CurOpenedDoors
-;     (after LayOutDoors that can only be a side of type 4-7). Its first step sets Link's ObjTimer
+;     (after Door_LayOut that can only be a side of type 4-7). Its first step sets Link's ObjTimer
 ;     to $30 frames whatever the type; then only a shutter closes (closed tiles at once; 8 frames
 ;     later its saved door flag is cleared and its bit removed from CurOpenedDoors). For a key door
-;     or bombable wall the command is dropped and the door stays open. UpdateDoors.
+;     or bombable wall the command is dropped and the door stays open. Door_Update.
 ;   - Both steps request sample bit $04 (the door sound) for key doors and shutters; a bombable wall
-;     requests none here. PrepareWriteHorizontalDoorTransferRecords.
+;     requests none here. Door_PrepareTransferRecords.
 ;   - Only the 2x2 passage tiles of the door are sent to the screen, as two 2-tile transfer records
-;     in DynTileBuf. UpdateDoors, PrepareWriteHorizontalDoorTransferRecords.
+;     in DynTileBuf. Door_Update, Door_PrepareTransferRecords.
 ; CONTENTS: (generated; L = line in this file)
-;   L0060 UpdateDoors                                   code  Runs one step of the pending door command: opens or closes the triggered dungeon door.
-;   L0168 L_SetOpenedDoorMaskAndResetCmdAndLayOutDoors  code  UpdateDoors, end of a command: stores A as CurOpenedDoors, then falls into the reset below.
-;   L0172 L_ResetDoorCmdAndLayOutDoors                  code  UpdateDoors, end of a command: clears TriggeredDoorCmd and redraws the doors in the tile map.
-;   L0217 PrepareWriteHorizontalDoorTransferRecords     code  Picks the face to show for the triggered door and sets up its two 2-tile transfer records.
+;   L0060 Door_Update                         code  Runs one step of the pending door command: opens or closes the triggered dungeon door.
+;   L0168 Door_Update_SetOpenedMaskAndFinish  code  Door_Update, end of a command: stores A as CurOpenedDoors, then falls into the reset below.
+;   L0172 Door_Update_ResetCmdAndLayOut       code  Door_Update, end of a command: clears TriggeredDoorCmd and redraws the doors in the tile map.
+;   L0217 Door_PrepareTransferRecords         code  Picks the face to show for the triggered door and sets up its two 2-tile transfer records.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -52,19 +52,19 @@
 ; OUT:  DynTileBuf/DynTileBufLen: two 2-tile records for the door; TriggeredDoorCmd + 1 and
 ;       DoorTimer = 8 after the first step; after the second step TriggeredDoorCmd = 0,
 ;       CurOpenedDoors and the room flags updated and the doors redrawn in the tile map
-;       (LayOutDoors). Uses [00]-[09], [0B].
+;       (Door_LayOut). Uses [00]-[09], [0B].
 ; NOTE: Does nothing in GameMode $12 or while DoorTimer is not 0. The first step of a close command
 ;       sets Link's ObjTimer to $30. A close command for anything but a shutter ends at once without
 ;       closing the door. A door finishes opening 8 frames after its first step.
 ; ----------------------------------------------------------------------------
-UpdateDoors:
+Door_Update:
     LDA GameMode
     CMP #$12                    ; End-of-level mode: leave the doors alone.
-    BEQ L165D4_Exit
+    BEQ Door_Return
     LDA DoorTimer
-    BNE L165D4_Exit             ; Still waiting between the two steps.
+    BNE Door_Return             ; Still waiting between the two steps.
     LDA TriggeredDoorCmd
-    BEQ L165D4_Exit             ; No command.
+    BEQ Door_Return             ; No command.
 
     ; From the command, work out [08]: 2 = show the open face, 0 = show the closed face.
     ;
@@ -99,16 +99,16 @@ UpdateDoors:
     BCS @WriteTiles             ; Open command.
     LDA TriggeredDoorDir
     STA $02
-    JSR FindDoorTypeByDoorBit
+    JSR Door_FindTypeByDirBit
     CMP #$07
     BEQ @WriteTiles             ; Closing a shutter.
-    JMP L_ResetDoorCmdAndLayOutDoors
+    JMP Door_Update_ResetCmdAndLayOut
 
 @WriteTiles:
     ; Queue the 2x2 passage tiles of the face chosen by [08] for the screen: two records of two
     ; tiles. Sets X = DynTileBufLen, [00] = address high, [01] = address low, [05] = [06] = 2,
     ; [07] = 0, [09] = direction index.
-    JSR PrepareWriteHorizontalDoorTransferRecords
+    JSR Door_PrepareTransferRecords
 
 @LoopTransferRec:
     LDA $06
@@ -125,7 +125,7 @@ UpdateDoors:
     STA DynTileBuf, X
     INX
 :
-    JSR WriteDoorFaceTileHorizontally    ; Append one tile; Z set after the record's last tile.
+    JSR Door_WriteFaceTileHorizontally    ; Append one tile; Z set after the record's last tile.
     BNE :-
 
     ; Second record: one tile row lower (+$20; bit 5 is clear in all four low address bytes).
@@ -152,56 +152,56 @@ UpdateDoors:
     RTS
 :
     ; Command 4: a shutter has closed. Clear the side's saved door flag and remove the side from
-    ; CurOpenedDoors. (No SetDoorFlag call sets the flag for a shutter, but the neighbour-room write
+    ; CurOpenedDoors. (No RoomFlags_SetDoorOpened call sets the flag for a shutter, but the neighbour-room write
     ; below sets a flag without looking at that side's door type.) Command 8 branches to the
-    ; unnamed label after L_ResetDoorCmdAndLayOutDoors.
+    ; unnamed label after Door_Update_ResetCmdAndLayOut.
     LDA TriggeredDoorCmd
     CMP #$04
     BNE :+
     LDX $09                     ; X = direction index.
-    JSR ResetDoorFlag
+    JSR RoomFlags_ClearDoorOpened
     LDA TriggeredDoorDir
     EOR #$0F
     AND CurOpenedDoors
 
-; UpdateDoors, end of a command: stores A as CurOpenedDoors, then falls into the reset below.
-L_SetOpenedDoorMaskAndResetCmdAndLayOutDoors:
+; Door_Update, end of a command: stores A as CurOpenedDoors, then falls into the reset below.
+Door_Update_SetOpenedMaskAndFinish:
     STA CurOpenedDoors
 
-; UpdateDoors, end of a command: clears TriggeredDoorCmd and redraws the doors in the tile map.
-L_ResetDoorCmdAndLayOutDoors:
+; Door_Update, end of a command: clears TriggeredDoorCmd and redraws the doors in the tile map.
+Door_Update_ResetCmdAndLayOut:
     LDA #$00
     STA TriggeredDoorCmd
-    JMP LayOutDoors
+    JMP Door_LayOut
 :
     ; Command 8: a door has opened. A shutter is only added to CurOpenedDoors.
     LDA TriggeredDoorDir
     STA $02
-    JSR FindDoorTypeByDoorBit
+    JSR Door_FindTypeByDirBit
     CMP #$07
     BEQ @AddToOpenedMask
 
     ; A key door or bombable wall: set its saved door flag in this room...
     LDX $09                     ; X = direction index.
-    JSR SetDoorFlag             ; Returns Y = RoomId and [00:01] = address of the room flags.
+    JSR RoomFlags_SetDoorOpened             ; Returns Y = RoomId and [00:01] = address of the room flags.
 
     ; ...and the flag of the opposite side in the room behind the door, so that the door is open
     ; from there too. The neighbouring room id is RoomId +1, -1, +$10 or -$10; it is not range-checked.
     TYA
     CLC
-    ADC DoorNextRoomIdOffsets, X
+    ADC Door_NextRoomIdOffsets, X
     TAY
     TXA
     EOR #$01                    ; Opposite direction index: right <-> left, down <-> up.
     TAX
     LDA ($00), Y
-    ORA LevelMasks, X
+    ORA Util_BitMasks, X
     STA ($00), Y
 
 @AddToOpenedMask:
     LDA TriggeredDoorDir
     ORA CurOpenedDoors
-    JMP L_SetOpenedDoorMaskAndResetCmdAndLayOutDoors
+    JMP Door_Update_SetOpenedMaskAndFinish
 
 ; ----------------------------------------------------------------------------
 ; Picks the face to show for the triggered door and sets up its two 2-tile transfer records.
@@ -212,20 +212,20 @@ L_ResetDoorCmdAndLayOutDoors:
 ;       index. Clobbers A, Y, [03].
 ; NOTE: Requests sample bit $04 (the door sound) when the door is a key door or shutter, on every
 ;       call (both steps of a command). Only meaningful for door types 4-7: for types 0, 2 and 3
-;       the face index comes out as nonsense, and UpdateDoors never calls it for them.
+;       the face index comes out as nonsense, and Door_Update never calls it for them.
 ; ----------------------------------------------------------------------------
-PrepareWriteHorizontalDoorTransferRecords:
+Door_PrepareTransferRecords:
     LDA TriggeredDoorDir
     STA $02
-    JSR FindDoorTypeByDoorBit   ; A = door type; [03] = reverse direction index.
+    JSR Door_FindTypeByDirBit   ; A = door type; [03] = reverse direction index.
     CMP #$05
     BCC :+
     PHA
     LDA #$04                    ; Types 5-7: request the door sound (sample request bit $04).
-    JSR PlaySample
+    JSR Sample_Play
     PLA
 :
-    ; Face index, as in LayOutDoors. First a provisional value: type 4 (bombable wall) -> 8;
+    ; Face index, as in Door_LayOut. First a provisional value: type 4 (bombable wall) -> 8;
     ; types 5-7 keep their number.
     CMP #$04
     BNE :+
@@ -255,17 +255,17 @@ PrepareWriteHorizontalDoorTransferRecords:
     DEY
 
 @MakeForwardIndex:
-    ; FindDoorTypeByDoorBit left the reverse direction index in [03]; direction index = 3 - [03].
+    ; Door_FindTypeByDirBit left the reverse direction index in [03]; direction index = 3 - [03].
     LDA #$03
     SEC
     SBC $03
-    JSR FetchDoorAddrsFaceTilesSrcAndPlayAreaDst    ; [02:03] = face tiles; X = direction index.
+    JSR Door_FetchFaceTilesAndPlayAreaAddrs    ; [02:03] = face tiles; X = direction index.
 
     ; [00] = high byte and [01] = low byte of the name table address of the passage block. (This
     ; overwrites the tile map address that the call above left in [00:01].)
-    LDA DoorVramAddrsHi, X
+    LDA Door_PassageVramAddrsHi, X
     STA $00
-    LDA DoorVramAddrsLo, X
+    LDA Door_PassageVramAddrsLo, X
     STA $01
 
     STX $09                     ; [09] = direction index.

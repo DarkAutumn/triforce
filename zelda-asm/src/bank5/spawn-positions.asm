@@ -1,52 +1,52 @@
 ; ============================================================================
 ; FILE:     bank5/spawn-positions.asm    BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 1870-2037
-; SUBJECTS: (none)
+; SUBJECTS: Mode9Cellar, Spawn
 ; TOPIC:    Where the objects made on room entry start: the nine in-room spawn spots for monsters, the
 ;           four cellar Keese, the cave person; and the test that keeps a spawn off blocked tiles and
 ;           away from Link (also used for monsters entering from the screen edge).
 ; SEE ALSO: bank5/enter-room.asm (decodes the room's monster list into ObjType, then calls
-;           AssignObjSpawnPositions); bank5/mode-inits-obj-lists.asm (SpawnPosList0-3, the spot lists);
-;           bank7/object-init-table.asm (edge spawns call IsDistanceSafeToSpawn);
-;           bank7/tile-collision.asm (GetCollidableTileStill); bank5/edge-spawn-cell.asm (edge cells).
+;           Spawn_AssignPositions); bank5/mode-inits-obj-lists.asm (Spawn_PosListFacingRight-3, the spot lists);
+;           bank7/object-init-table.asm (edge spawns call Spawn_IsFarFromLink);
+;           bank7/tile-collision.asm (Tile_GetUnderObj); bank5/edge-spawn-cell.asm (edge cells).
 ; KEY FACTS:
 ;   - In-room spawn spots come from one of four 9-entry lists chosen by the direction Link faces on
-;     entry (bit index of ObjDir: 0 right, 1 left, 2 down, 3 up). AssignObjSpawnPositions.
+;     entry (bit index of ObjDir: 0 right, 1 left, 2 down, 3 up). Spawn_AssignPositions.
 ;   - A spot byte is row in the high nibble, column in the low nibble: X = column * $10,
-;     Y = row * $10 + $0D. AssignObjSpawnPositions@LoopSpawnSpot.
+;     Y = row * $10 + $0D. Spawn_AssignPositions@LoopSpawnSpot.
 ;   - The walk through the list starts at SpawnCycle and SpawnCycle is stored back afterwards, so it
 ;     carries over from room to room; the same room can hand out different spots on each visit.
-;     AssignObjSpawnPositions.
+;     Spawn_AssignPositions.
 ;   - Object slots $01-$09 all get a position, whatever the room's monster count is. A spot is skipped
 ;     when its tile blocks movement, or when it is within $21 pixels of Link on both axes.
-;     IsSafeToSpawn, IsDistanceSafeToSpawn.
+;     Spawn_IsSafeSpot, Spawn_IsFarFromLink.
 ;   - No in-room positions are assigned when the list id is 0 or Zelda ($37), when the monster count is
 ;     0, or in an overworld room whose monsters enter from the screen edges (RoomAttrsF bit 3).
-;     AssignObjSpawnPositions.
+;     Spawn_AssignPositions.
 ;   - A cellar (mode 9) always gets four blue Keese (type $1B) in slots $01-$04 at X $20, $60, $90,
 ;     $D0. All four get Y $9D: the Y table is indexed with Y, which is 0 here, instead of X.
-;     AssignObjSpawnPositions@AssignSpecialPositions, CellarKeeseYs.
+;     Spawn_AssignPositions@AssignSpecialPositions, Mode9Cellar_KeeseYs.
 ;   - In a cave (modes $0B, $0C) slots $01-$08 are emptied and slot $01 becomes the cave person:
 ;     type $6A + (cave index - $10), cave index = bits 7-2 of LevelBlockAttrsB.
-;     AssignObjSpawnPositions@InCave.
+;     Spawn_AssignPositions@InCave.
 ;   - A monster entering from the screen edge is refused (and retried later) only by the distance
-;     test; its tile is not tested. IsDistanceSafeToSpawn.
+;     test; its tile is not tested. Spawn_IsFarFromLink.
 ; CONTENTS: (generated; L = line in this file)
-;   L0044 CellarKeeseXs            data  TABLE: X of the four cellar Keese; index = 0-3 (object slot - 1); value = X in pixels.
-;   L0049 CellarKeeseYs            data  TABLE: Y of the cellar Keese, in pixels. Only entry 0 ($9D) is ever read: the reader indexes it
-;   L0064 AssignObjSpawnPositions  code  Gives the objects made on room entry their start positions (spawn spots, cellar Keese, cave person).
-;   L0189 IsSafeToSpawn            code  Tests whether an object may spawn where it is: walkable tile, and not close to Link.
-;   L0208 IsDistanceSafeToSpawn    code  Tests whether an object is far enough from Link to spawn.
-;   L0229 ReturnUnsafeToSpawn      code  Shared "not safe" exit of the two tests above: returns C set.
+;   L0044 Mode9Cellar_KeeseXs    data  TABLE: X of the four cellar Keese; index = 0-3 (object slot - 1); value = X in pixels.
+;   L0049 Mode9Cellar_KeeseYs    data  TABLE: Y of the cellar Keese, in pixels. Only entry 0 ($9D) is ever read: the reader indexes it
+;   L0064 Spawn_AssignPositions  code  Gives the objects made on room entry their start positions (spawn spots, cellar Keese, cave person).
+;   L0189 Spawn_IsSafeSpot       code  Tests whether an object may spawn where it is: walkable tile, and not close to Link.
+;   L0208 Spawn_IsFarFromLink    code  Tests whether an object is far enough from Link to spawn.
+;   L0229 Spawn_ReturnUnsafe     code  Shared "not safe" exit of the two tests above: returns C set.
 ; ============================================================================
 
 ; TABLE: X of the four cellar Keese; index = 0-3 (object slot - 1); value = X in pixels.
-CellarKeeseXs:
+Mode9Cellar_KeeseXs:
     .BYTE $20, $60, $90, $D0
 
 ; TABLE: Y of the cellar Keese, in pixels. Only entry 0 ($9D) is ever read: the reader indexes it
-; with Y = 0 (see AssignObjSpawnPositions@AssignSpecialPositions), so $5D, $7D, $9D are unused.
-CellarKeeseYs:
+; with Y = 0 (see Spawn_AssignPositions@AssignSpecialPositions), so $5D, $7D, $9D are unused.
+Mode9Cellar_KeeseYs:
     .BYTE $9D, $5D, $7D, $9D
 
 ; ----------------------------------------------------------------------------
@@ -55,13 +55,13 @@ CellarKeeseYs:
 ;       RoomObjCount = number of monsters; ObjDir = direction Link faces; SpawnCycle.
 ; OUT:  ObjX/ObjY of slots $01-$09 (in-room spawns); SpawnCycle advanced; in a cellar, types and
 ;       positions of slots $01-$04; in a cave, types of slots $01-$08.
-; NOTE: The spot list is walked cyclically from SpawnCycle; an unsafe spot (IsSafeToSpawn) is skipped
+; NOTE: The spot list is walked cyclically from SpawnCycle; an unsafe spot (Spawn_IsSafeSpot) is skipped
 ;       without advancing the slot, so with fewer than nine safe spots several slots share a spot. The
 ;       loop only ends once slot $09 is placed (it would not end if no spot were safe).
 ; NOTE: Nothing here is random: the positions depend only on Link's entry direction, SpawnCycle and
 ;       which spots are safe.
 ; ----------------------------------------------------------------------------
-AssignObjSpawnPositions:
+Spawn_AssignPositions:
     LDY RoomObjCount            ; Y = monster count. It is 0 whenever the cellar code below is reached.
 
     ; If the monster list id is 0, or it is Zelda ($37; she is placed by her own init), then
@@ -90,9 +90,9 @@ AssignObjSpawnPositions:
     BCC :-
 
     ; Put the address of the spawn spot list for that direction in [06:07].
-    LDA SpawnPosListAddrsLo, Y
+    LDA Spawn_PosListAddrsLo, Y
     STA $06
-    LDA SpawnPosListAddrsHi, Y
+    LDA Spawn_PosListAddrsHi, Y
     STA $07
 
     ; Assign coordinates to the 9 object slots $01-$09, continuing in the list where the
@@ -112,7 +112,7 @@ AssignObjSpawnPositions:
     AND #$F0
     ORA #$0D
     STA ObjY, X
-    JSR IsSafeToSpawn
+    JSR Spawn_IsSafeSpot
     BCS :+                      ; Unsafe: keep this slot and try the next spot for it.
     INX                         ; Safe: go on to the next slot.
 :
@@ -134,12 +134,12 @@ AssignObjSpawnPositions:
 :
     LDA #$1B                    ; Blue Keese
     STA ObjType+1, X
-    LDA CellarKeeseXs, X
+    LDA Mode9Cellar_KeeseXs, X
     STA ObjX+1, X
     ; The Y table is indexed by Y instead of X. In mode 9 the caller zeroes [02] and RoomObjCount,
     ; so this point is reached by the first branch above with Y = RoomObjCount = 0: every Keese
-    ; gets CellarKeeseYs[0] = $9D.
-    LDA CellarKeeseYs, Y
+    ; gets Mode9Cellar_KeeseYs[0] = $9D.
+    LDA Mode9Cellar_KeeseYs, Y
     STA ObjY+1, X
     DEX
     BPL :-
@@ -183,18 +183,18 @@ AssignObjSpawnPositions:
 ; Tests whether an object may spawn where it is: walkable tile, and not close to Link.
 ; IN:   X = object slot (ObjX, ObjY already set).
 ; OUT:  C set = not safe; C clear = safe. Y preserved; ObjCollidedTile,X = the tile found.
-; NOTE: The tile is the one GetCollidableTileStill finds for the slot (no direction); it blocks when
+; NOTE: The tile is the one Tile_GetUnderObj finds for the slot (no direction); it blocks when
 ;       it is >= RoomFirstUnwalkableTile. Falls through to the distance test.
 ; ----------------------------------------------------------------------------
-IsSafeToSpawn:
+Spawn_IsSafeSpot:
     TYA                         ; Save Y (the caller's index into the spot list).
     PHA
-    JSR GetCollidableTileStill
+    JSR Tile_GetUnderObj
     PLA                         ; Restore Y.
     TAY
     LDA ObjCollidedTile, X
     CMP RoomFirstUnwalkableTile
-    BCS ReturnUnsafeToSpawn     ; The tile blocks movement: not safe.
+    BCS Spawn_ReturnUnsafe     ; The tile blocks movement: not safe.
 
 ; ----------------------------------------------------------------------------
 ; Tests whether an object is far enough from Link to spawn.
@@ -205,12 +205,12 @@ IsSafeToSpawn:
 ; NOTE: Each difference is an 8-bit subtraction made positive by Abs, so it wraps: a real distance
 ;       of $DF or more reads as $21 or less (Link at X $00, object at X $F0 = "distance" $10).
 ; ----------------------------------------------------------------------------
-IsDistanceSafeToSpawn:
+Spawn_IsFarFromLink:
     ; Horizontal distance to Link.
     LDA ObjX
     SEC
     SBC ObjX, X
-    JSR Abs
+    JSR Math_Abs
     CMP #$22
     BCS :+                      ; $22 or more: safe.
 
@@ -218,14 +218,14 @@ IsDistanceSafeToSpawn:
     LDA ObjY
     SEC
     SBC ObjY, X
-    JSR Abs
+    JSR Math_Abs
     CMP #$22
-    BCC ReturnUnsafeToSpawn     ; Both distances below $22: not safe.
+    BCC Spawn_ReturnUnsafe     ; Both distances below $22: not safe.
 :
     CLC                         ; Safe
     RTS
 
 ; Shared "not safe" exit of the two tests above: returns C set.
-ReturnUnsafeToSpawn:
+Spawn_ReturnUnsafe:
     SEC                         ; Not safe
     RTS

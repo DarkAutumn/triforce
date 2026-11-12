@@ -1,52 +1,52 @@
 ; ============================================================================
 ; FILE:     bank4/tektite-boulder.asm    BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 2167-2590
-; SUBJECTS: Jumper
+; SUBJECTS: Boulder, Jumper
 ; TOPIC:    The boulder spawner (type $1F) that drops up to 3 Boulders (type $20), and the jumper code shared
 ;           by Tektites (types $0D blue, $0E red) and Boulders: wait on the ground, hop along a parabola.
-; SEE ALSO: bank4/zora-ow-inits.asm (InitTektite, InitBoulder, InitBoulderSet: starting direction and timer);
-;           bank4/fairy-flyer-common.asm (TurnTowardsPlayer8, BoundFlyer: aiming and room bounds);
-;           bank1/monster-collisions.asm (CheckMonsterCollisions; ObjTypeToDamagePoints);
-;           bank1/link-collision-harm.asm (CheckLinkCollision, the only collision a Boulder has);
-;           bank7/object-update-table.asm (UpdateObject_JumpTable entries $0D, $0E, $1F, $20).
+; SEE ALSO: bank4/zora-ow-inits.asm (Tektite_Init, Boulder_Init, Boulder_InitSpawner: starting direction and timer);
+;           bank4/fairy-flyer-common.asm (Dir_TurnObjTowardTarget8, Flyer_BoundByRoom: aiming and room bounds);
+;           bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink; Damage_ObjTypeDamageToLink);
+;           bank1/link-collision-harm.asm (Link_CheckMonsterTouch, the only collision a Boulder has);
+;           bank7/object-update-table.asm (Obj_Update_JumpTable entries $0D, $0E, $1F, $20).
 ; KEY FACTS:
 ;   - A jumper has two states: 0 on the ground until ObjTimer runs out, 1 in the air
-;     (UpdateTektiteOrBoulder).
+;     (Jumper_Update).
 ;   - A jump always has a horizontal part: X changes by exactly 1 pixel per frame in the air, left or right
-;     (UpdateTektiteOrBoulder@MoveX).
+;     (Jumper_Update@MoveX).
 ;   - A jump aims 0 pixels (sideways), $20 pixels lower (down diagonal) or $20 pixels higher (up diagonal)
-;     than it began (JumperYOffsets) and ends on the first frame the jumper is no longer rising and is
-;     within 3 pixels of that Y. Y is not snapped to the aim (UpdateTektiteOrBoulder@MoveX).
-;   - Start speed and gravity: blue Tektite -3 px/frame, red -4, Boulder -2 (JumperStartSpeedsHi); gravity
-;     in 1/256 px/frame per frame from JumperYAccelerations; falling speed is capped at 2 px/frame
+;     than it began (Jumper_TargetYOffsets) and ends on the first frame the jumper is no longer rising and is
+;     within 3 pixels of that Y. Y is not snapped to the aim (Jumper_Update@MoveX).
+;   - Start speed and gravity: blue Tektite -3 px/frame, red -4, Boulder -2 (Jumper_StartSpeedsWholeY); gravity
+;     in 1/256 px/frame per frame from Jumper_YAccelerations; falling speed is capped at 2 px/frame
 ;     (Jumper_MoveY).
 ;   - Wait between jumps: blue Tektite $20-$FF frames; red Tektite $00-$7F frames, or $00-$0F when its
-;     random byte is >= $A0 (3 in 8); Boulder 0 (UpdateTektiteOrBoulder@Landed).
+;     random byte is >= $A0 (3 in 8); Boulder 0 (Jumper_Update@Landed).
 ;   - A waiting Tektite alternates frame images 0 and 1 every $10 frames while its timer is above $20
 ;     and holds frame image 0 for the last $20 frames before the jump; in the air it shows frame image 1
 ;     (Jumper_AnimateAndCheckCollisions).
-;   - The clock or a stun freezes a jumper where it is, in the air too (UpdateTektiteOrBoulder@CheckStunned).
-;   - Jumpers ignore tiles; only the room bounds turn them around (BoundFlyer). A bound crossed on two
-;     frames in a row flips the horizontal direction (UpdateTektiteOrBoulder@SetUpJump).
+;   - The clock or a stun freezes a jumper where it is, in the air too (Jumper_Update@CheckStunned).
+;   - Jumpers ignore tiles; only the room bounds turn them around (Flyer_BoundByRoom). A bound crossed on two
+;     frames in a row flips the horizontal direction (Jumper_Update@SetUpJump).
 ;   - Boulders always go down, are not bounded vertically, check only the collision with Link (weapons do
 ;     not touch them) and are destroyed at Y >= $F0 (Jumper_PointBoulderDownward,
 ;     Jumper_AnimateAndCheckCollisions@DrawBoulder).
 ;   - The spawner keeps at most 3 Boulders alive; a new one appears at Y = $40 at a random X in the half
-;     of the screen that holds the chase target, then the spawner waits 0-$1F frames (UpdateBoulderSet).
+;     of the screen that holds the chase target, then the spawner waits 0-$1F frames (Boulder_UpdateSpawner).
 ; CONTENTS: (generated; L = line in this file)
-;   L0062 UpdateBoulderSet                  code  Updates the boulder spawner (type $1F): makes a new Boulder whenever its timer runs out.
-;   L0122 JumperYOffsets                    data  TABLE: Y distance from the start of a jump to its end; index = ObjDir (0-$A); value = signed pixels.
-;   L0131 JumperYAccelerations              data  TABLE: gravity of a jump; index = JumperYAccelerationBaseOffsets[kind] + ObjDir; value = 1/256 px/frame
-;   L0143 JumperStartSpeedsHi               data  TABLE: whole part of the vertical speed at the start of a jump; index = kind (Jumper_GetKind);
-;   L0147 JumperYAccelerationBaseOffsets    data  TABLE: start of each kind's set in JumperYAccelerations; index = kind (Jumper_GetKind).
-;   L0163 UpdateTektiteOrBoulder            code  Updates a Tektite (types $0D, $0E) or a Boulder (type $20): wait on the ground, then jump.
+;   L0062 Boulder_UpdateSpawner             code  Updates the boulder spawner (type $1F): makes a new Boulder whenever its timer runs out.
+;   L0122 Jumper_TargetYOffsets             data  TABLE: Y distance from the start of a jump to its end; index = ObjDir (0-$A); value = signed pixels.
+;   L0131 Jumper_YAccelerations             data  TABLE: gravity of a jump; index = Jumper_YAccelerationBaseOffsets[kind] + ObjDir; value = 1/256 px/frame
+;   L0143 Jumper_StartSpeedsWholeY          data  TABLE: whole part of the vertical speed at the start of a jump; index = kind (Jumper_GetKind);
+;   L0147 Jumper_YAccelerationBaseOffsets   data  TABLE: start of each kind's set in Jumper_YAccelerations; index = kind (Jumper_GetKind).
+;   L0163 Jumper_Update                     code  Updates a Tektite (types $0D, $0E) or a Boulder (type $20): wait on the ground, then jump.
 ;   L0385 Jumper_AnimateAndCheckCollisions  code  Draws a Tektite or a Boulder and checks its collisions; destroys a Boulder at the bottom of the screen.
 ;   L0439 Jumper_GetKind                    code  Gets the kind of jumper an object is, which indexes the jumper tables.
-;   L0449 L10A10_Exit                       code  Shared exit of Jumper_AnimateAndCheckCollisions and Jumper_GetKind.
+;   L0449 Jumper_GetKind_Return             code  Shared exit of Jumper_AnimateAndCheckCollisions and Jumper_GetKind.
 ;   L0456 Jumper_PointBoulderDownward       code  Makes a Boulder (type $20) point down: keeps the horizontal bits of ObjDir and sets down (4).
 ;   L0478 Jumper_MoveY                      code  Moves a jumper vertically by its speed, then adds gravity to the speed and caps the falling speed.
-;   L0515 Jumper_ResetVSpeedFrac            code  Clears a jumper's vertical speed fraction; also the tail of Jumper_MoveY.
-;   L0520 L10A52_Exit                       code  Shared exit of Jumper_MoveY.
+;   L0515 Jumper_ResetSpeedFracY            code  Clears a jumper's vertical speed fraction; also the tail of Jumper_MoveY.
+;   L0520 Jumper_MoveY_Return               code  Shared exit of Jumper_MoveY.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -59,7 +59,7 @@
 ;       test the clock. RNG: Random+1 indexed by the new Boulder's slot for X, by the spawner's slot
 ;       for the timers.
 ; ----------------------------------------------------------------------------
-UpdateBoulderSet:
+Boulder_UpdateSpawner:
     ; If the object timer has not expired, then return.
     LDA ObjTimer, X
     BNE @Exit
@@ -70,15 +70,15 @@ UpdateBoulderSet:
     BEQ @RandomizeTimer
 
     ; If no empty monster slot is found (Z set), then return.
-    JSR FindEmptyMonsterSlot
+    JSR Obj_FindEmptyMonsterSlot
     BEQ @Exit
 
     ; Make a Boulder (type $20) in the empty slot, and count it.
-    ; It is initialized on its first update (InitBoulder).
+    ; It is initialized on its first update (Boulder_Init).
     LDX EmptyMonsterSlot
     INC ActiveBoulderCount
     LDA #$20
-    JSR SetTypeAndClearObject
+    JSR Obj_SetTypeAndClear
 
     ; Give the boulder a random X coordinate in the same half
     ; of the screen as the chase target.
@@ -119,16 +119,16 @@ UpdateBoulderSet:
     RTS
 
 ; TABLE: Y distance from the start of a jump to its end; index = ObjDir (0-$A); value = signed pixels.
-JumperYOffsets:
+Jumper_TargetYOffsets:
     .BYTE $00, $00, $00, $00, $00, $20, $20, $00    ; 1 right, 2 left: 0. 5, 6 down diagonals: +$20.
     .BYTE $00, $E0, $E0                             ; 9, $A up diagonals: -$20.
 
-; TABLE: gravity of a jump; index = JumperYAccelerationBaseOffsets[kind] + ObjDir; value = 1/256 px/frame
+; TABLE: gravity of a jump; index = Jumper_YAccelerationBaseOffsets[kind] + ObjDir; value = 1/256 px/frame
 ; added to the vertical speed each frame.
 ; Three sets of 11 bytes would be 33 bytes, but the Boulder's set stops after direction 6: a Boulder
 ; always points down (5 or 6), so the bytes for directions 7-$A are not stored and the index would run
-; into JumperStartSpeedsHi.
-JumperYAccelerations:
+; into Jumper_StartSpeedsWholeY.
+Jumper_YAccelerations:
     ; Blue Tektite, directions 0-7: sideways (1, 2) $40, down diagonals (5, 6) $40.
     .BYTE $00, $40, $40, $00, $00, $40, $40, $00
     ; Blue Tektite 8-$A: up diagonals (9, $A) $30. Then red Tektite 0-4: sideways $80.
@@ -140,17 +140,17 @@ JumperYAccelerations:
 
 ; TABLE: whole part of the vertical speed at the start of a jump; index = kind (Jumper_GetKind);
 ; value = signed pixels per frame.
-JumperStartSpeedsHi:
+Jumper_StartSpeedsWholeY:
     .BYTE $FD, $FC, $FE         ; blue Tektite -3, red Tektite -4, Boulder -2
 
-; TABLE: start of each kind's set in JumperYAccelerations; index = kind (Jumper_GetKind).
-JumperYAccelerationBaseOffsets:
+; TABLE: start of each kind's set in Jumper_YAccelerations; index = kind (Jumper_GetKind).
+Jumper_YAccelerationBaseOffsets:
     .BYTE $00, $0B, $16         ; blue Tektite, red Tektite, Boulder
 
 ; ----------------------------------------------------------------------------
 ; Updates a Tektite (types $0D, $0E) or a Boulder (type $20): wait on the ground, then jump.
 ; IN:   X = object slot.
-; NOTE: ObjState 0 = on the ground until ObjTimer is 0; 1 = in the air. At take-off TurnTowardsPlayer8
+; NOTE: ObjState 0 = on the ground until ObjTimer is 0; 1 = in the air. At take-off Dir_TurnObjTowardTarget8
 ;       turns the jumper at most one step of 45 degrees (see its header for when the step is toward the
 ;       chase target), and a direction without a horizontal part gets left or right toward the chase
 ;       target's X. The take-off frame does not move the jumper. In the air X changes 1 pixel per frame
@@ -160,13 +160,13 @@ JumperYAccelerationBaseOffsets:
 ;       Boulder's bounce 29 frames (these counts follow from the tables; computed, not traced).
 ;       The clock (InvClock) or a stun freezes the jumper in place, in the air too.
 ; ----------------------------------------------------------------------------
-UpdateTektiteOrBoulder:
+Jumper_Update:
     ; If the monster is shoved, then keep shoving it; it is not drawn in such a frame.
     LDA ObjShoveDir, X
     BEQ @CheckStunned
     ; No case that shoves a jumper was found (unverified); upstream marked this jump as never seen
     ; executing.
-    JMP Obj_Shove
+    JMP Shove_Update
 
 @DrawAndCheckCollisions:
     JMP Jumper_AnimateAndCheckCollisions
@@ -190,8 +190,8 @@ UpdateTektiteOrBoulder:
 
     ; State = 0 and object timer expired. Time to jump.
     ;
-    ; First, turn at most 1 step (45 degrees); see TurnTowardsPlayer8 for the rule.
-    JSR TurnTowardsPlayer8
+    ; First, turn at most 1 step (45 degrees); see Dir_TurnObjTowardTarget8 for the rule.
+    JSR Dir_TurnObjTowardTarget8
 
     ; If the facing direction has no horizontal component, then
     ; add the horizontal direction toward the chase target:
@@ -224,7 +224,7 @@ UpdateTektiteOrBoulder:
     ; For example, if a tektite's direction is down and right,
     ; and it jumps into the top right corner of the room:
     ; 1. The right room boundary is hit. So the direction is
-    ;    reversed to up and left (BoundFlyer).
+    ;    reversed to up and left (Flyer_BoundByRoom).
     ; 2. The next frame, the top room boundary is hit.
     ;    The direction is reversed to down and right.
     ;
@@ -250,17 +250,17 @@ UpdateTektiteOrBoulder:
     LDY ObjDir, X
     LDA ObjY, X
     CLC
-    ADC JumperYOffsets, Y
+    ADC Jumper_TargetYOffsets, Y
     STA Jumper_ObjTargetY, X
 
     ; Set the starting speed, depending on the kind of jumper.
     JSR Jumper_GetKind
-    LDA JumperStartSpeedsHi, Y
+    LDA Jumper_StartSpeedsWholeY, Y
     STA Jumper_ObjSpeedWholeY, X
 
     ; Reset the vertical speed fraction.
     ; Then go animate, draw, and check collisions.
-    JSR Jumper_ResetVSpeedFrac
+    JSR Jumper_ResetSpeedFracY
 
 @Animate:
     JMP Jumper_AnimateAndCheckCollisions
@@ -269,8 +269,8 @@ UpdateTektiteOrBoulder:
     ; State 1. Jumping.
     ;
     ; Test the room bounds: horizontal for all, vertical for Tektites only.
-    ; When a bound is crossed, BoundFlyer reverses ObjDir and returns [0F] = 0.
-    JSR BoundFlyer
+    ; When a bound is crossed, Flyer_BoundByRoom reverses ObjDir and returns [0F] = 0.
+    JSR Flyer_BoundByRoom
 
     ; If the object was blocked at the room boundary, then
     ; increase the reversal count, and go set up a new jump from here
@@ -288,15 +288,15 @@ UpdateTektiteOrBoulder:
 
     ; Get the base offset for the kind of jumper the object is.
     JSR Jumper_GetKind
-    LDA JumperYAccelerationBaseOffsets, Y
+    LDA Jumper_YAccelerationBaseOffsets, Y
 
     ; Get the acceleration by indexing with (base offset + direction).
-    ; The Boulder's set is short (see JumperYAccelerations); its direction is 5 or 6 here.
+    ; The Boulder's set is short (see Jumper_YAccelerations); its direction is 5 or 6 here.
     ; The addition leaves carry clear, which Jumper_MoveY relies on.
     CLC
     ADC ObjDir, X
     TAY
-    LDA JumperYAccelerations, Y
+    LDA Jumper_YAccelerations, Y
     LDY #$02                    ; Falling speed cap: 2 pixels per frame.
     JSR Jumper_MoveY
 
@@ -328,16 +328,16 @@ UpdateTektiteOrBoulder:
     LDA ObjY, X
     SEC
     SBC Jumper_ObjTargetY, X
-    JSR Abs
+    JSR Math_Abs
     CMP #$03
     BCS Jumper_AnimateAndCheckCollisions
 
 @Landed:
-    ; Distance < 3. Go to state 0. ResetObjState returns A = 0.
+    ; Distance < 3. Go to state 0. Obj_ResetState returns A = 0.
     ;
     ; If the object is a boulder, then go set the timer to 0:
     ; it bounces again on the next frame.
-    JSR ResetObjState
+    JSR Obj_ResetState
     LDY ObjType, X
     CPY #$20
     BEQ @SetTimerAndAnimate
@@ -377,7 +377,7 @@ UpdateTektiteOrBoulder:
 ; ----------------------------------------------------------------------------
 ; Draws a Tektite or a Boulder and checks its collisions; destroys a Boulder at the bottom of the screen.
 ; IN:   X = object slot.
-; NOTE: Tektite: collisions with Link and his weapons (CheckMonsterCollisions). Frame image 1 in the
+; NOTE: Tektite: collisions with Link and his weapons (Collision_CheckMonsterVsWeaponsAndLink). Frame image 1 in the
 ;       air, 0 during the last $20 frames on the ground, and alternating 0/1 every $10 frames before that.
 ;       Boulder: 2 frame images alternating every 6 frames; only the collision with Link is checked, so
 ;       no weapon touches it. A Boulder at Y >= $F0 is destroyed and ActiveBoulderCount decremented.
@@ -413,23 +413,23 @@ Jumper_AnimateAndCheckCollisions:
     LDA ObjAnimFrame, X
 
 @DrawTektite:
-    JMP DrawObjectMirroredAndCheckCollisions
+    JMP Obj_DrawMirroredAndCheckCollisions
 
 @DrawBoulder:
     ; Draw a boulder: 6 frames per animation frame.
     LDA #$06
     JSR Anim_AdvanceAnimCounterAndSetObjPosForSpriteDescriptor
     LDA ObjAnimFrame, X         ; The animation frame is the frame image.
-    JSR DrawObjectNotMirroredAndCheckLinkCollision
+    JSR Obj_DrawNotMirroredAndCheckLinkCollision
 
     ; If the boulder's Y < $F0, return.
     LDA ObjY, X
     CMP #$F0
-    BCC L10A10_Exit
+    BCC Jumper_GetKind_Return
 
     ; Else the boulder has reached the bottom of the screen: destroy it.
     DEC ActiveBoulderCount
-    JMP DestroyMonster
+    JMP Obj_DestroyMonster
 
 ; ----------------------------------------------------------------------------
 ; Gets the kind of jumper an object is, which indexes the jumper tables.
@@ -442,11 +442,11 @@ Jumper_GetKind:
     SBC #$0D
     TAY
     CPY #$02
-    BCC L10A10_Exit
+    BCC Jumper_GetKind_Return
     LDY #$02
 
 ; Shared exit of Jumper_AnimateAndCheckCollisions and Jumper_GetKind.
-L10A10_Exit:
+Jumper_GetKind_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -501,21 +501,21 @@ Jumper_MoveY:
     ; This is not a general purpose signed comparison (it tests only the sign
     ; of the difference), but it works because both values are near 0.
     CMP $02
-    BMI L10A52_Exit
+    BMI Jumper_MoveY_Return
 
     ; At the cap or above. Once the fraction reaches $80, set the speed to exactly the cap and
-    ; (falling into Jumper_ResetVSpeedFrac) clear the fraction.
+    ; (falling into Jumper_ResetSpeedFracY) clear the fraction.
     LDA Jumper_ObjSpeedFracY, X
     CMP #$80
-    BCC L10A52_Exit
+    BCC Jumper_MoveY_Return
     LDA $02
     STA Jumper_ObjSpeedWholeY, X
 
 ; Clears a jumper's vertical speed fraction; also the tail of Jumper_MoveY.
-Jumper_ResetVSpeedFrac:
+Jumper_ResetSpeedFracY:
     LDA #$00
     STA Jumper_ObjSpeedFracY, X
 
 ; Shared exit of Jumper_MoveY.
-L10A52_Exit:
+Jumper_MoveY_Return:
     RTS

@@ -1,11 +1,11 @@
 ; ============================================================================
 ; FILE:     bank6/quest2-replacements.asm BANK: 6 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_06.asm 265-388
-; SUBJECTS: (none)
+; SUBJECTS: Quest
 ; TOPIC:    The data the second quest patches into the level data in RAM after a level is loaded: 8
 ;           overworld room attribute bytes, and for each dungeon level 1-9 a replacement for the level
 ;           info from offset $29 on (item positions, start/Triforce/boss rooms, cellars, maps).
-; SEE ALSO: bank6/level-load-mode2.asm (UpdateMode2Load_Full applies these, plus 7 immediate overworld
+; SEE ALSO: bank6/level-load-mode2.asm (Mode2Load_Update_Full applies these, plus 7 immediate overworld
 ;           stores); Variables.inc (LevelInfo_* fields, LevelBlockAttrsA-F bits); data/README.md
 ;           ("Second-quest patches") and data/levelinfo.md, data/levelblock-ow.md (decoded results).
 ; KEY FACTS:
@@ -13,40 +13,40 @@
 ;     $22 to cave $21 (in Q1 the level 6 entrance), $34 becomes the entrance of level 3 (in Q1 cave $20;
 ;     in Q1 level 3 is entered from $74), $3C stays the level 2 entrance with inner palette 3, and room
 ;     $0B gets monster list id $2F (Pond fairy). "Level n" is CurLevel, not the number shown.
-;     LevelBlockAttrsBQ2ReplacementOffsets, LevelBlockAttrsBQ2ReplacementValues.
+;     Quest_Q2OverworldPatchOffsets, Quest_Q2OverworldPatchValues.
 ;   - Each dungeon table replaces level info offsets $29 up: 4 item positions, map rotation, map X
 ;     offset, start room, Triforce room, room flags address, level number, 10 cellar rooms, boss room,
-;     16 map mask bytes, status bar map transfer records. LevelInfoUWQ2Replacements1.
+;     16 map mask bytes, status bar map transfer records. Quest_Q2LevelInfoPatch1.
 ;   - The level number in a table is the digit drawn in "LEVEL-n", not CurLevel. Q2 tables for CurLevel
 ;     1-9 hold 1, 3, 2, 5, 4, 6, 8, 7, 9: the dungeon loaded as CurLevel 2 is shown as LEVEL-3 and so
-;     on. LevelInfoUWQ2Replacements2 (and 3, 4, 5, 7, 8).
+;     on. Quest_Q2LevelInfoPatch2 (and 3, 4, 5, 7, 8).
 ;   - Q2 start / Triforce / boss rooms by CurLevel: 1 $77/$08/$07; 2 $75/$20/$30; 3 $79/$1B/$2B;
 ;     4 $72/$00/$10; 5 $7D/$4F/$5F; 6 $74/$16/$26; 7 $7F/$2D/$3D; 8 $79/$1B/$1C; 9 $74/$07/$17.
-;     LevelInfoUWQ2Replacements1 .. LevelInfoUWQ2Replacements9.
+;     Quest_Q2LevelInfoPatch1 .. Quest_Q2LevelInfoPatch9.
 ;   - The room flags address in the tables equals the Q1 value: $06FF for levels 1-6, $077F for 7-9.
-;     LevelInfoUWQ2Replacements1, LevelInfoUWQ2Replacements7.
-;   - LevelInfoUWQ2ReplacementSizes holds each table's exact length, but the copy loop runs from that
+;     Quest_Q2LevelInfoPatch1, Quest_Q2LevelInfoPatch7.
+;   - Quest_Q2LevelInfoPatchSizes holds each table's exact length, but the copy loop runs from that
 ;     index down to 0, so it copies one byte past each table (it lands after the status bar map's end
-;     marker; see UpdateMode2Load_Full).
+;     marker; see Mode2Load_Update_Full).
 ; CONTENTS: (generated; L = line in this file)
-;   L0049 LevelBlockAttrsBQ2ReplacementOffsets  data  TABLE: where the Q2 overworld patch writes; index = 0-7; value = offset from LevelBlockAttrsB.
-;   L0064 LevelBlockAttrsBQ2ReplacementValues   data  TABLE: what the Q2 overworld patch writes; index = 0-7 (as the offsets table); value = the new byte.
-;   L0084 LevelInfoUWQ2Replacements1            data  TABLE: Q2 level info patch for CurLevel 1; index = offset from level info +$29; 57 bytes.
-;   L0096 LevelInfoUWQ2Replacements2            data  TABLE: Q2 level info patch for CurLevel 2; same layout; 55 bytes.
-;   L0107 LevelInfoUWQ2Replacements3            data  TABLE: Q2 level info patch for CurLevel 3; same layout; 61 bytes.
-;   L0119 LevelInfoUWQ2Replacements4            data  TABLE: Q2 level info patch for CurLevel 4; same layout; 57 bytes.
-;   L0131 LevelInfoUWQ2Replacements5            data  TABLE: Q2 level info patch for CurLevel 5; same layout; 67 bytes.
-;   L0145 LevelInfoUWQ2Replacements6            data  TABLE: Q2 level info patch for CurLevel 6; same layout; 64 bytes.
-;   L0158 LevelInfoUWQ2Replacements7            data  TABLE: Q2 level info patch for CurLevel 7; same layout; 63 bytes.
-;   L0170 LevelInfoUWQ2Replacements8            data  TABLE: Q2 level info patch for CurLevel 8; same layout; 67 bytes.
-;   L0183 LevelInfoUWQ2Replacements9            data  TABLE: Q2 level info patch for CurLevel 9; same layout; 74 bytes.
-;   L0197 LevelInfoUWQ2ReplacementAddrs         data  TABLE: address of each level's Q2 level info patch; index = (CurLevel - 1) * 2; value = address.
-;   L0211 LevelInfoUWQ2ReplacementSizes         data  TABLE: length of each level's Q2 level info patch; index = CurLevel - 1; value = bytes (55-74).
+;   L0049 Quest_Q2OverworldPatchOffsets  data  TABLE: where the Q2 overworld patch writes; index = 0-7; value = offset from LevelBlockAttrsB.
+;   L0064 Quest_Q2OverworldPatchValues   data  TABLE: what the Q2 overworld patch writes; index = 0-7 (as the offsets table); value = the new byte.
+;   L0084 Quest_Q2LevelInfoPatch1        data  TABLE: Q2 level info patch for CurLevel 1; index = offset from level info +$29; 57 bytes.
+;   L0096 Quest_Q2LevelInfoPatch2        data  TABLE: Q2 level info patch for CurLevel 2; same layout; 55 bytes.
+;   L0107 Quest_Q2LevelInfoPatch3        data  TABLE: Q2 level info patch for CurLevel 3; same layout; 61 bytes.
+;   L0119 Quest_Q2LevelInfoPatch4        data  TABLE: Q2 level info patch for CurLevel 4; same layout; 57 bytes.
+;   L0131 Quest_Q2LevelInfoPatch5        data  TABLE: Q2 level info patch for CurLevel 5; same layout; 67 bytes.
+;   L0145 Quest_Q2LevelInfoPatch6        data  TABLE: Q2 level info patch for CurLevel 6; same layout; 64 bytes.
+;   L0158 Quest_Q2LevelInfoPatch7        data  TABLE: Q2 level info patch for CurLevel 7; same layout; 63 bytes.
+;   L0170 Quest_Q2LevelInfoPatch8        data  TABLE: Q2 level info patch for CurLevel 8; same layout; 67 bytes.
+;   L0183 Quest_Q2LevelInfoPatch9        data  TABLE: Q2 level info patch for CurLevel 9; same layout; 74 bytes.
+;   L0197 Quest_Q2LevelInfoPatchAddrs    data  TABLE: address of each level's Q2 level info patch; index = (CurLevel - 1) * 2; value = address.
+;   L0211 Quest_Q2LevelInfoPatchSizes    data  TABLE: length of each level's Q2 level info patch; index = CurLevel - 1; value = bytes (55-74).
 ; ============================================================================
 
 ; TABLE: where the Q2 overworld patch writes; index = 0-7; value = offset from LevelBlockAttrsB.
 ; Pairs with the values table below. $00-$7F is a room id in array B; $8B is array C, room $0B.
-LevelBlockAttrsBQ2ReplacementOffsets:
+Quest_Q2OverworldPatchOffsets:
     .BYTE $0E, $0F, $22, $34, $3C, $45, $74, $8B
 
 ; TABLE: what the Q2 overworld patch writes; index = 0-7 (as the offsets table); value = the new byte.
@@ -61,7 +61,7 @@ LevelBlockAttrsBQ2ReplacementOffsets:
 ;   room $74: $0F -> $7A  level 3 entrance -> cave $1E, palette 3 -> 2
 ;   C, room $0B: $10 -> $2F  count index 0, monster list id $10 (Red Leever) -> $2F (Pond fairy)
 ; (Q1 values are those of the overworld level block, listed in data/levelblock-ow.md.)
-LevelBlockAttrsBQ2ReplacementValues:
+Quest_Q2OverworldPatchValues:
     .BYTE $7B, $83, $84, $0F, $0B, $12, $7A, $2F
 
 ; The nine tables below share one layout; index = offset from LevelInfo_ShortcutOrItemPosArray (level
@@ -81,7 +81,7 @@ LevelBlockAttrsBQ2ReplacementValues:
 
 ; TABLE: Q2 level info patch for CurLevel 1; index = offset from level info +$29; 57 bytes.
 ; Start room $77, Triforce room $08, boss room $07, cellar $28, shown as LEVEL-1.
-LevelInfoUWQ2Replacements1:
+Quest_Q2LevelInfoPatch1:
     .BYTE $C9, $AC, $89, $B7, $00, $E0, $77, $08    ; 4 item positions, rotation, X offset, start, Triforce
     .BYTE $FF, $06, $01, $28, $FF, $FF, $FF, $FF    ; flags address $06FF, level number, cellars 0-4
     .BYTE $FF, $FF, $FF, $FF, $FF, $07, $00, $00    ; cellars 5-9, boss room, map mask 0-1
@@ -93,7 +93,7 @@ LevelInfoUWQ2Replacements1:
 
 ; TABLE: Q2 level info patch for CurLevel 2; same layout; 55 bytes.
 ; Start room $75, Triforce room $20, boss room $30, cellar $56, shown as LEVEL-3.
-LevelInfoUWQ2Replacements2:
+Quest_Q2LevelInfoPatch2:
     .BYTE $C9, $AC, $89, $87, $05, $00, $75, $20
     .BYTE $FF, $06, $03, $56, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $30, $00, $00
@@ -104,7 +104,7 @@ LevelInfoUWQ2Replacements2:
 
 ; TABLE: Q2 level info patch for CurLevel 3; same layout; 61 bytes.
 ; Start room $79, Triforce room $1B, boss room $2B, cellars $09 $0B, shown as LEVEL-2.
-LevelInfoUWQ2Replacements3:
+Quest_Q2LevelInfoPatch3:
     .BYTE $C9, $AC, $89, $37, $0D, $C8, $79, $1B
     .BYTE $FF, $06, $02, $09, $0B, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $2B, $00, $00
@@ -116,7 +116,7 @@ LevelInfoUWQ2Replacements3:
 
 ; TABLE: Q2 level info patch for CurLevel 4; same layout; 57 bytes.
 ; Start room $72, Triforce room $00, boss room $10, cellars $21 $58 $7A, shown as LEVEL-5.
-LevelInfoUWQ2Replacements4:
+Quest_Q2LevelInfoPatch4:
     .BYTE $C9, $AC, $89, $86, $06, $10, $72, $00
     .BYTE $FF, $06, $05, $21, $58, $7A, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $10, $00, $00
@@ -128,7 +128,7 @@ LevelInfoUWQ2Replacements4:
 
 ; TABLE: Q2 level info patch for CurLevel 5; same layout; 67 bytes.
 ; Start room $7D, Triforce room $4F, boss room $5F, cellars $0F $6A $7F, shown as LEVEL-4.
-LevelInfoUWQ2Replacements5:
+Quest_Q2LevelInfoPatch5:
     .BYTE $C9, $AC, $89, $87, $0A, $B0, $7D, $4F
     .BYTE $FF, $06, $04, $0F, $6A, $7F, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $5F, $00, $00
@@ -142,7 +142,7 @@ LevelInfoUWQ2Replacements5:
 ; TABLE: Q2 level info patch for CurLevel 6; same layout; 64 bytes.
 ; Start room $74, Triforce room $16, boss room $26, cellars $03 $73 $46, shown as LEVEL-6.
 ; Its first two item positions ($49, $79) differ from the other tables' ($C9, $AC).
-LevelInfoUWQ2Replacements6:
+Quest_Q2LevelInfoPatch6:
     .BYTE $49, $79, $89, $56, $04, $00, $74, $16
     .BYTE $FF, $06, $06, $03, $73, $46, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $26, $00, $00
@@ -155,7 +155,7 @@ LevelInfoUWQ2Replacements6:
 ; TABLE: Q2 level info patch for CurLevel 7; same layout; 63 bytes.
 ; Start room $7F, Triforce room $2D, boss room $3D, cellars $02 $03 $04 $05 $20 $21 $26 $2B $2C,
 ; shown as LEVEL-8. Room flags address $077F (levels 7-9).
-LevelInfoUWQ2Replacements7:
+Quest_Q2LevelInfoPatch7:
     .BYTE $C9, $AC, $89, $79, $0C, $C0, $7F, $2D
     .BYTE $7F, $07, $08, $02, $03, $04, $05, $20
     .BYTE $21, $26, $2B, $2C, $FF, $3D, $00, $00
@@ -167,7 +167,7 @@ LevelInfoUWQ2Replacements7:
 
 ; TABLE: Q2 level info patch for CurLevel 8; same layout; 67 bytes.
 ; Start room $79, Triforce room $1B, boss room $1C, cellars $27 $30 $37 $60 $67 $70, shown as LEVEL-7.
-LevelInfoUWQ2Replacements8:
+Quest_Q2LevelInfoPatch8:
     .BYTE $C9, $AC, $89, $57, $0C, $C0, $79, $1B
     .BYTE $7F, $07, $07, $27, $30, $37, $60, $67
     .BYTE $70, $FF, $FF, $FF, $FF, $1C, $00, $00
@@ -180,7 +180,7 @@ LevelInfoUWQ2Replacements8:
 
 ; TABLE: Q2 level info patch for CurLevel 9; same layout; 74 bytes.
 ; Start room $74, Triforce room $07, boss room $17, cellars $71 $72 $75 $76 $77, shown as LEVEL-9.
-LevelInfoUWQ2Replacements9:
+Quest_Q2LevelInfoPatch9:
     .BYTE $C9, $AC, $89, $B6, $04, $00, $74, $07
     .BYTE $7F, $07, $09, $71, $72, $75, $76, $77
     .BYTE $FF, $FF, $FF, $FF, $FF, $17, $00, $00
@@ -193,26 +193,26 @@ LevelInfoUWQ2Replacements9:
     .BYTE $FF, $FF
 
 ; TABLE: address of each level's Q2 level info patch; index = (CurLevel - 1) * 2; value = address.
-; No overworld entry: the code indexes it from LevelInfoUWQ2ReplacementAddrs-2 with CurLevel * 2.
-LevelInfoUWQ2ReplacementAddrs:
-    .ADDR LevelInfoUWQ2Replacements1
-    .ADDR LevelInfoUWQ2Replacements2
-    .ADDR LevelInfoUWQ2Replacements3
-    .ADDR LevelInfoUWQ2Replacements4
-    .ADDR LevelInfoUWQ2Replacements5
-    .ADDR LevelInfoUWQ2Replacements6
-    .ADDR LevelInfoUWQ2Replacements7
-    .ADDR LevelInfoUWQ2Replacements8
-    .ADDR LevelInfoUWQ2Replacements9
+; No overworld entry: the code indexes it from Quest_Q2LevelInfoPatchAddrs-2 with CurLevel * 2.
+Quest_Q2LevelInfoPatchAddrs:
+    .ADDR Quest_Q2LevelInfoPatch1
+    .ADDR Quest_Q2LevelInfoPatch2
+    .ADDR Quest_Q2LevelInfoPatch3
+    .ADDR Quest_Q2LevelInfoPatch4
+    .ADDR Quest_Q2LevelInfoPatch5
+    .ADDR Quest_Q2LevelInfoPatch6
+    .ADDR Quest_Q2LevelInfoPatch7
+    .ADDR Quest_Q2LevelInfoPatch8
+    .ADDR Quest_Q2LevelInfoPatch9
 
 ; TABLE: length of each level's Q2 level info patch; index = CurLevel - 1; value = bytes (55-74).
 ; The copy loop uses it as its highest index, so it copies length + 1 bytes (indexes length..0); it
-; is indexed from LevelInfoUWQ2ReplacementSizes-1 with CurLevel.
-LevelInfoUWQ2ReplacementSizes:
+; is indexed from Quest_Q2LevelInfoPatchSizes-1 with CurLevel.
+Quest_Q2LevelInfoPatchSizes:
     .BYTE $39, $37, $3D, $39, $43, $40, $3F, $43
     .BYTE $4A
 
-; DATA: filler ($FF), 65 bytes, up to LevelBlockOW at $8400.
+; DATA: filler ($FF), 65 bytes, up to Level_BlockOW at $8400.
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF

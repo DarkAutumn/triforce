@@ -1,52 +1,52 @@
 ; ============================================================================
 ; FILE:     bank7/sword-and-rod.asm      BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 4362-4679
-; SUBJECTS: (none)
+; SUBJECTS: Obj, Rod, Sword, SwordShot
 ; TOPIC:    The swing of the sword (object slot $0D) and of the magic rod (slot $12, shared with the
 ;           arrow): one state machine for both, their position and drawing, and the creation of the sword
 ;           shot or magic shot in slot $0E on the third state.
-; SEE ALSO: bank5/wield-items.asm (WieldSword, WieldRod: initial states 1 and $31, first timer 5);
+; SEE ALSO: bank5/wield-items.asm (Sword_Wield, Rod_Wield: initial states 1 and $31, first timer 5);
 ;           bank5/link-handle-input.asm (Link_HandleInput: A and B are read only while Link's state is 0);
-;           bank7/object-animation.asm (AnimateLinkObjState: Link's state $10 -> $11 -> $31 -> 0);
+;           bank7/object-animation.asm (Link_AdvanceItemUseState: Link's state $10 -> $11 -> $31 -> 0);
 ;           bank7/sword-shot-magic-shot.asm (flight, spread, the book's fire); bank1/bomb-candle-wield.asm
-;           (PlaceWeapon); bank1/sword-bomb-arrow-collision.asm (sword and rod damage);
-;           bank7/boomerang-arrow-food.asm (UpdateArrowOrBoomerang, weapon frame and attribute tables).
+;           (Link_PlaceWeaponAhead); bank1/sword-bomb-arrow-collision.asm (sword and rod damage);
+;           bank7/boomerang-arrow-food.asm (Boomerang_UpdateOrArrow, weapon frame and attribute tables).
 ; KEY FACTS:
 ;   - Sword states 1-5, rod states $31-$35 (same low nibble). Counting the frame of the button press as
 ;     frame 0: state 1 frames 0-3 (not drawn), state 2 frames 4-11 (fully extended), state 3 frame 12,
-;     state 4 frame 13, state 5 frame 14 (not drawn), slot free (state 0) on frame 15. UpdateSwordOrRod
-;   - The shot is made on the frame the weapon enters state 3 (frame 12). UpdateSwordOrRod
+;     state 4 frame 13, state 5 frame 14 (not drawn), slot free (state 0) on frame 15. Sword_UpdateSwordOrRod
+;   - The shot is made on the frame the weapon enters state 3 (frame 12). Sword_UpdateSwordOrRod
 ;   - The sword hits monsters only in state 2 (frames 4-11); the rod hits in every state $31-$35
-;     (frames 0-14), damage $20. CheckMonsterSwordCollision, CheckMonsterArrowOrRodCollision
+;     (frames 0-14), damage $20. Sword_CheckMonsterCollision, Arrow_CheckArrowOrRodVsMonster
 ;     (bank1/sword-bomb-arrow-collision.asm)
 ;   - Sword shot: slot $0E must be empty, full hearts (low nibble of HeartValues) must equal containers
 ;     - 1 (high nibble) and HeartPartial must be >= $80, so up to just under half a heart may be
-;     missing. Starts in state $10 at q-speed $C0 (3 pixels per frame). MakeSwordShot
+;     missing. Starts in state $10 at q-speed $C0 (3 pixels per frame). SwordShot_Make
 ;   - Magic shot (rod): no health test and no cost. Refused only while a magic shot (state bit 7) is in
 ;     slot $0E; it replaces a sword shot that is flying or spreading. State $80, q-speed $A0 (2.5
-;     pixels per frame). UpdateSwordOrRod@MakeMagicShot, SetUpWeaponWithState
+;     pixels per frame). Sword_UpdateSwordOrRod@MakeMagicShot, SwordShot_SetUpWithState
 ;   - Either shot starts $10 pixels ahead of Link and is dropped at once when it faces left or right
-;     with X < $14 or X >= $EC. SetUpWeaponWithState
+;     with X < $14 or X >= $EC. SwordShot_SetUpWithState
 ;   - Sword and rod have separate slots and neither wield routine tests the other. They are kept apart
 ;     only by Link's state: both set it to $10 and A/B are read only at state 0. A and B pressed on the
 ;     same frame start both; the rod's magic shot then replaces the sword shot (slot $12 is updated
-;     after $0D and $0E). UpdateSwordOrRod, WieldSword, WieldRod, Link_HandleInput
+;     after $0D and $0E). Sword_UpdateSwordOrRod, Sword_Wield, Rod_Wield, Link_HandleInput
 ;   - Each state change also writes Link's animation counter (8 entering state 2, else 1), which times
-;     Link's own state: $11 through frame 11, $31 on frame 12, 0 on frame 13. UpdateSwordOrRod
+;     Link's own state: $11 through frame 11, $31 on frame 12, 0 on frame 13. Sword_UpdateSwordOrRod
 ;   - The weapon is repositioned from Link's position and direction every frame, so it turns and moves
-;     with him. PlayerToWeaponOffsetsX, PlayerToWeaponOffsetsY
+;     with him. Sword_LinkToWeaponOffsetsX, Sword_LinkToWeaponOffsetsY
 ;   - Sword palette row = 3 + InvSword (4 wooden, 5 white, 6 magic); the rod uses row 5.
-;     UpdateSwordOrRod@CalcSwordAttrs
-;   - IsSwordShotForced would allow the sword shot at any health, but no code ever sets it. MakeSwordShot
+;     Sword_UpdateSwordOrRod@CalcSwordAttrs
+;   - IsSwordShotForced would allow the sword shot at any health, but no code ever sets it. SwordShot_Make
 ; CONTENTS: (generated; L = line in this file)
-;   L0057 UpdateRodOrArrow        code  Updates object slot $12: a rod (state $3x) goes to the sword routine, an arrow to the arrow one.
-;   L0068 PlayerToWeaponOffsetsX  data  TABLE: X offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
-;   L0074 PlayerToWeaponOffsetsY  data  TABLE: Y offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
-;   L0093 UpdateSwordOrRod        code  Runs the swing of the sword (slot $0D) or rod (slot $12): states 1 to 5, drawing, and the shot.
-;   L0265 SetUpWeaponWithState    code  Starts the shot in slot $0E: state from A, $10 pixels ahead of Link, speed by kind of shot.
-;   L0299 L1F854_Exit             code  Shared return of UpdateSwordOrRod, SetUpWeaponWithState and MakeSwordShot.
-;   L0307 ResetObjState           code  Sets ObjState,X to 0, which frees a weapon slot or puts a monster back in its state 0.
-;   L0320 MakeSwordShot           code  Makes a sword shot in slot $0E if the slot is empty and Link's health is full.
+;   L0057 Rod_UpdateRodOrArrow           code  Updates object slot $12: a rod (state $3x) goes to the sword routine, an arrow to the arrow one.
+;   L0068 Sword_LinkToWeaponOffsetsX     data  TABLE: X offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
+;   L0074 Sword_LinkToWeaponOffsetsY     data  TABLE: Y offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
+;   L0093 Sword_UpdateSwordOrRod         code  Runs the swing of the sword (slot $0D) or rod (slot $12): states 1 to 5, drawing, and the shot.
+;   L0265 SwordShot_SetUpWithState       code  Starts the shot in slot $0E: state from A, $10 pixels ahead of Link, speed by kind of shot.
+;   L0299 Sword_UpdateSwordOrRod_Return  code  Shared return of Sword_UpdateSwordOrRod, SwordShot_SetUpWithState and SwordShot_Make.
+;   L0307 Obj_ResetState                 code  Sets ObjState,X to 0, which frees a weapon slot or puts a monster back in its state 0.
+;   L0320 SwordShot_Make                 code  Makes a sword shot in slot $0E if the slot is empty and Link's health is full.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -54,24 +54,24 @@
 ; IN:   X = $12.
 ; NOTE: The rod and the arrow share this slot, so neither can be used while the other is active.
 ; ----------------------------------------------------------------------------
-UpdateRodOrArrow:
+Rod_UpdateRodOrArrow:
     ; The rod uses states $31-$35. The arrow uses $1x (flying) and $2x (spark); state 0 (empty)
     ; also goes to the arrow routine, which returns.
     LDA ObjState, X
     AND #$F0
     CMP #$30
-    BCS UpdateSwordOrRod
-    JMP UpdateArrowOrBoomerang
+    BCS Sword_UpdateSwordOrRod
+    JMP Boomerang_UpdateOrArrow
 
 ; TABLE: X offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
 ; (0 up, 1 down, 2 left, 3 right); value = signed pixels added to Link's X.
-PlayerToWeaponOffsetsX:
+Sword_LinkToWeaponOffsetsX:
     .BYTE $FF, $01, $00, $F8, $FF, $01, $F5, $0B    ; State 1: -1, +1, 0, -8.  State 2: -1, +1, -11, +11
     .BYTE $FF, $01, $F9, $07, $FF, $01, $FD, $03    ; State 3: -1, +1, -7, +7. State 4: -1, +1, -3, +3
 
 ; TABLE: Y offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
 ; (0 up, 1 down, 2 left, 3 right); value = signed pixels added to Link's Y.
-PlayerToWeaponOffsetsY:
+Sword_LinkToWeaponOffsetsY:
     .BYTE $F7, $F2, $F5, $F5, $F6, $0D, $03, $03    ; State 1: -9, -14, -11, -11. State 2: -10, +13, +3, +3
     .BYTE $F7, $09, $03, $03, $FF, $05, $03, $03    ; State 3: -9, +9, +3, +3.    State 4: -1, +5, +3, +3
 
@@ -80,7 +80,7 @@ PlayerToWeaponOffsetsY:
 ; IN:   X = $0D (sword, states 1-5) or $12 (rod, states $31-$35). ObjAnimCounter,X = frames left in
 ;       the state (5 when wielded).
 ; OUT:  Advances ObjState,X; writes ObjX/ObjY/ObjDir,X and Link's ObjAnimCounter; entering state 3
-;       makes a sword shot (MakeSwordShot) or a magic shot in slot $0E.
+;       makes a sword shot (SwordShot_Make) or a magic shot in slot $0E.
 ; NOTE: Frames from the button press (frame 0). The wield routine stores timer 5 during Link's
 ;       update, and this routine runs later in the same frame and already counts it down to 4. So
 ;       state 1 is seen at the end of 4 frames (0-3): the 5th decrement, on frame 4, enters state
@@ -90,7 +90,7 @@ PlayerToWeaponOffsetsY:
 ;       Link's state, driven by the animation counter written here, is 0 again on frame 13, so A
 ;       or B can start the other weapon on frame 14 and the same weapon on frame 16.
 ; ----------------------------------------------------------------------------
-UpdateSwordOrRod:
+Sword_UpdateSwordOrRod:
     ; Low nibble of state = 0: the slot is empty (or, for slot $12, holds nothing in a rod state).
     LDA ObjState, X
     AND #$0F
@@ -111,7 +111,7 @@ UpdateSwordOrRod:
     LDA #$01
 :
     ; Give the same count to Link's animation counter, which times his state ($11 until state 2
-    ; ends, then $31 for one frame, then 0; see AnimateLinkObjState), and to the weapon's timer.
+    ; ends, then $31 for one frame, then 0; see Link_AdvanceItemUseState), and to the weapon's timer.
     STA ObjAnimCounter
     STA ObjAnimCounter, X
 
@@ -123,7 +123,7 @@ UpdateSwordOrRod:
     AND #$0F
     CMP #$06
     BCC @DrawSwordOrRod
-    JSR ResetObjState
+    JSR Obj_ResetState
 
 @Exit:
     RTS
@@ -154,7 +154,7 @@ UpdateSwordOrRod:
     STA ObjDir, X
 
     ; Y = [00] + reverse direction index: the entry in the offset tables.
-    JSR GetOppositeDir
+    JSR Dir_GetOpposite
     TYA
     CLC
     ADC $00
@@ -163,14 +163,14 @@ UpdateSwordOrRod:
     ; Weapon X = Link's X + offset; copy to [00] for drawing.
     LDA ObjX
     CLC
-    ADC PlayerToWeaponOffsetsX, Y
+    ADC Sword_LinkToWeaponOffsetsX, Y
     STA ObjX, X
     STA $00
 
     ; Weapon Y = Link's Y + offset; copy to [01] for drawing.
     LDA ObjY
     CLC
-    ADC PlayerToWeaponOffsetsY, Y
+    ADC Sword_LinkToWeaponOffsetsY, Y
     STA ObjY, X
     STA $01
 
@@ -186,13 +186,13 @@ UpdateSwordOrRod:
 
 @CalcAttrs:
     ; [0C] = the weapon's frame for that direction: 0 vertical, 1 horizontal.
-    JSR GetOppositeDir
-    LDA RDirectionToWeaponFrame, Y
+    JSR Dir_GetOpposite
+    LDA Anim_WeaponFramesByRDir, Y
     STA $0C
 
     ; Sprite attributes. The base attribute flips the image vertically for "down".
     ; Rod (any slot but $0D): base OR 1 = palette row 5.
-    LDA RDirectionToWeaponBaseAttribute, Y
+    LDA Anim_WeaponBaseAttrsByRDir, Y
     CPX #$0D
     BEQ @CalcSwordAttrs
     ORA #$01
@@ -217,7 +217,7 @@ UpdateSwordOrRod:
     LDA ObjState, X
     AND #$0F
     CMP #$01
-    BEQ L1F854_Exit
+    BEQ Sword_UpdateSwordOrRod_Return
 
     ; Y = item slot whose image is drawn.
     LDY #$00                    ; Item slot 0: sword
@@ -232,11 +232,11 @@ UpdateSwordOrRod:
     LDA ObjState, X
     AND #$0F
     CMP #$03
-    BNE L1F854_Exit
+    BNE Sword_UpdateSwordOrRod_Return
 
-    ; The sword (slot $0D) goes to MakeSwordShot; the rod (slot $12) makes a magic shot here.
+    ; The sword (slot $0D) goes to SwordShot_Make; the rod (slot $12) makes a magic shot here.
     CPX #$12
-    BNE MakeSwordShot
+    BNE SwordShot_Make
 
     ; Magic shot, in the shot slot $0E.
     LDX #$0E
@@ -246,7 +246,7 @@ UpdateSwordOrRod:
     LDA ObjState, X
     BEQ @MakeMagicShot
     ASL
-    BCS L1F854_Exit
+    BCS Sword_UpdateSwordOrRod_Return
 
 @MakeMagicShot:
     ; Play the "magic shot" tune.
@@ -262,12 +262,12 @@ UpdateSwordOrRod:
 ; OUT:  ObjState,X = A, or 0 when the shot starts too close to the left or right screen edge.
 ; NOTE: Q-speed $C0 (3 pixels per frame) for the sword shot, $A0 (2.5) for the magic shot.
 ; ----------------------------------------------------------------------------
-SetUpWeaponWithState:
+SwordShot_SetUpWithState:
     STA ObjState, X
 
     ; Place the shot $10 pixels from Link in his direction, and give it his direction.
     LDA #$10
-    JSR PlaceWeapon
+    JSR Link_PlaceWeaponAhead
 
     ; A shot facing left or right with X < $14 or X >= $EC is dropped at once (state 0).
     ; Its sound has already been requested.
@@ -276,9 +276,9 @@ SetUpWeaponWithState:
     BEQ @ChooseSpeed
     LDA ObjX, X
     CMP #$14
-    BCC ResetObjState
+    BCC Obj_ResetState
     CMP #$EC
-    BCS ResetObjState
+    BCS Obj_ResetState
 
 @ChooseSpeed:
     ; Q-speed $A0 if state bit 7 is set (magic shot), else $C0 (sword shot).
@@ -295,8 +295,8 @@ SetUpWeaponWithState:
     LDA ObjGridOffset
     STA ObjGridOffset, X
 
-; Shared return of UpdateSwordOrRod, SetUpWeaponWithState and MakeSwordShot.
-L1F854_Exit:
+; Shared return of Sword_UpdateSwordOrRod, SwordShot_SetUpWithState and SwordShot_Make.
+Sword_UpdateSwordOrRod_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -304,29 +304,29 @@ L1F854_Exit:
 ; IN:   X = object slot.
 ; OUT:  A = 0.
 ; ----------------------------------------------------------------------------
-ResetObjState:
+Obj_ResetState:
     LDA #$00
     STA ObjState, X
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Makes a sword shot in slot $0E if the slot is empty and Link's health is full.
-; IN:   Called (by branch) from UpdateSwordOrRod when the sword enters state 3.
+; IN:   Called (by branch) from Sword_UpdateSwordOrRod when the sword enters state 3.
 ; OUT:  X = $0E. On success ObjState+$0E = $10 and the sword shot sample is requested.
 ; NOTE: "Full" = full hearts equal to heart containers - 1 and HeartPartial >= $80: Link may be
 ;       short by less than half a heart. Any shot still in slot $0E (flying or spreading sword
 ;       shot, or a magic shot) blocks a new sword shot.
 ; ----------------------------------------------------------------------------
-MakeSwordShot:
+SwordShot_Make:
     ; Switch to the shot slot $0E.
     LDX #$0E
 
     ; If the slot is in use (state <> 0), return.
     LDA ObjState, X
-    BNE L1F854_Exit
+    BNE Sword_UpdateSwordOrRod_Return
 
-    ; If IsSwordShotForced is set, skip the health test. Its three writers (FormatHeartsInTextBuf,
-    ; ClearRoomHistory and the file menu's init) all store 0, so the test always applies.
+    ; If IsSwordShotForced is set, skip the health test. Its three writers (Text_FormatHeartRows,
+    ; RoomHistory_Clear and the file menu's init) all store 0, so the test always applies.
     LDA IsSwordShotForced
     BNE @SetUp
 
@@ -342,17 +342,17 @@ MakeSwordShot:
     LSR
     LSR
     CMP $00
-    BNE L1F854_Exit
+    BNE Sword_UpdateSwordOrRod_Return
 
     ; HeartPartial is the fill of the last heart ($FF full). Below $80 (half), return.
     LDA HeartPartial
     CMP #$80
-    BCC L1F854_Exit
+    BCC Sword_UpdateSwordOrRod_Return
 
 @SetUp:
     LDA #$01                    ; Sample 1: sword shot
-    JSR PlaySample
+    JSR Sample_Play
 
-    ; Start the shot in state $10 (flying; $11 is the spread, see SetShotSpreadingState).
+    ; Start the shot in state $10 (flying; $11 is the spread, see SwordShot_StartSpread).
     LDA #$10
-    BNE SetUpWeaponWithState
+    BNE SwordShot_SetUpWithState

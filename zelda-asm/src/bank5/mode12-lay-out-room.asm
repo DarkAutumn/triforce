@@ -1,50 +1,50 @@
 ; ============================================================================
 ; FILE:     bank5/mode12-lay-out-room.asm BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 5537-5749
-; SUBJECTS: (none)
+; SUBJECTS: Mode12EndLevel, RoomLayout, Transfer
 ; TOPIC:    Mode $12 (end of level, after a Triforce piece is taken): init and the five update submodes
-;           (wait, flash, refill hearts, close the curtain, return to the overworld). LayOutRoom, which
+;           (wait, flash, refill hearts, close the curtain, return to the overworld). RoomLayout_LayOutRoom, which
 ;           builds the play area tile map of any room, and the routines that queue one tile column or
 ;           row of that map for transfer to the screen.
-; SEE ALSO: bank5/next-room-calc.asm (EndGameMode12: leaves the level); bank1/map-marker-curtain.asm
-;           (UpdateWorldCurtainEffect); bank7/status-bar-lift-item.asm (Link holding up the item);
-;           bank5/layout-room-ow.asm (LayoutRoomOW, PatchColumnDirectoryForCellar);
-;           bank5/uw-floor-push-block.asm (LayoutUWFloor); bank5/fill-walls.asm, bank5/lay-out-doors.asm
-;           (dungeon walls and doors); bank5/ow-shortcut-map-square.asm (CheckShortcut and the callers
-;           of CopyRowToTileBuf); bank5/mode7-scroll-update.asm (row and column copies while scrolling).
+; SEE ALSO: bank5/next-room-calc.asm (Mode_LeaveLevelToOW: leaves the level); bank1/map-marker-curtain.asm
+;           (Mode_UpdateCurtainEffect); bank7/status-bar-lift-item.asm (Link holding up the item);
+;           bank5/layout-room-ow.asm (RoomLayout_LayOutRoomOW, RoomLayout_PatchColumnDirectoryForCellar);
+;           bank5/uw-floor-push-block.asm (RoomLayout_LayOutUWFloor); bank5/fill-walls.asm, bank5/lay-out-doors.asm
+;           (dungeon walls and doors); bank5/ow-shortcut-map-square.asm (Secret_RestoreStairsOW and the callers
+;           of Transfer_CopyRowToTileBuf); bank5/mode7-scroll-update.asm (row and column copies while scrolling).
 ; KEY FACTS:
-;   - Mode $12 sequence: ObjTimer[0] = $30 wait (UpdateMode12EndLevel_Sub0); $30 frames of palette flash,
-;     4 frames white / 4 frames level palette (UpdateMode12EndLevel_Sub1); hearts refill to full
-;     (UpdateMode12EndLevel_Sub2); $80 frame wait, then the curtain closes from both screen edges, one
-;     tile column per side every 5 frames, 16 steps (UpdateMode12EndLevel_Sub3); $80 frame wait, then
-;     EndGameMode12 (UpdateMode12EndLevel_Sub4).
+;   - Mode $12 sequence: ObjTimer[0] = $30 wait (Mode12EndLevel_Update_Sub0Wait); $30 frames of palette flash,
+;     4 frames white / 4 frames level palette (Mode12EndLevel_Update_Sub1Flash); hearts refill to full
+;     (Mode12EndLevel_Update_Sub2FillHearts); $80 frame wait, then the curtain closes from both screen edges, one
+;     tile column per side every 5 frames, 16 steps (Mode12EndLevel_Update_Sub3CloseCurtain); $80 frame wait, then
+;     Mode_LeaveLevelToOW (Mode12EndLevel_Update_Sub4LeaveLevel).
 ;   - The end of a level always refills Link's hearts completely: World_IsFillingHearts = 2
-;     (StartFillingHearts), and the sequence does not go on until the refill clears it.
+;     (Mode12EndLevel_StartFillingHearts), and the sequence does not go on until the refill clears it.
 ;   - During all of mode $12 Link is drawn holding up item $1B (Triforce piece) and all other object
-;     sprites are hidden (InitMode12, UpdateMode12EndLevel_Full).
-;   - LayOutRoom: overworld (CurLevel = 0) = LayoutRoomOW then CheckShortcut; dungeon = fill the map with
+;     sprites are hidden (Mode12EndLevel_Init, Mode12EndLevel_Update_Full).
+;   - RoomLayout_LayOutRoom: overworld (CurLevel = 0) = RoomLayout_LayOutRoomOW then Secret_RestoreStairsOW; dungeon = fill the map with
 ;     tile $F6, then walls, doors, floor. It only writes PlayAreaTiles; the screen is updated by the
 ;     row/column copies.
 ;   - The play area tile map is stored by column: $16 (22) tiles per column, $20 (32) columns, from $6530
-;     (CopyColumnToTileBuf, CopyRowToTileBuf).
-;   - CopyColumnToTileBuf appends a 22-tile vertical record at PPU $2100 + column to DynTileBuf;
-;     CopyRowToTileBuf overwrites DynTileBuf from its start with one 32-tile row record at
+;     (Transfer_CopyColumnToTileBuf, Transfer_CopyRowToTileBuf).
+;   - Transfer_CopyColumnToTileBuf appends a 22-tile vertical record at PPU $2100 + column to DynTileBuf;
+;     Transfer_CopyRowToTileBuf overwrites DynTileBuf from its start with one 32-tile row record at
 ;     $2100 + CurRow * $20.
 ; CONTENTS: (generated; L = line in this file)
-;   L0056 InitMode12                           code  Init of mode $12 (end of level): starts the song, blanks the tile map, makes Link lift the Triforce.
-;   L0078 UpdateMode12EndLevel_Full            code  Update of mode $12: hides object sprites, draws Link lifting the Triforce, runs the submode.
-;   L0085 UpdateMode12EndLevel_Full_JumpTable  data  TABLE: mode $12 update submode handlers; index = GameSubmode.
-;   L0093 UpdateMode12EndLevel_Sub0            code  Mode $12 submode 0: waits for ObjTimer[0] ($30 from InitMode12), then arms $30 frames of flashing.
-;   L0101 UpdateMode12EndLevel_Sub1            code  Mode $12 submode 1: flashes the background palette for $30 frames, then starts the heart refill.
-;   L0114 L16887_Exit                          code  Shared return of mode $12 submodes 0 and 1.
-;   L0118 StartFillingHearts                   code  End of mode $12 submode 1: starts refilling Link's hearts and advances the submode.
-;   L0124 L1688C_IncSubmode                    code  Advances GameSubmode and returns (shared by mode $12 submodes 0 and 1).
-;   L0129 UpdateMode12EndLevel_Sub2            code  Mode $12 submode 2: refills hearts each frame; when full, arms a $80 frame wait and advances.
-;   L0138 UpdateMode12EndLevel_Sub3            code  Mode $12 submode 3: after the wait, closes the curtain; once closed, arms a $80 frame wait.
-;   L0156 UpdateMode12EndLevel_Sub4            code  Mode $12 submode 4: after the wait, hides all sprites and leaves the level (EndGameMode12).
-;   L0178 LayOutRoom                           code  Builds the play area tile map of the room RoomId (overworld or dungeon); nothing is drawn yet.
-;   L0201 CopyColumnToTileBuf                  code  Queues one tile column (22 tiles) of the play area tile map for transfer to the screen.
-;   L0249 CopyRowToTileBuf                     code  Queues one tile row (32 tiles) of the play area tile map for transfer to the screen.
+;   L0056 Mode12EndLevel_Init                     code  Init of mode $12 (end of level): starts the song, blanks the tile map, makes Link lift the Triforce.
+;   L0078 Mode12EndLevel_Update_Full              code  Update of mode $12: hides object sprites, draws Link lifting the Triforce, runs the submode.
+;   L0085 Mode12EndLevel_Update_Full_JumpTable    data  TABLE: mode $12 update submode handlers; index = GameSubmode.
+;   L0093 Mode12EndLevel_Update_Sub0Wait          code  Mode $12 submode 0: waits for ObjTimer[0] ($30 from Mode12EndLevel_Init), then arms $30 frames of flashing.
+;   L0101 Mode12EndLevel_Update_Sub1Flash         code  Mode $12 submode 1: flashes the background palette for $30 frames, then starts the heart refill.
+;   L0114 Mode12EndLevel_Return                   code  Shared return of mode $12 submodes 0 and 1.
+;   L0118 Mode12EndLevel_StartFillingHearts       code  End of mode $12 submode 1: starts refilling Link's hearts and advances the submode.
+;   L0124 Mode12EndLevel_IncSubmode               code  Advances GameSubmode and returns (shared by mode $12 submodes 0 and 1).
+;   L0129 Mode12EndLevel_Update_Sub2FillHearts    code  Mode $12 submode 2: refills hearts each frame; when full, arms a $80 frame wait and advances.
+;   L0138 Mode12EndLevel_Update_Sub3CloseCurtain  code  Mode $12 submode 3: after the wait, closes the curtain; once closed, arms a $80 frame wait.
+;   L0156 Mode12EndLevel_Update_Sub4LeaveLevel    code  Mode $12 submode 4: after the wait, hides all sprites and leaves the level (Mode_LeaveLevelToOW).
+;   L0178 RoomLayout_LayOutRoom                   code  Builds the play area tile map of the room RoomId (overworld or dungeon); nothing is drawn yet.
+;   L0201 Transfer_CopyColumnToTileBuf            code  Queues one tile column (22 tiles) of the play area tile map for transfer to the screen.
+;   L0249 Transfer_CopyRowToTileBuf               code  Queues one tile row (32 tiles) of the play area tile map for transfer to the screen.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -53,10 +53,10 @@
 ;       PlayAreaTiles all $24 (blank; the screen itself is not redrawn yet); IsUpdatingMode = 1;
 ;       ItemTypeToLift = $1B.
 ; ----------------------------------------------------------------------------
-InitMode12:
+Mode12EndLevel_Init:
     LDA #$04                    ; Request the end-of-level song.
     STA SongRequest
-    LDA #$20                    ; Curtain column that moves left (UpdateWorldCurtainEffect).
+    LDA #$20                    ; Curtain column that moves left (Mode_UpdateCurtainEffect).
     STA ObjX+12
     LDA #$01                    ; Curtain column that moves right.
     STA ObjX+13
@@ -64,81 +64,81 @@ InitMode12:
     STA ObjTimer
     LDA #$24                    ; Fill the tile map with blank tiles: the curtain copies its columns.
     STA $0A
-    JSR FillTileMap
+    JSR Tile_FillTileMap
     INC IsUpdatingMode
-    JSR HideObjectSprites
+    JSR Sprite_HideObjectSprites
     LDA #$1B                    ; Item id $1B: Triforce piece.
     STA ItemTypeToLift
-    JMP SetUpAndDrawLinkLiftingItem
+    JMP Link_SetUpAndDrawLiftingItem
 
 ; ----------------------------------------------------------------------------
 ; Update of mode $12: hides object sprites, draws Link lifting the Triforce, runs the submode.
 ; IN:   GameSubmode 0-4.
 ; ----------------------------------------------------------------------------
-UpdateMode12EndLevel_Full:
-    JSR HideObjectSprites
-    JSR DrawLinkLiftingItem
+Mode12EndLevel_Update_Full:
+    JSR Sprite_HideObjectSprites
+    JSR Link_DrawLiftingItem
     LDA GameSubmode
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: mode $12 update submode handlers; index = GameSubmode.
-UpdateMode12EndLevel_Full_JumpTable:
-    .ADDR UpdateMode12EndLevel_Sub0
-    .ADDR UpdateMode12EndLevel_Sub1
-    .ADDR UpdateMode12EndLevel_Sub2
-    .ADDR UpdateMode12EndLevel_Sub3
-    .ADDR UpdateMode12EndLevel_Sub4
+Mode12EndLevel_Update_Full_JumpTable:
+    .ADDR Mode12EndLevel_Update_Sub0Wait
+    .ADDR Mode12EndLevel_Update_Sub1Flash
+    .ADDR Mode12EndLevel_Update_Sub2FillHearts
+    .ADDR Mode12EndLevel_Update_Sub3CloseCurtain
+    .ADDR Mode12EndLevel_Update_Sub4LeaveLevel
 
-; Mode $12 submode 0: waits for ObjTimer[0] ($30 from InitMode12), then arms $30 frames of flashing.
-UpdateMode12EndLevel_Sub0:
+; Mode $12 submode 0: waits for ObjTimer[0] ($30 from Mode12EndLevel_Init), then arms $30 frames of flashing.
+Mode12EndLevel_Update_Sub0Wait:
     LDA ObjTimer
-    BNE L16887_Exit             ; Wait until the timer runs out.
+    BNE Mode12EndLevel_Return             ; Wait until the timer runs out.
     LDA #$30                    ; Submode 1 flashes while this timer runs.
     STA ObjTimer
-    BNE L1688C_IncSubmode       ; Always taken.
+    BNE Mode12EndLevel_IncSubmode       ; Always taken.
 
 ; Mode $12 submode 1: flashes the background palette for $30 frames, then starts the heart refill.
-UpdateMode12EndLevel_Sub1:
+Mode12EndLevel_Update_Sub1Flash:
     ; Each frame select a palette transfer: timer low 3 bits 4-7 = white, 0-3 = the level's palette.
     LDY #$18                    ; Transfer buffer selector $18: LevelInfo_PalettesTransferBuf.
     LDA ObjTimer
-    BEQ StartFillingHearts      ; Timer ran out (no transfer is selected on this frame).
+    BEQ Mode12EndLevel_StartFillingHearts      ; Timer ran out (no transfer is selected on this frame).
     AND #$07
     CMP #$04
     BCC :+
-    LDY #$78                    ; Selector $78: WhitePaletteBottomHalfTransferBuf.
+    LDY #$78                    ; Selector $78: Transfer_WhitePaletteBottomHalfBuf.
 :
     STY TileBufSelector
 
 ; Shared return of mode $12 submodes 0 and 1.
-L16887_Exit:
+Mode12EndLevel_Return:
     RTS
 
 ; End of mode $12 submode 1: starts refilling Link's hearts and advances the submode.
-StartFillingHearts:
+Mode12EndLevel_StartFillingHearts:
     ; Any nonzero value starts the refill; the end of a level uses 2.
     LDA #$02
     STA World_IsFillingHearts
 
 ; Advances GameSubmode and returns (shared by mode $12 submodes 0 and 1).
-L1688C_IncSubmode:
+Mode12EndLevel_IncSubmode:
     INC GameSubmode
     RTS
 
 ; Mode $12 submode 2: refills hearts each frame; when full, arms a $80 frame wait and advances.
-UpdateMode12EndLevel_Sub2:
-    JSR UpdateHeartsAndRupees
+Mode12EndLevel_Update_Sub2FillHearts:
+    JSR World_UpdateHeartsAndRupees
     LDA World_IsFillingHearts
     BEQ :+                      ; Refill finished: go set the timer and advance (in submode 3's code).
     RTS
 
 ; Mode $12 submode 3: after the wait, closes the curtain; once closed, arms a $80 frame wait.
-; NOTE: UpdateWorldCurtainEffect copies two (blank) tile columns to the screen every 5 frames:
+; NOTE: Mode_UpdateCurtainEffect copies two (blank) tile columns to the screen every 5 frames:
 ;       ObjX[$0C] goes $20 down to $10 and ObjX[$0D] goes 1 up to $11, so 16 steps cover all 32 columns.
-UpdateMode12EndLevel_Sub3:
+Mode12EndLevel_Update_Sub3CloseCurtain:
     LDA ObjTimer
     BNE :++                     ; Still waiting: return.
-    JSR UpdateWorldCurtainEffect
+    JSR Mode_UpdateCurtainEffect
     LDA ObjX+12
     CMP #$11
     BCS :++                     ; The left-moving column has not passed the middle ($11 or more): return.
@@ -150,33 +150,33 @@ UpdateMode12EndLevel_Sub3:
 :
     RTS                         ; Also the return of submode 4.
 
-; Mode $12 submode 4: after the wait, hides all sprites and leaves the level (EndGameMode12).
-; NOTE: EndGameMode12 sets CurLevel = 0, GameMode = 2 (load level) and UndergroundExitType = 2, so Link
+; Mode $12 submode 4: after the wait, hides all sprites and leaves the level (Mode_LeaveLevelToOW).
+; NOTE: Mode_LeaveLevelToOW sets CurLevel = 0, GameMode = 2 (load level) and UndergroundExitType = 2, so Link
 ;       comes out of the level's entrance on the overworld.
-UpdateMode12EndLevel_Sub4:
+Mode12EndLevel_Update_Sub4LeaveLevel:
     LDA ObjTimer
     BNE :-                      ; Still waiting: return.
-    JSR HideAllSprites
+    JSR Sprite_HideAll
     LDA CurPpuControl
     AND #$FB                    ; Clear bit 2: PPU address increment of 1.
     STA CurPpuControl
     STA PpuControl
-    JMP EndGameMode12
+    JMP Mode_LeaveLevelToOW
 :
-    ; Overworld branch of LayOutRoom (reached from its BEQ below).
-    JSR LayoutRoomOW
-    JMP CheckShortcut           ; Draw the shortcut stairs if this room shows them.
+    ; Overworld branch of RoomLayout_LayOutRoom (reached from its BEQ below).
+    JSR RoomLayout_LayOutRoomOW
+    JMP Secret_RestoreStairsOW           ; Draw the shortcut stairs if this room shows them.
 
 ; ----------------------------------------------------------------------------
 ; Builds the play area tile map of the room RoomId (overworld or dungeon); nothing is drawn yet.
-; IN:   RoomId; CurLevel (0 = overworld); for a dungeon, the door state used by LayOutDoors.
-; OUT:  PlayAreaTiles written; ColumnDirectoryOW entry 0 patched for the current world. Overworld:
+; IN:   RoomId; CurLevel (0 = overworld); for a dungeon, the door state used by Door_LayOut.
+; OUT:  PlayAreaTiles written; RoomLayout_ColumnDirectoryOW entry 0 patched for the current world. Overworld:
 ;       RoomTileObjType/X/Y set when the room has a tile object, shortcut stairs added.
 ; NOTE: the overworld part is the unnamed block directly above this label. Callers copy the map to the
 ;       screen afterwards, by rows (room entry) or by rows/columns (scrolling, curtain).
 ; ----------------------------------------------------------------------------
-LayOutRoom:
-    JSR PatchColumnDirectoryForCellar
+RoomLayout_LayOutRoom:
+    JSR RoomLayout_PatchColumnDirectoryForCellar
     LDA CurLevel
     BEQ :-                      ; Overworld: go to the block above.
 
@@ -184,11 +184,11 @@ LayOutRoom:
     ; and floor go on top.
     LDA #$F6
     STA $0A
-    JSR FillTileMap
-    JSR AddDoorFlagsToCurOpenedDoors
-    JSR FillWalls
-    JSR LayOutDoors
-    JMP LayoutUWFloor
+    JSR Tile_FillTileMap
+    JSR Door_AddRoomFlagsToOpenedDoors
+    JSR RoomLayout_FillWalls
+    JSR Door_LayOut
+    JMP RoomLayout_LayOutUWFloor
 
 ; ----------------------------------------------------------------------------
 ; Queues one tile column (22 tiles) of the play area tile map for transfer to the screen.
@@ -198,7 +198,7 @@ LayOutRoom:
 ; NOTE: [00:01] starts at $651A, $16 below PlayAreaTiles ($6530), because the loop adds $16 once more
 ;       than the column number.
 ; ----------------------------------------------------------------------------
-CopyColumnToTileBuf:
+Transfer_CopyColumnToTileBuf:
     LDA #$1A
     STA $00
     LDA #$65
@@ -213,7 +213,7 @@ CopyColumnToTileBuf:
 :
     ; Add $16 (the height of a column) X+1 times: [00:01] = $6530 + column * $16.
     LDA #$16
-    JSR AddToInt16At0
+    JSR Math_AddToInt16At0
     DEX
     BPL :-
     LDA #$96                    ; Control byte: bit 7 = write downward (step 32), count $16.
@@ -227,7 +227,7 @@ CopyColumnToTileBuf:
 :
     LDA ($00), Y                ; Tile from the tile map,
     STA DynTileBuf+3, X         ; into the record.
-    JSR Add1ToInt16At0
+    JSR Math_Add1ToInt16At0
     INX
     INC $06
     LDA $06
@@ -246,7 +246,7 @@ CopyColumnToTileBuf:
 ; OUT:  DynTileBuf rewritten from its start: PPU address $2100 + CurRow * $20, count $20, 32 tiles,
 ;       $FF end marker; DynTileBufLen = $23. Uses [00:01]. Anything queued before is overwritten.
 ; ----------------------------------------------------------------------------
-CopyRowToTileBuf:
+Transfer_CopyRowToTileBuf:
     ; [00:01] = $6530 + CurRow: the row's tile in the first column.
     LDA #$65
     STA $01
@@ -285,7 +285,7 @@ CopyRowToTileBuf:
     LDA ($00), Y                ; Copy a tile.
     STA DynTileBuf+3, X
     LDA #$16
-    JSR AddToInt16At0           ; Advance to the tile in the same row, but next column of play area.
+    JSR Math_AddToInt16At0           ; Advance to the tile in the same row, but next column of play area.
     INX                         ; Advance to the next tile in the row in transfer buf.
     CPX #$20
     BCC :-                      ; If we haven't written $20 tiles, then go write another.

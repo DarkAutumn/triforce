@@ -5,11 +5,11 @@
 ; TOPIC:    Ganon (type $3E): body drawing, the death burst (8 rays, 8 clouds), the ashes, his palette
 ;           changes, his collision rules (sword while invisible, silver arrow while brown) and the
 ;           release of the room item (Triforce of Power) when he is dead.
-; SEE ALSO: bank4/ganon.asm (UpdateGanon: scene phases, movement, shooting, the dying sequence that calls
-;           these routines); bank4/patra-ganon-inits.asm (InitGanon: invincibility mask $FA);
-;           bank4/wizzrobe.asm (BlueWizzrobe_Move, used for the burst rays);
-;           bank1/sword-bomb-arrow-collision.asm (CheckMonsterSwordCollision,
-;           CheckMonsterArrowOrRodCollision); bank1/link-collision-harm.asm (CheckLinkCollisionPreinit);
+; SEE ALSO: bank4/ganon.asm (Ganon_Update: scene phases, movement, shooting, the dying sequence that calls
+;           these routines); bank4/patra-ganon-inits.asm (Ganon_Init: invincibility mask $FA);
+;           bank4/wizzrobe.asm (Wizzrobe_Blue_Move, used for the burst rays);
+;           bank1/sword-bomb-arrow-collision.asm (Sword_CheckMonsterCollision,
+;           Arrow_CheckArrowOrRodVsMonster); bank1/link-collision-harm.asm (Link_CheckMonsterTouch_NoReset);
 ;           bank1/take-item.asm (room item pickup).
 ; KEY FACTS:
 ;   - Ganon is 32x32: his collision midpoint is (ObjX+$10, ObjY+$10) and Link is hit when both axis
@@ -32,9 +32,9 @@
 ;   - The palette routines write 3 colours at fixed offsets 4-6 of DynTileBuf, which is the record they
 ;     appended only when the buffer was empty. Ganon_AppendPaletteRowTransferRecord_Brown
 ; CONTENTS: (generated; L = line in this file)
-;   L0062 GanonBurstDirs                                 data  TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
-;   L0067 GanonBurstSpriteAttrs                          data  TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
-;   L0073 GanonBurstTiles                                data  TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
+;   L0062 Ganon_BurstDirs                                data  TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
+;   L0067 Ganon_BurstSpriteAttrs                         data  TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
+;   L0073 Ganon_BurstTiles                               data  TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
 ;   L0085 Ganon_SetUpBurstRays                           code  Places the 8 death-burst rays at Ganon's ashes and gives each its direction.
 ;   L0110 Ganon_DrawCloud                                code  Draws one death-burst cloud at ([00], [01]): frame image $0C at cloud distance >= 6, $0D below.
 ;   L0144 Ganon_DrawBurst                                code  Draws the death burst: 8 clouds closing in on the ashes and 8 rays flying outward.
@@ -42,14 +42,14 @@
 ;   L0242 Ganon_GetCurCloudRight                         code  Sets [00] to the X of the burst clouds right of the ashes (ObjX + cloud distance).
 ;   L0253 Ganon_GetCurCloudTop                           code  Sets [01] to the Y of the burst clouds above the ashes (ObjY - cloud distance).
 ;   L0264 Ganon_GetCurCloudBottom                        code  Sets [01] to the Y of the burst clouds below the ashes (ObjY + cloud distance).
-;   L0273 GanonFrameImages                               data  TABLE: frame images of Ganon's body; index = animation frame (0-5) * 4 + quarter (0 top left,
-;   L0279 GanonSpriteOffsetsX                            data  TABLE: X offset of each body quarter from ObjX; index = quarter 0-3; value = pixels.
-;   L0283 GanonSpriteOffsetsY                            data  TABLE: Y offset of each body quarter from ObjY; index = quarter 0-3; value = pixels.
-;   L0288 GanonSpriteHFlips                              data  TABLE: horizontal flip flag of each body quarter; index = quarter 0-3; value = 1 flipped (the right
+;   L0273 Ganon_FrameImages                              data  TABLE: frame images of Ganon's body; index = animation frame (0-5) * 4 + quarter (0 top left,
+;   L0279 Ganon_SpriteOffsetsX                           data  TABLE: X offset of each body quarter from ObjX; index = quarter 0-3; value = pixels.
+;   L0283 Ganon_SpriteOffsetsY                           data  TABLE: Y offset of each body quarter from ObjY; index = quarter 0-3; value = pixels.
+;   L0288 Ganon_SpriteHFlips                             data  TABLE: horizontal flip flag of each body quarter; index = quarter 0-3; value = 1 flipped (the right
 ;   L0296 Ganon_DrawBody                                 code  Draws Ganon's 32x32 body as four 16x16 quarters for the current animation frame.
 ;   L0356 Ganon_CheckCollisions                          code  Ganon's collision rules: hurts Link on contact, takes sword hits while invisible, arrow when brown.
-;   L0458 GanonColorTransferRecord                       data  DATA: template of the PPU transfer record for Ganon's palette: address $3F1C (sprite palette row 3,
-;   L0463 GanonColorSets                                 data  TABLE: three sets of the 3 colours written over the template; index = 0-8, a set ends at index
+;   L0458 Ganon_PaletteTransferRecord                    data  DATA: template of the PPU transfer record for Ganon's palette: address $3F1C (sprite palette row 3,
+;   L0463 Ganon_PaletteColorSets                         data  TABLE: three sets of the 3 colours written over the template; index = 0-8, a set ends at index
 ;   L0475 Ganon_AppendPaletteRowTransferRecord_Brown     code  Queues Ganon's brown palette ($07, $17, $30), used while he is vulnerable to the silver arrow.
 ;   L0480 Ganon_AppendPaletteRowTransferRecord_Blue      code  Queues Ganon's blue palette ($16, $2C, $3C), used when the brown state ends.
 ;   L0485 Ganon_AppendPaletteRowTransferRecord_Triforce  code  Queues the palette for the ashes and the Triforce of Power ($27, $06, $16) when Ganon bursts.
@@ -59,18 +59,18 @@
 
 ; TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
 ;        bits (1 right, 2 left, 4 down, 8 up).
-GanonBurstDirs:
+Ganon_BurstDirs:
     .BYTE $01, $02, $04, $05, $06, $08, $09, $0A    ; R, L, D, R+D, L+D, U, R+U, L+U
 
 ; TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
 ;        value = $40 flip horizontally, $80 flip vertically.
-GanonBurstSpriteAttrs:
+Ganon_BurstSpriteAttrs:
     .BYTE $00, $00, $40, $00, $80, $C0, $80, $00    ; -, -, R, L, D, R+D, L+D, U
     .BYTE $40, $00                                  ; R+U, L+U
 
 ; TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
 ;        value = tile ($EE horizontal ray, $E8 vertical ray, $30 diagonal ray).
-GanonBurstTiles:
+Ganon_BurstTiles:
     .BYTE $00, $00, $EE, $EE, $E8, $30, $30, $E8    ; -, -, R, L, D, R+D, L+D, U
     .BYTE $30, $30                                  ; R+U, L+U
 
@@ -96,7 +96,7 @@ Ganon_SetUpBurstRays:
     ADC #$04
     STA a:ObjY+2, Y
 
-    LDA GanonBurstDirs, Y
+    LDA Ganon_BurstDirs, Y
     STA a:ObjDir+2, Y
     DEY
     BPL @LoopRay
@@ -123,7 +123,7 @@ Ganon_DrawCloud:
 :
     LDY #$00                    ; No horizontal flipping.
     STY $0F
-    JSR DrawObjectMirrored
+    JSR Anim_DrawObjectMirrored
 
     ; Restore the coordinates.
     PLA
@@ -136,7 +136,7 @@ Ganon_DrawCloud:
 ; Draws the death burst: 8 clouds closing in on the ashes and 8 rays flying outward.
 ; IN:   X = Ganon's object slot.
 ; OUT:  CurObjIndex restored; X = $0A (not reloaded); ObjX/ObjY of object slots $02-$09 changed.
-; NOTE: Tail-jumped to from Ganon_Dying while Ganon_ObjDyingCount is $50-$9F. The cloud distance (8 at the
+; NOTE: Tail-jumped to from Ganon_UpdateDying while Ganon_ObjDyingCount is $50-$9F. The cloud distance (8 at the
 ;       arrow hit) drops by 1 on every frame whose FrameCounter is a multiple of 8, down to 0.
 ;       Rays in the 4 cardinal directions move 1 pixel every frame; the 4 diagonal rays move 1 pixel on
 ;       each axis on 3 of every 4 frames.
@@ -201,7 +201,7 @@ Ganon_DrawBurst:
     BEQ :+
 
 @Move:
-    JSR BlueWizzrobe_Move       ; 1 pixel along each axis of ObjDir.
+    JSR Wizzrobe_Blue_Move       ; 1 pixel along each axis of ObjDir.
 :
     JSR Anim_FetchObjPosForSpriteDescriptor
 
@@ -209,9 +209,9 @@ Ganon_DrawBurst:
     ; the table adds the horizontal and vertical flip bits.
     LDA FrameCounter
     AND #$03
-    ORA GanonBurstSpriteAttrs, X
+    ORA Ganon_BurstSpriteAttrs, X
     STA $03
-    LDA GanonBurstTiles, X
+    LDA Ganon_BurstTiles, X
     JSR Anim_WriteSprite
 
     ; Next slot, up to 9.
@@ -270,22 +270,22 @@ Ganon_GetCurCloudBottom:
 
 ; TABLE: frame images of Ganon's body; index = animation frame (0-5) * 4 + quarter (0 top left,
 ;        1 top right, 2 bottom left, 3 bottom right); value = frame image of that 16x16 quarter.
-GanonFrameImages:
+Ganon_FrameImages:
     .BYTE $06, $08, $07, $09, $00, $00, $01, $01    ; frame 0 (also the pose of the entry scene), 1
     .BYTE $02, $02, $03, $03, $04, $00, $05, $01    ; frames 2, 3
     .BYTE $04, $04, $05, $05, $00, $04, $01, $05    ; frames 4, 5
 
 ; TABLE: X offset of each body quarter from ObjX; index = quarter 0-3; value = pixels.
-GanonSpriteOffsetsX:
+Ganon_SpriteOffsetsX:
     .BYTE $00, $10, $00, $10
 
 ; TABLE: Y offset of each body quarter from ObjY; index = quarter 0-3; value = pixels.
-GanonSpriteOffsetsY:
+Ganon_SpriteOffsetsY:
     .BYTE $00, $00, $10, $10
 
 ; TABLE: horizontal flip flag of each body quarter; index = quarter 0-3; value = 1 flipped (the right
 ;        column).
-GanonSpriteHFlips:
+Ganon_SpriteHFlips:
     .BYTE $00, $01, $00, $01
 
 ; ----------------------------------------------------------------------------
@@ -297,21 +297,21 @@ Ganon_DrawBody:
     ; Loop over the four quarters, 3 down to 0.
     LDY #$03
 
-@LoopCorner:
+@LoopQuarter:
     ; [00] = sprite X = Ganon's X + the quarter's offset.
     LDA ObjX, X
     CLC
-    ADC GanonSpriteOffsetsX, Y
+    ADC Ganon_SpriteOffsetsX, Y
     STA $00
 
     ; [01] = sprite Y = Ganon's Y + the quarter's offset.
     LDA ObjY, X
     CLC
-    ADC GanonSpriteOffsetsY, Y
+    ADC Ganon_SpriteOffsetsY, Y
     STA $01
 
     ; [0F] = the quarter's horizontal flip flag.
-    LDA GanonSpriteHFlips, Y
+    LDA Ganon_SpriteHFlips, Y
     STA $0F
 
     ; Save the loop index (the quarter) and copy it to [07].
@@ -319,20 +319,20 @@ Ganon_DrawBody:
     PHA
     STA $07
 
-    ; Index into GanonFrameImages = animation frame * 4 + quarter.
+    ; Index into Ganon_FrameImages = animation frame * 4 + quarter.
     ; (Carry is clear after the shifts because the frame is at most 5.)
     LDA Ganon_ObjAnimationFrame, X
     ASL
     ASL
     ADC $07
     TAY
-    LDA GanonFrameImages, Y
-    JSR DrawObjectNotMirrored
+    LDA Ganon_FrameImages, Y
+    JSR Anim_DrawObjectNotMirrored
     PLA                         ; Restore the loop index.
 
     TAY
     DEY
-    BPL @LoopCorner
+    BPL @LoopQuarter
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -340,7 +340,7 @@ Ganon_DrawBody:
 ; IN:   X = Ganon's object slot; ObjState,X = 0 blue, nonzero brown (counts down from $FF).
 ; OUT:  [02], [03] = Ganon's midpoint; may start Ganon_ObjDyingCount,X.
 ; NOTE: Link: tested every frame of the fight unless Link's invincibility timer is running. The entry
-;       point used skips the magic clock and stun tests of CheckLinkCollision; its own tests remain
+;       point used skips the magic clock and stun tests of Link_CheckMonsterTouch; its own tests remain
 ;       (no hit while Link's state is exactly $40, halted, or while IsLinkParalyzed is set).
 ;       Blue (ObjState 0): only the sword in slot $0D can hit, only while ObjTimer,X = 0 (he is
 ;       invisible), and only in sword state 2 (fully extended). A hit makes him visible for $40 frames
@@ -349,8 +349,8 @@ Ganon_DrawBody:
 ;       Brown (ObjState <> 0): only an arrow flying in slot $12 (state $10) can hit, and only when
 ;       InvArrow = 2 (silver arrow). The hit starts the dying sequence; nothing else can kill him.
 ;       Sword beam, bombs, fire, boomerang and rod are never tested here (and the mask $FA set by
-;       InitGanon covers every damage type except sword 1 and arrow 4).
-;       The cancelled sword "death" still went through HandleMonsterDied, so WorldKillCount and
+;       Ganon_Init covers every damage type except sword 1 and arrow 4).
+;       The cancelled sword "death" still went through Damage_KillMonster, so WorldKillCount and
 ;       HelpDropCount (up to $0A) were incremented and the monster death sound was requested.
 ; ----------------------------------------------------------------------------
 Ganon_CheckCollisions:
@@ -366,9 +366,9 @@ Ganon_CheckCollisions:
 
     ; Check for a collision with Link.
     ;
-    ; CheckLinkCollision would compute the midpoint of a 16x16 object, so the second entry point
-    ; CheckLinkCollisionPreinit is used with the midpoint above. That entry skips the first part of
-    ; CheckLinkCollision, so do it here: skip the test if Link is invincible, and clear the result
+    ; Link_CheckMonsterTouch would compute the midpoint of a 16x16 object, so the second entry point
+    ; Link_CheckMonsterTouch_NoReset is used with the midpoint above. That entry skips the first part of
+    ; Link_CheckMonsterTouch, so do it here: skip the test if Link is invincible, and clear the result
     ; variables [06], [09], [0C] and the defender slot [00] (0 = Link).
     LDA ObjInvincibilityTimer
     BNE @SkipLinkCollision
@@ -377,7 +377,7 @@ Ganon_CheckCollisions:
     STA $0C
     LDY #$00
     STY $00
-    JSR CheckLinkCollisionPreinit
+    JSR Link_CheckMonsterTouch_NoReset
 
 @SkipLinkCollision:
     ; State <> 0: Ganon is brown. Go check the arrow.
@@ -388,7 +388,7 @@ Ganon_CheckCollisions:
     LDA ObjTimer, X
     BNE @Exit
     LDY #$0D                    ; Sword slot
-    JSR CheckMonsterSwordCollision
+    JSR Sword_CheckMonsterCollision
 
     ; If the hit used up his HP, the damage code set the dying metastate. Instead of dying:
     ; 1. Restore HP to the initial value $F0
@@ -402,20 +402,20 @@ Ganon_CheckCollisions:
     JSR Ganon_AppendPaletteRowTransferRecord_Brown
 
 @CheckHarmed:
-    ; A sword hit set his invincibility timer (to $10, in BeginShove). If so, play the boss
+    ; A sword hit set his invincibility timer (to $10, in Shove_Begin). If so, play the boss
     ; hit cry and set timer to $40, so that he's visible for $40 frames.
     LDA ObjInvincibilityTimer, X
     BEQ @UndoDeath
-    JSR PlayBossHitCryIfNeeded
+    JSR Sample_PlayBossHitCryIfHit
     LDA #$40
     STA ObjTimer, X
 
 @UndoDeath:
     ; Reset metastate, because Ganon cannot die this way.
-    JSR ResetObjMetastate
+    JSR Obj_ResetMetastate
 
     ; Reset shove info and invincibility timer: no knockback and no flashing from sword hits.
-    JSR ResetShoveInfoAndInvincibilityTimer
+    JSR Shove_ResetAndClearInvincibility
 
 @Exit:
     RTS
@@ -437,11 +437,11 @@ Ganon_CheckCollisions:
     BNE @Exit
 
     ; Check for collision with the arrow; return if none.
-    JSR CheckMonsterArrowOrRodCollision
+    JSR Arrow_CheckArrowOrRodVsMonster
     LDA $06                     ; [06] collision result
     BEQ @Exit
 
-    ; Start the dying sequence (count 0 -> 1; Ganon_Dying takes over next frame).
+    ; Start the dying sequence (count 0 -> 1; Ganon_UpdateDying takes over next frame).
     INC Ganon_ObjDyingCount, X
 
     ; Invincibility timer $28 makes his body flash while dying.
@@ -455,12 +455,12 @@ Ganon_CheckCollisions:
 
 ; DATA: template of the PPU transfer record for Ganon's palette: address $3F1C (sprite palette row 3,
 ;       palette row 7 overall), 4 bytes, the 4 colours, end marker $FF. Colours 1-3 get replaced.
-GanonColorTransferRecord:
+Ganon_PaletteTransferRecord:
     .BYTE $3F, $1C, $04, $0F, $07, $17, $27, $FF
 
 ; TABLE: three sets of the 3 colours written over the template; index = 0-8, a set ends at index
 ;        2, 5 or 8; value = NES colour.
-GanonColorSets:
+Ganon_PaletteColorSets:
     .BYTE $07, $17, $30, $16, $2C, $3C, $27, $06    ; brown set (0-2), blue set (3-5), Triforce set (6-8)
     .BYTE $16
 
@@ -473,7 +473,7 @@ GanonColorSets:
 ;       empty (DynTileBufLen = 0); otherwise the record keeps the template colours $07, $17, $27.
 ; ----------------------------------------------------------------------------
 Ganon_AppendPaletteRowTransferRecord_Brown:
-    LDY #$02                    ; End index of the brown set in GanonColorSets.
+    LDY #$02                    ; End index of the brown set in Ganon_PaletteColorSets.
     BNE :+
 
 ; Queues Ganon's blue palette ($16, $2C, $3C), used when the brown state ends.
@@ -495,7 +495,7 @@ Ganon_AppendPaletteRowTransferRecord_Triforce:
     LDY #$00
 
 @CopyBytes:
-    LDA GanonColorTransferRecord, Y
+    LDA Ganon_PaletteTransferRecord, Y
     STA DynTileBuf, X
     INX
     INY
@@ -510,7 +510,7 @@ Ganon_AppendPaletteRowTransferRecord_Triforce:
     LDX #$02
 
 @OverwriteColors:
-    LDA GanonColorSets, Y
+    LDA Ganon_PaletteColorSets, Y
     STA DynTileBuf+4, X
     DEY
     DEX
@@ -526,7 +526,7 @@ Ganon_AppendPaletteRowTransferRecord_Triforce:
 Ganon_DrawAshes:
     JSR Anim_FetchObjPosForSpriteDescriptor
     LDA #$0B
-    JMP DrawObjectNotMirrored
+    JMP Anim_DrawObjectNotMirrored
 
 ; ----------------------------------------------------------------------------
 ; Makes the room item (the Triforce of Power in Ganon's room) appear, unless active or already taken.
@@ -538,7 +538,7 @@ Ganon_ActivateRoomItem:
     ; If the room item is already active (state 0), or the room flags say it was taken, return.
     LDA ObjState+19
     BEQ @Exit
-    JSR GetRoomFlagUWItemState
+    JSR RoomFlags_GetItemTaken
     BNE @Exit
 
     ; Activate the room item, by setting its state to 0.

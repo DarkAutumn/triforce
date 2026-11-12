@@ -1,37 +1,37 @@
 ; ============================================================================
 ; FILE:     bank7/shove.asm              BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 2323-2494
-; SUBJECTS: Obj
+; SUBJECTS: Shove
 ; TOPIC:    Knockback movement: moves a shoved object (Link or a monster) up to 4 pixels per frame in
 ;           its shove direction until the distance runs out or something blocks it.
-; SEE ALSO: bank1/shove-knockback.asm (BeginShove: sets direction, distance and invincibility);
-;           bank7/tile-collision.asm (GetCollidingTileMoving); bank1/room-bounds.asm (BoundByRoomWithA);
-;           bank1/modeb-cave-save-sprites.asm (CheckPersonBlocking); bank7/mode5-play-update.asm
-;           (EnsureObjectAligned); bank4/walker-wanderer-common.asm and other monster files (callers).
+; SEE ALSO: bank1/shove-knockback.asm (Shove_Begin: sets direction, distance and invincibility);
+;           bank7/tile-collision.asm (Tile_GetAheadOfObj); bank1/room-bounds.asm (Room_BoundDirA);
+;           bank1/modeb-cave-save-sprites.asm (Person_BlockLinkMovingUp); bank7/mode5-play-update.asm
+;           (Obj_SnapToGrid); bank4/walker-wanderer-common.asm and other monster files (callers).
 ; KEY FACTS:
-;   - Speed: 4 pixels per frame, one pixel at a time, each pixel tested (ShoveMoveMin). BeginShove gives
+;   - Speed: 4 pixels per frame, one pixel at a time, each pixel tested (Shove_MovePixels). Shove_Begin gives
 ;     Link $20 pixels (8 frames) and a monster $40 pixels (16 frames) when nothing stops the shove.
 ;   - The first call of a shove (bit 7 of ObjShoveDir set) only clears bit 7 and validates the direction;
-;     it does not move the object (Obj_Shove).
+;     it does not move the object (Shove_Update).
 ;   - A shove perpendicular to the object's facing axis is allowed only at grid offset 0. Off the grid
 ;     a monster's shove is cancelled; Link's is redirected to the opposite of his facing direction
-;     (Obj_Shove@CheckPerpendicularShove).
+;     (Shove_Update@CheckPerpendicularShove).
 ;   - Tiles are tested only at grid offset 0, after snapping the object to the grid; an unwalkable tile
-;     ahead ends the shove (ShoveMoveMin@LoopShovePixel).
-;   - The room bounds end the shove at any grid offset (ShoveMoveMin@CheckBoundary).
+;     ahead ends the shove (Shove_MovePixels@LoopShovePixel).
+;   - The room bounds end the shove at any grid offset (Shove_MovePixels@CheckBoundary).
 ;   - If object slot 1 holds the Grumble Goriya ($36) or a dungeon person ($4B-$52), an upward shove
 ;     ends while Link's Y < $8E; the test reads Link's Y whichever object is shoved
-;     (ShoveMoveMin@CheckBlocked).
+;     (Shove_MovePixels@CheckBlocked).
 ;   - Each pixel also moves ObjGridOffset by 1; it is reset to 0 at a multiple of $10, and for Link also
-;     at a multiple of 8 (ShoveMoveMin@ChooseSpeed).
-;   - When the shove ends, ObjShoveDir and ObjShoveDistance are both cleared (ResetShoveInfo).
+;     at a multiple of 8 (Shove_MovePixels@ChooseSpeed).
+;   - When the shove ends, ObjShoveDir and ObjShoveDistance are both cleared (Shove_Reset).
 ;   - Bit 6 of ObjShoveDir is never tested here: every use masks with $0F, $0C, $05 or $03
-;     (Obj_Shove, ShoveMoveMin).
+;     (Shove_Update, Shove_MovePixels).
 ; CONTENTS: (generated; L = line in this file)
-;   L0050 Obj_Shove          code  Advances an object's knockback by one frame: validate on the first call, then move up to 4 pixels.
-;   L0103 ResetShoveInfo     code  Ends an object's knockback: clears ObjShoveDir,X and ObjShoveDistance,X.
-;   L0107 SetShoveInfoWith0  code  Second entry: stores A (callers pass 0) in ObjShoveDir,X and ObjShoveDistance,X. A is unchanged.
-;   L0124 ShoveMoveMin       code  Moves a shoved object up to 4 pixels, one at a time, stopping the shove at the first obstacle.
+;   L0050 Shove_Update             code  Advances an object's knockback by one frame: validate on the first call, then move up to 4 pixels.
+;   L0103 Shove_Reset              code  Ends an object's knockback: clears ObjShoveDir,X and ObjShoveDistance,X.
+;   L0107 Shove_SetDirAndDistance  code  Second entry: stores A (callers pass 0) in ObjShoveDir,X and ObjShoveDistance,X. A is unchanged.
+;   L0124 Shove_MovePixels         code  Moves a shoved object up to 4 pixels, one at a time, stopping the shove at the first obstacle.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -43,11 +43,11 @@
 ; NOTE: Callers call this while ObjShoveDir,X is nonzero. The first call does not move the object.
 ; NOTE: First call: if the shove axis differs from the axis the object faces and its grid offset is
 ;       not 0, a monster's shove is cancelled and Link's direction is replaced by the opposite of ObjDir.
-;       BeginShove chooses Link's shove axis from ObjDir when he is off the grid, so Link's replacement
-;       is reached only if ObjDir or the grid offset changed since BeginShove ran (unverified whether
+;       Shove_Begin chooses Link's shove axis from ObjDir when he is off the grid, so Link's replacement
+;       is reached only if ObjDir or the grid offset changed since Shove_Begin ran (unverified whether
 ;       that ever happens; upstream marked the block as never seen executing).
 ; ----------------------------------------------------------------------------
-Obj_Shove:
+Shove_Update:
     ; Bit 7 clear: not the first call of this shove. Go move.
     LDA ObjShoveDir, X
     ASL
@@ -73,12 +73,12 @@ Obj_Shove:
 
     ; Off the grid: cancel the shove of any object but Link.
     CPX #$00
-    BNE ResetShoveInfo
+    BNE Shove_Reset
 
     ; Link: shove him opposite to the direction he faces instead.
     ; (Upstream marked these three instructions as never seen executing; see the routine header.)
     LDA ObjDir
-    JSR GetOppositeDir
+    JSR Dir_GetOpposite
     STA ObjShoveDir
 
 @Exit:
@@ -93,18 +93,18 @@ Obj_Shove:
 @MoveIfNotDone:
     ; If pixels are left, move. Otherwise the shove is over: fall through and clear it.
     LDA ObjShoveDistance, X
-    BNE ShoveMoveMin
+    BNE Shove_MovePixels
 
 ; ----------------------------------------------------------------------------
 ; Ends an object's knockback: clears ObjShoveDir,X and ObjShoveDistance,X.
 ; IN:   X = object slot.
 ; OUT:  A = 0.
 ; ----------------------------------------------------------------------------
-ResetShoveInfo:
+Shove_Reset:
     LDA #$00
 
 ; Second entry: stores A (callers pass 0) in ObjShoveDir,X and ObjShoveDistance,X. A is unchanged.
-SetShoveInfoWith0:
+Shove_SetDirAndDistance:
     STA ObjShoveDir, X
     STA ObjShoveDistance, X
     RTS
@@ -119,9 +119,9 @@ SetShoveInfoWith0:
 ;       Grumble Goriya ($36) or a dungeon person ($4B-$52) in slot 1, an upward shove stops while
 ;       Link's Y < $8E.
 ; NOTE: The distance is not tested inside the loop: if fewer than 4 pixels were left, the loop still
-;       moves 4 and ObjShoveDistance wraps below 0. BeginShove's distances ($20, $40) are multiples of 4.
+;       moves 4 and ObjShoveDistance wraps below 0. Shove_Begin's distances ($20, $40) are multiples of 4.
 ; ----------------------------------------------------------------------------
-ShoveMoveMin:
+Shove_MovePixels:
     ; [03] counts the 4 pixels of this frame.
     LDA #$04
     STA $03
@@ -130,24 +130,24 @@ ShoveMoveMin:
     ; On a grid point: snap to the grid, then stop the shove if the tile ahead is unwalkable.
     LDA ObjGridOffset, X
     BNE @CheckBoundary
-    JSR EnsureObjectAligned
+    JSR Obj_SnapToGrid
     LDA ObjShoveDir, X
     AND #$0F
     STA $0F
-    JSR GetCollidingTileMoving
+    JSR Tile_GetAheadOfObj
     CMP RoomFirstUnwalkableTile
-    BCS ResetShoveInfo
+    BCS Shove_Reset
 
 @CheckBoundary:
     ; At any grid offset: stop the shove if the object is at the room bounds in that direction
-    ; (BoundByRoomWithA returns 0 then).
+    ; (Room_BoundDirA returns 0 then).
     LDA ObjShoveDir, X
     AND #$0F
-    JSR BoundByRoomWithA
-    BEQ ResetShoveInfo
+    JSR Room_BoundDirA
+    BEQ Shove_Reset
 
     ; If slot 1 holds the Grumble Goriya ($36) or a dungeon person ($4B-$52), apply the person's
-    ; barrier: CheckPersonBlocking zeroes [0F] when the direction is up and Link's Y < $8E. It reads
+    ; barrier: Person_BlockLinkMovingUp zeroes [0F] when the direction is up and Link's Y < $8E. It reads
     ; Link's Y even when the shoved object is a monster.
     LDA ObjType+1
     CMP #$36
@@ -158,9 +158,9 @@ ShoveMoveMin:
     BCS @ChooseSpeed
 
 @CheckBlocked:
-    JSR CheckPersonBlocking
+    JSR Person_BlockLinkMovingUp
     LDA $0F
-    BEQ ResetShoveInfo
+    BEQ Shove_Reset
 
 @ChooseSpeed:
     ; [02] = +1 for right or down, -1 for left or up: the change of the coordinate.

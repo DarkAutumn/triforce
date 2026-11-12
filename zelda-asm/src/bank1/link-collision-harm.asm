@@ -4,22 +4,22 @@
 ; SUBJECTS: Link
 ; TOPIC:    A monster or monster shot touching Link: the overlap test, shield parry rules, damage lookup,
 ;           ring halving, heart subtraction and the switch to the death mode.
-; SEE ALSO: bank1/monster-collisions.asm (CheckMonsterCollisions calls this; GetObjectMiddle;
-;           ObjTypeToDamagePoints); bank1/shove-knockback.asm (BeginShove: Link's knockback and invincibility
-;           timer); bank1/object-overlap-test.asm (DoObjectsCollide); bank7/fire.asm (candle fire harming
+; SEE ALSO: bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink calls this; Obj_GetMiddle;
+;           Damage_ObjTypeDamageToLink); bank1/shove-knockback.asm (Shove_Begin: Link's knockback and invincibility
+;           timer); bank1/object-overlap-test.asm (Collision_TestPoints); bank7/fire.asm (candle fire harming
 ;           Link through Link_BeHarmed); bank4/drop-items.asm (readers of the counters reset here).
 ; KEY FACTS:
 ;   - No touch is tested while Link's invincibility timer, the clock, Link's stun timer or the monster's
 ;     stun timer is nonzero, while Link's state is exactly $40 (halted) or a Like-Like holds him
-;     (CheckLinkCollision, CheckLinkCollisionPreinit).
+;     (Link_CheckMonsterTouch, Link_CheckMonsterTouch_NoReset).
 ;   - Touch box: Link's middle (X+8, Y+8) against the object's middle, hit when both axis distances are
-;     under 9 pixels (CheckLinkCollisionPreinit).
-;   - Object types $53 and up are shots; they touch Link only in states $10-$1F (CheckLinkCollisionPreinit).
+;     under 9 pixels (Link_CheckMonsterTouch_NoReset).
+;   - Object types $53 and up are shots; they touch Link only in states $10-$1F (Link_CheckMonsterTouch_NoReset).
 ;   - A shot is parried only when Link's state is $00-$0F (not swinging or using an item) and Link and the
 ;     shot face opposite ways on one axis. Types $53, $54, $5B, $5C need no magic shield; $55, $57, $58,
-;     $59 need it; $56 and $5A are never parried (CheckLinkCollisionPreinit@FacingOpposite).
-;   - Damage = ObjTypeToDamagePoints[type]: low nibble = whole hearts, high nibble = sixteenths of a heart
-;     ($80 = half a heart) (HarmLink).
+;     $59 need it; $56 and $5A are never parried (Link_CheckMonsterTouch_NoReset@FacingOpposite).
+;   - Damage = Damage_ObjTypeDamageToLink[type]: low nibble = whole hearts, high nibble = sixteenths of a heart
+;     ($80 = half a heart) (Link_HarmByObjType).
 ;   - Each ring grade halves the damage: blue 1/2, red 1/4 (Link_BeHarmed).
 ;   - Every call of Link_BeHarmed zeroes WorldKillCount, HelpDropCount and IsHelpDropBomb, even when the
 ;     damage is 0 (Link_BeHarmed@ResetHelp).
@@ -27,26 +27,26 @@
 ;     heart left; then GameMode becomes $11 (Link_BeHarmed@HandleDied).
 ;   - A borrow from the full hearts costs 1/256 heart extra (Link_BeHarmed@BorrowHeart).
 ; CONTENTS: (generated; L = line in this file)
-;   L0048 CheckLinkCollision         code  Tests whether the monster or shot in slot X touches Link and, unless parried, harms and shoves him.
-;   L0071 CheckLinkCollisionPreinit  code  Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
-;   L0157 L73A9_Exit                 code  Shared exit of CheckLinkCollision.
-;   L0162 HarmLink                   code  Starts Link's knockback and harms him by the touching object's damage from ObjTypeToDamagePoints.
-;   L0191 Link_BeHarmed              code  Takes damage [0D]:[0E], halved per ring grade, from Link's hearts; starts death mode when he dies.
-;   L0266 Link_BeHarmed_Return       code  Shared exit: the RTS of Link_BeHarmed, also used by CheckMonsterBoomerangOrFoodCollision.
+;   L0048 Link_CheckMonsterTouch          code  Tests whether the monster or shot in slot X touches Link and, unless parried, harms and shoves him.
+;   L0071 Link_CheckMonsterTouch_NoReset  code  Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
+;   L0157 Link_CheckMonsterTouch_Return   code  Shared exit of Link_CheckMonsterTouch.
+;   L0162 Link_HarmByObjType              code  Starts Link's knockback and harms him by the touching object's damage from Damage_ObjTypeDamageToLink.
+;   L0191 Link_BeHarmed                   code  Takes damage [0D]:[0E], halved per ring grade, from Link's hearts; starts death mode when he dies.
+;   L0266 Link_BeHarmed_Return            code  Shared exit: the RTS of Link_BeHarmed, also used by Boomerang_CheckMonsterCollision.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Tests whether the monster or shot in slot X touches Link and, unless parried, harms and shoves him.
 ; IN:   X = object slot of the monster or shot.
 ; OUT:  [06] = 1 when the object overlaps Link and was not parried, else 0; [0C] = 1 when Link was harmed
-;       (HarmLink ran), else 0; IsShotCollidingWithLink = 1 when a shot (type >= $53) overlaps Link, parried
+;       (Link_HarmByObjType ran), else 0; IsShotCollidingWithLink = 1 when a shot (type >= $53) overlaps Link, parried
 ;       or not; [00] = 0 (Link's slot); [09] = 0 (no damage type); [02],[03] = the object's middle;
 ;       [04],[05] = Link's middle when the test got that far.
 ; NOTE: Skipped entirely (no hit) while any of these is nonzero: Link's invincibility timer, InvClock,
 ;       Link's stun timer, the object's stun timer. A stunned monster cannot hurt Link by touch.
 ; ----------------------------------------------------------------------------
-CheckLinkCollision:
-    JSR GetObjectMiddle         ; [02],[03] := the object's middle
+Link_CheckMonsterTouch:
+    JSR Obj_GetMiddle         ; [02],[03] := the object's middle
 
     ; Clear the results.
     LDA #$00
@@ -63,18 +63,18 @@ CheckLinkCollision:
     ORA InvClock
     ORA ObjStunTimer
     ORA ObjStunTimer, X
-    BNE L73A9_Exit
+    BNE Link_CheckMonsterTouch_Return
 
 ; Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
 ; It skips the invincibility, clock and stun tests above. Ganon enters here with his own middle point
 ; after testing Link's invincibility timer himself (not the clock or the stun timers).
-CheckLinkCollisionPreinit:
+Link_CheckMonsterTouch_NoReset:
     ; Return no collision if Link's state is exactly $40 (halted) or a Like-Like holds him.
     LDA ObjState
     CMP #$40
-    BEQ L73A9_Exit
+    BEQ Link_CheckMonsterTouch_Return
     LDA IsLinkParalyzed
-    BNE L73A9_Exit
+    BNE Link_CheckMonsterTouch_Return
 
     ; Object types $53 and up are shots. A shot can touch Link only in states $10-$1F.
     LDA ObjType, X
@@ -83,7 +83,7 @@ CheckLinkCollisionPreinit:
     LDA ObjState, X
     AND #$F0
     CMP #$10
-    BNE L73A9_Exit
+    BNE Link_CheckMonsterTouch_Return
 :
     ; [04],[05] := Link's middle (X+8, Y+8).
     LDA ObjX
@@ -97,13 +97,13 @@ CheckLinkCollisionPreinit:
 
     ; No collision unless both axis distances are under 9 pixels.
     LDA #$09
-    JSR DoObjectsCollide
-    BEQ L73A9_Exit
+    JSR Collision_TestPoints
+    BEQ Link_CheckMonsterTouch_Return
 
     ; They overlap ([06] = 1). A monster (type < $53) harms Link at once.
     LDA ObjType, X
     CMP #$53
-    BCC HarmLink
+    BCC Link_HarmByObjType
 
     ; The object is a shot. Flag that a shot touched Link (set even if it is parried below).
     INC IsShotCollidingWithLink
@@ -111,12 +111,12 @@ CheckLinkCollisionPreinit:
     ; Shot types $56 and $5A can never be parried. Nor can any shot while Link's state is $10 or
     ; above (swinging the sword or using an item).
     CMP #$56
-    BEQ HarmLink
+    BEQ Link_HarmByObjType
     CMP #$5A
-    BEQ HarmLink
+    BEQ Link_HarmByObjType
     LDA ObjState
     AND #$F0
-    BNE HarmLink
+    BNE Link_HarmByObjType
 
     ; Link must face against the shot: the two directions together must hold both vertical bits
     ; (up + down) or both horizontal bits (left + right). Otherwise harm Link.
@@ -131,7 +131,7 @@ CheckLinkCollisionPreinit:
     ORA ObjDir, X
     AND #$03
     CMP #$03
-    BNE HarmLink
+    BNE Link_HarmByObjType
 
 @FacingOpposite:
     ; Types below $55 ($53 flying rock, $54) and $5B and up ($5B monster arrow, $5C monster boomerang)
@@ -144,7 +144,7 @@ CheckLinkCollisionPreinit:
 
     ; The rest ($55 fireball, $57 sword shot, $58/$59 magic shot) need the magic shield.
     LDA InvMagicShield
-    BEQ HarmLink
+    BEQ Link_HarmByObjType
 
 @Parry:
     ; Play the parry tune and cancel the collision ([06] := 0). IsShotCollidingWithLink stays 1.
@@ -153,15 +153,15 @@ CheckLinkCollisionPreinit:
     LDA #$00
     STA $06
 
-; Shared exit of CheckLinkCollision.
-L73A9_Exit:
+; Shared exit of Link_CheckMonsterTouch.
+Link_CheckMonsterTouch_Return:
     RTS
 
-; Starts Link's knockback and harms him by the touching object's damage from ObjTypeToDamagePoints.
+; Starts Link's knockback and harms him by the touching object's damage from Damage_ObjTypeDamageToLink.
 ; IN: X = object slot of the attacker. Sets [0C] = 1, then falls into Link_BeHarmed.
-HarmLink:
-    ; Knockback: $20 pixels away from the attacker, and Link's invincibility timer := $18 (BeginShove).
-    JSR BeginShove
+Link_HarmByObjType:
+    ; Knockback: $20 pixels away from the attacker, and Link's invincibility timer := $18 (Shove_Begin).
+    JSR Shove_Begin
 
     ; [0C] := 1: Link was harmed. (Wallmaster and Like-Like capture Link on this flag.)
     INC $0C
@@ -169,7 +169,7 @@ HarmLink:
     ; Unpack the damage byte of the attacker's type into a 16-bit amount:
     ; [0D] = low nibble = whole hearts; [0E] = high nibble in place = 1/256 hearts ($80 = half a heart).
     LDY ObjType, X
-    LDA ObjTypeToDamagePoints, Y
+    LDA Damage_ObjTypeDamageToLink, Y
     PHA
     AND #$0F
     STA $0D
@@ -194,7 +194,7 @@ Link_BeHarmed:
     CPY #$2E
     BEQ :+
     LDA #$08
-    JSR PlaySample
+    JSR Sample_Play
 :
     ; Halve the 16-bit damage once per ring grade: blue ring (1) = 1/2, red ring (2) = 1/4.
     LDY InvRing
@@ -255,13 +255,13 @@ Link_BeHarmed:
     LDA HeartValues
     AND #$F0
     STA HeartValues
-    JSR EndGameMode             ; Returns A = 0.
+    JSR Mode_End             ; Returns A = 0.
     STA HeartPartial
     STA ObjState
     LDA #$11
     STA GameMode
     LDA #$04
     STA ObjDir
-; Shared exit: the RTS of Link_BeHarmed, also used by CheckMonsterBoomerangOrFoodCollision.
+; Shared exit: the RTS of Link_BeHarmed, also used by Boomerang_CheckMonsterCollision.
 Link_BeHarmed_Return:
     RTS

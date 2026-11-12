@@ -4,76 +4,76 @@
 ; SUBJECTS: Digdogger
 ; TOPIC:    Digdogger update (big types $38/$39 and small type $18): shrinking and splitting after the
 ;           flute, speed oscillation, 8-way movement, four-corner collisions of the big body, drawing.
-; SEE ALSO: bank4/aquamentus-digdogger-dodongo-inits.asm (InitDigdogger1/2: start speed, child count);
-;           bank7/flute.asm (WieldFlute sets FluteUsedState and the $98-frame freeze);
-;           bank4/fairy-flyer-common.asm (BoundFlyer, TurnTowardsPlayer8, TurnRandomlyDir8, Directions8);
-;           bank1/monster-collisions.asm (CheckMonsterCollisions, ObjTypeToDamagePoints);
-;           bank7/object-update-table.asm (ObjectTypeToAttributes, ObjectTypeToHpPairs).
+; SEE ALSO: bank4/aquamentus-digdogger-dodongo-inits.asm (Digdogger_InitWith3Children/2: start speed, child count);
+;           bank7/flute.asm (Flute_Wield sets FluteUsedState and the $98-frame freeze);
+;           bank4/fairy-flyer-common.asm (Flyer_BoundByRoom, Dir_TurnObjTowardTarget8, Dir_TurnObjRandomly8, Dir_EightWayDirs);
+;           bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink, Damage_ObjTypeDamageToLink);
+;           bank7/object-update-table.asm (Obj_TypeAttributes, Obj_TypeHpPairs).
 ; KEY FACTS:
 ;   - The big Digdogger cannot be hit by any weapon: its ObjAttr is $A9, and bit $20 makes
-;     CheckMonsterCollisions skip all weapon tests (ObjectTypeToAttributes, types $38/$39). Only the
+;     Collision_CheckMonsterVsWeaponsAndLink skip all weapon tests (Obj_TypeAttributes, types $38/$39). Only the
 ;     small one (type $18: ObjAttr $81, HP $80) can be harmed. No code here sets an invincibility
 ;     mask; it is 0 from the room-entry RAM clear unless an earlier object in the slot set it.
-;   - The flute in a dungeon sets FluteUsedState to 1 (WieldFlute). After the $98-frame flute freeze the
-;     big Digdogger starts a $40-frame shrink (FluteUsedState 2), then splits (L_Digdogger_AfterFlute).
-;   - The split makes ChildDigdoggerCount small Digdoggers (3 from InitDigdogger1, 1 from
-;     InitDigdogger2) in the object slots right after the parent's, without testing that they are free,
-;     sets RoomObjCount to that number and clears the parent's ObjType (L_Digdogger_AfterFlute).
+;   - The flute in a dungeon sets FluteUsedState to 1 (Flute_Wield). After the $98-frame flute freeze the
+;     big Digdogger starts a $40-frame shrink (FluteUsedState 2), then splits (Digdogger_HandleFlute).
+;   - The split makes ChildDigdoggerCount small Digdoggers (3 from Digdogger_InitWith3Children, 1 from
+;     Digdogger_InitWith1Child) in the object slots right after the parent's, without testing that they are free,
+;     sets RoomObjCount to that number and clears the parent's ObjType (Digdogger_HandleFlute).
 ;   - A child slot not used since room entry is still flagged uninitialized with ObjMetastate 1, so
-;     the child first runs InitObject (ObjAttr $81, ObjHP $80) and a spawn cloud (UpdateObject). An
+;     the child first runs Obj_Init (ObjAttr $81, ObjHP $80) and a spawn cloud (Obj_Update). An
 ;     occupied slot is overwritten and keeps its old ObjAttr, ObjHP and metastate
-;     (L_Digdogger_AfterFlute@LoopMakeChild).
+;     (Digdogger_HandleFlute@LoopMakeChild).
 ;   - The FluteUsedState = 2 path does not test the size: while one big Digdogger shrinks, any other
 ;     Digdogger in the room, big or small, also runs it and splits when its own ObjTimer reads 0
-;     (L_Digdogger_AfterFlute@SplitUp).
-;   - While InvClock is set or the Digdogger is stunned, UpdateDigdogger skips the flute handling, so
+;     (Digdogger_HandleFlute@SplitUp).
+;   - While InvClock is set or the Digdogger is stunned, Digdogger_Update skips the flute handling, so
 ;     the split does not start or progress.
 ;   - During the shrink the Digdogger does not move, and it tests collisions only on the frame the
-;     shrink starts and on the 3 frames it is shown big again (L_Digdogger_AfterFlute@SplitUp).
+;     shrink starts and on the 3 frames it is shown big again (Digdogger_HandleFlute@SplitUp).
 ;   - Speed is a 16-bit value changed by 1 per frame. It starts at $003F and rises to the target; from
 ;     then on it swings between $0040 and $0080 (big, 0.25 to 0.5 pixels per frame) or $0140 and $0180
-;     (small, 1.25 to 1.5) (Digdogger_SpeedUp, Digdogger_SlowDown, SetTargetSpeed). Only bits 5-7 of
+;     (small, 1.25 to 1.5) (Digdogger_SpeedUp, Digdogger_SlowDown, Digdogger_SetTargetSpeed). Only bits 5-7 of
 ;     the low byte count, and the speed applies to each axis of the 8-way direction (Digdogger_Move).
-;   - Every $10 frames it turns at most one 8-way step: by TurnTowardsPlayer8 (steers at the chase
-;     target) when Random,X >= $80, else at random (L_Digdogger_Turn).
+;   - Every $10 frames it turns at most one 8-way step: by Dir_TurnObjTowardTarget8 (steers at the chase
+;     target) when Random,X >= $80, else at random (Digdogger_ChangeSpeedAndTurn).
 ;   - The big body is 32x32 pixels: bounds and collisions are tested at four 16x16 corners
-;     (CheckBigDigdoggerCollisions). Touching either size costs Link $0200 = 2 hearts before rings
-;     (ObjTypeToDamagePoints entries $18, $38, $39 are $02).
+;     (Digdogger_CheckBigCollisionsAndDraw). Touching either size costs Link $0200 = 2 hearts before rings
+;     (Damage_ObjTypeDamageToLink entries $18, $38, $39 are $02).
 ;   - The big Digdogger is always drawn with a small one on top of its centre
-;     (CheckBigDigdoggerCollisions falls into L_Digdogger_DrawAsLittle).
+;     (Digdogger_CheckBigCollisionsAndDraw falls into Digdogger_DrawAsLittle).
 ; CONTENTS: (generated; L = line in this file)
-;   L0071 DigdoggerCornerOffsetsX             data  TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
-;   L0076 DigdoggerCornerOffsetsY             data  TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
-;   L0090 L_Digdogger_AfterFlute              code  Runs a Digdogger after the flute was played: shrink for $40 frames, then split into small ones.
-;   L0191 L_Digdogger_TurnTowardLink          code  Digdogger turn, Random,X >= $80: TurnTowardsPlayer8 (at most one 8-way step, steering at the
-;   L0201 UpdateDigdogger                     code  Updates a Digdogger of either size (object types $18, $38, $39) for one frame.
-;   L0214 L_Digdogger_Turn                    code  Normal movement of a Digdogger: change speed, turn every $10 frames, move, check collisions, draw.
-;   L0231 L_Digdogger_Move                    code  Moves the Digdogger, then checks collisions and draws it.
-;   L0235 L_Digdogger_DrawAndCheckCollisions  code  Checks room bounds and collisions and draws the Digdogger without moving it.
-;   L0252 CheckBigDigdoggerCollisions         code  Bounds and collision-tests the big Digdogger at its four corners, then draws it.
-;   L0303 L_Digdogger_DrawAsLittle            code  Draws a small Digdogger 8 pixels right of and below the object's position (the big one's centre).
-;   L0349 Digdogger_ChangeSpeed               code  Moves a Digdogger's 16-bit speed 1 unit toward its target: up when the speed flag is 0, else down.
-;   L0354 Digdogger_ChangeSpeed_JumpTable     data  TABLE: speed routines; index = Digdogger_ObjSpeedFlag (0 speeding up, 1 slowing down).
-;   L0363 Digdogger_SpeedUp                   code  Adds 1 to the 16-bit speed; at the target speed, switches to slowing down toward $0040/$0140.
-;   L0388 Digdogger_SlowDown                  code  Subtracts 1 from the 16-bit speed; at the target speed, switches to speeding up toward $0080/$0180.
-;   L0413 SetTargetSpeed                      code  Sets the target speed to A (low byte), with high byte 0 for the big Digdogger and 1 for a small one.
-;   L0424 L116EA_Exit                         code  Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and SetTargetSpeed.
-;   L0436 Digdogger_Move                      code  Moves a Digdogger by its 16-bit speed along each axis of its 8-way direction.
-;   L0504 DigdoggerSpriteOffsetsX             data  TABLE: X offsets of the four 16x16 parts of the big Digdogger's image; index = part 0-3
-;   L0508 DigdoggerSpriteOffsetsY             data  TABLE: Y offsets of the four parts of the big Digdogger's image; index = part 0-3; value = pixels.
-;   L0514 DigdoggerSpriteAttrs                data  TABLE: sprite attributes of the four parts of the big Digdogger; index = part 0-3;
-;   L0524 Digdogger_Draw                      code  Draws a Digdogger: four 16x16 parts when big, one mirrored 16x16 image when small.
+;   L0071 Digdogger_CornerOffsetsX             data  TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
+;   L0076 Digdogger_CornerOffsetsY             data  TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
+;   L0090 Digdogger_HandleFlute                code  Runs a Digdogger after the flute was played: shrink for $40 frames, then split into small ones.
+;   L0191 Digdogger_TurnTowardTargetAndMove    code  Digdogger turn, Random,X >= $80: Dir_TurnObjTowardTarget8 (at most one 8-way step, steering at the
+;   L0201 Digdogger_Update                     code  Updates a Digdogger of either size (object types $18, $38, $39) for one frame.
+;   L0214 Digdogger_ChangeSpeedAndTurn         code  Normal movement of a Digdogger: change speed, turn every $10 frames, move, check collisions, draw.
+;   L0231 Digdogger_MoveAndCheckCollisions     code  Moves the Digdogger, then checks collisions and draws it.
+;   L0235 Digdogger_CheckCollisionsAndDraw     code  Checks room bounds and collisions and draws the Digdogger without moving it.
+;   L0252 Digdogger_CheckBigCollisionsAndDraw  code  Bounds and collision-tests the big Digdogger at its four corners, then draws it.
+;   L0303 Digdogger_DrawAsLittle               code  Draws a small Digdogger 8 pixels right of and below the object's position (the big one's centre).
+;   L0349 Digdogger_ChangeSpeed                code  Moves a Digdogger's 16-bit speed 1 unit toward its target: up when the speed flag is 0, else down.
+;   L0354 Digdogger_ChangeSpeed_JumpTable      data  TABLE: speed routines; index = Digdogger_ObjSpeedFlag (0 speeding up, 1 slowing down).
+;   L0363 Digdogger_SpeedUp                    code  Adds 1 to the 16-bit speed; at the target speed, switches to slowing down toward $0040/$0140.
+;   L0388 Digdogger_SlowDown                   code  Subtracts 1 from the 16-bit speed; at the target speed, switches to speeding up toward $0080/$0180.
+;   L0413 Digdogger_SetTargetSpeed             code  Sets the target speed to A (low byte), with high byte 0 for the big Digdogger and 1 for a small one.
+;   L0424 Digdogger_ChangeSpeed_Return         code  Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and Digdogger_SetTargetSpeed.
+;   L0436 Digdogger_Move                       code  Moves a Digdogger by its 16-bit speed along each axis of its 8-way direction.
+;   L0504 Digdogger_SpriteOffsetsX             data  TABLE: X offsets of the four 16x16 parts of the big Digdogger's image; index = part 0-3
+;   L0508 Digdogger_SpriteOffsetsY             data  TABLE: Y offsets of the four parts of the big Digdogger's image; index = part 0-3; value = pixels.
+;   L0514 Digdogger_SpriteAttrs                data  TABLE: sprite attributes of the four parts of the big Digdogger; index = part 0-3;
+;   L0524 Digdogger_Draw                       code  Draws a Digdogger: four 16x16 parts when big, one mirrored 16x16 image when small.
 ; ============================================================================
 
 ; TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
 ; value = signed pixels added to the previous corner's X. The corners visited are, relative to the
 ; object position: (0,0), ($10,$10), ($10,0), (0,$10).
-DigdoggerCornerOffsetsX:
+Digdogger_CornerOffsetsX:
     .BYTE $00, $10, $00, $F0
 
 ; TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
 ; pixels added to the previous corner's Y.
-DigdoggerCornerOffsetsY:
+Digdogger_CornerOffsetsY:
     .BYTE $00, $10, $F0, $10
 
 ; ----------------------------------------------------------------------------
@@ -87,24 +87,24 @@ DigdoggerCornerOffsetsY:
 ;       whether or not those are free, at the position of slot 1 (ObjX+1, ObjY+1), not slot X.
 ;       FluteUsedState is one byte for the room (zeroed on room entry), shared by every Digdogger.
 ; ----------------------------------------------------------------------------
-L_Digdogger_AfterFlute:
+Digdogger_HandleFlute:
     DEY
-    BNE @SplitUp
+    BNE @Shrinking
 
     ; FluteUsedState = 1: the flute was played and its freeze is over.
     ;
     ; A small Digdogger ignores the flute: go turn and move as usual.
     LDA Digdogger_ObjIsChild, X
-    BNE L_Digdogger_Turn
+    BNE Digdogger_ChangeSpeedAndTurn
 
     ; Big Digdogger: start the shrink. Object timer := $40 frames, FluteUsedState := 2.
     ; This frame only checks collisions and draws it big; it does not move.
     LDA #$40
     STA ObjTimer, X
     INC FluteUsedState
-    JMP CheckBigDigdoggerCollisions
+    JMP Digdogger_CheckBigCollisionsAndDraw
 
-@SplitUp:
+@Shrinking:
     ; FluteUsedState = 2 (a shrink is in progress). When this object's timer reads 0, split up.
     ; The size of the object is not tested on this path.
     LDA ObjTimer, X
@@ -120,9 +120,9 @@ L_Digdogger_AfterFlute:
     LDA Digdogger_ObjIsChild, X
     EOR #$01
     STA Digdogger_ObjIsChild, X
-    BEQ CheckBigDigdoggerCollisions
+    BEQ Digdogger_CheckBigCollisionsAndDraw
 :
-    JMP L_Digdogger_DrawAsLittle
+    JMP Digdogger_DrawAsLittle
 
 @MakeChildren:
     ; FluteUsedState := 1, so the children behave as normal small Digdoggers.
@@ -136,21 +136,21 @@ L_Digdogger_AfterFlute:
     PHA
 
 @LoopMakeChild:
-    ; Set up the next object slot as a small Digdogger (type $18). InitDigdogger1 gives it a random
+    ; Set up the next object slot as a small Digdogger (type $18). Digdogger_InitWith3Children gives it a random
     ; 8-way direction, speed low byte $3F and target low byte $80 (it also requests the roar sample
     ; and rewrites ChildDigdoggerCount with 3; the loop counts with [00], so 3 is what the variable
     ; holds after any split).
     ; The slot is not tested for being free. If it was not used since room entry, it is still
-    ; flagged uninitialized with ObjMetastate 1: on its first update UpdateObject runs InitObject
-    ; (ObjAttr $81, ObjHP $80, ObjTimer = slot number; type $18's init routine is DoNothing) and
-    ; then the spawn cloud, before UpdateDigdogger runs for it. ObjAttr and ObjHP are not written
+    ; flagged uninitialized with ObjMetastate 1: on its first update Obj_Update runs Obj_Init
+    ; (ObjAttr $81, ObjHP $80, ObjTimer = slot number; type $18's init routine is Obj_DoNothing) and
+    ; then the spawn cloud, before Digdogger_Update runs for it. ObjAttr and ObjHP are not written
     ; here, so a slot that was in use keeps its old values.
     INX
-    JSR InitDigdogger1
+    JSR Digdogger_InitWith3Children
     LDA #$18
     STA ObjType, X
 
-    ; Target speed high byte +1: $0180 if it was 0 (low byte $80 from InitDigdogger1). This byte and
+    ; Target speed high byte +1: $0180 if it was 0 (low byte $80 from Digdogger_InitWith3Children). This byte and
     ; the child's speed high byte are not written anywhere else here; both are 0 from the room-entry
     ; RAM clear ($0300-$051F) unless another object used these bytes of the slot in this room.
     INC Digdogger_ObjTargetSpeedWhole, X
@@ -175,22 +175,22 @@ L_Digdogger_AfterFlute:
     BNE @LoopMakeChild
     PLA                         ; Restore the current object index in X register.
     TAX
-    JSR PlayBossDeathCry
+    JSR Sample_PlayBossDeathCry
 
     ; Remove the big Digdogger by clearing its object type.
     LDA #$00
     STA ObjType, X
 
     ; Draw it once more as a small one, so that something is shown on this frame. This works with
-    ; the type cleared: the other object bytes are untouched, and L_Digdogger_DrawAsLittle sets
+    ; the type cleared: the other object bytes are untouched, and Digdogger_DrawAsLittle sets
     ; type $18 for the duration of the drawing (and then restores the 0).
-    JMP L_Digdogger_DrawAsLittle
+    JMP Digdogger_DrawAsLittle
 
-; Digdogger turn, Random,X >= $80: TurnTowardsPlayer8 (at most one 8-way step, steering at the
+; Digdogger turn, Random,X >= $80: Dir_TurnObjTowardTarget8 (at most one 8-way step, steering at the
 ; chase target), then move.
-L_Digdogger_TurnTowardLink:
-    JSR TurnTowardsPlayer8
-    JMP L_Digdogger_Move
+Digdogger_TurnTowardTargetAndMove:
+    JSR Dir_TurnObjTowardTarget8
+    JMP Digdogger_MoveAndCheckCollisions
 
 ; ----------------------------------------------------------------------------
 ; Updates a Digdogger of either size (object types $18, $38, $39) for one frame.
@@ -198,58 +198,58 @@ L_Digdogger_TurnTowardLink:
 ; NOTE: With InvClock set or the monster stunned it does not move, and the flute handling is skipped
 ;       too, so a big Digdogger neither starts nor continues its shrink.
 ; ----------------------------------------------------------------------------
-UpdateDigdogger:
+Digdogger_Update:
     ; If Link has the clock, or the monster is stunned,
     ; then only check room bounds and collisions, and draw.
     LDA InvClock
     ORA ObjStunTimer, X
-    BNE L_Digdogger_DrawAndCheckCollisions
+    BNE Digdogger_CheckCollisionsAndDraw
 
     ; If the flute was played in this room (FluteUsedState 1 or 2), go handle the shrink and split.
-    ; With FluteUsedState = 1, small Digdoggers come back to L_Digdogger_Turn from there.
+    ; With FluteUsedState = 1, small Digdoggers come back to Digdogger_ChangeSpeedAndTurn from there.
     LDY FluteUsedState
-    BNE L_Digdogger_AfterFlute
+    BNE Digdogger_HandleFlute
 
 ; Normal movement of a Digdogger: change speed, turn every $10 frames, move, check collisions, draw.
-L_Digdogger_Turn:
+Digdogger_ChangeSpeedAndTurn:
     JSR Digdogger_ChangeSpeed
 
     ; When the object timer has run out, set it to $10 frames and turn:
-    ; Random,X >= $80 (1 in 2): by TurnTowardsPlayer8, steering at the chase target; else by
-    ; TurnRandomlyDir8 (Random+1,X >= $A0 no turn, >= $50 one step clockwise, else one step
+    ; Random,X >= $80 (1 in 2): by Dir_TurnObjTowardTarget8, steering at the chase target; else by
+    ; Dir_TurnObjRandomly8 (Random+1,X >= $A0 no turn, >= $50 one step clockwise, else one step
     ; counterclockwise).
     LDA ObjTimer, X
-    BNE L_Digdogger_Move
+    BNE Digdogger_MoveAndCheckCollisions
     LDA #$10
     STA ObjTimer, X
     LDA Random, X
     CMP #$80
-    BCS L_Digdogger_TurnTowardLink
-    JSR TurnRandomlyDir8
+    BCS Digdogger_TurnTowardTargetAndMove
+    JSR Dir_TurnObjRandomly8
 
 ; Moves the Digdogger, then checks collisions and draws it.
-L_Digdogger_Move:
+Digdogger_MoveAndCheckCollisions:
     JSR Digdogger_Move
 
 ; Checks room bounds and collisions and draws the Digdogger without moving it.
-L_Digdogger_DrawAndCheckCollisions:
+Digdogger_CheckCollisionsAndDraw:
     ; A small Digdogger is one 16x16 object: bound it, check collisions, draw.
-    ; BoundFlyer reverses its 8-way direction when a room bound blocks it.
+    ; Flyer_BoundByRoom reverses its 8-way direction when a room bound blocks it.
     LDA Digdogger_ObjIsChild, X
-    BEQ CheckBigDigdoggerCollisions
-    JSR BoundFlyer
-    JSR CheckMonsterCollisions
+    BEQ Digdogger_CheckBigCollisionsAndDraw
+    JSR Flyer_BoundByRoom
+    JSR Collision_CheckMonsterVsWeaponsAndLink
     JMP Digdogger_Draw
 
 ; ----------------------------------------------------------------------------
 ; Bounds and collision-tests the big Digdogger at its four corners, then draws it.
 ; IN:   X = object slot
-; NOTE: BoundFlyer runs once per corner and reverses the 8-way direction each time a corner is
-;       blocked (two blocked corners cancel out). With ObjAttr bit $20 set, CheckMonsterCollisions
+; NOTE: Flyer_BoundByRoom runs once per corner and reverses the 8-way direction each time a corner is
+;       blocked (two blocked corners cancel out). With ObjAttr bit $20 set, Collision_CheckMonsterVsWeaponsAndLink
 ;       tests only the touch with Link, once per corner.
-;       Falls into L_Digdogger_DrawAsLittle, which draws a small Digdogger over the centre.
+;       Falls into Digdogger_DrawAsLittle, which draws a small Digdogger over the centre.
 ; ----------------------------------------------------------------------------
-CheckBigDigdoggerCollisions:
+Digdogger_CheckBigCollisionsAndDraw:
     ; Save the original coordinates.
     LDA ObjX, X
     PHA
@@ -270,16 +270,16 @@ CheckBigDigdoggerCollisions:
     ; Step the coordinates to this corner (the table values are steps from the previous corner).
     LDA ObjX, X
     CLC
-    ADC DigdoggerCornerOffsetsX, Y
+    ADC Digdogger_CornerOffsetsX, Y
     STA ObjX, X
     LDA ObjY, X
     CLC
-    ADC DigdoggerCornerOffsetsY, Y
+    ADC Digdogger_CornerOffsetsY, Y
     STA ObjY, X
 
     ; Check the room bounds and collisions at this temporary position.
-    JSR BoundFlyer
-    JSR CheckMonsterCollisions
+    JSR Flyer_BoundByRoom
+    JSR Collision_CheckMonsterVsWeaponsAndLink
 
     ; Next corner, until 4.
     INC Digdogger_ObjCurPart, X
@@ -300,7 +300,7 @@ CheckBigDigdoggerCollisions:
 ; NOTE: Temporarily sets ObjType,X = $18 and the child flag = 1; restores both and the coordinates.
 ;       No collision test is made here.
 ; ----------------------------------------------------------------------------
-L_Digdogger_DrawAsLittle:
+Digdogger_DrawAsLittle:
     ; Save the original coordinates.
     LDA ObjX, X
     PHA
@@ -348,7 +348,7 @@ L_Digdogger_DrawAsLittle:
 ; ----------------------------------------------------------------------------
 Digdogger_ChangeSpeed:
     LDA Digdogger_ObjSpeedFlag, X
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: speed routines; index = Digdogger_ObjSpeedFlag (0 speeding up, 1 slowing down).
 Digdogger_ChangeSpeed_JumpTable:
@@ -369,17 +369,17 @@ Digdogger_SpeedUp:
     ; If the 16-bit speed has not reached the 16-bit target speed, then return.
     LDA Digdogger_ObjSpeedFrac, X
     CMP Digdogger_ObjTargetSpeedFrac, X
-    BNE L116EA_Exit
+    BNE Digdogger_ChangeSpeed_Return
     LDA Digdogger_ObjSpeedWhole, X
     CMP Digdogger_ObjTargetSpeedWhole, X
-    BNE L116EA_Exit
+    BNE Digdogger_ChangeSpeed_Return
 
     ; Speed flag := 1: slow down from now on.
     INC Digdogger_ObjSpeedFlag, X
 
     ; Go set the target speed to $0040 (big) or $0140 (small).
     LDA #$40
-    JMP SetTargetSpeed
+    JMP Digdogger_SetTargetSpeed
 
 ; ----------------------------------------------------------------------------
 ; Subtracts 1 from the 16-bit speed; at the target speed, switches to speeding up toward $0080/$0180.
@@ -398,10 +398,10 @@ Digdogger_SlowDown:
     ; If the 16-bit speed has not reached the 16-bit target speed, then return.
     LDA Digdogger_ObjSpeedFrac, X
     CMP Digdogger_ObjTargetSpeedFrac, X
-    BNE L116EA_Exit
+    BNE Digdogger_ChangeSpeed_Return
     LDA Digdogger_ObjSpeedWhole, X
     CMP Digdogger_ObjTargetSpeedWhole, X
-    BNE L116EA_Exit
+    BNE Digdogger_ChangeSpeed_Return
 
     ; Speed flag := 0: speed up from now on.
     DEC Digdogger_ObjSpeedFlag, X
@@ -410,18 +410,18 @@ Digdogger_SlowDown:
     LDA #$80
 
 ; Sets the target speed to A (low byte), with high byte 0 for the big Digdogger and 1 for a small one.
-SetTargetSpeed:
+Digdogger_SetTargetSpeed:
     STA Digdogger_ObjTargetSpeedFrac, X
     LDA #$00
     STA Digdogger_ObjTargetSpeedWhole, X
 
     ; A small Digdogger gets high byte 1: 1 more pixel per frame.
     LDA Digdogger_ObjIsChild, X
-    BEQ L116EA_Exit
+    BEQ Digdogger_ChangeSpeed_Return
     INC Digdogger_ObjTargetSpeedWhole, X
 
-; Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and SetTargetSpeed.
-L116EA_Exit:
+; Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and Digdogger_SetTargetSpeed.
+Digdogger_ChangeSpeed_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -431,17 +431,17 @@ L116EA_Exit:
 ; NOTE: Only bits 5-7 of the speed low byte count, so the big Digdogger's speed steps through
 ;       $40, $60, $80 (0.25, 0.375, 0.5 pixels per frame), after $20 (0.125) while the speed is
 ;       still $003F at the start. A diagonal moves the full amount on both axes. No tile
-;       collision: only the room bounds (BoundFlyer, in the callers) confine it.
+;       collision: only the room bounds (Flyer_BoundByRoom, in the callers) confine it.
 ; ----------------------------------------------------------------------------
 Digdogger_Move:
-    ; Add the top 3 bits of the speed low byte to the position fraction at $412,X.
+    ; Add the top 3 bits of the speed low byte to the position fraction (Digdogger_ObjPosFrac).
     ; Pixels to move this frame: [03] := speed high byte + carry.
     ; Manhandla_Move does the same calculation.
     LDA Digdogger_ObjSpeedFrac, X
     AND #$E0
     CLC
-    ADC $0412, X
-    STA $0412, X
+    ADC Digdogger_ObjPosFrac, X
+    STA Digdogger_ObjPosFrac, X
 
     ; [03] := speed high byte + carry.
     LDA Digdogger_ObjSpeedWhole, X
@@ -501,17 +501,17 @@ Digdogger_Move:
 
 ; TABLE: X offsets of the four 16x16 parts of the big Digdogger's image; index = part 0-3
 ; (top left, top right, bottom left, bottom right); value = pixels.
-DigdoggerSpriteOffsetsX:
+Digdogger_SpriteOffsetsX:
     .BYTE $00, $10, $00, $10
 
 ; TABLE: Y offsets of the four parts of the big Digdogger's image; index = part 0-3; value = pixels.
-DigdoggerSpriteOffsetsY:
+Digdogger_SpriteOffsetsY:
     .BYTE $00, $00, $10, $10
 
 ; TABLE: sprite attributes of the four parts of the big Digdogger; index = part 0-3;
 ; value = OAM attribute byte: $03 = sprite palette 3 (the level's palette row), $80 = flipped
 ; vertically (the bottom parts).
-DigdoggerSpriteAttrs:
+Digdogger_SpriteAttrs:
     .BYTE $03, $03, $83, $83
 
 ; ----------------------------------------------------------------------------
@@ -536,18 +536,18 @@ Digdogger_Draw:
     ; [00] := X of the current part.
     LDA ObjX, X
     CLC
-    ADC DigdoggerSpriteOffsetsX, Y
+    ADC Digdogger_SpriteOffsetsX, Y
     STA $00
 
     ; [01] := Y of the current part.
     LDA ObjY, X
     CLC
-    ADC DigdoggerSpriteOffsetsY, Y
+    ADC Digdogger_SpriteOffsetsY, Y
     STA $01
 
     ; Load and set the sprite attributes for this part.
     ; Vertical flipping is set appropriately here.
-    LDA DigdoggerSpriteAttrs, Y
+    LDA Digdogger_SpriteAttrs, Y
     JSR Anim_SetSpriteDescriptorAttributes
     TYA                         ; Save the loop index.
     PHA
@@ -556,7 +556,7 @@ Digdogger_Draw:
     AND #$01
     STA $0F
     LDA #$00                    ; Frame image 0: the big body has a single image.
-    JSR DrawObjectNotMirrored
+    JSR Anim_DrawObjectNotMirrored
     PLA                         ; Restore the loop index.
     TAY
 
@@ -571,4 +571,4 @@ Digdogger_Draw:
     ; Small Digdogger: one mirrored image in the level's palette row, frame from ObjAnimFrame.
     JSR Anim_SetSpriteDescriptorLevelPaletteRow
     LDA ObjAnimFrame, X
-    JMP DrawObjectMirrored
+    JMP Anim_DrawObjectMirrored

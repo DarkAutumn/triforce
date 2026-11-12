@@ -1,51 +1,51 @@
 ; ============================================================================
 ; FILE:     bank4/walker-wanderer-common.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 184-432
-; SUBJECTS: Unused, Wanderer
+; SUBJECTS: MonsterShot, Sample, StandingFire, Unused, Walker, Wanderer
 ; TOPIC:    Boss hit and death cries; init of monster shots (q-speed) and of walking monsters (first
 ;           facing direction); standing fire update; the wanderer AI shared by most walking monsters
 ;           (move one grid square at a time, turn toward the chase target or perpendicular to it).
-; SEE ALSO: bank4/goriya.asm (L_Walker_SetInputDirAndTryShootingBoomerang, where the wanderer ends);
-;           bank7/walker-move.asm (Walker_Move, MoveObject); bank7/shove.asm (Obj_Shove);
-;           bank7/object-init-table.asm (which types use InitWalker and InitMonsterShot);
-;           bank4/drop-items.asm (PlayBossDeathCry); bank4/monster-shots-fireballs.asm (shot updates);
+; SEE ALSO: bank4/goriya.asm (Walker_SetInputDirAndTryThrowBoomerang, where the wanderer ends);
+;           bank7/walker-move.asm (Walker_Move, Obj_MoveByQSpeed); bank7/shove.asm (Shove_Update);
+;           bank7/object-init-table.asm (which types use Walker_Init and MonsterShot_Init);
+;           bank4/drop-items.asm (Sample_PlayBossDeathCry); bank4/monster-shots-fireballs.asm (shot updates);
 ;           bank7/mode5-play-update.asm (how ChaseTargetX/Y are chosen).
 ; KEY FACTS:
 ;   - A wanderer decides only on a grid point (ObjGridOffset a multiple of $10 pixels) and only when
-;     its q-speed is not 0; between points it keeps walking in ObjDir. Wanderer_TargetPlayer
+;     its q-speed is not 0; between points it keeps walking in ObjDir. Wanderer_MoveAndTurn
 ;   - On a grid point it homes on the chase target when turn rate >= Random+1,X (chance about
 ;     (rate+1)/256; rate $FF always) and the target is within 8 pixels on one axis; it then faces the
-;     target along the other axis. Wanderer_TargetPlayer@TurnVertically, @TurnHorizontally
+;     target along the other axis. Wanderer_MoveAndTurn@TurnVertically, @TurnHorizontally
 ;   - Otherwise it turns only when Wanderer_ObjTurnTimer is 0, and then perpendicular to its facing,
 ;     toward the chase target. Every turn reloads the timer from Random,X (0-$FF frames).
-;     Wanderer_TargetPlayer@TurnIfTime, @SetDirTowardTarget
+;     Wanderer_MoveAndTurn@TurnIfTime, @SetDirTowardTarget
 ;   - Every turn sets Shooter_ObjWantsToShoot to 1; a grid point without a turn clears it.
-;     Wanderer_TargetPlayer@SetDirTowardTarget, @TurnIfTime
+;     Wanderer_MoveAndTurn@SetDirTowardTarget, @TurnIfTime
 ;   - The target is ChaseTargetX/Y, not Link's position: wanderers follow the decoy point or the food
-;     when the chase target is one of those. Wanderer_TargetPlayer
+;     when the chase target is one of those. Wanderer_MoveAndTurn
 ;   - With the clock (InvClock) or while stunned a wanderer does nothing at all, and its turn timer
-;     does not run. UpdateCommonWanderer
+;     does not run. Wanderer_Update
 ;   - A new walker faces vertically toward the chase target, unless the vertical difference (as an
-;     unsigned byte) is >= the horizontal one: then it faces horizontally AWAY from it. InitWalker
+;     unsigned byte) is >= the horizontal one: then it faces horizontally AWAY from it. Walker_Init
 ;   - Monster shots start at q-speed $C0 (3 pixels a frame); type $54 at $E0 (3.5). The type $54
-;     init runs for any type $54 object (InitObject_JumpTable), but no instruction in the program
-;     loads $54 as an object type to create. InitMonsterShot, _InitMonsterShot_Unknown54
+;     init runs for any type $54 object (Obj_Init_JumpTable), but no instruction in the program
+;     loads $54 as an object type to create. MonsterShot_Init, MonsterShot_InitType54
 ;   - The boss hit cry (sample $02) starts when the boss's invincibility timer is exactly $10, the
-;     value a hit sets. PlayBossHitCryIfNeeded
+;     value a hit sets. Sample_PlayBossHitCryIfHit
 ;   - Standing fire (type $40) only tests contact with Link; it never looks at Link's weapons.
-;     UpdateStandingFire
+;     StandingFire_Update
 ; CONTENTS: (generated; L = line in this file)
-;   L0057 PlayBossHitCryIfNeeded      code  Starts the boss cry sample on the frame a boss has just been hit.
-;   L0070 PlayBossDeathCryIfNeeded    code  Plays the boss death cry when the object is dying (ObjMetastate <> 0).
-;   L0082 InitMonsterShot             code  Init for monster shot types $53 and $55-$5A: q-speed $C0, and the shot updates at once.
-;   L0090 _InitMonsterShot_Unknown54  code  Init for shot type $54: as InitMonsterShot, but q-speed $E0 (3.5 pixels a frame).
-;   L0097 Unused_10021                code  Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into InitWalker.
-;   L0112 InitWalker                  code  Init for walking monsters: chooses the first facing direction, unless one is already set.
-;   L0159 UpdateStandingFire          code  Standing fire (type $40): hurts Link on contact, animates and draws the flame.
-;   L0184 UpdateCommonWanderer        code  Wanderer update: knockback if shoved; nothing with the clock or while stunned; else move and turn.
-;   L0198 Unused_10082                code  Dead code (nothing refers to it): a wanderer entry with turn rate $70 for type $05, else $A0.
-;   L0223 Wanderer_TargetPlayer       code  Moves a wanderer one frame and, on a grid point, chooses its next facing direction.
-;   L0234 Wanderer_Return             code  Shared exit of the wanderer routines above and below.
+;   L0057 Sample_PlayBossHitCryIfHit         code  Starts the boss cry sample on the frame a boss has just been hit.
+;   L0070 Sample_PlayBossDeathCryIfDying     code  Plays the boss death cry when the object is dying (ObjMetastate <> 0).
+;   L0082 MonsterShot_Init                   code  Init for monster shot types $53 and $55-$5A: q-speed $C0, and the shot updates at once.
+;   L0090 MonsterShot_InitType54             code  Init for shot type $54: as MonsterShot_Init, but q-speed $E0 (3.5 pixels a frame).
+;   L0097 Unused_Walker_InitWithTimer80      code  Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into Walker_Init.
+;   L0112 Walker_Init                        code  Init for walking monsters: chooses the first facing direction, unless one is already set.
+;   L0159 StandingFire_Update                code  Standing fire (type $40): hurts Link on contact, animates and draws the flame.
+;   L0184 Wanderer_Update                    code  Wanderer update: knockback if shoved; nothing with the clock or while stunned; else move and turn.
+;   L0198 Unused_Wanderer_SetTurnRateByType  code  Dead code (nothing refers to it): a wanderer entry with turn rate $70 for type $05, else $A0.
+;   L0223 Wanderer_MoveAndTurn               code  Moves a wanderer one frame and, on a grid point, chooses its next facing direction.
+;   L0234 Wanderer_Return                    code  Shared exit of the wanderer routines above and below.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -54,7 +54,7 @@
 ; NOTE: A hit sets a monster's ObjInvincibilityTimer to $10 (it then drops by 1 every second frame);
 ;       the test is for exactly $10. SampleRequest $02 is the boss cry.
 ; ----------------------------------------------------------------------------
-PlayBossHitCryIfNeeded:
+Sample_PlayBossHitCryIfHit:
     LDA ObjInvincibilityTimer, X
     CMP #$10
     BNE :+
@@ -67,10 +67,10 @@ PlayBossHitCryIfNeeded:
 ; Plays the boss death cry when the object is dying (ObjMetastate <> 0).
 ; IN:   X = object slot
 ; ----------------------------------------------------------------------------
-PlayBossDeathCryIfNeeded:
+Sample_PlayBossDeathCryIfDying:
     LDA ObjMetastate, X
     BEQ :-                      ; Not dying: return through the RTS above.
-    JMP PlayBossDeathCry
+    JMP Sample_PlayBossDeathCry
 
 ; ----------------------------------------------------------------------------
 ; Init for monster shot types $53 and $55-$5A: q-speed $C0, and the shot updates at once.
@@ -79,22 +79,22 @@ PlayBossDeathCryIfNeeded:
 ; NOTE: Fireballs ($55, $56) replace this q-speed with their own per-axis speeds when they move
 ;       (Fireball_MoveOneAxis).
 ; ----------------------------------------------------------------------------
-InitMonsterShot:
+MonsterShot_Init:
     LDA #$C0                    ; Q-speed $C0 (3 pixels a frame)
     BNE :+                      ; Always taken.
 
-; Init for shot type $54: as InitMonsterShot, but q-speed $E0 (3.5 pixels a frame).
-; It is live code: the InitObject_JumpTable entry of type $54 points here, and that type's update
-; is UpdateMonsterShot. No instruction loads the immediate $54 as a type to create; whether a
+; Init for shot type $54: as MonsterShot_Init, but q-speed $E0 (3.5 pixels a frame).
+; It is live code: the Obj_Init_JumpTable entry of type $54 points here, and that type's update
+; is MonsterShot_Update. No instruction loads the immediate $54 as a type to create; whether a
 ; computed type or room data can produce it is (unverified).
-_InitMonsterShot_Unknown54:
+MonsterShot_InitType54:
     LDA #$E0                    ; Q-speed $E0 (3.5 pixels a frame)
 :
     STA ObjQSpeedFrac, X
-    JMP ResetObjMetastate
+    JMP Obj_ResetMetastate
 
-; Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into InitWalker.
-Unused_10021:
+; Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into Walker_Init.
+Unused_Walker_InitWithTimer80:
     LDA #$80
     STA ObjTimer, X
 
@@ -109,7 +109,7 @@ Unused_10021:
 ;       Init routine of types $01-$06, $12-$14, $16, $17, $2A, $30, and the tail of several other
 ;       inits (Darknut, Rope, Bubble, Gel $15, Octoroks, Leevers, Ghini).
 ; ----------------------------------------------------------------------------
-InitWalker:
+Walker_Init:
     ; If the facing direction was already set, then return.
     LDA ObjDir, X
     BNE @Exit
@@ -154,15 +154,15 @@ InitWalker:
 ; ----------------------------------------------------------------------------
 ; Standing fire (type $40): hurts Link on contact, animates and draws the flame.
 ; IN:   X = object slot
-; NOTE: Only CheckLinkCollision is called: Link's weapons are never tested against it.
+; NOTE: Only Link_CheckMonsterTouch is called: Link's weapons are never tested against it.
 ; ----------------------------------------------------------------------------
-UpdateStandingFire:
-    JSR CheckLinkCollision
+StandingFire_Update:
+    JSR Link_CheckMonsterTouch
     LDA #$02                    ; Sprite attributes: sprite palette 2 (palette row 6), no flipping
     JSR Anim_SetSpriteDescriptorAttributes
     LDA #$08                    ; Face up, so that the walking animation flips the image each 6 frames.
     STA ObjDir, X
-    JSR AnimateObjectWalking
+    JSR Anim_AnimateObjWalking
 
     ; A type other than $40 would never be flipped horizontally ([0F] = 0). The branch below is
     ; always taken, because only type $40 has this update routine.
@@ -173,7 +173,7 @@ UpdateStandingFire:
     STA $0F
 :
     LDA #$00                    ; Frame image 0
-    JMP DrawObjectNotMirrored
+    JMP Anim_DrawObjectNotMirrored
 
 ; ----------------------------------------------------------------------------
 ; Wanderer update: knockback if shoved; nothing with the clock or while stunned; else move and turn.
@@ -181,21 +181,21 @@ UpdateStandingFire:
 ; OUT:  Wanderer_ObjTurnRate,X = A
 ; NOTE: Callers pass $40 (Bubble), $80 (Stalfos, Gibdo, Darknut, Like-Like, Vire), $FF (Ghini).
 ; ----------------------------------------------------------------------------
-UpdateCommonWanderer:
+Wanderer_Update:
     STA Wanderer_ObjTurnRate, X
     LDA ObjShoveDir, X
     BEQ :+
-    JMP Obj_Shove
+    JMP Shove_Update
 :
     ; If Link has the clock or the monster is stunned, then return.
     LDA InvClock
     ORA ObjStunTimer, X
     BNE Wanderer_Return
-    JMP Wanderer_TargetPlayer
+    JMP Wanderer_MoveAndTurn
 
 ; Dead code (nothing refers to it): a wanderer entry with turn rate $70 for type $05, else $A0.
-; Returns if ObjState bit 7 is set, else falls into Wanderer_TargetPlayer.
-Unused_10082:
+; Returns if ObjState bit 7 is set, else falls into Wanderer_MoveAndTurn.
+Unused_Wanderer_SetTurnRateByType:
     LDA #$70
     LDY ObjType, X
     CPY #$05
@@ -218,9 +218,9 @@ Unused_10082:
 ;       2. Otherwise, when the turn timer is 0, turn perpendicular to the facing direction, toward
 ;          the chase target.
 ;       Either turn sets the turn timer to Random,X frames and "wants to shoot" to 1; no turn
-;       clears "wants to shoot". Ends in L_Walker_SetInputDirAndTryShootingBoomerang.
+;       clears "wants to shoot". Ends in Walker_SetInputDirAndTryThrowBoomerang.
 ; ----------------------------------------------------------------------------
-Wanderer_TargetPlayer:
+Wanderer_MoveAndTurn:
     ; If turn timer <> 0, then decrement it.
     LDA Wanderer_ObjTurnTimer, X
     BEQ :+
@@ -315,7 +315,7 @@ Wanderer_Return:
     STA Shooter_ObjWantsToShoot, X
 
     ; Go set input direction to facing direction.
-    JMP L_Walker_SetInputDirAndTryShootingBoomerang
+    JMP Walker_SetInputDirAndTryThrowBoomerang
 
 @TurnIfTime:
     ; Reset "wants to shoot" flag.
@@ -334,4 +334,4 @@ Wanderer_Return:
     BEQ @TurnVertically
 
 @SetInputDir:
-    JMP L_Walker_SetInputDirAndTryShootingBoomerang
+    JMP Walker_SetInputDirAndTryThrowBoomerang

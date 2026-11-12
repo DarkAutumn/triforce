@@ -1,7 +1,7 @@
 # Level info
 
 How to read this: one section per level (`0` = overworld) and quest, decoded from the level info blocks
-([`LevelInfoAddrs`](../src/bank6/level-load-mode2.asm#L71)) with the second-quest tables applied for Q2 ([`UpdateMode2Load_Full`](../src/bank6/level-load-mode2.asm#L297)). Every line starts with the RAM symbol of the field;
+([`Level_InfoAddrs`](../src/bank6/level-load-mode2.asm#L71)) with the second-quest tables applied for Q2 ([`Mode2Load_Update_Full`](../src/bank6/level-load-mode2.asm#L297)). Every line starts with the RAM symbol of the field;
 the field formats are in `README.md`. A position is written X,Y. The overworld block is the same in
 both quests. Palettes and transfer records are given as raw bytes.
 
@@ -35,13 +35,13 @@ Q2     9      LEVEL-9   $74    $07       $17   $DD     $077F  $71,$72,$75,$76,$7
 ```
 
 - `level`: the internal level number ([`CurLevel`](../src/Variables.inc#L12)), which selects the block; `shown as`: the number drawn on
-  screen ([`LevelInfo_LevelNumber`](../src/Variables.inc#L672)). They differ for some levels in Q2. [`InitMode3_Sub7`](../src/bank5/mode3-mode6-init.asm#L114)
-- `start`, `Triforce`, `boss`: room ids ([`LevelInfo_StartRoomId`](../src/Variables.inc#L669), [`LevelInfo_TriforceRoomId`](../src/Variables.inc#L670), [`LevelInfo_BossRoomId`](../src/Variables.inc#L675)). In the overworld only the start room is read.
-- `cellars`: cellar rooms of the level; for the overworld, the four rooms the shortcut cave joins. [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L673)
+  screen ([`LevelInfo_LevelNumber`](../src/Variables.inc#L724)). They differ for some levels in Q2. [`Mode3Unfurl_Init_Sub7_CueLevelNumber`](../src/bank5/mode3-mode6-init.asm#L114)
+- `start`, `Triforce`, `boss`: room ids ([`LevelInfo_StartRoomId`](../src/Variables.inc#L721), [`LevelInfo_TriforceRoomId`](../src/Variables.inc#L722), [`LevelInfo_BossRoomId`](../src/Variables.inc#L727)). In the overworld only the start room is read.
+- `cellars`: cellar rooms of the level; for the overworld, the four rooms the shortcut cave joins. [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L725)
 
 # Overworld (level 0), Q1
 
-Block [`LevelInfoOW`](../src/bank6/level-blocks-common-data.asm#L86) (`dat/LevelInfoOW.dat`).
+Block [`Level_InfoOW`](../src/bank6/level-blocks-common-data.asm#L86) (`dat/LevelInfoOW.dat`).
 
 ```
 field                                     value
@@ -91,7 +91,7 @@ LevelInfo_DeathPaletteSeries step 3       $0F $0F $0F $0F $0F $0F $0F $0F
 
 # Level 1, Q1 (shown as LEVEL-1)
 
-Block [`LevelInfoUW1`](../src/bank6/level-blocks-common-data.asm#L90) (`dat/LevelInfoUW1.dat`).
+Block [`Level_InfoUW1`](../src/bank6/level-blocks-common-data.asm#L90) (`dat/LevelInfoUW1.dat`).
 
 ```
 field                                     value
@@ -155,7 +155,7 @@ $70  . . # S # . . . . . . . . . . .
 
 # Level 2, Q1 (shown as LEVEL-2)
 
-Block [`LevelInfoUW2`](../src/bank6/level-blocks-common-data.asm#L94) (`dat/LevelInfoUW2.dat`).
+Block [`Level_InfoUW2`](../src/bank6/level-blocks-common-data.asm#L94) (`dat/LevelInfoUW2.dat`).
 
 ```
 field                                     value
@@ -220,7 +220,7 @@ $70  . . . . . . . . . . . . . S # .
 
 # Level 3, Q1 (shown as LEVEL-3)
 
-Block [`LevelInfoUW3`](../src/bank6/level-blocks-common-data.asm#L98) (`dat/LevelInfoUW3.dat`).
+Block [`Level_InfoUW3`](../src/bank6/level-blocks-common-data.asm#L98) (`dat/LevelInfoUW3.dat`).
 
 ```
 field                                     value
@@ -284,7 +284,7 @@ $70  . . . . . . . . . . . # S . . .
 
 # Level 4, Q1 (shown as LEVEL-4)
 
-Block [`LevelInfoUW4`](../src/bank6/level-blocks-common-data.asm#L102) (`dat/LevelInfoUW4.dat`).
+Block [`Level_InfoUW4`](../src/bank6/level-blocks-common-data.asm#L102) (`dat/LevelInfoUW4.dat`).
 
 ```
 field                                     value
@@ -349,7 +349,7 @@ $70  # S . . . . . . . . . . . . . .
 
 # Level 5, Q1 (shown as LEVEL-5)
 
-Block [`LevelInfoUW5`](../src/bank6/level-blocks-common-data.asm#L106) (`dat/LevelInfoUW5.dat`).
+Block [`Level_InfoUW5`](../src/bank6/level-blocks-common-data.asm#L106) (`dat/LevelInfoUW5.dat`).
 
 ```
 field                                     value
@@ -414,7 +414,7 @@ $70  . . . . . . S # . . . . . . . .
 
 # Level 6, Q1 (shown as LEVEL-6)
 
-Block [`LevelInfoUW6`](../src/bank6/level-blocks-common-data.asm#L110) (`dat/LevelInfoUW6.dat`).
+Block [`Level_InfoUW6`](../src/bank6/level-blocks-common-data.asm#L110) (`dat/LevelInfoUW6.dat`).
 
 ```
 field                                     value
@@ -479,7 +479,7 @@ $70  . . . . . . . . # S # . . . . .
 
 # Level 7, Q1 (shown as LEVEL-7)
 
-Block [`LevelInfoUW7`](../src/bank6/level-blocks-common-data.asm#L114) (`dat/LevelInfoUW7.dat`).
+Block [`Level_InfoUW7`](../src/bank6/level-blocks-common-data.asm#L114) (`dat/LevelInfoUW7.dat`).
 
 ```
 field                                     value
@@ -544,7 +544,7 @@ $70  . . . . . . . . # S # . . . . .
 
 # Level 8, Q1 (shown as LEVEL-8)
 
-Block [`LevelInfoUW8`](../src/bank6/level-blocks-common-data.asm#L118) (`dat/LevelInfoUW8.dat`).
+Block [`Level_InfoUW8`](../src/bank6/level-blocks-common-data.asm#L118) (`dat/LevelInfoUW8.dat`).
 
 ```
 field                                     value
@@ -609,7 +609,7 @@ $70  . . . . . . . . . . . . # # S #
 
 # Level 9, Q1 (shown as LEVEL-9)
 
-Block [`LevelInfoUW9`](../src/bank6/level-blocks-common-data.asm#L122) (`dat/LevelInfoUW9.dat`).
+Block [`Level_InfoUW9`](../src/bank6/level-blocks-common-data.asm#L122) (`dat/LevelInfoUW9.dat`).
 
 ```
 field                                     value
@@ -674,7 +674,7 @@ $70  . # . # # . S . . . . . . . . .
 
 # Level 1, Q2 (shown as LEVEL-1)
 
-Block [`LevelInfoUW1`](../src/bank6/level-blocks-common-data.asm#L90) (`dat/LevelInfoUW1.dat`) patched with [`LevelInfoUWQ2Replacements1`](../src/bank6/quest2-replacements.asm#L84).
+Block [`Level_InfoUW1`](../src/bank6/level-blocks-common-data.asm#L90) (`dat/LevelInfoUW1.dat`) patched with [`Quest_Q2LevelInfoPatch1`](../src/bank6/quest2-replacements.asm#L84).
 
 ```
 field                                     value
@@ -739,7 +739,7 @@ $70  . . . . . . . S # . . . . . . .
 
 # Level 2, Q2 (shown as LEVEL-3)
 
-Block [`LevelInfoUW2`](../src/bank6/level-blocks-common-data.asm#L94) (`dat/LevelInfoUW2.dat`) patched with [`LevelInfoUWQ2Replacements2`](../src/bank6/quest2-replacements.asm#L96).
+Block [`Level_InfoUW2`](../src/bank6/level-blocks-common-data.asm#L94) (`dat/LevelInfoUW2.dat`) patched with [`Quest_Q2LevelInfoPatch2`](../src/bank6/quest2-replacements.asm#L96).
 
 ```
 field                                     value
@@ -804,7 +804,7 @@ $70  . . . . . S # . . . . . . . . .
 
 # Level 3, Q2 (shown as LEVEL-2)
 
-Block [`LevelInfoUW3`](../src/bank6/level-blocks-common-data.asm#L98) (`dat/LevelInfoUW3.dat`) patched with [`LevelInfoUWQ2Replacements3`](../src/bank6/quest2-replacements.asm#L107).
+Block [`Level_InfoUW3`](../src/bank6/level-blocks-common-data.asm#L98) (`dat/LevelInfoUW3.dat`) patched with [`Quest_Q2LevelInfoPatch3`](../src/bank6/quest2-replacements.asm#L107).
 
 ```
 field                                     value
@@ -869,7 +869,7 @@ $70  . . . . . . . . . S . # . . . .
 
 # Level 4, Q2 (shown as LEVEL-5)
 
-Block [`LevelInfoUW4`](../src/bank6/level-blocks-common-data.asm#L102) (`dat/LevelInfoUW4.dat`) patched with [`LevelInfoUWQ2Replacements4`](../src/bank6/quest2-replacements.asm#L119).
+Block [`Level_InfoUW4`](../src/bank6/level-blocks-common-data.asm#L102) (`dat/LevelInfoUW4.dat`) patched with [`Quest_Q2LevelInfoPatch4`](../src/bank6/quest2-replacements.asm#L119).
 
 ```
 field                                     value
@@ -934,7 +934,7 @@ $70  # # S . . . . . . . . . . . . .
 
 # Level 5, Q2 (shown as LEVEL-4)
 
-Block [`LevelInfoUW5`](../src/bank6/level-blocks-common-data.asm#L106) (`dat/LevelInfoUW5.dat`) patched with [`LevelInfoUWQ2Replacements5`](../src/bank6/quest2-replacements.asm#L131).
+Block [`Level_InfoUW5`](../src/bank6/level-blocks-common-data.asm#L106) (`dat/LevelInfoUW5.dat`) patched with [`Quest_Q2LevelInfoPatch5`](../src/bank6/quest2-replacements.asm#L131).
 
 ```
 field                                     value
@@ -999,7 +999,7 @@ $70  . . . . . . . . . . . . # S # .
 
 # Level 6, Q2 (shown as LEVEL-6)
 
-Block [`LevelInfoUW6`](../src/bank6/level-blocks-common-data.asm#L110) (`dat/LevelInfoUW6.dat`) patched with [`LevelInfoUWQ2Replacements6`](../src/bank6/quest2-replacements.asm#L145).
+Block [`Level_InfoUW6`](../src/bank6/level-blocks-common-data.asm#L110) (`dat/LevelInfoUW6.dat`) patched with [`Quest_Q2LevelInfoPatch6`](../src/bank6/quest2-replacements.asm#L145).
 
 ```
 field                                     value
@@ -1065,7 +1065,7 @@ $70  . . . . S . . . . . . . . . . .
 
 # Level 7, Q2 (shown as LEVEL-8)
 
-Block [`LevelInfoUW7`](../src/bank6/level-blocks-common-data.asm#L114) (`dat/LevelInfoUW7.dat`) patched with [`LevelInfoUWQ2Replacements7`](../src/bank6/quest2-replacements.asm#L158).
+Block [`Level_InfoUW7`](../src/bank6/level-blocks-common-data.asm#L114) (`dat/LevelInfoUW7.dat`) patched with [`Quest_Q2LevelInfoPatch7`](../src/bank6/quest2-replacements.asm#L158).
 
 ```
 field                                     value
@@ -1132,7 +1132,7 @@ $70  . . . . . . . . . . . . . . . S
 
 # Level 8, Q2 (shown as LEVEL-7)
 
-Block [`LevelInfoUW8`](../src/bank6/level-blocks-common-data.asm#L118) (`dat/LevelInfoUW8.dat`) patched with [`LevelInfoUWQ2Replacements8`](../src/bank6/quest2-replacements.asm#L170).
+Block [`Level_InfoUW8`](../src/bank6/level-blocks-common-data.asm#L118) (`dat/LevelInfoUW8.dat`) patched with [`Quest_Q2LevelInfoPatch8`](../src/bank6/quest2-replacements.asm#L170).
 
 ```
 field                                     value
@@ -1199,7 +1199,7 @@ $70  . . . . . . . . # S # # # # # .
 
 # Level 9, Q2 (shown as LEVEL-9)
 
-Block [`LevelInfoUW9`](../src/bank6/level-blocks-common-data.asm#L122) (`dat/LevelInfoUW9.dat`) patched with [`LevelInfoUWQ2Replacements9`](../src/bank6/quest2-replacements.asm#L183).
+Block [`Level_InfoUW9`](../src/bank6/level-blocks-common-data.asm#L122) (`dat/LevelInfoUW9.dat`) patched with [`Quest_Q2LevelInfoPatch9`](../src/bank6/quest2-replacements.asm#L183).
 
 ```
 field                                     value

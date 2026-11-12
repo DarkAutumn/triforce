@@ -1,58 +1,58 @@
 ; ============================================================================
 ; FILE:     bank2/common-patterns.asm    BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 55-178
-; SUBJECTS: (none)
+; SUBJECTS: Chr
 ; TOPIC:    The three CHR pattern blocks every part of the game shares (sprites, background, misc) and
 ;           the routine that copies them to the PPU pattern tables once after power-on.
-; SEE ALSO: bank7/init-mode-dispatch.asm (InitMode0 calls TransferCommonPatterns while HasCommonPatterns
+; SEE ALSO: bank7/init-mode-dispatch.asm (Mode0Demo_InitPatternsOrDemo calls Chr_TransferCommonPatterns while HasCommonPatterns
 ;           is not $5A); bank1/copy-code-demo-patterns.asm (the demo pattern transfer that follows);
 ;           bank3/level-pattern-blocks.asm (per-level patterns and the bank 3 copy of the block transfer).
 ; KEY FACTS:
 ;   - Three blocks are sent in one call: $0700 bytes to PPU $0000 (sprites), $0700 bytes to $1000
-;     (background), $00E0 bytes to $1F20 (misc). CommonPatternBlockAddrs, CommonPatternBlockSizes,
-;     CommonPatternVramAddrs, TransferCommonPatterns.
-;   - TransferCommonPatterns sets HasCommonPatterns = $5A when done, so mode 0 init does it only once
+;     (background), $00E0 bytes to $1F20 (misc). Chr_CommonPatternBlockAddrs, Chr_CommonPatternBlockSizes,
+;     Chr_CommonPatternPpuAddrs, Chr_TransferCommonPatterns.
+;   - Chr_TransferCommonPatterns sets HasCommonPatterns = $5A when done, so mode 0 init does it only once
 ;     per power-on, and leaves PatternBlockIndex = 0.
 ;   - Sizes and PPU addresses are stored high byte first (.DBYT); block addresses low byte first.
-;   - TransferPatternBlock_Bank2 copies one byte per loop pass with rendering off and increments
+;   - Chr_TransferPatternBlock_Bank2 copies one byte per loop pass with rendering off and increments
 ;     PatternBlockIndex at the end.
-;   - The $FF bytes after CommonMiscPatterns are padding (161 bytes), never read.
+;   - The $FF bytes after Chr_CommonMiscPatterns are padding (161 bytes), never read.
 ; CONTENTS: (generated; L = line in this file)
-;   L0032 CommonPatternBlockAddrs     data  TABLE: CPU address of each common pattern block; index = PatternBlockIndex (0-2).
-;   L0038 CommonPatternBlockSizes     data  TABLE: size in bytes of each common pattern block, high byte first; index = PatternBlockIndex.
-;   L0044 CommonPatternVramAddrs      data  TABLE: PPU pattern-table address each common block is written to, high byte first; index as above.
-;   L0054 TransferCommonPatterns      code  Copies the three common pattern blocks to the PPU with video off and sets HasCommonPatterns = $5A.
-;   L0096 TransferPatternBlock_Bank2  code  Writes one pattern block to PPU memory and increments PatternBlockIndex.
-;   L0134 CommonSpritePatterns        data  DATA: common sprite patterns, $0700 bytes of CHR tiles for PPU $0000 (112 tiles of 16 bytes).
-;   L0138 CommonBackgroundPatterns    data  DATA: common background patterns, $0700 bytes of CHR tiles for PPU $1000.
-;   L0142 CommonMiscPatterns          data  DATA: common misc patterns, $00E0 bytes of CHR tiles for PPU $1F20 (background tiles $F2-$FF).
+;   L0032 Chr_CommonPatternBlockAddrs     data  TABLE: CPU address of each common pattern block; index = PatternBlockIndex (0-2).
+;   L0038 Chr_CommonPatternBlockSizes     data  TABLE: size in bytes of each common pattern block, high byte first; index = PatternBlockIndex.
+;   L0044 Chr_CommonPatternPpuAddrs       data  TABLE: PPU pattern-table address each common block is written to, high byte first; index as above.
+;   L0054 Chr_TransferCommonPatterns      code  Copies the three common pattern blocks to the PPU with video off and sets HasCommonPatterns = $5A.
+;   L0096 Chr_TransferPatternBlock_Bank2  code  Writes one pattern block to PPU memory and increments PatternBlockIndex.
+;   L0134 Chr_CommonSpritePatterns        data  DATA: common sprite patterns, $0700 bytes of CHR tiles for PPU $0000 (112 tiles of 16 bytes).
+;   L0138 Chr_CommonBackgroundPatterns    data  DATA: common background patterns, $0700 bytes of CHR tiles for PPU $1000.
+;   L0142 Chr_CommonMiscPatterns          data  DATA: common misc patterns, $00E0 bytes of CHR tiles for PPU $1F20 (background tiles $F2-$FF).
 ; ============================================================================
 
 ; TABLE: CPU address of each common pattern block; index = PatternBlockIndex (0-2).
-CommonPatternBlockAddrs:
-    .ADDR CommonSpritePatterns
-    .ADDR CommonBackgroundPatterns
-    .ADDR CommonMiscPatterns
+Chr_CommonPatternBlockAddrs:
+    .ADDR Chr_CommonSpritePatterns
+    .ADDR Chr_CommonBackgroundPatterns
+    .ADDR Chr_CommonMiscPatterns
 
 ; TABLE: size in bytes of each common pattern block, high byte first; index = PatternBlockIndex.
-CommonPatternBlockSizes:
+Chr_CommonPatternBlockSizes:
     .DBYT $0700
     .DBYT $0700
     .DBYT $00E0
 
 ; TABLE: PPU pattern-table address each common block is written to, high byte first; index as above.
-CommonPatternVramAddrs:
+Chr_CommonPatternPpuAddrs:
     .DBYT $0000
     .DBYT $1000
     .DBYT $1F20
 
 ; ----------------------------------------------------------------------------
 ; Copies the three common pattern blocks to the PPU with video off and sets HasCommonPatterns = $5A.
-; IN:   PatternBlockIndex = first block to send (0 on entry from InitMode0).
+; IN:   PatternBlockIndex = first block to send (0 on entry from Mode0Demo_InitPatternsOrDemo).
 ; OUT:  PatternBlockIndex = 0; HasCommonPatterns = $5A.
 ; ----------------------------------------------------------------------------
-TransferCommonPatterns:
-    JSR TurnOffAllVideo
+Chr_TransferCommonPatterns:
+    JSR Ppu_TurnOffAllVideo
     LDA PpuStatus          ; Clear address latch and scroll.
 
 @LoopBlock:
@@ -63,19 +63,19 @@ TransferCommonPatterns:
     ; Put block address in [00:01] and size in [03:02].
     ; Load destination VRAM address and set it.
     ; The size and VRAM address have the high byte first.
-    LDA CommonPatternBlockAddrs, X
+    LDA Chr_CommonPatternBlockAddrs, X
     STA $00
-    LDA CommonPatternBlockSizes, X
+    LDA Chr_CommonPatternBlockSizes, X
     STA $02
-    LDA CommonPatternVramAddrs, X
+    LDA Chr_CommonPatternPpuAddrs, X
     STA PpuAddr
     INX
-    LDA CommonPatternBlockAddrs, X
+    LDA Chr_CommonPatternBlockAddrs, X
     STA $01
-    LDA CommonPatternBlockSizes, X
+    LDA Chr_CommonPatternBlockSizes, X
     STA $03
-    LDA CommonPatternVramAddrs, X
-    JSR TransferPatternBlock_Bank2
+    LDA Chr_CommonPatternPpuAddrs, X
+    JSR Chr_TransferPatternBlock_Bank2
 
     ; Loop until pattern block index = 3.
     LDA PatternBlockIndex
@@ -93,7 +93,7 @@ TransferCommonPatterns:
 ;       A = low byte of the destination PPU address (the high byte was already written to PpuAddr).
 ; OUT:  [00:01] = address after the block; [02], [03] = 0; PatternBlockIndex incremented.
 ; ----------------------------------------------------------------------------
-TransferPatternBlock_Bank2:
+Chr_TransferPatternBlock_Bank2:
     STA PpuAddr
     LDY #$00
 
@@ -131,15 +131,15 @@ TransferPatternBlock_Bank2:
     RTS
 
 ; DATA: common sprite patterns, $0700 bytes of CHR tiles for PPU $0000 (112 tiles of 16 bytes).
-CommonSpritePatterns:
+Chr_CommonSpritePatterns:
     .INCBIN "dat/CommonSpritePatterns.dat"
 
 ; DATA: common background patterns, $0700 bytes of CHR tiles for PPU $1000.
-CommonBackgroundPatterns:
+Chr_CommonBackgroundPatterns:
     .INCBIN "dat/CommonBackgroundPatterns.dat"
 
 ; DATA: common misc patterns, $00E0 bytes of CHR tiles for PPU $1F20 (background tiles $F2-$FF).
-CommonMiscPatterns:
+Chr_CommonMiscPatterns:
     .INCBIN "dat/CommonMiscPatterns.dat"
 
 ; Padding: 161 bytes of $FF, not referenced by any code.

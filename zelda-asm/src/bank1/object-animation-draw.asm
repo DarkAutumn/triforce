@@ -1,61 +1,61 @@
 ; ============================================================================
 ; FILE:     bank1/object-animation-draw.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 4937-5245
-; SUBJECTS: Anim
+; SUBJECTS: Anim, Sprite
 ; TOPIC:    How Link and room objects become sprites: the per-type animation tables (first frame offset,
 ;           tile and attributes of each frame), the rolling sprite record order, and the DrawObject
 ;           routines that write one or two 8x16 sprites with flipping, mirroring and the hit flash.
 ; SEE ALSO: bank1/item-sprite-draw.asm (item and weapon sprites; Anim_WriteMirroredSpritePair,
-;           Anim_SetSpriteDescriptorAttributes); bank7/object-animation.asm (AnimateObjectWalking picks
+;           Anim_SetSpriteDescriptorAttributes); bank7/object-animation.asm (Anim_AnimateObjWalking picks
 ;           the frame; Anim_FetchObjPosForSpriteDescriptor sets [00], [01], [0F]);
-;           bank1/modeb-cave-save-sprites.asm (CycleCurSpriteIndex, HideObjectSprites);
+;           bank1/modeb-cave-save-sprites.asm (Sprite_CycleCurIndex, Sprite_HideObjectSprites);
 ;           bank7/link-animate-ladder.asm (Link's draw call); bank7/mode5-play-update.asm (the object
-;           loop that calls AnimateAndDrawObjectWalking); bank4/push-block.asm
-;           (DrawObjectMirroredOverLink: sprite records $10 and $11).
+;           loop that calls Anim_AnimateAndDrawObjectWalking); bank4/push-block.asm
+;           (Sprite_DrawObjMirroredOverLink: sprite records $10 and $11).
 ; KEY FACTS:
-;   - Animation index = object type + 1; index 0 is Link. ObjAnimations[index] + frame indexes both
-;     ObjAnimFrameHeap (tile) and ObjAnimAttrHeap (attributes). DrawObjectWithType, DrawObjectWithAnim
+;   - Animation index = object type + 1; index 0 is Link. Anim_ObjFrameOffsets[index] + frame indexes both
+;     Anim_ObjFrameTiles (tile) and Anim_ObjFrameAttrs (attributes). Anim_DrawObjectWithType, Anim_DrawObjectWithAnim
 ;   - An object is two 8x16 sprites 8 pixels apart: left tile from the table, right tile = left + 2.
-;     DrawObjectWithAnimAndSpecificSprites
+;     Anim_DrawObjectWithAnimAndSpecificSprites
 ;   - Walking frames: 0 and 1 sideways (flipped when facing left), 2 down, 3 up; Link's frame gets +4
-;     while (his state AND $30) is $10 or $20 (sword or item in use). AnimateAndDrawObjectWalking
-;     (frame from AnimateObjectWalking), ObjAnimFrameHeap
+;     while (his state AND $30) is $10 or $20 (sword or item in use). Anim_AnimateAndDrawObjectWalking
+;     (frame from Anim_AnimateObjWalking), Anim_ObjFrameTiles
 ;   - Link always uses sprite records $12 and $13 (offsets $48, $4C) and does not advance
-;     RollingSpriteIndex. DrawObjectWithAnim, Anim_WriteSpritePairNotFlashing
-;   - Every other object takes its records from SpriteOffsets, a fixed order over records $18-$3F; the
-;     index advances once per sprite written and wraps at $28. SpriteOffsets,
+;     RollingSpriteIndex. Anim_DrawObjectWithAnim, Anim_WriteSpritePairNotFlashing
+;   - Every other object takes its records from Sprite_RollingOffsets, a fixed order over records $18-$3F; the
+;     index advances once per sprite written and wraps at $28. Sprite_RollingOffsets,
 ;     Anim_WriteSpritePairNotFlashing
 ;   - While the slot's ObjInvincibilityTimer is nonzero, the palette bits of its sprites are replaced by
 ;     (timer AND 3): the object flashes through the four sprite palette rows. Anim_WriteSpritePair
 ;   - ObjAttr bit $02 draws one sprite only (half width); bit $08 keeps the caller's attributes in [04],
 ;     [05] instead of the table's. Both are tested only for slots $01-$0C.
-;     DrawObjectWithAnimAndSpecificSprites
+;     Anim_DrawObjectWithAnimAndSpecificSprites
 ;   - Mirrored ([0C] nonzero): both sprites show the left tile, the right one flipped. Not mirrored:
 ;     [0F] nonzero swaps the halves and flips both. Link is never mirrored.
-;     DrawObjectWithAnimAndSpecificSprites, Anim_WriteHorizontallyFlippableSpritePair
+;     Anim_DrawObjectWithAnimAndSpecificSprites, Anim_WriteHorizontallyFlippableSpritePair
 ;   - Palette rows in the attribute table: 0 Link's, 1 blue, 2 red, 3 the row that differs per level
 ;     (colours from the level palette data). Row 1 is used by Lynel $01, Goriya $05, Octorok $09/$0A,
-;     Darknut $0C, Tektite $0D, Keese $1B, Wizzrobe $23; row 2 by their other variants. ObjAnimAttrHeap
+;     Darknut $0C, Tektite $0D, Keese $1B, Wizzrobe $23; row 2 by their other variants. Anim_ObjFrameAttrs
 ; CONTENTS: (generated; L = line in this file)
-;   L0058 ObjAnimations                              data  TABLE: where each animation's frames start; index = animation index (0 = Link, else object type + 1);
-;   L0131 ObjAnimFrameHeap                           data  TABLE: sprite tile of every animation frame; index = ObjAnimations[animation index] + frame; value =
-;   L0166 ObjAnimAttrHeap                            data  TABLE: sprite attributes of every animation frame; index as ObjAnimFrameHeap; value = sprite
-;   L0199 SpriteOffsets                              data  TABLE: sprite record offsets handed to objects in turn; index = RollingSpriteIndex 0-$27 (entry $28
-;   L0216 AnimateAndDrawObjectWalking                code  Steps a walking object's animation and draws it by its facing direction (not mirrored).
-;   L0226 DrawObjectMirrored                         code  Draws object X with frame A as a mirrored pair: the right sprite is the left tile flipped.
-;   L0235 DrawObjectNotMirrored                      code  Draws object X with frame A as two different halves, flipped horizontally when [0F] is nonzero.
-;   L0247 DrawObjectWithType                         code  Draws an object with the animation of object type Y (animation index Y + 1).
-;   L0259 DrawObjectWithAnim                         code  Draws an object with animation index Y, using Link's own sprite records or the next rolling pair.
-;   L0289 DrawObjectWithAnimAndSpecificSprites       code  Looks up the frame's tile and attributes and writes the object's one or two sprites.
+;   L0058 Anim_ObjFrameOffsets                       data  TABLE: where each animation's frames start; index = animation index (0 = Link, else object type + 1);
+;   L0131 Anim_ObjFrameTiles                         data  TABLE: sprite tile of every animation frame; index = Anim_ObjFrameOffsets[animation index] + frame; value =
+;   L0166 Anim_ObjFrameAttrs                         data  TABLE: sprite attributes of every animation frame; index as Anim_ObjFrameTiles; value = sprite
+;   L0199 Sprite_RollingOffsets                      data  TABLE: sprite record offsets handed to objects in turn; index = RollingSpriteIndex 0-$27 (entry $28
+;   L0216 Anim_AnimateAndDrawObjectWalking           code  Steps a walking object's animation and draws it by its facing direction (not mirrored).
+;   L0226 Anim_DrawObjectMirrored                    code  Draws object X with frame A as a mirrored pair: the right sprite is the left tile flipped.
+;   L0235 Anim_DrawObjectNotMirrored                 code  Draws object X with frame A as two different halves, flipped horizontally when [0F] is nonzero.
+;   L0247 Anim_DrawObjectWithType                    code  Draws an object with the animation of object type Y (animation index Y + 1).
+;   L0259 Anim_DrawObjectWithAnim                    code  Draws an object with animation index Y, using Link's own sprite records or the next rolling pair.
+;   L0289 Anim_DrawObjectWithAnimAndSpecificSprites  code  Looks up the frame's tile and attributes and writes the object's one or two sprites.
 ;   L0344 Anim_WriteHorizontallyFlippableSpritePair  code  Writes the sprite pair, first swapping the halves and flipping both when [0F] is nonzero.
 ;   L0375 Anim_WriteSpritePair                       code  Writes one or two sprites from the descriptor in [00]-[0A]; a slot with invincibility time flashes.
 ;   L0394 Anim_WriteSpritePairNotFlashing            code  Entry that skips the flash: writes the sprites with [04], [05] as given. X need not be set.
 ; ============================================================================
 
 ; TABLE: where each animation's frames start; index = animation index (0 = Link, else object type + 1);
-; value = offset of frame 0 in ObjAnimFrameHeap and ObjAnimAttrHeap.
+; value = offset of frame 0 in Anim_ObjFrameTiles and Anim_ObjFrameAttrs.
 ; Types with the same value share their frames. Type $69 has $CC, one past the end of both heaps.
-ObjAnimations:
+Anim_ObjFrameOffsets:
     ; Link, type $00, Lynel $01 $02, Moblin $03 $04, Goriya $05 $06
     .BYTE $00, $08, $0B, $0F, $13, $17, $5C, $60
     ; Octorok $07 $08 $09 $0A, Darknut $0B $0C, Tektite $0D $0E
@@ -91,7 +91,7 @@ ObjAnimations:
     ; Cave persons $77-$7D
     .BYTE $5A, $5A, $5A, $5A, $5B, $5B, $5B
 
-; TABLE: sprite tile of every animation frame; index = ObjAnimations[animation index] + frame; value =
+; TABLE: sprite tile of every animation frame; index = Anim_ObjFrameOffsets[animation index] + frame; value =
 ; tile of the left 8x16 sprite (the right sprite shows tile + 2, or the same tile when mirrored).
 ; Start offsets and the types that use them; (n) = bytes up to the next start, an upper bound on the
 ; frames (which frames are requested is up to each type's code):
@@ -128,7 +128,7 @@ ObjAnimations:
 ;   $B8 Aquamentus $3D, Ganon $3E (14)      $C6 Moldorm $41, Gleeok $42-$46 (2)
 ;   $C8 Patra $47, $48 (1)                  $C9 Trap $49, $4A (1)
 ;   $CA dungeon persons $4B-$52 (1)         $CB dead dummy $5D, push block $68 (1)
-ObjAnimFrameHeap:
+Anim_ObjFrameTiles:
     .BYTE $00, $04, $08, $0C, $10, $10, $14, $18    ; $00-$07
     .BYTE $5C, $9E, $44, $CE, $D2, $D6, $DA, $CE    ; $08-$0F
     .BYTE $D2, $D6, $DA, $F0, $F4, $F8, $FC, $F0    ; $10-$17
@@ -156,14 +156,14 @@ ObjAnimFrameHeap:
     .BYTE $C4, $CC, $E8, $EA, $72, $74, $DE, $EE    ; $C0-$C7
     .BYTE $F8, $96, $98, $B1                        ; $C8-$CB
 
-; TABLE: sprite attributes of every animation frame; index as ObjAnimFrameHeap; value = sprite
+; TABLE: sprite attributes of every animation frame; index as Anim_ObjFrameTiles; value = sprite
 ; attribute byte: bits 1-0 = sprite palette row (0 Link's, 1 blue, 2 red, 3 the row that differs per
 ; level), bit 7 = flip vertically. Only Octorok frames 1 and 4 have bit 7 ($82 at $1C, $1F; $81 at $22,
 ; $25). Colour variants share tiles and differ here: row 1 for Lynel $01, Goriya $05, Octorok $09/$0A,
 ; Darknut $0C, Tektite $0D, Keese $1B, Wizzrobe $23; row 2 for Lynel $02, Moblin $04, Goriya $06,
 ; Octorok $07/$08, Darknut $0B, Tektite $0E, Leever $10, Keese $1C, Wizzrobe $24; row 3 for Moblin $03,
 ; Zora $11, Keese $1D. Leever $0F mixes rows 2 and 1 over its 10 frames.
-ObjAnimAttrHeap:
+Anim_ObjFrameAttrs:
     .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; $00-$07
     .BYTE $02, $00, $00, $01, $01, $01, $01, $02    ; $08-$0F
     .BYTE $02, $02, $02, $03, $03, $03, $03, $02    ; $10-$17
@@ -196,7 +196,7 @@ ObjAnimAttrHeap:
 ; The 40 entries are records $18-$3F (offsets $60-$FC), each once: even entries count up from $60 to
 ; $AC; odd entries cover $B0-$FC, each group of four counting down. A two-sprite object uses entries
 ; i (left) and i + 1 (right).
-SpriteOffsets:
+Sprite_RollingOffsets:
     .BYTE $60, $BC, $64, $B8, $68, $B4, $6C, $B0
     .BYTE $70, $CC, $74, $C8, $78, $C4, $7C, $C0
     .BYTE $80, $DC, $84, $D8, $88, $D4, $8C, $D0
@@ -208,31 +208,31 @@ SpriteOffsets:
 ; Steps a walking object's animation and draws it by its facing direction (not mirrored).
 ; IN:   X = object slot.
 ; OUT:  X = object slot. Uses [00]-[05], [07], [08], [0A], [0C]-[0F].
-; NOTE: AnimateObjectWalking returns Y = frame (0 or 1 sideways, 2 down, 3 up), [00], [01] = the
+; NOTE: Anim_AnimateObjWalking returns Y = frame (0 or 1 sideways, 2 down, 3 up), [00], [01] = the
 ;       object's position and [0F] = horizontal flip. The play-mode object loop calls this for every
 ;       object with metastate 0 whose ObjAttr has neither bit $01 nor bit $04: in the type attribute
-;       table only types $01-$06 (Lynel, Moblin, Goriya; ObjectTypeToAttributes value $00).
+;       table only types $01-$06 (Lynel, Moblin, Goriya; Obj_TypeAttributes value $00).
 ; ----------------------------------------------------------------------------
-AnimateAndDrawObjectWalking:
-    JSR AnimateObjectWalking
+Anim_AnimateAndDrawObjectWalking:
+    JSR Anim_AnimateObjWalking
     TYA
-    JMP DrawObjectNotMirrored
+    JMP Anim_DrawObjectNotMirrored
 
 ; ----------------------------------------------------------------------------
 ; Draws object X with frame A as a mirrored pair: the right sprite is the left tile flipped.
 ; IN:   A = frame; X = object slot; [00] = sprite X; [01] = sprite Y.
-; NOTE: Sets [0C] = 1 and joins DrawObjectNotMirrored at its unnamed label.
+; NOTE: Sets [0C] = 1 and joins Anim_DrawObjectNotMirrored at its unnamed label.
 ; ----------------------------------------------------------------------------
-DrawObjectMirrored:
+Anim_DrawObjectMirrored:
     LDY #$01                    ; [0C] := 1: mirrored.
     BNE :+                      ; Always taken.
 
 ; ----------------------------------------------------------------------------
 ; Draws object X with frame A as two different halves, flipped horizontally when [0F] is nonzero.
 ; IN:   A = frame; X = object slot; [00] = sprite X; [01] = sprite Y; [0F] = flip horizontally.
-; NOTE: Sets [0C] = 0, loads Y = ObjType,X and falls into DrawObjectWithType.
+; NOTE: Sets [0C] = 0, loads Y = ObjType,X and falls into Anim_DrawObjectWithType.
 ; ----------------------------------------------------------------------------
-DrawObjectNotMirrored:
+Anim_DrawObjectNotMirrored:
     LDY #$00                    ; [0C] := 0: not mirrored.
 :
     STY $0C
@@ -244,7 +244,7 @@ DrawObjectNotMirrored:
 ;       [0F] = flip horizontally.
 ; NOTE: Link's candle fire (slots $10, $11) enters here with Y = $40, the standing fire's type.
 ; ----------------------------------------------------------------------------
-DrawObjectWithType:
+Anim_DrawObjectWithType:
     INY
 
 ; ----------------------------------------------------------------------------
@@ -254,22 +254,22 @@ DrawObjectWithType:
 ; OUT:  X = object slot; [0D] = frame; [0E] = animation index; [08] = object slot;
 ;       LeftSpriteOffset, RightSpriteOffset.
 ; NOTE: Link (X = 0) gets records $12 and $13 (offsets $48, $4C). Any other slot gets
-;       SpriteOffsets[RollingSpriteIndex] and the entry after it.
+;       Sprite_RollingOffsets[RollingSpriteIndex] and the entry after it.
 ; ----------------------------------------------------------------------------
-DrawObjectWithAnim:
+Anim_DrawObjectWithAnim:
     STA $0D                     ; [0D] := frame
     STY $0E                     ; [0E] := animation index
     STX $08                     ; [08] := object slot; nonzero also means "advance RollingSpriteIndex"
 
     ; Left and right sprite record offsets for the current rolling index.
     LDY RollingSpriteIndex
-    LDA SpriteOffsets, Y
+    LDA Sprite_RollingOffsets, Y
     STA LeftSpriteOffset
-    LDA SpriteOffsets+1, Y
+    LDA Sprite_RollingOffsets+1, Y
 
     ; Link (slot 0) instead always uses records $12 and $13.
     CPX #$00
-    BNE DrawObjectWithAnimAndSpecificSprites
+    BNE Anim_DrawObjectWithAnimAndSpecificSprites
     LDA #$48                    ; Offset of record $12: Link's left half.
     STA LeftSpriteOffset
     LDA #$4C                    ; Offset of record $13: Link's right half.
@@ -282,22 +282,22 @@ DrawObjectWithAnim:
 ; OUT:  X = [08]; sprites written; RollingSpriteIndex advanced once per sprite unless [08] = 0.
 ; NOTE: Slots $01-$0C: ObjAttr bit $02 = one sprite only (half width) with the caller's [04];
 ;       bit $08 = two sprites with the caller's [04], [05]. Link and slots $0D and up always take
-;       their attributes from ObjAnimAttrHeap. Link is never mirrored.
+;       their attributes from Anim_ObjFrameAttrs. Link is never mirrored.
 ;       Callers from other banks pass records $10 and $11 (offsets $40, $44), which precede Link's
-;       records and so are drawn over him (DrawObjectMirroredOverLink).
+;       records and so are drawn over him (Sprite_DrawObjMirroredOverLink).
 ; ----------------------------------------------------------------------------
-DrawObjectWithAnimAndSpecificSprites:
+Anim_DrawObjectWithAnimAndSpecificSprites:
     STA RightSpriteOffset
     LDY $0E
     LDA #$01                    ; [07] := 1: two sprites (0 would mean one).
     STA $07
     LDA #$08                    ; [0A] := 8: the right sprite is 8 pixels right of the left one.
     STA $0A
-    LDA ObjAnimations, Y
+    LDA Anim_ObjFrameOffsets, Y
     CLC
     ADC $0D                     ; Y := first frame offset + frame.
     TAY
-    LDA ObjAnimFrameHeap, Y
+    LDA Anim_ObjFrameTiles, Y
     STA $02                     ; [02] := left tile
     CLC
     ADC #$02
@@ -320,7 +320,7 @@ DrawObjectWithAnimAndSpecificSprites:
     BNE :+
 
 @UseTableAttr:
-    LDA ObjAnimAttrHeap, Y      ; Attributes of this frame, for both sprites.
+    LDA Anim_ObjFrameAttrs, Y      ; Attributes of this frame, for both sprites.
     JSR Anim_SetSpriteDescriptorAttributes
 :
     ; Link is never mirrored: his halves are only swapped and flipped by [0F].
@@ -369,7 +369,7 @@ Anim_WriteHorizontallyFlippableSpritePair:
 ;       RightSpriteOffset = offsets into Sprites.
 ; OUT:  X = [08]; [00] = X + [0A] for each sprite written; [07] = $FF.
 ; NOTE: Flash: while ObjInvincibilityTimer,X is nonzero the palette bits (1-0) of both attributes are
-;       replaced by (timer AND 3). The timer drops every second frame (DecrementInvincibilityTimer), so
+;       replaced by (timer AND 3). The timer drops every second frame (Obj_DecInvincibilityTimer), so
 ;       the sprite palette row changes every 2 frames. X may be any slot $00-$13.
 ; ----------------------------------------------------------------------------
 Anim_WriteSpritePair:
@@ -410,7 +410,7 @@ Anim_WriteSpritePairNotFlashing:
     LDX RightSpriteOffset       ; The next pass writes the right sprite's record.
     LDA $08                     ; [08] nonzero: advance RollingSpriteIndex (not for Link, slot 0).
     BEQ :+
-    JSR CycleCurSpriteIndex
+    JSR Sprite_CycleCurIndex
 :
     INY
     DEC $07

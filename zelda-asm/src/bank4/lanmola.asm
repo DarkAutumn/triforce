@@ -1,35 +1,35 @@
 ; ============================================================================
 ; FILE:     bank4/lanmola.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 9671-10027
-; SUBJECTS: (none)
+; SUBJECTS: Lanmola
 ; TOPIC:    Lanmola (types $3A red, $3B blue): per-segment update, death handling that shortens the
 ;           worm from the tail, the head's direction choice, and the pixel mover.
-; SEE ALSO: bank4/zelda-lanmola-inits.asm (InitLamnola: 10 segments in two worms, speed, start spot);
-;           bank1/monster-collisions.asm (CheckMonsterCollisions, ObjTypeToDamagePoints);
+; SEE ALSO: bank4/zelda-lanmola-inits.asm (Lanmola_Init: 10 segments in two worms, speed, start spot);
+;           bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink, Damage_ObjTypeDamageToLink);
 ;           bank7/object-update-table.asm (HP table, dead dummy turning into nothing);
-;           bank4/digdogger.asm (a mover built the same way as Lamnola_Move).
+;           bank4/digdogger.asm (a mover built the same way as Lanmola_Move).
 ; KEY FACTS:
 ;   - A room's Lanmola object makes two worms of 5 segments: slots $01-$05 and $06-$0A; slots $05
-;     and $0A are the heads, $01 and $06 the tails (UpdateLamnola, Lamnola_UpdateHead).
-;   - Speed is 1 pixel per frame for type $3A and 2 for type $3B (Lanmola_Speed, Lamnola_Move).
+;     and $0A are the heads, $01 and $06 the tails (Lanmola_Update, Lanmola_UpdateHead).
+;   - Speed is 1 pixel per frame for type $3A and 2 for type $3B (Lanmola_Speed, Lanmola_Move).
 ;   - Every segment can be hit. A killed segment is revived with HP $20 and the worm's lowest live
 ;     slot becomes a dead dummy ($5D) instead; only when the head is the last segment does a
-;     Lanmola object really die (UpdateLamnola@FindTail).
+;     Lanmola object really die (Lanmola_Update@FindTail).
 ;   - So each worm takes 5 kills. Every one of them adds to WorldKillCount and HelpDropCount, but
 ;     only the head's death advances WorldKillCycle, adds to RoomKillCount and can drop an item;
-;     dead dummies do none of these (UpdateLamnola; HandleMonsterDied, UpdateMetaObjectEnd).
-;   - With the clock the segments stop but are still drawn and can be hit (UpdateLamnola).
+;     dead dummies do none of these (Lanmola_Update; Damage_KillMonster, Obj_EndMetastate).
+;   - With the clock the segments stop but are still drawn and can be hit (Lanmola_Update).
 ;   - The head decides at every 16-pixel grid point: Random,X < $80 toward Link, else straight or
-;     a perpendicular turn by Random+1,X; never reverses at random (Lamnola_UpdateHead).
+;     a perpendicular turn by Random+1,X; never reverses at random (Lanmola_UpdateHead).
 ;   - Directions pass one segment down the chain every 8 pixels, so segments trail 8 pixels apart
-;     (Lamnola_UpdateHead@PropagateDirs).
+;     (Lanmola_UpdateHead@PropagateDirs).
 ;   - Segments do not test tiles when moving; only the head's chosen direction is tested against
-;     the room bounds and tiles (Lamnola_UpdateHead@SetDirAndCheckTiles, Lamnola_Move).
+;     the room bounds and tiles (Lanmola_UpdateHead@SetDirAndCheckTiles, Lanmola_Move).
 ; CONTENTS: (generated; L = line in this file)
-;   L0043 UpdateLamnola       code  Updates one Lanmola segment: moves it, draws it, takes weapon hits and shortens the worm on a kill.
-;   L0151 L12A6F_Exit         code  Shared RTS for the early exits of Lamnola_UpdateHead.
-;   L0166 Lamnola_UpdateHead  code  Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
-;   L0334 Lamnola_Move        code  Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
+;   L0043 Lanmola_Update             code  Updates one Lanmola segment: moves it, draws it, takes weapon hits and shortens the worm on a kill.
+;   L0151 Lanmola_UpdateHead_Return  code  Shared RTS for the early exits of Lanmola_UpdateHead.
+;   L0166 Lanmola_UpdateHead         code  Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
+;   L0334 Lanmola_Move               code  Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -38,18 +38,18 @@
 ; OUT:  on a kill the lowest live slot of that Lanmola becomes a dead dummy ($5D) at the hit
 ;       segment's position and the hit segment is revived with HP $20.
 ; NOTE: With the clock (InvClock) segments do not move but are still drawn and can still be hit.
-; NOTE: L129EA_Exit is an RTS in the chunk before this one.
+; NOTE: GuardFire_Update_Return is an RTS in the chunk before this one.
 ; ----------------------------------------------------------------------------
-UpdateLamnola:
-    ; A segment with direction 0 has not been set in motion yet (see Lamnola_UpdateHead): it is
+Lanmola_Update:
+    ; A segment with direction 0 has not been set in motion yet (see Lanmola_UpdateHead): it is
     ; neither drawn nor checked for collisions.
     LDA ObjDir, X
-    BEQ L129EA_Exit
+    BEQ GuardFire_Update_Return
 
     ; With the clock, skip movement.
     LDA InvClock
     BNE @DrawAndCheckCollisions
-    JSR Lamnola_Move
+    JSR Lanmola_Move
 
     ; Only the heads (slots $05 and $0A) choose directions.
     CPX #$05
@@ -57,7 +57,7 @@ UpdateLamnola:
     CPX #$0A
     BNE @DrawAndCheckCollisions
 :
-    JSR Lamnola_UpdateHead
+    JSR Lanmola_UpdateHead
 
 @DrawAndCheckCollisions:
     LDA ObjX, X
@@ -87,20 +87,20 @@ UpdateLamnola:
     PLA                         ; Restore the X coordinate.
     STA ObjX, X
 
-    ; CheckMonsterCollisions may change the facing direction; the chain depends on it, so keep it.
+    ; Collision_CheckMonsterVsWeaponsAndLink may change the facing direction; the chain depends on it, so keep it.
     LDA ObjDir, X
     PHA
-    JSR CheckMonsterCollisions
+    JSR Collision_CheckMonsterVsWeaponsAndLink
     PLA
     STA ObjDir, X
 
     ; Metastate 0 = still alive: done.
     LDA ObjMetastate, X
-    BEQ L129EA_Exit
+    BEQ GuardFire_Update_Return
 
     ; The segment was killed this frame. Instead of letting it die, revive it and remove the
     ; segment at the tail end of its Lanmola.
-    JSR ResetShoveInfo
+    JSR Shove_Reset
 
     ; Give the hit segment its full HP ($20) again.
     LDA #$20
@@ -119,9 +119,9 @@ UpdateLamnola:
     CMP Lanmola_Type
     BNE @FindTail
 
-    ; Timer $11 for the tail slot. It has no effect: UpdateDeadDummy does not read the timer, and
+    ; Timer $11 for the tail slot. It has no effect: DeadDummy_StartDeathSparkle does not read the timer, and
     ; the first sparkle step (metastate $10) advances at once and reloads the timer with 6
-    ; (AnimateAndDrawMetaObject). When the tail is the head, the sparkle is already at $10.
+    ; (Obj_AnimateMetastate). When the tail is the head, the sparkle is already at $10.
     LDA #$11
     STA a:ObjTimer+1, Y
 
@@ -137,18 +137,18 @@ UpdateLamnola:
     ; If the tail found is a head (slot $05 or $0A), the head itself was the last segment: leave
     ; it dying, so that it dies as an ordinary monster.
     CPY #$04
-    BEQ L129EA_Exit
+    BEQ GuardFire_Update_Return
     CPY #$09
-    BEQ L129EA_Exit
+    BEQ GuardFire_Update_Return
 
     ; Turn the tail slot into a dead dummy ($5D), which plays the death sparkle, and bring the
     ; hit segment back to life.
     LDA #$5D
     STA ObjType+1, Y
-    JMP ResetObjMetastate
+    JMP Obj_ResetMetastate
 
-; Shared RTS for the early exits of Lamnola_UpdateHead.
-L12A6F_Exit:
+; Shared RTS for the early exits of Lanmola_UpdateHead.
+Lanmola_UpdateHead_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -163,18 +163,18 @@ L12A6F_Exit:
 ;       allowed one, rotating 8 -> 4 -> 2 -> 1 -> 8. The search has no exit if all three allowed
 ;       directions are blocked.
 ; ----------------------------------------------------------------------------
-Lamnola_UpdateHead:
+Lanmola_UpdateHead:
     ; Act only when X is a multiple of 8 ...
     LDA ObjX, X
     AND #$07
-    BNE L12A6F_Exit
+    BNE Lanmola_UpdateHead_Return
 
     ; ... and (Y + 3) is a multiple of 8 (object Y is offset 3 pixels from the tile grid).
     LDA ObjY, X
     CLC
     ADC #$03
     AND #$07
-    BNE L12A6F_Exit
+    BNE Lanmola_UpdateHead_Return
 
     ; Pass directions one segment toward the tail, 4 copies counted in [00].
     LDA #$04
@@ -256,9 +256,9 @@ Lamnola_UpdateHead:
 @SetDirAndCheckTiles:
     STA ObjDir, X
 
-    ; [0F] = moving direction for the room bound and tile tests. BoundByRoom zeroes it if blocked.
+    ; [0F] = moving direction for the room bound and tile tests. Room_BoundDir zeroes it if blocked.
     STA $0F
-    JSR BoundByRoom
+    JSR Room_BoundDir
     LDA $0F
     BNE @CheckTileCollision
 
@@ -279,7 +279,7 @@ Lamnola_UpdateHead:
 
 @CheckTileCollision:
     ; Not blocked by the room bounds. A tile at or above RoomFirstUnwalkableTile ahead blocks too.
-    JSR GetCollidingTileMoving
+    JSR Tile_GetAheadOfObj
     CMP RoomFirstUnwalkableTile
     BCS @FindNonOpposite
 
@@ -331,7 +331,7 @@ Lamnola_UpdateHead:
 ; NOTE: No position fraction, no tile or bounds test here; only the head's choices keep the worm
 ;       in the room.
 ; ----------------------------------------------------------------------------
-Lamnola_Move:
+Lanmola_Move:
     ; [02] starts as mask $A1 and is shifted left before each later test: bit 0 walks through the
     ; direction bits 1, 2, 4, 8, while the bit shifted out (1, 0, 1) sets the carry needed by the
     ; following SBC, ADC, SBC.

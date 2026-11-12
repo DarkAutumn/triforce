@@ -1,27 +1,27 @@
 ; ============================================================================
 ; FILE:     bank4/rope.asm               BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 4537-4668
-; SUBJECTS: (none)
+; SUBJECTS: Rope
 ; TOPIC:    Rope (type $28): init with HP by quest, and the update that walks slowly, turns at random and
 ;           rushes when Link is in line with it.
 ; SEE ALSO: bank7/walker-move.asm (Walker_Move); bank7/walker-collision-screen-edge.asm
-;           (_FaceUnblockedDir, and Walker_CheckTileCollision which turns a blocked Rope and so ends a
-;           rush); bank4/walker-wanderer-common.asm (InitWalker); bank1/monster-collisions.asm.
+;           (Walker_FaceUnblockedDir, and Walker_CheckTileCollision which turns a blocked Rope and so ends a
+;           rush); bank4/walker-wanderer-common.asm (Walker_Init); bank1/monster-collisions.asm.
 ; KEY FACTS:
-;   - HP is $10 in Q1 and $40 in Q2 (HP nibbles 1 and 4; ObjHP is the nibble * $10). InitRope.
-;   - Q-speed $20 (0.5 px/frame) when walking, $60 (1.5 px/frame) when rushing. UpdateRope@Rush.
+;   - HP is $10 in Q1 and $40 in Q2 (HP nibbles 1 and 4; ObjHP is the nibble * $10). Rope_Init.
+;   - Q-speed $20 (0.5 px/frame) when walking, $60 (1.5 px/frame) when rushing. Rope_Update@Rush.
 ;   - A rush starts only at q-speed $20 and grid offset 0, when Link's X is within 7 pixels of the
 ;     Rope's X (rush up or down) or else his Y within 7 of its Y (rush left or right). It uses Link's
-;     real position (ObjX, ObjY), not the chase target. UpdateRope, UpdateRope@CheckVertical.
+;     real position (ObjX, ObjY), not the chase target. Rope_Update, Rope_Update@CheckVertical.
 ;   - A rush ends when the facing direction changes during the move (a blocked Rope is turned by
-;     Walker_CheckTileCollision): q-speed goes back to $20. UpdateRope@CheckSpeed.
+;     Walker_CheckTileCollision): q-speed goes back to $20. Rope_Update@CheckSpeed.
 ;   - While walking, each time ObjTimer runs out it is reloaded with Random AND $3F (0-63 frames) and
-;     the Rope turns to an unblocked direction if it is on a grid point. UpdateRope.
-;   - The clock or a stun stops movement and turning, but the rush test still runs. UpdateRope.
-;   - In Q2 a Rope's sprite palette changes every frame (FrameCounter AND 3). UpdateRope@Animate.
+;     the Rope turns to an unblocked direction if it is on a grid point. Rope_Update.
+;   - The clock or a stun stops movement and turning, but the rush test still runs. Rope_Update.
+;   - In Q2 a Rope's sprite palette changes every frame (FrameCounter AND 3). Rope_Update@Animate.
 ; CONTENTS: (generated; L = line in this file)
-;   L0032 InitRope    code  Initializes a Rope (type $28): HP $10 in Q1 or $40 in Q2, then the common walker init.
-;   L0051 UpdateRope  code  Updates a Rope: walks at 0.5 px/frame, turns at random, rushes at 1.5 px/frame when Link lines up.
+;   L0032 Rope_Init    code  Initializes a Rope (type $28): HP $10 in Q1 or $40 in Q2, then the common walker init.
+;   L0051 Rope_Update  code  Updates a Rope: walks at 0.5 px/frame, turns at random, rushes at 1.5 px/frame when Link lines up.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -29,7 +29,7 @@
 ; IN:   X = object slot
 ; OUT:  ObjHP,X = $10 (Q1) or $40 (Q2)
 ; ----------------------------------------------------------------------------
-InitRope:
+Rope_Init:
     LDA #$10
     STA ObjHP, X
     LDY CurSaveSlot
@@ -38,7 +38,7 @@ InitRope:
     LDA #$40
     STA ObjHP, X
 :
-    JMP InitWalker
+    JMP Walker_Init
 
 ; ----------------------------------------------------------------------------
 ; Updates a Rope: walks at 0.5 px/frame, turns at random, rushes at 1.5 px/frame when Link lines up.
@@ -48,7 +48,7 @@ InitRope:
 ;       or else |Link Y - Rope Y| < 8 (horizontal rush). The rush lasts until the Rope's facing
 ;       direction changes during a move.
 ; ----------------------------------------------------------------------------
-UpdateRope:
+Rope_Update:
     ; Move in the facing direction.
     LDA ObjDir, X
     STA ObjInputDir, X
@@ -68,7 +68,7 @@ UpdateRope:
 :
     ; If not rushing (q-speed <> $60) and the timer has run out, then set the timer to a
     ; random value from 0 to $3F frames, and turn to face an unblocked direction
-    ; (_FaceUnblockedDir does nothing unless the grid offset is 0).
+    ; (Walker_FaceUnblockedDir does nothing unless the grid offset is 0).
     LDA ObjQSpeedFrac, X
     CMP #$60
     BEQ @CheckSpeed
@@ -77,7 +77,7 @@ UpdateRope:
     LDA Random, X
     AND #$3F
     STA ObjTimer, X
-    JSR _FaceUnblockedDir
+    JSR Walker_FaceUnblockedDir
 
 @CheckSpeed:
     PLA                         ; The facing direction from before the move.
@@ -101,7 +101,7 @@ UpdateRope:
     LDA ObjX
     SEC
     SBC ObjX, X
-    JSR Abs
+    JSR Math_Abs
     CMP #$08
     BCS @CheckVertical
 
@@ -146,8 +146,8 @@ UpdateRope:
 @Draw:
     ; The frame image is the animation frame (0 or 1).
     LDA ObjAnimFrame, X
-    JSR DrawObjectNotMirrored
-    JMP CheckMonsterCollisions
+    JSR Anim_DrawObjectNotMirrored
+    JMP Collision_CheckMonsterVsWeaponsAndLink
 
 @CheckVertical:
     ; If the absolute vertical distance between Link and the Rope >= 8,
@@ -155,7 +155,7 @@ UpdateRope:
     LDA ObjY
     SEC
     SBC ObjY, X
-    JSR Abs
+    JSR Math_Abs
     CMP #$08
     BCS @Animate
 

@@ -1,87 +1,87 @@
 ; ============================================================================
 ; FILE:     bank5/mode-inits-obj-lists.asm BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 1369-1448
-; SUBJECTS: (none)
+; SUBJECTS: Mode10Stairs, Mode4Enter, Mode8Continue, ModeDSave, Spawn
 ; TOPIC:    Init routines of modes 8 (continue menu), $D (save) and $10 (stairs); the four monster spawn
 ;           position lists (one per direction Link faces on entry); Link's walk-in distances through a
-;           dungeon door; the room monster lists (ObjLists) and their address table.
-; SEE ALSO: bank5/spawn-positions.asm (AssignObjSpawnPositions reads the spawn lists);
-;           bank5/enter-room.asm (InitMode_EnterRoom reads ObjListAddrs and the walk-in distances);
+;           dungeon door; the room monster lists (Spawn_ObjLists) and their address table.
+; SEE ALSO: bank5/spawn-positions.asm (Spawn_AssignPositions reads the spawn lists);
+;           bank5/enter-room.asm (Room_EnterCommon reads Spawn_ObjListAddrs and the walk-in distances);
 ;           bank5/mode8-continue-mode10-stairs.asm (update routines of modes 8 and $10);
-;           bank5/save-ram-clear-ram.asm (InitSaveRam); bank7/init-mode-dispatch.asm (InitMode table).
+;           bank5/save-ram-clear-ram.asm (Save_InitSaveRam); bank7/init-mode-dispatch.asm (Mode_Init table).
 ; KEY FACTS:
 ;   - A spawn spot byte is row in the high nibble, column in the low nibble: X = column * $10,
 ;     Y = row * $10 + $0D. Each list has 9 spots, all away from the side Link enters by: facing
 ;     right columns 5-$D, left 2-$A, down rows 7-$B, up rows 5-9.
-;     SpawnPosList0-3 (decoded by AssignObjSpawnPositions).
+;     Spawn_PosListFacingRight-3 (decoded by Spawn_AssignPositions).
 ;   - The list is chosen by the lowest set bit of Link's direction: 0 right, 1 left, 2 down, 3 up.
-;     SpawnPosListAddrsLo, SpawnPosListAddrsHi.
-;   - Monster list ids $62-$7F select one of 30 lists in ObjLists (index = id - $62); a list entry is
+;     Spawn_PosListAddrsLo, Spawn_PosListAddrsHi.
+;   - Monster list ids $62-$7F select one of 30 lists in Spawn_ObjLists (index = id - $62); a list entry is
 ;     an object type, 0 = leave the slot empty. The room copies as many entries as its monster count,
-;     starting at the list's first byte. ObjListAddrs, ObjLists.
+;     starting at the list's first byte. Spawn_ObjListAddrs, Spawn_ObjLists.
 ;   - Entering a dungeon room through an open or key door Link starts with ObjGridOffset $18 (or -$18);
 ;     through any other door type (wall, false wall, bombable, shutter) $28 (or -$28). The mode 4 update
-;     walks him until the offset is 8, 0 or -8. EnteringRoomRelativePositions.
+;     walks him until the offset is 8, 0 or -8. Mode4Enter_WalkInGridOffsets.
 ;   - Mode $10 animates only when Link stands on tile $24 (cave or dungeon entrance): target Y is $10
-;     pixels below. On a stairs tile the mode starts with no walk. InitMode10.
-;   - Mode 8 init clears UndergroundExitType and the room history. InitMode8.
+;     pixels below. On a stairs tile the mode starts with no walk. Mode10Stairs_Init.
+;   - Mode 8 init clears UndergroundExitType and the room history. Mode8Continue_Init.
 ; CONTENTS: (generated; L = line in this file)
-;   L0049 InitMode8                      code  Mode 8 (continue/save/retry menu) init: blanks the screen, then cues the menu text.
-;   L0067 InitModeD                      code  Mode $D (save) init: blanks the screen and makes sure save RAM is formatted.
-;   L0082 InitMode10                     code  Mode $10 (stairs) init: if Link stands on an entrance tile, starts the walk down into it.
-;   L0103 SpawnPosListAddrsLo            data  TABLE: low address bytes of the spawn position lists; index = bit number of Link's direction
-;   L0110 SpawnPosListAddrsHi            data  TABLE: high address bytes of the spawn position lists; index as in SpawnPosListAddrsLo.
-;   L0119 SpawnPosList0                  data  TABLE: monster spawn spots when Link enters facing right; index = SpawnCycle 0-8; value = row in
-;   L0125 SpawnPosList1                  data  TABLE: monster spawn spots when Link enters facing left; same format as SpawnPosList0.
-;   L0131 SpawnPosList2                  data  TABLE: monster spawn spots when Link enters facing down; same format as SpawnPosList0.
-;   L0137 SpawnPosList3                  data  TABLE: monster spawn spots when Link enters facing up; same format as SpawnPosList0.
-;   L0144 EnteringRoomRelativePositions  data  TABLE: Link's starting ObjGridOffset (signed pixels) when he enters a dungeon room; index =
-;   L0180 ObjLists                       data  DATA: the 30 room monster lists, 201 bytes of object types (0 = empty slot), addressed through
-;   L0185 ObjListAddrs                   data  TABLE: addresses of the monster lists in ObjLists; index = monster list id - $62 (0-29); value =
+;   L0049 Mode8Continue_Init            code  Mode 8 (continue/save/retry menu) init: blanks the screen, then cues the menu text.
+;   L0067 ModeDSave_Init                code  Mode $D (save) init: blanks the screen and makes sure save RAM is formatted.
+;   L0082 Mode10Stairs_Init             code  Mode $10 (stairs) init: if Link stands on an entrance tile, starts the walk down into it.
+;   L0103 Spawn_PosListAddrsLo          data  TABLE: low address bytes of the spawn position lists; index = bit number of Link's direction
+;   L0110 Spawn_PosListAddrsHi          data  TABLE: high address bytes of the spawn position lists; index as in Spawn_PosListAddrsLo.
+;   L0119 Spawn_PosListFacingRight      data  TABLE: monster spawn spots when Link enters facing right; index = SpawnCycle 0-8; value = row in
+;   L0125 Spawn_PosListFacingLeft       data  TABLE: monster spawn spots when Link enters facing left; same format as Spawn_PosListFacingRight.
+;   L0131 Spawn_PosListFacingDown       data  TABLE: monster spawn spots when Link enters facing down; same format as Spawn_PosListFacingRight.
+;   L0137 Spawn_PosListFacingUp         data  TABLE: monster spawn spots when Link enters facing up; same format as Spawn_PosListFacingRight.
+;   L0144 Mode4Enter_WalkInGridOffsets  data  TABLE: Link's starting ObjGridOffset (signed pixels) when he enters a dungeon room; index =
+;   L0180 Spawn_ObjLists                data  DATA: the 30 room monster lists, 201 bytes of object types (0 = empty slot), addressed through
+;   L0185 Spawn_ObjListAddrs            data  TABLE: addresses of the monster lists in Spawn_ObjLists; index = monster list id - $62 (0-29); value =
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Mode 8 (continue/save/retry menu) init: blanks the screen, then cues the menu text.
 ; NOTE: Submode 0 clears UndergroundExitType, clears the name tables, cues the level palettes
-;       (which advances the submode) and clears the room history (ClearRoomHistory). The next
+;       (which advances the submode) and clears the room history (RoomHistory_Clear). The next
 ;       frame cues transfer buffer 4 (menu text and attributes) and starts the mode's update.
 ; ----------------------------------------------------------------------------
-InitMode8:
-    JSR TurnOffAllVideo
+Mode8Continue_Init:
+    JSR Ppu_TurnOffAllVideo
     LDA GameSubmode
     BNE :+
     STA a:UndergroundExitType   ; A = 0: Link is no longer leaving a cave, cellar or dungeon.
-    JSR TurnOffVideoAndClearArtifacts
-    JSR PatchAndCueLevelPalettesTransferAndAdvanceSubmode
-    JMP ClearRoomHistory
+    JSR Ppu_TurnOffVideoAndClearNameTables
+    JSR Palette_PatchLinkColorAndCueLevelPalettes
+    JMP RoomHistory_Clear
 :
     LDA #$04                    ; Transfer buffer 4: the text and attributes of the mode 8 menu.
     STA TileBufSelector
-    JMP BeginUpdateMode
+    JMP Mode_BeginUpdate
 
 ; ----------------------------------------------------------------------------
 ; Mode $D (save) init: blanks the screen and makes sure save RAM is formatted.
-; NOTE: InitSaveRam returns C set when it had to clear save RAM (its begin/end markers were
+; NOTE: Save_InitSaveRam returns C set when it had to clear save RAM (its begin/end markers were
 ;       missing); the game then restarts through the reset handler instead of saving.
 ; ----------------------------------------------------------------------------
-InitModeD:
-    JSR TurnOffVideoAndClearArtifacts
-    JSR InitSaveRam
+ModeDSave_Init:
+    JSR Ppu_TurnOffVideoAndClearNameTables
+    JSR Save_InitSaveRam
     BCS :+                      ; Save RAM had to be cleared: reset the game.
-    JMP BeginUpdateMode
+    JMP Mode_BeginUpdate
 :
-    JMP IsrReset
+    JMP Reset_Handler
 
 ; ----------------------------------------------------------------------------
 ; Mode $10 (stairs) init: if Link stands on an entrance tile, starts the walk down into it.
 ; OUT:  IsUpdatingMode = 1. On tile $24 also StairsTargetY = ObjY + $10 and the stairs sound.
 ; NOTE: Tile $24 is the black cave or dungeon entrance; on any other tile (stairs) nothing is set
 ;       up and the mode's update ends at once. The update moves Link 1 pixel every 4 frames
-;       (UpdateMode10Stairs_Full) on frames with FrameCounter AND 3 = 0: $10 pixels in 61-64 frames.
+;       (Mode10Stairs_Update_Full) on frames with FrameCounter AND 3 = 0: $10 pixels in 61-64 frames.
 ; ----------------------------------------------------------------------------
-InitMode10:
+Mode10Stairs_Init:
     LDX #$00                    ; Tile under Link's hotspot.
-    JSR GetCollidableTileStill
+    JSR Tile_GetUnderObj
     CMP #$24
     BNE :+                      ; Not the entrance tile: no walk.
     LDA #$00                    ; Volume envelope selector of the song = 0 (audible effect (unverified)).
@@ -100,53 +100,53 @@ InitMode10:
 
 ; TABLE: low address bytes of the spawn position lists; index = bit number of Link's direction
 ; (0 right, 1 left, 2 down, 3 up); value = address of a 9-byte list.
-SpawnPosListAddrsLo:
-    .LOBYTES SpawnPosList0
-    .LOBYTES SpawnPosList1
-    .LOBYTES SpawnPosList2
-    .LOBYTES SpawnPosList3
+Spawn_PosListAddrsLo:
+    .LOBYTES Spawn_PosListFacingRight
+    .LOBYTES Spawn_PosListFacingLeft
+    .LOBYTES Spawn_PosListFacingDown
+    .LOBYTES Spawn_PosListFacingUp
 
-; TABLE: high address bytes of the spawn position lists; index as in SpawnPosListAddrsLo.
-SpawnPosListAddrsHi:
-    .HIBYTES SpawnPosList0
-    .HIBYTES SpawnPosList1
-    .HIBYTES SpawnPosList2
-    .HIBYTES SpawnPosList3
+; TABLE: high address bytes of the spawn position lists; index as in Spawn_PosListAddrsLo.
+Spawn_PosListAddrsHi:
+    .HIBYTES Spawn_PosListFacingRight
+    .HIBYTES Spawn_PosListFacingLeft
+    .HIBYTES Spawn_PosListFacingDown
+    .HIBYTES Spawn_PosListFacingUp
 
 ; TABLE: monster spawn spots when Link enters facing right; index = SpawnCycle 0-8; value = row in
 ; the high nibble, column in the low nibble (X = column * $10, Y = row * $10 + $0D).
 ; (X,Y): ($50,$5D) ($50,$BD) ($80,$7D) ($80,$9D) ($A0,$7D) ($A0,$9D) ($C0,$6D) ($C0,$AD) ($D0,$8D)
-SpawnPosList0:
+Spawn_PosListFacingRight:
     .BYTE $55, $B5, $78, $98, $7A, $9A, $6C, $AC
     .BYTE $8D
 
-; TABLE: monster spawn spots when Link enters facing left; same format as SpawnPosList0.
+; TABLE: monster spawn spots when Link enters facing left; same format as Spawn_PosListFacingRight.
 ; (X,Y): ($20,$8D) ($30,$6D) ($30,$AD) ($50,$7D) ($50,$9D) ($70,$7D) ($70,$9D) ($A0,$5D) ($A0,$BD)
-SpawnPosList1:
+Spawn_PosListFacingLeft:
     .BYTE $82, $63, $A3, $75, $95, $77, $97, $5A
     .BYTE $BA
 
-; TABLE: monster spawn spots when Link enters facing down; same format as SpawnPosList0.
+; TABLE: monster spawn spots when Link enters facing down; same format as Spawn_PosListFacingRight.
 ; (X,Y): ($30,$AD) ($50,$7D) ($50,$BD) ($60,$9D) ($70,$8D) ($90,$9D) ($A0,$7D) ($A0,$BD) ($C0,$AD)
-SpawnPosList2:
+Spawn_PosListFacingDown:
     .BYTE $A3, $75, $B5, $96, $87, $99, $7A, $BA
     .BYTE $AC
 
-; TABLE: monster spawn spots when Link enters facing up; same format as SpawnPosList0.
+; TABLE: monster spawn spots when Link enters facing up; same format as Spawn_PosListFacingRight.
 ; (X,Y): ($30,$6D) ($50,$5D) ($50,$9D) ($60,$7D) ($80,$8D) ($90,$7D) ($A0,$5D) ($A0,$9D) ($C0,$6D)
-SpawnPosList3:
+Spawn_PosListFacingUp:
     .BYTE $63, $55, $95, $76, $88, $79, $5A, $9A
     .BYTE $6C
 
 ; TABLE: Link's starting ObjGridOffset (signed pixels) when he enters a dungeon room; index =
 ; (0 facing left or up, 1 facing right or down) + (0 open or key door, 2 any other door type);
 ; value = $18 / -$18 / $28 / -$28. The mode 4 update walks Link until the offset is 8, 0 or -8.
-EnteringRoomRelativePositions:
+Mode4Enter_WalkInGridOffsets:
     .BYTE $18, $E8, $28, $D8
 
 ; DATA: the 30 room monster lists, 201 bytes of object types (0 = empty slot), addressed through
-; ObjListAddrs. Decoded (list id: types):
-;   $62: $03 $03 $04 $03 $04              red and blue Moblins
+; Spawn_ObjListAddrs. Decoded (list id: types):
+;   $62: $03 $03 $04 $03 $04              blue ($03) and red ($04) Moblins
 ;   $63: $03 $04 $03 $04                  Moblins
 ;   $64: $1A $1A $02 $01 $02 $01          Peahats, Lynels
 ;   $65: $01 $02 $01 $02                  Lynels
@@ -165,7 +165,7 @@ EnteringRoomRelativePositions:
 ;   $72: $2B $2B $12 $12 $12 $00 $00 $00  Bubbles, Vires
 ;   $73: $2B $2B $13 $13 $17 $17          Bubbles, Zols, Like-Likes
 ;   $74: $2B $2B $0C $0B $0B $30 $30 $30  Bubbles, Darknuts, Gibdos
-;   $75: $2B $2B $05 $05 $05 $1B $1B $1B  Bubbles, red Goriyas, blue Keese
+;   $75: $2B $2B $05 $05 $05 $1B $1B $1B  Bubbles, blue Goriyas, blue Keese
 ;   $76: $4A $00 $00 $00 $17 $17 $17 $17  Trap, Like-Likes
 ;   $77: $4A $00 $00 $00 $23 $24 $23 $24  Trap, Wizzrobes
 ;   $78: $16 $0C $0B $0C $0B $16          Pols Voices, Darknuts
@@ -177,10 +177,10 @@ EnteringRoomRelativePositions:
 ;   $7E: $2D $2D $2D $2C $0C $0B $0C $0B  Bubbles ($2D, $2C), Darknuts
 ;   $7F: $2D $2D $2D $2C $27 $27 $27 $27  Bubbles ($2D, $2C), Wallmasters
 ; A room with a larger monster count than its list's length reads on into the next list.
-ObjLists:
+Spawn_ObjLists:
     .INCBIN "dat/ObjLists.dat"
 
-; TABLE: addresses of the monster lists in ObjLists; index = monster list id - $62 (0-29); value =
+; TABLE: addresses of the monster lists in Spawn_ObjLists; index = monster list id - $62 (0-29); value =
 ; address of the list's first object type.
-ObjListAddrs:
+Spawn_ObjListAddrs:
     .INCLUDE "dat/ObjListAddrs.inc"

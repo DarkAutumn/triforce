@@ -1,97 +1,97 @@
 ; ============================================================================
 ; FILE:     bank4/leever.asm             BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 2592-2966
-; SUBJECTS: Burrower
+; SUBJECTS: Burrower, Leever
 ; TOPIC:    Blue Leever (type $0F) and Red Leever (type $10) updates, and the six-state burrower cycle
 ;           (under ground, emerging, out, sinking) that the Blue Leever shares with the Zora (type $11).
-; SEE ALSO: bank4/zora-ow-inits.asm (InitLeever; CheckZora and UpdateZora, which calls UpdateBurrower);
-;           bank4/walker-wanderer-common.asm (Wanderer_TargetPlayer: the Blue Leever's steering);
-;           bank7/walker-move.asm (Walker_Move, MoveObject); bank1/monster-collisions.asm
-;           (CheckMonsterCollisions); bank7/object-update-table.asm (UpdateObject_JumpTable $0F-$11).
+; SEE ALSO: bank4/zora-ow-inits.asm (Leever_Init; Zora_TrySpawn and Zora_Update, which calls Burrower_Update);
+;           bank4/walker-wanderer-common.asm (Wanderer_MoveAndTurn: the Blue Leever's steering);
+;           bank7/walker-move.asm (Walker_Move, Obj_MoveByQSpeed); bank1/monster-collisions.asm
+;           (Collision_CheckMonsterVsWeaponsAndLink); bank7/object-update-table.asm (Obj_Update_JumpTable $0F-$11).
 ; KEY FACTS:
 ;   - Burrower states 0-5: 0 under ground (not drawn), 1 and 5 mound, 2 and 4 half out, 3 fully out.
-;     Each lasts the frames in BlueLeeverStateTimes ($80, $20, $0F, $FF, $10, $60: 542 in all), then the
-;     next begins (UpdateBurrower@CycleState).
+;     Each lasts the frames in Burrower_StateTimes ($80, $20, $0F, $FF, $10, $60: 542 in all), then the
+;     next begins (Burrower_Update@CycleState).
 ;   - A Leever can hurt Link and be hit only in state 3; a Zora in states 2, 3 and 4
 ;     (Burrower_AnimateDrawAndCheckCollisions).
 ;   - Zora cycle: mound $20 frames (state 1), body up for states 2-4 ($0F frames, about $22, $10; in
 ;     state 3 it shoots a fireball 2 frames in and its timer is cut to $20), mound $60 (state 5); then
 ;     the object is destroyed and a new Zora is made on a random water square, with full HP
-;     (UpdateBurrower, and UpdateZora, CheckZora in bank4/zora-ow-inits.asm).
+;     (Burrower_Update, and Zora_Update, Zora_TrySpawn in bank4/zora-ow-inits.asm).
 ;   - The Blue Leever moves in every state, under ground too, steering toward the chase target with turn
 ;     rate $A0; q-speed per state $08, $0A, $10, $20, $10, $0A = 0.125 to 0.5 px/frame
-;     (UpdateBlueLeever, BlueLeeverStateQSpeeds).
+;     (Leever_UpdateBlue, Burrower_StateQSpeeds).
 ;   - The clock or a stun stops a Blue Leever's movement but not its state timers: it still sinks and
-;     comes back (UpdateBlueLeever does not test them; Walker_Move does).
+;     comes back (Leever_UpdateBlue does not test them; Walker_Move does).
 ;   - A Red Leever waits in state 0 until RedLeeverLongTimer is 0 and fewer than 2 Red Leevers are out,
 ;     then surfaces $28 pixels from Link: ahead of him in the direction he faces (3 in 4), else behind
-;     him (UpdateRedLeever).
+;     him (Leever_UpdateRed).
 ;   - It refuses to surface above Y = $5D, on an unwalkable tile, or when the X would wrap around the
-;     screen; it tries again every frame (UpdateRedLeever@CheckSafeToSpawn).
+;     screen; it tries again every frame (Leever_UpdateRed@CheckSafeToSpawn).
 ;   - A Red Leever emerges for $18 frames, then runs straight at 0.5 px/frame (q-speed $20) toward where
 ;     Link was, for as long as nothing blocks it: it sinks ($18 frames) only at an unwalkable tile or the
-;     room bound (UpdateRedLeever@CheckStunned, RedLeeverStateTimes).
+;     room bound (Leever_UpdateRed@CheckStunned, Leever_RedStateTimes).
 ;   - Each surfacing sets RedLeeverLongTimer to 2, so the next Red Leever surfaces 11-20 frames later at
 ;     the earliest (the timer loses 1 every 10th frame). The clock is not tested in states 0, 1, 2, 4
 ;     and 5: Red Leevers still surface with it, then stay out in state 3
-;     (UpdateRedLeever@CheckSafeToSpawn, UpdateRedLeever@CheckStunned).
+;     (Leever_UpdateRed@CheckSafeToSpawn, Leever_UpdateRed@CheckStunned).
 ;   - ActiveRedLeeverCount goes down when a Red Leever finishes its cycle or dies
-;     (RedLeever_CycleStateDrawAndCheckCollisions, Burrower_AnimateDrawAndCheckCollisions).
+;     (Leever_CycleRedStateAndDraw, Burrower_AnimateDrawAndCheckCollisions).
 ; CONTENTS: (generated; L = line in this file)
-;   L0057 BlueLeeverStateQSpeeds                      data  TABLE: q-speed of a Blue Leever or Zora in each burrower state; index = ObjState (0-5); value =
-;   L0063 BlueLeeverStateTimes                        data  TABLE: length of each burrower state of a Blue Leever or Zora; index = ObjState (0-5); value = frames
-;   L0069 BlueLeeverStateAnimTimes                    data  TABLE: frames per animation frame of a Blue Leever or Zora; index = ObjState (0-5); value = frames
-;   L0079 UpdateBlueLeever                            code  Updates a Blue Leever (type $0F): walks toward the chase target, then runs the burrower cycle.
-;   L0094 UpdateBurrower                              code  Runs the six-state burrower cycle of a Blue Leever or Zora, then draws it and checks collisions.
-;   L0152 Burrower_AnimateDrawAndCheckCollisions      code  Animates and draws a burrower (Leever or Zora) and checks its collisions in the states where it is out.
-;   L0222 RedLeeverStateQSpeeds                       data  TABLE: q-speed of a Red Leever in each state; index = ObjState (0-5); value = q-speed (pixels per
-;   L0227 RedLeeverStateTimes                         data  TABLE: length of each Red Leever state; index = ObjState (0-5); value = frames (ObjTimer value set on
-;   L0235 RedLeeverStateAnimTimes                     data  TABLE: frames per animation frame of a Red Leever; index = ObjState (0-5); value = frames (reload value
-;   L0252 UpdateRedLeever                             code  Updates a Red Leever (type $10): surfaces near Link, runs in a straight line, sinks when blocked.
-;   L0447 RedLeever_CycleStateDrawAndCheckCollisions  code  Advances a Red Leever to its next state (5 wraps to 0 and frees its place), then draws it.
-;   L0470 RedLeever_AnimateAndCheckCollisions         code  Animates and draws a Red Leever with its state's animation time; collisions only in state 3.
+;   L0057 Burrower_StateQSpeeds                   data  TABLE: q-speed of a Blue Leever or Zora in each burrower state; index = ObjState (0-5); value =
+;   L0063 Burrower_StateTimes                     data  TABLE: length of each burrower state of a Blue Leever or Zora; index = ObjState (0-5); value = frames
+;   L0069 Burrower_StateAnimTimes                 data  TABLE: frames per animation frame of a Blue Leever or Zora; index = ObjState (0-5); value = frames
+;   L0079 Leever_UpdateBlue                       code  Updates a Blue Leever (type $0F): walks toward the chase target, then runs the burrower cycle.
+;   L0094 Burrower_Update                         code  Runs the six-state burrower cycle of a Blue Leever or Zora, then draws it and checks collisions.
+;   L0152 Burrower_AnimateDrawAndCheckCollisions  code  Animates and draws a burrower (Leever or Zora) and checks its collisions in the states where it is out.
+;   L0222 Leever_RedStateQSpeeds                  data  TABLE: q-speed of a Red Leever in each state; index = ObjState (0-5); value = q-speed (pixels per
+;   L0227 Leever_RedStateTimes                    data  TABLE: length of each Red Leever state; index = ObjState (0-5); value = frames (ObjTimer value set on
+;   L0235 Leever_RedStateAnimTimes                data  TABLE: frames per animation frame of a Red Leever; index = ObjState (0-5); value = frames (reload value
+;   L0252 Leever_UpdateRed                        code  Updates a Red Leever (type $10): surfaces near Link, runs in a straight line, sinks when blocked.
+;   L0447 Leever_CycleRedStateAndDraw             code  Advances a Red Leever to its next state (5 wraps to 0 and frees its place), then draws it.
+;   L0470 Leever_AnimateRedAndCheckCollisions     code  Animates and draws a Red Leever with its state's animation time; collisions only in state 3.
 ; ============================================================================
 
 ; TABLE: q-speed of a Blue Leever or Zora in each burrower state; index = ObjState (0-5); value =
 ; q-speed (pixels per frame = value / 64). The Zora gets the value too but is never moved.
-BlueLeeverStateQSpeeds:
+Burrower_StateQSpeeds:
     ; 0 under ground 0.125, 1 mound 0.156, 2 half out 0.25, 3 out 0.5, 4 half out 0.25, 5 mound 0.156
     .BYTE $08, $0A, $10, $20, $10, $0A
 
 ; TABLE: length of each burrower state of a Blue Leever or Zora; index = ObjState (0-5); value = frames
 ; (the ObjTimer value set on entering the state).
-BlueLeeverStateTimes:
+Burrower_StateTimes:
     ; 0 under ground 128, 1 mound 32, 2 half out 15, 3 out 255, 4 half out 16, 5 mound 96
     .BYTE $80, $20, $0F, $FF, $10, $60
 
 ; TABLE: frames per animation frame of a Blue Leever or Zora; index = ObjState (0-5); value = frames
 ; (reload value of ObjAnimCounter).
-BlueLeeverStateAnimTimes:
+Burrower_StateAnimTimes:
     .BYTE $10, $0B, $01, $05, $01, $0B
 
 ; ----------------------------------------------------------------------------
 ; Updates a Blue Leever (type $0F): walks toward the chase target, then runs the burrower cycle.
 ; IN:   X = object slot.
-; NOTE: Turn rate $A0 (Wanderer_TargetPlayer). It moves in all six states, at the state's q-speed.
+; NOTE: Turn rate $A0 (Wanderer_MoveAndTurn). It moves in all six states, at the state's q-speed.
 ;       The clock and stun are not tested here; Walker_Move stops the movement for them, but the state
-;       timers go on, so a frozen Blue Leever still sinks and surfaces. Falls into UpdateBurrower.
+;       timers go on, so a frozen Blue Leever still sinks and surfaces. Falls into Burrower_Update.
 ; ----------------------------------------------------------------------------
-UpdateBlueLeever:
+Leever_UpdateBlue:
     LDA #$A0                    ; Turn rate $A0
     STA Wanderer_ObjTurnRate, X
-    JSR Wanderer_TargetPlayer
+    JSR Wanderer_MoveAndTurn
 
 ; ----------------------------------------------------------------------------
 ; Runs the six-state burrower cycle of a Blue Leever or Zora, then draws it and checks collisions.
 ; IN:   X = object slot.
 ; NOTE: When ObjTimer is 0 the state advances (5 wraps to 0) and the state's q-speed and timer are
-;       loaded from BlueLeeverStateQSpeeds and BlueLeeverStateTimes. States: 0 under ground, 1 mound,
+;       loaded from Burrower_StateQSpeeds and Burrower_StateTimes. States: 0 under ground, 1 mound,
 ;       2 half out, 3 out, 4 half out, 5 mound. A new Zora has state 0 and timer 0, so it goes to state 1
 ;       on its first update; a new Blue Leever stays in state 0 for (slot + 1) * $10 frames first
-;       (InitLeever). A Zora leaving state 1 gets its body frame image stored in ObjDir:
+;       (Leever_Init). A Zora leaving state 1 gets its body frame image stored in ObjDir:
 ;       3 (back) when its Y >= Link's Y, else 2 (front).
 ; ----------------------------------------------------------------------------
-UpdateBurrower:
+Burrower_Update:
     ; If object timer <> 0, then go animate, draw, and check for collisions.
     LDA ObjTimer, X
     BNE @Animate
@@ -131,15 +131,15 @@ UpdateBurrower:
 
     ; Look up and set the speed and timer for the new state.
     TAY
-    LDA BlueLeeverStateQSpeeds, Y
+    LDA Burrower_StateQSpeeds, Y
     STA ObjQSpeedFrac, X
-    LDA BlueLeeverStateTimes, Y
+    LDA Burrower_StateTimes, Y
     STA ObjTimer, X
 
 @Animate:
     ; Advance the animation counter, reloading it with the state's value when it runs out.
     LDY ObjState, X
-    LDA BlueLeeverStateAnimTimes, Y
+    LDA Burrower_StateAnimTimes, Y
 
 ; ----------------------------------------------------------------------------
 ; Animates and draws a burrower (Leever or Zora) and checks its collisions in the states where it is out.
@@ -157,7 +157,7 @@ Burrower_AnimateDrawAndCheckCollisions:
     BEQ @Exit
 
     ; If is zora, and state >= 2 and < 5, then use frame image 2 or 3
-    ; (front or back), which was stored in ObjDir by UpdateBurrower.
+    ; (front or back), which was stored in ObjDir by Burrower_Update.
     LDY ObjType, X
     CPY #$11
     BNE @CalcFrameImage
@@ -182,27 +182,27 @@ Burrower_AnimateDrawAndCheckCollisions:
     ADC ObjAnimFrame, X
 
 @Draw:
-    JSR DrawObjectMirrored
+    JSR Anim_DrawObjectMirrored
 
     ; If not zora and state <> 3,
     ; or zora and state <> 2, 3, 4;
     ; then return without checking collisions.
     LDA ObjType, X
     CMP #$11
-    BNE @NoState3Collisions
+    BNE @CheckState3
     LDA ObjState, X
     CMP #$02
     BEQ @CheckCollisions
     CMP #$04
     BEQ @CheckCollisions
 
-@NoState3Collisions:
+@CheckState3:
     LDA ObjState, X
     CMP #$03
     BNE @Exit
 
 @CheckCollisions:
-    JSR CheckMonsterCollisions
+    JSR Collision_CheckMonsterVsWeaponsAndLink
 
     ; If not dying (metastate 0), then return.
     LDA ObjMetastate, X
@@ -219,12 +219,12 @@ Burrower_AnimateDrawAndCheckCollisions:
 
 ; TABLE: q-speed of a Red Leever in each state; index = ObjState (0-5); value = q-speed (pixels per
 ; frame = value / 64). It moves only in state 3: $20 = 0.5 px/frame.
-RedLeeverStateQSpeeds:
+Leever_RedStateQSpeeds:
     .BYTE $00, $00, $00, $20, $00, $00
 
 ; TABLE: length of each Red Leever state; index = ObjState (0-5); value = frames (ObjTimer value set on
 ; entering the state).
-RedLeeverStateTimes:
+Leever_RedStateTimes:
     ; 0 under ground: no timer (waits for RedLeeverLongTimer). 1 mound 16, 2 half out 8.
     ; 3 out: $FF, rewritten every frame it moves, so the state ends only when it is blocked.
     ; 4 half out 8, 5 mound 16.
@@ -232,7 +232,7 @@ RedLeeverStateTimes:
 
 ; TABLE: frames per animation frame of a Red Leever; index = ObjState (0-5); value = frames (reload value
 ; of ObjAnimCounter).
-RedLeeverStateAnimTimes:
+Leever_RedStateAnimTimes:
     .BYTE $10, $08, $08, $05, $08, $08
 
 ; ----------------------------------------------------------------------------
@@ -249,7 +249,7 @@ RedLeeverStateAnimTimes:
 ;       hold it in state 3. States 4, 5: sinking, 8 + $10 frames, then state 0 and the count drops.
 ;       Only state 3 tests the clock and stun: the other states run on with them.
 ; ----------------------------------------------------------------------------
-UpdateRedLeever:
+Leever_UpdateRed:
     LDA ObjState, X
     BEQ :+
     JMP @CheckOtherStates
@@ -273,7 +273,7 @@ UpdateRedLeever:
     LDA Random+1, X
     CMP #$C0
     BCC :+
-    JSR ReverseObjDir
+    JSR Obj_ReverseDirAndMovingDir
 :
     ; If facing horizontally, go place the leever to the left or right of Link.
     LDA ObjDir, X
@@ -373,7 +373,7 @@ UpdateRedLeever:
 
 @CheckSafeToSpawn:
     ; The leever can't come out of an unwalkable tile. So, return.
-    JSR GetCollidableTileStill
+    JSR Tile_GetUnderObj
     CMP RoomFirstUnwalkableTile
     BCS @Exit
     INC ActiveRedLeeverCount
@@ -387,10 +387,10 @@ UpdateRedLeever:
     ASL
     STA RedLeeverLongTimer
     ; State 0 -> 1. This call also draws the leever; the code below draws it a second time this frame.
-    JSR RedLeever_CycleStateDrawAndCheckCollisions
+    JSR Leever_CycleRedStateAndDraw
 
     ; Turn around, so that the leever faces back toward where Link is.
-    JSR ReverseObjDir
+    JSR Obj_ReverseDirAndMovingDir
 
 @CheckOtherStates:
     ; If not in state 3, go check the object timer in order to draw and such.
@@ -403,29 +403,29 @@ UpdateRedLeever:
     ; If being shoved, go shove, animate, and draw the leever.
     LDA ObjShoveDir, X
     BEQ @CheckStunned
-    JSR Obj_Shove
-    JMP RedLeever_AnimateAndCheckCollisions
+    JSR Shove_Update
+    JMP Leever_AnimateRedAndCheckCollisions
 
 @CheckStunned:
     ; If Link has the clock or the leever is stunned, then
     ; only animate, draw, and check for collisions. The state does not advance.
     LDA InvClock
     ORA ObjStunTimer, X
-    BNE RedLeever_AnimateAndCheckCollisions
+    BNE Leever_AnimateRedAndCheckCollisions
 
     ; If the leever is blocked by an unwalkable tile or the room boundary,
     ; then go to the next state (4, sinking), in addition to animating, drawing,
     ; and checking for collisions.
     LDA ObjDir, X
     STA $0F
-    JSR GetCollidingTileMoving
+    JSR Tile_GetAheadOfObj
     CMP RoomFirstUnwalkableTile
-    BCS RedLeever_CycleStateDrawAndCheckCollisions
-    JSR BoundByRoom
-    BEQ RedLeever_CycleStateDrawAndCheckCollisions
+    BCS Leever_CycleRedStateAndDraw
+    JSR Room_BoundDir
+    BEQ Leever_CycleRedStateAndDraw
 
     ; Move in direction [0F] at the state's q-speed.
-    JSR MoveObject
+    JSR Obj_MoveByQSpeed
 
     ; If the low nibble of the grid offset is 0 (a whole square was crossed), reset the grid offset.
     LDA ObjGridOffset, X
@@ -441,10 +441,10 @@ UpdateRedLeever:
     ; If object timer has not expired, then
     ; go animate, draw, and check for collisions.
     LDA ObjTimer, X
-    BNE RedLeever_AnimateAndCheckCollisions
+    BNE Leever_AnimateRedAndCheckCollisions
 
 ; Advances a Red Leever to its next state (5 wraps to 0 and frees its place), then draws it.
-RedLeever_CycleStateDrawAndCheckCollisions:
+Leever_CycleRedStateAndDraw:
     ; Cycle the state between 0 and 5.
     ;
     ; If a cycle was completed (wrapped around to 0),
@@ -461,15 +461,15 @@ RedLeever_CycleStateDrawAndCheckCollisions:
 
     ; Look up and set the speed and timer for the new state.
     TAY
-    LDA RedLeeverStateQSpeeds, Y
+    LDA Leever_RedStateQSpeeds, Y
     STA ObjQSpeedFrac, X
-    LDA RedLeeverStateTimes, Y
+    LDA Leever_RedStateTimes, Y
     STA ObjTimer, X
 
 ; Animates and draws a Red Leever with its state's animation time; collisions only in state 3.
-RedLeever_AnimateAndCheckCollisions:
+Leever_AnimateRedAndCheckCollisions:
     LDY ObjState, X
-    LDA RedLeeverStateAnimTimes, Y
+    LDA Leever_RedStateAnimTimes, Y
     JMP Burrower_AnimateDrawAndCheckCollisions
     ; Unreachable: follows an unconditional JMP and has no label.
     RTS

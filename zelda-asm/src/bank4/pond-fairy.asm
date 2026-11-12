@@ -4,34 +4,34 @@
 ; SUBJECTS: PondFairy
 ; TOPIC:    Pond fairy ($2F): refills Link's hearts when he stands at the pond's edge, while eight hearts
 ;           orbit around the pond.
-; SEE ALSO: bank4/zora-ow-inits.asm (InitPondFairy: position and sound); bank4/fairy-flyer-common.asm
-;           (DrawFairy); bank5/cave-cellar-enter.asm (World_FillHearts: the refill itself);
-;           bank4/orbit-rotation-math.asm (DecreaseObjectAngle, RotateObjectLocation).
+; SEE ALSO: bank4/zora-ow-inits.asm (PondFairy_Init: position and sound); bank4/fairy-flyer-common.asm
+;           (Fairy_Draw); bank5/cave-cellar-enter.asm (World_FillHearts: the refill itself);
+;           bank4/orbit-rotation-math.asm (Obj_DecreaseOrbitAngle, Obj_MoveAlongOrbit).
 ; KEY FACTS:
 ;   - The fairy triggers when Link's Y = $AD and $70 <= X <= $80 while its state is 0: Link is halted
-;     (ObjState = $40) and World_IsFillingHearts is set (UpdatePondFairy).
+;     (ObjState = $40) and World_IsFillingHearts is set (PondFairy_Update).
 ;   - States (ObjState+1): 0 waiting; 1 hearts filling; 2 a further $50 frames of orbiting hearts;
 ;     3 done, Link released. Nothing returns it to 0, so it heals once per room visit
-;     (UpdatePondFairy, PondFairy_HandleOtherStates).
+;     (PondFairy_Update, PondFairy_UpdateStates1To3).
 ;   - Link stays halted from the trigger until state 3: the whole refill plus $50 (80) frames
-;     (PondFairy_HandleOtherStates).
+;     (PondFairy_UpdateStates1To3).
 ;   - The code reads the fairy's state, timer and position from object slot $01, not from X
-;     (UpdatePondFairy, PondFairy_MoveHearts).
+;     (PondFairy_Update, PondFairy_MoveHearts).
 ;   - The eight orbiting hearts use object slots $02-$09 for their state, angle and position without
 ;     being objects (no ObjType is set) (PondFairy_MoveHearts).
 ;   - Each heart starts $1C pixels above the fairy at angle $18 and loses $60/256 of an angle step per
 ;     frame (32 steps a circle: one revolution in about 85 frames); the next heart starts every 4
-;     steps of the first one (PondFairy_MoveHearts, PondHeartStartAngles).
-;   - With the slots' q-speed of $20 (set for slots $01-$0B on room entry, InitMode_EnterRoom) a heart
+;     steps of the first one (PondFairy_MoveHearts, PondFairy_HeartStartAngles).
+;   - With the slots' q-speed of $20 (set for slots $01-$0B on room entry, Room_EnterCommon) a heart
 ;     moves up to 4 pixels a frame; computed from this arithmetic the circle spans X $49-$B3 and
-;     Y $60-$CB, about 53 pixels in radius, with the fairy at ($78, $7D) (RotateObjectLocation).
-;   - While Link is halted (state $40) no monster or shot can hurt him by touch: CheckLinkCollision
-;     returns at once in that state (UpdatePondFairy).
+;     Y $60-$CB, about 53 pixels in radius, with the fairy at ($78, $7D) (Obj_MoveAlongOrbit).
+;   - While Link is halted (state $40) no monster or shot can hurt him by touch: Link_CheckMonsterTouch
+;     returns at once in that state (PondFairy_Update).
 ; CONTENTS: (generated; L = line in this file)
-;   L0043 UpdatePondFairy              code  Updates the pond fairy ($2F): draws it; starts the heart refill when Link stands at the pond's edge.
-;   L0075 PondFairy_HandleOtherStates  code  Pond fairy states 1-3 (A = state): waits for the refill, then $50 frames, then releases Link.
-;   L0135 PondHeartStartAngles         data  TABLE: when each later orbiting heart appears; index = heart's object slot - 3 (slots $03-$09);
-;   L0146 PondFairy_MoveHearts         code  Starts, moves and draws the eight hearts that orbit the pond while the fairy heals Link.
+;   L0043 PondFairy_Update            code  Updates the pond fairy ($2F): draws it; starts the heart refill when Link stands at the pond's edge.
+;   L0075 PondFairy_UpdateStates1To3  code  Pond fairy states 1-3 (A = state): waits for the refill, then $50 frames, then releases Link.
+;   L0135 PondFairy_HeartStartAngles  data  TABLE: when each later orbiting heart appears; index = heart's object slot - 3 (slots $03-$09);
+;   L0146 PondFairy_MoveHearts        code  Starts, moves and draws the eight hearts that orbit the pond while the fairy heals Link.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -40,12 +40,12 @@
 ; NOTE: Trigger: fairy state 0, Link's Y = $AD and X in $70-$80. Link is halted (state $40) until the
 ;       hearts are full and $50 more frames have passed. The fairy ends in state 3 and never rearms.
 ; ----------------------------------------------------------------------------
-UpdatePondFairy:
-    JSR DrawFairy
+PondFairy_Update:
+    JSR Fairy_Draw
 
     ; If the fairy (object slot $01) is not in state 0, then go handle states 1 to 3.
     LDA ObjState+1
-    BNE PondFairy_HandleOtherStates
+    BNE PondFairy_UpdateStates1To3
 
     ; State 0.
     ;
@@ -72,7 +72,7 @@ UpdatePondFairy:
     RTS
 
 ; Pond fairy states 1-3 (A = state): waits for the refill, then $50 frames, then releases Link.
-PondFairy_HandleOtherStates:
+PondFairy_UpdateStates1To3:
     CMP #$01
     BNE @CheckState2
 
@@ -116,7 +116,7 @@ PondFairy_HandleOtherStates:
     LDA ObjState
     PHA
     STY ObjState
-    JSR Link_EndMoveAndAnimate_Bank4
+    JSR Link_EndMoveAndAnimate_ReturnToBank4
 
     ; Restore Link's state.
     PLA
@@ -132,7 +132,7 @@ PondFairy_HandleOtherStates:
 ; TABLE: when each later orbiting heart appears; index = heart's object slot - 3 (slots $03-$09);
 ;        value = whole angle of the first heart (slot $02) at which this heart starts (angle steps).
 ;        The first heart starts at $18 and counts down, so they appear in slot order, 4 steps apart.
-PondHeartStartAngles:
+PondFairy_HeartStartAngles:
     .BYTE $14, $10, $0C, $08, $04, $00, $1C
 
 ; ----------------------------------------------------------------------------
@@ -140,7 +140,7 @@ PondHeartStartAngles:
 ; OUT:  X = $0A (the caller restores it).
 ; NOTE: The hearts keep their state, angle and position in object slots $02-$09 but are not objects.
 ;       Each starts $1C pixels above the fairy (slot $01) at angle $18 and loses $0060 of angle per
-;       frame (whole part 0-$1F), moving by RotateObjectLocation with 6 bits of sine and cosine.
+;       frame (whole part 0-$1F), moving by Obj_MoveAlongOrbit with 6 bits of sine and cosine.
 ;       The step also scales with the slot's q-speed, which this routine does not set.
 ; ----------------------------------------------------------------------------
 PondFairy_MoveHearts:
@@ -171,15 +171,15 @@ PondFairy_MoveHearts:
     SBC #$03
     TAY
     LDA ObjAngleWhole+2
-    CMP PondHeartStartAngles, Y
+    CMP PondFairy_HeartStartAngles, Y
     BNE @NextLoopHeart
 
 @SetUpHeart:
     ; Bring this heart out: state 1.
     INC ObjState, X
 
-    ; Direction $80. Nothing called here for a heart reads it (DecreaseObjectAngle,
-    ; RotateObjectLocation and the position fetch do not). The Patra children get the same assignment.
+    ; Direction $80. Nothing called here for a heart reads it (Obj_DecreaseOrbitAngle,
+    ; Obj_MoveAlongOrbit and the position fetch do not). The Patra children get the same assignment.
     LDA #$80
     STA ObjDir, X
 
@@ -202,14 +202,14 @@ PondFairy_MoveHearts:
     LDA #$00
     STA $0B
     LDA #$60
-    JSR DecreaseObjectAngle
+    JSR Obj_DecreaseOrbitAngle
 
     ; Move the heart along the circle for its new angle, using the top 6 bits of the
     ; sine and of the cosine (the more bits, the larger the step and the circle).
     ; The routine stores the new X itself and returns the new Y in A.
     LDA #$06
     TAY
-    JSR RotateObjectLocation
+    JSR Obj_MoveAlongOrbit
     STA ObjY, X
     TXA                         ; Save the loop index (the heart's slot).
     PHA
@@ -219,7 +219,7 @@ PondFairy_MoveHearts:
     ; [00], [01] now hold the heart's position. Draw with X = the pond fairy's object slot,
     ; so the sprite is frame image 0 (A = 0) of the pond fairy's object type.
     LDX CurObjIndex
-    JSR DrawObjectNotMirrored
+    JSR Anim_DrawObjectNotMirrored
     PLA                         ; Restore the loop index.
     TAX
 

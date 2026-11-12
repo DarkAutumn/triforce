@@ -1,36 +1,36 @@
 ; ============================================================================
 ; FILE:     bank1/shot-aim-boomerang-speed.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 3638-3851
-; SUBJECTS: Dir
+; SUBJECTS: Boomerang, Dir, Obj
 ; TOPIC:    Moving a shot one axis at a time inside the room bounds; direction and distance from one
 ;           object to another; choosing one of nine aim angles for fireballs and returning boomerangs;
 ;           the returning boomerang's speed and its slow-to-fast switch.
-; SEE ALSO: bank1/room-bounds.asm (BoundByRoomWithA); bank7/walker-move.asm (MoveObject);
+; SEE ALSO: bank1/room-bounds.asm (Room_BoundDirA); bank7/walker-move.asm (Obj_MoveByQSpeed);
 ;           bank7/boomerang-arrow-food.asm (arrow and boomerang flight, boomerang speed tables);
 ;           bank7/boomerang-return-draw.asm (boomerang return states $40/$50);
-;           bank7/sword-shot-magic-shot.asm (sword shot and magic shot use MoveShot);
-;           bank4/monster-shots-fireballs.asm (UpdateFireball aims with these routines).
+;           bank7/sword-shot-magic-shot.asm (sword shot and magic shot use Obj_MoveShot);
+;           bank4/monster-shots-fireballs.asm (Fireball_Update aims with these routines).
 ; KEY FACTS:
-;   - A shot that would cross a room bound does not move; MoveShot returns [0E] = $80 and [0F] = 0.
-;   - MoveShot moves with the grid offset zeroed, so the grid offset limits never stop a shot; with
+;   - A shot that would cross a room bound does not move; Obj_MoveShot returns [0E] = $80 and [0F] = 0.
+;   - Obj_MoveShot moves with the grid offset zeroed, so the grid offset limits never stop a shot; with
 ;     [0E] = 0 the grid offset accumulates the signed pixels flown (the boomerang's range counter).
 ;   - Aim has nine steps from horizontal (index 0) through diagonal (4) to vertical (8). With
 ;     g = larger and l = smaller axis distance: g - l < 8 gives 4; else the index moves
-;     min(4, floor(g / l)) steps from 4 toward the longer axis (_CalcDiagonalSpeedIndex).
+;     min(4, floor(g / l)) steps from 4 toward the longer axis (Dir_CalcAimSpeedIndex).
 ;   - An axis counts as "reached" when its distance is < 9 pixels; [00] counts such axes
-;     (GetOneDirectionAndDistanceToTarget). A returning boomerang is caught when both are.
-;   - Equal coordinates give direction left (2) or up (8) (GetOneDirectionAndDistanceToTarget).
+;     (Dir_GetAxisDirAndDistanceToTarget). A returning boomerang is caught when both are.
+;   - Equal coordinates give direction left (2) or up (8) (Dir_GetAxisDirAndDistanceToTarget).
 ;   - Boomerang return state $4x runs at half the table q-speed; state $5x at the full q-speed
-;     (SetBoomerangSpeed).
-;   - SetBoomerangSpeed decrements ObjMovingLimit once per call in state $4x and sets state $50 at 0;
+;     (Boomerang_SetReturnSpeed).
+;   - Boomerang_SetReturnSpeed decrements ObjMovingLimit once per call in state $4x and sets state $50 at 0;
 ;     the return code calls it twice a frame, so a limit of $20 lasts $10 frames.
 ; CONTENTS: (generated; L = line in this file)
-;   L0049 MoveShot                            code  Moves a shot or boomerang along one direction unless that would cross a room bound.
-;   L0086 GetDirectionsAndDistancesToTarget   code  Finds the horizontal and vertical direction and distance from one object to another.
-;   L0122 _CalcDiagonalSpeedIndex             code  Picks one of nine aim angles (speed table index 0-8) from the two axis distances to a target.
-;   L0186 SetBoomerangSpeed                   code  Sets a returning boomerang's q-speed: half in state $4x (which it also times), full otherwise.
-;   L0215 GetOneDirectionAndDistanceToTarget  code  Finds direction and distance from an origin to a target coordinate on one axis.
-;   L0235 Dir_ToTarget_Return                 code  Shared RTS; WieldBomb (bank1/bomb-candle-wield.asm) also branches here to return.
+;   L0049 Obj_MoveShot                       code  Moves a shot or boomerang along one direction unless that would cross a room bound.
+;   L0086 Dir_GetDirsAndDistancesToTarget    code  Finds the horizontal and vertical direction and distance from one object to another.
+;   L0122 Dir_CalcAimSpeedIndex              code  Picks one of nine aim angles (speed table index 0-8) from the two axis distances to a target.
+;   L0186 Boomerang_SetReturnSpeed           code  Sets a returning boomerang's q-speed: half in state $4x (which it also times), full otherwise.
+;   L0215 Dir_GetAxisDirAndDistanceToTarget  code  Finds direction and distance from an origin to a target coordinate on one axis.
+;   L0235 Dir_ToTarget_Return                code  Shared RTS; Bomb_Wield (bank1/bomb-candle-wield.asm) also branches here to return.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -39,16 +39,16 @@
 ;       offset, nonzero to leave the grid offset as it was; ObjQSpeedFrac,X = speed
 ; OUT:  moved: [0F] = A, coordinate and ObjPosFrac,X updated, [0E] unchanged.
 ;       blocked by a room bound: [0E] = $80, [0F] = 0, nothing moved.
-; NOTE: The grid offset is set to 0 for the move itself, so MoveObject's grid offset limits (+-$10)
+; NOTE: The grid offset is set to 0 for the move itself, so Obj_MoveByQSpeed's grid offset limits (+-$10)
 ;       are never reached and cannot stop the shot. With [0E] = 0 the offset afterwards is the old value
 ;       plus the signed pixels just moved (+ right/down, - left/up): a running distance. The boomerang
 ;       code compares its absolute value with ObjMovingLimit as the range.
 ; NOTE: The arrow/boomerang code calls this for the horizontal part of ObjDir, increments [0E], then
 ;       calls it for the vertical part, so on a diagonal only the horizontal distance is counted.
 ; ----------------------------------------------------------------------------
-MoveShot:
+Obj_MoveShot:
     ; If the direction leads past a room bound, return [0E] = $80 instead of moving.
-    JSR BoundByRoomWithA
+    JSR Room_BoundDirA
     BEQ @ReturnBlocked
 
     ; Move the object with its grid offset at 0.
@@ -56,7 +56,7 @@ MoveShot:
     PHA
     LDA #$00
     STA ObjGridOffset, X
-    JSR MoveObject
+    JSR Obj_MoveByQSpeed
     PLA                         ; A = grid offset before the move.
 
     ; [0E] <> 0: put the old grid offset back. [0E] = 0: old offset + pixels just moved.
@@ -83,7 +83,7 @@ MoveShot:
 ; NOTE: Coordinates are compared as they are (top-left corners, unsigned). Equal coordinates give
 ;       left and up.
 ; ----------------------------------------------------------------------------
-GetDirectionsAndDistancesToTarget:
+Dir_GetDirsAndDistancesToTarget:
     ; Horizontal.
     PHA
     TAY
@@ -91,7 +91,7 @@ GetDirectionsAndDistancesToTarget:
     STA $0A
     LDA a:ObjX, Y
     LDY ObjX, X
-    JSR GetOneDirectionAndDistanceToTarget
+    JSR Dir_GetAxisDirAndDistanceToTarget
     STA $03
     LDA $0A
     STA $0B
@@ -103,7 +103,7 @@ GetDirectionsAndDistancesToTarget:
     STA $0A
     LDA a:ObjY, Y
     LDY ObjY, X
-    JSR GetOneDirectionAndDistanceToTarget
+    JSR Dir_GetAxisDirAndDistanceToTarget
     STA $04
     RTS
 
@@ -119,7 +119,7 @@ GetDirectionsAndDistancesToTarget:
 ; NOTE: The index selects a pair of q-speeds from the caller's X and Y tables (fireballs and
 ;       returning boomerangs). The directions in [0A] and [0B] are not read here.
 ; ----------------------------------------------------------------------------
-_CalcDiagonalSpeedIndex:
+Dir_CalcAimSpeedIndex:
     ; [00] = the index being adjusted, starting at the caller's value.
     ; Lower indexes mean more X speed and less Y speed; higher ones the reverse.
     STY $00
@@ -132,7 +132,7 @@ _CalcDiagonalSpeedIndex:
     ; Afterwards [03] = larger distance, [04] = smaller distance.
     LDA $03
     CMP $04
-    BCS @Swap
+    BCS @Sorted
     PHA
     LDA $04
     STA $03
@@ -141,7 +141,7 @@ _CalcDiagonalSpeedIndex:
     LDA #$01
     STA $01
 
-@Swap:
+@Sorted:
     ; If the distances differ by less than 8 pixels, keep the starting index (diagonal).
     LDA $03
     SEC
@@ -183,7 +183,7 @@ _CalcDiagonalSpeedIndex:
 ;       limit of $20 set on entering state $40 lasts $10 frames. The table's largest value is $80
 ;       (2 pixels per frame on one axis); halved it is $40 (1 pixel per frame).
 ; ----------------------------------------------------------------------------
-SetBoomerangSpeed:
+Boomerang_SetReturnSpeed:
     STA ObjQSpeedFrac, X
 
     ; Only state $4x (slow return) changes anything further.
@@ -212,7 +212,7 @@ SetBoomerangSpeed:
 ;       else shifted right once: 2 -> 1 right, 8 -> 4 down); [00] incremented if distance < 9;
 ;       [01] = smaller coordinate, [02] = larger coordinate
 ; ----------------------------------------------------------------------------
-GetOneDirectionAndDistanceToTarget:
+Dir_GetAxisDirAndDistanceToTarget:
     ; If origin >= target, the direction in [0A] already points at the target (or they are equal).
     ; Otherwise swap the two so that [02] >= [01], and flip the direction by shifting it right.
     STA $01
@@ -231,6 +231,6 @@ GetOneDirectionAndDistanceToTarget:
     CMP #$09
     BCS Dir_ToTarget_Return
     INC $00
-; Shared RTS; WieldBomb (bank1/bomb-candle-wield.asm) also branches here to return.
+; Shared RTS; Bomb_Wield (bank1/bomb-candle-wield.asm) also branches here to return.
 Dir_ToTarget_Return:
     RTS

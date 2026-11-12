@@ -1,71 +1,71 @@
 ; ============================================================================
 ; FILE:     bank2/mode13-ending-init.asm BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 3203-3403
-; SUBJECTS: (none)
+; SUBJECTS: Ending, Mode13WinGame
 ; TOPIC:    Mode $13 (win game) init, five submodes: the curtain effect runs over Zelda's room, the
 ;           play area attributes are reset, Zelda's "THANKS LINK,YOU'RE THE HERO OF HYRULE." is
 ;           typed out, then a pause, silence, and the hand-over to the mode's update.
 ; SEE ALSO: bank2/mode13-win-game.asm (the update submodes that follow); bank2/credits.asm (the credits
-;           scroll, update submode 3); bank1/map-marker-curtain.asm (UpdateWorldCurtainEffect_Bank2);
+;           scroll, update submode 3); bank1/map-marker-curtain.asm (Mode_UpdateCurtainEffect_ReturnToBank2);
 ;           bank7/init-mode-dispatch.asm (the trampoline that switches to bank 2 and jumps here);
 ;           bank1/person-textbox.asm (the cave textbox, same record format and 6-frame pacing).
 ; KEY FACTS:
-;   - InitMode13_Full dispatches on GameSubmode through InitMode13_Full_JumpTable (submodes 0-4).
+;   - Mode13WinGame_Init_Full dispatches on GameSubmode through Mode13WinGame_Init_JumpTable (submodes 0-4).
 ;   - Submode 0 waits for ObjTimer (slot 0) to expire and the current song to end (CurSong = 0)
 ;     before the curtain moves; the curtain is done when column index ObjX+12 drops below $11.
-;     UpdateEndGameCurtainEffect
-;   - Zelda is object slot 1 throughout: Person_Draw with X = 1 (InitMode13_Sub0); her ObjTimer+1
+;     Mode13WinGame_UpdateCurtain
+;   - Zelda is object slot 1 throughout: Person_Draw with X = 1 (Mode13WinGame_Init_Sub0Curtain); her ObjTimer+1
 ;     paces the text and her ObjState+1 becomes nonzero when the text is complete.
-;   - Text speed: one character per 6 frames (UpdateZeldaTextbox); 38 bytes in ThanksText, one of
+;   - Text speed: one character per 6 frames (Ending_UpdateThanksTextbox); 38 bytes in Ending_ThanksText, one of
 ;     them a space code that carries the jump to the third line.
-;   - ThanksText bytes: low 6 bits = tile code, high 2 bits = what follows the character
+;   - Ending_ThanksText bytes: low 6 bits = tile code, high 2 bits = what follows the character
 ;     ($80 go to line 2, $40 go to line 3, $C0 end of text). Lines start at nametable $21A4, $21C4,
-;     $21E4 (ThanksTextboxLineAddrsLo).
-;   - After the text: $50 frames of delay (InitMode13_Sub2, InitMode13_Sub3), all sound silenced,
-;     then InitMode13_Sub4 sets CreditsTileOffset to 8 and calls BeginUpdateMode.
-;   - No controller input is read anywhere in this file (InitMode13_Full and its submodes).
+;     $21E4 (Ending_ThanksLineAddrsLo).
+;   - After the text: $50 frames of delay (Mode13WinGame_Init_Sub2ThanksText, Mode13WinGame_Init_Sub3Silence), all sound silenced,
+;     then Mode13WinGame_Init_Sub4BeginUpdate sets CreditsTileOffset to 8 and calls Mode_BeginUpdate.
+;   - No controller input is read anywhere in this file (Mode13WinGame_Init_Full and its submodes).
 ; CONTENTS: (generated; L = line in this file)
-;   L0049 InitMode13_Full                       code  Mode $13 (win game) init: runs the handler of the current GameSubmode (0-4).
-;   L0054 InitMode13_Full_JumpTable             data  TABLE: mode $13 init handlers; index = GameSubmode; value = routine address.
-;   L0064 InitMode13_Sub0                       code  Init submode 0: advances the closing curtain; on the frame it finishes, draws Link and Zelda.
-;   L0078 UpdateEndGameCurtainEffect            code  Steps the curtain once ObjTimer and the current song have run out; when done, goes to submode 1.
-;   L0102 PlayAreaAttr0TransferBuf              data  DATA: transfer record: $28 bytes of $00 (count byte $68 = repeat flag $40 + $28) to the nametable
-;   L0108 InitMode13_Sub1                       code  Init submode 1: queues PlayAreaAttr0TransferBuf and resets the textbox position and Zelda's state.
-;   L0126 LA958_Exit                            code  Shared exit of InitMode13_Sub0 and InitMode13_Sub1.
-;   L0133 ThanksText                            data  DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
-;   L0143 InitMode13_Sub2                       code  Init submode 2: types Zelda's text; when it is complete, starts a $50 frame delay and advances.
-;   L0156 ThanksTextboxCharTransferRecTemplate  data  DATA: transfer record template for one textbox character: address $21A4, count 1, tile $24, end $FF.
-;   L0161 ThanksTextboxLineAddrsLo              data  TABLE: low nametable address byte of a text line's first character; index = 0 line 2, 1 line 3,
-;   L0169 UpdateZeldaTextbox                    code  Draws Link and, every 6 frames, writes the next character of ThanksText to the screen.
-;   L0261 LA9F4_Exit                            code  Shared exit of UpdateZeldaTextbox and InitMode13_Sub3.
-;   L0267 InitMode13_Sub3                       code  Init submode 3: when Zelda's timer (the $50 frame delay) expires, silences all sound and advances.
-;   L0278 InitMode13_Sub4                       code  Init submode 4: presets the credits scroll and text counters, ends init, and hides all sprites.
+;   L0049 Mode13WinGame_Init_Full                 code  Mode $13 (win game) init: runs the handler of the current GameSubmode (0-4).
+;   L0054 Mode13WinGame_Init_JumpTable            data  TABLE: mode $13 init handlers; index = GameSubmode; value = routine address.
+;   L0064 Mode13WinGame_Init_Sub0Curtain          code  Init submode 0: advances the closing curtain; on the frame it finishes, draws Link and Zelda.
+;   L0078 Mode13WinGame_UpdateCurtain             code  Steps the curtain once ObjTimer and the current song have run out; when done, goes to submode 1.
+;   L0102 Mode13WinGame_PlayAreaAttrsTransferBuf  data  DATA: transfer record: $28 bytes of $00 (count byte $68 = repeat flag $40 + $28) to the nametable
+;   L0108 Mode13WinGame_Init_Sub1ResetTextbox     code  Init submode 1: queues Mode13WinGame_PlayAreaAttrsTransferBuf and resets the textbox position and Zelda's s...
+;   L0126 Mode13WinGame_Init_Sub1_Return          code  Shared exit of Mode13WinGame_Init_Sub0Curtain and Mode13WinGame_Init_Sub1ResetTextbox.
+;   L0133 Ending_ThanksText                       data  DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
+;   L0143 Mode13WinGame_Init_Sub2ThanksText       code  Init submode 2: types Zelda's text; when it is complete, starts a $50 frame delay and advances.
+;   L0156 Ending_ThanksCharTransferRecTemplate    data  DATA: transfer record template for one textbox character: address $21A4, count 1, tile $24, end $FF.
+;   L0161 Ending_ThanksLineAddrsLo                data  TABLE: low nametable address byte of a text line's first character; index = 0 line 2, 1 line 3,
+;   L0169 Ending_UpdateThanksTextbox              code  Draws Link and, every 6 frames, writes the next character of Ending_ThanksText to the screen.
+;   L0261 Ending_UpdateThanksTextbox_Return       code  Shared exit of Ending_UpdateThanksTextbox and Mode13WinGame_Init_Sub3Silence.
+;   L0267 Mode13WinGame_Init_Sub3Silence          code  Init submode 3: when Zelda's timer (the $50 frame delay) expires, silences all sound and advances.
+;   L0278 Mode13WinGame_Init_Sub4BeginUpdate      code  Init submode 4: presets the credits scroll and text counters, ends init, and hides all sprites.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Mode $13 (win game) init: runs the handler of the current GameSubmode (0-4).
 ; NOTE: reached from the fixed bank's mode-init trampoline with bank 2 switched in.
 ; ----------------------------------------------------------------------------
-InitMode13_Full:
+Mode13WinGame_Init_Full:
     LDA GameSubmode
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: mode $13 init handlers; index = GameSubmode; value = routine address.
-InitMode13_Full_JumpTable:
-    .ADDR InitMode13_Sub0
-    .ADDR InitMode13_Sub1
-    .ADDR InitMode13_Sub2
-    .ADDR InitMode13_Sub3
-    .ADDR InitMode13_Sub4
+Mode13WinGame_Init_JumpTable:
+    .ADDR Mode13WinGame_Init_Sub0Curtain
+    .ADDR Mode13WinGame_Init_Sub1ResetTextbox
+    .ADDR Mode13WinGame_Init_Sub2ThanksText
+    .ADDR Mode13WinGame_Init_Sub3Silence
+    .ADDR Mode13WinGame_Init_Sub4BeginUpdate
 
 ; ----------------------------------------------------------------------------
 ; Init submode 0: advances the closing curtain; on the frame it finishes, draws Link and Zelda.
 ; ----------------------------------------------------------------------------
-InitMode13_Sub0:
-    JSR UpdateEndGameCurtainEffect
+Mode13WinGame_Init_Sub0Curtain:
+    JSR Mode13WinGame_UpdateCurtain
     LDA GameSubmode
-    BEQ LA958_Exit
-    JSR HideAllSprites
+    BEQ Mode13WinGame_Init_Sub1_Return
+    JSR Sprite_HideAll
     JSR Link_EndMoveAndDraw
     LDX #$01                    ; Zelda is in object slot 1.
     JMP Person_Draw
@@ -75,12 +75,12 @@ InitMode13_Sub0:
 ; OUT:  GameSubmode incremented and ObjTimer = $80 once ObjX+12 (curtain column index) < $11.
 ; NOTE: the curtain routine reloads ObjTimer with 5 after each step, which spaces the steps.
 ; ----------------------------------------------------------------------------
-UpdateEndGameCurtainEffect:
+Mode13WinGame_UpdateCurtain:
     LDA ObjTimer
     BNE @Exit
     LDA CurSong
     BNE @Exit
-    JSR UpdateWorldCurtainEffect_Bank2
+    JSR Mode_UpdateCurtainEffect_ReturnToBank2
 
     ; When the decreasing curtain column index is below $11,
     ; go to the next submode.
@@ -99,16 +99,16 @@ UpdateEndGameCurtainEffect:
 
 ; DATA: transfer record: $28 bytes of $00 (count byte $68 = repeat flag $40 + $28) to the nametable
 ; attributes $23D8-$23FF, then the end marker $FF.
-PlayAreaAttr0TransferBuf:
+Mode13WinGame_PlayAreaAttrsTransferBuf:
     .BYTE $23, $D8, $68, $00, $FF
 
 ; ----------------------------------------------------------------------------
-; Init submode 1: queues PlayAreaAttr0TransferBuf and resets the textbox position and Zelda's state.
+; Init submode 1: queues Mode13WinGame_PlayAreaAttrsTransferBuf and resets the textbox position and Zelda's state.
 ; ----------------------------------------------------------------------------
-InitMode13_Sub1:
+Mode13WinGame_Init_Sub1ResetTextbox:
     LDY #$04
 :
-    LDA PlayAreaAttr0TransferBuf, Y
+    LDA Mode13WinGame_PlayAreaAttrsTransferBuf, Y
     STA DynTileBuf, Y
     DEY
     BPL :-
@@ -122,15 +122,15 @@ InitMode13_Sub1:
     STA ObjState+1
     INC GameSubmode
 
-; Shared exit of InitMode13_Sub0 and InitMode13_Sub1.
-LA958_Exit:
+; Shared exit of Mode13WinGame_Init_Sub0Curtain and Mode13WinGame_Init_Sub1ResetTextbox.
+Mode13WinGame_Init_Sub1_Return:
     RTS
 
 ; DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
 ; space; $28, $2A, $2C punctuation, glyphs (unverified): comma, apostrophe, period); high 2 bits =
 ; $80 next goes to line 2, $40 to line 3, $C0 end of text.
 ; Reads "THANKS LINK,YOU'RE" / (one space) / "THE HERO OF HYRULE."
-ThanksText:
+Ending_ThanksText:
     .BYTE $1D, $11, $0A, $17, $14, $1C, $24, $15
     .BYTE $12, $17, $14, $28, $22, $18, $1E, $2A
     .BYTE $1B, $8E, $64, $1D, $11, $0E, $24, $11
@@ -140,8 +140,8 @@ ThanksText:
 ; ----------------------------------------------------------------------------
 ; Init submode 2: types Zelda's text; when it is complete, starts a $50 frame delay and advances.
 ; ----------------------------------------------------------------------------
-InitMode13_Sub2:
-    JSR UpdateZeldaTextbox
+Mode13WinGame_Init_Sub2ThanksText:
+    JSR Ending_UpdateThanksTextbox
     LDA ObjState+1
     BEQ :+
 
@@ -153,25 +153,25 @@ InitMode13_Sub2:
     RTS
 
 ; DATA: transfer record template for one textbox character: address $21A4, count 1, tile $24, end $FF.
-ThanksTextboxCharTransferRecTemplate:
+Ending_ThanksCharTransferRecTemplate:
     .BYTE $21, $A4, $01, $24, $FF
 
 ; TABLE: low nametable address byte of a text line's first character; index = 0 line 2, 1 line 3,
-; 2 line 1 (selected by the high 2 bits of a ThanksText byte); high byte is $21.
-ThanksTextboxLineAddrsLo:
+; 2 line 1 (selected by the high 2 bits of a Ending_ThanksText byte); high byte is $21.
+Ending_ThanksLineAddrsLo:
     .BYTE $C4, $E4, $A4
 
 ; ----------------------------------------------------------------------------
-; Draws Link and, every 6 frames, writes the next character of ThanksText to the screen.
+; Draws Link and, every 6 frames, writes the next character of Ending_ThanksText to the screen.
 ; OUT:  ObjState+1 incremented (nonzero) and ObjState (Link) = 0 once the last character is written.
 ; NOTE: paced by ObjTimer+1 (Zelda's timer); each character requests tune $10 on square 0.
 ; ----------------------------------------------------------------------------
-UpdateZeldaTextbox:
+Ending_UpdateThanksTextbox:
     JSR Link_EndMoveAndDraw
 
     ; If Zelda's timer has not expired, then return.
     LDA ObjTimer+1
-    BNE LA9F4_Exit
+    BNE Ending_UpdateThanksTextbox_Return
 
     ; Set the timer to wait 6 frames after the next character about
     ; to be shown.
@@ -182,7 +182,7 @@ UpdateZeldaTextbox:
     ; to the dynamic transfer buf.
     LDY #$04
 :
-    LDA ThanksTextboxCharTransferRecTemplate, Y
+    LDA Ending_ThanksCharTransferRecTemplate, Y
     STA DynTileBuf, Y
     DEY
     BPL :-
@@ -194,9 +194,9 @@ UpdateZeldaTextbox:
 
     ; Increment the low VRAM address for the next character.
     INC TextboxCharVramLo
-    LDA #<ThanksText
+    LDA #<Ending_ThanksText
     STA $00
-    LDA #>ThanksText
+    LDA #>Ending_ThanksText
     STA $01
 
     ; Load the person text current character index.
@@ -226,7 +226,7 @@ UpdateZeldaTextbox:
     ; If the high 2 bits of character element = 0, then return.
     LDA ($00), Y
     AND #$C0
-    BEQ LA9F4_Exit
+    BEQ Ending_UpdateThanksTextbox_Return
 
     ; Determine an index based on the high 2 bits of the character element:
     ;   $80: 0
@@ -245,40 +245,40 @@ UpdateZeldaTextbox:
     ;   0: $C4: front of the second line
     ;   1: $E4: front of the third line
     ;   2: $A4: front of the first line
-    LDA ThanksTextboxLineAddrsLo, Y
+    LDA Ending_ThanksLineAddrsLo, Y
     STA TextboxCharVramLo
 
     ; If index = 2, then we've reached the end of the text,
     ; and low VRAM address is moved to the front of the first line.
     ; So, advance the state of the person object, and unhalt Link.
     CPY #$02
-    BNE LA9F4_Exit
+    BNE Ending_UpdateThanksTextbox_Return
     INC ObjState+1
     LDA #$00
     STA ObjState
 
-; Shared exit of UpdateZeldaTextbox and InitMode13_Sub3.
-LA9F4_Exit:
+; Shared exit of Ending_UpdateThanksTextbox and Mode13WinGame_Init_Sub3Silence.
+Ending_UpdateThanksTextbox_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Init submode 3: when Zelda's timer (the $50 frame delay) expires, silences all sound and advances.
 ; ----------------------------------------------------------------------------
-InitMode13_Sub3:
+Mode13WinGame_Init_Sub3Silence:
     LDA ObjTimer+1
-    BNE LA9F4_Exit
-    JSR SilenceAllSound
+    BNE Ending_UpdateThanksTextbox_Return
+    JSR Audio_SilenceAll
     INC GameSubmode
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Init submode 4: presets the credits scroll and text counters, ends init, and hides all sprites.
-; NOTE: uses the A = 0 that BeginUpdateMode returns to clear the two "peace" text counters.
+; NOTE: uses the A = 0 that Mode_BeginUpdate returns to clear the two "peace" text counters.
 ; ----------------------------------------------------------------------------
-InitMode13_Sub4:
+Mode13WinGame_Init_Sub4BeginUpdate:
     LDA #$08
     STA CreditsTileOffset
-    JSR BeginUpdateMode
+    JSR Mode_BeginUpdate
     STA PeaceCharDelayCounter
     STA PeaceCharIndex
-    JMP HideAllSprites
+    JMP Sprite_HideAll

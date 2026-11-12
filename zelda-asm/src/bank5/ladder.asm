@@ -1,18 +1,18 @@
 ; ============================================================================
 ; FILE:     bank5/ladder.asm             BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 3219-3416
-; SUBJECTS: (none)
+; SUBJECTS: Ladder
 ; TOPIC:    The laid-down ladder (object type $5F): each frame decides whether it stays, lets Link walk
 ;           across it by overriding his moving direction, and draws it.
-; SEE ALSO: bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate lays the ladder down: LadderRoomsOW,
-;           LinkToLadderOffsetsX/Y, the water tile test); bank7/walker-move.asm (Walker_Move calls
-;           CheckLadder after the tile collision test, then falls into MoveObject);
+; SEE ALSO: bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate lays the ladder down: Ladder_RoomIdsOW,
+;           Ladder_LinkOffsetsX/Y, the water tile test); bank7/walker-move.asm (Walker_Move calls
+;           Ladder_CheckAndDraw after the tile collision test, then falls into Obj_MoveByQSpeed);
 ;           bank7/walker-collision-screen-edge.asm (no screen-edge room change while LadderSlot <> 0);
-;           bank5/mode3-mode6-init.asm (ResetInvObjState clears LadderSlot).
+;           bank5/mode3-mode6-init.asm (Obj_ResetWeaponSlotsAndLadder clears LadderSlot).
 ; KEY FACTS:
 ;   - LadderSlot = the ladder's object slot, 0 = no ladder out. The ladder's ObjState: 1 = laid down,
-;     Link not yet on it; 2 = Link is or has been on it (CheckLadder@SetState2).
-;   - The ladder has no timer. It is put away (CheckLadder@StashLadder) when: its state is 0; Link is
+;     Link not yet on it; 2 = Link is or has been on it (Ladder_CheckAndDraw@SetState2).
+;   - The ladder has no timer. It is put away (Ladder_CheckAndDraw@StashLadder) when: its state is 0; Link is
 ;     off its line (X differs for a vertical ladder, Y + 3 differs for a horizontal one); Link is more
 ;     than $10 pixels from it along its axis; or he is exactly $10 away and either faces another way
 ;     than the ladder or the state is already 2 (he has crossed and stepped off).
@@ -21,14 +21,14 @@
 ;     that is his moving direction; back the way he came; all else is stopped ([0F] = 0).
 ;   - A ladder laid upward, exactly Up held, and none of the three cases above: the tile test is
 ;     repeated with Link's Y 8 less; Link may go on only if that tile is walkable (below
-;     RoomFirstUnwalkableTile) (CheckLadder, case E).
-;   - In the frame the ladder is put away CheckLadder returns X = the ladder's slot, not 0, and leaves
-;     [0F] alone, so the MoveObject that follows in Walker_Move acts on the freed slot and Link does
+;     RoomFirstUnwalkableTile) (Ladder_CheckAndDraw, case E).
+;   - In the frame the ladder is put away Ladder_CheckAndDraw returns X = the ladder's slot, not 0, and leaves
+;     [0F] alone, so the Obj_MoveByQSpeed that follows in Walker_Move acts on the freed slot and Link does
 ;     not move that frame.
-;   - The ladder is drawn with item slot $0C's sprites, palette attribute 0 (CheckLadder@DrawLadder).
+;   - The ladder is drawn with item slot $0C's sprites, palette attribute 0 (Ladder_CheckAndDraw@DrawLadder).
 ; CONTENTS: (generated; L = line in this file)
-;   L0044 CheckLadder                        code  Maintains the laid-down ladder: puts it away, or draws it and decides Link's moving direction on it.
-;   L0235 SetMovingDirAndSwitchToPlayerSlot  code  Stores A as the moving direction and selects Link's object slot.
+;   L0044 Ladder_CheckAndDraw               code  Maintains the laid-down ladder: puts it away, or draws it and decides Link's moving direction on it.
+;   L0235 Ladder_SetMovingDirAndSelectLink  code  Stores A as the moving direction and selects Link's object slot.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -41,7 +41,7 @@
 ;       laid left or right. The ladder stays as long as Link keeps to its line within $10 pixels; it
 ;       has no timer.
 ; ----------------------------------------------------------------------------
-CheckLadder:
+Ladder_CheckAndDraw:
     ; If the ladder's not in use, return.
     LDX LadderSlot
     BEQ @Exit
@@ -82,7 +82,7 @@ CheckLadder:
 @CheckDistanceToLadder:
     ; If absolute distance < $10, go handle movement on the ladder and set state 2.
     ; If > $10, go put the ladder away.
-    JSR Abs
+    JSR Math_Abs
     STA $00                     ; [00] = absolute distance between Link and the ladder on its axis.
     CMP #$10
     BCC @SetState2
@@ -109,10 +109,10 @@ CheckLadder:
 
 @StashLadder:
     ; Put away the ladder. Reset ladder slot and destroy the object.
-    ; DestroyMonster keeps X, so X stays the ladder's slot on return.
+    ; Obj_DestroyMonster keeps X, so X stays the ladder's slot on return.
     LDA #$00
     STA LadderSlot
-    JSR DestroyMonster
+    JSR Obj_DestroyMonster
 
 @Exit:
     RTS
@@ -164,7 +164,7 @@ CheckLadder:
     ; then go draw and move in that direction (A = opposite of the ladder's direction).
     ;
     ; Link can always step off the ladder where he came from.
-    JSR GetOppositeDir
+    JSR Dir_GetOpposite
     CMP ObjDir
     BEQ @DrawLadder
 
@@ -191,7 +191,7 @@ CheckLadder:
     ; Set moving direction to input direction (up) and switch X to
     ; Link's slot for the purpose of checking tile collision below.
     ; Based on that, we'll set moving direction according to walkability.
-    JSR SetMovingDirAndSwitchToPlayerSlot
+    JSR Ladder_SetMovingDirAndSelectLink
 
     ; Check the colliding tile as if Link was 8 pixels up.
     LDA ObjY
@@ -199,7 +199,7 @@ CheckLadder:
     SEC
     SBC #$08
     STA ObjY
-    JSR GetCollidingTileMoving
+    JSR Tile_GetAheadOfObj
     PLA
     STA ObjY
 
@@ -232,7 +232,7 @@ CheckLadder:
 ; IN:   A = direction.
 ; OUT:  [0F] = A; X = 0.
 ; ----------------------------------------------------------------------------
-SetMovingDirAndSwitchToPlayerSlot:
+Ladder_SetMovingDirAndSelectLink:
     STA $0F
     LDX #$00
     RTS

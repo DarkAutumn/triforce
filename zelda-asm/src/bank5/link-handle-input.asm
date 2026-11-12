@@ -1,17 +1,17 @@
 ; ============================================================================
 ; FILE:     bank5/link-handle-input.asm  BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 6919-7253
-; SUBJECTS: Link
+; SUBJECTS: Dir, Link
 ; TOPIC:    Link's per-frame input handling in mode 5: A (sword) and B (item) presses, then the rules that
 ;           turn the held directions into ObjDir/ObjInputDir at a grid point and between grid points,
 ;           and Link's walking speed.
 ; SEE ALSO: bank5/border-input-mask.asm (Link_FilterInput: buttons and directions masked near the room
-;           border); bank5/doorway.asm (Link_ModifyDirInDoorway); bank5/wield-items.asm (WieldSword,
-;           WieldItem); bank7/walker-move.asm (Walker_Move, which moves Link right after this routine);
-;           bank7/walker-collision-screen-edge.asm (CheckScreenEdge: room change only at grid offset 0);
+;           border); bank5/doorway.asm (Link_ModifyDirInDoorway); bank5/wield-items.asm (Sword_Wield,
+;           Link_WieldItem); bank7/walker-move.asm (Walker_Move, which moves Link right after this routine);
+;           bank7/walker-collision-screen-edge.asm (Link_CheckScreenEdge: room change only at grid offset 0);
 ;           bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate: grid offset +-8 becomes 0);
-;           bank7/mode5-play-update.asm (UpdatePlayer, the caller); bank1/qspeed-direction-math.asm
-;           (GetOppositeDir, Abs, Negate, the q-speed fraction).
+;           bank7/mode5-play-update.asm (Link_Update, the caller); bank1/qspeed-direction-math.asm
+;           (Dir_GetOpposite, Abs, Negate, the q-speed fraction).
 ; KEY FACTS:
 ;   - A and B are read only while Link's state is 0. A swings the sword only when SwordBlockedLongTimer
 ;     and IsSwordBlocked are both 0; B is not subject to that test (Link_HandleInput).
@@ -19,47 +19,47 @@
 ;   - Link's grid is 8 pixels. ObjGridOffset = 0 selects the grid-point rules (Link_ModifyDirAtGridPoint),
 ;     anything else the between-points rules (Link_ModifyDirOnGridLine).
 ;   - At a grid point one held direction always becomes ObjDir and ObjInputDir, walkable or not
-;     (HaveInput).
+;     (Link_ModifyDirAtGridPoint_HaveInput).
 ;   - At a grid point with two held directions: none walkable = no movement; one walkable = go that way;
 ;     both walkable = OW takes the vertical one, UW alternates (turn perpendicular once, then keep going
-;     straight) with special cases at X=$20/$D0 and at ($78,$5D) (HaveInput).
+;     straight) with special cases at X=$20/$D0 and at ($78,$5D) (Link_ModifyDirAtGridPoint_HaveInput).
 ;   - Between grid points Link can only continue or go back: the same direction continues, the opposite
 ;     direction is taken at once WITHOUT touching ObjGridOffset (Link_ModifyDirOnGridLine).
 ;   - Between grid points a single perpendicular press reverses Link when Link_GoStraight is 0, he is
 ;     less than 4 pixels from the grid point he left and still heading away from it. ObjGridOffset is
 ;     rewritten for the new heading: negative n -> 8 + n, positive n -> n - 8
-;     (Link_ModifyDirOnGridLine, SetLinkInputDir@ReverseDir).
+;     (Link_ModifyDirOnGridLine, Link_SetInputDir@ReverseDir).
 ;   - After such a reversal followed by the opposite direction, the offset's sign is opposite to Link's
 ;     heading and counts toward 0 instead of +-8. Nothing stops it at 0, so a 2-pixel frame can step it
 ;     from +1 to -1 (or -1 to +1) and Link passes that grid point without any frame at offset 0
 ;     (Link_ModifyDirOnGridLine NOTE).
 ;   - With two directions held between grid points the horizontal one is the one considered
-;     (Link_ModifyDirOnGridLine, through GetOppositeDir).
+;     (Link_ModifyDirOnGridLine, through Dir_GetOpposite).
 ;   - Link's q-speed is $60 (1.5 pixels per frame: 1, 2, 1, 2 ...); $30 (0.75) in the OW while
-;     ObjCollidedTile is $74 or $75 (InitLinkSpeed).
+;     ObjCollidedTile is $74 or $75 (Link_InitSpeed).
 ; CONTENTS: (generated; L = line in this file)
-;   L0055 AxisMasks                  data  TABLE: direction bits on the same axis as a direction; index = reverse direction index (0 up, 1 down,
-;   L0068 Link_HandleInput           code  Handles Link's A and B presses, then turns the held directions into his facing and moving direction.
-;   L0117 Link_ModifyDirAtGridPoint  code  Grid-point rules: picks Link's direction from the held directions and which of them are walkable.
-;   L0153 L172FC_Exit                code  Shared return of Link_HandleInput and Link_ModifyDirAtGridPoint.
-;   L0157 HaveInput                  code  Grid-point rules, second part: at least one direction is held; Y = their count, X = 0.
-;   L0272 InitLinkSpeed              code  Sets Link's walking q-speed: $60 (1.5 pixels per frame), or $30 (0.75) on OW tiles $74 and $75.
-;   L0333 Link_ModifyDirOnGridLine   code  Between-grid-points rules: Link may only continue, go back, or (near the start of a step) reverse.
-;   L0360 SetObjDirAndInputDir       code  Sets Link's facing direction and input direction to A.
-;   L0364 SetLinkInputDir            code  Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
+;   L0055 Dir_AxisMasks                        data  TABLE: direction bits on the same axis as a direction; index = reverse direction index (0 up, 1 down,
+;   L0068 Link_HandleInput                     code  Handles Link's A and B presses, then turns the held directions into his facing and moving direction.
+;   L0117 Link_ModifyDirAtGridPoint            code  Grid-point rules: picks Link's direction from the held directions and which of them are walkable.
+;   L0153 Link_HandleInput_Return              code  Shared return of Link_HandleInput and Link_ModifyDirAtGridPoint.
+;   L0157 Link_ModifyDirAtGridPoint_HaveInput  code  Grid-point rules, second part: at least one direction is held; Y = their count, X = 0.
+;   L0272 Link_InitSpeed                       code  Sets Link's walking q-speed: $60 (1.5 pixels per frame), or $30 (0.75) on OW tiles $74 and $75.
+;   L0333 Link_ModifyDirOnGridLine             code  Between-grid-points rules: Link may only continue, go back, or (near the start of a step) reverse.
+;   L0360 Link_SetDirAndInputDir               code  Sets Link's facing direction and input direction to A.
+;   L0364 Link_SetInputDir                     code  Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
 ; ============================================================================
 
 ; TABLE: direction bits on the same axis as a direction; index = reverse direction index (0 up, 1 down,
 ;        2 left, 3 right); value = $0C (up|down) for a vertical direction, $03 (left|right) for a
 ;        horizontal one.
-AxisMasks:
+Dir_AxisMasks:
     .BYTE $0C, $0C, $03, $03
 
 ; ----------------------------------------------------------------------------
 ; Handles Link's A and B presses, then turns the held directions into his facing and moving direction.
 ; IN:   ObjInputDir (slot 0) = direction bits held on the controller (1 right, 2 left, 4 down, 8 up)
 ; OUT:  ObjDir, ObjInputDir, ObjQSpeedFrac and sometimes ObjGridOffset of slot 0; X = 0 on most paths
-; NOTE: Called by UpdatePlayer directly before Walker_Move, on every frame UpdatePlayer runs with
+; NOTE: Called by Link_Update directly before Walker_Move, on every frame Link_Update runs with
 ;       Link not halted ((ObjState AND $C0) <> $40).
 ; NOTE: A and B are tested only in state 0 and only on the frame they go down (ButtonsPressed).
 ;       Link_FilterInput may have cleared them or the perpendicular directions near the room border.
@@ -79,19 +79,19 @@ Link_HandleInput:
     LDA ButtonsPressed
     AND #$80                    ; A button
     BEQ :+
-    JSR WieldSword
+    JSR Sword_Wield
 :
     ; B newly pressed: use the selected item.
     LDA ButtonsPressed
     AND #$40                    ; B button
     BEQ @CheckMovement
-    JSR WieldItem
+    JSR Link_WieldItem
 
 @CheckMovement:
     ; If Link is being shoved, return: knockback decides the movement.
     LDX #$00
     LDA ObjShoveDir
-    BNE L172FC_Exit
+    BNE Link_HandleInput_Return
 
     ; In UW, restrict the input direction inside a doorway.
     LDA CurLevel
@@ -111,7 +111,7 @@ Link_HandleInput:
 ;       direction found; [0D] = last walkable held direction found; Link_GoStraight = 0
 ; NOTE: The directions are tested in the order right, left, down, up, so with a horizontal and a
 ;       vertical direction held "last found" is the vertical one.
-; NOTE: Walkable = the tile GetCollidingTileMoving finds ahead of Link in that direction is below
+; NOTE: Walkable = the tile Tile_GetAheadOfObj finds ahead of Link in that direction is below
 ;       RoomFirstUnwalkableTile. Doors, room bounds and tile objects are not considered here.
 ; ----------------------------------------------------------------------------
 Link_ModifyDirAtGridPoint:
@@ -125,13 +125,13 @@ Link_ModifyDirAtGridPoint:
 
 @LoopDir:
     LDA ObjInputDir
-    AND ReverseDirections, Y
+    AND Dir_ReverseIndexToDir, Y
     BEQ @NextLoopDir            ; Not held.
     STA $0F                     ; [0F] = this held direction (also the argument of the tile lookup).
     TYA                         ; Save the reverse direction index.
     PHA
     INC $0B
-    JSR GetCollidingTileMoving
+    JSR Tile_GetAheadOfObj
     CMP RoomFirstUnwalkableTile
     BCS :+                      ; Tile >= first unwalkable tile: blocked.
     LDA $0F
@@ -147,14 +147,14 @@ Link_ModifyDirAtGridPoint:
 
     ; No direction held: return. ObjDir, ObjInputDir (0) and the speed stay as they are.
     LDY $0B
-    BNE HaveInput
+    BNE Link_ModifyDirAtGridPoint_HaveInput
 
 ; Shared return of Link_HandleInput and Link_ModifyDirAtGridPoint.
-L172FC_Exit:
+Link_HandleInput_Return:
     RTS
 
 ; Grid-point rules, second part: at least one direction is held; Y = their count, X = 0.
-HaveInput:
+Link_ModifyDirAtGridPoint_HaveInput:
     ; One direction held: it becomes ObjDir and ObjInputDir whether or not it is walkable,
     ; and Link_GoStraightWhenDiagInput is cleared (X = 0).
     LDA $0F
@@ -166,7 +166,7 @@ HaveInput:
     ; None walkable: set ObjInputDir to 0 (A = 0), leave ObjDir alone, and return.
     LDA $0C
     BNE :+
-    JMP SetLinkInputDir
+    JMP Link_SetInputDir
 :
     ; At least one of them is walkable. Link will keep one direction until the
     ; next grid point even if a perpendicular direction is pressed on the way.
@@ -192,7 +192,7 @@ HaveInput:
 
     ; Special case 1: Link's X is $20 or $D0, the leftmost and rightmost X the UW room
     ; bounds allow outside a doorway (the columns in front of the left and right doors,
-    ; which are entered at Y = $8D: DoorwayRequiredCoord).
+    ; which are entered at Y = $8D: Doorway_RequiredCoords).
     ;   At Y = $85 (8 pixels above the door row) facing down: keep the facing direction
     ;   and clear the flag.
     ;   Otherwise: turn perpendicular, whatever the flag says.
@@ -225,7 +225,7 @@ HaveInput:
     BEQ @SetLinkDirAndSpeed     ; Never taken: the OW left this path above.
 
     ; ... except in special case 2: Link at X = $78, Y = $5D (the top floor row, at the X
-    ; the up and down doors require: DoorwayRequiredCoord) and facing horizontally. There
+    ; the up and down doors require: Doorway_RequiredCoords) and facing horizontally. There
     ; he turns perpendicular (up or down) even though the flag is set. Facing vertically
     ; there, he keeps his facing. The bottom door ($78, $BD) has no such case.
     LDY ObjX
@@ -242,10 +242,10 @@ HaveInput:
     ; remove from the input the bits on ObjDir's own axis.
     LDA ObjDir
     INX                         ; Flag + 1: nonzero (X was 0, or the set flag in special case 2).
-    JSR GetOppositeDir          ; Only for Y = reverse direction index of ObjDir.
+    JSR Dir_GetOpposite          ; Only for Y = reverse direction index of ObjDir.
     LDA ObjInputDir
     PHA
-    AND AxisMasks, Y            ; The input bits on ObjDir's axis ...
+    AND Dir_AxisMasks, Y            ; The input bits on ObjDir's axis ...
     STA $0C
     PLA
     EOR $0C                     ; ... removed from the input.
@@ -253,7 +253,7 @@ HaveInput:
 @SetLinkDirAndSpeed:
     ; ObjDir = ObjInputDir = A; Link_GoStraightWhenDiagInput = X; then set the speed.
     STX Link_GoStraightWhenDiagInput
-    JSR SetObjDirAndInputDir
+    JSR Link_SetDirAndInputDir
     LDX #$00
 
 ; ----------------------------------------------------------------------------
@@ -266,10 +266,10 @@ HaveInput:
 ;       pixels per frame: 1 and 2 pixels on alternate frames.
 ; NOTE: Upstream calls tiles $74/$75 mountain stairs (unverified here). The slow speed applies in
 ;       the OW only. ObjPosFrac is not reset when the speed goes back to $60.
-; NOTE: Also called when Link enters a room (InitMode_EnterRoom chunk) and, by branch, from
+; NOTE: Also called when Link enters a room (Room_EnterCommon chunk) and, by branch, from
 ;       Link_ModifyDirOnGridLine when Link keeps his direction.
 ; ----------------------------------------------------------------------------
-InitLinkSpeed:
+Link_InitSpeed:
     LDA #$60                    ; Default q-speed.
     STA $00
     LDA CurLevel
@@ -299,7 +299,7 @@ InitLinkSpeed:
 ; Between-grid-points rules: Link may only continue, go back, or (near the start of a step) reverse.
 ; IN:   X = 0; ObjGridOffset <> 0; ObjInputDir = held direction bits; ObjDir = facing
 ; OUT:  ObjDir, ObjInputDir, ObjGridOffset, ObjQSpeedFrac changed as listed below
-; NOTE: The input is first reduced to one direction by GetOppositeDir, which takes the lowest set
+; NOTE: The input is first reduced to one direction by Dir_GetOpposite, which takes the lowest set
 ;       bit: right, else left, else down, else up. The cases, in order:
 ;       1. Nothing held: return. Link stops between grid points.
 ;       2. Same as ObjDir: keep going (speed is set again).
@@ -337,31 +337,31 @@ Link_ModifyDirOnGridLine:
 
     ; Reduce the input to a single direction.
     ; Y = its reverse direction index, A = the direction.
-    JSR GetOppositeDir
-    LDA ReverseDirections, Y
+    JSR Dir_GetOpposite
+    LDA Dir_ReverseIndexToDir, Y
 
     ; Case 2: same as the facing direction.
     CMP ObjDir
-    BEQ InitLinkSpeed
+    BEQ Link_InitSpeed
 
     ; Case 3: opposite of the facing direction (the two together make a full axis).
     ORA ObjDir
     CMP #$03                    ; right | left
     BEQ :+
     CMP #$0C                    ; down | up
-    BNE :++                     ; Perpendicular: go to cases 4-6, below SetLinkInputDir.
+    BNE :++                     ; Perpendicular: go to cases 4-6, below Link_SetInputDir.
 :
-    LDA ReverseDirections, Y
+    LDA Dir_ReverseIndexToDir, Y
 
 ; ----------------------------------------------------------------------------
 ; Sets Link's facing direction and input direction to A.
 ; IN:   A = direction
 ; ----------------------------------------------------------------------------
-SetObjDirAndInputDir:
+Link_SetDirAndInputDir:
     STA ObjDir
 
 ; Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
-SetLinkInputDir:
+Link_SetInputDir:
     STA ObjInputDir
     RTS
 :
@@ -369,14 +369,14 @@ SetLinkInputDir:
     ;
     ; Case 4: told at the last grid point to go straight (diagonal input).
     LDA Link_GoStraight
-    BNE InitLinkSpeed
+    BNE Link_InitSpeed
 
     ; Case 5: 4 or more pixels (half a grid cell) from the grid point: return.
     LDA ObjGridOffset
-    JSR Abs
+    JSR Math_Abs
     PHA
     LDA ObjDir
-    JSR GetOppositeDir
+    JSR Dir_GetOpposite
     STA $01                     ; [01] = the opposite of the facing direction.
     PLA
     CMP #$04
@@ -411,7 +411,7 @@ SetLinkInputDir:
 :
     PHA
     TYA
-    JSR Negate
+    JSR Math_Negate
     STA $01
     PLA
     SEC

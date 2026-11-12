@@ -1,19 +1,19 @@
 ; ============================================================================
 ; FILE:     bank5/edge-spawn-cell.asm    BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 3418-3513
-; SUBJECTS: (none)
+; SUBJECTS: EdgeSpawn
 ; TOPIC:    Picks the next cell on the screen's outer ring where a monster may walk in from the edge
 ;           (overworld rooms with the "monsters from edges" attribute).
-; SEE ALSO: bank7/object-init-table.asm (InitObject: the only caller; turns the cell into X and Y, sets
+; SEE ALSO: bank7/object-init-table.asm (Obj_Init: the only caller; turns the cell into X and Y, sets
 ;           MonstersFromEdgesLongTimer, rejects a spot too close to Link);
 ;           bank5/save-ram-clear-ram.asm (the starting cell $40); bank5/spawn-positions.asm
-;           (IsDistanceSafeToSpawn).
+;           (Spawn_IsFarFromLink).
 ; KEY FACTS:
 ;   - CurEdgeSpawnCell = row in the high nibble ($4 top .. $E bottom), column in the low nibble ($0
-;     left .. $F right). InitObject places the monster at X = column * $10, Y = row * $10 - 3.
+;     left .. $F right). Obj_Init places the monster at X = column * $10, Y = row * $10 - 3.
 ;   - The search steps around the ring counterclockwise, one cell a step: down the left edge, right
 ;     along the bottom, up the right edge, left along the top. It starts from the cell after the stored
-;     one, so successive monsters enter at successive open cells (FindNextEdgeSpawnCell@LoopEdgeCell).
+;     one, so successive monsters enter at successive open cells (EdgeSpawn_FindNextCell@LoopEdgeCell).
 ;   - The corner cells $E0 (bottom left) and $4F (top right) are never tested: the step into them also
 ;     moves along the next edge.
 ;   - A cell is accepted when the tile at its top left is below $84. That is stricter than walking in
@@ -22,7 +22,7 @@
 ;     that cell has just failed the tile test too.
 ;   - No random numbers are used; the cell persists between rooms (CurEdgeSpawnCell).
 ; CONTENTS: (generated; L = line in this file)
-;   L0035 FindNextEdgeSpawnCell  code  Advances CurEdgeSpawnCell counterclockwise around the screen's outer ring to the next open cell.
+;   L0035 EdgeSpawn_FindNextCell  code  Advances CurEdgeSpawnCell counterclockwise around the screen's outer ring to the next open cell.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -32,7 +32,7 @@
 ; NOTE: Open = tile number below $84 at the cell's top left tile. The stored cell is the last one
 ;       tested; if it fails as well, the lap ends there and it is kept anyway. Deterministic: no RNG.
 ; ----------------------------------------------------------------------------
-FindNextEdgeSpawnCell:
+EdgeSpawn_FindNextCell:
     ; [0A] = the cell being tested, starting from the stored cell.
     LDA CurEdgeSpawnCell
     STA $0A
@@ -81,7 +81,7 @@ FindNextEdgeSpawnCell:
 
 @PointToColumn:
     ; Get the address of the room's tile map: the top of the leftmost tile column.
-    JSR FetchTileMapAddr
+    JSR Tile_FetchPlayAreaTilesAddr
 
     ; Add $2C to the address as many times as the low nibble of [0A],
     ; in order to point to the cell's left tile column.
@@ -91,7 +91,7 @@ FindNextEdgeSpawnCell:
     BEQ @GetRowOffset
 :
     LDA #$2C                    ; A tile column is $16 tiles; a cell is two tile columns wide.
-    JSR AddToInt16At0
+    JSR Math_AddToInt16At0
     DEY
     BNE :-
 

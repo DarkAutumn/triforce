@@ -1,65 +1,65 @@
 ; ============================================================================
 ; FILE:     bank2/title-animation.asm    BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 1003-1348
-; SUBJECTS: (none)
+; SUBJECTS: Mode0Demo, Title
 ; TOPIC:    Title screen animation: the title sprites, the glowing Triforce palette, the waterfall
 ;           sprites, and the palette fade to black (phase 0 subphase 1) that leads into the story.
-; SEE ALSO: bank2/demo-story-scroll.asm (AnimateDemoPhase0Subphase0 calls the sprite and glow routine
-;           here); bank2/demo-tables-init.asm (InitialTitleSprites, the title palette and the variable
-;           reset); bank2/mode0-demo.asm (AnimateDemo_Phase0_JumpTable).
+; SEE ALSO: bank2/demo-story-scroll.asm (Mode0Demo_Animate_Phase0_Sub0 calls the sprite and glow routine
+;           here); bank2/demo-tables-init.asm (Title_InitialSprites, the title palette and the variable
+;           reset); bank2/mode0-demo.asm (Mode0Demo_Animate_Phase0_JumpTable).
 ; KEY FACTS:
 ;   - The Triforce colour (palette byte $3F06) steps through 8 values, each held 6 frames, the last
-;     $10 frames: one glow cycle is 58 frames. TriforceGlowingColors,
-;     AnimateDemoPhase0Subphase0Artifacts.
+;     $10 frames: one glow cycle is 58 frames. Title_TriforceGlowColors,
+;     Title_AnimateSpritesAndGlow.
 ;   - The waterfall is 3 waves of 4 sprites (sprite records at offsets $70, $80, $90) that move down 2
 ;     pixels per frame and wrap from Y >= $E3 to $B2, plus a 4-sprite crest fixed at Y = $A8 (offset
-;     $F0) that changes tile every 8 frames. UpdateSpritesForWaterfallWave,
-;     UpdateSpritesForWaterfallCrest.
-;   - A wave uses tile set +0 while Y < $B9, +8 while Y < $C2, else +$10. UpdateSpritesForWaterfallWave.
-;   - The fade sends 14 full 32-byte palettes; palette n is held DemoPhase0Subphase1Delays[n] frames
+;     $F0) that changes tile every 8 frames. Title_DrawWaterfallWave,
+;     Title_DrawWaterfallCrest.
+;   - A wave uses tile set +0 while Y < $B9, +8 while Y < $C2, else +$10. Title_DrawWaterfallWave.
+;   - The fade sends 14 full 32-byte palettes; palette n is held Title_FadeDelays[n] frames
 ;     (8, 8, 6, 5, 4, 3, 2, 2, 2, $C0, 6, 4, $C0), 434 frames in all; with the 14th palette DemoPhase
-;     becomes 1 and IsUpdatingMode 0 at once. AnimateDemoPhase0Subphase1.
-;   - TitleWaveYs+3..+5, the 5 bytes after WaterfallWaveSpriteOffsets, the 64 bytes after
-;     DemoPhase0Subphase1Palettes and the 2 bytes after DemoPhase0Subphase1Delays are never read.
+;     becomes 1 and IsUpdatingMode 0 at once. Mode0Demo_Animate_Phase0_Sub1.
+;   - TitleWaveYs+3..+5, the 5 bytes after Title_WaterfallWaveSpriteOffsets, the 64 bytes after
+;     Title_FadePalettes and the 2 bytes after Title_FadeDelays are never read.
 ;   - The $FF bytes at the end of the file are padding (297 bytes).
 ; CONTENTS: (generated; L = line in this file)
-;   L0042 TriforcePaletteTransferRecord        data  DATA: PPU transfer record for palette bytes $3F04-$3F07; its byte 5 (for $3F06) is patched per step.
-;   L0046 TriforceGlowingColors                data  TABLE: Triforce glow colour; index = TriforceGlowCycle (0-7); value = NES colour for $3F06.
-;   L0052 AnimateDemoPhase0Subphase0Artifacts  code  Title subphase 0 per frame: copies the title sprites, animates the waterfall, steps the glow.
-;   L0097 WaterfallWaveTiles                   data  TABLE: first-frame tile of each waterfall wave sprite; index = sprite 0-3 (read from 3 down).
-;   L0101 WaterfallCrestTiles                  data  TABLE: first-frame tile of each waterfall crest sprite; index = sprite 0-3.
-;   L0105 WaterfallSpriteXs                    data  TABLE: X coordinate of the 4 sprites of a waterfall wave or crest; index = sprite 0-3.
-;   L0109 WaterfallWaveSpriteOffsets           data  TABLE: offset in Sprites of the first sprite of each waterfall wave; index = wave 0-2.
-;   L0118 UpdateWaterfallAnimation             code  Sets the waterfall wave Ys on first use, then moves and draws the 3 waves and the crest.
-;   L0151 UpdateSpritesForWaterfallWave        code  Moves one waterfall wave down 2 pixels (wrapping to $B2) and writes its 4 sprites.
-;   L0208 UpdateSpritesForWaterfallCrest       code  Writes the 4 sprites of the waterfall crest at Y = $A8, alternating two tile sets every 8 frames.
-;   L0234 DemoPhase0Subphase1Palettes          data  TABLE: the 14 palettes of the title fade, 32 bytes each; index = DemoPhase0Subphase1Cycle * $20.
-;   L0304 DemoPhase0Subphase1Delays            data  TABLE: frames each fade palette is held; index = DemoPhase0Subphase1Cycle - 1 after the increment.
-;   L0314 AnimateDemoPhase0Subphase1           code  Title subphase 1: fades the title palettes to black in 14 timed steps, then starts the story phase.
+;   L0042 Title_TriforcePaletteTransferRecord  data  DATA: PPU transfer record for palette bytes $3F04-$3F07; its byte 5 (for $3F06) is patched per step.
+;   L0046 Title_TriforceGlowColors             data  TABLE: Triforce glow colour; index = TriforceGlowCycle (0-7); value = NES colour for $3F06.
+;   L0052 Title_AnimateSpritesAndGlow          code  Title subphase 0 per frame: copies the title sprites, animates the waterfall, steps the glow.
+;   L0097 Title_WaterfallWaveTiles             data  TABLE: first-frame tile of each waterfall wave sprite; index = sprite 0-3 (read from 3 down).
+;   L0101 Title_WaterfallCrestTiles            data  TABLE: first-frame tile of each waterfall crest sprite; index = sprite 0-3.
+;   L0105 Title_WaterfallSpriteXs              data  TABLE: X coordinate of the 4 sprites of a waterfall wave or crest; index = sprite 0-3.
+;   L0109 Title_WaterfallWaveSpriteOffsets     data  TABLE: offset in Sprites of the first sprite of each waterfall wave; index = wave 0-2.
+;   L0118 Title_UpdateWaterfall                code  Sets the waterfall wave Ys on first use, then moves and draws the 3 waves and the crest.
+;   L0151 Title_DrawWaterfallWave              code  Moves one waterfall wave down 2 pixels (wrapping to $B2) and writes its 4 sprites.
+;   L0208 Title_DrawWaterfallCrest             code  Writes the 4 sprites of the waterfall crest at Y = $A8, alternating two tile sets every 8 frames.
+;   L0234 Title_FadePalettes                   data  TABLE: the 14 palettes of the title fade, 32 bytes each; index = DemoPhase0Subphase1Cycle * $20.
+;   L0304 Title_FadeDelays                     data  TABLE: frames each fade palette is held; index = DemoPhase0Subphase1Cycle - 1 after the increment.
+;   L0314 Mode0Demo_Animate_Phase0_Sub1        code  Title subphase 1: fades the title palettes to black in 14 timed steps, then starts the story phase.
 ; ============================================================================
 
 ; DATA: PPU transfer record for palette bytes $3F04-$3F07; its byte 5 (for $3F06) is patched per step.
-TriforcePaletteTransferRecord:
+Title_TriforcePaletteTransferRecord:
     .BYTE $3F, $04, $04, $36, $17, $27, $0F, $FF
 
 ; TABLE: Triforce glow colour; index = TriforceGlowCycle (0-7); value = NES colour for $3F06.
-TriforceGlowingColors:
+Title_TriforceGlowColors:
     .BYTE $27, $37, $37, $27, $17, $07, $07, $17
 
 ; ----------------------------------------------------------------------------
 ; Title subphase 0 per frame: copies the title sprites, animates the waterfall, steps the glow.
 ; ----------------------------------------------------------------------------
-AnimateDemoPhase0Subphase0Artifacts:
+Title_AnimateSpritesAndGlow:
     ; Set up sprites for the title.
     ; Copy initial sprite data to Sprites area.
     LDY #$70
 
 @CopySprites:
-    LDA InitialTitleSprites-1, Y
+    LDA Title_InitialSprites-1, Y
     STA Sprites-1, Y
     DEY
     BNE @CopySprites
-    JSR UpdateWaterfallAnimation
+    JSR Title_UpdateWaterfall
 
     ; When you reach the end of the glow cycle,
     ; Append a transfer record for the Triforce palette.
@@ -68,7 +68,7 @@ AnimateDemoPhase0Subphase0Artifacts:
     LDY #$07
 
 @CopyTriforcePalette:
-    LDA TriforcePaletteTransferRecord, Y
+    LDA Title_TriforcePaletteTransferRecord, Y
     STA DynTileBuf, Y
     DEY
     BPL @CopyTriforcePalette
@@ -76,7 +76,7 @@ AnimateDemoPhase0Subphase0Artifacts:
     ; Patch the palette record with the color
     ; for the current point in the cycle.
     LDY TriforceGlowCycle
-    LDA TriforceGlowingColors, Y
+    LDA Title_TriforceGlowColors, Y
     STA DynTileBuf+5
     LDA #$06                    ; Restart the glow timer.
     STA TriforceGlowTimer
@@ -94,19 +94,19 @@ AnimateDemoPhase0Subphase0Artifacts:
     RTS
 
 ; TABLE: first-frame tile of each waterfall wave sprite; index = sprite 0-3 (read from 3 down).
-WaterfallWaveTiles:
+Title_WaterfallWaveTiles:
     .BYTE $B2, $B4, $B6, $B8
 
 ; TABLE: first-frame tile of each waterfall crest sprite; index = sprite 0-3.
-WaterfallCrestTiles:
+Title_WaterfallCrestTiles:
     .BYTE $A2, $A4, $A6, $A8
 
 ; TABLE: X coordinate of the 4 sprites of a waterfall wave or crest; index = sprite 0-3.
-WaterfallSpriteXs:
+Title_WaterfallSpriteXs:
     .BYTE $50, $58, $60, $68
 
 ; TABLE: offset in Sprites of the first sprite of each waterfall wave; index = wave 0-2.
-WaterfallWaveSpriteOffsets:
+Title_WaterfallWaveSpriteOffsets:
     .BYTE $70, $80, $90
 
 ; Five more sprite offsets that continue the table above; no wave index reaches them.
@@ -115,7 +115,7 @@ WaterfallWaveSpriteOffsets:
 ; ----------------------------------------------------------------------------
 ; Sets the waterfall wave Ys on first use, then moves and draws the 3 waves and the crest.
 ; ----------------------------------------------------------------------------
-UpdateWaterfallAnimation:
+Title_UpdateWaterfall:
     LDA IsWaterfallInitialized
     BNE @UpdateSprites
     LDA #$B6                    ; Initialize animation values.
@@ -137,10 +137,10 @@ UpdateWaterfallAnimation:
 @UpdateSprites:
     LDX #$02
 :
-    JSR UpdateSpritesForWaterfallWave
+    JSR Title_DrawWaterfallWave
     DEX
     BPL :-
-    JSR UpdateSpritesForWaterfallCrest
+    JSR Title_DrawWaterfallCrest
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -148,7 +148,7 @@ UpdateWaterfallAnimation:
 ; IN:   X = wave 0-2.
 ; OUT:  X preserved; [00] = tile offset, [02] = wave, [05] = new Y.
 ; ----------------------------------------------------------------------------
-UpdateSpritesForWaterfallWave:
+Title_DrawWaterfallWave:
     ; Add 2 to current waterfall wave Y.
     ; But keep it in the range $B2..$E3.
     INC TitleWaveYs, X
@@ -179,15 +179,15 @@ UpdateSpritesForWaterfallWave:
 @SetOffset:
     STA $00
     STX $02                     ; Keep a copy of the wave index in [$02].
-    LDY WaterfallWaveSpriteOffsets, X    ; Y gets offset of first sprite in current wave.
+    LDY Title_WaterfallWaveSpriteOffsets, X    ; Y gets offset of first sprite in current wave.
     LDX #$03                    ; For each sprite (4) in current wave, indexed by X:
 
 @LoopSprite:
-    LDA WaterfallWaveTiles, X   ; Get base tile for current sprite.
+    LDA Title_WaterfallWaveTiles, X   ; Get base tile for current sprite.
     CLC
     ADC $00                     ; Modify the tile according to the current state of the wave.
     STA Sprites+1, Y
-    LDA WaterfallSpriteXs, X    ; Set sprite X to each part of wave in a row.
+    LDA Title_WaterfallSpriteXs, X    ; Set sprite X to each part of wave in a row.
     STA Sprites+3, Y
     LDA $05                     ; Set sprite Y to rolling value.
     STA Sprites, Y
@@ -205,7 +205,7 @@ UpdateSpritesForWaterfallWave:
 ; ----------------------------------------------------------------------------
 ; Writes the 4 sprites of the waterfall crest at Y = $A8, alternating two tile sets every 8 frames.
 ; ----------------------------------------------------------------------------
-UpdateSpritesForWaterfallCrest:
+Title_DrawWaterfallCrest:
     LDX #$03                    ; For each sprite (4) in crest, indexed by X:
     LDY #$F0
 
@@ -214,11 +214,11 @@ UpdateSpritesForWaterfallCrest:
     ; the two frames of animation (16-frame period).
     LDA FrameCounter
     AND #$08
-    ADC WaterfallCrestTiles, X
+    ADC Title_WaterfallCrestTiles, X
     STA Sprites+1, Y
     LDA #$A8                    ; The Y coordinate is fixed in place.
     STA Sprites, Y
-    LDA WaterfallSpriteXs, X    ; Set sprite X to each part of crest in a row.
+    LDA Title_WaterfallSpriteXs, X    ; Set sprite X to each part of crest in a row.
     STA Sprites+3, Y
     LDA #$00                    ; Set sprite attributes: normal with palette 4.
     STA Sprites+2, Y
@@ -231,7 +231,7 @@ UpdateSpritesForWaterfallCrest:
     RTS
 
 ; TABLE: the 14 palettes of the title fade, 32 bytes each; index = DemoPhase0Subphase1Cycle * $20.
-DemoPhase0Subphase1Palettes:
+Title_FadePalettes:
     .BYTE $36, $0F, $00, $10, $36, $17, $27, $0F
     .BYTE $36, $08, $1A, $28, $36, $30, $3B, $22
     .BYTE $36, $30, $3B, $16, $36, $17, $27, $0F
@@ -301,7 +301,7 @@ DemoPhase0Subphase1Palettes:
 
 ; TABLE: frames each fade palette is held; index = DemoPhase0Subphase1Cycle - 1 after the increment.
 ; The 14th value ($03) is loaded but the phase ends on that frame.
-DemoPhase0Subphase1Delays:
+Title_FadeDelays:
     .BYTE $08, $08, $06, $05, $04, $03, $02, $02
     .BYTE $02, $C0, $06, $04, $C0, $03
 
@@ -311,12 +311,12 @@ DemoPhase0Subphase1Delays:
 ; ----------------------------------------------------------------------------
 ; Title subphase 1: fades the title palettes to black in 14 timed steps, then starts the story phase.
 ; ----------------------------------------------------------------------------
-AnimateDemoPhase0Subphase1:
+Mode0Demo_Animate_Phase0_Sub1:
     LDA DemoPhase0Subphase1Timer    ; When subphase timer expires,
     BNE @UpdateAnimation        ; go update animation only.
 
     ; Calculate the address to the palette to transfer.
-    ; Addr = DemoPhase0Subphase1Palettes + (DemoPhase0Subphase1Cycle * $20)
+    ; Addr = Title_FadePalettes + (DemoPhase0Subphase1Cycle * $20)
     LDA #$00
     STA $01
     LDA DemoPhase0Subphase1Cycle
@@ -327,10 +327,10 @@ AnimateDemoPhase0Subphase1:
     ROL $01
     ASL
     ROL $01
-    ADC #<DemoPhase0Subphase1Palettes
+    ADC #<Title_FadePalettes
     STA $00
     LDA $01
-    ADC #>DemoPhase0Subphase1Palettes
+    ADC #>Title_FadePalettes
     STA $01
     LDA #$3F                    ; Set up the header of the transfer record.
     STA DynTileBuf
@@ -353,7 +353,7 @@ AnimateDemoPhase0Subphase1:
 
     ; Set the timer to the delay for the current point in the cycle.
     LDY DemoPhase0Subphase1Cycle
-    LDA DemoPhase0Subphase1Delays-1, Y
+    LDA Title_FadeDelays-1, Y
     STA DemoPhase0Subphase1Timer
     CPY #$0E
     BCC @UpdateAnimation        ; If we reached the end of the cycle,
@@ -366,7 +366,7 @@ AnimateDemoPhase0Subphase1:
 
 @UpdateAnimation:
     DEC DemoPhase0Subphase1Timer
-    JSR UpdateWaterfallAnimation
+    JSR Title_UpdateWaterfall
     RTS
 
 ; Padding: 297 bytes of $FF, not referenced by any code.

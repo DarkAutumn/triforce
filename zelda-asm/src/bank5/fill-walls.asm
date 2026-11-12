@@ -1,43 +1,43 @@
 ; ============================================================================
 ; FILE:     bank5/fill-walls.asm         BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 4537-4719
-; SUBJECTS: (none)
-; TOPIC:    The door type lookup for one side of a dungeon room (FindDoorTypeByDoorBit), and FillWalls,
+; SUBJECTS: Door, RoomLayout
+; TOPIC:    The door type lookup for one side of a dungeon room (Door_FindTypeByDirBit), and RoomLayout_FillWalls,
 ;           which writes the wall outline shared by all dungeon rooms into the play area tile map.
-; SEE ALSO: bank5/room-layouts-uw.asm (WallTileList); bank5/lay-out-doors.asm (LayOutDoors draws the
-;           doors over the walls); bank5/mode12-lay-out-room.asm (LayOutRoom, the only caller of
-;           FillWalls); bank5/touch-door.asm (TouchDoor_JumpTable: what each door type does when Link
+; SEE ALSO: bank5/room-layouts-uw.asm (RoomLayout_UWWallTiles); bank5/lay-out-doors.asm (Door_LayOut draws the
+;           doors over the walls); bank5/mode12-lay-out-room.asm (RoomLayout_LayOutRoom, the only caller of
+;           RoomLayout_FillWalls); bank5/touch-door.asm (Door_Touch_JumpTable: what each door type does when Link
 ;           walks into it); bank5/doorway.asm, bank5/shutters-door-flags.asm, bank5/submenu-map.asm,
-;           bank5/mode3-mode6-init.asm (GetPassedDoorType), bank7/next-room-room-flags.asm
-;           (CalculateNextRoom), bank7/bomb.asm (other callers of FindDoorTypeByDoorBit);
+;           bank5/mode3-mode6-init.asm (Door_GetPassedType), bank7/next-room-room-flags.asm
+;           (Room_CalcNext), bank7/bomb.asm (other callers of Door_FindTypeByDirBit);
 ;           bank1/map-marker-curtain.asm (the 16-bit pointer helpers).
 ; KEY FACTS:
 ;   - A dungeon room has one door type (3 bits) per side: LevelBlockAttrsA bits 7-5 = N, bits 4-2 = S;
-;     LevelBlockAttrsB bits 7-5 = W, bits 4-2 = E. FindDoorTypeByDoorBit.
+;     LevelBlockAttrsB bits 7-5 = W, bits 4-2 = E. Door_FindTypeByDirBit.
 ;   - Door types: 0 open, 1 wall, 2 and 3 false wall, 4 bombable wall, 5 and 6 key door, 7 shutter.
-;     FindDoorTypeByDoorBit returns 8 when its direction argument has none of bits 0-3 set.
-;   - FindDoorTypeByDoorBit reads the level data of RoomId only. Whether a door is open now is in
+;     Door_FindTypeByDirBit returns 8 when its direction argument has none of bits 0-3 set.
+;   - Door_FindTypeByDirBit reads the level data of RoomId only. Whether a door is open now is in
 ;     CurOpenedDoors, and whether it was opened before is in the room flags; neither is looked at here.
-;   - FindDoorTypeByDoorBit tests the sides in the order right, left, down, up and stops at the first
+;   - Door_FindTypeByDirBit tests the sides in the order right, left, down, up and stops at the first
 ;     bit of [02] that matches. It also returns that side's reverse direction index in [03]
 ;     (3 right, 2 left, 1 down, 0 up).
-;   - Every dungeon room gets the same wall outline: 78 bytes (WallTileList) describe the left wall and
-;     the left half of the top wall; FillWalls mirrors them top to bottom, then rotates the left half
+;   - Every dungeon room gets the same wall outline: 78 bytes (RoomLayout_UWWallTiles) describe the left wall and
+;     the left half of the top wall; RoomLayout_FillWalls mirrors them top to bottom, then rotates the left half
 ;     of the room by 180 degrees into the right half.
 ;   - Wall tile numbering that the mirroring relies on: below $DC a shape has four tiles T, T+1
 ;     (flipped top to bottom), T+2 (T rotated 180 degrees), T+3; $DC/$DD are the horizontal edge line
 ;     of the top/bottom wall, $DE/$DF the vertical edge line of the left/right wall; $E0 and above are
-;     copied unchanged by the rotation. FillWalls, LoopWallTile.
-;   - FillWalls runs before LayOutDoors and LayoutUWFloor, on a tile map already filled with brick
-;     tile $F6; it leaves the floor area and the outer ring of tiles as $F6. FillWalls.
+;     copied unchanged by the rotation. RoomLayout_FillWalls, RoomLayout_FillWalls_LoopTile.
+;   - RoomLayout_FillWalls runs before Door_LayOut and RoomLayout_LayOutUWFloor, on a tile map already filled with brick
+;     tile $F6; it leaves the floor area and the outer ring of tiles as $F6. RoomLayout_FillWalls.
 ; CONTENTS: (generated; L = line in this file)
-;   L0055 FindDoorTypeByDoorBit  code  Looks up the door type (0-7) of the side of the current dungeon room selected by a direction bit.
-;   L0100 ReachedTopWallBottom   code  FillWalls, part: a $00 in WallTileList ends a 3-tile top-wall column; steps both pointers on.
-;   L0110 DecBottomOffset        code  FillWalls, part: moves the bottom pointer up one row after a tile pair.
-;   L0125 FillWalls              code  Writes the wall outline shared by all dungeon rooms into the play area tile map.
-;   L0148 LoopWallTile           code  FillWalls pass 1 loop: writes one tile of WallTileList at the top pointer and at the bottom pointer.
-;   L0178 MoveWallPtrs           code  FillWalls, part: adds A to the top pointer; X = 1 moves the bottom pointer up a row, else adds X.
-;   L0186 NextLoopWallTile       code  FillWalls, part: advances the list pointer; after the last list byte, falls into pass 2 (rotation).
+;   L0055 Door_FindTypeByDirBit                  code  Looks up the door type (0-7) of the side of the current dungeon room selected by a direction bit.
+;   L0100 RoomLayout_FillWalls_EndTopWallColumn  code  RoomLayout_FillWalls, part: a $00 in RoomLayout_UWWallTiles ends a 3-tile top-wall column; steps both point...
+;   L0110 RoomLayout_FillWalls_DecBottomPtr      code  RoomLayout_FillWalls, part: moves the bottom pointer up one row after a tile pair.
+;   L0125 RoomLayout_FillWalls                   code  Writes the wall outline shared by all dungeon rooms into the play area tile map.
+;   L0148 RoomLayout_FillWalls_LoopTile          code  RoomLayout_FillWalls pass 1 loop: writes one tile of RoomLayout_UWWallTiles at the top pointer and at the b...
+;   L0178 RoomLayout_FillWalls_MovePtrs          code  RoomLayout_FillWalls, part: adds A to the top pointer; X = 1 moves the bottom pointer up a row, else adds X.
+;   L0186 RoomLayout_FillWalls_NextTile          code  RoomLayout_FillWalls, part: advances the list pointer; after the last list byte, falls into pass 2 (rotation).
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -52,7 +52,7 @@
 ;       first match wins. The type comes from the level data alone (LevelBlockAttrsA bits 7-5 = N,
 ;       4-2 = S; LevelBlockAttrsB bits 7-5 = W, 4-2 = E): it does not say whether the door is open.
 ; ----------------------------------------------------------------------------
-FindDoorTypeByDoorBit:
+Door_FindTypeByDirBit:
     LDA #$01                    ; [01] = direction bit under test, starting with 1 (right).
     STA $01
     LDA #$03                    ; [03] = reverse direction index, 3 (right) down to 0 (up).
@@ -86,7 +86,7 @@ FindDoorTypeByDoorBit:
     DEC $03
     BPL @LoopDoorBit
 
-    ; [02] had none of bits 0-3 set: return 8, which is not a door type. (CalculateNextRoom's jump
+    ; [02] had none of bits 0-3 set: return 8, which is not a door type. (Room_CalcNext's jump
     ; table has a ninth entry for it, "no next room".)
     LDA #$08
     RTS
@@ -96,37 +96,37 @@ FindDoorTypeByDoorBit:
     AND #$07
     RTS
 
-; FillWalls, part: a $00 in WallTileList ends a 3-tile top-wall column; steps both pointers on.
-ReachedTopWallBottom:
+; RoomLayout_FillWalls, part: a $00 in RoomLayout_UWWallTiles ends a 3-tile top-wall column; steps both pointers on.
+RoomLayout_FillWalls_EndTopWallColumn:
     ; The top pointer is at row 4 and the bottom pointer at row 17. One column is 22 ($16) bytes, so
     ; row 1 of the next column is $13 ahead of the top pointer and row 20 of the next column is $19
     ; ahead of the bottom pointer.
     LDA #$13
     STA $06                     ; Also refill the tile counter, so it cannot run out in a 3-tile column.
     LDX #$19
-    BNE MoveWallPtrs            ; Always taken.
+    BNE RoomLayout_FillWalls_MovePtrs            ; Always taken.
 
-; FillWalls, part: moves the bottom pointer up one row after a tile pair.
-DecBottomOffset:
-    JSR Sub1FromInt16At4
-    JMP NextLoopWallTile
+; RoomLayout_FillWalls, part: moves the bottom pointer up one row after a tile pair.
+RoomLayout_FillWalls_DecBottomPtr:
+    JSR Math_Sub1FromInt16At4
+    JMP RoomLayout_FillWalls_NextTile
 
 ; ----------------------------------------------------------------------------
 ; Writes the wall outline shared by all dungeon rooms into the play area tile map.
-; IN:   PlayAreaTiles already filled with brick tile $F6 (LayOutRoom does that first).
+; IN:   PlayAreaTiles already filled with brick tile $F6 (RoomLayout_LayOutRoom does that first).
 ; OUT:  PlayAreaTiles columns 1-3 and 28-30 (rows 1-20) and rows 1-3 and 18-20 (columns 4-27) hold
 ;       the four walls, without doors. Uses [00]-[06]; Y = 0 throughout.
-; NOTE: Pass 1 walks WallTileList with a top pointer [02:03] going down from row 1 and a bottom
+; NOTE: Pass 1 walks RoomLayout_UWWallTiles with a top pointer [02:03] going down from row 1 and a bottom
 ;       pointer [04:05] going up from row 20, writing each tile at both (the bottom copy flipped).
 ;       That covers columns 1-15. Pass 2 copies columns 0-15 to columns 31-16 rotated by 180 degrees:
 ;       the tile at (column c, row r) goes to (31 - c, 21 - r), changed to its rotated form.
 ;       The play area tile map is stored by column, 22 ($16) bytes per column, from $6530.
 ; ----------------------------------------------------------------------------
-FillWalls:
-    ; [00:01] = read pointer into WallTileList.
-    LDA #<WallTileList
+RoomLayout_FillWalls:
+    ; [00:01] = read pointer into RoomLayout_UWWallTiles.
+    LDA #<RoomLayout_UWWallTiles
     STA $00
-    LDA #>WallTileList
+    LDA #>RoomLayout_UWWallTiles
     STA $01
 
     ; [02:03] = top pointer = $6547 = PlayAreaTiles + $17: column 1, row 1.
@@ -144,10 +144,10 @@ FillWalls:
     STA $06
     LDY #$00
 
-; FillWalls pass 1 loop: writes one tile of WallTileList at the top pointer and at the bottom pointer.
-LoopWallTile:
+; RoomLayout_FillWalls pass 1 loop: writes one tile of RoomLayout_UWWallTiles at the top pointer and at the bottom pointer.
+RoomLayout_FillWalls_LoopTile:
     LDA ($00), Y
-    BEQ ReachedTopWallBottom    ; $00 = end of a top-wall column.
+    BEQ RoomLayout_FillWalls_EndTopWallColumn    ; $00 = end of a top-wall column.
     STA ($02), Y
     STA ($04), Y
 
@@ -162,9 +162,9 @@ LoopWallTile:
     STA ($04), Y
 :
     LDA #$01                    ; Top pointer: down one row.
-    LDX #$01                    ; X = 1: bottom pointer up one row (see MoveWallPtrs).
+    LDX #$01                    ; X = 1: bottom pointer up one row (see RoomLayout_FillWalls_MovePtrs).
     DEC $06
-    BNE MoveWallPtrs
+    BNE RoomLayout_FillWalls_MovePtrs
 
     ; Tenth tile of a left-wall column: the top pointer is at row 10, the bottom pointer at row 11.
     ; Row 1 of the next column is $0D ahead of the top pointer; row 20 of the next column is $1F ahead
@@ -174,19 +174,19 @@ LoopWallTile:
     LDA #$0D
     LDX #$1F
 
-; FillWalls, part: adds A to the top pointer; X = 1 moves the bottom pointer up a row, else adds X.
-MoveWallPtrs:
-    JSR AddToInt16At2
+; RoomLayout_FillWalls, part: adds A to the top pointer; X = 1 moves the bottom pointer up a row, else adds X.
+RoomLayout_FillWalls_MovePtrs:
+    JSR Math_AddToInt16At2
     TXA
     DEX
-    BEQ DecBottomOffset         ; X was 1: subtract 1 from the bottom pointer.
-    JSR AddToInt16At4           ; Else add X ($19 or $1F) to move it to row 20 of the next column.
+    BEQ RoomLayout_FillWalls_DecBottomPtr         ; X was 1: subtract 1 from the bottom pointer.
+    JSR Math_AddToInt16At4           ; Else add X ($19 or $1F) to move it to row 20 of the next column.
 
-; FillWalls, part: advances the list pointer; after the last list byte, falls into pass 2 (rotation).
-NextLoopWallTile:
-    JSR Add1ToInt16At0          ; Returns the pointer's new low byte in A.
-    CMP #<(WallTileList + $4E)  ; End of the 78-byte list? (Only the low byte is compared.)
-    BNE LoopWallTile
+; RoomLayout_FillWalls, part: advances the list pointer; after the last list byte, falls into pass 2 (rotation).
+RoomLayout_FillWalls_NextTile:
+    JSR Math_Add1ToInt16At0          ; Returns the pointer's new low byte in A.
+    CMP #<(RoomLayout_UWWallTiles + $4E)  ; End of the 78-byte list? (Only the low byte is compared.)
+    BNE RoomLayout_FillWalls_LoopTile
 
     ; Pass 2. Columns 1-15 now hold the left wall and the left halves of the top and bottom walls.
     ; Copy the left half of the tile map to the right half, rotated by 180 degrees.
@@ -205,7 +205,7 @@ NextLoopWallTile:
     LDA ($02), Y                ; Copy the tile, then replace the copy with its rotated form:
     STA ($04), Y
     CMP #$DD
-    BEQ @SwapWithVertical       ; $DD (bottom wall's edge line) -> $DC (top wall's edge line).
+    BEQ @UseTopEdgeLine       ; $DD (bottom wall's edge line) -> $DC (top wall's edge line).
     CMP #$E0
     BCS @NextLoopRotate         ; $E0 and above (corners, wall interior $F5, brick $F6): unchanged.
     CMP #$DC
@@ -220,8 +220,8 @@ NextLoopWallTile:
     STA ($04), Y
 
 @NextLoopRotate:
-    JSR Sub1FromInt16At4
-    JSR Add1ToInt16At2          ; Returns the source pointer's new low byte in A.
+    JSR Math_Sub1FromInt16At4
+    JSR Math_Add1ToInt16At2          ; Returns the source pointer's new low byte in A.
     CMP #$90                    ; Stop when the source reaches $6690 (column 16, row 0): 16 columns
     BNE @LoopRotate             ; of 22 tiles copied.
     LDA $03
@@ -229,6 +229,6 @@ NextLoopWallTile:
     BNE @LoopRotate
     RTS
 
-@SwapWithVertical:
+@UseTopEdgeLine:
     LDA #$DC
     BNE @SetRotatedTile         ; Always taken.

@@ -1,42 +1,42 @@
 ; ============================================================================
 ; FILE:     bank1/shove-knockback.asm    BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 6495-6749
-; SUBJECTS: Filler
-; TOPIC:    BeginShove: starts a knockback (direction, distance, invincibility timer) for Link hit by a
+; SUBJECTS: Filler, Mmc1, Shove
+; TOPIC:    Shove_Begin: starts a knockback (direction, distance, invincibility timer) for Link hit by a
 ;           monster, shot or fire, or for a monster hit by one of Link's weapons. Then the tail of bank 1:
 ;           padding, the bank's copy of the reset stub, its bank-switch routine and its vectors.
-; SEE ALSO: bank7/shove.asm (Obj_Shove: moves the object along the knockback set up here);
-;           bank1/link-collision-harm.asm (HarmLink calls BeginShove, then takes the hearts);
-;           bank1/sword-bomb-arrow-collision.asm (weapon hits that end in BeginShove; Darknut parry);
-;           bank1/object-overlap-test.asm (DoObjectsCollideWithThresholds leaves the distance in [0B]);
+; SEE ALSO: bank7/shove.asm (Shove_Update: moves the object along the knockback set up here);
+;           bank1/link-collision-harm.asm (Link_HarmByObjType calls Shove_Begin, then takes the hearts);
+;           bank1/sword-bomb-arrow-collision.asm (weapon hits that end in Shove_Begin; Darknut parry);
+;           bank1/object-overlap-test.asm (Collision_TestPointsWithThresholds leaves the distance in [0B]);
 ;           bank7/fire.asm (Link burned by his own fire); bank4/gohma.asm (Gohma's part counter [0F]);
-;           bank7/object-stubs-destroy-monster.asm (DecrementInvincibilityTimer);
+;           bank7/object-stubs-destroy-monster.asm (Obj_DecInvincibilityTimer);
 ;           bank7/reset-mmc1-vectors.asm (the reset code the stub here duplicates).
 ; KEY FACTS:
 ;   - Link hit: ObjInvincibilityTimer = $18 (about 48 frames, it drops every second frame) and
-;     ObjShoveDistance = $20 pixels. Nothing happens while his timer is still nonzero. BeginShove
+;     ObjShoveDistance = $20 pixels. Nothing happens while his timer is still nonzero. Shove_Begin
 ;   - Monster hit by a weapon: ObjInvincibilityTimer = $10 (about 32 frames) and ObjShoveDistance = $40
-;     pixels. Nothing happens while its timer is still nonzero. BeginShove@SetShoveDir
+;     pixels. Nothing happens while its timer is still nonzero. Shove_Begin@SetShoveDir
 ;   - A monster whose ObjInvincibilityMask has the weapon's damage type bit [09] is never shoved and gets
-;     no invincibility timer. BeginShove
+;     no invincibility timer. Shove_Begin
 ;   - Link is pushed away from the attacker along one axis: off the grid (ObjGridOffset <> 0) the axis he
 ;     faces; on the grid, horizontal when the vertical distance [0B] between the midpoints is < 4 pixels,
-;     else vertical. BeginShove@UseDistance
+;     else vertical. Shove_Begin@UseDistance
 ;   - A monster is pushed in the direction the weapon faces (ObjDir of the weapon slot), not away from
-;     Link. BeginShove@MonsterDefender
+;     Link. Shove_Begin@MonsterDefender
 ;   - After hitting Link a monster turns around (ObjDir reversed), unless its ObjAttr has bit $80 or it
-;     is a Vire (type $12). Not done when Link was invincible. BeginShove
+;     is a Vire (type $12). Not done when Link was invincible. Shove_Begin
 ;   - Gohma (types $33, $34) is shoved only when the part hit is 3 or 4 of its 5 collision parts (the
-;     ones at Gohma's ObjX and ObjX - 8) and Gohma_ObjEyeState is 3 (fully open). BeginShove@Gohma
-;   - ObjShoveDir gets bit $80 ("knockback not started yet", cleared by Obj_Shove); bit $40 is added for
-;     monsters with ObjAttr bit $80, and no code reads that bit. BeginShove@MonsterDefender
+;     ones at Gohma's ObjX and ObjX - 8) and Gohma_ObjEyeState is 3 (fully open). Shove_Begin@Gohma
+;   - ObjShoveDir gets bit $80 ("knockback not started yet", cleared by Shove_Update); bit $40 is added for
+;     monsters with ObjAttr bit $80, and no code reads that bit. Shove_Begin@MonsterDefender
 ;   - The reset stub at $BF50 has the same bytes as the fixed bank's reset code except that its two JSR
 ;     targets are $BFxx instead of $FFxx: it ends by switching bank 7 in and jumping to $E440.
-;     SwitchBank_Local1
+;     Mmc1_SwitchBank_Bank1
 ; CONTENTS: (generated; L = line in this file)
-;   L0065 BeginShove         code  Starts a knockback: sets the shove direction, distance and invincibility timer of the object hit.
-;   L0233 Filler_7751        data  DATA: filler ($FF), 31 bytes: the end of the BANK_01_CODE segment (the code that runs from RAM).
-;   L0283 SwitchBank_Local1  code  Bank 1's copy of SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
+;   L0065 Shove_Begin            code  Starts a knockback: sets the shove direction, distance and invincibility timer of the object hit.
+;   L0232 Filler_Bank1CodeTail   data  DATA: filler ($FF), 31 bytes: the end of the BANK_01_CODE segment (the code that runs from RAM).
+;   L0282 Mmc1_SwitchBank_Bank1  code  Bank 1's copy of Mmc1_SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -46,7 +46,7 @@
 ;       [00] = 0 when Link is the one hit, else the object slot of the weapon that hit monster X.
 ;       [09] = damage type bit of the weapon (as in ObjInvincibilityMask); 0 when Link is hit.
 ;       [0B] = vertical distance in pixels between the two midpoints (left there by
-;              DoObjectsCollideWithThresholds); used only when Link is hit while on the grid.
+;              Collision_TestPointsWithThresholds); used only when Link is hit while on the grid.
 ;       [0F] = Gohma only: collision part counter 5..1 of Gohma_CheckCollisions.
 ; OUT:  Link hit:    ObjShoveDir = direction away from X with bit $80, ObjShoveDistance = $20,
 ;                    ObjInvincibilityTimer = $18; ObjDir,X reversed for most monsters.
@@ -55,14 +55,14 @@
 ;       Uses [04], [05], [08]. X is kept; Y = [00].
 ; NOTE: Does nothing when the object hit still has a nonzero ObjInvincibilityTimer, or when the
 ;       monster's ObjInvincibilityMask contains [09]. It deals no damage: the callers do that.
-;       The timer drops once every second frame (DecrementInvincibilityTimer), so $18 = about 48
+;       The timer drops once every second frame (Obj_DecInvincibilityTimer), so $18 = about 48
 ;       frames for Link and $10 = about 32 frames for a monster.
-;       Obj_Shove does the moving, up to 4 pixels per call. Its first call moves nothing and may
+;       Shove_Update does the moving, up to 4 pixels per call. Its first call moves nothing and may
 ;       cancel the knockback: for an object between grid points (ObjGridOffset <> 0) a shove across
 ;       the axis it faces is dropped for a monster (the invincibility timer set here stays) and
 ;       turned into the direction opposite Link's facing for Link.
 ; ----------------------------------------------------------------------------
-BeginShove:
+Shove_Begin:
     ; A monster (X < $0D) that is invincible to the damage type in [09] is not shoved.
     ; When Link is the one hit, [09] is 0 and this test never returns.
     ; Slots $0D and up (Link's fire) have no ObjInvincibilityMask entry and skip the test.
@@ -100,8 +100,8 @@ BeginShove:
 @UseDistance:
     ; Link on a grid point (or a monster hit, where the result is not used): [0B] < 4 selects the
     ; horizontal axis, else the vertical one. For Link, [0B] is the vertical distance between his
-    ; midpoint and the attacker's, left by DoObjectsCollideWithThresholds: both paths that hit Link
-    ; (HarmLink, and Link's own fire) run that test just before coming here. So an attacker within
+    ; midpoint and the attacker's, left by Collision_TestPointsWithThresholds: both paths that hit Link
+    ; (Link_HarmByObjType, and Link's own fire) run that test just before coming here. So an attacker within
     ; 3 pixels of Link's height pushes him sideways, and any other pushes him up or down.
     LDA $0B
     CMP #$04
@@ -134,7 +134,7 @@ BeginShove:
     LDA ObjInvincibilityTimer
     BNE @Exit
 
-    ; Bit $80 of ObjShoveDir marks a knockback that Obj_Shove has not started yet.
+    ; Bit $80 of ObjShoveDir marks a knockback that Shove_Update has not started yet.
     LDA $08
     ORA #$80
     STA ObjShoveDir
@@ -162,7 +162,7 @@ BeginShove:
 
     ; Every other attacker turns around.
     LDA ObjDir, X
-    JSR GetOppositeDir
+    JSR Dir_GetOpposite
     STA ObjDir, X
 
 @Exit:
@@ -175,7 +175,7 @@ BeginShove:
     STA $08
 
     ; For a monster with ObjAttr bit $80, bit $40 is added to the shove direction.
-    ; Obj_Shove masks the direction with $0F, $03, $0C or $05 wherever it reads it, and every other
+    ; Shove_Update masks the direction with $0F, $03, $0C or $05 wherever it reads it, and every other
     ; reader of ObjShoveDir only tests it for zero, so the bit has no effect.
     LDA ObjAttr, X
     AND #$80
@@ -187,7 +187,7 @@ BeginShove:
 @CheckInvincible:
     ; No new knockback (and no new invincibility time) while the monster is still invincible.
     LDA ObjInvincibilityTimer, X
-    BNE @Exit2
+    BNE @ExitMonster
 
     ; Gohma (types $33 and $34) has extra conditions.
     LDA ObjType, X
@@ -204,17 +204,16 @@ BeginShove:
     CMP #$03
     BEQ @CheckEyeOpen
     CMP #$04
-    BNE @Exit2
+    BNE @ExitMonster
 
 @CheckEyeOpen:
-    ; The eye must show image 3 (fully open). $046B is Gohma_ObjEyeState (this bank does not include
-    ; the file that defines the name).
-    LDA $046B, X
+    ; The eye must show image 3 (fully open).
+    LDA Gohma_ObjEyeState, X
     CMP #$03
-    BNE @Exit2
+    BNE @ExitMonster
 
 @SetShoveDir:
-    ; Bit $80 of ObjShoveDir marks a knockback that Obj_Shove has not started yet.
+    ; Bit $80 of ObjShoveDir marks a knockback that Shove_Update has not started yet.
     LDA $08
     ORA #$80
     STA ObjShoveDir, X
@@ -225,12 +224,12 @@ BeginShove:
     LDA #$10
     STA ObjInvincibilityTimer, X
 
-@Exit2:
+@ExitMonster:
     RTS
 
 ; DATA: filler ($FF), 31 bytes: the end of the BANK_01_CODE segment (the code that runs from RAM).
 ; The linker fills the rest of the bank up to the reset stub at $BF50 with $FF as well.
-Filler_7751:
+Filler_Bank1CodeTail:
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
@@ -245,7 +244,7 @@ Filler_7751:
 ; reads vectors at $FFFA-$FFFF, so the vector is seen only if bank 1 is mapped at $C000-$FFFF,
 ; while the vector and the two JSRs below name $BFxx addresses (bank 1 at $8000-$BFFF); whether
 ; the stub can ever run is (unverified). The bytes are 6502 code, the same instructions as
-; IsrReset in the fixed bank:
+; Reset_Handler in the fixed bank:
 ;   $BF50  SEI / CLD / LDA #$00 / STA $2000    interrupts off, PPU control 0 (no NMI)
 ;   $BF57  LDX #$FF / TXS                      stack pointer $FF
 ;   $BF5A  LDA $2002 / AND #$80 / BEQ $BF5A    wait for a vertical blank
@@ -255,11 +254,11 @@ Filler_7751:
 ;   $BF76  LDA #$0F / JSR $BF98                MMC1 control = $0F
 ;   $BF7B  LDA #$00 / STA $A000 / (LSR / STA $A000) x 4
 ;                                              MMC1 CHR bank 0 register = 0
-;   $BF90  LDA #$07 / JSR $BFAC                switch program bank 7 in (SwitchBank_Local1)
+;   $BF90  LDA #$07 / JSR $BFAC                switch program bank 7 in (Mmc1_SwitchBank_Bank1)
 ;   $BF95  JMP $E440                           the main program's entry in the fixed bank, the same
-;                                              address IsrReset jumps to
+;                                              address Reset_Handler jumps to
 ;   $BF98  STA $8000 / (LSR / STA $8000) x 4 / RTS
-;                                              unlabeled copy of SetMMC1Control: writes the low 5 bits
+;                                              unlabeled copy of Mmc1_SetControl: writes the low 5 bits
 ;                                              of A, lowest first, to the MMC1 control register
     .BYTE $78, $D8, $A9, $00, $8D, $00, $20, $A2
     .BYTE $FF, $9A, $AD, $02, $20, $29, $80, $F0
@@ -275,12 +274,12 @@ Filler_7751:
     .BYTE $8D, $00, $80, $60
 
 ; ----------------------------------------------------------------------------
-; Bank 1's copy of SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
+; Bank 1's copy of Mmc1_SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
 ; IN:   A = bank number (low 5 bits).
 ; NOTE: Writes the 5 bits, lowest first, to the MMC1 program bank register ($E000). At $BFAC. Called
 ;       by the reset stub above; this file's own code does not otherwise use it.
 ; ----------------------------------------------------------------------------
-SwitchBank_Local1:
+Mmc1_SwitchBank_Bank1:
     STA $E000
     LSR
     STA $E000

@@ -3,7 +3,7 @@
 .SEGMENT "BANK_00_00"
 
 
-.EXPORT DriveAudio
+.EXPORT Audio_Drive
 
 .INCLUDE "bank0/song-data.asm"
 .INCLUDE "bank0/drive-audio-tune0.asm"

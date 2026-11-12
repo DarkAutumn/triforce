@@ -4,111 +4,111 @@
 ; SUBJECTS: Submenu
 ; TOPIC:    The item submenu's state machine (SubmenuState): scrolling the submenu in over the play area,
 ;           the active state, scrolling it out; the overworld Triforce display built from InvTriforce.
-; SEE ALSO: bank7/mode5-play-update.asm (UpdateMode5Play: Start sets SubmenuState 1 and calls this file
+; SEE ALSO: bank7/mode5-play-update.asm (Mode5Play_Update: Start sets SubmenuState 1 and calls this file
 ;           every frame while it is nonzero); bank5/submenu-row-transfer.asm (the row transferred each
 ;           scroll frame); bank5/submenu-items.asm (item drawing and cursor in the active state);
-;           bank5/submenu-map.asm (dungeon sheet map, HasCompass); bank1/map-marker-curtain.asm (status
-;           bar position markers); bank6/level-blocks-common-data.asm (TriforceRow0TransferBuf).
+;           bank5/submenu-map.asm (dungeon sheet map, Inv_HasCompass); bank1/map-marker-curtain.asm (status
+;           bar position markers); bank6/level-blocks-common-data.asm (Transfer_TriforceRow0Buf).
 ; KEY FACTS:
 ;   - SubmenuState values: UW 1-5 set-up (one frame each), 6 scroll down, 7 active, 8 scroll up;
 ;     OW has one more set-up state, so 1-6 set-up, 7 scroll down, 8 active, 9 scroll up
-;     (UpdateMenuUW_JumpTable, UpdateMenuOW_JumpTable).
+;     (Submenu_UpdateUW_JumpTable, Submenu_UpdateOW_JumpTable).
 ;   - Opening scrolls 3 pixels per frame for 58 frames (CurVScroll $EF down to $41). Start is pressed
 ;     on frame 0; the active state first runs on frame 64 in UW (5 set-up frames), 65 in OW (6)
-;     (UpdateMenuScrollDownUW).
+;     (Submenu_ScrollDownUW).
 ;   - Closing scrolls 3 pixels per frame for 59 frames (CurVScroll $41 up to $F2), then SubmenuState = 0
-;     (UpdateMenuScrollUp).
+;     (Submenu_ScrollUp).
 ;   - In the active state Up+A held on controller 2 ends the mode and goes to mode 8 (the
-;     continue/save/retry menu) with sound silenced (UpdateMenuActive).
-;   - Start (controller 1, newly pressed) in the active state begins closing (UpdateMenuActive).
+;     continue/save/retry menu) with sound silenced (Submenu_UpdateActive).
+;   - Start (controller 1, newly pressed) in the active state begins closing (Submenu_UpdateActive).
 ;   - The OW Triforce picture is rebuilt from InvTriforce each time the submenu opens: bit n = piece
-;     of level n+1, three tiles per piece (UpdateMenuStartOW, TriforceTransferBufOffsets).
+;     of level n+1, three tiles per piece (Submenu_BuildTriforceOW, Submenu_TriforceTileOffsets).
 ;   - The UW submenu shows a position dot for Link's room unless GameMode is 9 (cellar); its X uses
-;     LevelInfo_SubmenuMapRotation (UpdateMenuScrollDownUW).
+;     LevelInfo_SubmenuMapRotation (Submenu_ScrollDownUW).
 ;   - The status bar Triforce marker follows the scroll only in UW with the level's compass
-;     (MovePositionMarkers).
+;     (Submenu_MovePositionMarkers).
 ; CONTENTS: (generated; L = line in this file)
-;   L0060 UpdateMenuAndMeters              code  Runs one frame of the submenu state machine, then updates the heart and rupee meters.
-;   L0067 UpdateMenu                       code  Dispatches on SubmenuState through the UW table (CurLevel nonzero) or the OW table.
-;   L0076 UpdateMenuUW_JumpTable           data  TABLE: UW submenu state handlers; index = SubmenuState (0-8); value = handler address.
-;   L0091 UpdateMenuOW_JumpTable           data  TABLE: OW submenu state handlers; index = SubmenuState (0-9); value = handler address.
-;   L0108 UpdateMenuCommon1                code  Submenu start state: hides sprites, redraws the map markers and sets up the scroll-in.
-;   L0150 UpdateMenu_Return                code  State 0 handler (submenu closed) and exit of the routine above: returns.
-;   L0156 UpdateMenuCommon2                code  Submenu set-up state: cues the first set of submenu name table attributes for NT 2.
-;   L0160 SelectTransferBufAndIncState     code  Sets TileBufSelector = A (a static transfer buffer for this frame) and advances SubmenuState.
-;   L0169 UpdateMenuCommon3                code  Submenu set-up state: cues the second set of submenu name table attributes for NT 2.
-;   L0176 UpdateMenuCommon4                code  Submenu set-up state: cues a blank row of tiles for the bottom row of NT 2 ($2BA0).
-;   L0183 UpdateMenu5UW                    code  UW state 5: cues one row transfer (first step of SubmenuScrollProgress, $2B) without scrolling.
-;   L0190 UpdateMenu5OW                    code  OW state 6: cues the transfer of the "TRIFORCE" text.
-;   L0197 UpdateMenuScrollDownOW           code  OW scroll-down state: transfers one submenu row, then scrolls like the UW state below.
-;   L0207 UpdateMenuScrollDownUW           code  Scroll-down state: transfers one submenu row and scrolls the submenu in by 3 pixels.
-;   L0301 UpdateMenuActive                 code  Active state: draws the items, moves the cursor, and checks for Start or the controller 2 exit.
-;   L0345 UpdateMenuScrollUp               code  Scroll-up state: scrolls the submenu out by 3 pixels a frame, then closes it (SubmenuState = 0).
-;   L0386 MovePositionMarkers              code  Moves the status bar position markers (Link's, and the Triforce's in UW) vertically by A pixels.
-;   L0408 Submenu_Return                   code  Shared exit of the submenu routines above.
-;   L0414 TriforceTransferBufOffsets       data  TABLE: where each Triforce piece's tiles go; index = (level - 1) * 3 + 0..2; value = byte offset
-;   L0422 TriforceTriforceBufReplacements  data  TABLE: tiles drawn for a Triforce piece that is held; index as TriforceTransferBufOffsets;
-;   L0429 TriforceTransferBufTiles         data  TABLE: tiles of the empty Triforce outline; index as TriforceTransferBufOffsets; value = tile
-;   L0440 UpdateMenuStartOW                code  OW state 1: rebuilds the Triforce tiles in the Triforce row transfer buffers from InvTriforce.
+;   L0060 Submenu_UpdateAndDrawMeters           code  Runs one frame of the submenu state machine, then updates the heart and rupee meters.
+;   L0067 Submenu_Update                        code  Dispatches on SubmenuState through the UW table (CurLevel nonzero) or the OW table.
+;   L0076 Submenu_UpdateUW_JumpTable            data  TABLE: UW submenu state handlers; index = SubmenuState (0-8); value = handler address.
+;   L0091 Submenu_UpdateOW_JumpTable            data  TABLE: OW submenu state handlers; index = SubmenuState (0-9); value = handler address.
+;   L0108 Submenu_BeginScrollDown               code  Submenu start state: hides sprites, redraws the map markers and sets up the scroll-in.
+;   L0150 Submenu_Update_Return                 code  State 0 handler (submenu closed) and exit of the routine above: returns.
+;   L0156 Submenu_CueAttrs1                     code  Submenu set-up state: cues the first set of submenu name table attributes for NT 2.
+;   L0160 Submenu_SelectTransferBufAndIncState  code  Sets TileBufSelector = A (a static transfer buffer for this frame) and advances SubmenuState.
+;   L0169 Submenu_CueAttrs2                     code  Submenu set-up state: cues the second set of submenu name table attributes for NT 2.
+;   L0176 Submenu_CueBlankBottomRow             code  Submenu set-up state: cues a blank row of tiles for the bottom row of NT 2 ($2BA0).
+;   L0183 Submenu_CueFirstRowUW                 code  UW state 5: cues one row transfer (first step of SubmenuScrollProgress, $2B) without scrolling.
+;   L0190 Submenu_CueTriforceText               code  OW state 6: cues the transfer of the "TRIFORCE" text.
+;   L0197 Submenu_ScrollDownOW                  code  OW scroll-down state: transfers one submenu row, then scrolls like the UW state below.
+;   L0207 Submenu_ScrollDownUW                  code  Scroll-down state: transfers one submenu row and scrolls the submenu in by 3 pixels.
+;   L0301 Submenu_UpdateActive                  code  Active state: draws the items, moves the cursor, and checks for Start or the controller 2 exit.
+;   L0345 Submenu_ScrollUp                      code  Scroll-up state: scrolls the submenu out by 3 pixels a frame, then closes it (SubmenuState = 0).
+;   L0386 Submenu_MovePositionMarkers           code  Moves the status bar position markers (Link's, and the Triforce's in UW) vertically by A pixels.
+;   L0408 Submenu_Return                        code  Shared exit of the submenu routines above.
+;   L0414 Submenu_TriforceTileOffsets           data  TABLE: where each Triforce piece's tiles go; index = (level - 1) * 3 + 0..2; value = byte offset
+;   L0422 Submenu_TriforceHeldTiles             data  TABLE: tiles drawn for a Triforce piece that is held; index as Submenu_TriforceTileOffsets;
+;   L0429 Submenu_TriforceEmptyTiles            data  TABLE: tiles of the empty Triforce outline; index as Submenu_TriforceTileOffsets; value = tile
+;   L0440 Submenu_BuildTriforceOW               code  OW state 1: rebuilds the Triforce tiles in the Triforce row transfer buffers from InvTriforce.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Runs one frame of the submenu state machine, then updates the heart and rupee meters.
-; NOTE: Called by UpdateMode5Play every frame while SubmenuState is nonzero, instead of updating the
+; NOTE: Called by Mode5Play_Update every frame while SubmenuState is nonzero, instead of updating the
 ;       world.
 ; ----------------------------------------------------------------------------
-UpdateMenuAndMeters:
-    JSR UpdateMenu
-    JMP UpdateHeartsAndRupees
+Submenu_UpdateAndDrawMeters:
+    JSR Submenu_Update
+    JMP World_UpdateHeartsAndRupees
 
 ; ----------------------------------------------------------------------------
 ; Dispatches on SubmenuState through the UW table (CurLevel nonzero) or the OW table.
 ; ----------------------------------------------------------------------------
-UpdateMenu:
+Submenu_Update:
     LDA SubmenuState
     LDY CurLevel
     BEQ :+                      ; In OW, go use the OW table.
 
     ; In UW.
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: UW submenu state handlers; index = SubmenuState (0-8); value = handler address.
-UpdateMenuUW_JumpTable:
-    .ADDR UpdateMenu_Return         ; 0 closed
-    .ADDR UpdateMenuCommon1         ; 1 start: markers, scroll position, counters
-    .ADDR UpdateMenuCommon2         ; 2 cue attributes, part 1
-    .ADDR UpdateMenuCommon3         ; 3 cue attributes, part 2
-    .ADDR UpdateMenuCommon4         ; 4 cue blank bottom row
-    .ADDR UpdateMenu5UW             ; 5 cue the first submenu row
-    .ADDR UpdateMenuScrollDownUW    ; 6 scroll down (opening)
-    .ADDR UpdateMenuActive          ; 7 active
-    .ADDR UpdateMenuScrollUp        ; 8 scroll up (closing)
+Submenu_UpdateUW_JumpTable:
+    .ADDR Submenu_Update_Return         ; 0 closed
+    .ADDR Submenu_BeginScrollDown         ; 1 start: markers, scroll position, counters
+    .ADDR Submenu_CueAttrs1         ; 2 cue attributes, part 1
+    .ADDR Submenu_CueAttrs2         ; 3 cue attributes, part 2
+    .ADDR Submenu_CueBlankBottomRow         ; 4 cue blank bottom row
+    .ADDR Submenu_CueFirstRowUW             ; 5 cue the first submenu row
+    .ADDR Submenu_ScrollDownUW    ; 6 scroll down (opening)
+    .ADDR Submenu_UpdateActive          ; 7 active
+    .ADDR Submenu_ScrollUp        ; 8 scroll up (closing)
 :
     ; In OW.
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: OW submenu state handlers; index = SubmenuState (0-9); value = handler address.
-UpdateMenuOW_JumpTable:
-    .ADDR UpdateMenu_Return         ; 0 closed
-    .ADDR UpdateMenuStartOW         ; 1 build the Triforce tiles from InvTriforce
-    .ADDR UpdateMenuCommon1         ; 2 start: markers, scroll position, counters
-    .ADDR UpdateMenuCommon2         ; 3 cue attributes, part 1
-    .ADDR UpdateMenuCommon3         ; 4 cue attributes, part 2
-    .ADDR UpdateMenuCommon4         ; 5 cue blank bottom row
-    .ADDR UpdateMenu5OW             ; 6 cue the "TRIFORCE" text
-    .ADDR UpdateMenuScrollDownOW    ; 7 scroll down (opening)
-    .ADDR UpdateMenuActive          ; 8 active
-    .ADDR UpdateMenuScrollUp        ; 9 scroll up (closing)
+Submenu_UpdateOW_JumpTable:
+    .ADDR Submenu_Update_Return         ; 0 closed
+    .ADDR Submenu_BuildTriforceOW         ; 1 build the Triforce tiles from InvTriforce
+    .ADDR Submenu_BeginScrollDown         ; 2 start: markers, scroll position, counters
+    .ADDR Submenu_CueAttrs1         ; 3 cue attributes, part 1
+    .ADDR Submenu_CueAttrs2         ; 4 cue attributes, part 2
+    .ADDR Submenu_CueBlankBottomRow         ; 5 cue blank bottom row
+    .ADDR Submenu_CueTriforceText             ; 6 cue the "TRIFORCE" text
+    .ADDR Submenu_ScrollDownOW    ; 7 scroll down (opening)
+    .ADDR Submenu_UpdateActive          ; 8 active
+    .ADDR Submenu_ScrollUp        ; 9 scroll up (closing)
 
 ; ----------------------------------------------------------------------------
 ; Submenu start state: hides sprites, redraws the map markers and sets up the scroll-in.
 ; OUT:  CurVScroll = $EF with a name table switch requested; SubmenuScrollProgress = $2B;
 ;       SubmenuScanRoomId = $7F; SubmenuState + 1.
 ; ----------------------------------------------------------------------------
-UpdateMenuCommon1:
-    JSR HideAllSprites
-    JSR UpdatePlayerPositionMarker
-    JSR UpdateTriforcePositionMarker
+Submenu_BeginScrollDown:
+    JSR Sprite_HideAll
+    JSR StatusBar_UpdateLinkPositionMarker
+    JSR StatusBar_UpdateTriforceMarker
 
     ; Move the position markers and the vertical scroll position
     ; down 1 pixel.
@@ -120,7 +120,7 @@ UpdateMenuCommon1:
     STA CurVScroll
     STA SwitchNameTablesReq     ; Any nonzero value requests the switch.
     LDA #$01                    ; 1 pixel
-    JSR MovePositionMarkers
+    JSR Submenu_MovePositionMarkers
     INC SubmenuState
 
     ; SubmenuScrollProgress begins at $2B. Each frame of the scroll-down
@@ -147,17 +147,17 @@ UpdateMenuCommon1:
     STA SubmenuScanRoomId
 
 ; State 0 handler (submenu closed) and exit of the routine above: returns.
-UpdateMenu_Return:
+Submenu_Update_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
 ; Submenu set-up state: cues the first set of submenu name table attributes for NT 2.
 ; ----------------------------------------------------------------------------
-UpdateMenuCommon2:
-    LDA #$48                    ; Selector of SubmenuAttrs1TransferBuf.
+Submenu_CueAttrs1:
+    LDA #$48                    ; Selector of Transfer_SubmenuAttrs1Buf.
 
 ; Sets TileBufSelector = A (a static transfer buffer for this frame) and advances SubmenuState.
-SelectTransferBufAndIncState:
+Submenu_SelectTransferBufAndIncState:
     STA TileBufSelector
 :
     INC SubmenuState
@@ -166,35 +166,35 @@ SelectTransferBufAndIncState:
 ; ----------------------------------------------------------------------------
 ; Submenu set-up state: cues the second set of submenu name table attributes for NT 2.
 ; ----------------------------------------------------------------------------
-UpdateMenuCommon3:
-    LDA #$4A                    ; Selector of SubmenuAttrs2TransferBuf.
-    BNE SelectTransferBufAndIncState    ; Always taken.
+Submenu_CueAttrs2:
+    LDA #$4A                    ; Selector of Transfer_SubmenuAttrs2Buf.
+    BNE Submenu_SelectTransferBufAndIncState    ; Always taken.
 
 ; ----------------------------------------------------------------------------
 ; Submenu set-up state: cues a blank row of tiles for the bottom row of NT 2 ($2BA0).
 ; ----------------------------------------------------------------------------
-UpdateMenuCommon4:
-    LDA #$4C                    ; Selector of BlankBottomRowNT2TransferBuf.
-    BNE SelectTransferBufAndIncState    ; Always taken.
+Submenu_CueBlankBottomRow:
+    LDA #$4C                    ; Selector of Transfer_BlankBottomRowNT2Buf.
+    BNE Submenu_SelectTransferBufAndIncState    ; Always taken.
 
 ; ----------------------------------------------------------------------------
 ; UW state 5: cues one row transfer (first step of SubmenuScrollProgress, $2B) without scrolling.
 ; ----------------------------------------------------------------------------
-UpdateMenu5UW:
+Submenu_CueFirstRowUW:
     JSR Submenu_CueTransferRowUW
     JMP :-                      ; Go advance SubmenuState and return.
 
 ; ----------------------------------------------------------------------------
 ; OW state 6: cues the transfer of the "TRIFORCE" text.
 ; ----------------------------------------------------------------------------
-UpdateMenu5OW:
-    LDA #$5C                    ; Selector of TriforceTextTransferBuf.
-    BNE SelectTransferBufAndIncState    ; Always taken.
+Submenu_CueTriforceText:
+    LDA #$5C                    ; Selector of Transfer_TriforceTextBuf.
+    BNE Submenu_SelectTransferBufAndIncState    ; Always taken.
 
 ; ----------------------------------------------------------------------------
 ; OW scroll-down state: transfers one submenu row, then scrolls like the UW state below.
 ; ----------------------------------------------------------------------------
-UpdateMenuScrollDownOW:
+Submenu_ScrollDownOW:
     JSR Submenu_CueTransferRowOW
     JMP :+
 
@@ -204,13 +204,13 @@ UpdateMenuScrollDownOW:
 ;       $14 (Sprites+80) becomes the dot marking Link's room on the submenu map.
 ; NOTE: Lasts 58 frames ($EF down to $41 in steps of 3); the active state runs from the next frame.
 ; ----------------------------------------------------------------------------
-UpdateMenuScrollDownUW:
+Submenu_ScrollDownUW:
     JSR Submenu_CueTransferRowUW
 :
     ; Move the position markers down 3 pixels and move the
     ; vertical scroll position up by the same amount.
     LDA #$03
-    JSR MovePositionMarkers
+    JSR Submenu_MovePositionMarkers
     LDA CurVScroll
     SEC
     SBC #$03
@@ -255,7 +255,7 @@ UpdateMenuScrollDownUW:
     ASL
     ASL
     ASL
-    JSR Negate
+    JSR Math_Negate
     JMP @SumMarkerX
 
 @ShortRotation:
@@ -298,9 +298,9 @@ UpdateMenuScrollDownUW:
 ; OUT:  Start: SubmenuState + 1 (scroll up). Up+A on controller 2: SubmenuState = 0, GameMode = 8.
 ; NOTE: Up+A held on controller 2 leaves play for mode 8 (continue/save/retry menu) without dying.
 ; ----------------------------------------------------------------------------
-UpdateMenuActive:
-    JSR DrawSubmenuItems
-    JSR UpdateSubmenuSelection
+Submenu_UpdateActive:
+    JSR Submenu_DrawItems
+    JSR Submenu_UpdateSelection
 
     ; If buttons Up ($08) and A ($80) are both held on the second controller, then
     ; 1. end the mode (IsUpdatingMode and GameSubmode = 0) and reset the submenu state
@@ -310,13 +310,13 @@ UpdateMenuActive:
     AND #$88
     CMP #$88
     BNE @CheckStart
-    JSR EndGameMode             ; Returns A = 0.
+    JSR Mode_End             ; Returns A = 0.
     STA SubmenuState
     LDA #$08
     STA GameMode
     LDA #$00
     STA SongEnvelopeSelector
-    JMP SilenceSound
+    JMP Audio_SilenceSongTune1AndSample
 
 @CheckStart:
     ; If Start was pressed on the first controller, then hide all sprites except
@@ -328,7 +328,7 @@ UpdateMenuActive:
     PHA
     LDA Sprites+88              ; Save the Triforce position marker's Y.
     PHA
-    JSR HideAllSprites
+    JSR Sprite_HideAll
     PLA                         ; Restore the Triforce position marker's Y.
     STA Sprites+88
     PLA                         ; Restore Link's position marker's Y.
@@ -342,10 +342,10 @@ UpdateMenuActive:
 ;       SubmenuState = 0.
 ; NOTE: Lasts 59 frames ($41 up to $F2 in steps of 3); play resumes on the next frame.
 ; ----------------------------------------------------------------------------
-UpdateMenuScrollUp:
+Submenu_ScrollUp:
     ; Move the position markers up 3 pixels ($FD = -3) and the vertical scroll down 3 pixels.
     LDA #$FD
-    JSR MovePositionMarkers
+    JSR Submenu_MovePositionMarkers
     LDA CurVScroll
     CLC
     ADC #$03
@@ -359,11 +359,11 @@ UpdateMenuScrollUp:
     STA SwitchNameTablesReq
 
     ; In UW, fill the first $10 sprite records with the blank priority sprites
-    ; (WriteBlankPrioritySprites): the dungeon doorway masks, which HideAllSprites
+    ; (Sprite_WriteBlankPrioritySprites): the dungeon doorway masks, which Sprite_HideAll
     ; removed when the submenu opened. The overworld path never writes these masks.
     LDA CurLevel
     BEQ :+
-    JSR WriteBlankPrioritySprites
+    JSR Sprite_WriteBlankPrioritySprites
 :
     ; We reached the end. So, reset the vertical scroll
     ; and submenu state.
@@ -383,7 +383,7 @@ UpdateMenuScrollUp:
 ; NOTE: Link's marker is left alone when hidden (Y = $F8). The Triforce marker moves only in UW
 ;       when the level's compass is held.
 ; ----------------------------------------------------------------------------
-MovePositionMarkers:
+Submenu_MovePositionMarkers:
     STA $00                     ; [00] holds the signed vertical step.
 
     ; If Link's position marker is visible, then move it by the step in [00].
@@ -397,7 +397,7 @@ MovePositionMarkers:
     ; If in UW and have the compass, then move the Triforce position marker.
     LDA CurLevel
     BEQ Submenu_Return
-    JSR HasCompass
+    JSR Inv_HasCompass
     BEQ Submenu_Return
     LDA Sprites+88
     CLC
@@ -409,42 +409,42 @@ Submenu_Return:
     RTS
 
 ; TABLE: where each Triforce piece's tiles go; index = (level - 1) * 3 + 0..2; value = byte offset
-; from TriforceRow0TransferBuf+4 into the four consecutive Triforce row transfer buffers.
+; from Transfer_TriforceRow0Buf+4 into the four consecutive Triforce row transfer buffers.
 ; Offsets $13, $21 (levels 5 and 6) and $16, $22 (levels 7 and 8) are shared by two pieces.
-TriforceTransferBufOffsets:
+Submenu_TriforceTileOffsets:
     .BYTE $00, $08, $09, $01, $0A, $0B, $12, $1E    ; level 1, level 2, level 3 (first two)
     .BYTE $1F, $17, $24, $25, $13, $14, $21, $13    ; level 3 (last), level 4, level 5, level 6 (first)
     .BYTE $20, $21, $15, $16, $22, $16, $22, $23    ; level 6 (last two), level 7, level 8
 
-; TABLE: tiles drawn for a Triforce piece that is held; index as TriforceTransferBufOffsets;
+; TABLE: tiles drawn for a Triforce piece that is held; index as Submenu_TriforceTileOffsets;
 ; value = tile. Where the slot already holds half tile $E5 or $E6 (the neighbouring piece),
 ; $F5 (full) is written instead of this value.
-TriforceTriforceBufReplacements:
+Submenu_TriforceHeldTiles:
     .BYTE $E7, $E7, $F5, $E8, $F5, $E8, $E7, $E7    ; level 1, level 2, level 3 (first two)
     .BYTE $F5, $E8, $F5, $E8, $E5, $F5, $E5, $E8    ; level 3 (last), level 4, level 5, level 6 (first)
     .BYTE $F5, $E8, $F5, $E6, $E6, $E7, $E7, $F5    ; level 6 (last two), level 7, level 8
 
-; TABLE: tiles of the empty Triforce outline; index as TriforceTransferBufOffsets; value = tile
+; TABLE: tiles of the empty Triforce outline; index as Submenu_TriforceTileOffsets; value = tile
 ; ($E9/$EA outline edges, $24 blank).
-TriforceTransferBufTiles:
+Submenu_TriforceEmptyTiles:
     .BYTE $E9, $E9, $24, $EA, $24, $EA, $E9, $E9    ; level 1, level 2, level 3 (first two)
     .BYTE $24, $EA, $24, $EA, $24, $24, $24, $24    ; level 3 (last), level 4, level 5, level 6 (first)
     .BYTE $24, $24, $24, $24, $24, $24, $24, $24    ; level 6 (last two), level 7, level 8
 
 ; ----------------------------------------------------------------------------
 ; OW state 1: rebuilds the Triforce tiles in the Triforce row transfer buffers from InvTriforce.
-; OUT:  the buffers at TriforceRow0TransferBuf+4.. hold the outline plus every held piece;
+; OUT:  the buffers at Transfer_TriforceRow0Buf+4.. hold the outline plus every held piece;
 ;       SubmenuState + 1. Uses [06] (level bit) and [07] (tile counter).
 ; NOTE: Bit n of InvTriforce is the piece of level n+1 (levels 1-8); each piece is three tiles.
 ; ----------------------------------------------------------------------------
-UpdateMenuStartOW:
+Submenu_BuildTriforceOW:
     ; Put the tiles into the submenu Triforce transfer buffers that
     ; make it look completely empty, as if no piece has been won.
     LDY #$17
 :
-    LDX TriforceTransferBufOffsets, Y
-    LDA TriforceTransferBufTiles, Y
-    STA TriforceRow0TransferBuf+4, X
+    LDX Submenu_TriforceTileOffsets, Y
+    LDA Submenu_TriforceEmptyTiles, Y
+    STA Transfer_TriforceRow0Buf+4, X
     DEY
     BPL :-
 
@@ -467,7 +467,7 @@ UpdateMenuStartOW:
 @LoopTile:
     ; Get the offset into the submenu Triforce transfer buffers of
     ; the current tile slot.
-    LDX TriforceTransferBufOffsets, Y
+    LDX Submenu_TriforceTileOffsets, Y
 
     ; If the level test bit is not in InvTriforce, then we don't
     ; have this piece. So, go loop again, and leave the tile in the
@@ -484,18 +484,18 @@ UpdateMenuStartOW:
     ;
     ; Else replace it with the one at the current Triforce tile slot
     ; in the replacement list.
-    LDA TriforceRow0TransferBuf+4, X
+    LDA Transfer_TriforceRow0Buf+4, X
     CMP #$E5
     BEQ @ReplaceWithF5
     CMP #$E6
     BEQ @ReplaceWithF5
-    LDA TriforceTriforceBufReplacements, Y
+    LDA Submenu_TriforceHeldTiles, Y
     JMP :+
 
 @ReplaceWithF5:
     LDA #$F5
 :
-    STA TriforceRow0TransferBuf+4, X
+    STA Transfer_TriforceRow0Buf+4, X
 
 @NextLoopTile:
     ; Bottom of the inner loop.

@@ -11,45 +11,45 @@
 .IMPORT Anim_WriteItemSprites
 .IMPORT Anim_WriteSpecificItemSprites
 .IMPORT Anim_WriteSpritePairNotFlashing
-.IMPORT BeginUpdateMode
-.IMPORT DrawObjectMirrored
-.IMPORT DrawObjectNotMirrored
-.IMPORT FetchFileAAddressSet
-.IMPORT FileBChecksums
-.IMPORT FormatDecimalByte
-.IMPORT FormatHeartsInTextBuf
+.IMPORT Mode_BeginUpdate
+.IMPORT Anim_DrawObjectMirrored
+.IMPORT Anim_DrawObjectNotMirrored
+.IMPORT Save_FetchFileAAddressSet
+.IMPORT Save_FileBChecksums
+.IMPORT Text_FormatDecimalByte
+.IMPORT Text_FormatHeartRows
 .IMPORT Person_Draw
-.IMPORT ResetRoomTileObjInfo
-.IMPORT SilenceAllSound
-.IMPORT UpdateWorldCurtainEffect_Bank2
+.IMPORT Room_ResetTileObjInfo
+.IMPORT Audio_SilenceAll
+.IMPORT Mode_UpdateCurtainEffect_ReturnToBank2
 
 ; Imports from RAM code bank 06
 
-.IMPORT MenuPalettesTransferBuf
+.IMPORT Transfer_MenuPalettesBuf
 
 ; Imports from program bank 07
 
 .IMPORT Anim_FetchObjPosForSpriteDescriptor
-.IMPORT AnimateItemObject
-.IMPORT EndGameMode
-.IMPORT GoToNextMode
-.IMPORT HideAllSprites
+.IMPORT Item_DrawObject
+.IMPORT Mode_End
+.IMPORT Mode_GoToNext
+.IMPORT Sprite_HideAll
 .IMPORT Link_EndMoveAndDraw
-.IMPORT TableJump
-.IMPORT TurnOffAllVideo
-.IMPORT TurnOffVideoAndClearArtifacts
+.IMPORT Util_TableJump
+.IMPORT Ppu_TurnOffAllVideo
+.IMPORT Ppu_TurnOffVideoAndClearNameTables
 
-.EXPORT InitDemo_RunTasks
-.EXPORT InitMode1_Full
-.EXPORT InitMode13_Full
-.EXPORT InitModeEandF_Full
-.EXPORT TransferCommonPatterns
-.EXPORT UpdateMode0Demo
-.EXPORT UpdateMode13WinGame
-.EXPORT UpdateMode1Menu
-.EXPORT UpdateModeDSave
-.EXPORT UpdateModeERegister
-.EXPORT UpdateModeFElimination
+.EXPORT Mode0Demo_Init
+.EXPORT Mode1Menu_Init_Full
+.EXPORT Mode13WinGame_Init_Full
+.EXPORT ModeERegister_Init_Full
+.EXPORT Chr_TransferCommonPatterns
+.EXPORT Mode0Demo_Update
+.EXPORT Mode13WinGame_Update
+.EXPORT Mode1Menu_Update
+.EXPORT ModeDSave_Update
+.EXPORT ModeERegister_Update
+.EXPORT ModeFEliminate_Update
 
 .INCLUDE "bank2/common-patterns.asm"
 .INCLUDE "bank2/mode0-demo.asm"

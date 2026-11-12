@@ -1,49 +1,49 @@
 ; ============================================================================
 ; FILE:     bank4/moldorm.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 4913-5153
-; SUBJECTS: Flyer, Moldorm
+; SUBJECTS: Moldorm
 ; TOPIC:    Moldorm (object type $41) update: the two heads steer with the flyer chase/wander
 ;           routines, every $10 frames each segment takes the direction of the one ahead, and a
 ;           killed segment is replaced by the worm's tail.
-; SEE ALSO: bank4/moldorm-init.asm (InitMoldorm: slots, start values);
-;           bank4/fairy-flyer-common.asm (Flyer_Chase, Flyer_Wander, MoveFlyer, and the room-bound
+; SEE ALSO: bank4/moldorm-init.asm (Moldorm_Init: slots, start values);
+;           bank4/fairy-flyer-common.asm (Flyer_State2Chase, Flyer_State3Wander, Flyer_Move, and the room-bound
 ;           bounce that sets Moldorm_ObjBounceDir); bank1/monster-collisions.asm
-;           (CheckMonsterCollisions); bank4/aquamentus.asm (CheckBossHitReaction);
-;           bank7/object-stubs-destroy-monster.asm (UpdateDeadDummy, object type $5D).
+;           (Collision_CheckMonsterVsWeaponsAndLink); bank4/aquamentus.asm (Obj_PlayBossDeathCryAndResetShove);
+;           bank7/object-stubs-destroy-monster.asm (DeadDummy_StartDeathSparkle, object type $5D).
 ; KEY FACTS:
 ;   - Two worms: slots $01-$05 (head $05) and $06-$0A (head $0A). Only a head runs the flight
 ;     control; the other segments just move along their own ObjDir. Moldorm_Chase, Moldorm_Wander
 ;   - All segments move 1 pixel every 2 frames (flyer speed $80), 8-way, and stop only while the
 ;     clock is held. A segment whose ObjDir is 0 is skipped entirely: not moved, not drawn, not
-;     hittable and harmless. UpdateMoldorm
+;     hittable and harmless. Moldorm_Update
 ;   - Whenever the head's ObjTimer is rearmed to $10 (each turn and each state change, so every
 ;     $10 frames = 8 pixels), slot N takes the old direction of slot N+1: the body follows the
 ;     head's path one step per segment, and at the start one more segment leaves the start point
 ;     every $10 frames. Moldorm_PropagateDirs
 ;   - A head picks a flying state when its timer runs out: chase the chase target (state 2) when
 ;     Random,X >= $40 (3 in 4), else wander (state 3); 8 turns, so a state lasts $80 frames.
-;     Flyer_MoldormDecideState, Moldorm_ChangeFlyingState
+;     Moldorm_DecideFlightState, Moldorm_ChangeFlyingState
 ;   - A head that reaches the room boundary does not reverse at once: the reversed direction is
 ;     stored and applied at the next propagation. Moldorm_PropagateDirs
 ;   - Killing any segment removes the worm's tail instead (lowest slot of that worm still type
 ;     $41): the tail becomes a dead dummy (type $5D) at the hit segment's position and the hit
-;     segment lives on with HP $20. Damage does not carry between segments. UpdateMoldorm
+;     segment lives on with HP $20. Damage does not carry between segments. Moldorm_Update
 ;   - A worm dies after 5 kills; the last one kills the head itself (type $41). The 4 before it
 ;     die as dead dummies (type $5D), which drop nothing and add nothing to RoomKillCount or
-;     WorldKillCycle (UpdateMetaObjectEnd, NoDropMonsterTypes): only the 2 head deaths count
-;     and can drop an item. UpdateMoldorm
+;     WorldKillCycle (Obj_EndMetastate, Drop_NoDropTypes): only the 2 head deaths count
+;     and can drop an item. Moldorm_Update
 ;   - Collisions cannot turn or delay a segment: ObjDir and ObjTimer are restored after
-;     CheckMonsterCollisions, and shove info is cleared only on a kill. UpdateMoldorm
+;     Collision_CheckMonsterVsWeaponsAndLink, and shove info is cleared only on a kill. Moldorm_Update
 ; CONTENTS: (generated; L = line in this file)
-;   L0059 UpdateMoldorm                   code  Updates one Moldorm segment: move, draw, collide; on death hands the death to the worm's tail.
-;   L0152 ControlMoldormFlight            code  Runs the flight routine for the segment's flying state (0-2 chase, 3 wander).
-;   L0157 ControlMoldormFlight_JumpTable  data  TABLE: Moldorm flight routines; index = Flyer_ObjFlyingState; value = routine address.
-;   L0171 Moldorm_Chase                   code  Flying states 0-2 of a Moldorm head: turn toward the chase target every $10 frames.
-;   L0188 Moldorm_ChangeFlyingState       code  Timer = 0, so the flying state has ended: picks a new state and rearms the timer to $10 frames.
-;   L0209 Moldorm_Wander                  code  Flying state 3 of a Moldorm head: turn at random every $10 frames.
-;   L0228 Moldorm_PropagateDirs           code  Once per $10 frames (head's timer = $10): each segment takes the direction of the one ahead.
-;   L0270 L1156B_Exit                     code  Shared exit of the Moldorm flight routines above.
-;   L0280 Flyer_MoldormDecideState        code  Picks a Moldorm head's next flying state: 2 (chase) if Random,X >= $40, else 3 (wander); 8 turns.
+;   L0059 Moldorm_Update                   code  Updates one Moldorm segment: move, draw, collide; on death hands the death to the worm's tail.
+;   L0152 Moldorm_ControlFlight            code  Runs the flight routine for the segment's flying state (0-2 chase, 3 wander).
+;   L0157 Moldorm_ControlFlight_JumpTable  data  TABLE: Moldorm flight routines; index = Flyer_ObjFlyingState; value = routine address.
+;   L0171 Moldorm_Chase                    code  Flying states 0-2 of a Moldorm head: turn toward the chase target every $10 frames.
+;   L0188 Moldorm_ChangeFlyingState        code  Timer = 0, so the flying state has ended: picks a new state and rearms the timer to $10 frames.
+;   L0209 Moldorm_Wander                   code  Flying state 3 of a Moldorm head: turn at random every $10 frames.
+;   L0228 Moldorm_PropagateDirs            code  Once per $10 frames (head's timer = $10): each segment takes the direction of the one ahead.
+;   L0270 Moldorm_PropagateDirs_Return     code  Shared exit of the Moldorm flight routines above.
+;   L0280 Moldorm_DecideFlightState        code  Picks a Moldorm head's next flying state: 2 (chase) if Random,X >= $40, else 3 (wander); 8 turns.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -53,10 +53,10 @@
 ;       and invincibility timer; unless the tail is the head itself, the tail becomes type $5D
 ;       and ObjMetastate,X = 0 (this segment lives on).
 ; NOTE: Each segment has HP $20 and costs Link $0080 = half a heart on touch, before rings
-;       (type $41 in ObjectTypeToHpPairs and ObjTypeToDamagePoints). Nothing here tests the stun
+;       (type $41 in Obj_TypeHpPairs and Damage_ObjTypeDamageToLink). Nothing here tests the stun
 ;       timer, so a boomerang stun does not stop a segment. The clock stops all movement.
 ; ----------------------------------------------------------------------------
-UpdateMoldorm:
+Moldorm_Update:
     ; A segment with no direction has not left the start point yet: do nothing at all.
     LDA ObjDir, X
     BEQ @Exit
@@ -64,8 +64,8 @@ UpdateMoldorm:
     ; Unless the clock is held: steer (heads only) and move.
     LDA InvClock
     BNE :+
-    JSR ControlMoldormFlight
-    JSR MoveFlyer
+    JSR Moldorm_ControlFlight
+    JSR Flyer_Move
 :
     ; Draw one sprite: attributes 2 (normal, palette row 6), tile $44 for every segment.
     ; (Anim_WriteSprite cycles the palette instead while the invincibility timer runs.)
@@ -80,7 +80,7 @@ UpdateMoldorm:
     PHA
     LDA ObjTimer, X
     PHA
-    JSR CheckMonsterCollisions
+    JSR Collision_CheckMonsterVsWeaponsAndLink
     PLA
     STA ObjTimer, X
     PLA
@@ -98,7 +98,7 @@ UpdateMoldorm:
     ; taken is forgotten.
     LDA #$20
     STA ObjHP, X
-    JSR CheckBossHitReaction    ; Boss death cry (metastate <> 0); clears shove info.
+    JSR Obj_PlayBossDeathCryAndResetShove    ; Boss death cry (metastate <> 0); clears shove info.
 
     ; Look for the tail: the lowest slot of this segment's worm that is still type $41.
     ; Y+1 is the slot: start at slot $01 for slots $01-$05, at slot $06 for slots $06-$0A.
@@ -138,7 +138,7 @@ UpdateMoldorm:
     ; and bring the current segment back to life (metastate 0).
     LDA #$5D
     STA ObjType+1, Y
-    JSR ResetObjMetastate
+    JSR Obj_ResetMetastate
 
 @Exit:
     RTS
@@ -147,14 +147,14 @@ UpdateMoldorm:
 ; Runs the flight routine for the segment's flying state (0-2 chase, 3 wander).
 ; IN:   X = object slot.
 ; NOTE: Moldorm only ever holds states 1 (left by the flyer routines when the turns run out),
-;       2 and 3 (InitMoldorm, Flyer_MoldormDecideState); state 1 is replaced in the same update.
+;       2 and 3 (Moldorm_Init, Moldorm_DecideFlightState); state 1 is replaced in the same update.
 ; ----------------------------------------------------------------------------
-ControlMoldormFlight:
+Moldorm_ControlFlight:
     LDA Flyer_ObjFlyingState, X
-    JSR TableJump
+    JSR Util_TableJump
 
 ; TABLE: Moldorm flight routines; index = Flyer_ObjFlyingState; value = routine address.
-ControlMoldormFlight_JumpTable:
+Moldorm_ControlFlight_JumpTable:
     .ADDR Moldorm_Chase         ; 0 (never set for Moldorm)
     .ADDR Moldorm_Chase         ; 1 (set when a state's turns run out; lasts no longer than the call)
     .ADDR Moldorm_Chase         ; 2 chase
@@ -165,7 +165,7 @@ ControlMoldormFlight_JumpTable:
 ; IN:   X = object slot. Does nothing unless X is a head ($05 or $0A).
 ; OUT:  may write ObjDir,X, ObjTimer,X, the flying state and turns; falls into the state change
 ;       when the timer is 0, else goes to the direction propagation.
-; NOTE: Flyer_Chase does not always turn toward the target (see its direction test), and the
+; NOTE: Flyer_State2Chase does not always turn toward the target (see its direction test), and the
 ;       chase target is not always Link (ChaseTargetX, ChaseTargetY).
 ; ----------------------------------------------------------------------------
 Moldorm_Chase:
@@ -173,11 +173,11 @@ Moldorm_Chase:
     CPX #$05
     BEQ :+
     CPX #$0A
-    BNE L1156B_Exit
+    BNE Moldorm_PropagateDirs_Return
 :
     ; While ObjTimer <> 0 this does nothing. At 0 it uses up one turn: if turns remain it sets
     ; ObjTimer to $10 and turns; if none remain it sets flying state 1 and leaves ObjTimer 0.
-    JSR Flyer_Chase
+    JSR Flyer_State2Chase
 
     ; If the timer is running (possibly just rearmed to $10), then
     ; go see if it is time to pass directions down the worm.
@@ -186,7 +186,7 @@ Moldorm_Chase:
 
 ; Timer = 0, so the flying state has ended: picks a new state and rearms the timer to $10 frames.
 Moldorm_ChangeFlyingState:
-    JSR Flyer_MoldormDecideState
+    JSR Moldorm_DecideFlightState
     LDA #$10
     STA ObjTimer, X
 
@@ -203,7 +203,7 @@ Moldorm_ChangeFlyingState:
 ; ----------------------------------------------------------------------------
 ; Flying state 3 of a Moldorm head: turn at random every $10 frames.
 ; IN:   X = object slot. Does nothing unless X is a head ($05 or $0A).
-; NOTE: Each turn of Flyer_Wander uses Random+1,X: >= $A0 keep the direction, $50-$9F turn one
+; NOTE: Each turn of Flyer_State3Wander uses Random+1,X: >= $A0 keep the direction, $50-$9F turn one
 ;       step right, < $50 one step left (8-way steps).
 ; ----------------------------------------------------------------------------
 Moldorm_Wander:
@@ -211,12 +211,12 @@ Moldorm_Wander:
     CPX #$05
     BEQ :+
     CPX #$0A
-    BNE L1156B_Exit
+    BNE Moldorm_PropagateDirs_Return
 :
     ; While ObjTimer <> 0 this does nothing. At 0 it uses up one turn: if turns remain it sets
     ; ObjTimer to $10 and turns at random; if none remain it sets flying state 1 and leaves
     ; ObjTimer 0.
-    JSR Flyer_Wander
+    JSR Flyer_State3Wander
 
     ; So after the call: timer = $10 means a turn was just made (pass directions down the worm);
     ; timer = 0 means the state ended (go pick a new one, rearm the timer and pass directions);
@@ -229,7 +229,7 @@ Moldorm_PropagateDirs:
     ; If timer <> $10 (not rearmed in this frame), then return.
     LDA ObjTimer, X
     CMP #$10
-    BNE L1156B_Exit
+    BNE Moldorm_PropagateDirs_Return
 
     ; If a bounce off the room boundary was deferred (bounce direction <> 0), then
     ; make it the head's direction now and clear it.
@@ -267,7 +267,7 @@ Moldorm_PropagateDirs:
     STA Moldorm_ObjOldDir, X
 
 ; Shared exit of the Moldorm flight routines above.
-L1156B_Exit:
+Moldorm_PropagateDirs_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
@@ -277,7 +277,7 @@ L1156B_Exit:
 ; NOTE: The flyer routines decrement the turns before turning, so 8 gives 7 turns $10 frames
 ;       apart; with the $10 frames set by the state change a state lasts $80 frames.
 ; ----------------------------------------------------------------------------
-Flyer_MoldormDecideState:
+Moldorm_DecideFlightState:
     LDY #$02
     LDA Random, X
     CMP #$40

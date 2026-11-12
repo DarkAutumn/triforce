@@ -1,35 +1,35 @@
 ; ============================================================================
 ; FILE:     bank4/like-like.asm          BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 6816-6913
-; SUBJECTS: (none)
+; SUBJECTS: LikeLike
 ; TOPIC:    Like-Like (object type $17): wanders toward Link, holds him when it touches him, and removes
 ;           the magic shield after holding him long enough.
-; SEE ALSO: bank1/monster-collisions.asm (CheckMonsterCollisions sets ObjCaptureTimer on a touch);
-;           bank1/link-collision-harm.asm (CheckLinkCollision: no monster can touch a held Link);
-;           bank7/mode5-play-update.asm (UpdatePlayer discards direction input while held);
-;           bank4/walker-wanderer-common.asm (UpdateCommonWanderer); bank4/push-block.asm
-;           (DrawObjectMirroredOverLink, HideSpritesOverLink); bank5/underworld-secrets.asm (clears
-;           IsLinkParalyzed when the room is found empty); bank4/drop-items.asm (NoDropMonsterTypes).
+; SEE ALSO: bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink sets ObjCaptureTimer on a touch);
+;           bank1/link-collision-harm.asm (Link_CheckMonsterTouch: no monster can touch a held Link);
+;           bank7/mode5-play-update.asm (Link_Update discards direction input while held);
+;           bank4/walker-wanderer-common.asm (Wanderer_Update); bank4/push-block.asm
+;           (Sprite_DrawObjMirroredOverLink, Sprite_HideOverLink); bank5/underworld-secrets.asm (clears
+;           IsLinkParalyzed when the room is found empty); bank4/drop-items.asm (Drop_NoDropTypes).
 ; KEY FACTS:
-;   - Capture starts on the frame its touch harms Link: CheckMonsterCollisions (bank 1) increments
-;     ObjCaptureTimer for type $17; UpdateLikeLike then moves the Like-Like onto Link, clears Link's
+;   - Capture starts on the frame its touch harms Link: Collision_CheckMonsterVsWeaponsAndLink (bank 1) increments
+;     ObjCaptureTimer for type $17; LikeLike_Update then moves the Like-Like onto Link, clears Link's
 ;     knockback, ObjTimer and metastate, and increments IsLinkParalyzed.
-;   - While held, Link's direction input is discarded (UpdatePlayer, bank 7); his buttons still work,
-;     and the Like-Like stays where it is (UpdateLikeLike@HandleCaptured does not move it).
+;   - While held, Link's direction input is discarded (Link_Update, bank 7); his buttons still work,
+;     and the Like-Like stays where it is (LikeLike_Update@HandleCaptured does not move it).
 ;   - The capture timer counts 1 per frame from 1; when it reaches $60 (95 frames after the capture
-;     frame) InvMagicShield is set to 0, and again every frame after (UpdateLikeLike@IncCaptureTime).
-;   - Link is freed when this Like-Like dies (UpdateLikeLike clears IsLinkParalyzed when its metastate
+;     frame) InvMagicShield is set to 0, and again every frame after (LikeLike_Update@IncCaptureTime).
+;   - Link is freed when this Like-Like dies (LikeLike_Update clears IsLinkParalyzed when its metastate
 ;     becomes nonzero); bank 5 also clears it when the room has no monsters left. No shield refund.
-;   - Nothing pauses the hold: UpdateLikeLike@HandleCaptured tests neither the stun timer nor InvClock,
+;   - Nothing pauses the hold: LikeLike_Update@HandleCaptured tests neither the stun timer nor InvClock,
 ;     so a boomerang stun does not stop the capture timer.
-;   - While IsLinkParalyzed is set CheckLinkCollision (bank 1) reports no collision for any monster or
+;   - While IsLinkParalyzed is set Link_CheckMonsterTouch (bank 1) reports no collision for any monster or
 ;     shot, so a held Link takes no further damage.
-;   - HP $90 (nibble 9 in ObjectTypeToHpPairs); touch damage byte $01 = 1 heart before rings
-;     (ObjTypeToDamagePoints); q-speed $20 = 0.5 pixels per frame (room-entry default); turn rate $80.
+;   - HP $90 (nibble 9 in Obj_TypeHpPairs); touch damage byte $01 = 1 heart before rings
+;     (Damage_ObjTypeDamageToLink); q-speed $20 = 0.5 pixels per frame (room-entry default); turn rate $80.
 ;   - Invincibility mask is never set here (stays 0: every weapon type hurts it). Type $17 is in
-;     NoDropMonsterTypes: it never drops an item.
+;     Drop_NoDropTypes: it never drops an item.
 ; CONTENTS: (generated; L = line in this file)
-;   L0046 UpdateLikeLike  code  Updates a Like-Like: wanders toward Link; once it touches him, holds him and eats the magic shield.
+;   L0046 LikeLike_Update  code  Updates a Like-Like: wanders toward Link; once it touches him, holds him and eats the magic shield.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -43,12 +43,12 @@
 ;       incremented, not set, but only goes 0 -> 1: a held Link cannot be touched again. It is
 ;       cleared when the holding Like-Like dies.
 ; ----------------------------------------------------------------------------
-UpdateLikeLike:
+LikeLike_Update:
     ; Nonzero capture timer = this Like-Like is holding Link.
     LDA ObjCaptureTimer, X
     BNE @HandleCaptured
     LDA #$80                    ; Turn rate $80 (see Wanderer_ObjTurnRate)
-    JSR UpdateCommonWanderer
+    JSR Wanderer_Update
 
     ; Like-Like cycles through 4 animation frames, 8 frames each.
     DEC ObjAnimCounter, X
@@ -64,11 +64,11 @@ UpdateLikeLike:
 @Draw:
     JSR Anim_FetchObjPosForSpriteDescriptor
     LDA ObjAnimFrame, X
-    JSR DrawObjectMirrored
+    JSR Anim_DrawObjectMirrored
 
-    ; Check collisions. CheckMonsterCollisions increments the capture timer of a Like-Like whose touch
+    ; Check collisions. Collision_CheckMonsterVsWeaponsAndLink increments the capture timer of a Like-Like whose touch
     ; harmed Link on this frame. If that did not happen, return.
-    JSR CheckMonsterCollisions
+    JSR Collision_CheckMonsterVsWeaponsAndLink
     LDA ObjCaptureTimer, X
     BEQ @Exit
 
@@ -128,15 +128,15 @@ UpdateLikeLike:
     ; sprite-cycling writer.
     JSR Anim_FetchObjPosForSpriteDescriptor
     LDA ObjAnimFrame, X
-    JSR DrawObjectMirroredOverLink
+    JSR Sprite_DrawObjMirroredOverLink
 
     ; Check collisions (Link's weapons can hit it; Link himself cannot be touched while held).
     ; If the Like-Like is still alive, return.
-    JSR CheckMonsterCollisions
+    JSR Collision_CheckMonsterVsWeaponsAndLink
     LDA ObjMetastate, X
     BEQ @Exit
 
     ; It is dying: free Link and hide the two sprites that covered him.
     LDA #$00
     STA IsLinkParalyzed
-    JMP HideSpritesOverLink
+    JMP Sprite_HideOverLink

@@ -1,42 +1,42 @@
 ; ============================================================================
 ; FILE:     bank1/armos-ghini-spawn.asm  BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 2212-2364
-; SUBJECTS: (none)
+; SUBJECTS: Spawn
 ; TOPIC:    Overworld: Link walking into an armos statue square wakes an Armos ($1E); walking into a
 ;           gravestone square releases a flying Ghini ($22).
-; SEE ALSO: bank7/walker-collision-screen-edge.asm (PlayerUnwalkable calls CheckPassiveTileObjects);
-;           bank4/ghini-armos.asm (InitArmosOrFlyingGhini: the fade-in, armos secrets; the updates);
-;           bank7/tile-collision.asm (GetCollidingTileMoving sets ObjCollidedTile);
-;           bank7/object-stubs-destroy-monster.asm (FindEmptyMonsterSlot).
+; SEE ALSO: bank7/walker-collision-screen-edge.asm (Link_StopAtUnwalkableTile calls Spawn_CheckTouchedArmosOrGravestone);
+;           bank4/ghini-armos.asm (Armos_InitOrFlyingGhiniFadeIn: the fade-in, armos secrets; the updates);
+;           bank7/tile-collision.asm (Tile_GetAheadOfObj sets ObjCollidedTile);
+;           bank7/object-stubs-destroy-monster.asm (Obj_FindEmptyMonsterSlot).
 ; KEY FACTS:
 ;   - Runs only on the overworld, when Link's move is blocked by an unwalkable tile, his grid
-;     offset is 0 and a direction is held: CheckPassiveTileObjects (caller PlayerUnwalkable).
+;     offset is 0 and a direction is held: Spawn_CheckTouchedArmosOrGravestone (caller Link_StopAtUnwalkableTile).
 ;   - Blocking tiles $BC-$BF (gravestone square) make a flying Ghini, type $22; tiles $C0-$C3
-;     (armos square) make an Armos, type $1E: CheckPassiveTileObjects@ChooseObjType.
+;     (armos square) make an Armos, type $1E: Spawn_CheckTouchedArmosOrGravestone@ChooseObjType.
 ;   - The monster is placed exactly on the touched square and gets ObjTimer = $3F, the fade-in
-;     time in frames: CheckPassiveTileObjects@ChooseObjType.
+;     time in frames: Spawn_CheckTouchedArmosOrGravestone@ChooseObjType.
 ;   - It takes the highest free object slot in $0B-$01; with no free slot nothing happens. Nothing
 ;     is made either when that slot's ObjUninitialized is 0 (a slot freed by zeroing only its
-;     ObjType): CheckPassiveTileObjects@FindSlot.
+;     ObjType): Spawn_CheckTouchedArmosOrGravestone@FindSlot.
 ;   - Nothing is made if another slot already holds an object at the same X and Y (the monster
-;     still fading in): CheckPassiveTileObjects@FindObjAtLocation.
+;     still fading in): Spawn_CheckTouchedArmosOrGravestone@FindObjAtLocation.
 ;   - No RNG and no count limit here: a gravestone can be touched again once its Ghini has moved.
-;   - InitObject exempts the Armos ($1E) from screen-edge entry but not the flying Ghini ($22): in
+;   - Obj_Init exempts the Armos ($1E) from screen-edge entry but not the flying Ghini ($22): in
 ;     a room whose RoomAttrsF has bit 3 the Ghini's init goes through the edge-entry code, which
-;     can move it to an edge cell (seen in InitObject; not traced).
+;     can move it to an edge cell (seen in Obj_Init; not traced).
 ; CONTENTS: (generated; L = line in this file)
-;   L0035 LinkToSquareOffsetsX     data  TABLE: X offset from the X computed for Link to the touched square; index = direction index of
-;   L0039 LinkToSquareOffsetsY     data  TABLE: Y offset from the Y computed for Link to the touched square; same index; signed pixels.
-;   L0053 CheckPassiveTileObjects  code  Wakes an Armos or releases a flying Ghini when Link walks into an armos or gravestone square.
+;   L0035 Spawn_TouchedSquareOffsetsX          data  TABLE: X offset from the X computed for Link to the touched square; index = direction index of
+;   L0039 Spawn_TouchedSquareOffsetsY          data  TABLE: Y offset from the Y computed for Link to the touched square; same index; signed pixels.
+;   L0053 Spawn_CheckTouchedArmosOrGravestone  code  Wakes an Armos or releases a flying Ghini when Link walks into an armos or gravestone square.
 ; ============================================================================
 
 ; TABLE: X offset from the X computed for Link to the touched square; index = direction index of
-;        Link's facing (Y from GetOppositeDir: 0 up, 1 down, 2 left, 3 right); value = signed pixels.
-LinkToSquareOffsetsX:
+;        Link's facing (Y from Dir_GetOpposite: 0 up, 1 down, 2 left, 3 right); value = signed pixels.
+Spawn_TouchedSquareOffsetsX:
     .BYTE $00, $00, $F0, $10    ; up 0, down 0, left -$10, right +$10
 
 ; TABLE: Y offset from the Y computed for Link to the touched square; same index; signed pixels.
-LinkToSquareOffsetsY:
+Spawn_TouchedSquareOffsetsY:
     .BYTE $FB, $13, $03, $03    ; up -5, down +$13, left +3, right +3
 
 ; ----------------------------------------------------------------------------
@@ -48,14 +48,14 @@ LinkToSquareOffsetsY:
 ; NOTE: Tiles $BC-$BF give a flying Ghini, $C0-$C3 an Armos. A square is 2x2 tiles: t and t+1
 ;       are its left column (top, bottom), t+2 and t+3 its right column. The X and Y of the free
 ;       slot are overwritten even when no monster is made. The new object is uninitialized, so
-;       its init (InitArmosOrFlyingGhini) runs each frame until the timer is 0.
+;       its init (Armos_InitOrFlyingGhiniFadeIn) runs each frame until the timer is 0.
 ; ----------------------------------------------------------------------------
-CheckPassiveTileObjects:
+Spawn_CheckTouchedArmosOrGravestone:
     ; If grid offset <> 0 or input direction = 0, return.
     LDA ObjGridOffset
-    BNE @ReturnX0
+    BNE @ReturnNoMatch
     LDA ObjInputDir
-    BEQ @ReturnX0
+    BEQ @ReturnNoMatch
 
     ; Compare the collided tile with tiles $BC to $C3 (8 tiles).
     ; These are tiles for gravestone and armos squares.
@@ -69,7 +69,7 @@ CheckPassiveTileObjects:
     DEX
     BPL @TestTile
 
-@ReturnX0:
+@ReturnNoMatch:
     ; No match (or nothing to do): return with X = 0, Link's object slot.
     LDX #$00
     RTS
@@ -123,30 +123,30 @@ CheckPassiveTileObjects:
 @FindSlot:
     ; Look for an empty slot in $0B-$01 for the monster.
     ; If none was found, then return.
-    JSR FindEmptyMonsterSlot
-    BEQ @ExitX0
+    JSR Obj_FindEmptyMonsterSlot
+    BEQ @ReturnLinkSlot
 
     LDX EmptyMonsterSlot        ; X = the empty slot found.
 
     ; Offset the coordinates we calculated by the table entries for the direction
-    ; Link is facing (Y = reverse direction index from GetOppositeDir).
+    ; Link is facing (Y = reverse direction index from Dir_GetOpposite).
     ;
     ; Set the new object's location to them.
     LDA ObjDir
-    JSR GetOppositeDir
+    JSR Dir_GetOpposite
     LDA $00
     CLC
-    ADC LinkToSquareOffsetsX, Y
+    ADC Spawn_TouchedSquareOffsetsX, Y
     STA ObjX, X
     LDA $01
     CLC
-    ADC LinkToSquareOffsetsY, Y
+    ADC Spawn_TouchedSquareOffsetsY, Y
     STA ObjY, X
 
     ; Return, if the empty slot is flagged initialized (ObjUninitialized = 0).
     ; A slot freed by zeroing only its ObjType stays in that condition.
     LDA ObjUninitialized, X
-    BEQ @ExitX0
+    BEQ @ReturnLinkSlot
 
     ; Because armos and flying ghini fade into existence over a little time,
     ; see if one is already beginning to appear at that location.
@@ -164,9 +164,9 @@ CheckPassiveTileObjects:
     CMP ObjY, X
     BNE @NextObjAtLocation      ; Slot Y is not at this Y: try the next slot.
     LDA ObjType, Y
-    BNE @ExitX0                 ; An object is at this location: return without making a monster.
+    BNE @ReturnLinkSlot                 ; An object is at this location: return without making a monster.
     LDA ObjUninitialized, Y
-    BEQ @ExitX0                 ; An empty but initialized slot has these coordinates: also return.
+    BEQ @ReturnLinkSlot                 ; An empty but initialized slot has these coordinates: also return.
     BNE @ChooseObjType          ; An empty, uninitialized slot matches: stop searching, make the monster.
 
 @NextObjAtLocation:
@@ -182,10 +182,10 @@ CheckPassiveTileObjects:
     LDA #$22                    ; Flying Ghini (gravestone square, tiles $BC-$BF)
 :
     STA ObjType, X
-    JSR ResetObjMetastate       ; Metastate 0: no spawn cloud.
+    JSR Obj_ResetMetastate       ; Metastate 0: no spawn cloud.
     LDA #$3F                    ; Fade in for $3F frames (the object stays uninitialized until then).
     STA ObjTimer, X
 
-@ExitX0:
+@ReturnLinkSlot:
     LDX #$00                    ; Restore Link's object slot in X.
     RTS
