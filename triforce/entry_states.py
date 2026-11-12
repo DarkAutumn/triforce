@@ -78,10 +78,10 @@ BUILD_RECORD = 'build.json'
 STAGING_ROOT = ROOT / 'target' / 'entry-states'
 CHAINS = (0, 1, 2)
 START_STATE = 'start'
-# Not part of the room's monster list at entry: Zoras (spawned by water rooms) and the overworld boulders ($32, named
-# '32' natively and 'Unknown_32' in game.yaml), which the boulder generator ($31) drops later.  Hazards (the boulder
-# generator $31 = game.yaml 'Unknown_31', Bubbles, traps) are not enemies at all: a state's enemy list leaves them out
-# (zelda's object classifier, review F067).
+# Not part of the room's monster list at entry: Zoras (spawned by water rooms) and the overworld Boulders (object type
+# $20 = decimal 32, named '32' natively and 'Unknown_32' in game.yaml), which the boulder spawner (type $1F) drops
+# later (asm:Boulder_UpdateSpawner).  Hazards (the spawner, $1F = decimal 31 = game.yaml 'Unknown_31', Bubbles, traps)
+# are not enemies at all: a state's enemy list leaves them out (zelda's object classifier, review F067).
 NOT_ROOM_MONSTERS = ('Zora', 'Unknown_32', '32', 'Unknown_31', 'Bubble', 'BlueBubble', 'RedBubble', 'Trap')
 BASE_HEARTS = 3                      # Link's containers at the start; each heart container on the route adds one
 

@@ -429,7 +429,7 @@ rooms:
       level: 0
       location: '0x16'
   enemies:
-    Unknown_31: 1  # $31 in the overworld: the falling-boulder generator (asm:Boulder_UpdateSpawner); $32 the boulders
+    Unknown_31: 1  # decimal 31 = object type $1F, the falling-boulder spawner (asm:Boulder_UpdateSpawner); Unknown_32 = type $20, the Boulders (asm:Jumper_Update)
     Unknown_32: 2
     Zora: 1
   treasure: null

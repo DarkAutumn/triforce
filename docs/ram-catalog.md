@@ -23,15 +23,15 @@ Encoding vocabulary: `categorical(n)` · `ordinal/scale (÷max)` · `bitfield` �
 |---|---|---|---|---|---|
 | `$10` CurLevel | 0 = overworld, 1–9 = dungeon | categorical(10) | both | yes — room identity key | asm:CurLevel; v1 gd.txt `level` |
 | `$EB` RoomId | room 0–$7F; high nibble = row, low = column (`asm:Unused_SplitRoomId`). Dungeons 1–6 share one 128-room grid (ss `1_*`, `2_*` both use flags block `$6FF`) | categorical(128) → with level, room embedding | both | yes — room identity | asm:Unused_SplitRoomId; v1 gd.txt `location` |
-| `$12` GameMode | 0 demo, 1 menu, 2 load level, 3 unfurl, 4 enter room, **5 play**, 6 leave room, 7 scroll, 8 continue?, **9 cellar**, **$A leave cellar**, **$B cave**, **$C shortcut cave**, $D save, $E/$F register/elim, $10 stairs, $11 death, $12 end level (triforce), $13 win. Modes 5,9,A,B,C all run `Mode5Play_Update` | categorical(20) | both | no (feature) — use for frame skip / masks; add `in_cave`=(mode==$B), `in_cellar`=(mode∈{9,$A}) bits | asm:Mode_Update_JumpTable, asm:Mode_Init_JumpTable; v1 frame_skip_wrapper.py MODE_* |
+| `$12` GameMode | 0 demo, 1 menu, 2 load level, 3 unfurl, 4 enter room, **5 play**, 6 leave room, 7 scroll, 8 continue/save/retry menu (`asm:Mode8Continue_Init`), **9 cellar**, **$A leave cellar**, **$B cave**, **$C shortcut cave**, $D save, $E/$F register/elim, $10 stairs, $11 death, $12 end level (triforce), $13 win. Modes 5,9,A,B,C all run `Mode5Play_Update` | categorical(20) | both | no (feature) — use for frame skip / masks; add `in_cave`=(mode==$B), `in_cellar`=(mode∈{9,$A}) bits | asm:Mode_Update_JumpTable, asm:Mode_Init_JumpTable; v1 frame_skip_wrapper.py MODE_* |
 | `$13` GameSubmode | sub-step within mode | categorical | both | no — transition plumbing | asm:GameSubmode |
 | `$EC` NextRoomId | room being scrolled to | categorical(128) | both, only in mode 6/7 | no | asm:NextRoomId |
-| `$526` LevelEntranceRoomId | OW room the dungeon/cave was entered from ($FF none) | categorical(128) | dungeon/cave | no — runner bookkeeping | asm:Warp_HandleOW@LoadLevel, asm:Mode3Unfurl_Init_Sub1 |
+| `$526` LevelEntranceRoomId | OW room of the dungeon entrance last entered ($FF none); written only when a level entrance is entered, never by a cave or shortcut cave; mode 3 starts the OW in this room and resets it to $FF | categorical(128) | dungeon | no — runner bookkeeping | asm:LevelEntranceRoomId, asm:Warp_HandleOW@LoadLevel, asm:Mode3Unfurl_Init_Sub1 |
 | `$527` CellarSourceRoomId | UW room the cellar was entered from | categorical(128) | cellar | no | asm:CellarSourceRoomId, asm:Mode9Cellar_Init_Sub8_EnterCellar |
 | `$5A` UndergroundExitType | nonzero while stepping out of cave/dungeon/cellar; blocks re-entering (`Warp_CheckUnderLink`) | bitfield/flag | OW, transitions | maybe — v1 uses to mask cave re-entry | asm:Warp_CheckUnderLink; v1 data.json `underground_exit_type` |
 | `$620` CurRoomHistoryIndex, `$621–$626` RoomHistory | ring of last 6 rooms visited (searched `LDY #$05`); used to restore partial kill counts | categorical(128)×6 | both | no — use explicit room flags instead | asm:RoomHistory_ModifyObjCountOW, asm:RoomHistory_ModifyObjCountUW; v1 ram.md |
 | `$6BB1` LevelInfo_LevelNumber, `$6BAD` LevelInfo_StartRoomId, `$6BAE` LevelInfo_TriforceRoomId, `$6BBC` LevelInfo_BossRoomId, `$6BB2..` LevelInfo_CellarRoomIdArray (SRAM) | current level's static info (ss `1_*`: start $73, triforce $36, boss $35; ss `2_7dn`: start $7D, triforce $0D, boss $0E) | categorical | dungeon (OW block has start $77) | no — static; use for `is_boss_room`, `is_triforce_room` derived bits (maybe) | asm:LevelInfo_LevelNumber, asm:LevelInfo_StartRoomId, asm:LevelInfo_TriforceRoomId, asm:LevelInfo_BossRoomId, asm:LevelInfo_CellarRoomIdArray; ss |
-| `$6BAF/$6BB0` LevelInfo_WorldFlagsAddr (SRAM) | pointer to this level's 128-byte room-flag block: OW `$067F`, L1–L6 `$06FF` (ss); L7–9 presumably `$077F` | pointer | both | no — decoder input | asm:RoomFlags_Get; ss |
+| `$6BAF/$6BB0` LevelInfo_WorldFlagsAddr (SRAM) | pointer to this level's 128-byte room-flag block: OW `$067F`, L1–L6 `$06FF` (ss); L7–9 `$077F` (`asm:WorldFlags`; `zelda-asm/data/levelinfo.md`) | pointer | both | no — decoder input | asm:RoomFlags_Get, asm:WorldFlags; ss |
 
 ## 2. Link
 
@@ -45,8 +45,8 @@ Encoding vocabulary: `categorical(n)` · `ordinal/scale (÷max)` · `bitfield` �
 | `$3F8` ObjInputDir[0] | current input direction bits | bitfield(4) | both | no — duplicates last action | asm:PushBlock_State0Idle |
 | `$AC` ObjState[0] | Link state; `(v & $C0)==$40` = halted (can't act/take item); v1 treats bit `$40` as "stunned" and waits for `==0` after attacks | bitfield (bits 6,7) + low nibble categorical | both | maybe — skipped frames make it mostly 0 | asm:Item_TryTakeRoomItem; v1 frame_skip_wrapper.py STUN_FLAG |
 | `$C0` ObjShoveDir[0] | knockback direction (bit7 = fresh) | bitfield | both | yes — knockback state | asm:ObjShoveDir; ram.md; data.json `link_shove_dir` |
-| `$D3` ObjShoveDistance[0] | knockback remaining | timer (÷$20 [unverified max]) | both | yes | asm:ObjShoveDistance; ram.md |
-| `$4F0` ObjInvincibilityTimer[0] | Link i-frames after hit (counts every 2 frames) | timer (÷$30 [unverified]) | both | yes | asm:ObjInvincibilityTimer, asm:Mode11Death_Init (comment), asm:Mode5Play_UpdateWorld |
+| `$D3` ObjShoveDistance[0] | knockback remaining, in pixels; a hit sets Link's to `$20` (a monster's to `$40`), `asm:Shove_Begin` | timer (÷$20) | both | yes | asm:ObjShoveDistance, asm:Shove_Begin; ram.md |
+| `$4F0` ObjInvincibilityTimer[0] | Link i-frames after hit (counts every 2 frames). A hit sets it to `$18` = 48 frames (`asm:Shove_Begin`); while InvClock is set `$10` is added every frame and the byte wraps (`asm:Mode5Play_UpdateWorld`), so only then does it exceed `$18` | timer (÷$30; the game's value after a hit is `$18`) | both | yes | asm:ObjInvincibilityTimer, asm:Shove_Begin, asm:Mode11Death_Init (comment), asm:Mode5Play_UpdateWorld |
 | `$28` ObjTimer[0] | Link's object timer, e.g. $20 block after unlocking door | timer (÷$40) | both | maybe | asm:Door_TouchKey@TriggerDoor; data.json `link_obj_timer` |
 | `$53` DoorwayDir | direction of doorway Link is standing in (UW); 0 = none; restricts movement to that axis | categorical(5) | dungeon | yes — cheap and affects legal moves | asm:Room_EnterCommon@Method2, asm:Link_ModifyDirInDoorway; data.json `doorway_dir` |
 | `$512` IsLinkParalyzed | grabbed by Like-Like | bool | both | yes | asm:LikeLike_Update@Draw, asm:Link_Update |
@@ -102,14 +102,14 @@ v1 reads slots 0–$B (12 bytes) of each table (gd.txt `[tables]`); add slot `$1
 | `$405+i` ObjMetastate | 0 = normal; 1–4 = spawn cloud (**not yet spawned**); `$10–$13` dying sparkle, `$14` → becomes item | categorical(3): none/spawning/dying | both | yes — spawning/dying bits | asm:Room_EnterCommon@ResetObjLoop, asm:Obj_UpdateMetastate; v1 enemy.py |
 | `$492+i` ObjUninitialized | $FF = slot not yet initialized | bool | both | no — plumbing | asm:Room_EnterCommon@ResetObjLoop |
 | `$485+i` ObjHP | HP in **high nibble** (v1 `>>4`); ss 1_74w stalfos `$20`, 1_44c goriya `$30` | ordinal (hi nibble ÷15) | both | yes | v1 zelda_game.py `_build_enemy`; ram.md; ss |
-| `$3D+i` ObjStunTimer (slot 1 = `$3E`) | boomerang/clock stun | timer (÷ observed max) | both | yes | v1 gd.txt obj_stun_timer; asm:InvClock, asm:ObjStunTimer (bank 4 InvClock/stun checks) |
+| `$3D+i` ObjStunTimer (slot 1 = `$3E`) | stun left, in 10-frame units: a boomerang hit sets `$10`, bomb smoke sets a Dodongo's to `$20`. The clock never writes it: InvClock is a separate byte that the monsters' update code tests beside it | timer (÷$10; ÷$20 for Dodongo) | both | yes | v1 gd.txt obj_stun_timer; asm:ObjStunTimer, asm:InvClock |
 | `$28+i` ObjTimer | per-object action/shoot delay | timer (÷$FF) | both | maybe — predicts shots | asm:ObjTimer; ram.md `$29–$2E` |
 | `$3A8+i` ObjPosFrac / Item_ObjItemLifetime | sub-pixel; **for items: lifetime**, ≥$F0 = flashing & not pickable | timer (÷$FF) | items only (`ObjType=$60` or slot $13) | maybe — item despawn | asm:Item_TryTake, asm:Item_DrawObject; v1 gd.txt `item_timer` |
 | `$C0+i`, `$D3+i` ObjShoveDir/Distance | knockback of monsters | bitfield / timer | both | maybe | asm:ObjShoveDir, asm:ObjShoveDistance |
-| `$4F0+i` ObjInvincibilityTimer | monster i-frames | timer | both | maybe | asm:ObjInvincibilityTimer |
+| `$4F0+i` ObjInvincibilityTimer | monster i-frames; a weapon hit sets `$10` = 32 frames (`asm:Shove_Begin`) | timer | both | maybe | asm:ObjInvincibilityTimer, asm:Shove_Begin |
 | `$4B2+i` ObjInvincibilityMask | weapon immunities: 1 sword, 2 boomerang, 4 arrow, 8 bomb, $10 rod beam, $20 fire | bitfield(6) | both | yes — "killable by X" flags | ram.md (fiskbit `dynamic_immunities`) |
 | `$4BF+i` ObjAttr | 1 custom collision, 2 thin frame, 4 custom sprite, 8 attr override, $20 no weapon collision, $40 thin (8×16), $80 no reverse on Link hit | bitfield(7) | both | maybe — "hurts-on-touch/killable" proxy | ram.md (fiskbit `dynamic_properties`); asm:Obj_InitTileObjOrItem |
-| `$49E+i` ObjCollidedTile | last tile object collided with | categorical(256) | both | no | asm:ObjCollidedTile |
+| `$49E+i` ObjCollidedTile | tile number found by the object's last tile collision test (the tile ahead in its moving direction; in the OW walkable tiles are stored as `$26`) | categorical(256) | both | no | asm:ObjCollidedTile |
 | `$394+i`, `$3BC+i`, `$3D0+i`, `$3E4+i`, `$3F8+i`, `$380+i` | grid offset, speed, anim counter/frame, input dir, moving limit | various | both | no — use Δposition instead | asm:ObjGridOffset, asm:ObjQSpeedFrac, asm:ObjAnimCounter, asm:ObjAnimFrame, asm:ObjInputDir, asm:ObjMovingLimit |
 | `$412–$478` (+i) | per-type scratch (Wallmaster step, Gohma eye, Aquamentus fireball offset, push-block push timer `$41D` etc.) | per type | both | no (generic); maybe boss-specific later | `zelda-asm/src/ObjVars.inc` (e.g. asm:PushBlock_ObjPushTimer) |
 | `$486–$490` | v1 `obj_health_1..b` | — | — | — | **v1 bug**: gd.txt names `0x491/0x492` as health_b/c; `$492` is ObjUninitialized. data.json uses `0x490/0x491`. Use `$485+i`, i≤$B |
@@ -139,7 +139,7 @@ v1 reads slots 0–$B (12 bytes) of each table (gd.txt `[tables]`); add slot `$1
 | `$34E` RoomObjCount | monsters created on entry (= FoeCount − remembered kills; 1 for list ids $32–$61; bosses may set 8) | ordinal (÷8, clip) | both | yes (as part of enemies-left) | asm:Room_EnterCommon, asm:Moldorm_Init@LoopSegment, asm:Lanmola_Init |
 | `$34F` RoomKillCount (= ObjType[0]) | kills in this room this visit | ordinal | both | yes (enemies-left = count − kills) | asm:RoomKillCount; v1 `room_kills` |
 | `$34D` IsRoomAllDead | ≠0 when no live monsters (bubbles excluded); **incremented every check, so it wraps** (ss: $04, $18, $DA) — treat as `!=0` and prefer slot-derived count | bool | both | maybe (derive instead) | asm:Secret_UpdateRoomAllDead |
-| `$35F` RoomObjTemplateType | monster list/template id for the room | categorical(128) | both | maybe — redundant with room id | asm:Room_EnterCommon@StoreObjCount, asm:RoomHistory_SaveKillCountUW |
+| `$35F` RoomObjTemplateType | object type of the first monster the room was populated with (slot 1 at room entry). Equals the room's monster list id only for ids below `$62` (an id below `$62` is itself an object type; `$62`+ selects a list of types). Read by the UW room history (non-recurring monsters) and by food | categorical(128) | both | maybe — redundant with room id | asm:RoomObjTemplateType, asm:Room_EnterCommon, asm:RoomHistory_SaveKillCountUW |
 | `$560+RoomId` LevelKillCounts | exact partial kills per room in the current level ($F = all); cleared on level load | ordinal (÷8) | dungeon | yes (enemies-left for revisits) | asm:RoomHistory_SaveKillCountUW, asm:Mode2Load_Init |
 | `$4CF` BlockPushComplete | 0 not pushed, 1 pushed (secret not yet handled), 2 pushed + handled | categorical(3) | dungeon | yes | asm:PushBlock_State1Moving, asm:Secret_Trigger5BlockStairs |
 | `$AC+$B` = `$B7` ObjState[$B] (when ObjType[$B]=$68) | push block 0 idle, 1 moving, 2 done; position `$7B/$8F` | categorical(3) + position | dungeon | yes (as entity + flag) | asm:PushBlock_Update, asm:PushBlock_FindAndCreate |
@@ -147,7 +147,7 @@ v1 reads slots 0–$B (12 bytes) of each table (gd.txt `[tables]`); add slot `$1
 | `$52B/$52C/$52D` RoomTileObjType/X/Y | OW tile object (armos/rock) being activated | categorical / position | OW | no | asm:RoomTileObjType, asm:RoomTileObjX, asm:RoomTileObjY |
 | `$51A` SecretColorCycle, `$51B` FluteUsedState | flute/pond secret progress | ordinal | OW | no (not on route) | asm:FluteSecret_Update |
 | `$52F` MazeStep | lost woods/mountain maze progress | ordinal | OW | no | ram.md; asm:MazeStep |
-| `$4CC` IsPersonFireballsEnabled | UW person shoots | bool | dungeon | no | asm:IsPersonFireballsEnabled |
+| `$4CC` IsPersonFireballsEnabled | nonzero after the UW person in slot 1 was attacked: from then on two fireball sources left and right of the person shoot at Link (statue pattern 2); the person itself does not shoot | bool | dungeon | no | asm:IsPersonFireballsEnabled, asm:Statue_Update |
 
 ## 6. Tiles / layout
 
@@ -166,11 +166,11 @@ v1 reads slots 0–$B (12 bytes) of each table (gd.txt `[tables]`); add slot `$1
 | walkable | `t < threshold` (`$34A`); OW also `t ∈ {$8D,$91,$9C,$AC,$AD,$CC,$D2,$D5,$DF}` | asm:Tile_WalkableTilesOW, asm:Tile_GetAheadOfObj |
 | stairs | `$70–$73` (UW stair tile `$70`; OW revealed stairs `$70`) | asm:Secret_Trigger5BlockStairs, asm:Secret_RevealAndFlagStairsObj, asm:Mode10Stairs_Update_Full |
 | cave/dungeon entrance | OW `$24` (black, bottom) under `$F3` (top) | asm:Room_EnterCommon ($24 = black entrance); ss 0_77c; v1 room.py |
-| water | OW `$8D ≤ t < $99`; UW `$F4` (also `≥$F4` walls per Wizzrobe comment) | asm:Link_EndMoveAndAnimate, asm:Zora_TrySpawn@TryCandidate, asm:Wizzrobe_Blue_MoveAndCheckTile |
+| water | OW `$8D ≤ t < $99`; UW `$F4` (the Blue Wizzrobe teleports through "block or water" = tiles `$B0–$B3` and any tile `≥$F4`; every other unwalkable tile is a wall to it) | asm:Link_EndMoveAndAnimate, asm:Zora_TrySpawn@TryCandidate, asm:Wizzrobe_Blue_MoveAndCheckTile |
 | block (solid) | `$B0–$B3` (any block/statue square). The *pushable* one is the first `$B0` in row `$A` from col 4 when attr D bit 6 set; it is ObjType `$68` in slot `$B` | asm:PushBlock_FindAndCreate, asm:Wizzrobe_Blue_MoveAndCheckTile |
 | armos/gravestone | `$BC–$C3` (OW) | asm:Spawn_CheckTouchedArmosOrGravestone |
 | UW floor | `$74–$77` (`$74` written when block leaves) | asm:PushBlock_State0Idle |
-| door | **do not classify from tiles**; use derived door type/open state stamped onto the 4 door cells: N cols 14–17 rows 0–3; S cols 14–17 rows 18–21; W cols 0–3 rows 9–12; E cols 28–31 rows 9–12 (open doorway shows `$24` at cols 29/2, rows 10–11) | ss 1_42e/1_35e; v1 room.py `*_DOOR_TILE` |
+| door | **do not classify from tiles**; use derived door type/open state stamped onto the 4 door cells: N cols 14–17 rows 0–3; S cols 14–17 rows 18–21; W cols 0–3 rows 9–12; E cols 28–31 rows 9–12 (open doorway shows `$24` at cols 29/2, rows 10–11). These cells are padded out to the map edge; the door faces the game itself writes are N cols 14–17 rows 1–3, S cols 14–17 rows 18–20, W cols 1–3 rows 9–12, E cols 28–30 rows 9–12 (`asm:Door_PlayAreaAddrsLo`, `asm:Door_LayOut`) | ss 1_42e/1_35e; v1 room.py `*_DOOR_TILE`; asm:Door_PlayAreaAddrsLo |
 | shutter (closed) tiles | `$AC–$AF` | v1 room.py BARRED_DOOR_TILES; ss 1_42e W door |
 | locked door tiles | `$98–$A7` | v1 room.py DOOR_TILES |
 | wall | everything else `≥ threshold` | asm:Tile_GetAheadOfObj |
@@ -184,7 +184,7 @@ Recommended grid: 16×11 of 16-px squares (row r covers y=$40+16r), class = max-
 | `$15` FrameCounter | frame counter | — | both | no (leaks time; use History) | asm:FrameCounter; ram.md |
 | `$18–$24` Random | LFSR RNG bytes, 13 (rng_0..12; `Nmi_Isr@ScrambleRandom` rotates $18–$24, monsters read `Random+1,X` up to $24) | — | both | no — load randomization redraws all 13 (`RNG_VARS`) | v1 gd.txt; asm:Random, asm:Nmi_Isr@ScrambleRandom |
 | `$3C` FluteTimer | freeze while flute plays | timer | both | no | asm:Mode5Play_Update |
-| `$26` LongTimerCycle | stun pacing | — | both | no | asm:LongTimerCycle |
+| `$26` LongTimerCycle | divider for every 10-frame ("long") timer: counts 9 down to 0 and wraps; paces the stun timers and the `$4A`–`$4D` long timers alike | — | both | no | asm:LongTimerCycle, asm:Nmi_Isr |
 | `$4A`, `$4B`, `$4D` long timers | chase / edge-spawn / red-leever | timer | per type | no | asm:ChaseLongTimer, asm:MonstersFromEdgesLongTimer, asm:RedLeeverLongTimer |
 | `$60` IsChasingOtherTarget, `$61`/`$62` ChaseTargetX/Y | **where monsters chase** ("shadow Link", Lee). With `$60`=0, current Link X/Y are copied before weapon/bait updates. When `$4A` expires (0–7 ticks, one per 10 frames), `$60` flips; on 0→1, if target X still equals current Link X, both target bytes XOR `$FF`. Without bait this normally mirrors the current position even if Link moved: the upstream disassembly's "last frame" comment was misleading (`zelda-asm/` corrects it). On 1→0 the old target survives that update. Bait can override actual coordinates without changing the flag. Mirrored Y may be outside the play area; use full-byte coordinates, not an inferred identity | position + refresh bool | both | candidate (round 7 audit): actual monsters' goal; no RNG required | asm:Mode5Play_UpdateWorld (instruction order), asm:Boomerang_UpdateOrFood (bait), asm:Nmi_Isr (timer); bank 4 chase movement |
 | `$524` SpawnCycle, `$525` CurEdgeSpawnCell | monster spawn pacing / edge cell | categorical | both | no | asm:SpawnCycle, asm:EdgeSpawn_FindNextCell@SetSpawnCell |
@@ -219,7 +219,7 @@ Notation: `r` = RoomId (`$EB`), `S(A)` = SRAM byte `ram()[A-0x5800]`, `flags = r
 | 2 | door **S** opened | kill count bit 2 | same |
 | 3 | door **N** opened | — (no reader found) | `asm:Door_ShiftOpenDoorwayMask`, `asm:Door_AddRoomFlagsToOpenedDoors` |
 | 4 | **room item taken** | **room item / cave item / secret reward taken** (e.g. sword cave room $77 → `$10`, ss 0_67w) | `asm:RoomFlags_SetItemTaken` (`ORA #$10`), `asm:RoomFlags_GetItemTaken` (used in OW caves too, `asm:Cave_Init@CheckTaken`, `asm:Cave_State2TalkOrShopOrDoorCharge@Take`) |
-| 5 | **visited** (dungeon map) | — (only set when `CurLevel≠0`) | `asm:RoomFlags_MarkVisited` (`ORA #$20`), `asm:Submenu_WriteScanningMapRoomMark` |
+| 5 | **visited** (dungeon map) | **put the stairs back on entry** (`asm:Secret_RestoreStairsOW`, only while bit 7 is clear): set for the room where a rock or gravestone was pushed its full `$10` pixels and for the room shortcut stairs lead to. Not set by merely entering an OW room (that call runs only when `CurLevel≠0`) | `asm:RoomFlags_MarkVisited` (`ORA #$20`), `asm:Submenu_WriteScanningMapRoomMark`, `asm:Secret_RestoreStairsOW` |
 | 6–7 | **kill count**: 0–2 partial kills (capped), **3 = all killed** | bit 7 = **secret found** (cave bombed/burned/stairs revealed) | UW `asm:RoomHistory_SaveKillCountUW` (`AND #$3F`, `ROR`×3, `#$C0`); OW `asm:Secret_RevealAndFlagTileObj` (`ORA #$80`), `asm:Secret_RestoreStairsOW`, `asm:RoomLayout_LayOutRoomOrCaveOW` (`AND #$80`) |
 
 Observed (old savestate `1_35e`, since deleted, level-1 block): `$74:B0` (kills=2-of-cap, visited, key taken), `$53:F0` (all dead, visited, taken), `$35:F4` (boss dead, visited, heart taken, S door opened), `$52:68` (1 kill, visited, N opened), `$43:21` (visited, E opened). OW (old `0_67w`): `$67:07` (OW kill count 7 = all), `$77:10` (sword taken). The route-generated chain (`1_36w_2` walked back into 0x35, `tests/test_room_state.py`) reads `$53:F0`, `$35:F4`, `$74:70`, `$52:A8`, `$43:71`; the differences are kills and pickups taken in a different order.
@@ -259,11 +259,11 @@ Door types (`asm:Door_LayOut` comment table):
 |---|---|---|---|
 | 0 | open | always | n/a (bit cleared from CurOpenedDoors) |
 | 1 | wall | never | n/a |
-| 2 | false wall | treated as wall by map/doorway mask [walk-through behavior unverified] | n/a |
-| 3 | false wall 2 | as 2 [unverified] | n/a |
+| 2 | false wall | drawn as plain wall and treated as wall by map/doorway mask; Link walks through after pushing against it for a `$18`-frame timer (Link's ObjTimer: 0 → set `$18` and block; 1 → pass; `asm:Door_TouchFalseWall`) | n/a |
+| 3 | false wall 2 | same handler as 2 (`asm:Door_Touch_JumpTable`) | n/a |
 | 4 | **bombable** | after bomb (`asm:Bomb_TryOpenWall@LoopHotspot` triggers open cmd) | yes |
 | 5 | **key** (locked) | after key (`asm:Door_TouchKey`: magic key or `DEC InvKeys`) | yes |
-| 6 | key 2 | as key [difference from 5 unverified] | yes |
+| 6 | key 2 | same handler (`asm:Door_TouchKey`) and same locked-door face as 5 (`asm:Door_Touch_JumpTable`, `asm:Door_LayOut`) | yes |
 | 7 | **shutter** | when room trigger fires (R.3) — this visit only; entering through an opened door issues close cmd 2 (`asm:Room_EnterCommon@Method2`) | no |
 
 Suggested per-direction door feature: `type ∈ {none(wall/false), open, key, bomb, shutter}` one-hot + `is_open` bit, where `is_open = type==open ∨ (flags & dirbit) ∨ (CurOpenedDoors & dirbit)`.
@@ -307,7 +307,7 @@ Item ids (`asm:Item_IdToSlot` → inventory slot `$657+s`; names from slot table
 | 02 | white sword | 0B | magic key | 14 | power bracelet | 1D | boomerang |
 | 03 | magic sword / **"none" in room attr** | 0C | raft | 15 | letter | 1E | magic boomerang |
 | 04 | food | 0D | ladder | 16 | **compass** | 1F | blue potion |
-| 05 | whistle | 0E | slot `$672` | 17 | **map** | 20 | red potion |
+| 05 | whistle | 0E | Triforce of Power (`$672`, `asm:InvPowerTriforce`) | 17 | **map** | 20 | red potion |
 | 06 | blue candle | 0F | 5 rupees | 18 | rupee | 21 | clock |
 | 07 | red candle | 10 | magic rod | 19 | **key** | 22 | heart |
 | 08 | arrow | 11 | book | 1A | **heart container** | 23 | fairy |
@@ -378,13 +378,13 @@ RAM agrees in ss `1_35e`: `CurOpenedDoors=$05` (S key door + E shutter), `flags[
 
 # Open questions / unverified
 
-1. Level 7–9 room-flag block address (`$077F` inferred from the `$67F–$7FF` copy loop, `asm:Mode1Menu_Update_Sub1Load@CopyWorldFlags`); not on milestone.
-2. Door types 2/3 ("false wall") and 6 ("key 2") — exact in-game behavior not traced.
+1. **Answered:** the level 7–9 room-flag block is at `$077F` (`asm:WorldFlags`: `$67F` overworld, `$6FF` levels 1–6, `$77F` levels 7–9; the level info blocks of levels 7–9 hold `$077F`, `zelda-asm/data/levelinfo.md`). Was: inferred from the `$67F–$7FF` copy loop, `asm:Mode1Menu_Update_Sub1Load@CopyWorldFlags`; not on milestone.
+2. **Answered:** door types 2/3 ("false wall") let Link through after he pushes for a `$18`-frame timer (`asm:Door_TouchFalseWall`); type 6 ("key 2") uses the same handler as 5 (`asm:Door_TouchKey`, `asm:Door_Touch_JumpTable`). See R.2.
 3. D1 room `$22` has push-block bit set but trigger 0; how the bow-cellar stairs are revealed (and v1's `1 13 stair` row; attrs of `$13` in the L1–6 grid look like another dungeon's room) — check with RouteSurvey/route data.
-4. Slot `$C`: `Secret_UpdateRoomAllDead` reads `ObjType+1+Y` with `Y=CurObjIndex=$B` (slot `$C`) but `Obj_FindEmptyMonsterSlot` only uses `$1–$B`; confirm whether slot `$C` is ever occupied.
-5. ObjHP low nibble meaning; max values for stun, shove distance, i-frame timers (set normalization from observed maxima).
+4. **Answered (the scan):** `asm:Secret_UpdateRoomAllDead` reads `ObjType+1+Y` for `Y = CurObjIndex ($B)` down to 0, so the all-dead scan covers slots `$0C`..`$01`. `Obj_FindEmptyMonsterSlot` only hands out `$B..$1`; whether anything else ever puts a type in slot `$C` was not checked.
+5. ObjHP low nibble meaning (still open). **Answered:** start values of the timers: stun `$10` from a boomerang, `$20` for a bomb-smoked Dodongo, in 10-frame units (`asm:ObjStunTimer`); shove distance `$20` pixels for Link, `$40` for a monster; i-frame timer `$18` for Link, `$10` for a monster (`asm:Shove_Begin`; with the clock Link's keeps rising and wraps, `asm:Mode5Play_UpdateWorld`).
 6. Link `ObjState[0]` bit meanings beyond `$40` (halted) — only v1 heuristics.
-7. OW flag bits 3, 5, 6: no `RoomFlags_Get` reader found (grep); assume unused.
-8. `IsRoomAllDead` wrap-around: incremented on each check; confirm it can hit 0 again (would briefly block pushes/triggers) — derive from slots instead.
+7. OW flag bits 3, 5, 6: no `RoomFlags_Get` reader found (grep) for bits 3 and 6; assume unused. **Answered for bit 5:** `asm:Secret_RestoreStairsOW` reads it (R.1).
+8. **Answered:** `IsRoomAllDead` is incremented on every frame the room is empty (`asm:Secret_UpdateRoomAllDead`), so it reads 0 on one frame in 256 and the readers that test it for zero (push block, all-dead triggers) see "monsters present" on that frame. Derive from slots instead.
 9. OW attr D bit 6 is used as a layout-id bit (`asm:RoomLayout_LayOutRoomOW` shifts 7 bits) — confirm against OW layout table size.
-10. `$0E` item (inventory slot `$672`) identity; not on route.
+10. **Answered:** item `$0E` (inventory byte `$672`) is the Triforce of Power (`asm:InvPowerTriforce`); not on route.

@@ -78,15 +78,16 @@ until Lee says so**. No emulator, environment or reward code changed (VERSION no
   sword touch while stunned by a blast, and only the sword death forces a bomb drop; a Zora's damage is lost on
   every dive; a locked door lets Link through without a key while another door command runs; file B's checksums
   overlap the RAM copy of a routine.
-- **Claims in this repo that the annotated source contradicts** (left as written; to fix):
-  - [ ] `triforce/game.yaml` (the 0x.. boulder note, "$31 … generator; $32 the boulders") and
-    `triforce/entry_states.py` ("the boulder generator ($31)"): the spawner is object type `$1F` and the Boulder
-    `$20` (decimal 31/32); `$31`/`$32` are Dodongo.
-  - [ ] `docs/ram-catalog.md`: `$526` is set by dungeon entrances only, not caves (`asm:LevelEntranceRoomId`);
-    `$35F` is the first monster's type, the list id only below `$62` (`asm:RoomObjTemplateType`); the clock never
-    writes `asm:ObjStunTimer`; `$49E` is a tile number, not a tile object; `$4CC` makes the statues fire, not the
-    person; `$26` paces every 10-frame timer; the door-cell extents of the door row. Its open questions 1, 4 and 8
-    are answered by the source (`asm:WorldFlags`, `asm:Secret_UpdateRoomAllDead`).
+- **Claims in this repo that the annotated source contradicted** (fixed Nov 12, each checked in `zelda-asm/src`):
+  - [x] `triforce/game.yaml` (room 0x17's boulder note) and `triforce/entry_states.py`: the spawner is object type
+    `$1F` and the Boulder `$20` (decimal 31/32, the `Unknown_31`/`Unknown_32` names); `$31`/`$32` are Dodongo.
+  - [x] `docs/ram-catalog.md`: `$526` is set by dungeon entrances only (`asm:LevelEntranceRoomId`); `$35F` is the
+    first monster's type, the list id only below `$62` (`asm:RoomObjTemplateType`); the clock never writes
+    `asm:ObjStunTimer`; `$49E` is a tile number; `$4CC` makes the statues fire, not the person; `$26` paces every
+    10-frame timer; Link's hit invincibility is `$18` (`asm:Shove_Begin`); door types 2/3 and 5/6 share handlers;
+    open questions 1, 2, 4, 8 and bit 5 of question 7 answered in place. Left as the catalog's own design: the
+    padded door stamping cells (the game's door faces are now beside them; `tiles.rs` `door_cells` uses narrower
+    ones still) and the suggested `÷$30` normalisation.
 - Left `(unverified)` in the tree (42 marks in `zelda-asm/src`, 5 in the documents and data notes), the ones a
   route could care about: what puts Link in state `$FF`; why a Lanmola or Moldorm room counts 8 objects for 10
   segments; what creates shot types `$54` and `$5A`; whether Patra's first pattern flip waits `$FF` frames;
