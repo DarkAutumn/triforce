@@ -3,9 +3,9 @@
 # Add a subject only when none fits. Text after '#' is ignored by tools/asm.py.
 
 # --- monsters and bosses
-Lynel           overworld centaur (object types $01 red, $02 blue)
-Moblin          overworld spear thrower ($03 red, $04 blue)
-Goriya          boomerang thrower ($05 red, $06 blue)
+Lynel           overworld centaur (object types $01 blue, $02 red)
+Moblin          overworld spear thrower ($03 blue, $04 red)
+Goriya          boomerang thrower ($05 blue, $06 red)
 Octorok         rock spitter ($07-$0A)
 Darknut         armoured knight ($0B red, $0C blue)
 Tektite         hopping spider ($0D blue, $0E red)
@@ -41,7 +41,7 @@ Trap            blade trap ($49, $4A)
 GuardFire       fire circling Zelda's room ($3F)
 StandingFire    stationary fire beside cave and dungeon persons ($40)
 Statue          dungeon statues that shoot fireballs
-DeadDummy       placeholder object used to count a kill ($5D)
+DeadDummy       stand-in object type $5D that plays a death sparkle (worm tails, Dodongo) without a drop
 
 # --- other objects
 Person          cave and dungeon persons (old men, shopkeepers), their text and states

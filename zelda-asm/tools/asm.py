@@ -45,7 +45,10 @@ RE_NAME_SYMBOL = re.compile(r"^[A-Z][A-Za-z0-9]*(_[A-Z][A-Za-z0-9]*)?$")
 RE_NAME_CHEAP = re.compile(r"^@[A-Z][A-Za-z0-9]*$")
 RE_PLAIN_WORD = re.compile(r"^[A-Z]?[a-z]+$")
 
-RE_SELF = re.compile(r"TRIFORCE|triforce|autosplit|[Pp]ython|frame_skip|data\.json|\.py\b|\.rs\b")
+# Outside references. `TRIFORCE:` is the old comment tag; the game's own word "Triforce" (any case) is
+# allowed, the other project's name as a path or module is not.
+RE_SELF = re.compile(r"TRIFORCE:|triforce2|triforce/|triforce\._|autosplit|[Pp]ython|frame_skip|data\.json"
+                     r"|\.py\b|\.rs\b")
 RE_MDLINK = re.compile(r"\[`(%s(?:@%s)?)`\]\(([^)#\s]*)#L(\d+)\)" % (IDENT, IDENT))
 RE_ASMREF = re.compile(r"(?<![A-Za-z0-9_\-/.])asm:(%s(?:@%s)?)" % (IDENT, IDENT))
 RE_RULE = re.compile(r"^;\s*[=\-]{8,}\s*$")
@@ -545,7 +548,7 @@ def load_baseline(root):
 def cmd_freeze(args):
     d = upstream_dir(args.root)
     if os.path.exists(os.path.join(d, "fingerprints.json")) and not args.force:
-        print("baseline already frozen; it is never refreshed (see UPSTREAM.md)", file=sys.stderr)
+        print("baseline already frozen; it is never refreshed", file=sys.stderr)
         return 1
     prog = Program(args.root)
     if report(prog.errors):
@@ -647,7 +650,7 @@ def md_files(root):
         dirs[:] = sorted(d for d in dirs if not (relbase == "." and d in ("work", "bin", "obj", "ext"))
                          and not (relbase == "index" and d == "upstream"))
         for f in sorted(files):
-            if f.endswith(".md") and not (relbase == "." and f == "UPSTREAM.md"):
+            if f.endswith(".md"):
                 out.append(os.path.join(base, f))
     return out
 
