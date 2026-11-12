@@ -11,7 +11,8 @@
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
 # run go on (the next room's objective sends Link back).
 # `treasure:` whether this visit takes the room's game.yaml treasure (fights for it when the kills make it appear):
-# absent = take it, `skip` = leave it, `{if_bombs_below: N}` = take it only while Link holds fewer than N bombs.
+# absent = take it, `skip` = leave it, `clear` = kill every enemy first (no treasure needed) and take the drops,
+# `{if_bombs_below: N}` = take it only while Link holds fewer than N bombs.
 # `bomb_reserve: N`: from this step on (until a later step sets another; 0 at the start) Link keeps N bombs for what
 # the route needs them for: outside `requires_bombs` rooms (game.yaml) BOMB is masked while he holds N or fewer, but
 # for the 10th damage-free kill, which arms a forced bomb drop (Lee, Nov 11; docs/decisions.md).
@@ -42,7 +43,8 @@ d2first:
 - {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
 - {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
 - {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
-- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}   # round 19 experiment: clear the Red Goriyas for bomb drops before the Moldorm
+# 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
+- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
 - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
 - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}

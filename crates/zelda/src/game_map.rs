@@ -251,8 +251,8 @@ pub enum TreasureRule {
     /// `treasure: {if_bombs_below: N}`: take it only while Link holds fewer than N bombs (Dungeon 3's 0x5b bombs on
     /// its last visit, Lee: D4 needs 2).
     IfBombsBelow(u8),
-    /// `treasure: clear`: fight until the room's enemies are dead even without a treasure, then take whatever it
-    /// holds (round 19 experiment: 2:0x5e's Red Goriyas for their bomb drops).
+    /// `treasure: clear`: fight until the room's enemies are dead even without a treasure, then take what they drop
+    /// (Dungeon 2's 0x5e: its Red Goriyas' bomb drops help against the Moldorm next door; round 19).
     Clear,
 }
 
@@ -293,7 +293,7 @@ impl TreasureRule {
             Some(n) if v.as_mapping().is_some_and(|m| m.len() == 1) => {
                 Ok(TreasureRule::IfBombsBelow(as_u8(n, "treasure: if_bombs_below")?))
             }
-            _ => err(format!("treasure: {v:?} (take, skip or {{if_bombs_below: N}})")),
+            _ => err(format!("treasure: {v:?} (take, skip, clear or {{if_bombs_below: N}})")),
         }
     }
 }
@@ -1119,6 +1119,7 @@ mod tests {
         assert_eq!(
             rules,
             [
+                (loc(2, 0x5e), "S", TreasureRule::Clear),
                 (loc(3, 0x5b), "S", TreasureRule::Skip),
                 (loc(3, 0x69), "N", TreasureRule::Skip),
                 (loc(3, 0x69), "cave", TreasureRule::Skip),
@@ -1129,13 +1130,14 @@ mod tests {
         assert_eq!(reserves, [(L::new(3, 0x7c, false), 5)], "Dungeon 3 keeps 5 bombs from its entrance");
     }
 
-    /// routes.yaml `treasure:` parses `skip`, `take` and `{if_bombs_below: N}`; anything else is a load error.
+    /// routes.yaml `treasure:` parses `skip`, `take`, `clear` and `{if_bombs_below: N}`; anything else is a load error.
     #[test]
     fn treasure_rules_parse_and_reject_typos() {
         let route = |rule: &str| format!("r:\n- {{level: 3, room: '0x5b', entry: S, exit: W, treasure: {rule}}}\n");
         let rule = |text: &str| GameMap::from_yaml(GAME_YAML, &route(text)).map(|m| m.routes["r"][0].treasure);
         assert_eq!(rule("skip").unwrap(), TreasureRule::Skip);
         assert_eq!(rule("take").unwrap(), TreasureRule::Take);
+        assert_eq!(rule("clear").unwrap(), TreasureRule::Clear);
         assert_eq!(rule("{if_bombs_below: 4}").unwrap(), TreasureRule::IfBombsBelow(4));
         for bad in ["leave", "{if_bombs_below: 300}", "{if_bombs_above: 4}", "{if_bombs_below: 4, x: 1}"] {
             let e = rule(bad).unwrap_err().0;
@@ -1144,6 +1146,7 @@ mod tests {
         let wants = |r: TreasureRule| [0, 3, 4, 8].map(|bombs| r.wants(bombs));
         assert_eq!(wants(TreasureRule::Take), [true; 4]);
         assert_eq!(wants(TreasureRule::Skip), [false; 4]);
+        assert_eq!(wants(TreasureRule::Clear), [true; 4]);
         assert_eq!(wants(TreasureRule::IfBombsBelow(4)), [true, true, false, false]);
     }
 

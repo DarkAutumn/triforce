@@ -651,13 +651,39 @@ fn bow_detour_block_stairs_cellar_and_back() {
     assert_eq!(objective.next_rooms, [loc(1, 0x23)].into_iter().collect());
 }
 
-/// The GameCompletion of the route step entering 3:`room` from `entry` (as one-room training picks it).
-fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameCompletion {
+/// The GameCompletion of the route step entering `level`:`room` from `entry` (as one-room training picks it).
+fn route_step(map: &Arc<GameMap>, state: &GameView, level: u8, room: u8, entry: &str) -> GameCompletion {
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step) = start_route(map, loc(3, room), Some(entry), &mut rng, None, state);
-    let step = step.unwrap_or_else(|| panic!("3:{room:#04x} from {entry} is a route step"));
-    assert_eq!(map.routes[&route][step].location(), loc(3, room));
+    let (route, step) = start_route(map, loc(level, room), Some(entry), &mut rng, None, state);
+    let step = step.unwrap_or_else(|| panic!("{level}:{room:#04x} from {entry} is a route step"));
+    assert_eq!(map.routes[&route][step].location(), loc(level, room));
     GameCompletion::new(map.clone(), &route, Some(step)).unwrap()
+}
+
+fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameCompletion {
+    route_step(map, state, 3, room, entry)
+}
+
+/// Dungeon 2's 0x5e (`treasure: clear`, round 19): no treasure, yet the objective fights its Red Goriyas (no correct
+/// exit while one lives, so leaving N early is a wrong exit) and heads N into 0x4e once they are dead.
+#[test]
+fn d2_goriya_room_is_cleared_before_leaving() {
+    let Some(images) = images(&["2_5es_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let goriyas = view(&map, &images[0], 0);
+    assert!(!goriyas.enemies.is_empty() && goriyas.treasure().is_none());
+    let objective = route_step(&map, &goriyas, 2, 0x5e, "S").objectives(None, &goriyas);
+    assert_eq!(objective.kind, ObjectiveKind::Fight);
+    assert!(objective.next_rooms.is_empty());
+
+    let mut ram = images[0].clone();
+    clear_objects(&mut ram);
+    let cleared = view(&map, &ram, 0);
+    let objective = route_step(&map, &cleared, 2, 0x5e, "S").objectives(None, &cleared);
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(objective.next_rooms, [loc(2, 0x4e)].into_iter().collect());
 }
 
 /// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11: take at 4 bombs or fewer) and bomb reserve.  0x69 from

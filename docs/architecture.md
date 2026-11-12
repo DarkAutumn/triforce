@@ -548,9 +548,10 @@ step, so following an enemy that moves away pays again, and knockback resets the
   the other ware, is `missed`: no exit is correct any more; `bow`, `raft`: a cellar's item). A step's `retreat` exit
   (0x0a S before the white sword) is no wrong exit: a one-room episode ends `retreat` (outcome from the specialist's
   `endings:`, default `neutral`: no terminal reward or penalty), a chain records the room as `retreat` and goes on.
-  A step's `treasure:` (`game_map::TreasureRule`: absent = take, `skip`, `{if_bombs_below: N}` read live) says
-  whether the room's treasure is fought for and picked up on that visit (D3's 0x69 and 0x5b). A step leaving
-  through an intact game.yaml bomb wall targets `objectives::bomb_spot` (facing the wall 16 px short of its
+  A step's `treasure:` (`game_map::TreasureRule`: absent = take, `skip`, `clear`, `{if_bombs_below: N}` read live)
+  says whether the room's treasure is fought for and picked up on that visit (D3's 0x69 and 0x5b); `clear` fights
+  until the room is empty even without a treasure (no correct exit until then) and takes the drops (D2's 0x5e). A
+  step leaving through an intact game.yaml bomb wall targets `objectives::bomb_spot` (facing the wall 16 px short of its
   Z_07 hotspot, so the bomb lands on it); the map objective's cache key holds the intact walls, so the doorway is
   the target once it opens.
   An overworld cave hidden behind a rock wall (game.yaml `bomb_secret`) is entered through that wall's tiles.
