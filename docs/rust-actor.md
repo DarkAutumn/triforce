@@ -4,7 +4,7 @@ Lee, Nov 9: inference moves to Rust. Python stops being called once per step; it
 the network's weights and gets the whole batch back. The same engine runs evaluation, chains and the watch player
 (play-zelda's simulations act inside the pool; since Nov 11 its picture is replays of their finished runs,
 `docs/architecture.md` "Watching"). Search (expert iteration,
-`~/Downloads/triforce-better-play.md` §2) is **for training only**: the agent always acts from the policy, never
+Lee's better-play plan §2, not in the repo) is **for training only**: the agent always acts from the policy, never
 from a search. Only the current model config is supported; checkpoints from before r56 (`grid_encoder: 'conv'`)
 load again, since the conv encoder is the only one left. Background: `docs/all-rust.md` (why the learner,
 GUIs and scripting stay in Python).

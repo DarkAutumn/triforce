@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from . import _native
-from .registry import model_version
+from .registry import CHECKPOINT_NAME, model_version
 
 
 @lru_cache(maxsize=1)
@@ -39,11 +39,21 @@ def location_text(location) -> Optional[str]:
     return f"{location.level}:0x{location.value:02x}" + (':cave' if location.in_cave else '')
 
 
+def checkpoint_label(checkpoint) -> str:
+    """A checkpoint (a ``ckpt.pt`` or its run dir) as provenance records it: ``<specialist>/<run>/ckpt.pt``, no
+    local directory (the ``checkpoint_sha1`` / network ``hash`` next to it identify the weights)."""
+    path = Path(checkpoint)
+    if path.is_dir():
+        path = path / CHECKPOINT_NAME
+    return '/'.join(path.parts[-3:])
+
+
 def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, deterministic: Iterable[bool]) -> list:
-    """The ``models`` entry: per policy index, its name, checkpoint, Rust network hash, whether it acted by argmax
-    and the triforce version its run dir is stamped with (None without a checkpoint or a stamp)."""
-    return [{'name': name, 'checkpoint': checkpoints.get(name), 'hash': f'{policy.hash:016x}',
-             'deterministic': bool(argmax),
+    """The ``models`` entry: per policy index, its name, checkpoint (``checkpoint_label``), Rust network hash,
+    whether it acted by argmax and the triforce version its run dir is stamped with (None without a checkpoint or
+    a stamp)."""
+    return [{'name': name, 'checkpoint': None if checkpoints.get(name) is None else checkpoint_label(checkpoints[name]),
+             'hash': f'{policy.hash:016x}', 'deterministic': bool(argmax),
              'version': None if checkpoints.get(name) is None else model_version(checkpoints[name])}
             for name, policy, argmax in zip(names, policies, deterministic)]
 

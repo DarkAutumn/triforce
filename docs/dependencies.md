@@ -295,7 +295,7 @@ written to `metrics.jsonl`, which the GUI and tools read.
 
 Python 3.12 only (`requires-python = ">=3.12,<3.13"`; stable-retro has no 3.13+ wheels). Linux x64, CUDA 13 torch wheel
 (`2.15.0+cu132`), RTX 4090, 20 cores. Paths in docs use `/tmp` for throwaway scripts. Code changes follow a main
-checkout + `../triforce2-dev` worktree workflow; do not edit `triforce/` or running specialists' YAML in `main` while a
+checkout + `../triforce-dev` worktree workflow; do not edit `triforce/` or running specialists' YAML in `main` while a
 training round is running (CLAUDE.md; R31 is live).
 
 ## 7. Gotchas, ranked by how likely they are to bite a reimplementation
@@ -332,9 +332,9 @@ training round is running (CLAUDE.md; R31 is live).
    `just_exited_cave`), `capture_pre_entry` (stores `last_pre_entry = emu.save_state()` while scrolling), per-step
    interrupt polling within `INTERRUPT_RADIUS = 24` px, shield-collision watch between frames.
 9. **Everything game-specific is data in the repo plus an external disassembly.** Addresses and logic cite
-   `zelda1-disassembly/src/Z_0n.asm` with line numbers (`/home/leculver/work/git/zelda1-disassembly/src` per
-   `docs/ram-catalog.md`), the v1 `triforce` repo (originals of deleted start states; `/home/leculver/work/git/triforce`),
-   and a design doc outside the repo (`triforce-v2-design.md`). None of these are in this repo. v1 used a fork
+   `zelda1-disassembly/src/Z_0n.asm` with line numbers (<https://github.com/aldonunez/zelda1-disassembly>, per
+   `docs/ram-catalog.md`), the v1 `triforce` code (originals of deleted start states; the `v2-stable-retro` branch),
+   and a design doc outside the repo (`triforce-v2-design.md`). None of these are on `main`. v1 used a fork
    (`DarkAutumn/stable-retro`, `crop_overscan`); v2 uses PyPI 1.0.1 and the 240×224 cropped screen. RAM coordinates are
    absolute NES coordinates, so the crop affects rendering only.
 10. **Tests need the real ROM and savestates** (all gameplay tests share one `GameSession`; `tests/conftest.py`).

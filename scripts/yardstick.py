@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The better-play yardstick (`~/Downloads/triforce-better-play.md` §0): fixed measurements every experiment is
+"""The better-play yardstick (§0 of Lee's better-play plan): fixed measurements every experiment is
 judged on, with 95% confidence intervals.
 
     python scripts/yardstick.py report --run RUN_ID [--models-dir DIR] [--mode sample|argmax] [--chain NAME=PATH ...]

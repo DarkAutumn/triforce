@@ -141,7 +141,7 @@ def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir,
     assert sorted(models) == list_specialists()
     assert meta['batches'] == [{'first_seed': 0, 'runs': 2, 'finished': True}]
     goriya = registry.promoted_checkpoint('goriya', models_dir)
-    assert models['goriya']['checkpoint'] == str(goriya)
+    assert models['goriya']['checkpoint'] == f'goriya/{goriya.parent.name}/ckpt.pt'    # no local directory
     assert models['goriya']['checkpoint_sha1'] == registry.checkpoint_sha1(goriya)
     assert models['goriya']['act'] == 'sample' and meta['provenance']['stop_at'] == '0:0x77'
     # An existing output is never appended to implicitly.

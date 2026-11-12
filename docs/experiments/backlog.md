@@ -92,7 +92,7 @@ Left open by round 19 (§7), not fixed:
      for the slowest env: more envs than threads with work-stealing envs, or the deferred look-ahead); the PPO
      update's kernel-launch overhead (~17k launches per update; fewer host syncs, fused Adam, CUDA graphs).
 2. [x] **Fresh retrain** on the new stack: r56 promoted (round 16 §1).
-3. **Better play** (`~/Downloads/triforce-better-play.md`; round 16): [x] §0 yardstick, [x] §6b act mode (argmax for
+3. **Better play** (Lee's better-play plan, not in the repo; round 16): [x] §0 yardstick, [x] §6b act mode (argmax for
    15 families, round 16 §3), §6b entropy annealing (not kept), §1a outcome fine-tuning (not kept alone), §3
    best-of-N (not kept) vs SIL (best arm on goriya; second family running), §2 Gumbel expert iteration (Dodongo: no
    gain at the ceiling; goriya running), §1b exit-health weight / harvested handoff states, §5 PLR, §6a PPG (goriya

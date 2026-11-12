@@ -1,4 +1,4 @@
-# Agent instructions (triforce2)
+# Agent instructions (triforce)
 
 Read this first, then `README.md` (setup, commands), `docs/architecture.md` (modules), and the newest
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
@@ -62,7 +62,7 @@ up with ideas, test them, keep what helps, and log everything.
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
-  rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
+  rather than keep them (originals are on the `v2-stable-retro` branch). No 16-heart states: max hearts follow
   the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
   Manhandla). States are chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build
   states with `python -m triforce.entry_states build|path` (staged under `target/entry-states/<ts>`, then
@@ -155,7 +155,7 @@ up with ideas, test them, keep what helps, and log everything.
 
 ## Environment
 
-- Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 10 cores / 20 threads. ROM at
+- Venv `.venv/bin/python` (Python 3.12); RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`). After changing any crate, rebuild the module:
   `.venv/bin/maturin develop --release`.
 - Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (on an idle
@@ -173,7 +173,7 @@ up with ideas, test them, keep what helps, and log everything.
 
 - **Never change `triforce/` code, rebuild `triforce._native`, or change a running specialist's yaml in the main
   checkout while a training round is running.** Training and the background evaluation import the code fresh; a
-  mid-round change broke two evaluations (round 6). Code changes go in a worktree (e.g. `../triforce2-dev`):
+  mid-round change broke two evaluations (round 6). Code changes go in a worktree (e.g. `../triforce-dev`):
   fast-forward it from `main` first, commit and test there (build its own module with maturin into a separate
   venv, or test the Rust side with `cargo test`), then merge into main once no round is running. A worktree needs
   `roms/zelda.nes`.

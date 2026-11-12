@@ -4,8 +4,8 @@ Every RAM/SRAM variable that v1 reads, plus the disassembly variables needed to 
 One row per candidate observation feature.
 
 **Citation keys**
-- `ASM Z_0n:Label` → `zelda1-disassembly/src/Z_0n.asm`, routine/table `Label` (local path `/home/leculver/work/git/zelda1-disassembly/src`). Variable names come from `Variables.inc` / `ObjVars.inc` / `CommonVars.inc` / `CaveVars.inc`.
-- `v1 file` → `/home/leculver/work/git/triforce/triforce/<file>` (`gd.txt` = `zelda_game_data.txt`, `data.json` = v1's retro integration variable table; this repo's equivalent is `crates/zelda/src/vars.rs`, `ram.md` = `docs/ram.md`).
+- `ASM Z_0n:Label` → `zelda1-disassembly/src/Z_0n.asm` (<https://github.com/aldonunez/zelda1-disassembly>), routine/table `Label`. Variable names come from `Variables.inc` / `ObjVars.inc` / `CommonVars.inc` / `CaveVars.inc`.
+- `v1 file` → `triforce/<file>` on this repository's `v2-stable-retro` branch, the Python project this one replaced (`gd.txt` = `zelda_game_data.txt`, `data.json` = v1's retro integration variable table; this repo's equivalent is `crates/zelda/src/vars.rs`, `ram.md` = `docs/ram.md`).
 - `ss <name>` → value observed by loading savestate `<name>.state` in this repo, stepping no-op until `GameMode=5`, and reading RAM. Historical: these observations were made in Phase 0 on the old stable-retro 1.0.1 savestates (since replaced by `TFZSTATE` files in `triforce/states/`, read with `triforce._native.Game`).
 
 **Address space.** `Game.ram()` (`triforce._native`) returns 10240 bytes: index `0x000–0x7FF` = CPU RAM `$0000–$07FF`; index `0x800–0x27FF` = cartridge SRAM `$6000–$7FFF`. So **SRAM address `A` is at `ram()[A - 0x5800]`** (v1's `tile_layout` at index `0xD30` is `PlayAreaTiles $6530`). Verified: attribute bytes read this way decode to door layouts that match RAM door state in ss `1_35e`, `1_42e` (see §R.9).

@@ -448,7 +448,7 @@ class Runner:
                          else [bool(self.deterministic)] * len(policies.policies))
         models = models_header(policies.names, policies.policies, policies.checkpoints, deterministic)
         for model, config in zip(models, policies.configs):
-            checkpoint = model['checkpoint']
+            checkpoint = policies.checkpoints.get(model['name'])
             model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
             model['act'] = 'argmax' if model['deterministic'] else 'sample'
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
