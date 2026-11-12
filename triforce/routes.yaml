@@ -175,6 +175,22 @@ d2first-d4:
   - {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
   - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
   - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
+# clips-gauntlet (round 21, docs/experiments/round21.md): an experiment route, not a way through the game.  Two
+# steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
+# reset.  Entered from W the target is E or S, entered from E it is W or S.
+clips-gauntlet:
+- {level: 0, room: '0x59', entry: W, exit: E}
+- {level: 0, room: '0x59', entry: W, exit: S}
+- {level: 0, room: '0x59', entry: E, exit: W}
+- {level: 0, room: '0x59', entry: E, exit: S}
+- {level: 0, room: '0x5a', entry: W, exit: E}
+- {level: 0, room: '0x5a', entry: W, exit: S}
+- {level: 0, room: '0x5a', entry: E, exit: W}
+- {level: 0, room: '0x5a', entry: E, exit: S}
+- {level: 0, room: '0x5b', entry: W, exit: E}
+- {level: 0, room: '0x5b', entry: W, exit: S}
+- {level: 0, room: '0x5b', entry: E, exit: W}
+- {level: 0, room: '0x5b', entry: E, exit: S}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}

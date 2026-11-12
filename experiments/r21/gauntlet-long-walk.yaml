@@ -1,0 +1,17 @@
+name: gauntlet-long-walk
+# Round 21 clips gauntlet (docs/experiments/round21.md): the seven arms differ only in `clips:`.
+# States: experiments/r21/states (train/evaluate with --states-dir experiments/r21/states).
+rooms: ['(0, 0x59)', '(0, 0x5a)', '(0, 0x5b)']
+start_states: ['0_59w_[0-9]', '0_5aw_[0-9]', '0_5bw_[0-9]', '0_59e_[0-9]', '0_5ae_[0-9]', '0_5be_[0-9]']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+items: {bombs: tenth}
+curriculum: {enabled: false}
+clips: {action: long, shaping: walk}
+route: clips-gauntlet            # target exit drawn per reset: from W, E or S; from E, W or S
+one_room: true
+max_steps: 600
+warm_start: null

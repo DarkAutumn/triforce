@@ -88,6 +88,18 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
      an armed target (short moves stay plain), including the back-off when the cadence is wrong; no action or
      observation change. A back-off makes the action longer than its duration, to be decided. The reproduction
      scripts were throwaway (`/tmp/zasm/clips/*/repro.py`).
+   - [x] **Round 21 gauntlet** (round21.md): the four ways of offering the wrap (`clips.action` none, kind, long,
+     edge; `shaping` jump, walk) trained from scratch on 0x59, 0x5a and 0x5b with two target exits per entry. No
+     design decided; problems it found, open:
+     - The first step that moves Link in an episode pays no PBRS (`critic.rs` `critique_movement`: it only sets
+       the baseline tile). A wrap from the entry bound at step 0 therefore earns nothing, the same wrap after one
+       short step into the room up to +1 (jump); kind and edge policies step in and wrap back (3 steps, not 2).
+     - `CLIP` pays `penalty-attack-miss` (−0.01) under `kind` (`critique_attack` exempts only MOVE, WAIT, BOMB);
+       the MOVE triggers of `long`/`edge` don't.
+     - `long`: a MOVE of 4-16 frames at the entry bound leaves by the wrong exit (−20), so a seed can learn to
+       avoid MOVE toward the entry edge and never find the 32-frame wrap (seed 1: W→E crossings never wrap).
+     - The wrap is offered on rows whose landing leaves by an exit that doesn't count (0x5b row Y $B5 lands in the
+       lower E opening, outside game.yaml `span`); policies learned to change rows first.
 
 ## Done (Nov 12): bombs (Lee, Nov 11; round 19)
 
