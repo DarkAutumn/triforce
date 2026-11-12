@@ -24,7 +24,7 @@
 InitUnderworldPerson_Full:
     ; Point to the front of the first line in VRAM.
     LDA TextboxLineAddrsLo+2
-    STA PersonTextPtr
+    STA PersonTextVramLo
     LDA CurLevel
     JSR TableJump
 
@@ -78,7 +78,7 @@ InitUnderworldPersonLifeOrMoney_Full:
 
     ; Point to the front of the first line in VRAM.
     LDA TextboxLineAddrsLo+2
-    STA PersonTextPtr
+    STA PersonTextVramLo
 
 UnderworldPerson_DestroyIfTaken:
     ; Destroy this object if the secret/item was already taken.
@@ -164,7 +164,7 @@ InitGrumble_Full:
     ; Set the low VRAM address of the first character to transfer
     ; to the front of the first line in NT0. It's at index 2.
     LDA TextboxLineAddrsLo+2
-    STA PersonTextPtr
+    STA PersonTextVramLo
 
     ; If Grumble already got the food, then
     ; reset his type and state to get rid of him.

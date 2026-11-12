@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/walker-collision-screen-edge.asm BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 2829-3161
-; SUBJECTS: (none)
+; SUBJECTS: Walker
 ; TOPIC:    Walker tile collision, CheckScreenEdge, GoToNextModeFromPlay, alternate directions
 ; SEE ALSO:
 ; KEY FACTS:
@@ -126,7 +126,7 @@ CheckTiles:
     ;
     ; If the colliding tile is walkable, go handle a walkable direction.
     JSR GetCollidingTileMoving
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCC GoWalkableDir
 
     ; The colliding tile is unwalkable.
@@ -353,7 +353,7 @@ _FaceUnblockedDir:
     ; If blocked in this direction by a tile or the room boundary,
     ; then loop again.
     JSR GetCollidingTileMoving
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS @LoopSearchStep
     JSR BoundByRoom
     BEQ @LoopSearchStep

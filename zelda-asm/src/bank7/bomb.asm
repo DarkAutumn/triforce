@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/bomb.asm               BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 4806-5030
-; SUBJECTS: (none)
+; SUBJECTS: Bomb
 ; TOPIC:    Bomb timers, bombable wall hotspots, UpdateBomb
 ; SEE ALSO:
 ; KEY FACTS:

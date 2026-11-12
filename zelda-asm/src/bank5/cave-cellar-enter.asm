@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/cave-cellar-enter.asm  BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 6588-6803
-; SUBJECTS: (none)
+; SUBJECTS: World
 ; TOPIC:    Mode A; cave/cellar walk-in; heart fill
 ; SEE ALSO:
 ; KEY FACTS:
@@ -237,9 +237,9 @@ World_FillHearts:
     ; decreasing from 0 to $FF.
     DEC HeartPartial
     LDA #$00                    ; We reached the end. So stop filling hearts.
-    STA SwordBlocked
+    STA IsSwordBlocked
     STA World_IsFillingHearts
-    STA Paused
+    STA PauseState
 
 @Exit:
     RTS

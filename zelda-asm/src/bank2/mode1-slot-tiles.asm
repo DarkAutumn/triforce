@@ -49,7 +49,7 @@ InitMode1_Sub1:
     JSR TurnOffVideoAndClearArtifacts
     LDY #$04
     LDA #$00
-    STA ForceSwordShot          ; UNKNOWN: Why now?
+    STA IsSwordShotForced          ; UNKNOWN: Why now?
 :
     STA RoomHistory, Y
     DEY
@@ -100,7 +100,7 @@ InitMode1_FillAndTransferSlotTiles:
     LDY #$03
 
 @CopyName:
-    LDA Names, X
+    LDA SaveSlotNames, X
     STA DynTileBuf, Y
     INX
     INY
@@ -179,7 +179,7 @@ InitMode1_Sub6:
     BNE @LoopSlot               ; Go process the next slot, if not done.
     LDY #$FF                    ; Find the first save slot that's active.
     STY CurSaveSlot
-    STY CaveSourceRoomId        ; Use room ID $FF, so that mode 3 "Unfurl" will put the player in the room at StartRoomId.
+    STY LevelEntranceRoomId        ; Use room ID $FF, so that mode 3 "Unfurl" will put the player in the room at StartRoomId.
 
 @FindActiveSlot:
     INY

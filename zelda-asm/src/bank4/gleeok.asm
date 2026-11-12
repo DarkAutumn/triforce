@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/gleeok.asm             BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 8505-9043
-; SUBJECTS: (none)
+; SUBJECTS: Flyer, Gleeok
 ; TOPIC:    Flying Gleeok head; UpdateGleeok; necks
 ; SEE ALSO:
 ; KEY FACTS:
@@ -145,7 +145,7 @@ UpdateGleeok:
     LDA ($02), Y
     STA a:ObjY+1, Y
     LDA ($04), Y
-    STA Gleeok_ObjHeadInfo, Y
+    STA Gleeok_CurHeadInfo, Y
     DEY
     BPL @LoadNeckBytes
 
@@ -184,7 +184,7 @@ UpdateGleeok:
     STA ($00), Y
     LDA a:ObjY+1, Y
     STA ($02), Y
-    LDA Gleeok_ObjHeadInfo, Y
+    LDA Gleeok_CurHeadInfo, Y
     STA ($04), Y
     DEY
     BPL @SaveNeckBytes

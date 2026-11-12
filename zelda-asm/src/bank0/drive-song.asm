@@ -25,12 +25,12 @@ KeepPlaying:
 DriveSong:
     LDA SongRequest
     BNE @ChangeSong
-    LDA Song
+    LDA CurSong
     BNE KeepPlaying
     RTS
 
 @ChangeSong:
-    STA Song
+    STA CurSong
     BMI @PlayFirstDemoPhrase
     CMP #$06
     BNE :+
@@ -151,16 +151,16 @@ KeepPlayingSong:
 
 @SongEnded:
     ; If this is a song that repeats, then go play again.
-    LDA Song
+    LDA CurSong
     AND #$F1
     BNE PlayAgain
 
 SilenceSong:
     LDA #$00
-    STA Song
-    STA ApuStatus_4015
+    STA CurSong
+    STA ApuStatus
     LDA #$0F
-    STA ApuStatus_4015
+    STA ApuStatus
     RTS
 
 PlayAgain:
@@ -176,7 +176,7 @@ PrepNote:
 PlayNote:
     ; If something is playing in tune channel 1, then
     ; don't play a square note here.
-    LDX Tune1
+    LDX CurTune1
     BNE @SkipSq1
     JSR EmitSquareNote1
     BEQ :+
@@ -194,7 +194,7 @@ PlayNote:
 ApplySq1Effects:
     ; If something is playing in tune channel 1, then
     ; skip effects for square channel 1.
-    LDY Tune1
+    LDY CurTune1
     BNE @HandleSq0
     INC SongVibrationCounterSq1
     LDY CustomEnvelopeOffsetSongSq1
@@ -202,17 +202,17 @@ ApplySq1Effects:
     DEC CustomEnvelopeOffsetSongSq1
 :
     JSR ShapeSongVolume
-    STA Sq1Duty_4004
+    STA Sq1Duty
     LDX #$7F
-    STX Sq1Sweep_4005
-    LDA Song
+    STX Sq1Sweep
+    LDA CurSong
     BPL @HandleSq0
 
     ; The demo/title song ($80) vibrates the pitch.
     LDA SongVibrationCounterSq1
     LDX CurNoteLowPeriodSq1
     JSR VibratePitch
-    STX Sq1Timer_4006
+    STX Sq1Timer
 
 @HandleSq0:
     LDY NoteOffsetSongSq0
@@ -230,7 +230,7 @@ ApplySq1Effects:
     LDA (SongScriptPtrLo), Y
 
 @PlaySq0:
-    LDX Tune0
+    LDX CurTune0
     BNE @SkipSq0
     JSR EmitSquareNote0
     BEQ :+
@@ -246,7 +246,7 @@ ApplySq1Effects:
     STA NoteCounterSongSq0
 
 @ApplySq0Effects:
-    LDX Tune0
+    LDX CurTune0
     BNE @HandleTrg
     INC SongVibrationCounterSq0
     LDY CustomEnvelopeOffsetSongSq0
@@ -254,18 +254,18 @@ ApplySq1Effects:
     DEC CustomEnvelopeOffsetSongSq0
 :
     JSR ShapeSongVolume
-    STA Sq0Duty_4000
-    LDA Song
+    STA Sq0Duty
+    LDA CurSong
     BPL :+
 
     ; The demo/title song ($80) vibrates the pitch.
     LDA SongVibrationCounterSq0
     LDX CurNoteLowPeriodSq0
     JSR VibratePitch
-    STX Sq0Timer_4002
+    STX Sq0Timer
 :
     LDA #$7F
-    STA Sq0Sweep_4001
+    STA Sq0Sweep
 
 @HandleTrg:
     LDA NoteOffsetSongTrg
@@ -308,7 +308,7 @@ ApplySq1Effects:
     JSR GetSongNoteLength
     STA NoteLengthSongTrg
     LDA #$1F
-    STA TrgLinear_4008
+    STA TrgLinear
     LDY NoteOffsetSongTrg
     INC NoteOffsetSongTrg
     LDA (SongScriptPtrLo), Y
@@ -326,7 +326,7 @@ ApplySq1Effects:
     LDA SongVibrationCounterTrg
     LDX CurNoteLowPeriodTrg
     JSR VibratePitch
-    STX TrgTimer_400A
+    STX TrgTimer
 
     ; TODO: [05F1] ?
     LDA $05F1
@@ -337,12 +337,12 @@ ApplySq1Effects:
     LDA #$FF
 
 @SetTrgLinear:
-    STA TrgLinear_4008
+    STA TrgLinear
 
 @HandleNoise:
     ; If the song is not demo nor ending, then return.
     ; They don't use noise.
-    LDA Song
+    LDA CurSong
     AND #$91
     BEQ @Exit
     DEC NoteCounterSongNoise
@@ -371,11 +371,11 @@ ApplySq1Effects:
     LSR
     TAY
     LDA NoiseVolumes, Y
-    STA NoiseVolume_400C
+    STA NoiseVolume
     LDA NoisePeriods, Y
-    STA NoisePeriod_400E
+    STA NoisePeriod
     LDA NoiseLengths, Y
-    STA NoiseLength_400F
+    STA NoiseLength
 
 @Exit:
     RTS

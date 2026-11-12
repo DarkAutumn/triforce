@@ -55,9 +55,9 @@ ClearRam:
     JSR ClearRam0300UpTo
     LDA #$00                    ; Clear a few individual variables that are left.
     STA ReturnToBank4
-    STA TransferredCommonPatterns
-    STA TransferredDemoPatterns
-    STA _Unknown_F3
+    STA HasCommonPatterns
+    STA HasDemoPatterns
+    STA IsScrollMirroringSet
     LDY #$EF
 :
     STA $0000, Y                ; Clear RAM from 0 to $EF.

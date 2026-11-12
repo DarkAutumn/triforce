@@ -93,7 +93,7 @@ DrawGhiniAndCheckCollisions:
 ; [06]: 1 if objects collide
 ; [09]: 0 for Link damage type (none)
 ; [0C]: 1 if objects collide
-; [034B]: ShotCollidesWithLink
+; [034B]: IsShotCollidingWithLink
 ;
 DrawObjectNotMirroredAndCheckLinkCollision:
     JSR DrawObjectNotMirrored

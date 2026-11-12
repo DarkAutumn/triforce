@@ -110,21 +110,21 @@ ContinueTransferTileBuf:
     ;
     ; Save VRAM address high byte.
     PHA
-    STA PpuAddr_2006
+    STA PpuAddr
     INY
     LDA ($00), Y                ; Read low byte of VRAM address.
-    STA PpuAddr_2006
+    STA PpuAddr
     INY
     LDA ($00), Y                ; Read count and attribute byte.
     ASL
     PHA
-    LDA CurPpuControl_2000
+    LDA CurPpuControl
     ORA #$04
     BCS :+                      ; If high bit is set, then auto-increment VRAM address by 32.
     AND #$FB
 :
-    STA PpuControl_2000
-    STA CurPpuControl_2000
+    STA PpuControl
+    STA CurPpuControl
     PLA
     ASL
     PHP
@@ -152,7 +152,7 @@ ContinueTransferTileBuf:
     INY                         ; then increment Y index (not repeating).
 :
     LDA ($00), Y
-    STA PpuData_2007
+    STA PpuData
     DEX
     BNE @Loop
     PLA                         ; Restore VRAM address high byte.
@@ -160,10 +160,10 @@ ContinueTransferTileBuf:
     ; If we wrote to $3Fxx, then set PPUADDR to $3F00, then $0000.
     CMP #$3F
     BNE @AdvanceSource
-    STA PpuAddr_2006
-    STX PpuAddr_2006
-    STX PpuAddr_2006
-    STX PpuAddr_2006
+    STA PpuAddr
+    STX PpuAddr
+    STX PpuAddr
+    STX PpuAddr
 
 @AdvanceSource:
     ; Advance the source address to one after the last byte read.
@@ -176,7 +176,7 @@ ContinueTransferTileBuf:
     STA $01
 
 TransferTileBuf:
-    LDX PpuStatus_2002
+    LDX PpuStatus
     LDY #$00
     LDA ($00), Y                ; Read high byte of VRAM address.
     BPL ContinueTransferTileBuf ; End when we read a negative VRAM address.

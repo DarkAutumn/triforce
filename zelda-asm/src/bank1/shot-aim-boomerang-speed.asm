@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/shot-aim-boomerang-speed.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 3638-3851
-; SUBJECTS: (none)
+; SUBJECTS: Dir
 ; TOPIC:    MoveShot, direction/distance to target, diagonal speed, boomerang speed
 ; SEE ALSO:
 ; KEY FACTS:

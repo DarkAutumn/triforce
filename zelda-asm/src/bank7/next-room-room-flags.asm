@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/next-room-room-flags.asm BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 737-803
-; SUBJECTS: (none)
+; SUBJECTS: Room
 ; TOPIC:    Triforce marker, CalculateNextRoom, MarkRoomVisited, GetRoomFlags
 ; SEE ALSO:
 ; KEY FACTS:

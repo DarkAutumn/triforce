@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/pols-voice.asm         BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 6516-6814
-; SUBJECTS: (none)
+; SUBJECTS: PolsVoice
 ; TOPIC:    Pols Voice walk/jump
 ; SEE ALSO:
 ; KEY FACTS:
@@ -299,7 +299,7 @@ PolsVoice_GetCollidingTile:
     LDA ObjCollidedTile, X
 
     ; Return C=0 if walkable.
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
 
     ; Remember the tile that the monster is over.
     STA PolsVoice_ObjLastTile, X

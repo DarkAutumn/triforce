@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/dodongo.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 5855-6447
-; SUBJECTS: (none)
+; SUBJECTS: Anim, Dodongo
 ; TOPIC:    Dodongo states, bloat/stun, bomb eating, collisions, draw
 ; SEE ALSO:
 ; KEY FACTS:
@@ -84,7 +84,7 @@ UpdateDodongoState0_Move:
     TYA
     PHA
     LDA #$20                    ; Turn rate $20
-    STA ObjTurnRate, X
+    STA Wanderer_ObjTurnRate, X
     JSR Wanderer_TargetPlayer
 
     ; Pop the offset and add it to the X coordinate.
@@ -234,7 +234,7 @@ Dodongo_CheckCollisions:
     ; Drop a bomb from this fight.
     LDA #$0A
     STA HelpDropCount
-    STA HelpDropValue
+    STA IsHelpDropBomb
 
 L11989_Exit:
     RTS

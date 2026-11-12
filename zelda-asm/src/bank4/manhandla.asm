@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/manhandla.asm          BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 7832-8191
-; SUBJECTS: (none)
+; SUBJECTS: Manhandla
 ; TOPIC:    Manhandla
 ; SEE ALSO:
 ; KEY FACTS:
@@ -268,8 +268,8 @@ Manhandla_Move:
     LDA Manhandla_ObjSpeedFrac, X
     AND #$E0
     CLC                         ; Add the low speed byte to speed accumulator.
-    ADC Manhandla_ObjSpeedAccum, X
-    STA Manhandla_ObjSpeedAccum, X
+    ADC Manhandla_ObjPosFrac, X
+    STA Manhandla_ObjPosFrac, X
 
     ; Assign (high speed byte + carry) to [03].
     LDA Manhandla_ObjSpeedWhole, X

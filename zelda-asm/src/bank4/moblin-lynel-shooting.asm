@@ -17,7 +17,7 @@
 UpdateMoblin:
     ; Set turn rate to $A0.
     LDA #$A0
-    STA ObjTurnRate, X
+    STA Wanderer_ObjTurnRate, X
     JSR Wanderer_TargetPlayer
     LDY #$5B                    ; Arrow object type
     JMP :+
@@ -93,7 +93,7 @@ _TryShooting:
     ; So, if "wants to shoot" flag is set, then set shoot timer to $30.
     ; Else go set a non-zero speed and return.
     BPL @SetShootTimer
-    LDA ObjWantsToShoot, X
+    LDA Shooter_ObjWantsToShoot, X
     BEQ @SetSpeed
     LDY #$30
 
@@ -125,7 +125,7 @@ _TryShooting:
 
     ; It succeeded, so reset "wants to shoot" flag and the speed.
     LDA #$00
-    STA ObjWantsToShoot, X
+    STA Shooter_ObjWantsToShoot, X
 
 @ZeroSpeed:
     PLA                         ; Replace the speed that was pushed with 0.

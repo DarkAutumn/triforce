@@ -70,9 +70,9 @@ EndGameMode12:
     STA Tune0Request
 
 MaskCurPpuMaskGrayscale:
-    LDA CurPpuMask_2001
+    LDA CurPpuMask
     AND #$FE
-    STA CurPpuMask_2001
+    STA CurPpuMask
     RTS
 
 ; Params:

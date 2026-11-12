@@ -200,14 +200,14 @@ HandleMonsterDied:
     INC HelpDropCount
 
     ; If the help drop counter has reached the max, and damage type = bomb (8);
-    ; then set [51] HelpDropValue in order to drop a bomb next time.
+    ; then set [51] IsHelpDropBomb in order to drop a bomb next time.
     LDA HelpDropCount
     CMP #$0A
     BNE @SetDyingMetastate
     LDA $09
     CMP #$08
     BNE @SetDyingMetastate
-    INC HelpDropValue
+    INC IsHelpDropBomb
 
 @SetDyingMetastate:
     ; Set the dying metastate, and reset some object info.

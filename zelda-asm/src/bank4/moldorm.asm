@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/moldorm.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 4913-5153
-; SUBJECTS: (none)
+; SUBJECTS: Flyer, Moldorm
 ; TOPIC:    Moldorm update, chase/wander
 ; SEE ALSO:
 ; KEY FACTS:

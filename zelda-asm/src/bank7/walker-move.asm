@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/walker-move.asm        BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 2600-2827
-; SUBJECTS: (none)
+; SUBJECTS: Walker
 ; TOPIC:    Walker_Move (Link and monsters), MoveObject
 ; SEE ALSO:
 ; KEY FACTS:

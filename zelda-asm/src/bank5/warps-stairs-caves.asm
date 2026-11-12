@@ -84,7 +84,7 @@ CheckWarps:
     LDA #$09
 
 SetTargetMode:
-    STA TargetMode
+    STA ModeAfterStairs
 
     ; If the target mode is not 9 (as in it's a cave), then silence all sound.
     CMP #$09
@@ -163,6 +163,6 @@ HandleWarpOW:
     LSR
     STA CurLevel
     LDA RoomId
-    STA CaveSourceRoomId        ; Remember where we came from.
+    STA LevelEntranceRoomId        ; Remember where we came from.
     LDA #$02                    ; Target mode is 2 to load a level.
     BNE SetTargetMode

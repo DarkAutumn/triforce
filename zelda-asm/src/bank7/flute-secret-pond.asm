@@ -102,7 +102,7 @@ CueTransferPondPaletteRow:
     CPY #$0A
     BNE L1FF28_Exit             ; If the index is $A,
     LDA #$99                    ; then make most water tiles (< $99) walkable.
-    STA ObjectFirstUnwalkableTile
+    STA RoomFirstUnwalkableTile
 
 L1FF28_Exit:
     RTS

@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/submenu-map.asm        BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 7567-7750
-; SUBJECTS: (none)
+; SUBJECTS: Submenu
 ; TOPIC:    Submenu dungeon map, compass and map tests
 ; SEE ALSO:
 ; KEY FACTS:
@@ -47,11 +47,11 @@ Submenu_WriteSheetMapRowTransferRecord:
 
     ; Write a map mark in the dynamic transfer buf for each room
     ; in the range currently being scanned.
-    LDA CurScanRoomId
+    LDA SubmenuScanRoomId
     PHA                         ; Save the current scanned room index before writing any marks.
 :
     JSR Submenu_WriteScanningMapRoomMark    ; Y register is $10.
-    DEC CurScanRoomId
+    DEC SubmenuScanRoomId
     DEY
     BNE :-
 
@@ -59,7 +59,7 @@ Submenu_WriteSheetMapRowTransferRecord:
     PLA
     SEC
     SBC #$10
-    STA CurScanRoomId
+    STA SubmenuScanRoomId
 
     ; If the level info indicates that the submenu map should be
     ; rotated horizontally, then loop to rotate right the number of
@@ -132,7 +132,7 @@ HasMap:
 :
     AND #$07                    ; Sanitize the zero-based level number.
     TAY
-    LDA Items, X
+    LDA InvItems, X
     AND LevelMasks, Y           ; Return the item value for the current level.
 
 @Exit:
@@ -151,7 +151,7 @@ Submenu_WriteScanningMapRoomMark:
 
     ; Temporarily set current room ID to the room ID we're scanning,
     ; in order to look up its information.
-    LDA CurScanRoomId
+    LDA SubmenuScanRoomId
     STA RoomId
 
     ; Set OpenDoorMask to $13, in case the room has not been

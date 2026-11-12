@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/object-animation.asm   BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 5032-5263
-; SUBJECTS: (none)
+; SUBJECTS: Anim
 ; TOPIC:    Spawn cloud, death sparkle, walking animation
 ; SEE ALSO:
 ; KEY FACTS:

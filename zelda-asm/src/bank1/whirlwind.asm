@@ -218,7 +218,7 @@ SummonWhirlwind:
 @MakeWhirlwind:
     ; If already summoned or in the middle of teleporting, then
     ; return and don't summon another one.
-    LDA SummonedWhirlwind
+    LDA IsWhirlwindSummoned
     ORA WhirlwindTeleportingState
     BNE L6104_Exit
 
@@ -228,7 +228,7 @@ SummonWhirlwind:
 
     ; An empty slot was found. Flag that summoned the whirlwind.
     ; Switch to the empty slot, and go set up a whirlwind object.
-    INC SummonedWhirlwind
+    INC IsWhirlwindSummoned
     TYA
     TAX
     JMP SetUpWhirlwind

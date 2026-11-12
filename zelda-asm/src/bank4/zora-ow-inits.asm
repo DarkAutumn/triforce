@@ -29,7 +29,7 @@ CheckZora:
     BEQ @Exit
 
     ; If zora is active, return.
-    LDA ZoraActive
+    LDA IsZoraActive
     BNE @Exit
 
     ; Look for an empty monster slot. If none is found, return.
@@ -80,7 +80,7 @@ CheckZora:
     BCS @NextLoopTileCandidate
 
     ; Flag the zora active, and set up the object.
-    INC ZoraActive
+    INC IsZoraActive
     LDA #$11                    ; Zora object type
     JMP SetTypeAndClearObject
 
@@ -98,7 +98,7 @@ TektiteStartingDirs:
 InitBoulderSet:
     ; Reset active boulder count.
     LDA #$00
-    STA ActiveBoulders
+    STA ActiveBoulderCount
 
 InitBoulder:
     JSR ResetObjMetastateAndTimer
@@ -160,7 +160,7 @@ InitPeahat:
 EndInitFlyer:
     JSR ResetFlyerState
     LDA #$A0
-    STA FlyingMaxSpeedFrac
+    STA FlyerMaxSpeedFrac
     LDA #$1F
     STA Flyer_ObjSpeed, X
     RTS
@@ -211,5 +211,5 @@ UpdateZora:
     ; to make another one.
     LDA ObjState, X
     BNE L10797_Exit
-    DEC ZoraActive
+    DEC IsZoraActive
     JMP DestroyMonster

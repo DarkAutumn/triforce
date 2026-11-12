@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/link-handle-input.asm  BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 6919-7253
-; SUBJECTS: (none)
+; SUBJECTS: Link
 ; TOPIC:    Link_HandleInput: buttons, grid turning rules, speed
 ; SEE ALSO:
 ; KEY FACTS:
@@ -35,7 +35,7 @@ Link_HandleInput:
 
     ; If the sword is not blocked, then handle the sword if A is pressed.
     LDA SwordBlockedLongTimer
-    ORA SwordBlocked
+    ORA IsSwordBlocked
     BNE :+
     LDA ButtonsPressed
     AND #$80
@@ -89,7 +89,7 @@ Link_ModifyDirAtGridPoint:
     PHA
     INC $0B                     ; Increment the input dir count in [0B].
     JSR GetCollidingTileMoving
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS :+                      ; If this is unwalkable, skip it.
     LDA $0F
     STA $0D                     ; [0D] holds the last walkable direction found.

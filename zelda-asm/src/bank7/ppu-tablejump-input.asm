@@ -18,13 +18,13 @@
 
 ResetPpuRegisters:
     LDA #$00
-    STA PpuScroll_2005
+    STA PpuScroll
     STA CurHScroll
-    STA PpuScroll_2005
+    STA PpuScroll
     STA CurVScroll
     LDA #$30
-    STA PpuControl_2000
-    STA CurPpuControl_2000
+    STA PpuControl
+    STA CurPpuControl
     RTS
 
 ; Params:
@@ -36,15 +36,15 @@ ClearNameTable:
     STA $00
     STX $01
     STY $02
-    LDA PpuStatus_2002
-    LDA CurPpuControl_2000      ; Make sure to auto-increment VRAM by 1.
+    LDA PpuStatus
+    LDA CurPpuControl      ; Make sure to auto-increment VRAM by 1.
     AND #$FB
-    STA PpuControl_2000
-    STA CurPpuControl_2000
+    STA PpuControl
+    STA CurPpuControl
     LDA $00
-    STA PpuAddr_2006
+    STA PpuAddr
     LDY #$00
-    STY PpuAddr_2006
+    STY PpuAddr
 
     ; Fill one nametable with the tile.
     LDX #$04
@@ -58,7 +58,7 @@ ClearNameTable:
     LDA $01
 
 @LoopTile:
-    STA PpuData_2007
+    STA PpuData
     DEY
     BNE @LoopTile
     DEX
@@ -70,13 +70,13 @@ ClearNameTable:
     CMP #$20
     BCC @RestoreX
     ADC #$02
-    STA PpuAddr_2006
+    STA PpuAddr
     LDA #$C0
-    STA PpuAddr_2006
+    STA PpuAddr
     LDX #$40
 
 @LoopAttr:
-    STY PpuData_2007
+    STY PpuData
     DEX
     BNE @LoopAttr
 
@@ -147,15 +147,15 @@ ClearRam0300UpTo:
 
 TurnOffAllVideo:
     LDA #$00
-    STA PpuMask_2001
-    STA CurPpuMask_2001
+    STA PpuMask
+    STA CurPpuMask
     RTS
 
 ReadInputs:
     LDA #$01                    ; Signal the controllers to poll.
-    STA Ctrl1_4016
+    STA Ctrl1
     LDA #$00                    ; Finish polling.
-    STA Ctrl1_4016
+    STA Ctrl1
     STA $03
     STA $04
     TAX
@@ -170,13 +170,13 @@ ReadOneController:
     ; [03]/2 : successive matching readings (for each controller)
     STA $02
     LDA #$01                    ; TODO: Why poll again?
-    STA Ctrl1_4016
+    STA Ctrl1
     LDA #$00
-    STA Ctrl1_4016
+    STA Ctrl1
     LDY #$08
 
 @Read:
-    LDA Ctrl1_4016, X
+    LDA Ctrl1, X
     LSR
     ROL ButtonsPressed, X       ; Roll the button bits in. Here ButtonsPressed means "down now".
     LSR

@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/ganon.asm              BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 10284-10545
-; SUBJECTS: (none)
+; SUBJECTS: Ganon
 ; TOPIC:    Ganon phases, teleport, shooting, dying
 ; SEE ALSO:
 ; KEY FACTS:
@@ -54,7 +54,7 @@ Ganon_ScenePhase0:
     ; Turn off the room brightening flag, because we're controlling it
     ; here instead of in the Mode 5 object update loop.
     LDA #$00
-    STA BrighteningRoom
+    STA IsRoomBrightening
 
     ; On the first frame of the fade-to-light cycle, play the
     ; Triforce/Ganon song.
@@ -126,7 +126,7 @@ Ganon_DrawBodyFrame0:
 ; If Ganon is dying, go handle it.
 ;
 Ganon_ScenePhase2:
-    LDA Ganon_ObjPhase, X
+    LDA Ganon_ObjDyingCount, X
     BNE Ganon_Dying
     JSR Ganon_CheckCollisions
     JSR PlayBossHitCryIfNeeded
@@ -225,13 +225,13 @@ L_Ganon_DrawBody:
 Ganon_Dying:
     ; Ganon is dying.
     ; Increment Ganon phase every frame.
-    INC Ganon_ObjPhase, X
+    INC Ganon_ObjDyingCount, X
 
     ; If it just went from $FF to 0, then keep it at $FF.
-    LDA Ganon_ObjPhase, X
+    LDA Ganon_ObjDyingCount, X
     BNE :+
     LDA #$FF
-    STA Ganon_ObjPhase, X
+    STA Ganon_ObjDyingCount, X
 :
     ; If Ganon phase < $50, then go draw only.
     CMP #$50
@@ -260,7 +260,7 @@ Ganon_Dying:
     JSR Ganon_DrawAshes
 
     ; Keep drawing the burst artifacts while Ganon phase < $A0.
-    LDA Ganon_ObjPhase, X
+    LDA Ganon_ObjDyingCount, X
     CMP #$A0
     BCC Ganon_DrawBurst
 

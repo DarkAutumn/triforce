@@ -41,11 +41,11 @@ UpdatePersonState_Textbox:
 @WriteChar:
     ; Replace the low byte of the VRAM address with the one
     ; where the next character should be written.
-    LDA PersonTextPtr
+    LDA PersonTextVramLo
     STA DynTileBuf+1
 
     ; Increment the low VRAM address for the next character.
-    INC PersonTextPtr
+    INC PersonTextVramLo
 
     ; Use the person text selector to look up the address of the
     ; text for the textbox. Store the address in [00:01].
@@ -106,7 +106,7 @@ UpdatePersonState_Textbox:
     ;
     ; Look up the low VRAM address and store it.
     LDA TextboxLineAddrsLo, Y
-    STA PersonTextPtr
+    STA PersonTextVramLo
 
     ; If index = 2, then we've reached the end of the text,
     ; and low VRAM address is moved to the front of the first line.

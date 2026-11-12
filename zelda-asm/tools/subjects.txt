@@ -1,0 +1,174 @@
+# Subjects: the first word of every global label (<Subject>_<Rest>).
+# `grep '^Dodongo_' index/symbols.tsv` lists everything about Dodongo. One subject per line, then its meaning.
+# Add a subject only when none fits. Text after '#' is ignored by tools/asm.py.
+
+# --- monsters and bosses
+Lynel           overworld centaur (object types $01 red, $02 blue)
+Moblin          overworld spear thrower ($03 red, $04 blue)
+Goriya          boomerang thrower ($05 red, $06 blue)
+Octorok         rock spitter ($07-$0A)
+Darknut         armoured knight ($0B red, $0C blue)
+Tektite         hopping spider ($0D blue, $0E red)
+Leever          burrowing spinner ($0F blue, $10 red)
+Zora            river monster that surfaces and shoots ($11)
+Vire            hopping bat demon that splits into red Keese ($12)
+Zol             large blob that splits into Gels ($13)
+Gel             small blob ($14 child, $15)
+PolsVoice       hopping rabbit-eared ghost ($16)
+LikeLike        tube that swallows Link and eats the magic shield ($17)
+Digdogger       sea urchin boss shrunk by the recorder ($18 small, $38, $39)
+Peahat          spinning flower ($1A)
+Keese           bat ($1B blue, $1C red, $1D black)
+Armos           statue that wakes when touched ($1E; tile object $66)
+Boulder         falling rock and its spawner ($1F spawner, $20)
+Ghini           ghost ($21, $22 flying)
+Wizzrobe        wizard ($23 blue, $24 red)
+Patra           eye with orbiting children ($25/$26 child, $47/$48)
+Wallmaster      hand that carries Link to the level entrance ($27)
+Rope            snake that charges ($28)
+Stalfos         skeleton ($2A)
+Bubble          flashing skull that blocks the sword ($2B-$2D)
+Gibdo           mummy ($30)
+Dodongo         bomb-eating dinosaur boss ($31, $32)
+Gohma           eye-spider boss ($33, $34)
+Lanmola         centipede ($3A red, $3B blue)
+Manhandla       four-headed plant boss ($3C)
+Aquamentus      dragon boss ($3D)
+Ganon           final boss ($3E)
+Moldorm         worm ($41)
+Gleeok          multi-headed dragon boss ($42-$45, flying head $46)
+Trap            blade trap ($49, $4A)
+GuardFire       fire circling Zelda's room ($3F)
+StandingFire    stationary fire beside cave and dungeon persons ($40)
+Statue          dungeon statues that shoot fireballs
+DeadDummy       placeholder object used to count a kill ($5D)
+
+# --- other objects
+Person          cave and dungeon persons (old men, shopkeepers), their text and states
+Cave            cave contents: wares, prices, hints, money game, door repair charge
+Grumble         hungry Goriya that takes the food ($36)
+RupeeStash      room of rupees ($35)
+Zelda           Princess Zelda ($37)
+Whirlwind       recorder whirlwind ($2E)
+PondFairy       healing fairy at a pond ($2F)
+Fairy           item fairy
+FluteSecret     recorder-revealed stairs ($5E)
+Dock            raft dock tile object ($61)
+Rock            pushable rock or gravestone ($62, $65)
+RockWall        bombable overworld rock wall ($63, $67)
+Tree            burnable tree ($64)
+PushBlock       dungeon push block ($68)
+MonsterShot     shots fired by monsters: flying rock, sword shot, magic shot ($53, $54, $57-$5A)
+Fireball        monster fireball ($55, $56)
+MonsterArrow    arrow fired by a monster ($5B)
+MonsterBoomerang boomerang thrown by a Goriya ($5C)
+
+# --- movement classes shared by several monsters
+Walker          grid walker movement shared by Link and walking monsters
+Wanderer        walker that turns at random or toward Link (Moblin, Octorok, Stalfos, ...)
+Flyer           accelerating flyer (Peahat, Keese, fairies, ...)
+Jumper          hopping movement (Tektite, Boulder)
+Burrower        surface/submerge cycle (Leever, Zora)
+Shooter         shared "wants to shoot" logic
+
+# --- Link, weapons and items
+Link            Link: input, movement, animation, being hurt
+Sword           sword swing (object slot $0D)
+SwordShot       sword beam (object slot $0E)
+MagicShot       rod shot (object slot $0E)
+Rod             magic rod swing
+Boomerang       Link's boomerang (object slot $0F)
+Food            bait (object slot $0F)
+Bomb            Link's bombs (object slots $10, $11)
+Fire            candle and book fire (object slots $10, $11)
+Candle          candle use and dark-room lighting
+Arrow           Link's arrow (object slot $12)
+Flute           recorder use and its secrets
+Potion          potion use
+Ladder          stepladder
+Raft            raft travel
+Shield          shield blocking
+Item            item objects: room items, pickups, item ids and sprites
+Inv             inventory values and their limits
+Drop            monster drops and the help-drop counters
+
+# --- game modes
+Mode            mode dispatch and code shared by several modes
+Mode0Demo       mode $00: title screen and story demo
+Mode1Menu       mode $01: file select
+Mode2Load       mode $02: load level data
+Mode3Unfurl     mode $03: curtain opens on a level
+Mode4Enter      mode $04: enter a room
+Mode5Play       mode $05: normal play
+Mode6Leave      mode $06: leave a room
+Mode7Scroll     mode $07: scroll to the next room
+Mode8Continue   mode $08: continue/save/retry menu
+Mode9Cellar     mode $09: enter a cellar
+ModeALeaveCellar mode $0A: leave a cellar
+ModeBCave       mode $0B: enter a cave
+ModeCShortcut   mode $0C: shortcut stairs
+ModeDSave       mode $0D: save
+ModeERegister   mode $0E: register a name
+ModeFEliminate  mode $0F: eliminate a save
+Mode10Stairs    mode $10: walk down or up stairs
+Mode11Death     mode $11: death sequence
+Mode12EndLevel  mode $12: triforce piece collected
+Mode13WinGame   mode $13: ending
+
+# --- rooms and the world
+Room            current room: ids, bounds, objects in it
+RoomLayout      room layout data and the code that lays out tiles
+RoomFlags       per-room saved flags
+RoomHistory     recently visited rooms and remembered kill counts
+Door            dungeon doors: types, keys, opening and closing
+Doorway         movement through a door frame
+Shutter         shutter door triggers
+Secret          room secrets and their triggers
+Maze            Lost Woods and Lost Hills
+Warp            stairs, cave entrances and other transitions found under Link
+Level           level block and level info data
+World           overworld/underworld state shared across rooms
+Tile            tiles and tile maps
+Spawn           monster spawn positions and spawn clouds
+EdgeSpawn       monsters entering from the screen edge
+Quest           first quest / second quest differences
+
+# --- engine
+Obj             object slots: init, update dispatch, destroy, shared fields
+Collision       collision tests
+Damage          damage calculation and monster death
+Shove           knockback
+Stun            stun timers
+Rng             random numbers
+Timer           timers
+Dir             direction helpers
+Math            arithmetic helpers
+Util            other small helpers
+Anim            animation counters and frames
+Sprite          sprite (OAM) writers
+Ppu             PPU register access
+Palette         palettes and fades
+Transfer        PPU transfer buffers
+Scroll          scrolling and the split screen
+StatusBar       status bar
+Submenu         item submenu
+Text            text and number formatting
+Input           controller reading
+Audio           sound driver
+Song            music
+Sfx             sound effects
+Sample          DMC samples
+Save            save files and save RAM
+Profile         the active save profile
+Demo            demo/story data
+Title           title screen
+Credits         credits
+Ending          ending sequence
+Chr             CHR pattern data and its transfer
+Bank            bank-local copies and bank tails
+Mmc1            mapper control
+Isr             interrupt vectors and stubs
+Nmi             the per-frame NMI handler
+Reset           reset handler
+Unused          dead code and data
+Filler          padding

@@ -59,7 +59,7 @@ UpdateLikeLike:
     STA ObjAnimCounter, X
 
     ; Now Link can't move.
-    INC LinkParalyzed
+    INC IsLinkParalyzed
 
 @Exit:
     RTS
@@ -105,5 +105,5 @@ UpdateLikeLike:
 
     ; But once it has died, then let Link move again.
     LDA #$00
-    STA LinkParalyzed
+    STA IsLinkParalyzed
     JMP HideSpritesOverLink

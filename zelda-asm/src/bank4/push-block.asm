@@ -35,7 +35,7 @@ UpdateBlock_JumpTable:
 
 UpdateBlock0Idle:
     ; If there are monsters in the room, go reset the push timer and return.
-    LDA RoomAllDead
+    LDA IsRoomAllDead
     BEQ ResetPushTimer
 
     ; If Link's X is aligned with the block's, then get the difference
@@ -94,10 +94,10 @@ UpdateBlock0Idle:
     ; Link is truly pushing the block.
     ;
     ; Increase the push timer.
-    INC ObjPushTimer, X
+    INC PushBlock_ObjPushTimer, X
 
     ; If the push timer still < $10, return.
-    LDY ObjPushTimer, X
+    LDY PushBlock_ObjPushTimer, X
     CPY #$10
     BCC L10262_Exit
 
@@ -119,7 +119,7 @@ DrawBlock:
 ResetPushTimer:
     ; Reset the push timer.
     LDA #$00
-    STA ObjPushTimer, X
+    STA PushBlock_ObjPushTimer, X
 
 L10262_Exit:
     RTS

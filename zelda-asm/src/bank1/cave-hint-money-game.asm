@@ -49,7 +49,7 @@ UpdateCavePersonState_HintOrMoneyGame:
 
     ; Point to the front of the first line of the textbox.
     LDA TextboxLineAddrsLo+2
-    STA PersonTextPtr
+    STA PersonTextVramLo
 
     ; Reset the character index.
     LDA #$00
@@ -128,8 +128,8 @@ UpdateCavePersonState_HintOrMoneyGame:
 
 PostCredit:
     CLC
-    ADC RupeesToAdd
-    STA RupeesToAdd
+    ADC InvRupeesToAdd
+    STA InvRupeesToAdd
     RTS
 
 ; Params:
@@ -139,8 +139,8 @@ PostCredit:
 ;
 PostDebit:
     CLC
-    ADC RupeesToSubtract
-    STA RupeesToSubtract
+    ADC InvRupeesToSubtract
+    STA InvRupeesToSubtract
     RTS
 
 ; Params:

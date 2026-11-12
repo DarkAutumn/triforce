@@ -182,7 +182,7 @@ CheckLadder:
     ; Else fall thru to reset moving direction and draw the ladder.
     LDA $0F
     LDY ObjCollidedTile
-    CPY ObjectFirstUnwalkableTile
+    CPY RoomFirstUnwalkableTile
     BCC @HandleInput
 :
     ; Set A to reset moving direction in [0F].

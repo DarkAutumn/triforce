@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/doorway.asm            BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 3656-3907
-; SUBJECTS: (none)
+; SUBJECTS: Link, Unused
 ; TOPIC:    Doorway detection and movement restriction
 ; SEE ALSO:
 ; KEY FACTS:

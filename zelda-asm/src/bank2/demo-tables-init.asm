@@ -139,7 +139,7 @@ InitDemoSubphaseTransferTitlePalette:
 
 @ClearVars:
     STA TriforceGlowTimer, X
-    STA InitializedWaterfallAnimation, X
+    STA IsWaterfallInitialized, X
     STA DemoPhase0Subphase1Cycle, X
     DEX
     BPL @ClearVars

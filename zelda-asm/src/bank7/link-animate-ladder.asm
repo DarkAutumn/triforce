@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/link-animate-ladder.asm BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 3163-3448
-; SUBJECTS: (none)
+; SUBJECTS: Link
 ; TOPIC:    Ladder tables, Link end-of-move: ladder, warps, drawing, shield
 ; SEE ALSO:
 ; KEY FACTS:

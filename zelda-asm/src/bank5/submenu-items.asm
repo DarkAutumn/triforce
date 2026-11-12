@@ -31,7 +31,7 @@ DrawSubmenuItems:
     ; If you find one, then draw it.
     LDX #$1E
 :
-    LDA Items, X
+    LDA InvItems, X
     BNE @FoundBoomerang
     DEX
     CPX #$1C
@@ -52,7 +52,7 @@ DrawSubmenuItems:
     LDX #$01
 
 @LoopDrawItem:
-    LDA Items, X
+    LDA InvItems, X
 
     ; If at the compass item slot, check this level's compass.
     CPX #$10
@@ -75,7 +75,7 @@ DrawSubmenuItems:
     ; That's because we already prepared sprites for the potion.
     CPX #$0F
     BNE :+
-    LDA Potion
+    LDA InvPotion
     BNE @NextLoopDrawItem
 :
     TXA                         ; Save the item slot.
@@ -142,7 +142,7 @@ UpdateSubmenuSelection:
     ; If you find one, then use its item slot.
     LDX #$1E
 :
-    LDA Items, X
+    LDA InvItems, X
     BNE @DrawBreakoutItem
     DEX
     CPX #$1C
@@ -159,11 +159,11 @@ UpdateSubmenuSelection:
     ; If the letter is selected and there's no potion, then make
     ; the item value 1 in [04]. Except that, the call to 05:B81C
     ; below will overwrite [04].
-    LDA Items, X
+    LDA InvItems, X
     BEQ @AfterBreakoutItem
     CPX #$0F
     BNE :+
-    LDA Potion
+    LDA InvPotion
     BNE @AfterBreakoutItem
     LDA #$01                    ; Special case for letter selected and no potion.
 :
@@ -181,7 +181,7 @@ UpdateSubmenuSelection:
     CPY #$0F
     BNE @DrawCursor
     LDY #$07
-    LDA Items, Y
+    LDA InvItems, Y
     BEQ @DrawCursor
     ; Begin unverified code 17764
     STY SelectedItemSlot
@@ -261,7 +261,7 @@ UpdateSubmenuSelection:
     ; Else the selection changed. The new slot should have an item.
     ; If it does not, then cancel the "selection changed" tune.
     LDY SelectedItemSlot
-    LDA Items, Y
+    LDA InvItems, Y
     BNE :+
 
 @CancelTune:
@@ -286,7 +286,7 @@ LoopItemSlot:
     BEQ CheckBoomerangs         ; If this is the boomerang pseudo-slot. Go check boomerangs.
     CPY #$03
     BEQ CheckNextItem           ; If it's the bow slot, then skip it. You can't select it.
-    LDA Items, Y
+    LDA InvItems, Y
     BNE FoundSlot               ; Found an item. Go see if the slot is OK.
     CPY #$07
     BEQ CheckLetter             ; This is the potion slot, but no potion. Go check the letter.
@@ -299,7 +299,7 @@ CheckNextItem:
 FoundSlot:
     CPY #$02
     BNE SetSlotFound            ; If not the arrow, go set SelectedItemSlot.
-    LDA Bow
+    LDA InvBow
     BEQ LoopItemSlot            ; If we don't have the bow, then keep looking for a slot.
 
 SetSlotFound:
@@ -314,7 +314,7 @@ CheckBoomerangs:
     ; Start with the magical boomerang.
     LDY #$1E
 :
-    LDA Items, Y
+    LDA InvItems, Y
     BNE :+                      ; We have one of the boomerangs. Go use the boomerang pseudo-slot 0.
     DEY
     CPY #$1C
@@ -328,12 +328,12 @@ CheckBoomerangs:
 CheckLetter:
     ; Check the letter.
     LDY #$0F
-    LDA Items, Y
+    LDA InvItems, Y
     BNE :+                      ; If there's a letter, go see if there's a potion.
     LDY #$07
     BNE CheckNextItem           ; There's no letter, so continue searching where we left off.
 :
-    LDA Potion
+    LDA InvPotion
     BEQ SetSlotFound            ; If there's no potion, then go set SelectedItemSlot to the letter slot.
     ; Begin unverified code 17818
     LDY #$07

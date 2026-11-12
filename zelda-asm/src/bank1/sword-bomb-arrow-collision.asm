@@ -61,7 +61,7 @@ CheckMonsterSwordShotOrMagicShotCollision:
     ; - white sword:  $20
     ; - master sword: $40
     LDY #$40
-    LDA Items
+    LDA InvSword
     CMP #$03
     BEQ @CheckCollision
     LDY #$20
@@ -180,7 +180,7 @@ CheckMonsterSwordCollision:
     BNE L7595_Exit
 
     ; Look up and set the damage points for the sword type.
-    LDY Items
+    LDY InvSword
     LDA SwordDamagePoints-1, Y
 
 ; Params:

@@ -95,11 +95,11 @@ UpdateMode0Demo_Sub1:
     LDA CurSaveSlot
     ASL
     TAY
-    LDA FileAChecksums, Y       ; Does the checksum match?
+    LDA SaveFileAChecksums, Y       ; Does the checksum match?
     CMP $0E
     BNE @FormatA
     INY
-    LDA FileAChecksums, Y
+    LDA SaveFileAChecksums, Y
     CMP $0F
     BEQ @NextSlot               ; If not, then format the file.
 
@@ -231,10 +231,10 @@ FormatFileA:
     ASL
     TAY
     LDA $0E
-    STA FileAChecksums, Y
+    STA SaveFileAChecksums, Y
     INY
     LDA $0F
-    STA FileAChecksums, Y
+    STA SaveFileAChecksums, Y
     RTS
 
 CalculateAndStoreFileBChecksumUncommitted:

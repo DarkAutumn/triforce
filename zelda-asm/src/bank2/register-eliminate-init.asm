@@ -197,7 +197,7 @@ InitModeEandF_Full:
     LDY #$00
 
 @OverwriteName:
-    LDA Names, Y                ; The names are all arranged one after another.
+    LDA SaveSlotNames, Y                ; The names are all arranged one after another.
     STA DynTileBuf+3, X
     INX
     INY

@@ -36,7 +36,7 @@ SwitchProfileToSecondQuest:
     ; Clear $28 byte block of items.
     LDY #$27
 :
-    STA Items, Y
+    STA InvItems, Y
     DEY
     BPL :-
 
@@ -45,7 +45,7 @@ SwitchProfileToSecondQuest:
     STA HeartValues
     DEC HeartPartial
     LDA #$08
-    STA MaxBombs
+    STA InvMaxBombs
     LDY CurSaveSlot
     LDA #$01
     STA QuestNumbers, Y

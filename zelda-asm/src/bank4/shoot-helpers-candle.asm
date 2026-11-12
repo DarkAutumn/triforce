@@ -35,7 +35,7 @@ _ShootIfWanted:
     STA $00
 
     ; If the monster does not want to shoot, then return C=0.
-    LDA ObjWantsToShoot, X
+    LDA Shooter_ObjWantsToShoot, X
     BEQ ReturnDidNotShoot
 
 ; Params:
@@ -59,12 +59,12 @@ ShootLimited:
     LDA $00
     CMP #$53
     BCC Shoot
-    LDA ActiveMonsterShots
+    LDA MonsterShotCount
     CMP #$04
     BCS ReturnDidNotShoot
 
     ; Else increase the number of active shots.
-    INC ActiveMonsterShots
+    INC MonsterShotCount
 
 ; Params:
 ; [00]: shot object type
@@ -122,7 +122,7 @@ UpdateCandle_Begin:
     BEQ UpdateCandle_Done       ; If it's not a dark room, return.
     LDA #$C0                    ; Start a fade-to-light cycle (reverse of $40).
     STA FadeCycle
-    INC BrighteningRoom
+    INC IsRoomBrightening
 
 L_Candle_IncState:
     INC CandleState
@@ -133,7 +133,7 @@ UpdateCandle_Done:
 L_Candle_StopBrightening:
     ; Stop brightening the room, and go set the candle state to done.
     LDA #$00
-    STA BrighteningRoom
+    STA IsRoomBrightening
     BEQ L_Candle_IncState
 
 UpdateCandle_Brightening:

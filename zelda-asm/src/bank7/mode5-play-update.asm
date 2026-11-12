@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/mode5-play-update.asm  BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 1811-2135
-; SUBJECTS: (none)
+; SUBJECTS: Link
 ; TOPIC:    UpdateMode5Play, object loop, chase target, UpdatePlayer
 ; SEE ALSO:
 ; KEY FACTS:
@@ -21,7 +21,7 @@ UpdateMode5Play:
     BNE L1EBF8_Exit
 
     ; If brightening the room, then animate it.
-    LDA BrighteningRoom
+    LDA IsRoomBrightening
     BEQ @CheckMenuAndPause
     LDA #$04
     JSR SwitchBank
@@ -29,9 +29,9 @@ UpdateMode5Play:
 
 @CheckMenuAndPause:
     ; Check menu and pause.
-    LDA MenuState
+    LDA SubmenuState
     BNE @CheckMenu              ; If the submenu is active, go update it.
-    LDA Paused
+    LDA PauseState
     CMP #$02
     BEQ @CheckPaused            ; If involuntarily paused, skip checking Select button here. But go do pause actions.
 
@@ -40,17 +40,17 @@ UpdateMode5Play:
     LDA ButtonsPressed
     AND #$20
     BEQ @CheckPaused            ; If pressed Select,
-    LDA Paused                  ; then toggle pause.
+    LDA PauseState                  ; then toggle pause.
     EOR #$01
-    STA Paused
+    STA PauseState
     BNE @CheckPaused            ; If not paused,
     LDA #$0F                    ; then enable sound.
-    STA ApuStatus_4015
+    STA ApuStatus
 
 @CheckPaused:
     ; If paused, then make sure to use NT 0,
     ; update hearts and rupees, and return.
-    LDA Paused
+    LDA PauseState
     BEQ @CheckMenu              ; If not paused, go update the submenu or world.
     LDA #$05
     JSR SwitchBank
@@ -63,7 +63,7 @@ UpdateMode5Play:
     LDA ButtonsDown             ; Save current direction from input buttons.
     AND #$0F
     STA ObjInputDir
-    LDA MenuState
+    LDA SubmenuState
     BEQ @NotInMenu              ; If not in the submenu, go check Start or update the world.
 
     ; In submenu.
@@ -77,7 +77,7 @@ UpdateMode5Play:
     LDA ButtonsPressed
     AND #$10
     BEQ BeginUpdateWorld        ; If Start not pressed, go update the world.
-    INC MenuState               ; Else set menu state 1 to start scrolling.
+    INC SubmenuState               ; Else set menu state 1 to start scrolling.
     RTS
 
 BeginUpdateWorld:
@@ -99,7 +99,7 @@ BeginUpdateWorld:
 
 @CheckChaseTarget:
     ; If Link can be chased, then set his coordinates as the target.
-    LDA ChaseOtherTarget
+    LDA IsChasingOtherTarget
     BNE @UpdateWeapons
     LDA ObjX
     STA ChaseTargetX
@@ -134,9 +134,9 @@ BeginUpdateWorld:
     ; Switch the flag indicating whether Link is the target.
     ; If the value is 0 (Link *is* the target), then
     ; skip this and go update objects.
-    LDA ChaseOtherTarget
+    LDA IsChasingOtherTarget
     EOR #$01
-    STA ChaseOtherTarget
+    STA IsChasingOtherTarget
     BEQ @LoopObject
 
     ; If Link's X has not changed since the last frame
@@ -298,7 +298,7 @@ UpdatePlayer:
     ;
     ; As far as I can tell, ObjInputDir could have been set to 0,
     ; instead of masking with $F0 for the same effect.
-    LDA LinkParalyzed
+    LDA IsLinkParalyzed
     BEQ :+
     LDA ObjInputDir
     AND #$F0

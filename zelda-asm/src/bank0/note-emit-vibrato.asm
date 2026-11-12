@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank0/note-emit-vibrato.asm  BANK: 0 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_00.asm 583-692
-; SUBJECTS: (none)
+; SUBJECTS: Audio
 ; TOPIC:    Square and triangle note emit, duty/sweep, vibrato
 ; SEE ALSO:
 ; KEY FACTS:
@@ -22,8 +22,8 @@
 ; Y: sweep byte
 ;
 SetSq0DutyAndSweep:
-    STY Sq0Sweep_4001
-    STX Sq0Duty_4000
+    STY Sq0Sweep
+    STX Sq0Duty
     RTS
 
 EmitSquareNoteWithDutyAndSweep0:
@@ -39,10 +39,10 @@ EmitSquareNote0:
     LDA NotePeriodTable+1, Y
     BEQ Audio_EmitNote_Return
     STA CurNoteLowPeriodSq0
-    STA Sq0Timer_4002
+    STA Sq0Timer
     LDA NotePeriodTable, Y
     ORA #$08
-    STA Sq0Length_4003
+    STA Sq0Length
 
 Audio_EmitNote_Return:
     RTS
@@ -52,8 +52,8 @@ Audio_EmitNote_Return:
 ; Y: sweep byte
 ;
 SetSq1DutyAndSweep:
-    STX Sq1Duty_4004
-    STY Sq1Sweep_4005
+    STX Sq1Duty
+    STY Sq1Sweep
     RTS
 
 EmitSquareNoteWithDutyAndSweep1:
@@ -73,10 +73,10 @@ EmitSquareNote1:
     LDA NotePeriodTable+1, Y
     BEQ Audio_EmitNote_Return
     STA CurNoteLowPeriodSq1
-    STA Sq1Timer_4006
+    STA Sq1Timer
     LDA NotePeriodTable, Y
     ORA #$08
-    STA Sq1Length_4007
+    STA Sq1Length
     RTS
 
 ; Params:
@@ -87,10 +87,10 @@ EmitTriangleNote:
     LDA NotePeriodTable+1, Y
     BEQ Audio_EmitNote_Return
     STA CurNoteLowPeriodTrg
-    STA TrgTimer_400A
+    STA TrgTimer
     LDA NotePeriodTable, Y
     ORA #$08
-    STA TrgLength_400B
+    STA TrgLength
     RTS
 
 ; Params:

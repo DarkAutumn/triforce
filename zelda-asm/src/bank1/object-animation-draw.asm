@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/object-animation-draw.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 4937-5245
-; SUBJECTS: (none)
+; SUBJECTS: Anim
 ; TOPIC:    Object animation tables, DrawObject routines
 ; SEE ALSO:
 ; KEY FACTS:

@@ -122,7 +122,7 @@ InitMode_EnterRoom:
     ; Store level block attribute byte F for convenience.
     LDY RoomId
     LDA LevelBlockAttrsF, Y
-    STA LevelBlockAttrsByteF
+    STA RoomAttrsF
     JSR ResetInvObjState
 
     ; There's more than one way to enter a room.

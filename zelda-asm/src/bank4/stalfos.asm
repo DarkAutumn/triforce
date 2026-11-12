@@ -47,7 +47,7 @@ UpdateStalfos:
     BPL @SetShootTimer
 
     ; If stalfos does not want to shoot, then go set the qspeed.
-    LDA ObjWantsToShoot, X
+    LDA Shooter_ObjWantsToShoot, X
     BEQ @SetSpeed
 
     ; Else not temporarily invincible, and shoot timer = 0,
@@ -96,7 +96,7 @@ UpdateStalfos:
     ; Shooting succeeded.
     ; Reset "wants to shoot" flag and the speed.
     LDA #$00
-    STA ObjWantsToShoot, X
+    STA Shooter_ObjWantsToShoot, X
 
 @ZeroSpeed:
     PLA                         ; Replace qspeed on the stack with 0.

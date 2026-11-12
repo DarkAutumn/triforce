@@ -11,7 +11,7 @@ lists its labels with line numbers.
 | [bank0/drive-audio-tune0.asm](../src/bank0/drive-audio-tune0.asm) | 130 | 4 |  | DriveAudio entry point; tune channel 0 scripts and driver |
 | [bank0/sound-effects.asm](../src/bank0/sound-effects.asm) | 203 | 12 |  | Noise effects: arrow, stairs, sword, flame, bomb, sea |
 | [bank0/tune1-and-samples.asm](../src/bank0/tune1-and-samples.asm) | 194 | 7 |  | Tune channel 1 scripts and driver; DMC samples |
-| [bank0/note-emit-vibrato.asm](../src/bank0/note-emit-vibrato.asm) | 129 | 9 |  | Square and triangle note emit, duty/sweep, vibrato |
+| [bank0/note-emit-vibrato.asm](../src/bank0/note-emit-vibrato.asm) | 129 | 9 | Audio | Square and triangle note emit, duty/sweep, vibrato |
 | [bank0/drive-song.asm](../src/bank0/drive-song.asm) | 381 | 11 |  | DriveSong: phrase sequencing, per-channel notes |
 | [bank0/song-note-tables.asm](../src/bank0/song-note-tables.asm) | 200 | 19 |  | Noise/note-length/period tables, envelopes; ISR stub, vectors |
 
@@ -22,46 +22,46 @@ lists its labels with line numbers.
 | [bank1/cave-init-person-text.asm](../src/bank1/cave-init-person-text.asm) | 269 | 10 |  | Person text data, money-game tables, InitCave, cave flags and wares |
 | [bank1/cave-person-prices.asm](../src/bank1/cave-person-prices.asm) | 290 | 13 |  | Cave person state machine, letter/potion shop, ware drawing, price list |
 | [bank1/person-textbox.asm](../src/bank1/person-textbox.asm) | 120 | 3 |  | Textbox typing, one character per 6 frames, unhalts Link |
-| [bank1/cave-shop.asm](../src/bank1/cave-shop.asm) | 194 | 5 |  | Shop purchase, item giveaway, heart requirement, door repair charge |
+| [bank1/cave-shop.asm](../src/bank1/cave-shop.asm) | 194 | 5 | Cave | Shop purchase, item giveaway, heart requirement, door repair charge |
 | [bank1/cave-hint-money-game.asm](../src/bank1/cave-hint-money-game.asm) | 170 | 8 |  | Paid hints, money game payout, secret rupee gift, credit/debit |
 | [bank1/underworld-person-init.asm](../src/bank1/underworld-person-init.asm) | 181 | 13 |  | Dungeon old men, life-or-money and Grumble init, text selectors |
-| [bank1/underworld-person-update.asm](../src/bank1/underworld-person-update.asm) | 178 | 11 |  | Dungeon old man update, fireballs when attacked, more-bombs offer |
+| [bank1/underworld-person-update.asm](../src/bank1/underworld-person-update.asm) | 178 | 11 | Person | Dungeon old man update, fireballs when attacked, more-bombs offer |
 | [bank1/life-or-money.asm](../src/bank1/life-or-money.asm) | 170 | 7 |  | Life-or-money man |
 | [bank1/grumble-goriya.asm](../src/bank1/grumble-goriya.asm) | 102 | 6 |  | Hungry Goriya takes the food; filler |
 | [bank1/copy-code-demo-patterns.asm](../src/bank1/copy-code-demo-patterns.asm) | 193 | 8 |  | Copy common code to RAM; demo pattern transfer and data |
 | [bank1/whirlwind.asm](../src/bank1/whirlwind.asm) | 287 | 11 |  | Recorder whirlwind: summon, pickup, destinations, drop-off |
-| [bank1/tile-block-power-triforce.asm](../src/bank1/tile-block-power-triforce.asm) | 220 | 10 |  | Block/rock/gravestone blocking Link; Triforce of Power fanfare |
+| [bank1/tile-block-power-triforce.asm](../src/bank1/tile-block-power-triforce.asm) | 220 | 10 | Unused | Block/rock/gravestone blocking Link; Triforce of Power fanfare |
 | [bank1/armos-ghini-spawn.asm](../src/bank1/armos-ghini-spawn.asm) | 166 | 3 |  | Touching armos statues or gravestones spawns Armos or Ghini |
 | [bank1/trap-rupee-stash.asm](../src/bank1/trap-rupee-stash.asm) | 333 | 11 |  | Blade traps; rupee stash room; filler |
 | [bank1/common-code-header.asm](../src/bank1/common-code-header.asm) | 149 | 1 |  | BANK_01_CODE segment (runs from RAM): imports and exports |
-| [bank1/status-bar-rupees.asm](../src/bank1/status-bar-rupees.asm) | 178 | 9 |  | BeginUpdateMode, rupee count ticking, status bar text |
+| [bank1/status-bar-rupees.asm](../src/bank1/status-bar-rupees.asm) | 178 | 9 | World | BeginUpdateMode, rupee count ticking, status bar text |
 | [bank1/modeb-cave-save-sprites.asm](../src/bank1/modeb-cave-save-sprites.asm) | 200 | 16 |  | Sound requests, mode B cave entry, save-slot addresses, sprite cycling, person blocking |
 | [bank1/format-decimal-hearts.asm](../src/bank1/format-decimal-hearts.asm) | 165 | 3 |  | Decimal formatting, heart row tiles |
 | [bank1/room-bounds.asm](../src/bank1/room-bounds.asm) | 223 | 9 |  | Silence sound, Link sprites behind doors, room boundary checks |
 | [bank1/qspeed-direction-math.asm](../src/bank1/qspeed-direction-math.asm) | 142 | 6 |  | Q-speed position fraction, opposite direction, Abs, Negate |
-| [bank1/shot-aim-boomerang-speed.asm](../src/bank1/shot-aim-boomerang-speed.asm) | 230 | 6 |  | MoveShot, direction/distance to target, diagonal speed, boomerang speed |
+| [bank1/shot-aim-boomerang-speed.asm](../src/bank1/shot-aim-boomerang-speed.asm) | 230 | 6 | Dir | MoveShot, direction/distance to target, diagonal speed, boomerang speed |
 | [bank1/bomb-candle-wield.asm](../src/bank1/bomb-candle-wield.asm) | 303 | 13 |  | Place bomb, candle fire, weapon placement, bomb flash |
 | [bank1/map-marker-curtain.asm](../src/bank1/map-marker-curtain.asm) | 209 | 12 |  | Status bar map marker, curtain effect, 16-bit add helpers |
 | [bank1/take-item.asm](../src/bank1/take-item.asm) | 450 | 22 |  | Item tables, room item flag, pickup range, TakeItem effects |
 | [bank1/world-fading.asm](../src/bank1/world-fading.asm) | 103 | 3 |  | Palette fade cycles, blank priority sprites |
-| [bank1/mazes-lost-woods-hills.asm](../src/bank1/mazes-lost-woods-hills.asm) | 119 | 5 |  | Lost Woods and Lost Hills maze steps; filler |
-| [bank1/object-animation-draw.asm](../src/bank1/object-animation-draw.asm) | 332 | 13 |  | Object animation tables, DrawObject routines |
-| [bank1/item-sprite-draw.asm](../src/bank1/item-sprite-draw.asm) | 231 | 12 |  | Item frame tiles, item sprite writers |
-| [bank1/monster-collisions.asm](../src/bank1/monster-collisions.asm) | 149 | 5 |  | CheckMonsterCollisions weapon dispatch, object midpoint, contact damage table |
-| [bank1/link-collision-harm.asm](../src/bank1/link-collision-harm.asm) | 253 | 6 |  | Link-vs-monster collision, shield, HarmLink, ring, death |
+| [bank1/mazes-lost-woods-hills.asm](../src/bank1/mazes-lost-woods-hills.asm) | 119 | 5 | Filler | Lost Woods and Lost Hills maze steps; filler |
+| [bank1/object-animation-draw.asm](../src/bank1/object-animation-draw.asm) | 332 | 13 | Anim | Object animation tables, DrawObject routines |
+| [bank1/item-sprite-draw.asm](../src/bank1/item-sprite-draw.asm) | 231 | 12 | Anim | Item frame tiles, item sprite writers |
+| [bank1/monster-collisions.asm](../src/bank1/monster-collisions.asm) | 149 | 5 | Person | CheckMonsterCollisions weapon dispatch, object midpoint, contact damage table |
+| [bank1/link-collision-harm.asm](../src/bank1/link-collision-harm.asm) | 253 | 6 | Link | Link-vs-monster collision, shield, HarmLink, ring, death |
 | [bank1/weapon-damage-death.asm](../src/bank1/weapon-damage-death.asm) | 224 | 8 |  | Boomerang stun, weapon hits, DealDamage, monster death, help-drop counters |
 | [bank1/sword-bomb-arrow-collision.asm](../src/bank1/sword-bomb-arrow-collision.asm) | 334 | 11 |  | Per-weapon damage: beam, magic, bomb, fire, sword, rod, arrow; parry |
 | [bank1/object-overlap-test.asm](../src/bank1/object-overlap-test.asm) | 157 | 4 |  | Weapon hotspot and object overlap tests |
-| [bank1/shove-knockback.asm](../src/bank1/shove-knockback.asm) | 268 | 3 |  | Knockback and invincibility frames; bank tail |
+| [bank1/shove-knockback.asm](../src/bank1/shove-knockback.asm) | 268 | 3 | Filler | Knockback and invincibility frames; bank tail |
 
 ## Bank 2 (`src/bank2.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
 | [bank2/common-patterns.asm](../src/bank2/common-patterns.asm) | 142 | 8 |  | Common CHR pattern blocks and transfer |
-| [bank2/mode0-demo.asm](../src/bank2/mode0-demo.asm) | 203 | 13 |  | Mode 0 demo init/update dispatch, save-slot info load |
+| [bank2/mode0-demo.asm](../src/bank2/mode0-demo.asm) | 203 | 13 | Mode0Demo | Mode 0 demo init/update dispatch, save-slot info load |
 | [bank2/demo-tables-init.asm](../src/bank2/demo-tables-init.asm) | 207 | 19 |  | Demo tables; init subphases, title/story palettes |
-| [bank2/demo-story-scroll.asm](../src/bank2/demo-story-scroll.asm) | 486 | 14 |  | Title wait, story scroll, item parade |
+| [bank2/demo-story-scroll.asm](../src/bank2/demo-story-scroll.asm) | 486 | 14 | Demo, Unused | Title wait, story scroll, item parade |
 | [bank2/title-animation.asm](../src/bank2/title-animation.asm) | 369 | 13 |  | Title triforce glow, waterfall, palette fade |
 | [bank2/register-eliminate-init.asm](../src/bank2/register-eliminate-init.asm) | 289 | 18 |  | Mode E/F tables and init |
 | [bank2/register-eliminate-update.asm](../src/bank2/register-eliminate-update.asm) | 200 | 5 |  | Register (ZELDA name check) and elimination updates |
@@ -86,59 +86,59 @@ lists its labels with line numbers.
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank4/walker-wanderer-common.asm](../src/bank4/walker-wanderer-common.asm) | 270 | 11 |  | Boss cry helpers, InitMonsterShot, InitWalker, standing fire, common wanderer AI |
+| [bank4/walker-wanderer-common.asm](../src/bank4/walker-wanderer-common.asm) | 270 | 11 | Unused, Wanderer | Boss cry helpers, InitMonsterShot, InitWalker, standing fire, common wanderer AI |
 | [bank4/goriya.asm](../src/bank4/goriya.asm) | 203 | 2 |  | Goriya update (shared by Lynel, Armos); boomerang throwing |
 | [bank4/push-block.asm](../src/bank4/push-block.asm) | 185 | 12 |  | Dungeon push block states; draw-over-Link sprite helpers |
-| [bank4/monster-shots-fireballs.asm](../src/bank4/monster-shots-fireballs.asm) | 327 | 13 |  | ShootFireball, UpdateMonsterShot, shot bounce/destroy, UpdateFireball |
-| [bank4/bubble-keese.asm](../src/bank4/bubble-keese.asm) | 163 | 10 |  | Bubble and Keese init/update, Keese flight |
-| [bank4/zol-gel.asm](../src/bank4/zol-gel.asm) | 356 | 15 |  | Zol states and split into Gels; Gel |
+| [bank4/monster-shots-fireballs.asm](../src/bank4/monster-shots-fireballs.asm) | 327 | 13 | Fireball | ShootFireball, UpdateMonsterShot, shot bounce/destroy, UpdateFireball |
+| [bank4/bubble-keese.asm](../src/bank4/bubble-keese.asm) | 163 | 10 | Flyer | Bubble and Keese init/update, Keese flight |
+| [bank4/zol-gel.asm](../src/bank4/zol-gel.asm) | 356 | 15 | Gel, Zol | Zol states and split into Gels; Gel |
 | [bank4/statues.asm](../src/bank4/statues.asm) | 202 | 7 |  | Dungeon statue fireball emitters |
 | [bank4/zora-ow-inits.asm](../src/bank4/zora-ow-inits.asm) | 215 | 13 |  | Zora spawn/update; inits for Tektite, Boulder, Leever, Octorok, Ghini, Peahat, pond fairy |
 | [bank4/moblin-lynel-shooting.asm](../src/bank4/moblin-lynel-shooting.asm) | 232 | 6 |  | Moblin, Lynel; shoot timer logic; monster arrow |
-| [bank4/tektite-boulder.asm](../src/bank4/tektite-boulder.asm) | 447 | 13 |  | Boulder spawner; Tektite/Boulder jumper physics |
-| [bank4/leever.asm](../src/bank4/leever.asm) | 397 | 12 |  | Blue and Red Leever; shared burrower code (Zora) |
+| [bank4/tektite-boulder.asm](../src/bank4/tektite-boulder.asm) | 447 | 13 | Jumper | Boulder spawner; Tektite/Boulder jumper physics |
+| [bank4/leever.asm](../src/bank4/leever.asm) | 397 | 12 | Burrower | Blue and Red Leever; shared burrower code (Zora) |
 | [bank4/octorok.asm](../src/bank4/octorok.asm) | 114 | 2 |  | Octorok update, rock shooting |
 | [bank4/ghini-armos.asm](../src/bank4/ghini-armos.asm) | 322 | 9 |  | Ghini; Armos tables, init, update |
-| [bank4/pond-fairy.asm](../src/bank4/pond-fairy.asm) | 204 | 4 |  | Pond fairy healing and orbiting hearts |
+| [bank4/pond-fairy.asm](../src/bank4/pond-fairy.asm) | 204 | 4 | PondFairy | Pond fairy healing and orbiting hearts |
 | [bank4/rock-wall-tree-secrets.asm](../src/bank4/rock-wall-tree-secrets.asm) | 315 | 11 |  | Push rock/gravestone, bombable rock wall, burnable tree, secret reveal |
 | [bank4/dock-raft.asm](../src/bank4/dock-raft.asm) | 127 | 2 |  | Dock tile object: raft boarding, ride, landing |
-| [bank4/flying-ghini-peahat.asm](../src/bank4/flying-ghini-peahat.asm) | 149 | 10 |  | Flying Ghini and Peahat |
-| [bank4/wallmaster.asm](../src/bank4/wallmaster.asm) | 452 | 12 |  | Wallmaster tables, emerge/grab states |
+| [bank4/flying-ghini-peahat.asm](../src/bank4/flying-ghini-peahat.asm) | 149 | 10 | Flyer | Flying Ghini and Peahat |
+| [bank4/wallmaster.asm](../src/bank4/wallmaster.asm) | 452 | 12 | Wallmaster | Wallmaster tables, emerge/grab states |
 | [bank4/rope.asm](../src/bank4/rope.asm) | 144 | 2 |  | Rope init (HP by quest) and rush at Link |
 | [bank4/stalfos.asm](../src/bank4/stalfos.asm) | 111 | 1 |  | Stalfos; second-quest sword shot |
 | [bank4/moldorm-init.asm](../src/bank4/moldorm-init.asm) | 81 | 1 |  | InitMoldorm: ten segments in two worms |
 | [bank4/aquamentus-digdogger-dodongo-inits.asm](../src/bank4/aquamentus-digdogger-dodongo-inits.asm) | 84 | 4 |  | Inits for Aquamentus, Digdogger, Dodongo |
-| [bank4/moldorm.asm](../src/bank4/moldorm.asm) | 260 | 9 |  | Moldorm update, chase/wander |
-| [bank4/digdogger.asm](../src/bank4/digdogger.asm) | 471 | 21 |  | Digdogger: flute split, update, move, collisions, draw |
-| [bank4/aquamentus.asm](../src/bank4/aquamentus.asm) | 279 | 11 |  | Aquamentus; boss hit reaction, boss sprite writer |
-| [bank4/dodongo.asm](../src/bank4/dodongo.asm) | 634 | 31 |  | Dodongo states, bloat/stun, bomb eating, collisions, draw |
+| [bank4/moldorm.asm](../src/bank4/moldorm.asm) | 260 | 9 | Flyer, Moldorm | Moldorm update, chase/wander |
+| [bank4/digdogger.asm](../src/bank4/digdogger.asm) | 471 | 21 | Digdogger | Digdogger: flute split, update, move, collisions, draw |
+| [bank4/aquamentus.asm](../src/bank4/aquamentus.asm) | 279 | 11 | Aquamentus | Aquamentus; boss hit reaction, boss sprite writer |
+| [bank4/dodongo.asm](../src/bank4/dodongo.asm) | 634 | 31 | Anim, Dodongo | Dodongo states, bloat/stun, bomb eating, collisions, draw |
 | [bank4/darknut-gibdo.asm](../src/bank4/darknut-gibdo.asm) | 79 | 3 |  | InitDarknut, UpdateGibdo, UpdateDarknut |
-| [bank4/pols-voice.asm](../src/bank4/pols-voice.asm) | 320 | 11 |  | Pols Voice walk/jump |
+| [bank4/pols-voice.asm](../src/bank4/pols-voice.asm) | 320 | 11 | PolsVoice | Pols Voice walk/jump |
 | [bank4/like-like.asm](../src/bank4/like-like.asm) | 109 | 1 |  | Like-Like: capture, magic shield eating |
 | [bank4/vire.asm](../src/bank4/vire.asm) | 128 | 7 |  | Vire: hop, split into red Keese |
-| [bank4/wizzrobe.asm](../src/bank4/wizzrobe.asm) | 663 | 43 |  | Blue and Red Wizzrobe: walk/teleport/fade, magic shots |
+| [bank4/wizzrobe.asm](../src/bank4/wizzrobe.asm) | 663 | 43 | Wizzrobe | Blue and Red Wizzrobe: walk/teleport/fade, magic shots |
 | [bank4/gleeok-manhandla-gohma-inits.asm](../src/bank4/gleeok-manhandla-gohma-inits.asm) | 211 | 8 |  | Inits for Gleeok, Manhandla, Gohma, Gleeok head |
-| [bank4/manhandla.asm](../src/bank4/manhandla.asm) | 375 | 5 |  | Manhandla |
-| [bank4/gohma.asm](../src/bank4/gohma.asm) | 328 | 7 |  | Gohma: eye states, arrow in the eye |
-| [bank4/gleeok.asm](../src/bank4/gleeok.asm) | 577 | 28 |  | Flying Gleeok head; UpdateGleeok; necks |
-| [bank4/gleeok-head-body.asm](../src/bank4/gleeok-head-body.asm) | 436 | 15 |  | Gleeok head/segment draw and collisions, body |
+| [bank4/manhandla.asm](../src/bank4/manhandla.asm) | 375 | 5 | Manhandla | Manhandla |
+| [bank4/gohma.asm](../src/bank4/gohma.asm) | 328 | 7 | Gohma | Gohma: eye states, arrow in the eye |
+| [bank4/gleeok.asm](../src/bank4/gleeok.asm) | 577 | 28 | Flyer, Gleeok | Flying Gleeok head; UpdateGleeok; necks |
+| [bank4/gleeok-head-body.asm](../src/bank4/gleeok-head-body.asm) | 436 | 15 | Gleeok | Gleeok head/segment draw and collisions, body |
 | [bank4/zelda-lanmola-inits.asm](../src/bank4/zelda-lanmola-inits.asm) | 83 | 4 |  | Guard fire tables, InitZelda, Lanmola init |
 | [bank4/patra-ganon-inits.asm](../src/bank4/patra-ganon-inits.asm) | 72 | 2 |  | InitPatra, InitGanon |
 | [bank4/zelda-guard-fire.asm](../src/bank4/zelda-guard-fire.asm) | 99 | 6 |  | UpdateZelda, guard fire, dead dummy type |
 | [bank4/lanmola.asm](../src/bank4/lanmola.asm) | 371 | 4 |  | Lanmola segments and head |
-| [bank4/patra.asm](../src/bank4/patra.asm) | 276 | 12 |  | Patra and its children |
-| [bank4/ganon.asm](../src/bank4/ganon.asm) | 284 | 12 |  | Ganon phases, teleport, shooting, dying |
-| [bank4/ganon-draw-collisions.asm](../src/bank4/ganon-draw-collisions.asm) | 480 | 23 |  | Ganon draw, collisions, ashes, triforce |
+| [bank4/patra.asm](../src/bank4/patra.asm) | 276 | 12 | Flyer | Patra and its children |
+| [bank4/ganon.asm](../src/bank4/ganon.asm) | 284 | 12 | Ganon | Ganon phases, teleport, shooting, dying |
+| [bank4/ganon-draw-collisions.asm](../src/bank4/ganon-draw-collisions.asm) | 480 | 23 | Ganon | Ganon draw, collisions, ashes, triforce |
 | [bank4/drop-items.asm](../src/bank4/drop-items.asm) | 338 | 13 |  | HP nibble extract, drop tables, SetUpDroppedItem, UpdateItem, DestroyMonster |
 | [bank4/shoot-helpers-candle.asm](../src/bank4/shoot-helpers-candle.asm) | 157 | 12 |  | Shoot helpers; candle room brightening, dark room test |
-| [bank4/fairy-flyer-common.asm](../src/bank4/fairy-flyer-common.asm) | 465 | 33 |  | Item fairy; shared flyer state machine |
+| [bank4/fairy-flyer-common.asm](../src/bank4/fairy-flyer-common.asm) | 465 | 33 | Flyer | Item fairy; shared flyer state machine |
 | [bank4/orbit-rotation-math.asm](../src/bank4/orbit-rotation-math.asm) | 216 | 4 |  | Rotation math; bank tail |
 
 ## Bank 5 (`src/bank5.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank5/submenu-states.asm](../src/bank5/submenu-states.asm) | 428 | 22 |  | Submenu state machine, triforce display |
+| [bank5/submenu-states.asm](../src/bank5/submenu-states.asm) | 428 | 22 | Submenu | Submenu state machine, triforce display |
 | [bank5/scroll-world.asm](../src/bank5/scroll-world.asm) | 188 | 8 |  | Per-frame world scrolling |
 | [bank5/mode7-scroll-init.asm](../src/bank5/mode7-scroll-init.asm) | 342 | 17 |  | Mode 7 init: next room layout, dark-room fade |
 | [bank5/mode7-scroll-update.asm](../src/bank5/mode7-scroll-update.asm) | 251 | 18 |  | Mode 7 update submodes |
@@ -151,13 +151,13 @@ lists its labels with line numbers.
 | [bank5/mode8-continue-mode10-stairs.asm](../src/bank5/mode8-continue-mode10-stairs.asm) | 171 | 9 |  | Continue/Save/Retry menu; stairs descent |
 | [bank5/underworld-secrets.asm](../src/bank5/underworld-secrets.asm) | 208 | 13 |  | Dungeon secret triggers: all dead, ringleader, push block, last boss |
 | [bank5/mode11-death.asm](../src/bank5/mode11-death.asm) | 227 | 21 |  | Death update |
-| [bank5/border-input-mask.asm](../src/bank5/border-input-mask.asm) | 159 | 4 |  | Border bounds masking the A button and directions |
+| [bank5/border-input-mask.asm](../src/bank5/border-input-mask.asm) | 159 | 4 | Link | Border bounds masking the A button and directions |
 | [bank5/wield-items.asm](../src/bank5/wield-items.asm) | 215 | 13 |  | Wield sword, boomerang, arrow, food, potion, rod; B item dispatch |
 | [bank5/cave-cellar-exits.asm](../src/bank5/cave-cellar-exits.asm) | 175 | 6 |  | Leaving cellars, caves, shortcut stairs |
 | [bank5/ladder.asm](../src/bank5/ladder.asm) | 210 | 2 |  | Ladder rules, movement override, drawing |
 | [bank5/edge-spawn-cell.asm](../src/bank5/edge-spawn-cell.asm) | 107 | 1 |  | Edge cell search for monster spawns |
-| [bank5/room-history-ow.asm](../src/bank5/room-history-ow.asm) | 161 | 10 |  | Mode B/C/9 init tables; overworld room history and kill counts |
-| [bank5/doorway.asm](../src/bank5/doorway.asm) | 271 | 9 |  | Doorway detection and movement restriction |
+| [bank5/room-history-ow.asm](../src/bank5/room-history-ow.asm) | 161 | 10 | Unused | Mode B/C/9 init tables; overworld room history and kill counts |
+| [bank5/doorway.asm](../src/bank5/doorway.asm) | 271 | 9 | Link, Unused | Doorway detection and movement restriction |
 | [bank5/touch-door.asm](../src/bank5/touch-door.asm) | 130 | 11 |  | Door type handlers: wall, false wall, bombable, key, shutter |
 | [bank5/room-history-uw.asm](../src/bank5/room-history-uw.asm) | 121 | 2 |  | Dungeon room history, kill counts, non-recurring monsters |
 | [bank5/boss-sound-door-face.asm](../src/bank5/boss-sound-door-face.asm) | 111 | 3 |  | Boss roar; padding; door face tile helper |
@@ -171,13 +171,13 @@ lists its labels with line numbers.
 | [bank5/layout-room-ow.asm](../src/bank5/layout-room-ow.asm) | 351 | 14 |  | Overworld squares, layout, tile objects, cave/cellar layout |
 | [bank5/ow-shortcut-map-square.asm](../src/bank5/ow-shortcut-map-square.asm) | 309 | 6 |  | Shortcut stairs, map square change; padding |
 | [bank5/mode3-mode6-init.asm](../src/bank5/mode3-mode6-init.asm) | 241 | 17 |  | Unfurl submodes, object room bounds, leave room |
-| [bank5/cave-cellar-enter.asm](../src/bank5/cave-cellar-enter.asm) | 249 | 23 |  | Mode A; cave/cellar walk-in; heart fill |
-| [bank5/submenu-row-transfer.asm](../src/bank5/submenu-row-transfer.asm) | 132 | 9 |  | Submenu row transfer while scrolling |
-| [bank5/link-handle-input.asm](../src/bank5/link-handle-input.asm) | 354 | 9 |  | Link_HandleInput: buttons, grid turning rules, speed |
+| [bank5/cave-cellar-enter.asm](../src/bank5/cave-cellar-enter.asm) | 249 | 23 | World | Mode A; cave/cellar walk-in; heart fill |
+| [bank5/submenu-row-transfer.asm](../src/bank5/submenu-row-transfer.asm) | 132 | 9 | Submenu | Submenu row transfer while scrolling |
+| [bank5/link-handle-input.asm](../src/bank5/link-handle-input.asm) | 354 | 9 | Link | Link_HandleInput: buttons, grid turning rules, speed |
 | [bank5/warps-stairs-caves.asm](../src/bank5/warps-stairs-caves.asm) | 168 | 5 |  | Stairs/cave/dungeon entrance detection, kill count save |
 | [bank5/save-ram-clear-ram.asm](../src/bank5/save-ram-clear-ram.asm) | 84 | 2 |  | InitSaveRam, ClearRam, first edge spawn cell, RNG seed |
 | [bank5/next-room-calc.asm](../src/bank5/next-room-calc.asm) | 100 | 6 |  | Next room by direction; invalid room reloads overworld |
-| [bank5/submenu-map.asm](../src/bank5/submenu-map.asm) | 199 | 5 |  | Submenu dungeon map, compass and map tests |
+| [bank5/submenu-map.asm](../src/bank5/submenu-map.asm) | 199 | 5 | Submenu | Submenu dungeon map, compass and map tests |
 | [bank5/door-flags-dark-room.asm](../src/bank5/door-flags-dark-room.asm) | 105 | 4 |  | Open doorway mask, door flags, dark room test |
 | [bank5/submenu-items.asm](../src/bank5/submenu-items.asm) | 378 | 14 |  | Submenu items, cursor, selection |
 | [bank5/create-room-objects.asm](../src/bank5/create-room-objects.asm) | 156 | 3 |  | Room item, push block, overworld heart container; bank tail |
@@ -198,27 +198,27 @@ lists its labels with line numbers.
 |---|---|---|---|---|
 | [bank7/run-game-nmi.asm](../src/bank7/run-game-nmi.asm) | 234 | 8 |  | PCM samples, RunGame, NMI frame handler |
 | [bank7/ppu-tablejump-input.asm](../src/bank7/ppu-tablejump-input.asm) | 202 | 8 |  | PPU reset, TableJump, sprite hiding, controller reading |
-| [bank7/next-room-room-flags.asm](../src/bank7/next-room-room-flags.asm) | 86 | 9 |  | Triforce marker, CalculateNextRoom, MarkRoomVisited, GetRoomFlags |
+| [bank7/next-room-room-flags.asm](../src/bank7/next-room-room-flags.asm) | 86 | 9 | Room | Triforce marker, CalculateNextRoom, MarkRoomVisited, GetRoomFlags |
 | [bank7/room-item-draw.asm](../src/bank7/room-item-draw.asm) | 185 | 7 |  | Room item on a monster, item drawing |
 | [bank7/status-bar-lift-item.asm](../src/bank7/status-bar-lift-item.asm) | 179 | 14 |  | Status bar items; Link lifting an item |
 | [bank7/tile-obj-tiles.asm](../src/bank7/tile-obj-tiles.asm) | 139 | 3 |  | GetUniqueRoomId, tile object tiles, FillTileMap |
 | [bank7/init-mode-dispatch.asm](../src/bank7/init-mode-dispatch.asm) | 261 | 18 |  | InitMode jump table, several mode inits, room history |
 | [bank7/init-mode5-play.asm](../src/bank7/init-mode5-play.asm) | 173 | 6 |  | Boss/tile-object palettes, InitMode5Play |
 | [bank7/update-mode-dispatch.asm](../src/bank7/update-mode-dispatch.asm) | 188 | 17 |  | UpdateMode jump table, modes 2/3/4/6, GoToNextMode |
-| [bank7/mode5-play-update.asm](../src/bank7/mode5-play-update.asm) | 342 | 7 |  | UpdateMode5Play, object loop, chase target, UpdatePlayer |
+| [bank7/mode5-play-update.asm](../src/bank7/mode5-play-update.asm) | 342 | 7 | Link | UpdateMode5Play, object loop, chase target, UpdatePlayer |
 | [bank7/tile-collision.asm](../src/bank7/tile-collision.asm) | 199 | 4 |  | Walkable tiles, colliding tile lookup |
-| [bank7/shove.asm](../src/bank7/shove.asm) | 186 | 4 |  | Knockback movement |
+| [bank7/shove.asm](../src/bank7/shove.asm) | 186 | 4 | Obj | Knockback movement |
 | [bank7/flute.asm](../src/bank7/flute.asm) | 116 | 3 |  | Flute secrets table, WieldFlute |
-| [bank7/walker-move.asm](../src/bank7/walker-move.asm) | 240 | 2 |  | Walker_Move (Link and monsters), MoveObject |
-| [bank7/walker-collision-screen-edge.asm](../src/bank7/walker-collision-screen-edge.asm) | 365 | 22 |  | Walker tile collision, CheckScreenEdge, GoToNextModeFromPlay, alternate directions |
-| [bank7/link-animate-ladder.asm](../src/bank7/link-animate-ladder.asm) | 309 | 13 |  | Ladder tables, Link end-of-move: ladder, warps, drawing, shield |
+| [bank7/walker-move.asm](../src/bank7/walker-move.asm) | 240 | 2 | Walker | Walker_Move (Link and monsters), MoveObject |
+| [bank7/walker-collision-screen-edge.asm](../src/bank7/walker-collision-screen-edge.asm) | 365 | 22 | Walker | Walker tile collision, CheckScreenEdge, GoToNextModeFromPlay, alternate directions |
+| [bank7/link-animate-ladder.asm](../src/bank7/link-animate-ladder.asm) | 309 | 13 | Link | Ladder tables, Link end-of-move: ladder, warps, drawing, shield |
 | [bank7/sword-shot-magic-shot.asm](../src/bank7/sword-shot-magic-shot.asm) | 331 | 9 |  | Sword beam / magic shot |
 | [bank7/boomerang-arrow-food.asm](../src/bank7/boomerang-arrow-food.asm) | 353 | 15 |  | Food, boomerang tables, arrow/boomerang flight |
 | [bank7/boomerang-return-draw.asm](../src/bank7/boomerang-return-draw.asm) | 285 | 6 |  | Boomerang slow/return states, drawing |
 | [bank7/sword-and-rod.asm](../src/bank7/sword-and-rod.asm) | 336 | 8 |  | Rod or arrow, sword or rod update, MakeSwordShot |
 | [bank7/fire.asm](../src/bank7/fire.asm) | 137 | 3 |  | Candle fire |
-| [bank7/bomb.asm](../src/bank7/bomb.asm) | 251 | 16 |  | Bomb timers, bombable wall hotspots, UpdateBomb |
-| [bank7/object-animation.asm](../src/bank7/object-animation.asm) | 252 | 10 |  | Spawn cloud, death sparkle, walking animation |
+| [bank7/bomb.asm](../src/bank7/bomb.asm) | 251 | 16 | Bomb | Bomb timers, bombable wall hotspots, UpdateBomb |
+| [bank7/object-animation.asm](../src/bank7/object-animation.asm) | 252 | 10 | Anim | Spawn cloud, death sparkle, walking animation |
 | [bank7/object-update-table.asm](../src/bank7/object-update-table.asm) | 271 | 7 |  | Type attributes, HP pairs, UpdateObject table, death to drop |
 | [bank7/object-init-table.asm](../src/bank7/object-init-table.asm) | 242 | 2 |  | InitObject and its table |
 | [bank7/object-stubs-destroy-monster.asm](../src/bank7/object-stubs-destroy-monster.asm) | 138 | 16 |  | Bank-1 trampolines, invincibility timer, dead dummy, DestroyMonster |

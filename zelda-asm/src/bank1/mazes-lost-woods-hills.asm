@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/mazes-lost-woods-hills.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 4832-4935
-; SUBJECTS: (none)
+; SUBJECTS: Filler
 ; TOPIC:    Lost Woods and Lost Hills maze steps; filler
 ; SEE ALSO:
 ; KEY FACTS:

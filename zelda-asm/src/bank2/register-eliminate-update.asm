@@ -32,7 +32,7 @@ UpdateModeERegister:
     ;
     ; Silence tune channel 1.
     LDA #$00
-    STA Tune1
+    STA CurTune1
     STA $0425                   ; Reset SaveFileNameIndex.
     STA $0423                   ; Reset SaveSlotNameIndex.
     STA CurSaveSlot             ; Reset CurSaveSlot.
@@ -58,7 +58,7 @@ UpdateModeERegister:
 
 @CopyName:
     LDY $0423                   ; Copy next character from save slot info to file B.
-    LDA Names, Y
+    LDA SaveSlotNames, Y
     LDY $0425                   ; SaveFileNameIndex
     STA ($C4), Y
     CMP #$24
@@ -87,7 +87,7 @@ UpdateModeERegister:
     LDX #$00                    ; Compare the name to "ZELDA".
 
 @CompareToZelda:
-    LDA Names, Y
+    LDA SaveSlotNames, Y
     CMP ZeldaString, X
     BNE @FlagBReady             ; If there's any mismatch, then skip the rest.
     INY
@@ -167,7 +167,7 @@ UpdateModeFElimination:
 ModeE_ResetVariables:
     ; Assumes that zero is passed in A.
     STA CharBoardIndex
-    STA InitializedNameField
+    STA IsNameFieldInitialized
     STA NameCharOffset
     RTS
 

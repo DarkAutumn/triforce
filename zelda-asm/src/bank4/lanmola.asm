@@ -43,7 +43,7 @@ UpdateLamnola:
 
     ; The speed is 1 or 2. By swapping them, you get sprite attributes
     ; to store in [03].
-    LDA Lamnola_Speed
+    LDA Lanmola_Speed
     EOR #$03
     STA $03
 
@@ -91,7 +91,7 @@ UpdateLamnola:
 @FindTail:
     INY
     LDA ObjType+1, Y
-    CMP Lamnola_Type
+    CMP Lanmola_Type
     BNE @FindTail
 
     ; Set the timer for the dead dummy object that will replace the tail.
@@ -182,7 +182,7 @@ Lamnola_UpdateHead:
 
     ; Make a mask of the inverted bits of the opposite direction.
     EOR #$0F
-    STA LamnolaViableDirMask
+    STA LanmolaViableDirMask
 
     ; There's a 50% chance of going to try to turn toward Link.
     LDA Random, X
@@ -214,7 +214,7 @@ Lamnola_UpdateHead:
 :
     ; If the current direction bit is masked off, then we've reached
     ; the opposite direction. Loop again.
-    BIT LamnolaViableDirMask
+    BIT LanmolaViableDirMask
     BEQ @LoopFindPerpendicular
 
     ; If Y register >= $40, then break out of the loop.
@@ -255,7 +255,7 @@ Lamnola_UpdateHead:
     ; If the current direction bit is not masked off, then go check the
     ; room boundary in this direction.
     ; Else we've reached the opposite direction. Loop again.
-    BIT LamnolaViableDirMask
+    BIT LanmolaViableDirMask
     BNE @SetDirAndCheckTiles
     BEQ @LoopFindNonOpposite
 
@@ -263,7 +263,7 @@ Lamnola_UpdateHead:
     ; We found a direction that was not blocked by the room boundary.
     ; Check tile collision. If blocked by a tile, then go look for another direction.
     JSR GetCollidingTileMoving
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS @FindNonOpposite
 
 @Exit:
@@ -301,7 +301,7 @@ Lamnola_UpdateHead:
     ; If the horizontal direction toward Link is not allowed, then
     ; go check the vertical direction.
     LDA $02
-    BIT LamnolaViableDirMask
+    BIT LanmolaViableDirMask
     BEQ @SetVertical
 
     ; If the horizontal direction toward Link is the same direction
@@ -334,7 +334,7 @@ Lamnola_Move:
     BEQ @Left
     LDA ObjX, X
     CLC
-    ADC Lamnola_Speed
+    ADC Lanmola_Speed
     STA ObjX, X
 
 @Left:
@@ -344,7 +344,7 @@ Lamnola_Move:
     BIT $02
     BEQ @Down
     LDA ObjX, X
-    SBC Lamnola_Speed
+    SBC Lanmola_Speed
     STA ObjX, X
 
 @Down:
@@ -354,7 +354,7 @@ Lamnola_Move:
     BIT $02
     BEQ @Up
     LDA ObjY, X
-    ADC Lamnola_Speed
+    ADC Lanmola_Speed
     STA ObjY, X
 
 @Up:
@@ -364,7 +364,7 @@ Lamnola_Move:
     BIT $02
     BEQ @Exit
     LDA ObjY, X
-    SBC Lamnola_Speed
+    SBC Lanmola_Speed
     STA ObjY, X
 
 @Exit:

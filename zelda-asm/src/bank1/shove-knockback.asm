@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/shove-knockback.asm    BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 6495-6749
-; SUBJECTS: (none)
+; SUBJECTS: Filler
 ; TOPIC:    Knockback and invincibility frames; bank tail
 ; SEE ALSO:
 ; KEY FACTS:

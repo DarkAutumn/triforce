@@ -22,8 +22,8 @@ SilenceAllSound:
     STA Tune0Request
     STA EffectRequest
     ASL
-    STA Tune0
-    STA Tune1
+    STA CurTune0
+    STA CurTune1
     RTS
 
 SpriteRelativeExtents:

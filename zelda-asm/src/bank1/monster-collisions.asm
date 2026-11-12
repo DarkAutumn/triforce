@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/monster-collisions.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 5457-5590
-; SUBJECTS: (none)
+; SUBJECTS: Person
 ; TOPIC:    CheckMonsterCollisions weapon dispatch, object midpoint, contact damage table
 ; SEE ALSO:
 ; KEY FACTS:
@@ -20,7 +20,7 @@ Person_DrawAndCheckCollisions_Common:
     ; enable fireballs from the two flames, and reset the metastate.
     LDA ObjMetastate+1
     BEQ Person_Draw
-    STA PersonFireballsEnabled
+    STA IsPersonFireballsEnabled
     LDA #$00
     STA ObjMetastate+1
 

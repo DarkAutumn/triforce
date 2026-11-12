@@ -33,7 +33,7 @@ CommonPatternVramAddrs:
 
 TransferCommonPatterns:
     JSR TurnOffAllVideo
-    LDA PpuStatus_2002          ; Clear address latch and scroll.
+    LDA PpuStatus          ; Clear address latch and scroll.
 
 @LoopBlock:
     LDA PatternBlockIndex
@@ -48,7 +48,7 @@ TransferCommonPatterns:
     LDA CommonPatternBlockSizes, X
     STA $02
     LDA CommonPatternVramAddrs, X
-    STA PpuAddr_2006
+    STA PpuAddr
     INX
     LDA CommonPatternBlockAddrs, X
     STA $01
@@ -62,7 +62,7 @@ TransferCommonPatterns:
     CMP #$03
     BNE @LoopBlock
     LDA #$5A                    ; Mark this block copied.
-    STA TransferredCommonPatterns
+    STA HasCommonPatterns
     LDA #$00                    ; Reset pattern block index.
     STA PatternBlockIndex
     RTS
@@ -73,13 +73,13 @@ TransferCommonPatterns:
 ; A: low byte of desination VRAM address
 ;
 TransferPatternBlock_Bank2:
-    STA PpuAddr_2006
+    STA PpuAddr
     LDY #$00
 
 @Loop:
     ; Load and transfer 1 byte to VRAM.
     LDA ($00), Y
-    STA PpuData_2007
+    STA PpuData
 
     ; Increment the 16-bit source address at [00:01].
     LDA $00

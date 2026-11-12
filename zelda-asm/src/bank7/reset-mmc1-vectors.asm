@@ -22,15 +22,15 @@ IsrReset:
     SEI                         ; Disable interrupts.
     CLD                         ; Clear decimal mode.
     LDA #$00
-    STA PpuControl_2000         ; Set the PPU to a base state with no NMI.
+    STA PpuControl         ; Set the PPU to a base state with no NMI.
     LDX #$FF
     TXS                         ; Set the stack to $01FF.
 :
-    LDA PpuStatus_2002          ; Wait for one VBLANK.
+    LDA PpuStatus          ; Wait for one VBLANK.
     AND #$80
     BEQ :-
 :
-    LDA PpuStatus_2002          ; Wait for another VBLANK.
+    LDA PpuStatus          ; Wait for another VBLANK.
     AND #$80                    ;   in case the first was left over from a previous run.
     BEQ :-
     ORA #$FF

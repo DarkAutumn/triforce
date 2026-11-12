@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/wizzrobe.asm           BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 7027-7636
-; SUBJECTS: (none)
+; SUBJECTS: Wizzrobe
 ; TOPIC:    Blue and Red Wizzrobe: walk/teleport/fade, magic shots
 ; SEE ALSO:
 ; KEY FACTS:
@@ -184,21 +184,21 @@ BlueWizzrobe_MoveAndCheckTile:
 ; Increment the turn counter.
 ;
 BlueWizzrobe_AdvanceCounterAndTurnTowardLinkIfNeeded:
-    INC BlueWizzrobe_ObjTurnCounter, X
+    INC Wizzrobe_ObjBlueTurnCounter, X
 
 ; Description:
 ; When the counter is a multiple of $40, switch between facing
 ; toward Link horizontally or vertically. All other times, return.
 ;
 L_BlueWizzrobe_TurnTowardLinkIfNeeded:
-    LDA BlueWizzrobe_ObjTurnCounter, X
+    LDA Wizzrobe_ObjBlueTurnCounter, X
     AND #$3F
     BNE L11EAF_Exit
 
 BlueWizzrobe_TurnTowardLink:
     ; If the multiple of $40 is even, then turn horizontally,
     ; else vertically.
-    LDA BlueWizzrobe_ObjTurnCounter, X
+    LDA Wizzrobe_ObjBlueTurnCounter, X
     AND #$40
     BNE @TurnVertically
 
@@ -314,9 +314,9 @@ BeginTeleporting:
     STA ObjRemDistance, X
 
     ; Flip bit 6 of turn counter; so that we change the axis to turn toward.
-    LDA BlueWizzrobe_ObjTurnCounter, X
+    LDA Wizzrobe_ObjBlueTurnCounter, X
     EOR #$40
-    STA BlueWizzrobe_ObjTurnCounter, X
+    STA Wizzrobe_ObjBlueTurnCounter, X
 
     ; Reset the timer to note that the monster is teleporting.
     ; Align with the nearest square.
@@ -415,7 +415,7 @@ Wizzrobe_GetBaseCollidableTile:
     LDA ObjCollidedTile, X
 
     ; Return C=0 if walkable.
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
 
     ; Store the last collided tile.
     STA Wizzrobe_ObjLastTile, X
@@ -504,7 +504,7 @@ UpdateRedWizzrobe:
     JMP Wizzrobe_DrawAndCheckCollisions
 :
     ; Else increase animation counter and decrease state every frame.
-    INC RedWizzrobe_ObjAnimCounter, X
+    INC Wizzrobe_ObjRedAnimCounter, X
     DEC ObjState, X
 
     ; Shift the state right 6 times to get the index (0 to 3) of a state routine.
@@ -548,7 +548,7 @@ UpdateRedWizzrobe_1:
 :
     ; Increment the fade counter. Depending on the low bit,
     ; the monster will be drawn every other frame.
-    INC RedWizzrobe_ObjFadeCounter, X
+    INC Wizzrobe_ObjRedFadeCounter, X
     JMP Wizzrobe_DrawAndCheckCollisionsIntermittently
 
 UpdateRedWizzrobe_3:
@@ -637,7 +637,7 @@ Wizzrobe_DrawAndCheckCollisions:
     JSR CheckLinkCollision
 
     ; Every 4 frames switch between two frame images.
-    LDA RedWizzrobe_ObjAnimCounter, X
+    LDA Wizzrobe_ObjRedAnimCounter, X
     LSR
     LSR
     AND #$01

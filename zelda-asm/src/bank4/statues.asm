@@ -41,7 +41,7 @@ UpdateStatues:
     ; If person fireballs are enabled (from the two fires), then
     ; go make fireballs with pattern 2.
     LDY #$02
-    LDA PersonFireballsEnabled
+    LDA IsPersonFireballsEnabled
     BNE @Shoot
 
     ; Else if the room layout has two or four statues that shoot fireballs,
@@ -98,10 +98,10 @@ UpdateStatues:
     ; For each fireball to make, indexed by X, (1 or 3 down to 0):
     ;
     ; Decrement the fireball timer at this index.
-    LDY Statue_ObjFireballTimer, X
+    LDY Statue_FireballTimers, X
     DEY
     TYA
-    STA Statue_ObjFireballTimer, X
+    STA Statue_FireballTimers, X
 
     ; If it was not 0, then this fireball index has to keep waiting
     ; to make a fireball. Go loop again.
@@ -119,7 +119,7 @@ UpdateStatues:
     AND #$03
     TAY
     LDA StatueFireballStartTimes, Y
-    STA Statue_ObjFireballTimer, X
+    STA Statue_FireballTimers, X
 
     ; The coordinate lists are divided into sets for each pattern.
     ;

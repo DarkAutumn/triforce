@@ -154,7 +154,7 @@ UpdateMode10Stairs_Full:
     CMP StairsTargetY
     BNE AnimateAndDrawLinkBehindBackground    ; If Link hasn't reached the end of the walk, go draw.
 :
-    LDA TargetMode              ; Else go to the target mode.
+    LDA ModeAfterStairs              ; Else go to the target mode.
     STA GameMode
     JSR EndGameMode
 

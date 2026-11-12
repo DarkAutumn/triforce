@@ -10,10 +10,10 @@
 ; ============================================================================
 
 WaitAndScrollToSplitBottom:
-    LDA PpuStatus_2002          ; Wait for Sprite 0 Hit.
+    LDA PpuStatus          ; Wait for Sprite 0 Hit.
     AND #$40
     BEQ WaitAndScrollToSplitBottom
-    LDA PpuStatus_2002
+    LDA PpuStatus
 
     ; Wait cycles.
     ; TODO: Why do these differ?
@@ -57,16 +57,16 @@ WaitAndScrollToSplitBottom:
     NOP
     NOP
     NOP
-    LDA PpuStatus_2002          ; Prepare for writing to PPUADDR.
+    LDA PpuStatus          ; Prepare for writing to PPUADDR.
 
     ; Set PPUADDR mid-frame to 
     ; achieve split-frame scrolling.
     LDA VScrollAddrHi
     LDY VScrollAddrLo
-    STA PpuAddr_2006
-    STY PpuAddr_2006
-    LDA PpuData_2007
-    LDA PpuData_2007
+    STA PpuAddr
+    STY PpuAddr
+    LDA PpuData
+    LDA PpuData
     RTS
 :
     LDY #$5E
@@ -77,15 +77,15 @@ WaitAndScrollToSplitBottom:
     NOP
     NOP
     NOP
-    LDA CurPpuControl_2000
+    LDA CurPpuControl
     AND #$FE
     ORA OddBaseNameTableOverride
-    STA CurPpuControl_2000
-    STA PpuControl_2000
+    STA CurPpuControl
+    STA PpuControl
     LDA CurHScroll
-    STA PpuScroll_2005
+    STA PpuScroll
     LDA #$00
-    STA PpuScroll_2005
+    STA PpuScroll
 
 @Exit:
     RTS
@@ -94,10 +94,10 @@ WaitAndScrollToSplitBottom:
     BCS :+                      ; If GameMode < $11,
     JMP TurnOffAllVideo         ; then turn off video and return.
 :
-    LDA CurPpuControl_2000      ; else change base nametable (0 -> 1 or 2 -> 3).
+    LDA CurPpuControl      ; else change base nametable (0 -> 1 or 2 -> 3).
     ORA #$01
-    STA CurPpuControl_2000
-    STA PpuControl_2000
+    STA CurPpuControl
+    STA PpuControl
     RTS
 
 ; Unknown block

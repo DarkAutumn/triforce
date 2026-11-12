@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/wallmaster.asm         BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 4106-4535
-; SUBJECTS: (none)
+; SUBJECTS: Wallmaster
 ; TOPIC:    Wallmaster tables, emerge/grab states
 ; SEE ALSO:
 ; KEY FACTS:

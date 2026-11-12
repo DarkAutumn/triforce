@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/monster-shots-fireballs.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 790-1093
-; SUBJECTS: (none)
+; SUBJECTS: Fireball
 ; TOPIC:    ShootFireball, UpdateMonsterShot, shot bounce/destroy, UpdateFireball
 ; SEE ALSO:
 ; KEY FACTS:
@@ -83,7 +83,7 @@ UpdateMonsterShot:
 
     ; If the flying rock hit a tile or room boundary, then go destroy it.
     JSR GetCollidingTileMoving
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS DestroyMonsterShot
 
 @CheckBoundary:
@@ -150,13 +150,13 @@ DestroyMonsterShot:
     BEQ :+
 
 DestroyCountedMonsterShot:
-    DEC ActiveMonsterShots
+    DEC MonsterShotCount
 :
     JMP DestroyMonster
 
 BounceShot:
     ; Get the reverse direction index for the bounce direction.
-    LDA Shot_ObjBounceDir, X
+    LDA MonsterShot_ObjBounceDir, X
     JSR GetOppositeDir
 
     ; Modify the coordinates according to the displacements for
@@ -172,10 +172,10 @@ BounceShot:
 
     ; Add 2 to the bounce distance.
     ; The absolute value of one of the displacements is 2.
-    LDA Shot_ObjBounceDist, X
+    LDA MonsterShot_ObjBounceDist, X
     CLC
     ADC #$02
-    STA Shot_ObjBounceDist, X
+    STA MonsterShot_ObjBounceDist, X
 
     ; Go destroy the shot, if the bounce counter has reached the limit.
     ; Otherwise, go draw.
@@ -191,22 +191,22 @@ BounceShot:
 ; [06]: 1 if objects collide
 ; [09]: 0 for Link damage type (none)
 ; [0C]: 1 if objects collide
-; [034B]: ShotCollidesWithLink
+; [034B]: IsShotCollidingWithLink
 ;
 ; Reset bounce distance.
 ;
 CheckShotLinkCollision:
     LDA #$00
-    STA Shot_ObjBounceDist, X
+    STA MonsterShot_ObjBounceDist, X
     JSR CheckLinkCollision
-    LDA ShotCollidesWithLink
+    LDA IsShotCollidingWithLink
     BEQ :+
 
     ; If the shot hits Link, then start to bounce off of Link's shield.
     ; Set the bounce direction to Link's facing direction.
     ; Set state $30 to bounce.
     LDA ObjDir
-    STA Shot_ObjBounceDir, X
+    STA MonsterShot_ObjBounceDir, X
     LDA #$30
     STA ObjState, X
 :
@@ -302,7 +302,7 @@ UpdateFireball:
 @CheckCollisionAndDraw:
     ; Check for collision with Link. If hit, then go destroy the fireball.
     JSR CheckShotLinkCollision
-    LDA ShotCollidesWithLink
+    LDA IsShotCollidingWithLink
     BNE @DestroyMonster
     JMP L_DrawShot
 

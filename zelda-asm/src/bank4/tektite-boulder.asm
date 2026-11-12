@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/tektite-boulder.asm    BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 2167-2590
-; SUBJECTS: (none)
+; SUBJECTS: Jumper
 ; TOPIC:    Boulder spawner; Tektite/Boulder jumper physics
 ; SEE ALSO:
 ; KEY FACTS:
@@ -28,7 +28,7 @@ UpdateBoulderSet:
 
     ; If the maximum number (3) of boulders are active, then
     ; go set the timer to wait a random amount of time.
-    LDA ActiveBoulders
+    LDA ActiveBoulderCount
     CMP #$03
     BEQ @RandomizeTimer
 
@@ -39,7 +39,7 @@ UpdateBoulderSet:
     ; Set the boulder monster type, and increase the number
     ; of active boulders.
     LDX EmptyMonsterSlot
-    INC ActiveBoulders
+    INC ActiveBoulderCount
     LDA #$20
     JSR SetTypeAndClearObject
 
@@ -367,7 +367,7 @@ Jumper_AnimateAndCheckCollisions:
 
     ; Else the boulder is close enough to the bottom of the screen
     ; to destroy it.
-    DEC ActiveBoulders
+    DEC ActiveBoulderCount
     JMP DestroyMonster
 
 ; Returns:

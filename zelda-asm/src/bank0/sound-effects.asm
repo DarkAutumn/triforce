@@ -22,16 +22,16 @@
 
 SilenceSample:
     LDA #$0F
-    STA ApuStatus_4015
+    STA ApuStatus
     LDA #$00
-    STA Sample
-    STA Tune1
+    STA CurSample
+    STA CurTune1
     STA $061A
     STA BackgroundSample
     RTS
 
 PlayArrowSfx:
-    STY Effect
+    STY CurEffect
     LDA #$05
     STA EffectCounter
 
@@ -47,7 +47,7 @@ ContinueArrowSfx:
     BNE PlaySfxNote
 
 PlayStairsSfx:
-    STY Effect
+    STY CurEffect
     LDA #$38
     STA EffectCounter
 :
@@ -68,7 +68,7 @@ ContinueStairsSfx:
 PlaySfxNote:
     TAX
     AND #$0F
-    STA NoisePeriod_400E
+    STA NoisePeriod
     TXA
     LSR
     LSR
@@ -77,22 +77,22 @@ PlaySfxNote:
     ORA #$10
 
 SetSfxVolumeLength:
-    STA NoiseVolume_400C
+    STA NoiseVolume
     LDA #$08
-    STA NoiseLength_400F
+    STA NoiseLength
     DEC EffectCounter
 
 SilenceSfxIfEnded:
     BNE :+
     LDA #$F0
-    STA NoiseVolume_400C
+    STA NoiseVolume
     LDA #$00
-    STA Effect
+    STA CurEffect
 :
     RTS
 
 PlaySwordSfx:
-    STY Effect
+    STY CurEffect
     LDA #$0A
     STA EffectCounter
 
@@ -106,7 +106,7 @@ DriveEffect:
 
     ; $80 is a signal to silence samples and tune 1.
     BMI SilenceSample
-    LDA Effect
+    LDA CurEffect
     LSR EffectRequest
     BCS PlaySwordSfx
     LSR
@@ -134,7 +134,7 @@ DriveEffect:
     RTS
 
 @PlayBombSfx:
-    STY Effect
+    STY CurEffect
     LDA #$18
     STA EffectCounter
 
@@ -144,7 +144,7 @@ DriveEffect:
     BNE PlaySfxNote
 
 @PlayFlameSfx:
-    STY Effect
+    STY CurEffect
     LDA #$20
     STA EffectCounter
 
@@ -153,12 +153,12 @@ DriveEffect:
     LSR
     TAY
     LDX #$0E
-    STX NoisePeriod_400E
+    STX NoisePeriod
     LDA FlameSfxNotes-1, Y
     JMP SetSfxVolumeLength
 
 @PlaySeaSfx:
-    STY Effect
+    STY CurEffect
     LDA #$D0
     STA SeaSfxCounter
     LDA #$10
@@ -189,11 +189,11 @@ DriveEffect:
 
 @SetSeaSfxParams:
     LDA $68
-    STA NoiseVolume_400C
+    STA NoiseVolume
     LDX #$03
-    STX NoisePeriod_400E
+    STX NoisePeriod
     LDA #$08
-    STA NoiseLength_400F
+    STA NoiseLength
     DEC SeaSfxCounter
     JMP SilenceSfxIfEnded
 

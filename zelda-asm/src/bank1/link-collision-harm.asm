@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/link-collision-harm.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 5592-5828
-; SUBJECTS: (none)
+; SUBJECTS: Link
 ; TOPIC:    Link-vs-monster collision, shield, HarmLink, ring, death
 ; SEE ALSO:
 ; KEY FACTS:
@@ -22,14 +22,14 @@
 ; [06]: 1 if objects collide
 ; [09]: 0 for Link damage type (none)
 ; [0C]: 1 if objects collide
-; [034B]: ShotCollidesWithLink
+; [034B]: IsShotCollidingWithLink
 ;
 CheckLinkCollision:
     JSR GetObjectMiddle
 
     ; Reset variables to return.
     LDA #$00
-    STA ShotCollidesWithLink
+    STA IsShotCollidingWithLink
     STA $06
     STA $09
     STA $0C
@@ -50,7 +50,7 @@ CheckLinkCollisionPreinit:
     LDA ObjState
     CMP #$40
     BEQ L73A9_Exit
-    LDA LinkParalyzed
+    LDA IsLinkParalyzed
     BNE L73A9_Exit
 
     ; If the object is a monster's shot/projectile, and it's not in a
@@ -87,7 +87,7 @@ CheckLinkCollisionPreinit:
 
     ; Here, the attacker is a monster's shot/projectile.
     ; Flag this kind of collision.
-    INC ShotCollidesWithLink
+    INC IsShotCollidingWithLink
 
     ; If object type = Fireball2 ($56) or $5A, or Link is not idle;
     ; then go harm Link.
@@ -190,7 +190,7 @@ Link_BeHarmed:
     LDA #$00
     STA WorldKillCount
     STA HelpDropCount
-    STA HelpDropValue
+    STA IsHelpDropBomb
 
     ; If heart partial >= low damage points byte, then simply
     ; subtract the damage byte from heart partial.

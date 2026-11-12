@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/aquamentus.asm         BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 5596-5853
-; SUBJECTS: (none)
+; SUBJECTS: Aquamentus
 ; TOPIC:    Aquamentus; boss hit reaction, boss sprite writer
 ; SEE ALSO:
 ; KEY FACTS:

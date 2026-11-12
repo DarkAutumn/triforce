@@ -187,11 +187,11 @@ SetUpDroppedItem:
     BCC @RandomlyCancel
 
     ; Otherwise, the item will be guaranteed to be made.
-    ; [51] HelpDropValue determines which kind:
+    ; [51] IsHelpDropBomb determines which kind:
     ; - 0:     5 rupees
     ; - other: bomb
     LDA #$0F
-    LDY HelpDropValue
+    LDY IsHelpDropBomb
     BEQ @SetHelpItem
     LDA #$00                    ; Bomb
 
@@ -202,7 +202,7 @@ SetUpDroppedItem:
     ; help drop variables.
     LDA #$00
     STA HelpDropCount
-    STA HelpDropValue
+    STA IsHelpDropBomb
     BEQ @Commit
 
 @RandomlyCancel:

@@ -20,17 +20,17 @@ ModeE_HandleDirections:
     BNE ModeE_HandleDirectionButton    ; If no button is down, then reset repeat state.
 
 ResetButtonRepeatState:
-    STA StillHoldingButton
-    STA SubsequentButtonRepeat
+    STA IsHoldingButton
+    STA IsButtonRepeating
     STA ButtonRepeatTimer
     RTS
 
 ModeE_HandleDirectionButton:
     TAY
-    LDA StillHoldingButton
+    LDA IsHoldingButton
     BNE @CheckSameButton        ; If we weren't holding a button last frame,
     STY HeldButton              ; Store current buttons down.
-    INC StillHoldingButton      ; Now we definitely are holding a button.
+    INC IsHoldingButton      ; Now we definitely are holding a button.
 
 @CheckSameButton:
     LDA ButtonsDown
@@ -50,7 +50,7 @@ ModeE_HandleDirectionButton:
     ; If this is the first button press, then wait $10 frames
     ; to repeat; otherwise wait 8 frames.
     LDY #$08
-    LDA SubsequentButtonRepeat
+    LDA IsButtonRepeating
     BNE :+
     LDY #$10
 :
@@ -74,7 +74,7 @@ ModeE_HandleDirectionButton:
     STA ObjX+1
     LDX #$00                    ; Cycle down.
     JSR CycleCharBoardCursorY
-    LDA ModeE_WrappedAroundBoardY
+    LDA ModeE_HasWrappedBoardY
     BEQ :+                      ; If wrapped around to the top,
     LDA #$00                    ; then reset CharBoardIndex.
     STA CharBoardIndex
@@ -99,7 +99,7 @@ ModeE_HandleDirectionButton:
     STA ObjX+1
     LDX #$03                    ; Cycle up.
     JSR CycleCharBoardCursorY
-    LDA ModeE_WrappedAroundBoardY
+    LDA ModeE_HasWrappedBoardY
     BEQ :+                      ; If wrapped around to the bottom,
     LDA #$2B                    ; then set CharBoardIndex to the last index.
     STA CharBoardIndex
@@ -119,7 +119,7 @@ ModeE_HandleDirectionButton:
     STA CharBoardIndex
     LDX #$00                    ; Cycle down.
     JSR CycleCharBoardCursorY
-    LDA ModeE_WrappedAroundBoardY
+    LDA ModeE_HasWrappedBoardY
     BEQ @Finish                 ; If didn't wrap around, then go finish.
     LDA CharBoardIndex          ; Wrapped around. So, move to top row.
     SEC
@@ -142,7 +142,7 @@ ModeE_HandleDirectionButton:
     STA CharBoardIndex
     LDX #$03                    ; Cycle up.
     JSR CycleCharBoardCursorY
-    LDA ModeE_WrappedAroundBoardY
+    LDA ModeE_HasWrappedBoardY
     BEQ @FinishInput            ; If didn't wrap around, then go finish.
     LDA CharBoardIndex          ; Wrapped around. So, move to bottom row.
     CLC
@@ -151,7 +151,7 @@ ModeE_HandleDirectionButton:
 
 @FinishInput:
     LDA #$01
-    STA SubsequentButtonRepeat
+    STA IsButtonRepeating
     STA Tune1Request            ; Request "selection changed" tune (same as rupee taken).
 
 @Exit:
@@ -161,7 +161,7 @@ ModeE_HandleDirectionButton:
 ; X: 0 for down, 3 for up.
 ;
 ; Returns:
-; ModeE_WrappedAroundBoardY [$042A]=1 if wrapped arounnd.
+; ModeE_HasWrappedBoardY [$042A]=1 if wrapped arounnd.
 ;
 ; Assume we don't wrap around.
 CycleCharBoardCursorY:
@@ -176,18 +176,18 @@ CycleCharBoardCursorY:
     INX                         ; Set cursor Y to wrapped around position.
     LDA ModeE_CharBoardYOffsetsAndBounds, X
     STA ObjY+1
-    INY                         ; Return ModeE_WrappedAroundBoardY [$042A]=1.
+    INY                         ; Return ModeE_HasWrappedBoardY [$042A]=1.
 
 @ReturnValue:
-    STY ModeE_WrappedAroundBoardY
+    STY ModeE_HasWrappedBoardY
 
 LA10A_Exit:
     RTS
 
 ModeE_HandleAOrB:
-    LDA InitializedNameField
+    LDA IsNameFieldInitialized
 
-    ; If InitializedNameField [$0420] is set, then skip initializing
+    ; If IsNameFieldInitialized [$0420] is set, then skip initializing
     ; the name field.
     BNE @CheckAB
     LDY CurSaveSlot
@@ -210,7 +210,7 @@ ModeE_HandleAOrB:
     DEX
     DEY
     BPL @CopyHeaderTemplate
-    INC InitializedNameField    ; Set InitializedNameField [$0420] to mark the name field initialized.
+    INC IsNameFieldInitialized    ; Set IsNameFieldInitialized [$0420] to mark the name field initialized.
 
 @CheckAB:
     ; At this point:
@@ -218,7 +218,7 @@ ModeE_HandleAOrB:
     ;   - This will be changed as the player inputs characters.
     ; - [$0422] to [$0424] hold a transfer record header. The VRAM address points to the beginning of the appropriate name field in the nametable.
     ;   - This will be changed as the player inputs characters.
-    ; - InitializedNameField [$0420] is set to 1.
+    ; - IsNameFieldInitialized [$0420] is set to 1.
     LDA ButtonsPressed
     AND #$C0
     BEQ @Exit                   ; If neither A nor B was pressed, then go finish.
@@ -244,7 +244,7 @@ ModeE_HandleAOrB:
     LDY CharBoardIndex          ; CharBoardIndex in [$041F] will index into character map.
     LDA ModeE_CharMap, Y        ; Get the character that's highlighted.
     STA DynTileBuf+3            ; Write the chosen character to dynamic transfer buf.
-    STA Names, X                ; Set the character in the name.
+    STA SaveSlotNames, X                ; Set the character in the name.
 
 @MoveCursor:
     LDA ObjX                    ; Move name cursor right 8 pixels.

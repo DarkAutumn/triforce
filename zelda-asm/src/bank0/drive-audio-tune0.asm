@@ -17,12 +17,12 @@ DriveAudio:
     ; by first disabling them, then enabling them.
     ;
     ; Then go drive tune channel 0 only.
-    LDA Paused
+    LDA PauseState
     BEQ @Play
     LDA #$00
-    STA ApuStatus_4015
+    STA ApuStatus
     LDA #$0F
-    STA ApuStatus_4015
+    STA ApuStatus
     BNE @Paused
 
 @Play:
@@ -30,7 +30,7 @@ DriveAudio:
     ;
     ; Synchronize the APU frame counter once a video frame.
     LDA #$FF
-    STA Ctrl2_FrameCtr_4017
+    STA Ctrl2FrameCtr
 
     ; Drive each game sound channel.
     JSR DriveTune1
@@ -81,16 +81,16 @@ DriveTune0:
     BNE @ChangeTune
 
     ; Else only play "heart warning" if nothing else is playing.
-    LDX Tune0
+    LDX CurTune0
     BEQ @ChangeTune
 
 @CheckCurrentTune:
-    LDA Tune0
+    LDA CurTune0
     BNE @KeepPlaying
     RTS
 
 @ChangeTune:
-    STA Tune0
+    STA CurTune0
     LDY #$00
 :
     ; Get the index for the song bit: 1 to 8.
@@ -98,33 +98,33 @@ DriveTune0:
     LSR
     BCC :-
     LDA TuneScripts0-1, Y
-    STA TunePtr0
+    STA Tune0ScriptOffset
 
 @KeepPlaying:
-    LDY TunePtr0
-    INC TunePtr0
+    LDY Tune0ScriptOffset
+    INC Tune0ScriptOffset
     LDA TuneScripts0, Y
     BMI @PrepNote
     BNE @PlayNote
 
     ; We've reached the end of the tune.
     LDX #$90
-    STX Sq0Duty_4000
+    STX Sq0Duty
     LDX #$18
-    STX Sq0Length_4003
+    STX Sq0Length
     LDX #$00
-    STX Sq0Timer_4002
-    STX Tune0
+    STX Sq0Timer
+    STX CurTune0
     RTS
 
 @PrepNote:
-    STA Sq0Duty_4000
-    LDY TunePtr0
-    INC TunePtr0
+    STA Sq0Duty
+    LDY Tune0ScriptOffset
+    INC Tune0ScriptOffset
     LDA TuneScripts0, Y
 
 @PlayNote:
     JSR EmitSquareNote0
     LDA #$7F
-    STA Sq0Sweep_4001
+    STA Sq0Sweep
     RTS

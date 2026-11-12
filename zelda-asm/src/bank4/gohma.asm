@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/gohma.asm              BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 8193-8503
-; SUBJECTS: (none)
+; SUBJECTS: Gohma
 ; TOPIC:    Gohma: eye states, arrow in the eye
 ; SEE ALSO:
 ; KEY FACTS:
@@ -44,10 +44,10 @@ UpdateGohma:
 
 @Move:
     ; Add $80 to the movement accumulator.
-    LDA Gohma_ObjMoveAccum, X
+    LDA Gohma_ObjPosFrac, X
     CLC
     ADC #$80
-    STA Gohma_ObjMoveAccum, X
+    STA Gohma_ObjPosFrac, X
 
     ; If movement accumulator didn't overflow, then go animate the eye.
     BCC @AnimateEye

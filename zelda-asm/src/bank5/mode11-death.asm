@@ -105,9 +105,9 @@ UpdateMode11Death_Sub5:
     JMP SelectTransferBufAndAdvanceSubmode    ; Go set this TileBufSelector value, and advance submode.
 
 UpdateMode11Death_Sub6:
-    LDA CurPpuControl_2000
+    LDA CurPpuControl
     AND #$FE                    ; Make sure we're using an even nametable number.
-    STA CurPpuControl_2000
+    STA CurPpuControl
 
 L14CD7_IncSubmode:
     INC GameSubmode

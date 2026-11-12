@@ -27,7 +27,7 @@
 ; ============================================================================
 
 InitializeGameOrMode:
-    LDA InitializedGame
+    LDA IsGameInitialized
     BNE InitMode
     LDA #$01
     JSR SwitchBank
@@ -39,7 +39,7 @@ InitializeGameOrMode:
     STA SaveRamBegin
     LDA #$A5
     STA SaveRamEnd
-    INC InitializedGame
+    INC IsGameInitialized
     RTS
 
 InitMode:
@@ -71,14 +71,14 @@ InitMode_JumpTable:
     .ADDR InitMode13
 
 InitMode0:
-    LDA TransferredCommonPatterns
+    LDA HasCommonPatterns
     CMP #$5A
     BEQ :+
     LDA #$02
     JSR SwitchBank
     JMP TransferCommonPatterns
 :
-    LDA TransferredDemoPatterns
+    LDA HasDemoPatterns
     CMP #$A5
     BEQ :+
     LDA #$01
@@ -131,9 +131,9 @@ InitMode7:
 
     ; After the last submode (5 or 6), sprite-0 check was enabled.
     ; So, set the appropriate mirroring for scrolling during mode update.
-    LDA _Unknown_F3             ; TODO: [$F3] ?
+    LDA IsScrollMirroringSet             ; TODO: [$F3] ?
     BNE @Exit
-    INC _Unknown_F3
+    INC IsScrollMirroringSet
 
     ; If player is facing horizontally, then enable vertical mirroring;
     ; else horizontal mirroring.
@@ -197,7 +197,7 @@ InitMode3_Sub0:
 ClearRoomHistory:
     LDY #$05
     LDA #$00
-    STA ForceSwordShot
+    STA IsSwordShotForced
 
 @Loop:
     ; Clear the room history.
@@ -214,7 +214,7 @@ SaveSlotToPaletteRowOffset:
 InitMode3_Sub1:
     LDA CurLevel
     BNE @UseStartRoomId         ; If in UW, then go set room ID to StartRoomId.
-    LDA CaveSourceRoomId
+    LDA LevelEntranceRoomId
     CMP #$FF
     BNE @SetRoomId              ; If it's set to a valid room ID, then start there.
 
@@ -223,10 +223,10 @@ InitMode3_Sub1:
 
 @SetRoomId:
     STA RoomId
-    CMP CaveSourceRoomId
+    CMP LevelEntranceRoomId
     BNE PatchAndCueLevelPalettesTransferAndAdvanceSubmode    ; If CaveEnteredRoomId was valid,
     LDA #$FF                    ; then keep CaveEnteredRoomId invalid by default.
-    STA CaveSourceRoomId
+    STA LevelEntranceRoomId
 
 PatchAndCueLevelPalettesTransferAndAdvanceSubmode:
     LDX CurSaveSlot

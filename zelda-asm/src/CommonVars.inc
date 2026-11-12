@@ -1,11 +1,34 @@
-ObjRefId := $42C
-ObjCaptureTimer := $42C
+; Aliases of object slot bytes shared by several banks (monster throwers, captors, items, room bookkeeping).
+; "per slot" = indexed by object slot (X or Y register). "scalar" = one fixed byte.
 
-ObjRoomItemId := $98
+; ---- Thrower and shot links (Goriya and its boomerang, monster arrows) ----
+ObjRefId := $42C                    ; per slot; slot of the partner object: thrower's shot or shot's thrower.
+;   Set on both objects when a monster shoots (goriya code). A dying Goriya uses it to destroy its
+;   boomerang; the returning boomerang uses it to find the thrower and restart its timer and state; a
+;   monster arrow flies at once when the slot it names is empty. Same byte as ObjCaptureTimer.
 
-Item_ObjMonsterType := $412
-Item_ObjItemLifetime := $3A8
-Item_ObjItemId := $AC
+; ---- Captors (Wallmaster $27, Like-Like $17) ----
+ObjCaptureTimer := $42C             ; per slot; Wallmaster, Like-Like: 0 = Link free, nonzero = Link captured.
+;   CheckMonsterCollisions increments it when the monster touches Link. Like-Like then adds 1 per frame; at
+;   $60 it removes the magic shield (InvMagicShield := 0) and holds the value at $C0. Wallmaster only tests
+;   it for nonzero: at the end of its trip it sends Link to the level entrance (mode 3).
 
-RoomKillCount := $34F
-StairsTargetY := $412
+; ---- Items ----
+ObjRoomItemId := $98                ; alias of ObjDir; with X = $13 (room item slot) it is RoomItemId ($AB).
+Item_ObjItemId := $AC               ; per slot; dropped item: item id; $FF = taken. Alias of ObjState.
+;   $23 (fairy) makes the object fly as an item fairy.
+Item_ObjItemLifetime := $3A8        ; per slot; dropped or room item: life countdown. Alias of ObjPosFrac.
+;   A dropped item starts at $FF, loses 1 every other frame and disappears at 0. While the value is >= $F0
+;   the item flashes (drawn on odd values only) and cannot be picked up (TryTakeItem).
+Item_ObjMonsterType := $412         ; per slot; object type of the monster that died here, for the drop.
+;   Copied from ObjType when the death ends (metastate $14); SetUpDroppedItem compares it with
+;   NoDropMonsterTypes and uses it to choose the drop.
+
+; ---- Room bookkeeping ----
+RoomKillCount := $34F               ; scalar; monsters killed in the room since it was entered.
+;   +1 when a monster's death ends (metastate $14), except dead dummies ($5D), child Gels ($14), red Keese
+;   ($1C) and Zoras ($11). On leaving, it is merged into the room's saved kill count (SaveKillCountOW, the
+;   dungeon room history code). It is slot 0's byte of ObjType.
+StairsTargetY := $412               ; scalar; Y where Link's walk down or up stairs ends (modes $10 and 4).
+;   Link moves 1 pixel every 4 frames until ObjY equals it. Going down: ObjY + $10. Coming out of a cave
+;   entrance: the exit Y, with Link starting $10 pixels below. Slot 0's byte of the $412 array.

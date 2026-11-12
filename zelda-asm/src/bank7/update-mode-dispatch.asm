@@ -59,7 +59,7 @@ UpdateMode7Scroll:
     JSR UpdateMode7SubmodeAndDrawLink
     LDA IsSprite0CheckActive
     BNE @Exit                   ; If still checking sprite 0, return.
-    STA _Unknown_F3             ; TODO: Reset [$F3].
+    STA IsScrollMirroringSet             ; TODO: Reset [$F3].
     LDA #$0F                    ; Set horizontal mirroring and our normal PRG ROM bank mode.
     JSR SetMMC1Control
 

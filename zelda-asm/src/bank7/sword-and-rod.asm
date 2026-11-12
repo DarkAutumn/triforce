@@ -172,7 +172,7 @@ UpdateSwordOrRod:
     ; The weapon is the sword.
     ; To calculate the sprite attributes: (item value - 1) + base attribute
     CLC
-    ADC Items
+    ADC InvSword
     SEC
     SBC #$01
 
@@ -298,7 +298,7 @@ MakeSwordShot:
     ; If [0529] is set, go activate a sword shot regardless of hearts.
     ;
     ; UNKNOWN: But I haven't found any code that sets it.
-    LDA ForceSwordShot
+    LDA IsSwordShotForced
     BNE @SetUp
 
     ; TRIFORCE: HeartValues ($066F) encoding:

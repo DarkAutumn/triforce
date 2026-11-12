@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/tile-block-power-triforce.asm BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 2012-2211
-; SUBJECTS: (none)
+; SUBJECTS: Unused
 ; TOPIC:    Block/rock/gravestone blocking Link; Triforce of Power fanfare
 ; SEE ALSO:
 ; KEY FACTS:
@@ -74,7 +74,7 @@ CheckTileObjectsBlocking:
 
 CheckPowerTriforceFanfare:
     ; If the fanfare is not active, then return.
-    LDA TriforceFanfareActive
+    LDA IsTriforceFanfareActive
     BEQ @Exit
 
     ; When Link's timer expires, go finish up the fanfare.
@@ -110,16 +110,16 @@ CheckPowerTriforceFanfare:
     LDA #$20                    ; Play the song for level 9 again.
     STA SongRequest
     LDA #$01
-    STA LastBossDefeated
+    STA InvPowerTriforce
     LSR
     STA ObjState                ; Make Link idle and not halted.
-    STA TriforceFanfareActive   ; Flag the fanfare not active.
+    STA IsTriforceFanfareActive   ; Flag the fanfare not active.
 
 @Exit:
     RTS
 
 TakePowerTriforce:
-    INC TriforceFanfareActive
+    INC IsTriforceFanfareActive
 
     ; Halt Link for $C0 frames.
     LDA #$C0

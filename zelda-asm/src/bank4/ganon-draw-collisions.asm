@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/ganon-draw-collisions.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 10547-10993
-; SUBJECTS: (none)
+; SUBJECTS: Ganon
 ; TOPIC:    Ganon draw, collisions, ashes, triforce
 ; SEE ALSO:
 ; KEY FACTS:
@@ -383,7 +383,7 @@ Ganon_CheckCollisions:
     BEQ @Exit
 
     ; Set the Ganon phase to "dying".
-    INC Ganon_ObjPhase, X
+    INC Ganon_ObjDyingCount, X
 
     ; Now his body does flash.
     LDA #$28

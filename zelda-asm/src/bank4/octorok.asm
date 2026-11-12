@@ -21,7 +21,7 @@ UpdateOctorock:
     BCS :+
     LDA #$70
 :
-    STA ObjTurnRate, X
+    STA Wanderer_ObjTurnRate, X
     JSR Wanderer_TargetPlayer
 
     ; If the octorock is slow, then use q-speed $20.

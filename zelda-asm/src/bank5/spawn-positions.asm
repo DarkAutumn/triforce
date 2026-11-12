@@ -36,7 +36,7 @@ AssignObjSpawnPositions:
     ; If in OW, then see if monsters come in from the edges of the screen.
     LDA CurLevel
     BNE :+
-    LDA LevelBlockAttrsByteF
+    LDA RoomAttrsF
     AND #$08                    ; Monsters from the edges of the screen
     BNE @AssignSpecialPositions ; If monsters come in from the edges, go skip spawning normal objects.
 :
@@ -150,7 +150,7 @@ IsSafeToSpawn:
     PLA                         ; Restore %Y.
     TAY
     LDA ObjCollidedTile, X
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS ReturnUnsafeToSpawn     ; If the tile at the object's hotspot is unwalkable, return unwalkable.
 
 ; Params:

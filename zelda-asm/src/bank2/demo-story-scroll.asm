@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank2/demo-story-scroll.asm  BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 540-1001
-; SUBJECTS: (none)
+; SUBJECTS: Demo, Unused
 ; TOPIC:    Title wait, story scroll, item parade
 ; SEE ALSO:
 ; KEY FACTS:
@@ -44,7 +44,7 @@ AnimateDemoPhase1Subphase0:
     LDA CurVScroll              ; Have we scrolled to the bottom of nametable 2?
     CMP #$F0
     BNE @CheckVScroll
-    INC ScrolledScreenCount
+    INC DemoScrolledScreenCount
 
     ; The bottom of NT 2 is also the top of NT 0.
     ; So, reset CurVScroll and the base NT.
@@ -58,10 +58,10 @@ AnimateDemoPhase1Subphase0:
     LDA CurVScroll
     CMP #$08
     BNE @Exit
-    LDA ScrolledScreenCount
+    LDA DemoScrolledScreenCount
     BEQ @Exit
     LDA #$00
-    STA ScrolledScreenCount
+    STA DemoScrolledScreenCount
     INC DemoSubphase
 
 @Exit:
@@ -96,15 +96,15 @@ AnimateDemoPhase1Subphase2:
     DEC ObjY, X
     DEX
     BNE @DecObjYs
-    INC ScrolledLineCount       ; We scrolled one more line.
-    LDA ScrolledLineCount
+    INC DemoScrolledLineCount       ; We scrolled one more line.
+    LDA DemoScrolledLineCount
     BNE :+                      ; Once we've scrolled a whole screen,
-    INC ScrolledScreenCount     ; Increment the screen count.
+    INC DemoScrolledScreenCount     ; Increment the screen count.
 :
-    LDA ScrolledScreenCount     ; Have we scrolled 5 screens?
+    LDA DemoScrolledScreenCount     ; Have we scrolled 5 screens?
     CMP #$05
     BNE @Scroll                 ; Scroll the nametable.
-    LDA ScrolledLineCount       ; Scroll half a screen more.
+    LDA DemoScrolledLineCount       ; Scroll half a screen more.
     CMP #$80
     BNE @Scroll                 ; Scroll the nametable.
     INC DemoSubphase            ; Go to the next subphase.
@@ -122,7 +122,7 @@ AnimateDemoPhase1Subphase2:
     STA CurVScroll
 
 @CheckLine:
-    LDA ScrolledLineCount       ; 7/8 of the lines,
+    LDA DemoScrolledLineCount       ; 7/8 of the lines,
     AND #$07
     BNE @Exit                   ; just return.
     JSR ProcessDemoLineItems    ; But every 8 lines, we have to check for new text and objects.

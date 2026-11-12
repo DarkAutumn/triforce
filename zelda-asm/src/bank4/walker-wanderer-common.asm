@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/walker-wanderer-common.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 184-432
-; SUBJECTS: (none)
+; SUBJECTS: Unused, Wanderer
 ; TOPIC:    Boss cry helpers, InitMonsterShot, InitWalker, standing fire, common wanderer AI
 ; SEE ALSO:
 ; KEY FACTS:
@@ -125,7 +125,7 @@ UpdateStandingFire:
 ; Set the turn rate. If being shoved, then shove and return.
 ;
 UpdateCommonWanderer:
-    STA ObjTurnRate, X
+    STA Wanderer_ObjTurnRate, X
     LDA ObjShoveDir, X
     BEQ :+
     JMP Obj_Shove
@@ -144,16 +144,16 @@ Unused_10082:
     BEQ :+
     LDA #$A0
 :
-    STA ObjTurnRate, X
+    STA Wanderer_ObjTurnRate, X
     LDA ObjState, X
     BMI Wanderer_Return
     ; End unverified code
 
 Wanderer_TargetPlayer:
     ; If turn timer <> 0, then decrement it.
-    LDA ObjTurnTimer, X
+    LDA Wanderer_ObjTurnTimer, X
     BEQ :+
-    DEC ObjTurnTimer, X
+    DEC Wanderer_ObjTurnTimer, X
 :
     JSR Walker_Move
     LDA ObjShoveDir, X
@@ -175,7 +175,7 @@ Wanderer_Return:
 
     ; If turn rate < a random value, or Link's state = $FF;
     ; then go turn if turn timer has expired.
-    LDA ObjTurnRate, X
+    LDA Wanderer_ObjTurnRate, X
     CMP Random+1, X
     BCC @TurnIfTime
     LDA ObjState
@@ -236,11 +236,11 @@ Wanderer_Return:
 
     ; Set turn timer to a random value.
     LDA Random, X
-    STA ObjTurnTimer, X
+    STA Wanderer_ObjTurnTimer, X
 
     ; Set "wants to shoot" flag to 1.
     LDA #$01
-    STA ObjWantsToShoot, X
+    STA Shooter_ObjWantsToShoot, X
 
     ; Go set input direction to facing direction.
     JMP L_Walker_SetInputDirAndTryShootingBoomerang
@@ -248,10 +248,10 @@ Wanderer_Return:
 @TurnIfTime:
     ; Reset "wants to shoot" flag.
     LDA #$00
-    STA ObjWantsToShoot, X
+    STA Shooter_ObjWantsToShoot, X
 
     ; If turn timer <> 0, then go set input direction to facing direction.
-    LDA ObjTurnTimer, X
+    LDA Wanderer_ObjTurnTimer, X
     BNE @SetInputDir
 
     ; Turn toward the chase target in a direction perpendicular to

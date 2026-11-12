@@ -196,7 +196,7 @@ DrawBoomerangAndCheckCollision:
     CPX #$0D
     BCS CalcBoomerangFrame
     JSR CheckLinkCollision
-    LDA ShotCollidesWithLink
+    LDA IsShotCollidingWithLink
     BEQ CalcBoomerangFrame
     LDA #$03
     STA ObjAnimCounter, X

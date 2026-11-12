@@ -145,7 +145,7 @@ FormatHeartsInTextBuf:
     CMP #$80
     BCS @EmitFullHeart          ; If partial heart at least half full, go emit a full heart tile.
     LDA #$00
-    STA ForceSwordShot          ; else, clear [$0529]
+    STA IsSwordShotForced          ; else, clear [$0529]
     LDA #$65                    ; and use a half heart tile.
     BNE @EmitChar
 

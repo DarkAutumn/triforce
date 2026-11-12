@@ -74,10 +74,10 @@ InitLamnola:
     ; Remember the object type, and set speed to (object type - $39):
     ; 1 or 2.
     LDA ObjType+1
-    STA Lamnola_Type
+    STA Lanmola_Type
     SEC
     SBC #$39
-    STA Lamnola_Speed
+    STA Lanmola_Speed
     LDA #$08                    ; 8 instead of 10, because 8 is the max kill count to save.
     STA RoomObjCount
     RTS

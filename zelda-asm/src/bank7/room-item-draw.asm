@@ -109,7 +109,7 @@ AnimateItemObject:
 ; [01]: Y
 ;
 DrawItemInInventory:
-    LDA Items, X
+    LDA InvItems, X
     STA $04                     ; The item inventory value can also serve as a palette row attribute.
 
 ; Params:

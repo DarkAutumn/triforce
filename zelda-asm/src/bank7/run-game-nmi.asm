@@ -31,30 +31,30 @@ PlayAreaColumnAddrs:
 
 RunGame:
     LDA #$00
-    STA InitializedGame
+    STA IsGameInitialized
     LDA #$05
     JSR SwitchBank
     JSR InitSaveRam
     JSR ClearRam
     JSR ClearAllAudioAndVideo
-    LDA CurPpuControl_2000      ; Enable NMI.
+    LDA CurPpuControl      ; Enable NMI.
     ORA #$A0
-    STA PpuControl_2000
-    STA CurPpuControl_2000
+    STA PpuControl
+    STA CurPpuControl
 
 LoopForever:
     JMP LoopForever
 
 ClearAllAudioAndVideo:
     LDA #$00
-    STA DmcCounter_4011
+    STA DmcCounter
     LDA #$0F                    ; Turn on audio except DMC.
-    STA ApuStatus_4015
+    STA ApuStatus
 
     ; Turn off video.
     ; TODO: except clipping is explicitly disabled. Why?
     LDA #$06
-    STA PpuMask_2001
+    STA PpuMask
 
 TurnOffVideoAndClearArtifacts:
     JSR HideAllSprites
@@ -70,19 +70,19 @@ ClearNameTableWithHiAddr:
     JMP ClearNameTable
 
 IsrNmi:
-    LDA CurPpuControl_2000
+    LDA CurPpuControl
     LDX SwitchNameTablesReq
     BEQ :+                      ; If need to switch name tables,
     EOR #$02                    ; Switch to the other name table ($2000 <-> $2800).
 :
     AND #$7F                    ; Disable NMI.
-    STA CurPpuControl_2000
+    STA CurPpuControl
     AND #$7E                    ; Make sure table is 0 or 2.
-    STA PpuControl_2000
+    STA PpuControl
 
     ; Set PPUMASK.
     ; Start with curren mask value, but ...
-    LDA CurPpuMask_2001
+    LDA CurPpuMask
     LDY IsSprite0CheckActive    ; If checking for sprite 0,
     BNE @EnableAllVideo
     LDY TileBufSelector         ; TODO: or TileBufSelector = 0 and [$17] = 0,
@@ -94,19 +94,19 @@ IsrNmi:
     ORA #$1E                    ; then make sure all video is on.
 
 @SetPpuMask:
-    STA PpuMask_2001
-    STA CurPpuMask_2001
+    STA PpuMask
+    STA CurPpuMask
 
     ; Copy all our sprites to OAM.
     LDA #$00
-    STA OamAddr_2003
+    STA OamAddr
     LDA #$02
-    STA SpriteDma_4014
+    STA SpriteDma
 
     ; Reset scroll register.
     LDA #$00
-    STA PpuScroll_2005
-    STA PpuScroll_2005
+    STA PpuScroll
+    STA PpuScroll
     LDA #$06
     JSR SwitchBank
     JSR TransferCurTileBuf
@@ -114,19 +114,19 @@ IsrNmi:
     ; Reset PPUADDR.
     ; I believe that the write of $3F00 is unneeded.
     LDA #$3F
-    STA PpuAddr_2006
+    STA PpuAddr
     LDA #$00
-    STA PpuAddr_2006
-    STA PpuAddr_2006
-    STA PpuAddr_2006
+    STA PpuAddr
+    STA PpuAddr
+    STA PpuAddr
 
 @WaitVBlankEnd:
     ; If Sprite 0 Hit is set,
     ; then wait for it to be cleared by the ending of VBLANK.
-    LDA PpuStatus_2002
+    LDA PpuStatus
     AND #$40
     BNE @WaitVBlankEnd
-    LDA PpuStatus_2002          ; Clear shift register.
+    LDA PpuStatus          ; Clear shift register.
 
     ; Wait for Sprite 0 hit, if needed.
     LDA IsSprite0CheckActive
@@ -154,18 +154,18 @@ IsrNmi:
     BNE @UpdateTimers
 
 @SetScroll:
-    LDA PpuStatus_2002
+    LDA PpuStatus
     LDA CurHScroll
-    STA PpuScroll_2005
+    STA PpuScroll
     LDA CurVScroll
-    STA PpuScroll_2005
-    LDA CurPpuControl_2000
-    STA PpuControl_2000
+    STA PpuScroll
+    LDA CurPpuControl
+    STA PpuControl
 
 @UpdateTimers:
     ; If paused or in menu, then don't decrement timers.
-    LDA MenuState
-    ORA Paused
+    LDA SubmenuState
+    ORA PauseState
     BNE @CheckInput
     LDX #$26                    ; Advance the stun cycle.
     LDA #$3C
@@ -226,9 +226,9 @@ IsrNmi:
     JSR UpdateMode
 
 @EnableNMI:
-    LDA PpuStatus_2002          ; Enable NMI.
-    LDA CurPpuControl_2000
+    LDA PpuStatus          ; Enable NMI.
+    LDA CurPpuControl
     ORA #$80
-    STA PpuControl_2000
-    STA CurPpuControl_2000
+    STA PpuControl
+    STA CurPpuControl
     RTI

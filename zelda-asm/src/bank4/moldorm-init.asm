@@ -75,7 +75,7 @@ InitMoldorm:
     STA Flyer_ObjTurns+5
     STA Flyer_ObjTurns+10
     LDA #$80                    ; The maximum speed for Moldorm is $80.
-    STA FlyingMaxSpeedFrac
+    STA FlyerMaxSpeedFrac
     LDA #$08                    ; 8 instead of 10, because 8 is the max kill count to save.
     STA RoomObjCount
     RTS

@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/patra.asm              BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 10029-10282
-; SUBJECTS: (none)
+; SUBJECTS: Flyer
 ; TOPIC:    Patra and its children
 ; SEE ALSO:
 ; KEY FACTS:

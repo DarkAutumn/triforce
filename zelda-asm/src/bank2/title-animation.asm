@@ -87,7 +87,7 @@ WaterfallWaveSpriteOffsets:
     .BYTE $A0, $B0, $C0, $D0, $E0
 
 UpdateWaterfallAnimation:
-    LDA InitializedWaterfallAnimation
+    LDA IsWaterfallInitialized
     BNE @UpdateSprites
     LDA #$B6                    ; Initialize animation values.
     STA TitleWaveYs+0
@@ -105,7 +105,7 @@ UpdateWaterfallAnimation:
     STA TitleWaveYs+4
     LDA #$DD
     STA TitleWaveYs+5
-    INC InitializedWaterfallAnimation
+    INC IsWaterfallInitialized
 
 @UpdateSprites:
     LDX #$02

@@ -229,7 +229,7 @@ TakeItem:
     LDA $0A
 
 SetItemValue:
-    STA Items, Y
+    STA InvItems, Y
 
 L6C28_Exit:
     RTS
@@ -275,7 +275,7 @@ CheckClass1:
     ; Add item value and value in item slot.
     LDA $0A
     CLC
-    ADC Items, Y
+    ADC InvItems, Y
     BCC :+                      ; If the sum overflowed,
 
 @SetItemValueFF:
@@ -288,19 +288,19 @@ CheckClass1:
     BCC :+
     LDA #$02
 :
-    ; For bomb item slot, cap it at MaxBombs.
+    ; For bomb item slot, cap it at InvMaxBombs.
     CPY #$01
     BNE :+
-    CMP MaxBombs
+    CMP InvMaxBombs
     BCC :+
-    LDA MaxBombs
+    LDA InvMaxBombs
 :
     JMP SetItemValue            ; Go set the item value and return.
 
 @TakeHeartContainer:
     ; For heart containers, cap at $10.
     ; Add a heart container and a heart.
-    LDA Items, Y
+    LDA InvItems, Y
     CMP #$F0
     BCS L6C28_Exit              ; If we already have max hearts, return.
     ADC #$11
@@ -343,9 +343,9 @@ TakeClass0Complex:
     TAX
 
     ; Combine the mask for this level with the mask in the item slot.
-    LDA Items, Y
+    LDA InvItems, Y
     ORA LevelMasks, X
-    STA Items, Y
+    STA InvItems, Y
 
     ; If the item taken was a triforce piece, then go to mode $12.
     CPY #$1A
@@ -420,9 +420,9 @@ HandleClass2:
     ; Y: item slot
     ; [0A]: item value
     LDA $0A
-    CMP Items, Y
+    CMP InvItems, Y
     BCC L6D1B_Exit              ; If we have a higher grade of this kind of item, return.
-    STA Items, Y                ; Set the new item grade.
+    STA InvItems, Y                ; Set the new item grade.
     CPY #$0B                    ; Ring item slot
     BNE L6D1B_Exit              ; If the item is not a ring, return.
 
@@ -437,7 +437,7 @@ HandleClass2:
 TakeOneRupee:
     LDA #$01                    ; Play "rupee taken" tune.
     STA Tune1Request
-    INC RupeesToAdd
+    INC InvRupeesToAdd
 
 L6D1B_Exit:
     RTS

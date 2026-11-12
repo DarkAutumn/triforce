@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/status-bar-rupees.asm  BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 2818-2976
-; SUBJECTS: (none)
+; SUBJECTS: World
 ; TOPIC:    BeginUpdateMode, rupee count ticking, status bar text
 ; SEE ALSO:
 ; KEY FACTS:
@@ -42,27 +42,27 @@ World_ChangeRupees:
     LDA DynTileBuf
     BPL L6506_Exit              ; If the dynamic transfer buf is already used, then return.
 
-    ; Reset RupeesToAdd or RupeesToSubtract as appropriate,
+    ; Reset InvRupeesToAdd or InvRupeesToSubtract as appropriate,
     ; if reached 0 or max.
     ;
-    ; Index of RupeesToSubtract item slot.
+    ; Index of InvRupeesToSubtract item slot.
     LDY #$27
     LDA InvRupees
     BEQ @ResetSlot
-    LDY #$26                    ; Index of RupeesToAdd item slot.
+    LDY #$26                    ; Index of InvRupeesToAdd item slot.
     CMP #$FF
     BNE :+                      ; If 0 < rupees < $FF, don't reset anything.
 
 @ResetSlot:
     LDA #$00                    ; Reset the slot we chose.
-    STA Items, Y
+    STA InvItems, Y
 :
     LDA FrameCounter
     LSR
     BCS L6506_Exit              ; Every two frames, return.
-    LDA RupeesToAdd
-    BEQ @CheckSubtract          ; If RupeesToAdd <> 0,
-    DEC RupeesToAdd             ; then add one rupee.
+    LDA InvRupeesToAdd
+    BEQ @CheckSubtract          ; If InvRupeesToAdd <> 0,
+    DEC InvRupeesToAdd             ; then add one rupee.
     INC InvRupees
 
     ; Play "heart taken" tune, probably because it's more
@@ -71,9 +71,9 @@ World_ChangeRupees:
     STA Tune0Request
 
 @CheckSubtract:
-    LDA RupeesToSubtract
-    BEQ FormatStatusBarText     ; If RupeesToSubtract = 0, then skip it, and go format header text.
-    DEC RupeesToSubtract
+    LDA InvRupeesToSubtract
+    BEQ FormatStatusBarText     ; If InvRupeesToSubtract = 0, then skip it, and go format header text.
+    DEC InvRupeesToSubtract
     DEC InvRupees               ; Subtract one rupee.
     LDA #$10                    ; Play the tune for this.
     STA Tune0Request

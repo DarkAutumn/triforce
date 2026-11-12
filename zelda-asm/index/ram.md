@@ -6,482 +6,487 @@ modes. `Upstream` is the name in the original disassembly when it differs.
 
 | Address | Name | Upstream | Defined | Meaning |
 |---|---|---|---|---|
-| `$0000` | `GLEEOK_DIRCOUNTERH` |  | ObjVars.inc:127 |  |
-| `$0001` | `GLEEOK_DIRCOUNTERV` |  | ObjVars.inc:128 |  |
-| `$0002` | `GLEEOK_SPEEDX` |  | ObjVars.inc:129 |  |
-| `$0003` | `GLEEOK_SPEEDY` |  | ObjVars.inc:130 |  |
-| `$0004` | `GLEEOK_DIRCHANGECOUNTER` |  | ObjVars.inc:131 |  |
-| `$0005` | `GLEEOK_DELAY` |  | ObjVars.inc:132 |  |
-| `$0010` | `CurLevel` |  | Variables.inc:1 |  |
-| `$0011` | `IsUpdatingMode` |  | Variables.inc:2 |  |
-| `$0012` | `GameMode` |  | Variables.inc:3 |  |
-| `$0013` | `GameSubmode` |  | Variables.inc:4 |  |
-| `$0014` | `TileBufSelector` |  | Variables.inc:5 |  |
-| `$0015` | `FrameCounter` |  | Variables.inc:6 |  |
-| `$0016` | `CurSaveSlot` |  | Variables.inc:7 |  |
-| `$0018` | `Random` |  | Variables.inc:8 |  |
-| `$0026` | `StunCycle` |  | Variables.inc:9 |  |
-| `$0027` | `DoorTimer` |  | Variables.inc:10 |  |
-| `$0028` | `ObjTimer` |  | Variables.inc:11 |  |
-| `$003C` | `FluteTimer` |  | Variables.inc:12 |  |
-| `$003D` | `ObjStunTimer` |  | Variables.inc:13 |  |
-| `$004A` | `ChaseLongTimer` |  | Variables.inc:14 |  |
-| `$004B` | `MonstersFromEdgesLongTimer` |  | Variables.inc:15 |  |
-| `$004C` | `SwordBlockedLongTimer` |  | Variables.inc:16 |  |
-| `$004D` | `EndingFlashLongTimer` |  | BeginEndVars.inc:13 |  |
-| `$004D` | `RedLeeverLongTimer` |  | Variables.inc:17 |  |
-| `$0050` | `HelpDropCount` |  | Variables.inc:18 |  |
-| `$0051` | `HelpDropValue` |  | Variables.inc:19 |  |
-| `$0052` | `ProcessedNarrowObj` |  | Variables.inc:20 |  |
-| `$0053` | `DoorwayDir` |  | Variables.inc:21 |  |
-| `$0054` | `TriggeredDoorCmd` |  | Variables.inc:22 |  |
-| `$0055` | `TriggeredDoorDir` |  | Variables.inc:23 |  |
-| `$0056` | `Link_GoStraightWhenDiagInput` |  | Variables.inc:24 |  |
-| `$0057` | `Link_GoStraight` |  | Variables.inc:25 |  |
-| `$0058` | `VScrollAddrHi` |  | Variables.inc:26 |  |
-| `$0059` | `EmptyMonsterSlot` |  | Variables.inc:27 |  |
-| `$005A` | `UndergroundExitType` |  | Variables.inc:28 |  |
-| `$005B` | `TargetMode` |  | Variables.inc:29 |  |
-| `$005C` | `SwitchNameTablesReq` |  | Variables.inc:30 |  |
-| `$005D` | `CurScanRoomId` |  | Variables.inc:31 |  |
-| `$005E` | `SubmenuScrollProgress` |  | Variables.inc:32 |  |
-| `$005F` | `OddBaseNameTableOverride` |  | Variables.inc:33 |  |
-| `$0060` | `ChaseOtherTarget` |  | Variables.inc:34 |  |
-| `$0061` | `ChaseTargetX` |  | Variables.inc:35 |  |
-| `$0062` | `ChaseTargetY` |  | Variables.inc:36 |  |
-| `$0063` | `World_IsFillingHearts` |  | Variables.inc:37 |  |
-| `$0064` | `LadderSlot` |  | Variables.inc:38 |  |
-| `$0065` | `UndergroundEntranceTile` |  | Variables.inc:39 |  |
-| `$0066` | `SongScriptPtrLo` |  | Variables.inc:40 |  |
-| `$0067` | `SongScriptPtrHi` |  | Variables.inc:41 |  |
-| `$0069` | `EffectCounter` |  | Variables.inc:42 |  |
-| `$006A` | `CurNoteLowPeriodSq0` |  | Variables.inc:43 |  |
-| `$006B` | `CurNoteLowPeriodSq1` |  | Variables.inc:44 |  |
-| `$006C` | `SongPhraseIndex` |  | Variables.inc:45 |  |
-| `$006D` | `CustomEnvelopeOffsetTune1` |  | Variables.inc:46 |  |
-| `$006E` | `NoteLengthTune1` |  | Variables.inc:47 |  |
-| `$006F` | `NoteCounterTune1` |  | Variables.inc:48 |  |
-| `$0070` | `ObjX` |  | Variables.inc:54 |  |
-| `$0084` | `ObjY` |  | Variables.inc:55 |  |
-| `$0098` | `ObjRoomItemId` |  | CommonVars.inc:4 |  |
-| `$0098` | `ObjDir` |  | Variables.inc:56 |  |
-| `$00AB` | `RoomItemId` |  | Variables.inc:57 |  |
-| `$00AC` | `Item_ObjItemId` |  | CommonVars.inc:8 |  |
-| `$00AC` | `ObjState` |  | Variables.inc:60 |  |
-| `$00C0` | `ObjShoveDir` |  | Variables.inc:61 |  |
-| `$00D3` | `ObjShoveDistance` |  | Variables.inc:62 |  |
-| `$00E0` | `Paused` |  | Variables.inc:63 |  |
-| `$00E1` | `MenuState` |  | Variables.inc:64 |  |
-| `$00E2` | `VScrollAddrLo` |  | Variables.inc:65 |  |
-| `$00E3` | `IsSprite0CheckActive` |  | Variables.inc:66 |  |
-| `$00E5` | `DeathModeCounter` |  | Variables.inc:67 |  |
-| `$00E6` | `VScrollStartFrame` |  | Variables.inc:68 |  |
-| `$00E8` | `CurColumn` |  | Variables.inc:69 |  |
-| `$00E9` | `CurRow` |  | Variables.inc:70 |  |
-| `$00EA` | `WhirlwindPrevRoomId` |  | Variables.inc:71 |  |
-| `$00EB` | `RoomId` |  | Variables.inc:72 |  |
-| `$00EC` | `NextRoomId` |  | Variables.inc:73 |  |
-| `$00ED` | `PrevRow` |  | Variables.inc:74 |  |
-| `$00EE` | `CurOpenedDoors` |  | Variables.inc:75 |  |
-| `$00F3` | `_Unknown_F3` |  | Variables.inc:76 |  |
-| `$00F4` | `InitializedGame` |  | Variables.inc:77 |  |
-| `$00F5` | `TransferredCommonPatterns` |  | Variables.inc:78 |  |
-| `$00F6` | `TransferredDemoPatterns` |  | Variables.inc:79 |  |
-| `$00F7` | `ReturnToBank4` |  | Variables.inc:80 |  |
-| `$00F8` | `ButtonsPressed` |  | Variables.inc:81 |  |
-| `$00FA` | `ButtonsDown` |  | Variables.inc:82 |  |
-| `$00FC` | `CurVScroll` |  | Variables.inc:83 |  |
-| `$00FD` | `CurHScroll` |  | Variables.inc:84 |  |
-| `$00FE` | `CurPpuMask_2001` |  | Variables.inc:85 |  |
-| `$00FF` | `CurPpuControl_2000` |  | Variables.inc:86 |  |
-| `$010E` | `PositiveGridCellSize` |  | Variables.inc:87 |  |
-| `$010F` | `NegativeGridCellSize` |  | Variables.inc:88 |  |
-| `$0200` | `Sprites` |  | Variables.inc:89 |  |
-| `$0301` | `DynTileBufLen` |  | Variables.inc:90 |  |
-| `$0302` | `DynTileBuf` |  | Variables.inc:91 |  |
-| `$033F` | `OpenDoorwayMask` |  | Variables.inc:92 |  |
-| `$0340` | `CurObjIndex` |  | Variables.inc:93 |  |
-| `$0341` | `RollingSpriteIndex` |  | Variables.inc:94 |  |
-| `$0342` | `FirstSpriteIndex` |  | Variables.inc:95 |  |
-| `$0343` | `LeftSpriteOffset` |  | Variables.inc:96 |  |
-| `$0344` | `RightSpriteOffset` |  | Variables.inc:97 |  |
-| `$0346` | `RoomBoundLeft` |  | Variables.inc:98 |  |
-| `$0347` | `RoomBoundRight` |  | Variables.inc:99 |  |
-| `$0348` | `RoomBoundUp` |  | Variables.inc:100 |  |
-| `$0349` | `RoomBoundDown` |  | Variables.inc:101 |  |
-| `$034A` | `ObjectFirstUnwalkableTile` |  | Variables.inc:102 |  |
-| `$034B` | `ShotCollidesWithLink` |  | Variables.inc:103 |  |
-| `$034C` | `ActiveMonsterShots` |  | Variables.inc:104 |  |
-| `$034D` | `RoomAllDead` |  | Variables.inc:105 |  |
-| `$034E` | `RoomObjCount` |  | Variables.inc:106 |  |
-| `$034F` | `RoomKillCount` |  | CommonVars.inc:10 |  |
-| `$034F` | `ObjType` |  | Variables.inc:107 |  |
-| `$035F` | `RoomObjTemplateType` |  | Variables.inc:108 |  |
-| `$0380` | `ObjAngleFrac` |  | ObjVars.inc:9 |  |
-| `$0380` | `Shot_ObjBounceDir` |  | ObjVars.inc:12 |  |
-| `$0380` | `Moldorm_ObjOldDir` |  | ObjVars.inc:43 |  |
-| `$0380` | `Gohma_ObjShootTimer` |  | ObjVars.inc:81 |  |
-| `$0380` | `ObjMovingLimit` |  | Variables.inc:109 |  |
-| `$0381` | `Gleook_HeadInfo2` |  | ObjVars.inc:114 |  |
-| `$0383` | `Manhandla_SegmentJustDied` |  | ObjVars.inc:78 |  |
-| `$0385` | `Manhandla_BounceDir` |  | ObjVars.inc:79 |  |
-| `$0394` | `ObjRemDistance` |  | ObjVars.inc:5 |  |
-| `$0394` | `ObjAngleWhole` |  | ObjVars.inc:10 |  |
-| `$0394` | `Shot_ObjBounceDist` |  | ObjVars.inc:13 |  |
-| `$0394` | `RedWizzrobe_ObjFadeCounter` |  | ObjVars.inc:68 |  |
-| `$0394` | `ObjGridOffset` |  | Variables.inc:110 |  |
-| `$0395` | `Gleeok_NeckXs3` |  | ObjVars.inc:105 |  |
-| `$03A8` | `Item_ObjItemLifetime` |  | CommonVars.inc:7 |  |
-| `$03A8` | `ObjPosFrac` |  | Variables.inc:111 |  |
-| `$03A9` | `Gleook_HeadInfo3` |  | ObjVars.inc:115 |  |
-| `$03BC` | `Moldorm_ObjBounceDir` |  | ObjVars.inc:42 |  |
-| `$03BC` | `ObjQSpeedFrac` |  | Variables.inc:112 |  |
-| `$03BD` | `Gleeok_NeckYs3` |  | ObjVars.inc:110 |  |
-| `$03D0` | `ObjAnimCounter` |  | Variables.inc:113 |  |
-| `$03E4` | `ObjAnimFrame` |  | Variables.inc:114 |  |
-| `$03F8` | `ObjInputDir` |  | Variables.inc:115 |  |
-| `$0405` | `ObjMetastate` |  | Variables.inc:116 |  |
-| `$0412` | `TriforceGlowTimer` |  | BeginEndVars.inc:1 |  |
-| `$0412` | `PeaceCharDelayCounter` |  | BeginEndVars.inc:14 |  |
-| `$0412` | `Item_ObjMonsterType` |  | CommonVars.inc:6 |  |
-| `$0412` | `StairsTargetY` |  | CommonVars.inc:11 |  |
-| `$0412` | `ObjWantsToShoot` |  | ObjVars.inc:1 |  |
-| `$0412` | `ObjPushTimer` |  | ObjVars.inc:7 |  |
-| `$0412` | `TileObjRoomId` |  | ObjVars.inc:15 |  |
-| `$0412` | `Fireball_ObjDirToTargetX` |  | ObjVars.inc:19 |  |
-| `$0412` | `Flyer_ObjSpeedFrac` |  | ObjVars.inc:24 |  |
-| `$0412` | `Jumper_ObjSpeedWholeY` |  | ObjVars.inc:34 |  |
-| `$0412` | `Wallmaster_ObjStep` |  | ObjVars.inc:39 |  |
-| `$0412` | `PolsVoice_ObjSpeedWhole` |  | ObjVars.inc:59 |  |
-| `$0412` | `BlueWizzrobe_ObjTurnCounter` |  | ObjVars.inc:66 |  |
-| `$0412` | `RedWizzrobe_ObjAnimCounter` |  | ObjVars.inc:69 |  |
-| `$0412` | `Manhandla_ObjSpeedAccum` |  | ObjVars.inc:71 |  |
-| `$0412` | `Gohma_ObjDistTraveled` |  | ObjVars.inc:82 |  |
-| `$0413` | `PeaceCharIndex` |  | BeginEndVars.inc:15 |  |
-| `$0413` | `CaveFlags` |  | CaveVars.inc:5 |  |
-| `$0413` | `Gleeok_ObjHeadInfo` |  | ObjVars.inc:117 |  |
-| `$0413` | `Gleeok_ObjHeadDirCounterH` |  | ObjVars.inc:118 |  |
-| `$0413` | `TriforceGlowCycle` |  | Variables.inc:117 |  |
-| `$0414` | `Gleeok_ObjHeadDirCounterV` |  | ObjVars.inc:119 |  |
-| `$0415` | `PersonTextSelector` |  | CaveVars.inc:1 |  |
-| `$0415` | `Gleeok_ObjHeadSpeedX` |  | ObjVars.inc:120 |  |
-| `$0415` | `ScrolledScreenCount` |  | Variables.inc:118 |  |
-| `$0416` | `TextboxCharIndex` |  | BeginEndVars.inc:16 |  |
-| `$0416` | `PersonTextIndex` |  | CaveVars.inc:2 |  |
-| `$0416` | `Gleeok_ObjHeadSpeedY` |  | ObjVars.inc:121 |  |
-| `$0417` | `Gleeok_ObjHeadDirChangeCounter` |  | ObjVars.inc:122 |  |
-| `$0417` | `DemoLineAttrVramAddrLo` |  | Variables.inc:119 |  |
-| `$0418` | `Gleeok_ObjHeadDelay` |  | ObjVars.inc:123 |  |
-| `$0418` | `DemoLineAttrVramAddrHi` |  | Variables.inc:120 |  |
-| `$0419` | `DemoLineIndex` |  | Variables.inc:121 |  |
-| `$041A` | `DemoTimer` |  | Variables.inc:122 |  |
-| `$041B` | `ScrolledLineCount` |  | Variables.inc:123 |  |
-| `$041C` | `DemoLineTileVramAddrLo` |  | Variables.inc:124 |  |
-| `$041D` | `DemoLineTileVramAddrHi` |  | Variables.inc:125 |  |
-| `$041F` | `InitializedWaterfallAnimation` |  | BeginEndVars.inc:2 |  |
-| `$041F` | `CharBoardIndex` |  | BeginEndVars.inc:8 |  |
-| `$041F` | `ObjTurnRate` |  | ObjVars.inc:2 |  |
-| `$041F` | `Fireball_ObjQSpeedX` |  | ObjVars.inc:21 |  |
-| `$041F` | `Flyer_ObjSpeed` |  | ObjVars.inc:25 |  |
-| `$041F` | `Jumper_ObjSpeedFracY` |  | ObjVars.inc:35 |  |
-| `$041F` | `Wallmaster_ObjTilesCrossed` |  | ObjVars.inc:40 |  |
-| `$041F` | `Digdogger_ObjSpeedFrac` |  | ObjVars.inc:45 |  |
-| `$041F` | `PolsVoice_ObjLastTile` |  | ObjVars.inc:60 |  |
-| `$041F` | `Wizzrobe_ObjLastTile` |  | ObjVars.inc:64 |  |
-| `$041F` | `Manhandla_ObjSpeedFrac` |  | ObjVars.inc:72 |  |
-| `$041F` | `Gohma_ObjMoveAccum` |  | ObjVars.inc:83 |  |
-| `$0420` | `TitleWaveYs` |  | BeginEndVars.inc:3 |  |
-| `$0420` | `InitializedNameField` |  | BeginEndVars.inc:9 |  |
-| `$0420` | `Gleook_HeadInfo0` |  | ObjVars.inc:112 |  |
-| `$0421` | `NameCharOffset` |  | BeginEndVars.inc:10 |  |
-| `$0422` | `NameInputCharBuf` |  | BeginEndVars.inc:11 |  |
-| `$0422` | `CaveItemIds` |  | CaveVars.inc:6 |  |
-| `$0426` | `StillHoldingButton` |  | Variables.inc:126 |  |
-| `$0427` | `HeldButton` |  | Variables.inc:127 |  |
-| `$0428` | `SubsequentButtonRepeat` |  | Variables.inc:128 |  |
-| `$0429` | `ButtonRepeatTimer` |  | Variables.inc:129 |  |
-| `$042A` | `ModeE_WrappedAroundBoardY` |  | Variables.inc:130 |  |
-| `$042C` | `DemoPhase` |  | BeginEndVars.inc:4 |  |
-| `$042C` | `ObjRefId` |  | CommonVars.inc:1 |  |
-| `$042C` | `ObjCaptureTimer` |  | CommonVars.inc:2 |  |
-| `$042C` | `Flyer_ObjTurns` |  | ObjVars.inc:26 |  |
-| `$042C` | `Digdogger_ObjSpeedWhole` |  | ObjVars.inc:46 |  |
-| `$042C` | `Dodongo_ObjBloatedSubstate` |  | ObjVars.inc:55 |  |
-| `$042C` | `PolsVoice_ObjTargetY` |  | ObjVars.inc:61 |  |
-| `$042C` | `Manhandla_ObjSpeedWhole` |  | ObjVars.inc:73 |  |
-| `$042C` | `Gohma_ObjNextOpenEyeCounter` |  | ObjVars.inc:84 |  |
-| `$042C` | `Ganon_ObjPhase` |  | ObjVars.inc:99 |  |
-| `$042D` | `Gleook_HeadInfo1` |  | ObjVars.inc:113 |  |
-| `$042D` | `DemoSubphase` |  | Variables.inc:131 |  |
-| `$042E` | `CaveCurPriceIndex` |  | CaveVars.inc:9 |  |
-| `$042E` | `DemoLineTextIndex` |  | Variables.inc:132 |  |
-| `$042F` | `CaveCurPriceOffset` |  | CaveVars.inc:10 |  |
-| `$042F` | `DemoItemRow` |  | Variables.inc:133 |  |
-| `$0430` | `CavePrices` |  | CaveVars.inc:7 |  |
-| `$0437` | `DemoPhase0Subphase1Cycle` |  | BeginEndVars.inc:5 |  |
-| `$0437` | `Fireball_ObjDirToTargetY` |  | ObjVars.inc:20 |  |
-| `$0437` | `Flyer_ObjDistTraveled` |  | ObjVars.inc:27 |  |
-| `$0437` | `Digdogger_ObjTargetSpeedFrac` |  | ObjVars.inc:47 |  |
-| `$0437` | `Dodongo_ObjBombHits` |  | ObjVars.inc:56 |  |
-| `$0437` | `Manhandla_ObjPrevFrame` |  | ObjVars.inc:74 |  |
-| `$0438` | `CaveChosenIndex` |  | CaveVars.inc:11 |  |
-| `$0438` | `Gleeok_NeckXs0` |  | ObjVars.inc:102 |  |
-| `$0438` | `DemoPhase0Subphase1Timer` |  | Variables.inc:134 |  |
-| `$0444` | `DemoItemIds` |  | BeginEndVars.inc:6 |  |
-| `$0444` | `Fireball_ObjQSpeedY` |  | ObjVars.inc:22 |  |
-| `$0444` | `Flyer_ObjFlyingState` |  | ObjVars.inc:28 |  |
-| `$0444` | `Jumper_ObjTargetY` |  | ObjVars.inc:36 |  |
-| `$0444` | `Digdogger_ObjTargetSpeedWhole` |  | ObjVars.inc:48 |  |
-| `$0444` | `PolsVoice_ObjSpeedFrac` |  | ObjVars.inc:62 |  |
-| `$0444` | `Gohma_ObjEyeOpenTimer` |  | ObjVars.inc:85 |  |
-| `$0445` | `Ganon_ScenePhase` |  | ObjVars.inc:96 |  |
-| `$0445` | `Gleeok_NeckYs0` |  | ObjVars.inc:107 |  |
-| `$0448` | `MoneyGameAmounts` |  | CaveVars.inc:12 |  |
-| `$0451` | `Fireball_ObjPosFracX` |  | ObjVars.inc:17 |  |
-| `$0451` | `Jumper_ObjReversalCount` |  | ObjVars.inc:37 |  |
-| `$0451` | `Manhandla_ObjFrameAccum` |  | ObjVars.inc:75 |  |
-| `$0451` | `Gohma_ObjGoStraight` |  | ObjVars.inc:86 |  |
-| `$0451` | `ObjShootTimer` |  | Variables.inc:135 |  |
-| `$0452` | `Gleeok_NeckXs1` |  | ObjVars.inc:103 |  |
-| `$045E` | `Fireball_ObjPosFracY` |  | ObjVars.inc:18 |  |
-| `$045E` | `Digdogger_ObjSpeedFlag` |  | ObjVars.inc:49 |  |
-| `$045E` | `Dodongo_ObjBloatedTimer` |  | ObjVars.inc:57 |  |
-| `$045E` | `Gohma_ObjSprints` |  | ObjVars.inc:87 |  |
-| `$045E` | `Patra_ObjManeuverIndex` |  | ObjVars.inc:94 |  |
-| `$045F` | `TextboxCharPtr` |  | BeginEndVars.inc:17 |  |
-| `$045F` | `PersonTextPtr` |  | CaveVars.inc:3 |  |
-| `$045F` | `Gleeok_NeckYs1` |  | ObjVars.inc:108 |  |
-| `$046B` | `Flyer_ObjOffsetX` |  | ObjVars.inc:29 |  |
-| `$046B` | `Digdogger_ObjIsChild` |  | ObjVars.inc:50 |  |
-| `$046B` | `Gohma_ObjEyeState` |  | ObjVars.inc:88 |  |
-| `$046B` | `Ganon_ObjAnimationFrame` |  | ObjVars.inc:98 |  |
-| `$046C` | `Gleeok_NeckXs2` |  | ObjVars.inc:104 |  |
-| `$0478` | `ObjTurnTimer` |  | ObjVars.inc:3 |  |
-| `$0478` | `Flyer_ObjOffsetY` |  | ObjVars.inc:30 |  |
-| `$0478` | `Digdogger_ObjCurPart` |  | ObjVars.inc:51 |  |
-| `$0478` | `Aquamentus_ObjFireballOffset` |  | ObjVars.inc:53 |  |
-| `$0478` | `Manhandla_ObjFrame` |  | ObjVars.inc:76 |  |
-| `$0478` | `Gohma_ObjEyeAnimCounter` |  | ObjVars.inc:89 |  |
-| `$0478` | `Ganon_ObjCloudDist` |  | ObjVars.inc:100 |  |
-| `$0479` | `Gleeok_NeckYs2` |  | ObjVars.inc:109 |  |
-| `$0485` | `ObjHP` |  | Variables.inc:136 |  |
-| `$0492` | `ObjUninitialized` |  | Variables.inc:137 |  |
-| `$049E` | `ObjCollidedTile` |  | Variables.inc:138 |  |
-| `$04B2` | `ObjInvincibilityMask` |  | Variables.inc:139 |  |
-| `$04BF` | `ObjAttr` |  | Variables.inc:140 |  |
-| `$04CC` | `PersonFireballsEnabled` |  | Variables.inc:141 |  |
-| `$04CD` | `LevelBlockAttrsByteF` |  | Variables.inc:142 |  |
-| `$04CE` | `ShutterTrigger` |  | Variables.inc:143 |  |
-| `$04CF` | `BlockPushComplete` |  | Variables.inc:144 |  |
-| `$04D1` | `FlyingMaxSpeedFrac` |  | Variables.inc:145 |  |
-| `$04D7` | `GleeokCurNeck` |  | Variables.inc:146 |  |
-| `$04D8` | `GleeokSignedRefSegmentDistance` |  | Variables.inc:147 |  |
-| `$04D9` | `GleeokPrimarySegmentLimits` |  | Variables.inc:148 |  |
-| `$04DB` | `GleeokSecondarySegmentLimits` |  | Variables.inc:149 |  |
-| `$04DD` | `GleeokTertiarySegmentLimits` |  | Variables.inc:150 |  |
-| `$04E5` | `StatusBarMapTrigger` |  | Variables.inc:151 |  |
-| `$04E6` | `Lamnola_Speed` |  | ObjVars.inc:92 |  |
-| `$04E6` | `GleeokAnimationTimer` |  | Variables.inc:152 |  |
-| `$04E7` | `Lamnola_Type` |  | ObjVars.inc:91 |  |
-| `$04E7` | `GleeokBodyAnimationFrame` |  | Variables.inc:153 |  |
-| `$04E8` | `Statue_ObjFireballTimer` |  | ObjVars.inc:32 |  |
-| `$04F0` | `ObjInvincibilityTimer` |  | Variables.inc:154 |  |
-| `$0504` | `LeftAlignHalfWidthObj` |  | Variables.inc:155 |  |
-| `$0505` | `ItemTypeToLift` |  | Variables.inc:156 |  |
-| `$0506` | `ItemLiftTimer` |  | Variables.inc:157 |  |
-| `$0507` | `ChildDigdoggerCount` |  | Variables.inc:158 |  |
-| `$0508` | `SummonedWhirlwind` |  | Variables.inc:159 |  |
-| `$0509` | `TriforceFanfareActive` |  | Variables.inc:160 |  |
-| `$050A` | `CreditsRow` |  | Variables.inc:161 |  |
-| `$050B` | `CreditsTileOffset` |  | Variables.inc:162 |  |
-| `$050C` | `CreditsVramPage` |  | Variables.inc:163 |  |
-| `$050D` | `CreditsVramLine` |  | Variables.inc:164 |  |
-| `$050E` | `CreditsLineIndex` |  | Variables.inc:165 |  |
-| `$050F` | `LamnolaViableDirMask` |  | Variables.inc:166 |  |
-| `$0510` | `Gleeok_WrithingCounter` |  | ObjVars.inc:125 |  |
-| `$0510` | `ActiveRedLeeverCount` |  | Variables.inc:167 |  |
-| `$0511` | `GleeokDeadNeckMask` |  | Variables.inc:168 |  |
-| `$0512` | `LinkParalyzed` |  | Variables.inc:169 |  |
-| `$0513` | `UsedCandle` |  | Variables.inc:170 |  |
-| `$0514` | `ZoraActive` |  | Variables.inc:171 |  |
-| `$0515` | `ActiveBoulders` |  | Variables.inc:172 |  |
-| `$051A` | `SecretColorCycle` |  | Variables.inc:173 |  |
-| `$051B` | `UsedFlute` |  | Variables.inc:174 |  |
-| `$051C` | `FadeCycle` |  | Variables.inc:175 |  |
-| `$051D` | `PatternBlockIndex` |  | Variables.inc:176 |  |
-| `$051E` | `BrighteningRoom` |  | Variables.inc:177 |  |
-| `$051F` | `CandleState` |  | Variables.inc:178 |  |
-| `$0521` | `PrevOpenedDoors` |  | Variables.inc:179 |  |
-| `$0522` | `WhirlwindTeleportingState` |  | Variables.inc:180 |  |
-| `$0523` | `TeleportingLevelIndex` |  | Variables.inc:181 |  |
-| `$0524` | `SpawnCycle` |  | Variables.inc:182 |  |
-| `$0525` | `CurEdgeSpawnCell` |  | Variables.inc:183 |  |
-| `$0526` | `CaveSourceRoomId` |  | Variables.inc:184 |  |
-| `$0527` | `CellarSourceRoomId` |  | Variables.inc:185 |  |
-| `$0528` | `SkippedDemo` |  | Variables.inc:186 |  |
-| `$0529` | `ForceSwordShot` |  | Variables.inc:187 |  |
-| `$052A` | `WorldKillCycle` |  | Variables.inc:188 |  |
-| `$052B` | `RoomTileObjType` |  | Variables.inc:189 |  |
-| `$052C` | `RoomTileObjX` |  | Variables.inc:190 |  |
-| `$052D` | `RoomTileObjY` |  | Variables.inc:191 |  |
-| `$052E` | `SwordBlocked` |  | Variables.inc:192 |  |
-| `$052F` | `MazeStep` |  | Variables.inc:193 |  |
-| `$0530` | `PlayAreaAttrs` |  | Variables.inc:194 |  |
-| `$0560` | `LevelKillCounts` |  | Variables.inc:195 |  |
-| `$05F0` | `CurNoteLowPeriodTrg` |  | Variables.inc:196 |  |
-| `$05F2` | `SampleCounter` |  | Variables.inc:197 |  |
-| `$05F3` | `SeaSfxCounter` |  | Variables.inc:198 |  |
-| `$05F4` | `NoteLengthTableBase` |  | Variables.inc:199 |  |
-| `$05F5` | `FirstNoteIndexSongNoise` |  | Variables.inc:200 |  |
-| `$05F6` | `BackgroundSample` |  | Variables.inc:201 |  |
-| `$0600` | `SongRequest` |  | Variables.inc:202 |  |
-| `$0601` | `SampleRequest` |  | Variables.inc:203 |  |
-| `$0602` | `Tune1Request` |  | Variables.inc:204 |  |
-| `$0603` | `EffectRequest` |  | Variables.inc:205 |  |
-| `$0604` | `Tune0Request` |  | Variables.inc:206 |  |
-| `$0605` | `Tune0` |  | Variables.inc:207 |  |
-| `$0606` | `Effect` |  | Variables.inc:208 |  |
-| `$0607` | `Tune1` |  | Variables.inc:209 |  |
-| `$0608` | `Sample` |  | Variables.inc:210 |  |
-| `$0609` | `Song` |  | Variables.inc:211 |  |
-| `$060A` | `NoteOffsetSongSq1` |  | Variables.inc:212 |  |
-| `$060B` | `NoteOffsetSongSq0` |  | Variables.inc:213 |  |
-| `$060C` | `NoteOffsetSongTrg` |  | Variables.inc:214 |  |
-| `$060D` | `NoteOffsetSongNoise` |  | Variables.inc:215 |  |
-| `$060E` | `TunePtr0` |  | Variables.inc:216 |  |
-| `$060F` | `NoteLengthSongSq0` |  | Variables.inc:217 |  |
-| `$0610` | `NoteLengthSongSq1` |  | Variables.inc:218 |  |
-| `$0611` | `NoteCounterSongSq1` |  | Variables.inc:219 |  |
-| `$0612` | `CustomEnvelopeOffsetSongSq1` |  | Variables.inc:220 |  |
-| `$0613` | `NoteCounterSongSq0` |  | Variables.inc:221 |  |
-| `$0614` | `CustomEnvelopeOffsetSongSq0` |  | Variables.inc:222 |  |
-| `$0615` | `NoteLengthSongTrg` |  | Variables.inc:223 |  |
-| `$0616` | `NoteCounterSongTrg` |  | Variables.inc:224 |  |
-| `$0617` | `NoteCounterSongNoise` |  | Variables.inc:225 |  |
-| `$0618` | `TunePtr1` |  | Variables.inc:226 |  |
-| `$0619` | `SongEnvelopeSelector` |  | Variables.inc:227 |  |
-| `$061B` | `SongVibrationCounterSq1` |  | Variables.inc:228 |  |
-| `$061C` | `SongVibrationCounterSq0` |  | Variables.inc:229 |  |
-| `$061D` | `SongVibrationCounterTrg` |  | Variables.inc:230 |  |
-| `$061E` | `SongRepetitionsTrg` |  | Variables.inc:231 |  |
-| `$061F` | `SongRepeatStartOffset` |  | Variables.inc:232 |  |
-| `$0620` | `CurRoomHistoryIndex` |  | Variables.inc:233 |  |
-| `$0621` | `RoomHistory` |  | Variables.inc:234 |  |
-| `$0627` | `WorldKillCount` |  | Variables.inc:235 |  |
-| `$062D` | `QuestNumbers` |  | Variables.inc:236 |  |
-| `$0630` | `DeathCounts` |  | Variables.inc:237 |  |
-| `$0633` | `IsSaveSlotActive` |  | Variables.inc:238 |  |
-| `$0636` | `IsRegisterSaveFileOptionEnabled` |  | Variables.inc:239 |  |
-| `$0637` | `IsEliminateSaveFileOptionEnabled` |  | Variables.inc:240 |  |
-| `$0638` | `Names` |  | Variables.inc:241 |  |
-| `$0650` | `SaveSlotHearts` |  | Variables.inc:242 |  |
-| `$0656` | `SelectedItemSlot` |  | Variables.inc:243 |  |
-| `$0657` | `Items` |  | Variables.inc:244 |  |
-| `$0658` | `InvBombs` |  | Variables.inc:245 |  |
-| `$0659` | `InvArrow` |  | Variables.inc:246 |  |
-| `$065A` | `Bow` |  | Variables.inc:247 |  |
-| `$065B` | `InvCandle` |  | Variables.inc:248 |  |
-| `$065D` | `InvFood` |  | Variables.inc:249 |  |
-| `$065E` | `Potion` |  | Variables.inc:250 |  |
-| `$0660` | `InvRaft` |  | Variables.inc:251 |  |
-| `$0661` | `InvBook` |  | Variables.inc:252 |  |
-| `$0662` | `InvRing` |  | Variables.inc:253 |  |
-| `$0663` | `InvLadder` |  | Variables.inc:254 |  |
-| `$0664` | `InvMagicKey` |  | Variables.inc:255 |  |
-| `$0665` | `InvBracelet` |  | Variables.inc:256 |  |
-| `$0666` | `InvLetter` |  | Variables.inc:257 |  |
-| `$0667` | `InvCompass` |  | Variables.inc:258 |  |
-| `$0668` | `InvMap` |  | Variables.inc:259 |  |
-| `$0669` | `InvCompass9` |  | Variables.inc:260 |  |
-| `$066A` | `InvMap9` |  | Variables.inc:261 |  |
-| `$066C` | `InvClock` |  | Variables.inc:262 |  |
-| `$066D` | `InvRupees` |  | Variables.inc:263 |  |
-| `$066E` | `InvKeys` |  | Variables.inc:264 |  |
-| `$066F` | `HeartValues` |  | Variables.inc:269 |  |
-| `$0670` | `HeartPartial` |  | Variables.inc:273 |  |
-| `$0671` | `InvTriforce` |  | Variables.inc:274 |  |
-| `$0672` | `LastBossDefeated` |  | Variables.inc:275 |  |
-| `$0674` | `InvBoomerang` |  | Variables.inc:276 |  |
-| `$0675` | `InvMagicBoomerang` |  | Variables.inc:277 |  |
-| `$0676` | `InvMagicShield` |  | Variables.inc:278 |  |
-| `$067C` | `MaxBombs` |  | Variables.inc:279 |  |
-| `$067D` | `RupeesToAdd` |  | Variables.inc:280 |  |
-| `$067E` | `RupeesToSubtract` |  | Variables.inc:281 |  |
-| `$067F` | `WorldFlags` |  | Variables.inc:282 |  |
-| `$2000` | `PpuControl_2000` |  | Variables.inc:284 |  |
-| `$2001` | `PpuMask_2001` |  | Variables.inc:285 |  |
-| `$2002` | `PpuStatus_2002` |  | Variables.inc:286 |  |
-| `$2003` | `OamAddr_2003` |  | Variables.inc:287 |  |
-| `$2004` | `OamData_2004` |  | Variables.inc:288 |  |
-| `$2005` | `PpuScroll_2005` |  | Variables.inc:289 |  |
-| `$2006` | `PpuAddr_2006` |  | Variables.inc:290 |  |
-| `$2007` | `PpuData_2007` |  | Variables.inc:291 |  |
-| `$4000` | `Sq0Duty_4000` |  | Variables.inc:292 |  |
-| `$4001` | `Sq0Sweep_4001` |  | Variables.inc:293 |  |
-| `$4002` | `Sq0Timer_4002` |  | Variables.inc:294 |  |
-| `$4003` | `Sq0Length_4003` |  | Variables.inc:295 |  |
-| `$4004` | `Sq1Duty_4004` |  | Variables.inc:296 |  |
-| `$4005` | `Sq1Sweep_4005` |  | Variables.inc:297 |  |
-| `$4006` | `Sq1Timer_4006` |  | Variables.inc:298 |  |
-| `$4007` | `Sq1Length_4007` |  | Variables.inc:299 |  |
-| `$4008` | `TrgLinear_4008` |  | Variables.inc:300 |  |
-| `$400A` | `TrgTimer_400A` |  | Variables.inc:301 |  |
-| `$400B` | `TrgLength_400B` |  | Variables.inc:302 |  |
-| `$400C` | `NoiseVolume_400C` |  | Variables.inc:303 |  |
-| `$400E` | `NoisePeriod_400E` |  | Variables.inc:304 |  |
-| `$400F` | `NoiseLength_400F` |  | Variables.inc:305 |  |
-| `$4010` | `DmcFreq_4010` |  | Variables.inc:306 |  |
-| `$4011` | `DmcCounter_4011` |  | Variables.inc:307 |  |
-| `$4012` | `DmcAddress_4012` |  | Variables.inc:308 |  |
-| `$4013` | `DmcLength_4013` |  | Variables.inc:309 |  |
-| `$4014` | `SpriteDma_4014` |  | Variables.inc:310 |  |
-| `$4015` | `ApuStatus_4015` |  | Variables.inc:311 |  |
-| `$4016` | `Ctrl1_4016` |  | Variables.inc:312 |  |
-| `$4017` | `Ctrl2_FrameCtr_4017` |  | Variables.inc:313 |  |
-| `$6001` | `SaveRamBegin` |  | Variables.inc:315 |  |
-| `$6002` | `SaveFileAName0` |  | Variables.inc:316 |  |
-| `$600A` | `SaveFileAName1` |  | Variables.inc:317 |  |
-| `$6012` | `SaveFileAName2` |  | Variables.inc:318 |  |
-| `$601A` | `SaveFileAItems0` |  | Variables.inc:319 |  |
-| `$6042` | `SaveFileAItems1` |  | Variables.inc:320 |  |
-| `$606A` | `SaveFileAItems2` |  | Variables.inc:321 |  |
-| `$6092` | `SaveFileAWorldFlags0` |  | Variables.inc:322 |  |
-| `$6212` | `SaveFileAWorldFlags1` |  | Variables.inc:323 |  |
-| `$6392` | `SaveFileAWorldFlags2` |  | Variables.inc:324 |  |
-| `$6512` | `SaveFileASlotActive0` |  | Variables.inc:325 |  |
-| `$6513` | `SaveFileASlotActive1` |  | Variables.inc:326 |  |
-| `$6514` | `SaveFileASlotActive2` |  | Variables.inc:327 |  |
-| `$6515` | `SaveFileADeathCount0` |  | Variables.inc:328 |  |
-| `$6516` | `SaveFileADeathCount1` |  | Variables.inc:329 |  |
-| `$6517` | `SaveFileADeathCount2` |  | Variables.inc:330 |  |
-| `$651B` | `SaveFileAQuestNumber0` |  | Variables.inc:331 |  |
-| `$651C` | `SaveFileAQuestNumber1` |  | Variables.inc:332 |  |
-| `$651D` | `SaveFileAQuestNumber2` |  | Variables.inc:333 |  |
-| `$651E` | `SaveFileOpenMarkers` |  | Variables.inc:334 |  |
-| `$6521` | `SaveFileCloseMarkers` |  | Variables.inc:335 |  |
-| `$6524` | `FileAChecksums` |  | Variables.inc:336 |  |
-| `$652A` | `IsSaveFileBCommitted` |  | Variables.inc:337 |  |
-| `$6530` | `PlayAreaTiles` |  | Variables.inc:338 |  |
-| `$687E` | `LevelBlockAttrsA` |  | Variables.inc:339 |  |
-| `$68FE` | `LevelBlockAttrsB` |  | Variables.inc:340 |  |
-| `$697E` | `LevelBlockAttrsC` |  | Variables.inc:341 |  |
-| `$69FE` | `LevelBlockAttrsD` |  | Variables.inc:342 |  |
-| `$6A7E` | `LevelBlockAttrsE` |  | Variables.inc:343 |  |
-| `$6AFE` | `LevelBlockAttrsF` |  | Variables.inc:344 |  |
-| `$6B7E` | `LevelInfo_PalettesTransferBuf` |  | Variables.inc:345 |  |
-| `$6BA2` | `LevelInfo_FoeCounts` |  | Variables.inc:346 |  |
-| `$6BA6` | `LevelInfo_StartY` |  | Variables.inc:347 |  |
-| `$6BA7` | `LevelInfo_ShortcutOrItemPosArray` |  | Variables.inc:348 |  |
-| `$6BAB` | `LevelInfo_SubmenuMapRotation` |  | Variables.inc:349 |  |
-| `$6BAC` | `LevelInfo_StatusBarMapXOffset` |  | Variables.inc:350 |  |
-| `$6BAD` | `LevelInfo_StartRoomId` |  | Variables.inc:351 |  |
-| `$6BAE` | `LevelInfo_TriforceRoomId` |  | Variables.inc:352 |  |
-| `$6BAF` | `LevelInfo_WorldFlagsAddr` |  | Variables.inc:353 |  |
-| `$6BB1` | `LevelInfo_LevelNumber` |  | Variables.inc:354 |  |
-| `$6BB2` | `LevelInfo_CellarRoomIdArray` |  | Variables.inc:355 |  |
-| `$6BBC` | `LevelInfo_BossRoomId` |  | Variables.inc:356 |  |
-| `$6BBD` | `LevelInfo_SubmenuMapMask` |  | Variables.inc:357 |  |
-| `$6BCD` | `LevelInfo_StatusBarMapTransferBuf` |  | Variables.inc:358 |  |
-| `$6BFA` | `LevelInfo_PaletteCycles` |  | Variables.inc:359 |  |
-| `$6C5A` | `LevelInfo_DeathPaletteSeries` |  | Variables.inc:360 |  |
-| `$7FFF` | `SaveRamEnd` |  | Variables.inc:361 |  |
+| `$0000` | `GleeokHead_DirCounterH` | `GLEEOK_DIRCOUNTERH` | ObjVars.inc:230 | offset 0: horizontal direction counter (starts at 6). |
+| `$0001` | `GleeokHead_DirCounterV` | `GLEEOK_DIRCOUNTERV` | ObjVars.inc:231 | offset 1: vertical direction counter (starts at 3). |
+| `$0002` | `GleeokHead_SpeedFlagX` | `GLEEOK_SPEEDX` | ObjVars.inc:232 | offset 2: X step flag (starts $FF on necks 0 and 2, else 0). |
+| `$0003` | `GleeokHead_SpeedFlagY` | `GLEEOK_SPEEDY` | ObjVars.inc:233 | offset 3: Y step flag (starts $FF on necks 1 and 3, else 0). |
+| `$0004` | `GleeokHead_DirChangeCounter` | `GLEEOK_DIRCHANGECOUNTER` | ObjVars.inc:234 | offset 4: move counter (the constant is not referenced). |
+| `$0005` | `GleeokHead_Delay` | `GLEEOK_DELAY` | ObjVars.inc:235 | offset 5: start delay. |
+| `$0010` | `CurLevel` |  | Variables.inc:12 | Current level: 0 = overworld (OW), 1-9 = dungeon level (UW). |
+| `$0011` | `IsUpdatingMode` |  | Variables.inc:13 | 0 = run the mode's init routine each frame; nonzero = run its update. |
+| `$0012` | `GameMode` |  | Variables.inc:15 | Game mode, $00-$13; index into the InitMode and UpdateMode jump tables. |
+| `$0013` | `GameSubmode` |  | Variables.inc:19 | Step within the mode's init or update routine; reset to 0 between them. |
+| `$0014` | `TileBufSelector` |  | Variables.inc:20 | Which PPU transfer buffer IsrNmi sends this frame; 0 = DynTileBuf. |
+| `$0015` | `FrameCounter` |  | Variables.inc:22 | Incremented once per frame in IsrNmi (also while paused); wraps at $FF. |
+| `$0016` | `CurSaveSlot` |  | Variables.inc:23 | Save slot in use, 0-2; in the file menu also 3 register, 4 eliminate. |
+| `$0018` | `Random` |  | Variables.inc:26 | [13] $18-$24. Random shift register, stepped once per frame in IsrNmi. |
+| `$0026` | `LongTimerCycle` | `StunCycle` | Variables.inc:38 | Divider for the 10-frame timers: counts 9 down to 0 and wraps (IsrNmi). |
+| `$0027` | `DoorTimer` |  | Variables.inc:39 | Frames until the next step of a door opening or closing (8 per step). |
+| `$0028` | `ObjTimer` |  | Variables.inc:40 | [20] per object slot, $28-$3B. Countdown in frames, 1 per frame to 0. |
+| `$003C` | `FluteTimer` |  | Variables.inc:45 | Frames left of the flute tune ($98 at start); the room is frozen then. |
+| `$003D` | `ObjStunTimer` |  | Variables.inc:48 | [13] per object slot $00-$0C, $3D-$49. Stun left, in 10-frame units. |
+| `$004A` | `ChaseLongTimer` |  | Variables.inc:51 | 10-frame units until the monsters' chase target flips (0-7 at reload). |
+| `$004B` | `MonstersFromEdgesLongTimer` |  | Variables.inc:53 | 10-frame units until the next monster may walk in from a screen edge |
+| `$004C` | `SwordBlockedLongTimer` |  | Variables.inc:55 | 10-frame units during which Link's sword is blocked (flashing Bubble). |
+| `$004D` | `EndingPeaceLongTimer` | `EndingFlashLongTimer` | BeginEndVars.inc:25 | scalar; ending: long timer for the "peace returns" text submode. |
+| `$004D` | `RedLeeverLongTimer` |  | Variables.inc:58 | 10-frame units until a Red Leever may surface. |
+| `$0050` | `HelpDropCount` |  | Variables.inc:63 | Kills since Link last took damage, capped at $0A; $0A forces a drop. |
+| `$0051` | `IsHelpDropBomb` | `HelpDropValue` | Variables.inc:67 | Which forced drop: 0 = 5 rupees, nonzero = bomb. |
+| `$0052` | `IsDrawnItemNarrow` | `ProcessedNarrowObj` | Variables.inc:71 | Set to 1 by Anim_WriteItemSprites when the item drawn is half width (one |
+| `$0053` | `DoorwayDir` |  | Variables.inc:73 | Direction bit of the dungeon doorway Link stands in; 0 = not in one. |
+| `$0054` | `TriggeredDoorCmd` |  | Variables.inc:76 | Door animation command: 0 none, 2 close, 6 open (UpdateDoors). |
+| `$0055` | `TriggeredDoorDir` |  | Variables.inc:79 | Direction bit (1 R, 2 L, 4 D, 8 U) of the door being opened or closed. |
+| `$0056` | `Link_GoStraightWhenDiagInput` |  | Variables.inc:80 | Flag: 1 = keep Link's direction at grid points under diagonal input. |
+| `$0057` | `Link_GoStraight` |  | Variables.inc:84 | Flag: 1 = Link keeps his direction until the next grid point. |
+| `$0058` | `VScrollAddrHi` |  | Variables.inc:102 | High byte of the mid-frame PPU address for vertical room scrolling. |
+| `$0059` | `EmptyMonsterSlot` |  | Variables.inc:88 | Object slot returned by FindEmptyMonsterSlot: the highest free slot in |
+| `$005A` | `UndergroundExitType` |  | Variables.inc:90 | Nonzero while Link leaves a cave or cellar (1) or a dungeon (2). |
+| `$005B` | `ModeAfterStairs` | `TargetMode` | Variables.inc:94 | Game mode to enter when the stairs mode ($10) ends (SetTargetMode). |
+| `$005C` | `SwitchNameTablesReq` |  | Variables.inc:105 | Nonzero = IsrNmi toggles the base name table ($2000/$2800) this frame. |
+| `$005D` | `SubmenuScanRoomId` | `CurScanRoomId` | Variables.inc:107 | Room id ($7F down to 0) being scanned to draw the submenu dungeon map. |
+| `$005E` | `SubmenuScrollProgress` |  | Variables.inc:108 | Countdown from $2B while the submenu scrolls in (row * 2 + flag). |
+| `$005F` | `OddBaseNameTableOverride` |  | Variables.inc:111 | 0/1 ORed into PPU control bit 0 at the split during horizontal scroll. |
+| `$0060` | `IsChasingOtherTarget` | `ChaseOtherTarget` | Variables.inc:132 | 0 = monsters chase Link; 1 = they chase the stored decoy position. |
+| `$0061` | `ChaseTargetX` |  | Variables.inc:135 | X that chasing monsters steer toward (Link, a decoy point, or food). |
+| `$0062` | `ChaseTargetY` |  | Variables.inc:140 | Y the chasing monsters steer toward (see ChaseTargetX). |
+| `$0063` | `World_IsFillingHearts` |  | Variables.inc:143 | Nonzero while hearts refill (potion, pond fairy, end of level). |
+| `$0064` | `LadderSlot` |  | Variables.inc:95 | Object slot holding the laid-down ladder; 0 = ladder not in use. |
+| `$0065` | `UndergroundEntranceTile` |  | Variables.inc:97 | OW tile Link stood on when he went underground ($24 or $70-$73). |
+| `$0066` | `SongScriptPtrLo` |  | Variables.inc:148 | Pointer (2 bytes lo/hi, $66-$67) to the current song phrase script. |
+| `$0067` | `SongScriptPtrHi` |  | Variables.inc:149 | High byte of the song script pointer. |
+| `$0069` | `EffectCounter` |  | Variables.inc:150 | Steps left in the current noise-channel sound effect; counts down to 0. |
+| `$006A` | `CurNoteLowPeriodSq0` |  | Variables.inc:151 | Low period byte of the note playing on square channel 0 (for vibrato). |
+| `$006B` | `CurNoteLowPeriodSq1` |  | Variables.inc:152 | Low period byte of the note playing on square channel 1 (for vibrato). |
+| `$006C` | `SongPhraseIndex` |  | Variables.inc:153 | Index into SongTable of the current phrase of a multi-phrase song. |
+| `$006D` | `CustomEnvelopeOffsetTune1` |  | Variables.inc:154 | Offset into CustomEnvelopeTune1; counts down from $1F during a note. |
+| `$006E` | `NoteLengthTune1` |  | Variables.inc:155 | Length in frames of notes on tune channel 1 (set by the tune script). |
+| `$006F` | `NoteCounterTune1` |  | Variables.inc:156 | Frames left of the current note on tune channel 1. |
+| `$0070` | `ObjX` |  | Variables.inc:177 | [20] per object slot, $70-$83. X of the object's left edge in pixels. |
+| `$0084` | `ObjY` |  | Variables.inc:178 | [20] per object slot, $84-$97. Y of the object's top edge in pixels. |
+| `$0098` | `ObjRoomItemId` |  | CommonVars.inc:17 | alias of ObjDir; with X = $13 (room item slot) it is RoomItemId ($AB). |
+| `$0098` | `ObjDir` |  | Variables.inc:181 | [20] per object slot, $98-$AB. Direction: 1 right, 2 left, 4 down, 8 up. |
+| `$00AB` | `RoomItemId` |  | Variables.inc:184 | = ObjDir[$13]. Item id of the room item; $3F = none. |
+| `$00AC` | `Item_ObjItemId` |  | CommonVars.inc:18 | per slot; dropped item: item id; $FF = taken. Alias of ObjState. |
+| `$00AC` | `ObjState` |  | Variables.inc:187 | [20] per object slot, $AC-$BF. State; meaning depends on object type. |
+| `$00C0` | `ObjShoveDir` |  | Variables.inc:196 | [19] per object slot, $C0-$D2. Knockback direction bits; 0 = none. |
+| `$00D3` | `ObjShoveDistance` |  | Variables.inc:199 | [13] per object slot $00-$0C, $D3-$DF. Pixels of knockback left. |
+| `$00E0` | `PauseState` | `Paused` | Variables.inc:203 | 0 running; 1 paused with Select; 2 paused by the game (potion refill). |
+| `$00E1` | `SubmenuState` | `MenuState` | Variables.inc:205 | Item submenu state: 0 closed, 1 opening ... 7/8 active, 8/9 closing. |
+| `$00E2` | `VScrollAddrLo` |  | Variables.inc:113 | Low byte of the mid-frame PPU address for vertical room scrolling. |
+| `$00E3` | `IsSprite0CheckActive` |  | Variables.inc:114 | Nonzero = IsrNmi waits for the sprite-0 hit and splits the scroll. |
+| `$00E5` | `DeathModeCounter` |  | Variables.inc:208 | Death mode ($11) countdown: spins left, later frames of the spark. |
+| `$00E6` | `VScrollStartFrame` |  | Variables.inc:117 | FrameCounter phase on which vertical room scrolling moves one row. |
+| `$00E8` | `CurColumn` |  | Variables.inc:119 | Tile column being copied to the transfer buffer; valid 1..$20. |
+| `$00E9` | `CurRow` |  | Variables.inc:121 | Tile row being copied to the transfer buffer, 0-$15; $16 or more = none. |
+| `$00EA` | `WhirlwindPrevRoomId` |  | Variables.inc:212 | Room the screen scrolls in from when the whirlwind delivers Link. |
+| `$00EB` | `RoomId` |  | Variables.inc:214 | Current room, $00-$7F: high nibble = map row, low nibble = column. |
+| `$00EC` | `NextRoomId` |  | Variables.inc:215 | Room being entered (CalculateNextRoom); bit 7 set = no such room. |
+| `$00ED` | `PrevRow` |  | Variables.inc:123 | Last row copied by CopyColumnOrRowToTileBuf (a row is not copied twice). |
+| `$00EE` | `CurOpenedDoors` |  | Variables.inc:216 | Direction bits of this room's true doors that are open now. |
+| `$00F3` | `IsScrollMirroringSet` | `_Unknown_F3` | Variables.inc:221 | Nonzero = name table mirroring is set for the room scroll (mode 7). |
+| `$00F4` | `IsGameInitialized` | `InitializedGame` | Variables.inc:224 | Nonzero once the common code and data were copied to RAM. |
+| `$00F5` | `HasCommonPatterns` | `TransferredCommonPatterns` | Variables.inc:226 | $5A once the common pattern tables were sent to the PPU (InitMode0). |
+| `$00F6` | `HasDemoPatterns` | `TransferredDemoPatterns` | Variables.inc:227 | $A5 while the demo pattern tables are loaded (tested by InitMode0). |
+| `$00F7` | `ReturnToBank4` |  | Variables.inc:228 | Nonzero = switch back to bank 4 after changing a tile-object tile. |
+| `$00F8` | `ButtonsPressed` |  | Variables.inc:232 | [2] controller 1, 2. Buttons newly down this frame. |
+| `$00FA` | `ButtonsDown` |  | Variables.inc:235 | [2] controller 1, 2. Buttons held this frame; bits as ButtonsPressed. |
+| `$00FC` | `CurVScroll` |  | Variables.inc:124 | Vertical scroll value IsrNmi writes to the PPU scroll register. |
+| `$00FD` | `CurHScroll` |  | Variables.inc:126 | Horizontal scroll value IsrNmi writes to the PPU scroll register. |
+| `$00FE` | `CurPpuMask` | `CurPpuMask_2001` | Variables.inc:128 | Copy of the last value written to PPU mask register $2001. |
+| `$00FF` | `CurPpuControl` | `CurPpuControl_2000` | Variables.inc:129 | Copy of the last value written to PPU control register $2000. |
+| `$010E` | `PositiveGridCellSize` |  | Variables.inc:238 | Positive limit of the grid offset: 8 for Link, $10 for other objects. |
+| `$010F` | `NegativeGridCellSize` |  | Variables.inc:239 | Negative limit of the grid offset: $F8 (-8) for Link, $F0 for others. |
+| `$0200` | `Sprites` |  | Variables.inc:242 | [256] $0200-$02FF. Sprite (OAM) buffer copied to the PPU every frame. |
+| `$0301` | `DynTileBufLen` |  | Variables.inc:245 | Offset in DynTileBuf of its end marker, where the next record goes. |
+| `$0302` | `DynTileBuf` |  | Variables.inc:246 | [61] $0302-$033E. Dynamic PPU transfer buffer (records, $FF-terminated). |
+| `$033F` | `OpenDoorwayMask` |  | Variables.inc:258 | Submenu map scratch: direction bits of a room's passable sides. |
+| `$0340` | `CurObjIndex` |  | Variables.inc:260 | Object slot being updated; $0B down to 1 each frame in mode 5. |
+| `$0341` | `RollingSpriteIndex` |  | Variables.inc:250 | 0-$27. Index into SpriteOffsets for the next object's sprite pair. |
+| `$0342` | `FirstSpriteIndex` |  | Variables.inc:252 | RollingSpriteIndex the frame starts with; advances by 1 every frame. |
+| `$0343` | `LeftSpriteOffset` |  | Variables.inc:254 | Offset into Sprites of the record for the drawn object's left half. |
+| `$0344` | `RightSpriteOffset` |  | Variables.inc:255 | Offset into Sprites of the record for the drawn object's right half. |
+| `$0346` | `RoomBoundLeft` |  | Variables.inc:262 | Left X bound for objects: $11 in the OW, $21 in the UW. |
+| `$0347` | `RoomBoundRight` |  | Variables.inc:265 | X bound on the right: $E0 in the OW, $D0 in the UW. |
+| `$0348` | `RoomBoundUp` |  | Variables.inc:266 | Y bound at the top: $4E in the OW, $5E in the UW. |
+| `$0349` | `RoomBoundDown` |  | Variables.inc:267 | Y bound at the bottom: $CD in the OW, $BD in the UW. |
+| `$034A` | `RoomFirstUnwalkableTile` | `ObjectFirstUnwalkableTile` | Variables.inc:268 | Tiles at or above this number block movement: $89 OW, $78 UW. |
+| `$034B` | `IsShotCollidingWithLink` | `ShotCollidesWithLink` | Variables.inc:269 | Set by CheckLinkCollision when a monster's shot touches Link. |
+| `$034C` | `MonsterShotCount` | `ActiveMonsterShots` | Variables.inc:271 | Counted monster shots in flight; ShootLimited allows at most 4. |
+| `$034D` | `IsRoomAllDead` | `RoomAllDead` | Variables.inc:272 | Nonzero once no monsters are left in the dungeon room. |
+| `$034E` | `RoomObjCount` |  | Variables.inc:274 | Number of monsters the room makes on entry. |
+| `$034F` | `RoomKillCount` |  | CommonVars.inc:28 | scalar; monsters killed in the room since it was entered. |
+| `$034F` | `ObjType` |  | Variables.inc:279 | [13] per object slot $00-$0C, $34F-$35B. Object type id; 0 = empty slot. |
+| `$035F` | `RoomObjTemplateType` |  | Variables.inc:281 | Object type of the first monster the room was populated with. |
+| `$0380` | `ObjAngleFrac` |  | ObjVars.inc:33 | per slot; orbiters: orbit angle fraction (low byte). |
+| `$0380` | `MonsterShot_ObjBounceDir` | `Shot_ObjBounceDir` | ObjVars.inc:41 | per slot; monster shot: Link's facing direction when it hit his shield. |
+| `$0380` | `Moldorm_ObjOldDir` |  | ObjVars.inc:105 | per slot; Moldorm: the segment's previous direction. |
+| `$0380` | `Gohma_ObjShootTimer` |  | ObjVars.inc:165 | per slot; Gohma: frames until the next fireball; reload $41. |
+| `$0380` | `ObjMovingLimit` |  | Variables.inc:284 | [20] per object slot. Per-type limit: boomerang range, Trap home spot. |
+| `$0381` | `Gleeok_HeadInfo2` | `Gleook_HeadInfo2` | ObjVars.inc:210 | [6] Gleeok neck 2: head movement block. |
+| `$0383` | `Manhandla_SegmentJustDied` |  | ObjVars.inc:159 | scalar; Manhandla: nonzero = a hand died; the base then speeds up. |
+| `$0385` | `Manhandla_BounceDir` |  | ObjVars.inc:161 | scalar; Manhandla: direction the base gives all segments, 0 = none. |
+| `$0394` | `ObjRemDistance` |  | ObjVars.inc:22 | per slot; pixels left to move. Alias of ObjGridOffset. |
+| `$0394` | `ObjAngleWhole` |  | ObjVars.inc:35 | per slot; orbiters: orbit angle $00-$1F (32 steps a circle; $18 = up). |
+| `$0394` | `MonsterShot_ObjBounceDist` | `Shot_ObjBounceDist` | ObjVars.inc:43 | per slot; monster shot: pixels bounced, +2 per frame; destroyed at $20. |
+| `$0394` | `Wizzrobe_ObjRedFadeCounter` | `RedWizzrobe_ObjFadeCounter` | ObjVars.inc:144 | per slot; Red Wizzrobe: +1 per frame while fading; bit 0 = skip drawing. |
+| `$0394` | `ObjGridOffset` |  | Variables.inc:287 | [20] per object slot. Signed pixels moved since the last grid point. |
+| `$0395` | `Gleeok_NeckXs3` |  | ObjVars.inc:203 | [6] Gleeok neck 3: X of segments 0-5. |
+| `$03A8` | `Item_ObjItemLifetime` |  | CommonVars.inc:20 | per slot; dropped or room item: life countdown. Alias of ObjPosFrac. |
+| `$03A8` | `ObjPosFrac` |  | Variables.inc:292 | [20] per object slot. Fraction (1/256 pixel) of the moving position. |
+| `$03A9` | `Gleeok_HeadInfo3` | `Gleook_HeadInfo3` | ObjVars.inc:211 | [6] Gleeok neck 3: head movement block. |
+| `$03BC` | `Moldorm_ObjBounceDir` |  | ObjVars.inc:108 | per slot; Moldorm head: direction to take at the next turn, 0 = none. |
+| `$03BC` | `ObjQSpeedFrac` |  | Variables.inc:293 | [20] per object slot. Q-speed; pixels per frame = value / 64. |
+| `$03BD` | `Gleeok_NeckYs3` |  | ObjVars.inc:207 | [6] Gleeok neck 3: Y of segments 0-5. |
+| `$03D0` | `ObjAnimCounter` |  | Variables.inc:297 | [20] per object slot. Frames until the next animation frame. |
+| `$03E4` | `ObjAnimFrame` |  | Variables.inc:299 | [20] per object slot. Animation frame; walking objects alternate 0, 1. |
+| `$03F8` | `ObjInputDir` |  | Variables.inc:300 | [13] per object slot $00-$0C. Direction bits the object wants to go. |
+| `$0405` | `ObjMetastate` |  | Variables.inc:303 | [13] per object slot $00-$0C. 0 normal; 1-4 spawn cloud; $10-$14 dying. |
+| `$0412` | `TriforceGlowTimer` |  | BeginEndVars.inc:5 | scalar; title: frames until the Triforce's next glow colour. |
+| `$0412` | `PeaceCharDelayCounter` |  | BeginEndVars.inc:28 | scalar; ending: +1 per frame; a character is written at (n AND 7) = 4. |
+| `$0412` | `Item_ObjMonsterType` |  | CommonVars.inc:23 | per slot; object type of the monster that died here, for the drop. |
+| `$0412` | `StairsTargetY` |  | CommonVars.inc:32 | scalar; Y where Link's walk down or up stairs ends (modes $10 and 4). |
+| `$0412` | `Shooter_ObjWantsToShoot` | `ObjWantsToShoot` | ObjVars.inc:9 | per slot; walking shooters: 1 = may shoot now, 0 = may not. |
+| `$0412` | `PushBlock_ObjPushTimer` | `ObjPushTimer` | ObjVars.inc:28 | per slot; push block: frames Link has pushed it; it moves at $10. |
+| `$0412` | `Rock_ObjRoomId` | `TileObjRoomId` | ObjVars.inc:47 | per slot; pushed rock or gravestone: RoomId when the push began. |
+| `$0412` | `Fireball_ObjDirToTargetX` |  | ObjVars.inc:52 | per slot; fireball: horizontal direction toward Link when fired. |
+| `$0412` | `Flyer_ObjPosFrac` | `Flyer_ObjSpeedFrac` | ObjVars.inc:65 | per slot; flyer: position fraction; 1 pixel is moved on each carry. |
+| `$0412` | `Jumper_ObjSpeedWholeY` |  | ObjVars.inc:83 | per slot; jumper: vertical speed, pixels per frame, signed (up < 0). |
+| `$0412` | `Wallmaster_ObjStep` |  | ObjVars.inc:98 | per slot; Wallmaster: index of its step in WallmasterDirsAndAttrsLeft. |
+| `$0412` | `PolsVoice_ObjSpeedWhole` |  | ObjVars.inc:134 | per slot; Pols Voice: jump speed, pixels per frame, signed (up < 0). |
+| `$0412` | `Wizzrobe_ObjBlueTurnCounter` | `BlueWizzrobe_ObjTurnCounter` | ObjVars.inc:141 | per slot; Blue Wizzrobe: step counter that times its turns. |
+| `$0412` | `Wizzrobe_ObjRedAnimCounter` | `RedWizzrobe_ObjAnimCounter` | ObjVars.inc:146 | per slot; Red Wizzrobe: +1 per frame; bit 2 selects the frame image. |
+| `$0412` | `Manhandla_ObjPosFrac` | `Manhandla_ObjSpeedAccum` | ObjVars.inc:149 | per slot; Manhandla: position fraction. |
+| `$0412` | `Gohma_ObjDistTraveled` |  | ObjVars.inc:167 | per slot; Gohma: pixels moved in this sprint; reverses at $20. |
+| `$0413` | `PeaceCharIndex` |  | BeginEndVars.inc:29 | scalar; ending: index of the next character in PeaceText ($FF = end). |
+| `$0413` | `CaveFlags` |  | CaveVars.inc:14 | scalar; cave behaviour bits, built by InitCave. |
+| `$0413` | `Gleeok_CurHeadInfo` | `Gleeok_ObjHeadInfo` | ObjVars.inc:214 | [6] Gleeok: head movement block of the neck being updated. |
+| `$0413` | `Gleeok_CurHeadDirCounterH` | `Gleeok_ObjHeadDirCounterH` | ObjVars.inc:215 | scalar; Gleeok head: horizontal counter; at $C it resets and X flips. |
+| `$0413` | `TriforceGlowCycle` |  | Variables.inc:328 | Title screen: step 0-7 of the Triforce glow palette cycle. |
+| `$0414` | `Gleeok_CurHeadDirCounterV` | `Gleeok_ObjHeadDirCounterV` | ObjVars.inc:217 | scalar; Gleeok head: vertical counter; at 6 it resets and Y flips. |
+| `$0415` | `PersonTextSelector` |  | CaveVars.inc:7 | scalar; offset of the person's text address in PersonTextAddrs. |
+| `$0415` | `Gleeok_CurHeadSpeedFlagX` | `Gleeok_ObjHeadSpeedX` | ObjVars.inc:219 | scalar; Gleeok head: X step: 0 = +1 pixel per move, nonzero = -1. |
+| `$0415` | `DemoScrolledScreenCount` | `ScrolledScreenCount` | Variables.inc:329 | Story demo: number of whole screens scrolled so far. |
+| `$0416` | `TextboxCharIndex` |  | BeginEndVars.inc:30 | scalar; ending: index of the next character of ThanksText. |
+| `$0416` | `PersonTextIndex` |  | CaveVars.inc:9 | scalar; index of the next character of the person's text. |
+| `$0416` | `Gleeok_CurHeadSpeedFlagY` | `Gleeok_ObjHeadSpeedY` | ObjVars.inc:220 | scalar; Gleeok head: Y step: 0 = +1 pixel per move, nonzero = -1. |
+| `$0417` | `Gleeok_CurHeadDirChangeCounter` | `Gleeok_ObjHeadDirChangeCounter` | ObjVars.inc:221 | scalar; Gleeok head: moves counted; wraps at 4. |
+| `$0417` | `DemoLineAttrVramAddrLo` |  | Variables.inc:330 | Story demo: PPU address (lo; hi at $418) of the next line's attributes. |
+| `$0418` | `Gleeok_CurHeadDelay` | `Gleeok_ObjHeadDelay` | ObjVars.inc:222 | scalar; Gleeok head: moves to wait before the head starts moving. |
+| `$0418` | `DemoLineAttrVramAddrHi` |  | Variables.inc:331 | Story demo: high byte of the attribute PPU address. |
+| `$0419` | `DemoLineIndex` |  | Variables.inc:332 | Story demo: index of the next line of the scroll (unverified). |
+| `$041A` | `DemoTimer` |  | Variables.inc:333 | Demo: frame counter for the waits between demo steps (counts up). |
+| `$041B` | `DemoScrolledLineCount` | `ScrolledLineCount` | Variables.inc:334 | Story demo: pixel lines scrolled, wraps every 256 (one screen). |
+| `$041C` | `DemoLineTileVramAddrLo` |  | Variables.inc:335 | Story demo: PPU address (lo, hi at $41D) of the next line's tiles. |
+| `$041D` | `DemoLineTileVramAddrHi` |  | Variables.inc:336 | Story demo: high byte of the tile PPU address. |
+| `$041F` | `IsWaterfallInitialized` | `InitializedWaterfallAnimation` | BeginEndVars.inc:7 | scalar; title: 0 until the waterfall wave Ys have been set. |
+| `$041F` | `CharBoardIndex` |  | BeginEndVars.inc:16 | scalar; index $00-$2B of the highlighted character in ModeE_CharMap. |
+| `$041F` | `Wanderer_ObjTurnRate` | `ObjTurnRate` | ObjVars.inc:13 | per slot; wanderers: turn rate $00-$FF given to UpdateCommonWanderer. |
+| `$041F` | `Fireball_ObjQSpeedX` |  | ObjVars.inc:53 | per slot; fireball: horizontal q-speed from FireballQSpeedsX ($10-$70). |
+| `$041F` | `Flyer_ObjSpeed` |  | ObjVars.inc:67 | per slot; flyer: speed in 1/256 pixel per frame (bits 5-7 count). |
+| `$041F` | `Jumper_ObjSpeedFracY` |  | ObjVars.inc:84 | per slot; jumper: vertical speed fraction (1/256 pixel per frame). |
+| `$041F` | `Wallmaster_ObjTilesCrossed` |  | ObjVars.inc:102 | per slot; Wallmaster: squares ($10 pixels) crossed; the trip ends at 7. |
+| `$041F` | `Digdogger_ObjSpeedFrac` |  | ObjVars.inc:112 | per slot; Digdogger: speed low byte (1/256 pixel per frame); starts $3F. |
+| `$041F` | `PolsVoice_ObjLastTile` |  | ObjVars.inc:135 | per slot; Pols Voice: tile under it at the last walkability test. |
+| `$041F` | `Wizzrobe_ObjLastTile` |  | ObjVars.inc:140 | per slot; Wizzrobe: tile found by its last collision test. |
+| `$041F` | `Manhandla_ObjSpeedFrac` |  | ObjVars.inc:151 | per slot; Manhandla: speed low byte (1/256 pixel per frame); starts $80. |
+| `$041F` | `Gohma_ObjPosFrac` | `Gohma_ObjMoveAccum` | ObjVars.inc:168 | per slot; Gohma: position fraction; +$80 per frame, 1 pixel per carry. |
+| `$0420` | `TitleWaveYs` |  | BeginEndVars.inc:8 | [6] title: Y of the waterfall wave sprites. |
+| `$0420` | `IsNameFieldInitialized` | `InitializedNameField` | BeginEndVars.inc:18 | scalar; 0 until the name field of the chosen save slot is set up. |
+| `$0420` | `Gleeok_HeadInfo0` | `Gleook_HeadInfo0` | ObjVars.inc:208 | [6] Gleeok neck 0: head movement block (fields: GLEEOK_* offsets). |
+| `$0421` | `NameCharOffset` |  | BeginEndVars.inc:19 | scalar; offset in SaveSlotNames of the name character the cursor is on. |
+| `$0422` | `NameInputCharBuf` |  | BeginEndVars.inc:20 | [3] transfer record header for the next name character. |
+| `$0422` | `CaveItemIds` |  | CaveVars.inc:19 | [3] cave wares, left to right: item id in bits 0-5 ($3F = none). |
+| `$0426` | `IsHoldingButton` | `StillHoldingButton` | Variables.inc:337 | Name registration: nonzero while a direction button is being held. |
+| `$0427` | `HeldButton` |  | Variables.inc:339 | Name registration: the direction bits held when the current hold began. |
+| `$0428` | `IsButtonRepeating` | `SubsequentButtonRepeat` | Variables.inc:340 | Name registration: 0 = first repeat delay ($10 frames), 1 = later (8). |
+| `$0429` | `ButtonRepeatTimer` |  | Variables.inc:341 | Name registration: frames until a held direction moves the cursor again. |
+| `$042A` | `ModeE_HasWrappedBoardY` | `ModeE_WrappedAroundBoardY` | Variables.inc:342 | Name registration: 1 = the last cursor move wrapped vertically. |
+| `$042C` | `DemoPhase` |  | BeginEndVars.inc:10 | scalar; mode 0: 0 = title screen, 1 = story scroll and item parade. |
+| `$042C` | `ObjRefId` |  | CommonVars.inc:5 | per slot; slot of the partner object: thrower's shot or shot's thrower. |
+| `$042C` | `ObjCaptureTimer` |  | CommonVars.inc:11 | per slot; Wallmaster, Like-Like: 0 = Link free, nonzero = Link captured. |
+| `$042C` | `Flyer_ObjTurns` |  | ObjVars.inc:70 | per slot; flyer: turns left in the chase or wander state. |
+| `$042C` | `Digdogger_ObjSpeedWhole` |  | ObjVars.inc:115 | per slot; Digdogger: speed high byte (pixels per frame). |
+| `$042C` | `Dodongo_ObjBloatedSubstate` |  | ObjVars.inc:125 | per slot; Dodongo in state 1 (bloated): substate 0-4. |
+| `$042C` | `PolsVoice_ObjTargetY` |  | ObjVars.inc:136 | per slot; Pols Voice: Y where the jump ends. |
+| `$042C` | `Manhandla_ObjSpeedWhole` |  | ObjVars.inc:153 | per slot; Manhandla: speed high byte (pixels per frame). |
+| `$042C` | `Gohma_ObjNextOpenEyeCounter` |  | ObjVars.inc:169 | per slot; Gohma: countdown to the next eye opening. |
+| `$042C` | `Ganon_ObjDyingCount` | `Ganon_ObjPhase` | ObjVars.inc:190 | per slot; Ganon: 0 = fighting; nonzero = dying, +1 per frame up to $FF. |
+| `$042D` | `Gleeok_HeadInfo1` | `Gleook_HeadInfo1` | ObjVars.inc:209 | [6] Gleeok neck 1: head movement block. |
+| `$042D` | `DemoSubphase` |  | Variables.inc:344 | Demo: step within the current demo phase. |
+| `$042E` | `CaveCurPriceIndex` |  | CaveVars.inc:30 | scalar; index 0-2 of the price being formatted. |
+| `$042E` | `DemoLineTextIndex` |  | Variables.inc:345 | Story demo: index of the next text line (unverified). |
+| `$042F` | `CaveCurPriceOffset` |  | CaveVars.inc:31 | scalar; offset of that price's text in the transfer record; +4 each. |
+| `$042F` | `DemoItemRow` |  | Variables.inc:346 | Story demo: index of the next row of the item list (unverified). |
+| `$0430` | `CavePrices` |  | CaveVars.inc:22 | [3] price or rupee amount of each ware, from LevelBlockAttrsE+60. |
+| `$0437` | `DemoPhase0Subphase1Cycle` |  | BeginEndVars.inc:11 | scalar; title: step 0-$E of the palette fade; at $E DemoPhase advances. |
+| `$0437` | `Fireball_ObjDirToTargetY` |  | ObjVars.inc:54 | per slot; fireball: vertical direction toward Link when fired. |
+| `$0437` | `Flyer_ObjDistTraveled` |  | ObjVars.inc:73 | per slot; flyer: pixels moved (wraps at $100). |
+| `$0437` | `Digdogger_ObjTargetSpeedFrac` |  | ObjVars.inc:116 | per slot; Digdogger: target speed low byte. |
+| `$0437` | `Dodongo_ObjBombHits` |  | ObjVars.inc:128 | per slot; Dodongo: bombs swallowed; the second one kills it. |
+| `$0437` | `Manhandla_ObjPrevFrame` |  | ObjVars.inc:154 | per slot; Manhandla hand: Manhandla_ObjFrame at its last change. |
+| `$0438` | `CaveChosenIndex` |  | CaveVars.inc:24 | scalar; index 0-2 of the ware Link picked up. |
+| `$0438` | `Gleeok_NeckXs0` |  | ObjVars.inc:200 | [6] Gleeok neck 0: X of segments 0-5 (all start at $7C). |
+| `$0438` | `DemoPhase0Subphase1Timer` |  | Variables.inc:347 | Title screen fade: frames until the next palette step. |
+| `$0444` | `DemoItemIds` |  | BeginEndVars.inc:13 | per object slot; item parade: item id shown; $23 fairy, >= $30 Link. |
+| `$0444` | `Fireball_ObjQSpeedY` |  | ObjVars.inc:55 | per slot; fireball: vertical q-speed from FireballQSpeedsY ($00-$70). |
+| `$0444` | `Flyer_ObjFlyingState` |  | ObjVars.inc:75 | per slot; flyer: flight state, index into the type's flight table. |
+| `$0444` | `Jumper_ObjTargetY` |  | ObjVars.inc:87 | per slot; jumper: Y where the jump ends. |
+| `$0444` | `Digdogger_ObjTargetSpeedWhole` |  | ObjVars.inc:118 | per slot; Digdogger: target speed high byte. |
+| `$0444` | `PolsVoice_ObjSpeedFrac` |  | ObjVars.inc:137 | per slot; Pols Voice: jump speed fraction; +$38 per frame in a jump. |
+| `$0444` | `Gohma_ObjEyeOpenTimer` |  | ObjVars.inc:171 | per slot; Gohma: frames the eye stays open ($80 at opening); 0 = closed. |
+| `$0445` | `Ganon_ScenePhase` |  | ObjVars.inc:192 | scalar; Ganon's room: 0 Triforce lifted in dark, 1 in light, 2 fight. |
+| `$0445` | `Gleeok_NeckYs0` |  | ObjVars.inc:204 | [6] Gleeok neck 0: Y of segments 0-5 (start values GleeokSegmentYs). |
+| `$0448` | `MoneyGameAmounts` |  | CaveVars.inc:25 | [3] money game: rupee amount behind each of the three rupees. |
+| `$0451` | `Fireball_ObjPosFracX` |  | ObjVars.inc:56 | per slot; fireball: X position fraction. |
+| `$0451` | `Jumper_ObjReversalCount` |  | ObjVars.inc:89 | per slot; jumper: consecutive jumps stopped by the room boundary. |
+| `$0451` | `Manhandla_ObjFrameAccum` |  | ObjVars.inc:155 | per slot; Manhandla: animation accumulator; bit 4 = animation frame. |
+| `$0451` | `Gohma_ObjGoStraight` |  | ObjVars.inc:172 | per slot; Gohma: 0 = pick a new direction now, nonzero = keep going. |
+| `$0451` | `ObjShootTimer` |  | Variables.inc:308 | [13] per object slot $00-$0C. Countdown to a walking monster's shot. |
+| `$0452` | `Gleeok_NeckXs1` |  | ObjVars.inc:201 | [6] Gleeok neck 1: X of segments 0-5. |
+| `$045E` | `Fireball_ObjPosFracY` |  | ObjVars.inc:57 | per slot; fireball: Y position fraction. |
+| `$045E` | `Digdogger_ObjSpeedFlag` |  | ObjVars.inc:120 | per slot; Digdogger: 0 = speeding up, 1 = slowing down. |
+| `$045E` | `Dodongo_ObjBloatedTimer` |  | ObjVars.inc:130 | per slot; Dodongo: frames left in the bloated wait substate. |
+| `$045E` | `Gohma_ObjSprints` |  | ObjVars.inc:174 | per slot; Gohma: number of $20-pixel sprints completed. |
+| `$045E` | `Patra_ObjManeuverIndex` |  | ObjVars.inc:186 | per slot; Patra: 0 or 1, the children's orbit pattern. |
+| `$045F` | `TextboxCharVramLo` | `TextboxCharPtr` | BeginEndVars.inc:31 | scalar; ending: low byte of the nametable address of the next character. |
+| `$045F` | `PersonTextVramLo` | `PersonTextPtr` | CaveVars.inc:10 | scalar; low byte of the nametable address of the next character. |
+| `$045F` | `Gleeok_NeckYs1` |  | ObjVars.inc:205 | [6] Gleeok neck 1: Y of segments 0-5. |
+| `$046B` | `Flyer_ObjOffsetX` |  | ObjVars.inc:78 | per slot; flyer: signed pixels moved horizontally since last zeroed. |
+| `$046B` | `Digdogger_ObjIsChild` |  | ObjVars.inc:121 | per slot; Digdogger: 1 = small (child), 0 = big. |
+| `$046B` | `Gohma_ObjEyeState` |  | ObjVars.inc:175 | per slot; Gohma: eye frame image 0-3; an arrow harms Gohma only at 3. |
+| `$046B` | `Ganon_ObjAnimationFrame` |  | ObjVars.inc:193 | per slot; Ganon: body animation frame 0-5; +1 per frame while moving. |
+| `$046C` | `Gleeok_NeckXs2` |  | ObjVars.inc:202 | [6] Gleeok neck 2: X of segments 0-5. |
+| `$0478` | `Wanderer_ObjTurnTimer` | `ObjTurnTimer` | ObjVars.inc:17 | per slot; wanderers: frames until a perpendicular turn is allowed. |
+| `$0478` | `Aquamentus_ObjFireballOffset` |  | ObjVars.inc:60 | per fireball slot; Y step of an Aquamentus fireball: 0, 1 or $FF. |
+| `$0478` | `Flyer_ObjOffsetY` |  | ObjVars.inc:80 | per slot; flyer: signed pixels moved vertically since last zeroed. |
+| `$0478` | `Digdogger_ObjCurPart` |  | ObjVars.inc:122 | per slot; big Digdogger: corner 0-3 being tested in the collision loop. |
+| `$0478` | `Manhandla_ObjFrame` |  | ObjVars.inc:157 | per slot; Manhandla: frame image and sprite attributes. |
+| `$0478` | `Gohma_ObjEyeAnimCounter` |  | ObjVars.inc:177 | per slot; Gohma: frames since the closed eye changed image; wraps at 8. |
+| `$0478` | `Ganon_ObjCloudDist` |  | ObjVars.inc:194 | per slot; Ganon: pixel distance of the 4 burst clouds from his position. |
+| `$0479` | `Gleeok_NeckYs2` |  | ObjVars.inc:206 | [6] Gleeok neck 2: Y of segments 0-5. |
+| `$0485` | `ObjHP` |  | Variables.inc:312 | [13] per object slot $00-$0C. Hit points in the high nibble (HP x $10). |
+| `$0492` | `ObjUninitialized` |  | Variables.inc:315 | [12] per object slot $00-$0B. Nonzero = init routine not yet run. |
+| `$049E` | `ObjCollidedTile` |  | Variables.inc:317 | [20] per object slot. Tile found by the last tile collision test. |
+| `$04B2` | `ObjInvincibilityMask` |  | Variables.inc:319 | [13] per object slot $00-$0C. Damage types that cannot hurt the monster. |
+| `$04BF` | `ObjAttr` |  | Variables.inc:321 | [13] per object slot $00-$0C. Behaviour bits (ObjectTypeToAttributes). |
+| `$04CC` | `IsPersonFireballsEnabled` | `PersonFireballsEnabled` | Variables.inc:356 | Nonzero after the person in slot 1 was hit: the room's statues shoot |
+| `$04CD` | `RoomAttrsF` | `LevelBlockAttrsByteF` | Variables.inc:358 | Copy of LevelBlockAttrsF[RoomId], taken on room entry (bits: see there). |
+| `$04CE` | `ShutterTrigger` |  | Variables.inc:359 | 1 = open the room's shutter doors; cleared when none is left closed. |
+| `$04CF` | `BlockPushComplete` |  | Variables.inc:362 | Push block: 0 not pushed, 1 fully pushed, 2 pushed and stairs made. |
+| `$04D1` | `FlyerMaxSpeedFrac` | `FlyingMaxSpeedFrac` | Variables.inc:366 | Flyer top speed: speeding up ends when (Flyer_ObjSpeed & $E0) >= this. |
+| `$04D7` | `GleeokCurNeck` |  | Variables.inc:369 | Gleeok: neck being processed, counted down from (ObjType - $42) to 0. |
+| `$04D8` | `GleeokSignedRefSegmentDistance` |  | Variables.inc:370 | Gleeok: signed distance between reference neck segments. |
+| `$04D9` | `GleeokPrimarySegmentLimits` |  | Variables.inc:371 | [2] X, Y. Gleeok neck segment spacing limit, tier 1: at most 4 pixels. |
+| `$04DB` | `GleeokSecondarySegmentLimits` |  | Variables.inc:372 | [2] X, Y. Tier 2 spacing limit: tier 1 + 4, at most 8 pixels. |
+| `$04DD` | `GleeokTertiarySegmentLimits` |  | Variables.inc:373 | [2] X, Y. Tier 3 spacing limit: tier 2 + 4, at most $B pixels. |
+| `$04E5` | `StatusBarMapTrigger` |  | Variables.inc:363 | 1 = transfer the level's status bar map (set when the map is picked up). |
+| `$04E6` | `Lanmola_Speed` | `Lamnola_Speed` | ObjVars.inc:180 | scalar; Lanmola: pixels per frame, object type - $39 (1 or 2). |
+| `$04E6` | `GleeokAnimationTimer` |  | Variables.inc:374 | Gleeok body: frames until the next animation frame (6 while writhing). |
+| `$04E7` | `Lanmola_Type` | `Lamnola_Type` | ObjVars.inc:182 | scalar; Lanmola: object type of the room's Lanmola ($3A or $3B). |
+| `$04E7` | `GleeokBodyAnimationFrame` |  | Variables.inc:375 | Gleeok body animation frame, cycles 0-3. |
+| `$04E8` | `Statue_FireballTimers` | `Statue_ObjFireballTimer` | ObjVars.inc:93 | [4] by fireball number in the statue pattern (not by slot): countdown. |
+| `$04F0` | `ObjInvincibilityTimer` |  | Variables.inc:379 | [20] per object slot $00-$13. Nonzero = cannot be harmed or shoved. |
+| `$0504` | `LeftAlignHalfWidthObj` |  | Variables.inc:385 | Nonzero while the lifted item is drawn: a narrow item is not centered. |
+| `$0505` | `ItemTypeToLift` |  | Variables.inc:386 | Item id Link is holding up, 0 = none ($1B Triforce piece in scenes). |
+| `$0506` | `ItemLiftTimer` |  | Variables.inc:387 | Frames left of the lift; $80 when an item is taken outside mode 5. |
+| `$0507` | `ChildDigdoggerCount` |  | Variables.inc:390 | Small Digdoggers the big one splits into: 3 (InitDigdogger1) or 1 (..2). |
+| `$0508` | `IsWhirlwindSummoned` | `SummonedWhirlwind` | Variables.inc:391 | 1 = the flute already summoned a whirlwind in this room: no second one. |
+| `$0509` | `IsTriforceFanfareActive` | `TriforceFanfareActive` | Variables.inc:392 | 1 while Link holds up the Triforce of Power (Link halted, ObjTimer $C0). |
+| `$050A` | `CreditsRow` |  | Variables.inc:412 | Credits: tile row being drawn. |
+| `$050B` | `CreditsTileOffset` |  | Variables.inc:413 | Credits: pixels scrolled since the last row was drawn; a row every 8. |
+| `$050C` | `CreditsVramPage` |  | Variables.inc:414 | Credits: nametable page index 0-$B of the row being drawn. |
+| `$050D` | `CreditsVramLine` |  | Variables.inc:415 | Credits: line within the page (8 lines, 6 in pages with page mod 4 = 3). |
+| `$050E` | `CreditsLineIndex` |  | Variables.inc:416 | Credits: index of the next text line. |
+| `$050F` | `LanmolaViableDirMask` | `LamnolaViableDirMask` | Variables.inc:393 | Lanmola turn scratch: direction bits allowed (all but the opposite one). |
+| `$0510` | `Gleeok_WrithingCounter` |  | ObjVars.inc:224 | scalar; Gleeok body: fast animation steps left after a hit (set to 6). |
+| `$0510` | `ActiveRedLeeverCount` |  | Variables.inc:394 | Red Leevers (type $10) above ground; a third may not surface. |
+| `$0511` | `GleeokDeadNeckMask` |  | Variables.inc:376 | Gleeok: bit n set = the head of neck n has been cut off. |
+| `$0512` | `IsLinkParalyzed` | `LinkParalyzed` | Variables.inc:395 | Nonzero while a Like-Like holds Link: direction input is discarded. |
+| `$0513` | `HasUsedCandle` | `UsedCandle` | Variables.inc:397 | 1 = a candle fire was made in this room; the blue candle then refuses. |
+| `$0514` | `IsZoraActive` | `ZoraActive` | Variables.inc:399 | 1 while the room's Zora exists (one at a time). |
+| `$0515` | `ActiveBoulderCount` | `ActiveBoulders` | Variables.inc:400 | Boulders (type $20) alive; the boulder spawner stops at 3. |
+| `$051A` | `SecretColorCycle` |  | Variables.inc:401 | Flute pond secret: 0 none, 1-$B draining (1 step per 8 frames), $C done. |
+| `$051B` | `FluteUsedState` | `UsedFlute` | Variables.inc:403 | 0; 1 once the flute was played in this room; 2 while Digdogger shrinks. |
+| `$051C` | `FadeCycle` |  | Variables.inc:404 | Palette fade: high nibble = series, low nibble = step 0-3 (4 = done). |
+| `$051D` | `PatternBlockIndex` |  | Variables.inc:407 | Index of the CHR pattern block being copied to the PPU (transfer loops). |
+| `$051E` | `IsRoomBrightening` | `BrighteningRoom` | Variables.inc:408 | 1 while a candle fire is fading a dark room to light. |
+| `$051F` | `CandleState` |  | Variables.inc:409 | Dark room lighting: 0 not lit, 1 brightening, 2 lit (UpdateCandle). |
+| `$0521` | `PrevOpenedDoors` |  | Variables.inc:419 | CurOpenedDoors of the room being left, kept while scrolling to the next. |
+| `$0522` | `WhirlwindTeleportingState` |  | Variables.inc:420 | 0 none, 1 whirlwind carrying Link away, 2 dropping him off. |
+| `$0523` | `TeleportingLevelIndex` |  | Variables.inc:421 | Whirlwind destination: (value & 7) = level number - 1. |
+| `$0524` | `SpawnCycle` |  | Variables.inc:424 | Next index 0-8 into the 9-entry spawn position list; kept between rooms. |
+| `$0525` | `CurEdgeSpawnCell` |  | Variables.inc:425 | Last screen-edge spawn cell: high nibble = row, low nibble = column. |
+| `$0526` | `LevelEntranceRoomId` | `CaveSourceRoomId` | Variables.inc:427 | Overworld room of the dungeon entrance last entered; $FF = none. |
+| `$0527` | `CellarSourceRoomId` |  | Variables.inc:429 | Dungeon room from which the current cellar was entered. |
+| `$0528` | `HasSkippedDemo` | `SkippedDemo` | Variables.inc:430 | $5A once Start was pressed in the title demo; stops the demo animation. |
+| `$0529` | `IsSwordShotForced` | `ForceSwordShot` | Variables.inc:431 | Nonzero would allow the sword shot at any health. Only ever cleared. |
+| `$052A` | `WorldKillCycle` |  | Variables.inc:432 | Kill cycle 0-9: column of the drop table used for the next drop. |
+| `$052B` | `RoomTileObjType` |  | Variables.inc:435 | Object type of the room's tile object found by the layout, 0 = none. |
+| `$052C` | `RoomTileObjX` |  | Variables.inc:436 | X of that tile object (column * $10). |
+| `$052D` | `RoomTileObjY` |  | Variables.inc:437 | Y of that tile object (row * $10 + $40). |
+| `$052E` | `IsSwordBlocked` | `SwordBlocked` | Variables.inc:438 | 1 = sword disabled until cured (set by Bubble type $2D, cleared by $2C). |
+| `$052F` | `MazeStep` |  | Variables.inc:440 | Correct steps so far (0-3) in the Lost Woods ($61) or Lost Hills ($1B). |
+| `$0530` | `PlayAreaAttrs` |  | Variables.inc:443 | [48] Nametable attribute bytes of the play area (from attrs A and B). |
+| `$0560` | `LevelKillCounts` |  | Variables.inc:444 | [128] per room of the current dungeon: kills banked when leaving it. |
+| `$05F0` | `CurNoteLowPeriodTrg` |  | Variables.inc:449 | Low period byte of the triangle note playing (base for vibrato). |
+| `$05F2` | `SampleCounter` |  | Variables.inc:450 | Frames left of the DMC sample ($A0 at start). |
+| `$05F3` | `SeaSfxCounter` |  | Variables.inc:451 | Sea noise effect phase counter, counts down from $D0. |
+| `$05F4` | `NoteLengthTableBase` |  | Variables.inc:452 | Song phrase: base offset into the note length table. |
+| `$05F5` | `FirstNoteIndexSongNoise` |  | Variables.inc:453 | Song phrase: script offset where the noise track starts (it loops). |
+| `$05F6` | `BackgroundSample` |  | Variables.inc:454 | Looping DMC sample (request bits $F0), restarted when no other plays. |
+| `$0600` | `SongRequest` |  | Variables.inc:455 | Song to start (one bit): $01 overworld, $08 item, $10 ending, |
+| `$0601` | `SampleRequest` |  | Variables.inc:457 | DMC sample to start (bit mask; bits $F0 loop). PlaySample ORs into it. |
+| `$0602` | `Tune1Request` |  | Variables.inc:458 | Square-1 tune to start (bit mask; $80 = silence first). |
+| `$0603` | `EffectRequest` |  | Variables.inc:459 | Noise effect to start (bit mask). PlayEffect ORs into it. |
+| `$0604` | `Tune0Request` |  | Variables.inc:460 | Square-0 tune to start (bit mask; $40 low-hearts beep, $80 stops song). |
+| `$0605` | `CurTune0` | `Tune0` | Variables.inc:461 | Square-0 tune playing (its request bit), 0 = none. |
+| `$0606` | `CurEffect` | `Effect` | Variables.inc:462 | Noise effect playing, 0 = none. |
+| `$0607` | `CurTune1` | `Tune1` | Variables.inc:463 | Square-1 tune playing, 0 = none; the song skips square 1 meanwhile. |
+| `$0608` | `CurSample` | `Sample` | Variables.inc:464 | DMC sample playing, 0 = none. |
+| `$0609` | `CurSong` | `Song` | Variables.inc:465 | Song playing (its request bit), 0 = none. |
+| `$060A` | `NoteOffsetSongSq1` |  | Variables.inc:466 | Song script offset of the next square-1 note. |
+| `$060B` | `NoteOffsetSongSq0` |  | Variables.inc:467 | Song script offset of the next square-0 note (0 = track absent). |
+| `$060C` | `NoteOffsetSongTrg` |  | Variables.inc:468 | Song script offset of the next triangle note (0 = track absent). |
+| `$060D` | `NoteOffsetSongNoise` |  | Variables.inc:469 | Song script offset of the next noise note. |
+| `$060E` | `Tune0ScriptOffset` | `TunePtr0` | Variables.inc:470 | Offset of the next byte of the square-0 tune in TuneScripts0. |
+| `$060F` | `NoteLengthSongSq0` |  | Variables.inc:471 | Length in frames of the current square-0 song note. |
+| `$0610` | `NoteLengthSongSq1` |  | Variables.inc:472 | Length in frames of the current square-1 song note. |
+| `$0611` | `NoteCounterSongSq1` |  | Variables.inc:473 | Frames left of the current square-1 song note. |
+| `$0612` | `CustomEnvelopeOffsetSongSq1` |  | Variables.inc:474 | Square-1 volume envelope position, counts down to 0. |
+| `$0613` | `NoteCounterSongSq0` |  | Variables.inc:475 | Frames left of the current square-0 song note. |
+| `$0614` | `CustomEnvelopeOffsetSongSq0` |  | Variables.inc:476 | Square-0 volume envelope position, counts down to 0. |
+| `$0615` | `NoteLengthSongTrg` |  | Variables.inc:477 | Length in frames of the current triangle song note. |
+| `$0616` | `NoteCounterSongTrg` |  | Variables.inc:478 | Frames left of the current triangle song note. |
+| `$0617` | `NoteCounterSongNoise` |  | Variables.inc:479 | Frames left of the current noise song note. |
+| `$0618` | `Tune1ScriptOffset` | `TunePtr1` | Variables.inc:480 | Offset of the next byte of the square-1 tune in TuneScripts1. |
+| `$0619` | `SongEnvelopeSelector` |  | Variables.inc:481 | Song phrase: volume envelope selector (byte 6 of the phrase header). |
+| `$061B` | `SongVibrationCounterSq1` |  | Variables.inc:482 | Frames since the square-1 song note began (vibrato phase). |
+| `$061C` | `SongVibrationCounterSq0` |  | Variables.inc:483 | Frames since the square-0 song note began (vibrato phase). |
+| `$061D` | `SongVibrationCounterTrg` |  | Variables.inc:484 | Frames since the triangle song note began (vibrato phase). |
+| `$061E` | `SongRepetitionsTrg` |  | Variables.inc:485 | Triangle track: repetitions left of the passage being repeated. |
+| `$061F` | `SongRepeatStartOffset` |  | Variables.inc:486 | Triangle track: script offset where the repeated passage starts. |
+| `$0620` | `CurRoomHistoryIndex` |  | Variables.inc:489 | Slot 0-5 of RoomHistory that the next new room overwrites. |
+| `$0621` | `RoomHistory` |  | Variables.inc:490 | [6] Ids of the last six different rooms entered (ring buffer). |
+| `$0627` | `WorldKillCount` |  | Variables.inc:494 | Monsters killed since Link was last harmed (zeroed by Link_BeHarmed). |
+| `$062D` | `QuestNumbers` |  | Variables.inc:498 | [3] per save slot: 0 = Q1, 1 = Q2. Read in play through CurSaveSlot. |
+| `$0630` | `DeathCounts` |  | Variables.inc:499 | [3] per save slot: deaths, stops at $FF. |
+| `$0633` | `IsSaveSlotActive` |  | Variables.inc:500 | [3] per save slot: nonzero = registered. The menu reads 5 entries. |
+| `$0636` | `IsRegisterSaveFileOptionEnabled` |  | Variables.inc:501 | IsSaveSlotActive[3], the menu's Register option: always 1. |
+| `$0637` | `IsEliminateSaveFileOptionEnabled` |  | Variables.inc:502 | IsSaveSlotActive[4], the menu's Eliminate option: always 1. |
+| `$0638` | `SaveSlotNames` | `Names` | Variables.inc:503 | [24] 3 slots x 8 characters: the slot names (tile codes, $24 = space). |
+| `$0650` | `SaveSlotHearts` |  | Variables.inc:504 | [6] 3 slots x (HeartValues, HeartPartial) shown on the file menu. |
+| `$0656` | `SelectedItemSlot` |  | Variables.inc:509 | Item slot on the B button: 0 boomerangs, 1-8 = InvItems+n, $F letter. |
+| `$0657` | `InvItems` | `Items` | Variables.inc:511 | [40] Base of the items block, indexed by item slot. InvItems+0 = sword. |
+| `$0657` | `InvSword` |  | Variables.inc:512 | Sword: 0 none, 1 wooden, 2 white, 3 magic. Same byte as InvItems. |
+| `$0658` | `InvBombs` |  | Variables.inc:514 | Bombs held, 0 to InvMaxBombs. A bomb pickup adds 4. |
+| `$0659` | `InvArrow` |  | Variables.inc:515 | Arrows: 0 none, 1 wooden (damage $20), 2 silver (damage $40). |
+| `$065A` | `InvBow` | `Bow` | Variables.inc:516 | Bow: 0 or 1. Arrows cannot be selected or shot without it. |
+| `$065B` | `InvCandle` |  | Variables.inc:517 | Candle: 0 none, 1 blue (one fire per room), 2 red. |
+| `$065C` | `InvFlute` |  | Variables.inc:518 | Flute: 0 or 1. The code reaches this byte only by index (InvItems, Y). |
+| `$065D` | `InvFood` |  | Variables.inc:519 | Food: 0 or 1. Zeroed when the Grumble Goriya takes it. |
+| `$065E` | `InvPotion` | `Potion` | Variables.inc:520 | Potion doses 0-2. Blue potion adds 1 (max 2), red sets 2; a use takes 1. |
+| `$065F` | `InvRod` |  | Variables.inc:521 | Magic rod: 0 or 1. The code reaches this byte only by index (InvItems,Y). |
+| `$0660` | `InvRaft` |  | Variables.inc:522 | Raft: 0 or 1. |
+| `$0661` | `InvBook` |  | Variables.inc:523 | Magic book: 0 or 1. With it a magic shot that ends makes a fire. |
+| `$0662` | `InvRing` |  | Variables.inc:524 | Ring: 0 none, 1 blue, 2 red. Damage to Link is halved once per grade. |
+| `$0663` | `InvLadder` |  | Variables.inc:525 | Ladder: 0 or 1. |
+| `$0664` | `InvMagicKey` |  | Variables.inc:526 | Magic key: 0 or 1. Opens locked doors without spending InvKeys. |
+| `$0665` | `InvBracelet` |  | Variables.inc:527 | Power bracelet: 0 or 1. Needed to push a rock ($62), not a gravestone. |
+| `$0666` | `InvLetter` |  | Variables.inc:528 | Letter: 0 none, 1 held, 2 shown to the cave person of type $74. |
+| `$0667` | `InvCompass` |  | Variables.inc:529 | Compasses of levels 1-8: bit (level - 1). Reached only by index ($10). |
+| `$0668` | `InvMap` |  | Variables.inc:530 | Maps of levels 1-8: bit (level - 1). Reached only by index (slot $11). |
+| `$0669` | `InvCompass9` |  | Variables.inc:531 | Compass of level 9: bit 0. Reached only by index (slot $12). |
+| `$066A` | `InvMap9` |  | Variables.inc:532 | Map of level 9: bit 0. Reached only by index (slot $13). |
+| `$066B` | `InvFairy` |  | Variables.inc:533 | Slot $14 of the fairy item (id $23). Never written: a fairy only heals. |
+| `$066C` | `InvClock` |  | Variables.inc:535 | Clock: 1 = monsters frozen, Link invincible. Zeroed on every room change |
+| `$066D` | `InvRupees` |  | Variables.inc:537 | Rupees, 0-$FF. Changes by 1 via InvRupeesToAdd / InvRupeesToSubtract. |
+| `$066E` | `InvKeys` |  | Variables.inc:538 | Keys, 0-$FF. |
+| `$066F` | `HeartValues` |  | Variables.inc:547 | High nibble = heart containers - 1; low nibble = full hearts. |
+| `$0670` | `HeartPartial` |  | Variables.inc:549 | Partial heart fill: 0 empty, $01-$7F drawn half, $80-$FF drawn full. |
+| `$0671` | `InvTriforce` |  | Variables.inc:551 | Triforce pieces: bit (level - 1) for levels 1-8; $FF = all eight. |
+| `$0672` | `InvPowerTriforce` | `LastBossDefeated` | Variables.inc:552 | Slot $1B, Triforce of Power: 1 once its fanfare ends. Opens the shutters |
+| `$0673` | `InvFiveRupees` |  | Variables.inc:554 | Slot $1C of the 5-rupee item (id $0F). Never written: 5 x TakeOneRupee. |
+| `$0674` | `InvBoomerang` |  | Variables.inc:556 | Wooden boomerang: 0 or 1. |
+| `$0675` | `InvMagicBoomerang` |  | Variables.inc:557 | Magic boomerang: 0 or 1. Sets the throw's range limit to $FF, else $31. |
+| `$0676` | `InvMagicShield` |  | Variables.inc:558 | Magic shield: 0 or 1. Zeroed when a Like-Like eats it. |
+| `$067C` | `InvMaxBombs` | `MaxBombs` | Variables.inc:560 | Bomb capacity: 8 in a new file, +4 per upgrade bought (100 rupees). |
+| `$067D` | `InvRupeesToAdd` | `RupeesToAdd` | Variables.inc:561 | Rupees still to be credited to InvRupees, 1 every second frame. |
+| `$067E` | `InvRupeesToSubtract` | `RupeesToSubtract` | Variables.inc:563 | Rupees still to be taken from InvRupees, 1 every second frame. |
+| `$067F` | `WorldFlags` |  | Variables.inc:567 | [384] One flag byte per room: $67F overworld, $6FF levels 1-6, $77F 7-9. |
+| `$2000` | `PpuControl` | `PpuControl_2000` | Variables.inc:575 | PPU control register (write). |
+| `$2001` | `PpuMask` | `PpuMask_2001` | Variables.inc:576 | PPU mask register (write). |
+| `$2002` | `PpuStatus` | `PpuStatus_2002` | Variables.inc:577 | PPU status register (read; reading resets the address latch). |
+| `$2003` | `OamAddr` | `OamAddr_2003` | Variables.inc:578 | OAM address (write). |
+| `$2004` | `OamData` | `OamData_2004` | Variables.inc:579 | OAM data. Not used by the code. |
+| `$2005` | `PpuScroll` | `PpuScroll_2005` | Variables.inc:580 | PPU scroll (two writes: X, Y). |
+| `$2006` | `PpuAddr` | `PpuAddr_2006` | Variables.inc:581 | PPU VRAM address (two writes: high, low). |
+| `$2007` | `PpuData` | `PpuData_2007` | Variables.inc:582 | PPU VRAM data. |
+| `$4000` | `Sq0Duty` | `Sq0Duty_4000` | Variables.inc:588 | Square 0: duty, envelope, volume. |
+| `$4001` | `Sq0Sweep` | `Sq0Sweep_4001` | Variables.inc:589 | Square 0: sweep. |
+| `$4002` | `Sq0Timer` | `Sq0Timer_4002` | Variables.inc:590 | Square 0: period low byte. |
+| `$4003` | `Sq0Length` | `Sq0Length_4003` | Variables.inc:591 | Square 0: length counter, period high bits. |
+| `$4004` | `Sq1Duty` | `Sq1Duty_4004` | Variables.inc:592 | Square 1: duty, envelope, volume. |
+| `$4005` | `Sq1Sweep` | `Sq1Sweep_4005` | Variables.inc:593 | Square 1: sweep. |
+| `$4006` | `Sq1Timer` | `Sq1Timer_4006` | Variables.inc:594 | Square 1: period low byte. |
+| `$4007` | `Sq1Length` | `Sq1Length_4007` | Variables.inc:595 | Square 1: length counter, period high bits. |
+| `$4008` | `TrgLinear` | `TrgLinear_4008` | Variables.inc:596 | Triangle: linear counter. |
+| `$400A` | `TrgTimer` | `TrgTimer_400A` | Variables.inc:597 | Triangle: period low byte. |
+| `$400B` | `TrgLength` | `TrgLength_400B` | Variables.inc:598 | Triangle: length counter, period high bits. |
+| `$400C` | `NoiseVolume` | `NoiseVolume_400C` | Variables.inc:599 | Noise: envelope, volume. |
+| `$400E` | `NoisePeriod` | `NoisePeriod_400E` | Variables.inc:600 | Noise: mode and period. |
+| `$400F` | `NoiseLength` | `NoiseLength_400F` | Variables.inc:601 | Noise: length counter. |
+| `$4010` | `DmcFreq` | `DmcFreq_4010` | Variables.inc:602 | DMC: flags and rate. |
+| `$4011` | `DmcCounter` | `DmcCounter_4011` | Variables.inc:603 | DMC: output level. |
+| `$4012` | `DmcAddress` | `DmcAddress_4012` | Variables.inc:604 | DMC: sample address. |
+| `$4013` | `DmcLength` | `DmcLength_4013` | Variables.inc:605 | DMC: sample length. |
+| `$4014` | `SpriteDma` | `SpriteDma_4014` | Variables.inc:583 | OAM DMA: page number of the sprite buffer to copy. |
+| `$4015` | `ApuStatus` | `ApuStatus_4015` | Variables.inc:606 | APU channel enables. |
+| `$4016` | `Ctrl1` | `Ctrl1_4016` | Variables.inc:584 | Controller strobe (write) and controller 1 data (read). |
+| `$4017` | `Ctrl2FrameCtr` | `Ctrl2_FrameCtr_4017` | Variables.inc:585 | Controller 2 data (read); APU frame counter (write). |
+| `$6001` | `SaveRamBegin` |  | Variables.inc:612 | $5A once save RAM is initialized (with SaveRamEnd = $A5). |
+| `$6002` | `SaveFileAName0` |  | Variables.inc:614 | [8] File A, slot 0: name. (The SaveFileA* blocks are addressed through |
+| `$600A` | `SaveFileAName1` |  | Variables.inc:616 | [8] File A, slot 1: name. |
+| `$6012` | `SaveFileAName2` |  | Variables.inc:617 | [8] File A, slot 2: name. |
+| `$601A` | `SaveFileAItems0` |  | Variables.inc:618 | [40] File A, slot 0: copy of the items block InvItems ($657-$67E). |
+| `$6042` | `SaveFileAItems1` |  | Variables.inc:619 | [40] File A, slot 1: items block. |
+| `$606A` | `SaveFileAItems2` |  | Variables.inc:620 | [40] File A, slot 2: items block. |
+| `$6092` | `SaveFileAWorldFlags0` |  | Variables.inc:621 | [384] File A, slot 0: copy of WorldFlags ($67F-$7FE). |
+| `$6212` | `SaveFileAWorldFlags1` |  | Variables.inc:622 | [384] File A, slot 1: world flags. |
+| `$6392` | `SaveFileAWorldFlags2` |  | Variables.inc:623 | [384] File A, slot 2: world flags. |
+| `$6512` | `SaveFileASlotActive0` |  | Variables.inc:624 | File A, slot 0: nonzero = slot registered (source of IsSaveSlotActive). |
+| `$6513` | `SaveFileASlotActive1` |  | Variables.inc:625 | File A, slot 1: slot registered. |
+| `$6514` | `SaveFileASlotActive2` |  | Variables.inc:626 | File A, slot 2: slot registered. |
+| `$6515` | `SaveFileADeathCount0` |  | Variables.inc:627 | File A, slot 0: death count (source of DeathCounts). |
+| `$6516` | `SaveFileADeathCount1` |  | Variables.inc:628 | File A, slot 1: death count. |
+| `$6517` | `SaveFileADeathCount2` |  | Variables.inc:629 | File A, slot 2: death count. |
+| `$651B` | `SaveFileAQuestNumber0` |  | Variables.inc:631 | File A, slot 0: quest, 0 = Q1, 1 = Q2 (source of QuestNumbers). |
+| `$651C` | `SaveFileAQuestNumber1` |  | Variables.inc:632 | File A, slot 1: quest. |
+| `$651D` | `SaveFileAQuestNumber2` |  | Variables.inc:633 | File A, slot 2: quest. |
+| `$651E` | `SaveFileOpenMarkers` |  | Variables.inc:634 | [3] per slot: $5A while file A is whole; 0 during the B-to-A copy. |
+| `$6521` | `SaveFileCloseMarkers` |  | Variables.inc:635 | [3] per slot: $A5 while file A is whole; 0 during the B-to-A copy. |
+| `$6524` | `SaveFileAChecksums` | `FileAChecksums` | Variables.inc:636 | [3] x 2 bytes: file A checksum per slot; a mismatch reformats the slot. |
+| `$652A` | `IsSaveFileBCommitted` |  | Variables.inc:637 | [3] per slot: $FF = file B fully copied to file A; 0 = copy pending. |
+| `$6530` | `PlayAreaTiles` |  | Variables.inc:640 | [704] Play area tile map: 32 columns x 22 rows, stored by column. |
+| `$687E` | `LevelBlockAttrsA` |  | Variables.inc:644 | [128] Dungeon: bits 7-5 N door type, 4-2 S door type, 1-0 outer palette. |
+| `$68FE` | `LevelBlockAttrsB` |  | Variables.inc:647 | [128] Dungeon: bits 7-5 W door type, 4-2 E door type, 1-0 inner palette. |
+| `$697E` | `LevelBlockAttrsC` |  | Variables.inc:650 | [128] Bits 7-6 index into LevelInfo_FoeCounts, 5-0 monster list id. |
+| `$69FE` | `LevelBlockAttrsD` |  | Variables.inc:652 | [128] Bit 7 = bit 6 of the monster list id, bit 6 push block (dungeon), |
+| `$6A7E` | `LevelBlockAttrsE` |  | Variables.inc:654 | [128] Dungeon: bit 7 dark room, 6-5 boss roar index, 4-0 room item id |
+| `$6AFE` | `LevelBlockAttrsF` |  | Variables.inc:657 | [128] Bits 5-4 index into LevelInfo_ShortcutOrItemPosArray. |
+| `$6B7E` | `LevelInfo_PalettesTransferBuf` |  | Variables.inc:662 | [36] PPU transfer record with the level's palettes. |
+| `$6BA2` | `LevelInfo_FoeCounts` |  | Variables.inc:663 | [4] Monster counts selectable by attr C bits 7-6 (dungeons: 3, 5, 6, 8). |
+| `$6BA6` | `LevelInfo_StartY` |  | Variables.inc:664 | Link's Y when the level is entered ($DD in dungeons, $8D overworld). |
+| `$6BA7` | `LevelInfo_ShortcutOrItemPosArray` |  | Variables.inc:665 | [4] Positions: high nibble X, low nibble Y (each * $10). |
+| `$6BAB` | `LevelInfo_SubmenuMapRotation` |  | Variables.inc:667 | Columns the submenu map is rotated to match the level's shape. |
+| `$6BAC` | `LevelInfo_StatusBarMapXOffset` |  | Variables.inc:668 | Pixels added to the status bar position marker's X. |
+| `$6BAD` | `LevelInfo_StartRoomId` |  | Variables.inc:669 | Room where Link starts the level. |
+| `$6BAE` | `LevelInfo_TriforceRoomId` |  | Variables.inc:670 | Room marked by the compass (Triforce marker on the status bar map). |
+| `$6BAF` | `LevelInfo_WorldFlagsAddr` |  | Variables.inc:671 | 2 bytes lo/hi: address of this level's 128 bytes in WorldFlags. |
+| `$6BB1` | `LevelInfo_LevelNumber` |  | Variables.inc:672 | Level number 1-9 for the "LEVEL-n" text; 0 = overworld. |
+| `$6BB2` | `LevelInfo_CellarRoomIdArray` |  | Variables.inc:673 | [10] Dungeon: room ids of the cellars, $FF-padded. |
+| `$6BBC` | `LevelInfo_BossRoomId` |  | Variables.inc:675 | Boss room; while its kills flag is not "all dead" rooms play the roar. |
+| `$6BBD` | `LevelInfo_SubmenuMapMask` |  | Variables.inc:676 | [16] per map column: bit set = a room exists in that row. |
+| `$6BCD` | `LevelInfo_StatusBarMapTransferBuf` |  | Variables.inc:677 | [45] PPU transfer record of the status bar map. |
+| `$6BFA` | `LevelInfo_PaletteCycles` |  | Variables.inc:678 | [96] Fade series: 8-byte palette halves, indexed through FadeCycle. |
+| `$6C5A` | `LevelInfo_DeathPaletteSeries` |  | Variables.inc:679 | [32] Fade series $60 (death): 4 steps of 8 bytes. |
+| `$7FFF` | `SaveRamEnd` |  | Variables.inc:680 | $A5 once save RAM is initialized; see SaveRamBegin. |

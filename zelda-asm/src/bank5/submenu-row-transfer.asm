@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/submenu-row-transfer.asm BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 6805-6917
-; SUBJECTS: (none)
+; SUBJECTS: Submenu
 ; TOPIC:    Submenu row transfer while scrolling
 ; SEE ALSO:
 ; KEY FACTS:

@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/fairy-flyer-common.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 11447-11868
-; SUBJECTS: (none)
+; SUBJECTS: Flyer
 ; TOPIC:    Item fairy; shared flyer state machine
 ; SEE ALSO:
 ; KEY FACTS:
@@ -57,12 +57,12 @@ SetUpFairyObject:
 
     ; Set maximum speed fraction to $A0.
     LDA #$A0
-    STA FlyingMaxSpeedFrac
+    STA FlyerMaxSpeedFrac
     RTS
 
 ResetFlyerState:
     LDA #$00
-    STA Flyer_ObjSpeedFrac, X
+    STA Flyer_ObjPosFrac, X
     STA Flyer_ObjTurns, X
     STA Flyer_ObjDistTraveled, X
     STA Flyer_ObjFlyingState, X
@@ -152,7 +152,7 @@ Flyer_SetFlyingState:
     RTS
 
 Flyer_CompareMaxSpeed:
-    CMP FlyingMaxSpeedFrac
+    CMP FlyerMaxSpeedFrac
     BCC :-                      ; If (whole_speed & $E0) < threshold, return.
     LDA #$01                    ; Else go to flying state 1, and return.
     JMP Flyer_SetFlyingState
@@ -162,8 +162,8 @@ MoveFlyer:
     LDA Flyer_ObjSpeed, X
     AND #$E0
     CLC
-    ADC Flyer_ObjSpeedFrac, X
-    STA Flyer_ObjSpeedFrac, X
+    ADC Flyer_ObjPosFrac, X
+    STA Flyer_ObjPosFrac, X
     BCC @Exit                   ; If the fraction isn't whole yet, then return.
 
     ; Because this object can move in 8 directions,

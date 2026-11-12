@@ -2948,482 +2948,487 @@ IsrReset	code	7	src/bank7/reset-mmc1-vectors.asm	21	IsrReset
 SetMMC1Control	code	7	src/bank7/reset-mmc1-vectors.asm	57	SetMMC1Control	
 SwitchBank	code	7	src/bank7/reset-mmc1-vectors.asm	69	SwitchBank	
 IsrVector	data	7	src/bank7/reset-mmc1-vectors.asm	90	IsrVector	
-GLEEOK_DIRCOUNTERH	var		src/ObjVars.inc	127	GLEEOK_DIRCOUNTERH	$0000 
-GLEEOK_DIRCOUNTERV	var		src/ObjVars.inc	128	GLEEOK_DIRCOUNTERV	$0001 
-GLEEOK_SPEEDX	var		src/ObjVars.inc	129	GLEEOK_SPEEDX	$0002 
-GLEEOK_SPEEDY	var		src/ObjVars.inc	130	GLEEOK_SPEEDY	$0003 
-GLEEOK_DIRCHANGECOUNTER	var		src/ObjVars.inc	131	GLEEOK_DIRCHANGECOUNTER	$0004 
-GLEEOK_DELAY	var		src/ObjVars.inc	132	GLEEOK_DELAY	$0005 
-CurLevel	var		src/Variables.inc	1	CurLevel	$0010 
-IsUpdatingMode	var		src/Variables.inc	2	IsUpdatingMode	$0011 
-GameMode	var		src/Variables.inc	3	GameMode	$0012 
-GameSubmode	var		src/Variables.inc	4	GameSubmode	$0013 
-TileBufSelector	var		src/Variables.inc	5	TileBufSelector	$0014 
-FrameCounter	var		src/Variables.inc	6	FrameCounter	$0015 
-CurSaveSlot	var		src/Variables.inc	7	CurSaveSlot	$0016 
-Random	var		src/Variables.inc	8	Random	$0018 
-StunCycle	var		src/Variables.inc	9	StunCycle	$0026 
-DoorTimer	var		src/Variables.inc	10	DoorTimer	$0027 
-ObjTimer	var		src/Variables.inc	11	ObjTimer	$0028 
-FluteTimer	var		src/Variables.inc	12	FluteTimer	$003C 
-ObjStunTimer	var		src/Variables.inc	13	ObjStunTimer	$003D 
-ChaseLongTimer	var		src/Variables.inc	14	ChaseLongTimer	$004A 
-MonstersFromEdgesLongTimer	var		src/Variables.inc	15	MonstersFromEdgesLongTimer	$004B 
-SwordBlockedLongTimer	var		src/Variables.inc	16	SwordBlockedLongTimer	$004C 
-EndingFlashLongTimer	var		src/BeginEndVars.inc	13	EndingFlashLongTimer	$004D 
-RedLeeverLongTimer	var		src/Variables.inc	17	RedLeeverLongTimer	$004D 
-HelpDropCount	var		src/Variables.inc	18	HelpDropCount	$0050 
-HelpDropValue	var		src/Variables.inc	19	HelpDropValue	$0051 
-ProcessedNarrowObj	var		src/Variables.inc	20	ProcessedNarrowObj	$0052 
-DoorwayDir	var		src/Variables.inc	21	DoorwayDir	$0053 
-TriggeredDoorCmd	var		src/Variables.inc	22	TriggeredDoorCmd	$0054 
-TriggeredDoorDir	var		src/Variables.inc	23	TriggeredDoorDir	$0055 
-Link_GoStraightWhenDiagInput	var		src/Variables.inc	24	Link_GoStraightWhenDiagInput	$0056 
-Link_GoStraight	var		src/Variables.inc	25	Link_GoStraight	$0057 
-VScrollAddrHi	var		src/Variables.inc	26	VScrollAddrHi	$0058 
-EmptyMonsterSlot	var		src/Variables.inc	27	EmptyMonsterSlot	$0059 
-UndergroundExitType	var		src/Variables.inc	28	UndergroundExitType	$005A 
-TargetMode	var		src/Variables.inc	29	TargetMode	$005B 
-SwitchNameTablesReq	var		src/Variables.inc	30	SwitchNameTablesReq	$005C 
-CurScanRoomId	var		src/Variables.inc	31	CurScanRoomId	$005D 
-SubmenuScrollProgress	var		src/Variables.inc	32	SubmenuScrollProgress	$005E 
-OddBaseNameTableOverride	var		src/Variables.inc	33	OddBaseNameTableOverride	$005F 
-ChaseOtherTarget	var		src/Variables.inc	34	ChaseOtherTarget	$0060 
-ChaseTargetX	var		src/Variables.inc	35	ChaseTargetX	$0061 
-ChaseTargetY	var		src/Variables.inc	36	ChaseTargetY	$0062 
-World_IsFillingHearts	var		src/Variables.inc	37	World_IsFillingHearts	$0063 
-LadderSlot	var		src/Variables.inc	38	LadderSlot	$0064 
-UndergroundEntranceTile	var		src/Variables.inc	39	UndergroundEntranceTile	$0065 
-SongScriptPtrLo	var		src/Variables.inc	40	SongScriptPtrLo	$0066 
-SongScriptPtrHi	var		src/Variables.inc	41	SongScriptPtrHi	$0067 
-EffectCounter	var		src/Variables.inc	42	EffectCounter	$0069 
-CurNoteLowPeriodSq0	var		src/Variables.inc	43	CurNoteLowPeriodSq0	$006A 
-CurNoteLowPeriodSq1	var		src/Variables.inc	44	CurNoteLowPeriodSq1	$006B 
-SongPhraseIndex	var		src/Variables.inc	45	SongPhraseIndex	$006C 
-CustomEnvelopeOffsetTune1	var		src/Variables.inc	46	CustomEnvelopeOffsetTune1	$006D 
-NoteLengthTune1	var		src/Variables.inc	47	NoteLengthTune1	$006E 
-NoteCounterTune1	var		src/Variables.inc	48	NoteCounterTune1	$006F 
-ObjX	var		src/Variables.inc	54	ObjX	$0070 
-ObjY	var		src/Variables.inc	55	ObjY	$0084 
-ObjRoomItemId	var		src/CommonVars.inc	4	ObjRoomItemId	$0098 
-ObjDir	var		src/Variables.inc	56	ObjDir	$0098 
-RoomItemId	var		src/Variables.inc	57	RoomItemId	$00AB 
-Item_ObjItemId	var		src/CommonVars.inc	8	Item_ObjItemId	$00AC 
-ObjState	var		src/Variables.inc	60	ObjState	$00AC 
-ObjShoveDir	var		src/Variables.inc	61	ObjShoveDir	$00C0 
-ObjShoveDistance	var		src/Variables.inc	62	ObjShoveDistance	$00D3 
-Paused	var		src/Variables.inc	63	Paused	$00E0 
-MenuState	var		src/Variables.inc	64	MenuState	$00E1 
-VScrollAddrLo	var		src/Variables.inc	65	VScrollAddrLo	$00E2 
-IsSprite0CheckActive	var		src/Variables.inc	66	IsSprite0CheckActive	$00E3 
-DeathModeCounter	var		src/Variables.inc	67	DeathModeCounter	$00E5 
-VScrollStartFrame	var		src/Variables.inc	68	VScrollStartFrame	$00E6 
-CurColumn	var		src/Variables.inc	69	CurColumn	$00E8 
-CurRow	var		src/Variables.inc	70	CurRow	$00E9 
-WhirlwindPrevRoomId	var		src/Variables.inc	71	WhirlwindPrevRoomId	$00EA 
-RoomId	var		src/Variables.inc	72	RoomId	$00EB 
-NextRoomId	var		src/Variables.inc	73	NextRoomId	$00EC 
-PrevRow	var		src/Variables.inc	74	PrevRow	$00ED 
-CurOpenedDoors	var		src/Variables.inc	75	CurOpenedDoors	$00EE 
-_Unknown_F3	var		src/Variables.inc	76	_Unknown_F3	$00F3 
-InitializedGame	var		src/Variables.inc	77	InitializedGame	$00F4 
-TransferredCommonPatterns	var		src/Variables.inc	78	TransferredCommonPatterns	$00F5 
-TransferredDemoPatterns	var		src/Variables.inc	79	TransferredDemoPatterns	$00F6 
-ReturnToBank4	var		src/Variables.inc	80	ReturnToBank4	$00F7 
-ButtonsPressed	var		src/Variables.inc	81	ButtonsPressed	$00F8 
-ButtonsDown	var		src/Variables.inc	82	ButtonsDown	$00FA 
-CurVScroll	var		src/Variables.inc	83	CurVScroll	$00FC 
-CurHScroll	var		src/Variables.inc	84	CurHScroll	$00FD 
-CurPpuMask_2001	var		src/Variables.inc	85	CurPpuMask_2001	$00FE 
-CurPpuControl_2000	var		src/Variables.inc	86	CurPpuControl_2000	$00FF 
-PositiveGridCellSize	var		src/Variables.inc	87	PositiveGridCellSize	$010E 
-NegativeGridCellSize	var		src/Variables.inc	88	NegativeGridCellSize	$010F 
-Sprites	var		src/Variables.inc	89	Sprites	$0200 
-DynTileBufLen	var		src/Variables.inc	90	DynTileBufLen	$0301 
-DynTileBuf	var		src/Variables.inc	91	DynTileBuf	$0302 
-OpenDoorwayMask	var		src/Variables.inc	92	OpenDoorwayMask	$033F 
-CurObjIndex	var		src/Variables.inc	93	CurObjIndex	$0340 
-RollingSpriteIndex	var		src/Variables.inc	94	RollingSpriteIndex	$0341 
-FirstSpriteIndex	var		src/Variables.inc	95	FirstSpriteIndex	$0342 
-LeftSpriteOffset	var		src/Variables.inc	96	LeftSpriteOffset	$0343 
-RightSpriteOffset	var		src/Variables.inc	97	RightSpriteOffset	$0344 
-RoomBoundLeft	var		src/Variables.inc	98	RoomBoundLeft	$0346 
-RoomBoundRight	var		src/Variables.inc	99	RoomBoundRight	$0347 
-RoomBoundUp	var		src/Variables.inc	100	RoomBoundUp	$0348 
-RoomBoundDown	var		src/Variables.inc	101	RoomBoundDown	$0349 
-ObjectFirstUnwalkableTile	var		src/Variables.inc	102	ObjectFirstUnwalkableTile	$034A 
-ShotCollidesWithLink	var		src/Variables.inc	103	ShotCollidesWithLink	$034B 
-ActiveMonsterShots	var		src/Variables.inc	104	ActiveMonsterShots	$034C 
-RoomAllDead	var		src/Variables.inc	105	RoomAllDead	$034D 
-RoomObjCount	var		src/Variables.inc	106	RoomObjCount	$034E 
-RoomKillCount	var		src/CommonVars.inc	10	RoomKillCount	$034F 
-ObjType	var		src/Variables.inc	107	ObjType	$034F 
-RoomObjTemplateType	var		src/Variables.inc	108	RoomObjTemplateType	$035F 
-ObjAngleFrac	var		src/ObjVars.inc	9	ObjAngleFrac	$0380 
-Shot_ObjBounceDir	var		src/ObjVars.inc	12	Shot_ObjBounceDir	$0380 
-Moldorm_ObjOldDir	var		src/ObjVars.inc	43	Moldorm_ObjOldDir	$0380 
-Gohma_ObjShootTimer	var		src/ObjVars.inc	81	Gohma_ObjShootTimer	$0380 
-ObjMovingLimit	var		src/Variables.inc	109	ObjMovingLimit	$0380 
-Gleook_HeadInfo2	var		src/ObjVars.inc	114	Gleook_HeadInfo2	$0381 
-Manhandla_SegmentJustDied	var		src/ObjVars.inc	78	Manhandla_SegmentJustDied	$0383 
-Manhandla_BounceDir	var		src/ObjVars.inc	79	Manhandla_BounceDir	$0385 
-ObjRemDistance	var		src/ObjVars.inc	5	ObjRemDistance	$0394 
-ObjAngleWhole	var		src/ObjVars.inc	10	ObjAngleWhole	$0394 
-Shot_ObjBounceDist	var		src/ObjVars.inc	13	Shot_ObjBounceDist	$0394 
-RedWizzrobe_ObjFadeCounter	var		src/ObjVars.inc	68	RedWizzrobe_ObjFadeCounter	$0394 
-ObjGridOffset	var		src/Variables.inc	110	ObjGridOffset	$0394 
-Gleeok_NeckXs3	var		src/ObjVars.inc	105	Gleeok_NeckXs3	$0395 
-Item_ObjItemLifetime	var		src/CommonVars.inc	7	Item_ObjItemLifetime	$03A8 
-ObjPosFrac	var		src/Variables.inc	111	ObjPosFrac	$03A8 
-Gleook_HeadInfo3	var		src/ObjVars.inc	115	Gleook_HeadInfo3	$03A9 
-Moldorm_ObjBounceDir	var		src/ObjVars.inc	42	Moldorm_ObjBounceDir	$03BC 
-ObjQSpeedFrac	var		src/Variables.inc	112	ObjQSpeedFrac	$03BC 
-Gleeok_NeckYs3	var		src/ObjVars.inc	110	Gleeok_NeckYs3	$03BD 
-ObjAnimCounter	var		src/Variables.inc	113	ObjAnimCounter	$03D0 
-ObjAnimFrame	var		src/Variables.inc	114	ObjAnimFrame	$03E4 
-ObjInputDir	var		src/Variables.inc	115	ObjInputDir	$03F8 
-ObjMetastate	var		src/Variables.inc	116	ObjMetastate	$0405 
-TriforceGlowTimer	var		src/BeginEndVars.inc	1	TriforceGlowTimer	$0412 
-PeaceCharDelayCounter	var		src/BeginEndVars.inc	14	PeaceCharDelayCounter	$0412 
-Item_ObjMonsterType	var		src/CommonVars.inc	6	Item_ObjMonsterType	$0412 
-StairsTargetY	var		src/CommonVars.inc	11	StairsTargetY	$0412 
-ObjWantsToShoot	var		src/ObjVars.inc	1	ObjWantsToShoot	$0412 
-ObjPushTimer	var		src/ObjVars.inc	7	ObjPushTimer	$0412 
-TileObjRoomId	var		src/ObjVars.inc	15	TileObjRoomId	$0412 
-Fireball_ObjDirToTargetX	var		src/ObjVars.inc	19	Fireball_ObjDirToTargetX	$0412 
-Flyer_ObjSpeedFrac	var		src/ObjVars.inc	24	Flyer_ObjSpeedFrac	$0412 
-Jumper_ObjSpeedWholeY	var		src/ObjVars.inc	34	Jumper_ObjSpeedWholeY	$0412 
-Wallmaster_ObjStep	var		src/ObjVars.inc	39	Wallmaster_ObjStep	$0412 
-PolsVoice_ObjSpeedWhole	var		src/ObjVars.inc	59	PolsVoice_ObjSpeedWhole	$0412 
-BlueWizzrobe_ObjTurnCounter	var		src/ObjVars.inc	66	BlueWizzrobe_ObjTurnCounter	$0412 
-RedWizzrobe_ObjAnimCounter	var		src/ObjVars.inc	69	RedWizzrobe_ObjAnimCounter	$0412 
-Manhandla_ObjSpeedAccum	var		src/ObjVars.inc	71	Manhandla_ObjSpeedAccum	$0412 
-Gohma_ObjDistTraveled	var		src/ObjVars.inc	82	Gohma_ObjDistTraveled	$0412 
-PeaceCharIndex	var		src/BeginEndVars.inc	15	PeaceCharIndex	$0413 
-CaveFlags	var		src/CaveVars.inc	5	CaveFlags	$0413 
-Gleeok_ObjHeadInfo	var		src/ObjVars.inc	117	Gleeok_ObjHeadInfo	$0413 
-Gleeok_ObjHeadDirCounterH	var		src/ObjVars.inc	118	Gleeok_ObjHeadDirCounterH	$0413 
-TriforceGlowCycle	var		src/Variables.inc	117	TriforceGlowCycle	$0413 
-Gleeok_ObjHeadDirCounterV	var		src/ObjVars.inc	119	Gleeok_ObjHeadDirCounterV	$0414 
-PersonTextSelector	var		src/CaveVars.inc	1	PersonTextSelector	$0415 
-Gleeok_ObjHeadSpeedX	var		src/ObjVars.inc	120	Gleeok_ObjHeadSpeedX	$0415 
-ScrolledScreenCount	var		src/Variables.inc	118	ScrolledScreenCount	$0415 
-TextboxCharIndex	var		src/BeginEndVars.inc	16	TextboxCharIndex	$0416 
-PersonTextIndex	var		src/CaveVars.inc	2	PersonTextIndex	$0416 
-Gleeok_ObjHeadSpeedY	var		src/ObjVars.inc	121	Gleeok_ObjHeadSpeedY	$0416 
-Gleeok_ObjHeadDirChangeCounter	var		src/ObjVars.inc	122	Gleeok_ObjHeadDirChangeCounter	$0417 
-DemoLineAttrVramAddrLo	var		src/Variables.inc	119	DemoLineAttrVramAddrLo	$0417 
-Gleeok_ObjHeadDelay	var		src/ObjVars.inc	123	Gleeok_ObjHeadDelay	$0418 
-DemoLineAttrVramAddrHi	var		src/Variables.inc	120	DemoLineAttrVramAddrHi	$0418 
-DemoLineIndex	var		src/Variables.inc	121	DemoLineIndex	$0419 
-DemoTimer	var		src/Variables.inc	122	DemoTimer	$041A 
-ScrolledLineCount	var		src/Variables.inc	123	ScrolledLineCount	$041B 
-DemoLineTileVramAddrLo	var		src/Variables.inc	124	DemoLineTileVramAddrLo	$041C 
-DemoLineTileVramAddrHi	var		src/Variables.inc	125	DemoLineTileVramAddrHi	$041D 
-InitializedWaterfallAnimation	var		src/BeginEndVars.inc	2	InitializedWaterfallAnimation	$041F 
-CharBoardIndex	var		src/BeginEndVars.inc	8	CharBoardIndex	$041F 
-ObjTurnRate	var		src/ObjVars.inc	2	ObjTurnRate	$041F 
-Fireball_ObjQSpeedX	var		src/ObjVars.inc	21	Fireball_ObjQSpeedX	$041F 
-Flyer_ObjSpeed	var		src/ObjVars.inc	25	Flyer_ObjSpeed	$041F 
-Jumper_ObjSpeedFracY	var		src/ObjVars.inc	35	Jumper_ObjSpeedFracY	$041F 
-Wallmaster_ObjTilesCrossed	var		src/ObjVars.inc	40	Wallmaster_ObjTilesCrossed	$041F 
-Digdogger_ObjSpeedFrac	var		src/ObjVars.inc	45	Digdogger_ObjSpeedFrac	$041F 
-PolsVoice_ObjLastTile	var		src/ObjVars.inc	60	PolsVoice_ObjLastTile	$041F 
-Wizzrobe_ObjLastTile	var		src/ObjVars.inc	64	Wizzrobe_ObjLastTile	$041F 
-Manhandla_ObjSpeedFrac	var		src/ObjVars.inc	72	Manhandla_ObjSpeedFrac	$041F 
-Gohma_ObjMoveAccum	var		src/ObjVars.inc	83	Gohma_ObjMoveAccum	$041F 
-TitleWaveYs	var		src/BeginEndVars.inc	3	TitleWaveYs	$0420 
-InitializedNameField	var		src/BeginEndVars.inc	9	InitializedNameField	$0420 
-Gleook_HeadInfo0	var		src/ObjVars.inc	112	Gleook_HeadInfo0	$0420 
-NameCharOffset	var		src/BeginEndVars.inc	10	NameCharOffset	$0421 
-NameInputCharBuf	var		src/BeginEndVars.inc	11	NameInputCharBuf	$0422 
-CaveItemIds	var		src/CaveVars.inc	6	CaveItemIds	$0422 
-StillHoldingButton	var		src/Variables.inc	126	StillHoldingButton	$0426 
-HeldButton	var		src/Variables.inc	127	HeldButton	$0427 
-SubsequentButtonRepeat	var		src/Variables.inc	128	SubsequentButtonRepeat	$0428 
-ButtonRepeatTimer	var		src/Variables.inc	129	ButtonRepeatTimer	$0429 
-ModeE_WrappedAroundBoardY	var		src/Variables.inc	130	ModeE_WrappedAroundBoardY	$042A 
-DemoPhase	var		src/BeginEndVars.inc	4	DemoPhase	$042C 
-ObjRefId	var		src/CommonVars.inc	1	ObjRefId	$042C 
-ObjCaptureTimer	var		src/CommonVars.inc	2	ObjCaptureTimer	$042C 
-Flyer_ObjTurns	var		src/ObjVars.inc	26	Flyer_ObjTurns	$042C 
-Digdogger_ObjSpeedWhole	var		src/ObjVars.inc	46	Digdogger_ObjSpeedWhole	$042C 
-Dodongo_ObjBloatedSubstate	var		src/ObjVars.inc	55	Dodongo_ObjBloatedSubstate	$042C 
-PolsVoice_ObjTargetY	var		src/ObjVars.inc	61	PolsVoice_ObjTargetY	$042C 
-Manhandla_ObjSpeedWhole	var		src/ObjVars.inc	73	Manhandla_ObjSpeedWhole	$042C 
-Gohma_ObjNextOpenEyeCounter	var		src/ObjVars.inc	84	Gohma_ObjNextOpenEyeCounter	$042C 
-Ganon_ObjPhase	var		src/ObjVars.inc	99	Ganon_ObjPhase	$042C 
-Gleook_HeadInfo1	var		src/ObjVars.inc	113	Gleook_HeadInfo1	$042D 
-DemoSubphase	var		src/Variables.inc	131	DemoSubphase	$042D 
-CaveCurPriceIndex	var		src/CaveVars.inc	9	CaveCurPriceIndex	$042E 
-DemoLineTextIndex	var		src/Variables.inc	132	DemoLineTextIndex	$042E 
-CaveCurPriceOffset	var		src/CaveVars.inc	10	CaveCurPriceOffset	$042F 
-DemoItemRow	var		src/Variables.inc	133	DemoItemRow	$042F 
-CavePrices	var		src/CaveVars.inc	7	CavePrices	$0430 
-DemoPhase0Subphase1Cycle	var		src/BeginEndVars.inc	5	DemoPhase0Subphase1Cycle	$0437 
-Fireball_ObjDirToTargetY	var		src/ObjVars.inc	20	Fireball_ObjDirToTargetY	$0437 
-Flyer_ObjDistTraveled	var		src/ObjVars.inc	27	Flyer_ObjDistTraveled	$0437 
-Digdogger_ObjTargetSpeedFrac	var		src/ObjVars.inc	47	Digdogger_ObjTargetSpeedFrac	$0437 
-Dodongo_ObjBombHits	var		src/ObjVars.inc	56	Dodongo_ObjBombHits	$0437 
-Manhandla_ObjPrevFrame	var		src/ObjVars.inc	74	Manhandla_ObjPrevFrame	$0437 
-CaveChosenIndex	var		src/CaveVars.inc	11	CaveChosenIndex	$0438 
-Gleeok_NeckXs0	var		src/ObjVars.inc	102	Gleeok_NeckXs0	$0438 
-DemoPhase0Subphase1Timer	var		src/Variables.inc	134	DemoPhase0Subphase1Timer	$0438 
-DemoItemIds	var		src/BeginEndVars.inc	6	DemoItemIds	$0444 
-Fireball_ObjQSpeedY	var		src/ObjVars.inc	22	Fireball_ObjQSpeedY	$0444 
-Flyer_ObjFlyingState	var		src/ObjVars.inc	28	Flyer_ObjFlyingState	$0444 
-Jumper_ObjTargetY	var		src/ObjVars.inc	36	Jumper_ObjTargetY	$0444 
-Digdogger_ObjTargetSpeedWhole	var		src/ObjVars.inc	48	Digdogger_ObjTargetSpeedWhole	$0444 
-PolsVoice_ObjSpeedFrac	var		src/ObjVars.inc	62	PolsVoice_ObjSpeedFrac	$0444 
-Gohma_ObjEyeOpenTimer	var		src/ObjVars.inc	85	Gohma_ObjEyeOpenTimer	$0444 
-Ganon_ScenePhase	var		src/ObjVars.inc	96	Ganon_ScenePhase	$0445 
-Gleeok_NeckYs0	var		src/ObjVars.inc	107	Gleeok_NeckYs0	$0445 
-MoneyGameAmounts	var		src/CaveVars.inc	12	MoneyGameAmounts	$0448 
-Fireball_ObjPosFracX	var		src/ObjVars.inc	17	Fireball_ObjPosFracX	$0451 
-Jumper_ObjReversalCount	var		src/ObjVars.inc	37	Jumper_ObjReversalCount	$0451 
-Manhandla_ObjFrameAccum	var		src/ObjVars.inc	75	Manhandla_ObjFrameAccum	$0451 
-Gohma_ObjGoStraight	var		src/ObjVars.inc	86	Gohma_ObjGoStraight	$0451 
-ObjShootTimer	var		src/Variables.inc	135	ObjShootTimer	$0451 
-Gleeok_NeckXs1	var		src/ObjVars.inc	103	Gleeok_NeckXs1	$0452 
-Fireball_ObjPosFracY	var		src/ObjVars.inc	18	Fireball_ObjPosFracY	$045E 
-Digdogger_ObjSpeedFlag	var		src/ObjVars.inc	49	Digdogger_ObjSpeedFlag	$045E 
-Dodongo_ObjBloatedTimer	var		src/ObjVars.inc	57	Dodongo_ObjBloatedTimer	$045E 
-Gohma_ObjSprints	var		src/ObjVars.inc	87	Gohma_ObjSprints	$045E 
-Patra_ObjManeuverIndex	var		src/ObjVars.inc	94	Patra_ObjManeuverIndex	$045E 
-TextboxCharPtr	var		src/BeginEndVars.inc	17	TextboxCharPtr	$045F 
-PersonTextPtr	var		src/CaveVars.inc	3	PersonTextPtr	$045F 
-Gleeok_NeckYs1	var		src/ObjVars.inc	108	Gleeok_NeckYs1	$045F 
-Flyer_ObjOffsetX	var		src/ObjVars.inc	29	Flyer_ObjOffsetX	$046B 
-Digdogger_ObjIsChild	var		src/ObjVars.inc	50	Digdogger_ObjIsChild	$046B 
-Gohma_ObjEyeState	var		src/ObjVars.inc	88	Gohma_ObjEyeState	$046B 
-Ganon_ObjAnimationFrame	var		src/ObjVars.inc	98	Ganon_ObjAnimationFrame	$046B 
-Gleeok_NeckXs2	var		src/ObjVars.inc	104	Gleeok_NeckXs2	$046C 
-ObjTurnTimer	var		src/ObjVars.inc	3	ObjTurnTimer	$0478 
-Flyer_ObjOffsetY	var		src/ObjVars.inc	30	Flyer_ObjOffsetY	$0478 
-Digdogger_ObjCurPart	var		src/ObjVars.inc	51	Digdogger_ObjCurPart	$0478 
-Aquamentus_ObjFireballOffset	var		src/ObjVars.inc	53	Aquamentus_ObjFireballOffset	$0478 
-Manhandla_ObjFrame	var		src/ObjVars.inc	76	Manhandla_ObjFrame	$0478 
-Gohma_ObjEyeAnimCounter	var		src/ObjVars.inc	89	Gohma_ObjEyeAnimCounter	$0478 
-Ganon_ObjCloudDist	var		src/ObjVars.inc	100	Ganon_ObjCloudDist	$0478 
-Gleeok_NeckYs2	var		src/ObjVars.inc	109	Gleeok_NeckYs2	$0479 
-ObjHP	var		src/Variables.inc	136	ObjHP	$0485 
-ObjUninitialized	var		src/Variables.inc	137	ObjUninitialized	$0492 
-ObjCollidedTile	var		src/Variables.inc	138	ObjCollidedTile	$049E 
-ObjInvincibilityMask	var		src/Variables.inc	139	ObjInvincibilityMask	$04B2 
-ObjAttr	var		src/Variables.inc	140	ObjAttr	$04BF 
-PersonFireballsEnabled	var		src/Variables.inc	141	PersonFireballsEnabled	$04CC 
-LevelBlockAttrsByteF	var		src/Variables.inc	142	LevelBlockAttrsByteF	$04CD 
-ShutterTrigger	var		src/Variables.inc	143	ShutterTrigger	$04CE 
-BlockPushComplete	var		src/Variables.inc	144	BlockPushComplete	$04CF 
-FlyingMaxSpeedFrac	var		src/Variables.inc	145	FlyingMaxSpeedFrac	$04D1 
-GleeokCurNeck	var		src/Variables.inc	146	GleeokCurNeck	$04D7 
-GleeokSignedRefSegmentDistance	var		src/Variables.inc	147	GleeokSignedRefSegmentDistance	$04D8 
-GleeokPrimarySegmentLimits	var		src/Variables.inc	148	GleeokPrimarySegmentLimits	$04D9 
-GleeokSecondarySegmentLimits	var		src/Variables.inc	149	GleeokSecondarySegmentLimits	$04DB 
-GleeokTertiarySegmentLimits	var		src/Variables.inc	150	GleeokTertiarySegmentLimits	$04DD 
-StatusBarMapTrigger	var		src/Variables.inc	151	StatusBarMapTrigger	$04E5 
-Lamnola_Speed	var		src/ObjVars.inc	92	Lamnola_Speed	$04E6 
-GleeokAnimationTimer	var		src/Variables.inc	152	GleeokAnimationTimer	$04E6 
-Lamnola_Type	var		src/ObjVars.inc	91	Lamnola_Type	$04E7 
-GleeokBodyAnimationFrame	var		src/Variables.inc	153	GleeokBodyAnimationFrame	$04E7 
-Statue_ObjFireballTimer	var		src/ObjVars.inc	32	Statue_ObjFireballTimer	$04E8 
-ObjInvincibilityTimer	var		src/Variables.inc	154	ObjInvincibilityTimer	$04F0 
-LeftAlignHalfWidthObj	var		src/Variables.inc	155	LeftAlignHalfWidthObj	$0504 
-ItemTypeToLift	var		src/Variables.inc	156	ItemTypeToLift	$0505 
-ItemLiftTimer	var		src/Variables.inc	157	ItemLiftTimer	$0506 
-ChildDigdoggerCount	var		src/Variables.inc	158	ChildDigdoggerCount	$0507 
-SummonedWhirlwind	var		src/Variables.inc	159	SummonedWhirlwind	$0508 
-TriforceFanfareActive	var		src/Variables.inc	160	TriforceFanfareActive	$0509 
-CreditsRow	var		src/Variables.inc	161	CreditsRow	$050A 
-CreditsTileOffset	var		src/Variables.inc	162	CreditsTileOffset	$050B 
-CreditsVramPage	var		src/Variables.inc	163	CreditsVramPage	$050C 
-CreditsVramLine	var		src/Variables.inc	164	CreditsVramLine	$050D 
-CreditsLineIndex	var		src/Variables.inc	165	CreditsLineIndex	$050E 
-LamnolaViableDirMask	var		src/Variables.inc	166	LamnolaViableDirMask	$050F 
-Gleeok_WrithingCounter	var		src/ObjVars.inc	125	Gleeok_WrithingCounter	$0510 
-ActiveRedLeeverCount	var		src/Variables.inc	167	ActiveRedLeeverCount	$0510 
-GleeokDeadNeckMask	var		src/Variables.inc	168	GleeokDeadNeckMask	$0511 
-LinkParalyzed	var		src/Variables.inc	169	LinkParalyzed	$0512 
-UsedCandle	var		src/Variables.inc	170	UsedCandle	$0513 
-ZoraActive	var		src/Variables.inc	171	ZoraActive	$0514 
-ActiveBoulders	var		src/Variables.inc	172	ActiveBoulders	$0515 
-SecretColorCycle	var		src/Variables.inc	173	SecretColorCycle	$051A 
-UsedFlute	var		src/Variables.inc	174	UsedFlute	$051B 
-FadeCycle	var		src/Variables.inc	175	FadeCycle	$051C 
-PatternBlockIndex	var		src/Variables.inc	176	PatternBlockIndex	$051D 
-BrighteningRoom	var		src/Variables.inc	177	BrighteningRoom	$051E 
-CandleState	var		src/Variables.inc	178	CandleState	$051F 
-PrevOpenedDoors	var		src/Variables.inc	179	PrevOpenedDoors	$0521 
-WhirlwindTeleportingState	var		src/Variables.inc	180	WhirlwindTeleportingState	$0522 
-TeleportingLevelIndex	var		src/Variables.inc	181	TeleportingLevelIndex	$0523 
-SpawnCycle	var		src/Variables.inc	182	SpawnCycle	$0524 
-CurEdgeSpawnCell	var		src/Variables.inc	183	CurEdgeSpawnCell	$0525 
-CaveSourceRoomId	var		src/Variables.inc	184	CaveSourceRoomId	$0526 
-CellarSourceRoomId	var		src/Variables.inc	185	CellarSourceRoomId	$0527 
-SkippedDemo	var		src/Variables.inc	186	SkippedDemo	$0528 
-ForceSwordShot	var		src/Variables.inc	187	ForceSwordShot	$0529 
-WorldKillCycle	var		src/Variables.inc	188	WorldKillCycle	$052A 
-RoomTileObjType	var		src/Variables.inc	189	RoomTileObjType	$052B 
-RoomTileObjX	var		src/Variables.inc	190	RoomTileObjX	$052C 
-RoomTileObjY	var		src/Variables.inc	191	RoomTileObjY	$052D 
-SwordBlocked	var		src/Variables.inc	192	SwordBlocked	$052E 
-MazeStep	var		src/Variables.inc	193	MazeStep	$052F 
-PlayAreaAttrs	var		src/Variables.inc	194	PlayAreaAttrs	$0530 
-LevelKillCounts	var		src/Variables.inc	195	LevelKillCounts	$0560 
-CurNoteLowPeriodTrg	var		src/Variables.inc	196	CurNoteLowPeriodTrg	$05F0 
-SampleCounter	var		src/Variables.inc	197	SampleCounter	$05F2 
-SeaSfxCounter	var		src/Variables.inc	198	SeaSfxCounter	$05F3 
-NoteLengthTableBase	var		src/Variables.inc	199	NoteLengthTableBase	$05F4 
-FirstNoteIndexSongNoise	var		src/Variables.inc	200	FirstNoteIndexSongNoise	$05F5 
-BackgroundSample	var		src/Variables.inc	201	BackgroundSample	$05F6 
-SongRequest	var		src/Variables.inc	202	SongRequest	$0600 
-SampleRequest	var		src/Variables.inc	203	SampleRequest	$0601 
-Tune1Request	var		src/Variables.inc	204	Tune1Request	$0602 
-EffectRequest	var		src/Variables.inc	205	EffectRequest	$0603 
-Tune0Request	var		src/Variables.inc	206	Tune0Request	$0604 
-Tune0	var		src/Variables.inc	207	Tune0	$0605 
-Effect	var		src/Variables.inc	208	Effect	$0606 
-Tune1	var		src/Variables.inc	209	Tune1	$0607 
-Sample	var		src/Variables.inc	210	Sample	$0608 
-Song	var		src/Variables.inc	211	Song	$0609 
-NoteOffsetSongSq1	var		src/Variables.inc	212	NoteOffsetSongSq1	$060A 
-NoteOffsetSongSq0	var		src/Variables.inc	213	NoteOffsetSongSq0	$060B 
-NoteOffsetSongTrg	var		src/Variables.inc	214	NoteOffsetSongTrg	$060C 
-NoteOffsetSongNoise	var		src/Variables.inc	215	NoteOffsetSongNoise	$060D 
-TunePtr0	var		src/Variables.inc	216	TunePtr0	$060E 
-NoteLengthSongSq0	var		src/Variables.inc	217	NoteLengthSongSq0	$060F 
-NoteLengthSongSq1	var		src/Variables.inc	218	NoteLengthSongSq1	$0610 
-NoteCounterSongSq1	var		src/Variables.inc	219	NoteCounterSongSq1	$0611 
-CustomEnvelopeOffsetSongSq1	var		src/Variables.inc	220	CustomEnvelopeOffsetSongSq1	$0612 
-NoteCounterSongSq0	var		src/Variables.inc	221	NoteCounterSongSq0	$0613 
-CustomEnvelopeOffsetSongSq0	var		src/Variables.inc	222	CustomEnvelopeOffsetSongSq0	$0614 
-NoteLengthSongTrg	var		src/Variables.inc	223	NoteLengthSongTrg	$0615 
-NoteCounterSongTrg	var		src/Variables.inc	224	NoteCounterSongTrg	$0616 
-NoteCounterSongNoise	var		src/Variables.inc	225	NoteCounterSongNoise	$0617 
-TunePtr1	var		src/Variables.inc	226	TunePtr1	$0618 
-SongEnvelopeSelector	var		src/Variables.inc	227	SongEnvelopeSelector	$0619 
-SongVibrationCounterSq1	var		src/Variables.inc	228	SongVibrationCounterSq1	$061B 
-SongVibrationCounterSq0	var		src/Variables.inc	229	SongVibrationCounterSq0	$061C 
-SongVibrationCounterTrg	var		src/Variables.inc	230	SongVibrationCounterTrg	$061D 
-SongRepetitionsTrg	var		src/Variables.inc	231	SongRepetitionsTrg	$061E 
-SongRepeatStartOffset	var		src/Variables.inc	232	SongRepeatStartOffset	$061F 
-CurRoomHistoryIndex	var		src/Variables.inc	233	CurRoomHistoryIndex	$0620 
-RoomHistory	var		src/Variables.inc	234	RoomHistory	$0621 
-WorldKillCount	var		src/Variables.inc	235	WorldKillCount	$0627 
-QuestNumbers	var		src/Variables.inc	236	QuestNumbers	$062D 
-DeathCounts	var		src/Variables.inc	237	DeathCounts	$0630 
-IsSaveSlotActive	var		src/Variables.inc	238	IsSaveSlotActive	$0633 
-IsRegisterSaveFileOptionEnabled	var		src/Variables.inc	239	IsRegisterSaveFileOptionEnabled	$0636 
-IsEliminateSaveFileOptionEnabled	var		src/Variables.inc	240	IsEliminateSaveFileOptionEnabled	$0637 
-Names	var		src/Variables.inc	241	Names	$0638 
-SaveSlotHearts	var		src/Variables.inc	242	SaveSlotHearts	$0650 
-SelectedItemSlot	var		src/Variables.inc	243	SelectedItemSlot	$0656 
-Items	var		src/Variables.inc	244	Items	$0657 
-InvBombs	var		src/Variables.inc	245	InvBombs	$0658 
-InvArrow	var		src/Variables.inc	246	InvArrow	$0659 
-Bow	var		src/Variables.inc	247	Bow	$065A 
-InvCandle	var		src/Variables.inc	248	InvCandle	$065B 
-InvFood	var		src/Variables.inc	249	InvFood	$065D 
-Potion	var		src/Variables.inc	250	Potion	$065E 
-InvRaft	var		src/Variables.inc	251	InvRaft	$0660 
-InvBook	var		src/Variables.inc	252	InvBook	$0661 
-InvRing	var		src/Variables.inc	253	InvRing	$0662 
-InvLadder	var		src/Variables.inc	254	InvLadder	$0663 
-InvMagicKey	var		src/Variables.inc	255	InvMagicKey	$0664 
-InvBracelet	var		src/Variables.inc	256	InvBracelet	$0665 
-InvLetter	var		src/Variables.inc	257	InvLetter	$0666 
-InvCompass	var		src/Variables.inc	258	InvCompass	$0667 
-InvMap	var		src/Variables.inc	259	InvMap	$0668 
-InvCompass9	var		src/Variables.inc	260	InvCompass9	$0669 
-InvMap9	var		src/Variables.inc	261	InvMap9	$066A 
-InvClock	var		src/Variables.inc	262	InvClock	$066C 
-InvRupees	var		src/Variables.inc	263	InvRupees	$066D 
-InvKeys	var		src/Variables.inc	264	InvKeys	$066E 
-HeartValues	var		src/Variables.inc	269	HeartValues	$066F 
-HeartPartial	var		src/Variables.inc	273	HeartPartial	$0670 
-InvTriforce	var		src/Variables.inc	274	InvTriforce	$0671 
-LastBossDefeated	var		src/Variables.inc	275	LastBossDefeated	$0672 
-InvBoomerang	var		src/Variables.inc	276	InvBoomerang	$0674 
-InvMagicBoomerang	var		src/Variables.inc	277	InvMagicBoomerang	$0675 
-InvMagicShield	var		src/Variables.inc	278	InvMagicShield	$0676 
-MaxBombs	var		src/Variables.inc	279	MaxBombs	$067C 
-RupeesToAdd	var		src/Variables.inc	280	RupeesToAdd	$067D 
-RupeesToSubtract	var		src/Variables.inc	281	RupeesToSubtract	$067E 
-WorldFlags	var		src/Variables.inc	282	WorldFlags	$067F 
-PpuControl_2000	var		src/Variables.inc	284	PpuControl_2000	$2000 
-PpuMask_2001	var		src/Variables.inc	285	PpuMask_2001	$2001 
-PpuStatus_2002	var		src/Variables.inc	286	PpuStatus_2002	$2002 
-OamAddr_2003	var		src/Variables.inc	287	OamAddr_2003	$2003 
-OamData_2004	var		src/Variables.inc	288	OamData_2004	$2004 
-PpuScroll_2005	var		src/Variables.inc	289	PpuScroll_2005	$2005 
-PpuAddr_2006	var		src/Variables.inc	290	PpuAddr_2006	$2006 
-PpuData_2007	var		src/Variables.inc	291	PpuData_2007	$2007 
-Sq0Duty_4000	var		src/Variables.inc	292	Sq0Duty_4000	$4000 
-Sq0Sweep_4001	var		src/Variables.inc	293	Sq0Sweep_4001	$4001 
-Sq0Timer_4002	var		src/Variables.inc	294	Sq0Timer_4002	$4002 
-Sq0Length_4003	var		src/Variables.inc	295	Sq0Length_4003	$4003 
-Sq1Duty_4004	var		src/Variables.inc	296	Sq1Duty_4004	$4004 
-Sq1Sweep_4005	var		src/Variables.inc	297	Sq1Sweep_4005	$4005 
-Sq1Timer_4006	var		src/Variables.inc	298	Sq1Timer_4006	$4006 
-Sq1Length_4007	var		src/Variables.inc	299	Sq1Length_4007	$4007 
-TrgLinear_4008	var		src/Variables.inc	300	TrgLinear_4008	$4008 
-TrgTimer_400A	var		src/Variables.inc	301	TrgTimer_400A	$400A 
-TrgLength_400B	var		src/Variables.inc	302	TrgLength_400B	$400B 
-NoiseVolume_400C	var		src/Variables.inc	303	NoiseVolume_400C	$400C 
-NoisePeriod_400E	var		src/Variables.inc	304	NoisePeriod_400E	$400E 
-NoiseLength_400F	var		src/Variables.inc	305	NoiseLength_400F	$400F 
-DmcFreq_4010	var		src/Variables.inc	306	DmcFreq_4010	$4010 
-DmcCounter_4011	var		src/Variables.inc	307	DmcCounter_4011	$4011 
-DmcAddress_4012	var		src/Variables.inc	308	DmcAddress_4012	$4012 
-DmcLength_4013	var		src/Variables.inc	309	DmcLength_4013	$4013 
-SpriteDma_4014	var		src/Variables.inc	310	SpriteDma_4014	$4014 
-ApuStatus_4015	var		src/Variables.inc	311	ApuStatus_4015	$4015 
-Ctrl1_4016	var		src/Variables.inc	312	Ctrl1_4016	$4016 
-Ctrl2_FrameCtr_4017	var		src/Variables.inc	313	Ctrl2_FrameCtr_4017	$4017 
-SaveRamBegin	var		src/Variables.inc	315	SaveRamBegin	$6001 
-SaveFileAName0	var		src/Variables.inc	316	SaveFileAName0	$6002 
-SaveFileAName1	var		src/Variables.inc	317	SaveFileAName1	$600A 
-SaveFileAName2	var		src/Variables.inc	318	SaveFileAName2	$6012 
-SaveFileAItems0	var		src/Variables.inc	319	SaveFileAItems0	$601A 
-SaveFileAItems1	var		src/Variables.inc	320	SaveFileAItems1	$6042 
-SaveFileAItems2	var		src/Variables.inc	321	SaveFileAItems2	$606A 
-SaveFileAWorldFlags0	var		src/Variables.inc	322	SaveFileAWorldFlags0	$6092 
-SaveFileAWorldFlags1	var		src/Variables.inc	323	SaveFileAWorldFlags1	$6212 
-SaveFileAWorldFlags2	var		src/Variables.inc	324	SaveFileAWorldFlags2	$6392 
-SaveFileASlotActive0	var		src/Variables.inc	325	SaveFileASlotActive0	$6512 
-SaveFileASlotActive1	var		src/Variables.inc	326	SaveFileASlotActive1	$6513 
-SaveFileASlotActive2	var		src/Variables.inc	327	SaveFileASlotActive2	$6514 
-SaveFileADeathCount0	var		src/Variables.inc	328	SaveFileADeathCount0	$6515 
-SaveFileADeathCount1	var		src/Variables.inc	329	SaveFileADeathCount1	$6516 
-SaveFileADeathCount2	var		src/Variables.inc	330	SaveFileADeathCount2	$6517 
-SaveFileAQuestNumber0	var		src/Variables.inc	331	SaveFileAQuestNumber0	$651B 
-SaveFileAQuestNumber1	var		src/Variables.inc	332	SaveFileAQuestNumber1	$651C 
-SaveFileAQuestNumber2	var		src/Variables.inc	333	SaveFileAQuestNumber2	$651D 
-SaveFileOpenMarkers	var		src/Variables.inc	334	SaveFileOpenMarkers	$651E 
-SaveFileCloseMarkers	var		src/Variables.inc	335	SaveFileCloseMarkers	$6521 
-FileAChecksums	var		src/Variables.inc	336	FileAChecksums	$6524 
-IsSaveFileBCommitted	var		src/Variables.inc	337	IsSaveFileBCommitted	$652A 
-PlayAreaTiles	var		src/Variables.inc	338	PlayAreaTiles	$6530 
-LevelBlockAttrsA	var		src/Variables.inc	339	LevelBlockAttrsA	$687E 
-LevelBlockAttrsB	var		src/Variables.inc	340	LevelBlockAttrsB	$68FE 
-LevelBlockAttrsC	var		src/Variables.inc	341	LevelBlockAttrsC	$697E 
-LevelBlockAttrsD	var		src/Variables.inc	342	LevelBlockAttrsD	$69FE 
-LevelBlockAttrsE	var		src/Variables.inc	343	LevelBlockAttrsE	$6A7E 
-LevelBlockAttrsF	var		src/Variables.inc	344	LevelBlockAttrsF	$6AFE 
-LevelInfo_PalettesTransferBuf	var		src/Variables.inc	345	LevelInfo_PalettesTransferBuf	$6B7E 
-LevelInfo_FoeCounts	var		src/Variables.inc	346	LevelInfo_FoeCounts	$6BA2 
-LevelInfo_StartY	var		src/Variables.inc	347	LevelInfo_StartY	$6BA6 
-LevelInfo_ShortcutOrItemPosArray	var		src/Variables.inc	348	LevelInfo_ShortcutOrItemPosArray	$6BA7 
-LevelInfo_SubmenuMapRotation	var		src/Variables.inc	349	LevelInfo_SubmenuMapRotation	$6BAB 
-LevelInfo_StatusBarMapXOffset	var		src/Variables.inc	350	LevelInfo_StatusBarMapXOffset	$6BAC 
-LevelInfo_StartRoomId	var		src/Variables.inc	351	LevelInfo_StartRoomId	$6BAD 
-LevelInfo_TriforceRoomId	var		src/Variables.inc	352	LevelInfo_TriforceRoomId	$6BAE 
-LevelInfo_WorldFlagsAddr	var		src/Variables.inc	353	LevelInfo_WorldFlagsAddr	$6BAF 
-LevelInfo_LevelNumber	var		src/Variables.inc	354	LevelInfo_LevelNumber	$6BB1 
-LevelInfo_CellarRoomIdArray	var		src/Variables.inc	355	LevelInfo_CellarRoomIdArray	$6BB2 
-LevelInfo_BossRoomId	var		src/Variables.inc	356	LevelInfo_BossRoomId	$6BBC 
-LevelInfo_SubmenuMapMask	var		src/Variables.inc	357	LevelInfo_SubmenuMapMask	$6BBD 
-LevelInfo_StatusBarMapTransferBuf	var		src/Variables.inc	358	LevelInfo_StatusBarMapTransferBuf	$6BCD 
-LevelInfo_PaletteCycles	var		src/Variables.inc	359	LevelInfo_PaletteCycles	$6BFA 
-LevelInfo_DeathPaletteSeries	var		src/Variables.inc	360	LevelInfo_DeathPaletteSeries	$6C5A 
-SaveRamEnd	var		src/Variables.inc	361	SaveRamEnd	$7FFF 
+GleeokHead_DirCounterH	var		src/ObjVars.inc	230	GLEEOK_DIRCOUNTERH	$0000 offset 0: horizontal direction counter (starts at 6).
+GleeokHead_DirCounterV	var		src/ObjVars.inc	231	GLEEOK_DIRCOUNTERV	$0001 offset 1: vertical direction counter (starts at 3).
+GleeokHead_SpeedFlagX	var		src/ObjVars.inc	232	GLEEOK_SPEEDX	$0002 offset 2: X step flag (starts $FF on necks 0 and 2, else 0).
+GleeokHead_SpeedFlagY	var		src/ObjVars.inc	233	GLEEOK_SPEEDY	$0003 offset 3: Y step flag (starts $FF on necks 1 and 3, else 0).
+GleeokHead_DirChangeCounter	var		src/ObjVars.inc	234	GLEEOK_DIRCHANGECOUNTER	$0004 offset 4: move counter (the constant is not referenced).
+GleeokHead_Delay	var		src/ObjVars.inc	235	GLEEOK_DELAY	$0005 offset 5: start delay.
+CurLevel	var		src/Variables.inc	12	CurLevel	$0010 Current level: 0 = overworld (OW), 1-9 = dungeon level (UW).
+IsUpdatingMode	var		src/Variables.inc	13	IsUpdatingMode	$0011 0 = run the mode's init routine each frame; nonzero = run its update.
+GameMode	var		src/Variables.inc	15	GameMode	$0012 Game mode, $00-$13; index into the InitMode and UpdateMode jump tables.
+GameSubmode	var		src/Variables.inc	19	GameSubmode	$0013 Step within the mode's init or update routine; reset to 0 between them.
+TileBufSelector	var		src/Variables.inc	20	TileBufSelector	$0014 Which PPU transfer buffer IsrNmi sends this frame; 0 = DynTileBuf.
+FrameCounter	var		src/Variables.inc	22	FrameCounter	$0015 Incremented once per frame in IsrNmi (also while paused); wraps at $FF.
+CurSaveSlot	var		src/Variables.inc	23	CurSaveSlot	$0016 Save slot in use, 0-2; in the file menu also 3 register, 4 eliminate.
+Random	var		src/Variables.inc	26	Random	$0018 [13] $18-$24. Random shift register, stepped once per frame in IsrNmi.
+LongTimerCycle	var		src/Variables.inc	38	StunCycle	$0026 Divider for the 10-frame timers: counts 9 down to 0 and wraps (IsrNmi).
+DoorTimer	var		src/Variables.inc	39	DoorTimer	$0027 Frames until the next step of a door opening or closing (8 per step).
+ObjTimer	var		src/Variables.inc	40	ObjTimer	$0028 [20] per object slot, $28-$3B. Countdown in frames, 1 per frame to 0.
+FluteTimer	var		src/Variables.inc	45	FluteTimer	$003C Frames left of the flute tune ($98 at start); the room is frozen then.
+ObjStunTimer	var		src/Variables.inc	48	ObjStunTimer	$003D [13] per object slot $00-$0C, $3D-$49. Stun left, in 10-frame units.
+ChaseLongTimer	var		src/Variables.inc	51	ChaseLongTimer	$004A 10-frame units until the monsters' chase target flips (0-7 at reload).
+MonstersFromEdgesLongTimer	var		src/Variables.inc	53	MonstersFromEdgesLongTimer	$004B 10-frame units until the next monster may walk in from a screen edge
+SwordBlockedLongTimer	var		src/Variables.inc	55	SwordBlockedLongTimer	$004C 10-frame units during which Link's sword is blocked (flashing Bubble).
+EndingPeaceLongTimer	var		src/BeginEndVars.inc	25	EndingFlashLongTimer	$004D scalar; ending: long timer for the "peace returns" text submode.
+RedLeeverLongTimer	var		src/Variables.inc	58	RedLeeverLongTimer	$004D 10-frame units until a Red Leever may surface.
+HelpDropCount	var		src/Variables.inc	63	HelpDropCount	$0050 Kills since Link last took damage, capped at $0A; $0A forces a drop.
+IsHelpDropBomb	var		src/Variables.inc	67	HelpDropValue	$0051 Which forced drop: 0 = 5 rupees, nonzero = bomb.
+IsDrawnItemNarrow	var		src/Variables.inc	71	ProcessedNarrowObj	$0052 Set to 1 by Anim_WriteItemSprites when the item drawn is half width (one
+DoorwayDir	var		src/Variables.inc	73	DoorwayDir	$0053 Direction bit of the dungeon doorway Link stands in; 0 = not in one.
+TriggeredDoorCmd	var		src/Variables.inc	76	TriggeredDoorCmd	$0054 Door animation command: 0 none, 2 close, 6 open (UpdateDoors).
+TriggeredDoorDir	var		src/Variables.inc	79	TriggeredDoorDir	$0055 Direction bit (1 R, 2 L, 4 D, 8 U) of the door being opened or closed.
+Link_GoStraightWhenDiagInput	var		src/Variables.inc	80	Link_GoStraightWhenDiagInput	$0056 Flag: 1 = keep Link's direction at grid points under diagonal input.
+Link_GoStraight	var		src/Variables.inc	84	Link_GoStraight	$0057 Flag: 1 = Link keeps his direction until the next grid point.
+VScrollAddrHi	var		src/Variables.inc	102	VScrollAddrHi	$0058 High byte of the mid-frame PPU address for vertical room scrolling.
+EmptyMonsterSlot	var		src/Variables.inc	88	EmptyMonsterSlot	$0059 Object slot returned by FindEmptyMonsterSlot: the highest free slot in
+UndergroundExitType	var		src/Variables.inc	90	UndergroundExitType	$005A Nonzero while Link leaves a cave or cellar (1) or a dungeon (2).
+ModeAfterStairs	var		src/Variables.inc	94	TargetMode	$005B Game mode to enter when the stairs mode ($10) ends (SetTargetMode).
+SwitchNameTablesReq	var		src/Variables.inc	105	SwitchNameTablesReq	$005C Nonzero = IsrNmi toggles the base name table ($2000/$2800) this frame.
+SubmenuScanRoomId	var		src/Variables.inc	107	CurScanRoomId	$005D Room id ($7F down to 0) being scanned to draw the submenu dungeon map.
+SubmenuScrollProgress	var		src/Variables.inc	108	SubmenuScrollProgress	$005E Countdown from $2B while the submenu scrolls in (row * 2 + flag).
+OddBaseNameTableOverride	var		src/Variables.inc	111	OddBaseNameTableOverride	$005F 0/1 ORed into PPU control bit 0 at the split during horizontal scroll.
+IsChasingOtherTarget	var		src/Variables.inc	132	ChaseOtherTarget	$0060 0 = monsters chase Link; 1 = they chase the stored decoy position.
+ChaseTargetX	var		src/Variables.inc	135	ChaseTargetX	$0061 X that chasing monsters steer toward (Link, a decoy point, or food).
+ChaseTargetY	var		src/Variables.inc	140	ChaseTargetY	$0062 Y the chasing monsters steer toward (see ChaseTargetX).
+World_IsFillingHearts	var		src/Variables.inc	143	World_IsFillingHearts	$0063 Nonzero while hearts refill (potion, pond fairy, end of level).
+LadderSlot	var		src/Variables.inc	95	LadderSlot	$0064 Object slot holding the laid-down ladder; 0 = ladder not in use.
+UndergroundEntranceTile	var		src/Variables.inc	97	UndergroundEntranceTile	$0065 OW tile Link stood on when he went underground ($24 or $70-$73).
+SongScriptPtrLo	var		src/Variables.inc	148	SongScriptPtrLo	$0066 Pointer (2 bytes lo/hi, $66-$67) to the current song phrase script.
+SongScriptPtrHi	var		src/Variables.inc	149	SongScriptPtrHi	$0067 High byte of the song script pointer.
+EffectCounter	var		src/Variables.inc	150	EffectCounter	$0069 Steps left in the current noise-channel sound effect; counts down to 0.
+CurNoteLowPeriodSq0	var		src/Variables.inc	151	CurNoteLowPeriodSq0	$006A Low period byte of the note playing on square channel 0 (for vibrato).
+CurNoteLowPeriodSq1	var		src/Variables.inc	152	CurNoteLowPeriodSq1	$006B Low period byte of the note playing on square channel 1 (for vibrato).
+SongPhraseIndex	var		src/Variables.inc	153	SongPhraseIndex	$006C Index into SongTable of the current phrase of a multi-phrase song.
+CustomEnvelopeOffsetTune1	var		src/Variables.inc	154	CustomEnvelopeOffsetTune1	$006D Offset into CustomEnvelopeTune1; counts down from $1F during a note.
+NoteLengthTune1	var		src/Variables.inc	155	NoteLengthTune1	$006E Length in frames of notes on tune channel 1 (set by the tune script).
+NoteCounterTune1	var		src/Variables.inc	156	NoteCounterTune1	$006F Frames left of the current note on tune channel 1.
+ObjX	var		src/Variables.inc	177	ObjX	$0070 [20] per object slot, $70-$83. X of the object's left edge in pixels.
+ObjY	var		src/Variables.inc	178	ObjY	$0084 [20] per object slot, $84-$97. Y of the object's top edge in pixels.
+ObjRoomItemId	var		src/CommonVars.inc	17	ObjRoomItemId	$0098 alias of ObjDir; with X = $13 (room item slot) it is RoomItemId ($AB).
+ObjDir	var		src/Variables.inc	181	ObjDir	$0098 [20] per object slot, $98-$AB. Direction: 1 right, 2 left, 4 down, 8 up.
+RoomItemId	var		src/Variables.inc	184	RoomItemId	$00AB = ObjDir[$13]. Item id of the room item; $3F = none.
+Item_ObjItemId	var		src/CommonVars.inc	18	Item_ObjItemId	$00AC per slot; dropped item: item id; $FF = taken. Alias of ObjState.
+ObjState	var		src/Variables.inc	187	ObjState	$00AC [20] per object slot, $AC-$BF. State; meaning depends on object type.
+ObjShoveDir	var		src/Variables.inc	196	ObjShoveDir	$00C0 [19] per object slot, $C0-$D2. Knockback direction bits; 0 = none.
+ObjShoveDistance	var		src/Variables.inc	199	ObjShoveDistance	$00D3 [13] per object slot $00-$0C, $D3-$DF. Pixels of knockback left.
+PauseState	var		src/Variables.inc	203	Paused	$00E0 0 running; 1 paused with Select; 2 paused by the game (potion refill).
+SubmenuState	var		src/Variables.inc	205	MenuState	$00E1 Item submenu state: 0 closed, 1 opening ... 7/8 active, 8/9 closing.
+VScrollAddrLo	var		src/Variables.inc	113	VScrollAddrLo	$00E2 Low byte of the mid-frame PPU address for vertical room scrolling.
+IsSprite0CheckActive	var		src/Variables.inc	114	IsSprite0CheckActive	$00E3 Nonzero = IsrNmi waits for the sprite-0 hit and splits the scroll.
+DeathModeCounter	var		src/Variables.inc	208	DeathModeCounter	$00E5 Death mode ($11) countdown: spins left, later frames of the spark.
+VScrollStartFrame	var		src/Variables.inc	117	VScrollStartFrame	$00E6 FrameCounter phase on which vertical room scrolling moves one row.
+CurColumn	var		src/Variables.inc	119	CurColumn	$00E8 Tile column being copied to the transfer buffer; valid 1..$20.
+CurRow	var		src/Variables.inc	121	CurRow	$00E9 Tile row being copied to the transfer buffer, 0-$15; $16 or more = none.
+WhirlwindPrevRoomId	var		src/Variables.inc	212	WhirlwindPrevRoomId	$00EA Room the screen scrolls in from when the whirlwind delivers Link.
+RoomId	var		src/Variables.inc	214	RoomId	$00EB Current room, $00-$7F: high nibble = map row, low nibble = column.
+NextRoomId	var		src/Variables.inc	215	NextRoomId	$00EC Room being entered (CalculateNextRoom); bit 7 set = no such room.
+PrevRow	var		src/Variables.inc	123	PrevRow	$00ED Last row copied by CopyColumnOrRowToTileBuf (a row is not copied twice).
+CurOpenedDoors	var		src/Variables.inc	216	CurOpenedDoors	$00EE Direction bits of this room's true doors that are open now.
+IsScrollMirroringSet	var		src/Variables.inc	221	_Unknown_F3	$00F3 Nonzero = name table mirroring is set for the room scroll (mode 7).
+IsGameInitialized	var		src/Variables.inc	224	InitializedGame	$00F4 Nonzero once the common code and data were copied to RAM.
+HasCommonPatterns	var		src/Variables.inc	226	TransferredCommonPatterns	$00F5 $5A once the common pattern tables were sent to the PPU (InitMode0).
+HasDemoPatterns	var		src/Variables.inc	227	TransferredDemoPatterns	$00F6 $A5 while the demo pattern tables are loaded (tested by InitMode0).
+ReturnToBank4	var		src/Variables.inc	228	ReturnToBank4	$00F7 Nonzero = switch back to bank 4 after changing a tile-object tile.
+ButtonsPressed	var		src/Variables.inc	232	ButtonsPressed	$00F8 [2] controller 1, 2. Buttons newly down this frame.
+ButtonsDown	var		src/Variables.inc	235	ButtonsDown	$00FA [2] controller 1, 2. Buttons held this frame; bits as ButtonsPressed.
+CurVScroll	var		src/Variables.inc	124	CurVScroll	$00FC Vertical scroll value IsrNmi writes to the PPU scroll register.
+CurHScroll	var		src/Variables.inc	126	CurHScroll	$00FD Horizontal scroll value IsrNmi writes to the PPU scroll register.
+CurPpuMask	var		src/Variables.inc	128	CurPpuMask_2001	$00FE Copy of the last value written to PPU mask register $2001.
+CurPpuControl	var		src/Variables.inc	129	CurPpuControl_2000	$00FF Copy of the last value written to PPU control register $2000.
+PositiveGridCellSize	var		src/Variables.inc	238	PositiveGridCellSize	$010E Positive limit of the grid offset: 8 for Link, $10 for other objects.
+NegativeGridCellSize	var		src/Variables.inc	239	NegativeGridCellSize	$010F Negative limit of the grid offset: $F8 (-8) for Link, $F0 for others.
+Sprites	var		src/Variables.inc	242	Sprites	$0200 [256] $0200-$02FF. Sprite (OAM) buffer copied to the PPU every frame.
+DynTileBufLen	var		src/Variables.inc	245	DynTileBufLen	$0301 Offset in DynTileBuf of its end marker, where the next record goes.
+DynTileBuf	var		src/Variables.inc	246	DynTileBuf	$0302 [61] $0302-$033E. Dynamic PPU transfer buffer (records, $FF-terminated).
+OpenDoorwayMask	var		src/Variables.inc	258	OpenDoorwayMask	$033F Submenu map scratch: direction bits of a room's passable sides.
+CurObjIndex	var		src/Variables.inc	260	CurObjIndex	$0340 Object slot being updated; $0B down to 1 each frame in mode 5.
+RollingSpriteIndex	var		src/Variables.inc	250	RollingSpriteIndex	$0341 0-$27. Index into SpriteOffsets for the next object's sprite pair.
+FirstSpriteIndex	var		src/Variables.inc	252	FirstSpriteIndex	$0342 RollingSpriteIndex the frame starts with; advances by 1 every frame.
+LeftSpriteOffset	var		src/Variables.inc	254	LeftSpriteOffset	$0343 Offset into Sprites of the record for the drawn object's left half.
+RightSpriteOffset	var		src/Variables.inc	255	RightSpriteOffset	$0344 Offset into Sprites of the record for the drawn object's right half.
+RoomBoundLeft	var		src/Variables.inc	262	RoomBoundLeft	$0346 Left X bound for objects: $11 in the OW, $21 in the UW.
+RoomBoundRight	var		src/Variables.inc	265	RoomBoundRight	$0347 X bound on the right: $E0 in the OW, $D0 in the UW.
+RoomBoundUp	var		src/Variables.inc	266	RoomBoundUp	$0348 Y bound at the top: $4E in the OW, $5E in the UW.
+RoomBoundDown	var		src/Variables.inc	267	RoomBoundDown	$0349 Y bound at the bottom: $CD in the OW, $BD in the UW.
+RoomFirstUnwalkableTile	var		src/Variables.inc	268	ObjectFirstUnwalkableTile	$034A Tiles at or above this number block movement: $89 OW, $78 UW.
+IsShotCollidingWithLink	var		src/Variables.inc	269	ShotCollidesWithLink	$034B Set by CheckLinkCollision when a monster's shot touches Link.
+MonsterShotCount	var		src/Variables.inc	271	ActiveMonsterShots	$034C Counted monster shots in flight; ShootLimited allows at most 4.
+IsRoomAllDead	var		src/Variables.inc	272	RoomAllDead	$034D Nonzero once no monsters are left in the dungeon room.
+RoomObjCount	var		src/Variables.inc	274	RoomObjCount	$034E Number of monsters the room makes on entry.
+RoomKillCount	var		src/CommonVars.inc	28	RoomKillCount	$034F scalar; monsters killed in the room since it was entered.
+ObjType	var		src/Variables.inc	279	ObjType	$034F [13] per object slot $00-$0C, $34F-$35B. Object type id; 0 = empty slot.
+RoomObjTemplateType	var		src/Variables.inc	281	RoomObjTemplateType	$035F Object type of the first monster the room was populated with.
+ObjAngleFrac	var		src/ObjVars.inc	33	ObjAngleFrac	$0380 per slot; orbiters: orbit angle fraction (low byte).
+MonsterShot_ObjBounceDir	var		src/ObjVars.inc	41	Shot_ObjBounceDir	$0380 per slot; monster shot: Link's facing direction when it hit his shield.
+Moldorm_ObjOldDir	var		src/ObjVars.inc	105	Moldorm_ObjOldDir	$0380 per slot; Moldorm: the segment's previous direction.
+Gohma_ObjShootTimer	var		src/ObjVars.inc	165	Gohma_ObjShootTimer	$0380 per slot; Gohma: frames until the next fireball; reload $41.
+ObjMovingLimit	var		src/Variables.inc	284	ObjMovingLimit	$0380 [20] per object slot. Per-type limit: boomerang range, Trap home spot.
+Gleeok_HeadInfo2	var		src/ObjVars.inc	210	Gleook_HeadInfo2	$0381 [6] Gleeok neck 2: head movement block.
+Manhandla_SegmentJustDied	var		src/ObjVars.inc	159	Manhandla_SegmentJustDied	$0383 scalar; Manhandla: nonzero = a hand died; the base then speeds up.
+Manhandla_BounceDir	var		src/ObjVars.inc	161	Manhandla_BounceDir	$0385 scalar; Manhandla: direction the base gives all segments, 0 = none.
+ObjRemDistance	var		src/ObjVars.inc	22	ObjRemDistance	$0394 per slot; pixels left to move. Alias of ObjGridOffset.
+ObjAngleWhole	var		src/ObjVars.inc	35	ObjAngleWhole	$0394 per slot; orbiters: orbit angle $00-$1F (32 steps a circle; $18 = up).
+MonsterShot_ObjBounceDist	var		src/ObjVars.inc	43	Shot_ObjBounceDist	$0394 per slot; monster shot: pixels bounced, +2 per frame; destroyed at $20.
+Wizzrobe_ObjRedFadeCounter	var		src/ObjVars.inc	144	RedWizzrobe_ObjFadeCounter	$0394 per slot; Red Wizzrobe: +1 per frame while fading; bit 0 = skip drawing.
+ObjGridOffset	var		src/Variables.inc	287	ObjGridOffset	$0394 [20] per object slot. Signed pixels moved since the last grid point.
+Gleeok_NeckXs3	var		src/ObjVars.inc	203	Gleeok_NeckXs3	$0395 [6] Gleeok neck 3: X of segments 0-5.
+Item_ObjItemLifetime	var		src/CommonVars.inc	20	Item_ObjItemLifetime	$03A8 per slot; dropped or room item: life countdown. Alias of ObjPosFrac.
+ObjPosFrac	var		src/Variables.inc	292	ObjPosFrac	$03A8 [20] per object slot. Fraction (1/256 pixel) of the moving position.
+Gleeok_HeadInfo3	var		src/ObjVars.inc	211	Gleook_HeadInfo3	$03A9 [6] Gleeok neck 3: head movement block.
+Moldorm_ObjBounceDir	var		src/ObjVars.inc	108	Moldorm_ObjBounceDir	$03BC per slot; Moldorm head: direction to take at the next turn, 0 = none.
+ObjQSpeedFrac	var		src/Variables.inc	293	ObjQSpeedFrac	$03BC [20] per object slot. Q-speed; pixels per frame = value / 64.
+Gleeok_NeckYs3	var		src/ObjVars.inc	207	Gleeok_NeckYs3	$03BD [6] Gleeok neck 3: Y of segments 0-5.
+ObjAnimCounter	var		src/Variables.inc	297	ObjAnimCounter	$03D0 [20] per object slot. Frames until the next animation frame.
+ObjAnimFrame	var		src/Variables.inc	299	ObjAnimFrame	$03E4 [20] per object slot. Animation frame; walking objects alternate 0, 1.
+ObjInputDir	var		src/Variables.inc	300	ObjInputDir	$03F8 [13] per object slot $00-$0C. Direction bits the object wants to go.
+ObjMetastate	var		src/Variables.inc	303	ObjMetastate	$0405 [13] per object slot $00-$0C. 0 normal; 1-4 spawn cloud; $10-$14 dying.
+TriforceGlowTimer	var		src/BeginEndVars.inc	5	TriforceGlowTimer	$0412 scalar; title: frames until the Triforce's next glow colour.
+PeaceCharDelayCounter	var		src/BeginEndVars.inc	28	PeaceCharDelayCounter	$0412 scalar; ending: +1 per frame; a character is written at (n AND 7) = 4.
+Item_ObjMonsterType	var		src/CommonVars.inc	23	Item_ObjMonsterType	$0412 per slot; object type of the monster that died here, for the drop.
+StairsTargetY	var		src/CommonVars.inc	32	StairsTargetY	$0412 scalar; Y where Link's walk down or up stairs ends (modes $10 and 4).
+Shooter_ObjWantsToShoot	var		src/ObjVars.inc	9	ObjWantsToShoot	$0412 per slot; walking shooters: 1 = may shoot now, 0 = may not.
+PushBlock_ObjPushTimer	var		src/ObjVars.inc	28	ObjPushTimer	$0412 per slot; push block: frames Link has pushed it; it moves at $10.
+Rock_ObjRoomId	var		src/ObjVars.inc	47	TileObjRoomId	$0412 per slot; pushed rock or gravestone: RoomId when the push began.
+Fireball_ObjDirToTargetX	var		src/ObjVars.inc	52	Fireball_ObjDirToTargetX	$0412 per slot; fireball: horizontal direction toward Link when fired.
+Flyer_ObjPosFrac	var		src/ObjVars.inc	65	Flyer_ObjSpeedFrac	$0412 per slot; flyer: position fraction; 1 pixel is moved on each carry.
+Jumper_ObjSpeedWholeY	var		src/ObjVars.inc	83	Jumper_ObjSpeedWholeY	$0412 per slot; jumper: vertical speed, pixels per frame, signed (up < 0).
+Wallmaster_ObjStep	var		src/ObjVars.inc	98	Wallmaster_ObjStep	$0412 per slot; Wallmaster: index of its step in WallmasterDirsAndAttrsLeft.
+PolsVoice_ObjSpeedWhole	var		src/ObjVars.inc	134	PolsVoice_ObjSpeedWhole	$0412 per slot; Pols Voice: jump speed, pixels per frame, signed (up < 0).
+Wizzrobe_ObjBlueTurnCounter	var		src/ObjVars.inc	141	BlueWizzrobe_ObjTurnCounter	$0412 per slot; Blue Wizzrobe: step counter that times its turns.
+Wizzrobe_ObjRedAnimCounter	var		src/ObjVars.inc	146	RedWizzrobe_ObjAnimCounter	$0412 per slot; Red Wizzrobe: +1 per frame; bit 2 selects the frame image.
+Manhandla_ObjPosFrac	var		src/ObjVars.inc	149	Manhandla_ObjSpeedAccum	$0412 per slot; Manhandla: position fraction.
+Gohma_ObjDistTraveled	var		src/ObjVars.inc	167	Gohma_ObjDistTraveled	$0412 per slot; Gohma: pixels moved in this sprint; reverses at $20.
+PeaceCharIndex	var		src/BeginEndVars.inc	29	PeaceCharIndex	$0413 scalar; ending: index of the next character in PeaceText ($FF = end).
+CaveFlags	var		src/CaveVars.inc	14	CaveFlags	$0413 scalar; cave behaviour bits, built by InitCave.
+Gleeok_CurHeadInfo	var		src/ObjVars.inc	214	Gleeok_ObjHeadInfo	$0413 [6] Gleeok: head movement block of the neck being updated.
+Gleeok_CurHeadDirCounterH	var		src/ObjVars.inc	215	Gleeok_ObjHeadDirCounterH	$0413 scalar; Gleeok head: horizontal counter; at $C it resets and X flips.
+TriforceGlowCycle	var		src/Variables.inc	328	TriforceGlowCycle	$0413 Title screen: step 0-7 of the Triforce glow palette cycle.
+Gleeok_CurHeadDirCounterV	var		src/ObjVars.inc	217	Gleeok_ObjHeadDirCounterV	$0414 scalar; Gleeok head: vertical counter; at 6 it resets and Y flips.
+PersonTextSelector	var		src/CaveVars.inc	7	PersonTextSelector	$0415 scalar; offset of the person's text address in PersonTextAddrs.
+Gleeok_CurHeadSpeedFlagX	var		src/ObjVars.inc	219	Gleeok_ObjHeadSpeedX	$0415 scalar; Gleeok head: X step: 0 = +1 pixel per move, nonzero = -1.
+DemoScrolledScreenCount	var		src/Variables.inc	329	ScrolledScreenCount	$0415 Story demo: number of whole screens scrolled so far.
+TextboxCharIndex	var		src/BeginEndVars.inc	30	TextboxCharIndex	$0416 scalar; ending: index of the next character of ThanksText.
+PersonTextIndex	var		src/CaveVars.inc	9	PersonTextIndex	$0416 scalar; index of the next character of the person's text.
+Gleeok_CurHeadSpeedFlagY	var		src/ObjVars.inc	220	Gleeok_ObjHeadSpeedY	$0416 scalar; Gleeok head: Y step: 0 = +1 pixel per move, nonzero = -1.
+Gleeok_CurHeadDirChangeCounter	var		src/ObjVars.inc	221	Gleeok_ObjHeadDirChangeCounter	$0417 scalar; Gleeok head: moves counted; wraps at 4.
+DemoLineAttrVramAddrLo	var		src/Variables.inc	330	DemoLineAttrVramAddrLo	$0417 Story demo: PPU address (lo; hi at $418) of the next line's attributes.
+Gleeok_CurHeadDelay	var		src/ObjVars.inc	222	Gleeok_ObjHeadDelay	$0418 scalar; Gleeok head: moves to wait before the head starts moving.
+DemoLineAttrVramAddrHi	var		src/Variables.inc	331	DemoLineAttrVramAddrHi	$0418 Story demo: high byte of the attribute PPU address.
+DemoLineIndex	var		src/Variables.inc	332	DemoLineIndex	$0419 Story demo: index of the next line of the scroll (unverified).
+DemoTimer	var		src/Variables.inc	333	DemoTimer	$041A Demo: frame counter for the waits between demo steps (counts up).
+DemoScrolledLineCount	var		src/Variables.inc	334	ScrolledLineCount	$041B Story demo: pixel lines scrolled, wraps every 256 (one screen).
+DemoLineTileVramAddrLo	var		src/Variables.inc	335	DemoLineTileVramAddrLo	$041C Story demo: PPU address (lo, hi at $41D) of the next line's tiles.
+DemoLineTileVramAddrHi	var		src/Variables.inc	336	DemoLineTileVramAddrHi	$041D Story demo: high byte of the tile PPU address.
+IsWaterfallInitialized	var		src/BeginEndVars.inc	7	InitializedWaterfallAnimation	$041F scalar; title: 0 until the waterfall wave Ys have been set.
+CharBoardIndex	var		src/BeginEndVars.inc	16	CharBoardIndex	$041F scalar; index $00-$2B of the highlighted character in ModeE_CharMap.
+Wanderer_ObjTurnRate	var		src/ObjVars.inc	13	ObjTurnRate	$041F per slot; wanderers: turn rate $00-$FF given to UpdateCommonWanderer.
+Fireball_ObjQSpeedX	var		src/ObjVars.inc	53	Fireball_ObjQSpeedX	$041F per slot; fireball: horizontal q-speed from FireballQSpeedsX ($10-$70).
+Flyer_ObjSpeed	var		src/ObjVars.inc	67	Flyer_ObjSpeed	$041F per slot; flyer: speed in 1/256 pixel per frame (bits 5-7 count).
+Jumper_ObjSpeedFracY	var		src/ObjVars.inc	84	Jumper_ObjSpeedFracY	$041F per slot; jumper: vertical speed fraction (1/256 pixel per frame).
+Wallmaster_ObjTilesCrossed	var		src/ObjVars.inc	102	Wallmaster_ObjTilesCrossed	$041F per slot; Wallmaster: squares ($10 pixels) crossed; the trip ends at 7.
+Digdogger_ObjSpeedFrac	var		src/ObjVars.inc	112	Digdogger_ObjSpeedFrac	$041F per slot; Digdogger: speed low byte (1/256 pixel per frame); starts $3F.
+PolsVoice_ObjLastTile	var		src/ObjVars.inc	135	PolsVoice_ObjLastTile	$041F per slot; Pols Voice: tile under it at the last walkability test.
+Wizzrobe_ObjLastTile	var		src/ObjVars.inc	140	Wizzrobe_ObjLastTile	$041F per slot; Wizzrobe: tile found by its last collision test.
+Manhandla_ObjSpeedFrac	var		src/ObjVars.inc	151	Manhandla_ObjSpeedFrac	$041F per slot; Manhandla: speed low byte (1/256 pixel per frame); starts $80.
+Gohma_ObjPosFrac	var		src/ObjVars.inc	168	Gohma_ObjMoveAccum	$041F per slot; Gohma: position fraction; +$80 per frame, 1 pixel per carry.
+TitleWaveYs	var		src/BeginEndVars.inc	8	TitleWaveYs	$0420 [6] title: Y of the waterfall wave sprites.
+IsNameFieldInitialized	var		src/BeginEndVars.inc	18	InitializedNameField	$0420 scalar; 0 until the name field of the chosen save slot is set up.
+Gleeok_HeadInfo0	var		src/ObjVars.inc	208	Gleook_HeadInfo0	$0420 [6] Gleeok neck 0: head movement block (fields: GLEEOK_* offsets).
+NameCharOffset	var		src/BeginEndVars.inc	19	NameCharOffset	$0421 scalar; offset in SaveSlotNames of the name character the cursor is on.
+NameInputCharBuf	var		src/BeginEndVars.inc	20	NameInputCharBuf	$0422 [3] transfer record header for the next name character.
+CaveItemIds	var		src/CaveVars.inc	19	CaveItemIds	$0422 [3] cave wares, left to right: item id in bits 0-5 ($3F = none).
+IsHoldingButton	var		src/Variables.inc	337	StillHoldingButton	$0426 Name registration: nonzero while a direction button is being held.
+HeldButton	var		src/Variables.inc	339	HeldButton	$0427 Name registration: the direction bits held when the current hold began.
+IsButtonRepeating	var		src/Variables.inc	340	SubsequentButtonRepeat	$0428 Name registration: 0 = first repeat delay ($10 frames), 1 = later (8).
+ButtonRepeatTimer	var		src/Variables.inc	341	ButtonRepeatTimer	$0429 Name registration: frames until a held direction moves the cursor again.
+ModeE_HasWrappedBoardY	var		src/Variables.inc	342	ModeE_WrappedAroundBoardY	$042A Name registration: 1 = the last cursor move wrapped vertically.
+DemoPhase	var		src/BeginEndVars.inc	10	DemoPhase	$042C scalar; mode 0: 0 = title screen, 1 = story scroll and item parade.
+ObjRefId	var		src/CommonVars.inc	5	ObjRefId	$042C per slot; slot of the partner object: thrower's shot or shot's thrower.
+ObjCaptureTimer	var		src/CommonVars.inc	11	ObjCaptureTimer	$042C per slot; Wallmaster, Like-Like: 0 = Link free, nonzero = Link captured.
+Flyer_ObjTurns	var		src/ObjVars.inc	70	Flyer_ObjTurns	$042C per slot; flyer: turns left in the chase or wander state.
+Digdogger_ObjSpeedWhole	var		src/ObjVars.inc	115	Digdogger_ObjSpeedWhole	$042C per slot; Digdogger: speed high byte (pixels per frame).
+Dodongo_ObjBloatedSubstate	var		src/ObjVars.inc	125	Dodongo_ObjBloatedSubstate	$042C per slot; Dodongo in state 1 (bloated): substate 0-4.
+PolsVoice_ObjTargetY	var		src/ObjVars.inc	136	PolsVoice_ObjTargetY	$042C per slot; Pols Voice: Y where the jump ends.
+Manhandla_ObjSpeedWhole	var		src/ObjVars.inc	153	Manhandla_ObjSpeedWhole	$042C per slot; Manhandla: speed high byte (pixels per frame).
+Gohma_ObjNextOpenEyeCounter	var		src/ObjVars.inc	169	Gohma_ObjNextOpenEyeCounter	$042C per slot; Gohma: countdown to the next eye opening.
+Ganon_ObjDyingCount	var		src/ObjVars.inc	190	Ganon_ObjPhase	$042C per slot; Ganon: 0 = fighting; nonzero = dying, +1 per frame up to $FF.
+Gleeok_HeadInfo1	var		src/ObjVars.inc	209	Gleook_HeadInfo1	$042D [6] Gleeok neck 1: head movement block.
+DemoSubphase	var		src/Variables.inc	344	DemoSubphase	$042D Demo: step within the current demo phase.
+CaveCurPriceIndex	var		src/CaveVars.inc	30	CaveCurPriceIndex	$042E scalar; index 0-2 of the price being formatted.
+DemoLineTextIndex	var		src/Variables.inc	345	DemoLineTextIndex	$042E Story demo: index of the next text line (unverified).
+CaveCurPriceOffset	var		src/CaveVars.inc	31	CaveCurPriceOffset	$042F scalar; offset of that price's text in the transfer record; +4 each.
+DemoItemRow	var		src/Variables.inc	346	DemoItemRow	$042F Story demo: index of the next row of the item list (unverified).
+CavePrices	var		src/CaveVars.inc	22	CavePrices	$0430 [3] price or rupee amount of each ware, from LevelBlockAttrsE+60.
+DemoPhase0Subphase1Cycle	var		src/BeginEndVars.inc	11	DemoPhase0Subphase1Cycle	$0437 scalar; title: step 0-$E of the palette fade; at $E DemoPhase advances.
+Fireball_ObjDirToTargetY	var		src/ObjVars.inc	54	Fireball_ObjDirToTargetY	$0437 per slot; fireball: vertical direction toward Link when fired.
+Flyer_ObjDistTraveled	var		src/ObjVars.inc	73	Flyer_ObjDistTraveled	$0437 per slot; flyer: pixels moved (wraps at $100).
+Digdogger_ObjTargetSpeedFrac	var		src/ObjVars.inc	116	Digdogger_ObjTargetSpeedFrac	$0437 per slot; Digdogger: target speed low byte.
+Dodongo_ObjBombHits	var		src/ObjVars.inc	128	Dodongo_ObjBombHits	$0437 per slot; Dodongo: bombs swallowed; the second one kills it.
+Manhandla_ObjPrevFrame	var		src/ObjVars.inc	154	Manhandla_ObjPrevFrame	$0437 per slot; Manhandla hand: Manhandla_ObjFrame at its last change.
+CaveChosenIndex	var		src/CaveVars.inc	24	CaveChosenIndex	$0438 scalar; index 0-2 of the ware Link picked up.
+Gleeok_NeckXs0	var		src/ObjVars.inc	200	Gleeok_NeckXs0	$0438 [6] Gleeok neck 0: X of segments 0-5 (all start at $7C).
+DemoPhase0Subphase1Timer	var		src/Variables.inc	347	DemoPhase0Subphase1Timer	$0438 Title screen fade: frames until the next palette step.
+DemoItemIds	var		src/BeginEndVars.inc	13	DemoItemIds	$0444 per object slot; item parade: item id shown; $23 fairy, >= $30 Link.
+Fireball_ObjQSpeedY	var		src/ObjVars.inc	55	Fireball_ObjQSpeedY	$0444 per slot; fireball: vertical q-speed from FireballQSpeedsY ($00-$70).
+Flyer_ObjFlyingState	var		src/ObjVars.inc	75	Flyer_ObjFlyingState	$0444 per slot; flyer: flight state, index into the type's flight table.
+Jumper_ObjTargetY	var		src/ObjVars.inc	87	Jumper_ObjTargetY	$0444 per slot; jumper: Y where the jump ends.
+Digdogger_ObjTargetSpeedWhole	var		src/ObjVars.inc	118	Digdogger_ObjTargetSpeedWhole	$0444 per slot; Digdogger: target speed high byte.
+PolsVoice_ObjSpeedFrac	var		src/ObjVars.inc	137	PolsVoice_ObjSpeedFrac	$0444 per slot; Pols Voice: jump speed fraction; +$38 per frame in a jump.
+Gohma_ObjEyeOpenTimer	var		src/ObjVars.inc	171	Gohma_ObjEyeOpenTimer	$0444 per slot; Gohma: frames the eye stays open ($80 at opening); 0 = closed.
+Ganon_ScenePhase	var		src/ObjVars.inc	192	Ganon_ScenePhase	$0445 scalar; Ganon's room: 0 Triforce lifted in dark, 1 in light, 2 fight.
+Gleeok_NeckYs0	var		src/ObjVars.inc	204	Gleeok_NeckYs0	$0445 [6] Gleeok neck 0: Y of segments 0-5 (start values GleeokSegmentYs).
+MoneyGameAmounts	var		src/CaveVars.inc	25	MoneyGameAmounts	$0448 [3] money game: rupee amount behind each of the three rupees.
+Fireball_ObjPosFracX	var		src/ObjVars.inc	56	Fireball_ObjPosFracX	$0451 per slot; fireball: X position fraction.
+Jumper_ObjReversalCount	var		src/ObjVars.inc	89	Jumper_ObjReversalCount	$0451 per slot; jumper: consecutive jumps stopped by the room boundary.
+Manhandla_ObjFrameAccum	var		src/ObjVars.inc	155	Manhandla_ObjFrameAccum	$0451 per slot; Manhandla: animation accumulator; bit 4 = animation frame.
+Gohma_ObjGoStraight	var		src/ObjVars.inc	172	Gohma_ObjGoStraight	$0451 per slot; Gohma: 0 = pick a new direction now, nonzero = keep going.
+ObjShootTimer	var		src/Variables.inc	308	ObjShootTimer	$0451 [13] per object slot $00-$0C. Countdown to a walking monster's shot.
+Gleeok_NeckXs1	var		src/ObjVars.inc	201	Gleeok_NeckXs1	$0452 [6] Gleeok neck 1: X of segments 0-5.
+Fireball_ObjPosFracY	var		src/ObjVars.inc	57	Fireball_ObjPosFracY	$045E per slot; fireball: Y position fraction.
+Digdogger_ObjSpeedFlag	var		src/ObjVars.inc	120	Digdogger_ObjSpeedFlag	$045E per slot; Digdogger: 0 = speeding up, 1 = slowing down.
+Dodongo_ObjBloatedTimer	var		src/ObjVars.inc	130	Dodongo_ObjBloatedTimer	$045E per slot; Dodongo: frames left in the bloated wait substate.
+Gohma_ObjSprints	var		src/ObjVars.inc	174	Gohma_ObjSprints	$045E per slot; Gohma: number of $20-pixel sprints completed.
+Patra_ObjManeuverIndex	var		src/ObjVars.inc	186	Patra_ObjManeuverIndex	$045E per slot; Patra: 0 or 1, the children's orbit pattern.
+TextboxCharVramLo	var		src/BeginEndVars.inc	31	TextboxCharPtr	$045F scalar; ending: low byte of the nametable address of the next character.
+PersonTextVramLo	var		src/CaveVars.inc	10	PersonTextPtr	$045F scalar; low byte of the nametable address of the next character.
+Gleeok_NeckYs1	var		src/ObjVars.inc	205	Gleeok_NeckYs1	$045F [6] Gleeok neck 1: Y of segments 0-5.
+Flyer_ObjOffsetX	var		src/ObjVars.inc	78	Flyer_ObjOffsetX	$046B per slot; flyer: signed pixels moved horizontally since last zeroed.
+Digdogger_ObjIsChild	var		src/ObjVars.inc	121	Digdogger_ObjIsChild	$046B per slot; Digdogger: 1 = small (child), 0 = big.
+Gohma_ObjEyeState	var		src/ObjVars.inc	175	Gohma_ObjEyeState	$046B per slot; Gohma: eye frame image 0-3; an arrow harms Gohma only at 3.
+Ganon_ObjAnimationFrame	var		src/ObjVars.inc	193	Ganon_ObjAnimationFrame	$046B per slot; Ganon: body animation frame 0-5; +1 per frame while moving.
+Gleeok_NeckXs2	var		src/ObjVars.inc	202	Gleeok_NeckXs2	$046C [6] Gleeok neck 2: X of segments 0-5.
+Wanderer_ObjTurnTimer	var		src/ObjVars.inc	17	ObjTurnTimer	$0478 per slot; wanderers: frames until a perpendicular turn is allowed.
+Aquamentus_ObjFireballOffset	var		src/ObjVars.inc	60	Aquamentus_ObjFireballOffset	$0478 per fireball slot; Y step of an Aquamentus fireball: 0, 1 or $FF.
+Flyer_ObjOffsetY	var		src/ObjVars.inc	80	Flyer_ObjOffsetY	$0478 per slot; flyer: signed pixels moved vertically since last zeroed.
+Digdogger_ObjCurPart	var		src/ObjVars.inc	122	Digdogger_ObjCurPart	$0478 per slot; big Digdogger: corner 0-3 being tested in the collision loop.
+Manhandla_ObjFrame	var		src/ObjVars.inc	157	Manhandla_ObjFrame	$0478 per slot; Manhandla: frame image and sprite attributes.
+Gohma_ObjEyeAnimCounter	var		src/ObjVars.inc	177	Gohma_ObjEyeAnimCounter	$0478 per slot; Gohma: frames since the closed eye changed image; wraps at 8.
+Ganon_ObjCloudDist	var		src/ObjVars.inc	194	Ganon_ObjCloudDist	$0478 per slot; Ganon: pixel distance of the 4 burst clouds from his position.
+Gleeok_NeckYs2	var		src/ObjVars.inc	206	Gleeok_NeckYs2	$0479 [6] Gleeok neck 2: Y of segments 0-5.
+ObjHP	var		src/Variables.inc	312	ObjHP	$0485 [13] per object slot $00-$0C. Hit points in the high nibble (HP x $10).
+ObjUninitialized	var		src/Variables.inc	315	ObjUninitialized	$0492 [12] per object slot $00-$0B. Nonzero = init routine not yet run.
+ObjCollidedTile	var		src/Variables.inc	317	ObjCollidedTile	$049E [20] per object slot. Tile found by the last tile collision test.
+ObjInvincibilityMask	var		src/Variables.inc	319	ObjInvincibilityMask	$04B2 [13] per object slot $00-$0C. Damage types that cannot hurt the monster.
+ObjAttr	var		src/Variables.inc	321	ObjAttr	$04BF [13] per object slot $00-$0C. Behaviour bits (ObjectTypeToAttributes).
+IsPersonFireballsEnabled	var		src/Variables.inc	356	PersonFireballsEnabled	$04CC Nonzero after the person in slot 1 was hit: the room's statues shoot
+RoomAttrsF	var		src/Variables.inc	358	LevelBlockAttrsByteF	$04CD Copy of LevelBlockAttrsF[RoomId], taken on room entry (bits: see there).
+ShutterTrigger	var		src/Variables.inc	359	ShutterTrigger	$04CE 1 = open the room's shutter doors; cleared when none is left closed.
+BlockPushComplete	var		src/Variables.inc	362	BlockPushComplete	$04CF Push block: 0 not pushed, 1 fully pushed, 2 pushed and stairs made.
+FlyerMaxSpeedFrac	var		src/Variables.inc	366	FlyingMaxSpeedFrac	$04D1 Flyer top speed: speeding up ends when (Flyer_ObjSpeed & $E0) >= this.
+GleeokCurNeck	var		src/Variables.inc	369	GleeokCurNeck	$04D7 Gleeok: neck being processed, counted down from (ObjType - $42) to 0.
+GleeokSignedRefSegmentDistance	var		src/Variables.inc	370	GleeokSignedRefSegmentDistance	$04D8 Gleeok: signed distance between reference neck segments.
+GleeokPrimarySegmentLimits	var		src/Variables.inc	371	GleeokPrimarySegmentLimits	$04D9 [2] X, Y. Gleeok neck segment spacing limit, tier 1: at most 4 pixels.
+GleeokSecondarySegmentLimits	var		src/Variables.inc	372	GleeokSecondarySegmentLimits	$04DB [2] X, Y. Tier 2 spacing limit: tier 1 + 4, at most 8 pixels.
+GleeokTertiarySegmentLimits	var		src/Variables.inc	373	GleeokTertiarySegmentLimits	$04DD [2] X, Y. Tier 3 spacing limit: tier 2 + 4, at most $B pixels.
+StatusBarMapTrigger	var		src/Variables.inc	363	StatusBarMapTrigger	$04E5 1 = transfer the level's status bar map (set when the map is picked up).
+Lanmola_Speed	var		src/ObjVars.inc	180	Lamnola_Speed	$04E6 scalar; Lanmola: pixels per frame, object type - $39 (1 or 2).
+GleeokAnimationTimer	var		src/Variables.inc	374	GleeokAnimationTimer	$04E6 Gleeok body: frames until the next animation frame (6 while writhing).
+Lanmola_Type	var		src/ObjVars.inc	182	Lamnola_Type	$04E7 scalar; Lanmola: object type of the room's Lanmola ($3A or $3B).
+GleeokBodyAnimationFrame	var		src/Variables.inc	375	GleeokBodyAnimationFrame	$04E7 Gleeok body animation frame, cycles 0-3.
+Statue_FireballTimers	var		src/ObjVars.inc	93	Statue_ObjFireballTimer	$04E8 [4] by fireball number in the statue pattern (not by slot): countdown.
+ObjInvincibilityTimer	var		src/Variables.inc	379	ObjInvincibilityTimer	$04F0 [20] per object slot $00-$13. Nonzero = cannot be harmed or shoved.
+LeftAlignHalfWidthObj	var		src/Variables.inc	385	LeftAlignHalfWidthObj	$0504 Nonzero while the lifted item is drawn: a narrow item is not centered.
+ItemTypeToLift	var		src/Variables.inc	386	ItemTypeToLift	$0505 Item id Link is holding up, 0 = none ($1B Triforce piece in scenes).
+ItemLiftTimer	var		src/Variables.inc	387	ItemLiftTimer	$0506 Frames left of the lift; $80 when an item is taken outside mode 5.
+ChildDigdoggerCount	var		src/Variables.inc	390	ChildDigdoggerCount	$0507 Small Digdoggers the big one splits into: 3 (InitDigdogger1) or 1 (..2).
+IsWhirlwindSummoned	var		src/Variables.inc	391	SummonedWhirlwind	$0508 1 = the flute already summoned a whirlwind in this room: no second one.
+IsTriforceFanfareActive	var		src/Variables.inc	392	TriforceFanfareActive	$0509 1 while Link holds up the Triforce of Power (Link halted, ObjTimer $C0).
+CreditsRow	var		src/Variables.inc	412	CreditsRow	$050A Credits: tile row being drawn.
+CreditsTileOffset	var		src/Variables.inc	413	CreditsTileOffset	$050B Credits: pixels scrolled since the last row was drawn; a row every 8.
+CreditsVramPage	var		src/Variables.inc	414	CreditsVramPage	$050C Credits: nametable page index 0-$B of the row being drawn.
+CreditsVramLine	var		src/Variables.inc	415	CreditsVramLine	$050D Credits: line within the page (8 lines, 6 in pages with page mod 4 = 3).
+CreditsLineIndex	var		src/Variables.inc	416	CreditsLineIndex	$050E Credits: index of the next text line.
+LanmolaViableDirMask	var		src/Variables.inc	393	LamnolaViableDirMask	$050F Lanmola turn scratch: direction bits allowed (all but the opposite one).
+Gleeok_WrithingCounter	var		src/ObjVars.inc	224	Gleeok_WrithingCounter	$0510 scalar; Gleeok body: fast animation steps left after a hit (set to 6).
+ActiveRedLeeverCount	var		src/Variables.inc	394	ActiveRedLeeverCount	$0510 Red Leevers (type $10) above ground; a third may not surface.
+GleeokDeadNeckMask	var		src/Variables.inc	376	GleeokDeadNeckMask	$0511 Gleeok: bit n set = the head of neck n has been cut off.
+IsLinkParalyzed	var		src/Variables.inc	395	LinkParalyzed	$0512 Nonzero while a Like-Like holds Link: direction input is discarded.
+HasUsedCandle	var		src/Variables.inc	397	UsedCandle	$0513 1 = a candle fire was made in this room; the blue candle then refuses.
+IsZoraActive	var		src/Variables.inc	399	ZoraActive	$0514 1 while the room's Zora exists (one at a time).
+ActiveBoulderCount	var		src/Variables.inc	400	ActiveBoulders	$0515 Boulders (type $20) alive; the boulder spawner stops at 3.
+SecretColorCycle	var		src/Variables.inc	401	SecretColorCycle	$051A Flute pond secret: 0 none, 1-$B draining (1 step per 8 frames), $C done.
+FluteUsedState	var		src/Variables.inc	403	UsedFlute	$051B 0; 1 once the flute was played in this room; 2 while Digdogger shrinks.
+FadeCycle	var		src/Variables.inc	404	FadeCycle	$051C Palette fade: high nibble = series, low nibble = step 0-3 (4 = done).
+PatternBlockIndex	var		src/Variables.inc	407	PatternBlockIndex	$051D Index of the CHR pattern block being copied to the PPU (transfer loops).
+IsRoomBrightening	var		src/Variables.inc	408	BrighteningRoom	$051E 1 while a candle fire is fading a dark room to light.
+CandleState	var		src/Variables.inc	409	CandleState	$051F Dark room lighting: 0 not lit, 1 brightening, 2 lit (UpdateCandle).
+PrevOpenedDoors	var		src/Variables.inc	419	PrevOpenedDoors	$0521 CurOpenedDoors of the room being left, kept while scrolling to the next.
+WhirlwindTeleportingState	var		src/Variables.inc	420	WhirlwindTeleportingState	$0522 0 none, 1 whirlwind carrying Link away, 2 dropping him off.
+TeleportingLevelIndex	var		src/Variables.inc	421	TeleportingLevelIndex	$0523 Whirlwind destination: (value & 7) = level number - 1.
+SpawnCycle	var		src/Variables.inc	424	SpawnCycle	$0524 Next index 0-8 into the 9-entry spawn position list; kept between rooms.
+CurEdgeSpawnCell	var		src/Variables.inc	425	CurEdgeSpawnCell	$0525 Last screen-edge spawn cell: high nibble = row, low nibble = column.
+LevelEntranceRoomId	var		src/Variables.inc	427	CaveSourceRoomId	$0526 Overworld room of the dungeon entrance last entered; $FF = none.
+CellarSourceRoomId	var		src/Variables.inc	429	CellarSourceRoomId	$0527 Dungeon room from which the current cellar was entered.
+HasSkippedDemo	var		src/Variables.inc	430	SkippedDemo	$0528 $5A once Start was pressed in the title demo; stops the demo animation.
+IsSwordShotForced	var		src/Variables.inc	431	ForceSwordShot	$0529 Nonzero would allow the sword shot at any health. Only ever cleared.
+WorldKillCycle	var		src/Variables.inc	432	WorldKillCycle	$052A Kill cycle 0-9: column of the drop table used for the next drop.
+RoomTileObjType	var		src/Variables.inc	435	RoomTileObjType	$052B Object type of the room's tile object found by the layout, 0 = none.
+RoomTileObjX	var		src/Variables.inc	436	RoomTileObjX	$052C X of that tile object (column * $10).
+RoomTileObjY	var		src/Variables.inc	437	RoomTileObjY	$052D Y of that tile object (row * $10 + $40).
+IsSwordBlocked	var		src/Variables.inc	438	SwordBlocked	$052E 1 = sword disabled until cured (set by Bubble type $2D, cleared by $2C).
+MazeStep	var		src/Variables.inc	440	MazeStep	$052F Correct steps so far (0-3) in the Lost Woods ($61) or Lost Hills ($1B).
+PlayAreaAttrs	var		src/Variables.inc	443	PlayAreaAttrs	$0530 [48] Nametable attribute bytes of the play area (from attrs A and B).
+LevelKillCounts	var		src/Variables.inc	444	LevelKillCounts	$0560 [128] per room of the current dungeon: kills banked when leaving it.
+CurNoteLowPeriodTrg	var		src/Variables.inc	449	CurNoteLowPeriodTrg	$05F0 Low period byte of the triangle note playing (base for vibrato).
+SampleCounter	var		src/Variables.inc	450	SampleCounter	$05F2 Frames left of the DMC sample ($A0 at start).
+SeaSfxCounter	var		src/Variables.inc	451	SeaSfxCounter	$05F3 Sea noise effect phase counter, counts down from $D0.
+NoteLengthTableBase	var		src/Variables.inc	452	NoteLengthTableBase	$05F4 Song phrase: base offset into the note length table.
+FirstNoteIndexSongNoise	var		src/Variables.inc	453	FirstNoteIndexSongNoise	$05F5 Song phrase: script offset where the noise track starts (it loops).
+BackgroundSample	var		src/Variables.inc	454	BackgroundSample	$05F6 Looping DMC sample (request bits $F0), restarted when no other plays.
+SongRequest	var		src/Variables.inc	455	SongRequest	$0600 Song to start (one bit): $01 overworld, $08 item, $10 ending,
+SampleRequest	var		src/Variables.inc	457	SampleRequest	$0601 DMC sample to start (bit mask; bits $F0 loop). PlaySample ORs into it.
+Tune1Request	var		src/Variables.inc	458	Tune1Request	$0602 Square-1 tune to start (bit mask; $80 = silence first).
+EffectRequest	var		src/Variables.inc	459	EffectRequest	$0603 Noise effect to start (bit mask). PlayEffect ORs into it.
+Tune0Request	var		src/Variables.inc	460	Tune0Request	$0604 Square-0 tune to start (bit mask; $40 low-hearts beep, $80 stops song).
+CurTune0	var		src/Variables.inc	461	Tune0	$0605 Square-0 tune playing (its request bit), 0 = none.
+CurEffect	var		src/Variables.inc	462	Effect	$0606 Noise effect playing, 0 = none.
+CurTune1	var		src/Variables.inc	463	Tune1	$0607 Square-1 tune playing, 0 = none; the song skips square 1 meanwhile.
+CurSample	var		src/Variables.inc	464	Sample	$0608 DMC sample playing, 0 = none.
+CurSong	var		src/Variables.inc	465	Song	$0609 Song playing (its request bit), 0 = none.
+NoteOffsetSongSq1	var		src/Variables.inc	466	NoteOffsetSongSq1	$060A Song script offset of the next square-1 note.
+NoteOffsetSongSq0	var		src/Variables.inc	467	NoteOffsetSongSq0	$060B Song script offset of the next square-0 note (0 = track absent).
+NoteOffsetSongTrg	var		src/Variables.inc	468	NoteOffsetSongTrg	$060C Song script offset of the next triangle note (0 = track absent).
+NoteOffsetSongNoise	var		src/Variables.inc	469	NoteOffsetSongNoise	$060D Song script offset of the next noise note.
+Tune0ScriptOffset	var		src/Variables.inc	470	TunePtr0	$060E Offset of the next byte of the square-0 tune in TuneScripts0.
+NoteLengthSongSq0	var		src/Variables.inc	471	NoteLengthSongSq0	$060F Length in frames of the current square-0 song note.
+NoteLengthSongSq1	var		src/Variables.inc	472	NoteLengthSongSq1	$0610 Length in frames of the current square-1 song note.
+NoteCounterSongSq1	var		src/Variables.inc	473	NoteCounterSongSq1	$0611 Frames left of the current square-1 song note.
+CustomEnvelopeOffsetSongSq1	var		src/Variables.inc	474	CustomEnvelopeOffsetSongSq1	$0612 Square-1 volume envelope position, counts down to 0.
+NoteCounterSongSq0	var		src/Variables.inc	475	NoteCounterSongSq0	$0613 Frames left of the current square-0 song note.
+CustomEnvelopeOffsetSongSq0	var		src/Variables.inc	476	CustomEnvelopeOffsetSongSq0	$0614 Square-0 volume envelope position, counts down to 0.
+NoteLengthSongTrg	var		src/Variables.inc	477	NoteLengthSongTrg	$0615 Length in frames of the current triangle song note.
+NoteCounterSongTrg	var		src/Variables.inc	478	NoteCounterSongTrg	$0616 Frames left of the current triangle song note.
+NoteCounterSongNoise	var		src/Variables.inc	479	NoteCounterSongNoise	$0617 Frames left of the current noise song note.
+Tune1ScriptOffset	var		src/Variables.inc	480	TunePtr1	$0618 Offset of the next byte of the square-1 tune in TuneScripts1.
+SongEnvelopeSelector	var		src/Variables.inc	481	SongEnvelopeSelector	$0619 Song phrase: volume envelope selector (byte 6 of the phrase header).
+SongVibrationCounterSq1	var		src/Variables.inc	482	SongVibrationCounterSq1	$061B Frames since the square-1 song note began (vibrato phase).
+SongVibrationCounterSq0	var		src/Variables.inc	483	SongVibrationCounterSq0	$061C Frames since the square-0 song note began (vibrato phase).
+SongVibrationCounterTrg	var		src/Variables.inc	484	SongVibrationCounterTrg	$061D Frames since the triangle song note began (vibrato phase).
+SongRepetitionsTrg	var		src/Variables.inc	485	SongRepetitionsTrg	$061E Triangle track: repetitions left of the passage being repeated.
+SongRepeatStartOffset	var		src/Variables.inc	486	SongRepeatStartOffset	$061F Triangle track: script offset where the repeated passage starts.
+CurRoomHistoryIndex	var		src/Variables.inc	489	CurRoomHistoryIndex	$0620 Slot 0-5 of RoomHistory that the next new room overwrites.
+RoomHistory	var		src/Variables.inc	490	RoomHistory	$0621 [6] Ids of the last six different rooms entered (ring buffer).
+WorldKillCount	var		src/Variables.inc	494	WorldKillCount	$0627 Monsters killed since Link was last harmed (zeroed by Link_BeHarmed).
+QuestNumbers	var		src/Variables.inc	498	QuestNumbers	$062D [3] per save slot: 0 = Q1, 1 = Q2. Read in play through CurSaveSlot.
+DeathCounts	var		src/Variables.inc	499	DeathCounts	$0630 [3] per save slot: deaths, stops at $FF.
+IsSaveSlotActive	var		src/Variables.inc	500	IsSaveSlotActive	$0633 [3] per save slot: nonzero = registered. The menu reads 5 entries.
+IsRegisterSaveFileOptionEnabled	var		src/Variables.inc	501	IsRegisterSaveFileOptionEnabled	$0636 IsSaveSlotActive[3], the menu's Register option: always 1.
+IsEliminateSaveFileOptionEnabled	var		src/Variables.inc	502	IsEliminateSaveFileOptionEnabled	$0637 IsSaveSlotActive[4], the menu's Eliminate option: always 1.
+SaveSlotNames	var		src/Variables.inc	503	Names	$0638 [24] 3 slots x 8 characters: the slot names (tile codes, $24 = space).
+SaveSlotHearts	var		src/Variables.inc	504	SaveSlotHearts	$0650 [6] 3 slots x (HeartValues, HeartPartial) shown on the file menu.
+SelectedItemSlot	var		src/Variables.inc	509	SelectedItemSlot	$0656 Item slot on the B button: 0 boomerangs, 1-8 = InvItems+n, $F letter.
+InvItems	var		src/Variables.inc	511	Items	$0657 [40] Base of the items block, indexed by item slot. InvItems+0 = sword.
+InvSword	var		src/Variables.inc	512		$0657 Sword: 0 none, 1 wooden, 2 white, 3 magic. Same byte as InvItems.
+InvBombs	var		src/Variables.inc	514	InvBombs	$0658 Bombs held, 0 to InvMaxBombs. A bomb pickup adds 4.
+InvArrow	var		src/Variables.inc	515	InvArrow	$0659 Arrows: 0 none, 1 wooden (damage $20), 2 silver (damage $40).
+InvBow	var		src/Variables.inc	516	Bow	$065A Bow: 0 or 1. Arrows cannot be selected or shot without it.
+InvCandle	var		src/Variables.inc	517	InvCandle	$065B Candle: 0 none, 1 blue (one fire per room), 2 red.
+InvFlute	var		src/Variables.inc	518		$065C Flute: 0 or 1. The code reaches this byte only by index (InvItems, Y).
+InvFood	var		src/Variables.inc	519	InvFood	$065D Food: 0 or 1. Zeroed when the Grumble Goriya takes it.
+InvPotion	var		src/Variables.inc	520	Potion	$065E Potion doses 0-2. Blue potion adds 1 (max 2), red sets 2; a use takes 1.
+InvRod	var		src/Variables.inc	521		$065F Magic rod: 0 or 1. The code reaches this byte only by index (InvItems,Y).
+InvRaft	var		src/Variables.inc	522	InvRaft	$0660 Raft: 0 or 1.
+InvBook	var		src/Variables.inc	523	InvBook	$0661 Magic book: 0 or 1. With it a magic shot that ends makes a fire.
+InvRing	var		src/Variables.inc	524	InvRing	$0662 Ring: 0 none, 1 blue, 2 red. Damage to Link is halved once per grade.
+InvLadder	var		src/Variables.inc	525	InvLadder	$0663 Ladder: 0 or 1.
+InvMagicKey	var		src/Variables.inc	526	InvMagicKey	$0664 Magic key: 0 or 1. Opens locked doors without spending InvKeys.
+InvBracelet	var		src/Variables.inc	527	InvBracelet	$0665 Power bracelet: 0 or 1. Needed to push a rock ($62), not a gravestone.
+InvLetter	var		src/Variables.inc	528	InvLetter	$0666 Letter: 0 none, 1 held, 2 shown to the cave person of type $74.
+InvCompass	var		src/Variables.inc	529	InvCompass	$0667 Compasses of levels 1-8: bit (level - 1). Reached only by index ($10).
+InvMap	var		src/Variables.inc	530	InvMap	$0668 Maps of levels 1-8: bit (level - 1). Reached only by index (slot $11).
+InvCompass9	var		src/Variables.inc	531	InvCompass9	$0669 Compass of level 9: bit 0. Reached only by index (slot $12).
+InvMap9	var		src/Variables.inc	532	InvMap9	$066A Map of level 9: bit 0. Reached only by index (slot $13).
+InvFairy	var		src/Variables.inc	533		$066B Slot $14 of the fairy item (id $23). Never written: a fairy only heals.
+InvClock	var		src/Variables.inc	535	InvClock	$066C Clock: 1 = monsters frozen, Link invincible. Zeroed on every room change
+InvRupees	var		src/Variables.inc	537	InvRupees	$066D Rupees, 0-$FF. Changes by 1 via InvRupeesToAdd / InvRupeesToSubtract.
+InvKeys	var		src/Variables.inc	538	InvKeys	$066E Keys, 0-$FF.
+HeartValues	var		src/Variables.inc	547	HeartValues	$066F High nibble = heart containers - 1; low nibble = full hearts.
+HeartPartial	var		src/Variables.inc	549	HeartPartial	$0670 Partial heart fill: 0 empty, $01-$7F drawn half, $80-$FF drawn full.
+InvTriforce	var		src/Variables.inc	551	InvTriforce	$0671 Triforce pieces: bit (level - 1) for levels 1-8; $FF = all eight.
+InvPowerTriforce	var		src/Variables.inc	552	LastBossDefeated	$0672 Slot $1B, Triforce of Power: 1 once its fanfare ends. Opens the shutters
+InvFiveRupees	var		src/Variables.inc	554		$0673 Slot $1C of the 5-rupee item (id $0F). Never written: 5 x TakeOneRupee.
+InvBoomerang	var		src/Variables.inc	556	InvBoomerang	$0674 Wooden boomerang: 0 or 1.
+InvMagicBoomerang	var		src/Variables.inc	557	InvMagicBoomerang	$0675 Magic boomerang: 0 or 1. Sets the throw's range limit to $FF, else $31.
+InvMagicShield	var		src/Variables.inc	558	InvMagicShield	$0676 Magic shield: 0 or 1. Zeroed when a Like-Like eats it.
+InvMaxBombs	var		src/Variables.inc	560	MaxBombs	$067C Bomb capacity: 8 in a new file, +4 per upgrade bought (100 rupees).
+InvRupeesToAdd	var		src/Variables.inc	561	RupeesToAdd	$067D Rupees still to be credited to InvRupees, 1 every second frame.
+InvRupeesToSubtract	var		src/Variables.inc	563	RupeesToSubtract	$067E Rupees still to be taken from InvRupees, 1 every second frame.
+WorldFlags	var		src/Variables.inc	567	WorldFlags	$067F [384] One flag byte per room: $67F overworld, $6FF levels 1-6, $77F 7-9.
+PpuControl	var		src/Variables.inc	575	PpuControl_2000	$2000 PPU control register (write).
+PpuMask	var		src/Variables.inc	576	PpuMask_2001	$2001 PPU mask register (write).
+PpuStatus	var		src/Variables.inc	577	PpuStatus_2002	$2002 PPU status register (read; reading resets the address latch).
+OamAddr	var		src/Variables.inc	578	OamAddr_2003	$2003 OAM address (write).
+OamData	var		src/Variables.inc	579	OamData_2004	$2004 OAM data. Not used by the code.
+PpuScroll	var		src/Variables.inc	580	PpuScroll_2005	$2005 PPU scroll (two writes: X, Y).
+PpuAddr	var		src/Variables.inc	581	PpuAddr_2006	$2006 PPU VRAM address (two writes: high, low).
+PpuData	var		src/Variables.inc	582	PpuData_2007	$2007 PPU VRAM data.
+Sq0Duty	var		src/Variables.inc	588	Sq0Duty_4000	$4000 Square 0: duty, envelope, volume.
+Sq0Sweep	var		src/Variables.inc	589	Sq0Sweep_4001	$4001 Square 0: sweep.
+Sq0Timer	var		src/Variables.inc	590	Sq0Timer_4002	$4002 Square 0: period low byte.
+Sq0Length	var		src/Variables.inc	591	Sq0Length_4003	$4003 Square 0: length counter, period high bits.
+Sq1Duty	var		src/Variables.inc	592	Sq1Duty_4004	$4004 Square 1: duty, envelope, volume.
+Sq1Sweep	var		src/Variables.inc	593	Sq1Sweep_4005	$4005 Square 1: sweep.
+Sq1Timer	var		src/Variables.inc	594	Sq1Timer_4006	$4006 Square 1: period low byte.
+Sq1Length	var		src/Variables.inc	595	Sq1Length_4007	$4007 Square 1: length counter, period high bits.
+TrgLinear	var		src/Variables.inc	596	TrgLinear_4008	$4008 Triangle: linear counter.
+TrgTimer	var		src/Variables.inc	597	TrgTimer_400A	$400A Triangle: period low byte.
+TrgLength	var		src/Variables.inc	598	TrgLength_400B	$400B Triangle: length counter, period high bits.
+NoiseVolume	var		src/Variables.inc	599	NoiseVolume_400C	$400C Noise: envelope, volume.
+NoisePeriod	var		src/Variables.inc	600	NoisePeriod_400E	$400E Noise: mode and period.
+NoiseLength	var		src/Variables.inc	601	NoiseLength_400F	$400F Noise: length counter.
+DmcFreq	var		src/Variables.inc	602	DmcFreq_4010	$4010 DMC: flags and rate.
+DmcCounter	var		src/Variables.inc	603	DmcCounter_4011	$4011 DMC: output level.
+DmcAddress	var		src/Variables.inc	604	DmcAddress_4012	$4012 DMC: sample address.
+DmcLength	var		src/Variables.inc	605	DmcLength_4013	$4013 DMC: sample length.
+SpriteDma	var		src/Variables.inc	583	SpriteDma_4014	$4014 OAM DMA: page number of the sprite buffer to copy.
+ApuStatus	var		src/Variables.inc	606	ApuStatus_4015	$4015 APU channel enables.
+Ctrl1	var		src/Variables.inc	584	Ctrl1_4016	$4016 Controller strobe (write) and controller 1 data (read).
+Ctrl2FrameCtr	var		src/Variables.inc	585	Ctrl2_FrameCtr_4017	$4017 Controller 2 data (read); APU frame counter (write).
+SaveRamBegin	var		src/Variables.inc	612	SaveRamBegin	$6001 $5A once save RAM is initialized (with SaveRamEnd = $A5).
+SaveFileAName0	var		src/Variables.inc	614	SaveFileAName0	$6002 [8] File A, slot 0: name. (The SaveFileA* blocks are addressed through
+SaveFileAName1	var		src/Variables.inc	616	SaveFileAName1	$600A [8] File A, slot 1: name.
+SaveFileAName2	var		src/Variables.inc	617	SaveFileAName2	$6012 [8] File A, slot 2: name.
+SaveFileAItems0	var		src/Variables.inc	618	SaveFileAItems0	$601A [40] File A, slot 0: copy of the items block InvItems ($657-$67E).
+SaveFileAItems1	var		src/Variables.inc	619	SaveFileAItems1	$6042 [40] File A, slot 1: items block.
+SaveFileAItems2	var		src/Variables.inc	620	SaveFileAItems2	$606A [40] File A, slot 2: items block.
+SaveFileAWorldFlags0	var		src/Variables.inc	621	SaveFileAWorldFlags0	$6092 [384] File A, slot 0: copy of WorldFlags ($67F-$7FE).
+SaveFileAWorldFlags1	var		src/Variables.inc	622	SaveFileAWorldFlags1	$6212 [384] File A, slot 1: world flags.
+SaveFileAWorldFlags2	var		src/Variables.inc	623	SaveFileAWorldFlags2	$6392 [384] File A, slot 2: world flags.
+SaveFileASlotActive0	var		src/Variables.inc	624	SaveFileASlotActive0	$6512 File A, slot 0: nonzero = slot registered (source of IsSaveSlotActive).
+SaveFileASlotActive1	var		src/Variables.inc	625	SaveFileASlotActive1	$6513 File A, slot 1: slot registered.
+SaveFileASlotActive2	var		src/Variables.inc	626	SaveFileASlotActive2	$6514 File A, slot 2: slot registered.
+SaveFileADeathCount0	var		src/Variables.inc	627	SaveFileADeathCount0	$6515 File A, slot 0: death count (source of DeathCounts).
+SaveFileADeathCount1	var		src/Variables.inc	628	SaveFileADeathCount1	$6516 File A, slot 1: death count.
+SaveFileADeathCount2	var		src/Variables.inc	629	SaveFileADeathCount2	$6517 File A, slot 2: death count.
+SaveFileAQuestNumber0	var		src/Variables.inc	631	SaveFileAQuestNumber0	$651B File A, slot 0: quest, 0 = Q1, 1 = Q2 (source of QuestNumbers).
+SaveFileAQuestNumber1	var		src/Variables.inc	632	SaveFileAQuestNumber1	$651C File A, slot 1: quest.
+SaveFileAQuestNumber2	var		src/Variables.inc	633	SaveFileAQuestNumber2	$651D File A, slot 2: quest.
+SaveFileOpenMarkers	var		src/Variables.inc	634	SaveFileOpenMarkers	$651E [3] per slot: $5A while file A is whole; 0 during the B-to-A copy.
+SaveFileCloseMarkers	var		src/Variables.inc	635	SaveFileCloseMarkers	$6521 [3] per slot: $A5 while file A is whole; 0 during the B-to-A copy.
+SaveFileAChecksums	var		src/Variables.inc	636	FileAChecksums	$6524 [3] x 2 bytes: file A checksum per slot; a mismatch reformats the slot.
+IsSaveFileBCommitted	var		src/Variables.inc	637	IsSaveFileBCommitted	$652A [3] per slot: $FF = file B fully copied to file A; 0 = copy pending.
+PlayAreaTiles	var		src/Variables.inc	640	PlayAreaTiles	$6530 [704] Play area tile map: 32 columns x 22 rows, stored by column.
+LevelBlockAttrsA	var		src/Variables.inc	644	LevelBlockAttrsA	$687E [128] Dungeon: bits 7-5 N door type, 4-2 S door type, 1-0 outer palette.
+LevelBlockAttrsB	var		src/Variables.inc	647	LevelBlockAttrsB	$68FE [128] Dungeon: bits 7-5 W door type, 4-2 E door type, 1-0 inner palette.
+LevelBlockAttrsC	var		src/Variables.inc	650	LevelBlockAttrsC	$697E [128] Bits 7-6 index into LevelInfo_FoeCounts, 5-0 monster list id.
+LevelBlockAttrsD	var		src/Variables.inc	652	LevelBlockAttrsD	$69FE [128] Bit 7 = bit 6 of the monster list id, bit 6 push block (dungeon),
+LevelBlockAttrsE	var		src/Variables.inc	654	LevelBlockAttrsE	$6A7E [128] Dungeon: bit 7 dark room, 6-5 boss roar index, 4-0 room item id
+LevelBlockAttrsF	var		src/Variables.inc	657	LevelBlockAttrsF	$6AFE [128] Bits 5-4 index into LevelInfo_ShortcutOrItemPosArray.
+LevelInfo_PalettesTransferBuf	var		src/Variables.inc	662	LevelInfo_PalettesTransferBuf	$6B7E [36] PPU transfer record with the level's palettes.
+LevelInfo_FoeCounts	var		src/Variables.inc	663	LevelInfo_FoeCounts	$6BA2 [4] Monster counts selectable by attr C bits 7-6 (dungeons: 3, 5, 6, 8).
+LevelInfo_StartY	var		src/Variables.inc	664	LevelInfo_StartY	$6BA6 Link's Y when the level is entered ($DD in dungeons, $8D overworld).
+LevelInfo_ShortcutOrItemPosArray	var		src/Variables.inc	665	LevelInfo_ShortcutOrItemPosArray	$6BA7 [4] Positions: high nibble X, low nibble Y (each * $10).
+LevelInfo_SubmenuMapRotation	var		src/Variables.inc	667	LevelInfo_SubmenuMapRotation	$6BAB Columns the submenu map is rotated to match the level's shape.
+LevelInfo_StatusBarMapXOffset	var		src/Variables.inc	668	LevelInfo_StatusBarMapXOffset	$6BAC Pixels added to the status bar position marker's X.
+LevelInfo_StartRoomId	var		src/Variables.inc	669	LevelInfo_StartRoomId	$6BAD Room where Link starts the level.
+LevelInfo_TriforceRoomId	var		src/Variables.inc	670	LevelInfo_TriforceRoomId	$6BAE Room marked by the compass (Triforce marker on the status bar map).
+LevelInfo_WorldFlagsAddr	var		src/Variables.inc	671	LevelInfo_WorldFlagsAddr	$6BAF 2 bytes lo/hi: address of this level's 128 bytes in WorldFlags.
+LevelInfo_LevelNumber	var		src/Variables.inc	672	LevelInfo_LevelNumber	$6BB1 Level number 1-9 for the "LEVEL-n" text; 0 = overworld.
+LevelInfo_CellarRoomIdArray	var		src/Variables.inc	673	LevelInfo_CellarRoomIdArray	$6BB2 [10] Dungeon: room ids of the cellars, $FF-padded.
+LevelInfo_BossRoomId	var		src/Variables.inc	675	LevelInfo_BossRoomId	$6BBC Boss room; while its kills flag is not "all dead" rooms play the roar.
+LevelInfo_SubmenuMapMask	var		src/Variables.inc	676	LevelInfo_SubmenuMapMask	$6BBD [16] per map column: bit set = a room exists in that row.
+LevelInfo_StatusBarMapTransferBuf	var		src/Variables.inc	677	LevelInfo_StatusBarMapTransferBuf	$6BCD [45] PPU transfer record of the status bar map.
+LevelInfo_PaletteCycles	var		src/Variables.inc	678	LevelInfo_PaletteCycles	$6BFA [96] Fade series: 8-byte palette halves, indexed through FadeCycle.
+LevelInfo_DeathPaletteSeries	var		src/Variables.inc	679	LevelInfo_DeathPaletteSeries	$6C5A [32] Fade series $60 (death): 4 steps of 8 bytes.
+SaveRamEnd	var		src/Variables.inc	680	SaveRamEnd	$7FFF $A5 once save RAM is initialized; see SaveRamBegin.

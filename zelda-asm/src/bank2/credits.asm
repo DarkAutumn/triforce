@@ -252,7 +252,7 @@ DrawCredits:
     ; Copy the player's name at offset 9 in string to transfer.
     LDX #$00
 :
-    LDA Names, Y
+    LDA SaveSlotNames, Y
     STA DynTileBuf+12, X
     INY
     INX

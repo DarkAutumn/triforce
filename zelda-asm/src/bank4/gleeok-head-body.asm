@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/gleeok-head-body.asm   BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 9044-9454
-; SUBJECTS: (none)
+; SUBJECTS: Gleeok
 ; TOPIC:    Gleeok head/segment draw and collisions, body
 ; SEE ALSO:
 ; KEY FACTS:
@@ -236,63 +236,63 @@ Gleeok_CheckCollisions:
 
 Gleeok_MoveHead:
     ; Don't do anything until the head's initial timer expires.
-    LDA Gleeok_ObjHeadDelay
+    LDA Gleeok_CurHeadDelay
     BNE Gleeok_DecHeadTimer
 
     ; Add 1 or -1 to X as needed.
     LDA ObjX+5
-    LDY Gleeok_ObjHeadSpeedX
+    LDY Gleeok_CurHeadSpeedFlagX
     JSR Gleeok_ChangeCoordinateBySpeedFlag
     STA ObjX+5
 
     ; Add 1 or -1 to Y as needed.
     LDA ObjY+5
-    LDY Gleeok_ObjHeadSpeedY
+    LDY Gleeok_CurHeadSpeedFlagY
     JSR Gleeok_ChangeCoordinateBySpeedFlag
     STA ObjY+5
 
     ; Increment the counter to change directions.
     ; If it's still < 4, then return.
-    INC Gleeok_ObjHeadDirChangeCounter
-    LDA Gleeok_ObjHeadDirChangeCounter
+    INC Gleeok_CurHeadDirChangeCounter
+    LDA Gleeok_CurHeadDirChangeCounter
     CMP #$04
     BCC L127FA_Exit
 
     ; The counter reached 4. So, reset it.
     ; Then check the individual direction counters.
     LDA #$00
-    STA Gleeok_ObjHeadDirChangeCounter
+    STA Gleeok_CurHeadDirChangeCounter
 
     ; Increment the horizontal direction counter.
     ; If >= $C, then reset the counter, and flip direction.
-    INC Gleeok_ObjHeadDirCounterH
-    LDA Gleeok_ObjHeadDirCounterH
+    INC Gleeok_CurHeadDirCounterH
+    LDA Gleeok_CurHeadDirCounterH
     CMP #$0C
     BCC @CheckVertical
     LDA #$00
-    STA Gleeok_ObjHeadDirCounterH
-    LDA Gleeok_ObjHeadSpeedX
+    STA Gleeok_CurHeadDirCounterH
+    LDA Gleeok_CurHeadSpeedFlagX
     EOR #$FF
-    STA Gleeok_ObjHeadSpeedX
+    STA Gleeok_CurHeadSpeedFlagX
 
 @CheckVertical:
     ; Increment the vertical direction counter.
     ; If >= 6, then reset the counter, and flip direction.
-    INC Gleeok_ObjHeadDirCounterV
-    LDA Gleeok_ObjHeadDirCounterV
+    INC Gleeok_CurHeadDirCounterV
+    LDA Gleeok_CurHeadDirCounterV
     CMP #$06
     BCC L127FA_Exit
     LDA #$00
-    STA Gleeok_ObjHeadDirCounterV
-    LDA Gleeok_ObjHeadSpeedY
+    STA Gleeok_CurHeadDirCounterV
+    LDA Gleeok_CurHeadSpeedFlagY
     EOR #$FF
-    STA Gleeok_ObjHeadSpeedY
+    STA Gleeok_CurHeadSpeedFlagY
 
 L127FA_Exit:
     RTS
 
 Gleeok_DecHeadTimer:
-    DEC Gleeok_ObjHeadDelay
+    DEC Gleeok_CurHeadDelay
     RTS
 
 ; Params:

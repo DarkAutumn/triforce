@@ -77,7 +77,7 @@ UpdateMode1Menu_Sub0:
 
 UpdateMode1Menu_Sub1:
     LDA #$00
-    STA Tune1
+    STA CurTune1
     LDA #$00
     STA CurLevel                ; Begin in OW.
     STA SelectedItemSlot        ; Reset item index.
@@ -99,11 +99,11 @@ UpdateMode1Menu_Sub1:
 
 @CopyItems:
     LDA ($00), Y
-    STA Items, Y
+    STA InvItems, Y
     DEY
     BPL @CopyItems
     LDA #$00
-    STA SwordBlocked
+    STA IsSwordBlocked
     STA ObjState                ; Reset player state.
     STA InvClock                ; Reset clock item.
 

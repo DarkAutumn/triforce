@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/zol-gel.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 1239-1569
-; SUBJECTS: (none)
+; SUBJECTS: Gel, Zol
 ; TOPIC:    Zol states and split into Gels; Gel
 ; SEE ALSO:
 ; KEY FACTS:
@@ -268,7 +268,7 @@ UpdateNormalZolOrGel:
     CMP #$05
     BCS @Exit
     LDA #$20                    ; Turn rate $20
-    STA ObjTurnRate, X
+    STA Wanderer_ObjTurnRate, X
     JSR Wanderer_TargetPlayer
 
     ; If the monster is between squares, or timer <> 0; then return.
@@ -323,7 +323,7 @@ Gel_MoveSplitting:
     JSR GetCollidingTileMoving
 
     ; If blocked by a tile, then return C=1.
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS @Exit
 
 @CheckRoomBoundary:

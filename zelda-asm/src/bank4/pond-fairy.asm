@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/pond-fairy.asm         BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 3374-3563
-; SUBJECTS: (none)
+; SUBJECTS: PondFairy
 ; TOPIC:    Pond fairy healing and orbiting hearts
 ; SEE ALSO:
 ; KEY FACTS:

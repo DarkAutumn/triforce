@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/leever.asm             BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 2592-2966
-; SUBJECTS: (none)
+; SUBJECTS: Burrower
 ; TOPIC:    Blue and Red Leever; shared burrower code (Zora)
 ; SEE ALSO:
 ; KEY FACTS:
@@ -31,7 +31,7 @@ BlueLeeverStateAnimTimes:
 
 UpdateBlueLeever:
     LDA #$A0                    ; Turn rate $A0
-    STA ObjTurnRate, X
+    STA Wanderer_ObjTurnRate, X
     JSR Wanderer_TargetPlayer
 
 UpdateBurrower:
@@ -298,7 +298,7 @@ UpdateRedLeever:
 @CheckSafeToSpawn:
     ; The leever can't come out of an unwalkable tile. So, return.
     JSR GetCollidableTileStill
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS @Exit
     INC ActiveRedLeeverCount
 
@@ -342,7 +342,7 @@ UpdateRedLeever:
     LDA ObjDir, X
     STA $0F
     JSR GetCollidingTileMoving
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS RedLeever_CycleStateDrawAndCheckCollisions
     JSR BoundByRoom
     BEQ RedLeever_CycleStateDrawAndCheckCollisions

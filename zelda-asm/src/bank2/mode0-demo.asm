@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank2/mode0-demo.asm         BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 180-359
-; SUBJECTS: (none)
+; SUBJECTS: Mode0Demo
 ; TOPIC:    Mode 0 demo init/update dispatch, save-slot info load
 ; SEE ALSO:
 ; KEY FACTS:
@@ -44,8 +44,8 @@ InitDemo_RunTasks_Phase1_JumpTable:
 
 UpdateMode0Demo:
     LDA GameSubmode
-    BNE @HandleSubmodes         ; Only animate if submode = 0 and SkippedDemo = 0
-    LDA SkippedDemo
+    BNE @HandleSubmodes         ; Only animate if submode = 0 and HasSkippedDemo = 0
+    LDA HasSkippedDemo
     BNE @HandleSubmodes
     JSR AnimateDemo
     LDA IsUpdatingMode          ; If no longer updating,
@@ -64,12 +64,12 @@ UpdateMode0Demo_Sub0:
     LDA ButtonsPressed          ; If Start is not pressed,
     AND #$10
     BEQ Mode0Demo_Return                    ; then return.
-    STA TransferredDemoPatterns ; Else, store $10, because it's convenient and not $A5.
+    STA HasDemoPatterns ; Else, store $10, because it's convenient and not $A5.
     LDA #$00
     STA SongRequest
     JSR SilenceAllSound
     LDA #$5A
-    STA SkippedDemo
+    STA HasSkippedDemo
     INC GameSubmode             ; Go to next submode.
     JSR TurnOffAllVideo
     JSR HideAllSprites
@@ -172,7 +172,7 @@ UpdateMode0Demo_Sub2:
 
 @LoopNameByte:
     LDA ($04), Y
-    STA Names, Y
+    STA SaveSlotNames, Y
     DEY
     BPL @LoopNameByte
     INC GameMode                ; Go to the next game mode (Menu).

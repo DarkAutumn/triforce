@@ -235,7 +235,7 @@ InitCaveContinue:
 
     ; Point to the front of the first textbox line.
     LDA TextboxLineAddrsLo+2
-    STA PersonTextPtr
+    STA PersonTextVramLo
     RTS
 
 ; Params:

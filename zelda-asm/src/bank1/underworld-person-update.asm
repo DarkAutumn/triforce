@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/underworld-person-update.asm BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 1170-1326
-; SUBJECTS: (none)
+; SUBJECTS: Person
 ; TOPIC:    Dungeon old man update, fireballs when attacked, more-bombs offer
 ; SEE ALSO:
 ; KEY FACTS:
@@ -58,7 +58,7 @@ Person_CheckCollisions:
     ; fireballs, then reset the metastate, so that he's not dead.
     LDA ObjMetastate+1
     BEQ :+
-    STA PersonFireballsEnabled
+    STA IsPersonFireballsEnabled
     LDA #$00
     STA ObjMetastate+1
 :
@@ -147,18 +147,18 @@ UpdateUnderworldPersonComplexState_SenseLink:
 :
     ; Post 100 rupees more to subtract.
     CLC
-    ADC RupeesToSubtract
-    STA RupeesToSubtract
+    ADC InvRupeesToSubtract
+    STA InvRupeesToSubtract
 
     ; Play the "key taken" sound effect.
     LDA #$08
     STA Tune0Request
 
     ; Increase max bombs by 4, set the amount on hand to the max.
-    LDA MaxBombs
+    LDA InvMaxBombs
     CLC
     ADC #$04
-    STA MaxBombs
+    STA InvMaxBombs
     STA InvBombs
 
     ; Go mark this offer taken.

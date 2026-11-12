@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/bubble-keese.asm       BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 1095-1237
-; SUBJECTS: (none)
+; SUBJECTS: Flyer
 ; TOPIC:    Bubble and Keese init/update, Keese flight
 ; SEE ALSO:
 ; KEY FACTS:
@@ -32,7 +32,7 @@ InitBlueKeese:
     STA ObjDir, X
     JSR ResetFlyerState
     LDA #$C0
-    STA FlyingMaxSpeedFrac
+    STA FlyerMaxSpeedFrac
     LDA #$1F
     STA Flyer_ObjSpeed, X
     RTS
@@ -94,7 +94,7 @@ UpdateBubble:
     ; Subtract $2C from the type to get the value for blocking: 0 or 1
     SEC
     SBC #$2C
-    STA SwordBlocked
+    STA IsSwordBlocked
     RTS
 
 ; Params:

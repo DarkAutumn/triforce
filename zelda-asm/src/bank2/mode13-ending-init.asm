@@ -46,7 +46,7 @@ InitMode13_Sub0:
 UpdateEndGameCurtainEffect:
     LDA ObjTimer
     BNE @Exit
-    LDA Song
+    LDA CurSong
     BNE @Exit
     JSR UpdateWorldCurtainEffect_Bank2
 
@@ -79,7 +79,7 @@ InitMode13_Sub1:
     ; Point to the front of the first textbox line,
     ; and reset the current character index.
     LDA #$A4
-    STA TextboxCharPtr
+    STA TextboxCharVramLo
     LDA #$00
     STA TextboxCharIndex
     STA ObjState+1
@@ -139,11 +139,11 @@ UpdateZeldaTextbox:
 :
     ; Replace the low byte of the VRAM address with the one
     ; where the next character should be written.
-    LDA TextboxCharPtr
+    LDA TextboxCharVramLo
     STA DynTileBuf+1
 
     ; Increment the low VRAM address for the next character.
-    INC TextboxCharPtr
+    INC TextboxCharVramLo
     LDA #<ThanksText
     STA $00
     LDA #>ThanksText
@@ -196,7 +196,7 @@ UpdateZeldaTextbox:
     ;   1: $E4: front of the third line
     ;   2: $A4: front of the first line
     LDA ThanksTextboxLineAddrsLo, Y
-    STA TextboxCharPtr
+    STA TextboxCharVramLo
 
     ; If index = 2, then we've reached the end of the text,
     ; and low VRAM address is moved to the front of the first line.

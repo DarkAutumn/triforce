@@ -134,13 +134,13 @@ HandleShotBlocked:
     ; For both these reasons, save state and restore it afterward.
     LDA ObjState
     PHA
-    LDA UsedCandle
+    LDA HasUsedCandle
     PHA
     LDA #$00
-    STA UsedCandle
+    STA HasUsedCandle
     JSR WieldCandle
     PLA
-    STA UsedCandle
+    STA HasUsedCandle
     PLA
     STA ObjState
 

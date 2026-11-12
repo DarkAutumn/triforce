@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank7/shove.asm              BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 2323-2494
-; SUBJECTS: (none)
+; SUBJECTS: Obj
 ; TOPIC:    Knockback movement
 ; SEE ALSO:
 ; KEY FACTS:
@@ -101,7 +101,7 @@ ShoveMoveMin:
     AND #$0F
     STA $0F
     JSR GetCollidingTileMoving
-    CMP ObjectFirstUnwalkableTile
+    CMP RoomFirstUnwalkableTile
     BCS ResetShoveInfo
 
 @CheckBoundary:

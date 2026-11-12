@@ -25,7 +25,7 @@ CheckUnderworldSecrets:
     JSR CheckHasLivingMonsters
 
     ; If there's no secret in this room, return.
-    LDA LevelBlockAttrsByteF
+    LDA RoomAttrsF
     AND #$07                    ; Secret trigger
     BEQ CheckSecretTriggerNone
 
@@ -34,7 +34,7 @@ CheckUnderworldSecrets:
     BCC CheckSecretTriggerNone
 
     ; If the secret is not "foes for an item", then we're done.
-    LDA LevelBlockAttrsByteF
+    LDA RoomAttrsF
     AND #$07                    ; Secret trigger
     CMP #$07
     BNE CheckSecretTriggerNone
@@ -93,15 +93,15 @@ CheckHasLivingMonsters:
     DEY
     BPL @Loop
     LDA #$00
-    STA LinkParalyzed
-    INC RoomAllDead
+    STA IsLinkParalyzed
+    INC IsRoomAllDead
 
 @Exit:
     RTS
 
 CheckSecretTriggerAllDead:
     ; If there are still monsters, not counting bubbles, then return C=0.
-    LDA RoomAllDead
+    LDA IsRoomAllDead
     BEQ ReturnFalse
 
 TriggerShutters:
@@ -190,7 +190,7 @@ CheckSecretTriggerBlockStairs:
 CheckSecretTriggerLastBoss:
     ; If the last boss was defeated, then
     ; go trigger shutters to open, and return C=1.
-    LDA LastBossDefeated
+    LDA InvPowerTriforce
     BNE TriggerShutters
 
     ; Else return C=0.

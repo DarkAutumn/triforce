@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/submenu-states.asm     BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 155-550
-; SUBJECTS: (none)
+; SUBJECTS: Submenu
 ; TOPIC:    Submenu state machine, triforce display
 ; SEE ALSO:
 ; KEY FACTS:
@@ -35,7 +35,7 @@ UpdateMenuAndMeters:
     JMP UpdateHeartsAndRupees
 
 UpdateMenu:
-    LDA MenuState
+    LDA SubmenuState
     LDY CurLevel
     BEQ :+
 
@@ -83,7 +83,7 @@ UpdateMenuCommon1:
     STA SwitchNameTablesReq
     LDA #$01                    ; 1 pixel
     JSR MovePositionMarkers
-    INC MenuState               ; Set menu state 2.
+    INC SubmenuState               ; Set menu state 2.
 
     ; SubmenuScrollProgress begins at $2B. Each frame it will be
     ; decremented. It encodes a submenu row index in bits 1 to 7,
@@ -107,7 +107,7 @@ UpdateMenuCommon1:
     ; to build the big sheet map in the submenu. It will range
     ; from $7F to 0.
     LDA #$7F
-    STA CurScanRoomId
+    STA SubmenuScanRoomId
 
 UpdateMenu_Return:
     RTS
@@ -120,7 +120,7 @@ UpdateMenuCommon2:
 SelectTransferBufAndIncState:
     STA TileBufSelector
 :
-    INC MenuState
+    INC SubmenuState
     RTS
 
 UpdateMenuCommon3:
@@ -167,7 +167,7 @@ UpdateMenuScrollDownUW:
     ; VScroll reached $41.
     ; Advance the submenu state.
     ; If in OW or in a cellar, we're done. Return.
-    INC MenuState
+    INC SubmenuState
     LDA CurLevel
     BEQ @Exit
     LDA GameMode
@@ -250,7 +250,7 @@ UpdateMenuActive:
     CMP #$88
     BNE :+
     JSR EndGameMode
-    STA MenuState
+    STA SubmenuState
     LDA #$08
     STA GameMode
     LDA #$00
@@ -271,7 +271,7 @@ UpdateMenuActive:
     STA Sprites+88
     PLA                         ; Restore Link's position marker's Y.
     STA Sprites+84
-    INC MenuState
+    INC SubmenuState
     RTS
 
 UpdateMenuScrollUp:
@@ -301,7 +301,7 @@ UpdateMenuScrollUp:
     ; and submenu state.
     LDA #$00
     STA CurVScroll
-    STA MenuState
+    STA SubmenuState
 
     ; Move the position markers 2 pixels down, because we
     ; overshot and reached vertical scroll $F2.
@@ -424,5 +424,5 @@ UpdateMenuStartOW:
     ; When it becomes 0, we're done.
     ASL $06
     BNE @LoopPiece
-    INC MenuState
+    INC SubmenuState
     RTS

@@ -100,7 +100,7 @@ UpdateGoriya:
 :
     ; Reset the "wants to shoot" flag.
     LDA #$00
-    STA ObjWantsToShoot, X
+    STA Shooter_ObjWantsToShoot, X
 
     ; If the distance chosen < $51, then
     ; set the "wants to shoot" flag to 1,
@@ -108,7 +108,7 @@ UpdateGoriya:
     LDA $0000, Y
     CMP #$51
     BCS L_Walker_SetInputDirAndTryShootingBoomerang
-    INC ObjWantsToShoot, X
+    INC Shooter_ObjWantsToShoot, X
     LDA $0002, Y
     STA ObjDir, X
 
@@ -164,7 +164,7 @@ L_Walker_SetInputDirAndTryShootingBoomerang:
 
     ; Reset the "wants to shoot" flag.
     LDA #$00
-    STA ObjWantsToShoot, X
+    STA Shooter_ObjWantsToShoot, X
 
     ; Have the shot keep track of the monster.
     TXA

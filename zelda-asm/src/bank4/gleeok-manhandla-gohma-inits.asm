@@ -73,36 +73,36 @@ InitGleeok:
     ; * neck 3 Y
     ;
     ; Leave the other other speed flags 0 (accelerate).
-    STX Gleook_HeadInfo0+GLEEOK_SPEEDX
-    STX Gleook_HeadInfo1+GLEEOK_SPEEDY
-    STX Gleook_HeadInfo2+GLEEOK_SPEEDX
-    STX Gleook_HeadInfo3+GLEEOK_SPEEDY
+    STX Gleeok_HeadInfo0+GleeokHead_SpeedFlagX
+    STX Gleeok_HeadInfo1+GleeokHead_SpeedFlagY
+    STX Gleeok_HeadInfo2+GleeokHead_SpeedFlagX
+    STX Gleeok_HeadInfo3+GleeokHead_SpeedFlagY
 
     ; Set the V-direction counter of all necks to 3.
     LDA #$03
-    STA Gleook_HeadInfo0+GLEEOK_DIRCOUNTERV
-    STA Gleook_HeadInfo1+GLEEOK_DIRCOUNTERV
-    STA Gleook_HeadInfo2+GLEEOK_DIRCOUNTERV
-    STA Gleook_HeadInfo3+GLEEOK_DIRCOUNTERV
+    STA Gleeok_HeadInfo0+GleeokHead_DirCounterV
+    STA Gleeok_HeadInfo1+GleeokHead_DirCounterV
+    STA Gleeok_HeadInfo2+GleeokHead_DirCounterV
+    STA Gleeok_HeadInfo3+GleeokHead_DirCounterV
 
     ; Set the H-direction counter of all necks to 6.
     ASL
-    STA Gleook_HeadInfo0+GLEEOK_DIRCOUNTERH
-    STA Gleook_HeadInfo1+GLEEOK_DIRCOUNTERH
-    STA Gleook_HeadInfo2+GLEEOK_DIRCOUNTERH
-    STA Gleook_HeadInfo3+GLEEOK_DIRCOUNTERH
+    STA Gleeok_HeadInfo0+GleeokHead_DirCounterH
+    STA Gleeok_HeadInfo1+GleeokHead_DirCounterH
+    STA Gleeok_HeadInfo2+GleeokHead_DirCounterH
+    STA Gleeok_HeadInfo3+GleeokHead_DirCounterH
 
     ; Set neck 1 head delay timer to 12.
     ASL
-    STA Gleook_HeadInfo1+GLEEOK_DELAY
+    STA Gleeok_HeadInfo1+GleeokHead_Delay
 
     ; Set neck 2 head delay timer to 24.
     ASL
-    STA Gleook_HeadInfo2+GLEEOK_DELAY
+    STA Gleeok_HeadInfo2+GleeokHead_Delay
 
     ; Set neck 3 head delay timer to 36.
-    ADC Gleook_HeadInfo1+GLEEOK_DELAY
-    STA Gleook_HeadInfo3+GLEEOK_DELAY
+    ADC Gleeok_HeadInfo1+GleeokHead_Delay
+    STA Gleeok_HeadInfo3+GleeokHead_Delay
 
     ; Leave neck 0 head delay timer as 0.
     RTS
@@ -205,7 +205,7 @@ InitGleeokHead:
 
     ; Set flying speed $BF and maximum $E0.
     LDA #$E0
-    STA FlyingMaxSpeedFrac
+    STA FlyerMaxSpeedFrac
     LDA #$BF
     STA Flyer_ObjSpeed, X
     RTS

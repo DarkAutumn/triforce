@@ -69,7 +69,7 @@ DemoPatternVramAddrs:
 
 TransferDemoPatterns:
     JSR TurnOffAllVideo
-    LDA PpuStatus_2002          ; Clear address latch.
+    LDA PpuStatus          ; Clear address latch.
 
 @LoopBlock:
     ; Loop over each block.
@@ -85,7 +85,7 @@ TransferDemoPatterns:
     LDA DemoPatternBlockSizes, X
     STA $02
     LDA DemoPatternVramAddrs, X
-    STA PpuAddr_2006
+    STA PpuAddr
     INX
     LDA DemoPatternBlockAddrs, X
     STA $01
@@ -99,7 +99,7 @@ TransferDemoPatterns:
     CMP #$02
     BNE @LoopBlock
     LDA #$A5
-    STA TransferredDemoPatterns
+    STA HasDemoPatterns
     LDA #$00
     STA PatternBlockIndex
     RTS
@@ -110,13 +110,13 @@ TransferDemoPatterns:
 ; A: low byte of desination VRAM address
 ;
 TransferPatternBlock_Bank1:
-    STA PpuAddr_2006
+    STA PpuAddr
     LDY #$00
 
 @Loop:
     ; Load and transfer one byte to VRAM.
     LDA ($00), Y
-    STA PpuData_2007
+    STA PpuData
 
     ; Increment the 16-bit address at [00:01].
     LDA $00

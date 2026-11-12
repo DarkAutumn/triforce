@@ -145,8 +145,8 @@ UpdateModeEandF_Idle:
     LDA #$70                    ; Name cursor X is $70.
     STA Sprites+7
     STA ObjX
-    LDA #$00                    ; Reset InitializedNameField and NameCharOffset.
-    STA InitializedNameField
+    LDA #$00                    ; Reset IsNameFieldInitialized and NameCharOffset.
+    STA IsNameFieldInitialized
     STA NameCharOffset
     LDY CurSaveSlot
     CPY #$03

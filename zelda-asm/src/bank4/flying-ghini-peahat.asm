@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/flying-ghini-peahat.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 3976-4104
-; SUBJECTS: (none)
+; SUBJECTS: Flyer
 ; TOPIC:    Flying Ghini and Peahat
 ; SEE ALSO:
 ; KEY FACTS:

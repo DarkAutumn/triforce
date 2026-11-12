@@ -87,7 +87,7 @@ UpdateRockOrGravestone:
 
     ; Store current room ID.
     LDA RoomId
-    STA TileObjRoomId, X
+    STA Rock_ObjRoomId, X
 
     ; Change from a gravestone tile to the gray floor tile.
     ; The gravestone object will be drawn above it.
@@ -122,7 +122,7 @@ UpdateRockOrGravestone:
     ; Flag the room visited.
     LDA RoomId
     PHA
-    LDA TileObjRoomId, X
+    LDA Rock_ObjRoomId, X
     STA RoomId
     JSR MarkRoomVisited
     PLA
@@ -154,7 +154,7 @@ UpdateRockOrGravestone:
     STA $00
 
     ; Get the position of the stairs in this room, and set it for the object.
-    LDY TileObjRoomId, X
+    LDY Rock_ObjRoomId, X
     JSR GetShortcutOrItemXYForRoom
     STA ObjX, X
     STY ObjY, X
@@ -285,7 +285,7 @@ SecretQuestNumbers:
 ;
 IsQuestSecretMismatch:
     ; The quest secret is in the high two bits.
-    LDA LevelBlockAttrsByteF
+    LDA RoomAttrsF
     LSR
     LSR
     LSR

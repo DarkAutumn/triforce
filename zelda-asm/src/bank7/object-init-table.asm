@@ -22,7 +22,7 @@ InitObject:
     ; then go initialize the object.
     LDA CurLevel
     BNE @NormalSpawn
-    LDA LevelBlockAttrsByteF
+    LDA RoomAttrsF
     AND #$08                    ; Enemies from edges
     BEQ @NormalSpawn
     LDA ObjType, X

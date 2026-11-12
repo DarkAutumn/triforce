@@ -84,7 +84,7 @@ UpdateMode13WinGame_Sub0_Flash:
     ; Set a long timer of $40 ($280 frames) for the whole duration
     ; of the next submode.
     LDA #$40
-    STA EndingFlashLongTimer
+    STA EndingPeaceLongTimer
     INC GameSubmode
     JMP @ChangePalette
 
@@ -137,14 +137,14 @@ DrawLinkZeldaTriforces:
     RTS
 
 UpdateMode13WinGame_Sub1:
-    LDA EndingFlashLongTimer
+    LDA EndingPeaceLongTimer
     BEQ @AdvanceSubmode
     JSR HideAllSprites
 
     ; Characters stop emitting when the long timer is $10.
     ; So, keep showing Link and Zelda until it reaches 4.
     ; Then hide them and wait until it reaches 0.
-    LDA EndingFlashLongTimer
+    LDA EndingPeaceLongTimer
     CMP #$04
     BCC @Exit
     JSR DrawLinkZeldaTriforces

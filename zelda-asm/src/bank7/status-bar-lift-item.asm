@@ -41,11 +41,11 @@ DrawStatusBarItemsAndEnsureItemSelected:
     ; it's a pseudo-slot used for checking boomerangs.
     LDX SelectedItemSlot
     BEQ DrawStatusBarBoomerang  ; If pseudo-slot zero is chosen, then go check boomerangs.
-    LDA Items, X
+    LDA InvItems, X
     BEQ CheckMissingItem        ; If there's no item in the current item slot, then go check for potions and letters.
     CPX #$0F                    ; We have an item. See if it's in the letter slot.
     BNE DrawStatusBarItemB      ; If it's not the letter slot, then go draw it.
-    LDY Potion                  ; It's in the letter slot. See if we have a potion.
+    LDY InvPotion                  ; It's in the letter slot. See if we have a potion.
     BNE DrawStatusBarPotion     ; If we have a potion, then go set SelectedItemSlot to its slot, and draw it.
     LSR                         ; Otherwise, we only have a letter.
     ORA #$01                    ; Use only 1 as the palette attribute.
@@ -65,7 +65,7 @@ DrawStatusBarBoomerang:
     LDX #$1E                    ; Check the magic boomerang first.
 
 @LoopBoomerang:
-    LDA Items, X
+    LDA InvItems, X
     BNE DrawStatusBarItemB      ; If we have one of the boomerangs, then go draw it.
     DEX
     CPX #$1C
@@ -74,7 +74,7 @@ DrawStatusBarBoomerang:
     JMP EnsureSelectedItem      ; No boomerangs. Go search for an occupied slot starting at 0.
 
 FindItemOrDrawSword:
-    LDA Items, X
+    LDA InvItems, X
 
     ; If there's an item in this slot, then SelectedItemSlot was already
     ; set. Go handle the sword instead of drawing the item.
@@ -92,7 +92,7 @@ EnsureSelectedItem:
 DrawStatusBarSword:
     ; Handle the sword.
     LDX #$00
-    LDA Items, X
+    LDA InvItems, X
     BEQ L1E847_Exit             ; If there's no sword, then return.
     LDA #$1F                    ; Set X and Y coordinates for "A" item in status bar: ($94, $1F).
     STA $01
@@ -152,7 +152,7 @@ DrawLinkLiftingItem:
     LDX #$13                    ; Now deal with item object.
     JSR AnimateItemObject
     DEC LeftAlignHalfWidthObj
-    LDA ProcessedNarrowObj
+    LDA IsDrawnItemNarrow
     BEQ L1E847_Exit             ; If this item is half-width,
 
     ; Then lift with one hand.

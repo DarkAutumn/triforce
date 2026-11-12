@@ -713,6 +713,20 @@ def bank_role(prog, mod, chunk):
 
 # ---- gen ------------------------------------------------------------------------------------------------
 
+RE_DEFLINE = re.compile(r"^(%s)\s*(:=|=)\s*(\S+)\s*(;.*)?$" % IDENT)
+
+
+def align_definition(line):
+    """`Name := $addr      ; meaning` with the `;` at column 37 (one space when the definition is longer)."""
+    m = RE_DEFLINE.match(line)
+    if not m:
+        return line
+    d = "%s %s %s" % (m.group(1), m.group(2), m.group(3))
+    if not m.group(4):
+        return d
+    return (d.ljust(36) if len(d) < 36 else d + " ") + m.group(4)
+
+
 def wrap_items(prefix, cont, items, width=108):
     lines, cur = [], prefix
     for i, it in enumerate(items):
@@ -788,6 +802,27 @@ def upstream_names(prog, base, ren):
             sym_up[ren.sym(name)] = name
     return lab_up, sym_up
 
+def upstream_to_current(root=None):
+    """{upstream name: current name} for global labels and `:=` symbols of the original import.
+
+    For tools that must keep working across renames: write the upstream name once, look the current
+    one up here.  Names the original defined in more than one bank (`Exit`) are left out.
+    """
+    root = root or ROOT
+    base, ren = load_baseline(root), Renames(root)
+    out, dup = {}, set()
+    for b in base["labels"]:
+        if b["kind"] == "global":
+            if b["name"] in out:
+                dup.add(b["name"])
+            out[b["name"]] = ren.glob(b["mod"], b["name"])
+    for name in dup:
+        del out[name]
+    for name in base["symbols"]:
+        out[name] = ren.sym(name)
+    return out
+
+
 
 def generate(root):
     """Returns {absolute path: text} for every generated or regenerated file."""
@@ -858,6 +893,14 @@ def generate(root):
                     " ".join(x for x in f.get("TOPIC", [""]) if x).replace("|", "\\|")))
             rows.append("")
         out[os.path.join(root, "index", "files.md")] = "\n".join(rows)
+
+    # src/*.inc: align the meaning comment of every definition at column 37
+    for f in sorted(os.listdir(prog.src)):
+        if f.endswith(".inc"):
+            text = prog.read(f)
+            new = "\n".join(align_definition(line) for line in text.split("\n"))
+            if new != text:
+                out[prog._abs(f)] = new
 
     # markdown: reference links and tables of contents
     for path in md_files(root):
@@ -1384,7 +1427,7 @@ def cmd_rename(args):
         return 0
 
     # rewrite source files
-    backup, changed = {}, {}
+    backup, changed, skipped = {}, {}, []
     file_lines = {}
     shared = set()
     counts = defaultdict(int)
@@ -1406,6 +1449,9 @@ def cmd_rename(args):
                 table = local
             code = sub_idents(ln.code, table, prose=False)
             comment = sub_idents(ln.comment, table, prose=True)
+            for m in RE_CODE_TOKEN.finditer(ln.comment):
+                if m.group(1) in table and RE_PLAIN_WORD.match(m.group(1)):
+                    skipped.append("%s:%d: %s -> %s" % (prog.rel(ln.file), ln.no, m.group(1), table[m.group(1)]))
             owner = prog.scope_of(mod, li)
             cm = cheap_map.get((mod.id, owner.li if owner else -1))
             new = code + comment
@@ -1495,6 +1541,13 @@ def cmd_rename(args):
     print("rename: %d labels/symbols and %d cheap labels renamed in %d file(s)" % (
         sum(1 for e in ents if e[0] != "cheap"), sum(1 for e in ents if e[0] == "cheap"),
         sum(1 for p in changed if p != ren.path)))
+    if skipped:
+        note = os.path.join(root, "work", "rename-skipped.txt")
+        os.makedirs(os.path.dirname(note), exist_ok=True)
+        with open(note, "a", encoding="utf-8") as f:
+            f.write("\n".join(skipped) + "\n")
+        print("rename: %d comment mention(s) of renamed single-word names were left alone (a word such as "
+              "`Exit` may be prose); review %s" % (len(skipped), os.path.relpath(note, root)))
     return 0
 
 

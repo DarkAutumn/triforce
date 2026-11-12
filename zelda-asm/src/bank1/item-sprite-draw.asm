@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/item-sprite-draw.asm   BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 5247-5455
-; SUBJECTS: (none)
+; SUBJECTS: Anim
 ; TOPIC:    Item frame tiles, item sprite writers
 ; SEE ALSO:
 ; KEY FACTS:
@@ -60,13 +60,13 @@ Anim_WriteStaticItemSpritesWithAttributes:
 ; [0F]: flip horizontally
 ;
 ; Returns:
-; [52]: ProcessedNarrowObj
+; [52]: IsDrawnItemNarrow
 ;
 Anim_WriteItemSprites:
     TYA                         ; Save the item slot passed in Y.
     PHA
     LDA #$00
-    STA ProcessedNarrowObj
+    STA IsDrawnItemNarrow
     LDY RollingSpriteIndex      ; Determine the left and right sprite offsets for current sprite index.
     LDA SpriteOffsets, Y
     STA LeftSpriteOffset
@@ -88,7 +88,7 @@ Anim_WriteItemSprites:
 ; [0344]: RightSpriteOffset
 ;
 ; Returns:
-; [52]: ProcessedNarrowObj
+; [52]: IsDrawnItemNarrow
 ;
 Anim_WriteSpecificItemSprites:
     STX $08                     ; Store the object index in [08].
@@ -124,7 +124,7 @@ Anim_WriteSpecificItemSprites:
     ADC #$04
     STA $00
 :
-    INC ProcessedNarrowObj      ; Record that this is a half-width object.
+    INC IsDrawnItemNarrow      ; Record that this is a half-width object.
     LDA #$00                    ; And mark it as such.
     STA $07
     JMP Anim_WriteSpritePair    ; Finished. Go write sprites.

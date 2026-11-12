@@ -181,12 +181,12 @@ WieldCandle:
     LDA InvCandle
     CMP #$01
     BNE :+
-    LDA UsedCandle
+    LDA HasUsedCandle
     BNE L69BE_Exit
 :
     ; Set the candle used.
     LDA #$01
-    STA UsedCandle
+    STA HasUsedCandle
 
     ; Reset the new fire object's movement info.
     ; Set quarter speed (q-speed) to $20 (half a pixel a frame).
@@ -269,7 +269,7 @@ UpdateBombFlashEffect:
     ;
     ; Start by setting A register to the PPU mask shifted right to
     ; throw away the grayscale bit.
-    LDA CurPpuMask_2001
+    LDA CurPpuMask
     LSR
 
     ; Then, based on the timer value, shift in a 1 or 0 in the low bit.
@@ -297,7 +297,7 @@ UpdateBombFlashEffect:
 @SetMask:
     ; Only at times $16, $11, $12, $D do we commit the mask
     ; we calculated.
-    STA CurPpuMask_2001
+    STA CurPpuMask
 
 @Exit:
     RTS

@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/room-history-ow.asm    BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 3515-3655
-; SUBJECTS: (none)
+; SUBJECTS: Unused
 ; TOPIC:    Mode B/C/9 init tables; overworld room history and kill counts
 ; SEE ALSO:
 ; KEY FACTS:

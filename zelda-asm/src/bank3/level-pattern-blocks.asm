@@ -87,7 +87,7 @@ PatternBlockSizesUW:
 
 TransferLevelPatternBlocks:
     JSR TurnOffAllVideo
-    LDA PpuStatus_2002
+    LDA PpuStatus
     JSR ResetPatternBlockIndex
     LDA CurLevel
     BNE TransferLevelPatternBlocksUW    ; Go handle UW levels.
@@ -193,15 +193,15 @@ TransferPatternBlock_Bank3:
     ASL
     TAX
     LDA PatternBlockPpuAddrs, X
-    STA PpuAddr_2006
+    STA PpuAddr
     INX
     LDA PatternBlockPpuAddrs, X
-    STA PpuAddr_2006
+    STA PpuAddr
     LDY #$00                    ; Start copying.
 
 @LoopCopy:
     LDA ($00), Y                ; Transfer 1 byte from source pattern block in ROM to PPU.
-    STA PpuData_2007
+    STA PpuData
 
     ; Increment source address.
     LDA $00

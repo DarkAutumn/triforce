@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank4/digdogger.asm          BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 5155-5594
-; SUBJECTS: (none)
+; SUBJECTS: Digdogger
 ; TOPIC:    Digdogger: flute split, update, move, collisions, draw
 ; SEE ALSO:
 ; KEY FACTS:
@@ -54,7 +54,7 @@ L_Digdogger_AfterFlute:
     ; Then go check collisions as a big digdogger.
     LDA #$40
     STA ObjTimer, X
-    INC UsedFlute
+    INC FluteUsedState
     JMP CheckBigDigdoggerCollisions
 
 @SplitUp:
@@ -82,7 +82,7 @@ L_Digdogger_AfterFlute:
 
 @MakeChildren:
     ; Decrement flute state to 1.
-    DEC UsedFlute
+    DEC FluteUsedState
 
     ; Loop to make a number of child digdoggers.
     LDA ChildDigdoggerCount
@@ -150,7 +150,7 @@ UpdateDigdogger:
 
     ; If the flute was used, then go start splitting up,
     ; or handling a child digdogger.
-    LDY UsedFlute
+    LDY FluteUsedState
     BNE L_Digdogger_AfterFlute
 
 L_Digdogger_Turn:

@@ -27,7 +27,7 @@ InitPatra:
     LDA #$1F
     STA Flyer_ObjSpeed, X
     LDA #$40
-    STA FlyingMaxSpeedFrac
+    STA FlyerMaxSpeedFrac
     STA SampleRequest           ; Play Digdogger/Manhandla/Patra roar.
 
     ; Set object timer to $FF. When it runs out, the maneuver will be switched.

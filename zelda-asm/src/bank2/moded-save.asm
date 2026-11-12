@@ -31,14 +31,14 @@ SaveSlotHeartsAddrsHi:
     .HIBYTES SaveSlotHearts+4
 
 ProfileNameAddrsLo:
-    .LOBYTES Names+0
-    .LOBYTES Names+8
-    .LOBYTES Names+16
+    .LOBYTES SaveSlotNames+0
+    .LOBYTES SaveSlotNames+8
+    .LOBYTES SaveSlotNames+16
 
 ProfileNameAddrsHi:
-    .HIBYTES Names+0
-    .HIBYTES Names+8
-    .HIBYTES Names+16
+    .HIBYTES SaveSlotNames+0
+    .HIBYTES SaveSlotNames+8
+    .HIBYTES SaveSlotNames+16
 
 UpdateModeDSave:
     LDA GameSubmode
@@ -60,7 +60,7 @@ UpdateModeDSave_Sub0:
     LDY #$27                    ; Copy Items block ($28 bytes) from profile to file B.
 
 @CopyItems:
-    LDA Items, Y
+    LDA InvItems, Y
     STA ($C0), Y
     DEY
     BPL @CopyItems
@@ -162,9 +162,9 @@ CopyFileBToFileA:
     ASL
     TAY
     LDA #$00
-    STA FileAChecksums, Y
+    STA SaveFileAChecksums, Y
     INY
-    STA FileAChecksums, Y
+    STA SaveFileAChecksums, Y
     JSR FetchFileBAddressSet
     JSR FetchFileAAddressSet    ; This puts $067F in [$0E:0F].
     LDY #$27                    ; Copy Items block ($28 bytes) from file B to file A.
@@ -238,10 +238,10 @@ CopyFileBToFileA:
     ASL
     TAY
     LDA FileBChecksums, Y
-    STA FileAChecksums, Y
+    STA SaveFileAChecksums, Y
     INY
     LDA FileBChecksums, Y
-    STA FileAChecksums, Y
+    STA SaveFileAChecksums, Y
     LDY CurSaveSlot
     LDA #$FF                    ; File B has been committed.
     STA IsSaveFileBCommitted, Y

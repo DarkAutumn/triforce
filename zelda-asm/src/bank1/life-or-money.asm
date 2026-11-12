@@ -118,8 +118,8 @@ UpdateUnderworldPersonLifeOrMoneyState_2:
 @PayWithMoney:
     ; Post 50 rupees more to subtract, and go flag this offer taken.
     CLC
-    ADC RupeesToSubtract
-    STA RupeesToSubtract
+    ADC InvRupeesToSubtract
+    STA InvRupeesToSubtract
     JMP @EndLifeOrMoney
 
 @PayWithHeartContainer:

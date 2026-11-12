@@ -23,7 +23,7 @@
 
 WieldSword:
     ; If there's no sword, return.
-    LDA Items
+    LDA InvSword
     BEQ L14DFF_Exit
 
     ; Switch to the sword slot.
@@ -119,7 +119,7 @@ L14E71_Exit:
 
 WieldArrow:
     ; If there's no bow, return.
-    LDA Bow
+    LDA InvBow
     BEQ WieldNothing
 
     ; Switch to the arrow slot.
@@ -138,7 +138,7 @@ WieldArrow:
     JSR PlayEffect
 
     ; Post a rupee to subtract.
-    INC RupeesToSubtract
+    INC InvRupeesToSubtract
 
     ; Arrows start in state $10.
     LDA #$10
@@ -184,17 +184,17 @@ WieldFood:
 
 WieldPotion:
     ; If there's nothing in the item slot, return.
-    LDA Potion
+    LDA InvPotion
     BEQ L14EC6_Exit
 
     ; We're using one potion. So decrement the item value.
-    DEC Potion
+    DEC InvPotion
 
     ; Flag that we're filling hearts and involuntarily paused.
     LDA #$01
     STA World_IsFillingHearts
     LDA #$02
-    STA Paused
+    STA PauseState
 
 L14EC6_Exit:
     RTS

@@ -26,7 +26,7 @@ InitMode11:
     JSR DrawStatusBarItemsAndEnsureItemSelected
     JSR MaskCurPpuMaskGrayscale
     LDA #$00
-    STA Paused
+    STA PauseState
     STA HeartPartial
     JSR FormatStatusBarText
     INC GameSubmode

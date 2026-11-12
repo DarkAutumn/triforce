@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank1/cave-shop.asm          BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 678-856
-; SUBJECTS: (none)
+; SUBJECTS: Cave
 ; TOPIC:    Shop purchase, item giveaway, heart requirement, door repair charge
 ; SEE ALSO:
 ; KEY FACTS:
@@ -31,10 +31,10 @@ UpdateCavePersonState_TalkOrShopOrDoorCharge:
     BNE @Exit
 
     ; Post 20 rupees to subtract.
-    LDA RupeesToSubtract
+    LDA InvRupeesToSubtract
     CLC
     ADC #$14
-    STA RupeesToSubtract
+    STA InvRupeesToSubtract
 
     ; Mark this secret taken.
     JSR SetRoomFlagUWItemState
@@ -50,7 +50,7 @@ UpdateCavePersonState_TalkOrShopOrDoorCharge:
     ; - money game
     ;
     ; If rupees are decreasing, then return.
-    LDA RupeesToSubtract
+    LDA InvRupeesToSubtract
     BNE @Exit
 
     ; Loop over each item from 2 to 0.

@@ -37,7 +37,7 @@ DriveTune1:
     LDA Tune1Request
     BMI @SilenceThenPlay
     BNE @ChangeTune
-    LDA Tune1
+    LDA CurTune1
     BNE @KeepPlaying
     RTS
 
@@ -46,7 +46,7 @@ DriveTune1:
     LDA #$80
 
 @ChangeTune:
-    STA Tune1
+    STA CurTune1
     LDY #$00
 :
     ; Get the index for the song bit: 1 to 8.
@@ -54,15 +54,15 @@ DriveTune1:
     LSR
     BCC :-
     LDA TuneScripts1-1, Y
-    STA TunePtr1
+    STA Tune1ScriptOffset
     LDA #$01
     STA NoteCounterTune1
 
 @KeepPlaying:
     DEC NoteCounterTune1
     BNE @CheckVibrate
-    LDY TunePtr1
-    INC TunePtr1
+    LDY Tune1ScriptOffset
+    INC Tune1ScriptOffset
     LDA TuneScripts1, Y
     BMI @PrepNote
     BNE @PlayNote
@@ -70,31 +70,31 @@ DriveTune1:
     ; We've reached the end of the tune.
     ;
     ; If tune is "Game Over", then go play it again.
-    LDA Tune1
+    LDA CurTune1
     CMP #$40
     BEQ @ChangeTune
     LDX #$90
-    STX Sq1Duty_4004
+    STX Sq1Duty
     LDX #$18
-    STX Sq1Length_4007
+    STX Sq1Length
     LDX #$00
-    STX Tune1
-    STX Sq1Timer_4006
+    STX CurTune1
+    STX Sq1Timer
     RTS
 
 @PrepNote:
     AND #$7F
     STA NoteLengthTune1
-    LDY TunePtr1
-    INC TunePtr1
+    LDY Tune1ScriptOffset
+    INC Tune1ScriptOffset
     LDA TuneScripts1, Y
 
 @PlayNote:
     JSR EmitSquareNote1
     LDA #$7F
-    STA Sq1Sweep_4005
+    STA Sq1Sweep
     LDA #$86
-    STA Sq1Duty_4004
+    STA Sq1Duty
     LDA NoteLengthTune1
     STA NoteCounterTune1
     LDA #$1F
@@ -102,7 +102,7 @@ DriveTune1:
 
 @CheckVibrate:
     ; If the tune is not one of "flute" or "Link dying", then return.
-    LDA Tune1
+    LDA CurTune1
     AND #$90
     BEQ @Exit
     LDY CustomEnvelopeOffsetTune1
@@ -110,11 +110,11 @@ DriveTune1:
     DEC CustomEnvelopeOffsetTune1
 :
     LDA CustomEnvelopeTune1, Y
-    STA Sq1Duty_4004
+    STA Sq1Duty
     LDA NoteCounterTune1
     LDX CurNoteLowPeriodSq1
     JSR VibratePitch
-    STX Sq1Timer_4006
+    STX Sq1Timer
 
 @Exit:
     RTS
@@ -129,18 +129,18 @@ DriveSample:
     LDA SampleRequest
     BMI @ChangeSampleMid
     BNE @ChangeSampleLow
-    LDA Sample
+    LDA CurSample
     BEQ @CheckBgSample
     DEC SampleCounter
     BNE @Exit
-    LDA Sample
+    LDA CurSample
     BMI @ChangeSampleMid
     AND #$70
     BNE @ChangeSampleLow
     LDA #$00
-    STA Sample
+    STA CurSample
     LDA #$0F
-    STA ApuStatus_4015
+    STA ApuStatus
 
 @CheckBgSample:
     LDA BackgroundSample
@@ -157,8 +157,8 @@ DriveSample:
     LDX #$7F
     AND #$F0
 :
-    STX DmcCounter_4011
-    STA Sample
+    STX DmcCounter
+    STA CurSample
     TAX
     AND #$F0
     BEQ :+
@@ -171,17 +171,17 @@ DriveSample:
     LSR
     BCC :-
     LDA SampleRates-1, Y
-    STA DmcFreq_4010
+    STA DmcFreq
     LDA SampleAddrs-1, Y
-    STA DmcAddress_4012
+    STA DmcAddress
     LDA SampleLengths-1, Y
-    STA DmcLength_4013
+    STA DmcLength
     LDA #$A0
     STA SampleCounter
     LDA #$0F
-    STA ApuStatus_4015
+    STA ApuStatus
     LDA #$1F
-    STA ApuStatus_4015
+    STA ApuStatus
     RTS
 
 SampleAddrs:

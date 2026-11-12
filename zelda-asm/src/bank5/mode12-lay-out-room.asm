@@ -112,10 +112,10 @@ UpdateMode12EndLevel_Sub4:
     LDA ObjTimer
     BNE :-
     JSR HideAllSprites
-    LDA CurPpuControl_2000
+    LDA CurPpuControl
     AND #$FB                    ; Make sure VRAM address increment is 1.
-    STA CurPpuControl_2000
-    STA PpuControl_2000
+    STA CurPpuControl
+    STA PpuControl
     JMP EndGameMode12
 :
     ; Is in OW.

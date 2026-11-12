@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FILE:     bank5/border-input-mask.asm  BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 2720-2864
-; SUBJECTS: (none)
+; SUBJECTS: Link
 ; TOPIC:    Border bounds masking the A button and directions
 ; SEE ALSO:
 ; KEY FACTS:

@@ -108,9 +108,9 @@ WieldFlute:
 
 @FlagFluteUsed:
     ; Flag that we used the flute.
-    LDA UsedFlute
+    LDA FluteUsedState
     BNE L1EFCF_Exit
-    INC UsedFlute
+    INC FluteUsedState
 
 L1EFCF_Exit:
     RTS
