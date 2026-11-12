@@ -171,7 +171,10 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 
 - A cellar is a room of the level block with layout id `$3E` (tunnel) or `$3F` (treasure room); each
   level lists its cellars in the level info ([`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L726)). [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418), [`Mode11Death_Init_Sub1`](../src/bank5/mode11-death-init.asm#L73)
-- Stairs in a room lead to the first listed cellar whose A or B byte equals the room id. [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L55)
+- Stairs in a room lead to the first listed cellar whose A or B byte equals the room id. The search
+  has no end test: after the ten list bytes it goes on through the level info bytes that follow,
+  taking each as a room id (a byte `$80`-`$FF` indexes past array A or B into the next array).
+  Cellars of Q1 that no list names and that are reached this way: level 3 cellar `$0F` (found at list offset 72, exit room `$69`). [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L55)
 - A: the room Link returns to when he leaves the cellar at X < `$80`; B: the room when X >= `$80`. Link
   enters at the left ladder when he comes from room A, else at the right ladder. [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43), [`Mode9Cellar_Init_Sub8_EnterCellar`](../src/bank5/cave-cellar-enter.asm#L276)
 - C: where Link appears in the room he returns to: `X = C & $F0`, `Y = (C & $0F) * 16 + $0D`. [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43)
@@ -304,3 +307,19 @@ In Q2 the level data is patched in RAM after it is copied. [`Mode2Load_Update_Fu
   `$0A`-`$23` letters A-Z, `$24` blank, `$28` comma, `$29` `!`, `$2A` apostrophe, `$2B` `&`, `$2C` full
   stop, `$2D` double quote, `$2E` `?`, `$2F` dash. [`Chr_CommonPatternPpuAddrs`](../src/bank2/common-patterns.asm#L44), [`Chr_TransferCommonPatterns`](../src/bank2/common-patterns.asm#L54), [`Ppu_ResetRegisters`](../src/bank7/ppu-tablejump-input.asm#L42)
 - Who says which string: [`Cave_PersonTextSelectors`](../src/bank1/cave-init-person-text.asm#L71) (caves), [`Cave_HintTextSelectorsType75`](../src/bank1/cave-hint-money-game.asm#L42) and [`Cave_HintTextSelectorsOther`](../src/bank1/cave-hint-money-game.asm#L48) (hint caves), [`Person_TextSelectorsLevels1257`](../src/bank1/underworld-person-init.asm#L67), [`Person_TextSelectorsLevels3468`](../src/bank1/underworld-person-init.asm#L134) and [`Person_TextSelectorsLevel9`](../src/bank1/underworld-person-init.asm#L162) (dungeon persons). [`Person_InitUnderworld_Full`](../src/bank1/underworld-person-init.asm#L45)
+
+# Level documents (`levels/level-1.md` .. `level-9.md`)
+
+The nine level documents under `levels/` are written by hand except for four blocks that
+`tools/romdata.py --rom <image>` fills on every run from the first-quest data of this directory: the
+lines between `<!-- generated:facts -->`, `<!-- generated:map -->`, `<!-- generated:rooms -->`,
+`<!-- generated:floors -->` and the matching `<!-- /generated:... -->` line. Everything outside the
+markers is kept byte for byte; a missing document is created from a skeleton; a document that lacks a
+marker pair stops the run with exit status 1. Do not edit between the markers.
+
+- `facts`: level numbers, entrance, start, Triforce and boss rooms, cellars, door and item counts. [`LevelInfo_StartRoomId`](../src/Variables.inc#L722), [`LevelInfo_BossRoomId`](../src/Variables.inc#L728)
+- `map`: the rooms on the 16 x 8 room grid with the door between each pair of neighbours, then the
+  cellars. A level's rooms are those its submenu map shows (`lvl` in the level block listings) plus
+  the rooms of its block that no map shows and that a door joins to them. [`LevelInfo_SubmenuMapMask`](../src/Variables.inc#L729)
+- `rooms`: one table row per room and cellar: doors, monsters, item, secret, layout, notes. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- `floors`: each layout the level uses, one character per floor square. [`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L57), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)

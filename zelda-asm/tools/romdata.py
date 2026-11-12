@@ -16,9 +16,12 @@ way the game's code does, and writes:
     data/objlists.md                  monster lists
     data/room-layouts.md              room layouts, column tables, squares
     data/person-text.md               the text strings of cave and dungeon persons
+    levels/level-1.md .. level-9.md   the generated blocks of the level documents (first quest):
+                                      facts, map, rooms, floor plans; the rest of each file is kept
 
-Usage: romdata.py --rom PATH [--out DIR]
-Exit status: 0 written, 1 the source and the ROM disagree, 2 the ROM is not PRG0.
+Usage: romdata.py --rom PATH [--out DIR] [--levels DIR]
+Exit status: 0 written, 1 the source and the ROM disagree or a level document lacks a marker pair,
+2 the ROM is not PRG0.
 The output is the same on every run.  Labels are written here by their upstream names and looked
 up at run time, so the listings follow renames.  Standard library only.
 """
@@ -844,7 +847,15 @@ def write_readme(g):
     A("- A cellar is a room of the level block with layout id `$3E` (tunnel) or `$3F` (treasure room); each")
     A("  level lists its cellars in the level info (%s). %s"
       % (R("LevelInfo_CellarRoomIdArray"), RS("LayoutCellarAndAdvanceSubmode", "InitMode11_Sub1")))
-    A("- Stairs in a room lead to the first listed cellar whose A or B byte equals the room id. %s" % R("CheckWarps"))
+    A("- Stairs in a room lead to the first listed cellar whose A or B byte equals the room id. The search")
+    A("  has no end test: after the ten list bytes it goes on through the level info bytes that follow,")
+    A("  taking each as a room id (a byte `$80`-`$FF` indexes past array A or B into the next array).")
+    unl = []
+    for lv in range(1, 10):
+        lvl = Level(g, lv)
+        unl += ["level %d cellar `%s` (found at list offset %d, exit room `%s`)"
+                % (lv, hx(c), off, hx(lvl.room[c]["a"])) for c, off in sorted(lvl.unlisted.items())]
+    A("  Cellars of Q1 that no list names and that are reached this way: %s. %s" % (", ".join(unl) or "none", R("CheckWarps")))
     A("- A: the room Link returns to when he leaves the cellar at X < `$80`; B: the room when X >= `$80`. Link")
     A("  enters at the left ladder when he comes from room A, else at the right ladder. %s"
       % RS("CheckSubroom", "InitMode9_EnterCellar"))
@@ -1019,6 +1030,24 @@ def write_readme(g):
       % (R("OverworldPersonTextSelectors"), R("HintCaveTextSelectors0"), R("HintCaveTextSelectors1"),
          R("UnderworldPersonTextSelectorsA"), R("UnderworldPersonTextSelectorsB"),
          R("UnderworldPersonTextSelectorsC"), R("InitUnderworldPerson_Full")))
+    A("")
+    A("# Level documents (`levels/level-1.md` .. `level-9.md`)")
+    A("")
+    A("The nine level documents under `levels/` are written by hand except for four blocks that")
+    A("`tools/romdata.py --rom <image>` fills on every run from the first-quest data of this directory: the")
+    A("lines between `<!-- generated:facts -->`, `<!-- generated:map -->`, `<!-- generated:rooms -->`,")
+    A("`<!-- generated:floors -->` and the matching `<!-- /generated:... -->` line. Everything outside the")
+    A("markers is kept byte for byte; a missing document is created from a skeleton; a document that lacks a")
+    A("marker pair stops the run with exit status 1. Do not edit between the markers.")
+    A("")
+    A("- `facts`: level numbers, entrance, start, Triforce and boss rooms, cellars, door and item counts. %s"
+      % RS("LevelInfo_StartRoomId", "LevelInfo_BossRoomId"))
+    A("- `map`: the rooms on the 16 x 8 room grid with the door between each pair of neighbours, then the")
+    A("  cellars. A level's rooms are those its submenu map shows (`lvl` in the level block listings) plus")
+    A("  the rooms of its block that no map shows and that a door joins to them. %s" % R("LevelInfo_SubmenuMapMask"))
+    A("- `rooms`: one table row per room and cellar: doors, monsters, item, secret, layout, notes. %s"
+      % R("InitMode_EnterRoom"))
+    A("- `floors`: each layout the level uses, one character per floor square. %s" % RS("PrimarySquaresUW", "LayoutUWFloor"))
     A("")
     return "\n".join(L)
 
@@ -1635,6 +1664,494 @@ def write_text(g):
     return "\n".join(L)
 
 
+# ---- level documents ------------------------------------------------------------------------------
+
+LEVEL_BLOCKS = ("facts", "map", "rooms", "floors")
+LEVEL_SKELETON = """# Level %d
+
+(one-paragraph summary to be written)
+
+Contents (generated; `L` = line in this file):
+
+<!-- toc -->
+<!-- /toc -->
+
+# At a glance
+
+<!-- generated:facts -->
+<!-- /generated:facts -->
+
+# What Link must bring
+
+# What Link gets here
+
+# Map
+
+<!-- generated:map -->
+<!-- /generated:map -->
+
+# Rooms
+
+Generated from the level data by `tools/romdata.py`; do not edit between the markers.
+
+<!-- generated:rooms -->
+<!-- /generated:rooms -->
+
+# Floor plans
+
+<!-- generated:floors -->
+<!-- /generated:floors -->
+
+# Monsters and boss
+
+# Route
+
+# Optional detours
+
+# Hazards and rules that matter here
+
+# Second quest
+"""
+
+ITEM_NONE, ITEM_KEY, ITEM_TRIFORCE = 0x03, 0x19, 0x1B
+CELLAR_KEESE = 0x1B                 # a cellar always holds four of these (README, "Cellar rooms")
+DOOR_LETTERS = [None, ".", "F", "F", "X", "K", "K", "S"]        # by door type; None = open
+SIDES = (("N", -16), ("S", 16), ("W", -1), ("E", 1))
+# Underworld floor squares by their primary tile: (character of the floor plans, word of the `floor` column).
+UW_SQUARE_KINDS = {0x74: (".", None), 0xB0: ("B", "blocks"), 0xF4: ("W", "water"), 0x94: ("S", "statues"),
+                   0xB4: ("S", "statues"), 0x70: (">", "stairs"), 0x68: (":", "sand"), 0x24: ("_", "blank")}
+FLOOR_WORDS = ["water", "blocks", "statues", "stairs", "sand", "blank"]
+
+
+class Level:
+    """One first-quest level: its level info, its rooms and cellars, decoded per room.
+
+    Rooms: those the level's submenu map shows, plus the rooms of the block that no level's map shows
+    and that a door joins to them (`hidden`).  Cellars: those of the level's list, plus a cellar that
+    no level lists when the game's search finds it for a room of the level (`unlisted`)."""
+
+    def __init__(self, g, lv):
+        self.g, self.lv = g, lv
+        self.info = info = g.info(0, lv)
+        name = g.block_labels[0][lv].name
+        self.blk = blk = g.blocks[name]
+        self.arr = [blk[i * 128:(i + 1) * 128] for i in range(6)]
+        self.block_levels = g.levels_of_block(0, name)
+        is_cellar = lambda r: self.arr[3][r] & 0x3F >= 0x3E
+        doors = lambda r: [self.arr[0][r] >> 5, (self.arr[0][r] >> 2) & 7, self.arr[1][r] >> 5, (self.arr[1][r] >> 2) & 7]
+        owner, listed = {}, set()
+        for other in self.block_levels:
+            for r in g.members(g.info(0, other)):
+                owner.setdefault(r, other)
+            listed.update(g.cellars(g.info(0, other)))
+        shown = set(owner)
+        loose = [r for r in range(128) if r not in owner and r not in listed and not is_cellar(r)]
+        changed = True
+        while changed:
+            changed = False
+            for r in loose:
+                if r in owner:
+                    continue
+                near = set()
+                for i, (side, delta) in enumerate(SIDES):
+                    n = r + delta
+                    if 0 <= n < 128 and (abs(delta) != 1 or n // 16 == r // 16) and n in owner \
+                            and (doors(r)[i] != 1 or doors(n)[i ^ 1] != 1):
+                        near.add(owner[n])
+                if len(near) > 1:
+                    raise DataError("room %s is on no map and has doors to levels %s" % (hx(r), sorted(near)))
+                if near:
+                    owner[r] = near.pop()
+                    changed = True
+        self.rooms = sorted(r for r, o in owner.items() if o == lv)
+        self.member = set(self.rooms)
+        self.hidden = self.member - shown
+        self.start, self.tri, self.boss = info[g.o_start], info[g.o_tri], info[g.o_boss]
+        # rooms that some cellar of the block names as an exit: the rooms whose stairs lead to a cellar
+        self.stairs_rooms = {x for c in range(128) if is_cellar(c) for x in (self.arr[0][c], self.arr[1][c])}
+        self.cellars = g.cellars(info)
+        self.unlisted = {}
+        for c in range(128):
+            if is_cellar(c) and c not in listed:
+                for x in dict.fromkeys((self.arr[0][c], self.arr[1][c])):
+                    found, off = self.stairs_search(x)
+                    if x in self.member and found == c:
+                        self.unlisted[c] = off
+        self.cellars += sorted(self.unlisted)
+        self.room = {r: self._decode(r) for r in self.rooms + self.cellars}
+        self.tri_has = self.tri in self.room and self.room[self.tri]["item"] == ITEM_TRIFORCE
+
+    def stairs_search(self, r):
+        """What the game's search finds for stairs in room r: (room id, offset from the cellar list).
+
+        The search reads the level info from the cellar list on, takes each byte as a room id and stops
+        at the first whose level block byte A or B equals r; it has no end test, so it runs past the
+        list into the fields that follow."""
+        info, blk = self.info, self.blk
+        for i in range(self.g.o_cellar, len(info)):
+            y = info[i]
+            if blk[y] == r or blk[128 + y] == r:
+                return y, i - self.g.o_cellar
+        return None, None
+
+    def _decode(self, r):
+        g, info = self.g, self.info
+        a, b, c, d, e, f = (x[r] for x in self.arr)
+        lay = d & 0x3F
+        cellar = lay >= 0x3E
+        lid = (c & 0x3F) | (0x40 if d & 0x80 else 0)
+        item = e & 0x1F
+        return {"id": r, "a": a, "b": b, "c": c, "lay": lay, "cellar": cellar,
+                "doors": [a >> 5, (a >> 2) & 7, b >> 5, (b >> 2) & 7],
+                "mons": [(4, CELLAR_KEESE)] if cellar else self._monsters(lid, info[g.o_foe + (c >> 6)]),
+                "item": None if item == ITEM_NONE else item, "pos": g.pos(info, (f >> 4) & 3),
+                "secret": f & 7, "block": bool(d & 0x40), "dark": bool(e & 0x80),
+                "snd": g.boss_sounds[(e >> 5) & 3]}
+
+    def _monsters(self, lid, count):
+        """[(count, object type)] made on entry, by the rules of the monster list id."""
+        g = self.g
+        if lid == 0:
+            return []
+        if lid < g.list_base:
+            return [(1 if lid >= 0x32 else count, lid)]
+        idx = lid - g.list_base
+        if idx >= len(g.objlist_offs):
+            raise DataError("level %d: no monster list %s" % (self.lv, hx(lid)))
+        off = g.objlist_offs[idx]
+        types = list(g.objlists[off:off + count])
+        return [(types.count(t), t) for t in dict.fromkeys(types)]
+
+    def mons_text(self, r):
+        return ", ".join("%d x %s (%s)" % (n, obj_name(t), hx(t)) for n, t in self.room[r]["mons"]) or "none"
+
+    def item_text(self, r):
+        it = self.room[r]["item"]
+        return None if it is None else "%s (%s)" % (item_name(it), hx(it))
+
+    def marks(self, r):
+        it = self.room[r]["item"]
+        m = ("S" if r == self.start else "") + ("B" if r == self.boss else "") + ("T" if r == self.tri else "")
+        if r in self.hidden:
+            m += "h"
+        if it == ITEM_KEY:
+            m += "k"
+        elif it is not None and not (it == ITEM_TRIFORCE and r == self.tri):
+            m += "i"
+        return m
+
+    def neighbour(self, r, delta):
+        """The room of this level on that side of room r, or None."""
+        n = r + delta
+        if not 0 <= n < 128 or (abs(delta) == 1 and n // 16 != r // 16) or n not in self.member:
+            return None
+        return n
+
+    def doorways(self):
+        """[(room, side index, own type, neighbour or None, neighbour's type or None)], each doorway once."""
+        out = []
+        for r in self.rooms:
+            for i, (side, delta) in enumerate(SIDES):
+                n = self.neighbour(r, delta)
+                if n is None:
+                    out.append((r, i, self.room[r]["doors"][i], None, None))
+                elif delta > 0:
+                    out.append((r, i, self.room[r]["doors"][i], n, self.room[n]["doors"][i - 1]))
+        return out
+
+    def stairs_cellar(self, r):
+        """The room the stairs of room r lead to (a cellar, unless the data is broken), or None."""
+        if r not in self.stairs_rooms:
+            return None
+        return self.stairs_search(r)[0]
+
+    def floor_words(self, r):
+        g, rm = self.g, self.room[r]
+        if rm["cellar"]:
+            return "treasure cellar" if rm["lay"] & 1 else "tunnel cellar"
+        found = set()
+        for row in g.uw_grid(uw_layout_desc(g, rm["lay"])):
+            for sq in row:
+                found.add(uw_square_kind(g, sq)[1])
+        return ", ".join(w for w in FLOOR_WORDS if w in found) or "plain"
+
+
+def uw_layout_desc(g, lid):
+    if lid >= g.uw_layout_count:
+        raise DataError("no underworld layout %s" % hx(lid))
+    return g.uw_layout_bytes[lid * 12:lid * 12 + 12]
+
+
+def uw_square_kind(g, sq):
+    if sq is None or g.sq_uw[sq] not in UW_SQUARE_KINDS:
+        raise DataError("underworld square %r has no known primary tile" % sq)
+    return UW_SQUARE_KINDS[g.sq_uw[sq]]
+
+
+def person_selector(g, lv, t):
+    """Text selector of a dungeon person of object type t in level lv, or None."""
+    s = g.src
+    own = {0x51: "InitUnderworldPersonLifeOrMoney_Full", 0x36: "InitGrumble_Full"}
+    if t in own:
+        sels = s.imm_before_store(own[t], "PersonTextSelector")
+        return sels[0] if sels else None
+    if not 0x4B <= t <= 0x52:
+        return None
+    m, p, o = s.addrs("InitUnderworldPerson_Full_JumpTable")[lv]
+    for letter in "ABC":
+        lab = s.label("InitUnderworldPerson" + letter)
+        if (lab.mod.id, lab.pos) == (m, p):
+            sels = s.data("UnderworldPersonTextSelectors" + letter)
+            return sels[t - 0x4B] if t - 0x4B < len(sels) else None
+    return None
+
+
+def room_list(rooms):
+    return ", ".join(hx(r) for r in rooms) or "none"
+
+
+def level_facts(g, lvl, listing, listing_link):
+    s = g.src
+    R, RS = s.ref, s.refs
+    info, lv = lvl.info, lvl.lv
+    rows = []
+    K = lambda field, value, link: rows.append("| %s | %s | %s |" % (field, value, link))
+    K("Internal level number", str(lv), R("CurLevel"))
+    K("Number shown on screen", "LEVEL-%d" % info[g.o_num], R("LevelInfo_LevelNumber"))
+    ents = []
+    for row in ow_rows(g, 0, [r for r in range(128) if g.ow[0][128 + r] >> 2 == lv]):
+        t = row[0]
+        if row[19] != "-":
+            t += " (tile object: %s%s)" % (row[19], "" if row[16] == "-" else ", secret works in %s only" % row[16])
+        ents.append(t)
+    K("Overworld entrance room (Q1)", "; ".join(ents) or "none", R("HandleWarpOW"))
+    K("Start room", hx(lvl.start), R("LevelInfo_StartRoomId"))
+    tri = lvl.room.get(lvl.tri)
+    if tri and tri["item"] == ITEM_TRIFORCE:
+        K("Triforce room", "%s (room item: %s); the field places the compass marker"
+          % (hx(lvl.tri), lvl.item_text(lvl.tri)), RS("LevelInfo_TriforceRoomId", "UpdateTriforcePositionMarker"))
+    else:
+        what = ("not a room of this level" if tri is None
+                else "no Triforce piece there; monsters: %s" % lvl.mons_text(lvl.tri))
+        K("Compass marker room (the Triforce room field)", "%s (%s); the field only places the compass marker"
+          % (hx(lvl.tri), what), RS("LevelInfo_TriforceRoomId", "UpdateTriforcePositionMarker"))
+    K("Boss room", "%s (%s)" % (hx(lvl.boss), lvl.mons_text(lvl.boss) if lvl.boss in lvl.room
+                                else "not a room of this level"), RS("LevelInfo_BossRoomId", "CheckBossSoundEffectUW"))
+    cl = [hx(c) + (" (not in the cellar list; the search that has no end test finds it %d bytes after the"
+                   " list's start)" % lvl.unlisted[c] if c in lvl.unlisted else "") for c in lvl.cellars]
+    K("Cellars", ", ".join(cl) or "none", RS("LevelInfo_CellarRoomIdArray", "CheckWarps"))
+    K("Rooms", "%d: %d on the submenu map%s" % (
+        len(lvl.rooms), len(lvl.rooms) - len(lvl.hidden),
+        ", %d the map does not show (%s)" % (len(lvl.hidden), room_list(sorted(lvl.hidden))) if lvl.hidden else ""),
+      R("LevelInfo_SubmenuMapMask"))
+    K("Monster counts (index = level block C bits 7-6)", ", ".join(str(b) for b in info[g.o_foe:g.o_foe + 4]),
+      R("LevelInfo_FoeCounts"))
+    ways = lvl.doorways()
+    classes = (("Key doors", (5, 6)), ("Bombable walls", (4,)), ("Shutters", (7,)), ("False walls", (2, 3)))
+    for title, types in classes:
+        hits = ["%s %s" % (hx(r), SIDES[i][0]) for r, i, t, n, nt in ways if t in types or nt in types]
+        K(title + " (doorways; room and side)", "%d%s" % (len(hits), " (%s)" % ", ".join(hits) if hits else ""),
+          R("TouchDoor_JumpTable"))
+    diff = ["%s %s %s / %s %s" % (hx(r), SIDES[i][0], DOOR_NAMES[t], hx(n), DOOR_NAMES[nt])
+            for r, i, t, n, nt in ways if n is not None and DOOR_LETTERS[t] != DOOR_LETTERS[nt]]
+    K("Doorways whose two sides differ", ", ".join(diff) or "none", R("FindDoorTypeByDoorBit"))
+    out = ["%s %s %s" % (hx(r), SIDES[i][0], DOOR_NAMES[t]) for r, i, t, n, nt in ways if n is None and t != 1]
+    K("Doors on sides with no room of the level", ", ".join(out) or "none", R("CalculateNextRoom"))
+    blocks = [r for r in lvl.rooms if lvl.room[r]["block"]]
+    K("Push blocks", "%d (%s)" % (len(blocks), room_list(blocks)), R("CreateRoomObjects"))
+    dark = [r for r in lvl.rooms + lvl.cellars if lvl.room[r]["dark"]]
+    K("Dark rooms", "%d (%s)" % (len(dark), room_list(dark)), R("IsDarkRoom_Bank5"))
+    keys = [r for r in lvl.rooms + lvl.cellars if lvl.room[r]["item"] == ITEM_KEY]
+    K("Keys (room item)", "%d (%s)" % (len(keys), room_list(keys)), R("CreateRoomObjects"))
+    others = {}
+    for r in lvl.rooms + lvl.cellars:
+        it = lvl.room[r]["item"]
+        if it is not None and it != ITEM_KEY:
+            others.setdefault(it, []).append(hx(r) + (" (cellar)" if lvl.room[r]["cellar"] else ""))
+    K("Other room items", "; ".join("%s (%s): %s" % (item_name(it), hx(it), ", ".join(rs))
+                                    for it, rs in sorted(others.items())) or "none", R("CreateRoomObjects"))
+    return ["| Field | Value | Read by |", "| --- | --- | --- |"] + rows + [
+        "", "Room by room data: [`%s`](%s) (rows with `lvl` = `%d` or `c%d`)." % (listing, listing_link, lv, lv)]
+
+
+def door_mark(t, nt, horizontal):
+    """Three characters for the doorway between two rooms (left or upper room's side first)."""
+    a, b = DOOR_LETTERS[t], DOOR_LETTERS[nt]
+    if a == b:
+        if a == ".":
+            return "   "
+        if a is None:
+            return "---" if horizontal else " | "
+        return " %s " % a
+    bar = "-" if horizontal else "|"
+    return "%s/%s" % (a or bar, b or bar)
+
+
+def level_map(g, lvl, listing, listing_link):
+    s = g.src
+    cols = sorted({r % 16 for r in lvl.rooms})
+    rows = sorted({r // 16 for r in lvl.rooms})
+    width = 2 + max(len(lvl.marks(r)) for r in lvl.rooms)
+    cell = width + 2
+    L = []
+    for y in range(rows[0], rows[-1] + 1):
+        line, below = "", ""
+        for x in range(cols[0], cols[-1] + 1):
+            r = y * 16 + x
+            if r in lvl.member:
+                line += "[%s]" % ("%02X%s" % (r, lvl.marks(r))).ljust(width)
+                e, d = lvl.neighbour(r, 1), lvl.neighbour(r, 16)
+                line += door_mark(lvl.room[r]["doors"][3], lvl.room[e]["doors"][2], True) if e is not None else "   "
+                below += (door_mark(lvl.room[r]["doors"][1], lvl.room[d]["doors"][0], False)
+                          if d is not None else "   ").center(cell) + "   "
+            else:
+                line += " " * (cell + 3)
+                below += " " * (cell + 3)
+        L.append(line.rstrip())
+        if y != rows[-1]:
+            L.append(below.rstrip())
+    L.append("")
+    tri_has = lvl.tri in lvl.room and lvl.room[lvl.tri]["item"] == ITEM_TRIFORCE
+    L.append("[73S] = room $73 and its marks: S start room, B boss room, %s,"
+             % ("T Triforce room" if tri_has else "T room the compass marks (no Triforce piece)"))
+    L.append("        k a key lies here, i another room item lies here, h not shown on the submenu map.")
+    L.append("Between two rooms, the door: --- or | open, K key door, S shutter, X bombable wall,")
+    L.append("        F false wall (walk-through), nothing = wall. A/B = the two sides differ: the left")
+    L.append("        or upper room's side first, . = wall on that side.")
+    out = ["$%02X %s %s" % (r, SIDES[i][0], DOOR_NAMES[t]) for r, i, t, n, nt in lvl.doorways() if n is None and t != 1]
+    L.append("Doors on sides with no room of the level: %s." % (", ".join(out) or "none"))
+    res = fenced(L)
+    for c in lvl.cellars:
+        rm = lvl.room[c]
+        a, b = rm["a"], rm["b"]
+        kind = "treasure" if rm["lay"] & 1 else "tunnel"
+        if a == b:
+            con = "both exits lead to `%s`, whose stairs lead here" % hx(a)
+        else:
+            con = "joins `%s` (left exit) and `%s` (right exit), whose stairs lead here" % (hx(a), hx(b))
+        wrong = [hx(x) for x in dict.fromkeys((a, b)) if lvl.stairs_cellar(x) != c]
+        if wrong:
+            con += " (not from %s: the search finds another room first)" % ", ".join(wrong)
+        if c in lvl.unlisted:
+            con += "; not in the level's cellar list"
+        res.append("")
+        res.append("- Cellar `%s` (%s cellar): %s; item: %s. %s, [`%s`](%s)"
+                   % (hx(c), kind, con, lvl.item_text(c) or "none", s.ref("CheckWarps"), listing, listing_link))
+    return res
+
+
+def level_rooms(g, lvl):
+    head = ["room", "N", "S", "W", "E", "monsters", "item", "secret", "block", "dark", "layout", "floor", "notes"]
+    L = ["| " + " | ".join(head) + " |", "|" + " --- |" * len(head)]
+    for r in lvl.rooms + lvl.cellars:
+        rm = lvl.room[r]
+        tags = [w for w, x in (("start", lvl.start), ("boss", lvl.boss),
+                               ("Triforce" if lvl.tri_has else "compass marker", lvl.tri)) if x == r]
+        if r in lvl.hidden:
+            tags.append("off-map")
+        notes = []
+        if rm["cellar"]:
+            tags.append("cellar")
+            doors = ["-"] * 4
+            notes.append("left exit to %s, right exit to %s; Link comes out at %s,%s"
+                         % (hx(rm["a"]), hx(rm["b"]), hx(rm["c"] & 0xF0), hx(((rm["c"] & 0x0F) << 4) | 0x0D)))
+        else:
+            doors = [DOOR_NAMES[t] for t in rm["doors"]]
+            for n, t in rm["mons"]:
+                sel = person_selector(g, lvl.lv, t)
+                if sel is not None:
+                    notes.append("person %s says: %s" % (hx(t), g.text_plain(sel)))
+            c = lvl.stairs_cellar(r)
+            if c is not None:
+                notes.append("stairs lead to cellar %s" % hx(c) if c in lvl.cellars
+                             else "stairs lead to room %s, not a cellar of this level" % hx(c))
+            if rm["snd"]:
+                notes.append("boss sound %s" % hx(rm["snd"]))
+        item = "-" if rm["item"] is None else "%s at %s,%s" % (lvl.item_text(r), hx(rm["pos"][0]), hx(rm["pos"][1]))
+        cells = [" ".join([hx(r)] + tags)] + doors + [
+            lvl.mons_text(r), item, SECRET_NAMES[rm["secret"]], "B" if rm["block"] else "-",
+            "D" if rm["dark"] else "-", hx(rm["lay"]), lvl.floor_words(r), "; ".join(notes) or "-"]
+        L.append("| " + " | ".join(c.replace("|", "/") for c in cells) + " |")
+    return L
+
+
+def level_floors(g, lvl, layouts_link):
+    s = g.src
+    L = ["One character per floor square, 12 columns x 7 rows inside the walls (left column = west, top row =",
+         "north): `.` floor (tile `$74`), `B` block (tile `$B0`; a push block object is placed on one in a room",
+         "with a push block), `W` water (tile `$F4`), `S` statue (tiles `$94` and `$B4`), `>` stairs (tile `$70`),",
+         "`:` sand (tile `$68`), `_` blank square (tile `$24`). %s" % s.refs(
+             "PrimarySquaresUW", "LayoutUWFloor", "FindAndCreatePushBlockObject", "CheckWarps"),
+         "Stairs that a secret makes appear are not part of the layout."]
+    used = {}
+    for r in lvl.rooms + lvl.cellars:
+        used.setdefault(lvl.room[r]["lay"], []).append(r)
+    sub_note = False
+    for lay in sorted(used):
+        L.append("")
+        rooms = ",".join(hx(r) for r in used[lay])
+        if lay >= 0x3E:
+            i = lay - 0x3E + 2
+            if i >= len(g.sub_layouts):
+                raise DataError("no cellar layout for layout id %s" % hx(lay))
+            grid = g.ow_grid(s.data_of(g.sub_layouts[i])[:16], g.ow_tables(cellar=True))
+            sqs = sorted({v for row in grid for v in row if v is not None})
+            L.extend(fenced(["layout %s (%s cellar)  rooms: %s" % (hx(lay), "treasure" if lay & 1 else "tunnel", rooms)]
+                            + grid_lines(grid, 16)
+                            + ["squares (first tile): " + ", ".join("%02X = %s" % (v, hx(g.sq_primary[v])) for v in sqs)]))
+            sub_note = True
+        else:
+            grid = g.uw_grid(uw_layout_desc(g, lay))
+            L.extend(fenced(["layout %s  rooms: %s" % (hx(lay), rooms)]
+                            + ["".join(uw_square_kind(g, sq)[0] for sq in row) for row in grid]))
+    if sub_note:
+        L.append("")
+        L.append("A cellar is laid out by the overworld routine: 16 columns x 11 rows of overworld square indexes,")
+        L.append("as in [`room-layouts.md`](%s) (sections \"Cave and cellar layouts\" and \"Overworld squares\")."
+                 % layouts_link)
+        L.append(s.refs("LayoutCellarAndAdvanceSubmode", "SubroomLayoutAddrs"))
+    return L
+
+
+def fill_level(path, text, blocks):
+    """The level document `text` with the lines between each pair of markers replaced."""
+    for name in LEVEL_BLOCKS:
+        a = re.search(r"(?m)^<!-- generated:%s -->\n" % name, text)
+        b = re.search(r"(?m)^<!-- /generated:%s -->$" % name, text)
+        if not a or not b or b.start() < a.end():
+            raise DataError("%s: no marker pair `<!-- generated:%s -->` ... `<!-- /generated:%s -->`"
+                            % (path, name, name))
+        body = "\n".join(blocks[name]).rstrip("\n")
+        text = text[:a.end()] + (body + "\n" if body else "") + text[b.start():]
+    return text
+
+
+def build_levels(g, levels_dir):
+    """{path: text} of the nine level documents; existing files keep everything outside the markers."""
+    s = g.src
+    out = {}
+    datadir = s.outdir
+    rel = lambda name: os.path.relpath(os.path.join(datadir, name), levels_dir).replace(os.sep, "/")
+    s.outdir = levels_dir                           # reference links are relative to the document
+    try:
+        for lv in range(1, 10):
+            lvl = Level(g, lv)
+            listing = "levelblock-uw-%dto%d-q1.md" % (lvl.block_levels[0], lvl.block_levels[-1])
+            blocks = {"facts": level_facts(g, lvl, listing, rel(listing)),
+                      "map": level_map(g, lvl, listing, rel(listing)),
+                      "rooms": level_rooms(g, lvl), "floors": level_floors(g, lvl, rel("room-layouts.md"))}
+            path = os.path.join(levels_dir, "level-%d.md" % lv)
+            if os.path.exists(path):
+                with open(path, encoding="utf-8", newline="") as f:
+                    text = f.read()
+            else:
+                text = LEVEL_SKELETON % lv
+            out[path] = fill_level(os.path.relpath(path), text, blocks)
+    finally:
+        s.outdir = datadir
+    return out
+
+
 # ---- main -----------------------------------------------------------------------------------------
 
 def load_prg(path):
@@ -1646,8 +2163,8 @@ def load_prg(path):
     return prg
 
 
-def build(root, prg, outdir):
-    """{file name: text} of every listing."""
+def build(root, prg, outdir, levels_dir=None):
+    """{file name: text} of every listing; with levels_dir also {path: text} of the level documents."""
     g = Game(Source(root, prg, outdir))
     out = {"README.md": write_readme(g), "levelblock-ow.md": write_ow(g), "levelinfo.md": write_levelinfo(g),
            "objlists.md": write_objlists(g), "room-layouts.md": write_layouts(g), "person-text.md": write_text(g)}
@@ -1655,17 +2172,21 @@ def build(root, prg, outdir):
         for name in dict.fromkeys(l.name for l in g.block_labels[q][1:]):
             levels = g.levels_of_block(q, name)
             out["levelblock-uw-%dto%d-q%d.md" % (levels[0], levels[-1], q + 1)] = write_uw(g, q, name, levels)
-    return out
+    if levels_dir is None:
+        return out
+    return out, build_levels(g, levels_dir)
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--rom", required=True, help="ROM image (16-byte header followed by the PRG0 image)")
     ap.add_argument("--out", help="output directory (default: data/ beside tools/)")
+    ap.add_argument("--levels", help="directory of the level documents (default: levels/ beside tools/)")
     ap.add_argument("--root", default=asm.ROOT, help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     root = os.path.abspath(args.root)
     outdir = os.path.abspath(args.out) if args.out else os.path.join(root, "data")
+    levels_dir = os.path.abspath(args.levels) if args.levels else os.path.join(root, "levels")
     try:
         prg = load_prg(args.rom)
     except OSError as e:
@@ -1676,13 +2197,18 @@ def main(argv=None):
               % PRG0_SHA1, file=sys.stderr)
         return 2
     try:
-        out = build(root, prg, outdir)
+        out, levels = build(root, prg, outdir, levels_dir)
     except DataError as e:
         print("romdata: %s" % e, file=sys.stderr)
         return 1
     for name in sorted(out):
         asm.write_text(os.path.join(outdir, name), out[name].rstrip("\n") + "\n")
-    print("romdata: wrote %d files to %s" % (len(out), os.path.relpath(outdir)))
+    os.makedirs(levels_dir, exist_ok=True)
+    for path in sorted(levels):
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(levels[path])
+    print("romdata: wrote %d files to %s and %d level documents to %s"
+          % (len(out), os.path.relpath(outdir), len(levels), os.path.relpath(levels_dir)))
     return 0
 
 

@@ -54,6 +54,17 @@ RE_ASMREF = re.compile(r"(?<![A-Za-z0-9_\-/.])asm:(%s(?:@%s)?)" % (IDENT, IDENT)
 RE_RULE = re.compile(r"^;\s*[=\-]{8,}\s*$")
 RE_HRULE = re.compile(r"^;\s*={8,}\s*$")
 DOC_FILES = ("enemies.md", "items.md", "mechanics.md")
+RE_ANYLINK = re.compile(r"\]\(([^)#\s]+)(#[^)\s]*)?\)")
+
+
+def doc_kind(root, path):
+    """'label' for the three reference documents (every bullet needs a label link), 'any' for the level
+    documents under levels/ (every bullet needs some link), else None."""
+    if os.path.dirname(path) == root and os.path.basename(path) in DOC_FILES:
+        return "label"
+    if os.path.dirname(path) == os.path.join(root, "levels"):
+        return "any"
+    return None
 HEADER_FIELDS = ("FILE", "UPSTREAM", "SUBJECTS", "TOPIC", "SEE ALSO", "KEY FACTS", "CONTENTS")
 BAD_SUMMARY = re.compile(r"^(Params|Returns|IN|OUT|NOTE|TODO|Unknown block)\b")
 
@@ -911,7 +922,7 @@ def generate(root):
             continue
         text = read_text(path)
         new = fix_links(prog, root, path, text)
-        if os.path.dirname(path) == root and os.path.basename(path) in DOC_FILES:
+        if doc_kind(root, path):
             new = fix_toc(new)
         if new != text:
             out[path] = new
@@ -1123,7 +1134,15 @@ def check(root, final=False, quick=False, naming=False, headers=False, selfc=Fal
                         prog.resolve_name(m.group(1))
                     except AsmError as e:
                         E(relp, no, "reference does not resolve: %s" % e)
-            if os.path.dirname(path) == root and os.path.basename(path) in DOC_FILES:
+            for no, line in enumerate(text.split("\n"), 1):
+                for m in RE_ANYLINK.finditer(line):
+                    target = m.group(1)
+                    if "://" in target or target.startswith("mailto:"):
+                        continue
+                    if not os.path.exists(os.path.normpath(os.path.join(os.path.dirname(path), target))):
+                        E(relp, no, "link target does not exist: %s" % target)
+            kind = doc_kind(root, path)
+            if kind:
                 lines = text.split("\n")
                 in_toc, fence, i = False, False, 0
                 while i < len(lines):
@@ -1139,8 +1158,9 @@ def check(root, final=False, quick=False, naming=False, headers=False, selfc=Fal
                         while j < len(lines) and lines[j].startswith("  ") and lines[j].strip():
                             bullet += "\n" + lines[j]
                             j += 1
-                        if not RE_MDLINK.search(bullet):
-                            E(relp, i + 1, "bullet has no source reference link")
+                        if not (RE_MDLINK.search(bullet) if kind == "label" else RE_ANYLINK.search(bullet)):
+                            E(relp, i + 1, "bullet has no source reference link" if kind == "label"
+                              else "bullet has no link to a label, a document section or a data listing")
                         i = j - 1
                     i += 1
         for relp, no, name in outside_refs(root):
