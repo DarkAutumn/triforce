@@ -40,7 +40,7 @@ image (the ROM file without its 16-byte header) and its length. Bank = offset / 
 | `dat/CommonBackgroundPatterns.dat` | $0877F | 1792 | 2 | [`Chr_CommonBackgroundPatterns`](../src/bank2/common-patterns.asm#L138) |
 | `dat/CommonMiscPatterns.dat` | $08E7F | 224 | 2 | [`Chr_CommonMiscPatterns`](../src/bank2/common-patterns.asm#L142) |
 | `dat/DemoTextFields.dat` | $0929A | 531 | 2 | [`Demo_TextFields`](../src/bank2/demo-tables-init.asm#L138) |
-| `dat/CreditsTextLines.dat` | $0AC5C | 414 | 2 | [`Credits_TextLines`](../src/bank2/credits.asm#L138) |
+| `dat/CreditsTextLines.dat` | $0AC5C | 414 | 2 | [`Credits_TextLines`](../src/bank2/credits.asm#L140) |
 | `dat/PatternBlockUWBG.dat` | $0C11B | 2080 | 3 | [`Chr_PatternsUWBackground`](../src/bank3/level-pattern-blocks.asm#L299) |
 | `dat/PatternBlockOWBG.dat` | $0C93B | 2080 | 3 | [`Chr_PatternsOWBackground`](../src/bank3/level-pattern-blocks.asm#L303) |
 | `dat/PatternBlockOWSP.dat` | $0D15B | 1824 | 3 | [`Chr_PatternsOWSprites`](../src/bank3/level-pattern-blocks.asm#L307) |
@@ -51,9 +51,9 @@ image (the ROM file without its 16-byte header) and its length. Bank = offset / 
 | `dat/PatternBlockUWSPBoss1257.dat` | $0DFDB | 1024 | 3 | [`Chr_PatternsUWBoss1257`](../src/bank3/level-pattern-blocks.asm#L327) |
 | `dat/PatternBlockUWSPBoss3468.dat` | $0E3DB | 1024 | 3 | [`Chr_PatternsUWBoss3468`](../src/bank3/level-pattern-blocks.asm#L331) |
 | `dat/PatternBlockUWSPBoss9.dat` | $0E7DB | 1024 | 3 | [`Chr_PatternsUWBoss9`](../src/bank3/level-pattern-blocks.asm#L335) |
-| `dat/ObjLists.dat` | $14676 | 201 | 5 | [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L180) |
+| `dat/ObjLists.dat` | $14676 | 201 | 5 | [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L185) |
 | `dat/RoomLayoutsOW.dat` | $15418 | 1936 | 5 | [`RoomLayout_RoomsOW`](../src/bank5/room-layouts-ow.asm#L58) |
-| `dat/RoomLayoutsUW.dat` | $160DE | 504 | 5 | [`RoomLayout_RoomsUW`](../src/bank5/room-layouts-uw.asm#L174) |
+| `dat/RoomLayoutsUW.dat` | $160DE | 504 | 5 | [`RoomLayout_RoomsUW`](../src/bank5/room-layouts-uw.asm#L175) |
 | `dat/LevelBlockOW.dat` | $18400 | 768 | 6 | [`Level_BlockOW`](../src/bank6/level-blocks-common-data.asm#L66) |
 | `dat/LevelBlockUW1Q1.dat` | $18700 | 768 | 6 | [`Level_BlockUW1to6Q1`](../src/bank6/level-blocks-common-data.asm#L70) |
 | `dat/LevelBlockUW2Q1.dat` | $18A00 | 768 | 6 | [`Level_BlockUW7to9Q1`](../src/bank6/level-blocks-common-data.asm#L74) |
@@ -69,8 +69,8 @@ image (the ROM file without its 16-byte header) and its length. Bank = offset / 
 | `dat/LevelInfoUW7.dat` | $199E4 | 252 | 6 | [`Level_InfoUW7`](../src/bank6/level-blocks-common-data.asm#L114) |
 | `dat/LevelInfoUW8.dat` | $19AE0 | 252 | 6 | [`Level_InfoUW8`](../src/bank6/level-blocks-common-data.asm#L118) |
 | `dat/LevelInfoUW9.dat` | $19BDC | 252 | 6 | [`Level_InfoUW9`](../src/bank6/level-blocks-common-data.asm#L122) |
-| `dat/StoryTileAttrTransferBuf.dat` | $1A3FE | 1131 | 6 | [`Transfer_StoryTileAttrBuf`](../src/bank6/transfer-bufs-static.asm#L326) |
-| `dat/GameTitleTransferBuf.dat` | $1A869 | 1121 | 6 | [`Transfer_GameTitleBuf`](../src/bank6/transfer-bufs-static.asm#L330) |
+| `dat/StoryTileAttrTransferBuf.dat` | $1A3FE | 1131 | 6 | [`Transfer_StoryTileAttrBuf`](../src/bank6/transfer-bufs-static.asm#L327) |
+| `dat/GameTitleTransferBuf.dat` | $1A869 | 1121 | 6 | [`Transfer_GameTitleBuf`](../src/bank6/transfer-bufs-static.asm#L331) |
 | `dat/PcmSamples.dat` | $1C000 | 9216 | 7 | [`Sample_PcmData`](../src/bank7/run-game-nmi.asm#L48) |
 
 # Level blocks
@@ -96,19 +96,20 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 
 ## Overworld rooms
 
-- A bits 7-4: X where Link appears when he comes out of a cave or a level into this room (`A & $F0`). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
-- A bit 3: a Zora lives in this room. [`Zora_TrySpawn`](../src/bank4/zora-ow-inits.asm#L75)
+- A bits 7-4: X where Link appears when he comes out of a cave or a level into this room (`A & $F0`). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
+- A bit 3: a Zora lives in this room. [`Zora_TrySpawn`](../src/bank4/zora-ow-inits.asm#L77)
 - A bit 2: the sea sound plays in this room. [`Mode5Play_UpdateWorld`](../src/bank7/mode5-play-update.asm#L129)
 - A bits 1-0: palette selector of the outer ring of the play area; B bits 1-0: palette selector of the
-  inner part. [`Room_FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L379), [`Room_PaletteSelectorAttrs`](../src/bank5/mode7-scroll-init.asm#L368)
+  inner part. [`Room_FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L393), [`Room_PaletteSelectorAttrs`](../src/bank5/mode7-scroll-init.asm#L382)
 - B bit 0 also picks the palette row of a rock (`$62`) or armos (`$66`) tile object. [`Mode5Play_Init`](../src/bank7/init-mode5-play.asm#L60)
 - B bits 7-2: cave index, read when Link stands on a stairs tile (`$70`-`$73`) or a cave entrance tile
   (`$24`, `$88`). `1`-`9`: enter that level. `$10` and above: a cave (`$14`: the shortcut cave, mode `$C`;
   any other: mode `$B`). The code treats every value below `$10` as a level number; the listings show
-  `0` as no destination, assuming such rooms hold no stairs or cave tile (unverified). [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L175)
+  `0` as no destination: in both quests no room with index `0` has a stairs or entrance tile in its layout,
+  a tile object other than the dock, an Armos stairs secret, a flute secret or shortcut stairs. [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L178), [`RoomLayout_CheckTileObj`](../src/bank5/layout-room-ow.asm#L267), [`Armos_SecretRoomIds`](../src/bank4/ghini-armos.asm#L138), [`Flute_SecretRoomIdsOW`](../src/bank7/flute.asm#L36)
 - The person in a cave is object type `$6A + (cave index - $10)`. [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64)
 - C bits 5-0 and D bit 7 (as bit 6) form the monster list id; C bits 7-6 select one of the four
-  monster counts of the level info ([`LevelInfo_FoeCounts`](../src/Variables.inc#L716)). See `objlists.md`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+  monster counts of the level info ([`LevelInfo_FoeCounts`](../src/Variables.inc#L716)). See `objlists.md`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - D bits 6-0: room layout id (7 bits in the overworld). See `room-layouts.md`. [`RoomLayout_LayOutRoomOW`](../src/bank5/layout-room-ow.asm#L106)
 - The layout id that Room_GetUniqueRoomId returns is only D bits 5-0, also in the overworld. [`Room_GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40)
 - E is not per room in the overworld: it holds the wares and prices of the caves (below). [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
@@ -119,9 +120,9 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
   (`(byte & $0F) * 16`). [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280), [`Secret_RestoreStairsOW`](../src/bank5/ow-shortcut-map-square.asm#L54)
 - F bit 3: monsters enter from the screen edges instead of starting inside the room. [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64), [`Obj_Init`](../src/bank7/object-init-table.asm#L45)
 - F bits 2-0: row where Link appears when he comes out of a cave or a level: `Y = row * 16 + $4D`; after
-  a cave entrance tile (`$24`) he starts 16 pixels lower and walks up to that Y. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+  a cave entrance tile (`$24`) he starts 16 pixels lower and walks up to that Y. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - The tile object of a room is not in the level block: it comes from the layout (a square whose primary
-  tile is `$E5`-`$EA`), except in the dock rooms $3F and $55, which get object type $61. [`RoomLayout_CheckTileObj`](../src/bank5/layout-room-ow.asm#L267), [`Room_SetUpTileObjOW`](../src/bank5/enter-room.asm#L423)
+  tile is `$E5`-`$EA`), except in the dock rooms $3F and $55, which get object type $61. [`RoomLayout_CheckTileObj`](../src/bank5/layout-room-ow.asm#L267), [`Room_SetUpTileObjOW`](../src/bank5/enter-room.asm#L429)
 
 ## Cave wares (overworld array E)
 
@@ -141,18 +142,20 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 - Flag `$40` heart-requirement: the ware can be taken only when [`HeartValues`](../src/Variables.inc#L593) >= `$40` (person type `$6C`) or
   >= `$B0` (other types). [`Cave_State2TalkOrShopOrDoorCharge`](../src/bank1/cave-shop.asm#L55)
 - Flag `$80` minus-sign: prices are shown with a minus sign. [`Cave_WritePriceListWithChar`](../src/bank1/cave-person-prices.asm#L245)
-- The last 8 bytes of E (`E[$78]`-`E[$7F]`) are not read by any code found. (unverified) [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
+- The last 8 bytes of E (`E[$78]`-`E[$7F]`) are never read in the overworld: the caves read `E[0]`-`E[$77]`
+  (the highest cave index in either quest is `$23`), and the only other overworld read of E is `E[$5F]`,
+  for room `$5F`; the dark-room, boss-roar and room-item reads run in dungeons only. [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145), [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51)
 
 ## Underworld rooms
 
 - Doors: A bits 7-5 north, A bits 4-2 south, B bits 7-5 west, B bits 4-2 east. [`Door_FindTypeByDirBit`](../src/bank5/fill-walls.asm#L55)
 - Door types: `0` open, `1` wall, `2` and `3` false wall (Link walks through after pushing), `4` bombable
   wall, `5` and `6` key door, `7` shutter. [`Door_Touch_JumpTable`](../src/bank5/touch-door.asm#L62), [`Door_LayOut`](../src/bank5/lay-out-doors.asm#L131), [`Room_CalcNext_JumpTable`](../src/bank7/next-room-room-flags.asm#L90)
-- A bits 1-0 and B bits 1-0: palette selectors of the outer ring and the inner part. [`Room_FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L379)
-- C bits 5-0 and D bit 7 (as bit 6): monster list id; C bits 7-6: index of the monster count. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- A bits 1-0 and B bits 1-0: palette selectors of the outer ring and the inner part. [`Room_FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L393)
+- C bits 5-0 and D bit 7 (as bit 6): monster list id; C bits 7-6: index of the monster count. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - D bit 6: the room has a push block; it is put on the block tile (`$B0`) found in the floor row at
-  Y = `$90`. [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L228)
-- D bits 5-0: room layout id. `$3E` and `$3F` are cellars (below). [`Room_GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
+  Y = `$90`. [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L234)
+- D bits 5-0: room layout id. `$3E` and `$3F` are cellars (below). [`Room_GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L73)
 - E bit 7: the room is dark. [`Room_IsDark_Bank5`](../src/bank5/door-flags-dark-room.asm#L124), [`Room_IsDark_Bank4`](../src/bank4/shoot-helpers-candle.asm#L184)
 - E bits 6-5: index of the sample request ($00 $10 $20 $40) that repeats in the room until the flags of the level's
   boss room have both kill-count bits set. [`Sample_SetBossRoarUW`](../src/bank5/boss-sound-door-face.asm#L42), [`Sample_BossRoarRequests`](../src/bank5/boss-sound-door-face.asm#L30)
@@ -179,7 +182,7 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
   enters at the left ladder when he comes from room A, else at the right ladder. [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43), [`Mode9Cellar_Init_Sub8_EnterCellar`](../src/bank5/cave-cellar-enter.asm#L276)
 - C: where Link appears in the room he returns to: `X = C & $F0`, `Y = (C & $0F) * 16 + $0D`. [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43)
 - E and F are read as in other underworld rooms (room item, its position, dark flag). [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51)
-- A cellar always holds four Keese blue; its own monster list is ignored. [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64), [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- A cellar always holds four Keese blue; its own monster list is ignored. [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64), [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 
 # Level info
 
@@ -189,7 +192,7 @@ One block of 252 bytes per level, copied to RAM at [`LevelInfo_PalettesTransferB
   that follow it in the ROM. [`Mode2Load_Init_Sub1`](../src/bank6/level-load-mode2.asm#L156), [`Level_SetInfoCopyDest`](../src/bank6/level-load-mode2.asm#L214), [`Level_CopyBlockAndIncSubmode`](../src/bank6/level-load-mode2.asm#L249)
 - `+$00` (36 bytes): transfer record with the level's 32 palette bytes; byte 20 is replaced with the
   save slot's colour for Link before the transfer. [`LevelInfo_PalettesTransferBuf`](../src/Variables.inc#L715), [`Palette_PatchLinkColorAndCueLevelPalettes`](../src/bank7/init-mode-dispatch.asm#L319)
-- `+$24` (4 bytes): the four monster counts a room can select. [`LevelInfo_FoeCounts`](../src/Variables.inc#L716), [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- `+$24` (4 bytes): the four monster counts a room can select. [`LevelInfo_FoeCounts`](../src/Variables.inc#L716), [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - `+$28`: Link's Y when the level starts (his X is `$78`). [`LevelInfo_StartY`](../src/Variables.inc#L717), [`Mode3Unfurl_Init_Sub8_LayOutRoomPlaceLink`](../src/bank5/mode3-mode6-init.asm#L129)
 - `+$29` (4 bytes): positions of secret stairs (overworld) or room items (underworld). [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L718), [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280)
 - `+$2D`: number of columns the submenu map is rotated right. [`LevelInfo_SubmenuMapRotation`](../src/Variables.inc#L720), [`Submenu_WriteSheetMapRowTransferRecord`](../src/bank5/submenu-map.asm#L49)
@@ -210,7 +213,7 @@ One block of 252 bytes per level, copied to RAM at [`LevelInfo_PalettesTransferB
   fade cycles `$00`, `$20` and `$40` and backwards by `$80`, `$A0` and `$C0`. [`LevelInfo_PaletteCycles`](../src/Variables.inc#L731), [`Palette_AnimateFade`](../src/bank1/world-fading.asm#L44)
 - `+$DC` (32 bytes): a fourth series, used by fade cycle `$60` when Link dies. [`LevelInfo_DeathPaletteSeries`](../src/Variables.inc#L732), [`Mode11Death_Init_Sub1`](../src/bank5/mode11-death-init.asm#L73), [`Palette_AnimateFade`](../src/bank1/world-fading.asm#L44)
 - A transfer record is: PPU address (high byte, low byte), a control byte (bit 7: write downwards, bit 6:
-  repeat one byte, bits 5-0: count, 0 = 64), then the data; a high byte >= `$80` ends the list. [`Transfer_WriteBuf`](../src/bank6/transfer-buf-dispatch.asm#L214), [`Transfer_WriteRecord`](../src/bank6/transfer-buf-dispatch.asm#L138)
+  repeat one byte, bits 5-0: count, 0 = 64), then the data; a high byte >= `$80` ends the list. [`Transfer_WriteBuf`](../src/bank6/transfer-buf-dispatch.asm#L217), [`Transfer_WriteRecord`](../src/bank6/transfer-buf-dispatch.asm#L141)
 
 # Second-quest patches
 
@@ -265,10 +268,10 @@ In Q2 the level data is patched in RAM after it is copied. [`Mode2Load_Update_Fu
 # Monster lists (`dat/ObjLists.dat`)
 
 - A room's monster list id (7 bits) is either an object type or a list: `0` no monsters; `$01`-`$61`
-  that object type, repeated; `$62`-`$7F` list number id - `$62`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
-- The count comes from the level info; an id from `$32` to `$61` always makes one object. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
-- [`Spawn_ObjListAddrs`](../src/bank5/mode-inits-obj-lists.asm#L185) holds the address of each list inside [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L180); a list is a run of object type bytes, of which the first
-  `count` are used (lists have no end marker). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+  that object type, repeated; `$62`-`$7F` list number id - `$62`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
+- The count comes from the level info; an id from `$32` to `$61` always makes one object. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
+- [`Spawn_ObjListAddrs`](../src/bank5/mode-inits-obj-lists.asm#L190) holds the address of each list inside [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L185); a list is a run of object type bytes, of which the first
+  `count` are used (lists have no end marker). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - The count is lowered by the room's kill count before the objects are made. [`RoomHistory_ModifyObjCountOW`](../src/bank5/room-history-ow.asm#L93), [`RoomHistory_ModifyObjCountUW`](../src/bank5/room-history-uw.asm#L50)
 
 # Room layouts (`dat/RoomLayoutsOW.dat`, `dat/RoomLayoutsUW.dat`)
@@ -286,12 +289,12 @@ In Q2 the level data is patched in RAM after it is copied. [`Mode2Load_Update_Fu
 - When the room's secret was already found, a `$E7` square is drawn as stairs, a `$E6` square as a cave
   entrance and a `$EA` square as stairs. [`RoomLayout_LayOutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141)
 - Caves and cellars use the overworld routine with the layouts of [`RoomLayout_SubroomLayoutAddrs`](../src/bank5/layout-room-ow.asm#L387) (cave, shortcut cave, tunnel
-  cellar, treasure cellar); in a level, column table 0 is [`RoomLayout_ColumnHeapUWCellar`](../src/bank5/room-layouts-uw.asm#L285) instead. [`ModeBCave_Init_LayOutCave`](../src/bank5/layout-room-ow.asm#L398), [`ModeCShortcut_Init_LayOutShortcut`](../src/bank5/layout-room-ow.asm#L409), [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418), [`RoomLayout_PatchColumnDirectoryForCellar`](../src/bank5/layout-room-ow.asm#L369)
+  cellar, treasure cellar); in a level, column table 0 is [`RoomLayout_ColumnHeapUWCellar`](../src/bank5/room-layouts-uw.asm#L287) instead. [`ModeBCave_Init_LayOutCave`](../src/bank5/layout-room-ow.asm#L398), [`ModeCShortcut_Init_LayOutShortcut`](../src/bank5/layout-room-ow.asm#L409), [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418), [`RoomLayout_PatchColumnDirectoryForCellar`](../src/bank5/layout-room-ow.asm#L369)
 - Underworld: a layout is 12 column descriptors (the floor is 12 columns x 7 rows inside the walls);
-  layout `n` starts at byte `12 * n` of [`RoomLayout_RoomsUW`](../src/bank5/room-layouts-uw.asm#L174); descriptors work as above with [`RoomLayout_UWColumnHeapAddrs`](../src/bank5/uw-floor-push-block.asm#L40). [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
-- Underworld square descriptor: bits 2-0 square index into [`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L57), bits 6-4 number of extra rows the square
+  layout `n` starts at byte `12 * n` of [`RoomLayout_RoomsUW`](../src/bank5/room-layouts-uw.asm#L175); descriptors work as above with [`RoomLayout_UWColumnHeapAddrs`](../src/bank5/uw-floor-push-block.asm#L40). [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L73)
+- Underworld square descriptor: bits 2-0 square index into [`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L63), bits 6-4 number of extra rows the square
   repeats, bit 7 = first byte of a column. A primary tile from `$70` to `$F2` stands for four
-  consecutive tiles, any other for one tile used four times. [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67), [`RoomLayout_WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L177)
+  consecutive tiles, any other for one tile used four times. [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L73), [`RoomLayout_WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L183)
 - Walls and doors of an underworld room are not in the layout: walls come from [`RoomLayout_UWWallTiles`](../src/bank5/room-layouts-uw.asm#L68), doors from the
   door types of the level block. [`RoomLayout_FillWalls`](../src/bank5/fill-walls.asm#L125), [`Door_LayOut`](../src/bank5/lay-out-doors.asm#L131), [`RoomLayout_LayOutRoom`](../src/bank5/mode12-lay-out-room.asm#L178)
 
@@ -321,5 +324,5 @@ marker pair stops the run with exit status 1. Do not edit between the markers.
 - `map`: the rooms on the 16 x 8 room grid with the door between each pair of neighbours, then the
   cellars. A level's rooms are those its submenu map shows (`lvl` in the level block listings) plus
   the rooms of its block that no map shows and that a door joins to them. [`LevelInfo_SubmenuMapMask`](../src/Variables.inc#L729)
-- `rooms`: one table row per room and cellar: doors, monsters, item, secret, layout, notes. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
-- `floors`: each layout the level uses, one character per floor square. [`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L57), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
+- `rooms`: one table row per room and cellar: doors, monsters, item, secret, layout, notes. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
+- `floors`: each layout the level uses, one character per floor square. [`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L63), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L73)

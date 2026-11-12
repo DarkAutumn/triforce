@@ -125,8 +125,11 @@ up with ideas, test them, keep what helps, and log everything.
 
 - **The annotated Zelda 1 disassembly is in the repo: `zelda-asm/`.** Start at `zelda-asm/README.md`. Look up a
   monster (`zelda-asm/enemies.md`), an item (`items.md`), a mechanic (`mechanics.md`: movement, collision, screen
-  edges and the screen wrap, doors, secrets, spawning, combat, saved state), a RAM byte (`index/ram.md`) or a
-  room's data (`data/`) there before investigating from scratch. Cite it as `asm:Name` (a label or RAM symbol;
+  edges and the screen wrap, doors, secrets, spawning, combat, saved state), a dungeon (`levels/level-N.md`: what to
+  bring, the items and what they change, e.g. the level 4 ladder needed at once in room 0x30, monsters, boss, route),
+  a RAM byte (`index/ram.md`) or a room's data (`data/`) there before investigating from scratch. Levels 5-9 were
+  written from the ROM only: check them in the game and update them when that level is worked on. Cite it as
+  `asm:Name` (a label or RAM symbol;
   `python zelda-asm/tools/asm.py where Name` finds it, and translates an old upstream name or `file:line`;
   `asm.py check` verifies every `asm:` citation in the repo). Edit it only by its README's rules (never the code;
   renames through `asm.py rename`; `asm.py gen` and `asm.py check --final` afterwards).

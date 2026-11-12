@@ -6,7 +6,7 @@ at the end give the tiles of each square index. The formats are in `README.md`. 
 `grep '^OW \$22 '` or `grep '^UW \$0A '`; its grid follows the line.
 
 - Overworld layouts: 16 columns x 11 rows. [`RoomLayout_LayOutRoomOW`](../src/bank5/layout-room-ow.asm#L106), [`RoomLayout_LayOutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141)
-- Underworld layouts: 12 columns x 7 rows of floor inside the walls. [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
+- Underworld layouts: 12 columns x 7 rows of floor inside the walls. [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L73)
 - A column descriptor is `table number, column number`: high and low nibble. [`RoomLayout_ColumnDirectoryOW`](../src/bank6/level-blocks-common-data.asm#L171), [`RoomLayout_UWColumnHeapAddrs`](../src/bank5/uw-floor-push-block.asm#L40)
 - `rooms` lists the rooms whose level block byte D selects the layout (Q2 only where it differs). [`Room_GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40)
 
@@ -1878,7 +1878,7 @@ r10  1B 1B 1B 1B 1B 1B 1B 0E 1B 1B 1B 1B 1B 1B 1B 1B
 # Cave and cellar layouts
 
 Laid out by the overworld routine from [`RoomLayout_SubroomLayoutAddrs`](../src/bank5/layout-room-ow.asm#L387): entry 0 the cave, 1 the shortcut cave, 2 the tunnel cellar
-(room layout id `$3E`), 3 the treasure cellar (`$3F`). Cellars read column table 0 from [`RoomLayout_ColumnHeapUWCellar`](../src/bank5/room-layouts-uw.asm#L285). [`ModeBCave_Init_LayOutCave`](../src/bank5/layout-room-ow.asm#L398), [`ModeCShortcut_Init_LayOutShortcut`](../src/bank5/layout-room-ow.asm#L409), [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418)
+(room layout id `$3E`), 3 the treasure cellar (`$3F`). Cellars read column table 0 from [`RoomLayout_ColumnHeapUWCellar`](../src/bank5/room-layouts-uw.asm#L287). [`ModeBCave_Init_LayOutCave`](../src/bank5/layout-room-ow.asm#L398), [`ModeCShortcut_Init_LayOutShortcut`](../src/bank5/layout-room-ow.asm#L409), [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418)
 
 ```
 SUB 0  cave  columns: $00 $00 $95 $95 $95 $95 $95 $C2 $C2 $95 $95 $95 $95 $95 $00 $00  (RoomLayout_CaveOW)
@@ -1943,7 +1943,7 @@ r10  03 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03
 
 # Underworld layouts
 
-Layouts `$00`-$29 of [`RoomLayout_RoomsUW`](../src/bank5/room-layouts-uw.asm#L174). Rooms are listed per level block: `1-6` and `7-9` are the level groups.
+Layouts `$00`-$29 of [`RoomLayout_RoomsUW`](../src/bank5/room-layouts-uw.asm#L175). Rooms are listed per level block: `1-6` and `7-9` are the level groups.
 
 ```
 UW $00  columns: $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00
@@ -2644,9 +2644,9 @@ sq  primary  tiles            object
 
 # Underworld squares
 
-Square index to primary tile ([`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L57)). A primary from `$70` to `$F2` is the first of four consecutive
+Square index to primary tile ([`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L63)). A primary from `$70` to `$F2` is the first of four consecutive
 tiles; any other fills the square with one tile. Tile `$B0` is the block a push block object is placed
-on; tiles `$70`-`$73` are stairs. [`RoomLayout_WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L177), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L228), [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L55)
+on; tiles `$70`-`$73` are stairs. [`RoomLayout_WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L183), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L234), [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L55)
 
 ```
 sq  primary  tiles
@@ -2665,7 +2665,7 @@ sq  primary  tiles
 The square descriptors of every column table, one line per column (`table.column`), as stored.
 Overworld descriptor: bit 7 column start, bit 6 two rows, bits 5-0 square index. Underworld descriptor:
 bit 7 column start, bits 6-4 extra rows, bits 2-0 square index. A column that holds fewer rows than the
-room needs (11 or 7) continues with the bytes of the next line. [`RoomLayout_LayOutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
+room needs (11 or 7) continues with the bytes of the next line. [`RoomLayout_LayOutRoomOrCaveOW`](../src/bank5/layout-room-ow.asm#L141), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L73)
 
 ```
 column         table                          square descriptors

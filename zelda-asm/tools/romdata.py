@@ -757,7 +757,9 @@ def write_readme(g):
     A("- B bits 7-2: cave index, read when Link stands on a stairs tile (`$70`-`$73`) or a cave entrance tile")
     A("  (`$24`, `$88`). `1`-`9`: enter that level. `$10` and above: a cave (`$14`: the shortcut cave, mode `$C`;")
     A("  any other: mode `$B`). The code treats every value below `$10` as a level number; the listings show")
-    A("  `0` as no destination, assuming such rooms hold no stairs or cave tile (unverified). %s" % R("HandleWarpOW"))
+    A("  `0` as no destination: in both quests no room with index `0` has a stairs or entrance tile in its layout,")
+    A("  a tile object other than the dock, an Armos stairs secret, a flute secret or shortcut stairs. %s"
+      % RS("HandleWarpOW", "CheckTileObject", "SecretArmosRoomIds", "FluteRoomSecretsOW"))
     A("- The person in a cave is object type `$6A + (cave index - $10)`. %s" % R("AssignObjSpawnPositions"))
     A("- C bits 5-0 and D bit 7 (as bit 6) form the monster list id; C bits 7-6 select one of the four")
     A("  monster counts of the level info (%s). See `objlists.md`. %s" % (R("LevelInfo_FoeCounts"),
@@ -809,8 +811,10 @@ def write_readme(g):
       % R("HeartValues"))
     A("  >= `$B0` (other types). %s" % R("UpdateCavePersonState_TalkOrShopOrDoorCharge"))
     A("- Flag `$80` minus-sign: prices are shown with a minus sign. %s" % R("WritePricesToDynamicTransferBuf"))
-    A("- The last 8 bytes of E (`E[$78]`-`E[$7F]`) are not read by any code found. (unverified) %s"
-      % R("InitCaveContinue"))
+    A("- The last 8 bytes of E (`E[$78]`-`E[$7F]`) are never read in the overworld: the caves read `E[0]`-`E[$77]`")
+    A("  (the highest cave index in either quest is `$23`), and the only other overworld read of E is `E[$5F]`,")
+    A("  for room `$5F`; the dark-room, boss-roar and room-item reads run in dungeons only. %s"
+      % RS("InitCaveContinue", "CreateRoomObjects"))
     A("")
     A("## Underworld rooms")
     A("")
@@ -1918,13 +1922,22 @@ def level_facts(g, lvl, listing, listing_link):
     K = lambda field, value, link: rows.append("| %s | %s | %s |" % (field, value, link))
     K("Internal level number", str(lv), R("CurLevel"))
     K("Number shown on screen", "LEVEL-%d" % info[g.o_num], R("LevelInfo_LevelNumber"))
-    ents = []
+    ents, q2only = [], []
+    flute = s.data("FluteRoomSecretsOW")
     for row in ow_rows(g, 0, [r for r in range(128) if g.ow[0][128 + r] >> 2 == lv]):
+        r = int(row[0][1:], 16)
         t = row[0]
         if row[19] != "-":
-            t += " (tile object: %s%s)" % (row[19], "" if row[16] == "-" else ", secret works in %s only" % row[16])
-        ents.append(t)
-    K("Overworld entrance room (Q1)", "; ".join(ents) or "none", R("HandleWarpOW"))
+            t += " (tile object: %s)" % row[19]
+        elif r == flute[0]:
+            t += " (the recorder's Q1 secret)"
+        if (row[19] != "-" and row[16] == "Q2") or (row[19] == "-" and r in flute[1:]):
+            q2only.append(t)
+        else:
+            ents.append(t)
+    if q2only:
+        ents.append("not in Q1, the secret works in Q2 only: " + ", ".join(q2only))
+    K("Overworld entrance room (Q1)", "; ".join(ents) or "none", RS("HandleWarpOW", "FluteRoomSecretsOW"))
     K("Start room", hx(lvl.start), R("LevelInfo_StartRoomId"))
     tri = lvl.room.get(lvl.tri)
     if tri and tri["item"] == ITEM_TRIFORCE:
@@ -1949,8 +1962,13 @@ def level_facts(g, lvl, listing, listing_link):
     ways = lvl.doorways()
     classes = (("Key doors", (5, 6)), ("Bombable walls", (4,)), ("Shutters", (7,)), ("False walls", (2, 3)))
     for title, types in classes:
-        hits = ["%s %s" % (hx(r), SIDES[i][0]) for r, i, t, n, nt in ways if t in types or nt in types]
-        K(title + " (doorways; room and side)", "%d%s" % (len(hits), " (%s)" % ", ".join(hits) if hits else ""),
+        hits = []
+        for r, i, t, n, nt in ways:
+            if t in types:
+                hits.append("%s %s" % (hx(r), SIDES[i][0]))
+            if nt in types:
+                hits.append("%s %s" % (hx(n), SIDES[i - 1][0]))
+        K(title + " (room and side that has it)", "%d%s" % (len(hits), " (%s)" % ", ".join(hits) if hits else ""),
           R("TouchDoor_JumpTable"))
     diff = ["%s %s %s / %s %s" % (hx(r), SIDES[i][0], DOOR_NAMES[t], hx(n), DOOR_NAMES[nt])
             for r, i, t, n, nt in ways if n is not None and DOOR_LETTERS[t] != DOOR_LETTERS[nt]]

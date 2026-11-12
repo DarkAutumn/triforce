@@ -16,6 +16,7 @@ here. Every original name and line can still be found (see "Finding things").
 | A monster, boss or hazard: HP, damage, weapons, behaviour, drops | [enemies.md](enemies.md), heading `# <Name>` |
 | An item or weapon: slots, states, frame counts, limits | [items.md](items.md), heading `# <Name>` |
 | How the game works: modes, movement, collision, screen edges and the screen wrap, doors, secrets, spawning, combat, saved state, second quest | [mechanics.md](mechanics.md) |
+| A dungeon (first quest): what to bring, items and what they change, monsters, boss, route room by room | [levels/README.md](levels/README.md), then `levels/level-N.md` |
 | What is in a room, a level, a monster list, a text | [data/README.md](data/README.md) and the listings beside it |
 | A RAM address | [index/ram.md](index/ram.md) (by address), `src/*.inc` (by topic) |
 | A label or symbol by name or prefix | `grep -P "^Dodongo_" index/symbols.tsv` |
@@ -30,6 +31,7 @@ by line range. Every bullet in them ends with a link to the label that proves it
 
 ```
 README.md  enemies.md  items.md  mechanics.md      the documents
+levels/level-1.md .. level-9.md                    one document per dungeon (Q1), partly generated from the ROM
 src/bankN.asm                                      bank header (imports, exports) + .INCLUDE lines in ROM order
 src/bankN/<topic>.asm                              the code and tables, 70-700 lines per file
 src/Variables.inc ObjVars.inc CommonVars.inc CaveVars.inc BeginEndVars.inc    RAM symbols (Name := $addr)

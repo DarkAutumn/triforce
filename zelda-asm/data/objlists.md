@@ -1,21 +1,21 @@
 # Monster lists
 
 How to read this: a room's level block bytes give a 7-bit monster list id and a count index. This file
-lists every list reachable through [`Spawn_ObjListAddrs`](../src/bank5/mode-inits-obj-lists.asm#L185) (blob [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L180), `dat/ObjLists.dat`) and the object type names used in all listings.
+lists every list reachable through [`Spawn_ObjListAddrs`](../src/bank5/mode-inits-obj-lists.asm#L190) (blob [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L185), `dat/ObjLists.dat`) and the object type names used in all listings.
 
-- Monster list id = level block C bits 5-0, plus `$40` when D bit 7 is set. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- Monster list id = level block C bits 5-0, plus `$40` when D bit 7 is set. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - Count = entry (C bits 7-6) of the level info's four monster counts ([`LevelInfo_FoeCounts`](../src/Variables.inc#L716)); `levelinfo.md` has them.
 - Id `0`: no monsters. Id `$01`-`$61`: `count` objects of the object type equal to the id; for an id from
-  `$32` up the count is forced to 1 (bosses and other single objects). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+  `$32` up the count is forced to 1 (bosses and other single objects). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - Id `$62`-`$7F`: list number id - `$62` below; the first `count` bytes of the list are the object types of
   object slots `$01` up. A list has no end marker: a count above its stored length runs into the next
-  list. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+  list. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143)
 - Before the objects are made, the count is lowered by the room's kill count, and a cellar or cave
   replaces the list. [`RoomHistory_ModifyObjCountOW`](../src/bank5/room-history-ow.asm#L93), [`RoomHistory_ModifyObjCountUW`](../src/bank5/room-history-uw.asm#L50), [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64)
 
 # Lists
 
-`offset` is the list's offset in the blob; `len` is the distance to the next list. [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L180)
+`offset` is the list's offset in the blob; `len` is the distance to the next list. [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L185)
 
 ```
 id   offset  len  type bytes                       types
