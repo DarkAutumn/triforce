@@ -5,7 +5,7 @@ from triforce import _native as native
 
 def test_constants():
     assert native.FRAME_SHAPE == (240, 256, 3)
-    assert native.OBS_SCHEMA_VERSION == 2
+    assert native.OBS_SCHEMA_VERSION == 3
     assert native.ACTION_SCHEMA_VERSION == 1
     spec = native.OBS_SPEC
     assert list(spec) == ['room_id', 'room_state', 'link', 'entity_types', 'entity_features', 'grid', 'history',

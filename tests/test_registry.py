@@ -95,10 +95,10 @@ def test_a_pre_r56_checkpoint_loads_and_another_grid_encoder_does_not(tmp_path):
 
 
 def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states_dir):
-    assert registry.obs_schema_version() == 2
+    assert registry.obs_schema_version() == 3
     network, checkpoint = registry.load_model(_schema1_checkpoint(tmp_path))
     assert checkpoint['obs_schema_version'] == 1 and 'target' not in network.config.obs_spec
-    # Eagerly on schema-2 observations: the target block is ignored.
+    # Eagerly on current observations: the target block is ignored.
     space = observation_space()
     space.seed(0)
     obs = {key: np.stack([space[key].sample() for _ in range(3)]) for key in space}
@@ -108,7 +108,7 @@ def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states
         before = network.evaluate(obs, actions=actions).log_prob
         obs['target'] = -obs['target'] + 0.5
         assert torch.equal(before, network.evaluate(obs, actions=actions).log_prob)
-    # Through the native eval pool (PoolInference / RolloutPolicy over schema-2 rows).
+    # Through the native eval pool (PoolInference / RolloutPolicy over current rows).
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=5)
     result = evaluate_specialist(config, tmp_path / 'ow-start' / 'schema1', episodes_per_state=2, parallel=2,
                                  threads=1, states_dir=states_dir)
@@ -164,7 +164,7 @@ def test_widened_policy_acts_exactly_like_the_original_for_any_target(tmp_path):
     with pytest.raises(ValueError, match="only new 1-D float vector keys"):
         widen_policy(old, {**old.config.obs_spec, 'extra': {'shape': [2, 2], 'vocab': None}})
     with pytest.raises(ValueError, match="'link'"):
-        widen_policy(old, {**full, 'link': {'shape': [80], 'vocab': None}})
+        widen_policy(old, {**full, 'link': {'shape': [81], 'vocab': None}})
 
 
 def test_widened_inputs_start_at_zero_and_train():
@@ -190,7 +190,7 @@ def test_widened_inputs_start_at_zero_and_train():
 
 @pytest.mark.parametrize('edit, match', [
     (lambda spec: spec.update(extra={'shape': [3], 'vocab': None}), "'extra' is not in the current"),
-    (lambda spec: spec['link'].update(shape=[80]), "'link' is shape"),
+    (lambda spec: spec['link'].update(shape=[81]), "'link' is shape"),
     (lambda spec: spec['entity_types'].update(vocab=100), "'entity_types' is shape"),
 ])
 def test_older_schema_with_a_different_layout_is_rejected(tmp_path, edit, match):

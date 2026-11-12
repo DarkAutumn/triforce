@@ -33,7 +33,10 @@
 - ``bombs/used``: bombs Link placed per completed episode (``info['bombs']``), and ``cheated/bombs``,
   ``cheated/keys``, ``cheated/rupees``: cheated items used per completed episode (``info['cheated']``; a room that
   needs an item Link lacks grants it: a bomb in ``requires_bombs`` rooms, a key at a locked route door, rupees in
-  ``requires_rupees`` shops; crates/zelda/src/cheats.rs).
+  ``requires_rupees`` shops; crates/zelda/src/cheats.rs).  ``bombs/<stat>`` for each of ``BOMB_STATS`` per
+  completed episode (crates/zelda/src/bombs.rs): bombs placed, enemy hits credited to them, bombs that hit
+  nothing, the damage they dealt (wood-sword hits: HP lost, a kill's remaining HP), 10th damage-free kills (any
+  weapon), bombs placed while the next kill was the 10th, forced bomb drops armed, bomb pickups.
 - ``boss/stuns`` and ``boss/eats``: Dodongo stuns (a bomb's smoke; the sword can kill him then) and bombs he
   swallowed per completed episode, from ``info['boss']`` (crates/env/src/critic.rs ``BossTransitions``).
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /
@@ -58,7 +61,7 @@ from typing import Optional
 
 import numpy as np
 
-from ._native import CHEAT_ITEMS, INTERRUPTS
+from ._native import BOMB_STATS, CHEAT_ITEMS, INTERRUPTS
 from .actions import DURATIONS, KINDS, TIMED_KINDS
 
 
@@ -89,6 +92,7 @@ class RolloutMetrics:
         self.hearts_wasted = 0.0
         self.hearts_healed = 0.0
         self.bombs_used = 0
+        self.bomb_stats = Counter()
         self.cheated = Counter()
         self.boss_stuns = 0
         self.boss_eats = 0
@@ -168,6 +172,8 @@ class RolloutMetrics:
         self.hearts_healed += hearts.get('healed', 0.0)
         bombs = info.get('bombs') or {}
         self.bombs_used += bombs.get('used', 0)
+        for stat in BOMB_STATS:
+            self.bomb_stats[stat] += bombs.get(stat, 0)
         for item, n in (info.get('cheated') or {}).items():
             self.cheated[item] += n
         boss = info.get('boss') or {}
@@ -222,6 +228,8 @@ class RolloutMetrics:
             result['hearts/wasted'] = self.hearts_wasted / eps
             result['hearts/healed'] = self.hearts_healed / eps
             result['bombs/used'] = self.bombs_used / eps
+            for stat in BOMB_STATS:
+                result[f'bombs/{stat}'] = self.bomb_stats[stat] / eps
             for item in CHEAT_ITEMS:
                 result[f'cheated/{item}'] = self.cheated[item] / eps
             result['boss/stuns'] = self.boss_stuns / eps

@@ -174,7 +174,7 @@ class RoomRecord:
     keys_in: Optional[int] = None   # keys carried on entering / leaving the room (None in pre-Nov-6 records)
     keys_out: Optional[int] = None
     outcome: str = 'in-progress'    # exit-correct, exit-wrong, retreat, retreat-limit, missed (heart waypoint), death,
-    #                                 stuck, milestone, error
+    #                                 stuck (room or run budgets, wrong-exit or bounce limit), milestone, error
     # Dropped hearts during the visit: healed = real hearts gained, wasted = taken - healed, left = still on the
     # floor when the visit ended.
     hearts_dropped: int = 0
@@ -197,6 +197,18 @@ class RoomRecord:
     # BossTransitions).  0 in older records.
     boss_stuns: int = 0
     boss_eats: int = 0
+    # Bombs in the visit (crates/zelda/src/bombs.rs): placed, enemy hits credited to them, placed without a hit,
+    # damage dealt (wood-sword hits: HP lost, a kill's remaining HP), 10th damage-free kills (any weapon), bombs
+    # placed while the next kill was the 10th, forced bomb drops armed (a bomb made the 10th kill), bomb pickups.
+    # 0 in older records.
+    bomb_placed: int = 0
+    bomb_hits: int = 0
+    bomb_misses: int = 0
+    bomb_damage: int = 0
+    bomb_tenth_kills: int = 0
+    bomb_tenth_tries: int = 0
+    bomb_armed: int = 0
+    bomb_picked_up: int = 0
 
 
 @dataclass

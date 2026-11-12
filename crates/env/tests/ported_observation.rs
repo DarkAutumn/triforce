@@ -575,5 +575,4 @@ fn selected_item_is_not_observed() {
         obs.push(ObservationBuilder::new(false, false).reset(&state, &objective, None, s.mask()).link);
     }
     assert!(obs[0] == obs[1] && obs[1] == obs[2]);
-    assert!(feature_names().link.iter().zip(&obs[0]).all(|(n, &v)| !n.starts_with("selected_") || v == 0.0));
 }

@@ -82,6 +82,8 @@ vars! {
     HeartsAndContainers = ("hearts_and_containers", 0x66F, false),
     PartialHearts = ("partial_hearts", 0x670, false),
     KillStreak = ("kill_streak", 0x627, false),
+    HelpDropCount = ("help_drop_count", 0x050, false),
+    HelpDropValue = ("help_drop_value", 0x051, false),
     RoomKills = ("room_kills", 0x34F, false),
     Rupees = ("rupees", 0x66D, false),
     RupeesToAdd = ("rupees_to_add", 0x67D, false),

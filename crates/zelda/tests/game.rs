@@ -211,13 +211,13 @@ fn look_ahead(s: &mut S) {
     let mut hidden = Vec::new();
     for on in [true, false] {
         s.restore(&snap);
-        s.look_ahead = on;
+        s.look_ahead = if on { zelda::LookAhead::All } else { zelda::LookAhead::Off };
         let (runs, frame) = (s.nes().1, s.frame());
         s.act(Action::new(ActionKind::Beams, Direction::E, 0).unwrap())
             .unwrap();
         hidden.push((s.nes().1 - runs) - (s.frame() - frame));
     }
-    s.look_ahead = true;
+    s.look_ahead = zelda::LookAhead::All;
     assert!(hidden[0] > 0 && hidden[1] == 0, "{hidden:?}");
 }
 

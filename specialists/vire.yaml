@@ -5,8 +5,8 @@ success: [exit-correct, triforce-collected]   # 0x03 ends on the D4 triforce (th
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chains arrive with partial hearts (round 5)
-items: {bombs: false}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
+items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 curriculum: {enabled: true}             # trajectories/vire (Go-Explore paths per start state): not explored yet
 one_room: true
 max_steps: 2000

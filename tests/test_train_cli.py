@@ -340,7 +340,7 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
     run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '3', '--models-dir', str(tmp_path),
                           '--run-id', 'confirm', '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
-                          '--stop-hearts-delta', '0', '--device', 'cpu'])
+                          '--stop-hearts-delta', '0', '--stop-bombs-delta', '0', '--device', 'cpu'])
     assert train.run_status(run_dir) == ('early_stop' if stops else 'completed')
     (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
     events = read_jsonl(str(next(log_dir.glob('*.jsonl'))))
@@ -358,34 +358,55 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
     assert ('early_stop' in [e['event'] for e in events]) == stops
 
 
-def test_a_stop_also_waits_for_the_hearts_lost_to_stop_improving(states_dir, tmp_path, logs_dir, monkeypatch):
-    """With --stop-hearts-delta a confirmed check stops only when its hearts lost per episode is no better (by the
-    delta or 2 SE) than the best earlier confirmed check: the first confirmed check never stops, an improving one
-    trains on, a level one stops; checks are at least --stop-hearts-gap iterations apart."""
-    losses = iter([1.0, 0.5, 0.49, 0.0])
-    calls = []
+def _plateau_checks(states_dir, tmp_path, logs_dir, monkeypatch, run_id, outcomes, flags):
+    """Trains with every iteration proposing a stop and fake confirmation evaluations, the k-th returning
+    ``outcomes[k]`` = (hearts lost, bombs dict) for every episode; returns the early_stop_check events."""
+    outcomes = iter(outcomes)
 
     def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, deterministic=False,
                   stop=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
-        lost = next(losses)
-        calls.append(seed)
+        lost, bombs = next(outcomes)
         for _ in range(runs):
-            stop({'success': True, 'start_state': 'start', 'start_health': 3.0, 'health': 3.0 - lost})
+            stop({'success': True, 'start_state': 'start', 'start_health': 3.0, 'health': 3.0 - lost,
+                  'bombs': bombs})
         return {'start': (runs, runs)}
 
     monkeypatch.setattr(train, 'success_by_state', fake_eval)
     monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
     run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '8', '--models-dir', str(tmp_path),
-                          '--run-id', 'hearts', '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
-                          '--stop-hearts-gap', '2', '--device', 'cpu'])
+                          '--run-id', run_id, '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
+                          '--stop-check-gap', '2', '--device', 'cpu', *flags])
     assert train.run_status(run_dir) == 'early_stop'
     (log_dir,) = [path for path in logs_dir.iterdir() if path.is_dir()]
-    checks = [e for e in read_jsonl(str(next(log_dir.glob('*.jsonl')))) if e['event'] == 'early_stop_check']
+    return [e for e in read_jsonl(str(next(log_dir.glob('*.jsonl')))) if e['event'] == 'early_stop_check']
+
+
+def test_a_stop_also_waits_for_the_hearts_lost_to_stop_improving(states_dir, tmp_path, logs_dir, monkeypatch):
+    """With --stop-hearts-delta a confirmed check stops only when its hearts lost per episode is no better (by the
+    delta or 2 SE) than the best earlier confirmed check: the first confirmed check never stops, an improving one
+    trains on, a level one stops; checks are at least --stop-check-gap iterations apart."""
+    checks = _plateau_checks(states_dir, tmp_path, logs_dir, monkeypatch, 'hearts',
+                             [(lost, {}) for lost in (1.0, 0.5, 0.49, 0.0)], ['--stop-bombs-delta', '0'])
     assert [(c['iteration'], pytest.approx(c['hearts_lost']), c['hearts_improving'], c['decision'])
             for c in checks] == [(1, 1.0, True, 'continue'), (3, 0.5, True, 'continue'), (5, 0.49, False, 'stop')]
-    assert all(c['hearts_lost_se'] == pytest.approx(0) for c in checks) and len(calls) == 3
+    assert all(c['hearts_lost_se'] == pytest.approx(0) for c in checks)
+    assert all(c['bombs_improving'] is None for c in checks)
+
+
+def test_a_stop_also_waits_for_the_bomb_value_to_stop_improving(states_dir, tmp_path, logs_dir, monkeypatch):
+    """With --stop-bombs-delta (Lee, round 19) a confirmed check also needs the bomb value per episode (the bomb
+    reward terms: 0.5 per hit, 0.75 per drop armed, 0.5 per pickup, -0.25 per bomb) to be no better than the best
+    earlier check by the delta or 2 SE: hearts level from the start, bombs rising, then level."""
+    bombs = [{'placed': 2, 'hits': 0}, {'placed': 2, 'hits': 1}, {'placed': 2, 'hits': 2, 'armed': 1},
+             {'placed': 2, 'hits': 2, 'armed': 1, 'picked_up': 0}]
+    checks = _plateau_checks(states_dir, tmp_path, logs_dir, monkeypatch, 'bombs',
+                             [(0.5, b) for b in bombs], ['--stop-hearts-delta', '0.02'])
+    assert [(c['iteration'], pytest.approx(c['bomb_value']), c['hearts_improving'], c['bombs_improving'],
+             c['decision']) for c in checks] == [
+        (1, -0.5, True, True, 'continue'), (3, 0.0, False, True, 'continue'), (5, 1.25, False, True, 'continue'),
+        (7, 1.25, False, False, 'stop')]
 
 
 def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, logs_dir):
@@ -395,7 +416,7 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     run_dir = train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '4',
                           '--steps-per-update', '16', '--iterations', '50', '--models-dir', str(tmp_path),
                           '--run-id', 'early', '--seed', '1', '--stop-success', '0.0', '--stop-patience', '1',
-                          '--stop-hearts-delta', '0', '--device', 'cpu'])
+                          '--stop-hearts-delta', '0', '--stop-bombs-delta', '0', '--device', 'cpu'])
     with open(run_dir / 'train_summary.json', encoding='utf-8') as file:
         summary = json.load(file)
     checkpoint = registry.load_checkpoint(run_dir)
