@@ -2,6 +2,9 @@
 
 use crate::actions::Action;
 use crate::blocks::{ProjectileBlock, ShieldWatch};
+use crate::clips::{
+    ClipAbort, ClipOutcome, ClipSettings, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, SkipTarget,
+};
 use crate::enums::{ActionKind, Direction, ObjectClass, selected};
 use crate::game::GameView;
 use crate::nes::Nes;
@@ -172,6 +175,8 @@ pub struct OptionResult {
     /// Frames of the option itself, before uncontrollable skipping.
     pub control_frames: u32,
     pub projectile_blocks: Vec<ProjectileBlock>,
+    /// The skip this option performed (a CLIP, or a MOVE under the `long`/`edge` triggers): `crate::clips`.
+    pub clip: Option<ClipOutcome>,
 }
 
 impl OptionResult {
@@ -341,6 +346,8 @@ pub struct Executor<S> {
     /// Keep the last frame before each room entry an action causes.
     pub capture_pre_entry: bool,
     pub last_pre_entry: Option<S>,
+    /// How MOVE reaches the skip macro (`crate::clips`; the session sets it).
+    pub clips: ClipSettings,
     blocks: Option<Vec<ProjectileBlock>>,
 }
 
@@ -351,6 +358,7 @@ impl<S> Default for Executor<S> {
             just_exited_cave: false,
             capture_pre_entry: false,
             last_pre_entry: None,
+            clips: ClipSettings::default(),
             blocks: None,
         }
     }
@@ -390,7 +398,12 @@ impl<S> Executor<S> {
         let location = (state.level(), state.location(), state.full_location().in_cave);
         self.blocks = Some(Vec::new());
         let result = (|| {
-            let interrupt = if matches!(action.kind, ActionKind::Move | ActionKind::Wait) {
+            let mut clip = None;
+            let interrupt = if let Some(target) = self.clips.action_target(state, action) {
+                let (interrupt, outcome) = self.run_skip(m, action.direction, target);
+                clip = Some(outcome);
+                interrupt
+            } else if matches!(action.kind, ActionKind::Move | ActionKind::Wait) {
                 self.run_timed(m, action, state)
             } else {
                 self.run_attack(m, action);
@@ -405,6 +418,7 @@ impl<S> Executor<S> {
                 interrupt,
                 control_frames,
                 projectile_blocks: self.blocks.take().unwrap_or_default(),
+                clip,
             })
         })();
         self.blocks = None;
@@ -468,6 +482,70 @@ impl<S> Executor<S> {
             before = after;
         }
         None
+    }
+
+    /// The grid-point skip toward `target` (`crate::clips`): the decision table every frame until Link stands at the
+    /// end point. A hit, a room change or game over end it at once (as a MOVE); spawns and nearby monsters don't.
+    /// Missed presses back off and retry; the presses, a stand-still and a frame cap end it cleanly. Link is left
+    /// where he stands, from where MOVE (and the skip itself, after its back-off) works again.
+    fn run_skip<N: Nes>(
+        &mut self,
+        m: &mut Machine<N>,
+        direction: Direction,
+        target: Option<SkipTarget>,
+    ) -> (Option<Interrupt>, ClipOutcome) {
+        let Some(target) = target else {
+            let outcome = ClipOutcome { direction, kind: None, abort: Some(ClipAbort::Unavailable), presses: 0 };
+            return (None, outcome);
+        };
+        let mut controller = Controller::new(target);
+        let mut before = FrameWatch::new(m.ram());
+        let mut still = 0;
+        let mut abort = Some(ClipAbort::FrameCap);
+        let mut interrupt = None;
+        for _ in 0..MAX_SKIP_FRAMES {
+            let s = target.read(m.ram());
+            let input = match controller.decide(s) {
+                Decision::Done => {
+                    abort = None;
+                    break;
+                }
+                Decision::GiveUp => {
+                    abort = Some(ClipAbort::Missed);
+                    break;
+                }
+                Decision::Input(input) => input,
+            };
+            let buttons = match input {
+                Input::Toward => target.walk(true),
+                Input::Away => target.walk(false),
+                Input::Press => target.press(),
+            };
+            self.step(m, buttons, 1);
+            let after = FrameWatch::new(m.ram());
+            let ended = match detect_interrupt(&before, &after, 0) {
+                Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => Some(i),
+                _ if SCROLLING_MODES.contains(&after.mode) => Some(Interrupt::Transition),
+                _ => None,
+            };
+            if let Some(i) = ended {
+                interrupt = Some(i);
+                abort = Some(ClipAbort::Interrupted(i));
+                break;
+            }
+            let now = target.read(m.ram());
+            if input == Input::Press {
+                controller.pressed(now);
+            }
+            still = if now.raw == s.raw { still + 1 } else { 0 };
+            if still >= MAX_STILL_FRAMES {
+                abort = Some(ClipAbort::Stalled);
+                break;
+            }
+            before = after;
+        }
+        let outcome = ClipOutcome { direction, kind: Some(target.kind), abort, presses: controller.presses };
+        (interrupt, outcome)
     }
 
     fn run_attack<N: Nes>(&mut self, m: &mut Machine<N>, action: &Action) {

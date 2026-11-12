@@ -67,7 +67,7 @@ def observations(native):
 def synthetic_rows(observations):
     """Edge cases play rarely reaches, on copies of real rows: all-empty entity rows; exactly one legal kind with its
     direction and duration rows full or empty (each combination, every kind); all-True masks."""
-    kinds, dirs, durs = 7, 8, 4
+    kinds, dirs, durs = 8, 8, 4
     n = len(observations['action_mask'])
 
     def pick(count):
@@ -94,7 +94,7 @@ def torch_heads(network, obs, actions):
         batch = network._batch({k: v for k, v in obs.items() if k != 'action_mask'})  # pylint: disable=protected-access
         policy_features, _ = network.mlp_extractor(network._features(batch))  # pylint: disable=protected-access
         mask = torch.as_tensor(obs['action_mask'])
-        kinds, dirs, durs = 7, 8, 4
+        kinds, dirs, durs = 8, 8, 4
         kind = torch.as_tensor(actions[:, 0])
         rows = torch.arange(len(kind))
         kind_lp = torch.log_softmax(network.kind_head(policy_features).masked_fill(~mask[:, :kinds], -1e9), -1)
@@ -225,7 +225,7 @@ def test_non_finite_weights_and_bad_actions_are_value_errors(native, observation
     with pytest.raises(ValueError, match='non-finite'):
         poisoned.to_native()
     rows = {k: v[:1] for k, v in observations.items()}
-    for actions in ([[7, 0, 0]], [[-1, 0, 0]], [[0, 8, 0]], [[0, 0, 99]], [[0, -1, 0]]):
+    for actions in ([[8, 0, 0]], [[-1, 0, 0]], [[0, 8, 0]], [[0, 0, 99]], [[0, -1, 0]]):
         with pytest.raises(ValueError):
             native.evaluate(rows, actions=np.array(actions, np.int64))
     with pytest.raises(ValueError, match='integers'):

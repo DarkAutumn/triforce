@@ -1,6 +1,7 @@
 //! A game session: emulator, option executor and game model.
 
 use crate::actions::{Action, ActionMask, compute_action_mask};
+use crate::clips::ClipSettings;
 use crate::change::{Change, LookAhead};
 use crate::enums::{ActionKind, Direction};
 use crate::executor::{Executor, FrameSink, MODE_CAVE, Machine, ZeldaError};
@@ -171,6 +172,22 @@ impl<N: Nes> Session<N> {
         if let Some(state) = self.state.clone() {
             self.mask = self.compute_mask(&state);
         }
+    }
+
+    /// How the policy reaches the skip macro (`crate::clips`; the env sets it every step: the trigger from the
+    /// specialist's `clips.action`, the correct exits from the objective). The mask is recomputed when it changes.
+    pub fn set_clip_settings(&mut self, clips: ClipSettings) {
+        if self.executor.clips == clips {
+            return;
+        }
+        self.executor.clips = clips;
+        if let Some(state) = self.state.clone() {
+            self.mask = self.compute_mask(&state);
+        }
+    }
+
+    pub fn clip_settings(&self) -> ClipSettings {
+        self.executor.clips
     }
 
     /// Loads a machine state, applies randomization and overrides, and gains control of Link.
@@ -366,6 +383,7 @@ impl<N: Nes> Session<N> {
 
     fn compute_mask(&self, state: &GameView) -> ActionMask {
         let mut mask = compute_action_mask(state);
+        self.executor.clips.apply(&mut mask, state);
         for &kind in &self.disabled_kinds {
             mask.disallow_kind(kind);
         }

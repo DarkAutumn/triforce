@@ -1041,7 +1041,7 @@ impl PyEnvPool {
     /// `fraction` 1.0, `perturb_rng` True). A searched decision executes the search's action (`actions`;
     /// `logp_ent_val` is the policy's log-prob, entropy and value of it). Optional search buffers, written whenever
     /// present (unsearched rows: false, 0, NaN, -1, 0): `search_mask` `[n, steps]` bool, `search_policy`
-    /// `[n, steps, 224]` float32 (the improved policy over joint actions `kind * 32 + direction * 4 + duration`),
+    /// `[n, steps, 256]` float32 (the improved policy over joint actions `kind * 32 + direction * 4 + duration`),
     /// `search_q` `[n, steps, k]` float32 (each candidate's mean return, NaN if never evaluated),
     /// `search_actions` `[n, steps, k, 3]` int64 (the candidates), `search_value` `[n, steps]` float32 (the
     /// search's root value).

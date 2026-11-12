@@ -95,7 +95,7 @@ def test_a_pre_r56_checkpoint_loads_and_another_grid_encoder_does_not(tmp_path):
 
 
 def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states_dir):
-    assert registry.obs_schema_version() == 3
+    assert registry.obs_schema_version() == 4
     network, checkpoint = registry.load_model(_schema1_checkpoint(tmp_path))
     assert checkpoint['obs_schema_version'] == 1 and 'target' not in network.config.obs_spec
     # Eagerly on current observations: the target block is ignored.

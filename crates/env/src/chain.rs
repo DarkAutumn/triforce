@@ -28,6 +28,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::bombs::BombStats;
+use zelda::clips::ClipStats;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::GameMap;
@@ -319,6 +320,8 @@ pub struct RoomRecord {
     /// Dodongo stuns and swallowed bombs during the visit ([`BossTransitions`]).
     pub boss_stuns: u32,
     pub boss_eats: u32,
+    /// Grid-point skips completed and aborted during the visit (`zelda::clips`; JSON `clip_<field>`).
+    pub clips: ClipStats,
 }
 
 impl RoomRecord {
@@ -359,6 +362,7 @@ impl RoomRecord {
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
+            clips: ClipStats::default(),
         }
     }
 
@@ -387,6 +391,9 @@ impl RoomRecord {
         }
         for (name, value) in self.bombs.fields() {
             o.insert(format!("bomb_{name}"), json!(value));
+        }
+        for (name, value) in self.clips.fields() {
+            o.insert(format!("clip_{name}"), json!(value));
         }
         m
     }
@@ -848,6 +855,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.blocks += change.blocks() as u32;
         record.bombs_used += cheats.used.bombs;
         record.bombs.update(&change);
+        record.clips.update(&change);
         record.cheated += cheats.cheated;
         let boss = BossTransitions::of(&change);
         record.boss_stuns += boss.stuns;
@@ -951,10 +959,16 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// kill and the bomb count change within a room).
     fn update_disabled_kinds(&mut self) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
-        let items = &self.current.as_ref().expect("acting specialist").config.items;
-        let kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve);
+        let config = &self.current.as_ref().expect("acting specialist").config;
+        let kinds = config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
+        let clips = match &self.objective {
+            Some(objective) => crate::objective::clip_settings(config, self.session.state(), objective),
+            None => zelda::clips::ClipSettings::new(config.clips.action.trigger(), 0),
+        };
+        self.session.set_clip_settings(clips);
         self.builder.bomb_reserve = reserve;
+        self.builder.clips = config.clips.action != crate::config::ClipAction::None;
     }
 
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {

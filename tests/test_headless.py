@@ -74,7 +74,8 @@ def test_a_filter_keeps_only_its_ending_and_gives_up_after_max_runs(scripted_mod
     assert (status, saved, summary['saved'], summary['runs']) == (1, [], 0, 4)
     assert "saved 0 of 1 runs ending in 'win' after 4 runs" in err and not list((tmp_path / 'wins').iterdir())
     status, _, summary, err = run(capsys, tmp_path / 'deaths', 2, '--deaths-only', *common)
-    assert status == 1 and "saved 0 of 2 runs ending in 'death'" in err and summary['endings'] == {'stuck': 4}
+    assert status == 1 and "saved 0 of 2 runs ending in 'death'" in err
+    assert sum(summary['endings'].values()) == 4 and 'death' not in summary['endings']
     status, saved, summary, _ = run(capsys, tmp_path / 'stuck', 2, '--stuck-only', *common)
     assert status == 0 and summary['saved'] == 2 and {line[1] for line in saved} == {'stuck'}
     assert all(path.name.endswith('-stuck.tfreplay') for path in (tmp_path / 'stuck').iterdir())

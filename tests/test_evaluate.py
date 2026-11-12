@@ -13,7 +13,8 @@ import pytest
 
 import triforce
 from triforce import _native, evaluate, provenance, registry, replay
-from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _start_health_fraction, _visited_rooms,
+from triforce.evaluate import (_boss_stats, _clip_stats, _group, _linger_stats, _room_key, _start_health_fraction,
+                               _visited_rooms,
                                default_output, evaluate_specialist, format_report, read_evaluation, write_result)
 from triforce.model import ModelConfig
 from triforce.registry import save_checkpoint
@@ -286,6 +287,24 @@ def test_room_and_state_groups_average_health_hearts_blocks_and_count_endings():
     states = _group(records, lambda r: r['start_state'])
     assert list(states) == ['0_77cave_0', '1_44w_0', '1_44w_1']
     assert states['1_44w_1']['hearts_dropped'] == 0 and states['1_44w_1']['health_change_total'] == -1.5
+
+
+def test_clip_means_and_the_state_target_grouping():
+    def clips(done, aborted):
+        return {'done': done, 'aborted': aborted, 'done_n': 0, 'done_s': 0, 'done_w': done, 'done_e': 0}
+
+    records = [
+        _record((0, 0x59, False), '0_59w_0', True, 3.0, 3.0, 'exit-correct', clips=clips(1, 0), target='S'),
+        _record((0, 0x59, False), '0_59w_0', False, 3.0, 3.0, 'exit-wrong', clips=clips(0, 1), target='E'),
+        _record((0, 0x59, False), '0_59w_0', True, 3.0, 3.0, 'exit-correct', clips=clips(3, 1), target='E'),
+        _record((0, 0x59, False), '0_59w_1', True, 3.0, 3.0, 'exit-correct'),          # older: no counters
+    ]
+    assert _clip_stats(records) == {'mean_clips_done': 4 / 3, 'mean_clips_aborted': 2 / 3, 'mean_clips_done_n': 0,
+                                    'mean_clips_done_s': 0, 'mean_clips_done_w': 4 / 3, 'mean_clips_done_e': 0}
+    groups = _group(records, lambda r: f"{r['start_state']}:{r.get('target', '-')}")
+    assert list(groups) == ['0_59w_0:E', '0_59w_0:S', '0_59w_1:-']
+    assert (groups['0_59w_0:E']['success_rate'], groups['0_59w_0:E']['mean_clips_done']) == (0.5, 1.5)
+    assert groups['0_59w_0:S']['mean_clips_aborted'] == 0 and 'mean_clips_done' not in groups['0_59w_1:-']
 
 
 def test_boss_stats_tell_stun_kills_from_swallow_kills():

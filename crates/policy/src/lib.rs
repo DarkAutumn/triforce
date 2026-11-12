@@ -639,7 +639,7 @@ impl Policy {
     }
 
     /// Values of one decision's whole distribution ([`Policy::evaluate_with_distribution`]): the action mask's
-    /// layout, `kinds + kinds * directions + kinds * durations` (7 + 56 + 28 = 91 for Zelda).
+    /// layout, `kinds + kinds * directions + kinds * durations` (8 + 64 + 32 = 104 for Zelda).
     pub fn distribution_size(&self) -> usize {
         self.kinds + self.kinds * self.directions + self.kinds * self.durations
     }
@@ -914,7 +914,7 @@ impl Policy {
         Ok(out)
     }
 
-    /// Joint actions: `kinds * directions * durations` (7 × 8 × 4 = 224 for Zelda).
+    /// Joint actions: `kinds * directions * durations` (8 × 8 × 4 = 256 for Zelda).
     pub fn joint_size(&self) -> usize {
         self.kinds * self.directions * self.durations
     }

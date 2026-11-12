@@ -39,6 +39,9 @@
   weapon), bombs placed while the next kill was the 10th, forced bomb drops armed, bomb pickups.
 - ``boss/stuns`` and ``boss/eats``: Dodongo stuns (a bomb's smoke; the sword can kill him then) and bombs he
   swallowed per completed episode, from ``info['boss']`` (crates/env/src/critic.rs ``BossTransitions``).
+- ``clips/<stat>`` for each of ``CLIP_STATS`` per completed episode (``info['clips']``; crates/zelda/src/clips.rs):
+  grid-point skips completed (``clips/done``), started and not completed (``clips/aborted``), completed per
+  direction (``clips/done_n`` ...).
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /
   ``info['episode_steps']``).
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
@@ -61,7 +64,7 @@ from typing import Optional
 
 import numpy as np
 
-from ._native import BOMB_STATS, CHEAT_ITEMS, INTERRUPTS
+from ._native import BOMB_STATS, CHEAT_ITEMS, CLIP_STATS, INTERRUPTS
 from .actions import DURATIONS, KINDS, TIMED_KINDS
 
 
@@ -96,6 +99,7 @@ class RolloutMetrics:
         self.cheated = Counter()
         self.boss_stuns = 0
         self.boss_eats = 0
+        self.clip_stats = Counter()
         self.episode_frames = 0
         self.episode_steps = 0
         self.interrupts = Counter()
@@ -179,6 +183,9 @@ class RolloutMetrics:
         boss = info.get('boss') or {}
         self.boss_stuns += boss.get('stuns', 0)
         self.boss_eats += boss.get('eats', 0)
+        clips = info.get('clips') or {}
+        for stat in CLIP_STATS:
+            self.clip_stats[stat] += clips.get(stat, 0)
         self.health_fraction += health / max_health if max_health > 0 else 0.0
         self.episode_frames += int(info.get('episode_frames', 0))
         self.episode_steps += int(info.get('episode_steps', 0))
@@ -234,6 +241,8 @@ class RolloutMetrics:
                 result[f'cheated/{item}'] = self.cheated[item] / eps
             result['boss/stuns'] = self.boss_stuns / eps
             result['boss/eats'] = self.boss_eats / eps
+            for stat in CLIP_STATS:
+                result[f'clips/{stat}'] = self.clip_stats[stat] / eps
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
         if self.curriculum_episodes:

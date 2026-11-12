@@ -34,7 +34,7 @@ Phasic policy gradient (better-play §6a, Cobbe et al., 2021; ``PPGStore``, ``PP
 the PPO updates are the policy phase, unchanged.  Each consumed rollout's observations, masks and value targets (the
 GAE returns) are kept on CPU; every ``ppg_every`` iterations an auxiliary phase runs ``ppg_aux_epochs`` epochs over
 them with ``½(V − R)² + ppg_clone_coeff · KL(π_old ‖ π_θ)`` (π_old: the joint action distributions from before the
-phase, an exact KL over the 224 joint actions), then the store is cleared.  The value head is the existing one: the
+phase, an exact KL over the 256 joint actions), then the store is cleared.  The value head is the existing one: the
 encoders are shared by both towers, so the extra value epochs reach the shared features and the clone term keeps the
 policy where it was.  The phase has its own Adam (the paper's separate optimizer; not checkpointed).
 """
@@ -649,7 +649,7 @@ class PPO:
         minibatch_size = max(1, -(-rows // (cfg.minibatches * len(self.ppg))))
 
         def measure():
-            """(value loss, explained variance, joint log-probs [rows, 224]) over every stored row."""
+            """(value loss, explained variance, joint log-probs [rows, 256]) over every stored row."""
             values, joints = [], []
             with torch.no_grad():
                 for begin in range(0, rows, minibatch_size):

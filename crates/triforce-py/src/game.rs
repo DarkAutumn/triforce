@@ -455,6 +455,22 @@ impl PyChange {
     fn blocks(&self) -> usize {
         self.change.blocks()
     }
+    /// The grid-point skip the option performed (`zelda::clips`): `{'direction', 'kind' ('wrap'/'block', None when
+    /// unavailable), 'completed', 'abort' (None, 'unavailable', 'interrupted', 'missed', 'stalled', 'frame-cap'),
+    /// 'presses'}`, or None.
+    #[getter]
+    fn clip<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
+        let Some(clip) = self.change.clip else {
+            return Ok(None);
+        };
+        let d = PyDict::new(py);
+        d.set_item("direction", clip.direction.name())?;
+        d.set_item("kind", clip.kind.map(|k| k.name()))?;
+        d.set_item("completed", clip.completed())?;
+        d.set_item("abort", clip.abort.map(|a| a.name()))?;
+        d.set_item("presses", clip.presses)?;
+        Ok(Some(d))
+    }
     #[getter]
     fn health_lost(&self) -> f64 {
         self.change.health_lost
@@ -906,6 +922,32 @@ impl PyGame {
             .collect::<PyResult<Vec<_>>>()?;
         self.inner.lock().session.set_disabled_kinds(&kinds);
         Ok(())
+    }
+
+    /// How the policy reaches the grid-point skip (`zelda::clips`; a specialist's `clips.action`): `action` one of
+    /// `none`, `kind`, `long`, `edge`; `correct_exits` the directions (`'N'`, ...) the `edge` trigger leaves plain.
+    /// A `CLIP <dir>` action runs the skip whatever the trigger (the mask only offers it under `kind`).
+    #[pyo3(signature = (action, correct_exits=Vec::new()))]
+    fn set_clip_settings(&self, action: &str, correct_exits: Vec<String>) -> PyResult<()> {
+        let trigger = zelda::clips::ClipTrigger::from_name(action)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown clips action {action:?}")))?;
+        let mut bits = 0;
+        for d in &correct_exits {
+            let direction = Direction::from_name(d)
+                .filter(|d| d.is_cardinal())
+                .ok_or_else(|| PyValueError::new_err(format!("unknown exit direction {d:?}")))?;
+            bits |= direction.value();
+        }
+        self.inner.lock().session.set_clip_settings(zelda::clips::ClipSettings::new(trigger, bits));
+        Ok(())
+    }
+
+    /// Whether the grid-point skip is available in `direction` now (`zelda::clips::skip_available`).
+    fn skip_available(&self, direction: &str) -> PyResult<bool> {
+        let direction = Direction::from_name(direction)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown direction {direction:?}")))?;
+        let state = self.inner.lock().state()?;
+        Ok(zelda::clips::skip_available(&state, direction))
     }
 
     /// Render emulated frames (from the next one on).

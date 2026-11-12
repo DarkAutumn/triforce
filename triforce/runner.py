@@ -209,6 +209,14 @@ class RoomRecord:
     bomb_tenth_tries: int = 0
     bomb_armed: int = 0
     bomb_picked_up: int = 0
+    # Grid-point skips in the visit (crates/zelda/src/clips.rs): completed, aborted, completed per direction.
+    # 0 in older records.
+    clip_done: int = 0
+    clip_aborted: int = 0
+    clip_done_n: int = 0
+    clip_done_s: int = 0
+    clip_done_w: int = 0
+    clip_done_e: int = 0
 
 
 @dataclass

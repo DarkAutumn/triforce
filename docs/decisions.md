@@ -1195,3 +1195,36 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   check (`asm:Damage_HandleWeaponHit`) compares only directions, so a bomb never hurts a Darknut facing opposite
   to Link's facing when he placed it, wherever it stands (measured over 6 seeds in 3:0x5b: 434 such cases, 0 hits;
   951 of 1478 others hit). No special handling: the observation has each Darknut's direction.
+
+## 2026-11-12 — The grid-point skip in the agent: the wrap and the block clip, every design behind config (version 1.3.3.0)
+
+- **Asked for:** the agent should use the frame-exact grid-point skip (`zelda-asm/mechanics.md`, "Screen wrap
+  (overworld)" and "Grid-point skip"): the overworld screen wrap and the dungeon block clip. The agent's MOVE can't do
+  it (4-32 frames; the trick is one perpendicular frame at one pixel in one sub-pixel cadence), so the executor plays
+  it as a macro, and several ways of offering it to the policy are built side by side, picked per specialist. Which
+  one stays is decided after the round 21 experiments; nothing is stripped before that.
+- **Built:**
+  - `zelda::clips`: `skip_target`/`skip_available` (state only; the mask, the executor and the observation share it),
+    the per-frame decision table (`Controller`: back off to G' when too close or in the wrong cadence, walk to the
+    trick state heading toward T, press one perpendicular frame, hold the heading) run by `Executor::run_skip`
+    without RAM writes or the sword; `ClipOutcome` in `OptionResult`/`Change`; `ClipStats`; `ClipSettings` on the
+    session (`set_clip_settings`) next to the disabled kinds.
+  - The action schema's 8th kind `CLIP` (directional, cardinal, untimed; action schema 2), always present; config
+    gates it. Observation schema 4: `history` one-hots 8 kinds, `link` gains `clip_usable_{N,S,W,E}` (the skip is
+    available and `clips.action` is not `none`; the mask is no network input). COMPAT bump to 1.3.3.0: no older model
+    loads. Old replays still verify and read (their META `actions` describes 7 kinds).
+  - Specialist YAML `clips: {action: none|kind|long|edge, shaping: jump|walk}` (defaults `none`, `jump`: every
+    specialist under `specialists/` behaves as before). `kind`: CLIP legal where the skip is available. `long`: a
+    MOVE of duration 32 performs it there (shorter MOVEs are plain; the mask makes MOVE legal in such a direction
+    even where the plain walk is blocked, so `MOVE N 4` into a block-clip square is a 1-frame wall). `edge`: a MOVE
+    of any duration performs it where it is available and the direction is not a correct exit of the objective (the
+    `next_room_*` bits; a block clip, which has no exit side, from any MOVE into the square). `shaping: walk` caps
+    the PBRS of a step whose skip completed at what walking its frames could earn (frames × 1.5 / 8 / 20, either
+    sign); `jump` leaves it as for any position change.
+  - Counters `clips/done`, `clips/aborted`, `clips/done_<dir>` (training metrics, evaluation, visits, chain room
+    records). Evaluation records carry the route step's `target` exit and `entry`; `eval.json` `by_state_target`
+    groups by both, for one room trained toward two exits.
+  - The MOVE mask follows the game where a wrap or an aborted one leaves Link (X `$F8`: E reads the tile under him,
+    N/S read past the tile map, as the game).
+- **Pending:** the choice between `kind`, `long` and `edge`, and between `jump` and `walk` (round 21 experiments).
+  Not built (asked not to): the sword variant, the ladder clip, the N/S wraps.

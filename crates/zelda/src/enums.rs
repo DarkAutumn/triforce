@@ -16,10 +16,12 @@ pub enum ActionKind {
     Bomb = 4,
     Boomerang = 5,
     Arrow = 6,
+    /// The grid-point skip macro (`crate::clips`): the overworld screen wrap (W, E) or the dungeon block clip (N, S).
+    Clip = 7,
 }
 
 impl ActionKind {
-    pub const ALL: [ActionKind; 7] = [
+    pub const ALL: [ActionKind; 8] = [
         ActionKind::Move,
         ActionKind::Wait,
         ActionKind::Sword,
@@ -27,6 +29,7 @@ impl ActionKind {
         ActionKind::Bomb,
         ActionKind::Boomerang,
         ActionKind::Arrow,
+        ActionKind::Clip,
     ];
 
     pub fn from_index(index: usize) -> Option<ActionKind> {
@@ -46,6 +49,7 @@ impl ActionKind {
             ActionKind::Bomb => "BOMB",
             ActionKind::Boomerang => "BOOMERANG",
             ActionKind::Arrow => "ARROW",
+            ActionKind::Clip => "CLIP",
         }
     }
 
@@ -593,7 +597,8 @@ mod tests {
             assert_eq!(k.index(), i);
             assert_eq!(ActionKind::from_name(k.name()), Some(k));
         }
-        assert_eq!(ActionKind::from_index(7), None);
+        assert_eq!(ActionKind::from_index(8), None);
+        assert_eq!(ActionKind::Clip.index(), 7);
         assert_eq!(ActionKind::from_name("move"), None);
     }
 

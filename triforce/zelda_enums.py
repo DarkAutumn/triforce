@@ -13,6 +13,7 @@ class ActionKind(IntEnum):
     BOMB = 4
     BOOMERANG = 5
     ARROW = 6
+    CLIP = 7        # the grid-point skip macro (crates/zelda/src/clips.rs)
 
     @property
     def is_b_item(self):

@@ -89,6 +89,8 @@ PROGRESS_METRICS += tuple(f'{prefix}/{key}' for prefix in ('linger', 'curriculum
 # `bombs/<stat>` for `_native.BOMB_STATS` (spelled out: this module doesn't load the native module, the GUI reads it).
 PROGRESS_METRICS += tuple(f'bombs/{stat}' for stat in ('placed', 'hits', 'misses', 'damage', 'tenth_kills',
                                                        'tenth_tries', 'armed', 'picked_up'))
+# `clips/<stat>` for `_native.CLIP_STATS` (spelled out likewise).
+PROGRESS_METRICS += tuple(f'clips/{stat}' for stat in ('done', 'aborted', 'done_n', 'done_s', 'done_w', 'done_e'))
 
 
 def logs_root(root: Optional[str | os.PathLike] = None) -> Path:

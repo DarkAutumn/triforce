@@ -22,7 +22,8 @@ use zelda::room_state::{
 use zelda::tiles::{Grid, NUM_TILE_CLASSES, build_grid};
 use zelda::{Action, Change};
 
-pub const OBS_SCHEMA_VERSION: u32 = 3;
+/// 4: the CLIP kind in `history` (8 kinds) and `link` `clip_usable_{N,S,W,E}` (round 21).
+pub const OBS_SCHEMA_VERSION: u32 = 4;
 
 /// NES object slots 1-$B, then the room item ("treasure").
 pub const NUM_ENTITY_SLOTS: usize = 12;
@@ -36,9 +37,9 @@ pub const ITEM_TYPE_BASE: i64 = 0x80;
 pub const ENTITY_VOCAB: usize = ITEM_TYPE_BASE as usize + NUM_ITEM_IDS as usize;
 
 pub const ROOM_STATE_SIZE: usize = 84;
-pub const LINK_SIZE: usize = 80;
+pub const LINK_SIZE: usize = 84;
 pub const ENTITY_FEATURE_SIZE: usize = 33;
-pub const HISTORY_SIZE: usize = 34;
+pub const HISTORY_SIZE: usize = 35;
 pub const OBJECTIVE_SIZE: usize = 10;
 pub const TARGET_SIZE: usize = 8;
 pub const GRID_ROWS: usize = 22;
@@ -209,6 +210,8 @@ mod l {
     pub const DROP_ARMED: usize = 77;
     pub const DROP_IS_BOMBS: usize = 78;
     pub const FAIRY_NEXT: usize = 79;
+    /// The grid-point skip is available and the specialist's `clips.action` is not `none` (round 21; N, S, W, E).
+    pub const CLIP_USABLE: usize = 80;
 }
 
 // entity offsets
@@ -244,12 +247,12 @@ mod e {
 mod h {
     pub const HAS_LAST_ACTION: usize = 0;
     pub const KIND: usize = 1;
-    pub const DIR: usize = 8;
-    pub const DURATION: usize = 16;
-    pub const FRAMES: usize = 20;
-    pub const INTERRUPT: usize = 21;
-    pub const ROOM_CHANGED: usize = 29;
-    pub const ENTERED_FROM: usize = 30;
+    pub const DIR: usize = 9;
+    pub const DURATION: usize = 17;
+    pub const FRAMES: usize = 21;
+    pub const INTERRUPT: usize = 22;
+    pub const ROOM_CHANGED: usize = 30;
+    pub const ENTERED_FROM: usize = 31;
 }
 
 /// Feature names of every vector key, in order.
@@ -388,6 +391,7 @@ fn build_feature_names() -> FeatureNames {
         "drop_is_bombs",
         "fairy_next",
     ]));
+    link.extend(DIR_BITS.iter().map(|(d, _)| format!("clip_usable_{}", d.name())));
 
     let entity = s(&[
         "presence",
@@ -638,6 +642,9 @@ pub struct ObservationBuilder {
     /// The route's bomb reserve at the step Link plays (`GameCompletion::bomb_reserve`), for the `link` block;
     /// the env sets it before every observation.
     pub bomb_reserve: u8,
+    /// The specialist's `clips.action` is not `none`: the `link` block's `clip_usable_*` follow the skip's
+    /// availability (`zelda::clips::skip_available`); the env sets it with the bomb reserve.
+    pub clips: bool,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
@@ -650,6 +657,7 @@ impl ObservationBuilder {
             objective,
             target,
             bomb_reserve: 0,
+            clips: false,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
@@ -717,7 +725,7 @@ impl ObservationBuilder {
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs),
-            link: link(state, mask, self.bomb_reserve),
+            link: link(state, mask, self.bomb_reserve, self.clips),
             entity_types,
             entity_features,
             grid: build_grid(state, &rs),
@@ -891,17 +899,9 @@ impl ObservationBuilder {
             return v;
         }
         v[4 + objective_kind_index(objective.kind)] = 1.0;
-        let location = state.full_location();
-        for next in &objective.next_rooms {
-            let direction = state
-                .game_map()
-                .exit_direction(location, *next, state.peek(zelda::game_map::MAZE_STEP))
-                .value();
-            for (i, (_, bit)) in DIR_BITS.iter().enumerate() {
-                if direction & bit != 0 {
-                    v[i] = 1.0;
-                }
-            }
+        let bits = crate::objective::exit_bits(state, objective);
+        for (i, (_, bit)) in DIR_BITS.iter().enumerate() {
+            v[i] = b(bits & bit != 0);
         }
         v
     }
@@ -1073,7 +1073,7 @@ fn room_state(rs: &RoomState) -> [f32; ROOM_STATE_SIZE] {
     v
 }
 
-fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8) -> [f32; LINK_SIZE] {
+fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8, clips: bool) -> [f32; LINK_SIZE] {
     use zelda::Var;
     let ram = state.ram();
     let info = |v: Var| state.var(v);
@@ -1170,6 +1170,13 @@ fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8) -> [f32; LINK_SIZ
     v[l::DROP_ARMED] = b(help >= 10);
     v[l::DROP_IS_BOMBS] = b(state.help_drop_is_bombs());
     v[l::FAIRY_NEXT] = b(state.kill_streak() == 15);
+    // The skip (`zelda::clips`): what CLIP's mask (`kind`) or a skipping MOVE (`long`, `edge`) needs, spelled out the
+    // same for every design (the mask is no network input).
+    if clips {
+        for (i, (d, _)) in DIR_BITS.iter().enumerate() {
+            v[l::CLIP_USABLE + i] = b(zelda::clips::skip_available(state, *d));
+        }
+    }
     v
 }
 
@@ -1210,6 +1217,7 @@ mod tests {
             (l::MAGIC_SHIELD, "magic_shield"),
             (l::BOMB_USABLE, "bomb_usable"),
             (l::FAIRY_NEXT, "fairy_next"),
+            (l::CLIP_USABLE, "clip_usable_N"),
         ] {
             assert_eq!(n.link[offset], name);
         }

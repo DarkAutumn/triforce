@@ -10,8 +10,9 @@
 //! [`TerminalInfo`] (`ending`, `outcome`, `start_state`, `start_health`, `hearts`, `linger`, `linger_room`,
 //! `blocks`, `bombs` (`used`: bombs placed), `cheated` (`bombs`, `keys`, `rupees`: cheated items used,
 //! `zelda::cheats`), `boss` (`stuns`, `eats`: Dodongo stunned by a bomb's smoke or swallowing a bomb,
-//! [`BossTransitions`]), `bootstrap_truncation`, `curriculum`, plus `episode_steps`,
-//! `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
+//! [`BossTransitions`]), `clips` (`done`, `aborted`, `done_<dir>`: grid-point skips, `zelda::clips`), `target` and
+//! `entry` (the route step's exit and entry, `-` off the route), `bootstrap_truncation`, `curriculum`, plus
+//! `episode_steps`, `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
 
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::{BossTransitions, Critique, GameplayCritic};
@@ -21,7 +22,7 @@ use crate::end_conditions::{
     NO_ROOM_PROGRESS, RETREAT,
 };
 use crate::error::EnvError;
-use crate::objective::{Attached, attach, needs_wavefront};
+use crate::objective::{Attached, attach, clip_settings, needs_wavefront};
 use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,6 +37,8 @@ use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::sync::Arc;
 use zelda::bombs::BombStats;
+use zelda::clips::ClipStats;
+use zelda::objectives::Objective;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
@@ -68,6 +71,12 @@ pub struct TerminalInfo {
     pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs ([`BossTransitions`]).
     pub boss: BossTransitions,
+    /// Grid-point skips completed and aborted (`zelda::clips`).
+    pub clip_stats: ClipStats,
+    /// The route step's exit and entry (routes.yaml strings, e.g. `E`, `cave`; `-` off the route): an evaluation
+    /// groups by (start state, target) so one room trained toward two exits reads apart.
+    pub target: String,
+    pub entry: String,
     /// The ending was `no-room-progress` or `no-damage` (bootstrap the value of the final observation).
     pub bootstrap_truncation: bool,
     pub curriculum: Option<CurriculumInfo>,
@@ -141,6 +150,11 @@ pub fn bombs_json(used: u32, stats: &BombStats) -> Value {
     Value::Object(o)
 }
 
+/// `{done, aborted, done_n, done_s, done_w, done_e}`: grid-point skips ([`ClipStats`]).
+pub fn clips_json(stats: &ClipStats) -> Value {
+    Value::Object(stats.fields().into_iter().map(|(name, value)| (name.to_owned(), json!(value))).collect())
+}
+
 impl StepInfo {
     /// The Python info dict (terminal keys merged in; `bootstrap_truncation`/`curriculum` only when set).
     pub fn to_json(&self) -> Value {
@@ -176,6 +190,9 @@ impl StepInfo {
             o.insert("bombs".into(), bombs_json(t.bombs_used, &t.bomb_stats));
             o.insert("cheated".into(), cheated_json(&t.cheated));
             o.insert("boss".into(), json!({"stuns": t.boss.stuns, "eats": t.boss.eats}));
+            o.insert("clips".into(), clips_json(&t.clip_stats));
+            o.insert("target".into(), json!(t.target));
+            o.insert("entry".into(), json!(t.entry));
             if t.bootstrap_truncation {
                 o.insert("bootstrap_truncation".into(), json!(true));
             }
@@ -235,6 +252,7 @@ pub struct EnvSnapshot<S> {
     blocks: u32,
     boss: BossTransitions,
     bomb_stats: BombStats,
+    clip_stats: ClipStats,
     episode_steps: u64,
     episode_frames: u64,
     reward_total: f64,
@@ -278,6 +296,10 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     blocks: u32,
     boss: BossTransitions,
     bomb_stats: BombStats,
+    clip_stats: ClipStats,
+    /// The episode's route step exit and entry ([`TerminalInfo::target`]).
+    episode_target: String,
+    episode_entry: String,
     episode_steps: u64,
     episode_frames: u64,
     reward_total: f64,
@@ -391,6 +413,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             blocks: 0,
             boss: BossTransitions::default(),
             bomb_stats: BombStats::default(),
+            clip_stats: ClipStats::default(),
+            episode_target: String::new(),
+            episode_entry: String::new(),
             episode_steps: 0,
             episode_frames: 0,
             reward_total: 0.0,
@@ -556,13 +581,17 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
-    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation.  Recomputed
-    /// every step: the 10th kill and the bomb count change within a room.
-    fn update_disabled_kinds(&mut self) {
+    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; and its clip
+    /// settings (`clips.action`, the correct exits of `objective`).  Recomputed every step: the 10th kill and the bomb
+    /// count change within a room, the objective with the room.
+    fn update_disabled_kinds(&mut self, objective: &Objective) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
+        let clips = clip_settings(&self.config, self.session.state(), objective);
+        self.session.set_clip_settings(clips);
         self.builder.bomb_reserve = reserve;
+        self.builder.clips = self.config.clips.action != crate::config::ClipAction::None;
     }
 
     /// Starts an episode from the session's state (loaded or restored).
@@ -579,7 +608,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             needs_wavefront(&self.config),
         );
         self.objectives = Some(gc);
-        self.update_disabled_kinds();
+        self.update_disabled_kinds(&attached.objective);
+        let step = self.route_step.and_then(|i| self.data.map.routes.get(&self.route)?.get(i));
+        (self.episode_target, self.episode_entry) = match step {
+            Some(s) => (s.exit.clone(), s.entry.clone()),
+            None => ("-".into(), "-".into()),
+        };
         self.critic.clear();
         self.end_conditions.clear();
         self.start_health = state.health();
@@ -594,6 +628,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.blocks = 0;
         self.boss = BossTransitions::default();
         self.bomb_stats = BombStats::default();
+        self.clip_stats = ClipStats::default();
         self.episode_steps = 0;
         self.episode_frames = 0;
         self.reward_total = 0.0;
@@ -639,6 +674,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             blocks: self.blocks,
             boss: self.boss,
             bomb_stats: self.bomb_stats,
+            clip_stats: self.clip_stats,
             episode_steps: self.episode_steps,
             episode_frames: self.episode_frames,
             reward_total: self.reward_total,
@@ -662,12 +698,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.blocks = snapshot.blocks;
         self.boss = snapshot.boss;
         self.bomb_stats = snapshot.bomb_stats;
+        self.clip_stats = snapshot.clip_stats;
         self.episode_steps = snapshot.episode_steps;
         self.episode_frames = snapshot.episode_frames;
         self.reward_total = snapshot.reward_total;
         self.episode_rewards.clone_from(&snapshot.episode_rewards);
-        // The disabled kinds depend on the state (the 10th kill, the bomb count) and aren't in the session snapshot.
-        self.update_disabled_kinds();
+        // The disabled kinds and clip settings depend on the state (the 10th kill, the bomb count, the objective)
+        // and aren't in the session snapshot.
+        if let Some(objective) = self.attached.as_ref().map(|a| a.objective.clone()) {
+            self.update_disabled_kinds(&objective);
+        }
     }
 
     /// Simulation mode for search (`Session::set_simulating`): no rendering, frame sink or pre-entry capture.
@@ -717,7 +757,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &self.config.reward,
             needs_wavefront(&self.config),
         );
-        self.update_disabled_kinds();
+        self.update_disabled_kinds(&curr.objective);
         self.linger.update(
             &LingerState::of(&change.previous, &prev.objective),
             &LingerState::of(&state, &curr.objective),
@@ -729,6 +769,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let boss = BossTransitions::of(&change);
         self.boss += boss;
         self.bomb_stats.update(&change);
+        self.clip_stats.update(&change);
         let scale = self.shaping.as_ref().map_or(self.config.reward.shaping_scale, ShapingDial::get);
         let Scored { rewards, ending, outcome, terminated, truncated } = score_step(
             &self.config,
@@ -787,6 +828,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 bomb_stats: self.bomb_stats,
                 cheated: self.cheats.cheated,
                 boss: self.boss,
+                clip_stats: self.clip_stats,
+                target: self.episode_target.clone(),
+                entry: self.episode_entry.clone(),
                 curriculum,
                 episode_steps: 0,
                 episode_frames: 0,

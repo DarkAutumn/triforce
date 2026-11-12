@@ -231,7 +231,7 @@ impl PyPolicy {
         Ok(PyArray1::from_vec(py, values))
     }
 
-    /// Joint log-probs `[B, J]` (J = kinds × directions × durations = 224; entry `kind * 32 + direction * 4 +
+    /// Joint log-probs `[B, J]` (J = kinds × directions × durations = 256; entry `kind * 32 + direction * 4 +
     /// duration`; `-inf` where illegal) and values `[B]`, one trunk pass per row (`Policy::joint_log_probs`: what
     /// `evaluate(actions=...)` gives each joint action, bit for bit).
     fn joint_log_probs<'py>(

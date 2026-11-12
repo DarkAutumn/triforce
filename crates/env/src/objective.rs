@@ -105,3 +105,19 @@ pub fn target_wavefront(
     targets.dedup();
     Some(wavefront_to(state, &targets))
 }
+
+/// Direction bits (E 1, W 2, S 4, N 8) of the sides `objective`'s next rooms lie on from `state`'s room (a maze
+/// room's next step): the `next_room_*` observation and the correct exits of the `edge` clip trigger.
+pub fn exit_bits(state: &GameView, objective: &Objective) -> u8 {
+    let location = state.full_location();
+    let maze_step = state.peek(zelda::game_map::MAZE_STEP);
+    objective
+        .next_rooms
+        .iter()
+        .fold(0, |bits, next| bits | state.game_map().exit_direction(location, *next, maze_step).value())
+}
+
+/// The session's clip settings for `config` in `state` with `objective` (the trigger, the correct exits).
+pub fn clip_settings(config: &SpecialistConfig, state: &GameView, objective: &Objective) -> zelda::clips::ClipSettings {
+    zelda::clips::ClipSettings::new(config.clips.action.trigger(), exit_bits(state, objective))
+}

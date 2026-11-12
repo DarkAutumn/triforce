@@ -11,6 +11,7 @@
 //! the episode ended in the room ([`VisitEnd`]).
 
 use crate::bombs::BombStats;
+use crate::clips::ClipStats;
 use crate::change::Change;
 use crate::cheats::ItemCounts;
 use crate::enums::{MapLocation, item};
@@ -79,6 +80,8 @@ pub struct RoomVisit {
     /// Dodongo stuns (a bomb's smoke) and bombs he swallowed.
     pub boss_stuns: u32,
     pub boss_eats: u32,
+    /// Skips completed and aborted ([`ClipStats`]).
+    pub clips: ClipStats,
     pub exit: &'static str,
 }
 
@@ -126,6 +129,8 @@ pub struct VisitStep<'a> {
     /// Dodongo stuns and swallowed bombs this step (set by the env; 0 from [`VisitStep::of`]).
     pub boss_stuns: u32,
     pub boss_eats: u32,
+    /// The step's skip, if any (from the change).
+    pub clips: ClipStats,
 }
 
 impl VisitStep<'_> {
@@ -142,6 +147,11 @@ impl VisitStep<'_> {
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
+            clips: {
+                let mut clips = ClipStats::default();
+                clips.update(change);
+                clips
+            },
         }
     }
 }
@@ -196,6 +206,7 @@ impl VisitTracker {
         visit.cheated += step.cheated;
         visit.boss_stuns += step.boss_stuns;
         visit.boss_eats += step.boss_eats;
+        visit.clips += step.clips;
         for &id in step.items_gained {
             if let Some(kind) = kind_index(id) {
                 visit.pickups[kind] += 1;
@@ -249,6 +260,7 @@ impl VisitTracker {
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
+            clips: ClipStats::default(),
             exit: EXIT_OTHER,
         });
         self.floor.clone_from(&state.items);
@@ -309,6 +321,7 @@ mod tests {
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
+            clips: ClipStats::default(),
         }
     }
 

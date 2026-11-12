@@ -99,6 +99,7 @@ fn step(prev: &Ram, curr: &Ram, action: &str) -> Change {
         interrupt: None,
         control_frames: 8,
         projectile_blocks: Vec::new(),
+        clip: None,
         previous,
         state,
         action_mask: ActionMask::default(),

@@ -392,6 +392,57 @@ impl ItemsConfig {
     }
 }
 
+/// `clips.action`: how the policy reaches the grid-point skip macro (round 21, `zelda::clips`). Every design is in
+/// the same binary (the action schema always has CLIP); the owner picks one after the experiments.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClipAction {
+    /// No skip anywhere: CLIP masked, MOVE plain (every specialist today).
+    #[default]
+    None,
+    /// The CLIP kind, legal where the skip is available.
+    Kind,
+    /// MOVE of duration 32 performs the skip where it is available; shorter MOVEs are plain.
+    Long,
+    /// MOVE of any duration performs the skip where it is available and its direction is not a correct exit of the
+    /// current objective (a block clip: any MOVE into the square from the zone).
+    Edge,
+}
+
+impl ClipAction {
+    pub fn trigger(self) -> zelda::clips::ClipTrigger {
+        use zelda::clips::ClipTrigger as T;
+        match self {
+            ClipAction::None => T::None,
+            ClipAction::Kind => T::Kind,
+            ClipAction::Long => T::Long,
+            ClipAction::Edge => T::Edge,
+        }
+    }
+}
+
+/// `clips.shaping`: what PBRS pays on a step in which a skip completed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClipShaping {
+    /// The whole wavefront difference, as for any position change (inside the step clamp).
+    #[default]
+    Jump,
+    /// Capped (either sign) at what walking the step's frames could earn: frames × 1.5 px / 8 px per tile /
+    /// `PBRS_SCALE`.
+    Walk,
+}
+
+/// `clips:` block (round 21): the grid-point skip (the overworld screen wrap, the dungeon block clip).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClipsConfig {
+    #[serde(default)]
+    pub action: ClipAction,
+    #[serde(default)]
+    pub shaping: ClipShaping,
+}
+
 /// Reset-time RAM randomization (`RamRandomization`): hp bounds are fractions of max hp (or 'max'); bombs/keys
 /// inclusive ranges; `full_hp`/`chain_hp` shares of resets (see `start_states::ram_randomization_values`);
 /// `bombs_share` the share of resets that draw `bombs` (the rest keep the start state's own count, what the route
@@ -488,6 +539,8 @@ pub struct SpecialistConfig {
     pub fresh_rooms: bool,
     #[serde(default)]
     pub items: ItemsConfig,
+    #[serde(default)]
+    pub clips: ClipsConfig,
     #[serde(default)]
     pub curriculum: CurriculumConfig,
     #[serde(default, deserialize_with = "de_bool")]

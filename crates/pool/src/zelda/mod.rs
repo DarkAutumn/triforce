@@ -27,10 +27,11 @@ pub use search::{GumbelSearch, SearchConfig, SearchScratch};
 use crate::layout::{Dtype, KeySpec, ObsLayout, ObsRow};
 use env::chain::RunResult;
 use env::observation::{GRID_COLS, OBS_SPEC, Observation};
-use env::specialist_env::{StepInfo, bombs_json, cheated_json, hearts_json, linger_json};
+use env::specialist_env::{StepInfo, bombs_json, cheated_json, clips_json, hearts_json, linger_json};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use zelda::bombs::BombStats;
+use zelda::clips::ClipStats;
 use zelda::cheats::{CheatItem, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::hearts::HeartSummary;
@@ -147,6 +148,11 @@ pub struct EvalRecord {
     /// Dodongo stuns and swallowed bombs (`env::critic::BossTransitions`).
     pub boss_stuns: u32,
     pub boss_eats: u32,
+    /// Grid-point skips completed and aborted (`zelda::clips`).
+    pub clip_stats: ClipStats,
+    /// The route step's exit and entry (`-` off the route): evaluation groups by (start state, target).
+    pub target: String,
+    pub entry: String,
     /// Every room visit, in order (`zelda::visits`).
     pub visits: Vec<RoomVisit>,
 }
@@ -164,6 +170,7 @@ impl EvalRecord {
             "blocks": self.blocks, "bombs": bombs_json(self.bombs_used, &self.bomb_stats),
             "cheated": cheated_json(&self.cheated),
             "boss": {"stuns": self.boss_stuns, "eats": self.boss_eats},
+            "clips": clips_json(&self.clip_stats), "target": self.target, "entry": self.entry,
             "visits": self.visits.iter().map(visit_json).collect::<Vec<_>>(),
         })
     }
@@ -195,6 +202,9 @@ pub fn visit_json(v: &RoomVisit) -> Value {
     }
     for (name, value) in v.bombs.fields() {
         o.insert(format!("bomb_{name}"), json!(value));
+    }
+    for (name, value) in v.clips.fields() {
+        o.insert(format!("clip_{name}"), json!(value));
     }
     m
 }

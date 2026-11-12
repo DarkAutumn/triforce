@@ -1,6 +1,7 @@
 //! What changed over one option, with look-ahead credit for delayed weapons.
 
 use crate::actions::{Action, ActionMask};
+use crate::clips::ClipOutcome;
 use crate::blocks::ProjectileBlock;
 use crate::enums::{AnimationKind, AnimationState, enemy};
 use crate::executor::{Interrupt, Machine, OptionResult};
@@ -71,6 +72,8 @@ pub struct Change {
     pub control_frames: u32,
     /// Confirmed shield blocks during the option (never changed by look-ahead).
     pub projectile_blocks: Vec<ProjectileBlock>,
+    /// The skip the option performed, if any (`crate::clips`).
+    pub clip: Option<ClipOutcome>,
     pub previous: Arc<GameView>,
     pub state: Arc<GameView>,
     /// The mask of `state` (as `GameSession.act` sets it).
@@ -113,6 +116,7 @@ impl Change {
             interrupt: option.interrupt,
             control_frames: option.control_frames,
             projectile_blocks: option.projectile_blocks,
+            clip: option.clip,
             previous: prev,
             state: curr,
             action_mask,
@@ -431,6 +435,7 @@ mod tests {
             interrupt: None,
             control_frames: 4,
             projectile_blocks: Vec::new(),
+            clip: None,
         };
         Change::new(
             m,

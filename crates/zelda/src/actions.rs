@@ -4,7 +4,8 @@ use crate::enums::{ActionKind, Direction};
 use crate::game::GameView;
 use std::fmt;
 
-pub const ACTION_SCHEMA_VERSION: u32 = 1;
+/// 2: the CLIP kind (round 21, the grid-point skip macro).
+pub const ACTION_SCHEMA_VERSION: u32 = 2;
 
 pub const DIRECTIONS: [Direction; 8] = [
     Direction::N,
@@ -19,7 +20,7 @@ pub const DIRECTIONS: [Direction; 8] = [
 pub const CARDINALS: [Direction; 4] = [Direction::N, Direction::S, Direction::W, Direction::E];
 pub const DURATIONS: [u8; 4] = [4, 8, 16, 32];
 
-pub const NUM_KINDS: usize = 7;
+pub const NUM_KINDS: usize = 8;
 pub const NUM_DIRECTIONS: usize = 8;
 pub const NUM_DURATIONS: usize = 4;
 /// Flat mask layout: `[kind (K) | direction (K x D) | duration (K x U)]`.
@@ -384,6 +385,8 @@ mod tests {
             "BOOMERANG NW",
             "ARROW S",
             "BOMB W",
+            "CLIP W",
+            "CLIP N",
             "BEAMS N",
         ] {
             let a = Action::parse(text).unwrap();
@@ -407,7 +410,7 @@ mod tests {
 
     #[test]
     fn invalid_actions_are_rejected() {
-        for text in ["SWORD NW", "MOVE NE 8", "MOVE N 5", "WAIT 3", "BOMB"] {
+        for text in ["SWORD NW", "MOVE NE 8", "MOVE N 5", "WAIT 3", "BOMB", "CLIP", "CLIP SE", "CLIP W 8"] {
             assert!(Action::parse(text).is_err(), "{text}");
         }
     }
@@ -419,7 +422,7 @@ mod tests {
         mask.allow(ActionKind::Wait, None);
         mask.allow(ActionKind::Boomerang, Some(Direction::SE));
         let flat = mask.to_flat();
-        assert_eq!(flat.len(), 91);
+        assert_eq!(flat.len(), 8 + 8 * 8 + 8 * 4);
         assert_eq!(ActionMask::from_flat(&flat), mask);
         assert!(mask.is_allowed(&Action::parse("MOVE N 32").unwrap()));
         assert!(!mask.is_allowed(&Action::parse("MOVE S 32").unwrap()));

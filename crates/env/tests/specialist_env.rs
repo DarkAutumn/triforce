@@ -364,7 +364,7 @@ fn spaces_and_reset_contract() {
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
     let (obs, info) = env.reset(Some(1), None).unwrap();
     assert_obs_valid(&obs, env.session().mask());
-    assert_eq!([NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS], [7, 8, 4]);
+    assert_eq!([NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS], [8, 8, 4]);
     assert_info_contract(&info);
     assert_eq!(&*info.specialist, "stalfos-keese-gel");
     assert_eq!(info.room, (1, 0x73, false));

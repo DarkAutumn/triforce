@@ -15,7 +15,8 @@ from triforce.runner import Route, Runner
 from .conftest import REPO_STATES_DIR, SEGMENT_START_STEP, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state
 
 STREAMS = ('rewards', 'decisions', 'keyframes')
-KINDS, DIRECTIONS, DURATIONS = 7, 8, 4
+KINDS, DIRECTIONS, DURATIONS = 8, 8, 4
+DISTRIBUTION = KINDS + KINDS * DIRECTIONS + KINDS * DURATIONS
 
 
 def record(runner, route, seed, **options):
@@ -84,7 +85,7 @@ def test_the_optional_streams_keep_rewards_decisions_and_keyframes(chain_replays
 
         decisions = recording.decisions()
         dist, action = decisions['dist'], decisions['action']
-        assert dist.shape == (result.steps, 91) and recording.meta['actions']['distribution'] == 91
+        assert dist.shape == (result.steps, DISTRIBUTION) and recording.meta['actions']['distribution'] == DISTRIBUTION
         assert np.allclose(np.exp(dist[:, :KINDS]).sum(axis=1), 1, atol=1e-4)
         rows = np.arange(result.steps)
         kind, direction, duration = action.T

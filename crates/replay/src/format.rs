@@ -63,20 +63,21 @@ pub const OUTCOME_CLASSES: [&str; 4] = ["success", "hard-failure", "soft-failure
 pub const STATE_KINDS: [&str; 4] = ["start", "end", "keyframe", "checkpoint"];
 
 /// The action space a DECISIONS stream describes (META `actions`): the factored joint of
-/// `zelda::actions` (`crates/pool/tests/zelda.rs` checks the two agree).
+/// `zelda::actions` (`crates/pool/tests/zelda.rs` checks the two agree). A replay carries its own META `actions`, so
+/// one recorded with an older space (7 kinds, distribution 91) still reads.
 pub mod actions {
-    pub const KINDS: [&str; 7] = ["MOVE", "WAIT", "SWORD", "BEAMS", "BOMB", "BOOMERANG", "ARROW"];
+    pub const KINDS: [&str; 8] = ["MOVE", "WAIT", "SWORD", "BEAMS", "BOMB", "BOOMERANG", "ARROW", "CLIP"];
     pub const DIRECTIONS: [&str; 8] = ["N", "S", "W", "E", "NW", "NE", "SW", "SE"];
     pub const DURATIONS: [u8; 4] = [4, 8, 16, 32];
-    /// The button a kind presses: 0 none, 1 A, 2 B.
-    pub const KIND_BUTTONS: [u8; 7] = [0, 0, 1, 1, 2, 2, 2];
+    /// The button a kind presses: 0 none, 1 A, 2 B (CLIP: the d-pad only, the grid-point skip macro).
+    pub const KIND_BUTTONS: [u8; 8] = [0, 0, 1, 1, 2, 2, 2, 0];
     /// The d-pad bits of each direction.
     pub const DIRECTION_BUTTONS: [u8; 8] = [16, 32, 64, 128, 80, 144, 96, 160];
     /// Entries of one decision's distribution.
     pub const DISTRIBUTION: usize =
         KINDS.len() + KINDS.len() * DIRECTIONS.len() + KINDS.len() * DURATIONS.len();
     pub const LAYOUT: &str =
-        "kind[7] | direction[kind][8] | duration[kind][4]; natural-log probabilities, -inf = masked";
+        "kind[8] | direction[kind][8] | duration[kind][4]; natural-log probabilities, -inf = masked";
 }
 
 pub(crate) const NO_STEP: u16 = 0xFFFF;

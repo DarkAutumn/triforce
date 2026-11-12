@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from triforce import train
-from triforce.actions import JOINT_SIZE, Action
+from triforce.actions import JOINT_SIZE, NUM_KINDS, Action
 from triforce.metrics import read_jsonl
 from triforce.model import MASK_KEY, ModelConfig, ZeldaPolicy
 from triforce.ppo import PPO, PPOConfig
@@ -48,13 +48,14 @@ def test_joint_log_probs_factorize_like_evaluate():
     torch.testing.assert_close(joint.exp().sum(dim=-1), torch.ones(64), atol=1e-5, rtol=0)
     # Legal joint actions are exactly the mask's combinations; a head whose row is empty has only index 0.
     masks = obs[MASK_KEY]
-    kinds = masks[:, :7]
-    dirs, durs = masks[:, 7:7 + 56].reshape(-1, 7, 8), masks[:, 63:].reshape(-1, 7, 4)
+    k = NUM_KINDS
+    kinds = masks[:, :k]
+    dirs, durs = masks[:, k:k + k * 8].reshape(-1, k, 8), masks[:, k + k * 8:].reshape(-1, k, 4)
     dirs = np.where(dirs.any(axis=-1, keepdims=True), dirs, np.arange(8) == 0)
     durs = np.where(durs.any(axis=-1, keepdims=True), durs, np.arange(4) == 0)
     expected = kinds[:, :, None, None] & dirs[:, :, :, None] & durs[:, :, None, :]
     assert (legal.numpy() == expected.reshape(64, JOINT_SIZE)).all()
-    assert (kinds.sum(axis=1) == 1).any() and (~masks[:, 7:63].reshape(-1, 7, 8).any(axis=-1) & kinds).any()
+    assert (kinds.sum(axis=1) == 1).any() and (~masks[:, k:k + k * 8].reshape(-1, k, 8).any(axis=-1) & kinds).any()
 
 
 def _buffer(network, searched: bool, search_policy: bool = True):

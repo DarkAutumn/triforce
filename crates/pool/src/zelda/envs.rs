@@ -665,6 +665,9 @@ where
                 cheated: t.cheated,
                 boss_stuns: t.boss.stuns,
                 boss_eats: t.boss.eats,
+                clip_stats: t.clip_stats,
+                target: t.target.clone(),
+                entry: t.entry.clone(),
                 visits: self.env.take_visits(),
             })));
             let (ending, job) = (specialist_ending(t), episode.job.seed as i64);

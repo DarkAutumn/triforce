@@ -76,7 +76,8 @@ def fixture_walk_north():
 
 def test_collect_best_on_the_native_pool(walk_north):
     policy = scripted('MOVE N 16').to_native()
-    records, _ = best_of_n.play_episodes(walk_north, policy, 4, seed=11, parallel=4, states_dir=REPO_STATES_DIR)
+    # Seed 24: the 8-kind schema's noise stream (round 21) picks the blocked MOVE's direction differently than seed 11 did.
+    records, _ = best_of_n.play_episodes(walk_north, policy, 4, seed=24, parallel=4, states_dir=REPO_STATES_DIR)
     by_state = {}
     for record in sorted(records.values(), key=lambda r: (best_of_n.rank_key(r), r['seed'])):
         if record['success']:
@@ -85,7 +86,7 @@ def test_collect_best_on_the_native_pool(walk_north):
     # keeping one per state drops one). If rebuilt states break it, pick another scripted move or state set.
     assert not all(r['success'] for r in records.values()), "every run succeeded"
     assert any(len(runs) >= 2 for runs in by_state.values()), f"no state with two successes: {by_state.keys()}"
-    best = best_of_n.collect_best(walk_north, policy, 4, 1, seed=11, parallel=4, states_dir=REPO_STATES_DIR)
+    best = best_of_n.collect_best(walk_north, policy, 4, 1, seed=24, parallel=4, states_dir=REPO_STATES_DIR)
     assert best.episodes == len(records) == 4 * 3
     assert best.successes == sum(r['success'] for r in records.values())
     kept = [r for runs in by_state.values() for r in runs[:1]]

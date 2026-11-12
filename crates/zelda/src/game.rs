@@ -40,6 +40,7 @@ const DOORWAY_REQUIRED_Y: i32 = 0x8D;
 const CAVE_PERSON_LINE_Y: i32 = 0x8E;
 const OW_EDGE_N: i32 = 0x3D;
 const OW_EDGE_W: i32 = 0x00;
+const OW_EDGE_E: i32 = 0xF0;
 const UW_BOUND_L: i32 = 0x21;
 const UW_BOUND_R: i32 = 0xD0;
 const UW_BOUND_T: i32 = 0x5E;
@@ -642,6 +643,22 @@ impl GameView {
             return self.can_pass_doorway(px, py, direction);
         }
         let room = self.room();
+        // Overworld past the right bound (where a screen wrap or an aborted one leaves Link, X $F8): no look-ahead
+        // at X >= $F0, the tile under the hotspot decides (asm:Tile_GetAtObjOffset@AdjustX; mechanics.md "After the
+        // wrap"). On the bound itself the edge test fires whatever the tile (asm:Link_CheckScreenEdge).
+        if self.level() == 0 && direction == Direction::E && px > OW_EDGE_E {
+            return room.is_tile_walkable(px.div_euclid(8), (py - 53).div_euclid(8));
+        }
+        // There, up or down reads column $1F and the 22 bytes after the tile map ($67F0 on) as column $20
+        // (asm:Tile_GetAtObjOffset@FetchTile, mechanics.md "Outside the play area").
+        if self.level() == 0 && matches!(direction, Direction::N | Direction::S) && px.div_euclid(8) == 0x1F {
+            let row = if direction == Direction::N { (py - 61).div_euclid(8) } else { (py - 45).div_euclid(8) };
+            if (0..crate::room::ROWS).contains(&row) {
+                let past = self.peek(0x6530 + (0x20 * crate::room::ROWS + row) as u16);
+                let walkable = |t: u8| t < room.threshold() || crate::room::OW_WALKABLE_OVERRIDES.contains(&t);
+                return walkable(room.tile(0x1F, row).max(past));
+            }
+        }
         if room.can_link_move_from(px, py, direction) {
             return true;
         }
@@ -824,10 +841,11 @@ impl GameView {
     }
 
     // --- Link: weapons ---
-    /// Action kinds Link's inventory allows, indexed by `ActionKind` (SWORD and BEAMS are exclusive).
-    pub fn available_actions(&self) -> [bool; 7] {
+    /// Action kinds Link's inventory allows, indexed by `ActionKind` (SWORD and BEAMS are exclusive; CLIP is the
+    /// session's, `crate::clips`).
+    pub fn available_actions(&self) -> [bool; crate::actions::NUM_KINDS] {
         use crate::enums::ActionKind as K;
-        let mut a = [false; 7];
+        let mut a = [false; crate::actions::NUM_KINDS];
         a[K::Move.index()] = true;
         a[K::Wait.index()] = true;
         if self.sword() != SwordKind::None {
@@ -926,7 +944,7 @@ impl GameView {
                 };
                 other == 0 || other >= 0x13
             }
-            K::Move | K::Wait => true,
+            K::Move | K::Wait | K::Clip => true,
         }
     }
 
@@ -991,7 +1009,7 @@ fn leaves_ow_screen(px: i32, py: i32, direction: Direction) -> bool {
 }
 
 /// Dungeon room bounds (asm:Room_ObjBoundsUW).
-fn at_dungeon_bound(px: i32, py: i32, direction: Direction) -> bool {
+pub(crate) fn at_dungeon_bound(px: i32, py: i32, direction: Direction) -> bool {
     match direction {
         Direction::N => py < UW_BOUND_T,
         Direction::S => py >= UW_BOUND_B,

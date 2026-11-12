@@ -60,10 +60,10 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 | Item | Contract |
 |---|---|
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
-| `zelda::actions` | `ACTION_SCHEMA_VERSION`; `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=91] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
-| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. An off-grid attack perpendicular to Link's travel first walks him to the grid point (holding `ObjDir` until `$394 == 0`, at most 6 frames); an attack press the game didn't read (a lag frame) is held one more frame. |
-| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`. `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game`. |
-| `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
+| `zelda::actions` | `ACTION_SCHEMA_VERSION` (2); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=104] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
+| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. An off-grid attack perpendicular to Link's travel first walks him to the grid point (holding `ObjDir` until `$394 == 0`, at most 6 frames); an attack press the game didn't read (a lag frame) is held one more frame. A CLIP (or a MOVE its `ClipSettings` turn into one) runs the grid-point skip macro ("Grid-point skip" below); `clip` reports its `ClipOutcome`. |
+| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clip_settings` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clip_settings(action, correct_exits)`, `skip_available(direction)`, `Change.clip`). |
+| `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
 Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's `Obj_Update` jump table) and
@@ -99,7 +99,42 @@ bomb wall) and BOMB
 stays legal at an unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
-Link back in).
+Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen wrap or an aborted one leaves Link)
+reads the tile under him (no look-ahead at X >= `$F0`), and N/S there read column `$1F` and the bytes after the tile
+map (`$67F0` on) as column `$20`, as the game does.
+
+### Grid-point skip (`crates/zelda/src/clips.rs`, round 21)
+
+One frame of perpendicular input 5 pixels short of a grid point T, in the right sub-pixel cadence, lets Link cross
+T with no frame starting on it (`zelda-asm/mechanics.md`, "Screen wrap (overworld)" and "Grid-point skip"). MOVE
+can't do it, so the executor plays it as a macro (`Executor::run_skip`, `clips::Controller`): every frame it reads
+`$70`/`$84`, `$394`, `$3A8` and `$98` and follows mechanics.md's decision table (walk on toward the trick state;
+on G with the wrong fraction, on T or lost between G and T, walk away until on G' with offset 0; in the trick state
+heading toward T, press one perpendicular frame, Up for W/E with the heading released, Right for N/S; then hold the
+heading). No RAM is written and no sword is used. It ends where it should (`ClipOutcome { direction, kind, abort,
+presses }`, `abort` None) or aborts: `Interrupted` by a hit, a room change or game over (the option's interrupt;
+spawns, nearby monsters, items and doors don't stop it), `Missed` (a press that ends on T backs off and retries, 3
+presses at most; a crossing that ends on T never holds the heading there), `Stalled` (4 still frames), `FrameCap`
+(200 frames), `Unavailable` (nothing pressed). Frames count like any option's.
+
+`skip_target(state, dir)` / `skip_available` is the one availability rule (mask, executor, observation): mode 5,
+Link's state 0, no knockback, no ladder (`$64` = 0), and
+- **wrap** (overworld, W or E): Link on a row line (Y a grid point; a nonzero offset only along the row); within 32
+  pixels of the bound (X <= `$20` going W, `$D0`..`$F0` going E; the bound itself included); the macro's run-up
+  columns of his hotspot row (0-3 W, `$1C`-`$1F` E) and the landing columns (`$1E`-`$1F` after a W wrap, 0-1 after
+  an E wrap) walkable and no slow tiles (`$74`/`$75`). T is `$00` (W) or `$F0` (E); the macro ends at X `$F0`
+  offset 0 after a W wrap and X `$00` after an E wrap, where the opposite edge's room change is one MOVE away.
+- **block clip** (dungeon, N or S): not in a doorway, X on the column line and inside the X border band, T the first
+  grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8 pixels further (a
+  16-pixel square), G' inside the room bounds, the run-up cells open both ways, and the clip useful: from T -+ 8 a
+  MOVE W or E is possible. The macro ends at T -+ 8, offset 0.
+
+`ClipSettings { trigger, correct_exits }` (`Session::set_clip_settings`; the env sets it every step) says how the
+policy reaches the macro, from the specialist's `clips.action`: `none` (no skip; CLIP masked), `kind` (CLIP legal in
+every direction the skip is available), `long` (MOVE of duration 32 in such a direction performs the skip; MOVE in
+that direction is made legal there), `edge` (MOVE of any duration performs the skip where it is available and the
+direction is not one of the objective's correct exits, `correct_exits` = the `next_room_*` bits; a block clip has no
+exit side). A CLIP action always runs the macro (the mask gates the policy, not the executor).
 
 ## Observation (`crates/env/src/observation.rs`)
 
@@ -114,14 +149,14 @@ Python sees the layout as
 |---|---|---|
 | `room_id` | int64 [1] | index < `ROOM_VOCAB` |
 | `room_state` | float32 [84] | per-room flags from `docs/ram-catalog.md` |
-| `link` | float32 [80] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15) |
+| `link` | float32 [84] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and `clips.action` is not `none`) |
 | `entity_types` | int64 [12] | 0 = empty slot |
 | `entity_features` | float32 [12, 33] | feature 0 = presence |
 | `grid` | int64 [22, 32] | tile class per 8px tile, row-major |
-| `history` | float32 [34] | last action kind/dir/duration, frames since |
+| `history` | float32 [35] | last action kind/dir/duration, frames since |
 | `objective` | float32 [10] | all zeros when `objective` is off |
 | `target` | float32 [8] | all zeros when `obs.target` is off |
-| `action_mask` | bool [91] | flat `ActionMask` |
+| `action_mask` | bool [104] | flat `ActionMask` |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -137,7 +172,9 @@ belongs to a dropped item. Chains rebuild the same wavefront (the acting special
 targets) only for specialists with `obs.target` on. A chain resets the observation builder on every room entry of
 a `one_room` specialist (also from a room of its own family), as at a training episode's start. Schema 3 (version
 1.3.2.0, Nov 11) replaced `link`'s always-zero `selected_*` slice with the bomb and forced-drop features (the table),
-so schema 1 and 2 checkpoints no longer load (their `link` is 81 wide): every family retrained.
+so schema 1 and 2 checkpoints no longer load (their `link` is 81 wide): every family retrained. Schema 4 (version
+1.3.3.0, Nov 12) added the CLIP kind (`history` one-hots 8 kinds, the mask is 104 wide) and `link`'s
+`clip_usable_*`: no schema 3 checkpoint loads (action schema 2).
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
 
@@ -168,9 +205,10 @@ Action space: `MultiDiscrete([NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS])`.
 `action` (str), `rewards` (dict name → value), `room` (list [level, room, in_cave]), `health`, `max_health`,
 `steps`, `total_frames`, `specialist`, `route`; the reset info also has `start_state`. On the last step: `ending`
 (end-condition name) and `outcome` (its class: one of `_native.OUTCOMES` = success, hard-failure, soft-failure,
-neutral), plus `blocks`, `bombs` ({used}), `cheated` ({bombs, keys, rupees}), `boss` ({stuns, eats}),
-`start_state`, `start_health`, `hearts`, `linger`, `linger_room` ([level, room, in_cave] of the episode's entry
-room), `bootstrap_truncation`, `curriculum`, `episode_steps`, `episode_frames`, `reward_total` and
+neutral), plus `blocks`, `bombs` ({used}), `cheated` ({bombs, keys, rupees}), `boss` ({stuns, eats}), `clips`
+({done, aborted, done_n, done_s, done_w, done_e}: grid-point skips), `target`/`entry` (the route step's exit and
+entry, `-` off the route), `start_state`, `start_health`, `hearts`, `linger`, `linger_room` ([level, room, in_cave] of
+the episode's entry room), `bootstrap_truncation`, `curriculum`, `episode_steps`, `episode_frames`, `reward_total` and
 `episode_rewards` (per-term episode totals; omitted `bootstrap_truncation`/`curriculum` mean false/none). `blocks`
 counts confirmed shield collisions over the episode. An end condition that is
 not classified raises. Evaluation reports mean `blocks` overall/per room/per state; training separates `blocks`
@@ -291,6 +329,15 @@ treasure) a PBRS target the same way, hearts and fairies only while Link is belo
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
+`clips: {action: none|kind|long|edge, shaping: jump|walk}` (round 21; default `none`, `jump`; "Grid-point skip"
+above): `action` picks how the policy reaches the skip; `shaping` what PBRS pays on a step whose skip completed:
+`jump` the whole wavefront difference (as for any position change, inside the ±1 step clamp), `walk` that difference
+capped, either sign, at what walking the step's frames could earn (`critic::walk_cap`: frames × 1.5 / 8 / 20). The
+env sets the session's `ClipSettings` every step (the trigger, the objective's correct exits) and the observation's
+`clip_usable_*` follow `action` != `none`. Terminal `info['clips']` → training `clips/<stat>` per episode
+(`_native.CLIP_STATS`; progress events too), eval `mean_clips_<stat>` (overall, per room and state), per-visit
+`clip_<stat>` / `clip_<stat>_per_visit`, chain `RoomRecord.clip_<stat>`; eval records carry `target` and `entry`,
+and `eval.json` `by_state_target` groups by `<start state>:<target>`.
 `reward.exit_health_weight` w (default 0.5, in [0, 1]; better-play §1b) sets how much of the success terminal rides
 on the health Link leaves with: `reward-terminal-success` = 20 × ((1 − w) + w × hp/max_hp) (`success_reward_value`;
 0.5 is the long-standing 20 × (0.5 + 0.5 × hp/max_hp), bit for bit; 1.0 pays 20 × hp/max_hp, 0 a flat 20).
@@ -317,7 +364,7 @@ from the current network, β = `--sil-value-coeff`, default 0.01; `losses/sil_po
 `--search JSON` (`PPOConfig.search`, Gumbel expert iteration; §2, docs/rust-actor.md "Search") passes the JSON
 object to `EnvPool.rollout(search=...)` (e.g. `{"candidates":4,"simulations":8,"futures":2,"depth":3,"fraction":0.25}`):
 the pool searches that share of the training decisions, executes the search's choice and writes `search_mask` and
-the improved policy `search_policy` π' over the 224 joint actions (`kind * 32 + direction * 4 + duration`), which the
+the improved policy `search_policy` π' over the 256 joint actions (`kind * 32 + direction * 4 + duration`), which the
 `RolloutBuffer` keeps only with search on. A searched row's action is not a sample of π, so `PPO.optimize` drops it
 from the clipped ratio term, its advantage normalization and the KL/clipfrac stats (KL early stop and rollback see
 only the sampled rows) and adds `--search-coeff` C (default 1) · CE(π', π_θ) = −Σ_j π'_j log π_θ(j) over the
@@ -352,7 +399,7 @@ keeps the PPO update as the policy phase and copies each consumed rollout's obse
 (default 6) epochs over those N rollouts, in minibatches the policy phase's size, with its own Adam (the paper's
 separate optimizer; not checkpointed, so a resumed run starts it fresh), loss ½(V − R)² + `--ppg-clone-coeff` C
 (default 1) · KL(π_old ‖ π_θ), π_old the joint action distributions recorded before the phase (`joint_kl` over
-`ZeldaPolicy.joint_log_probs`, exact over the 224 joint actions), then clears the store. The network has separate
+`ZeldaPolicy.joint_log_probs`, exact over the 256 joint actions), then clears the store. The network has separate
 policy and value towers on shared encoders (room embedding, entity transformer, grid CNN), so this is the
 single-network variant on the existing value head: the extra value epochs train the value tower and the shared
 encoders while the clone term holds the policy. A paper-style auxiliary value head on the policy tower was left out:
@@ -694,7 +741,7 @@ The file layout is in `crates/replay/src/lib.rs`. It holds:
 | STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, so a chain can continue from it |
 | EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary) |
 | REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
-| DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (91 log-probabilities: kind[7], direction[kind][8], duration[kind][4]) |
+| DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (104 log-probabilities: kind[8], direction[kind][8], duration[kind][4]; META `actions` describes the space, so replays recorded with 7 kinds and 91 still read) |
 
 A record at frame `k` applies after input frame `k - 1` and before input frame `k`.
 

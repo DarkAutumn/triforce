@@ -165,7 +165,11 @@
   "next_kill_arms",
   "drop_armed",
   "drop_is_bombs",
-  "fairy_next"
+  "fairy_next",
+  "clip_usable_N",
+  "clip_usable_S",
+  "clip_usable_W",
+  "clip_usable_E"
  ],
  "ENTITY_FEATURES": [
   "presence",
@@ -211,6 +215,7 @@
   "kind_BOMB",
   "kind_BOOMERANG",
   "kind_ARROW",
+  "kind_CLIP",
   "dir_N",
   "dir_S",
   "dir_W",
@@ -263,7 +268,7 @@
  "spaces": {
   "action_mask": {
    "shape": [
-    91
+    104
    ],
    "dtype": "bool",
    "low": 0.0,
@@ -297,7 +302,7 @@
   },
   "history": {
    "shape": [
-    34
+    35
    ],
    "dtype": "float32",
    "low": 0.0,
@@ -305,7 +310,7 @@
   },
   "link": {
    "shape": [
-    80
+    84
    ],
    "dtype": "float32",
    "low": -1.0,

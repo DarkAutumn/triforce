@@ -33,7 +33,11 @@ crates/zelda/src/cheats.rs), also per room and per start state.  ``mean_boss_stu
 Dodongo stuns (a bomb's smoke; the sword can kill him then) and bombs he swallowed per episode
 (``records[i]['boss']``: ``stuns``, ``eats``;
 crates/env/src/critic.rs ``BossTransitions``), and ``stun_kill_rate`` the share of successful episodes won by
-stun-and-sword alone (a stun, no swallow), also per room and per start state.
+stun-and-sword alone (a stun, no swallow), also per room and per start state.  ``mean_clips_<stat>`` are grid-point
+skips per episode for each of ``_native.CLIP_STATS`` (``records[i]['clips']``: ``done``, ``aborted``,
+``done_n``/``done_s``/``done_w``/``done_e``; crates/zelda/src/clips.rs), also per room and per start state.  Records
+carry the route step's ``target`` exit and ``entry`` (routes.yaml strings, ``-`` off the route), and
+``by_state_target`` groups by ``<start state>:<target>`` so one room trained toward two exits reads apart.
 Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
 room and start-state aggregates report mean longest/tail steps and frames plus the worst measured streak.
 
@@ -43,7 +47,7 @@ episode's visits in order (``level``, ``room``, ``in_cave``, ``steps``, ``frames
 ``hits_dealt``, ``drops``/``pickups`` per item kind (bombs, rupee, blue_rupee, heart, fairy, clock; zeros
 omitted), ``keys_gained`` (natural keys: a cheated key is no gain), ``bombs_used`` (bombs placed),
 ``bomb_<stat>`` (``_native.BOMB_STATS``), ``cheated_bombs``/``cheated_keys``/``cheated_rupees`` (cheated items used),
-``boss_stuns``/``boss_eats`` (Dodongo stunned, bombs swallowed) and ``exit``:
+``boss_stuns``/``boss_eats`` (Dodongo stunned, bombs swallowed), ``clip_<stat>`` (``_native.CLIP_STATS``) and ``exit``:
 ``n``/``s``/``e``/``w`` or ``cave`` when Link left the room, else how the episode ended there,
 ``death``/``success``/``timeout``/``other``).  ``visited_rooms`` aggregates them per
 room entered (keyed like ``by_room``, which only knows start rooms): ``visits``, ``episodes``, ``deaths``,
@@ -51,7 +55,7 @@ room entered (keyed like ``by_room``, which only knows start rooms): ``visits``,
 ``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``keys_per_visit``, ``bombs_used_per_visit``,
 ``bomb_<stat>_per_visit``,
 ``cheated_bombs_per_visit``, ``cheated_keys_per_visit``, ``cheated_rupees_per_visit``, ``boss_stuns_per_visit``,
-``boss_eats_per_visit``, ``drops_per_visit``,
+``boss_eats_per_visit``, ``clip_<stat>_per_visit``, ``drops_per_visit``,
 ``pickups_per_visit``), tagged with the ``specialist``.  Readers
 merging several evaluations weight by visits.
 """
@@ -162,6 +166,15 @@ def _boss_stats(records: list[dict]) -> dict:
     return result
 
 
+def _clip_stats(records: list[dict]) -> dict:
+    """Grid-point skips per episode, over records that count them."""
+    measured = [record['clips'] for record in records if 'clips' in record]
+    if not measured:
+        return {}
+    return {f'mean_clips_{stat}': sum(c.get(stat, 0) for c in measured) / len(measured)
+            for stat in _native.CLIP_STATS}
+
+
 def _group(records: list[dict], key) -> dict:
     groups = {}
     for record in records:
@@ -174,6 +187,7 @@ def _group(records: list[dict], key) -> dict:
                    **_block_stats(items),
                    **_cheat_stats(items),
                    **_boss_stats(items),
+                   **_clip_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items)),
                    # how the unsuccessful episodes ended, e.g. {'death': 4}
                    'failures': dict(Counter(r['ending'] for r in items if not r['success']))}
@@ -212,6 +226,8 @@ def _room_visit_stats(visits: list[dict]) -> dict:
            for item in _native.CHEAT_ITEMS},
         'boss_stuns_per_visit': mean(lambda v: v.get('boss_stuns', 0)),
         'boss_eats_per_visit': mean(lambda v: v.get('boss_eats', 0)),
+        **{f'clip_{stat}_per_visit': mean(lambda v, stat=stat: v.get(f'clip_{stat}', 0))
+           for stat in _native.CLIP_STATS},
         'drops_per_visit': items('drops'),
         'pickups_per_visit': items('pickups'),
         'exits': dict(Counter(visit['exit'] for visit in visits)),
@@ -299,12 +315,14 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         **_block_stats(records),
         **_cheat_stats(records),
         **_boss_stats(records),
+        **_clip_stats(records),
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),
         'endings': dict(Counter(r['ending'] for r in records)),
         'by_room': _group(records, lambda r: _room_key(r['room'])),
         'by_state': _group(records, lambda r: r['start_state']),
+        'by_state_target': _group(records, lambda r: f"{r['start_state']}:{r.get('target', '-')}"),
         'visited_rooms': _visited_rooms(records, config.name),
         'records': records,
     }

@@ -287,8 +287,8 @@ fn b_item_actions_follow_the_inventory() {
     let none = actions(&[]);
     assert_eq!(
         none,
-        [true, true, false, false, false, false, false],
-        "MOVE and WAIT only"
+        [true, true, false, false, false, false, false, false],
+        "MOVE and WAIT only (CLIP is the session's)"
     );
     assert!(actions(&[(Var::Bombs, 1)])[ActionKind::Bomb.index()]);
     let bow_and_arrows = [(Var::Bow, 1), (Var::Arrows, 1), (Var::Rupees, 1)];

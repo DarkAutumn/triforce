@@ -137,8 +137,8 @@ ratio on those rows). Unsearched decisions are exactly a plain rollout's (`fract
 `search=None`). Optional `out` buffers, written whenever present (unsearched rows: false, 0, NaN, -1, 0):
 
 - `search_mask` `[n, steps]` bool: the row was searched.
-- `search_policy` `[n, steps, 224]` float32: the improved policy π' = softmax(log π + σ(completed Q)) over the
-  joint actions, index `kind * 32 + direction * 4 + duration` (7 kinds × 8 directions × 4 durations,
+- `search_policy` `[n, steps, 256]` float32: the improved policy π' = softmax(log π + σ(completed Q)) over the
+  joint actions, index `kind * 32 + direction * 4 + duration` (8 kinds × 8 directions × 4 durations,
   `zelda::actions`); 0 for illegal ones. A kind-conditioned head whose row is all masked (WAIT's direction, attacks'
   duration) has only index 0, as the policy's factorization scores it.
 - `search_q` `[n, steps, k]` float32: each candidate's mean return; NaN where never evaluated (or fewer legal
@@ -147,7 +147,7 @@ ratio on those rows). Unsearched decisions are exactly a plain rollout's (`fract
 - `search_value` `[n, steps]` float32: the search's root value, `mctx`'s mixed value (V(root) mixed with the
   prior-weighted Q of the evaluated candidates); V(root) alone is `logp_ent_val[..., 2]`.
 
-`Policy.joint_log_probs(obs)` → (`[B, 224]` log-probs, `-inf` illegal; `[B]` values): one trunk pass per row, bit
+`Policy.joint_log_probs(obs)` → (`[B, 256]` log-probs, `-inf` illegal; `[B]` values): one trunk pass per row, bit
 for bit what `evaluate(actions=...)` gives each joint action (log p(kind), 0 with one legal kind, + log p(direction |
 kind) + log p(duration | kind)); the learner's torch side computes the same factorization
 (`ZeldaPolicy.joint_log_probs`). Training uses it through `triforce.train --search JSON` (`PPOConfig.search`;
