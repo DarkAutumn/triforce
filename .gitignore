@@ -15,7 +15,7 @@ logs/
 target/
 triforce/_native*.so
 /roms/
-triforce/states/*.lock
+triforce/states/**/*.lock
 crates/zcore/test_results/
 .coverage
 htmlcov/
