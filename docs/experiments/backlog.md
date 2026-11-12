@@ -51,6 +51,20 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
      cache key holds "the room has stairs" now.
    - A 3600 s tool timeout killed the first chain-0 build at step 120; long builds run without a deadline.
 
+4. **Fewer writes to memory** (Lee, Nov 12). The executor plays some actions by writing RAM instead of pressing
+   buttons, which makes combat easier than the real game:
+   - **Item selection:** a BOMB, BOOMERANG or ARROW action writes `Var::SelectedItem` before pressing B
+     (`zelda::executor` `run_attack`). Select the item the way a player does: open the sub-screen with START, move
+     the cursor to it, close it, and count those frames (and Link's exposure while the screen is up) against the
+     action.
+   - **Turning to attack:** every attack writes `Var::LinkDirection` to face Link the way he strikes (after walking
+     him onto the grid point). A player has to turn by moving, which takes a step and can cost a hit. Turn with
+     the d-pad instead, so the turn is real and the models learn to face enemies before they swing.
+   - Then list the writes that remain (the cheat ledger's bombs/keys/rupees, start-state RAM randomization,
+     anything else that calls `set_var` during play) and decide for each whether it stays. Expect a retrain and
+     an action-schema or behaviour change (a `COMPAT` bump if the actions change), and re-measure every family in
+     single rooms and chains.
+
 ## Done (Nov 12): bombs (Lee, Nov 11; round 19)
 
 1. [x] **Bombs as a weapon, the bomb reserve and the 10th kill's forced bomb drop** (round19.md, decisions
