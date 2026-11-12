@@ -20,3 +20,10 @@ crates/zcore/test_results/
 .coverage
 htmlcov/
 /screens/
+
+# zelda-asm: build outputs, blobs cut from the ROM, scratch
+zelda-asm/bin/
+zelda-asm/obj/
+zelda-asm/ext/
+zelda-asm/src/dat/*.dat
+zelda-asm/work/
