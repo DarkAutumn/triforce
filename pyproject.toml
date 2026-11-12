@@ -16,8 +16,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["pyside6-essentials>=6.7"]
-dev = ["pytest", "pyside6-essentials>=6.7"]
+gui = ["pyside6-essentials>=6.7", "pygame"]                # pygame: `triforce.run --render`
+dev = ["pytest", "pyyaml", "pyside6-essentials>=6.7", "pygame"]
 
 [project.scripts]
 triforce = "triforce.cli:main"
