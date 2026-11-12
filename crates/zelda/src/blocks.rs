@@ -1,8 +1,8 @@
 //! Confirmed shield collisions from consecutive executed frames.
 //!
-//! Z_01 CheckLinkCollision, Z_04 CheckShotLinkCollision / UpdateFireball / UpdateMonsterArrow and Z_07
-//! DrawBoomerangAndCheckCollision: require the projectile's collision signature, the shield eligibility, facing
-//! and proximity checks and this frame's parry request ($604 bit 0).
+//! asm:Link_CheckMonsterTouch, asm:MonsterShot_CheckLinkCollision / asm:Fireball_Update / asm:MonsterArrow_Update
+//! and asm:Boomerang_DrawAndCheckCollision: require the projectile's collision signature, the shield eligibility,
+//! facing and proximity checks and this frame's parry request ($604 bit 0).
 
 use crate::enums::MapLocation;
 

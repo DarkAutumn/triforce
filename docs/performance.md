@@ -8,7 +8,7 @@ RTX 4090, idle unless noted.
 ## Review fix-up re-profile (Nov 10)
 
 About 155 commits fixed the whole-repo code review (`ab17fc5..aa40d8e`, `target/review-progress.md`). Several add
-work per step by design (the jump-table object classifier F067, exact attack masks with measured BorderBounds
+work per step by design (the jump-table object classifier F067, exact attack masks with measured `asm:Link_BorderBounds`
 F182/N006, legal-step target descent F132, per-room bomb masks F016, the mouth flag F094, off-grid alignment and the
 held attack press F160/N003, marginal look-ahead credit F054, the linger rebaseline F154, the selector F185) or per
 iteration (in-flight metrics and cohorts F071, GPU recompute F019, `tensor_split` F167, the all-or-nothing snapshot
@@ -49,7 +49,7 @@ Per action kind (one run each, the same states and seeds; frames/step, Mcyc/step
 (unchanged); MOVE 20.8 → 22.2 frames (other moves are legal now, F059/F170/F188); SWORD 16.99 → 18.40 frames, 14.7
 → 15.7 Mcyc and BEAMS 16.5 → 18.1 frames: the F160 walk to the grid and the N003 held press, by design (+1.4
 frames per attack); BOMB 9.7 → 14.9 frames, 37 → 62 Mcyc and BOOMERANG 9.4 → 15.5 frames, 23 → 39 Mcyc: before
-F182 many presses were ignored by the game (busy slot, outside BorderBounds) and returned after a few frames; now
+F182 many presses were ignored by the game (busy slot, outside `asm:Link_BorderBounds`) and returned after a few frames; now
 every one is a real throw, with its look-ahead. Cycles per frame of each kind are unchanged or lower. The code above
 the emulator stays negligible: in training profiles `zelda::`, `env::` and `pool::` together are 0.11–0.12 Mcyc per
 step of 11–15 in both builds, the new classifier `ObjectClass::of` 0.01% of samples, `GameView::new` 0.03%.

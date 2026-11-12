@@ -301,10 +301,10 @@ fn observe_damage(
                     stuns.push(enemy.index);
                 }
             }
-            // A Zora destroys itself after a dive (Z_04 UpdateZora @DestroyWhenDone), and a step can span a whole
-            // surface-and-dive cycle. A killed one turns into a dropped item ($60, Z_07 metastate $14) in its slot
-            // (or is still dying, handled above): only that is a kill. Boulders, which destroy themselves off
-            // screen, are hazards, not enemies, so they never get here.
+            // A Zora destroys itself after a dive (asm:Zora_Update@DestroyIfDived), and a step can span a whole
+            // surface-and-dive cycle. A killed one turns into a dropped item ($60, metastate $14,
+            // asm:Obj_EndMetastate) in its slot (or is still dying, handled above): only that is a kill. Boulders,
+            // which destroy themselves off screen, are hazards, not enemies, so they never get here.
             None if enemy.id == enemy::ZORA && curr.item_by_index(enemy.index as i8).is_none() => {}
             None => add_hit(
                 hits,
@@ -316,7 +316,7 @@ fn observe_damage(
 }
 
 /// Items gone from `prev` to `curr` before their timers ran out (picked up). The lifetime byte counts half-frames
-/// (UpdateItem decrements it every other frame, Z_04.asm:11209-11218): an item expires 2·timer−1 or 2·timer
+/// (asm:Drop_UpdateItem decrements it every other frame): an item expires 2·timer−1 or 2·timer
 /// frames after `prev`, by frame parity.
 fn observe_items(prev: &GameView, curr: &GameView, items: &mut Vec<i16>) {
     let elapsed = curr.frame.saturating_sub(prev.frame);

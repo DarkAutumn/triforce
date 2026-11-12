@@ -219,7 +219,7 @@ with 1.8 hearts), 0x6d 7, 0x6e 6, 0x5e 6, 0x4e 5. D2: 0x3e 11, 0x2e 5, 0x5e 4, 0
 
 New: `hearts.HeartTracker` follows every dropped heart (item 0x22 only; fairies, triforce and containers don't
 count) through a room visit: `dropped`, `taken` (by Link or his weapons; a vanished heart whose lifetime couldn't
-have run out), `healed` (real hearts: `min(1, max − hp)` per heart, `Z_01 TakeHearts`), `wasted` (taken − healed),
+have run out), `healed` (real hearts: `min(1, max − hp)` per heart, `asm:Item_TakeHearts`), `wasted` (taken − healed),
 `left` (on the floor when Link left or died), `expired`. Episodes report `health_change` (real) and
 `health_change_total` (real + wasted); eval, chain records, training metrics and the training GUI show both.
 

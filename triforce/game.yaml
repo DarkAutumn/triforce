@@ -2,8 +2,8 @@ rooms:
 # --- Overworld (level 0): every room 0x00-0x7f (mapping, Nov 9; docs/routes/overworld.md) ---
 # Exits: Link walked out of every 8px lane of every edge in the emulator (room-id retarget, Link teleported
 # to the first spot inside the edge he fits, walking straight out).  Enemies: the ROM room list (attr C/D +
-# LevelInfo FoeCounts, Z_05:1698-1826) plus Zora when attr A bit 3 is set; existing entries keep their data.
-# `entrance`: the cave index (attr B >> 2), what is inside (OW block E wares/prices, Z_01:111-161) and how it
+# LevelInfo FoeCounts, asm:Room_EnterCommon) plus Zora when attr A bit 3 is set; existing entries keep their data.
+# `entrance`: the cave index (attr B >> 2), what is inside (OW block E wares/prices, asm:Cave_Init_SetUpTextAndWares) and how it
 # opens (open mouth, bomb/burn/push tile object, armos, recorder); every entrance was walked into in the
 # emulator (secret flag $80 set to reveal hidden ones) and leads where the index says.
 - level: 0
@@ -98,7 +98,7 @@ rooms:
     W:
       level: 0
       location: '0x04'
-    cave:  # Dungeon 9 entrance: LevelInfoUW9 StartRoomId
+    cave:  # Dungeon 9 entrance: Level_InfoUW9 StartRoomId
       level: 9
       location: '0x76'
   enemies:
@@ -206,7 +206,7 @@ rooms:
     S:
       level: 0
       location: '0x1b'
-    cave:  # Dungeon 5 entrance: LevelInfoUW5 StartRoomId
+    cave:  # Dungeon 5 entrance: Level_InfoUW5 StartRoomId
       level: 5
       location: '0x76'
   enemies:
@@ -429,7 +429,7 @@ rooms:
       level: 0
       location: '0x16'
   enemies:
-    Unknown_31: 1  # $31 in the overworld: the falling-boulder generator (Z_04 boulder set); $32 the boulders
+    Unknown_31: 1  # $31 in the overworld: the falling-boulder generator (asm:Boulder_UpdateSpawner); $32 the boulders
     Unknown_32: 2
     Zora: 1
   treasure: null
@@ -485,7 +485,7 @@ rooms:
 - level: 0
   location: '0x1b'
   specialist: ow-start
-  # The mountain maze (Z_01 CheckMazes, MountainMazeDirs): only W leaves normally; E and S bring Link back into 0x1b
+  # The mountain maze (asm:Maze_CheckStep, asm:Maze_LostHillsDirs): only W leaves normally; E and S bring Link back into 0x1b
   # and N reaches 0x0b only on the fourth N in a row (one N wrapping back checked in the emulator, d2first Nov 8).
   # Mapping (Nov 9): all four Ns walked in the emulator ($52F MazeStep 0 -> 1 -> 2 -> 3, the 4th N enters 0x0b).
   exits:
@@ -503,7 +503,7 @@ rooms:
       location: '0x1a'
   enemies: null
   treasure: null
-  maze:  # Z_01 CheckMazes MountainMazeDirs (crates/zelda game_map::MAZES)
+  maze:  # asm:Maze_CheckStep asm:Maze_LostHillsDirs (crates/zelda game_map::MAZES)
     sequence: [N, N, N, N]
     destination:
       level: 0
@@ -527,7 +527,7 @@ rooms:
       location: '0x1b'
   enemies: null
   treasure: null
-  entrance:  # cave index $15 (OW attr B >> 2); the armos at x=176 y=128 hides stairs (Z_04 armos table)
+  entrance:  # cave index $15 (OW attr B >> 2); the armos at x=176 y=128 hides stairs (asm:Armos_SecretXs)
     cave: '0x15'
     contents: hint
     how: armos
@@ -579,7 +579,7 @@ rooms:
 - level: 0
   location: '0x1f'
   exits:
-    N:  # a gap in the rock wall at x=$80 only (Z_07 L2299-2318 false-wall exception; mapping, emulator-checked)
+    N:  # a gap in the rock wall at x=$80 only (asm:Tile_GetAtObjOffset false-wall exception; mapping, emulator-checked)
       level: 0
       location: '0x0f'
     W:
@@ -630,7 +630,7 @@ rooms:
     S:
       level: 0
       location: '0x32'
-    cave:  # Dungeon 6 entrance: LevelInfoUW6 StartRoomId
+    cave:  # Dungeon 6 entrance: Level_InfoUW6 StartRoomId
       level: 6
       location: '0x79'
   enemies:
@@ -671,7 +671,7 @@ rooms:
       level: 0
       location: '0x23'
   enemies: null
-  treasure: power-bracelet  # under the armos at x=$E0 (Z_04 armos table)
+  treasure: power-bracelet  # under the armos at x=$E0 (asm:Armos_SecretXs)
 - level: 0
   location: '0x25'
   exits:
@@ -805,7 +805,7 @@ rooms:
 - level: 0
   location: '0x2c'
   specialist: ow-tektite
-  # Secret (d2first, Nov 8; emulator-checked): OW attr B cave index $11, a rock wall tile object (Z_04 UpdateRockWall)
+  # Secret (d2first, Nov 8; emulator-checked): OW attr B cave index $11, a rock wall tile object (asm:RockWall_Update)
   # at x=144 y=160, tiles (18-19, 12-13) in the middle rock.  A bomb there opens it (room flag $80) to the take-any
   # cave: potion ($20) on the left, heart container ($1A) on the right.
   requires_bombs: true    # Lee (Nov 8): the d2first heart needs a bomb here (zelda::cheats cheats one in)
@@ -889,7 +889,7 @@ rooms:
   exits: null
   enemies: null
   treasure: null
-  raft_exits:  # walking S off the pier with the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
+  raft_exits:  # walking S off the pier with the raft (asm:Dock_Update; emulator-checked): an exit path searches use only with the raft
     S:
       level: 0
       location: '0x3f'
@@ -975,7 +975,7 @@ rooms:
   enemies:
     BlueLeever: 4
   treasure: null
-  entrance:  # cave index $20 (OW attr B >> 2); the armos at x=64 y=128 hides stairs (Z_04 armos table)
+  entrance:  # cave index $20 (OW attr B >> 2); the armos at x=64 y=128 hides stairs (asm:Armos_SecretXs)
     cave: '0x20'
     contents: shop
     how: armos
@@ -1088,11 +1088,11 @@ rooms:
     S:  # 0x4c N exit leads here; savestate 0_3cs has Link entering at the S edge (y=221)
       level: 0
       location: '0x4c'
-    cave:  # D2 entrance: OW LevelBlock attr B cave index 2; LevelInfoUW2 StartRoomId=$7D (v1 had 2:0x77 in_cave)
+    cave:  # D2 entrance: OW LevelBlock attr B cave index 2; Level_InfoUW2 StartRoomId=$7D (v1 had 2:0x77 in_cave)
       level: 2
       location: '0x7d'
   enemies:
-    BlueOctorok: 1  # RAM ObjType $0A in 0_3cs: the blue fast Octorok (UpdateOctorock, 2 HP)
+    BlueOctorok: 1  # RAM ObjType $0A in 0_3cs: the blue fast Octorok (Octorok_Update, 2 HP)
   treasure: null
   entrance:  # cave index $02 (OW attr B >> 2)
     cave: '0x02'
@@ -1112,7 +1112,7 @@ rooms:
   enemies:
     BlueMoblin: 4
   treasure: null
-  entrance:  # cave index $21 (OW attr B >> 2); the armos at x=144 y=128 hides stairs (Z_04 armos table)
+  entrance:  # cave index $21 (OW attr B >> 2); the armos at x=144 y=128 hides stairs (asm:Armos_SecretXs)
     cave: '0x21'
     contents: secret-rupees
     how: armos
@@ -1144,7 +1144,7 @@ rooms:
     BlueSlowOctorok: 1
     Zora: 1
   treasure: null
-  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
+  raft_exits:  # sailing from the dock needs the raft (asm:Dock_Update; emulator-checked): an exit path searches use only with the raft
     N:
       level: 0
       location: '0x2f'
@@ -1182,7 +1182,7 @@ rooms:
     S:
       level: 0
       location: '0x52'
-    cave:  # Dungeon 7 entrance: LevelInfoUW7 StartRoomId
+    cave:  # Dungeon 7 entrance: Level_InfoUW7 StartRoomId
       level: 7
       location: '0x79'
   enemies:
@@ -1225,13 +1225,13 @@ rooms:
   location: '0x45'  # the island of Dungeon 4: reached by raft from the dock of 0x55
   specialist: ow-peahat  # d2first-d4 (Nov 11)
   exits:
-    cave:  # Dungeon 4 entrance: LevelInfoUW4 StartRoomId
+    cave:  # Dungeon 4 entrance: Level_InfoUW4 StartRoomId
       level: 4
       location: '0x71'
   enemies:
     Peahat: 1
   treasure: null
-  raft_exits:  # walking S off the pier with the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
+  raft_exits:  # walking S off the pier with the raft (asm:Dock_Update; emulator-checked): an exit path searches use only with the raft
     S:
       level: 0
       location: '0x55'
@@ -1413,7 +1413,7 @@ rooms:
     BlueMoblin: 4
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
-  entrance:  # cave index $23 (OW attr B >> 2); the armos at x=160 y=128 hides stairs (Z_04 armos table)
+  entrance:  # cave index $23 (OW attr B >> 2); the armos at x=160 y=128 hides stairs (asm:Armos_SecretXs)
     cave: '0x23'
     contents: secret-rupees
     how: armos
@@ -1541,7 +1541,7 @@ rooms:
     RedSlowOctorok: 1
     Zora: 1
   treasure: null
-  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
+  raft_exits:  # sailing from the dock needs the raft (asm:Dock_Update; emulator-checked): an exit path searches use only with the raft
     N:
       level: 0
       location: '0x45'
@@ -1773,7 +1773,7 @@ rooms:
     BlueMoblin: 5
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
-  maze:  # Z_01 CheckMazes ForestMazeDirs (crates/zelda game_map::MAZES)
+  maze:  # asm:Maze_CheckStep asm:Maze_LostWoodsDirs (crates/zelda game_map::MAZES)
     sequence: [N, W, S, W]
     destination:
       level: 0
@@ -2043,7 +2043,7 @@ rooms:
     W:
       level: 0
       location: '0x6c'
-    cave:  # Dungeon 8 entrance (mapping, Nov 9): burn the tree; LevelInfoUW8 StartRoomId
+    cave:  # Dungeon 8 entrance (mapping, Nov 9): burn the tree; Level_InfoUW8 StartRoomId
       level: 8
       location: '0x7e'
   enemies:
@@ -2170,7 +2170,7 @@ rooms:
     W:
       level: 0
       location: '0x73'
-    cave:  # Dungeon 3 entrance: LevelInfoUW3 StartRoomId
+    cave:  # Dungeon 3 entrance: Level_InfoUW3 StartRoomId
       level: 3
       location: '0x7c'
   enemies:
@@ -2652,9 +2652,9 @@ rooms:
     BlueKeese: 4
   treasure: bow  # on the upper walkway, (128, 144); its item-taken flag is 0x7f's
 # --- Dungeon 2 (level 2) ---
-# Derived from rom.nes LevelBlockUW1Q1 (bins.xml offset 100096) + LevelInfoUW2 (offset 103672):
-# doors from attr A/B (Z_05 FindDoorTypeByDoorBit), enemies from attr C/D + LevelInfo_FoeCounts
-# (Z_05 ~1697), item from attr E&$1F (Z_05 CreateRoomObjects). Same method reproduces v1's D1 entries.
+# Derived from rom.nes Level_BlockUW1to6Q1 (bins.xml offset 100096) + Level_InfoUW2 (offset 103672):
+# doors from attr A/B (asm:Door_FindTypeByDirBit), enemies from attr C/D + LevelInfo_FoeCounts
+# (asm:Room_EnterCommon@ResetObjLoop), item from attr E&$1F (asm:Room_SetUpItemAndPushBlock). Same method reproduces v1's D1 entries.
 # '# shutter' exits open when the room's kill-all trigger fires. Counts are first-visit (no RAM check yet).
 # Exit conventions (D1-D3, checked against the ROM's attr A/B by crates/zelda game_map tests): every door is an
 # exit on both sides; a key door is `locked: true` on both sides; a bombable wall is an exit marked `# bomb wall`
@@ -2710,7 +2710,7 @@ rooms:
       level: 2
       location: '0x1e'
   enemies:
-    Unknown_75: 1  # unverified: $4B UnderworldPerson (old man), Z_07 UpdateObject_JumpTable
+    Unknown_75: 1  # unverified: $4B UnderworldPerson (old man), asm:Obj_Update_JumpTable
   treasure: null
   bomb_walls: [W]
 - level: 2
@@ -2776,7 +2776,7 @@ rooms:
       level: 2
       location: '0x3e'
   enemies:
-    Unknown_74: 1  # unverified: $4A Trap (UpdateTrap, Z_07 UpdateObject_JumpTable); list $6E slots 1-3 empty
+    Unknown_74: 1  # unverified: $4A Trap (asm:Trap_Update, asm:Obj_Update_JumpTable); list $6E slots 1-3 empty
     BlueKeese: 4
   treasure: bombs
   bomb_walls: [N, S]
@@ -2930,9 +2930,9 @@ rooms:
     Rope: 5
   treasure: key
 # --- Dungeon 3 (level 3) (mapping, Nov 9; docs/routes/d3.md) ---
-# Rooms: LevelInfoUW3 SubmenuMapMask (rotation $0C) over LevelBlockUW1Q1; doors from attr A/B (N A>>5, S A>>2,
+# Rooms: Level_InfoUW3 SubmenuMapMask (rotation $0C) over Level_BlockUW1to6Q1; doors from attr A/B (N A>>5, S A>>2,
 # W B>>5, E B>>2; 0 open, 1 wall, 4 bomb, 5/6 key, 7 shutter), enemies from attr C/D + FoeCounts, item from
-# attr E & $1F, `trigger` from attr F & 7 (Z_05 CheckSecretTrigger).  Every room was loaded in the emulator
+# attr E & $1F, `trigger` from attr F & 7 (asm:Secret_RunTrigger).  Every room was loaded in the emulator
 # (room-id retarget from 0x7c) and Lee's route was walked there (docs/routes/d3.md).  The boss room's only open way
 # in is 0x4c's E bomb wall (exit conventions: see Dungeon 2).
 - level: 3
@@ -3169,7 +3169,7 @@ rooms:
     N:
       level: 3
       location: '0x59'
-    cave:  # the stairs; CheckWarps finds cellar $0F (see d3.md)
+    cave:  # the stairs; Warp_CheckUnderLink finds cellar $0F (see d3.md)
       level: 3
       location: '0x0f'
       in_cave: true
@@ -3226,7 +3226,7 @@ rooms:
     BlueKeese: 4
   treasure: raft
 # --- Dungeon 4 (level 4) (mapping, Nov 11; docs/routes/d4.md) ---
-# Rooms: the rooms reachable from LevelInfoUW4 StartRoomId (0x71) over LevelBlockUW1Q1, the same as its
+# Rooms: the rooms reachable from Level_InfoUW4 StartRoomId (0x71) over Level_BlockUW1to6Q1, the same as its
 # SubmenuMapMask (rotation $06); doors, enemies, items and triggers as for Dungeon 3.  Every room was loaded in
 # the emulator (room-id retarget from 0x71) and Lee's route was walked there (docs/routes/d4.md).  `dark: true`
 # is attr E bit 7 (the room is black without a candle; its tiles are the same).  Exit conventions: see Dungeon 2.
@@ -3436,7 +3436,7 @@ rooms:
     W:  # open here; a shutter on 0x31's side
       level: 4
       location: '0x31'
-    cave:  # the stairs (they appear when the block is pushed); LevelInfoUW4 CellarRoomIdArray[0] = $60
+    cave:  # the stairs (they appear when the block is pushed); Level_InfoUW4 CellarRoomIdArray[0] = $60
       level: 4
       location: '0x60'
       in_cave: true

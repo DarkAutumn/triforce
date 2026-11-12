@@ -16,7 +16,7 @@ needs them (rules below). The curriculum over his movement patterns matters most
 - Chain check: milestone1 ends on entering 0x0e; the d2-first route (next) plays through the kill and the
   triforce, so its chains measure Dodongo in a run.
 
-## 1. Mechanics (probes, `target/dodongo/`; disassembly `Z_04`)
+## 1. Mechanics (probes, `target/dodongo/`; disassembly `asm:Dodongo_Update`)
 
 - Dodongo2 (`$32`) is in object slot 1: X `$71`, Y `$85`, dir `$99`; ObjState `$AD`: 0 walk, 1 bloated (ate a
   bomb), 2 stunned; stun timer `$3E`; metastate `$406` ≥ `$10` = dying. In `2_0es_0` he spawns at (160, 157)

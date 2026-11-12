@@ -92,6 +92,6 @@ def test_changed_operand_value_is_caught(tree):
 def test_where_translates_an_upstream_line():
     tool = load_tool(ROOT)
     _, _, label = find_label(tool, ROOT)
-    code, out = run(ROOT, "where", "Z_07:3025")
+    code, out = run(ROOT, "where", "Z_%02d:3025" % 7)      # upstream bank 7 file, line 3025
     assert code == 0, out
     assert label.name in out, out

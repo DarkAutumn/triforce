@@ -11,7 +11,7 @@ ring = other cave, purple frame = maze).
 ## How it was built
 
 Quest 1 throughout. The ROM is `roms/zelda.nes`; disassembly tables are at file offset = `bins.xml` offset + 16
-(`LevelBlockOW` 0x18410: six 128-byte tables A–F; `LevelInfoOW` 0x19310).
+(`Level_BlockOW` 0x18410: six 128-byte tables A–F; `Level_InfoOW` 0x19310).
 
 - **Loading a room:** the room-id retarget of `target/overworld/render.py`: load `0_59w_0`, set `RoomId` ($EB) to
   target + 1 and hold Left, so the game scrolls into the target from its E edge and loads it itself (0x60, left of
@@ -22,19 +22,21 @@ Quest 1 throughout. The ROM is `roms/zelda.nes`; disassembly tables are at file 
   tiles don't say (0x1f's wall gap, below). The run was repeated with the ladder: no edge needs it. Exits are
   symmetric except the mazes and the raft piers.
 - **Enemies:** the ROM room list: monster id `C & $3F | (D & $80 ? $40 : 0)`, count `LevelInfo FoeCounts[C >> 6]`
-  (1 for ids $32–$61), ids ≥ $62 index `ObjLists` (the first `count` bytes) (Z_05:1698–1826), plus `Zora: 1` when
-  attr A bit 3 is set (Z_04 CheckZora). It matches the emulator's fresh load (the monster slots at load or the most
-  seen at once over 600 frames) in 125 of 128 rooms (0x38/0x49's list of 6 runs one byte past its 5-byte `ObjLists`
-  entry, as the game copies `count` bytes); 0x58, 0x67 and 0x68 were on the start state's way, so the game's kill
+  (1 for ids $32–$61), ids ≥ $62 index `Spawn_ObjLists` (the first `count` bytes) (`asm:Room_EnterCommon`), plus
+  `Zora: 1` when attr A bit 3 is set (`asm:Zora_TrySpawn`). It matches the emulator's fresh load (the monster slots
+  at load or the most seen at once over 600 frames) in 125 of 128 rooms (0x38/0x49's list of 6 runs one byte past
+  its 5-byte `Spawn_ObjLists` entry, as the game copies `count` bytes); 0x58, 0x67 and 0x68 were on the start
+  state's way, so the game's kill
   history lowered their counts (the ROM count is the fresh one). Names are the repo's (`describe::enemy_name`), unnamed ids as
   `Unknown_<decimal>` like the existing entries: `Unknown_31` = $1F the boulder generator, `Unknown_32` = $20 its
   boulders (counted as the most seen at once, as the existing boulder rooms do), `Unknown_47` = $2F a pond fairy.
-  `edge_spawn: true` (attr F bit 3, 20 rooms): the monsters walk in from the screen edges (Z_07 FindNextEdgeSpawnCell)
+  `edge_spawn: true` (attr F bit 3, 20 rooms): the monsters walk in from the screen edges (`asm:EdgeSpawn_FindNextCell`)
   instead of appearing in place; Leevers and Zoras surface by their own rules.
 - **Caves:** attr B >> 2 is the cave index: < $10 a dungeon level, $10–$23 a cave (dweller `$6A + index − $10`).
-  What a cave holds comes from OW block E (wares at `E[3i..]`, prices at `E[60 + 3i..]`, Z_01:111–161). How it opens
-  comes from the room: a visible mouth, or the tile object in slot 11 ($62 rock, $63 rock wall, $64 tree, $65
-  gravestone, Z_05:5744–5958), the hard-coded armos rooms (Z_04:3150–3160), or the recorder (Q1: 0x42 only). Tile
+  What a cave holds comes from OW block E (wares at `E[3i..]`, prices at `E[60 + 3i..]`,
+  `asm:Cave_Init_SetUpTextAndWares`). How it opens comes from the room: a visible mouth, or the tile object in slot
+  11 ($62 rock, $63 rock wall, $64 tree, $65 gravestone, `asm:RoomLayout_TileObjTypes`, `asm:RoomLayout_CheckTileObj`),
+  the hard-coded armos rooms (`asm:Armos_SecretRoomIds`), or the recorder (Q1: 0x42 only). Tile
   object secrets carry a quest gate (attr F >> 6: 0 both, 1 Q1, 2 Q2); Q2-only ones are left out (a comment says so).
   **Every entrance was walked into in the emulator** (room flag $80 set first so bombed walls and burned trees show
   their opening; rocks pushed with the bracelet; armos touched; the recorder blown at 0x42) and the game went where the
@@ -61,9 +63,10 @@ Existing entries are kept verbatim (data, comments, tags); new keys are appended
 
 ## Special edges
 
-- **0x1f N → 0x0f:** the rock wall at the top of 0x1f is walkable at x = $80 only (Z_07:2299–2318, a false-wall
-  exception for room $1F); 0x0f's stairs lead back down. game.yaml has the exit with a comment.
-- **Raft:** docks in 0x3f (x = $60) and 0x55 (x = $80) sail N to 0x2f and 0x45 with the raft (Z_04 UpdateDock;
+- **0x1f N → 0x0f:** the rock wall at the top of 0x1f is walkable at x = $80 only
+  (`asm:Tile_GetAtObjOffset@SetTile`, a false-wall exception for room $1F); 0x0f's stairs lead back down. game.yaml
+  has the exit with a comment.
+- **Raft:** docks in 0x3f (x = $60) and 0x55 (x = $80) sail N to 0x2f and 0x45 with the raft (`asm:Dock_Update`;
   emulator: from the dock with the raft, 0x55 → 0x45 and 0x3f → 0x2f). Walking S off the piers of 0x2f/0x45 lands Link
   in the water at the top of 0x3f/0x55 without the raft, so those are `raft_exits` only. 0x2f has no walkable exit.
   The route `d2first-d4` sails 0x55 → 0x45 (`docs/routes/d4.md`).
@@ -72,17 +75,17 @@ Existing entries are kept verbatim (data, comments, tags); new keys are appended
 
 ## The mazes
 
-`Z_01 CheckMazes`, called on every overworld edge exit (Z_05 CalculateNextRoomForDoor). Direction bits E=1 W=2 S=4
+`asm:Maze_CheckStep`, called on every overworld edge exit (`asm:Room_CalcNextRoomForDoor`). Direction bits E=1 W=2 S=4
 N=8; `MazeStep` = $52F.
 
 | Room | Sequence | Leads to | Leaves normally | Any other direction |
 |---|---|---|---|---|
-| 0x1b (mountain) | N, N, N, N (`MountainMazeDirs` 08 08 08 08) | 0x0b on the 4th N | W → 0x1a (step kept) | E, S: back into 0x1b, step reset |
-| 0x61 (Lost Woods) | N, W, S, W (`ForestMazeDirs` 08 02 04 02) | 0x60 on the last W | E → 0x62 (step kept) | back into 0x61, step reset |
+| 0x1b (mountain) | N, N, N, N (`Maze_LostHillsDirs` 08 08 08 08) | 0x0b on the 4th N | W → 0x1a (step kept) | E, S: back into 0x1b, step reset |
+| 0x61 (Lost Woods) | N, W, S, W (`Maze_LostWoodsDirs` 08 02 04 02) | 0x60 on the last W | E → 0x62 (step kept) | back into 0x61, step reset |
 
 - A matching direction that isn't the last one brings Link back into the maze room with `MazeStep + 1`. A mismatch
   resets the step to 0 **and doesn't count as a first step**: in the woods N, N leaves the step at 0 (the second N
-  must be followed by a fresh N). `CheckMazes` resets the step when Link leaves any other overworld room, so he always
+  must be followed by a fresh N). `Maze_CheckStep` resets the step when Link leaves any other overworld room, so he always
   enters a maze at step 0.
 - **4 vs 5 Ns:** four. From inside 0x1b the 4th N enters 0x0b, in the disassembly (`CPX #$03` on the 4th match) and
   in the emulator ($52F 0 → 1 → 2 → 3, then 0x0b). `d2first.md` and the existing game.yaml comment ("fourth N") are

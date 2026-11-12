@@ -292,7 +292,7 @@ impl fmt::Display for ActionMask {
 }
 
 /// Legal actions of a state (`compute_action_mask`). An attack is legal only where the game would start its weapon:
-/// [`GameView::weapon_ready`] and the facing inside Link_FilterInput's BorderBounds (`sword_directions`,
+/// [`GameView::weapon_ready`] and the facing inside Link_FilterInput's Link_BorderBounds (`sword_directions`,
 /// `item_directions`; a diagonal throw faces N or S).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let mut mask = ActionMask::default();

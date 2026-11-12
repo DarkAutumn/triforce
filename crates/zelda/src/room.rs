@@ -1,6 +1,6 @@
 //! Room walkability, exits and the wavefront.
 //!
-//! Walkability uses the NES threshold system from GetCollidingTileMoving (Z_07.asm:2161-2320).
+//! Walkability uses the NES threshold system from asm:Tile_GetAheadOfObj.
 
 use crate::enums::{Direction, MapLocation, Tile};
 use std::collections::{HashSet, VecDeque};
@@ -19,14 +19,14 @@ pub const BOTTOM_CAVE_TILE: u8 = 0x24;
 /// The top-left tile of an underworld stairs square ($70 $72 over $71 $73).
 pub const STAIRS_TOP_LEFT_TILE: u8 = 0x70;
 
-/// Tiles with value < threshold are walkable (Z_05.asm:6446-6450).
+/// Tiles with value < threshold are walkable (asm:Room_ObjBoundsOW, asm:Room_ObjBoundsUW).
 pub const OW_FIRST_UNWALKABLE: u8 = 0x89;
 pub const UW_FIRST_UNWALKABLE: u8 = 0x78;
 
-/// Overworld WalkableTiles substitutions (Z_07.asm:2137-2139).
+/// Overworld asm:Tile_WalkableTilesOW substitutions.
 pub const OW_WALKABLE_OVERRIDES: [u8; 9] = [0x8D, 0x91, 0x9C, 0xAC, 0xAD, 0xCC, 0xD2, 0xD5, 0xDF];
 
-/// Cave entry tiles the agent may walk into (CheckPassiveTileObjects warps on the collision).
+/// Cave entry tiles the agent may walk into (asm:Warp_CheckUnderLink starts the cave from the tile under Link).
 const OW_CAVE_ENTRY_TILES: [u8; 1] = [TOP_CAVE_TILE];
 
 /// Locked door tiles $98-$A7 (N, S, W, E).
@@ -186,7 +186,7 @@ impl Room {
         room
     }
 
-    /// The top-left tiles of the room's stairs squares (tiles $70-$73; Z_05 CheckWarps sends Link down from a
+    /// The top-left tiles of the room's stairs squares (tiles $70-$73; asm:Warp_CheckUnderLink sends Link down from a
     /// square-aligned stand on one): where Link enters an underworld cellar.
     pub fn stairs_tiles(&self) -> Vec<Tile> {
         (0..COLS)
@@ -425,7 +425,7 @@ impl Room {
             exits.set(Direction::E, col(COLS - 1), true);
             exits.set(Direction::W, col(0), true);
         } else if self.location.in_cave {
-            // An item cellar: up the ladder out of the top row (Z_05 CheckSubroom: Y < $40 moving up).
+            // An item cellar: up the ladder out of the top row (asm:Warp_CheckSubroomExit: Y < $40 moving up).
             let top: Vec<Tile> = (0..COLS - 1)
                 .map(|x| (x, 0))
                 .filter(|&(x, y)| self.is_tile_walkable(x, y) && self.is_tile_walkable(x + 1, y))

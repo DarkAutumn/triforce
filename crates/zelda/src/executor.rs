@@ -486,7 +486,7 @@ impl<S> Executor<S> {
             d => d,
         };
         // Off the grid the game moves Link along ObjDir without a tile test and snaps him at the next grid point
-        // (Z_07 Walker_Move / EnsureObjectAligned); it never turns him perpendicular there. So first walk him on to
+        // (asm:Walker_Move / asm:Obj_SnapToGrid); it never turns him perpendicular there. So first walk him on to
         // the grid point along his line (at most 6 frames), as the game would, then turn and attack.
         let current = m.read(ADDR_LINK_DIRECTION);
         let vertical = |d: u8| d & 0x0C != 0;
@@ -563,7 +563,7 @@ impl<S> Executor<S> {
 }
 
 /// Mode 9 still entering its cellar: the cellar is laid out over the room above's tiles and Link walks down its
-/// ladder (Z_05 InitMode9_EnterCellar / InitMode9_WalkCellar) until IsUpdatingMode turns on.
+/// ladder (asm:Mode9Cellar_Init_Sub8_EnterCellar / asm:Mode9Cellar_Init_Sub9_WalkIn) until IsUpdatingMode turns on.
 fn is_cellar_entry<N: Nes>(m: &Machine<N>) -> bool {
     m.read(ADDR_MODE) == MODE_UNDERGROUND && m.read(ADDR_IS_UPDATING_MODE) == 0
 }

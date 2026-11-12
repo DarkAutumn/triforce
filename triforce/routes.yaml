@@ -1,7 +1,7 @@
 # The route (docs/routes/d2first.md; Lee, Nov 8: the only route; the bow detour and Dungeon 3, Nov 9).
 # entry = side of the room Link enters from (start = game start, cave = emerging from a cave/dungeon stairs/cellar or
 # the triforce's warp); exit = direction Link leaves (cave = enter the cave, dungeon stairs or cellar stairs in this
-# room; triforce = level ends on pickup, Z_01 TakeItem -> GameMode $12 -> OW; terminal = the route ends on entering
+# room; triforce = level ends on pickup, asm:Item_Take -> GameMode $12 -> OW; terminal = the route ends on entering
 # this room; a route without a terminal step ends on its last step's triforce).  An exit through an intact bomb wall
 # (game.yaml `bomb_walls`) sends Link to the spot to bomb it from.
 # The objective follows the steps: in a room the route enters from the side Link came in, with the triforce pieces,

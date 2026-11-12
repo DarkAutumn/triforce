@@ -169,8 +169,8 @@ fn north_shutter_is_barred_not_a_wall() {
     );
 }
 
-/// F188: a MOVE into the pending push block is legal only where UpdateBlock0Idle counts the push (Link's X equal
-/// to the block's for N/S, Y + 3 equal to its Y for E/W; the block in 1:0x22 is at (96, 144)).
+/// F188: a MOVE into the pending push block is legal only where asm:PushBlock_State0Idle counts the push (Link's X
+/// equal to the block's for N/S, Y + 3 equal to its Y for E/W; the block in 1:0x22 is at (96, 144)).
 #[test]
 fn push_block_move_is_legal() {
     let Some(mut s) = session() else { return };

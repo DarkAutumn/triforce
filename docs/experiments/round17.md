@@ -97,7 +97,7 @@ Every change below is in the code the r61 team trains on (§3); none of the curr
   - one object classifier from the game's jump table: hazards (boulders and their generator, traps, Bubbles, the
     standing fire) are not enemies or fight targets; people and tile objects are in no list (F067, F038);
   - attacks are legal only where the game starts the weapon (busy slot, blocked sword `$4C`/`$52E`, Link's state,
-    BorderBounds measured at every coordinate, no attack across the doorway Link stands in) (F182, F105, F183,
+    `asm:Link_BorderBounds` measured at every coordinate, no attack across the doorway Link stands in) (F182, F105, F183,
     N006); an off-grid perpendicular attack first walks to the grid point (F160); the attack press is held a second
     frame on a lag frame (N003);
   - BOMB legal only in `requires_bombs` rooms (F016) and at an unopened overworld rock wall (F186); MOVE N scrolls

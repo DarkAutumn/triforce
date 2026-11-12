@@ -358,8 +358,8 @@ fn a_look_ahead_keeps_the_rendered_frame() {
     assert!(s.nes_mut().pixels().is_some(), "the action's last frame is still the screen");
 }
 
-/// N006: the attack directions follow the game's BorderBounds exactly. On a dungeon and an overworld state, for every
-/// coordinate on each facing's axis, a 2-frame A (sword) or B (bomb) press starts the weapon iff
+/// N006: the attack directions follow the game's asm:Link_BorderBounds exactly. On a dungeon and an overworld state,
+/// for every coordinate on each facing's axis, a 2-frame A (sword) or B (bomb) press starts the weapon iff
 /// `sword_directions`/`item_directions` include the facing.
 #[test]
 fn attack_directions_match_the_game_at_every_coordinate() {

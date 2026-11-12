@@ -33,7 +33,8 @@ const ANIMATION_ARROW_END: u8 = 21;
 const ANIMATION_BOOMERANG_MIN: u8 = 0x10;
 const ANIMATION_BOOMERANG_MAX: u8 = 0x57;
 
-// NES doorway coordinates (Z_05.asm:3706) and screen/room bounds (Z_07.asm:2831, Z_05.asm:6449).
+// NES doorway coordinates (asm:Doorway_RequiredCoords) and screen/room bounds (asm:Link_ScreenEdgeBounds,
+// asm:Room_ObjBoundsUW).
 const DOORWAY_REQUIRED_X: i32 = 0x78;
 const DOORWAY_REQUIRED_Y: i32 = 0x8D;
 const CAVE_PERSON_LINE_Y: i32 = 0x8E;
@@ -243,7 +244,7 @@ impl BombWall {
         (2, 2)
     }
 
-    /// BombableWallHotspotsX/Y (Z_07.asm:4809-4812).
+    /// asm:Bomb_WallHotspotsX / asm:Bomb_WallHotspotsY.
     pub fn hotspot(direction: Direction) -> Position {
         match direction {
             Direction::N => Position::new(0x78, 0x5D),
@@ -511,7 +512,8 @@ impl GameView {
     }
 
     /// A bomb-wall door ($4) the game has opened (room flag or CurOpenedDoors bit): its hole is passable whatever
-    /// tile sits at the door position (the N and W holes' rims are unwalkable tiles; CheckDoorway goes by type).
+    /// tile sits at the door position (the N and W holes' rims are unwalkable tiles; asm:Doorway_CheckLink goes by
+    /// type).
     pub fn is_bomb_door_open(&self, direction: Direction) -> bool {
         self.level() != 0
             && crate::room_state::decode_room_state(&self.ram)
@@ -547,7 +549,7 @@ impl GameView {
         })
     }
 
-    /// A push block that hasn't been pushed yet (block object state 0, Z_04.asm:633).
+    /// A push block that hasn't been pushed yet (block object state 0, asm:PushBlock_Update_JumpTable).
     pub fn push_block_pending(&self) -> bool {
         table(&self.ram, tables::OBJ_ID, PUSH_BLOCK_SLOT) == OBJ_BLOCK_ID
             && table(&self.ram, tables::OBJ_STATUS, PUSH_BLOCK_SLOT) & 0x03 == 0
@@ -570,8 +572,8 @@ impl GameView {
     }
 
     /// Whether a MOVE in `direction` pushes the pending push block: Link touches it, the room is clear
-    /// (RoomAllDead $34D) and he is aligned the way UpdateBlock0Idle counts a push (Z_04: same X for N/S, Y + 3 ==
-    /// block Y for E/W).
+    /// (asm:IsRoomAllDead $34D) and he is aligned the way asm:PushBlock_State0Idle counts a push (same X for N/S,
+    /// Y + 3 == block Y for E/W).
     pub fn is_push_block_direction(&self, direction: Direction) -> bool {
         let block = self.push_block_tiles();
         if block.is_empty() || self.peek(0x34D) == 0 {
@@ -604,7 +606,7 @@ impl GameView {
         !self.is_door_locked(direction) && !self.is_door_barred(direction)
     }
 
-    /// Whether Link can move in `direction` (the NES Walker_Move flow, Z_07.asm:2600).
+    /// Whether Link can move in `direction` (the NES flow of asm:Walker_Move).
     pub fn can_link_move(&self, direction: Direction) -> bool {
         let (px, py) = (self.link.position.x, self.link.position.y);
         if self.in_cave() && direction == Direction::N && py < CAVE_PERSON_LINE_Y {
@@ -626,11 +628,12 @@ impl GameView {
         {
             return false;
         }
-        // Overworld: on or one step before the N/W screen edge a move scrolls to the next room (CheckScreenEdge).
+        // Overworld: on or one step before the N/W screen edge a move scrolls to the next room
+        // (asm:Link_CheckScreenEdge).
         if self.level() == 0 && leaves_ow_screen(px, py, direction) {
             return true;
         }
-        // A cellar has no doorways or room bounds (Z_07 Walker_Move skips both in mode 9): only its tiles block.
+        // A cellar has no doorways or room bounds (asm:Walker_Move skips both in mode 9): only its tiles block.
         let underworld_room = self.level() > 0 && !self.in_cellar();
         if underworld_room && direction == Direction::N && py <= OW_EDGE_N {
             return px == DOORWAY_REQUIRED_X && self.is_door_open(Direction::N);
@@ -701,7 +704,7 @@ impl GameView {
         (self.health() - self.max_health() as f64).abs() < 1e-9
     }
 
-    /// Exact NES beam condition (Z_07.asm:4632-4648): containers-1 == filled and partial >= $80.
+    /// Exact NES beam condition (asm:SwordShot_Make): containers-1 == filled and partial >= $80.
     fn is_health_full_for_beams(&self) -> bool {
         let hc = self.hearts_and_containers();
         (hc >> 4) & 0x0F == hc & 0x0F && self.partial_hearts() >= 0x80
@@ -839,8 +842,8 @@ impl GameView {
         self.sword_directions().is_empty()
     }
 
-    /// Directions the sword (A) can swing: Link_FilterInput's BorderBounds on the facing's axis, as the game applies
-    /// them (Z_05.asm:2736; measured by pressing A on every coordinate, N006). Inclusive ranges:
+    /// Directions the sword (A) can swing: Link_FilterInput's Link_BorderBounds on the facing's axis, as the game
+    /// applies them (asm:Link_BorderBounds; measured by pressing A on every coordinate, N006). Inclusive ranges:
     /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.
     pub fn sword_directions(&self) -> Vec<Direction> {
         self.attack_directions(false)
@@ -870,15 +873,15 @@ impl GameView {
             .collect()
     }
 
-    /// The sword is blocked (a Bubble's touch: SwordBlockedLongTimer $4C, or SwordBlocked $52E); the game ignores
-    /// the A button meanwhile (Z_05 Link_HandleInput).
+    /// The sword is blocked (a Bubble's touch: SwordBlockedLongTimer $4C, or asm:IsSwordBlocked $52E); the game
+    /// ignores the A button meanwhile (asm:Link_HandleInput).
     pub fn is_sword_blocked(&self) -> bool {
         self.byte(Var::SwordBlockedLongTimer) != 0 || self.byte(Var::SwordBlocked) != 0
     }
 
-    /// The game would start `kind`'s weapon now (Link_HandleInput and the Wield* routines): Link is in his normal
+    /// The game would start `kind`'s weapon now (Link_HandleInput and the *_Wield routines): Link is in his normal
     /// state ($AC = 0), the sword is not blocked and its slot ($B9) is free for SWORD/BEAMS, the boomerang ($BB) and
-    /// arrow ($BE) slots are free or returning (bit 7), and WieldBomb finds a bomb slot ($BC/$BD).
+    /// arrow ($BE) slots are free or returning (bit 7), and Bomb_Wield finds a bomb slot ($BC/$BD).
     pub fn weapon_ready(&self, kind: crate::enums::ActionKind) -> bool {
         use crate::enums::ActionKind as K;
         if self.link.status != 0 {
@@ -955,8 +958,8 @@ fn bomb_state(value: u8) -> AnimationState {
     }
 }
 
-/// On or one step before an overworld screen edge, moving on scrolls (PlayerScreenEdgeBounds, CheckScreenEdge
-/// Z_07.asm:3003-3035, which runs even when the tile ahead is unwalkable).
+/// On or one step before an overworld screen edge, moving on scrolls (asm:Link_ScreenEdgeBounds,
+/// asm:Link_CheckScreenEdge, which runs even when the tile ahead is unwalkable).
 fn leaves_ow_screen(px: i32, py: i32, direction: Direction) -> bool {
     match direction {
         Direction::N => py - 8 <= OW_EDGE_N,
@@ -965,7 +968,7 @@ fn leaves_ow_screen(px: i32, py: i32, direction: Direction) -> bool {
     }
 }
 
-/// Dungeon room bounds (ObjectRoomBoundsUW).
+/// Dungeon room bounds (asm:Room_ObjBoundsUW).
 fn at_dungeon_bound(px: i32, py: i32, direction: Direction) -> bool {
     match direction {
         Direction::N => py < UW_BOUND_T,

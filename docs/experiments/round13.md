@@ -34,10 +34,11 @@ boss-aquamentus 3/3, goriya 12/12 (2 at 12000 iterations), moldorm 3/3 (12000 it
 - **Three spawns** (300 RNG seeds, entry S): (160, 93) middle of the top strip 55%, (192, 109) top of the right
   corridor 23%, (80, 93) on the strip near the cave 22%.
 - Blue Lynel: 6 HP units, the wood sword takes 1 per hit (6 hits; white sword 3); **contact costs 2 hearts**; sword
-  shots (type $57, not small-shield blockable); moves like a Goriya (UpdateLynel → UpdateGoriya).
+  shots (type $57, not small-shield blockable); moves like a Goriya (`asm:Lynel_Update` → `asm:Goriya_Update`).
 - **Walk-through (Lee's trick, confirmed):** after a sword hit his invincibility timer runs ~31 frames, and while
-  it runs `CheckMonsterCollisions` returns before `CheckLinkCollision` (Z_01), so Link overlaps him unharmed (probe:
-  8–30 frames after the swing no damage; at 2 and 36 frames −2 hearts). Stunned monsters are skipped too.
+  it runs `asm:Collision_CheckMonsterVsWeaponsAndLink` returns before `asm:Link_CheckMonsterTouch`, so Link overlaps
+  him unharmed (probe: 8–30 frames after the swing no damage; at 2 and 36 frames −2 hearts). Stunned monsters are
+  skipped too.
   `hurts_on_touch` said 1 then; fixed for every monster (`37295b5`: 0 while hit-flashing, unless always
   invincible, or while stunned).
 - Go-Explore solves every spawn without retreating (12 seeds of `0_0as_0`: mid-strip 7, corridor 2, near-cave 3;

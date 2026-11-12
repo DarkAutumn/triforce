@@ -1,7 +1,7 @@
 //! Room entry: when the game decides monster spawns and kill history, and how to vary them on load (see
 //! docs/ram-catalog.md, room entry).
 //!
-//! A pre-entry state (taken during the scroll/transition, before Z_05 InitMode_EnterRoom) can get a new spawn
+//! A pre-entry state (taken during the scroll/transition, before asm:Room_EnterCommon) can get a new spawn
 //! layout (`randomize_spawn`) and a full room (`make_room_fresh`) by editing RAM before EnterRoom runs.
 
 use crate::nes::Nes;
@@ -18,7 +18,7 @@ pub const ROOM_HISTORY: u16 = 0x621;
 pub const LEVEL_KILL_COUNTS: u16 = 0x560;
 pub const ROOM_FLAGS_OW: u16 = 0x67F;
 /// Room flags of levels 1-6 (levels 7-9: `ROOM_FLAGS_UW_7_9`); the game reads them through the level block's
-/// pointer at `WORLD_FLAGS_POINTER` (Z_07 GetRoomFlags), which `room_flags_base` follows.
+/// pointer at `WORLD_FLAGS_POINTER` (asm:RoomFlags_Get), which `room_flags_base` follows.
 pub const ROOM_FLAGS_UW: u16 = 0x6FF;
 pub const ROOM_FLAGS_UW_7_9: u16 = 0x77F;
 /// LevelInfo_WorldFlagsAddr (2 bytes, little endian).
@@ -32,7 +32,7 @@ pub const TRANSITION_MODES: [u8; 6] = [0x02, 0x03, 0x06, 0x07, 0x0A, 0x10];
 /// Modes whose init is EnterRoom (room, cellar, cave, shortcut cave).
 pub const ENTER_MODES: [u8; 4] = [0x04, 0x09, 0x0B, 0x0C];
 
-/// Perimeter cells FindNextEdgeSpawnCell walks (row high nibble, column low nibble), sorted.
+/// Perimeter cells asm:EdgeSpawn_FindNextCell walks (row high nibble, column low nibble), sorted.
 pub const EDGE_CELLS: [u8; 50] = edge_cells();
 
 const fn edge_cells() -> [u8; 50] {

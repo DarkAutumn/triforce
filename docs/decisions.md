@@ -34,7 +34,7 @@ Format: date — what changed — why — evidence.
 - **What:** `ZeldaGame.is_push_block_direction` (block object type $68 in slot 11, state 0) makes MOVE toward
   it legal. The executor doesn't apply the "two still frames = wall" interrupt while pushing.
 - **Why:** design §5.3. The NES needs the direction held for $10 frames with the room cleared
-  (`UpdateBlock0Idle`, Z_04.asm:638); the wall interrupt would cancel every push.
+  (`asm:PushBlock_State0Idle`); the wall interrupt would cancel every push.
 - **Evidence:** `tests/test_core.py::test_push_block_opens` (room 1_22: `BlockPushComplete` becomes 1 after
   `MOVE S 32`). Only the block object's tiles count: rooms also contain plain $B0 statue tiles.
 
@@ -42,7 +42,7 @@ Format: date — what changed — why — evidence.
 
 - **What:** in caves, `can_link_move(N)` is False while Link's Y < $8E.
 - **Why:** the mask offered MOVE N at the old man's line, but the NES stops Link there
-  (`CheckPersonBlocking`, Z_01.asm:3144). Every such MOVE was a wasted wall step.
+  (`asm:Person_BlockLinkMovingUp`). Every such MOVE was a wasted wall step.
 - **Evidence:** `tests/test_core.py::test_cave_person_line_blocks_north` (`0_77cave`).
 
 ## 2026-11-01 — Dungeon N doorway at the screen edge
@@ -64,7 +64,7 @@ Format: date — what changed — why — evidence.
 
 - Velocity = Δposition / (frames × 4), clipped to [−1, 1] (pixels per frame, not raw Δ). Zero after reset, on a
   room change, or when a slot's type changes.
-- Enemies remaining uses the game's own `CheckHasLivingMonsters` threshold (type < $49), not the catalog's $53,
+- Enemies remaining uses the game's own `Secret_UpdateRoomAllDead` threshold (type < $49), not the catalog's $53,
   and excludes whirlwinds, fairies, people and fires.
 - Entry direction is remembered by the builder; at reset it's inferred from the room edge Link stands at.
 - No v1 synthetic bomb-wall entities: bombable walls are in the grid and the door features.
@@ -816,9 +816,10 @@ entry below and `crates/zcore/UPSTREAM.md`.
   (`game_map::TreasureRule`, read live by `GameCompletion::dungeon_room_objective`; absent = take the treasure, as
   before): 0x69 skips its bombs on both visits, 0x5b on its first, and on its last takes them only below 4 bombs.
   `StepProgress` tracks the raft (`waypoint: raft` on the cellar step). A step leaving through an intact game.yaml
-  bomb wall targets its bomb spot (`objectives::bomb_spot`: 16 px short of the wall's Z_07 `BombableWallHotspots`
-  entry, so the bomb Link places 16 px ahead lands on it; the game wants it within $18 px); the map
-  objective's cache key holds the intact walls, so the doorway becomes the target once it opens. New families
+  bomb wall targets its bomb spot (`objectives::bomb_spot`: 16 px short of the wall's entry in
+  `asm:Bomb_WallHotspotsX` and `asm:Bomb_WallHotspotsY`, so the bomb Link places 16 px ahead lands on it; the
+  game wants it within $18 px); the map objective's cache key holds the intact walls, so the doorway becomes the
+  target once it opens. New families
   `ow-leever` (0:0x48), `zol` (3:0x7c, 7b, 6b, 49, 4b, 3d), `darknut` (3:0x5b, 59, 69), `boss-manhandla` (3:0x4d);
   `trap-room` gains 3:0x5a and 3:0x4c (and bombs, for 0x4c), `equipment-room` the raft cellar, the overworld families
   0x57/0x64 (ow-octorok), 0x55/0x56/0x65 (ow-zora), 0x63/0x73 (ow-moblin), 0x74 (ow-tektite).
@@ -943,7 +944,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **F132:** `descend()` picks only legal steps (the first via `can_link_move`); no schema bump; `Wavefront::compute`
   unchanged.
 - **F160:** walk to the grid first; an off-grid perpendicular attack holds `ObjDir` until `$394 == 0` (≤ 6 frames).
-- **F182:** mask every attack option the game ignores (busy weapon slot, sword blocked, outside `BorderBounds`,
+- **F182:** mask every attack option the game ignores (busy weapon slot, sword blocked, outside `Link_BorderBounds`,
   Link in an item/catch state).
 - **F187:** zero the observation's selected-B-item slice; layout and size unchanged.
 - **F094:** carry `just_exited_cave` through loads; extend it to dungeon mouths (0_37c, 0_3cc), cleared once Link

@@ -1,7 +1,7 @@
 """game.yaml's dungeon exits follow one convention and agree with the ROM's room attributes (review F030).
 
 Doors come from attr A ($687E: N = bits 7-5, S = bits 4-2) and attr B ($68FE: W = bits 7-5, E = bits 4-2) of the
-loaded level (Z_05 FindDoorTypeByDoorBit; 0 open, 1 wall, 4 bomb wall, 5/6 key, 7 shutter).  Convention (game.yaml
+loaded level (asm:Door_FindTypeByDirBit; 0 open, 1 wall, 4 bomb wall, 5/6 key, 7 shutter).  Convention (game.yaml
 "Exit conventions"): every door is an exit on both sides, a key door is `locked` on both sides, a bomb wall is an
 exit listed in `bomb_walls`, and the entrance room's S door back to the overworld is no exit.
 """

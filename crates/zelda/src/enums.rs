@@ -244,7 +244,7 @@ pub enum AnimationKind {
     Bait,
 }
 
-/// Enemy object types (`ZeldaEnemyKind`, UpdateObject_JumpTable Z_07.asm:5348; colours from ObjectTypeToHpPairs and
+/// Enemy object types (`ZeldaEnemyKind`, asm:Obj_Update_JumpTable; colours from asm:Obj_TypeHpPairs and
 /// the Octorok/Darknut/Lanmola code).
 pub mod enemy {
     pub const BLUE_LYNEL: u8 = 0x01;
@@ -270,7 +270,7 @@ pub mod enemy {
     pub const BLUE_GEL: u8 = 0x15;
     pub const POLS_VOICE: u8 = 0x16;
     pub const LIKE_LIKE: u8 = 0x17;
-    /// A child Digdogger (the boss splits into these); $19 is no object (DoNothing).
+    /// A child Digdogger (the boss splits into these); $19 is no object (asm:Obj_DoNothing).
     pub const DIGDOGGER_CHILD: u8 = 0x18;
     pub const PEAHAT: u8 = 0x1A;
     pub const BLUE_KEESE: u8 = 0x1B;
@@ -347,21 +347,22 @@ pub mod item {
 
 /// Non-monster object types the classifier names.
 pub mod object {
-    /// The invisible generator of the overworld boulder rooms (UpdateBoulderSet).
+    /// The invisible generator of the overworld boulder rooms (asm:Boulder_UpdateSpawner).
     pub const BOULDER_SET: u8 = 0x1F;
-    /// A falling boulder (UpdateTektiteOrBoulder; it destroys itself off screen).
+    /// A falling boulder (asm:Jumper_Update; it destroys itself off screen).
     pub const BOULDER: u8 = 0x20;
-    /// UpdateGuardFire: the fires beside an underworld person (CheckMonsterCollisions: they hurt).
+    /// asm:GuardFire_Update: the fires beside an underworld person (asm:Collision_CheckMonsterVsWeaponsAndLink: they
+    /// hurt).
     pub const GUARD_FIRE: u8 = 0x3F;
     pub const STANDING_FIRE: u8 = 0x40;
     pub const TRAP: u8 = 0x49;
     pub const TRAP2: u8 = 0x4A;
     pub const DROPPED_ITEM: u8 = 0x60;
-    /// The first cave person type (UpdateCavePerson, Z_07.asm `CMP #$6A`).
+    /// The first cave person type (asm:Cave_UpdatePerson, `CMP #$6A` in asm:Obj_Update@Update).
     pub const CAVE_PERSON: u8 = 0x6A;
 }
 
-/// What an object type is, from UpdateObject_JumpTable (Z_07.asm:5348-5454): the one classifier `GameView`, the
+/// What an object type is, from asm:Obj_Update_JumpTable: the one classifier `GameView`, the
 /// executor's interrupts, `room_state` and the observation share.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ObjectClass {
@@ -370,8 +371,8 @@ pub enum ObjectClass {
     /// A monster that can be fought ($01-$48 but the types below and the bubbles).
     Monster,
     /// Hurts (or, the boulder generator, makes things that hurt) but can't be hurt: boulders $1F/$20, traps
-    /// $49/$4A, bubbles $2B-$2D (the game leaves them out of its living monsters, CheckHasLivingMonsters), the
-    /// cave's standing fires $40 (UpdateStandingFire: CheckLinkCollision only).
+    /// $49/$4A, bubbles $2B-$2D (the game leaves them out of its living monsters, asm:Secret_UpdateRoomAllDead),
+    /// the cave's standing fires $40 (asm:StandingFire_Update: asm:Link_CheckMonsterTouch only).
     Hazard,
     /// A monster shot ($53-$5C: rocks, fireballs, arrows, boomerangs, sword/magic shots).
     Shot,
@@ -381,7 +382,7 @@ pub enum ObjectClass {
     Person,
     /// A tile object ($61-$68: dock, rocks, gravestones, rock walls, tree, block).
     TileObject,
-    /// Everything else: DoNothing types, whirlwind, pond fairy, rupee stash, Grumble, Zelda, the dead dummy, the
+    /// Everything else: Obj_DoNothing types, whirlwind, pond fairy, rupee stash, Grumble, Zelda, the dead dummy, the
     /// flute secret.
     Other,
 }

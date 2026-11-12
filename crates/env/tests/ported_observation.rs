@@ -538,9 +538,10 @@ fn stunned_dodongo_does_not_hurt_on_touch() {
     assert_eq!(with_state(1, 0)[e("hurts_on_touch")], 1.0);
 }
 
-/// A monster that was just hit (invincibility timer) or is stunned skips the collision with Link (Z_01
-/// CheckMonsterCollisions / CheckLinkCollision), so `hurts_on_touch` drops; an always-invincible one (ObjAttr bit 5)
-/// still hurts. Round 13: Link passes the 0x0a Lynel while he flashes from a sword hit.
+/// A monster that was just hit (invincibility timer) or is stunned skips the collision with Link
+/// (asm:Collision_CheckMonsterVsWeaponsAndLink / asm:Link_CheckMonsterTouch), so `hurts_on_touch` drops; an
+/// always-invincible one (ObjAttr bit 5) still hurts. Round 13: Link passes the 0x0a Lynel while he flashes from a
+/// sword hit.
 #[test]
 fn flashing_or_stunned_monsters_do_not_hurt_on_touch() {
     let Some(mut s) = session() else { return };

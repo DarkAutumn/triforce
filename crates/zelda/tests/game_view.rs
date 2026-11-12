@@ -96,8 +96,7 @@ fn object_slots_decode_into_enemies_items_and_projectiles_by_distance() {
     assert_eq!(v.link.direction, Direction::N);
 }
 
-/// F067: every object type's class follows UpdateObject_JumpTable (Z_07.asm:5348-5454; types >= $6A are cave
-/// people).
+/// F067: every object type's class follows asm:Obj_Update_JumpTable (types >= $6A are cave people).
 #[test]
 fn object_classes_follow_the_jump_table() {
     use ObjectClass::*;
@@ -416,7 +415,7 @@ fn weapon_directions_respect_screen_bounds() {
 }
 
 /// F182: the mask offers only attacks the game would start: a busy boomerang slot, a blocked sword, Link in an
-/// item state, a full bomb pair or a facing outside BorderBounds mask the option.
+/// item state, a full bomb pair or a facing outside Link_BorderBounds mask the option.
 #[test]
 fn the_mask_offers_only_attacks_the_game_starts() {
     use zelda::actions::compute_action_mask;
@@ -512,8 +511,8 @@ fn push_block_is_pending_until_pushed() {
 
 #[test]
 fn overworld_screen_edges_scroll() {
-    // F059: at the top edge (y = $3D) or one step before it, MOVE N scrolls to the room above (CheckScreenEdge), as
-    // W does at the west edge.
+    // F059: at the top edge (y = $3D) or one step before it, MOVE N scrolls to the room above
+    // (asm:Link_CheckScreenEdge), as W does at the west edge.
     let can = |x: u8, y: u8, d: Direction| {
         let mut r = Ram::new();
         r.set(Var::Level, 0)

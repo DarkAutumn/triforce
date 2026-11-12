@@ -66,7 +66,7 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 | `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
-Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's UpdateObject jump table) and
+Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's `Obj_Update` jump table) and
 `GameView`, the executor's interrupts, `room_state` and the observation share it: `enemies` are monsters only;
 `projectiles` are monster shots ($53–$5C); `hazards` hold boulders and the boulder generator ($20/$1F), traps
 ($49/$4A), Bubbles ($2B–$2D) and standing fire ($40), which hurt but can't be hurt and are not fight targets;
@@ -77,7 +77,7 @@ dived is not a kill.
 
 The action mask (`zelda::actions::compute_action_mask`) offers only what the game would do. An attack is legal
 only where the game would start the weapon: Link's state allows it, the weapon's slot is free, the sword isn't
-blocked (`$4C`/`$52E`: SWORD and BEAMS masked), Link is inside the game's BorderBounds for the facing, and a
+blocked (`$4C`/`$52E`: SWORD and BEAMS masked), Link is inside the game's `Link_BorderBounds` for the facing, and a
 diagonal throw checks its N/S facing; no attack across the doorway Link stands in. The bounds are the measured
 inclusive ranges (`GameView::sword_directions` for A, the sword; `GameView::item_directions` for B items):
 
@@ -527,10 +527,10 @@ step, so following an enemy that moves away pays again, and knockback resets the
   A step's `treasure:` (`game_map::TreasureRule`: absent = take, `skip`, `{if_bombs_below: N}` read live) says
   whether the room's treasure is fought for and picked up on that visit (D3's 0x69 and 0x5b). A step leaving
   through an intact game.yaml bomb wall targets `objectives::bomb_spot` (facing the wall 16 px short of its
-  Z_07 hotspot, so the bomb lands on it); the map objective's cache key holds the intact walls, so the doorway is
-  the target once it opens.
+  hotspot (`asm:Bomb_WallHotspotsX`, `asm:Bomb_WallHotspotsY`), so the bomb lands on it); the map objective's
+  cache key holds the intact walls, so the doorway is the target once it opens.
   game.yaml `raft_exits` (the docks of 0x55 and 0x3f, the piers of 0x45 and 0x2f) are exits too (`RoomExit::raft`):
-  a step leaving through one targets its `dock:` tile (`Z_04 UpdateDock` sails from there), and path searches use a
+  a step leaving through one targets its `dock:` tile (`asm:Dock_Update` sails from there), and path searches use a
   raft crossing only while Link holds the raft.
   An overworld cave hidden behind a rock wall (game.yaml `bomb_secret`) is entered through that wall's tiles.
   Training episodes take their step from the start state's name and Link's progress
@@ -551,12 +551,12 @@ step, so following an enemy that moves away pays again, and knockback resets the
   pushes it from: game.yaml `push_block: [dirs]` for stairs the block walls in (Dungeon 1's 0x22: N or S only) or
   reveals (Dungeon 4's Breakfast Room: any way; the map objective's cache key holds whether the room has stairs),
   `push_block_opens: E` for a shutter on the step's exit side (Dungeon 4's 0x12: any way). A block moves only once
-  the room's monsters are dead (`RoomAllDead` $34D; Bubbles don't count), so until then the objective is to fight.
+  the room's monsters are dead (`IsRoomAllDead` $34D; Bubbles don't count), so until then the objective is to fight.
   `reward-pushed-block` pays for a push in a listed direction.
 - **Room names**: game.yaml `name:` (`GameRoom::name`, `_native.game_rooms()[...]['name']`) is what people call a
   room (4:0x32 is the Breakfast Room); the viewer's strip shows it. `dark: true` (attr E bit 7) is recorded and
   read by nothing.
-- **Overworld mazes** (`zelda::game_map::MAZES`, Z_01 CheckMazes; `docs/routes/overworld.md`): 0x1b (N, N, N, N to
+- **Overworld mazes** (`zelda::game_map::MAZES`, `asm:Maze_CheckStep`; `docs/routes/overworld.md`): 0x1b (N, N, N, N to
   0x0b; W leaves) and 0x61 (N, W, S, W to 0x60; E leaves). They live in code; game.yaml's `maze:` blocks must match
   them (load error otherwise) and list the looping edges as exits back into the room. A maze room gets a synthetic
   exit `maze` to its destination costing the sequence's length in the Dijkstra; `GameMap::exit_direction` turns

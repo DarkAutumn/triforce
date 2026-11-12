@@ -54,14 +54,14 @@ Choices and findings:
   path would go 0x73 N directly; the route still takes both key rooms like the old D1-first route: 0x73 W, 0x72
   back E, 0x73 E, 0x74 back W, 0x73 N. The objective follows the route's steps (below), so 0x73 sends Link W,
   then E, then N. The boomerang pickup at 0x44 stays.
-- **0x1b is the mountain maze** (`Z_01 CheckMazes`): W is its only normal exit; E and S bring Link back into
+- **0x1b is the mountain maze** (`asm:Maze_CheckStep`): W is its only normal exit; E and S bring Link back into
   0x1b and N reaches 0x0b only on the fourth N in a row (four Ns from inside 0x1b; walked in the emulator, Nov 9).
   game.yaml lists N/E/S as exits back into 0x1b plus a `maze:` block (`docs/routes/overworld.md`).
 
 ## The 0x2c secret
 
 - OW attr B of 0x2c = $47: cave index $11, the take-any cave (person $6B, text selector $20).
-- A rock-wall tile object ($63 in slot 11, `Z_04 UpdateRockWall`) at x=144, y=160: tiles (18–19, 12–13) on the
+- A rock-wall tile object ($63 in slot 11, `asm:RockWall_Update`) at x=144, y=160: tiles (18–19, 12–13) on the
   bottom face of the middle rock. A bomb at Link (144, 169) facing N opens it (tile $24, room flag $80); walking N
   into it enters the cave.
 - Cave wares (`CaveItemIds` $422): $20 (potion, x=88) / none / **$1A heart container (x=152)**. Taking the right
@@ -96,19 +96,20 @@ out and returns the same way (0x22 E, 0x23 S, 0x33 S) to 0x43, which it leaves E
 Keys: +1 (0x33) −1 (0x33 N door) +1 (0x23) −1 (0x23 W door), so Link leaves the detour with the keys he brought.
 
 Mechanics (emulator, rooms loaded through `Game.load` and read at mode 5, the cellar at mode 9; disassembly
-`Z_01 InitTrap_Full`/`UpdateTrap_Full`, `Z_04 UpdateBlock`, `Z_05 CheckWarps`/`CheckSubroom`/`InitMode9_*`):
+`asm:Trap_Init_Full`, `asm:Trap_Update_Full`, `asm:PushBlock_Update`, `asm:Warp_CheckUnderLink`,
+`asm:Warp_CheckSubroomExit`, `Mode9Cellar_Init_*`):
 - **0x22** has no monsters: a trap generator ($4A) makes four blade traps ($49, object slots 1–4) in the corners
   (32, 93), (32, 189), (208, 93), (208, 189). A trap slides at Link when he lines up with it (|dy| < 14:
-  horizontally, else |dx| < 14: vertically), only inward (`TrapAllowedDirs`), fast (1.75 px/frame) to near the
+  horizontally, else |dx| < 14: vertically), only inward (`Trap_AllowedDirs`), fast (1.75 px/frame) to near the
   room's centre line ($78 / $90) and slowly (0.5 px/frame) back. They hurt on touch, can't be harmed and are not
   monsters (room state `enemies_remaining` 0); the observation shows them as entities `0x49` with `hurts_on_touch`
   1, `killable` 0. A scripted path along the bottom (door, W to x 176, S to y 173, W 144, S 181, W 112, N 173,
   W 96, then N to push) went through unhurt in 20 of 20 seeds with raw input (`target/traps/path.py`).
 - **The stairs** (tiles $70 $72 / $71 $73) are there from the start at tiles (16, 10)–(17, 11), the centre of a
   diamond of eight blocks ($B0–$B3); the room's secret trigger is none (attr F & 7 = 0). The west block, tiles
-  (12, 10)–(13, 11) at (96, 144), is the room's push block (attr D bit $40, object $68 in slot $B). `UpdateBlock`
+  (12, 10)–(13, 11) at (96, 144), is the room's push block (attr D bit $40, object $68 in slot $B). `PushBlock_Update`
   moves it after 16 frames of pushing toward it while aligned, in **any** direction (the room needs no kills:
-  `RoomAllDead`). Pushed **N** (from below, Link at (96, 157) walks half into it, y 149) or **S** (from above, Link at
+  `IsRoomAllDead`). Pushed **N** (from below, Link at (96, 157) walks half into it, y 149) or **S** (from above, Link at
   (96, 125)) it opens the way: (12, 10) → (14, 10) → the stairs. Pushed **E** it lands on (14, 10) and walls the
   stairs in for the rest of the visit (it moves once; re-entering the room resets it). W needs Link inside the
   diamond. A MOVE must last 16+ frames (`MOVE N 16`): a released button resets the push timer.

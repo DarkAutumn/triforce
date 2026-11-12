@@ -772,9 +772,9 @@ impl ObservationBuilder {
             let harmful = ObjectClass::can_hurt(t);
             // A stunned Dodongo (ObjState 2, the bomb smoke) can't hurt Link: that's when to stab him.
             let stunned_dodongo = matches!(t, 0x31 | 0x32) && obj_state == 2;
-            // Z_01 CheckMonsterCollisions/CheckLinkCollision: a monster whose stun timer runs, or that was just hit
-            // (invincibility timer, unless it is always invincible), skips the collision with Link: Link can walk
-            // through it (round 13: hit a Lynel once, then pass him while he flashes).
+            // asm:Collision_CheckMonsterVsWeaponsAndLink / asm:Link_CheckMonsterTouch: a monster whose stun timer
+            // runs, or that was just hit (invincibility timer, unless it is always invincible), skips the collision
+            // with Link: Link can walk through it (round 13: hit a Lynel once, then pass him while he flashes).
             let flashing = at(OBJ_INVINCIBILITY_TIMER, i) > 0 && at(OBJ_ATTR, i) & 0x20 == 0;
             let harmless = monster && (at(OBJ_STUN, i) > 0 || flashing);
             f[e::HURTS_ON_TOUCH] =

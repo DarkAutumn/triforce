@@ -19,7 +19,7 @@ Audit of the 84 seed states the round 1/2 configs used:
 - **15 had 16 hearts** (max health), far above the route's 3–4. Aquamentus and the D1 states were the worst.
 - **4 were misnamed** (file name room ≠ RAM room).
 
-Spawn positions are not RNG-driven per load: `AssignObjSpawnPositions` (Z_05:1879) uses `SpawnCycle $524`
+Spawn positions are not RNG-driven per load: `asm:Spawn_AssignPositions` uses `SpawnCycle $524`
 (0–8), set at room entry; overworld edge-spawn rooms use `CurEdgeSpawnCell $525`. The RNG bytes ($18–$23) were
 already re-randomized on every load. So a post-entry state can never vary its layout; only a state saved *before*
 the room loads can.

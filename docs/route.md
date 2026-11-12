@@ -10,8 +10,8 @@ The machine-readable version is `triforce/routes.yaml` (runtime data for the run
 
 | Tag | Source | What it gave |
 |---|---|---|
-| ROM | `roms/zelda.nes` (or `$TRIFORCE_ROM`), decoded at the `bins.xml` offsets (+16-byte header, `build.ps1`): `LevelBlockOW` 99328, `LevelBlockUW1Q1` 100096, `LevelInfoOW/UW1/UW2` 103168/103420/103672, `ObjLists` 83574 | Per-room attrs A–F (6 × 128 bytes; layout `$687E..$6AFE` in `Variables.inc`) |
-| disasm | `zelda1-disassembly/src` | Decoders: doors = `Z_05 FindDoorTypeByDoorBit` (A: N bits 7-5, S bits 4-2; B: W bits 7-5, E bits 4-2). Door type table is in `Z_05 @DoneClosedPF` (0 open, 1 wall, 2/3 false wall, 4 bombable, 5/6 key, 7 shutter). Enemies: C&$3F \| (D bit7→$40) = template/list, count = `LevelInfo_FoeCounts[C>>6]`, forced 1 for ids $32–$61 (`Z_05` ~1697-1730). Lists ≥$62 use `ObjListAddrs`. Room item: E&$1F, 3 = none (`Z_05 CreateRoomObjects`). Item IDs map through `Z_01 ItemIdToSlot` → `Items $657+slot` (`Variables.inc`): $19 key, $17 map, $16 compass, $1D boomerang, $1A heart container, $1B triforce, $00 bombs. Secret trigger: F&7 (`Z_05 CheckSecretTrigger_JumpTable`): 1 all-dead→shutters, 2 ringleader, 4 block→door, 5 block→stairs, 7 all-dead→item+shutters. Push block: D&$40. OW Zora: A&$08 (`Z_04` ~1760). OW cave/level: B&$FC; <$40 means level B>>2 (`Z_05 HandleWarpOW`). |
+| ROM | `roms/zelda.nes` (or `$TRIFORCE_ROM`), decoded at the `bins.xml` offsets (+16-byte header, `build.ps1`): `Level_BlockOW` 99328, `Level_BlockUW1to6Q1` 100096, `Level_InfoOW/UW1/UW2` 103168/103420/103672, `Spawn_ObjLists` 83574 | Per-room attrs A–F (6 × 128 bytes; layout `$687E..$6AFE`, from `asm:LevelBlockAttrsA`) |
+| disasm | `zelda-asm/` | Decoders: doors = `asm:Door_FindTypeByDirBit` (A: N bits 7-5, S bits 4-2; B: W bits 7-5, E bits 4-2). Door type table is in `asm:Door_LayOut_LoopHalves@HaveClosedFace` (0 open, 1 wall, 2/3 false wall, 4 bombable, 5/6 key, 7 shutter). Enemies: C&$3F \| (D bit7→$40) = template/list, count = `LevelInfo_FoeCounts[C>>6]`, forced 1 for ids $32–$61 (`asm:Room_EnterCommon`). Lists ≥$62 use `Spawn_ObjListAddrs`. Room item: E&$1F, 3 = none (`asm:Room_SetUpItemAndPushBlock`). Item IDs map through `asm:Item_IdToSlot` → `InvItems $657+slot` (`asm:InvItems`): $19 key, $17 map, $16 compass, $1D boomerang, $1A heart container, $1B triforce, $00 bombs. Secret trigger: F&7 (`asm:Secret_RunTrigger_JumpTable`): 1 all-dead→shutters, 2 ringleader, 4 block→door, 5 block→stairs, 7 all-dead→item+shutters. Push block: D&$40. OW Zora: A&$08 (`asm:Zora_TrySpawn`). OW cave/level: B&$FC; <$40 means level B>>2 (`asm:Warp_HandleOW`). |
 | v1 | `triforce/game.yaml` (v1), `triforce.yaml` scenarios, `end_conditions.py`, `objectives.py`, `docs/savestates.yml` | Room graph, overworld exits, D1 enemy/treasure data. The ROM decode reproduces every v1 D1 enemy and treasure entry, which validates the decoder. |
 | RAM | Every `*.state` in the repo at the time (old stable-retro savestates, since regenerated as `TFZSTATE`): `$10` level, `$EB` room, `$12` mode, `$70/$84` Link x/y, `$34F+i` ObjType, `$66E` keys, `$658` bombs | Confirms which room each savestate is in, and the enemy types present |
 
@@ -24,7 +24,7 @@ Level facts from LevelInfo (ROM): D1 start room $73, boss room $35, triforce roo
 | OW start → sword | 0x77 → cave 0x77 (wood sword) → 0x77 |
 | OW → D1 | 0x77 N 0x67 E 0x68 N 0x58 N 0x48 N 0x38 W 0x37 → stairs |
 | D1 | 0x73 W 0x72 E 0x73 E 0x74 W 0x73 N(key) 0x63 N 0x53 W 0x52 N(key) 0x42 E 0x43 E(key) 0x44 E 0x45 N(key) 0x35 E 0x36 → triforce |
-| D1 → OW | Picking up the triforce sets GameMode $12. `EndGameMode12` then sets CurLevel=0 and Link reappears at OW 0x37 (`Z_01 TakeItem`, `Z_05 EndGameMode12`). There is no walk out of D1. `0_37c` (mode 4) is this state, and v1's `dungeon1-dungeon2` scenario starts from it. |
+| D1 → OW | Picking up the triforce sets GameMode $12. `Mode_LeaveLevelToOW` then sets CurLevel=0 and Link reappears at OW 0x37 (`asm:Item_Take`, `asm:Mode_LeaveLevelToOW`). There is no walk out of D1. `0_37c` (mode 4) is this state, and v1's `dungeon1-dungeon2` scenario starts from it. |
 | OW → D2 | 0x37 E 0x38 N 0x28 E 0x29 E 0x2a E 0x2b E 0x2c E 0x2d S 0x3d S 0x4d W 0x4c N 0x3c → stairs |
 | OW → D2, `milestone1-fairy` | 0x37 E 0x38 S 0x48 S 0x58 E 0x59 N 0x49 N 0x39 (fairy pond: hearts refilled) S 0x49 S 0x59 E 0x5a E 0x5b E 0x5c E 0x5d N 0x4d W 0x4c N 0x3c → stairs |
 | D2 | 0x7d E 0x7e N 0x6e N 0x5e N 0x4e N 0x3e N 0x2e N 0x1e N 0x0e (milestone ends on entry) |
@@ -35,13 +35,13 @@ Level facts from LevelInfo (ROM): D1 start room $73, boss room $35, triforce roo
   - North: 0x28…0x2d, 0x3d, 0x4d. This is canonical: it matches the design's `ow-leever-peahat` family and stays inside v1's `LeftOverworld2Area` box.
   - South: 0x48, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d. Tagged in round 6 as part of `milestone1-fairy`
     (Lee): the south road plus a 4-room detour 0x59 N 0x49 N 0x39 to the fairy pond, which refills every heart
-    (`Z_04 UpdatePondFairy`: Link at the pond edge, Y=$AD, $70 ≤ X < $81, is halted until the hearts are full).
+    (`asm:PondFairy_Update`: Link at the pond edge, Y=$AD, $70 ≤ X < $81, is halted until the hearts are full).
     `routes.yaml` defines it as milestone1 with the steps from 0x38 (from W) up to 0x4c (from E) replaced.
 - **D1 path.** This is v1's "locked-door branch" (`dungeon1-late-chain`: 0x43→0x44→0x45→0x35, `Dungeon1DidntGetKey`). It needs no bombs, and Link starts with 0 bombs (RAM `start`: `$658`=0).
 - **D2 path.** Two 8-room ties from 0x7d: via 0x6d or via 0x7e. The canonical route uses the eastern key room 0x7e, then enters 0x6e from S. 0x6d remains in the Rope enemy family, but is no longer a route alternate.
 
 **Corrections to v1 `game.yaml`** (applied in v2 `game.yaml`):
-- OW 0x3c cave target: 2:0x77 in_cave → **2:0x7d**. Source: LevelInfoUW2 StartRoomId; RAM `2_7dn` is in level 2, room $7D.
+- OW 0x3c cave target: 2:0x77 in_cave → **2:0x7d**. Source: Level_InfoUW2 StartRoomId; RAM `2_7dn` is in level 2, room $7D.
 - OW 0x3c enemy: BlueSlowOctorok → **RedSlowOctorok**. Source: ROM template $0A and RAM ObjType $0A in `0_3cs`.
 - OW 0x3c: added an S exit to 0x4c. v1 already had 0x4c N→0x3c, and `0_3cs` has Link entering at the S edge.
 
@@ -53,8 +53,8 @@ Entry is the side of the room Link enters from. Doors list only non-wall sides (
 
 | # | (level, room) | Entry | Exit | Enemies [source] | Treasure | Doors | Puzzle / gate | Needs | Savestates |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | (0, 0x77) | start | cave | none [ROM, v1] | — | — | Enter sword cave. OW attr B = $42 → cave index $10 (`Z_05 HandleWarpOW`). | — | `start`(C), `0_77c`(C) (no sword); `0_77e`(E), `0_77n`(N), `0_77w`(W) (with sword) |
-| 2 | (0, 0x77, cave) | S | S | old man NPC only (cave dweller $6A, `Z_05` @InCave) | wood-sword [ROM: cave 0 wares $3F,$01,$3F; v1] | — | Take the sword, then walk S out of the cave. | — | **none** |
+| 1 | (0, 0x77) | start | cave | none [ROM, v1] | — | — | Enter sword cave. OW attr B = $42 → cave index $10 (`asm:Warp_HandleOW`). | — | `start`(C), `0_77c`(C) (no sword); `0_77e`(E), `0_77n`(N), `0_77w`(W) (with sword) |
+| 2 | (0, 0x77, cave) | S | S | old man NPC only (cave dweller $6A, `asm:Spawn_AssignPositions@InCave`) | wood-sword [ROM: cave 0 wares $3F,$01,$3F; v1] | — | Take the sword, then walk S out of the cave. | — | **none** |
 | 3 | (0, 0x77) | cave | N | none [ROM, v1] | — | — | — | sword | `0_77n`(N) etc. (with sword; none at the cave mouth) |
 | 4 | (0, 0x67) | S | E | BlueOctorok×4 [ROM, v1, RAM `test_ow_full_health`] | — | — | — | — | `0_67s`(mode7 from S), `0_67c`(N), `0_67e`(E), `0_67w`(W) |
 | 5 | (0, 0x68) | W | N | BlueOctorok×4 [ROM, v1, RAM `0_68e`] | — | — | — | — | `0_68w`(W), `0_68e`, `0_68n`, `0_68s` |
@@ -65,7 +65,7 @@ Entry is the side of the room Link enters from. Doors list only non-wall sides (
 | 10 | (1, 0x73) | S | W | none [ROM, v1] | — | N:key S:open W:open E:open | N is locked; come back with a key. | — | `1_73n`(S), `1_73c`(S), `1_73s`(mode3) |
 | 11 | (1, 0x72) | E | E | BlueKeese×3 [ROM, v1] | key (appears when all dead, F=7) | E:open | Kill all to get the key. | — | `1_72e`(mode7 from E) |
 | 12 | (1, 0x73) | W | E | none | — | as #10 | — | — | `1_73w`(mode7 from W) |
-| 13 | (1, 0x74) | W | W | Stalfos×5 [ROM, v1, RAM `1_74w`] | key (F=0, visible). A Stalfos in object slot 1 carries the room item (`Z_07 MoveAndDrawRoomItem`), so kill the carrier. | W:open | Kill the Stalfos that carries the key. | — | `1_74w`(W) |
+| 13 | (1, 0x74) | W | W | Stalfos×5 [ROM, v1, RAM `1_74w`] | key (F=0, visible). A Stalfos in object slot 1 carries the room item (`asm:Item_MoveAndDrawRoomItem`), so kill the carrier. | W:open | Kill the Stalfos that carries the key. | — | `1_74w`(W) |
 | 14 | (1, 0x73) | E | N | none | — | as #10 | **Locked door N.** Uses key 1. | key | `1_73e`(mode4 from E) |
 | 15 | (1, 0x63) | S | N | Stalfos×3 [ROM, v1, RAM `1_63n`] | — | N:open S:key | — | — | `1_63s`(S), `1_63n`(N) |
 | 16 | (1, 0x53) | S | W | Stalfos×5 [ROM, v1, RAM `1_53s`] | key (appears when all dead) | N:bombable S:open W:open E:open | Kill all to get the key. N bomb wall → 0x43 is a shortcut that needs bombs (not used). | — | `1_53s`(S), `1_83s`(S), `1_53e`, `1_83e`, `1_53n`(C), `1_53w` |
@@ -74,7 +74,7 @@ Entry is the side of the room Link enters from. Doors list only non-wall sides (
 | 19 | (1, 0x43) | W | E | BlueGel×5 [ROM, v1, RAM `1_43e`] | map (visible, optional) | N:open S:bombable W:open E:key | **Locked door E.** Uses key 3. | key | `1_43w`(W), `1_43e`, `1_43n`, `1_43s`(C) |
 | 20 | (1, 0x44) | W | E | RedGoriya×3 [ROM, v1, RAM `1_44c`] | boomerang (appears when all dead; optional, only boomerang on route) | S:bombable W:key E:open | — | — | `1_44w`(W), `1_44c`(C), `1_44e`, `1_44s`(C) |
 | 21 | (1, 0x45) | W | N | Wallmaster×8 [ROM, v1, RAM `1_45n`] | key (F=0, visible) | N:key W:open | Get the key. **Locked door N.** Uses key 4. v1 needed special Wallmaster shaping (design §6). | key | `1_45w`(W), `1_45n`(N) |
-| 22 | (1, 0x35) | S | E | Aquamentus×1 [ROM, v1, RAM `1_35s`] | heart-container (appears when boss dead) | S:key E:shutter | Killing the boss opens the E shutter (F=7 → `TriggerShutters`). | — | `1_35s`(S), `1_35e`(C) |
+| 22 | (1, 0x35) | S | E | Aquamentus×1 [ROM, v1, RAM `1_35s`] | heart-container (appears when boss dead) | S:key E:shutter | Killing the boss opens the E shutter (F=7 → `Shutter_SetTrigger`). | — | `1_35s`(S), `1_35e`(C) |
 | 23 | (1, 0x36) | W | triforce | none | triforce (visible) | W:open | Pickup ends the level and returns Link to OW 0x37. | — | `1_36w`(W) |
 | 24 | (0, 0x37) | cave | E | RedOctorok×1 | — | — | Post-D1 spawn at the dungeon doorway. | — | `0_37c`(mode4, exact post-triforce state) |
 | 25 | (0, 0x38) | W | N | as #8 | — | — | — | — | `0_38w`(W) |
@@ -91,8 +91,8 @@ Entry is the side of the room Link enters from. Doors list only non-wall sides (
 | 36 | (2, 0x7d) | S | E | none [ROM, RAM `2_7dn`] | — | N:open S:open E:open | — | — | `2_7dn`(S) |
 | 37 | (2, 0x7e) | W | N | Rope×5 [ROM] | key (appears when all dead) | N:open W:open | Native route-state generation collects the key before leaving. | — | `2_7ew_[0-2]` |
 | 38 | (2, 0x6e) | S | N | Rope×3 [ROM] | — | N:open S:open W:open E:key | E key door → compass room 0x6f; not needed. | — | `2_6es_[0-2]` |
-| 39 | (2, 0x5e) | S | N | RedGoriya×5 [ROM] | — | N:open S:open E:key | Ringleader (F=2): killing the slot-1 Goriya kills the rest (`Z_05 CheckSecretTriggerRingleader`). N is open. | — | **none** |
-| 40 | (2, 0x4e) | S | N | Rope×5 [ROM] | key (appears when all dead; optional) | N:open S:shutter E:open | Enter from 0x5e, whose N door is open. The move uses the current room's door type (`Z_07 CalculateNextRoom`). The D1 analogue: entering 0x52 through its shutter is proven by `1_52e`. | — | **none** |
+| 39 | (2, 0x5e) | S | N | RedGoriya×5 [ROM] | — | N:open S:open E:key | Ringleader (F=2): killing the slot-1 Goriya kills the rest (`asm:Secret_Trigger2Ringleader`). N is open. | — | **none** |
+| 40 | (2, 0x4e) | S | N | Rope×5 [ROM] | key (appears when all dead; optional) | N:open S:shutter E:open | Enter from 0x5e, whose N door is open. The move uses the current room's door type (`asm:Room_CalcNext`). The D1 analogue: entering 0x52 through its shutter is proven by `1_52e`. | — | **none** |
 | 41 | (2, 0x3e) | S | N | Moldorm×1 [ROM] | key (appears when all dead; optional) | N:open S:open E:open | — | — | **none** |
 | 42 | (2, 0x2e) | S | N | Rope×8 [ROM] | — | N:shutter S:open E:key | **Kill all 8 to open the N shutter** (F=1). | — | **none** |
 | 43 | (2, 0x1e) | S | N | RedGoriya×5 [ROM] | bombs (appears when all dead) | N:shutter S:shutter E:bombable | **Kill all 5 to open the N shutter** (F=7). E bomb wall → old man 0x1f; not needed. | — | **none** |

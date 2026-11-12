@@ -29,8 +29,8 @@ reasoning) will take it and fix the problems. Write each entry for that agent.
   ## F017 [bug|risk|perf|cleanup|docs|test] confidence:high|medium|low  area:<pass name>
   where: crates/env/src/critic.rs:412-430, triforce/ppo.py:288 (every location the fix must touch)
   claim: one sentence: what is wrong.
-  evidence: the code excerpt(s) that show it; for game facts, the disassembly label/line (Z_07.asm:L1890
-    UpdateGoriya) or RAM address; for runtime facts, the exact command run and its output (trimmed).
+  evidence: the code excerpt(s) that show it; for game facts, the disassembly citation (`asm:Goriya_Update`)
+    or RAM address; for runtime facts, the exact command run and its output (trimmed).
   repro: command or /tmp script path that demonstrates it, with what to look for (omit if purely static).
   expected vs actual: what the code should do and what it does, concretely (values, frames, shapes).
   impact: who is affected (training rewards / endings / eval numbers / chains / replays / determinism / GUI) and
@@ -58,18 +58,17 @@ reasoning) will take it and fix the problems. Write each entry for that agent.
   - `docs/architecture.md`: the module map. It is long; skim it, then use it as a reference.
   - `docs/rust-actor.md`: inference, rollouts, replays and search.
   - `docs/experiments/round16.md` §0–§2, for what changed most recently.
-- **References outside the repo:**
-  - **Zelda 1 disassembly**, the ground truth for game behaviour and RAM:
-    - `/home/leculver/work/git/zelda1-disassembly/src`: the copy `docs/ram-catalog.md` cites. It carries this
-      project's `; TRIFORCE:` annotations (61 of them). Some are known to be wrong, e.g. the sword-slot note in
-      `Variables.inc` lines 49–59; see the note at the top of `docs/ram-catalog.md`.
-    - `/home/leculver/git/zelda1-disassembly/src`: a near-clean copy. Use it to tell original disassembly
-      comments from project annotations.
-    - Variable names: `Variables.inc`, `ObjVars.inc`, `CommonVars.inc`, `CaveVars.inc`.
-    - Code: `Z_00.asm`–`Z_07.asm`. Citation style used in the repo: `Z_07:UpdateGoriya` or `Z_07 L1888`.
+- **Zelda 1 disassembly**, the ground truth for game behaviour and RAM: `zelda-asm/` in this repo (start at
+  `zelda-asm/README.md`).
+  - Variable names: `zelda-asm/src/Variables.inc`, `zelda-asm/src/ObjVars.inc`, `zelda-asm/src/CommonVars.inc`,
+    `zelda-asm/src/CaveVars.inc` (by address: `zelda-asm/index/ram.md`).
+  - Code: `zelda-asm/src/bank0.asm`–`bank7.asm` and their topic files `zelda-asm/src/bankN/*.asm`. Citation style
+    used in the repo: `asm:Goriya_Update` or `asm:Mode5Play_UpdateWorld@NotInvincible`;
+    `zelda-asm/tools/asm.py where` resolves a name.
   - `docs/ram-catalog.md`: every RAM variable the project reads, with its disassembly citation. Verify the Rust
     decoders (`crates/zelda/src/vars.rs`, `room_state.rs`, `game.rs`, `hearts.rs`, …) against the disassembly,
     not just against this catalog.
+- **References outside the repo:**
   - **TetaNES** (`/home/leculver/git/tetanes`, `tetanes-core/src`): the emulator `crates/zcore` was cut down from.
     Diff behaviour-relevant code against it when something in zcore looks off.
   - **libretro-fceumm** (`/home/leculver/git/libretro-fceumm/src`): the previous emulator, the old stack's ground
@@ -165,8 +164,9 @@ The order is bottom-up, so each layer is reviewed before the code that trusts it
 
 ### Pass 2: Zelda game layer (`crates/zelda`)
 - **Files, in order:**
-  - `vars.rs`, `enums.rs`, `tables.rs`: RAM addresses. Check each against the disassembly (`Variables.inc` and
-    friends, and the routines that read or write the address), not only against `docs/ram-catalog.md`.
+  - `vars.rs`, `enums.rs`, `tables.rs`: RAM addresses. Check each against the disassembly
+    (`zelda-asm/src/Variables.inc` and friends, and the routines that read or write the address), not only
+    against `docs/ram-catalog.md`.
   - `nes.rs`, `session.rs`: load, randomization, snapshot/restore, `SessionCheckpoint`, the frame sink.
   - `executor.rs`: running actions frame by frame, cave entry/exit, the frame counter.
   - `change.rs`, `ledger.rs`: the weapon look-ahead and future-credit ledger, the 400-frame cap, 200-frame

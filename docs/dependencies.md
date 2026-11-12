@@ -331,10 +331,11 @@ training round is running (CLAUDE.md; R31 is live).
 8. **Heavy cross-module state coupling in `GameSession`/`OptionExecutor`**: cave flags (`was_in_cave`,
    `just_exited_cave`), `capture_pre_entry` (stores `last_pre_entry = emu.save_state()` while scrolling), per-step
    interrupt polling within `INTERRUPT_RADIUS = 24` px, shield-collision watch between frames.
-9. **Everything game-specific is data in the repo plus an external disassembly.** Addresses and logic cite
-   `zelda1-disassembly/src/Z_0n.asm` with line numbers (`/home/leculver/work/git/zelda1-disassembly/src` per
-   `docs/ram-catalog.md`), the v1 `triforce` repo (originals of deleted start states; `/home/leculver/work/git/triforce`),
-   and a design doc outside the repo (`triforce-v2-design.md`). None of these are in this repo. v1 used a fork
+9. **Everything game-specific is data in the repo, including the disassembly.** Addresses and logic cite the
+   annotated Zelda 1 disassembly at `zelda-asm/` (start at `zelda-asm/README.md`) as `asm:<Name>`, a label or RAM
+   symbol there; `zelda-asm/tools/asm.py where <Name>` translates a name (current or original) to its file and line.
+   Outside the repo remain the v1 `triforce` repo (originals of deleted start states; `/home/leculver/work/git/triforce`)
+   and a design doc (`triforce-v2-design.md`). v1 used a fork
    (`DarkAutumn/stable-retro`, `crop_overscan`); v2 uses PyPI 1.0.1 and the 240×224 cropped screen. RAM coordinates are
    absolute NES coordinates, so the crop affects rendering only.
 10. **Tests need the real ROM and savestates** (all gameplay tests share one `GameSession`; `tests/conftest.py`).

@@ -14,14 +14,14 @@ pub const LOCKED_COST: i32 = 4;
 pub const DEFAULT_ROUTE: &str = "d2first";
 /// The exit key a maze room gets for its sequence (`exits['maze']`, destination = [`Maze::destination`]).
 pub const MAZE_EXIT: &str = "maze";
-/// `MazeStep` ($52F): how many directions of a maze's sequence Link has matched in a row (Z_01 CheckMazes).
+/// `MazeStep` ($52F): how many directions of a maze's sequence Link has matched in a row (asm:Maze_CheckStep).
 pub const MAZE_STEP: u16 = 0x52F;
 
-/// An overworld maze room (Z_01 CheckMazes, `ForestMazeDirs`/`MountainMazeDirs`).  Leaving through `free` leaves
-/// normally at any step.  Leaving through the sequence's next direction advances `MazeStep` and brings Link back into
-/// the room, except on the sequence's last direction, which leads to `destination`.  Any other direction resets
-/// `MazeStep` to 0 and brings Link back.  `CheckMazes` resets `MazeStep` whenever Link leaves any other overworld
-/// room, so he always enters a maze at step 0.
+/// An overworld maze room (asm:Maze_CheckStep, asm:Maze_LostWoodsDirs / asm:Maze_LostHillsDirs).  Leaving through
+/// `free` leaves normally at any step.  Leaving through the sequence's next direction advances `MazeStep` and brings
+/// Link back into the room, except on the sequence's last direction, which leads to `destination`.  Any other
+/// direction resets `MazeStep` to 0 and brings Link back.  `Maze_CheckStep` resets `MazeStep` whenever Link leaves
+/// any other overworld room, so he always enters a maze at step 0.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Maze {
     pub room: MapLocation,
@@ -62,7 +62,7 @@ impl Maze {
             .unwrap_or(self.sequence[0])
     }
 
-    /// Where leaving through `direction` at `step` takes Link and the `MazeStep` after it (CheckMazes): the
+    /// Where leaving through `direction` at `step` takes Link and the `MazeStep` after it (asm:Maze_CheckStep): the
     /// destination on the sequence's last direction, the room's real neighbour through `free` (step kept), else
     /// back into the maze (step + 1 on a match, 0 otherwise).
     pub fn leave(&self, direction: Direction, step: u8) -> (MapLocation, u8) {
@@ -121,7 +121,7 @@ pub struct RoomExit {
     /// S).  Path searches pass it only once it is in `opened_doors` (the objective puts it there while Link holds
     /// the raft); a route step may leave through it.
     pub raft: bool,
-    /// `dock: [col, row]` of a raft exit: the tile Link stands on to sail (Z_04 UpdateDock: the dock's column at
+    /// `dock: [col, row]` of a raft exit: the tile Link stands on to sail (asm:Dock_Update: the dock's column at
     /// y = $7D).  None for a pier, which is left by walking off the room's edge.
     pub dock: Option<Tile>,
 }
@@ -145,12 +145,12 @@ pub struct GameRoom {
     /// he has fewer (cheated rupees: `crate::cheats`).  No room sets it yet.
     pub requires_rupees: Option<u8>,
     /// `bomb_secret: [col, row]`: the top-left tile of an overworld rock wall hiding the room's cave (2x2 tiles,
-    /// Z_04 UpdateRockWall).  A bomb blast there opens the cave; walking into the opening enters it.
+    /// asm:RockWall_Update).  A bomb blast there opens the cave; walking into the opening enters it.
     pub bomb_secret: Option<Tile>,
     /// `treasure_tile: [col, row]`: where a cave's treasure lies when it isn't the middle ware (the 0x2c cave offers
     /// a potion on the left and the heart container on the right).
     pub treasure_tile: Option<Tile>,
-    /// `push_block: [N, S]`: the room's push block (room attr D bit $40, Z_04 UpdateBlock) opens the way to the
+    /// `push_block: [N, S]`: the room's push block (room attr D bit $40, asm:PushBlock_Update) opens the way to the
     /// room's stairs only when pushed one of these ways (Dungeon 1's 0x22: its west block, N or S; pushed E it
     /// closes the way until the room is re-entered).  The objective sends Link to a push spot while it is pending.
     pub push_block: Vec<Direction>,
@@ -673,7 +673,7 @@ fn parse_maze(entry: &Value, loc: MapLocation) -> Result<Option<&'static Maze>, 
         };
     };
     let Some(maze) = builtin else {
-        return err(format!("{loc}: `maze:` on a room that isn't a maze (Z_01 CheckMazes: 0x1b, 0x61)"));
+        return err(format!("{loc}: `maze:` on a room that isn't a maze (asm:Maze_CheckStep: 0x1b, 0x61)"));
     };
     let direction = |v: &Value| {
         v.as_str()
@@ -698,7 +698,7 @@ fn parse_maze(entry: &Value, loc: MapLocation) -> Result<Option<&'static Maze>, 
     if sequence != maze.sequence || destination != Some(maze.destination) || free != Some(maze.free) {
         return err(format!(
             "{loc}: game.yaml maze (sequence {sequence:?}, destination {destination:?}, free {free:?}) disagrees with \
-             Z_01 CheckMazes ({:?}, {}, {:?})",
+             asm:Maze_CheckStep ({:?}, {}, {:?})",
             maze.sequence, maze.destination, maze.free
         ));
     }
@@ -1443,7 +1443,7 @@ mod tests {
         );
     }
 
-    /// Z_01 CheckMazes as walked in the emulator (mapping, Nov 9): four Ns from inside 0x1b reach 0x0b (not five);
+    /// asm:Maze_CheckStep as walked in the emulator (mapping, Nov 9): four Ns from inside 0x1b reach 0x0b (not five);
     /// N, W, S, W from inside 0x61 reach 0x60; a wrong direction restarts the sequence without counting itself.
     #[test]
     fn maze_sequences_follow_check_mazes() {
@@ -1495,8 +1495,8 @@ mod tests {
     fn maze_yaml_and_routes_are_checked() {
         let wrong = GAME_YAML.replacen("sequence: [N, W, S, W]", "sequence: [N, W, S, S]", 1);
         let e = GameMap::from_yaml(&wrong, ROUTES_YAML).unwrap_err().0;
-        assert!(e.contains("disagrees with Z_01 CheckMazes"), "{e}");
-        let missing = GAME_YAML.replacen("  maze:  # Z_01 CheckMazes ForestMazeDirs", "  maze_unused:  #", 1);
+        assert!(e.contains("disagrees with asm:Maze_CheckStep"), "{e}");
+        let missing = GAME_YAML.replacen("  maze:  # asm:Maze_CheckStep asm:Maze_LostWoodsDirs", "  maze_unused:  #", 1);
         let e = GameMap::from_yaml(&missing, ROUTES_YAML).unwrap_err().0;
         assert!(e.contains("needs its game.yaml `maze:` block"), "{e}");
         let through = ROUTES_YAML.replacen(

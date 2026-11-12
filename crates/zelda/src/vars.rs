@@ -130,7 +130,7 @@ vars! {
     ObjHealthC = ("obj_health_c", 0x491, false),
 }
 
-/// The 13 LFSR bytes $18-$24 (Z_07 @ScrambleRandom rotates 13; monsters read `Random+1, X` up to $24).
+/// The 13 LFSR bytes $18-$24 (asm:Nmi_Isr@ScrambleRandom rotates 13; monsters read `Random+1, X` up to $24).
 pub const RNG_VARS: [Var; 13] = [
     Var::Rng0,
     Var::Rng1,

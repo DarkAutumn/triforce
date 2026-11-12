@@ -64,7 +64,7 @@ const CAVE_FLAG_SHOW_ITEMS: u8 = 0x04;
 pub const DOOR_DIRECTIONS: [Direction; 4] =
     [Direction::N, Direction::S, Direction::W, Direction::E];
 
-/// Dungeon door types (Z_05:LayOutDoors).
+/// Dungeon door types (asm:Door_LayOut).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DoorType {
     Open = 0,
@@ -258,7 +258,7 @@ fn is_living_monster(obj_type: u8) -> bool {
     ObjectClass::of(obj_type) == ObjectClass::Monster && obj_type != object::GUARD_FIRE
 }
 
-/// Room item position from attr F bits 4-5 (Z_01:GetShortcutOrItemXYForRoom).
+/// Room item position from attr F bits 4-5 (asm:Room_GetShortcutOrItemXYForRoomId).
 pub fn item_position_for_room(ram: &[u8; RAM_SIZE], attr_f: u8, item_id: u8) -> (i32, i32) {
     let pos = sram(ram, ITEM_POS_ARRAY + ((attr_f >> 4) & 0x03) as usize);
     let (mut x, y) = ((pos & 0xF0) as i32, ((pos & 0x0F) as i32) << 4);
@@ -268,7 +268,7 @@ pub fn item_position_for_room(ram: &[u8; RAM_SIZE], attr_f: u8, item_id: u8) -> 
     (x, y)
 }
 
-/// Room flag byte of `room_id` in the current level's block (Z_07:GetRoomFlags).
+/// Room flag byte of `room_id` in the current level's block (asm:RoomFlags_Get).
 pub fn room_flags(ram: &[u8; RAM_SIZE], room_id: u8) -> u8 {
     room_flags_addr(ram, room_id).map_or(0, |addr| ram[addr])
 }

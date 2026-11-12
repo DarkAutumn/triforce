@@ -123,9 +123,16 @@ up with ideas, test them, keep what helps, and log everything.
 
 ## Game mechanics that matter for training
 
+- **The annotated Zelda 1 disassembly is in the repo: `zelda-asm/`.** Start at `zelda-asm/README.md`. Look up a
+  monster (`zelda-asm/enemies.md`), an item (`items.md`), a mechanic (`mechanics.md`: movement, collision, screen
+  edges and the screen wrap, doors, secrets, spawning, combat, saved state), a RAM byte (`index/ram.md`) or a
+  room's data (`data/`) there before investigating from scratch. Cite it as `asm:Name` (a label or RAM symbol;
+  `python zelda-asm/tools/asm.py where Name` finds it, and translates an old upstream name or `file:line`;
+  `asm.py check` verifies every `asm:` citation in the repo). Edit it only by its README's rules (never the code;
+  renames through `asm.py rename`; `asm.py gen` and `asm.py check --final` afterwards).
 - **Monsters don't always chase Link; they often chase "shadow Link"** (Lee; `docs/ram-catalog.md` `$60–$62`,
-  `Z_07` L1888–1951). The actual instruction order copies current Link X/Y before flipping to the alternate
-  mode, so normally it mirrors the current position even if Link moved (the ASM's "last frame" comment is wrong).
+  `asm:Mode5Play_UpdateWorld`). The actual instruction order copies current Link X/Y before flipping to the alternate
+  mode, so normally it mirrors the current position even if Link moved (the upstream "last frame" comment was wrong).
   So a Link who stands still in a corner can send the whole room to the opposite corner for a long time. Lee watched
   the goriya model do exactly that in the Red Goriya room: Link in the top left not fighting, the Goriyas chasing
   shadow Link in the bottom right, no hits either way, "for ages". In training the room-stalling penalty does fire

@@ -36,7 +36,7 @@ pub const WAYPOINT_RAFT: &str = "raft";
 /// routes.yaml `waypoint: ladder` (on Dungeon 4's cellar step under the Breakfast Room 0x32): take the cellar's
 /// ladder, as the bow (`StepProgress::ladder`).
 pub const WAYPOINT_LADDER: &str = "ladder";
-/// RoomAllDead ($34D): the room's monsters are all dead (a push block moves only then, Z_04 UpdateBlock).
+/// IsRoomAllDead ($34D): the room's monsters are all dead (a push block moves only then, asm:PushBlock_Update).
 const ROOM_ALL_DEAD: u16 = 0x34D;
 const PUSH_DIRECTIONS: [Direction; 4] = [Direction::N, Direction::S, Direction::E, Direction::W];
 const COMBAT_SHUTTER_TRIGGERS: [SecretTrigger; 4] = [
@@ -877,7 +877,7 @@ impl GameCompletion {
         let Some(mut item) = self.rooms.get(&loc).cloned() else {
             return (ObjectiveKind::None, Vec::new(), Vec::new());
         };
-        // The room's item-taken flag (set on the pickup frame, Z_01.asm TryTakeItem) says the treasure is gone,
+        // The room's item-taken flag (set on the pickup frame, asm:Item_TryTake) says the treasure is gone,
         // whichever room the previous state was in and whether or not its pickup was seen.
         if item.is_some() && room_flags(state.ram(), loc.value) & FLAG_ITEM_TAKEN != 0 {
             if item.as_deref() == Some("key") && self.collected_key_rooms.insert(loc) {
@@ -942,7 +942,7 @@ impl GameCompletion {
         decoded.enemies_remaining > 0 && COMBAT_SHUTTER_TRIGGERS.contains(&decoded.secret_trigger)
     }
 
-    /// The objective needs the room's block pushed, and it won't move while a monster lives (RoomAllDead).
+    /// The objective needs the room's block pushed, and it won't move while a monster lives (asm:IsRoomAllDead).
     fn push_requires_combat(&mut self, state: &GameView) -> bool {
         if state.peek(ROOM_ALL_DEAD) != 0 {
             return false;
@@ -1020,7 +1020,7 @@ impl GameCompletion {
                 }
                 continue;
             }
-            // A raft crossing from a dock: stand on the dock (Z_04 UpdateDock sails from there).
+            // A raft crossing from a dock: stand on the dock (asm:Dock_Update sails from there).
             let dock = self
                 .map
                 .get(loc)
@@ -1054,9 +1054,10 @@ pub fn exit_span(map: &GameMap, location: MapLocation, direction: Direction) -> 
 }
 
 /// Where Link stands to bomb the intact dungeon wall in `direction`: facing it, 16 px short of its hotspot
-/// (Z_07 `BombableWallHotspots`), so the bomb he places 16 px ahead (Z_01 `PlaceWeapon`) lands on the hotspot; the
-/// game opens the wall for a bomb within $18 px of it (Z_07 `UpdateBomb`).  Beside an E/W wall that also keeps Link
-/// out of the column the corner blade traps slide along (|dx| < 14 from x $D0 or $20; 0x4c has them).
+/// (asm:Bomb_WallHotspotsX / asm:Bomb_WallHotspotsY), so the bomb he places 16 px ahead (asm:Link_PlaceWeaponAhead)
+/// lands on the hotspot; the game opens the wall for a bomb within $18 px of it (asm:Bomb_Update).  Beside an E/W
+/// wall that also keeps Link out of the column the corner blade traps slide along (|dx| < 14 from x $D0 or $20; 0x4c
+/// has them).
 pub fn bomb_spot(direction: Direction) -> Tile {
     let hotspot = BombWall::hotspot(direction);
     let (dx, dy) = match direction {

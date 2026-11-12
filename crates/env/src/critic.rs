@@ -34,7 +34,7 @@ pub const COMBAT_DECAY_RATE: f64 = 0.5;
 
 /// Reward profiles `reward_profile` may name.
 pub const REWARD_PROFILES: [&str; 1] = ["default"];
-/// ObjDir of the push block (object slot $B): the direction it was pushed (Z_04 UpdateBlock0Idle).
+/// ObjDir of the push block (object slot $B): the direction it was pushed (asm:PushBlock_State0Idle).
 const PUSH_BLOCK_DIRECTION: u16 = 0x98 + 0x0B;
 
 /// Equipment pickups, in `_EQUIPMENT_ATTRS` order: (name, value). Bombs pay like rupees (a dropped resource); the

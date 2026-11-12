@@ -21,7 +21,7 @@ trap room very hard for plain PPO (the negative scores discourage it) and expect
   (deaths by arrival hearts: 0.5 → 6/6, 1.0 → 8/8, 1.5 → 4/8, 2.0 → 4/10, ≥ 2.5 → 5/79). Retraining him from 0.15
   (r53, §4). Full route 9/120 (round 13: 25/120 without the detour).
 
-## 1. Mechanics (probes `target/traps/`, Z_01 UpdateTrap_Full, Z_04 UpdateBlock)
+## 1. Mechanics (probes `target/traps/`, `asm:Trap_Update_Full`, `asm:PushBlock_Update`)
 
 - Four blade traps (`$49`) in the corners (32/208, 93/189). They sense Link within 14 px of their row (slide
   horizontally) or column (vertically), slide out at 1.75 px/frame to the centre line, back at 0.5. Unkillable;

@@ -51,6 +51,50 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
      cache key holds "the room has stairs" now.
    - A 3600 s tool timeout killed the first chain-0 build at step 120; long builds run without a deadline.
 
+## Done (Nov 12): the annotated disassembly is in the repo (`zelda-asm/`)
+
+Lee's project: the Zelda 1 disassembly (Aldo Núñez's; the source link is in `zelda-asm/README.md`) moved into
+the repo and turned into a reference for agents. Branch `zelda-asm` (worktree `../triforce2-asm`), **not merged
+until Lee says so**. No emulator, environment or reward code changed (VERSION not bumped).
+
+- [x] **Import, tool, baseline.** `zelda-asm/tools/asm.py` reduces every statement to a canonical form
+  (identifiers resolved to values and statement positions) and compares it with the frozen import
+  (`zelda-asm/index/upstream/`); `check` proves a split, a rename or a comment edit changed no code. A throwaway
+  assembler on the same parser (`target/zasm/miniasm.py`, not committed) reproduces the PRG0 image byte for byte
+  from the tree at every stage, including the final one.
+- [x] **Split and annotate.** 8 bank files became 182 chunk files with headers (topic, see also, key facts,
+  contents); every label has a summary; 1,686 labels and 75 cheap labels renamed to `<Subject>_<Rest>`, 127 RAM
+  symbols renamed and all annotated (`zelda-asm/index/renames.tsv` maps the original names). 50 packages, each
+  annotated by one agent and reviewed against the code by a second.
+- [x] **Documents.** `zelda-asm/README.md`, `enemies.md` (52 sections), `items.md` (22), `mechanics.md` (21); every
+  bullet links the label that proves it; `data/` holds the decoded level blocks, level info, monster lists, room
+  layouts and person texts (`tools/romdata.py`).
+- [x] **Citations.** Every citation of the external disassembly in this repo is now `asm:Name`
+  (`zelda-asm/tools/asm.py where Name`; `asm.py check` resolves them all). Two error strings and two test lines in
+  `crates/zelda/src/game_map.rs` changed with them (they quote the citation).
+- Findings that matter for the route work (all in the documents, with links): the overworld screen wrap (rule,
+  frame table, which edges pass which barriers, softlock spots; `mechanics.md` "Screen wrap"); the sword and the rod
+  are in separate slots and A+B on one frame starts both (`items.md`); Dodongo dies to two swallowed bombs or to one
+  sword touch while stunned by a blast, and only the sword death forces a bomb drop; a Zora's damage is lost on
+  every dive; a locked door lets Link through without a key while another door command runs; file B's checksums
+  overlap the RAM copy of a routine.
+- **Claims in this repo that the annotated source contradicts** (left as written; to fix):
+  - [ ] `triforce/game.yaml` (the 0x.. boulder note, "$31 … generator; $32 the boulders") and
+    `triforce/entry_states.py` ("the boulder generator ($31)"): the spawner is object type `$1F` and the Boulder
+    `$20` (decimal 31/32); `$31`/`$32` are Dodongo.
+  - [ ] `docs/ram-catalog.md`: `$526` is set by dungeon entrances only, not caves (`asm:LevelEntranceRoomId`);
+    `$35F` is the first monster's type, the list id only below `$62` (`asm:RoomObjTemplateType`); the clock never
+    writes `asm:ObjStunTimer`; `$49E` is a tile number, not a tile object; `$4CC` makes the statues fire, not the
+    person; `$26` paces every 10-frame timer; the door-cell extents of the door row. Its open questions 1, 4 and 8
+    are answered by the source (`asm:WorldFlags`, `asm:Secret_UpdateRoomAllDead`).
+- Left `(unverified)` in the tree (42 marks in `zelda-asm/src`, 5 in the documents and data notes), the ones a
+  route could care about: what puts Link in state `$FF`; why a Lanmola or Moldorm room counts 8 objects for 10
+  segments; what creates shot types `$54` and `$5A`; whether Patra's first pattern flip waits `$FF` frames;
+  overworld room-flag bits 3 and 6; the byte `$25` the Zora spawn reads. Traces behind `(trace)` marks were run with
+  this repo's emulator and are not in the tree.
+- Not done, by design: no ROM is built (ca65 is not installed; the tree is kept assemblable). `~/git/zelda-autosplit`
+  still cites the original names; `zelda-asm/index/renames.tsv` and `asm.py where` translate them.
+
 ## Done (Nov 11): after the r61 retrain (round 17)
 
 1. [x] **The D1 regression** (round17.md §5): D1 arrivals 115 → 80. stalfos-keese-gel early-stopped after 80
@@ -136,11 +180,11 @@ spawn (95%).
 Lee's idea: when Link is about to make the 10th kill without taking damage, light up part of the observation so the
 model kills that enemy with a bomb, which forces a bomb drop (fewer cheated bombs). Decision: the research is done
 now (it is cheap and the facts are needed to design the feature); implementation waits until this item is picked
-up, after D3. The ASM facts (scout DropStreaks, `history://DropStreaks`; Z_01 5742–6014, Z_04 11030–11196,
-Z_07 5446–5488), with corrections to the folk version:
+up, after D3. The ASM facts (scout DropStreaks, `history://DropStreaks`; `asm:Link_BeHarmed`, `asm:Damage_KillMonster`,
+`asm:Drop_NoDropTypes`, `asm:Drop_SetUpItem`, `asm:Obj_EndMetastate`), with corrections to the folk version:
 
 - RAM: `$627 WorldKillCount` (kills since Link was last hurt; `Var::KillStreak` already maps it, unused by the
-  observation), `$50 HelpDropCount` (counts kills up to 10 and stops), `$51 HelpDropValue` (0: the forced drop
+  observation), `$50 HelpDropCount` (counts kills up to 10 and stops), `$51 IsHelpDropBomb` (0: the forced drop
   is 5 rupees; non-zero: bombs), `$52A WorldKillCycle` (drop-table column 0–9, advanced per kill, never reset).
   Damage to Link (`Link_BeHarmed`, also on death) clears `$627`, `$50`, `$51`; nothing else does (rooms, stairs
   and caves don't).
@@ -157,10 +201,11 @@ Z_07 5446–5488), with corrections to the folk version:
   (columns 1, 6, 8). All bosses use row 3.
 - **Dodongo** forces bombs on a sword kill (sets `$50 = $51 = $0A`): his stun-and-sword kill always drops bombs
   unless the fairy (`$627 == 16`) wins. **Manhandla** (Lee partly right; scout ManhandlaHits, `history://ManhandlaHits`,
-  Z_04 7968–8054, Z_01 5996–6014, 6108–6157, Z_07 4783–4835): four hands (slots 1–4) and a base (slot 5, HP `$40`).
+  `asm:Manhandla_CheckCollisions`, `asm:Damage_KillMonster`, `asm:Bomb_CheckBombOrFireVsMonster`, `asm:Bomb_StateTimes`,
+  `asm:Bomb_Update`): four hands (slots 1–4) and a base (slot 5, HP `$40`).
   The base "revives": `Manhandla_CheckCollisions` zeroes its invincibility timer after every check and writes its
   metastate back to 0, and HP is never restored — so once a bomb (`$40` damage) takes it to 0, **every later
-  damaging hit is a fresh kill** through `HandleMonsterDied` (`$627`++, `$50`++). A bomb damages only in state `$13`,
+  damaging hit is a fresh kill** through `Damage_KillMonster` (`$627`++, `$50`++). A bomb damages only in state `$13`,
   24 frames, with no per-bomb hit bookkeeping: the base can be hit **once per frame, up to 24 times per bomb** while
   it is within 24 px and alive (a sword swing up to 8 per swing once its HP is 0). Each hand dies once (bomb damage
   = hand HP). Only the last hand drops (row 3); the base and the other hands become `$5D` (no drop). So: a bomb

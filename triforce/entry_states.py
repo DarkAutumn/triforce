@@ -172,7 +172,7 @@ def make_room_fresh(game: Game, level: int, room: int):
 
 
 def room_flags(state, room: int) -> int:
-    """Room flag byte of ``room`` in the current level's block (Z_07:GetRoomFlags); ``state`` is a GameState."""
+    """Room flag byte of ``room`` in the current level's block (asm:RoomFlags_Get); ``state`` is a GameState."""
     addr = state.read(WORLD_FLAGS_ADDR) | (state.read(WORLD_FLAGS_ADDR + 1) << 8)
     return state.read(addr + (room & 0x7F)) if 0 < addr < 0x800 else 0
 
