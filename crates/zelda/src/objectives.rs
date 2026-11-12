@@ -909,9 +909,9 @@ impl GameCompletion {
             item = None;
         }
         // The step's `treasure:` rule (routes.yaml), read live: 0x5b's bombs stop mattering once Link holds 4.
-        let wanted = self
-            .current_step(loc)
-            .is_none_or(|step| step.treasure.wants(state.bombs()));
+        let rule = self.current_step(loc).map(|step| step.treasure);
+        let wanted = rule.is_none_or(|r| r.wants(state.bombs()));
+        let clear = rule == Some(crate::game_map::TreasureRule::Clear);
         let mut kind = ObjectiveKind::None;
         let mut tiles = Vec::new();
         if let Some(treasure) = state.treasure() {
@@ -920,7 +920,10 @@ impl GameCompletion {
                 tiles.extend(overlap(treasure.link_overlap_tiles()));
             }
         } else if !state.enemies.is_empty()
-            && ((wanted && item.is_some()) || self.shutter_requires_combat(state) || self.push_requires_combat(state))
+            && ((wanted && item.is_some())
+                || clear
+                || self.shutter_requires_combat(state)
+                || self.push_requires_combat(state))
         {
             kind = ObjectiveKind::Fight;
             let enemy_tiles: Vec<Tile> = if state.has_active_enemies() {

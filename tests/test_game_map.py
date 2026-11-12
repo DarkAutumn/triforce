@@ -90,7 +90,8 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
                     (0x3d, False, 'S', 'triforce', 'zol')]
     assert steps[start + 9]['waypoint'] == 'raft'
     assert [(s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
-        (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip'), (0x5b, 'W', 'if_bombs_below: 5')]
+        (0x5e, 'S', 'clear'), (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip'),
+        (0x5b, 'W', 'if_bombs_below: 5')]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps if s['bomb_reserve'] is not None] == [
         (3, 0x7c, 5)]
     assert steps[start - 1]['room'] == 0x74 and steps[start - 1]['exit'] == 'cave'

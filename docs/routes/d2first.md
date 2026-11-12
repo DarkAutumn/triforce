@@ -167,9 +167,10 @@ this route).
   states and resets play every one.
 - `retreat: S` on step 35 (see below); routes end on their last triforce (no `terminal` exits any more): since Nov 9
   the D3 triforce (`chain::Route::final_triforce` = 3; the D1 and D2 triforces warp Link on).
-- `treasure:` on a step (Nov 9, `game_map::TreasureRule`): `skip`, or `{if_bombs_below: N}`; without it the room's
-  treasure is taken as before. A step leaving through an intact game.yaml bomb wall targets the spot to bomb it
-  from (`objectives::bomb_spot`, `docs/routes/d3.md`).
+- `treasure:` on a step (Nov 9, `game_map::TreasureRule`): `skip`, `clear` or `{if_bombs_below: N}`; without it the
+  room's treasure is taken as before. `clear` (round 19, 2:0x5e) kills every enemy first (no correct exit while one
+  lives) and picks up the drops: the Red Goriyas' bombs reach the Moldorm room in about 40% of runs. A step leaving
+  through an intact game.yaml bomb wall targets the spot to bomb it from (`objectives::bomb_spot`, `docs/routes/d3.md`).
 - An overworld cave never sends Link into another overworld cave's room. The heart waypoint reads the overworld
   room flags directly, so a Dungeon 1 state knows the heart was taken.
 - `entry_states build` (default route d2first); bombs are on in `requires_bombs` rooms while building.

@@ -501,10 +501,12 @@ step, so following an enemy that moves away pays again, and knockback resets the
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
-- Bombs and the kill streak at reset (Lee, Nov 11; every family): `ram_randomization: {bombs: [0, 8],
-  help_count: [0, 9]}` draws Link's bomb count and a damage-free kill streak (`$50` = `$627` = n, `$51` = 0), so
-  bomb use and the 10th kill's forced bomb drop come up in every family's training. Curriculum starts get them too
-  (like hp); harvested starts don't (they keep what the upstream specialist handed over).
+- Bombs and the kill streak at reset (Lee, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
+  0.5, help_count: [0, 9]}` draws Link's bomb count in half the resets (the other half keep the start state's own
+  count, what the route carries there: none in Dungeon 2, round 19 §4) and a damage-free kill streak (`$50` =
+  `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
+  Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
+  over).
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
   deterministic=None, on_episode=None, *, threads=None, states_dir=None, events=None, replays=None, streams=(),
   state='embed', keyframe_frames=600)` plays every seed start state N
@@ -548,9 +550,10 @@ step, so following an enemy that moves away pays again, and knockback resets the
   the other ware, is `missed`: no exit is correct any more; `bow`, `raft`, `ladder`: a cellar's item). A step's `retreat` exit
   (0x0a S before the white sword) is no wrong exit: a one-room episode ends `retreat` (outcome from the specialist's
   `endings:`, default `neutral`: no terminal reward or penalty), a chain records the room as `retreat` and goes on.
-  A step's `treasure:` (`game_map::TreasureRule`: absent = take, `skip`, `{if_bombs_below: N}` read live) says
-  whether the room's treasure is fought for and picked up on that visit (D3's 0x69 and 0x5b). A step leaving
-  through an intact game.yaml bomb wall targets `objectives::bomb_spot` (facing the wall 16 px short of its
+  A step's `treasure:` (`game_map::TreasureRule`: absent = take, `skip`, `clear`, `{if_bombs_below: N}` read live)
+  says whether the room's treasure is fought for and picked up on that visit (D3's 0x69 and 0x5b); `clear` fights
+  until the room is empty even without a treasure (no correct exit until then) and takes the drops (D2's 0x5e). A
+  step leaving through an intact game.yaml bomb wall targets `objectives::bomb_spot` (facing the wall 16 px short of its
   Z_07 hotspot, so the bomb lands on it); the map objective's cache key holds the intact walls, so the doorway is
   the target once it opens.
   game.yaml `raft_exits` (the docks of 0x55 and 0x3f, the piers of 0x45 and 0x2f) are exits too (`RoomExit::raft`):

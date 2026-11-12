@@ -5,7 +5,7 @@ success: [exit-correct, enter-room:4:0x71]
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as the overworld families)
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 curriculum: {enabled: true}             # trajectories/ow-peahat (Go-Explore paths per start state): not explored yet
 one_room: true                          # round 5: per-room episodes

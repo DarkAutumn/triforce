@@ -476,7 +476,10 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
         };
         values.extend(hearts_encoding(half_hearts, max_health as i64));
     }
-    if let Some((lo, hi)) = spec.bombs {
+    // `bombs_share`: the rest of the resets keep the start state's bombs (what the route carries there).
+    if let Some((lo, hi)) = spec.bombs
+        && spec.bombs_share.is_none_or(|p| rng.random::<f64>() < p)
+    {
         values.push((Var::Bombs, rng.random_range(lo..=hi) as u8));
     }
     if let Some((lo, hi)) = spec.keys {
@@ -855,5 +858,18 @@ mod tests {
             .map(|_| ram_randomization_values(&spec, 3, &mut r, Some(&[0.5])))
             .collect();
         assert!(!sparse.iter().any(|v| hearts(v) == 0.5));
+    }
+
+    /// `bombs_share`: that share of resets draws the bomb count; the rest keep the start state's (no bombs value).
+    #[test]
+    fn bombs_share_keeps_the_states_bombs_in_the_rest() {
+        let mut r = rng();
+        let spec = RamRandomization { bombs: Some((0, 8)), bombs_share: Some(0.5), ..Default::default() };
+        let drawn = (0..400)
+            .filter(|_| ram_randomization_values(&spec, 3, &mut r, None).iter().any(|(v, _)| *v == Var::Bombs))
+            .count();
+        assert!((160..240).contains(&drawn), "{drawn}");
+        let all = RamRandomization { bombs_share: None, ..spec };
+        assert!((0..50).all(|_| ram_randomization_values(&all, 3, &mut r, None).iter().any(|(v, _)| *v == Var::Bombs)));
     }
 }
