@@ -1,7 +1,7 @@
 # Game mechanics
 
 How the game works underneath: modes and the frame loop, object slots, random numbers, timers, Link's
-movement, tile collision, screen edges and the overworld screen wrap, doors and secrets, stairs and caves, the
+movement, tile collision, screen edges, the overworld screen wrap and the grid-point skip (block and ladder clips), doors and secrets, stairs and caves, the
 mazes, rooms the code treats specially, spawning and room history, combat, hearts and death, saved state, level
 data and the second quest. Every bullet ends with the label that proves it. `(trace)` marks a result observed
 in the running game; `(unverified)` a statement not confirmed in the code. Monsters are in
@@ -10,26 +10,27 @@ in the running game; `(unverified)` a statement not confirmed in the code. Monst
 Contents (generated; `L` = line in this file):
 
 <!-- toc -->
-- L35 Game modes and the frame loop
-- L104 Object slots and update order
-- L154 Random numbers
-- L183 Timers
-- L224 Link's movement: grid, speed and sub-pixels
-- L288 Tile collision and walking half into blocks
-- L345 Screen edges and room transitions
-- L398 Screen wrap (overworld)
-- L476 Doorways, doors, keys, shutters and bomb walls
-- L533 Push blocks and room secrets
-- L568 Stairs, cellars and caves
-- L611 Lost Woods and Lost Hills (mazes)
-- L626 Special-cased rooms
-- L666 Ladder and raft
-- L689 Monster spawning, edge spawns and respawn (room history)
-- L751 Combat: collision boxes, damage, invincibility, knockback, stun
-- L823 Hearts, rings and death
-- L860 Room flags and saved state
-- L889 Level data formats
-- L902 Second quest differences
+- L36 Game modes and the frame loop
+- L105 Object slots and update order
+- L155 Random numbers
+- L184 Timers
+- L225 Link's movement: grid, speed and sub-pixels
+- L289 Tile collision and walking half into blocks
+- L346 Screen edges and room transitions
+- L400 Screen wrap (overworld)
+- L485 Grid-point skip: block clip, ladder clip and their run-up
+- L775 Doorways, doors, keys, shutters and bomb walls
+- L832 Push blocks and room secrets
+- L867 Stairs, cellars and caves
+- L910 Lost Woods and Lost Hills (mazes)
+- L925 Special-cased rooms
+- L965 Ladder and raft
+- L989 Monster spawning, edge spawns and respawn (room history)
+- L1051 Combat: collision boxes, damage, invincibility, knockback, stun
+- L1123 Hearts, rings and death
+- L1160 Room flags and saved state
+- L1189 Level data formats
+- L1202 Second quest differences
 <!-- /toc -->
 
 # Game modes and the frame loop
@@ -278,12 +279,12 @@ then he is moved along one axis. All tests use the position the previous frame l
 
 **What stops movement**
 - Halted: while (`ObjState` AND `$C0`) = `$40` Link's update does nothing but count the invincibility timer. [`Link_Update`](src/bank7/mode5-play-update.asm#L330)
-- Sword or item use: while (`ObjState` AND `$F0`) is `$10` or `$20` the moving direction is zeroed; state `$31` does not block; a passable doorway or the laid ladder can restore it. [`Walker_Move@SetMovingDir`](src/bank7/walker-move.asm#L104)
+- Sword or item use: while (`ObjState` AND `$F0`) is `$10` or `$20` the moving direction is zeroed; state `$31` does not block; a passable doorway or the laid ladder can restore it, which is why the sword gives the grid-point skip an extra position everywhere but on a laid ladder (`# Grid-point skip: block clip, ladder clip and their run-up`). [`Walker_Move@SetMovingDir`](src/bank7/walker-move.asm#L104)
 - Knockback: while `ObjShoveDir` is nonzero directions are not processed and the shove routine moves Link instead (4 pixels per frame). [`Link_HandleInput`](src/bank5/link-handle-input.asm#L68) [`Shove_Update`](src/bank7/shove.asm#L55)
 - Paralysis (`IsLinkParalyzed`, a Like-Like's hold): direction input is discarded, A and B still work. [`Link_Update`](src/bank7/mode5-play-update.asm#L330)
 - An unwalkable tile ahead on a grid point zeroes the moving direction and `ButtonsPressed`. [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167)
 - A sliding tile object (state 1) within `$10` pixels on both axes stops Link; a person in slot 1 stops him moving up while Y < `$8E`. [`Link_CheckSlidingTileObjBlocking`](src/bank1/tile-block-power-triforce.asm#L45) [`Person_BlockLinkMovingUp`](src/bank1/modeb-cave-save-sprites.asm#L289)
-- Room bounds stop Link only in a dungeon room outside doorways; in the overworld only tiles and the screen-edge test limit him. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Room_BoundDir`](src/bank1/room-bounds.asm#L254)
+- Room bounds stop Link only in a dungeon room outside doorways, and a laid ladder can override them (its direction rule runs after the bound test); in the overworld only tiles and the screen-edge test limit him. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Room_BoundDir`](src/bank1/room-bounds.asm#L254) [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
 
 # Tile collision and walking half into blocks
 
@@ -336,7 +337,7 @@ below. The grid itself is under `# Link's movement: grid, speed and sub-pixels`.
 - Link blocked on a grid point: his moving direction and `ButtonsPressed` are zeroed for the frame and he keeps facing the tile; in the overworld the armos and gravestone touch runs and the screen edge test is still made. [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167)
 - A monster blocked on a grid point tries, in order, a random direction perpendicular to its facing, the opposite of that, the reverse of its facing, and then does not move this frame. [`Walker_GetNextAltDir_JumpTable`](src/bank7/walker-collision-screen-edge.asm#L322) [`Walker_TryNextAltDir`](src/bank7/walker-collision-screen-edge.asm#L158)
 - A monster with a walkable tile ahead must also pass the room bounds: left refused at X < `$11` (dungeon `$21`), right at X >= `$E0` (`$D0`), up at Y < `$4E` (`$5E`), down at Y >= `$CD` (`$BD`). [`Walker_CheckRoomBound`](src/bank7/walker-collision-screen-edge.asm#L298) [`Room_BoundDirHorizontally`](src/bank1/room-bounds.asm#L116) [`Room_BoundDirVertically`](src/bank1/room-bounds.asm#L185)
-- Link is held by those bounds only in a dungeon room outside doorways, and there on every frame, not just on grid points; in the overworld, caves and cellars only tiles and the screen edge test limit him. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185)
+- Link is held by those bounds only in a dungeon room outside doorways, and there on every frame, not just on grid points, unless a laid ladder restores the move after the bound test (`# Grid-point skip: block clip, ladder clip and their run-up`, "Ladder clip"); in the overworld, caves and cellars only tiles and the screen edge test limit him. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
 - In a dungeon doorway (`DoorwayDir` nonzero) Link's tile test is skipped. [`Walker_CheckTileCollision`](src/bank7/walker-collision-screen-edge.asm#L89)
 - Monsters move on a `$10`-pixel grid and test one tile (two when vertical) of the cell they are about to enter: up and left look `$10` back from the hotspot where Link looks 8. [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
 - A monster neither moves nor tests while the clock is held or its stun timer runs. [`Walker_Move@CheckStunned`](src/bank7/walker-move.asm#L87)
@@ -385,7 +386,8 @@ frame, before the move, on a grid point, and compares for equality.
 - Facing up in a dungeon at Y = `$54` nothing on the facing side is masked: there the outer bound (`$55`) lies outside the inner one (`$54`). [`Link_FilterInput`](src/bank5/border-input-mask.asm#L54)
 
 **Dungeon edges**
-- In a dungeon room the room bounds keep Link within X `$20`..`$D0`, Y `$5D`..`$BD`; he reaches a screen edge only through a doorway (X = `$78` for up and down, Y = `$8D` for left and right), where the bounds and the tile test are skipped. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Doorway_CheckLink`](src/bank5/doorway.asm#L137) [`Doorway_RequiredCoords`](src/bank5/doorway.asm#L93)
+- In a dungeon room the room bounds keep Link within X `$20`..`$D0`, Y `$5D`..`$BD`, except where a laid ladder carries him past them (next bullet); he reaches a screen edge only through a doorway (X = `$78` for up and down, Y = `$8D` for left and right), where the bounds and the tile test are skipped. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Doorway_CheckLink`](src/bank5/doorway.asm#L137) [`Doorway_RequiredCoords`](src/bank5/doorway.asm#L93)
+- A laid ladder's case A rewrites the moving direction after the bound test: after the ladder clip north in level 4 room `$21` Link stands at Y = `$55`, 8 pixels past the top bound, with no ladder out, and walks along Y = `$55` to X = `$20` (trace). [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
 - A false wall or a bombed wall (door types 2, 3, 4) starts the room change the moment Link passes it, without the edge test. [`Doorway_CheckLink`](src/bank5/doorway.asm#L137)
 
 **Cave edge exit**
@@ -420,17 +422,15 @@ reproduced frame by frame.
 - Link walks on; 8 pixels past the bound the offset reaches -+8 and is reset, and from there he is an ordinary walker at a position no bound matches. [`Link_EndMoveAndAnimate@TruncGridOffset`](src/bank7/link-animate-ladder.asm#L177)
 
 **The rule (all four edges, trace)**
-- Where: overworld, play mode, no ladder laid; Link walking straight at an open screen edge with only that direction held (a diagonal at the last grid point sets `Link_GoStraight` and the press is ignored). [`Link_ModifyDirAtGridPoint_HaveInput`](src/bank5/link-handle-input.asm#L157) [`Link_GoStraight`](src/Variables.inc#L93)
-- Cadence: Link must leave the last grid point before the bound (X = `$08` or `$E8`, Y = `$45` or `$D5`) with a 1-pixel frame, i.e. with the fraction at least `$80` there going left or up, below `$80` going right or down. Walking one full cell toward the edge first guarantees it: from then on every cell is 1, 2, 1, 2, 1, 1 pixels in 6 frames. [`Obj_SubQSpeedFromPosFrac`](src/bank1/qspeed-direction-math.asm#L94) [`ObjPosFrac`](src/Variables.inc#L316)
+- Where: overworld, play mode, no ladder laid; Link walking straight at an open screen edge with only that direction held (a diagonal at the last grid point sets `Link_GoStraight` and the press is ignored). The run-up, the recovery from a wrong cadence and the sword's extra position are the same for every grid point and are under `# Grid-point skip: block clip, ladder clip and their run-up`. [`Link_ModifyDirAtGridPoint_HaveInput`](src/bank5/link-handle-input.asm#L157) [`Link_GoStraight`](src/Variables.inc#L93)
+- Run-up: Link must leave the last grid point before the bound (X = `$08` or `$E8`, Y = `$45` or `$D5`) with a 1-pixel frame, i.e. with the fraction `$80` there going left or up, `$00` going right or down; a full cell walked toward the edge into that grid point always leaves it so. [`Obj_SubQSpeedFromPosFrac`](src/bank1/qspeed-direction-math.asm#L94) [`ObjPosFrac`](src/Variables.inc#L316)
 - Position: two frames after that grid point Link is 3 pixels past it, 5 pixels short of the bound: left X = `$05` (offset `$FD`, fraction `$80`); right X = `$EB` (`$03`, `$00`); up Y = `$42` (`$FD`, `$80`); down Y = `$D8` (`$03`, `$00`). [`Link_ScreenEdgeBounds`](src/bank7/walker-collision-screen-edge.asm#L70) [`ObjGridOffset`](src/Variables.inc#L311)
 - Input: for exactly the next frame hold a perpendicular direction, either one. At a left or right edge release the edge direction for that frame (held together, the horizontal bit wins); at the top or bottom Up or Down may stay held (trace: Up+Left wraps at the top; Up+Left does not at the left). [`Dir_GetOpposite`](src/bank1/qspeed-direction-math.asm#L137) [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
 - Then hold the edge direction; idle frames before it change nothing (trace: 1 and 5). On the fifth such frame the offset steps from +-1 to -+1 across the bound. [`Link_SetDirAndInputDir`](src/bank5/link-handle-input.asm#L365)
-- Two perpendicular frames fail: the second carries Link on to the grid point behind him, where the offset is reset (trace). [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
-- No other position works. The reversal needs an offset of 1 to 3. From +-1 the step back ends on the grid point behind (offset reset); in the other cadence (2 pixels first) the offsets are +-2 and +-3 and both runs land exactly on 0 at the bound (trace: every frame of the last 19 or more before the room change, both perpendicular directions, on two rooms per edge: left `$77`, `$38`; right `$77`, `$37`; top `$77`, `$3D`; bottom `$67`, `$3D`: only the position above passes the bound). [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
-- The cadence cannot be picked by timing: only moves change `ObjPosFrac` (room entry and the slow tiles zero it), and standing still keeps it. From rest on the last grid point it depends on the fraction left over (trace: reaching X = `$08` walking left, pausing, then Left wraps at `$05`; reaching it walking down, fraction `$00`, no frame wraps). A pause at X = `$07` or `$05` is harmless (trace). [`ObjPosFrac`](src/Variables.inc#L316) [`Room_EnterCommon`](src/bank5/enter-room.asm#L143) [`Link_InitSpeed`](src/bank5/link-handle-input.asm#L277)
-- Reproduced (trace): all four edges, either perpendicular direction: left and right in rooms `$77`, `$38`, `$37`, `$78`; top in `$77`, `$3D`, `$5D`; bottom in `$67`, `$3D`. Not reproduced: a wrap from any other position or cadence, a second skip in a row, any wrap from a dungeon doorway (details below). [`Link_CheckScreenEdge`](src/bank7/walker-collision-screen-edge.asm#L243)
+- Without the sword no other position works: from offset +-1 the step back ends on the grid point behind (offset reset); in the other cadence (2 pixels first) the offsets are +-2 and +-3 and both runs land exactly on 0 at the bound (trace: every frame of the last 19 or more before the room change, both perpendicular directions, on two rooms per edge: left `$77`, `$38`; right `$77`, `$37`; top `$77`, `$3D`; bottom `$67`, `$3D`: only the position above passes the bound). With the sword the left edge also wraps from X = `$07` (offset `$FF`, fraction `$00`) with Up+A; at the other three edges that position (X = `$E9`, Y = `$44`, Y = `$D6`) lies in the outer border band, where A is cleared (trace). [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404) [`Link_MaskInputInBorder@MaskButtons`](src/bank5/border-input-mask.asm#L133)
+- Reproduced (trace): all four edges, either perpendicular direction: left and right in rooms `$77`, `$38`, `$37`, `$78`, right also in `$60`; top in `$77`, `$3D`, `$5D`; bottom in `$67`, `$3D`. Not reproduced: a wrap from any other position or cadence, a second skip in a row (`# Grid-point skip: block clip, ladder clip and their run-up`, "No second skip in a row"), any wrap from a dungeon doorway (details below). [`Link_CheckScreenEdge`](src/bank7/walker-collision-screen-edge.asm#L243)
 
-**Frame table** (trace): left edge of room `$77` on row Y = `$8D`, Left held except where shown; values after each frame. `$84` stays `$8D`; `$EB` stays `$77` in the wrap run.
+**Frame table** (trace): left edge of room `$77` on row Y = `$8D`, Left held except where shown; values after each frame. `$84` stays `$8D`; `$EB` stays `$77` in the wrap run. From rest at (`$10`, `$8D`) with `$3A8` = `$80` the same rows follow 6 frames of Left (X `$0F`, `$0D`, `$0C`, `$0A`, `$09`, `$08`; offsets `$FF`, `$FD`, `$FC`, `$FA`, `$F9`, `$00`), so Up comes on the 9th frame (trace).
 
 | frame | normal: input | `$70` X | `$98` dir | `$394` offset | `$3A8` fraction | `$3F8` input | `$12` mode | wrap: input | `$70` X | `$98` dir | `$394` offset | `$3A8` fraction | `$3F8` input | `$12` mode |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -448,30 +448,329 @@ reproduced frame by frame.
 | 18 | Left | `$00` | 2 | `$00` | `$80` | 2 | 7 | Left | `$F0` | 2 | `$00` | `$80` | 2 | 5 |
 | 111 | (ignored) | `$F0` | 2 | `$00` | `$00` | 0 | 5, room `$76` | | | | | | | |
 
+**Frame table, right edge** (trace): room `$77` on row Y = `$8D`, from rest at (`$E0`, `$8D`) with `$3A8` = `$00`, Right held except where shown; values after each frame; `$12` stays 5 and `$EB` stays `$77`.
+
+| frame | input | `$70` X | `$98` dir | `$394` offset | `$3A8` fraction | `$3F8` input |
+|---|---|---|---|---|---|---|
+| 0 | - | `$E0` | 1 | `$00` | `$00` | 1 |
+| 1-5 | Right | `$E1`, `$E3`, `$E4`, `$E6`, `$E7` | 1 | `$01`, `$03`, `$04`, `$06`, `$07` | `$80`, `$00`, `$80`, `$00`, `$80` | 1 |
+| 6 | Right | `$E8` | 1 | `$00` | `$00` | 1 |
+| 7 | Right | `$E9` | 1 | `$01` | `$80` | 1 |
+| 8 | Right | `$EB` | 1 | `$03` | `$00` | 1 |
+| 9 | Up | `$E9` | 2 | `$F9` | `$80` | 8 |
+| 10 | Right | `$EB` | 1 | `$FB` | `$00` | 1 |
+| 11-13 | Right | `$EC`, `$EE`, `$EF` | 1 | `$FC`, `$FE`, `$FF` | `$80`, `$00`, `$80` | 1 |
+| 14 | Right | `$F1` | 1 | `$01` | `$00` | 1 |
+| 19 | Right | `$F8` | 1 | `$00` | `$80` | 1 |
+| 24 | Right | `$00` | 1 | `$00` | `$00` | 1 |
+
 **After the wrap, edge by edge** (c = Link's column, X / 8)
 - Left: Link comes in at X = `$FF`; the first grid point is X = `$F8`, where the tile ahead is column `$1E`, then `$F0`, `$E8` and so on as from any position. On an open row he walks left across the same room, and at X = `$F0` Right starts the ordinary change to the room on the right (trace: room `$77`, Y = `$8D`). [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65) [`Link_CheckScreenEdge`](src/bank7/walker-collision-screen-edge.asm#L243)
 - Left onto a row whose right edge is solid: he stops at X = `$F8` and is stuck: the tile ahead (column `$1E`) and the tile under him (column `$1F`; no look-ahead at X >= `$F0`) are solid, and `$F8` is not the right bound (trace: room `$38`, Y = `$8D`; no direction moved him). [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123) [`Link_ScreenEdgeBounds`](src/bank7/walker-collision-screen-edge.asm#L70)
 - Right: the grid point X = `$F8` reads the tile under him, then X = `$00` reads column 2 (X + `$10`). Columns 0 and 1, the 16-pixel square at the left edge, are never read (trace: room `$78`, rows Y = `$75` with columns 0-1 solid and Y = `$7D` with column 0 solid: he stands at X = `$00` inside them and walks on to X = `$10`). [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123) [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
-- Right onto a row with two solid squares at the left (trace: room `$37`, Y = `$8D`): he stops at X = `$00` inside the wall; Right, Up and Down do nothing; Left fires the edge test, because X equals the bound and the overworld makes the test even with an unwalkable tile ahead. The room changes to `$36`, where he arrives at X = `$F0` inside solid tiles and cannot walk on: the arrival spot is never tested against the new room. [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167) [`Room_EnterCommon@Method2`](src/bank5/enter-room.asm#L211)
+- Right onto a row with two solid squares at the left (trace: room `$37`, Y = `$8D`): he stops at X = `$00` inside the wall; Right, Up and Down do nothing; Left fires the edge test, because X equals the bound and the overworld makes the test even with an unwalkable tile ahead. The room changes to `$36`, where he arrives at X = `$F0` inside solid tiles and cannot walk on: the arrival spot is never tested against the new room. Second trace: room `$60` (row 6, column 0), rows Y = `$85` and `$8D`: Left enters room `$5F`, the last room of the row above, at X = `$F0` standing on water (the ladder clip in `# Grid-point skip: block clip, ladder clip and their run-up`). [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167) [`Room_EnterCommon@Method2`](src/bank5/enter-room.asm#L211)
 - Up (the vertical variant): Link passes `$3D` (`$3E` to `$3C`) and reaches grid points `$35`, `$2D` ... `$05` over the status bar, then `$FD`, `$F5`, `$ED` and `$E5` at the bottom of the screen. [`Obj_MoveByQSpeed`](src/bank7/walker-move.asm#L244)
 - He keeps moving there because nothing bounds him and the lookup has no row check: at the ten grid points `$35`, `$2D` ... `$05`, `$FD`, `$F5`, `$ED` it reads rows 9, 8 ... 0 of columns c + 1 and c + 2, tiles of the same room one column to the right. He stops where one of them is unwalkable (trace: room `$5D`, X = `$30`, a passage 2 tiles wide: stops at Y = `$25`, column 8 row 7 solid). [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
 - At Y = `$E5` the lookup is back inside the map: row 21, the bottom row, of his own columns. Solid: he stops at `$E5`, 8 pixels below the bottom bound; Down takes him back through `$ED`, `$F5` (trace: room `$77`, X = `$78`). Open: he walks up into the room from its bottom edge, a complete vertical wrap (trace: room `$3D`, X = `$70`, openings at columns `$0E`-`$11` top and bottom). [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
 - Down: Link passes `$DD` (`$DC` to `$DE`) to `$E5`. At `$E5` and `$ED` the hotspot Y is `$DD` or more, so there is no look-ahead: they read rows 0 and 1 of columns c + 1 and c + 2. From `$F5` the hotspot Y has wrapped and the look-ahead is back: `$F5` to `$25` read rows 3 to 9 of those columns (row 2 is never read), `$2D` and `$35` rows 0 and 1 of his own columns. [`Tile_GetAtObjOffset`](src/bank7/tile-collision.asm#L97)
 - Down, traces: room `$67`, X = `$70`: stops at `$E5` (row 0 solid there); Up brings him back to `$DD`, where Down then changes rooms normally. Room `$3D`, X = `$70`: he goes round and comes down from the top edge. [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
 
-**Passing barriers**
-- The skip is not tied to the edge. 5 pixels short of any grid point, in the same cadence, the same input skips that point's tile test, and Link walks one tile (8 pixels) further before the next test. [`Walker_CheckTileCollision@CheckGridOffset`](src/bank7/walker-collision-screen-edge.asm#L101)
-- So he passes an obstacle one tile deep along his heading. Into a 16-pixel block he gets 8 pixels, then the block's second tile stops him (trace, level 2 room `$7D`, whose solid squares are statues: below one at Y `$B0`-`$BF` he ends at Y = `$AD`, not `$B5`; above it at `$A5`, not `$9D`; right of one at X `$30`-`$3F` at `$38`, not `$40`; left of one at X `$60`-`$6F` at `$58`, not `$50`. Overworld room `$77`: 8 pixels into the bottom wall and into the rock at the left of row Y = `$95`). [`Walker_TestTileAhead`](src/bank7/walker-collision-screen-edge.asm#L138)
-- A second skip in a row was not reproduced: after the crossing the offset has its normal sign and the limit stops Link on the next grid point. Tried on the block above: after the first press, at each of the next 14 frames, a second press (Left, Right or Down) of 1 or 2 frames, with 0 or 1 idle frame after it, then Up: 168 runs, none past Y = `$AD`. [`Obj_SubQSpeedFromPosFrac@SetCarry`](src/bank1/qspeed-direction-math.asm#L108)
-- With the edge: a right wrap passes a solid 16-pixel square at the left edge; a left wrap is stopped by one at the right edge; an up wrap is stopped by a solid bottom row; a down wrap needs row 0 open one column to the right. [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123) [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
-- Dungeon walls are not passed: the room bounds are tested every frame by inequality, and Link stops 1 pixel past the grid point (trace: room `$7D`, X = `$1F` at the left wall, Y = `$5C` at the top wall). [`Room_BoundDir`](src/bank1/room-bounds.asm#L254) [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185)
-
 **Why it cannot happen in dungeons**
-- A dungeon screen edge is reached only inside a doorway; everywhere else the room bounds hold Link. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Doorway_CheckLink`](src/bank5/doorway.asm#L137)
+- A dungeon screen edge is reached only inside a doorway; everywhere else the room bounds hold Link, a laid ladder aside (`# Screen edges and room transitions`, "Dungeon edges"). [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Doorway_CheckLink`](src/bank5/doorway.asm#L137)
 - In a doorway an input that is only perpendicular is replaced by the facing direction, on every frame: Link keeps walking forward. [`Link_ModifyDirInDoorway`](src/bank5/doorway.asm#L52)
 - In the dungeon's outer band (Y < `$55`, Y >= `$C6`, X < `$17`, X >= `$D9`, which covers the last cell before each bound), with state 0, the perpendicular bits are removed first and no input is left: Link stands still for that frame. [`Link_MaskInputInBorder@MaskButtons`](src/bank5/border-input-mask.asm#L133)
 - Either way the reversal never runs (trace: level 2 room `$7D`, top doorway, Left or Right for one frame at every position from Y = `$5C` to `$3D`: at `$5C`-`$54` he keeps walking up with `ObjInputDir` = 8, at `$52`-`$3D` he pauses with `ObjInputDir` = 0; every run ends in the normal room change). [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
-- The skip itself does work inside a dungeon room away from the doors and walls (the block traces above). [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
+- The skip itself does work inside a dungeon room away from the doors and walls: the block clip and the ladder clip are under `# Grid-point skip: block clip, ladder clip and their run-up`. [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
+
+# Grid-point skip: block clip, ladder clip and their run-up
+
+One frame of perpendicular input, 5 pixels short of a grid point, lets Link cross that grid point with no frame
+starting on it, so nothing that is tested only there is tested: the tile ahead, the screen edge, the warps, the stop
+of a laid ladder. `# Screen wrap (overworld)` is this skip at a screen bound; this section is the skip itself, the
+run-up into it, the recovery from a failed or spoiled try, and its uses on solid squares: the block clip and the
+ladder clip. Names: s = Link's heading; T = the grid point whose tests are to be skipped; G = the last grid point
+before T (8 pixels short of it); G' = the one before G (`$10` short); "good fraction" = `ObjPosFrac` `$80` heading up
+or left, `$00` heading down or right (the value that makes the next frame a 1-pixel frame). Table columns are RAM
+after the frame: `$70` `ObjX`, `$84` `ObjY`, `$98` `ObjDir`, `$394` `ObjGridOffset`, `$3A8` `ObjPosFrac`, `$3F8`
+`ObjInputDir`, `$AC` `ObjState`, `$12` `GameMode`, `$EB` `RoomId`, `$64` `LadderSlot`. (trace) marks results
+reproduced frame by frame with controller input only.
+
+**The skip in one paragraph**
+
+Link walks toward T holding only s. On the frame that starts 5 pixels short of T, 3 pixels past G, in the working
+cadence, a held direction perpendicular to s is case 6 of the rules between grid points: `ObjDir` is reversed, the
+offset is rewritten as seen from T (-3 becomes +5, +3 becomes -5) and Link steps back that frame (offset +-7 after
+it). Holding s again is case 3: `ObjDir` turns back and the offset is kept, so with its sign now opposite to the
+heading it counts toward 0 at T instead of toward +-8. On the 5th frame of s a frame starts at offset +-1 and moves
+2 pixels: the offset steps to -+1 and no frame ever starts at offset 0 on T, so T's tile test, screen-edge test,
+warp check and turning rules are not made. The offset runs on to -+8 at the grid point past T, is reset there, and
+that grid point is tested as usual. One skip removes exactly one grid point's tests and carries Link one tile (8
+pixels) past where he would have stopped, whatever made T a stop.
+[`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404) [`Link_SetDirAndInputDir`](src/bank5/link-handle-input.asm#L365)
+[`Walker_CheckTileCollision@CheckGridOffset`](src/bank7/walker-collision-screen-edge.asm#L101) [`Link_EndMoveAndAnimate@TruncGridOffset`](src/bank7/link-animate-ladder.asm#L177)
+
+**Preconditions and the working position**
+- Mode 5; Link not halted and not being knocked back; for the plain skip his state is 0 (no sword or item in use). Nothing else is needed: no item, key or button besides the d-pad, except a laid ladder for the ladder clip (trace). [`Link_HandleInput`](src/bank5/link-handle-input.asm#L68)
+- Only s held when Link left G: a diagonal held on G sets `Link_GoStraight`, and the press is then case 4 and ignored. [`Link_ModifyDirAtGridPoint_HaveInput`](src/bank5/link-handle-input.asm#L157) [`Link_GoStraight`](src/Variables.inc#L93)
+- Dungeon: not in a doorway, where the input is forced onto the facing axis, and not in the outer border band (`# Screen edges and room transitions`, "Border bands that mask buttons"), where a perpendicular bit is dropped at state 0. The overworld band clears buttons only and lets the press through. [`Link_ModifyDirInDoorway`](src/bank5/doorway.asm#L52) [`Link_MaskInputInBorder@MaskButtons`](src/bank5/border-input-mask.asm#L133)
+- Trick state, read at the start of the press frame: heading up Y = T + 5, `ObjGridOffset` = `$FD`, `ObjPosFrac` = `$80`; left X = T + 5, `$FD`, `$80`; down Y = T - 5, `$03`, `$00`; right X = T - 5, `$03`, `$00` (trace, all four headings). It is the 3rd frame after the frame that ended on G, when Link left G with the good fraction. [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- T by obstacle: the screen bounds X `$00`, `$F0`, Y `$3D`, `$DD` (trick X `$05`, `$EB`, Y `$42`, `$D8`); below a 16-pixel solid square whose top is `by`, T = `by` + 5 (trick `by` + `$0A`); above it T = `by` - `$13`; right of a square at X `bx`..`bx` + `$0F` T = `bx` + `$10`, left of it T = `bx` - `$10`; on a laid ladder the distance-0 point: ladder X for a ladder laid left or right, ladder Y - 3 for one laid up or down. [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65) [`Link_ScreenEdgeBounds`](src/bank7/walker-collision-screen-edge.asm#L70) [`Ladder_CheckAndDraw@CheckDistanceToLadder`](src/bank5/ladder.asm#L82)
+- The press: exactly one frame whose held bits, reduced in the order right, left, down, up, give a direction perpendicular to s; either perpendicular direction works. Heading up or down: Left or Right, alone or with Up or Down (Up+Left reduces to Left). Heading left or right: Up or Down alone, s released for that frame, since Left+Up reduces to Left (trace: Left, Right and all four diagonals work heading up in level 4 room `$21`; no diagonal works heading left or right; Up+Left wraps at the top edge, not at the left). [`Dir_GetOpposite`](src/bank1/qspeed-direction-math.asm#L137)
+- Then hold s. Idle frames between the press and s change nothing (trace: 1, 5 and 30). Link crosses T on the 5th frame of s. [`Link_SetDirAndInputDir`](src/bank5/link-handle-input.asm#L365)
+
+**Cadence: why a run-up is needed**
+- `ObjPosFrac` is one byte shared by both axes. With h = 2 x coordinate + 1 when `ObjPosFrac` >= `$80` (a position in half pixels), every moving frame changes h by exactly 3 (1.5 pixels): heading up or left 2 pixels when the fraction is `$00`, 1 when `$80`; heading down or right 1 when `$00`, 2 when `$80`; the fraction flips each moving frame. [`Obj_SubQSpeedFromPosFrac`](src/bank1/qspeed-direction-math.asm#L94) [`Obj_AddQSpeedToPosFrac`](src/bank1/qspeed-direction-math.asm#L52) [`Obj_MoveByQSpeed@ApplyQSpeedToPosition`](src/bank7/walker-move.asm#L262)
+- The trick state is h = 2(T + 5) + 1 heading up or left, 2(T - 5) heading down or right. A straight walk that reaches no grid point on the way gets there iff its distance in h is a multiple of 3; the walk out of G gets there iff Link leaves G with the good fraction. [`Obj_SubQSpeedFromPosFrac`](src/bank1/qspeed-direction-math.asm#L94)
+- What changes h by anything but 3 a frame: the withheld pixel at offset +-8 (a grid point reached by a full cell; the fraction still advances); room entry (`$0300`-`$051F` zeroed: fraction `$00`); the overworld slow tiles (fraction zeroed when the speed first drops); knockback (4 whole pixels a frame, fraction untouched). [`Obj_SubQSpeedFromPosFrac@SetCarry`](src/bank1/qspeed-direction-math.asm#L108) [`Room_EnterCommon`](src/bank5/enter-room.asm#L143) [`Link_InitSpeed`](src/bank5/link-handle-input.asm#L277) [`Shove_MovePixels`](src/bank7/shove.asm#L129)
+- What does not: standing still; a turn at a grid point (the fraction is kept, but which value is good flips with the heading); a sword swing or B item (Link does not move); case 6 itself (it rewrites the offset only; its step back is an ordinary moving frame). [`Walker_Move@SetMovingDir`](src/bank7/walker-move.asm#L104) [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- So the cadence cannot be picked by timing (trace: reaching X = `$08` walking left, pausing, then Left wraps at `$05`; reaching it walking down, `$3A8` = `$00`, no frame wraps; a pause at X = `$07` or `$05` is harmless). [`ObjPosFrac`](src/Variables.inc#L316)
+- Moves are exactly reversible: walking back retraces the same (position, fraction) pairs, and a plain turn-back lands exactly on the grid point left, with no withheld pixel. Walking back and forth inside a cell therefore never changes the cadence (trace: from rest on G with the wrong fraction, every Up/Down sequence of 1-8 frames that stays between G and T: the trick state is never reached). [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
+- A full cell walked straight into a grid point always ends there with the good fraction for its own heading, whatever the fraction at its start: from the good fraction the cell is 1, 2, 1, 2, 1, 1 pixels in 6 frames (the last 2 cut by the limit), from the other 2, 1, 2, 1, 2 in 5 frames; both end on `$80` after a cell walked up or left, `$00` after one walked down or right (trace: from (`$8D`, `$00`) and (`$8D`, `$80`) Up arrives at (`$85`, `$80`)). [`Obj_AddQSpeedToPosFrac@ClearCarry`](src/bank1/qspeed-direction-math.asm#L66)
+- So the fraction on G is fixed by how Link got there: a full cell walked into it up or left gives `$80`, down or right `$00`, on either axis (a cell walked left sets up's value, right down's); room entry `$00`; a partial walk or a turn-back whatever it was before (trace: room `$77`, every rest position X `$05`-`$18`, both fractions and both offset signs; level 1 room `$22`, arriving on (`$A0`, `$9D`) by a cell walked Left, then Up 2 and Right: clip; arriving on it walking Down from `$95`: no clip). [`ObjPosFrac`](src/Variables.inc#L316)
+- Rule: the last full cell walked before the skip must have been up or left for a skip heading up or left, down or right for one heading down or right; a full cell walked away from T sets the wrong fraction. [`Obj_SubQSpeedFromPosFrac@SetCarry`](src/bank1/qspeed-direction-math.asm#L108)
+- Minimum run-up: none when Link stands on G with the good fraction (s 2 frames, press on the 3rd); otherwise one full cell, G' to G, walked toward T. From rest on G' or farther back on the line, either fraction, holding s works (trace: room `$22`, every rest position on a grid point from Y `$A5` down to `$B5`; room `$77`, all such). [`Obj_SubQSpeedFromPosFrac@SetCarry`](src/bank1/qspeed-direction-math.asm#L108)
+- From rest between G' and G: it works when Link left G' toward T (offset sign = heading); when he got there walking away from G he retraces onto G with the fraction he had there, so it works only if that was good (trace: room `$22` heading up, rest at Y = G + 1, + 3, + 4, + 6, + 7 with fraction `$80`, `$00`, `$80`, `$00`, `$80`, the states of a walk away from G left with `$00`, all fail; room `$21`, from 5 such states each the phase on G is kept). [`Obj_SubQSpeedFromPosFrac`](src/bank1/qspeed-direction-math.asm#L94)
+- Between G and T only two states lead to the skip: the trick state and the frame before it (heading up Y = G - 1, `$FF`, `$00`), from which one more frame of s gives the trick state (trace: room `$22`, rest at `$9C` with `$00` reached walking up from G: 1 Up, then Right clips; rest at `$9C` with `$80`, `$9B` either, `$9A` with `$00`, `$96`-`$99` either: no clip). [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- The other positions fail by landing on a grid point: from G with the wrong fraction the frames out of G reach 2 and 3 pixels past G at the other fraction; a press 2 past G steps back 2 pixels exactly onto G (offset reset), a press 3 past G counts 5, 3, 2, 0 and lands exactly on T; a plain press 1 past G turns the rewritten +-7 into +-8 with its 1-pixel step back, reset on G (trace). [`Link_EndMoveAndAnimate@TruncGridOffset`](src/bank7/link-animate-ladder.asm#L177)
+- Backing off: from G with the wrong fraction one cell back, to G', is enough; from T (stopped after a failed press) or from between G and T one cell back is not, because it ends on G walking away, with the fraction of the opposite heading (trace: room `$22` from T; room `$5F`, backing off only to X `$E8` gave no clip). The rule for both: walk away until Link stands on G' with offset 0, then walk toward T. Situations differ only in where G' lies: below a block `by` + `$15`; at the left screen edge X `$10`; on a ladder laid left or right, and at the arrival in room `$5F`, G' is the lay point itself (X `$50`/`$A0` in level 4 room `$21`, X `$F0` in `$5F`), so a Link who starts from the lay point always has the full cell; on a ladder laid up the lay point is G (Y `$85` in room `$21`) and G' is one cell below it (Y `$8D`). [`Obj_AddQSpeedToPosFrac`](src/bank1/qspeed-direction-math.asm#L52) [`Ladder_LinkOffsetsX`](src/bank7/link-animate-ladder.asm#L58)
+- With a ladder out, the walk back toward the water after backing off costs one more frame: the first frame back only puts the old ladder away (Link does not move), and the ladder is laid again on arrival at the lay point (trace). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110)
+- Frames from rest on a grid point n cells before G (n >= 1) to the press, holding s: 6(n - 1) + 5 + 2 when the first frame moves 2 pixels (fraction `$00` heading up or left, `$80` down or right), 6(n - 1) + 6 + 2 otherwise; the press is the frame after (trace, heading up: from Y `$A5` 7 or 8 frames, `$AD` 13 or 14, `$B5` 19 or 20). [`Obj_MoveByQSpeed`](src/bank7/walker-move.asm#L244)
+
+**Recovery when too close or in the wrong cadence**
+- On G with the wrong fraction: walk away 6 frames to G' (the offset resets to 0 there), then s 7 frames, press, s (trace: room `$22` from (`$A0`, `$9D`) with `$00`: Down 6, Up 7, Right 1; room `$77` from (`$08`, `$8D`) with `$00`: Right 6, Left 7, Up 1, Left 5: wrap). [`Link_EndMoveAndAnimate@TruncGridOffset`](src/bank7/link-animate-ladder.asm#L177)
+- Stopped on T after a failed press: walk away two cells to G' (11 frames when Link reached T walking toward it, else 12), then s 7 frames, press, s (trace: room `$22` from (`$A0`, `$95`): Down 11, Up 7, Right 1, Up 10). [`Obj_AddQSpeedToPosFrac`](src/bank1/qspeed-direction-math.asm#L52)
+- Anywhere between G and T but the trick state and the frame before it: release, walk away until on G' (passing back over G), then s 7 frames, press. [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
+- Between G' and G after stepping back from G (offset sign opposite to s): s retraces onto G with the fraction Link had there; then apply the rule for G. [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
+- With a ladder out add the re-laying frame (trace: room `$21` north from (`$85`, `$00`, `$00`): Down 6, Up 8, press: 15 frames instead of 3; room `$5F` after a miss: Right 11 frames to X `$F0`, Left 8 to `$E5`, Up 1, Left: clip). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110)
+- Cheaper where the line beside is open: a full cell walked up or left on the other axis sets the good fraction for a skip heading up or left, down or right for one heading down or right (trace: room `$77` from G = (`$08`, `$8D`) with `$00`: Up 3, Left 4 (Link finishes the cell up to Y `$85` and turns left there), Up 1, Left 5: wrap on row `$85`, 13 frames instead of 19). [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
+- Nothing short of the back-off rescues the wrong cadence: not the sword (trace: no sequence of 5 frames of Left, Up, nothing and A from G = (`$08`, `$8D`) with `$00` wrapped), not other presses (trace: room `$21` from the wrong phase at Y `$85`, 16,134 input scripts, every 3-frame window of Up, A, Up+A, Left, Left+A, nothing and every 4-frame window adding Down, after 0-7 Up frames: none passed). [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- Knockback from a monster's touch spoils the cadence; the same rules repair it (room `$21` with its Gels, under "Ladder clip"). [`Shove_Update`](src/bank7/shove.asm#L55)
+
+**Decision table** (applied every frame, first matching row; c = Link's coordinate on the heading axis, o = `ObjGridOffset`, f = `ObjPosFrac`, read at the start of the frame; "press" = one frame of perpendicular, then s held)
+
+| Link's state | input |
+|---|---|
+| on G' or farther back on the line (o = 0), any f | hold s; press on the frame that starts in the trick state |
+| between G' and G, having left G' toward T (o negative heading up or left, positive heading down or right) | hold s; press in the trick state |
+| between G' and G after stepping back from G (o of the other sign) | hold s: Link retraces onto G with the f he had there; then the rows for G |
+| on G, good f | s 2 frames, press on the 3rd |
+| between G and the trick state with h - h(trick) a positive multiple of 3 (G - 1 or G + 1 toward T, o = `$FF` with f = `$00` heading up or left, o = `$01` with f = `$80` heading down or right) | s 1 frame, then press |
+| trick state (table below) | press now, then hold s |
+| sword state (table below), sword owned, A not masked, no ladder out | A now (alone or with the perpendicular), the perpendicular on one of the next 12 frames, then s |
+| on G with the other f | walk away until on G' (6 frames), then s 7 frames, press |
+| on T, stopped | walk away to G' (11 or 12 frames), then s 7 frames, press |
+| between G and T in any other state (6 pixels short of T, 5 short with the other f, nearer T) | lost: release, walk away until on G' (passing back over G), then s 7 frames, press |
+| on G with the other f, the line beside open (alternative) | a full cell on the other axis, up or left for a skip heading up or left, down or right otherwise; then the rows for G on the new line |
+| ladder out, walking back toward the water after a back-off | one more frame of s: the first only puts the old ladder away |
+
+| heading | trick state (c, o, f) | sword state (c, o, f) | good f on G |
+|---|---|---|---|
+| up | T + 5, `$FD`, `$80` | T + 7, `$FF`, `$00` | `$80` |
+| left | T + 5, `$FD`, `$80` | T + 7, `$FF`, `$00` | `$80` |
+| down | T - 5, `$03`, `$00` | T - 7, `$01`, `$80` | `$00` |
+| right | T - 5, `$03`, `$00` | T - 7, `$01`, `$80` | `$00` |
+
+The table holds in all four directions (trace: room `$22` east block from all four sides, both perpendicular directions, plain and sword; level 2 room `$7D` statues at X `$30` and `$60` from all four sides; overworld room `$77` bottom wall heading down, top heading up, left rock row heading left; all four screen edges). Worked example, level 4 room `$21` heading up from the island, ladder laid at Y `$80` (T = `$7D`, G = `$85`, G' = `$8D`; trace: all 16 start states reached Y `$55`):
+
+| Link (Y, `$394`, `$3A8`) | input |
+|---|---|
+| `$8D` > Y > `$85` with `$394` negative (walking up from `$8D`), or Y >= `$8D` | Up until (`$82`, `$FD`, `$80`), press |
+| `$8D` > Y > `$85` with `$394` positive (left `$85` walking down) | Up: Link arrives on `$85` with the fraction he left it with; if `$80`, Up 2 more and press; else Down to `$8D` first |
+| (`$8D`, `$00`, `$00`) / (`$8D`, `$00`, `$80`), no ladder out | Up 7 / Up 8, press |
+| (`$85`, `$00`, `$80`) | Up 2, press |
+| (`$84`, `$FF`, `$00`) | Up 1, press |
+| (`$82`, `$FD`, `$80`) | press |
+| (`$85`, `$00`, `$00`) | Down 6 to `$8D`, Up 8, press |
+| (`$83`, `$FE`, `$80`) / (`$82`, `$FD`, `$00`) / (`$81`, `$FC`, `$00`) | Down 7 / 8 / 8, Up 8, press |
+| (`$80`, `$FB`, `$80`) / (`$7F`, `$FA`, either) / (`$7E`, `$F9`, `$00`) | Down 9 / 9-10 / 10, Up 8, press |
+| (`$7D`, `$00`, `$80`), stopped by the ladder | Down 11, Up 8, press |
+
+**The sword's extra position**
+- A newly pressed is handled in Link's update before the direction rules (state 0 only, after the border mask), and the direction rules still run during the swing; only the move is zeroed while (`ObjState` AND `$F0`) is `$10` or `$20`. [`Link_HandleInput`](src/bank5/link-handle-input.asm#L68) [`Walker_Move@SetMovingDir`](src/bank7/walker-move.asm#L104)
+- A press during the swing is case 6 without the step back and without the fraction flip. From 1 pixel past G in the working cadence (the sword state: heading up or left c = T + 7, `$FF`, `$00`; down or right T - 7, `$01`, `$80`) Link stays at offset +-7 and the following s crosses T in the working cadence (trace: room `$22`, Up 13, A, Right, Up: (`$A0`, `$8D`); room `$77`, X = `$07` with Up+A: left wrap). [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- So with the sword the skip works from two consecutive frames of the approach (1 and 3 pixels past G), plain from one (3 past G); no other position works with or without it (trace: every frame of the approach from Y `$AD`, both cadences). [`Link_EndMoveAndAnimate@TruncGridOffset`](src/bank7/link-animate-ladder.asm#L177)
+- Timing: A on the frame that starts 1 or 3 pixels past G (Link does not move on it; A with the perpendicular on the same frame works too), the perpendicular on any of the next 12 frames and held at most 12 frames, then s (trace: held 13 frames from 1 past G it carries Link back onto G). Link's move is zeroed on the A frame (state `$10`) and on the 12 frames after it (state `$11`, timed by the sword's states 1 and 2); then state `$31` lasts 1 frame and lets him move. [`Sword_Wield`](src/bank5/wield-items.asm#L59) [`Sword_UpdateSwordOrRod`](src/bank7/sword-and-rod.asm#L100) [`Link_AdvanceItemUseState`](src/bank7/object-animation.asm#L223)
+- B items freeze Link the same way (state `$10`): bomb, arrow (bow, arrows and a rupee), boomerang and rod all skip from 1 pixel past G (trace). The candle freezes him too, but its fire lies on his path and burns him: knocked back, no skip (trace). B with nothing usable (0 bombs) does not freeze him. [`Link_WieldItem`](src/bank5/wield-items.asm#L95) [`Link_UseItem_SetState10`](src/bank1/bomb-candle-wield.asm#L143) [`Fire_Update`](src/bank7/fire.asm#L44)
+- A must not be masked: facing the edge in the overworld's outer border band (X < `$07`, X >= `$E9`, Y < `$45`, Y >= `$D6`) A is cleared. The sword states at the screen bounds are X `$07` (left, allowed), X `$E9` (right), Y `$44` (top) and Y `$D6` (bottom), the last three masked: only the left edge has a sword position (trace: right, top and bottom edges did not wrap with the sword; at X `$E9` A did nothing and the room changed; the plain X `$EB` wraps). [`Link_FilterInput`](src/bank5/border-input-mask.asm#L54) [`Link_BorderBounds`](src/bank5/border-input-mask.asm#L38)
+- On a laid ladder there is no sword position: the ladder code runs after the zeroing and puts a moving direction back (case C for the step back, case A forward), so Link moves during the swing and the press acts as without the sword (trace: room `$5F`, Up+A at X `$E7`: step back to `$E8`, stopped at `$E0`; room `$21`, every frame from Y `$86` to `$7D` with A on any of 3 frames around the press: only the plain trick state works). A alone on the trick frame is an idle frame there, and the press on the next frame still works (trace). [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
+- The sword is never needed: every recipe below is plain. [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+
+**Block clip**
+- Rule, heading up into a 16-pixel solid square whose top is `by`: T = `by` + 5, where the square stops Link; G = `by` + `$0D`; G' = `by` + `$15`. One skip takes him to Y = `by` - 3 = T - 8, half inside the square, where the next test reads its upper tile row and stops him (trace: east block of level 1 room `$22`, (`$A0`, `$95`) to (`$A0`, `$8D`): the press frame plus 10 frames of Up). [`Walker_CheckTileCollision@CheckGridOffset`](src/bank7/walker-collision-screen-edge.asm#L101)
+- The way on is sideways: at Y = `by` - 3 his hotspot (Y + `$0B`) is in the square's lower tile row, and a left or right test reads only the one tile ahead in that row (X - 8 or X + `$10`), never the tile he stands in; where that tile is open he walks out sideways with his upper body overlapping the square. [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
+- From the side the clip leads nowhere: vertical tests read two columns (X / 8 and X / 8 + 1), so a Link stopped 8 pixels into a square from the side (X = `bx` + 8 or `bx` - 8) still reads a block column going up or down, and the square's second column going on (trace: from the right of the east block of room `$22` he stops at (`$A8`, `$8D`): Left and Up blocked; only Right and Down move). [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
+- Room `$22` (level 1, layout `$1A`): blocks at (`$80`,`$70`), (`$70`,`$80`), (`$90`,`$80`), (`$60`,`$90`) (the push block), (`$A0`,`$90`), (`$70`,`$A0`), (`$90`,`$A0`), (`$80`,`$B0`); stairs at (`$80`,`$90`), taken at (`$80`, `$8D`); inside squares (`$80`,`$80`), (`$70`,`$90`), (`$90`,`$90`), (`$80`,`$A0`). [`Warp_CheckUnderLink`](src/bank5/warps-stairs-caves.asm#L55)
+- Room `$22` recipe (Link's state 0, no knockback, only Up held when he leaves G, Link on the block's column; nothing in the inventory): from (`$E0`, `$8D`) in the E doorway Left to X `$B0` (36 frames), Down to Y `$AD` (23), Left to X `$A0` (11), Up 14, Right 1, Up 10, Left 22: Link is on the stairs (mode `$10`, then 9, cellar `$7F`), 117 frames, no damage (trace). [`Link_HandleInput`](src/bank5/link-handle-input.asm#L68)
+- Into the diamond: from (`$A0`, `$8D`) the left test reads (`$98`, `$98`), the inside square (`$90`, `$90`), so Left walks him in; on X = `$80` the stairs take him (trace: 22 frames of Left from the clip). [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144) [`Warp_CheckUnderLink`](src/bank5/warps-stairs-caves.asm#L55)
+
+**Frame table, room `$22` east block** (trace): Link at rest on (`$A0`, `$AD`) after walking Left to X `$A0`; values after each frame; X = `$A0` until frame 26; `$AC` = 0 throughout.
+
+| frame | input | `$84` Y | `$98` | `$394` | `$3A8` | `$3F8` |
+|---|---|---|---|---|---|---|
+| 0 | - | `$AD` | 2 | `$00` | `$80` | 2 |
+| 1-5 | Up | `$AC`, `$AA`, `$A9`, `$A7`, `$A6` | 8 | `$FF`, `$FD`, `$FC`, `$FA`, `$F9` | `$00`, `$80`, `$00`, `$80`, `$00` | 8 |
+| 6 | Up | `$A5` | 8 | `$00` | `$80` | 8 |
+| 7-11 | Up | `$A4`, `$A2`, `$A1`, `$9F`, `$9E` | 8 | `$FF`, `$FD`, `$FC`, `$FA`, `$F9` | `$00`, `$80`, `$00`, `$80`, `$00` | 8 |
+| 12 | Up | `$9D` (G) | 8 | `$00` | `$80` | 8 |
+| 13 | Up | `$9C` | 8 | `$FF` | `$00` | 8 |
+| 14 | Up | `$9A` | 8 | `$FD` | `$80` | 8 |
+| 15 | Right | `$9C` | 4 | `$07` | `$00` | 1 |
+| 16 | Up | `$9A` | 8 | `$05` | `$80` | 8 |
+| 17 | Up | `$99` | 8 | `$04` | `$00` | 8 |
+| 18 | Up | `$97` | 8 | `$02` | `$80` | 8 |
+| 19 | Up | `$96` | 8 | `$01` | `$00` | 8 |
+| 20 | Up | `$94` (T = `$95` passed) | 8 | `$FF` | `$80` | 8 |
+| 21-24 | Up | `$93`, `$91`, `$90`, `$8E` | 8 | `$FE`, `$FC`, `$FB`, `$F9` | `$00`, `$80`, `$00`, `$80` | 8 |
+| 25 | Up | `$8D` | 8 | `$00` | `$00` | 8 |
+| 26 | Left | `$8D` (X `$9E`) | 2 | `$FE` | `$80` | 2 |
+
+- Frame by frame: frame 15 Right is case 6 (`$FD` rewritten to `$05`, then 2 pixels back: `$07`); frame 16 Up is case 3, the offset kept, now counting toward 0 at T; frame 20 starts at `$01` with fraction `$00`, a 2-pixel frame, `$01` to `$FF`: T's test is never made; frame 25 the offset reaches -8 at Y `$8D` and is reset, and the test there reads the block's upper tile row. [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404) [`Link_SetDirAndInputDir`](src/bank5/link-handle-input.asm#L365) [`Obj_SubQSpeedFromPosFrac`](src/bank1/qspeed-direction-math.asm#L94)
+- Which blocks of room `$22` lead somewhere from below (trace): the east block, (`$A0`,`$95`) to (`$A0`,`$8D`), Left in; the west block, (`$60`,`$95`) to (`$60`,`$8D`), Right in; the lower-left block, (`$70`,`$A5`) to (`$70`,`$9D`), Right to X `$80`, Up onto the stairs; the lower-right block, (`$90`,`$A5`) to (`$90`,`$9D`), Left in; the upper blocks, (`$70`/`$90`, `$85`) to `$7D`. Beside the east, west and four diagonal blocks the tile ahead sideways belongs to an inside square. [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
+- The south block (`$80`,`$B0`): from rest on (`$80`,`$BD`) after walking Left along the bottom row (fraction `$80`) it clips to (`$80`,`$AD`), but the squares beside that row are outside the diamond: nothing gained (trace). The north block (`$80`,`$70`) cannot be clipped from above: its stop is Y `$5D`, the top room bound, so there is no G. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185)
+- From above (the reverse block clip, below) every block with a full cell above its stop works; from the left or right Link gets 8 pixels in and no further. [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
+- Push block caveat: the west block is the room's push block; holding Up against it for 16 frames from (`$60`, `$8D`) or below pushes it, so after its clip go Right at once. [`PushBlock_State0Idle`](src/bank4/push-block.asm#L74)
+- Traps: the four blade traps of room `$22` charge only when Link is within `$0D` of a trap's row (Y `$5D`, `$BD`) or column (X `$20`, `$D0`). The east- and west-block clips, their run-up and the walk to the stairs stay inside X `$30`-`$C0`, Y `$6D`-`$AD`: the traps never move (trace: the whole recipe with the traps in the room, hearts unchanged). The lower-left block's run-up passes Y `$B5`, within the bottom traps' reach, and also ended without damage at walking pace (trace). [`Trap_Update_Full`](src/bank1/trap-rupee-stash.asm#L189) [`Trap_Update_Full@TryCharge`](src/bank1/trap-rupee-stash.asm#L216)
+- No softlock in room `$22`: half inside a block Link can always walk back the way he came (the test behind him reads the square he left), and the stairs lead to cellar `$7F`, whose exits put him at (`$60`, `$AD`) outside the diamond. [`Warp_CheckUnderLink`](src/bank5/warps-stairs-caves.asm#L55)
+- Other solid squares clip by the same table, 8 pixels deep, from every side tried (trace): level 2 room `$7D` statues (below one at Y `$B0`-`$BF` Link ends at Y `$AD`, not `$B5`; above it at `$A5`, not `$9D`; right of one at X `$30`-`$3F` at X `$38`, not `$40`; left of one at X `$60`-`$6F` at `$58`, not `$50`); overworld room `$77` (8 pixels into the bottom wall heading down, the top wall heading up, the rock at the left of row Y `$95` heading left). The overworld needs no sword: the plain recipe is enough. [`Walker_TestTileAhead`](src/bank7/walker-collision-screen-edge.asm#L138)
+- Dungeon walls are not passed by the plain skip: the room bounds are tested every frame by inequality, and Link stops 1 pixel past the grid point (trace: room `$7D`, X = `$1F` at the left wall, Y = `$5C` at the top wall). Only a laid ladder carries him past a bound ("Ladder clip"). [`Room_BoundDir`](src/bank1/room-bounds.asm#L254) [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185)
+- At a screen edge (overworld): a right wrap passes a solid 16-pixel square at the left edge; a left wrap is stopped by one at the right edge; an up wrap is stopped by a solid bottom row; a down wrap needs row 0 open one column to the right (`# Screen wrap (overworld)`, "After the wrap"). [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123) [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
+
+**Reverse block clip**
+- The block clip heading down. From above the east block of room `$22`: run-up cell (`$A0`, `$6D`) to (`$A0`, `$75`) (fraction `$00`), Down 2 frames (Y `$78`, offset `$03`, fraction `$00`), Left or Right 1 frame, hold Down: Link stops at (`$A0`, `$85`), 8 pixels into the block (trace, traps in the room). [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- His hotspot row is then the block's upper tile row, so Left takes him into the inside square (`$90`, `$90`); at X `$80` Down puts him on the stairs (trace; the walk from (`$E0`, `$8D`): Left to X `$B0`, Up to Y `$6D`, Left to X `$A0`, Down to `$75`, then the clip). [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
+- From above the west block the same gives (`$60`, `$85`), and Right walks into the diamond (trace). [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
+- A second, horizontal clip does not pass a block's second tile column: from above the west block at X `$58` (half a column off) Link clips to (`$58`, `$85`); Right is then blocked by the block's right tile (X + `$10` = `$68`), and a horizontal clip from X `$48` stops him at `$58` again (trace). Room `$22` needs no second clip. [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
+
+**Ladder clip**
+- What a laid ladder is: laid at Link's Y - 5 (up), Y + `$13` (down), X -+ `$10` with Y + 3 (left, right), one square ahead, when he stands on a grid point facing water with that direction held and no ladder out (all conditions in `# Ladder and raft`). [`Ladder_LinkOffsetsY`](src/bank7/link-animate-ladder.asm#L62) [`Ladder_LinkOffsetsX`](src/bank7/link-animate-ladder.asm#L58) [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
+- Distance = |Link Y + 3 - ladder Y| for a ladder laid up or down, |Link X - ladder X| for one laid left or right: a ladder laid up starts at distance 8, one laid down, left or right at `$10`. [`Ladder_CheckAndDraw@CheckDistanceToLadder`](src/bank5/ladder.asm#L82)
+- The ladder code runs every frame after the room bound, the doorway check and Link's tile test, and may rewrite the moving direction they left. With a direction held: A, distance not 0 and Link facing the ladder's way: he moves in his facing direction whatever the tile, the bound or the door said; B, distance 0 and the ladder's direction is his moving direction (the tile test let him on): go on; C, facing opposite to the ladder: go back; D, anything else stops him, except E: a ladder laid up with exactly Up held repeats the tile test 8 pixels higher and that decides. [`Walker_Move@CheckTiles`](src/bank7/walker-move.asm#L206) [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125) [`Ladder_CheckAndDraw`](src/bank5/ladder.asm#L44)
+- So with a ladder out the only grid point whose tile can stop Link is T, the one at distance 0; without the skip he stops there when the square beyond is water too (trace: room `$21` going up at Y `$7D`, where case E finds water at `$78`, going left at X `$40`, going right at X `$B0`; room `$5F` at X `$E0`). [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167)
+- The skip removes that one test; the trick state is 5 pixels short of T as everywhere, and the press's step back is allowed by case C. [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404) [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
+- Past T: at T -+ 8 (distance 8, water ahead) case A carries him on; at T -+ `$10` (distance `$10`, ladder state 2) the next frame puts the ladder away and Link does not move; on that frame, standing on a grid point with no ladder out, the direction held and water ahead, a new ladder is laid one square farther (the relay). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110) [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
+- Reach of one press, ladders laid left, right or down: lay point L (Link's position when it is laid, G' of the skip), distance 0 at L -+ `$10` (skipped), relay at L -+ `$20`, the new ladder's distance 0 at L -+ `$30`, where the tile ahead must be walkable: 3 water squares; 2 when the tile ahead at the relay point is already land and no new ladder is laid (trace: room `$21` west and east, room `$20` row 1, room `$5F`). [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
+- Ladder laid up: lay point L = water top + 5 (G of the skip), distance 0 at L - 8 (skipped), relay at L - `$18`, the new ladder's distance 0 at L - `$20`, where Y + 3 must be land, or by case E Y - 5: room `$21`'s two squares need one press (trace). [`Ladder_CheckAndDraw`](src/bank5/ladder.asm#L44)
+- A second press is needed only for wider water: one at each further distance-0 point, in the same trick state. Left, right or down the relay point is G' of the next distance-0 point, so any fraction serves; up it is G, and Link reaches it with the good fraction (frame 24 of the room `$21` table: (`$6D`, `$80`)). No water wider than the reach of one press was tried. [`Walker_CheckTileCollision@CheckGridOffset`](src/bank7/walker-collision-screen-edge.asm#L101)
+- The ladder works in every dungeon room and in overworld rooms `$17`, `$18`, `$19`, `$27`, `$4F`, `$5F` only. [`Ladder_RoomIdsOW`](src/bank7/link-animate-ladder.asm#L76)
+
+*Overworld: room `$5F` and its heart container, entered from room `$60`*
+- Room `$5F` (row 5, column 15) can be entered standing on water from room `$60` (row 6, column 0) by a right wrap: `$60` has its right edge open on tile rows 8-`$0D` (aligned Y `$75`-`$A5`) and columns 0-3 solid on every row. [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123)
+- Wrap in `$60`, row Y `$8D` (or `$85`): coming in from room `$61` at X `$F0`, walk Left 2 cells to X `$E0` (from X `$E8` the first step right would be a 2-pixel step, the wrong cadence), then Right 7, Up 1, Right: X `$00` on frame 23, inside the solid left wall, where Right, Up and Down do nothing (trace). At X `$F8` the tile under Link is read (no look-ahead at X >= `$F0`), at X `$00` column 2 (X + `$10`), solid. [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123)
+- Then Left: X `$00` equals the left bound, the overworld makes the edge test with a solid tile ahead, and `RoomId` - 1 in 8 bits is `$5F`, the last room of the row above. 104 frames later Link plays in room `$5F` at (`$F0`, `$8D`) facing left, `$394` = 0, `$3A8` = `$00`, standing on water (tiles `$95` in columns `$1C`-`$1F` of his row): the arrival spot is never tested (trace). [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167) [`Room_CalcNextRoomForDoor`](src/bank5/next-room-calc.asm#L76) [`Room_EnterCommon@Method2`](src/bank5/enter-room.asm#L211)
+- Room `$5F`, rows Y `$85`/`$8D` (tile rows `$0A`-`$0B`): land up to X `$8F`; water `$90`-`$9F`; platform `$A0`-`$AF` (tiles `$76`/`$77`); water `$B0`-`$BF`; platform `$C0`-`$CF` with the heart container at (`$C0`, `$90`), the overworld's only room-item heart container; water `$D0`-`$FF`. Room `$4F` has the same layout, without the heart container. [`Room_SetUpItemAndPushBlock@MakeHeartContainerOW`](src/bank5/create-room-objects.asm#L116)
+- Recipe in `$5F` (`InvLadder` = 1, a free monster slot): hold Left; the first play frame does not move Link, at the end of the 2nd the ladder is laid at X `$E0`; Link walks onto it, `$F0` to `$E8` in frames 3-7, then `$E7`, `$E5`; frame 10: Up (or Down) for exactly 1 frame, the frame that starts at X `$E5` (`$394` `$FD`, `$3A8` `$80`), 5 pixels short of `$E0` and the 3rd frame after the frame that ended on `$E8`; then Left: `$E0` passed on frame 15, `$D8` on frame 20, `$D0` on frame 25, where the ladder is put away and Link loses 1 frame; the heart container is taken at X `$C8` on frame 32. Input: Left 9, Up 1, Left 22 = 32 frames (trace). [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338) [`Item_TryTake`](src/bank1/take-item.asm#L206)
+- Water crossed with that one press: the square Link arrived on (`$F0`-`$FF`), the ladder's square (`$E0`-`$EF`) and the square `$D0`-`$DF` that the laid ladder does not cover, X from `$F0` to `$D0`, 32 pixels. At X `$D0` the tile ahead is the platform, so no new ladder is laid. West of the heart platform the ladder works as usual: at X `$C0` a new ladder over `$B0`-`$BF`, platform `$A0`, ladder over `$90`-`$9F`, land at `$88`. [`Ladder_CheckAndDraw`](src/bank5/ladder.asm#L44) [`Link_EndMoveAndAnimate@CheckWaterOW`](src/bank7/link-animate-ladder.asm#L240)
+- Variants that work (trace): Up or Down as the press; rows Y `$85` and `$8D` (both take the heart container: range |X - `$C0`| < 9, Link's Y `$85`-`$95`); row Y `$95` (all water): at `$D0` a new ladder is laid toward `$C0` and Link takes the heart container from X `$C8` while still over water; room `$4F`: the same clip crosses to the platform. [`Item_TryTake`](src/bank1/take-item.asm#L206) [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
+
+**Frame table, room `$60` row Y `$8D`: right wrap, then Left into `$5F`** (trace; frame 0 = at rest on X `$E0` after walking 2 cells left from the `$F0` arrival; the monsters of `$60` were present)
+
+| frame | input | `$70` X | `$98` | `$394` | `$3A8` | `$3F8` | `$12` | `$EB` |
+|---|---|---|---|---|---|---|---|---|
+| 0 | - | `$E0` | 2 | `$00` | `$80` | 2 | 5 | `$60` |
+| 1-4 | Right | `$E2`, `$E3`, `$E5`, `$E6` | 1 | `$02`, `$03`, `$05`, `$06` | `$00`, `$80`, `$00`, `$80` | 1 | 5 | `$60` |
+| 5 | Right | `$E8` | 1 | `$00` | `$00` | 1 | 5 | `$60` |
+| 6 | Right | `$E9` | 1 | `$01` | `$80` | 1 | 5 | `$60` |
+| 7 | Right | `$EB` | 1 | `$03` | `$00` | 1 | 5 | `$60` |
+| 8 | Up | `$E9` | 2 | `$F9` | `$80` | 8 | 5 | `$60` |
+| 9 | Right | `$EB` | 1 | `$FB` | `$00` | 1 | 5 | `$60` |
+| 13 | Right | `$F1` | 1 | `$01` | `$00` | 1 | 5 | `$60` |
+| 18 | Right | `$F8` | 1 | `$00` | `$80` | 1 | 5 | `$60` |
+| 23 | Right | `$00` | 1 | `$00` | `$00` | 1 | 5 | `$60` |
+| 24 | Left | `$00` | 2 | `$00` | `$00` | 2 | 6 | `$60` |
+| 128 | - | `$F0` | 2 | `$00` | `$00` | | 5 | `$5F` |
+
+**Frame table, room `$5F` ladder clip** (trace; frame 0 = the first play frame after the arrival; `$AC` = 0 and Y = `$8D` throughout; ladder X = `ObjX` of the ladder's slot)
+
+| frame | input | `$70` X | `$98` | `$394` | `$3A8` | `$3F8` | `$64` | ladder X |
+|---|---|---|---|---|---|---|---|---|
+| 0 | - | `$F0` | 2 | `$00` | `$00` | 0 | 0 | - |
+| 1 | Left | `$F0` | 2 | `$00` | `$00` | 0 | 0 | - |
+| 2 | Left | `$F0` | 2 | `$00` | `$00` | 2 | `$0B` | `$E0` |
+| 3 | Left | `$EE` | 2 | `$FE` | `$80` | 2 | `$0B` | `$E0` |
+| 4 | Left | `$ED` | 2 | `$FD` | `$00` | 2 | `$0B` | `$E0` |
+| 5 | Left | `$EB` | 2 | `$FB` | `$80` | 2 | `$0B` | `$E0` |
+| 6 | Left | `$EA` | 2 | `$FA` | `$00` | 2 | `$0B` | `$E0` |
+| 7 | Left | `$E8` | 2 | `$00` | `$80` | 2 | `$0B` | `$E0` |
+| 8 | Left | `$E7` | 2 | `$FF` | `$00` | 2 | `$0B` | `$E0` |
+| 9 | Left | `$E5` | 2 | `$FD` | `$80` | 2 | `$0B` | `$E0` |
+| 10 | Up | `$E7` | 1 | `$07` | `$00` | 8 | `$0B` | `$E0` |
+| 11 | Left | `$E5` | 2 | `$05` | `$80` | 2 | `$0B` | `$E0` |
+| 12 | Left | `$E4` | 2 | `$04` | `$00` | 2 | `$0B` | `$E0` |
+| 13 | Left | `$E2` | 2 | `$02` | `$80` | 2 | `$0B` | `$E0` |
+| 14 | Left | `$E1` | 2 | `$01` | `$00` | 2 | `$0B` | `$E0` |
+| 15 | Left | `$DF` | 2 | `$FF` | `$80` | 2 | `$0B` | `$E0` |
+| 19 | Left | `$D9` | 2 | `$F9` | `$80` | 2 | `$0B` | `$E0` |
+| 20 | Left | `$D8` | 2 | `$00` | `$00` | 2 | `$0B` | `$E0` |
+| 25 | Left | `$D0` | 2 | `$00` | `$80` | 2 | `$0B` | `$E0` |
+| 26 | Left | `$D0` | 2 | `$00` | `$80` | 2 | 0 | - |
+| 27 | Left | `$CF` | 2 | `$FF` | `$00` | 2 | 0 | - |
+| 32 | Left | `$C8` | 2 | `$00` | `$80` | 2 | 0 | - (heart container taken, `HeartValues` `$22` to `$33`) |
+| 38 | Left | `$C0` | 2 | `$00` | `$80` | 2 | `$0B` | `$B0` (the plain ladder to the next platform) |
+
+*Dungeon: level 4 room `$21` from the south*
+- Room `$21` from its S door (the key door from room `$31`; in `$31` from the E door Left along Y `$8D`, where the ladder crosses its four single squares, to X `$78`, then Up): Link walks in to (`$78`, `$CD`) on the island (rows 3-6 in the middle, water two or more squares wide on every side). Going up he stops at Y `$85`, where the tile ahead (Y + 3 = `$88`) is water `$F4`, and the ladder is laid at Y `$80` on that frame (trace). Traces in `$21` were made without its 5 Gels unless stated. [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
+- Preconditions: mode 5; `InvLadder`; a free monster slot (the 5 Gels leave 6); `LadderSlot` = 0 when Link reaches Y `$85`; Up held so `ObjInputDir` = `ObjDir` = 8; any X from `$50` to `$A0` (trace: all 11 grid columns); Link must reach `$85` walking up from Y `$8D` or below (trace: standing on `$85` with `$00`, after walking right along Y `$85` under Up+Right or walking down from the water, fails). [`Link_EndMoveAndAnimate@CheckLadder`](src/bank7/link-animate-ladder.asm#L209)
+- Trick state: Y `$82`, `$FD`, `$80`, facing up, ladder out (state 2): Y + 3 - ladder Y = 5. From the frame Link arrives on `$85` (offset 0, `$80`, ladder laid): Up, Up, press on the 3rd frame, then Up until Y `$55`. From rest at (`$78`, `$8D`) with `$80`: Up 8, press 1, Up 34 = 43 frames to (`$78`, `$55`) (trace). One press crosses both water squares. [`Ladder_CheckAndDraw@CheckDistanceToLadder`](src/bank5/ladder.asm#L82) [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
+- Why: frame 9 is the reversal (-3 rewritten to +5, then 2 pixels down); frame 14 steps the offset from +1 to -1 across Y `$7D` with no frame at offset 0 there; at `$75` (distance 8, water ahead) case A carries him on; frame 25, at `$6D` (distance `$10`, state 2), puts the first ladder away (Link does not move) and lays the second at Y `$68` (Y + 3 = `$70` is water), distance 8; its distance-0 point `$65` has a walkable tile ahead (`$68`, the top floor row); at `$5D` (distance 8) the room bound zeroes the move and case A restores it; at `$55` (distance `$10`) the ladder is put away and Link stands 8 pixels past the top bound. [`Walker_Move@CheckBoundary`](src/bank7/walker-move.asm#L185) [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110)
+- Where he comes out: (`$78`, `$55`), 8 pixels into the top wall, no ladder out; Down 5 frames puts him on the N door spot (`$78`, `$5D`); Left walks him along Y `$55` to X `$20` (trace). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110)
+- On to room `$11`: from (`$78`, `$5D`) Up for 1 frame (it faces him up and puts away the ladder he laid going down), B with a bomb: the N bomb wall opens and Up takes him into room `$11` (trace). On to room `$20`: from Y `$55` Left to X `$20`, Down to Y `$8D`, Left: the W door (trace). [`Bomb_TryOpenWall`](src/bank7/bomb.asm#L136) [`Doorway_CheckLink`](src/bank5/doorway.asm#L137)
+
+**Frame table, room `$21` north** (trace): frame 0 = Link at (`$78`, `$8D`), offset 0, fraction `$80`, no ladder; values after each frame; X = `$78` and Link's `$AC` = 0 throughout; the ladder in slot `$0B` (ladder Y = `$8F`, ladder state = `$B7`).
+
+| frame | input | `$84` Y | `$98` | `$394` | `$3A8` | `$3F8` | `$64` | ladder Y | ladder state |
+|---|---|---|---|---|---|---|---|---|---|
+| 1-5 | Up | `$8C`, `$8A`, `$89`, `$87`, `$86` | 8 | `$FF`, `$FD`, `$FC`, `$FA`, `$F9` | `$00`, `$80`, `$00`, `$80`, `$00` | 8 | 0 | - | - |
+| 6 | Up | `$85` | 8 | `$00` | `$80` | 8 | `$0B` | `$80` | 1 |
+| 7 | Up | `$84` | 8 | `$FF` | `$00` | 8 | `$0B` | `$80` | 2 |
+| 8 | Up | `$82` | 8 | `$FD` | `$80` | 8 | `$0B` | `$80` | 2 |
+| 9 | Left | `$84` | 4 | `$07` | `$00` | 2 | `$0B` | `$80` | 2 |
+| 10 | Up | `$82` | 8 | `$05` | `$80` | 8 | `$0B` | `$80` | 2 |
+| 11-13 | Up | `$81`, `$7F`, `$7E` | 8 | `$04`, `$02`, `$01` | `$00`, `$80`, `$00` | 8 | `$0B` | `$80` | 2 |
+| 14 | Up | `$7C` | 8 | `$FF` | `$80` | 8 | `$0B` | `$80` | 2 |
+| 15-18 | Up | `$7B`, `$79`, `$78`, `$76` | 8 | `$FE`, `$FC`, `$FB`, `$F9` | `$00`, `$80`, `$00`, `$80` | 8 | `$0B` | `$80` | 2 |
+| 19 | Up | `$75` | 8 | `$00` | `$00` | 8 | `$0B` | `$80` | 2 |
+| 20-23 | Up | `$73`, `$72`, `$70`, `$6F` | 8 | `$FE`, `$FD`, `$FB`, `$FA` | `$80`, `$00`, `$80`, `$00` | 8 | `$0B` | `$80` | 2 |
+| 24 | Up | `$6D` | 8 | `$00` | `$80` | 8 | `$0B` | `$80` | 2 |
+| 25 | Up | `$6D` | 8 | `$00` | `$80` | 8 | `$0B` | `$68` | 1 |
+| 26-30 | Up | `$6C` ... `$66` | 8 | `$FF` ... `$F9` | alternating | 8 | `$0B` | `$68` | 2 |
+| 31 | Up | `$65` | 8 | `$00` | `$80` | 8 | `$0B` | `$68` | 2 |
+| 37 | Up | `$5D` | 8 | `$00` | `$80` | 8 | `$0B` | `$68` | 2 |
+| 43 | Up | `$55` | 8 | `$00` | `$80` | 8 | `$0B` | `$68` | 2 |
+| 44 | Up | `$55` | 8 | `$00` | `$80` | 8 | 0 | - | - |
+
+- Other directions from the island (trace): west, rows Y `$8D`, `$95`, `$9D`: ladder laid at X `$40` from X `$50`; trick (`$45`, `$FD`, `$80`), Up or Down; Link ends at X `$20`, and on Y `$8D` walks straight on through the W door into room `$20`. East, same rows: ladder at X `$B0` from X `$A0`; trick (`$AB`, `$03`, `$00`), Up or Down; Link ends at X `$D0` in the E column (the map lies at (`$D0`, `$C0`); the E side is a wall). Left and right the grid point before the trick is X `$48`/`$A8`, one cell past the lay point, so from the lay point: Left 8 and Up, or Right 8 and Up. [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246) [`Ladder_LinkOffsetsX`](src/bank7/link-animate-ladder.asm#L58)
+- South from the top row back to the island: ladder at Y `$70` from Y `$5D`, trick (`$68`, `$03`, `$00`), Left; Link ends on the island at Y `$9D` (trace). [`Ladder_LinkOffsetsY`](src/bank7/link-animate-ladder.asm#L62)
+- Room `$20`, row 1 (Y `$6D`), three water squares X `$30`-`$5F`: from X `$60` Left 9, Up: Link reaches X `$20` with one press (ladders laid at `$50` and `$30`); the ring of `$20` is open, so this saves nothing there (trace). Room `$30` has no use for it: its water is one row, which the plain ladder crosses. [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246) [`Ladder_CheckAndDraw`](src/bank5/ladder.asm#L44)
+- With the 5 Gels of room `$21` alive the decision table succeeded after each of 100 idle delays (0-297 frames) after entry; 73 runs took at least half a heart: a touch's knockback spoils the cadence and the back-off repairs it (trace). [`Link_CheckMonsterTouch_NoReset`](src/bank1/link-collision-harm.asm#L73) [`Shove_Update`](src/bank7/shove.asm#L55)
+
+**Failed attempts and softlocks**
+- Plain skip, any place: a press on any other frame, two perpendicular frames (the second is case 5 and carries Link on to the grid point behind him, where the offset is reset), Left then Right, or the opposite of s instead of a perpendicular (a plain turn-back retraces): Link stops normally on T, no damage, nothing changed but his position (trace: room `$22`, all four screen edges, room `$5F` at X `$EE`, `$ED`, `$EB`, `$EA`, `$E8`, `$E7`, `$E4`, `$E2`, `$E1`, room `$21` at Y `$7D`). Recovery: back off to G' ("Recovery"). [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
+- A perpendicular held during the crossing while Link is 1-3 pixels past T is case 6 again and undoes the skip: he ends on T as after a failed press (trace: room `$21`, Left or Right held for many frames before Y `$79`). From 4 pixels past T on it is case 5 and harmless. [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- Screen wrap: a missed press is the ordinary room change (at the right edge of `$60` into `$61`, the Lost Woods). After a wrap Link can be stuck: left onto a row whose right edge is solid he stops at X `$F8` and no direction moves him; right onto a row with two solid squares at the left he stands inside them at X `$00` and only Left moves him, into the room on the left, where he may again stand inside solid tiles (`# Screen wrap (overworld)`, "After the wrap"). [`Maze_CheckStep`](src/bank1/mazes-lost-woods-hills.asm#L56) [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123)
+- Room `$60` to `$5F` without the ladder is a softlock: at (`$F0`, `$8D`) of `$5F` no direction moves Link (water ahead, above and below); Right changes to `$60` at (`$00`, `$8D`) inside the wall, where only Left moves him, back to `$5F`. Neither spot can start a new skip (trace). [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167)
+- Room `$5F`, missed ladder clip: Link stands on the ladder at X `$E0` facing water; Left does nothing. Recovery: Right 11 frames to `$F0` (case C), then Left (the old ladder is put away and a new one laid at `$E0` on the first frame), Left 8 frames to `$E5`, Up, Left: clip (trace). Backing off only to `$E8` is too short: arriving there walking right gives `$3A8` = `$00`, and no frame of the next Left walk clips (trace). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110) [`Obj_AddQSpeedToPosFrac`](src/bank1/qspeed-direction-math.asm#L52)
+- Room `$5F`, Right held on at `$F0` after a miss: the ladder is put away and on the same frame a new one is laid at X `$F0` + `$10` = `$00`; with a ladder out there is no edge test, so Link walks onto it to X `$00` of `$5F`, inside the solid left column, with no room change; Left brings him back (trace). To leave east instead: at `$F0` release for 1 frame (the ladder is put away and none is laid without a held direction), then Right: room change to `$60` (trace). [`Walker_CheckTileCollision`](src/bank7/walker-collision-screen-edge.asm#L89) [`Walker_AcceptMovingDir`](src/bank7/walker-collision-screen-edge.asm#L200)
+- Room `$5F`, Up or Down on the grid point `$F0` with the ladder out: the left ladder is put away and an upward one laid; Left is then refused (case D). Recovery: Down 3, Left 11 (Link finishes the cell to Y `$95`, where the vertical ladder is put away and a left one laid), Up at `$E5`, Left 22: the heart container is taken from row `$95` (trace). [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
+- Room `$21`, failed press: Link stops on the ladder at Y `$7D` (distance 0) over the water; Down walks him back to the island (case C), where the decision table starts again (Down 11, Up 8, press) (trace). [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
+- Room `$21`, after a successful skip Link may stop anywhere over the water: Up or Down from there always reaches land (trace: every frame of the crossing, stopped 3 frames, then Up or Down). [`Ladder_CheckAndDraw`](src/bank5/ladder.asm#L44)
+- Room `$21`, Left or Right over the water lays a sideways ladder along the water row (Y `$6D`, row 1 is water): Link stops at its distance-0 point (X `$68` or `$88`) and Up or Down do nothing while it is out. Not a softlock: walk back to X `$78` (distance `$10`), then Up: the turn puts the sideways ladder away and lays one upward (trace). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110)
+- With the ladder there is always a way back: a laid ladder lets Link back the way he came, and on a grid point with no ladder out every water tile ahead lays one, given a free monster slot (trace: no position in rooms `$21` and `$5F` was found where no direction moves him). [`Obj_FindEmptyMonsterSlot`](src/bank7/object-stubs-destroy-monster.asm#L169) [`Link_EndMoveAndAnimate@CheckLadder`](src/bank7/link-animate-ladder.asm#L209)
+
+**No second skip in a row**
+- A skip needs the frame that starts 1 pixel before T to move 2 pixels, i.e. h at a fixed remainder (mod 3) from T. After the crossing Link reaches the next grid point, T -+ 8, without a withheld pixel and with the fraction that is wrong for skipping it: no frame starts 3 pixels before T -+ 8, and the frame 1 pixel before it comes with the other fraction, so neither the plain nor the sword state for T -+ 8 occurs (frames 20-25 of the room `$22` table). Only a withheld pixel changes the remainder, and that happens only on a grid point reached by a full cell, whose test is then made. [`Obj_SubQSpeedFromPosFrac@SetCarry`](src/bank1/qspeed-direction-math.asm#L108) [`Link_EndMoveAndAnimate@TruncGridOffset`](src/bank7/link-animate-ladder.asm#L177)
+- The next grid point that can be skipped is T -+ `$18`: Link reaches T -+ `$10` by a full cell from T -+ 8, so with the good fraction. Through a 16-pixel block that never helps, since T -+ 8 is inside it and stops him; on a ladder T -+ 8 and T -+ `$10` are passed by case A and the relay, which is why wider water takes a second press ("Ladder clip"). [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
+- Searched (trace): east block of room `$22`, from each of the five frames around the crossing of `$95`, every sequence of 1-5 frames of Up, Down, Left, Right, A or nothing, then Up: 46,650 runs, none past `$8D`; level 2 room `$7D`, after the first press, at each of the next 14 frames a second press (Left, Right or Down) of 1 or 2 frames with 0 or 1 idle frame after it, then Up: 168 runs, none past Y `$AD`. [`Obj_SubQSpeedFromPosFrac@SetCarry`](src/bank1/qspeed-direction-math.asm#L108)
+
+**Lengths** (frames from the standstill positions given; trace unless said otherwise)
+- Left wrap, room `$77`: from rest on (`$08`, `$8D`) with `$80`: Left 2, Up 1, Left 5, past the bound on the 8th frame, X `$F0` of the same room on frame 18; from (`$10`, `$8D`) with `$80`: Left 8, Up 1, Left 5, X `$FF` on frame 14. [`Link_CheckScreenEdge`](src/bank7/walker-collision-screen-edge.asm#L243)
+- Right wrap, room `$77`: from rest on (`$E0`, `$8D`) with `$00`: Right 8, Up 1, Right 5 (X `$F1` on frame 14); X `$00` on frame 24. [`Link_CheckScreenEdge`](src/bank7/walker-collision-screen-edge.asm#L243)
+- Room `$60` to `$5F`: from rest on (`$E0`, `$8D`) with `$80`: Right 7, Up 1, Right 15 (X `$00` on frame 23), Left 1 (frame 24, the room change starts); Link plays in `$5F` on frame 128. [`Room_EnterCommon@Method2`](src/bank5/enter-room.asm#L211)
+- Ladder clip, room `$5F`: from the arrival Left 9, Up 1, Left 22 = 32 frames to the heart container; 160 frames from rest on X `$E0` of room `$60`. [`Item_TryTake`](src/bank1/take-item.asm#L206)
+- Block clip, room `$22`: from rest on (`$A0`, `$AD`) with `$80`: Up 14, Right 1, Up 10 = 25 frames to (`$A0`, `$8D`), then Left 22 to the stairs; 117 frames from (`$E0`, `$8D`) in the E doorway. [`Warp_CheckUnderLink`](src/bank5/warps-stairs-caves.asm#L55)
+- Reverse block clip, room `$22`: from rest on (`$A0`, `$75`) with `$00`: Down 2, press 1, Down 10 to (`$A0`, `$85`) (counted from the movement rule; the trace recorded the positions, not the frames). [`Obj_AddQSpeedToPosFrac`](src/bank1/qspeed-direction-math.asm#L52)
+- Ladder clip, room `$21`: from rest on (`$78`, `$8D`) with `$80`: Up 8, press 1, Up 34 = 43 frames to (`$78`, `$55`); Down 5 to the N door spot; Up 1, B: the wall is passable 81 frames after the button. From the island entry (`$78`, `$CD`), 9 cells before G: 55 or 56 frames of Up, then the press (the run-up formula above). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110) [`Bomb_TryOpenWall`](src/bank7/bomb.asm#L136)
+- Back-offs: see "Recovery" (6 + 7 + 1 from G with the wrong fraction; 11 or 12 + 7 + 1 from T; one more frame with a ladder out). [`Link_EndMoveAndAnimate@TruncGridOffset`](src/bank7/link-animate-ladder.asm#L177)
+- What must not be interrupted: before the press, stops and turn-backs inside the cell are harmless; a full cell walked away from T, knockback or a room change spoil the cadence. The press is exactly 1 frame. Between the press and the crossing of T only s or nothing may be held (idle frames are harmless); until Link is 4 pixels past T no perpendicular. After that nothing matters until the next grid point; on a ladder Link may stop anywhere after the crossing. The 104 frames of the room change from `$60` to `$5F` take no input. [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338)
 
 # Doorways, doors, keys, shutters and bomb walls
 
@@ -672,11 +971,12 @@ The items themselves (ids, pickup, inventory bytes) are in `items.md` under `# L
 - It is laid only in mode 5 with Link on a grid point, outside a doorway, not halted, no ladder already out, a free monster slot, and `ObjInputDir` nonzero and equal to `ObjDir`. [`Link_EndMoveAndAnimate@CheckLadder`](src/bank7/link-animate-ladder.asm#L209) [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
 - Tile ahead of Link: dungeon `$F4` (water); overworld `$8D`-`$98` as the tile lookup returns them, which has already turned the walkable `$8D` and `$91` into `$26`. [`Link_EndMoveAndAnimate@CheckWaterOW`](src/bank7/link-animate-ladder.asm#L240) [`Tile_WalkableTilesOW`](src/bank7/tile-collision.asm#L43)
 - The ladder takes the highest free slot of `$0B`..`$01`, one cell ahead of Link, facing as he does; `LadderSlot` holds the slot (0 = none). [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246) [`LadderSlot`](src/Variables.inc#L104)
-- It has no timer: it is put away when Link leaves its line, is more than `$10` pixels from it, or is exactly `$10` away after crossing or facing another way. [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110)
-- On the ladder Link may only go on in its direction or back the way he came; other input stops him. [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
+- It has no timer: it is put away when Link leaves its line, is more than `$10` pixels from it, or is exactly `$10` away after crossing or facing another way. On that frame a new ladder is laid at once, one square farther, when Link stands on a grid point with water ahead and the direction still held (trace: level 4 room `$21`, overworld room `$5F` row Y = `$95`). [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110) [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
+- On the ladder Link may only go on in its direction or back the way he came; other input stops him. A perpendicular press between grid points is first turned into a reversal by the rules between grid points, and the ladder lets that through as the way back (case C): that is how the ladder clip starts. [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125) [`Link_SetInputDir@ReverseDir`](src/bank5/link-handle-input.asm#L404)
+- Only the grid point at distance 0 is decided by the tile ahead; at every other distance, facing the ladder's way with a direction held, Link moves on whatever the tile test or the room bound said (case A). One skip of the distance-0 test therefore crosses two or three squares (`# Grid-point skip: block clip, ladder clip and their run-up`, "Ladder clip"). [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125)
 - A ladder laid upward with exactly Up held repeats the tile test 8 pixels higher and lets Link on only if that tile is walkable. [`Ladder_CheckAndDraw`](src/bank5/ladder.asm#L44)
 - On the frame the ladder is put away Link does not move. [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110) [`Walker_Move`](src/bank7/walker-move.asm#L64)
-- While a ladder is out the screen-edge room change is not tested. [`Walker_CheckTileCollision`](src/bank7/walker-collision-screen-edge.asm#L89)
+- While a ladder is out the screen-edge room change is not tested: at X = `$F0` facing right over water the next ladder lands at X = `$00` and Link walks onto it to the left edge of the same room (trace: overworld room `$5F`). [`Walker_CheckTileCollision`](src/bank7/walker-collision-screen-edge.asm#L89) [`Ladder_LinkOffsetsX`](src/bank7/link-animate-ladder.asm#L58)
 - Every room entry and exit clears `LadderSlot`. [`Obj_ResetWeaponSlotsAndLadder`](src/bank5/mode3-mode6-init.asm#L263)
 
 **Raft** (`InvRaft`, dock tile object type `$61`)

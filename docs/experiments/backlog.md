@@ -65,6 +65,30 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
      an action-schema or behaviour change (a `COMPAT` bump if the actions change), and re-measure every family in
      single rooms and chains.
 
+5. **Clips and screen wraps** (Nov 12). The speedrun route uses the grid-point skip: one frame of perpendicular
+   input 5 pixels short of a grid point skips that point's tests. All of it is reproduced with controller input and
+   written up in `zelda-asm/mechanics.md` "Grid-point skip: block clip, ladder clip and their run-up" (rule, run-up,
+   recovery, decision table, frame tables, failures):
+   - [x] **East/west screen wrap** (room 0x77 both edges); the right wrap in 0x60 leaves Link in its left wall and
+     Left then enters 0x5f (room id − 1, no column check) standing on water. Without the ladder that is a softlock.
+   - [x] **Overworld ladder clip** in 0x5f (and 0x4f): from that arrival one press crosses three water squares to
+     the heart container.
+   - [x] **Dungeon ladder clip** in 4:0x21 from the S door: one press crosses both water squares north (43 frames
+     from rest); with a bomb on the N wall it replaces 0x31 → 0x30 → 0x20. Also west and east off the island.
+   - [x] **Block clip** in 1:0x22: 8 pixels into a block from below, then sideways into the diamond and onto the
+     stairs (117 frames from the room entry, traps alive, no damage). The "reverse" clip is the same heading down.
+   - What the executor needs to know: the skip works from exactly one frame of the approach (two with the sword,
+     which is never needed and does nothing on a ladder). The sub-pixel byte (`asm:ObjPosFrac`) must have the right
+     value on the last grid point before the target, which only a full cell walked toward it guarantees; too close
+     or in the wrong cadence, Link has to walk away to the grid point 16 pixels before the target and come back
+     (6-12 frames away, 7-8 back). A second skip in a row is impossible. A failed try stops Link where he would
+     have stopped anyway; knockback spoils the cadence and the same back-off repairs it.
+   - [ ] **Not built: how the agent performs it.** Proposal from the discussion: clips are route exits in game.yaml
+     (whitelisted and verified per site); the executor inserts the one frame during a MOVE of 16 or 32 frames toward
+     an armed target (short moves stay plain), including the back-off when the cadence is wrong; no action or
+     observation change. A back-off makes the action longer than its duration, to be decided. The reproduction
+     scripts were throwaway (`/tmp/zasm/clips/*/repro.py`).
+
 ## Done (Nov 12): bombs (Lee, Nov 11; round 19)
 
 1. [x] **Bombs as a weapon, the bomb reserve and the 10th kill's forced bomb drop** (round19.md, decisions

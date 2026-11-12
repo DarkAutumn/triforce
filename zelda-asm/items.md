@@ -22,15 +22,15 @@ Contents (generated; `L` = line in this file):
 - L523 Magic Rod and Book
 - L574 Raft
 - L610 Ladder
-- L651 Keys and Magic Key
-- L687 Power Bracelet
-- L717 Ring (blue, red)
-- L742 Shield (small, magic)
-- L785 Hearts, Heart Containers and Fairies
-- L830 Rupees
-- L870 Clock
-- L909 Map and Compass
-- L942 Triforce pieces and the Triforce of Power
+- L653 Keys and Magic Key
+- L689 Power Bracelet
+- L719 Ring (blue, red)
+- L744 Shield (small, magic)
+- L787 Hearts, Heart Containers and Fairies
+- L832 Rupees
+- L872 Clock
+- L911 Map and Compass
+- L944 Triforce pieces and the Triforce of Power
 <!-- /toc -->
 
 # Weapon object slots and limits
@@ -634,6 +634,8 @@ Link lays the ladder automatically when he walks into water; it is an object in 
 
 **Limits**
 - It spans one square: 16 pixels of water. After crossing, the ladder is stashed and can be laid again at the next water tile. [`Ladder_CheckAndDraw@StashLadder`](src/bank5/ladder.asm#L110)
+- With the grid-point skip one d-pad press crosses more than one square: the skip removes the ladder's only tile test (Link squarely on it, distance 0), the ladder's own direction rule carries him over the next square, and a ladder laid again on the frame the first is put away goes on: 2 or 3 water squares per press (trace: overworld room `$5F` to the heart container, level 4 room `$21` off its island). Recipes, run-up and failures: `# Grid-point skip: block clip, ladder clip and their run-up` in [mechanics.md](mechanics.md). [`Ladder_CheckAndDraw@HandleInput`](src/bank5/ladder.asm#L125) [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
+- A ladder clip can carry Link past a dungeon room bound (Y `$55` in level 4 room `$21`) and, in the overworld, a ladder laid right from X `$F0` lands at X `$00` of the same room, since no screen-edge test is made while a ladder is out (trace). [`Ladder_LinkOffsetsX`](src/bank7/link-animate-ladder.asm#L58) [`Walker_AcceptMovingDir`](src/bank7/walker-collision-screen-edge.asm#L200)
 - No free monster slot: no ladder. [`Link_EndMoveAndAnimate@SetUpLadder`](src/bank7/link-animate-ladder.asm#L246)
 - While the ladder is out, the screen-edge room change is not tested. [`Walker_AcceptMovingDir`](src/bank7/walker-collision-screen-edge.asm#L200)
 - The ladder has no timer; it stays as long as Link keeps to its line within `$10` pixels. [`Ladder_CheckAndDraw`](src/bank5/ladder.asm#L44)
