@@ -345,51 +345,403 @@ fn the_move_mask_is_true_on_every_frame_of_a_wrap() {
     }
 }
 
-/// Level 1 room $22, the east block from below (column $A0, every Y of the zone $95..$A5 in both cadences): CLIP N
-/// ends 8 pixels into the block at ($A0, $8D), and MOVE W then reaches the stairs (cellar $7F).
+fn y(s: &S) -> i32 {
+    s.state().link.position.y
+}
+
+/// Walks `d` a frame at a time until Link's coordinate on that axis is `to`, on a grid point.
+fn walk(s: &mut S, d: Direction, to: i32) {
+    let horizontal = matches!(d, Direction::W | Direction::E);
+    press_until(s, zelda::executor::direction_buttons(d), |s| {
+        (if horizontal { link(s).0 } else { y(s) }) == to && link(s).1 == 0
+    });
+}
+
+/// MOVE `text` until Link is in cellar $7F (at most 8 times).
+fn move_to_cellar(s: &mut S, text: &str, label: &str) {
+    for _ in 0..8 {
+        if s.state().full_location() == MapLocation::new(1, 0x7F, true) {
+            return;
+        }
+        act(s, text);
+    }
+    assert_eq!(s.state().full_location(), MapLocation::new(1, 0x7F, true), "{label}: the stairs: {}", describe(s));
+}
+
+/// One square of level 1 room $22 (`zelda-asm/mechanics.md` "Block clip", "Reverse block clip"): Link at rest on
+/// the square's column (`base`), the heading, the zone (G' to T), the end point 8 pixels into the square and the
+/// way on from there to the stairs.
+struct Square {
+    label: &'static str,
+    heading: Direction,
+    zone: (i32, i32),
+    end: (i32, i32),
+    way_on: fn(&mut S, &str),
+}
+
+/// Every start of the zone reached from `base` by real walking (the heading held 0 frames up to the frame Link stops
+/// on T, each followed by 0, 1 or 3 frames back: both cadences, both offset signs, stopped mid-cell): the skip is
+/// offered in the heading only, never W or E; CLIP completes with one press at the end point, without damage (the
+/// traps are in the room); the way on reaches the stairs (cellar $7F). Holding on against the square on T is not a
+/// start: against the push block it pushes.
+fn clip_from_every_start(s: &mut S, base: &Snap, square: &Square) {
+    let Square { label, heading, zone: (from, t), end, way_on } = *square;
+    let toward = zelda::executor::direction_buttons(heading);
+    let away = zelda::executor::direction_buttons(heading.opposite());
+    let zone = from.min(t)..=from.max(t);
+    let mut starts = 0;
+    for frames in 0..30 {
+        s.restore(base);
+        s.press(toward, frames);
+        let on_t = y(s) == t && link(s).1 == 0;
+        for back in [0, 1, 3] {
+            s.restore(base);
+            s.press(toward, frames);
+            s.press(away, back);
+            if !zone.contains(&y(s)) {
+                continue;
+            }
+            let at = format!("{label}: {} {frames}, {} {back}: {}", heading.name(), heading.opposite().name(), describe(s));
+            let offered = [Direction::N, Direction::S, Direction::W, Direction::E].map(|d| skip_available(s.state(), d));
+            let want = [Direction::N, Direction::S, Direction::W, Direction::E].map(|d| d == heading);
+            assert_eq!(offered, want, "{at}");
+            starts += 1;
+            let c = act(s, &format!("CLIP {}", heading.name()));
+            let clip = c.clip.expect("clip");
+            assert!(clip.completed() && clip.presses == 1, "{at}: {clip:?} now {}", describe(s));
+            assert_eq!(c.health_lost, 0.0, "{at}");
+            assert_eq!((link(s).0, y(s), link(s).1), (end.0, end.1, 0), "{at}: {}", describe(s));
+            way_on(s, &at);
+        }
+        if on_t {
+            break;
+        }
+    }
+    assert!(starts >= 10, "{label}: {starts} starts");
+}
+
+/// Level 1 room $22, the east block from below (column $A0, zone $95..$A5): CLIP N ends 8 pixels into the block at
+/// ($A0, $8D), and MOVE W then reaches the stairs.
 #[test]
 fn block_clip_east_block_of_level_1_room_22() {
     let Some(mut s) = session() else { return };
     load(&mut s, "1_22e_0");
-    let y = |s: &S| s.state().link.position.y;
-    press_until(&mut s, LEFT, |s| link(s).0 == 0xB0 && link(s).1 == 0);
-    press_until(&mut s, zelda::executor::buttons::DOWN, |s| y(s) == 0xAD && link(s).1 == 0);
-    press_until(&mut s, LEFT, |s| link(s).0 == 0xA0 && link(s).1 == 0);
+    walk(&mut s, Direction::W, 0xB0);
+    walk(&mut s, Direction::S, 0xAD);
+    walk(&mut s, Direction::W, 0xA0);
     assert!(!skip_available(s.state(), Direction::N), "$AD is outside the zone: {}", describe(&s));
-    for d in [Direction::W, Direction::E] {
-        assert!(!skip_available(s.state(), d), "no W/E block clip");
-    }
     let base = s.snapshot();
-    let mut starts = 0;
-    for frames in 1..30 {
-        s.restore(&base);
-        s.press(zelda::executor::buttons::UP, frames);
-        if !(0x95..=0xA5).contains(&y(&s)) {
-            continue;
+    let square = Square {
+        label: "east block from below",
+        heading: Direction::N,
+        zone: (0xA5, 0x95),
+        end: (0xA0, 0x8D),
+        way_on: |s, at| {
+            assert!(s.mask().is_allowed(&Action::parse("MOVE W 8").unwrap()), "{at}");
+            move_to_cellar(s, "MOVE W 8", at);
+        },
+    };
+    clip_from_every_start(&mut s, &base, &square);
+}
+
+/// Push block ($60, $90) at slot $0B, as the room set it up: not moved and still pending.
+fn push_block_untouched(s: &S, at: &str) {
+    let st = s.state();
+    assert!(st.push_block_pending(), "{at}: push started");
+    assert_eq!((st.peek(0x70 + 0x0B), st.peek(0x84 + 0x0B)), (0x60, 0x90), "{at}: the push block moved");
+}
+
+/// The west block, the room's push block, from below (from the cellar's exit spot ($60, $AD); zone $95..$A5): CLIP
+/// N ends at ($60, $8D) without starting a push (the block stays, still pending, also after a WAIT), and MOVE E then
+/// walks into the diamond and onto the stairs.
+#[test]
+fn block_clip_west_push_block_of_level_1_room_22() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_22c_0");
+    assert_eq!((link(&s).0, y(&s)), (0x60, 0xAD), "{}", describe(&s));
+    push_block_untouched(&s, "start");
+    let base = s.snapshot();
+    let square = Square {
+        label: "west block from below",
+        heading: Direction::N,
+        zone: (0xA5, 0x95),
+        end: (0x60, 0x8D),
+        way_on: |s, at| {
+            push_block_untouched(s, at);
+            act(s, "WAIT 32");
+            push_block_untouched(s, at);
+            move_to_cellar(s, "MOVE E 8", at);
+        },
+    };
+    clip_from_every_start(&mut s, &base, &square);
+}
+
+/// The west block's push spot below it (Link stopped on T = ($60, $95)) is inside its clip zone, so the trigger
+/// decides between a push and a clip: a plain MOVE N 16 or 32 pushes the block ($10 frames against it), three MOVE N 8
+/// don't (the count restarts between options); under `long` MOVE N 32 clips and MOVE N 16 still pushes; under `edge`
+/// every MOVE N clips and the block can't be pushed from there.
+#[test]
+fn the_west_blocks_push_spot_is_in_its_clip_zone() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_22c_0");
+    walk(&mut s, Direction::N, 0x95);
+    let on_t = s.snapshot();
+    for (trigger, moves, clipped) in [
+        (ClipTrigger::None, &["MOVE N 16"][..], false),
+        (ClipTrigger::None, &["MOVE N 32"][..], false),
+        (ClipTrigger::None, &["MOVE N 8", "MOVE N 8", "MOVE N 8"][..], false),
+        (ClipTrigger::Long, &["MOVE N 16"][..], false),
+        (ClipTrigger::Long, &["MOVE N 32"][..], true),
+        (ClipTrigger::Edge, &["MOVE N 8"][..], true),
+        (ClipTrigger::Edge, &["MOVE N 16"][..], true),
+        (ClipTrigger::Edge, &["MOVE N 32"][..], true),
+    ] {
+        s.set_clip_settings(ClipSettings::new(trigger, 0));
+        s.restore(&on_t);
+        let mut skips = 0;
+        for text in moves {
+            skips += u32::from(act(&mut s, text).clip.is_some_and(|c| c.completed()));
         }
-        for back in [0, 1, 3] {
-            s.restore(&base);
-            s.press(zelda::executor::buttons::UP, frames);
-            s.press(zelda::executor::buttons::DOWN, back);
-            if !(0x95..=0xA5).contains(&y(&s)) {
-                continue;
-            }
-            let label = format!("Up {frames}, Down {back}: {}", describe(&s));
-            assert!(skip_available(s.state(), Direction::N), "{label}");
-            starts += 1;
-            let c = act(&mut s, "CLIP N");
-            let clip = c.clip.expect("clip");
-            assert!(clip.completed(), "{label}: {clip:?} now {}", describe(&s));
-            assert_eq!((link(&s).0, y(&s), link(&s).1), (0xA0, 0x8D, 0), "{label}: {}", describe(&s));
-            assert!(s.mask().is_allowed(&Action::parse("MOVE W 8").unwrap()), "{label}");
-            for _ in 0..6 {
-                if s.state().full_location().value == 0x7F {
-                    break;
-                }
-                act(&mut s, "MOVE W 8");
-            }
-            assert_eq!(s.state().full_location().value, 0x7F, "{label}: the stairs: {}", describe(&s));
+        act(&mut s, "WAIT 32");
+        let label = format!("{trigger:?} {moves:?}");
+        assert_eq!(skips, u32::from(clipped), "{label}: {}", describe(&s));
+        let pushed = !clipped && moves.len() == 1;
+        assert_eq!(!s.state().push_block_pending(), pushed, "{label}: {}", describe(&s));
+        if clipped {
+            assert_eq!((link(&s).0, y(&s)), (0x60, 0x8D), "{label}: {}", describe(&s));
+            push_block_untouched(&s, &label);
         }
     }
-    assert!(starts >= 10, "{starts} starts");
+}
+
+/// The lower diagonal blocks from below (zone $A5..$B5, the run-up within the bottom traps' reach): the lower-left
+/// ($70, $A0) to ($70, $9D), then E to X $80 and N onto the stairs; the lower-right ($90, $A0) to ($90, $9D), then W
+/// and N.
+#[test]
+fn block_clip_lower_diagonal_blocks_of_level_1_room_22() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_22c_0");
+    walk(&mut s, Direction::E, 0x70);
+    let base = s.snapshot();
+    let square = Square {
+        label: "lower-left block from below",
+        heading: Direction::N,
+        zone: (0xB5, 0xA5),
+        end: (0x70, 0x9D),
+        way_on: |s, at| {
+            act(s, "MOVE E 16");
+            assert_eq!((link(s).0, y(s)), (0x80, 0x9D), "{at}: stopped by the lower-right block: {}", describe(s));
+            move_to_cellar(s, "MOVE N 8", at);
+        },
+    };
+    clip_from_every_start(&mut s, &base, &square);
+    load(&mut s, "1_22e_0");
+    walk(&mut s, Direction::W, 0xB0);
+    walk(&mut s, Direction::S, 0xAD);
+    walk(&mut s, Direction::W, 0x90);
+    let base = s.snapshot();
+    let square = Square {
+        label: "lower-right block from below",
+        heading: Direction::N,
+        zone: (0xB5, 0xA5),
+        end: (0x90, 0x9D),
+        way_on: |s, at| {
+            act(s, "MOVE W 16");
+            assert_eq!((link(s).0, y(s)), (0x80, 0x9D), "{at}: stopped by the lower-left block: {}", describe(s));
+            move_to_cellar(s, "MOVE N 8", at);
+        },
+    };
+    clip_from_every_start(&mut s, &base, &square);
+}
+
+/// The reverse block clip (heading S, zone $6D..$7D) from above the east block to ($A0, $85) and from above the west
+/// block to ($60, $85); from either, sideways to X $80 and S onto the stairs.
+#[test]
+fn reverse_block_clip_east_and_west_blocks_of_level_1_room_22() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_22e_0");
+    walk(&mut s, Direction::W, 0xB0);
+    walk(&mut s, Direction::N, 0x6D);
+    walk(&mut s, Direction::W, 0xA0);
+    let base = s.snapshot();
+    let square = Square {
+        label: "east block from above",
+        heading: Direction::S,
+        zone: (0x6D, 0x7D),
+        end: (0xA0, 0x85),
+        way_on: |s, at| {
+            walk(s, Direction::W, 0x80);
+            move_to_cellar(s, "MOVE S 8", at);
+        },
+    };
+    clip_from_every_start(&mut s, &base, &square);
+    load(&mut s, "1_22c_0");
+    walk(&mut s, Direction::W, 0x40);
+    walk(&mut s, Direction::N, 0x6D);
+    walk(&mut s, Direction::E, 0x60);
+    let base = s.snapshot();
+    let square = Square {
+        label: "west block from above",
+        heading: Direction::S,
+        zone: (0x6D, 0x7D),
+        end: (0x60, 0x85),
+        way_on: |s, at| {
+            push_block_untouched(s, at);
+            walk(s, Direction::E, 0x80);
+            move_to_cellar(s, "MOVE S 8", at);
+        },
+    };
+    clip_from_every_start(&mut s, &base, &square);
+}
+
+/// Every grid point of a room where the block clip is offered, Link put there at rest (poked; availability reads the
+/// state alone): (X, Y, heading).
+fn offered_in_room(s: &mut S) -> Vec<(i32, i32, Direction)> {
+    let base = s.snapshot();
+    let mut out = Vec::new();
+    for y in (0x5D..=0xBD).step_by(8) {
+        for x in (0x18..=0xD8).step_by(8) {
+            s.restore(&base);
+            let nes = s.nes_mut();
+            nes.poke(0x70, x as u8);
+            nes.poke(0x84, y as u8);
+            nes.poke(0x394, 0);
+            s.apply_ram(&[]);
+            for d in [Direction::N, Direction::S, Direction::W, Direction::E] {
+                if skip_available(s.state(), d) {
+                    out.push((x, y, d));
+                }
+            }
+        }
+    }
+    s.restore(&base);
+    out
+}
+
+/// What is offered in level 1 room $22 and level 2 room $7D, grid point by grid point. $22: the squares whose clip
+/// leads into the diamond (from below the west, east and lower diagonal blocks, from above the upper diagonal, west
+/// and east blocks) or out of it (from inside, the north block), each over its zone G'..T; nothing half a column off
+/// a square (that clip leads only back out), not the south block from below (G' = $C5 is past the room bound; it too
+/// only leads back out), not the south block from inside (G' = ($80, $8D) is the stairs spot) and never W or E. $7D:
+/// nothing (its statues stand alone, 16 pixels apart: G' is inside the next statue and every tile beside one is
+/// open from T).
+#[test]
+fn the_block_clip_is_offered_where_it_leads_somewhere_in_22_and_nowhere_in_7d() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_22c_0");
+    let mut want = Vec::new();
+    let zone = |want: &mut Vec<_>, x: i32, ys: [i32; 3], d: Direction| want.extend(ys.map(|y| (x, y, d)));
+    // Heading N: west and east blocks, the lower diagonal blocks, the north block from inside the diamond.
+    for x in [0x60, 0xA0] {
+        zone(&mut want, x, [0x95, 0x9D, 0xA5], Direction::N);
+    }
+    for x in [0x70, 0x90] {
+        zone(&mut want, x, [0xA5, 0xAD, 0xB5], Direction::N);
+    }
+    zone(&mut want, 0x80, [0x75, 0x7D, 0x85], Direction::N);
+    // Heading S: the upper diagonal blocks, west and east blocks.
+    for x in [0x70, 0x90] {
+        zone(&mut want, x, [0x5D, 0x65, 0x6D], Direction::S);
+    }
+    for x in [0x60, 0xA0] {
+        zone(&mut want, x, [0x6D, 0x75, 0x7D], Direction::S);
+    }
+    let key = |&(x, y, d): &(i32, i32, Direction)| (y, x, d.value());
+    want.sort_by_key(key);
+    let mut got = offered_in_room(&mut s);
+    got.sort_by_key(key);
+    assert_eq!(got, want);
+    load(&mut s, "2_7ds_0");
+    for _ in 0..3 {
+        act(&mut s, "MOVE N 8");
+    }
+    assert_eq!((s.state().full_location(), s.state().var(Var::DoorwayDir)), (MapLocation::new(2, 0x7D, false), 0));
+    assert_eq!(offered_in_room(&mut s), vec![], "$7D");
+}
+
+/// `long` and `edge` in a dungeon, at the east block of $22 (Link on G = ($A0, $9D) after a cell walked Left, or
+/// stopped on T = $95): `long` clips with MOVE N 32 only (MOVE N 16, 8 and 4 are plain and never pass T); `edge`
+/// with MOVE N of every duration; `none` and `kind` never with a MOVE. On T the mask has CLIP N under `kind` only,
+/// and MOVE N (a wall for the plain walk) under `long` and `edge` only. From above the east block (Y $75) `edge`
+/// clips S with MOVE S 4 and `long` with MOVE S 32.
+#[test]
+fn long_and_edge_trigger_the_block_clip_in_a_dungeon() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_22e_0");
+    walk(&mut s, Direction::W, 0xB0);
+    let corner = s.snapshot();
+    walk(&mut s, Direction::S, 0x9D);
+    walk(&mut s, Direction::W, 0xA0);
+    let on_g = s.snapshot();
+    walk(&mut s, Direction::N, 0x95);
+    let on_t = s.snapshot();
+    let clip_n = Action::parse("CLIP N").unwrap();
+    for trigger in ClipTrigger::ALL {
+        s.set_clip_settings(ClipSettings::new(trigger, 0));
+        s.restore(&on_t);
+        assert!(skip_available(s.state(), Direction::N), "{}", describe(&s));
+        let mask = s.mask();
+        assert_eq!(mask.is_allowed(&clip_n), trigger == ClipTrigger::Kind, "{trigger:?} CLIP N on T");
+        let move_n = mask.is_allowed(&Action::parse("MOVE N 8").unwrap());
+        assert_eq!(move_n, matches!(trigger, ClipTrigger::Long | ClipTrigger::Edge), "{trigger:?} MOVE N on T");
+        for duration in [4, 8, 16, 32] {
+            let clips = match trigger {
+                ClipTrigger::Long => duration == 32,
+                ClipTrigger::Edge => true,
+                _ => false,
+            };
+            for (start, snap) in [("G", &on_g), ("T", &on_t)] {
+                s.restore(snap);
+                let label = format!("{trigger:?} MOVE N {duration} from {start}");
+                let c = act(&mut s, &format!("MOVE N {duration}"));
+                assert_eq!(c.clip.is_some(), clips, "{label}: {:?} {}", c.clip, describe(&s));
+                if clips {
+                    assert!(c.clip.unwrap().completed(), "{label}: {:?}", c.clip);
+                    assert_eq!((link(&s).0, y(&s), link(&s).1), (0xA0, 0x8D, 0), "{label}: {}", describe(&s));
+                } else {
+                    assert!(y(&s) >= 0x95 && link(&s).0 == 0xA0, "{label}: {}", describe(&s));
+                }
+            }
+        }
+    }
+    s.restore(&corner);
+    walk(&mut s, Direction::N, 0x75);
+    walk(&mut s, Direction::W, 0xA0);
+    let above = s.snapshot();
+    for (trigger, text) in [(ClipTrigger::Edge, "MOVE S 4"), (ClipTrigger::Long, "MOVE S 32")] {
+        s.set_clip_settings(ClipSettings::new(trigger, 0));
+        s.restore(&above);
+        let c = act(&mut s, text);
+        assert!(c.clip.is_some_and(|c| c.completed()), "{trigger:?} {text}: {:?}", c.clip);
+        assert_eq!((link(&s).0, y(&s), link(&s).1), (0xA0, 0x85, 0), "{trigger:?} {text}: {}", describe(&s));
+    }
+}
+
+/// The way through $22 with button-free actions only: from the E door MOVE W into the corner of the east block, MOVE
+/// S 8 and MOVE W (Link turns on the next grid point and the lower-right block stops him on G = ($A0, $9D)), one
+/// CLIP N (or, under `long`, MOVE N 32), MOVE W 32 onto the stairs: in cellar $7F 218 frames after the room's first
+/// frame, no damage (mechanics.md: 117 frames from the doorway to the stairs by controller input, before the
+/// stairs' transition).
+#[test]
+fn the_way_through_22_by_moves_and_one_clip() {
+    let Some(mut s) = session() else { return };
+    for (trigger, clip) in [(ClipTrigger::Kind, "CLIP N"), (ClipTrigger::Long, "MOVE N 32")] {
+        load(&mut s, "1_22e_0");
+        s.set_clip_settings(ClipSettings::new(trigger, 0));
+        let (mut frames, mut skips, mut hurt) = (0, 0, 0.0);
+        let plan = ["MOVE W 32", "MOVE W 32", "MOVE W 8", "MOVE S 8", "MOVE W 8", "MOVE W 8", clip, "MOVE W 32"];
+        for text in plan {
+            let action = Action::parse(text).unwrap();
+            assert!(s.mask().is_allowed(&action), "{trigger:?} {text}: {}", describe(&s));
+            let c = s.act(action).unwrap();
+            frames += c.frames;
+            hurt += c.health_lost;
+            skips += u32::from(c.clip.is_some_and(|c| c.completed()));
+            if text == clip {
+                assert_eq!((link(&s).0, y(&s), c.frames), (0xA0, 0x8D, 14), "{trigger:?} {text}: {}", describe(&s));
+            }
+        }
+        assert_eq!(s.state().full_location(), MapLocation::new(1, 0x7F, true), "{trigger:?}: {}", describe(&s));
+        assert_eq!((frames, skips, hurt), (218, 1, 0.0), "{trigger:?}");
+    }
 }

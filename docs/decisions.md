@@ -1226,5 +1226,26 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
     groups by both, for one room trained toward two exits.
   - The MOVE mask follows the game where a wrap or an aborted one leaves Link (X `$F8`: E reads the tile under him,
     N/S read past the tile map, as the game).
+- **The block clip, proven in the real game** (level 1 room `$22`, traps alive; `crates/zelda/tests/clips.rs`):
+  from every start of each zone reached by walking, CLIP completes with one press and no damage, 8 pixels into the
+  square, and a walk sideways takes the stairs: the east and west blocks and the lower diagonal blocks from below,
+  the east and west blocks from above (the reverse clip). The clip into the west block (the push block) starts no
+  push. `long` clips with MOVE 32 only, `edge` with every MOVE into the square; the push spots of that block lie in
+  its zones, so under `edge` it can't be pushed from them, and under `long` only MOVE 16 still pushes. The way
+  through `$22` by MOVEs and one CLIP (or MOVE N 32 under `long`) reaches cellar `$7F` in 218 frames. The env side
+  (`crates/env/tests/clips.rs`): `clip_usable_N`/`_S` there for every design but `none`, the design's own action
+  clips, and the episode ends `exit-correct` on the stairs with the clip counted. A smoke training of a throwaway
+  `trap-room`-like YAML on `1_22e_*` with `kind` (6 iterations) ran end to end: `clips/done_n` and `_s` counted,
+  `_w`/`_e` 0, and every success of its evaluation came through a clip.
+- **"Useful" made stricter:** a block clip is offered only where the sideways move from T -+ 8 enters a tile that
+  the same move from T can't (the tile is walled off from T). The first rule (the sideways move possible at all)
+  offered 24 more grid points in `$22`, half a column off a square, whose clip leads only back out; the statues of
+  level 2 room `$7D` stand alone and would be offered under the first rule if they had room for the back-off. The
+  rule stays local (two tile reads). Also new: no stairs spot at G', G or T, since the warp takes Link down in the
+  middle of the macro (a random policy in `$22` had 5 of 63 clips end that way, from inside the diamond toward the
+  south block). In `$22` 27 grid points are offered, in `$7D` none. The zone still needs G' inside the room bounds
+  (the back-off always has room); in `$22` that leaves out only the south block from below, which leads back out
+  anyway. Both rule changes narrow the mask and `clip_usable_*` without changing the layout: REV bump to 1.3.3.1
+  (models stamped 1.3.3.0 still load).
 - **Pending:** the choice between `kind`, `long` and `edge`, and between `jump` and `walk` (round 21 experiments).
   Not built (asked not to): the sword variant, the ladder clip, the N/S wraps.

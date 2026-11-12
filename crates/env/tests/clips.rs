@@ -1,6 +1,7 @@
 //! The grid-point skip through `SpecialistEnv` (round 21): the `clips:` config block, the mask per design, the
 //! `clip_usable_*` observation, PBRS shaping (`jump`, `walk`), the counters and the episode's target in the terminal
-//! info. Room `$77` from the game start (objective: the sword cave; W and E are wrong exits).
+//! info. Room `$77` from the game start (objective: the sword cave; W and E are wrong exits) for the wrap; level 1
+//! room `$22` from its E door for the block clip.
 
 mod common;
 
@@ -153,4 +154,60 @@ fn the_edge_design_wraps_out_of_a_wrong_exit() {
     assert_eq!(settings.correct_exits & (Direction::W.value() | Direction::E.value()), 0);
     act(&mut env, "MOVE W 8");
     assert_eq!((link_x(&env), env.session().state().location()), (0xF0, 0x77));
+}
+
+/// The trap-room family's config in level 1 room $22 from its E door (`1_22e_0`; the route's target is the stairs,
+/// exit `cave`, with the push spots as targets while the block is pending), RAM randomization off.
+fn make_room_22_env(nes: ZCore, clips: ClipsConfig) -> Env {
+    let mut config = (*DATA.specialists["trap-room"]).clone();
+    config.ram_randomization = RamRandomization::default();
+    config.clips = clips;
+    let opts = EnvOptions { start_state: Some("1_22e_0".into()), ..Default::default() };
+    SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env")
+}
+
+/// From the E door of $22 by `moves`; Link's (X, Y) and the last observation's `clip_usable_*`.
+fn walk_room_22(env: &mut Env, moves: &[&str]) -> ((i32, i32), [f32; 4]) {
+    env.reset(Some(0), None).unwrap();
+    let mut obs = None;
+    for text in moves {
+        obs = Some(act(env, text).obs);
+    }
+    let p = env.session().state().link.position;
+    ((p.x, p.y), usable(&obs.unwrap()))
+}
+
+/// The block clip in a dungeon room per design (level 1 room $22): `clip_usable_S` above the east block,
+/// `clip_usable_N` on G below it (for every design but `none`; never W or E); the design's own action (`CLIP N`,
+/// `MOVE N 32`, `MOVE N 8`) clips to ($A0, $8D), and MOVE W 32 then takes the stairs: the episode ends a success on
+/// the route's exit (`cave`, entered from E) with the clip counted.
+#[test]
+fn the_block_clip_in_a_dungeon_room_per_design() {
+    let Some(mut nes) = open_core() else { return };
+    let to_corner = ["MOVE W 32", "MOVE W 32", "MOVE W 8"];
+    for (action, clip) in [
+        (ClipAction::None, None),
+        (ClipAction::Kind, Some("CLIP N")),
+        (ClipAction::Long, Some("MOVE N 32")),
+        (ClipAction::Edge, Some("MOVE N 8")),
+    ] {
+        let mut env = make_room_22_env(nes, clips(action, ClipShaping::Jump));
+        let want = if action == ClipAction::None { 0.0 } else { 1.0 };
+        let above = [&to_corner[..], &["MOVE N 16", "MOVE W 8", "MOVE W 8"]].concat();
+        assert_eq!(walk_room_22(&mut env, &above), ((0xA0, 0x75), [0.0, want, 0.0, 0.0]), "{action:?} above");
+        let below = [&to_corner[..], &["MOVE S 8", "MOVE W 8", "MOVE W 8"]].concat();
+        assert_eq!(walk_room_22(&mut env, &below), ((0xA0, 0x9D), [want, 0.0, 0.0, 0.0]), "{action:?} below");
+        assert_eq!(env.session().mask().is_allowed(&Action::parse("CLIP N").unwrap()), action == ClipAction::Kind);
+        if let Some(clip) = clip {
+            let r = act(&mut env, clip);
+            let p = env.session().state().link.position;
+            assert_eq!((p.x, p.y, r.info.terminal.is_none()), (0xA0, 0x8D, true), "{action:?} {clip}");
+            let r = act(&mut env, "MOVE W 32");
+            let t = r.info.terminal.as_ref().expect("the stairs end the episode");
+            assert_eq!((t.ending.as_str(), t.outcome), ("exit-correct", "success"), "{action:?}");
+            assert_eq!((t.clip_stats.done, t.clip_stats.done_n, t.clip_stats.aborted), (1, 1, 0), "{action:?}");
+            assert_eq!((t.target.as_str(), t.entry.as_str()), ("cave", "E"), "{action:?}");
+        }
+        nes = env.into_parts().0.into_nes();
+    }
 }

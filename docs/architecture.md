@@ -127,14 +127,36 @@ Link's state 0, no knockback, no ladder (`$64` = 0), and
 - **block clip** (dungeon, N or S): not in a doorway, X on the column line and inside the X border band, T the first
   grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8 pixels further (a
   16-pixel square), G' inside the room bounds, the run-up cells open both ways, and the clip useful: from T -+ 8 a
-  MOVE W or E is possible. The macro ends at T -+ 8, offset 0.
+  MOVE W or E is possible **and** the same move from T is blocked (the tile it enters is walled off from T; where it
+  is open from T too, the clip only leads back out: half a column off a square, an isolated statue), and no stairs
+  spot at G', G or T (the warp would take Link down in the middle of the macro). The macro ends at T -+ 8, offset 0.
+  Never W or E (from the side the clip leads nowhere). The G' condition is conservative (the back-off always has
+  room): it leaves out squares whose G' is past a bound or solid, where a Link on G with the good fraction could
+  still clip. In level 1 room `$22` that is only the south block from below (Y `$B5`-`$BD`, G' = `$C5`), a clip that
+  would lead back out anyway; the north block from above has no G at all.
+- What is offered, tested in the real game (`crates/zelda/tests/clips.rs`): in `$22` 27 grid points, each zone G'..T
+  of a square whose clip leads into the diamond (from below the west, east and lower diagonal blocks; from above
+  the upper diagonal, west and east blocks) or out of it (from inside, toward the north block; toward the south
+  block G' is the stairs spot); from every start of those zones reached by walking, CLIP completes with one press,
+  without damage from the traps, and a walk sideways (to X `$80`, then N or S where needed) takes the stairs. The
+  west block is the push block: the clip never starts a push (holding N or S against it on T for 16 frames does,
+  as in the game). Level 2 room `$7D`: nothing (its statues stand alone, 16 pixels apart: G' is inside the next
+  statue and the tiles beside each are open from T). The way through `$22` with button-free actions: `MOVE W 32`,
+  `MOVE W 32`, `MOVE W 8` (the corner of the east block), `MOVE S 8`, `MOVE W 8` twice (Link turns on the next grid
+  point; the lower-right block stops him on G = (`$A0`, `$9D`)), `CLIP N` (14 frames; `MOVE N 32` under `long`),
+  `MOVE W 32`: in cellar `$7F` 218 frames after the room's first frame, the stairs' transition included.
 
 `ClipSettings { trigger, correct_exits }` (`Session::set_clip_settings`; the env sets it every step) says how the
 policy reaches the macro, from the specialist's `clips.action`: `none` (no skip; CLIP masked), `kind` (CLIP legal in
 every direction the skip is available), `long` (MOVE of duration 32 in such a direction performs the skip; MOVE in
 that direction is made legal there), `edge` (MOVE of any duration performs the skip where it is available and the
 direction is not one of the objective's correct exits, `correct_exits` = the `next_room_*` bits; a block clip has no
-exit side). A CLIP action always runs the macro (the mask gates the policy, not the executor).
+exit side). A CLIP action always runs the macro (the mask gates the policy, not the executor). In a dungeon (tested in
+`$22`): `long` clips with MOVE N/S 32 from anywhere in the zone, shorter MOVEs walk (and stop on T); `edge` clips with
+a MOVE of every duration; on T, where the plain walk is blocked, MOVE in the heading is legal under `long` and `edge`
+only. The push spots of `$22`'s west block (Link on T below or above it) lie in its zones: a plain MOVE N 16 or 32
+there pushes the block; under `long` MOVE N 32 clips instead (16 still pushes); under `edge` every MOVE clips and the
+block can't be pushed from there (the objective keeps pointing at the push spots while the push is pending).
 
 ## Observation (`crates/env/src/observation.rs`)
 

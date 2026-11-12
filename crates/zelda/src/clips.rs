@@ -22,6 +22,7 @@ use crate::change::Change;
 use crate::enums::{ActionKind, Direction};
 use crate::executor::Interrupt;
 use crate::game::{GameView, at_dungeon_bound};
+use crate::room::Room;
 use crate::vars::Var;
 use std::ops::AddAssign;
 
@@ -347,7 +348,10 @@ fn block_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     if !(UW_TOP..=UW_BOTTOM).contains(&clipped) || !blocked(clipped) {
         return None;
     }
-    // G' (the back-off point) inside the room bounds; the run-up cells open both ways.
+    // G' (the back-off point) inside the room bounds; the run-up cells open both ways. Conservative: the macro can
+    // always back off to G', so squares whose G' is past a bound or solid are not offered even where a Link on G
+    // with the good fraction would clip (level 1 room $22's south block from below, G' = $C5; the statues of level 2
+    // room $7D, 16 pixels apart).
     let (g, g2) = (t - step, t - 2 * step);
     if !(UW_TOP..=UW_BOTTOM).contains(&g2)
         || !room.can_link_move_from(x, g2, direction)
@@ -357,14 +361,28 @@ fn block_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     {
         return None;
     }
-    // Useful: from inside the square a sideways move goes on (mechanics.md "Block clip").
-    let sideways = [Direction::W, Direction::E]
-        .into_iter()
-        .any(|d| !at_dungeon_bound(x, clipped, d) && room.can_link_move_from(x, clipped, d));
+    // No stairs spot on the walk (G', G, T): the warp check would take Link down mid-macro (level 1 room $22: from
+    // inside the diamond toward the south block, G' is the stairs).
+    if [g2, g, t].into_iter().any(|p| on_stairs(room, x, p)) {
+        return None;
+    }
+    // Useful: from inside the square a sideways move goes on, into a tile walled off from T (mechanics.md "Block
+    // clip"). At T -+ 8 Link's hotspot is in the square's tile row next to T and a sideways test reads the one tile
+    // beside it; when the same test from T is open too, Link stopped on T can already walk that way, and the clip
+    // only leads back out (half a column off a square, an isolated statue).
+    let sideways = [Direction::W, Direction::E].into_iter().any(|d| {
+        !at_dungeon_bound(x, clipped, d) && room.can_link_move_from(x, clipped, d) && !room.can_link_move_from(x, t, d)
+    });
     if !sideways {
         return None;
     }
     Some(SkipTarget { direction, kind: SkipKind::Block, t: t as u8 })
+}
+
+/// Link at rest on (x, y) stands on a dungeon stairs square, whose warp check takes him down (asm:Warp_CheckUnderLink:
+/// X a multiple of $10, Y low nibble $D, the tile at (X, Y + $0B) one of $70-$73).
+fn on_stairs(room: &Room, x: i32, y: i32) -> bool {
+    x & 0xF == 0 && y & 0xF == 0xD && (0x70..=0x73).contains(&room.tile(x.div_euclid(8), (y - 53).div_euclid(8)))
 }
 
 /// How the policy reaches the skip (the specialist's `clips.action`).
@@ -686,5 +704,73 @@ mod tests {
             assert_eq!(ClipTrigger::from_name(t.name()), Some(t));
         }
         assert_eq!(ClipTrigger::from_name("sword"), None);
+    }
+
+    /// A level 1 room in play: floor inside the walls, 16-pixel squares with their top-left pixel at `squares`
+    /// (dungeon tile rows start at Y $40) and a stairs square (tiles $70-$73) at `stairs`, Link at rest on (x, y).
+    fn dungeon_room(squares: &[(usize, usize)], stairs: Option<(usize, usize)>, x: u8, y: u8) -> GameView {
+        use crate::tables::{GRID_COLS, GRID_ROWS, RAM_SIZE, TILE_LAYOUT};
+        let mut ram = [0u8; RAM_SIZE];
+        let tile = |c: usize, r: usize| TILE_LAYOUT.0 + c * GRID_ROWS + r;
+        for c in 0..GRID_COLS {
+            for r in 0..GRID_ROWS {
+                let wall = !(4..28).contains(&c) || !(4..18).contains(&r);
+                ram[tile(c, r)] = if wall { 0xF6 } else { 0x74 };
+            }
+        }
+        let square = |ram: &mut [u8; RAM_SIZE], (sx, sy): (usize, usize), first: u8, step: u8| {
+            let (c, r) = (sx / 8, (sy - 0x40) / 8);
+            for (i, (dc, dr)) in [(0, 0), (0, 1), (1, 0), (1, 1)].into_iter().enumerate() {
+                ram[tile(c + dc, r + dr)] = first + step * i as u8;
+            }
+        };
+        for &at in squares {
+            square(&mut ram, at, 0xB0, 0);
+        }
+        if let Some(at) = stairs {
+            square(&mut ram, at, 0x70, 1);
+        }
+        let vars = [(Var::Level, 1), (Var::Location, 0x22), (Var::Mode, MODE_PLAY), (Var::LinkX, x), (Var::LinkY, y)];
+        for (var, value) in vars {
+            ram[var.addr() as usize] = value;
+        }
+        GameView::new(&ram, 0, false, std::sync::Arc::new(crate::GameMap::builtin()))
+    }
+
+    /// "Useful clips only": a block clip is offered where, from 8 pixels into the square, a sideways move enters a
+    /// tile that Link stopped on T can't step into (mechanics.md "Block clip"). Not with no open sideways tile, and
+    /// not past an isolated square, where the sideways tile is as open from T and the clip only leads back out. Not
+    /// where the walk G'..T passes a stairs spot either (the warp would take Link down mid-macro).
+    #[test]
+    fn a_block_clip_is_offered_only_where_it_leads_somewhere() {
+        let target = |squares: &[(usize, usize)], y: u8, direction: Direction| {
+            skip_target(&dungeon_room(squares, None, 0x80, y), direction).map(|t| t.t)
+        };
+        // Heading N under the square ($80, $80): T = $85, G' = $95. The squares below-left and below-right wall off
+        // the tiles beside T; from T - 8 = $7D both sides are open.
+        let pocket = [(0x80, 0x80), (0x70, 0x90), (0x90, 0x90)];
+        for y in [0x95, 0x8D, 0x85] {
+            assert_eq!(target(&pocket, y, Direction::N), Some(0x85), "pocket, Y {y:#04x}");
+            assert_eq!(target(&pocket, y, Direction::W), None, "no W/E block clip");
+            assert_eq!(target(&pocket, y, Direction::E), None, "no W/E block clip");
+        }
+        assert_eq!(target(&pocket, 0x9D, Direction::N), None, "24 pixels from T: outside the zone");
+        // Stairs under G = $8D (the square at ($80, $90), between the lower squares): no clip from the zone.
+        let view = dungeon_room(&pocket, Some((0x80, 0x90)), 0x80, 0x95);
+        assert!(view.room().stairs_tiles() == vec![(0x10, 0x0A)] && skip_target(&view, Direction::N).is_none());
+        // No open sideways tile at the clipped position: squares beside the square on both sides.
+        let walled = [(0x70, 0x80), (0x80, 0x80), (0x90, 0x80), (0x70, 0x90), (0x90, 0x90)];
+        assert_eq!(target(&walled, 0x95, Direction::N), None, "walled in");
+        // One open side is enough.
+        let one_side = [(0x70, 0x80), (0x80, 0x80), (0x70, 0x90), (0x90, 0x90)];
+        assert_eq!(target(&one_side, 0x95, Direction::N), Some(0x85), "E open");
+        // An isolated square (a statue): the tiles beside T are open as well; the clip leads back out.
+        assert_eq!(target(&[(0x80, 0x80)], 0x95, Direction::N), None, "isolated square");
+        // Heading S over the square ($80, $90), the pocket mirrored: T = $7D, G' = $6D.
+        let pocket_s = [(0x80, 0x90), (0x70, 0x80), (0x90, 0x80)];
+        for y in [0x6D, 0x75, 0x7D] {
+            assert_eq!(target(&pocket_s, y, Direction::S), Some(0x7D), "pocket S, Y {y:#04x}");
+        }
+        assert_eq!(target(&[(0x80, 0x90)], 0x6D, Direction::S), None, "isolated square from above");
     }
 }
