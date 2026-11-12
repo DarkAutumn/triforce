@@ -2,26 +2,54 @@
 ; FILE:     bank2/demo-story-scroll.asm  BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 540-1001
 ; SUBJECTS: Demo, Unused
-; TOPIC:    Title wait, story scroll, item parade
-; SEE ALSO:
+; TOPIC:    Animation subphases of the demo: the title wait (phase 0 subphase 0) and the whole story
+;           phase: scroll the story screen in, wait, scroll the text and the item parade one 8-pixel
+;           line at a time, wait, then restart the title.
+; SEE ALSO: bank2/mode0-demo.asm (AnimateDemo dispatches here); bank2/demo-tables-init.asm (DemoLineAttrs,
+;           item lists, text, IncSubphase); bank2/title-animation.asm (title sprites, phase 0 subphase
+;           1); bank7/room-item-draw.asm (AnimateItemObject draws the parade items);
+;           bank1/item-sprite-draw.asm (Anim_WriteItemSprites).
 ; KEY FACTS:
+;   - Title wait: DemoTimer counts every other frame and the subphase ends when it wraps, 512 frames.
+;     AnimateDemoPhase0Subphase0.
+;   - Story subphase 0 scrolls 1 pixel every other frame from CurVScroll $10 through the name table
+;     wrap at $F0 to 8: 232 pixels, 464 frames. AnimateDemoPhase1Subphase0.
+;   - Story subphase 1 waits 256 frames and sets the first text line's PPU addresses (tiles $2900,
+;     attributes $2BE0). AnimateDemoPhase1Subphase1.
+;   - Story subphase 2 scrolls 1 pixel every other frame for 5 screens of 256 lines plus $80 lines
+;     (1408 pixels, 2816 frames); every 8 lines it queues one 32-tile line (blank tile $24, or the
+;     next text field) and handles that line's DemoLineAttrs bits. AnimateDemoPhase1Subphase2.
+;   - Parade items live in object slots $01-$0A: ObjState 0 = shown, $FF = free; they move up 1 pixel
+;     with each scrolled line and are freed at Y = $F0. ProcessDemoLineItems, DisableFallenObjects.
+;   - ProcessDemoLineItems takes the highest free slot for the left item and the slot below it for the
+;     right item without testing that one; the search loop has no lower bound.
+;   - Item id $23 (fairy) is drawn with a 2-frame wing animation that changes every 4 frames; ids
+;     >= $30 are drawn by AnimateDemoStoryFinalItems; all others by AnimateItemObject.
+;     Demo_AnimateObjects.
+;   - Story subphase 3 waits 256 frames, subphase 4 ends on its 57th frame (DemoTimer = $39) and
+;     clears DemoPhase, DemoSubphase and IsUpdatingMode, so the title is initialized again.
+;     AnimateDemoPhase1Subphase3, AnimateDemoPhase1Subphase4.
+;   - Unused_97C5 is not referenced by any code.
 ; CONTENTS: (generated; L = line in this file)
-;   L0025 AnimateDemoPhase0Subphase0           code
-;   L0039 AnimateDemoPhase1Subphase0           code
-;   L0070 AnimateDemoPhase1Subphase1           code
-;   L0086 AnimateDemoPhase1Subphase2           code
-;   L0218 ProcessDemoLineAttrs                 code
-;   L0265 DisableFallenObjects                 code
-;   L0286 ProcessDemoLineItems                 code
-;   L0346 Demo_AnimateObjects                  code
-;   L0384 Unused_97C5                          code
-;   L0400 AnimateStationaryFairy               code
-;   L0415 AnimateDemoStoryFinalItems           code
-;   L0464 AnimateDemoPhase1Subphase3           code
-;   L0471 AnimateDemoPhase1Subphase4           code
-;   L0483 AnimateDemoPhase1End_AnimateObjects  code
+;   L0053 AnimateDemoPhase0Subphase0           code  Title subphase 0: animates the title for 512 frames, then advances the subphase.
+;   L0070 AnimateDemoPhase1Subphase0           code  Story subphase 0: scrolls the story screen up 1 pixel every other frame until it is fully shown.
+;   L0104 AnimateDemoPhase1Subphase1           code  Story subphase 1: waits 256 frames and sets the PPU addresses of the first scrolled text line.
+;   L0125 AnimateDemoPhase1Subphase2           code  Story subphase 2: scrolls text and item parade; every 8 pixel lines queues the next line of tiles.
+;   L0261 ProcessDemoLineAttrs                 code  If the current line has flag $40, appends a record that zeroes one row of 8 attribute bytes.
+;   L0311 DisableFallenObjects                 code  Frees (ObjState = $FF) every parade object in slots $01-$0A whose Y has reached $F0.
+;   L0337 ProcessDemoLineItems                 code  If the current line has flag $20, spawns the next item parade row at Y = $EF in free object slots.
+;   L0400 Demo_AnimateObjects                  code  Draws every shown parade object in slots $0A down to $01 according to its DemoItemIds value.
+;   L0441 Unused_97C5                          code  Dead code (no reference to it): decrements bytes of Sprites+80 indexed by 4 or $C, then A-4 down.
+;   L0460 AnimateStationaryFairy               code  Draws the parade fairy (item id $23) in place, switching between 2 frames every 4 frames.
+;   L0480 AnimateDemoStoryFinalItems           code  Draws one row (up to 6 sprites, 8 pixels apart) of the closing picture for item ids $30-$33.
+;   L0532 AnimateDemoPhase1Subphase3           code  Story subphase 3: keeps drawing the parade objects for 256 frames, then advances the subphase.
+;   L0542 AnimateDemoPhase1Subphase4           code  Story subphase 4: draws the objects for 56 more frames, then restarts the demo at phase 0.
+;   L0555 AnimateDemoPhase1End_AnimateObjects  code  Shared tail of story subphases 3 and 4: hides all sprites, then draws the parade objects.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Title subphase 0: animates the title for 512 frames, then advances the subphase.
+; ----------------------------------------------------------------------------
 AnimateDemoPhase0Subphase0:
     ; Animate while we wait about 512 frames.
     LDA FrameCounter
@@ -36,6 +64,9 @@ AnimateDemoPhase0Subphase0:
     JSR AnimateDemoPhase0Subphase0Artifacts
     RTS
 
+; ----------------------------------------------------------------------------
+; Story subphase 0: scrolls the story screen up 1 pixel every other frame until it is fully shown.
+; ----------------------------------------------------------------------------
 AnimateDemoPhase1Subphase0:
     LDA FrameCounter            ; Increase CurVScroll every odd frame.
     AND #$01
@@ -67,6 +98,9 @@ AnimateDemoPhase1Subphase0:
 @Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Story subphase 1: waits 256 frames and sets the PPU addresses of the first scrolled text line.
+; ----------------------------------------------------------------------------
 AnimateDemoPhase1Subphase1:
     INC DemoTimer
     LDA DemoTimer
@@ -83,6 +117,11 @@ AnimateDemoPhase1Subphase1:
     STA DemoLineAttrVramAddrLo
     RTS
 
+; ----------------------------------------------------------------------------
+; Story subphase 2: scrolls text and item parade; every 8 pixel lines queues the next line of tiles.
+; NOTE: Ends when the line count reaches 1408 (2816 frames); one DemoLineAttrs entry is handled
+;       every 8 scrolled lines (16 frames), 175 entries in all.
+; ----------------------------------------------------------------------------
 AnimateDemoPhase1Subphase2:
     JSR HideAllSprites
     JSR DisableFallenObjects
@@ -215,6 +254,10 @@ AnimateDemoPhase1Subphase2:
     INC DemoLineIndex           ; Advance to the next line.
     RTS
 
+; ----------------------------------------------------------------------------
+; If the current line has flag $40, appends a record that zeroes one row of 8 attribute bytes.
+; IN:   DemoLineIndex; DynTileBuf already holds the 35-byte tile line record.
+; ----------------------------------------------------------------------------
 ProcessDemoLineAttrs:
     LDX DemoLineIndex
     LDA DemoLineAttrs, X
@@ -233,7 +276,7 @@ ProcessDemoLineAttrs:
     STA DynTileBuf+38
     LDA #$FF
     STA DynTileBuf+39
-    INC $0416                   ; UNKNOWN: It doesn't seem to be used.
+    INC $0416                   ; $0416 is written here only; no code in this bank reads it.
     LDA DemoLineAttrVramAddrLo  ; The next attributes go 8 bytes farther.
     CLC
     ADC #$08
@@ -262,6 +305,9 @@ ProcessDemoLineAttrs:
 @Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Frees (ObjState = $FF) every parade object in slots $01-$0A whose Y has reached $F0.
+; ----------------------------------------------------------------------------
 DisableFallenObjects:
     ; For objects 1..10, indexed by X:
     LDX #$0A
@@ -283,6 +329,11 @@ DisableFallenObjects:
     BNE @Loop
     RTS
 
+; ----------------------------------------------------------------------------
+; If the current line has flag $20, spawns the next item parade row at Y = $EF in free object slots.
+; IN:   DemoLineIndex, DemoItemRow.
+; OUT:  DemoItemIds, ObjX, ObjY, ObjState of the slots used; DemoItemRow incremented.
+; ----------------------------------------------------------------------------
 ProcessDemoLineItems:
     LDY DemoLineIndex
     LDA DemoLineAttrs, Y
@@ -325,14 +376,14 @@ ProcessDemoLineItems:
     CMP #$1B
     BNE @IncRow
 
-    ; Special case: The triforce must be centered.
+    ; Special case: The Triforce piece must be centered.
     ; But it shows up in both column lists.
     ; Two objects were instantiated, but they'll overlap.
     LDA #$78
     STA ObjX, X
     STA ObjX+1, X
     LDA #$00
-    STA $0430                   ; UNKNOWN: It doesn't seem to be used.
+    STA $0430                   ; $0430 is written here only; no code in this bank reads it.
 
 @IncRow:
     INC DemoItemRow
@@ -343,6 +394,9 @@ ProcessDemoLineItems:
     STA ObjX, X
     JMP @IncRow
 
+; ----------------------------------------------------------------------------
+; Draws every shown parade object in slots $0A down to $01 according to its DemoItemIds value.
+; ----------------------------------------------------------------------------
 Demo_AnimateObjects:
     ; For each object 1..10, indexed by X:
     LDX #$0A
@@ -381,8 +435,10 @@ Demo_AnimateObjects:
     BNE @LoopObject
     RTS
 
+; ----------------------------------------------------------------------------
+; Dead code (no reference to it): decrements bytes of Sprites+80 indexed by 4 or $C, then A-4 down.
+; ----------------------------------------------------------------------------
 Unused_97C5:
-    ; Begin unverified code 97C5
     LDX #$04
     CMP #$14
     BNE :+
@@ -395,8 +451,12 @@ Unused_97C5:
     TAX
     BPL :-
     RTS
-    ; End unverified code
 
+
+; ----------------------------------------------------------------------------
+; Draws the parade fairy (item id $23) in place, switching between 2 frames every 4 frames.
+; IN:   X = object slot.
+; ----------------------------------------------------------------------------
 AnimateStationaryFairy:
     JSR Anim_FetchObjPosForSpriteDescriptor
     JSR Anim_SetSpriteDescriptorRedPaletteRow
@@ -412,6 +472,11 @@ AnimateStationaryFairy:
     LDY #$14
     JMP Anim_WriteItemSprites
 
+; ----------------------------------------------------------------------------
+; Draws one row (up to 6 sprites, 8 pixels apart) of the closing picture for item ids $30-$33.
+; IN:   X = object slot; DemoItemIds,X low nibble = row 0-3.
+; NOTE: Writes sprite records starting at Sprites + row * 24; does not preserve X.
+; ----------------------------------------------------------------------------
 AnimateDemoStoryFinalItems:
     ; The demo story ending objects use special item types.
     ; The bottom nibble of the item type is an index into two
@@ -461,6 +526,9 @@ AnimateDemoStoryFinalItems:
     BPL @LoopSprite
     RTS
 
+; ----------------------------------------------------------------------------
+; Story subphase 3: keeps drawing the parade objects for 256 frames, then advances the subphase.
+; ----------------------------------------------------------------------------
 AnimateDemoPhase1Subphase3:
     INC DemoTimer               ; Delay about 256 frames.
     LDA DemoTimer
@@ -468,8 +536,11 @@ AnimateDemoPhase1Subphase3:
     INC DemoSubphase
     RTS
 
+; ----------------------------------------------------------------------------
+; Story subphase 4: draws the objects for 56 more frames, then restarts the demo at phase 0.
+; ----------------------------------------------------------------------------
 AnimateDemoPhase1Subphase4:
-    INC DemoTimer               ; Delay 56 frames.
+    INC DemoTimer               ; Ends on the 57th frame, when DemoTimer = $39.
     LDA DemoTimer
     CMP #$39
     BNE AnimateDemoPhase1End_AnimateObjects
@@ -480,6 +551,7 @@ AnimateDemoPhase1Subphase4:
     STA DemoSubphase
     RTS
 
+; Shared tail of story subphases 3 and 4: hides all sprites, then draws the parade objects.
 AnimateDemoPhase1End_AnimateObjects:
     JSR HideAllSprites
     JSR Demo_AnimateObjects

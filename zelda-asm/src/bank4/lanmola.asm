@@ -2,28 +2,56 @@
 ; FILE:     bank4/lanmola.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 9671-10027
 ; SUBJECTS: (none)
-; TOPIC:    Lanmola segments and head
-; SEE ALSO:
+; TOPIC:    Lanmola (types $3A red, $3B blue): per-segment update, death handling that shortens the
+;           worm from the tail, the head's direction choice, and the pixel mover.
+; SEE ALSO: bank4/zelda-lanmola-inits.asm (InitLamnola: 10 segments in two worms, speed, start spot);
+;           bank1/monster-collisions.asm (CheckMonsterCollisions, ObjTypeToDamagePoints);
+;           bank7/object-update-table.asm (HP table, dead dummy turning into nothing);
+;           bank4/digdogger.asm (a mover built the same way as Lamnola_Move).
 ; KEY FACTS:
+;   - A room's Lanmola object makes two worms of 5 segments: slots $01-$05 and $06-$0A; slots $05
+;     and $0A are the heads, $01 and $06 the tails (UpdateLamnola, Lamnola_UpdateHead).
+;   - Speed is 1 pixel per frame for type $3A and 2 for type $3B (Lanmola_Speed, Lamnola_Move).
+;   - Every segment can be hit. A killed segment is revived with HP $20 and the worm's lowest live
+;     slot becomes a dead dummy ($5D) instead; only when the head is the last segment does a
+;     Lanmola object really die (UpdateLamnola@FindTail).
+;   - So each worm takes 5 kills. Every one of them adds to WorldKillCount and HelpDropCount, but
+;     only the head's death advances WorldKillCycle, adds to RoomKillCount and can drop an item;
+;     dead dummies do none of these (UpdateLamnola; HandleMonsterDied, UpdateMetaObjectEnd).
+;   - With the clock the segments stop but are still drawn and can be hit (UpdateLamnola).
+;   - The head decides at every 16-pixel grid point: Random,X < $80 toward Link, else straight or
+;     a perpendicular turn by Random+1,X; never reverses at random (Lamnola_UpdateHead).
+;   - Directions pass one segment down the chain every 8 pixels, so segments trail 8 pixels apart
+;     (Lamnola_UpdateHead@PropagateDirs).
+;   - Segments do not test tiles when moving; only the head's chosen direction is tested against
+;     the room bounds and tiles (Lamnola_UpdateHead@SetDirAndCheckTiles, Lamnola_Move).
 ; CONTENTS: (generated; L = line in this file)
-;   L0015 UpdateLamnola       code
-;   L0123 L12A6F_Exit         code
-;   L0126 Lamnola_UpdateHead  code
-;   L0320 Lamnola_Move        code
+;   L0043 UpdateLamnola       code  Updates one Lanmola segment: moves it, draws it, takes weapon hits and shortens the worm on a kill.
+;   L0151 L12A6F_Exit         code  Shared RTS for the early exits of Lamnola_UpdateHead.
+;   L0166 Lamnola_UpdateHead  code  Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
+;   L0334 Lamnola_Move        code  Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Updates one Lanmola segment: moves it, draws it, takes weapon hits and shortens the worm on a kill.
+; IN:   X = object slot ($01-$05 first Lanmola, $06-$0A second; $05 and $0A are the heads).
+; OUT:  on a kill the lowest live slot of that Lanmola becomes a dead dummy ($5D) at the hit
+;       segment's position and the hit segment is revived with HP $20.
+; NOTE: With the clock (InvClock) segments do not move but are still drawn and can still be hit.
+; NOTE: L129EA_Exit is an RTS in the chunk before this one.
+; ----------------------------------------------------------------------------
 UpdateLamnola:
-    ; If the direction of this segment is not set, then it has not started
-    ; moving yet. So, return.
+    ; A segment with direction 0 has not been set in motion yet (see Lamnola_UpdateHead): it is
+    ; neither drawn nor checked for collisions.
     LDA ObjDir, X
     BEQ L129EA_Exit
 
-    ; If we have the magic clock, then go draw and check collisions.
+    ; With the clock, skip movement.
     LDA InvClock
     BNE @DrawAndCheckCollisions
     JSR Lamnola_Move
 
-    ; If the current segment is a head, then update the direction it's facing.
+    ; Only the heads (slots $05 and $0A) choose directions.
     CPX #$05
     BEQ :+
     CPX #$0A
@@ -35,19 +63,18 @@ UpdateLamnola:
     LDA ObjX, X
     PHA                         ; Save the X coordinate.
 
-    ; Each segment is a full 16x16 object. But, it's drawn as a narrow,
-    ; half-width object. So, center it by temporarily adding 4 to X.
+    ; A segment is one 8-pixel-wide sprite. Center it in the 16-pixel cell by drawing it at X + 4.
     CLC
     ADC #$04
     STA ObjX, X
 
-    ; The speed is 1 or 2. By swapping them, you get sprite attributes
-    ; to store in [03].
+    ; Sprite attributes [03] = speed EOR 3: speed 1 (type $3A) -> palette 2, speed 2 (type $3B)
+    ; -> palette 1.
     LDA Lanmola_Speed
     EOR #$03
     STA $03
 
-    ; If the segment is a head, then use tile $9E, else $A0.
+    ; Tile $9E for a head, $A0 for any other segment.
     LDA #$9E
     CPX #$05
     BEQ @Draw
@@ -59,30 +86,28 @@ UpdateLamnola:
     JSR Anim_WriteSprite
     PLA                         ; Restore the X coordinate.
     STA ObjX, X
-    LDA ObjDir, X               ; Save the facing direction.
+
+    ; CheckMonsterCollisions may change the facing direction; the chain depends on it, so keep it.
+    LDA ObjDir, X
     PHA
     JSR CheckMonsterCollisions
-    PLA                         ; Restore the facing direction.
+    PLA
     STA ObjDir, X
 
-    ; If still alive, then return.
+    ; Metastate 0 = still alive: done.
     LDA ObjMetastate, X
     BEQ L129EA_Exit
 
-    ; Otherwise, the segment is dead.
+    ; The segment was killed this frame. Instead of letting it die, revive it and remove the
+    ; segment at the tail end of its Lanmola.
     JSR ResetShoveInfo
 
-    ; Set the current segment's HP to the initial value in anticipation
-    ; of bringing this segment back to life.
+    ; Give the hit segment its full HP ($20) again.
     LDA #$20
     STA ObjHP, X
 
-    ; Find the tail of the lamnola that the current segment belongs to.
-    ;
-    ; From the lowest slot, look for one that has the original lamnola
-    ; object type.
-    ;
-    ; The goal is to swap the current dead segment with the tail segment.
+    ; Find the tail: the lowest slot of this Lanmola that still has the Lanmola object type.
+    ; Y + 1 is the slot tested: start at slot $01 for the first Lanmola (X < 6), $06 for the second.
     LDY #$FF
     CPX #$06
     BCC @FindTail
@@ -94,12 +119,14 @@ UpdateLamnola:
     CMP Lanmola_Type
     BNE @FindTail
 
-    ; Set the timer for the dead dummy object that will replace the tail.
+    ; Timer $11 for the tail slot. It has no effect: UpdateDeadDummy does not read the timer, and
+    ; the first sparkle step (metastate $10) advances at once and reloads the timer with 6
+    ; (AnimateAndDrawMetaObject). When the tail is the head, the sparkle is already at $10.
     LDA #$11
     STA a:ObjTimer+1, Y
 
-    ; Copy the current dead segment's invincibility timer, X, and Y
-    ; to the tail segment.
+    ; Move the tail slot to where the hit segment is (the sparkle appears there), with the hit
+    ; segment's invincibility timer.
     LDA ObjInvincibilityTimer, X
     STA ObjInvincibilityTimer+1, Y
     LDA ObjX, X
@@ -107,70 +134,80 @@ UpdateLamnola:
     LDA ObjY, X
     STA a:ObjY+1, Y
 
-    ; If the tail segment found is a head, then the whole lamnola died.
-    ; So, return and leave it dead.
+    ; If the tail found is a head (slot $05 or $0A), the head itself was the last segment: leave
+    ; it dying, so that it dies as an ordinary monster.
     CPY #$04
     BEQ L129EA_Exit
     CPY #$09
     BEQ L129EA_Exit
 
-    ; Change the tail segment to the dead dummy object, and
-    ; bring the current segment back to life.
+    ; Turn the tail slot into a dead dummy ($5D), which plays the death sparkle, and bring the
+    ; hit segment back to life.
     LDA #$5D
     STA ObjType+1, Y
     JMP ResetObjMetastate
 
+; Shared RTS for the early exits of Lamnola_UpdateHead.
 L12A6F_Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
+; IN:   X = head's object slot ($05 or $0A).
+; OUT:  ObjDir of the head and of the four segments behind it; LanmolaViableDirMask.
+; NOTE: At each 16-pixel grid point: Random,X < $80 -> turn toward Link; else Random+1,X >= $80 ->
+;       straight on; else a perpendicular turn ($40-$7F: up if moving horizontally, left if
+;       vertically; < $40: down or right). The head never picks its opposite direction at random,
+;       but the turn toward Link may be vertical even when that reverses it.
+; NOTE: A direction blocked by the room bounds or an unwalkable tile is replaced by the next
+;       allowed one, rotating 8 -> 4 -> 2 -> 1 -> 8. The search has no exit if all three allowed
+;       directions are blocked.
+; ----------------------------------------------------------------------------
 Lamnola_UpdateHead:
-    ; If X coordinate is not a multiple of 8, then return.
+    ; Act only when X is a multiple of 8 ...
     LDA ObjX, X
     AND #$07
     BNE L12A6F_Exit
 
-    ; If (Y + 3) is not a multiple of 8, then return.
-    ; We had to account for the usual offset of 3.
+    ; ... and (Y + 3) is a multiple of 8 (object Y is offset 3 pixels from the tile grid).
     LDA ObjY, X
     CLC
     ADC #$03
     AND #$07
     BNE L12A6F_Exit
 
-    ; Will loop 4 times, propagating directions down the chain,
-    ; by pulling from the bottom.
+    ; Pass directions one segment toward the tail, 4 copies counted in [00].
     LDA #$04
     STA $00
 
-    ; Choose the tail index of the lamnola that the current segment belongs to.
+    ; Y = tail slot - 1: 0 for the head in slot $05, 5 for the head in slot $0A.
     LDY #$00
     CPX #$05
     BEQ @PropagateDirs
     LDY #$05
 
 @PropagateDirs:
-    ; Loop over every segment under the head, starting from the tail.
-    ; Copy the next segment's direction to the current one in this loop.
+    ; From the tail up: each segment takes the direction of the segment ahead of it. A segment
+    ; whose direction becomes nonzero starts moving, so segments follow 8 pixels apart.
     LDA a:ObjDir+2, Y
     STA a:ObjDir+1, Y
     INY
     DEC $00
     BNE @PropagateDirs
 
-    ; If this head segment is not aligned with a square, then return.
+    ; Choose a new direction only when X is a multiple of $10 ...
     LDA ObjX, X
     AND #$0F
     BNE @Exit
 
-    ; If (Y + 3) is not a multiple of $10, then return.
-    ; We had to account for the usual offset of 3.
+    ; ... and (Y + 3) is a multiple of $10.
     LDA ObjY, X
     CLC
     ADC #$03
     AND #$0F
     BNE @Exit
 
-    ; Store the opposite of the facing direction in [00].
+    ; Build the opposite of the facing direction: swap bits 1<->2 and 4<->8.
     LDA ObjDir, X
     LSR
     AND #$05
@@ -180,107 +217,79 @@ Lamnola_UpdateHead:
     AND #$0A
     ORA $00
 
-    ; Make a mask of the inverted bits of the opposite direction.
+    ; The viable directions are all but the opposite one.
     EOR #$0F
     STA LanmolaViableDirMask
 
-    ; There's a 50% chance of going to try to turn toward Link.
+    ; Random,X < $80: go turn toward Link.
     LDA Random, X
     CMP #$80
     BCC @TurnTowardLink
 
-    ; Otherwise, we randomly choose a perpendicular direction.
-    ; Load the monster's facing direction.
+    ; Otherwise go straight or turn perpendicular, by Random+1,X (in Y).
     LDA ObjDir, X
-
-    ; Load the next random number into Y register.
     LDY Random+1, X
 
-    ; Based on it, there's a 50% chance of skipping the loop,
-    ; to keep moving straight.
+    ; Random+1,X >= $80: keep the facing direction.
     CPY #$80
     BCS @SetDirAndCheckTiles
 
 @LoopFindPerpendicular:
-    ; Loop to rotate the direction bit over the mask.
-    ; The goal is to calculate a direction perpendicular to the monster's
-    ; facing direction.
-    ;
-    ; Shift right the copy of the direction.
-    ; If the direction bit rolled off the low end, then roll it onto the high end.
+    ; Rotate the direction bit right (8 -> 4 -> 2 -> 1 -> 8) ...
     LSR
     BCC :+
     LDA #$08
 :
-    ; If the current direction bit is masked off, then we've reached
-    ; the opposite direction. Loop again.
+    ; ... skipping the opposite direction.
     BIT LanmolaViableDirMask
     BEQ @LoopFindPerpendicular
 
-    ; If Y register >= $40, then break out of the loop.
-    ; So, 75% of the time, if horizontal, then turn up, else left.
+    ; Y >= $40: take this first perpendicular direction (up if moving horizontally, else left).
     CPY #$40
     BCS @SetDirAndCheckTiles
 
-    ; Set Y register to $40 in order to break out of the loop next time;
-    ; and loop again now.
-    ; So, 25% of the time, if horizontal, then turn down, else right.
+    ; Y < $40: rotate once more to the second perpendicular direction (down if moving
+    ; horizontally, else right). Y = $40 ends the loop on the next pass.
     LDY #$40
-    BCC @LoopFindPerpendicular
+    BCC @LoopFindPerpendicular  ; Always taken (C is clear from the CPY above).
 
 @SetDirAndCheckTiles:
-    ; Change the facing direction to the direction found.
     STA ObjDir, X
 
-    ; Set moving direction [0F] for boundary and tile checks.
+    ; [0F] = moving direction for the room bound and tile tests. BoundByRoom zeroes it if blocked.
     STA $0F
     JSR BoundByRoom
-
-    ; If not blocked by the room boundary, then go check tile collision.
     LDA $0F
     BNE @CheckTileCollision
 
 @FindNonOpposite:
-    ; Else it was blocked. So, load the facing direction in preparation
-    ; for looking for any non-opposite direction that is not blocked.
+    ; Blocked: try the next viable direction after the one just tried.
     LDA ObjDir, X
 
 @LoopFindNonOpposite:
-    ; Shift right the copy of the direction.
-    ; If the direction bit rolled off the low end, then roll it onto the high end.
+    ; Rotate the direction bit right (8 -> 4 -> 2 -> 1 -> 8).
     LSR
     BCC :+
     LDA #$08
 :
-    ; If the current direction bit is not masked off, then go check the
-    ; room boundary in this direction.
-    ; Else we've reached the opposite direction. Loop again.
+    ; Viable: go test it. Opposite of the original facing: rotate again.
     BIT LanmolaViableDirMask
     BNE @SetDirAndCheckTiles
     BEQ @LoopFindNonOpposite
 
 @CheckTileCollision:
-    ; We found a direction that was not blocked by the room boundary.
-    ; Check tile collision. If blocked by a tile, then go look for another direction.
+    ; Not blocked by the room bounds. A tile at or above RoomFirstUnwalkableTile ahead blocks too.
     JSR GetCollidingTileMoving
     CMP RoomFirstUnwalkableTile
     BCS @FindNonOpposite
 
 @Exit:
-    ; If there were a room that had lamnolas, and they could get
-    ; surrounded on 3 sides, then the loop above would get stuck in
-    ; an infinite loop.
-    ;
-    ; But, the only room with that configuration has those blocks
-    ; blocked off with a push block, which can only be pushed after
-    ; all monsters are killed.
-    ;
-    ; I confirmed this by using the memory view to move the lamnolas
-    ; in room $57 of Q1/L9 over the stairs in the middle of the room.
+    ; If all three viable directions were blocked, the search above would never end. Whether
+    ; any room with Lanmolas allows that was not checked (unverified).
     RTS
 
 @TurnTowardLink:
-    ; Find the horizontal direction toward Link and store it in [02].
+    ; [02] = horizontal direction toward Link: 1 (right) if Link's X >= the head's X, else 2.
     LDA #$01
     STA $02
     LDA ObjX
@@ -289,7 +298,7 @@ Lamnola_UpdateHead:
     BCS :+
     ASL $02
 :
-    ; Find the vertical direction toward Link and store it in [03].
+    ; [03] = vertical direction toward Link: 4 (down) if Link's Y >= the head's Y, else 8.
     LDA #$04
     STA $03
     LDA ObjY
@@ -298,37 +307,38 @@ Lamnola_UpdateHead:
     BCS :+
     ASL $03
 :
-    ; If the horizontal direction toward Link is not allowed, then
-    ; go check the vertical direction.
+    ; Use the horizontal direction only if it is viable (not the opposite of the facing) ...
     LDA $02
     BIT LanmolaViableDirMask
     BEQ @SetVertical
 
-    ; If the horizontal direction toward Link is the same direction
-    ; that Link is facing, then go test it for tile and room boundary collision.
+    ; ... and it equals the direction Link is facing (ObjDir of slot 0).
     BIT ObjDir
-    BNE :+
+    BNE @TestDir
 
 @SetVertical:
-    ; Load the vertical direction toward Link in order to test it for
-    ; room boundary and tile collision.
+    ; Otherwise use the vertical direction toward Link. It is not tested against the mask, so
+    ; it may be the opposite of the facing direction.
     LDA $03
-:
-    ; Go test this direction for collisions with tiles or the room boundary.
+@TestDir:
+    ; Set it and test it against the room bounds and tiles.
     JMP @SetDirAndCheckTiles
 
+; ----------------------------------------------------------------------------
+; Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
+; IN:   X = object slot; ObjDir,X = direction bits.
+; OUT:  ObjX,X / ObjY,X.
+; NOTE: No position fraction, no tile or bounds test here; only the head's choices keep the worm
+;       in the room.
+; ----------------------------------------------------------------------------
 Lamnola_Move:
-    ; This code is similar to 04:96EB Digdogger_Move.
-    ;
-    ; Change coordinates by the appropriate speed according to the direction.
-    ;
-    ; Start with a mask of $A1 in [02]:
-    ; - low nibble represents the right direction
-    ; - high nibble is used to set or clear carry as we go along
+    ; [02] starts as mask $A1 and is shifted left before each later test: bit 0 walks through the
+    ; direction bits 1, 2, 4, 8, while the bit shifted out (1, 0, 1) sets the carry needed by the
+    ; following SBC, ADC, SBC.
     LDA #$A1
     STA $02
 
-    ; If direction has a right component (1), then add offset to X coordinate.
+    ; Right (1): X += speed.
     LDA ObjDir, X
     BIT $02
     BEQ @Left
@@ -338,9 +348,9 @@ Lamnola_Move:
     STA ObjX, X
 
 @Left:
-    ; If direction has a left component (2), then subtract offset from X coordinate.
+    ; Left (2): X -= speed.
     LDA ObjDir, X
-    ASL $02                     ; Bit 7 of mask $A1 sets Carry now.
+    ASL $02                     ; Mask $42; carry set for SBC.
     BIT $02
     BEQ @Down
     LDA ObjX, X
@@ -348,9 +358,9 @@ Lamnola_Move:
     STA ObjX, X
 
 @Down:
-    ; If direction has a down component (4), then add offset to Y coordinate.
+    ; Down (4): Y += speed.
     LDA ObjDir, X
-    ASL $02                     ; Bit 6 of mask $A1 clears Carry now.
+    ASL $02                     ; Mask $84; carry clear for ADC.
     BIT $02
     BEQ @Up
     LDA ObjY, X
@@ -358,9 +368,9 @@ Lamnola_Move:
     STA ObjY, X
 
 @Up:
-    ; If direction has an up component (8), then subtract offset from Y coordinate.
+    ; Up (8): Y -= speed.
     LDA ObjDir, X
-    ASL $02                     ; Bit 5 of mask $A1 sets Carry now.
+    ASL $02                     ; Mask $08; carry set for SBC.
     BIT $02
     BEQ @Exit
     LDA ObjY, X

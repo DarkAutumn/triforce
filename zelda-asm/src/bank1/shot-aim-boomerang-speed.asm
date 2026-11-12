@@ -1,43 +1,65 @@
 ; ============================================================================
-; FILE:     bank1/shot-aim-boomerang-speed.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
+; FILE:     bank1/shot-aim-boomerang-speed.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 3638-3851
 ; SUBJECTS: Dir
-; TOPIC:    MoveShot, direction/distance to target, diagonal speed, boomerang speed
-; SEE ALSO:
+; TOPIC:    Moving a shot one axis at a time inside the room bounds; direction and distance from one
+;           object to another; choosing one of nine aim angles for fireballs and returning boomerangs;
+;           the returning boomerang's speed and its slow-to-fast switch.
+; SEE ALSO: bank1/room-bounds.asm (BoundByRoomWithA); bank7/walker-move.asm (MoveObject);
+;           bank7/boomerang-arrow-food.asm (arrow and boomerang flight, boomerang speed tables);
+;           bank7/boomerang-return-draw.asm (boomerang return states $40/$50);
+;           bank7/sword-shot-magic-shot.asm (sword shot and magic shot use MoveShot);
+;           bank4/monster-shots-fireballs.asm (UpdateFireball aims with these routines).
 ; KEY FACTS:
+;   - A shot that would cross a room bound does not move; MoveShot returns [0E] = $80 and [0F] = 0.
+;   - MoveShot moves with the grid offset zeroed, so the grid offset limits never stop a shot; with
+;     [0E] = 0 the grid offset accumulates the signed pixels flown (the boomerang's range counter).
+;   - Aim has nine steps from horizontal (index 0) through diagonal (4) to vertical (8). With
+;     g = larger and l = smaller axis distance: g - l < 8 gives 4; else the index moves
+;     min(4, floor(g / l)) steps from 4 toward the longer axis (_CalcDiagonalSpeedIndex).
+;   - An axis counts as "reached" when its distance is < 9 pixels; [00] counts such axes
+;     (GetOneDirectionAndDistanceToTarget). A returning boomerang is caught when both are.
+;   - Equal coordinates give direction left (2) or up (8) (GetOneDirectionAndDistanceToTarget).
+;   - Boomerang return state $4x runs at half the table q-speed; state $5x at the full q-speed
+;     (SetBoomerangSpeed).
+;   - SetBoomerangSpeed decrements ObjMovingLimit once per call in state $4x and sets state $50 at 0;
+;     the return code calls it twice a frame, so a limit of $20 lasts $10 frames.
 ; CONTENTS: (generated; L = line in this file)
-;   L0026 MoveShot                            code  Params:
-;   L0066 GetDirectionsAndDistancesToTarget   code  Params:
-;   L0100 _CalcDiagonalSpeedIndex             code  Params:
-;   L0174 SetBoomerangSpeed                   code  Params:
-;   L0207 GetOneDirectionAndDistanceToTarget  code  Params:
-;   L0229 Dir_ToTarget_Return                 code
+;   L0049 MoveShot                            code  Moves a shot or boomerang along one direction unless that would cross a room bound.
+;   L0086 GetDirectionsAndDistancesToTarget   code  Finds the horizontal and vertical direction and distance from one object to another.
+;   L0122 _CalcDiagonalSpeedIndex             code  Picks one of nine aim angles (speed table index 0-8) from the two axis distances to a target.
+;   L0186 SetBoomerangSpeed                   code  Sets a returning boomerang's q-speed: half in state $4x (which it also times), full otherwise.
+;   L0215 GetOneDirectionAndDistanceToTarget  code  Finds direction and distance from an origin to a target coordinate on one axis.
+;   L0235 Dir_ToTarget_Return                 code  Shared RTS; WieldBomb (bank1/bomb-candle-wield.asm) also branches here to return.
 ; ============================================================================
 
-; Params:
-; A: direction
-; X: object index
-; [0E]: 0 to change grid offset, else leave it as is
-;
-; Returns:
-; [0E]: $80 if blocked
-; [0F]: moving direction, or 0 if boundary was crossed
-;
+; ----------------------------------------------------------------------------
+; Moves a shot or boomerang along one direction unless that would cross a room bound.
+; IN:   A = direction to move (one axis); X = object slot; [0E] = 0 to add the pixels moved to the grid
+;       offset, nonzero to leave the grid offset as it was; ObjQSpeedFrac,X = speed
+; OUT:  moved: [0F] = A, coordinate and ObjPosFrac,X updated, [0E] unchanged.
+;       blocked by a room bound: [0E] = $80, [0F] = 0, nothing moved.
+; NOTE: The grid offset is set to 0 for the move itself, so MoveObject's grid offset limits (+-$10)
+;       are never reached and cannot stop the shot. With [0E] = 0 the offset afterwards is the old value
+;       plus the signed pixels just moved (+ right/down, - left/up): a running distance. The boomerang
+;       code compares its absolute value with ObjMovingLimit as the range.
+; NOTE: The arrow/boomerang code calls this for the horizontal part of ObjDir, increments [0E], then
+;       calls it for the vertical part, so on a diagonal only the horizontal distance is counted.
+; ----------------------------------------------------------------------------
 MoveShot:
-    ; If a boundary was crossed, go set [0E] to $80 instead of moving.
+    ; If the direction leads past a room bound, return [0E] = $80 instead of moving.
     JSR BoundByRoomWithA
     BEQ @ReturnBlocked
 
-    ; Move the object as if grid offset were 0.
+    ; Move the object with its grid offset at 0.
     LDA ObjGridOffset, X
     PHA
     LDA #$00
     STA ObjGridOffset, X
     JSR MoveObject
-    PLA
+    PLA                         ; A = grid offset before the move.
 
-    ; If [0E] is set, keep the original value in grid offset,
-    ; or else add the new amount to it.
+    ; [0E] <> 0: put the old grid offset back. [0E] = 0: old offset + pixels just moved.
     LDY $0E
     BNE :+
     CLC
@@ -51,23 +73,21 @@ MoveShot:
     STA $0E
     RTS
 
-; Params:
-; A: object index of target
-; X: object index of origin
-; [00]: 0
-;
-; Returns:
-; [00]: the number of axes where the distance <= 8
-; [03]: distance X
-; [04]: distance Y
-; [0A]: vertical direction from origin to target
-; [0B]: horizontal direction from origin to target
-;
+; ----------------------------------------------------------------------------
+; Finds the horizontal and vertical direction and distance from one object to another.
+; IN:   A = object slot of the target; X = object slot of the origin; [00] = count to add to (callers
+;       that read it set it to 0 first)
+; OUT:  [03] = horizontal distance in pixels; [04] = vertical distance (also in A);
+;       [0B] = horizontal direction to the target (1 right, 2 left); [0A] = vertical direction
+;       (4 down, 8 up); [00] += number of axes whose distance is < 9; uses [01], [02]
+; NOTE: Coordinates are compared as they are (top-left corners, unsigned). Equal coordinates give
+;       left and up.
+; ----------------------------------------------------------------------------
 GetDirectionsAndDistancesToTarget:
-    ; Handle the horizontal.
+    ; Horizontal.
     PHA
     TAY
-    LDA #$02
+    LDA #$02                    ; Start from left; becomes right (1) if the target's X is greater.
     STA $0A
     LDA a:ObjX, Y
     LDY ObjX, X
@@ -76,10 +96,10 @@ GetDirectionsAndDistancesToTarget:
     LDA $0A
     STA $0B
 
-    ; Handle the vertical.
+    ; Vertical.
     PLA
     TAY
-    LDA #$08
+    LDA #$08                    ; Start from up; becomes down (4) if the target's Y is greater.
     STA $0A
     LDA a:ObjY, Y
     LDY ObjY, X
@@ -87,36 +107,29 @@ GetDirectionsAndDistancesToTarget:
     STA $04
     RTS
 
-; Params:
-; Y: middle speed index (4)
-; [03]: horizontal distance
-; [04]: vertical distance
-; [0A]: vertical direction
-; [0B]: horizontal direction
-;
-; Returns:
-; Y: speed index (0 to 8) for the angle
-;
+; ----------------------------------------------------------------------------
+; Picks one of nine aim angles (speed table index 0-8) from the two axis distances to a target.
+; IN:   Y = starting index (callers pass 4, the diagonal); [03] = horizontal distance;
+;       [04] = vertical distance
+; OUT:  Y = [00] = index: 0 = purely horizontal, 4 = diagonal (equal X and Y speed), 8 = purely
+;       vertical; [03], [04] are overwritten; uses [01]
+; NOTE: With g = the larger and l = the smaller distance: if g - l < 8 the index stays 4. Otherwise it
+;       moves one step toward the longer axis, then one more step for each further time l fits in what
+;       is left of g, stopping at 0 or 8: min(4, floor(g / l)) steps (4 steps when l = 0).
+; NOTE: The index selects a pair of q-speeds from the caller's X and Y tables (fireballs and
+;       returning boomerangs). The directions in [0A] and [0B] are not read here.
+; ----------------------------------------------------------------------------
 _CalcDiagonalSpeedIndex:
-    ; TODO: call it speed index or angle?
-    ; Store the middle speed index in [00]. It will be changed to the
-    ; right speed index to use incrementally.
-    ; Lower speed indexes yield faster X speeds and lower Y speeds.
-    ; Higher speed indexes yield faster Y speeds and lower X speeds.
+    ; [00] = the index being adjusted, starting at the caller's value.
+    ; Lower indexes mean more X speed and less Y speed; higher ones the reverse.
     STY $00
 
-    ; Assuming horizontal distance >= vertical distance, the
-    ; index offset in [01] is negative (-1) to go towards the X axis.
+    ; [01] = step: -1 (toward horizontal) while horizontal distance >= vertical distance.
     LDA #$FF
     STA $01
 
-    ; TODO:
-    ; If horizontal distance [03] < vertical distance [04], swap [03] and [04],
-    ; and store positive speed index 1 in [01] to go towards the Y axis.
-    ;
-    ; The point is to put the greater value in [03] and the lesser one in [04],
-    ; and use a speed index offset (1 or -1) that will point us in the direction
-    ; of the farther distance faster.
+    ; If horizontal distance [03] < vertical distance [04], swap them and step +1 (toward vertical).
+    ; Afterwards [03] = larger distance, [04] = smaller distance.
     LDA $03
     CMP $04
     BCS @Swap
@@ -129,9 +142,7 @@ _CalcDiagonalSpeedIndex:
     STA $01
 
 @Swap:
-    ; TODO: call it speed index or angle?
-    ; If the difference in distances is within 8 pixels,
-    ; return the speed index (angle) we have.
+    ; If the distances differ by less than 8 pixels, keep the starting index (diagonal).
     LDA $03
     SEC
     SBC $04
@@ -139,22 +150,19 @@ _CalcDiagonalSpeedIndex:
     BCC @Return
 
 @Turn:
-    ; TODO: call it speed index or angle?
-    ; Otherwise, go to the next speed index (angle).
+    ; Step the index toward the longer axis.
     LDA $00
     CLC
     ADC $01
     STA $00
 
-    ; TODO: call it speed index or angle?
-    ; If a speed index (angle) limit (0 or 8), we've gone all the way to an axis
-    ; (0, 90, 180, 270 degrees). So return this speed index (angle).
+    ; At 0 or 8 the aim is along an axis: stop.
     BEQ @Return
     CMP #$08
     BEQ @Return
 
-    ; Subtract the lesser distance from the greater distance.
-    ; If they still haven't crossed, then we can turn more.
+    ; Take the smaller distance out of the larger; while the remainder is still >= the smaller
+    ; distance, step again.
     LDA $03
     SEC
     SBC $04
@@ -163,28 +171,31 @@ _CalcDiagonalSpeedIndex:
     BCS @Turn
 
 @Return:
-    ; TODO: call it speed index or angle?
-    ; Return the speed index (angle) we found.
     LDY $00
     RTS
 
-; Params:
-; A: q-speed fraction
-;
+; ----------------------------------------------------------------------------
+; Sets a returning boomerang's q-speed: half in state $4x (which it also times), full otherwise.
+; IN:   A = q-speed from the speed table; X = object slot; ObjMovingLimit,X = calls left in state $4x
+; OUT:  ObjQSpeedFrac,X = A, or A / 2 in state $4x; ObjMovingLimit,X decremented in state $4x; when
+;       it reaches 0, ObjState,X = $50 (the low nibble, the animation step, restarts at 0)
+; NOTE: The return code calls this twice per frame (vertical speed, then horizontal speed), so the
+;       limit of $20 set on entering state $40 lasts $10 frames. The table's largest value is $80
+;       (2 pixels per frame on one axis); halved it is $40 (1 pixel per frame).
+; ----------------------------------------------------------------------------
 SetBoomerangSpeed:
     STA ObjQSpeedFrac, X
 
-    ; If in major state $50, use this speed as is.
+    ; Only state $4x (slow return) changes anything further.
     LDA ObjState, X
     AND #$F0
     CMP #$40
     BNE @Exit
 
-    ; Else, in major state $40, go at half the speed.
+    ; State $4x: half speed.
     LSR ObjQSpeedFrac, X
 
-    ; Once we've traveled the target amount of time, set state $50 to go faster.
-    ; In major state $40, ObjMovingLimit is a timer to change the state to $50.
+    ; In state $4x ObjMovingLimit counts down to the switch to state $50 (fast return).
     DEC ObjMovingLimit, X
     BNE @Exit
     LDA #$50
@@ -193,23 +204,17 @@ SetBoomerangSpeed:
 @Exit:
     RTS
 
-; Params:
-; A: target coordinate
-; Y: origin coordinate
-; [00]: a value
-; [0A]: the decreasing direction on the coordinates' axis (2 or 8)
-;
-; Returns:
-; A: the distance from origin to target
-; [00]: the original value + 1, if < 8 pixels between origin and target
-; [0A]: the direction from origin to target
-;
+; ----------------------------------------------------------------------------
+; Finds direction and distance from an origin to a target coordinate on one axis.
+; IN:   A = target coordinate; Y = origin coordinate; [0A] = the axis's decreasing direction
+;       (2 left or 8 up); [00] = a count
+; OUT:  A = distance in pixels; [0A] = direction from origin to target (unchanged if origin >= target,
+;       else shifted right once: 2 -> 1 right, 8 -> 4 down); [00] incremented if distance < 9;
+;       [01] = smaller coordinate, [02] = larger coordinate
+; ----------------------------------------------------------------------------
 GetOneDirectionAndDistanceToTarget:
-    ; If the origin coordinate already >= target coordinate, then
-    ; the direction in [0A] is already correct. Otherwise, shift it right
-    ; to flip it.
-    ;
-    ; After this, [02] will >= [01].
+    ; If origin >= target, the direction in [0A] already points at the target (or they are equal).
+    ; Otherwise swap the two so that [02] >= [01], and flip the direction by shifting it right.
     STA $01
     STY $02
     CPY $01
@@ -219,12 +224,13 @@ GetOneDirectionAndDistanceToTarget:
     LSR $0A
 
 @Subtract:
-    ; If the difference between the coordinates < 9, increment [00].
+    ; A = distance. If it is < 9, count this axis in [00].
     LDA $02
     SEC
     SBC $01
     CMP #$09
     BCS Dir_ToTarget_Return
     INC $00
+; Shared RTS; WieldBomb (bank1/bomb-candle-wield.asm) also branches here to return.
 Dir_ToTarget_Return:
     RTS

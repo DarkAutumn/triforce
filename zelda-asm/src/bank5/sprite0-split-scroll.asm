@@ -2,32 +2,52 @@
 ; FILE:     bank5/sprite0-split-scroll.asm BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 1263-1367
 ; SUBJECTS: (none)
-; TOPIC:    Sprite-0 split; padding
-; SEE ALSO:
+; TOPIC:    The sprite-0 split: waits inside the frame handler for the sprite-0 hit at the bottom of the
+;           status bar, then sets the scroll (or blanks the screen) for the play area below it. Followed
+;           by 99 bytes of $FF filler.
+; SEE ALSO: bank7/run-game-nmi.asm (the frame handler calls this when IsSprite0CheckActive is set);
+;           bank5/mode7-scroll-init.asm (WriteAndEnableSprite0 places sprite 0 and sets the flag);
+;           bank5/scroll-world.asm (updates CurHScroll, VScrollAddrHi/Lo, OddBaseNameTableOverride);
+;           bank5/mode7-scroll-update.asm (the scroll submodes; submode 7 clears the flag).
 ; KEY FACTS:
+;   - Runs once per frame while IsSprite0CheckActive is nonzero, busy-waiting on PPU status bit 6, so
+;     the status bar stays fixed while the play area scrolls. WaitAndScrollToSplitBottom.
+;   - GameMode < 8 (room scroll, mode 7): nothing is changed while GameSubmode = 0; a horizontal scroll
+;     (Link's direction 1 or 2) writes CurHScroll and nametable bit OddBaseNameTableOverride; a vertical
+;     scroll (4 or 8) writes VScrollAddrHi/Lo to the PPU address register.
+;     WaitAndScrollToSplitBottom@HorizontalSplit.
+;   - GameMode 8-$10: all video is turned off below the split. GameMode >= $11: base nametable bit 0 is
+;     set below the split. WaitAndScrollToSplitBottom@ModeAtLeast8.
+;   - The delays are cycle-counted loops: about 1005 CPU cycles plus 9 NOPs after the hit, then about
+;     666 more before the scroll registers are written. WaitAndScrollToSplitBottom.
 ; CONTENTS: (generated; L = line in this file)
-;   L0012 WaitAndScrollToSplitBottom  code
+;   L0034 WaitAndScrollToSplitBottom  code  Waits for the sprite-0 hit, then sets the play area's scroll for this frame (split-screen scroll).
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Waits for the sprite-0 hit, then sets the play area's scroll for this frame (split-screen scroll).
+; IN:   GameMode, GameSubmode, ObjDir (slot 0), CurHScroll, OddBaseNameTableOverride, VScrollAddrHi/Lo.
+; OUT:  Writes the PPU control, scroll or address registers mid-frame; CurPpuControl updated.
+; NOTE: Loops until PPU status bit 6 is set: sprite 0 must be on screen over opaque background.
+;       The unnamed padding after the routine fills the gap up to InitMode8.
+; ----------------------------------------------------------------------------
 WaitAndScrollToSplitBottom:
-    LDA PpuStatus          ; Wait for Sprite 0 Hit.
+    LDA PpuStatus               ; Wait for the sprite-0 hit (status bit 6).
     AND #$40
     BEQ WaitAndScrollToSplitBottom
     LDA PpuStatus
 
-    ; Wait cycles.
-    ; TODO: Why do these differ?
-    ; (cycle at 8535 - cycle at 852b) = 1005  (see CPU status in debugger)
-    ; (multiply instruction timing appropriately) = 1010
+    ; Delay loop: 4 outer passes of 49 inner passes; about 1005 CPU cycles by instruction count
+    ; (LDY 2, per outer pass LDX 2 + 49 * (DEX 2 + BPL 3) - 1 + DEY 2 + BPL 3, last BPL 1 less).
     LDY #$03
-:
+@DelayOuter:
     LDX #$30
 :
     DEX
     BPL :-
     DEY
-    BPL :--
-    NOP                         ; Wait 18 cycles.
+    BPL @DelayOuter
+    NOP                         ; 9 NOPs: 18 more cycles.
     NOP
     NOP
     NOP
@@ -38,37 +58,38 @@ WaitAndScrollToSplitBottom:
     NOP
     LDA GameMode
     CMP #$08
-    BCS :++++
+    BCS @ModeAtLeast8           ; Modes 8 and up do not scroll.
     LDA GameSubmode
-    BEQ @Exit                   ; If GameSubmode is 0, then return.
+    BEQ @Exit                   ; Submode 0: leave the scroll as the frame handler set it.
     LDA ObjDir
     CMP #$04
-    BCC :++                     ; TODO: If facing horizontally, then go update scroll registers.
+    BCC @HorizontalSplit        ; Link faces right (1) or left (2): horizontal scroll.
 
-    ; Scrolling vertically, will set PPUADDR instead of PPUSCROLL.
-    ; Wait about 666 cycles.
+    ; Vertical scroll: the PPU address register is set instead of the scroll register.
+    ; Delay about 666 cycles ($5F passes of NOP, DEY, BPL).
     LDY #$5E
 :
     NOP
     DEY
     BPL :-
-    NOP                         ; Wait 10 cycles.
+    NOP                         ; 5 NOPs: 10 more cycles.
     NOP
     NOP
     NOP
     NOP
-    LDA PpuStatus          ; Prepare for writing to PPUADDR.
+    LDA PpuStatus               ; Reset the PPU address latch.
 
-    ; Set PPUADDR mid-frame to 
-    ; achieve split-frame scrolling.
+    ; Point the PPU at the nametable row where the play area picture starts this frame.
     LDA VScrollAddrHi
     LDY VScrollAddrLo
     STA PpuAddr
     STY PpuAddr
-    LDA PpuData
+    LDA PpuData                 ; Two dummy reads.
     LDA PpuData
     RTS
-:
+
+@HorizontalSplit:
+    ; Horizontal scroll: the same delay loop, then PPU control and scroll.
     LDY #$5E
 :
     NOP
@@ -77,30 +98,31 @@ WaitAndScrollToSplitBottom:
     NOP
     NOP
     NOP
-    LDA CurPpuControl
+    LDA CurPpuControl           ; Base nametable bit 0 = OddBaseNameTableOverride (NT 0 or NT 1).
     AND #$FE
     ORA OddBaseNameTableOverride
     STA CurPpuControl
     STA PpuControl
-    LDA CurHScroll
+    LDA CurHScroll              ; X scroll = CurHScroll, Y scroll = 0.
     STA PpuScroll
     LDA #$00
     STA PpuScroll
 
 @Exit:
     RTS
-:
+
+@ModeAtLeast8:
     CMP #$11
-    BCS :+                      ; If GameMode < $11,
-    JMP TurnOffAllVideo         ; then turn off video and return.
+    BCS :+                      ; Modes $11 and up.
+    JMP TurnOffAllVideo         ; Modes 8-$10: blank everything below the split.
 :
-    LDA CurPpuControl      ; else change base nametable (0 -> 1 or 2 -> 3).
+    LDA CurPpuControl           ; Modes $11 and up: set base nametable bit 0 (NT 0 -> 1, NT 2 -> 3).
     ORA #$01
     STA CurPpuControl
     STA PpuControl
     RTS
 
-; Unknown block
+; DATA: filler ($FF), 99 bytes, up to InitMode8.
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF

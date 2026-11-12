@@ -2,35 +2,65 @@
 ; FILE:     bank5/submenu-map.asm        BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 7567-7750
 ; SUBJECTS: Submenu
-; TOPIC:    Submenu dungeon map, compass and map tests
-; SEE ALSO:
+; TOPIC:    The dungeon map sheet of the item submenu: builds one row of 16 room marks per call from
+;           the rooms' visited flags and doors; plus the tests "does Link have this level's compass /
+;           map".
+; SEE ALSO: bank5/submenu-row-transfer.asm (Submenu_CueTransferRowUW calls the row writer for submenu
+;           rows $0D-$14); bank5/door-flags-dark-room.asm (CalcOpenDoorwayMask); bank5/fill-walls.asm
+;           (FindDoorTypeByDoorBit); bank7/next-room-room-flags.asm (GetRoomFlags, LevelMasks,
+;           MarkRoomVisited, the compass marker); bank5/submenu-items.asm and
+;           bank5/mode3-mode6-init.asm (other callers of HasCompass and HasMap).
 ; KEY FACTS:
+;   - The map sheet shows only rooms whose room flag bit $20 (visited) is set; it does not depend on
+;     owning the map (Submenu_WriteScanningMapRoomMark).
+;   - A visited room's mark is tile $E2 + a 4-bit mask of its passable sides (8 up, 4 down, 2 left,
+;     1 right); an unvisited room is tile $F5 (Submenu_WriteScanningMapRoomMark).
+;   - A side counts as passable when its door type is 0 (open), or is 4 or more and the room flag
+;     bit for that direction is set (door opened); types 1-3 never do
+;     (Submenu_WriteScanningMapRoomMark through CalcOpenDoorwayMask).
+;   - Each row is rotated right by LevelInfo_SubmenuMapRotation columns and then blanked wherever
+;     LevelInfo_SubmenuMapMask says no room exists (Submenu_WriteSheetMapRowTransferRecord).
+;   - Compasses and maps of levels 1-8 are bit (level - 1) of item slots $10 and $11; level 9 uses
+;     bit 0 of slots $12 and $13. Both tests return 0 in the OW (HasCompass, HasMap).
 ; CONTENTS: (generated; L = line in this file)
-;   L0016 MapRowMasks                             data
-;   L0019 Submenu_WriteSheetMapRowTransferRecord  code
-;   L0114 HasCompass                              code  Returns:
-;   L0121 HasMap                                  code  Returns:
-;   L0145 Submenu_WriteScanningMapRoomMark        code  Params:
+;   L0034 MapRowMasks                             data  TABLE: bit of LevelInfo_SubmenuMapMask for a map row; index = map row 0 (top) to 7; value = $80 >> row.
+;   L0049 Submenu_WriteSheetMapRowTransferRecord  code  Builds the PPU transfer record for one row (16 room marks) of the submenu's dungeon map sheet.
+;   L0143 HasCompass                              code  Tests whether Link has the compass of the current level.
+;   L0153 HasMap                                  code  Tests whether Link has the map of the current level.
+;   L0183 Submenu_WriteScanningMapRoomMark        code  Writes the map sheet tile for room SubmenuScanRoomId into the row being built.
 ; ============================================================================
 
+; TABLE: bit of LevelInfo_SubmenuMapMask for a map row; index = map row 0 (top) to 7; value = $80 >> row.
 MapRowMasks:
     .BYTE $80, $40, $20, $10, $08, $04, $02, $01
 
+; ----------------------------------------------------------------------------
+; Builds the PPU transfer record for one row (16 room marks) of the submenu's dungeon map sheet.
+; IN:   SubmenuScrollProgress = submenu row * 2 (rows $0D-$14 are map rows 0-7); SubmenuScanRoomId =
+;       the room of this row's rightmost column
+; OUT:  DynTileBuf = record: address $290C + row * $20, 16 tiles, $FF end marker;
+;       SubmenuScanRoomId reduced by $10 (the row above)
+; NOTE: Rows are produced bottom to top as SubmenuScrollProgress counts down, one row per call.
+; NOTE: Order of work: marks for the 16 rooms by room column; rotate the row right by
+;       LevelInfo_SubmenuMapRotation; then blank (tile $F5) every column whose
+;       LevelInfo_SubmenuMapMask byte lacks this row's bit. The mask is indexed by the column
+;       after rotation.
+; ----------------------------------------------------------------------------
 Submenu_WriteSheetMapRowTransferRecord:
-    LDY #$10                    ; The row is $10 tiles and bytes long.
+    LDY #$10                    ; 16 tiles in the row.
 
-    ; Get the submenu row by dividing (current menu scrolling value) by 2.
+    ; X = submenu row.
     LDA SubmenuScrollProgress
     LSR
     TAX
 
-    ; Write an end marker at the end of the row data.
+    ; End marker after the 16 tiles, and the tile count.
     LDA #$FF
     STA DynTileBuf+3, Y
-    LDA #$10                    ; We'll transfer $10 bytes.
+    LDA #$10
     STA DynTileBuf+2
 
-    ; Calculate PPU address ($290C + X*$20).
+    ; PPU address = $28EC + (row + 1) * $20 = $290C + row * $20.
     LDA #$28
     STA DynTileBuf
     LDA #$EC
@@ -45,30 +75,29 @@ Submenu_WriteSheetMapRowTransferRecord:
     BPL @Add20H
     STA DynTileBuf+1
 
-    ; Write a map mark in the dynamic transfer buf for each room
-    ; in the range currently being scanned.
+    ; Write the 16 marks from the right end (Y = $10, room SubmenuScanRoomId)
+    ; to the left end (Y = 1, 15 rooms lower).
     LDA SubmenuScanRoomId
-    PHA                         ; Save the current scanned room index before writing any marks.
+    PHA
 :
-    JSR Submenu_WriteScanningMapRoomMark    ; Y register is $10.
+    JSR Submenu_WriteScanningMapRoomMark
     DEC SubmenuScanRoomId
     DEY
     BNE :-
 
-    ; Restore the current scanned room index and subtract $10.
+    ; Next call: the row above (room id - $10).
     PLA
     SEC
     SBC #$10
     STA SubmenuScanRoomId
 
-    ; If the level info indicates that the submenu map should be
-    ; rotated horizontally, then loop to rotate right the number of
-    ; bytes indicated.
+    ; Rotate the 16 tiles right by one column, LevelInfo_SubmenuMapRotation times:
+    ; the last tile wraps around to the first column.
     LDX LevelInfo_SubmenuMapRotation
 
 @Rotate:
     BEQ @DoneRotate
-    LDA DynTileBuf+18
+    LDA DynTileBuf+18           ; The last tile.
     PHA
     LDY #$0E
 :
@@ -82,11 +111,8 @@ Submenu_WriteSheetMapRowTransferRecord:
     JMP @Rotate
 
 @DoneRotate:
-    ; Exclude rooms that are not part of this level, and certain rooms
-    ; that should never be marked visited in the submenu map.
-    ;
-    ; First calculate the map row:
-    ; ((current menu scrolling value) / 2) - $D
+    ; Blank the columns that have no room in this row.
+    ; X = map row = submenu row - $0D = (SubmenuScrollProgress - $1A) / 2.
     LDA SubmenuScrollProgress
     SEC
     SBC #$1A
@@ -95,9 +121,8 @@ Submenu_WriteSheetMapRowTransferRecord:
     LDY #$0F
 
 @MaskRooms:
-    ; For each element ($10) in the row, starting from $F:
-    ; If the current row is set in the submenu map mask,
-    ; then replace the tile with $F5, a blank map tile.
+    ; For columns $0F down to 0: if the column's mask byte lacks this row's bit,
+    ; write the blank map tile $F5.
     LDA LevelInfo_SubmenuMapMask, Y
     AND MapRowMasks, X
     BNE :+
@@ -108,70 +133,78 @@ Submenu_WriteSheetMapRowTransferRecord:
     BPL @MaskRooms
     RTS
 
-; Returns:
-; A: 0 if compass of current level is missing.
-;
+; ----------------------------------------------------------------------------
+; Tests whether Link has the compass of the current level.
+; OUT:  A = 0 (Z set) when in the OW or the compass is missing; nonzero when he has it. In a
+;       dungeon X = the item slot read and Y = the bit number.
+; NOTE: Levels 1-8: bit (level - 1) of item slot $10 (InvCompass). Level 9: bit 0 of slot $12
+;       (InvCompass9). Shares its code with HasMap.
+; ----------------------------------------------------------------------------
 HasCompass:
-    LDX #$10                    ; Check compasses.
+    LDX #$10                    ; Item slot of the compasses.
     BNE :+
 
-; Returns:
-; A: 0 if map of current level is missing.
-;
+; ----------------------------------------------------------------------------
+; Tests whether Link has the map of the current level.
+; OUT:  A = 0 (Z set) when in the OW or the map is missing; nonzero when he has it. In a dungeon
+;       X = the item slot read and Y = the bit number.
+; NOTE: Levels 1-8: bit (level - 1) of item slot $11 (InvMap). Level 9: bit 0 of slot $13 (InvMap9).
+; ----------------------------------------------------------------------------
 HasMap:
-    LDX #$11                    ; Check maps.
+    LDX #$11                    ; Item slot of the maps.
 :
     LDA CurLevel
-    BEQ @Exit                   ; If in OW, then return.
+    BEQ @Exit                   ; OW: return 0.
     SEC
-    SBC #$01                    ; Base the level number on zero.
+    SBC #$01                    ; Level number from 0.
     CMP #$08
-    BCC :+                      ; If in level 9,
-    INX                         ; then check the level 9 variables.
+    BCC :+
+    INX                         ; Level 9: use the level 9 slot, two slots further on.
     INX
 :
-    AND #$07                    ; Sanitize the zero-based level number.
+    AND #$07                    ; Bit number: 0-7 for levels 1-8, 0 for level 9.
     TAY
     LDA InvItems, X
-    AND LevelMasks, Y           ; Return the item value for the current level.
+    AND LevelMasks, Y
 
 @Exit:
     RTS
 
-; Params:
-; Y: offset from the third element in dynamic transfer buf
-;    to write at (between 1 and $10)
-;
+; ----------------------------------------------------------------------------
+; Writes the map sheet tile for room SubmenuScanRoomId into the row being built.
+; IN:   Y = column position 1-$10 (the tile goes to DynTileBuf+2+Y); SubmenuScanRoomId = room
+; OUT:  Y and RoomId preserved; OpenDoorwayMask = the room's passable sides, or $13 if unvisited
+; NOTE: Unvisited (room flag bit $20 clear): tile $F5, blank. Visited: tile $E2 + mask, where the
+;       mask has bit 8 up, 4 down, 2 left, 1 right set for each side that is door type 0 (open) or
+;       a door of type 4 or more whose "opened" room flag bit is set (CalcOpenDoorwayMask).
+; NOTE: RoomId is set to the scanned room for the duration, because the door lookups work on
+;       RoomId.
+; ----------------------------------------------------------------------------
 Submenu_WriteScanningMapRoomMark:
-    TYA                         ; Save dynamic transfer buf offset.
+    TYA                         ; Save the column position.
     PHA
-    JSR GetRoomFlags            ; Call this to load the address of level block world flags.
-    LDA RoomId                  ; Save current room ID.
+    JSR GetRoomFlags            ; For [00:01] = address of the level's room flags.
+    LDA RoomId                  ; Save the real room.
     PHA
 
-    ; Temporarily set current room ID to the room ID we're scanning,
-    ; in order to look up its information.
+    ; Look at the scanned room instead.
     LDA SubmenuScanRoomId
     STA RoomId
 
-    ; Set OpenDoorMask to $13, in case the room has not been
-    ; visited. $E2 will be added, yielding $F5, which is the blank
-    ; map mark tile.
+    ; Default for an unvisited room: $13 + $E2 = $F5, the blank map tile.
     LDA #$13
     STA OpenDoorwayMask
 
-    ; Get the currently scanned room's visit state.
+    ; Visited?
     LDY RoomId
     LDA ($00), Y
-    AND #$20                    ; Visit state
+    AND #$20
 
-    ; If it's been visited, then check each of the 4 doors,
-    ; and build an open door mask.
-    ;
-    ; Start with direction up and direction index 3.
+    ; If visited, shift one bit per side into the mask: direction bits 8, 4, 2, 1
+    ; with direction index X = 3 to 0.
     BEQ @WriteMapTile
     LDA #$08
-    STA $02                     ; [02] holds door direction
+    STA $02                     ; [02] = direction bit of the side.
     LDX #$03
 :
     JSR FindDoorTypeByDoorBit
@@ -181,17 +214,12 @@ Submenu_WriteScanningMapRoomMark:
     BNE :-
 
 @WriteMapTile:
-    ; Restore current room ID and dynamic buffer offset.
-    PLA
+    PLA                         ; Restore the real room and the column position.
     STA RoomId
     PLA
     TAY
 
-    ; The map marks are arranged in the same order as all the
-    ; possible values of OpenDoorMask.
-    ;
-    ; Add $E2 for the first map mark tile, and store it in the
-    ; dynamic transfer buf at the current offset.
+    ; The 16 map mark tiles $E2-$F1 are in mask order.
     LDA OpenDoorwayMask
     CLC
     ADC #$E2

@@ -2,17 +2,41 @@
 ; FILE:     bank5/uw-floor-push-block.asm BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 5311-5535
 ; SUBJECTS: (none)
-; TOPIC:    Dungeon floor layout, squares, push block creation
-; SEE ALSO:
+; TOPIC:    Lays out the floor of a dungeon room (12 x 7 squares of 2 x 2 tiles) from its room layout
+;           and the dungeon column heaps, and creates the push block object for rooms flagged with one.
+; SEE ALSO: bank5/room-layouts-uw.asm (RoomLayoutsUW, ColumnHeapUW0-9: the data decoded here);
+;           bank5/mode12-lay-out-room.asm (LayOutRoom: walls and doors first, then LayoutUWFloor);
+;           bank5/layout-room-ow.asm (overworld, cave and cellar layout: same scheme, other bit fields);
+;           bank5/create-room-objects.asm (CreateRoomObjects calls FindAndCreatePushBlockObject);
+;           bank4/push-block.asm (the push block object's states); bank7/tile-obj-tiles.asm
+;           (GetUniqueRoomId).
 ; KEY FACTS:
+;   - A dungeon room layout is 12 bytes, one per floor column: high nibble = column heap 0-9, low nibble =
+;     index of the column inside that heap. Layout address = RoomLayoutsUW + layout id * 12; layout id =
+;     LevelBlockAttrsD bits 5-0 (LayoutUWFloor).
+;   - A square descriptor in a column heap: bit 7 = first square of a column, bits 6-4 = extra repeats
+;     (the square is written 1-8 times), bits 2-0 = index into PrimarySquaresUW; bit 3 is not read
+;     (LayoutUWFloor).
+;   - The floor starts at tile column 4, tile row 4 of the play area ($658C; pixel $20,$60) and is 12
+;     squares wide, 7 high (LayoutUWFloor).
+;   - Square tiles $70-$F2 expand to four consecutive tiles (top-left, bottom-left, top-right,
+;     bottom-right); any other tile fills all four cells (WriteSquareUW).
+;   - The push block object always goes in object slot $0B, type $68, at the first block tile ($B0)
+;     found left to right in the middle floor row (Y = $90, X = $20-$C0 in steps of $10); if none is
+;     found it is put at X = $D0 (FindAndCreatePushBlockObject).
+;   - Layout id $21 (the level entrance room) has a special push block position ($40,$80); no room of
+;     the game's level data combines layout $21 with the push block flag, so it is never used
+;     (FindAndCreatePushBlockObject).
 ; CONTENTS: (generated; L = line in this file)
-;   L0016 ColumnDirectoryUW             data
-;   L0028 PrimarySquaresUW              data
-;   L0031 LayoutUWFloor                 code
-;   L0137 WriteSquareUW                 code  Params:
-;   L0183 FindAndCreatePushBlockObject  code
+;   L0040 ColumnDirectoryUW             data  TABLE: addresses of the ten dungeon column heaps; index = high nibble of a room layout byte; value =
+;   L0056 PrimarySquaresUW              data  TABLE: first tile of each dungeon floor square; index = bits 2-0 of a square descriptor; value = tile.
+;   L0066 LayoutUWFloor                 code  Writes the 12 x 7 squares of the current dungeon room's floor into the play area tile map.
+;   L0176 WriteSquareUW                 code  Writes one 2 x 2 tile dungeon square into the play area tile map.
+;   L0227 FindAndCreatePushBlockObject  code  Creates the push block object (type $68) in object slot $0B at the room's block tile.
 ; ============================================================================
 
+; TABLE: addresses of the ten dungeon column heaps; index = high nibble of a room layout byte; value =
+;   address of a run of square descriptors (see LayoutUWFloor).
 ColumnDirectoryUW:
     .ADDR ColumnHeapUW0
     .ADDR ColumnHeapUW1
@@ -25,18 +49,30 @@ ColumnDirectoryUW:
     .ADDR ColumnHeapUW8
     .ADDR ColumnHeapUW9
 
+; TABLE: first tile of each dungeon floor square; index = bits 2-0 of a square descriptor; value = tile.
+;   0 $B0 block (the tile FindAndCreatePushBlockObject searches for), 1 $74 floor tile (unverified),
+;   2 $94 and 3 $B4 statues (unverified), 4 $70 stairs, 5 $68 (one tile repeated; sand, unverified),
+;   6 $F4 (one tile repeated; water, unverified), 7 $24 blank (black).
 PrimarySquaresUW:
     .BYTE $B0, $74, $94, $B4, $70, $68, $F4, $24
 
+; ----------------------------------------------------------------------------
+; Writes the 12 x 7 squares of the current dungeon room's floor into the play area tile map.
+; IN:   RoomId; LevelBlockAttrsD (layout id). The walls and doors are already laid out by the caller.
+; OUT:  PlayAreaTiles columns 4-27, rows 4-17 written. Uses [00]-[08].
+; NOTE: [02:03] = the room's 12 layout bytes, [04:05] = current square descriptor, [00:01] = play area
+;       cursor, [06] = column 0-11, [07] = row 0-6, [08] = repeats done of the current square.
+; ----------------------------------------------------------------------------
 LayoutUWFloor:
     JSR GetUniqueRoomId
-    PHA                         ; Save unique room ID.
-    LDA #<RoomLayoutsUW         ; Load the address of room column directory in [$02:03].
+    PHA                         ; Save the layout id (unique room id).
+    LDA #<RoomLayoutsUW         ; [02:03] = start of the dungeon room layouts.
     STA $02
     LDA #>RoomLayoutsUW
     STA $03
-    PLA                         ; Restore unique room ID.
-    ASL                         ; Add ((unique room ID) * $C) to address in [$02:03]. Each unique room has $C columns.
+    PLA
+    ASL                         ; [02:03] += layout id * 12 (id * 4, added three times):
+                                ; each layout has 12 column bytes.
     ASL
     STA $00
     JSR AddToInt16At2
@@ -44,166 +80,171 @@ LayoutUWFloor:
     JSR AddToInt16At2
     LDA $00
     JSR AddToInt16At2
-    LDA #$8C                    ; Load the address of top-left tile in floor of play area in [$00:01].
+    LDA #$8C                    ; [00:01] = $658C = PlayAreaTiles + 4 * $16 + 4: tile column 4, row 4,
+                                ; the top-left tile of the floor.
     STA $00
     LDA #$65
     STA $01
 
-    ; For each column in room, indexed by [06]:
+    ; For each of the 12 floor columns, indexed by [06]:
     LDY #$00
     STY $06
 
 @LoopColumnUW:
     LDY $06
-    LDA ($02), Y                ; Get a column descriptor.
-    AND #$F0                    ; Put column table number * 2 in X.
+    LDA ($02), Y                ; Layout byte of this column.
+    AND #$F0                    ; X = heap number * 2 (high nibble).
     LSR
     LSR
     LSR
     TAX
-    LDA ColumnDirectoryUW, X    ; Load the column table address for this descriptor in [$04:05].
+    LDA ColumnDirectoryUW, X    ; [04:05] = address of that column heap.
     STA $04
     LDA ColumnDirectoryUW+1, X
     STA $05
-    LDA ($02), Y                ; Get the column descriptor again.
-    AND #$0F                    ; Put column index in X.
+    LDA ($02), Y                ; Layout byte again.
+    AND #$0F                    ; X = index of the column inside the heap.
     TAX
     LDY #$00
 
 @FindSquare:
-    LDA ($04), Y                ; Get a square descriptor.
-    BPL :+                      ; If high bit is set,
-    DEX                         ; then we've found the beginning of a column;
-    BMI @FoundColumn            ; If this is the column we want, then go handle it.
+    ; Walk the heap, counting descriptors with bit 7 set (column starts), until column X is reached.
+    LDA ($04), Y
+    BPL :+                      ; Not a column start.
+    DEX
+    BMI @FoundColumn            ; This is the column wanted.
 :
-    INY                         ; Increment the square descriptor offset.
-    JMP @FindSquare             ; Go get the next square descriptor.
+    INY
+    JMP @FindSquare
 
 @FoundColumn:
-    ; We found the column.
     TYA
-    JSR AddToInt16At4           ; Advance the square descriptor pointer by the offset, so we don't have to keep the offset in Y.
+    JSR AddToInt16At4           ; [04:05] now points at the column's first square descriptor.
     LDA #$00
-    STA $07                     ; Reset processed row count.
-    STA $08                     ; Reset repeat count.
+    STA $07                     ; Row = 0.
+    STA $08                     ; Repeats done = 0.
 
 @LoopSquareRow:
-    ; Write and repeat squares from the column.
     LDY #$00
-    LDA ($04), Y                ; Get the square descriptor.
-    AND #$07                    ; Get the square index from the descriptor.
+    LDA ($04), Y                ; Square descriptor.
+    AND #$07                    ; Bits 2-0: index into PrimarySquaresUW.
     TAX
     LDA PrimarySquaresUW, X
     LDY #$00
     JSR WriteSquareUW
-    LDA #$02                    ; Point to next square in column in play area.
+    LDA #$02                    ; Move the cursor 2 tiles down: the next square of this column.
     JSR AddToInt16At0
     LDY #$00
-    LDA ($04), Y                ; Get the square descriptor.
-    AND #$70                    ; Isolate the count.
+    LDA ($04), Y                ; Square descriptor.
+    AND #$70                    ; Bits 6-4: number of extra repeats.
     LSR
     LSR
     LSR
     LSR
     CMP $08
-    BEQ :+                      ; If we haven't repeated this square as specified,
-    INC $08                     ; then increment the processed repeat count;
-    JMP @NextLoopSquareRow      ; and go increment the row, and check if we're done in this column.
+    BEQ :+                      ; All repeats done: go on to the next descriptor.
+    INC $08                     ; Else count a repeat and write the same square again.
+    JMP @NextLoopSquareRow
 :
-    LDA #$00                    ; Reset repeat count.
+    LDA #$00                    ; Reset the repeat count.
     STA $08
     JSR Add1ToInt16At4          ; Point to the next square descriptor.
 
 @NextLoopSquareRow:
-    INC $07                     ; Increment the processed row count.
+    INC $07                     ; Next row.
     LDA $07
-    CMP #$07                    ; There are 7 square rows in UW floor.
-    BCC @LoopSquareRow          ; If we haven't written 7 rows, then go process a square.
-    LDA #$1E                    ; Move 2 columns right and to the top of the floor area.
+    CMP #$07                    ; The floor is 7 squares high.
+    BCC @LoopSquareRow
+    LDA #$1E                    ; The cursor is 14 tiles below the column top: +$1E (2 * $16 - 14)
+                                ; puts it at the top of the floor two tile columns to the right.
     JSR AddToInt16At0
-    INC $06                     ; Increment column index.
+    INC $06                     ; Next column.
     LDA $06
-    CMP #$0C
-    BCS :+                      ; If we haven't processed all columns,
-    JMP @LoopColumnUW           ; then go process the next one.
+    CMP #$0C                    ; The floor is 12 squares wide.
+    BCS :+
+    JMP @LoopColumnUW
 :
     RTS
 
-; Params:
-; A: primary square
-; Y: offset from [$00:01]
-; [$00:01]: pointer to play area
-;
+; ----------------------------------------------------------------------------
+; Writes one 2 x 2 tile dungeon square into the play area tile map.
+; IN:   A = the square's tile (PrimarySquaresUW value); [00:01] + Y = address of its top-left cell.
+; OUT:  four cells written (the map is stored by column, $16 tiles per column). Changes A, X, Y.
+; NOTE: tiles $70-$F2 are the first of four consecutive tiles (top-left, bottom-left, top-right,
+;       bottom-right); tiles below $70 or from $F3 up fill all four cells.
+; ----------------------------------------------------------------------------
 WriteSquareUW:
     CMP #$70
     BCC @WriteType2
     CMP #$F3
     BCS @WriteType2
 
-    ; Type 1 square.
-    ; Primary is the first tile. Next 3 tiles in CHR form the rest of the square.
-    ; Primary >= $70 and < $F3.
+    ; Tile $70-$F2: four consecutive tiles.
     TAX
-    STA ($00), Y                ; Write tile+0 to (col, row).
+    STA ($00), Y                ; Tile+0 to the top-left cell.
     INY
     INX
     TXA
-    STA ($00), Y                ; Write tile+1 to (col, row+1).
+    STA ($00), Y                ; Tile+1 to the bottom-left cell.
     TYA
     CLC
-    ADC #$15
+    ADC #$15                    ; +$15 (one column, $16, minus the row already stepped).
     TAY
     INX
     TXA
-    STA ($00), Y                ; Write tile+2 to (col+1, row).
+    STA ($00), Y                ; Tile+2 to the top-right cell.
     INX
     TXA
 
 @WriteLastTile:
     INY
-    STA ($00), Y                ; Write last tile to (col+1, row+1).
+    STA ($00), Y                ; Last tile to the bottom-right cell.
     RTS
 
 @WriteType2:
-    ; Type 2 square.
-    ; Primary is a tile used for the whole square.
-    ; Primary < $70 or >= $F3.
-    STA ($00), Y                ; Write tile to (col, row).
+    ; Tile below $70 or $F3 and up: the same tile in all four cells.
+    STA ($00), Y                ; Top-left cell.
     INY
-    STA ($00), Y                ; Write tile to (col, row+1).
+    STA ($00), Y                ; Bottom-left cell.
     PHA
     TYA
     CLC
     ADC #$15
     TAY
     PLA
-    STA ($00), Y                ; Write tile to (col+1, row).
-    JMP @WriteLastTile          ; Go write tile to (col+1, row+1).
+    STA ($00), Y                ; Top-right cell.
+    JMP @WriteLastTile          ; Go write the bottom-right cell.
 
+; ----------------------------------------------------------------------------
+; Creates the push block object (type $68) in object slot $0B at the room's block tile.
+; IN:   the room is laid out in PlayAreaTiles. Called by CreateRoomObjects when the room's
+;       LevelBlockAttrsD bit 6 (push block) is set.
+; OUT:  ObjType[$0B] = $68; ObjState[$0B] = 0; ObjDir[$0B] = 0; ObjX[$0B], ObjY[$0B] set. Uses [00:01].
+; NOTE: the block is the leftmost tile $B0 in tile row $A of the play area (the middle floor row,
+;       Y = $90), testing tile columns 4, 6, ... 24 (X = $20-$C0). If none matches, the object is still
+;       created, at X = $D0.
+; ----------------------------------------------------------------------------
 FindAndCreatePushBlockObject:
-    ; Reset block state and direction.
+    ; Reset the block's state and direction.
     LDA #$00
     STA ObjState+11
     STA ObjDir+11
 
-    ; If the unique room ID is $21, then
-    ; put the push block object at ($40, $80), and go set the type.
-    ;
-    ; UNKNOWN:
-    ; UW room layout $21 is the entrance room. But none of them
-    ; have the push block flag set in LevelBlock attributes.
+    ; Layout id $21 (the level entrance room): put the block at ($40, $80) without searching.
+    ; No room in the game's level data has both layout $21 and the push block flag, so this
+    ; branch never runs.
     JSR GetUniqueRoomId
     CMP #$21
-    BNE :+
-    ; Begin unverified code 167FE
+    BNE @FindBlockTile
     LDA #$40
     STA ObjX+11
-    ASL
+    ASL                         ; $80
     STA ObjY+11
-    JMP @SetType                ; Go set the object type and return.
-    ; End unverified code
-:
-    ; Look for a block tile in row $A of play area, starting in column 4.
+    JMP @SetType
+
+@FindBlockTile:
+    ; Look for a block tile ($B0) in tile row $A, starting in tile column 4. X is the offset into
+    ; PlayAreaColumnAddrs (2 bytes per tile column), stepped by one square (2 tile columns).
     LDX #$08
     LDY #$0A
 
@@ -219,22 +260,20 @@ FindAndCreatePushBlockObject:
     INX
     INX
     INX
-    CPX #$34
+    CPX #$34                    ; Stop before tile column 26.
     BNE @LoopColumn
 
 @Found:
-    ; The block was found in a column with an address at
-    ; offset %X in column table. So the column number would
-    ; be (%X/2), and X coordinate ((%X/2)*8). That means
-    ; multiplying %X by 4.
+    ; X = tile column * 2, and a tile column is 8 pixels wide: ObjX = X * 4.
+    ; (When nothing was found, X = $34 and ObjX = $D0.)
     TXA
     ASL
     ASL
     STA ObjX+11
-    LDA #$90                    ; Row $A is at $90 from the top of the screen.
+    LDA #$90                    ; Tile row $A is at Y = $40 + $A * 8 = $90.
     STA ObjY+11
 
 @SetType:
-    LDA #$68                    ; Block object type
+    LDA #$68                    ; Push block object type.
     STA ObjType+11
     RTS

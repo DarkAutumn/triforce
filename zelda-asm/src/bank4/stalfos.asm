@@ -2,30 +2,60 @@
 ; FILE:     bank4/stalfos.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 4670-4769
 ; SUBJECTS: (none)
-; TOPIC:    Stalfos; second-quest sword shot
-; SEE ALSO:
+; TOPIC:    Stalfos (object type $2A): a common wanderer that, in Q2 only, stops and fires a
+;           sword shot (object type $57) in its facing direction.
+; SEE ALSO: bank4/walker-wanderer-common.asm (UpdateCommonWanderer: walking, turning toward the chase
+;           target, the "wants to shoot" flag; InitWalker is the Stalfos init routine);
+;           bank4/shoot-helpers-candle.asm (_ShootIfWanted: slot search and the limit of 4 shots);
+;           bank4/moblin-lynel-shooting.asm (_TryShooting: the same shoot timer logic for Moblin,
+;           Lynel, Octorok); bank4/monster-shots-fireballs.asm (the sword shot's flight);
+;           bank7/object-update-table.asm (ObjectTypeToHpPairs, ObjectTypeToAttributes).
 ; KEY FACTS:
+;   - Stalfos walks as a common wanderer with turn rate $80 and never sets its own q-speed in Q1:
+;     it keeps the room-entry default $20 (0.5 pixel per frame). UpdateStalfos
+;   - Q1: Stalfos never shoots; UpdateStalfos returns right after drawing. UpdateStalfos
+;   - Q2: while the shoot timer is 0, a shot sequence may start only on frames where Random,X >= $F8
+;     (8 in 256), the Stalfos is not flashing from a hit, and its "wants to shoot" flag is set (it
+;     turned toward the chase target on its last grid square). UpdateStalfos@PrepareToShoot
+;   - Q2 shot sequence: ObjShootTimer = $30, then -1 per frame; q-speed is 0 (Stalfos stands still)
+;     while the timer is nonzero; the sword shot is fired on the frame the timer reaches $10, that is
+;     $20 frames after the start; walking resumes when it reaches 0. UpdateStalfos@SetShootTimer
+;   - The shot is skipped (the timer keeps running) if the clock is held or the Stalfos is stunned
+;     on the frame the timer is $10. A hit (invincibility timer nonzero) cancels the sequence:
+;     the timer is zeroed. UpdateStalfos@PrepareToShoot, UpdateStalfos@SetShootTimer
+;   - The shot fails when no monster slot is free or 4 monster shots are already in flight
+;     (_ShootIfWanted); its q-speed is then $20 for that one frame and the timer still runs out.
+;     UpdateStalfos@CheckResult
 ; CONTENTS: (generated; L = line in this file)
-;   L0012 UpdateStalfos  code
+;   L0043 UpdateStalfos  code  Updates a Stalfos: wanders, checks collisions, draws; in Q2 also runs its sword-shot timer.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Updates a Stalfos: wanders, checks collisions, draws; in Q2 also runs its sword-shot timer.
+; IN:   X = object slot.
+; OUT:  Q2 only: writes ObjShootTimer,X and ObjQSpeedFrac,X (0 while the shoot timer runs, else $20);
+;       may create a sword shot (type $57) in a free monster slot.
+; NOTE: Q1 leaves ObjQSpeedFrac,X alone, so Stalfos walks at the default $20 given to every monster
+;       slot on room entry. HP is $20 and the attribute byte $81 (type $2A in ObjectTypeToHpPairs and
+;       ObjectTypeToAttributes); touching it costs Link $0080 = half a heart before rings
+;       (ObjTypeToDamagePoints).
+; ----------------------------------------------------------------------------
 UpdateStalfos:
-    LDA #$80                    ; Turn rate $80
-    JSR UpdateCommonWanderer
+    LDA #$80                    ; Turn rate $80 for the wanderer logic.
+    JSR UpdateCommonWanderer    ; Shoved: moves by the shove. Clock or stun: does not move.
     JSR CheckMonsterCollisions
-    LDA #$08                    ; Animation counter 8
+    LDA #$08                    ; Reload value 8 for the animation counter.
     JSR AnimateAndDrawCommonObject
-    LDA #$20                    ; QSpeed $20
-    STA $01                     ; [01] holds qspeed $20
+    LDA #$20                    ; Walking q-speed $20 (0.5 pixel per frame),
+    STA $01                     ; kept in [01] for the Q2 code below.
 
-    ; If in the first quest, return. Stalfos can't shoot in this quest.
+    ; Q1 (quest number 0 for the current save slot): return. Stalfos does not shoot.
     LDY CurSaveSlot
     LDA QuestNumbers, Y
     BEQ @Exit
 
-    ; Second quest.
-    ;
-    ; If shoot timer = 0 and Random < $F8, then return.
+    ; Q2. A shot sequence is running while shoot timer <> 0: go continue it.
+    ; Otherwise only 8 of 256 values of Random,X ($F8-$FF) let a new one start; else return.
     LDA ObjShootTimer, X
     BNE @PrepareToShoot
     LDA Random, X
@@ -33,78 +63,75 @@ UpdateStalfos:
     BCC @Exit
 
 @PrepareToShoot:
-    LDA $01                     ; Save the qspeed.
-    PHA
+    LDA $01                     ; Push the walking q-speed; it is popped at @SetSpeed
+    PHA                         ; or replaced with 0 at @ZeroSpeed.
 
-    ; If temporarily invincible, then go reset shoot timer.
+    ; If flashing from a hit (invincibility timer <> 0), then go set shoot timer to 0:
+    ; a running sequence is cancelled.
     LDY #$00
     LDA ObjInvincibilityTimer, X
     BNE @SetShootTimer
 
-    ; If shoot timer >= 1, then decrement and go set shoot timer.
+    ; If shoot timer >= 1, then go store it decremented.
     LDY ObjShootTimer, X
     DEY
     BPL @SetShootTimer
 
-    ; If stalfos does not want to shoot, then go set the qspeed.
+    ; Shoot timer = 0. If the "wants to shoot" flag is clear, then go keep walking.
+    ; (The wanderer code sets the flag when Stalfos turns toward the chase target.)
     LDA Shooter_ObjWantsToShoot, X
     BEQ @SetSpeed
 
-    ; Else not temporarily invincible, and shoot timer = 0,
-    ; and wants to shoot.
-    ;
-    ; Set shoot timer to $30.
+    ; Start a shot sequence: shoot timer = $30 frames.
     LDY #$30
 
 @SetShootTimer:
     TYA
     STA ObjShootTimer, X
 
-    ; If shoot timer = 0, then we're not shooting.
-    ; Go set the qspeed.
+    ; If shoot timer = 0 (ran out, or cancelled by a hit), then go walk.
     BEQ @SetSpeed
 
-    ; If shoot timer <> $10, or we have the magic clock, or stunned;
-    ; then go reset qspeed.
+    ; Shoot timer <> 0: stand still. The shot leaves only on the frame the timer is $10,
+    ; and not if the clock is held or the Stalfos is stunned on that frame.
     CPY #$10
     BNE @ZeroSpeed
     LDA InvClock
     ORA ObjStunTimer, X
     BNE @ZeroSpeed
 
-    ; Try to shoot a sword shot.
+    ; Try to make a sword shot (object type $57) at Stalfos's position, facing its direction.
+    ; C = 0 if the flag is clear, no monster slot is free, or 4 monster shots are in flight.
     LDA #$57
     STA $00
     JSR _ShootIfWanted
 
-    ; If failed, then go set the qspeed.
+    ; If it failed, then go walk (through @CheckResult).
     BCC @CheckResult
 
-    ; Else set timer to $80, and decrement [0437][X].
-    ;
-    ; UNKNOWN: [0437] only ever seems to be decremented.
-    ; Also, Stalfos doesn't care about the timer. This block seems
-    ; copied and pasted from 8832 ("ShootIfWanted2").
+    ; Succeeded: set the object timer to $80 and decrement $437,X.
+    ; Neither has an effect seen in Stalfos code: this routine and the wanderer and walker movement
+    ; code it calls do not read ObjTimer for a Stalfos, and no walking-monster code reads $437,X
+    ; (it is only ever decremented; the same two instructions are in _ShootIfWanted2).
     LDA #$80
     STA ObjTimer, X
     DEC $0437, X
 
 @CheckResult:
-    ; We jump here if shooting failed. Jump again to set the qspeed.
+    ; C is still the result of _ShootIfWanted. Failed: go walk at q-speed $20 this frame.
     BCC @SetSpeed
 
-    ; Shooting succeeded.
-    ; Reset "wants to shoot" flag and the speed.
+    ; Shot made: clear the "wants to shoot" flag and stand still.
     LDA #$00
     STA Shooter_ObjWantsToShoot, X
 
 @ZeroSpeed:
-    PLA                         ; Replace qspeed on the stack with 0.
+    PLA                         ; Replace the q-speed on the stack with 0.
     LDA #$00
     PHA
 
 @SetSpeed:
-    PLA                         ; Pop and set the qspeed (0 or the speed for stalfos).
+    PLA                         ; Q-speed: 0 (standing) or $20 (walking).
     STA ObjQSpeedFrac, X
 
 @Exit:

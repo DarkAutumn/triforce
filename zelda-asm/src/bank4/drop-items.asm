@@ -2,42 +2,72 @@
 ; FILE:     bank4/drop-items.asm         BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 10995-11309
 ; SUBJECTS: (none)
-; TOPIC:    HP nibble extract, drop tables, SetUpDroppedItem, UpdateItem, DestroyMonster
-; SEE ALSO:
+; TOPIC:    What a dead monster leaves behind: the four drop groups, the drop table indexed by the kill
+;           cycle, drop rates, the fairy at 16 kills and the forced help drops; the dropped item object
+;           (type $60): lifetime, pickup by Link or his weapons. Also the HP nibble extractor, the boss
+;           death cry and this bank's copy of DestroyMonster.
+; SEE ALSO: bank7/object-update-table.asm (UpdateMetaObjectEnd: advances WorldKillCycle, turns the dead
+;           monster into type $60 and calls SetUpDroppedItem; ObjectTypeToHpPairs);
+;           bank1/weapon-damage-death.asm (HandleMonsterDied: WorldKillCount, HelpDropCount, IsHelpDropBomb);
+;           bank1/link-collision-harm.asm (Link_BeHarmed zeroes the three counters);
+;           bank1/take-item.asm (TryTakeItem: pickup range and effects); bank7/room-item-draw.asm
+;           (AnimateItemObject: flashing); bank4/fairy-flyer-common.asm (SetUpFairyObject, UpdateFairyObject);
+;           bank4/dodongo.asm (forces a bomb help drop); bank7/object-init-table.asm (InitObject sets ObjHP).
 ; KEY FACTS:
+;   - Never drop: types $5D dead dummy, $14 child Gel, $15 Gel, $1B-$1D Keese, $17 Like-Like; and a
+;     Stalfos ($2A) or Gibdo ($30) in object slot 1. NoDropMonsterTypes, SetUpDroppedItem@Found
+;   - Group 0: $07/$08 red Octoroks, $0E Tektite, $04 Moblin, $0F Blue Leever, $23 Blue Wizzrobe.
+;     Group 1: $21/$22 Ghini, $0D Tektite, $10 Red Leever, $13 Zol, $28 Rope, $2A Stalfos, $27 Wallmaster,
+;     $16 Pols Voice. Group 2: $09/$0A blue Octoroks, $03 Moblin, $01 Lynel, $12 Vire, $06 Goriya,
+;     $0B Darknut, $24 Red Wizzrobe, $30 Gibdo. Group 3: every other type. DropItemMonsterTypes0/1/2
+;   - The item is DropItemTable[group * 10 + WorldKillCycle]; the cycle (0-9) was already advanced for
+;     this kill by UpdateMetaObjectEnd. DropItemTable, SetUpDroppedItem@LookUpItem
+;   - Without a forced drop the item appears only if Random,X (X = the monster's slot) < the group's
+;     rate: $50 (31%), $98 (59%), $68 (41%), $68 (41%). DropItemRates, SetUpDroppedItem@RandomlyCancel
+;   - WorldKillCount = $10 when the death ends: the drop is a fairy, with no random test, whatever the
+;     group. SetUpDroppedItem@LookUpItem
+;   - Else HelpDropCount >= $0A: forced drop, a bomb if IsHelpDropBomb <> 0, otherwise 5 rupees. Both
+;     forced kinds (and the fairy) zero HelpDropCount and IsHelpDropBomb. SetUpDroppedItem@SetHelpItem
+;   - A dropped item's lifetime starts at $FF and drops by 1 on odd frames: gone after about 510
+;     frames. While it is >= $F0 (about the first 32 frames) it flashes and cannot be taken.
+;     UpdateItem, SetUpDroppedItem@Commit
+;   - Items are taken by Link or by an active object in slot $12 (arrow/rod), $0D (sword) or $0F
+;     (boomerang/food), tested in that order, Link last; not while Link is halted. UpdateItem,
+;     ItemTakerObjSlots
+;   - ObjHP = the type's nibble * $10 (even type: high nibble; odd type: low nibble).
+;     ExtractHitPointValue
 ; CONTENTS: (generated; L = line in this file)
-;   L0034 ExtractHitPointValue    code  Params:
-;   L0055 PlayBossDeathCry        code
-;   L0064 NoDropMonsterTypes      data  Types of objects that do not drop items.
-;   L0067 DropItemMonsterTypes0   data
-;   L0070 DropItemMonsterTypes1   data
-;   L0074 DropItemMonsterTypes2   data
-;   L0080 DropItemSetBaseOffsets  data  Multiples of $A to index the base of each row of items in DropItemTable.
-;   L0086 DropItemRates           data  Top drop an item, a random value must be less than the
-;   L0095 DropItemTable           data  ID's for items dropped by monsters.
-;   L0102 SetUpDroppedItem        code
-;   L0235 ItemTakerObjSlots       data
-;   L0238 UpdateItem              code
-;   L0327 DestroyMonster_Bank4    code  Params:
+;   L0062 ExtractHitPointValue    code  Extracts one object type's starting HP from a packed byte of ObjectTypeToHpPairs.
+;   L0088 PlayBossDeathCry        code  Requests the boss death sounds: DMC sample 2 (the boss cry) and noise effect $80.
+;   L0096 NoDropMonsterTypes      data  TABLE: object types that never drop an item; index = 0-6; value = object type.
+;   L0100 DropItemMonsterTypes0   data  TABLE: object types of drop group 0; index = 0-5; value = object type.
+;   L0105 DropItemMonsterTypes1   data  TABLE: object types of drop group 1; index = 0-8; value = object type.
+;   L0111 DropItemMonsterTypes2   data  TABLE: object types of drop group 2; index = 0-8; value = object type.
+;   L0117 DropItemSetBaseOffsets  data  TABLE: offset of each group's row in DropItemTable; index = drop group 0-3; value = group * 10.
+;   L0122 DropItemRates           data  TABLE: drop rate; index = drop group 0-3; value = threshold: an unforced drop happens when the
+;   L0132 DropItemTable           data  TABLE: dropped item ids; index = drop group * 10 + WorldKillCycle (0-9); value = item id
+;   L0157 SetUpDroppedItem        code  Decides what a monster that finished dying drops, and makes the slot that item or frees it.
+;   L0280 ItemTakerObjSlots       data  TABLE: object slots whose position can pick up a dropped item; index = 0-3 (tested 3 down to 0);
+;   L0297 UpdateItem              code  Updates a dropped item (type $60): ages it, draws it, and lets Link or his weapons take it.
+;   L0384 DestroyMonster_Bank4    code  Frees an object slot: type 0, no knockback, timer, state and invincibility timer cleared.
 ; ============================================================================
 
-; Params:
-; A: hit point doublet (byte)
-; [00]: object type
-;
-; Returns:
-; A: hit points for object type
-;
-; TRIFORCE: Extracts one enemy's HP from the packed byte in ObjectTypeToHpPairs.
-; TRIFORCE: Even types: AND $F0 (keep high nibble). Odd types: low nibble << 4.
-; TRIFORCE: Result always has low nibble=0. Python reads ObjHP >> 4 for HP count.
+; ----------------------------------------------------------------------------
+; Extracts one object type's starting HP from a packed byte of ObjectTypeToHpPairs.
+; IN:   A = byte of ObjectTypeToHpPairs (index = type / 2); [00] = object type.
+; OUT:  A = HP: the type's nibble * $10 (low nibble always 0).
+; NOTE: Even types use the high nibble, odd types the low nibble. Weapon damage values are multiples
+;       of $10 as well ($10 = the wooden sword's damage).
+; ----------------------------------------------------------------------------
 ExtractHitPointValue:
     PHA
 
-    ; Even object types only have to mask off the bottom nibble.
+    ; Bit 0 of the type into carry.
     LDA $00
     LSR
     BCS @OddType
+
+    ; Even type: keep the high nibble.
     PLA
     AND #$F0
     RTS
@@ -45,13 +75,16 @@ ExtractHitPointValue:
 @OddType:
     PLA
 
-    ; Odd object types have to multiply by 16.
+    ; Odd type: move the low nibble up.
     ASL
     ASL
     ASL
     ASL
     RTS
 
+; ----------------------------------------------------------------------------
+; Requests the boss death sounds: DMC sample 2 (the boss cry) and noise effect $80.
+; ----------------------------------------------------------------------------
 PlayBossDeathCry:
     LDA #$02
     STA SampleRequest
@@ -59,102 +92,120 @@ PlayBossDeathCry:
     STA EffectRequest
     RTS
 
-; Types of objects that do not drop items.
-;
+; TABLE: object types that never drop an item; index = 0-6; value = object type.
 NoDropMonsterTypes:
-    .BYTE $5D, $14, $15, $1B, $1C, $1D, $17
+    .BYTE $5D, $14, $15, $1B, $1C, $1D, $17        ; dead dummy, child Gel, Gel, Keese x3, Like-Like
 
+; TABLE: object types of drop group 0; index = 0-5; value = object type.
 DropItemMonsterTypes0:
-    .BYTE $07, $08, $0E, $04, $0F, $23
+    .BYTE $07, $08, $0E, $04, $0F, $23    ; red Octorok slow/fast, Tektite $0E, Moblin $04, Blue Leever,
+                                          ; Blue Wizzrobe
 
+; TABLE: object types of drop group 1; index = 0-8; value = object type.
 DropItemMonsterTypes1:
-    .BYTE $21, $22, $0D, $10, $13, $28, $2A, $27
-    .BYTE $16
+    .BYTE $21, $22, $0D, $10, $13, $28, $2A, $27    ; Ghini, flying Ghini, Tektite $0D, Red Leever, Zol,
+                                                    ; Rope, Stalfos, Wallmaster
+    .BYTE $16                                       ; Pols Voice
 
+; TABLE: object types of drop group 2; index = 0-8; value = object type.
 DropItemMonsterTypes2:
-    .BYTE $09, $0A, $03, $01, $12, $06, $0B, $24
-    .BYTE $30
+    .BYTE $09, $0A, $03, $01, $12, $06, $0B, $24    ; blue Octorok slow/fast, Moblin $03, Lynel $01, Vire,
+                                                    ; Goriya $06, Darknut $0B, Red Wizzrobe
+    .BYTE $30                                       ; Gibdo
 
-; Multiples of $A to index the base of each row of items in DropItemTable.
-;
+; TABLE: offset of each group's row in DropItemTable; index = drop group 0-3; value = group * 10.
 DropItemSetBaseOffsets:
     .BYTE $00, $0A, $14, $1E
 
-; Top drop an item, a random value must be less than the
-; element for the monster group.
-;
+; TABLE: drop rate; index = drop group 0-3; value = threshold: an unforced drop happens when the
+;        random byte is below it ($50 = 80/256, $98 = 152/256, $68 = 104/256).
 DropItemRates:
     .BYTE $50, $98, $68, $68
 
-; ID's for items dropped by monsters.
-; WorldKillCycle addresses the column.
-;
-; Monsters are arranged in groups that determine the row.
-; There are four rows.
-;
+; TABLE: dropped item ids; index = drop group * 10 + WorldKillCycle (0-9); value = item id
+;        ($22 heart, $18 rupee, $0F 5 rupees, $23 fairy, $21 clock, $00 bomb).
+;        The rows are 10 long, so they do not line up with the 8-byte lines below:
+;        group 0: heart, rupee, heart, rupee, fairy, rupee, heart, heart, rupee, rupee
+;        group 1: 5 rupees, rupee, heart, rupee, 5 rupees, heart, clock, rupee, rupee, rupee
+;        group 2: heart, bomb, rupee, clock, rupee, heart, bomb, rupee, bomb, heart
+;        group 3: heart, heart, fairy, rupee, heart, fairy, heart, heart, heart, rupee
 DropItemTable:
-    .BYTE $22, $18, $22, $18, $23, $18, $22, $22
-    .BYTE $18, $18, $0F, $18, $22, $18, $0F, $22
-    .BYTE $21, $18, $18, $18, $22, $00, $18, $21
-    .BYTE $18, $22, $00, $18, $00, $22, $22, $22
-    .BYTE $23, $18, $22, $23, $22, $22, $22, $18
+    .BYTE $22, $18, $22, $18, $23, $18, $22, $22    ; group 0, cycle 0-7
+    .BYTE $18, $18, $0F, $18, $22, $18, $0F, $22    ; group 0, cycle 8-9; group 1, cycle 0-5
+    .BYTE $21, $18, $18, $18, $22, $00, $18, $21    ; group 1, cycle 6-9; group 2, cycle 0-3
+    .BYTE $18, $22, $00, $18, $00, $22, $22, $22    ; group 2, cycle 4-9; group 3, cycle 0-1
+    .BYTE $23, $18, $22, $23, $22, $22, $22, $18    ; group 3, cycle 2-9
 
+; ----------------------------------------------------------------------------
+; Decides what a monster that finished dying drops, and makes the slot that item or frees it.
+; IN:   X = object slot, already turned into type $60; Item_ObjMonsterType,X = the dead monster's type.
+; OUT:  Either Item_ObjItemId,X = item id and Item_ObjItemLifetime,X = $FF, or the slot is freed.
+;       [00] = item id, [01] = drop group (0-3).
+; NOTE: Order of the decisions:
+;       1. A type in NoDropMonsterTypes drops nothing.
+;       2. A Stalfos or Gibdo in slot 1 drops nothing (slot 1 is the monster that carries the room item).
+;       3. The table item is DropItemTable[group * 10 + WorldKillCycle]. The caller advanced the cycle
+;          for this kill first, so a kill made with the cycle at 0 uses column 1.
+;       4. WorldKillCount = $10: a fairy instead, always.
+;       5. Otherwise HelpDropCount >= $0A: a bomb if IsHelpDropBomb <> 0, else 5 rupees, always.
+;       6. Otherwise the table item, only if Random,X < DropItemRates[group].
+;       Cases 4 and 5 zero HelpDropCount and IsHelpDropBomb. WorldKillCount is not changed here, so
+;       every death that ends while it reads $10 gives a fairy. WorldKillCount and HelpDropCount are
+;       incremented when the killing hit lands, this routine runs when the death sparkle ends: kills
+;       made in between count. The random byte is the one indexed by the object slot.
+; ----------------------------------------------------------------------------
 SetUpDroppedItem:
-    ; Reset [01] which holds the row number of the drop item table.
+    ; [01] = drop group, the row of the drop item table. Start with 0.
     LDA #$00
     STA $01
 
-    ; Compare dead object's type to array of 7 that don't drop items.
-    ; If found, go destroy the monster.
+    ; The 7 types that never drop: go free the slot.
     LDA Item_ObjMonsterType, X
     LDY #$06
 
 @FindNoDropType:
     CMP NoDropMonsterTypes, Y
-    BEQ @DestroyMonster         ; If found, go destroy the monster.
+    BEQ @DestroyMonster
     DEY
     BPL @FindNoDropType
 
-    ; Look for object type in array of 6. These use drop item table row 0.
+    ; The 6 types of group 0.
     LDY #$05
 
 @FindDrop0Type:
     CMP DropItemMonsterTypes0, Y
-    BEQ @Found                  ; If found, use row 0.
+    BEQ @Found
     DEY
     BPL @FindDrop0Type
 
-    ; Increment row number in [01] to 1.
     INC $01
 
-    ; Look for object type in array of 9. These use drop item table row 1.
+    ; The 9 types of group 1.
     LDY #$08
 
 @FindDrop1Type:
     CMP DropItemMonsterTypes1, Y
-    BEQ @Found                  ; If found, use row 1.
+    BEQ @Found
     DEY
     BPL @FindDrop1Type
 
-    ; Increment row number in [01] to 2.
     INC $01
 
-    ; Look for object type in array of 9. These use drop item table row 2.
+    ; The 9 types of group 2.
     LDY #$08
 
 @FindDrop2Type:
     CMP DropItemMonsterTypes2, Y
-    BEQ @Found                  ; If found, use row 2.
+    BEQ @Found
     DEY
     BPL @FindDrop2Type
 
-    ; Increment [01]. The rest use row 3.
+    ; Every other type is in group 3.
     INC $01
 
 @Found:
-    ; If object slot = 1 and object is stalfos or gibdos, then
-    ; go destroy the mosnter, because it might already be carrying
-    ; a room item.
+    ; A Stalfos ($2A) or Gibdo ($30) in object slot 1 drops nothing: go free the slot.
+    ; (The room item is drawn on a Stalfos, Gibdo or Like-Like in slot 1; see MoveAndDrawRoomItem.)
     CPX #$01
     BNE @LookUpItem
     CMP #$2A
@@ -163,9 +214,7 @@ SetUpDroppedItem:
     BEQ @DestroyMonster
 
 @LookUpItem:
-    ; Look up the base offset of the row in the drop item table.
-    ; Add it and WorldKillCycle to look up the dropped item for
-    ; this object type and store it in [00].
+    ; [00] = DropItemTable[group * 10 + WorldKillCycle].
     LDY $01
     LDA DropItemSetBaseOffsets, Y
     CLC
@@ -174,22 +223,19 @@ SetUpDroppedItem:
     LDA DropItemTable, Y
     STA $00                     ; [00] Dropped item ID
 
-    ; If the global kill count = $10, set the dropped item to a fairy.
+    ; If WorldKillCount = $10 (16 kills since Link was last harmed), drop a fairy ($23) instead.
     LDA #$23
     LDY WorldKillCount
     CPY #$10
     BEQ @SetHelpItem
 
-    ; If help drop counter < $A, then use the dropped item ID as is.
-    ; But there is a random chance that the item drop will be canceled.
+    ; If the help drop counter < $0A, keep the table item, subject to the random test.
     LDA HelpDropCount
     CMP #$0A
     BCC @RandomlyCancel
 
-    ; Otherwise, the item will be guaranteed to be made.
-    ; [51] IsHelpDropBomb determines which kind:
-    ; - 0:     5 rupees
-    ; - other: bomb
+    ; Help drop (10 kills since Link was last harmed): guaranteed.
+    ; IsHelpDropBomb = 0: 5 rupees ($0F). Otherwise: a bomb ($00).
     LDA #$0F
     LDY IsHelpDropBomb
     BEQ @SetHelpItem
@@ -198,31 +244,28 @@ SetUpDroppedItem:
 @SetHelpItem:
     STA $00                     ; [00] Item ID
 
-    ; The player has been helped with a dropped item. Reset the
-    ; help drop variables.
+    ; The forced drop (fairy, bomb or 5 rupees) was given. Reset the help drop variables.
     LDA #$00
     STA HelpDropCount
     STA IsHelpDropBomb
-    BEQ @Commit
+    BEQ @Commit                 ; Always taken.
 
 @RandomlyCancel:
-    ; If the random value >= drop item rate for the monster's group,
-    ; then go destroy the monster.
+    ; If the random byte of this slot >= the group's drop rate, drop nothing: go free the slot.
     LDY $01
     LDA Random, X
     CMP DropItemRates, Y
     BCS @DestroyMonster
 
 @Commit:
-    ; Set ObjItemLifetime to $FF.
+    ; The item starts with lifetime $FF.
     LDA #$FF
     STA Item_ObjItemLifetime, X
 
-    ; Set ObjItemId.
     LDA $00
     STA Item_ObjItemId, X
 
-    ; If the item is a fairy, we have to finish setting it up.
+    ; A fairy flies: set up its flight.
     CMP #$23
     BNE :+
     JMP SetUpFairyObject
@@ -232,21 +275,37 @@ SetUpDroppedItem:
 @DestroyMonster:
     JMP DestroyMonster_Bank4
 
+; TABLE: object slots whose position can pick up a dropped item; index = 0-3 (tested 3 down to 0);
+;        value = object slot: $00 Link, $0F boomerang or food, $0D sword, $12 arrow or rod.
 ItemTakerObjSlots:
     .BYTE $00, $0F, $0D, $12
 
+; ----------------------------------------------------------------------------
+; Updates a dropped item (type $60): ages it, draws it, and lets Link or his weapons take it.
+; IN:   X = object slot (= CurObjIndex).
+; OUT:  Slot freed when the lifetime runs out or the item is taken.
+; NOTE: The lifetime starts at $FF and drops by 1 on every frame with an odd FrameCounter: the item
+;       is gone after about 510 frames. While the lifetime is >= $F0 (about the first 32 frames) it
+;       flashes (AnimateItemObject) and cannot be taken (TryTakeItem).
+;       Takers, in this order: slot $12 (arrow or rod), slot $0D (sword), slot $0F (boomerang or food),
+;       then Link. A weapon slot counts while its state is nonzero with bit 7 clear; which object is
+;       in the slot is not tested. The test is TryTakeItem with the taker's position in place of
+;       Link's: both axis distances < 9 (the taker's Y + 3 against the item's Y).
+;       Nothing is taken while Link is halted (ObjState & $C0 = $40), but the item keeps aging.
+;       A fairy ($23) flies around instead of lying still.
+; ----------------------------------------------------------------------------
 UpdateItem:
-    ; Every other frame, decrement the item lifetime.
+    ; On odd frames, decrement the item lifetime.
     LDA FrameCounter
     LSR
     BCC :+
     DEC Item_ObjItemLifetime, X
 :
-    ; If lifetime reached 0, go destroy the object.
+    ; If the lifetime reached 0, free the slot.
     LDA Item_ObjItemLifetime, X
     BEQ DestroyMonster_Bank4
 
-    ; Draw the item. Fairies are animated separately.
+    ; Draw the item. A fairy moves and is drawn by its own routine.
     LDA Item_ObjItemId, X
     CMP #$23
     BEQ @AnimateFairy
@@ -256,30 +315,27 @@ UpdateItem:
 @AnimateFairy:
     JSR UpdateFairyObject
 :
-    ; If the player is halted, then return.
+    ; If Link is halted, then return.
     LDA ObjState
     AND #$C0
     CMP #$40
     BEQ @Exit
 
-    ; In addition to Link, there are 3 objects that can pick up items: 
-    ; * arrow
-    ; * sword
-    ; * boomerang
+    ; Besides Link, three weapon slots can pick up items: $12, $0D and $0F.
     ;
-    ; For each weapon that's active, substitute it's location for
-    ; Link's and try taking the item. Have Link himself check last.
+    ; For each one that's active, substitute its position for Link's and try taking the item.
+    ; Link himself is tried last.
     LDA #$04
-    STA $0D                     ; [0D] holds index into array of item slots that can take an item.
+    STA $0D                     ; [0D] = 1-based index into ItemTakerObjSlots, 4 down to 1.
 
 @LoopItemTaker:
-    ; Save Link's location.
+    ; Save Link's position.
     LDA ObjX
     PHA
     LDA ObjY
     PHA
 
-    ; Set Link's location to this object's.
+    ; Set Link's position to the taker's.
     LDY $0D
     LDX ItemTakerObjSlots-1, Y
     LDA ObjX, X
@@ -287,43 +343,44 @@ UpdateItem:
     LDA ObjY, X
     STA ObjY
     CPX #$00
-    BEQ @TryToTake              ; If Link is checking directly, go try to take the item.
+    BEQ @TryToTake              ; Link himself needs no activity test.
 
-    ; If the object whose place Link is taking is not active, then
-    ; don't try to take the item.
+    ; A weapon slot that is empty (state 0) or has bit 7 of its state set does not take items.
     LDA ObjState, X
     BEQ @SkipTaking
     BMI @SkipTaking
 
 @TryToTake:
-    ; Try to take the item.
+    ; Try to take the item ([04] = item id).
     LDX CurObjIndex
     LDA Item_ObjItemId, X
     STA $04
     JSR TryTakeItem
 
 @SkipTaking:
-    ; Restore Link's location.
+    ; Restore Link's position.
     PLA
     STA ObjY
     PLA
     STA ObjX
     LDX CurObjIndex             ; Reload object index in X.
 
-    ; If item object's item type is invalid, then the item was taken.
-    ; So, go destroy this object.
+    ; TryTakeItem marks a taken item by setting its item id to $FF. If so, free the slot.
     LDA Item_ObjItemId, X
     CMP #$FF
     BEQ DestroyMonster_Bank4
-    DEC $0D                     ; Decrease the index [0D].
-    BNE @LoopItemTaker          ; If there are more object slots to check from, go try the next one.
+    DEC $0D
+    BNE @LoopItemTaker          ; More takers to try.
 
 @Exit:
     RTS
 
-; Params:
-; X: object index
-;
+; ----------------------------------------------------------------------------
+; Frees an object slot: type 0, no knockback, timer, state and invincibility timer cleared.
+; IN:   X = object slot.
+; OUT:  A = 1; ObjUninitialized,X = $FF; ObjMetastate,X = 1.
+; NOTE: Bank 4's own copy of what DestroyMonster does in the fixed bank.
+; ----------------------------------------------------------------------------
 DestroyMonster_Bank4:
     LDA #$00
     STA ObjType, X

@@ -2,30 +2,63 @@
 ; FILE:     bank4/octorok.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 2967-3068
 ; SUBJECTS: (none)
-; TOPIC:    Octorok update, rock shooting
-; SEE ALSO:
+; TOPIC:    Octorok ($07-$0A) per-frame update: turn toward Link, spit rocks, pick the sprite frame; plus
+;           the shared "draw mirrored, then check collisions" tail.
+; SEE ALSO: bank4/zora-ow-inits.asm (InitSlowOctorockOrGhini, InitFastOctorock: starting speed and spawn
+;           delay); bank4/walker-wanderer-common.asm (Wanderer_TargetPlayer: movement and turning);
+;           bank4/moblin-lynel-shooting.asm (_TryShooting: the shoot timer); bank4/shoot-helpers-candle.asm
+;           (ShootLimited: the 4-shot limit); bank4/monster-shots-fireballs.asm (the flying rock, type $53);
+;           bank1/monster-collisions.asm (CheckMonsterCollisions, ObjTypeToDamagePoints).
 ; KEY FACTS:
+;   - Types $07 and $09 are slow, $08 and $0A fast; $07/$08 have 1 HP and $09/$0A 2 HP (ObjectTypeToHpPairs).
+;     UpdateOctorock tests the type for turn rate (>= $09) and for speed ($07, $09).
+;   - Turn rate (Wanderer_ObjTurnRate) is $70 for types $07/$08 and $A0 for $09/$0A. At a grid point the
+;     Octorok faces the chase target (and wants to shoot) if turn rate >= Random+1,X (113 or 161 of 256
+;     values) and the target is less than 9 pixels off on one axis (UpdateOctorock, Wanderer_TargetPlayer).
+;   - Walking q-speed handed to _TryShooting: $20 (0.5 px/frame) slow, $40 (1 px/frame) fast. The init
+;     routine starts a fast one at $30 (0.75 px/frame); it keeps that until _TryShooting first gets past
+;     its random gate and stores the new speed (UpdateOctorock).
+;   - The shot is a flying rock, object type $53, fired in the facing direction from the Octorok's own
+;     position (UpdateOctorock, _TryShooting).
+;   - Types $09/$0A run the shoot logic every frame; types $07/$08 only on frames where Random,X >= $F8
+;     (8 in 256) or while their shoot timer is already running (_TryShooting).
+;   - A shot stops the Octorok for $30 frames; the rock leaves when the timer reaches $10, not with
+;     the clock or while stunned; being hit cancels it (_TryShooting).
+;   - Touching an Octorok or its rock costs $0080 damage (half a heart before rings)
+;     (ObjTypeToDamagePoints, types $07-$0A and $53).
+;   - Drops: types $07/$08 are drop group 0, $09/$0A group 2 (DropItemMonsterTypes0,
+;     DropItemMonsterTypes2).
 ; CONTENTS: (generated; L = line in this file)
-;   L0015 UpdateOctorock                        code
-;   L0112 DrawObjectMirroredAndCheckCollisions  code  Params:
+;   L0048 UpdateOctorock                        code  Updates an Octorok: walks and turns toward Link, tries to spit a rock, animates, draws, checks hits.
+;   L0139 DrawObjectMirroredAndCheckCollisions  code  Draws the object mirrored, then checks it against Link's weapons and Link (shared tail).
 ; ============================================================================
 
-    ; End unverified code
-
+; ----------------------------------------------------------------------------
+; Updates an Octorok: walks and turns toward Link, tries to spit a rock, animates, draws, checks hits.
+; IN:   X = object slot.
+; NOTE: Types: $07 slow, $08 fast (1 HP each); $09 slow, $0A fast (2 HP each).
+; NOTE: The walking q-speed is only stored when _TryShooting gets past its random gate, which types
+;       $07/$08 pass on 8 frames in 256; until then the speed set by the init routine stays ($20 slow,
+;       $30 fast). Types $09/$0A store it every frame.
+; NOTE: While the shoot timer runs ($30 frames, rock leaves when it reaches $10) the Octorok stands still
+;       and, with q-speed 0, does not turn either (Wanderer_TargetPlayer turns only when q-speed <> 0).
+; NOTE: No clock or stun test here: Walker_Move keeps it from moving then, and _TryShooting skips the
+;       rock, but the shoot timer still counts.
+; ----------------------------------------------------------------------------
 UpdateOctorock:
-    ; If the monster is a fast octorock, use turn rate $A0.
-    ; Else use turn rate $70.
+    ; Types $09 and $0A (2 HP) use turn rate $A0; types $07 and $08 use $70.
+    ; At a grid point the monster tests for the chase target in line when the turn rate >= Random+1,X.
     LDA #$A0
     LDY ObjType, X
-    CPY #$09                    ; Blue octorock (fast and slow)
+    CPY #$09
     BCS :+
     LDA #$70
 :
     STA Wanderer_ObjTurnRate, X
-    JSR Wanderer_TargetPlayer
+    JSR Wanderer_TargetPlayer   ; Moves, turns, and sets or clears the "wants to shoot" flag.
 
-    ; If the octorock is slow, then use q-speed $20.
-    ; Else double it.
+    ; Slow types ($07, $09) walk at q-speed $20 (0.5 px/frame).
+    ; Fast types ($08, $0A) double it to $40 (1 px/frame).
     LDA #$20
     LDY ObjType, X
     CPY #$07
@@ -35,12 +68,13 @@ UpdateOctorock:
     ASL
 
 @Shoot:
-    ; Shoot a flying rock (object type $53).
+    ; A = walking q-speed, Y = shot type $53 (flying rock).
+    ; _TryShooting stores A as the speed, or 0 while the shoot timer runs.
     LDY #$53
     JSR _TryShooting
     JSR Anim_FetchObjPosForSpriteDescriptor
 
-    ; If facing down, then use frame image offset 2.
+    ; Choose the frame image offset for the facing direction: 0 horizontal, 1 up, 2 down.
     LDA ObjDir, X
     TAY
     AND #$0C
@@ -49,53 +83,47 @@ UpdateOctorock:
     CPY #$08
     BNE @SaveOffset
 
-    ; Else facing up. Use frame image offset 1.
+    ; Facing up.
     LDA #$01
     BNE @SaveOffset
 
 @CheckHorizontal:
-    ; If facing right, then set horizontal flipping, and use frame image offset 0.
+    ; Facing right: set [0F] to flip the left-facing image horizontally.
     CPY #$01
     BNE :+
     INC $0F
 :
-    ; Else facing left. Use frame image offset 0, but no horizontal flipping.
+    ; Facing left or right uses frame image offset 0.
     LDA #$00
 
 @SaveOffset:
-    PHA                         ; Save frame image offset for the direction.
+    PHA                         ; Save the frame image offset for the direction.
 
-    ; Decrement the animation counter, and roll over if needed.
+    ; Count down the animation counter; reload it with 6 frames when it reaches 0.
     DEC ObjAnimCounter, X
     BNE @CalcFinalOffset
     LDA #$06
     STA ObjAnimCounter, X
 
-    ; There are actually 6 frame images divided into 2 sets.
-    ; Each set depicts one animation frame. In each set there are
-    ; 3 frame images: 1 for each direction (left, up, down).
-    ;
-    ; The movement frame will keep track of the base offset of
-    ; the current set for the current animation frame: 0 or 3.
-    ;
-    ; So, XOR the movement frame with 3.
+    ; There are 6 frame images in 2 sets of 3 (left, up, down), one set per animation frame.
+    ; ObjAnimFrame holds the base offset of the current set, 0 or 3: A = 6 >> 1 = 3 toggles it.
     LSR
     EOR ObjAnimFrame, X
     STA ObjAnimFrame, X
 
 @CalcFinalOffset:
-    ; Add the base offset and the directional offset, and save the result.
+    ; Frame image = set base (0 or 3) + directional offset (0-2).
     PLA
     CLC
     ADC ObjAnimFrame, X
     PHA
 
-    ; If facing vertically, go draw mirrored.
+    ; Facing up or down: go draw with DrawObjectMirrored.
     LDA ObjDir, X
     AND #$0C
     BNE @DrawMirrored
 
-    ; Else draw not mirrored.
+    ; Facing left or right: draw with DrawObjectNotMirrored ([0F] flips it when facing right).
     PLA
     JSR DrawObjectNotMirrored
     JMP CheckMonsterCollisions
@@ -103,12 +131,11 @@ UpdateOctorock:
 @DrawMirrored:
     PLA                         ; Restore the frame image.
 
-; Params:
-; A: frame image
-; X: object index
-; [00]: object X
-; [01]: object Y
-;
+; ----------------------------------------------------------------------------
+; Draws the object mirrored, then checks it against Link's weapons and Link (shared tail).
+; IN:   A = frame image; X = object slot; [00] = object X; [01] = object Y.
+; NOTE: Also the draw tail of the Tektite update.
+; ----------------------------------------------------------------------------
 DrawObjectMirroredAndCheckCollisions:
     JSR DrawObjectMirrored
     JMP CheckMonsterCollisions

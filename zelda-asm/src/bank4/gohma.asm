@@ -2,28 +2,73 @@
 ; FILE:     bank4/gohma.asm              BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 8193-8503
 ; SUBJECTS: Gohma
-; TOPIC:    Gohma: eye states, arrow in the eye
-; SEE ALSO:
+; TOPIC:    Gohma (object types $33, $34) per-frame update: out-and-back movement, the eye's open/closed
+;           cycle, fireballs, drawing of eye and legs, five-part collision, and the rule that only an
+;           arrow flying up into the fully open eye deals damage.
+; SEE ALSO: bank4/gleeok-manhandla-gohma-inits.asm (InitGohma: start position, invincibility mask $FB,
+;           shoot timer); bank1/weapon-damage-death.asm (HandleMonsterWeaponCollision jumps to
+;           Gohma_HandleWeaponCollision; DealDamage); bank1/sword-bomb-arrow-collision.asm
+;           (CheckMonsterArrowOrRodCollision: arrow damage $20 wooden, $40 silver);
+;           bank1/shove-knockback.asm (BeginShove: Gohma gets invincibility frames only from an eye hit);
+;           bank4/monster-shots-fireballs.asm (ShootFireball, UpdateFireball);
+;           bank7/object-update-table.asm (ObjectTypeToHpPairs: HP $60 for $33, $20 for $34).
 ; KEY FACTS:
+;   - Damage needs all of: an arrow (the only damage type the mask $FB of InitGohma lets through),
+;     collision part 3 or 4 (the parts at ObjX and ObjX - 8), eye state 3, and arrow direction up (8).
+;     Anything else only plays the parry sound. Gohma_HandleWeaponCollision, Gohma_CheckCollisions
+;   - Eye state 3 lasts $60 (96) frames inside each $80-frame opening: $11 frames at state 2, $60 at
+;     state 3, $0F at state 2. UpdateGohma@AnimateEye
+;   - Openings start every 2 * ($C0 | Random,X) frames = 384 to 510 frames, counted from the start
+;     of the previous opening. UpdateGohma@AnimateEye, UpdateGohma@DecNextOpenEyeCounter
+;   - Movement is 1 pixel every 2 frames. Gohma picks right (Random,X >= $B0), left (>= $60) or down
+;     (else), goes $20 pixels, comes back $20 pixels, then picks again: it always returns to where it
+;     started (InitGohma puts it at X $80, Y $70) and never goes above that. UpdateGohma
+;   - Fireball type $56 (the shield cannot block it) every $41 (65) frames, whatever the eye does; the
+;     first one on the first update frame if the timer was 0 before InitGohma incremented it. Only a
+;     full object table (slots $01-$0B) stops it. UpdateGohma@ShootAnimateCollide
+;   - Collision is tested in 5 parts 8 pixels apart from ObjX - $10 to ObjX + $10, left to right,
+;     against Link and weapons alike. An arrow sparks on the first part it overlaps, so the eye is
+;     reached only when the arrow's hit point X is ObjX - 1 to ObjX + $0E. Gohma_CheckCollisions
+;   - An arrow on parts 3 or 4 with the eye at state 3 starts Gohma's invincibility timer ($10, about
+;     32 frames; no weapon or Link test meanwhile) whatever the arrow's direction. BeginShove@Gohma
+;   - A successful hit ends with the parry sound request too (the code falls through), replacing the
+;     "harmed" sound request of DealDamage. Gohma_HandleWeaponCollision
+;   - Sprite palette row = object type - $32: 1 for type $33, 2 for type $34. Gohma_SetSpriteAttributes
 ; CONTENTS: (generated; L = line in this file)
-;   L0018 UpdateGohma                  code
-;   L0189 GohmaLegOffsetsX             data
-;   L0197 Gohma_AnimateAndDraw         code  Params:
-;   L0219 Gohma_DrawLegsOneSide        code  Params:
-;   L0253 Gohma_SetSpriteAttributes    code  Returns:
-;   L0259 Gohma_CheckCollisions        code
-;   L0291 Gohma_HandleWeaponCollision  code
+;   L0063 UpdateGohma                  code  Updates Gohma: moves it out and back, runs the eye's open/closed cycle, shoots, draws, collides.
+;   L0236 GohmaLegOffsetsX             data  TABLE: X offset of Gohma's leg sprites from ObjX; index = side (0 left, 1 right); value = pixels.
+;   L0245 Gohma_AnimateAndDraw         code  Draws Gohma: the eye at its position with the given frame image, then the legs on both sides.
+;   L0265 Gohma_DrawLegsOneSide        code  Draws the legs on one side of Gohma, $10 pixels left or right of the eye.
+;   L0301 Gohma_SetSpriteAttributes    code  Sets both sprite attribute bytes to Gohma's palette row: object type - $32 (1 for $33, 2 for $34).
+;   L0322 Gohma_CheckCollisions        code  Checks Gohma's collisions with Link and his weapons in five parts, 8 pixels apart.
+;   L0367 Gohma_HandleWeaponCollision  code  Decides what a weapon that got past Gohma's invincibility mask does: harm through the eye, or parry.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Updates Gohma: moves it out and back, runs the eye's open/closed cycle, shoots, draws, collides.
+; IN:   X = object slot
+; NOTE: Movement: a new direction is picked when Gohma_ObjGoStraight is 0 (no move that frame):
+;       Random,X >= $B0 right (80 in 256), >= $60 left (80 in 256), else down (96 in 256). Then 1
+;       pixel every 2 frames for $20 pixels, reverse, $20 pixels back, and pick again. No room
+;       boundary or tile test is made; the path stays within $20 pixels of the start position.
+; NOTE: Eye: when Gohma_ObjNextOpenEyeCounter is 0 the eye opens for $80 frames and the counter is
+;       reloaded with $C0 | Random,X ($C0-$FF). The counter drops by 1 on frames with an odd
+;       FrameCounter, also while the eye is open. Eye state by open timer value before the frame's
+;       decrement: $80-$70 -> 2, $6F-$10 -> 3 (the only vulnerable state), $0F-$01 -> 2. Closed, the
+;       state alternates 1, 0 every 8 frames; it can stay 2 for up to 7 frames after closing.
+; NOTE: Fireball: Gohma_ObjShootTimer is decremented every frame; at 0 it is reloaded with $41 and a
+;       type $56 fireball is created (aimed at Link's position by UpdateFireball). InitGohma increments
+;       the timer, so the first fireball comes on the first update frame if the slot's byte was 0.
+; ----------------------------------------------------------------------------
 UpdateGohma:
     ; If flagged not to continue straight, then choose a random facing direction.
     LDA Gohma_ObjGoStraight, X
     BNE @Move
 
-    ; If Random:
-    ;   >= $B0: right
-    ;   >= $60: left
-    ;   Else:   down
+    ; If Random,X:
+    ;   >= $B0: right (1)
+    ;   >= $60: left (2)
+    ;   Else:   down (4)
     LDA #$01
     LDY Random, X
     CPY #$B0
@@ -36,26 +81,26 @@ UpdateGohma:
 @ChangeDir:
     STA ObjDir, X
 
-    ; Now we can go straight without changing direction for some time.
+    ; Now go straight (out and back) without choosing again.
     INC Gohma_ObjGoStraight, X
 
-    ; Go animate the eye.
+    ; No movement on this frame.
     JMP @AnimateEye
 
 @Move:
-    ; Add $80 to the movement accumulator.
+    ; Add $80 to the position fraction: one pixel every second frame.
     LDA Gohma_ObjPosFrac, X
     CLC
     ADC #$80
     STA Gohma_ObjPosFrac, X
 
-    ; If movement accumulator didn't overflow, then go animate the eye.
+    ; If the fraction didn't overflow, then go animate the eye.
     BCC @AnimateEye
 
-    ; Increase the distance traveled, and move 1.
+    ; Increase the distance traveled, and move 1 pixel.
     INC Gohma_ObjDistTraveled, X
 
-    ; Set a direction mask in [02], starting with right (1).
+    ; [02] is a direction mask, shifted left once per test, starting with right (1).
     LDA #$01
     STA $02
 
@@ -78,6 +123,7 @@ UpdateGohma:
     INC ObjY, X
 :
     ; If Gohma's facing direction has an up component, then subtract 1 from Y.
+    ; (Up only occurs as the way back from a down sprint.)
     ASL $02
     BIT $02
     BEQ :+
@@ -96,22 +142,20 @@ UpdateGohma:
     LDA Gohma_ObjSprints, X
     INC Gohma_ObjSprints, X
 
-    ; If the previous number of sprints was odd, then flag that Gohma
-    ; should randomly change direction.
+    ; If the number of sprints before this one was odd (this was the
+    ; way back), then choose a new direction on the next frame.
     LSR
     BCC @AnimateEye
     LDA #$00
     STA Gohma_ObjGoStraight, X
 
 @AnimateEye:
-    ; Animate the eye.
+    ; If the counter for when to open the eye next = 0, then open it:
+    ; set the open timer to $80 frames, and reload the counter with a
+    ; random value of at least $C0.
     ;
-    ; First, if the counter for when to open the eye next = 0, then
-    ; set it to a random value at least $C0; and set the timer for
-    ; keeping the eye open to $80.
-    ;
-    ; Note that $C0 is not a number of frames, because it's changed
-    ; every other frame.
+    ; The counter is not in frames: it drops by 1 every other frame, so
+    ; $C0-$FF means 384 to 510 frames until the next opening.
     LDA Gohma_ObjNextOpenEyeCounter, X
     BNE @DecNextOpenEyeCounter
     LDA #$80
@@ -121,7 +165,7 @@ UpdateGohma:
     STA Gohma_ObjNextOpenEyeCounter, X
 
 @DecNextOpenEyeCounter:
-    ; Decrement the next-open-eye counter.
+    ; Decrement the next-open-eye counter on frames with an odd FrameCounter.
     LDA FrameCounter
     LSR
     BCC :+
@@ -132,11 +176,12 @@ UpdateGohma:
     LDA Gohma_ObjEyeOpenTimer, X
     BEQ @AnimateClosedEye
 
-    ; Else decrement the open eye timer.
+    ; Else decrement the open eye timer. A keeps the value before the decrement.
     DEC Gohma_ObjEyeOpenTimer, X
 
-    ; If open eye timer >= $70 and < $10, then the eye is fully open.
-    ; So, set its frame image to 2. Else use 3 for a half open eye.
+    ; If that value >= $70 or < $10, the eye is opening or closing: eye
+    ; state 2. In between ($6F down to $10, $60 frames) it is fully
+    ; open: eye state 3, the only state in which an arrow harms Gohma.
     LDY #$02
     CMP #$70
     BCS :+
@@ -150,10 +195,11 @@ UpdateGohma:
     STA Gohma_ObjEyeState, X
 
 @ShootAnimateCollide:
-    ; Decrement the shoot timer.
+    ; Decrement the shoot timer, every frame.
     DEC Gohma_ObjShootTimer, X
 
-    ; If it became 0, then set it to $41, and shoot fireball $56.
+    ; If it became 0, then set it to $41 frames, and shoot fireball $56
+    ; (the shield cannot block it).
     BNE @AnimateAndCheckCollisions
     LDA #$41
     STA Gohma_ObjShootTimer, X
@@ -167,7 +213,7 @@ UpdateGohma:
     JMP Gohma_CheckCollisions
 
 @AnimateClosedEye:
-    ; Here the eye is closed. So animate it this way.
+    ; Here the eye is closed.
     ; Increment the animation counter, and if <> 8, then
     ; go shoot, draw, and check collisions.
     INC Gohma_ObjEyeAnimCounter, X
@@ -186,21 +232,23 @@ UpdateGohma:
     ; Go set eye state/frame image, shoot, draw, and check collisions
     JMP @SetEyeStateAndShoot
 
+; TABLE: X offset of Gohma's leg sprites from ObjX; index = side (0 left, 1 right); value = pixels.
 GohmaLegOffsetsX:
-    .BYTE $F0, $10
+    .BYTE $F0, $10              ; -$10 left legs, +$10 right legs
 
-; Params:
-; A: eye frame image
-;
-; Draw the eye with the frame image passed in.
-;
+; ----------------------------------------------------------------------------
+; Draws Gohma: the eye at its position with the given frame image, then the legs on both sides.
+; IN:   A = eye frame image (Gohma_ObjEyeState: 0/1 closed, 2 half open, 3 fully open); X = object slot
+; NOTE: Advances the leg animation: ObjAnimCounter,X is reloaded with $10 frames per leg frame.
+;       Falls through into Gohma_DrawLegsOneSide for the left legs.
+; ----------------------------------------------------------------------------
 Gohma_AnimateAndDraw:
     PHA
     JSR Anim_FetchObjPosForSpriteDescriptor
     JSR Gohma_SetSpriteAttributes
     PLA
     JSR DrawObjectMirrored
-    LDA #$10
+    LDA #$10                    ; Animation counter reload: $10 frames per animation frame.
     JSR Anim_AdvanceAnimCounterAndSetObjPosForSpriteDescriptor
 
     ; Draw the right legs.
@@ -210,13 +258,12 @@ Gohma_AnimateAndDraw:
     ; Draw the left legs.
     LDY #$00
 
-; Params:
-; Y: side: 0 for left, 1 for right
-;
-; Add the horizontal offset for the current side to Gohma's X to
-; store the sprite's X in [00].
-;
+; ----------------------------------------------------------------------------
+; Draws the legs on one side of Gohma, $10 pixels left or right of the eye.
+; IN:   Y = side: 0 left, 1 right; X = object slot
+; ----------------------------------------------------------------------------
 Gohma_DrawLegsOneSide:
+    ; [00] := sprite X = Gohma's X + the offset for this side.
     LDA ObjX, X
     CLC
     ADC GohmaLegOffsetsX, Y
@@ -227,16 +274,16 @@ Gohma_DrawLegsOneSide:
     STA $01
     JSR Gohma_SetSpriteAttributes
 
-    ; There are only two frame images for legs: left and right.
-    ; There are two animation frames. They are animated as follows:
+    ; There are only two frame images for legs (4 and 5), and two
+    ; animation frames. They are animated as follows:
     ;
-    ; Frame 0:
-    ; ((leg index + frame number) AND 1) = 0 or 1
-    ; horizontal flipping = frame number = 0
-    ; 
-    ; Frame 1:
-    ; ((leg index + frame number) AND 1) = 1 or 0
-    ; horizontal flipping = frame number = 1
+    ; Animation frame 0:
+    ;   image = 4 + ((side + 0) AND 1): 4 left, 5 right
+    ;   not flipped horizontally
+    ;
+    ; Animation frame 1:
+    ;   image = 4 + ((side + 1) AND 1): 5 left, 4 right
+    ;   flipped horizontally
     JSR Anim_SetObjHFlipForSpriteDescriptor
     TYA
     CLC
@@ -246,16 +293,32 @@ Gohma_DrawLegsOneSide:
     ADC #$04                    ; Leg frame images start at 4.
     JMP DrawObjectNotMirrored
 
-; Returns:
-; [04]: left side sprite attributes
-; [05]: right side sprite attributes
-;
+; ----------------------------------------------------------------------------
+; Sets both sprite attribute bytes to Gohma's palette row: object type - $32 (1 for $33, 2 for $34).
+; IN:   X = object slot
+; OUT:  [04] = left side sprite attributes; [05] = right side sprite attributes
+; ----------------------------------------------------------------------------
 Gohma_SetSpriteAttributes:
     LDA ObjType, X
     SEC
     SBC #$32
     JMP Anim_SetSpriteDescriptorAttributes
 
+; ----------------------------------------------------------------------------
+; Checks Gohma's collisions with Link and his weapons in five parts, 8 pixels apart.
+; IN:   X = object slot
+; OUT:  ObjX,X unchanged; [0F] = 0
+; NOTE: [0F] numbers the part being tested: 5 at ObjX - $10, 4 at ObjX - 8, 3 at ObjX, 2 at ObjX + 8,
+;       1 at ObjX + $10. Gohma_HandleWeaponCollision and BeginShove read [0F]; parts 3 and 4 are the
+;       eye.
+; NOTE: Each part runs the whole of CheckMonsterCollisions, so Link is harmed by touching any part
+;       and every part is skipped while ObjInvincibilityTimer,X is nonzero.
+; NOTE: Parts are tested left to right and an arrow turns into a spark on the first part it overlaps
+;       (box: under $0B pixels on both axes between the arrow's hit point and the part's middle, which
+;       is the part's X + 4, ObjY + 8). So part 5 takes arrows with hit point X up to ObjX - 2, part 4
+;       ObjX - 1 to ObjX + 6, part 3 ObjX + 7 to ObjX + $0E. The hit point X is the arrow's ObjX + 6
+;       while Link faces up or down (CheckMonsterSlenderWeaponCollision2).
+; ----------------------------------------------------------------------------
 Gohma_CheckCollisions:
     ; Save the boss's X coordinate.
     LDA ObjX, X
@@ -268,9 +331,9 @@ Gohma_CheckCollisions:
     STA ObjX, X
 
     ; Check object collisions in 5 parts, 8 pixels apart,
-    ; from left to right, indexed by [0F].
+    ; from left to right, counted down by [0F] from 5 to 1.
     LDA #$05
-    STA $0F                     ; Loop counter
+    STA $0F                     ; Part number
 
 @LoopSprite:
     JSR CheckMonsterCollisions
@@ -280,7 +343,7 @@ Gohma_CheckCollisions:
     CLC
     ADC #$08
     STA ObjX, X
-    DEC $0F                     ; Loop counter
+    DEC $0F                     ; Part number
     BNE @LoopSprite
 
     ; Restore the boss's X coordinate.
@@ -288,8 +351,24 @@ Gohma_CheckCollisions:
     STA ObjX, X
     RTS
 
+; ----------------------------------------------------------------------------
+; Decides what a weapon that got past Gohma's invincibility mask does: harm through the eye, or parry.
+; IN:   X = Gohma's object slot; Y = weapon object slot; [0F] = collision part (5 to 1, from
+;       Gohma_CheckCollisions); [07] = damage points
+; OUT:  ObjHP,X reduced or Gohma dying (DealDamage) when the hit counts; Tune0Request = 1 (parry sound)
+; NOTE: Reached from HandleMonsterWeaponCollision only for damage types the mask allows. InitGohma sets
+;       mask $FB, so that is the arrow alone (object slot $12).
+; NOTE: The hit counts only if the part is 3 or 4, Gohma_ObjEyeState,X = 3 and the arrow's direction
+;       is up (8). Damage is $20 (wooden arrow) or $40 (silver arrow) against HP $60 (type $33) or
+;       $20 (type $34).
+; NOTE: A hit that counts also ends in @PlayParryTune, so the "harmed" sound request is replaced by
+;       the parry sound request.
+; ----------------------------------------------------------------------------
 Gohma_HandleWeaponCollision:
-    ; If hit by an arrow, then set the arrow to spark.
+    ; If hit by the weapon in slot $12 (an arrow), then set it to spark:
+    ; state $28, animation counter 4. The arrow collision routine
+    ; (CheckMonsterShotCollision) stores state $20 and counter 3 itself
+    ; after this returns.
     CPY #$12
     BNE @CheckHitEye
     LDA #$28
@@ -298,7 +377,7 @@ Gohma_HandleWeaponCollision:
     STA ObjAnimCounter, Y
 
 @CheckHitEye:
-    ; If it did not hit part 3 nor 4, then go play the parry sound effect.
+    ; If it did not hit part 3 nor 4 (the eye), then go play the parry sound effect.
     LDA $0F
     CMP #$03
     BEQ @CheckEyeOpen
@@ -306,7 +385,7 @@ Gohma_HandleWeaponCollision:
     BNE @PlayParryTune
 
 @CheckEyeOpen:
-    ; If the state of the eye is not 3, then go parry.
+    ; If the state of the eye is not 3 (fully open), then go parry.
     LDA Gohma_ObjEyeState, X
     CMP #$03
     BNE @PlayParryTune
@@ -315,14 +394,14 @@ Gohma_HandleWeaponCollision:
     LDA a:ObjDir, Y
     CMP #$08
     BNE @PlayParryTune
-    LDA #$02                    ; Boss hit sound effect
+    LDA #$02                    ; Boss hit cry sample
     STA SampleRequest
 
-    ; Deal damage and cry out.
+    ; Deal damage, and play the boss death cry if Gohma is now dying.
     JSR DealDamage
     JSR PlayBossDeathCryIfNeeded
 
 @PlayParryTune:
-    LDA #$01
+    LDA #$01                    ; Parry sound
     STA Tune0Request
     RTS

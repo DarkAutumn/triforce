@@ -2,23 +2,55 @@
 ; FILE:     bank4/aquamentus.asm         BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 5596-5853
 ; SUBJECTS: Aquamentus
-; TOPIC:    Aquamentus; boss hit reaction, boss sprite writer
-; SEE ALSO:
+; TOPIC:    Aquamentus (type $3D): pacing left and right, three-fireball volleys and their spread,
+;           drawing; the boss cry and shove reset shared with Moldorm; a one-sprite writer.
+; SEE ALSO: bank4/aquamentus-digdogger-dodongo-inits.asm (InitAquamentus: start position, invincibility
+;           mask); bank4/monster-shots-fireballs.asm (ShootFireball, UpdateFireball: aiming, speed);
+;           bank4/walker-wanderer-common.asm (PlayBossHitCryIfNeeded, PlayBossDeathCryIfNeeded);
+;           bank1/link-collision-harm.asm (shield rule for fireballs, damage);
+;           bank7/object-update-table.asm (ObjectTypeToAttributes, ObjectTypeToHpPairs).
 ; KEY FACTS:
+;   - Aquamentus has HP $60 (ObjectTypeToHpPairs, type $3D) and invincibility mask $E2
+;     (InitAquamentus): the boomerang (bit $02) and fire (bit $20) do nothing; sword, arrow, bomb and
+;     magic shot are not masked.
+;   - It starts at X $B0, Y $80 (InitAquamentus) and only moves horizontally, 1 pixel every 8 frames.
+;     It is turned back when found at X < $88 or X >= $C8, so X ranges over $87-$C8
+;     (Aquamentus_Move). Y never changes.
+;   - Each leg of the pacing is 7 or $F pixels in a random direction: Random,X bit 3 picks the length,
+;     bit 0 the direction (Aquamentus_Move).
+;   - A volley is three fireballs of type $55 created at (X+4, Y); the next volley comes
+;     Random,X OR $70 frames later: $70-$7F or $F0-$FF frames (Aquamentus_Shoot).
+;   - Each fireball aims at Link by itself on its first update and waits $10 frames before flying
+;     (UpdateFireball); in addition Aquamentus_Shoot moves the lower one down and the upper one up
+;     1 pixel every second frame, from creation on, which fans the volley out.
+;   - The mouth is drawn open while ObjTimer < $20, the last $20 frames before a volley
+;     (Aquamentus_Draw).
+;   - With InvClock set, Aquamentus neither moves nor shoots, and fireballs in flight stop spreading
+;     (UpdateAquamentus).
+;   - Touching Aquamentus costs $0100 = 1 heart, a type $55 fireball $0080 = half a heart, before
+;     rings (ObjTypeToDamagePoints entries $3D = $01, $55 = $80).
+;   - The collision midpoint is (X+8, Y+8) like any 16x16 object (GetObjectMiddle; ObjAttr $89 has no
+;     half-width bit), although the drawn body is 24x32 pixels (Aquamentus_Draw).
+;   - It is never knocked back: CheckBossHitReaction clears the shove bytes every frame.
 ; CONTENTS: (generated; L = line in this file)
-;   L0022 UpdateAquamentus          code
-;   L0032 CheckBossHitReaction      code
-;   L0036 AquamentusSpeeds          data
-;   L0039 Aquamentus_Move           code
-;   L0110 Aquamentus_Shoot          code
-;   L0174 ShootFireball55           code  Params:
-;   L0178 AquamentusTiles           data
-;   L0182 AquamentusSpriteOffsetsY  data
-;   L0185 AquamentusSpriteOffsetsX  data
-;   L0188 Aquamentus_Draw           code
-;   L0269 WriteBossSprite           code  Params:
+;   L0054 UpdateAquamentus          code  Updates Aquamentus for one frame: move, shoot, draw, check collisions, cry when hit or killed.
+;   L0070 CheckBossHitReaction      code  Plays the boss death cry if the monster is dying (ObjMetastate <> 0) and cancels any knockback.
+;   L0075 AquamentusSpeeds          data  TABLE: Aquamentus's X step per move; index = ObjDir - 1 (0 right, 1 left); value = signed pixels.
+;   L0086 Aquamentus_Move           code  Paces Aquamentus left or right: 1 pixel every 8 frames, in legs of 7 or $F pixels.
+;   L0166 Aquamentus_Shoot          code  Fires a volley of three fireballs when ObjTimer runs out; otherwise spreads the fireballs in flight.
+;   L0232 ShootFireball55           code  Creates a fireball of type $55 at the shooter's position (X+4, Y) if a monster slot is free.
+;   L0240 AquamentusTiles           data  TABLE: Aquamentus sprite tiles; index = animation frame * 6 + sprite 0-5; value = tile id.
+;   L0245 AquamentusSpriteOffsetsY  data  TABLE: Y offsets of Aquamentus's six sprites; index = sprite 0-5; value = pixels.
+;   L0249 AquamentusSpriteOffsetsX  data  TABLE: X offsets of Aquamentus's six sprites; index = sprite 0-5; value = pixels.
+;   L0258 Aquamentus_Draw           code  Draws Aquamentus as six sprites (3 columns of 8 pixels, 2 rows of 16), animated every $10 frames.
+;   L0328 WriteBossSprite           code  Writes one sprite of a boss at the next rolling sprite record and advances the record index.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Updates Aquamentus for one frame: move, shoot, draw, check collisions, cry when hit or killed.
+; IN:   X = object slot
+; NOTE: With InvClock set the move and shoot steps are skipped. Falls into CheckBossHitReaction.
+; ----------------------------------------------------------------------------
 UpdateAquamentus:
     LDA InvClock
     BNE :+
@@ -29,20 +61,35 @@ UpdateAquamentus:
     JSR CheckMonsterCollisions
     JSR PlayBossHitCryIfNeeded
 
+; ----------------------------------------------------------------------------
+; Plays the boss death cry if the monster is dying (ObjMetastate <> 0) and cancels any knockback.
+; IN:   X = object slot
+; OUT:  A = 0; ObjShoveDir,X and ObjShoveDistance,X = 0
+; NOTE: Also called by Moldorm.
+; ----------------------------------------------------------------------------
 CheckBossHitReaction:
     JSR PlayBossDeathCryIfNeeded
     JMP ResetShoveInfo
 
+; TABLE: Aquamentus's X step per move; index = ObjDir - 1 (0 right, 1 left); value = signed pixels.
 AquamentusSpeeds:
     .BYTE $01, $FF
 
+; ----------------------------------------------------------------------------
+; Paces Aquamentus left or right: 1 pixel every 8 frames, in legs of 7 or $F pixels.
+; IN:   X = object slot; ObjGridOffset,X = pixels left in the current leg
+; NOTE: Uses Random,X once per leg: (value AND $0F) OR 7 = length, bit 0 = direction. On a move
+;       frame, X < $88 gives X = $88, facing right, and X >= $C8 gives X = $C7, facing left, each
+;       with a new 7-pixel leg whose first step is taken at once. X = $87 and X = $C8 are reached
+;       before the correction, so the range is $87-$C8.
+; ----------------------------------------------------------------------------
 Aquamentus_Move:
-    ; The monster uses grid offset to mean distance remaining.
-    ; If there's more distance to cover, then go move.
+    ; Aquamentus uses ObjGridOffset as the pixels left to move in this leg.
+    ; If any are left, go move.
     LDA ObjGridOffset, X
     BNE @Move
 
-    ; Set a random distance to move of 7 or $F pixels.
+    ; Pick a new leg: (Random,X AND $0F) OR 7 = 7 or $F pixels.
     LDA Random, X
     PHA
     AND #$0F
@@ -50,7 +97,8 @@ Aquamentus_Move:
     STA ObjGridOffset, X
     PLA
 
-    ; Randomly head left or right.
+    ; Bit 0 of the same random value picks the direction: 1 (right) or 2 (left).
+    ; Nothing moves on this frame.
     AND #$01
     TAY
     INY
@@ -58,13 +106,13 @@ Aquamentus_Move:
     RTS
 
 @Move:
-    ; 7 of 8 screen frames return without moving.
+    ; Move only on frames where the low 3 bits of FrameCounter are 0: 1 frame in 8.
     LDA FrameCounter
     AND #$07
     BNE @Exit
 
-    ; If the boss crossed the left limit, then
-    ; put it back at the left limit ($88), and face right.
+    ; If X < $88 (left limit), then
+    ; put it at $88, face right, and start a 7-pixel leg.
     LDA ObjX, X
     CMP #$88
     BCS @CheckRightLimit
@@ -75,8 +123,8 @@ Aquamentus_Move:
     BNE @SetRemainingDistance
 
 @CheckRightLimit:
-    ; If the boss crossed the right limit, then
-    ; put it back at the right limit ($C7), and face left.
+    ; If X >= $C8 (past the right limit), then
+    ; put it at $C7, face left, and start a 7-pixel leg.
     CMP #$C8
     BCC @ApplySpeed
     LDA #$C7
@@ -85,52 +133,60 @@ Aquamentus_Move:
     STA ObjDir, X
 
 @SetRemainingDistance:
-    ; Set the distance remaining to 7 pixels.
+    ; Set the pixels left in the leg to 7.
     LDA #$07
     STA ObjGridOffset, X
 
 @ApplySpeed:
-    ; Use (direction - 1) to index the speeds.
-    ; This yields 0 for right, 1 for left.
+    ; Index the X steps by (direction - 1): 0 for right, 1 for left.
     LDY ObjDir, X
     DEY
 
-    ; Add the speed to the X coordinate.
+    ; Add the step (+1 or -1) to the X coordinate.
     LDA ObjX, X
     CLC
     ADC AquamentusSpeeds, Y
     STA ObjX, X
 
-    ; Decrement the distance remaining.
+    ; One pixel less to go.
     DEC ObjGridOffset, X
 
 @Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Fires a volley of three fireballs when ObjTimer runs out; otherwise spreads the fireballs in flight.
+; IN:   X = object slot
+; OUT:  X = CurObjIndex after the spread loop
+; NOTE: Volley interval = Random,X OR $70 frames ($70-$7F or $F0-$FF). A fireball needs a free
+;       monster slot; when none is free ShootFireball returns Y = 0 and the offset byte is written
+;       for slot 0 instead. The spread loop moves every type $55 object in the room, each by its own
+;       Aquamentus_ObjFireballOffset, on frames where FrameCounter is even.
+; ----------------------------------------------------------------------------
 Aquamentus_Shoot:
     ; If the object timer <> 0, then
-    ; go modify fireballs that might still be flying.
+    ; go spread out the fireballs that are flying.
     LDA ObjTimer, X
     BNE @SpreadOutFireballs
 
-    ; The boss's object timer has expired. Time to shoot fireballs.
+    ; The object timer has run out: shoot.
     ;
-    ; Set the timer to a random time, at least $70 frames.
+    ; Set the timer to Random,X OR $70: $70-$7F or $F0-$FF frames until the next volley.
     LDA Random, X
     ORA #$70
     STA ObjTimer, X
 
-    ; Shoot the middle fireball. Its vertical displacement is 0.
+    ; Shoot the middle fireball. Its vertical step is 0. (Y = the new fireball's slot.)
     JSR ShootFireball55
     LDA #$00
     STA Aquamentus_ObjFireballOffset, Y
 
-    ; Shoot the lower fireball. Its vertical displacement is 1.
+    ; Shoot the lower fireball. Its vertical step is 1 (down).
     JSR ShootFireball55
     LDA #$01
     STA Aquamentus_ObjFireballOffset, Y
 
-    ; Shoot the upper fireball. Its vertical displacement is -1.
+    ; Shoot the upper fireball. Its vertical step is $FF (-1, up).
     JSR ShootFireball55
     LDA #$FF
     STA Aquamentus_ObjFireballOffset, Y
@@ -139,16 +195,16 @@ Aquamentus_Shoot:
 @SpreadOutFireballs:
     ; Make the fireballs spread out.
     ;
-    ; For each object slot from $B to 1:
+    ; For each object slot from $B down to 0:
     LDX #$0B
 
 @LoopObject:
-    ; If type <> $55, loop again.
+    ; Skip objects that are not fireballs of type $55.
     LDA ObjType, X
     CMP #$55
     BNE @NextLoopObject
 
-    ; Every other screen frame, loop again.
+    ; Skip on frames where FrameCounter is odd: the step is applied every second frame.
     LDA FrameCounter
     LSR
     BCS @NextLoopObject
@@ -160,36 +216,49 @@ Aquamentus_Shoot:
     STA ObjY, X
 
 @NextLoopObject:
-    ; Bottom of the loop.
+    ; Next slot, down to and including slot 0.
     DEX
     BPL @LoopObject
 
-    ; Restore the boss's slot number.
+    ; Restore Aquamentus's slot number.
     LDX CurObjIndex
     RTS
 
-; Params:
-; X: object index
-;
+; ----------------------------------------------------------------------------
+; Creates a fireball of type $55 at the shooter's position (X+4, Y) if a monster slot is free.
+; IN:   X = shooter's object slot
+; OUT:  Y = the fireball's slot, or 0 when no slot was free
+; ----------------------------------------------------------------------------
 ShootFireball55:
     LDA #$55
     JMP ShootFireball
 
+; TABLE: Aquamentus sprite tiles; index = animation frame * 6 + sprite 0-5; value = tile id.
+; Sprites 0-2 are the top row from left to right, 3-5 the bottom row. The first tile of each
+; frame ($CC) is the face with the mouth shut; Aquamentus_Draw replaces it with $C0 (mouth open).
+; Bytes 0-5: frame 0. Bytes 6-11: frame 1 (it differs only in the bottom row).
 AquamentusTiles:
     .BYTE $CC, $C4, $C8, $C2, $C6, $CA, $CC, $C4
     .BYTE $C8, $CE, $D0, $D2
 
+; TABLE: Y offsets of Aquamentus's six sprites; index = sprite 0-5; value = pixels.
 AquamentusSpriteOffsetsY:
     .BYTE $00, $00, $00, $10, $10, $10
 
+; TABLE: X offsets of Aquamentus's six sprites; index = sprite 0-5; value = pixels.
 AquamentusSpriteOffsetsX:
     .BYTE $00, $08, $10, $00, $08, $10
 
+; ----------------------------------------------------------------------------
+; Draws Aquamentus as six sprites (3 columns of 8 pixels, 2 rows of 16), animated every $10 frames.
+; IN:   X = object slot
+; NOTE: The face tile is $C0 (mouth open) while ObjTimer < $20, else $CC. While the invincibility
+;       timer runs, the palette bits cycle, which makes the body flash.
+; ----------------------------------------------------------------------------
 Aquamentus_Draw:
-    ; Every $10 screen frames, switch animation frames.
-    ; Each frame has 6 tiles (representing the top of 6 sprites).
-    ; The last tile of frame 0 is at index 5.
-    ; The last tile of frame 1 is at index $B.
+    ; The animation frame switches every $10 frames: frame 0 while bit 4 of FrameCounter is set,
+    ; frame 1 while it is clear. Each frame has 6 tiles.
+    ; The last tile of frame 0 is at index 5, the last tile of frame 1 at index $B.
     LDY #$05
     LDA FrameCounter
     AND #$10
@@ -219,14 +288,10 @@ Aquamentus_Draw:
     ADC AquamentusSpriteOffsetsY, Y
     STA $01
 
-    ; Calculate sprite attributes:
-    ; [03] := (invincibility timer AND 3) XOR 3
+    ; Sprite attributes: [03] := (invincibility timer AND 3) XOR 3.
     ;
-    ; If the boss is temporarily invincible, then
-    ; this makes it flash by cycling all the palette rows.
-    ;
-    ; Otherwise invincibility timer = 0. So [03] becomes 3:
-    ; the attribute value for a normal sprite with palette row 7 (level).
+    ; With the timer at 0 this is 3: sprite palette 3 (the level's palette row), no flipping.
+    ; While the timer runs, the palette bits change with it, so the body flashes.
     LDA ObjInvincibilityTimer, X
     AND #$03
     EOR #$03
@@ -234,20 +299,17 @@ Aquamentus_Draw:
     LDY $0A
 
     ; Look up the tile for this sprite.
-    ; If it's not the first one (face), then go write the sprite record.
+    ; If it is not the face tile (the first table entry, $CC), go write the sprite.
     LDA AquamentusTiles, Y
     CMP AquamentusTiles
     BNE @WriteSprite
 
-    ; Else it's the first one (the face tile).
-    ; For timer >= $20, use it as is ($CC). Otherwise, use tile $C0.
-    ;
-    ; $CC/CD shows the closed mouth face.
-    ; $C0/C1 shows the open mouth face.
+    ; It is the face tile.
+    ; If ObjTimer >= $20, use it as it is ($CC, mouth shut). Otherwise use $C0 (mouth open).
     LDY ObjTimer, X
     CPY #$20
     BCS @WriteSprite
-    LDA #$C0                    ; Open mouth tile
+    LDA #$C0                    ; Mouth open tile
 
 @WriteSprite:
     JSR WriteBossSprite
@@ -259,13 +321,10 @@ Aquamentus_Draw:
     BPL @LoopSprite
     RTS
 
-; Params:
-; A: tile
-; [00]: X
-; [01]: Y
-; [03]: sprite attributes
-;
-; Save the tile
+; ----------------------------------------------------------------------------
+; Writes one sprite of a boss at the next rolling sprite record and advances the record index.
+; IN:   A = tile; [00] = X; [01] = Y; [03] = sprite attributes
+; ----------------------------------------------------------------------------
 WriteBossSprite:
     PHA
     LDY RollingSpriteIndex

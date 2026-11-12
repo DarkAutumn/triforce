@@ -2,29 +2,50 @@
 ; FILE:     bank2/register-name-input.asm BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 1798-2079
 ; SUBJECTS: (none)
-; TOPIC:    Name entry cursor and characters
-; SEE ALSO:
+; TOPIC:    Mode $E name entry: moving the character-board cursor with the direction buttons (with
+;           auto-repeat) and typing a character (A) or skipping one (B) in the chosen slot's name.
+; SEE ALSO: bank2/register-eliminate-init.asm (ModeE_CharMap, ModeE_CharBoardYOffsetsAndBounds,
+;           SlotToNameOffset, transfer header templates); bank2/register-eliminate-update.asm (caller);
+;           bank2/register-cursor-sprites.asm (cursor sprites, ModeE_SetNameCursorSpriteX).
 ; KEY FACTS:
+;   - The character board is 4 rows of 11 ($2C entries of ModeE_CharMap); the cursor is object slot 1's
+;     ObjX/ObjY: X $30-$D0 in steps of $10, Y $87-$B7 in steps of $10 (ModeE_HandleDirectionButton,
+;     CycleCharBoardCursorY).
+;   - A held direction moves at once, again $11 frames later (timer $10), then every 9 frames (timer
+;     8); only a single direction counts (ModeE_HandleDirectionButton).
+;   - Right past the last column moves to the first column of the next row, Left the reverse; all four
+;     directions wrap around the board (ModeE_HandleDirectionButton).
+;   - A writes the highlighted character into SaveSlotNames and the nametable and advances; B only
+;     advances. There is no delete: the name cursor wraps after 8 characters (ModeE_HandleAOrB).
+;   - The name cursor is object slot 0's ObjX: $70-$A8 in steps of 8 (ModeE_HandleAOrB).
 ; CONTENTS: (generated; L = line in this file)
-;   L0017 ModeE_HandleDirections       code
-;   L0022 ResetButtonRepeatState       code
-;   L0028 ModeE_HandleDirectionButton  code
-;   L0167 CycleCharBoardCursorY        code  Params:
-;   L0184 LA10A_Exit                   code
-;   L0187 ModeE_HandleAOrB             code
+;   L0033 ModeE_HandleDirections       code  Reads the held direction buttons for the character board; none held resets the repeat state.
+;   L0039 ResetButtonRepeatState       code  Clears the button hold/repeat state; IN: A = 0.
+;   L0049 ModeE_HandleDirectionButton  code  Moves the character-board cursor one step in the held direction, with auto-repeat and wrapping.
+;   L0187 CycleCharBoardCursorY        code  Moves the character-board cursor one row down or up, wrapping at the bottom or top.
+;   L0205 LA10A_Exit                   code  Shared return of the routines above and below.
+;   L0211 ModeE_HandleAOrB             code  Sets up the name field for the chosen slot once, then handles A (type a character) and B (skip).
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Reads the held direction buttons for the character board; none held resets the repeat state.
+; ----------------------------------------------------------------------------
 ModeE_HandleDirections:
     LDA ButtonsDown
     AND #$0F                    ; Filter and keep direction buttons.
     BNE ModeE_HandleDirectionButton    ; If no button is down, then reset repeat state.
 
+; Clears the button hold/repeat state; IN: A = 0.
 ResetButtonRepeatState:
     STA IsHoldingButton
     STA IsButtonRepeating
     STA ButtonRepeatTimer
     RTS
 
+; ----------------------------------------------------------------------------
+; Moves the character-board cursor one step in the held direction, with auto-repeat and wrapping.
+; IN:   A = direction bits held (nonzero).
+; ----------------------------------------------------------------------------
 ModeE_HandleDirectionButton:
     TAY
     LDA IsHoldingButton
@@ -47,8 +68,9 @@ ModeE_HandleDirectionButton:
     RTS
 
 @ChooseRepeatDelay:
-    ; If this is the first button press, then wait $10 frames
-    ; to repeat; otherwise wait 8 frames.
+    ; After the first move the timer is $10, after later moves 8. The
+    ; timer counts down one per frame and the move happens on the frame
+    ; after it reaches 0: $11 frames to the first repeat, then 9.
     LDY #$08
     LDA IsButtonRepeating
     BNE :+
@@ -157,15 +179,13 @@ ModeE_HandleDirectionButton:
 @Exit:
     RTS
 
-; Params:
-; X: 0 for down, 3 for up.
-;
-; Returns:
-; ModeE_HasWrappedBoardY [$042A]=1 if wrapped arounnd.
-;
-; Assume we don't wrap around.
+; ----------------------------------------------------------------------------
+; Moves the character-board cursor one row down or up, wrapping at the bottom or top.
+; IN:   X = 0 for down, 3 for up (offset of a triplet in ModeE_CharBoardYOffsetsAndBounds).
+; OUT:  ModeE_HasWrappedBoardY = 1 if the cursor wrapped around, else 0.
+; ----------------------------------------------------------------------------
 CycleCharBoardCursorY:
-    LDY #$00
+    LDY #$00                    ; Assume we don't wrap around.
     LDA ObjY+1                  ; Move the char board cursor Y one spot in given direction.
     CLC
     ADC ModeE_CharBoardYOffsetsAndBounds, X    ; Add $10 or -$10 ($F0), depending on X passed in (0 or 3).
@@ -181,9 +201,13 @@ CycleCharBoardCursorY:
 @ReturnValue:
     STY ModeE_HasWrappedBoardY
 
+; Shared return of the routines above and below.
 LA10A_Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Sets up the name field for the chosen slot once, then handles A (type a character) and B (skip).
+; ----------------------------------------------------------------------------
 ModeE_HandleAOrB:
     LDA IsNameFieldInitialized
 
@@ -214,10 +238,10 @@ ModeE_HandleAOrB:
 
 @CheckAB:
     ; At this point:
-    ; - NameCharOffset [$0421] holds the offset of the first character in the save slot info name for the current slot.
-    ;   - This will be changed as the player inputs characters.
-    ; - [$0422] to [$0424] hold a transfer record header. The VRAM address points to the beginning of the appropriate name field in the nametable.
-    ;   - This will be changed as the player inputs characters.
+    ; - NameCharOffset [$0421] holds the offset in SaveSlotNames of the current slot's
+    ;   first character; it advances as characters are entered.
+    ; - [$0422] to [$0424] hold a transfer record header whose VRAM address points to the
+    ;   start of the slot's name field in the nametable; it advances the same way.
     ; - IsNameFieldInitialized [$0420] is set to 1.
     LDA ButtonsPressed
     AND #$C0
@@ -232,7 +256,7 @@ ModeE_HandleAOrB:
     ; Request to play the character click tune (same as bomb set).
     LDY #$20
     STY Tune0Request
-    LDY #$02                    ; Copy our char transfer record header (in [$0422-0424]) to dynamic transfer buf.
+    LDY #$02                    ; Copy the 3-byte transfer header ([$0422-0424]) to DynTileBuf.
 
 @CopyHeader:
     LDA NameInputCharBuf, Y

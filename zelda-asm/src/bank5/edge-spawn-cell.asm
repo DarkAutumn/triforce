@@ -2,24 +2,46 @@
 ; FILE:     bank5/edge-spawn-cell.asm    BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 3418-3513
 ; SUBJECTS: (none)
-; TOPIC:    Edge cell search for monster spawns
-; SEE ALSO:
+; TOPIC:    Picks the next cell on the screen's outer ring where a monster may walk in from the edge
+;           (overworld rooms with the "monsters from edges" attribute).
+; SEE ALSO: bank7/object-init-table.asm (InitObject: the only caller; turns the cell into X and Y, sets
+;           MonstersFromEdgesLongTimer, rejects a spot too close to Link);
+;           bank5/save-ram-clear-ram.asm (the starting cell $40); bank5/spawn-positions.asm
+;           (IsDistanceSafeToSpawn).
 ; KEY FACTS:
+;   - CurEdgeSpawnCell = row in the high nibble ($4 top .. $E bottom), column in the low nibble ($0
+;     left .. $F right). InitObject places the monster at X = column * $10, Y = row * $10 - 3.
+;   - The search steps around the ring counterclockwise, one cell a step: down the left edge, right
+;     along the bottom, up the right edge, left along the top. It starts from the cell after the stored
+;     one, so successive monsters enter at successive open cells (FindNextEdgeSpawnCell@LoopEdgeCell).
+;   - The corner cells $E0 (bottom left) and $4F (top right) are never tested: the step into them also
+;     moves along the next edge.
+;   - A cell is accepted when the tile at its top left is below $84. That is stricter than walking in
+;     the overworld (RoomFirstUnwalkableTile = $89): tiles $84-$88 are refused.
+;   - If no cell on the ring qualifies, the search ends back at the stored cell and keeps it, although
+;     that cell has just failed the tile test too.
+;   - No random numbers are used; the cell persists between rooms (CurEdgeSpawnCell).
 ; CONTENTS: (generated; L = line in this file)
-;   L0012 FindNextEdgeSpawnCell  code
+;   L0035 FindNextEdgeSpawnCell  code  Advances CurEdgeSpawnCell counterclockwise around the screen's outer ring to the next open cell.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Advances CurEdgeSpawnCell counterclockwise around the screen's outer ring to the next open cell.
+; OUT:  CurEdgeSpawnCell = the cell found (high nibble row $4-$E, low nibble column $0-$F).
+;       Uses [00]-[01] (tile map address) and [0A] (cell being tested).
+; NOTE: Open = tile number below $84 at the cell's top left tile. The stored cell is the last one
+;       tested; if it fails as well, the lap ends there and it is kept anyway. Deterministic: no RNG.
+; ----------------------------------------------------------------------------
 FindNextEdgeSpawnCell:
-    ; Load [0A] with the value before the call.
+    ; [0A] = the cell being tested, starting from the stored cell.
     LDA CurEdgeSpawnCell
     STA $0A
 
 @LoopEdgeCell:
-    ; Loop to look for a place to spawn a monster from the edge
-    ; of the screen. Move counterclockwise, one square at a time.
+    ; Step to the next cell on the edge of the screen, counterclockwise.
     ;
     ; First, if low nibble = 0, then we're at the left edge.
-    ; We'll move down $10 pixels.
+    ; Move down one row (add $10).
     LDY #$10
     LDA $0A
     AND #$0F
@@ -32,16 +54,15 @@ FindNextEdgeSpawnCell:
     BNE @CheckTopOrBottom
 
 @HandleLeftOrRight:
-    ; Else low nibble = $F. We're at the right edge,
-    ; and we'll move up $10 pixels.
+    ; Left edge: Y = $10. Right edge (low nibble = $F): Y = $F0, move up one row.
     TYA
     CLC
-    ADC $0A                     ; Add $10 or -$10 at the left or right edge.
+    ADC $0A
     STA $0A
 
 @CheckTopOrBottom:
-    ; Next, if high nibble = $E, then we're at the bottom edge.
-    ; Move right one pixel.
+    ; Next, if high nibble = $E, then we're at the bottom edge (possibly having just arrived).
+    ; Move right one column.
     LDA $0A
     AND #$F0
     CMP #$E0
@@ -50,34 +71,33 @@ FindNextEdgeSpawnCell:
     JMP @PointToColumn
 :
     ; Else if high nibble <> 4, then we're at the left or right.
-    ; Dont' move horizontally.
+    ; Don't move horizontally.
     CMP #$40
     BNE @PointToColumn
 
     ; Else high nibble = 4. We're at the top edge.
-    ; Move left 1 pixel.
+    ; Move left one column.
     DEC $0A
 
 @PointToColumn:
-    ; Time to get the address of the column.
-    ; Starting at the top of the leftmost column.
+    ; Get the address of the room's tile map: the top of the leftmost tile column.
     JSR FetchTileMapAddr
 
     ; Add $2C to the address as many times as the low nibble of [0A],
-    ; in order to point to the column we want.
+    ; in order to point to the cell's left tile column.
     LDA $0A
     AND #$0F
     TAY
     BEQ @GetRowOffset
 :
-    LDA #$2C                    ; Each column is $16 tiles. Each square column has two columns.
+    LDA #$2C                    ; A tile column is $16 tiles; a cell is two tile columns wide.
     JSR AddToInt16At0
     DEY
     BNE :-
 
 @GetRowOffset:
-    ; Turn the row part of [0A] into a tile index.
-    ; row := (([0A] AND $F0) - $40) / 8
+    ; Turn the row part of [0A] into a tile row within the column:
+    ; tile row = (([0A] AND $F0) - $40) / 8, two tile rows per cell row, row 4 at the top.
     LDA $0A
     AND #$F0
     SEC
@@ -87,15 +107,15 @@ FindNextEdgeSpawnCell:
     LSR
     TAY
 
-    ; If the tile < $84, then it's walkable. So, go use it.
-    ; $84 is a sand tile, which is OK for many monsters; but not
-    ; when coming in from the edges.
+    ; If the tile < $84, the cell is open. Go use it.
+    ; The limit is lower than the overworld's first unwalkable tile ($89), so tiles $84-$88, which
+    ; Link can walk on, are refused for monsters coming in from the edges.
     LDA ($00), Y
     CMP #$84
     BCC @SetSpawnCell
 
     ; Bottom of the loop.
-    ; If you reach the original cell, then stop.
+    ; If we're back at the stored cell (it has just failed the test too), stop and keep it.
     LDA $0A
     CMP CurEdgeSpawnCell
     BNE @LoopEdgeCell

@@ -2,51 +2,70 @@
 ; FILE:     bank5/border-input-mask.asm  BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 2720-2864
 ; SUBJECTS: Link
-; TOPIC:    Border bounds masking the A button and directions
-; SEE ALSO:
+; TOPIC:    Border bands near the screen edges in which Link's newly pressed A and B buttons are discarded
+;           (no sword, no item) and, in dungeons, sideways input is removed.
+; SEE ALSO: bank5/link-handle-input.asm (Link_HandleInput calls Link_FilterInput, then tests A and B);
+;           bank5/wield-items.asm (WieldSword, WieldItem: what the surviving buttons start);
+;           bank7/walker-collision-screen-edge.asm (CheckScreenEdge: the room change at the edge itself);
+;           bank5/doorway.asm (Link_ModifyDirInDoorway: the other dungeon restriction near a door).
 ; KEY FACTS:
+;   - Link_FilterInput runs once a frame, only while Link's state (ObjState) is 0, before the A and B
+;     tests of Link_HandleInput. Only the coordinate on Link's facing axis is tested (X when he faces left
+;     or right, Y when he faces up or down).
+;   - Inner band, both worlds, Link facing the edge (BorderBounds+8): facing down Y >= $BE, up Y < $54,
+;     right X >= $D1, left X < $1F. ButtonsPressed is ANDed with $80: A survives, B and the rest are
+;     cleared, so the sword works and the B item does not.
+;   - Outer band, Link facing the edge: overworld down Y >= $D6, up Y < $45, right X >= $E9, left X < $07;
+;     dungeon down Y >= $C6, up Y < $55, right X >= $D9, left X < $17. ButtonsPressed is cleared: no
+;     sword either.
+;   - Outer band behind Link (he faces away from the edge he stands at, e.g. just after entering a room):
+;     same bounds, same result: ButtonsPressed cleared. Facing parallel to the nearby edge masks nothing.
+;   - Dungeons only (CurLevel <> 0), outer band only: ObjInputDir is ANDed with Link's facing axis ($0C or
+;     $03), so a held perpendicular direction is dropped. In the overworld ObjInputDir is never changed
+;     here (MaskInputInBorder@MaskButtons).
+;   - Only ButtonsPressed of controller 1 (newly pressed this frame) is changed; ButtonsDown is not.
 ; CONTENTS: (generated; L = line in this file)
-;   L0031 BorderBounds       data  TRIFORCE: Screen lock boundaries — Python: Link.is_sword_screen_locked, get_sword_directions_allowed
-;   L0035 Link_FilterInput   code
-;   L0101 MaskInputInBorder  code  Params:
-;   L0158 L14DFF_Exit        code
+;   L0038 BorderBounds       data  TABLE: border coordinates; index = set * 4 + side; value = X or Y coordinate of Link (pixels).
+;   L0054 Link_FilterInput   code  Discards Link's newly pressed buttons (and, in dungeons, sideways input) near the screen edges.
+;   L0119 MaskInputInBorder  code  Tests one coordinate of Link against one border bound and masks ButtonsPressed when it is reached.
+;   L0172 L14DFF_Exit        code  Shared exit: the RTS of MaskInputInBorder, also branched to by WieldSword.
 ; ============================================================================
 
-; TRIFORCE: Screen lock boundaries — Python: Link.is_sword_screen_locked, get_sword_directions_allowed
-; TRIFORCE: OW bounds (first 4): down=$D6, up=$45, right=$E9, left=$07
-; TRIFORCE: UW bounds (next 4):  down=$C6, up=$55, right=$D9, left=$17
-; TRIFORCE: Inner bounds (last 4): down=$BE, up=$54, right=$D1, left=$1F
-; TRIFORCE: Inner bounds mask A button (sword). Outer bounds mask directions.
-; TRIFORCE: Direction-dependent: checks facing dir vs boundary. Only blocks movement TOWARD edge.
-; TRIFORCE: Python approximation: checks position against bounds regardless of direction (known approx).
-;
-; Three sets of border coordinates:
-; - outer OW
-; - outer UW
-; - inner
-;
-; Within each set, the coordinates are arranged:
-; down, up, right, left
-;
+; TABLE: border coordinates; index = set * 4 + side; value = X or Y coordinate of Link (pixels).
+;   Sets: 0 outer overworld, 1 outer dungeon, 2 inner (both worlds). Sides in each set: down, up, right,
+;   left. Down and right bounds are reached at coordinate >= bound; up and left at coordinate < bound.
+;   The inner set discards every newly pressed button but A; the outer sets discard A as well.
 BorderBounds:
-    .BYTE $D6, $45, $E9, $07, $C6, $55, $D9, $17
-    .BYTE $BE, $54, $D1, $1F
+    .BYTE $D6, $45, $E9, $07, $C6, $55, $D9, $17    ; Outer OW: D, U, R, L. Outer UW: D, U, R, L.
+    .BYTE $BE, $54, $D1, $1F                        ; Inner: D, U, R, L.
 
+; ----------------------------------------------------------------------------
+; Discards Link's newly pressed buttons (and, in dungeons, sideways input) near the screen edges.
+; IN:   ObjDir = Link's facing direction; ObjX, ObjY; ButtonsPressed; CurLevel.
+; OUT:  ButtonsPressed ANDed with $80 (inner band, facing the edge) or cleared (outer band, facing the
+;       edge or with the edge behind); in a dungeon's outer band ObjInputDir keeps only the facing axis.
+;       Uses [00], [01], [02].
+; NOTE: Two tests. 1) Inner band on the side Link faces. 2) Outer band: on the side Link faces when test
+;       1 hit, else on the side behind him. Only the coordinate on the facing axis is looked at.
+;       Called by Link_HandleInput only while Link's state is 0.
+; NOTE: Every outer bound lies inside its inner band except the dungeon's up bound ($55 against $54):
+;       facing up in a dungeon at Y = $54 test 1 misses, so nothing on the facing side is masked there.
+; ----------------------------------------------------------------------------
 Link_FilterInput:
-    ; [00] holds the opposite of Link's facing direction.
+    ; [00] holds the opposite of Link's facing direction. MaskInputInBorder takes "left or up" in [00]
+    ; as "test coordinate >= bound", so the opposite direction selects the test for the side he faces.
     LDA ObjDir
     JSR GetOppositeDir
     STA $00
 
-    ; Call GetOppositeDir again to use this mapping:
-    ; In Dir: 1 2 4 8
-    ;         -------
-    ; Index:  2 3 0 1
+    ; Call GetOppositeDir again, on the opposite direction, for its index in Y. The result is the
+    ; side index of the direction Link faces, in BorderBounds order:
+    ; Facing: 1 (right) 2 (left) 4 (down) 8 (up)
+    ; Y:      2         3        0        1
     JSR GetOppositeDir
 
-    ; Get the appropriate coordinate for the direction:
-    ; X for horizontal
-    ; Y for vertical
+    ; Get the coordinate on the facing axis:
+    ; X for horizontal (Y >= 2), Y for vertical.
     LDA ObjX
     CPY #$02
     BCS :+
@@ -54,30 +73,30 @@ Link_FilterInput:
 :
     STA $02                     ; [02] holds the coordinate (X or Y).
 
-    ; Mask A button and directions if inner border is crossed.
+    ; Test 1: inner band on the side Link faces.
     TYA
-    PHA                         ; Save reverse direction index.
+    PHA                         ; Save the side index.
     CLC
-    ADC #$08                    ; Add 8 for the third set of border bounds. Each is 4 bytes.
+    ADC #$08                    ; Offset 8 = the third (inner) set of bounds.
     TAY
-    LDA #$80                    ; Button A will be masked off, if boundary is crossed.
+    LDA #$80                    ; AND mask for ButtonsPressed: only A ($80) is kept.
     JSR MaskInputInBorder
-    PLA                         ; Restore reverse direction index.
+    PLA                         ; Restore the side index.
     TAY
 
-    ; If inner boundary was not crossed, then we'll check the outer
-    ; boundary using player's direction and reverse direction index.
+    ; [01] = $FF means Link is not in the inner band on the side he faces. Then test the outer band
+    ; on the side behind him instead: [00] becomes the facing direction, and Y the index
+    ; GetOppositeDir gives for it (up 0, down 1, left 2, right 3), which in BorderBounds order
+    ; (down, up, right, left) is the opposite side.
+    ; Otherwise [00] and Y stay, and the outer band is tested on the side he faces.
     LDA $01
     CMP #$FF
     BNE :+
     LDA ObjDir
-    STA $00                     ; [00] now holds facing direction instead of the opposite.
-    JSR GetOppositeDir          ; Get the reverse direction index for the actual facing.
+    STA $00
+    JSR GetOppositeDir
 :
-    ; If in UW, use the second set of bounds by adding 4
-    ; to reverse direction index.
-    ;
-    ; Else in OW, and use first set that begins at offset 0.
+    ; In a dungeon use the second set of bounds (offset 4); in the overworld the first (offset 0).
     LDA CurLevel
     BEQ :+
     TYA
@@ -85,48 +104,46 @@ Link_FilterInput:
     ADC #$04
     TAY
 :
-    ; We won't mask buttons (A) this time. Only directions now.
+    ; Test 2: outer band. AND mask 0 discards every newly pressed button, A included.
     LDA #$00
 
-; Params:
-; A: mask of buttons to block
-; Y: offset into BorderBounds
-; [00]: direction
-; [02]: coordinate
-;
-; Returns:
-; [01]: button mask that was used
-;       (set to $FF if boundary not crossed)
-;
+; ----------------------------------------------------------------------------
+; Tests one coordinate of Link against one border bound and masks ButtonsPressed when it is reached.
+; IN:   A = AND mask for ButtonsPressed ($80 keeps only A; 0 clears all); Y = offset into BorderBounds;
+;       [00] = direction: left or up (bits $0A) tests coordinate >= bound, right or down tests
+;       coordinate < bound; [02] = the coordinate.
+; OUT:  [01] = the mask if the bound was reached, $FF if not. When reached: ButtonsPressed ANDed with
+;       the mask; and if in a dungeon with mask 0, ObjInputDir ANDed with Link's facing axis.
+; NOTE: In the overworld (CurLevel = 0) ObjInputDir is never touched.
+; ----------------------------------------------------------------------------
 MaskInputInBorder:
     STA $01
 
-    ; If direction is positive (right or down), then go handle it separately.
+    ; If [00] is right or down, go test "coordinate < bound".
     LDA $00
     AND #$0A
     BEQ @PositiveDir
 
-    ; The direction is negative (left or up).
-    ;
-    ; If the coordinate does not cross (<) the boundary, then
-    ; go set mask $FF, so that no button is excluded.
+    ; [00] is left or up: the bound is reached when coordinate >= bound.
+    ; If coordinate < bound, go report $FF and change nothing.
     LDA $02
     CMP BorderBounds, Y
     BCC @ExcludeNone
 
 @MaskButtons:
-    ; The boundary was crossed. Mask buttons.
+    ; The bound was reached. Keep only the newly pressed buttons in mask [01].
     LDA ButtonsPressed
-    AND $01                     ; [01] button mask
+    AND $01
     STA ButtonsPressed
 
-    ; If in OW or button mask <> 0, return.
+    ; In the overworld, or if the mask <> 0 (inner band), that is all.
     LDA CurLevel
     BEQ @Exit
     LDA $01
     BNE @Exit
 
-    ; Mask off input directions perpendicular to player's facing.
+    ; Dungeon, outer band: drop the input directions perpendicular to Link's facing.
+    ; Keep up/down ($0C) if he faces up or down, else left/right ($03).
     LDY #$0C
     LDA ObjDir
     AND #$0C
@@ -141,19 +158,16 @@ MaskInputInBorder:
     RTS
 
 @PositiveDir:
-    ; The direction is positive.
-    ;
-    ; If the coordinate crosses (<) the boundary, then
-    ; go mask buttons.
-    LDA $02                     ; Get coordinate in [02].
+    ; [00] is right or down: the bound is reached when coordinate < bound.
+    LDA $02
     CMP BorderBounds, Y
     BCC @MaskButtons
 
 @ExcludeNone:
-    ; The coordinate is not crossed; then set mask $FF,
-    ; so that no button is excluded.
+    ; The bound was not reached. Report $FF in [01]; nothing is masked.
     LDA #$FF
-    STA $01                     ; [01] holds button mask.
+    STA $01
 
+; Shared exit: the RTS of MaskInputInBorder, also branched to by WieldSword.
 L14DFF_Exit:
     RTS

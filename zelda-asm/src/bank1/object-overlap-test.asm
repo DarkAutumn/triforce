@@ -1,57 +1,53 @@
 ; ============================================================================
-; FILE:     bank1/object-overlap-test.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
+; FILE:     bank1/object-overlap-test.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 6351-6493
 ; SUBJECTS: (none)
-; TOPIC:    Weapon hotspot and object overlap tests
-; SEE ALSO:
+; TOPIC:    The hit point of a thin weapon (sword, rod, arrow, sword shot, magic shot) and the box test
+;           between two points that every collision check uses.
+; SEE ALSO: bank1/sword-bomb-arrow-collision.asm (callers that set damage and thresholds);
+;           bank1/weapon-damage-death.asm (CheckMonsterWeaponCollision: what happens on overlap);
+;           bank1/link-collision-harm.asm (Link against monsters, threshold 9);
+;           bank1/monster-collisions.asm (GetObjectMiddle: the monster's middle in [02],[03]).
 ; KEY FACTS:
+;   - Two points collide when the horizontal distance is less than [0D] and the vertical distance less
+;     than [0E]; the bounds are exclusive (DoObjectsCollideWithThresholds).
+;   - Distances are the absolute value of an 8-bit difference, so a true distance over $80 wraps and reads
+;     as 256 minus the distance (DoObjectsCollideWithThresholds).
+;   - The hit point of a thin weapon is (X+6, Y+8) when Link faces up or down and (X+8, Y+6) when he faces
+;     left or right: Link's direction is used, not the weapon's (CheckMonsterSlenderWeaponCollision2).
+;   - DoObjectsCollide uses one threshold for both axes (DoObjectsCollide).
 ; CONTENTS: (generated; L = line in this file)
-;   L0029 CheckMonsterSlenderWeaponCollision   code  Params:
-;   L0047 CheckMonsterSlenderWeaponCollision2  code  Params:
-;   L0100 DoObjectsCollide                     code  Params:
-;   L0123 DoObjectsCollideWithThresholds       code  Params:
+;   L0033 CheckMonsterSlenderWeaponCollision   code  Tests a thin weapon against a monster using one threshold for both axes.
+;   L0047 CheckMonsterSlenderWeaponCollision2  code  Sets the hit point of a thin weapon from Link's facing direction, then tests it against a monster.
+;   L0085 DoObjectsCollide                     code  Tests whether two points are closer than A pixels on both axes.
+;   L0098 DoObjectsCollideWithThresholds       code  Tests whether two points are closer than [0D] pixels horizontally and [0E] pixels vertically.
 ; ============================================================================
 
-; Params:
-; A: damage points
-; X: monster object slot
-; [00]: weapon object slot
-; [02]: monster object mid X
-; [03]: monster object mid Y
-; [09]: damage type
-; [0D]: horizontal threshold
-;
-; Returns:
-; [06]: 1 if objects collide
-; [07]: damage points
-; [0E]: vertical threshold
-;
+; ----------------------------------------------------------------------------
+; Tests a thin weapon against a monster using one threshold for both axes.
+; IN:   A = damage points; X = monster slot; [00] = weapon slot; [02],[03] = monster's middle;
+;       [09] = damage type; [0D] = threshold.
+; OUT:  [06] = 1 when they overlap; [07] = damage points; [0E] = [0D]; Y = weapon slot.
+; NOTE: Falls into CheckMonsterSlenderWeaponCollision2.
+; ----------------------------------------------------------------------------
 CheckMonsterSlenderWeaponCollision:
-    STA $07
+    STA $07                     ; [07] := damage points
     LDA $0D
-    STA $0E
+    STA $0E                     ; vertical threshold := horizontal threshold
 
-; Params:
-; X: monster object slot
-; [00]: weapon object slot
-; [02]: monster object mid X
-; [03]: monster object mid Y
-; [07]: damage points
-; [09]: damage type
-; [0D]: horizontal threshold
-; [0E]: vertical threshold
-;
-; Returns:
-; [06]: 1 if objects collide
-;
+; ----------------------------------------------------------------------------
+; Sets the hit point of a thin weapon from Link's facing direction, then tests it against a monster.
+; IN:   X = monster slot; [00] = weapon slot; [02],[03] = monster's middle; [07] = damage points;
+;       [09] = damage type; [0D],[0E] = horizontal and vertical thresholds.
+; OUT:  [06] = 1 when they overlap; Y = weapon slot; [04],[05] = the weapon's hit point.
+; NOTE: The point is chosen by Link's direction (ObjDir of slot 0), not the weapon's own. An arrow or
+;       shot in flight therefore uses Link's current facing: its hit point moves by 2 pixels on each
+;       axis when Link turns to the other axis.
+; ----------------------------------------------------------------------------
 CheckMonsterSlenderWeaponCollision2:
     LDY $00
 
-    ; If Link is facing vertically, then:
-    ; [04] := (weapon X + 6)
-    ; A    := (weapon Y + 8)
-    ;
-    ; Shouldn't it be based on the weapon's direction?
+    ; Link faces up or down: [04] := weapon X + 6; A := weapon Y + 8.
     LDA ObjDir
     AND #$0C
     BEQ @CheckHorizontal
@@ -62,14 +58,10 @@ CheckMonsterSlenderWeaponCollision2:
     LDA a:ObjY, Y
     CLC
     ADC #$08
-    JMP :+
+    JMP @Test
 
 @CheckHorizontal:
-    ; Else Link is facing horizontally.
-    ; [04] := (weapon X + 8)
-    ; A    := (weapon Y + 6)
-    ;
-    ; Shouldn't it be based on the weapon's direction?
+    ; Link faces left or right: [04] := weapon X + 8; A := weapon Y + 6.
     LDA a:ObjX, Y
     CLC
     ADC #$08
@@ -77,79 +69,58 @@ CheckMonsterSlenderWeaponCollision2:
     LDA a:ObjY, Y
     CLC
     ADC #$06
-:
-    ; The A register will be copied to [05] and used here.
+@Test:
+    ; A (the point's Y) is stored in [05] by the routine jumped to.
     JMP CheckMonsterWeaponCollision
 
-; Params:
-; A: collision distance threshold (objects collide if nearer in X and Y)
-; [00]: weapon object slot (unused)
-; [02]: object 1 mid X
-; [03]: object 1 mid Y
-; [04]: object 2 mid X
-; [05]: object 2 mid Y
-;
-; Returns:
-; A: 1 if objects collide
-; Y: weapon object slot
-; Z: 0 if objects collide
-; [06]: 1 if objects collide
-; [0A]: horizontal distance
-; [0B]: vertical distance
-;
+; ----------------------------------------------------------------------------
+; Tests whether two points are closer than A pixels on both axes.
+; IN:   A = threshold for both axes; [00] = an object slot, only copied to Y; [02],[03] = point 1 (X, Y);
+;       [04],[05] = point 2 (X, Y).
+; OUT:  A = [06] = 1 when they collide, else 0 (Z flag set accordingly); Y = [00]; [0D] = [0E] = the
+;       threshold; [0A] = horizontal distance; [0B] = vertical distance (written only when the horizontal
+;       test passed).
+; NOTE: Falls into DoObjectsCollideWithThresholds.
+; ----------------------------------------------------------------------------
 DoObjectsCollide:
-    ; Use the same threshold value horizontally and vertically.
-    ; Copy it to [0D] for horizontal threshold, and [0E] for vertical one.
     STA $0D
     STA $0E
 
-; Params:
-; [00]: weapon or Link object slot (unused)
-; [02]: object 1 mid X
-; [03]: object 1 mid Y
-; [04]: object 2 mid X
-; [05]: object 2 mid Y
-; [0D]: horizontal threshold
-; [0E]: vertical threshold
-;
-; Returns:
-; A: 1 if objects collide
-; Y: weapon or Link object slot (copied from [00])
-; Z: 0 if objects collide
-; [06]: 1 if objects collide
-; [0A]: horizontal distance
-; [0B]: vertical distance
-;
+; ----------------------------------------------------------------------------
+; Tests whether two points are closer than [0D] pixels horizontally and [0E] pixels vertically.
+; IN:   [00] = an object slot, only copied to Y; [02],[03] = point 1 (X, Y); [04],[05] = point 2 (X, Y);
+;       [0D] = horizontal threshold; [0E] = vertical threshold.
+; OUT:  A = [06] = 1 when they collide, else 0 (Z flag set accordingly); Y = [00]; [0A] = horizontal
+;       distance; [0B] = vertical distance (written only when the horizontal test passed).
+; NOTE: Collision needs distance < threshold on both axes. Each distance is the absolute value of the
+;       8-bit difference taken as a signed byte.
+; ----------------------------------------------------------------------------
 DoObjectsCollideWithThresholds:
-    ; Reset [06] to indicate no collision by default.
     LDA #$00
-    STA $06
+    STA $06                     ; [06] := 0: no collision
     LDY $00
 
-    ; Store in [0A] the horizontal distance between the two objects.
+    ; [0A] := |point 1 X - point 2 X|. No collision if it is >= [0D].
     LDA $02
     SEC
     SBC $04
     JSR Abs
     STA $0A
 
-    ; If distance >= horizontal threshold in [0D], return 0.
     CMP $0D
     BCS @ReturnValue
 
-    ; Store in [0B] the vertical distance between the two objects.
+    ; [0B] := |point 1 Y - point 2 Y|. No collision if it is >= [0E].
     LDA $03
     SEC
     SBC $05
     JSR Abs
     STA $0B
 
-    ; If distance >= vertical threshold in [0E], return 0.
     CMP $0E
     BCS @ReturnValue
 
-    ; If we get here, then the objects are close enough in both axes.
-    ; Return 1.
+    ; Close enough on both axes.
     INC $06
 
 @ReturnValue:

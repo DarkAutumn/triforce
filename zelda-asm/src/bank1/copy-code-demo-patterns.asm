@@ -2,26 +2,44 @@
 ; FILE:     bank1/copy-code-demo-patterns.asm BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 1569-1743
 ; SUBJECTS: (none)
-; TOPIC:    Copy common code to RAM; demo pattern transfer and data
-; SEE ALSO:
+; TOPIC:    Copies the common code segment from bank 1 to RAM; sends the title/story demo pattern
+;           (CHR) blocks to the PPU; the two pattern blobs; filler.
+; SEE ALSO: bank1/common-code-header.asm (the BANK_01_CODE segment that is copied);
+;           bank7/init-mode-dispatch.asm (the callers: InitializeGameOrMode, InitMode2, InitMode0);
+;           bank2/common-patterns.asm (the same transfer for the common patterns);
+;           bank3/level-pattern-blocks.asm (the per-level pattern transfer).
 ; KEY FACTS:
+;   - The common code runs from RAM at $6C90-$7EFF; it is copied there once after reset and again at the
+;     start of every level load (mode 2, submode 0). CopyCommonCodeToRam
+;   - The demo patterns are two blocks: $0900 bytes to PPU address $0700 (sprite table) and $0820
+;     bytes to $1700 (background table). DemoPatternBlockSizes, DemoPatternVramAddrs
+;   - HasDemoPatterns = $A5 marks the demo patterns as loaded; mode 0 init calls the transfer only
+;     when it holds another value. TransferDemoPatterns
+;   - Both blocks go out in one call with video turned off. TransferDemoPatterns
 ; CONTENTS: (generated; L = line in this file)
-;   L0019 CopyCommonCodeToRam         code
-;   L0058 DemoPatternBlockAddrs       data
-;   L0062 DemoPatternBlockSizes       data
-;   L0066 DemoPatternVramAddrs        data
-;   L0070 TransferDemoPatterns        code
-;   L0112 TransferPatternBlock_Bank1  code  Params:
-;   L0149 DemoSpritePatterns          data
-;   L0152 DemoBackgroundPatterns      data
+;   L0037 CopyCommonCodeToRam         code  Copies the BANK_01_CODE segment (common code) from this bank to RAM, where it runs.
+;   L0078 DemoPatternBlockAddrs       data  TABLE: addresses of the demo pattern blocks; index = PatternBlockIndex (0 sprites, 1 background);
+;   L0083 DemoPatternBlockSizes       data  TABLE: sizes of the demo pattern blocks; index = PatternBlockIndex; value = bytes, high byte first.
+;   L0089 DemoPatternVramAddrs        data  TABLE: PPU destination of the demo pattern blocks; index = PatternBlockIndex; value = PPU address,
+;   L0098 TransferDemoPatterns        code  Sends both demo pattern blocks to the PPU with video off and marks them loaded.
+;   L0141 TransferPatternBlock_Bank1  code  Writes one pattern block to the PPU and increments PatternBlockIndex.
+;   L0179 DemoSpritePatterns          data  DATA: demo sprite patterns (CHR), $0900 bytes = 144 tiles of 16 bytes, sent to PPU $0700.
+;   L0183 DemoBackgroundPatterns      data  DATA: demo background patterns (CHR), $0820 bytes = 130 tiles of 16 bytes, sent to PPU $1700.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Copies the BANK_01_CODE segment (common code) from this bank to RAM, where it runs.
+; OUT:  RAM from __BANK_01_CODE_RUN__ ($6C90) up to __BANK_01_CODE_RUN_END__ ($7F00) filled;
+;       [00]-[03] and A, Y changed.
+; NOTE: Bank 1 must be switched in. Called once after reset (InitializeGameOrMode) and at the start of
+;       every level load (InitMode2, submode 0).
+; ----------------------------------------------------------------------------
 CopyCommonCodeToRam:
-    LDA #<__BANK_01_CODE_LOAD__ ; Source address $A500.
+    LDA #<__BANK_01_CODE_LOAD__ ; Source address $A500 -> [00:01].
     STA $00
     LDA #>__BANK_01_CODE_LOAD__
     STA $01
-    LDA #<__BANK_01_CODE_RUN__  ; Destination address $6C90.
+    LDA #<__BANK_01_CODE_RUN__  ; Destination address $6C90 -> [02:03].
     STA $02
     LDA #>__BANK_01_CODE_RUN__
     STA $03
@@ -48,25 +66,35 @@ CopyCommonCodeToRam:
     LDA $03
     ADC #$00
     STA $03
-    CMP #>__BANK_01_CODE_RUN_END__    ; Once you reach $7F00, you're done.
+    CMP #>__BANK_01_CODE_RUN_END__    ; Done once the destination reaches $7F00.
     BNE @Loop
     LDA $02
     CMP #<__BANK_01_CODE_RUN_END__
     BNE @Loop
     RTS
 
+; TABLE: addresses of the demo pattern blocks; index = PatternBlockIndex (0 sprites, 1 background);
+;        value = address in this bank.
 DemoPatternBlockAddrs:
     .ADDR DemoSpritePatterns
     .ADDR DemoBackgroundPatterns
 
+; TABLE: sizes of the demo pattern blocks; index = PatternBlockIndex; value = bytes, high byte first.
 DemoPatternBlockSizes:
     .DBYT $0900
     .DBYT $0820
 
+; TABLE: PPU destination of the demo pattern blocks; index = PatternBlockIndex; value = PPU address,
+;        high byte first.
 DemoPatternVramAddrs:
-    .DBYT $0700
-    .DBYT $1700
+    .DBYT $0700                 ; In pattern table 0 (sprites), from tile $70.
+    .DBYT $1700                 ; In pattern table 1 (background), from tile $70.
 
+; ----------------------------------------------------------------------------
+; Sends both demo pattern blocks to the PPU with video off and marks them loaded.
+; OUT:  HasDemoPatterns = $A5; PatternBlockIndex = 0; [00]-[03] changed.
+; NOTE: Called from mode 0 init while HasDemoPatterns <> $A5. Assumes PatternBlockIndex = 0 on entry.
+; ----------------------------------------------------------------------------
 TransferDemoPatterns:
     JSR TurnOffAllVideo
     LDA PpuStatus          ; Clear address latch.
@@ -98,17 +126,18 @@ TransferDemoPatterns:
     LDA PatternBlockIndex
     CMP #$02
     BNE @LoopBlock
-    LDA #$A5
+    LDA #$A5                    ; Mark the demo patterns loaded.
     STA HasDemoPatterns
     LDA #$00
     STA PatternBlockIndex
     RTS
 
-; Params:
-; [00:01]: source address
-; [03:02]: size
-; A: low byte of desination VRAM address
-;
+; ----------------------------------------------------------------------------
+; Writes one pattern block to the PPU and increments PatternBlockIndex.
+; IN:   [00:01] = source address; [02] = size high byte, [03] = size low byte; A = low byte of the
+;       PPU address (the high byte was already written to PpuAddr).
+; OUT:  PatternBlockIndex incremented; [00:01] advanced past the block; [02], [03] = 0.
+; ----------------------------------------------------------------------------
 TransferPatternBlock_Bank1:
     STA PpuAddr
     LDY #$00
@@ -146,13 +175,15 @@ TransferPatternBlock_Bank1:
     INC PatternBlockIndex
     RTS
 
+; DATA: demo sprite patterns (CHR), $0900 bytes = 144 tiles of 16 bytes, sent to PPU $0700.
 DemoSpritePatterns:
     .INCBIN "dat/DemoSpritePatterns.dat"
 
+; DATA: demo background patterns (CHR), $0820 bytes = 130 tiles of 16 bytes, sent to PPU $1700.
 DemoBackgroundPatterns:
     .INCBIN "dat/DemoBackgroundPatterns.dat"
 
-; Unknown block
+; DATA: filler ($FF), 300 bytes, not referenced.
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF

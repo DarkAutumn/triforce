@@ -2,99 +2,136 @@
 ; FILE:     bank7/status-bar-lift-item.asm BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 974-1128
 ; SUBJECTS: (none)
-; TOPIC:    Status bar items; Link lifting an item
-; SEE ALSO:
+; TOPIC:    Status bar B item and sword sprites, with the repair of SelectedItemSlot when the selected item
+;           is gone; Link holding an item above his head (halt, timer, drawing).
+; SEE ALSO: bank7/room-item-draw.asm (DrawItemInInventory, AnimateItemObject); bank5/submenu-items.asm
+;           (FindAndSelectOccupiedItemSlot, DrawItemInInventoryWithX); bank1/take-item.asm (TakeItem starts
+;           a lift); bank5/mode12-lay-out-room.asm (Triforce piece lift in mode $12);
+;           bank7/mode5-play-update.asm (calls CheckLiftItem and the status bar routine every frame).
 ; KEY FACTS:
+;   - SelectedItemSlot 0 means "boomerang": the magic boomerang (slot $1E) is shown if owned, else the
+;     wooden one (slot $1D) (DrawStatusBarBoomerang).
+;   - If the selected slot is empty (for example the last bomb was used), the selection moves to the
+;     nearest occupied selectable slot searching downward from it, and the B item is not drawn that
+;     frame (CheckMissingItem, EnsureSelectedItem).
+;   - Potion (slot 7) and letter (slot $F) share one selection: an empty potion slot falls back to the
+;     letter if Link has it, and a selected letter switches to the potion as soon as InvPotion is
+;     nonzero (CheckMissingItem, DrawStatusBarItemsAndEnsureItemSelected, DrawStatusBarPotion).
+;   - Status bar sprite positions: B item at X $7C, Y $1F; sword at X $94, Y $1F (DrawStatusBarItemB,
+;     DrawStatusBarSword).
+;   - While ItemTypeToLift is nonzero, CheckLiftItem sets Link's state to $40 (halted) every frame and
+;     counts ItemLiftTimer down; TakeItem starts it at $80 when an item is taken outside mode 5 (the
+;     play update that calls CheckLiftItem also serves caves and cellars), so Link is frozen for $7F
+;     frames and released on the $80th (CheckLiftItem, EndLinkLiftingItem).
+;   - Item id 0 (bomb) cannot be lifted: ItemTypeToLift = 0 means "none" (CheckLiftItem).
+;   - The lifted item is drawn with object slot $13 (the room item's slot), placed at Link's X and
+;     $10 pixels above his Y (SetUpAndDrawLinkLiftingItem).
+;   - When the lift ends in a dungeon the level's song is requested again; in the OW (caves) no song
+;     is requested here (EndLinkLiftingItem).
 ; CONTENTS: (generated; L = line in this file)
-;   L0025 DrawStatusBarPotion                      code
-;   L0031 DrawStatusBarItemsAndEnsureItemSelected  code
-;   L0053 DrawStatusBarItemB                       code
-;   L0064 DrawStatusBarBoomerang                   code
-;   L0076 FindItemOrDrawSword                      code
-;   L0084 EnsureSelectedItem                       code
-;   L0092 DrawStatusBarSword                       code
-;   L0105 CheckMissingItem                         code
-;   L0115 CheckLiftItem                            code
-;   L0128 SetUpAndDrawLinkLiftingItem              code  Params:
-;   L0139 DrawLinkLiftingItem                      code  Params:
-;   L0163 L1E847_Exit                              code
-;   L0166 EndLinkLiftingItem                       code
-;   L0178 L1E859_Exit                              code
+;   L0051 DrawStatusBarPotion                      code  Switches the selection from the letter to the potion (item slot 7) and draws the potion as B item.
+;   L0064 DrawStatusBarItemsAndEnsureItemSelected  code  Draws the B item and the sword in the status bar, first repairing SelectedItemSlot if needed.
+;   L0081 DrawStatusBarItemB                       code  Draws the item of item slot X at the B position of the status bar, then goes on to the sword.
+;   L0095 DrawStatusBarBoomerang                   code  Selection 0: draws the magic boomerang if owned, else the wooden one; with neither, reselects.
+;   L0108 FindItemOrDrawSword                      code  Draws only the sword if slot X holds an item (the B item follows next frame); else falls into the search.
+;   L0119 EnsureSelectedItem                       code  Sets SelectedItemSlot to an occupied selectable item slot, searching backward from slot X.
+;   L0130 DrawStatusBarSword                       code  Draws Link's sword at the A position of the status bar, if he has one.
+;   L0146 CheckMissingItem                         code  Handles an empty selected slot: the potion slot falls back to the letter, any other slot is reselected.
+;   L0162 CheckLiftItem                            code  While Link holds up an item: keeps him halted, counts the lift timer down and draws the pose.
+;   L0176 SetUpAndDrawLinkLiftingItem              code  Places the lifted item (object slot $13) at Link's X, $10 pixels above him, then draws both.
+;   L0192 DrawLinkLiftingItem                      code  Draws Link in the item-lifting pose and the lifted item at the position of object slot $13.
+;   L0217 L1E847_Exit                              code  Shared RTS of DrawLinkLiftingItem and DrawStatusBarSword.
+;   L0224 EndLinkLiftingItem                       code  Ends the lift: Link's state back to 0 (idle), ItemTypeToLift cleared, dungeon song restarted.
+;   L0234 L1E859_Exit                              code  Shared RTS of EndLinkLiftingItem and CheckLiftItem.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Switches the selection from the letter to the potion (item slot 7) and draws the potion as B item.
+; ----------------------------------------------------------------------------
 DrawStatusBarPotion:
-    ; We have a potion to draw.
     LDX #$07                    ; Potion item slot.
     STX SelectedItemSlot
-    BNE DrawStatusBarItemB      ; Go draw the potion.
+    BNE DrawStatusBarItemB      ; Always taken.
 
+; ----------------------------------------------------------------------------
+; Draws the B item and the sword in the status bar, first repairing SelectedItemSlot if needed.
+; NOTE: SelectedItemSlot 0 is the boomerang pseudo slot (InvItems+0 is the sword). A selection whose
+;       slot is empty is replaced: potion slot 7 by the letter slot $F if Link has the letter, anything
+;       else by a search for an occupied slot (FindAndSelectOccupiedItemSlot, backward). On a frame
+;       where the selection changes this way, only the sword is drawn.
+; NOTE: Leaves bank 5 switched in whenever something is drawn or searched.
+; ----------------------------------------------------------------------------
 DrawStatusBarItemsAndEnsureItemSelected:
-    ; Draws the selected item and the sword in the status bar.
-    ; Before drawing the item, it ensures that SelectedItemSlot
-    ; refers to an occupied, equippable item slot.
-    ;
-    ; This accounts for the fallback behavior between potions
-    ; and letters and the two boomerangs.
-    ;
-    ; Start at slot zero. Normally, it would be used to
-    ; check swords. When it's used as the selected item index;
-    ; it's a pseudo-slot used for checking boomerangs.
     LDX SelectedItemSlot
-    BEQ DrawStatusBarBoomerang  ; If pseudo-slot zero is chosen, then go check boomerangs.
+    BEQ DrawStatusBarBoomerang  ; Pseudo slot 0: boomerangs.
     LDA InvItems, X
-    BEQ CheckMissingItem        ; If there's no item in the current item slot, then go check for potions and letters.
-    CPX #$0F                    ; We have an item. See if it's in the letter slot.
-    BNE DrawStatusBarItemB      ; If it's not the letter slot, then go draw it.
-    LDY InvPotion                  ; It's in the letter slot. See if we have a potion.
-    BNE DrawStatusBarPotion     ; If we have a potion, then go set SelectedItemSlot to its slot, and draw it.
-    LSR                         ; Otherwise, we only have a letter.
-    ORA #$01                    ; Use only 1 as the palette attribute.
+    BEQ CheckMissingItem        ; Selected slot is empty.
+    CPX #$0F                    ; Letter slot?
+    BNE DrawStatusBarItemB      ; No: draw the item of slot X.
+    LDY InvPotion               ; Letter selected: if Link now has a potion,
+    BNE DrawStatusBarPotion     ; select and draw the potion instead.
+    LSR                         ; Letter value 1 or 2 -> 0 or 1,
+    ORA #$01                    ; -> 1. (Overwritten: DrawItemInInventory reloads [04].)
 
+; ----------------------------------------------------------------------------
+; Draws the item of item slot X at the B position of the status bar, then goes on to the sword.
+; IN:   X = item slot (1-8, $F, or $1D/$1E for a boomerang).
+; NOTE: The [04] written here is replaced by InvItems,X in DrawItemInInventory.
+; ----------------------------------------------------------------------------
 DrawStatusBarItemB:
-    STA $04                     ; Set palette attribute to inventory value.
-    LDA #$1F                    ; Set X and Y coordinates for "B" item in status bar: ($7C, $1F).
+    STA $04
+    LDA #$1F                    ; B item position: X $7C, Y $1F.
     STA $01
     LDA #$7C
     STA $00
     LDA #$05
     JSR SwitchBank
     JSR DrawItemInInventoryWithX
-    JMP DrawStatusBarSword      ; Go handle the sword.
+    JMP DrawStatusBarSword
 
+; ----------------------------------------------------------------------------
+; Selection 0: draws the magic boomerang if owned, else the wooden one; with neither, reselects.
+; ----------------------------------------------------------------------------
 DrawStatusBarBoomerang:
-    LDX #$1E                    ; Check the magic boomerang first.
+    LDX #$1E                    ; Magic boomerang slot first, then $1D (wooden).
 
 @LoopBoomerang:
     LDA InvItems, X
-    BNE DrawStatusBarItemB      ; If we have one of the boomerangs, then go draw it.
+    BNE DrawStatusBarItemB
     DEX
     CPX #$1C
-    BNE @LoopBoomerang          ; Go check the next boomerang.
+    BNE @LoopBoomerang
     LDX #$00
-    JMP EnsureSelectedItem      ; No boomerangs. Go search for an occupied slot starting at 0.
+    JMP EnsureSelectedItem      ; No boomerang: search for an occupied slot, starting from slot 0.
 
+; Draws only the sword if slot X holds an item (the B item follows next frame); else falls into the search.
 FindItemOrDrawSword:
     LDA InvItems, X
-
-    ; If there's an item in this slot, then SelectedItemSlot was already
-    ; set. Go handle the sword instead of drawing the item.
-    ; Next frame, we'll draw this item.
     BNE DrawStatusBarSword
 
+; ----------------------------------------------------------------------------
+; Sets SelectedItemSlot to an occupied selectable item slot, searching backward from slot X.
+; IN:   X = slot to start from.
+; NOTE: The search steps downward through slots 8..0 (wrapping), skips the bow slot 3, treats slot 0
+;       as the boomerangs, slot 7 as potion-or-letter, accepts arrows only with the bow, and selects
+;       0 when nothing is found (FindAndSelectOccupiedItemSlot with A = 2).
+; ----------------------------------------------------------------------------
 EnsureSelectedItem:
-    TXA                         ; Not found. Search for an occupied slot.
+    TXA
     TAY
     LDA #$05
     JSR SwitchBank
-    LDA #$02                    ; Go backwards from current slot.
+    LDA #$02                    ; Search direction: backward.
     JSR FindAndSelectOccupiedItemSlot
 
+; ----------------------------------------------------------------------------
+; Draws Link's sword at the A position of the status bar, if he has one.
+; ----------------------------------------------------------------------------
 DrawStatusBarSword:
-    ; Handle the sword.
-    LDX #$00
+    LDX #$00                    ; Item slot 0 = sword.
     LDA InvItems, X
-    BEQ L1E847_Exit             ; If there's no sword, then return.
-    LDA #$1F                    ; Set X and Y coordinates for "A" item in status bar: ($94, $1F).
+    BEQ L1E847_Exit             ; No sword: return.
+    LDA #$1F                    ; Sword position: X $94, Y $1F.
     STA $01
     LDA #$94
     STA $00
@@ -102,78 +139,97 @@ DrawStatusBarSword:
     JSR SwitchBank
     JMP DrawItemInInventoryWithX
 
+; ----------------------------------------------------------------------------
+; Handles an empty selected slot: the potion slot falls back to the letter, any other slot is reselected.
+; IN:   X = SelectedItemSlot (nonzero), whose inventory value is 0.
+; ----------------------------------------------------------------------------
 CheckMissingItem:
-    ; No item in slot.
     CPX #$07
-    BNE FindItemOrDrawSword     ; If the current item slot isn't for potions, then go handle the slot almost as usual.
-    LDA InvLetter               ; This slot is for potions but don't have one. Check the letter.
-    BEQ EnsureSelectedItem      ; If we don't have a letter, then go look for an occupied slot.
-    LDX #$0F                    ; We have a letter. Set SelectedItemSlot to its slot.
+    BNE FindItemOrDrawSword     ; Not the potion slot: reselect (InvItems,X is 0 there).
+    LDA InvLetter               ; Potion slot without potion:
+    BEQ EnsureSelectedItem      ; no letter either: reselect.
+    LDX #$0F                    ; Letter: select its slot;
     STX SelectedItemSlot
-    BNE FindItemOrDrawSword     ; Go handle the sword (indirectly).
+    BNE FindItemOrDrawSword     ; always taken; draws the sword only this frame.
 
+; ----------------------------------------------------------------------------
+; While Link holds up an item: keeps him halted, counts the lift timer down and draws the pose.
+; NOTE: Does nothing when ItemTypeToLift = 0 (so item id 0, the bomb, is never lifted). Each call
+;       decrements ItemLiftTimer first; at 0 the lift ends (EndLinkLiftingItem), otherwise Link's
+;       state is forced to $40 (halted: no input, no movement). With the $80 set by TakeItem that is
+;       $7F halted frames.
+; ----------------------------------------------------------------------------
 CheckLiftItem:
     LDA ItemTypeToLift
-    BEQ L1E859_Exit             ; If there's no item to lift, then return.
+    BEQ L1E859_Exit
     DEC ItemLiftTimer
-    BEQ EndLinkLiftingItem      ; If the item lift timer has expired, go return to normal.
-
-    ; Set player state to halted.
-    LDA #$40
+    BEQ EndLinkLiftingItem
+    LDA #$40                    ; Link's state: halted.
     STA ObjState
 
-; Params:
-; [0505]: item type
-;
+; ----------------------------------------------------------------------------
+; Places the lifted item (object slot $13) at Link's X, $10 pixels above him, then draws both.
+; IN:   ItemTypeToLift = item id.
+; NOTE: Overwrites ObjX+$13/ObjY+$13, the room item's position. Also called by the mode $12 init with
+;       item id $1B (Triforce piece).
+; ----------------------------------------------------------------------------
 SetUpAndDrawLinkLiftingItem:
-    LDA ObjX                    ; Set item X the same as Link's.
+    LDA ObjX
     STA ObjX+19
-    LDA ObjY                    ; Set item's Y $10 pixels above Link's.
+    LDA ObjY
     SEC
     SBC #$10
     STA ObjY+19
 
-; Params:
-; [0505]: item type
-;
+; ----------------------------------------------------------------------------
+; Draws Link in the item-lifting pose and the lifted item at the position of object slot $13.
+; IN:   ItemTypeToLift = item id; ObjX+$13/ObjY+$13 = item position.
+; NOTE: Link is drawn with the image of pseudo item slot $21 in his own sprite records (offsets $48,
+;       $4C), attributes 0. A half-width item is drawn at the left (not centered) and Link's right half
+;       then uses tile $08, a tile Link's facing-down walk frame also uses (what it shows here:
+;       unverified).
+; ----------------------------------------------------------------------------
 DrawLinkLiftingItem:
-    LDX #$00                    ; We're dealing with Link object.
-    JSR Anim_FetchObjPosForSpriteDescriptor
-    JSR Anim_SetSpriteDescriptorAttributes    ; Set 0 sprite attributes. 0 was returned above.
-    STA $0C                     ; Set frame 0.
-    LDA #$48                    ; Point to Link's sprites.
+    LDX #$00                    ; Link's object slot.
+    JSR Anim_FetchObjPosForSpriteDescriptor      ; Returns A = 0.
+    JSR Anim_SetSpriteDescriptorAttributes       ; Sprite attributes 0 for both halves.
+    STA $0C                     ; Frame 0.
+    LDA #$48                    ; Link's two sprite records.
     STA LeftSpriteOffset
     LDA #$4C
     STA RightSpriteOffset
-    LDY #$21
+    LDY #$21                    ; Pseudo item slot $21: Link's lifting image.
     JSR Anim_WriteSpecificItemSprites
-    INC LeftAlignHalfWidthObj   ; Temporarily set left alignment.
+    INC LeftAlignHalfWidthObj   ; While the item is drawn: do not center a half-width item.
     LDA ItemTypeToLift
-    LDX #$13                    ; Now deal with item object.
+    LDX #$13                    ; Draw the item at the room item slot's position.
     JSR AnimateItemObject
     DEC LeftAlignHalfWidthObj
     LDA IsDrawnItemNarrow
-    BEQ L1E847_Exit             ; If this item is half-width,
+    BEQ L1E847_Exit             ; Full-width item: done.
 
-    ; Then lift with one hand.
-    ; Change the right side to a tile without the arm raised.
+    ; Half-width item: change the tile of Link's right sprite record to $08 (said upstream to be a
+    ; tile without the raised arm; the image itself is unverified).
     LDA #$08
     STA Sprites+77
 
+; Shared RTS of DrawLinkLiftingItem and DrawStatusBarSword.
 L1E847_Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Ends the lift: Link's state back to 0 (idle), ItemTypeToLift cleared, dungeon song restarted.
+; NOTE: In a dungeon (CurLevel not 0) the level's song is requested again; in the OW nothing is requested.
+; ----------------------------------------------------------------------------
 EndLinkLiftingItem:
-    ; Make Link idle, and reset the item type.
     LDA #$00
     STA ObjState
     STA ItemTypeToLift
-
-    ; If in UW, play the level's song again.
     LDY CurLevel
-    BEQ L1E859_Exit
+    BEQ L1E859_Exit             ; OW: return.
     LDA LevelSongIds, Y
     STA SongRequest
 
+; Shared RTS of EndLinkLiftingItem and CheckLiftItem.
 L1E859_Exit:
     RTS

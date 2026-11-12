@@ -2,53 +2,81 @@
 ; FILE:     bank2/moded-save.asm         BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 2915-3201
 ; SUBJECTS: (none)
-; TOPIC:    Mode D save
-; SEE ALSO:
+; TOPIC:    Mode $D (save): builds file B from the profile, verifies it, copies it over file A, then
+;           returns to mode 0 submode 1. Also the slot-info address tables for names and hearts.
+; SEE ALSO: bank2/mode1-init-save-files.asm (FormatFileB, checksums, UpdateMode0Demo_Sub1);
+;           bank2/register-eliminate-init.asm (FetchFileBAddressSet, file B addresses);
+;           bank1/modeb-cave-save-sprites.asm (FetchFileAAddressSet, file A addresses);
+;           bank2/mode0-demo.asm (UpdateMode0Demo_Sub2, which reloads the slot info after a save).
 ; KEY FACTS:
+;   - Saving takes three updates of mode $D: submode 0 writes file B, submode 1 commits it to file A,
+;     submode 2 sets GameMode 0 / GameSubmode 1 (UpdateModeDSave_JumpTable).
+;   - Saved: the items block InvItems ($28 bytes), the slot's death count, quest number and name, the
+;     world flags ($180 bytes), active flag = 1 (UpdateModeDSave_Sub0).
+;   - The items block is copied before the hearts are refilled, so the file holds HeartValues and
+;     HeartPartial as they were; only the profile in RAM and SaveSlotHearts get full hearts
+;     (UpdateModeDSave_Sub0, StoreSaveSlotHearts).
+;   - The copy to file A is guarded: markers and checksum of file A are zeroed first and rewritten
+;     last, then IsSaveFileBCommitted = $FF. An interrupted copy leaves file B uncommitted and valid,
+;     and the next validation pass repeats the copy (CopyFileBToFileA).
+;   - A file B whose checksum does not match is dropped (marked committed without copying)
+;     (UpdateModeDSave_Sub1).
 ; CONTENTS: (generated; L = line in this file)
-;   L0023 SaveSlotHeartsAddrsLo      data
-;   L0028 SaveSlotHeartsAddrsHi      data
-;   L0033 ProfileNameAddrsLo         data
-;   L0038 ProfileNameAddrsHi         data
-;   L0043 UpdateModeDSave            code
-;   L0047 UpdateModeDSave_JumpTable  data
-;   L0052 UpdateModeDSave_Sub0       code
-;   L0124 UpdateModeDSave_Sub1       code
-;   L0156 CopyFileBToFileA           code
-;   L0250 UpdateModeDSave_Sub2       code
-;   L0260 FetchProfileNameAddress    code  Returns:
-;   L0268 StoreSaveSlotHearts        code
+;   L0040 SaveSlotHeartsAddrsLo      data  TABLE: low bytes of each save slot's entry in SaveSlotHearts; index = save slot.
+;   L0046 SaveSlotHeartsAddrsHi      data  TABLE: high bytes of each save slot's entry in SaveSlotHearts; index = save slot.
+;   L0052 ProfileNameAddrsLo         data  TABLE: low bytes of each save slot's 8-character name in SaveSlotNames; index = save slot.
+;   L0058 ProfileNameAddrsHi         data  TABLE: high bytes of each save slot's 8-character name in SaveSlotNames; index = save slot.
+;   L0066 UpdateModeDSave            code  Mode $D (save) update: runs the handler selected by GameSubmode.
+;   L0071 UpdateModeDSave_JumpTable  data  TABLE: mode $D handlers; index = GameSubmode (0 build file B, 1 commit to file A, 2 leave).
+;   L0080 UpdateModeDSave_Sub0       code  Mode $D submode 0: formats file B, copies the profile into it, checksums it, marks it uncommitted.
+;   L0155 UpdateModeDSave_Sub1       code  Mode $D submode 1: if file B is pending and its checksum matches, copies it over file A.
+;   L0190 CopyFileBToFileA           code  Copies the current slot's file B over file A and its slot info, then marks file B committed.
+;   L0287 UpdateModeDSave_Sub2       code  Mode $D submode 2: goes to mode 0 submode 1 (the save-file validation pass), still updating.
+;   L0297 FetchProfileNameAddress    code  Points [0C:0D] at the current save slot's name in SaveSlotNames.
+;   L0308 StoreSaveSlotHearts        code  Copies HeartValues and HeartPartial to the current save slot's entry in SaveSlotHearts.
 ; ============================================================================
 
+; TABLE: low bytes of each save slot's entry in SaveSlotHearts; index = save slot.
 SaveSlotHeartsAddrsLo:
     .LOBYTES SaveSlotHearts+0
     .LOBYTES SaveSlotHearts+2
     .LOBYTES SaveSlotHearts+4
 
+; TABLE: high bytes of each save slot's entry in SaveSlotHearts; index = save slot.
 SaveSlotHeartsAddrsHi:
     .HIBYTES SaveSlotHearts+0
     .HIBYTES SaveSlotHearts+2
     .HIBYTES SaveSlotHearts+4
 
+; TABLE: low bytes of each save slot's 8-character name in SaveSlotNames; index = save slot.
 ProfileNameAddrsLo:
     .LOBYTES SaveSlotNames+0
     .LOBYTES SaveSlotNames+8
     .LOBYTES SaveSlotNames+16
 
+; TABLE: high bytes of each save slot's 8-character name in SaveSlotNames; index = save slot.
 ProfileNameAddrsHi:
     .HIBYTES SaveSlotNames+0
     .HIBYTES SaveSlotNames+8
     .HIBYTES SaveSlotNames+16
 
+; ----------------------------------------------------------------------------
+; Mode $D (save) update: runs the handler selected by GameSubmode.
+; ----------------------------------------------------------------------------
 UpdateModeDSave:
     LDA GameSubmode
     JSR TableJump
 
+; TABLE: mode $D handlers; index = GameSubmode (0 build file B, 1 commit to file A, 2 leave).
 UpdateModeDSave_JumpTable:
     .ADDR UpdateModeDSave_Sub0
     .ADDR UpdateModeDSave_Sub1
     .ADDR UpdateModeDSave_Sub2
 
+; ----------------------------------------------------------------------------
+; Mode $D submode 0: formats file B, copies the profile into it, checksums it, marks it uncommitted.
+; NOTE: Also refills Link's hearts in RAM to the number of heart containers.
+; ----------------------------------------------------------------------------
 UpdateModeDSave_Sub0:
     ; Initialize file B, and copy profile to it.
     ; Calculate and store file B checksum.
@@ -121,6 +149,9 @@ UpdateModeDSave_Sub0:
     INC GameSubmode             ; Go to the next submode.
     RTS
 
+; ----------------------------------------------------------------------------
+; Mode $D submode 1: if file B is pending and its checksum matches, copies it over file A.
+; ----------------------------------------------------------------------------
 UpdateModeDSave_Sub1:
     LDY CurSaveSlot
     LDA IsSaveFileBCommitted, Y
@@ -145,14 +176,17 @@ UpdateModeDSave_Sub1:
 
 @DiscardFileB:
     ; Discard file B, because it couldn't be validated.
-    ; Begin unverified code A75A
+    ; Submode 0 has just stored this checksum, so this path needs file B to change in between.
     LDY CurSaveSlot
     LDA #$FF
     STA IsSaveFileBCommitted, Y
     INC GameSubmode
     RTS
-    ; End unverified code
 
+; ----------------------------------------------------------------------------
+; Copies the current slot's file B over file A and its slot info, then marks file B committed.
+; NOTE: File A's markers and checksum are zeroed during the copy and restored at the end.
+; ----------------------------------------------------------------------------
 CopyFileBToFileA:
     LDY CurSaveSlot
     LDA #$00                    ; Reset the save file markers.
@@ -177,7 +211,7 @@ CopyFileBToFileA:
     LDY #$00                    ; Copy these individual bytes from file B to file A.
     LDA ($C6), Y                ; IsSaveSlotActive
     STA ($06), Y
-    LDA ($C8), Y                ; TODO: ?
+    LDA ($C8), Y                ; The unused per-slot byte ($6D93 + slot to $6515 + slot).
     STA ($08), Y
     LDA ($CA), Y                ; DeathCount
     STA ($0A), Y
@@ -247,6 +281,9 @@ CopyFileBToFileA:
     STA IsSaveFileBCommitted, Y
     RTS
 
+; ----------------------------------------------------------------------------
+; Mode $D submode 2: goes to mode 0 submode 1 (the save-file validation pass), still updating.
+; ----------------------------------------------------------------------------
 UpdateModeDSave_Sub2:
     LDA #$00                    ; Go to mode 0 submode 1. Keep it updating.
     STA GameMode
@@ -254,9 +291,9 @@ UpdateModeDSave_Sub2:
     STA GameSubmode
     RTS
 
-; Returns:
-; [0C:0D]: save slot name pointer
-;
+; ----------------------------------------------------------------------------
+; Points [0C:0D] at the current save slot's name in SaveSlotNames.
+; ----------------------------------------------------------------------------
 FetchProfileNameAddress:
     LDY CurSaveSlot
     LDA ProfileNameAddrsLo, Y
@@ -265,13 +302,16 @@ FetchProfileNameAddress:
     STA $0D
     RTS
 
+; ----------------------------------------------------------------------------
+; Copies HeartValues and HeartPartial to the current save slot's entry in SaveSlotHearts.
+; ----------------------------------------------------------------------------
 StoreSaveSlotHearts:
     LDY CurSaveSlot
     LDA SaveSlotHeartsAddrsLo, Y
     STA $0C
     LDA SaveSlotHeartsAddrsHi, Y
     STA $0D
-    LDY #$01                    ; Copy HeartsValue and HeartsPartial to set B.
+    LDY #$01                    ; Copy HeartValues and HeartPartial to the slot's SaveSlotHearts entry.
 
 @CopyHearts:
     LDA HeartValues, Y
@@ -280,7 +320,7 @@ StoreSaveSlotHearts:
     BPL @CopyHearts
     RTS
 
-; Unknown block
+; Filler ($FF) up to the next routine.
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
     .BYTE $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF

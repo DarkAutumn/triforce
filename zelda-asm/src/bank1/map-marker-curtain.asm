@@ -1,27 +1,57 @@
 ; ============================================================================
-; FILE:     bank1/map-marker-curtain.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
+; FILE:     bank1/map-marker-curtain.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 4134-4320
 ; SUBJECTS: (none)
-; TOPIC:    Status bar map marker, curtain effect, 16-bit add helpers
-; SEE ALSO:
+; TOPIC:    The position marker sprites on the status bar map (Link's room and the compass's Triforce
+;           room), the curtain effect that redraws the play area two tile columns at a time, and small
+;           16-bit add/subtract helpers on zero-page pairs [00:01], [02:03], [04:05].
+; SEE ALSO: bank7/next-room-room-flags.asm (UpdateTriforcePositionMarker calls UpdatePositionMarker with
+;           X = 4; LevelMasks); bank5/mode12-lay-out-room.asm (mode $12 sets the curtain columns and calls
+;           UpdateWorldCurtainEffect; CopyColumnToTileBuf); bank2/mode13-ending-init.asm (calls the
+;           _Bank2 variant); bank1/whirlwind.asm and bank7/init-mode-dispatch.asm (callers of
+;           UpdatePlayerPositionMarker).
 ; KEY FACTS:
+;   - Link's map marker is not updated in mode 9 (cellar) or while a whirlwind carries Link
+;     (WhirlwindTeleportingState <> 0). (UpdatePlayerPositionMarker)
+;   - Marker position: Y = $17 + 4 * room row. X = column * 4 + $11 in the overworld, column * 8 + $12
+;     in a dungeon, plus LevelInfo_StatusBarMapXOffset. Room row = bits 6-4 of the room id, column =
+;     bits 3-0. (UpdatePositionMarker)
+;   - Link's marker is sprite record $15 (Sprites+84) with attribute 0; the Triforce marker is record
+;     $16 (Sprites+88); both use tile $3E. (UpdatePositionMarker)
+;   - The Triforce marker alternates between attributes 2 and 3 every 16 frames while the level's
+;     Triforce piece is missing from InvTriforce, and always in level 9; with the piece it stays at 3.
+;     (UpdatePositionMarker)
+;   - The curtain effect copies two tile columns per step, ObjX[$0D] counting up and ObjX[$0C] counting
+;     down, then stores 5 in ObjTimer[0] and waits for it to reach 0. (UpdateWorldCurtainEffect)
+;   - Mode 3 opens the curtain from the middle (columns $10 and $11, until ObjX[$0C] = 0); modes $12
+;     and $13 close it from the edges ($20 and 1, until ObjX[$0C] < $11). 16 steps either way.
+;     (InitMode3_Sub8, UpdateMode3Unfurl, InitMode12, UpdateMode12EndLevel_Sub3, UpdateZelda_State1,
+;     UpdateEndGameCurtainEffect)
+;   - UpdateWorldCurtainEffect leaves bank 5 switched in; the _Bank2 variant switches bank 2 back in.
+;     (UpdateWorldCurtainEffect, UpdateWorldCurtainEffect_Bank2)
 ; CONTENTS: (generated; L = line in this file)
-;   L0023 UpdatePlayerPositionMarker      code
-;   L0035 UpdatePositionMarker            code  Params:
-;   L0087 L6AAF_Exit                      code
-;   L0090 UpdateWorldCurtainEffect_Bank2  code
-;   L0101 UpdateWorldCurtainEffect        code  Params:
-;   L0135 Add1ToInt16At0                  code  Params:
-;   L0146 AddToInt16At0                   code  Params:
-;   L0158 Add1ToInt16At2                  code  Params:
-;   L0168 AddToInt16At2                   code  Params:
-;   L0179 Add1ToInt16At4                  code  Params:
-;   L0189 AddToInt16At4                   code  Params:
-;   L0201 Sub1FromInt16At4                code  Params:
+;   L0053 UpdatePlayerPositionMarker      code  Places Link's position marker on the status bar map at the current room.
+;   L0072 UpdatePositionMarker            code  Writes one status bar map marker sprite for a room: Link's (X = 0) or the Triforce room's (X = 4).
+;   L0126 L6AAF_Exit                      code  Shared RTS of the two routines above.
+;   L0132 UpdateWorldCurtainEffect_Bank2  code  Runs one curtain-effect step for a caller in bank 2, then switches bank 2 back in.
+;   L0150 UpdateWorldCurtainEffect        code  Curtain effect step: copies two tile columns of the play area to the transfer buffer, then waits.
+;   L0181 Add1ToInt16At0                  code  Adds 1 to the 16-bit value at [00:01].
+;   L0189 AddToInt16At0                   code  Adds A (unsigned) to the 16-bit value at [00:01].
+;   L0202 Add1ToInt16At2                  code  Adds 1 to the 16-bit value at [02:03].
+;   L0210 AddToInt16At2                   code  Adds A (unsigned) to the 16-bit value at [02:03].
+;   L0223 Add1ToInt16At4                  code  Adds 1 to the 16-bit value at [04:05].
+;   L0231 AddToInt16At4                   code  Adds A (unsigned) to the 16-bit value at [04:05].
+;   L0244 Sub1FromInt16At4                code  Subtracts 1 from the 16-bit value at [04:05].
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Places Link's position marker on the status bar map at the current room.
+; OUT:  sprite record at Sprites+84 written (falls into UpdatePositionMarker with A = RoomId, X = 0).
+; NOTE: Does nothing in mode 9 (cellar) or while WhirlwindTeleportingState <> 0, so the marker keeps
+;       its last position then.
+; ----------------------------------------------------------------------------
 UpdatePlayerPositionMarker:
-    LDA GameMode                ; Return if mode 9 or whirlwind teleporting.
+    LDA GameMode                ; Return if mode 9 (cellar) or whirlwind teleporting.
     CMP #$09
     BEQ L6AAF_Exit
     LDX WhirlwindTeleportingState
@@ -29,22 +59,29 @@ UpdatePlayerPositionMarker:
     LDA RoomId
     LDX #$00
 
-; Params:
-; A: room ID
-;
+; ----------------------------------------------------------------------------
+; Writes one status bar map marker sprite for a room: Link's (X = 0) or the Triforce room's (X = 4).
+; IN:   A = room id (bits 6-4 row, bits 3-0 column); X = 0 for Link's marker (sprite record at
+;       Sprites+84), 4 for the Triforce marker (record at Sprites+88).
+; OUT:  the record's Y, tile ($3E), attributes and X written; [00] = map left edge ($11 or $12).
+; NOTE: Y = $17 + row * 4. X = column * 4 + $11 (overworld, CurLevel = 0) or column * 8 + $12
+;       (dungeon), plus LevelInfo_StatusBarMapXOffset.
+; NOTE: Attributes: Link's marker 0. Triforce marker 3; but while the level's bit is clear in
+;       InvTriforce, or always in level 9, it is 2 during the first 16 of every 32 frames (blinks).
+; ----------------------------------------------------------------------------
 UpdatePositionMarker:
     PHA                         ; Push the room ID.
-    AND #$70                    ; Sanitize the row of the room ID.
-    LSR                         ; The rows in status bar map are 4 pixels tall.
+    AND #$70                    ; Isolate the row of the room ID (row * $10).
+    LSR                         ; Row * 4: the rows in the status bar map are 4 pixels tall.
     LSR
-    ADC #$17                    ; Add $17 pixels to Y coordinate.
+    ADC #$17                    ; The map's top row is at Y = $17. (Carry is clear after the shifts.)
     STA Sprites+84, X           ; Place the position marker vertically.
     LDA #$11                    ; Map X at $11 in OW.
     LDY CurLevel
     BEQ :+
     LDA #$12                    ; Map X at $12 in UW.
 :
-    STA $00                     ; Store the appropriate status bar map left coordinate in [$00].
+    STA $00                     ; Store the appropriate status bar map left coordinate in [00].
     PLA                         ; Pop the room ID.
     AND #$0F                    ; Isolate the column of the room ID.
     CPY #$00
@@ -60,22 +97,23 @@ UpdatePositionMarker:
     STA Sprites+85, X           ; Use the position marker tile.
     LDA #$00
     CPX #$00
-    BEQ @SetAttr                ; If we're updating the triforce marker,
-    LDA #$03                    ; Set up a default "inactive" palette (attribute), which means "not gotten".
+    BEQ @SetAttr                ; Link's marker (X = 0) uses attribute 0.
+    LDA #$03                    ; Triforce marker: attribute 3 by default.
     PHA
     LDY CurLevel
     CPY #$09
-    BEQ :+                      ; If you're in level 9, use the "active" palette only.
+    BEQ :+                      ; In level 9, always blink.
     LDA InvTriforce
-    AND LevelMasks-1, Y
-    BNE @PopSetAttr             ; If player hasn't gotten the piece,
+    AND LevelMasks-1, Y         ; Bit (level - 1) of InvTriforce.
+    BNE @PopSetAttr             ; Link has this level's piece: keep attribute 3.
 :
+    ; The piece is missing (or level 9): blink.
     LDA FrameCounter
     AND #$1F
     CMP #$10
-    BCS @PopSetAttr             ; then every 16 frames,
+    BCS @PopSetAttr             ; Second 16 frames of every 32: attribute 3.
     PLA
-    LDA #$02                    ; switch between two palettes.
+    LDA #$02                    ; First 16 frames of every 32: attribute 2.
     PHA
 
 @PopSetAttr:
@@ -84,24 +122,35 @@ UpdatePositionMarker:
 @SetAttr:
     STA Sprites+86, X
 
+; Shared RTS of the two routines above.
 L6AAF_Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Runs one curtain-effect step for a caller in bank 2, then switches bank 2 back in.
+; ----------------------------------------------------------------------------
 UpdateWorldCurtainEffect_Bank2:
     JSR UpdateWorldCurtainEffect
     LDA #$02
     JMP SwitchBank_Local2
 
-; Params:
-; [$7C]/ObjX[$C]: column index that will be decreased + 1
-; [$7D]/ObjX[$D]: column index that will be increased + 1
-;
-; Switches to bank 5.
-;
+; ----------------------------------------------------------------------------
+; Curtain effect step: copies two tile columns of the play area to the transfer buffer, then waits.
+; IN:   ObjX[$0C] ($7C) = column that moves down by 1 per step; ObjX[$0D] ($7D) = column that moves
+;       up by 1 per step (each is a play area tile column + 1, $01-$20); ObjTimer[0] = delay left.
+; OUT:  when ObjTimer[0] = 0: both columns queued by CopyColumnToTileBuf (first ObjX[$0D]'s, then
+;       ObjX[$0C]'s), ObjX[$0C] decremented, ObjX[$0D] incremented, CurColumn = $FF, ObjTimer[0] = 5.
+;       Otherwise nothing.
+; NOTE: Leaves bank 5 switched in and MMC1 control set to $0E (vertical mirroring). Uses [0A].
+; NOTE: No range test on the columns: the caller stops calling. Mode 3 starts with ObjX[$0C] = $10
+;       and ObjX[$0D] = $11 and stops at ObjX[$0C] = 0 (the room appears from the middle outward).
+;       Modes $12 and $13 start with $20 and 1 over a blank tile map and stop at ObjX[$0C] < $11
+;       (the room is wiped from both screen edges to the middle).
+; ----------------------------------------------------------------------------
 UpdateWorldCurtainEffect:
     LDA ObjTimer
     BNE @Exit                   ; Delay until ObjTimer[0] expires.
-    LDA #$01                    ; Start with column index in [$7D] ObjX[$D].
+    LDA #$01                    ; Start with the column index in ObjX[$0D].
     STA $0A
 
 @LoopColumn:
@@ -113,11 +162,11 @@ UpdateWorldCurtainEffect:
     LDA #$0E                    ; Set vertical nametable mirroring.
     JSR SetMMC1Control_Local5
     JSR CopyColumnToTileBuf
-    DEC $0A                     ; Now reference the column with index in [$7C] ObjX[$C].
-    BPL @LoopColumn             ; If we copied both columns, then quit.
+    DEC $0A                     ; Now reference the column with index in ObjX[$0C].
+    BPL @LoopColumn             ; Loop until both columns were copied.
     LDA #$FF                    ; Invalidate CurColumn
     STA CurColumn
-    LDA #$05                    ; Set a delay of 4 frames (5-1) in ObjTimer[0].
+    LDA #$05                    ; Wait for ObjTimer[0] to count down from 5 before the next pair.
     STA ObjTimer
     DEC ObjX+12                 ; Change the column indexes.
     INC ObjX+13
@@ -125,24 +174,18 @@ UpdateWorldCurtainEffect:
 @Exit:
     RTS
 
-; Params:
-; [$00:01]: a 16-bit value to increment
-;
-; Returns:
-; [$00:01]: sum
-; A: low byte of sum
-;
+; ----------------------------------------------------------------------------
+; Adds 1 to the 16-bit value at [00:01].
+; OUT:  [00:01] = sum; A = low byte of the sum.
+; ----------------------------------------------------------------------------
 Add1ToInt16At0:
     LDA #$01
 
-; Params:
-; A: value 1
-; [$00:01]: value 2
-;
-; Returns:
-; [$00:01]: sum
-; A: low byte of sum
-;
+; ----------------------------------------------------------------------------
+; Adds A (unsigned) to the 16-bit value at [00:01].
+; IN:   A = amount.
+; OUT:  [00:01] = sum; A = low byte of the sum.
+; ----------------------------------------------------------------------------
 AddToInt16At0:
     CLC
     ADC $00
@@ -152,19 +195,18 @@ AddToInt16At0:
 :
     RTS
 
-; Params:
-; [$02:03]: a 16-bit value to increment
-;
+; ----------------------------------------------------------------------------
+; Adds 1 to the 16-bit value at [02:03].
+; OUT:  [02:03] = sum; A = low byte of the sum.
+; ----------------------------------------------------------------------------
 Add1ToInt16At2:
     LDA #$01
 
-; Params:
-; A: value 1
-; [$02:03]: value 2
-;
-; Returns:
-; [$02:03]: sum
-;
+; ----------------------------------------------------------------------------
+; Adds A (unsigned) to the 16-bit value at [02:03].
+; IN:   A = amount.
+; OUT:  [02:03] = sum; A = low byte of the sum.
+; ----------------------------------------------------------------------------
 AddToInt16At2:
     CLC
     ADC $02
@@ -174,18 +216,18 @@ AddToInt16At2:
 :
     RTS
 
-; Params:
-; [$04:05]: a 16-bit value to increment
+; ----------------------------------------------------------------------------
+; Adds 1 to the 16-bit value at [04:05].
+; OUT:  [04:05] = sum; A = low byte of the sum.
+; ----------------------------------------------------------------------------
 Add1ToInt16At4:
     LDA #$01
 
-; Params:
-; A: value 1
-; [$04:05]: value 2
-;
-; Returns:
-; [$04:05]: sum
-;
+; ----------------------------------------------------------------------------
+; Adds A (unsigned) to the 16-bit value at [04:05].
+; IN:   A = amount.
+; OUT:  [04:05] = sum; A = low byte of the sum.
+; ----------------------------------------------------------------------------
 AddToInt16At4:
     CLC
     ADC $04
@@ -195,9 +237,10 @@ AddToInt16At4:
 :
     RTS
 
-; Params:
-; [$04:05]: a 16-bit value to decrease
-;
+; ----------------------------------------------------------------------------
+; Subtracts 1 from the 16-bit value at [04:05].
+; OUT:  [04:05] = difference; A = low byte of the difference.
+; ----------------------------------------------------------------------------
 Sub1FromInt16At4:
     LDA $04
     SEC

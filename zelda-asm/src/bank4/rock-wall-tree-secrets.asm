@@ -2,35 +2,71 @@
 ; FILE:     bank4/rock-wall-tree-secrets.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 3565-3858
 ; SUBJECTS: (none)
-; TOPIC:    Push rock/gravestone, bombable rock wall, burnable tree, secret reveal
-; SEE ALSO:
+; TOPIC:    Overworld tile objects that hide a secret: the pushable rock ($62) and gravestone ($65), the
+;           bombable rock wall ($63), the burnable tree ($64); revealing and flagging the secret; the
+;           test of which quest a room's secret belongs to.
+; SEE ALSO: bank5/layout-room-ow.asm (CheckTileObject: which square makes which tile object);
+;           bank5/ow-shortcut-map-square.asm (CheckShortcut: redraws stairs from room flag $20);
+;           bank7/tile-obj-tiles.asm (ChangeTileObjTiles); bank1/bomb-candle-wield.asm
+;           (GetShortcutOrItemXYForRoom); bank7/bomb.asm and bank7/fire.asm (weapon states $13, $22);
+;           bank7/flute-secret-pond.asm (RevealPondStairs uses RevealAndFlagSecretStairsObj);
+;           bank4/ghini-armos.asm (secrets under Armos statues).
 ; KEY FACTS:
+;   - A rock ($62) can be pushed only with the power bracelet (InvBracelet); a gravestone ($65) needs
+;     nothing (UpdateRockOrGravestone).
+;   - Push condition: Link's X equals the object's X, |Link's Y + 3 - object's Y| < $11, and the vertical
+;     bits of Link's input direction are exactly up (Link below) or down (Link above). Rocks and
+;     gravestones never move sideways (UpdateRockOrGravestone, RockPushDirections).
+;   - The pushed object moves $10 pixels with MoveObject at its slot's q-speed ($20 = 0.5 px/frame from
+;     the room-entry reset, so 32 frames), then stairs (tile $70) appear at the room's shortcut
+;     position, not where the object stood (UpdateRockOrGravestone, InitMode_EnterRoom).
+;   - A finished push sets room flag $20 (MarkRoomVisited), not $80 (UpdateRockOrGravestone).
+;   - A rock wall ($63) opens (black tile $24) when a bomb in slot $10 or $11 is in state $13 and the
+;     two midpoints are less than $10 pixels apart on both axes (UpdateRockWall).
+;   - A tree ($64) burns to stairs when a fire in slot $10 or $11 is standing (state $22) with its
+;     timer below 2, i.e. as the fire is about to go out, within the same $10 pixels. Candle fire and
+;     the book's fire are not told apart (UpdateTree).
+;   - Rock wall, tree and flute stairs set room flag $80 "secret found" (RevealAndFlagSecretTileObj).
+;   - Bits 7-6 of RoomAttrsF say whose secret it is: 0 both quests, 1 Q1 only, 2 Q2 only. In the other
+;     quest the tile object does nothing (IsQuestSecretMismatch, SecretQuestNumbers).
+;   - Object types $66 and $67 are routed to the rock and rock wall updates by the update table; a
+;     type $66 leaves Armos tile $C0 after a push. The room layout code notes that no overworld layout
+;     produces either type (UpdateRockOrGravestone, CheckTileObject).
 ; CONTENTS: (generated; L = line in this file)
-;   L0023 RockPushDirections            data  Also used for the gravestone.
-;   L0026 UpdateRockOrGravestone        code
-;   L0167 RevealSecretTileObj           code  Params:
-;   L0173 UpdateRockWall                code
-;   L0203 UpdateTree                    code
-;   L0236 RevealAndFlagSecretStairsObj  code  Params:
-;   L0243 RevealAndFlagSecretTileObj    code  Params:
-;   L0251 L10F3E_Exit                   code
-;   L0264 CheckTileObjWeaponCollision   code  Params:
-;   L0279 SecretQuestNumbers            data
-;   L0286 IsQuestSecretMismatch         code  Returns:
+;   L0051 RockPushDirections            data  TABLE: input direction that pushes a rock or gravestone; index = 0 Link below it, 1 Link above it;
+;   L0062 UpdateRockOrGravestone        code  Updates a pushable rock ($62) or gravestone ($65): waits for Link's push, slides, reveals stairs.
+;   L0202 RevealSecretTileObj           code  Puts a secret's tiles at the tile object's position, removes the object and plays the secret tune.
+;   L0214 UpdateRockWall                code  Updates a bombable rock wall ($63): opens a cave mouth when a bomb blast touches it.
+;   L0249 UpdateTree                    code  Updates a burnable tree ($64): turns into stairs when one of Link's fires burns out on it.
+;   L0283 RevealAndFlagSecretStairsObj  code  Reveals stairs (tile $70) at the tile object's position and flags the room's secret found.
+;   L0287 RevealAndFlagSecretTileObj    code  Second entry: reveals the square starting with tile A, then sets room flag $80 (secret found).
+;   L0296 L10F3E_Exit                   code  Shared exit of UpdateTree and the reveal routines above.
+;   L0304 CheckTileObjWeaponCollision   code  Tests whether a weapon object (bomb or fire) touches a tile object.
+;   L0322 SecretQuestNumbers            data  TABLE: quest that a room's secret belongs to; index = bits 7-6 of RoomAttrsF (1 or 2; 0 is never
+;   L0331 IsQuestSecretMismatch         code  Tests whether the room's secret belongs to the quest that is not being played.
 ; ============================================================================
 
-; Also used for the gravestone.
+; TABLE: input direction that pushes a rock or gravestone; index = 0 Link below it, 1 Link above it;
+;        value = direction bit ($08 up, $04 down).
 RockPushDirections:
     .BYTE $08, $04
 
+; ----------------------------------------------------------------------------
+; Updates a pushable rock ($62) or gravestone ($65): waits for Link's push, slides, reveals stairs.
+; IN:   X = object slot.
+; NOTE: State 0 waits; state 1 slides $10 pixels up or down, then puts stairs at the room's shortcut
+;       position, sets room flag $20 and removes the object. The rock needs the power bracelet.
+; NOTE: The slide takes 32 frames at the q-speed $20 that room entry gives every slot.
+; NOTE: Also the update of object type $66, which needs the bracelet too and leaves Armos tile $C0.
+; ----------------------------------------------------------------------------
 UpdateRockOrGravestone:
     LDA ObjState, X
     BNE @State1
 
-    ; State 0.
+    ; State 0: waiting to be pushed.
     ;
-    ; If this is not a gravestone (but it's a rock), and there is no
-    ; bracelet, then return.
+    ; A gravestone ($65) needs no item. Any other type (the rock) needs the
+    ; power bracelet: without it, return.
     LDA ObjType, X
     CMP #$65
     BEQ @CheckQuest
@@ -38,20 +74,18 @@ UpdateRockOrGravestone:
     BEQ @Exit
 
 @CheckQuest:
-    ; If there is a mismatch between the current quest and the quest
-    ; needed for the secret in this room, then return.
+    ; If this room's secret belongs to the other quest, then return.
     JSR IsQuestSecretMismatch
     BCS @Exit
 
-    ; The gravestone and rocks can only be pushed vertically.
-    ; Return, if X's don't match.
+    ; Rocks and gravestones are pushed only vertically.
+    ; If Link's X is not exactly the object's X, then return.
     LDA ObjX
     CMP ObjX, X
     BNE @Exit
 
-    ; If the difference between Link's (Y + 3) and the block's Y
-    ; is positive; then go use it along with a flag that indicates that
-    ; Link is "down" from the object.
+    ; Take (Link's Y + 3) - (object's Y). If it is not negative, Link is below the
+    ; object: keep it as the distance, with index Y = 0 (push direction up).
     LDY #$00
     LDA ObjY
     CLC
@@ -60,37 +94,37 @@ UpdateRockOrGravestone:
     SBC ObjY, X
     BPL @CheckDistance
 
-    ; Else negate it, and indicate Link is "up" from the object.
+    ; Else negate it; Link is above the object: index Y = 1 (push direction down).
     INY
     EOR #$FF
     CLC
     ADC #$01
 
 @CheckDistance:
-    ; If the distance >= $11, return.
+    ; If the distance >= $11, then return. (Link standing against the object gives $10.)
     CMP #$11
     BCS @Exit
 
-    ; If the input direction has no vertical component, then return.
+    ; If Link's input direction has no vertical component, then return.
     LDA ObjInputDir
     AND #$0C
     BEQ @Exit
 
-    ; If this vertical input direction does not match the one needed
-    ; to push the rock or gravestone, then return.
+    ; If the vertical bits are not exactly the direction that pushes from Link's side
+    ; (up from below, down from above), then return.
     CMP RockPushDirections, Y
     BNE @Exit
 
-    ; Set it to the object's direction. Go to the next state.
+    ; Make it the object's direction, and go to state 1.
     STA ObjDir, X
     INC ObjState, X
 
-    ; Store current room ID.
+    ; Remember the room where the push began.
     LDA RoomId
     STA Rock_ObjRoomId, X
 
-    ; Change from a gravestone tile to the gray floor tile.
-    ; The gravestone object will be drawn above it.
+    ; Replace the object's square with floor tile $26. The moving rock or
+    ; gravestone is drawn as sprites from now on.
     INC ReturnToBank4
     LDA #$26                    ; Gray floor tile
     JSR ChangeTileObjTiles
@@ -99,9 +133,10 @@ UpdateRockOrGravestone:
     RTS
 
 @State1:
-    ; State 1.
+    ; State 1: sliding.
     ;
-    ; Move in the object's direction.
+    ; Move in the object's direction at the slot's q-speed. MoveObject stops
+    ; an object other than Link after $10 pixels.
     LDA ObjDir, X
     STA $0F
     JSR MoveObject
@@ -111,15 +146,15 @@ UpdateRockOrGravestone:
     DEC $01
     JSR DrawObjectNotMirrored
 
-    ; If the object's grid offset (distance moved) <> $10 nor -$10,
-    ; then return.
+    ; If the grid offset (signed distance moved) is neither $10 nor -$10, then return.
     LDA ObjGridOffset, X
     CMP #$10
     BEQ :+
     CMP #$F0
     BNE @Exit
 :
-    ; Flag the room visited.
+    ; The push is complete. Set room flag $20 for the room where the push began
+    ; (RoomId is swapped in for the call).
     LDA RoomId
     PHA
     LDA Rock_ObjRoomId, X
@@ -128,56 +163,61 @@ UpdateRockOrGravestone:
     PLA
     STA RoomId
 
-    ; If object is a rock ($62), go use a rock tile ($C8).
+    ; Choose the tile for the square where the object came to rest: rock ($62) = $C8.
     LDA #$C8
     LDY ObjType, X
     CPY #$62
     BEQ @ReplaceTiles
 
-    ; If the object is a gravestone ($65), go use a gravestone tile ($BC).
+    ; Gravestone ($65) = $BC.
     LDA #$BC
     CPY #$65
     BEQ @ReplaceTiles
 
-    ; Else use an armos tile ($C0). Dead code?
-    ; Begin unverified code 10EC9
+    ; Any other type (only $66 can get here) = Armos tile $C0.
     LDA #$C0
-    ; End unverified code
 
 @ReplaceTiles:
-    ; Change the tiles at the end location.
+    ; Change the tiles at the resting place.
     INC ReturnToBank4
     JSR ChangeTileObjTiles
 
-    ; Store the stairs tile in [00] for use in revealing the secret.
+    ; [00] = stairs tile $70, the secret to reveal.
     LDA #$70
     STA $00
 
-    ; Get the position of the stairs in this room, and set it for the object.
+    ; Move the object to the room's shortcut position (from bits 5-4 of the room's
+    ; attribute byte F), where the stairs will appear.
     LDY Rock_ObjRoomId, X
     JSR GetShortcutOrItemXYForRoom
     STA ObjX, X
     STY ObjY, X
     LDA $00
 
-; Params:
-; A: the first tile of tile object
-; X: object index
-;
+; ----------------------------------------------------------------------------
+; Puts a secret's tiles at the tile object's position, removes the object and plays the secret tune.
+; IN:   A = first tile of the square to draw ($70 stairs, $24 black cave mouth); X = object slot.
+; NOTE: Does not touch the room flags; RevealAndFlagSecretTileObj does.
+; ----------------------------------------------------------------------------
 RevealSecretTileObj:
     INC ReturnToBank4
     JSR ChangeTileObjTiles
     JSR DestroyMonster_Bank4
     JMP PlaySecretFoundTune
 
+; ----------------------------------------------------------------------------
+; Updates a bombable rock wall ($63): opens a cave mouth when a bomb blast touches it.
+; IN:   X = object slot.
+; NOTE: Tests bombs in slots $10 and $11 for state $13 (the blast, $18 frames) and a midpoint distance
+;       below $10 pixels on both axes. Does nothing in the quest the secret does not belong to.
+; ----------------------------------------------------------------------------
 UpdateRockWall:
-    ; If the secret in this room does not apply to the current quest,
-    ; then return.
+    ; If this room's secret belongs to the other quest, then return.
     JSR IsQuestSecretMismatch
     BCS @Exit
 
-    ; If there is no detonating bomb (state $13) in slots $10 and $11,
-    ; then return.
+    ; Look for a bomb in its blast state ($13) in slot $10, then $11.
+    ; If there is none, then return.
     LDY #$10
     LDA a:ObjState, Y
     CMP #$13
@@ -188,26 +228,31 @@ UpdateRockWall:
     BNE @Exit
 
 @FoundBomb:
-    ; Store the bomb's object slot in [00].
+    ; [00] = the bomb's object slot.
     STY $00
 
-    ; If the tile object and weapon collide, then reveal the secret.
+    ; If the bomb touches the rock wall, reveal the secret and flag it found.
     JSR CheckTileObjWeaponCollision
     BEQ @Exit
-    LDA #$24                    ; Black tile
+    LDA #$24                    ; Black tile: the cave mouth.
     JSR RevealAndFlagSecretTileObj
 
 @Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Updates a burnable tree ($64): turns into stairs when one of Link's fires burns out on it.
+; IN:   X = object slot.
+; NOTE: Tests fires in slots $10 and $11 for state $22 (standing) with ObjTimer < 2, and a midpoint
+;       distance below $10 pixels on both axes. Does nothing in the quest the secret does not belong to.
+; ----------------------------------------------------------------------------
 UpdateTree:
-    ; If the secret in this room does not apply to the current quest,
-    ; then return.
+    ; If this room's secret belongs to the other quest, then return.
     JSR IsQuestSecretMismatch
     BCS L10F3E_Exit
 
-    ; If there is no standing fire (state $22) in slots $10 and $11,
-    ; then return.
+    ; Look for a standing fire (state $22) in slot $10, then $11.
+    ; If there is none, then return.
     LDY #$10
     LDA a:ObjState, Y
     CMP #$22
@@ -218,50 +263,46 @@ UpdateTree:
     BNE L10F3E_Exit
 
 @FoundFire:
-    ; Store the fire's object slot in [00].
+    ; [00] = the fire's object slot.
     STY $00
 
-    ; If the standing fire's timer >= 2, return.
+    ; If the fire's timer >= 2, then return: the tree burns only as the fire is about to go out.
     LDA a:ObjTimer, Y
     CMP #$02
     BCS L10F3E_Exit
 
-    ; If the tile object and weapon collide, then reveal the secret.
+    ; If the fire does not touch the tree, then return. Else fall through to reveal stairs.
     JSR CheckTileObjWeaponCollision
     BEQ L10F3E_Exit
 
-; Params:
-; X: object index of the tile object
-;
+; ----------------------------------------------------------------------------
+; Reveals stairs (tile $70) at the tile object's position and flags the room's secret found.
+; IN:   X = object slot of the tile object.
+; NOTE: Also used for the stairs that the flute reveals in a pond.
+; ----------------------------------------------------------------------------
 RevealAndFlagSecretStairsObj:
     LDA #$70                    ; First tile of stairs
 
-; Params:
-; A: the first tile of tile object
-; X: object index
-;
+; Second entry: reveals the square starting with tile A, then sets room flag $80 (secret found).
 RevealAndFlagSecretTileObj:
     JSR RevealSecretTileObj
 
-    ; Flag the secret found in this room.
+    ; Set flag $80 in the current room's flags: the secret has been found.
     JSR GetRoomFlags
-    ORA #$80                    ; Secret found/taken
+    ORA #$80
     STA ($00), Y
 
+; Shared exit of UpdateTree and the reveal routines above.
 L10F3E_Exit:
     RTS
 
-; Params:
-; X: object index
-; Y: weapon object index
-; [00]: weapon object index
-;
-; Returns:
-; A: 1 if objects collide
-;
-; Put the midpoint coordinate of the weapon in [04] and [05].
-;
+; ----------------------------------------------------------------------------
+; Tests whether a weapon object (bomb or fire) touches a tile object.
+; IN:   X = tile object's slot; Y = weapon's object slot; [00] = weapon's object slot.
+; OUT:  A = [06] = 1 (Z clear) if the midpoints are less than $10 pixels apart in both X and Y.
+; ----------------------------------------------------------------------------
 CheckTileObjWeaponCollision:
+    ; [04], [05] = the weapon's midpoint: its position + 8 on each axis.
     LDA a:ObjX, Y
     CLC
     ADC #$08
@@ -271,20 +312,24 @@ CheckTileObjWeaponCollision:
     ADC #$08
     STA $05
 
-    ; Put the tile object's midpoint coordinates in [02] and [03].
+    ; [02], [03] = the tile object's midpoint.
     JSR GetObjectMiddle
-    LDA #$10                    ; 10 pixel collision threshold
+    LDA #$10                    ; Collision threshold: $10 pixels.
     JMP DoObjectsCollide
 
+; TABLE: quest that a room's secret belongs to; index = bits 7-6 of RoomAttrsF (1 or 2; 0 is never
+;        looked up); value = quest number as in QuestNumbers (0 = Q1, 1 = Q2).
 SecretQuestNumbers:
-    .BYTE $00, $00, $01
+    .BYTE $00, $00, $01         ; (unused), 1 = Q1 only, 2 = Q2 only
 
-; Returns:
-; C: 1 if there is a mismatch between current quest
-;    and quest number for the secret in the room
-;
+; ----------------------------------------------------------------------------
+; Tests whether the room's secret belongs to the quest that is not being played.
+; OUT:  C = 1 if the secret is for the other quest (the caller then does nothing); C = 0 if it applies.
+; NOTE: Bits 7-6 of RoomAttrsF: 0 = both quests, 1 = Q1 only, 2 = Q2 only. Value 3 would index past
+;       the table.
+; ----------------------------------------------------------------------------
 IsQuestSecretMismatch:
-    ; The quest secret is in the high two bits.
+    ; Shift bits 7-6 of RoomAttrsF down to bits 1-0.
     LDA RoomAttrsF
     LSR
     LSR
@@ -293,20 +338,19 @@ IsQuestSecretMismatch:
     LSR
     LSR
 
-    ; If it's 0, then return C=0.
+    ; If it's 0, the secret is in both quests: return C=0.
     BEQ @ReturnFalse
 
-    ; Look up a quest number (0 or 1) indexed by quest secret (0 or 1).
+    ; Look up the quest number (0 or 1) that the value (1 or 2) stands for.
     TAY
     LDA SecretQuestNumbers, Y
 
-    ; If the save slot's quest number matches the room's
-    ; secret quest number, then return C=0.
+    ; If it equals the quest number of the save slot in use, then return C=0.
     LDY CurSaveSlot
     CMP QuestNumbers, Y
     BEQ @ReturnFalse
 
-    ; Else return C=1. There is a mismatch in quest numbers.
+    ; Else return C=1: the secret belongs to the other quest.
     SEC
     RTS
 

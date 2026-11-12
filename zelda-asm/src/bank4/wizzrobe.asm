@@ -2,157 +2,198 @@
 ; FILE:     bank4/wizzrobe.asm           BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 7027-7636
 ; SUBJECTS: Wizzrobe
-; TOPIC:    Blue and Red Wizzrobe: walk/teleport/fade, magic shots
-; SEE ALSO:
+; TOPIC:    Blue Wizzrobe ($23: walks, teleports through blocks, shoots magic shot $58) and Red Wizzrobe
+;           ($24: appears near Link, shoots magic shot $59, vanishes); their shared tile test, shooting,
+;           weapon collisions and drawing. Ganon reuses the Blue Wizzrobe's movement.
+; SEE ALSO: bank4/shoot-helpers-candle.asm (ShootLimited: free slot and the 4-shot limit);
+;           bank4/monster-shots-fireballs.asm (UpdateMonsterShot moves shots $58/$59);
+;           bank1/sword-bomb-arrow-collision.asm (the weapon tests called here, damage types);
+;           bank1/link-collision-harm.asm (CheckLinkCollision, ObjTypeToDamagePoints use, shield rule);
+;           bank7/tile-collision.asm (GetCollidableTileStill); bank4/ganon.asm (Ganon_MoveAndShoot calls
+;           BlueWizzrobe_TurnSometimesAndMoveAndCheckTile); bank7/object-init-table.asm (both types are
+;           initialized by ResetObjMetastateAndTimer: no spawn cloud).
 ; KEY FACTS:
+;   - Weapons: Wizzrobe_DrawAndCheckCollisions sets ObjInvincibilityMask to $F6 and tests only object
+;     slots $0E, $10, $11 and $0D. Only sword-type damage (sword, sword shot) and bombs hurt. Fire and
+;     Link's magic shot are tested but masked (the magic shot still ends on the overlap). The
+;     boomerang ($0F) and the arrow or rod ($12) are never tested: they pass through, no stun.
+;   - While InvClock is set both types skip all movement and shooting and are drawn and hittable every
+;     frame, even a hidden Red Wizzrobe (UpdateBlueWizzrobe, UpdateRedWizzrobe).
+;   - Blue walk: 1 pixel every second frame while ObjTimer >= $10, then 14 frames standing, then at
+;     timer 1 it picks a diagonal teleport target (BlueWizzrobe_WalkOrTeleport, GoEveryOtherFrame).
+;   - Blue teleport: $20 frames at 1 pixel per frame per axis; on odd ObjRemDistance it is neither drawn
+;     nor collision-tested (cannot be hit, cannot hurt). Afterwards ObjTimer = Random,X OR $70
+;     (BeginTeleporting, Wizzrobe_DrawAndCheckCollisionsIntermittently,
+;     BlueWizzrobe_AlignWithNearestSquareAndRandomizeTimer).
+;   - Blue walking into a block tile ($B0-$B3) or a tile >= $F4 starts a $20-pixel teleport straight
+;     through it; any other unwalkable tile reverses it (BlueWizzrobe_MoveAndCheckTile).
+;   - Blue turns toward Link every $40 walking steps (128 frames), alternating between the horizontal
+;     and the vertical axis (BlueWizzrobe_TurnTowardLink).
+;   - Blue shoots only when not teleporting, on frames where FrameCounter AND $1F = 0, when it faces
+;     Link along a shared 16-pixel row, or along its column with Link's X exactly on that column
+;     (BlueWizzrobe_TryShooting, BlueWizzrobe_CheckSquareColumn).
+;   - Red cycle is 208 frames, driven by ObjState counting down: 1 frame choosing a place, 63 fading in,
+;     64 solid, 16 fading out, 64 hidden (UpdateRedWizzrobe and its four handlers).
+;   - Red appears 2, 3, 4 or 5 squares from Link in a cardinal direction, facing Link, on a walkable
+;     tile with Y in $5D-$C3; a rejected spot is retried every frame (UpdateRedWizzrobe_3).
+;   - Red shoots magic shot $59 once per cycle, at state $B0: the 16th solid frame (UpdateRedWizzrobe_2).
+;   - Every shot needs a free monster slot and fewer than 4 counted shots (ShootMagicShot -> ShootLimited).
+;   - While fading (either type), on skipped frames there is no weapon test and no test against Link
+;     (Wizzrobe_DrawAndCheckCollisionsIntermittently). A hidden Red Wizzrobe is never tested.
 ; CONTENTS: (generated; L = line in this file)
-;   L0061 UpdateBlueWizzrobe                                    code  Description:
-;   L0067 Wizzrobe_DrawAndCheckCollisionsIntermittently         code
-;   L0080 L_Wizzrobe_DrawAndCheckCollisions                     code
-;   L0083 BlueWizzrobe_WalkOrTeleport                           code
-;   L0116 L11E17_Exit                                           code
-;   L0119 GoEveryOtherFrame                                     code
-;   L0126 BlueWizzrobe_TurnSometimesAndMoveAndCheckTile         code
-;   L0129 BlueWizzrobe_MoveAndCheckTile                         code
-;   L0186 BlueWizzrobe_AdvanceCounterAndTurnTowardLinkIfNeeded  code  Description:
-;   L0193 L_BlueWizzrobe_TurnTowardLinkIfNeeded                 code  Description:
-;   L0198 BlueWizzrobe_TurnTowardLink                           code
-;   L0231 BlueWizzrobeTeleportOffsetsX                          data
-;   L0235 BlueWizzrobeTeleportOffsetsY                          data
-;   L0243 BlueWizzrobe_Move                                     code  Description:
-;   L0255 L11EAF_Exit                                           code
-;   L0258 BlueWizzrobeTeleportMaxOffsetsX                       data
-;   L0261 BlueWizzrobeTeleportMaxOffsetsY                       data
-;   L0264 BlueWizzrobeTeleportDirs                              data
-;   L0267 BlueWizzrobe_ChooseTeleportTarget                     code
-;   L0311 BeginTeleporting                                      code
-;   L0326 BlueWizzrobe_AlignWithNearestSquareAndRandomizeTimer  code
-;   L0333 BlueWizzrobe_AlignWithNearestSquare                   code
-;   L0351 RedWizzrobe_AlignAndSetY                              code  Params:
-;   L0358 WizzrobeCollisionOffsetsX                             data
-;   L0362 WizzrobeCollisionOffsetsY                             data
-;   L0372 Wizzrobe_GetCollidableTile                            code  Params:
-;   L0384 Wizzrobe_GetCollidableTileForDir                      code  Params:
-;   L0413 Wizzrobe_GetBaseCollidableTile                        code  Params:
-;   L0424 BlueWizzrobe_TryShooting                              code
-;   L0456 L11F7E_Exit                                           code
-;   L0459 BlueWizzrobe_CheckSquareColumn                        code
-;   L0482 ShootMagicShot58                                      code
-;   L0488 ShootMagicShot                                        code  Params:
-;   L0500 UpdateRedWizzrobe                                     code
-;   L0520 UpdateRedWizzrobe_JumpTable                           data
-;   L0526 RedWizzrobeOffsetsX                                   data
-;   L0530 RedWizzrobeOffsetsY                                   data
-;   L0534 RedWizzrobeDirections                                 data
-;   L0537 UpdateRedWizzrobe_1                                   code
-;   L0554 UpdateRedWizzrobe_3                                   code
-;   L0604 UpdateRedWizzrobe_0                                   code
-;   L0607 UpdateRedWizzrobe_2                                   code
-;   L0617 Wizzrobe_DrawAndCheckCollisions                       code
+;   L0095 UpdateBlueWizzrobe                                    code  Updates a Blue Wizzrobe (type $23): walk or teleport, try to shoot, then draw and check collisions.
+;   L0103 Wizzrobe_DrawAndCheckCollisionsIntermittently         code  Draws and checks collisions only on frames where ObjRemDistance,X is even (flicker while fading).
+;   L0112 L_Wizzrobe_DrawAndCheckCollisions                     code  Jumps to Wizzrobe_DrawAndCheckCollisions (out of branch range from above); also the clock path.
+;   L0123 BlueWizzrobe_WalkOrTeleport                           code  Runs one frame of the Blue Wizzrobe's walk, pause or teleport, chosen by ObjTimer and ObjRemDistance.
+;   L0150 L11E17_Exit                                           code  Shared exit of the routines above.
+;   L0154 GoEveryOtherFrame                                     code  Walking step: on even frames count a step, turn if due and move; on odd frames only test the turn.
+;   L0164 BlueWizzrobe_TurnSometimesAndMoveAndCheckTile         code  Counts a step, turns toward Link if due, moves 1 pixel and handles the tile ahead.
+;   L0174 BlueWizzrobe_MoveAndCheckTile                         code  Moves 1 pixel in ObjDir, then reverses at a wall or starts a teleport through a block or water tile.
+;   L0226 BlueWizzrobe_AdvanceCounterAndTurnTowardLinkIfNeeded  code  Adds 1 to the Blue Wizzrobe's turn counter, then turns toward Link if the counter's low 6 bits are 0.
+;   L0230 L_BlueWizzrobe_TurnTowardLinkIfNeeded                 code  Turns toward Link when the turn counter is a multiple of $40; otherwise returns.
+;   L0241 BlueWizzrobe_TurnTowardLink                           code  Faces the Blue Wizzrobe toward Link on one axis and, if the direction changed, aligns it to a square.
+;   L0271 BlueWizzrobeTeleportOffsetsX                          data  TABLE: X step of BlueWizzrobe_Move; index = direction value $00-$0A (8-way); value = signed pixels.
+;   L0276 BlueWizzrobeTeleportOffsetsY                          data  TABLE: Y step of BlueWizzrobe_Move; index = direction value $00-$0A (8-way); value = signed pixels.
+;   L0286 BlueWizzrobe_Move                                     code  Moves the object 1 pixel in its 8-way direction ObjDir (no fraction, no collision test).
+;   L0298 L11EAF_Exit                                           code  Shared exit of BlueWizzrobe_Move and the turn routines above.
+;   L0302 BlueWizzrobeTeleportMaxOffsetsX                       data  TABLE: X offset of the teleport target; index = random 0-3; value = signed pixels (-$20 or +$20).
+;   L0306 BlueWizzrobeTeleportMaxOffsetsY                       data  TABLE: Y offset of the teleport target; index = random 0-3; value = signed pixels (-$20 or +$20).
+;   L0310 BlueWizzrobeTeleportDirs                              data  TABLE: diagonal direction of the teleport; index = random 0-3; value = direction bits.
+;   L0320 BlueWizzrobe_ChooseTeleportTarget                     code  Picks a random diagonal spot 2 squares away; teleports there if its tile is walkable, else walks on.
+;   L0363 BeginTeleporting                                      code  Starts a Blue Wizzrobe teleport of $20 pixels in the current ObjDir and aligns it to a square.
+;   L0375 BlueWizzrobe_AlignWithNearestSquareAndRandomizeTimer  code  Starts a walking phase: ObjTimer = Random,X OR $70, then aligns to the nearest square.
+;   L0386 BlueWizzrobe_AlignWithNearestSquare                   code  Snaps the object to the nearest 16-pixel square: X to a multiple of $10, Y to a multiple of $10 minus 3.
+;   L0397 RedWizzrobe_AlignAndSetY                              code  Second entry: A = a Y coordinate; stores (A AND $F0) - 3 in ObjY,X and returns it in A.
+;   L0405 WizzrobeCollisionOffsetsX                             data  TABLE: X offset of the Wizzrobe tile test point; index = direction value - 1 ($00-$09); pixels.
+;   L0411 WizzrobeCollisionOffsetsY                             data  TABLE: Y offset of the Wizzrobe tile test point; index = direction value - 1 ($00-$09); signed pixels.
+;   L0420 Wizzrobe_GetCollidableTile                            code  Tests the tile in front of a Wizzrobe (or Ganon) for its facing direction ObjDir.
+;   L0428 Wizzrobe_GetCollidableTileForDir                      code  Tests the tile at the object's position plus the test offset of an 8-way direction.
+;   L0455 Wizzrobe_GetBaseCollidableTile                        code  Reads the tile at (ObjX, ObjY + $0B) and compares it with the room's first unwalkable tile.
+;   L0469 BlueWizzrobe_TryShooting                              code  Lets a Blue Wizzrobe shoot magic shot $58 when it faces Link along its row or column.
+;   L0497 L11F7E_Exit                                           code  Shared exit of the shooting routines.
+;   L0503 BlueWizzrobe_CheckSquareColumn                        code  Column half of BlueWizzrobe_TryShooting: shoots if Link is in the monster's column and it faces him.
+;   L0523 ShootMagicShot58                                      code  Shoots the Blue Wizzrobe's magic shot (object type $58).
+;   L0534 ShootMagicShot                                        code  Shoots a magic shot of the given object type from the monster, with the magic sound.
+;   L0550 UpdateRedWizzrobe                                     code  Updates a Red Wizzrobe (type $24): counts ObjState down and runs the handler for its top two bits.
+;   L0569 UpdateRedWizzrobe_JumpTable                           data  TABLE: Red Wizzrobe handlers; index = ObjState >> 6.
+;   L0577 RedWizzrobeOffsetsX                                   data  TABLE: X offset from Link where a Red Wizzrobe appears; index = Random,X AND $0F; signed pixels.
+;   L0582 RedWizzrobeOffsetsY                                   data  TABLE: Y offset from Link where a Red Wizzrobe appears; index = Random,X AND $0F; signed pixels.
+;   L0588 RedWizzrobeDirections                                 data  TABLE: facing direction of an appearing Red Wizzrobe; index = Random,X AND 3; direction bits.
+;   L0597 UpdateRedWizzrobe_1                                   code  Red Wizzrobe state group 1 ($7F-$40), fading out: flickers for 16 frames.
+;   L0615 UpdateRedWizzrobe_3                                   code  Red Wizzrobe state group 3 ($FF-$C0): at $FF picks where to appear; $FE-$C0 fades in (63 frames).
+;   L0659 UpdateRedWizzrobe_0                                   code  Red Wizzrobe state group 0 ($3F-$00), hidden: does nothing (not drawn, no collisions) for 64 frames.
+;   L0667 UpdateRedWizzrobe_2                                   code  Red Wizzrobe state group 2 ($BF-$80), solid for 64 frames: shoots magic shot $59 at state $B0.
+;   L0683 Wizzrobe_DrawAndCheckCollisions                       code  Tests a Wizzrobe against Link's weapons and against Link, then draws it.
 ; ============================================================================
 
-; Description:
-; Blue Wizzrobe has two states: walking and teleporting.
-; When walking, the object timer is set. When teleporting,
-; the teleporting distance remaining is set.
-;
-; If we have the magic clock, then only go draw and check collisions.
-;
+; ----------------------------------------------------------------------------
+; Updates a Blue Wizzrobe (type $23): walk or teleport, try to shoot, then draw and check collisions.
+; IN:   X = object slot.
+; NOTE: Two phases. Walking: ObjTimer,X nonzero. Teleporting: ObjTimer,X = 0 and ObjRemDistance,X = pixels
+;       left. With the clock (InvClock nonzero) it only draws and checks collisions, every frame.
+; ----------------------------------------------------------------------------
 UpdateBlueWizzrobe:
     LDA InvClock
     BNE L_Wizzrobe_DrawAndCheckCollisions
     JSR BlueWizzrobe_WalkOrTeleport
     JSR BlueWizzrobe_TryShooting
 
+; Draws and checks collisions only on frames where ObjRemDistance,X is even (flicker while fading).
+; The Red Wizzrobe enters here with its fade counter, which is the same byte (Wizzrobe_ObjRedFadeCounter).
 Wizzrobe_DrawAndCheckCollisionsIntermittently:
-    ; If the teleporting distance remaining is even, then draw
-    ; and check collisions, else return.
-    ;
-    ; This means that when 0, the monster is walking.
-    ; So, draw and check collisions every frame.
-    ;
-    ; When not 0, the monster is teleporting, and must be drawn
-    ; translucently -- every other frame.
+    ; Blue: 0 = walking, so it is drawn every frame; while teleporting the distance left counts down by
+    ; 1 per frame, so every other frame is skipped. A skipped frame has no drawing, no weapon test and
+    ; no test against Link.
     LDA ObjRemDistance, X
     LSR
-    BCS L11E17_Exit
+    BCS L11E17_Exit             ; Odd: skip this frame.
 
+; Jumps to Wizzrobe_DrawAndCheckCollisions (out of branch range from above); also the clock path.
 L_Wizzrobe_DrawAndCheckCollisions:
     JMP Wizzrobe_DrawAndCheckCollisions
 
+; ----------------------------------------------------------------------------
+; Runs one frame of the Blue Wizzrobe's walk, pause or teleport, chosen by ObjTimer and ObjRemDistance.
+; IN:   X = object slot.
+; NOTE: ObjTimer >= $10: walk (1 pixel every second frame). $0F-$02: stand still (14 frames). 1: choose a
+;       teleport target. 0 with distance left: move 1 pixel per frame. 0 with no distance left: the
+;       teleport is over (also the very first update): align to a square, set ObjTimer to Random,X OR
+;       $70 ($70-$7F or $F0-$FF) and turn toward Link.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_WalkOrTeleport:
-    ; If timer has not expired, then go walk.
     LDA ObjTimer, X
     BNE @Walk
 
-    ; Timer = 0. Only teleporting now.
-    ;
-    ; If there is still distance to go while translucent, then
-    ; decrement the distance remaining, and move.
+    ; Timer = 0: teleporting. While distance remains, count it down and move.
     LDA ObjRemDistance, X
     BEQ @WalkAgain
     DEC ObjRemDistance, X
     JMP BlueWizzrobe_MoveAndCheckTile
 
 @WalkAgain:
-    ; Distance remaining = 0. Still teleporting.
+    ; Timer = 0 and distance = 0: start a walking phase.
     JSR BlueWizzrobe_AlignWithNearestSquareAndRandomizeTimer
     JMP BlueWizzrobe_TurnTowardLink
 
 @Walk:
-    ; Timer:
-    ;   >= $10: Turn if needed and move every other frame
-    ;   > 1:    Do nothing
-    ;   = 1:    Choose a place to teleport to.
-    ;
-    ; Notice that walking is slower than teleporting; and there is
-    ; a pause of $10 frames at the end.
+    ; A = timer (nonzero).
+    ;   >= $10: turn if needed and move, every other frame
+    ;   $0F-2:  do nothing
+    ;   1:      choose a place to teleport to
     CMP #$10
     BCS GoEveryOtherFrame
     CMP #$01
     BNE L11E17_Exit
     JSR BlueWizzrobe_ChooseTeleportTarget
 
+; Shared exit of the routines above.
 L11E17_Exit:
     RTS
 
+; Walking step: on even frames count a step, turn if due and move; on odd frames only test the turn.
 GoEveryOtherFrame:
-    ; Every other frame, advance the turn counter, turn if needed,
-    ; and move.
     LDA FrameCounter
     LSR
-    BCS L_BlueWizzrobe_TurnTowardLinkIfNeeded
+    BCS L_BlueWizzrobe_TurnTowardLinkIfNeeded   ; Odd frame: no step.
 
+; ----------------------------------------------------------------------------
+; Counts a step, turns toward Link if due, moves 1 pixel and handles the tile ahead.
+; IN:   X = object slot.
+; NOTE: Also called every frame by Ganon, with ObjRemDistance,X forced to 1 (so blocks never stop him).
+; ----------------------------------------------------------------------------
 BlueWizzrobe_TurnSometimesAndMoveAndCheckTile:
     JSR BlueWizzrobe_AdvanceCounterAndTurnTowardLinkIfNeeded
 
+; ----------------------------------------------------------------------------
+; Moves 1 pixel in ObjDir, then reverses at a wall or starts a teleport through a block or water tile.
+; IN:   X = object slot; ObjRemDistance,X nonzero = already teleporting.
+; NOTE: "Block or water" = tile $B0-$B3 or tile >= $F4 (primary squares $B0 block and $F4; that $F4 is
+;       water is (unverified) here). A wall is any other tile >= RoomFirstUnwalkableTile: the direction
+;       is reversed on both axes and the step is taken back in the same frame.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_MoveAndCheckTile:
     JSR BlueWizzrobe_Move
     JSR Wizzrobe_GetCollidableTile
+    BCC @Exit                   ; Walkable: done.
 
-    ; If walkable, then return.
-    BCC @Exit
-
-    ; Go handle a wall, if the tile is not a block nor water.
+    ; Unwalkable. Sort the tile into block/water or wall.
     LDA Wizzrobe_ObjLastTile, X
     AND #$FC
     CMP #$B0
-    BEQ @HitBlockOrWater
+    BEQ @HitBlockOrWater        ; Tiles $B0-$B3.
     CMP #$F4
-    BCC @HitWall
+    BCC @HitWall                ; Below $F4: wall.
 
 @HitBlockOrWater:
-    ; If the monster was already teleporting, then return,
-    ; so that it moves again next frame.
+    ; Already teleporting: keep going through it next frame.
     LDA ObjRemDistance, X
     BNE L11E17_Exit
 
-    ; Else go start teleporting thru this obstacle.
+    ; Walking: start a teleport through the obstacle, in the current direction.
     JMP BeginTeleporting
 
 @HitWall:
-    ; The monster hit a wall.
-    ; If facing direction has a vertical component, then flip it.
+    ; Flip the vertical component (8 <-> 4) of the facing direction, if it has one.
     LDY ObjDir, X
     TYA
     AND #$0C
@@ -163,7 +204,7 @@ BlueWizzrobe_MoveAndCheckTile:
     TAY
 
 @CheckHorizontal:
-    ; If facing direction has a horizontal component, then flip it.
+    ; Flip the horizontal component (1 <-> 2), if it has one.
     TYA
     AND #$03
     BEQ @Move
@@ -172,37 +213,37 @@ BlueWizzrobe_MoveAndCheckTile:
     STA ObjDir, X
 
 @Move:
+    ; Step back out of the wall.
     JMP BlueWizzrobe_Move
 
 @Exit:
     RTS
 
-; Description:
-; Increment the turn counter. Then turn toward Link
-; when the turn counter is a multiple of $40.
-;
-; Increment the turn counter.
-;
+; ----------------------------------------------------------------------------
+; Adds 1 to the Blue Wizzrobe's turn counter, then turns toward Link if the counter's low 6 bits are 0.
+; IN:   X = object slot.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_AdvanceCounterAndTurnTowardLinkIfNeeded:
     INC Wizzrobe_ObjBlueTurnCounter, X
 
-; Description:
-; When the counter is a multiple of $40, switch between facing
-; toward Link horizontally or vertically. All other times, return.
-;
+; Turns toward Link when the turn counter is a multiple of $40; otherwise returns.
 L_BlueWizzrobe_TurnTowardLinkIfNeeded:
     LDA Wizzrobe_ObjBlueTurnCounter, X
     AND #$3F
     BNE L11EAF_Exit
 
+; ----------------------------------------------------------------------------
+; Faces the Blue Wizzrobe toward Link on one axis and, if the direction changed, aligns it to a square.
+; IN:   X = object slot; bit 6 of Wizzrobe_ObjBlueTurnCounter,X: 0 = horizontal axis, 1 = vertical.
+; OUT:  ObjDir,X; ObjX,X and ObjY,X snapped to a square only when the direction changed.
+; NOTE: Bit 6 alternates as the counter passes each multiple of $40, and BeginTeleporting flips it.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_TurnTowardLink:
-    ; If the multiple of $40 is even, then turn horizontally,
-    ; else vertically.
     LDA Wizzrobe_ObjBlueTurnCounter, X
     AND #$40
     BNE @TurnVertically
 
-    ; If the monster's X >= Link's X, then choose left, else right.
+    ; Monster's X >= Link's X: left (2). Else right (1).
     LDA #$02
     LDY ObjX, X
     CPY ObjX
@@ -212,7 +253,7 @@ BlueWizzrobe_TurnTowardLink:
     JMP @SetDir
 
 @TurnVertically:
-    ; If the monster's Y >= Link's Y, then choose up, else down.
+    ; Monster's Y >= Link's Y: up (8). Else down (4).
     LDA #$08
     LDY ObjY, X
     CPY ObjY
@@ -220,29 +261,30 @@ BlueWizzrobe_TurnTowardLink:
     LSR
 
 @SetDir:
-    ; If the direction chosen = facing direction, then return.
+    ; Already facing that way: return without aligning.
     CMP ObjDir, X
     BEQ L11EAF_Exit
-
-    ; Else face toward Link.
     STA ObjDir, X
     JMP BlueWizzrobe_AlignWithNearestSquare
 
+; TABLE: X step of BlueWizzrobe_Move; index = direction value $00-$0A (8-way); value = signed pixels.
 BlueWizzrobeTeleportOffsetsX:
-    .BYTE $00, $01, $FF, $00, $00, $01, $FF, $00
-    .BYTE $00, $01, $FF
+    .BYTE $00, $01, $FF, $00, $00, $01, $FF, $00    ; -, right +1, left -1, -, down 0, 5 +1, 6 -1, -
+    .BYTE $00, $01, $FF                             ; up 0, 9 (up-right) +1, $A (up-left) -1
 
+; TABLE: Y step of BlueWizzrobe_Move; index = direction value $00-$0A (8-way); value = signed pixels.
 BlueWizzrobeTeleportOffsetsY:
-    .BYTE $00, $00, $00, $00, $01, $01, $01, $00
-    .BYTE $FF, $FF, $FF
+    .BYTE $00, $00, $00, $00, $01, $01, $01, $00    ; -, right 0, left 0, -, down +1, 5 +1, 6 +1, -
+    .BYTE $FF, $FF, $FF                             ; up -1, 9 (up-right) -1, $A (up-left) -1
 
-; Description:
-; This procedure can be called MoveSimple8. But it's only used
-; by blue wizzrobe and Ganon, which move alike.
-;
+; ----------------------------------------------------------------------------
+; Moves the object 1 pixel in its 8-way direction ObjDir (no fraction, no collision test).
+; IN:   X = object slot; ObjDir,X = direction bits (diagonals allowed).
+; OUT:  ObjX,X and ObjY,X changed by -1, 0 or +1 each.
+; NOTE: Used by the Blue Wizzrobe (walking and teleporting) and by Ganon.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_Move:
-    ; Index the offsets using the direction value directly.
-    LDY ObjDir, X
+    LDY ObjDir, X               ; The direction value itself is the table index.
     LDA ObjX, X
     CLC
     ADC BlueWizzrobeTeleportOffsetsX, Y
@@ -252,36 +294,40 @@ BlueWizzrobe_Move:
     ADC BlueWizzrobeTeleportOffsetsY, Y
     STA ObjY, X
 
+; Shared exit of BlueWizzrobe_Move and the turn routines above.
 L11EAF_Exit:
     RTS
 
+; TABLE: X offset of the teleport target; index = random 0-3; value = signed pixels (-$20 or +$20).
 BlueWizzrobeTeleportMaxOffsetsX:
     .BYTE $E0, $20, $E0, $20
 
+; TABLE: Y offset of the teleport target; index = random 0-3; value = signed pixels (-$20 or +$20).
 BlueWizzrobeTeleportMaxOffsetsY:
     .BYTE $E0, $E0, $20, $20
 
+; TABLE: diagonal direction of the teleport; index = random 0-3; value = direction bits.
 BlueWizzrobeTeleportDirs:
-    .BYTE $0A, $09, $06, $05
+    .BYTE $0A, $09, $06, $05    ; up-left, up-right, down-left, down-right
 
+; ----------------------------------------------------------------------------
+; Picks a random diagonal spot 2 squares away; teleports there if its tile is walkable, else walks on.
+; IN:   X = object slot. Called when the walking timer reaches 1.
+; OUT:  Success: ObjDir,X = the diagonal, then as BeginTeleporting. Failure: aligned to a square and
+;       ObjTimer,X = Random,X OR $70 (another walking phase; no retry this frame).
+; NOTE: RNG: Random,X AND 3 selects the diagonal. Only the target tile is tested, not the path.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_ChooseTeleportTarget:
-    ; Choose a random value between 0 and 3 that will be used
-    ; to test and set a direction to move in.
     LDA Random, X
     AND #$03
     TAY
 
-    ; The random value implies a random direction.
-    ; Save the original X coordinate; and add to it the offset for
-    ; the random direction.
+    ; Move the object to the target temporarily, saving its real position.
     LDA ObjX, X
     PHA
     CLC
     ADC BlueWizzrobeTeleportMaxOffsetsX, Y
     STA ObjX, X
-
-    ; Save the original Y coordinate; and add to it the offset for
-    ; the random direction.
     LDA ObjY, X
     PHA
     CLC
@@ -290,7 +336,7 @@ BlueWizzrobe_ChooseTeleportTarget:
     TYA                         ; Save the random index.
     PHA
 
-    ; Test the walkability in the random direction chosen.
+    ; Test the tile at the target, with the test offset of the diagonal direction.
     LDA BlueWizzrobeTeleportDirs, Y
     TAY
     JSR Wizzrobe_GetCollidableTileForDir
@@ -301,53 +347,53 @@ BlueWizzrobe_ChooseTeleportTarget:
     PLA                         ; Restore the original X.
     STA ObjX, X
 
-    ; If not walkable, then all we can do is align with the nearest square.
+    ; C set = not walkable: give up and start another walking phase.
     BCS BlueWizzrobe_AlignWithNearestSquareAndRandomizeTimer
 
-    ; Set the random diagonal direction.
+    ; Face along the chosen diagonal.
     LDA BlueWizzrobeTeleportDirs, Y
     STA ObjDir, X
 
+; ----------------------------------------------------------------------------
+; Starts a Blue Wizzrobe teleport of $20 pixels in the current ObjDir and aligns it to a square.
+; IN:   X = object slot; ObjDir,X = diagonal (chosen target) or cardinal (walked into a block or water).
+; OUT:  ObjRemDistance,X = $20; ObjTimer,X = 0 (teleporting); bit 6 of the turn counter flipped.
+; NOTE: $20 frames; a diagonal covers $20 pixels on each axis. No shooting until it ends.
+; ----------------------------------------------------------------------------
 BeginTeleporting:
-    ; Will move $20 pixels horizontally and vertically.
     LDA #$20
     STA ObjRemDistance, X
 
-    ; Flip bit 6 of turn counter; so that we change the axis to turn toward.
+    ; Flip bit 6 of the turn counter: the next turn toward Link uses the other axis.
     LDA Wizzrobe_ObjBlueTurnCounter, X
     EOR #$40
     STA Wizzrobe_ObjBlueTurnCounter, X
-
-    ; Reset the timer to note that the monster is teleporting.
-    ; Align with the nearest square.
-    LDA #$00
+    LDA #$00                    ; Timer 0 = teleporting.
     BEQ :+
 
+; Starts a walking phase: ObjTimer = Random,X OR $70, then aligns to the nearest square.
 BlueWizzrobe_AlignWithNearestSquareAndRandomizeTimer:
-    ; Set a random timer >= $70.
     LDA Random, X
-    ORA #$70
+    ORA #$70                    ; $70-$7F or $F0-$FF frames.
 :
     STA ObjTimer, X
 
+; ----------------------------------------------------------------------------
+; Snaps the object to the nearest 16-pixel square: X to a multiple of $10, Y to a multiple of $10 minus 3.
+; IN:   X = object slot.
+; OUT:  ObjX,X = (X + 8) AND $F0; ObjY,X = ((Y + 8) AND $F0) - 3; A = new Y.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_AlignWithNearestSquare:
-    ; If in the left half of a square, jump to the left edge.
-    ; Else jump to the next square.
     LDA ObjX, X
     CLC
     ADC #$08
     AND #$F0
     STA ObjX, X
-
-    ; If in the top half of a square, jump to the top edge.
-    ; Else jump to the next square.
     LDA ObjY, X
     CLC
     ADC #$08
 
-; Params:
-; A: Y coordinate, square ($10) aligned
-;
+; Second entry: A = a Y coordinate; stores (A AND $F0) - 3 in ObjY,X and returns it in A.
 RedWizzrobe_AlignAndSetY:
     AND #$F0
     SEC
@@ -355,45 +401,41 @@ RedWizzrobe_AlignAndSetY:
     STA ObjY, X
     RTS
 
+; TABLE: X offset of the Wizzrobe tile test point; index = direction value - 1 ($00-$09); pixels.
 WizzrobeCollisionOffsetsX:
-    .BYTE $0F, $00, $00, $04, $08, $00, $00, $04
-    .BYTE $08, $00
+    .BYTE $0F, $00, $00, $04, $08, $00, $00, $04    ; right, left, -, down, down-right, down-left, -, up
+    .BYTE $08, $00                                  ; up-right, up-left
 
+; TABLE: Y offset of the Wizzrobe tile test point; index = direction value - 1 ($00-$09); signed pixels.
+;   GetCollidableTileStill adds another $0B to Y.
 WizzrobeCollisionOffsetsY:
-    .BYTE $04, $04, $00, $08, $08, $08, $00, $F8
-    .BYTE $00, $00
+    .BYTE $04, $04, $00, $08, $08, $08, $00, $F8    ; right, left, -, down, down-right, down-left, -, up
+    .BYTE $00, $00                                  ; up-right, up-left
 
-; Params:
-; X: object index
-;
-; Returns:
-; C: 0 if walkable
-;
+; ----------------------------------------------------------------------------
+; Tests the tile in front of a Wizzrobe (or Ganon) for its facing direction ObjDir.
+; IN:   X = object slot.
+; OUT:  C clear = walkable, set = unwalkable; A and Wizzrobe_ObjLastTile,X = the tile.
+; ----------------------------------------------------------------------------
 Wizzrobe_GetCollidableTile:
     LDY ObjDir, X
 
-; Params:
-; X: object index
-; Y: 8-way direction
-;
-; Returns:
-; C: 0 if walkable
-;
-; Subtract 1 from direction to make an 8-way direction index.
-;
+; ----------------------------------------------------------------------------
+; Tests the tile at the object's position plus the test offset of an 8-way direction.
+; IN:   X = object slot; Y = direction value ($01-$0A).
+; OUT:  C clear = walkable, set = unwalkable; A and Wizzrobe_ObjLastTile,X = the tile. Position unchanged.
+; ----------------------------------------------------------------------------
 Wizzrobe_GetCollidableTileForDir:
-    DEY
+    DEY                         ; Direction - 1 indexes the offset tables.
 
-    ; Look up and add the collision offset to the monster's X coordinate.
+    ; Shift the object to the test point, saving its real position.
     LDA ObjX, X
-    PHA                         ; Save the original X.
+    PHA
     CLC
     ADC WizzrobeCollisionOffsetsX, Y
     STA ObjX, X
-
-    ; Look up and add the collision offset to the monster's Y coordinate.
     LDA ObjY, X
-    PHA                         ; Save the original Y.
+    PHA
     CLC
     ADC WizzrobeCollisionOffsetsY, Y
     STA ObjY, X
@@ -404,34 +446,34 @@ Wizzrobe_GetCollidableTileForDir:
     STA ObjX, X
     RTS
 
-; Params:
-; X: object index
-;
-; Returns:
-; C: 0 if walkable
-;
+; ----------------------------------------------------------------------------
+; Reads the tile at (ObjX, ObjY + $0B) and compares it with the room's first unwalkable tile.
+; IN:   X = object slot.
+; OUT:  C clear = walkable (tile < RoomFirstUnwalkableTile), set = unwalkable; A and
+;       Wizzrobe_ObjLastTile,X = the tile (also left in ObjCollidedTile,X).
+; ----------------------------------------------------------------------------
 Wizzrobe_GetBaseCollidableTile:
     JSR GetCollidableTileStill
     LDA ObjCollidedTile, X
-
-    ; Return C=0 if walkable.
-    CMP RoomFirstUnwalkableTile
-
-    ; Store the last collided tile.
+    CMP RoomFirstUnwalkableTile ; Sets C for the caller; STA below does not change it.
     STA Wizzrobe_ObjLastTile, X
     RTS
 
+; ----------------------------------------------------------------------------
+; Lets a Blue Wizzrobe shoot magic shot $58 when it faces Link along its row or column.
+; IN:   X = object slot.
+; NOTE: Tried only when not teleporting and FrameCounter AND $1F = 0 (once per 32 frames; also during
+;       the 14-frame pause). Row test: same high nibble of Y. Column test: see
+;       BlueWizzrobe_CheckSquareColumn. The direction toward Link must equal ObjDir,X.
+; ----------------------------------------------------------------------------
 BlueWizzrobe_TryShooting:
-    ; Once every $20 frames, and when not fading, we'll try to shoot.
-    ; Otherwise, return.
     LDA ObjRemDistance, X
-    BNE L11F7E_Exit
+    BNE L11F7E_Exit             ; Teleporting.
     LDA FrameCounter
     AND #$1F
     BNE L11F7E_Exit
 
-    ; If Link and the monster are not within the same square row,
-    ; then go see about the same square column.
+    ; Same 16-pixel row as Link (Y AND $F0 equal)? If not, try the column.
     LDA ObjY, X
     AND #$F0
     STA $00
@@ -440,25 +482,25 @@ BlueWizzrobe_TryShooting:
     CMP $00
     BNE BlueWizzrobe_CheckSquareColumn
 
-    ; If the monster is to the right of Link, then choose left.
-    ; Else choose right.
+    ; Monster's X >= Link's X: left (2). Else right (1).
     LDA #$02
     LDY ObjX, X
     CPY ObjX
     BCS :+
     LSR
 :
-    ; If the direction chosen = the monster's facing direction,
-    ; then go shoot.
+    ; Shoot only if already facing that way.
     CMP ObjDir, X
     BEQ ShootMagicShot58
 
+; Shared exit of the shooting routines.
 L11F7E_Exit:
     RTS
 
+; Column half of BlueWizzrobe_TryShooting: shoots if Link is in the monster's column and it faces him.
+; NOTE: Link's X is compared unmasked with (monster X AND $F0), so Link must stand exactly on the
+;       monster's 16-pixel column (X a multiple of $10), unlike the row test.
 BlueWizzrobe_CheckSquareColumn:
-    ; If Link and the monster are not within the same square column,
-    ; then return.
     LDA ObjX, X
     AND #$F0
     STA $00
@@ -466,48 +508,54 @@ BlueWizzrobe_CheckSquareColumn:
     CMP $00
     BNE L11F7E_Exit
 
-    ; If the monster is down from Link, then choose up.
-    ; Else choose down.
+    ; Monster's Y >= Link's Y: up (8). Else down (4).
     LDA #$08
     LDY ObjY, X
     CPY ObjY
     BCS :+
     LSR
 :
-    ; If the direction chosen <> the monster's facing direction,
-    ; then return.
+    ; Shoot only if already facing that way.
     CMP ObjDir, X
     BNE L11F7E_Exit
 
+; Shoots the Blue Wizzrobe's magic shot (object type $58).
 ShootMagicShot58:
     LDA #$58
 
-; Params:
-; A: shot object type
-;
+; ----------------------------------------------------------------------------
+; Shoots a magic shot of the given object type from the monster, with the magic sound.
+; IN:   A = shot object type ($58 Blue Wizzrobe, $59 Red Wizzrobe); X = object slot of the shooter.
+; OUT:  As ShootLimited: C set = shot created, Y = its slot. [00] = shot type. With the clock it
+;       returns at once and C is left as it was.
+; NOTE: Nothing happens with the clock. The sound (Tune0Request 4) plays even when ShootLimited
+;       refuses the shot (no free slot, or 4 counted shots already in flight).
+; ----------------------------------------------------------------------------
 ShootMagicShot:
     STA $00
-
-    ; If we have the magic clock, then return.
     LDA InvClock
     BNE L11F7E_Exit
-
-    ; Else play the magic sound, shoot, and return.
-    LDA #$04
+    LDA #$04                    ; Magic shot sound.
     STA Tune0Request
     JMP ShootLimited
 
+; ----------------------------------------------------------------------------
+; Updates a Red Wizzrobe (type $24): counts ObjState down and runs the handler for its top two bits.
+; IN:   X = object slot.
+; NOTE: ObjState,X is decremented first, then (state >> 6) selects: 3 ($FF-$C0) appear and fade in,
+;       2 ($BF-$80) solid, 1 ($7F-$40) fade out, 0 ($3F-$00) hidden. A full cycle is 208 frames (group
+;       1 is cut to 16 frames). With the clock the state is frozen and the monster is drawn and
+;       collision-tested every frame, whatever the state.
+; ----------------------------------------------------------------------------
 UpdateRedWizzrobe:
-    ; If we have the magic clock, then go check collisions and draw.
     LDA InvClock
     BEQ :+
     JMP Wizzrobe_DrawAndCheckCollisions
 :
-    ; Else increase animation counter and decrease state every frame.
     INC Wizzrobe_ObjRedAnimCounter, X
     DEC ObjState, X
 
-    ; Shift the state right 6 times to get the index (0 to 3) of a state routine.
+    ; State >> 6 = handler index 0-3.
     LDA ObjState, X
     LSR
     LSR
@@ -517,51 +565,59 @@ UpdateRedWizzrobe:
     LSR
     JSR TableJump
 
+; TABLE: Red Wizzrobe handlers; index = ObjState >> 6.
 UpdateRedWizzrobe_JumpTable:
-    .ADDR UpdateRedWizzrobe_0
-    .ADDR UpdateRedWizzrobe_1
-    .ADDR UpdateRedWizzrobe_2
-    .ADDR UpdateRedWizzrobe_3
+    .ADDR UpdateRedWizzrobe_0   ; $00-$3F hidden
+    .ADDR UpdateRedWizzrobe_1   ; $40-$7F fading out
+    .ADDR UpdateRedWizzrobe_2   ; $80-$BF solid, shoots at $B0
+    .ADDR UpdateRedWizzrobe_3   ; $C0-$FF choose a place ($FF), then fade in
 
+; TABLE: X offset from Link where a Red Wizzrobe appears; index = Random,X AND $0F; signed pixels.
+;   Index AND 3: 0 above Link, 1 below, 2 left, 3 right (matches RedWizzrobeDirections).
 RedWizzrobeOffsetsX:
-    .BYTE $00, $00, $E0, $20, $00, $00, $C0, $40
-    .BYTE $00, $00, $D0, $30, $00, $00, $B0, $50
+    .BYTE $00, $00, $E0, $20, $00, $00, $C0, $40    ; distance $20 (indexes 0-3), $40 (4-7)
+    .BYTE $00, $00, $D0, $30, $00, $00, $B0, $50    ; distance $30 (8-$B), $50 ($C-$F)
 
+; TABLE: Y offset from Link where a Red Wizzrobe appears; index = Random,X AND $0F; signed pixels.
 RedWizzrobeOffsetsY:
-    .BYTE $E0, $20, $00, $00, $C0, $40, $00, $00
-    .BYTE $D0, $30, $00, $00, $B0, $50, $00, $00
+    .BYTE $E0, $20, $00, $00, $C0, $40, $00, $00    ; distance $20 (indexes 0-3), $40 (4-7)
+    .BYTE $D0, $30, $00, $00, $B0, $50, $00, $00    ; distance $30 (8-$B), $50 ($C-$F)
 
+; TABLE: facing direction of an appearing Red Wizzrobe; index = Random,X AND 3; direction bits.
+;   Each entry points back at Link from the side the same index selects in the offset tables.
 RedWizzrobeDirections:
-    .BYTE $04, $08, $01, $02
+    .BYTE $04, $08, $01, $02    ; above Link: down; below: up; left of Link: right; right: left
 
+; ----------------------------------------------------------------------------
+; Red Wizzrobe state group 1 ($7F-$40), fading out: flickers for 16 frames.
+; IN:   X = object slot.
+; NOTE: State $7F jumps to $4F, so the group lasts 16 frames instead of 64. Also the fade-in body of
+;       group 3. Drawn and collision-tested only on frames where the fade counter is even.
+; ----------------------------------------------------------------------------
 UpdateRedWizzrobe_1:
-    ; Handle state group 1 ($40 to $7F).
-    ;
-    ; If state = $7F, make it $4F.
-    ; $7F is the first frame of state group ($40 to $7F).
-    ; By doing this, we skip $30 frames.
     LDA ObjState, X
     CMP #$7F
     BNE :+
-    LDA #$4F
+    LDA #$4F                    ; Skip $30 states.
     STA ObjState, X
 :
-    ; Increment the fade counter. Depending on the low bit,
-    ; the monster will be drawn every other frame.
     INC Wizzrobe_ObjRedFadeCounter, X
     JMP Wizzrobe_DrawAndCheckCollisionsIntermittently
 
+; ----------------------------------------------------------------------------
+; Red Wizzrobe state group 3 ($FF-$C0): at $FF picks where to appear; $FE-$C0 fades in (63 frames).
+; IN:   X = object slot.
+; NOTE: RNG: one byte Random,X. Bits 0-1 pick the side of Link (and the facing, toward Link); bits 0-3
+;       pick the offset: 2, 3, 4 or 5 squares. The spot is square-aligned (Y = multiple of $10 minus 3)
+;       and accepted only if $5D <= Y < $C4 and its tile is walkable; otherwise the state goes back to
+;       $00 and the choice is repeated next frame. X is not range-checked, only the tile is.
+; ----------------------------------------------------------------------------
 UpdateRedWizzrobe_3:
-    ; Handle state group 3 ($C0 to $FF).
-    ;
-    ; If state <> $FF, go fade as in state group 1.
     LDY ObjState, X
     INY
-    BNE UpdateRedWizzrobe_1
+    BNE UpdateRedWizzrobe_1     ; Not $FF: fade in, same as fading out.
 
-    ; State $FF.
-    ;
-    ; Face in a random direction.
+    ; State $FF. Face toward Link from the side chosen by the low 2 random bits.
     LDA Random, X
     PHA                         ; Save the random value.
     AND #$03
@@ -570,59 +626,66 @@ UpdateRedWizzrobe_3:
     STA ObjDir, X
     PLA                         ; Restore the random value.
 
-    ; Use a random value from 0 to $F to index into an array of offsets.
+    ; X = (Link's X + offset) AND $F0. C is clear here (left so by the ASL in TableJump).
     AND #$0F
     TAY
     LDA ObjX
-
-    ; Add the X offset and Link's X to set the monster's position.
     ADC RedWizzrobeOffsetsX, Y
-    AND #$F0                    ; Align with a square.
+    AND #$F0
     STA ObjX, X
 
-    ; Add the Y offset and Link's Y to set the monster's position.
+    ; Y = ((Link's Y + 3 + offset) AND $F0) - 3. Rows are 16 pixels apart at Y = multiple of $10 minus
+    ; 3. A Link on a row keeps that row; a Link 8 pixels below a row (halfway to the next) gets the
+    ; row above him. Then the offset moves whole rows.
     LDA ObjY
     CLC
-    ADC #$03                    ; Add 3 to help with the alignment calculation below.
+    ADC #$03
     ADC RedWizzrobeOffsetsY, Y
     JSR RedWizzrobe_AlignAndSetY
 
-    ; If Y coordinate >= $5D and < $C4, then the monster
-    ; is not in a wall. So, check tile collision.
+    ; A = new Y. Outside $5D-$C3 the spot is rejected without a tile test.
     CMP #$5D
-    BCC :+
+    BCC @Retry
     CMP #$C4
-    BCS :+
+    BCS @Retry
     JSR Wizzrobe_GetCollidableTile
 
-    ; If walkable, then return.
-    ; Else increase state to 0, in order to check again next frame.
+    ; Walkable: keep the spot (state stays $FF; the next frame's decrement starts the fade-in).
     BCC UpdateRedWizzrobe_0
-:
-    INC ObjState, X
+@Retry:
+    INC ObjState, X             ; $FF -> $00; the next frame's decrement gives $FF again.
 
+; Red Wizzrobe state group 0 ($3F-$00), hidden: does nothing (not drawn, no collisions) for 64 frames.
 UpdateRedWizzrobe_0:
     RTS
 
+; ----------------------------------------------------------------------------
+; Red Wizzrobe state group 2 ($BF-$80), solid for 64 frames: shoots magic shot $59 at state $B0.
+; IN:   X = object slot.
+; NOTE: $B0 is the 16th solid frame. Drawn and collision-tested every frame.
+; ----------------------------------------------------------------------------
 UpdateRedWizzrobe_2:
-    ; Handle state group 2 ($80 to $BF).
-    ;
-    ; If state = $B0, then shoot a magic shot $59.
     LDA ObjState, X
     CMP #$B0
     BNE Wizzrobe_DrawAndCheckCollisions
     LDA #$59
     JSR ShootMagicShot
 
+; ----------------------------------------------------------------------------
+; Tests a Wizzrobe against Link's weapons and against Link, then draws it.
+; IN:   X = object slot.
+; NOTE: ObjInvincibilityMask,X = $F6: only damage types 1 (sword, sword shot) and 8 (bomb) hurt.
+;       Slots tested: $0E sword shot or magic shot, $10 and $11 bomb or fire, $0D sword. Fire and Link's
+;       magic shot are masked. Slots $0F (boomerang, food) and $12 (arrow, rod) are not tested at all:
+;       no boomerang stun, no arrow or rod damage. Weapon tests are skipped while
+;       ObjInvincibilityTimer,X is nonzero; the test against Link is not.
+; ----------------------------------------------------------------------------
 Wizzrobe_DrawAndCheckCollisions:
-    ; Invincible to everything but sword and bomb.
     LDA #$F6
     STA ObjInvincibilityMask, X
     JSR GetObjectMiddle
-
-    ; If invincibility timer = 0, then check collisions with weapons.
     LDA ObjInvincibilityTimer, X
-    BNE :+
+    BNE @CheckLink
     LDY #$0E
     JSR CheckMonsterSwordShotOrMagicShotCollision
     LDY #$10
@@ -631,12 +694,13 @@ Wizzrobe_DrawAndCheckCollisions:
     JSR CheckMonsterBombOrFireCollision
     LDY #$0D
     JSR CheckMonsterSwordCollision
-:
-    ; In this state, the monster can always harm Link,
-    ; even if it can't be harmed.
+@CheckLink:
+    ; Touching Link harms him even while the monster itself is invincible.
     JSR CheckLinkCollision
 
-    ; Every 4 frames switch between two frame images.
+    ; Frame image 0 or 1 = bit 2 of the counter at $412 (Wizzrobe_ObjRedAnimCounter and
+    ; Wizzrobe_ObjBlueTurnCounter are the same byte): Red changes image every 4 frames, Blue every 4
+    ; walking steps (8 frames) and not at all while teleporting or paused.
     LDA Wizzrobe_ObjRedAnimCounter, X
     LSR
     LSR
@@ -644,20 +708,20 @@ Wizzrobe_DrawAndCheckCollisions:
     PHA                         ; Save the frame image number.
     JSR Anim_FetchObjPosForSpriteDescriptor
 
-    ; If facing up, then go add 2 to frame image number, and draw mirrored.
+    ; Facing up (also up-left and up-right): images 2 and 3, drawn mirrored.
     LDA ObjDir, X
     AND #$08
-    BNE :+
+    BNE @FacingUp
 
-    ; If facing left, then flip horizontally.
+    ; Otherwise [0F] = bit 1 of the direction: flip horizontally when facing left.
     LDA ObjDir, X
     LSR
     AND #$01
     STA $0F
     PLA                         ; Restore the frame image number.
     JMP DrawObjectNotMirrored
-:
+@FacingUp:
     PLA
     CLC
-    ADC #$02                    ; Up facing frame image numbers are 2 and 3.
+    ADC #$02
     JMP DrawObjectMirrored

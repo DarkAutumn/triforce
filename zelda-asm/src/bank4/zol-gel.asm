@@ -2,27 +2,58 @@
 ; FILE:     bank4/zol-gel.asm            BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 1239-1569
 ; SUBJECTS: Gel, Zol
-; TOPIC:    Zol states and split into Gels; Gel
-; SEE ALSO:
+; TOPIC:    Zol (type $13): wander with pauses, and the split into two child Gels (type $14) when a hit
+;           does not kill it. Gel (types $14 child, $15): start-up dash of a child, wander with pauses.
+; SEE ALSO: bank1/weapon-damage-death.asm (HandleMonsterWeaponCollision: a weapon turns the Zol to the
+;           weapon's direction; DealDamage); bank1/shove-knockback.asm (BeginShove: sets the
+;           invincibility timer the split test reads); bank4/shoot-helpers-candle.asm (ShootLimited:
+;           creates the child Gel); bank4/walker-wanderer-common.asm (Wanderer_TargetPlayer, InitWalker);
+;           bank7/object-update-table.asm (HP and attribute tables; child Gel kills are not counted);
+;           bank4/vire.asm (Vire's state 1 is UpdateZolState1_Shove).
 ; KEY FACTS:
+;   - A Zol splits when a weapon hit leaves it alive with its invincibility timer set, i.e. the hit
+;     did less than its HP ($20) and shoved it: wooden sword or its beam ($10) and candle fire ($10).
+;     The boomerang only stuns it (no shove, so no split) (Zol_CheckCollisions).
+;   - Split path: if Link faces left or right while the Zol is on a grid row ((Y AND $0F) = $0D), or
+;     up or down while it is on a grid column ((X AND $0F) = 0), the Zol first slides at q-speed $FF
+;     (about 4 px/frame) in the weapon's direction until a tile or the room boundary blocks it (state
+;     1), then splits; otherwise it splits at once (Zol_CheckCollisions, UpdateZolState1_Shove).
+;   - While sliding (state 1) the Zol tests no collisions: it cannot be hit and cannot hurt Link
+;     (Zol_CheckCollisions returns unless state = 0).
+;   - The split destroys the Zol and creates two type $14 Gels at its position, facing left/right if
+;     the Zol faced vertically, up/down if horizontally; RoomObjCount goes up by 1
+;     (UpdateZolState2_Split).
+;   - Each child Gel first shows the spawn cloud (slot number + 12 frames, no collisions), then dashes
+;     about 4 px/frame for 4 frames (less if blocked), snaps to the grid and wanders (CreateChildGel,
+;     Gel_Move).
+;   - If no object slot is free for the second Gel, CreateChildGel's writes go to slot 0: Link's
+;     ObjState, ObjGridOffset and ObjDir are overwritten (CreateChildGel, UpdateZolState2_Split).
+;   - Walking speed: Zol q-speed $18 (0.375 px/frame), Gel $40 (1 px/frame). At each grid point they
+;     pause: Zol $18/$28/$38/$48 frames, Gel $08/$18/$28/$38, chosen by Random,X; they start moving
+;     when 4 frames of the pause are left (UpdateNormalZolOrGel, ZolGelDelays).
+;   - A Gel placed by the room (type $15) starts in state 2, skipping the dash (InitGel).
 ; CONTENTS: (generated; L = line in this file)
-;   L0026 UpdateZol                 code
-;   L0041 UpdateZolState            code
-;   L0045 UpdateZolState_JumpTable  data
-;   L0050 UpdateZolState0_Wander    code
-;   L0054 UpdateZolState1_Shove     code
-;   L0062 UpdateZolState2_Split     code
-;   L0087 CreateChildGel            code
-;   L0103 Zol_CheckCollisions       code
-;   L0166 InitGel                   code
-;   L0171 UpdateGel                 code
-;   L0200 Gel_Move                  code
-;   L0263 UpdateNormalZolOrGel      code  Params:
-;   L0304 ZolGelDelays              data
-;   L0312 Gel_MoveSplitting         code  Returns:
-;   L0349 Gel_CheckCollisions       code
+;   L0057 UpdateZol                 code  Updates a Zol (type $13): runs its state, tests collisions (state 0 only) and draws it.
+;   L0076 UpdateZolState            code  Runs the Zol's state handler: 0 wander, 1 slide after a hit, 2 split.
+;   L0081 UpdateZolState_JumpTable  data  TABLE: Zol state handlers; index = ObjState.
+;   L0087 UpdateZolState0_Wander    code  Zol state 0: walks with pauses at q-speed $18 (0.375 px/frame).
+;   L0098 UpdateZolState1_Shove     code  Zol state 1: slides straight at q-speed $FF until a tile or the room boundary blocks it.
+;   L0113 UpdateZolState2_Split     code  Zol state 2: destroys the Zol and creates two child Gels facing opposite ways.
+;   L0147 CreateChildGel            code  Creates one child Gel (type $14) at the Zol's position, in state 0.
+;   L0170 Zol_CheckCollisions       code  Tests a wandering Zol against Link and his weapons and starts the split when it was hit.
+;   L0235 InitGel                   code  Initializes a Gel placed by the room (type $15): state 2 (wander), then the walker init.
+;   L0244 UpdateGel                 code  Updates a Gel (types $14, $15): moves, tests collisions in every state, and draws it.
+;   L0281 Gel_Move                  code  Moves a Gel by state: 0 set up the dash, 1 dash away from the split, 2 wander with pauses.
+;   L0350 UpdateNormalZolOrGel      code  Walks a Zol or Gel one grid square at a time as a wanderer, with a random pause at each square.
+;   L0393 ZolGelDelays              data  TABLE: pause at a grid point; index = (Random,X AND 3), +4 for a Gel; value = frames in ObjTimer
+;   L0403 Gel_MoveSplitting         code  Moves a struck Zol or a new child Gel straight ahead at q-speed $FF (about 4 px/frame).
+;   L0446 Gel_CheckCollisions       code  Runs the common monster collision test (Link's weapons, then Link) for a Zol or Gel.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Updates a Zol (type $13): runs its state, tests collisions (state 0 only) and draws it.
+; IN:   X = object slot.
+; ----------------------------------------------------------------------------
 UpdateZol:
     JSR UpdateZolState
     JSR Zol_CheckCollisions
@@ -38,36 +69,55 @@ UpdateZol:
     TYA
     JMP DrawObjectMirrored
 
+; ----------------------------------------------------------------------------
+; Runs the Zol's state handler: 0 wander, 1 slide after a hit, 2 split.
+; IN:   X = object slot.
+; ----------------------------------------------------------------------------
 UpdateZolState:
     LDA ObjState, X
     JSR TableJump
 
+; TABLE: Zol state handlers; index = ObjState.
 UpdateZolState_JumpTable:
-    .ADDR UpdateZolState0_Wander
-    .ADDR UpdateZolState1_Shove
-    .ADDR UpdateZolState2_Split
+    .ADDR UpdateZolState0_Wander    ; 0: walk with pauses
+    .ADDR UpdateZolState1_Shove     ; 1: slide until blocked
+    .ADDR UpdateZolState2_Split     ; 2: turn into two child Gels
 
+; Zol state 0: walks with pauses at q-speed $18 (0.375 px/frame).
 UpdateZolState0_Wander:
-    LDA #$18                    ; QSpeed $18 (0.375 pixels a frame)
+    LDA #$18                    ; Q-speed $18 (0.375 pixels a frame)
     JMP UpdateNormalZolOrGel
 
+; ----------------------------------------------------------------------------
+; Zol state 1: slides straight at q-speed $FF until a tile or the room boundary blocks it.
+; IN:   X = object slot.
+; NOTE: The direction is ObjDir,X, which the weapon hit set to the weapon's direction. No collision
+;       test runs in this state. When blocked, the state becomes 2 (split on the next frame).
+;       Also state 1 of the Vire (its state table points here).
+; ----------------------------------------------------------------------------
 UpdateZolState1_Shove:
-    ; Move straight and fast until blocked. Then go to state 2.
     JSR Gel_MoveSplitting
-    BCC :+
+    BCC :+                      ; C = 0: moved, not blocked yet.
     INC ObjState, X
 :
     RTS
 
+; ----------------------------------------------------------------------------
+; Zol state 2: destroys the Zol and creates two child Gels facing opposite ways.
+; IN:   X = object slot.
+; NOTE: Zol facing up or down: the Gels face left (2) and right (1). Zol facing left or right: up
+;       (8) and down (4). The Zol's direction here is that of the weapon that hit it. The first Gel
+;       always finds a slot (the Zol's own was just freed). If the second finds none, Y is 0 and
+;       the direction below is written to Link's ObjDir; RoomObjCount was still raised by 1.
+; ----------------------------------------------------------------------------
 UpdateZolState2_Split:
-    ; We'll create two gels, but destroy the zol. So, increase
-    ; the object count by 1 only.
+    ; One Zol becomes two Gels, so the room's object count goes up by 1.
     INC RoomObjCount
-    JSR DestroyMonster
+    JSR DestroyMonster          ; Keeps ObjX, ObjY, ObjDir and ObjGridOffset of the slot.
     JSR CreateChildGel
 
-    ; If the zol's direction is vertical, then set the first child gel's
-    ; direction to left, else up.
+    ; If the Zol's direction is vertical (>= 4), then set the first child Gel's
+    ; direction to left (2), else up (8).
     LDA ObjDir, X
     CMP #$04
     LDA #$02
@@ -75,23 +125,33 @@ UpdateZolState2_Split:
     LDA #$08
 :
     STA a:ObjDir, Y
-    PHA                         ; Save the direction of the first gel.
+    PHA                         ; Save the direction of the first Gel.
     JSR CreateChildGel
-    PLA                         ; Restore the direction of the first gel.
+    PLA                         ; Restore the direction of the first Gel.
 
-    ; Set the second child gel's direction to the opposite of the first one's.
+    ; Set the second child Gel's direction to the opposite of the first one's
+    ; (2 -> 1, 8 -> 4).
     LSR
     STA a:ObjDir, Y
     RTS
 
+; ----------------------------------------------------------------------------
+; Creates one child Gel (type $14) at the Zol's position, in state 0.
+; IN:   X = the Zol's object slot (already destroyed).
+; OUT:  Y = the Gel's object slot, or 0 if no slot in $01-$0B was free.
+; NOTE: The result of ShootLimited is not tested. On failure Y = 0 and the two writes below change
+;       Link's ObjState (to 0) and ObjGridOffset. The new slot is left uninitialized with the spawn
+;       cloud metastate, so the Gel is initialized (InitWalker) and shows the cloud before it moves.
+;       Type $14 is below $53, so it is not counted as a shot and has no limit of 4.
+; ----------------------------------------------------------------------------
 CreateChildGel:
     LDA #$14                    ; Child Gel object type
 
-    ; Use the shooting operation to create the gel object.
+    ; Use the shooting operation to create the Gel object.
     STA $00
     JSR ShootLimited
 
-    ; Shots start in state $10. But Child Gel needs to start in state 0.
+    ; Shots start in state $10. But a child Gel needs to start in state 0.
     LDA #$00
     STA a:ObjState, Y
 
@@ -100,6 +160,13 @@ CreateChildGel:
     STA ObjGridOffset, Y
     RTS
 
+; ----------------------------------------------------------------------------
+; Tests a wandering Zol against Link and his weapons and starts the split when it was hit.
+; IN:   X = object slot.
+; NOTE: Runs only in state 0. After a hit that neither killed the Zol nor left its invincibility
+;       timer at 0, the state becomes 1 (slide, then split) or 2 (split now). The alignment test
+;       uses Link's facing direction (ObjDir of slot 0), not the Zol's.
+; ----------------------------------------------------------------------------
 Zol_CheckCollisions:
     ; If not in state 0, then return.
     LDA ObjState, X
@@ -107,8 +174,8 @@ Zol_CheckCollisions:
 
     ; Check collisions.
     ;
-    ; If killed, or got hit but didn't get hurt (invincibility timer = 0),
-    ; then return.
+    ; If the Zol is dying (metastate <> 0), or was not shoved by a hit
+    ; (invincibility timer = 0: no hit, or a boomerang hit), then return.
     JSR Gel_CheckCollisions
     LDA ObjMetastate, X
     BNE @Exit
@@ -118,8 +185,7 @@ Zol_CheckCollisions:
     ; If vertically aligned with the square grid, then
     ; use a horizontal direction mask (3).
     ;
-    ; Keep in mind that most objects are aligned vertically when
-    ; the low nibble of their Y is $D.
+    ; Objects are aligned vertically when the low nibble of their Y is $D.
     LDY #$00
     LDA ObjY, X
     AND #$0F
@@ -139,21 +205,19 @@ Zol_CheckCollisions:
 :
     TYA
 
-    ; Combine the two masks. At most one will be 0.
+    ; Combine the two masks: the directions in which the Zol can slide along the grid.
     ORA $00
 
-    ; The point is to see if the zol is facing in a way that's aligned
-    ; with the grid.
+    ; Test the mask against Link's facing direction (slot 0; this operand has no X index).
     ;
-    ; If so, then go to state 1 to do a "big shove".
-    ; Else go to state 2, to immediately split in two.
+    ; If Link faces a direction in the mask, then go to state 1 to slide.
+    ; Else go to state 2, to split in two at once.
     ;
-    ; Examples:
-    ; It would be aligned, if moving left along a tile as usual.
-    ; It would *not* be aligned, if while moving left, it was hit downward.
-    ; - The collision check routines would have made the zol
-    ;   face in the direction of the weapon.
-    ; - See CheckMonsterWeaponCollision.
+    ; Example: a Zol walking left or right between grid columns has mask 3. Struck by Link
+    ; facing left or right it slides; struck by Link facing up or down it splits where it is.
+    ;
+    ; The weapon hit has already set the Zol's own direction to the weapon's direction
+    ; (HandleMonsterWeaponCollision); the slide in state 1 uses that.
     AND ObjDir
     BNE :+
     INC ObjState, X
@@ -163,16 +227,25 @@ Zol_CheckCollisions:
 @Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Initializes a Gel placed by the room (type $15): state 2 (wander), then the walker init.
+; IN:   X = object slot.
+; NOTE: Child Gels (type $14) use InitWalker alone and so begin in state 0.
+; ----------------------------------------------------------------------------
 InitGel:
-    LDA #$02                    ; Gels that aren't split from a Zol begin in state 2.
+    LDA #$02
     STA ObjState, X
     JMP InitWalker
 
+; ----------------------------------------------------------------------------
+; Updates a Gel (types $14, $15): moves, tests collisions in every state, and draws it.
+; IN:   X = object slot.
+; ----------------------------------------------------------------------------
 UpdateGel:
     JSR Gel_Move
     JSR Gel_CheckCollisions
 
-    ; Gels are narrow. So, temporarily shift the X coordinate
+    ; Gels are narrow. So, for drawing, temporarily shift the X coordinate
     ; 4 pixels to the right.
     LDA ObjX, X
     PHA                         ; Save the original X coordinate.
@@ -188,7 +261,7 @@ UpdateGel:
     BNE :+
     INY
 :
-    ; Set sprite attributes 3: normal sprite, palette row "level".
+    ; Set sprite attributes 3: normal sprite, sprite palette 3.
     LDA #$03
     JSR Anim_SetSpriteDescriptorAttributes
     TYA                         ; Pass the frame image in A register.
@@ -197,6 +270,14 @@ UpdateGel:
     STA ObjX, X
     RTS
 
+; ----------------------------------------------------------------------------
+; Moves a Gel by state: 0 set up the dash, 1 dash away from the split, 2 wander with pauses.
+; IN:   X = object slot.
+; NOTE: State 0 lasts one frame and sets ObjTimer to 5. State 1 moves at q-speed $FF
+;       (Gel_MoveSplitting) on the 4 frames the timer reads 4 to 1, unless blocked; when it reads 0
+;       or the Gel is blocked, the Gel is snapped to the nearest grid square and goes to state 2.
+;       State 2 falls into UpdateNormalZolOrGel with q-speed $40 (1 px/frame).
+; ----------------------------------------------------------------------------
 Gel_Move:
     ; Go handle state 0 or 2 as appropriate.
     LDY ObjState, X
@@ -215,7 +296,7 @@ Gel_Move:
     BCC @Exit
 
 @Move:
-    ; Blocked or timer expired.
+    ; Blocked or timer expired: snap to the grid.
     ;
     ; Set X coordinate to ((X + 8) AND $F0).
     LDA ObjX, X
@@ -225,6 +306,7 @@ Gel_Move:
     STA ObjX, X
 
     ; Set Y coordinate to (((Y + 8) AND $F0) OR $D).
+    ; The carry of the X addition above is not cleared first.
     LDA ObjY, X
     ADC #$08
     AND #$F0
@@ -242,8 +324,8 @@ Gel_Move:
 @State0:
     ; State 0.
     ;
-    ; Immediately go to state 1 with QSpeed $20 (half a pixel a frame),
-    ; and 5 frame timer.
+    ; Go to state 1 with a 5 frame timer. The q-speed $20 stored here is
+    ; replaced with $FF by Gel_MoveSplitting before any movement.
     LDA #$20
     STA ObjQSpeedFrac, X
     LDA #$05
@@ -254,16 +336,21 @@ Gel_Move:
 @State2:
     ; State 2.
     ;
-    ; Set QSpeed $40 (1 pixel a frame).
+    ; Set q-speed $40 (1 pixel a frame), and fall through.
     LDA #$40
 
-; Params:
-; A: qspeed
-;
+; ----------------------------------------------------------------------------
+; Walks a Zol or Gel one grid square at a time as a wanderer, with a random pause at each square.
+; IN:   A = q-speed ($18 Zol, $40 Gel); X = object slot.
+; NOTE: While ObjTimer >= 5 the monster stands still. Below 5 it moves as a wanderer with turn rate
+;       $20. Each time it is on a grid point with the timer at 0, a new pause is loaded from
+;       ZolGelDelays by Random,X AND 3; the last 4 frames of the pause are already movement. Does
+;       not handle knockback; the clock and stun stop the movement inside Walker_Move.
+; ----------------------------------------------------------------------------
 UpdateNormalZolOrGel:
     STA ObjQSpeedFrac, X
 
-    ; If object timer >= 5, then return.
+    ; If object timer >= 5, then return: still pausing.
     LDA ObjTimer, X
     CMP #$05
     BCS @Exit
@@ -281,12 +368,12 @@ UpdateNormalZolOrGel:
     AND #$03
     TAY
 
-    ; If the monster is Zol, then go use this index as is.
+    ; If the monster is Zol ($13), then go use this index as is.
     LDA ObjType, X
     CMP #$13
     BEQ @SetDelay
 
-    ; Else it's a gel. Add 4 to the index to look in the set of times
+    ; Else it's a Gel. Add 4 to the index to look in the set of times
     ; for Gel.
     INY
     INY
@@ -294,35 +381,39 @@ UpdateNormalZolOrGel:
     INY
 
 @SetDelay:
-    ; Set a delay at a tile edge for the next time to move.
+    ; Set the pause before the next square.
     LDA ZolGelDelays, Y
     STA ObjTimer, X
 
 @Exit:
     RTS
 
+; TABLE: pause at a grid point; index = (Random,X AND 3), +4 for a Gel; value = frames in ObjTimer
+; (movement resumes when 4 are left).
 ZolGelDelays:
-    .BYTE $18, $28, $38, $48, $08, $18, $28, $38
+    .BYTE $18, $28, $38, $48, $08, $18, $28, $38    ; Zol: $18-$48; Gel: $08-$38
 
-; Returns:
-; C: 1 if blocked
-;
-; Set the speed to maximum.
-;
+; ----------------------------------------------------------------------------
+; Moves a struck Zol or a new child Gel straight ahead at q-speed $FF (about 4 px/frame).
+; IN:   X = object slot; ObjDir,X = direction.
+; OUT:  C = 1 if blocked (nothing moved), 0 if moved.
+; NOTE: The tile ahead is tested only when the grid offset is 0 (unwalkable = at or above
+;       RoomFirstUnwalkableTile); the room boundary is tested every frame.
+; ----------------------------------------------------------------------------
 Gel_MoveSplitting:
     LDA #$FF
     STA ObjQSpeedFrac, X
 
-    ; Set moving direction to facing direction.
+    ; Set moving direction [0F] to facing direction.
     LDA ObjDir, X
     STA $0F
 
-    ; If at a tile boundary, then check for a tile collision.
+    ; If at a grid point, then check for a tile collision.
     LDA ObjGridOffset, X
     BNE @CheckRoomBoundary
     JSR GetCollidingTileMoving
 
-    ; If blocked by a tile, then return C=1.
+    ; If blocked by a tile, then return C=1 (set by the compare).
     CMP RoomFirstUnwalkableTile
     BCS @Exit
 
@@ -335,8 +426,8 @@ Gel_MoveSplitting:
     ; Move.
     JSR MoveObject
 
-    ; Mask the grid offset with $F (to a square length),
-    ; and return C=0.
+    ; If the grid offset has reached a multiple of $10 (a square length), reset it to 0.
+    ; Return C=0.
     LDA ObjGridOffset, X
     AND #$0F
     CLC
@@ -346,9 +437,13 @@ Gel_MoveSplitting:
 @Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Runs the common monster collision test (Link's weapons, then Link) for a Zol or Gel.
+; IN:   X = object slot.
+; NOTE: The [02]/[03] values stored here are overwritten at once: CheckMonsterCollisions begins
+;       with GetObjectMiddle, which sets both.
+; ----------------------------------------------------------------------------
 Gel_CheckCollisions:
-    ; CheckMonsterCollisions calls GetObjectMiddle which
-    ; overwrites [02] and [03]. So, these assignments might be redundant.
     LDA ObjX, X
     STA $02
     LDA ObjY, X

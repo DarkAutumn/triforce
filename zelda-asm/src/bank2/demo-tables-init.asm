@@ -2,31 +2,52 @@
 ; FILE:     bank2/demo-tables-init.asm   BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 361-538
 ; SUBJECTS: (none)
-; TOPIC:    Demo tables; init subphases, title/story palettes
-; SEE ALSO:
+; TOPIC:    Data for the title screen and the story scroll (title sprites, per-line flags, item parade
+;           lists, story text, palettes) and the mode 0 init subphases that set up each demo phase.
+; SEE ALSO: bank2/mode0-demo.asm (InitDemo_RunTasks dispatches the init subphases here);
+;           bank2/demo-story-scroll.asm (reads DemoLineAttrs, the item lists and the text);
+;           bank2/title-animation.asm (copies InitialTitleSprites every frame);
+;           bank6/transfer-buf-dispatch.asm (TransferBufAddrs: selectors $02 and $10 used here).
 ; KEY FACTS:
+;   - DemoLineAttrs has one byte per 8-pixel line of the story scroll (175 lines): bit $80 = the line
+;     has text (next entry of DemoLineTextAddrs), bit $40 = also send a row of 8 zero attribute bytes,
+;     bit $20 = spawn the next row of the item parade.
+;   - The item parade has 22 rows: DemoLeftItemIds at X = $44 (DemoItemColumnX1) and DemoRightItemIds
+;     at X = $AC (DemoItemColumnX2). Ids are item ids; $30-$33 are the four sprite rows of the closing
+;     picture and have no right-hand item.
+;   - A text field in DemoTextFields is: column offset in the line, tile codes, $FF.
+;     DemoLineTextAddrs has 29 of them.
+;   - Title init (phase 0) takes 3 frames: clear screen; palette record and variable reset (object
+;     slots $01-$0A set to state $FF = free); title song ($80) and the title name tables (selector
+;     $10). InitDemoSubphaseTransferTitlePalette, InitDemoSubphasePlayTitleSong.
+;   - Story init (phase 1) takes 3 frames: clear screen; story palette and variable reset; story name
+;     tables (selector $02) with CurVScroll = $10 and the base name table switched.
+;     InitDemoSubphaseTransferStoryPalette, InitDemoSubphaseTransferStoryTiles.
+;   - The last init subphase of a phase sets IsUpdatingMode and DemoSubphase = 0. EndInitDemo.
 ; CONTENTS: (generated; L = line in this file)
-;   L0030 InitialTitleSprites                   data
-;   L0046 DemoLineAttrs                         data
-;   L0079 DemoLeftItemIds                       data
-;   L0084 DemoRightItemIds                      data
-;   L0089 DemoItemColumnX1                      data
-;   L0092 DemoItemColumnX2                      data
-;   L0095 DemoStoryFinalSpriteTiles             data
-;   L0100 DemoStoryFinalSpriteAttrs             data
-;   L0105 DemoTextFields                        data
-;   L0108 DemoLineTextAddrs                     data
-;   L0111 InitDemoSubphaseClearArtifacts        code
-;   L0114 IncSubphase                           code
-;   L0118 TitlePaletteTransferRecord            data
-;   L0125 InitDemoSubphaseTransferTitlePalette  code
-;   L0155 InitDemoSubphasePlayTitleSong         code
-;   L0164 StoryPaletteTransferRecord            data
-;   L0171 InitDemoSubphaseTransferStoryPalette  code
-;   L0193 InitDemoSubphaseTransferStoryTiles    code
-;   L0202 EndInitDemo                           code
+;   L0051 InitialTitleSprites                   data  TABLE: the 28 title screen sprites as OAM records (Y, tile, attributes, X), copied to Sprites every
+;   L0069 DemoLineAttrs                         data  TABLE: flags of each 8-pixel line of the story scroll; index = DemoLineIndex (0-174);
+;   L0104 DemoLeftItemIds                       data  TABLE: item shown in the left column of each item parade row; index = DemoItemRow (0-21);
+;   L0111 DemoRightItemIds                      data  TABLE: item shown in the right column of each item parade row; index = DemoItemRow (0-17);
+;   L0117 DemoItemColumnX1                      data  DATA: X coordinate ($44) of the left item parade column.
+;   L0121 DemoItemColumnX2                      data  DATA: X coordinate ($AC) of the right item parade column.
+;   L0126 DemoStoryFinalSpriteTiles             data  TABLE: sprite tiles of the closing picture; index = (item id - $30) * 6 + sprite 0-5 from the left;
+;   L0132 DemoStoryFinalSpriteAttrs             data  TABLE: sprite attributes of the closing picture; same index as DemoStoryFinalSpriteTiles.
+;   L0138 DemoTextFields                        data  DATA: the story text, a list of fields: column offset in the line, tile codes, $FF.
+;   L0142 DemoLineTextAddrs                     data  TABLE: address of each story text field in DemoTextFields; index = DemoLineTextIndex (0-28).
+;   L0148 InitDemoSubphaseClearArtifacts        code  Init subphase 0 of both demo phases: hides sprites, clears the screen, then advances the subphase.
+;   L0152 IncSubphase                           code  Increments DemoSubphase and returns; shared tail of the demo init and animation subphases.
+;   L0157 TitlePaletteTransferRecord            data  DATA: PPU transfer record with the 32 title screen palette bytes ($3F00, length $20, $FF end).
+;   L0169 InitDemoSubphaseTransferTitlePalette  code  Title init subphase 1: queues the title palette, zeroes the demo variables, frees slots $01-$0A.
+;   L0202 InitDemoSubphasePlayTitleSong         code  Title init subphase 2: requests the title song ($80) and the title name tables (selector $10).
+;   L0212 StoryPaletteTransferRecord            data  DATA: PPU transfer record with the 32 story screen palette bytes ($3F00, length $20, $FF end).
+;   L0223 InitDemoSubphaseTransferStoryPalette  code  Story init subphase 1: queues the story palette and zeroes the demo variables.
+;   L0248 InitDemoSubphaseTransferStoryTiles    code  Story init subphase 2: switches the base name table, sets CurVScroll = $10, cues the story tiles.
+;   L0258 EndInitDemo                           code  Shared end of both demo inits: A = TileBufSelector to cue; resets DemoSubphase, sets IsUpdatingMode.
 ; ============================================================================
 
+; TABLE: the 28 title screen sprites as OAM records (Y, tile, attributes, X), copied to Sprites every
+; frame of the title wait; $70 bytes.
 InitialTitleSprites:
     .BYTE $77, $CA, $C2, $D0, $77, $CC, $C2, $C8
     .BYTE $77, $CA, $82, $28, $77, $CC, $82, $30
@@ -43,6 +64,8 @@ InitialTitleSprites:
     .BYTE $67, $A0, $03, $70, $67, $A0, $03, $78
     .BYTE $67, $A0, $03, $80, $67, $A0, $03, $88
 
+; TABLE: flags of each 8-pixel line of the story scroll; index = DemoLineIndex (0-174);
+; bit $80 = text line, $40 = clear a row of name table attributes, $20 = spawn an item parade row.
 DemoLineAttrs:
     .BYTE $80, $00, $00, $00, $00, $00, $00, $00
     .BYTE $40, $80, $80, $00, $60, $00, $00, $00
@@ -67,7 +90,7 @@ DemoLineAttrs:
     .BYTE $00, $20, $00, $20, $00, $20, $00, $00
     .BYTE $00, $00, $00, $00, $00, $00, $00
 
-; Unknown block
+; Padding: 51 zero bytes after DemoLineAttrs; the scroll ends before DemoLineIndex reaches them.
     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
@@ -76,45 +99,61 @@ DemoLineAttrs:
     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
     .BYTE $00, $00, $00
 
+; TABLE: item shown in the left column of each item parade row; index = DemoItemRow (0-21);
+; value = item id, or $30-$33 = a row of the closing picture (centred, no right-hand item).
 DemoLeftItemIds:
     .BYTE $22, $23, $18, $1F, $15, $01, $03, $1D
     .BYTE $00, $08, $06, $12, $14, $0C, $10, $19
     .BYTE $17, $1B, $30, $31, $32, $33
 
+; TABLE: item shown in the right column of each item parade row; index = DemoItemRow (0-17);
+; value = item id. In row 17 both columns hold $1B (Triforce piece) and are drawn at X = $78.
 DemoRightItemIds:
     .BYTE $1A, $21, $0F, $20, $04, $02, $1C, $1E
     .BYTE $0A, $09, $07, $13, $05, $0D, $11, $0B
     .BYTE $16, $1B
 
+; DATA: X coordinate ($44) of the left item parade column.
 DemoItemColumnX1:
     .BYTE $44
 
+; DATA: X coordinate ($AC) of the right item parade column.
 DemoItemColumnX2:
     .BYTE $AC
 
+; TABLE: sprite tiles of the closing picture; index = (item id - $30) * 6 + sprite 0-5 from the left;
+; value = tile, 0 = no sprite at that position.
 DemoStoryFinalSpriteTiles:
     .BYTE $E0, $E2, $EC, $EE, $F8, $FA, $E4, $E6
     .BYTE $F0, $F2, $FC, $FE, $E8, $EA, $F4, $F6
     .BYTE $DC, $DE, $00, $00, $78, $78, $00, $00
 
+; TABLE: sprite attributes of the closing picture; same index as DemoStoryFinalSpriteTiles.
 DemoStoryFinalSpriteAttrs:
     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
     .BYTE $00, $00, $00, $00, $00, $40, $00, $00
 
+; DATA: the story text, a list of fields: column offset in the line, tile codes, $FF.
 DemoTextFields:
     .INCBIN "dat/DemoTextFields.dat"
 
+; TABLE: address of each story text field in DemoTextFields; index = DemoLineTextIndex (0-28).
 DemoLineTextAddrs:
     .INCLUDE "dat/DemoLineTextAddrs.inc"
 
+; ----------------------------------------------------------------------------
+; Init subphase 0 of both demo phases: hides sprites, clears the screen, then advances the subphase.
+; ----------------------------------------------------------------------------
 InitDemoSubphaseClearArtifacts:
     JSR TurnOffVideoAndClearArtifacts
 
+; Increments DemoSubphase and returns; shared tail of the demo init and animation subphases.
 IncSubphase:
     INC DemoSubphase
     RTS
 
+; DATA: PPU transfer record with the 32 title screen palette bytes ($3F00, length $20, $FF end).
 TitlePaletteTransferRecord:
     .BYTE $3F, $00, $20, $36, $0F, $00, $10, $36
     .BYTE $17, $27, $0F, $36, $08, $1A, $28, $36
@@ -122,6 +161,11 @@ TitlePaletteTransferRecord:
     .BYTE $17, $27, $0F, $36, $08, $1A, $28, $36
     .BYTE $30, $3B, $22, $FF
 
+; ----------------------------------------------------------------------------
+; Title init subphase 1: queues the title palette, zeroes the demo variables, frees slots $01-$0A.
+; OUT:  DynTileBuf holds the palette record; $0412-$041C, $041F-$0429, $0437-$0441, DemoLineTextIndex
+;       and DemoItemRow = 0; ObjState of slots $01-$0A = $FF.
+; ----------------------------------------------------------------------------
 InitDemoSubphaseTransferTitlePalette:
     LDX #$23                    ; Write a tile buf record for the title palette.
     STX $0300
@@ -152,6 +196,9 @@ InitDemoSubphaseTransferTitlePalette:
     BNE @DisableObjects
     JMP IncSubphase             ; Go advance the DemoSubphase and return.
 
+; ----------------------------------------------------------------------------
+; Title init subphase 2: requests the title song ($80) and the title name tables (selector $10).
+; ----------------------------------------------------------------------------
 InitDemoSubphasePlayTitleSong:
     LDA #$80                    ; Request the title song.
     STA SongRequest
@@ -161,6 +208,7 @@ InitDemoSubphasePlayTitleSong:
     LDA #$10
     JMP EndInitDemo
 
+; DATA: PPU transfer record with the 32 story screen palette bytes ($3F00, length $20, $FF end).
 StoryPaletteTransferRecord:
     .BYTE $3F, $00, $20, $0F, $30, $30, $30, $0F
     .BYTE $21, $30, $30, $0F, $16, $30, $30, $0F
@@ -168,6 +216,10 @@ StoryPaletteTransferRecord:
     .BYTE $02, $22, $30, $0F, $16, $27, $30, $0F
     .BYTE $0B, $1B, $2B, $FF
 
+; ----------------------------------------------------------------------------
+; Story init subphase 1: queues the story palette and zeroes the demo variables.
+; OUT:  DynTileBuf holds the palette record; $0412-$041C, $041F-$0429, $0437-$0441, $0444-$044E = 0.
+; ----------------------------------------------------------------------------
 InitDemoSubphaseTransferStoryPalette:
     LDX #$23                    ; Copy the transfer record for the story palette.
     STX $0300
@@ -190,6 +242,9 @@ InitDemoSubphaseTransferStoryPalette:
     BPL @ClearVars
     JMP IncSubphase             ; Go to the next subphase and return.
 
+; ----------------------------------------------------------------------------
+; Story init subphase 2: switches the base name table, sets CurVScroll = $10, cues the story tiles.
+; ----------------------------------------------------------------------------
 InitDemoSubphaseTransferStoryTiles:
     INC SwitchNameTablesReq
     LDA #$10
@@ -199,6 +254,7 @@ InitDemoSubphaseTransferStoryTiles:
     ; Story nametables and attributes.
     LDA #$02
 
+; Shared end of both demo inits: A = TileBufSelector to cue; resets DemoSubphase, sets IsUpdatingMode.
 EndInitDemo:
     STA TileBufSelector
     LDA #$00

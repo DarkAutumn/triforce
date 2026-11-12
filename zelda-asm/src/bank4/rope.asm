@@ -2,47 +2,73 @@
 ; FILE:     bank4/rope.asm               BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 4537-4668
 ; SUBJECTS: (none)
-; TOPIC:    Rope init (HP by quest) and rush at Link
-; SEE ALSO:
+; TOPIC:    Rope (type $28): init with HP by quest, and the update that walks slowly, turns at random and
+;           rushes when Link is in line with it.
+; SEE ALSO: bank7/walker-move.asm (Walker_Move); bank7/walker-collision-screen-edge.asm
+;           (_FaceUnblockedDir, and Walker_CheckTileCollision which turns a blocked Rope and so ends a
+;           rush); bank4/walker-wanderer-common.asm (InitWalker); bank1/monster-collisions.asm.
 ; KEY FACTS:
+;   - HP is $10 in Q1 and $40 in Q2 (HP nibbles 1 and 4; ObjHP is the nibble * $10). InitRope.
+;   - Q-speed $20 (0.5 px/frame) when walking, $60 (1.5 px/frame) when rushing. UpdateRope@Rush.
+;   - A rush starts only at q-speed $20 and grid offset 0, when Link's X is within 7 pixels of the
+;     Rope's X (rush up or down) or else his Y within 7 of its Y (rush left or right). It uses Link's
+;     real position (ObjX, ObjY), not the chase target. UpdateRope, UpdateRope@CheckVertical.
+;   - A rush ends when the facing direction changes during the move (a blocked Rope is turned by
+;     Walker_CheckTileCollision): q-speed goes back to $20. UpdateRope@CheckSpeed.
+;   - While walking, each time ObjTimer runs out it is reloaded with Random AND $3F (0-63 frames) and
+;     the Rope turns to an unblocked direction if it is on a grid point. UpdateRope.
+;   - The clock or a stun stops movement and turning, but the rush test still runs. UpdateRope.
+;   - In Q2 a Rope's sprite palette changes every frame (FrameCounter AND 3). UpdateRope@Animate.
 ; CONTENTS: (generated; L = line in this file)
-;   L0013 InitRope    code
-;   L0025 UpdateRope  code
+;   L0032 InitRope    code  Initializes a Rope (type $28): HP $10 in Q1 or $40 in Q2, then the common walker init.
+;   L0051 UpdateRope  code  Updates a Rope: walks at 0.5 px/frame, turns at random, rushes at 1.5 px/frame when Link lines up.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Initializes a Rope (type $28): HP $10 in Q1 or $40 in Q2, then the common walker init.
+; IN:   X = object slot
+; OUT:  ObjHP,X = $10 (Q1) or $40 (Q2)
+; ----------------------------------------------------------------------------
 InitRope:
-    ; Rope has $10 HP in quest 1, $40 HP in quest 2.
     LDA #$10
     STA ObjHP, X
     LDY CurSaveSlot
-    LDA QuestNumbers, Y
+    LDA QuestNumbers, Y         ; 0 = Q1, nonzero = Q2
     BEQ :+
     LDA #$40
     STA ObjHP, X
 :
     JMP InitWalker
 
+; ----------------------------------------------------------------------------
+; Updates a Rope: walks at 0.5 px/frame, turns at random, rushes at 1.5 px/frame when Link lines up.
+; IN:   X = object slot
+; OUT:  ObjDir,X and ObjQSpeedFrac,X ($20 walk, $60 rush) updated; drawn; collisions checked.
+; NOTE: The rush test needs q-speed $20 and grid offset 0, and |Link X - Rope X| < 8 (vertical rush)
+;       or else |Link Y - Rope Y| < 8 (horizontal rush). The rush lasts until the Rope's facing
+;       direction changes during a move.
+; ----------------------------------------------------------------------------
 UpdateRope:
-    ; Set the input direction to the facing direction.
+    ; Move in the facing direction.
     LDA ObjDir, X
     STA ObjInputDir, X
-    PHA                         ; Save the original facing direction
+    PHA                         ; Save the facing direction to compare after the move.
 
-    ; If we have the clock, or the monster is stunned, then don't move.
+    ; With the clock, or while stunned, don't move or turn.
     LDA InvClock
     ORA ObjStunTimer, X
     BNE @CheckSpeed
     JSR Walker_Move
 
-    ; Truncate the grid offset at $10.
+    ; When the grid offset reaches a multiple of $10 ($10 or -$10: a whole square), reset it to 0.
     LDA ObjGridOffset, X
     AND #$0F
     BNE :+
     STA ObjGridOffset, X
 :
-    ; If not rushing (qspeed <> $60) and timer = 0, then
-    ; set timer to a random value up to $3F, and turn to face
-    ; an unblocked direction.
+    ; If not rushing (q-speed <> $60) and the timer has run out, then set the timer to a
+    ; random value from 0 to $3F frames, and turn to face an unblocked direction
+    ; (_FaceUnblockedDir does nothing unless the grid offset is 0).
     LDA ObjQSpeedFrac, X
     CMP #$60
     BEQ @CheckSpeed
@@ -54,23 +80,24 @@ UpdateRope:
     JSR _FaceUnblockedDir
 
 @CheckSpeed:
-    PLA                         ; Pop the original facing direction
+    PLA                         ; The facing direction from before the move.
 
-    ; If the facing direction has changed, then set qspeed to $20 (slow).
+    ; If the facing direction has changed, then set q-speed to $20 (0.5 px/frame).
+    ; This is what ends a rush.
     CMP ObjDir, X
     BEQ :+
     LDA #$20
     STA ObjQSpeedFrac, X
 :
-    ; If qspeed <> $20 or grid offset <> 0, then go draw.
+    ; Only test for a rush at q-speed $20 and grid offset 0. Otherwise go draw.
     LDA ObjQSpeedFrac, X
     CMP #$20
     BNE @Animate
     LDA ObjGridOffset, X
     BNE @Animate
 
-    ; If the absolute horizontal distance between Link and the monster >= 8,
-    ; then go see if the vertical distance is smaller.
+    ; If the absolute horizontal distance between Link and the Rope >= 8,
+    ; then go test the vertical distance.
     LDA ObjX
     SEC
     SBC ObjX, X
@@ -78,25 +105,25 @@ UpdateRope:
     CMP #$08
     BCS @CheckVertical
 
-    ; Face up.
+    ; Link is in the Rope's column. Face up.
     LDA #$08
     STA ObjDir, X
 
-    ; But, if Link is down from the monster, then face down.
+    ; But if Link's Y >= the Rope's Y, then face down (8 shifted right is 4).
     LDA ObjY
     CMP ObjY, X
     BCC @Rush
 
 @FlipDir:
-    LSR ObjDir, X
+    LSR ObjDir, X               ; Up (8) -> down (4), or left (2) -> right (1).
 
 @Rush:
-    ; Make the rope rush (qspeed $60).
+    ; Rush: q-speed $60 (1.5 px/frame).
     LDA #$60
     STA ObjQSpeedFrac, X
 
 @Animate:
-    LDA #$0A                    ; Animation counter $A
+    LDA #$0A                    ; $0A frames per animation frame
     JSR Anim_AdvanceAnimCounterAndSetObjPosForSpriteDescriptor
 
     ; If facing left, then flip horizontally.
@@ -104,11 +131,11 @@ UpdateRope:
     AND #$02
     LSR
     STA $0F                     ; [0F] horizontal flipping
-    LDA #$02                    ; Red sprite palette
+    LDA #$02                    ; Sprite attributes 2: palette row 6 (red)
     JSR Anim_SetSpriteDescriptorAttributes
 
-    ; In the second quest, ropes always flash.
-    ; So, set sprite attributes to all the cycled palette rows.
+    ; In Q2, Ropes flash: the sprite attributes are the low 2 bits of the frame counter,
+    ; so the palette row changes every frame.
     LDY CurSaveSlot
     LDA QuestNumbers, Y
     BEQ @Draw
@@ -117,14 +144,14 @@ UpdateRope:
     JSR Anim_SetSpriteDescriptorAttributes
 
 @Draw:
-    ; The frame image is based on the movement frame.
+    ; The frame image is the animation frame (0 or 1).
     LDA ObjAnimFrame, X
     JSR DrawObjectNotMirrored
     JMP CheckMonsterCollisions
 
 @CheckVertical:
-    ; If the absolute vertical distance between Link and the monster >= 8,
-    ; then go draw.
+    ; If the absolute vertical distance between Link and the Rope >= 8,
+    ; then Link is not in line. Go draw.
     LDA ObjY
     SEC
     SBC ObjY, X
@@ -132,12 +159,12 @@ UpdateRope:
     CMP #$08
     BCS @Animate
 
-    ; Face left.
+    ; Link is in the Rope's row. Face left.
     LDA #$02
     STA ObjDir, X
 
-    ; But, if Link is right of the monster, then face right.
-    ; Either way, go increase speed and draw.
+    ; But if Link's X >= the Rope's X, then face right.
+    ; Either way, go rush and draw.
     LDA ObjX
     CMP ObjX, X
     BCS @FlipDir

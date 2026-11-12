@@ -2,54 +2,114 @@
 ; FILE:     bank4/moblin-lynel-shooting.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 1950-2165
 ; SUBJECTS: (none)
-; TOPIC:    Moblin, Lynel; shoot timer logic; monster arrow
-; SEE ALSO:
+; TOPIC:    Moblin and Lynel updates; the shoot timer shared by walking shooters (Moblin, Lynel,
+;           Octorok): when they stop, when the shot leaves, what cancels it; the monster arrow's update.
+; SEE ALSO: bank4/walker-wanderer-common.asm (Wanderer_TargetPlayer: movement, turning, "wants to
+;           shoot"); bank4/goriya.asm (UpdateGoriya, used by the Lynel); bank4/octorok.asm (third
+;           caller of _TryShooting); bank4/shoot-helpers-candle.asm (_ShootIfWanted, ShootLimited: the
+;           4-shot limit, Shoot); bank4/monster-shots-fireballs.asm (UpdateMonsterShot for the Lynel's
+;           sword shot; CheckShotLinkCollision, BounceShot, DestroyCountedMonsterShot);
+;           bank7/boomerang-arrow-food.asm (UpdateArrowOrBoomerang, DrawArrow);
+;           bank1/link-collision-harm.asm (which shots the shields block; damage to Link);
+;           bank7/object-update-table.asm (ObjectTypeToHpPairs, ObjectTypeToAttributes).
 ; KEY FACTS:
+;   - Moblin (types $03, $04) shoots monster arrows (type $5B); Lynel (types $01, $02) shoots sword
+;     shots (type $57). Both walk at q-speed $20 (0.5 px/frame). UpdateMoblin, UpdateLynel
+;   - A shot takes $30 (48) frames during which the monster stands still (q-speed 0); the shot is
+;     created when the timer reaches $10, 32 frames after it stopped. _TryShooting
+;   - The sequence starts only when ObjShootTimer is 0 and Shooter_ObjWantsToShoot is set (the monster
+;     has just turned toward the chase target, or for the Lynel the target is within $50 pixels on
+;     the longer axis). _TryShooting
+;   - Types $01, $03, $09, $0A test this every frame; types $02, $04, $07, $08 only on frames where
+;     Random,X >= $F8 (8 of 256 values), so they shoot much less often. On the other frames the
+;     q-speed is not written either: a fast Octorok of type $08 keeps its init speed $30 until the
+;     gate first passes, then walks at $40. _TryShooting
+;   - Hitting the monster (ObjInvincibilityTimer nonzero) resets the shoot timer to 0: a pending shot
+;     is cancelled and the monster walks again. _TryShooting@TryShootingNow
+;   - With the clock, or while the monster is stunned, the timer runs but no shot is created.
+;     _TryShooting@SetShootTimer
+;   - The shot is also lost when no monster slot is empty or 4 counted shots are already in flight
+;     (MonsterShotCount; ShootLimited in bank4/shoot-helpers-candle.asm). _ShootIfWanted2
+;   - Monster arrow: q-speed $80 (2 px/frame), ignores tiles, sparks for 3 frames at the room bounds,
+;     bounces for 16 frames when Link's shield blocks it, is destroyed when it harms Link.
+;     UpdateMonsterArrow
+;   - Moblin and Lynel do not draw or test collisions themselves (attribute byte $00 in
+;     ObjectTypeToAttributes): the object loop of the play update does both after the update.
+;     UpdateMoblin, UpdateLynel
 ; CONTENTS: (generated; L = line in this file)
-;   L0017 UpdateMoblin        code
-;   L0025 UpdateLynel         code
-;   L0036 _TryShooting        code  Params:
-;   L0151 _ShootIfWanted2     code  Params:
-;   L0162 L1083E_Exit         code
-;   L0165 UpdateMonsterArrow  code
+;   L0054 UpdateMoblin        code  Updates a Moblin (types $03, $04): wanders toward Link with turn rate $A0 and shoots arrows.
+;   L0068 UpdateLynel         code  Updates a Lynel (types $01, $02): moves and aims with the Goriya routine and shoots sword shots.
+;   L0095 _TryShooting        code  Runs a walking shooter's shoot timer: stop for $30 frames, fire at $10, and set its q-speed.
+;   L0214 _ShootIfWanted2     code  Shoots through _ShootIfWanted and, on success, sets the shooter's object timer to $80.
+;   L0222 L1083E_Exit         code  Shared RTS of _ShootIfWanted2 and UpdateMonsterArrow.
+;   L0234 UpdateMonsterArrow  code  Updates a monster's arrow (type $5B): flies at 2 pixels a frame, sparks out, or bounces off the shield.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Updates a Moblin (types $03, $04): wanders toward Link with turn rate $A0 and shoots arrows.
+; IN:   X = object slot.
+; NOTE: Walks at q-speed $20 (0.5 pixels a frame); shot = monster arrow (type $5B) through
+;       _TryShooting. Drawing and collision tests are done by the object loop, not here.
+; ----------------------------------------------------------------------------
 UpdateMoblin:
-    ; Set turn rate to $A0.
-    LDA #$A0
+    LDA #$A0                    ; Turn rate $A0
     STA Wanderer_ObjTurnRate, X
-    JSR Wanderer_TargetPlayer
-    LDY #$5B                    ; Arrow object type
+    JSR Wanderer_TargetPlayer   ; Move; turn toward the chase target; set or clear "wants to shoot".
+    LDY #$5B                    ; Monster arrow object type
     JMP :+
 
+; ----------------------------------------------------------------------------
+; Updates a Lynel (types $01, $02): moves and aims with the Goriya routine and shoots sword shots.
+; IN:   X = object slot.
+; NOTE: Walks at q-speed $20 (0.5 pixels a frame); shot = sword shot (type $57) through
+;       _TryShooting. UpdateGoriya throws no boomerang for these types; it sets "wants to shoot"
+;       when the chase target is less than $51 pixels away on the longer axis.
+; ----------------------------------------------------------------------------
 UpdateLynel:
     JSR UpdateGoriya
     LDY #$57                    ; Sword shot object type
 :
-    LDA #$20                    ; QSpeed $20 (.5 pixels a frame)
+    LDA #$20                    ; Q-speed $20 (0.5 pixels a frame)
 
-; Params:
-; A: q-speed of the monster
-; Y: shot object type
-;
-; [01] holds the q-speed of the monster
+; ----------------------------------------------------------------------------
+; Runs a walking shooter's shoot timer: stop for $30 frames, fire at $10, and set its q-speed.
+; IN:   A = the monster's walking q-speed; Y = shot object type; X = object slot.
+; OUT:  ObjQSpeedFrac,X = A (walking) or 0 (standing to shoot); ObjShootTimer,X updated; a shot may
+;       be created. Uses [00] (shot type), [01] (q-speed).
+; NOTE: Called by Moblin, Lynel (this file) and Octorok (bank4/octorok.asm, shot type $53).
+; NOTE: Sequence once started: timer $30 -> 0, one step per frame; the monster stands still for
+;       all $30 (48) frames and the shot leaves when the timer reaches $10, 32 frames after the
+;       start. It starts when the timer is 0 and Shooter_ObjWantsToShoot,X is set.
+; NOTE: Types $01, $03, $09, $0A (the Lynel, Moblin and Octoroks with the higher HP) run this logic
+;       every frame. The other types run it with the timer at 0 only on frames where Random,X >=
+;       $F8 (8 of 256 values), so they start a shot far less often; on the other frames this routine
+;       returns without writing the q-speed, and ObjQSpeedFrac,X keeps its last value. For types
+;       $02, $04, $07 that is $20 either way (the room-entry default or the init value). A type
+;       $08 Octorok keeps its init q-speed $30 (0.75 px/frame) until the gate first passes; from
+;       then on it has the $40 (1 px/frame) its update passes in A.
+; NOTE: Being hit cancels a pending shot: while ObjInvincibilityTimer,X is nonzero the timer is
+;       forced to 0. With the clock or while stunned the timer still counts but the shot at $10 is
+;       skipped. If the shot cannot be made at $10 (no empty slot, 4 counted shots in flight, or
+;       "wants to shoot" cleared meanwhile) it is skipped too.
+; ----------------------------------------------------------------------------
 _TryShooting:
     STA $01
 
-    ; If the monster is not a blue walking OW monster, and shoot timer = 0,
+    ; Types $01, $03, $09, $0A always run the timer logic. So does any type whose shoot timer is
+    ; already running.
     LDA ObjType, X
-    CMP #$03                    ; Blue moblin
+    CMP #$03                    ; Moblin type $03
     BEQ @TryShootingNow
-    CMP #$01                    ; Blue lynel
+    CMP #$01                    ; Lynel type $01
     BEQ @TryShootingNow
-    CMP #$09                    ; Blue slow octorock
+    CMP #$09                    ; Octorok type $09 (slow, 2 HP)
     BEQ @TryShootingNow
-    CMP #$0A                    ; Blue fast octorock
+    CMP #$0A                    ; Octorok type $0A (fast, 2 HP)
     BEQ @TryShootingNow
     LDA ObjShootTimer, X
     BNE @TryShootingNow
 
-    ; and a random value < $F8, then return.
+    ; Other types with the timer at 0: return unless Random,X >= $F8.
     LDA Random, X
     CMP #$F8
     BCC @Exit
@@ -70,28 +130,28 @@ _TryShooting:
     ;   if shoot timer = $10 and no clock and not stunned then
     ;     shoot
     ;     if succeeded then
-    ;       shoot timer := 0
+    ;       wants to shoot := 0
     ;       qspeed := 0
     ;   else
     ;     qspeed := 0
     ;
-    ; Push a 0 q-speed, in case the monster is in shooting time.
+    ; Push the walking q-speed; it is replaced by 0 below if the monster has to stand still.
     LDA $01
-    STY $00                     ; Store shot object type in [00] to pass to shooting routine.
+    STY $00                     ; [00] := shot object type, for the shooting routine.
     PHA
     LDY #$00
 
-    ; If not temporarily invincible,
+    ; If temporarily invincible (just hit), go set the shoot timer to 0.
     LDA ObjInvincibilityTimer, X
     BNE @SetShootTimer
 
-    ; then Y := shoot timer - 1
+    ; Else Y := shoot timer - 1.
     LDY ObjShootTimer, X
     DEY
 
-    ; If Y register < 0, then shoot timer is 0.
-    ; So, if "wants to shoot" flag is set, then set shoot timer to $30.
-    ; Else go set a non-zero speed and return.
+    ; If Y >= 0, the timer was running: go store the decremented value.
+    ; Else the timer was 0: if "wants to shoot" is set, start it at $30;
+    ; if not, go set the walking speed and return.
     BPL @SetShootTimer
     LDA Shooter_ObjWantsToShoot, X
     BEQ @SetSpeed
@@ -102,16 +162,15 @@ _TryShooting:
     TYA
     STA ObjShootTimer, X
 
-    ; If new shoot timer = 0, go set a non-zero speed.
+    ; If the new shoot timer = 0, go set the walking speed.
     BEQ @SetSpeed
 
-    ; shoot timer <> 0
-    ; If shoot timer <> $10, then go set a zero speed.
+    ; The timer is running. Unless it is exactly $10, stand still.
     CPY #$10
     BNE @ZeroSpeed
 
-    ; If we have the magic clock, or the monster is stunned, then
-    ; go set a zero speed.
+    ; Timer = $10: time to shoot. If we have the clock, or the monster is stunned, then skip the
+    ; shot and stand still.
     LDA InvClock
     ORA ObjStunTimer, X
     BNE @ZeroSpeed
@@ -120,10 +179,10 @@ _TryShooting:
     LDA $00
     JSR _ShootIfWanted2
 
-    ; If it failed, go set a non-zero speed.
+    ; If it failed (C clear), go set the walking speed for this frame; the timer keeps running.
     BCC @SetSpeed
 
-    ; It succeeded, so reset "wants to shoot" flag and the speed.
+    ; It succeeded: clear "wants to shoot", and stand still.
     LDA #$00
     STA Shooter_ObjWantsToShoot, X
 
@@ -133,100 +192,104 @@ _TryShooting:
     PHA
 
 @SetSpeed:
-    ; Set the speed to whatever was determined: 0 or the value passed in [01].
+    ; Set the speed that was decided: 0 or the value passed in [01].
     PLA
     STA ObjQSpeedFrac, X
 
 @Exit:
     RTS
 
-; Params:
-; A: shot object type
-; X: shooter object index
-;
-; Returns:
-; C: 1 if succeeded
-; Y: shot slot
-;
+; ----------------------------------------------------------------------------
+; Shoots through _ShootIfWanted and, on success, sets the shooter's object timer to $80.
+; IN:   A = shot object type; X = shooter's object slot (must be CurObjIndex).
+; OUT:  C set when the shot was made; then Y = the shot's slot, ObjTimer,X = $80 and $0437,X is
+;       decremented. C clear when "wants to shoot" is 0, no slot is empty or 4 shots are in flight.
+; NOTE: The shot starts in state $10 with timer 0 at the shooter's position, facing as the shooter.
+; NOTE: Only _TryShooting calls this. $0437,X is a write-only byte for these monsters: nothing
+;       reads it for a Moblin, Lynel or Octorok (the RAM symbols at $437 belong to fireballs,
+;       flyers, Digdogger, Dodongo and Manhandla). The $80 timer has no reader either:
+;       _TryShooting, Wanderer_TargetPlayer, UpdateGoriya (for these types), UpdateOctorock and
+;       Walker_Move do not read ObjTimer.
+; ----------------------------------------------------------------------------
 _ShootIfWanted2:
     JSR _ShootIfWanted
-
-    ; If succeeded, then set object timer to $80, and decrement [0437][X].
-    ;
-    ; UNKNOWN: [0437][X] only ever seems to be decremented.
-    BCC L1083E_Exit
+    BCC L1083E_Exit             ; Not shot.
     LDA #$80
     STA ObjTimer, X
     DEC $0437, X
 
+; Shared RTS of _ShootIfWanted2 and UpdateMonsterArrow.
 L1083E_Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Updates a monster's arrow (type $5B): flies at 2 pixels a frame, sparks out, or bounces off the shield.
+; IN:   X = the arrow's object slot.
+; NOTE: States (high nibble of ObjState): $10 flying; $20 spark after MoveShot refused the move at
+;       the room bounds (3 frames, then the arrow is destroyed); $30 bouncing off Link's shield (16
+;       frames, then destroyed: BounceShot). Tiles do not stop it: no tile test is made here.
+; NOTE: An arrow that harms Link is destroyed at once. Every way out goes through
+;       DestroyCountedMonsterShot or BounceShot, which decrement MonsterShotCount.
+; ----------------------------------------------------------------------------
 UpdateMonsterArrow:
-    ; Set q-speed $80 (2 pixels a frame).
+    ; Q-speed $80 (2 pixels a frame).
     LDA #$80
     STA ObjQSpeedFrac, X
 
-    ; If the timer has not expired, then go draw,
-    ; and see if the shooter's still alive.
+    ; If the arrow's timer has not expired, then only draw it, and see if the shooter still exists.
+    ; (The shooting code in this file creates arrows with timer 0.)
     LDA ObjTimer, X
     BNE @CheckShooter
 
-    ; If the arrow is sparking, then go update the base arrow.
+    ; If the arrow is sparking (state $2x), then go update the base arrow.
     LDA a:ObjState, X
     AND #$F0
     CMP #$20
     BEQ @UpdateBase
 
-    ; If the arrow is not flying, then
-    ; go handle it bouncing off of Link's shield.
+    ; If the arrow is not flying (state $1x), then go handle it bouncing off of Link's shield.
     CMP #$10
     BNE @CheckBounce
 
-    ; Set the moving direction in [0F].
-    ; Then go update the base arrow.
-    ;
-    ; UNKNOWN:
-    ; This doesn't seem to be needed. Removing the assignment
-    ; doesn't affect the movement of the arrow.
+    ; Flying: [0F] := facing direction, then update the base arrow.
+    ; The assignment has no effect: MoveShot (called by UpdateArrowOrBoomerang) stores the direction
+    ; it is given in [0F] itself (BoundByRoomWithA).
     LDA ObjDir, X
     STA $0F
     JMP @UpdateBase
 
 @CheckShooter:
-    ; If the shooter is gone, then reset the arrow's object timer;
-    ; so that it flies right away.
-    ; Begin unverified code 1085C
+    ; If the shooter's slot (ObjRefId,X) is empty, then zero the arrow's timer, so that it flies on
+    ; the next frame. Either way, draw the arrow.
+    ; This branch needs a nonzero arrow timer, which the shooting code in this file never sets;
+    ; whether anything reaches it is unverified.
     LDY ObjRefId, X
     LDA ObjType, Y
     BNE :+
     STA ObjTimer, X
 :
     JMP DrawArrow
-    ; End unverified code
 
 @UpdateBase:
-    JSR UpdateArrowOrBoomerang
+    JSR UpdateArrowOrBoomerang  ; Move (state $1x) or count down the spark (state $2x); draw.
 
-    ; If the arrow is no longer flying, then
-    ; go handle it sparking or bouncing.
+    ; If the arrow is no longer flying, then go see whether it is bouncing.
     LDA a:ObjState, X
     AND #$F0
     CMP #$10
     BNE @CheckBounce
-    JSR CheckShotLinkCollision
+    JSR CheckShotLinkCollision  ; A blocked arrow gets state $30 here.
 
-    ; If [06] = 0, then there was no collision with Link that harmed him
-    ; Either there was no collision at all, or it bounced off of the shield.
+    ; If [06] = 0, then Link was not harmed: there was no collision, or the shield blocked the arrow.
     ; So, return.
     LDA $06
     BEQ L1083E_Exit
 
-    ; Else there was a collision with Link that harmed him.
-    ; So, destroy the arrow.
+    ; Else the arrow harmed Link. Destroy it.
     JMP DestroyCountedMonsterShot
 
 @CheckBounce:
+    ; A = high nibble of the state. $30: bounce off the shield. Anything else: return.
     CMP #$30
     BNE L1083E_Exit
     JMP BounceShot

@@ -1,35 +1,62 @@
 ; ============================================================================
-; FILE:     bank1/qspeed-direction-math.asm BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
+; FILE:     bank1/qspeed-direction-math.asm BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 3511-3636
 ; SUBJECTS: (none)
-; TOPIC:    Q-speed position fraction, opposite direction, Abs, Negate
-; SEE ALSO:
+; TOPIC:    The two routines that turn an object's q-speed into whole-pixel steps and count them in the
+;           grid offset (with its limits); opposite direction and direction index; Abs and Negate.
+; SEE ALSO: bank7/walker-move.asm (MoveObject: sets the limits, calls these four times a frame and moves
+;           the coordinate by the returned carry); bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate
+;           sets Link's grid offset back to 0 at a multiple of 8); bank5/link-handle-input.asm (turning
+;           rules that read and rewrite the grid offset); bank7/walker-collision-screen-edge.asm
+;           (CheckScreenEdge needs grid offset 0); bank1/shot-aim-boomerang-speed.asm (MoveShot).
 ; KEY FACTS:
+;   - One call adds (or subtracts) ObjQSpeedFrac to ObjPosFrac and yields at most one pixel; MoveObject
+;     calls four times a frame, so pixels per frame = q-speed / 64 (AddQSpeedToPositionFraction).
+;   - ObjGridOffset counts the pixels: +1 per pixel right or down (AddQSpeedToPositionFraction), -1 per
+;     pixel left or up (SubQSpeedFromPositionFraction).
+;   - Limits: when ObjGridOffset equals PositiveGridCellSize or NegativeGridCellSize (+8/-8 for Link,
+;     +$10/-$10 for every other object, set by MoveObject) the pixel is withheld, in BOTH routines: an
+;     object at either limit cannot move either way until other code changes the offset.
+;   - 0 is not a limit: the offset counts through 0 freely (+1, 0, -1 = $FF, ...); nothing here stops
+;     or snaps an object at a grid point (AddQSpeedToPositionFraction, SubQSpeedFromPositionFraction).
+;   - At a limit the fraction still accumulates; only the pixel is dropped.
+;   - The test is for equality with a limit before the step, so an offset already beyond a limit is
+;     not stopped (AddQSpeedToPositionFraction).
+;   - GetOppositeDir uses the lowest set direction bit (right, then left, then down, then up) and also
+;     returns the direction index in Y: right 3, left 2, down 1, up 0. Direction 0 is not handled.
+;   - Abs and Negate leave $80 as $80.
 ; CONTENTS: (generated; L = line in this file)
-;   L0024 AddQSpeedToPositionFraction    code  Params:
-;   L0063 SubQSpeedFromPositionFraction  code  Params:
-;   L0095 OppositeDirs                   data
-;   L0110 GetOppositeDir                 code  Params:
-;   L0128 Abs                            code  Params:
-;   L0137 Negate                         code  Params:
+;   L0052 AddQSpeedToPositionFraction    code  Adds the q-speed to the position fraction for a step right or down; a carry is one pixel.
+;   L0094 SubQSpeedFromPositionFraction  code  Subtracts the q-speed from the position fraction for a step left or up; a borrow is one pixel.
+;   L0125 OppositeDirs                   data  TABLE: opposite of each direction; index = direction index (0 up, 1 down, 2 left, 3 right);
+;   L0137 GetOppositeDir                 code  Gives the opposite of a direction in A and the direction's index (0 up .. 3 right) in Y.
+;   L0155 Abs                            code  Takes the absolute value of a signed byte (falls into Negate when A is negative).
+;   L0163 Negate                         code  Negates a byte (two's complement).
 ; ============================================================================
 
-; Params:
-; [010E]: PositiveGridCellSize
-; [010F]: NegativeGridCellSize
-;
-; Returns:
-; C: 1 if fractional position reached a whole pixel
-;
+; ----------------------------------------------------------------------------
+; Adds the q-speed to the position fraction for a step right or down; a carry is one pixel.
+; IN:   X = object slot; PositiveGridCellSize, NegativeGridCellSize = grid offset limits (MoveObject
+;       stores 8 and $F8 for Link, $10 and $F0 for any other object)
+; OUT:  C = 1 if the object moves one pixel (the caller adds C to ObjX or ObjY); ObjPosFrac,X
+;       updated; ObjGridOffset,X = itself + C
+; NOTE: If ObjGridOffset,X equals either limit before the step, C is forced to 0: no pixel and no
+;       change to the grid offset, although ObjPosFrac still advances. The positive AND the negative
+;       limit both block this (positive-going) step.
+; NOTE: 0 is not a limit. An offset of -1 ($FF) steps to 0 and on to +1 like any other value, so an
+;       object heading right or down with a negative offset walks through the grid point (offset 0)
+;       and continues up to the positive limit.
+; NOTE: MoveObject calls this four times per frame, each call giving 0 or 1 pixel: q-speed $60 gives
+;       1 and 2 pixels on alternate frames (1.5 per frame); q-speed $40 gives 1 pixel every frame.
+; ----------------------------------------------------------------------------
 AddQSpeedToPositionFraction:
     LDA ObjPosFrac, X
     CLC
     ADC ObjQSpeedFrac, X
     STA ObjPosFrac, X
-    PHP                         ; Save carry flag.
+    PHP                         ; Save the carry: 1 = the fraction passed a whole pixel.
 
-    ; Don't let positions go past the limits
-    ; If we're at a limit, then clear carry.
+    ; If the grid offset equals the positive or the negative limit, withhold the pixel.
     LDA ObjGridOffset, X
     CMP PositiveGridCellSize
     BEQ @ClearCarry
@@ -37,38 +64,41 @@ AddQSpeedToPositionFraction:
     BNE :+
 
 @ClearCarry:
-    PLP                         ; Replace saved (pushed) carry flag with 0.
+    PLP                         ; Replace the saved carry with 0.
     CLC
     PHP
 :
-    PLP                         ; Restore carry flag to use in addition below.
-    PHP                         ; But save it again in order to return it at the end.
+    PLP                         ; Carry for the addition below,
+    PHP                         ; saved again to be the return value.
 
-    ; Add only carry to the grid offset.
-    ; Carry represents whether the fractional position reached
-    ; a whole pixel (C=1).
+    ; Grid offset += 1 if a pixel is being moved.
     LDA ObjGridOffset, X
     ADC #$00
     STA ObjGridOffset, X
-    PLP                         ; Return carry flag from speed addition, or 0 if we reached a limit.
+    PLP                         ; Return C = 1 for a pixel moved; 0 for none or at a limit.
     RTS
 
-; Params:
-; [010E]: PositiveGridCellSize
-; [010F]: NegativeGridCellSize
-;
-; Returns:
-; C: 0 if fractional position reached a whole pixel
-;
+; ----------------------------------------------------------------------------
+; Subtracts the q-speed from the position fraction for a step left or up; a borrow is one pixel.
+; IN:   X = object slot; PositiveGridCellSize, NegativeGridCellSize = grid offset limits (MoveObject
+;       stores 8 and $F8 for Link, $10 and $F0 for any other object)
+; OUT:  C = 0 if the object moves one pixel (the caller subtracts the borrow from ObjX or ObjY);
+;       ObjPosFrac,X updated; ObjGridOffset,X = itself - 1 when C = 0
+; NOTE: If ObjGridOffset,X equals either limit before the step, C is forced to 1: no pixel and no
+;       change to the grid offset, although ObjPosFrac still changes. The negative AND the positive
+;       limit both block this (negative-going) step.
+; NOTE: 0 is not a limit. An offset of +1 steps to 0 and on to -1 ($FF), so an object heading left or
+;       up with a positive offset walks through the grid point (offset 0) and continues down to the
+;       negative limit.
+; ----------------------------------------------------------------------------
 SubQSpeedFromPositionFraction:
     LDA ObjPosFrac, X
     SEC
     SBC ObjQSpeedFrac, X
     STA ObjPosFrac, X
-    PHP                         ; Save carry flag.
+    PHP                         ; Save the carry: 0 = the fraction borrowed a whole pixel.
 
-    ; Don't let positions go past the limits
-    ; If we're at a limit, then set carry.
+    ; If the grid offset equals the positive or the negative limit, withhold the pixel.
     LDA ObjGridOffset, X
     CMP PositiveGridCellSize
     BEQ @SetCarry
@@ -76,42 +106,39 @@ SubQSpeedFromPositionFraction:
     BNE :+
 
 @SetCarry:
-    PLP                         ; Replace saved (pushed) carry flag with 1.
+    PLP                         ; Replace the saved carry with 1 (no borrow).
     SEC
     PHP
 :
-    PLP                         ; Restore carry flag to use in addition below.
-    PHP                         ; But save it again in order to return it at the end.
+    PLP                         ; Carry for the subtraction below,
+    PHP                         ; saved again to be the return value.
 
-    ; Subtract only carry from the grid offset.
-    ; Carry represents whether the fractional position reached
-    ; a whole pixel (C=0).
+    ; Grid offset -= 1 if a pixel is being moved.
     LDA ObjGridOffset, X
     SBC #$00
     STA ObjGridOffset, X
-    PLP                         ; Return carry flag from speed subtraction, or 1 if we reached a limit.
+    PLP                         ; Return C = 0 for a pixel moved; 1 for none or at a limit.
     RTS
 
+; TABLE: opposite of each direction; index = direction index (0 up, 1 down, 2 left, 3 right);
+; value = direction bits.
 OppositeDirs:
-    .BYTE $04, $08, $01, $02
+    .BYTE $04, $08, $01, $02    ; up -> down, down -> up, left -> right, right -> left
 
-; Params:
-; A: direction
-;
-; Returns:
-; A: opposite direction
-; Y: a reverse direction index
-;
-; The reverse direction index returned has this mapping:
-; In Dir: 1 2 4 8
-;         -------
-; Index:  3 2 1 0
-;
+; ----------------------------------------------------------------------------
+; Gives the opposite of a direction in A and the direction's index (0 up .. 3 right) in Y.
+; IN:   A = direction bits (1 right, 2 left, 4 down, 8 up)
+; OUT:  A = opposite direction bit; Y = direction index of the input: 3 right, 2 left, 1 down, 0 up
+; NOTE: With several bits set the lowest wins: right, then left, then down, then up. Many callers use
+;       this only to reduce a diagonal input to one direction or to get the index in Y.
+; NOTE: With none of the low four bits set the loop ends with Y = $FF and A is read from
+;       OppositeDirs+$FF, a byte outside the table: callers must pass a direction.
+; ----------------------------------------------------------------------------
 GetOppositeDir:
     LDY #$03
 
 @Loop:
-    LSR
+    LSR                         ; Shift out the next direction bit, lowest (right) first.
     BCS :+
     DEY
     BPL @Loop
@@ -119,21 +146,20 @@ GetOppositeDir:
     LDA OppositeDirs, Y
     RTS
 
-; Params:
-; A: value
-;
-; Returns:
-; A: absolute value
-;
+; ----------------------------------------------------------------------------
+; Takes the absolute value of a signed byte (falls into Negate when A is negative).
+; IN:   A = signed value
+; OUT:  A = |A| ($80 stays $80)
+; NOTE: The branch for a non-negative value goes to the RTS at the end of Negate.
+; ----------------------------------------------------------------------------
 Abs:
     BPL :+
 
-; Params:
-; A: value
-;
-; Returns:
-; A: result
-;
+; ----------------------------------------------------------------------------
+; Negates a byte (two's complement).
+; IN:   A = value
+; OUT:  A = -A (0 stays 0, $80 stays $80); C = 1 only when A was 0
+; ----------------------------------------------------------------------------
 Negate:
     EOR #$FF
     CLC

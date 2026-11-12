@@ -1,175 +1,249 @@
 ; ============================================================================
-; FILE:     bank1/status-bar-rupees.asm  BANK: 1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)
+; FILE:     bank1/status-bar-rupees.asm  BANK: 1 (RAM code: stored at $A500, run at $6C90-$7EFF)
 ; UPSTREAM: Z_01.asm 2818-2976
 ; SUBJECTS: World
-; TOPIC:    BeginUpdateMode, rupee count ticking, status bar text
-; SEE ALSO:
+; TOPIC:    First code of the common code block: the switch from a mode's init to its update
+;           (BeginUpdateMode), the rupee counter that moves InvRupees 1 at a time, and the status
+;           bar text (hearts, rupee, key and bomb counts) written to the dynamic transfer buffer.
+; SEE ALSO: bank7/mode5-play-update.asm (UpdateHeartsAndRupees calls World_ChangeRupees every frame
+;           of the play modes); bank5/cave-cellar-enter.asm (World_FillHearts, called just before);
+;           bank1/format-decimal-hearts.asm (FormatDecimalByte, FormatHeartsInTextBuf);
+;           bank1/take-item.asm (TakeOneRupee) and bank1/cave-hint-money-game.asm (PostCredit,
+;           PostDebit): where rupees to add or subtract are posted; bank5/mode11-death-init.asm
+;           (calls FormatStatusBarText directly); bank1/common-code-header.asm (why this code runs
+;           from RAM).
 ; KEY FACTS:
+;   - InvRupees never jumps: on every even frame (FrameCounter bit 0 clear) it gains 1 while
+;     InvRupeesToAdd is nonzero and loses 1 while InvRupeesToSubtract is nonzero. That is 30 rupees
+;     a second; a price of 100 takes 200 frames to count off. World_ChangeRupees.
+;   - The count runs only where UpdateHeartsAndRupees is called: the play update of modes 5, 9, $A,
+;     $B and $C (also while paused or in the submenu) and mode $12 submode 2. It does not run while
+;     the flute tune plays (FluteTimer nonzero) or a dark room is brightening. World_ChangeRupees.
+;   - A frame is skipped when a PPU transfer is already queued (TileBufSelector nonzero, or
+;     DynTileBuf holding a record). World_ChangeRupees.
+;   - With InvRupees = 0 a pending subtraction is thrown away; with InvRupees = $FF a pending
+;     addition is thrown away. So rupees stop at 255 and a debt is never carried.
+;     World_ChangeRupees.
+;   - Each counted rupee requests tune 0 bit $10, the blip also used by the heart refill and by
+;     typed text. World_ChangeRupees.
+;   - After each count step the whole status bar text is rewritten from HeartValues, HeartPartial,
+;     InvRupees, InvKeys (or InvMagicKey) and InvBombs. FormatStatusBarText.
+;   - Counts are an "X" (tile $21) and the digits, left-aligned: 123, X23, X3 and a blank. With the
+;     magic key the key count reads "XA". FormatDecimalCountByte, FormatStatusBarText.
+;   - BeginUpdateMode sets GameSubmode = 0 and makes IsUpdatingMode nonzero: from the next frame
+;     the mode's update routine runs instead of its init routine.
 ; CONTENTS: (generated; L = line in this file)
-;   L0023 BeginUpdateMode                  code  Returns:
-;   L0028 L6506_Exit                       code
-;   L0031 StatusBarTransferBufTemplate     data
-;   L0039 World_ChangeRupees               code
-;   L0081 FormatStatusBarText              code
-;   L0124 FormatDecimalCountByteInTextBuf  code  Params:
-;   L0131 CopyTripletToTextBuf             code  Params:
-;   L0155 FormatDecimalCountByte           code  Formats a byte:
-;   L0173 FormatCharDoublet                code  Params:
+;   L0053 BeginUpdateMode                  code  Ends a mode's init phase: resets the submode and makes the mode's update routine run from now on.
+;   L0059 L6506_Exit                       code  Shared RTS: end of BeginUpdateMode and the early exits of World_ChangeRupees.
+;   L0071 StatusBarTransferBufTemplate     data  TABLE: transfer buffer template for the status bar text, $29 bytes; index = byte offset, as in
+;   L0095 World_ChangeRupees               code  Counts pending rupees into or out of InvRupees, 1 per even frame, then rewrites the status bar.
+;   L0148 FormatStatusBarText              code  Writes the status bar text (hearts, rupee, key and bomb counts) into the dynamic transfer buffer.
+;   L0203 FormatDecimalCountByteInTextBuf  code  Formats a count as three tiles ("X" and digits) and writes them into the dynamic transfer buffer.
+;   L0212 CopyTripletToTextBuf             code  Copies the three tiles in [01], [02], [03] into the dynamic transfer buffer.
+;   L0230 FormatDecimalCountByte           code  Formats a count as three tiles: the number itself if it has three digits, else "X" and digits.
+;   L0247 FormatCharDoublet                code  Puts one tile in the middle position and a blank in the last position of the tile triplet.
 ; ============================================================================
 
-; Returns:
-; A: 0
-;
+; ----------------------------------------------------------------------------
+; Ends a mode's init phase: resets the submode and makes the mode's update routine run from now on.
+; OUT:  GameSubmode = 0; IsUpdatingMode incremented (0 -> 1); A = 0 (callers store it)
+; NOTE: IsrNmi runs the mode's init routine while IsUpdatingMode = 0 and its update routine
+;       otherwise, one of the two per frame; so the first update happens on the next frame.
+; ----------------------------------------------------------------------------
 BeginUpdateMode:
     LDA #$00
     STA GameSubmode
     INC IsUpdatingMode
 
+; Shared RTS: end of BeginUpdateMode and the early exits of World_ChangeRupees.
 L6506_Exit:
     RTS
 
+; TABLE: transfer buffer template for the status bar text, $29 bytes; index = byte offset, as in
+; DynTileBuf; value = PPU address high, low, tile count, then that many tiles; $FF ends it.
+;   +$00 $20B6 (row 5, column 22), 8 tiles at +$03..+$0A: top row of hearts (hearts 9-16)
+;   +$0B $20D6 (row 6, column 22), 8 tiles at +$0E..+$15: bottom row of hearts (hearts 1-8)
+;   +$16 $206C (row 3, column 12), 3 tiles at +$19..+$1B: rupee count
+;   +$1C $20AC (row 5, column 12), 3 tiles at +$1F..+$21: key count
+;   +$22 $20CC (row 6, column 12), 3 tiles at +$25..+$27: bomb count
+;   +$28 $FF end marker
+; Tiles: $24 blank, $21 "X", $00-$09 the digits. The template itself reads "X0" for each count.
 StatusBarTransferBufTemplate:
-    .BYTE $20, $B6, $08, $24, $24, $24, $24, $24
-    .BYTE $24, $24, $24, $20, $D6, $08, $24, $24
-    .BYTE $24, $24, $24, $24, $24, $24, $20, $6C
-    .BYTE $03, $21, $00, $24, $20, $AC, $03, $21
-    .BYTE $00, $24, $20, $CC, $03, $21, $00, $24
-    .BYTE $FF
+    .BYTE $20, $B6, $08, $24, $24, $24, $24, $24    ; $20B6, 8 tiles: top heart row ...
+    .BYTE $24, $24, $24, $20, $D6, $08, $24, $24    ; ... $20D6, 8 tiles: bottom heart row ...
+    .BYTE $24, $24, $24, $24, $24, $24, $20, $6C    ; ... $206C,
+    .BYTE $03, $21, $00, $24, $20, $AC, $03, $21    ; 3 tiles: rupees; $20AC, 3 tiles: keys
+    .BYTE $00, $24, $20, $CC, $03, $21, $00, $24    ; $20CC, 3 tiles: bombs
+    .BYTE $FF                                       ; End marker.
 
+; ----------------------------------------------------------------------------
+; Counts pending rupees into or out of InvRupees, 1 per even frame, then rewrites the status bar.
+; OUT:  InvRupees, InvRupeesToAdd, InvRupeesToSubtract stepped; tune 0 request $10 per counted
+;       rupee; DynTileBuf = the status bar text (by falling into FormatStatusBarText)
+; NOTE: Returns without doing anything when a PPU transfer is already queued for this frame:
+;       TileBufSelector nonzero, or a record in DynTileBuf (first byte with bit 7 clear).
+; NOTE: Before counting, every frame: InvRupees = 0 zeroes InvRupeesToSubtract (a debt is dropped);
+;       InvRupees = $FF zeroes InvRupeesToAdd (the rest of a gain is dropped). This is the only cap:
+;       rupees stop at 255.
+; NOTE: Counting happens only when FrameCounter is even: 1 rupee per 2 frames (30 a second) in
+;       each direction. An addition and a subtraction pending together both step in the same frame.
+; NOTE: Called by UpdateHeartsAndRupees: every frame of the play update (modes 5, 9, $A, $B, $C),
+;       also while paused or in the submenu, and in mode $12 submode 2. UpdateMode5Play returns
+;       before it while FluteTimer is nonzero and while IsRoomBrightening is set. In other modes
+;       pending rupees wait.
+; ----------------------------------------------------------------------------
 World_ChangeRupees:
     LDA TileBufSelector
-    BNE L6506_Exit              ; If a static transfer buf is already chosen, then return.
+    BNE L6506_Exit              ; A static transfer buffer is queued for this frame: return.
     LDA DynTileBuf
-    BPL L6506_Exit              ; If the dynamic transfer buf is already used, then return.
+    BPL L6506_Exit              ; The dynamic buffer holds a record (empty = $FF): return.
 
-    ; Reset InvRupeesToAdd or InvRupeesToSubtract as appropriate,
-    ; if reached 0 or max.
-    ;
-    ; Index of InvRupeesToSubtract item slot.
+    ; If InvRupees = 0, zero InvRupeesToSubtract (item slot $27).
+    ; If InvRupees = $FF, zero InvRupeesToAdd (item slot $26).
     LDY #$27
     LDA InvRupees
     BEQ @ResetSlot
-    LDY #$26                    ; Index of InvRupeesToAdd item slot.
+    LDY #$26
     CMP #$FF
-    BNE :+                      ; If 0 < rupees < $FF, don't reset anything.
+    BNE :+                      ; 0 < InvRupees < $FF: zero neither.
 
 @ResetSlot:
-    LDA #$00                    ; Reset the slot we chose.
+    LDA #$00
     STA InvItems, Y
 :
+    ; Count only on even frames.
     LDA FrameCounter
     LSR
-    BCS L6506_Exit              ; Every two frames, return.
+    BCS L6506_Exit              ; Odd frame: return.
+
+    ; One rupee to add, if any is pending.
     LDA InvRupeesToAdd
-    BEQ @CheckSubtract          ; If InvRupeesToAdd <> 0,
-    DEC InvRupeesToAdd             ; then add one rupee.
+    BEQ @CheckSubtract
+    DEC InvRupeesToAdd
     INC InvRupees
 
-    ; Play "heart taken" tune, probably because it's more
-    ; pleasing for a continuous process than "rupee taken".
+    ; Request tune 0 bit $10 (the blip also used by the heart refill and by typed text), not the
+    ; "rupee taken" tune of tune channel 1.
     LDA #$10
     STA Tune0Request
 
 @CheckSubtract:
+    ; One rupee to subtract, if any is pending. Either way the status bar text is rewritten.
     LDA InvRupeesToSubtract
-    BEQ FormatStatusBarText     ; If InvRupeesToSubtract = 0, then skip it, and go format header text.
+    BEQ FormatStatusBarText
     DEC InvRupeesToSubtract
-    DEC InvRupees               ; Subtract one rupee.
-    LDA #$10                    ; Play the tune for this.
+    DEC InvRupees
+    LDA #$10                    ; The same blip as for an added rupee.
     STA Tune0Request
 
+; ----------------------------------------------------------------------------
+; Writes the status bar text (hearts, rupee, key and bomb counts) into the dynamic transfer buffer.
+; OUT:  DynTileBuf+$00..+$28 = StatusBarTransferBufTemplate with the current values filled in;
+;       uses [00]-[03] and [0B]-[0F]; DynTileBufLen is not changed
+; NOTE: World_ChangeRupees falls into this on every even frame in which it runs; the death mode
+;       init calls it directly. It writes from offset 0 without testing whether the buffer is
+;       free (World_ChangeRupees tests that first).
+; NOTE: With InvMagicKey nonzero the key count is replaced by "XA" and InvKeys is not shown.
+; ----------------------------------------------------------------------------
 FormatStatusBarText:
-    LDY #$28                    ; Copy transfer buf template for status bar text to dynamic buf.
+    LDY #$28                    ; Copy the template, $29 bytes, from its end marker down.
 :
     LDA StatusBarTransferBufTemplate, Y
     STA DynTileBuf, Y
     DEY
     BPL :-
+
+    ; Hearts: the top row starts at offset 3 (the bottom row follows at offset $0E).
     LDY #$03
     LDA HeartValues
     STA $0E
     LDA HeartPartial
     STA $0F
     JSR FormatHeartsInTextBuf
-    LDX #$02
+
+    ; Rupee count: its third tile is at offset $1B.
+    LDX #$02                    ; Not used: the callee does not read X and overwrites it.
     LDA InvRupees
     LDY #$1B
     JSR FormatDecimalCountByteInTextBuf
-    LDY #$21                    ; Key count goes at offset $21.
+
+    ; Key count: its third tile is at offset $21.
+    LDY #$21
     LDA InvMagicKey
-    BEQ @FormatKeyCount         ; If don't have the magic key, then go format key count.
+    BEQ @FormatKeyCount         ; No magic key: show InvKeys.
+
+    ; Magic key: write "XA" and a blank instead of a number.
     STY $00
-    LDA #$21                    ; Put an "X" in [$01].
+    LDA #$21                    ; [01] = tile $21, the "X".
     STA $01
-    LDA #$0A                    ; Put an "A" in formatting buffer.
+    LDA #$0A                    ; [02] = tile $0A, the letter A; [03] = blank.
     JSR FormatCharDoublet
-    LDX #$08                    ; UNKNOWN: Why? X is overwritten in the procedure.
+    LDX #$08                    ; Not used: CopyTripletToTextBuf loads X itself.
     JSR CopyTripletToTextBuf
-    JMP @FormatBombCount        ; Have the magic key. Skip formatting key count.
+    JMP @FormatBombCount
 
 @FormatKeyCount:
-    LDX #$08
+    LDX #$08                    ; Not used (see above).
     LDA InvKeys
     JSR FormatDecimalCountByteInTextBuf
 
 @FormatBombCount:
-    LDX #$0E
+    ; Bomb count: its third tile is at offset $27.
+    LDX #$0E                    ; Not used (see above).
     LDA InvBombs
     LDY #$27
     JMP FormatDecimalCountByteInTextBuf
 
-; Params:
-; A: value
-; Y: offset of first character in buffer.
+; ----------------------------------------------------------------------------
+; Formats a count as three tiles ("X" and digits) and writes them into the dynamic transfer buffer.
+; IN:   A = value (0-255); Y = offset in DynTileBuf of the third (last) of the three tiles
+; OUT:  DynTileBuf+Y-2..+Y = the three tiles; [00] = Y; [01]-[03] = the tiles; X = Y - 3; Y = $FF
+; NOTE: Falls into CopyTripletToTextBuf.
+; ----------------------------------------------------------------------------
 FormatDecimalCountByteInTextBuf:
     STY $00
     JSR FormatDecimalCountByte
 
-; Params:
-; [$00]: offset to first character in buffer
-;
+; ----------------------------------------------------------------------------
+; Copies the three tiles in [01], [02], [03] into the dynamic transfer buffer.
+; IN:   [00] = offset in DynTileBuf of the third (last) tile; [01]-[03] = tiles, left to right
+; OUT:  DynTileBuf+[00]-2..+[00] = [01], [02], [03]; X = [00] - 3; Y = $FF
+; ----------------------------------------------------------------------------
 CopyTripletToTextBuf:
     LDY #$02
     LDX $00
 :
-    LDA $0001, Y
+    LDA $0001, Y                ; [01+Y], copied from the last tile back to the first.
     STA DynTileBuf, X
     DEX
     DEY
     BPL :-
     RTS
 
-; Formats a byte:
-; 123 -> "123"
-;  23 -> "X23"
-;   3 -> "X3 "
-;
-; Params:
-; A: value
-;
-; Returns:
-; [$01]: First character
-; [$02]: Second character
-; [$03]: Third character
-;
+; ----------------------------------------------------------------------------
+; Formats a count as three tiles: the number itself if it has three digits, else "X" and digits.
+; IN:   A = value (0-255)
+; OUT:  [01], [02], [03] = the tiles, left to right: 123 -> "123"; 23 -> "X23"; 3 -> "X3" and a
+;       blank ($24). "X" is tile $21; a digit's tile is its value.
+; NOTE: For values below 10 it falls into FormatCharDoublet to move the digit left.
+; ----------------------------------------------------------------------------
 FormatDecimalCountByte:
-    JSR FormatDecimalByte
+    JSR FormatDecimalByte       ; [01]-[03] = digits with leading blanks; Y = [01]; A = [02].
     CPY #$24
-    BNE :+
-    LDY #$21
+    BNE :+                      ; Three digits: keep the hundreds digit.
+    LDY #$21                    ; No hundreds digit: put the "X" there.
 :
     STY $01
     CMP #$24
-    BNE :+
-    LDA $03
+    BNE :+                      ; There is a tens digit: done (the RTS below).
+    LDA $03                     ; One digit only: A = that digit, to go in the middle.
 
-; Params:
-; A: character
-;
-; Returns:
-; [$02]: character
-; [$03]: space
-;
+; ----------------------------------------------------------------------------
+; Puts one tile in the middle position and a blank in the last position of the tile triplet.
+; IN:   A = tile
+; OUT:  [02] = A; [03] = $24 (blank); A = $24
+; NOTE: The RTS is also the exit of FormatDecimalCountByte for values of 10 and more.
+; ----------------------------------------------------------------------------
 FormatCharDoublet:
     STA $02
     LDA #$24

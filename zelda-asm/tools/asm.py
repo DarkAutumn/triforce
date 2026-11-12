@@ -706,9 +706,9 @@ def header_fields(header):
 def bank_role(prog, mod, chunk):
     segs = prog.segments_of(mod, chunk)
     if "BANK_01_CODE" in segs:
-        return "1 (stored at $A500-$B76F; copied to RAM and run at $6C90-$7EFF)"
+        return "1 (RAM code: stored at $A500, run at $6C90-$7EFF)"
     if "BANK_06_DATA" in segs:
-        return "6 (switchable, $8000-$BFFF; the BANK_06_DATA part is copied to RAM $67F0-$687D)"
+        return "6 (switchable; BANK_06_DATA is copied to RAM $67F0)"
     if mod.id == 7:
         return "7 (fixed, $C000-$FFFF)"
     return "%d (switchable, $8000-$BFFF)" % mod.id

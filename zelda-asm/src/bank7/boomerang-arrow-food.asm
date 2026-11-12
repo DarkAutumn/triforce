@@ -2,43 +2,84 @@
 ; FILE:     bank7/boomerang-arrow-food.asm BANK: 7 (fixed, $C000-$FFFF)
 ; UPSTREAM: Z_07.asm 3763-4090
 ; SUBJECTS: (none)
-; TOPIC:    Food, boomerang tables, arrow/boomerang flight
-; SEE ALSO:
+; TOPIC:    Food on the ground (object slot $0F): its lifetime and which monsters it attracts. The outward
+;           flight and the spark of arrows and boomerangs, Link's and monsters' alike; arrow drawing;
+;           sprite tables shared by the sword, rod, shots, arrow and boomerang.
+; SEE ALSO: bank7/boomerang-return-draw.asm (boomerang states $3x-$5x, the catch, boomerang drawing,
+;           OffsetAndDrawArrow); bank5/wield-items.asm (WieldBoomerang, WieldArrow, WieldFood: slot rules,
+;           the rupee an arrow costs, range limits); bank1/shot-aim-boomerang-speed.asm (MoveShot,
+;           SetBoomerangSpeed); bank1/room-bounds.asm (where a flight is blocked);
+;           bank1/weapon-damage-death.asm (boomerang stun); bank1/sword-bomb-arrow-collision.asm (arrow
+;           damage); bank4/drop-items.asm (UpdateItem: weapons that pick up items);
+;           bank4/moblin-lynel-shooting.asm (UpdateMonsterArrow); bank4/goriya.asm (monster boomerang).
 ; KEY FACTS:
+;   - Slot $0F holds the boomerang (state bit 7 clear) or food (bit 7 set), never both.
+;       UpdateBoomerangOrFood
+;   - Food lies for three timer periods of $FF frames (states $80, $81, $82): $2FD = 765 frames, then
+;       the slot is freed. UpdateBoomerangOrFood
+;   - Food attracts by the room's first monster type (RoomObjTemplateType), not per monster: $03-$0A
+;       (Moblin, Goriya, Octorok), $12 (Vire), $1B and $1C (blue and red Keese). Every frame it
+;       overwrites ChaseTargetX/Y with its own position. UpdateBoomerangOrFood
+;   - Arrow and boomerang states: $1x flying out, $2x spark, $3x boomerang slowing, $4x slow return,
+;       $5x fast return; the low 3 bits are the boomerang's spin step. UpdateArrowOrBoomerang
+;   - A flight in state $1x is blocked only by the room bounds (MoveShot), not by tiles.
+;       UpdateArrowOrBoomerang
+;   - A boomerang turns back when the pixels flown (absolute ObjGridOffset) reach ObjMovingLimit: $31
+;       wooden, $51 a Goriya's. The magic boomerang's $FF is never reached (the absolute value of a
+;       signed byte is at most $80), so it flies until blocked or until it hits. UpdateArrowOrBoomerang
+;   - On a diagonal throw only the horizontal movement is counted toward the limit.
+;       UpdateArrowOrBoomerang
+;   - The spark state lasts 3 frames. Then an arrow frees its slot (4th frame), and a boomerang
+;       returns fast (state $50). CheckState20, HandleArrowOrBoomerangBlocked
+;   - An arrow has no range limit: it flies at its q-speed until blocked or until the collision code
+;       stops it. UpdateArrowOrBoomerang
 ; CONTENTS: (generated; L = line in this file)
-;   L0026 UpdateBoomerangOrFood                   code
-;   L0086 BoomerangFrameCycle                     data
-;   L0090 BoomerangBaseSpriteAttrCycle            data
-;   L0094 BoomerangQSpeedFracsY                   data
-;   L0098 BoomerangQSpeedFracsX                   data
-;   L0102 RDirectionToWeaponFrame                 data
-;   L0111 RDirectionToWeaponBaseAttribute         data  The base sprite attribute for weapon sprites, 1 for each
-;   L0114 RDirectionToOffsetsX                    data
-;   L0117 RDirectionToOffsetsY                    data
-;   L0120 UpdateArrowOrBoomerang                  code
-;   L0213 DrawArrow                               code
-;   L0233 SetAttrAndDrawArrow                     code
-;   L0265 CheckState20                            code
-;   L0313 HandleArrowOrBoomerangBlocked           code
-;   L0324 DrawArrowOrBoomerangAndCheckCollisions  code
+;   L0070 UpdateBoomerangOrFood                   code  Updates object slot $0F each frame: the boomerang, or food lying on the ground.
+;   L0125 BoomerangFrameCycle                     data  TABLE: boomerang sprite frame; index = low nibble of the boomerang's state (0-7 = spin step, 8 = spark);
+;   L0134 BoomerangBaseSpriteAttrCycle            data  TABLE: boomerang base sprite attributes; index = low nibble of the boomerang's state (as above);
+;   L0141 BoomerangQSpeedFracsY                   data  TABLE: vertical q-speed of a returning boomerang; index = speed index 0-8 from _CalcDiagonalSpeedIndex
+;   L0147 BoomerangQSpeedFracsX                   data  TABLE: horizontal q-speed of a returning boomerang; index = the same speed index; value = q-speed.
+;   L0154 RDirectionToWeaponFrame                 data  TABLE: weapon sprite frame by direction; index = reverse direction index (0 up, 1 down, 2 left,
+;   L0160 RDirectionToWeaponBaseAttribute         data  TABLE: weapon base sprite attributes by direction; index = reverse direction index (0 up, 1 down,
+;   L0165 RDirectionToOffsetsX                    data  TABLE: arrow sprite X offset by direction; index = reverse direction index (0 up, 1 down, 2 left,
+;   L0170 RDirectionToOffsetsY                    data  TABLE: arrow sprite Y offset by direction; index = reverse direction index; value = pixels added
+;   L0192 UpdateArrowOrBoomerang                  code  Updates a flying arrow or boomerang, Link's or a monster's: flight out, spark, boomerang return.
+;   L0289 DrawArrow                               code  Draws a flying arrow (Link's or a monster's) pointing in its direction.
+;   L0308 SetAttrAndDrawArrow                     code  Second entry of DrawArrow: A = base sprite attribute, Y = reverse direction index, [0C], [0F] set.
+;   L0352 CheckState20                            code  Handles the spark state ($2x) of an arrow or boomerang; passes other states to CheckState30.
+;   L0404 HandleArrowOrBoomerangBlocked           code  Moves a blocked arrow or boomerang to its next major state (adds $10) and draws it.
+;   L0419 DrawArrowOrBoomerangAndCheckCollisions  code  Draws an arrow's spark, or draws a boomerang and (for a monster's) tests it against Link.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Updates object slot $0F each frame: the boomerang, or food lying on the ground.
+; IN:   X = object slot ($0F; called once a frame by UpdateMode5Play)
+; NOTE: State 0 = empty. Bit 7 clear = boomerang (handled by UpdateArrowOrBoomerang). Bit 7 set = food.
+;       Food: WieldFood starts it in state $80 with ObjTimer = $FF. Each time the timer reaches 0 the
+;       state goes up by 1 and the timer restarts at $FF; on reaching $83 the food is removed. The
+;       three states differ in nothing else: 3 x $FF = $2FD (765) frames on the ground.
+;       While it lies there, if RoomObjTemplateType (the type of the first monster the room was
+;       populated with) is $03-$0A (Moblin, Goriya, Octorok), $12 (Vire), $1B (blue Keese) or $1C
+;       (red Keese), the monsters' chase target is set to the food's position every frame. The test
+;       is on that one type, not on each monster: every monster that steers by ChaseTargetX/Y then
+;       goes for the food, and none does when the first monster is of another type.
+;       This runs after UpdateMode5Play has copied Link's position to the chase target, so the food
+;       wins on every frame, whatever IsChasingOtherTarget says.
+;       Food does not touch monsters: CheckMonsterBoomerangOrFoodCollision returns when bit 7 is set.
+; ----------------------------------------------------------------------------
 UpdateBoomerangOrFood:
-    ; If state = 0, then not active. So, return.
+    ; If state = 0, the slot is empty. Return.
     LDA ObjState, X
     BEQ L1F49F_Exit
 
-    ; If the high bit of state is clear, then go update the boomerang.
+    ; If bit 7 of the state is clear, go update the boomerang.
     ASL
     BCC UpdateArrowOrBoomerang
 
     ; The object is food.
     ;
-    ; Once the timer has expired, increment the state and set timer to $FF.
-    ; If we reach state $83, then go deactivate the object.
-    ;
-    ; Nothing changes between the states. So, they are used as
-    ; a way to extend the timer. $2FD screen frames in total.
+    ; Once the timer has expired, increment the state and set the timer to $FF again.
+    ; If the state reaches $83, go deactivate the object.
     LDA ObjTimer, X
     BNE @CheckMonsterType
     INC ObjState, X
@@ -50,21 +91,17 @@ UpdateBoomerangOrFood:
     STA ObjTimer, X
 
 @CheckMonsterType:
-    ; If the template object type in the room is one of:
-    ; moblin, goriya, octorock, vire, keese
-    ; then attract these monsters to the food.
-    ;
-    ; They will chase the food instead of Link when given a chance.
+    ; If the room's first monster type is $03-$0A, $12, $1B or $1C, make the food the chase target.
     LDA RoomObjTemplateType
-    CMP #$03                    ; Blue moblin
+    CMP #$03                    ; Below $03 (Lynel $01/$02, or none): not attracted.
     BCC @Draw
-    CMP #$0B                    ; Red darknut
+    CMP #$0B                    ; $03-$0A: Moblin, Goriya, Octorok (all variants).
     BCC @AttractMonsters
     CMP #$12                    ; Vire
     BEQ @AttractMonsters
-    CMP #$1B                    ; Blue keese
+    CMP #$1B                    ; Blue Keese
     BEQ @AttractMonsters
-    CMP #$1C                    ; Red keese
+    CMP #$1C                    ; Red Keese
     BNE @Draw
 
 @AttractMonsters:
@@ -76,55 +113,89 @@ UpdateBoomerangOrFood:
 @Draw:
     ; Draw the food.
     JSR Anim_FetchObjPosForSpriteDescriptor
-    LDA #$02                    ; Red sprite palette
-    LDY #$06                    ; Food item slot
+    LDA #$02                    ; Sprite attributes: palette row 6.
+    LDY #$06                    ; Item sprite slot 6: food.
     JMP Anim_WriteStaticItemSpritesWithAttributes
 
 @Deactivate:
     JMP ResetObjState
 
+; TABLE: boomerang sprite frame; index = low nibble of the boomerang's state (0-7 = spin step, 8 = spark);
+;   value = frame of item sprite slot $1D (0-2 = three views of the boomerang, 3 = spark).
 BoomerangFrameCycle:
     .BYTE $00, $01, $02, $01, $00, $01, $02, $01
     .BYTE $03
 
+; TABLE: boomerang base sprite attributes; index = low nibble of the boomerang's state (as above);
+;   value = OAM flip bits ($40 horizontal, $80 vertical) for the spin steps; entry 8 (spark) is 1.
+;   CalcBoomerangFrame adds InvMagicBoomerang (0 or 1) to it, which selects the palette. It skips the
+;   addition only for a table value of 8, which does not occur, so the addition always happens, for a
+;   monster's boomerang too.
 BoomerangBaseSpriteAttrCycle:
     .BYTE $00, $00, $00, $40, $40, $C0, $80, $80
     .BYTE $01
 
+; TABLE: vertical q-speed of a returning boomerang; index = speed index 0-8 from _CalcDiagonalSpeedIndex
+;   (0 = thrower is level with it, 4 = on the diagonal, 8 = straight above or below); value = q-speed
+;   ($80 = 2 pixels a frame, $60 = 1.5). State $4x uses half of it (SetBoomerangSpeed).
 BoomerangQSpeedFracsY:
     .BYTE $00, $20, $36, $4C, $60, $68, $70, $78
     .BYTE $80
 
+; TABLE: horizontal q-speed of a returning boomerang; index = the same speed index; value = q-speed.
+;   It is the table above read backward.
 BoomerangQSpeedFracsX:
     .BYTE $80, $78, $70, $68, $60, $4C, $36, $20
     .BYTE $00
 
+; TABLE: weapon sprite frame by direction; index = reverse direction index (0 up, 1 down, 2 left,
+;   3 right, as returned in Y by GetOppositeDir); value = frame: 0 = vertical image, 1 = horizontal.
+;   Used for the sword, rod, sword shot, magic shot and arrow.
 RDirectionToWeaponFrame:
     .BYTE $00, $00, $01, $01
 
-; The base sprite attribute for weapon sprites, 1 for each
-; direction in reverse direction order: up, down, left, right
-;
-; All of them are 0, except for the element for "down".
-; That one flips the vertical sword or rod image so that it points down.
-;
+; TABLE: weapon base sprite attributes by direction; index = reverse direction index (0 up, 1 down,
+;   2 left, 3 right); value = OAM attributes. Only "down" is nonzero: $80 flips the vertical image
+;   so that it points down. (Left is flipped separately, through [0F].)
 RDirectionToWeaponBaseAttribute:
     .BYTE $00, $80, $00, $00
 
+; TABLE: arrow sprite X offset by direction; index = reverse direction index (0 up, 1 down, 2 left,
+;   3 right); value = signed pixels added to ObjX when drawing: -4 for a vertical arrow.
 RDirectionToOffsetsX:
     .BYTE $FC, $FC, $00, $00
 
+; TABLE: arrow sprite Y offset by direction; index = reverse direction index; value = pixels added
+;   to ObjY when drawing: +3 for a horizontal arrow.
 RDirectionToOffsetsY:
     .BYTE $00, $00, $03, $03
 
+; ----------------------------------------------------------------------------
+; Updates a flying arrow or boomerang, Link's or a monster's: flight out, spark, boomerang return.
+; IN:   X = object slot: $0F Link's boomerang, $12 Link's arrow (from UpdateRodOrArrow), or a monster
+;       slot holding a monster arrow (type $5B, from UpdateMonsterArrow) or boomerang (type $5C)
+; NOTE: Major state (high nibble): $1x flying out; $2x spark; $3x boomerang slowing down; $4x boomerang
+;       returning slowly; $5x returning fast (the last three are in CheckState30). The low 3 bits of a
+;       boomerang's state are its spin step; bit 3 is set only in the spark state $28.
+;       State $1x moves at ObjQSpeedFrac (Link's arrow and boomerang $C0 = 3 pixels a frame, a monster
+;       arrow $80 = 2, a Goriya's boomerang $A0 = 2.5) along each axis of ObjDir; a boomerang thrown
+;       diagonally moves that far on both axes. MoveShot blocks the flight only at the room bounds;
+;       tiles are not tested. Blocked: spark (state $20).
+;       An arrow has no range limit. A boomerang turns back when the absolute value of its
+;       ObjGridOffset (pixels flown; on a diagonal only the horizontal part is counted) is at least
+;       ObjMovingLimit: $31 for the wooden boomerang (reached after 17 frames, 51 pixels), $51 for a
+;       Goriya's. The magic boomerang's limit $FF cannot be reached, because the absolute value of
+;       the signed offset is at most $80: it flies until blocked or until it hits something.
+;       On reaching the limit the boomerang goes to state $30 with ObjMovingLimit = $10 (now a timer).
+;       Monster collisions of Link's weapons are not tested here but in the monsters' collision code.
+; ----------------------------------------------------------------------------
 UpdateArrowOrBoomerang:
     ; If not active (state = 0), then return.
     LDA ObjState, X
     BEQ L1F49F_Exit
 
-    ; Reset [00], which will hold the number of axes where the distance <= 8
-    ; when calculating the angle to return to thrower.
-    ; See states $40 and $50 and GetDirectionsAndDistancesToTarget.
+    ; Reset [00], which will count the axes on which the boomerang is within 8 pixels of its
+    ; thrower. See states $40 and $50 in CheckState30, and GetDirectionsAndDistancesToTarget.
     LDA #$00
     STA $00
 
@@ -138,27 +209,27 @@ UpdateArrowOrBoomerang:
 @State10:
     ; State $1x. Fly away from the thrower.
     ;
-    ; Reset [0E], which will indicate:
-    ; - into MoveShot:   0 update grid offset, else don't
-    ; - out of MoveShot: $80 if blocked
+    ; Reset [0E], which is used:
+    ; - into MoveShot:   0 = add the movement to the grid offset; else leave the grid offset alone
+    ; - out of MoveShot: $80 if blocked at a room bound
     LDA #$00
     STA $0E
 
     ; If the object's direction has a horizontal component, then
-    ; move it horizontally.
+    ; move it horizontally. (A = only the horizontal bits.)
     LDA ObjDir, X
     AND #$03
     BEQ :+
     JSR MoveShot
-    INC $0E                     ; If MoveShot were called again, then don't update grid offset.
+    INC $0E                     ; A second MoveShot call (vertical) will not change the grid offset.
 :
-    ; If the object was blocked, go handle it.
+    ; If the object was blocked (bit 7 of [0E]), go handle it.
     LDA $0E
     ASL
     BCS @HandleBlocked
 
     ; If the object's direction has a vertical component, then
-    ; move it vertically.
+    ; move it vertically. (A = only the vertical bits.)
     LDA ObjDir, X
     AND #$0C
     BEQ :+
@@ -169,7 +240,8 @@ UpdateArrowOrBoomerang:
     ASL
     BCS @HandleBlocked
 
-    ; If the object is an arrow (Link's or a monster's), go set up sprite parameters.
+    ; If the object is an arrow (a monster's: slot < $0D and type $5B; Link's: slot $12),
+    ; go draw it. Nothing else happens to a flying arrow here.
     CPX #$0D
     BCS @CheckPlayerArrow
     LDA ObjType, X
@@ -189,14 +261,11 @@ UpdateArrowOrBoomerang:
     ADC #$01
 
 @CompareLimit:
-    ; For boomerangs, compare it to the movement limit.
-    ; If it reached the limit, set state $20 and a new movement
-    ; limit of $10, and go handle the rest as if blocked.
-    ; State $20 will become $30 below in HandleArrowOrBoomerangBlocked.
+    ; Compare the distance to the boomerang's limit. Below it: only animate and check collision.
     ;
-    ; Otherwise, only animate and check collision as usual.
-    ;
-    ; In major state $30, ObjMovingLimit is a timer to change the state to $40.
+    ; At or past the limit: set state $20 and ObjMovingLimit = $10, and go on as if blocked.
+    ; HandleArrowOrBoomerangBlocked adds $10, so the state becomes $30 (slowing down), not a spark.
+    ; In major state $30, ObjMovingLimit is a timer: $10 frames until state $40.
     CMP ObjMovingLimit, X
     BCC @AnimateBoomerang
     LDA #$10
@@ -210,9 +279,14 @@ UpdateArrowOrBoomerang:
 @AnimateBoomerang:
     JMP AnimateBoomerangAndCheckCollision
 
+; ----------------------------------------------------------------------------
+; Draws a flying arrow (Link's or a monster's) pointing in its direction.
+; IN:   X = object slot ($12, or a monster slot holding type $5B); ObjDir,X = direction
+; NOTE: Also the tail of UpdateArrowOrBoomerang for arrows in state $1x, called by UpdateMonsterArrow
+;       while the monster's arrow is held back by its timer, and by the monster shot draw code for
+;       type $5B.
+; ----------------------------------------------------------------------------
 DrawArrow:
-    ; This is an arrow. Set up sprite parameters.
-    ;
     ; If facing left, set horizontal flipping in [0F].
     LDA #$00
     STA $0F
@@ -221,23 +295,25 @@ DrawArrow:
     BNE :+
     INC $0F
 :
-    JSR GetOppositeDir          ; Get the reverse direction index that the weapon is facing.
+    JSR GetOppositeDir          ; Y = reverse direction index of the arrow's direction.
 
-    ; Store the weapon's frame (up or right) in [0C].
+    ; Store the weapon's frame (0 vertical, 1 horizontal) in [0C].
     LDA RDirectionToWeaponFrame, Y
     STA $0C
 
-    ; Store the base sprite attribute in [04].
+    ; A = base sprite attribute ($80, vertical flip, when pointing down).
     LDA RDirectionToWeaponBaseAttribute, Y
 
+; Second entry of DrawArrow: A = base sprite attribute, Y = reverse direction index, [0C], [0F] set.
 SetAttrAndDrawArrow:
     STA $04
 
-    ; If this is a monster's arrow, add 2 to sprite attributes in [04].
-    ; This chooses palette row 6.
+    ; If this is a monster's arrow (slot < $0D and type $5B), add 2 to the sprite attributes.
+    ; This chooses palette row 6. (A monster slot of any other type would reach @PlayerArrow with
+    ; A = its object type instead of the attribute; no caller sends one.)
     ;
-    ; Otherwise, add the arrow item value less 1. This chooses
-    ; palette row 4 if the arrow is wooden, otherwise 5 for silver.
+    ; Otherwise, add the arrow item value (InvArrow) less 1. This chooses
+    ; palette row 4 for the wooden arrow (1), row 5 for the silver arrow (2).
     CPX #$0D
     BCS @PlayerArrow
     LDA ObjType, X
@@ -246,7 +322,7 @@ SetAttrAndDrawArrow:
     LDA $04
     CLC
     ADC #$02
-    BNE @SetAttr
+    BNE @SetAttr                ; Always taken.
 
 @PlayerArrow:
     CLC
@@ -257,11 +333,22 @@ SetAttrAndDrawArrow:
 @SetAttr:
     STA $04
 
-    ; Copy the attribute to [05], and go draw.
+    ; Copy the attribute to [05] (right sprite), and go draw.
     LDA $04
     STA $05
     JMP OffsetAndDrawArrow
 
+; ----------------------------------------------------------------------------
+; Handles the spark state ($2x) of an arrow or boomerang; passes other states to CheckState30.
+; IN:   X = object slot; A = major state (state AND $F0), not $10
+; NOTE: Continuation of UpdateArrowOrBoomerang. The spark state lasts 3 frames: the frame on which
+;       the weapon was blocked (ObjAnimCounter set to 3), and two more here (counter 2, then 1).
+;       On the frame the counter reaches 0, an arrow is removed (Link's slot $12 is freed; a
+;       monster's arrow is destroyed and MonsterShotCount decremented), and a boomerang goes to
+;       state $50 (fast return).
+;       The state is forced to $28 so that minor state 8 selects the boomerang's spark image; on
+;       the first of the 3 frames a boomerang still shows its spin image (in the spark's palette).
+; ----------------------------------------------------------------------------
 CheckState20:
     ; If major state <> $20, go check other states.
     CMP #$20
@@ -269,12 +356,9 @@ CheckState20:
 
     ; State $2x. Spark.
     ;
-    ; Change the state to $28, and decrement animation counter.
+    ; Change the state to $28, and decrement the animation counter.
     ; If it hasn't reached 0, then go draw and check for collision
     ; (with Link, if this is a monster's boomerang).
-    ;
-    ; Minor state 8 selects the frame image and base sprite attribute
-    ; for the spark.
     LDA #$28
     STA ObjState, X
     DEC ObjAnimCounter, X
@@ -282,13 +366,13 @@ CheckState20:
 
     ; Animation counter = 0.
     ;
-    ; Set state to $40. It will become $50 below in
+    ; Set state to $40. For a boomerang it becomes $50 below, in
     ; HandleArrowOrBoomerangBlocked.
     LDA #$40
     STA ObjState, X
 
-    ; If this is an arrow (monster's or player's), then deactivate it.
-    ; Else go handle the boomerang being blocked.
+    ; If this is an arrow (a monster's: slot < $0D and type $5B; Link's: slot $12), then
+    ; deactivate it. Else go send the boomerang back.
     CPX #$0D
     BCS @CheckBoomerangBlocked
     LDA ObjType, X
@@ -302,27 +386,38 @@ CheckState20:
 @Deactivate:
     JSR ResetObjState
 
-    ; If it's a monster's arrow, then destroy it in the monster slot,
-    ; including clearing object type.
+    ; If it's a monster's arrow, then destroy the object in the monster slot (clearing its
+    ; object type) and decrement the count of monster shots.
     CPX #$0D
     BCS :+
     JSR DestroyCountedMonsterShot
 :
     RTS
 
+; ----------------------------------------------------------------------------
+; Moves a blocked arrow or boomerang to its next major state (adds $10) and draws it.
+; IN:   X = object slot; ObjState,X = $1x (blocked at a room bound: becomes $2x, spark), $20 (boomerang
+;       at its range limit: becomes $30, slowing down) or $40 (spark over: becomes $50, fast return)
+; NOTE: Sets ObjAnimCounter = 3: the length of the spark, or of the boomerang's next spin step.
+;       The low nibble of a boomerang's state (its spin step) is 0 after the $20 and $40 cases.
+; ----------------------------------------------------------------------------
 HandleArrowOrBoomerangBlocked:
-    ; Use animation counter to count down 3 screen frames in case the state is $20 (spark).
     LDA #$03
     STA ObjAnimCounter, X
 
-    ; Add $10 to the state to make it $2x.
+    ; Add $10 to the state.
     LDA ObjState, X
     CLC
     ADC #$10
     STA ObjState, X
 
+; ----------------------------------------------------------------------------
+; Draws an arrow's spark, or draws a boomerang and (for a monster's) tests it against Link.
+; IN:   X = object slot
+; NOTE: Arrows reach this only in the spark state, so the arrow path always draws the spark image.
+; ----------------------------------------------------------------------------
 DrawArrowOrBoomerangAndCheckCollisions:
-    ; If the weapon is a boomerang (not a monster arrow nor player arrow),
+    ; If the weapon is a boomerang (neither a monster's arrow nor Link's arrow),
     ; then go draw it and check for a collision.
     CPX #$0D
     BCS @DrawPlayerWeapon
@@ -336,17 +431,17 @@ DrawArrowOrBoomerangAndCheckCollisions:
     JMP DrawBoomerangAndCheckCollision
 
 @PrepareArrow:
-    ; Start preparing to draw an arrow.
+    ; Draw the arrow's spark.
     ;
-    ; Set arrow slot frame 2 (spark) in [0C],
+    ; Set frame 2 of the arrow's item sprite slot (spark) in [0C],
     ; and no horizontal flipping in [0F].
     LDA #$02
     STA $0C
     LDA #$00
     STA $0F
 
-    ; Get reverse index of weapon's direction, and base sprite attribute 0,
-    ; and go draw.
+    ; Get the reverse index of the weapon's direction in Y (for the sprite offsets), and base
+    ; sprite attribute 0 in A, and go draw.
     LDA ObjDir, X
     JSR GetOppositeDir
     LDA #$00

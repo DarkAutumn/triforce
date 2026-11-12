@@ -2,33 +2,56 @@
 ; FILE:     bank2/mode1-menu-update.asm  BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 2735-2913
 ; SUBJECTS: (none)
-; TOPIC:    File-select menu update, Start loads profile
-; SEE ALSO:
+; TOPIC:    Mode 1 (file select) update: Select moves the cursor, Start either loads the chosen save
+;           slot into the profile and goes on to the next mode, or enters Register / Eliminate.
+; SEE ALSO: bank2/mode1-slot-tiles.asm and bank2/mode1-init-save-files.asm (menu init);
+;           bank1/modeb-cave-save-sprites.asm (FetchFileAAddressSet); bank2/register-eliminate-init.asm
+;           (modes $E and $F); bank7/update-mode-dispatch.asm (GoToNextMode, EndGameMode).
 ; KEY FACTS:
+;   - CurSaveSlot is the menu choice: 0-2 save slots, 3 Register, 4 Eliminate. Select steps to the next
+;     choice whose IsSaveSlotActive entry is nonzero, so unregistered slots are skipped
+;     (UpdateMode1Menu_Sub0).
+;   - Start on Register or Eliminate sets GameMode to CurSaveSlot + $B = $E or $F
+;     (UpdateMode1Menu_Sub1).
+;   - Start on a slot copies file A's items block ($28 bytes) to InvItems and its world flags ($180
+;     bytes) to WorldFlags, then goes to the next mode (UpdateMode1Menu_Sub1).
+;   - Loading a slot zeroes IsSwordBlocked, Link's ObjState and InvClock; Start in the menu also sets
+;     CurLevel = 0 (overworld) and SelectedItemSlot = 0 (UpdateMode1Menu_Sub1).
+;   - A slot in Q2 (QuestNumbers nonzero) shows a sword sprite beside its Link
+;     (Mode1_WriteLinkSprites).
 ; CONTENTS: (generated; L = line in this file)
-;   L0018 Mode1CursorSpriteTriplet   data
-;   L0021 Mode1CursorSpriteYs        data
-;   L0024 UpdateMode1Menu            code
-;   L0028 UpdateMode1Menu_JumpTable  data
-;   L0032 UpdateMode1Menu_Sub0       code
-;   L0078 UpdateMode1Menu_Sub1       code
-;   L0132 Mode1_WriteLinkSprites     code
+;   L0033 Mode1CursorSpriteTriplet   data  DATA: tile, attributes and X of the menu cursor sprite (heart tile $F3 at X $28).
+;   L0037 Mode1CursorSpriteYs        data  TABLE: Y of the menu cursor sprite; index = CurSaveSlot (0-2 save slots, 3 Register, 4 Eliminate).
+;   L0043 UpdateMode1Menu            code  Mode 1 (file select) update: runs the handler selected by GameSubmode.
+;   L0048 UpdateMode1Menu_JumpTable  data  TABLE: mode 1 update handlers; index = GameSubmode (0 choose, 1 act on the choice).
+;   L0055 UpdateMode1Menu_Sub0       code  Mode 1 submode 0: Select moves the cursor to the next enabled choice; Start goes to submode 1.
+;   L0104 UpdateMode1Menu_Sub1       code  Mode 1 submode 1: loads the chosen save slot into the profile, or enters mode $E or $F.
+;   L0162 Mode1_WriteLinkSprites     code  Draws one Link per save slot down the menu, and a sword beside each slot that is in Q2.
 ; ============================================================================
 
+; DATA: tile, attributes and X of the menu cursor sprite (heart tile $F3 at X $28).
 Mode1CursorSpriteTriplet:
     .BYTE $F3, $03, $28
 
+; TABLE: Y of the menu cursor sprite; index = CurSaveSlot (0-2 save slots, 3 Register, 4 Eliminate).
 Mode1CursorSpriteYs:
     .BYTE $5C, $74, $8C, $A8, $B8
 
+; ----------------------------------------------------------------------------
+; Mode 1 (file select) update: runs the handler selected by GameSubmode.
+; ----------------------------------------------------------------------------
 UpdateMode1Menu:
     LDA GameSubmode
     JSR TableJump
 
+; TABLE: mode 1 update handlers; index = GameSubmode (0 choose, 1 act on the choice).
 UpdateMode1Menu_JumpTable:
     .ADDR UpdateMode1Menu_Sub0
     .ADDR UpdateMode1Menu_Sub1
 
+; ----------------------------------------------------------------------------
+; Mode 1 submode 0: Select moves the cursor to the next enabled choice; Start goes to submode 1.
+; ----------------------------------------------------------------------------
 UpdateMode1Menu_Sub0:
     LDA ButtonsPressed
     AND #$10
@@ -75,6 +98,9 @@ UpdateMode1Menu_Sub0:
     INC GameSubmode
     RTS
 
+; ----------------------------------------------------------------------------
+; Mode 1 submode 1: loads the chosen save slot into the profile, or enters mode $E or $F.
+; ----------------------------------------------------------------------------
 UpdateMode1Menu_Sub1:
     LDA #$00
     STA CurTune1
@@ -92,7 +118,7 @@ UpdateMode1Menu_Sub1:
     JMP EndGameMode
 
 @ChoseSlot:
-    ; The player chose a save slot.
+    ; A save slot was chosen.
     JSR TurnOffAllVideo
     JSR FetchFileAAddressSet
     LDY #$27                    ; Copy Items block from file A to profile.
@@ -104,7 +130,7 @@ UpdateMode1Menu_Sub1:
     BPL @CopyItems
     LDA #$00
     STA IsSwordBlocked
-    STA ObjState                ; Reset player state.
+    STA ObjState                ; Reset Link's state.
     STA InvClock                ; Reset clock item.
 
     ; Copy WorldFlags block from file A to profile.
@@ -129,6 +155,10 @@ UpdateMode1Menu_Sub1:
     BNE @CopyWorldFlags         ; If not done (destination address < $07FF), then copy more.
     JMP GoToNextMode
 
+; ----------------------------------------------------------------------------
+; Draws one Link per save slot down the menu, and a sword beside each slot that is in Q2.
+; IN:   [00] = X, [01] = Y of the first Link.
+; ----------------------------------------------------------------------------
 Mode1_WriteLinkSprites:
     LDA #$08                    ; Put the left tile of Link in [$02].
     STA $02
@@ -162,7 +192,7 @@ Mode1_WriteLinkSprites:
     STA $0A
     LDA $00                     ; Save the X coordinate.
     PHA
-    JSR Anim_WriteSpritePairNotFlashing    ; We didn't set [$08]. But we don't care if CurSpriteIndex is cycled.
+    JSR Anim_WriteSpritePairNotFlashing    ; [08] is not set; cycling CurSpriteIndex does not matter here.
     TAX
     PLA                         ; Restore the X coordinate.
     STA $00
@@ -170,10 +200,10 @@ Mode1_WriteLinkSprites:
     LDA QuestNumbers, Y
     BEQ @NextSlot               ; If in first quest, then skip the second quest marker.
     LDY LeftSpriteOffset
-    LDA $01                     ; Put the sword 3 pixels below Link.
+    LDA $01                     ; Put the sword 3 pixels above the Y in [01].
     SEC
     SBC #$03
-    STA Sprites+128, Y          ; Use sprites $20 to $23 for the swords.
+    STA Sprites+128, Y          ; Sprite offsets $90, $98, $A0 (sprites $24, $26, $28) hold the swords.
     LDA #$20                    ; Use sword tiles.
     STA Sprites+129, Y
     LDA #$03                    ; Use palette 7.

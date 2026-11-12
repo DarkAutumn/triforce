@@ -2,26 +2,54 @@
 ; FILE:     bank0/drive-song.asm         BANK: 0 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_00.asm 694-1053
 ; SUBJECTS: (none)
-; TOPIC:    DriveSong: phrase sequencing, per-channel notes
-; SEE ALSO:
+; TOPIC:    The music driver: starts a requested song, steps through its phrases, and plays one frame
+;           of the square 1, square 0, triangle and noise tracks of the current phrase.
+; SEE ALSO: bank0/song-data.asm (SongTable, phrase headers and their format, scripts);
+;           bank0/song-note-tables.asm (note lengths, envelopes, noise parameters);
+;           bank0/note-emit-vibrato.asm (note emit, VibratePitch); bank0/drive-audio-tune0.asm (DriveAudio).
 ; KEY FACTS:
+;   - SongRequest/CurSong values: $01 overworld, $40 underworld, $10 ending and $80 demo are multi-phrase
+;     songs; $06 is Zelda's song (SongTable entry $24); any other value is a single phrase picked by its
+;     lowest set bit. DriveSong, PlayNextPhrase.
+;   - First phrase / loop range (SongTable entries): overworld 9 then 10-15; underworld 16-17; ending
+;     18-20 then 21-25; demo 26-35. DriveSong@PlayFirst..., PlayNextPhrase.
+;   - The square 1 track starts at script offset 0 and its $00 byte ends the phrase for every track.
+;     Songs with a bit of $F1 set ($01, $10, $20, $40, $80) then play their next phrase or repeat;
+;     all others stop through SilenceSong. KeepPlayingSong@SongEnded.
+;   - Script bytes on the square and triangle tracks: bit 7 set = note length control (low 3 bits index
+;     the phrase's note length table) followed by a note; otherwise a note id. PrepNote, PlayNote.
+;   - Triangle track only: $F1-$FF start a passage repeated (value - $F0) times, $F0 ends the passage,
+;     $00 writes 0 to TrgLinear. ApplySq1Effects@PrepNoteOrPassage.
+;   - The noise track plays only for songs $01, $10 and $80 and loops on its own $00 byte. One byte
+;     gives both the length and one of 4 drum sounds. ApplySq1Effects@HandleNoise.
+;   - While CurTune1 (CurTune0) is nonzero the song keeps time but does not write square 1 (square 0).
+;     PlayNote, ApplySq1Effects@PlaySq0.
+;   - Only the demo song ($80) gets vibrato on the square channels; the triangle always does.
+;     ApplySq1Effects.
+;   - SilenceSong clears CurSong and cuts every channel (ApuStatus 0 then $0F), which also stops a
+;     playing DMC sample. SilenceSong.
 ; CONTENTS: (generated; L = line in this file)
-;   L0022 KeepPlaying         code
-;   L0025 DriveSong           code
-;   L0060 SetPrevPhraseIndex  code
-;   L0063 PlayNextPhrase      code
-;   L0114 PrepPhrase          code
-;   L0142 KeepPlayingSong     code
-;   L0158 SilenceSong         code
-;   L0166 PlayAgain           code
-;   L0169 PrepNote            code
-;   L0176 PlayNote            code
-;   L0194 ApplySq1Effects     code
+;   L0046 KeepPlaying         code  Jump to KeepPlayingSong (within branch range of DriveSong).
+;   L0053 DriveSong           code  Starts the song in SongRequest, or plays one frame of the current song.
+;   L0089 SetPrevPhraseIndex  code  Stores Y as the phrase index before the first phrase of a multi-phrase song (or its loop point).
+;   L0093 PlayNextPhrase      code  Picks the next phrase of the song in A: advances SongPhraseIndex, wrapping to the song's loop point.
+;   L0145 PrepPhrase          code  Loads the phrase header for SongTable entry Y (1-based) and resets all track positions and counters.
+;   L0174 KeepPlayingSong     code  Plays one frame of the current phrase, starting with the square 1 track.
+;   L0194 SilenceSong         code  Stops the song: clears CurSong and disables, then re-enables, the four tone and noise channels.
+;   L0203 PlayAgain           code  Jump to PlayNextPhrase for a song that repeats or continues.
+;   L0207 PrepNote            code  Handles a square 1 length control byte: sets the note length, then reads the note that follows.
+;   L0215 PlayNote            code  Starts the square 1 note in A (unless tune channel 1 is playing) and reloads its note counter.
+;   L0234 ApplySq1Effects     code  Per-frame volume envelope and vibrato for square 1; then the square 0, triangle and noise tracks.
 ; ============================================================================
 
+; Jump to KeepPlayingSong (within branch range of DriveSong).
 KeepPlaying:
     JMP KeepPlayingSong
 
+; ----------------------------------------------------------------------------
+; Starts the song in SongRequest, or plays one frame of the current song.
+; NOTE: The routine runs on through the labels below to the end of this file.
+; ----------------------------------------------------------------------------
 DriveSong:
     LDA SongRequest
     BNE @ChangeSong
@@ -57,9 +85,11 @@ DriveSong:
 @PlayFirstOverworldPhrase:
     LDY #$08
 
+; Stores Y as the phrase index before the first phrase of a multi-phrase song (or its loop point).
 SetPrevPhraseIndex:
     STY SongPhraseIndex
 
+; Picks the next phrase of the song in A: advances SongPhraseIndex, wrapping to the song's loop point.
 PlayNextPhrase:
     TAX
     BMI @PlayNextDemoPhrase
@@ -111,6 +141,7 @@ PlayNextPhrase:
     LSR
     BCC :-
 
+; Loads the phrase header for SongTable entry Y (1-based) and resets all track positions and counters.
 PrepPhrase:
     LDA SongTable-1, Y
     TAY
@@ -130,7 +161,7 @@ PrepPhrase:
     LDA SongTable+6, Y
     STA SongEnvelopeSelector
     LDA SongTable+7, Y
-    STA $05F1                   ; TODO: [05F1]
+    STA $05F1                   ; Header byte 7: triangle sustain flag (see @ApplyTrgEffects).
     LDA #$01
     STA NoteCounterSongSq1
     STA NoteCounterSongSq0
@@ -139,6 +170,7 @@ PrepPhrase:
     LSR
     STA NoteOffsetSongSq1
 
+; Plays one frame of the current phrase, starting with the square 1 track.
 KeepPlayingSong:
     DEC NoteCounterSongSq1
     BNE ApplySq1Effects
@@ -155,6 +187,10 @@ KeepPlayingSong:
     AND #$F1
     BNE PlayAgain
 
+; ----------------------------------------------------------------------------
+; Stops the song: clears CurSong and disables, then re-enables, the four tone and noise channels.
+; NOTE: Also called for Tune0Request $80 and Tune1Request bit 7. The write of 0 stops the DMC sample.
+; ----------------------------------------------------------------------------
 SilenceSong:
     LDA #$00
     STA CurSong
@@ -163,9 +199,11 @@ SilenceSong:
     STA ApuStatus
     RTS
 
+; Jump to PlayNextPhrase for a song that repeats or continues.
 PlayAgain:
     JMP PlayNextPhrase
 
+; Handles a square 1 length control byte: sets the note length, then reads the note that follows.
 PrepNote:
     JSR GetSongNoteLength
     STA NoteLengthSongSq1
@@ -173,6 +211,7 @@ PrepNote:
     INC NoteOffsetSongSq1
     LDA (SongScriptPtrLo), Y
 
+; Starts the square 1 note in A (unless tune channel 1 is playing) and reloads its note counter.
 PlayNote:
     ; If something is playing in tune channel 1, then
     ; don't play a square note here.
@@ -191,6 +230,7 @@ PlayNote:
     LDA NoteLengthSongSq1
     STA NoteCounterSongSq1
 
+; Per-frame volume envelope and vibrato for square 1; then the square 0, triangle and noise tracks.
 ApplySq1Effects:
     ; If something is playing in tune channel 1, then
     ; skip effects for square channel 1.
@@ -270,9 +310,8 @@ ApplySq1Effects:
 @HandleTrg:
     LDA NoteOffsetSongTrg
     BNE :+
-    ; Begin unverified code 1E1E
+    ; No phrase header has triangle offset 0, so this jump is never taken.
     JMP @HandleNoise
-    ; End unverified code
 :
     DEC NoteCounterSongTrg
     BNE @ApplyTrgEffects
@@ -328,7 +367,7 @@ ApplySq1Effects:
     JSR VibratePitch
     STX TrgTimer
 
-    ; TODO: [05F1] ?
+    ; Header byte 7 [05F1]: bit 7 set = linear counter $1F, clear = $FF.
     LDA $05F1
     BPL :+
     LDA #$1F
@@ -340,8 +379,7 @@ ApplySq1Effects:
     STA TrgLinear
 
 @HandleNoise:
-    ; If the song is not demo nor ending, then return.
-    ; They don't use noise.
+    ; Only the overworld ($01), ending ($10) and demo ($80) songs play the noise track.
     LDA CurSong
     AND #$91
     BEQ @Exit

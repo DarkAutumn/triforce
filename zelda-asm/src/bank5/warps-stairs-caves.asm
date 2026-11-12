@@ -2,26 +2,63 @@
 ; FILE:     bank5/warps-stairs-caves.asm BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 7255-7407
 ; SUBJECTS: (none)
-; TOPIC:    Stairs/cave/dungeon entrance detection, kill count save
-; SEE ALSO:
+; TOPIC:    The transitions Link starts by standing on a tile in mode 5: dungeon stairs to a cellar,
+;           overworld stairs and openings to a cave, a shortcut cave or a dungeon level. Also banks the
+;           room's kill count when Link leaves a room.
+; SEE ALSO: bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate, the only caller of CheckWarps);
+;           bank5/mode8-continue-mode10-stairs.asm and bank5/mode-inits-obj-lists.asm (mode $10, the
+;           walk down the stairs, which ends in ModeAfterStairs); bank5/cave-cellar-enter.asm (modes 9
+;           and $B: arriving in the cellar or cave); bank5/cave-cellar-exits.asm (leaving them);
+;           bank5/room-history-ow.asm and bank5/room-history-uw.asm (SaveKillCountOW, SaveKillCountUW);
+;           bank7/init-mode-dispatch.asm (InitMode3_Sub1 reads LevelEntranceRoomId);
+;           bank7/tile-collision.asm (GetCollidableTileStill).
 ; KEY FACTS:
+;   - The check runs only in mode 5 with Link's grid offset 0, UndergroundExitType 0, Y low nibble $D
+;     and X a multiple of $10 (a multiple of 8 in OW room $22) (CheckWarps).
+;   - UndergroundExitType stays nonzero after Link comes out of a cave, cellar or dungeon until he
+;     completes one grid step, so the entrance he stands on does not take him back in (CheckWarps).
+;   - UW: tiles $70-$73 under Link are stairs: the cellar whose attribute A or B names this room
+;     becomes RoomId and mode $10 leads to mode 9; sound keeps playing (CheckWarps).
+;   - OW: tile $24, tile $88 or tiles $70-$73 under Link start a transition chosen by the room's cave
+;     index (LevelBlockAttrsB bits 7-2): 1-9 load that level (mode 2), $14 shortcut cave (mode $C),
+;     any other value $10 or more a cave (mode $B) (HandleWarpOW).
+;   - LevelEntranceRoomId is set here, to the OW room of the entrance, only when a level is entered;
+;     caves and cellars do not touch it (HandleWarpOW@LoadLevel).
+;   - Entering a cave, shortcut cave or level silences all sound and clears FluteTimer; entering a
+;     cellar does neither (SetTargetMode).
+;   - Every transition here goes through mode $10 first; ModeAfterStairs holds the mode that follows
+;     (SetTargetMode).
+;   - The room's kill count is banked before each of these transitions (SaveKillCount).
 ; CONTENTS: (generated; L = line in this file)
-;   L0016 CheckWarps     code
-;   L0086 SetTargetMode  code
-;   L0104 SaveKillCount  code
-;   L0111 L1746E_Exit    code
-;   L0114 HandleWarpOW   code
+;   L0054 CheckWarps     code  Starts a stairs, cave or level-entrance transition when Link stands on such a tile.
+;   L0130 SetTargetMode  code  Starts mode $10 (stairs) and records the mode to enter when it ends.
+;   L0150 SaveKillCount  code  Banks the current room's kill count into the room's saved state (OW or UW version).
+;   L0158 L1746E_Exit    code  Shared return of CheckWarps, SaveKillCount and HandleWarpOW.
+;   L0174 HandleWarpOW   code  Overworld part of CheckWarps: enters the cave, shortcut cave or level under Link.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Starts a stairs, cave or level-entrance transition when Link stands on such a tile.
+; IN:   Link's ObjX, ObjY, ObjGridOffset; UndergroundExitType; RoomId; CurLevel
+; OUT:  on a transition: GameMode = $10, ModeAfterStairs set, Link's state, knockback and
+;       invincibility timer cleared (EndPrepareMode); ObjCollidedTile (slot 0) overwritten
+; NOTE: Called from Link_EndMoveAndAnimate only, after Link has moved, and only when GameMode = 5.
+;       The caller saves ObjCollidedTile before the call and restores it after.
+; NOTE: The tile tested is the one at (ObjX, ObjY + $0B): with Y = $xD that is the lower left tile
+;       of the 16-pixel square Link stands on (GetCollidableTileStill).
+; NOTE: Requires grid offset 0, so a grid point that Link passes without a frame at offset 0 is not
+;       tested.
+; NOTE: OW room $22 is tested by number: there X only has to be a multiple of 8 (upstream: the
+;       level 6 entrance is wide; which level uses the room is unverified here).
+; ----------------------------------------------------------------------------
 CheckWarps:
-    ; If just came out of a cave, dungeon, or cellar; or if grid offset <> 0;
-    ; then return.
+    ; Return if Link just came out of a cave, dungeon or cellar and has not
+    ; finished a grid step since, or if he is between grid points.
     LDA UndergroundExitType
     ORA ObjGridOffset
     BNE L1746E_Exit
 
-    ; If in OW room $22 and Link's X is not a multiple of 8, then return.
-    ; This is a special case, because Level 6's entrance is wide.
+    ; OW room $22: X must be a multiple of 8.
     LDA CurLevel
     BNE @EnsureSquareX
     LDA RoomId
@@ -33,41 +70,40 @@ CheckWarps:
     BEQ @EnsureSquareY
 
 @EnsureSquareX:
-    ; In other OW rooms and in UW, make sure X is a multiple of $10.
+    ; Every other OW room and all of UW: X must be a multiple of $10.
     LDA ObjX
     AND #$0F
     BNE L1746E_Exit
 
 @EnsureSquareY:
-    ; If Link's Y is not at ((multiple of $10) + $D), then return.
+    ; Y must be (a multiple of $10) + $D: Link aligned with a row of squares.
     LDA ObjY
     AND #$0F
     CMP #$0D
     BNE L1746E_Exit
 
-    ; Check tile collision standing still.
+    ; Get the tile under Link (no direction: X = 0 is still Link's slot).
     JSR GetCollidableTileStill
 
-    ; If in OW, go handle the tile separately.
+    ; OW is handled separately.
     LDA ObjCollidedTile
     LDY CurLevel
     BEQ HandleWarpOW
 
-    ; In UW.
-    ;
-    ; If tile is not part of stairs square (tiles $70 to $74), return.
+    ; In UW: only stairs tiles $70-$73 count.
     CMP #$70
     BCC L1746E_Exit
     CMP #$74
     BCS L1746E_Exit
 
-    ; Prepare to leave this room.
+    ; Link is on dungeon stairs. Bank the kills and remember this room.
     JSR SaveKillCount
     LDA RoomId
-    STA CellarSourceRoomId      ; Remember what room we were in.
+    STA CellarSourceRoomId      ; Used to pick the cellar's left or right ladder on arrival.
 
-    ; Look for a room in cellar array that has the current room as
-    ; destination room A or B.
+    ; Find the first cellar room in the level's cellar list whose attribute A (room of
+    ; the left stairs) or B (room of the right stairs) is the current room.
+    ; NOTE: the search has no end test; it relies on a match existing.
     LDX #$FF
 :
     INX
@@ -79,28 +115,38 @@ CheckWarps:
     CMP LevelBlockAttrsB, Y
     BNE :-
 :
-    ; Make the cellar found the current room, and the target mode 9.
+    ; The cellar becomes the current room; after the stairs comes mode 9.
     STY RoomId
     LDA #$09
 
+; ----------------------------------------------------------------------------
+; Starts mode $10 (stairs) and records the mode to enter when it ends.
+; IN:   A = mode after the stairs: 9 cellar, $B cave, $C shortcut cave, 2 load level
+; OUT:  ModeAfterStairs = A; GameMode = $10 with submode 0, not yet updating; Link's state,
+;       knockback and invincibility timer = 0 (EndPrepareMode)
+; NOTE: Unless A = 9, all sound is silenced and Tune1Request and FluteTimer are set to 0. A cellar
+;       keeps the dungeon's sound.
+; ----------------------------------------------------------------------------
 SetTargetMode:
     STA ModeAfterStairs
 
-    ; If the target mode is not 9 (as in it's a cave), then silence all sound.
+    ; Not a cellar: silence all sound (SilenceAllSound returns A = 0).
     CMP #$09
     BEQ :+
     JSR SilenceAllSound
     STA Tune1Request
-
-    ; Reset the flute timer.
     STA FluteTimer
 :
-    ; Go to mode $10.
     LDA #$10
     STA GameMode
     JSR MaskCurPpuMaskGrayscale
     JMP EndPrepareMode
 
+; ----------------------------------------------------------------------------
+; Banks the current room's kill count into the room's saved state (OW or UW version).
+; NOTE: Called before each stairs or entrance transition here and when Link leaves a room by its
+;       edge (mode 6 init).
+; ----------------------------------------------------------------------------
 SaveKillCount:
     LDA CurLevel
     BNE :+
@@ -108,61 +154,70 @@ SaveKillCount:
 :
     JSR SaveKillCountUW
 
+; Shared return of CheckWarps, SaveKillCount and HandleWarpOW.
 L1746E_Exit:
     RTS
 
+; ----------------------------------------------------------------------------
+; Overworld part of CheckWarps: enters the cave, shortcut cave or level under Link.
+; IN:   A = tile under Link (OW tiles listed in WalkableTiles arrive as $26)
+; OUT:  UndergroundEntranceTile = A, even when A is no entrance; on a transition as SetTargetMode,
+;       and for a level also CurLevel and LevelEntranceRoomId
+; NOTE: Entrance tiles: $24 (the black opening: Link later sinks into it and rises out of it),
+;       $88 (what square uses it is unverified) and the stairs tiles $70-$73.
+; NOTE: The destination comes from the room's cave index, LevelBlockAttrsB bits 7-2: below $10 it
+;       is the level number (index 0 is not excluded: it would load level 0, the OW); $14 is the
+;       shortcut cave; anything else is an ordinary cave.
+; NOTE: The $70 written to ObjCollidedTile for stairs does not survive: the caller of CheckWarps
+;       restores ObjCollidedTile, and mode $10's init reads the tile under Link again.
+; ----------------------------------------------------------------------------
 HandleWarpOW:
-    ; Save the tile that Link is standing on; so that we know how
-    ; to go underground.
+    ; Remember the tile, so the exit later knows whether Link walked into an
+    ; opening ($24) or took stairs.
     STA UndergroundEntranceTile
 
-    ; If (tile < $70 or >= $74) except for $24 and $88; then return.
+    ; Return unless the tile is $24, $88 or $70-$73.
     CMP #$24
-    BEQ :+
+    BEQ @GoUnderground
     CMP #$88
-    BEQ :+
+    BEQ @GoUnderground
     CMP #$70
     BCC L1746E_Exit
     CMP #$74
     BCS L1746E_Exit
 
-    ; If Link touched a stairs tile ($70 to $74), then
-    ; use $70 to represent them all.
+    ; Any stairs tile is recorded as $70 (see the NOTE above).
     LDA #$70
     STA ObjCollidedTile
-:
+
+@GoUnderground:
     JSR SaveKillCount
 
-    ; Get the cave index attribute.
+    ; Get the room's cave index, still shifted left by 2.
     LDY RoomId
     LDA LevelBlockAttrsB, Y
-    AND #$FC                    ; Cave index
+    AND #$FC
 
-    ; If < $40, go deal with a level.
-    ; $40 means cave index $10. Levels have cave indexes 1 to 9.
+    ; Below $40 (cave index below $10): a level entrance.
     CMP #$40
     BCC @LoadLevel
 
-    ; If attribute <> $50, go to mode $B for a regular cave.
+    ; $50 (cave index $14): shortcut cave, mode $C. Anything else: cave, mode $B.
     LDY #$0B
     CMP #$50
     BNE :+
-
-    ; Attribute = $50 meaning cave index $14 (shortcuts).
-    ; Go to mode $C for a shortcut cave.
     INY
 :
     TYA
     JMP SetTargetMode
 
 @LoadLevel:
-    ; Load a level.
-    ;
-    ; Shift right by two to get the level number.
+    ; The cave index is the level number. Remember the entrance room: mode 3 puts
+    ; Link back in it when the OW is loaded again.
     LSR
     LSR
     STA CurLevel
     LDA RoomId
-    STA LevelEntranceRoomId        ; Remember where we came from.
-    LDA #$02                    ; Target mode is 2 to load a level.
+    STA LevelEntranceRoomId
+    LDA #$02                    ; After the stairs: mode 2, load the level.
     BNE SetTargetMode

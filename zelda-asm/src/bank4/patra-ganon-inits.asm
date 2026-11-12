@@ -2,20 +2,48 @@
 ; FILE:     bank4/patra-ganon-inits.asm  BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 9526-9585
 ; SUBJECTS: (none)
-; TOPIC:    InitPatra, InitGanon
-; SEE ALSO:
+; TOPIC:    Init routines: Patra (types $47, $48) and its eight children (types $25, $26); Ganon
+;           (type $3E), whose init halts Link for the opening scene of the fight.
+; SEE ALSO: bank4/patra.asm (UpdatePatra, UpdatePatraChild: orbits, maneuvers); bank4/ganon.asm
+;           (UpdateGanon, Ganon_ScenePhase0: what Link's timer set here drives);
+;           bank4/fairy-flyer-common.asm (flyer speed-up and movement used by Patra);
+;           bank7/object-update-table.asm (ObjectTypeToHpPairs).
 ; KEY FACTS:
+;   - Patra and its children get invincibility mask $FE: only damage type 1 (sword, sword shot, rod
+;     swing) can hurt them (InitPatra).
+;   - Patra starts at ($80, $70) facing up, flyer speed $1F, room flyer top speed $40 (InitPatra).
+;   - Patra type $47 makes eight children of type $25, type $48 eight of type $26, in object slots
+;     $02-$09 (InitPatra).
+;   - InitPatra sets the maneuver timer, ObjTimer of the slot after Patra's (ObjTimer+1, X), to $FF
+;     frames. With Patra in slot 1 that is slot $02's timer, which the init of the child in slot $02
+;     (ResetObjMetastateAndTimer) zeroes again; that this happens before Patra's first update follows
+;     from the slot order $0B down to $01 but was not traced (unverified) (InitPatra).
+;   - Ganon gets invincibility mask $FA: bits 0 (sword class) and 2 (arrow) are the only damage types
+;     not masked (InitGanon).
+;   - InitGanon halts Link (ObjState = $40) and sets Link's timer to $40 frames, the length of the
+;     first, dark part of the opening scene (InitGanon, Ganon_ScenePhase0).
 ; CONTENTS: (generated; L = line in this file)
-;   L0013 InitPatra  code
-;   L0058 InitGanon  code
+;   L0041 InitPatra  code  Sets up Patra and turns object slots $02-$09 into its eight children.
+;   L0095 InitGanon  code  Sets up Ganon and starts the opening scene of his room by halting Link.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Sets up Patra and turns object slots $02-$09 into its eight children.
+; IN:   X = Patra's object slot. The code reads ObjType+1, so it expects Patra in slot 1.
+; OUT:  [00] = child type; ObjType and ObjInvincibilityMask of slots $02-$09 written; Y = $0A.
+; NOTE: Mask $FE leaves only bit 0 clear: Patra and the children are hurt by damage type 1 only
+;       (sword, sword shot, rod swing).
+;       Child type $25 goes with Patra $47, $26 with Patra $48.
+;       The roar is sample request $40.
+;       The children are initialized on a later update by ResetObjMetastateAndTimer (no spawn
+;       cloud); for slot $02 that clears the ObjTimer byte set to $FF here.
+; ----------------------------------------------------------------------------
 InitPatra:
-    ; Invincible to everything but sword.
+    ; Invincible to every damage type except 1 (sword).
     LDA #$FE
     STA ObjInvincibilityMask, X
 
-    ; Start at location ($80, $70) and facing up.
+    ; Start at ($80, $70), facing up.
     LDA #$80
     STA ObjX, X
     LDA #$70
@@ -23,50 +51,61 @@ InitPatra:
     LDA #$08
     STA ObjDir, X
 
-    ; Set flying speed $1F, and maximum $40.
+    ; Flyer speed $1F; the room's flyer top speed $40.
     LDA #$1F
     STA Flyer_ObjSpeed, X
     LDA #$40
     STA FlyerMaxSpeedFrac
-    STA SampleRequest           ; Play Digdogger/Manhandla/Patra roar.
+    STA SampleRequest           ; Sample $40: the roar shared with Digdogger and Manhandla.
 
-    ; Set object timer to $FF. When it runs out, the maneuver will be switched.
+    ; Maneuver timer: $FF frames. UpdatePatra flips the children's orbit pattern when it is 0 and
+    ; the child in slot 3 is at angle 0. The timer byte is that of the slot after Patra's: with
+    ; Patra in slot 1 it is also the ObjTimer of the child in slot $02, whose init zeroes it.
     LDA #$FF
     STA ObjTimer+1, X
 
-    ; Patra type $47 goes with Patra Child type $25.
-    ; Patra type $48 goes with Patra Child type $26.
+    ; Child type: $25 for Patra type $47, else $26 (Patra type $48).
     LDA #$25
     LDY ObjType+1
     CPY #$47
     BEQ :+
     LDA #$26
 :
-    ; Loop over object slots 2 to 9, making patra children.
+    ; For object slots 2 to 9: set the child type and the same invincibility mask.
     LDY #$02
     STA $00                     ; [00] holds the patra child type.
 :
     LDA $00
     STA ObjType, Y
-    LDA #$FE                    ; Patra children are also only weak to the sword.
+    LDA #$FE                    ; Children, too, are hurt by the sword class only.
     STA ObjInvincibilityMask, Y
     INY
     CPY #$0A
     BNE :-
     RTS
 
+; ----------------------------------------------------------------------------
+; Sets up Ganon and starts the opening scene of his room by halting Link.
+; IN:   X = Ganon's object slot.
+; OUT:  Link's ObjState = $40 (halted) and ObjTimer = $40; Ganon's metastate and timer = 0.
+; NOTE: Mask $FA leaves bits 0 and 2 clear: damage types 1 (sword class) and 4 (arrow) are not
+;       masked. What a sword or arrow hit does to Ganon is decided in Ganon_CheckCollisions.
+;       Link stays halted until Ganon_ScenePhase1 ends. Samples $02 and $10 are requested together.
+; ----------------------------------------------------------------------------
 InitGanon:
-    LDA #$FA                    ; Invincible to everything but sword and arrow.
+    LDA #$FA                    ; Invincible to every damage type except 1 (sword) and 4 (arrow).
     STA ObjInvincibilityMask, X
 
     ; Halt Link.
     LDA #$40
     STA ObjState
 
-    ; Set Link's timer to $40 for scene phase 0.
+    ; Link's timer: $40 frames for scene phase 0 (the room is still dark).
     STA ObjTimer
-    LDA #$02                    ; Boss hit sound effect. But here it's more of a shout.
+    LDA #$02                    ; Sample $02, the boss hit cry, used here as a shout.
     STA SampleRequest
-    LDA #$10                    ; Play Aquamentus/Gleeok/Ganon roar.
-    JSR PlaySample
+    LDA #$10                    ; Sample $10: the roar shared with Aquamentus and Gleeok.
+    JSR PlaySample              ; ORs it into SampleRequest.
+
+    ; No spawn cloud: metastate 0, and Ganon's own timer 0.
     JMP ResetObjMetastateAndTimer

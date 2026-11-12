@@ -2,26 +2,54 @@
 ; FILE:     bank5/scroll-world.asm       BANK: 5 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_05.asm 552-721
 ; SUBJECTS: (none)
-; TOPIC:    Per-frame world scrolling
-; SEE ALSO:
+; TOPIC:    The per-frame step of the room-to-room scroll (mode 7): moves the scroll position by one
+;           tile row (vertical) or 2/4 pixels (horizontal), carries Link across the screen, and ends
+;           the scroll submode when the next room is fully shown.
+; SEE ALSO: bank5/mode7-scroll-update.asm (UpdateMode7Scroll_Sub0 sets the start values, Sub2 sets
+;           VScrollStartFrame, Sub3 calls ScrollWorld every frame and copies the row or column);
+;           bank5/mode7-scroll-init.asm (draws the next room before the scroll);
+;           bank5/sprite0-split-scroll.asm (applies VScrollAddrHi/Lo, CurHScroll and
+;           OddBaseNameTableOverride below the status bar).
 ; KEY FACTS:
+;   - The scroll direction is Link's facing, ObjDir of slot 0 (ScrollWorld, ScrollWorldH).
+;   - Horizontal scroll: every frame, 4 pixels in OW (64 frames per room), 2 pixels in UW
+;     (128 frames) (ScrollWorldH).
+;   - Vertical scroll: one tile row (8 pixels) every 2nd frame in OW, every 4th frame in UW, on
+;     the frames where the masked FrameCounter equals VScrollStartFrame (ScrollWorld).
+;   - Scrolling down takes 22 steps ($2100 to $23C0), scrolling up 23 (22 rows plus the step that
+;     detects $20E0): 85 / 89 frames in UW, 43 / 45 in OW, the first step on the first frame
+;     (ScrollWorld, ScrollWorldDownOrH; UpdateMode7Scroll_Sub2 sets the phase).
+;   - Link is carried with the picture: Y +8 per step while Y < $DD (up), Y -8 while Y >= $3E
+;     (down), X + speed while X < $F0 (left), X - speed while X >= 1 (right) (ScrollWorld,
+;     ScrollWorldDownOrH, ScrollWorldH, ScrollWorldRight).
+;   - CurRow (vertical) or CurColumn (horizontal) is stepped here; the caller copies that row or
+;     column of the new room to the name table (ScrollWorld, ScrollWorldH).
 ; CONTENTS: (generated; L = line in this file)
-;   L0019 ScrollWorld         code
-;   L0077 ResetVScrollLo      code
-;   L0081 IncSubmode          code
-;   L0085 ScrollWorldDownOrH  code
-;   L0117 ScrollWorldH        code
-;   L0147 SwitchToNT1         code
-;   L0162 L14287_Exit         code
-;   L0165 ScrollWorldRight    code
+;   L0046 ScrollWorld         code  Advances the room scroll by one step in the direction Link faces (mode 7 update, submode 3).
+;   L0106 ResetVScrollLo      code  Clears VScrollAddrLo, then ends the scroll submode (shared by the up and down scrolls).
+;   L0111 IncSubmode          code  Advances GameSubmode: the scroll is complete (vertical or horizontal).
+;   L0116 ScrollWorldDownOrH  code  Vertical step frame, Link not facing up: scrolls down one row if he faces down, else horizontally.
+;   L0154 ScrollWorldH        code  Horizontal part of the scroll step: scrolls left if Link faces left, else tries right.
+;   L0185 SwitchToNT1         code  Sets OddBaseNameTableOverride = 1 so that the horizontal scroll position is based on NT 1.
+;   L0201 L14287_Exit         code  Shared exit of the scroll routines in this file.
+;   L0205 ScrollWorldRight    code  Scrolls right by [00] pixels if Link faces right; otherwise does nothing.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Advances the room scroll by one step in the direction Link faces (mode 7 update, submode 3).
+; IN:   ObjDir (slot 0) = scroll direction; VScrollStartFrame = FrameCounter phase of vertical steps.
+; OUT:  VScrollAddrHi/Lo or CurHScroll moved; CurRow or CurColumn stepped; ObjX or ObjY of Link
+;       moved; GameSubmode + 1 when the scroll is complete. Uses [00], [01] (horizontal).
+; NOTE: Vertical: 8 pixels per step, a step every 2nd frame in OW and every 4th in UW.
+;       Horizontal: 4 pixels per frame in OW, 2 in UW.
+; ----------------------------------------------------------------------------
 ScrollWorld:
     LDA FrameCounter
 
-    ; The purpose of this is to delay vertical scrolling.
-    ; OW: once every two frames
-    ; UW: once every four frames
+    ; Vertical scrolling moves only on the frames where the low bits
+    ; of FrameCounter equal VScrollStartFrame:
+    ; OW: once every two frames (mask 1)
+    ; UW: once every four frames (mask 3)
     ; Horizontal scrolling happens every frame.
     AND #$03
     LDY CurLevel
@@ -29,15 +57,15 @@ ScrollWorld:
     AND #$01
 :
     CMP VScrollStartFrame
-    BNE ScrollWorldH
-    LDA #$08                    ; If the player is facing up,
+    BNE ScrollWorldH            ; Not a vertical step frame. Only a horizontal scroll moves.
+    LDA #$08                    ; If Link is facing up,
     BIT ObjDir
     BEQ ScrollWorldDownOrH
 
     ; then scroll up.
     ; Scrolling up starts from the top of NT 2 at $2800.
     DEC CurRow
-    LDA ObjY                    ; Move the player down 1 tile length if not at edge.
+    LDA ObjY                    ; Move Link down 1 tile (8 pixels) while his Y < $DD.
     CMP #$DD
     BCS :+
     ADC #$08
@@ -51,10 +79,10 @@ ScrollWorld:
     DEC VScrollAddrHi
 :
     CMP #$E0
-    BNE @Exit                   ; If the result doesn't end in $E0, then return.
+    BNE @Exit                   ; If the low byte isn't $E0, then return.
     LDA VScrollAddrHi
     CMP #$20
-    BEQ @LimitLow               ; If the result is $20E0, then the scroll position reached the status bar. Go sanitize and keep it there.
+    BEQ @LimitLow               ; $20E0: passed the top of the play area in NT 0. Go finish.
     CMP #$27
     BNE @Exit                   ; If the result is not $27E0, then return.
 
@@ -70,26 +98,29 @@ ScrollWorld:
     RTS
 
 @LimitLow:
-    ; Don't let the scroll position go above $2100, the bottom of
-    ; the status bar; nor below $2800, the top of NT 2.
+    ; The address went one row above $2100, the top of the play area
+    ; (the bottom of the status bar). Put it back at $2100 and end the scroll.
     INC VScrollAddrHi
 
+; Clears VScrollAddrLo, then ends the scroll submode (shared by the up and down scrolls).
 ResetVScrollLo:
     LDA #$00
     STA VScrollAddrLo
 
+; Advances GameSubmode: the scroll is complete (vertical or horizontal).
 IncSubmode:
-    INC GameSubmode             ; And we're done.
+    INC GameSubmode
     RTS
 
+; Vertical step frame, Link not facing up: scrolls down one row if he faces down, else horizontally.
 ScrollWorldDownOrH:
-    LSR                         ; If the player is facing down,
+    LSR                         ; A = 4. If Link is facing down,
     BIT ObjDir
     BEQ ScrollWorldH
 
     ; then scroll down.
     INC CurRow
-    LDA ObjY                    ; Move the player up 1 tile length, if not at edge.
+    LDA ObjY                    ; Move Link up 1 tile (8 pixels) while his Y >= $3E.
     CMP #$3E
     BCC :+
     SBC #$08
@@ -103,52 +134,59 @@ ScrollWorldDownOrH:
     INC VScrollAddrHi
 :
     CMP #$C0
-    BNE L14287_Exit             ; If the result doesn't end in $C0, then return.
+    BNE L14287_Exit             ; If the low byte isn't $C0, then return.
     LDA VScrollAddrHi
     CMP #$23
     BNE L14287_Exit             ; If the result is not $23C0, then return.
 
-    ; VScroll address is $23C0, the bottom of NT 0. So, we need
-    ; to roll to $2800, the top of NT 2.
+    ; VScroll address is $23C0, just past the bottom row of NT 0. So, roll
+    ; to $2800, the top of NT 2, where the next room was drawn, and end the scroll.
     LDA #$28
     STA VScrollAddrHi
     JMP ResetVScrollLo
 
+; ----------------------------------------------------------------------------
+; Horizontal part of the scroll step: scrolls left if Link faces left, else tries right.
+; OUT:  [00] = pixels per frame (4 in OW, 2 in UW); [01] = CurHScroll value after the first step
+;       left ($FC in OW, $FE in UW).
+; NOTE: A full room is 256 pixels: 64 frames in OW, 128 frames in UW.
+; ----------------------------------------------------------------------------
 ScrollWorldH:
     LDA #$02                    ; Use the default scroll speed: 2 pixels a frame.
     LDX #$FE
     LDY CurLevel
     BNE :+
-    ASL                         ; Scroll twice as fast if in the overworld.
+    ASL                         ; Scroll twice as fast (4 pixels a frame) in OW.
     LDX #$FC
 :
     STA $00                     ; [00] holds the speed.
-    STX $01                     ; [01] holds the X position where we must start using NT 1.
-    LDA #$02                    ; If player does not face left,
+    STX $01                     ; [01] holds the scroll position where we must start using NT 1.
+    LDA #$02                    ; If Link does not face left,
     BIT ObjDir
     BEQ ScrollWorldRight        ; then go scroll right.
 
     ; Scroll left.
     DEC CurColumn
-    LDA ObjX                    ; Move player right by [00] if not at edge.
+    LDA ObjX                    ; Move Link right by [00] while his X < $F0.
     CMP #$F0
     BCS :+
     ADC $00
     STA ObjX
 :
-    LDA CurHScroll              ; Update nametable X scroll by speed in [00].
+    LDA CurHScroll              ; Move the horizontal scroll position left by the speed in [00].
     SEC
     SBC $00
     STA CurHScroll
-    BEQ IncSubmode              ; Stop when you've scrolled to the end (CurHScroll=0).
-    CMP $01                     ; Does scroll position match reference scroll position [01]?
+    BEQ IncSubmode              ; The scroll is complete when CurHScroll returns to 0.
+    CMP $01                     ; Is this the first step (scroll position = [01])?
     BNE L14287_Exit             ; If not, then return.
 
+; Sets OddBaseNameTableOverride = 1 so that the horizontal scroll position is based on NT 1.
 SwitchToNT1:
     ; When we begin scrolling left, CurHScroll = 0 and base
     ; nametable is 0. This shows the current room completely.
     ;
-    ; The first time in ScrollWorld, the speed [00] will be
+    ; The first time in ScrollWorld, the speed [00] is
     ; subtracted from CurHScroll to show most of NT 0, and
     ; a little of NT 1 to its left. In other words, the
     ; scroll position now refers to a position in NT 1.
@@ -157,32 +195,35 @@ SwitchToNT1:
     ; CurHScroll matches it (in the first call to this routine),
     ; turn on this flag that makes NT 1 the base nametable.
     LDA #$01
-    STA OddBaseNameTableOverride    ; Start basing the horizontal scroll position on NT 1.
+    STA OddBaseNameTableOverride
 
+; Shared exit of the scroll routines in this file.
 L14287_Exit:
     RTS
 
+; Scrolls right by [00] pixels if Link faces right; otherwise does nothing.
 ScrollWorldRight:
-    LSR
-    BIT ObjDir                  ; If the player isn't facing right either,
-    BEQ L14287_Exit             ; then quit.
+    LSR                         ; A = 1.
+    BIT ObjDir                  ; If Link isn't facing right either,
+    BEQ L14287_Exit             ; then return.
     INC CurColumn
     LDA ObjX
     CMP #$01
-    BCC :+                      ; Move player left by [00] if not at edge.
+    BCC :+                      ; Move Link left by [00] while his X >= 1.
     SBC $00
     STA ObjX
 :
-    LDA CurHScroll              ; Update nametable X scroll by speed in [00].
+    LDA CurHScroll              ; Move the horizontal scroll position right by the speed in [00].
     CLC
     ADC $00
     STA CurHScroll
-    BNE L14287_Exit             ; If scroll position hasn't reached 0, then return.
+    BNE L14287_Exit             ; If the scroll position hasn't wrapped to 0, then return.
 
     ; Because CurHScroll is now 0 and base nametable is 0;
     ; we would be showing the new room at the end of the scroll
     ; but with old attributes.
     ;
-    ; So, now use NT 1, until after we copy the attributes.
+    ; So, now use NT 1, until after the attributes are copied
+    ; (UpdateMode7Scroll_Sub4And5_TransferNTAttrs clears the flag).
     JSR SwitchToNT1
     JMP IncSubmode              ; Go to the next submode.

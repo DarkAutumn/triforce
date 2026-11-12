@@ -2,35 +2,64 @@
 ; FILE:     bank1/person-textbox.asm     BANK: 1 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_01.asm 570-676
 ; SUBJECTS: (none)
-; TOPIC:    Textbox typing, one character per 6 frames, unhalts Link
-; SEE ALSO:
+; TOPIC:    The textbox state shared by cave persons, dungeon persons and the hungry Goriya: types the
+;           person's text one character at a time, then advances the person's state and unhalts Link.
+; SEE ALSO: bank1/cave-init-person-text.asm (PersonText, PersonTextAddrs, UnhaltLink; the text
+;           encoding); bank1/cave-person-prices.asm (cave person states 1 and 7);
+;           bank1/underworld-person-update.asm, bank1/life-or-money.asm, bank1/grumble-goriya.asm (the
+;           other state tables that use this handler); bank6/transfer-bufs-static.asm
+;           (BlankTextBoxLines).
 ; KEY FACTS:
+;   - One character is typed every 6 frames (ObjTimer+1 reloaded with 6); characters with tile code
+;     $25 are skipped in the same frame and cost no time, ordinary blanks ($24) cost 6 frames.
+;     UpdatePersonState_Textbox
+;   - A person's setup halts Link; he is unhalted, and the person's state advanced, in the frame the
+;     last character (bits 7-6 = $C0) is typed. The handler itself neither halts Link nor tests
+;     whether he is halted. UpdatePersonState_Textbox
+;   - Textbox lines start at nametable $21A4, $21C4, $21E4. A character with bits 7-6 = $80 is
+;     followed by line 2, $40 by line 3. TextboxLineAddrsLo, UpdatePersonState_Textbox
+;   - Every typed character requests tune 0 bit $10. UpdatePersonState_Textbox
+;   - The handler always uses object slot 1's timer and state (ObjTimer+1, ObjState+1).
+;     UpdatePersonState_Textbox
 ; CONTENTS: (generated; L = line in this file)
-;   L0014 TextboxCharTransferRecTemplate  data
-;   L0017 TextboxLineAddrsLo              data
-;   L0020 UpdatePersonState_Textbox       code
+;   L0032 TextboxCharTransferRecTemplate  data  DATA: transfer record template for one textbox character: nametable address $21A4 (the low byte is
+;   L0037 TextboxLineAddrsLo              data  TABLE: low byte of the nametable address ($21xx) where a textbox line starts; index 0 = line 2
+;   L0051 UpdatePersonState_Textbox       code  Person state: types the next character of the person's text; at the end, next state and unhalt Link.
 ; ============================================================================
 
+; DATA: transfer record template for one textbox character: nametable address $21A4 (the low byte is
+; replaced), 1 tile, $24 (replaced by the character), end marker $FF.
 TextboxCharTransferRecTemplate:
     .BYTE $21, $A4, $01, $24, $FF
 
+; TABLE: low byte of the nametable address ($21xx) where a textbox line starts; index 0 = line 2
+; ($C4), 1 = line 3 ($E4), 2 = line 1 ($A4).
 TextboxLineAddrsLo:
     .BYTE $C4, $E4, $A4
 
+; ----------------------------------------------------------------------------
+; Person state: types the next character of the person's text; at the end, next state and unhalt Link.
+; IN:   PersonTextSelector = offset of the text's address in PersonTextAddrs; PersonTextIndex = index
+;       of the next character; PersonTextVramLo = low nametable address of the next cell;
+;       ObjTimer+1 = frames until the next character.
+; OUT:  DynTileBuf = one-tile transfer record; PersonTextIndex and PersonTextVramLo advanced;
+;       ObjTimer+1 = 6; at the end of the text ObjState+1 is incremented, ObjState (Link) = 0 and
+;       PersonTextVramLo = $A4. Uses [00:01] (text address).
+; NOTE: 6 frames per character; tile code $25 is skipped at no cost in time. Link is drawn every
+;       frame with his animation counter held (Link_EndMoveAndDraw).
+; ----------------------------------------------------------------------------
 UpdatePersonState_Textbox:
     JSR Link_EndMoveAndDraw_Bank1
 
-    ; If the person's timer has not expired, then return.
+    ; Wait until the person's timer has run out.
     LDA ObjTimer+1
     BNE @Exit
 
-    ; Set the timer to wait 6 frames after the next character about
-    ; to be shown.
+    ; 6 frames until the character after this one.
     LDA #$06
     STA ObjTimer+1
 
-    ; Copy the 5 bytes of the textbox character transfer record template
-    ; to the dynamic transfer buf.
+    ; Copy the 5-byte one-character transfer record template to the dynamic transfer buffer.
     LDY #$04
 :
     LDA TextboxCharTransferRecTemplate, Y
@@ -39,16 +68,12 @@ UpdatePersonState_Textbox:
     BPL :-
 
 @WriteChar:
-    ; Replace the low byte of the VRAM address with the one
-    ; where the next character should be written.
+    ; Set the record's low nametable address to the current cell, and step to the next cell.
     LDA PersonTextVramLo
     STA DynTileBuf+1
-
-    ; Increment the low VRAM address for the next character.
     INC PersonTextVramLo
 
-    ; Use the person text selector to look up the address of the
-    ; text for the textbox. Store the address in [00:01].
+    ; [00:01] = address of the person's text.
     LDY PersonTextSelector
     LDA PersonTextAddrs, Y
     STA $00
@@ -56,39 +81,33 @@ UpdatePersonState_Textbox:
     LDA PersonTextAddrs, Y
     STA $01
 
-    ; Load the person text current character index.
+    ; Y = index of the current character; the stored index moves on to the next one.
     LDY PersonTextIndex
-
-    ; Increment the index variable to point to the next character
-    ; for next time.
     INC PersonTextIndex
 
-    ; Get the current character.
+    ; Low 6 bits = character tile.
     LDA ($00), Y
 
-    ; If the character is $25, then it's a special space. It will still
-    ; take up space, but will not take time to show -- meaning that
-    ; we'll go look up the next character to transfer.
+    ; Tile $25 is a blank that takes a cell but no time: go on to the next character in this
+    ; same frame. (Its high 2 bits are not examined.)
     AND #$3F
     CMP #$25
     BEQ @WriteChar
 
-    ; We have a non-space character. Put it in the transfer record.
+    ; Put the character in the transfer record.
     STA DynTileBuf+3
 
-    ; Play the "heart taken/character" sound effect.
+    ; Request tune 0 bit $10 (the sound of a text character).
     LDA #$10
     STA Tune0Request
 
-    ; If the high 2 bits of character element = 0, then return.
+    ; High 2 bits of the character = 0: the line goes on; return.
     LDA ($00), Y
     AND #$C0
     BEQ @Exit
 
-    ; Determine an index based on the high 2 bits of the character element:
-    ;   $80: 0
-    ;   $40: 1
-    ;   $C0: 2
+    ; Otherwise turn them into an index into TextboxLineAddrsLo:
+    ;   $80: 0 (go to line 2)   $40: 1 (go to line 3)   $C0: 2 (end of text, back to line 1)
     LDY #$02
     CMP #$C0
     BEQ @ChangeLine
@@ -98,19 +117,11 @@ UpdatePersonState_Textbox:
     DEY
 
 @ChangeLine:
-    ; The index chooses the low VRAM address of the start
-    ; of another line:
-    ;   0: $C4: front of the second line
-    ;   1: $E4: front of the third line
-    ;   2: $A4: front of the first line
-    ;
-    ; Look up the low VRAM address and store it.
+    ; The next character goes to the start of that line.
     LDA TextboxLineAddrsLo, Y
     STA PersonTextVramLo
 
-    ; If index = 2, then we've reached the end of the text,
-    ; and low VRAM address is moved to the front of the first line.
-    ; So, advance the state of the person object, and unhalt Link.
+    ; Index 2 = end of the text: advance the person's state and unhalt Link.
     CPY #$02
     BNE @Exit
     INC ObjState+1

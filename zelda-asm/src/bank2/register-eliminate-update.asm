@@ -2,20 +2,42 @@
 ; FILE:     bank2/register-eliminate-update.asm BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 1612-1796
 ; SUBJECTS: (none)
-; TOPIC:    Register (ZELDA name check) and elimination updates
-; SEE ALSO:
+; TOPIC:    Per-frame update of mode $E (register a name) and mode $F (eliminate a save slot): what Start
+;           does on a slot or on "End", the ZELDA name test that starts a file in Q2, slot deletion.
+; SEE ALSO: bank2/register-eliminate-init.asm (screen setup, tables, FetchFileBAddressSet);
+;           bank2/register-name-input.asm (character board and name typing);
+;           bank2/register-cursor-sprites.asm (cursors, Select cycling);
+;           bank2/mode1-init-save-files.asm (file A/B format and checksum; the commit pass that follows);
+;           bank2/moded-save.asm (UpdateModeDSave_Sub2, the exit to mode 0 submode 1).
 ; KEY FACTS:
+;   - Mode $E does nothing permanent until Start is pressed on "End" (CurSaveSlot = 3); then every slot's
+;     name is copied from SaveSlotNames into its file B (UpdateModeERegister).
+;   - A slot is registered only if it was not active and its name has at least one non-space character:
+;     its file B gets HeartValues $22 and HeartPartial $FF (3 containers, 3 full hearts), InvMaxBombs 8,
+;     the active flag, a checksum, and is marked uncommitted (UpdateModeERegister).
+;   - Q2 start: the first 5 name characters equal to ZeldaString ("ZELDA"; characters 6-8 are not
+;     compared) set the file's quest number to 1 (UpdateModeERegister@CompareToZelda).
+;   - Mode $E leaves through GameMode 0 / GameSubmode 1, whose handler copies each valid uncommitted
+;     file B over file A (UpdateModeDSave_Sub2, UpdateMode0Demo_Sub1).
+;   - Mode $F: Start on a slot formats its file A at once and blanks its name; Start on "End" switches
+;     to mode $E (UpdateModeFElimination, DeleteSlot).
 ; CONTENTS: (generated; L = line in this file)
-;   L0016 ZeldaString             data
-;   L0019 UpdateModeERegister     code
-;   L0151 UpdateModeFElimination  code
-;   L0167 ModeE_ResetVariables    code
-;   L0174 DeleteSlot              code
+;   L0033 ZeldaString             data  TABLE: the name "ZELDA" as 5 character tile codes; compared with the start of a new slot's name.
+;   L0041 UpdateModeERegister     code  Mode $E update: Start on "End" writes the new names to the save files; otherwise runs name entry.
+;   L0177 UpdateModeFElimination  code  Mode $F update: Start deletes the chosen slot or, on "End", goes to mode $E; else handles Select.
+;   L0194 ModeE_ResetVariables    code  Clears the name-entry state (CharBoardIndex, IsNameFieldInitialized, NameCharOffset); IN: A = 0.
+;   L0204 DeleteSlot              code  Eliminates the save slot CurSaveSlot: formats file A and blanks the name on screen and in slot info.
 ; ============================================================================
 
+; TABLE: the name "ZELDA" as 5 character tile codes; compared with the start of a new slot's name.
 ZeldaString:
     .BYTE $23, $0E, $15, $0D, $0A
 
+; ----------------------------------------------------------------------------
+; Mode $E update: Start on "End" writes the new names to the save files; otherwise runs name entry.
+; NOTE: Uses $0423/$0425 as name offsets (slot info, file B) and $0426 as "this file B needs a
+;       checksum"; these overlap NameInputCharBuf+1 and IsHoldingButton, which are idle here.
+; ----------------------------------------------------------------------------
 UpdateModeERegister:
     LDA ButtonsPressed          ; If didn't press Start,
     AND #$10
@@ -68,7 +90,7 @@ UpdateModeERegister:
 
     ; The save slot is not active.
     ;
-    ; Initialize file B hearts value to 3 heart containers and 2 hearts.
+    ; Initialize file B HeartValues to $22: 3 heart containers, all 3 full (with the partial below).
     LDY #$18
     LDA #$22
     STA ($C0), Y
@@ -114,12 +136,12 @@ UpdateModeERegister:
     INC $0425                   ; Point to the next char in save file B name.
     LDA $0425
     CMP #$08
-    BNE @CopyName               ; If we haven't copied 8 characters from save slot info name, then go copy the next one.
+    BNE @CopyName               ; Until 8 characters of the name are copied, go copy the next one.
     INX                         ; Make X refer to the next slot.
     LDA #$00                    ; Reset the offset to the next save file B char.
     STA $0425                   ; SaveFileNameIndex
     LDA $0426
-    BEQ :+                      ; If FileBReadyToSave [$0426] is set, then calculate and store the file B checksum, and mark file B uncommitted.
+    BEQ :+                      ; If FileBReadyToSave [$0426] is set, store the checksum, mark B uncommitted.
     JSR CalculateAndStoreFileBChecksumUncommitted
 :
     INC CurSaveSlot             ; Advance the slot number.
@@ -148,6 +170,10 @@ UpdateModeERegister:
     JSR ModeEandF_WriteCharBoardCursorSpritePosition
     JMP ModeE_HandleAOrB
 
+; ----------------------------------------------------------------------------
+; Mode $F update: Start deletes the chosen slot or, on "End", goes to mode $E; else handles Select.
+; NOTE: The Start test is CMP #$10, so Start counts only when no other button is newly pressed.
+; ----------------------------------------------------------------------------
 UpdateModeFElimination:
     LDA ButtonsPressed
     CMP #$10
@@ -164,6 +190,7 @@ UpdateModeFElimination:
     STA IsUpdatingMode
     STA GameSubmode
 
+; Clears the name-entry state (CharBoardIndex, IsNameFieldInitialized, NameCharOffset); IN: A = 0.
 ModeE_ResetVariables:
     ; Assumes that zero is passed in A.
     STA CharBoardIndex
@@ -171,6 +198,9 @@ ModeE_ResetVariables:
     STA NameCharOffset
     RTS
 
+; ----------------------------------------------------------------------------
+; Eliminates the save slot CurSaveSlot: formats file A and blanks the name on screen and in slot info.
+; ----------------------------------------------------------------------------
 DeleteSlot:
     LDA #$08                    ; "Hurt" sound effect
     STA SampleRequest

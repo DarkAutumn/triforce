@@ -2,16 +2,30 @@
 ; FILE:     bank2/mode1-slot-tiles.asm   BANK: 2 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_02.asm 2556-2733
 ; SUBJECTS: (none)
-; TOPIC:    Mode 1 init submodes: slot name/hearts/deaths tiles
-; SEE ALSO:
+; TOPIC:    Mode 1 (file select) init submodes 1-6: menu palettes with each slot's tunic colour, the
+;           menu tiles, one line per save slot (name and hearts), death counts, first cursor position.
+; SEE ALSO: bank2/mode1-init-save-files.asm (InitMode1_Full_JumpTable, the templates, LinkColors);
+;           bank2/mode1-menu-update.asm (the menu once init is done);
+;           bank1/format-decimal-hearts.asm (FormatHeartsInTextBuf, FormatDecimalByte).
 ; KEY FACTS:
+;   - Entering the file menu clears the room tile object, IsSwordShotForced and RoomHistory entries 0-4
+;     (InitMode1_Sub1).
+;   - Submodes 3, 4 and 5 each build one slot's line from SaveSlotNames and SaveSlotHearts; the slot's
+;     PPU address is the template's plus $60 * (slot + 1) (InitMode1_FillAndTransferSlotTiles).
+;   - Death counts are shown as 3 decimal characters; an inactive slot with count 0 shows blanks
+;     (InitMode1_Sub6).
+;   - The cursor starts on the first active slot, or on Register (3) when none is active; and
+;     LevelEntranceRoomId is set to $FF so the game starts in the level's start room (InitMode1_Sub6).
 ; CONTENTS: (generated; L = line in this file)
-;   L0015 InitMode1_Sub1                      code
-;   L0059 InitMode1_Sub2                      code
-;   L0065 InitMode1_FillAndTransferSlotTiles  code
-;   L0126 InitMode1_Sub6                      code
+;   L0029 InitMode1_Sub1                      code  Mode 1 init submode 1: puts each slot's tunic colour in the menu palettes and queues their transfer.
+;   L0076 InitMode1_Sub2                      code  Mode 1 init submode 2: queues the transfer of tile buffer $14 (the file menu's static tiles).
+;   L0086 InitMode1_FillAndTransferSlotTiles  code  Mode 1 init submodes 3-5: builds the menu line (name, hearts) of save slot CurSaveSlot.
+;   L0150 InitMode1_Sub6                      code  Mode 1 init submode 6: writes the death counts, selects the first active slot, starts updating.
 ; ============================================================================
 
+; ----------------------------------------------------------------------------
+; Mode 1 init submode 1: puts each slot's tunic colour in the menu palettes and queues their transfer.
+; ----------------------------------------------------------------------------
 InitMode1_Sub1:
     ; Reset CurSaveSlot. Doing this is useful for the
     ; work done here, and for the sequence of submodes
@@ -42,26 +56,33 @@ InitMode1_Sub1:
     TAX
     CPX #$0C
     BCC @LoopSlot               ; 3 times.
-    JSR ResetRoomTileObjInfo    ; UNKNOWN: Why now?
+    JSR ResetRoomTileObjInfo    ; Clear the room tile object's type and position.
     LDA #$12                    ; Cue transfer of menu palettes.
     STA TileBufSelector
     INC GameSubmode
     JSR TurnOffVideoAndClearArtifacts
     LDY #$04
     LDA #$00
-    STA IsSwordShotForced          ; UNKNOWN: Why now?
+    STA IsSwordShotForced       ; Clear this flag and RoomHistory entries 0-4 (Y = 4 down to 0).
 :
     STA RoomHistory, Y
     DEY
     BPL :-
     RTS
 
+; ----------------------------------------------------------------------------
+; Mode 1 init submode 2: queues the transfer of tile buffer $14 (the file menu's static tiles).
+; ----------------------------------------------------------------------------
 InitMode1_Sub2:
     LDA #$14
     STA TileBufSelector
     INC GameSubmode
     RTS
 
+; ----------------------------------------------------------------------------
+; Mode 1 init submodes 3-5: builds the menu line (name, hearts) of save slot CurSaveSlot.
+; NOTE: Increments CurSaveSlot and GameSubmode, so three consecutive submodes cover slots 0-2.
+; ----------------------------------------------------------------------------
 InitMode1_FillAndTransferSlotTiles:
     ; Copy the mode 1 line transfer buf template to
     ; dynamic transfer buf.
@@ -75,7 +96,7 @@ InitMode1_FillAndTransferSlotTiles:
     LDY CurSaveSlot             ; The first time, this is reset in a previous submode.
 
 @OffsetSlotLineAddr:
-    LDA DynTileBuf+1            ; Add ($60 * CurSaveSlot) to the PPU address of each record in the buffer.
+    LDA DynTileBuf+1            ; Add $60 * (CurSaveSlot + 1) to the PPU address of each record in the buffer.
     CLC
     ADC #$60
     STA DynTileBuf+1
@@ -123,6 +144,9 @@ InitMode1_FillAndTransferSlotTiles:
     INC GameSubmode
     RTS
 
+; ----------------------------------------------------------------------------
+; Mode 1 init submode 6: writes the death counts, selects the first active slot, starts updating.
+; ----------------------------------------------------------------------------
 InitMode1_Sub6:
     ; Copy the mode 1 death counts transfer buf template to
     ; dynamic transfer buf.
@@ -179,7 +203,7 @@ InitMode1_Sub6:
     BNE @LoopSlot               ; Go process the next slot, if not done.
     LDY #$FF                    ; Find the first save slot that's active.
     STY CurSaveSlot
-    STY LevelEntranceRoomId        ; Use room ID $FF, so that mode 3 "Unfurl" will put the player in the room at StartRoomId.
+    STY LevelEntranceRoomId     ; Room id $FF, so that mode 3 puts Link in the room at StartRoomId.
 
 @FindActiveSlot:
     INY

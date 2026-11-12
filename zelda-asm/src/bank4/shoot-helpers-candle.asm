@@ -2,35 +2,55 @@
 ; FILE:     bank4/shoot-helpers-candle.asm BANK: 4 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_04.asm 11311-11445
 ; SUBJECTS: (none)
-; TOPIC:    Shoot helpers; candle room brightening, dark room test
-; SEE ALSO:
+; TOPIC:    How a monster creates a shot or a child object in a free monster slot (with the limit of 4
+;           counted shots), and the fade that lights a dark dungeon room when candle fire burns in it;
+;           this bank's dark-room test.
+; SEE ALSO: bank4/goriya.asm, bank4/moblin-lynel-shooting.asm, bank4/stalfos.asm (callers of
+;           _ShootIfWanted); bank4/zol-gel.asm (ShootLimited makes child Gels); bank4/vire.asm (Shoot makes
+;           red Keese); bank4/monster-shots-fireballs.asm (DestroyCountedMonsterShot gives the count
+;           back); bank7/object-stubs-destroy-monster.asm (FindEmptyMonsterSlot, SetTypeAndClearObject);
+;           bank7/fire.asm (UpdateFire calls UpdateCandle); bank7/mode5-play-update.asm (UpdateMode5Play runs
+;           only the fade while IsRoomBrightening); bank4/ganon.asm (Ganon_ScenePhase0 lights his room);
+;           bank1/world-fading.asm (AnimateWorldFading); bank5/mode7-scroll-init.asm, bank5/enter-room.asm
+;           (CandleState reset and use on room change).
 ; KEY FACTS:
+;   - At most 4 counted monster shots exist at once: a new object of type >= $53 is refused while
+;     MonsterShotCount >= 4. Types below $53 (child Gel) are not counted. ShootLimited
+;   - A shot needs a free object slot in $01-$0B; the highest free one is used. ShootLimited
+;   - A walking shooter shoots only while Shooter_ObjWantsToShoot,X <> 0. _ShootIfWanted
+;   - The new object starts in state $10 with timer 0, at the position and with the direction of the
+;     object in CurObjIndex. Shoot
+;   - Shoot itself tests nothing and counts nothing; the caller must have set EmptyMonsterSlot. Shoot
+;   - A dark room is a dungeon room (CurLevel <> 0) with bit 7 of LevelBlockAttrsE set; the overworld
+;     is never dark. IsDarkRoom_Bank4
+;   - CandleState: 0 not lit, 1 fading to light, 2 lit. In a dark room the first call starts fade
+;     cycle $C0 and sets IsRoomBrightening; in a room that is not dark nothing happens.
+;     UpdateCandle_Begin
+;   - The fade has 4 palette steps 10 frames apart; when it ends IsRoomBrightening is cleared and the
+;     state becomes 2, after which further fires do nothing. UpdateCandle_Brightening,
+;     L_Candle_StopBrightening
 ; CONTENTS: (generated; L = line in this file)
-;   L0034 _ShootIfWanted            code  Params:
-;   L0053 ShootLimited              code  Params:
-;   L0080 Shoot                     code  Params:
-;   L0105 ReturnDidNotShoot         code
-;   L0110 UpdateCandle              code
-;   L0114 UpdateCandle_JumpTable    data
-;   L0119 UpdateCandle_Begin        code
-;   L0127 L_Candle_IncState         code
-;   L0130 UpdateCandle_Done         code
-;   L0133 L_Candle_StopBrightening  code
-;   L0139 UpdateCandle_Brightening  code
-;   L0151 IsDarkRoom_Bank4          code  Params:
+;   L0054 _ShootIfWanted            code  Makes a shot of type A for the monster in slot X, if that monster currently wants to shoot.
+;   L0068 ShootLimited              code  Makes an object of type [00] in a free monster slot, enforcing the limit of 4 counted shots.
+;   L0092 Shoot                     code  Makes an object of type [00] in slot EmptyMonsterSlot at the shooter's position and direction.
+;   L0118 ReturnDidNotShoot         code  Shared failure exit of the three routines above: returns C = 0.
+;   L0130 UpdateCandle              code  Runs the dark-room lighting state machine (CandleState): start the fade, run it, or do nothing.
+;   L0135 UpdateCandle_JumpTable    data  TABLE: handlers of UpdateCandle; index = CandleState 0-2.
+;   L0145 UpdateCandle_Begin        code  CandleState 0: in a dark room, starts the fade to light (cycle $C0) and goes to state 1.
+;   L0154 L_Candle_IncState         code  Advances CandleState to the next state (shared by states 0 and 1).
+;   L0158 UpdateCandle_Done         code  CandleState 2 (room lit): nothing to do. Also the shared return of the candle states.
+;   L0162 L_Candle_StopBrightening  code  End of the fade: clears IsRoomBrightening and goes to CandleState 2.
+;   L0171 UpdateCandle_Brightening  code  CandleState 1: steps the fade to light; when it is finished, ends the brightening.
+;   L0182 IsDarkRoom_Bank4          code  Tests whether a room is a dark dungeon room.
 ; ============================================================================
 
-; Params:
-; A: shot object type
-; X: shooter object index
-;
-; Returns:
-; C: 1 if succeeded
-; Y: shot slot
-;
-; Description:
-; The shot starts in state $10.
-;
+; ----------------------------------------------------------------------------
+; Makes a shot of type A for the monster in slot X, if that monster currently wants to shoot.
+; IN:   A = object type of the shot; X = shooter's object slot (must equal CurObjIndex).
+; OUT:  C = 1 and Y = the shot's slot when made; C = 0 when not. [00] = shot type.
+; NOTE: Fails when Shooter_ObjWantsToShoot,X = 0; otherwise falls into ShootLimited and can fail for
+;       its reasons. The flag is not cleared here.
+; ----------------------------------------------------------------------------
 _ShootIfWanted:
     STA $00
 
@@ -38,24 +58,20 @@ _ShootIfWanted:
     LDA Shooter_ObjWantsToShoot, X
     BEQ ReturnDidNotShoot
 
-; Params:
-; [00]: shot object type
-;
-; Returns:
-; C: 1 if succeeded
-; Y: shot slot
-;
-; Description:
-; The shot starts in state $10.
-;
-; If no slot is found, return C=0.
-;
+; ----------------------------------------------------------------------------
+; Makes an object of type [00] in a free monster slot, enforcing the limit of 4 counted shots.
+; IN:   [00] = object type to make; CurObjIndex = the shooter's object slot.
+; OUT:  C = 1 and Y = the new slot when made; C = 0 when not. MonsterShotCount +1 for types >= $53.
+; NOTE: Fails when no slot in $01-$0B is free, or when the type is >= $53 (a projectile) and
+;       MonsterShotCount is already 4. Types below $53 are neither limited nor counted.
+; ----------------------------------------------------------------------------
 ShootLimited:
+    ; Z set = no free slot: return C=0.
     JSR FindEmptyMonsterSlot
     BEQ ReturnDidNotShoot
 
-    ; If the object type to shoot is a true shot (projectile),
-    ; and we're at the limit of active shots (4), then return C=0.
+    ; Types below $53 are not projectiles: make the object without counting it.
+    ; For a projectile, return C=0 if 4 counted shots are already in flight.
     LDA $00
     CMP #$53
     BCC Shoot
@@ -63,20 +79,16 @@ ShootLimited:
     CMP #$04
     BCS ReturnDidNotShoot
 
-    ; Else increase the number of active shots.
+    ; Else count the new shot.
     INC MonsterShotCount
 
-; Params:
-; [00]: shot object type
-; [59]: EmptyMonsterSlot
-;
-; Returns:
-; C: 1 if succeeded
-; Y: shot slot
-;
-; Description:
-; The shot starts in state $10.
-;
+; ----------------------------------------------------------------------------
+; Makes an object of type [00] in slot EmptyMonsterSlot at the shooter's position and direction.
+; IN:   [00] = object type; EmptyMonsterSlot = free slot; CurObjIndex = the shooter's object slot.
+; OUT:  C = 1; Y = the new slot; X = CurObjIndex.
+; NOTE: No limit and no counting. The new object starts in state $10 with timer 0; the slot is
+;       otherwise cleared by SetTypeAndClearObject (flagged uninitialized, metastate 1).
+; ----------------------------------------------------------------------------
 Shoot:
     LDX EmptyMonsterSlot
     LDA $00
@@ -90,7 +102,7 @@ Shoot:
     LDA #$00
     STA a:ObjTimer, Y
 
-    ; Set the shot's direction and coordinates the same as the thrower's.
+    ; Copy the shooter's direction and coordinates to the shot.
     LDA ObjDir, X
     STA a:ObjDir, Y
     LDA ObjX, X
@@ -102,52 +114,71 @@ Shoot:
     SEC
     RTS
 
+; Shared failure exit of the three routines above: returns C = 0.
 ReturnDidNotShoot:
-    ; Return C=0.
     CLC
     RTS
 
+; ----------------------------------------------------------------------------
+; Runs the dark-room lighting state machine (CandleState): start the fade, run it, or do nothing.
+; OUT:  X and Y changed (callers save X).
+; NOTE: Called by a standing candle fire in a dungeon every frame, by the play-mode update on every
+;       frame while IsRoomBrightening is set (nothing else of the play update runs on those frames),
+;       and by Ganon's opening scene. CandleState is zeroed by the room-change code, so a lit room is
+;       dark again on the next visit.
+; ----------------------------------------------------------------------------
 UpdateCandle:
     LDA CandleState
     JSR TableJump
 
+; TABLE: handlers of UpdateCandle; index = CandleState 0-2.
 UpdateCandle_JumpTable:
-    .ADDR UpdateCandle_Begin
-    .ADDR UpdateCandle_Brightening
-    .ADDR UpdateCandle_Done
+    .ADDR UpdateCandle_Begin            ; 0: room not lit yet
+    .ADDR UpdateCandle_Brightening      ; 1: fading to light
+    .ADDR UpdateCandle_Done             ; 2: lit
 
+; ----------------------------------------------------------------------------
+; CandleState 0: in a dark room, starts the fade to light (cycle $C0) and goes to state 1.
+; NOTE: In a room that is not dark it returns with the state still 0, so it is tested again on
+;       every call.
+; ----------------------------------------------------------------------------
 UpdateCandle_Begin:
     LDY RoomId
     JSR IsDarkRoom_Bank4
     BEQ UpdateCandle_Done       ; If it's not a dark room, return.
-    LDA #$C0                    ; Start a fade-to-light cycle (reverse of $40).
+    LDA #$C0                    ; Fade series $40 (dark room) run backwards (bit 7): dark to light.
     STA FadeCycle
     INC IsRoomBrightening
 
+; Advances CandleState to the next state (shared by states 0 and 1).
 L_Candle_IncState:
     INC CandleState
 
+; CandleState 2 (room lit): nothing to do. Also the shared return of the candle states.
 UpdateCandle_Done:
     RTS
 
+; End of the fade: clears IsRoomBrightening and goes to CandleState 2.
 L_Candle_StopBrightening:
-    ; Stop brightening the room, and go set the candle state to done.
     LDA #$00
     STA IsRoomBrightening
-    BEQ L_Candle_IncState
+    BEQ L_Candle_IncState       ; Always taken.
 
+; ----------------------------------------------------------------------------
+; CandleState 1: steps the fade to light; when it is finished, ends the brightening.
+; NOTE: AnimateWorldFading returns Z = 1 after the 4th palette step; steps are 10 frames apart.
+; ----------------------------------------------------------------------------
 UpdateCandle_Brightening:
-    ; Animating a brightening cycle.
     JSR AnimateWorldFading
     BEQ L_Candle_StopBrightening    ; If done fading, go stop brightening the room.
     RTS
 
-; Params:
-; Y: room ID
-;
-; Returns:
-; A: $80 if dark, else 0
-;
+; ----------------------------------------------------------------------------
+; Tests whether a room is a dark dungeon room.
+; IN:   Y = room id.
+; OUT:  A = $80 (Z clear) if dark; A = 0 (Z set) if not, and always in the overworld (CurLevel = 0).
+; NOTE: Bank 4's copy of the dark-room test; the flag is bit 7 of LevelBlockAttrsE.
+; ----------------------------------------------------------------------------
 IsDarkRoom_Bank4:
     LDA CurLevel
     BEQ :+

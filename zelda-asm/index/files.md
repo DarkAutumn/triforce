@@ -7,220 +7,220 @@ lists its labels with line numbers.
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank0/song-data.asm](../src/bank0/song-data.asm) | 125 | 19 |  | Song table, song phrase headers, song script blobs |
-| [bank0/drive-audio-tune0.asm](../src/bank0/drive-audio-tune0.asm) | 130 | 4 |  | DriveAudio entry point; tune channel 0 scripts and driver |
-| [bank0/sound-effects.asm](../src/bank0/sound-effects.asm) | 203 | 12 |  | Noise effects: arrow, stairs, sword, flame, bomb, sea |
-| [bank0/tune1-and-samples.asm](../src/bank0/tune1-and-samples.asm) | 194 | 7 |  | Tune channel 1 scripts and driver; DMC samples |
-| [bank0/note-emit-vibrato.asm](../src/bank0/note-emit-vibrato.asm) | 129 | 9 | Audio | Square and triangle note emit, duty/sweep, vibrato |
-| [bank0/drive-song.asm](../src/bank0/drive-song.asm) | 381 | 11 |  | DriveSong: phrase sequencing, per-channel notes |
-| [bank0/song-note-tables.asm](../src/bank0/song-note-tables.asm) | 200 | 19 |  | Noise/note-length/period tables, envelopes; ISR stub, vectors |
+| [bank0/song-data.asm](../src/bank0/song-data.asm) | 166 | 19 |  | Music data: the table that maps songs and phrase numbers to phrase headers, the 8-byte phrase headers of every song, and the song scripts (note streams) they point into. |
+| [bank0/drive-audio-tune0.asm](../src/bank0/drive-audio-tune0.asm) | 155 | 4 |  | The sound driver's per-frame entry point (DriveAudio) and tune channel 0: short jingles on square channel 0, one script byte per frame (among them the low-hearts warning beep). |
+| [bank0/sound-effects.asm](../src/bank0/sound-effects.asm) | 240 | 12 |  | Noise-channel sound effects (sword, arrow, flame, stairs, bomb, sea) and their driver DriveEffect; SilenceSample, which stops the sample and tune channel 1. |
+| [bank0/tune1-and-samples.asm](../src/bank0/tune1-and-samples.asm) | 228 | 7 |  | Tune channel 1 (jingles on square channel 1, with note lengths; they mute the song's square 1 track) and the DMC sample driver with its address, length and rate tables. |
+| [bank0/note-emit-vibrato.asm](../src/bank0/note-emit-vibrato.asm) | 139 | 9 | Audio | Helpers that start a note on square 0, square 1 or the triangle channel from a note id, set a square channel's duty and sweep registers, and wobble a pitch for vibrato. |
+| [bank0/drive-song.asm](../src/bank0/drive-song.asm) | 419 | 11 |  | The music driver: starts a requested song, steps through its phrases, and plays one frame of the square 1, square 0, triangle and noise tracks of the current phrase. |
+| [bank0/song-note-tables.asm](../src/bank0/song-note-tables.asm) | 234 | 19 |  | Tables and small lookups of the sound driver: drum (noise) parameters, note length tables, the note period table, the song volume envelope, the sword/arrow/flame/stairs effect notes; then the bank's reset stub and vectors. |
 
 ## Bank 1 (`src/bank1.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank1/cave-init-person-text.asm](../src/bank1/cave-init-person-text.asm) | 269 | 10 |  | Person text data, money-game tables, InitCave, cave flags and wares |
-| [bank1/cave-person-prices.asm](../src/bank1/cave-person-prices.asm) | 290 | 13 |  | Cave person state machine, letter/potion shop, ware drawing, price list |
-| [bank1/person-textbox.asm](../src/bank1/person-textbox.asm) | 120 | 3 |  | Textbox typing, one character per 6 frames, unhalts Link |
-| [bank1/cave-shop.asm](../src/bank1/cave-shop.asm) | 194 | 5 | Cave | Shop purchase, item giveaway, heart requirement, door repair charge |
-| [bank1/cave-hint-money-game.asm](../src/bank1/cave-hint-money-game.asm) | 170 | 8 |  | Paid hints, money game payout, secret rupee gift, credit/debit |
-| [bank1/underworld-person-init.asm](../src/bank1/underworld-person-init.asm) | 181 | 13 |  | Dungeon old men, life-or-money and Grumble init, text selectors |
-| [bank1/underworld-person-update.asm](../src/bank1/underworld-person-update.asm) | 178 | 11 | Person | Dungeon old man update, fireballs when attacked, more-bombs offer |
-| [bank1/life-or-money.asm](../src/bank1/life-or-money.asm) | 170 | 7 |  | Life-or-money man |
-| [bank1/grumble-goriya.asm](../src/bank1/grumble-goriya.asm) | 102 | 6 |  | Hungry Goriya takes the food; filler |
-| [bank1/copy-code-demo-patterns.asm](../src/bank1/copy-code-demo-patterns.asm) | 193 | 8 |  | Copy common code to RAM; demo pattern transfer and data |
-| [bank1/whirlwind.asm](../src/bank1/whirlwind.asm) | 287 | 11 |  | Recorder whirlwind: summon, pickup, destinations, drop-off |
-| [bank1/tile-block-power-triforce.asm](../src/bank1/tile-block-power-triforce.asm) | 220 | 10 | Unused | Block/rock/gravestone blocking Link; Triforce of Power fanfare |
-| [bank1/armos-ghini-spawn.asm](../src/bank1/armos-ghini-spawn.asm) | 166 | 3 |  | Touching armos statues or gravestones spawns Armos or Ghini |
-| [bank1/trap-rupee-stash.asm](../src/bank1/trap-rupee-stash.asm) | 333 | 11 |  | Blade traps; rupee stash room; filler |
-| [bank1/common-code-header.asm](../src/bank1/common-code-header.asm) | 149 | 1 |  | BANK_01_CODE segment (runs from RAM): imports and exports |
-| [bank1/status-bar-rupees.asm](../src/bank1/status-bar-rupees.asm) | 178 | 9 | World | BeginUpdateMode, rupee count ticking, status bar text |
-| [bank1/modeb-cave-save-sprites.asm](../src/bank1/modeb-cave-save-sprites.asm) | 200 | 16 |  | Sound requests, mode B cave entry, save-slot addresses, sprite cycling, person blocking |
-| [bank1/format-decimal-hearts.asm](../src/bank1/format-decimal-hearts.asm) | 165 | 3 |  | Decimal formatting, heart row tiles |
-| [bank1/room-bounds.asm](../src/bank1/room-bounds.asm) | 223 | 9 |  | Silence sound, Link sprites behind doors, room boundary checks |
-| [bank1/qspeed-direction-math.asm](../src/bank1/qspeed-direction-math.asm) | 142 | 6 |  | Q-speed position fraction, opposite direction, Abs, Negate |
-| [bank1/shot-aim-boomerang-speed.asm](../src/bank1/shot-aim-boomerang-speed.asm) | 230 | 6 | Dir | MoveShot, direction/distance to target, diagonal speed, boomerang speed |
-| [bank1/bomb-candle-wield.asm](../src/bank1/bomb-candle-wield.asm) | 303 | 13 |  | Place bomb, candle fire, weapon placement, bomb flash |
-| [bank1/map-marker-curtain.asm](../src/bank1/map-marker-curtain.asm) | 209 | 12 |  | Status bar map marker, curtain effect, 16-bit add helpers |
-| [bank1/take-item.asm](../src/bank1/take-item.asm) | 450 | 22 |  | Item tables, room item flag, pickup range, TakeItem effects |
-| [bank1/world-fading.asm](../src/bank1/world-fading.asm) | 103 | 3 |  | Palette fade cycles, blank priority sprites |
-| [bank1/mazes-lost-woods-hills.asm](../src/bank1/mazes-lost-woods-hills.asm) | 119 | 5 | Filler | Lost Woods and Lost Hills maze steps; filler |
-| [bank1/object-animation-draw.asm](../src/bank1/object-animation-draw.asm) | 332 | 13 | Anim | Object animation tables, DrawObject routines |
-| [bank1/item-sprite-draw.asm](../src/bank1/item-sprite-draw.asm) | 231 | 12 | Anim | Item frame tiles, item sprite writers |
-| [bank1/monster-collisions.asm](../src/bank1/monster-collisions.asm) | 149 | 5 | Person | CheckMonsterCollisions weapon dispatch, object midpoint, contact damage table |
-| [bank1/link-collision-harm.asm](../src/bank1/link-collision-harm.asm) | 253 | 6 | Link | Link-vs-monster collision, shield, HarmLink, ring, death |
-| [bank1/weapon-damage-death.asm](../src/bank1/weapon-damage-death.asm) | 224 | 8 |  | Boomerang stun, weapon hits, DealDamage, monster death, help-drop counters |
-| [bank1/sword-bomb-arrow-collision.asm](../src/bank1/sword-bomb-arrow-collision.asm) | 334 | 11 |  | Per-weapon damage: beam, magic, bomb, fire, sword, rod, arrow; parry |
-| [bank1/object-overlap-test.asm](../src/bank1/object-overlap-test.asm) | 157 | 4 |  | Weapon hotspot and object overlap tests |
-| [bank1/shove-knockback.asm](../src/bank1/shove-knockback.asm) | 268 | 3 | Filler | Knockback and invincibility frames; bank tail |
+| [bank1/cave-init-person-text.asm](../src/bank1/cave-init-person-text.asm) | 326 | 10 |  | The text strings of cave and dungeon persons, the per-cave text selector table, the money game tables, and the cave person's init: person and fires placed, Link halted, wares, prices and the eight cave flags loaded, money game amounts drawn. |
+| [bank1/cave-person-prices.asm](../src/bank1/cave-person-prices.asm) | 347 | 13 |  | The cave person's per-frame update: drawing the person and the wares, the medicine shop's wait for the letter, the 9-state machine dispatch, and the price list written under the wares. |
+| [bank1/person-textbox.asm](../src/bank1/person-textbox.asm) | 131 | 3 |  | The textbox state shared by cave persons, dungeon persons and the hungry Goriya: types the person's text one character at a time, then advances the person's state and unhalts Link. |
+| [bank1/cave-shop.asm](../src/bank1/cave-shop.asm) | 228 | 5 | Cave | Cave person state 2: a person that only talks (and the door repair charge), or Link touching a ware: purchase, free gift with or without a heart container requirement, entry to the hint and money game state. Also state 4, which removes the person after a ware was taken. |
+| [bank1/cave-hint-money-game.asm](../src/bank1/cave-hint-money-game.asm) | 210 | 8 |  | Cave person state 5: the paid hint, the money game result and the secret rupee gift; the helpers that post rupees to add or subtract; the shared person state that blanks text line 3 and the price row. |
+| [bank1/underworld-person-init.asm](../src/bank1/underworld-person-init.asm) | 245 | 13 |  | Init of the dungeon persons (object types $4B-$52) and of the Grumble Goriya ($36): position, the two fires, the text selector by level and type, removal when the room's offer was taken. |
+| [bank1/underworld-person-update.asm](../src/bank1/underworld-person-update.asm) | 239 | 11 | Person | Update of the dungeon persons (types $4B-$50, $52): talk-only persons, the persons of levels 1, 2, 5, 7 including the bomb capacity offer (type $4F), and what happens when Link hits one. |
+| [bank1/life-or-money.asm](../src/bank1/life-or-money.asm) | 212 | 7 |  | Update of the life-or-money man (dungeon person type $51): Link must give up a heart container or 50 rupees; paying opens the room's shutters. |
+| [bank1/grumble-goriya.asm](../src/bank1/grumble-goriya.asm) | 142 | 6 |  | Update of the Grumble Goriya (object type $36), the hungry Goriya that blocks the way until Link puts down the food; the "offer taken" step shared with other persons; filler. |
+| [bank1/copy-code-demo-patterns.asm](../src/bank1/copy-code-demo-patterns.asm) | 224 | 8 |  | Copies the common code segment from bank 1 to RAM; sends the title/story demo pattern (CHR) blocks to the PPU; the two pattern blobs; filler. |
+| [bank1/whirlwind.asm](../src/bank1/whirlwind.asm) | 377 | 11 |  | The recorder's whirlwind (object type $2E): summoning it, choosing the destination level, picking Link up, the scroll to the destination room and the drop-off there. |
+| [bank1/tile-block-power-triforce.asm](../src/bank1/tile-block-power-triforce.asm) | 262 | 10 | Unused | Link stopped by a sliding push block, rock or gravestone; the Triforce of Power fanfare (level 9, after Ganon); bank-1 copies of Ganon's palette, ashes and room item helpers. |
+| [bank1/armos-ghini-spawn.asm](../src/bank1/armos-ghini-spawn.asm) | 191 | 3 |  | Overworld: Link walking into an armos statue square wakes an Armos ($1E); walking into a gravestone square releases a flying Ghini ($22). |
+| [bank1/trap-rupee-stash.asm](../src/bank1/trap-rupee-stash.asm) | 404 | 11 |  | Dungeon blade traps (object types $49 and $4A: one generator object becomes six or four traps at fixed spots) and the room of ten rupees (type $35), then $FF padding up to the common code block. |
+| [bank1/common-code-header.asm](../src/bank1/common-code-header.asm) | 175 | 1 |  | Start of the common code block: the BANK_01_CODE segment, stored in bank 1 but linked to run from cartridge RAM, where any bank can call it. This file only switches the segment and declares the block's imports and exports; the code follows in the next files. |
+| [bank1/status-bar-rupees.asm](../src/bank1/status-bar-rupees.asm) | 252 | 9 | World | First code of the common code block: the switch from a mode's init to its update (BeginUpdateMode), the rupee counter that moves InvRupees 1 at a time, and the status bar text (hearts, rupee, key and bomb counts) written to the dynamic transfer buffer. |
+| [bank1/modeb-cave-save-sprites.asm](../src/bank1/modeb-cave-save-sprites.asm) | 296 | 16 |  | Small helpers of the common code block: sound requests (sample, effect, boomerang whirr), the cave entry step of modes $B and $C, the save file A pointer table, the rolling sprite index, the reverse direction table, and the line Link cannot cross in front of a person. |
+| [bank1/format-decimal-hearts.asm](../src/bank1/format-decimal-hearts.asm) | 170 | 3 |  | Turns a byte into three decimal digit tiles (leading blanks), and turns the heart bytes into the two rows of eight heart tiles shown in the status bar and on the file-select screen. |
+| [bank1/room-bounds.asm](../src/bank1/room-bounds.asm) | 258 | 9 |  | Silencing the sound channels; drawing Link behind the background inside the left and right dungeon doorways; the room bound test that stops objects and shots at the room's border. |
+| [bank1/qspeed-direction-math.asm](../src/bank1/qspeed-direction-math.asm) | 168 | 6 |  | The two routines that turn an object's q-speed into whole-pixel steps and count them in the grid offset (with its limits); opposite direction and direction index; Abs and Negate. |
+| [bank1/shot-aim-boomerang-speed.asm](../src/bank1/shot-aim-boomerang-speed.asm) | 236 | 6 | Dir | Moving a shot one axis at a time inside the room bounds; direction and distance from one object to another; choosing one of nine aim angles for fireballs and returning boomerangs; the returning boomerang's speed and its slow-to-fast switch. |
+| [bank1/bomb-candle-wield.asm](../src/bank1/bomb-candle-wield.asm) | 366 | 13 |  | Using a bomb or a candle (object slots $10/$11), the shared code that puts a new weapon object $10 pixels in front of Link and puts Link in his item-use state, the room's shortcut/item position lookup, the object slot reset, and the grayscale flash of a bomb blast. |
+| [bank1/map-marker-curtain.asm](../src/bank1/map-marker-curtain.asm) | 252 | 12 |  | The position marker sprites on the status bar map (Link's room and the compass's Triforce room), the curtain effect that redraws the play area two tile columns at a time, and small 16-bit add/subtract helpers on zero-page pairs [00:01], [02:03], [04:05]. |
+| [bank1/take-item.asm](../src/bank1/take-item.asm) | 574 | 22 |  | Picking up items: the item id -> inventory slot and item id -> descriptor (class, value) tables, the "item taken" room flag, the pickup range test for the room item and dropped items, and TakeItem, which applies every item's effect on the inventory, hearts and rupees. |
+| [bank1/world-fading.asm](../src/bank1/world-fading.asm) | 141 | 3 |  | The dungeon palette fade (cellar, dark room, death): one 8-byte half palette to the PPU every 10 frames. Also the 16 blank mask sprites that hide Link in a dungeon's top and bottom doorways. |
+| [bank1/mazes-lost-woods-hills.asm](../src/bank1/mazes-lost-woods-hills.asm) | 151 | 5 | Filler | The Lost Woods (overworld room $61) and Lost Hills (overworld room $1B) direction puzzles, applied on every overworld room change; a pixel-to-nametable-address helper; 10 filler bytes. |
+| [bank1/object-animation-draw.asm](../src/bank1/object-animation-draw.asm) | 419 | 13 | Anim | How Link and room objects become sprites: the per-type animation tables (first frame offset, tile and attributes of each frame), the rolling sprite record order, and the DrawObject routines that write one or two 8x16 sprites with flipping, mirroring and the hit flash. |
+| [bank1/item-sprite-draw.asm](../src/bank1/item-sprite-draw.asm) | 259 | 12 | Anim | Item and weapon sprites: the frame tile table indexed by item slot, the routine that decides from the tile number whether an item is one sprite, a mirrored pair or a flippable pair, and the single-sprite writers used by multi-part monsters. |
+| [bank1/monster-collisions.asm](../src/bank1/monster-collisions.asm) | 224 | 5 | Person | A monster's collision pass for one frame: Link's six weapon slots in a fixed order, then the monster's touch on Link; the capture flag of Wallmaster and Like-Like; the object midpoint; and the table of damage each object type does to Link. |
+| [bank1/link-collision-harm.asm](../src/bank1/link-collision-harm.asm) | 267 | 6 | Link | A monster or monster shot touching Link: the overlap test, shield parry rules, damage lookup, ring halving, heart subtraction and the switch to the death mode. |
+| [bank1/weapon-damage-death.asm](../src/bank1/weapon-damage-death.asm) | 248 | 8 |  | A weapon of Link's touching a monster: the boomerang's stun, the invincibility mask, the Gohma, Zol/Vire and Darknut special cases, HP subtraction, monster death and the kill counters. |
+| [bank1/sword-bomb-arrow-collision.asm](../src/bank1/sword-bomb-arrow-collision.asm) | 339 | 11 |  | Per-weapon entry routines of the monster-vs-weapon test: sword shot and magic shot, bomb blast and fire, sword, rod, arrow. Each sets damage type, damage points and hit box; then the Pols Voice arrow kill, the Darknut parry and the knockback. |
+| [bank1/object-overlap-test.asm](../src/bank1/object-overlap-test.asm) | 128 | 4 |  | The hit point of a thin weapon (sword, rod, arrow, sword shot, magic shot) and the box test between two points that every collision check uses. |
+| [bank1/shove-knockback.asm](../src/bank1/shove-knockback.asm) | 303 | 3 | Filler | BeginShove: starts a knockback (direction, distance, invincibility timer) for Link hit by a monster, shot or fire, or for a monster hit by one of Link's weapons. Then the tail of bank 1: padding, the bank's copy of the reset stub, its bank-switch routine and its vectors. |
 
 ## Bank 2 (`src/bank2.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank2/common-patterns.asm](../src/bank2/common-patterns.asm) | 142 | 8 |  | Common CHR pattern blocks and transfer |
-| [bank2/mode0-demo.asm](../src/bank2/mode0-demo.asm) | 203 | 13 | Mode0Demo | Mode 0 demo init/update dispatch, save-slot info load |
-| [bank2/demo-tables-init.asm](../src/bank2/demo-tables-init.asm) | 207 | 19 |  | Demo tables; init subphases, title/story palettes |
-| [bank2/demo-story-scroll.asm](../src/bank2/demo-story-scroll.asm) | 486 | 14 | Demo, Unused | Title wait, story scroll, item parade |
-| [bank2/title-animation.asm](../src/bank2/title-animation.asm) | 369 | 13 |  | Title triforce glow, waterfall, palette fade |
-| [bank2/register-eliminate-init.asm](../src/bank2/register-eliminate-init.asm) | 289 | 18 |  | Mode E/F tables and init |
-| [bank2/register-eliminate-update.asm](../src/bank2/register-eliminate-update.asm) | 200 | 5 |  | Register (ZELDA name check) and elimination updates |
-| [bank2/register-name-input.asm](../src/bank2/register-name-input.asm) | 298 | 6 |  | Name entry cursor and characters |
-| [bank2/register-cursor-sprites.asm](../src/bank2/register-cursor-sprites.asm) | 158 | 6 |  | Mode E/F cursor sprites, slot cycling |
-| [bank2/mode1-init-save-files.asm](../src/bank2/mode1-init-save-files.asm) | 354 | 13 |  | Mode 1 init; save file validate, checksum, format |
-| [bank2/mode1-slot-tiles.asm](../src/bank2/mode1-slot-tiles.asm) | 192 | 4 |  | Mode 1 init submodes: slot name/hearts/deaths tiles |
-| [bank2/mode1-menu-update.asm](../src/bank2/mode1-menu-update.asm) | 196 | 7 |  | File-select menu update, Start loads profile |
-| [bank2/moded-save.asm](../src/bank2/moded-save.asm) | 309 | 12 |  | Mode D save |
-| [bank2/mode13-ending-init.asm](../src/bank2/mode13-ending-init.asm) | 226 | 15 |  | Mode $13 init: curtain, Zelda's textbox |
-| [bank2/mode13-win-game.asm](../src/bank2/mode13-win-game.asm) | 289 | 13 |  | Win game update |
-| [bank2/credits.asm](../src/bank2/credits.asm) | 381 | 10 |  | Credits scroll and tables |
-| [bank2/second-quest-bank-stub.asm](../src/bank2/second-quest-bank-stub.asm) | 92 | 3 |  | Switch profile to second quest; ISR stub, vectors |
+| [bank2/common-patterns.asm](../src/bank2/common-patterns.asm) | 166 | 8 |  | The three CHR pattern blocks every part of the game shares (sprites, background, misc) and the routine that copies them to the PPU pattern tables once after power-on. |
+| [bank2/mode0-demo.asm](../src/bank2/mode0-demo.asm) | 255 | 13 | Mode0Demo | Mode 0 (title screen and story demo): the init dispatcher by demo phase and subphase, the update routine (animate, wait for Start), and the copy of the three save files' summary data into save slot info before the file menu (mode 1). |
+| [bank2/demo-tables-init.asm](../src/bank2/demo-tables-init.asm) | 263 | 19 |  | Data for the title screen and the story scroll (title sprites, per-line flags, item parade lists, story text, palettes) and the mode 0 init subphases that set up each demo phase. |
+| [bank2/demo-story-scroll.asm](../src/bank2/demo-story-scroll.asm) | 558 | 14 | Demo, Unused | Animation subphases of the demo: the title wait (phase 0 subphase 0) and the whole story phase: scroll the story screen in, wait, scroll the text and the item parade one 8-pixel line at a time, wait, then restart the title. |
+| [bank2/title-animation.asm](../src/bank2/title-animation.asm) | 410 | 13 |  | Title screen animation: the title sprites, the glowing Triforce palette, the waterfall sprites, and the palette fade to black (phase 0 subphase 1) that leads into the story. |
+| [bank2/register-eliminate-init.asm](../src/bank2/register-eliminate-init.asm) | 339 | 18 |  | Save file B address sets and their fetch routine; tables for mode $E (register a name) and mode $F (eliminate a save): screen text records, character map, cursor data; and the init routine the two modes share. |
+| [bank2/register-eliminate-update.asm](../src/bank2/register-eliminate-update.asm) | 230 | 5 |  | Per-frame update of mode $E (register a name) and mode $F (eliminate a save slot): what Start does on a slot or on "End", the ZELDA name test that starts a file in Q2, slot deletion. |
+| [bank2/register-name-input.asm](../src/bank2/register-name-input.asm) | 322 | 6 |  | Mode $E name entry: moving the character-board cursor with the direction buttons (with auto-repeat) and typing a character (A) or skipping one (B) in the chosen slot's name. |
+| [bank2/register-cursor-sprites.asm](../src/bank2/register-cursor-sprites.asm) | 178 | 6 |  | Modes $E and $F: the slot cursor, name cursor and character-board cursor sprites, and Select moving the slot cursor. |
+| [bank2/mode1-init-save-files.asm](../src/bank2/mode1-init-save-files.asm) | 402 | 13 |  | Mode 1 (file select) init dispatcher and its templates; the save-file pass that commits a pending file B or reformats a damaged file A; checksum and format routines of files A and B. |
+| [bank2/mode1-slot-tiles.asm](../src/bank2/mode1-slot-tiles.asm) | 216 | 4 |  | Mode 1 (file select) init submodes 1-6: menu palettes with each slot's tunic colour, the menu tiles, one line per save slot (name and hearts), death counts, first cursor position. |
+| [bank2/mode1-menu-update.asm](../src/bank2/mode1-menu-update.asm) | 226 | 7 |  | Mode 1 (file select) update: Select moves the cursor, Start either loads the chosen save slot into the profile and goes on to the next mode, or enters Register / Eliminate. |
+| [bank2/moded-save.asm](../src/bank2/moded-save.asm) | 349 | 12 |  | Mode $D (save): builds file B from the profile, verifies it, copies it over file A, then returns to mode 0 submode 1. Also the slot-info address tables for names and hearts. |
+| [bank2/mode13-ending-init.asm](../src/bank2/mode13-ending-init.asm) | 284 | 15 |  | Mode $13 (win game) init, five submodes: the curtain effect runs over Zelda's room, the play area attributes are reset, Zelda's "THANKS LINK,YOU'RE THE HERO OF HYRULE." is typed out, then a pause, silence, and the hand-over to the mode's update. |
+| [bank2/mode13-win-game.asm](../src/bank2/mode13-win-game.asm) | 348 | 13 |  | Mode $13 (win game) update: background flash with Link and Zelda holding Triforce pieces, the "FINALLY,PEACE RETURNS TO HYRULE.THIS ENDS THE STORY." text, and the final screen that waits for Start, then switches the profile to Q2 and goes to mode $D (save). |
+| [bank2/credits.asm](../src/bank2/credits.asm) | 422 | 10 |  | Mode $13 update submode 3: the credits. The screen scrolls up half a pixel per frame and one tile row (brick frame, text line, attributes) is drawn for every 8 pixels scrolled. Holds the credits text lines and the tables that place them. |
+| [bank2/second-quest-bank-stub.asm](../src/bank2/second-quest-bank-stub.asm) | 128 | 3 |  | Resets the active profile for Q2 after the ending (world flags, inventory, hearts), then bank 2's tail: its copy of the reset handler, its bank-switch routine and its vectors. |
 
 ## Bank 3 (`src/bank3.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank3/level-pattern-blocks.asm](../src/bank3/level-pattern-blocks.asm) | 289 | 27 |  | Per-level pattern block tables, transfer code, CHR blobs, bank tail |
+| [bank3/level-pattern-blocks.asm](../src/bank3/level-pattern-blocks.asm) | 375 | 27 |  | CHR pattern (tile graphics) blocks that depend on the level, and the routine that copies them into CHR RAM when a level is loaded: overworld background and sprites, or dungeon background, common dungeon sprites, the level's monster sprites and its boss sprites. Ends with the bank's copy of the reset stub and the interrupt vectors. |
 
 ## Bank 4 (`src/bank4.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank4/walker-wanderer-common.asm](../src/bank4/walker-wanderer-common.asm) | 270 | 11 | Unused, Wanderer | Boss cry helpers, InitMonsterShot, InitWalker, standing fire, common wanderer AI |
-| [bank4/goriya.asm](../src/bank4/goriya.asm) | 203 | 2 |  | Goriya update (shared by Lynel, Armos); boomerang throwing |
-| [bank4/push-block.asm](../src/bank4/push-block.asm) | 185 | 12 |  | Dungeon push block states; draw-over-Link sprite helpers |
-| [bank4/monster-shots-fireballs.asm](../src/bank4/monster-shots-fireballs.asm) | 327 | 13 | Fireball | ShootFireball, UpdateMonsterShot, shot bounce/destroy, UpdateFireball |
-| [bank4/bubble-keese.asm](../src/bank4/bubble-keese.asm) | 163 | 10 | Flyer | Bubble and Keese init/update, Keese flight |
-| [bank4/zol-gel.asm](../src/bank4/zol-gel.asm) | 356 | 15 | Gel, Zol | Zol states and split into Gels; Gel |
-| [bank4/statues.asm](../src/bank4/statues.asm) | 202 | 7 |  | Dungeon statue fireball emitters |
-| [bank4/zora-ow-inits.asm](../src/bank4/zora-ow-inits.asm) | 215 | 13 |  | Zora spawn/update; inits for Tektite, Boulder, Leever, Octorok, Ghini, Peahat, pond fairy |
-| [bank4/moblin-lynel-shooting.asm](../src/bank4/moblin-lynel-shooting.asm) | 232 | 6 |  | Moblin, Lynel; shoot timer logic; monster arrow |
-| [bank4/tektite-boulder.asm](../src/bank4/tektite-boulder.asm) | 447 | 13 | Jumper | Boulder spawner; Tektite/Boulder jumper physics |
-| [bank4/leever.asm](../src/bank4/leever.asm) | 397 | 12 | Burrower | Blue and Red Leever; shared burrower code (Zora) |
-| [bank4/octorok.asm](../src/bank4/octorok.asm) | 114 | 2 |  | Octorok update, rock shooting |
-| [bank4/ghini-armos.asm](../src/bank4/ghini-armos.asm) | 322 | 9 |  | Ghini; Armos tables, init, update |
-| [bank4/pond-fairy.asm](../src/bank4/pond-fairy.asm) | 204 | 4 | PondFairy | Pond fairy healing and orbiting hearts |
-| [bank4/rock-wall-tree-secrets.asm](../src/bank4/rock-wall-tree-secrets.asm) | 315 | 11 |  | Push rock/gravestone, bombable rock wall, burnable tree, secret reveal |
-| [bank4/dock-raft.asm](../src/bank4/dock-raft.asm) | 127 | 2 |  | Dock tile object: raft boarding, ride, landing |
-| [bank4/flying-ghini-peahat.asm](../src/bank4/flying-ghini-peahat.asm) | 149 | 10 | Flyer | Flying Ghini and Peahat |
-| [bank4/wallmaster.asm](../src/bank4/wallmaster.asm) | 452 | 12 | Wallmaster | Wallmaster tables, emerge/grab states |
-| [bank4/rope.asm](../src/bank4/rope.asm) | 144 | 2 |  | Rope init (HP by quest) and rush at Link |
-| [bank4/stalfos.asm](../src/bank4/stalfos.asm) | 111 | 1 |  | Stalfos; second-quest sword shot |
-| [bank4/moldorm-init.asm](../src/bank4/moldorm-init.asm) | 81 | 1 |  | InitMoldorm: ten segments in two worms |
-| [bank4/aquamentus-digdogger-dodongo-inits.asm](../src/bank4/aquamentus-digdogger-dodongo-inits.asm) | 84 | 4 |  | Inits for Aquamentus, Digdogger, Dodongo |
-| [bank4/moldorm.asm](../src/bank4/moldorm.asm) | 260 | 9 | Flyer, Moldorm | Moldorm update, chase/wander |
-| [bank4/digdogger.asm](../src/bank4/digdogger.asm) | 471 | 21 | Digdogger | Digdogger: flute split, update, move, collisions, draw |
-| [bank4/aquamentus.asm](../src/bank4/aquamentus.asm) | 279 | 11 | Aquamentus | Aquamentus; boss hit reaction, boss sprite writer |
-| [bank4/dodongo.asm](../src/bank4/dodongo.asm) | 634 | 31 | Anim, Dodongo | Dodongo states, bloat/stun, bomb eating, collisions, draw |
-| [bank4/darknut-gibdo.asm](../src/bank4/darknut-gibdo.asm) | 79 | 3 |  | InitDarknut, UpdateGibdo, UpdateDarknut |
-| [bank4/pols-voice.asm](../src/bank4/pols-voice.asm) | 320 | 11 | PolsVoice | Pols Voice walk/jump |
-| [bank4/like-like.asm](../src/bank4/like-like.asm) | 109 | 1 |  | Like-Like: capture, magic shield eating |
-| [bank4/vire.asm](../src/bank4/vire.asm) | 128 | 7 |  | Vire: hop, split into red Keese |
-| [bank4/wizzrobe.asm](../src/bank4/wizzrobe.asm) | 663 | 43 | Wizzrobe | Blue and Red Wizzrobe: walk/teleport/fade, magic shots |
-| [bank4/gleeok-manhandla-gohma-inits.asm](../src/bank4/gleeok-manhandla-gohma-inits.asm) | 211 | 8 |  | Inits for Gleeok, Manhandla, Gohma, Gleeok head |
-| [bank4/manhandla.asm](../src/bank4/manhandla.asm) | 375 | 5 | Manhandla | Manhandla |
-| [bank4/gohma.asm](../src/bank4/gohma.asm) | 328 | 7 | Gohma | Gohma: eye states, arrow in the eye |
-| [bank4/gleeok.asm](../src/bank4/gleeok.asm) | 577 | 28 | Flyer, Gleeok | Flying Gleeok head; UpdateGleeok; necks |
-| [bank4/gleeok-head-body.asm](../src/bank4/gleeok-head-body.asm) | 436 | 15 | Gleeok | Gleeok head/segment draw and collisions, body |
-| [bank4/zelda-lanmola-inits.asm](../src/bank4/zelda-lanmola-inits.asm) | 83 | 4 |  | Guard fire tables, InitZelda, Lanmola init |
-| [bank4/patra-ganon-inits.asm](../src/bank4/patra-ganon-inits.asm) | 72 | 2 |  | InitPatra, InitGanon |
-| [bank4/zelda-guard-fire.asm](../src/bank4/zelda-guard-fire.asm) | 99 | 6 |  | UpdateZelda, guard fire, dead dummy type |
-| [bank4/lanmola.asm](../src/bank4/lanmola.asm) | 371 | 4 |  | Lanmola segments and head |
-| [bank4/patra.asm](../src/bank4/patra.asm) | 276 | 12 | Flyer | Patra and its children |
-| [bank4/ganon.asm](../src/bank4/ganon.asm) | 284 | 12 | Ganon | Ganon phases, teleport, shooting, dying |
-| [bank4/ganon-draw-collisions.asm](../src/bank4/ganon-draw-collisions.asm) | 480 | 23 | Ganon | Ganon draw, collisions, ashes, triforce |
-| [bank4/drop-items.asm](../src/bank4/drop-items.asm) | 338 | 13 |  | HP nibble extract, drop tables, SetUpDroppedItem, UpdateItem, DestroyMonster |
-| [bank4/shoot-helpers-candle.asm](../src/bank4/shoot-helpers-candle.asm) | 157 | 12 |  | Shoot helpers; candle room brightening, dark room test |
-| [bank4/fairy-flyer-common.asm](../src/bank4/fairy-flyer-common.asm) | 465 | 33 | Flyer | Item fairy; shared flyer state machine |
-| [bank4/orbit-rotation-math.asm](../src/bank4/orbit-rotation-math.asm) | 216 | 4 |  | Rotation math; bank tail |
+| [bank4/walker-wanderer-common.asm](../src/bank4/walker-wanderer-common.asm) | 337 | 11 | Unused, Wanderer | Boss hit and death cries; init of monster shots (q-speed) and of walking monsters (first facing direction); standing fire update; the wanderer AI shared by most walking monsters (move one grid square at a time, turn toward the chase target or perpendicular to it). |
+| [bank4/goriya.asm](../src/bank4/goriya.asm) | 242 | 2 |  | Update of Goriya (types $05, $06), also the movement step of Lynel and Armos: walk the grid, face the chase target along the longer axis when it is near. Shared tail of all walking monsters: copy facing to input direction; a Goriya throws its boomerang there. |
+| [bank4/push-block.asm](../src/bank4/push-block.asm) | 232 | 12 |  | Dungeon push block (object type $68, object slot $0B): waiting to be pushed, sliding one square, done. Sprite helpers that draw a monster in front of Link (Like-Like, Wallmaster). |
+| [bank4/monster-shots-fireballs.asm](../src/bank4/monster-shots-fireballs.asm) | 390 | 13 | Fireball | Monster projectiles: creating a fireball (types $55/$56), the update of straight-line shots (flying rock $53, $54, sword shot $57, magic shots $58/$59, $5A), the bounce off Link's shield, destroying shots, and the aimed fireball's flight. |
+| [bank4/bubble-keese.asm](../src/bank4/bubble-keese.asm) | 221 | 10 | Flyer | Bubble (types $2B flashing, $2C, $2D): a wanderer that blocks or unblocks Link's sword on touch. Keese (types $1B blue, $1C red, $1D black): init, update and the flight state table. Also a shared animate-and-draw helper for simple two-frame monsters. |
+| [bank4/zol-gel.asm](../src/bank4/zol-gel.asm) | 451 | 15 | Gel, Zol | Zol (type $13): wander with pauses, and the split into two child Gels (type $14) when a hit does not kill it. Gel (types $14 child, $15): start-up dash of a child, wander with pauses. |
+| [bank4/statues.asm](../src/bank4/statues.asm) | 225 | 7 |  | Dungeon statues that shoot fireballs at Link: which rooms have them, where the fireballs start, the per-statue timers, and the same code reused for the two fires beside an attacked person. |
+| [bank4/zora-ow-inits.asm](../src/bank4/zora-ow-inits.asm) | 328 | 13 |  | Zora: spawning on a random water tile and its update (surface, shoot one fireball, dive, respawn). Object init routines of Tektite, Boulder and boulder spawner, Leever, Octorok, Ghini, Peahat (and the shared flyer init tail) and the pond fairy. |
+| [bank4/moblin-lynel-shooting.asm](../src/bank4/moblin-lynel-shooting.asm) | 295 | 6 |  | Moblin and Lynel updates; the shoot timer shared by walking shooters (Moblin, Lynel, Octorok): when they stop, when the shot leaves, what cancels it; the monster arrow's update. |
+| [bank4/tektite-boulder.asm](../src/bank4/tektite-boulder.asm) | 521 | 13 | Jumper | The boulder spawner (type $1F) that drops up to 3 Boulders (type $20), and the jumper code shared by Tektites (types $0D blue, $0E red) and Boulders: wait on the ground, hop along a parabola. |
+| [bank4/leever.asm](../src/bank4/leever.asm) | 475 | 12 | Burrower | Blue Leever (type $0F) and Red Leever (type $10) updates, and the six-state burrower cycle (under ground, emerging, out, sinking) that the Blue Leever shares with the Zora (type $11). |
+| [bank4/octorok.asm](../src/bank4/octorok.asm) | 141 | 2 |  | Octorok ($07-$0A) per-frame update: turn toward Link, spit rocks, pick the sprite frame; plus the shared "draw mirrored, then check collisions" tail. |
+| [bank4/ghini-armos.asm](../src/bank4/ghini-armos.asm) | 363 | 9 |  | Ghini ($21) update and the Ghini sprite; the fade-in "init" shared by Armos ($1E) and flying Ghini ($22), with the secrets hidden under seven Armos statues; Armos update and sprite. |
+| [bank4/pond-fairy.asm](../src/bank4/pond-fairy.asm) | 231 | 4 | PondFairy | Pond fairy ($2F): refills Link's hearts when he stands at the pond's edge, while eight hearts orbit around the pond. |
+| [bank4/rock-wall-tree-secrets.asm](../src/bank4/rock-wall-tree-secrets.asm) | 359 | 11 |  | Overworld tile objects that hide a secret: the pushable rock ($62) and gravestone ($65), the bombable rock wall ($63), the burnable tree ($64); revealing and flagging the secret; the test of which quest a room's secret belongs to. |
+| [bank4/dock-raft.asm](../src/bank4/dock-raft.asm) | 151 | 2 |  | The dock tile object (type $61) of OW rooms $3F and $55: with the raft it carries Link from the dock up to the top screen edge and into the room above, or from the top edge down to it. |
+| [bank4/flying-ghini-peahat.asm](../src/bank4/flying-ghini-peahat.asm) | 199 | 10 | Flyer | Update routines and flight-state tables of the flying Ghini (type $22) and the Peahat (type $1A), both built on the shared flyer code; the "secret found" tune request; padding. |
+| [bank4/wallmaster.asm](../src/bank4/wallmaster.asm) | 523 | 12 | Wallmaster | Wallmaster (type $27): the step tables of its trips out of a wall and back, the wait state that picks where it emerges, the trip state that grabs Link and returns him to the level's start room, and its drawing. |
+| [bank4/rope.asm](../src/bank4/rope.asm) | 171 | 2 |  | Rope (type $28): init with HP by quest, and the update that walks slowly, turns at random and rushes when Link is in line with it. |
+| [bank4/stalfos.asm](../src/bank4/stalfos.asm) | 138 | 1 |  | Stalfos (object type $2A): a common wanderer that, in Q2 only, stops and fires a sword shot (object type $57) in its facing direction. |
+| [bank4/moldorm-init.asm](../src/bank4/moldorm-init.asm) | 100 | 1 |  | Moldorm (object type $41) init: fills object slots $01-$0A with ten segments, two worms of five, all starting at ($80, $70); the heads are slots $05 and $0A. |
+| [bank4/aquamentus-digdogger-dodongo-inits.asm](../src/bank4/aquamentus-digdogger-dodongo-inits.asm) | 128 | 4 |  | Init routines of Aquamentus (type $3D), the big Digdogger (types $38, $39; also run for each small Digdogger, type $18) and Dodongo (types $31, $32): roar, start position or direction, immunities, Digdogger's speed and child count. |
+| [bank4/moldorm.asm](../src/bank4/moldorm.asm) | 291 | 9 | Flyer, Moldorm | Moldorm (object type $41) update: the two heads steer with the flyer chase/wander routines, every $10 frames each segment takes the direction of the one ahead, and a killed segment is replaced by the worm's tail. |
+| [bank4/digdogger.asm](../src/bank4/digdogger.asm) | 574 | 21 | Digdogger | Digdogger update (big types $38/$39 and small type $18): shrinking and splitting after the flute, speed oscillation, 8-way movement, four-corner collisions of the big body, drawing. |
+| [bank4/aquamentus.asm](../src/bank4/aquamentus.asm) | 338 | 11 | Aquamentus | Aquamentus (type $3D): pacing left and right, three-fireball volleys and their spread, drawing; the boss cry and shove reset shared with Moldorm; a one-sprite writer. |
+| [bank4/dodongo.asm](../src/bank4/dodongo.asm) | 730 | 31 | Anim, Dodongo | Dodongo (types $31, $32): walking, swallowing a bomb and bloating, the bomb-cloud stun, the two ways it dies, its two-box collision check and its drawing. |
+| [bank4/darknut-gibdo.asm](../src/bank4/darknut-gibdo.asm) | 127 | 3 |  | Darknut (types $0B red, $0C blue) init and update, and Gibdo (type $30) update. Both walk the grid as wanderers and hurt Link by touch only. |
+| [bank4/pols-voice.asm](../src/bank4/pols-voice.asm) | 359 | 11 | PolsVoice | Pols Voice (object type $16): its update routine, the walk and jump tables, the jump physics and its own two-point tile test. It moves only on even frames and dies to any arrow. |
+| [bank4/like-like.asm](../src/bank4/like-like.asm) | 142 | 1 |  | Like-Like (object type $17): wanders toward Link, holds him when it touches him, and removes the magic shield after holding him long enough. |
+| [bank4/vire.asm](../src/bank4/vire.asm) | 186 | 7 |  | Vire (object type $12): wanders toward Link, hopping while it moves sideways; a hit that does not kill it sends it flying and turns it into two red Keese (type $1C). |
+| [bank4/wizzrobe.asm](../src/bank4/wizzrobe.asm) | 727 | 43 | Wizzrobe | Blue Wizzrobe ($23: walks, teleports through blocks, shoots magic shot $58) and Red Wizzrobe ($24: appears near Link, shoots magic shot $59, vanishes); their shared tile test, shooting, weapon collisions and drawing. Ganon reuses the Blue Wizzrobe's movement. |
+| [bank4/gleeok-manhandla-gohma-inits.asm](../src/bank4/gleeok-manhandla-gohma-inits.asm) | 244 | 8 |  | Init routines of Gleeok ($42-$45: neck segments, HP, head timing), Manhandla ($3C: four hands and the base in object slots 1-5), Gohma ($33/$34) and the flying Gleeok head ($46). |
+| [bank4/manhandla.asm](../src/bank4/manhandla.asm) | 445 | 5 | Manhandla | Manhandla (object type $3C) per-frame update: the base in object slot 5 steers and speeds up all five segments, the four hands in slots 1-4 shoot fireballs; movement, collisions, the death of hands and base, and drawing. |
+| [bank4/gohma.asm](../src/bank4/gohma.asm) | 407 | 7 | Gohma | Gohma (object types $33, $34) per-frame update: out-and-back movement, the eye's open/closed cycle, fireballs, drawing of eye and legs, five-part collision, and the rule that only an arrow flying up into the fully open eye deals damage. |
+| [bank4/gleeok.asm](../src/bank4/gleeok.asm) | 636 | 28 | Flyer, Gleeok | Gleeok (types $42-$45): the per-frame update that loads each living neck into object slots 1-6, bends the neck, lets its head shoot, and stores it back; and the cut-off flying head (type $46), which cannot be hurt. |
+| [bank4/gleeok-head-body.asm](../src/bank4/gleeok-head-body.asm) | 485 | 15 | Gleeok | Gleeok (types $42-$45): drawing the segments of one neck, weapon and Link collisions of its head and base, cutting a head off (flying head, type $46), the death of the whole boss, the attached head's weaving movement, and the animated 3x2 sprite body. |
+| [bank4/zelda-lanmola-inits.asm](../src/bank4/zelda-lanmola-inits.asm) | 117 | 4 |  | Init routines: Zelda (type $37) with her four guard fires (type $3F) and their start positions; Lanmola (types $3A, $3B), which fills slots $01-$0A with two 5-segment worms. |
+| [bank4/patra-ganon-inits.asm](../src/bank4/patra-ganon-inits.asm) | 111 | 2 |  | Init routines: Patra (types $47, $48) and its eight children (types $25, $26); Ganon (type $3E), whose init halts Link for the opening scene of the fight. |
+| [bank4/zelda-guard-fire.asm](../src/bank4/zelda-guard-fire.asm) | 136 | 6 |  | Zelda (type $37): waits for Link to stand in front of her, then starts the ending (mode $13). Guard fire (type $3F): the killable fires around her. The helper that turns a dying object into a dead dummy (type $5D). |
+| [bank4/lanmola.asm](../src/bank4/lanmola.asm) | 381 | 4 |  | Lanmola (types $3A red, $3B blue): per-segment update, death handling that shortens the worm from the tail, the head's direction choice, and the pixel mover. |
+| [bank4/patra.asm](../src/bank4/patra.asm) | 329 | 12 | Flyer | Patra (types $47, $48): its flight, the rule that it can be hurt only when no child is left, the orbit-pattern switch; its 8 children (types $25, $26): staggered start, orbit. |
+| [bank4/ganon.asm](../src/bank4/ganon.asm) | 327 | 12 | Ganon | Ganon (type $3E): the entry scene (Link holds up a Triforce piece in the dark, then in the light), the fight (invisible and moving, visible after a hit, brown and vulnerable to the silver arrow), and the death sequence that ends with the room item appearing. |
+| [bank4/ganon-draw-collisions.asm](../src/bank4/ganon-draw-collisions.asm) | 564 | 23 | Ganon | Ganon (type $3E): body drawing, the death burst (8 rays, 8 clouds), the ashes, his palette changes, his collision rules (sword while invisible, silver arrow while brown) and the release of the room item (Triforce of Power) when he is dead. |
+| [bank4/drop-items.asm](../src/bank4/drop-items.asm) | 395 | 13 |  | What a dead monster leaves behind: the four drop groups, the drop table indexed by the kill cycle, drop rates, the fairy at 16 kills and the forced help drops; the dropped item object (type $60): lifetime, pickup by Link or his weapons. Also the HP nibble extractor, the boss death cry and this bank's copy of DestroyMonster. |
+| [bank4/shoot-helpers-candle.asm](../src/bank4/shoot-helpers-candle.asm) | 188 | 12 |  | How a monster creates a shot or a child object in a free monster slot (with the limit of 4 counted shots), and the fade that lights a dark dungeon room when candle fire burns in it; this bank's dark-room test. |
+| [bank4/fairy-flyer-common.asm](../src/bank4/fairy-flyer-common.asm) | 562 | 33 | Flyer | The fairy item (item id $23): init, flight and drawing. The flight code shared by all 8-way flyers: speed-up / slow-down / chase / wander / delay states, the pixel mover, the room-boundary bounce, and the 8-way turn helpers (toward the chase target, at random, reverse). |
+| [bank4/orbit-rotation-math.asm](../src/bank4/orbit-rotation-math.asm) | 233 | 4 |  | Orbit movement for Patra's children and the pond fairy's hearts: sine table, per-frame step along a circle, shift multiply, angle decrease. Then bank 4's tail: reset stub and vectors. |
 
 ## Bank 5 (`src/bank5.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank5/submenu-states.asm](../src/bank5/submenu-states.asm) | 428 | 22 | Submenu | Submenu state machine, triforce display |
-| [bank5/scroll-world.asm](../src/bank5/scroll-world.asm) | 188 | 8 |  | Per-frame world scrolling |
-| [bank5/mode7-scroll-init.asm](../src/bank5/mode7-scroll-init.asm) | 342 | 17 |  | Mode 7 init: next room layout, dark-room fade |
-| [bank5/mode7-scroll-update.asm](../src/bank5/mode7-scroll-update.asm) | 251 | 18 |  | Mode 7 update submodes |
-| [bank5/sprite0-split-scroll.asm](../src/bank5/sprite0-split-scroll.asm) | 116 | 1 |  | Sprite-0 split; padding |
-| [bank5/mode-inits-obj-lists.asm](../src/bank5/mode-inits-obj-lists.asm) | 102 | 12 |  | Mode 8/D/10 init stubs; spawn position lists; ObjLists |
-| [bank5/enter-room.asm](../src/bank5/enter-room.asm) | 436 | 7 |  | Entering a room: Link placement, monster list decode, tile object |
-| [bank5/spawn-positions.asm](../src/bank5/spawn-positions.asm) | 184 | 6 |  | Monster spawn spots, cellar keese, cave person, spawn safety |
-| [bank5/mode11-death-init.asm](../src/bank5/mode11-death-init.asm) | 73 | 4 |  | Death init |
-| [bank5/shutters-door-flags.asm](../src/bank5/shutters-door-flags.asm) | 98 | 4 |  | Door flags, CheckShutters, TriggerOpenDoor |
-| [bank5/mode8-continue-mode10-stairs.asm](../src/bank5/mode8-continue-mode10-stairs.asm) | 171 | 9 |  | Continue/Save/Retry menu; stairs descent |
-| [bank5/underworld-secrets.asm](../src/bank5/underworld-secrets.asm) | 208 | 13 |  | Dungeon secret triggers: all dead, ringleader, push block, last boss |
-| [bank5/mode11-death.asm](../src/bank5/mode11-death.asm) | 227 | 21 |  | Death update |
-| [bank5/border-input-mask.asm](../src/bank5/border-input-mask.asm) | 159 | 4 | Link | Border bounds masking the A button and directions |
-| [bank5/wield-items.asm](../src/bank5/wield-items.asm) | 215 | 13 |  | Wield sword, boomerang, arrow, food, potion, rod; B item dispatch |
-| [bank5/cave-cellar-exits.asm](../src/bank5/cave-cellar-exits.asm) | 175 | 6 |  | Leaving cellars, caves, shortcut stairs |
-| [bank5/ladder.asm](../src/bank5/ladder.asm) | 210 | 2 |  | Ladder rules, movement override, drawing |
-| [bank5/edge-spawn-cell.asm](../src/bank5/edge-spawn-cell.asm) | 107 | 1 |  | Edge cell search for monster spawns |
-| [bank5/room-history-ow.asm](../src/bank5/room-history-ow.asm) | 161 | 10 | Unused | Mode B/C/9 init tables; overworld room history and kill counts |
-| [bank5/doorway.asm](../src/bank5/doorway.asm) | 271 | 9 | Link, Unused | Doorway detection and movement restriction |
-| [bank5/touch-door.asm](../src/bank5/touch-door.asm) | 130 | 11 |  | Door type handlers: wall, false wall, bombable, key, shutter |
-| [bank5/room-history-uw.asm](../src/bank5/room-history-uw.asm) | 121 | 2 |  | Dungeon room history, kill counts, non-recurring monsters |
-| [bank5/boss-sound-door-face.asm](../src/bank5/boss-sound-door-face.asm) | 111 | 3 |  | Boss roar; padding; door face tile helper |
-| [bank5/room-layouts-ow.asm](../src/bank5/room-layouts-ow.asm) | 213 | 22 |  | Overworld room layouts, cave layouts, column heaps (data) |
-| [bank5/room-layouts-uw.asm](../src/bank5/room-layouts-uw.asm) | 155 | 19 |  | Dungeon wall tiles, door faces, layouts, column heaps, cellars (data) |
-| [bank5/fill-walls.asm](../src/bank5/fill-walls.asm) | 200 | 7 |  | Door type lookup; FillWalls |
-| [bank5/lay-out-doors.asm](../src/bank5/lay-out-doors.asm) | 345 | 19 |  | Door tables; LayOutDoors |
-| [bank5/update-doors.asm](../src/bank5/update-doors.asm) | 286 | 4 |  | Door open/close commands, timers, flags in both rooms |
-| [bank5/uw-floor-push-block.asm](../src/bank5/uw-floor-push-block.asm) | 240 | 5 |  | Dungeon floor layout, squares, push block creation |
-| [bank5/mode12-lay-out-room.asm](../src/bank5/mode12-lay-out-room.asm) | 237 | 14 |  | End-level sequence; LayOutRoom dispatcher |
-| [bank5/layout-room-ow.asm](../src/bank5/layout-room-ow.asm) | 351 | 14 |  | Overworld squares, layout, tile objects, cave/cellar layout |
-| [bank5/ow-shortcut-map-square.asm](../src/bank5/ow-shortcut-map-square.asm) | 309 | 6 |  | Shortcut stairs, map square change; padding |
-| [bank5/mode3-mode6-init.asm](../src/bank5/mode3-mode6-init.asm) | 241 | 17 |  | Unfurl submodes, object room bounds, leave room |
-| [bank5/cave-cellar-enter.asm](../src/bank5/cave-cellar-enter.asm) | 249 | 23 | World | Mode A; cave/cellar walk-in; heart fill |
-| [bank5/submenu-row-transfer.asm](../src/bank5/submenu-row-transfer.asm) | 132 | 9 | Submenu | Submenu row transfer while scrolling |
-| [bank5/link-handle-input.asm](../src/bank5/link-handle-input.asm) | 354 | 9 | Link | Link_HandleInput: buttons, grid turning rules, speed |
-| [bank5/warps-stairs-caves.asm](../src/bank5/warps-stairs-caves.asm) | 168 | 5 |  | Stairs/cave/dungeon entrance detection, kill count save |
-| [bank5/save-ram-clear-ram.asm](../src/bank5/save-ram-clear-ram.asm) | 84 | 2 |  | InitSaveRam, ClearRam, first edge spawn cell, RNG seed |
-| [bank5/next-room-calc.asm](../src/bank5/next-room-calc.asm) | 100 | 6 |  | Next room by direction; invalid room reloads overworld |
-| [bank5/submenu-map.asm](../src/bank5/submenu-map.asm) | 199 | 5 | Submenu | Submenu dungeon map, compass and map tests |
-| [bank5/door-flags-dark-room.asm](../src/bank5/door-flags-dark-room.asm) | 105 | 4 |  | Open doorway mask, door flags, dark room test |
-| [bank5/submenu-items.asm](../src/bank5/submenu-items.asm) | 378 | 14 |  | Submenu items, cursor, selection |
-| [bank5/create-room-objects.asm](../src/bank5/create-room-objects.asm) | 156 | 3 |  | Room item, push block, overworld heart container; bank tail |
+| [bank5/submenu-states.asm](../src/bank5/submenu-states.asm) | 516 | 22 | Submenu | The item submenu's state machine (SubmenuState): scrolling the submenu in over the play area, the active state, scrolling it out; the overworld Triforce display built from InvTriforce. |
+| [bank5/scroll-world.asm](../src/bank5/scroll-world.asm) | 229 | 8 |  | The per-frame step of the room-to-room scroll (mode 7): moves the scroll position by one tile row (vertical) or 2/4 pixels (horizontal), carries Link across the screen, and ends the scroll submode when the next room is fully shown. |
+| [bank5/mode7-scroll-init.asm](../src/bank5/mode7-scroll-init.asm) | 425 | 17 |  | Mode 7 (scroll to the next room) init submodes: find the next room, lay it out and send its tiles and attributes to name table 2, fade to black when entering a dark room, then arm the sprite-0 split. Also the play-area attribute fill used by other modes. |
+| [bank5/mode7-scroll-update.asm](../src/bank5/mode7-scroll-update.asm) | 319 | 18 |  | Mode 7 (scroll to the next room), update half: the eight update submodes that set up the scroll start, scroll one step per frame while copying the new room's tiles into nametable 0, transfer its attributes, and hand over to mode 4 (enter room). |
+| [bank5/sprite0-split-scroll.asm](../src/bank5/sprite0-split-scroll.asm) | 138 | 1 |  | The sprite-0 split: waits inside the frame handler for the sprite-0 hit at the bottom of the status bar, then sets the scroll (or blanks the screen) for the play area below it. Followed by 99 bytes of $FF filler. |
+| [bank5/mode-inits-obj-lists.asm](../src/bank5/mode-inits-obj-lists.asm) | 186 | 12 |  | Init routines of modes 8 (continue menu), $D (save) and $10 (stairs); the four monster spawn position lists (one per direction Link faces on entry); Link's walk-in distances through a dungeon door; the room monster lists (ObjLists) and their address table. |
+| [bank5/enter-room.asm](../src/bank5/enter-room.asm) | 444 | 7 |  | Mode 4 (enter room) init submodes, and the room-entry routine shared by modes 4, 9, $B and $C: clears per-room RAM, places Link, decodes the room's monster list and count (reduced by the room history), fills the object types, and sets the overworld tile object. |
+| [bank5/spawn-positions.asm](../src/bank5/spawn-positions.asm) | 231 | 6 |  | Where the objects made on room entry start: the nine in-room spawn spots for monsters, the four cellar Keese, the cave person; and the test that keeps a spawn off blocked tiles and away from Link (also used for monsters entering from the screen edge). |
+| [bank5/mode11-death-init.asm](../src/bank5/mode11-death-init.asm) | 108 | 4 |  | Init half of the death mode ($11): Link flashes in the frozen room for 33 frames, then the death sequence is set up (red fade series, four spins) and all sound is silenced. |
+| [bank5/shutters-door-flags.asm](../src/bank5/shutters-door-flags.asm) | 122 | 4 |  | Saved "door opened" room flags (set and clear), the per-frame check that opens a dungeon room's shutter doors once they have been triggered, and the entry that starts a door's opening animation. |
+| [bank5/mode8-continue-mode10-stairs.asm](../src/bank5/mode8-continue-mode10-stairs.asm) | 209 | 9 |  | Update of mode 8 (the CONTINUE / SAVE / RETRY menu shown after death) and of mode $10 (Link sinking into a cave or dungeon entrance, or taking stairs, before the next mode). |
+| [bank5/underworld-secrets.asm](../src/bank5/underworld-secrets.asm) | 269 | 13 |  | Dungeon room secrets, checked every frame of play: the "no monsters left" test, and the eight secret trigger types (room attribute F bits 2-0) that open shutters, kill a ringleader's followers, turn a pushed block into stairs, or make the room item appear. |
+| [bank5/mode11-death.asm](../src/bank5/mode11-death.asm) | 307 | 21 |  | Update half of the death mode ($11), thirteen steps: redraw the room for the death palette, spin Link four times, fade the room, turn Link grey, show the spark, print GAME OVER, count the death and go to the continue menu (mode 8). |
+| [bank5/border-input-mask.asm](../src/bank5/border-input-mask.asm) | 173 | 4 | Link | Border bands near the screen edges in which Link's newly pressed A and B buttons are discarded (no sword, no item) and, in dungeons, sideways input is removed. |
+| [bank5/wield-items.asm](../src/bank5/wield-items.asm) | 307 | 13 |  | Starting a weapon when A or B is pressed: the sword swing, and the B item dispatch with the boomerang, arrow, food, potion and rod (bomb, candle and flute are started elsewhere). |
+| [bank5/cave-cellar-exits.asm](../src/bank5/cave-cellar-exits.asm) | 216 | 6 |  | Leaving a cellar (up its stairs), a cave (off the screen edge) or the shortcut cave (down one of its three stairs): picks the destination room and starts mode $A. |
+| [bank5/ladder.asm](../src/bank5/ladder.asm) | 238 | 2 |  | The laid-down ladder (object type $5F): each frame decides whether it stays, lets Link walk across it by overriding his moving direction, and draws it. |
+| [bank5/edge-spawn-cell.asm](../src/bank5/edge-spawn-cell.asm) | 127 | 1 |  | Picks the next cell on the screen's outer ring where a monster may walk in from the edge (overworld rooms with the "monsters from edges" attribute). |
+| [bank5/room-history-ow.asm](../src/bank5/room-history-ow.asm) | 213 | 10 | Unused | Submode dispatch for the init of modes $B (enter cave), $C (shortcut stairs) and 9 (enter cellar); the overworld side of the room history: how many monsters a room makes on entry and how its kills are saved on leaving; two unused sprite helpers. |
+| [bank5/doorway.asm](../src/bank5/doorway.asm) | 270 | 9 | Link, Unused | Dungeon doorways: detecting that Link stands at or in one of the four door frames, touching the door there, locking his movement to the doorway's axis, and leaving the room through false and bombed walls. |
+| [bank5/touch-door.asm](../src/bank5/touch-door.asm) | 196 | 11 |  | What happens when Link pushes into a dungeon doorway: one handler per door type (open, wall, false wall, bombable wall, locked door, shutter) that lets him pass or blocks him. |
+| [bank5/room-history-uw.asm](../src/bank5/room-history-uw.asm) | 160 | 2 |  | The dungeon side of the room history: how many monsters a dungeon room makes on entry (kills banked in LevelKillCounts, non-recurring monsters) and how its kills are saved on leaving. |
+| [bank5/boss-sound-door-face.asm](../src/bank5/boss-sound-door-face.asm) | 122 | 3 |  | The looping boss roar heard in dungeon rooms near a living boss; 174 bytes of padding; the helper that copies one door face tile into the dynamic transfer buffer. |
+| [bank5/room-layouts-ow.asm](../src/bank5/room-layouts-ow.asm) | 272 | 22 |  | Data only: the overworld room layouts (16 column descriptors per layout), the layouts of the cave and the shortcut-stairs cave, and the 16 column tables ("heaps") of square descriptors that the layouts refer to. |
+| [bank5/room-layouts-uw.asm](../src/bank5/room-layouts-uw.asm) | 290 | 19 |  | Dungeon (UW) room graphics data: the wall outline tile list, the door face tile sets of the four walls, the 42 floor layouts with their ten column heaps, and the two cellar layouts with their column heap. No code. |
+| [bank5/fill-walls.asm](../src/bank5/fill-walls.asm) | 234 | 7 |  | The door type lookup for one side of a dungeon room (FindDoorTypeByDoorBit), and FillWalls, which writes the wall outline shared by all dungeon rooms into the play area tile map. |
+| [bank5/lay-out-doors.asm](../src/bank5/lay-out-doors.asm) | 366 | 19 |  | Drawing the four doors of a dungeon room into the play area tile map by door type and open/closed state (LayOutDoors), and the per-wall tables used for that and for the door animation. |
+| [bank5/update-doors.asm](../src/bank5/update-doors.asm) | 278 | 4 |  | Carrying out a door command in a dungeon room: the two-step opening or closing of the triggered door, the tiles sent to the screen, the saved door flags in this room and the room behind the door, and CurOpenedDoors. |
+| [bank5/uw-floor-push-block.asm](../src/bank5/uw-floor-push-block.asm) | 279 | 5 |  | Lays out the floor of a dungeon room (12 x 7 squares of 2 x 2 tiles) from its room layout and the dungeon column heaps, and creates the push block object for rooms flagged with one. |
+| [bank5/mode12-lay-out-room.asm](../src/bank5/mode12-lay-out-room.asm) | 294 | 14 |  | Mode $12 (end of level, after a Triforce piece is taken): init and the five update submodes (wait, flash, refill hearts, close the curtain, return to the overworld). LayOutRoom, which builds the play area tile map of any room, and the routines that queue one tile column or row of that map for transfer to the screen. |
+| [bank5/layout-room-ow.asm](../src/bank5/layout-room-ow.asm) | 429 | 14 |  | Lays out an overworld room, a cave or a dungeon cellar (16 x 11 squares of 2 x 2 tiles) into the play area tile map; turns a found secret into stairs or a cave mouth; finds the room's tile object (rock, rock wall, tree, gravestone, armos) while laying out. |
+| [bank5/ow-shortcut-map-square.asm](../src/bank5/ow-shortcut-map-square.asm) | 361 | 6 |  | Overworld stairs restored when a room is laid out (rooms whose rock or gravestone was pushed, rooms reached by shortcut stairs); rewriting one 16x16 square of the play area tile map under a tile object; the row-by-row copy of the tile map to the screen; filler. |
+| [bank5/mode3-mode6-init.asm](../src/bank5/mode3-mode6-init.asm) | 320 | 17 |  | Mode 3 (unfurl) init submodes 2-8: attributes, status bar, "LEVEL-n" text, first room layout, Link's start position. The room bounds for objects (overworld and dungeon). Mode 6 (leave room) init: how far Link walks through a door. The weapon slot reset. |
+| [bank5/cave-cellar-enter.asm](../src/bank5/cave-cellar-enter.asm) | 374 | 23 | World | Init submodes shared by the cave and cellar modes (9 enter cellar, $A leave cave or cellar, $B enter cave, $C shortcut cave): sprites, palette fades, attributes, Link's walk in. Also the per-frame heart refill (potion, pond fairy, end of level). |
+| [bank5/submenu-row-transfer.asm](../src/bank5/submenu-row-transfer.asm) | 163 | 9 | Submenu | Draws the item submenu into name table 2 while it scrolls in: each call sends one tile row, either a row of blank tiles or a fixed piece (text, boxes, Triforce in the overworld, the map sheet in a dungeon). |
+| [bank5/link-handle-input.asm](../src/bank5/link-handle-input.asm) | 422 | 9 | Link | Link's per-frame input handling in mode 5: A (sword) and B (item) presses, then the rules that turn the held directions into ObjDir/ObjInputDir at a grid point and between grid points, and Link's walking speed. |
+| [bank5/warps-stairs-caves.asm](../src/bank5/warps-stairs-caves.asm) | 223 | 5 |  | The transitions Link starts by standing on a tile in mode 5: dungeon stairs to a cellar, overworld stairs and openings to a cave, a shortcut cave or a dungeon level. Also banks the room's kill count when Link leaves a room. |
+| [bank5/save-ram-clear-ram.asm](../src/bank5/save-ram-clear-ram.asm) | 108 | 2 |  | Power-on memory setup: zeroing the working part of save RAM when it carries no valid markers, and clearing the console RAM with the few starting values that are not 0 (the random number seed, the first screen-edge spawn cell, the two menu options). |
+| [bank5/next-room-calc.asm](../src/bank5/next-room-calc.asm) | 141 | 6 |  | Works out NextRoomId from the direction Link leaves a room in; leaving the map (as through a dungeon's entrance) loads the overworld instead. Also the end of the end-level sequence and a small PPU mask helper. |
+| [bank5/submenu-map.asm](../src/bank5/submenu-map.asm) | 227 | 5 | Submenu | The dungeon map sheet of the item submenu: builds one row of 16 room marks per call from the rooms' visited flags and doors; plus the tests "does Link have this level's compass / map". |
+| [bank5/door-flags-dark-room.asm](../src/bank5/door-flags-dark-room.asm) | 130 | 4 |  | Dungeon door helpers: the mask of sides of a room that can be walked through (for the submenu map), copying a room's saved door flags into CurOpenedDoors, and the dark room test. |
+| [bank5/submenu-items.asm](../src/bank5/submenu-items.asm) | 422 | 14 |  | Item submenu: draws the inventory item sprites, the selected item and the flashing cursor; moves the B-button selection left/right; finds an occupied selectable item slot (also used by the status bar every frame). |
+| [bank5/create-room-objects.asm](../src/bank5/create-room-objects.asm) | 203 | 3 |  | Room setup of the room item (object slot $13), the dungeon push block and the overworld heart container of room $5F; then the bank 5 tail: its copy of the reset handler, the MMC1 control and bank switch writers, and the vectors. |
 
 ## Bank 6 (`src/bank6.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank6/level-load-mode2.asm](../src/bank6/level-load-mode2.asm) | 273 | 14 |  | Level block/info address tables, mode 2 copy to RAM, quest-2 patch |
-| [bank6/quest2-replacements.asm](../src/bank6/quest2-replacements.asm) | 147 | 13 |  | Second-quest replacement tables |
-| [bank6/level-blocks-common-data.asm](../src/bank6/level-blocks-common-data.asm) | 129 | 25 |  | Level block/info blobs, common data block |
-| [bank6/transfer-buf-dispatch.asm](../src/bank6/transfer-buf-dispatch.asm) | 183 | 4 |  | Transfer buffer selector table and PPU transfer loop |
-| [bank6/transfer-bufs-static.asm](../src/bank6/transfer-bufs-static.asm) | 271 | 41 |  | Static PPU transfer buffers; bank tail |
+| [bank6/level-load-mode2.asm](../src/bank6/level-load-mode2.asm) | 355 | 14 |  | How level data reaches RAM: the tables that pick a level block (768 bytes of room attributes) and a level info block per level and quest, the mode 2 routines that copy them to RAM, the power-on copy of the common data block, and the second-quest patches applied after the copy. |
+| [bank6/quest2-replacements.asm](../src/bank6/quest2-replacements.asm) | 224 | 13 |  | The data the second quest patches into the level data in RAM after a level is loaded: 8 overworld room attribute bytes, and for each dungeon level 1-9 a replacement for the level info from offset $29 on (item positions, start/Triforce/boss rooms, cellars, maps). |
+| [bank6/level-blocks-common-data.asm](../src/bank6/level-blocks-common-data.asm) | 204 | 25 |  | The level data in ROM: five 768-byte level blocks (room attributes of the overworld and of the two dungeon maps, Q1 and Q2) and ten 252-byte level info blocks; then the common data block, $8E bytes of patchable PPU transfer buffers and the overworld column directory that live in RAM at $67F0-$687D. |
+| [bank6/transfer-buf-dispatch.asm](../src/bank6/transfer-buf-dispatch.asm) | 219 | 4 |  | How queued background, attribute and palette data reaches the PPU: the table mapping TileBufSelector to a transfer buffer, and the loop that the NMI handler runs once per frame to write that buffer's records to PPU memory. |
+| [bank6/transfer-bufs-static.asm](../src/bank6/transfer-bufs-static.asm) | 372 | 41 |  | The fixed PPU transfer buffers in ROM: screen text, box frames, attribute fills and palette rows for the file menus, status bar, submenu, caves, cellars, death and ending; then the bank's copy of the reset code and its interrupt vectors. |
 
 ## Bank 7 (`src/bank7.asm`)
 
 | File | Lines | Labels | Subjects | Topic |
 |---|---|---|---|---|
-| [bank7/run-game-nmi.asm](../src/bank7/run-game-nmi.asm) | 234 | 8 |  | PCM samples, RunGame, NMI frame handler |
-| [bank7/ppu-tablejump-input.asm](../src/bank7/ppu-tablejump-input.asm) | 202 | 8 |  | PPU reset, TableJump, sprite hiding, controller reading |
-| [bank7/next-room-room-flags.asm](../src/bank7/next-room-room-flags.asm) | 86 | 9 | Room | Triforce marker, CalculateNextRoom, MarkRoomVisited, GetRoomFlags |
-| [bank7/room-item-draw.asm](../src/bank7/room-item-draw.asm) | 185 | 7 |  | Room item on a monster, item drawing |
-| [bank7/status-bar-lift-item.asm](../src/bank7/status-bar-lift-item.asm) | 179 | 14 |  | Status bar items; Link lifting an item |
-| [bank7/tile-obj-tiles.asm](../src/bank7/tile-obj-tiles.asm) | 139 | 3 |  | GetUniqueRoomId, tile object tiles, FillTileMap |
-| [bank7/init-mode-dispatch.asm](../src/bank7/init-mode-dispatch.asm) | 261 | 18 |  | InitMode jump table, several mode inits, room history |
-| [bank7/init-mode5-play.asm](../src/bank7/init-mode5-play.asm) | 173 | 6 |  | Boss/tile-object palettes, InitMode5Play |
-| [bank7/update-mode-dispatch.asm](../src/bank7/update-mode-dispatch.asm) | 188 | 17 |  | UpdateMode jump table, modes 2/3/4/6, GoToNextMode |
-| [bank7/mode5-play-update.asm](../src/bank7/mode5-play-update.asm) | 342 | 7 | Link | UpdateMode5Play, object loop, chase target, UpdatePlayer |
-| [bank7/tile-collision.asm](../src/bank7/tile-collision.asm) | 199 | 4 |  | Walkable tiles, colliding tile lookup |
-| [bank7/shove.asm](../src/bank7/shove.asm) | 186 | 4 | Obj | Knockback movement |
-| [bank7/flute.asm](../src/bank7/flute.asm) | 116 | 3 |  | Flute secrets table, WieldFlute |
-| [bank7/walker-move.asm](../src/bank7/walker-move.asm) | 240 | 2 | Walker | Walker_Move (Link and monsters), MoveObject |
-| [bank7/walker-collision-screen-edge.asm](../src/bank7/walker-collision-screen-edge.asm) | 365 | 22 | Walker | Walker tile collision, CheckScreenEdge, GoToNextModeFromPlay, alternate directions |
-| [bank7/link-animate-ladder.asm](../src/bank7/link-animate-ladder.asm) | 309 | 13 | Link | Ladder tables, Link end-of-move: ladder, warps, drawing, shield |
-| [bank7/sword-shot-magic-shot.asm](../src/bank7/sword-shot-magic-shot.asm) | 331 | 9 |  | Sword beam / magic shot |
-| [bank7/boomerang-arrow-food.asm](../src/bank7/boomerang-arrow-food.asm) | 353 | 15 |  | Food, boomerang tables, arrow/boomerang flight |
-| [bank7/boomerang-return-draw.asm](../src/bank7/boomerang-return-draw.asm) | 285 | 6 |  | Boomerang slow/return states, drawing |
-| [bank7/sword-and-rod.asm](../src/bank7/sword-and-rod.asm) | 336 | 8 |  | Rod or arrow, sword or rod update, MakeSwordShot |
-| [bank7/fire.asm](../src/bank7/fire.asm) | 137 | 3 |  | Candle fire |
-| [bank7/bomb.asm](../src/bank7/bomb.asm) | 251 | 16 | Bomb | Bomb timers, bombable wall hotspots, UpdateBomb |
-| [bank7/object-animation.asm](../src/bank7/object-animation.asm) | 252 | 10 | Anim | Spawn cloud, death sparkle, walking animation |
-| [bank7/object-update-table.asm](../src/bank7/object-update-table.asm) | 271 | 7 |  | Type attributes, HP pairs, UpdateObject table, death to drop |
-| [bank7/object-init-table.asm](../src/bank7/object-init-table.asm) | 242 | 2 |  | InitObject and its table |
-| [bank7/object-stubs-destroy-monster.asm](../src/bank7/object-stubs-destroy-monster.asm) | 138 | 16 |  | Bank-1 trampolines, invincibility timer, dead dummy, DestroyMonster |
-| [bank7/flute-secret-pond.asm](../src/bank7/flute-secret-pond.asm) | 128 | 11 |  | Tile object/item init, flute secret pond |
-| [bank7/reset-mmc1-vectors.asm](../src/bank7/reset-mmc1-vectors.asm) | 93 | 4 |  | Reset, MMC1 control, bank switch, vectors |
+| [bank7/run-game-nmi.asm](../src/bank7/run-game-nmi.asm) | 320 | 8 |  | DMC sample data, the play area column address table, the boot routine RunGame, and IsrNmi: the NMI handler that runs one whole game frame (PPU, timers, input, RNG, audio, mode code). |
+| [bank7/ppu-tablejump-input.asm](../src/bank7/ppu-tablejump-input.asm) | 256 | 8 |  | Engine helpers of the fixed bank: PPU register reset, name table fill, the inline jump-table dispatcher TableJump, hiding all sprites, clearing RAM pages, and reading the controllers. |
+| [bank7/next-room-room-flags.asm](../src/bank7/next-room-room-flags.asm) | 141 | 9 | Room | The compass (Triforce) marker on the status bar map; picking the room Link scrolls into from his direction and the door type on that side; the per-room flag byte (read, mark visited); the single-bit mask table. |
+| [bank7/room-item-draw.asm](../src/bank7/room-item-draw.asm) | 205 | 7 |  | Drawing items: the room item (object slot $13), including the one carried by the monster in slot 1; any item object by item id; an inventory item by item slot; palette and flashing. |
+| [bank7/status-bar-lift-item.asm](../src/bank7/status-bar-lift-item.asm) | 235 | 14 |  | Status bar B item and sword sprites, with the repair of SelectedItemSlot when the selected item is gone; Link holding an item above his head (halt, timer, drawing). |
+| [bank7/tile-obj-tiles.asm](../src/bank7/tile-obj-tiles.asm) | 172 | 3 |  | Helpers for a room's layout id and for changing background tiles during play: replace the 2x2 tiles under a tile object (push block, rock, armos, revealed stairs), fill the tile map. |
+| [bank7/init-mode-dispatch.asm](../src/bank7/init-mode-dispatch.asm) | 357 | 18 |  | The init half of the mode machine: one-time game setup, the per-mode init dispatch, the mode inits that live in the fixed bank (0, 1, 2, 3, 7, $E/$F, $13), room history clearing, and helpers run on every room change (sprites between rooms, Link's state and clock reset). |
+| [bank7/init-mode5-play.asm](../src/bank7/init-mode5-play.asm) | 221 | 6 |  | Mode 5 (play) init: picks the palette for sprite palette row 7 (boss, tile object or level), then the tasks run whenever a room becomes active: object bounds, visited flag, room objects, room history, boss roar, whirlwind drop-off. |
+| [bank7/update-mode-dispatch.asm](../src/bank7/update-mode-dispatch.asm) | 272 | 17 |  | The update half of the mode machine: the per-mode update dispatch, trampolines to the far updates, the fixed-bank updates of modes 2, 3, 4/6 and 7, and the routines that end a mode (GoToNextMode, EndGameMode), including Link's rise out of a cave or dungeon entrance. |
+| [bank7/mode5-play-update.asm](../src/bank7/mode5-play-update.asm) | 388 | 7 | Link | The per-frame update of play (mode 5, also modes 9, $A, $B, $C): flute freeze, pause, submenu, Link, the monsters' chase target, weapon slots $0D-$12, object slots $0B-$01, per-room checks, hearts and rupees. Also Link's own update and the grid alignment helper. |
+| [bank7/tile-collision.asm](../src/bank7/tile-collision.asm) | 225 | 4 |  | Tile lookup for collision: which play-area tile lies under an object or one step ahead of it in a direction, the overworld's list of extra walkable tiles, and the walk-through wall of overworld room $1F. |
+| [bank7/shove.asm](../src/bank7/shove.asm) | 217 | 4 | Obj | Knockback movement: moves a shoved object (Link or a monster) up to 4 pixels per frame in its shove direction until the distance runs out or something blocks it. |
+| [bank7/flute.asm](../src/bank7/flute.asm) | 135 | 3 |  | Using the recorder (flute): tune, $98-frame freeze, and its effect by place: in the UW a "flute used" flag (Digdogger reads it); in the OW a flute secret in the listed rooms, the whirlwind elsewhere. |
+| [bank7/walker-move.asm](../src/bank7/walker-move.asm) | 303 | 2 | Walker | The per-frame move of a grid walker (Link and walking monsters): choose the moving direction, apply every blocker (knockback, item use, tile objects, persons, room bounds, doorways, tiles, ladder), then move by the q-speed (MoveObject). |
+| [bank7/walker-collision-screen-edge.asm](../src/bank7/walker-collision-screen-edge.asm) | 428 | 22 | Walker | What a grid walker does on a grid point: the test of the tile ahead (Walker_CheckTileCollision), a blocked monster's search for another direction, Link's screen edge test (CheckScreenEdge) and the start of a room change (GoToNextModeFromPlay). |
+| [bank7/link-animate-ladder.asm](../src/bank7/link-animate-ladder.asm) | 392 | 13 | Link | Link's end-of-frame step after moving: reset a finished grid step, lay the ladder down at water, check warps (stairs, caves, level entrances), animate and draw Link and his shield tile. Also the tables for the ladder and the shield, and bank trampolines. |
+| [bank7/sword-shot-magic-shot.asm](../src/bank7/sword-shot-magic-shot.asm) | 380 | 9 |  | Link's sword shot (beam) and the rod's magic shot in object slot $0E: flight, what happens when the shot is stopped (the beam bursts into four corners, the magic shot lights a fire if Link has the book), and drawing (also used to draw monsters' sword and magic shots). |
+| [bank7/boomerang-arrow-food.asm](../src/bank7/boomerang-arrow-food.asm) | 448 | 15 |  | Food on the ground (object slot $0F): its lifetime and which monsters it attracts. The outward flight and the spark of arrows and boomerangs, Link's and monsters' alike; arrow drawing; sprite tables shared by the sword, rod, shots, arrow and boomerang. |
+| [bank7/boomerang-return-draw.asm](../src/bank7/boomerang-return-draw.asm) | 304 | 6 |  | Second half of the boomerang update (Link's in slot $0F and a monster's): states $3x slow down, $4x/$5x return to the thrower and the catch; the spin animation and drawing shared with arrows. |
+| [bank7/sword-and-rod.asm](../src/bank7/sword-and-rod.asm) | 358 | 8 |  | The swing of the sword (object slot $0D) and of the magic rod (slot $12, shared with the arrow): one state machine for both, their position and drawing, and the creation of the sword shot or magic shot in slot $0E on the third state. |
+| [bank7/fire.asm](../src/bank7/fire.asm) | 164 | 3 |  | Link's fire (candle flame, or the fire the magic book leaves where a magic shot ends) in object slots $10 and $11: drifting, standing, lighting a dark room, burning out, and hurting Link. |
+| [bank7/bomb.asm](../src/bank7/bomb.asm) | 318 | 16 | Bomb | Link's bomb in object slots $10 and $11: the fuse, blast and fade states and their timers, the test that opens a bombable dungeon wall, and the drawing of the bomb and its dust clouds (the cloud writer is also the monster spawn cloud). |
+| [bank7/object-animation.asm](../src/bank7/object-animation.asm) | 272 | 10 | Anim | Drawing and timing of the spawn cloud and the death sparkle (ObjMetastate); the walking animation counter shared by Link and walking monsters; the stepping of Link's item-use state by that counter; helpers that put an object's position in the sprite descriptor. |
+| [bank7/object-update-table.asm](../src/bank7/object-update-table.asm) | 342 | 7 |  | Per-object-type tables (behaviour attribute bits, packed HP) and the per-frame object update dispatch: first-frame init, spawn cloud / death sparkle metastates, the update routine of each type, and the end of a death (kill cycle, room kill count, dropped item). |
+| [bank7/object-init-table.asm](../src/bank7/object-init-table.asm) | 272 | 2 |  | InitObject, run once for every object slot flagged uninitialized: overworld screen-edge entry, start timer, attributes and HP, then the per-type init routine (jump table). |
+| [bank7/object-stubs-destroy-monster.asm](../src/bank7/object-stubs-destroy-monster.asm) | 181 | 16 |  | Fixed-bank trampolines to the bank-1 init/update routines of Whirlwind, Rupee stash, Trap, dungeon persons and Grumble; invincibility countdown; start of the death sparkle; freeing an object slot; search for a free monster slot. |
+| [bank7/flute-secret-pond.asm](../src/bank7/flute-secret-pond.asm) | 178 | 11 |  | Shared init tails for objects (tile objects and items, metastate/timer reset) and the flute secret object ($5E): the pond's colour cycle, the stairs it uncovers, and the reverse cycle played when Link leaves the room by scrolling. |
+| [bank7/reset-mmc1-vectors.asm](../src/bank7/reset-mmc1-vectors.asm) | 132 | 4 |  | The reset handler, the two MMC1 serial-write routines (control register, PRG bank), the cartridge footer bytes and the NMI/reset/IRQ vectors at the end of the fixed bank. |

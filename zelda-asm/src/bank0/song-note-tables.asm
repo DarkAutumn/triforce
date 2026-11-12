@@ -2,49 +2,71 @@
 ; FILE:     bank0/song-note-tables.asm   BANK: 0 (switchable, $8000-$BFFF)
 ; UPSTREAM: Z_00.asm 1055-1225
 ; SUBJECTS: (none)
-; TOPIC:    Noise/note-length/period tables, envelopes; ISR stub, vectors
-; SEE ALSO:
+; TOPIC:    Tables and small lookups of the sound driver: drum (noise) parameters, note length tables,
+;           the note period table, the song volume envelope, the sword/arrow/flame/stairs effect notes;
+;           then the bank's reset stub and vectors.
+; SEE ALSO: bank0/drive-song.asm (the song driver that uses the lookups); bank0/sound-effects.asm
+;           (DriveEffect reads the effect note tables); bank0/note-emit-vibrato.asm (reads
+;           NotePeriodTable); bank0/song-data.asm (phrase headers choose the length table and envelope);
+;           bank7/reset-mmc1-vectors.asm (IsrReset, the same reset code in the fixed bank).
 ; KEY FACTS:
+;   - Note lengths are frames, 8 per table; a phrase header's base selects the table: $00
+;     NoteLengthTable0 (underworld), $08 NoteLengthTable1 (ending), $10 NoteLengthTable2 (overworld and
+;     the single-phrase songs), $20 NoteLengthTable4 (demo). No header uses $18 (NoteLengthTable3).
+;     GetSongNoteLength.
+;   - A noise track byte holds a length index in bits 0, 7, 6 and a drum sound 0-3 in bits 5-4; sound 0
+;     is silent (volume $10). GetSongNoiseNoteLength, NoiseVolumes.
+;   - NotePeriodTable has 57 two-byte entries (note ids $00-$70, even), period high byte first; id $08
+;     is the rest (period 0).
+;   - Every song note that is not a rest starts its envelope at offset $20 with duty byte $82 and sweep
+;     $7F; the envelope selector loaded first is overwritten. Offset $20 is one past CustomEnvelopeSong:
+;     a note's first frame reads the first byte of SwordSfxNotes ($47). PrepareCustomSongEnvelope.
+;   - The envelope offset counts down, so CustomEnvelopeSong is read from its end; header envelope bit 7
+;     picks the low nibbles, otherwise the high nibbles; the result is ORed with $90. ShapeSongVolume.
+;   - GetSongNoteLengthWithAbsIndex is not referenced anywhere.
+;   - The bytes in BANK_00_ISR are this bank's copy of the reset handler (ends JMP $E440 after switching
+;     to bank 7); BANK_00_VEC holds the vectors NMI $E484, reset $BF50, IRQ $BFF0 (see the comments
+;     there).
 ; CONTENTS: (generated; L = line in this file)
-;   L0030 NoiseVolumes                   data
-;   L0033 NoisePeriods                   data
-;   L0036 NoiseLengths                   data
-;   L0048 GetSongNoiseNoteLength         code  Params:
-;   L0062 GetSongNoteLength              code  Params:
-;   L0070 GetSongNoteLengthWithAbsIndex  code
-;   L0081 StairsSfxNotes                 data
-;   L0089 NotePeriodTable                data  Big-endian 16-bit period values.
-;   L0111 PrepareCustomSongEnvelope      code  Returns:
-;   L0124 ShapeSongVolume                code  Params:
-;   L0141 CustomEnvelopeSong             data
-;   L0147 SwordSfxNotes                  data
-;   L0151 ArrowSfxNotes                  data
-;   L0154 FlameSfxNotes                  data
-;   L0158 NoteLengthTable0               data
-;   L0161 NoteLengthTable1               data
-;   L0164 NoteLengthTable2               data
-;   L0167 NoteLengthTable3               data
-;   L0170 NoteLengthTable4               data
+;   L0053 NoiseVolumes                   data  TABLE: noise volume register value of a song drum sound; index = sound 0-3 (0 = silent).
+;   L0057 NoisePeriods                   data  TABLE: noise period register value of a song drum sound; index = sound 0-3.
+;   L0061 NoiseLengths                   data  TABLE: noise length register value of a song drum sound; index = sound 0-3.
+;   L0070 GetSongNoiseNoteLength         code  Gets the length in frames of a noise track byte, then falls into GetSongNoteLength.
+;   L0083 GetSongNoteLength              code  Gets the note length in frames for a length control byte, from the phrase's note length table.
+;   L0092 GetSongNoteLengthWithAbsIndex  code  Unreferenced routine: note length for the low 3 bits of A from NoteLengthTable0, ignoring the base.
+;   L0102 StairsSfxNotes                 data  TABLE: stairs effect notes; index = step counter [68] - 1 (1-6); volume/period nibbles.
+;   L0109 NotePeriodTable                data  TABLE: note periods (APU timer values); index = note id (even); high byte first; 0 = rest.
+;   L0131 PrepareCustomSongEnvelope      code  Loads the starting envelope offset and the duty and sweep bytes for a new song note.
+;   L0143 ShapeSongVolume                code  Computes the duty/volume byte of a song's square channel for the current envelope offset.
+;   L0163 CustomEnvelopeSong             data  TABLE: song volume envelopes; index = envelope offset (counts down from $20 to 0, then stays at 0).
+;   L0170 SwordSfxNotes                  data  TABLE: sword effect notes; index = EffectCounter - 1 (read from the end); volume/period nibbles.
+;   L0175 ArrowSfxNotes                  data  TABLE: arrow effect notes; index = EffectCounter - 1 (read from the end); volume/period nibbles.
+;   L0180 FlameSfxNotes                  data  TABLE: flame effect noise volume bytes; index = EffectCounter / 2 - 1 (read from the end).
+;   L0185 NoteLengthTable0               data  TABLE: note lengths for base $00 (underworld song); index = low 3 bits of a control byte; frames.
+;   L0189 NoteLengthTable1               data  TABLE: note lengths for base $08 (ending song); index = low 3 bits of a control byte; frames.
+;   L0193 NoteLengthTable2               data  TABLE: note lengths for base $10 (overworld and single-phrase songs); index = low 3 bits; frames.
+;   L0197 NoteLengthTable3               data  TABLE: note lengths for base $18 (no phrase header uses it); index = low 3 bits; frames.
+;   L0201 NoteLengthTable4               data  TABLE: note lengths for base $20 (demo song); index = low 3 bits of a control byte; frames.
 ; ============================================================================
 
+; TABLE: noise volume register value of a song drum sound; index = sound 0-3 (0 = silent).
 NoiseVolumes:
     .BYTE $10, $1C, $1C, $1C
 
+; TABLE: noise period register value of a song drum sound; index = sound 0-3.
 NoisePeriods:
     .BYTE $00, $03, $0A, $03
 
+; TABLE: noise length register value of a song drum sound; index = sound 0-3.
 NoiseLengths:
     .BYTE $00, $18, $18, $58
 
-; Params:
-; A: control note
-;
-; Returns:
-; A: note length
-; X: original control note
-;
-; Rotate so that bits 0, 7, 6 move to bits 2, 1, 0.
-;
+; ----------------------------------------------------------------------------
+; Gets the length in frames of a noise track byte, then falls into GetSongNoteLength.
+; IN:   A = noise track byte
+; OUT:  A = note length in frames; X = the original byte
+; NOTE: Rotates so that bits 0, 7, 6 move to bits 2, 1, 0 (the length index).
+; ----------------------------------------------------------------------------
 GetSongNoiseNoteLength:
     TAX
     ROR
@@ -53,12 +75,11 @@ GetSongNoiseNoteLength:
     ROL
     ROL
 
-; Params:
-; A: control note
-;
-; Returns:
-; A: note length
-;
+; ----------------------------------------------------------------------------
+; Gets the note length in frames for a length control byte, from the phrase's note length table.
+; IN:   A = control byte (low 3 bits = index); NoteLengthTableBase = the phrase's table offset
+; OUT:  A = note length in frames; Y = table offset
+; ----------------------------------------------------------------------------
 GetSongNoteLength:
     AND #$07
     CLC
@@ -67,25 +88,24 @@ GetSongNoteLength:
     LDA NoteLengthTable0, Y
     RTS
 
+; Unreferenced routine: note length for the low 3 bits of A from NoteLengthTable0, ignoring the base.
 GetSongNoteLengthWithAbsIndex:
-    ; Begin unverified code 1EF1
     AND #$07
     TAY
     LDA NoteLengthTable0, Y
     RTS
-    ; End unverified code
 
-; Unknown block
+; One byte that nothing references.
     .BYTE $CB
 
+; TABLE: stairs effect notes; index = step counter [68] - 1 (1-6); volume/period nibbles.
 StairsSfxNotes:
     .BYTE $0E, $0E, $4C, $6D, $8C, $CD
 
-; Unknown block
+; One byte that nothing references.
     .BYTE $FF
 
-; Big-endian 16-bit period values.
-;
+; TABLE: note periods (APU timer values); index = note id (even); high byte first; 0 = rest.
 NotePeriodTable:
     .BYTE $00, $23, $00, $6A, $03, $27, $00, $97
     .BYTE $00, $00, $02, $F9, $02, $CF, $02, $A6
@@ -103,11 +123,11 @@ NotePeriodTable:
     .BYTE $04, $35, $03, $F8, $03, $BF, $03, $89
     .BYTE $03, $57
 
-; Returns:
-; A: starting custom envelope offset
-; X: duty byte $82
-; Y: sweep byte $7F
-;
+; ----------------------------------------------------------------------------
+; Loads the starting envelope offset and the duty and sweep bytes for a new song note.
+; OUT:  A = $20 (envelope offset); X = $82 (duty byte); Y = $7F (sweep byte)
+; NOTE: The first load (SongEnvelopeSelector) is overwritten at once; all songs get the same values.
+; ----------------------------------------------------------------------------
 PrepareCustomSongEnvelope:
     LDA SongEnvelopeSelector
     LDA #$20
@@ -115,12 +135,11 @@ PrepareCustomSongEnvelope:
     LDY #$7F
     RTS
 
-; Params:
-; Y: envelope offset
-;
-; Returns:
-; A: duty/volume value
-;
+; ----------------------------------------------------------------------------
+; Computes the duty/volume byte of a song's square channel for the current envelope offset.
+; IN:   Y = envelope offset; SongEnvelopeSelector bit 7 set = use low nibbles, clear = high nibbles
+; OUT:  A = $90 OR the nibble of CustomEnvelopeSong,Y
+; ----------------------------------------------------------------------------
 ShapeSongVolume:
     LDA SongEnvelopeSelector
     BPL :+
@@ -138,35 +157,47 @@ ShapeSongVolume:
     ORA #$90
     RTS
 
+; TABLE: song volume envelopes; index = envelope offset (counts down from $20 to 0, then stays at 0).
+; High nibble = volume for selector bit 7 clear, low nibble = volume for selector bit 7 set.
+; Offset $20 (a note's first frame) is past the 32 bytes: it reads SwordSfxNotes' first byte, $47.
 CustomEnvelopeSong:
     .BYTE $04, $24, $24, $34, $34, $35, $35, $35
     .BYTE $45, $45, $46, $46, $46, $46, $46, $46
     .BYTE $46, $46, $57, $57, $57, $57, $68, $68
     .BYTE $68, $68, $79, $79, $79, $68, $68, $57
 
+; TABLE: sword effect notes; index = EffectCounter - 1 (read from the end); volume/period nibbles.
 SwordSfxNotes:
     .BYTE $47, $67, $87, $A8, $B9, $9A, $8A, $5A
     .BYTE $9B, $8B
 
+; TABLE: arrow effect notes; index = EffectCounter - 1 (read from the end); volume/period nibbles.
 ArrowSfxNotes:
     .BYTE $FB, $F9, $9D, $6E, $3F
 
+; TABLE: flame effect noise volume bytes; index = EffectCounter / 2 - 1 (read from the end).
+; On the last frame (counter 1) the index is -1: the byte read is the last of ArrowSfxNotes ($3F).
 FlameSfxNotes:
     .BYTE $1A, $1A, $1C, $1D, $1D, $1E, $1E, $1F
     .BYTE $1F, $1E, $1A, $19, $16, $13, $11, $11
 
+; TABLE: note lengths for base $00 (underworld song); index = low 3 bits of a control byte; frames.
 NoteLengthTable0:
     .BYTE $03, $0A, $01, $14, $05, $28, $3C, $70
 
+; TABLE: note lengths for base $08 (ending song); index = low 3 bits of a control byte; frames.
 NoteLengthTable1:
     .BYTE $07, $1B, $35, $14, $0D, $28, $3C, $50
 
+; TABLE: note lengths for base $10 (overworld and single-phrase songs); index = low 3 bits; frames.
 NoteLengthTable2:
     .BYTE $06, $0C, $08, $18, $24, $30, $48, $10
 
+; TABLE: note lengths for base $18 (no phrase header uses it); index = low 3 bits; frames.
 NoteLengthTable3:
     .BYTE $07, $0D, $09, $1B, $24, $36, $48, $10
 
+; TABLE: note lengths for base $20 (demo song); index = low 3 bits of a control byte; frames.
 NoteLengthTable4:
     .BYTE $3C, $50, $0A, $05, $14, $0D, $28, $0E
 
@@ -175,7 +206,10 @@ NoteLengthTable4:
 
 
 
-; Unknown block
+; This bank's copy of the reset handler, at $BF50 (machine code as data). It disables NMI, sets the
+; stack, waits for two vertical blanks, resets the MMC1 shift register, JSRs $BF98 with $0F (MMC1
+; control), writes 0 to $A000 serially, JSRs $BFAC with 7 (switch to bank 7) and jumps to $E440.
+; $BF98 (row 10): five serial writes of A to $8000, RTS. $BFAC (row 12, byte 5): the same to $E000.
     .BYTE $78, $D8, $A9, $00, $8D, $00, $20, $A2
     .BYTE $FF, $9A, $AD, $02, $20, $29, $80, $F0
     .BYTE $F9, $AD, $02, $20, $29, $80, $F0, $F9
@@ -196,5 +230,5 @@ NoteLengthTable4:
 
 
 
-; Unknown block
+; Vectors: NMI $E484, reset $BF50 (the stub above), IRQ $BFF0.
     .BYTE $84, $E4, $50, $BF, $F0, $BF
