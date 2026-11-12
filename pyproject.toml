@@ -29,7 +29,7 @@ manifest-path = "crates/triforce-py/Cargo.toml"
 features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "zelda-asm/tests"]
 markers = [
     "e2e: end-to-end tests over the whole stack (run by default; select with '-m e2e')",
 ]

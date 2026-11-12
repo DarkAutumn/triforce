@@ -1,7 +1,10 @@
-"""The annotated disassembly (zelda-asm/) must stay equivalent to the code it was imported as.
+"""The annotated disassembly must stay equivalent to the code it was imported as.
 
-`zelda-asm/tools/asm.py check` compares every statement with a frozen canonical form; these tests
-prove the check passes on the tree and fails when a label is redirected or half-renamed.
+`tools/asm.py check` compares every statement with a frozen canonical form; these tests prove the
+check passes on the tree and fails when a label is redirected, half-renamed or an operand changes.
+
+They need only the standard library and pytest, and live inside this tree (not under the repository's
+`tests/`, whose conftest loads the emulator module), so `pytest zelda-asm/tests` runs anywhere.
 """
 
 import importlib.util
@@ -12,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1] / "zelda-asm"
+ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_LABEL = "CheckScreenEdge"      # upstream name, bank 7; found through the baseline
 
 
