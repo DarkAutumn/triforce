@@ -344,3 +344,52 @@ fn the_move_mask_is_true_on_every_frame_of_a_wrap() {
         assert_eq!((link(&s).0, s.state().full_location()), (end, ow(0x77)), "{}", describe(&s));
     }
 }
+
+/// Level 1 room $22, the east block from below (column $A0, every Y of the zone $95..$A5 in both cadences): CLIP N
+/// ends 8 pixels into the block at ($A0, $8D), and MOVE W then reaches the stairs (cellar $7F).
+#[test]
+fn block_clip_east_block_of_level_1_room_22() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "1_22e_0");
+    let y = |s: &S| s.state().link.position.y;
+    press_until(&mut s, LEFT, |s| link(s).0 == 0xB0 && link(s).1 == 0);
+    press_until(&mut s, zelda::executor::buttons::DOWN, |s| y(s) == 0xAD && link(s).1 == 0);
+    press_until(&mut s, LEFT, |s| link(s).0 == 0xA0 && link(s).1 == 0);
+    assert!(!skip_available(s.state(), Direction::N), "$AD is outside the zone: {}", describe(&s));
+    for d in [Direction::W, Direction::E] {
+        assert!(!skip_available(s.state(), d), "no W/E block clip");
+    }
+    let base = s.snapshot();
+    let mut starts = 0;
+    for frames in 1..30 {
+        s.restore(&base);
+        s.press(zelda::executor::buttons::UP, frames);
+        if !(0x95..=0xA5).contains(&y(&s)) {
+            continue;
+        }
+        for back in [0, 1, 3] {
+            s.restore(&base);
+            s.press(zelda::executor::buttons::UP, frames);
+            s.press(zelda::executor::buttons::DOWN, back);
+            if !(0x95..=0xA5).contains(&y(&s)) {
+                continue;
+            }
+            let label = format!("Up {frames}, Down {back}: {}", describe(&s));
+            assert!(skip_available(s.state(), Direction::N), "{label}");
+            starts += 1;
+            let c = act(&mut s, "CLIP N");
+            let clip = c.clip.expect("clip");
+            assert!(clip.completed(), "{label}: {clip:?} now {}", describe(&s));
+            assert_eq!((link(&s).0, y(&s), link(&s).1), (0xA0, 0x8D, 0), "{label}: {}", describe(&s));
+            assert!(s.mask().is_allowed(&Action::parse("MOVE W 8").unwrap()), "{label}");
+            for _ in 0..6 {
+                if s.state().full_location().value == 0x7F {
+                    break;
+                }
+                act(&mut s, "MOVE W 8");
+            }
+            assert_eq!(s.state().full_location().value, 0x7F, "{label}: the stairs: {}", describe(&s));
+        }
+    }
+    assert!(starts >= 10, "{starts} starts");
+}
