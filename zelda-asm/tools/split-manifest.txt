@@ -1,0 +1,184 @@
+# bank | first global label | upstream line | chunk file (src/bankN/<file>.asm) | topic [| start=N]
+# Used once by `asm.py split` to cut the upstream bank files (Z_0N.asm) into chunk files. Kept as a record.
+0 | SongTable | 9 | song-data | Song table, song phrase headers, song script blobs
+0 | DriveAudio | 106 | drive-audio-tune0 | DriveAudio entry point; tune channel 0 scripts and driver
+0 | SilenceSample | 223 | sound-effects | Noise effects: arrow, stairs, sword, flame, bomb, sea
+0 | TuneScripts1 | 405 | tune1-and-samples | Tune channel 1 scripts and driver; DMC samples
+0 | SetSq0DutyAndSweep | 587 | note-emit-vibrato | Square and triangle note emit, duty/sweep, vibrato
+0 | KeepPlaying | 694 | drive-song | DriveSong: phrase sequencing, per-channel notes
+0 | NoiseVolumes | 1055 | song-note-tables | Noise/note-length/period tables, envelopes; ISR stub, vectors
+1 | PersonTextAddrs | 52 | cave-init-person-text | Person text data, money-game tables, InitCave, cave flags and wares
+1 | PriceListTemplateTransferBuf | 302 | cave-person-prices | Cave person state machine, letter/potion shop, ware drawing, price list
+1 | TextboxCharTransferRecTemplate | 570 | person-textbox | Textbox typing, one character per 6 frames, unhalts Link
+1 | UpdateCavePersonState_TalkOrShopOrDoorCharge | 678 | cave-shop | Shop purchase, item giveaway, heart requirement, door repair charge
+1 | HintCaveTextSelectors0 | 858 | cave-hint-money-game | Paid hints, money game payout, secret rupee gift, credit/debit
+1 | InitUnderworldPerson_Full | 1011 | underworld-person-init | Dungeon old men, life-or-money and Grumble init, text selectors
+1 | UpdateUnderworldPerson_Full | 1170 | underworld-person-update | Dungeon old man update, fireballs when attacked, more-bombs offer
+1 | UpdateUnderworldPersonLifeOrMoney_Full | 1328 | life-or-money | Life-or-money man
+1 | UpdateGrumble_Full | 1482 | grumble-goriya | Hungry Goriya takes the food; filler
+1 | CopyCommonCodeToRam | 1569 | copy-code-demo-patterns | Copy common code to RAM; demo pattern transfer and data
+1 | InitWhirlwind | 1749 | whirlwind | Recorder whirlwind: summon, pickup, destinations, drop-off
+1 | CheckTileObjectsBlocking | 2018 | tile-block-power-triforce | Block/rock/gravestone blocking Link; Triforce of Power fanfare
+1 | LinkToSquareOffsetsX | 2214 | armos-ghini-spawn | Touching armos statues or gravestones spawns Armos or Ghini
+1 | RupeeStashXs | 2366 | trap-rupee-stash | Blade traps; rupee stash room; filler
+1 | CommonCodeBlock_Bank1 | 2678 | common-code-header | BANK_01_CODE segment (runs from RAM): imports and exports
+1 | BeginUpdateMode | 2821 | status-bar-rupees | BeginUpdateMode, rupee count ticking, status bar text | start=2818
+1 | PlaySample | 2978 | modeb-cave-save-sprites | Sound requests, mode B cave entry, save-slot addresses, sprite cycling, person blocking
+1 | FormatDecimalByte | 3165 | format-decimal-hearts | Decimal formatting, heart row tiles
+1 | SilenceAllSound | 3306 | room-bounds | Silence sound, Link sprites behind doors, room boundary checks
+1 | AddQSpeedToPositionFraction | 3518 | qspeed-direction-math | Q-speed position fraction, opposite direction, Abs, Negate
+1 | MoveShot | 3647 | shot-aim-boomerang-speed | MoveShot, direction/distance to target, diagonal speed, boomerang speed
+1 | WieldBomb | 3853 | bomb-candle-wield | Place bomb, candle fire, weapon placement, bomb flash
+1 | UpdatePlayerPositionMarker | 4134 | map-marker-curtain | Status bar map marker, curtain effect, 16-bit add helpers
+1 | ItemIdToSlot | 4322 | take-item | Item tables, room item flag, pickup range, TakeItem effects
+1 | AnimateWorldFading | 4747 | world-fading | Palette fade cycles, blank priority sprites
+1 | ForestMazeDirs | 4832 | mazes-lost-woods-hills | Lost Woods and Lost Hills maze steps; filler
+1 | ObjAnimations | 4937 | object-animation-draw | Object animation tables, DrawObject routines
+1 | Anim_ItemFrameOffsets | 5248 | item-sprite-draw | Item frame tiles, item sprite writers
+1 | Person_DrawAndCheckCollisions_Common | 5457 | monster-collisions | CheckMonsterCollisions weapon dispatch, object midpoint, contact damage table
+1 | CheckLinkCollision | 5602 | link-collision-harm | Link-vs-monster collision, shield, HarmLink, ring, death
+1 | CheckMonsterBoomerangOrFoodCollision | 5839 | weapon-damage-death | Boomerang stun, weapon hits, DealDamage, monster death, help-drop counters
+1 | CheckMonsterSwordShotOrMagicShotCollision | 6046 | sword-bomb-arrow-collision | Per-weapon damage: beam, magic, bomb, fire, sword, rod, arrow; parry
+1 | CheckMonsterSlenderWeaponCollision | 6365 | object-overlap-test | Weapon hotspot and object overlap tests
+1 | BeginShove | 6513 | shove-knockback | Knockback and invincibility frames; bank tail
+2 | CommonPatternBlockAddrs | 55 | common-patterns | Common CHR pattern blocks and transfer
+2 | InitDemo_RunTasks | 180 | mode0-demo | Mode 0 demo init/update dispatch, save-slot info load
+2 | InitialTitleSprites | 361 | demo-tables-init | Demo tables; init subphases, title/story palettes
+2 | AnimateDemoPhase0Subphase0 | 540 | demo-story-scroll | Title wait, story scroll, item parade
+2 | TriforcePaletteTransferRecord | 1003 | title-animation | Title triforce glow, waterfall, palette fade
+2 | SaveFileBAddressSets | 1350 | register-eliminate-init | Mode E/F tables and init
+2 | ZeldaString | 1612 | register-eliminate-update | Register (ZELDA name check) and elimination updates
+2 | ModeE_HandleDirections | 1798 | register-name-input | Name entry cursor and characters
+2 | ModeEandF_SetUpCursorSprites | 2081 | register-cursor-sprites | Mode E/F cursor sprites, slot cycling
+2 | Mode1SlotLineTransferBuf | 2224 | mode1-init-save-files | Mode 1 init; save file validate, checksum, format
+2 | InitMode1_Sub1 | 2556 | mode1-slot-tiles | Mode 1 init submodes: slot name/hearts/deaths tiles
+2 | Mode1CursorSpriteTriplet | 2735 | mode1-menu-update | File-select menu update, Start loads profile
+2 | SaveSlotHeartsAddrsLo | 2915 | moded-save | Mode D save
+2 | InitMode13_Full | 3203 | mode13-ending-init | Mode $13 init: curtain, Zelda's textbox
+2 | UpdateMode13WinGame | 3405 | mode13-win-game | Win game update
+2 | CreditsLastScreenList | 3672 | credits | Credits scroll and tables
+2 | WorldFlagBlockAddrs | 4034 | second-quest-bank-stub | Switch profile to second quest; ISR stub, vectors
+3 | LevelPatternBlockSrcAddrs | 13 | level-pattern-blocks | Per-level pattern block tables, transfer code, CHR blobs, bank tail
+4 | PlayBossHitCryIfNeeded | 184 | walker-wanderer-common | Boss cry helpers, InitMonsterShot, InitWalker, standing fire, common wanderer AI
+4 | UpdateGoriya | 434 | goriya | Goriya update (shared by Lynel, Armos); boomerang throwing
+4 | BlockPushDirections | 626 | push-block | Dungeon push block states; draw-over-Link sprite helpers
+4 | ShootFireball | 794 | monster-shots-fireballs | ShootFireball, UpdateMonsterShot, shot bounce/destroy, UpdateFireball
+4 | InitBubble | 1095 | bubble-keese | Bubble and Keese init/update, Keese flight
+4 | UpdateZol | 1239 | zol-gel | Zol states and split into Gels; Gel
+4 | StatueRoomLayouts | 1571 | statues | Dungeon statue fireball emitters
+4 | CheckZora | 1757 | zora-ow-inits | Zora spawn/update; inits for Tektite, Boulder, Leever, Octorok, Ghini, Peahat, pond fairy
+4 | UpdateMoblin | 1950 | moblin-lynel-shooting | Moblin, Lynel; shoot timer logic; monster arrow
+4 | UpdateBoulderSet | 2167 | tektite-boulder | Boulder spawner; Tektite/Boulder jumper physics
+4 | BlueLeeverStateQSpeeds | 2592 | leever | Blue and Red Leever; shared burrower code (Zora)
+4 | UpdateOctorock | 2969 | octorok | Octorok update, rock shooting
+4 | UpdateGhini | 3070 | ghini-armos | Ghini; Armos tables, init, update
+4 | UpdatePondFairy | 3374 | pond-fairy | Pond fairy healing and orbiting hearts
+4 | RockPushDirections | 3566 | rock-wall-tree-secrets | Push rock/gravestone, bombable rock wall, burnable tree, secret reveal
+4 | RaftDirections | 3860 | dock-raft | Dock tile object: raft boarding, ride, landing
+4 | UpdateFlyingGhini | 3976 | flying-ghini-peahat | Flying Ghini and Peahat
+4 | WallmasterDirsAndAttrsLeft | 4106 | wallmaster | Wallmaster tables, emerge/grab states
+4 | InitRope | 4537 | rope | Rope init (HP by quest) and rush at Link
+4 | UpdateStalfos | 4670 | stalfos | Stalfos; second-quest sword shot
+4 | InitMoldorm | 4771 | moldorm-init | InitMoldorm: ten segments in two worms
+4 | InitAquamentus | 4842 | aquamentus-digdogger-dodongo-inits | Inits for Aquamentus, Digdogger, Dodongo
+4 | UpdateMoldorm | 4913 | moldorm | Moldorm update, chase/wander
+4 | DigdoggerCornerOffsetsX | 5155 | digdogger | Digdogger: flute split, update, move, collisions, draw
+4 | UpdateAquamentus | 5596 | aquamentus | Aquamentus; boss hit reaction, boss sprite writer
+4 | UpdateDodongo | 5855 | dodongo | Dodongo states, bloat/stun, bomb eating, collisions, draw
+4 | InitDarknut | 6449 | darknut-gibdo | InitDarknut, UpdateGibdo, UpdateDarknut
+4 | PolsVoiceWalkSpeedsX | 6516 | pols-voice | Pols Voice walk/jump
+4 | UpdateLikeLike | 6816 | like-like | Like-Like: capture, magic shield eating
+4 | UpdateVire | 6915 | vire | Vire: hop, split into red Keese
+4 | UpdateBlueWizzrobe | 7034 | wizzrobe | Blue and Red Wizzrobe: walk/teleport/fade, magic shots
+4 | GleeokSegmentYs | 7638 | gleeok-manhandla-gohma-inits | Inits for Gleeok, Manhandla, Gohma, Gleeok head
+4 | UpdateManhandla | 7832 | manhandla | Manhandla
+4 | UpdateGohma | 8193 | gohma | Gohma: eye states, arrow in the eye
+4 | UpdateGleeokHead | 8505 | gleeok | Flying Gleeok head; UpdateGleeok; necks
+4 | Gleeok_WriteHeadOrBaseSpriteAndCheckCollisions | 9055 | gleeok-head-body | Gleeok head/segment draw and collisions, body
+4 | GuardFireXs | 9456 | zelda-lanmola-inits | Guard fire tables, InitZelda, Lanmola init
+4 | InitPatra | 9526 | patra-ganon-inits | InitPatra, InitGanon
+4 | UpdateZelda | 9587 | zelda-guard-fire | UpdateZelda, guard fire, dead dummy type
+4 | UpdateLamnola | 9671 | lanmola | Lanmola segments and head
+4 | PatraManeuverTimes | 10029 | patra | Patra and its children
+4 | UpdateGanon | 10284 | ganon | Ganon phases, teleport, shooting, dying
+4 | GanonBurstDirs | 10547 | ganon-draw-collisions | Ganon draw, collisions, ashes, triforce
+4 | ExtractHitPointValue | 11005 | drop-items | HP nibble extract, drop tables, SetUpDroppedItem, UpdateItem, DestroyMonster
+4 | _ShootIfWanted | 11322 | shoot-helpers-candle | Shoot helpers; candle room brightening, dark room test
+4 | SetUpFairyObject | 11447 | fairy-flyer-common | Item fairy; shared flyer state machine
+4 | PatraSines | 11870 | orbit-rotation-math | Rotation math; bank tail
+5 | UpdateMenuAndMeters | 155 | submenu-states | Submenu state machine, triforce display
+5 | ScrollWorld | 552 | scroll-world | Per-frame world scrolling
+5 | InitMode7Submodes | 723 | mode7-scroll-init | Mode 7 init: next room layout, dark-room fade
+5 | UpdateMode7SubmodeAndDrawLink | 1039 | mode7-scroll-update | Mode 7 update submodes
+5 | WaitAndScrollToSplitBottom | 1263 | sprite0-split-scroll | Sprite-0 split; padding
+5 | InitMode8 | 1369 | mode-inits-obj-lists | Mode 8/D/10 init stubs; spawn position lists; ObjLists
+5 | InitMode4 | 1450 | enter-room | Entering a room: Link placement, monster list decode, tile object
+5 | CellarKeeseXs | 1870 | spawn-positions | Monster spawn spots, cellar keese, cave person, spawn safety
+5 | InitMode11 | 2039 | mode11-death-init | Death init
+5 | SetDoorFlag | 2106 | shutters-door-flags | Door flags, CheckShutters, TriggerOpenDoor
+5 | Mode8BaseSpriteValues | 2184 | mode8-continue-mode10-stairs | Continue/Save/Retry menu; stairs descent
+5 | CheckUnderworldSecrets | 2337 | underworld-secrets | Dungeon secret triggers: all dead, ringleader, push block, last boss
+5 | UpdateMode11Death_Full | 2523 | mode11-death | Death update
+5 | BorderBounds | 2736 | border-input-mask | Border bounds masking the A button and directions
+5 | WieldSword | 2866 | wield-items | Wield sword, boomerang, arrow, food, potion, rod; B item dispatch
+5 | CheckSubroom | 3065 | cave-cellar-exits | Leaving cellars, caves, shortcut stairs
+5 | CheckLadder | 3225 | ladder | Ladder rules, movement override, drawing
+5 | FindNextEdgeSpawnCell | 3418 | edge-spawn-cell | Edge cell search for monster spawns
+5 | InitModeB | 3515 | room-history-ow | Mode B/C/9 init tables; overworld room history and kill counts
+5 | Link_ModifyDirInDoorway | 3658 | doorway | Doorway detection and movement restriction
+5 | TouchDoor | 3916 | touch-door | Door type handlers: wall, false wall, bombable, key, shutter
+5 | ModifyObjCountByHistoryUW | 4019 | room-history-uw | Dungeon room history, kill counts, non-recurring monsters
+5 | BossSoundEffects | 4129 | boss-sound-door-face | Boss roar; padding; door face tile helper
+5 | RoomLayoutsOW | 4228 | room-layouts-ow | Overworld room layouts, cave layouts, column heaps (data)
+5 | WallTileList | 4410 | room-layouts-uw | Dungeon wall tiles, door faces, layouts, column heaps, cellars (data)
+5 | FindDoorTypeByDoorBit | 4551 | fill-walls | Door type lookup; FillWalls
+5 | DoorBits | 4721 | lay-out-doors | Door tables; LayOutDoors
+5 | UpdateDoors | 5038 | update-doors | Door open/close commands, timers, flags in both rooms
+5 | ColumnDirectoryUW | 5311 | uw-floor-push-block | Dungeon floor layout, squares, push block creation
+5 | InitMode12 | 5537 | mode12-lay-out-room | End-level sequence; LayOutRoom dispatcher
+5 | TileObjectTypes | 5751 | layout-room-ow | Overworld squares, layout, tile objects, cave/cellar layout
+5 | CheckShortcut | 6079 | ow-shortcut-map-square | Shortcut stairs, map square change; padding
+5 | InitMode3_Sub2 | 6373 | mode3-mode6-init | Unfurl submodes, object room bounds, leave room
+5 | InitModeA | 6588 | cave-cellar-enter | Mode A; cave/cellar walk-in; heart fill
+5 | SubmenuTransferBufSelectorsUW | 6805 | submenu-row-transfer | Submenu row transfer while scrolling
+5 | AxisMasks | 6926 | link-handle-input | Link_HandleInput: buttons, grid turning rules, speed
+5 | CheckWarps | 7255 | warps-stairs-caves | Stairs/cave/dungeon entrance detection, kill count save
+5 | InitSaveRam | 7412 | save-ram-clear-ram | InitSaveRam, ClearRam, first edge spawn cell, RNG seed
+5 | NextRoomIdOffsets | 7482 | next-room-calc | Next room by direction; invalid room reloads overworld
+5 | MapRowMasks | 7567 | submenu-map | Submenu dungeon map, compass and map tests
+5 | CalcOpenDoorwayMask | 7763 | door-flags-dark-room | Open doorway mask, door flags, dark room test
+5 | SubmenuItemXs | 7844 | submenu-items | Submenu items, cursor, selection
+5 | CreateRoomObjects | 8199 | create-room-objects | Room item, push block, overworld heart container; bank tail
+6 | LevelBlockAddrsQ1 | 15 | level-load-mode2 | Level block/info address tables, mode 2 copy to RAM, quest-2 patch
+6 | LevelBlockAttrsBQ2ReplacementOffsets | 265 | quest2-replacements | Second-quest replacement tables
+6 | LevelBlockOW | 390 | level-blocks-common-data | Level block/info blobs, common data block
+6 | TransferBufAddrs | 491 | transfer-buf-dispatch | Transfer buffer selector table and PPU transfer loop
+6 | Mode1TileTransferBuf | 655 | transfer-bufs-static | Static PPU transfer buffers; bank tail
+7 | PcmSamples | 335 | run-game-nmi | PCM samples, RunGame, NMI frame handler
+7 | ResetPpuRegisters | 552 | ppu-tablejump-input | PPU reset, TableJump, sprite hiding, controller reading
+7 | UpdateTriforcePositionMarker | 737 | next-room-room-flags | Triforce marker, CalculateNextRoom, MarkRoomVisited, GetRoomFlags
+7 | AnimateRoomItemOnMonster | 805 | room-item-draw | Room item on a monster, item drawing
+7 | DrawStatusBarPotion | 974 | status-bar-lift-item | Status bar items; Link lifting an item
+7 | GetUniqueRoomId | 1134 | tile-obj-tiles | GetUniqueRoomId, tile object tiles, FillTileMap
+7 | InitializeGameOrMode | 1257 | init-mode-dispatch | InitMode jump table, several mode inits, room history
+7 | SpecialBossPaletteTransferBufSelectors | 1491 | init-mode5-play | Boss/tile-object palettes, InitMode5Play
+7 | UpdateMode | 1649 | update-mode-dispatch | UpdateMode jump table, modes 2/3/4/6, GoToNextMode
+7 | UpdateMode5Play | 1811 | mode5-play-update | UpdateMode5Play, object loop, chase target, UpdatePlayer
+7 | WalkableTiles | 2137 | tile-collision | Walkable tiles, colliding tile lookup
+7 | Obj_Shove | 2323 | shove | Knockback movement
+7 | FluteRoomSecretsOW | 2496 | flute | Flute secrets table, WieldFlute
+7 | Walker_Move | 2600 | walker-move | Walker_Move (Link and monsters), MoveObject
+7 | PlayerScreenEdgeBounds | 2831 | walker-collision-screen-edge | Walker tile collision, CheckScreenEdge, GoToNextModeFromPlay, alternate directions
+7 | LinkToLadderOffsetsX | 3163 | link-animate-ladder | Ladder tables, Link end-of-move: ladder, warps, drawing, shield
+7 | SwordShotSpreadBaseAttr | 3453 | sword-shot-magic-shot | Sword beam / magic shot
+7 | UpdateBoomerangOrFood | 3763 | boomerang-arrow-food | Food, boomerang tables, arrow/boomerang flight
+7 | CheckState30 | 4092 | boomerang-return-draw | Boomerang slow/return states, drawing
+7 | UpdateRodOrArrow | 4362 | sword-and-rod | Rod or arrow, sword or rod update, MakeSwordShot
+7 | UpdateFire | 4681 | fire | Candle fire
+7 | BombTimes | 4806 | bomb | Bomb timers, bombable wall hotspots, UpdateBomb
+7 | AnimateAndDrawMetaObject | 5032 | object-animation | Spawn cloud, death sparkle, walking animation
+7 | ObjectTypeToAttributes | 5265 | object-update-table | Type attributes, HP pairs, UpdateObject table, death to drop
+7 | InitObject | 5520 | object-init-table | InitObject and its table
+7 | UpdateWhirlwind | 5751 | object-stubs-destroy-monster | Bank-1 trampolines, invincibility timer, dead dummy, DestroyMonster
+7 | InitTileObjOrItem | 5864 | flute-secret-pond | Tile object/item init, flute secret pond
+7 | IsrReset | 5978 | reset-mmc1-vectors | Reset, MMC1 control, bank switch, vectors

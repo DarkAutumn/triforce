@@ -1,0 +1,7 @@
+old	new	kind	scope
+Exit	Audio_EmitNote_Return	global	bank0
+Exit	Cave_Shop_Return	global	bank1
+Exit	Mode0Demo_Return	global	bank2
+Exit	Wanderer_Return	global	bank4
+Exit	Submenu_Return	global	bank5
+Exit	Room_MarkVisited_Return	global	bank7
