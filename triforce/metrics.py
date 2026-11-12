@@ -35,8 +35,8 @@
   needs an item Link lacks grants it: a bomb in ``requires_bombs`` rooms, a key at a locked route door, rupees in
   ``requires_rupees`` shops; crates/zelda/src/cheats.rs).  ``bombs/<stat>`` for each of ``BOMB_STATS`` per
   completed episode (crates/zelda/src/bombs.rs): bombs placed, enemy hits credited to them, bombs that hit
-  nothing, 10th damage-free kills (any weapon), bombs placed while the next kill was the 10th, forced bomb drops
-  armed, bomb pickups.
+  nothing, the damage they dealt (wood-sword hits: HP lost, a kill's remaining HP), 10th damage-free kills (any
+  weapon), bombs placed while the next kill was the 10th, forced bomb drops armed, bomb pickups.
 - ``boss/stuns`` and ``boss/eats``: Dodongo stuns (a bomb's smoke; the sword can kill him then) and bombs he
   swallowed per completed episode, from ``info['boss']`` (crates/env/src/critic.rs ``BossTransitions``).
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /

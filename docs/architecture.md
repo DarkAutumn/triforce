@@ -229,7 +229,8 @@ totals and `runs_with_cheated_<item>`; room events carry the run's `cheated` dic
 footer (`cheated: 2 bombs, 1 key`, when any): such a game wasn't beaten naturally.
 
 Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, Lee Nov 11): `placed`, `hits` (credited to the placing
-step: every session looks ahead for bombs), `misses` (placed, no hit), `tenth_kills` (`$50` 9 → 10, any weapon),
+step: every session looks ahead for bombs), `misses` (placed, no hit), `damage` (dealt by those hits, in wood-sword
+hits: an enemy's HP lost, a kill's remaining HP), `tenth_kills` (`$50` 9 → 10, any weapon),
 `tenth_tries` (placed while the next kill was the 10th), `armed` (the 10th kill made with a bomb: a forced bomb drop),
 `picked_up` (bomb pickups). Terminal `info['bombs']` holds them next to `used` → training `bombs/<stat>` per episode
 (progress events too); eval `mean_bomb_<stat>` and per-visit `bomb_<stat>` / `bomb_<stat>_per_visit`; chain

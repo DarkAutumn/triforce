@@ -25,7 +25,7 @@ heart container picked up later doesn't count), ``mean_health_fraction`` the end
 Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
 ``hearts_left`` are means per episode (also per room and per start state).  ``mean_bombs_used`` are bombs placed per
-episode (``records[i]['bombs']``), ``mean_bomb_<stat>`` its ``_native.BOMB_STATS`` (placed, hits, misses,
+episode (``records[i]['bombs']``), ``mean_bomb_<stat>`` its ``_native.BOMB_STATS`` (placed, hits, misses, damage,
 tenth_kills, tenth_tries, armed, picked_up: crates/zelda/src/bombs.rs) and ``mean_cheated_bombs`` / ``mean_cheated_keys`` / ``mean_cheated_rupees``
 cheated items used per episode (``records[i]['cheated']``: a room that needs an item Link lacks grants it, a bomb in
 ``requires_bombs`` rooms, a key at a locked route door, rupees in ``requires_rupees`` shops:

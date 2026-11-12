@@ -198,11 +198,13 @@ class RoomRecord:
     boss_stuns: int = 0
     boss_eats: int = 0
     # Bombs in the visit (crates/zelda/src/bombs.rs): placed, enemy hits credited to them, placed without a hit,
-    # 10th damage-free kills (any weapon), bombs placed while the next kill was the 10th, forced bomb drops armed
-    # (a bomb made the 10th kill), bomb pickups.  0 in older records.
+    # damage dealt (wood-sword hits: HP lost, a kill's remaining HP), 10th damage-free kills (any weapon), bombs
+    # placed while the next kill was the 10th, forced bomb drops armed (a bomb made the 10th kill), bomb pickups.
+    # 0 in older records.
     bomb_placed: int = 0
     bomb_hits: int = 0
     bomb_misses: int = 0
+    bomb_damage: int = 0
     bomb_tenth_kills: int = 0
     bomb_tenth_tries: int = 0
     bomb_armed: int = 0

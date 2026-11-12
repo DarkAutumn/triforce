@@ -252,7 +252,7 @@ def bomb_row(label: str, ev: dict) -> tuple:
     placed = ev.get('mean_bomb_placed') or 0.0
     share = max(0.0, min(1.0, 1.0 - ev.get('mean_bomb_misses', 0.0) / placed)) if placed > 0 else None
     text = ' · '.join(f"{name} {ev.get(f'mean_bomb_{stat}', 0.0):.2f}" for name, stat in (
-        ('placed', 'placed'), ('hits', 'hits'), ('misses', 'misses'), ('armed', 'armed'),
+        ('placed', 'placed'), ('hits', 'hits'), ('misses', 'misses'), ('damage', 'damage'), ('armed', 'armed'),
         ('picked up', 'picked_up'))) + ' / episode'
     return label, share, text, rate_color(share)
 
@@ -1935,7 +1935,8 @@ class DetailPane(QWidget):
             'Means per completed episode in each PPO iteration.\n'
             'Placed: bombs Link placed. Hits: enemy hits credited to bombs (the look-ahead credits a bomb\'s hits '
             'to the step that placed it). Misses: bombs that hit nothing.\n'
-            'Armed: 10th damage-free kills made with a bomb, each arming a forced drop of 4 bombs.')
+            'Damage: what those hits took off, in wood-sword hits (an enemy\'s HP lost; a kill counts the HP it had '
+            'left). A bomb takes 4 off; damage per hit near 4 means the bombs hit tough enemies.')
         self.charts['bomb_reward'].setToolTip(
             'The bomb reward terms per completed episode, from the counts: earned = 0.5 per bomb hit '
             '(reward-bomb-hit) + 0.75 per forced drop armed (reward-armed-bomb-drop) + 0.5 per bomb pickup '
@@ -2041,7 +2042,7 @@ class DetailPane(QWidget):
             {'label': 'placed', 'color': C.accent, 'points': run.series('bombs/placed', skip), 'width': 1.4},
             {'label': 'hits', 'color': C.ok, 'points': run.series('bombs/hits', skip), 'area': True},
             {'label': 'misses', 'color': C.bad, 'points': run.series('bombs/misses', skip), 'width': 1.4},
-            {'label': 'armed', 'color': C.eval, 'points': run.series('bombs/armed', skip), 'width': 2.4},
+            {'label': 'damage', 'color': C.eval, 'points': run.series('bombs/damage', skip), 'width': 2.4},
         ], (), overlay)
         earned, cost, net = bomb_reward_series(run, skip)
         self.charts['bomb_reward'].set_data([

@@ -13,6 +13,9 @@ pub struct BombStats {
     pub hits: u32,
     /// Bombs placed that hit nothing.
     pub misses: u32,
+    /// Damage the bombs dealt, in wood-sword hits (an enemy's HP >> 4): each credited hit's HP lost, a kill's
+    /// remaining HP (Lee: how hard the bombs hit; a bomb takes 4 off, a Keese or Gel counts 1).
+    pub damage: u32,
     /// 10th damage-free kills (`$50` 9 → 10), any weapon: the forced-drop opportunities taken.
     pub tenth_kills: u32,
     /// Bombs placed while the next kill was the 10th: tries for a forced bomb drop.
@@ -31,6 +34,7 @@ impl BombStats {
             self.placed += 1;
             self.hits += hits;
             self.misses += u32::from(hits == 0);
+            self.damage += change.enemies_hit.iter().map(|&(_, damage)| damage.max(0) as u32).sum::<u32>();
             self.tenth_tries += u32::from(change.previous.next_kill_arms_drop());
         }
         self.tenth_kills += u32::from(change.tenth_kill());
@@ -41,12 +45,13 @@ impl BombStats {
         );
     }
 
-    /// `{placed, hits, misses, tenth_kills, tenth_tries, armed, picked_up}`.
-    pub fn fields(&self) -> [(&'static str, u32); 7] {
+    /// `{placed, hits, misses, damage, tenth_kills, tenth_tries, armed, picked_up}`.
+    pub fn fields(&self) -> [(&'static str, u32); 8] {
         [
             ("placed", self.placed),
             ("hits", self.hits),
             ("misses", self.misses),
+            ("damage", self.damage),
             ("tenth_kills", self.tenth_kills),
             ("tenth_tries", self.tenth_tries),
             ("armed", self.armed),
@@ -60,6 +65,7 @@ impl AddAssign for BombStats {
         self.placed += o.placed;
         self.hits += o.hits;
         self.misses += o.misses;
+        self.damage += o.damage;
         self.tenth_kills += o.tenth_kills;
         self.tenth_tries += o.tenth_tries;
         self.armed += o.armed;
