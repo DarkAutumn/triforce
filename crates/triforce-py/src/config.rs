@@ -203,11 +203,12 @@ impl PySpecialistConfig {
             .collect())
     }
 
-    /// Action kind names masked out by `items`.
+    /// Action kind names `items` masks out whatever the state (BOMB only for `bombs: never`; the other modes
+    /// decide per state, `env::config::BombUse`).
     fn disabled_kinds(&self) -> Vec<&'static str> {
         self.inner
             .items
-            .disabled_kinds()
+            .fixed_disabled_kinds()
             .iter()
             .map(|k| k.name())
             .collect()

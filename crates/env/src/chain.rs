@@ -19,7 +19,7 @@ use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::reward_track::RewardTrack;
 use crate::rewards::Scored;
-use crate::specialist_env::{linger_json, room_disabled_kinds};
+use crate::specialist_env::linger_json;
 use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
 use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
@@ -27,6 +27,7 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use zelda::bombs::BombStats;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::GameMap;
@@ -312,6 +313,8 @@ pub struct RoomRecord {
     /// Bombs placed during the visit, and cheated items used (`zelda::cheats`; JSON `cheated_bombs`, `cheated_keys`,
     /// `cheated_rupees`).
     pub bombs_used: u32,
+    /// What the bombs did, the 10th kills and the bomb pickups (`zelda::bombs`; JSON `bomb_<field>`).
+    pub bombs: BombStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs during the visit ([`BossTransitions`]).
     pub boss_stuns: u32,
@@ -352,6 +355,7 @@ impl RoomRecord {
             blocks: 0,
             no_damage_max: 0,
             bombs_used: 0,
+            bombs: BombStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
@@ -380,6 +384,9 @@ impl RoomRecord {
         let o = m.as_object_mut().expect("object");
         for item in CheatItem::ALL {
             o.insert(format!("cheated_{}", item.name()), json!(self.cheated[item]));
+        }
+        for (name, value) in self.bombs.fields() {
+            o.insert(format!("bomb_{name}"), json!(value));
         }
         m
     }
@@ -511,11 +518,11 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
-    /// The chain runs no critic unless [`ChainEnv::set_rewards`] is on, so its session skips the weapon
-    /// look-ahead (it only credits rewards).
+    /// The chain runs no critic unless [`ChainEnv::set_rewards`] is on, so its session looks ahead for bombs only
+    /// (their hits go into the room records' bomb counts; the rest only credits rewards).
     pub fn new(data: Arc<GameData>, nes: N, store: St, route: Route) -> Self {
         let mut session = Session::new(nes, data.map.clone());
-        session.look_ahead = false;
+        session.look_ahead = zelda::LookAhead::Bombs;
         ChainEnv {
             session,
             data,
@@ -606,7 +613,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// acting specialist's own end conditions fire.
     pub fn set_rewards(&mut self, on: bool) {
         self.rewards = on;
-        self.session.look_ahead = on;
+        self.session.look_ahead = if on { zelda::LookAhead::All } else { zelda::LookAhead::Bombs };
     }
 
     /// What the last step earned under the acting specialist's training rewards (once; None with rewards off).
@@ -840,6 +847,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.linger = Some(summary);
         record.blocks += change.blocks() as u32;
         record.bombs_used += cheats.used.bombs;
+        record.bombs.update(&change);
         record.cheated += cheats.cheated;
         let boss = BossTransitions::of(&change);
         record.boss_stuns += boss.stuns;
@@ -936,6 +944,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.hearts_healed = h.healed;
         record.hearts_wasted = h.wasted;
         record.hearts_expired = h.expired;
+    }
+
+    /// The session's disabled kinds for the acting specialist's `items` in Link's state, with the route's bomb
+    /// reserve at the step he plays (or played last), and that reserve for the observation; every step (the 10th
+    /// kill and the bomb count change within a room).
+    fn update_disabled_kinds(&mut self) {
+        let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
+        let items = &self.current.as_ref().expect("acting specialist").config.items;
+        let kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve);
+        self.session.set_disabled_kinds(&kinds);
+        self.builder.bomb_reserve = reserve;
     }
 
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {
@@ -1097,10 +1116,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 .last_mut()
                 .unwrap()
                 .linger = Some(summary);
-            // Bombs only in the acting family's `requires_bombs` rooms (F016), so set per room entry.
             let config = self.config_for(&name)?;
-            self.session
-                .set_disabled_kinds(&room_disabled_kinds(&config.items, &map, location));
             let switch = self.current.as_ref().is_none_or(|c| *c.name != *name);
             // A one_room specialist trains on episodes that start at the room (a reset observation): give it the
             // same on every room entry, also from a room of its own family (F040).
@@ -1119,6 +1135,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     config,
                 });
             }
+            self.update_disabled_kinds();
             if fresh {
                 let wavefront = self.target_wavefront(&objective);
                 obs = self.builder.reset(
@@ -1131,6 +1148,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 obs = self.build_obs(&objective);
             }
         } else {
+            self.update_disabled_kinds();
             obs = self.build_obs(&objective);
         }
 

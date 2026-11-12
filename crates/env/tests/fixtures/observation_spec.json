@@ -158,15 +158,14 @@
   "boomerang",
   "magic_boomerang",
   "magic_shield",
-  "selected_0",
-  "selected_1",
-  "selected_2",
-  "selected_3",
-  "selected_4",
-  "selected_5",
-  "selected_6",
-  "selected_7",
-  "selected_8"
+  "bomb_usable",
+  "bomb_reserve",
+  "bombs_spare",
+  "help_count",
+  "next_kill_arms",
+  "drop_armed",
+  "drop_is_bombs",
+  "fairy_next"
  ],
  "ENTITY_FEATURES": [
   "presence",
@@ -306,7 +305,7 @@
   },
   "link": {
    "shape": [
-    81
+    80
    ],
    "dtype": "float32",
    "low": -1.0,

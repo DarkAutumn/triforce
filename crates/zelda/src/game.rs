@@ -753,6 +753,28 @@ impl GameView {
         self.var(Var::Bombs)
     }
 
+    /// Damage-free kills toward the forced drop (`$50` HelpDropCount, 0-10; asm:Damage_KillMonster).  Any hit to
+    /// Link clears it; the next drop-capable death after the 10th takes the forced drop and clears it.
+    pub fn help_drop_count(&self) -> i32 {
+        self.var(Var::HelpDropCount)
+    }
+
+    /// The forced drop is bombs (`$51` HelpDropValue non-zero): the 10th kill was a bomb kill; else 5 rupees.
+    pub fn help_drop_is_bombs(&self) -> bool {
+        self.var(Var::HelpDropValue) != 0
+    }
+
+    /// The next kill is the 10th damage-free one: made with a bomb, it arms a forced bomb drop (4 bombs).
+    pub fn next_kill_arms_drop(&self) -> bool {
+        self.help_drop_count() == 9
+    }
+
+    /// Kills since Link was last hurt (`$627` WorldKillCount); a drop-capable death at exactly 16 drops a fairy,
+    /// which also clears an armed forced drop.
+    pub fn kill_streak(&self) -> i32 {
+        self.var(Var::KillStreak)
+    }
+
     pub fn keys(&self) -> i32 {
         self.var(Var::Keys)
     }

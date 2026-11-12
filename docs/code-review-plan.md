@@ -21,7 +21,7 @@ reasoning) will take it and fix the problems. Write each entry for that agent.
   If you can't settle a question after real effort, add the entry anyway with `confidence: low`. Say exactly what
   you checked and what is still unknown, and what single experiment would settle it.
 - **Write it as you go**, appending to the file, so a stopped review loses nothing.
-- **Location:** `/home/leculver/git/triforce2/target/review-ledger.md`. `target/` is gitignored.
+- **Location:** `target/review-ledger.md` in the repo. `target/` is gitignored.
 - **Format:** plain markdown, one entry per finding, these fields in this order. Keep the entries terse. Use
   complete facts, not prose.
 
@@ -69,13 +69,13 @@ reasoning) will take it and fix the problems. Write each entry for that agent.
     decoders (`crates/zelda/src/vars.rs`, `room_state.rs`, `game.rs`, `hearts.rs`, …) against the disassembly,
     not just against this catalog.
 - **References outside the repo:**
-  - **TetaNES** (`/home/leculver/git/tetanes`, `tetanes-core/src`): the emulator `crates/zcore` was cut down from.
+  - **TetaNES** (<https://github.com/lukexor/tetanes>, `tetanes-core/src`): the emulator `crates/zcore` was cut down from.
     Diff behaviour-relevant code against it when something in zcore looks off.
-  - **libretro-fceumm** (`/home/leculver/git/libretro-fceumm/src`): the previous emulator, the old stack's ground
+  - **libretro-fceumm** (<https://github.com/libretro/libretro-fceumm>, `src/`): the previous emulator, the old stack's ground
     truth. zcore deliberately drops FCEUmm's quirks (`docs/decisions.md`), so differences from it are not bugs by
     themselves.
 - **Ground rules:**
-  - Never edit `/home/leculver/git/triforce2`. Trainings may be running from it (`ps` for `train_round`,
+  - Never edit the main checkout. Trainings may be running from it (`ps` for `train_round`,
     `triforce.train`), and they import the code fresh.
   - Running tests and read-only probes there is fine, but keep heavy jobs small (`--parallel` 4 or less) when a
     training is running.
@@ -158,7 +158,7 @@ The order is bottom-up, so each layer is reviewed before the code that trusts it
   - `tf ladder-diff` replays the committed golden movies (`corpus/golden/`) and reports the first frame that
     diverges (README, "Emulator regression"). Run it, but write any new goldens only under `target/` or `/tmp`.
   - `crates/zcore/tests/machine.rs` has the snapshot tests.
-  - TetaNES (`/home/leculver/git/tetanes/tetanes-core/src`) is the reference for what was cut.
+  - TetaNES (`tetanes-core/src`) is the reference for what was cut.
 - **Budget:** largest by lines, but much of it is table-like. Skim the instruction tables and spend the time on
   timing, snapshot and mapper code.
 

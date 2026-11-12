@@ -10,16 +10,17 @@ from triforce import _native as native
 def test_load_and_fields(tmp_path):
     path = tmp_path / 'ow-start.yaml'
     path.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x1c)']\nstart_states: ['start']\n"
-                    "success: [exit-correct]\nmax_steps: 321\nreward: {pbrs: false}\nitems: {bombs: false}\n"
+                    "success: [exit-correct]\nmax_steps: 321\nreward: {pbrs: false}\nitems: {bombs: never}\n"
                     "curriculum: {enabled: false}\nram_randomization: {hp: [0.25, max], full_hp: 0.3}\n")
     config = native.SpecialistConfig.load(str(path))
     assert config.name == 'ow-start'
     assert config.rooms == [(0, 0x77, False), (0, 0x77, True), (0, 0x1c, False)]
     assert config.success == ['exit-correct']
     assert config.max_steps == 321
-    assert config.reward.pbrs is False and config.items.bombs is False
+    assert config.reward.pbrs is False and config.items.bombs == 'never'
     assert config.curriculum.enabled is False
     assert config.disabled_kinds() == ['BOMB']
+    assert config.replace(items={'bombs': 'tenth'}).disabled_kinds() == []
     ram = config.to_dict()['ram_randomization']
     assert (ram['hp'], ram['full_hp']) == ([0.25, 'max'], 0.3)
     assert native.SpecialistConfig.load('ow-start').name == 'ow-start'
@@ -46,8 +47,8 @@ def test_replace_revalidates():
 def test_build_from_fields():
     config = native.SpecialistConfig(name='entry-step-3', rooms=[(0, 0x67)], start_states=['0_67s_0'],
                                      success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                                     items={'bombs': False}, route='d2first')
-    assert config.rooms == [(0, 0x67, False)] and config.items.bombs is False and config.items.arrows is True
+                                     items={'bombs': 'free'}, route='d2first')
+    assert config.rooms == [(0, 0x67, False)] and config.items.bombs == 'free' and config.items.arrows is True
     with pytest.raises(native.ConfigError, match='rooms'):
         native.SpecialistConfig(name='x', rooms=[], success=['exit-correct'])
 

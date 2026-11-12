@@ -417,7 +417,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "env"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "indexmap",
  "parking_lot",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "movie"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "anyhow",
  "blake3",
@@ -996,7 +996,7 @@ dependencies = [
 
 [[package]]
 name = "policy"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "pool"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "env",
  "parking_lot",
@@ -1224,7 +1224,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "replay"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "blake3",
  "serde_json",
@@ -1460,11 +1460,11 @@ dependencies = [
 
 [[package]]
 name = "test-rom"
-version = "1.3.1"
+version = "1.3.2"
 
 [[package]]
 name = "theater"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "cpal",
  "parking_lot",
@@ -1576,7 +1576,7 @@ checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "triforce-py"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "env",
  "indexmap",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "triforce-tools"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1901,7 +1901,7 @@ dependencies = [
 
 [[package]]
 name = "zcore"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "anyhow",
  "bitflags 2.13.2",
@@ -1918,7 +1918,7 @@ dependencies = [
 
 [[package]]
 name = "zelda"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "indexmap",
  "movie",

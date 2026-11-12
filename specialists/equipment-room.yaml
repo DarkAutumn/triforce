@@ -5,8 +5,8 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as the dungeon families (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chains arrive with partial hearts (round 5)
-items: {bombs: false}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
+items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 curriculum: {enabled: true}             # trajectories/equipment-room (Go-Explore paths per start state)
 one_room: true
 max_steps: 600

@@ -25,11 +25,14 @@ if an evaluation of the current weights (``CONFIRM_EPISODES`` sampled episodes p
 ``EvalTask`` pool, seed = pool seed + iteration) also reaches it; every check is an ``early_stop_check`` event.  The
 evaluation ends early once its failures rule the threshold out (``aborted``, with the partial ``rate``, ``failures``
 and ``rate_upper_bound``, the best rate it could still have reached): the decision is the full evaluation's.
-A confirmed check also measures the hearts lost per episode (``hearts_lost``, start minus end health, with its SE):
-with ``--stop-hearts-delta D`` (default 0.02; 0 = success alone) training stops only once that stopped improving,
-i.e. it is not below every earlier confirmed check by more than max(D, 2 SE); confirmed checks are at least
-``--stop-hearts-gap`` iterations apart (default 50), so the first one never stops (round 18: a family that reached
-99% success after 4 minutes was still losing hearts it went on to stop losing).
+A confirmed check also measures the hearts lost per episode (``hearts_lost``, start minus end health, with its SE)
+and the bomb value per episode (``bomb_value``: the bomb reward terms, ``BOMB_VALUE``, with its SE): training stops
+only once both stopped improving.  With ``--stop-hearts-delta D`` (default 0.02; 0 = no hearts rule) the hearts
+lost is not below every earlier confirmed check's by more than max(D, 2 SE); with ``--stop-bombs-delta B``
+(default 0.05; 0 = no bombs rule) the bomb value is not above every earlier one's by more than max(B, 2 SE).
+Confirmed checks are at least ``--stop-check-gap`` iterations apart (default 50), so the first one never stops
+(round 18: a family that reached 99% success after 4 minutes was still losing hearts it went on to stop losing;
+round 19, Lee: bomb use keeps improving after success and hearts look done).
 Only episodes that started at a room entry count, and the balance is over the seed start states only: episodes of
 harvested start states (chain handoffs) are reported as ``harvested/*`` and never move it; ``--curriculum`` episodes
 are reported separately as ``curriculum/*``.  ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*``
@@ -111,6 +114,15 @@ from .specialist import SpecialistConfig, load_specialist
 
 # Episodes per seed start state of the evaluation that confirms an early-stop proposal (``EarlyStop``).
 CONFIRM_EPISODES = 50
+
+# The bomb reward terms per count (crates/env/src/critic.rs critique_item_usage and EQUIPMENT; ``info['bombs']``):
+# an episode's bomb value is what its bombs earned in rewards.
+BOMB_VALUE = {'hits': 0.5, 'armed': 0.75, 'picked_up': 0.5, 'placed': -0.25}
+
+
+def bomb_value(bombs: dict) -> float:
+    """An episode's bomb value from its ``bombs`` counts (``BOMB_VALUE``)."""
+    return sum(weight * bombs.get(stat, 0) for stat, weight in BOMB_VALUE.items())
 
 
 class EarlyStop:
@@ -281,9 +293,13 @@ def parse_args(argv=None):
     parser.add_argument('--stop-hearts-delta', type=float, default=0.02,
                         help="a stop also needs the hearts lost per episode to have stopped improving: a confirmed "
                              "check whose mean hearts lost (start - end, confirmation evaluation) is more than "
-                             "max(this, 2 SE) below every earlier confirmed check's trains on; 0: success alone")
-    parser.add_argument('--stop-hearts-gap', type=int, default=50,
-                        help="iterations between two confirmed checks of the hearts lost")
+                             "max(this, 2 SE) below every earlier confirmed check's trains on; 0: no hearts rule")
+    parser.add_argument('--stop-bombs-delta', type=float, default=0.05,
+                        help="a stop also needs the bomb value per episode (the bomb reward terms in the "
+                             "confirmation evaluation) to have stopped improving: a confirmed check whose mean is more "
+                             "than max(this, 2 SE) above every earlier confirmed check's trains on; 0: no bombs rule")
+    parser.add_argument('--stop-check-gap', type=int, default=50,
+                        help="iterations between two confirmed checks (of the hearts lost and the bomb value)")
     parser.add_argument('--curriculum', default=None,
                         help="trajectories dir from triforce.explore: backward-curriculum starts "
                              "(crates/env/src/curriculum.rs); default: the specialist's curriculum config")
@@ -372,7 +388,8 @@ def validate_args(args):
               (args.save_every >= 1, "--save-every must be >= 1"),
               (args.stop_patience >= 1, "--stop-patience must be >= 1"),
               (args.stop_hearts_delta >= 0, "--stop-hearts-delta must be >= 0"),
-              (args.stop_hearts_gap >= 1, "--stop-hearts-gap must be >= 1"),
+              (args.stop_bombs_delta >= 0, "--stop-bombs-delta must be >= 0"),
+              (args.stop_check_gap >= 1, "--stop-check-gap must be >= 1"),
               (args.best_of_n <= 0 or args.best_every >= 1, "--best-every must be >= 1"),
               (args.steps_per_update >= args.parallel, "--steps-per-update must be >= --parallel"),
               (args.device != 'cuda' or torch.cuda.is_available(),
@@ -611,27 +628,37 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         state['saved'] = state['iteration']
         events.emit('checkpoint', iteration=state['iteration'], steps=state['steps'], path=str(ckpt))
 
-    hearts_checks: list[tuple[int, float, float]] = []     # confirmed checks: (iteration, mean hearts lost, SE)
+    # Confirmed checks: (iteration, mean hearts lost, its SE, mean bomb value, its SE).
+    checks: list[tuple[int, float, float, float, float]] = []
+    plateau_rules = args.stop_hearts_delta > 0 or args.stop_bombs_delta > 0
+
+    def mean_se(values: list[float]) -> tuple[float, float]:
+        mean = sum(values) / len(values) if values else 0.0
+        se = (math.sqrt(sum((x - mean) ** 2 for x in values) / (len(values) - 1) / len(values))
+              if len(values) > 1 else 0.0)
+        return mean, se
 
     def confirm_stop(iteration: int) -> bool:
         """An early-stop proposal: evaluates the current weights (``CONFIRM_EPISODES`` sampled episodes per seed
         start state); stops only if their success >= --stop-success, else the streak starts over.  The evaluation
-        ends as soon as its failures rule the threshold out (``aborted``): the decision is the full one's.  With
-        --stop-hearts-delta a confirmed check also has to show that the hearts lost per episode stopped improving
-        against every earlier confirmed check (at least --stop-hearts-gap iterations apart), so the first confirmed
-        check never stops."""
-        if args.stop_hearts_delta > 0 and hearts_checks and iteration < hearts_checks[-1][0] + args.stop_hearts_gap:
+        ends as soon as its failures rule the threshold out (``aborted``): the decision is the full one's.  A
+        confirmed check also has to show that the hearts lost per episode (--stop-hearts-delta) and the bomb value
+        per episode (--stop-bombs-delta) stopped improving against every earlier confirmed check (at least
+        --stop-check-gap iterations apart), so the first confirmed check never stops."""
+        if plateau_rules and checks and iteration < checks[-1][0] + args.stop_check_gap:
             return False        # too soon after the last confirmed check: keep training, keep the streak
         seed = pool_seed + start_iteration + iteration
         states_dir = None if args.states_dir is None else str(args.states_dir)
         planned = CONFIRM_EPISODES * len(config.resolve_start_states(states_dir))
         failures, aborted = 0, False
         losses: list[float] = []
+        values: list[float] = []
 
         def hopeless(record: dict) -> bool:
             nonlocal failures, aborted
             failures += not record['success']
             losses.append(float(record['start_health']) - float(record['health']))
+            values.append(bomb_value(record.get('bombs') or {}))
             aborted = (planned - failures) / planned < args.stop_success
             return aborted
 
@@ -641,26 +668,32 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         successes = sum(s for s, _ in by_state.values())
         episodes = sum(e for _, e in by_state.values())
         rate = successes / episodes if episodes else 0.0
-        hearts = sum(losses) / len(losses) if losses else 0.0
-        se = (math.sqrt(sum((x - hearts) ** 2 for x in losses) / (len(losses) - 1) / len(losses))
-              if len(losses) > 1 else 0.0)
+        hearts, se = mean_se(losses)
+        bombs, bombs_se = mean_se(values)
         # An aborted evaluation's rate is partial and below its upper bound, which is below the threshold.
         confirmed = bool(episodes) and not aborted and rate >= args.stop_success
-        improved = None
-        if confirmed and args.stop_hearts_delta > 0:
-            best_iteration, best, best_se = min(hearts_checks, key=lambda c: c[1]) if hearts_checks else (None, 0, 0)
-            margin = max(args.stop_hearts_delta, 2 * math.sqrt(se ** 2 + best_se ** 2))
-            improved = not hearts_checks or hearts < best - margin
-            hearts_checks.append((iteration, hearts, se))
-        decision = 'stop' if confirmed and not improved else 'continue'
+        hearts_improved = bombs_improved = None
+        if confirmed and plateau_rules:
+            if args.stop_hearts_delta > 0:
+                _, best, best_se, _, _ = min(checks, key=lambda c: c[1]) if checks else (None, 0, 0, 0, 0)
+                margin = max(args.stop_hearts_delta, 2 * math.sqrt(se ** 2 + best_se ** 2))
+                hearts_improved = not checks or hearts < best - margin
+            if args.stop_bombs_delta > 0:
+                _, _, _, best, best_se = max(checks, key=lambda c: c[3]) if checks else (None, 0, 0, 0, 0)
+                margin = max(args.stop_bombs_delta, 2 * math.sqrt(bombs_se ** 2 + best_se ** 2))
+                bombs_improved = not checks or bombs > best + margin
+            checks.append((iteration, hearts, se, bombs, bombs_se))
+        decision = 'stop' if confirmed and not (hearts_improved or bombs_improved) else 'continue'
         upper = (planned - (episodes - successes)) / planned if planned else 0.0
         print(f"[train] early stop check: evaluation success {rate:.3f} over {episodes} of {planned} episodes, "
-              f"hearts lost {hearts:.3f} ± {se:.3f}"
+              f"hearts lost {hearts:.3f} ± {se:.3f}, bomb value {bombs:+.3f} ± {bombs_se:.3f}"
               + (f" (aborted: at most {upper:.3f} reachable)" if aborted else '')
-              + (" (hearts still improving)" if improved else '') + f" -> {decision}", flush=True)
+              + (" (hearts still improving)" if hearts_improved else '')
+              + (" (bombs still improving)" if bombs_improved else '') + f" -> {decision}", flush=True)
         events.emit('early_stop_check', iteration=start_iteration + iteration, rate=rate, episodes=episodes,
                     planned=planned, failures=episodes - successes, aborted=aborted, rate_upper_bound=upper,
-                    hearts_lost=hearts, hearts_lost_se=se, hearts_improving=improved,
+                    hearts_lost=hearts, hearts_lost_se=se, hearts_improving=hearts_improved,
+                    bomb_value=bombs, bomb_value_se=bombs_se, bombs_improving=bombs_improved,
                     seed=seed, balanced_success_rate=early.balanced, train_rates=early.rates(),
                     states={state: s / e for state, (s, e) in sorted(by_state.items()) if e}, decision=decision)
         if decision != 'stop':

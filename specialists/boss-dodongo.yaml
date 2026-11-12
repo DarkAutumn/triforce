@@ -5,8 +5,8 @@ success: [exit-correct]                    # d2first: kill, take the heart conta
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
 obs: {objective: true, target: true}       # schema 2
-ram_randomization: {hp: [0.15, max], full_hp: 0.5}
-items: {bombs: true}                       # the room is requires_bombs (game.yaml): never without a bomb here
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+items: {bombs: free}                       # the room is requires_bombs (game.yaml): never without a bomb here
 curriculum: {enabled: true}             # trajectories/boss-dodongo: bomb-stun + sword kill, heart, W exit (round 13)
 one_room: true
 max_steps: 600

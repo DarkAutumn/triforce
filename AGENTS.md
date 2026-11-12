@@ -1,23 +1,33 @@
-# Agent instructions (triforce2)
+# Agent instructions (triforce)
 
 Read this first, then `README.md` (setup, commands), `docs/architecture.md` (modules), and the newest
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 11)
+## Where things stand (Nov 12)
 
-- **Now (Nov 11, round 18):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives them
-  through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only route
-  (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white sword
-  → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. The whole-repo
-  code review is worked through (`target/review-progress.md`; Lee's decisions in `docs/decisions.md` 2026-11-10),
-  the team was retrained from scratch on the fixed code (r61, round 17) and continued with a hearts-aware early
-  stop (round 18): every chain segment is at or above the previous team (1000 runs per segment: D2 87.6%, after
-  D2 81.9%, D1 97.8%, after D1 100%, D3 40.6%; from the start to the D3 triforce 10.6%). Act mode per model
-  (`<run dir>/act`, bound to the checkpoint's sha1): argmax except d2-rope, darknut and stalfos-keese-gel. Measure
-  chains with 1000 runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog top):
-  wallmaster heart gathering and goriya heart loss. Every new checkpoint needs its act mode re-measured, in
-  single rooms and in chains (argmax is fragile per checkpoint).
+- **Now (Nov 12, round 19, 1.3.2.0):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
+  them through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only trained
+  route (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white
+  sword → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. Round 19
+  added bombs (`docs/experiments/round19.md`, decisions 2026-11-11): per-family bomb use (`items.bombs`:
+  free/required/tenth/never), D3's reserve of 5, the 10th damage-free kill's forced bomb drop, observation schema 3,
+  and the whole team retrained; Link clears 2:0x5e (`treasure: clear`) for bomb drops before the Moldorm. 1000 runs
+  per segment: D2 82.1%, after D2 85.9%, D1 98.4%, after D1 100%, D3 39.5%; from the start to Dungeon 3 36.3%
+  (round 18 29.2%), to the D3 triforce 10.3% (10.6%). Act mode per model (`<run dir>/act`, bound to the
+  checkpoint's sha1): argmax except goriya, d2-rope, darknut, stalfos-keese-gel and zol. Measure chains with 1000
+  runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog "Next projects"): wallmaster
+  heart gathering, goriya heart loss, Dungeon 4, fewer writes to memory; round 19 left 3:0x59's stalls and
+  Manhandla's deaths open. Every new checkpoint needs its act mode re-measured, in single rooms and in chains
+  (argmax is fragile per checkpoint).
+- **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
+  `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
+  earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`
+  (own networks and PPO); `README.md` "History" has the short version. Tags: `v1.3.2.0`, `archive/r36-schema2`
+  (round 7's unmerged schema-2 observation). Never commit the ROM, models or local paths (`/home/...`, `~/...`):
+  docs link to public repos or branches, scripts find the checkout through git, and provenance and replays record a
+  checkpoint as `<specialist>/<run>/ckpt.pt`. A fresh clone has no `models/` or `trajectories/` (gitignored):
+  curricula come back with `python -m triforce.explore`, models only from training.
 - **Replays (merged Nov 11):** versioning (`VERSION` 1.3.1.0, model stamps), starts from console power on,
   `TFREPLAY` replays (`--replays DIR`; they replaced `--plays` and the `movie` event), `zelda-headless.py` and
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
@@ -61,17 +71,23 @@ up with ideas, test them, keep what helps, and log everything.
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
-  rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
+  rather than keep them (originals are on the `v2-stable-retro` branch). No 16-heart states: max hearts follow
   the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
   Manhandla). States are chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build
   states with `python -m triforce.entry_states build|path` (staged under `target/entry-states/<ts>`, then
   `entry_states install <dir>`) and check them with `... audit` (it enforces these rules and exits 1 on a problem).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
-- **Bombs** are on only where the route needs them: Dodongo (`boss-dodongo`), the 0x2c rock wall (`ow-tektite`), D3's
-  0x4c bomb wall (`trap-room`) and Manhandla (`boss-manhandla`), all `requires_bombs` in game.yaml. BOMB is masked
-  per room (training and chains): a family's `items: {bombs: true}` enables it only in its `requires_bombs` rooms;
-  everywhere else the families say `items: {bombs: false}`.
+- **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
+  (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
+  Manhandla: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
+  (ow-tektite, trap-room: their `requires_bombs` rooms, the 0x2c rock wall and D3's bomb wall), `tenth` (the rest:
+  only the 10th damage-free kill, `$50` = 9, whose bomb kill arms a forced drop of 4 bombs; allowed in every mode
+  but `never`, below any reserve). routes.yaml `bomb_reserve: 5` from Dungeon 3's entrance (3 for the bomb wall, 2
+  for Manhandla); D3's central Darknut room takes its bombs at 4 or fewer. Every family trains with
+  `ram_randomization: {bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}` (`bombs_share`: half the resets keep
+  the start state's own bombs, round 19). A Darknut facing opposite to Link's facing when he placed
+  a bomb takes no damage from it (ASM and measured, round 19). Overworld families don't bomb but for the 10th kill.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
@@ -82,7 +98,7 @@ up with ideas, test them, keep what helps, and log everything.
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.3.1.1`). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.3.2.0`). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
@@ -159,14 +175,16 @@ up with ideas, test them, keep what helps, and log everything.
 
 ## Environment
 
-- Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 10 cores / 20 threads. ROM at
+- Setup (README "Getting started"): `uv venv --python 3.12 .venv`, then `uv pip install --python .venv/bin/python -e
+  '.[dev]'` (pytest, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`). After changing any crate, rebuild the module:
   `.venv/bin/maturin develop --release`.
 - Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (on an idle
   machine about 2.5 and 1.5 minutes after the build; next to a training round 2-3x that, from oversubscription).
   Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
-- Training GUI: `uv run training-gui.py` (PEP 723 script; PySide6 isn't in the venv).
+- Training GUI: `uv run training-gui.py` (PEP 723 script; `play-zelda.py`, `create-video.py` and `zelda-map.py` run
+  from the venv, which has PySide6 through the `dev` extra).
 - `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
   `metrics.jsonl`, `run.json`, `train.log`, `act` (`<mode> <ckpt.pt sha1>`) and `eval.json`, the canonical
   evaluation (the model's act mode, 100 episodes per state, seed 0); other evaluations are
@@ -177,7 +195,7 @@ up with ideas, test them, keep what helps, and log everything.
 
 - **Never change `triforce/` code, rebuild `triforce._native`, or change a running specialist's yaml in the main
   checkout while a training round is running.** Training and the background evaluation import the code fresh; a
-  mid-round change broke two evaluations (round 6). Code changes go in a worktree (e.g. `../triforce2-dev`):
+  mid-round change broke two evaluations (round 6). Code changes go in a worktree (e.g. `../triforce-dev`):
   fast-forward it from `main` first, commit and test there (build its own module with maturin into a separate
   venv, or test the Rust side with `cargo test`), then merge into main once no round is running. A worktree needs
   `roms/zelda.nes`.

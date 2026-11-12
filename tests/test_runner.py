@@ -73,7 +73,7 @@ def test_eval_chain_summary_names_every_model_and_its_act_mode(models_dir, tmp_p
     models = {model['name']: model for model in provenance['models']}
     assert sorted(models) == sorted(Policies(root).names)
     assert models['goriya']['act'] == 'argmax' and models['ow-start']['act'] == 'sample'
-    assert models['zol']['checkpoint'] == str(other)
+    assert models['zol']['checkpoint'] == 'zol/other/ckpt.pt'     # no local directory: the sha1 identifies it
     assert models['zol']['checkpoint_sha1'] == registry.checkpoint_sha1(other)
     assert (provenance['route'], provenance['start_from'], provenance['stop_at']) == ('d2first', None, '0:0x77')
     assert provenance['first_seed'] == 0 and provenance['runs'] == 1

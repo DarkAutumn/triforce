@@ -295,7 +295,7 @@ written to `metrics.jsonl`, which the GUI and tools read.
 
 Python 3.12 only (`requires-python = ">=3.12,<3.13"`; stable-retro has no 3.13+ wheels). Linux x64, CUDA 13 torch wheel
 (`2.15.0+cu132`), RTX 4090, 20 cores. Paths in docs use `/tmp` for throwaway scripts. Code changes follow a main
-checkout + `../triforce2-dev` worktree workflow; do not edit `triforce/` or running specialists' YAML in `main` while a
+checkout + `../triforce-dev` worktree workflow; do not edit `triforce/` or running specialists' YAML in `main` while a
 training round is running (CLAUDE.md; R31 is live).
 
 ## 7. Gotchas, ranked by how likely they are to bite a reimplementation
@@ -332,10 +332,11 @@ training round is running (CLAUDE.md; R31 is live).
    `just_exited_cave`), `capture_pre_entry` (stores `last_pre_entry = emu.save_state()` while scrolling), per-step
    interrupt polling within `INTERRUPT_RADIUS = 24` px, shield-collision watch between frames.
 9. **Everything game-specific is data in the repo, including the disassembly.** Addresses and logic cite the
-   annotated Zelda 1 disassembly at `zelda-asm/` (start at `zelda-asm/README.md`) as `asm:<Name>`, a label or RAM
-   symbol there; `zelda-asm/tools/asm.py where <Name>` translates a name (current or original) to its file and line.
-   Outside the repo remain the v1 `triforce` repo (originals of deleted start states; `/home/leculver/work/git/triforce`)
-   and a design doc (`triforce-v2-design.md`). v1 used a fork
+   annotated Zelda 1 disassembly at `zelda-asm/` (start at `zelda-asm/README.md`; imported from
+   <https://github.com/aldonunez/zelda1-disassembly>) as `asm:<Name>`, a label or RAM symbol there;
+   `zelda-asm/tools/asm.py where <Name>` translates a name (current or original) to its file and line. Not on
+   `main`: the v1 `triforce` code (originals of deleted start states; the `v2-stable-retro` branch) and a design doc
+   outside the repo (`triforce-v2-design.md`). v1 used a fork
    (`DarkAutumn/stable-retro`, `crop_overscan`); v2 uses PyPI 1.0.1 and the 240×224 cropped screen. RAM coordinates are
    absolute NES coordinates, so the crop affects rendering only.
 10. **Tests need the real ROM and savestates** (all gameplay tests share one `GameSession`; `tests/conftest.py`).

@@ -652,21 +652,48 @@ fn bow_detour_block_stairs_cellar_and_back() {
     assert_eq!(objective.next_rooms, [loc(1, 0x23)].into_iter().collect());
 }
 
-/// The GameCompletion of the route step entering 3:`room` from `entry` (as one-room training picks it).
-fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameCompletion {
+/// The GameCompletion of the route step entering `level`:`room` from `entry` (as one-room training picks it).
+fn route_step(map: &Arc<GameMap>, state: &GameView, level: u8, room: u8, entry: &str) -> GameCompletion {
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step) = start_route(map, loc(3, room), Some(entry), &mut rng, None, state);
-    let step = step.unwrap_or_else(|| panic!("3:{room:#04x} from {entry} is a route step"));
-    assert_eq!(map.routes[&route][step].location(), loc(3, room));
+    let (route, step) = start_route(map, loc(level, room), Some(entry), &mut rng, None, state);
+    let step = step.unwrap_or_else(|| panic!("{level}:{room:#04x} from {entry} is a route step"));
+    assert_eq!(map.routes[&route][step].location(), loc(level, room));
     GameCompletion::new(map.clone(), &route, Some(step)).unwrap()
 }
 
-/// Dungeon 3's route-step treasure rules (Lee, Nov 9).  0x69 from N (`treasure: skip`) heads for the stairs down to
-/// the raft cellar past its Darknuts, where the default rule (off the route) fights them for the bombs they guard;
-/// 0x5b from S (`skip`) leaves W at once; 0x5b from W (`if_bombs_below: 4`) fights for its bombs and takes them only
-/// while Link holds fewer than 4, else leaves N.
+fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameCompletion {
+    route_step(map, state, 3, room, entry)
+}
+
+/// Dungeon 2's 0x5e (`treasure: clear`, round 19): no treasure, yet the objective fights its Red Goriyas (no correct
+/// exit while one lives, so leaving N early is a wrong exit) and heads N into 0x4e once they are dead.
 #[test]
-fn d3_treasure_rules_skip_and_take_below_four_bombs() {
+fn d2_goriya_room_is_cleared_before_leaving() {
+    let Some(images) = images(&["2_5es_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let goriyas = view(&map, &images[0], 0);
+    assert!(!goriyas.enemies.is_empty() && goriyas.treasure().is_none());
+    let objective = route_step(&map, &goriyas, 2, 0x5e, "S").objectives(None, &goriyas);
+    assert_eq!(objective.kind, ObjectiveKind::Fight);
+    assert!(objective.next_rooms.is_empty());
+
+    let mut ram = images[0].clone();
+    clear_objects(&mut ram);
+    let cleared = view(&map, &ram, 0);
+    let objective = route_step(&map, &cleared, 2, 0x5e, "S").objectives(None, &cleared);
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(objective.next_rooms, [loc(2, 0x4e)].into_iter().collect());
+}
+
+/// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11: take at 4 bombs or fewer) and bomb reserve.  0x69 from
+/// N (`treasure: skip`) heads for the stairs down to the raft cellar past its Darknuts, where the default rule (off
+/// the route) fights them for the bombs they guard; 0x5b from S (`skip`) leaves W at once; 0x5b from W
+/// (`if_bombs_below: 5`) fights for its bombs and takes them only while Link holds 4 or fewer, else leaves N.  The
+/// reserve is 5 from the dungeon's entrance on (routes.yaml `bomb_reserve`).
+#[test]
+fn d3_treasure_rules_skip_and_take_at_four_bombs_or_fewer() {
     let Some(images) = images(&["3_69n_0", "3_5bs_0", "3_5bw_0"]) else {
         return;
     };
@@ -681,14 +708,16 @@ fn d3_treasure_rules_skip_and_take_below_four_bombs() {
 
     let central = view(&map, &images[1], 0);
     assert!(!central.enemies.is_empty());
-    let objective = d3_step(&map, &central, 0x5b, "S").objectives(None, &central);
+    let mut central_step = d3_step(&map, &central, 0x5b, "S");
+    assert_eq!(central_step.bomb_reserve(), 5);
+    let objective = central_step.objectives(None, &central);
     assert_eq!(objective.kind, ObjectiveKind::Move);
     assert_eq!(objective.next_rooms, [loc(3, 0x5a)].into_iter().collect());
 
     for (bombs, kind) in [
         (0, ObjectiveKind::Fight),
-        (3, ObjectiveKind::Fight),
-        (4, ObjectiveKind::Move),
+        (4, ObjectiveKind::Fight),
+        (5, ObjectiveKind::Move),
         (8, ObjectiveKind::Move),
     ] {
         let mut ram = images[2].clone();
@@ -700,8 +729,8 @@ fn d3_treasure_rules_skip_and_take_below_four_bombs() {
         let next = if kind == ObjectiveKind::Move { vec![loc(3, 0x4b)] } else { vec![] };
         assert_eq!(objective.next_rooms, next.into_iter().collect(), "{bombs} bombs");
     }
-    // The Darknuts dead and their bombs on the floor: taken below 4 bombs, left from 4 on.
-    for (bombs, kind) in [(3, ObjectiveKind::Treasure), (4, ObjectiveKind::Move)] {
+    // The Darknuts dead and their bombs on the floor: taken at 4 bombs or fewer, left from 5 on.
+    for (bombs, kind) in [(4, ObjectiveKind::Treasure), (5, ObjectiveKind::Move)] {
         let mut ram = images[2].clone();
         clear_objects(&mut ram);
         show_treasure(&mut ram, 120, 141);

@@ -5,8 +5,8 @@ success: [exit-correct, triforce-collected]   # 0x0d ends on the D2 triforce
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §8 (r40): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r40)
-ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
-items: {bombs: false}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
+items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 curriculum: {enabled: true}              # verified per-entry paths teach the east-first 0x7d exit (round 7)
 one_room: true                          # round 5: per-room episodes (one-room eval of r3: 91% vs 83% family)
 max_steps: 3000

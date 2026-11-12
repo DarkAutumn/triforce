@@ -272,6 +272,10 @@ pub struct GameCompletion {
     /// The route step Link is playing (`route_step_at`): the episode's start step, then the step of every room he
     /// enters; None off the route.
     step: Option<usize>,
+    /// The last route step Link was on (`step`, kept while he is off the route).
+    last_step: Option<usize>,
+    /// The bomb reserve (routes.yaml `bomb_reserve`) in force at each route step.
+    reserves: Vec<u8>,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
     /// The last map objective, keyed by its route key and the room's shape then: the intact bomb walls' direction
@@ -319,11 +323,20 @@ impl GameCompletion {
             .into_iter()
             .filter(|w| step.is_none_or(|s| w.step >= s))
             .collect();
+        let reserves = steps
+            .iter()
+            .scan(0u8, |reserve, s| {
+                *reserve = s.bomb_reserve.unwrap_or(*reserve);
+                Some(*reserve)
+            })
+            .collect();
         Ok(GameCompletion {
             map: map.clone(),
             route: route.to_owned(),
             progress: route_progress(&map, steps),
             step,
+            last_step: step,
+            reserves,
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -344,6 +357,12 @@ impl GameCompletion {
     /// The route step Link is playing, None off the route.
     pub fn step(&self) -> Option<usize> {
         self.step
+    }
+
+    /// Bombs Link keeps for what the route needs them for (routes.yaml `bomb_reserve`) at the route step he is on,
+    /// or was on last while off the route; 0 before any step.
+    pub fn bomb_reserve(&self) -> u8 {
+        self.step.or(self.last_step).map_or(0, |s| self.reserves[s])
     }
 
     /// The step of the route that enters Link's room from `entry` with exactly Link's progress (`StepProgress`);
@@ -478,6 +497,7 @@ impl GameCompletion {
         {
             self.step = route_entry(prev.full_location(), state.full_location())
                 .and_then(|entry| self.route_step_at(state, entry));
+            self.last_step = self.step.or(self.last_step);
         }
         self.open_raft_crossings(state);
         self.check_heart_waypoint(prev, state);
@@ -889,9 +909,9 @@ impl GameCompletion {
             item = None;
         }
         // The step's `treasure:` rule (routes.yaml), read live: 0x5b's bombs stop mattering once Link holds 4.
-        let wanted = self
-            .current_step(loc)
-            .is_none_or(|step| step.treasure.wants(state.bombs()));
+        let rule = self.current_step(loc).map(|step| step.treasure);
+        let wanted = rule.is_none_or(|r| r.wants(state.bombs()));
+        let clear = rule == Some(crate::game_map::TreasureRule::Clear);
         let mut kind = ObjectiveKind::None;
         let mut tiles = Vec::new();
         if let Some(treasure) = state.treasure() {
@@ -900,7 +920,10 @@ impl GameCompletion {
                 tiles.extend(overlap(treasure.link_overlap_tiles()));
             }
         } else if !state.enemies.is_empty()
-            && ((wanted && item.is_some()) || self.shutter_requires_combat(state) || self.push_requires_combat(state))
+            && ((wanted && item.is_some())
+                || clear
+                || self.shutter_requires_combat(state)
+                || self.push_requires_combat(state))
         {
             kind = ObjectiveKind::Fight;
             let enemy_tiles: Vec<Tile> = if state.has_active_enemies() {

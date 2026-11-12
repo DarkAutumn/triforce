@@ -5,8 +5,8 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §9 (r41): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r41)
-ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # round 14: the bow detour brings Link in with 0.5-2 hearts
-items: {bombs: false}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # round 14: the bow detour brings Link in with 0.5-2 hearts
+items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 curriculum: {enabled: true}             # trajectories/boss-aquamentus includes kill, heart and E exit (round 7)
 max_steps: 400                        # complete explored visits take 91-109 actions; keep failures bounded
 warm_start: null

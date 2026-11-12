@@ -86,6 +86,9 @@ PROGRESS_METRICS += ('blocks', 'curriculum/blocks', 'success_rate_pessimistic', 
 PROGRESS_METRICS += tuple(f'{prefix}/{key}' for prefix in ('linger', 'curriculum/linger')
                           for key in ('max_steps', 'max_frames', 'tail_steps', 'tail_frames',
                                       'worst_steps', 'worst_frames'))
+# `bombs/<stat>` for `_native.BOMB_STATS` (spelled out: this module doesn't load the native module, the GUI reads it).
+PROGRESS_METRICS += tuple(f'bombs/{stat}' for stat in ('placed', 'hits', 'misses', 'damage', 'tenth_kills',
+                                                       'tenth_tries', 'armed', 'picked_up'))
 
 
 def logs_root(root: Optional[str | os.PathLike] = None) -> Path:

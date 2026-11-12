@@ -1,7 +1,7 @@
 //! A game session: emulator, option executor and game model.
 
 use crate::actions::{Action, ActionMask, compute_action_mask};
-use crate::change::Change;
+use crate::change::{Change, LookAhead};
 use crate::enums::{ActionKind, Direction};
 use crate::executor::{Executor, FrameSink, MODE_CAVE, Machine, ZeldaError};
 use crate::game::GameView;
@@ -67,8 +67,8 @@ pub struct Session<N: Nes> {
     /// Actions since the last load.
     pub steps: u64,
     disabled_kinds: Vec<ActionKind>,
-    /// Simulate fired weapons forward to credit their hits to the firing step.
-    pub look_ahead: bool,
+    /// Which fired weapons to simulate forward to credit their hits to the firing step (default all).
+    pub look_ahead: LookAhead,
     /// Simulation mode (search) holds the frame sink, render flag and pre-entry capture flag here.
     stash: Option<Stash<N>>,
 }
@@ -85,7 +85,7 @@ impl<N: Nes> Session<N> {
             total_frames: 0,
             steps: 0,
             disabled_kinds: Vec::new(),
-            look_ahead: true,
+            look_ahead: LookAhead::All,
             stash: None,
         }
     }
@@ -162,8 +162,11 @@ impl<N: Nes> Session<N> {
         self.machine.sink = sink;
     }
 
-    /// Action kinds removed from every mask.
+    /// Action kinds removed from every mask (the mask is recomputed only when they change).
     pub fn set_disabled_kinds(&mut self, kinds: &[ActionKind]) {
+        if self.disabled_kinds == kinds {
+            return;
+        }
         self.disabled_kinds = kinds.to_vec();
         if let Some(state) = self.state.clone() {
             self.mask = self.compute_mask(&state);

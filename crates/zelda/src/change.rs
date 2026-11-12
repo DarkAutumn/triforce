@@ -13,6 +13,27 @@ use std::sync::Arc;
 /// Safety cap on one look-ahead.
 pub const LOOK_AHEAD_MAX_FRAMES: u32 = 400;
 
+/// Which fired weapons the session simulates forward to credit their hits to the firing step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LookAhead {
+    Off,
+    /// Bombs only: what [`crate::bombs::BombStats`] needs to tell a bomb's hits (evaluation and chains, which score
+    /// no rewards; a bomb's prediction is rare and cheap).
+    Bombs,
+    /// Every weapon (training: the rewards credit the firing step).
+    All,
+}
+
+impl LookAhead {
+    fn covers(self, weapon: AnimationKind) -> bool {
+        match self {
+            LookAhead::Off => false,
+            LookAhead::Bombs => matches!(weapon, AnimationKind::Bomb1 | AnimationKind::Bomb2),
+            LookAhead::All => true,
+        }
+    }
+}
+
 /// Weapons whose activation runs a look-ahead, in order.
 pub const LOOK_AHEAD_WEAPONS: [AnimationKind; 8] = [
     AnimationKind::Beams,
@@ -74,7 +95,7 @@ impl Change {
         option: OptionResult,
         action_mask: ActionMask,
         ledger: &mut FutureCreditLedger,
-        look_ahead: bool,
+        look_ahead: LookAhead,
     ) -> Change {
         // A container pickup adds one filled heart along with the container, so take the container delta out
         // of the filled-heart delta: what is left is a hit or a refill in the same step. A container loss (a
@@ -121,13 +142,12 @@ impl Change {
             // A weapon that finished without its predicted hit landing predicted wrong: its credit was paid at the
             // firing step already, so the leftover entries go rather than discount an unrelated later hit.
             ledger.drop_finished(|w| curr.animation_state(w) == AnimationState::Inactive);
-            if look_ahead {
-                for weapon in LOOK_AHEAD_WEAPONS {
-                    if curr.animation_state(weapon) == AnimationState::Active
-                        && prev.animation_state(weapon) != AnimationState::Active
-                    {
-                        change.predict(m, &curr, weapon, ledger);
-                    }
+            for weapon in LOOK_AHEAD_WEAPONS {
+                if look_ahead.covers(weapon)
+                    && curr.animation_state(weapon) == AnimationState::Active
+                    && prev.animation_state(weapon) != AnimationState::Active
+                {
+                    change.predict(m, &curr, weapon, ledger);
                 }
             }
         }
@@ -153,6 +173,43 @@ impl Change {
 
     pub fn hits(&self) -> usize {
         self.enemies_hit.len()
+    }
+
+    /// The step's BOMB action placed a bomb (a bomb slot went from inactive to active).
+    pub fn placed_bomb(&self) -> bool {
+        use crate::enums::{AnimationKind, AnimationState};
+        self.action.kind == crate::enums::ActionKind::Bomb
+            && [AnimationKind::Bomb1, AnimationKind::Bomb2].into_iter().any(|k| {
+                self.state.animation_state(k) != AnimationState::Inactive
+                    && self.previous.animation_state(k) == AnimationState::Inactive
+            })
+    }
+
+    /// The step made the 10th damage-free kill (`$50` 9 → 10, or 9 → 0 when the forced drop already fell within
+    /// the step and the kill count went up; a hit to Link that clears both is no kill).
+    pub fn tenth_kill(&self) -> bool {
+        let (prev, curr) = (&self.previous, &self.state);
+        prev.next_kill_arms_drop()
+            && match curr.help_drop_count() {
+                10 => true,
+                0 => curr.kill_streak() > prev.kill_streak(),
+                _ => false,
+            }
+    }
+
+    /// The step's 10th kill armed a forced bomb drop (a bomb kill: `$51` set), or spent one: the 10th kill's drop
+    /// fell within the step as bombs.
+    pub fn armed_bomb_drop(&self) -> bool {
+        self.tenth_kill()
+            && (self.state.help_drop_is_bombs()
+                || (self.state.help_drop_count() == 0 && self.dropped(crate::enums::item::BOMBS)))
+    }
+
+    /// A dropped item of kind `id` appeared in the room this step (a slot holding it that didn't before).
+    pub fn dropped(&self, id: i16) -> bool {
+        let had = |index: i8| self.previous.items.iter().any(|i| i.index == index && i.id == id);
+        self.previous.full_location() == self.state.full_location()
+            && self.state.items.iter().any(|i| i.id == id && !had(i.index))
     }
 
     /// Simulates until the weapon deactivates on a cloned machine state (no input, invincible hearts, other
@@ -383,7 +440,7 @@ mod tests {
             option,
             ActionMask::default(),
             ledger,
-            look_ahead,
+            if look_ahead { LookAhead::All } else { LookAhead::Off },
         )
     }
 

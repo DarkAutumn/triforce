@@ -1,8 +1,58 @@
-# Triforce v2
+# Triforce: a deep learning agent for The Legend of Zelda (NES)
 
-Specialist PPO agents that play *The Legend of Zelda* (NES) from structured game state read out of RAM.
-No pixels reach a network. Each specialist owns a family of rooms; a runner picks the specialist for each
-room and plays the route end to end.
+Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES. The agents play from the
+start of the game through Dungeon 2, go get the white sword, clear Dungeon 1, and finish on the triforce piece at
+the end of Dungeon 3, with a few detours along the way (a heart container, the bow, the raft).
+
+![Six runs by the trained models, played back with play-zelda.py](docs/images/play-zelda.png)
+
+## How it works
+
+- **No pixels.** The networks never see the screen. Every observation is built from the game's RAM: Link, the
+  enemies, projectiles and items, the room's tiles, and a pointer to the current objective.
+- **One model per kind of room.** There are 20 specialist PPO models, grouped by the enemies they face (Goriyas,
+  Darknuts, the Moldorm, each boss, and so on). A runner follows a fixed route through the game and hands each
+  room to its specialist.
+- **Actions that mean something.** Each action is a short move (eight directions), a sword swing or an item, and
+  the agent only acts when the game would actually listen. The action mask offers only what the
+  game would really do at that moment, so the model never wastes a step on a sword swing the game would ignore.
+- **A fast emulator in Rust.** The NES emulator (`crates/zcore`, cut down from TetaNES), the game model, the
+  environments and the policy's forward pass are all Rust. Python handles PPO training, evaluation and the tools,
+  and talks to the game through the `triforce._native` extension module.
+
+## How well it plays
+
+Out of 1,000 runs from the start of the game with the current team:
+
+| Link reaches | Runs |
+|---|---:|
+| Dungeon 1 (after Dungeon 2 and the white sword) | 55% |
+| Dungeon 3 | 36% |
+| The Dungeon 3 triforce | 10% |
+
+Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
+`docs/experiments/backlog.md` has what's next.
+
+## Getting started
+
+Needs Linux, Python 3.12 and stable Rust (`rust-toolchain.toml`).
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -e '.[dev]'             # builds triforce._native through maturin
+.venv/bin/maturin develop --release                              # rebuild the module after Rust changes
+```
+
+The ROM isn't included. Put an uncompressed *Legend of Zelda (U)* ROM at `roms/zelda.nes` or point
+`$TRIFORCE_ROM` at it. The ROM payload (after the 16-byte iNES header) must have SHA-1
+`a12d74c73a0481599a5d832361d168f4737bbcf6`. ROM-dependent tests fail without it; `TRIFORCE_ALLOW_NO_ROM=1` makes
+them skip instead (both suites).
+
+Trained models aren't checked in either (they're too big), so watching the agent means training a team first:
+`scripts/train_round.py` trains and evaluates every specialist, `triforce promote` picks the models to use, and
+`play-zelda.py` shows their runs.
+
+## Finding your way around
 
 - Working on the repo (people or agents): `AGENTS.md` (standing rules, workflow, how to resume), then the newest
   `docs/experiments/round*.md` and `docs/experiments/backlog.md`.
@@ -17,24 +67,7 @@ room and plays the route end to end.
   trajectories in `trajectories/<specialist>/<state>/`, checkpoints in `models/` (`$TRIFORCE_MODELS_DIR`), emulator
   test movies in `corpus/`.
 
-## Setup
-
-The emulator, game model, environments and env pool are Rust (`crates/`); Python keeps PPO, evaluation and the
-CLIs and reaches the game through the extension module `triforce._native`. Needs Python 3.12 and stable Rust
-(`rust-toolchain.toml`).
-
-```bash
-uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -e '.[dev]'             # builds triforce._native through maturin
-.venv/bin/maturin develop --release                              # rebuild the module after Rust changes
-```
-
-The ROM isn't checked in. Put an uncompressed *Legend of Zelda (U)* ROM at `roms/zelda.nes` or point
-`$TRIFORCE_ROM` at it. The ROM payload (after the 16-byte iNES header) must have SHA-1
-`a12d74c73a0481599a5d832361d168f4737bbcf6`. ROM-dependent tests fail without it; `TRIFORCE_ALLOW_NO_ROM=1` makes
-them skip instead (both suites).
-
-## Use
+## Commands
 
 ```bash
 cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 min; see "Testing")
@@ -148,3 +181,21 @@ Two suites, both about a minute: `cargo test --release --workspace --features ze
 
 Coverage (`cargo llvm-cov --release --workspace --features zelda/zcore --summary-only`,
 `pytest --cov=triforce`) guides where behaviour is untested; it is not a target.
+
+## History
+
+This is the third version of the project. The older two are kept on their own branches.
+
+**v1** ([`v1-original-design`](https://github.com/DarkAutumn/triforce/tree/v1-original-design)) was a hand-written
+project to learn reinforcement learning, built on stable-retro and stable-baselines3. It used a few models (overworld
+and dungeon, with and without sword beams) and could play through the first dungeon. Here it is
+[beating Dungeon 1](https://www.youtube.com/watch?v=yERh3IJ54dU).
+
+**v2** ([`v2-stable-retro`](https://github.com/DarkAutumn/triforce/tree/v2-stable-retro)) was still written by hand,
+but with my own neural network architectures and a PPO implementation built from scratch from the original paper.
+Once I had learned what I wanted from doing it by hand, I started bringing in LLM agents to help.
+
+**v3** (this branch) is agent-driven code to finish the project. I've learned what I set out to learn from the
+hand-written versions, so now the point is to test and prototype ideas quickly and actually get through the game.
+That started with a fast Rust emulator built for this project, with the game logic and the training environments in
+Rust too.

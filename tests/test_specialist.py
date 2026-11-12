@@ -33,7 +33,7 @@ def test_list_and_load_specialists():
 def test_configs_from_fields_accept_python_rooms():
     config = SpecialistConfig(**minimal(rooms=[MapLocation(1, 0x73, False), (1, 0x72), '(1, 0x74)']))
     assert config.rooms == [(1, 0x73, False), (1, 0x72, False), (1, 0x74, False)]
-    assert config.items.bombs is True and config.success == ['exit-correct']
+    assert config.items.bombs == 'tenth' and config.success == ['exit-correct']
     assert pickle.loads(pickle.dumps(config)) == config
 
 

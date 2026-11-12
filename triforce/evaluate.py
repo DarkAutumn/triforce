@@ -25,7 +25,8 @@ heart container picked up later doesn't count), ``mean_health_fraction`` the end
 Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
 ``hearts_left`` are means per episode (also per room and per start state).  ``mean_bombs_used`` are bombs placed per
-episode (``records[i]['bombs']``) and ``mean_cheated_bombs`` / ``mean_cheated_keys`` / ``mean_cheated_rupees``
+episode (``records[i]['bombs']``), ``mean_bomb_<stat>`` its ``_native.BOMB_STATS`` (placed, hits, misses, damage,
+tenth_kills, tenth_tries, armed, picked_up: crates/zelda/src/bombs.rs) and ``mean_cheated_bombs`` / ``mean_cheated_keys`` / ``mean_cheated_rupees``
 cheated items used per episode (``records[i]['cheated']``: a room that needs an item Link lacks grants it, a bomb in
 ``requires_bombs`` rooms, a key at a locked route door, rupees in ``requires_rupees`` shops:
 crates/zelda/src/cheats.rs), also per room and per start state.  ``mean_boss_stuns`` / ``mean_boss_eats`` are
@@ -41,13 +42,14 @@ episode's visits in order (``level``, ``room``, ``in_cave``, ``steps``, ``frames
 ``max_health``, ``health_lost``/``health_gained`` summed over the visit, ``hits`` = steps that lost health,
 ``hits_dealt``, ``drops``/``pickups`` per item kind (bombs, rupee, blue_rupee, heart, fairy, clock; zeros
 omitted), ``keys_gained`` (natural keys: a cheated key is no gain), ``bombs_used`` (bombs placed),
-``cheated_bombs``/``cheated_keys``/``cheated_rupees`` (cheated items used),
+``bomb_<stat>`` (``_native.BOMB_STATS``), ``cheated_bombs``/``cheated_keys``/``cheated_rupees`` (cheated items used),
 ``boss_stuns``/``boss_eats`` (Dodongo stunned, bombs swallowed) and ``exit``:
 ``n``/``s``/``e``/``w`` or ``cave`` when Link left the room, else how the episode ended there,
 ``death``/``success``/``timeout``/``other``).  ``visited_rooms`` aggregates them per
 room entered (keyed like ``by_room``, which only knows start rooms): ``visits``, ``episodes``, ``deaths``,
 ``death_rate``, ``exits`` and per-visit means (``steps_per_visit``, ``health_lost/gained/change_per_visit``,
 ``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``keys_per_visit``, ``bombs_used_per_visit``,
+``bomb_<stat>_per_visit``,
 ``cheated_bombs_per_visit``, ``cheated_keys_per_visit``, ``cheated_rupees_per_visit``, ``boss_stuns_per_visit``,
 ``boss_eats_per_visit``, ``drops_per_visit``,
 ``pickups_per_visit``), tagged with the ``specialist``.  Readers
@@ -137,6 +139,8 @@ def _cheat_stats(records: list[dict]) -> dict:
     bombs = [record['bombs'] for record in records if 'bombs' in record]
     if bombs:
         result['mean_bombs_used'] = sum(b['used'] for b in bombs) / len(bombs)
+        result.update({f'mean_bomb_{stat}': sum(b.get(stat, 0) for b in bombs) / len(bombs)
+                       for stat in _native.BOMB_STATS})
     cheated = [record['cheated'] for record in records if 'cheated' in record]
     if cheated:
         result.update({f'mean_cheated_{item}': sum(c[item] for c in cheated) / len(cheated)
@@ -202,6 +206,8 @@ def _room_visit_stats(visits: list[dict]) -> dict:
         'hits_dealt_per_visit': mean(lambda v: v['hits_dealt']),
         'keys_per_visit': mean(lambda v: v['keys_gained']),
         'bombs_used_per_visit': mean(lambda v: v.get('bombs_used', 0)),
+        **{f'bomb_{stat}_per_visit': mean(lambda v, stat=stat: v.get(f'bomb_{stat}', 0))
+           for stat in _native.BOMB_STATS},
         **{f'cheated_{item}_per_visit': mean(lambda v, item=item: v.get(f'cheated_{item}', 0))
            for item in _native.CHEAT_ITEMS},
         'boss_stuns_per_visit': mean(lambda v: v.get('boss_stuns', 0)),

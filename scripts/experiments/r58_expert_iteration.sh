@@ -14,7 +14,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
-MAIN=/home/leculver/git/triforce2
+MAIN=${MAIN:-$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")}   # the main checkout
 SPEC=${SPEC:-boss-dodongo}
 FROM=${FROM:-r56-rust-dg}
 ARMS=${ARMS:-"ctl ei ei-k1"}
