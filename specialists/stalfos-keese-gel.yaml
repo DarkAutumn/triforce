@@ -5,7 +5,7 @@ success: [exit-correct, triforce-collected]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §9 (r41): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r41)
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], help_count: [0, 9]}   # chains arrive in Stalfos rooms with 0.5-1.5 hearts (round 4)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive in Stalfos rooms with 0.5-1.5 hearts (round 4)
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 one_room: true                          # an episode is one room (round 4)
 max_steps: 3000

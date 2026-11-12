@@ -501,10 +501,12 @@ step, so following an enemy that moves away pays again, and knockback resets the
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
-- Bombs and the kill streak at reset (Lee, Nov 11; every family): `ram_randomization: {bombs: [0, 8],
-  help_count: [0, 9]}` draws Link's bomb count and a damage-free kill streak (`$50` = `$627` = n, `$51` = 0), so
-  bomb use and the 10th kill's forced bomb drop come up in every family's training. Curriculum starts get them too
-  (like hp); harvested starts don't (they keep what the upstream specialist handed over).
+- Bombs and the kill streak at reset (Lee, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
+  0.5, help_count: [0, 9]}` draws Link's bomb count in half the resets (the other half keep the start state's own
+  count, what the route carries there: none in Dungeon 2, round 19 §4) and a damage-free kill streak (`$50` =
+  `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
+  Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
+  over).
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
   deterministic=None, on_episode=None, *, threads=None, states_dir=None, events=None, replays=None, streams=(),
   state='embed', keyframe_frames=600)` plays every seed start state N

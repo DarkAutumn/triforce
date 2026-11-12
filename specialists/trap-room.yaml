@@ -5,7 +5,7 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as the dungeon families (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: required}                   # their requires_bombs rooms (the 0x2c rock wall, D3's bomb wall); else the 10th kill
 curriculum: {enabled: true}             # trajectories/trap-room (Go-Explore paths per start state)
 one_room: true

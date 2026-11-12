@@ -394,8 +394,9 @@ impl ItemsConfig {
 
 /// Reset-time RAM randomization (`RamRandomization`): hp bounds are fractions of max hp (or 'max'); bombs/keys
 /// inclusive ranges; `full_hp`/`chain_hp` shares of resets (see `start_states::ram_randomization_values`);
-/// `help_count: [lo, hi]` a damage-free kill streak (`$50`, 0-9, and `$627` with it, no forced drop armed), so the
-/// 10th kill (a bomb kill arms a forced bomb drop) comes up in training.
+/// `bombs_share` the share of resets that draw `bombs` (the rest keep the start state's own count, what the route
+/// carries there: none in Dungeon 2; round 19); `help_count: [lo, hi]` a damage-free kill streak (`$50`, 0-9, and
+/// `$627` with it, no forced drop armed), so the 10th kill (a bomb kill arms a forced bomb drop) comes up in training.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RamRandomization {
@@ -408,6 +409,8 @@ pub struct RamRandomization {
     #[serde(default)]
     pub bombs: Option<(i64, i64)>,
     #[serde(default)]
+    pub bombs_share: Option<f64>,
+    #[serde(default)]
     pub keys: Option<(i64, i64)>,
     #[serde(default)]
     pub help_count: Option<(i64, i64)>,
@@ -415,13 +418,11 @@ pub struct RamRandomization {
 
 impl RamRandomization {
     fn validate(&self) -> Result<(), String> {
-        for (key, value) in [("full_hp", self.full_hp), ("chain_hp", self.chain_hp)] {
+        for (key, value) in [("full_hp", self.full_hp), ("chain_hp", self.chain_hp), ("bombs_share", self.bombs_share)] {
             if let Some(v) = value
                 && !(0.0..=1.0).contains(&v)
             {
-                return Err(format!(
-                    "{key}: full_hp/chain_hp must be a probability in [0, 1], got {v}"
-                ));
+                return Err(format!("{key}: must be a probability in [0, 1], got {v}"));
             }
         }
         if let Some((lo, hi)) = self.hp {

@@ -7,7 +7,7 @@ reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): drop
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 # hp as every dungeon family; bombs drawn 0-8 so 0x5b's last visit trains both sides of its treasure rule (take the
 # bombs only below 4); help_count drawn 0-9 so the 10th damage-free kill's forced bomb drop comes at any point.
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], help_count: [0, 9]}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: free}                       # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve
 curriculum: {enabled: true}             # trajectories/darknut (Go-Explore paths per start state)
 one_room: true
