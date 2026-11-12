@@ -1122,3 +1122,36 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   5th return in a row into the room before the last (`bounce-limit`, `MAX_BOUNCES`), whatever the exits are
   judged; `retreat` crossings don't count (their own cap stays 3). REV bump to `1.3.1.1`: off-route objectives
   (rewards, the target observation) change; models stay loadable.
+
+## 2026-11-11 — Dungeon 4 scouted: map, the route d2first-d4, start states; no training (Lee)
+
+- **What Lee asked for:** map Dungeon 4; the route is a direct path to the ladder; the room with the stairs to the
+  ladder is the "Breakfast Room", and the yaml and its parser allow "fun" room names; from the Breakfast Room all
+  the way west back to the Vire room already crossed, north 1, east 1, bomb N into the rupee room, bomb E into the
+  Vire room, then E to the boss. Mapping, save states and the rest of the scouting work only: no training yet.
+- **Done** (`docs/routes/d4.md`): the 20 rooms and the ladder cellar in game.yaml (ROM tables, each room loaded in
+  the emulator); Lee's directions match the layout and were walked end to end; `name: Breakfast Room` on 4:0x32
+  (`GameRoom::name`); the way there by raft; the route; chains 0–2 of start states for every new step.
+- **Choices made while building (say so if they should change):**
+  - **A second route, `d2first-d4`, not a longer `d2first`.** routes.yaml gained `{extends: d2first, steps: [...]}`.
+    If `d2first` itself ran on into Dungeon 4, every tool's "the route's end" would become a triforce no model can
+    reach yet: chain success, the golden path, the viewer's `success` queue. `d2first` is untouched; Dungeon 4 is
+    one flag away (`--route d2first-d4`) and one edit away from being the default.
+  - **The start states live in `triforce/states/d4/`.** The overworld leg re-enters rooms of trained families
+    (`0_74c`, `0_55s`, …); in the states folder itself their `start_states` globs would pick those up and train
+    from states the default route has no step for. `entry_states install --to DIR` puts them in the subfolder.
+  - **Families by enemy, without touching what is trained.** New: `vire`, `like-like`, `boss-gleeok`, `ow-peahat`
+    (`trainable: false`). Existing families list their Dungeon 4 rooms in `rooms` only: `zol` (0x40),
+    `stalfos-keese-gel` (0x51, 0x21), `equipment-room` (the cellar), `trap-room` (the rupee room 0x11, which has
+    neither monsters nor traps: the nearest fit). `stalfos-keese-gel` is `items: {bombs: true}` now for 0x21's
+    wall; BOMB stays masked in its other rooms (none is `requires_bombs`).
+  - **The keys of 0x51 and 0x40 are left** (`treasure: skip`): "a direct path", and Link brings 5 keys for 2 doors.
+  - **Raft crossings are graph exits** (`RoomExit::raft`, `dock:`), passable in path searches only with the raft.
+    0x65's N exit got a `span` so the objective leads into 0x55's dock side.
+  - **Push blocks.** `push_block_opens` is read now (0x12's shutter); `push_block` also covers stairs that appear
+    only after the push (the Breakfast Room); while a monster lives the objective fights first, since the block
+    doesn't move. The explorer's cell key includes the block's state: without it a cell reached after the push
+    lost to the same spot reached sooner before it, and 0x12 (kill five Vires, push, leave) was never solved in
+    8,000 iterations x 3; with it, in 14,577.
+  - **Version:** `1.3.1.2` (the objective and the explorer changed; trained models are unaffected). MINOR stays 3:
+    the route everything plays still ends at three dungeons.

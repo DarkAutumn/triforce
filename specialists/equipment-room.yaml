@@ -1,5 +1,5 @@
 name: equipment-room
-rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)']
+rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)']
 start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]']
 success: [exit-correct]
 reward_profile: default
@@ -16,4 +16,6 @@ notes: >-
   by ladders, four Blue Keese, the item on the upper walkway. Dungeon 1's bow cellar 0x7f under 0x22: Link arrives
   at the top of the left ladder, goes down, along the floor, up the right ladder to the bow, and back up the left
   ladder out to 0x22 (success: the bow, then that exit; leaving without it is a wrong exit). Dungeon 3's raft
-  cellar 0x0f under 0x69 (Nov 9): the same with the raft (`waypoint: raft`), back up to 0x69.
+  cellar 0x0f under 0x69 (Nov 9): the same with the raft (`waypoint: raft`), back up to 0x69. Dungeon 4 scouting
+  (Nov 11): the ladder cellar 0x60 under the Breakfast Room 0x32 (`waypoint: ladder`) is listed in `rooms` for the
+  route d2first-d4; it has no `start_states` yet.

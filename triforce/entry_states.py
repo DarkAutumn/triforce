@@ -764,6 +764,10 @@ def build_parser() -> argparse.ArgumentParser:
     install_parser = sub.add_parser('install', help="copy a finished staged build into the states dir")
     install_parser.add_argument('staged', help="the build's --out directory")
     install_parser.add_argument('--partial', action='store_true', help="install a build that failed part-way")
+    install_parser.add_argument('--to', default=None, metavar='DIR',
+                                help="install there instead of the states dir (states of a route that isn't "
+                                     "trained yet live in a subfolder of it, e.g. triforce/states/d4: no "
+                                     "specialist's start_states sees them)")
     audit_parser = sub.add_parser('audit', help="check start states (default: every state in the states dir)")
     which = audit_parser.add_mutually_exclusive_group()
     which.add_argument('--dir', default=None, help="audit every state in this directory (default: the states dir)")
@@ -794,8 +798,9 @@ def main(argv=None):
         return 0
 
     if args.command == 'install':
-        names = install(args.staged, states_dir, args.partial)
-        print(f"installed {len(names)} states into {states_dir}")
+        target = args.to or states_dir
+        names = install(args.staged, target, args.partial)
+        print(f"installed {len(names)} states into {target}")
         return 0
 
     if args.command in ('path', 'build'):

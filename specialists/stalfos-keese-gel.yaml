@@ -1,12 +1,12 @@
 name: stalfos-keese-gel
-rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)']
+rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)', '(4, 0x51)', '(4, 0x21)']
 start_states: ['1_73*_[0-9]', '1_72*_[0-9]', '1_74*_[0-9]', '1_63*_[0-9]', '1_53*_[0-9]', '1_52*_[0-9]', '1_42*_[0-9]', '1_43*_[0-9]', '1_36*_[0-9]', '1_33*_[0-9]']
 success: [exit-correct, triforce-collected]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §9 (r41): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r41)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chains arrive in Stalfos rooms with 0.5-1.5 hearts (round 4)
-items: {bombs: false}
+items: {bombs: true}                    # only in its requires_bombs room, Dungeon 4's 0x21 (bomb the N wall); masked in every other room
 one_room: true                          # an episode is one room (round 4)
 max_steps: 3000
 warm_start: null
@@ -14,4 +14,7 @@ notes: >-
   Rooms whose enemies are Stalfos, Keese and Gels (was d1-melee): Dungeon 1's route rooms plus the empty entrance
   hall and the triforce room (ends on pickup), including the Stalfos key room 0x33 north of the Gel map room,
   crossed twice on the bow detour (S to N, then N to S; Nov 9). Start states are pre-entry states from
-  triforce/entry_states.py.
+  triforce/entry_states.py. Dungeon 4 scouting (Nov 11): its Keese room 0x51 (eight Blue Keese, the key left: S to
+  W) and its dark Gel room 0x21 (five Blue Gels: W in, bomb the N wall into the rupee room) are listed in `rooms`
+  for the route d2first-d4; they have no `start_states` yet, so nothing trains or is evaluated there until Lee
+  starts Dungeon 4.

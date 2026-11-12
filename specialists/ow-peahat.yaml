@@ -1,0 +1,18 @@
+name: ow-peahat
+rooms: ['(0, 0x45)']
+start_states: ['d4/0_45*_[0-9]']   # triforce/states/d4 (scouting states)
+success: [exit-correct, enter-room:4:0x71]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as the overworld families)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
+items: {bombs: false}
+curriculum: {enabled: true}             # trajectories/ow-peahat (Go-Explore paths per start state): not explored yet
+one_room: true                          # round 5: per-room episodes
+max_steps: 600
+trainable: false                        # Dungeon 4 is scouted, not trained (Lee, Nov 11): set true to train it
+warm_start: null
+notes: >-
+  Peahat rooms (Dungeon 4 scouting, Nov 11; not trained): a Peahat flies and can only be hit while it rests. 0x45,
+  the island of Dungeon 4 (one Peahat): Link lands on the pier at the bottom, by raft from the dock of 0x55, and
+  walks N into the dungeon's mouth. Copied from ow-leever (one-room, 600 steps, curriculum).

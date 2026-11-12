@@ -43,6 +43,24 @@ Rooms per family: `ow-start` 4, `ow-octorok` 9 (one an alternate), `ow-zora` 9, 
 `wallmaster` 1, `boss-aquamentus` 1, `d2-rope` 6, `moldorm` 1, `boss-dodongo` 1, `zol` 6, `darknut` 3,
 `boss-manhandla` 1.
 
+### Dungeon 4 (scouted Nov 11, not trained; `docs/routes/d4.md`)
+
+The route `d2first-d4` continues `d2first` through Dungeon 4. Its rooms are tagged by enemy as everywhere, but
+nothing trains there yet: the new families are `trainable: false` and their start states live in
+`triforce/states/d4/`; the existing families list their Dungeon 4 rooms in `rooms` without `start_states`, so
+their training and evaluation are what they were.
+
+| Family | Main threat | Rooms (level, room) | Notes |
+|---|---|---|---|
+| `vire` (new) | Vire (splits into two Red Keese) | (4,0x71), (4,0x61), (4,0x50), (4,0x30), (4,0x31), (4,0x20), (4,0x12), (4,0x03) | The dungeon's main family, with its empty hall and triforce room. 0x30 twice (S→E, E→N: both locked doors); 0x31 twice (W→E after killing all five for the shutter; E→W); 0x12: kill them, push the block, E through the shutter. |
+| `like-like` (new) | Like Like, Zol, Bubble | (4,0x32) | The Breakfast Room: kill them, push the block, down the stairs; back up, W. |
+| `boss-gleeok` (new) | Gleeok, two heads ($43) | (4,0x13) | Kill him, the heart container, N. |
+| `ow-peahat` (new) | Peahat | (0,0x45) | The island: from the raft's pier into the dungeon. |
+| `zol` | | + (4,0x40) | Five Zols in the dark; the key is left. |
+| `stalfos-keese-gel` | | + (4,0x51), (4,0x21) | Eight Blue Keese (the key is left); five Blue Gels in the dark, bomb the N wall (`items: {bombs: true}`, which unmasks BOMB only in this `requires_bombs` room). |
+| `trap-room` | | + (4,0x11) | The rupee room: no monsters, no traps, bomb the E wall. The nearest fit; Lee to confirm. |
+| `equipment-room` | | + (4,0x60 cellar) | The ladder cellar. |
+
 Removed with the reset (Nov 8): `ow-leever-peahat` (0x29, 0x2a, 0x2b: milestone1 only; 0x2c went to `ow-tektite`),
 the fairy pond 0x39 (ow-start), 0x48 (ow-zora; back on the route since Nov 9 as `ow-leever`), 0x49 (ow-octorok) and
 2:0x6d (d2-rope).
@@ -63,4 +81,7 @@ the fairy pond 0x39 (ow-start), 0x48 (ow-zora; back on the route since Nov 9 as 
 Every route room has route-generated pre-entry states (`python -m triforce.entry_states build`, chains 0–2, staged
 under `target/entry-states/<ts>` and copied in with `entry_states install <dir>`; `entry_states.json`); the bow
 detour's (Nov 9) were built from `1_43w_N` with `--start-step 55`, the way on to and through Dungeon 3 (Nov 9)
-from `1_36w_N` with `--start-step 67` (then `0_56e_N`, `--start-step 73`).
+from `1_36w_N` with `--start-step 67` (then `0_56e_N`, `--start-step 73`). The Dungeon 4 scouting states (Nov 11:
+`--route d2first-d4 --start-step 97` from `3_3ds_N`) are installed with `install <dir> --to triforce/states/d4`
+and audited with `audit --states 'triforce/states/d4/*.state' --route d2first-d4`: in the subfolder no trained
+family's `start_states` glob matches them (`docs/routes/d4.md`, "Start states").

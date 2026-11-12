@@ -88,7 +88,7 @@ class CellState:
         self._clear_room()
 
     def _clear_room(self):
-        self.specialist = self.level = self.room = None
+        self.specialist = self.level = self.room = self.room_name = None
         self.rooms = 0
         self.playing = False        # a room message arrived: the replay has a picture
         self.cheated = {}           # cheated items used so far in the run, {bombs, keys, rupees}
@@ -108,6 +108,7 @@ class CellState:
             self.specialist = message.get('specialist')
             self.level = message.get('level')
             self.room = message.get('room')
+            self.room_name = message.get('name')
             self.rooms = message.get('rooms', self.rooms)
             self.cheated = dict(message.get('cheated', self.cheated))
         elif event == 'end':
@@ -141,7 +142,7 @@ class CellState:
             return f"{self.label()}  {self.placeholder()}".strip()
         parts = [self.label()]
         if self.room is not None:
-            parts.append(f"L{self.level} 0x{self.room:02x}")
+            parts.append(f"L{self.level} 0x{self.room:02x}" + (f" {self.room_name}" if self.room_name else ''))
         if self.specialist:
             parts.append(self.specialist)
         text = '  '.join(parts)

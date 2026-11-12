@@ -54,8 +54,10 @@ impl AcceptSpec {
 }
 
 /// Coarse state summary: (level, room, cave, tile x/2, tile y/2, whole hearts, living enemies, their total health,
-/// keys, boomerang).  Enemy health keeps multi-hit enemies leaving a trail of cells toward the kill.
-pub type CellKey = (u8, u8, bool, i32, i32, i32, usize, i32, i32, i32);
+/// keys, boomerang, the room's push block still unpushed).  Enemy health keeps multi-hit enemies leaving a trail of
+/// cells toward the kill.  The push block: a pushed block changes what the room is (stairs appear, a shutter
+/// opens), and a cell reached after the push must not lose to the same spot reached sooner before it.
+pub type CellKey = (u8, u8, bool, i32, i32, i32, usize, i32, i32, i32, bool);
 
 /// Total health of the living enemies (drops with every damaging hit).
 pub fn enemy_health(state: &GameView) -> i32 {
@@ -81,6 +83,7 @@ pub fn cell_key(state: &GameView) -> CellKey {
         enemy_health(state),
         state.keys(),
         state.boomerang() as i32,
+        state.push_block_pending(),
     )
 }
 

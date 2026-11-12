@@ -33,6 +33,12 @@ pub const WAYPOINT_BOW: &str = "bow";
 /// routes.yaml `waypoint: raft` (on Dungeon 3's cellar step under 0x69): take the cellar's raft, as the bow
 /// (`StepProgress::raft`).
 pub const WAYPOINT_RAFT: &str = "raft";
+/// routes.yaml `waypoint: ladder` (on Dungeon 4's cellar step under the Breakfast Room 0x32): take the cellar's
+/// ladder, as the bow (`StepProgress::ladder`).
+pub const WAYPOINT_LADDER: &str = "ladder";
+/// RoomAllDead ($34D): the room's monsters are all dead (a push block moves only then, Z_04 UpdateBlock).
+const ROOM_ALL_DEAD: u16 = 0x34D;
+const PUSH_DIRECTIONS: [Direction; 4] = [Direction::N, Direction::S, Direction::E, Direction::W];
 const COMBAT_SHUTTER_TRIGGERS: [SecretTrigger; 4] = [
     SecretTrigger::AllDead,
     SecretTrigger::Ringleader,
@@ -85,13 +91,14 @@ pub struct Objective {
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
-/// earlier cave steps handed over and whether earlier cellar steps gave the bow and the raft.
+/// earlier cave steps handed over and whether earlier cellar steps gave the bow, the raft and the ladder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepProgress {
     pub triforces: u8,
     pub sword: SwordKind,
     pub bow: bool,
     pub raft: bool,
+    pub ladder: bool,
 }
 
 impl StepProgress {
@@ -104,6 +111,7 @@ impl StepProgress {
             sword: state.sword(),
             bow: state.bow(),
             raft: state.raft(),
+            ladder: state.ladder(),
         }
     }
 
@@ -128,6 +136,7 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
         sword: SwordKind::None,
         bow: false,
         raft: false,
+        ladder: false,
     };
     let mut out = Vec::with_capacity(steps.len());
     for step in steps {
@@ -147,6 +156,9 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
         }
         if treasure == Some("raft") {
             progress.raft = true;
+        }
+        if treasure == Some("ladder") {
+            progress.ladder = true;
         }
     }
     out
@@ -262,7 +274,8 @@ pub struct GameCompletion {
     step: Option<usize>,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
-    /// The last map objective, keyed by its route key and the intact bomb walls' direction bits.
+    /// The last map objective, keyed by its route key and the room's shape then: the intact bomb walls' direction
+    /// bits, and bit $10 when the room has stairs (a pushed block can make them appear).
     last_route: Option<(RouteKey, u8, MapObjective)>,
     collected_key_rooms: BTreeSet<MapLocation>,
     opened_doors: BTreeSet<(MapLocation, String)>,
@@ -276,6 +289,8 @@ pub struct GameCompletion {
     /// Why the route can't be finished any more: a `heart` waypoint missed (its room left without the heart
     /// container, or the other ware taken).  The objective then has no correct exit.
     missed: Option<String>,
+    /// The raft crossings were put into `opened_doors` (Link holds the raft).
+    rafts_open: bool,
 }
 
 impl GameCompletion {
@@ -318,6 +333,7 @@ impl GameCompletion {
             waypoints,
             heart_baseline: None,
             missed: None,
+            rafts_open: false,
         })
     }
 
@@ -463,6 +479,7 @@ impl GameCompletion {
             self.step = route_entry(prev.full_location(), state.full_location())
                 .and_then(|entry| self.route_step_at(state, entry));
         }
+        self.open_raft_crossings(state);
         self.check_heart_waypoint(prev, state);
         // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first).
         while let Some(i) = self.active_waypoint(state)
@@ -687,36 +704,63 @@ impl GameCompletion {
             .unwrap_or_default()
     }
 
-    /// While a game.yaml `push_block` room's block is pending, its stairs are walled in: the stairs targets become
-    /// the tiles Link pushes it from (Link's top-left tile; pushing N he stands half inside the block's lower row, as
-    /// the game lets him, pushing S on top of it, E and W beside it).  The push itself needs 16 frames of pressing.
+    /// With the raft, every game.yaml raft crossing counts as open for the path searches (`RoomExit::raft`).
+    fn open_raft_crossings(&mut self, state: &GameView) {
+        if self.rafts_open || !state.raft() {
+            return;
+        }
+        self.rafts_open = true;
+        for (loc, room) in self.map.rooms() {
+            for exit in room.exits.values().filter(|e| e.raft) {
+                self.opened_doors.insert((*loc, exit.direction.clone()));
+            }
+        }
+        self.closest.get_mut().clear();
+    }
+
+    /// The ways the room's pending push block may be pushed when the objective (its next rooms `rooms`) needs it
+    /// moved, else None.  A game.yaml `push_block` block gates the stairs down (walled in, as Dungeon 1's 0x22, or
+    /// not there until it moves, as Dungeon 4's Breakfast Room); a `push_block_opens` block opens a shutter the
+    /// objective leaves through (Dungeon 4's 0x12), pushed any way.
+    fn push_wanted(&self, state: &GameView, rooms: &BTreeSet<MapLocation>) -> Option<&[Direction]> {
+        let loc = state.full_location();
+        let room = self.map.get(loc)?;
+        if !state.push_block_pending() {
+            return None;
+        }
+        if !room.push_block.is_empty() && rooms.iter().any(|next| next.in_cave != loc.in_cave) {
+            return Some(&room.push_block);
+        }
+        let shutter = room.push_block_opens?;
+        (state.is_door_barred(shutter) && rooms.iter().any(|next| loc.direction_to(*next) == shutter))
+            .then_some(&PUSH_DIRECTIONS[..])
+    }
+
+    /// While the objective needs the room's push block moved ([`GameCompletion::push_wanted`]), the targets are the
+    /// tiles Link pushes it from (Link's top-left tile; pushing N he stands half inside the block's lower row, as
+    /// the game lets him, pushing S on top of it, E and W beside it) instead of the stairs or the shut door.  The
+    /// push itself needs 16 frames of pressing, and a room without living monsters.
     fn push_block_targets(&self, state: &GameView, objective: MapObjective) -> MapObjective {
         let (targets, rooms) = objective;
-        let Some(room) = self.map.get(state.full_location()) else {
+        let Some(directions) = self.push_wanted(state, &rooms) else {
             return (targets, rooms);
         };
-        if room.push_block.is_empty() || !state.push_block_pending() {
-            return (targets, rooms);
-        }
-        let stairs: Vec<Target> = state.room().stairs_tiles().into_iter().map(Target::Tile).collect();
-        if !targets.iter().any(|t| stairs.contains(t)) {
-            return (targets, rooms);
-        }
         let block = state.push_block_tiles();
         let (col, row) = (
             block.iter().map(|t| t.0).min().unwrap_or(0),
             block.iter().map(|t| t.1).min().unwrap_or(0),
         );
-        let mut out: Vec<Target> = targets.into_iter().filter(|t| !stairs.contains(t)).collect();
-        for direction in &room.push_block {
-            let spot = match direction {
-                Direction::N => (col, row + 1),
-                Direction::S => (col, row - 2),
-                Direction::E => (col - 2, row),
-                _ => (col + 2, row),
-            };
-            out.push(Target::Tile(spot));
-        }
+        let out = directions
+            .iter()
+            .map(|direction| {
+                Target::Tile(match direction {
+                    Direction::N => (col, row + 1),
+                    Direction::S => (col, row - 2),
+                    Direction::E => (col - 2, row),
+                    _ => (col + 2, row),
+                })
+            })
+            .collect();
         (out, rooms)
     }
 
@@ -856,7 +900,7 @@ impl GameCompletion {
                 tiles.extend(overlap(treasure.link_overlap_tiles()));
             }
         } else if !state.enemies.is_empty()
-            && ((wanted && item.is_some()) || self.shutter_requires_combat(state))
+            && ((wanted && item.is_some()) || self.shutter_requires_combat(state) || self.push_requires_combat(state))
         {
             kind = ObjectiveKind::Fight;
             let enemy_tiles: Vec<Tile> = if state.has_active_enemies() {
@@ -898,6 +942,15 @@ impl GameCompletion {
         decoded.enemies_remaining > 0 && COMBAT_SHUTTER_TRIGGERS.contains(&decoded.secret_trigger)
     }
 
+    /// The objective needs the room's block pushed, and it won't move while a monster lives (RoomAllDead).
+    fn push_requires_combat(&mut self, state: &GameView) -> bool {
+        if state.peek(ROOM_ALL_DEAD) != 0 {
+            return false;
+        }
+        let (_, next_rooms) = self.map_objective(state);
+        self.push_wanted(state, &next_rooms).is_some()
+    }
+
     fn map_objective(&mut self, state: &GameView) -> (Vec<Target>, BTreeSet<MapLocation>) {
         let loc = state.full_location();
         if loc.in_cave {
@@ -923,16 +976,19 @@ impl GameCompletion {
                 )
             }
         };
-        // Intact bomb walls change the exit targets (below) when they open; the cache key holds them.
+        // Intact bomb walls change the exit targets (below) when they open, and stairs a pushed block reveals are
+        // a new target; the cache key holds both.
         let walls = state
             .bomb_walls()
             .iter()
             .fold(0u8, |mask, w| mask | w.wall_direction.value());
+        let stairs = if state.level() > 0 && !state.room().stairs_tiles().is_empty() { 0x10 } else { 0 };
+        let shape = walls | stairs;
         // A maze's next direction depends on MazeStep, which the cache key doesn't hold.
         if self.map.maze(loc).is_none()
             && let Some((last, last_walls, result)) = &self.last_route
             && *last == key
-            && *last_walls == walls
+            && *last_walls == shape
         {
             return self.push_block_targets(state, result.clone());
         }
@@ -941,7 +997,7 @@ impl GameCompletion {
             RouteKey::Target(_, target, keys, collected, opened, _) => {
                 let mut next_rooms = self.map.find_next_rooms(loc, *target, *keys, collected, opened);
                 if next_rooms.is_empty() {
-                    self.last_route = Some((key, walls, (Vec::new(), BTreeSet::new())));
+                    self.last_route = Some((key, shape, (Vec::new(), BTreeSet::new())));
                     return (Vec::new(), BTreeSet::new());
                 }
                 let route_next = self.route_next_with_progress(loc, state);
@@ -964,6 +1020,17 @@ impl GameCompletion {
                 }
                 continue;
             }
+            // A raft crossing from a dock: stand on the dock (Z_04 UpdateDock sails from there).
+            let dock = self
+                .map
+                .get(loc)
+                .and_then(|r| r.exits.get(d.name()))
+                .filter(|exit| exit.raft)
+                .and_then(|exit| exit.dock);
+            if let Some(dock) = dock {
+                targets.push(Target::Tile(dock));
+                continue;
+            }
             match room.exits.get(d) {
                 Some(tiles) => targets.extend(
                     tiles_in_span(tiles, exit_span(&self.map, loc, d), d)
@@ -976,7 +1043,7 @@ impl GameCompletion {
             }
         }
         let result = (targets, next_rooms);
-        self.last_route = Some((key, walls, result.clone()));
+        self.last_route = Some((key, shape, result.clone()));
         self.push_block_targets(state, result)
     }
 }

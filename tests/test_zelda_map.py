@@ -80,6 +80,15 @@ def test_state_names_and_picture_choice(tmp_path):
     states = zelda_map.scan_states(tmp_path)
     assert states == {(0, 0x37, False): ['0_37c_0', '0_37e_0', '0_37e_1'], (0, 0x77, True): ['0_77cave_0']}
     assert zelda_map.pick_state(states[(0, 0x37, False)]) == '0_37e_0'
+    # A subfolder's states (the Dungeon 4 scouting states) are found too; the folder's own picture a shared room.
+    (tmp_path / 'd4').mkdir()
+    for name in ('0_37e_0', '4_32w_0', 'idle_12'):
+        (tmp_path / 'd4' / f'{name}.state').write_bytes(b'')
+    states = zelda_map.scan_states(tmp_path)
+    assert states[(0, 0x37, False)] == ['0_37c_0', '0_37e_0', '0_37e_1', 'd4/0_37e_0']
+    assert states[(4, 0x32, False)] == ['d4/4_32w_0'] and len(states) == 3
+    assert zelda_map.pick_state(states[(0, 0x37, False)]) == '0_37e_0'
+    assert zelda_map.parse_state_name('d4/4_60cave_2') == (4, 0x60, 'cave', 2)
 
 
 def test_load_evals_merges_rooms_by_visits(models):
@@ -202,7 +211,7 @@ def test_route_plan_and_overlay(qapp, models):
 
 def test_dungeon_cellars_are_drawn_with_their_entrance(qapp, models):
     rooms = zelda_map.game_rooms()
-    assert zelda_map.cellar_entrances(rooms) == {(1, 0x7f, True): 0x22, (3, 0x0f, True): 0x69}
+    assert zelda_map.cellar_entrances(rooms) == {(1, 0x7f, True): 0x22, (3, 0x0f, True): 0x69, (4, 0x60, True): 0x32}
     states = {(1, 0x22, False): ['1_22e_0'], (1, 0x7f, True): ['1_7fcave_0']}
     window = zelda_map.MapWindow(models, {}, states)
     assert 0x7f not in window.level_rooms(1) and 0x0f not in window.level_rooms(3)
@@ -211,6 +220,8 @@ def test_dungeon_cellars_are_drawn_with_their_entrance(qapp, models):
     html = window.room_html(1, 0x22)
     assert '1_7fcave_0' in html and 'cellar 0x7f' in html
     assert zelda_map.specialist_for((1, 0x7f, True)) == 'equipment-room' and 'equipment-room' in html
+    # A room people have a name for says it (game.yaml `name:`), and only that room.
+    assert '>Name<' not in html and 'Breakfast Room' in window.room_html(4, 0x32)
     plan = zelda_map.route_plan('d2first')
     if any((s['level'], s['room'], s['in_cave']) == (1, 0x7f, True) for s in plan):
         assert 0x7f not in zelda_map.route_rooms(plan, 1, window.cellars)

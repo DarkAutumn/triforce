@@ -3,7 +3,8 @@
 Lee's route (Nov 8), the only route since the reset the same day (`docs/decisions.md` 2026-11-08: milestone1 and
 milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9, and the same day the route went on from the
 D1 triforce to Dungeon 3 (the raft, Manhandla); it now ends on the D3 triforce. Data: `triforce/routes.yaml`
-`d2first`, rooms in `triforce/game.yaml`. View it with
+`d2first`, rooms in `triforce/game.yaml`. Dungeon 4 is scouted as the route `d2first-d4`, which continues this one
+(`extends: d2first`; `docs/routes/d4.md`, Nov 11): `d2first` itself is unchanged. View it with
 
 ```bash
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step

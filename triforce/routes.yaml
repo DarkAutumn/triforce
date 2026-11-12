@@ -5,9 +5,11 @@
 # this room; a route without a terminal step ends on its last step's triforce).  An exit through an intact bomb wall
 # (game.yaml `bomb_walls`) sends Link to the spot to bomb it from.
 # The objective follows the steps: in a room the route enters from the side Link came in, with the triforce pieces,
-# sword, bow and raft the route has there, the step's exit is the correct one (zelda::objectives).
+# sword, bow, raft and ladder the route has there, the step's exit is the correct one (zelda::objectives).
 # `waypoint: heart` (cave step): take the cave's heart container; leaving its room without it is `missed`.
-# `waypoint: bow` / `waypoint: raft` (cellar step): take the cellar's item; until then the objective leads back to it.
+# `waypoint: bow` / `raft` / `ladder` (cellar step): take the cellar's item; until then the objective leads back to it.
+# A route is a list of steps, or `{extends: <a route above>, steps: [...]}`: that route's steps, then these.
+# An exit that is a game.yaml raft crossing (`raft_exits`) sends Link to its dock; the raft does the rest.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
 # run go on (the next room's objective sends Link back).
 # `treasure:` whether this visit takes the room's game.yaml treasure (fights for it when the kills make it appear):
@@ -132,10 +134,45 @@ d2first:
 - {level: 3, room: '0x4c', specialist: trap-room, entry: W, exit: E}
 - {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N}
 - {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce}
+# d2first-d4 (Lee, Nov 11; docs/routes/d4.md): d2first, then on to Dungeon 4 and its triforce.  Scouting only: the
+# rooms are mapped and have start states, nothing is trained there yet, and d2first stays the default route.
+# From the D3 triforce's warp (0x74) back the way Link came to 0x65, N to the dock of 0x55 and by raft to the island
+# 0x45.  Dungeon 4, Lee's directions: the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose
+# pushed block reveals the stairs), back W W to the Vire room 0x30, N, E, bomb N into the rupee room 0x11, bomb E
+# into the Vire room 0x12, its pushed block opens the E shutter to Gleeok, N to the triforce.  The keys of 0x51
+# and 0x40 are left: Link brings 5 from Dungeon 3 and the way needs 2 (0x30's E and N doors).
+d2first-d4:
+  extends: d2first
+  steps:
+  - {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
+  - {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
+  - {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: E}
+  - {level: 0, room: '0x64', specialist: ow-octorok, entry: W, exit: E}
+  - {level: 0, room: '0x65', specialist: ow-zora, entry: W, exit: N}
+  - {level: 0, room: '0x55', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x45', specialist: ow-peahat, entry: S, exit: cave}
+  - {level: 4, room: '0x71', specialist: vire, entry: S, exit: N}
+  - {level: 4, room: '0x61', specialist: vire, entry: S, exit: N}
+  - {level: 4, room: '0x51', specialist: stalfos-keese-gel, entry: S, exit: W, treasure: skip}
+  - {level: 4, room: '0x50', specialist: vire, entry: E, exit: N}
+  - {level: 4, room: '0x40', specialist: zol, entry: S, exit: N, treasure: skip}
+  - {level: 4, room: '0x30', specialist: vire, entry: S, exit: E}
+  - {level: 4, room: '0x31', specialist: vire, entry: W, exit: E}
+  - {level: 4, room: '0x32', specialist: like-like, entry: W, exit: cave}
+  - {level: 4, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ladder}
+  - {level: 4, room: '0x32', specialist: like-like, entry: cave, exit: W}
+  - {level: 4, room: '0x31', specialist: vire, entry: E, exit: W}
+  - {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
+  - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
+  - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
+  - {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: E}
+  - {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
+  - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
+  - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
-# Families by enemy (docs/specialists.md): the route's rooms and the alternate 0x78.
+# Families by enemy (docs/specialists.md): the routes' rooms and the alternate 0x78.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
@@ -144,16 +181,20 @@ families:
   ow-leever: ['(0, 0x48)']
   ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)']
   ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)']
+  ow-peahat: ['(0, 0x45)']
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
-  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
+  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x21)', '(4, 0x51)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
-  trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)']
-  equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)']
+  trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)', '(4, 0x11)']
+  equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)']
   wallmaster: ['(1, 0x45)']
   boss-aquamentus: ['(1, 0x35)']
   d2-rope: ['(2, 0x0d)', '(2, 0x2e)', '(2, 0x4e)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
   moldorm: ['(2, 0x3e)']
   boss-dodongo: ['(2, 0x0e)']
-  zol: ['(3, 0x3d)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x6b)', '(3, 0x7b)', '(3, 0x7c)']
+  zol: ['(3, 0x3d)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x6b)', '(3, 0x7b)', '(3, 0x7c)', '(4, 0x40)']
   darknut: ['(3, 0x59)', '(3, 0x5b)', '(3, 0x69)']
   boss-manhandla: ['(3, 0x4d)']
+  vire: ['(4, 0x03)', '(4, 0x12)', '(4, 0x20)', '(4, 0x30)', '(4, 0x31)', '(4, 0x50)', '(4, 0x61)', '(4, 0x71)']
+  like-like: ['(4, 0x32)']
+  boss-gleeok: ['(4, 0x13)']

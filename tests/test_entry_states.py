@@ -56,16 +56,21 @@ def test_every_trainable_specialist_has_start_states():
 
 def test_configured_start_states_are_clean():
     """Every configured state passes the audit: named room and entry side, pre-entry, the full room, the route's max
-    hearts at full health, a route step."""
+    hearts at full health, a route step.  A state is audited against the route its manifest entry names (the
+    Dungeon 4 scouting states in ``d4/`` are steps of ``d2first-d4``)."""
     require_rom()
     paths = configured_states()
     if not paths:
         pytest.fail(f"missing start states: {BUILD}", pytrace=False)
     game, full = native.Game(states_dir=str(REPO_STATES_DIR)), full_monster_counts()
-    index = entry_states.RouteIndex()
-    problems = {os.path.basename(path): audit_problems(audit_state(game, path, loads=2, full=full, index=index))
-                for path in paths}
+    indexes = {DEFAULT_ROUTE: entry_states.RouteIndex()}
+    problems = {}
+    for path in paths:
+        route = (indexes[DEFAULT_ROUTE].manifest_entry(path) or {}).get('route', DEFAULT_ROUTE)
+        index = indexes.setdefault(route, entry_states.RouteIndex(route))
+        problems[os.path.basename(path)] = audit_problems(audit_state(game, path, loads=2, full=full, index=index))
     assert {name: found for name, found in problems.items() if found} == {}
+    assert set(indexes) == {DEFAULT_ROUTE, 'd2first-d4'}
 
 
 def test_every_shipped_state_but_start_has_a_manifest_entry():
@@ -74,7 +79,8 @@ def test_every_shipped_state_but_start_has_a_manifest_entry():
         manifest = {entry['file'] for entry in json.load(file)}
     shipped = {os.path.basename(p) for p in glob.glob(str(REPO_STATES_DIR / '*.state'))}
     assert shipped - {'start.state'} - manifest == set()
-    assert {os.path.basename(p) for p in configured_states()} - {'start.state'} <= manifest
+    index = entry_states.RouteIndex()
+    assert [p for p in configured_states() if state_label(p) != 'start' and index.manifest_entry(p) is None] == []
 
 
 def test_every_start_state_pattern_matches_a_shipped_state():

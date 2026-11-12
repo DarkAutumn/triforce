@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "triforce"
-version = "1.3.1.1"
+version = "1.3.1.2"
 description = "Specialist PPO agents that play The Legend of Zelda (NES) from structured RAM state"
 requires-python = ">=3.12,<3.13"
 dependencies = [

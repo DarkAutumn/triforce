@@ -126,6 +126,11 @@ def test_a_cell_says_where_its_replay_is_from_and_how_it_goes():
     state.apply({'cell': 0, 'event': 'start', 'seed': 7, 'source': 'files', 'name': '00000007-win.tfreplay'})
     state.apply(_room(0, 0, level=None, room=None))
     assert state.outcome is None and state.strip_text() == '00000007-win  ow-zora'
+    # A room people have a name for says it (game.yaml `name:`); the next room without one drops it.
+    state.apply(_room(0, 1, specialist='like-like', level=4, room=0x32, name='Breakfast Room'))
+    assert state.strip_text() == '00000007-win  L4 0x32 Breakfast Room  like-like'
+    state.apply(_room(0, 2, specialist='vire', level=4, room=0x31, name=None))
+    assert state.strip_text() == '00000007-win  L4 0x31  vire'
 
     # A cell whose replay can't play says why; a dark cell of a file grid says nothing.
     state.apply({'cell': 0, 'event': 'crash', 'reason': 'ReplayError: not a TFREPLAY file'})
@@ -446,7 +451,8 @@ def test_a_show_reads_what_the_strip_says_from_the_replay(recordings):  # pylint
     assert win.reason == f'reached route step {SEGMENT_STOP_STEP} (level 0, room 0x4c)'
     first, last = win.status(win.start), win.status(win.frames)
     assert (first['specialist'], first['level'], first['room'], first['rooms']) == ('ow-octorok', 0, 0x3c, 1)
-    assert (last['room'], last['rooms']) == (0x4c, 2)
+    assert (last['room'], last['rooms'], last['name']) == (0x4c, 2, None)
+    assert play_grid.room_names() == {(4, 0x32, False): 'Breakfast Room'}
     assert last['cheated'] == {'bombs': 0, 'keys': 0, 'rupees': 0}
 
     # A run from power on is watched from the moment the models took over; before it there is no room.

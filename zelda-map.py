@@ -209,22 +209,25 @@ def fmt_exits(exits: dict) -> str:
 Key = tuple[int, int, bool]            # (level, room, in_cave), like game_rooms()
 
 
-def parse_state_name(stem: str) -> Optional[tuple[int, int, str, int]]:
-    """'0_4ce_1' -> (level 0, room 0x4c, side 'e', chain 1); None for other files (start.state)."""
-    match = STATE_NAME.match(stem)
+def parse_state_name(name: str) -> Optional[tuple[int, int, str, int]]:
+    """'0_4ce_1' -> (level 0, room 0x4c, side 'e', chain 1), also with its subfolder ('d4/4_71s_0'); None for other
+    files (start.state)."""
+    match = STATE_NAME.match(name.rsplit('/', 1)[-1])
     if not match:
         return None
     return int(match[1]), int(match[2], 16), match[3], int(match[4])
 
 
 def scan_states(states_dir: Path) -> dict[Key, list[str]]:
-    """(level, room, in_cave) -> the room's savestate names (sorted).  Side 'cave' is the cave interior."""
+    """(level, room, in_cave) -> the room's savestate names (sorted).  Side 'cave' is the cave interior.  The states
+    of a subfolder (the Dungeon 4 scouting states) are named with it ('d4/4_71s_0') and come after the folder's own."""
     states = defaultdict(list)
-    for path in sorted(Path(states_dir).glob('*.state')):
-        parsed = parse_state_name(path.stem)
-        if parsed:
-            level, room, side, _ = parsed
-            states[(level, room, side == 'cave')].append(path.stem)
+    root = Path(states_dir)
+    for path in sorted(root.glob('*.state')) + sorted(root.glob('*/*.state')):
+        if parse_state_name(path.stem):
+            name = path.relative_to(root).with_suffix('').as_posix()
+            level, room, side, _ = parse_state_name(name)
+            states[(level, room, side == 'cave')].append(name)
     return dict(states)
 
 
@@ -973,8 +976,10 @@ class MapWindow(QMainWindow):
         cave = self.cave_key(level, room)
         has_cave = any(cave in source for source in (self.rooms, self.states, self.stats))
         cave_text = 'yes' if cave[1] == room else f'cellar 0x{cave[1]:02x}'
+        name = (self.rooms.get((level, room, False)) or {}).get('name')      # game.yaml `name:` (the Breakfast Room)
         rows = [('Location', level_name(level)), ('Room', f'0x{room:02x} (column {room % GRID_COLS:X}, '
                                                           f'row {room // GRID_COLS})'),
+                *([('Name', name)] if name else []),
                 ('Cave', f'{cave_text} (pictured below the room)' if cave in self.pixmaps
                  else cave_text if has_cave else 'no')]
         parts = [html_rows(rows)]

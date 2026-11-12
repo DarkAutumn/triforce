@@ -458,7 +458,7 @@ step, so following an enemy that moves away pays again, and knockback resets the
   (failures), so it is not used for stopping.
 - `python -m triforce.explore --specialist NAME` (Go-Explore phase A; `crates/env/src/explore.rs`, CLI `explore.py`): per seed start state, an
   archive of cells (level, room, in_cave, tile // 2, whole hearts, living enemies, their total health, keys,
-  boomerang) with exact `Session`
+  boomerang, the room's push block still unpushed) with exact `Session`
   snapshots; random legal actions from cells chosen by progress/closeness/novelty; the best success is replayed
   and written as `trajectories/<specialist>/<state>/NNNN.state` + `trajectory.json`. `SpecialistEnv::restore(snapshot)`
   starts an episode from an exact snapshot.
@@ -509,17 +509,19 @@ step, so following an enemy that moves away pays again, and knockback resets the
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
 
 - The route (`triforce/routes.yaml`, `zelda::game_map`; Python `triforce._native.route_steps()`,
-  `_native.DEFAULT_ROUTE`): `d2first`, the only route since Nov 8 (Dungeon 2 first, the 0x2c heart, the white
+  `_native.DEFAULT_ROUTE`): `d2first`, the route everything plays (Dungeon 2 first, the 0x2c heart, the white
   sword, Dungeon 1 with the bow detour, then Dungeon 3 with the raft; `docs/routes/d2first.md`, `docs/routes/d3.md`).
+  A route is a list of steps or `{extends: <route above>, steps: [...]}`; `d2first-d4` continues `d2first` by raft
+  to Dungeon 4 and through it (`docs/routes/d4.md`: scouted, not trained; `--route d2first-d4`).
   `GameCompletion(route, step)` follows it step by step: the step entering Link's room from the side he came in
-  with the route's progress there (triforce pieces, sword, bow, raft) makes its edge exit the correct one (plus
+  with the route's progress there (triforce pieces, sword, bow, raft, ladder) makes its edge exit the correct one (plus
   alternates replacing its next room); off the route and on
   cave, stairs and triforce steps the key-aware shortest path to the target decides (the route's triforce steps in
   route order; ties, or no shortest way through a route exit, go toward the route exits of the steps there that
   Link plays with his progress, so without the sword the way leads back to the sword cave, not along the route),
   and `waypoint:` steps are targets while they apply (`heart`: a cave's
   heart container, game.yaml `treasure_tile`; leaving its room other than into the cave before the heart, or taking
-  the other ware, is `missed`: no exit is correct any more; `bow`, `raft`: a cellar's item). A step's `retreat` exit
+  the other ware, is `missed`: no exit is correct any more; `bow`, `raft`, `ladder`: a cellar's item). A step's `retreat` exit
   (0x0a S before the white sword) is no wrong exit: a one-room episode ends `retreat` (outcome from the specialist's
   `endings:`, default `neutral`: no terminal reward or penalty), a chain records the room as `retreat` and goes on.
   A step's `treasure:` (`game_map::TreasureRule`: absent = take, `skip`, `{if_bombs_below: N}` read live) says
@@ -527,6 +529,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   through an intact game.yaml bomb wall targets `objectives::bomb_spot` (facing the wall 16 px short of its
   Z_07 hotspot, so the bomb lands on it); the map objective's cache key holds the intact walls, so the doorway is
   the target once it opens.
+  game.yaml `raft_exits` (the docks of 0x55 and 0x3f, the piers of 0x45 and 0x2f) are exits too (`RoomExit::raft`):
+  a step leaving through one targets its `dock:` tile (`Z_04 UpdateDock` sails from there), and path searches use a
+  raft crossing only while Link holds the raft.
   An overworld cave hidden behind a rock wall (game.yaml `bomb_secret`) is entered through that wall's tiles.
   Training episodes take their step from the start state's name and Link's progress
   (`zelda::objectives::start_route`, `env::start_states::state_entry`).
@@ -541,9 +546,16 @@ step, so following an enemy that moves away pays again, and knockback resets the
   and action mask need nothing new; `can_link_move` skips the underworld doorway/bound rules there (the game does).
   `Room` gives a cellar one exit, N: the walkable top-row tiles of its ladder. In a sub-room the objective is its
   treasure while the route wants it there (the sword, the heart, the bow, the raft), else that exit (a cellar's game.yaml
-  `N` room). Underworld stairs ($70 top-left tiles, `Room::stairs_tiles`) are the targets into a cellar; in a room
-  with game.yaml `push_block: [dirs]` they are replaced, while the block is pending, by the tiles Link pushes it
-  from in those directions, and `reward-pushed-block` pays for a push in a listed direction.
+  `N` room). Underworld stairs ($70 top-left tiles, `Room::stairs_tiles`) are the targets into a cellar. A pending
+  push block the objective needs moved (`GameCompletion::push_wanted`) replaces the targets by the tiles Link
+  pushes it from: game.yaml `push_block: [dirs]` for stairs the block walls in (Dungeon 1's 0x22: N or S only) or
+  reveals (Dungeon 4's Breakfast Room: any way; the map objective's cache key holds whether the room has stairs),
+  `push_block_opens: E` for a shutter on the step's exit side (Dungeon 4's 0x12: any way). A block moves only once
+  the room's monsters are dead (`RoomAllDead` $34D; Bubbles don't count), so until then the objective is to fight.
+  `reward-pushed-block` pays for a push in a listed direction.
+- **Room names**: game.yaml `name:` (`GameRoom::name`, `_native.game_rooms()[...]['name']`) is what people call a
+  room (4:0x32 is the Breakfast Room); the viewer's strip shows it. `dark: true` (attr E bit 7) is recorded and
+  read by nothing.
 - **Overworld mazes** (`zelda::game_map::MAZES`, Z_01 CheckMazes; `docs/routes/overworld.md`): 0x1b (N, N, N, N to
   0x0b; W leaves) and 0x61 (N, W, S, W to 0x60; E leaves). They live in code; game.yaml's `maze:` blocks must match
   them (load error otherwise) and list the looping edges as exits back into the room. A maze room gets a synthetic

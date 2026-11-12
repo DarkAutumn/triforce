@@ -1,6 +1,7 @@
 //! `GameCompletion` objectives on real rooms with poked RAM: key collection (observed and seeded from room
 //! flags), treasure/fight precedence, caves, exit targets agreeing with exit correctness, the route's step order, the
-//! bow detour's push block, stairs and cellar played in the emulator, and Dungeon 3's treasure rules and bomb wall.
+//! bow detour's push block, stairs and cellar played in the emulator, Dungeon 3's treasure rules and bomb wall, and
+//! Dungeon 4's push blocks (the Breakfast Room's stairs, 0x12's shutter).
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -804,4 +805,142 @@ fn a_treasure_left_behind_does_not_take_the_next_rooms() {
     let fresh = GameCompletion::new(map.clone(), &route, step_b).unwrap().objectives(None, &b);
     assert_eq!(fresh.kind, ObjectiveKind::Fight);
     assert_eq!((walked.kind, walked.next_rooms), (fresh.kind, fresh.next_rooms));
+}
+
+/// A session in the Dungeon 4 scouting state `name` (`triforce/states/d4`), at its first controllable frame, with
+/// the completion of its d2first-d4 step.
+fn d4_room(map: &Arc<GameMap>, name: &str, room: u8, entry: &str) -> Option<(Session<Counted>, GameCompletion)> {
+    let nes = open_core()?;
+    let mut s = Session::new(Counted(nes, 0), map.clone());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    s.load(&load_named_state(&format!("d4/{name}")), &LoadOptions::default(), &mut rng).unwrap();
+    for _ in 0..30 {
+        if act(&mut s, "WAIT 8").interrupt.is_none() {
+            break;
+        }
+    }
+    let (route, step) = start_route(map, loc(4, room), Some(entry), &mut rng, None, s.state());
+    assert_eq!(route, "d2first-d4", "only the extended route has Dungeon 4 steps");
+    let gc = GameCompletion::new(map.clone(), &route, step).unwrap();
+    Some((s, gc))
+}
+
+/// Empties the monster slots except Bubbles (they never die and don't count) and lets the game notice.
+fn kill_monsters(s: &mut Session<Counted>) {
+    for slot in 1..11usize {
+        if !(0x2B..=0x2D).contains(&s.state().ram()[tables::OBJ_ID.0 + slot]) {
+            zelda::Nes::poke(s.nes_mut(), (tables::OBJ_ID.0 + slot) as u16, 0);
+        }
+    }
+    for _ in 0..4 {
+        act(s, "WAIT 16");
+    }
+}
+
+/// Pushes the room's block E from the tile W of it and waits until it has slid into place (the stairs appear, or
+/// the shutter opens, only then); true once it moved.
+fn push_east(s: &mut Session<Counted>) -> bool {
+    let block = s.state().push_block_tiles();
+    let (col, row) = (block[0].0, block[0].1);
+    s.apply_ram(&[(Var::LinkX, (col * 8 - 16) as u8), (Var::LinkY, (0x3D + row * 8) as u8)]);
+    for _ in 0..6 {
+        act(s, "MOVE E 16");
+        if !s.state().push_block_pending() {
+            for _ in 0..6 {
+                act(s, "WAIT 16");
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// The four tiles a block at (12, 10) is pushed from: W of it (pushing E), E of it, above it, and half inside its
+/// lower row (pushing N).
+const PUSH_SPOTS: [(i32, i32); 4] = [(10, 10), (14, 10), (12, 8), (12, 11)];
+
+/// Dungeon 4's Breakfast Room (0x32) on the way to the ladder: the stairs are not there until the block moves, and
+/// the block doesn't move while a Like Like or a Zol lives.  So: fight, then the push spots, then the stairs.
+#[test]
+fn d4_breakfast_room_fights_then_pushes_the_block_for_its_stairs() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((mut s, mut gc)) = d4_room(&map, "4_32w_0", 0x32, "W") else { return };
+    let cellar = MapLocation::new(4, 0x60, true);
+    let entered = s.state().clone();
+    assert!(entered.push_block_pending() && entered.room().stairs_tiles().is_empty());
+    assert_eq!(entered.enemies.len(), 4, "two Like Likes and two Zols; the Bubbles aren't monsters");
+    assert_eq!(gc.objectives(None, &entered).kind, ObjectiveKind::Fight);
+
+    kill_monsters(&mut s);
+    let clear = s.state().clone();
+    assert!(clear.enemies.is_empty() && clear.push_block_pending());
+    let objective = gc.objectives(Some(&entered), &clear);
+    assert_eq!((objective.kind, objective.next_rooms.clone()), (ObjectiveKind::Move, [cellar].into()));
+    assert_eq!(objective.pbrs_targets, tiles(&PUSH_SPOTS));
+
+    assert!(push_east(&mut s), "the block moves once the room is clear");
+    let pushed = s.state().clone();
+    assert_eq!(pushed.room().stairs_tiles(), [(26, 4)], "the stairs appear in the top right");
+    let objective = gc.objectives(Some(&clear), &pushed);
+    assert_eq!((objective.pbrs_targets, objective.next_rooms), (tiles(&[(26, 4)]), [cellar].into()));
+}
+
+/// Dungeon 4's 0x12 on the way to Gleeok: its block opens the E shutter (game.yaml `push_block_opens: E`), once the
+/// Vires are dead.  Fight, then the push spots, then the open door.
+#[test]
+fn d4_push_block_opens_the_shutter_to_the_boss() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((mut s, mut gc)) = d4_room(&map, "4_12w_0", 0x12, "W") else { return };
+    let boss = loc(4, 0x13);
+    let entered = s.state().clone();
+    assert!(entered.is_door_barred(Direction::E) && entered.push_block_pending());
+    assert_eq!((entered.enemies.len(), gc.objectives(None, &entered).kind), (5, ObjectiveKind::Fight));
+
+    kill_monsters(&mut s);
+    let clear = s.state().clone();
+    assert!(clear.is_door_barred(Direction::E), "killing them opens nothing here");
+    let objective = gc.objectives(Some(&entered), &clear);
+    assert_eq!((objective.kind, objective.next_rooms.clone()), (ObjectiveKind::Move, [boss].into()));
+    assert_eq!(objective.pbrs_targets, tiles(&PUSH_SPOTS));
+
+    assert!(push_east(&mut s));
+    let open = s.state().clone();
+    let door = open.room().tile(28, 10);
+    assert!(!open.is_door_barred(Direction::E), "the pushed block opened the shutter (door tile {door:#04x})");
+    assert!(open.room().exits.contains(Direction::E), "door tile {door:#04x}");
+    let objective = gc.objectives(Some(&clear), &open);
+    assert_eq!(objective.next_rooms, [boss].into());
+    // The push spots are gone; the target is the E side (the wavefront reads the open door from the room).
+    assert_eq!(objective.pbrs_targets, [Target::Dir(Direction::E)].into());
+    assert!(exit_is_correct_at(&map, loc(4, 0x12), (31, 10), &objective, boss));
+    s.apply_ram(&[(Var::LinkX, 0xC0), (Var::LinkY, 0x8D)]);
+    for _ in 0..10 {
+        if act(&mut s, "MOVE E 16").changed_location() {
+            break;
+        }
+    }
+    assert_eq!(s.state().full_location(), boss, "through the opened shutter into Gleeok's room");
+}
+
+/// The dock of 0x55 after Dungeon 3: with the raft the step's exit N is the raft crossing, and the target is the
+/// dock tile, not the room's edge.
+#[test]
+fn d4_raft_exit_targets_the_dock() {
+    let Some(nes) = open_core() else { return };
+    let map = Arc::new(GameMap::builtin());
+    let mut s = Session::new(Counted(nes, 0), map.clone());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    s.load(&load_named_state("d4/0_55s_0"), &LoadOptions::default(), &mut rng).unwrap();
+    for _ in 0..30 {
+        if act(&mut s, "WAIT 8").interrupt.is_none() {
+            break;
+        }
+    }
+    let state = s.state().clone();
+    assert!(state.raft() && !state.ladder());
+    let (route, step) = start_route(&map, loc(0, 0x55), Some("S"), &mut rng, None, &state);
+    assert_eq!(route, "d2first-d4");
+    let objective = GameCompletion::new(map.clone(), &route, step).unwrap().objectives(None, &state);
+    assert_eq!(objective.next_rooms, [loc(0, 0x45)].into());
+    assert_eq!(objective.pbrs_targets, tiles(&[(16, 8)]));
 }

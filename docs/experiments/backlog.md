@@ -27,6 +27,29 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
    objective doesn't move it (r61 → r63a: +0.266 → +0.262). Likely needs shaping (boomerang blocks with the shield,
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples.
+3. **Dungeon 4** (scouted Nov 11, Lee; `docs/routes/d4.md`, decisions 2026-11-11). Done: the map (20 rooms, the
+   ladder cellar), the way there by raft, the route `d2first-d4` (`extends: d2first`, steps 98–122), room names
+   (`name: Breakfast Room`), 75 start states in `triforce/states/d4/` (chains 0–2, audit clean), the objective for
+   raft docks, revealed stairs and block-opened shutters. Not done, on purpose: training. To start it: d4.md "Start
+   states" (make the route the default, move the states up, `start_states` and `trainable: true`, explore).
+   Found on the way:
+   - [ ] **Bombs for Dungeon 4's two walls.** Manhandla eats the bombs 0x5b's last pass saves: the chains arrive
+     with 0, 3 and 2, and all three open 0x11's E wall with a cheated bomb (the explorer spent 3 on 0x21's wall in
+     chain 1). Options: a pickup after Manhandla, a higher `if_bombs_below` at 0x5b, or the bomb upgrade.
+   - [ ] **Gleeok has no method yet.** The explorer needed 189–314 thousand env steps (12–18 minutes) per chain to
+     kill him; nothing in the rewards or the observation is specific to his heads.
+   - [ ] **The rupee room 4:0x11 sits in `trap-room`** for want of a family (no monsters, no traps, two bomb
+     walls). Lee to confirm, or name another.
+   - [ ] **`treasure: skip` doesn't stop a pickup.** The route leaves the keys of 0x51 and 0x40, and the explorer
+     took both in every chain (a key counts as progress in its cell score). Harmless here; a model trained with
+     the skip would arrive at 0x30 with 5 keys, not 7.
+   - [x] **The explorer's cell key didn't tell "block pushed" from "not pushed"** (fixed: `push_block_pending` in
+     `CellKey`). 0x12 (kill five Vires, push, leave E) failed at 3,000 and 4,000 iterations with the old key and
+     once more at 4,000 with the new one; solved at 14,577 (331 thousand env steps, 23 minutes). The entry-state
+     builds ran with `--iterations 30000`; a chain takes 55–67 minutes on one core.
+   - [x] **The map objective's cache returned the targets from before a push** (stairs that appear with it): the
+     cache key holds "the room has stairs" now.
+   - A 3600 s tool timeout killed the first chain-0 build at step 120; long builds run without a deadline.
 
 ## Done (Nov 11): after the r61 retrain (round 17)
 

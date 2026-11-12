@@ -889,7 +889,7 @@ rooms:
   exits: null
   enemies: null
   treasure: null
-  raft_exits:  # sailing off the pier needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+  raft_exits:  # walking S off the pier with the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
     S:
       level: 0
       location: '0x3f'
@@ -1144,10 +1144,11 @@ rooms:
     BlueSlowOctorok: 1
     Zora: 1
   treasure: null
-  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
     N:
       level: 0
       location: '0x2f'
+      dock: [12, 8]  # Link at x = $60, y = $7D
 - level: 0
   location: '0x40'
   exits:
@@ -1221,7 +1222,8 @@ rooms:
     tile: [8, 2]
     wares: [[magic-shield, 130], [bombs, 20], [wood-arrow, 80]]  # [item, rupees], left to right
 - level: 0
-  location: '0x45'
+  location: '0x45'  # the island of Dungeon 4: reached by raft from the dock of 0x55
+  specialist: ow-peahat  # d2first-d4 (Nov 11)
   exits:
     cave:  # Dungeon 4 entrance: LevelInfoUW4 StartRoomId
       level: 4
@@ -1229,7 +1231,7 @@ rooms:
   enemies:
     Peahat: 1
   treasure: null
-  raft_exits:  # sailing off the pier needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+  raft_exits:  # walking S off the pier with the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
     S:
       level: 0
       location: '0x55'
@@ -1539,10 +1541,11 @@ rooms:
     RedSlowOctorok: 1
     Zora: 1
   treasure: null
-  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked): an exit path searches use only with the raft
     N:
       level: 0
       location: '0x45'
+      dock: [16, 8]  # Link at x = $80, y = $7D: he sails N and lands on 0x45's pier
 - level: 0
   location: '0x56'
   specialist: ow-zora  # d2first to Dungeon 3 (Nov 9)
@@ -1858,6 +1861,9 @@ rooms:
     N:
       level: 0
       location: '0x55'
+      # 0x55 is two parts (see there): the lanes at columns 4-9 lead into its W part, cut off from the dock.  Only
+      # the right-hand lanes count (columns 14-27: 0x55's E part, the dock at column 16).
+      span: [14, 27]
     E:
       level: 0
       location: '0x66'
@@ -3219,3 +3225,328 @@ rooms:
   enemies:  # the cellar's keese (emulator; not the attr C/D list)
     BlueKeese: 4
   treasure: raft
+# --- Dungeon 4 (level 4) (mapping, Nov 11; docs/routes/d4.md) ---
+# Rooms: the rooms reachable from LevelInfoUW4 StartRoomId (0x71) over LevelBlockUW1Q1, the same as its
+# SubmenuMapMask (rotation $06); doors, enemies, items and triggers as for Dungeon 3.  Every room was loaded in
+# the emulator (room-id retarget from 0x71) and Lee's route was walked there (docs/routes/d4.md).  `dark: true`
+# is attr E bit 7 (the room is black without a candle; its tiles are the same).  Exit conventions: see Dungeon 2.
+- level: 4
+  location: '0x00'  # an old man (UW person $4E; Unknown_78 by the repo enum names): "WALK INTO THE WATERFALL"
+  exits:
+    E:
+      level: 4
+      location: '0x01'
+      locked: true
+    S:  # open here; a shutter on 0x10's side
+      level: 4
+      location: '0x10'
+  enemies:
+    Unknown_78: 1
+  treasure: null
+- level: 4
+  location: '0x01'  # Blue Keese over water; the key in the middle needs the ladder
+  exits:
+    E:
+      level: 4
+      location: '0x02'
+    S:  # bomb wall
+      level: 4
+      location: '0x11'
+    W:
+      level: 4
+      location: '0x00'
+      locked: true
+  enemies:
+    BlueKeese: 8
+  treasure: key
+  bomb_walls: [S]
+  dark: true
+- level: 4
+  location: '0x02'  # six blade traps ($49) in the dark; off the route
+  exits:
+    S:
+      level: 4
+      location: '0x12'
+    W:
+      level: 4
+      location: '0x01'
+  enemies: null  # six blade traps ($49, projectiles)
+  treasure: null
+  dark: true
+- level: 4
+  location: '0x03'  # the triforce room
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    S:  # open here; a shutter on 0x13's side
+      level: 4
+      location: '0x13'
+  enemies: null
+  treasure: triforce
+- level: 4
+  location: '0x10'  # Manhandla again (one $3C object, five slots); off the route
+  exits:
+    N:  # shutter
+      level: 4
+      location: '0x00'
+    E:  # bomb wall
+      level: 4
+      location: '0x11'
+    S:  # shutter
+      level: 4
+      location: '0x20'
+  enemies:
+    Manhandla: 1
+  treasure: null
+  bomb_walls: [E]
+  trigger: kill-all  # attr F & 7 = 1
+- level: 4
+  location: '0x11'  # the rupee room (ten rupees, a $35 rupee stash; no monsters): all four walls are bombable
+  specialist: trap-room  # d2first-d4 (Nov 11)
+  requires_bombs: true    # Lee (Nov 11): the E wall is bombed open into the Vire room 0x12
+  exits:
+    N:  # bomb wall
+      level: 4
+      location: '0x01'
+    E:  # bomb wall
+      level: 4
+      location: '0x12'
+    S:  # bomb wall
+      level: 4
+      location: '0x21'
+    W:  # bomb wall
+      level: 4
+      location: '0x10'
+  enemies: null  # ten rupees (a $35 rupee stash), no monsters
+  treasure: null
+  bomb_walls: [N, E, S, W]
+- level: 4
+  location: '0x12'  # Vires; pushing the block (once they are dead) opens the E shutter into the boss room (secret trigger 4)
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    N:
+      level: 4
+      location: '0x02'
+    E:  # shutter
+      level: 4
+      location: '0x13'
+    W:  # bomb wall
+      level: 4
+      location: '0x11'
+  enemies:
+    Vire: 5
+  treasure: null
+  bomb_walls: [W]
+  trigger: push-block  # attr F & 7 = 4
+  push_block_opens: E  # the shutter into the boss room (trigger 4); the block needs the room clear
+- level: 4
+  location: '0x13'  # Gleeok with two heads (object $43, Gleeok2); the heart container appears and the shutters open when it dies
+  specialist: boss-gleeok  # d2first-d4 (Nov 11)
+  exits:
+    N:  # shutter
+      level: 4
+      location: '0x03'
+    W:  # shutter
+      level: 4
+      location: '0x12'
+  enemies:
+    Gleeok2: 1
+  treasure: heart-container
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 4
+  location: '0x20'  # Vires around a water ring
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    N:  # open here; a shutter on 0x10's side
+      level: 4
+      location: '0x10'
+    E:
+      level: 4
+      location: '0x21'
+    S:
+      level: 4
+      location: '0x30'
+      locked: true
+  enemies:
+    Vire: 5
+  treasure: null
+- level: 4
+  location: '0x21'  # Blue Gels; its N wall is bombable into the rupee room
+  specialist: stalfos-keese-gel  # d2first-d4 (Nov 11)
+  requires_bombs: true    # Lee (Nov 11): the N wall is bombed open into the rupee room
+  exits:
+    N:  # bomb wall
+      level: 4
+      location: '0x11'
+    S:
+      level: 4
+      location: '0x31'
+      locked: true
+    W:
+      level: 4
+      location: '0x20'
+  enemies:
+    BlueGel: 5
+  treasure: map
+  bomb_walls: [N]
+  dark: true
+- level: 4
+  location: '0x30'  # Vires and Bubbles (Lee: "the vire room we already pathed through")
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    N:
+      level: 4
+      location: '0x20'
+      locked: true
+    E:
+      level: 4
+      location: '0x31'
+      locked: true
+    S:
+      level: 4
+      location: '0x40'
+  enemies:
+    Bubble: 2
+    Vire: 3
+  treasure: null
+  dark: true
+- level: 4
+  location: '0x31'  # Vires in a water maze; the land path winds from the W door to the E shutter (no ladder needed)
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    N:
+      level: 4
+      location: '0x21'
+      locked: true
+    E:  # shutter
+      level: 4
+      location: '0x32'
+    W:
+      level: 4
+      location: '0x30'
+      locked: true
+  enemies:
+    Vire: 5
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 4
+  location: '0x32'  # Like Likes, Zols and Bubbles; a pushed block reveals the stairs to the ladder cellar 0x60
+  name: Breakfast Room  # Lee (Nov 11): the room with the stairs to the ladder
+  specialist: like-like  # d2first-d4 (Nov 11)
+  exits:
+    W:  # open here; a shutter on 0x31's side
+      level: 4
+      location: '0x31'
+    cave:  # the stairs (they appear when the block is pushed); LevelInfoUW4 CellarRoomIdArray[0] = $60
+      level: 4
+      location: '0x60'
+      in_cave: true
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: null
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 4
+  location: '0x40'  # Zols; the key is visible
+  specialist: zol  # d2first-d4 (Nov 11)
+  exits:
+    N:
+      level: 4
+      location: '0x30'
+    S:
+      level: 4
+      location: '0x50'
+  enemies:
+    Zol: 5
+  treasure: key
+  dark: true
+- level: 4
+  location: '0x50'  # Vires
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    N:
+      level: 4
+      location: '0x40'
+    E:
+      level: 4
+      location: '0x51'
+  enemies:
+    Vire: 5
+  treasure: null
+  dark: true
+- level: 4
+  location: '0x51'  # Blue Keese; the key is visible
+  specialist: stalfos-keese-gel  # d2first-d4 (Nov 11)
+  exits:
+    S:
+      level: 4
+      location: '0x61'
+    W:
+      level: 4
+      location: '0x50'
+  enemies:
+    BlueKeese: 8
+  treasure: key
+- level: 4
+  location: '0x61'  # Vires (hit, a Vire splits into two Red Keese)
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    N:
+      level: 4
+      location: '0x51'
+    E:
+      level: 4
+      location: '0x62'
+      locked: true
+    S:
+      level: 4
+      location: '0x71'
+  enemies:
+    Vire: 3
+  treasure: null
+- level: 4
+  location: '0x62'  # Vires; the compass
+  exits:
+    W:
+      level: 4
+      location: '0x61'
+      locked: true
+  enemies:
+    Vire: 5
+  treasure: compass
+  dark: true
+- level: 4
+  location: '0x70'  # Blue Keese; the key appears when they are dead
+  exits:
+    E:
+      level: 4
+      location: '0x71'
+  enemies:
+    BlueKeese: 8
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 4
+  location: '0x71'  # the entrance room (OW 0x45, cave index 4); S leaves the dungeon (omitted, as in D2)
+  specialist: vire  # d2first-d4 (Nov 11)
+  exits:
+    N:
+      level: 4
+      location: '0x61'
+    W:
+      level: 4
+      location: '0x70'
+  enemies: null
+  treasure: null
+- level: 4
+  location: '0x60'
+  in_cave: true  # the ladder cellar under the Breakfast Room 0x32 (mode 9, side view), as D3's raft cellar
+  specialist: equipment-room  # d2first-d4 (Nov 11)
+  exits:
+    N:  # up the left ladder (attr A = attr B = $32)
+      level: 4
+      location: '0x32'
+  enemies:  # the cellar's keese (emulator; not the attr C/D list)
+    BlueKeese: 4
+  treasure: ladder

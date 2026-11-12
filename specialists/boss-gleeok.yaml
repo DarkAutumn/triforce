@@ -1,0 +1,20 @@
+name: boss-gleeok
+rooms: ['(4, 0x13)']
+start_states: ['d4/4_13*_[0-9]']   # triforce/states/d4 (scouting states)
+success: [exit-correct]                    # kill, take the heart container, leave N to the triforce room 0x03
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
+obs: {objective: true, target: true}       # schema 2
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}
+items: {bombs: false}
+curriculum: {enabled: true}             # trajectories/boss-gleeok (Go-Explore): not explored yet
+one_room: true
+max_steps: 1000
+trainable: false                        # Dungeon 4 is scouted, not trained (Lee, Nov 11): set true to train it
+warm_start: null
+notes: >-
+  Gleeok (Dungeon 4 scouting, Nov 11; not trained): the two-headed one (object $43), a body at the top of the room
+  with two necks; only the heads take damage, a head that is cut off flies around the room and can't be hurt, and
+  both spit fireballs. Entered from W through 0x12's shutter (opened by its push block); the N and W shutters open
+  and the heart container appears when he dies; success is the N exit to the triforce room (the heart first).
+  Copied from boss-manhandla without the bombs.

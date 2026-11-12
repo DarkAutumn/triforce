@@ -117,12 +117,21 @@ pub struct RoomExit {
     /// Through a bombable wall (the room's `bomb_walls`): path searches pass it only in a `requires_bombs` room
     /// (where Link may bomb) or once it is open (`opened_doors`).
     pub bomb_wall: bool,
+    /// A raft crossing (game.yaml `raft_exits`: the docks of 0x55 and 0x3f sail N, the piers of 0x45 and 0x2f back
+    /// S).  Path searches pass it only once it is in `opened_doors` (the objective puts it there while Link holds
+    /// the raft); a route step may leave through it.
+    pub raft: bool,
+    /// `dock: [col, row]` of a raft exit: the tile Link stands on to sail (Z_04 UpdateDock: the dock's column at
+    /// y = $7D).  None for a pier, which is left by walking off the room's edge.
+    pub dock: Option<Tile>,
 }
 
 /// A game.yaml room.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameRoom {
     pub location: MapLocation,
+    /// `name: Breakfast Room`: what people call the room.  For display only (`describe`, the viewer's strip).
+    pub name: Option<String>,
     /// Exits by key ('N', 'S', 'E', 'W', 'cave') in file order; a maze room also gets [`MAZE_EXIT`] last.
     pub exits: IndexMap<String, RoomExit>,
     pub enemies: IndexMap<String, i64>,
@@ -145,6 +154,9 @@ pub struct GameRoom {
     /// room's stairs only when pushed one of these ways (Dungeon 1's 0x22: its west block, N or S; pushed E it
     /// closes the way until the room is re-entered).  The objective sends Link to a push spot while it is pending.
     pub push_block: Vec<Direction>,
+    /// `push_block_opens: E`: pushing the room's block (any way) opens this side's shutter (secret trigger 4:
+    /// Dungeon 4's 0x12 E into Gleeok's room, Dungeon 3's 0x3b N).  The block moves only once the room is clear.
+    pub push_block_opens: Option<Direction>,
     /// The room's maze ([`MAZES`]; game.yaml `maze:` must describe it).
     pub maze: Option<&'static Maze>,
 }
@@ -198,12 +210,13 @@ fn opt_string(v: &Value, key: &str, what: &str) -> Result<Option<String>, MapErr
     }
 }
 
-/// game.yaml room keys (several are read elsewhere: `entrance`, `edge_spawn`, `trigger`, `raft_exits`, `stairs`,
-/// `push_block_opens`).
-const ROOM_KEYS: [&str; 20] = [
+/// game.yaml room keys (several are read elsewhere or by nothing yet: `entrance`, `edge_spawn`, `trigger`, `stairs`,
+/// `dark`).
+const ROOM_KEYS: [&str; 22] = [
     "level",
     "location",
     "in_cave",
+    "name",
     "exits",
     "enemies",
     "treasure",
@@ -221,15 +234,17 @@ const ROOM_KEYS: [&str; 20] = [
     "push_block",
     "push_block_opens",
     "stairs",
+    "dark",
 ];
 const EXIT_KEYS: [&str; 5] = ["level", "location", "in_cave", "locked", "span"];
+const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
 const STEP_KEYS: [&str; 10] =
     ["level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "note"];
 const STEP_ENTRIES: [&str; 6] = ["start", "N", "S", "E", "W", "cave"];
 /// `maze` ([`MAZE_EXIT`]) parses so `from_yaml` can say why a route may not take it.
 const STEP_EXITS: [&str; 8] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT];
-const WAYPOINTS: [&str; 3] = ["heart", "bow", "raft"];
+const WAYPOINTS: [&str; 4] = ["heart", "bow", "raft", "ladder"];
 const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];
 
 impl GameRoom {
@@ -400,6 +415,30 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
 
 type Routes = IndexMap<String, Vec<RouteStep>>;
 
+/// A route is a list of steps, or `{extends: <route above>, steps: [...]}`: that route's steps, then these.
+fn parse_route(name: &str, value: &Value, routes: &Routes) -> Result<Vec<RouteStep>, MapError> {
+    let parse = |list: &[Value]| list.iter().map(parse_step).collect::<Result<Vec<_>, _>>();
+    if let Some(list) = value.as_sequence() {
+        return parse(list);
+    }
+    let what = format!("routes.yaml: route {name:?}");
+    if !value.is_mapping() {
+        return err(format!("{what} is not a list of steps (or `extends:` and `steps:`)"));
+    }
+    check_keys(value, &["extends", "steps"], &what)?;
+    let base = opt_string(value, "extends", &what)?
+        .ok_or_else(|| MapError(format!("{what}: needs `extends:` (the route it continues)")))?;
+    let Some(base_steps) = routes.get(&base) else {
+        return err(format!("{what}: extends {base:?}, which is not a route above it"));
+    };
+    let Some(list) = get(value, "steps").and_then(Value::as_sequence) else {
+        return err(format!("{what}: needs a `steps:` list"));
+    };
+    let mut steps = base_steps.clone();
+    steps.extend(parse(list)?);
+    Ok(steps)
+}
+
 fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
     let data: Value =
         serde_yaml_ng::from_str(text).map_err(|e| MapError(format!("routes.yaml: {e}")))?;
@@ -414,13 +453,8 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
         if name == "alternates" || name == "families" {
             continue;
         }
-        let Some(list) = value.as_sequence() else {
-            return err(format!("routes.yaml: route {name:?} is not a list of steps"));
-        };
-        routes.insert(
-            name.to_owned(),
-            list.iter().map(parse_step).collect::<Result<Vec<_>, _>>()?,
-        );
+        let steps = parse_route(name, value, &routes)?;
+        routes.insert(name.to_owned(), steps);
     }
     let mut alternates = Vec::new();
     if let Some(list) = get(&data, "alternates") {
@@ -488,6 +522,42 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         locked,
                         span,
                         bomb_wall: false,
+                        raft: false,
+                        dock: None,
+                    },
+                );
+            }
+        }
+        // Raft crossings are exits too (a route may sail), marked so path searches can leave them out.
+        if let Some(map) = get(entry, "raft_exits") {
+            let Some(map) = map.as_mapping() else {
+                return err(format!("{what}: raft_exits must be a mapping"));
+            };
+            for (dir, dest) in map {
+                let dir = match dir.as_str() {
+                    Some(d) if DIRECTIONS.contains(&d) => d.to_owned(),
+                    _ => return err(format!("{what}: raft exit {dir:?} is not one of {}", DIRECTIONS.join(", "))),
+                };
+                let exit_what = format!("{what} raft exit {dir}");
+                check_keys(dest, &RAFT_EXIT_KEYS, &exit_what)?;
+                if exits.contains_key(&dir) {
+                    return err(format!("{exit_what}: {dir} is a walking exit already"));
+                }
+                let destination = MapLocation::new(
+                    as_u8(&dest["level"], &format!("{exit_what}: level"))?,
+                    hex(&dest["location"], &format!("{exit_what}: location"))?,
+                    false,
+                );
+                exits.insert(
+                    dir.clone(),
+                    RoomExit {
+                        direction: dir,
+                        destination,
+                        locked: false,
+                        span: None,
+                        bomb_wall: false,
+                        raft: true,
+                        dock: tile(get(dest, "dock"), &format!("{exit_what}: dock"))?,
                     },
                 );
             }
@@ -536,11 +606,26 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     locked: false,
                     span: None,
                     bomb_wall: false,
+                    raft: false,
+                    dock: None,
                 },
             );
         }
+        let name = opt_string(entry, "name", &what)?;
+        if name.as_deref().is_some_and(|n| n.trim().is_empty() || n.trim() != n) {
+            return err(format!("{what}: name must be text without spaces around it, got {name:?}"));
+        }
+        let push_block_opens = match opt_string(entry, "push_block_opens", &what)? {
+            None => None,
+            Some(d) => Some(
+                Direction::from_exit(&d)
+                    .filter(|_| exits.contains_key(&d))
+                    .ok_or_else(|| MapError(format!("{what}: push_block_opens {d:?} is not a door of the room")))?,
+            ),
+        };
         let room = GameRoom {
             location: loc,
+            name,
             exits,
             enemies,
             treasure: opt_string(entry, "treasure", &what)?,
@@ -565,6 +650,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             },
+            push_block_opens,
             maze,
         };
         // Unknown keys last: a missing required block (`maze:`) gets its own message first.
@@ -843,6 +929,10 @@ impl GameMap {
                     continue;
                 }
                 let opened = opened_doors.contains(&(current, exit.direction.clone()));
+                // A raft crossing: only once it is "opened" (Link holds the raft).
+                if exit.raft && !opened {
+                    continue;
+                }
                 // An intact bomb wall: only where Link may bomb (BOMB is masked elsewhere, review F016).
                 if exit.bomb_wall && !opened && !room.requires_bombs {
                     continue;
@@ -1034,8 +1124,12 @@ mod tests {
     fn dodongo_and_the_0x2c_secret_require_bombs() {
         let map = GameMap::builtin();
         let tagged: Vec<_> = map.rooms().values().filter(|r| r.requires_bombs).map(|r| r.location).collect();
-        // Dungeon 3's bombed E wall into the boss room and Manhandla (Lee, Nov 9) are off the route so far.
-        assert_eq!(tagged, vec![loc(0, 0x2c), loc(2, 0x0e), loc(3, 0x4c), loc(3, 0x4d)]);
+        // Dungeon 3's bombed E wall into the boss room and Manhandla (Lee, Nov 9); Dungeon 4's two bomb walls on the
+        // way to Gleeok (Lee, Nov 11).
+        assert_eq!(
+            tagged,
+            vec![loc(0, 0x2c), loc(2, 0x0e), loc(3, 0x4c), loc(3, 0x4d), loc(4, 0x11), loc(4, 0x21)]
+        );
         assert!(!map.requires_bombs(loc(9, 0x7f)));
         let room = map.get(loc(0, 0x2c)).unwrap();
         assert_eq!(room.bomb_secret, Some((18, 12)));
@@ -1220,7 +1314,8 @@ mod tests {
                 .map(|r| r.location)
                 .collect::<Vec<_>>()
         };
-        assert_eq!(set(&locs("triforce")), set(&[D1_TRIFORCE, loc(2, 0x0d), loc(3, 0x3d)]));
+        assert_eq!(set(&locs("triforce")), set(&[D1_TRIFORCE, loc(2, 0x0d), loc(3, 0x3d), loc(4, 0x03)]));
+        assert_eq!(locs("ladder"), vec![L::new(4, 0x60, true)]);
         assert_eq!(locs("wood-sword"), vec![L::new(0, 0x77, true)]);
         assert_eq!(locs("white-sword"), vec![L::new(0, 0x0a, true)]);
         assert_eq!(locs("boomerang"), vec![loc(1, 0x44)]);
@@ -1292,16 +1387,20 @@ mod tests {
         assert!(with_key == set(&[loc(1, 0x63)]) && !without.contains(&loc(1, 0x63)));
     }
 
-    /// Only the d2-first route's rooms (the bow detour included) and its alternate have a specialist.
+    /// Only the routes' rooms (the bow detour included) and the alternate have a specialist.
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        let mut route: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d2first-d4"]);
+        let mut route: BTreeSet<L> = map.routes.values().flatten().map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
         assert_eq!(tagged, route);
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE]);
+        // The default route's own rooms: everything but the island of Dungeon 4 and the dungeon.
+        let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
+        let beyond: Vec<L> = route.difference(&default).copied().filter(|l| l.level != 4).collect();
+        assert_eq!(beyond, [loc(0, 0x45), loc(0, 0x78)]);
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
@@ -1558,5 +1657,112 @@ mod tests {
             [0x7c, 0x7b, 0x6b, 0x5b, 0x5a, 0x59, 0x49, 0x59, 0x69, 0x0f, 0x69, 0x59, 0x5a, 0x5b, 0x4b, 0x4c, 0x4d, 0x3d]
         );
         assert_eq!(map.get(loc(3, 0x5b)).unwrap().treasure.as_deref(), Some("bombs"));
+    }
+
+    /// Dungeon 4: Lee's directions follow real exits (the direct way to the ladder, back W to the Vire room, N, E,
+    /// the two bomb walls, the push-block shutter, Gleeok, the triforce); the rooms' special keys are read.
+    #[test]
+    fn d4_lees_route_and_room_keys() {
+        let map = GameMap::builtin();
+        let mut at = loc(4, 0x71);
+        let mut rooms = vec![at.value];
+        let way = ["N", "N", "W", "N", "N", "E", "E", "cave", "N", "W", "W", "N", "E", "N", "E", "E", "N"];
+        for exit in way {
+            at = map.get(at).unwrap().exits[exit].destination;
+            rooms.push(at.value);
+        }
+        assert_eq!(
+            rooms,
+            [0x71, 0x61, 0x51, 0x50, 0x40, 0x30, 0x31, 0x32, 0x60, 0x32, 0x31, 0x30, 0x20, 0x21, 0x11, 0x12, 0x13, 0x03]
+        );
+        let room = |id: u8| map.get(loc(4, id)).unwrap();
+        // The Breakfast Room: a name, a block that reveals the stairs pushed any way, the ladder under it.
+        let breakfast = room(0x32);
+        assert_eq!(breakfast.name.as_deref(), Some("Breakfast Room"));
+        assert_eq!(breakfast.push_block, [Direction::N, Direction::S, Direction::E, Direction::W]);
+        assert_eq!(breakfast.exits["cave"].destination, L::new(4, 0x60, true));
+        assert_eq!(map.get(L::new(4, 0x60, true)).unwrap().treasure.as_deref(), Some("ladder"));
+        assert!(map.rooms().values().filter(|r| r.name.is_some()).count() == 1);
+        // Both locked doors of 0x30, the bomb walls into and out of the rupee room, the push-block shutter.
+        assert!(room(0x30).exits["E"].locked && room(0x30).exits["N"].locked && room(0x20).exits["S"].locked);
+        assert_eq!((room(0x21).bomb_walls.as_slice(), room(0x21).requires_bombs), (&["N".to_owned()][..], true));
+        assert_eq!(room(0x11).bomb_walls, ["N", "E", "S", "W"]);
+        assert!(room(0x11).requires_bombs && room(0x11).enemies.is_empty());
+        assert_eq!(room(0x12).push_block_opens, Some(Direction::E));
+        assert_eq!(map.get(loc(3, 0x3b)).unwrap().push_block_opens, Some(Direction::N));
+        let boss = room(0x13);
+        assert_eq!((boss.enemies.get("Gleeok2"), boss.treasure.as_deref()), (Some(&1), Some("heart-container")));
+        assert_eq!(room(0x03).treasure.as_deref(), Some("triforce"));
+    }
+
+    /// d2first-d4 is d2first and then the way to Dungeon 4 and through it; every step leaves through a real exit.
+    #[test]
+    fn d2first_d4_extends_d2first() {
+        let map = GameMap::builtin();
+        let (base, steps) = (&map.routes["d2first"], &map.routes["d2first-d4"]);
+        assert_eq!(&steps[..base.len()], &base[..]);
+        assert_eq!(steps.len(), base.len() + 25);
+        let last = steps.last().unwrap();
+        assert_eq!((last.location(), last.exit.as_str()), (loc(4, 0x03), "triforce"));
+        for pair in steps[base.len() - 1..].windows(2) {
+            let (step, next) = (&pair[0], &pair[1]);
+            if step.exit == "triforce" {
+                // The Dungeon 3 triforce warps Link to its entrance room.
+                assert_eq!((next.location(), next.entry.as_str()), (loc(0, 0x74), "cave"));
+                continue;
+            }
+            let exit = &map.get(step.location()).unwrap().exits[&step.exit];
+            assert_eq!(exit.destination, next.location(), "{step:?} -> {next:?}");
+        }
+        let tail = &steps[base.len()..];
+        let waypoints: Vec<_> = tail.iter().filter_map(|s| Some((s.location(), s.waypoint.as_deref()?))).collect();
+        assert_eq!(waypoints, [(L::new(4, 0x60, true), "ladder")]);
+        let skipped: Vec<_> = tail.iter().filter(|s| s.treasure == TreasureRule::Skip).map(|s| s.room).collect();
+        assert_eq!(skipped, [0x51, 0x40]);
+
+        // `extends` needs a route above it and a `steps` list; a typo is a load error.
+        let load = |text: &str| GameMap::from_yaml(GAME_YAML, text).map(|m| m.routes["b"].len());
+        let a = "a:\n- {level: 0, room: '0x77', entry: start, exit: N}\n";
+        let step = "{level: 0, room: '0x67', entry: S, exit: E}";
+        assert_eq!(load(&format!("{a}b:\n  extends: a\n  steps:\n  - {step}\n")).unwrap(), 2);
+        for (bad, why) in [
+            (format!("b:\n  extends: a\n  steps:\n  - {step}\n{a}"), "not a route above it"),
+            (format!("{a}b:\n  extends: a\n"), "needs a `steps:` list"),
+            (format!("{a}b:\n  steps:\n  - {step}\n"), "needs `extends:`"),
+            (format!("{a}b:\n  extends: a\n  stops: []\n  steps: []\n"), "unknown key"),
+            (format!("{a}b: 7\n"), "not a list of steps"),
+        ] {
+            let error = load(&bad).unwrap_err().0;
+            assert!(error.contains(why), "{error}");
+        }
+    }
+
+    /// Raft crossings are exits (a route may sail) that path searches use only once they are "opened"; a dock has
+    /// the tile Link sails from.  A room name must be plain text; `push_block_opens` must name a door.
+    #[test]
+    fn raft_exits_names_and_push_block_doors_parse() {
+        let map = GameMap::builtin();
+        let dock = &map.get(loc(0, 0x55)).unwrap().exits["N"];
+        assert_eq!((dock.destination, dock.raft, dock.dock), (loc(0, 0x45), true, Some((16, 8))));
+        let pier = &map.get(loc(0, 0x45)).unwrap().exits["S"];
+        assert_eq!((pier.destination, pier.raft, pier.dock), (loc(0, 0x55), true, None));
+        assert!(!map.get(loc(0, 0x55)).unwrap().exits["S"].raft);
+        // 0x65 N of the dock room: without the raft there is no way from 0x55 on to the island; with it, one room.
+        let (from, island) = (loc(0, 0x55), loc(0, 0x45));
+        assert_eq!(map.find_path(from, island), None);
+        let sailed: BTreeSet<(L, String)> = [(from, "N".to_owned())].into_iter().collect();
+        assert_eq!(map.find_route(from, island, 0, &BTreeSet::new(), &sailed), Some(vec![from, island]));
+
+        let edit = |from: &str, to: &str| GameMap::from_yaml(&GAME_YAML.replacen(from, to, 1), ROUTES_YAML).map(|_| ());
+        for (from, to, why) in [
+            ("  name: Breakfast Room", "  name: ' Breakfast Room'", "name must be text"),
+            ("  name: Breakfast Room", "  name: 7", "name must be a string"),
+            ("  push_block_opens: E", "  push_block_opens: S", "is not a door of the room"),
+            ("      dock: [16, 8]", "      dock: 16", "dock"),
+            ("      dock: [16, 8]", "      docks: [16, 8]", "unknown key"),
+        ] {
+            let error = edit(from, to).unwrap_err().0;
+            assert!(error.contains(why), "{error}");
+        }
     }
 }

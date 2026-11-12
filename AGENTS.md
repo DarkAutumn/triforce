@@ -23,6 +23,14 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
   (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
+- **Dungeon 4 is scouted, not trained (Nov 11; `docs/routes/d4.md`):** all 20 rooms and the ladder cellar are in
+  `game.yaml`; the route `d2first-d4` (`extends: d2first`: by raft from 0x55 to the island 0x45, Lee's directions
+  to the ladder under the Breakfast Room 4:0x32, back and through two bomb walls to Gleeok and the triforce) has
+  start states in `triforce/states/d4/`. `d2first` stays the default route of every tool and ends on the D3
+  triforce. The new families (`vire`, `like-like`, `boss-gleeok`, `ow-peahat`) are `trainable: false`; the
+  Dungeon 4 rooms of `zol`, `stalfos-keese-gel`, `trap-room` and `equipment-room` have no `start_states`, so those
+  families train and evaluate as before. To start Dungeon 4: `docs/routes/d4.md` "Start states". game.yaml rooms
+  can carry a `name:` (the Breakfast Room).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each

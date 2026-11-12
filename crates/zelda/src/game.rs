@@ -738,6 +738,10 @@ impl GameView {
         self.byte(Var::Raft) != 0
     }
 
+    pub fn ladder(&self) -> bool {
+        self.byte(Var::StepLadder) != 0
+    }
+
     pub fn rupees(&self) -> i32 {
         self.var(Var::Rupees)
     }

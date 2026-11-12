@@ -14,7 +14,8 @@ from triforce.paths import PACKAGE_DIR
 
 from .conftest import REPO_STATES_DIR, require_state
 
-ENTRANCES = {1: ('1_73s_0', 0x73), 2: ('2_7ds_0', 0x7d), 3: ('3_7cs_0', 0x7c)}
+# Dungeon 4's entrance state is a scouting state (triforce/states/d4: the route d2first-d4, not trained yet).
+ENTRANCES = {1: ('1_73s_0', 0x73), 2: ('2_7ds_0', 0x7d), 3: ('3_7cs_0', 0x7c), 4: ('d4/4_71s_0', 0x71)}
 OPPOSITE = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 DOOR = {0: 'open', 1: 'wall', 2: 'open', 3: 'open', 4: 'bomb', 5: 'key', 6: 'key', 7: 'shutter'}
 

@@ -85,8 +85,10 @@ class Show:
         # Watching starts where the models took over: a power-on run's boot and idle are skipped.
         self.start = next((event['frame'] for event in events if event['type'] == 'control'), 0)
         self.specialist = meta.get('specialist')        # an evaluation episode's (it has no room events)
+        names = room_names()
         self.rooms = [(event['frame'], models[event['policy']] if event['policy'] is not None
-                       and event['policy'] < len(models) else None, event['level'], event['room'])
+                       and event['policy'] < len(models) else None, event['level'], event['room'],
+                       names.get((event['level'], event['room'], event['in_cave'])))
                       for event in events if event['type'] == 'room']
         self._room_frames = [room[0] for room in self.rooms]
         self.cheats = recording.cheats()
@@ -94,12 +96,25 @@ class Show:
     def status(self, frame: int) -> dict:
         """The ``room`` message's fields ``frame`` input frames into the replay."""
         entered = bisect.bisect_right(self._room_frames, frame)
-        _, specialist, level, room = self.rooms[entered - 1] if entered else (0, self.specialist, None, None)
+        _, specialist, level, room, name = (self.rooms[entered - 1] if entered
+                                            else (0, self.specialist, None, None, None))
         cheated = dict.fromkeys(_native.CHEAT_ITEMS, 0)
         for at, item, count in self.cheats:
             if at <= frame:
                 cheated[item] += count
-        return {'specialist': specialist, 'level': level, 'room': room, 'rooms': entered, 'cheated': cheated}
+        return {'specialist': specialist, 'level': level, 'room': room, 'name': name, 'rooms': entered,
+                'cheated': cheated}
+
+
+_ROOM_NAMES: Optional[Dict[tuple, str]] = None
+
+
+def room_names() -> Dict[tuple, str]:
+    """game.yaml's room names (``name: Breakfast Room``) by (level, room, in_cave); read once."""
+    global _ROOM_NAMES  # pylint: disable=global-statement
+    if _ROOM_NAMES is None:
+        _ROOM_NAMES = {room: info['name'] for room, info in _native.game_rooms().items() if info['name']}
+    return _ROOM_NAMES
 
 
 class FileSource:
