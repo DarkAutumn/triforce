@@ -72,7 +72,7 @@ fn route_definition() {
     let (map, states) = (&data.map, &data.states_dir);
     let route = Route::load(map, states, "d2first", None, None).unwrap();
     assert_eq!(route.start_state, "start");
-    assert_eq!((route.terminal, route.final_triforce), (None, Some(3)));
+    assert_eq!((route.terminal, route.final_triforce), (None, Some(4)));
     let stop = MapLocation::new(1, 0x73, false);
     assert_eq!(
         Route::load(map, states, "d2first", Some(stop), None)

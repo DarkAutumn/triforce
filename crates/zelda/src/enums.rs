@@ -306,12 +306,16 @@ pub mod enemy {
     pub const GLEEOK2: u8 = 0x43;
     pub const GLEEOK3: u8 = 0x44;
     pub const GLEEOK4: u8 = 0x45;
+    /// A cut-off flying head: hurts, can't die (asm:Gleeok_UpdateFlyingHead), so a hazard.
     pub const GLEEOK_HEAD: u8 = 0x46;
+    /// The ROM's one-necked Gleeok type, which no room of either quest spawns (zelda-asm `enemies.md` `# Gleeok`),
+    /// reused as the id of the attached heads the env synthesizes (`game::gleeok_heads`; no object slot has them).
+    pub const GLEEOK_NECK_HEAD: u8 = GLEEOK;
     pub const PATRA: u8 = 0x47;
     pub const PATRA2: u8 = 0x48;
 
-    /// Boss object types (`critics.BOSS_KINDS`).
-    pub const BOSS_KINDS: [u8; 15] = [
+    /// Boss object types (`critics.BOSS_KINDS`); the flying Gleeok head can't die, so it is none.
+    pub const BOSS_KINDS: [u8; 14] = [
         AQUAMENTUS,
         DODONGO,
         DODONGO2,
@@ -324,7 +328,6 @@ pub mod enemy {
         GLEEOK2,
         GLEEOK3,
         GLEEOK4,
-        GLEEOK_HEAD,
         PATRA,
         GANON,
     ];
@@ -372,7 +375,8 @@ pub enum ObjectClass {
     Monster,
     /// Hurts (or, the boulder generator, makes things that hurt) but can't be hurt: boulders $1F/$20, traps
     /// $49/$4A, bubbles $2B-$2D (the game leaves them out of its living monsters, asm:Secret_UpdateRoomAllDead),
-    /// the cave's standing fires $40 (asm:StandingFire_Update: asm:Link_CheckMonsterTouch only).
+    /// the cave's standing fires $40 (asm:StandingFire_Update: asm:Link_CheckMonsterTouch only), Gleeok's flying
+    /// heads $46 (`GameView` also files his neck base, slot 1, here).
     Hazard,
     /// A monster shot ($53-$5C: rocks, fireballs, arrows, boomerangs, sword/magic shots).
     Shot,
@@ -392,9 +396,8 @@ impl ObjectClass {
         use object::*;
         match id {
             0 => ObjectClass::Empty,
-            BOULDER_SET | BOULDER | TRAP | TRAP2 | STANDING_FIRE | enemy::BUBBLE..=enemy::RED_BUBBLE => {
-                ObjectClass::Hazard
-            }
+            BOULDER_SET | BOULDER | TRAP | TRAP2 | STANDING_FIRE | enemy::GLEEOK_HEAD
+            | enemy::BUBBLE..=enemy::RED_BUBBLE => ObjectClass::Hazard,
             0x19 | 0x29 | 0x2E | 0x2F | 0x35..=0x37 => ObjectClass::Other,
             0x01..=0x48 => ObjectClass::Monster,
             0x4B..=0x52 => ObjectClass::Person,

@@ -629,6 +629,28 @@ fn stalling_ramps_after_the_grace_period_and_resets_on_progress() {
     assert!(critique(&mut critic, &wait).contains("penalty-room-stalling"));
 }
 
+/// A Vire's Red Keese (or a Gleeok head) dies without the game counting it in RoomKills ($34F): the observed kill
+/// still restarts the stall count.
+#[test]
+fn an_uncounted_kill_restarts_the_stall_count() {
+    let mut base = Ram::new();
+    base.enemy(3, enemy::RED_KEESE, 40, 100);
+    let mut critic = critic();
+    let wait = step(&base, &base, "MOVE N 8");
+    for _ in 0..ROOM_STEP_GRACE + 10 {
+        critique(&mut critic, &wait);
+    }
+    assert!(critique(&mut critic, &wait).contains("penalty-room-stalling"));
+    let mut emptied = base.clone();
+    emptied.0[tables::OBJ_ID.0 + 3] = 0;
+    let mut kill = step(&base, &emptied, "SWORD N");
+    kill.observed.enemies_killed = vec![3];
+    assert_eq!(kill.state.room_kills(), kill.previous.room_kills());
+    assert!(!critique(&mut critic, &kill).contains("penalty-room-stalling"));
+    let quiet = step(&emptied, &emptied, "MOVE N 8");
+    assert!(!critique(&mut critic, &quiet).contains("penalty-room-stalling"));
+}
+
 #[test]
 fn quiet_enemy_penalty_needs_a_live_active_enemy_past_the_grace() {
     let mut base = Ram::new();

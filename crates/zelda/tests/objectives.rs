@@ -836,20 +836,20 @@ fn a_treasure_left_behind_does_not_take_the_next_rooms() {
     assert_eq!((walked.kind, walked.next_rooms), (fresh.kind, fresh.next_rooms));
 }
 
-/// A session in the Dungeon 4 scouting state `name` (`triforce/states/d4`), at its first controllable frame, with
-/// the completion of its d2first-d4 step.
+/// A session in the Dungeon 4 start state `name`, at its first controllable frame, with the completion of its
+/// d2first step.
 fn d4_room(map: &Arc<GameMap>, name: &str, room: u8, entry: &str) -> Option<(Session<Counted>, GameCompletion)> {
     let nes = open_core()?;
     let mut s = Session::new(Counted(nes, 0), map.clone());
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    s.load(&load_named_state(&format!("d4/{name}")), &LoadOptions::default(), &mut rng).unwrap();
+    s.load(&load_named_state(name), &LoadOptions::default(), &mut rng).unwrap();
     for _ in 0..30 {
         if act(&mut s, "WAIT 8").interrupt.is_none() {
             break;
         }
     }
     let (route, step) = start_route(map, loc(4, room), Some(entry), &mut rng, None, s.state());
-    assert_eq!(route, "d2first-d4", "only the extended route has Dungeon 4 steps");
+    assert_eq!(route, "d2first");
     let gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     Some((s, gc))
 }
@@ -959,7 +959,7 @@ fn d4_raft_exit_targets_the_dock() {
     let map = Arc::new(GameMap::builtin());
     let mut s = Session::new(Counted(nes, 0), map.clone());
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    s.load(&load_named_state("d4/0_55s_0"), &LoadOptions::default(), &mut rng).unwrap();
+    s.load(&load_named_state("0_55s_0"), &LoadOptions::default(), &mut rng).unwrap();
     for _ in 0..30 {
         if act(&mut s, "WAIT 8").interrupt.is_none() {
             break;
@@ -968,8 +968,102 @@ fn d4_raft_exit_targets_the_dock() {
     let state = s.state().clone();
     assert!(state.raft() && !state.ladder());
     let (route, step) = start_route(&map, loc(0, 0x55), Some("S"), &mut rng, None, &state);
-    assert_eq!(route, "d2first-d4");
+    assert_eq!(route, "d2first");
     let objective = GameCompletion::new(map.clone(), &route, step).unwrap().objectives(None, &state);
     assert_eq!(objective.next_rooms, [loc(0, 0x45)].into());
     assert_eq!(objective.pbrs_targets, tiles(&[(16, 8)]));
+}
+
+/// Dungeon 4's 0x30 from E with the ladder (step 116): row 2 is water from wall to wall, and the N door behind it is
+/// the way on (zelda-asm `levels/level-4.md` "What it changes").  With the ladder the objective's wavefront reaches
+/// Link and walking N crosses; without it (InvLadder poked to 0) the wavefront doesn't reach him and Link stops at
+/// the water, as the game makes him.
+#[test]
+fn d4_the_ladder_crosses_the_water_row_of_0x30() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((mut s, mut gc)) = d4_room(&map, "4_30e_0", 0x30, "E") else { return };
+    kill_monsters(&mut s);
+    let reaches = |gc: &mut GameCompletion, state: &GameView| {
+        let objective = gc.objectives(None, state);
+        assert_eq!(objective.kind, ObjectiveKind::Move);
+        let targets: Vec<Target> = objective.pbrs_targets.into_iter().collect();
+        state.room().wavefront(&targets, &[], &[Direction::N]).get(state.link.tile()).is_some()
+    };
+    let state = s.state().clone();
+    assert!(state.ladder() && reaches(&mut gc, &state));
+    let without = s.apply_ram(&[(Var::StepLadder, 0)]).clone();
+    assert!(!reaches(&mut gc, &without), "without the ladder the N door is cut off");
+
+    s.apply_ram(&[(Var::LinkX, 0x78), (Var::LinkY, 0x8D), (Var::StepLadder, 1)]);
+    for _ in 0..4 {
+        if act(&mut s, "MOVE N 16").changed_location() {
+            break;
+        }
+    }
+    let crossed = s.state();
+    assert!(
+        crossed.link.position.y <= 0x6D || crossed.full_location() == loc(4, 0x20),
+        "Link at {:?} in {:?}",
+        crossed.link.position,
+        crossed.full_location()
+    );
+
+    let Some((mut s, _)) = d4_room(&map, "4_30e_0", 0x30, "E") else { return };
+    kill_monsters(&mut s);
+    s.apply_ram(&[(Var::LinkX, 0x78), (Var::LinkY, 0x8D), (Var::StepLadder, 0)]);
+    for _ in 0..4 {
+        act(&mut s, "MOVE N 16");
+    }
+    let stopped = s.state();
+    assert!(stopped.link.position.y >= 0x85, "Link at {:?}", stopped.link.position);
+    assert!(!stopped.can_link_move(Direction::N));
+}
+
+/// 0x31 back from E with the ladder (step 115): the four single water squares on the door line are a shortcut to
+/// the W door, shorter than the winding land path the wavefront takes without the ladder.
+#[test]
+fn d4_the_ladder_shortens_0x31() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((mut s, _)) = d4_room(&map, "4_31e_0", 0x31, "E") else { return };
+    kill_monsters(&mut s);
+    let distance = |state: &GameView| {
+        state
+            .room()
+            .wavefront(&[Target::Dir(Direction::W)], &[], &[Direction::W])
+            .get(state.link.tile())
+            .expect("the W door is reachable either way")
+    };
+    let with = s.state().clone();
+    assert!(with.ladder());
+    let without = s.apply_ram(&[(Var::StepLadder, 0)]).clone();
+    let (short, long) = (distance(&with), distance(&without));
+    assert!(short < long, "with the ladder {short}, without {long}");
+}
+
+/// Gleeok (4:0x13, two necks): his attached heads aren't objects (slots 2-6 are type 0), so the view synthesizes one
+/// enemy per head at its neck array's head position; the neck base (slot 1) is a hazard.  The objective fights the
+/// heads.
+#[test]
+fn d4_gleeoks_heads_are_the_enemies() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((mut s, mut gc)) = d4_room(&map, "4_13w_0", 0x13, "W") else { return };
+    for _ in 0..20 {
+        act(&mut s, "WAIT 8");
+    }
+    let state = s.state().clone();
+    let ram = state.ram();
+    let heads: Vec<_> = state.enemies.iter().filter(|e| e.id == zelda::enums::enemy::GLEEOK_NECK_HEAD).collect();
+    assert_eq!(heads.len(), 2, "{state:?}");
+    assert_eq!(state.enemies.len(), 2, "only the heads are enemies");
+    for head in &heads {
+        let neck = head.index as usize - 2;
+        let at = (ram[zelda::game::GLEEOK_NECK_X[neck] + 4], ram[zelda::game::GLEEOK_NECK_Y[neck] + 4]);
+        assert_eq!((head.position.x, head.position.y), (at.0 as i32, at.1 as i32));
+    }
+    assert!(state.hazards.iter().any(|h| h.index == 1 && h.id == zelda::enums::enemy::GLEEOK2));
+    let objective = gc.objectives(None, &state);
+    assert_eq!(objective.kind, ObjectiveKind::Fight);
+    for head in heads {
+        assert!(head.link_overlap_tiles().into_iter().all(|t| objective.targets.contains(&Target::Tile(t))));
+    }
 }

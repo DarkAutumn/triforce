@@ -96,7 +96,8 @@ fn object_slots_decode_into_enemies_items_and_projectiles_by_distance() {
     assert_eq!(v.link.direction, Direction::N);
 }
 
-/// F067: every object type's class follows asm:Obj_Update_JumpTable (types >= $6A are cave people).
+/// F067: every object type's class follows asm:Obj_Update_JumpTable (types >= $6A are cave people); Gleeok's flying
+/// head ($46), which never dies (asm:Gleeok_UpdateFlyingHead), is a hazard.
 #[test]
 fn object_classes_follow_the_jump_table() {
     use ObjectClass::*;
@@ -118,7 +119,7 @@ fn object_classes_follow_the_jump_table() {
         ("Digdogger", Monster), ("Lamnola", Monster), ("Lamnola", Monster), ("Manhandla", Monster),
         ("Aquamentus", Monster), ("Ganon", Monster), ("GuardFire", Monster), ("StandingFire", Hazard),
         ("Moldorm", Monster), ("Gleeok", Monster), ("Gleeok", Monster), ("Gleeok", Monster), ("Gleeok", Monster),
-        ("GleeokHead", Monster), ("Patra", Monster), ("Patra", Monster), ("Trap", Hazard), ("Trap", Hazard),
+        ("GleeokHead", Hazard), ("Patra", Monster), ("Patra", Monster), ("Trap", Hazard), ("Trap", Hazard),
         ("UnderworldPerson", Person), ("UnderworldPerson", Person), ("UnderworldPerson", Person),
         ("UnderworldPerson", Person), ("UnderworldPerson", Person), ("UnderworldPerson", Person),
         ("UnderworldPersonLifeOrMoney", Person), ("UnderworldPerson", Person), ("MonsterShot", Shot),

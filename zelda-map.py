@@ -220,7 +220,7 @@ def parse_state_name(name: str) -> Optional[tuple[int, int, str, int]]:
 
 def scan_states(states_dir: Path) -> dict[Key, list[str]]:
     """(level, room, in_cave) -> the room's savestate names (sorted).  Side 'cave' is the cave interior.  The states
-    of a subfolder (the Dungeon 4 scouting states) are named with it ('d4/4_71s_0') and come after the folder's own."""
+    of a subfolder (a scouted route's states) are named with it ('d4/4_71s_0') and come after the folder's own."""
     states = defaultdict(list)
     root = Path(states_dir)
     for path in sorted(root.glob('*.state')) + sorted(root.glob('*/*.state')):
@@ -418,8 +418,8 @@ def overlay_badge(overlay: str, room: int, stats: Optional[dict]) -> Optional[tu
 def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
     """The route's steps (``route_steps`` dicts) each with what Link carries on entering it: ``hearts`` (heart
     containers), ``sword``, ``items`` and ``triforce`` (levels).  Progress follows the treasures (``game.yaml``) of
-    the steps that take them: a heart container, a sword, the boomerang, bombs, the bow or the raft; a ``triforce`` exit
-    adds its piece."""
+    the steps that take them: a heart container, a sword, the boomerang, bombs, the bow, the raft or the ladder; a
+    ``triforce`` exit adds its piece."""
     rooms = game_rooms() if rooms is None else rooms
     hearts, sword, items, triforce = 3, 'none', [], []
     plan = []
@@ -430,7 +430,7 @@ def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
             hearts += 1
         elif treasure in ('wood-sword', 'white-sword', 'magic-sword'):
             sword = treasure.split('-')[0]
-        elif treasure in ('boomerang', 'bombs', 'bow', 'raft') and treasure not in items:
+        elif treasure in ('boomerang', 'bombs', 'bow', 'raft', 'ladder') and treasure not in items:
             items.append(treasure)
         if step['exit'] == 'triforce':
             triforce.append(step['level'])

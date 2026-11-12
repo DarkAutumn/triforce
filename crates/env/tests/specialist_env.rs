@@ -2141,3 +2141,18 @@ fn bombs_only_in_requires_bombs_rooms() {
         nes = release(env);
     }
 }
+
+/// Gleeok's observation: his attached heads are entities (id $42) in slots 2 and 3, killable; his neck base in
+/// slot 1 is not killable.
+#[test]
+fn gleeoks_heads_are_observed_and_his_base_is_not_killable() {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "boss-gleeok", Some("4_13w_0"), |_| {});
+    let (obs, _) = env.reset(Some(0), None).unwrap();
+    let killable = feature_names().entity.iter().position(|n| n == "killable").unwrap();
+    let head = zelda::enums::enemy::GLEEOK_NECK_HEAD as i64;
+    assert_eq!(obs.entity_types[1..=2], [head, head], "{:?}", obs.entity_types);
+    assert_eq!(obs.entity_types[0], zelda::enums::enemy::GLEEOK2 as i64);
+    assert_eq!(obs.entity_features[0][killable], 0.0);
+    assert!(obs.entity_features[1..=2].iter().all(|f| f[killable] == 1.0));
+}

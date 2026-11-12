@@ -26,7 +26,9 @@
 # (warps Link to 0x3c); round to 0x2c, bomb its rock wall for the take-any cave's heart container (5 hearts), the
 # white sword at 0x0a, then west and south to Dungeon 1 (both key rooms, the bow cellar and the boomerang) through
 # Aquamentus (6 hearts) to the D1 triforce (warps Link to 0x37); then east, south and west to Dungeon 3 (0x74), the
-# raft cellar, Manhandla (7 hearts); the route ends on taking the D3 triforce.  Never the fairy.
+# raft cellar, Manhandla (7 hearts) and the D3 triforce (warps Link to 0x74); then back to 0x65, by raft from 0x55 to
+# the island 0x45 and Dungeon 4 (docs/routes/d4.md): the ladder, Gleeok (8 hearts); the route ends on taking the D4
+# triforce.  Never the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
 - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
@@ -140,41 +142,37 @@ d2first:
 - {level: 3, room: '0x4c', specialist: trap-room, entry: W, exit: E}
 - {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N}
 - {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce}
-# d2first-d4 (Lee, Nov 11; docs/routes/d4.md): d2first, then on to Dungeon 4 and its triforce.  Scouting only: the
-# rooms are mapped and have start states, nothing is trained there yet, and d2first stays the default route.
-# From the D3 triforce's warp (0x74) back the way Link came to 0x65, N to the dock of 0x55 and by raft to the island
-# 0x45.  Dungeon 4, Lee's directions: the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose
-# pushed block reveals the stairs), back W W to the Vire room 0x30, N, E, bomb N into the rupee room 0x11, bomb E
-# into the Vire room 0x12, its pushed block opens the E shutter to Gleeok, N to the triforce.  The keys of 0x51
-# and 0x40 are left: Link brings 5 from Dungeon 3 and the way needs 2 (0x30's E and N doors).
-d2first-d4:
-  extends: d2first
-  steps:
-  - {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
-  - {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
-  - {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: E}
-  - {level: 0, room: '0x64', specialist: ow-octorok, entry: W, exit: E}
-  - {level: 0, room: '0x65', specialist: ow-zora, entry: W, exit: N}
-  - {level: 0, room: '0x55', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x45', specialist: ow-peahat, entry: S, exit: cave}
-  - {level: 4, room: '0x71', specialist: vire, entry: S, exit: N}
-  - {level: 4, room: '0x61', specialist: vire, entry: S, exit: N}
-  - {level: 4, room: '0x51', specialist: stalfos-keese-gel, entry: S, exit: W, treasure: skip}
-  - {level: 4, room: '0x50', specialist: vire, entry: E, exit: N}
-  - {level: 4, room: '0x40', specialist: zol, entry: S, exit: N, treasure: skip}
-  - {level: 4, room: '0x30', specialist: vire, entry: S, exit: E}
-  - {level: 4, room: '0x31', specialist: vire, entry: W, exit: E}
-  - {level: 4, room: '0x32', specialist: like-like, entry: W, exit: cave}
-  - {level: 4, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ladder}
-  - {level: 4, room: '0x32', specialist: like-like, entry: cave, exit: W}
-  - {level: 4, room: '0x31', specialist: vire, entry: E, exit: W}
-  - {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
-  - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
-  - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
-  - {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: E}
-  - {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
-  - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
-  - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
+# Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
+# N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, Lee's directions: the keys of 0x51 and 0x40
+# (both in the open from the start), the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose
+# pushed block reveals the stairs), back W W to the Vire room 0x30, N across its water on the ladder, E, bomb N into
+# the rupee room 0x11, bomb E into the Vire room 0x12, its pushed block opens the E shutter to Gleeok, N to the
+# triforce.  Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11.
+- {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
+- {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
+- {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: E}
+- {level: 0, room: '0x64', specialist: ow-octorok, entry: W, exit: E}
+- {level: 0, room: '0x65', specialist: ow-zora, entry: W, exit: N}
+- {level: 0, room: '0x55', specialist: ow-zora, entry: S, exit: N}
+- {level: 0, room: '0x45', specialist: ow-peahat, entry: S, exit: cave}
+- {level: 4, room: '0x71', specialist: vire, entry: S, exit: N, bomb_reserve: 2}
+- {level: 4, room: '0x61', specialist: vire, entry: S, exit: N}
+- {level: 4, room: '0x51', specialist: stalfos-keese-gel, entry: S, exit: W}
+- {level: 4, room: '0x50', specialist: vire, entry: E, exit: N}
+- {level: 4, room: '0x40', specialist: zol, entry: S, exit: N}
+- {level: 4, room: '0x30', specialist: vire, entry: S, exit: E}
+- {level: 4, room: '0x31', specialist: vire, entry: W, exit: E}
+- {level: 4, room: '0x32', specialist: like-like, entry: W, exit: cave}
+- {level: 4, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ladder}
+- {level: 4, room: '0x32', specialist: like-like, entry: cave, exit: W}
+- {level: 4, room: '0x31', specialist: vire, entry: E, exit: W}
+- {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
+- {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
+- {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
+- {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: E}
+- {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
+- {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
+- {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}

@@ -54,6 +54,9 @@ pub struct Observed {
     pub enemies_hit: Vec<(u8, i32)>,
     pub enemies_stunned: Vec<u8>,
     pub items_gained: Vec<i16>,
+    /// Slots whose monster died this step (it started dying, or its slot emptied): kills the game's `RoomKills`
+    /// may not count (a Vire's Red Keese, Gleeok's heads).
+    pub enemies_killed: Vec<u8>,
 }
 
 impl Observed {
@@ -128,7 +131,13 @@ impl Change {
         } else {
             let (prev, curr) = (change.previous.clone(), change.state.clone());
             let seen = &mut change.observed;
-            observe_damage(&prev, &curr, &mut seen.enemies_hit, &mut seen.enemies_stunned);
+            observe_damage(
+                &prev,
+                &curr,
+                &mut seen.enemies_hit,
+                &mut seen.enemies_stunned,
+                &mut seen.enemies_killed,
+            );
             observe_items(&prev, &curr, &mut seen.items_gained);
             change.enemies_hit = seen.enemies_hit.clone();
             change.enemies_stunned = seen.enemies_stunned.clone();
@@ -261,7 +270,8 @@ impl Change {
             ..Default::default()
         };
         let (mut hits, mut stuns, mut items) = (Vec::new(), Vec::new(), Vec::new());
-        observe_damage(start, &curr, &mut hits, &mut stuns);
+        // Predicted kills aren't kills yet: only the observed step records them.
+        observe_damage(start, &curr, &mut hits, &mut stuns, &mut Vec::new());
         if fetches {
             observe_items(start, &curr, &mut items);
         }
@@ -331,28 +341,39 @@ fn disabled_slots(weapon: AnimationKind) -> Vec<Var> {
     .collect()
 }
 
-/// Enemy health drops, kills and new stuns from `prev` to `curr`.
+/// Enemy health drops, kills and new stuns from `prev` to `curr`.  Gleeok's attached heads share one HP byte, so a
+/// hit on them is credited once (the largest credit among them), to the head that took it or fell.
 fn observe_damage(
     prev: &GameView,
     curr: &GameView,
     hits: &mut Vec<(u8, i32)>,
     stuns: &mut Vec<u8>,
+    kills: &mut Vec<u8>,
 ) {
+    let mut gleeok_hit: Option<(u8, i32)> = None;
     for enemy in &prev.enemies {
         if enemy.is_dying() {
             continue;
         }
+        let gleeok_head = enemy.id == enemy::GLEEOK_NECK_HEAD;
+        let mut credit = |hits: &mut Vec<(u8, i32)>, dmg: i32| {
+            if !gleeok_head {
+                add_hit(hits, enemy.index, dmg);
+            } else if gleeok_hit.is_none_or(|(_, best)| dmg > best) {
+                gleeok_hit = Some((enemy.index, dmg));
+            }
+        };
+        let killed = if enemy.health > 0 { enemy.health } else { 1 };
         match curr.enemy_by_index(enemy.index) {
             Some(now) => {
                 let dmg = enemy.health - now.health;
                 if dmg > 0 {
-                    add_hit(hits, enemy.index, dmg);
+                    credit(hits, dmg);
                 } else if now.is_dying() {
-                    add_hit(
-                        hits,
-                        enemy.index,
-                        if enemy.health > 0 { enemy.health } else { 1 },
-                    );
+                    credit(hits, killed);
+                }
+                if now.is_dying() {
+                    kills.push(enemy.index);
                 }
                 if now.is_stunned() && !enemy.is_stunned() {
                     stuns.push(enemy.index);
@@ -363,12 +384,14 @@ fn observe_damage(
             // asm:Obj_EndMetastate) in its slot (or is still dying, handled above): only that is a kill. Boulders,
             // which destroy themselves off screen, are hazards, not enemies, so they never get here.
             None if enemy.id == enemy::ZORA && curr.item_by_index(enemy.index as i8).is_none() => {}
-            None => add_hit(
-                hits,
-                enemy.index,
-                if enemy.health > 0 { enemy.health } else { 1 },
-            ),
+            None => {
+                credit(hits, killed);
+                kills.push(enemy.index);
+            }
         }
+    }
+    if let Some((index, dmg)) = gleeok_hit {
+        add_hit(hits, index, dmg);
     }
 }
 
@@ -514,6 +537,86 @@ mod tests {
         let mut still = stunned;
         still[tables::OBJ_STUN_TIMER.0 + SLOT] = 0x0C;
         assert_eq!(observe(&stunned, &still, 4).enemies_stunned, vec![]);
+    }
+
+    /// A kill is observed whether or not the game counts it in RoomKills (a Vire's Red Keese): the slot empties or
+    /// starts dying.  A dived Zora and a mere hit are no kills.
+    #[test]
+    fn kills_are_observed_without_room_kills() {
+        let mut keese = playable();
+        keese[tables::OBJ_ID.0 + SLOT] = enemy::RED_KEESE;
+        keese[tables::OBJ_HEALTH.0 + SLOT] = 0x10;
+        let mut gone = keese;
+        gone[tables::OBJ_ID.0 + SLOT] = 0;
+        let kill = observe(&keese, &gone, 4);
+        assert_eq!(kill.observed.enemies_killed, vec![SLOT as u8]);
+        assert_eq!(kill.state.room_kills(), kill.previous.room_kills());
+        let mut dying = keese;
+        dying[tables::OBJ_SPAWN_STATE.0 + SLOT] = 0x10;
+        assert_eq!(observe(&keese, &dying, 4).observed.enemies_killed, vec![SLOT as u8]);
+        let stalfos = with_stalfos(3);
+        let mut hurt = stalfos;
+        hurt[tables::OBJ_HEALTH.0 + SLOT] = 1 << 4;
+        assert!(observe(&stalfos, &hurt, 4).observed.enemies_killed.is_empty());
+        let mut zora = playable();
+        zora[tables::OBJ_ID.0 + SLOT] = enemy::ZORA;
+        zora[tables::OBJ_STATUS.0 + SLOT] = 5;
+        let mut dived = zora;
+        dived[tables::OBJ_ID.0 + SLOT] = 0;
+        assert!(observe(&zora, &dived, 4).observed.enemies_killed.is_empty());
+    }
+
+    /// Gleeok with two necks (type $43 in slot 1): heads at (0x70, 0x80) and (0x88, 0x80), sharing slot 5's HP $A0.
+    fn with_gleeok() -> [u8; 0x800] {
+        let mut ram = playable();
+        ram[tables::OBJ_ID.0 + 1] = enemy::GLEEOK2;
+        ram[tables::OBJ_HEALTH.0 + 1] = 0xA0;
+        ram[tables::OBJ_HEALTH.0 + crate::game::GLEEOK_HEAD_SLOT] = 0xA0;
+        for (neck, x) in [(0, 0x70), (1, 0x88)] {
+            ram[crate::game::GLEEOK_NECK_X[neck] + 4] = x;
+            ram[crate::game::GLEEOK_NECK_Y[neck] + 4] = 0x80;
+        }
+        ram
+    }
+
+    /// The env sees one enemy per attached head and the neck base as a hazard; a hit on the shared HP pays once,
+    /// the base's and a flying head's pay nothing, and a cut head is one hit and one kill.
+    #[test]
+    fn gleeok_heads_are_the_enemies_and_share_one_hit() {
+        let prev = with_gleeok();
+        let seen = view(&prev, 0);
+        let heads: Vec<_> = seen.enemies.iter().map(|e| (e.index, e.id, e.position.x, e.health)).collect();
+        assert_eq!(
+            heads.iter().copied().collect::<std::collections::BTreeSet<_>>(),
+            [(2, enemy::GLEEOK_NECK_HEAD, 0x70, 10), (3, enemy::GLEEOK_NECK_HEAD, 0x88, 10)].into()
+        );
+        assert!(seen.hazards.iter().any(|h| h.index == 1));
+
+        let mut hit = prev;
+        hit[tables::OBJ_HEALTH.0 + crate::game::GLEEOK_HEAD_SLOT] = 0x80;
+        let hits = observe(&prev, &hit, 4).enemies_hit;
+        assert!(hits.len() == 1 && hits[0].1 == 2, "{hits:?}");
+
+        let mut base = prev;
+        base[tables::OBJ_HEALTH.0 + 1] = 0x80;
+        assert_eq!(observe(&prev, &base, 4).enemies_hit, vec![]);
+
+        let mut flying = prev;
+        flying[tables::OBJ_ID.0 + 7] = enemy::GLEEOK_HEAD;
+        flying[tables::OBJ_HEALTH.0 + 7] = 0xF0;
+        let mut landed = flying;
+        landed[tables::OBJ_ID.0 + 7] = 0;
+        let gone = observe(&flying, &landed, 4);
+        assert!(gone.enemies_hit.is_empty() && gone.observed.enemies_killed.is_empty());
+
+        // Neck 0's head falls: its bit in $511, the shared HP reset to $60 for the next head.
+        let mut low = prev;
+        low[tables::OBJ_HEALTH.0 + crate::game::GLEEOK_HEAD_SLOT] = 0x20;
+        let mut cut = low;
+        cut[crate::game::GLEEOK_DEAD_NECK_MASK] = 1;
+        cut[tables::OBJ_HEALTH.0 + crate::game::GLEEOK_HEAD_SLOT] = 0x60;
+        let fell = observe(&low, &cut, 4);
+        assert_eq!((fell.enemies_hit, fell.observed.enemies_killed), (vec![(2, 2)], vec![2]));
     }
 
     #[test]
