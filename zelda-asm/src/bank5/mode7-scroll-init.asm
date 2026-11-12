@@ -33,20 +33,20 @@
 ;   L0055 Mode7Scroll_InitSubmodes                      code  Runs the mode 7 init step selected by GameSubmode.
 ;   L0060 Mode7Scroll_InitSubmodes_JumpTable            data  TABLE: mode 7 init steps; index = GameSubmode (0-6); value = handler address.
 ;   L0077 Mode7Scroll_Init_Sub1                         code  Mode 7 init step 1: finds the next room and lays out the room that goes into name table 2.
-;   L0135 Door_LayOutWithPrevOpened                     code  Lays out the doors of the room in RoomId using PrevOpenedDoors as the open doors (UW only).
-;   L0153 Mode7Scroll_Init_Sub0                         code  Mode 7 init step 0: sets the whirlwind's source room and undoes a flute pond secret.
-;   L0170 Mode7Scroll_Init_Sub2                         code  Mode 7 init step 2: sends tile row CurRow of the laid-out room to name table 2; one row a frame.
-;   L0205 Mode7Scroll_Init_IncSubmode                   code  Advances GameSubmode (shared by init steps 0 and 2).
-;   L0216 Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2  code  Mode 7 init steps 3 and 4: cue the top, then the bottom half of PlayAreaAttrs for name table 2.
-;   L0252 Mode7Scroll_Init_Sub5                         code  Mode 7 init step 5: lays out the next room when going up, then decides on a fade to black.
-;   L0314 Mode7Scroll_Init_Sub6                         code  Mode 7 init step 6: runs the fade to black until it is done, then finishes the init.
-;   L0319 Mode7Scroll_Init_Finish                       code  Ends mode 7 init: RoomId = NextRoomId, sprite-0 split armed, mode update begins.
-;   L0326 Mode7Scroll_Init_Return                       code  Shared exit of the mode 7 init steps above.
-;   L0331 Scroll_Sprite0Record                          data  DATA: sprite record 0 used for the sprite-0 hit: Y $27, tile $61, attributes $20 (behind the
-;   L0339 Scroll_WriteAndEnableSprite0                  code  Sets IsSprite0CheckActive and writes Scroll_Sprite0Record to sprite record 0.
-;   L0354 Door_SetEnteringDoorwayOpened                 code  Sets CurOpenedDoors to the single direction bit opposite Link's facing.
-;   L0368 Room_PaletteSelectorAttrs                     data  TABLE: name table attribute byte using one palette in all four quadrants; index = palette
-;   L0379 Room_FillPlayAreaAttrs                        code  Fills PlayAreaAttrs (6 rows of 8 attribute bytes) with a room's outer and inner palettes.
+;   L0139 Door_LayOutWithPrevOpened                     code  Lays out the doors of the room in RoomId using PrevOpenedDoors as the open doors (UW only).
+;   L0157 Mode7Scroll_Init_Sub0                         code  Mode 7 init step 0: sets the whirlwind's source room and undoes a flute pond secret.
+;   L0174 Mode7Scroll_Init_Sub2                         code  Mode 7 init step 2: sends tile row CurRow of the laid-out room to name table 2; one row a frame.
+;   L0209 Mode7Scroll_Init_IncSubmode                   code  Advances GameSubmode (shared by init steps 0 and 2).
+;   L0220 Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2  code  Mode 7 init steps 3 and 4: cue the top, then the bottom half of PlayAreaAttrs for name table 2.
+;   L0256 Mode7Scroll_Init_Sub5                         code  Mode 7 init step 5: lays out the next room when going up, then decides on a fade to black.
+;   L0328 Mode7Scroll_Init_Sub6                         code  Mode 7 init step 6: runs the fade to black until it is done, then finishes the init.
+;   L0333 Mode7Scroll_Init_Finish                       code  Ends mode 7 init: RoomId = NextRoomId, sprite-0 split armed, mode update begins.
+;   L0340 Mode7Scroll_Init_Return                       code  Shared exit of the mode 7 init steps above.
+;   L0345 Scroll_Sprite0Record                          data  DATA: sprite record 0 used for the sprite-0 hit: Y $27, tile $61, attributes $20 (behind the
+;   L0353 Scroll_WriteAndEnableSprite0                  code  Sets IsSprite0CheckActive and writes Scroll_Sprite0Record to sprite record 0.
+;   L0368 Door_SetEnteringDoorwayOpened                 code  Sets CurOpenedDoors to the single direction bit opposite Link's facing.
+;   L0382 Room_PaletteSelectorAttrs                     data  TABLE: name table attribute byte using one palette in all four quadrants; index = palette
+;   L0393 Room_FillPlayAreaAttrs                        code  Fills PlayAreaAttrs (6 rows of 8 attribute bytes) with a room's outer and inner palettes.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -84,8 +84,12 @@ Mode7Scroll_Init_Sub1:
     ; If it is not a true door, then Door_LayOut called from
     ; RoomLayout_LayOutRoom will clear it.
     JSR Door_SetEnteringDoorwayOpened
-    DEC PrevRow                 ; PrevRow is $FF after an earlier scroll, so this leaves $FE: still
-                                ; no valid row. No other effect found; purpose (unverified).
+    DEC PrevRow                 ; PrevRow becomes $FF if it was 0 (as after the RAM clear at reset), $FE
+                                ; after an earlier scroll (which leaves $FF): never a valid row. With 0
+                                ; left in it, Transfer_CopyColumnOrRowToTileBuf takes row 0, the first
+                                ; row of a scroll down, for a row already copied and skips it. (trace)
+                                ; PrevRow is 0 when play first starts after power on; with PrevRow
+                                ; set to 1 before a scroll down, the row record for $2100 was not sent.
     INC GameSubmode
     JSR Room_CalcNext
     LDA NextRoomId
@@ -257,8 +261,18 @@ Mode7Scroll_Init_Sub5:
     BCS @Vertical               ; If direction is horizontal,
 
     ; then cue Transfer_BlankRow7NT2Buf: a row of blank tiles ($24) at $28E0,
-    ; the row just above the play area copy at $2900 in NT 2.
-    ; Whether this has a visible effect is (unverified).
+    ; the row just above the play area copy at $2900 in NT 2. During a horizontal scroll the
+    ; bottom scanline of that row (line 63) shows in the part of the picture that comes from the
+    ; second name table, so the blank row hides what an earlier vertical scroll left there.
+    ; It reaches that row only when a fade follows (step 6): the record is then sent while the
+    ; mirroring is still horizontal. Without a fade the init finishes in this frame, the mirroring
+    ; is vertical when the record is sent on the next frame, and $28E0 is then the same memory as
+    ; $20E0, the bottom row of the status bar, which is blank already.
+    ; (trace) Scrolls without a fade, overworld and levels 1 and 4: leaving the transfer out changed
+    ; no pixel; a visible tile in its place showed on lines 56-63 on all frames but the first, as one written
+    ; to $20E0 did, while one written to the other name table's row showed on line 63 only (not
+    ; on every frame). Level 1, a scroll down from $63 to $73 and then left or right: line 63
+    ; showed tiles that blanking that row by hand removed.
     LDY #$4E
     STY TileBufSelector
 

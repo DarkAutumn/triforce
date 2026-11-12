@@ -34,16 +34,16 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0051 Anim_ItemFrameOffsets                      data  TABLE: where each item's frames start; index = item slot (Item_IdToSlot; $20-$24 are image-only
 ;   L0069 Anim_ItemFrameTiles                        data  TABLE: left tile of every item frame; index = Anim_ItemFrameOffsets[item slot] + frame; value = tile.
-;   L0097 Anim_WriteStaticItemSpritesWithAttributes  code  Draws frame 0 of an item, unflipped, with attributes A on both sprites.
-;   L0111 Anim_WriteItemSprites                      code  Draws an item frame in the next rolling sprite records.
-;   L0133 Anim_WriteSpecificItemSprites              code  Draws an item frame in the sprite records the caller chose; the tile number selects the shape.
-;   L0190 Anim_WriteMirroredSpritePair               code  Writes a sprite pair whose right half is the left tile flipped horizontally.
-;   L0202 Anim_SetSpriteDescriptorRedPaletteRow      code  Sets both sprites' attributes to 2: sprite palette row 2 (the red row), no flip, in front.
-;   L0206 Anim_SetSpriteDescriptorAttributes         code  Entry with A = the attribute byte for both sprites: [04] := [05] := A. A is unchanged.
-;   L0216 Anim_WriteLevelPaletteSprite               code  Writes one sprite of tile A at object X's position with sprite palette row 3 (the per-level row).
-;   L0228 Anim_WriteSprite                           code  Writes one sprite of tile A at object X's position in the next rolling sprite record.
-;   L0247 Anim_WriteSpecificSprite                   code  Writes one sprite of tile A at object X's position in the sprite record at offset Y.
-;   L0255 Anim_EndWriteSprite                        code  Entry with A = the sprite's Y coordinate; tile and X are already in the record at offset Y.
+;   L0098 Anim_WriteStaticItemSpritesWithAttributes  code  Draws frame 0 of an item, unflipped, with attributes A on both sprites.
+;   L0112 Anim_WriteItemSprites                      code  Draws an item frame in the next rolling sprite records.
+;   L0134 Anim_WriteSpecificItemSprites              code  Draws an item frame in the sprite records the caller chose; the tile number selects the shape.
+;   L0191 Anim_WriteMirroredSpritePair               code  Writes a sprite pair whose right half is the left tile flipped horizontally.
+;   L0203 Anim_SetSpriteDescriptorRedPaletteRow      code  Sets both sprites' attributes to 2: sprite palette row 2 (the red row), no flip, in front.
+;   L0207 Anim_SetSpriteDescriptorAttributes         code  Entry with A = the attribute byte for both sprites: [04] := [05] := A. A is unchanged.
+;   L0217 Anim_WriteLevelPaletteSprite               code  Writes one sprite of tile A at object X's position with sprite palette row 3 (the per-level row).
+;   L0229 Anim_WriteSprite                           code  Writes one sprite of tile A at object X's position in the next rolling sprite record.
+;   L0248 Anim_WriteSpecificSprite                   code  Writes one sprite of tile A at object X's position in the sprite record at offset Y.
+;   L0256 Anim_EndWriteSprite                        code  Entry with A = the sprite's Y coordinate; tile and X are already in the record at offset Y.
 ; ============================================================================
 
 ; TABLE: where each item's frames start; index = item slot (Item_IdToSlot; $20-$24 are image-only
@@ -67,8 +67,9 @@ Anim_ItemFrameOffsets:
 ; $20-$61), S = mirrored pair 7 pixels apart ($62-$6B), M = mirrored pair 8 apart ($6C-$7B),
 ; F = two halves tile and tile + 2, flippable ($7C and up).
 Anim_ItemFrameTiles:
-    ; $00 sword: $20 N vertical, $82 F horizontal, $3C N (offset $02; the sword draw code uses only
-    ; frames 0 and 1; whether anything draws it is (unverified));
+    ; $00 sword: $20 N vertical, $82 F horizontal, $3C N (offset $02: the spark tile, never drawn.
+    ; Only item slot 0 can reach offset 2, and slot 0 is drawn with frame 0 or 1 by
+    ; Sword_UpdateSwordOrRod (Anim_WeaponFramesByRDir) and with frame 0 by Item_DrawBySlot);
     ; $03 bomb: $34 N, then clouds $70, $72, $74 M; $07 arrow: $28 N vertical
     .BYTE $20, $82, $3C, $34, $70, $72, $74, $28
     ; arrow: $86 F horizontal, $3C N spark; $0A bow $2A; $0B candle $26; $0C flute $24; $0D food $22;

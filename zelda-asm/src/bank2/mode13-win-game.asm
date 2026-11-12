@@ -12,8 +12,10 @@
 ; KEY FACTS:
 ;   - Mode13WinGame_Update dispatches on GameSubmode: 0 flash, 1 text, 2 wait, 3 credits, 4 wait for
 ;     Start. Submodes 1 and 2 share Mode13WinGame_Update_Sub1PeaceText (Mode13WinGame_Update_JumpTable).
-;   - Submode 0 ends when ItemLiftTimer, +1 per frame, reaches $C0 ($C0 frames if it enters at 0;
-;     its start value is not set in this file, (unverified)); from count $40 on the background colour
+;   - Submode 0 ends when ItemLiftTimer, +1 per frame, reaches $C0: $C0 frames, because it enters
+;     at 0 (Room_EnterCommon zeroes it with $0300-$051F on entry to Zelda's room; its only other
+;     writers are Item_Take outside mode 5 and Link_CheckLiftItem while ItemTypeToLift is nonzero,
+;     neither of which happens in that room); from count $40 on the background colour
 ;     changes every frame through Ending_FlashColors. Its last frame requests song $10 (ending),
 ;     sets ObjTimer = $40 and EndingPeaceLongTimer = $40. Mode13WinGame_Update_Sub0Flash
 ;   - Text: after the $40 frame delay, one character every 8 frames, 52 characters (Ending_PeaceText),
@@ -28,19 +30,19 @@
 ;   - Triforce pieces (item $1B) are drawn $10 pixels above Link (object slot $13) and above Zelda
 ;     (slot 1, piece in slot 2). Ending_DrawLinkZeldaTriforces
 ; CONTENTS: (generated; L = line in this file)
-;   L0049 Mode13WinGame_Update                 code  Mode $13 (win game) update: runs the handler of the current GameSubmode (0-4).
-;   L0054 Mode13WinGame_Update_JumpTable       data  TABLE: mode $13 update handlers; index = GameSubmode; value = routine address (1 and 2 share one).
-;   L0062 Ending_FlashColors                   data  TABLE: background colours of the ending flash; index = ItemLiftTimer AND 3; value = NES colour.
-;   L0070 Mode13WinGame_Update_Sub0Flash       code  Update submode 0: Link and Zelda hold Triforce pieces until ItemLiftTimer = $C0; flashes from $40.
-;   L0127 Ending_DrawLinkZeldaTriforces        code  Draws Link and Zelda, each with a Triforce piece (item $1B) $10 pixels above.
-;   L0179 Mode13WinGame_Update_Sub1PeaceText   code  Update submodes 1 and 2: draws the pair, types the peace text (submode 1 only), ends on the timer.
-;   L0213 Ending_PeaceCharTransferRecTemplate  data  DATA: transfer record template for one text character: address $22A4, count 1, tile $24, end $FF.
-;   L0218 Ending_PeaceCharAddrsLo              data  TABLE: low nametable address byte of each character; index = position in Ending_PeaceText (0-51); the
-;   L0229 Ending_PeaceText                     data  DATA: the peace text, 52 tile codes then $FF: "FINALLY," / "PEACE RETURNS TO HYRULE." /
-;   L0242 Ending_UpdatePeaceTextbox            code  Every 8th frame writes the next Ending_PeaceText character to the screen; at $FF goes to submode 2.
-;   L0297 Ending_UpdatePeaceTextbox_Return     code  Shared exit of Ending_UpdatePeaceTextbox and Mode13WinGame_Update_Sub4WaitStart.
-;   L0305 Mode13WinGame_Update_Sub4WaitStart   code  Update submode 4: draws the Triforce of Power and Ganon's ashes; Start saves and begins Q2.
-;   L0345 Ending_DrawAshPile                   code  Draws the ash pile (frame $0B, not mirrored) for the object in slot X.
+;   L0051 Mode13WinGame_Update                 code  Mode $13 (win game) update: runs the handler of the current GameSubmode (0-4).
+;   L0056 Mode13WinGame_Update_JumpTable       data  TABLE: mode $13 update handlers; index = GameSubmode; value = routine address (1 and 2 share one).
+;   L0064 Ending_FlashColors                   data  TABLE: background colours of the ending flash; index = ItemLiftTimer AND 3; value = NES colour.
+;   L0072 Mode13WinGame_Update_Sub0Flash       code  Update submode 0: Link and Zelda hold Triforce pieces until ItemLiftTimer = $C0; flashes from $40.
+;   L0129 Ending_DrawLinkZeldaTriforces        code  Draws Link and Zelda, each with a Triforce piece (item $1B) $10 pixels above.
+;   L0181 Mode13WinGame_Update_Sub1PeaceText   code  Update submodes 1 and 2: draws the pair, types the peace text (submode 1 only), ends on the timer.
+;   L0215 Ending_PeaceCharTransferRecTemplate  data  DATA: transfer record template for one text character: address $22A4, count 1, tile $24, end $FF.
+;   L0220 Ending_PeaceCharAddrsLo              data  TABLE: low nametable address byte of each character; index = position in Ending_PeaceText (0-51); the
+;   L0232 Ending_PeaceText                     data  DATA: the peace text, 52 tile codes then $FF: "FINALLY," / "PEACE RETURNS TO HYRULE." /
+;   L0245 Ending_UpdatePeaceTextbox            code  Every 8th frame writes the next Ending_PeaceText character to the screen; at $FF goes to submode 2.
+;   L0300 Ending_UpdatePeaceTextbox_Return     code  Shared exit of Ending_UpdatePeaceTextbox and Mode13WinGame_Update_Sub4WaitStart.
+;   L0308 Mode13WinGame_Update_Sub4WaitStart   code  Update submode 4: draws the Triforce of Power and Ganon's ashes; Start saves and begins Q2.
+;   L0348 Ending_DrawAshPile                   code  Draws the ash pile (frame $0B, not mirrored) for the object in slot X.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -225,7 +227,8 @@ Ending_PeaceCharAddrsLo:
     .BYTE $56, $57, $58, $59
 
 ; DATA: the peace text, 52 tile codes then $FF: "FINALLY," / "PEACE RETURNS TO HYRULE." /
-; "THIS ENDS THE STORY." ($24 space; glyphs of $28 and $2C (unverified): comma, period).
+; "THIS ENDS THE STORY." ($24 space, $28 comma, $2C full stop: read from the bitmaps of those
+; tiles in Chr_CommonBackgroundPatterns).
 Ending_PeaceText:
     .BYTE $0F, $12, $17, $0A, $15, $15, $22, $28
     .BYTE $19, $0E, $0A, $0C, $0E, $24, $1B, $0E

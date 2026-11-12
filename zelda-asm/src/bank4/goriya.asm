@@ -28,7 +28,7 @@
 ;     type $1E (Armos): the code reads ObjType+1,X. Goriya_Update
 ; CONTENTS: (generated; L = line in this file)
 ;   L0045 Goriya_Update                           code  Moves a Goriya (also Lynel, Armos) and on a grid point turns it toward a near chase target.
-;   L0154 Walker_SetInputDirAndTryThrowBoomerang  code  Sets a walking monster's input direction to its facing; a Goriya may then throw its boomerang.
+;   L0156 Walker_SetInputDirAndTryThrowBoomerang  code  Sets a walking monster's input direction to its facing; a Goriya may then throw its boomerang.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -74,7 +74,9 @@ Goriya_Update:
     STA ObjGridOffset, X
 
     ; If Link's state = $FF, go try shooting.
-    ; What puts Link in state $FF is (unverified).
+    ; Never true: no code sets bit 7 of Link's state. Slot 0 only gets 0, $10 and $40 stored, bits
+    ; $20 and $30 ORed in, and the steps $11, $21 (Link_AdvanceItemUseState). $FF is stored only in
+    ; item slots (Item_TryTake) and, by the title demo, in slots $01-$0A.
     LDA ObjState
     CMP #$FF
     BEQ Walker_SetInputDirAndTryThrowBoomerang

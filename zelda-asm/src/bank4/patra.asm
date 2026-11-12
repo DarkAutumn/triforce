@@ -23,25 +23,27 @@
 ;     tables overlap: Patra_Child1RotationCosineBits, Patra_Child2RotationBits,
 ;     Patra_Child1RotationSineBits).
 ;   - The index flips when ObjTimer of slot $02 is 0 and the angle of slot $03 is 0; the timer is
-;     then reloaded with $FF from Patra_ManeuverTimes (entry 1, $50, is never read)
-;     (Patra_Update@TryChangeManeuver).
+;     then reloaded with $FF from Patra_ManeuverTimes (entry 1, $50, is never read). The timer is
+;     already 0 at Patra's first update, so the first flip (0 -> 1) comes when the child in slot $03
+;     first reaches angle 0: 63 frames after Patra_Init for type $47, 74 for type $48; later flips
+;     follow every 292-293 frames for type $47 (trace) (Patra_Update@TryChangeManeuver).
 ;   - Patra flies as a flyer: speed up once, then chase (Random,X >= $40) or wander: turn counter
 ;     8 = 7 turns $10 frames apart, then decide again (Patra_ControlFlight, Patra_DecideFlightState).
 ;   - Children follow Patra by adding its per-frame displacement (Flyer_ObjOffsetX/Y of slot $01)
 ;     to their own position before rotating (Patra_Update, Patra_UpdateChild_State1Orbit).
 ; CONTENTS: (generated; L = line in this file)
-;   L0050 Patra_ManeuverTimes             data  TABLE: frames until the next orbit-pattern switch is allowed; index = Y left by the collision
-;   L0060 Patra_Update                    code  Updates Patra: flies, draws, checks collisions, and switches the children's orbit pattern.
-;   L0123 Patra_ControlFlight             code  Runs Patra's flight state (Flyer_ObjFlyingState,X) through the table below.
-;   L0128 Patra_ControlFlight_JumpTable   data  TABLE: Patra's flight state handlers; index = Flyer_ObjFlyingState,X.
-;   L0142 Patra_DecideFlightState         code  Flight state 1: picks chase (Random,X >= $40) or wander (Random,X < $40) with turn counter 8.
-;   L0158 Patra_ChildStartAngles          data  TABLE: angle the child in slot $02 must have for a later child to appear above Patra;
-;   L0163 Patra_Child1RotationCosineBits  data  TABLE: type $25 child: number of high bits of the cosine used for the Y step; index =
-;   L0168 Patra_Child2RotationBits        data  TABLE: type $26 child: number of high sine and cosine bits used for both steps; index =
-;   L0175 Patra_Child1RotationSineBits    data  TABLE: type $25 child: number of high bits of the sine used for the X step; index =
-;   L0185 Patra_UpdateChild               code  Updates a Patra child: state 0 waits for its turn to appear above Patra, state 1 orbits.
-;   L0253 Patra_UpdateChild_State1Orbit   code  Patra child state 1: follows Patra, steps its orbit angle, moves along the orbit, draws, collides.
-;   L0323 Patra_DrawChild                 code  Draws a Patra child with sprite palette 2, a new animation frame every 2 frames.
+;   L0052 Patra_ManeuverTimes             data  TABLE: frames until the next orbit-pattern switch is allowed; index = Y left by the collision
+;   L0062 Patra_Update                    code  Updates Patra: flies, draws, checks collisions, and switches the children's orbit pattern.
+;   L0129 Patra_ControlFlight             code  Runs Patra's flight state (Flyer_ObjFlyingState,X) through the table below.
+;   L0134 Patra_ControlFlight_JumpTable   data  TABLE: Patra's flight state handlers; index = Flyer_ObjFlyingState,X.
+;   L0148 Patra_DecideFlightState         code  Flight state 1: picks chase (Random,X >= $40) or wander (Random,X < $40) with turn counter 8.
+;   L0164 Patra_ChildStartAngles          data  TABLE: angle the child in slot $02 must have for a later child to appear above Patra;
+;   L0169 Patra_Child1RotationCosineBits  data  TABLE: type $25 child: number of high bits of the cosine used for the Y step; index =
+;   L0174 Patra_Child2RotationBits        data  TABLE: type $26 child: number of high sine and cosine bits used for both steps; index =
+;   L0181 Patra_Child1RotationSineBits    data  TABLE: type $25 child: number of high bits of the sine used for the X step; index =
+;   L0191 Patra_UpdateChild               code  Updates a Patra child: state 0 waits for its turn to appear above Patra, state 1 orbits.
+;   L0261 Patra_UpdateChild_State1Orbit   code  Patra child state 1: follows Patra, steps its orbit angle, moves along the orbit, draws, collides.
+;   L0331 Patra_DrawChild                 code  Draws a Patra child with sprite palette 2, a new animation frame every 2 frames.
 ; ============================================================================
 
 ; TABLE: frames until the next orbit-pattern switch is allowed; index = Y left by the collision
@@ -94,8 +96,11 @@ Patra_Update:
 @TryChangeManeuver:
     ; Flip the maneuver index when the timer of the next slot (ObjTimer+1,X: slot $02 for Patra
     ; in slot $01) is 0 and the angle of the child slot $03 is 0. Patra_Init sets that timer to
-    ; $FF, but the init of the child in slot $02 (Obj_ResetMetastateAndTimer) zeroes it again if
-    ; it runs after Patra_Init, which it does when the slot was empty until Patra_Init filled it.
+    ; $FF, but the init of the child in slot $02 (Obj_ResetMetastateAndTimer) zeroes it on the
+    ; next frame, while Patra is still in its spawn cloud. So at Patra's first update the timer
+    ; is 0, the child in slot $03 has already appeared, and the index flips as soon as that
+    ; child's angle has counted down to 0 (trace: 63 frames after Patra_Init for type $47, 74 for
+    ; type $48; Patra's spawn cloud ends on frame 13).
     LDA ObjTimer+1, X
     ORA ObjAngleWhole+3
     BNE @Exit
@@ -106,10 +111,11 @@ Patra_Update:
 
     ; Reload the timer. Y is not the maneuver index (the TYA above has no effect; A is reloaded):
     ; it is whatever the collision calls left. Link_CheckMonsterTouch loads Y with 0, and harming
-    ; Link ends with Y = 0 too (the ring loop in Link_BeHarmed). Collision_CheckMonsterVsWeaponsAndLink returns
-    ; Y = 0 when Patra's invincibility timer runs (Y from the loop above), else ObjMetastate,X:
-    ; 0 while alive, $10 on the frame Patra is killed (a code byte past the table is read then).
-    ; So the reload is $FF. The path on which Link dies was not traced (unverified).
+    ; Link ends with Y = 0 too (the ring loop in Link_BeHarmed), also when Link dies of it (the
+    ; death code does not use Y). Collision_CheckMonsterVsWeaponsAndLink returns Y = 0 when Patra's
+    ; invincibility timer runs (Y from the loop above), else ObjMetastate,X, loaded after its
+    ; test of Link: 0 while alive, $10 on the frame Patra is killed (a code byte past the table is
+    ; read then). So the reload is $FF in every case but Patra's own death.
     LDA Patra_ManeuverTimes, Y
     STA ObjTimer+1, X
 
@@ -216,7 +222,9 @@ Patra_UpdateChild:
     ; Go to state 1 (orbit).
     INC ObjState, X
 
-    ; Direction $80: no reader of this value was found (unverified).
+    ; Direction $80. Nothing reads it: a child moves by its angle (Obj_MoveAlongOrbit), its
+    ; ObjAttr $C3 keeps Shove_Begin from reversing it (bit $80) and the object loop from moving
+    ; or drawing it by direction (bit $01), and no weapon test reads ObjDir of types $25/$26.
     LDA #$80
     STA ObjDir, X
 

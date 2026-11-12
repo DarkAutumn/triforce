@@ -24,11 +24,11 @@
 ;     (Mode_LeaveLevelToOW).
 ; CONTENTS: (generated; L = line in this file)
 ;   L0036 Room_NextRoomIdOffsets    data  TABLE: value added to RoomId to get the neighbouring room; index = reverse direction index (0 up,
-;   L0046 Room_CalcNoNextRoom       code  Door types with no room behind them: clears NextRoomDir and computes nothing.
-;   L0069 Room_CalcNextRoomForDoor  code  Sets NextRoomId to the room beyond the side Link is leaving by; loads the OW when there is none.
-;   L0100 Mode_LeaveLevelToOW       code  Leaves the current level for the overworld: mode 2 (load level) with CurLevel = 0.
-;   L0114 Ppu_ClearGrayscaleInMask  code  Clears bit 0 (grayscale) of the PPU mask copy CurPpuMask.
-;   L0127 Room_CalcNextRoomByDir    code  Computes the id of the room next to the current one in a direction, with no checks.
+;   L0053 Room_CalcNoNextRoom       code  Door types with no room behind them: clears NextRoomDir and computes nothing.
+;   L0076 Room_CalcNextRoomForDoor  code  Sets NextRoomId to the room beyond the side Link is leaving by; loads the OW when there is none.
+;   L0107 Mode_LeaveLevelToOW       code  Leaves the current level for the overworld: mode 2 (load level) with CurLevel = 0.
+;   L0121 Ppu_ClearGrayscaleInMask  code  Clears bit 0 (grayscale) of the PPU mask copy CurPpuMask.
+;   L0134 Room_CalcNextRoomByDir    code  Computes the id of the room next to the current one in a direction, with no checks.
 ; ============================================================================
 
 ; TABLE: value added to RoomId to get the neighbouring room; index = reverse direction index (0 up,
@@ -41,7 +41,14 @@ Room_NextRoomIdOffsets:
 ; NOTE: Entries 1 and 8 of Room_CalcNext_JumpTable: door type 1 (wall), and the value 8 that
 ;       Door_FindTypeByDirBit returns when Link's direction has none of the four direction bits.
 ;       NextRoomId keeps its old value. NextRoomDir is the direction bit stored by
-;       Room_CalcNext_Dispatch. Whether either entry is reached in play is unverified.
+;       Room_CalcNext_Dispatch.
+; NOTE: Entry 8 is not reached: in a dungeon mode 7 follows only Link_CheckScreenEdge or
+;       Doorway_CheckLink, and both store a single direction bit in ObjDir before they leave mode 5.
+;       Entry 1 needs Link on a screen edge facing a wall side. Door_Touch blocks a wall from inside
+;       the room. (trace) Level 1 room $72 with its east side changed by hand to type 1 before Link
+;       came in from room $73 (the Q2 level data has such one-way sides, e.g. level 9 $13 -> $14):
+;       Link walks in $28 pixels to X = $D0, DoorwayDir is cleared, and holding right he stays at
+;       X = $D0. (unverified) That no other path puts Link on a wall side's screen edge.
 ; ----------------------------------------------------------------------------
 Room_CalcNoNextRoom:
     LDA #$00

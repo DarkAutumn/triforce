@@ -39,10 +39,10 @@
 ;   L0146 StatusBar_CheckMissingItem             code  Handles an empty selected slot: the potion slot falls back to the letter, any other slot is reselected.
 ;   L0162 Link_CheckLiftItem                     code  While Link holds up an item: keeps him halted, counts the lift timer down and draws the pose.
 ;   L0176 Link_SetUpAndDrawLiftingItem           code  Places the lifted item (object slot $13) at Link's X, $10 pixels above him, then draws both.
-;   L0192 Link_DrawLiftingItem                   code  Draws Link in the item-lifting pose and the lifted item at the position of object slot $13.
-;   L0217 Link_DrawLiftingItem_Return            code  Shared RTS of Link_DrawLiftingItem and StatusBar_DrawSword.
-;   L0224 Link_EndLiftingItem                    code  Ends the lift: Link's state back to 0 (idle), ItemTypeToLift cleared, dungeon song restarted.
-;   L0234 Link_EndLiftingItem_Return             code  Shared RTS of Link_EndLiftingItem and Link_CheckLiftItem.
+;   L0194 Link_DrawLiftingItem                   code  Draws Link in the item-lifting pose and the lifted item at the position of object slot $13.
+;   L0219 Link_DrawLiftingItem_Return            code  Shared RTS of Link_DrawLiftingItem and StatusBar_DrawSword.
+;   L0226 Link_EndLiftingItem                    code  Ends the lift: Link's state back to 0 (idle), ItemTypeToLift cleared, dungeon song restarted.
+;   L0236 Link_EndLiftingItem_Return             code  Shared RTS of Link_EndLiftingItem and Link_CheckLiftItem.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -186,8 +186,10 @@ Link_SetUpAndDrawLiftingItem:
 ; IN:   ItemTypeToLift = item id; ObjX+$13/ObjY+$13 = item position.
 ; NOTE: Link is drawn with the image of pseudo item slot $21 in his own sprite records (offsets $48,
 ;       $4C), attributes 0. A half-width item is drawn at the left (not centered) and Link's right half
-;       then uses tile $08, a tile Link's facing-down walk frame also uses (what it shows here:
-;       unverified).
+;       then uses tile $08, a tile Link's facing-down walk frame also uses. (trace) Lifting the
+;       wooden sword in the cave of room $77: left sprite tile $78 (the arm raised to the item),
+;       right sprite tile $08 with attribute $40 (flipped): Link's other side with the arm down,
+;       so he lifts with one hand.
 ; ----------------------------------------------------------------------------
 Link_DrawLiftingItem:
     LDX #$00                    ; Link's object slot.
@@ -208,8 +210,8 @@ Link_DrawLiftingItem:
     LDA IsDrawnItemNarrow
     BEQ Link_DrawLiftingItem_Return             ; Full-width item: done.
 
-    ; Half-width item: change the tile of Link's right sprite record to $08 (said upstream to be a
-    ; tile without the raised arm; the image itself is unverified).
+    ; Half-width item: change the tile of Link's right sprite record to $08, the half without
+    ; the raised arm (see the header).
     LDA #$08
     STA Sprites+77
 

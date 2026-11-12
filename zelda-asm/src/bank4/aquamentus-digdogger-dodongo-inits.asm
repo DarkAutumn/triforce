@@ -25,8 +25,8 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0040 Aquamentus_Init              code  Initializes Aquamentus: immunity to boomerang and fire, roar, fixed start position ($B0, $80).
 ;   L0065 Digdogger_InitWith3Children  code  Initializes a Digdogger that splits into 3 (type $38); also the common init of every small one.
-;   L0097 Digdogger_InitWith1Child     code  Initializes a Digdogger that splits into 1 (type $39), then turns it into type $38.
-;   L0116 Dodongo_Init                 code  Initializes a Dodongo (type $31 or $32): roar, and a random facing direction, right or left.
+;   L0099 Digdogger_InitWith1Child     code  Initializes a Digdogger that splits into 1 (type $39), then turns it into type $38.
+;   L0118 Dodongo_Init                 code  Initializes a Dodongo (type $31 or $32): roar, and a random facing direction, right or left.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -90,9 +90,11 @@ Digdogger_InitWith3Children:
 ; Initializes a Digdogger that splits into 1 (type $39), then turns it into type $38.
 ; IN:   X = object slot.
 ; OUT:  as Digdogger_InitWith3Children, but ObjType,X = $38 and ChildDigdoggerCount = 1.
-; NOTE: Types $38 and $39 have the same update routine (Obj_Update_JumpTable) and the same
-;       attribute, HP and contact damage table values; no effect of the type change was found
-;       (unverified).
+; NOTE: The type change has no effect. No instruction tells $38 from $39: the two types have the same
+;       update routine (Obj_Update_JumpTable), animation entry (Anim_ObjFrameOffsets), attribute, HP and
+;       contact damage (Obj_TypeAttributes, Obj_TypeHpPairs, Damage_ObjTypeDamageToLink) and palette
+;       selector (Palette_BossObjTypes), and every comparison of ObjType puts them on the same side.
+;       RoomObjTemplateType keeps the $39 it got on room entry. Only the child count differs.
 ; ----------------------------------------------------------------------------
 Digdogger_InitWith1Child:
     JSR Digdogger_InitWith3Children

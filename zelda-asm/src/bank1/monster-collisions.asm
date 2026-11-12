@@ -37,11 +37,11 @@
 ;   - Obj_GetMiddle has no RTS of its own: it ends on the first byte of Damage_ObjTypeDamageToLink, $60,
 ;     which is the RTS opcode. Obj_GetMiddle
 ; CONTENTS: (generated; L = line in this file)
-;   L0061 Person_DrawAndCheckCollisions_Common    code  Runs the collision pass for object X, turns a "kill" of the slot-1 person into fireballs, and draws.
-;   L0072 Person_Draw                             code  Draws object X at its position with frame 0 as a mirrored pair. IN: X = object slot.
-;   L0097 Collision_CheckMonsterVsWeaponsAndLink  code  Tests the monster in slot X against Link's six weapon slots, then against Link himself.
-;   L0169 Obj_GetMiddle                           code  Computes the middle point of object X for the collision tests.
-;   L0196 Damage_ObjTypeDamageToLink              data  TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
+;   L0065 Person_DrawAndCheckCollisions_Common    code  Runs the collision pass for object X, turns a "kill" of the slot-1 person into fireballs, and draws.
+;   L0076 Person_Draw                             code  Draws object X at its position with frame 0 as a mirrored pair. IN: X = object slot.
+;   L0101 Collision_CheckMonsterVsWeaponsAndLink  code  Tests the monster in slot X against Link's six weapon slots, then against Link himself.
+;   L0173 Obj_GetMiddle                           code  Computes the middle point of object X for the collision tests.
+;   L0200 Damage_ObjTypeDamageToLink              data  TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -52,11 +52,15 @@
 ;       The test below reads ObjMetastate+1 (object slot 1) whatever X is: a nonzero value is copied to
 ;       IsPersonFireballsEnabled and the metastate is cleared, so the object in slot 1 does not die.
 ;       While the flag is set, Statue_Update shoots fireballs with pattern 2, from ($48,$82) and
-;       ($A8,$86). In a trap room slot 1 holds a trap (Trap_Init_Full), which Link's weapons cannot
-;       kill (bit $20), and a trap's update does not run during its own spawn cloud (Obj_Update);
-;       whether slot 1's metastate is ever nonzero while another trap updates, so that this branch
-;       is taken, is (unverified). Dungeon persons use their own copy of this test
-;       (Person_CheckCollisions).
+;       ($A8,$86). In a trap room the branch is never taken: slot 1 holds a trap (Trap_Init_Full),
+;       which Link's weapons cannot kill (bit $20), so its metastate is nonzero only during its spawn
+;       cloud, and all the traps leave the cloud on the same frame (Obj_Init gives slot 1 ObjTimer 1
+;       on the frame it makes the traps; the other traps' timers are 0, and their first cloud step
+;       ends one frame later, with slot 1's). Slots are updated from $0B down to 1, and a trap's own
+;       update first runs on the frame after its cloud ends, when slot 1's metastate is already 0.
+;       (trace) Level 1 room $22 and level 3 rooms $4C and $5A (four traps each): the metastates of
+;       slots 1-4 went 1, 2, 3, 0 on the same frames and IsPersonFireballsEnabled stayed 0.
+;       Dungeon persons use their own copy of this test (Person_CheckCollisions).
 ; ----------------------------------------------------------------------------
 Person_DrawAndCheckCollisions_Common:
     JSR Collision_CheckMonsterVsWeaponsAndLink

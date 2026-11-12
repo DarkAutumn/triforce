@@ -28,10 +28,10 @@
 ;   - Bit 6 of ObjShoveDir is never tested here: every use masks with $0F, $0C, $05 or $03
 ;     (Shove_Update, Shove_MovePixels).
 ; CONTENTS: (generated; L = line in this file)
-;   L0050 Shove_Update             code  Advances an object's knockback by one frame: validate on the first call, then move up to 4 pixels.
-;   L0103 Shove_Reset              code  Ends an object's knockback: clears ObjShoveDir,X and ObjShoveDistance,X.
-;   L0107 Shove_SetDirAndDistance  code  Second entry: stores A (callers pass 0) in ObjShoveDir,X and ObjShoveDistance,X. A is unchanged.
-;   L0124 Shove_MovePixels         code  Moves a shoved object up to 4 pixels, one at a time, stopping the shove at the first obstacle.
+;   L0055 Shove_Update             code  Advances an object's knockback by one frame: validate on the first call, then move up to 4 pixels.
+;   L0108 Shove_Reset              code  Ends an object's knockback: clears ObjShoveDir,X and ObjShoveDistance,X.
+;   L0112 Shove_SetDirAndDistance  code  Second entry: stores A (callers pass 0) in ObjShoveDir,X and ObjShoveDistance,X. A is unchanged.
+;   L0129 Shove_MovePixels         code  Moves a shoved object up to 4 pixels, one at a time, stopping the shove at the first obstacle.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -43,9 +43,14 @@
 ; NOTE: Callers call this while ObjShoveDir,X is nonzero. The first call does not move the object.
 ; NOTE: First call: if the shove axis differs from the axis the object faces and its grid offset is
 ;       not 0, a monster's shove is cancelled and Link's direction is replaced by the opposite of ObjDir.
-;       Shove_Begin chooses Link's shove axis from ObjDir when he is off the grid, so Link's replacement
-;       is reached only if ObjDir or the grid offset changed since Shove_Begin ran (unverified whether
-;       that ever happens; upstream marked the block as never seen executing).
+;       Shove_Begin chooses Link's shove axis from ObjDir when he is off the grid, and Link_HandleInput
+;       returns before the directions while ObjShoveDir is nonzero, so walking cannot reach Link's
+;       replacement. The raft can: Dock_Update halts Link (no Shove_Update), and at the end of a
+;       ride down sets ObjDir = 4 and ObjGridOffset = 2. (trace) Room $3F, ObjShoveDir = $82 and
+;       ObjShoveDistance = $20 written by hand during the ride down: on the first frame after the
+;       ride ObjShoveDir becomes $08 and Link is pushed up from Y = $7F to $75. (unverified)
+;       Whether a monster can hit Link sideways during the 67 frames of that ride: 400 rides into
+;       room $55 gave no hit, and a Zora's fireball there starts to move on frame 68.
 ; ----------------------------------------------------------------------------
 Shove_Update:
     ; Bit 7 clear: not the first call of this shove. Go move.

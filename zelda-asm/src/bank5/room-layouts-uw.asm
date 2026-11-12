@@ -42,20 +42,20 @@
 ;   L0115 Door_FaceTilesW                data  TABLE: 5 door faces x 12 tiles for the door in the W (left) wall: play area columns 1-3, rows 9-12.
 ;   L0128 Door_FaceTilesS                data  TABLE: 5 door faces x 12 tiles for the door in the S (bottom) wall: tile columns 14-17, rows 18-20.
 ;   L0141 Door_FaceTilesN                data  TABLE: 5 door faces x 12 tiles for the door in the N (top) wall: play area columns 14-17, rows 1-3.
-;   L0174 RoomLayout_RoomsUW             data  DATA: 42 dungeon floor layouts x 12 column descriptors (504 bytes); index = unique room id * 12.
-;   L0180 RoomLayout_ColumnHeapUW0       data  TABLE: dungeon column heap 0: 8 columns of square descriptors (format above).
-;   L0187 RoomLayout_ColumnHeapUW1       data  TABLE: dungeon column heap 1: 8 columns of square descriptors.
-;   L0196 RoomLayout_ColumnHeapUW2       data  TABLE: dungeon column heap 2: 7 columns of square descriptors.
-;   L0204 RoomLayout_ColumnHeapUW3       data  TABLE: dungeon column heap 3: 7 columns of square descriptors.
-;   L0212 RoomLayout_ColumnHeapUW4       data  TABLE: dungeon column heap 4: 7 columns of square descriptors.
-;   L0220 RoomLayout_ColumnHeapUW5       data  TABLE: dungeon column heap 5: 8 columns of square descriptors.
-;   L0228 RoomLayout_ColumnHeapUW6       data  TABLE: dungeon column heap 6: 8 columns of square descriptors (block column, then water columns).
-;   L0236 RoomLayout_ColumnHeapUW7       data  TABLE: dungeon column heap 7: 8 columns of square descriptors.
-;   L0245 RoomLayout_ColumnHeapUW8       data  TABLE: dungeon column heap 8: 9 columns of square descriptors.
-;   L0255 RoomLayout_ColumnHeapUW9       data  TABLE: dungeon column heap 9: 9 columns of square descriptors.
-;   L0269 RoomLayout_CellarUW0           data  TABLE: cellar layout for unique room id $3E (even id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
-;   L0274 RoomLayout_CellarUW1           data  TABLE: cellar layout for unique room id $3F (odd id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
-;   L0285 RoomLayout_ColumnHeapUWCellar  data  TABLE: cellar column heap: 5 columns of overworld-format square descriptors, 11 squares per column.
+;   L0175 RoomLayout_RoomsUW             data  DATA: 42 dungeon floor layouts x 12 column descriptors (504 bytes); index = unique room id * 12.
+;   L0181 RoomLayout_ColumnHeapUW0       data  TABLE: dungeon column heap 0: 8 columns of square descriptors (format above).
+;   L0188 RoomLayout_ColumnHeapUW1       data  TABLE: dungeon column heap 1: 8 columns of square descriptors.
+;   L0197 RoomLayout_ColumnHeapUW2       data  TABLE: dungeon column heap 2: 7 columns of square descriptors.
+;   L0205 RoomLayout_ColumnHeapUW3       data  TABLE: dungeon column heap 3: 7 columns of square descriptors.
+;   L0213 RoomLayout_ColumnHeapUW4       data  TABLE: dungeon column heap 4: 7 columns of square descriptors.
+;   L0221 RoomLayout_ColumnHeapUW5       data  TABLE: dungeon column heap 5: 8 columns of square descriptors.
+;   L0229 RoomLayout_ColumnHeapUW6       data  TABLE: dungeon column heap 6: 8 columns of square descriptors (block column, then water columns).
+;   L0237 RoomLayout_ColumnHeapUW7       data  TABLE: dungeon column heap 7: 8 columns of square descriptors.
+;   L0246 RoomLayout_ColumnHeapUW8       data  TABLE: dungeon column heap 8: 9 columns of square descriptors.
+;   L0256 RoomLayout_ColumnHeapUW9       data  TABLE: dungeon column heap 9: 9 columns of square descriptors.
+;   L0270 RoomLayout_CellarUW0           data  TABLE: cellar layout for unique room id $3E (even id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
+;   L0275 RoomLayout_CellarUW1           data  TABLE: cellar layout for unique room id $3F (odd id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
+;   L0287 RoomLayout_ColumnHeapUWCellar  data  TABLE: cellar column heap: 5 columns of overworld-format square descriptors, 11 squares per column.
 ; ============================================================================
 
 ; TABLE: dungeon wall outline tiles for play area columns 1-15, stored by column; read by RoomLayout_FillWalls.
@@ -163,9 +163,10 @@ Door_FaceTilesN:
 ;   Square indexes (RoomLayout_UWSquareTiles gives the square's first tile; RoomLayout_WriteSquareUW writes tiles
 ;   T, T+1, T+2, T+3 for a first tile in $70-$F2 and one tile four times otherwise):
 ;   0 = $B0-$B3 block (the square PushBlock_FindAndCreate looks for), 1 = $74-$77 floor,
-;   2 = $94-$97 and 3 = $B4-$B7 (solid: $78 and above; appearance unverified), 4 = $70-$73 stairs,
-;   5 = $68 x 4 (walkable: below $78; appearance unverified), 6 = $F4 x 4 water (the tile the ladder
-;   test looks for in a dungeon), 7 = $24 x 4 blank (black, walkable).
+;   2 = $94-$97 and 3 = $B4-$B7 (the two statue pictures, mirror images; solid: $78 and above),
+;   4 = $70-$73 stairs, 5 = $68 x 4 (dotted sand floor; walkable: below $78), 6 = $F4 x 4 water (the
+;   tile the ladder test looks for in a dungeon), 7 = $24 x 4 blank (black, walkable). See the table
+;   comment on RoomLayout_UWSquareTiles for the trace behind squares 2, 3 and 5.
 ; The column lists below give each column's 7 square indexes, top to bottom.
 
 ; DATA: 42 dungeon floor layouts x 12 column descriptors (504 bytes); index = unique room id * 12.
@@ -279,7 +280,8 @@ RoomLayout_CellarUW1:
 ;   Descriptor: bit 7 = a column starts here, bit 6 = write the square twice, bits 5-0 = square index.
 ;   All indexes here are below $10, so each square is four tiles from RoomLayout_OWSecondarySquareTiles:
 ;   0 = $24 x 4 (blank), 1 = $6F x 4, 2 = $F3 x 4, 3 = $FA x 4, $0C = $F3 on the top row and $24 on the
-;   bottom row. (What tiles $6F, $F3 and $FA look like in the cellar tile set is unverified.)
+;   bottom row. $6F is the cellar ladder tile (RoomLayout_OWSquareTiles). (unverified) What tiles $F3
+;   and $FA show in the cellar tile set: the picture was not looked at; only their numbers are known.
 ;   col 0: 2 3 3 3 3 3 3 2 C 3 3     col 1: 0 1 1 1 1 1 1 1 1 3 3     col 2: 2 3 3 2 2 C 1 1 1 3 3
 ;   col 3: 2 3 3 2 2 C 3 2 C 3 3     col 4: 2 3 3 3 3 3 3 3 3 3 3
 RoomLayout_ColumnHeapUWCellar:

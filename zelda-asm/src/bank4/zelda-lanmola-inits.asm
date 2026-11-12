@@ -23,7 +23,7 @@
 ;   L0031 Zelda_RoomObjXs  data  TABLE: start X of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
 ;   L0036 Zelda_RoomObjYs  data  TABLE: start Y of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
 ;   L0045 Zelda_Init       code  Places Zelda in object slot 1 and four guard fires in slots 2-5.
-;   L0074 Lanmola_Init     code  Makes the ten Lanmola segments (two worms of five) in object slots $01-$0A.
+;   L0075 Lanmola_Init     code  Makes the ten Lanmola segments (two worms of five) in object slots $01-$0A.
 ; ============================================================================
 
 ; TABLE: start X of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
@@ -67,9 +67,10 @@ Zelda_Init:
 ; OUT:  slots $01-$0A positioned, typed and marked initialized; Lanmola_Type, Lanmola_Speed,
 ;       RoomObjCount written.
 ; NOTE: Speed is type - $39: 1 pixel per frame for type $3A, 2 for type $3B.
-;       RoomObjCount is set to 8, not 10: the reason is (unverified). Only a head's death adds to
-;       RoomKillCount (tails die as type $5D), so the count compared with it on leaving the room
-;       is at most 2.
+;       RoomObjCount is set to 8, not 10. Its only later reader is the kill banking on leaving the
+;       room (RoomHistory_SaveKillCountUW: all dead when RoomKillCount >= RoomObjCount; Lanmola is
+;       exempt from the one-kill rule for boss types). Only a head's death adds to RoomKillCount
+;       (tails die as type $5D), so the count is at most 2 and 8 behaves exactly as 10 would.
 ; ----------------------------------------------------------------------------
 Lanmola_Init:
     ; For Y = 9 down to 0, object slots $0A down to $01:
@@ -112,6 +113,6 @@ Lanmola_Init:
     SEC
     SBC #$39
     STA Lanmola_Speed
-    LDA #$08                    ; 8, although 10 segments were made (reason unverified).
+    LDA #$08                    ; 8, although 10 segments were made (no effect: see the header).
     STA RoomObjCount
     RTS

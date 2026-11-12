@@ -36,14 +36,14 @@
 ;     Collision_CheckMonsterVsWeaponsAndLink, and shove info is cleared only on a kill. Moldorm_Update
 ; CONTENTS: (generated; L = line in this file)
 ;   L0059 Moldorm_Update                   code  Updates one Moldorm segment: move, draw, collide; on death hands the death to the worm's tail.
-;   L0152 Moldorm_ControlFlight            code  Runs the flight routine for the segment's flying state (0-2 chase, 3 wander).
-;   L0157 Moldorm_ControlFlight_JumpTable  data  TABLE: Moldorm flight routines; index = Flyer_ObjFlyingState; value = routine address.
-;   L0171 Moldorm_Chase                    code  Flying states 0-2 of a Moldorm head: turn toward the chase target every $10 frames.
-;   L0188 Moldorm_ChangeFlyingState        code  Timer = 0, so the flying state has ended: picks a new state and rearms the timer to $10 frames.
-;   L0209 Moldorm_Wander                   code  Flying state 3 of a Moldorm head: turn at random every $10 frames.
-;   L0228 Moldorm_PropagateDirs            code  Once per $10 frames (head's timer = $10): each segment takes the direction of the one ahead.
-;   L0270 Moldorm_PropagateDirs_Return     code  Shared exit of the Moldorm flight routines above.
-;   L0280 Moldorm_DecideFlightState        code  Picks a Moldorm head's next flying state: 2 (chase) if Random,X >= $40, else 3 (wander); 8 turns.
+;   L0153 Moldorm_ControlFlight            code  Runs the flight routine for the segment's flying state (0-2 chase, 3 wander).
+;   L0158 Moldorm_ControlFlight_JumpTable  data  TABLE: Moldorm flight routines; index = Flyer_ObjFlyingState; value = routine address.
+;   L0172 Moldorm_Chase                    code  Flying states 0-2 of a Moldorm head: turn toward the chase target every $10 frames.
+;   L0189 Moldorm_ChangeFlyingState        code  Timer = 0, so the flying state has ended: picks a new state and rearms the timer to $10 frames.
+;   L0210 Moldorm_Wander                   code  Flying state 3 of a Moldorm head: turn at random every $10 frames.
+;   L0229 Moldorm_PropagateDirs            code  Once per $10 frames (head's timer = $10): each segment takes the direction of the one ahead.
+;   L0271 Moldorm_PropagateDirs_Return     code  Shared exit of the Moldorm flight routines above.
+;   L0281 Moldorm_DecideFlightState        code  Picks a Moldorm head's next flying state: 2 (chase) if Random,X >= $40, else 3 (wander); 8 turns.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -112,9 +112,10 @@ Moldorm_Update:
     CMP #$41
     BNE :-
 
-    ; Set the tail's object timer to $11. No use of this value was found: once the tail is a
-    ; dead dummy its metastate becomes $10, and the death sparkle then sets the timer to 6
-    ; (purpose unverified).
+    ; Set the tail's object timer to $11. The value is never read: a tail turned into a dead dummy
+    ; gets metastate $10 on its next update without a timer test (DeadDummy_StartDeathSparkle), and
+    ; metastate $10, also that of a dying head, replaces the timer with 6 at once
+    ; (Obj_AnimateMetastate).
     LDA #$11
     STA a:ObjTimer+1, Y
 

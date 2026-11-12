@@ -344,9 +344,9 @@ Wallmaster_State1Trip:
     ; Animation frame 1 uses Wallmaster frame image 1, which
     ; uses tiles $9C/$9D on the left and $9E/$9F on the right.
     ; The right side is correctly the right side of a closed hand.
-    ; But the left side is another monster's tile (which one: unverified). So the sprite that got
-    ; tile $9C is patched
-    ; to the left side that both hand images share: $AC/$AD.
+    ; But the left side, $9C/$9D, is the Keese's second image (Anim_ObjFrameTiles entries $83,
+    ; $85, $87). So the sprite that got tile $9C is patched to the left side that both hand
+    ; images share: $AC/$AD.
     ;
     ; The left and right sprites might be swapped by flipping: if the first record
     ; does not hold tile $9C, the second is patched without a test.

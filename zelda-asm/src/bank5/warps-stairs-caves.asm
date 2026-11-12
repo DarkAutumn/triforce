@@ -34,7 +34,7 @@
 ;   L0131 Warp_StartStairsMode        code  Starts mode $10 (stairs) and records the mode to enter when it ends.
 ;   L0151 RoomHistory_SaveKillCount   code  Banks the current room's kill count into the room's saved state (OW or UW version).
 ;   L0159 Warp_CheckUnderLink_Return  code  Shared return of Warp_CheckUnderLink, RoomHistory_SaveKillCount and Warp_HandleOW.
-;   L0175 Warp_HandleOW               code  Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
+;   L0178 Warp_HandleOW               code  Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -165,7 +165,10 @@ Warp_CheckUnderLink_Return:
 ; OUT:  UndergroundEntranceTile = A, even when A is no entrance; on a transition as Warp_StartStairsMode,
 ;       and for a level also CurLevel and LevelEntranceRoomId
 ; NOTE: Entrance tiles: $24 (the black opening: Link later sinks into it and rises out of it),
-;       $88 (what square uses it is unverified) and the stairs tiles $70-$73.
+;       $88 (the foot of the waterfall: the two bottom tiles of secondary square $0F = $89,$88,$8B,$88,
+;       which only layout $19 uses, the layout of room $1A in both quests) and the stairs tiles
+;       $70-$73. (trace) Room $1A: walking up into the tiles $88 at X = $60 ends mode 5 at Y = $7D
+;       and the cave (mode $B) follows.
 ; NOTE: The destination comes from the room's cave index, LevelBlockAttrsB bits 7-2: below $10 it
 ;       is the level number (index 0 is not excluded: it would load level 0, the OW); $14 is the
 ;       shortcut cave; anything else is an ordinary cave.

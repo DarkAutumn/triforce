@@ -15,16 +15,17 @@
 ;   - Patra type $47 makes eight children of type $25, type $48 eight of type $26, in object slots
 ;     $02-$09 (Patra_Init).
 ;   - Patra_Init sets the maneuver timer, ObjTimer of the slot after Patra's (ObjTimer+1, X), to $FF
-;     frames. With Patra in slot 1 that is slot $02's timer, which the init of the child in slot $02
-;     (Obj_ResetMetastateAndTimer) zeroes again; that this happens before Patra's first update follows
-;     from the slot order $0B down to $01 but was not traced (unverified) (Patra_Init).
+;     frames. Patra is always in slot 1 (list ids $32-$61 make one object: Room_EnterCommon), so that
+;     is slot $02's timer, and the init of the child in slot $02 (Obj_ResetMetastateAndTimer) zeroes
+;     it on the next frame, while Patra is still in its spawn cloud (trace). The first pattern switch
+;     therefore does not wait $FF frames: see Patra_Update@TryChangeManeuver (Patra_Init).
 ;   - Ganon gets invincibility mask $FA: bits 0 (sword class) and 2 (arrow) are the only damage types
 ;     not masked (Ganon_Init).
 ;   - Ganon_Init halts Link (ObjState = $40) and sets Link's timer to $40 frames, the length of the
 ;     first, dark part of the opening scene (Ganon_Init, Ganon_ScenePhase0_LiftInDark).
 ; CONTENTS: (generated; L = line in this file)
-;   L0041 Patra_Init  code  Sets up Patra and turns object slots $02-$09 into its eight children.
-;   L0095 Ganon_Init  code  Sets up Ganon and starts the opening scene of his room by halting Link.
+;   L0042 Patra_Init  code  Sets up Patra and turns object slots $02-$09 into its eight children.
+;   L0096 Ganon_Init  code  Sets up Ganon and starts the opening scene of his room by halting Link.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------

@@ -23,12 +23,14 @@
 ;   - Mmc1_SwitchBank_Bank2 writes A to the MMC1 PRG bank register ($E000), 5 serial writes, bit 0
 ;     first; same code as the fixed bank's Mmc1_SwitchBank.
 ;   - The unlabeled bytes in BANK_02_ISR ($BF50) are a copy of the reset handler, and BANK_02_VEC
-;     ($BFFA) a copy of the vectors: NMI $E484, reset $BF50, IRQ $BFF0. Purpose (a reset while this
-;     bank is mapped at $C000-$FFFF) is (unverified).
+;     ($BFFA) a copy of the vectors: NMI $E484, reset $BF50, IRQ $BFF0. No code jumps to the copy
+;     and the program always keeps bank 7 at $C000-$FFFF (MMC1 control $0F or $0E), so it runs only
+;     after a reset that finds another bank there; every bank has the same code at offset $3F50,
+;     so the vector $BF50 reaches a copy whichever bank is at $8000 (bank1/shove-knockback.asm).
 ; CONTENTS: (generated; L = line in this file)
-;   L0035 Quest_WorldFlagBlockAddrs    data  TABLE: start addresses (low, high) of the three $80-byte world flag blocks: $067F, $06FF, $077F.
-;   L0043 Profile_SwitchToSecondQuest  code  Resets the active profile for a new game in Q2: clears world flags and items, 3 hearts, 8 bombs max.
-;   L0110 Mmc1_SwitchBank_Bank2        code  Switches the PRG bank at $8000-$BFFF to bank A (5 serial writes to MMC1 register $E000).
+;   L0037 Quest_WorldFlagBlockAddrs    data  TABLE: start addresses (low, high) of the three $80-byte world flag blocks: $067F, $06FF, $077F.
+;   L0045 Profile_SwitchToSecondQuest  code  Resets the active profile for a new game in Q2: clears world flags and items, 3 hearts, 8 bombs max.
+;   L0112 Mmc1_SwitchBank_Bank2        code  Switches the PRG bank at $8000-$BFFF to bank A (5 serial writes to MMC1 register $E000).
 ; ============================================================================
 
 ; TABLE: start addresses (low, high) of the three $80-byte world flag blocks: $067F, $06FF, $077F.

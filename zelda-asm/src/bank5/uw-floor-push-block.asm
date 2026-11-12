@@ -29,10 +29,10 @@
 ;     (PushBlock_FindAndCreate).
 ; CONTENTS: (generated; L = line in this file)
 ;   L0040 RoomLayout_UWColumnHeapAddrs  data  TABLE: addresses of the ten dungeon column heaps; index = high nibble of a room layout byte; value =
-;   L0057 RoomLayout_UWSquareTiles      data  TABLE: first tile of each dungeon floor square; index = bits 2-0 of a square descriptor; value = tile.
-;   L0067 RoomLayout_LayOutUWFloor      code  Writes the 12 x 7 squares of the current dungeon room's floor into the play area tile map.
-;   L0177 RoomLayout_WriteSquareUW      code  Writes one 2 x 2 tile dungeon square into the play area tile map.
-;   L0228 PushBlock_FindAndCreate       code  Creates the push block object (type $68) in object slot $0B at the room's block tile.
+;   L0063 RoomLayout_UWSquareTiles      data  TABLE: first tile of each dungeon floor square; index = bits 2-0 of a square descriptor; value = tile.
+;   L0073 RoomLayout_LayOutUWFloor      code  Writes the 12 x 7 squares of the current dungeon room's floor into the play area tile map.
+;   L0183 RoomLayout_WriteSquareUW      code  Writes one 2 x 2 tile dungeon square into the play area tile map.
+;   L0234 PushBlock_FindAndCreate       code  Creates the push block object (type $68) in object slot $0B at the room's block tile.
 ; ============================================================================
 
 ; TABLE: addresses of the ten dungeon column heaps; index = high nibble of a room layout byte; value =
@@ -50,10 +50,16 @@ RoomLayout_UWColumnHeapAddrs:
     .ADDR RoomLayout_ColumnHeapUW9
 
 ; TABLE: first tile of each dungeon floor square; index = bits 2-0 of a square descriptor; value = tile.
-;   0 $B0 block (the tile PushBlock_FindAndCreate searches for), 1 $74 floor tile (unverified),
-;   2 $94 and 3 $B4 statues (unverified), 4 $70 stairs, 5 $68 (one tile repeated; sand, unverified),
-;   6 $F4 (one tile repeated; the dungeon water tile, the one the ladder crosses:
-;   Link_EndMoveAndAnimate), 7 $24 blank (black).
+;   0 $B0 block (the tile PushBlock_FindAndCreate searches for), 1 $74 the plain floor square,
+;   2 $94 and 3 $B4 the two statue pictures (mirror images; in the level entrance room, layout
+;   $21, square 2 stands in the left half and 3 in the right half), 4 $70 stairs, 5 $68 (one
+;   tile repeated; the dotted sand floor), 6 $F4 (one tile repeated; the dungeon water tile, the
+;   one the ladder crosses: Link_EndMoveAndAnimate), 7 $24 blank (black; the whole floor of
+;   layout $26, the rooms of the dungeon persons 1:$41, 2:$1F and 3:$2B among others).
+;   Squares 1, 4, 5 and 7 can be walked on (tiles below $78, RoomFirstUnwalkableTile); 0, 2, 3
+;   and 6 block.
+;   (trace) Level 1 room $73 (squares 1, 2, 3, 5) and level 2 room $0E (5): the tiles read from
+;   PlayAreaTiles and the picture on screen.
 RoomLayout_UWSquareTiles:
     .BYTE $B0, $74, $94, $B4, $70, $68, $F4, $24
 

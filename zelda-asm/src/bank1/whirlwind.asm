@@ -37,15 +37,15 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0056 Whirlwind_SetLinkYAndSetUp           code  Moves Link to Y = A, then falls through to set up a whirlwind on that Y in object slot X.
 ;   L0066 Whirlwind_SetUp                      code  Makes object slot X a whirlwind (type $2E) at the left screen edge on Link's Y.
-;   L0080 Whirlwind_PrevRoomIds                data  TABLE: room the screen scrolls in from when the whirlwind delivers Link; index = level - 1
-;   L0098 Whirlwind_Update_Full                code  Whirlwind update: moves right 2 pixels per frame, picks Link up, carries him off or drops him.
-;   L0217 Whirlwind_Destroy                    code  Frees the whirlwind's object slot and resets its per-slot fields.
-;   L0242 Whirlwind_Summon                     code  Flute use on the overworld: picks the next destination level and makes a whirlwind.
-;   L0313 Whirlwind_StepLevelIndex             code  Steps TeleportingLevelIndex: +1 when Link faces right or up, -1 when he faces left or down.
-;   L0322 Whirlwind_StepLevelIndex_Return      code  Shared exit of Whirlwind_Summon and Whirlwind_StepLevelIndex.
-;   L0329 Whirlwind_Draw                       code  Draws the whirlwind: one image, palette row cycling every frame.
-;   L0347 Whirlwind_DropOffYs                  data  TABLE: Y coordinate of Link and the whirlwind in the destination room; index = level - 1
-;   L0359 Whirlwind_InitDropOffAndBeginUpdate  code  On starting play in a room: sets up the drop-off if a whirlwind carries Link; then Mode_BeginUpdate.
+;   L0081 Whirlwind_PrevRoomIds                data  TABLE: room the screen scrolls in from when the whirlwind delivers Link; index = level - 1
+;   L0099 Whirlwind_Update_Full                code  Whirlwind update: moves right 2 pixels per frame, picks Link up, carries him off or drops him.
+;   L0218 Whirlwind_Destroy                    code  Frees the whirlwind's object slot and resets its per-slot fields.
+;   L0243 Whirlwind_Summon                     code  Flute use on the overworld: picks the next destination level and makes a whirlwind.
+;   L0314 Whirlwind_StepLevelIndex             code  Steps TeleportingLevelIndex: +1 when Link faces right or up, -1 when he faces left or down.
+;   L0323 Whirlwind_StepLevelIndex_Return      code  Shared exit of Whirlwind_Summon and Whirlwind_StepLevelIndex.
+;   L0330 Whirlwind_Draw                       code  Draws the whirlwind: one image, palette row cycling every frame.
+;   L0348 Whirlwind_DropOffYs                  data  TABLE: Y coordinate of Link and the whirlwind in the destination room; index = level - 1
+;   L0360 Whirlwind_InitDropOffAndBeginUpdate  code  On starting play in a room: sets up the drop-off if a whirlwind carries Link; then Mode_BeginUpdate.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -75,8 +75,9 @@ Whirlwind_SetUp:
 ; TABLE: room the screen scrolls in from when the whirlwind delivers Link; index = level - 1
 ;        (TeleportingLevelIndex AND 7); value = overworld room id west of the destination room.
 ;        The scroll goes right, so Link arrives in value + 1: $37, $3C, $74, $45, $0B, $22, $42, $6D.
-;        The table is the same in Q1 and Q2. That these are the rooms of the level entrances is not
-;        shown by this code (unverified here).
+;        The table is the same in Q1 and Q2. In Q1 the eight destinations are the rooms whose
+;        LevelBlockAttrsB destination is level 1-8. In Q2 that holds for $37, $3C, $45, $0B and
+;        $42; $74 and $22 lead to caves there and the tree secret of $6D works in Q1 only.
 Whirlwind_PrevRoomIds:
     .BYTE $36, $3B, $73, $44, $0A, $21, $41, $6C
 

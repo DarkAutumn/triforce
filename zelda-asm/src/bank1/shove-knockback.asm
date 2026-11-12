@@ -36,7 +36,7 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0065 Shove_Begin            code  Starts a knockback: sets the shove direction, distance and invincibility timer of the object hit.
 ;   L0232 Filler_Bank1CodeTail   data  DATA: filler ($FF), 31 bytes: the end of the BANK_01_CODE segment (the code that runs from RAM).
-;   L0282 Mmc1_SwitchBank_Bank1  code  Bank 1's copy of Mmc1_SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
+;   L0288 Mmc1_SwitchBank_Bank1  code  Bank 1's copy of Mmc1_SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -240,11 +240,17 @@ Filler_Bank1CodeTail:
 
 
 
-; Bank 1's copy of the reset handler, at $BF50, where this bank's reset vector points. The CPU
-; reads vectors at $FFFA-$FFFF, so the vector is seen only if bank 1 is mapped at $C000-$FFFF,
-; while the vector and the two JSRs below name $BFxx addresses (bank 1 at $8000-$BFFF); whether
-; the stub can ever run is (unverified). The bytes are 6502 code, the same instructions as
-; Reset_Handler in the fixed bank:
+; Bank 1's copy of the reset handler, at $BF50, where this bank's reset vector points. No code
+; jumps to it. The CPU reads vectors at $FFFA-$FFFF, so this bank's vectors are seen only if a
+; reset finds bank 1 mapped at $C000-$FFFF. The program never sets the mapper up that way: every
+; control value it writes ($0F or $0E, Mmc1_SetControl and Mmc1_SetControl_Bank5) keeps bank 7 at
+; $C000, so a reset while the game runs takes bank 7's vectors and Reset_Handler. The copy is for
+; a reset that finds the mapper in another program bank mode (its state at power-on is the
+; mapper's, not set by code). Then the vector $BF50 names whatever bank is at $8000-$BFFF, and
+; all eight banks hold this code at offset $3F50 (bank 7's own, Reset_Handler, differs only in
+; the two JSR operands, $FF98 and $FFAC, which again name copies of the same two routines), so
+; the stub is reached and works with any pair of banks mapped. The bytes are 6502 code, the same
+; instructions as Reset_Handler in the fixed bank:
 ;   $BF50  SEI / CLD / LDA #$00 / STA $2000    interrupts off, PPU control 0 (no NMI)
 ;   $BF57  LDX #$FF / TXS                      stack pointer $FF
 ;   $BF5A  LDA $2002 / AND #$80 / BEQ $BF5A    wait for a vertical blank

@@ -24,7 +24,7 @@
 ;   L0042 Reset_Handler    code  Reset handler: puts the CPU, PPU and mapper in a known state and jumps to Reset_RunGame.
 ;   L0085 Mmc1_SetControl  code  Writes the low 5 bits of A to the MMC1 control register ($8000), lowest bit first.
 ;   L0104 Mmc1_SwitchBank  code  Selects the PRG bank at $8000-$BFFF: writes the low 5 bits of A to $E000, lowest bit first.
-;   L0129 Isr_Vectors      data  TABLE: the CPU vectors at $FFFA; index = NMI, reset, IRQ/BRK; value = handler address. The IRQ
+;   L0131 Isr_Vectors      data  TABLE: the CPU vectors at $FFFA; index = NMI, reset, IRQ/BRK; value = handler address. The IRQ
 ; ============================================================================
 
 .SEGMENT "BANK_07_ISR"
@@ -119,8 +119,10 @@ Mmc1_SwitchBank:
 
 
 ; DATA: cartridge footer at $FFEB-$FFF9 (15 bytes, no label, read by no code). The first five
-; bytes are the ASCII text "ZELDA". The other ten are not decoded here (unverified: they look like
-; a maker's footer of checksums and size codes; the eight bytes $FFF2-$FFF9 add up to $00 mod $100).
+; bytes are the ASCII text "ZELDA". $FFF0-$FFF1 = $D7C8 is the 16-bit sum of the other 16,382
+; bytes of this bank (computed from the ROM image). The eight bytes $FFF2-$FFF9 add up to $00 mod
+; $100. (unverified) What $FFF2-$FFF8 ($00, $00, $38, $04, $01, $04, $01) stand for: no code
+; reads them, so the tree cannot decide it; $04 at $FFF7 equals the title length minus 1.
     .BYTE $5A, $45, $4C, $44, $41, $D7, $C8, $00    ; "ZELDA" at $FFEB; $D7 is at $FFF0
     .BYTE $00, $38, $04, $01, $04, $01, $BE
 

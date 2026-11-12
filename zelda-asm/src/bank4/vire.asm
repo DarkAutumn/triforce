@@ -34,9 +34,9 @@
 ;   L0090 Vire_UpdateState            code  Runs the handler for the Vire's state (0 wander and hop, 1 fly away after a hit).
 ;   L0096 Vire_UpdateState_JumpTable  data  TABLE: Vire state handlers; index = ObjState,X (0-1); value = routine address. State 2 is never
 ;   L0102 Vire_HopYOffsets            data  TABLE: Vire hop; index = abs(ObjGridOffset,X) (0-$F); value = signed pixels added to Y on each frame
-;   L0114 Vire_State0Wander           code  Vire state 0: wanders toward Link (turn rate $80) and hops while facing left or right.
-;   L0152 Vire_CheckCollisions        code  Checks a wandering Vire's collisions and starts the split if it was hit and survived.
-;   L0175 Vire_Draw                   code  Animates and draws a Vire: frame images 0-1 normally, 2-3 when it faces up.
+;   L0116 Vire_State0Wander           code  Vire state 0: wanders toward Link (turn rate $80) and hops while facing left or right.
+;   L0154 Vire_CheckCollisions        code  Checks a wandering Vire's collisions and starts the split if it was hit and survived.
+;   L0177 Vire_Draw                   code  Animates and draws a Vire: frame images 0-1 normally, 2-3 when it faces up.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -108,7 +108,9 @@ Vire_HopYOffsets:
 ; IN:   X = object slot.
 ; NOTE: The hop offset is added on every frame, not once per pixel. At the default q-speed $20 the
 ;       Vire spends 2 frames on each pixel, so each entry applies twice and the hop peaks 16 pixels
-;       up (derived from the speed; not traced). Wanderer_Update never applies knockback to
+;       up. (trace) A Vire made by setting an object slot's type to $12 in level 1 room $33:
+;       walking right, Y went from $AD to $9D at offsets 6-8 and back, 2 frames per pixel.
+;       Wanderer_Update never applies knockback to
 ;       a Vire: the hit that sets ObjShoveDir also moves it to state 1 (or kills it).
 ; ----------------------------------------------------------------------------
 Vire_State0Wander:

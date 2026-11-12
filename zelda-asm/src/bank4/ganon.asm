@@ -44,7 +44,7 @@
 ;   L0223 Ganon_StartXs                  data  TABLE: Ganon's start X coordinates; index = FrameCounter AND 1; value = pixels.
 ;   L0234 Ganon_UpdateBrownState         code  Brown Ganon: counts ObjState down every other frame; at 0 he turns blue at a new start spot.
 ;   L0256 Ganon_DrawBodyAndReturn        code  Draws Ganon's body and returns; shared by the blue, brown and dying code.
-;   L0270 Ganon_UpdateDying              code  Ganon's death: counts Ganon_ObjDyingCount up each frame; body, then ashes and burst, then the item.
+;   L0271 Ganon_UpdateDying              code  Ganon's death: counts Ganon_ObjDyingCount up each frame; body, then ashes and burst, then the item.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -263,9 +263,10 @@ Ganon_DrawBodyAndReturn:
 ; IN:   X = object slot; Ganon_ObjDyingCount,X nonzero (set to 1 by the silver arrow hit).
 ; OUT:  at $50: palette, position moved to the ashes, burst set up, death cry, song $02;
 ;       at $A0: room item (slot $13) activated at the ashes, RoomKillCount + 1.
-; NOTE: Count < $50: body drawn (the arrow hit sets his invincibility timer to $28; that this
-;       makes the body flash is (unverified)). $50-$9F: ashes and burst. From $A0: ashes only.
-;       The count stops at $FF.
+; NOTE: Count < $50: body drawn, flashing. The arrow hit set his invincibility timer to $28; it loses 1
+;       every second frame, so it is nonzero for all $4F body frames, and Anim_WriteSpritePair then
+;       puts (timer AND 3) in the palette bits of his sprites: a new palette row every 2 frames.
+;       $50-$9F: ashes and burst. From $A0: ashes only. The count stops at $FF.
 ; ----------------------------------------------------------------------------
 Ganon_UpdateDying:
     INC Ganon_ObjDyingCount, X

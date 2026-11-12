@@ -43,10 +43,10 @@
 ;   L0117 Link_ModifyDirAtGridPoint            code  Grid-point rules: picks Link's direction from the held directions and which of them are walkable.
 ;   L0153 Link_HandleInput_Return              code  Shared return of Link_HandleInput and Link_ModifyDirAtGridPoint.
 ;   L0157 Link_ModifyDirAtGridPoint_HaveInput  code  Grid-point rules, second part: at least one direction is held; Y = their count, X = 0.
-;   L0272 Link_InitSpeed                       code  Sets Link's walking q-speed: $60 (1.5 pixels per frame), or $30 (0.75) on OW tiles $74 and $75.
-;   L0333 Link_ModifyDirOnGridLine             code  Between-grid-points rules: Link may only continue, go back, or (near the start of a step) reverse.
-;   L0360 Link_SetDirAndInputDir               code  Sets Link's facing direction and input direction to A.
-;   L0364 Link_SetInputDir                     code  Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
+;   L0277 Link_InitSpeed                       code  Sets Link's walking q-speed: $60 (1.5 pixels per frame), or $30 (0.75) on OW tiles $74 and $75.
+;   L0338 Link_ModifyDirOnGridLine             code  Between-grid-points rules: Link may only continue, go back, or (near the start of a step) reverse.
+;   L0365 Link_SetDirAndInputDir               code  Sets Link's facing direction and input direction to A.
+;   L0369 Link_SetInputDir                     code  Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
 ; ============================================================================
 
 ; TABLE: direction bits on the same axis as a direction; index = reverse direction index (0 up, 1 down,
@@ -196,7 +196,10 @@ Link_ModifyDirAtGridPoint_HaveInput:
     ;   At Y = $85 (8 pixels above the door row) facing down: keep the facing direction
     ;   and clear the flag.
     ;   Otherwise: turn perpendicular, whatever the flag says.
-    ; (The intent, making diagonal input lead into the side doors, is unverified.)
+    ; Effect: on these two columns diagonal input never goes straight past a side door.
+    ; (trace) Level 1 room $73, Link at X = $20 holding down+left from Y = $5D, or up+left from
+    ; Y = $BD: he walks along the column to Y = $8D, turns left there and leaves by the west door;
+    ; at X = $D0 holding down+right he leaves by the east door the same way.
     LDY ObjX
     CPY #$20
     BEQ :+
@@ -264,7 +267,9 @@ Link_ModifyDirAtGridPoint_HaveInput:
 ; OUT:  ObjQSpeedFrac (slot 0); [00] = the same value; ObjPosFrac = 0 when the speed changes to $30
 ; NOTE: The q-speed is added to ObjPosFrac four times a frame, one pixel per carry, so $60 gives 1.5
 ;       pixels per frame: 1 and 2 pixels on alternate frames.
-; NOTE: Upstream calls tiles $74/$75 mountain stairs (unverified here). The slow speed applies in
+; NOTE: Tiles $74/$75 are overworld secondary square $0A ($74,$74,$75,$75), the stairs drawn on
+;       mountain sides; 37 room layouts use it. (trace) Room $1A: the column of blue steps at
+;       X = $D0, rows 0-4, holds these two tiles. The slow speed applies in
 ;       the OW only. ObjPosFrac is not reset when the speed goes back to $60.
 ; NOTE: Also called when Link enters a room (Room_EnterCommon chunk) and, by branch, from
 ;       Link_ModifyDirOnGridLine when Link keeps his direction.

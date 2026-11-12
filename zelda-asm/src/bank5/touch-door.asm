@@ -39,11 +39,11 @@
 ;   L0080 Door_TouchOpen              code  Door type 0 (open doorway): lets Link pass. Also the RTS of Door_TouchWall.
 ;   L0090 Door_TouchFalseWall         code  Door types 2 and 3 (false wall): makes Link push for the length of a $18-frame timer, then pass.
 ;   L0108 Door_TouchBombable          code  Door type 4 (bombable wall): lets Link pass only when the wall has been opened.
-;   L0123 Door_TouchShutter           code  Door type 7 (shutter): lets Link pass only when it is open and no door is opening or closing.
-;   L0157 Door_TouchKey               code  Door types 5 and 6 (locked door): passes if open; else spends a key (or uses the magic key) to open.
-;   L0186 Door_Touch_BlockAtWall      code  Blocks Link: jumps to Door_TouchWall. Shared by Door_TouchKey and Door_Touch_BlockWhileTimer.
-;   L0190 Door_Touch_BlockWhileTimer  code  Blocks Link while his ObjTimer (slot 0) is not 0; lets him pass when it is 0.
-;   L0195 Door_Touch_Return           code  Shared RTS of Door_TouchKey and Door_Touch_BlockWhileTimer: Link passes.
+;   L0126 Door_TouchShutter           code  Door type 7 (shutter): lets Link pass only when it is open and no door is opening or closing.
+;   L0160 Door_TouchKey               code  Door types 5 and 6 (locked door): passes if open; else spends a key (or uses the magic key) to open.
+;   L0189 Door_Touch_BlockAtWall      code  Blocks Link: jumps to Door_TouchWall. Shared by Door_TouchKey and Door_Touch_BlockWhileTimer.
+;   L0193 Door_Touch_BlockWhileTimer  code  Blocks Link while his ObjTimer (slot 0) is not 0; lets him pass when it is 0.
+;   L0198 Door_Touch_Return           code  Shared RTS of Door_TouchKey and Door_Touch_BlockWhileTimer: Link passes.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -117,8 +117,11 @@ Door_TouchBombable:
 ; NOTE: ShutterTouchedDirs collects the direction bits of open shutters Link has touched since
 ;       the room was entered; it is zeroed with $0300-$051F by Room_EnterCommon. The first touch
 ;       of an open shutter passes and sets its bit. Every later touch (Doorway_CheckLink touches it again
-;       on each frame of the walk through) passes only while Link's ObjTimer is 0. Why the timer is
-;       consulted here is (unverified).
+;       on each frame of the walk through) passes only while Link's ObjTimer is 0. A block has an
+;       effect only while DoorwayDir = 0, so the timer cannot stop Link during the walk through
+;       that the first touch began; it holds him only when he has left the doorway span and
+;       touches the same open shutter again while his timer runs (set to $18 by a false wall, $20
+;       by a key unlock, $30 by a door closing: Door_TouchFalseWall, Door_TouchKey, Door_Update).
 ; ----------------------------------------------------------------------------
 Door_TouchShutter:
     ; A door command is running, or this shutter is not open: wall.

@@ -12,7 +12,9 @@
 ;   - Scroll speed is 0.5 pixel per frame: $80 is added to a fraction (VScrollAddrHi, reused) each
 ;     frame and the carry goes into CurVScroll and CreditsTileOffset. Mode13WinGame_Update_Sub3Credits
 ;   - CurVScroll wraps at $F0; each wrap toggles the base nametable (SwitchNameTablesReq) and counts
-;     one screen in VScrollAddrLo (reused; nothing in this file sets its start value).
+;     one screen in VScrollAddrLo (reused). It starts at 0: every room scroll leaves it 0
+;     (Mode7Scroll_ResetVScrollLo after a vertical scroll, Mode7Scroll_Update_Sub0 before a horizontal
+;     one) and nothing writes it between the scroll into Zelda's room and the credits.
 ;     Mode13WinGame_Update_Sub3Credits
 ;   - The scroll ends, by the quest of the current save slot (QuestNumbers): Q1 at screen 2 with
 ;     CurVScroll $78, Q2 at screen 3 with CurVScroll 0. Then ObjTimer = $40 and submode 4 follows.
@@ -26,16 +28,16 @@
 ;   - Text line record: byte 0 = character count, byte 1 = starting column, then the tile codes.
 ;     Credits_TextLines, Credits_TextAddrsLo, Credits_TextAddrsHi
 ; CONTENTS: (generated; L = line in this file)
-;   L0042 Credits_LastScreens               data  TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
-;   L0046 Credits_LastVScrolls              data  TABLE: CurVScroll within that last screen at which the credits end; index = 0 Q1, 1 Q2; pixels.
-;   L0054 Mode13WinGame_Update_Sub3Credits  code  Update submode 3: scrolls the credits 0.5 pixel per frame and draws a row per 8 pixels.
-;   L0120 Credits_PageVramAddrsHi           data  TABLE: high nametable address byte of a page of 8 tile rows; index = CreditsVramPage (0-$B).
-;   L0125 Credits_PageTextMasks             data  TABLE: which rows of a page take a text line; index = CreditsVramPage; bit 7 = row 0 .. bit 0 = row 7.
-;   L0130 Credits_TextAddrsLo               data  TABLE: low address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-;   L0134 Credits_TextAddrsHi               data  TABLE: high address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-;   L0138 Credits_TextLines                 data  DATA: credits text line records: character count, starting column, then that many tile codes.
-;   L0142 Credits_RowAttrs                  data  TABLE: attribute byte for the middle 6 blocks of an attribute row; index = CreditsRow / 4.
-;   L0158 Credits_DrawRow                   code  Builds the transfer records for the next credits tile row: bricks, text line, attributes.
+;   L0044 Credits_LastScreens               data  TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
+;   L0048 Credits_LastVScrolls              data  TABLE: CurVScroll within that last screen at which the credits end; index = 0 Q1, 1 Q2; pixels.
+;   L0056 Mode13WinGame_Update_Sub3Credits  code  Update submode 3: scrolls the credits 0.5 pixel per frame and draws a row per 8 pixels.
+;   L0122 Credits_PageVramAddrsHi           data  TABLE: high nametable address byte of a page of 8 tile rows; index = CreditsVramPage (0-$B).
+;   L0127 Credits_PageTextMasks             data  TABLE: which rows of a page take a text line; index = CreditsVramPage; bit 7 = row 0 .. bit 0 = row 7.
+;   L0132 Credits_TextAddrsLo               data  TABLE: low address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
+;   L0136 Credits_TextAddrsHi               data  TABLE: high address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
+;   L0140 Credits_TextLines                 data  DATA: credits text line records: character count, starting column, then that many tile codes.
+;   L0144 Credits_RowAttrs                  data  TABLE: attribute byte for the middle 6 blocks of an attribute row; index = CreditsRow / 4.
+;   L0164 Credits_DrawRow                   code  Builds the transfer records for the next credits tile row: bricks, text line, attributes.
 ; ============================================================================
 
 ; TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
@@ -145,8 +147,12 @@ Credits_RowAttrs:
     .BYTE $00, $00, $50, $00, $00, $00, $AA, $00
 
 ; One more byte without a label: it is Credits_RowAttrs+24, the entry Credits_DrawRow would read for
-; CreditsRow $60. If CreditsRow and the screen count start at 0 (not set in this file, (unverified)),
-; the last row drawn is CreditsRow $5D in Q2 ($4E in Q1) and this byte is never read.
+; CreditsRow $60. It is never read. CreditsRow, CreditsVramPage, CreditsVramLine and
+; CreditsLineIndex ($050A, $050C-$050E) start at 0: Room_EnterCommon zeroes $0300-$051F on entry to
+; Zelda's room and only Credits_DrawRow writes them; the screen count (VScrollAddrLo) starts at 0
+; too (file header). The last row drawn is then CreditsRow $5D in Q2 ($4E in Q1).
+; (trace) Mode $13 started by hand in a level 1 room: the credits ran 1200 frames in Q1 and 1440 in
+; Q2 and ended with CreditsRow = $4F (Q1) and $60 (Q2), the row after the last one drawn.
     .BYTE $00
 
 ; ----------------------------------------------------------------------------

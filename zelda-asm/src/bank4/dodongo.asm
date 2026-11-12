@@ -39,36 +39,36 @@
 ;     hit started knockback invincibility (Dodongo_CheckCollisions).
 ; CONTENTS: (generated; L = line in this file)
 ;   L0083 Dodongo_Update                           code  Updates a Dodongo (types $31, $32) for one frame: state, collisions, bomb test, drawing.
-;   L0094 Dodongo_BloatedWaitTimes                 data  TABLE: length of each bloated wait substate; index = Dodongo_ObjBloatedSubstate 0-2; value = frames.
-;   L0101 Dodongo_UpdateState                      code  Runs the handler of the Dodongo's current state.
-;   L0106 Dodongo_UpdateState_JumpTable            data  TABLE: Dodongo state handlers; index = ObjState; value = routine address.
-;   L0123 Dodongo_State0Move                       code  State 0: walks the Dodongo for one frame as a wanderer with turn rate $20.
-;   L0169 Dodongo_State2Stunned                    code  State 2: keeps the Dodongo stunned until its stun timer runs down, then returns it to walking.
-;   L0185 Dodongo_State1Bloated                    code  State 1: runs the bloated substate of a Dodongo that swallowed a bomb.
-;   L0190 Dodongo_State1Bloated_JumpTable          data  TABLE: bloated substate handlers; index = Dodongo_ObjBloatedSubstate; value = routine address.
-;   L0209 Dodongo_State1Bloated_Wait               code  Bloated substates 0-2: times the wait, counts the swallowed bomb and picks the next substate.
-;   L0256 Dodongo_State1Bloated_DecTimer           code  Shared tail of the bloated wait substates: counts the bloated timer down by 1.
-;   L0269 Dodongo_State1Bloated_Die                code  Bloated substate 3: starts the Dodongo's death (sparkle, boss death cry) and resets its state.
-;   L0274 Dodongo_State1Bloated_End                code  Bloated substate 4, and the end of the stun: returns the Dodongo to state 0 and substate 0.
-;   L0294 Dodongo_CheckCollisions                  code  Checks collisions for one or both 16-pixel halves of the Dodongo and kills it if the sword hit.
-;   L0330 Dodongo_CheckCollisions_Return           code  Shared exit of Dodongo_CheckCollisions and Dodongo_CheckCollisionsStandardSize.
-;   L0345 Dodongo_CheckCollisionsStandardSize      code  Checks weapons and Link against the 16-pixel box at ObjX; the sword can hit only a stunned Dodongo.
-;   L0364 Dodongo_MouthNegativeLimitsX             data  TABLE: lower limit (inclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-;   L0369 Dodongo_MouthPositiveLimitsX             data  TABLE: upper limit (exclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-;   L0374 Dodongo_MouthNegativeLimitsY             data  TABLE: lower limit (inclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-;   L0379 Dodongo_MouthPositiveLimitsY             data  TABLE: upper limit (exclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-;   L0398 Dodongo_CheckBombHit                     code  Tests the bomb in slot $10 against a walking Dodongo: a ticking bomb may be eaten, a blast stuns.
-;   L0467 Dodongo_TryEatBomb                       code  Makes the Dodongo swallow the ticking bomb in slot $10 if the bomb lies just ahead of its centre.
-;   L0520 Dodongo_BombPositiveLimits               data  TABLE: upper limit (exclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
-;   L0525 Dodongo_BombNegativeLimits               data  TABLE: lower limit (inclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
-;   L0536 Dodongo_IsBombInRange                    code  Tests whether the bomb's centre is within a square range of the Dodongo's centre.
-;   L0577 Dodongo_FrameImages                      data  TABLE: frame image of the half drawn at ObjX, walking or stunned; index = (ObjDir >> 1) + 5 * frame.
-;   L0584 Dodongo_FrameHFlips                      data  TABLE: horizontal flip for each entry of Dodongo_FrameImages; same index; value = $40 flip, 0 none.
-;   L0590 Dodongo_BloatedFrameImages               data  TABLE: frame images of the bloated Dodongo; index = ObjDir >> 1; value = frame image number.
-;   L0596 Dodongo_BloatedFrameHFlips               data  TABLE: horizontal flip for each entry of Dodongo_BloatedFrameImages; same index; $40 flip, 0 none.
-;   L0609 Dodongo_Draw                             code  Draws the Dodongo: one 16-pixel image facing up or down, two side by side facing left or right.
-;   L0718 Anim_SetSpriteDescriptorLevelPaletteRow  code  Sets both sprite attribute bytes of the sprite descriptor to 3 (sprite palette 3).
-;   L0723 Dodongo_Draw_Return                      code  Shared exit of Dodongo_Draw; the routine above also returns through it.
+;   L0096 Dodongo_BloatedWaitTimes                 data  TABLE: length of each bloated wait substate; index = Dodongo_ObjBloatedSubstate 0-2; value = frames.
+;   L0103 Dodongo_UpdateState                      code  Runs the handler of the Dodongo's current state.
+;   L0108 Dodongo_UpdateState_JumpTable            data  TABLE: Dodongo state handlers; index = ObjState; value = routine address.
+;   L0125 Dodongo_State0Move                       code  State 0: walks the Dodongo for one frame as a wanderer with turn rate $20.
+;   L0171 Dodongo_State2Stunned                    code  State 2: keeps the Dodongo stunned until its stun timer runs down, then returns it to walking.
+;   L0187 Dodongo_State1Bloated                    code  State 1: runs the bloated substate of a Dodongo that swallowed a bomb.
+;   L0192 Dodongo_State1Bloated_JumpTable          data  TABLE: bloated substate handlers; index = Dodongo_ObjBloatedSubstate; value = routine address.
+;   L0211 Dodongo_State1Bloated_Wait               code  Bloated substates 0-2: times the wait, counts the swallowed bomb and picks the next substate.
+;   L0258 Dodongo_State1Bloated_DecTimer           code  Shared tail of the bloated wait substates: counts the bloated timer down by 1.
+;   L0271 Dodongo_State1Bloated_Die                code  Bloated substate 3: starts the Dodongo's death (sparkle, boss death cry) and resets its state.
+;   L0276 Dodongo_State1Bloated_End                code  Bloated substate 4, and the end of the stun: returns the Dodongo to state 0 and substate 0.
+;   L0296 Dodongo_CheckCollisions                  code  Checks collisions for one or both 16-pixel halves of the Dodongo and kills it if the sword hit.
+;   L0332 Dodongo_CheckCollisions_Return           code  Shared exit of Dodongo_CheckCollisions and Dodongo_CheckCollisionsStandardSize.
+;   L0347 Dodongo_CheckCollisionsStandardSize      code  Checks weapons and Link against the 16-pixel box at ObjX; the sword can hit only a stunned Dodongo.
+;   L0366 Dodongo_MouthNegativeLimitsX             data  TABLE: lower limit (inclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+;   L0371 Dodongo_MouthPositiveLimitsX             data  TABLE: upper limit (exclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+;   L0376 Dodongo_MouthNegativeLimitsY             data  TABLE: lower limit (inclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+;   L0381 Dodongo_MouthPositiveLimitsY             data  TABLE: upper limit (exclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+;   L0400 Dodongo_CheckBombHit                     code  Tests the bomb in slot $10 against a walking Dodongo: a ticking bomb may be eaten, a blast stuns.
+;   L0469 Dodongo_TryEatBomb                       code  Makes the Dodongo swallow the ticking bomb in slot $10 if the bomb lies just ahead of its centre.
+;   L0522 Dodongo_BombPositiveLimits               data  TABLE: upper limit (exclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
+;   L0527 Dodongo_BombNegativeLimits               data  TABLE: lower limit (inclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
+;   L0538 Dodongo_IsBombInRange                    code  Tests whether the bomb's centre is within a square range of the Dodongo's centre.
+;   L0579 Dodongo_FrameImages                      data  TABLE: frame image of the half drawn at ObjX, walking or stunned; index = (ObjDir >> 1) + 5 * frame.
+;   L0586 Dodongo_FrameHFlips                      data  TABLE: horizontal flip for each entry of Dodongo_FrameImages; same index; value = $40 flip, 0 none.
+;   L0592 Dodongo_BloatedFrameImages               data  TABLE: frame images of the bloated Dodongo; index = ObjDir >> 1; value = frame image number.
+;   L0598 Dodongo_BloatedFrameHFlips               data  TABLE: horizontal flip for each entry of Dodongo_BloatedFrameImages; same index; $40 flip, 0 none.
+;   L0611 Dodongo_Draw                             code  Draws the Dodongo: one 16-pixel image facing up or down, two side by side facing left or right.
+;   L0720 Anim_SetSpriteDescriptorLevelPaletteRow  code  Sets both sprite attribute bytes of the sprite descriptor to 3 (sprite palette 3).
+;   L0725 Dodongo_Draw_Return                      code  Shared exit of Dodongo_Draw; the routine above also returns through it.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -86,8 +86,10 @@ Dodongo_Update:
     JSR Dodongo_CheckBombHit
     JMP Dodongo_Draw
 
-; Five bytes without a label; nothing refers to them by name. Purpose (unverified). They have the
-; shape of this file's 5-entry direction tables (index = direction >> 1, entry 3 = $FF unused).
+; Five unused bytes. They have no label, no label expression in any bank reaches them (the table
+; below is indexed from 0 up, and the code above is not indexed), and no instruction addresses bank 4
+; by a raw number. They have the shape of this file's 5-entry direction tables (index =
+; direction >> 1, entry 3 = $FF unused).
     .BYTE $10, $F0, $10, $FF, $F0
 
 ; TABLE: length of each bloated wait substate; index = Dodongo_ObjBloatedSubstate 0-2; value = frames.

@@ -40,13 +40,13 @@
 ;   - Mode 4 submodes: 1 redraw rows (only after scrolling into a dark room), 2 decide whether to
 ;     fade in after leaving an unlit dark room, 3 run the fade, 0 enter the room. Mode4Enter_Init.
 ; CONTENTS: (generated; L = line in this file)
-;   L0059 Mode4Enter_Init                        code  Mode 4 (enter room) init: runs submode 1, 2 or 3, or (submode 0) the common room entry.
-;   L0107 Palette_SetFadeCycleAndAdvanceSubmode  code  Starts a palette fade and advances the submode.
-;   L0114 Mode4Enter_Init_Sub3                   code  Mode 4 init submode 3: runs the fade-in each frame; when it is done, falls into the next label.
-;   L0119 Mode4Enter_Init_GoToSub0               code  Sets mode 4's submode to 0 (enter the room next frame) and clears CandleState.
-;   L0137 Room_EnterCommon                       code  Common room entry: clears per-room state, places Link, creates the room's monsters and tile object.
-;   L0402 Link_DrawBetweenRooms                  code  Draws Link for a frame between rooms; behind the background while he is leaving underground.
-;   L0423 Room_SetUpTileObjOW                    code  Puts the overworld room's tile object in object slot $0B and activates it.
+;   L0065 Mode4Enter_Init                        code  Mode 4 (enter room) init: runs submode 1, 2 or 3, or (submode 0) the common room entry.
+;   L0113 Palette_SetFadeCycleAndAdvanceSubmode  code  Starts a palette fade and advances the submode.
+;   L0120 Mode4Enter_Init_Sub3                   code  Mode 4 init submode 3: runs the fade-in each frame; when it is done, falls into the next label.
+;   L0125 Mode4Enter_Init_GoToSub0               code  Sets mode 4's submode to 0 (enter the room next frame) and clears CandleState.
+;   L0143 Room_EnterCommon                       code  Common room entry: clears per-room state, places Link, creates the room's monsters and tile object.
+;   L0408 Link_DrawBetweenRooms                  code  Draws Link for a frame between rooms; behind the background while he is leaving underground.
+;   L0429 Room_SetUpTileObjOW                    code  Puts the overworld room's tile object in object slot $0B and activates it.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -54,7 +54,13 @@
 ; NOTE: Mode 7 (scroll) enters at submode 1, and the order is 1 -> 2 -> (3 ->) 0. Other modes enter
 ;       at submode 0. Submode 1 does nothing unless CurRow >= 0, which mode 7 arranges only after
 ;       scrolling into a dark dungeon room (CurRow = 0); it then sends all $16 play-area rows to
-;       NT 0 again, one per frame. Why that redraw is needed is (unverified).
+;       NT 0 again, one per frame. The tile map is not changed between the scroll and this redraw,
+;       so it sends the rows the scroll has already put in NT 0: the picture stays the same and
+;       the only effect is that the room is entered 21 frames later.
+;       (trace) Level 4, scrolls into the dark rooms $30 (down from $20 and up from $40), $21 (right
+;       from $20) and $50 (left from $51): PlayAreaTiles was the same before and after the redraw;
+;       with CurRow forced to $FF when mode 4 began, play started 21 frames sooner and the room,
+;       once lit, was the same picture pixel for pixel.
 ; ----------------------------------------------------------------------------
 Mode4Enter_Init:
     LDX GameSubmode

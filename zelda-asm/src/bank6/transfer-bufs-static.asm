@@ -26,50 +26,51 @@
 ;     (Transfer_LifeOrMoneyCostTextBuf).
 ;   - The unlabeled bytes in segments BANK_06_ISR ($BF50) and BANK_06_VEC ($BFFA) are a copy of the
 ;     fixed bank's reset code (Reset_Handler, Mmc1_SetControl, Mmc1_SwitchBank; only the two JSR targets differ,
-;     $BFxx for $FFxx) and a vector table: NMI $E484, reset $BF50, IRQ $BFF0. Whether the copy can
-;     ever run is (unverified).
+;     $BFxx for $FFxx) and a vector table: NMI $E484, reset $BF50, IRQ $BFF0. No code jumps to the
+;     copy; it runs only after a reset that finds a bank other than 7 at $C000-$FFFF, which the
+;     program never sets up (MMC1 control is always $0F or $0E).
 ; CONTENTS: (generated; L = line in this file)
-;   L0079 Transfer_Mode1TilesBuf                         data  DATA: transfer buffer (selector $14): the file select screen.
-;   L0103 Transfer_ModeEandFCharBoardBuf                 data  DATA: transfer buffer (selector $16): the register/eliminate character board (modes $E and $F).
-;   L0122 Transfer_GanonPaletteRow7Buf                   data  DATA: transfer buffer (selector $36): sprite palette row 7 ($3F1C) for Ganon: $0F $16 $2C $3C.
-;   L0127 Transfer_EndingPaletteBuf                      data  DATA: transfer buffer (selector $6A): the ending palettes.
-;   L0133 Transfer_BlankTextLines12Buf                   data  DATA: transfer buffer (selector $1E): 24 blank tiles at $21A4 and at $21C4 (person text lines 1, 2).
-;   L0138 Transfer_BlankTextLine3AndPricesBuf            data  DATA: transfer buffer (selector $2A): 24 blank tiles at $21E4 (text line 3), 13 at $22C8 (prices).
-;   L0143 Transfer_SubmenuTriforceApexBuf                data  DATA: transfer buffer (selector $50): apex of the submenu Triforce outline, 2 tiles at $2ACF.
-;   L0147 Transfer_SubmenuTriforceBottomBuf              data  DATA: transfer buffer (selector $5A): bottom of the submenu Triforce outline, 12 tiles at $2B6A.
-;   L0154 Transfer_GhostPaletteRow7Buf                   data  DATA: transfer buffer (selector $20): sprite palette row 7 = $0F $30 $00 $12.
-;   L0159 Transfer_GreenBgPaletteRow7Buf                 data  DATA: transfer buffer (selector $22): sprite palette row 7 = $0F $1A $37 $12.
-;   L0164 Transfer_BrownBgPaletteRow7Buf                 data  DATA: transfer buffer (selector $24): sprite palette row 7 = $0F $17 $37 $12.
-;   L0168 Transfer_CaveBgPaletteRowsBuf                  data  DATA: transfer buffer (selector $3E): background palette rows 2-3 ($3F08, 8 bytes) for caves.
-;   L0173 Transfer_CellarAttrsBuf                        data  DATA: transfer buffer (selector $26): cellar attributes: $AA x 32 at $23D0 and x 16 at $23F0.
-;   L0178 Transfer_WhitePaletteBottomHalfBuf             data  DATA: transfer buffer (selector $78): background palette rows 2-3 ($3F08) all white ($30).
-;   L0185 Transfer_DefaultOWPaletteRow7Buf               data  DATA: transfer buffer (selector $7A): sprite palette row 7 = $0F $0F $1C $16.
-;   L0189 Transfer_GleeokPaletteRow7Buf                  data  DATA: transfer buffer (selector $7C): sprite palette row 7 = $0F $2A $1A $0C, for Gleeok ($43-$45).
-;   L0193 Transfer_AquamentusPaletteRow7Buf              data  DATA: transfer buffer (selector $08): sprite palette row 7 = $0F $0A $29 $30, for Aquamentus ($3D).
-;   L0198 Transfer_OrangeBossPaletteRow7Buf              data  DATA: transfer buffer (selector $0A): sprite palette row 7 = $0F $17 $27 $30.
-;   L0202 Transfer_BombCapacityPriceTextBuf              data  DATA: transfer buffer (selector $6C): the text "-100" at $22CD (price of the more-bombs offer).
-;   L0206 Transfer_LifeOrMoneyCostTextBuf                data  DATA: transfer buffer (selector $76): "-1", five blanks, "-50" at $22CB (life-or-money man).
-;   L0212 Transfer_Mode8TextBuf                          data  DATA: transfer buffer (selector $04): the continue menu.
-;   L0222 Transfer_StatusBarStaticsBuf                   data  DATA: transfer buffer (selector $0E): the fixed parts of the status bar.
-;   L0234 Transfer_InventoryTextBuf                      data  DATA: transfer buffer (selector $30): the text "INVENTORY" at $2984.
-;   L0240 Transfer_SubmenuBoxesTopsBuf                   data  DATA: transfer buffer (selector $32): tops of the two submenu boxes.
-;   L0247 Transfer_SubmenuBoxesSidesBuf                  data  DATA: transfer buffer (selector $34): sides of the two submenu boxes.
-;   L0253 Transfer_SelectedItemBoxBottomBuf              data  DATA: transfer buffer (selector $38): bottom of the selected-item box, 4 tiles at $2A27.
-;   L0257 Transfer_UseBButtonTextBuf                     data  DATA: transfer buffer (selector $3A): the text "USE B BUTTON" at $2A42.
-;   L0263 Transfer_InventoryBoxBottomBuf                 data  DATA: transfer buffer (selector $3C): the text "FOR THIS" at $2A64 and the inventory box bottom.
-;   L0270 Transfer_SubmenuMapTextsAndSheetTopBuf         data  DATA: transfer buffer (selector $40): dungeon submenu texts and the top edge of the map sheet.
-;   L0278 Transfer_SubmenuMapSheetBottomEdgeBuf          data  DATA: transfer buffer (selector $42): bottom edge of the dungeon map sheet, 16 tiles at $2BAC.
-;   L0284 Transfer_SubmenuAttrs1Buf                      data  DATA: transfer buffer (selector $48): submenu attributes 1: $05 x 3 at $2BD9, $00 x 11 at $2BDC.
-;   L0289 Transfer_SubmenuAttrs2Buf                      data  DATA: transfer buffer (selector $4A): submenu attributes, part 2: $55 x 22 at $2BE9.
-;   L0293 Transfer_BlankBottomRowNT2Buf                  data  DATA: transfer buffer (selector $4C): 32 blank tiles at $2BA0 (a row of the second name table).
-;   L0297 Transfer_BlankRow7NT2Buf                       data  DATA: transfer buffer (selector $4E): 32 blank tiles at $28E0.
-;   L0301 Transfer_Mode11DeadLinkPaletteBuf              data  DATA: transfer buffer (selector $2C): dead Link's palette (sprite row 4, $3F10) = $0F $10 $30 $00.
-;   L0306 Transfer_GameOverBuf                           data  DATA: transfer buffer (selector $46): the death screen's "GAME OVER " text at $224C.
-;   L0313 Transfer_Mode11BackgroundPaletteBottomHalfBuf  data  DATA: transfer buffer (selector $5E): death: background palette rows 2-3 ($3F08).
-;   L0318 Transfer_Mode11PlayAreaAttrsTopHalfBuf         data  DATA: transfer buffer (selector $60): death: attributes $FF x 24 at $23D0 (upper play area).
-;   L0322 Transfer_Mode11PlayAreaAttrsBottomHalfBuf      data  DATA: transfer buffer (selector $62): death: attributes $FF x 24 at $23E8 (lower play area).
-;   L0326 Transfer_StoryTileAttrBuf                      data  DATA: transfer buffer (selector $02): story screen tiles and attributes (1131-byte blob).
-;   L0330 Transfer_GameTitleBuf                          data  DATA: transfer buffer (selector $10): title screen tiles and attributes (1121-byte blob).
+;   L0080 Transfer_Mode1TilesBuf                         data  DATA: transfer buffer (selector $14): the file select screen.
+;   L0104 Transfer_ModeEandFCharBoardBuf                 data  DATA: transfer buffer (selector $16): the register/eliminate character board (modes $E and $F).
+;   L0123 Transfer_GanonPaletteRow7Buf                   data  DATA: transfer buffer (selector $36): sprite palette row 7 ($3F1C) for Ganon: $0F $16 $2C $3C.
+;   L0128 Transfer_EndingPaletteBuf                      data  DATA: transfer buffer (selector $6A): the ending palettes.
+;   L0134 Transfer_BlankTextLines12Buf                   data  DATA: transfer buffer (selector $1E): 24 blank tiles at $21A4 and at $21C4 (person text lines 1, 2).
+;   L0139 Transfer_BlankTextLine3AndPricesBuf            data  DATA: transfer buffer (selector $2A): 24 blank tiles at $21E4 (text line 3), 13 at $22C8 (prices).
+;   L0144 Transfer_SubmenuTriforceApexBuf                data  DATA: transfer buffer (selector $50): apex of the submenu Triforce outline, 2 tiles at $2ACF.
+;   L0148 Transfer_SubmenuTriforceBottomBuf              data  DATA: transfer buffer (selector $5A): bottom of the submenu Triforce outline, 12 tiles at $2B6A.
+;   L0155 Transfer_GhostPaletteRow7Buf                   data  DATA: transfer buffer (selector $20): sprite palette row 7 = $0F $30 $00 $12.
+;   L0160 Transfer_GreenBgPaletteRow7Buf                 data  DATA: transfer buffer (selector $22): sprite palette row 7 = $0F $1A $37 $12.
+;   L0165 Transfer_BrownBgPaletteRow7Buf                 data  DATA: transfer buffer (selector $24): sprite palette row 7 = $0F $17 $37 $12.
+;   L0169 Transfer_CaveBgPaletteRowsBuf                  data  DATA: transfer buffer (selector $3E): background palette rows 2-3 ($3F08, 8 bytes) for caves.
+;   L0174 Transfer_CellarAttrsBuf                        data  DATA: transfer buffer (selector $26): cellar attributes: $AA x 32 at $23D0 and x 16 at $23F0.
+;   L0179 Transfer_WhitePaletteBottomHalfBuf             data  DATA: transfer buffer (selector $78): background palette rows 2-3 ($3F08) all white ($30).
+;   L0186 Transfer_DefaultOWPaletteRow7Buf               data  DATA: transfer buffer (selector $7A): sprite palette row 7 = $0F $0F $1C $16.
+;   L0190 Transfer_GleeokPaletteRow7Buf                  data  DATA: transfer buffer (selector $7C): sprite palette row 7 = $0F $2A $1A $0C, for Gleeok ($43-$45).
+;   L0194 Transfer_AquamentusPaletteRow7Buf              data  DATA: transfer buffer (selector $08): sprite palette row 7 = $0F $0A $29 $30, for Aquamentus ($3D).
+;   L0199 Transfer_OrangeBossPaletteRow7Buf              data  DATA: transfer buffer (selector $0A): sprite palette row 7 = $0F $17 $27 $30.
+;   L0203 Transfer_BombCapacityPriceTextBuf              data  DATA: transfer buffer (selector $6C): the text "-100" at $22CD (price of the more-bombs offer).
+;   L0207 Transfer_LifeOrMoneyCostTextBuf                data  DATA: transfer buffer (selector $76): "-1", five blanks, "-50" at $22CB (life-or-money man).
+;   L0213 Transfer_Mode8TextBuf                          data  DATA: transfer buffer (selector $04): the continue menu.
+;   L0223 Transfer_StatusBarStaticsBuf                   data  DATA: transfer buffer (selector $0E): the fixed parts of the status bar.
+;   L0235 Transfer_InventoryTextBuf                      data  DATA: transfer buffer (selector $30): the text "INVENTORY" at $2984.
+;   L0241 Transfer_SubmenuBoxesTopsBuf                   data  DATA: transfer buffer (selector $32): tops of the two submenu boxes.
+;   L0248 Transfer_SubmenuBoxesSidesBuf                  data  DATA: transfer buffer (selector $34): sides of the two submenu boxes.
+;   L0254 Transfer_SelectedItemBoxBottomBuf              data  DATA: transfer buffer (selector $38): bottom of the selected-item box, 4 tiles at $2A27.
+;   L0258 Transfer_UseBButtonTextBuf                     data  DATA: transfer buffer (selector $3A): the text "USE B BUTTON" at $2A42.
+;   L0264 Transfer_InventoryBoxBottomBuf                 data  DATA: transfer buffer (selector $3C): the text "FOR THIS" at $2A64 and the inventory box bottom.
+;   L0271 Transfer_SubmenuMapTextsAndSheetTopBuf         data  DATA: transfer buffer (selector $40): dungeon submenu texts and the top edge of the map sheet.
+;   L0279 Transfer_SubmenuMapSheetBottomEdgeBuf          data  DATA: transfer buffer (selector $42): bottom edge of the dungeon map sheet, 16 tiles at $2BAC.
+;   L0285 Transfer_SubmenuAttrs1Buf                      data  DATA: transfer buffer (selector $48): submenu attributes 1: $05 x 3 at $2BD9, $00 x 11 at $2BDC.
+;   L0290 Transfer_SubmenuAttrs2Buf                      data  DATA: transfer buffer (selector $4A): submenu attributes, part 2: $55 x 22 at $2BE9.
+;   L0294 Transfer_BlankBottomRowNT2Buf                  data  DATA: transfer buffer (selector $4C): 32 blank tiles at $2BA0 (a row of the second name table).
+;   L0298 Transfer_BlankRow7NT2Buf                       data  DATA: transfer buffer (selector $4E): 32 blank tiles at $28E0.
+;   L0302 Transfer_Mode11DeadLinkPaletteBuf              data  DATA: transfer buffer (selector $2C): dead Link's palette (sprite row 4, $3F10) = $0F $10 $30 $00.
+;   L0307 Transfer_GameOverBuf                           data  DATA: transfer buffer (selector $46): the death screen's "GAME OVER " text at $224C.
+;   L0314 Transfer_Mode11BackgroundPaletteBottomHalfBuf  data  DATA: transfer buffer (selector $5E): death: background palette rows 2-3 ($3F08).
+;   L0319 Transfer_Mode11PlayAreaAttrsTopHalfBuf         data  DATA: transfer buffer (selector $60): death: attributes $FF x 24 at $23D0 (upper play area).
+;   L0323 Transfer_Mode11PlayAreaAttrsBottomHalfBuf      data  DATA: transfer buffer (selector $62): death: attributes $FF x 24 at $23E8 (lower play area).
+;   L0327 Transfer_StoryTileAttrBuf                      data  DATA: transfer buffer (selector $02): story screen tiles and attributes (1131-byte blob).
+;   L0331 Transfer_GameTitleBuf                          data  DATA: transfer buffer (selector $10): title screen tiles and attributes (1121-byte blob).
 ; ============================================================================
 
 ; DATA: transfer buffer (selector $14): the file select screen.
@@ -98,8 +99,8 @@ Transfer_Mode1TilesBuf:
 ; DATA: transfer buffer (selector $16): the register/eliminate character board (modes $E and $F).
 ; Box frame ($2205-$231B) and four rows of characters with blanks between: A-K ($2226), L-V ($2266),
 ; W-Z then tiles $62 (dash), $63, $28-$2C ($22A6), 0-9 ($22E6). In the person text character map
-; (data/README.md) $28-$2C are , ! ' & and full stop; the glyph of $63 is pattern data, not decoded
-; here (unverified).
+; (data/README.md) $28-$2C are , ! ' & and full stop. Tile $63 is a second full stop: its 16
+; pattern bytes in Chr_CommonBackgroundPatterns equal those of tile $2C.
 Transfer_ModeEandFCharBoardBuf:
     .BYTE $22, $05, $01, $69, $22, $06, $55, $6A
     .BYTE $22, $1B, $01, $6B, $22, $25, $C7, $6C
@@ -344,8 +345,12 @@ Transfer_GameTitleBuf:
 ;          A = 7, JSR $BFAC (switch to bank 7), JMP $E440 (Reset_RunGame, as in bank 7's Reset_Handler)
 ;   $BF98  five serial writes of A to $8000 (copy of Mmc1_SetControl), RTS
 ;   $BFAC  five serial writes of A to $E000 (copy of Mmc1_SwitchBank), RTS
-; The vector and the JSRs name $BFxx addresses (this bank mapped at $8000-$BFFF), while the CPU
-; reads its vectors at $FFFA-$FFFF; whether the copy can ever run is (unverified).
+; No code jumps here. The CPU reads its vectors at $FFFA-$FFFF, so this vector table is seen only
+; after a reset that finds this bank at $C000-$FFFF. The program never maps it there: every MMC1
+; control value it writes ($0F, $0E) keeps bank 7 fixed at $C000. The copy serves a reset that
+; finds the mapper in another program bank mode (the power-on state is the mapper's, not set by
+; code): the vector $BF50 then names whatever bank is at $8000-$BFFF, and all eight banks hold
+; this code at offset $3F50, so the reset still ends in bank 7 at $E440.
     .BYTE $78, $D8, $A9, $00, $8D, $00, $20, $A2
     .BYTE $FF, $9A, $AD, $02, $20, $29, $80, $F0
     .BYTE $F9, $AD, $02, $20, $29, $80, $F0, $F9

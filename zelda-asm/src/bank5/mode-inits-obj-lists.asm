@@ -29,15 +29,15 @@
 ;   L0049 Mode8Continue_Init            code  Mode 8 (continue/save/retry menu) init: blanks the screen, then cues the menu text.
 ;   L0067 ModeDSave_Init                code  Mode $D (save) init: blanks the screen and makes sure save RAM is formatted.
 ;   L0082 Mode10Stairs_Init             code  Mode $10 (stairs) init: if Link stands on an entrance tile, starts the walk down into it.
-;   L0103 Spawn_PosListAddrsLo          data  TABLE: low address bytes of the spawn position lists; index = bit number of Link's direction
-;   L0110 Spawn_PosListAddrsHi          data  TABLE: high address bytes of the spawn position lists; index as in Spawn_PosListAddrsLo.
-;   L0119 Spawn_PosListFacingRight      data  TABLE: monster spawn spots when Link enters facing right; index = SpawnCycle 0-8; value = row in
-;   L0125 Spawn_PosListFacingLeft       data  TABLE: monster spawn spots when Link enters facing left; same format as Spawn_PosListFacingRight.
-;   L0131 Spawn_PosListFacingDown       data  TABLE: monster spawn spots when Link enters facing down; same format as Spawn_PosListFacingRight.
-;   L0137 Spawn_PosListFacingUp         data  TABLE: monster spawn spots when Link enters facing up; same format as Spawn_PosListFacingRight.
-;   L0144 Mode4Enter_WalkInGridOffsets  data  TABLE: Link's starting ObjGridOffset (signed pixels) when he enters a dungeon room; index =
-;   L0180 Spawn_ObjLists                data  DATA: the 30 room monster lists, 201 bytes of object types (0 = empty slot), addressed through
-;   L0185 Spawn_ObjListAddrs            data  TABLE: addresses of the monster lists in Spawn_ObjLists; index = monster list id - $62 (0-29); value =
+;   L0108 Spawn_PosListAddrsLo          data  TABLE: low address bytes of the spawn position lists; index = bit number of Link's direction
+;   L0115 Spawn_PosListAddrsHi          data  TABLE: high address bytes of the spawn position lists; index as in Spawn_PosListAddrsLo.
+;   L0124 Spawn_PosListFacingRight      data  TABLE: monster spawn spots when Link enters facing right; index = SpawnCycle 0-8; value = row in
+;   L0130 Spawn_PosListFacingLeft       data  TABLE: monster spawn spots when Link enters facing left; same format as Spawn_PosListFacingRight.
+;   L0136 Spawn_PosListFacingDown       data  TABLE: monster spawn spots when Link enters facing down; same format as Spawn_PosListFacingRight.
+;   L0142 Spawn_PosListFacingUp         data  TABLE: monster spawn spots when Link enters facing up; same format as Spawn_PosListFacingRight.
+;   L0149 Mode4Enter_WalkInGridOffsets  data  TABLE: Link's starting ObjGridOffset (signed pixels) when he enters a dungeon room; index =
+;   L0185 Spawn_ObjLists                data  DATA: the 30 room monster lists, 201 bytes of object types (0 = empty slot), addressed through
+;   L0190 Spawn_ObjListAddrs            data  TABLE: addresses of the monster lists in Spawn_ObjLists; index = monster list id - $62 (0-29); value =
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -84,7 +84,12 @@ Mode10Stairs_Init:
     JSR Tile_GetUnderObj
     CMP #$24
     BNE :+                      ; Not the entrance tile: no walk.
-    LDA #$00                    ; Volume envelope selector of the song = 0 (audible effect (unverified)).
+    ; SongEnvelopeSelector = 0. Only its bit 7 is read, by Song_ShapeVolume while a song plays, and
+    ; every phrase start loads it again (Song_PrepPhrase). Nothing is heard of this store: tile $24
+    ; is under Link here only in the overworld, where Warp_StartStairsMode has silenced all sound
+    ; before this mode. (trace) Walking into the cave of room $77: CurSong is already 0 on the
+    ; frame this runs.
+    LDA #$00
     STA SongEnvelopeSelector
     LDA #$08                    ; Stairs sound effect.
     STA EffectRequest

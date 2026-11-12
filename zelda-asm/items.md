@@ -49,8 +49,8 @@ Link's weapons are not typed objects. Each kind lives in a fixed object slot `$0
 **Order within a frame**
 - Update: Link, then slots `$0D`, `$0E`, `$0F`, `$10`, `$11`, `$12`, then object slots `$0B` down to `$01`; a monster's collision test therefore sees the weapon states left by this frame's weapon updates. [`Mode5Play_UpdateWorld`](src/bank7/mode5-play-update.asm#L129)
 - If Link's update changed the game mode, no weapon slot is updated that frame. [`Mode5Play_UpdateWorld`](src/bank7/mode5-play-update.asm#L129)
-- Each monster tests the weapon slots in the order `$0F`, `$0E`, `$10`, `$11`, `$0D`, `$12`, then its own touch on Link. [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L97)
-- The monster's invincibility timer is tested once, before the first weapon: two weapons overlapping it in one frame both deal their damage (trace: a magic shot's `$20` and a bomb blast's `$40` on one frame). [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L97)
+- Each monster tests the weapon slots in the order `$0F`, `$0E`, `$10`, `$11`, `$0D`, `$12`, then its own touch on Link. [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L101)
+- The monster's invincibility timer is tested once, before the first weapon: two weapons overlapping it in one frame both deal their damage (trace: a magic shot's `$20` and a bomb blast's `$40` on one frame). [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L101)
 
 **Slot busy tests (what may coexist)**
 - Sword: refused when `InvSword` = 0 or slot `$0D`'s state is not 0. [`Sword_Wield`](src/bank5/wield-items.asm#L59)
@@ -77,7 +77,7 @@ Link's weapons are not typed objects. Each kind lives in a fixed object slot `$0
 - A new weapon is put `$10` pixels from Link's position in the direction he faces and takes his direction. [`Link_PlaceWeaponAhead`](src/bank1/bomb-candle-wield.asm#L154)
 - Shots, arrows and boomerangs are stopped by the room bounds, not by tiles; for weapon slots the bounds are wider than for Link: left X < `$06` overworld / `$16` dungeon, right X >= `$EC` / `$DC`, up Y < `$3F` / `$4F`, down Y >= `$DF` / `$CF`. [`Room_BoundDirHorizontally`](src/bank1/room-bounds.asm#L116) [`Room_BoundDirVertically`](src/bank1/room-bounds.asm#L185) [`Obj_MoveShot`](src/bank1/shot-aim-boomerang-speed.asm#L49)
 - Dropped items can be taken by the position of slot `$12`, `$0D` or `$0F` (state not 0, bit 7 clear, so not by food), then by Link. [`Drop_UpdateItem`](src/bank4/drop-items.asm#L297) [`Drop_ItemTakerObjSlots`](src/bank4/drop-items.asm#L280)
-- Room change: the states of slots `$0D`-`$12` are zeroed (and the ladder released) when Link leaves a room, enters a room, cave or cellar, and at the end of mode `$A`; nothing that is out survives. [`Obj_ResetWeaponSlotsAndLadder`](src/bank5/mode3-mode6-init.asm#L263) [`Room_EnterCommon`](src/bank5/enter-room.asm#L137)
+- Room change: the states of slots `$0D`-`$12` are zeroed (and the ladder released) when Link leaves a room, enters a room, cave or cellar, and at the end of mode `$A`; nothing that is out survives. [`Obj_ResetWeaponSlotsAndLadder`](src/bank5/mode3-mode6-init.asm#L263) [`Room_EnterCommon`](src/bank5/enter-room.asm#L143)
 - A room change also sets Link's state to 0, ending a swing or item use. [`Mode5Play_GoToNextMode`](src/bank7/walker-collision-screen-edge.asm#L281) [`Link_ResetStateAndClock`](src/bank7/init-mode-dispatch.asm#L354)
 
 # Animation and state values
@@ -160,7 +160,7 @@ The code calls the beam the "sword shot".
 - Hits only while the sword's state is 2 (8 frames per swing). Damage type 1; damage `$10` wooden, `$20` white, `$40` magic, in `ObjHP` units (HP x `$10`). [`Sword_CheckMonsterCollision`](src/bank1/sword-bomb-arrow-collision.asm#L192) [`Sword_DamagePoints`](src/bank1/sword-bomb-arrow-collision.asm#L182)
 - Hit test: the sword's point (X+6, Y+8 when Link faces up or down; X+8, Y+6 when left or right) against the monster's middle, less than `$10` pixels along Link's facing axis and less than `$0C` across it. [`Collision_CheckStabVsMonster`](src/bank1/sword-bomb-arrow-collision.asm#L215) [`Collision_CheckThinWeaponVsMonster_Thresholds`](src/bank1/object-overlap-test.asm#L47)
 - A monster whose invincibility mask has bit 1 takes nothing (parry tune); a Darknut facing exactly against the sword takes nothing. [`Damage_HandleWeaponHit`](src/bank1/weapon-damage-death.asm#L127)
-- A monster that is hit is shoved `$40` pixels the way the sword points and gets invincibility timer `$10` (about 32 frames), during which no weapon is tested against it. [`Shove_Begin`](src/bank1/shove-knockback.asm#L65) [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L97)
+- A monster that is hit is shoved `$40` pixels the way the sword points and gets invincibility timer `$10` (about 32 frames), during which no weapon is tested against it. [`Shove_Begin`](src/bank1/shove-knockback.asm#L65) [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L101)
 - The sword's position picks up dropped items in any state of the swing. [`Drop_UpdateItem`](src/bank4/drop-items.asm#L297)
 
 **Sword beam**
@@ -192,7 +192,7 @@ A bomb is an object in slot `$10` or `$11` (shared with fires) that sits where i
 
 **RAM**
 - `InvBombs` (`$658`): bombs held, 0 to `InvMaxBombs`. [`InvBombs`](src/Variables.inc#L558)
-- `InvMaxBombs` (`$67C`): capacity; 8 in a newly registered file and after the switch to Q2. [`InvMaxBombs`](src/Variables.inc#L607) [`ModeERegister_Update`](src/bank2/register-eliminate-update.asm#L42) [`Profile_SwitchToSecondQuest`](src/bank2/second-quest-bank-stub.asm#L43)
+- `InvMaxBombs` (`$67C`): capacity; 8 in a newly registered file and after the switch to Q2. [`InvMaxBombs`](src/Variables.inc#L607) [`ModeERegister_Update`](src/bank2/register-eliminate-update.asm#L42) [`Profile_SwitchToSecondQuest`](src/bank2/second-quest-bank-stub.asm#L45)
 - A bomb's `ObjState` is `$11`-`$14`; a fire in the same slots is `$21`/`$22`; 0 = empty slot. [`Bomb_UpdateBombOrFire`](src/bank7/bomb.asm#L71)
 
 **Use**
@@ -232,7 +232,7 @@ A bomb is an object in slot `$10` or `$11` (shared with fires) that sits where i
 
 **Notes**
 - A kill counts toward the forced bomb drop only when the kill that brings `HelpDropCount` to exactly `$0A` is made with a bomb. [`Damage_KillMonster`](src/bank1/weapon-damage-death.asm#L216)
-- Dodongo reads only the bomb in slot `$10`, for eating (fuse state `$12`) and for the stun (states `$13`, `$14`); a bomb in slot `$11` does nothing to it. [`Dodongo_CheckBombHit`](src/bank4/dodongo.asm#L398) [`Dodongo_TryEatBomb`](src/bank4/dodongo.asm#L467)
+- Dodongo reads only the bomb in slot `$10`, for eating (fuse state `$12`) and for the stun (states `$13`, `$14`); a bomb in slot `$11` does nothing to it. [`Dodongo_CheckBombHit`](src/bank4/dodongo.asm#L400) [`Dodongo_TryEatBomb`](src/bank4/dodongo.asm#L469)
 
 # Arrows and Bow (wooden, silver)
 
@@ -333,7 +333,7 @@ The candle makes a fire in object slot `$10` or `$11` (shared with bombs). The s
 
 **RAM**
 - `InvCandle` (`$65B`): 0 none, 1 blue, 2 red. [`InvCandle`](src/Variables.inc#L562)
-- `HasUsedCandle` (`$513`): set by every candle fire; zeroed with the rest of `$0300`-`$051F` on every room entry (also caves and cellars). [`HasUsedCandle`](src/Variables.inc#L428) [`Room_EnterCommon`](src/bank5/enter-room.asm#L137)
+- `HasUsedCandle` (`$513`): set by every candle fire; zeroed with the rest of `$0300`-`$051F` on every room entry (also caves and cellars). [`HasUsedCandle`](src/Variables.inc#L428) [`Room_EnterCommon`](src/bank5/enter-room.asm#L143)
 - Fire `ObjState`: `$21` moving, `$22` standing. [`Fire_Update`](src/bank7/fire.asm#L44)
 - `CandleState` (`$51F`): dark room lighting, 0 not lit, 1 brightening, 2 lit; `IsRoomBrightening` (`$51E`) is 1 during the fade. [`CandleState`](src/Variables.inc#L445) [`IsRoomBrightening`](src/Variables.inc#L444)
 
@@ -392,7 +392,7 @@ The source calls it the flute. Using it always plays the tune and freezes play; 
 **Limits**
 - No cost and no slot; it can be played again as soon as the freeze ends. [`Flute_Wield`](src/bank7/flute.asm#L49)
 - Overworld outside mode 5 (a cave, mode `$B`; the shortcut stairs room, mode `$C`): tune and freeze only. [`Flute_Wield`](src/bank7/flute.asm#L49)
-- One whirlwind per room entry (`IsWhirlwindSummoned`, cleared on room entry) and none while one carries Link. [`Whirlwind_Summon@MakeWhirlwind`](src/bank1/whirlwind.asm#L290)
+- One whirlwind per room entry (`IsWhirlwindSummoned`, cleared on room entry) and none while one carries Link. [`Whirlwind_Summon@MakeWhirlwind`](src/bank1/whirlwind.asm#L291)
 - One flute secret per room entry: refused when `SecretColorCycle` <> 0. [`Flute_Wield@RevealSecret`](src/bank7/flute.asm#L95)
 
 **Effect**
@@ -401,33 +401,33 @@ In a dungeon:
 - `FluteUsedState` goes 0 -> 1; a use while it is nonzero changes nothing more. [`Flute_Wield@FlagFluteUsed`](src/bank7/flute.asm#L127)
 - Digdogger: after the freeze a big Digdogger starts a `$40`-frame shrink (`FluteUsedState` 2), then splits into `ChildDigdoggerCount` small ones (3 or 1) and the big one is removed. [`Digdogger_HandleFlute`](src/bank4/digdogger.asm#L91) [`ChildDigdoggerCount`](src/Variables.inc#L420)
 - The split does not start or progress while Link holds the clock or the Digdogger is stunned. [`Digdogger_Update`](src/bank4/digdogger.asm#L202)
-- The byte is zeroed on room entry, so the flute must be played in the Digdogger's room. [`FluteUsedState`](src/Variables.inc#L439) [`Room_EnterCommon`](src/bank5/enter-room.asm#L137)
+- The byte is zeroed on room entry, so the flute must be played in the Digdogger's room. [`FluteUsedState`](src/Variables.inc#L439) [`Room_EnterCommon`](src/bank5/enter-room.asm#L143)
 
 On the overworld, secrets:
 - Level 7 entrance: in room `$42` in Q1 the flute makes the flute secret object instead of a whirlwind. [`Flute_SecretRoomIdsOW`](src/bank7/flute.asm#L36)
 - Q2 secret rooms: `$06`, `$29`, `$2B`, `$30`, `$3A`, `$3C`, `$58`, `$60`, `$6E`, `$72`; in Q1 these rooms summon the whirlwind, and in Q2 room `$42` does. [`Flute_SecretRoomIdsOW`](src/bank7/flute.asm#L36) [`Flute_Wield@Found`](src/bank7/flute.asm#L82)
 - The secret object (type `$5E`) needs an empty object slot in `$01`-`$09` (the highest is used); with none, only the tune and freeze happen. [`Flute_Wield@FindEmptySlot`](src/bank7/flute.asm#L103)
 - The object steps a colour cycle once every 8 frames; step `$0A` raises the walkable-tile limit to `$99`, and the 11th step puts stairs at X = `$60`, Y = `$90` (the same spot in every such room) and sets room flag `$80`: 81 to 88 frames after the freeze ends. [`FluteSecret_Update`](src/bank7/flute-secret-pond.asm#L101) [`FluteSecret_CuePondPaletteRow`](src/bank7/flute-secret-pond.asm#L127) [`FluteSecret_RevealPondStairs`](src/bank7/flute-secret-pond.asm#L157)
-- Leaving such a room by scrolling waits while the cycle runs backwards to 0. [`FluteSecret_ReversePondCycle`](src/bank7/flute-secret-pond.asm#L172) [`Mode7Scroll_Init_Sub0`](src/bank5/mode7-scroll-init.asm#L153)
+- Leaving such a room by scrolling waits while the cycle runs backwards to 0. [`FluteSecret_ReversePondCycle`](src/bank7/flute-secret-pond.asm#L172) [`Mode7Scroll_Init_Sub0`](src/bank5/mode7-scroll-init.asm#L157)
 
 On the overworld, the whirlwind:
 - Everywhere else on the overworld in mode 5 the flute calls the whirlwind summon. [`Flute_Wield@SummonWhirlwind`](src/bank7/flute.asm#L120)
-- Summon conditions: at least one Triforce piece (`InvTriforce` <> 0), none already summoned in this room, none carrying Link, and a free object slot in `$01`-`$0B`; the room id is not tested. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L242) [`Whirlwind_Summon@MakeWhirlwind`](src/bank1/whirlwind.asm#L290)
-- Destination: each use steps `TeleportingLevelIndex` by +1 when Link faces right or up, by -1 when he faces left or down. [`Whirlwind_StepLevelIndex`](src/bank1/whirlwind.asm#L313)
-- It then keeps stepping the same way, wrapping within levels 1-8, past levels whose piece Link lacks (bit level - 1 of `InvTriforce`). [`Whirlwind_Summon@TestLevelPiece`](src/bank1/whirlwind.asm#L257) [`InvTriforce`](src/Variables.inc#L597)
-- The index is kept between rooms and steps on every overworld use that reaches the summon, even when no whirlwind is made. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L242)
-- The whirlwind (type `$2E`) is created at X = 0 on Link's Y, plays a spawn cloud if its slot was unused, then moves right 2 pixels per frame and is destroyed at X >= `$F0` (its 120th update). [`Whirlwind_SetUp`](src/bank1/whirlwind.asm#L66) [`Whirlwind_Update_Full`](src/bank1/whirlwind.asm#L98)
-- Pickup is the ordinary monster touch test, which reports nothing while Link's invincibility timer or stun timer is nonzero, he holds the clock, he is halted (state `$40`) or a Like-Like holds him; a missed whirlwind leaves at the right edge and the room allows no second one. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L144) [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
-- On pickup Link faces right, is halted (state `$40`) and hidden, and rides to the right edge; then the game leaves the room (mode 6) and scrolls right. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L144) [`Whirlwind_Update_Full@CheckRightEdge`](src/bank1/whirlwind.asm#L187)
-- Landing rooms for levels 1-8: `$37`, `$3C`, `$74`, `$45`, `$0B`, `$22`, `$42`, `$6D` (the table holds the room west of each), the same in both quests. [`Whirlwind_PrevRoomIds`](src/bank1/whirlwind.asm#L80)
-- In the landing room the whirlwind takes object slot `$09` at X = 0 and Link is released at X = `$80`, Y = `$8D`, `$AD`, `$8D`, `$8D`, `$AD`, `$8D`, `$AD`, `$5D` for levels 1-8. [`Whirlwind_InitDropOffAndBeginUpdate`](src/bank1/whirlwind.asm#L359) [`Whirlwind_DropOffYs`](src/bank1/whirlwind.asm#L347)
-- Drop-off timing: 1 frame of init, 9 + 6 + 6 frames of spawn cloud, then 64 updates to X = `$80`: 86 frames after play starts in the room. [`Whirlwind_InitDropOffAndBeginUpdate`](src/bank1/whirlwind.asm#L359) [`Whirlwind_Update_Full`](src/bank1/whirlwind.asm#L98)
+- Summon conditions: at least one Triforce piece (`InvTriforce` <> 0), none already summoned in this room, none carrying Link, and a free object slot in `$01`-`$0B`; the room id is not tested. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L243) [`Whirlwind_Summon@MakeWhirlwind`](src/bank1/whirlwind.asm#L291)
+- Destination: each use steps `TeleportingLevelIndex` by +1 when Link faces right or up, by -1 when he faces left or down. [`Whirlwind_StepLevelIndex`](src/bank1/whirlwind.asm#L314)
+- It then keeps stepping the same way, wrapping within levels 1-8, past levels whose piece Link lacks (bit level - 1 of `InvTriforce`). [`Whirlwind_Summon@TestLevelPiece`](src/bank1/whirlwind.asm#L258) [`InvTriforce`](src/Variables.inc#L597)
+- The index is kept between rooms and steps on every overworld use that reaches the summon, even when no whirlwind is made. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L243)
+- The whirlwind (type `$2E`) is created at X = 0 on Link's Y, plays a spawn cloud if its slot was unused, then moves right 2 pixels per frame and is destroyed at X >= `$F0` (its 120th update). [`Whirlwind_SetUp`](src/bank1/whirlwind.asm#L66) [`Whirlwind_Update_Full`](src/bank1/whirlwind.asm#L99)
+- Pickup is the ordinary monster touch test, which reports nothing while Link's invincibility timer or stun timer is nonzero, he holds the clock, he is halted (state `$40`) or a Like-Like holds him; a missed whirlwind leaves at the right edge and the room allows no second one. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L145) [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
+- On pickup Link faces right, is halted (state `$40`) and hidden, and rides to the right edge; then the game leaves the room (mode 6) and scrolls right. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L145) [`Whirlwind_Update_Full@CheckRightEdge`](src/bank1/whirlwind.asm#L188)
+- Landing rooms for levels 1-8: `$37`, `$3C`, `$74`, `$45`, `$0B`, `$22`, `$42`, `$6D` (the table holds the room west of each), the same in both quests. [`Whirlwind_PrevRoomIds`](src/bank1/whirlwind.asm#L81)
+- In the landing room the whirlwind takes object slot `$09` at X = 0 and Link is released at X = `$80`, Y = `$8D`, `$AD`, `$8D`, `$8D`, `$AD`, `$8D`, `$AD`, `$5D` for levels 1-8. [`Whirlwind_InitDropOffAndBeginUpdate`](src/bank1/whirlwind.asm#L360) [`Whirlwind_DropOffYs`](src/bank1/whirlwind.asm#L348)
+- Drop-off timing: 1 frame of init, 9 + 6 + 6 frames of spawn cloud, then 64 updates to X = `$80`: 86 frames after play starts in the room. [`Whirlwind_InitDropOffAndBeginUpdate`](src/bank1/whirlwind.asm#L360) [`Whirlwind_Update_Full`](src/bank1/whirlwind.asm#L99)
 
 **Pickup**
 - Class 0: `InvFlute` = 1. [`Item_IdToDescriptor`](src/bank1/take-item.asm#L111) [`Item_Take`](src/bank1/take-item.asm#L259)
 
 **Notes**
-- The whirlwind's pickup deals 0 damage but runs the harm path: Link's invincibility timer becomes `$18`, and `WorldKillCount`, `HelpDropCount` and `IsHelpDropBomb` are zeroed. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L144) [`Link_BeHarmed`](src/bank1/link-collision-harm.asm#L193)
+- The whirlwind's pickup deals 0 damage but runs the harm path: Link's invincibility timer becomes `$18`, and `WorldKillCount`, `HelpDropCount` and `IsHelpDropBomb` are zeroed. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L145) [`Link_BeHarmed`](src/bank1/link-collision-harm.asm#L193)
 - The big Digdogger cannot be hit by any weapon; only the small ones made by the flute can. [`Obj_TypeAttributes`](src/bank7/object-update-table.asm#L70) [`Digdogger_HandleFlute`](src/bank4/digdogger.asm#L91)
 
 # Food (bait, meat)
@@ -583,7 +583,7 @@ position.
 - `$0660`: 0 or 1. [`InvRaft`](src/Variables.inc#L567)
 
 **Use**
-- Overworld rooms `$3F` and `$55` get a dock object (type `$61`) in object slot `$0B` on entry. [`Room_SetUpTileObjOW`](src/bank5/enter-room.asm#L423)
+- Overworld rooms `$3F` and `$55` get a dock object (type `$61`) in object slot `$0B` on entry. [`Room_SetUpTileObjOW`](src/bank5/enter-room.asm#L429)
 - The dock's X is `$80` in room `$55` and `$60` otherwise (room `$3F`). [`Dock_Update`](src/bank4/dock-raft.asm#L39)
 - Ride up starts when Link's X equals the dock X exactly and his Y is exactly `$7D` (dock state 2). [`Dock_Update`](src/bank4/dock-raft.asm#L39)
 - Ride down starts when Link's X equals the dock X and his Y is exactly `$3D`, the top screen edge (dock state 1). [`Dock_Update`](src/bank4/dock-raft.asm#L39)
@@ -659,15 +659,15 @@ Link lays the ladder automatically when he walks into water; it is an object in 
 - `$0664`: magic key, 0 or 1. [`InvMagicKey`](src/Variables.inc#L571)
 
 **Use**
-- Keys act when Link pushes into a dungeon doorway whose door type is 5 or 6 (locked door). [`Door_Touch_JumpTable`](src/bank5/touch-door.asm#L62), [`Door_TouchKey`](src/bank5/touch-door.asm#L157)
-- Order of tests: door already open: pass; a door command running: blocked while Link's timer is nonzero; magic key: open, nothing spent; no keys: wall; else `InvKeys` - 1 and open. [`Door_TouchKey`](src/bank5/touch-door.asm#L157)
-- Opening sets the door's open command and Link's `ObjTimer` to `$20`; Link stays blocked until the door's bit is in `CurOpenedDoors` or the timer runs out. [`Door_TouchKey`](src/bank5/touch-door.asm#L157), [`Door_TriggerOpen`](src/bank5/shutters-door-flags.asm#L117)
+- Keys act when Link pushes into a dungeon doorway whose door type is 5 or 6 (locked door). [`Door_Touch_JumpTable`](src/bank5/touch-door.asm#L62), [`Door_TouchKey`](src/bank5/touch-door.asm#L160)
+- Order of tests: door already open: pass; a door command running: blocked while Link's timer is nonzero; magic key: open, nothing spent; no keys: wall; else `InvKeys` - 1 and open. [`Door_TouchKey`](src/bank5/touch-door.asm#L160)
+- Opening sets the door's open command and Link's `ObjTimer` to `$20`; Link stays blocked until the door's bit is in `CurOpenedDoors` or the timer runs out. [`Door_TouchKey`](src/bank5/touch-door.asm#L160), [`Door_TriggerOpen`](src/bank5/shutters-door-flags.asm#L117)
 - The open command saves the door's opened flag in this room and in the next one, so a door is paid for once. [`Door_Update`](src/bank5/update-doors.asm#L60)
 
 **Limits**
 - Only door types 5 and 6 take a key; walls (1), false walls (2, 3), bombable walls (4) and shutters (7) never do. [`Door_Touch_JumpTable`](src/bank5/touch-door.asm#L62)
-- Only one door command exists (`TriggeredDoorCmd`), so a key cannot unlock a door while another door is opening or closing. [`Door_TouchKey`](src/bank5/touch-door.asm#L157)
-- The magic key never decrements `InvKeys`: the magic key test comes before the key count is read. [`Door_TouchKey`](src/bank5/touch-door.asm#L157)
+- Only one door command exists (`TriggeredDoorCmd`), so a key cannot unlock a door while another door is opening or closing. [`Door_TouchKey`](src/bank5/touch-door.asm#L160)
+- The magic key never decrements `InvKeys`: the magic key test comes before the key count is read. [`Door_TouchKey`](src/bank5/touch-door.asm#L160)
 
 **Effect**
 - With the magic key the status bar shows "XA" in place of the key count and `InvKeys` is not displayed. [`StatusBar_FormatText`](src/bank1/status-bar-rupees.asm#L148)
@@ -681,8 +681,8 @@ Link lays the ladder automatically when he walks into water; it is an object in 
 - A shop sells one ware per visit, so one key per cave entry. [`Cave_State4DelayThenHide`](src/bank1/cave-shop.asm#L221)
 
 **Notes**
-- Keyless pass: while any door command runs and Link's `ObjTimer` is 0, a locked door lets him through unopened and unpaid. It needs a command that did not set his timer: a shutter opening or a bombed wall opening. [`Door_TouchKey`](src/bank5/touch-door.asm#L157), [`Door_Touch_BlockWhileTimer`](src/bank5/touch-door.asm#L190)
-- A close command sets Link's timer to `$30` and a key unlock to `$20`, which is what blocks the pass in those cases. [`Door_TouchKey`](src/bank5/touch-door.asm#L157), [`Door_Update`](src/bank5/update-doors.asm#L60)
+- Keyless pass: while any door command runs and Link's `ObjTimer` is 0, a locked door lets him through unopened and unpaid. It needs a command that did not set his timer: a shutter opening or a bombed wall opening. [`Door_TouchKey`](src/bank5/touch-door.asm#L160), [`Door_Touch_BlockWhileTimer`](src/bank5/touch-door.asm#L193)
+- A close command sets Link's timer to `$30` and a key unlock to `$20`, which is what blocks the pass in those cases. [`Door_TouchKey`](src/bank5/touch-door.asm#L160), [`Door_Update`](src/bank5/update-doors.asm#L60)
 
 # Power Bracelet
 
@@ -725,7 +725,7 @@ Link lays the ladder automatically when he walks into water; it is an object in 
 **Effect**
 - Damage to Link is a 16-bit value: [0D] whole hearts, [0E] 256ths of a heart. It is shifted right once per ring grade (`LSR` [0D], `ROR` [0E]). [`Link_BeHarmed`](src/bank1/link-collision-harm.asm#L193)
 - Blue ring: damage / 2. Red ring: damage / 4. The shift carries from the heart byte into the fraction and drops bits below 1/256. [`Link_BeHarmed`](src/bank1/link-collision-harm.asm#L193)
-- Examples: a 1-heart touch (`$01:$00`) becomes `$00:$80` (blue) or `$00:$40` (red); a half-heart touch (`$00:$80`) becomes `$00:$40` or `$00:$20`. [`Link_BeHarmed`](src/bank1/link-collision-harm.asm#L193), [`Damage_ObjTypeDamageToLink`](src/bank1/monster-collisions.asm#L196)
+- Examples: a 1-heart touch (`$01:$00`) becomes `$00:$80` (blue) or `$00:$40` (red); a half-heart touch (`$00:$80`) becomes `$00:$40` or `$00:$20`. [`Link_BeHarmed`](src/bank1/link-collision-harm.asm#L193), [`Damage_ObjTypeDamageToLink`](src/bank1/monster-collisions.asm#L200)
 - Every harm path that goes through `Link_BeHarmed` is divided: monster and shot touches and Link's own candle fire (`$00:$80`). [`Link_HarmByObjType`](src/bank1/link-collision-harm.asm#L164), [`Fire_Update`](src/bank7/fire.asm#L44)
 - The life-or-money man's heart container charge is not damage and is not reduced. [`Person_LifeOrMoneyState2Choose`](src/bank1/life-or-money.asm#L121)
 - Tunic colour (NES palette value): `$29` no ring, `$32` blue ring, `$16` red ring. [`Link_TunicColorsByRing`](src/bank1/take-item.asm#L164)
@@ -766,7 +766,7 @@ The shield is passive: it is one test inside the routine that decides whether a 
 
 **Effect**
 - A block plays the parry tune and cancels the collision: no damage, no knockback, no invincibility timer. [`Link_CheckMonsterTouch_NoReset@Parry`](src/bank1/link-collision-harm.asm#L151)
-- Damage avoided, before rings: `$53`, `$54`, `$55`, `$5B` half a heart; `$5C` 1 heart; `$57`, `$58` 2 hearts; `$59` 4 hearts. Never blockable: `$56` 1 heart, `$5A` 4 hearts. [`Damage_ObjTypeDamageToLink`](src/bank1/monster-collisions.asm#L196)
+- Damage avoided, before rings: `$53`, `$54`, `$55`, `$5B` half a heart; `$5C` 1 heart; `$57`, `$58` 2 hearts; `$59` 4 hearts. Never blockable: `$56` 1 heart, `$5A` 4 hearts. [`Damage_ObjTypeDamageToLink`](src/bank1/monster-collisions.asm#L200)
 - A blocked straight shot goes to state `$30` and drifts 2 pixels a frame the way Link faces for `$10` frames, harmless, then is destroyed. [`MonsterShot_CheckLinkCollision`](src/bank4/monster-shots-fireballs.asm#L249) [`MonsterShot_Bounce`](src/bank4/monster-shots-fireballs.asm#L209)
 
 **Pickup**
@@ -774,7 +774,7 @@ The shield is passive: it is one test inside the routine that decides whether a 
 - Sold in overworld caves for 160, 130 or 90 rupees depending on the shop (persons `$78`, `$77`, `$79` in `data/levelblock-ow.md`); buying needs `InvRupees` >= the price. [`Cave_State2TalkOrShopOrDoorCharge`](src/bank1/cave-shop.asm#L55)
 
 **Like-Like**
-- A Like-Like (`$17`) whose touch harms Link captures him; its capture timer is 1 on that frame and counts 1 per frame. [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L97) [`LikeLike_Update`](src/bank4/like-like.asm#L46)
+- A Like-Like (`$17`) whose touch harms Link captures him; its capture timer is 1 on that frame and counts 1 per frame. [`Collision_CheckMonsterVsWeaponsAndLink`](src/bank1/monster-collisions.asm#L101) [`LikeLike_Update`](src/bank4/like-like.asm#L46)
 - When the timer reaches `$60`, 95 frames after the capture, `InvMagicShield` is set to 0, and again on every later frame of the capture; the small shield remains. [`LikeLike_Update@IncCaptureTime`](src/bank4/like-like.asm#L111)
 - Killing the Like-Like before that keeps the shield: while held, Link's direction input is discarded but A and B still work. [`Link_Update`](src/bank7/mode5-play-update.asm#L330) [`LikeLike_Update`](src/bank4/like-like.asm#L46)
 - The Like-Like's code never restores the shield, also not when it dies or lets Link go. [`LikeLike_Update@IncCaptureTime`](src/bank4/like-like.asm#L111)
@@ -850,8 +850,8 @@ Link's health is two bytes. One heart is `$0100` in damage terms: one step of th
 **Pickup**
 - A rupee adds 1 to `InvRupeesToAdd` and plays tune 1 number 1. [`Item_TakeOneRupee`](src/bank1/take-item.asm#L557)
 - A 5-rupee item is five single rupees: `InvRupeesToAdd` + 5. [`Item_Take5Rupees`](src/bank1/take-item.asm#L328)
-- Rupee stash (object type `$35`): ten rupee objects in slots `$01`-`$0A` in a diamond; each is taken when Link is less than 9 pixels from it on both axes, +1 each. [`RupeeStash_Init_Full`](src/bank1/trap-rupee-stash.asm#L75), [`RupeeStash_Update_Full`](src/bank1/trap-rupee-stash.asm#L336)
-- Taking one stash rupee zeroes `RoomObjCount`: the room is saved as cleared on leaving and rupees left behind are lost. [`RupeeStash_Update_Full`](src/bank1/trap-rupee-stash.asm#L336)
+- Rupee stash (object type `$35`): ten rupee objects in slots `$01`-`$0A` in a diamond; each is taken when Link is less than 9 pixels from it on both axes, +1 each. [`RupeeStash_Init_Full`](src/bank1/trap-rupee-stash.asm#L75), [`RupeeStash_Update_Full`](src/bank1/trap-rupee-stash.asm#L338)
+- Taking one stash rupee zeroes `RoomObjCount`: the room is saved as cleared on leaving and rupees left behind are lost. [`RupeeStash_Update_Full`](src/bank1/trap-rupee-stash.asm#L338)
 - Secret rupee caves (persons `$7B`-`$7D`) give 30, 100 or 10 rupees, once. [`Cave_State5HintOrMoneyGame`](src/bank1/cave-hint-money-game.asm#L61), [`Cave_Init`](src/bank1/cave-init-person-text.asm#L101)
 - Money game: the three amounts are fixed when the cave person is set up: one win of 20 or 50, one loss of 10, one loss of 10 or 40. [`Cave_Init_SetUpTextAndWares`](src/bank1/cave-init-person-text.asm#L145), [`Cave_MoneyGamePermutations`](src/bank1/cave-init-person-text.asm#L83)
 - A forced help drop is 5 rupees unless it is a bomb. [`Drop_SetUpItem@SetHelpItem`](src/bank4/drop-items.asm#L244)
@@ -880,30 +880,30 @@ Link's health is two bytes. One heart is `$0100` in damage terms: one step of th
 - Monster touches and shots do not register on Link: the touch test returns at once while `InvClock` is nonzero. [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
 - `$10` is added to Link's invincibility timer every frame, before his update; the timer loses only 1 per two frames. [`Mode5Play_UpdateWorld`](src/bank7/mode5-play-update.asm#L129), [`Obj_DecInvincibilityTimer`](src/bank7/object-stubs-destroy-monster.asm#L119)
 - Shooters keep running their shoot timer but the shot is skipped. [`Shooter_RunShootTimer`](src/bank4/moblin-lynel-shooting.asm#L96)
-- Frozen with their own test: wanderers, jumpers (Tektite, Boulder: in mid-air too), Keese, Peahat, flying Ghini, Pols Voice, Rope, Wallmaster's trip, Vire's hop, Moldorm, Lanmola, Digdogger, Aquamentus (no move, no shot). [`Wanderer_Update`](src/bank4/walker-wanderer-common.asm#L184), [`Jumper_Update`](src/bank4/tektite-boulder.asm#L163), [`Keese_Update`](src/bank4/bubble-keese.asm#L163), [`Aquamentus_Update`](src/bank4/aquamentus.asm#L54)
+- Frozen with their own test: wanderers, jumpers (Tektite, Boulder: in mid-air too), Keese, Peahat, flying Ghini, Pols Voice, Rope, Wallmaster's trip, Vire's hop, Moldorm, Lanmola, Digdogger, Aquamentus (no move, no shot). [`Wanderer_Update`](src/bank4/walker-wanderer-common.asm#L185), [`Jumper_Update`](src/bank4/tektite-boulder.asm#L166), [`Keese_Update`](src/bank4/bubble-keese.asm#L163), [`Aquamentus_Update`](src/bank4/aquamentus.asm#L54)
 - Wizzrobes neither move, fade nor shoot, and are drawn and hittable every frame. [`Wizzrobe_Blue_Update`](src/bank4/wizzrobe.asm#L95)
-- A Zora's update does nothing at all: it is not drawn and cannot be hit. [`Zora_Update`](src/bank4/zora-ow-inits.asm#L299)
-- Frozen monsters still take weapon hits; only their movement and their touch on Link stop. [`Wanderer_Update`](src/bank4/walker-wanderer-common.asm#L184), [`Lanmola_Update`](src/bank4/lanmola.asm#L43)
+- A Zora's update does nothing at all: it is not drawn and cannot be hit. [`Zora_Update`](src/bank4/zora-ow-inits.asm#L301)
+- Frozen monsters still take weapon hits; only their movement and their touch on Link stop. [`Wanderer_Update`](src/bank4/walker-wanderer-common.asm#L185), [`Lanmola_Update`](src/bank4/lanmola.asm#L43)
 
 **Limits**
-- Not frozen (no `InvClock` test in their update, and they do not use the walker move): Gohma, Manhandla, Gleeok, Patra, Ganon, statue fireballs, shots and fireballs already in flight. [`Gohma_Update`](src/bank4/gohma.asm#L63), [`Manhandla_Update`](src/bank4/manhandla.asm#L60), [`Gleeok_Update`](src/bank4/gleeok.asm#L175), [`Patra_Update`](src/bank4/patra.asm#L60), [`Statue_Update`](src/bank4/statues.asm#L86)
+- Not frozen (no `InvClock` test in their update, and they do not use the walker move): Gohma, Manhandla, Gleeok, Patra, Ganon, statue fireballs, shots and fireballs already in flight. [`Gohma_Update`](src/bank4/gohma.asm#L63), [`Manhandla_Update`](src/bank4/manhandla.asm#L60), [`Gleeok_Update`](src/bank4/gleeok.asm#L175), [`Patra_Update`](src/bank4/patra.asm#L62), [`Statue_Update`](src/bank4/statues.asm#L86)
 - Those still cannot hurt Link through the ordinary touch test, which the clock disables. [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
 - Ganon's touch does not test `InvClock`; it tests only Link's invincibility timer. [`Ganon_CheckCollisions`](src/bank4/ganon-draw-collisions.asm#L360), [`Link_CheckMonsterTouch_NoReset`](src/bank1/link-collision-harm.asm#L73)
 - Link's own candle fire also tests only the invincibility timer. [`Fire_Update`](src/bank7/fire.asm#L44)
 - That timer is not constantly nonzero: +`$10` per frame and -1 per two frames makes the byte wrap to 0 on one frame in every 33 (arithmetic of the two routines), and on that frame Ganon and fire can hurt Link. [`Mode5Play_UpdateWorld`](src/bank7/mode5-play-update.asm#L129), [`Obj_DecInvincibilityTimer`](src/bank7/object-stubs-destroy-monster.asm#L119)
 - A Like-Like that already holds Link keeps eating: its hold tests neither the clock nor its stun timer. [`LikeLike_Update`](src/bank4/like-like.asm#L46)
-- Blade traps still sense Link and charge; they only cannot hurt him. [`Trap_Update_Full`](src/bank1/trap-rupee-stash.asm#L187)
+- Blade traps still sense Link and charge; they only cannot hurt him. [`Trap_Update_Full`](src/bank1/trap-rupee-stash.asm#L189)
 - Leevers: a Blue Leever stops moving but still sinks and resurfaces; a Red Leever is held only in its surfaced state 3. [`Leever_UpdateBlue`](src/bank4/leever.asm#L79), [`Leever_UpdateRed`](src/bank4/leever.asm#L252)
 - The boulder spawner keeps making Boulders. [`Boulder_UpdateSpawner`](src/bank4/tektite-boulder.asm#L62)
 - A Rope stops moving but its rush test still sets direction and speed. [`Rope_Update`](src/bank4/rope.asm#L51)
-- Cleared (`InvClock` = 0) on every room entry (modes 4, 9, `$B`, `$C`: caves and cellars too), on leaving a room (mode 6), by the continue menu and when a file is loaded. [`Link_ResetStateAndClock`](src/bank7/init-mode-dispatch.asm#L354), [`Room_EnterCommon`](src/bank5/enter-room.asm#L137), [`Mode6Leave_Init`](src/bank5/mode3-mode6-init.asm#L214), [`Mode1Menu_Update_Sub1Load`](src/bank2/mode1-menu-update.asm#L104)
+- Cleared (`InvClock` = 0) on every room entry (modes 4, 9, `$B`, `$C`: caves and cellars too), on leaving a room (mode 6), by the continue menu and when a file is loaded. [`Link_ResetStateAndClock`](src/bank7/init-mode-dispatch.asm#L354), [`Room_EnterCommon`](src/bank5/enter-room.asm#L143), [`Mode6Leave_Init`](src/bank5/mode3-mode6-init.asm#L214), [`Mode1Menu_Update_Sub1Load`](src/bank2/mode1-menu-update.asm#L104)
 
 **Pickup**
 - Plain class 0 item: `InvClock` = 1. [`Item_Take`](src/bank1/take-item.asm#L259)
 - Source: the drop table only. Group 1 at kill cycle 6 and group 2 at kill cycle 3. [`Drop_ItemTable`](src/bank4/drop-items.asm#L132)
 
 **Notes**
-- A whirlwind cannot pick Link up while he holds the clock (same touch test). [`Whirlwind_Update_Full`](src/bank1/whirlwind.asm#L98)
+- A whirlwind cannot pick Link up while he holds the clock (same touch test). [`Whirlwind_Update_Full`](src/bank1/whirlwind.asm#L99)
 - A Wallmaster or Like-Like cannot capture Link under the clock: capture needs a touch that harms him. [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
 
 # Map and Compass
@@ -956,12 +956,12 @@ Both are kept as one bit per level; neither does anything in the overworld.
 - Submode 0: wait `$30` frames. Submode 1: `$30` frames of palette flash, 4 frames white and 4 frames the level palette. [`Mode12EndLevel_Update_Sub0Wait`](src/bank5/mode12-lay-out-room.asm#L93), [`Mode12EndLevel_Update_Sub1Flash`](src/bank5/mode12-lay-out-room.asm#L101)
 - Submode 2: hearts refill to full (`World_IsFillingHearts` = 2; 43 frames per empty heart); the sequence waits for it. [`Mode12EndLevel_StartFillingHearts`](src/bank5/mode12-lay-out-room.asm#L118), [`Mode12EndLevel_Update_Sub2FillHearts`](src/bank5/mode12-lay-out-room.asm#L129)
 - Submode 3: `$80` frames wait, then the curtain closes from both screen edges, 16 steps of 5 frames. [`Mode12EndLevel_Update_Sub3CloseCurtain`](src/bank5/mode12-lay-out-room.asm#L138)
-- Submode 4: `$80` frames wait, then `CurLevel` = 0, `GameMode` = 2 (load level) and `UndergroundExitType` = 2: Link comes out of the level's entrance on the overworld. [`Mode12EndLevel_Update_Sub4LeaveLevel`](src/bank5/mode12-lay-out-room.asm#L156), [`Mode_LeaveLevelToOW`](src/bank5/next-room-calc.asm#L100)
+- Submode 4: `$80` frames wait, then `CurLevel` = 0, `GameMode` = 2 (load level) and `UndergroundExitType` = 2: Link comes out of the level's entrance on the overworld. [`Mode12EndLevel_Update_Sub4LeaveLevel`](src/bank5/mode12-lay-out-room.asm#L156), [`Mode_LeaveLevelToOW`](src/bank5/next-room-calc.asm#L107)
 - Pending rupees are counted only during submode 2 of this mode. [`Mode12EndLevel_Update_Sub2FillHearts`](src/bank5/mode12-lay-out-room.asm#L129)
 
 **Effect** (Triforce pieces)
 - Level 9's first old man (person type `$4B`): with `InvTriforce` = `$FF` he sets `ShutterTrigger`, releases Link and is removed when the room is set up; with any piece missing he stays and blocks the way up. [`Person_InitUnderworldLevel9`](src/bank1/underworld-person-init.asm#L172)
-- The recorder's whirlwind goes only to levels whose piece Link has; with `InvTriforce` = 0 no whirlwind is made. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L242)
+- The recorder's whirlwind goes only to levels whose piece Link has; with `InvTriforce` = 0 no whirlwind is made. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L243)
 - The compass marker stops blinking once the level's piece is held. [`StatusBar_UpdatePositionMarker`](src/bank1/map-marker-curtain.asm#L72)
 - The overworld submenu draws the Triforce from `InvTriforce`: bit n = the piece of level n + 1. [`Submenu_BuildTriforceOW`](src/bank5/submenu-states.asm#L440)
 

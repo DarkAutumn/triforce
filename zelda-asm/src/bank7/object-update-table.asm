@@ -40,12 +40,12 @@
 ;     Item_ObjMonsterType = the old type; Drop_SetUpItem decides what, if anything, drops.
 ; CONTENTS: (generated; L = line in this file)
 ;   L0070 Obj_TypeAttributes    data  TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
-;   L0098 Obj_TypeHpPairs       data  TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
-;   L0113 Obj_Update            code  Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
-;   L0165 Obj_Update_JumpTable  data  TABLE: update routine per object type; index = object type $00-$69; value = routine address.
-;   L0278 Obj_UpdateMetastate   code  Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
-;   L0288 Obj_DoNothing         code  Does nothing (RTS): the update or init routine of object types that have none of their own.
-;   L0301 Obj_EndMetastate      code  Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
+;   L0105 Obj_TypeHpPairs       data  TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
+;   L0120 Obj_Update            code  Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
+;   L0172 Obj_Update_JumpTable  data  TABLE: update routine per object type; index = object type $00-$69; value = routine address.
+;   L0285 Obj_UpdateMetastate   code  Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
+;   L0295 Obj_DoNothing         code  Does nothing (RTS): the update or init routine of object types that have none of their own.
+;   L0308 Obj_EndMetastate      code  Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
 ; ============================================================================
 
 ; TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
@@ -89,9 +89,16 @@ Obj_TypeAttributes:
 ; killed through ordinary HP loss. For Dodongo ($31/$32: dies to a swallowed second bomb or to the
 ; sword while stunned, Dodongo_CheckCollisions), the big Digdogger ($38/$39: ObjAttr bit $20, no
 ; weapon test, Collision_CheckMonsterVsWeaponsAndLink) and the flying Gleeok head ($46: its death is
-; undone every frame, Gleeok_UpdateFlyingHead) the type's own code makes the HP irrelevant. For the
-; other $F types ($19, $1F, $20 Boulder, $22, $2B-$2F, $35-$37, $3E Ganon, $40, $49/$4A Trap) the
-; reason was not checked here (unverified).
+; undone every frame, Gleeok_UpdateFlyingHead) the type's own code makes the HP irrelevant. The
+; other $F types:
+;   $49/$4A Trap: ObjAttr bit $20, no weapon test.
+;   $20 Boulder, $22 flying Ghini, $2B-$2D Bubble, $2E Whirlwind, $40 standing fire: their updates
+;     test only the touch on Link (Link_CheckMonsterTouch), never his weapons.
+;   $1F boulder spawner, $2F pond fairy, $35 rupee stash, $37 Zelda: their updates run no
+;     collision test at all. $19 has no init and no update routine (Obj_DoNothing).
+;   $36 Grumble Goriya: weapons are tested (Person_CheckCollisions) and lower its HP of $F0; at 0
+;     it does not die: the metastate is cleared and IsPersonFireballsEnabled is set.
+;   $3E Ganon: $F0 is the HP his own test counts sword hits against (Ganon_CheckCollisions).
 ; NOTE: 38 bytes cover types $00-$4B. Obj_Init does not bound the index, so types $4C and up are
 ;       given a nibble of the bytes that follow the table (the code of Obj_Update: $48, $A9, $04,
 ;       $20 give types $4C-$53 the nibbles 4, 8, $A, 9, 0, 4, 2, 0).

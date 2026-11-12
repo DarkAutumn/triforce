@@ -43,11 +43,11 @@
 ;   L0100 Obj_InitSimpleObject         code  Gives object slot X a type and attributes and marks it as already initialized.
 ;   L0112 Trap_StartXs                 data  TABLE: start X of each trap; index = trap number 0-5 (object slot - 1 with the generator in slot
 ;   L0117 Trap_StartYs                 data  TABLE: start Y of each trap; index = trap number 0-5; value = ObjY (pixels): $5D top, $BD bottom,
-;   L0132 Trap_Init_Full               code  Turns the trap generator (type $49 or $4A) into six or four traps of type $49 at fixed spots.
-;   L0165 Trap_AllowedDirs             data  TABLE: directions a trap may charge in; index = object slot - 1 (0-5); value = direction bits
-;   L0187 Trap_Update_Full             code  Updates one blade trap: waits for Link to line up, charges to the room's middle, creeps back.
-;   L0321 Trap_DrawAndCheckCollisions  code  Shared tail of Trap_Update_Full: tests the collision with Link and draws the trap.
-;   L0336 RupeeStash_Update_Full       code  Updates one rupee of the rupee stash: Link takes it by touching it, otherwise it is drawn.
+;   L0134 Trap_Init_Full               code  Turns the trap generator (type $49 or $4A) into six or four traps of type $49 at fixed spots.
+;   L0167 Trap_AllowedDirs             data  TABLE: directions a trap may charge in; index = object slot - 1 (0-5); value = direction bits
+;   L0189 Trap_Update_Full             code  Updates one blade trap: waits for Link to line up, charges to the room's middle, creeps back.
+;   L0323 Trap_DrawAndCheckCollisions  code  Shared tail of Trap_Update_Full: tests the collision with Link and draws the trap.
+;   L0338 RupeeStash_Update_Full       code  Updates one rupee of the rupee stash: Link takes it by touching it, otherwise it is drawn.
 ; ============================================================================
 
 ; TABLE: X of each rupee of the rupee stash; index = object slot - 1 (slots $01-$0A); value = ObjX
@@ -123,9 +123,11 @@ Trap_StartYs:
 ; OUT:  slots CurObjIndex+0..+5 (generator type $49) or +0..+3 (type $4A): ObjType = $49, ObjAttr =
 ;       the generator's, ObjUninitialized = 0, ObjX and ObjY from Trap_StartXs and Trap_StartYs; [00] = $49;
 ;       [01] = the attributes; X = CurObjIndex - 1 (not restored)
-; NOTE: The generator is the room's only object and sits in slot 1 (see Room_EnterCommon: a monster
-;       list id in $32-$61 makes one object), so the traps are slots 1-6 or 1-4. Trap_AllowedDirs is
-;       indexed by slot - 1 and fits only that arrangement.
+; NOTE: The generator sits in slot 1: either the room's only object (a monster list id in $32-$61
+;       makes one object, see Room_EnterCommon) or the first entry of a monster list that leaves
+;       slots 2-4 empty and puts other monsters in slots 5 and up (lists $6D, $6E, $76, $77), so the
+;       traps are slots 1-6 or 1-4. Trap_AllowedDirs is indexed by slot - 1 and fits only that
+;       arrangement.
 ; NOTE: Every trap is type $49, also the four made by a $4A generator. Each shows the spawn cloud
 ;       first (room entry set ObjMetastate = 1 in slots $01-$0B).
 ; ----------------------------------------------------------------------------

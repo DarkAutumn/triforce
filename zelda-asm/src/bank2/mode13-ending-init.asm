@@ -32,14 +32,14 @@
 ;   L0102 Mode13WinGame_PlayAreaAttrsTransferBuf  data  DATA: transfer record: $28 bytes of $00 (count byte $68 = repeat flag $40 + $28) to the nametable
 ;   L0108 Mode13WinGame_Init_Sub1ResetTextbox     code  Init submode 1: queues Mode13WinGame_PlayAreaAttrsTransferBuf and resets the textbox position and Zelda's s...
 ;   L0126 Mode13WinGame_Init_Sub1_Return          code  Shared exit of Mode13WinGame_Init_Sub0Curtain and Mode13WinGame_Init_Sub1ResetTextbox.
-;   L0133 Ending_ThanksText                       data  DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
-;   L0143 Mode13WinGame_Init_Sub2ThanksText       code  Init submode 2: types Zelda's text; when it is complete, starts a $50 frame delay and advances.
-;   L0156 Ending_ThanksCharTransferRecTemplate    data  DATA: transfer record template for one textbox character: address $21A4, count 1, tile $24, end $FF.
-;   L0161 Ending_ThanksLineAddrsLo                data  TABLE: low nametable address byte of a text line's first character; index = 0 line 2, 1 line 3,
-;   L0169 Ending_UpdateThanksTextbox              code  Draws Link and, every 6 frames, writes the next character of Ending_ThanksText to the screen.
-;   L0261 Ending_UpdateThanksTextbox_Return       code  Shared exit of Ending_UpdateThanksTextbox and Mode13WinGame_Init_Sub3Silence.
-;   L0267 Mode13WinGame_Init_Sub3Silence          code  Init submode 3: when Zelda's timer (the $50 frame delay) expires, silences all sound and advances.
-;   L0278 Mode13WinGame_Init_Sub4BeginUpdate      code  Init submode 4: presets the credits scroll and text counters, ends init, and hides all sprites.
+;   L0134 Ending_ThanksText                       data  DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
+;   L0144 Mode13WinGame_Init_Sub2ThanksText       code  Init submode 2: types Zelda's text; when it is complete, starts a $50 frame delay and advances.
+;   L0157 Ending_ThanksCharTransferRecTemplate    data  DATA: transfer record template for one textbox character: address $21A4, count 1, tile $24, end $FF.
+;   L0162 Ending_ThanksLineAddrsLo                data  TABLE: low nametable address byte of a text line's first character; index = 0 line 2, 1 line 3,
+;   L0170 Ending_UpdateThanksTextbox              code  Draws Link and, every 6 frames, writes the next character of Ending_ThanksText to the screen.
+;   L0262 Ending_UpdateThanksTextbox_Return       code  Shared exit of Ending_UpdateThanksTextbox and Mode13WinGame_Init_Sub3Silence.
+;   L0268 Mode13WinGame_Init_Sub3Silence          code  Init submode 3: when Zelda's timer (the $50 frame delay) expires, silences all sound and advances.
+;   L0279 Mode13WinGame_Init_Sub4BeginUpdate      code  Init submode 4: presets the credits scroll and text counters, ends init, and hides all sprites.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -127,8 +127,9 @@ Mode13WinGame_Init_Sub1_Return:
     RTS
 
 ; DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
-; space; $28, $2A, $2C punctuation, glyphs (unverified): comma, apostrophe, period); high 2 bits =
-; $80 next goes to line 2, $40 to line 3, $C0 end of text.
+; space, $28 comma, $2A apostrophe, $2C full stop: read from the bitmaps of those tiles in
+; Chr_CommonBackgroundPatterns); high 2 bits = $80 next goes to line 2, $40 to line 3, $C0 end of
+; text.
 ; Reads "THANKS LINK,YOU'RE" / (one space) / "THE HERO OF HYRULE."
 Ending_ThanksText:
     .BYTE $1D, $11, $0A, $17, $14, $1C, $24, $15

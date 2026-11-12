@@ -28,8 +28,8 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0043 Lanmola_Update             code  Updates one Lanmola segment: moves it, draws it, takes weapon hits and shortens the worm on a kill.
 ;   L0151 Lanmola_UpdateHead_Return  code  Shared RTS for the early exits of Lanmola_UpdateHead.
-;   L0166 Lanmola_UpdateHead         code  Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
-;   L0334 Lanmola_Move               code  Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
+;   L0167 Lanmola_UpdateHead         code  Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
+;   L0340 Lanmola_Move               code  Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -161,7 +161,8 @@ Lanmola_UpdateHead_Return:
 ;       but the turn toward Link may be vertical even when that reverses it.
 ; NOTE: A direction blocked by the room bounds or an unwalkable tile is replaced by the next
 ;       allowed one, rotating 8 -> 4 -> 2 -> 1 -> 8. The search has no exit if all three allowed
-;       directions are blocked.
+;       directions are blocked; no room with Lanmolas lets a head get into such a square (see the
+;       comment at the end of the search).
 ; ----------------------------------------------------------------------------
 Lanmola_UpdateHead:
     ; Act only when X is a multiple of 8 ...
@@ -284,8 +285,13 @@ Lanmola_UpdateHead:
     BCS @FindNonOpposite
 
 @Exit:
-    ; If all three viable directions were blocked, the search above would never end. Whether
-    ; any room with Lanmolas allows that was not checked (unverified).
+    ; If all three viable directions were blocked, the search above would never end. That takes a
+    ; square whose only open neighbour is the one the head came from. The rooms with Lanmolas are
+    ; level 9 rooms $11, $12, $55, $74 (Q1) and $00, $50, $63 (Q2), layouts $25, $26, $1A, $0A, $24,
+    ; $1D (data/room-layouts.md). Their only such squares are the four inside the ring of blocks of
+    ; layout $1A. The ring opens only when its push block is moved, and that needs every Lanmola
+    ; dead (PushBlock_State0Idle). The start square ($40, $8D) is a block square in layout $1D, but
+    ; its open neighbour is to the left and the heads start facing up, so left is allowed.
     RTS
 
 @TurnTowardLink:

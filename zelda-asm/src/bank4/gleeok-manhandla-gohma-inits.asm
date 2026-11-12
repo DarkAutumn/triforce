@@ -30,19 +30,21 @@
 ;   - Flying Gleeok head: a blue Keese-style flyer with start speed $BF and top speed $E0
 ;     (Gleeok_InitFlyingHead). FlyerMaxSpeedFrac is one byte for the whole room.
 ; CONTENTS: (generated; L = line in this file)
-;   L0046 Gleeok_SegmentStartYs              data  TABLE: start Y of the 6 stored segments of every Gleeok neck; index = segment (object slot - 1); pixels.
-;   L0057 Gleeok_Init                        code  Initializes Gleeok (types $42-$45): neck segment positions, HP and mask of slots 1-6, head timing.
-;   L0131 Manhandla_BaseFrameImagesAndAttrs  data  TABLE: start value of Manhandla_ObjFrame; index = segment 0-4 (slots 1-5); frame image and sprite bits.
-;   L0137 Manhandla_SegmentOffsetsX          data  TABLE: X offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
-;   L0141 Manhandla_SegmentOffsetsY          data  TABLE: Y offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
-;   L0153 Manhandla_Init                     code  Initializes Manhandla (type $3C): makes object slots 1-4 the hands and slot 5 the base.
-;   L0219 Gohma_Init                         code  Initializes Gohma (types $33, $34): arrow-only mask, shoot timer 1, position ($80, $70).
-;   L0238 Gleeok_InitFlyingHead              code  Initializes a flying Gleeok head (type $46) as a fast blue Keese-style flyer.
+;   L0048 Gleeok_SegmentStartYs              data  TABLE: start Y of the 6 stored segments of every Gleeok neck; index = segment (object slot - 1); pixels.
+;   L0059 Gleeok_Init                        code  Initializes Gleeok (types $42-$45): neck segment positions, HP and mask of slots 1-6, head timing.
+;   L0133 Manhandla_BaseFrameImagesAndAttrs  data  TABLE: start value of Manhandla_ObjFrame; index = segment 0-4 (slots 1-5); frame image and sprite bits.
+;   L0139 Manhandla_SegmentOffsetsX          data  TABLE: X offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
+;   L0143 Manhandla_SegmentOffsetsY          data  TABLE: Y offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
+;   L0155 Manhandla_Init                     code  Initializes Manhandla (type $3C): makes object slots 1-4 the hands and slot 5 the base.
+;   L0221 Gohma_Init                         code  Initializes Gohma (types $33, $34): arrow-only mask, shoot timer 1, position ($80, $70).
+;   L0240 Gleeok_InitFlyingHead              code  Initializes a flying Gleeok head (type $46) as a fast blue Keese-style flyer.
 ; ============================================================================
 
 ; TABLE: start Y of the 6 stored segments of every Gleeok neck; index = segment (object slot - 1); pixels.
 ;   Index 0 (slot 1) is the neck bottom, index 4 (slot 5) the head. Index 5 (slot 6) is stored and
-;   loaded with the neck, but no use of it was found (unverified).
+;   loaded with the neck but never read: Gleeok_MoveNeck, Gleeok_MoveHead and the draw and collision
+;   loop (Gleeok_DrawSegmentAndCheckCollisions) address slots 1-5 only. The copy loops are 6 long
+;   because they also copy the 6-byte head movement block (Gleeok_CurHeadInfo).
 Gleeok_SegmentStartYs:
     .BYTE $6F, $74, $79, $7E, $83, $88
 

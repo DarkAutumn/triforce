@@ -26,8 +26,8 @@
 ;     bottom doorways. Every caller runs only in a dungeon. Sprite_BlankPriorityTemplates
 ; CONTENTS: (generated; L = line in this file)
 ;   L0044 Palette_AnimateFade               code  Sends the next step of the palette fade FadeCycle to the PPU, one step per 10 frames.
-;   L0112 Sprite_BlankPriorityTemplates     data  TABLE: the two mask sprite records copied alternately into sprite records $00-$0F; 4 bytes each =
-;   L0128 Sprite_WriteBlankPrioritySprites  code  Fills sprite records $00-$0F with 8 blank sprites at Y=$3D and 8 at Y=$DD (dungeon doorway masks).
+;   L0113 Sprite_BlankPriorityTemplates     data  TABLE: the two mask sprite records copied alternately into sprite records $00-$0F; 4 bytes each =
+;   L0129 Sprite_WriteBlankPrioritySprites  code  Fills sprite records $00-$0F with 8 blank sprites at Y=$3D and 8 at Y=$DD (dungeon doorway masks).
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -106,8 +106,9 @@ Palette_AnimateFade:
     RTS
 
 ; TABLE: the two mask sprite records copied alternately into sprite records $00-$0F; 4 bytes each =
-; Y, tile, attributes, X. Y = $3D (first) and $DD (second), tile $1C (blank by its upstream name; the
-; pattern was not read: (unverified)), attributes $20 (behind the background, sprite palette row 0),
+; Y, tile, attributes, X. Y = $3D (first) and $DD (second), tile $1C (blank: sprites are 8x16, so
+; the record shows patterns $1C and $1D of pattern table 0, and all 32 bytes of the two in
+; Chr_CommonSpritePatterns are 0), attributes $20 (behind the background, sprite palette row 0),
 ; X = 0.
 Sprite_BlankPriorityTemplates:
     .BYTE $3D, $1C, $20, $00, $DD, $1C, $20, $00

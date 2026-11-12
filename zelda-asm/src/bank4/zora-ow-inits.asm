@@ -40,19 +40,19 @@
 ;     bank4/octorok.asm). Octorok_InitSlowOrGhini, Octorok_InitFast
 ;   - Every Leever init sets RedLeeverLongTimer to 5 (41-50 frames). Leever_Init
 ; CONTENTS: (generated; L = line in this file)
-;   L0075 Zora_TrySpawn            code  Creates the room's Zora (type $11) on a random water tile when the room allows one and none exists.
-;   L0147 Tektite_StartDirs        data  TABLE: starting directions of a Tektite or Boulder; index = Random+1,X AND 3; value = direction bits.
-;   L0154 Boulder_InitSpawner      code  Init of the boulder spawner (type $1F): zeroes the boulder count, then inits like a Boulder.
-;   L0162 Boulder_Init             code  Init of a Boulder (type $20): no spawn cloud, then a random direction and delay as for a Tektite.
-;   L0172 Tektite_Init             code  Init of a Tektite (types $0D, $0E): random starting direction and a first delay of 4-$28 frames.
-;   L0192 Leever_Init              code  Init of a Leever (types $0F blue, $10 red): no spawn cloud; then as a slow Octorok.
-;   L0202 Octorok_InitSlowOrGhini  code  Init of a slow Octorok (types $07, $09) or a Ghini (type $21): q-speed $20 (0.5 pixels a frame).
-;   L0217 Octorok_InitFast         code  Init of a fast Octorok (types $08, $0A): q-speed $30; its tail sets timer, state and facing.
-;   L0241 Peahat_Init              code  Init of a Peahat (type $1A): no spawn cloud, facing up, flyer state reset, slow start.
-;   L0254 Flyer_FinishInit         code  Finishes a flyer's init: clears its flight fields, top speed $A0, starting speed $1F.
-;   L0268 PondFairy_Init           code  Init of the pond fairy (type $2F): requests square-1 tune $08 and places it at ($78, $7D).
-;   L0279 PondFairy_Init_Return    code  Shared RTS of PondFairy_Init and Zora_Update.
-;   L0299 Zora_Update              code  Updates the Zora: runs the burrower state cycle, shoots one fireball per surfacing, removes it on dive.
+;   L0077 Zora_TrySpawn            code  Creates the room's Zora (type $11) on a random water tile when the room allows one and none exists.
+;   L0149 Tektite_StartDirs        data  TABLE: starting directions of a Tektite or Boulder; index = Random+1,X AND 3; value = direction bits.
+;   L0156 Boulder_InitSpawner      code  Init of the boulder spawner (type $1F): zeroes the boulder count, then inits like a Boulder.
+;   L0164 Boulder_Init             code  Init of a Boulder (type $20): no spawn cloud, then a random direction and delay as for a Tektite.
+;   L0174 Tektite_Init             code  Init of a Tektite (types $0D, $0E): random starting direction and a first delay of 4-$28 frames.
+;   L0194 Leever_Init              code  Init of a Leever (types $0F blue, $10 red): no spawn cloud; then as a slow Octorok.
+;   L0204 Octorok_InitSlowOrGhini  code  Init of a slow Octorok (types $07, $09) or a Ghini (type $21): q-speed $20 (0.5 pixels a frame).
+;   L0219 Octorok_InitFast         code  Init of a fast Octorok (types $08, $0A): q-speed $30; its tail sets timer, state and facing.
+;   L0243 Peahat_Init              code  Init of a Peahat (type $1A): no spawn cloud, facing up, flyer state reset, slow start.
+;   L0256 Flyer_FinishInit         code  Finishes a flyer's init: clears its flight fields, top speed $A0, starting speed $1F.
+;   L0270 PondFairy_Init           code  Init of the pond fairy (type $2F): requests square-1 tune $08 and places it at ($78, $7D).
+;   L0281 PondFairy_Init_Return    code  Shared RTS of PondFairy_Init and Zora_Update.
+;   L0301 Zora_Update              code  Updates the Zora: runs the burrower state cycle, shoots one fireball per surfacing, removes it on dive.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -64,9 +64,11 @@
 ; NOTE: Room condition: bit 3 ($08) of LevelBlockAttrsA for RoomId. One Zora at a time (IsZoraActive).
 ; NOTE: RNG: up to 13 candidate squares per frame from the bytes Random+$0D down to Random+1. High
 ;       nibble = X ($10-$E0 accepted), low nibble * $10 = Y ($50-$D0 accepted, then OR $0D). The first
-;       byte read, Random+$0D ($25), lies one past the 13-byte Random array; no code that writes $25
-;       was found (unverified), and a 0 there fails the X test. If no candidate qualifies, the search
-;       is repeated on the next frame with new random bytes.
+;       byte read, Random+$0D ($25), lies one past the 13-byte Random array. $25 has no symbol and no
+;       instruction names it; the random step ends at $24 and the timer loop starts at $26
+;       (Nmi_Isr). It read 0 on every frame of play observed (trace), and a 0 fails the X test, so
+;       12 candidates count. If no candidate qualifies, the search is repeated on the next frame
+;       with new random bytes.
 ; NOTE: Tile test: the tile under (X, Y + $0B), the lower left tile of the 16-pixel square, must be
 ;       $8D-$98 as returned by Tile_GetUnderObj. That routine reports the overworld tiles of
 ;       Tile_WalkableTilesOW (among them $8D and $91) as $26, so those two never qualify.

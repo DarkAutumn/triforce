@@ -23,11 +23,12 @@
 ;   - No RNG and no count limit here: a gravestone can be touched again once its Ghini has moved.
 ;   - Obj_Init exempts the Armos ($1E) from screen-edge entry but not the flying Ghini ($22): in
 ;     a room whose RoomAttrsF has bit 3 the Ghini's init goes through the edge-entry code, which
-;     can move it to an edge cell (seen in Obj_Init; not traced).
+;     can move it to an edge cell. No room with that bit has a gravestone square (squares $14 and
+;     $29) in its layout, in either quest, so the level data never takes this path.
 ; CONTENTS: (generated; L = line in this file)
-;   L0035 Spawn_TouchedSquareOffsetsX          data  TABLE: X offset from the X computed for Link to the touched square; index = direction index of
-;   L0039 Spawn_TouchedSquareOffsetsY          data  TABLE: Y offset from the Y computed for Link to the touched square; same index; signed pixels.
-;   L0053 Spawn_CheckTouchedArmosOrGravestone  code  Wakes an Armos or releases a flying Ghini when Link walks into an armos or gravestone square.
+;   L0036 Spawn_TouchedSquareOffsetsX          data  TABLE: X offset from the X computed for Link to the touched square; index = direction index of
+;   L0040 Spawn_TouchedSquareOffsetsY          data  TABLE: Y offset from the Y computed for Link to the touched square; same index; signed pixels.
+;   L0054 Spawn_CheckTouchedArmosOrGravestone  code  Wakes an Armos or releases a flying Ghini when Link walks into an armos or gravestone square.
 ; ============================================================================
 
 ; TABLE: X offset from the X computed for Link to the touched square; index = direction index of

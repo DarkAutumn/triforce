@@ -16,10 +16,12 @@
 ;   - Every segment has flyer speed $80 (1 pixel every 2 frames in Flyer_Move) and flying state 2
 ;     (chase); the heads start with 1 turn left, so a head's first update with ObjTimer = 0 ends
 ;     the state and picks a new one. Moldorm_Init
-;   - RoomObjCount is set to 8 although ten segments are made (reason unverified). Moldorm_Init
+;   - RoomObjCount is set to 8 although ten segments are made. The only later reader is the kill
+;     banking on leaving the room, where one kill already clears a room whose first type is $41
+;     (RoomHistory_SaveKillCountUW), so 8 and 10 behave alike. Moldorm_Init
 ;   - RNG: head directions come from Random+5 and Random+10 (AND 7 into Dir_EightWayDirs). Moldorm_Init
 ; CONTENTS: (generated; L = line in this file)
-;   L0034 Moldorm_Init  code  Creates the ten Moldorm segments (two worms of five) in object slots $01-$0A.
+;   L0038 Moldorm_Init  code  Creates the ten Moldorm segments (two worms of five) in object slots $01-$0A.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -27,7 +29,9 @@
 ; IN:   ObjAttr+1 and ObjHP+1 already loaded for type $41 by Obj_Init. X is not used.
 ; OUT:  slots $01-$0A initialized; FlyerMaxSpeedFrac = $80; RoomObjCount = 8.
 ; NOTE: It clears ObjUninitialized for all ten slots, so it runs once per room. Copying from slot
-;       $01 is right only if the room's Moldorm object is in slot $01 when this runs (unverified).
+;       $01 is right: the Moldorm is always there. Type $41 comes only from a room whose monster
+;       list id is $41, ids $32-$61 get count 1 and so fill slot $01 alone (Room_EnterCommon), no
+;       monster list holds $41, and no other code stores type $41.
 ;       HP is $20 per segment and the attribute byte $C1 (type $41 in Obj_TypeHpPairs and
 ;       Obj_TypeAttributes).
 ; ----------------------------------------------------------------------------
@@ -95,6 +99,6 @@ Moldorm_Init:
     STA Flyer_ObjTurns+10
     LDA #$80                    ; Flyer top speed $80. Moldorm's flight table has no speed-up
     STA FlyerMaxSpeedFrac       ; state, so its speed stays at the $80 set above.
-    LDA #$08                    ; Monster count 8, not 10 (reason unverified).
+    LDA #$08                    ; Monster count 8, not 10 (no effect: see the file header).
     STA RoomObjCount
     RTS

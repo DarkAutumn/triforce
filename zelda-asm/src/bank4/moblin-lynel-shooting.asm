@@ -263,8 +263,9 @@ MonsterArrow_Update:
 @CheckShooter:
     ; If the shooter's slot (ObjRefId,X) is empty, then zero the arrow's timer, so that it flies on
     ; the next frame. Either way, draw the arrow.
-    ; This branch needs a nonzero arrow timer, which the shooting code in this file never sets;
-    ; whether anything reaches it is unverified.
+    ; Not reached: only the Moblin code above makes type $5B, Shooter_Shoot zeroes the arrow's
+    ; timer, Obj_Init sets no timer for types from $53 up, and no other code writes the timer
+    ; of an arrow's slot. (trace) Six Moblin rooms, 21,976 arrow frames: the timer was always 0.
     LDY ObjRefId, X
     LDA ObjType, Y
     BNE :+

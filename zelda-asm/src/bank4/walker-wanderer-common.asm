@@ -38,14 +38,14 @@
 ;   L0057 Sample_PlayBossHitCryIfHit         code  Starts the boss cry sample on the frame a boss has just been hit.
 ;   L0070 Sample_PlayBossDeathCryIfDying     code  Plays the boss death cry when the object is dying (ObjMetastate <> 0).
 ;   L0082 MonsterShot_Init                   code  Init for monster shot types $53 and $55-$5A: q-speed $C0, and the shot updates at once.
-;   L0090 MonsterShot_InitType54             code  Init for shot type $54: as MonsterShot_Init, but q-speed $E0 (3.5 pixels a frame).
-;   L0097 Unused_Walker_InitWithTimer80      code  Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into Walker_Init.
-;   L0112 Walker_Init                        code  Init for walking monsters: chooses the first facing direction, unless one is already set.
-;   L0159 StandingFire_Update                code  Standing fire (type $40): hurts Link on contact, animates and draws the flame.
-;   L0184 Wanderer_Update                    code  Wanderer update: knockback if shoved; nothing with the clock or while stunned; else move and turn.
-;   L0198 Unused_Wanderer_SetTurnRateByType  code  Dead code (nothing refers to it): a wanderer entry with turn rate $70 for type $05, else $A0.
-;   L0223 Wanderer_MoveAndTurn               code  Moves a wanderer one frame and, on a grid point, chooses its next facing direction.
-;   L0234 Wanderer_Return                    code  Shared exit of the wanderer routines above and below.
+;   L0091 MonsterShot_InitType54             code  Init for shot type $54: as MonsterShot_Init, but q-speed $E0 (3.5 pixels a frame).
+;   L0098 Unused_Walker_InitWithTimer80      code  Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into Walker_Init.
+;   L0113 Walker_Init                        code  Init for walking monsters: chooses the first facing direction, unless one is already set.
+;   L0160 StandingFire_Update                code  Standing fire (type $40): hurts Link on contact, animates and draws the flame.
+;   L0185 Wanderer_Update                    code  Wanderer update: knockback if shoved; nothing with the clock or while stunned; else move and turn.
+;   L0199 Unused_Wanderer_SetTurnRateByType  code  Dead code (nothing refers to it): a wanderer entry with turn rate $70 for type $05, else $A0.
+;   L0224 Wanderer_MoveAndTurn               code  Moves a wanderer one frame and, on a grid point, chooses its next facing direction.
+;   L0235 Wanderer_Return                    code  Shared exit of the wanderer routines above and below.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -84,9 +84,10 @@ MonsterShot_Init:
     BNE :+                      ; Always taken.
 
 ; Init for shot type $54: as MonsterShot_Init, but q-speed $E0 (3.5 pixels a frame).
-; It is live code: the Obj_Init_JumpTable entry of type $54 points here, and that type's update
-; is MonsterShot_Update. No instruction loads the immediate $54 as a type to create; whether a
-; computed type or room data can produce it is (unverified).
+; Its only reference is the Obj_Init_JumpTable entry of type $54 (that type's update is
+; MonsterShot_Update), and type $54 is never created: every shot type handed to Shooter_Shoot or
+; Fireball_Shoot is an immediate ($53, $55-$59, $5B, $5C), no room has a monster list id from $53
+; to $61, and no monster list contains $54. The same holds for type $5A.
 MonsterShot_InitType54:
     LDA #$E0                    ; Q-speed $E0 (3.5 pixels a frame)
 :
@@ -247,7 +248,7 @@ Wanderer_Return:
 
     ; If turn rate < the random byte, or Link's state = $FF;
     ; then go turn only if the turn timer has expired.
-    ; What puts Link in state $FF is (unverified).
+    ; The state test is never true: no code sets bit 7 of Link's state (see Goriya_Update).
     LDA Wanderer_ObjTurnRate, X
     CMP Random+1, X
     BCC @TurnIfTime

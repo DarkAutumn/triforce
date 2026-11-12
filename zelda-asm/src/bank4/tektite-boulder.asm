@@ -39,14 +39,14 @@
 ;   L0131 Jumper_YAccelerations             data  TABLE: gravity of a jump; index = Jumper_YAccelerationBaseOffsets[kind] + ObjDir; value = 1/256 px/frame
 ;   L0143 Jumper_StartSpeedsWholeY          data  TABLE: whole part of the vertical speed at the start of a jump; index = kind (Jumper_GetKind);
 ;   L0147 Jumper_YAccelerationBaseOffsets   data  TABLE: start of each kind's set in Jumper_YAccelerations; index = kind (Jumper_GetKind).
-;   L0163 Jumper_Update                     code  Updates a Tektite (types $0D, $0E) or a Boulder (type $20): wait on the ground, then jump.
-;   L0385 Jumper_AnimateAndCheckCollisions  code  Draws a Tektite or a Boulder and checks its collisions; destroys a Boulder at the bottom of the screen.
-;   L0439 Jumper_GetKind                    code  Gets the kind of jumper an object is, which indexes the jumper tables.
-;   L0449 Jumper_GetKind_Return             code  Shared exit of Jumper_AnimateAndCheckCollisions and Jumper_GetKind.
-;   L0456 Jumper_PointBoulderDownward       code  Makes a Boulder (type $20) point down: keeps the horizontal bits of ObjDir and sets down (4).
-;   L0478 Jumper_MoveY                      code  Moves a jumper vertically by its speed, then adds gravity to the speed and caps the falling speed.
-;   L0515 Jumper_ResetSpeedFracY            code  Clears a jumper's vertical speed fraction; also the tail of Jumper_MoveY.
-;   L0520 Jumper_MoveY_Return               code  Shared exit of Jumper_MoveY.
+;   L0166 Jumper_Update                     code  Updates a Tektite (types $0D, $0E) or a Boulder (type $20): wait on the ground, then jump.
+;   L0390 Jumper_AnimateAndCheckCollisions  code  Draws a Tektite or a Boulder and checks its collisions; destroys a Boulder at the bottom of the screen.
+;   L0444 Jumper_GetKind                    code  Gets the kind of jumper an object is, which indexes the jumper tables.
+;   L0454 Jumper_GetKind_Return             code  Shared exit of Jumper_AnimateAndCheckCollisions and Jumper_GetKind.
+;   L0461 Jumper_PointBoulderDownward       code  Makes a Boulder (type $20) point down: keeps the horizontal bits of ObjDir and sets down (4).
+;   L0483 Jumper_MoveY                      code  Moves a jumper vertically by its speed, then adds gravity to the speed and caps the falling speed.
+;   L0520 Jumper_ResetSpeedFracY            code  Clears a jumper's vertical speed fraction; also the tail of Jumper_MoveY.
+;   L0525 Jumper_MoveY_Return               code  Shared exit of Jumper_MoveY.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -157,15 +157,20 @@ Jumper_YAccelerationBaseOffsets:
 ;       and Y follows Jumper_MoveY; tiles are ignored.
 ;       Without hitting the room bounds a blue Tektite's jump lasts 29 frames sideways (rising 24
 ;       pixels), 45 down-diagonal, 16 up-diagonal; a red Tektite's 20 (rising 20 pixels), 36, 13; a
-;       Boulder's bounce 29 frames (these counts follow from the tables; computed, not traced).
+;       Boulder's bounce 29 frames, then 1 frame on the ground. (trace) Frames in state 1 counted
+;       for red Tektites (rooms $1A, $2C, $74), Boulders (room $17) and a red Tektite with its
+;       type changed by hand to $0D: the same counts. A sideways jump ends 2 pixels above its
+;       start, a down-diagonal one or a bounce 30 below, an up-diagonal one 33 or 34 above.
 ;       The clock (InvClock) or a stun freezes the jumper in place, in the air too.
 ; ----------------------------------------------------------------------------
 Jumper_Update:
     ; If the monster is shoved, then keep shoving it; it is not drawn in such a frame.
     LDA ObjShoveDir, X
     BEQ @CheckStunned
-    ; No case that shoves a jumper was found (unverified); upstream marked this jump as never seen
-    ; executing.
+    ; Never taken (upstream marked this jump as never seen executing). Only a weapon hit sets a
+    ; monster's ObjShoveDir (Shove_Begin). A Boulder is not tested against weapons, and every
+    ; weapon that shoves deals at least $10, a Tektite's whole HP, so the hit Tektite is in its
+    ; death sparkle and this update no longer runs; the boomerang (damage 0) does not shove.
     JMP Shove_Update
 
 @DrawAndCheckCollisions:
@@ -385,8 +390,8 @@ Jumper_Update:
 Jumper_AnimateAndCheckCollisions:
     JSR Anim_FetchObjPosForSpriteDescriptor
 
-    ; [0D] := 0 (A is 0 here). No reader of this value was found: the draw routines overwrite [0D]
-    ; before reading it (unverified).
+    ; [0D] := 0 (A is 0 here). The value is never read: both draw tails below go through
+    ; Anim_DrawObjectWithAnim, which stores the frame image in [0D] before anything reads it.
     STA $0D
 
     ; If the monster is a boulder, then go animate, draw, check collision.

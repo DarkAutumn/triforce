@@ -26,8 +26,8 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0042 Transfer_BufAddrs     data  TABLE: transfer buffer addresses; index = TileBufSelector (even, $00-$7E); value = buffer address.
 ;   L0116 Transfer_SendCurBuf   code  Sends the transfer buffer chosen by TileBufSelector to the PPU, then resets the transfer state.
-;   L0138 Transfer_WriteRecord  code  Writes one transfer record (A = PPU address high byte, Y = 0), then falls into Transfer_WriteBuf.
-;   L0214 Transfer_WriteBuf     code  Writes the transfer records at [00:01] to the PPU until a byte with bit 7 set is found.
+;   L0141 Transfer_WriteRecord  code  Writes one transfer record (A = PPU address high byte, Y = 0), then falls into Transfer_WriteBuf.
+;   L0217 Transfer_WriteBuf     code  Writes the transfer records at [00:01] to the PPU until a byte with bit 7 set is found.
 ; ============================================================================
 
 .SEGMENT "BANK_06_DLIST"
@@ -121,9 +121,12 @@ Transfer_SendCurBuf:
     STA $01
     JSR Transfer_WriteBuf
 
-    ; Store $3F in $0300, the byte before DynTileBufLen. The only other writes to $0300 found are the
-    ; two demo palette setups (value $23); no instruction reads it by address, so its purpose is
-    ; (unverified).
+    ; Store $3F in $0300, the byte before DynTileBufLen. Nothing reads $0300: the only other
+    ; instructions that name it are two more stores (the demo palette setups, value $23), and the
+    ; only indexed array below it, Sprites, is never indexed past $02FF. A dead store.
+    ; (trace) Overwriting $0300 with a random value before every frame for 1500 frames of play (two
+    ; dungeon rooms with the scroll between them; an overworld room) changed no other RAM byte.
+    ; What the byte was meant for is not in the code.
     LDA #$3F
     STA $0300
     LDX #$00

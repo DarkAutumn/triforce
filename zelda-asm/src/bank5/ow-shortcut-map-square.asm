@@ -31,11 +31,11 @@
 ;   - The file ends with 982 bytes of $FF filler ($AC2A-$AFFF).
 ; CONTENTS: (generated; L = line in this file)
 ;   L0054 Secret_RestoreStairsOW                     code  Overworld: after a room is laid out, puts its stairs square back if room flag bit 5 says so.
-;   L0126 Tile_ChangePlayAreaSquare                  code  Rewrites the 16x16 square of the play area tile map under an object, from the tile in [05].
-;   L0193 Tile_FetchPlayAreaTilesAddr                code  Points [00:01] at the start of the play area tile map, PlayAreaTiles ($6530).
-;   L0207 Mode_CopyNextRowAndAdvanceSubmodeWhenDone  code  Submode step: copies one tile row to the transfer buffer; after the last row, next submode.
-;   L0217 Transfer_CopyNextPlayAreaRow               code  Copies tile row CurRow of the play area to the dynamic transfer buffer, then increments CurRow.
-;   L0229 ModeALeaveCellar_Init_Sub4_LayOutRoom      code  Submode step: lays out the room's tile map, sets CurRow to 0 and goes to the next submode.
+;   L0129 Tile_ChangePlayAreaSquare                  code  Rewrites the 16x16 square of the play area tile map under an object, from the tile in [05].
+;   L0196 Tile_FetchPlayAreaTilesAddr                code  Points [00:01] at the start of the play area tile map, PlayAreaTiles ($6530).
+;   L0210 Mode_CopyNextRowAndAdvanceSubmodeWhenDone  code  Submode step: copies one tile row to the transfer buffer; after the last row, next submode.
+;   L0220 Transfer_CopyNextPlayAreaRow               code  Copies tile row CurRow of the play area to the dynamic transfer buffer, then increments CurRow.
+;   L0232 ModeALeaveCellar_Init_Sub4_LayOutRoom      code  Submode step: lays out the room's tile map, sets CurRow to 0 and goes to the next submode.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -89,8 +89,11 @@ Secret_RestoreStairsOW:
     BEQ @WriteStairs            ; Rock wall here, but the room's tile object is a rock: stairs.
 
     ; Rock wall at the spot and the tile object is not a rock: remove the tile object and write
-    ; square $0C (RoomLayout_OWSecondarySquareTiles: two $F3 tiles above two $24 tiles). No room that reaches
-    ; this branch was identified (unverified).
+    ; square $0C (RoomLayout_OWSecondarySquareTiles: two $F3 tiles above two $24 tiles). The level
+    ; data never reaches this branch, in either quest: flag bit 5 can be set only in the rooms with a
+    ; rock or gravestone object ($09, $11, $1B, $1D, $20, $21, $23, $49, $79) and in the four
+    ; shortcut rooms ($1D, $23, $49, $79, LevelInfo_CellarRoomIdArray); of these only $1D has a rock
+    ; wall tile ($D8) at its stairs spot ($50,$70), and its tile object is a rock.
     LDA #$00
     STA RoomTileObjType
     LDA #$0C

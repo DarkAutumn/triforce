@@ -268,22 +268,22 @@ Chr_DemoSpritePatterns	data	1	src/bank1/copy-code-demo-patterns.asm	179	DemoSpri
 Chr_DemoBackgroundPatterns	data	1	src/bank1/copy-code-demo-patterns.asm	183	DemoBackgroundPatterns	DATA: demo background patterns (CHR), $0820 bytes = 130 tiles of 16 bytes, sent to PPU $1700.
 Whirlwind_SetLinkYAndSetUp	code	1	src/bank1/whirlwind.asm	56	InitWhirlwind	Moves Link to Y = A, then falls through to set up a whirlwind on that Y in object slot X.
 Whirlwind_SetUp	code	1	src/bank1/whirlwind.asm	66	SetUpWhirlwind	Makes object slot X a whirlwind (type $2E) at the left screen edge on Link's Y.
-Whirlwind_PrevRoomIds	data	1	src/bank1/whirlwind.asm	80	WhirlwindPrevRoomIdList	TABLE: room the screen scrolls in from when the whirlwind delivers Link; index = level - 1
-Whirlwind_Update_Full	code	1	src/bank1/whirlwind.asm	98	UpdateWhirlwind_Full	Whirlwind update: moves right 2 pixels per frame, picks Link up, carries him off or drops him.
-Whirlwind_Update_Full@CheckCollision	cheap	1	src/bank1/whirlwind.asm	144	@CheckCollision	
-Whirlwind_Update_Full@CheckRightEdge	cheap	1	src/bank1/whirlwind.asm	187	@CheckRightEdge	
-Whirlwind_Update_Full@Draw	cheap	1	src/bank1/whirlwind.asm	208	@Draw	
-Whirlwind_Destroy	code	1	src/bank1/whirlwind.asm	217	DestroyWhirlwind	Frees the whirlwind's object slot and resets its per-slot fields.
-Whirlwind_Summon	code	1	src/bank1/whirlwind.asm	242	SummonWhirlwind	Flute use on the overworld: picks the next destination level and makes a whirlwind.
-Whirlwind_Summon@TestLevelPiece	cheap	1	src/bank1/whirlwind.asm	257	@LoopTriforcePiece	
-Whirlwind_Summon@DecreasingDir	cheap	1	src/bank1/whirlwind.asm	282	@DecreasingDir	
-Whirlwind_Summon@MakeWhirlwind	cheap	1	src/bank1/whirlwind.asm	290	@MakeWhirlwind	
-Whirlwind_StepLevelIndex	code	1	src/bank1/whirlwind.asm	313	AdvanceTeleportingLevelIndex	Steps TeleportingLevelIndex: +1 when Link faces right or up, -1 when he faces left or down.
-Whirlwind_StepLevelIndex_Return	code	1	src/bank1/whirlwind.asm	322	L6104_Exit	Shared exit of Whirlwind_Summon and Whirlwind_StepLevelIndex.
-Whirlwind_Draw	code	1	src/bank1/whirlwind.asm	329	DrawWhirlwind	Draws the whirlwind: one image, palette row cycling every frame.
-Whirlwind_DropOffYs	data	1	src/bank1/whirlwind.asm	347	TeleportYs	TABLE: Y coordinate of Link and the whirlwind in the destination room; index = level - 1
-Whirlwind_InitDropOffAndBeginUpdate	code	1	src/bank1/whirlwind.asm	359	CheckInitWhirlwindAndBeginUpdate	On starting play in a room: sets up the drop-off if a whirlwind carries Link; then Mode_BeginUpdate.
-Whirlwind_InitDropOffAndBeginUpdate@BeginUpdate	cheap	1	src/bank1/whirlwind.asm	376		
+Whirlwind_PrevRoomIds	data	1	src/bank1/whirlwind.asm	81	WhirlwindPrevRoomIdList	TABLE: room the screen scrolls in from when the whirlwind delivers Link; index = level - 1
+Whirlwind_Update_Full	code	1	src/bank1/whirlwind.asm	99	UpdateWhirlwind_Full	Whirlwind update: moves right 2 pixels per frame, picks Link up, carries him off or drops him.
+Whirlwind_Update_Full@CheckCollision	cheap	1	src/bank1/whirlwind.asm	145	@CheckCollision	
+Whirlwind_Update_Full@CheckRightEdge	cheap	1	src/bank1/whirlwind.asm	188	@CheckRightEdge	
+Whirlwind_Update_Full@Draw	cheap	1	src/bank1/whirlwind.asm	209	@Draw	
+Whirlwind_Destroy	code	1	src/bank1/whirlwind.asm	218	DestroyWhirlwind	Frees the whirlwind's object slot and resets its per-slot fields.
+Whirlwind_Summon	code	1	src/bank1/whirlwind.asm	243	SummonWhirlwind	Flute use on the overworld: picks the next destination level and makes a whirlwind.
+Whirlwind_Summon@TestLevelPiece	cheap	1	src/bank1/whirlwind.asm	258	@LoopTriforcePiece	
+Whirlwind_Summon@DecreasingDir	cheap	1	src/bank1/whirlwind.asm	283	@DecreasingDir	
+Whirlwind_Summon@MakeWhirlwind	cheap	1	src/bank1/whirlwind.asm	291	@MakeWhirlwind	
+Whirlwind_StepLevelIndex	code	1	src/bank1/whirlwind.asm	314	AdvanceTeleportingLevelIndex	Steps TeleportingLevelIndex: +1 when Link faces right or up, -1 when he faces left or down.
+Whirlwind_StepLevelIndex_Return	code	1	src/bank1/whirlwind.asm	323	L6104_Exit	Shared exit of Whirlwind_Summon and Whirlwind_StepLevelIndex.
+Whirlwind_Draw	code	1	src/bank1/whirlwind.asm	330	DrawWhirlwind	Draws the whirlwind: one image, palette row cycling every frame.
+Whirlwind_DropOffYs	data	1	src/bank1/whirlwind.asm	348	TeleportYs	TABLE: Y coordinate of Link and the whirlwind in the destination room; index = level - 1
+Whirlwind_InitDropOffAndBeginUpdate	code	1	src/bank1/whirlwind.asm	360	CheckInitWhirlwindAndBeginUpdate	On starting play in a room: sets up the drop-off if a whirlwind carries Link; then Mode_BeginUpdate.
+Whirlwind_InitDropOffAndBeginUpdate@BeginUpdate	cheap	1	src/bank1/whirlwind.asm	377		
 Link_CheckSlidingTileObjBlocking	code	1	src/bank1/tile-block-power-triforce.asm	45	CheckTileObjectsBlocking	Cancels Link's move while a sliding push block, rock or gravestone is within $10 pixels of him.
 Link_CheckSlidingTileObjBlocking@LoopTileObj	cheap	1	src/bank1/tile-block-power-triforce.asm	49	@LoopTileObj	
 Link_CheckSlidingTileObjBlocking@Found	cheap	1	src/bank1/tile-block-power-triforce.asm	60	@Found	
@@ -302,18 +302,18 @@ Ganon_AppendAshesPaletteRow_Bank1@CopyPaletteRecord	cheap	1	src/bank1/tile-block
 Ganon_AppendAshesPaletteRow_Bank1@ReplaceColors	cheap	1	src/bank1/tile-block-power-triforce.asm	228	@ReplaceColors	
 Unused_DrawAshes_Bank1	code	1	src/bank1/tile-block-power-triforce.asm	243	Unused_DrawAshes_Bank1	Never referenced: draws the pile of ashes (frame image $0B) at object slot X's position.
 Unused_ActivateRoomItem_Bank1	code	1	src/bank1/tile-block-power-triforce.asm	252	Unused_ActivateRoomItem_Bank1	Never referenced: makes the room item appear (state 0) unless it was already taken.
-Spawn_TouchedSquareOffsetsX	data	1	src/bank1/armos-ghini-spawn.asm	35	LinkToSquareOffsetsX	TABLE: X offset from the X computed for Link to the touched square; index = direction index of
-Spawn_TouchedSquareOffsetsY	data	1	src/bank1/armos-ghini-spawn.asm	39	LinkToSquareOffsetsY	TABLE: Y offset from the Y computed for Link to the touched square; same index; signed pixels.
-Spawn_CheckTouchedArmosOrGravestone	code	1	src/bank1/armos-ghini-spawn.asm	53	CheckPassiveTileObjects	Wakes an Armos or releases a flying Ghini when Link walks into an armos or gravestone square.
-Spawn_CheckTouchedArmosOrGravestone@NextTile	cheap	1	src/bank1/armos-ghini-spawn.asm	67	@NextTile	
-Spawn_CheckTouchedArmosOrGravestone@ReturnNoMatch	cheap	1	src/bank1/armos-ghini-spawn.asm	72	@ReturnX0	
-Spawn_CheckTouchedArmosOrGravestone@TestTile	cheap	1	src/bank1/armos-ghini-spawn.asm	77	@TestTile	
-Spawn_CheckTouchedArmosOrGravestone@CheckHorizontal	cheap	1	src/bank1/armos-ghini-spawn.asm	110	@CheckHorizontal	
-Spawn_CheckTouchedArmosOrGravestone@FindSlot	cheap	1	src/bank1/armos-ghini-spawn.asm	123	@FindSlot	
-Spawn_CheckTouchedArmosOrGravestone@FindObjAtLocation	cheap	1	src/bank1/armos-ghini-spawn.asm	157	@FindObjAtLocation	
-Spawn_CheckTouchedArmosOrGravestone@NextObjAtLocation	cheap	1	src/bank1/armos-ghini-spawn.asm	172	@NextObjAtLocation	
-Spawn_CheckTouchedArmosOrGravestone@ChooseObjType	cheap	1	src/bank1/armos-ghini-spawn.asm	176	@ChooseObjType	
-Spawn_CheckTouchedArmosOrGravestone@ReturnLinkSlot	cheap	1	src/bank1/armos-ghini-spawn.asm	189	@ExitX0	
+Spawn_TouchedSquareOffsetsX	data	1	src/bank1/armos-ghini-spawn.asm	36	LinkToSquareOffsetsX	TABLE: X offset from the X computed for Link to the touched square; index = direction index of
+Spawn_TouchedSquareOffsetsY	data	1	src/bank1/armos-ghini-spawn.asm	40	LinkToSquareOffsetsY	TABLE: Y offset from the Y computed for Link to the touched square; same index; signed pixels.
+Spawn_CheckTouchedArmosOrGravestone	code	1	src/bank1/armos-ghini-spawn.asm	54	CheckPassiveTileObjects	Wakes an Armos or releases a flying Ghini when Link walks into an armos or gravestone square.
+Spawn_CheckTouchedArmosOrGravestone@NextTile	cheap	1	src/bank1/armos-ghini-spawn.asm	68	@NextTile	
+Spawn_CheckTouchedArmosOrGravestone@ReturnNoMatch	cheap	1	src/bank1/armos-ghini-spawn.asm	73	@ReturnX0	
+Spawn_CheckTouchedArmosOrGravestone@TestTile	cheap	1	src/bank1/armos-ghini-spawn.asm	78	@TestTile	
+Spawn_CheckTouchedArmosOrGravestone@CheckHorizontal	cheap	1	src/bank1/armos-ghini-spawn.asm	111	@CheckHorizontal	
+Spawn_CheckTouchedArmosOrGravestone@FindSlot	cheap	1	src/bank1/armos-ghini-spawn.asm	124	@FindSlot	
+Spawn_CheckTouchedArmosOrGravestone@FindObjAtLocation	cheap	1	src/bank1/armos-ghini-spawn.asm	158	@FindObjAtLocation	
+Spawn_CheckTouchedArmosOrGravestone@NextObjAtLocation	cheap	1	src/bank1/armos-ghini-spawn.asm	173	@NextObjAtLocation	
+Spawn_CheckTouchedArmosOrGravestone@ChooseObjType	cheap	1	src/bank1/armos-ghini-spawn.asm	177	@ChooseObjType	
+Spawn_CheckTouchedArmosOrGravestone@ReturnLinkSlot	cheap	1	src/bank1/armos-ghini-spawn.asm	190	@ExitX0	
 RupeeStash_RupeeXs	data	1	src/bank1/trap-rupee-stash.asm	55	RupeeStashXs	TABLE: X of each rupee of the rupee stash; index = object slot - 1 (slots $01-$0A); value = ObjX
 RupeeStash_RupeeYs	data	1	src/bank1/trap-rupee-stash.asm	61	RupeeStashYs	TABLE: Y of each rupee of the rupee stash; index = object slot - 1 (slots $01-$0A); value = ObjY
 RupeeStash_Init_Full	code	1	src/bank1/trap-rupee-stash.asm	75	InitRupeeStash_Full	Turns the rupee stash object (type $35) into ten rupee objects in object slots $0A-$01.
@@ -321,21 +321,21 @@ RupeeStash_Init_Full@LoopRupee	cheap	1	src/bank1/trap-rupee-stash.asm	84	@LoopRu
 Obj_InitSimpleObject	code	1	src/bank1/trap-rupee-stash.asm	100	InitOneSimpleObject	Gives object slot X a type and attributes and marks it as already initialized.
 Trap_StartXs	data	1	src/bank1/trap-rupee-stash.asm	112	TrapXs	TABLE: start X of each trap; index = trap number 0-5 (object slot - 1 with the generator in slot
 Trap_StartYs	data	1	src/bank1/trap-rupee-stash.asm	117	TrapYs	TABLE: start Y of each trap; index = trap number 0-5; value = ObjY (pixels): $5D top, $BD bottom,
-Trap_Init_Full	code	1	src/bank1/trap-rupee-stash.asm	132	InitTrap_Full	Turns the trap generator (type $49 or $4A) into six or four traps of type $49 at fixed spots.
-Trap_Init_Full@LoopTrap	cheap	1	src/bank1/trap-rupee-stash.asm	144	@LoopTrap	
-Trap_AllowedDirs	data	1	src/bank1/trap-rupee-stash.asm	165	TrapAllowedDirs	TABLE: directions a trap may charge in; index = object slot - 1 (0-5); value = direction bits
-Trap_Update_Full	code	1	src/bank1/trap-rupee-stash.asm	187	UpdateTrap_Full	Updates one blade trap: waits for Link to line up, charges to the room's middle, creeps back.
-Trap_Update_Full@TryCharge	cheap	1	src/bank1/trap-rupee-stash.asm	214	@GoToState1	
-Trap_Update_Full@DrawAndCheckCollisions	cheap	1	src/bank1/trap-rupee-stash.asm	230	@DrawAndCheckCollisions	
-Trap_Update_Full@CheckColumn	cheap	1	src/bank1/trap-rupee-stash.asm	233	@CheckHorizontal	
-Trap_Update_Full@UpdateMovingStates	cheap	1	src/bank1/trap-rupee-stash.asm	256	@UpdateMovingStates	
-Trap_Update_Full@CheckState	cheap	1	src/bank1/trap-rupee-stash.asm	286	@Finish	
-Trap_Update_Full@Draw	cheap	1	src/bank1/trap-rupee-stash.asm	309	@Draw	
-Trap_Update_Full@FinishState2	cheap	1	src/bank1/trap-rupee-stash.asm	312	@FinishState2	
-Trap_DrawAndCheckCollisions	code	1	src/bank1/trap-rupee-stash.asm	321	L_Trap_DrawAndCheckCollisions	Shared tail of Trap_Update_Full: tests the collision with Link and draws the trap.
-RupeeStash_Update_Full	code	1	src/bank1/trap-rupee-stash.asm	336	UpdateRupeeStash_Full	Updates one rupee of the rupee stash: Link takes it by touching it, otherwise it is drawn.
-RupeeStash_Update_Full@DrawRupee	cheap	1	src/bank1/trap-rupee-stash.asm	363	@DrawRupee	
-RupeeStash_Update_Full@ExitRestoreX	cheap	1	src/bank1/trap-rupee-stash.asm	371	@ExitRestoreX	
+Trap_Init_Full	code	1	src/bank1/trap-rupee-stash.asm	134	InitTrap_Full	Turns the trap generator (type $49 or $4A) into six or four traps of type $49 at fixed spots.
+Trap_Init_Full@LoopTrap	cheap	1	src/bank1/trap-rupee-stash.asm	146	@LoopTrap	
+Trap_AllowedDirs	data	1	src/bank1/trap-rupee-stash.asm	167	TrapAllowedDirs	TABLE: directions a trap may charge in; index = object slot - 1 (0-5); value = direction bits
+Trap_Update_Full	code	1	src/bank1/trap-rupee-stash.asm	189	UpdateTrap_Full	Updates one blade trap: waits for Link to line up, charges to the room's middle, creeps back.
+Trap_Update_Full@TryCharge	cheap	1	src/bank1/trap-rupee-stash.asm	216	@GoToState1	
+Trap_Update_Full@DrawAndCheckCollisions	cheap	1	src/bank1/trap-rupee-stash.asm	232	@DrawAndCheckCollisions	
+Trap_Update_Full@CheckColumn	cheap	1	src/bank1/trap-rupee-stash.asm	235	@CheckHorizontal	
+Trap_Update_Full@UpdateMovingStates	cheap	1	src/bank1/trap-rupee-stash.asm	258	@UpdateMovingStates	
+Trap_Update_Full@CheckState	cheap	1	src/bank1/trap-rupee-stash.asm	288	@Finish	
+Trap_Update_Full@Draw	cheap	1	src/bank1/trap-rupee-stash.asm	311	@Draw	
+Trap_Update_Full@FinishState2	cheap	1	src/bank1/trap-rupee-stash.asm	314	@FinishState2	
+Trap_DrawAndCheckCollisions	code	1	src/bank1/trap-rupee-stash.asm	323	L_Trap_DrawAndCheckCollisions	Shared tail of Trap_Update_Full: tests the collision with Link and draws the trap.
+RupeeStash_Update_Full	code	1	src/bank1/trap-rupee-stash.asm	338	UpdateRupeeStash_Full	Updates one rupee of the rupee stash: Link takes it by touching it, otherwise it is drawn.
+RupeeStash_Update_Full@DrawRupee	cheap	1	src/bank1/trap-rupee-stash.asm	365	@DrawRupee	
+RupeeStash_Update_Full@ExitRestoreX	cheap	1	src/bank1/trap-rupee-stash.asm	373	@ExitRestoreX	
 Bank_CommonCodeBlock	data	1	src/bank1/common-code-header.asm	37	CommonCodeBlock_Bank1	DATA: marker without bytes: the ROM address ($A500) where the common code block is stored.
 Mode_BeginUpdate	code	1	src/bank1/status-bar-rupees.asm	53	BeginUpdateMode	Ends a mode's init phase: resets the submode and makes the mode's update routine run from now on.
 Mode_BeginUpdate_Return	code	1	src/bank1/status-bar-rupees.asm	59	L6506_Exit	Shared RTS: end of Mode_BeginUpdate and the early exits of Inv_ChangeRupees.
@@ -487,9 +487,9 @@ Palette_AnimateFade	code	1	src/bank1/world-fading.asm	44	AnimateWorldFading	Send
 Palette_AnimateFade@CopyPalette	cheap	1	src/bank1/world-fading.asm	81	@CopyPalette	
 Palette_AnimateFade@Exit	cheap	1	src/bank1/world-fading.asm	101	@Exit	
 Palette_AnimateFade@ReturnDone	cheap	1	src/bank1/world-fading.asm	104	@ReturnDone	
-Sprite_BlankPriorityTemplates	data	1	src/bank1/world-fading.asm	112	BlankPrioritySpriteTemplates	TABLE: the two mask sprite records copied alternately into sprite records $00-$0F; 4 bytes each =
-Sprite_WriteBlankPrioritySprites	code	1	src/bank1/world-fading.asm	128	WriteBlankPrioritySprites	Fills sprite records $00-$0F with 8 blank sprites at Y=$3D and 8 at Y=$DD (dungeon doorway masks).
-Sprite_WriteBlankPrioritySprites@Loop	cheap	1	src/bank1/world-fading.asm	131		
+Sprite_BlankPriorityTemplates	data	1	src/bank1/world-fading.asm	113	BlankPrioritySpriteTemplates	TABLE: the two mask sprite records copied alternately into sprite records $00-$0F; 4 bytes each =
+Sprite_WriteBlankPrioritySprites	code	1	src/bank1/world-fading.asm	129	WriteBlankPrioritySprites	Fills sprite records $00-$0F with 8 blank sprites at Y=$3D and 8 at Y=$DD (dungeon doorway masks).
+Sprite_WriteBlankPrioritySprites@Loop	cheap	1	src/bank1/world-fading.asm	132		
 Maze_LostWoodsDirs	data	1	src/bank1/mazes-lost-woods-hills.asm	36	ForestMazeDirs	TABLE: Lost Woods (room $61) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
 Maze_LostHillsDirs	data	1	src/bank1/mazes-lost-woods-hills.asm	41	MountainMazeDirs	TABLE: Lost Hills (room $1B) sequence; index = MazeStep 0-3; value = direction bit Link must leave by
 Maze_CheckStep	code	1	src/bank1/mazes-lost-woods-hills.asm	56	CheckMazes	Applies the Lost Woods ($61) and Lost Hills ($1B) rules to an overworld room change.
@@ -523,28 +523,28 @@ Anim_WriteSpritePairNotFlashing	code	1	src/bank1/object-animation-draw.asm	394	A
 Anim_WriteSpritePairNotFlashing@LoopSprite	cheap	1	src/bank1/object-animation-draw.asm	398	@LoopSprite	
 Anim_ItemFrameOffsets	data	1	src/bank1/item-sprite-draw.asm	51	Anim_ItemFrameOffsets	TABLE: where each item's frames start; index = item slot (Item_IdToSlot; $20-$24 are image-only
 Anim_ItemFrameTiles	data	1	src/bank1/item-sprite-draw.asm	69	Anim_ItemFrameTiles	TABLE: left tile of every item frame; index = Anim_ItemFrameOffsets[item slot] + frame; value = tile.
-Anim_WriteStaticItemSpritesWithAttributes	code	1	src/bank1/item-sprite-draw.asm	97	Anim_WriteStaticItemSpritesWithAttributes	Draws frame 0 of an item, unflipped, with attributes A on both sprites.
-Anim_WriteItemSprites	code	1	src/bank1/item-sprite-draw.asm	111	Anim_WriteItemSprites	Draws an item frame in the next rolling sprite records.
-Anim_WriteSpecificItemSprites	code	1	src/bank1/item-sprite-draw.asm	133	Anim_WriteSpecificItemSprites	Draws an item frame in the sprite records the caller chose; the tile number selects the shape.
-Anim_WriteSpecificItemSprites@Narrow	cheap	1	src/bank1/item-sprite-draw.asm	158	@Narrow	
-Anim_WriteSpecificItemSprites@Wide	cheap	1	src/bank1/item-sprite-draw.asm	173	@Wide	
-Anim_WriteSpecificItemSprites@Slim	cheap	1	src/bank1/item-sprite-draw.asm	181	@_Slim	
-Anim_WriteMirroredSpritePair	code	1	src/bank1/item-sprite-draw.asm	190	Anim_WriteMirroredSpritePair	Writes a sprite pair whose right half is the left tile flipped horizontally.
-Anim_SetSpriteDescriptorRedPaletteRow	code	1	src/bank1/item-sprite-draw.asm	202	Anim_SetSpriteDescriptorRedPaletteRow	Sets both sprites' attributes to 2: sprite palette row 2 (the red row), no flip, in front.
-Anim_SetSpriteDescriptorAttributes	code	1	src/bank1/item-sprite-draw.asm	206	Anim_SetSpriteDescriptorAttributes	Entry with A = the attribute byte for both sprites: [04] := [05] := A. A is unchanged.
-Anim_WriteLevelPaletteSprite	code	1	src/bank1/item-sprite-draw.asm	216	Anim_WriteLevelPaletteSprite	Writes one sprite of tile A at object X's position with sprite palette row 3 (the per-level row).
-Anim_WriteSprite	code	1	src/bank1/item-sprite-draw.asm	228	Anim_WriteSprite	Writes one sprite of tile A at object X's position in the next rolling sprite record.
-Anim_WriteSpecificSprite	code	1	src/bank1/item-sprite-draw.asm	247	Anim_WriteSpecificSprite	Writes one sprite of tile A at object X's position in the sprite record at offset Y.
-Anim_EndWriteSprite	code	1	src/bank1/item-sprite-draw.asm	255	Anim_EndWriteSprite	Entry with A = the sprite's Y coordinate; tile and X are already in the record at offset Y.
-Person_DrawAndCheckCollisions_Common	code	1	src/bank1/monster-collisions.asm	61	Person_DrawAndCheckCollisions_Common	Runs the collision pass for object X, turns a "kill" of the slot-1 person into fireballs, and draws.
-Person_Draw	code	1	src/bank1/monster-collisions.asm	72	Person_Draw	Draws object X at its position with frame 0 as a mirrored pair. IN: X = object slot.
-Collision_CheckMonsterVsWeaponsAndLink	code	1	src/bank1/monster-collisions.asm	97	CheckMonsterCollisions	Tests the monster in slot X against Link's six weapon slots, then against Link himself.
-Collision_CheckMonsterVsWeaponsAndLink@CheckLink	cheap	1	src/bank1/monster-collisions.asm	123	@CheckLink	
-Collision_CheckMonsterVsWeaponsAndLink@Exit	cheap	1	src/bank1/monster-collisions.asm	144	@Exit	
-Collision_CheckMonsterVsWeaponsAndLink@CheckCaptors	cheap	1	src/bank1/monster-collisions.asm	147	@CheckCaptors	
-Collision_CheckMonsterVsWeaponsAndLink@Exit2	cheap	1	src/bank1/monster-collisions.asm	159	@Exit2	
-Obj_GetMiddle	code	1	src/bank1/monster-collisions.asm	169	GetObjectMiddle	Computes the middle point of object X for the collision tests.
-Damage_ObjTypeDamageToLink	data	1	src/bank1/monster-collisions.asm	196	ObjTypeToDamagePoints	TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
+Anim_WriteStaticItemSpritesWithAttributes	code	1	src/bank1/item-sprite-draw.asm	98	Anim_WriteStaticItemSpritesWithAttributes	Draws frame 0 of an item, unflipped, with attributes A on both sprites.
+Anim_WriteItemSprites	code	1	src/bank1/item-sprite-draw.asm	112	Anim_WriteItemSprites	Draws an item frame in the next rolling sprite records.
+Anim_WriteSpecificItemSprites	code	1	src/bank1/item-sprite-draw.asm	134	Anim_WriteSpecificItemSprites	Draws an item frame in the sprite records the caller chose; the tile number selects the shape.
+Anim_WriteSpecificItemSprites@Narrow	cheap	1	src/bank1/item-sprite-draw.asm	159	@Narrow	
+Anim_WriteSpecificItemSprites@Wide	cheap	1	src/bank1/item-sprite-draw.asm	174	@Wide	
+Anim_WriteSpecificItemSprites@Slim	cheap	1	src/bank1/item-sprite-draw.asm	182	@_Slim	
+Anim_WriteMirroredSpritePair	code	1	src/bank1/item-sprite-draw.asm	191	Anim_WriteMirroredSpritePair	Writes a sprite pair whose right half is the left tile flipped horizontally.
+Anim_SetSpriteDescriptorRedPaletteRow	code	1	src/bank1/item-sprite-draw.asm	203	Anim_SetSpriteDescriptorRedPaletteRow	Sets both sprites' attributes to 2: sprite palette row 2 (the red row), no flip, in front.
+Anim_SetSpriteDescriptorAttributes	code	1	src/bank1/item-sprite-draw.asm	207	Anim_SetSpriteDescriptorAttributes	Entry with A = the attribute byte for both sprites: [04] := [05] := A. A is unchanged.
+Anim_WriteLevelPaletteSprite	code	1	src/bank1/item-sprite-draw.asm	217	Anim_WriteLevelPaletteSprite	Writes one sprite of tile A at object X's position with sprite palette row 3 (the per-level row).
+Anim_WriteSprite	code	1	src/bank1/item-sprite-draw.asm	229	Anim_WriteSprite	Writes one sprite of tile A at object X's position in the next rolling sprite record.
+Anim_WriteSpecificSprite	code	1	src/bank1/item-sprite-draw.asm	248	Anim_WriteSpecificSprite	Writes one sprite of tile A at object X's position in the sprite record at offset Y.
+Anim_EndWriteSprite	code	1	src/bank1/item-sprite-draw.asm	256	Anim_EndWriteSprite	Entry with A = the sprite's Y coordinate; tile and X are already in the record at offset Y.
+Person_DrawAndCheckCollisions_Common	code	1	src/bank1/monster-collisions.asm	65	Person_DrawAndCheckCollisions_Common	Runs the collision pass for object X, turns a "kill" of the slot-1 person into fireballs, and draws.
+Person_Draw	code	1	src/bank1/monster-collisions.asm	76	Person_Draw	Draws object X at its position with frame 0 as a mirrored pair. IN: X = object slot.
+Collision_CheckMonsterVsWeaponsAndLink	code	1	src/bank1/monster-collisions.asm	101	CheckMonsterCollisions	Tests the monster in slot X against Link's six weapon slots, then against Link himself.
+Collision_CheckMonsterVsWeaponsAndLink@CheckLink	cheap	1	src/bank1/monster-collisions.asm	127	@CheckLink	
+Collision_CheckMonsterVsWeaponsAndLink@Exit	cheap	1	src/bank1/monster-collisions.asm	148	@Exit	
+Collision_CheckMonsterVsWeaponsAndLink@CheckCaptors	cheap	1	src/bank1/monster-collisions.asm	151	@CheckCaptors	
+Collision_CheckMonsterVsWeaponsAndLink@Exit2	cheap	1	src/bank1/monster-collisions.asm	163	@Exit2	
+Obj_GetMiddle	code	1	src/bank1/monster-collisions.asm	173	GetObjectMiddle	Computes the middle point of object X for the collision tests.
+Damage_ObjTypeDamageToLink	data	1	src/bank1/monster-collisions.asm	200	ObjTypeToDamagePoints	TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
 Link_CheckMonsterTouch	code	1	src/bank1/link-collision-harm.asm	48	CheckLinkCollision	Tests whether the monster or shot in slot X touches Link and, unless parried, harms and shoves him.
 Link_CheckMonsterTouch_NoReset	code	1	src/bank1/link-collision-harm.asm	73	CheckLinkCollisionPreinit	Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
 Link_CheckMonsterTouch_NoReset@FacingOpposite	cheap	1	src/bank1/link-collision-harm.asm	138	@FacingOpposite	
@@ -605,7 +605,7 @@ Shove_Begin@CheckEyeOpen	cheap	1	src/bank1/shove-knockback.asm	209
 Shove_Begin@SetShoveDir	cheap	1	src/bank1/shove-knockback.asm	215	@SetShoveDir	
 Shove_Begin@ExitMonster	cheap	1	src/bank1/shove-knockback.asm	227	@Exit2	
 Filler_Bank1CodeTail	data	1	src/bank1/shove-knockback.asm	232	Filler_7751	DATA: filler ($FF), 31 bytes: the end of the BANK_01_CODE segment (the code that runs from RAM).
-Mmc1_SwitchBank_Bank1	code	1	src/bank1/shove-knockback.asm	282	SwitchBank_Local1	Bank 1's copy of Mmc1_SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
+Mmc1_SwitchBank_Bank1	code	1	src/bank1/shove-knockback.asm	288	SwitchBank_Local1	Bank 1's copy of Mmc1_SwitchBank: maps program bank A at $8000-$BFFF through the MMC1.
 Chr_CommonPatternBlockAddrs	data	2	src/bank2/common-patterns.asm	32	CommonPatternBlockAddrs	TABLE: CPU address of each common pattern block; index = PatternBlockIndex (0-2).
 Chr_CommonPatternBlockSizes	data	2	src/bank2/common-patterns.asm	38	CommonPatternBlockSizes	TABLE: size in bytes of each common pattern block, high byte first; index = PatternBlockIndex.
 Chr_CommonPatternPpuAddrs	data	2	src/bank2/common-patterns.asm	44	CommonPatternVramAddrs	TABLE: PPU pattern-table address each common block is written to, high byte first; index as above.
@@ -898,56 +898,56 @@ Mode13WinGame_UpdateCurtain@Exit	cheap	2	src/bank2/mode13-ending-init.asm	97	@Ex
 Mode13WinGame_PlayAreaAttrsTransferBuf	data	2	src/bank2/mode13-ending-init.asm	102	PlayAreaAttr0TransferBuf	DATA: transfer record: $28 bytes of $00 (count byte $68 = repeat flag $40 + $28) to the nametable
 Mode13WinGame_Init_Sub1ResetTextbox	code	2	src/bank2/mode13-ending-init.asm	108	InitMode13_Sub1	Init submode 1: queues Mode13WinGame_PlayAreaAttrsTransferBuf and resets the textbox position and Zelda's state.
 Mode13WinGame_Init_Sub1_Return	code	2	src/bank2/mode13-ending-init.asm	126	LA958_Exit	Shared exit of Mode13WinGame_Init_Sub0Curtain and Mode13WinGame_Init_Sub1ResetTextbox.
-Ending_ThanksText	data	2	src/bank2/mode13-ending-init.asm	133	ThanksText	DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
-Mode13WinGame_Init_Sub2ThanksText	code	2	src/bank2/mode13-ending-init.asm	143	InitMode13_Sub2	Init submode 2: types Zelda's text; when it is complete, starts a $50 frame delay and advances.
-Ending_ThanksCharTransferRecTemplate	data	2	src/bank2/mode13-ending-init.asm	156	ThanksTextboxCharTransferRecTemplate	DATA: transfer record template for one textbox character: address $21A4, count 1, tile $24, end $FF.
-Ending_ThanksLineAddrsLo	data	2	src/bank2/mode13-ending-init.asm	161	ThanksTextboxLineAddrsLo	TABLE: low nametable address byte of a text line's first character; index = 0 line 2, 1 line 3,
-Ending_UpdateThanksTextbox	code	2	src/bank2/mode13-ending-init.asm	169	UpdateZeldaTextbox	Draws Link and, every 6 frames, writes the next character of Ending_ThanksText to the screen.
-Ending_UpdateThanksTextbox_Return	code	2	src/bank2/mode13-ending-init.asm	261	LA9F4_Exit	Shared exit of Ending_UpdateThanksTextbox and Mode13WinGame_Init_Sub3Silence.
-Mode13WinGame_Init_Sub3Silence	code	2	src/bank2/mode13-ending-init.asm	267	InitMode13_Sub3	Init submode 3: when Zelda's timer (the $50 frame delay) expires, silences all sound and advances.
-Mode13WinGame_Init_Sub4BeginUpdate	code	2	src/bank2/mode13-ending-init.asm	278	InitMode13_Sub4	Init submode 4: presets the credits scroll and text counters, ends init, and hides all sprites.
-Mode13WinGame_Update	code	2	src/bank2/mode13-win-game.asm	49	UpdateMode13WinGame	Mode $13 (win game) update: runs the handler of the current GameSubmode (0-4).
-Mode13WinGame_Update_JumpTable	data	2	src/bank2/mode13-win-game.asm	54	UpdateMode13WinGame_JumpTable	TABLE: mode $13 update handlers; index = GameSubmode; value = routine address (1 and 2 share one).
-Ending_FlashColors	data	2	src/bank2/mode13-win-game.asm	62	EndingFlashColors	TABLE: background colours of the ending flash; index = ItemLiftTimer AND 3; value = NES colour.
-Mode13WinGame_Update_Sub0Flash	code	2	src/bank2/mode13-win-game.asm	70	UpdateMode13WinGame_Sub0_Flash	Update submode 0: Link and Zelda hold Triforce pieces until ItemLiftTimer = $C0; flashes from $40.
-Mode13WinGame_Update_Sub0Flash@ChangePalette	cheap	2	src/bank2/mode13-win-game.asm	78	@ChangePalette	
-Mode13WinGame_Update_Sub0Flash@Exit	cheap	2	src/bank2/mode13-win-game.asm	103	@Exit	
-Mode13WinGame_Update_Sub0Flash@AdvanceSubmode	cheap	2	src/bank2/mode13-win-game.asm	106	@AdvanceSubmode	
-Ending_DrawLinkZeldaTriforces	code	2	src/bank2/mode13-win-game.asm	127	DrawLinkZeldaTriforces	Draws Link and Zelda, each with a Triforce piece (item $1B) $10 pixels above.
-Mode13WinGame_Update_Sub1PeaceText	code	2	src/bank2/mode13-win-game.asm	179	UpdateMode13WinGame_Sub1	Update submodes 1 and 2: draws the pair, types the peace text (submode 1 only), ends on the timer.
-Mode13WinGame_Update_Sub1PeaceText@Exit	cheap	2	src/bank2/mode13-win-game.asm	202	@Exit	
-Mode13WinGame_Update_Sub1PeaceText@AdvanceSubmode	cheap	2	src/bank2/mode13-win-game.asm	205	@AdvanceSubmode	
-Ending_PeaceCharTransferRecTemplate	data	2	src/bank2/mode13-win-game.asm	213	PeaceTextboxCharTransferRecTemplate	DATA: transfer record template for one text character: address $22A4, count 1, tile $24, end $FF.
-Ending_PeaceCharAddrsLo	data	2	src/bank2/mode13-win-game.asm	218	PeaceTextboxCharAddrsLo	TABLE: low nametable address byte of each character; index = position in Ending_PeaceText (0-51); the
-Ending_PeaceText	data	2	src/bank2/mode13-win-game.asm	229	PeaceText	DATA: the peace text, 52 tile codes then $FF: "FINALLY," / "PEACE RETURNS TO HYRULE." /
-Ending_UpdatePeaceTextbox	code	2	src/bank2/mode13-win-game.asm	242	UpdatePeaceTextbox	Every 8th frame writes the next Ending_PeaceText character to the screen; at $FF goes to submode 2.
-Ending_UpdatePeaceTextbox@Exit	cheap	2	src/bank2/mode13-win-game.asm	290	@Exit	
-Ending_UpdatePeaceTextbox@AdvanceSubmode	cheap	2	src/bank2/mode13-win-game.asm	293	@AdvanceSubmode	
-Ending_UpdatePeaceTextbox_Return	code	2	src/bank2/mode13-win-game.asm	297	LAB7E_Exit	Shared exit of Ending_UpdatePeaceTextbox and Mode13WinGame_Update_Sub4WaitStart.
-Mode13WinGame_Update_Sub4WaitStart	code	2	src/bank2/mode13-win-game.asm	305	UpdateMode13WinGame_Sub4	Update submode 4: draws the Triforce of Power and Ganon's ashes; Start saves and begins Q2.
-Ending_DrawAshPile	code	2	src/bank2/mode13-win-game.asm	345	DrawAshPile	Draws the ash pile (frame $0B, not mirrored) for the object in slot X.
-Credits_LastScreens	data	2	src/bank2/credits.asm	42	CreditsLastScreenList	TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
-Credits_LastVScrolls	data	2	src/bank2/credits.asm	46	CreditsLastVscrollList	TABLE: CurVScroll within that last screen at which the credits end; index = 0 Q1, 1 Q2; pixels.
-Mode13WinGame_Update_Sub3Credits	code	2	src/bank2/credits.asm	54	UpdateMode13WinGame_Sub3	Update submode 3: scrolls the credits 0.5 pixel per frame and draws a row per 8 pixels.
-Mode13WinGame_Update_Sub3Credits@Exit	cheap	2	src/bank2/credits.asm	116	@Exit	
-Credits_PageVramAddrsHi	data	2	src/bank2/credits.asm	120	CreditLineVramAddrsHi	TABLE: high nametable address byte of a page of 8 tile rows; index = CreditsVramPage (0-$B).
-Credits_PageTextMasks	data	2	src/bank2/credits.asm	125	CreditsPagesTextMasks	TABLE: which rows of a page take a text line; index = CreditsVramPage; bit 7 = row 0 .. bit 0 = row 7.
-Credits_TextAddrsLo	data	2	src/bank2/credits.asm	130	CreditsTextAddrsLo	TABLE: low address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-Credits_TextAddrsHi	data	2	src/bank2/credits.asm	134	CreditsTextAddrsHi	TABLE: high address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
-Credits_TextLines	data	2	src/bank2/credits.asm	138	CreditsTextLines	DATA: credits text line records: character count, starting column, then that many tile codes.
-Credits_RowAttrs	data	2	src/bank2/credits.asm	142	CreditsAttrs	TABLE: attribute byte for the middle 6 blocks of an attribute row; index = CreditsRow / 4.
-Credits_DrawRow	code	2	src/bank2/credits.asm	158	DrawCredits	Builds the transfer records for the next credits tile row: bricks, text line, attributes.
-Credits_DrawRow@WriteHorizontalWalls	cheap	2	src/bank2/credits.asm	179	@WriteHorizontalWalls	
-Credits_DrawRow@WriteSideWalls	cheap	2	src/bank2/credits.asm	187	@WriteSideWalls	
-Credits_DrawRow@TerminateRecords	cheap	2	src/bank2/credits.asm	192	@TerminateRecords	
-Credits_DrawRow@IncLine	cheap	2	src/bank2/credits.asm	317	@IncLine	
-Credits_DrawRow@IncVramLine	cheap	2	src/bank2/credits.asm	320	@IncVramLine	
-Credits_DrawRow@WriteAttributes	cheap	2	src/bank2/credits.asm	353	@WriteAttributes	
-Credits_DrawRow@IncRow	cheap	2	src/bank2/credits.asm	404	@IncRow	
-Quest_WorldFlagBlockAddrs	data	2	src/bank2/second-quest-bank-stub.asm	35	WorldFlagBlockAddrs	TABLE: start addresses (low, high) of the three $80-byte world flag blocks: $067F, $06FF, $077F.
-Profile_SwitchToSecondQuest	code	2	src/bank2/second-quest-bank-stub.asm	43	SwitchProfileToSecondQuest	Resets the active profile for a new game in Q2: clears world flags and items, 3 hearts, 8 bombs max.
-Profile_SwitchToSecondQuest@ClearBlock	cheap	2	src/bank2/second-quest-bank-stub.asm	47	@ClearBlock	
-Mmc1_SwitchBank_Bank2	code	2	src/bank2/second-quest-bank-stub.asm	110	SwitchBank_Local2	Switches the PRG bank at $8000-$BFFF to bank A (5 serial writes to MMC1 register $E000).
+Ending_ThanksText	data	2	src/bank2/mode13-ending-init.asm	134	ThanksText	DATA: Zelda's text, 38 bytes: low 6 bits = tile code ($00-$09 digits, $0A-$23 letters A-Z, $24
+Mode13WinGame_Init_Sub2ThanksText	code	2	src/bank2/mode13-ending-init.asm	144	InitMode13_Sub2	Init submode 2: types Zelda's text; when it is complete, starts a $50 frame delay and advances.
+Ending_ThanksCharTransferRecTemplate	data	2	src/bank2/mode13-ending-init.asm	157	ThanksTextboxCharTransferRecTemplate	DATA: transfer record template for one textbox character: address $21A4, count 1, tile $24, end $FF.
+Ending_ThanksLineAddrsLo	data	2	src/bank2/mode13-ending-init.asm	162	ThanksTextboxLineAddrsLo	TABLE: low nametable address byte of a text line's first character; index = 0 line 2, 1 line 3,
+Ending_UpdateThanksTextbox	code	2	src/bank2/mode13-ending-init.asm	170	UpdateZeldaTextbox	Draws Link and, every 6 frames, writes the next character of Ending_ThanksText to the screen.
+Ending_UpdateThanksTextbox_Return	code	2	src/bank2/mode13-ending-init.asm	262	LA9F4_Exit	Shared exit of Ending_UpdateThanksTextbox and Mode13WinGame_Init_Sub3Silence.
+Mode13WinGame_Init_Sub3Silence	code	2	src/bank2/mode13-ending-init.asm	268	InitMode13_Sub3	Init submode 3: when Zelda's timer (the $50 frame delay) expires, silences all sound and advances.
+Mode13WinGame_Init_Sub4BeginUpdate	code	2	src/bank2/mode13-ending-init.asm	279	InitMode13_Sub4	Init submode 4: presets the credits scroll and text counters, ends init, and hides all sprites.
+Mode13WinGame_Update	code	2	src/bank2/mode13-win-game.asm	51	UpdateMode13WinGame	Mode $13 (win game) update: runs the handler of the current GameSubmode (0-4).
+Mode13WinGame_Update_JumpTable	data	2	src/bank2/mode13-win-game.asm	56	UpdateMode13WinGame_JumpTable	TABLE: mode $13 update handlers; index = GameSubmode; value = routine address (1 and 2 share one).
+Ending_FlashColors	data	2	src/bank2/mode13-win-game.asm	64	EndingFlashColors	TABLE: background colours of the ending flash; index = ItemLiftTimer AND 3; value = NES colour.
+Mode13WinGame_Update_Sub0Flash	code	2	src/bank2/mode13-win-game.asm	72	UpdateMode13WinGame_Sub0_Flash	Update submode 0: Link and Zelda hold Triforce pieces until ItemLiftTimer = $C0; flashes from $40.
+Mode13WinGame_Update_Sub0Flash@ChangePalette	cheap	2	src/bank2/mode13-win-game.asm	80	@ChangePalette	
+Mode13WinGame_Update_Sub0Flash@Exit	cheap	2	src/bank2/mode13-win-game.asm	105	@Exit	
+Mode13WinGame_Update_Sub0Flash@AdvanceSubmode	cheap	2	src/bank2/mode13-win-game.asm	108	@AdvanceSubmode	
+Ending_DrawLinkZeldaTriforces	code	2	src/bank2/mode13-win-game.asm	129	DrawLinkZeldaTriforces	Draws Link and Zelda, each with a Triforce piece (item $1B) $10 pixels above.
+Mode13WinGame_Update_Sub1PeaceText	code	2	src/bank2/mode13-win-game.asm	181	UpdateMode13WinGame_Sub1	Update submodes 1 and 2: draws the pair, types the peace text (submode 1 only), ends on the timer.
+Mode13WinGame_Update_Sub1PeaceText@Exit	cheap	2	src/bank2/mode13-win-game.asm	204	@Exit	
+Mode13WinGame_Update_Sub1PeaceText@AdvanceSubmode	cheap	2	src/bank2/mode13-win-game.asm	207	@AdvanceSubmode	
+Ending_PeaceCharTransferRecTemplate	data	2	src/bank2/mode13-win-game.asm	215	PeaceTextboxCharTransferRecTemplate	DATA: transfer record template for one text character: address $22A4, count 1, tile $24, end $FF.
+Ending_PeaceCharAddrsLo	data	2	src/bank2/mode13-win-game.asm	220	PeaceTextboxCharAddrsLo	TABLE: low nametable address byte of each character; index = position in Ending_PeaceText (0-51); the
+Ending_PeaceText	data	2	src/bank2/mode13-win-game.asm	232	PeaceText	DATA: the peace text, 52 tile codes then $FF: "FINALLY," / "PEACE RETURNS TO HYRULE." /
+Ending_UpdatePeaceTextbox	code	2	src/bank2/mode13-win-game.asm	245	UpdatePeaceTextbox	Every 8th frame writes the next Ending_PeaceText character to the screen; at $FF goes to submode 2.
+Ending_UpdatePeaceTextbox@Exit	cheap	2	src/bank2/mode13-win-game.asm	293	@Exit	
+Ending_UpdatePeaceTextbox@AdvanceSubmode	cheap	2	src/bank2/mode13-win-game.asm	296	@AdvanceSubmode	
+Ending_UpdatePeaceTextbox_Return	code	2	src/bank2/mode13-win-game.asm	300	LAB7E_Exit	Shared exit of Ending_UpdatePeaceTextbox and Mode13WinGame_Update_Sub4WaitStart.
+Mode13WinGame_Update_Sub4WaitStart	code	2	src/bank2/mode13-win-game.asm	308	UpdateMode13WinGame_Sub4	Update submode 4: draws the Triforce of Power and Ganon's ashes; Start saves and begins Q2.
+Ending_DrawAshPile	code	2	src/bank2/mode13-win-game.asm	348	DrawAshPile	Draws the ash pile (frame $0B, not mirrored) for the object in slot X.
+Credits_LastScreens	data	2	src/bank2/credits.asm	44	CreditsLastScreenList	TABLE: count of whole screens scrolled at which the credits end; index = 0 Q1, 1 Q2.
+Credits_LastVScrolls	data	2	src/bank2/credits.asm	48	CreditsLastVscrollList	TABLE: CurVScroll within that last screen at which the credits end; index = 0 Q1, 1 Q2; pixels.
+Mode13WinGame_Update_Sub3Credits	code	2	src/bank2/credits.asm	56	UpdateMode13WinGame_Sub3	Update submode 3: scrolls the credits 0.5 pixel per frame and draws a row per 8 pixels.
+Mode13WinGame_Update_Sub3Credits@Exit	cheap	2	src/bank2/credits.asm	118	@Exit	
+Credits_PageVramAddrsHi	data	2	src/bank2/credits.asm	122	CreditLineVramAddrsHi	TABLE: high nametable address byte of a page of 8 tile rows; index = CreditsVramPage (0-$B).
+Credits_PageTextMasks	data	2	src/bank2/credits.asm	127	CreditsPagesTextMasks	TABLE: which rows of a page take a text line; index = CreditsVramPage; bit 7 = row 0 .. bit 0 = row 7.
+Credits_TextAddrsLo	data	2	src/bank2/credits.asm	132	CreditsTextAddrsLo	TABLE: low address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
+Credits_TextAddrsHi	data	2	src/bank2/credits.asm	136	CreditsTextAddrsHi	TABLE: high address byte of each credits text line record; index = CreditsLineIndex ($00-$16).
+Credits_TextLines	data	2	src/bank2/credits.asm	140	CreditsTextLines	DATA: credits text line records: character count, starting column, then that many tile codes.
+Credits_RowAttrs	data	2	src/bank2/credits.asm	144	CreditsAttrs	TABLE: attribute byte for the middle 6 blocks of an attribute row; index = CreditsRow / 4.
+Credits_DrawRow	code	2	src/bank2/credits.asm	164	DrawCredits	Builds the transfer records for the next credits tile row: bricks, text line, attributes.
+Credits_DrawRow@WriteHorizontalWalls	cheap	2	src/bank2/credits.asm	185	@WriteHorizontalWalls	
+Credits_DrawRow@WriteSideWalls	cheap	2	src/bank2/credits.asm	193	@WriteSideWalls	
+Credits_DrawRow@TerminateRecords	cheap	2	src/bank2/credits.asm	198	@TerminateRecords	
+Credits_DrawRow@IncLine	cheap	2	src/bank2/credits.asm	323	@IncLine	
+Credits_DrawRow@IncVramLine	cheap	2	src/bank2/credits.asm	326	@IncVramLine	
+Credits_DrawRow@WriteAttributes	cheap	2	src/bank2/credits.asm	359	@WriteAttributes	
+Credits_DrawRow@IncRow	cheap	2	src/bank2/credits.asm	410	@IncRow	
+Quest_WorldFlagBlockAddrs	data	2	src/bank2/second-quest-bank-stub.asm	37	WorldFlagBlockAddrs	TABLE: start addresses (low, high) of the three $80-byte world flag blocks: $067F, $06FF, $077F.
+Profile_SwitchToSecondQuest	code	2	src/bank2/second-quest-bank-stub.asm	45	SwitchProfileToSecondQuest	Resets the active profile for a new game in Q2: clears world flags and items, 3 hearts, 8 bombs max.
+Profile_SwitchToSecondQuest@ClearBlock	cheap	2	src/bank2/second-quest-bank-stub.asm	49	@ClearBlock	
+Mmc1_SwitchBank_Bank2	code	2	src/bank2/second-quest-bank-stub.asm	112	SwitchBank_Local2	Switches the PRG bank at $8000-$BFFF to bank A (5 serial writes to MMC1 register $E000).
 Chr_LevelMonsterPatternAddrs	data	3	src/bank3/level-pattern-blocks.asm	62	LevelPatternBlockSrcAddrs	TABLE: address of the dungeon monster sprite pattern block ($0220 bytes, PPU $09E0) for each level;
 Chr_LevelBossPatternAddrs	data	3	src/bank3/level-pattern-blocks.asm	76	BossPatternBlockSrcAddrs	TABLE: address of the boss sprite pattern block ($0400 bytes, PPU $0C00) for each level;
 Chr_CommonPatternAddrsUW	data	3	src/bank3/level-pattern-blocks.asm	90	PatternBlockSrcAddrsUW	TABLE: addresses of the two pattern blocks every dungeon uses; index = PatternBlockIndex (0
@@ -980,28 +980,28 @@ Chr_PatternsUWBoss9	data	3	src/bank3/level-pattern-blocks.asm	335	PatternBlockUW
 Sample_PlayBossHitCryIfHit	code	4	src/bank4/walker-wanderer-common.asm	57	PlayBossHitCryIfNeeded	Starts the boss cry sample on the frame a boss has just been hit.
 Sample_PlayBossDeathCryIfDying	code	4	src/bank4/walker-wanderer-common.asm	70	PlayBossDeathCryIfNeeded	Plays the boss death cry when the object is dying (ObjMetastate <> 0).
 MonsterShot_Init	code	4	src/bank4/walker-wanderer-common.asm	82	InitMonsterShot	Init for monster shot types $53 and $55-$5A: q-speed $C0, and the shot updates at once.
-MonsterShot_InitType54	code	4	src/bank4/walker-wanderer-common.asm	90	_InitMonsterShot_Unknown54	Init for shot type $54: as MonsterShot_Init, but q-speed $E0 (3.5 pixels a frame).
-Unused_Walker_InitWithTimer80	code	4	src/bank4/walker-wanderer-common.asm	97	Unused_10021	Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into Walker_Init.
-Walker_Init	code	4	src/bank4/walker-wanderer-common.asm	112	InitWalker	Init for walking monsters: chooses the first facing direction, unless one is already set.
-Walker_Init@Exit	cheap	4	src/bank4/walker-wanderer-common.asm	151	@Exit	
-StandingFire_Update	code	4	src/bank4/walker-wanderer-common.asm	159	UpdateStandingFire	Standing fire (type $40): hurts Link on contact, animates and draws the flame.
-Wanderer_Update	code	4	src/bank4/walker-wanderer-common.asm	184	UpdateCommonWanderer	Wanderer update: knockback if shoved; nothing with the clock or while stunned; else move and turn.
-Unused_Wanderer_SetTurnRateByType	code	4	src/bank4/walker-wanderer-common.asm	198	Unused_10082	Dead code (nothing refers to it): a wanderer entry with turn rate $70 for type $05, else $A0.
-Wanderer_MoveAndTurn	code	4	src/bank4/walker-wanderer-common.asm	223	Wanderer_TargetPlayer	Moves a wanderer one frame and, on a grid point, chooses its next facing direction.
-Wanderer_Return	code	4	src/bank4/walker-wanderer-common.asm	234	Exit	Shared exit of the wanderer routines above and below.
-Wanderer_Return@TurnVertically	cheap	4	src/bank4/walker-wanderer-common.asm	272	@TurnVertically	
-Wanderer_Return@CheckVerticalDistance	cheap	4	src/bank4/walker-wanderer-common.asm	282	@CheckVerticalDistance	
-Wanderer_Return@TurnHorizontally	cheap	4	src/bank4/walker-wanderer-common.asm	296	@TurnHorizontally	
-Wanderer_Return@SetDirTowardTarget	cheap	4	src/bank4/walker-wanderer-common.asm	305	@SetDirTowardTarget	
-Wanderer_Return@TurnIfTime	cheap	4	src/bank4/walker-wanderer-common.asm	320	@TurnIfTime	
-Wanderer_Return@SetInputDir	cheap	4	src/bank4/walker-wanderer-common.asm	336	@SetInputDir	
+MonsterShot_InitType54	code	4	src/bank4/walker-wanderer-common.asm	91	_InitMonsterShot_Unknown54	Init for shot type $54: as MonsterShot_Init, but q-speed $E0 (3.5 pixels a frame).
+Unused_Walker_InitWithTimer80	code	4	src/bank4/walker-wanderer-common.asm	98	Unused_10021	Dead code (nothing refers to it): sets the object timer to $80 frames, then falls into Walker_Init.
+Walker_Init	code	4	src/bank4/walker-wanderer-common.asm	113	InitWalker	Init for walking monsters: chooses the first facing direction, unless one is already set.
+Walker_Init@Exit	cheap	4	src/bank4/walker-wanderer-common.asm	152	@Exit	
+StandingFire_Update	code	4	src/bank4/walker-wanderer-common.asm	160	UpdateStandingFire	Standing fire (type $40): hurts Link on contact, animates and draws the flame.
+Wanderer_Update	code	4	src/bank4/walker-wanderer-common.asm	185	UpdateCommonWanderer	Wanderer update: knockback if shoved; nothing with the clock or while stunned; else move and turn.
+Unused_Wanderer_SetTurnRateByType	code	4	src/bank4/walker-wanderer-common.asm	199	Unused_10082	Dead code (nothing refers to it): a wanderer entry with turn rate $70 for type $05, else $A0.
+Wanderer_MoveAndTurn	code	4	src/bank4/walker-wanderer-common.asm	224	Wanderer_TargetPlayer	Moves a wanderer one frame and, on a grid point, chooses its next facing direction.
+Wanderer_Return	code	4	src/bank4/walker-wanderer-common.asm	235	Exit	Shared exit of the wanderer routines above and below.
+Wanderer_Return@TurnVertically	cheap	4	src/bank4/walker-wanderer-common.asm	273	@TurnVertically	
+Wanderer_Return@CheckVerticalDistance	cheap	4	src/bank4/walker-wanderer-common.asm	283	@CheckVerticalDistance	
+Wanderer_Return@TurnHorizontally	cheap	4	src/bank4/walker-wanderer-common.asm	297	@TurnHorizontally	
+Wanderer_Return@SetDirTowardTarget	cheap	4	src/bank4/walker-wanderer-common.asm	306	@SetDirTowardTarget	
+Wanderer_Return@TurnIfTime	cheap	4	src/bank4/walker-wanderer-common.asm	321	@TurnIfTime	
+Wanderer_Return@SetInputDir	cheap	4	src/bank4/walker-wanderer-common.asm	337	@SetInputDir	
 Goriya_Update	code	4	src/bank4/goriya.asm	45	UpdateGoriya	Moves a Goriya (also Lynel, Armos) and on a grid point turns it toward a near chase target.
 Goriya_Update@Exit	cheap	4	src/bank4/goriya.asm	62	@Exit	
 Goriya_Update@AfterMove	cheap	4	src/bank4/goriya.asm	65	@AfterMove	
-Walker_SetInputDirAndTryThrowBoomerang	code	4	src/bank4/goriya.asm	154	L_Walker_SetInputDirAndTryShootingBoomerang	Sets a walking monster's input direction to its facing; a Goriya may then throw its boomerang.
-Walker_SetInputDirAndTryThrowBoomerang@LoadBoomerangType	cheap	4	src/bank4/goriya.asm	178	@CheckTimerToShootBoomerang	
-Walker_SetInputDirAndTryThrowBoomerang@CheckTimerToShoot	cheap	4	src/bank4/goriya.asm	182	@CheckTimerToShoot	
-Walker_SetInputDirAndTryThrowBoomerang@Exit	cheap	4	src/bank4/goriya.asm	241	@Exit	
+Walker_SetInputDirAndTryThrowBoomerang	code	4	src/bank4/goriya.asm	156	L_Walker_SetInputDirAndTryShootingBoomerang	Sets a walking monster's input direction to its facing; a Goriya may then throw its boomerang.
+Walker_SetInputDirAndTryThrowBoomerang@LoadBoomerangType	cheap	4	src/bank4/goriya.asm	180	@CheckTimerToShootBoomerang	
+Walker_SetInputDirAndTryThrowBoomerang@CheckTimerToShoot	cheap	4	src/bank4/goriya.asm	184	@CheckTimerToShoot	
+Walker_SetInputDirAndTryThrowBoomerang@Exit	cheap	4	src/bank4/goriya.asm	243	@Exit	
 PushBlock_PushDirs	data	4	src/bank4/push-block.asm	44	BlockPushDirections	TABLE: direction Link must hold to push the block; index = where Link stands relative to the
 PushBlock_Update	code	4	src/bank4/push-block.asm	51	UpdateBlock	Push block (type $68) update: dispatches on the low 2 bits of its state.
 PushBlock_Update_JumpTable	data	4	src/bank4/push-block.asm	57	UpdateBlock_JumpTable	TABLE: push block state handlers; index = ObjState AND 3; value = routine address.
@@ -1089,23 +1089,23 @@ Statue_Update@NextStatue	cheap	4	src/bank4/statues.asm	137	@LoopFireball
 Statue_Update@LoopAxis	cheap	4	src/bank4/statues.asm	194	@LoopAxis	
 Statue_Update@SkipStatue	cheap	4	src/bank4/statues.asm	217	@NextLoopFireball	
 Statue_Update@Exit	cheap	4	src/bank4/statues.asm	221	@Exit	
-Zora_TrySpawn	code	4	src/bank4/zora-ow-inits.asm	75	CheckZora	Creates the room's Zora (type $11) on a random water tile when the room allows one and none exists.
-Zora_TrySpawn@TryCandidate	cheap	4	src/bank4/zora-ow-inits.asm	97	@LoopTileCandidate	
-Zora_TrySpawn@NextCandidate	cheap	4	src/bank4/zora-ow-inits.asm	137	@NextLoopTileCandidate	
-Zora_TrySpawn@Exit	cheap	4	src/bank4/zora-ow-inits.asm	142	@Exit	
-Tektite_StartDirs	data	4	src/bank4/zora-ow-inits.asm	147	TektiteStartingDirs	TABLE: starting directions of a Tektite or Boulder; index = Random+1,X AND 3; value = direction bits.
-Boulder_InitSpawner	code	4	src/bank4/zora-ow-inits.asm	154	InitBoulderSet	Init of the boulder spawner (type $1F): zeroes the boulder count, then inits like a Boulder.
-Boulder_Init	code	4	src/bank4/zora-ow-inits.asm	162	InitBoulder	Init of a Boulder (type $20): no spawn cloud, then a random direction and delay as for a Tektite.
-Tektite_Init	code	4	src/bank4/zora-ow-inits.asm	172	InitTektite	Init of a Tektite (types $0D, $0E): random starting direction and a first delay of 4-$28 frames.
-Leever_Init	code	4	src/bank4/zora-ow-inits.asm	192	InitLeever	Init of a Leever (types $0F blue, $10 red): no spawn cloud; then as a slow Octorok.
-Octorok_InitSlowOrGhini	code	4	src/bank4/zora-ow-inits.asm	202	InitSlowOctorockOrGhini	Init of a slow Octorok (types $07, $09) or a Ghini (type $21): q-speed $20 (0.5 pixels a frame).
-Octorok_InitFast	code	4	src/bank4/zora-ow-inits.asm	217	InitFastOctorock	Init of a fast Octorok (types $08, $0A): q-speed $30; its tail sets timer, state and facing.
-Peahat_Init	code	4	src/bank4/zora-ow-inits.asm	241	InitPeahat	Init of a Peahat (type $1A): no spawn cloud, facing up, flyer state reset, slow start.
-Flyer_FinishInit	code	4	src/bank4/zora-ow-inits.asm	254	EndInitFlyer	Finishes a flyer's init: clears its flight fields, top speed $A0, starting speed $1F.
-PondFairy_Init	code	4	src/bank4/zora-ow-inits.asm	268	InitPondFairy	Init of the pond fairy (type $2F): requests square-1 tune $08 and places it at ($78, $7D).
-PondFairy_Init_Return	code	4	src/bank4/zora-ow-inits.asm	279	L10797_Exit	Shared RTS of PondFairy_Init and Zora_Update.
-Zora_Update	code	4	src/bank4/zora-ow-inits.asm	299	UpdateZora	Updates the Zora: runs the burrower state cycle, shoots one fireball per surfacing, removes it on dive.
-Zora_Update@DestroyIfDived	cheap	4	src/bank4/zora-ow-inits.asm	322	@DestroyWhenDone	
+Zora_TrySpawn	code	4	src/bank4/zora-ow-inits.asm	77	CheckZora	Creates the room's Zora (type $11) on a random water tile when the room allows one and none exists.
+Zora_TrySpawn@TryCandidate	cheap	4	src/bank4/zora-ow-inits.asm	99	@LoopTileCandidate	
+Zora_TrySpawn@NextCandidate	cheap	4	src/bank4/zora-ow-inits.asm	139	@NextLoopTileCandidate	
+Zora_TrySpawn@Exit	cheap	4	src/bank4/zora-ow-inits.asm	144	@Exit	
+Tektite_StartDirs	data	4	src/bank4/zora-ow-inits.asm	149	TektiteStartingDirs	TABLE: starting directions of a Tektite or Boulder; index = Random+1,X AND 3; value = direction bits.
+Boulder_InitSpawner	code	4	src/bank4/zora-ow-inits.asm	156	InitBoulderSet	Init of the boulder spawner (type $1F): zeroes the boulder count, then inits like a Boulder.
+Boulder_Init	code	4	src/bank4/zora-ow-inits.asm	164	InitBoulder	Init of a Boulder (type $20): no spawn cloud, then a random direction and delay as for a Tektite.
+Tektite_Init	code	4	src/bank4/zora-ow-inits.asm	174	InitTektite	Init of a Tektite (types $0D, $0E): random starting direction and a first delay of 4-$28 frames.
+Leever_Init	code	4	src/bank4/zora-ow-inits.asm	194	InitLeever	Init of a Leever (types $0F blue, $10 red): no spawn cloud; then as a slow Octorok.
+Octorok_InitSlowOrGhini	code	4	src/bank4/zora-ow-inits.asm	204	InitSlowOctorockOrGhini	Init of a slow Octorok (types $07, $09) or a Ghini (type $21): q-speed $20 (0.5 pixels a frame).
+Octorok_InitFast	code	4	src/bank4/zora-ow-inits.asm	219	InitFastOctorock	Init of a fast Octorok (types $08, $0A): q-speed $30; its tail sets timer, state and facing.
+Peahat_Init	code	4	src/bank4/zora-ow-inits.asm	243	InitPeahat	Init of a Peahat (type $1A): no spawn cloud, facing up, flyer state reset, slow start.
+Flyer_FinishInit	code	4	src/bank4/zora-ow-inits.asm	256	EndInitFlyer	Finishes a flyer's init: clears its flight fields, top speed $A0, starting speed $1F.
+PondFairy_Init	code	4	src/bank4/zora-ow-inits.asm	270	InitPondFairy	Init of the pond fairy (type $2F): requests square-1 tune $08 and places it at ($78, $7D).
+PondFairy_Init_Return	code	4	src/bank4/zora-ow-inits.asm	281	L10797_Exit	Shared RTS of PondFairy_Init and Zora_Update.
+Zora_Update	code	4	src/bank4/zora-ow-inits.asm	301	UpdateZora	Updates the Zora: runs the burrower state cycle, shoots one fireball per surfacing, removes it on dive.
+Zora_Update@DestroyIfDived	cheap	4	src/bank4/zora-ow-inits.asm	324	@DestroyWhenDone	
 Moblin_Update	code	4	src/bank4/moblin-lynel-shooting.asm	55	UpdateMoblin	Updates a Moblin (types $03, $04): wanders toward Link with turn rate $A0 and shoots arrows.
 Lynel_Update	code	4	src/bank4/moblin-lynel-shooting.asm	69	UpdateLynel	Updates a Lynel (types $01, $02): moves and aims with the Goriya routine and shoots sword shots.
 Shooter_RunShootTimer	code	4	src/bank4/moblin-lynel-shooting.asm	96	_TryShooting	Runs a walking shooter's shoot timer: stop for $30 frames, fire at $10, and set its q-speed.
@@ -1118,8 +1118,8 @@ Shooter_ShootAndSetTimer	code	4	src/bank4/moblin-lynel-shooting.asm	216	_ShootIf
 Shooter_ShootAndSetTimer_Return	code	4	src/bank4/moblin-lynel-shooting.asm	224	L1083E_Exit	Shared RTS of Shooter_ShootAndSetTimer and MonsterArrow_Update.
 MonsterArrow_Update	code	4	src/bank4/moblin-lynel-shooting.asm	236	UpdateMonsterArrow	Updates a monster's arrow (type $5B): flies at 2 pixels a frame, sparks out, or bounces off the shield.
 MonsterArrow_Update@CheckShooter	cheap	4	src/bank4/moblin-lynel-shooting.asm	263	@CheckShooter	
-MonsterArrow_Update@UpdateBase	cheap	4	src/bank4/moblin-lynel-shooting.asm	275	@UpdateBase	
-MonsterArrow_Update@CheckBounce	cheap	4	src/bank4/moblin-lynel-shooting.asm	293	@CheckBounce	
+MonsterArrow_Update@UpdateBase	cheap	4	src/bank4/moblin-lynel-shooting.asm	276	@UpdateBase	
+MonsterArrow_Update@CheckBounce	cheap	4	src/bank4/moblin-lynel-shooting.asm	294	@CheckBounce	
 Boulder_UpdateSpawner	code	4	src/bank4/tektite-boulder.asm	62	UpdateBoulderSet	Updates the boulder spawner (type $1F): makes a new Boulder whenever its timer runs out.
 Boulder_UpdateSpawner@RightHalf	cheap	4	src/bank4/tektite-boulder.asm	92	@RightHalf	
 Boulder_UpdateSpawner@SetX	cheap	4	src/bank4/tektite-boulder.asm	95	@SetX	
@@ -1129,27 +1129,27 @@ Jumper_TargetYOffsets	data	4	src/bank4/tektite-boulder.asm	122	JumperYOffsets	TA
 Jumper_YAccelerations	data	4	src/bank4/tektite-boulder.asm	131	JumperYAccelerations	TABLE: gravity of a jump; index = Jumper_YAccelerationBaseOffsets[kind] + ObjDir; value = 1/256 px/frame
 Jumper_StartSpeedsWholeY	data	4	src/bank4/tektite-boulder.asm	143	JumperStartSpeedsHi	TABLE: whole part of the vertical speed at the start of a jump; index = kind (Jumper_GetKind);
 Jumper_YAccelerationBaseOffsets	data	4	src/bank4/tektite-boulder.asm	147	JumperYAccelerationBaseOffsets	TABLE: start of each kind's set in Jumper_YAccelerations; index = kind (Jumper_GetKind).
-Jumper_Update	code	4	src/bank4/tektite-boulder.asm	163	UpdateTektiteOrBoulder	Updates a Tektite (types $0D, $0E) or a Boulder (type $20): wait on the ground, then jump.
-Jumper_Update@DrawAndCheckCollisions	cheap	4	src/bank4/tektite-boulder.asm	171	@DrawAndCheckCollisions	
-Jumper_Update@CheckStunned	cheap	4	src/bank4/tektite-boulder.asm	174	@CheckStunned	
-Jumper_Update@SetStateJump	cheap	4	src/bank4/tektite-boulder.asm	212	@SetStateJump	
-Jumper_Update@SetUpJump	cheap	4	src/bank4/tektite-boulder.asm	216	@SetUpJump	
-Jumper_Update@FinishSetUpJump	cheap	4	src/bank4/tektite-boulder.asm	241	@FinishSetUpJump	
-Jumper_Update@Animate	cheap	4	src/bank4/tektite-boulder.asm	265	@Animate	
-Jumper_Update@State1	cheap	4	src/bank4/tektite-boulder.asm	268	@State1	
-Jumper_Update@MoveX	cheap	4	src/bank4/tektite-boulder.asm	303		
-Jumper_Update@Landed	cheap	4	src/bank4/tektite-boulder.asm	335		
-Jumper_Update@SetTimerAndAnimate	cheap	4	src/bank4/tektite-boulder.asm	374	@SetTimerAndAnimate	
-Jumper_AnimateAndCheckCollisions	code	4	src/bank4/tektite-boulder.asm	385	Jumper_AnimateAndCheckCollisions	Draws a Tektite or a Boulder and checks its collisions; destroys a Boulder at the bottom of the screen.
-Jumper_AnimateAndCheckCollisions@DrawTektite	cheap	4	src/bank4/tektite-boulder.asm	415	@DrawTektite	
-Jumper_AnimateAndCheckCollisions@DrawBoulder	cheap	4	src/bank4/tektite-boulder.asm	418	@DrawBoulder	
-Jumper_GetKind	code	4	src/bank4/tektite-boulder.asm	439	Jumper_GetKind	Gets the kind of jumper an object is, which indexes the jumper tables.
-Jumper_GetKind_Return	code	4	src/bank4/tektite-boulder.asm	449	L10A10_Exit	Shared exit of Jumper_AnimateAndCheckCollisions and Jumper_GetKind.
-Jumper_PointBoulderDownward	code	4	src/bank4/tektite-boulder.asm	456	Jumper_PointBoulderDownward	Makes a Boulder (type $20) point down: keeps the horizontal bits of ObjDir and sets down (4).
-Jumper_PointBoulderDownward@Exit	cheap	4	src/bank4/tektite-boulder.asm	465	@Exit	
-Jumper_MoveY	code	4	src/bank4/tektite-boulder.asm	478	Jumper_MoveY	Moves a jumper vertically by its speed, then adds gravity to the speed and caps the falling speed.
-Jumper_ResetSpeedFracY	code	4	src/bank4/tektite-boulder.asm	515	Jumper_ResetVSpeedFrac	Clears a jumper's vertical speed fraction; also the tail of Jumper_MoveY.
-Jumper_MoveY_Return	code	4	src/bank4/tektite-boulder.asm	520	L10A52_Exit	Shared exit of Jumper_MoveY.
+Jumper_Update	code	4	src/bank4/tektite-boulder.asm	166	UpdateTektiteOrBoulder	Updates a Tektite (types $0D, $0E) or a Boulder (type $20): wait on the ground, then jump.
+Jumper_Update@DrawAndCheckCollisions	cheap	4	src/bank4/tektite-boulder.asm	176	@DrawAndCheckCollisions	
+Jumper_Update@CheckStunned	cheap	4	src/bank4/tektite-boulder.asm	179	@CheckStunned	
+Jumper_Update@SetStateJump	cheap	4	src/bank4/tektite-boulder.asm	217	@SetStateJump	
+Jumper_Update@SetUpJump	cheap	4	src/bank4/tektite-boulder.asm	221	@SetUpJump	
+Jumper_Update@FinishSetUpJump	cheap	4	src/bank4/tektite-boulder.asm	246	@FinishSetUpJump	
+Jumper_Update@Animate	cheap	4	src/bank4/tektite-boulder.asm	270	@Animate	
+Jumper_Update@State1	cheap	4	src/bank4/tektite-boulder.asm	273	@State1	
+Jumper_Update@MoveX	cheap	4	src/bank4/tektite-boulder.asm	308		
+Jumper_Update@Landed	cheap	4	src/bank4/tektite-boulder.asm	340		
+Jumper_Update@SetTimerAndAnimate	cheap	4	src/bank4/tektite-boulder.asm	379	@SetTimerAndAnimate	
+Jumper_AnimateAndCheckCollisions	code	4	src/bank4/tektite-boulder.asm	390	Jumper_AnimateAndCheckCollisions	Draws a Tektite or a Boulder and checks its collisions; destroys a Boulder at the bottom of the screen.
+Jumper_AnimateAndCheckCollisions@DrawTektite	cheap	4	src/bank4/tektite-boulder.asm	420	@DrawTektite	
+Jumper_AnimateAndCheckCollisions@DrawBoulder	cheap	4	src/bank4/tektite-boulder.asm	423	@DrawBoulder	
+Jumper_GetKind	code	4	src/bank4/tektite-boulder.asm	444	Jumper_GetKind	Gets the kind of jumper an object is, which indexes the jumper tables.
+Jumper_GetKind_Return	code	4	src/bank4/tektite-boulder.asm	454	L10A10_Exit	Shared exit of Jumper_AnimateAndCheckCollisions and Jumper_GetKind.
+Jumper_PointBoulderDownward	code	4	src/bank4/tektite-boulder.asm	461	Jumper_PointBoulderDownward	Makes a Boulder (type $20) point down: keeps the horizontal bits of ObjDir and sets down (4).
+Jumper_PointBoulderDownward@Exit	cheap	4	src/bank4/tektite-boulder.asm	470	@Exit	
+Jumper_MoveY	code	4	src/bank4/tektite-boulder.asm	483	Jumper_MoveY	Moves a jumper vertically by its speed, then adds gravity to the speed and caps the falling speed.
+Jumper_ResetSpeedFracY	code	4	src/bank4/tektite-boulder.asm	520	Jumper_ResetVSpeedFrac	Clears a jumper's vertical speed fraction; also the tail of Jumper_MoveY.
+Jumper_MoveY_Return	code	4	src/bank4/tektite-boulder.asm	525	L10A52_Exit	Shared exit of Jumper_MoveY.
 Burrower_StateQSpeeds	data	4	src/bank4/leever.asm	57	BlueLeeverStateQSpeeds	TABLE: q-speed of a Blue Leever or Zora in each burrower state; index = ObjState (0-5); value =
 Burrower_StateTimes	data	4	src/bank4/leever.asm	63	BlueLeeverStateTimes	TABLE: length of each burrower state of a Blue Leever or Zora; index = ObjState (0-5); value = frames
 Burrower_StateAnimTimes	data	4	src/bank4/leever.asm	69	BlueLeeverStateAnimTimes	TABLE: frames per animation frame of a Blue Leever or Zora; index = ObjState (0-5); value = frames
@@ -1297,24 +1297,24 @@ Stalfos_Update@CheckResult	cheap	4	src/bank4/stalfos.asm	120	@CheckResult
 Stalfos_Update@ZeroSpeed	cheap	4	src/bank4/stalfos.asm	128	@ZeroSpeed	
 Stalfos_Update@SetSpeed	cheap	4	src/bank4/stalfos.asm	133	@SetSpeed	
 Stalfos_Update@Exit	cheap	4	src/bank4/stalfos.asm	137	@Exit	
-Moldorm_Init	code	4	src/bank4/moldorm-init.asm	34	InitMoldorm	Creates the ten Moldorm segments (two worms of five) in object slots $01-$0A.
-Moldorm_Init@LoopSegment	cheap	4	src/bank4/moldorm-init.asm	39	@LoopSegment	
+Moldorm_Init	code	4	src/bank4/moldorm-init.asm	38	InitMoldorm	Creates the ten Moldorm segments (two worms of five) in object slots $01-$0A.
+Moldorm_Init@LoopSegment	cheap	4	src/bank4/moldorm-init.asm	43	@LoopSegment	
 Aquamentus_Init	code	4	src/bank4/aquamentus-digdogger-dodongo-inits.asm	40	InitAquamentus	Initializes Aquamentus: immunity to boomerang and fire, roar, fixed start position ($B0, $80).
 Digdogger_InitWith3Children	code	4	src/bank4/aquamentus-digdogger-dodongo-inits.asm	65	InitDigdogger1	Initializes a Digdogger that splits into 3 (type $38); also the common init of every small one.
-Digdogger_InitWith1Child	code	4	src/bank4/aquamentus-digdogger-dodongo-inits.asm	97	InitDigdogger2	Initializes a Digdogger that splits into 1 (type $39), then turns it into type $38.
-Dodongo_Init	code	4	src/bank4/aquamentus-digdogger-dodongo-inits.asm	116	InitDodongo	Initializes a Dodongo (type $31 or $32): roar, and a random facing direction, right or left.
+Digdogger_InitWith1Child	code	4	src/bank4/aquamentus-digdogger-dodongo-inits.asm	99	InitDigdogger2	Initializes a Digdogger that splits into 1 (type $39), then turns it into type $38.
+Dodongo_Init	code	4	src/bank4/aquamentus-digdogger-dodongo-inits.asm	118	InitDodongo	Initializes a Dodongo (type $31 or $32): roar, and a random facing direction, right or left.
 Moldorm_Update	code	4	src/bank4/moldorm.asm	59	UpdateMoldorm	Updates one Moldorm segment: move, draw, collide; on death hands the death to the worm's tail.
-Moldorm_Update@Exit	cheap	4	src/bank4/moldorm.asm	143	@Exit	
-Moldorm_ControlFlight	code	4	src/bank4/moldorm.asm	152	ControlMoldormFlight	Runs the flight routine for the segment's flying state (0-2 chase, 3 wander).
-Moldorm_ControlFlight_JumpTable	data	4	src/bank4/moldorm.asm	157	ControlMoldormFlight_JumpTable	TABLE: Moldorm flight routines; index = Flyer_ObjFlyingState; value = routine address.
-Moldorm_Chase	code	4	src/bank4/moldorm.asm	171	Moldorm_Chase	Flying states 0-2 of a Moldorm head: turn toward the chase target every $10 frames.
-Moldorm_ChangeFlyingState	code	4	src/bank4/moldorm.asm	188	Moldorm_ChangeFlyingState	Timer = 0, so the flying state has ended: picks a new state and rearms the timer to $10 frames.
-Moldorm_Wander	code	4	src/bank4/moldorm.asm	209	Moldorm_Wander	Flying state 3 of a Moldorm head: turn at random every $10 frames.
-Moldorm_PropagateDirs	code	4	src/bank4/moldorm.asm	228	Moldorm_PropagateDirs	Once per $10 frames (head's timer = $10): each segment takes the direction of the one ahead.
-Moldorm_PropagateDirs@SkipBounce	cheap	4	src/bank4/moldorm.asm	242	@SkipBounce	
-Moldorm_PropagateDirs@Loop	cheap	4	src/bank4/moldorm.asm	254	@Loop	
-Moldorm_PropagateDirs_Return	code	4	src/bank4/moldorm.asm	270	L1156B_Exit	Shared exit of the Moldorm flight routines above.
-Moldorm_DecideFlightState	code	4	src/bank4/moldorm.asm	280	Flyer_MoldormDecideState	Picks a Moldorm head's next flying state: 2 (chase) if Random,X >= $40, else 3 (wander); 8 turns.
+Moldorm_Update@Exit	cheap	4	src/bank4/moldorm.asm	144	@Exit	
+Moldorm_ControlFlight	code	4	src/bank4/moldorm.asm	153	ControlMoldormFlight	Runs the flight routine for the segment's flying state (0-2 chase, 3 wander).
+Moldorm_ControlFlight_JumpTable	data	4	src/bank4/moldorm.asm	158	ControlMoldormFlight_JumpTable	TABLE: Moldorm flight routines; index = Flyer_ObjFlyingState; value = routine address.
+Moldorm_Chase	code	4	src/bank4/moldorm.asm	172	Moldorm_Chase	Flying states 0-2 of a Moldorm head: turn toward the chase target every $10 frames.
+Moldorm_ChangeFlyingState	code	4	src/bank4/moldorm.asm	189	Moldorm_ChangeFlyingState	Timer = 0, so the flying state has ended: picks a new state and rearms the timer to $10 frames.
+Moldorm_Wander	code	4	src/bank4/moldorm.asm	210	Moldorm_Wander	Flying state 3 of a Moldorm head: turn at random every $10 frames.
+Moldorm_PropagateDirs	code	4	src/bank4/moldorm.asm	229	Moldorm_PropagateDirs	Once per $10 frames (head's timer = $10): each segment takes the direction of the one ahead.
+Moldorm_PropagateDirs@SkipBounce	cheap	4	src/bank4/moldorm.asm	243	@SkipBounce	
+Moldorm_PropagateDirs@Loop	cheap	4	src/bank4/moldorm.asm	255	@Loop	
+Moldorm_PropagateDirs_Return	code	4	src/bank4/moldorm.asm	271	L1156B_Exit	Shared exit of the Moldorm flight routines above.
+Moldorm_DecideFlightState	code	4	src/bank4/moldorm.asm	281	Flyer_MoldormDecideState	Picks a Moldorm head's next flying state: 2 (chase) if Random,X >= $40, else 3 (wander); 8 turns.
 Digdogger_CornerOffsetsX	data	4	src/bank4/digdogger.asm	72	DigdoggerCornerOffsetsX	TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
 Digdogger_CornerOffsetsY	data	4	src/bank4/digdogger.asm	77	DigdoggerCornerOffsetsY	TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
 Digdogger_HandleFlute	code	4	src/bank4/digdogger.asm	91	L_Digdogger_AfterFlute	Runs a Digdogger after the flute was played: shrink for $40 frames, then split into small ones.
@@ -1368,50 +1368,50 @@ Aquamentus_Draw@LoopSprite	cheap	4	src/bank4/aquamentus.asm	274	@LoopSprite
 Aquamentus_Draw@WriteSprite	cheap	4	src/bank4/aquamentus.asm	314	@WriteSprite	
 Sprite_WriteBossSprite	code	4	src/bank4/aquamentus.asm	328	WriteBossSprite	Writes one sprite of a boss at the next rolling sprite record and advances the record index.
 Dodongo_Update	code	4	src/bank4/dodongo.asm	83	UpdateDodongo	Updates a Dodongo (types $31, $32) for one frame: state, collisions, bomb test, drawing.
-Dodongo_BloatedWaitTimes	data	4	src/bank4/dodongo.asm	94	DodongoBloatedWaitTimes	TABLE: length of each bloated wait substate; index = Dodongo_ObjBloatedSubstate 0-2; value = frames.
-Dodongo_UpdateState	code	4	src/bank4/dodongo.asm	101	UpdateDodongoState	Runs the handler of the Dodongo's current state.
-Dodongo_UpdateState_JumpTable	data	4	src/bank4/dodongo.asm	106	UpdateDodongoState_JumpTable	TABLE: Dodongo state handlers; index = ObjState; value = routine address.
-Dodongo_State0Move	code	4	src/bank4/dodongo.asm	123	UpdateDodongoState0_Move	State 0: walks the Dodongo for one frame as a wanderer with turn rate $20.
-Dodongo_State0Move@Move	cheap	4	src/bank4/dodongo.asm	136	@Move	
-Dodongo_State2Stunned	code	4	src/bank4/dodongo.asm	169	UpdateDodongoState2_Stunned	State 2: keeps the Dodongo stunned until its stun timer runs down, then returns it to walking.
-Dodongo_State1Bloated	code	4	src/bank4/dodongo.asm	185	UpdateDodongoState1_Bloated	State 1: runs the bloated substate of a Dodongo that swallowed a bomb.
-Dodongo_State1Bloated_JumpTable	data	4	src/bank4/dodongo.asm	190	UpdateDodongoState1_Bloated_JumpTable	TABLE: bloated substate handlers; index = Dodongo_ObjBloatedSubstate; value = routine address.
-Dodongo_State1Bloated_Wait	code	4	src/bank4/dodongo.asm	209	UpdateDodongoState1_Bloated_Sub_Wait	Bloated substates 0-2: times the wait, counts the swallowed bomb and picks the next substate.
-Dodongo_State1Bloated_Wait@AdvanceSubstate	cheap	4	src/bank4/dodongo.asm	239	@AdvanceSubstate	
-Dodongo_State1Bloated_DecTimer	code	4	src/bank4/dodongo.asm	256	L_Dodongo_DecrementBloatedTimer	Shared tail of the bloated wait substates: counts the bloated timer down by 1.
-Dodongo_State1Bloated_Die	code	4	src/bank4/dodongo.asm	269	UpdateDodongoState1_Bloated_Sub_Die	Bloated substate 3: starts the Dodongo's death (sparkle, boss death cry) and resets its state.
-Dodongo_State1Bloated_End	code	4	src/bank4/dodongo.asm	274	UpdateDodongoState1_Bloated_Sub_End	Bloated substate 4, and the end of the stun: returns the Dodongo to state 0 and substate 0.
-Dodongo_CheckCollisions	code	4	src/bank4/dodongo.asm	294	Dodongo_CheckCollisions	Checks collisions for one or both 16-pixel halves of the Dodongo and kills it if the sword hit.
-Dodongo_CheckCollisions@Die	cheap	4	src/bank4/dodongo.asm	321	@Die	
-Dodongo_CheckCollisions_Return	code	4	src/bank4/dodongo.asm	330	L11989_Exit	Shared exit of Dodongo_CheckCollisions and Dodongo_CheckCollisionsStandardSize.
-Dodongo_CheckCollisionsStandardSize	code	4	src/bank4/dodongo.asm	345	Dodongo_CheckCollisionsStandardSize	Checks weapons and Link against the 16-pixel box at ObjX; the sword can hit only a stunned Dodongo.
-Dodongo_MouthNegativeLimitsX	data	4	src/bank4/dodongo.asm	364	DodongoMouthNegativeLimits0	TABLE: lower limit (inclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-Dodongo_MouthPositiveLimitsX	data	4	src/bank4/dodongo.asm	369	DodongoMouthPositiveLimits0	TABLE: upper limit (exclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-Dodongo_MouthNegativeLimitsY	data	4	src/bank4/dodongo.asm	374	DodongoMouthNegativeLimits1	TABLE: lower limit (inclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-Dodongo_MouthPositiveLimitsY	data	4	src/bank4/dodongo.asm	379	DodongoMouthPositiveLimits1	TABLE: upper limit (exclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
-Dodongo_CheckBombHit	code	4	src/bank4/dodongo.asm	398	Dodongo_CheckBombHit	Tests the bomb in slot $10 against a walking Dodongo: a ticking bomb may be eaten, a blast stuns.
-Dodongo_CheckBombHit@Exit	cheap	4	src/bank4/dodongo.asm	452	@Exit	
-Dodongo_TryEatBomb	code	4	src/bank4/dodongo.asm	467	Dodongo_TryEatBomb	Makes the Dodongo swallow the ticking bomb in slot $10 if the bomb lies just ahead of its centre.
-Dodongo_TryEatBomb@LoopLimit	cheap	4	src/bank4/dodongo.asm	486	@LoopLimit	
-Dodongo_TryEatBomb@Exit	cheap	4	src/bank4/dodongo.asm	515	@Exit	
-Dodongo_BombPositiveLimits	data	4	src/bank4/dodongo.asm	520	DodongoBombPositiveLimits	TABLE: upper limit (exclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
-Dodongo_BombNegativeLimits	data	4	src/bank4/dodongo.asm	525	DodongoBombNegativeLimits	TABLE: lower limit (inclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
-Dodongo_IsBombInRange	code	4	src/bank4/dodongo.asm	536	Dodongo_IsBombInRange	Tests whether the bomb's centre is within a square range of the Dodongo's centre.
-Dodongo_IsBombInRange@LoopAxis	cheap	4	src/bank4/dodongo.asm	550	@LoopAxis	
-Dodongo_IsBombInRange@NextAxis	cheap	4	src/bank4/dodongo.asm	566	@NextLoopAxis	
-Dodongo_FrameImages	data	4	src/bank4/dodongo.asm	577	DodongoFrameImages	TABLE: frame image of the half drawn at ObjX, walking or stunned; index = (ObjDir >> 1) + 5 * frame.
-Dodongo_FrameHFlips	data	4	src/bank4/dodongo.asm	584	DodongoFrameHFlips	TABLE: horizontal flip for each entry of Dodongo_FrameImages; same index; value = $40 flip, 0 none.
-Dodongo_BloatedFrameImages	data	4	src/bank4/dodongo.asm	590	DodongoFrameImagesBloated	TABLE: frame images of the bloated Dodongo; index = ObjDir >> 1; value = frame image number.
-Dodongo_BloatedFrameHFlips	data	4	src/bank4/dodongo.asm	596	DodongoFrameHFlipsBloated	TABLE: horizontal flip for each entry of Dodongo_BloatedFrameImages; same index; $40 flip, 0 none.
-Dodongo_Draw	code	4	src/bank4/dodongo.asm	609	Dodongo_Draw	Draws the Dodongo: one 16-pixel image facing up or down, two side by side facing left or right.
-Dodongo_Draw@DrawFlickering	cheap	4	src/bank4/dodongo.asm	643	@DrawFaded	
-Dodongo_Draw@DrawWalkingFast	cheap	4	src/bank4/dodongo.asm	651	@DrawWalkingFast	
-Dodongo_Draw@DrawWalking	cheap	4	src/bank4/dodongo.asm	654	@DrawWalking	
-Dodongo_Draw@PrepareToDraw	cheap	4	src/bank4/dodongo.asm	666	@PrepareToDraw	
-Dodongo_Draw@DrawNotMirrored	cheap	4	src/bank4/dodongo.asm	685	@DrawLeftSide	
-Dodongo_Draw@DrawSecondHalf	cheap	4	src/bank4/dodongo.asm	688	@DrawRightSide	
-Anim_SetSpriteDescriptorLevelPaletteRow	code	4	src/bank4/dodongo.asm	718	Anim_SetSpriteDescriptorLevelPaletteRow	Sets both sprite attribute bytes of the sprite descriptor to 3 (sprite palette 3).
-Dodongo_Draw_Return	code	4	src/bank4/dodongo.asm	723	L11B00_Exit	Shared exit of Dodongo_Draw; the routine above also returns through it.
+Dodongo_BloatedWaitTimes	data	4	src/bank4/dodongo.asm	96	DodongoBloatedWaitTimes	TABLE: length of each bloated wait substate; index = Dodongo_ObjBloatedSubstate 0-2; value = frames.
+Dodongo_UpdateState	code	4	src/bank4/dodongo.asm	103	UpdateDodongoState	Runs the handler of the Dodongo's current state.
+Dodongo_UpdateState_JumpTable	data	4	src/bank4/dodongo.asm	108	UpdateDodongoState_JumpTable	TABLE: Dodongo state handlers; index = ObjState; value = routine address.
+Dodongo_State0Move	code	4	src/bank4/dodongo.asm	125	UpdateDodongoState0_Move	State 0: walks the Dodongo for one frame as a wanderer with turn rate $20.
+Dodongo_State0Move@Move	cheap	4	src/bank4/dodongo.asm	138	@Move	
+Dodongo_State2Stunned	code	4	src/bank4/dodongo.asm	171	UpdateDodongoState2_Stunned	State 2: keeps the Dodongo stunned until its stun timer runs down, then returns it to walking.
+Dodongo_State1Bloated	code	4	src/bank4/dodongo.asm	187	UpdateDodongoState1_Bloated	State 1: runs the bloated substate of a Dodongo that swallowed a bomb.
+Dodongo_State1Bloated_JumpTable	data	4	src/bank4/dodongo.asm	192	UpdateDodongoState1_Bloated_JumpTable	TABLE: bloated substate handlers; index = Dodongo_ObjBloatedSubstate; value = routine address.
+Dodongo_State1Bloated_Wait	code	4	src/bank4/dodongo.asm	211	UpdateDodongoState1_Bloated_Sub_Wait	Bloated substates 0-2: times the wait, counts the swallowed bomb and picks the next substate.
+Dodongo_State1Bloated_Wait@AdvanceSubstate	cheap	4	src/bank4/dodongo.asm	241	@AdvanceSubstate	
+Dodongo_State1Bloated_DecTimer	code	4	src/bank4/dodongo.asm	258	L_Dodongo_DecrementBloatedTimer	Shared tail of the bloated wait substates: counts the bloated timer down by 1.
+Dodongo_State1Bloated_Die	code	4	src/bank4/dodongo.asm	271	UpdateDodongoState1_Bloated_Sub_Die	Bloated substate 3: starts the Dodongo's death (sparkle, boss death cry) and resets its state.
+Dodongo_State1Bloated_End	code	4	src/bank4/dodongo.asm	276	UpdateDodongoState1_Bloated_Sub_End	Bloated substate 4, and the end of the stun: returns the Dodongo to state 0 and substate 0.
+Dodongo_CheckCollisions	code	4	src/bank4/dodongo.asm	296	Dodongo_CheckCollisions	Checks collisions for one or both 16-pixel halves of the Dodongo and kills it if the sword hit.
+Dodongo_CheckCollisions@Die	cheap	4	src/bank4/dodongo.asm	323	@Die	
+Dodongo_CheckCollisions_Return	code	4	src/bank4/dodongo.asm	332	L11989_Exit	Shared exit of Dodongo_CheckCollisions and Dodongo_CheckCollisionsStandardSize.
+Dodongo_CheckCollisionsStandardSize	code	4	src/bank4/dodongo.asm	347	Dodongo_CheckCollisionsStandardSize	Checks weapons and Link against the 16-pixel box at ObjX; the sword can hit only a stunned Dodongo.
+Dodongo_MouthNegativeLimitsX	data	4	src/bank4/dodongo.asm	366	DodongoMouthNegativeLimits0	TABLE: lower limit (inclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+Dodongo_MouthPositiveLimitsX	data	4	src/bank4/dodongo.asm	371	DodongoMouthPositiveLimits0	TABLE: upper limit (exclusive) of dx for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+Dodongo_MouthNegativeLimitsY	data	4	src/bank4/dodongo.asm	376	DodongoMouthNegativeLimits1	TABLE: lower limit (inclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+Dodongo_MouthPositiveLimitsY	data	4	src/bank4/dodongo.asm	381	DodongoMouthPositiveLimits1	TABLE: upper limit (exclusive) of dy for a bomb in the mouth; index = ObjDir >> 1; value = pixels.
+Dodongo_CheckBombHit	code	4	src/bank4/dodongo.asm	400	Dodongo_CheckBombHit	Tests the bomb in slot $10 against a walking Dodongo: a ticking bomb may be eaten, a blast stuns.
+Dodongo_CheckBombHit@Exit	cheap	4	src/bank4/dodongo.asm	454	@Exit	
+Dodongo_TryEatBomb	code	4	src/bank4/dodongo.asm	469	Dodongo_TryEatBomb	Makes the Dodongo swallow the ticking bomb in slot $10 if the bomb lies just ahead of its centre.
+Dodongo_TryEatBomb@LoopLimit	cheap	4	src/bank4/dodongo.asm	488	@LoopLimit	
+Dodongo_TryEatBomb@Exit	cheap	4	src/bank4/dodongo.asm	517	@Exit	
+Dodongo_BombPositiveLimits	data	4	src/bank4/dodongo.asm	522	DodongoBombPositiveLimits	TABLE: upper limit (exclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
+Dodongo_BombNegativeLimits	data	4	src/bank4/dodongo.asm	527	DodongoBombNegativeLimits	TABLE: lower limit (inclusive) of the centre distance for Dodongo_IsBombInRange; index = range 0-1.
+Dodongo_IsBombInRange	code	4	src/bank4/dodongo.asm	538	Dodongo_IsBombInRange	Tests whether the bomb's centre is within a square range of the Dodongo's centre.
+Dodongo_IsBombInRange@LoopAxis	cheap	4	src/bank4/dodongo.asm	552	@LoopAxis	
+Dodongo_IsBombInRange@NextAxis	cheap	4	src/bank4/dodongo.asm	568	@NextLoopAxis	
+Dodongo_FrameImages	data	4	src/bank4/dodongo.asm	579	DodongoFrameImages	TABLE: frame image of the half drawn at ObjX, walking or stunned; index = (ObjDir >> 1) + 5 * frame.
+Dodongo_FrameHFlips	data	4	src/bank4/dodongo.asm	586	DodongoFrameHFlips	TABLE: horizontal flip for each entry of Dodongo_FrameImages; same index; value = $40 flip, 0 none.
+Dodongo_BloatedFrameImages	data	4	src/bank4/dodongo.asm	592	DodongoFrameImagesBloated	TABLE: frame images of the bloated Dodongo; index = ObjDir >> 1; value = frame image number.
+Dodongo_BloatedFrameHFlips	data	4	src/bank4/dodongo.asm	598	DodongoFrameHFlipsBloated	TABLE: horizontal flip for each entry of Dodongo_BloatedFrameImages; same index; $40 flip, 0 none.
+Dodongo_Draw	code	4	src/bank4/dodongo.asm	611	Dodongo_Draw	Draws the Dodongo: one 16-pixel image facing up or down, two side by side facing left or right.
+Dodongo_Draw@DrawFlickering	cheap	4	src/bank4/dodongo.asm	645	@DrawFaded	
+Dodongo_Draw@DrawWalkingFast	cheap	4	src/bank4/dodongo.asm	653	@DrawWalkingFast	
+Dodongo_Draw@DrawWalking	cheap	4	src/bank4/dodongo.asm	656	@DrawWalking	
+Dodongo_Draw@PrepareToDraw	cheap	4	src/bank4/dodongo.asm	668	@PrepareToDraw	
+Dodongo_Draw@DrawNotMirrored	cheap	4	src/bank4/dodongo.asm	687	@DrawLeftSide	
+Dodongo_Draw@DrawSecondHalf	cheap	4	src/bank4/dodongo.asm	690	@DrawRightSide	
+Anim_SetSpriteDescriptorLevelPaletteRow	code	4	src/bank4/dodongo.asm	720	Anim_SetSpriteDescriptorLevelPaletteRow	Sets both sprite attribute bytes of the sprite descriptor to 3 (sprite palette 3).
+Dodongo_Draw_Return	code	4	src/bank4/dodongo.asm	725	L11B00_Exit	Shared exit of Dodongo_Draw; the routine above also returns through it.
 Darknut_Init	code	4	src/bank4/darknut-gibdo.asm	44	InitDarknut	Initializes a Darknut (type $0B red, $0C blue): weapon immunities, speed, facing direction.
 Gibdo_Update	code	4	src/bank4/darknut-gibdo.asm	69	UpdateGibdo	Updates a Gibdo (type $30): wanders with turn rate $80, checks collisions, draws itself.
 Darknut_Update	code	4	src/bank4/darknut-gibdo.asm	89	UpdateDarknut	Updates a Darknut (types $0B, $0C): wanders with turn rate $80, checks collisions, draws itself.
@@ -1447,11 +1447,11 @@ Vire_Update@NextLoopMakeKeese	cheap	4	src/bank4/vire.asm	79	@NextLoopMakeKeese
 Vire_UpdateState	code	4	src/bank4/vire.asm	90	UpdateVireState	Runs the handler for the Vire's state (0 wander and hop, 1 fly away after a hit).
 Vire_UpdateState_JumpTable	data	4	src/bank4/vire.asm	96	UpdateVireState_JumpTable	TABLE: Vire state handlers; index = ObjState,X (0-1); value = routine address. State 2 is never
 Vire_HopYOffsets	data	4	src/bank4/vire.asm	102	VireJumpOffsets	TABLE: Vire hop; index = abs(ObjGridOffset,X) (0-$F); value = signed pixels added to Y on each frame
-Vire_State0Wander	code	4	src/bank4/vire.asm	114	UpdateVireState0	Vire state 0: wanders toward Link (turn rate $80) and hops while facing left or right.
-Vire_State0Wander@Exit	cheap	4	src/bank4/vire.asm	139	@Exit	
-Vire_CheckCollisions	code	4	src/bank4/vire.asm	152	CheckVireCollisions	Checks a wandering Vire's collisions and starts the split if it was hit and survived.
-Vire_CheckCollisions@Exit	cheap	4	src/bank4/vire.asm	168	@Exit	
-Vire_Draw	code	4	src/bank4/vire.asm	175	DrawVire	Animates and draws a Vire: frame images 0-1 normally, 2-3 when it faces up.
+Vire_State0Wander	code	4	src/bank4/vire.asm	116	UpdateVireState0	Vire state 0: wanders toward Link (turn rate $80) and hops while facing left or right.
+Vire_State0Wander@Exit	cheap	4	src/bank4/vire.asm	141	@Exit	
+Vire_CheckCollisions	code	4	src/bank4/vire.asm	154	CheckVireCollisions	Checks a wandering Vire's collisions and starts the split if it was hit and survived.
+Vire_CheckCollisions@Exit	cheap	4	src/bank4/vire.asm	170	@Exit	
+Vire_Draw	code	4	src/bank4/vire.asm	177	DrawVire	Animates and draws a Vire: frame images 0-1 normally, 2-3 when it faces up.
 Wizzrobe_Blue_Update	code	4	src/bank4/wizzrobe.asm	95	UpdateBlueWizzrobe	Updates a Blue Wizzrobe (type $23): walk or teleport, try to shoot, then draw and check collisions.
 Wizzrobe_DrawAndCheckCollisionsIntermittently	code	4	src/bank4/wizzrobe.asm	103	Wizzrobe_DrawAndCheckCollisionsIntermittently	Draws and checks collisions only on frames where ObjRemDistance,X is even (flicker while fading).
 Wizzrobe_JumpToDrawAndCheckCollisions	code	4	src/bank4/wizzrobe.asm	112	L_Wizzrobe_DrawAndCheckCollisions	Jumps to Wizzrobe_DrawAndCheckCollisions (out of branch range from above); also the clock path.
@@ -1507,16 +1507,16 @@ Wizzrobe_Red_State2Solid	code	4	src/bank4/wizzrobe.asm	667	UpdateRedWizzrobe_2	R
 Wizzrobe_DrawAndCheckCollisions	code	4	src/bank4/wizzrobe.asm	683	Wizzrobe_DrawAndCheckCollisions	Tests a Wizzrobe against Link's weapons and against Link, then draws it.
 Wizzrobe_DrawAndCheckCollisions@CheckLink	cheap	4	src/bank4/wizzrobe.asm	697		
 Wizzrobe_DrawAndCheckCollisions@FacingUp	cheap	4	src/bank4/wizzrobe.asm	723		
-Gleeok_SegmentStartYs	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	46	GleeokSegmentYs	TABLE: start Y of the 6 stored segments of every Gleeok neck; index = segment (object slot - 1); pixels.
-Gleeok_Init	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	57	InitGleeok	Initializes Gleeok (types $42-$45): neck segment positions, HP and mask of slots 1-6, head timing.
-Gleeok_Init@NextSegment	cheap	4	src/bank4/gleeok-manhandla-gohma-inits.asm	63		
-Manhandla_BaseFrameImagesAndAttrs	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	131	ManhandlaBaseFrameImagesAndAttrs	TABLE: start value of Manhandla_ObjFrame; index = segment 0-4 (slots 1-5); frame image and sprite bits.
-Manhandla_SegmentOffsetsX	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	137	ManhandlaSegmentOffsetsX	TABLE: X offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
-Manhandla_SegmentOffsetsY	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	141	ManhandlaSegmentOffsetsY	TABLE: Y offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
-Manhandla_Init	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	153	InitManhandla	Initializes Manhandla (type $3C): makes object slots 1-4 the hands and slot 5 the base.
-Manhandla_Init@NextSegment	cheap	4	src/bank4/gleeok-manhandla-gohma-inits.asm	166		
-Gohma_Init	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	219	InitGohma	Initializes Gohma (types $33, $34): arrow-only mask, shoot timer 1, position ($80, $70).
-Gleeok_InitFlyingHead	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	238	InitGleeokHead	Initializes a flying Gleeok head (type $46) as a fast blue Keese-style flyer.
+Gleeok_SegmentStartYs	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	48	GleeokSegmentYs	TABLE: start Y of the 6 stored segments of every Gleeok neck; index = segment (object slot - 1); pixels.
+Gleeok_Init	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	59	InitGleeok	Initializes Gleeok (types $42-$45): neck segment positions, HP and mask of slots 1-6, head timing.
+Gleeok_Init@NextSegment	cheap	4	src/bank4/gleeok-manhandla-gohma-inits.asm	65		
+Manhandla_BaseFrameImagesAndAttrs	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	133	ManhandlaBaseFrameImagesAndAttrs	TABLE: start value of Manhandla_ObjFrame; index = segment 0-4 (slots 1-5); frame image and sprite bits.
+Manhandla_SegmentOffsetsX	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	139	ManhandlaSegmentOffsetsX	TABLE: X offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
+Manhandla_SegmentOffsetsY	data	4	src/bank4/gleeok-manhandla-gohma-inits.asm	143	ManhandlaSegmentOffsetsY	TABLE: Y offset of a Manhandla segment from the base; index = segment 0-4; signed pixels.
+Manhandla_Init	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	155	InitManhandla	Initializes Manhandla (type $3C): makes object slots 1-4 the hands and slot 5 the base.
+Manhandla_Init@NextSegment	cheap	4	src/bank4/gleeok-manhandla-gohma-inits.asm	168		
+Gohma_Init	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	221	InitGohma	Initializes Gohma (types $33, $34): arrow-only mask, shoot timer 1, position ($80, $70).
+Gleeok_InitFlyingHead	code	4	src/bank4/gleeok-manhandla-gohma-inits.asm	240	InitGleeokHead	Initializes a flying Gleeok head (type $46) as a fast blue Keese-style flyer.
 Manhandla_Update	code	4	src/bank4/manhandla.asm	60	UpdateManhandla	Updates one Manhandla segment: the base steers and speeds up all, each moves, collides, draws.
 Manhandla_Update@LoopSegment	cheap	4	src/bank4/manhandla.asm	72	@LoopSegment	
 Manhandla_Update@BounceIfNeeded	cheap	4	src/bank4/manhandla.asm	88	@BounceIfNeeded	
@@ -1624,9 +1624,9 @@ Gleeok_WriteBodySprites@LoopDrawColumn	cheap	4	src/bank4/gleeok-head-body.asm	42
 Zelda_RoomObjXs	data	4	src/bank4/zelda-lanmola-inits.asm	31	GuardFireXs	TABLE: start X of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
 Zelda_RoomObjYs	data	4	src/bank4/zelda-lanmola-inits.asm	36	GuardFireYs	TABLE: start Y of the objects in Zelda's room; index = object slot - 1 (0 = Zelda, 1-4 = guard
 Zelda_Init	code	4	src/bank4/zelda-lanmola-inits.asm	45	InitZelda	Places Zelda in object slot 1 and four guard fires in slots 2-5.
-Lanmola_Init	code	4	src/bank4/zelda-lanmola-inits.asm	74	InitLamnola	Makes the ten Lanmola segments (two worms of five) in object slots $01-$0A.
-Patra_Init	code	4	src/bank4/patra-ganon-inits.asm	41	InitPatra	Sets up Patra and turns object slots $02-$09 into its eight children.
-Ganon_Init	code	4	src/bank4/patra-ganon-inits.asm	95	InitGanon	Sets up Ganon and starts the opening scene of his room by halting Link.
+Lanmola_Init	code	4	src/bank4/zelda-lanmola-inits.asm	75	InitLamnola	Makes the ten Lanmola segments (two worms of five) in object slots $01-$0A.
+Patra_Init	code	4	src/bank4/patra-ganon-inits.asm	42	InitPatra	Sets up Patra and turns object slots $02-$09 into its eight children.
+Ganon_Init	code	4	src/bank4/patra-ganon-inits.asm	96	InitGanon	Sets up Ganon and starts the opening scene of his room by halting Link.
 Zelda_Update	code	4	src/bank4/zelda-guard-fire.asm	42	UpdateZelda	Draws Zelda and, once Link stands in front of her, halts him and starts the fanfare.
 Zelda_Update_Return	code	4	src/bank4/zelda-guard-fire.asm	81	L129B7_Exit	Shared return of Zelda_Update and Zelda_State1WaitForEnding.
 Zelda_State1WaitForEnding	code	4	src/bank4/zelda-guard-fire.asm	90	UpdateZelda_State1	Zelda state 1: keeps drawing Link for $80 frames, then switches the game to mode $13.
@@ -1638,43 +1638,43 @@ Lanmola_Update@DrawAndCheckCollisions	cheap	4	src/bank4/lanmola.asm	62	@DrawAndC
 Lanmola_Update@Draw	cheap	4	src/bank4/lanmola.asm	85	@Draw	
 Lanmola_Update@FindTail	cheap	4	src/bank4/lanmola.asm	116	@FindTail	
 Lanmola_UpdateHead_Return	code	4	src/bank4/lanmola.asm	151	L12A6F_Exit	Shared RTS for the early exits of Lanmola_UpdateHead.
-Lanmola_UpdateHead	code	4	src/bank4/lanmola.asm	166	Lamnola_UpdateHead	Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
-Lanmola_UpdateHead@PropagateDirs	cheap	4	src/bank4/lanmola.asm	189	@PropagateDirs	
-Lanmola_UpdateHead@LoopFindPerpendicular	cheap	4	src/bank4/lanmola.asm	237	@LoopFindPerpendicular	
-Lanmola_UpdateHead@SetDirAndCheckTiles	cheap	4	src/bank4/lanmola.asm	256	@SetDirAndCheckTiles	
-Lanmola_UpdateHead@FindNonOpposite	cheap	4	src/bank4/lanmola.asm	265	@FindNonOpposite	
-Lanmola_UpdateHead@LoopFindNonOpposite	cheap	4	src/bank4/lanmola.asm	269	@LoopFindNonOpposite	
-Lanmola_UpdateHead@CheckTileCollision	cheap	4	src/bank4/lanmola.asm	280	@CheckTileCollision	
-Lanmola_UpdateHead@Exit	cheap	4	src/bank4/lanmola.asm	286	@Exit	
-Lanmola_UpdateHead@TurnTowardLink	cheap	4	src/bank4/lanmola.asm	291	@TurnTowardLink	
-Lanmola_UpdateHead@SetVertical	cheap	4	src/bank4/lanmola.asm	319	@SetVertical	
-Lanmola_UpdateHead@TestDir	cheap	4	src/bank4/lanmola.asm	323		
-Lanmola_Move	code	4	src/bank4/lanmola.asm	334	Lamnola_Move	Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
-Lanmola_Move@Left	cheap	4	src/bank4/lanmola.asm	350	@Left	
-Lanmola_Move@Down	cheap	4	src/bank4/lanmola.asm	360	@Down	
-Lanmola_Move@Up	cheap	4	src/bank4/lanmola.asm	370	@Up	
-Lanmola_Move@Exit	cheap	4	src/bank4/lanmola.asm	380	@Exit	
-Patra_ManeuverTimes	data	4	src/bank4/patra.asm	50	PatraManeuverTimes	TABLE: frames until the next orbit-pattern switch is allowed; index = Y left by the collision
-Patra_Update	code	4	src/bank4/patra.asm	60	UpdatePatra	Updates Patra: flies, draws, checks collisions, and switches the children's orbit pattern.
-Patra_Update@LoopChildren	cheap	4	src/bank4/patra.asm	75	@LoopChildren	
-Patra_Update@CheckLinkCollision	cheap	4	src/bank4/patra.asm	90	@CheckLinkCollision	
-Patra_Update@TryChangeManeuver	cheap	4	src/bank4/patra.asm	94	@TryChangeManeuver	
-Patra_Update@Exit	cheap	4	src/bank4/patra.asm	116	@Exit	
-Patra_ControlFlight	code	4	src/bank4/patra.asm	123	ControlPatraFlight	Runs Patra's flight state (Flyer_ObjFlyingState,X) through the table below.
-Patra_ControlFlight_JumpTable	data	4	src/bank4/patra.asm	128	ControlPatraFlight_JumpTable	TABLE: Patra's flight state handlers; index = Flyer_ObjFlyingState,X.
-Patra_DecideFlightState	code	4	src/bank4/patra.asm	142	Flyer_PatraDecideState	Flight state 1: picks chase (Random,X >= $40) or wander (Random,X < $40) with turn counter 8.
-Patra_ChildStartAngles	data	4	src/bank4/patra.asm	158	PatraChildStartAngles	TABLE: angle the child in slot $02 must have for a later child to appear above Patra;
-Patra_Child1RotationCosineBits	data	4	src/bank4/patra.asm	163	PatraChild1RotationCosineBits	TABLE: type $25 child: number of high bits of the cosine used for the Y step; index =
-Patra_Child2RotationBits	data	4	src/bank4/patra.asm	168	PatraChild2RotationBits	TABLE: type $26 child: number of high sine and cosine bits used for both steps; index =
-Patra_Child1RotationSineBits	data	4	src/bank4/patra.asm	175	PatraChild1RotationSineBits	TABLE: type $25 child: number of high bits of the sine used for the X step; index =
-Patra_UpdateChild	code	4	src/bank4/patra.asm	185	UpdatePatraChild	Updates a Patra child: state 0 waits for its turn to appear above Patra, state 1 orbits.
-Patra_UpdateChild@Ready	cheap	4	src/bank4/patra.asm	209	@Ready	
-Patra_UpdateChild@Exit	cheap	4	src/bank4/patra.asm	244	@Exit	
-Patra_UpdateChild_State1Orbit	code	4	src/bank4/patra.asm	253	PatraChild_State1	Patra child state 1: follows Patra, steps its orbit angle, moves along the orbit, draws, collides.
-Patra_UpdateChild_State1Orbit@UsePatraChild2Bits	cheap	4	src/bank4/patra.asm	294	@UsePatraChild2Bits	
-Patra_UpdateChild_State1Orbit@Rotate	cheap	4	src/bank4/patra.asm	300	@Rotate	
-Patra_UpdateChild_State1Orbit@Exit	cheap	4	src/bank4/patra.asm	316	@Exit	
-Patra_DrawChild	code	4	src/bank4/patra.asm	323	PatraChild_Draw	Draws a Patra child with sprite palette 2, a new animation frame every 2 frames.
+Lanmola_UpdateHead	code	4	src/bank4/lanmola.asm	167	Lamnola_UpdateHead	Steers a Lanmola head: passes directions down the chain every 8 pixels, picks a new one every 16.
+Lanmola_UpdateHead@PropagateDirs	cheap	4	src/bank4/lanmola.asm	190	@PropagateDirs	
+Lanmola_UpdateHead@LoopFindPerpendicular	cheap	4	src/bank4/lanmola.asm	238	@LoopFindPerpendicular	
+Lanmola_UpdateHead@SetDirAndCheckTiles	cheap	4	src/bank4/lanmola.asm	257	@SetDirAndCheckTiles	
+Lanmola_UpdateHead@FindNonOpposite	cheap	4	src/bank4/lanmola.asm	266	@FindNonOpposite	
+Lanmola_UpdateHead@LoopFindNonOpposite	cheap	4	src/bank4/lanmola.asm	270	@LoopFindNonOpposite	
+Lanmola_UpdateHead@CheckTileCollision	cheap	4	src/bank4/lanmola.asm	281	@CheckTileCollision	
+Lanmola_UpdateHead@Exit	cheap	4	src/bank4/lanmola.asm	287	@Exit	
+Lanmola_UpdateHead@TurnTowardLink	cheap	4	src/bank4/lanmola.asm	297	@TurnTowardLink	
+Lanmola_UpdateHead@SetVertical	cheap	4	src/bank4/lanmola.asm	325	@SetVertical	
+Lanmola_UpdateHead@TestDir	cheap	4	src/bank4/lanmola.asm	329		
+Lanmola_Move	code	4	src/bank4/lanmola.asm	340	Lamnola_Move	Moves a Lanmola segment Lanmola_Speed pixels (1 or 2) in its direction.
+Lanmola_Move@Left	cheap	4	src/bank4/lanmola.asm	356	@Left	
+Lanmola_Move@Down	cheap	4	src/bank4/lanmola.asm	366	@Down	
+Lanmola_Move@Up	cheap	4	src/bank4/lanmola.asm	376	@Up	
+Lanmola_Move@Exit	cheap	4	src/bank4/lanmola.asm	386	@Exit	
+Patra_ManeuverTimes	data	4	src/bank4/patra.asm	52	PatraManeuverTimes	TABLE: frames until the next orbit-pattern switch is allowed; index = Y left by the collision
+Patra_Update	code	4	src/bank4/patra.asm	62	UpdatePatra	Updates Patra: flies, draws, checks collisions, and switches the children's orbit pattern.
+Patra_Update@LoopChildren	cheap	4	src/bank4/patra.asm	77	@LoopChildren	
+Patra_Update@CheckLinkCollision	cheap	4	src/bank4/patra.asm	92	@CheckLinkCollision	
+Patra_Update@TryChangeManeuver	cheap	4	src/bank4/patra.asm	96	@TryChangeManeuver	
+Patra_Update@Exit	cheap	4	src/bank4/patra.asm	122	@Exit	
+Patra_ControlFlight	code	4	src/bank4/patra.asm	129	ControlPatraFlight	Runs Patra's flight state (Flyer_ObjFlyingState,X) through the table below.
+Patra_ControlFlight_JumpTable	data	4	src/bank4/patra.asm	134	ControlPatraFlight_JumpTable	TABLE: Patra's flight state handlers; index = Flyer_ObjFlyingState,X.
+Patra_DecideFlightState	code	4	src/bank4/patra.asm	148	Flyer_PatraDecideState	Flight state 1: picks chase (Random,X >= $40) or wander (Random,X < $40) with turn counter 8.
+Patra_ChildStartAngles	data	4	src/bank4/patra.asm	164	PatraChildStartAngles	TABLE: angle the child in slot $02 must have for a later child to appear above Patra;
+Patra_Child1RotationCosineBits	data	4	src/bank4/patra.asm	169	PatraChild1RotationCosineBits	TABLE: type $25 child: number of high bits of the cosine used for the Y step; index =
+Patra_Child2RotationBits	data	4	src/bank4/patra.asm	174	PatraChild2RotationBits	TABLE: type $26 child: number of high sine and cosine bits used for both steps; index =
+Patra_Child1RotationSineBits	data	4	src/bank4/patra.asm	181	PatraChild1RotationSineBits	TABLE: type $25 child: number of high bits of the sine used for the X step; index =
+Patra_UpdateChild	code	4	src/bank4/patra.asm	191	UpdatePatraChild	Updates a Patra child: state 0 waits for its turn to appear above Patra, state 1 orbits.
+Patra_UpdateChild@Ready	cheap	4	src/bank4/patra.asm	215	@Ready	
+Patra_UpdateChild@Exit	cheap	4	src/bank4/patra.asm	252	@Exit	
+Patra_UpdateChild_State1Orbit	code	4	src/bank4/patra.asm	261	PatraChild_State1	Patra child state 1: follows Patra, steps its orbit angle, moves along the orbit, draws, collides.
+Patra_UpdateChild_State1Orbit@UsePatraChild2Bits	cheap	4	src/bank4/patra.asm	302	@UsePatraChild2Bits	
+Patra_UpdateChild_State1Orbit@Rotate	cheap	4	src/bank4/patra.asm	308	@Rotate	
+Patra_UpdateChild_State1Orbit@Exit	cheap	4	src/bank4/patra.asm	324	@Exit	
+Patra_DrawChild	code	4	src/bank4/patra.asm	331	PatraChild_Draw	Draws a Patra child with sprite palette 2, a new animation frame every 2 frames.
 Ganon_Update	code	4	src/bank4/ganon.asm	54	UpdateGanon	Updates Ganon: runs the handler of the current scene phase (Ganon_ScenePhase).
 Ganon_Update_JumpTable	data	4	src/bank4/ganon.asm	59	UpdateGanon_JumpTable	TABLE: scene phase handlers; index = Ganon_ScenePhase.
 Ganon_ScenePhase0_LiftInDark	code	4	src/bank4/ganon.asm	71	Ganon_ScenePhase0	Scene phase 0: Link holds up a Triforce piece in the dark; then the room fades to light.
@@ -1691,9 +1691,9 @@ Ganon_StartXs	data	4	src/bank4/ganon.asm	223	GanonStartXs	TABLE: Ganon's start X
 Ganon_UpdateBrownState	code	4	src/bank4/ganon.asm	234	Ganon_UpdateBrownState	Brown Ganon: counts ObjState down every other frame; at 0 he turns blue at a new start spot.
 Ganon_UpdateBrownState@Draw	cheap	4	src/bank4/ganon.asm	246	@Draw	
 Ganon_DrawBodyAndReturn	code	4	src/bank4/ganon.asm	256	L_Ganon_DrawBody	Draws Ganon's body and returns; shared by the blue, brown and dying code.
-Ganon_UpdateDying	code	4	src/bank4/ganon.asm	270	Ganon_Dying	Ganon's death: counts Ganon_ObjDyingCount up each frame; body, then ashes and burst, then the item.
-Ganon_UpdateDying@HandleAshes	cheap	4	src/bank4/ganon.asm	303	@HandleAshes	
-Ganon_UpdateDying@Exit	cheap	4	src/bank4/ganon.asm	326	@Exit	
+Ganon_UpdateDying	code	4	src/bank4/ganon.asm	271	Ganon_Dying	Ganon's death: counts Ganon_ObjDyingCount up each frame; body, then ashes and burst, then the item.
+Ganon_UpdateDying@HandleAshes	cheap	4	src/bank4/ganon.asm	304	@HandleAshes	
+Ganon_UpdateDying@Exit	cheap	4	src/bank4/ganon.asm	327	@Exit	
 Ganon_BurstDirs	data	4	src/bank4/ganon-draw-collisions.asm	63	GanonBurstDirs	TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
 Ganon_BurstSpriteAttrs	data	4	src/bank4/ganon-draw-collisions.asm	68	GanonBurstSpriteAttrs	TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
 Ganon_BurstTiles	data	4	src/bank4/ganon-draw-collisions.asm	74	GanonBurstTiles	TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
@@ -1865,33 +1865,33 @@ Mode7Scroll_ScrollWorldRight	code	5	src/bank5/scroll-world.asm	205	ScrollWorldRi
 Mode7Scroll_InitSubmodes	code	5	src/bank5/mode7-scroll-init.asm	55	InitMode7Submodes	Runs the mode 7 init step selected by GameSubmode.
 Mode7Scroll_InitSubmodes_JumpTable	data	5	src/bank5/mode7-scroll-init.asm	60	InitMode7Submodes_JumpTable	TABLE: mode 7 init steps; index = GameSubmode (0-6); value = handler address.
 Mode7Scroll_Init_Sub1	code	5	src/bank5/mode7-scroll-init.asm	77	InitMode7_Sub1	Mode 7 init step 1: finds the next room and lays out the room that goes into name table 2.
-Mode7Scroll_Init_Sub1@RestoreRoomId	cheap	5	src/bank5/mode7-scroll-init.asm	118	@RestoreRoomId	
-Mode7Scroll_Init_Sub1@Exit	cheap	5	src/bank5/mode7-scroll-init.asm	122	@Exit	
-Mode7Scroll_Init_Sub1@GoingUp	cheap	5	src/bank5/mode7-scroll-init.asm	125		
-Door_LayOutWithPrevOpened	code	5	src/bank5/mode7-scroll-init.asm	135	LayOutDoorsPrev	Lays out the doors of the room in RoomId using PrevOpenedDoors as the open doors (UW only).
-Mode7Scroll_Init_Sub0	code	5	src/bank5/mode7-scroll-init.asm	153	InitMode7_Sub0	Mode 7 init step 0: sets the whirlwind's source room and undoes a flute pond secret.
-Mode7Scroll_Init_Sub2	code	5	src/bank5/mode7-scroll-init.asm	170	InitMode7_Sub2	Mode 7 init step 2: sends tile row CurRow of the laid-out room to name table 2; one row a frame.
-Mode7Scroll_Init_IncSubmode	code	5	src/bank5/mode7-scroll-init.asm	205	L1433A_IncSubmode	Advances GameSubmode (shared by init steps 0 and 2).
-Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2	code	5	src/bank5/mode7-scroll-init.asm	216	InitMode7_Sub3And4_TransferPlayAreaAttrsToNT2	Mode 7 init steps 3 and 4: cue the top, then the bottom half of PlayAreaAttrs for name table 2.
-Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2@Vertical	cheap	5	src/bank5/mode7-scroll-init.asm	224	@Vertical	
-Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2@TransferHalfPlayAreaAttrs	cheap	5	src/bank5/mode7-scroll-init.asm	228	@TransferHalfPlayAreaAttrs	
-Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2@Horizontal	cheap	5	src/bank5/mode7-scroll-init.asm	237	@Horizontal	
-Mode7Scroll_Init_Sub5	code	5	src/bank5/mode7-scroll-init.asm	252	InitMode7_Sub5	Mode 7 init step 5: lays out the next room when going up, then decides on a fade to black.
-Mode7Scroll_Init_Sub5@Vertical	cheap	5	src/bank5/mode7-scroll-init.asm	265	@Vertical	
-Mode7Scroll_Init_Sub5@CheckDark	cheap	5	src/bank5/mode7-scroll-init.asm	282	@CheckDark	
-Mode7Scroll_Init_Sub5@DarkenRoom	cheap	5	src/bank5/mode7-scroll-init.asm	293	@DarkenRoom	
-Mode7Scroll_Init_Sub5@CheckIfLit	cheap	5	src/bank5/mode7-scroll-init.asm	302	@CheckIfLit	
-Mode7Scroll_Init_Sub6	code	5	src/bank5/mode7-scroll-init.asm	314	InitMode7_Sub6	Mode 7 init step 6: runs the fade to black until it is done, then finishes the init.
-Mode7Scroll_Init_Finish	code	5	src/bank5/mode7-scroll-init.asm	319	InitMode7_Finish	Ends mode 7 init: RoomId = NextRoomId, sprite-0 split armed, mode update begins.
-Mode7Scroll_Init_Return	code	5	src/bank5/mode7-scroll-init.asm	326	L143AD_Exit	Shared exit of the mode 7 init steps above.
-Scroll_Sprite0Record	data	5	src/bank5/mode7-scroll-init.asm	331	Sprite0Descriptor	DATA: sprite record 0 used for the sprite-0 hit: Y $27, tile $61, attributes $20 (behind the
-Scroll_WriteAndEnableSprite0	code	5	src/bank5/mode7-scroll-init.asm	339	WriteAndEnableSprite0	Sets IsSprite0CheckActive and writes Scroll_Sprite0Record to sprite record 0.
-Door_SetEnteringDoorwayOpened	code	5	src/bank5/mode7-scroll-init.asm	354	SetEnteringDoorwayAsCurOpenedDoors	Sets CurOpenedDoors to the single direction bit opposite Link's facing.
-Room_PaletteSelectorAttrs	data	5	src/bank5/mode7-scroll-init.asm	368	RoomPaletteSelectorToNTAttr	TABLE: name table attribute byte using one palette in all four quadrants; index = palette
-Room_FillPlayAreaAttrs	code	5	src/bank5/mode7-scroll-init.asm	379	FillPlayAreaAttrs	Fills PlayAreaAttrs (6 rows of 8 attribute bytes) with a room's outer and inner palettes.
-Room_FillPlayAreaAttrs@LoopRow	cheap	5	src/bank5/mode7-scroll-init.asm	397	@LoopRow	
-Room_FillPlayAreaAttrs@NextLoopRow	cheap	5	src/bank5/mode7-scroll-init.asm	408	@NextLoopRow	
-Room_FillPlayAreaAttrs@CombineInnerOuter	cheap	5	src/bank5/mode7-scroll-init.asm	414	@CombineInnerOuter	
+Mode7Scroll_Init_Sub1@RestoreRoomId	cheap	5	src/bank5/mode7-scroll-init.asm	122	@RestoreRoomId	
+Mode7Scroll_Init_Sub1@Exit	cheap	5	src/bank5/mode7-scroll-init.asm	126	@Exit	
+Mode7Scroll_Init_Sub1@GoingUp	cheap	5	src/bank5/mode7-scroll-init.asm	129		
+Door_LayOutWithPrevOpened	code	5	src/bank5/mode7-scroll-init.asm	139	LayOutDoorsPrev	Lays out the doors of the room in RoomId using PrevOpenedDoors as the open doors (UW only).
+Mode7Scroll_Init_Sub0	code	5	src/bank5/mode7-scroll-init.asm	157	InitMode7_Sub0	Mode 7 init step 0: sets the whirlwind's source room and undoes a flute pond secret.
+Mode7Scroll_Init_Sub2	code	5	src/bank5/mode7-scroll-init.asm	174	InitMode7_Sub2	Mode 7 init step 2: sends tile row CurRow of the laid-out room to name table 2; one row a frame.
+Mode7Scroll_Init_IncSubmode	code	5	src/bank5/mode7-scroll-init.asm	209	L1433A_IncSubmode	Advances GameSubmode (shared by init steps 0 and 2).
+Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2	code	5	src/bank5/mode7-scroll-init.asm	220	InitMode7_Sub3And4_TransferPlayAreaAttrsToNT2	Mode 7 init steps 3 and 4: cue the top, then the bottom half of PlayAreaAttrs for name table 2.
+Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2@Vertical	cheap	5	src/bank5/mode7-scroll-init.asm	228	@Vertical	
+Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2@TransferHalfPlayAreaAttrs	cheap	5	src/bank5/mode7-scroll-init.asm	232	@TransferHalfPlayAreaAttrs	
+Mode7Scroll_Init_Sub3And4_TransferAttrsToNT2@Horizontal	cheap	5	src/bank5/mode7-scroll-init.asm	241	@Horizontal	
+Mode7Scroll_Init_Sub5	code	5	src/bank5/mode7-scroll-init.asm	256	InitMode7_Sub5	Mode 7 init step 5: lays out the next room when going up, then decides on a fade to black.
+Mode7Scroll_Init_Sub5@Vertical	cheap	5	src/bank5/mode7-scroll-init.asm	279	@Vertical	
+Mode7Scroll_Init_Sub5@CheckDark	cheap	5	src/bank5/mode7-scroll-init.asm	296	@CheckDark	
+Mode7Scroll_Init_Sub5@DarkenRoom	cheap	5	src/bank5/mode7-scroll-init.asm	307	@DarkenRoom	
+Mode7Scroll_Init_Sub5@CheckIfLit	cheap	5	src/bank5/mode7-scroll-init.asm	316	@CheckIfLit	
+Mode7Scroll_Init_Sub6	code	5	src/bank5/mode7-scroll-init.asm	328	InitMode7_Sub6	Mode 7 init step 6: runs the fade to black until it is done, then finishes the init.
+Mode7Scroll_Init_Finish	code	5	src/bank5/mode7-scroll-init.asm	333	InitMode7_Finish	Ends mode 7 init: RoomId = NextRoomId, sprite-0 split armed, mode update begins.
+Mode7Scroll_Init_Return	code	5	src/bank5/mode7-scroll-init.asm	340	L143AD_Exit	Shared exit of the mode 7 init steps above.
+Scroll_Sprite0Record	data	5	src/bank5/mode7-scroll-init.asm	345	Sprite0Descriptor	DATA: sprite record 0 used for the sprite-0 hit: Y $27, tile $61, attributes $20 (behind the
+Scroll_WriteAndEnableSprite0	code	5	src/bank5/mode7-scroll-init.asm	353	WriteAndEnableSprite0	Sets IsSprite0CheckActive and writes Scroll_Sprite0Record to sprite record 0.
+Door_SetEnteringDoorwayOpened	code	5	src/bank5/mode7-scroll-init.asm	368	SetEnteringDoorwayAsCurOpenedDoors	Sets CurOpenedDoors to the single direction bit opposite Link's facing.
+Room_PaletteSelectorAttrs	data	5	src/bank5/mode7-scroll-init.asm	382	RoomPaletteSelectorToNTAttr	TABLE: name table attribute byte using one palette in all four quadrants; index = palette
+Room_FillPlayAreaAttrs	code	5	src/bank5/mode7-scroll-init.asm	393	FillPlayAreaAttrs	Fills PlayAreaAttrs (6 rows of 8 attribute bytes) with a room's outer and inner palettes.
+Room_FillPlayAreaAttrs@LoopRow	cheap	5	src/bank5/mode7-scroll-init.asm	411	@LoopRow	
+Room_FillPlayAreaAttrs@NextLoopRow	cheap	5	src/bank5/mode7-scroll-init.asm	422	@NextLoopRow	
+Room_FillPlayAreaAttrs@CombineInnerOuter	cheap	5	src/bank5/mode7-scroll-init.asm	428	@CombineInnerOuter	
 Mode7Scroll_UpdateSubmodeAndDrawLink	code	5	src/bank5/mode7-scroll-update.asm	58	UpdateMode7SubmodeAndDrawLink	Mode 7 update entry: runs the current scroll submode, then draws Link (overworld only).
 Mode7Scroll_UpdateSubmode	code	5	src/bank5/mode7-scroll-update.asm	65	UpdateMode7ScrollSubmode	Dispatches to the mode 7 update routine for GameSubmode (0-7).
 Mode7Scroll_UpdateSubmode_JumpTable	data	5	src/bank5/mode7-scroll-update.asm	70	UpdateMode7ScrollSubmode_JumpTable	TABLE: mode 7 update submode handlers; index = GameSubmode; value = routine address.
@@ -1921,35 +1921,35 @@ Scroll_WaitSprite0AndSplit@ModeAtLeast8	cheap	5	src/bank5/sprite0-split-scroll.a
 Mode8Continue_Init	code	5	src/bank5/mode-inits-obj-lists.asm	49	InitMode8	Mode 8 (continue/save/retry menu) init: blanks the screen, then cues the menu text.
 ModeDSave_Init	code	5	src/bank5/mode-inits-obj-lists.asm	67	InitModeD	Mode $D (save) init: blanks the screen and makes sure save RAM is formatted.
 Mode10Stairs_Init	code	5	src/bank5/mode-inits-obj-lists.asm	82	InitMode10	Mode $10 (stairs) init: if Link stands on an entrance tile, starts the walk down into it.
-Spawn_PosListAddrsLo	data	5	src/bank5/mode-inits-obj-lists.asm	103	SpawnPosListAddrsLo	TABLE: low address bytes of the spawn position lists; index = bit number of Link's direction
-Spawn_PosListAddrsHi	data	5	src/bank5/mode-inits-obj-lists.asm	110	SpawnPosListAddrsHi	TABLE: high address bytes of the spawn position lists; index as in Spawn_PosListAddrsLo.
-Spawn_PosListFacingRight	data	5	src/bank5/mode-inits-obj-lists.asm	119	SpawnPosList0	TABLE: monster spawn spots when Link enters facing right; index = SpawnCycle 0-8; value = row in
-Spawn_PosListFacingLeft	data	5	src/bank5/mode-inits-obj-lists.asm	125	SpawnPosList1	TABLE: monster spawn spots when Link enters facing left; same format as Spawn_PosListFacingRight.
-Spawn_PosListFacingDown	data	5	src/bank5/mode-inits-obj-lists.asm	131	SpawnPosList2	TABLE: monster spawn spots when Link enters facing down; same format as Spawn_PosListFacingRight.
-Spawn_PosListFacingUp	data	5	src/bank5/mode-inits-obj-lists.asm	137	SpawnPosList3	TABLE: monster spawn spots when Link enters facing up; same format as Spawn_PosListFacingRight.
-Mode4Enter_WalkInGridOffsets	data	5	src/bank5/mode-inits-obj-lists.asm	144	EnteringRoomRelativePositions	TABLE: Link's starting ObjGridOffset (signed pixels) when he enters a dungeon room; index =
-Spawn_ObjLists	data	5	src/bank5/mode-inits-obj-lists.asm	180	ObjLists	DATA: the 30 room monster lists, 201 bytes of object types (0 = empty slot), addressed through
-Spawn_ObjListAddrs	data	5	src/bank5/mode-inits-obj-lists.asm	185	ObjListAddrs	TABLE: addresses of the monster lists in Spawn_ObjLists; index = monster list id - $62 (0-29); value =
-Mode4Enter_Init	code	5	src/bank5/enter-room.asm	59	InitMode4	Mode 4 (enter room) init: runs submode 1, 2 or 3, or (submode 0) the common room entry.
-Mode4Enter_Init@Exit	cheap	5	src/bank5/enter-room.asm	73	@Exit	
-Mode4Enter_Init@CheckSub2	cheap	5	src/bank5/enter-room.asm	76	@CheckSub2	
-Palette_SetFadeCycleAndAdvanceSubmode	code	5	src/bank5/enter-room.asm	107	SetFadeCycleAndAdvanceSubmode	Starts a palette fade and advances the submode.
-Mode4Enter_Init_Sub3	code	5	src/bank5/enter-room.asm	114	InitMode4_Sub3	Mode 4 init submode 3: runs the fade-in each frame; when it is done, falls into the next label.
-Mode4Enter_Init_GoToSub0	code	5	src/bank5/enter-room.asm	119	InitMode4_GoToSub0	Sets mode 4's submode to 0 (enter the room next frame) and clears CandleState.
-Room_EnterCommon	code	5	src/bank5/enter-room.asm	137	InitMode_EnterRoom	Common room entry: clears per-room state, places Link, creates the room's monsters and tile object.
-Room_EnterCommon@FaceDown	cheap	5	src/bank5/enter-room.asm	197		
-Room_EnterCommon@Method2	cheap	5	src/bank5/enter-room.asm	205	@Method2	
-Room_EnterCommon@ChooseWalkDistance	cheap	5	src/bank5/enter-room.asm	234	@ChooseWalkDistance	
-Room_EnterCommon@PlaceObjects	cheap	5	src/bank5/enter-room.asm	252	@PlaceObjects	
-Room_EnterCommon@ResetObjLoop	cheap	5	src/bank5/enter-room.asm	259		
-Room_EnterCommon@StoreObjCount	cheap	5	src/bank5/enter-room.asm	325	@StoreObjCount	
-Room_EnterCommon@PlaceList	cheap	5	src/bank5/enter-room.asm	348	@PlaceList	
-Room_EnterCommon@StoreObjTemplate	cheap	5	src/bank5/enter-room.asm	372	@StoreObjTemplate	
-Room_EnterCommon@SkipObjects	cheap	5	src/bank5/enter-room.asm	377	@SkipObjects	
-Link_DrawBetweenRooms	code	5	src/bank5/enter-room.asm	402	DrawLinkBetweenRooms	Draws Link for a frame between rooms; behind the background while he is leaving underground.
-Room_SetUpTileObjOW	code	5	src/bank5/enter-room.asm	423	SetupTileObjectOW	Puts the overworld room's tile object in object slot $0B and activates it.
-Room_SetUpTileObjOW@PlaceTileObj	cheap	5	src/bank5/enter-room.asm	433	@PlaceTileObj	
-Room_SetUpTileObjOW@SetType	cheap	5	src/bank5/enter-room.asm	440	@SetType	
+Spawn_PosListAddrsLo	data	5	src/bank5/mode-inits-obj-lists.asm	108	SpawnPosListAddrsLo	TABLE: low address bytes of the spawn position lists; index = bit number of Link's direction
+Spawn_PosListAddrsHi	data	5	src/bank5/mode-inits-obj-lists.asm	115	SpawnPosListAddrsHi	TABLE: high address bytes of the spawn position lists; index as in Spawn_PosListAddrsLo.
+Spawn_PosListFacingRight	data	5	src/bank5/mode-inits-obj-lists.asm	124	SpawnPosList0	TABLE: monster spawn spots when Link enters facing right; index = SpawnCycle 0-8; value = row in
+Spawn_PosListFacingLeft	data	5	src/bank5/mode-inits-obj-lists.asm	130	SpawnPosList1	TABLE: monster spawn spots when Link enters facing left; same format as Spawn_PosListFacingRight.
+Spawn_PosListFacingDown	data	5	src/bank5/mode-inits-obj-lists.asm	136	SpawnPosList2	TABLE: monster spawn spots when Link enters facing down; same format as Spawn_PosListFacingRight.
+Spawn_PosListFacingUp	data	5	src/bank5/mode-inits-obj-lists.asm	142	SpawnPosList3	TABLE: monster spawn spots when Link enters facing up; same format as Spawn_PosListFacingRight.
+Mode4Enter_WalkInGridOffsets	data	5	src/bank5/mode-inits-obj-lists.asm	149	EnteringRoomRelativePositions	TABLE: Link's starting ObjGridOffset (signed pixels) when he enters a dungeon room; index =
+Spawn_ObjLists	data	5	src/bank5/mode-inits-obj-lists.asm	185	ObjLists	DATA: the 30 room monster lists, 201 bytes of object types (0 = empty slot), addressed through
+Spawn_ObjListAddrs	data	5	src/bank5/mode-inits-obj-lists.asm	190	ObjListAddrs	TABLE: addresses of the monster lists in Spawn_ObjLists; index = monster list id - $62 (0-29); value =
+Mode4Enter_Init	code	5	src/bank5/enter-room.asm	65	InitMode4	Mode 4 (enter room) init: runs submode 1, 2 or 3, or (submode 0) the common room entry.
+Mode4Enter_Init@Exit	cheap	5	src/bank5/enter-room.asm	79	@Exit	
+Mode4Enter_Init@CheckSub2	cheap	5	src/bank5/enter-room.asm	82	@CheckSub2	
+Palette_SetFadeCycleAndAdvanceSubmode	code	5	src/bank5/enter-room.asm	113	SetFadeCycleAndAdvanceSubmode	Starts a palette fade and advances the submode.
+Mode4Enter_Init_Sub3	code	5	src/bank5/enter-room.asm	120	InitMode4_Sub3	Mode 4 init submode 3: runs the fade-in each frame; when it is done, falls into the next label.
+Mode4Enter_Init_GoToSub0	code	5	src/bank5/enter-room.asm	125	InitMode4_GoToSub0	Sets mode 4's submode to 0 (enter the room next frame) and clears CandleState.
+Room_EnterCommon	code	5	src/bank5/enter-room.asm	143	InitMode_EnterRoom	Common room entry: clears per-room state, places Link, creates the room's monsters and tile object.
+Room_EnterCommon@FaceDown	cheap	5	src/bank5/enter-room.asm	203		
+Room_EnterCommon@Method2	cheap	5	src/bank5/enter-room.asm	211	@Method2	
+Room_EnterCommon@ChooseWalkDistance	cheap	5	src/bank5/enter-room.asm	240	@ChooseWalkDistance	
+Room_EnterCommon@PlaceObjects	cheap	5	src/bank5/enter-room.asm	258	@PlaceObjects	
+Room_EnterCommon@ResetObjLoop	cheap	5	src/bank5/enter-room.asm	265		
+Room_EnterCommon@StoreObjCount	cheap	5	src/bank5/enter-room.asm	331	@StoreObjCount	
+Room_EnterCommon@PlaceList	cheap	5	src/bank5/enter-room.asm	354	@PlaceList	
+Room_EnterCommon@StoreObjTemplate	cheap	5	src/bank5/enter-room.asm	378	@StoreObjTemplate	
+Room_EnterCommon@SkipObjects	cheap	5	src/bank5/enter-room.asm	383	@SkipObjects	
+Link_DrawBetweenRooms	code	5	src/bank5/enter-room.asm	408	DrawLinkBetweenRooms	Draws Link for a frame between rooms; behind the background while he is leaving underground.
+Room_SetUpTileObjOW	code	5	src/bank5/enter-room.asm	429	SetupTileObjectOW	Puts the overworld room's tile object in object slot $0B and activates it.
+Room_SetUpTileObjOW@PlaceTileObj	cheap	5	src/bank5/enter-room.asm	439	@PlaceTileObj	
+Room_SetUpTileObjOW@SetType	cheap	5	src/bank5/enter-room.asm	446	@SetType	
 Mode9Cellar_KeeseXs	data	5	src/bank5/spawn-positions.asm	44	CellarKeeseXs	TABLE: X of the four cellar Keese; index = 0-3 (object slot - 1); value = X in pixels.
 Mode9Cellar_KeeseYs	data	5	src/bank5/spawn-positions.asm	49	CellarKeeseYs	TABLE: Y of the cellar Keese, in pixels. Only entry 0 ($9D) is ever read: the reader indexes it
 Spawn_AssignPositions	code	5	src/bank5/spawn-positions.asm	64	AssignObjSpawnPositions	Gives the objects made on room entry their start positions (spawn spots, cellar Keese, cave person).
@@ -2117,12 +2117,12 @@ Door_TouchFalseWall	code	5	src/bank5/touch-door.asm	90	TouchDoorFalse	Door types
 Door_TouchFalseWall@SetTimer	cheap	5	src/bank5/touch-door.asm	97	@SetTimer	
 Door_TouchFalseWall@BlockMovement	cheap	5	src/bank5/touch-door.asm	101	@BlockMovement	
 Door_TouchBombable	code	5	src/bank5/touch-door.asm	108	TouchDoorBombable	Door type 4 (bombable wall): lets Link pass only when the wall has been opened.
-Door_TouchShutter	code	5	src/bank5/touch-door.asm	123	TouchDoorShutter	Door type 7 (shutter): lets Link pass only when it is open and no door is opening or closing.
-Door_TouchKey	code	5	src/bank5/touch-door.asm	157	TouchDoorKey	Door types 5 and 6 (locked door): passes if open; else spends a key (or uses the magic key) to open.
-Door_TouchKey@TriggerDoor	cheap	5	src/bank5/touch-door.asm	176	@TriggerDoor	
-Door_Touch_BlockAtWall	code	5	src/bank5/touch-door.asm	186	BlockAtWall	Blocks Link: jumps to Door_TouchWall. Shared by Door_TouchKey and Door_Touch_BlockWhileTimer.
-Door_Touch_BlockWhileTimer	code	5	src/bank5/touch-door.asm	190	BlockUntilTime	Blocks Link while his ObjTimer (slot 0) is not 0; lets him pass when it is 0.
-Door_Touch_Return	code	5	src/bank5/touch-door.asm	195	L15292_Exit	Shared RTS of Door_TouchKey and Door_Touch_BlockWhileTimer: Link passes.
+Door_TouchShutter	code	5	src/bank5/touch-door.asm	126	TouchDoorShutter	Door type 7 (shutter): lets Link pass only when it is open and no door is opening or closing.
+Door_TouchKey	code	5	src/bank5/touch-door.asm	160	TouchDoorKey	Door types 5 and 6 (locked door): passes if open; else spends a key (or uses the magic key) to open.
+Door_TouchKey@TriggerDoor	cheap	5	src/bank5/touch-door.asm	179	@TriggerDoor	
+Door_Touch_BlockAtWall	code	5	src/bank5/touch-door.asm	189	BlockAtWall	Blocks Link: jumps to Door_TouchWall. Shared by Door_TouchKey and Door_Touch_BlockWhileTimer.
+Door_Touch_BlockWhileTimer	code	5	src/bank5/touch-door.asm	193	BlockUntilTime	Blocks Link while his ObjTimer (slot 0) is not 0; lets him pass when it is 0.
+Door_Touch_Return	code	5	src/bank5/touch-door.asm	198	L15292_Exit	Shared RTS of Door_TouchKey and Door_Touch_BlockWhileTimer: Link passes.
 RoomHistory_ModifyObjCountUW	code	5	src/bank5/room-history-uw.asm	50	ModifyObjCountByHistoryUW	Reduces the monster count of the dungeon room being entered by the kills banked for it.
 RoomHistory_ModifyObjCountUW@CalcObjCount	cheap	5	src/bank5/room-history-uw.asm	86	@CalcObjCount	
 RoomHistory_ModifyObjCountUW@ResetObjCount	cheap	5	src/bank5/room-history-uw.asm	94	@ResetObjCount	
@@ -2160,20 +2160,20 @@ Door_FaceTilesE	data	5	src/bank5/room-layouts-uw.asm	102	DoorFaceTilesE	TABLE: 5
 Door_FaceTilesW	data	5	src/bank5/room-layouts-uw.asm	115	DoorFaceTilesW	TABLE: 5 door faces x 12 tiles for the door in the W (left) wall: play area columns 1-3, rows 9-12.
 Door_FaceTilesS	data	5	src/bank5/room-layouts-uw.asm	128	DoorFaceTilesS	TABLE: 5 door faces x 12 tiles for the door in the S (bottom) wall: tile columns 14-17, rows 18-20.
 Door_FaceTilesN	data	5	src/bank5/room-layouts-uw.asm	141	DoorFaceTilesN	TABLE: 5 door faces x 12 tiles for the door in the N (top) wall: play area columns 14-17, rows 1-3.
-RoomLayout_RoomsUW	data	5	src/bank5/room-layouts-uw.asm	174	RoomLayoutsUW	DATA: 42 dungeon floor layouts x 12 column descriptors (504 bytes); index = unique room id * 12.
-RoomLayout_ColumnHeapUW0	data	5	src/bank5/room-layouts-uw.asm	180	ColumnHeapUW0	TABLE: dungeon column heap 0: 8 columns of square descriptors (format above).
-RoomLayout_ColumnHeapUW1	data	5	src/bank5/room-layouts-uw.asm	187	ColumnHeapUW1	TABLE: dungeon column heap 1: 8 columns of square descriptors.
-RoomLayout_ColumnHeapUW2	data	5	src/bank5/room-layouts-uw.asm	196	ColumnHeapUW2	TABLE: dungeon column heap 2: 7 columns of square descriptors.
-RoomLayout_ColumnHeapUW3	data	5	src/bank5/room-layouts-uw.asm	204	ColumnHeapUW3	TABLE: dungeon column heap 3: 7 columns of square descriptors.
-RoomLayout_ColumnHeapUW4	data	5	src/bank5/room-layouts-uw.asm	212	ColumnHeapUW4	TABLE: dungeon column heap 4: 7 columns of square descriptors.
-RoomLayout_ColumnHeapUW5	data	5	src/bank5/room-layouts-uw.asm	220	ColumnHeapUW5	TABLE: dungeon column heap 5: 8 columns of square descriptors.
-RoomLayout_ColumnHeapUW6	data	5	src/bank5/room-layouts-uw.asm	228	ColumnHeapUW6	TABLE: dungeon column heap 6: 8 columns of square descriptors (block column, then water columns).
-RoomLayout_ColumnHeapUW7	data	5	src/bank5/room-layouts-uw.asm	236	ColumnHeapUW7	TABLE: dungeon column heap 7: 8 columns of square descriptors.
-RoomLayout_ColumnHeapUW8	data	5	src/bank5/room-layouts-uw.asm	245	ColumnHeapUW8	TABLE: dungeon column heap 8: 9 columns of square descriptors.
-RoomLayout_ColumnHeapUW9	data	5	src/bank5/room-layouts-uw.asm	255	ColumnHeapUW9	TABLE: dungeon column heap 9: 9 columns of square descriptors.
-RoomLayout_CellarUW0	data	5	src/bank5/room-layouts-uw.asm	269	RoomLayoutUWCellar0	TABLE: cellar layout for unique room id $3E (even id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
-RoomLayout_CellarUW1	data	5	src/bank5/room-layouts-uw.asm	274	RoomLayoutUWCellar1	TABLE: cellar layout for unique room id $3F (odd id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
-RoomLayout_ColumnHeapUWCellar	data	5	src/bank5/room-layouts-uw.asm	285	ColumnHeapUWCellar	TABLE: cellar column heap: 5 columns of overworld-format square descriptors, 11 squares per column.
+RoomLayout_RoomsUW	data	5	src/bank5/room-layouts-uw.asm	175	RoomLayoutsUW	DATA: 42 dungeon floor layouts x 12 column descriptors (504 bytes); index = unique room id * 12.
+RoomLayout_ColumnHeapUW0	data	5	src/bank5/room-layouts-uw.asm	181	ColumnHeapUW0	TABLE: dungeon column heap 0: 8 columns of square descriptors (format above).
+RoomLayout_ColumnHeapUW1	data	5	src/bank5/room-layouts-uw.asm	188	ColumnHeapUW1	TABLE: dungeon column heap 1: 8 columns of square descriptors.
+RoomLayout_ColumnHeapUW2	data	5	src/bank5/room-layouts-uw.asm	197	ColumnHeapUW2	TABLE: dungeon column heap 2: 7 columns of square descriptors.
+RoomLayout_ColumnHeapUW3	data	5	src/bank5/room-layouts-uw.asm	205	ColumnHeapUW3	TABLE: dungeon column heap 3: 7 columns of square descriptors.
+RoomLayout_ColumnHeapUW4	data	5	src/bank5/room-layouts-uw.asm	213	ColumnHeapUW4	TABLE: dungeon column heap 4: 7 columns of square descriptors.
+RoomLayout_ColumnHeapUW5	data	5	src/bank5/room-layouts-uw.asm	221	ColumnHeapUW5	TABLE: dungeon column heap 5: 8 columns of square descriptors.
+RoomLayout_ColumnHeapUW6	data	5	src/bank5/room-layouts-uw.asm	229	ColumnHeapUW6	TABLE: dungeon column heap 6: 8 columns of square descriptors (block column, then water columns).
+RoomLayout_ColumnHeapUW7	data	5	src/bank5/room-layouts-uw.asm	237	ColumnHeapUW7	TABLE: dungeon column heap 7: 8 columns of square descriptors.
+RoomLayout_ColumnHeapUW8	data	5	src/bank5/room-layouts-uw.asm	246	ColumnHeapUW8	TABLE: dungeon column heap 8: 9 columns of square descriptors.
+RoomLayout_ColumnHeapUW9	data	5	src/bank5/room-layouts-uw.asm	256	ColumnHeapUW9	TABLE: dungeon column heap 9: 9 columns of square descriptors.
+RoomLayout_CellarUW0	data	5	src/bank5/room-layouts-uw.asm	270	RoomLayoutUWCellar0	TABLE: cellar layout for unique room id $3E (even id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
+RoomLayout_CellarUW1	data	5	src/bank5/room-layouts-uw.asm	275	RoomLayoutUWCellar1	TABLE: cellar layout for unique room id $3F (odd id): 16 column numbers into RoomLayout_ColumnHeapUWCellar.
+RoomLayout_ColumnHeapUWCellar	data	5	src/bank5/room-layouts-uw.asm	287	ColumnHeapUWCellar	TABLE: cellar column heap: 5 columns of overworld-format square descriptors, 11 squares per column.
 Door_FindTypeByDirBit	code	5	src/bank5/fill-walls.asm	55	FindDoorTypeByDoorBit	Looks up the door type (0-7) of the side of the current dungeon room selected by a direction bit.
 Door_FindTypeByDirBit@LoopDoorBit	cheap	5	src/bank5/fill-walls.asm	61	@LoopDoorBit	
 Door_FindTypeByDirBit@Found	cheap	5	src/bank5/fill-walls.asm	94		
@@ -2223,21 +2223,21 @@ Door_Update_ResetCmdAndLayOut@AddToOpenedMask	cheap	5	src/bank5/update-doors.asm
 Door_PrepareTransferRecords	code	5	src/bank5/update-doors.asm	217	PrepareWriteHorizontalDoorTransferRecords	Picks the face to show for the triggered door and sets up its two 2-tile transfer records.
 Door_PrepareTransferRecords@MakeForwardIndex	cheap	5	src/bank5/update-doors.asm	257	@MakeForwardIndex	
 RoomLayout_UWColumnHeapAddrs	data	5	src/bank5/uw-floor-push-block.asm	40	ColumnDirectoryUW	TABLE: addresses of the ten dungeon column heaps; index = high nibble of a room layout byte; value =
-RoomLayout_UWSquareTiles	data	5	src/bank5/uw-floor-push-block.asm	57	PrimarySquaresUW	TABLE: first tile of each dungeon floor square; index = bits 2-0 of a square descriptor; value = tile.
-RoomLayout_LayOutUWFloor	code	5	src/bank5/uw-floor-push-block.asm	67	LayoutUWFloor	Writes the 12 x 7 squares of the current dungeon room's floor into the play area tile map.
-RoomLayout_LayOutUWFloor@LoopColumnUW	cheap	5	src/bank5/uw-floor-push-block.asm	94	@LoopColumnUW	
-RoomLayout_LayOutUWFloor@FindSquare	cheap	5	src/bank5/uw-floor-push-block.asm	111	@FindSquare	
-RoomLayout_LayOutUWFloor@FoundColumn	cheap	5	src/bank5/uw-floor-push-block.asm	121	@FoundColumn	
-RoomLayout_LayOutUWFloor@LoopSquareRow	cheap	5	src/bank5/uw-floor-push-block.asm	128	@LoopSquareRow	
-RoomLayout_LayOutUWFloor@NextLoopSquareRow	cheap	5	src/bank5/uw-floor-push-block.asm	154	@NextLoopSquareRow	
-RoomLayout_WriteSquareUW	code	5	src/bank5/uw-floor-push-block.asm	177	WriteSquareUW	Writes one 2 x 2 tile dungeon square into the play area tile map.
-RoomLayout_WriteSquareUW@WriteLastTile	cheap	5	src/bank5/uw-floor-push-block.asm	200	@WriteLastTile	
-RoomLayout_WriteSquareUW@WriteType2	cheap	5	src/bank5/uw-floor-push-block.asm	205	@WriteType2	
-PushBlock_FindAndCreate	code	5	src/bank5/uw-floor-push-block.asm	228	FindAndCreatePushBlockObject	Creates the push block object (type $68) in object slot $0B at the room's block tile.
-PushBlock_FindAndCreate@FindBlockTile	cheap	5	src/bank5/uw-floor-push-block.asm	246		
-PushBlock_FindAndCreate@LoopColumn	cheap	5	src/bank5/uw-floor-push-block.asm	252	@LoopColumn	
-PushBlock_FindAndCreate@Found	cheap	5	src/bank5/uw-floor-push-block.asm	267	@Found	
-PushBlock_FindAndCreate@SetType	cheap	5	src/bank5/uw-floor-push-block.asm	277	@SetType	
+RoomLayout_UWSquareTiles	data	5	src/bank5/uw-floor-push-block.asm	63	PrimarySquaresUW	TABLE: first tile of each dungeon floor square; index = bits 2-0 of a square descriptor; value = tile.
+RoomLayout_LayOutUWFloor	code	5	src/bank5/uw-floor-push-block.asm	73	LayoutUWFloor	Writes the 12 x 7 squares of the current dungeon room's floor into the play area tile map.
+RoomLayout_LayOutUWFloor@LoopColumnUW	cheap	5	src/bank5/uw-floor-push-block.asm	100	@LoopColumnUW	
+RoomLayout_LayOutUWFloor@FindSquare	cheap	5	src/bank5/uw-floor-push-block.asm	117	@FindSquare	
+RoomLayout_LayOutUWFloor@FoundColumn	cheap	5	src/bank5/uw-floor-push-block.asm	127	@FoundColumn	
+RoomLayout_LayOutUWFloor@LoopSquareRow	cheap	5	src/bank5/uw-floor-push-block.asm	134	@LoopSquareRow	
+RoomLayout_LayOutUWFloor@NextLoopSquareRow	cheap	5	src/bank5/uw-floor-push-block.asm	160	@NextLoopSquareRow	
+RoomLayout_WriteSquareUW	code	5	src/bank5/uw-floor-push-block.asm	183	WriteSquareUW	Writes one 2 x 2 tile dungeon square into the play area tile map.
+RoomLayout_WriteSquareUW@WriteLastTile	cheap	5	src/bank5/uw-floor-push-block.asm	206	@WriteLastTile	
+RoomLayout_WriteSquareUW@WriteType2	cheap	5	src/bank5/uw-floor-push-block.asm	211	@WriteType2	
+PushBlock_FindAndCreate	code	5	src/bank5/uw-floor-push-block.asm	234	FindAndCreatePushBlockObject	Creates the push block object (type $68) in object slot $0B at the room's block tile.
+PushBlock_FindAndCreate@FindBlockTile	cheap	5	src/bank5/uw-floor-push-block.asm	252		
+PushBlock_FindAndCreate@LoopColumn	cheap	5	src/bank5/uw-floor-push-block.asm	258	@LoopColumn	
+PushBlock_FindAndCreate@Found	cheap	5	src/bank5/uw-floor-push-block.asm	273	@Found	
+PushBlock_FindAndCreate@SetType	cheap	5	src/bank5/uw-floor-push-block.asm	283	@SetType	
 Mode12EndLevel_Init	code	5	src/bank5/mode12-lay-out-room.asm	56	InitMode12	Init of mode $12 (end of level): starts the song, blanks the tile map, makes Link lift the Triforce.
 Mode12EndLevel_Update_Full	code	5	src/bank5/mode12-lay-out-room.asm	78	UpdateMode12EndLevel_Full	Update of mode $12: hides object sprites, draws Link lifting the Triforce, runs the submode.
 Mode12EndLevel_Update_Full_JumpTable	data	5	src/bank5/mode12-lay-out-room.asm	85	UpdateMode12EndLevel_Full_JumpTable	TABLE: mode $12 update submode handlers; index = GameSubmode.
@@ -2277,15 +2277,15 @@ ModeBCave_Init_LayOutCave	code	5	src/bank5/layout-room-ow.asm	398	LayoutCaveAndA
 ModeCShortcut_Init_LayOutShortcut	code	5	src/bank5/layout-room-ow.asm	409	LayoutShortcutAndAdvanceSubmode	Mode $C init step: lays out the shortcut stairs room and advances GameSubmode.
 Mode9Cellar_Init_LayOutCellar	code	5	src/bank5/layout-room-ow.asm	418	LayoutCellarAndAdvanceSubmode	Mode 9 init step: lays out the cellar (tunnel or item cellar) and advances GameSubmode.
 Secret_RestoreStairsOW	code	5	src/bank5/ow-shortcut-map-square.asm	54	CheckShortcut	Overworld: after a room is laid out, puts its stairs square back if room flag bit 5 says so.
-Secret_RestoreStairsOW@Write	cheap	5	src/bank5/ow-shortcut-map-square.asm	99	@Write	
-Secret_RestoreStairsOW@Exit	cheap	5	src/bank5/ow-shortcut-map-square.asm	102	@Exit	
-Secret_RestoreStairsOW@WriteStairs	cheap	5	src/bank5/ow-shortcut-map-square.asm	105	@WriteStairs	
-Tile_ChangePlayAreaSquare	code	5	src/bank5/ow-shortcut-map-square.asm	126	ChangePlayMapSquareOW	Rewrites the 16x16 square of the play area tile map under an object, from the tile in [05].
-Tile_ChangePlayAreaSquare@Write	cheap	5	src/bank5/ow-shortcut-map-square.asm	180	@Write	
-Tile_FetchPlayAreaTilesAddr	code	5	src/bank5/ow-shortcut-map-square.asm	193	FetchTileMapAddr	Points [00:01] at the start of the play area tile map, PlayAreaTiles ($6530).
-Mode_CopyNextRowAndAdvanceSubmodeWhenDone	code	5	src/bank5/ow-shortcut-map-square.asm	207	CopyNextRowToTransferBufAndAdvanceSubmodeWhenDone	Submode step: copies one tile row to the transfer buffer; after the last row, next submode.
-Transfer_CopyNextPlayAreaRow	code	5	src/bank5/ow-shortcut-map-square.asm	217	CopyNextRowToTransferBuf	Copies tile row CurRow of the play area to the dynamic transfer buffer, then increments CurRow.
-ModeALeaveCellar_Init_Sub4_LayOutRoom	code	5	src/bank5/ow-shortcut-map-square.asm	229	LayoutRoom_SubmodeTask	Submode step: lays out the room's tile map, sets CurRow to 0 and goes to the next submode.
+Secret_RestoreStairsOW@Write	cheap	5	src/bank5/ow-shortcut-map-square.asm	102	@Write	
+Secret_RestoreStairsOW@Exit	cheap	5	src/bank5/ow-shortcut-map-square.asm	105	@Exit	
+Secret_RestoreStairsOW@WriteStairs	cheap	5	src/bank5/ow-shortcut-map-square.asm	108	@WriteStairs	
+Tile_ChangePlayAreaSquare	code	5	src/bank5/ow-shortcut-map-square.asm	129	ChangePlayMapSquareOW	Rewrites the 16x16 square of the play area tile map under an object, from the tile in [05].
+Tile_ChangePlayAreaSquare@Write	cheap	5	src/bank5/ow-shortcut-map-square.asm	183	@Write	
+Tile_FetchPlayAreaTilesAddr	code	5	src/bank5/ow-shortcut-map-square.asm	196	FetchTileMapAddr	Points [00:01] at the start of the play area tile map, PlayAreaTiles ($6530).
+Mode_CopyNextRowAndAdvanceSubmodeWhenDone	code	5	src/bank5/ow-shortcut-map-square.asm	210	CopyNextRowToTransferBufAndAdvanceSubmodeWhenDone	Submode step: copies one tile row to the transfer buffer; after the last row, next submode.
+Transfer_CopyNextPlayAreaRow	code	5	src/bank5/ow-shortcut-map-square.asm	220	CopyNextRowToTransferBuf	Copies tile row CurRow of the play area to the dynamic transfer buffer, then increments CurRow.
+ModeALeaveCellar_Init_Sub4_LayOutRoom	code	5	src/bank5/ow-shortcut-map-square.asm	232	LayoutRoom_SubmodeTask	Submode step: lays out the room's tile map, sets CurRow to 0 and goes to the next submode.
 Mode3Unfurl_Init_Sub2_FillAttrsCuePalettes	code	5	src/bank5/mode3-mode6-init.asm	58	InitMode3_Sub2	Mode 3 init, submode 2: builds the first room's attribute bytes and cues the level palettes.
 Mode3Unfurl_Init_Sub3_TransferTopHalfAttrs	code	5	src/bank5/mode3-mode6-init.asm	69	InitMode3_Sub3_TransferTopHalfAttrs	Submode step: cues the top half of PlayAreaAttrs (24 bytes) for PPU $23D0; next submode.
 Mode3Unfurl_Init_Sub4_TransferBottomHalfAttrs	code	5	src/bank5/mode3-mode6-init.asm	79	InitMode3_Sub4_TransferBottomHalfAttrs	Submode step: cues the bottom half of PlayAreaAttrs (24 bytes) for PPU $23E8; next submode.
@@ -2354,36 +2354,36 @@ Link_ModifyDirAtGridPoint@LoopDir	cheap	5	src/bank5/link-handle-input.asm	126	@L
 Link_ModifyDirAtGridPoint@NextLoopDir	cheap	5	src/bank5/link-handle-input.asm	144	@NextLoopDir	
 Link_HandleInput_Return	code	5	src/bank5/link-handle-input.asm	153	L172FC_Exit	Shared return of Link_HandleInput and Link_ModifyDirAtGridPoint.
 Link_ModifyDirAtGridPoint_HaveInput	code	5	src/bank5/link-handle-input.asm	157	HaveInput	Grid-point rules, second part: at least one direction is held; Y = their count, X = 0.
-Link_ModifyDirAtGridPoint_HaveInput@SetLinkDirToObjDir	cheap	5	src/bank5/link-handle-input.asm	213	@SetLinkDirToObjDir	
-Link_ModifyDirAtGridPoint_HaveInput@CheckGoStraightFlag	cheap	5	src/bank5/link-handle-input.asm	217		
-Link_ModifyDirAtGridPoint_HaveInput@TurnPerpendicular	cheap	5	src/bank5/link-handle-input.asm	240		
-Link_ModifyDirAtGridPoint_HaveInput@SetLinkDirAndSpeed	cheap	5	src/bank5/link-handle-input.asm	253	@SetLinkDirAndSpeed	
-Link_InitSpeed	code	5	src/bank5/link-handle-input.asm	272	InitLinkSpeed	Sets Link's walking q-speed: $60 (1.5 pixels per frame), or $30 (0.75) on OW tiles $74 and $75.
-Link_InitSpeed@SetSpeed	cheap	5	src/bank5/link-handle-input.asm	292	@SetSpeed	
-Link_ModifyDirOnGridLine	code	5	src/bank5/link-handle-input.asm	333	Link_ModifyDirOnGridLine	Between-grid-points rules: Link may only continue, go back, or (near the start of a step) reverse.
-Link_SetDirAndInputDir	code	5	src/bank5/link-handle-input.asm	360	SetObjDirAndInputDir	Sets Link's facing direction and input direction to A.
-Link_SetInputDir	code	5	src/bank5/link-handle-input.asm	364	SetLinkInputDir	Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
-Link_SetInputDir@ReverseDir	cheap	5	src/bank5/link-handle-input.asm	399	@ReverseDir	
-Link_SetInputDir@Exit	cheap	5	src/bank5/link-handle-input.asm	421	@Exit	
+Link_ModifyDirAtGridPoint_HaveInput@SetLinkDirToObjDir	cheap	5	src/bank5/link-handle-input.asm	216	@SetLinkDirToObjDir	
+Link_ModifyDirAtGridPoint_HaveInput@CheckGoStraightFlag	cheap	5	src/bank5/link-handle-input.asm	220		
+Link_ModifyDirAtGridPoint_HaveInput@TurnPerpendicular	cheap	5	src/bank5/link-handle-input.asm	243		
+Link_ModifyDirAtGridPoint_HaveInput@SetLinkDirAndSpeed	cheap	5	src/bank5/link-handle-input.asm	256	@SetLinkDirAndSpeed	
+Link_InitSpeed	code	5	src/bank5/link-handle-input.asm	277	InitLinkSpeed	Sets Link's walking q-speed: $60 (1.5 pixels per frame), or $30 (0.75) on OW tiles $74 and $75.
+Link_InitSpeed@SetSpeed	cheap	5	src/bank5/link-handle-input.asm	297	@SetSpeed	
+Link_ModifyDirOnGridLine	code	5	src/bank5/link-handle-input.asm	338	Link_ModifyDirOnGridLine	Between-grid-points rules: Link may only continue, go back, or (near the start of a step) reverse.
+Link_SetDirAndInputDir	code	5	src/bank5/link-handle-input.asm	365	SetObjDirAndInputDir	Sets Link's facing direction and input direction to A.
+Link_SetInputDir	code	5	src/bank5/link-handle-input.asm	369	SetLinkInputDir	Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
+Link_SetInputDir@ReverseDir	cheap	5	src/bank5/link-handle-input.asm	404	@ReverseDir	
+Link_SetInputDir@Exit	cheap	5	src/bank5/link-handle-input.asm	426	@Exit	
 Warp_CheckUnderLink	code	5	src/bank5/warps-stairs-caves.asm	55	CheckWarps	Starts a stairs, cave or level-entrance transition when Link stands on such a tile.
 Warp_CheckUnderLink@EnsureSquareX	cheap	5	src/bank5/warps-stairs-caves.asm	73	@EnsureSquareX	
 Warp_CheckUnderLink@EnsureSquareY	cheap	5	src/bank5/warps-stairs-caves.asm	79	@EnsureSquareY	
 Warp_StartStairsMode	code	5	src/bank5/warps-stairs-caves.asm	131	SetTargetMode	Starts mode $10 (stairs) and records the mode to enter when it ends.
 RoomHistory_SaveKillCount	code	5	src/bank5/warps-stairs-caves.asm	151	SaveKillCount	Banks the current room's kill count into the room's saved state (OW or UW version).
 Warp_CheckUnderLink_Return	code	5	src/bank5/warps-stairs-caves.asm	159	L1746E_Exit	Shared return of Warp_CheckUnderLink, RoomHistory_SaveKillCount and Warp_HandleOW.
-Warp_HandleOW	code	5	src/bank5/warps-stairs-caves.asm	175	HandleWarpOW	Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
-Warp_HandleOW@GoUnderground	cheap	5	src/bank5/warps-stairs-caves.asm	194		
-Warp_HandleOW@LoadLevel	cheap	5	src/bank5/warps-stairs-caves.asm	215	@LoadLevel	
+Warp_HandleOW	code	5	src/bank5/warps-stairs-caves.asm	178	HandleWarpOW	Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
+Warp_HandleOW@GoUnderground	cheap	5	src/bank5/warps-stairs-caves.asm	197		
+Warp_HandleOW@LoadLevel	cheap	5	src/bank5/warps-stairs-caves.asm	218	@LoadLevel	
 Save_InitSaveRam	code	5	src/bank5/save-ram-clear-ram.asm	35	InitSaveRam	Zeroes save RAM from $6530 up when its two validity markers are missing.
 Save_InitSaveRam@ClearByte	cheap	5	src/bank5/save-ram-clear-ram.asm	53		
 Save_InitSaveRam@ReturnFalse	cheap	5	src/bank5/save-ram-clear-ram.asm	68	@ReturnFalse	
 Reset_ClearRam	code	5	src/bank5/save-ram-clear-ram.asm	81	ClearRam	Clears the console RAM at reset and sets the few variables that do not start at 0.
 Room_NextRoomIdOffsets	data	5	src/bank5/next-room-calc.asm	36	NextRoomIdOffsets	TABLE: value added to RoomId to get the neighbouring room; index = reverse direction index (0 up,
-Room_CalcNoNextRoom	code	5	src/bank5/next-room-calc.asm	46	CalculateNoNextRoom	Door types with no room behind them: clears NextRoomDir and computes nothing.
-Room_CalcNextRoomForDoor	code	5	src/bank5/next-room-calc.asm	69	CalculateNextRoomForDoor	Sets NextRoomId to the room beyond the side Link is leaving by; loads the OW when there is none.
-Mode_LeaveLevelToOW	code	5	src/bank5/next-room-calc.asm	100	EndGameMode12	Leaves the current level for the overworld: mode 2 (load level) with CurLevel = 0.
-Ppu_ClearGrayscaleInMask	code	5	src/bank5/next-room-calc.asm	114	MaskCurPpuMaskGrayscale	Clears bit 0 (grayscale) of the PPU mask copy CurPpuMask.
-Room_CalcNextRoomByDir	code	5	src/bank5/next-room-calc.asm	127	CalcNextRoomByDir	Computes the id of the room next to the current one in a direction, with no checks.
+Room_CalcNoNextRoom	code	5	src/bank5/next-room-calc.asm	53	CalculateNoNextRoom	Door types with no room behind them: clears NextRoomDir and computes nothing.
+Room_CalcNextRoomForDoor	code	5	src/bank5/next-room-calc.asm	76	CalculateNextRoomForDoor	Sets NextRoomId to the room beyond the side Link is leaving by; loads the OW when there is none.
+Mode_LeaveLevelToOW	code	5	src/bank5/next-room-calc.asm	107	EndGameMode12	Leaves the current level for the overworld: mode 2 (load level) with CurLevel = 0.
+Ppu_ClearGrayscaleInMask	code	5	src/bank5/next-room-calc.asm	121	MaskCurPpuMaskGrayscale	Clears bit 0 (grayscale) of the PPU mask copy CurPpuMask.
+Room_CalcNextRoomByDir	code	5	src/bank5/next-room-calc.asm	134	CalcNextRoomByDir	Computes the id of the room next to the current one in a direction, with no checks.
 Submenu_MapRowMasks	data	5	src/bank5/submenu-map.asm	34	MapRowMasks	TABLE: bit of LevelInfo_SubmenuMapMask for a map row; index = map row 0 (top) to 7; value = $80 >> row.
 Submenu_WriteSheetMapRowTransferRecord	code	5	src/bank5/submenu-map.asm	49	Submenu_WriteSheetMapRowTransferRecord	Builds the PPU transfer record for one row (16 room marks) of the submenu's dungeon map sheet.
 Submenu_WriteSheetMapRowTransferRecord@Add20H	cheap	5	src/bank5/submenu-map.asm	68	@Add20H	
@@ -2494,51 +2494,51 @@ Transfer_TriforceRow3Buf	data	6	src/bank6/level-blocks-common-data.asm	194	Trifo
 Transfer_TriforceTextBuf	data	6	src/bank6/level-blocks-common-data.asm	202	TriforceTextTransferBuf	DATA: transfer buffer (selector $5C): the text "TRIFORCE" at $2BAC (overworld submenu).
 Transfer_BufAddrs	data	6	src/bank6/transfer-buf-dispatch.asm	42	TransferBufAddrs	TABLE: transfer buffer addresses; index = TileBufSelector (even, $00-$7E); value = buffer address.
 Transfer_SendCurBuf	code	6	src/bank6/transfer-buf-dispatch.asm	116	TransferCurTileBuf	Sends the transfer buffer chosen by TileBufSelector to the PPU, then resets the transfer state.
-Transfer_WriteRecord	code	6	src/bank6/transfer-buf-dispatch.asm	138	ContinueTransferTileBuf	Writes one transfer record (A = PPU address high byte, Y = 0), then falls into Transfer_WriteBuf.
-Transfer_WriteRecord@Loop	cheap	6	src/bank6/transfer-buf-dispatch.asm	178	@Loop	
-Transfer_WriteRecord@AdvanceSource	cheap	6	src/bank6/transfer-buf-dispatch.asm	196	@AdvanceSource	
-Transfer_WriteBuf	code	6	src/bank6/transfer-buf-dispatch.asm	214	TransferTileBuf	Writes the transfer records at [00:01] to the PPU until a byte with bit 7 set is found.
-Transfer_Mode1TilesBuf	data	6	src/bank6/transfer-bufs-static.asm	79	Mode1TileTransferBuf	DATA: transfer buffer (selector $14): the file select screen.
-Transfer_ModeEandFCharBoardBuf	data	6	src/bank6/transfer-bufs-static.asm	103	ModeFCharsTransferBuf	DATA: transfer buffer (selector $16): the register/eliminate character board (modes $E and $F).
-Transfer_GanonPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	122	GanonPaletteRow7TransferBuf	DATA: transfer buffer (selector $36): sprite palette row 7 ($3F1C) for Ganon: $0F $16 $2C $3C.
-Transfer_EndingPaletteBuf	data	6	src/bank6/transfer-bufs-static.asm	127	EndingPaletteTransferBuf	DATA: transfer buffer (selector $6A): the ending palettes.
-Transfer_BlankTextLines12Buf	data	6	src/bank6/transfer-bufs-static.asm	133	BlankTextBoxLines	DATA: transfer buffer (selector $1E): 24 blank tiles at $21A4 and at $21C4 (person text lines 1, 2).
-Transfer_BlankTextLine3AndPricesBuf	data	6	src/bank6/transfer-bufs-static.asm	138	BlankPersonWares	DATA: transfer buffer (selector $2A): 24 blank tiles at $21E4 (text line 3), 13 at $22C8 (prices).
-Transfer_SubmenuTriforceApexBuf	data	6	src/bank6/transfer-bufs-static.asm	143	SubmenuTriforceApexTransferBuf	DATA: transfer buffer (selector $50): apex of the submenu Triforce outline, 2 tiles at $2ACF.
-Transfer_SubmenuTriforceBottomBuf	data	6	src/bank6/transfer-bufs-static.asm	147	SubmenuTriforceBottomTransferBuf	DATA: transfer buffer (selector $5A): bottom of the submenu Triforce outline, 12 tiles at $2B6A.
-Transfer_GhostPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	154	GhostPaletteRow7TransferBuf	DATA: transfer buffer (selector $20): sprite palette row 7 = $0F $30 $00 $12.
-Transfer_GreenBgPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	159	GreenBgPaletteRow7TransferBuf	DATA: transfer buffer (selector $22): sprite palette row 7 = $0F $1A $37 $12.
-Transfer_BrownBgPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	164	BrownBgPaletteRow7TransferBuf	DATA: transfer buffer (selector $24): sprite palette row 7 = $0F $17 $37 $12.
-Transfer_CaveBgPaletteRowsBuf	data	6	src/bank6/transfer-bufs-static.asm	168	CaveBgPaletteRowsTransferBuf	DATA: transfer buffer (selector $3E): background palette rows 2-3 ($3F08, 8 bytes) for caves.
-Transfer_CellarAttrsBuf	data	6	src/bank6/transfer-bufs-static.asm	173	CellarAttrsTransferBuf	DATA: transfer buffer (selector $26): cellar attributes: $AA x 32 at $23D0 and x 16 at $23F0.
-Transfer_WhitePaletteBottomHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	178	WhitePaletteBottomHalfTransferBuf	DATA: transfer buffer (selector $78): background palette rows 2-3 ($3F08) all white ($30).
-Transfer_DefaultOWPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	185	RedArmosPaletteRow7TransferBuf	DATA: transfer buffer (selector $7A): sprite palette row 7 = $0F $0F $1C $16.
-Transfer_GleeokPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	189	GleeokPaletteRow7TransferBuf	DATA: transfer buffer (selector $7C): sprite palette row 7 = $0F $2A $1A $0C, for Gleeok ($43-$45).
-Transfer_AquamentusPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	193	AquamentusPaletteRow7TransferBuf	DATA: transfer buffer (selector $08): sprite palette row 7 = $0F $0A $29 $30, for Aquamentus ($3D).
-Transfer_OrangeBossPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	198	OrangeBossPaletteRow7TransferBuf	DATA: transfer buffer (selector $0A): sprite palette row 7 = $0F $17 $27 $30.
-Transfer_BombCapacityPriceTextBuf	data	6	src/bank6/transfer-bufs-static.asm	202	BombCapacityPriceTextTransferBuf	DATA: transfer buffer (selector $6C): the text "-100" at $22CD (price of the more-bombs offer).
-Transfer_LifeOrMoneyCostTextBuf	data	6	src/bank6/transfer-bufs-static.asm	206	LifeOrMoneyCostTextTransferBuf	DATA: transfer buffer (selector $76): "-1", five blanks, "-50" at $22CB (life-or-money man).
-Transfer_Mode8TextBuf	data	6	src/bank6/transfer-bufs-static.asm	212	Mode8TextTileBuffer	DATA: transfer buffer (selector $04): the continue menu.
-Transfer_StatusBarStaticsBuf	data	6	src/bank6/transfer-bufs-static.asm	222	StatusBarStaticsTransferBuf	DATA: transfer buffer (selector $0E): the fixed parts of the status bar.
-Transfer_InventoryTextBuf	data	6	src/bank6/transfer-bufs-static.asm	234	InventoryTextTransferBuf	DATA: transfer buffer (selector $30): the text "INVENTORY" at $2984.
-Transfer_SubmenuBoxesTopsBuf	data	6	src/bank6/transfer-bufs-static.asm	240	SubmenuBoxesTopsTransferBuf	DATA: transfer buffer (selector $32): tops of the two submenu boxes.
-Transfer_SubmenuBoxesSidesBuf	data	6	src/bank6/transfer-bufs-static.asm	247	SubmenuBoxesSidesTransferBuf	DATA: transfer buffer (selector $34): sides of the two submenu boxes.
-Transfer_SelectedItemBoxBottomBuf	data	6	src/bank6/transfer-bufs-static.asm	253	SelectedItemBoxBottomTransferBuf	DATA: transfer buffer (selector $38): bottom of the selected-item box, 4 tiles at $2A27.
-Transfer_UseBButtonTextBuf	data	6	src/bank6/transfer-bufs-static.asm	257	UseBButtonTextTransferBuf	DATA: transfer buffer (selector $3A): the text "USE B BUTTON" at $2A42.
-Transfer_InventoryBoxBottomBuf	data	6	src/bank6/transfer-bufs-static.asm	263	InventoryBoxBottomTransferBuf	DATA: transfer buffer (selector $3C): the text "FOR THIS" at $2A64 and the inventory box bottom.
-Transfer_SubmenuMapTextsAndSheetTopBuf	data	6	src/bank6/transfer-bufs-static.asm	270	SubmenuMapRemainderTransferBuf	DATA: transfer buffer (selector $40): dungeon submenu texts and the top edge of the map sheet.
-Transfer_SubmenuMapSheetBottomEdgeBuf	data	6	src/bank6/transfer-bufs-static.asm	278	SheetMapBottomEdgeTransferBuf	DATA: transfer buffer (selector $42): bottom edge of the dungeon map sheet, 16 tiles at $2BAC.
-Transfer_SubmenuAttrs1Buf	data	6	src/bank6/transfer-bufs-static.asm	284	SubmenuAttrs1TransferBuf	DATA: transfer buffer (selector $48): submenu attributes 1: $05 x 3 at $2BD9, $00 x 11 at $2BDC.
-Transfer_SubmenuAttrs2Buf	data	6	src/bank6/transfer-bufs-static.asm	289	SubmenuAttrs2TransferBuf	DATA: transfer buffer (selector $4A): submenu attributes, part 2: $55 x 22 at $2BE9.
-Transfer_BlankBottomRowNT2Buf	data	6	src/bank6/transfer-bufs-static.asm	293	BlankBottomRowNT2TransferBuf	DATA: transfer buffer (selector $4C): 32 blank tiles at $2BA0 (a row of the second name table).
-Transfer_BlankRow7NT2Buf	data	6	src/bank6/transfer-bufs-static.asm	297	BlankRowTransferBuf	DATA: transfer buffer (selector $4E): 32 blank tiles at $28E0.
-Transfer_Mode11DeadLinkPaletteBuf	data	6	src/bank6/transfer-bufs-static.asm	301	Mode11DeadLinkPalette	DATA: transfer buffer (selector $2C): dead Link's palette (sprite row 4, $3F10) = $0F $10 $30 $00.
-Transfer_GameOverBuf	data	6	src/bank6/transfer-bufs-static.asm	306	GameOverTransferBuf	DATA: transfer buffer (selector $46): the death screen's "GAME OVER " text at $224C.
-Transfer_Mode11BackgroundPaletteBottomHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	313	Mode11BackgroundPaletteBottomHalfTransferBuf	DATA: transfer buffer (selector $5E): death: background palette rows 2-3 ($3F08).
-Transfer_Mode11PlayAreaAttrsTopHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	318	Mode11PlayAreaAttrsTopHalfTransferBuf	DATA: transfer buffer (selector $60): death: attributes $FF x 24 at $23D0 (upper play area).
-Transfer_Mode11PlayAreaAttrsBottomHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	322	Mode11PlayAreaAttrsBottomHalfTransferBuf	DATA: transfer buffer (selector $62): death: attributes $FF x 24 at $23E8 (lower play area).
-Transfer_StoryTileAttrBuf	data	6	src/bank6/transfer-bufs-static.asm	326	StoryTileAttrTransferBuf	DATA: transfer buffer (selector $02): story screen tiles and attributes (1131-byte blob).
-Transfer_GameTitleBuf	data	6	src/bank6/transfer-bufs-static.asm	330	GameTitleTransferBuf	DATA: transfer buffer (selector $10): title screen tiles and attributes (1121-byte blob).
+Transfer_WriteRecord	code	6	src/bank6/transfer-buf-dispatch.asm	141	ContinueTransferTileBuf	Writes one transfer record (A = PPU address high byte, Y = 0), then falls into Transfer_WriteBuf.
+Transfer_WriteRecord@Loop	cheap	6	src/bank6/transfer-buf-dispatch.asm	181	@Loop	
+Transfer_WriteRecord@AdvanceSource	cheap	6	src/bank6/transfer-buf-dispatch.asm	199	@AdvanceSource	
+Transfer_WriteBuf	code	6	src/bank6/transfer-buf-dispatch.asm	217	TransferTileBuf	Writes the transfer records at [00:01] to the PPU until a byte with bit 7 set is found.
+Transfer_Mode1TilesBuf	data	6	src/bank6/transfer-bufs-static.asm	80	Mode1TileTransferBuf	DATA: transfer buffer (selector $14): the file select screen.
+Transfer_ModeEandFCharBoardBuf	data	6	src/bank6/transfer-bufs-static.asm	104	ModeFCharsTransferBuf	DATA: transfer buffer (selector $16): the register/eliminate character board (modes $E and $F).
+Transfer_GanonPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	123	GanonPaletteRow7TransferBuf	DATA: transfer buffer (selector $36): sprite palette row 7 ($3F1C) for Ganon: $0F $16 $2C $3C.
+Transfer_EndingPaletteBuf	data	6	src/bank6/transfer-bufs-static.asm	128	EndingPaletteTransferBuf	DATA: transfer buffer (selector $6A): the ending palettes.
+Transfer_BlankTextLines12Buf	data	6	src/bank6/transfer-bufs-static.asm	134	BlankTextBoxLines	DATA: transfer buffer (selector $1E): 24 blank tiles at $21A4 and at $21C4 (person text lines 1, 2).
+Transfer_BlankTextLine3AndPricesBuf	data	6	src/bank6/transfer-bufs-static.asm	139	BlankPersonWares	DATA: transfer buffer (selector $2A): 24 blank tiles at $21E4 (text line 3), 13 at $22C8 (prices).
+Transfer_SubmenuTriforceApexBuf	data	6	src/bank6/transfer-bufs-static.asm	144	SubmenuTriforceApexTransferBuf	DATA: transfer buffer (selector $50): apex of the submenu Triforce outline, 2 tiles at $2ACF.
+Transfer_SubmenuTriforceBottomBuf	data	6	src/bank6/transfer-bufs-static.asm	148	SubmenuTriforceBottomTransferBuf	DATA: transfer buffer (selector $5A): bottom of the submenu Triforce outline, 12 tiles at $2B6A.
+Transfer_GhostPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	155	GhostPaletteRow7TransferBuf	DATA: transfer buffer (selector $20): sprite palette row 7 = $0F $30 $00 $12.
+Transfer_GreenBgPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	160	GreenBgPaletteRow7TransferBuf	DATA: transfer buffer (selector $22): sprite palette row 7 = $0F $1A $37 $12.
+Transfer_BrownBgPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	165	BrownBgPaletteRow7TransferBuf	DATA: transfer buffer (selector $24): sprite palette row 7 = $0F $17 $37 $12.
+Transfer_CaveBgPaletteRowsBuf	data	6	src/bank6/transfer-bufs-static.asm	169	CaveBgPaletteRowsTransferBuf	DATA: transfer buffer (selector $3E): background palette rows 2-3 ($3F08, 8 bytes) for caves.
+Transfer_CellarAttrsBuf	data	6	src/bank6/transfer-bufs-static.asm	174	CellarAttrsTransferBuf	DATA: transfer buffer (selector $26): cellar attributes: $AA x 32 at $23D0 and x 16 at $23F0.
+Transfer_WhitePaletteBottomHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	179	WhitePaletteBottomHalfTransferBuf	DATA: transfer buffer (selector $78): background palette rows 2-3 ($3F08) all white ($30).
+Transfer_DefaultOWPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	186	RedArmosPaletteRow7TransferBuf	DATA: transfer buffer (selector $7A): sprite palette row 7 = $0F $0F $1C $16.
+Transfer_GleeokPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	190	GleeokPaletteRow7TransferBuf	DATA: transfer buffer (selector $7C): sprite palette row 7 = $0F $2A $1A $0C, for Gleeok ($43-$45).
+Transfer_AquamentusPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	194	AquamentusPaletteRow7TransferBuf	DATA: transfer buffer (selector $08): sprite palette row 7 = $0F $0A $29 $30, for Aquamentus ($3D).
+Transfer_OrangeBossPaletteRow7Buf	data	6	src/bank6/transfer-bufs-static.asm	199	OrangeBossPaletteRow7TransferBuf	DATA: transfer buffer (selector $0A): sprite palette row 7 = $0F $17 $27 $30.
+Transfer_BombCapacityPriceTextBuf	data	6	src/bank6/transfer-bufs-static.asm	203	BombCapacityPriceTextTransferBuf	DATA: transfer buffer (selector $6C): the text "-100" at $22CD (price of the more-bombs offer).
+Transfer_LifeOrMoneyCostTextBuf	data	6	src/bank6/transfer-bufs-static.asm	207	LifeOrMoneyCostTextTransferBuf	DATA: transfer buffer (selector $76): "-1", five blanks, "-50" at $22CB (life-or-money man).
+Transfer_Mode8TextBuf	data	6	src/bank6/transfer-bufs-static.asm	213	Mode8TextTileBuffer	DATA: transfer buffer (selector $04): the continue menu.
+Transfer_StatusBarStaticsBuf	data	6	src/bank6/transfer-bufs-static.asm	223	StatusBarStaticsTransferBuf	DATA: transfer buffer (selector $0E): the fixed parts of the status bar.
+Transfer_InventoryTextBuf	data	6	src/bank6/transfer-bufs-static.asm	235	InventoryTextTransferBuf	DATA: transfer buffer (selector $30): the text "INVENTORY" at $2984.
+Transfer_SubmenuBoxesTopsBuf	data	6	src/bank6/transfer-bufs-static.asm	241	SubmenuBoxesTopsTransferBuf	DATA: transfer buffer (selector $32): tops of the two submenu boxes.
+Transfer_SubmenuBoxesSidesBuf	data	6	src/bank6/transfer-bufs-static.asm	248	SubmenuBoxesSidesTransferBuf	DATA: transfer buffer (selector $34): sides of the two submenu boxes.
+Transfer_SelectedItemBoxBottomBuf	data	6	src/bank6/transfer-bufs-static.asm	254	SelectedItemBoxBottomTransferBuf	DATA: transfer buffer (selector $38): bottom of the selected-item box, 4 tiles at $2A27.
+Transfer_UseBButtonTextBuf	data	6	src/bank6/transfer-bufs-static.asm	258	UseBButtonTextTransferBuf	DATA: transfer buffer (selector $3A): the text "USE B BUTTON" at $2A42.
+Transfer_InventoryBoxBottomBuf	data	6	src/bank6/transfer-bufs-static.asm	264	InventoryBoxBottomTransferBuf	DATA: transfer buffer (selector $3C): the text "FOR THIS" at $2A64 and the inventory box bottom.
+Transfer_SubmenuMapTextsAndSheetTopBuf	data	6	src/bank6/transfer-bufs-static.asm	271	SubmenuMapRemainderTransferBuf	DATA: transfer buffer (selector $40): dungeon submenu texts and the top edge of the map sheet.
+Transfer_SubmenuMapSheetBottomEdgeBuf	data	6	src/bank6/transfer-bufs-static.asm	279	SheetMapBottomEdgeTransferBuf	DATA: transfer buffer (selector $42): bottom edge of the dungeon map sheet, 16 tiles at $2BAC.
+Transfer_SubmenuAttrs1Buf	data	6	src/bank6/transfer-bufs-static.asm	285	SubmenuAttrs1TransferBuf	DATA: transfer buffer (selector $48): submenu attributes 1: $05 x 3 at $2BD9, $00 x 11 at $2BDC.
+Transfer_SubmenuAttrs2Buf	data	6	src/bank6/transfer-bufs-static.asm	290	SubmenuAttrs2TransferBuf	DATA: transfer buffer (selector $4A): submenu attributes, part 2: $55 x 22 at $2BE9.
+Transfer_BlankBottomRowNT2Buf	data	6	src/bank6/transfer-bufs-static.asm	294	BlankBottomRowNT2TransferBuf	DATA: transfer buffer (selector $4C): 32 blank tiles at $2BA0 (a row of the second name table).
+Transfer_BlankRow7NT2Buf	data	6	src/bank6/transfer-bufs-static.asm	298	BlankRowTransferBuf	DATA: transfer buffer (selector $4E): 32 blank tiles at $28E0.
+Transfer_Mode11DeadLinkPaletteBuf	data	6	src/bank6/transfer-bufs-static.asm	302	Mode11DeadLinkPalette	DATA: transfer buffer (selector $2C): dead Link's palette (sprite row 4, $3F10) = $0F $10 $30 $00.
+Transfer_GameOverBuf	data	6	src/bank6/transfer-bufs-static.asm	307	GameOverTransferBuf	DATA: transfer buffer (selector $46): the death screen's "GAME OVER " text at $224C.
+Transfer_Mode11BackgroundPaletteBottomHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	314	Mode11BackgroundPaletteBottomHalfTransferBuf	DATA: transfer buffer (selector $5E): death: background palette rows 2-3 ($3F08).
+Transfer_Mode11PlayAreaAttrsTopHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	319	Mode11PlayAreaAttrsTopHalfTransferBuf	DATA: transfer buffer (selector $60): death: attributes $FF x 24 at $23D0 (upper play area).
+Transfer_Mode11PlayAreaAttrsBottomHalfBuf	data	6	src/bank6/transfer-bufs-static.asm	323	Mode11PlayAreaAttrsBottomHalfTransferBuf	DATA: transfer buffer (selector $62): death: attributes $FF x 24 at $23E8 (lower play area).
+Transfer_StoryTileAttrBuf	data	6	src/bank6/transfer-bufs-static.asm	327	StoryTileAttrTransferBuf	DATA: transfer buffer (selector $02): story screen tiles and attributes (1131-byte blob).
+Transfer_GameTitleBuf	data	6	src/bank6/transfer-bufs-static.asm	331	GameTitleTransferBuf	DATA: transfer buffer (selector $10): title screen tiles and attributes (1121-byte blob).
 Sample_PcmData	data	7	src/bank7/run-game-nmi.asm	48	PcmSamples	DATA: DMC (delta modulation) sample bytes, $2400 bytes at $C000-$E3FF, for the sound driver in bank 0.
 Tile_PlayAreaColumnAddrs	data	7	src/bank7/run-game-nmi.asm	54	PlayAreaColumnAddrs	TABLE: address of each tile column of PlayAreaTiles; index = column 0-$1F (times 2); value = address, lo/hi.
 Reset_RunGame	code	7	src/bank7/run-game-nmi.asm	70	RunGame	Boot entry after reset: clears RAM, sound and video, enables the NMI, then idles forever.
@@ -2607,10 +2607,10 @@ StatusBar_DrawSword	code	7	src/bank7/status-bar-lift-item.asm	130	DrawStatusBarS
 StatusBar_CheckMissingItem	code	7	src/bank7/status-bar-lift-item.asm	146	CheckMissingItem	Handles an empty selected slot: the potion slot falls back to the letter, any other slot is reselected.
 Link_CheckLiftItem	code	7	src/bank7/status-bar-lift-item.asm	162	CheckLiftItem	While Link holds up an item: keeps him halted, counts the lift timer down and draws the pose.
 Link_SetUpAndDrawLiftingItem	code	7	src/bank7/status-bar-lift-item.asm	176	SetUpAndDrawLinkLiftingItem	Places the lifted item (object slot $13) at Link's X, $10 pixels above him, then draws both.
-Link_DrawLiftingItem	code	7	src/bank7/status-bar-lift-item.asm	192	DrawLinkLiftingItem	Draws Link in the item-lifting pose and the lifted item at the position of object slot $13.
-Link_DrawLiftingItem_Return	code	7	src/bank7/status-bar-lift-item.asm	217	L1E847_Exit	Shared RTS of Link_DrawLiftingItem and StatusBar_DrawSword.
-Link_EndLiftingItem	code	7	src/bank7/status-bar-lift-item.asm	224	EndLinkLiftingItem	Ends the lift: Link's state back to 0 (idle), ItemTypeToLift cleared, dungeon song restarted.
-Link_EndLiftingItem_Return	code	7	src/bank7/status-bar-lift-item.asm	234	L1E859_Exit	Shared RTS of Link_EndLiftingItem and Link_CheckLiftItem.
+Link_DrawLiftingItem	code	7	src/bank7/status-bar-lift-item.asm	194	DrawLinkLiftingItem	Draws Link in the item-lifting pose and the lifted item at the position of object slot $13.
+Link_DrawLiftingItem_Return	code	7	src/bank7/status-bar-lift-item.asm	219	L1E847_Exit	Shared RTS of Link_DrawLiftingItem and StatusBar_DrawSword.
+Link_EndLiftingItem	code	7	src/bank7/status-bar-lift-item.asm	226	EndLinkLiftingItem	Ends the lift: Link's state back to 0 (idle), ItemTypeToLift cleared, dungeon song restarted.
+Link_EndLiftingItem_Return	code	7	src/bank7/status-bar-lift-item.asm	236	L1E859_Exit	Shared RTS of Link_EndLiftingItem and Link_CheckLiftItem.
 Room_GetUniqueRoomId	code	7	src/bank7/tile-obj-tiles.asm	40	GetUniqueRoomId	Gets the current room's unique room id (bits 5-0 of its attribute byte D).
 Tile_ChangeTileObjTiles	code	7	src/bank7/tile-obj-tiles.asm	57	ChangeTileObjTiles	Replaces the 2x2 background tiles of the square under an object, on screen and in the tile map.
 Tile_ChangeTileObjTiles@SetCountBytes	cheap	7	src/bank7/tile-obj-tiles.asm	111	@SetCountBytes	
@@ -2717,22 +2717,22 @@ Tile_GetAtObjOffset@MatchWalkableTile	cheap	7	src/bank7/tile-collision.asm	192	@
 Tile_GetAtObjOffset@SetTile	cheap	7	src/bank7/tile-collision.asm	199	@SetTile	
 Tile_GetAtObjOffset@ReturnTile	cheap	7	src/bank7/tile-collision.asm	221	@ReturnTile	
 Tile_GetAtObjOffset@Exit	cheap	7	src/bank7/tile-collision.asm	224	@Exit	
-Shove_Update	code	7	src/bank7/shove.asm	50	Obj_Shove	Advances an object's knockback by one frame: validate on the first call, then move up to 4 pixels.
-Shove_Update@CheckPerpendicularShove	cheap	7	src/bank7/shove.asm	69	@CheckPerpendicularShove	
-Shove_Update@Exit	cheap	7	src/bank7/shove.asm	84	@Exit	
-Shove_Update@FacingHorizontally	cheap	7	src/bank7/shove.asm	87	@FacingHorizontally	
-Shove_Update@MoveIfNotDone	cheap	7	src/bank7/shove.asm	93	@MoveIfNotDone	
-Shove_Reset	code	7	src/bank7/shove.asm	103	ResetShoveInfo	Ends an object's knockback: clears ObjShoveDir,X and ObjShoveDistance,X.
-Shove_SetDirAndDistance	code	7	src/bank7/shove.asm	107	SetShoveInfoWith0	Second entry: stores A (callers pass 0) in ObjShoveDir,X and ObjShoveDistance,X. A is unchanged.
-Shove_MovePixels	code	7	src/bank7/shove.asm	124	ShoveMoveMin	Moves a shoved object up to 4 pixels, one at a time, stopping the shove at the first obstacle.
-Shove_MovePixels@LoopShovePixel	cheap	7	src/bank7/shove.asm	129	@LoopShovePixel	
-Shove_MovePixels@CheckBoundary	cheap	7	src/bank7/shove.asm	141	@CheckBoundary	
-Shove_MovePixels@CheckBlocked	cheap	7	src/bank7/shove.asm	160	@CheckBlocked	
-Shove_MovePixels@ChooseSpeed	cheap	7	src/bank7/shove.asm	165	@ChooseSpeed	
-Shove_MovePixels@SetGridOffset	cheap	7	src/bank7/shove.asm	193	@SetGridOffset	
-Shove_MovePixels@ApplySpeed	cheap	7	src/bank7/shove.asm	196	@ApplySpeed	
-Shove_MovePixels@AddToY	cheap	7	src/bank7/shove.asm	207	@AddToY	
-Shove_MovePixels@NextShovePixel	cheap	7	src/bank7/shove.asm	214	@NextShovePixel	
+Shove_Update	code	7	src/bank7/shove.asm	55	Obj_Shove	Advances an object's knockback by one frame: validate on the first call, then move up to 4 pixels.
+Shove_Update@CheckPerpendicularShove	cheap	7	src/bank7/shove.asm	74	@CheckPerpendicularShove	
+Shove_Update@Exit	cheap	7	src/bank7/shove.asm	89	@Exit	
+Shove_Update@FacingHorizontally	cheap	7	src/bank7/shove.asm	92	@FacingHorizontally	
+Shove_Update@MoveIfNotDone	cheap	7	src/bank7/shove.asm	98	@MoveIfNotDone	
+Shove_Reset	code	7	src/bank7/shove.asm	108	ResetShoveInfo	Ends an object's knockback: clears ObjShoveDir,X and ObjShoveDistance,X.
+Shove_SetDirAndDistance	code	7	src/bank7/shove.asm	112	SetShoveInfoWith0	Second entry: stores A (callers pass 0) in ObjShoveDir,X and ObjShoveDistance,X. A is unchanged.
+Shove_MovePixels	code	7	src/bank7/shove.asm	129	ShoveMoveMin	Moves a shoved object up to 4 pixels, one at a time, stopping the shove at the first obstacle.
+Shove_MovePixels@LoopShovePixel	cheap	7	src/bank7/shove.asm	134	@LoopShovePixel	
+Shove_MovePixels@CheckBoundary	cheap	7	src/bank7/shove.asm	146	@CheckBoundary	
+Shove_MovePixels@CheckBlocked	cheap	7	src/bank7/shove.asm	165	@CheckBlocked	
+Shove_MovePixels@ChooseSpeed	cheap	7	src/bank7/shove.asm	170	@ChooseSpeed	
+Shove_MovePixels@SetGridOffset	cheap	7	src/bank7/shove.asm	198	@SetGridOffset	
+Shove_MovePixels@ApplySpeed	cheap	7	src/bank7/shove.asm	201	@ApplySpeed	
+Shove_MovePixels@AddToY	cheap	7	src/bank7/shove.asm	212	@AddToY	
+Shove_MovePixels@NextShovePixel	cheap	7	src/bank7/shove.asm	219	@NextShovePixel	
 Flute_SecretRoomIdsOW	data	7	src/bank7/flute.asm	36	FluteRoomSecretsOW	TABLE: overworld rooms where the flute reveals a secret; index = 0-10; value = room id.
 Flute_Wield	code	7	src/bank7/flute.asm	49	WieldFlute	Uses the flute: plays the tune, freezes play for $98 frames, then acts by level, room and quest.
 Flute_Wield@FindSecretRoom	cheap	7	src/bank7/flute.asm	75	@FindSecretRoom	
@@ -2945,17 +2945,17 @@ Link_AdvanceItemUseState@CombineStateWith30	cheap	7	src/bank7/object-animation.a
 Link_AdvanceItemUseState@SetAnimFrame1	cheap	7	src/bank7/object-animation.asm	253	@SetMovementFrame1	
 Link_AdvanceItemUseState@CheckState30	cheap	7	src/bank7/object-animation.asm	260	@CheckState30	
 Obj_TypeAttributes	data	7	src/bank7/object-update-table.asm	70	ObjectTypeToAttributes	TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
-Obj_TypeHpPairs	data	7	src/bank7/object-update-table.asm	98	ObjectTypeToHpPairs	TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
-Obj_Update	code	7	src/bank7/object-update-table.asm	113	UpdateObject	Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
-Obj_Update@Init	cheap	7	src/bank7/object-update-table.asm	137	@Init	
-Obj_Update@Update	cheap	7	src/bank7/object-update-table.asm	143	@Update	
-Obj_Update@NormalObject	cheap	7	src/bank7/object-update-table.asm	158	@NormalObject	
-Obj_Update_JumpTable	data	7	src/bank7/object-update-table.asm	165	UpdateObject_JumpTable	TABLE: update routine per object type; index = object type $00-$69; value = routine address.
-Obj_UpdateMetastate	code	7	src/bank7/object-update-table.asm	278	UpdateMetaObject	Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
-Obj_DoNothing	code	7	src/bank7/object-update-table.asm	288	DoNothing	Does nothing (RTS): the update or init routine of object types that have none of their own.
-Obj_EndMetastate	code	7	src/bank7/object-update-table.asm	301	UpdateMetaObjectEnd	Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
-Obj_EndMetastate@DropItem	cheap	7	src/bank7/object-update-table.asm	338	@DropItem	
-Obj_EndMetastate@Reset	cheap	7	src/bank7/object-update-table.asm	347	@Reset	
+Obj_TypeHpPairs	data	7	src/bank7/object-update-table.asm	105	ObjectTypeToHpPairs	TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
+Obj_Update	code	7	src/bank7/object-update-table.asm	120	UpdateObject	Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
+Obj_Update@Init	cheap	7	src/bank7/object-update-table.asm	144	@Init	
+Obj_Update@Update	cheap	7	src/bank7/object-update-table.asm	150	@Update	
+Obj_Update@NormalObject	cheap	7	src/bank7/object-update-table.asm	165	@NormalObject	
+Obj_Update_JumpTable	data	7	src/bank7/object-update-table.asm	172	UpdateObject_JumpTable	TABLE: update routine per object type; index = object type $00-$69; value = routine address.
+Obj_UpdateMetastate	code	7	src/bank7/object-update-table.asm	285	UpdateMetaObject	Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
+Obj_DoNothing	code	7	src/bank7/object-update-table.asm	295	DoNothing	Does nothing (RTS): the update or init routine of object types that have none of their own.
+Obj_EndMetastate	code	7	src/bank7/object-update-table.asm	308	UpdateMetaObjectEnd	Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
+Obj_EndMetastate@DropItem	cheap	7	src/bank7/object-update-table.asm	345	@DropItem	
+Obj_EndMetastate@Reset	cheap	7	src/bank7/object-update-table.asm	354	@Reset	
 Obj_Init	code	7	src/bank7/object-init-table.asm	45	InitObject	Initializes the object in slot CurObjIndex: edge entry, start timer, attributes, HP, type's init.
 Obj_Init@UninitMonsterFromEdge	cheap	7	src/bank7/object-init-table.asm	70	@UninitMonsterFromEdge	
 Obj_Init@InitMonsterFromEdge	cheap	7	src/bank7/object-init-table.asm	79	@InitMonsterFromEdge	
@@ -2997,7 +2997,7 @@ FluteSecret_ReversePondCycle	code	7	src/bank7/flute-secret-pond.asm	172	AnimateP
 Reset_Handler	code	7	src/bank7/reset-mmc1-vectors.asm	42	IsrReset	Reset handler: puts the CPU, PPU and mapper in a known state and jumps to Reset_RunGame.
 Mmc1_SetControl	code	7	src/bank7/reset-mmc1-vectors.asm	85	SetMMC1Control	Writes the low 5 bits of A to the MMC1 control register ($8000), lowest bit first.
 Mmc1_SwitchBank	code	7	src/bank7/reset-mmc1-vectors.asm	104	SwitchBank	Selects the PRG bank at $8000-$BFFF: writes the low 5 bits of A to $E000, lowest bit first.
-Isr_Vectors	data	7	src/bank7/reset-mmc1-vectors.asm	129	IsrVector	TABLE: the CPU vectors at $FFFA; index = NMI, reset, IRQ/BRK; value = handler address. The IRQ
+Isr_Vectors	data	7	src/bank7/reset-mmc1-vectors.asm	131	IsrVector	TABLE: the CPU vectors at $FFFA; index = NMI, reset, IRQ/BRK; value = handler address. The IRQ
 GleeokHead_DirCounterH	var		src/ObjVars.inc	242	GLEEOK_DIRCOUNTERH	$0000 offset 0: horizontal direction counter (starts at 6).
 GleeokHead_DirCounterV	var		src/ObjVars.inc	243	GLEEOK_DIRCOUNTERV	$0001 offset 1: vertical direction counter (starts at 3).
 GleeokHead_SpeedFlagX	var		src/ObjVars.inc	244	GLEEOK_SPEEDX	$0002 offset 2: X step flag (starts $FF on necks 0 and 2, else 0).
