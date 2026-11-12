@@ -42,7 +42,7 @@ d2first:
 - {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
 - {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
 - {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
-- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
+- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}   # round 19 experiment: clear the Red Goriyas for bomb drops before the Moldorm
 - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
 - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}

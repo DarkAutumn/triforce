@@ -251,6 +251,9 @@ pub enum TreasureRule {
     /// `treasure: {if_bombs_below: N}`: take it only while Link holds fewer than N bombs (Dungeon 3's 0x5b bombs on
     /// its last visit, Lee: D4 needs 2).
     IfBombsBelow(u8),
+    /// `treasure: clear`: fight until the room's enemies are dead even without a treasure, then take whatever it
+    /// holds (round 19 experiment: 2:0x5e's Red Goriyas for their bomb drops).
+    Clear,
 }
 
 impl TreasureRule {
@@ -259,6 +262,7 @@ impl TreasureRule {
         match self {
             TreasureRule::Take => true,
             TreasureRule::Skip => false,
+            TreasureRule::Clear => true,
             TreasureRule::IfBombsBelow(n) => bombs < i32::from(n),
         }
     }
@@ -268,6 +272,7 @@ impl TreasureRule {
         match self {
             TreasureRule::Take => None,
             TreasureRule::Skip => Some("skip".into()),
+            TreasureRule::Clear => Some("clear".into()),
             TreasureRule::IfBombsBelow(n) => Some(format!("if_bombs_below: {n}")),
         }
     }
@@ -280,7 +285,8 @@ impl TreasureRule {
             return match text {
                 "take" => Ok(TreasureRule::Take),
                 "skip" => Ok(TreasureRule::Skip),
-                _ => err(format!("treasure: {text:?} (take, skip or {{if_bombs_below: N}})")),
+                "clear" => Ok(TreasureRule::Clear),
+                _ => err(format!("treasure: {text:?} (take, skip, clear or {{if_bombs_below: N}})")),
             };
         }
         match get(v, "if_bombs_below") {
