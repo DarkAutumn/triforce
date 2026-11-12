@@ -28,6 +28,28 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples.
 
+## Done (Nov 12): bombs (Lee, Nov 11; round 19)
+
+1. [x] **Bombs as a weapon, the bomb reserve and the 10th kill's forced bomb drop** (round19.md, decisions
+   2026-11-11): per-family bomb use, D3's reserve of 5, schema 3 observation, rewards, metrics, GUI charts, the
+   bombs early-stop rule; the whole team retrained (1.3.2.0); `bombs_share` (Dungeon 2 has no bombs) and
+   `treasure: clear` on 2:0x5e (its Red Goriyas' bomb drops for the Moldorm). Full route 10.3% (round 18 10.6%), to
+   Dungeon 3 36.3% (29.2%).
+
+Left open by round 19 (§7), not fixed:
+
+- **3:0x59's kill-all visit stalls** (darknut, D3 segment: 74 `stuck` per 1000 runs, round 18: 10; deaths 153 →
+  132). No bomb is placed there: the reserve of 5 masks bombs while Link holds 5 or fewer, so the darknut model,
+  trained on 0–8 bombs, fights sword-only and runs out the 2000-step budget. Ideas: train darknut on the bombs Link
+  really brings to 0x59 (`bombs_share`), or let 0x59's kill-all visit spend below the reserve.
+- **Manhandla deaths** 84 → 123 per 1000 D3 runs; single room 95.0% / 0.24 hearts lost vs round 18's 96.3% / 0.01.
+- **Dungeon 2 segment** 82.1% vs 87.6% (from its entrance state; the full route converts D2 better than round 18):
+  goriya 2:0x1e deaths 53 → 66, moldorm 33 → 55, 2:0x5e 17 → 38 (it now clears the room). The bombless Moldorm fight
+  is weaker than a sword-only model's (92–93% vs 96.5% won, round19.md §6).
+- **Single-room regressions** in §3 that the chains don't show beyond noise: ow-lynel (+0.09 hearts lost), ow-moblin
+  (−0.7 points), boss-dodongo (98.3%).
+- **Dungeon 4's bomb reserve**: `d2first-d4` inherits D3's 5; set its own when D4 is trained.
+
 ## Done (Nov 11): after the r61 retrain (round 17)
 
 1. [x] **The D1 regression** (round17.md §5): D1 arrivals 115 → 80. stalfos-keese-gel early-stopped after 80

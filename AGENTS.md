@@ -4,20 +4,21 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 11)
+## Where things stand (Nov 12)
 
-- **Now (Nov 11, round 18):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives them
-  through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only route
-  (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white sword
-  → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. The whole-repo
-  code review is worked through (`target/review-progress.md`; Lee's decisions in `docs/decisions.md` 2026-11-10),
-  the team was retrained from scratch on the fixed code (r61, round 17) and continued with a hearts-aware early
-  stop (round 18): every chain segment is at or above the previous team (1000 runs per segment: D2 87.6%, after
-  D2 81.9%, D1 97.8%, after D1 100%, D3 40.6%; from the start to the D3 triforce 10.6%). Act mode per model
-  (`<run dir>/act`, bound to the checkpoint's sha1): argmax except d2-rope, darknut and stalfos-keese-gel. Measure
-  chains with 1000 runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog top):
-  wallmaster heart gathering and goriya heart loss. Every new checkpoint needs its act mode re-measured, in
-  single rooms and in chains (argmax is fragile per checkpoint).
+- **Now (Nov 12, round 19, 1.3.2.0):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
+  them through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only trained
+  route (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white
+  sword → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. Round 19
+  added bombs (`docs/experiments/round19.md`, decisions 2026-11-11): per-family bomb use (`items.bombs`:
+  free/required/tenth/never), D3's reserve of 5, the 10th damage-free kill's forced bomb drop, observation schema 3,
+  and the whole team retrained; Link clears 2:0x5e (`treasure: clear`) for bomb drops before the Moldorm. 1000 runs
+  per segment: D2 82.1%, after D2 85.9%, D1 98.4%, after D1 100%, D3 39.5%; from the start to Dungeon 3 36.3%
+  (round 18 29.2%), to the D3 triforce 10.3% (10.6%). Act mode per model (`<run dir>/act`, bound to the
+  checkpoint's sha1): argmax except goriya, d2-rope, darknut, stalfos-keese-gel and zol. Measure chains with 1000
+  runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog top): wallmaster heart gathering
+  and goriya heart loss; round 19 left 3:0x59's stalls and Manhandla's deaths open. Every new checkpoint needs its
+  act mode re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
 - **Replays (merged Nov 11):** versioning (`VERSION` 1.3.1.0, model stamps), starts from console power on,
   `TFREPLAY` replays (`--replays DIR`; they replaced `--plays` and the `movie` event), `zelda-headless.py` and
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
