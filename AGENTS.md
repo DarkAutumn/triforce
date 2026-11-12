@@ -28,6 +28,11 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   docs link to public repos or branches, scripts find the checkout through git, and provenance and replays record a
   checkpoint as `<specialist>/<run>/ckpt.pt`. A fresh clone has no `models/` or `trajectories/` (gitignored):
   curricula come back with `python -m triforce.explore`, models only from training.
+- **The annotated disassembly (merged Nov 12): `zelda-asm/`.** The Zelda 1 disassembly (PRG0) split into 182
+  topic files, every label renamed and summarised, with `enemies.md`, `items.md`, `mechanics.md`, decoded room and
+  level data (`data/`) and one document per dungeon (`levels/level-1.md` .. `level-9.md`, Q1; levels 5-9 from the
+  ROM only). `zelda-asm/tools/asm.py check` proves no edit changed the code and resolves every `asm:Name` citation
+  in the repo; tests in `zelda-asm/tests`. See "Game mechanics that matter for training" for how to use it.
 - **Replays (merged Nov 11):** versioning (`VERSION` 1.3.1.0, model stamps), starts from console power on,
   `TFREPLAY` replays (`--replays DIR`; they replaced `--plays` and the `movie` event), `zelda-headless.py` and
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
