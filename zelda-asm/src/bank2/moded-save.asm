@@ -85,7 +85,7 @@ ModeDSave_Update_Sub0BuildFileB:
     JSR Save_FormatFileB
     JSR Save_FetchFileBAddressSet
     JSR Save_FetchFileAAddressSet    ; This seems to be called only for $067F put in [$0E:0F].
-    LDY #$27                    ; Copy Items block ($28 bytes) from profile to file B.
+    LDY #$27                    ; Copy InvItems block ($28 bytes) from profile to file B.
 
 @CopyItems:
     LDA InvItems, Y
@@ -201,7 +201,7 @@ Save_CopyFileBToFileA:
     STA SaveFileAChecksums, Y
     JSR Save_FetchFileBAddressSet
     JSR Save_FetchFileAAddressSet    ; This puts $067F in [$0E:0F].
-    LDY #$27                    ; Copy Items block ($28 bytes) from file B to file A.
+    LDY #$27                    ; Copy InvItems block ($28 bytes) from file B to file A.
 
 @CopyItems:
     LDA ($C0), Y

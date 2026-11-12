@@ -7,7 +7,7 @@
 ; SEE ALSO: bank4/zol-gel.asm (Zol_State1Slide and Gel_MoveSplitting: the shared state 1);
 ;           bank1/weapon-damage-death.asm (Damage_HandleWeaponHit turns a hit Vire to face the
 ;           weapon's direction); bank1/shove-knockback.asm (Shove_Begin: Vire keeps its direction after
-;           touching Link); bank4/shoot-helpers-candle.asm (Shoot creates the Keese);
+;           touching Link); bank4/shoot-helpers-candle.asm (Shooter_Shoot creates the Keese);
 ;           bank4/walker-wanderer-common.asm (Wanderer_Update); bank7/boomerang-arrow-food.asm
 ;           (food attracts Vires); bank4/drop-items.asm (drop group lists).
 ; KEY FACTS:

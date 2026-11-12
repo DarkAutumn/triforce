@@ -28,11 +28,11 @@
 ;   - A borrow from the full hearts costs 1/256 heart extra (Link_BeHarmed@BorrowHeart).
 ; CONTENTS: (generated; L = line in this file)
 ;   L0048 Link_CheckMonsterTouch          code  Tests whether the monster or shot in slot X touches Link and, unless parried, harms and shoves him.
-;   L0071 Link_CheckMonsterTouch_NoReset  code  Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
-;   L0157 Link_CheckMonsterTouch_Return   code  Shared exit of Link_CheckMonsterTouch.
-;   L0162 Link_HarmByObjType              code  Starts Link's knockback and harms him by the touching object's damage from Damage_ObjTypeDamageToLink.
-;   L0191 Link_BeHarmed                   code  Takes damage [0D]:[0E], halved per ring grade, from Link's hearts; starts death mode when he dies.
-;   L0266 Link_BeHarmed_Return            code  Shared exit: the RTS of Link_BeHarmed, also used by Boomerang_CheckMonsterCollision.
+;   L0073 Link_CheckMonsterTouch_NoReset  code  Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
+;   L0159 Link_CheckMonsterTouch_Return   code  Shared exit of Link_CheckMonsterTouch.
+;   L0164 Link_HarmByObjType              code  Starts Link's knockback and harms him by the touching object's damage from Damage_ObjTypeDamageToLink.
+;   L0193 Link_BeHarmed                   code  Takes damage [0D]:[0E], halved per ring grade, from Link's hearts; starts death mode when he dies.
+;   L0268 Link_BeHarmed_Return            code  Shared exit: the RTS of Link_BeHarmed, also used by Boomerang_CheckMonsterCollision.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -67,7 +67,9 @@ Link_CheckMonsterTouch:
 
 ; Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
 ; It skips the invincibility, clock and stun tests above. Ganon enters here with his own middle point
-; after testing Link's invincibility timer himself (not the clock or the stun timers).
+; after testing Link's invincibility timer himself (not InvClock or the stun timers). The clock still
+; protects Link from Ganon on nearly every frame: while InvClock is set, Mode5Play_UpdateWorld adds $10
+; to Link's invincibility timer every frame, and by that arithmetic the byte reads 0 on 1 frame in 33.
 Link_CheckMonsterTouch_NoReset:
     ; Return no collision if Link's state is exactly $40 (halted) or a Like-Like holds him.
     LDA ObjState

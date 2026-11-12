@@ -29,7 +29,7 @@
 ;     A sword hit still starts its invincibility timer ($10, Shove_Begin in bank 1); while that runs
 ;     Collision_CheckMonsterVsWeaponsAndLink tests no weapon, so an arrow passes through it without killing it.
 ;   - Its walk distance is 0 when the room is entered (the slot arrays are zeroed), so its first
-;     moving frame starts a jump (PolsVoice_Update@State0).
+;     moving frame starts a jump (PolsVoice_Update@Walk).
 ; CONTENTS: (generated; L = line in this file)
 ;   L0048 PolsVoice_WalkSpeedsX             data  TABLE: Pols Voice X step; index = ObjDir - 1 (0-9); value = signed pixels per moving frame.
 ;   L0054 PolsVoice_WalkSpeedsY             data  TABLE: Pols Voice Y step while walking (state 0); index = ObjDir - 1 (0-9); value = signed pixels per

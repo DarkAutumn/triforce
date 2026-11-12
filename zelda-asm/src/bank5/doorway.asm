@@ -20,7 +20,7 @@
 ;   - Once DoorwayDir <> 0, the wide spans are used only while Link faces DoorwayDir inside that
 ;     doorway; otherwise the narrow spans apply (Y <= $5B up, Y >= $BF down, X <= $1E left,
 ;     X >= $D2 right), so DoorwayDir is cleared 2-3 pixels before he is back on the floor spot.
-;     Doorway_BoundsMinUnder, Doorway_BoundsMaxUnder, Doorway_CheckLink@SearchUnderflowDoorway
+;     Doorway_BoundsMinUnder, Doorway_BoundsMaxUnder, Doorway_CheckLink@SearchNarrowSpans
 ;   - In a doorway the input direction is forced onto the axis Link faces: forward if held, else
 ;     backward if held, else (only perpendicular input) forward. Link_ModifyDirInDoorway
 ;   - Passing a false wall (door types 2, 3) or a bombed wall (type 4) starts the room change at once

@@ -1181,7 +1181,8 @@ def outside_refs(root):
             continue
         for no, line in enumerate(text.split("\n"), 1):
             for m in RE_ASMREF.finditer(line):
-                out.append((os.path.relpath(p, root), no, m.group(1)))
+                if m.group(1) != "Name":            # `asm:Name` is how documents describe the form itself
+                    out.append((os.path.relpath(p, root), no, m.group(1)))
     return out
 
 

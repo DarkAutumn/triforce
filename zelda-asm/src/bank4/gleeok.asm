@@ -24,8 +24,9 @@
 ;     object slot $0B is empty; a flying head does so on frames where its distance travelled is even,
 ;     Random+1,X < $20 and slot $0B is empty. So one Gleeok fireball exists at a time (it takes slot
 ;     $0B). Gleeok_Update, Gleeok_UpdateFlyingHead
-;   - The flying head cannot be harmed, shoved or killed: after its collision test its metastate,
-;     shove info and invincibility timer are zeroed every frame. Gleeok_UpdateFlyingHead
+;   - The flying head cannot be killed or shoved: after its collision test its metastate, shove info
+;     and invincibility timer are zeroed every frame. Hits still lower its ObjHP, and when the HP runs
+;     out Damage_KillMonster still adds to WorldKillCount and HelpDropCount. Gleeok_UpdateFlyingHead
 ;   - Flying head flight states: 0 speed up, 1 decide, 2 chase Link, 3 wander. Decide picks chase when
 ;     Random+1,X < $D0 (13 in 16), else wander. It has no slow-down or rest state.
 ;     Gleeok_FlyingHeadFlight_JumpTable, Flyer_GleeokHeadDecideState
@@ -35,42 +36,44 @@
 ;   - Neck spacing limits per axis from d = |head - base| / 4: tier 1 = min(d, 4), tier 2 = tier 1 + 4,
 ;     tier 3 = min(tier 2 + 4, $B) pixels. Gleeok_CalcSegmentLimits
 ; CONTENTS: (generated; L = line in this file)
-;   L0075 Gleeok_UpdateFlyingHead            code  Updates a cut-off flying Gleeok head (type $46): flies, may shoot a fireball, draws, harms Link.
-;   L0110 Gleeok_ControlFlyingHeadFlight     code  Runs the flying Gleeok head's current flight state.
-;   L0115 Gleeok_FlyingHeadFlight_JumpTable  data  TABLE: flight state handlers of the flying Gleeok head; index = Flyer_ObjFlyingState.
-;   L0127 Flyer_GleeokHeadDecideState        code  Flying Gleeok head flight state 1: picks chase (Random+1,X < $D0) or wander; turn counter 6.
-;   L0140 Gleeok_NeckXAddrsLo                data  TABLE: low address bytes of each neck's segment X array; index = neck 0-3; Gleeok_NeckXs0-3.
-;   L0144 Gleeok_NeckXAddrsHi                data  TABLE: high address bytes of each neck's segment X array; index = neck 0-3.
-;   L0148 Gleeok_NeckYAddrsLo                data  TABLE: low address bytes of each neck's segment Y array; index = neck 0-3; Gleeok_NeckYs0-3.
-;   L0152 Gleeok_NeckYAddrsHi                data  TABLE: high address bytes of each neck's segment Y array; index = neck 0-3.
-;   L0156 Gleeok_NeckHeadInfoAddrsLo         data  TABLE: low address bytes of each neck's head movement block; index = neck 0-3; Gleeok_HeadInfo0-3.
-;   L0160 Gleeok_NeckHeadInfoAddrsHi         data  TABLE: high address bytes of each neck's head movement block; index = neck 0-3.
-;   L0172 Gleeok_Update                      code  Updates Gleeok (types $42-$45): draws the body, then moves, draws and hit-tests every living neck.
-;   L0256 Gleeok_FetchNeckAddrs              code  Loads the addresses of the current neck's X, Y and head movement arrays.
-;   L0274 Gleeok_MoveNeck_DivideBy4Unsigned  code  Gleeok_MoveNeck branches here when the head is not left of the base: A = distance / 4.
-;   L0287 Gleeok_MoveNeck                    code  Bends the current neck (object slots 1-5) so its segments follow the head.
-;   L0303 Gleeok_MoveNeck_StoreRefDistance   code  Both paths of Gleeok_MoveNeck join here with A = signed (head X - base X) / 4.
-;   L0453 Gleeok_CalcSegmentLimits           code  Derives the three neck segment spacing limits of one axis from a quarter head-to-base distance.
-;   L0490 Gleeok_StretchNeck                 code  Moves one middle neck segment 2 pixels away from or toward the next segment, or leaves it.
-;   L0533 Gleeok_StretchNeck_JumpTable       data  TABLE: segment handlers of Gleeok_StretchNeck; index = h + 3 * v (h = horizontal limits reached,
-;   L0550 Gleeok_ExpandSegment               code  Moves a neck segment 2 pixels away from the next segment, horizontally or vertically at random.
-;   L0564 Gleeok_StepSegmentYMinus2          code  Shared tail: turns the prepared segment Y + 2 into segment Y - 2.
-;   L0571 Gleeok_StoreSegmentY               code  Shared tail: stores the Y register as the Y of the segment in slot 2+X.
-;   L0575 Gleeok_IgnoreSegment               code  Segment handler that does nothing (also the return of the handlers above).
-;   L0583 Gleeok_ContractSegmentY            code  Moves a neck segment 2 pixels toward the next segment vertically.
-;   L0594 Gleeok_ExpandSegmentX              code  Horizontal half of Gleeok_ExpandSegment: X + 2 if this segment's X >= the next one's, else - 2.
-;   L0609 Gleeok_ContractSegmentX            code  Moves a neck segment 2 pixels toward the next segment horizontally.
-;   L0618 Gleeok_StepSegmentXMinus2          code  Shared tail: turns the prepared segment X + 2 into segment X - 2.
-;   L0625 Gleeok_StoreSegmentX               code  Shared tail: stores the Y register as the X of the segment in slot 2+X.
-;   L0633 Gleeok_ContractSegmentXOrY         code  Moves a neck segment toward the next one, horizontally or vertically at random.
+;   L0078 Gleeok_UpdateFlyingHead            code  Updates a cut-off flying Gleeok head (type $46): flies, may shoot a fireball, draws, harms Link.
+;   L0113 Gleeok_ControlFlyingHeadFlight     code  Runs the flying Gleeok head's current flight state.
+;   L0118 Gleeok_FlyingHeadFlight_JumpTable  data  TABLE: flight state handlers of the flying Gleeok head; index = Flyer_ObjFlyingState.
+;   L0130 Flyer_GleeokHeadDecideState        code  Flying Gleeok head flight state 1: picks chase (Random+1,X < $D0) or wander; turn counter 6.
+;   L0143 Gleeok_NeckXAddrsLo                data  TABLE: low address bytes of each neck's segment X array; index = neck 0-3; Gleeok_NeckXs0-3.
+;   L0147 Gleeok_NeckXAddrsHi                data  TABLE: high address bytes of each neck's segment X array; index = neck 0-3.
+;   L0151 Gleeok_NeckYAddrsLo                data  TABLE: low address bytes of each neck's segment Y array; index = neck 0-3; Gleeok_NeckYs0-3.
+;   L0155 Gleeok_NeckYAddrsHi                data  TABLE: high address bytes of each neck's segment Y array; index = neck 0-3.
+;   L0159 Gleeok_NeckHeadInfoAddrsLo         data  TABLE: low address bytes of each neck's head movement block; index = neck 0-3; Gleeok_HeadInfo0-3.
+;   L0163 Gleeok_NeckHeadInfoAddrsHi         data  TABLE: high address bytes of each neck's head movement block; index = neck 0-3.
+;   L0175 Gleeok_Update                      code  Updates Gleeok (types $42-$45): draws the body, then moves, draws and hit-tests every living neck.
+;   L0259 Gleeok_FetchNeckAddrs              code  Loads the addresses of the current neck's X, Y and head movement arrays.
+;   L0277 Gleeok_MoveNeck_DivideBy4Unsigned  code  Gleeok_MoveNeck branches here when the head is not left of the base: A = distance / 4.
+;   L0290 Gleeok_MoveNeck                    code  Bends the current neck (object slots 1-5) so its segments follow the head.
+;   L0306 Gleeok_MoveNeck_StoreRefDistance   code  Both paths of Gleeok_MoveNeck join here with A = signed (head X - base X) / 4.
+;   L0456 Gleeok_CalcSegmentLimits           code  Derives the three neck segment spacing limits of one axis from a quarter head-to-base distance.
+;   L0493 Gleeok_StretchNeck                 code  Moves one middle neck segment 2 pixels away from or toward the next segment, or leaves it.
+;   L0536 Gleeok_StretchNeck_JumpTable       data  TABLE: segment handlers of Gleeok_StretchNeck; index = h + 3 * v (h = horizontal limits reached,
+;   L0553 Gleeok_ExpandSegment               code  Moves a neck segment 2 pixels away from the next segment, horizontally or vertically at random.
+;   L0567 Gleeok_StepSegmentYMinus2          code  Shared tail: turns the prepared segment Y + 2 into segment Y - 2.
+;   L0574 Gleeok_StoreSegmentY               code  Shared tail: stores the Y register as the Y of the segment in slot 2+X.
+;   L0578 Gleeok_IgnoreSegment               code  Segment handler that does nothing (also the return of the handlers above).
+;   L0586 Gleeok_ContractSegmentY            code  Moves a neck segment 2 pixels toward the next segment vertically.
+;   L0597 Gleeok_ExpandSegmentX              code  Horizontal half of Gleeok_ExpandSegment: X + 2 if this segment's X >= the next one's, else - 2.
+;   L0612 Gleeok_ContractSegmentX            code  Moves a neck segment 2 pixels toward the next segment horizontally.
+;   L0621 Gleeok_StepSegmentXMinus2          code  Shared tail: turns the prepared segment X + 2 into segment X - 2.
+;   L0628 Gleeok_StoreSegmentX               code  Shared tail: stores the Y register as the X of the segment in slot 2+X.
+;   L0636 Gleeok_ContractSegmentXOrY         code  Moves a neck segment toward the next one, horizontally or vertically at random.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Updates a cut-off flying Gleeok head (type $46): flies, may shoot a fireball, draws, harms Link.
 ; IN:   X = object slot (7 + neck index; set where the head is cut off).
 ; NOTE: Shoots fireball type $56 on a frame where bit 0 of Flyer_ObjDistTraveled is clear,
-;       Random+1,X < $20 and object slot $0B is empty. The head cannot be harmed: whatever
-;       Collision_CheckMonsterVsWeaponsAndLink did to its metastate, shove info and invincibility timer is undone.
+;       Random+1,X < $20 and object slot $0B is empty. The head cannot be killed: a hit still lowers
+;       ObjHP (and Damage_KillMonster still counts the kill when the HP runs out), but the death
+;       metastate, shove info and invincibility timer set by Collision_CheckMonsterVsWeaponsAndLink
+;       are undone.
 ; ----------------------------------------------------------------------------
 Gleeok_UpdateFlyingHead:
     JSR Gleeok_ControlFlyingHeadFlight

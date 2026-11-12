@@ -77,40 +77,40 @@ Audio_EmitTriangleNote	code	0	src/bank0/note-emit-vibrato.asm	98	EmitTriangleNot
 Audio_VibratePitch	code	0	src/bank0/note-emit-vibrato.asm	115	VibratePitch	Moves a period low byte up or down by 1 for vibrato, by the note's frame counter.
 Audio_VibratePitch@GoDown	cheap	0	src/bank0/note-emit-vibrato.asm	130	@GoDown	
 Audio_VibratePitch@Exit	cheap	0	src/bank0/note-emit-vibrato.asm	138	@Exit	
-Song_Drive_KeepPlaying	code	0	src/bank0/drive-song.asm	46	KeepPlaying	Jump to Song_PlayFrame (within branch range of Song_Drive).
-Song_Drive	code	0	src/bank0/drive-song.asm	53	DriveSong	Starts the song in SongRequest, or plays one frame of the current song.
-Song_Drive@ChangeSong	cheap	0	src/bank0/drive-song.asm	60	@ChangeSong	
-Song_Drive@PlayFirstDemoPhrase	cheap	0	src/bank0/drive-song.asm	77	@PlayFirstDemoPhrase	
-Song_Drive@PlayFirstUnderworldPhrase	cheap	0	src/bank0/drive-song.asm	81	@PlayFirstUnderworldPhrase	
-Song_Drive@PlayFirstOverworldPhrase	cheap	0	src/bank0/drive-song.asm	85	@PlayFirstOverworldPhrase	
-Song_SetPrevPhraseIndex	code	0	src/bank0/drive-song.asm	89	SetPrevPhraseIndex	Stores Y as the phrase index before the first phrase of a multi-phrase song (or its loop point).
-Song_PlayNextPhrase	code	0	src/bank0/drive-song.asm	93	PlayNextPhrase	Picks the next phrase of the song in A: advances SongPhraseIndex, wrapping to the song's loop point.
-Song_PlayNextPhrase@PlayNextUnderworldPhrase	cheap	0	src/bank0/drive-song.asm	111	@PlayNextUnderworldPhrase	
-Song_PlayNextPhrase@PlayNextOverworldPhrase	cheap	0	src/bank0/drive-song.asm	119	@PlayNextOverworldPhrase	
-Song_PlayNextPhrase@PlayNextDemoPhrase	cheap	0	src/bank0/drive-song.asm	127	@PlayNextDemoPhrase	
-Song_PlayNextPhrase@PlaySinglePhraseSong	cheap	0	src/bank0/drive-song.asm	135	@PlaySinglePhraseSong	
-Song_PrepPhrase	code	0	src/bank0/drive-song.asm	145	PrepPhrase	Loads the phrase header for Song_PhraseHeaderOffsets entry Y (1-based) and resets all track positions and counters.
-Song_PlayFrame	code	0	src/bank0/drive-song.asm	174	KeepPlayingSong	Plays one frame of the current phrase, starting with the square 1 track.
-Song_PlayFrame@SongEnded	cheap	0	src/bank0/drive-song.asm	184	@SongEnded	
-Song_Silence	code	0	src/bank0/drive-song.asm	194	SilenceSong	Stops the song: clears CurSong and disables, then re-enables, the four tone and noise channels.
-Song_PlayAgain	code	0	src/bank0/drive-song.asm	203	PlayAgain	Jump to Song_PlayNextPhrase for a song that repeats or continues.
-Song_PrepSq1Note	code	0	src/bank0/drive-song.asm	207	PrepNote	Handles a square 1 length control byte: sets the note length, then reads the note that follows.
-Song_PlaySq1Note	code	0	src/bank0/drive-song.asm	215	PlayNote	Starts the square 1 note in A (unless tune channel 1 is playing) and reloads its note counter.
-Song_PlaySq1Note@SkipSq1	cheap	0	src/bank0/drive-song.asm	229	@SkipSq1	
-Song_ApplySq1Effects	code	0	src/bank0/drive-song.asm	234	ApplySq1Effects	Per-frame volume envelope and vibrato for square 1; then the square 0, triangle and noise tracks.
-Song_ApplySq1Effects@HandleSq0	cheap	0	src/bank0/drive-song.asm	257	@HandleSq0	
-Song_ApplySq1Effects@PlaySq0	cheap	0	src/bank0/drive-song.asm	272	@PlaySq0	
-Song_ApplySq1Effects@SkipSq0	cheap	0	src/bank0/drive-song.asm	284	@SkipSq0	
-Song_ApplySq1Effects@ApplySq0Effects	cheap	0	src/bank0/drive-song.asm	288	@ApplySq0Effects	
-Song_ApplySq1Effects@HandleTrg	cheap	0	src/bank0/drive-song.asm	310	@HandleTrg	
-Song_ApplySq1Effects@PrepNoteOrPassage	cheap	0	src/bank0/drive-song.asm	319	@PrepNoteOrPassage	
-Song_ApplySq1Effects@EndOfPassage	cheap	0	src/bank0/drive-song.asm	338	@EndOfPassage	
-Song_ApplySq1Effects@PrepNoteTrg	cheap	0	src/bank0/drive-song.asm	346	@PrepNoteTrg	
-Song_ApplySq1Effects@PlayNoteTrg	cheap	0	src/bank0/drive-song.asm	356	@PlayNoteTrg	
-Song_ApplySq1Effects@ApplyTrgEffects	cheap	0	src/bank0/drive-song.asm	363	@ApplyTrgEffects	
-Song_ApplySq1Effects@SetTrgLinear	cheap	0	src/bank0/drive-song.asm	378	@SetTrgLinear	
-Song_ApplySq1Effects@HandleNoise	cheap	0	src/bank0/drive-song.asm	381	@HandleNoise	
-Song_ApplySq1Effects@Exit	cheap	0	src/bank0/drive-song.asm	418	@Exit	
+Song_Drive_KeepPlaying	code	0	src/bank0/drive-song.asm	47	KeepPlaying	Jump to Song_PlayFrame (within branch range of Song_Drive).
+Song_Drive	code	0	src/bank0/drive-song.asm	54	DriveSong	Starts the song in SongRequest, or plays one frame of the current song.
+Song_Drive@ChangeSong	cheap	0	src/bank0/drive-song.asm	61	@ChangeSong	
+Song_Drive@PlayFirstDemoPhrase	cheap	0	src/bank0/drive-song.asm	78	@PlayFirstDemoPhrase	
+Song_Drive@PlayFirstUnderworldPhrase	cheap	0	src/bank0/drive-song.asm	82	@PlayFirstUnderworldPhrase	
+Song_Drive@PlayFirstOverworldPhrase	cheap	0	src/bank0/drive-song.asm	86	@PlayFirstOverworldPhrase	
+Song_SetPrevPhraseIndex	code	0	src/bank0/drive-song.asm	90	SetPrevPhraseIndex	Stores Y as the phrase index before the first phrase of a multi-phrase song (or its loop point).
+Song_PlayNextPhrase	code	0	src/bank0/drive-song.asm	94	PlayNextPhrase	Picks the next phrase of the song in A: advances SongPhraseIndex, wrapping to the song's loop point.
+Song_PlayNextPhrase@PlayNextUnderworldPhrase	cheap	0	src/bank0/drive-song.asm	112	@PlayNextUnderworldPhrase	
+Song_PlayNextPhrase@PlayNextOverworldPhrase	cheap	0	src/bank0/drive-song.asm	120	@PlayNextOverworldPhrase	
+Song_PlayNextPhrase@PlayNextDemoPhrase	cheap	0	src/bank0/drive-song.asm	128	@PlayNextDemoPhrase	
+Song_PlayNextPhrase@PlaySinglePhraseSong	cheap	0	src/bank0/drive-song.asm	136	@PlaySinglePhraseSong	
+Song_PrepPhrase	code	0	src/bank0/drive-song.asm	146	PrepPhrase	Loads the phrase header for Song_PhraseHeaderOffsets entry Y (1-based) and resets all track positions and counters.
+Song_PlayFrame	code	0	src/bank0/drive-song.asm	175	KeepPlayingSong	Plays one frame of the current phrase, starting with the square 1 track.
+Song_PlayFrame@SongEnded	cheap	0	src/bank0/drive-song.asm	185	@SongEnded	
+Song_Silence	code	0	src/bank0/drive-song.asm	195	SilenceSong	Stops the song: clears CurSong and disables, then re-enables, the four tone and noise channels.
+Song_PlayAgain	code	0	src/bank0/drive-song.asm	204	PlayAgain	Jump to Song_PlayNextPhrase for a song that repeats or continues.
+Song_PrepSq1Note	code	0	src/bank0/drive-song.asm	208	PrepNote	Handles a square 1 length control byte: sets the note length, then reads the note that follows.
+Song_PlaySq1Note	code	0	src/bank0/drive-song.asm	216	PlayNote	Starts the square 1 note in A (unless tune channel 1 is playing) and reloads its note counter.
+Song_PlaySq1Note@SkipSq1	cheap	0	src/bank0/drive-song.asm	230	@SkipSq1	
+Song_ApplySq1Effects	code	0	src/bank0/drive-song.asm	235	ApplySq1Effects	Per-frame volume envelope and vibrato for square 1; then the square 0, triangle and noise tracks.
+Song_ApplySq1Effects@HandleSq0	cheap	0	src/bank0/drive-song.asm	258	@HandleSq0	
+Song_ApplySq1Effects@PlaySq0	cheap	0	src/bank0/drive-song.asm	273	@PlaySq0	
+Song_ApplySq1Effects@SkipSq0	cheap	0	src/bank0/drive-song.asm	285	@SkipSq0	
+Song_ApplySq1Effects@ApplySq0Effects	cheap	0	src/bank0/drive-song.asm	289	@ApplySq0Effects	
+Song_ApplySq1Effects@HandleTrg	cheap	0	src/bank0/drive-song.asm	311	@HandleTrg	
+Song_ApplySq1Effects@PrepNoteOrPassage	cheap	0	src/bank0/drive-song.asm	320	@PrepNoteOrPassage	
+Song_ApplySq1Effects@EndOfPassage	cheap	0	src/bank0/drive-song.asm	339	@EndOfPassage	
+Song_ApplySq1Effects@PrepNoteTrg	cheap	0	src/bank0/drive-song.asm	347	@PrepNoteTrg	
+Song_ApplySq1Effects@PlayNoteTrg	cheap	0	src/bank0/drive-song.asm	357	@PlayNoteTrg	
+Song_ApplySq1Effects@ApplyTrgEffects	cheap	0	src/bank0/drive-song.asm	364	@ApplyTrgEffects	
+Song_ApplySq1Effects@SetTrgLinear	cheap	0	src/bank0/drive-song.asm	379	@SetTrgLinear	
+Song_ApplySq1Effects@HandleNoise	cheap	0	src/bank0/drive-song.asm	382	@HandleNoise	
+Song_ApplySq1Effects@Exit	cheap	0	src/bank0/drive-song.asm	419	@Exit	
 Song_NoiseVolumes	data	0	src/bank0/song-note-tables.asm	53	NoiseVolumes	TABLE: noise volume register value of a song drum sound; index = sound 0-3 (0 = silent).
 Song_NoisePeriods	data	0	src/bank0/song-note-tables.asm	57	NoisePeriods	TABLE: noise period register value of a song drum sound; index = sound 0-3.
 Song_NoiseLengths	data	0	src/bank0/song-note-tables.asm	61	NoiseLengths	TABLE: noise length register value of a song drum sound; index = sound 0-3.
@@ -221,16 +221,16 @@ Person_UpdateUnderworld_Full@TalkOnly	cheap	1	src/bank1/underworld-person-update
 Person_UpdateUnderworldTalker_JumpTable	data	1	src/bank1/underworld-person-update.asm	64	UpdateUnderworldPerson_Full_JumpTable	TABLE: states of a talk-only dungeon person; index = ObjState+1; value = routine address.
 Person_TalkerState0ResetText	code	1	src/bank1/underworld-person-update.asm	72	UpdatePersonState_ResetCharOffset	Talk-only person state 0: restarts the text at its first character and goes to state 1.
 Person_TalkerState2DoNothing	code	1	src/bank1/underworld-person-update.asm	78	UpdatePersonState_DoNothing	Talk-only person state 2: does nothing (the person stays); also the return of the routine above.
-Person_CheckCollisions	code	1	src/bank1/underworld-person-update.asm	88	Person_CheckCollisions	Runs weapon and Link collisions for the person; a hit enables fireballs instead of killing him.
-Person_UpdateUnderworldComplex	code	1	src/bank1/underworld-person-update.asm	106	UpdateUnderworldPersonComplex	Updates a dungeon person of levels 1, 2, 5, 7: draws him (and type $4F's rupee), runs his state.
-Person_UpdateUnderworldComplex@HandleState	cheap	1	src/bank1/underworld-person-update.asm	130	@HandleState	
-Person_UpdateUnderworldComplex_JumpTable	data	1	src/bank1/underworld-person-update.asm	135	UpdateUnderworldPersonComplex_JumpTable	TABLE: states of a dungeon person in levels 1, 2, 5, 7; index = ObjState+1; value = routine address.
-Person_ComplexState0Begin	code	1	src/bank1/underworld-person-update.asm	146	UpdateUnderworldPersonComplexState_Begin	Complex person state 0: type $4F shows its "-100" price; waits $0A frames before the text starts.
-Person_ComplexState2SellBombCapacity	code	1	src/bank1/underworld-person-update.asm	170	UpdateUnderworldPersonComplexState_SenseLink	Complex person state 2: type $4F sells 4 more bomb capacity for 100 rupees at its rupee.
-Person_ComplexState2SellBombCapacity@Exit	cheap	1	src/bank1/underworld-person-update.asm	191	@Exit	
-Person_ComplexState2SellBombCapacity@CheckCanPay	cheap	1	src/bank1/underworld-person-update.asm	194	@CheckCanPay	
-Person_State4DelayAndQuit	code	1	src/bank1/underworld-person-update.asm	224	UpdateUnderworldPersonComplexState_DelayAndQuit	Person state 4 (complex persons, life-or-money): frees the person's slot once ObjTimer+1 reaches 0.
-Person_DrawAndCheckCollisions	code	1	src/bank1/underworld-person-update.asm	236	Person_DrawAndCheckCollisions	Checks the person's collisions (see Person_CheckCollisions), then draws him mirrored.
+Person_CheckCollisions	code	1	src/bank1/underworld-person-update.asm	89	Person_CheckCollisions	Runs weapon and Link collisions for the person; a hit enables fireballs instead of killing him.
+Person_UpdateUnderworldComplex	code	1	src/bank1/underworld-person-update.asm	107	UpdateUnderworldPersonComplex	Updates a dungeon person of levels 1, 2, 5, 7: draws him (and type $4F's rupee), runs his state.
+Person_UpdateUnderworldComplex@HandleState	cheap	1	src/bank1/underworld-person-update.asm	131	@HandleState	
+Person_UpdateUnderworldComplex_JumpTable	data	1	src/bank1/underworld-person-update.asm	136	UpdateUnderworldPersonComplex_JumpTable	TABLE: states of a dungeon person in levels 1, 2, 5, 7; index = ObjState+1; value = routine address.
+Person_ComplexState0Begin	code	1	src/bank1/underworld-person-update.asm	147	UpdateUnderworldPersonComplexState_Begin	Complex person state 0: type $4F shows its "-100" price; waits $0A frames before the text starts.
+Person_ComplexState2SellBombCapacity	code	1	src/bank1/underworld-person-update.asm	171	UpdateUnderworldPersonComplexState_SenseLink	Complex person state 2: type $4F sells 4 more bomb capacity for 100 rupees at its rupee.
+Person_ComplexState2SellBombCapacity@Exit	cheap	1	src/bank1/underworld-person-update.asm	192	@Exit	
+Person_ComplexState2SellBombCapacity@CheckCanPay	cheap	1	src/bank1/underworld-person-update.asm	195	@CheckCanPay	
+Person_State4DelayAndQuit	code	1	src/bank1/underworld-person-update.asm	225	UpdateUnderworldPersonComplexState_DelayAndQuit	Person state 4 (complex persons, life-or-money): frees the person's slot once ObjTimer+1 reaches 0.
+Person_DrawAndCheckCollisions	code	1	src/bank1/underworld-person-update.asm	237	Person_DrawAndCheckCollisions	Checks the person's collisions (see Person_CheckCollisions), then draws him mirrored.
 Person_UpdateLifeOrMoney_Full	code	1	src/bank1/life-or-money.asm	38	UpdateUnderworldPersonLifeOrMoney_Full	Updates the life-or-money man (type $51): draws him and the two items, then runs his state.
 Person_UpdateLifeOrMoney_Full@Draw	cheap	1	src/bank1/life-or-money.asm	47	@Draw	
 Person_UpdateLifeOrMoney_JumpTable	data	1	src/bank1/life-or-money.asm	55	UpdateUnderworldPersonLifeOrMoney_Full_JumpTable	TABLE: states of the life-or-money man; index = ObjState+1; value = routine address.
@@ -402,7 +402,7 @@ Obj_SubQSpeedFromPosFrac@SetCarry	cheap	1	src/bank1/qspeed-direction-math.asm	10
 Dir_Opposites	data	1	src/bank1/qspeed-direction-math.asm	125	OppositeDirs	TABLE: opposite of each direction; index = direction index (0 up, 1 down, 2 left, 3 right);
 Dir_GetOpposite	code	1	src/bank1/qspeed-direction-math.asm	137	GetOppositeDir	Gives the opposite of a direction in A and the direction's index (0 up .. 3 right) in Y.
 Dir_GetOpposite@Loop	cheap	1	src/bank1/qspeed-direction-math.asm	140	@Loop	
-Math_Abs	code	1	src/bank1/qspeed-direction-math.asm	155	Abs	Takes the absolute value of a signed byte (falls into Negate when A is negative).
+Math_Abs	code	1	src/bank1/qspeed-direction-math.asm	155	Abs	Takes the absolute value of a signed byte (falls into Math_Negate when A is negative).
 Math_Negate	code	1	src/bank1/qspeed-direction-math.asm	163	Negate	Negates a byte (two's complement).
 Obj_MoveShot	code	1	src/bank1/shot-aim-boomerang-speed.asm	49	MoveShot	Moves a shot or boomerang along one direction unless that would cross a room bound.
 Obj_MoveShot@ReturnBlocked	cheap	1	src/bank1/shot-aim-boomerang-speed.asm	71	@ReturnBlocked	
@@ -538,24 +538,24 @@ Anim_WriteSpecificSprite	code	1	src/bank1/item-sprite-draw.asm	247	Anim_WriteSpe
 Anim_EndWriteSprite	code	1	src/bank1/item-sprite-draw.asm	255	Anim_EndWriteSprite	Entry with A = the sprite's Y coordinate; tile and X are already in the record at offset Y.
 Person_DrawAndCheckCollisions_Common	code	1	src/bank1/monster-collisions.asm	61	Person_DrawAndCheckCollisions_Common	Runs the collision pass for object X, turns a "kill" of the slot-1 person into fireballs, and draws.
 Person_Draw	code	1	src/bank1/monster-collisions.asm	72	Person_Draw	Draws object X at its position with frame 0 as a mirrored pair. IN: X = object slot.
-Collision_CheckMonsterVsWeaponsAndLink	code	1	src/bank1/monster-collisions.asm	93	CheckMonsterCollisions	Tests the monster in slot X against Link's six weapon slots, then against Link himself.
-Collision_CheckMonsterVsWeaponsAndLink@CheckLink	cheap	1	src/bank1/monster-collisions.asm	119	@CheckLink	
-Collision_CheckMonsterVsWeaponsAndLink@Exit	cheap	1	src/bank1/monster-collisions.asm	140	@Exit	
-Collision_CheckMonsterVsWeaponsAndLink@CheckCaptors	cheap	1	src/bank1/monster-collisions.asm	143	@CheckCaptors	
-Collision_CheckMonsterVsWeaponsAndLink@Exit2	cheap	1	src/bank1/monster-collisions.asm	155	@Exit2	
-Obj_GetMiddle	code	1	src/bank1/monster-collisions.asm	165	GetObjectMiddle	Computes the middle point of object X for the collision tests.
-Damage_ObjTypeDamageToLink	data	1	src/bank1/monster-collisions.asm	192	ObjTypeToDamagePoints	TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
+Collision_CheckMonsterVsWeaponsAndLink	code	1	src/bank1/monster-collisions.asm	97	CheckMonsterCollisions	Tests the monster in slot X against Link's six weapon slots, then against Link himself.
+Collision_CheckMonsterVsWeaponsAndLink@CheckLink	cheap	1	src/bank1/monster-collisions.asm	123	@CheckLink	
+Collision_CheckMonsterVsWeaponsAndLink@Exit	cheap	1	src/bank1/monster-collisions.asm	144	@Exit	
+Collision_CheckMonsterVsWeaponsAndLink@CheckCaptors	cheap	1	src/bank1/monster-collisions.asm	147	@CheckCaptors	
+Collision_CheckMonsterVsWeaponsAndLink@Exit2	cheap	1	src/bank1/monster-collisions.asm	159	@Exit2	
+Obj_GetMiddle	code	1	src/bank1/monster-collisions.asm	169	GetObjectMiddle	Computes the middle point of object X for the collision tests.
+Damage_ObjTypeDamageToLink	data	1	src/bank1/monster-collisions.asm	196	ObjTypeToDamagePoints	TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
 Link_CheckMonsterTouch	code	1	src/bank1/link-collision-harm.asm	48	CheckLinkCollision	Tests whether the monster or shot in slot X touches Link and, unless parried, harms and shoves him.
-Link_CheckMonsterTouch_NoReset	code	1	src/bank1/link-collision-harm.asm	71	CheckLinkCollisionPreinit	Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
-Link_CheckMonsterTouch_NoReset@FacingOpposite	cheap	1	src/bank1/link-collision-harm.asm	136	@FacingOpposite	
-Link_CheckMonsterTouch_NoReset@Parry	cheap	1	src/bank1/link-collision-harm.asm	149	@Parry	
-Link_CheckMonsterTouch_Return	code	1	src/bank1/link-collision-harm.asm	157	L73A9_Exit	Shared exit of Link_CheckMonsterTouch.
-Link_HarmByObjType	code	1	src/bank1/link-collision-harm.asm	162	HarmLink	Starts Link's knockback and harms him by the touching object's damage from Damage_ObjTypeDamageToLink.
-Link_BeHarmed	code	1	src/bank1/link-collision-harm.asm	191	Link_BeHarmed	Takes damage [0D]:[0E], halved per ring grade, from Link's hearts; starts death mode when he dies.
-Link_BeHarmed@ResetHelp	cheap	1	src/bank1/link-collision-harm.asm	208	@ResetHelp	
-Link_BeHarmed@BorrowHeart	cheap	1	src/bank1/link-collision-harm.asm	236	@BorrowHeart	
-Link_BeHarmed@HandleDied	cheap	1	src/bank1/link-collision-harm.asm	252	@HandleDied	
-Link_BeHarmed_Return	code	1	src/bank1/link-collision-harm.asm	266		Shared exit: the RTS of Link_BeHarmed, also used by Boomerang_CheckMonsterCollision.
+Link_CheckMonsterTouch_NoReset	code	1	src/bank1/link-collision-harm.asm	73	CheckLinkCollisionPreinit	Second entry: the caller has set [02],[03] (object middle), [00] = 0 and cleared the results itself.
+Link_CheckMonsterTouch_NoReset@FacingOpposite	cheap	1	src/bank1/link-collision-harm.asm	138	@FacingOpposite	
+Link_CheckMonsterTouch_NoReset@Parry	cheap	1	src/bank1/link-collision-harm.asm	151	@Parry	
+Link_CheckMonsterTouch_Return	code	1	src/bank1/link-collision-harm.asm	159	L73A9_Exit	Shared exit of Link_CheckMonsterTouch.
+Link_HarmByObjType	code	1	src/bank1/link-collision-harm.asm	164	HarmLink	Starts Link's knockback and harms him by the touching object's damage from Damage_ObjTypeDamageToLink.
+Link_BeHarmed	code	1	src/bank1/link-collision-harm.asm	193	Link_BeHarmed	Takes damage [0D]:[0E], halved per ring grade, from Link's hearts; starts death mode when he dies.
+Link_BeHarmed@ResetHelp	cheap	1	src/bank1/link-collision-harm.asm	210	@ResetHelp	
+Link_BeHarmed@BorrowHeart	cheap	1	src/bank1/link-collision-harm.asm	238	@BorrowHeart	
+Link_BeHarmed@HandleDied	cheap	1	src/bank1/link-collision-harm.asm	254	@HandleDied	
+Link_BeHarmed_Return	code	1	src/bank1/link-collision-harm.asm	268		Shared exit: the RTS of Link_BeHarmed, also used by Boomerang_CheckMonsterCollision.
 Boomerang_CheckMonsterCollision	code	1	src/bank1/weapon-damage-death.asm	48	CheckMonsterBoomerangOrFoodCollision	Tests Link's boomerang (not food) in slot Y against the monster in slot X; a hit stuns the monster.
 Collision_CheckWeaponPointVsMonster	code	1	src/bank1/weapon-damage-death.asm	82	CheckMonsterWeaponCollision	Tests a weapon point against a monster and, on overlap, applies the hit (stun, damage or parry).
 Damage_HandleWeaponHit	code	1	src/bank1/weapon-damage-death.asm	127	HandleMonsterWeaponCollision	Applies a weapon hit to a monster: immunity mask, Gohma, Zol/Vire turning, Darknut parry, then damage.
@@ -567,23 +567,23 @@ Damage_PlayParryTuneUnlessBombOrFire	code	1	src/bank1/weapon-damage-death.asm	19
 Damage_KillMonster	code	1	src/bank1/weapon-damage-death.asm	216	HandleMonsterDied	Counts a kill in the drop counters and puts the monster into the dying metastate.
 Damage_KillMonster@SetDyingMetastate	cheap	1	src/bank1/weapon-damage-death.asm	235	@SetDyingMetastate	
 Shove_ResetAndClearInvincibility	code	1	src/bank1/weapon-damage-death.asm	245	ResetShoveInfoAndInvincibilityTimer	Clears the slot's knockback direction, knockback distance and invincibility timer.
-SwordShot_CheckMonsterCollision	code	1	src/bank1/sword-bomb-arrow-collision.asm	58	CheckMonsterSwordShotOrMagicShotCollision	Tests Link's sword shot or magic shot (slot Y = $0E) against the monster in slot X.
-SwordShot_CheckMonsterCollision@CheckCollision	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	92	@CheckCollision	
-SwordShot_CheckMonsterCollision@Exit	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	108	@Exit	
-Bomb_CheckBombOrFireVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	120	CheckMonsterBombOrFireCollision	Tests a detonating bomb or a fire in slot Y ($10 or $11) against the monster in slot X.
-Bomb_CheckBombOrFireVsMonster@SetHotspot	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	147	@SetHotspot	
-Bomb_CheckBombOrFireVsMonster_Return	code	1	src/bank1/sword-bomb-arrow-collision.asm	171	L7595_Exit	Shared exit of the bomb/fire, sword and stabbing tests.
-Sword_DamagePoints	data	1	src/bank1/sword-bomb-arrow-collision.asm	176	SwordDamagePoints	TABLE: sword damage points; index = InvSword - 1 (0 wooden, 1 white, 2 magic); value = damage in ObjHP
-Sword_CheckMonsterCollision	code	1	src/bank1/sword-bomb-arrow-collision.asm	186	CheckMonsterSwordCollision	Tests Link's sword (slot Y = $0D) against the monster in slot X.
-Collision_CheckStabVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	209	CheckMonsterStabbingCollision	Tests a sword or rod swing against a monster with a box that is longer along Link's facing axis.
-Collision_CheckStabVsMonster@Horizontal	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	221	@Horizontal	
-Collision_CheckStabVsMonster@SetVerticalThreshold	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	226		
-Arrow_CheckArrowOrRodVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	243	CheckMonsterArrowOrRodCollision	Tests the rod swing or the flying arrow in slot Y = $12 against the monster in slot X.
-Collision_CheckShotVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	281	CheckMonsterShotCollision	Tests an arrow, sword shot or magic shot against a monster; handles Pols Voice and the arrow's spark.
-Damage_ParryOrShove	code	1	src/bank1/sword-bomb-arrow-collision.asm	312	ParryOrShove	Knocks the monster in slot X back in the weapon's direction, or plays the parry tune for a Darknut.
-Damage_ParryOrShove@Shove	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	327		
-Damage_PlayParryTune	code	1	src/bank1/sword-bomb-arrow-collision.asm	333	PlayParryTune	Requests the parry tune (Tune0Request := 1).
-Collision_CheckShotVsMonster_Return	code	1	src/bank1/sword-bomb-arrow-collision.asm	338	L763A_Exit	Shared exit of the arrow and shot tests.
+SwordShot_CheckMonsterCollision	code	1	src/bank1/sword-bomb-arrow-collision.asm	64	CheckMonsterSwordShotOrMagicShotCollision	Tests Link's sword shot or magic shot (slot Y = $0E) against the monster in slot X.
+SwordShot_CheckMonsterCollision@CheckCollision	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	98	@CheckCollision	
+SwordShot_CheckMonsterCollision@Exit	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	114	@Exit	
+Bomb_CheckBombOrFireVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	126	CheckMonsterBombOrFireCollision	Tests a detonating bomb or a fire in slot Y ($10 or $11) against the monster in slot X.
+Bomb_CheckBombOrFireVsMonster@SetHotspot	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	153	@SetHotspot	
+Bomb_CheckBombOrFireVsMonster_Return	code	1	src/bank1/sword-bomb-arrow-collision.asm	177	L7595_Exit	Shared exit of the bomb/fire, sword and stabbing tests.
+Sword_DamagePoints	data	1	src/bank1/sword-bomb-arrow-collision.asm	182	SwordDamagePoints	TABLE: sword damage points; index = InvSword - 1 (0 wooden, 1 white, 2 magic); value = damage in ObjHP
+Sword_CheckMonsterCollision	code	1	src/bank1/sword-bomb-arrow-collision.asm	192	CheckMonsterSwordCollision	Tests Link's sword (slot Y = $0D) against the monster in slot X.
+Collision_CheckStabVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	215	CheckMonsterStabbingCollision	Tests a sword or rod swing against a monster with a box that is longer along Link's facing axis.
+Collision_CheckStabVsMonster@Horizontal	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	227	@Horizontal	
+Collision_CheckStabVsMonster@SetVerticalThreshold	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	232		
+Arrow_CheckArrowOrRodVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	249	CheckMonsterArrowOrRodCollision	Tests the rod swing or the flying arrow in slot Y = $12 against the monster in slot X.
+Collision_CheckShotVsMonster	code	1	src/bank1/sword-bomb-arrow-collision.asm	287	CheckMonsterShotCollision	Tests an arrow, sword shot or magic shot against a monster; handles Pols Voice and the arrow's spark.
+Damage_ParryOrShove	code	1	src/bank1/sword-bomb-arrow-collision.asm	318	ParryOrShove	Knocks the monster in slot X back in the weapon's direction, or plays the parry tune for a Darknut.
+Damage_ParryOrShove@Shove	cheap	1	src/bank1/sword-bomb-arrow-collision.asm	333		
+Damage_PlayParryTune	code	1	src/bank1/sword-bomb-arrow-collision.asm	339	PlayParryTune	Requests the parry tune (Tune0Request := 1).
+Collision_CheckShotVsMonster_Return	code	1	src/bank1/sword-bomb-arrow-collision.asm	344	L763A_Exit	Shared exit of the arrow and shot tests.
 Collision_CheckThinWeaponVsMonster	code	1	src/bank1/object-overlap-test.asm	33	CheckMonsterSlenderWeaponCollision	Tests a thin weapon against a monster using one threshold for both axes.
 Collision_CheckThinWeaponVsMonster_Thresholds	code	1	src/bank1/object-overlap-test.asm	47	CheckMonsterSlenderWeaponCollision2	Sets the hit point of a thin weapon from Link's facing direction, then tests it against a monster.
 Collision_CheckThinWeaponVsMonster_Thresholds@CheckHorizontal	cheap	1	src/bank1/object-overlap-test.asm	63	@CheckHorizontal	
@@ -1106,20 +1106,20 @@ PondFairy_Init	code	4	src/bank4/zora-ow-inits.asm	268	InitPondFairy	Init of the 
 PondFairy_Init_Return	code	4	src/bank4/zora-ow-inits.asm	279	L10797_Exit	Shared RTS of PondFairy_Init and Zora_Update.
 Zora_Update	code	4	src/bank4/zora-ow-inits.asm	299	UpdateZora	Updates the Zora: runs the burrower state cycle, shoots one fireball per surfacing, removes it on dive.
 Zora_Update@DestroyIfDived	cheap	4	src/bank4/zora-ow-inits.asm	322	@DestroyWhenDone	
-Moblin_Update	code	4	src/bank4/moblin-lynel-shooting.asm	54	UpdateMoblin	Updates a Moblin (types $03, $04): wanders toward Link with turn rate $A0 and shoots arrows.
-Lynel_Update	code	4	src/bank4/moblin-lynel-shooting.asm	68	UpdateLynel	Updates a Lynel (types $01, $02): moves and aims with the Goriya routine and shoots sword shots.
-Shooter_RunShootTimer	code	4	src/bank4/moblin-lynel-shooting.asm	95	_TryShooting	Runs a walking shooter's shoot timer: stop for $30 frames, fire at $10, and set its q-speed.
-Shooter_RunShootTimer@TryShootingNow	cheap	4	src/bank4/moblin-lynel-shooting.asm	117	@TryShootingNow	
-Shooter_RunShootTimer@SetShootTimer	cheap	4	src/bank4/moblin-lynel-shooting.asm	160	@SetShootTimer	
-Shooter_RunShootTimer@ZeroSpeed	cheap	4	src/bank4/moblin-lynel-shooting.asm	189	@ZeroSpeed	
-Shooter_RunShootTimer@SetSpeed	cheap	4	src/bank4/moblin-lynel-shooting.asm	194	@SetSpeed	
-Shooter_RunShootTimer@Exit	cheap	4	src/bank4/moblin-lynel-shooting.asm	199	@Exit	
-Shooter_ShootAndSetTimer	code	4	src/bank4/moblin-lynel-shooting.asm	215	_ShootIfWanted2	Shoots through Shooter_ShootIfWanted and, on success, sets the shooter's object timer to $80.
-Shooter_ShootAndSetTimer_Return	code	4	src/bank4/moblin-lynel-shooting.asm	223	L1083E_Exit	Shared RTS of Shooter_ShootAndSetTimer and MonsterArrow_Update.
-MonsterArrow_Update	code	4	src/bank4/moblin-lynel-shooting.asm	235	UpdateMonsterArrow	Updates a monster's arrow (type $5B): flies at 2 pixels a frame, sparks out, or bounces off the shield.
-MonsterArrow_Update@CheckShooter	cheap	4	src/bank4/moblin-lynel-shooting.asm	262	@CheckShooter	
-MonsterArrow_Update@UpdateBase	cheap	4	src/bank4/moblin-lynel-shooting.asm	274	@UpdateBase	
-MonsterArrow_Update@CheckBounce	cheap	4	src/bank4/moblin-lynel-shooting.asm	292	@CheckBounce	
+Moblin_Update	code	4	src/bank4/moblin-lynel-shooting.asm	55	UpdateMoblin	Updates a Moblin (types $03, $04): wanders toward Link with turn rate $A0 and shoots arrows.
+Lynel_Update	code	4	src/bank4/moblin-lynel-shooting.asm	69	UpdateLynel	Updates a Lynel (types $01, $02): moves and aims with the Goriya routine and shoots sword shots.
+Shooter_RunShootTimer	code	4	src/bank4/moblin-lynel-shooting.asm	96	_TryShooting	Runs a walking shooter's shoot timer: stop for $30 frames, fire at $10, and set its q-speed.
+Shooter_RunShootTimer@TryShootingNow	cheap	4	src/bank4/moblin-lynel-shooting.asm	118	@TryShootingNow	
+Shooter_RunShootTimer@SetShootTimer	cheap	4	src/bank4/moblin-lynel-shooting.asm	161	@SetShootTimer	
+Shooter_RunShootTimer@ZeroSpeed	cheap	4	src/bank4/moblin-lynel-shooting.asm	190	@ZeroSpeed	
+Shooter_RunShootTimer@SetSpeed	cheap	4	src/bank4/moblin-lynel-shooting.asm	195	@SetSpeed	
+Shooter_RunShootTimer@Exit	cheap	4	src/bank4/moblin-lynel-shooting.asm	200	@Exit	
+Shooter_ShootAndSetTimer	code	4	src/bank4/moblin-lynel-shooting.asm	216	_ShootIfWanted2	Shoots through Shooter_ShootIfWanted and, on success, sets the shooter's object timer to $80.
+Shooter_ShootAndSetTimer_Return	code	4	src/bank4/moblin-lynel-shooting.asm	224	L1083E_Exit	Shared RTS of Shooter_ShootAndSetTimer and MonsterArrow_Update.
+MonsterArrow_Update	code	4	src/bank4/moblin-lynel-shooting.asm	236	UpdateMonsterArrow	Updates a monster's arrow (type $5B): flies at 2 pixels a frame, sparks out, or bounces off the shield.
+MonsterArrow_Update@CheckShooter	cheap	4	src/bank4/moblin-lynel-shooting.asm	263	@CheckShooter	
+MonsterArrow_Update@UpdateBase	cheap	4	src/bank4/moblin-lynel-shooting.asm	275	@UpdateBase	
+MonsterArrow_Update@CheckBounce	cheap	4	src/bank4/moblin-lynel-shooting.asm	293	@CheckBounce	
 Boulder_UpdateSpawner	code	4	src/bank4/tektite-boulder.asm	62	UpdateBoulderSet	Updates the boulder spawner (type $1F): makes a new Boulder whenever its timer runs out.
 Boulder_UpdateSpawner@RightHalf	cheap	4	src/bank4/tektite-boulder.asm	92	@RightHalf	
 Boulder_UpdateSpawner@SetX	cheap	4	src/bank4/tektite-boulder.asm	95	@SetX	
@@ -1315,37 +1315,37 @@ Moldorm_PropagateDirs@SkipBounce	cheap	4	src/bank4/moldorm.asm	242	@SkipBounce
 Moldorm_PropagateDirs@Loop	cheap	4	src/bank4/moldorm.asm	254	@Loop	
 Moldorm_PropagateDirs_Return	code	4	src/bank4/moldorm.asm	270	L1156B_Exit	Shared exit of the Moldorm flight routines above.
 Moldorm_DecideFlightState	code	4	src/bank4/moldorm.asm	280	Flyer_MoldormDecideState	Picks a Moldorm head's next flying state: 2 (chase) if Random,X >= $40, else 3 (wander); 8 turns.
-Digdogger_CornerOffsetsX	data	4	src/bank4/digdogger.asm	71	DigdoggerCornerOffsetsX	TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
-Digdogger_CornerOffsetsY	data	4	src/bank4/digdogger.asm	76	DigdoggerCornerOffsetsY	TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
-Digdogger_HandleFlute	code	4	src/bank4/digdogger.asm	90	L_Digdogger_AfterFlute	Runs a Digdogger after the flute was played: shrink for $40 frames, then split into small ones.
-Digdogger_HandleFlute@Shrinking	cheap	4	src/bank4/digdogger.asm	107	@SplitUp	
-Digdogger_HandleFlute@MakeChildren	cheap	4	src/bank4/digdogger.asm	127	@MakeChildren	
-Digdogger_HandleFlute@LoopMakeChild	cheap	4	src/bank4/digdogger.asm	138	@LoopMakeChild	
-Digdogger_TurnTowardTargetAndMove	code	4	src/bank4/digdogger.asm	191	L_Digdogger_TurnTowardLink	Digdogger turn, Random,X >= $80: Dir_TurnObjTowardTarget8 (at most one 8-way step, steering at the
-Digdogger_Update	code	4	src/bank4/digdogger.asm	201	UpdateDigdogger	Updates a Digdogger of either size (object types $18, $38, $39) for one frame.
-Digdogger_ChangeSpeedAndTurn	code	4	src/bank4/digdogger.asm	214	L_Digdogger_Turn	Normal movement of a Digdogger: change speed, turn every $10 frames, move, check collisions, draw.
-Digdogger_MoveAndCheckCollisions	code	4	src/bank4/digdogger.asm	231	L_Digdogger_Move	Moves the Digdogger, then checks collisions and draws it.
-Digdogger_CheckCollisionsAndDraw	code	4	src/bank4/digdogger.asm	235	L_Digdogger_DrawAndCheckCollisions	Checks room bounds and collisions and draws the Digdogger without moving it.
-Digdogger_CheckBigCollisionsAndDraw	code	4	src/bank4/digdogger.asm	252	CheckBigDigdoggerCollisions	Bounds and collision-tests the big Digdogger at its four corners, then draws it.
-Digdogger_CheckBigCollisionsAndDraw@LoopCornerCollision	cheap	4	src/bank4/digdogger.asm	263	@LoopCornerCollision	
-Digdogger_DrawAsLittle	code	4	src/bank4/digdogger.asm	303	L_Digdogger_DrawAsLittle	Draws a small Digdogger 8 pixels right of and below the object's position (the big one's centre).
-Digdogger_ChangeSpeed	code	4	src/bank4/digdogger.asm	349	Digdogger_ChangeSpeed	Moves a Digdogger's 16-bit speed 1 unit toward its target: up when the speed flag is 0, else down.
-Digdogger_ChangeSpeed_JumpTable	data	4	src/bank4/digdogger.asm	354	Digdogger_ChangeSpeed_JumpTable	TABLE: speed routines; index = Digdogger_ObjSpeedFlag (0 speeding up, 1 slowing down).
-Digdogger_SpeedUp	code	4	src/bank4/digdogger.asm	363	Digdogger_SpeedUp	Adds 1 to the 16-bit speed; at the target speed, switches to slowing down toward $0040/$0140.
-Digdogger_SlowDown	code	4	src/bank4/digdogger.asm	388	Digdogger_SlowDown	Subtracts 1 from the 16-bit speed; at the target speed, switches to speeding up toward $0080/$0180.
-Digdogger_SetTargetSpeed	code	4	src/bank4/digdogger.asm	413	SetTargetSpeed	Sets the target speed to A (low byte), with high byte 0 for the big Digdogger and 1 for a small one.
-Digdogger_ChangeSpeed_Return	code	4	src/bank4/digdogger.asm	424	L116EA_Exit	Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and Digdogger_SetTargetSpeed.
-Digdogger_Move	code	4	src/bank4/digdogger.asm	436	Digdogger_Move	Moves a Digdogger by its 16-bit speed along each axis of its 8-way direction.
-Digdogger_Move@Left	cheap	4	src/bank4/digdogger.asm	469	@Left	
-Digdogger_Move@Down	cheap	4	src/bank4/digdogger.asm	479	@Down	
-Digdogger_Move@Up	cheap	4	src/bank4/digdogger.asm	489	@Up	
-Digdogger_Move@End	cheap	4	src/bank4/digdogger.asm	499	@End	
-Digdogger_SpriteOffsetsX	data	4	src/bank4/digdogger.asm	504	DigdoggerSpriteOffsetsX	TABLE: X offsets of the four 16x16 parts of the big Digdogger's image; index = part 0-3
-Digdogger_SpriteOffsetsY	data	4	src/bank4/digdogger.asm	508	DigdoggerSpriteOffsetsY	TABLE: Y offsets of the four parts of the big Digdogger's image; index = part 0-3; value = pixels.
-Digdogger_SpriteAttrs	data	4	src/bank4/digdogger.asm	514	DigdoggerSpriteAttrs	TABLE: sprite attributes of the four parts of the big Digdogger; index = part 0-3;
-Digdogger_Draw	code	4	src/bank4/digdogger.asm	524	Digdogger_Draw	Draws a Digdogger: four 16x16 parts when big, one mirrored 16x16 image when small.
-Digdogger_Draw@LoopPart	cheap	4	src/bank4/digdogger.asm	535	@LoopPart	
-Digdogger_Draw@DrawLittle	cheap	4	src/bank4/digdogger.asm	570	@DrawLittle	
+Digdogger_CornerOffsetsX	data	4	src/bank4/digdogger.asm	72	DigdoggerCornerOffsetsX	TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
+Digdogger_CornerOffsetsY	data	4	src/bank4/digdogger.asm	77	DigdoggerCornerOffsetsY	TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
+Digdogger_HandleFlute	code	4	src/bank4/digdogger.asm	91	L_Digdogger_AfterFlute	Runs a Digdogger after the flute was played: shrink for $40 frames, then split into small ones.
+Digdogger_HandleFlute@Shrinking	cheap	4	src/bank4/digdogger.asm	108	@SplitUp	
+Digdogger_HandleFlute@MakeChildren	cheap	4	src/bank4/digdogger.asm	128	@MakeChildren	
+Digdogger_HandleFlute@LoopMakeChild	cheap	4	src/bank4/digdogger.asm	139	@LoopMakeChild	
+Digdogger_TurnTowardTargetAndMove	code	4	src/bank4/digdogger.asm	192	L_Digdogger_TurnTowardLink	Digdogger turn, Random,X >= $80: Dir_TurnObjTowardTarget8 (at most one 8-way step, steering at the
+Digdogger_Update	code	4	src/bank4/digdogger.asm	202	UpdateDigdogger	Updates a Digdogger of either size (object types $18, $38, $39) for one frame.
+Digdogger_ChangeSpeedAndTurn	code	4	src/bank4/digdogger.asm	215	L_Digdogger_Turn	Normal movement of a Digdogger: change speed, turn every $10 frames, move, check collisions, draw.
+Digdogger_MoveAndCheckCollisions	code	4	src/bank4/digdogger.asm	232	L_Digdogger_Move	Moves the Digdogger, then checks collisions and draws it.
+Digdogger_CheckCollisionsAndDraw	code	4	src/bank4/digdogger.asm	236	L_Digdogger_DrawAndCheckCollisions	Checks room bounds and collisions and draws the Digdogger without moving it.
+Digdogger_CheckBigCollisionsAndDraw	code	4	src/bank4/digdogger.asm	253	CheckBigDigdoggerCollisions	Bounds and collision-tests the big Digdogger at its four corners, then draws it.
+Digdogger_CheckBigCollisionsAndDraw@LoopCornerCollision	cheap	4	src/bank4/digdogger.asm	264	@LoopCornerCollision	
+Digdogger_DrawAsLittle	code	4	src/bank4/digdogger.asm	304	L_Digdogger_DrawAsLittle	Draws a small Digdogger 8 pixels right of and below the object's position (the big one's centre).
+Digdogger_ChangeSpeed	code	4	src/bank4/digdogger.asm	350	Digdogger_ChangeSpeed	Moves a Digdogger's 16-bit speed 1 unit toward its target: up when the speed flag is 0, else down.
+Digdogger_ChangeSpeed_JumpTable	data	4	src/bank4/digdogger.asm	355	Digdogger_ChangeSpeed_JumpTable	TABLE: speed routines; index = Digdogger_ObjSpeedFlag (0 speeding up, 1 slowing down).
+Digdogger_SpeedUp	code	4	src/bank4/digdogger.asm	364	Digdogger_SpeedUp	Adds 1 to the 16-bit speed; at the target speed, switches to slowing down toward $0040/$0140.
+Digdogger_SlowDown	code	4	src/bank4/digdogger.asm	389	Digdogger_SlowDown	Subtracts 1 from the 16-bit speed; at the target speed, switches to speeding up toward $0080/$0180.
+Digdogger_SetTargetSpeed	code	4	src/bank4/digdogger.asm	414	SetTargetSpeed	Sets the target speed to A (low byte), with high byte 0 for the big Digdogger and 1 for a small one.
+Digdogger_ChangeSpeed_Return	code	4	src/bank4/digdogger.asm	425	L116EA_Exit	Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and Digdogger_SetTargetSpeed.
+Digdogger_Move	code	4	src/bank4/digdogger.asm	437	Digdogger_Move	Moves a Digdogger by its 16-bit speed along each axis of its 8-way direction.
+Digdogger_Move@Left	cheap	4	src/bank4/digdogger.asm	470	@Left	
+Digdogger_Move@Down	cheap	4	src/bank4/digdogger.asm	480	@Down	
+Digdogger_Move@Up	cheap	4	src/bank4/digdogger.asm	490	@Up	
+Digdogger_Move@End	cheap	4	src/bank4/digdogger.asm	500	@End	
+Digdogger_SpriteOffsetsX	data	4	src/bank4/digdogger.asm	505	DigdoggerSpriteOffsetsX	TABLE: X offsets of the four 16x16 parts of the big Digdogger's image; index = part 0-3
+Digdogger_SpriteOffsetsY	data	4	src/bank4/digdogger.asm	509	DigdoggerSpriteOffsetsY	TABLE: Y offsets of the four parts of the big Digdogger's image; index = part 0-3; value = pixels.
+Digdogger_SpriteAttrs	data	4	src/bank4/digdogger.asm	515	DigdoggerSpriteAttrs	TABLE: sprite attributes of the four parts of the big Digdogger; index = part 0-3;
+Digdogger_Draw	code	4	src/bank4/digdogger.asm	525	Digdogger_Draw	Draws a Digdogger: four 16x16 parts when big, one mirrored 16x16 image when small.
+Digdogger_Draw@LoopPart	cheap	4	src/bank4/digdogger.asm	536	@LoopPart	
+Digdogger_Draw@DrawLittle	cheap	4	src/bank4/digdogger.asm	571	@DrawLittle	
 Aquamentus_Update	code	4	src/bank4/aquamentus.asm	54	UpdateAquamentus	Updates Aquamentus for one frame: move, shoot, draw, check collisions, cry when hit or killed.
 Obj_PlayBossDeathCryAndResetShove	code	4	src/bank4/aquamentus.asm	70	CheckBossHitReaction	Plays the boss death cry if the monster is dying (ObjMetastate <> 0) and cancels any knockback.
 Aquamentus_StepsX	data	4	src/bank4/aquamentus.asm	75	AquamentusSpeeds	TABLE: Aquamentus's X step per move; index = ObjDir - 1 (0 right, 1 left); value = signed pixels.
@@ -1557,46 +1557,46 @@ Gohma_HandleWeaponCollision	code	4	src/bank4/gohma.asm	367	Gohma_HandleWeaponCol
 Gohma_HandleWeaponCollision@CheckHitEye	cheap	4	src/bank4/gohma.asm	379	@CheckHitEye	
 Gohma_HandleWeaponCollision@CheckEyeOpen	cheap	4	src/bank4/gohma.asm	387	@CheckEyeOpen	
 Gohma_HandleWeaponCollision@PlayParryTune	cheap	4	src/bank4/gohma.asm	404	@PlayParryTune	
-Gleeok_UpdateFlyingHead	code	4	src/bank4/gleeok.asm	75	UpdateGleeokHead	Updates a cut-off flying Gleeok head (type $46): flies, may shoot a fireball, draws, harms Link.
-Gleeok_ControlFlyingHeadFlight	code	4	src/bank4/gleeok.asm	110	ControlGleeokHeadFlight	Runs the flying Gleeok head's current flight state.
-Gleeok_FlyingHeadFlight_JumpTable	data	4	src/bank4/gleeok.asm	115	ControlGleeokHeadFlight_JumpTable	TABLE: flight state handlers of the flying Gleeok head; index = Flyer_ObjFlyingState.
-Flyer_GleeokHeadDecideState	code	4	src/bank4/gleeok.asm	127	Flyer_GleeokHeadDecideState	Flying Gleeok head flight state 1: picks chase (Random+1,X < $D0) or wander; turn counter 6.
-Gleeok_NeckXAddrsLo	data	4	src/bank4/gleeok.asm	140	GleeokNeckXAddrsLo	TABLE: low address bytes of each neck's segment X array; index = neck 0-3; Gleeok_NeckXs0-3.
-Gleeok_NeckXAddrsHi	data	4	src/bank4/gleeok.asm	144	GleeokNeckXAddrsHi	TABLE: high address bytes of each neck's segment X array; index = neck 0-3.
-Gleeok_NeckYAddrsLo	data	4	src/bank4/gleeok.asm	148	GleeokNeckYAddrsLo	TABLE: low address bytes of each neck's segment Y array; index = neck 0-3; Gleeok_NeckYs0-3.
-Gleeok_NeckYAddrsHi	data	4	src/bank4/gleeok.asm	152	GleeokNeckYAddrsHi	TABLE: high address bytes of each neck's segment Y array; index = neck 0-3.
-Gleeok_NeckHeadInfoAddrsLo	data	4	src/bank4/gleeok.asm	156	GleeokNeckMiscAddrsLo	TABLE: low address bytes of each neck's head movement block; index = neck 0-3; Gleeok_HeadInfo0-3.
-Gleeok_NeckHeadInfoAddrsHi	data	4	src/bank4/gleeok.asm	160	GleeokNeckMiscAddrsHi	TABLE: high address bytes of each neck's head movement block; index = neck 0-3.
-Gleeok_Update	code	4	src/bank4/gleeok.asm	172	UpdateGleeok	Updates Gleeok (types $42-$45): draws the body, then moves, draws and hit-tests every living neck.
-Gleeok_Update@LoopNeck	cheap	4	src/bank4/gleeok.asm	181	@LoopNeck	
-Gleeok_Update@LoadNeckBytes	cheap	4	src/bank4/gleeok.asm	192	@LoadNeckBytes	
-Gleeok_Update@DrawAndCheckCollisions	cheap	4	src/bank4/gleeok.asm	226	@DrawAndCheckCollisions	
-Gleeok_Update@SaveNeckBytes	cheap	4	src/bank4/gleeok.asm	234	@SaveNeckBytes	
-Gleeok_Update@NextLoopNeck	cheap	4	src/bank4/gleeok.asm	244	@NextLoopNeck	
-Gleeok_FetchNeckAddrs	code	4	src/bank4/gleeok.asm	256	Gleeok_FetchNeckAddrs	Loads the addresses of the current neck's X, Y and head movement arrays.
-Gleeok_MoveNeck_DivideBy4Unsigned	code	4	src/bank4/gleeok.asm	274	L_Gleeok_UDiv4	Gleeok_MoveNeck branches here when the head is not left of the base: A = distance / 4.
-Gleeok_MoveNeck	code	4	src/bank4/gleeok.asm	287	Gleeok_MoveNeck	Bends the current neck (object slots 1-5) so its segments follow the head.
-Gleeok_MoveNeck_StoreRefDistance	code	4	src/bank4/gleeok.asm	303	L_Gleeok_StoreRefSegDistance	Both paths of Gleeok_MoveNeck join here with A = signed (head X - base X) / 4.
-Gleeok_MoveNeck_StoreRefDistance@KeepSegsNearNeighbors	cheap	4	src/bank4/gleeok.asm	328	@KeepSegsNearNeighbors	
-Gleeok_MoveNeck_StoreRefDistance@CheckDistanceV	cheap	4	src/bank4/gleeok.asm	353	@CheckDistanceV	
-Gleeok_MoveNeck_StoreRefDistance@NextKeepSegsNearNeighbors	cheap	4	src/bank4/gleeok.asm	378	@NextKeepSegsNearNeighbors	
-Gleeok_MoveNeck_StoreRefDistance@KeepSegsNearRefPoint	cheap	4	src/bank4/gleeok.asm	397	@KeepSegsNearRefPoint	
-Gleeok_MoveNeck_StoreRefDistance@NextKeepSegsNearRefPoint	cheap	4	src/bank4/gleeok.asm	417	@NextKeepSegsNearRefPoint	
-Gleeok_MoveNeck_StoreRefDistance@KeepSegsBetweenNeighbors	cheap	4	src/bank4/gleeok.asm	427	@KeepSegsBetweenNeighbors	
-Gleeok_MoveNeck_StoreRefDistance@NextKeepSegsBetweenNeighbors	cheap	4	src/bank4/gleeok.asm	442	@NextKeepSegsBetweenNeighbors	
-Gleeok_CalcSegmentLimits	code	4	src/bank4/gleeok.asm	453	Gleeok_CalcSegmentLimits	Derives the three neck segment spacing limits of one axis from a quarter head-to-base distance.
-Gleeok_StretchNeck	code	4	src/bank4/gleeok.asm	490	Gleeok_StretchNeck	Moves one middle neck segment 2 pixels away from or toward the next segment, or leaves it.
-Gleeok_StretchNeck_JumpTable	data	4	src/bank4/gleeok.asm	533	Gleeok_StretchNeck_JumpTable	TABLE: segment handlers of Gleeok_StretchNeck; index = h + 3 * v (h = horizontal limits reached,
-Gleeok_ExpandSegment	code	4	src/bank4/gleeok.asm	550	Gleeok_ExpandSegment	Moves a neck segment 2 pixels away from the next segment, horizontally or vertically at random.
-Gleeok_StepSegmentYMinus2	code	4	src/bank4/gleeok.asm	564	L_Gleeok_DecSegmentY	Shared tail: turns the prepared segment Y + 2 into segment Y - 2.
-Gleeok_StoreSegmentY	code	4	src/bank4/gleeok.asm	571	L_Gleeok_SetSegmentY	Shared tail: stores the Y register as the Y of the segment in slot 2+X.
-Gleeok_IgnoreSegment	code	4	src/bank4/gleeok.asm	575	Gleeok_IgnoreSegment	Segment handler that does nothing (also the return of the handlers above).
-Gleeok_ContractSegmentY	code	4	src/bank4/gleeok.asm	583	Gleeok_ContractSegmentY	Moves a neck segment 2 pixels toward the next segment vertically.
-Gleeok_ExpandSegmentX	code	4	src/bank4/gleeok.asm	594	L_Gleeok_ExpandHorizontally	Horizontal half of Gleeok_ExpandSegment: X + 2 if this segment's X >= the next one's, else - 2.
-Gleeok_ContractSegmentX	code	4	src/bank4/gleeok.asm	609	Gleeok_ContractSegmentX	Moves a neck segment 2 pixels toward the next segment horizontally.
-Gleeok_StepSegmentXMinus2	code	4	src/bank4/gleeok.asm	618	L_Gleeok_DecSegmentX	Shared tail: turns the prepared segment X + 2 into segment X - 2.
-Gleeok_StoreSegmentX	code	4	src/bank4/gleeok.asm	625	L_Gleeok_SetSegmentX	Shared tail: stores the Y register as the X of the segment in slot 2+X.
-Gleeok_ContractSegmentXOrY	code	4	src/bank4/gleeok.asm	633	Gleeok_ContractSegment	Moves a neck segment toward the next one, horizontally or vertically at random.
+Gleeok_UpdateFlyingHead	code	4	src/bank4/gleeok.asm	78	UpdateGleeokHead	Updates a cut-off flying Gleeok head (type $46): flies, may shoot a fireball, draws, harms Link.
+Gleeok_ControlFlyingHeadFlight	code	4	src/bank4/gleeok.asm	113	ControlGleeokHeadFlight	Runs the flying Gleeok head's current flight state.
+Gleeok_FlyingHeadFlight_JumpTable	data	4	src/bank4/gleeok.asm	118	ControlGleeokHeadFlight_JumpTable	TABLE: flight state handlers of the flying Gleeok head; index = Flyer_ObjFlyingState.
+Flyer_GleeokHeadDecideState	code	4	src/bank4/gleeok.asm	130	Flyer_GleeokHeadDecideState	Flying Gleeok head flight state 1: picks chase (Random+1,X < $D0) or wander; turn counter 6.
+Gleeok_NeckXAddrsLo	data	4	src/bank4/gleeok.asm	143	GleeokNeckXAddrsLo	TABLE: low address bytes of each neck's segment X array; index = neck 0-3; Gleeok_NeckXs0-3.
+Gleeok_NeckXAddrsHi	data	4	src/bank4/gleeok.asm	147	GleeokNeckXAddrsHi	TABLE: high address bytes of each neck's segment X array; index = neck 0-3.
+Gleeok_NeckYAddrsLo	data	4	src/bank4/gleeok.asm	151	GleeokNeckYAddrsLo	TABLE: low address bytes of each neck's segment Y array; index = neck 0-3; Gleeok_NeckYs0-3.
+Gleeok_NeckYAddrsHi	data	4	src/bank4/gleeok.asm	155	GleeokNeckYAddrsHi	TABLE: high address bytes of each neck's segment Y array; index = neck 0-3.
+Gleeok_NeckHeadInfoAddrsLo	data	4	src/bank4/gleeok.asm	159	GleeokNeckMiscAddrsLo	TABLE: low address bytes of each neck's head movement block; index = neck 0-3; Gleeok_HeadInfo0-3.
+Gleeok_NeckHeadInfoAddrsHi	data	4	src/bank4/gleeok.asm	163	GleeokNeckMiscAddrsHi	TABLE: high address bytes of each neck's head movement block; index = neck 0-3.
+Gleeok_Update	code	4	src/bank4/gleeok.asm	175	UpdateGleeok	Updates Gleeok (types $42-$45): draws the body, then moves, draws and hit-tests every living neck.
+Gleeok_Update@LoopNeck	cheap	4	src/bank4/gleeok.asm	184	@LoopNeck	
+Gleeok_Update@LoadNeckBytes	cheap	4	src/bank4/gleeok.asm	195	@LoadNeckBytes	
+Gleeok_Update@DrawAndCheckCollisions	cheap	4	src/bank4/gleeok.asm	229	@DrawAndCheckCollisions	
+Gleeok_Update@SaveNeckBytes	cheap	4	src/bank4/gleeok.asm	237	@SaveNeckBytes	
+Gleeok_Update@NextLoopNeck	cheap	4	src/bank4/gleeok.asm	247	@NextLoopNeck	
+Gleeok_FetchNeckAddrs	code	4	src/bank4/gleeok.asm	259	Gleeok_FetchNeckAddrs	Loads the addresses of the current neck's X, Y and head movement arrays.
+Gleeok_MoveNeck_DivideBy4Unsigned	code	4	src/bank4/gleeok.asm	277	L_Gleeok_UDiv4	Gleeok_MoveNeck branches here when the head is not left of the base: A = distance / 4.
+Gleeok_MoveNeck	code	4	src/bank4/gleeok.asm	290	Gleeok_MoveNeck	Bends the current neck (object slots 1-5) so its segments follow the head.
+Gleeok_MoveNeck_StoreRefDistance	code	4	src/bank4/gleeok.asm	306	L_Gleeok_StoreRefSegDistance	Both paths of Gleeok_MoveNeck join here with A = signed (head X - base X) / 4.
+Gleeok_MoveNeck_StoreRefDistance@KeepSegsNearNeighbors	cheap	4	src/bank4/gleeok.asm	331	@KeepSegsNearNeighbors	
+Gleeok_MoveNeck_StoreRefDistance@CheckDistanceV	cheap	4	src/bank4/gleeok.asm	356	@CheckDistanceV	
+Gleeok_MoveNeck_StoreRefDistance@NextKeepSegsNearNeighbors	cheap	4	src/bank4/gleeok.asm	381	@NextKeepSegsNearNeighbors	
+Gleeok_MoveNeck_StoreRefDistance@KeepSegsNearRefPoint	cheap	4	src/bank4/gleeok.asm	400	@KeepSegsNearRefPoint	
+Gleeok_MoveNeck_StoreRefDistance@NextKeepSegsNearRefPoint	cheap	4	src/bank4/gleeok.asm	420	@NextKeepSegsNearRefPoint	
+Gleeok_MoveNeck_StoreRefDistance@KeepSegsBetweenNeighbors	cheap	4	src/bank4/gleeok.asm	430	@KeepSegsBetweenNeighbors	
+Gleeok_MoveNeck_StoreRefDistance@NextKeepSegsBetweenNeighbors	cheap	4	src/bank4/gleeok.asm	445	@NextKeepSegsBetweenNeighbors	
+Gleeok_CalcSegmentLimits	code	4	src/bank4/gleeok.asm	456	Gleeok_CalcSegmentLimits	Derives the three neck segment spacing limits of one axis from a quarter head-to-base distance.
+Gleeok_StretchNeck	code	4	src/bank4/gleeok.asm	493	Gleeok_StretchNeck	Moves one middle neck segment 2 pixels away from or toward the next segment, or leaves it.
+Gleeok_StretchNeck_JumpTable	data	4	src/bank4/gleeok.asm	536	Gleeok_StretchNeck_JumpTable	TABLE: segment handlers of Gleeok_StretchNeck; index = h + 3 * v (h = horizontal limits reached,
+Gleeok_ExpandSegment	code	4	src/bank4/gleeok.asm	553	Gleeok_ExpandSegment	Moves a neck segment 2 pixels away from the next segment, horizontally or vertically at random.
+Gleeok_StepSegmentYMinus2	code	4	src/bank4/gleeok.asm	567	L_Gleeok_DecSegmentY	Shared tail: turns the prepared segment Y + 2 into segment Y - 2.
+Gleeok_StoreSegmentY	code	4	src/bank4/gleeok.asm	574	L_Gleeok_SetSegmentY	Shared tail: stores the Y register as the Y of the segment in slot 2+X.
+Gleeok_IgnoreSegment	code	4	src/bank4/gleeok.asm	578	Gleeok_IgnoreSegment	Segment handler that does nothing (also the return of the handlers above).
+Gleeok_ContractSegmentY	code	4	src/bank4/gleeok.asm	586	Gleeok_ContractSegmentY	Moves a neck segment 2 pixels toward the next segment vertically.
+Gleeok_ExpandSegmentX	code	4	src/bank4/gleeok.asm	597	L_Gleeok_ExpandHorizontally	Horizontal half of Gleeok_ExpandSegment: X + 2 if this segment's X >= the next one's, else - 2.
+Gleeok_ContractSegmentX	code	4	src/bank4/gleeok.asm	612	Gleeok_ContractSegmentX	Moves a neck segment 2 pixels toward the next segment horizontally.
+Gleeok_StepSegmentXMinus2	code	4	src/bank4/gleeok.asm	621	L_Gleeok_DecSegmentX	Shared tail: turns the prepared segment X + 2 into segment X - 2.
+Gleeok_StoreSegmentX	code	4	src/bank4/gleeok.asm	628	L_Gleeok_SetSegmentX	Shared tail: stores the Y register as the X of the segment in slot 2+X.
+Gleeok_ContractSegmentXOrY	code	4	src/bank4/gleeok.asm	636	Gleeok_ContractSegment	Moves a neck segment toward the next one, horizontally or vertically at random.
 Gleeok_WriteHeadOrBaseSpriteAndCheckCollisions	code	4	src/bank4/gleeok-head-body.asm	65	Gleeok_WriteHeadOrBaseSpriteAndCheckCollisions	Draws a Gleeok head or neck base in a fixed front sprite record, then checks its collisions.
 Gleeok_DrawNeckAndCheckCollisions	code	4	src/bank4/gleeok-head-body.asm	94	Gleeok_DrawHeadAndCheckCollisions	Draws the current neck from the head (slot 5) down to the base (slot 1) and checks collisions.
 Gleeok_DrawSegmentAndCheckCollisions	code	4	src/bank4/gleeok-head-body.asm	98	Gleeok_DrawSegmentAndCheckCollisions	Loop entry: draws the segment in slot X (tile $DC for the head, $DA for the others).
@@ -1694,42 +1694,42 @@ Ganon_DrawBodyAndReturn	code	4	src/bank4/ganon.asm	256	L_Ganon_DrawBody	Draws Ga
 Ganon_UpdateDying	code	4	src/bank4/ganon.asm	270	Ganon_Dying	Ganon's death: counts Ganon_ObjDyingCount up each frame; body, then ashes and burst, then the item.
 Ganon_UpdateDying@HandleAshes	cheap	4	src/bank4/ganon.asm	303	@HandleAshes	
 Ganon_UpdateDying@Exit	cheap	4	src/bank4/ganon.asm	326	@Exit	
-Ganon_BurstDirs	data	4	src/bank4/ganon-draw-collisions.asm	62	GanonBurstDirs	TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
-Ganon_BurstSpriteAttrs	data	4	src/bank4/ganon-draw-collisions.asm	67	GanonBurstSpriteAttrs	TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
-Ganon_BurstTiles	data	4	src/bank4/ganon-draw-collisions.asm	73	GanonBurstTiles	TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
-Ganon_SetUpBurstRays	code	4	src/bank4/ganon-draw-collisions.asm	85	Ganon_SetUpBurstRays	Places the 8 death-burst rays at Ganon's ashes and gives each its direction.
-Ganon_SetUpBurstRays@LoopRay	cheap	4	src/bank4/ganon-draw-collisions.asm	89	@LoopRay	
-Ganon_DrawCloud	code	4	src/bank4/ganon-draw-collisions.asm	110	Ganon_DrawCloud	Draws one death-burst cloud at ([00], [01]): frame image $0C at cloud distance >= 6, $0D below.
-Ganon_DrawBurst	code	4	src/bank4/ganon-draw-collisions.asm	144	Ganon_DrawBurst	Draws the death burst: 8 clouds closing in on the ashes and 8 rays flying outward.
-Ganon_DrawBurst@DrawClouds	cheap	4	src/bank4/ganon-draw-collisions.asm	153	@DrawClouds	
-Ganon_DrawBurst@LoopRay	cheap	4	src/bank4/ganon-draw-collisions.asm	189	@LoopRay	
-Ganon_DrawBurst@Move	cheap	4	src/bank4/ganon-draw-collisions.asm	203	@Move	
-Ganon_GetCurCloudLeft	code	4	src/bank4/ganon-draw-collisions.asm	231	Ganon_GetCurCloudLeft	Sets [00] to the X of the burst clouds left of the ashes (ObjX - cloud distance).
-Ganon_GetCurCloudRight	code	4	src/bank4/ganon-draw-collisions.asm	242	Ganon_GetCurCloudRight	Sets [00] to the X of the burst clouds right of the ashes (ObjX + cloud distance).
-Ganon_GetCurCloudTop	code	4	src/bank4/ganon-draw-collisions.asm	253	Ganon_GetCurCloudTop	Sets [01] to the Y of the burst clouds above the ashes (ObjY - cloud distance).
-Ganon_GetCurCloudBottom	code	4	src/bank4/ganon-draw-collisions.asm	264	Ganon_GetCurCloudBottom	Sets [01] to the Y of the burst clouds below the ashes (ObjY + cloud distance).
-Ganon_FrameImages	data	4	src/bank4/ganon-draw-collisions.asm	273	GanonFrameImages	TABLE: frame images of Ganon's body; index = animation frame (0-5) * 4 + quarter (0 top left,
-Ganon_SpriteOffsetsX	data	4	src/bank4/ganon-draw-collisions.asm	279	GanonSpriteOffsetsX	TABLE: X offset of each body quarter from ObjX; index = quarter 0-3; value = pixels.
-Ganon_SpriteOffsetsY	data	4	src/bank4/ganon-draw-collisions.asm	283	GanonSpriteOffsetsY	TABLE: Y offset of each body quarter from ObjY; index = quarter 0-3; value = pixels.
-Ganon_SpriteHFlips	data	4	src/bank4/ganon-draw-collisions.asm	288	GanonSpriteHFlips	TABLE: horizontal flip flag of each body quarter; index = quarter 0-3; value = 1 flipped (the right
-Ganon_DrawBody	code	4	src/bank4/ganon-draw-collisions.asm	296	Ganon_DrawBody	Draws Ganon's 32x32 body as four 16x16 quarters for the current animation frame.
-Ganon_DrawBody@LoopQuarter	cheap	4	src/bank4/ganon-draw-collisions.asm	300	@LoopCorner	
-Ganon_CheckCollisions	code	4	src/bank4/ganon-draw-collisions.asm	356	Ganon_CheckCollisions	Ganon's collision rules: hurts Link on contact, takes sword hits while invisible, arrow when brown.
-Ganon_CheckCollisions@SkipLinkCollision	cheap	4	src/bank4/ganon-draw-collisions.asm	382	@SkipLinkCollision	
-Ganon_CheckCollisions@CheckHarmed	cheap	4	src/bank4/ganon-draw-collisions.asm	404	@CheckHarmed	
-Ganon_CheckCollisions@UndoDeath	cheap	4	src/bank4/ganon-draw-collisions.asm	413	@UndoDeath	
-Ganon_CheckCollisions@Exit	cheap	4	src/bank4/ganon-draw-collisions.asm	420	@Exit	
-Ganon_CheckCollisions@CheckArrowCollision	cheap	4	src/bank4/ganon-draw-collisions.asm	423	@CheckArrowCollision	
-Ganon_PaletteTransferRecord	data	4	src/bank4/ganon-draw-collisions.asm	458	GanonColorTransferRecord	DATA: template of the PPU transfer record for Ganon's palette: address $3F1C (sprite palette row 3,
-Ganon_PaletteColorSets	data	4	src/bank4/ganon-draw-collisions.asm	463	GanonColorSets	TABLE: three sets of the 3 colours written over the template; index = 0-8, a set ends at index
-Ganon_AppendPaletteRowTransferRecord_Brown	code	4	src/bank4/ganon-draw-collisions.asm	475	Ganon_AppendPaletteRowTransferRecord_Brown	Queues Ganon's brown palette ($07, $17, $30), used while he is vulnerable to the silver arrow.
-Ganon_AppendPaletteRowTransferRecord_Blue	code	4	src/bank4/ganon-draw-collisions.asm	480	Ganon_AppendPaletteRowTransferRecord_Blue	Queues Ganon's blue palette ($16, $2C, $3C), used when the brown state ends.
-Ganon_AppendPaletteRowTransferRecord_Triforce	code	4	src/bank4/ganon-draw-collisions.asm	485	Ganon_AppendPaletteRowTransferRecord_Triforce	Queues the palette for the ashes and the Triforce of Power ($27, $06, $16) when Ganon bursts.
-Ganon_AppendPaletteRowTransferRecord_Triforce@CopyBytes	cheap	4	src/bank4/ganon-draw-collisions.asm	497	@CopyBytes	
-Ganon_AppendPaletteRowTransferRecord_Triforce@OverwriteColors	cheap	4	src/bank4/ganon-draw-collisions.asm	512	@OverwriteColors	
-Ganon_DrawAshes	code	4	src/bank4/ganon-draw-collisions.asm	526	Ganon_DrawAshes	Draws Ganon's pile of ashes (frame image $0B) at his position.
-Ganon_ActivateRoomItem	code	4	src/bank4/ganon-draw-collisions.asm	537	Ganon_ActivateRoomItem	Makes the room item (the Triforce of Power in Ganon's room) appear, unless active or already taken.
-Ganon_ActivateRoomItem@Exit	cheap	4	src/bank4/ganon-draw-collisions.asm	552	@Exit	
+Ganon_BurstDirs	data	4	src/bank4/ganon-draw-collisions.asm	63	GanonBurstDirs	TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
+Ganon_BurstSpriteAttrs	data	4	src/bank4/ganon-draw-collisions.asm	68	GanonBurstSpriteAttrs	TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
+Ganon_BurstTiles	data	4	src/bank4/ganon-draw-collisions.asm	74	GanonBurstTiles	TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
+Ganon_SetUpBurstRays	code	4	src/bank4/ganon-draw-collisions.asm	86	Ganon_SetUpBurstRays	Places the 8 death-burst rays at Ganon's ashes and gives each its direction.
+Ganon_SetUpBurstRays@LoopRay	cheap	4	src/bank4/ganon-draw-collisions.asm	90	@LoopRay	
+Ganon_DrawCloud	code	4	src/bank4/ganon-draw-collisions.asm	111	Ganon_DrawCloud	Draws one death-burst cloud at ([00], [01]): frame image $0C at cloud distance >= 6, $0D below.
+Ganon_DrawBurst	code	4	src/bank4/ganon-draw-collisions.asm	145	Ganon_DrawBurst	Draws the death burst: 8 clouds closing in on the ashes and 8 rays flying outward.
+Ganon_DrawBurst@DrawClouds	cheap	4	src/bank4/ganon-draw-collisions.asm	154	@DrawClouds	
+Ganon_DrawBurst@LoopRay	cheap	4	src/bank4/ganon-draw-collisions.asm	190	@LoopRay	
+Ganon_DrawBurst@Move	cheap	4	src/bank4/ganon-draw-collisions.asm	204	@Move	
+Ganon_GetCurCloudLeft	code	4	src/bank4/ganon-draw-collisions.asm	232	Ganon_GetCurCloudLeft	Sets [00] to the X of the burst clouds left of the ashes (ObjX - cloud distance).
+Ganon_GetCurCloudRight	code	4	src/bank4/ganon-draw-collisions.asm	243	Ganon_GetCurCloudRight	Sets [00] to the X of the burst clouds right of the ashes (ObjX + cloud distance).
+Ganon_GetCurCloudTop	code	4	src/bank4/ganon-draw-collisions.asm	254	Ganon_GetCurCloudTop	Sets [01] to the Y of the burst clouds above the ashes (ObjY - cloud distance).
+Ganon_GetCurCloudBottom	code	4	src/bank4/ganon-draw-collisions.asm	265	Ganon_GetCurCloudBottom	Sets [01] to the Y of the burst clouds below the ashes (ObjY + cloud distance).
+Ganon_FrameImages	data	4	src/bank4/ganon-draw-collisions.asm	274	GanonFrameImages	TABLE: frame images of Ganon's body; index = animation frame (0-5) * 4 + quarter (0 top left,
+Ganon_SpriteOffsetsX	data	4	src/bank4/ganon-draw-collisions.asm	280	GanonSpriteOffsetsX	TABLE: X offset of each body quarter from ObjX; index = quarter 0-3; value = pixels.
+Ganon_SpriteOffsetsY	data	4	src/bank4/ganon-draw-collisions.asm	284	GanonSpriteOffsetsY	TABLE: Y offset of each body quarter from ObjY; index = quarter 0-3; value = pixels.
+Ganon_SpriteHFlips	data	4	src/bank4/ganon-draw-collisions.asm	289	GanonSpriteHFlips	TABLE: horizontal flip flag of each body quarter; index = quarter 0-3; value = 1 flipped (the right
+Ganon_DrawBody	code	4	src/bank4/ganon-draw-collisions.asm	297	Ganon_DrawBody	Draws Ganon's 32x32 body as four 16x16 quarters for the current animation frame.
+Ganon_DrawBody@LoopQuarter	cheap	4	src/bank4/ganon-draw-collisions.asm	301	@LoopCorner	
+Ganon_CheckCollisions	code	4	src/bank4/ganon-draw-collisions.asm	360	Ganon_CheckCollisions	Ganon's collision rules: hurts Link on contact, takes sword hits while invisible, arrow when brown.
+Ganon_CheckCollisions@SkipLinkCollision	cheap	4	src/bank4/ganon-draw-collisions.asm	386	@SkipLinkCollision	
+Ganon_CheckCollisions@CheckHarmed	cheap	4	src/bank4/ganon-draw-collisions.asm	408	@CheckHarmed	
+Ganon_CheckCollisions@UndoDeath	cheap	4	src/bank4/ganon-draw-collisions.asm	417	@UndoDeath	
+Ganon_CheckCollisions@Exit	cheap	4	src/bank4/ganon-draw-collisions.asm	424	@Exit	
+Ganon_CheckCollisions@CheckArrowCollision	cheap	4	src/bank4/ganon-draw-collisions.asm	427	@CheckArrowCollision	
+Ganon_PaletteTransferRecord	data	4	src/bank4/ganon-draw-collisions.asm	462	GanonColorTransferRecord	DATA: template of the PPU transfer record for Ganon's palette: address $3F1C (sprite palette row 3,
+Ganon_PaletteColorSets	data	4	src/bank4/ganon-draw-collisions.asm	467	GanonColorSets	TABLE: three sets of the 3 colours written over the template; index = 0-8, a set ends at index
+Ganon_AppendPaletteRowTransferRecord_Brown	code	4	src/bank4/ganon-draw-collisions.asm	479	Ganon_AppendPaletteRowTransferRecord_Brown	Queues Ganon's brown palette ($07, $17, $30), used while he is vulnerable to the silver arrow.
+Ganon_AppendPaletteRowTransferRecord_Blue	code	4	src/bank4/ganon-draw-collisions.asm	484	Ganon_AppendPaletteRowTransferRecord_Blue	Queues Ganon's blue palette ($16, $2C, $3C), used when the brown state ends.
+Ganon_AppendPaletteRowTransferRecord_Triforce	code	4	src/bank4/ganon-draw-collisions.asm	489	Ganon_AppendPaletteRowTransferRecord_Triforce	Queues the palette for the ashes and the Triforce of Power ($27, $06, $16) when Ganon bursts.
+Ganon_AppendPaletteRowTransferRecord_Triforce@CopyBytes	cheap	4	src/bank4/ganon-draw-collisions.asm	501	@CopyBytes	
+Ganon_AppendPaletteRowTransferRecord_Triforce@OverwriteColors	cheap	4	src/bank4/ganon-draw-collisions.asm	516	@OverwriteColors	
+Ganon_DrawAshes	code	4	src/bank4/ganon-draw-collisions.asm	530	Ganon_DrawAshes	Draws Ganon's pile of ashes (frame image $0B) at his position.
+Ganon_ActivateRoomItem	code	4	src/bank4/ganon-draw-collisions.asm	541	Ganon_ActivateRoomItem	Makes the room item (the Triforce of Power in Ganon's room) appear, unless active or already taken.
+Ganon_ActivateRoomItem@Exit	cheap	4	src/bank4/ganon-draw-collisions.asm	556	@Exit	
 Obj_ExtractStartHp	code	4	src/bank4/drop-items.asm	62	ExtractHitPointValue	Extracts one object type's starting HP from a packed byte of Obj_TypeHpPairs.
 Obj_ExtractStartHp@OddType	cheap	4	src/bank4/drop-items.asm	75	@OddType	
 Sample_PlayBossDeathCry	code	4	src/bank4/drop-items.asm	88	PlayBossDeathCry	Requests the boss death sounds: DMC sample 2 (the boss cry) and noise effect $80.
@@ -1759,18 +1759,18 @@ Drop_UpdateItem@TryToTake	cheap	4	src/bank4/drop-items.asm	353	@TryToTake
 Drop_UpdateItem@SkipTaking	cheap	4	src/bank4/drop-items.asm	360	@SkipTaking	
 Drop_UpdateItem@Exit	cheap	4	src/bank4/drop-items.asm	375	@Exit	
 Obj_DestroyMonster_Bank4	code	4	src/bank4/drop-items.asm	384	DestroyMonster_Bank4	Frees an object slot: type 0, no knockback, timer, state and invincibility timer cleared.
-Shooter_ShootIfWanted	code	4	src/bank4/shoot-helpers-candle.asm	54	_ShootIfWanted	Makes a shot of type A for the monster in slot X, if that monster currently wants to shoot.
-Shooter_ShootLimited	code	4	src/bank4/shoot-helpers-candle.asm	68	ShootLimited	Makes an object of type [00] in a free monster slot, enforcing the limit of 4 counted shots.
-Shooter_Shoot	code	4	src/bank4/shoot-helpers-candle.asm	92	Shoot	Makes an object of type [00] in slot EmptyMonsterSlot at the shooter's position and direction.
-Shooter_ReturnDidNotShoot	code	4	src/bank4/shoot-helpers-candle.asm	118	ReturnDidNotShoot	Shared failure exit of the three routines above: returns C = 0.
-Candle_UpdateRoomLight	code	4	src/bank4/shoot-helpers-candle.asm	130	UpdateCandle	Runs the dark-room lighting state machine (CandleState): start the fade, run it, or do nothing.
-Candle_UpdateRoomLight_JumpTable	data	4	src/bank4/shoot-helpers-candle.asm	135	UpdateCandle_JumpTable	TABLE: handlers of Candle_UpdateRoomLight; index = CandleState 0-2.
-Candle_State0Begin	code	4	src/bank4/shoot-helpers-candle.asm	145	UpdateCandle_Begin	CandleState 0: in a dark room, starts the fade to light (cycle $C0) and goes to state 1.
-Candle_IncState	code	4	src/bank4/shoot-helpers-candle.asm	154	L_Candle_IncState	Advances CandleState to the next state (shared by states 0 and 1).
-Candle_State2Done	code	4	src/bank4/shoot-helpers-candle.asm	158	UpdateCandle_Done	CandleState 2 (room lit): nothing to do. Also the shared return of the candle states.
-Candle_StopBrightening	code	4	src/bank4/shoot-helpers-candle.asm	162	L_Candle_StopBrightening	End of the fade: clears IsRoomBrightening and goes to CandleState 2.
-Candle_State1Brightening	code	4	src/bank4/shoot-helpers-candle.asm	171	UpdateCandle_Brightening	CandleState 1: steps the fade to light; when it is finished, ends the brightening.
-Room_IsDark_Bank4	code	4	src/bank4/shoot-helpers-candle.asm	182	IsDarkRoom_Bank4	Tests whether a room is a dark dungeon room.
+Shooter_ShootIfWanted	code	4	src/bank4/shoot-helpers-candle.asm	56	_ShootIfWanted	Makes a shot of type A for the monster in slot X, if that monster currently wants to shoot.
+Shooter_ShootLimited	code	4	src/bank4/shoot-helpers-candle.asm	70	ShootLimited	Makes an object of type [00] in a free monster slot, enforcing the limit of 4 counted shots.
+Shooter_Shoot	code	4	src/bank4/shoot-helpers-candle.asm	94	Shoot	Makes an object of type [00] in slot EmptyMonsterSlot at the shooter's position and direction.
+Shooter_ReturnDidNotShoot	code	4	src/bank4/shoot-helpers-candle.asm	120	ReturnDidNotShoot	Shared failure exit of the three routines above: returns C = 0.
+Candle_UpdateRoomLight	code	4	src/bank4/shoot-helpers-candle.asm	132	UpdateCandle	Runs the dark-room lighting state machine (CandleState): start the fade, run it, or do nothing.
+Candle_UpdateRoomLight_JumpTable	data	4	src/bank4/shoot-helpers-candle.asm	137	UpdateCandle_JumpTable	TABLE: handlers of Candle_UpdateRoomLight; index = CandleState 0-2.
+Candle_State0Begin	code	4	src/bank4/shoot-helpers-candle.asm	147	UpdateCandle_Begin	CandleState 0: in a dark room, starts the fade to light (cycle $C0) and goes to state 1.
+Candle_IncState	code	4	src/bank4/shoot-helpers-candle.asm	156	L_Candle_IncState	Advances CandleState to the next state (shared by states 0 and 1).
+Candle_State2Done	code	4	src/bank4/shoot-helpers-candle.asm	160	UpdateCandle_Done	CandleState 2 (room lit): nothing to do. Also the shared return of the candle states.
+Candle_StopBrightening	code	4	src/bank4/shoot-helpers-candle.asm	164	L_Candle_StopBrightening	End of the fade: clears IsRoomBrightening and goes to CandleState 2.
+Candle_State1Brightening	code	4	src/bank4/shoot-helpers-candle.asm	173	UpdateCandle_Brightening	CandleState 1: steps the fade to light; when it is finished, ends the brightening.
+Room_IsDark_Bank4	code	4	src/bank4/shoot-helpers-candle.asm	184	IsDarkRoom_Bank4	Tests whether a room is a dark dungeon room.
 Fairy_Init	code	4	src/bank4/fairy-flyer-common.asm	82	SetUpFairyObject	Turns a new item object into a flying fairy: jingle, facing up, speed $7F, top speed $A0.
 Flyer_ResetState	code	4	src/bank4/fairy-flyer-common.asm	107	ResetFlyerState	Zeroes a flyer's position fraction, turn count, distance, flight state and invincibility timer.
 Fairy_Update	code	4	src/bank4/fairy-flyer-common.asm	121	UpdateFairyObject	Runs the fairy item for one frame: flight state, movement, then drawing.
@@ -2365,15 +2365,15 @@ Link_SetDirAndInputDir	code	5	src/bank5/link-handle-input.asm	360	SetObjDirAndIn
 Link_SetInputDir	code	5	src/bank5/link-handle-input.asm	364	SetLinkInputDir	Sets Link's input direction to A and returns; cases 4-6 of Link_ModifyDirOnGridLine follow.
 Link_SetInputDir@ReverseDir	cheap	5	src/bank5/link-handle-input.asm	399	@ReverseDir	
 Link_SetInputDir@Exit	cheap	5	src/bank5/link-handle-input.asm	421	@Exit	
-Warp_CheckUnderLink	code	5	src/bank5/warps-stairs-caves.asm	54	CheckWarps	Starts a stairs, cave or level-entrance transition when Link stands on such a tile.
-Warp_CheckUnderLink@EnsureSquareX	cheap	5	src/bank5/warps-stairs-caves.asm	72	@EnsureSquareX	
-Warp_CheckUnderLink@EnsureSquareY	cheap	5	src/bank5/warps-stairs-caves.asm	78	@EnsureSquareY	
-Warp_StartStairsMode	code	5	src/bank5/warps-stairs-caves.asm	130	SetTargetMode	Starts mode $10 (stairs) and records the mode to enter when it ends.
-RoomHistory_SaveKillCount	code	5	src/bank5/warps-stairs-caves.asm	150	SaveKillCount	Banks the current room's kill count into the room's saved state (OW or UW version).
-Warp_CheckUnderLink_Return	code	5	src/bank5/warps-stairs-caves.asm	158	L1746E_Exit	Shared return of Warp_CheckUnderLink, RoomHistory_SaveKillCount and Warp_HandleOW.
-Warp_HandleOW	code	5	src/bank5/warps-stairs-caves.asm	174	HandleWarpOW	Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
-Warp_HandleOW@GoUnderground	cheap	5	src/bank5/warps-stairs-caves.asm	193		
-Warp_HandleOW@LoadLevel	cheap	5	src/bank5/warps-stairs-caves.asm	214	@LoadLevel	
+Warp_CheckUnderLink	code	5	src/bank5/warps-stairs-caves.asm	55	CheckWarps	Starts a stairs, cave or level-entrance transition when Link stands on such a tile.
+Warp_CheckUnderLink@EnsureSquareX	cheap	5	src/bank5/warps-stairs-caves.asm	73	@EnsureSquareX	
+Warp_CheckUnderLink@EnsureSquareY	cheap	5	src/bank5/warps-stairs-caves.asm	79	@EnsureSquareY	
+Warp_StartStairsMode	code	5	src/bank5/warps-stairs-caves.asm	131	SetTargetMode	Starts mode $10 (stairs) and records the mode to enter when it ends.
+RoomHistory_SaveKillCount	code	5	src/bank5/warps-stairs-caves.asm	151	SaveKillCount	Banks the current room's kill count into the room's saved state (OW or UW version).
+Warp_CheckUnderLink_Return	code	5	src/bank5/warps-stairs-caves.asm	159	L1746E_Exit	Shared return of Warp_CheckUnderLink, RoomHistory_SaveKillCount and Warp_HandleOW.
+Warp_HandleOW	code	5	src/bank5/warps-stairs-caves.asm	175	HandleWarpOW	Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
+Warp_HandleOW@GoUnderground	cheap	5	src/bank5/warps-stairs-caves.asm	194		
+Warp_HandleOW@LoadLevel	cheap	5	src/bank5/warps-stairs-caves.asm	215	@LoadLevel	
 Save_InitSaveRam	code	5	src/bank5/save-ram-clear-ram.asm	35	InitSaveRam	Zeroes save RAM from $6530 up when its two validity markers are missing.
 Save_InitSaveRam@ClearByte	cheap	5	src/bank5/save-ram-clear-ram.asm	53		
 Save_InitSaveRam@ReturnFalse	cheap	5	src/bank5/save-ram-clear-ram.asm	68	@ReturnFalse	
@@ -2771,26 +2771,26 @@ Walker_CheckTileCollision@CheckGridOffset	cheap	7	src/bank7/walker-collision-scr
 Unused_WalkerReverseWhenBlocked	code	7	src/bank7/walker-collision-screen-edge.asm	130	Reverse	Dead code: a blocked monster with object attribute $10 would reverse ObjDir here.
 Walker_TestTileAhead	code	7	src/bank7/walker-collision-screen-edge.asm	138	CheckTiles	Tests the tile ahead in direction [0F]; loop head of the monsters' alternate direction search.
 Walker_RejectDirAndTryNext	code	7	src/bank7/walker-collision-screen-edge.asm	150	CheckObjAttr10AndAltDir	Monster's direction rejected (tile or room bound): turn around (attribute $10) or try the next.
-Walker_TryNextAltDir	code	7	src/bank7/walker-collision-screen-edge.asm	157	TryNextDir	Takes the next alternate direction into [0F] and tests it, until the search ends.
-Link_StopAtUnwalkableTile	code	7	src/bank7/walker-collision-screen-edge.asm	166	PlayerUnwalkable	Link on a grid point facing an unwalkable tile: stop; in the OW still run the screen edge test.
-Link_StopAtUnwalkableTile@StopMoving	cheap	7	src/bank7/walker-collision-screen-edge.asm	175	@StopMoving	
-Walker_CheckTileCollision_Return	code	7	src/bank7/walker-collision-screen-edge.asm	186	L1F148_Exit	Shared RTS of Walker_CheckTileCollision and Walker_AcceptMovingDir.
-Obj_ResetMovingDir	code	7	src/bank7/walker-collision-screen-edge.asm	193	ResetMovingDir	Cancels the move: sets the moving direction [0F] to 0.
-Walker_AcceptMovingDir	code	7	src/bank7/walker-collision-screen-edge.asm	199	GoWalkableDir	Accepts direction [0F]: a monster goes to the room bound test, Link to the screen edge test.
-Link_CheckScreenEdge	code	7	src/bank7/walker-collision-screen-edge.asm	242	CheckScreenEdge	Starts a room change when Link stands exactly on the screen edge his input direction points at.
-Mode5Play_GoToNextMode	code	7	src/bank7/walker-collision-screen-edge.asm	280	GoToNextModeFromPlay	Ends play mode: adds 1 to GameMode (5 -> 6, leave room) and clears Link's movement state.
-Link_CheckScreenEdge_ReturnX0	code	7	src/bank7/walker-collision-screen-edge.asm	292	ExitX0	Shared exit of Walker_AcceptMovingDir, Link_CheckScreenEdge and Mode5Play_GoToNextMode: returns X = 0 (Link).
-Walker_CheckRoomBound	code	7	src/bank7/walker-collision-screen-edge.asm	297	CheckBoundary	Monster with a walkable tile ahead: accepts [0F] as ObjDir unless it leads across a room bound.
-Walker_GetNextAltDir	code	7	src/bank7/walker-collision-screen-edge.asm	315	Walker_GetNextAltDir	Gives the next direction to try for a blocked walker and advances the search step [0E].
-Walker_GetNextAltDir_JumpTable	data	7	src/bank7/walker-collision-screen-edge.asm	321	Walker_GetNextAltDir_JumpTable	TABLE: alternate direction search steps; index = step in [0E] (0-3); value = routine address.
-Walker_AltDir_GetRandomObjPerpendicularDir	code	7	src/bank7/walker-collision-screen-edge.asm	334	Walker_AltDir_GetRandomObjPerpendicularDir	Search step 0: returns a random direction perpendicular to the object's facing.
-Walker_AltDir_GetMovingOppositeDir	code	7	src/bank7/walker-collision-screen-edge.asm	355	Walker_AltDir_GetMovingOppositeDir	Search step 1: returns the opposite of the direction in [0F] (the one step 0 tried).
-Walker_AltDir_GetMovingOppositeDir@IncreasingDir	cheap	7	src/bank7/walker-collision-screen-edge.asm	364	@IncreasingDir	
-Obj_ReverseDirAndMovingDir	code	7	src/bank7/walker-collision-screen-edge.asm	376	ReverseObjDir	Reverses an object's facing and makes it the moving direction; also search step 2.
-Walker_AltDir_EndLoop	code	7	src/bank7/walker-collision-screen-edge.asm	386	Walker_AltDir_EndLoop	Search step 3: ends the search; returns A = 0 and [0E] = 0.
-Walker_FaceUnblockedDir	code	7	src/bank7/walker-collision-screen-edge.asm	402	_FaceUnblockedDir	Turns a monster on a grid point to face an open direction, if the search below finds one.
-Walker_FaceUnblockedDir@LoopSearchStep	cheap	7	src/bank7/walker-collision-screen-edge.asm	409	@LoopSearchStep	
-Walker_FaceUnblockedDir_Return	code	7	src/bank7/walker-collision-screen-edge.asm	427	L1F1FC_Exit	Shared RTS of Walker_FaceUnblockedDir; also the early exit of Link_EndMoveAndAnimate.
+Walker_TryNextAltDir	code	7	src/bank7/walker-collision-screen-edge.asm	158	TryNextDir	Takes the next alternate direction into [0F] and tests it, until the search ends.
+Link_StopAtUnwalkableTile	code	7	src/bank7/walker-collision-screen-edge.asm	167	PlayerUnwalkable	Link on a grid point facing an unwalkable tile: stop; in the OW still run the screen edge test.
+Link_StopAtUnwalkableTile@StopMoving	cheap	7	src/bank7/walker-collision-screen-edge.asm	176	@StopMoving	
+Walker_CheckTileCollision_Return	code	7	src/bank7/walker-collision-screen-edge.asm	187	L1F148_Exit	Shared RTS of Walker_CheckTileCollision and Walker_AcceptMovingDir.
+Obj_ResetMovingDir	code	7	src/bank7/walker-collision-screen-edge.asm	194	ResetMovingDir	Cancels the move: sets the moving direction [0F] to 0.
+Walker_AcceptMovingDir	code	7	src/bank7/walker-collision-screen-edge.asm	200	GoWalkableDir	Accepts direction [0F]: a monster goes to the room bound test, Link to the screen edge test.
+Link_CheckScreenEdge	code	7	src/bank7/walker-collision-screen-edge.asm	243	CheckScreenEdge	Starts a room change when Link stands exactly on the screen edge his input direction points at.
+Mode5Play_GoToNextMode	code	7	src/bank7/walker-collision-screen-edge.asm	281	GoToNextModeFromPlay	Ends play mode: adds 1 to GameMode (5 -> 6, leave room) and clears Link's movement state.
+Link_CheckScreenEdge_ReturnX0	code	7	src/bank7/walker-collision-screen-edge.asm	293	ExitX0	Shared exit of Walker_AcceptMovingDir, Link_CheckScreenEdge and Mode5Play_GoToNextMode: returns X = 0 (Link).
+Walker_CheckRoomBound	code	7	src/bank7/walker-collision-screen-edge.asm	298	CheckBoundary	Monster with a walkable tile ahead: accepts [0F] as ObjDir unless it leads across a room bound.
+Walker_GetNextAltDir	code	7	src/bank7/walker-collision-screen-edge.asm	316	Walker_GetNextAltDir	Gives the next direction to try for a blocked walker and advances the search step [0E].
+Walker_GetNextAltDir_JumpTable	data	7	src/bank7/walker-collision-screen-edge.asm	322	Walker_GetNextAltDir_JumpTable	TABLE: alternate direction search steps; index = step in [0E] (0-3); value = routine address.
+Walker_AltDir_GetRandomObjPerpendicularDir	code	7	src/bank7/walker-collision-screen-edge.asm	335	Walker_AltDir_GetRandomObjPerpendicularDir	Search step 0: returns a random direction perpendicular to the object's facing.
+Walker_AltDir_GetMovingOppositeDir	code	7	src/bank7/walker-collision-screen-edge.asm	356	Walker_AltDir_GetMovingOppositeDir	Search step 1: returns the opposite of the direction in [0F] (the one step 0 tried).
+Walker_AltDir_GetMovingOppositeDir@IncreasingDir	cheap	7	src/bank7/walker-collision-screen-edge.asm	365	@IncreasingDir	
+Obj_ReverseDirAndMovingDir	code	7	src/bank7/walker-collision-screen-edge.asm	377	ReverseObjDir	Reverses an object's facing and makes it the moving direction; also search step 2.
+Walker_AltDir_EndLoop	code	7	src/bank7/walker-collision-screen-edge.asm	387	Walker_AltDir_EndLoop	Search step 3: ends the search; returns A = 0 and [0E] = 0.
+Walker_FaceUnblockedDir	code	7	src/bank7/walker-collision-screen-edge.asm	403	_FaceUnblockedDir	Turns a monster on a grid point to face an open direction, if the search below finds one.
+Walker_FaceUnblockedDir@LoopSearchStep	cheap	7	src/bank7/walker-collision-screen-edge.asm	410	@LoopSearchStep	
+Walker_FaceUnblockedDir_Return	code	7	src/bank7/walker-collision-screen-edge.asm	428	L1F1FC_Exit	Shared RTS of Walker_FaceUnblockedDir; also the early exit of Link_EndMoveAndAnimate.
 Ladder_LinkOffsetsX	data	7	src/bank7/link-animate-ladder.asm	58	LinkToLadderOffsetsX	TABLE: X offset from Link to the ladder he lays down; index = 0 up, 1 down, 2 left, 3 right; pixels.
 Ladder_LinkOffsetsY	data	7	src/bank7/link-animate-ladder.asm	62	LinkToLadderOffsetsY	TABLE: Y offset from Link to the ladder he lays down; index = 0 up, 1 down, 2 left, 3 right; pixels.
 Link_ShieldHalfTiles	data	7	src/bank7/link-animate-ladder.asm	68	LinkHeadTiles	TABLE: tiles of Link's sprite that get the magic shield; index = 0-3; value = sprite tile number.
@@ -2828,17 +2828,17 @@ SwordShot_DrawOrMagicShot@Flash	cheap	7	src/bank7/sword-shot-magic-shot.asm	105	
 SwordShot_DrawOrMagicShot@LinkShot	cheap	7	src/bank7/sword-shot-magic-shot.asm	136	@PlayerShot	
 SwordShot_DrawOrMagicShot@WriteMagicSprites	cheap	7	src/bank7/sword-shot-magic-shot.asm	142	@WriteMagicSprites	
 SwordShot_DrawOrMagicShot@WriteSprites	cheap	7	src/bank7/sword-shot-magic-shot.asm	145	@WriteSprites	
-SwordShot_HandleBlocked	code	7	src/bank7/sword-shot-magic-shot.asm	166	HandleShotBlocked	Stops Link's shot: a sword shot starts spreading; a magic shot vanishes (leaving a fire with the book).
-SwordShot_DeactivateSlot0E	code	7	src/bank7/sword-shot-magic-shot.asm	219	DeactivateLinkShot	Deactivates Link's shot in slot $0E; second entry of SwordShot_HandleBlocked and the end of SwordShot_UpdateSpread.
-SwordShot_Deactivate	code	7	src/bank7/sword-shot-magic-shot.asm	223	DeactivateShot	Deactivates the shot in slot X (state = 0).
-SwordShot_StartSpread	code	7	src/bank7/sword-shot-magic-shot.asm	233	SetShotSpreadingState	Puts a stopped sword shot into the spreading state ($10 becomes $11) with corner offset -2.
-SwordShot_UpdateSpread	code	7	src/bank7/sword-shot-magic-shot.asm	249	SpreadShot	Draws the four corners of a spreading sword shot, moves them 1 pixel outward, and ends the shot.
-SwordShot_UpdateSpread@DrawShotCorner	cheap	7	src/bank7/sword-shot-magic-shot.asm	264	@DrawShotCorner	
-SwordShot_UpdateSpread@ReverseSub	cheap	7	src/bank7/sword-shot-magic-shot.asm	300	@ReverseSub	
-SwordShot_UpdateSpread@CheckDistance	cheap	7	src/bank7/sword-shot-magic-shot.asm	305	@CheckDistance	
-SwordShot_UpdateSpread@Draw	cheap	7	src/bank7/sword-shot-magic-shot.asm	326	@Draw	
-SwordShot_UpdateSpread@NextCorner	cheap	7	src/bank7/sword-shot-magic-shot.asm	335	@NextCorner	
-SwordShot_Return	code	7	src/bank7/sword-shot-magic-shot.asm	379	L1F49F_Exit	Shared return (RTS) of SwordShot_UpdateSpread, Boomerang_UpdateOrFood and Boomerang_UpdateOrArrow.
+SwordShot_HandleBlocked	code	7	src/bank7/sword-shot-magic-shot.asm	172	HandleShotBlocked	Stops Link's shot: a sword shot starts spreading; a magic shot vanishes (leaving a fire with the book).
+SwordShot_DeactivateSlot0E	code	7	src/bank7/sword-shot-magic-shot.asm	225	DeactivateLinkShot	Deactivates Link's shot in slot $0E; second entry of SwordShot_HandleBlocked and the end of SwordShot_UpdateSpread.
+SwordShot_Deactivate	code	7	src/bank7/sword-shot-magic-shot.asm	229	DeactivateShot	Deactivates the shot in slot X (state = 0).
+SwordShot_StartSpread	code	7	src/bank7/sword-shot-magic-shot.asm	239	SetShotSpreadingState	Puts a stopped sword shot into the spreading state ($10 becomes $11) with corner offset -2.
+SwordShot_UpdateSpread	code	7	src/bank7/sword-shot-magic-shot.asm	255	SpreadShot	Draws the four corners of a spreading sword shot, moves them 1 pixel outward, and ends the shot.
+SwordShot_UpdateSpread@DrawShotCorner	cheap	7	src/bank7/sword-shot-magic-shot.asm	270	@DrawShotCorner	
+SwordShot_UpdateSpread@ReverseSub	cheap	7	src/bank7/sword-shot-magic-shot.asm	306	@ReverseSub	
+SwordShot_UpdateSpread@CheckDistance	cheap	7	src/bank7/sword-shot-magic-shot.asm	311	@CheckDistance	
+SwordShot_UpdateSpread@Draw	cheap	7	src/bank7/sword-shot-magic-shot.asm	332	@Draw	
+SwordShot_UpdateSpread@NextCorner	cheap	7	src/bank7/sword-shot-magic-shot.asm	341	@NextCorner	
+SwordShot_Return	code	7	src/bank7/sword-shot-magic-shot.asm	385	L1F49F_Exit	Shared return (RTS) of SwordShot_UpdateSpread, Boomerang_UpdateOrFood and Boomerang_UpdateOrArrow.
 Boomerang_UpdateOrFood	code	7	src/bank7/boomerang-arrow-food.asm	70	UpdateBoomerangOrFood	Updates object slot $0F each frame: the boomerang, or food lying on the ground.
 Boomerang_UpdateOrFood@CheckMonsterType	cheap	7	src/bank7/boomerang-arrow-food.asm	93	@CheckMonsterType	
 Boomerang_UpdateOrFood@AttractMonsters	cheap	7	src/bank7/boomerang-arrow-food.asm	107	@AttractMonsters	
@@ -2886,20 +2886,20 @@ Arrow_DrawArrowOrBoomerang@Draw	cheap	7	src/bank7/boomerang-return-draw.asm	303	
 Rod_UpdateRodOrArrow	code	7	src/bank7/sword-and-rod.asm	57	UpdateRodOrArrow	Updates object slot $12: a rod (state $3x) goes to the sword routine, an arrow to the arrow one.
 Sword_LinkToWeaponOffsetsX	data	7	src/bank7/sword-and-rod.asm	68	PlayerToWeaponOffsetsX	TABLE: X offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
 Sword_LinkToWeaponOffsetsY	data	7	src/bank7/sword-and-rod.asm	74	PlayerToWeaponOffsetsY	TABLE: Y offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
-Sword_UpdateSwordOrRod	code	7	src/bank7/sword-and-rod.asm	93	UpdateSwordOrRod	Runs the swing of the sword (slot $0D) or rod (slot $12): states 1 to 5, drawing, and the shot.
-Sword_UpdateSwordOrRod@Exit	cheap	7	src/bank7/sword-and-rod.asm	128	@Exit	
-Sword_UpdateSwordOrRod@DrawSwordOrRod	cheap	7	src/bank7/sword-and-rod.asm	131	@DrawSwordOrRod	
-Sword_UpdateSwordOrRod@Add4	cheap	7	src/bank7/sword-and-rod.asm	144	@Add4	
-Sword_UpdateSwordOrRod@CalcAttrs	cheap	7	src/bank7/sword-and-rod.asm	187	@CalcAttrs	
-Sword_UpdateSwordOrRod@CalcSwordAttrs	cheap	7	src/bank7/sword-and-rod.asm	201	@CalcSwordAttrs	
-Sword_UpdateSwordOrRod@SetAttrs	cheap	7	src/bank7/sword-and-rod.asm	208	@SetAttrs	
-Sword_UpdateSwordOrRod@MakeMagicShot	cheap	7	src/bank7/sword-and-rod.asm	251	@MakeMagicShot	
-SwordShot_SetUpWithState	code	7	src/bank7/sword-and-rod.asm	265	SetUpWeaponWithState	Starts the shot in slot $0E: state from A, $10 pixels ahead of Link, speed by kind of shot.
-SwordShot_SetUpWithState@ChooseSpeed	cheap	7	src/bank7/sword-and-rod.asm	283	@ChooseSpeed	
-Sword_UpdateSwordOrRod_Return	code	7	src/bank7/sword-and-rod.asm	299	L1F854_Exit	Shared return of Sword_UpdateSwordOrRod, SwordShot_SetUpWithState and SwordShot_Make.
-Obj_ResetState	code	7	src/bank7/sword-and-rod.asm	307	ResetObjState	Sets ObjState,X to 0, which frees a weapon slot or puts a monster back in its state 0.
-SwordShot_Make	code	7	src/bank7/sword-and-rod.asm	320	MakeSwordShot	Makes a sword shot in slot $0E if the slot is empty and Link's health is full.
-SwordShot_Make@SetUp	cheap	7	src/bank7/sword-and-rod.asm	352	@SetUp	
+Sword_UpdateSwordOrRod	code	7	src/bank7/sword-and-rod.asm	100	UpdateSwordOrRod	Runs the swing of the sword (slot $0D) or rod (slot $12): states 1 to 5, drawing, and the shot.
+Sword_UpdateSwordOrRod@Exit	cheap	7	src/bank7/sword-and-rod.asm	135	@Exit	
+Sword_UpdateSwordOrRod@DrawSwordOrRod	cheap	7	src/bank7/sword-and-rod.asm	138	@DrawSwordOrRod	
+Sword_UpdateSwordOrRod@Add4	cheap	7	src/bank7/sword-and-rod.asm	151	@Add4	
+Sword_UpdateSwordOrRod@CalcAttrs	cheap	7	src/bank7/sword-and-rod.asm	194	@CalcAttrs	
+Sword_UpdateSwordOrRod@CalcSwordAttrs	cheap	7	src/bank7/sword-and-rod.asm	208	@CalcSwordAttrs	
+Sword_UpdateSwordOrRod@SetAttrs	cheap	7	src/bank7/sword-and-rod.asm	215	@SetAttrs	
+Sword_UpdateSwordOrRod@MakeMagicShot	cheap	7	src/bank7/sword-and-rod.asm	258	@MakeMagicShot	
+SwordShot_SetUpWithState	code	7	src/bank7/sword-and-rod.asm	272	SetUpWeaponWithState	Starts the shot in slot $0E: state from A, $10 pixels ahead of Link, speed by kind of shot.
+SwordShot_SetUpWithState@ChooseSpeed	cheap	7	src/bank7/sword-and-rod.asm	290	@ChooseSpeed	
+Sword_UpdateSwordOrRod_Return	code	7	src/bank7/sword-and-rod.asm	306	L1F854_Exit	Shared return of Sword_UpdateSwordOrRod, SwordShot_SetUpWithState and SwordShot_Make.
+Obj_ResetState	code	7	src/bank7/sword-and-rod.asm	314	ResetObjState	Sets ObjState,X to 0, which frees a weapon slot or puts a monster back in its state 0.
+SwordShot_Make	code	7	src/bank7/sword-and-rod.asm	327	MakeSwordShot	Makes a sword shot in slot $0E if the slot is empty and Link's health is full.
+SwordShot_Make@SetUp	cheap	7	src/bank7/sword-and-rod.asm	359	@SetUp	
 Fire_Update	code	7	src/bank7/fire.asm	44	UpdateFire	Updates one fire of Link's (candle or book): moves it, burns it out, lights the room, hurts Link.
 Fire_Update@StandingFire	cheap	7	src/bank7/fire.asm	75	@StandingFie	
 Fire_Update@DrawAndCheckCollisions	cheap	7	src/bank7/fire.asm	92	@DrawAndCheckCollisions	
@@ -2944,18 +2944,18 @@ Link_AdvanceItemUseState@IncState	cheap	7	src/bank7/object-animation.asm	244	@In
 Link_AdvanceItemUseState@CombineStateWith30	cheap	7	src/bank7/object-animation.asm	248	@CombineStateWith30	
 Link_AdvanceItemUseState@SetAnimFrame1	cheap	7	src/bank7/object-animation.asm	253	@SetMovementFrame1	
 Link_AdvanceItemUseState@CheckState30	cheap	7	src/bank7/object-animation.asm	260	@CheckState30	
-Obj_TypeAttributes	data	7	src/bank7/object-update-table.asm	68	ObjectTypeToAttributes	TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
-Obj_TypeHpPairs	data	7	src/bank7/object-update-table.asm	92	ObjectTypeToHpPairs	TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
-Obj_Update	code	7	src/bank7/object-update-table.asm	107	UpdateObject	Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
-Obj_Update@Init	cheap	7	src/bank7/object-update-table.asm	131	@Init	
-Obj_Update@Update	cheap	7	src/bank7/object-update-table.asm	137	@Update	
-Obj_Update@NormalObject	cheap	7	src/bank7/object-update-table.asm	152	@NormalObject	
-Obj_Update_JumpTable	data	7	src/bank7/object-update-table.asm	159	UpdateObject_JumpTable	TABLE: update routine per object type; index = object type $00-$69; value = routine address.
-Obj_UpdateMetastate	code	7	src/bank7/object-update-table.asm	272	UpdateMetaObject	Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
-Obj_DoNothing	code	7	src/bank7/object-update-table.asm	282	DoNothing	Does nothing (RTS): the update or init routine of object types that have none of their own.
-Obj_EndMetastate	code	7	src/bank7/object-update-table.asm	295	UpdateMetaObjectEnd	Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
-Obj_EndMetastate@DropItem	cheap	7	src/bank7/object-update-table.asm	332	@DropItem	
-Obj_EndMetastate@Reset	cheap	7	src/bank7/object-update-table.asm	341	@Reset	
+Obj_TypeAttributes	data	7	src/bank7/object-update-table.asm	70	ObjectTypeToAttributes	TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
+Obj_TypeHpPairs	data	7	src/bank7/object-update-table.asm	98	ObjectTypeToHpPairs	TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
+Obj_Update	code	7	src/bank7/object-update-table.asm	113	UpdateObject	Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
+Obj_Update@Init	cheap	7	src/bank7/object-update-table.asm	137	@Init	
+Obj_Update@Update	cheap	7	src/bank7/object-update-table.asm	143	@Update	
+Obj_Update@NormalObject	cheap	7	src/bank7/object-update-table.asm	158	@NormalObject	
+Obj_Update_JumpTable	data	7	src/bank7/object-update-table.asm	165	UpdateObject_JumpTable	TABLE: update routine per object type; index = object type $00-$69; value = routine address.
+Obj_UpdateMetastate	code	7	src/bank7/object-update-table.asm	278	UpdateMetaObject	Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
+Obj_DoNothing	code	7	src/bank7/object-update-table.asm	288	DoNothing	Does nothing (RTS): the update or init routine of object types that have none of their own.
+Obj_EndMetastate	code	7	src/bank7/object-update-table.asm	301	UpdateMetaObjectEnd	Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
+Obj_EndMetastate@DropItem	cheap	7	src/bank7/object-update-table.asm	338	@DropItem	
+Obj_EndMetastate@Reset	cheap	7	src/bank7/object-update-table.asm	347	@Reset	
 Obj_Init	code	7	src/bank7/object-init-table.asm	45	InitObject	Initializes the object in slot CurObjIndex: edge entry, start timer, attributes, HP, type's init.
 Obj_Init@UninitMonsterFromEdge	cheap	7	src/bank7/object-init-table.asm	70	@UninitMonsterFromEdge	
 Obj_Init@InitMonsterFromEdge	cheap	7	src/bank7/object-init-table.asm	79	@InitMonsterFromEdge	
@@ -3299,210 +3299,210 @@ ObjInvincibilityTimer	var		src/Variables.inc	408	ObjInvincibilityTimer	$04F0 [20
 LeftAlignHalfWidthObj	var		src/Variables.inc	414	LeftAlignHalfWidthObj	$0504 Nonzero while the lifted item is drawn: a narrow item is not centered.
 ItemTypeToLift	var		src/Variables.inc	415	ItemTypeToLift	$0505 Item id Link is holding up, 0 = none ($1B Triforce piece in scenes).
 ItemLiftTimer	var		src/Variables.inc	416	ItemLiftTimer	$0506 Frames left of the lift; $80 when an item is taken outside mode 5.
-ChildDigdoggerCount	var		src/Variables.inc	420	ChildDigdoggerCount	$0507 Small Digdoggers the big one splits into: 3 (Digdogger_InitWith3Children) or 1 (..2).
-IsWhirlwindSummoned	var		src/Variables.inc	421	SummonedWhirlwind	$0508 1 = the flute already summoned a whirlwind in this room: no second one.
-IsTriforceFanfareActive	var		src/Variables.inc	422	TriforceFanfareActive	$0509 1 while Link holds up the Triforce of Power (Link halted, ObjTimer $C0).
-CreditsRow	var		src/Variables.inc	447	CreditsRow	$050A Credits: tile row being drawn.
-CreditsTileOffset	var		src/Variables.inc	448	CreditsTileOffset	$050B Credits: pixels scrolled since the last row was drawn; a row every 8.
-CreditsVramPage	var		src/Variables.inc	449	CreditsVramPage	$050C Credits: nametable page index 0-$B of the row being drawn.
-CreditsVramLine	var		src/Variables.inc	450	CreditsVramLine	$050D Credits: line within the page (8 lines, 6 in pages with page mod 4 = 3).
-CreditsLineIndex	var		src/Variables.inc	451	CreditsLineIndex	$050E Credits: index of the next text line.
-LanmolaViableDirMask	var		src/Variables.inc	423	LamnolaViableDirMask	$050F Lanmola turn scratch: direction bits allowed (all but the opposite one).
+ChildDigdoggerCount	var		src/Variables.inc	420	ChildDigdoggerCount	$0507 Small Digdoggers the big one splits into: 3 or 1.
+IsWhirlwindSummoned	var		src/Variables.inc	422	SummonedWhirlwind	$0508 1 = the flute already summoned a whirlwind in this room: no second one.
+IsTriforceFanfareActive	var		src/Variables.inc	423	TriforceFanfareActive	$0509 1 while Link holds up the Triforce of Power (Link halted, ObjTimer $C0).
+CreditsRow	var		src/Variables.inc	448	CreditsRow	$050A Credits: tile row being drawn.
+CreditsTileOffset	var		src/Variables.inc	449	CreditsTileOffset	$050B Credits: pixels scrolled since the last row was drawn; a row every 8.
+CreditsVramPage	var		src/Variables.inc	450	CreditsVramPage	$050C Credits: nametable page index 0-$B of the row being drawn.
+CreditsVramLine	var		src/Variables.inc	451	CreditsVramLine	$050D Credits: line within the page (8 lines, 6 in pages with page mod 4 = 3).
+CreditsLineIndex	var		src/Variables.inc	452	CreditsLineIndex	$050E Credits: index of the next text line.
+LanmolaViableDirMask	var		src/Variables.inc	424	LamnolaViableDirMask	$050F Lanmola turn scratch: direction bits allowed (all but the opposite one).
 Gleeok_WrithingCounter	var		src/ObjVars.inc	236	Gleeok_WrithingCounter	$0510 scalar; Gleeok body: fast animation steps left after a hit (set to 6).
-ActiveRedLeeverCount	var		src/Variables.inc	424	ActiveRedLeeverCount	$0510 Red Leevers (type $10) above ground; a third may not surface.
+ActiveRedLeeverCount	var		src/Variables.inc	425	ActiveRedLeeverCount	$0510 Red Leevers (type $10) above ground; a third may not surface.
 GleeokDeadNeckMask	var		src/Variables.inc	405	GleeokDeadNeckMask	$0511 Gleeok: bit n set = the head of neck n has been cut off.
-IsLinkParalyzed	var		src/Variables.inc	425	LinkParalyzed	$0512 Nonzero while a Like-Like holds Link: direction input is discarded.
-HasUsedCandle	var		src/Variables.inc	427	UsedCandle	$0513 1 = a candle fire was made in this room; the blue candle then refuses.
-IsZoraActive	var		src/Variables.inc	429	ZoraActive	$0514 1 while the room's Zora exists (one at a time).
-ActiveBoulderCount	var		src/Variables.inc	430	ActiveBoulders	$0515 Boulders (type $20) alive; the boulder spawner stops at 3.
-ShutterTouchedDirs	var		src/Variables.inc	431		$0519 Direction bits of the open shutters Link has touched in this room.
-SecretColorCycle	var		src/Variables.inc	434	SecretColorCycle	$051A Flute pond secret: 0 none, 1-$B draining, $C done.
-FluteUsedState	var		src/Variables.inc	438	UsedFlute	$051B 0; 1 once the flute was played in this room; 2 while Digdogger shrinks.
-FadeCycle	var		src/Variables.inc	439	FadeCycle	$051C Palette fade: high nibble = series, low nibble = step 0-3 (4 = done).
-PatternBlockIndex	var		src/Variables.inc	442	PatternBlockIndex	$051D Index of the CHR pattern block being copied to the PPU (transfer loops).
-IsRoomBrightening	var		src/Variables.inc	443	BrighteningRoom	$051E 1 while a candle fire is fading a dark room to light.
-CandleState	var		src/Variables.inc	444	CandleState	$051F Dark room lighting: 0 not lit, 1 brightening, 2 lit (Candle_UpdateRoomLight).
-PrevOpenedDoors	var		src/Variables.inc	454	PrevOpenedDoors	$0521 CurOpenedDoors of the room being left, kept while scrolling to the next.
-WhirlwindTeleportingState	var		src/Variables.inc	455	WhirlwindTeleportingState	$0522 0 none, 1 whirlwind carrying Link away, 2 dropping him off.
-TeleportingLevelIndex	var		src/Variables.inc	456	TeleportingLevelIndex	$0523 Whirlwind destination: (value & 7) = level number - 1.
-SpawnCycle	var		src/Variables.inc	459	SpawnCycle	$0524 Next index 0-8 into the 9-entry spawn position list; kept between rooms.
-CurEdgeSpawnCell	var		src/Variables.inc	460	CurEdgeSpawnCell	$0525 Last screen-edge spawn cell: high nibble = row, low nibble = column.
-LevelEntranceRoomId	var		src/Variables.inc	462	CaveSourceRoomId	$0526 Overworld room of the dungeon entrance last entered; $FF = none.
-CellarSourceRoomId	var		src/Variables.inc	464	CellarSourceRoomId	$0527 Dungeon room from which the current cellar was entered.
-HasSkippedDemo	var		src/Variables.inc	465	SkippedDemo	$0528 $5A once Start was pressed in the title demo; stops the demo animation.
-IsSwordShotForced	var		src/Variables.inc	466	ForceSwordShot	$0529 Nonzero would allow the sword shot at any health. Only ever cleared.
-WorldKillCycle	var		src/Variables.inc	467	WorldKillCycle	$052A Kill cycle 0-9: column of the drop table used for the next drop.
-RoomTileObjType	var		src/Variables.inc	470	RoomTileObjType	$052B Object type of the room's tile object found by the layout, 0 = none.
-RoomTileObjX	var		src/Variables.inc	471	RoomTileObjX	$052C X of that tile object (column * $10).
-RoomTileObjY	var		src/Variables.inc	472	RoomTileObjY	$052D Y of that tile object (row * $10 + $40).
-IsSwordBlocked	var		src/Variables.inc	473	SwordBlocked	$052E 1 = sword disabled until cured (set by Bubble type $2D, cleared by $2C).
-MazeStep	var		src/Variables.inc	475	MazeStep	$052F Correct steps so far (0-3) in the Lost Woods ($61) or Lost Hills ($1B).
-PlayAreaAttrs	var		src/Variables.inc	478	PlayAreaAttrs	$0530 [48] Nametable attribute bytes of the play area (from attrs A and B).
-LevelKillCounts	var		src/Variables.inc	479	LevelKillCounts	$0560 [128] per room of the current dungeon: kills banked when leaving it.
-CurNoteLowPeriodTrg	var		src/Variables.inc	484	CurNoteLowPeriodTrg	$05F0 Low period byte of the triangle note playing (base for vibrato).
-SongTrgSustainFlag	var		src/Variables.inc	485		$05F1 Song phrase: header byte 7. Bit 7 set = triangle linear counter $1F,
-SampleCounter	var		src/Variables.inc	487	SampleCounter	$05F2 Frames left of the DMC sample ($A0 at start).
-SeaSfxCounter	var		src/Variables.inc	488	SeaSfxCounter	$05F3 Sea noise effect phase counter, counts down from $D0.
-NoteLengthTableBase	var		src/Variables.inc	489	NoteLengthTableBase	$05F4 Song phrase: base offset into the note length table.
-FirstNoteIndexSongNoise	var		src/Variables.inc	490	FirstNoteIndexSongNoise	$05F5 Song phrase: script offset where the noise track starts (it loops).
-BackgroundSample	var		src/Variables.inc	491	BackgroundSample	$05F6 Looping DMC sample (request bits $F0), restarted when no other plays.
-SongRequest	var		src/Variables.inc	492	SongRequest	$0600 Song to start (one bit): $01 overworld, $02 Ganon, $04 end of level,
-SampleRequest	var		src/Variables.inc	495	SampleRequest	$0601 DMC sample to start (bit mask; bits $10-$40 loop).
-Tune1Request	var		src/Variables.inc	498	Tune1Request	$0602 Square-1 tune to start (bit mask). Bit 7 set = silence the song first,
-EffectRequest	var		src/Variables.inc	500	EffectRequest	$0603 Noise effect to start (bit mask). Sfx_Play ORs into it.
-Tune0Request	var		src/Variables.inc	501	Tune0Request	$0604 Square-0 tune to start (bit mask; $40 low-hearts beep, $80 stops song).
-CurTune0	var		src/Variables.inc	502	Tune0	$0605 Square-0 tune playing (the whole Tune0Request byte), 0 = none.
-CurEffect	var		src/Variables.inc	503	Effect	$0606 Noise effect playing, 0 = none.
-CurTune1	var		src/Variables.inc	504	Tune1	$0607 Square-1 tune playing, 0 = none; the song skips square 1 meanwhile.
-CurSample	var		src/Variables.inc	505	Sample	$0608 DMC sample playing, 0 = none.
-CurSong	var		src/Variables.inc	506	Song	$0609 Song playing (its request bit), 0 = none.
-NoteOffsetSongSq1	var		src/Variables.inc	507	NoteOffsetSongSq1	$060A Song script offset of the next square-1 note.
-NoteOffsetSongSq0	var		src/Variables.inc	508	NoteOffsetSongSq0	$060B Song script offset of the next square-0 note (0 = track absent).
-NoteOffsetSongTrg	var		src/Variables.inc	509	NoteOffsetSongTrg	$060C Song script offset of the next triangle note (0 = track absent).
-NoteOffsetSongNoise	var		src/Variables.inc	510	NoteOffsetSongNoise	$060D Song script offset of the next noise note.
-Tune0ScriptOffset	var		src/Variables.inc	511	TunePtr0	$060E Offset of the next byte of the square-0 tune in Audio_Tune0Scripts.
-NoteLengthSongSq0	var		src/Variables.inc	512	NoteLengthSongSq0	$060F Length in frames of the current square-0 song note.
-NoteLengthSongSq1	var		src/Variables.inc	513	NoteLengthSongSq1	$0610 Length in frames of the current square-1 song note.
-NoteCounterSongSq1	var		src/Variables.inc	514	NoteCounterSongSq1	$0611 Frames left of the current square-1 song note.
-CustomEnvelopeOffsetSongSq1	var		src/Variables.inc	515	CustomEnvelopeOffsetSongSq1	$0612 Square-1 volume envelope position, counts down to 0.
-NoteCounterSongSq0	var		src/Variables.inc	516	NoteCounterSongSq0	$0613 Frames left of the current square-0 song note.
-CustomEnvelopeOffsetSongSq0	var		src/Variables.inc	517	CustomEnvelopeOffsetSongSq0	$0614 Square-0 volume envelope position, counts down to 0.
-NoteLengthSongTrg	var		src/Variables.inc	518	NoteLengthSongTrg	$0615 Length in frames of the current triangle song note.
-NoteCounterSongTrg	var		src/Variables.inc	519	NoteCounterSongTrg	$0616 Frames left of the current triangle song note.
-NoteCounterSongNoise	var		src/Variables.inc	520	NoteCounterSongNoise	$0617 Frames left of the current noise song note.
-Tune1ScriptOffset	var		src/Variables.inc	521	TunePtr1	$0618 Offset of the next byte of the square-1 tune in Audio_Tune1Scripts.
-SongEnvelopeSelector	var		src/Variables.inc	522	SongEnvelopeSelector	$0619 Song phrase: volume envelope selector (byte 6 of the phrase header).
-UnusedSound61A	var		src/Variables.inc	523		$061A Zeroed by Sample_Silence; no other code refers to it.
-SongVibrationCounterSq1	var		src/Variables.inc	524	SongVibrationCounterSq1	$061B Frames since the square-1 song note began (vibrato phase).
-SongVibrationCounterSq0	var		src/Variables.inc	525	SongVibrationCounterSq0	$061C Frames since the square-0 song note began (vibrato phase).
-SongVibrationCounterTrg	var		src/Variables.inc	526	SongVibrationCounterTrg	$061D Frames since the triangle song note began (vibrato phase).
-SongRepetitionsTrg	var		src/Variables.inc	527	SongRepetitionsTrg	$061E Triangle track: repetitions left of the passage being repeated.
-SongRepeatStartOffset	var		src/Variables.inc	528	SongRepeatStartOffset	$061F Triangle track: script offset where the repeated passage starts.
-CurRoomHistoryIndex	var		src/Variables.inc	531	CurRoomHistoryIndex	$0620 Slot 0-5 of RoomHistory that the next new room overwrites.
-RoomHistory	var		src/Variables.inc	532	RoomHistory	$0621 [6] Ids of the last six different rooms entered (ring buffer).
-WorldKillCount	var		src/Variables.inc	536	WorldKillCount	$0627 Monsters killed since Link was last harmed (zeroed by Link_BeHarmed).
-QuestNumbers	var		src/Variables.inc	541	QuestNumbers	$062D [3] per save slot: 0 = Q1, 1 = Q2. Read in play through CurSaveSlot.
-DeathCounts	var		src/Variables.inc	542	DeathCounts	$0630 [3] per save slot: deaths, stops at $FF.
-IsSaveSlotActive	var		src/Variables.inc	543	IsSaveSlotActive	$0633 [3] per save slot: nonzero = registered. The menu reads 5 entries.
-IsRegisterSaveFileOptionEnabled	var		src/Variables.inc	544	IsRegisterSaveFileOptionEnabled	$0636 IsSaveSlotActive[3], the menu's Register option: always 1.
-IsEliminateSaveFileOptionEnabled	var		src/Variables.inc	545	IsEliminateSaveFileOptionEnabled	$0637 IsSaveSlotActive[4], the menu's Eliminate option: always 1.
-SaveSlotNames	var		src/Variables.inc	546	Names	$0638 [24] 3 slots x 8 characters: the slot names (tile codes, $24 = space).
-SaveSlotHearts	var		src/Variables.inc	547	SaveSlotHearts	$0650 [6] 3 slots x (HeartValues, HeartPartial) shown on the file menu.
-SelectedItemSlot	var		src/Variables.inc	552	SelectedItemSlot	$0656 Item slot on the B button: 0 boomerangs, 1-8 = InvItems+n, $F letter.
-InvItems	var		src/Variables.inc	554	Items	$0657 [40] Base of the items block, indexed by item slot. InvItems+0 = sword.
-InvSword	var		src/Variables.inc	555		$0657 Sword: 0 none, 1 wooden, 2 white, 3 magic. Same byte as InvItems.
-InvBombs	var		src/Variables.inc	557	InvBombs	$0658 Bombs held, 0 to InvMaxBombs. A bomb pickup adds 4.
-InvArrow	var		src/Variables.inc	558	InvArrow	$0659 Arrows: 0 none, 1 wooden (damage $20), 2 silver (damage $40).
-InvBow	var		src/Variables.inc	559	Bow	$065A Bow: 0 or 1. Without it the submenu skips the arrow slot and Arrow_Wield
-InvCandle	var		src/Variables.inc	561	InvCandle	$065B Candle: 0 none, 1 blue (one fire per room), 2 red.
-InvFlute	var		src/Variables.inc	562		$065C Flute: 0 or 1. The code reaches this byte only by index (InvItems, Y).
-InvFood	var		src/Variables.inc	563	InvFood	$065D Food: 0 or 1. Zeroed when the Grumble Goriya takes it.
-InvPotion	var		src/Variables.inc	564	Potion	$065E Potion doses 0-2. Blue potion adds 1 (max 2), red sets 2; a use takes 1.
-InvRod	var		src/Variables.inc	565		$065F Magic rod: 0 or 1. The code reaches this byte only by index.
-InvRaft	var		src/Variables.inc	566	InvRaft	$0660 Raft: 0 or 1.
-InvBook	var		src/Variables.inc	567	InvBook	$0661 Magic book: 0 or 1. With it a magic shot that ends makes a fire.
-InvRing	var		src/Variables.inc	568	InvRing	$0662 Ring: 0 none, 1 blue, 2 red. Damage to Link is halved once per grade.
-InvLadder	var		src/Variables.inc	569	InvLadder	$0663 Ladder: 0 or 1.
-InvMagicKey	var		src/Variables.inc	570	InvMagicKey	$0664 Magic key: 0 or 1. Opens locked doors without spending InvKeys.
-InvBracelet	var		src/Variables.inc	571	InvBracelet	$0665 Power bracelet: 0 or 1. Needed to push a rock ($62), not a gravestone.
-InvLetter	var		src/Variables.inc	572	InvLetter	$0666 Letter: 0 none, 1 held, 2 shown to the cave person of type $74.
-InvCompass	var		src/Variables.inc	573	InvCompass	$0667 Compasses of levels 1-8: bit (level - 1). Reached only by index ($10).
-InvMap	var		src/Variables.inc	574	InvMap	$0668 Maps of levels 1-8: bit (level - 1). Reached only by index (slot $11).
-InvCompass9	var		src/Variables.inc	575	InvCompass9	$0669 Compass of level 9: bit 0. Reached only by index (slot $12).
-InvMap9	var		src/Variables.inc	576	InvMap9	$066A Map of level 9: bit 0. Reached only by index (slot $13).
-InvFairy	var		src/Variables.inc	577		$066B Slot $14 of the fairy item (id $23). Never written: a fairy only heals.
-InvClock	var		src/Variables.inc	579	InvClock	$066C Clock: 1 = monsters frozen, Link invincible. Zeroed by Link_ResetStateAndClock
-InvRupees	var		src/Variables.inc	582	InvRupees	$066D Rupees, 0-$FF. Changes by 1 via InvRupeesToAdd / InvRupeesToSubtract.
-InvKeys	var		src/Variables.inc	583	InvKeys	$066E Keys, 0-$FF.
-HeartValues	var		src/Variables.inc	592	HeartValues	$066F High nibble = heart containers - 1; low nibble = full hearts.
-HeartPartial	var		src/Variables.inc	594	HeartPartial	$0670 Partial heart fill: 0 empty, $01-$7F drawn half, $80-$FF drawn full.
-InvTriforce	var		src/Variables.inc	596	InvTriforce	$0671 Triforce pieces: bit (level - 1) for levels 1-8; $FF = all eight.
-InvPowerTriforce	var		src/Variables.inc	597	LastBossDefeated	$0672 Slot $1B, Triforce of Power: 1 once its fanfare ends. Opens the shutters
-InvFiveRupees	var		src/Variables.inc	599		$0673 Slot $1C of the 5-rupee item (id $0F). Never written: 5 x Item_TakeOneRupee.
-InvBoomerang	var		src/Variables.inc	601	InvBoomerang	$0674 Wooden boomerang: 0 or 1.
-InvMagicBoomerang	var		src/Variables.inc	602	InvMagicBoomerang	$0675 Magic boomerang: 0 or 1. Sets the throw's range limit to $FF, else $31.
-InvMagicShield	var		src/Variables.inc	603	InvMagicShield	$0676 Magic shield: 0 or 1. Zeroed when a Like-Like eats it.
-InvMaxBombs	var		src/Variables.inc	606	MaxBombs	$067C Bomb capacity: 8 in a new file, +4 per upgrade bought (100 rupees).
-InvRupeesToAdd	var		src/Variables.inc	607	RupeesToAdd	$067D Rupees still to be credited to InvRupees, 1 every second frame.
-InvRupeesToSubtract	var		src/Variables.inc	609	RupeesToSubtract	$067E Rupees still to be taken from InvRupees, 1 every second frame.
-WorldFlags	var		src/Variables.inc	613	WorldFlags	$067F [384] One flag byte per room: $67F overworld, $6FF levels 1-6, $77F 7-9.
-PpuControl	var		src/Variables.inc	622	PpuControl_2000	$2000 PPU control register (write).
-PpuMask	var		src/Variables.inc	623	PpuMask_2001	$2001 PPU mask register (write).
-PpuStatus	var		src/Variables.inc	624	PpuStatus_2002	$2002 PPU status register (read; reading resets the address latch).
-OamAddr	var		src/Variables.inc	625	OamAddr_2003	$2003 OAM address (write).
-OamData	var		src/Variables.inc	626	OamData_2004	$2004 OAM data. Not used by the code.
-PpuScroll	var		src/Variables.inc	627	PpuScroll_2005	$2005 PPU scroll (two writes: X, Y).
-PpuAddr	var		src/Variables.inc	628	PpuAddr_2006	$2006 PPU VRAM address (two writes: high, low).
-PpuData	var		src/Variables.inc	629	PpuData_2007	$2007 PPU VRAM data.
-Sq0Duty	var		src/Variables.inc	635	Sq0Duty_4000	$4000 Square 0: duty, envelope, volume.
-Sq0Sweep	var		src/Variables.inc	636	Sq0Sweep_4001	$4001 Square 0: sweep.
-Sq0Timer	var		src/Variables.inc	637	Sq0Timer_4002	$4002 Square 0: period low byte.
-Sq0Length	var		src/Variables.inc	638	Sq0Length_4003	$4003 Square 0: length counter, period high bits.
-Sq1Duty	var		src/Variables.inc	639	Sq1Duty_4004	$4004 Square 1: duty, envelope, volume.
-Sq1Sweep	var		src/Variables.inc	640	Sq1Sweep_4005	$4005 Square 1: sweep.
-Sq1Timer	var		src/Variables.inc	641	Sq1Timer_4006	$4006 Square 1: period low byte.
-Sq1Length	var		src/Variables.inc	642	Sq1Length_4007	$4007 Square 1: length counter, period high bits.
-TrgLinear	var		src/Variables.inc	643	TrgLinear_4008	$4008 Triangle: linear counter.
-TrgTimer	var		src/Variables.inc	644	TrgTimer_400A	$400A Triangle: period low byte.
-TrgLength	var		src/Variables.inc	645	TrgLength_400B	$400B Triangle: length counter, period high bits.
-NoiseVolume	var		src/Variables.inc	646	NoiseVolume_400C	$400C Noise: envelope, volume.
-NoisePeriod	var		src/Variables.inc	647	NoisePeriod_400E	$400E Noise: mode and period.
-NoiseLength	var		src/Variables.inc	648	NoiseLength_400F	$400F Noise: length counter.
-DmcFreq	var		src/Variables.inc	649	DmcFreq_4010	$4010 DMC: flags and rate.
-DmcCounter	var		src/Variables.inc	650	DmcCounter_4011	$4011 DMC: output level.
-DmcAddress	var		src/Variables.inc	651	DmcAddress_4012	$4012 DMC: sample address.
-DmcLength	var		src/Variables.inc	652	DmcLength_4013	$4013 DMC: sample length.
-SpriteDma	var		src/Variables.inc	630	SpriteDma_4014	$4014 OAM DMA: page number of the sprite buffer to copy.
-ApuStatus	var		src/Variables.inc	653	ApuStatus_4015	$4015 APU channel enables.
-Ctrl1	var		src/Variables.inc	631	Ctrl1_4016	$4016 Controller strobe (write) and controller 1 data (read).
-Ctrl2FrameCtr	var		src/Variables.inc	632	Ctrl2_FrameCtr_4017	$4017 Controller 2 data (read); APU frame counter (write).
-SaveRamBegin	var		src/Variables.inc	659	SaveRamBegin	$6001 $5A once save RAM is initialized (with SaveRamEnd = $A5).
-SaveFileAName0	var		src/Variables.inc	661	SaveFileAName0	$6002 [8] File A, slot 0: name. (The SaveFileA* blocks are addressed through
-SaveFileAName1	var		src/Variables.inc	663	SaveFileAName1	$600A [8] File A, slot 1: name.
-SaveFileAName2	var		src/Variables.inc	664	SaveFileAName2	$6012 [8] File A, slot 2: name.
-SaveFileAItems0	var		src/Variables.inc	665	SaveFileAItems0	$601A [40] File A, slot 0: copy of the items block InvItems ($657-$67E).
-SaveFileAItems1	var		src/Variables.inc	666	SaveFileAItems1	$6042 [40] File A, slot 1: items block.
-SaveFileAItems2	var		src/Variables.inc	667	SaveFileAItems2	$606A [40] File A, slot 2: items block.
-SaveFileAWorldFlags0	var		src/Variables.inc	668	SaveFileAWorldFlags0	$6092 [384] File A, slot 0: copy of WorldFlags ($67F-$7FE).
-SaveFileAWorldFlags1	var		src/Variables.inc	669	SaveFileAWorldFlags1	$6212 [384] File A, slot 1: world flags.
-SaveFileAWorldFlags2	var		src/Variables.inc	670	SaveFileAWorldFlags2	$6392 [384] File A, slot 2: world flags.
-SaveFileASlotActive0	var		src/Variables.inc	671	SaveFileASlotActive0	$6512 File A, slot 0: nonzero = slot registered (source of IsSaveSlotActive).
-SaveFileASlotActive1	var		src/Variables.inc	672	SaveFileASlotActive1	$6513 File A, slot 1: slot registered.
-SaveFileASlotActive2	var		src/Variables.inc	673	SaveFileASlotActive2	$6514 File A, slot 2: slot registered.
-SaveFileAUnused0	var		src/Variables.inc	674	SaveFileADeathCount0	$6515 File A, slot 0: a byte with no use (only zeroed, summed and copied).
-SaveFileAUnused1	var		src/Variables.inc	676	SaveFileADeathCount1	$6516 File A, slot 1: byte with no use.
-SaveFileAUnused2	var		src/Variables.inc	677	SaveFileADeathCount2	$6517 File A, slot 2: byte with no use.
-SaveFileADeaths0	var		src/Variables.inc	678		$6518 File A, slot 0: death count (source of DeathCounts).
-SaveFileADeaths1	var		src/Variables.inc	679		$6519 File A, slot 1: death count.
-SaveFileADeaths2	var		src/Variables.inc	680		$651A File A, slot 2: death count.
-SaveFileAQuestNumber0	var		src/Variables.inc	681	SaveFileAQuestNumber0	$651B File A, slot 0: quest, 0 = Q1, 1 = Q2 (source of QuestNumbers).
-SaveFileAQuestNumber1	var		src/Variables.inc	682	SaveFileAQuestNumber1	$651C File A, slot 1: quest.
-SaveFileAQuestNumber2	var		src/Variables.inc	683	SaveFileAQuestNumber2	$651D File A, slot 2: quest.
-SaveFileOpenMarkers	var		src/Variables.inc	684	SaveFileOpenMarkers	$651E [3] per slot: $5A while file A is whole; 0 during the B-to-A copy.
-SaveFileCloseMarkers	var		src/Variables.inc	685	SaveFileCloseMarkers	$6521 [3] per slot: $A5 while file A is whole; 0 during the B-to-A copy.
-SaveFileAChecksums	var		src/Variables.inc	686	FileAChecksums	$6524 [3] x 2 bytes: file A checksum per slot; a mismatch reformats the slot.
-IsSaveFileBCommitted	var		src/Variables.inc	687	IsSaveFileBCommitted	$652A [3] per slot: $FF = file B fully copied to file A; 0 = copy pending.
-PlayAreaTiles	var		src/Variables.inc	690	PlayAreaTiles	$6530 [704] Play area tile map: 32 columns x 22 rows, stored by column.
-LevelBlockAttrsA	var		src/Variables.inc	694	LevelBlockAttrsA	$687E [128] Dungeon: bits 7-5 N door type, 4-2 S door type, 1-0 outer palette.
-LevelBlockAttrsB	var		src/Variables.inc	697	LevelBlockAttrsB	$68FE [128] Dungeon: bits 7-5 W door type, 4-2 E door type, 1-0 inner palette.
-LevelBlockAttrsC	var		src/Variables.inc	700	LevelBlockAttrsC	$697E [128] Bits 7-6 index into LevelInfo_FoeCounts, 5-0 monster list id.
-LevelBlockAttrsD	var		src/Variables.inc	702	LevelBlockAttrsD	$69FE [128] Bit 7 = bit 6 of the monster list id. Dungeon: bit 6 push block,
-LevelBlockAttrsE	var		src/Variables.inc	705	LevelBlockAttrsE	$6A7E [128] Dungeon: bit 7 dark room, 6-5 boss roar index, 4-0 room item id
-LevelBlockAttrsF	var		src/Variables.inc	708	LevelBlockAttrsF	$6AFE [128] Bits 5-4 index into LevelInfo_ShortcutOrItemPosArray.
-LevelInfo_PalettesTransferBuf	var		src/Variables.inc	714	LevelInfo_PalettesTransferBuf	$6B7E [36] PPU transfer record with the level's palettes.
-LevelInfo_FoeCounts	var		src/Variables.inc	715	LevelInfo_FoeCounts	$6BA2 [4] Monster counts selectable by attr C bits 7-6 (dungeons: 3, 5, 6, 8).
-LevelInfo_StartY	var		src/Variables.inc	716	LevelInfo_StartY	$6BA6 Link's Y when the level is entered ($DD in dungeons, $8D overworld).
-LevelInfo_ShortcutOrItemPosArray	var		src/Variables.inc	717	LevelInfo_ShortcutOrItemPosArray	$6BA7 [4] Positions: high nibble X, low nibble Y (each * $10).
-LevelInfo_SubmenuMapRotation	var		src/Variables.inc	719	LevelInfo_SubmenuMapRotation	$6BAB Columns the submenu map is rotated to match the level's shape.
-LevelInfo_StatusBarMapXOffset	var		src/Variables.inc	720	LevelInfo_StatusBarMapXOffset	$6BAC Pixels added to the status bar position marker's X.
-LevelInfo_StartRoomId	var		src/Variables.inc	721	LevelInfo_StartRoomId	$6BAD Room where Link starts the level.
-LevelInfo_TriforceRoomId	var		src/Variables.inc	722	LevelInfo_TriforceRoomId	$6BAE Room marked by the compass (Triforce marker on the status bar map).
-LevelInfo_WorldFlagsAddr	var		src/Variables.inc	723	LevelInfo_WorldFlagsAddr	$6BAF 2 bytes lo/hi: address of this level's 128 bytes in WorldFlags.
-LevelInfo_LevelNumber	var		src/Variables.inc	724	LevelInfo_LevelNumber	$6BB1 Level number 1-9 for the "LEVEL-n" text; 0 = overworld.
-LevelInfo_CellarRoomIdArray	var		src/Variables.inc	725	LevelInfo_CellarRoomIdArray	$6BB2 [10] Dungeon: room ids of the cellars, $FF-padded.
-LevelInfo_BossRoomId	var		src/Variables.inc	727	LevelInfo_BossRoomId	$6BBC Boss room; while its kills flag is not "all dead" rooms play the roar.
-LevelInfo_SubmenuMapMask	var		src/Variables.inc	728	LevelInfo_SubmenuMapMask	$6BBD [16] per map column: bit set = a room exists in that row.
-LevelInfo_StatusBarMapTransferBuf	var		src/Variables.inc	729	LevelInfo_StatusBarMapTransferBuf	$6BCD [45] PPU transfer record of the status bar map.
-LevelInfo_PaletteCycles	var		src/Variables.inc	730	LevelInfo_PaletteCycles	$6BFA [96] Fade series: 8-byte palette halves, indexed through FadeCycle.
-LevelInfo_DeathPaletteSeries	var		src/Variables.inc	731	LevelInfo_DeathPaletteSeries	$6C5A [32] Fade series $60 (death): 4 steps of 8 bytes.
-SaveRamEnd	var		src/Variables.inc	732	SaveRamEnd	$7FFF $A5 once save RAM is initialized; see SaveRamBegin.
+IsLinkParalyzed	var		src/Variables.inc	426	LinkParalyzed	$0512 Nonzero while a Like-Like holds Link: direction input is discarded.
+HasUsedCandle	var		src/Variables.inc	428	UsedCandle	$0513 1 = a candle fire was made in this room; the blue candle then refuses.
+IsZoraActive	var		src/Variables.inc	430	ZoraActive	$0514 1 while the room's Zora exists (one at a time).
+ActiveBoulderCount	var		src/Variables.inc	431	ActiveBoulders	$0515 Boulders (type $20) alive; the boulder spawner stops at 3.
+ShutterTouchedDirs	var		src/Variables.inc	432		$0519 Direction bits of the open shutters Link has touched in this room.
+SecretColorCycle	var		src/Variables.inc	435	SecretColorCycle	$051A Flute pond secret: 0 none, 1-$B draining, $C done.
+FluteUsedState	var		src/Variables.inc	439	UsedFlute	$051B 0; 1 once the flute was played in this room; 2 while Digdogger shrinks.
+FadeCycle	var		src/Variables.inc	440	FadeCycle	$051C Palette fade: high nibble = series, low nibble = step 0-3 (4 = done).
+PatternBlockIndex	var		src/Variables.inc	443	PatternBlockIndex	$051D Index of the CHR pattern block being copied to the PPU (transfer loops).
+IsRoomBrightening	var		src/Variables.inc	444	BrighteningRoom	$051E 1 while a candle fire is fading a dark room to light.
+CandleState	var		src/Variables.inc	445	CandleState	$051F Dark room lighting: 0 not lit, 1 brightening, 2 lit (Candle_UpdateRoomLight).
+PrevOpenedDoors	var		src/Variables.inc	455	PrevOpenedDoors	$0521 CurOpenedDoors of the room being left, kept while scrolling to the next.
+WhirlwindTeleportingState	var		src/Variables.inc	456	WhirlwindTeleportingState	$0522 0 none, 1 whirlwind carrying Link away, 2 dropping him off.
+TeleportingLevelIndex	var		src/Variables.inc	457	TeleportingLevelIndex	$0523 Whirlwind destination: (value & 7) = level number - 1.
+SpawnCycle	var		src/Variables.inc	460	SpawnCycle	$0524 Next index 0-8 into the 9-entry spawn position list; kept between rooms.
+CurEdgeSpawnCell	var		src/Variables.inc	461	CurEdgeSpawnCell	$0525 Last screen-edge spawn cell: high nibble = row, low nibble = column.
+LevelEntranceRoomId	var		src/Variables.inc	463	CaveSourceRoomId	$0526 Overworld room of the dungeon entrance last entered; $FF = none.
+CellarSourceRoomId	var		src/Variables.inc	465	CellarSourceRoomId	$0527 Dungeon room from which the current cellar was entered.
+HasSkippedDemo	var		src/Variables.inc	466	SkippedDemo	$0528 $5A once Start was pressed in the title demo; stops the demo animation.
+IsSwordShotForced	var		src/Variables.inc	467	ForceSwordShot	$0529 Nonzero would allow the sword shot at any health. Only ever cleared.
+WorldKillCycle	var		src/Variables.inc	468	WorldKillCycle	$052A Kill cycle 0-9: column of the drop table used for the next drop.
+RoomTileObjType	var		src/Variables.inc	471	RoomTileObjType	$052B Object type of the room's tile object found by the layout, 0 = none.
+RoomTileObjX	var		src/Variables.inc	472	RoomTileObjX	$052C X of that tile object (column * $10).
+RoomTileObjY	var		src/Variables.inc	473	RoomTileObjY	$052D Y of that tile object (row * $10 + $40).
+IsSwordBlocked	var		src/Variables.inc	474	SwordBlocked	$052E 1 = sword disabled until cured (set by Bubble type $2D, cleared by $2C).
+MazeStep	var		src/Variables.inc	476	MazeStep	$052F Correct steps so far (0-3) in the Lost Woods ($61) or Lost Hills ($1B).
+PlayAreaAttrs	var		src/Variables.inc	479	PlayAreaAttrs	$0530 [48] Nametable attribute bytes of the play area (from attrs A and B).
+LevelKillCounts	var		src/Variables.inc	480	LevelKillCounts	$0560 [128] per room of the current dungeon: kills banked when leaving it.
+CurNoteLowPeriodTrg	var		src/Variables.inc	485	CurNoteLowPeriodTrg	$05F0 Low period byte of the triangle note playing (base for vibrato).
+SongTrgSustainFlag	var		src/Variables.inc	486		$05F1 Song phrase: header byte 7. Bit 7 set = triangle linear counter $1F,
+SampleCounter	var		src/Variables.inc	488	SampleCounter	$05F2 Frames left of the DMC sample ($A0 at start).
+SeaSfxCounter	var		src/Variables.inc	489	SeaSfxCounter	$05F3 Sea noise effect phase counter, counts down from $D0.
+NoteLengthTableBase	var		src/Variables.inc	490	NoteLengthTableBase	$05F4 Song phrase: base offset into the note length table.
+FirstNoteIndexSongNoise	var		src/Variables.inc	491	FirstNoteIndexSongNoise	$05F5 Song phrase: script offset where the noise track starts (it loops).
+BackgroundSample	var		src/Variables.inc	492	BackgroundSample	$05F6 Looping DMC sample (request bits $F0), restarted when no other plays.
+SongRequest	var		src/Variables.inc	493	SongRequest	$0600 Song to start (one bit): $01 overworld, $02 Ganon, $04 end of level,
+SampleRequest	var		src/Variables.inc	496	SampleRequest	$0601 DMC sample to start (bit mask; bits $10-$40 loop).
+Tune1Request	var		src/Variables.inc	499	Tune1Request	$0602 Square-1 tune to start (bit mask). Bit 7 set = silence the song first,
+EffectRequest	var		src/Variables.inc	501	EffectRequest	$0603 Noise effect to start (bit mask). Sfx_Play ORs into it.
+Tune0Request	var		src/Variables.inc	502	Tune0Request	$0604 Square-0 tune to start (bit mask; $40 low-hearts beep, $80 stops song).
+CurTune0	var		src/Variables.inc	503	Tune0	$0605 Square-0 tune playing (the whole Tune0Request byte), 0 = none.
+CurEffect	var		src/Variables.inc	504	Effect	$0606 Noise effect playing, 0 = none.
+CurTune1	var		src/Variables.inc	505	Tune1	$0607 Square-1 tune playing, 0 = none; the song skips square 1 meanwhile.
+CurSample	var		src/Variables.inc	506	Sample	$0608 DMC sample playing, 0 = none.
+CurSong	var		src/Variables.inc	507	Song	$0609 Song playing (its request bit), 0 = none.
+NoteOffsetSongSq1	var		src/Variables.inc	508	NoteOffsetSongSq1	$060A Song script offset of the next square-1 note.
+NoteOffsetSongSq0	var		src/Variables.inc	509	NoteOffsetSongSq0	$060B Song script offset of the next square-0 note (0 = track absent).
+NoteOffsetSongTrg	var		src/Variables.inc	510	NoteOffsetSongTrg	$060C Song script offset of the next triangle note (0 = track absent).
+NoteOffsetSongNoise	var		src/Variables.inc	511	NoteOffsetSongNoise	$060D Song script offset of the next noise note.
+Tune0ScriptOffset	var		src/Variables.inc	512	TunePtr0	$060E Offset of the next byte of the square-0 tune in Audio_Tune0Scripts.
+NoteLengthSongSq0	var		src/Variables.inc	513	NoteLengthSongSq0	$060F Length in frames of the current square-0 song note.
+NoteLengthSongSq1	var		src/Variables.inc	514	NoteLengthSongSq1	$0610 Length in frames of the current square-1 song note.
+NoteCounterSongSq1	var		src/Variables.inc	515	NoteCounterSongSq1	$0611 Frames left of the current square-1 song note.
+CustomEnvelopeOffsetSongSq1	var		src/Variables.inc	516	CustomEnvelopeOffsetSongSq1	$0612 Square-1 volume envelope position, counts down to 0.
+NoteCounterSongSq0	var		src/Variables.inc	517	NoteCounterSongSq0	$0613 Frames left of the current square-0 song note.
+CustomEnvelopeOffsetSongSq0	var		src/Variables.inc	518	CustomEnvelopeOffsetSongSq0	$0614 Square-0 volume envelope position, counts down to 0.
+NoteLengthSongTrg	var		src/Variables.inc	519	NoteLengthSongTrg	$0615 Length in frames of the current triangle song note.
+NoteCounterSongTrg	var		src/Variables.inc	520	NoteCounterSongTrg	$0616 Frames left of the current triangle song note.
+NoteCounterSongNoise	var		src/Variables.inc	521	NoteCounterSongNoise	$0617 Frames left of the current noise song note.
+Tune1ScriptOffset	var		src/Variables.inc	522	TunePtr1	$0618 Offset of the next byte of the square-1 tune in Audio_Tune1Scripts.
+SongEnvelopeSelector	var		src/Variables.inc	523	SongEnvelopeSelector	$0619 Song phrase: volume envelope selector (byte 6 of the phrase header).
+UnusedSound61A	var		src/Variables.inc	524		$061A Zeroed by Sample_Silence; no other code refers to it.
+SongVibrationCounterSq1	var		src/Variables.inc	525	SongVibrationCounterSq1	$061B Frames since the square-1 song note began (vibrato phase).
+SongVibrationCounterSq0	var		src/Variables.inc	526	SongVibrationCounterSq0	$061C Frames since the square-0 song note began (vibrato phase).
+SongVibrationCounterTrg	var		src/Variables.inc	527	SongVibrationCounterTrg	$061D Frames since the triangle song note began (vibrato phase).
+SongRepetitionsTrg	var		src/Variables.inc	528	SongRepetitionsTrg	$061E Triangle track: repetitions left of the passage being repeated.
+SongRepeatStartOffset	var		src/Variables.inc	529	SongRepeatStartOffset	$061F Triangle track: script offset where the repeated passage starts.
+CurRoomHistoryIndex	var		src/Variables.inc	532	CurRoomHistoryIndex	$0620 Slot 0-5 of RoomHistory that the next new room overwrites.
+RoomHistory	var		src/Variables.inc	533	RoomHistory	$0621 [6] Ids of the last six different rooms entered (ring buffer).
+WorldKillCount	var		src/Variables.inc	537	WorldKillCount	$0627 Monsters killed since Link was last harmed (zeroed by Link_BeHarmed).
+QuestNumbers	var		src/Variables.inc	542	QuestNumbers	$062D [3] per save slot: 0 = Q1, 1 = Q2. Read in play through CurSaveSlot.
+DeathCounts	var		src/Variables.inc	543	DeathCounts	$0630 [3] per save slot: deaths, stops at $FF.
+IsSaveSlotActive	var		src/Variables.inc	544	IsSaveSlotActive	$0633 [3] per save slot: nonzero = registered. The menu reads 5 entries.
+IsRegisterSaveFileOptionEnabled	var		src/Variables.inc	545	IsRegisterSaveFileOptionEnabled	$0636 IsSaveSlotActive[3], the menu's Register option: always 1.
+IsEliminateSaveFileOptionEnabled	var		src/Variables.inc	546	IsEliminateSaveFileOptionEnabled	$0637 IsSaveSlotActive[4], the menu's Eliminate option: always 1.
+SaveSlotNames	var		src/Variables.inc	547	Names	$0638 [24] 3 slots x 8 characters: the slot names (tile codes, $24 = space).
+SaveSlotHearts	var		src/Variables.inc	548	SaveSlotHearts	$0650 [6] 3 slots x (HeartValues, HeartPartial) shown on the file menu.
+SelectedItemSlot	var		src/Variables.inc	553	SelectedItemSlot	$0656 Item slot on the B button: 0 boomerangs, 1-8 = InvItems+n, $F letter.
+InvItems	var		src/Variables.inc	555	Items	$0657 [40] Base of the items block, indexed by item slot. InvItems+0 = sword.
+InvSword	var		src/Variables.inc	556		$0657 Sword: 0 none, 1 wooden, 2 white, 3 magic. Same byte as InvItems.
+InvBombs	var		src/Variables.inc	558	InvBombs	$0658 Bombs held, 0 to InvMaxBombs. A bomb pickup adds 4.
+InvArrow	var		src/Variables.inc	559	InvArrow	$0659 Arrows: 0 none, 1 wooden (damage $20), 2 silver (damage $40).
+InvBow	var		src/Variables.inc	560	Bow	$065A Bow: 0 or 1. Without it the submenu skips the arrow slot and Arrow_Wield
+InvCandle	var		src/Variables.inc	562	InvCandle	$065B Candle: 0 none, 1 blue (one fire per room), 2 red.
+InvFlute	var		src/Variables.inc	563		$065C Flute: 0 or 1. The code reaches this byte only by index (InvItems, Y).
+InvFood	var		src/Variables.inc	564	InvFood	$065D Food: 0 or 1. Zeroed when the Grumble Goriya takes it.
+InvPotion	var		src/Variables.inc	565	Potion	$065E Potion doses 0-2. Blue potion adds 1 (max 2), red sets 2; a use takes 1.
+InvRod	var		src/Variables.inc	566		$065F Magic rod: 0 or 1. The code reaches this byte only by index.
+InvRaft	var		src/Variables.inc	567	InvRaft	$0660 Raft: 0 or 1.
+InvBook	var		src/Variables.inc	568	InvBook	$0661 Magic book: 0 or 1. With it a magic shot that ends makes a fire.
+InvRing	var		src/Variables.inc	569	InvRing	$0662 Ring: 0 none, 1 blue, 2 red. Damage to Link is halved once per grade.
+InvLadder	var		src/Variables.inc	570	InvLadder	$0663 Ladder: 0 or 1.
+InvMagicKey	var		src/Variables.inc	571	InvMagicKey	$0664 Magic key: 0 or 1. Opens locked doors without spending InvKeys.
+InvBracelet	var		src/Variables.inc	572	InvBracelet	$0665 Power bracelet: 0 or 1. Needed to push a rock ($62), not a gravestone.
+InvLetter	var		src/Variables.inc	573	InvLetter	$0666 Letter: 0 none, 1 held, 2 shown to the cave person of type $74.
+InvCompass	var		src/Variables.inc	574	InvCompass	$0667 Compasses of levels 1-8: bit (level - 1). Reached only by index ($10).
+InvMap	var		src/Variables.inc	575	InvMap	$0668 Maps of levels 1-8: bit (level - 1). Reached only by index (slot $11).
+InvCompass9	var		src/Variables.inc	576	InvCompass9	$0669 Compass of level 9: bit 0. Reached only by index (slot $12).
+InvMap9	var		src/Variables.inc	577	InvMap9	$066A Map of level 9: bit 0. Reached only by index (slot $13).
+InvFairy	var		src/Variables.inc	578		$066B Slot $14 of the fairy item (id $23). Never written: a fairy only heals.
+InvClock	var		src/Variables.inc	580	InvClock	$066C Clock: 1 = monsters frozen, Link invincible. Zeroed by Link_ResetStateAndClock
+InvRupees	var		src/Variables.inc	583	InvRupees	$066D Rupees, 0-$FF. Changes by 1 via InvRupeesToAdd / InvRupeesToSubtract.
+InvKeys	var		src/Variables.inc	584	InvKeys	$066E Keys, 0-$FF.
+HeartValues	var		src/Variables.inc	593	HeartValues	$066F High nibble = heart containers - 1; low nibble = full hearts.
+HeartPartial	var		src/Variables.inc	595	HeartPartial	$0670 Partial heart fill: 0 empty, $01-$7F drawn half, $80-$FF drawn full.
+InvTriforce	var		src/Variables.inc	597	InvTriforce	$0671 Triforce pieces: bit (level - 1) for levels 1-8; $FF = all eight.
+InvPowerTriforce	var		src/Variables.inc	598	LastBossDefeated	$0672 Slot $1B, Triforce of Power: 1 once its fanfare ends. Opens the shutters
+InvFiveRupees	var		src/Variables.inc	600		$0673 Slot $1C of the 5-rupee item (id $0F). Never written: 5 x Item_TakeOneRupee.
+InvBoomerang	var		src/Variables.inc	602	InvBoomerang	$0674 Wooden boomerang: 0 or 1.
+InvMagicBoomerang	var		src/Variables.inc	603	InvMagicBoomerang	$0675 Magic boomerang: 0 or 1. Sets the throw's range limit to $FF, else $31.
+InvMagicShield	var		src/Variables.inc	604	InvMagicShield	$0676 Magic shield: 0 or 1. Zeroed when a Like-Like eats it.
+InvMaxBombs	var		src/Variables.inc	607	MaxBombs	$067C Bomb capacity: 8 in a new file, +4 per upgrade bought (100 rupees).
+InvRupeesToAdd	var		src/Variables.inc	608	RupeesToAdd	$067D Rupees still to be credited to InvRupees, 1 every second frame.
+InvRupeesToSubtract	var		src/Variables.inc	610	RupeesToSubtract	$067E Rupees still to be taken from InvRupees, 1 every second frame.
+WorldFlags	var		src/Variables.inc	614	WorldFlags	$067F [384] One flag byte per room: $67F overworld, $6FF levels 1-6, $77F 7-9.
+PpuControl	var		src/Variables.inc	623	PpuControl_2000	$2000 PPU control register (write).
+PpuMask	var		src/Variables.inc	624	PpuMask_2001	$2001 PPU mask register (write).
+PpuStatus	var		src/Variables.inc	625	PpuStatus_2002	$2002 PPU status register (read; reading resets the address latch).
+OamAddr	var		src/Variables.inc	626	OamAddr_2003	$2003 OAM address (write).
+OamData	var		src/Variables.inc	627	OamData_2004	$2004 OAM data. Not used by the code.
+PpuScroll	var		src/Variables.inc	628	PpuScroll_2005	$2005 PPU scroll (two writes: X, Y).
+PpuAddr	var		src/Variables.inc	629	PpuAddr_2006	$2006 PPU VRAM address (two writes: high, low).
+PpuData	var		src/Variables.inc	630	PpuData_2007	$2007 PPU VRAM data.
+Sq0Duty	var		src/Variables.inc	636	Sq0Duty_4000	$4000 Square 0: duty, envelope, volume.
+Sq0Sweep	var		src/Variables.inc	637	Sq0Sweep_4001	$4001 Square 0: sweep.
+Sq0Timer	var		src/Variables.inc	638	Sq0Timer_4002	$4002 Square 0: period low byte.
+Sq0Length	var		src/Variables.inc	639	Sq0Length_4003	$4003 Square 0: length counter, period high bits.
+Sq1Duty	var		src/Variables.inc	640	Sq1Duty_4004	$4004 Square 1: duty, envelope, volume.
+Sq1Sweep	var		src/Variables.inc	641	Sq1Sweep_4005	$4005 Square 1: sweep.
+Sq1Timer	var		src/Variables.inc	642	Sq1Timer_4006	$4006 Square 1: period low byte.
+Sq1Length	var		src/Variables.inc	643	Sq1Length_4007	$4007 Square 1: length counter, period high bits.
+TrgLinear	var		src/Variables.inc	644	TrgLinear_4008	$4008 Triangle: linear counter.
+TrgTimer	var		src/Variables.inc	645	TrgTimer_400A	$400A Triangle: period low byte.
+TrgLength	var		src/Variables.inc	646	TrgLength_400B	$400B Triangle: length counter, period high bits.
+NoiseVolume	var		src/Variables.inc	647	NoiseVolume_400C	$400C Noise: envelope, volume.
+NoisePeriod	var		src/Variables.inc	648	NoisePeriod_400E	$400E Noise: mode and period.
+NoiseLength	var		src/Variables.inc	649	NoiseLength_400F	$400F Noise: length counter.
+DmcFreq	var		src/Variables.inc	650	DmcFreq_4010	$4010 DMC: flags and rate.
+DmcCounter	var		src/Variables.inc	651	DmcCounter_4011	$4011 DMC: output level.
+DmcAddress	var		src/Variables.inc	652	DmcAddress_4012	$4012 DMC: sample address.
+DmcLength	var		src/Variables.inc	653	DmcLength_4013	$4013 DMC: sample length.
+SpriteDma	var		src/Variables.inc	631	SpriteDma_4014	$4014 OAM DMA: page number of the sprite buffer to copy.
+ApuStatus	var		src/Variables.inc	654	ApuStatus_4015	$4015 APU channel enables.
+Ctrl1	var		src/Variables.inc	632	Ctrl1_4016	$4016 Controller strobe (write) and controller 1 data (read).
+Ctrl2FrameCtr	var		src/Variables.inc	633	Ctrl2_FrameCtr_4017	$4017 Controller 2 data (read); APU frame counter (write).
+SaveRamBegin	var		src/Variables.inc	660	SaveRamBegin	$6001 $5A once save RAM is initialized (with SaveRamEnd = $A5).
+SaveFileAName0	var		src/Variables.inc	662	SaveFileAName0	$6002 [8] File A, slot 0: name. (The SaveFileA* blocks are addressed through
+SaveFileAName1	var		src/Variables.inc	664	SaveFileAName1	$600A [8] File A, slot 1: name.
+SaveFileAName2	var		src/Variables.inc	665	SaveFileAName2	$6012 [8] File A, slot 2: name.
+SaveFileAItems0	var		src/Variables.inc	666	SaveFileAItems0	$601A [40] File A, slot 0: copy of the items block InvItems ($657-$67E).
+SaveFileAItems1	var		src/Variables.inc	667	SaveFileAItems1	$6042 [40] File A, slot 1: items block.
+SaveFileAItems2	var		src/Variables.inc	668	SaveFileAItems2	$606A [40] File A, slot 2: items block.
+SaveFileAWorldFlags0	var		src/Variables.inc	669	SaveFileAWorldFlags0	$6092 [384] File A, slot 0: copy of WorldFlags ($67F-$7FE).
+SaveFileAWorldFlags1	var		src/Variables.inc	670	SaveFileAWorldFlags1	$6212 [384] File A, slot 1: world flags.
+SaveFileAWorldFlags2	var		src/Variables.inc	671	SaveFileAWorldFlags2	$6392 [384] File A, slot 2: world flags.
+SaveFileASlotActive0	var		src/Variables.inc	672	SaveFileASlotActive0	$6512 File A, slot 0: nonzero = slot registered (source of IsSaveSlotActive).
+SaveFileASlotActive1	var		src/Variables.inc	673	SaveFileASlotActive1	$6513 File A, slot 1: slot registered.
+SaveFileASlotActive2	var		src/Variables.inc	674	SaveFileASlotActive2	$6514 File A, slot 2: slot registered.
+SaveFileAUnused0	var		src/Variables.inc	675	SaveFileADeathCount0	$6515 File A, slot 0: a byte with no use (only zeroed, summed and copied).
+SaveFileAUnused1	var		src/Variables.inc	677	SaveFileADeathCount1	$6516 File A, slot 1: byte with no use.
+SaveFileAUnused2	var		src/Variables.inc	678	SaveFileADeathCount2	$6517 File A, slot 2: byte with no use.
+SaveFileADeaths0	var		src/Variables.inc	679		$6518 File A, slot 0: death count (source of DeathCounts).
+SaveFileADeaths1	var		src/Variables.inc	680		$6519 File A, slot 1: death count.
+SaveFileADeaths2	var		src/Variables.inc	681		$651A File A, slot 2: death count.
+SaveFileAQuestNumber0	var		src/Variables.inc	682	SaveFileAQuestNumber0	$651B File A, slot 0: quest, 0 = Q1, 1 = Q2 (source of QuestNumbers).
+SaveFileAQuestNumber1	var		src/Variables.inc	683	SaveFileAQuestNumber1	$651C File A, slot 1: quest.
+SaveFileAQuestNumber2	var		src/Variables.inc	684	SaveFileAQuestNumber2	$651D File A, slot 2: quest.
+SaveFileOpenMarkers	var		src/Variables.inc	685	SaveFileOpenMarkers	$651E [3] per slot: $5A while file A is whole; 0 during the B-to-A copy.
+SaveFileCloseMarkers	var		src/Variables.inc	686	SaveFileCloseMarkers	$6521 [3] per slot: $A5 while file A is whole; 0 during the B-to-A copy.
+SaveFileAChecksums	var		src/Variables.inc	687	FileAChecksums	$6524 [3] x 2 bytes: file A checksum per slot; a mismatch reformats the slot.
+IsSaveFileBCommitted	var		src/Variables.inc	688	IsSaveFileBCommitted	$652A [3] per slot: $FF = file B fully copied to file A; 0 = copy pending.
+PlayAreaTiles	var		src/Variables.inc	691	PlayAreaTiles	$6530 [704] Play area tile map: 32 columns x 22 rows, stored by column.
+LevelBlockAttrsA	var		src/Variables.inc	695	LevelBlockAttrsA	$687E [128] Dungeon: bits 7-5 N door type, 4-2 S door type, 1-0 outer palette.
+LevelBlockAttrsB	var		src/Variables.inc	698	LevelBlockAttrsB	$68FE [128] Dungeon: bits 7-5 W door type, 4-2 E door type, 1-0 inner palette.
+LevelBlockAttrsC	var		src/Variables.inc	701	LevelBlockAttrsC	$697E [128] Bits 7-6 index into LevelInfo_FoeCounts, 5-0 monster list id.
+LevelBlockAttrsD	var		src/Variables.inc	703	LevelBlockAttrsD	$69FE [128] Bit 7 = bit 6 of the monster list id. Dungeon: bit 6 push block,
+LevelBlockAttrsE	var		src/Variables.inc	706	LevelBlockAttrsE	$6A7E [128] Dungeon: bit 7 dark room, 6-5 boss roar index, 4-0 room item id
+LevelBlockAttrsF	var		src/Variables.inc	709	LevelBlockAttrsF	$6AFE [128] Bits 5-4 index into LevelInfo_ShortcutOrItemPosArray.
+LevelInfo_PalettesTransferBuf	var		src/Variables.inc	715	LevelInfo_PalettesTransferBuf	$6B7E [36] PPU transfer record with the level's palettes.
+LevelInfo_FoeCounts	var		src/Variables.inc	716	LevelInfo_FoeCounts	$6BA2 [4] Monster counts selectable by attr C bits 7-6 (dungeons: 3, 5, 6, 8).
+LevelInfo_StartY	var		src/Variables.inc	717	LevelInfo_StartY	$6BA6 Link's Y when the level is entered ($DD in dungeons, $8D overworld).
+LevelInfo_ShortcutOrItemPosArray	var		src/Variables.inc	718	LevelInfo_ShortcutOrItemPosArray	$6BA7 [4] Positions: high nibble X, low nibble Y (each * $10).
+LevelInfo_SubmenuMapRotation	var		src/Variables.inc	720	LevelInfo_SubmenuMapRotation	$6BAB Columns the submenu map is rotated to match the level's shape.
+LevelInfo_StatusBarMapXOffset	var		src/Variables.inc	721	LevelInfo_StatusBarMapXOffset	$6BAC Pixels added to the status bar position marker's X.
+LevelInfo_StartRoomId	var		src/Variables.inc	722	LevelInfo_StartRoomId	$6BAD Room where Link starts the level.
+LevelInfo_TriforceRoomId	var		src/Variables.inc	723	LevelInfo_TriforceRoomId	$6BAE Room marked by the compass (Triforce marker on the status bar map).
+LevelInfo_WorldFlagsAddr	var		src/Variables.inc	724	LevelInfo_WorldFlagsAddr	$6BAF 2 bytes lo/hi: address of this level's 128 bytes in WorldFlags.
+LevelInfo_LevelNumber	var		src/Variables.inc	725	LevelInfo_LevelNumber	$6BB1 Level number 1-9 for the "LEVEL-n" text; 0 = overworld.
+LevelInfo_CellarRoomIdArray	var		src/Variables.inc	726	LevelInfo_CellarRoomIdArray	$6BB2 [10] Dungeon: room ids of the cellars, $FF-padded.
+LevelInfo_BossRoomId	var		src/Variables.inc	728	LevelInfo_BossRoomId	$6BBC Boss room; while its kills flag is not "all dead" rooms play the roar.
+LevelInfo_SubmenuMapMask	var		src/Variables.inc	729	LevelInfo_SubmenuMapMask	$6BBD [16] per map column: bit set = a room exists in that row.
+LevelInfo_StatusBarMapTransferBuf	var		src/Variables.inc	730	LevelInfo_StatusBarMapTransferBuf	$6BCD [45] PPU transfer record of the status bar map.
+LevelInfo_PaletteCycles	var		src/Variables.inc	731	LevelInfo_PaletteCycles	$6BFA [96] Fade series: 8-byte palette halves, indexed through FadeCycle.
+LevelInfo_DeathPaletteSeries	var		src/Variables.inc	732	LevelInfo_DeathPaletteSeries	$6C5A [32] Fade series $60 (death): 4 steps of 8 bytes.
+SaveRamEnd	var		src/Variables.inc	733	SaveRamEnd	$7FFF $A5 once save RAM is initialized; see SaveRamBegin.

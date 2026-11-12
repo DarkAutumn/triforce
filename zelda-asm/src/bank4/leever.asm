@@ -14,9 +14,9 @@
 ;     next begins (Burrower_Update@CycleState).
 ;   - A Leever can hurt Link and be hit only in state 3; a Zora in states 2, 3 and 4
 ;     (Burrower_AnimateDrawAndCheckCollisions).
-;   - Zora cycle: mound $20 frames (state 1), body up for states 2-4 ($0F frames, about $22, $10; in
-;     state 3 it shoots a fireball 2 frames in and its timer is cut to $20), mound $60 (state 5); then
-;     the object is destroyed and a new Zora is made on a random water square, with full HP
+;   - Zora cycle: mound $20 frames (state 1), body up for states 2-4 ($0F, 34 and $10 frames; state 3
+;     starts with timer $FF, shoots a fireball 2 frames in and its timer is cut to $20), mound $60
+;     (state 5); then the object is destroyed and a new Zora is made on a random water square, with full HP
 ;     (Burrower_Update, and Zora_Update, Zora_TrySpawn in bank4/zora-ow-inits.asm).
 ;   - The Blue Leever moves in every state, under ground too, steering toward the chase target with turn
 ;     rate $A0; q-speed per state $08, $0A, $10, $20, $10, $0A = 0.125 to 0.5 px/frame

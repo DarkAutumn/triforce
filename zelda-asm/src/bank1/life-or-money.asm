@@ -19,7 +19,7 @@
 ;     HeartPartial are both set to 0. Person_LifeOrMoneyState2Choose@PayWithHeartContainer
 ;   - Either payment sets ShutterTrigger = 1 and the room's item-taken flag and starts a $40-frame
 ;     timer; the man flickers until it ends and is gone for good.
-;     Person_LifeOrMoneyState2Choose@EndLifeOrMoney
+;     Person_LifeOrMoneyState2Choose@Paid
 ; CONTENTS: (generated; L = line in this file)
 ;   L0038 Person_UpdateLifeOrMoney_Full       code  Updates the life-or-money man (type $51): draws him and the two items, then runs his state.
 ;   L0055 Person_UpdateLifeOrMoney_JumpTable  data  TABLE: states of the life-or-money man; index = ObjState+1; value = routine address.

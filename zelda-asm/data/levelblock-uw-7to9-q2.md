@@ -7,19 +7,19 @@ them. The formats are in `README.md`. Find a room with `grep '^\$32 '`.
 Columns:
 
 - `lvl`: the level whose submenu map shows the room; `cN` = a cellar listed by level N; `-` = neither
-  (the room is drawn on no level's map). Levels are internal level numbers ([`CurLevel`](../src/Variables.inc#L12)). [`LevelInfo_SubmenuMapMask`](../src/Variables.inc#L728), [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L725)
+  (the room is drawn on no level's map). Levels are internal level numbers ([`CurLevel`](../src/Variables.inc#L12)). [`LevelInfo_SubmenuMapMask`](../src/Variables.inc#L729), [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L726)
 - `N`, `S`, `W`, `E`: door type per side (A bits 7-5, A bits 4-2, B bits 7-5, B bits 4-2): `open`,
   `wall`, `false`/`false2` (walk-through wall), `bomb` (bombable wall), `key`/`key2` (key door),
   `shutter`. [`Door_FindTypeByDirBit`](../src/bank5/fill-walls.asm#L55), [`Door_Touch_JumpTable`](../src/bank5/touch-door.asm#L62)
 - `po`, `pi`: outer and inner palette selectors (A bits 1-0, B bits 1-0). [`Room_FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L379)
-- `cnt`: monster count selected by C bits 7-6 from [`LevelInfo_FoeCounts`](../src/Variables.inc#L715); `list`: monster list id (C bits 5-0, D bit 7).
+- `cnt`: monster count selected by C bits 7-6 from [`LevelInfo_FoeCounts`](../src/Variables.inc#L716); `list`: monster list id (C bits 5-0, D bit 7).
   The `monsters` text applies the rules of `objlists.md`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
 - `blk`: `B` = the room has a push block (D bit 6). [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51)
 - `lay`: room layout id (D bits 5-0), see `room-layouts.md`; `$3E`/`$3F` = cellar. [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
 - `dk`: `D` = dark room (E bit 7). [`Room_IsDark_Bank5`](../src/bank5/door-flags-dark-room.asm#L124)
 - `snd`: boss sound request heard in the room (E bits 6-5 through [`Sample_BossRoarRequests`](../src/bank5/boss-sound-door-face.asm#L30)). [`Sample_SetBossRoarUW`](../src/bank5/boss-sound-door-face.asm#L42)
 - `item`: room item (E bits 4-0; `$03` = none, shown as `-`). [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51)
-- `pos`: position index (F bits 5-4) and the item's X,Y from the owning level's [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L717) (`?` when the room
+- `pos`: position index (F bits 5-4) and the item's X,Y from the owning level's [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L718) (`?` when the room
   has no `lvl`). [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280)
 - `secret`: secret trigger (F bits 2-0). [`Secret_RunTrigger_JumpTable`](../src/bank5/underworld-secrets.asm#L105)
 - `monsters; cellar`: the monsters made on entry (before the kill count is subtracted). For a cellar:

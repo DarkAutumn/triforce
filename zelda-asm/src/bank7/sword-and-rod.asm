@@ -42,11 +42,11 @@
 ;   L0057 Rod_UpdateRodOrArrow           code  Updates object slot $12: a rod (state $3x) goes to the sword routine, an arrow to the arrow one.
 ;   L0068 Sword_LinkToWeaponOffsetsX     data  TABLE: X offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
 ;   L0074 Sword_LinkToWeaponOffsetsY     data  TABLE: Y offset from Link to the sword or rod; index = (state - 1) * 4 + reverse direction index
-;   L0093 Sword_UpdateSwordOrRod         code  Runs the swing of the sword (slot $0D) or rod (slot $12): states 1 to 5, drawing, and the shot.
-;   L0265 SwordShot_SetUpWithState       code  Starts the shot in slot $0E: state from A, $10 pixels ahead of Link, speed by kind of shot.
-;   L0299 Sword_UpdateSwordOrRod_Return  code  Shared return of Sword_UpdateSwordOrRod, SwordShot_SetUpWithState and SwordShot_Make.
-;   L0307 Obj_ResetState                 code  Sets ObjState,X to 0, which frees a weapon slot or puts a monster back in its state 0.
-;   L0320 SwordShot_Make                 code  Makes a sword shot in slot $0E if the slot is empty and Link's health is full.
+;   L0100 Sword_UpdateSwordOrRod         code  Runs the swing of the sword (slot $0D) or rod (slot $12): states 1 to 5, drawing, and the shot.
+;   L0272 SwordShot_SetUpWithState       code  Starts the shot in slot $0E: state from A, $10 pixels ahead of Link, speed by kind of shot.
+;   L0306 Sword_UpdateSwordOrRod_Return  code  Shared return of Sword_UpdateSwordOrRod, SwordShot_SetUpWithState and SwordShot_Make.
+;   L0314 Obj_ResetState                 code  Sets ObjState,X to 0, which frees a weapon slot or puts a monster back in its state 0.
+;   L0327 SwordShot_Make                 code  Makes a sword shot in slot $0E if the slot is empty and Link's health is full.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -89,6 +89,13 @@ Sword_LinkToWeaponOffsetsY:
 ;       after the weapons, so their collision tests see these end-of-frame states.
 ;       Link's state, driven by the animation counter written here, is 0 again on frame 13, so A
 ;       or B can start the other weapon on frame 14 and the same weapon on frame 16.
+; NOTE: When the rod is started on frame 14 of a sword swing (or the sword on frame 14 of a rod
+;       swing), the first weapon's last two state changes (4 -> 5 on frame 14, 5 -> free on frame 15)
+;       each set Link's animation counter to 1. Link's state then goes $11 on frame 14 (the wield's own
+;       counter of 1 runs out in Link's update), $31 on frame 15 and 0 on frame 16, so A and B are read
+;       again from frame 17, 3 frames after the second weapon started and while it is still in its
+;       first state (its frames 0-3). The first weapon's slot is free from frame 15, so it can be
+;       swung again during the second weapon's swing.
 ; ----------------------------------------------------------------------------
 Sword_UpdateSwordOrRod:
     ; Low nibble of state = 0: the slot is empty (or, for slot $12, holds nothing in a rod state).

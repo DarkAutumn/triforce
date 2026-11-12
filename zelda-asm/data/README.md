@@ -77,7 +77,7 @@ image (the ROM file without its 16-byte header) and its length. Bank = offset / 
 
 A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with one byte per room.
 
-- Loading a level copies one block to RAM at [`LevelBlockAttrsA`](../src/Variables.inc#L694) (arrays B to F follow at 128-byte steps: [`LevelBlockAttrsB`](../src/Variables.inc#L697), [`LevelBlockAttrsC`](../src/Variables.inc#L700), [`LevelBlockAttrsD`](../src/Variables.inc#L702), [`LevelBlockAttrsE`](../src/Variables.inc#L705), [`LevelBlockAttrsF`](../src/Variables.inc#L708)) and one
+- Loading a level copies one block to RAM at [`LevelBlockAttrsA`](../src/Variables.inc#L695) (arrays B to F follow at 128-byte steps: [`LevelBlockAttrsB`](../src/Variables.inc#L698), [`LevelBlockAttrsC`](../src/Variables.inc#L701), [`LevelBlockAttrsD`](../src/Variables.inc#L703), [`LevelBlockAttrsE`](../src/Variables.inc#L706), [`LevelBlockAttrsF`](../src/Variables.inc#L709)) and one
   level info block after it; all code reads the RAM copy. [`Mode2Load_Init_Sub0`](../src/bank6/level-load-mode2.asm#L122), [`Level_CopyBlockAndIncSubmode`](../src/bank6/level-load-mode2.asm#L249), [`Level_SetBlockCopyDest`](../src/bank6/level-load-mode2.asm#L196)
 - The block is chosen by the level number and the quest of the save slot: [`Level_BlockAddrsQ1`](../src/bank6/level-load-mode2.asm#L57) for Q1, [`Level_BlockAddrsQ2`](../src/bank6/level-load-mode2.asm#L89) for Q2. [`Mode2Load_Init_Sub0`](../src/bank6/level-load-mode2.asm#L122)
 
@@ -105,16 +105,16 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 - B bits 7-2: cave index, read when Link stands on a stairs tile (`$70`-`$73`) or a cave entrance tile
   (`$24`, `$88`). `1`-`9`: enter that level. `$10` and above: a cave (`$14`: the shortcut cave, mode `$C`;
   any other: mode `$B`). The code treats every value below `$10` as a level number; the listings show
-  `0` as no destination, assuming such rooms hold no stairs or cave tile (unverified). [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L174)
+  `0` as no destination, assuming such rooms hold no stairs or cave tile (unverified). [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L175)
 - The person in a cave is object type `$6A + (cave index - $10)`. [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64)
 - C bits 5-0 and D bit 7 (as bit 6) form the monster list id; C bits 7-6 select one of the four
-  monster counts of the level info ([`LevelInfo_FoeCounts`](../src/Variables.inc#L715)). See `objlists.md`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+  monster counts of the level info ([`LevelInfo_FoeCounts`](../src/Variables.inc#L716)). See `objlists.md`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
 - D bits 6-0: room layout id (7 bits in the overworld). See `room-layouts.md`. [`RoomLayout_LayOutRoomOW`](../src/bank5/layout-room-ow.asm#L106)
 - The layout id that Room_GetUniqueRoomId returns is only D bits 5-0, also in the overworld. [`Room_GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40)
 - E is not per room in the overworld: it holds the wares and prices of the caves (below). [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
 - F bits 7-6: the quest in which the room's tile-object secret (pushed rock or gravestone, bombed rock
   wall, burned tree) works: `0` both, `1` Q1 only, `2` Q2 only ([`Secret_QuestNumbers`](../src/bank4/rock-wall-tree-secrets.asm#L322)). [`Secret_IsForOtherQuest`](../src/bank4/rock-wall-tree-secrets.asm#L331), [`Rock_Update`](../src/bank4/rock-wall-tree-secrets.asm#L62), [`RockWall_Update`](../src/bank4/rock-wall-tree-secrets.asm#L214), [`Tree_Update`](../src/bank4/rock-wall-tree-secrets.asm#L249)
-- F bits 5-4: index into the four positions of the level info ([`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L717)) where the room's secret stairs
+- F bits 5-4: index into the four positions of the level info ([`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L718)) where the room's secret stairs
   appear; a position byte is X in the high nibble (`byte & $F0`) and Y in the low nibble
   (`(byte & $0F) * 16`). [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280), [`Secret_RestoreStairsOW`](../src/bank5/ow-shortcut-map-square.asm#L54)
 - F bit 3: monsters enter from the screen edges instead of starting inside the room. [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64), [`Obj_Init`](../src/bank7/object-init-table.asm#L45)
@@ -138,7 +138,7 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 - Flag `$10` hint: Link pays the price of the ware he touches and the person says a hint. [`Cave_State2TalkOrShopOrDoorCharge`](../src/bank1/cave-shop.asm#L55), [`Cave_State5HintOrMoneyGame`](../src/bank1/cave-hint-money-game.asm#L61)
 - Flag `$20` money: the money game for person types below `$7B`; a person of type `$7B` or above
   gives Link the middle price as rupees. [`Cave_State5HintOrMoneyGame`](../src/bank1/cave-hint-money-game.asm#L61)
-- Flag `$40` heart-requirement: the ware can be taken only when [`HeartValues`](../src/Variables.inc#L592) >= `$40` (person type `$6C`) or
+- Flag `$40` heart-requirement: the ware can be taken only when [`HeartValues`](../src/Variables.inc#L593) >= `$40` (person type `$6C`) or
   >= `$B0` (other types). [`Cave_State2TalkOrShopOrDoorCharge`](../src/bank1/cave-shop.asm#L55)
 - Flag `$80` minus-sign: prices are shown with a minus sign. [`Cave_WritePriceListWithChar`](../src/bank1/cave-person-prices.asm#L245)
 - The last 8 bytes of E (`E[$78]`-`E[$7F]`) are not read by any code found. (unverified) [`Cave_Init_SetUpTextAndWares`](../src/bank1/cave-init-person-text.asm#L145)
@@ -153,7 +153,7 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 - D bit 6: the room has a push block; it is put on the block tile (`$B0`) found in the floor row at
   Y = `$90`. [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L228)
 - D bits 5-0: room layout id. `$3E` and `$3F` are cellars (below). [`Room_GetUniqueRoomId`](../src/bank7/tile-obj-tiles.asm#L40), [`RoomLayout_LayOutUWFloor`](../src/bank5/uw-floor-push-block.asm#L67)
-- E bit 7: the room is dark. [`Room_IsDark_Bank5`](../src/bank5/door-flags-dark-room.asm#L124), [`Room_IsDark_Bank4`](../src/bank4/shoot-helpers-candle.asm#L182)
+- E bit 7: the room is dark. [`Room_IsDark_Bank5`](../src/bank5/door-flags-dark-room.asm#L124), [`Room_IsDark_Bank4`](../src/bank4/shoot-helpers-candle.asm#L184)
 - E bits 6-5: index of the sample request ($00 $10 $20 $40) that repeats in the room until the flags of the level's
   boss room have both kill-count bits set. [`Sample_SetBossRoarUW`](../src/bank5/boss-sound-door-face.asm#L42), [`Sample_BossRoarRequests`](../src/bank5/boss-sound-door-face.asm#L30)
 - E bits 4-0: room item id; `$03` stands for no item. [`Room_SetUpItemAndPushBlock`](../src/bank5/create-room-objects.asm#L51)
@@ -170,8 +170,8 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 ## Cellar rooms
 
 - A cellar is a room of the level block with layout id `$3E` (tunnel) or `$3F` (treasure room); each
-  level lists its cellars in the level info ([`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L725)). [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418), [`Mode11Death_Init_Sub1`](../src/bank5/mode11-death-init.asm#L73)
-- Stairs in a room lead to the first listed cellar whose A or B byte equals the room id. [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L54)
+  level lists its cellars in the level info ([`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L726)). [`Mode9Cellar_Init_LayOutCellar`](../src/bank5/layout-room-ow.asm#L418), [`Mode11Death_Init_Sub1`](../src/bank5/mode11-death-init.asm#L73)
+- Stairs in a room lead to the first listed cellar whose A or B byte equals the room id. [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L55)
 - A: the room Link returns to when he leaves the cellar at X < `$80`; B: the room when X >= `$80`. Link
   enters at the left ladder when he comes from room A, else at the right ladder. [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43), [`Mode9Cellar_Init_Sub8_EnterCellar`](../src/bank5/cave-cellar-enter.asm#L276)
 - C: where Link appears in the room he returns to: `X = C & $F0`, `Y = (C & $0F) * 16 + $0D`. [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43)
@@ -180,32 +180,32 @@ A level block is 768 bytes: six arrays of 128 bytes, called A to F, each with on
 
 # Level info
 
-One block of 252 bytes per level, copied to RAM at [`LevelInfo_PalettesTransferBuf`](../src/Variables.inc#L714). Offsets are from the start of the block.
+One block of 252 bytes per level, copied to RAM at [`LevelInfo_PalettesTransferBuf`](../src/Variables.inc#L715). Offsets are from the start of the block.
 
 - [`Level_InfoAddrs`](../src/bank6/level-load-mode2.asm#L71) chooses the block by level number. The copy runs to `$6C7D`: 256 bytes, the block and the 4 bytes
   that follow it in the ROM. [`Mode2Load_Init_Sub1`](../src/bank6/level-load-mode2.asm#L156), [`Level_SetInfoCopyDest`](../src/bank6/level-load-mode2.asm#L214), [`Level_CopyBlockAndIncSubmode`](../src/bank6/level-load-mode2.asm#L249)
 - `+$00` (36 bytes): transfer record with the level's 32 palette bytes; byte 20 is replaced with the
-  save slot's colour for Link before the transfer. [`LevelInfo_PalettesTransferBuf`](../src/Variables.inc#L714), [`Palette_PatchLinkColorAndCueLevelPalettes`](../src/bank7/init-mode-dispatch.asm#L319)
-- `+$24` (4 bytes): the four monster counts a room can select. [`LevelInfo_FoeCounts`](../src/Variables.inc#L715), [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
-- `+$28`: Link's Y when the level starts (his X is `$78`). [`LevelInfo_StartY`](../src/Variables.inc#L716), [`Mode3Unfurl_Init_Sub8_LayOutRoomPlaceLink`](../src/bank5/mode3-mode6-init.asm#L129)
-- `+$29` (4 bytes): positions of secret stairs (overworld) or room items (underworld). [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L717), [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280)
-- `+$2D`: number of columns the submenu map is rotated right. [`LevelInfo_SubmenuMapRotation`](../src/Variables.inc#L719), [`Submenu_WriteSheetMapRowTransferRecord`](../src/bank5/submenu-map.asm#L49)
-- `+$2E`: pixels added to the X of the status bar map markers. [`LevelInfo_StatusBarMapXOffset`](../src/Variables.inc#L720), [`StatusBar_UpdatePositionMarker`](../src/bank1/map-marker-curtain.asm#L72)
-- `+$2F`: start room. [`LevelInfo_StartRoomId`](../src/Variables.inc#L721), [`Mode3Unfurl_Init_Sub1`](../src/bank7/init-mode-dispatch.asm#L294)
-- `+$30`: Triforce room, shown on the status bar map with the compass (underworld only). [`LevelInfo_TriforceRoomId`](../src/Variables.inc#L722), [`StatusBar_UpdateTriforceMarker`](../src/bank7/next-room-room-flags.asm#L51)
-- `+$31` (2 bytes, low byte first): RAM address of this level's room flags (one byte per room). [`LevelInfo_WorldFlagsAddr`](../src/Variables.inc#L723), [`RoomFlags_Get`](../src/bank7/next-room-room-flags.asm#L134)
-- `+$33`: level number as written into the `LEVEL-n` text; 0 in the overworld. [`LevelInfo_LevelNumber`](../src/Variables.inc#L724), [`Mode3Unfurl_Init_Sub7_CueLevelNumber`](../src/bank5/mode3-mode6-init.asm#L114)
+  save slot's colour for Link before the transfer. [`LevelInfo_PalettesTransferBuf`](../src/Variables.inc#L715), [`Palette_PatchLinkColorAndCueLevelPalettes`](../src/bank7/init-mode-dispatch.asm#L319)
+- `+$24` (4 bytes): the four monster counts a room can select. [`LevelInfo_FoeCounts`](../src/Variables.inc#L716), [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
+- `+$28`: Link's Y when the level starts (his X is `$78`). [`LevelInfo_StartY`](../src/Variables.inc#L717), [`Mode3Unfurl_Init_Sub8_LayOutRoomPlaceLink`](../src/bank5/mode3-mode6-init.asm#L129)
+- `+$29` (4 bytes): positions of secret stairs (overworld) or room items (underworld). [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L718), [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280)
+- `+$2D`: number of columns the submenu map is rotated right. [`LevelInfo_SubmenuMapRotation`](../src/Variables.inc#L720), [`Submenu_WriteSheetMapRowTransferRecord`](../src/bank5/submenu-map.asm#L49)
+- `+$2E`: pixels added to the X of the status bar map markers. [`LevelInfo_StatusBarMapXOffset`](../src/Variables.inc#L721), [`StatusBar_UpdatePositionMarker`](../src/bank1/map-marker-curtain.asm#L72)
+- `+$2F`: start room. [`LevelInfo_StartRoomId`](../src/Variables.inc#L722), [`Mode3Unfurl_Init_Sub1`](../src/bank7/init-mode-dispatch.asm#L294)
+- `+$30`: Triforce room, shown on the status bar map with the compass (underworld only). [`LevelInfo_TriforceRoomId`](../src/Variables.inc#L723), [`StatusBar_UpdateTriforceMarker`](../src/bank7/next-room-room-flags.asm#L51)
+- `+$31` (2 bytes, low byte first): RAM address of this level's room flags (one byte per room). [`LevelInfo_WorldFlagsAddr`](../src/Variables.inc#L724), [`RoomFlags_Get`](../src/bank7/next-room-room-flags.asm#L134)
+- `+$33`: level number as written into the `LEVEL-n` text; 0 in the overworld. [`LevelInfo_LevelNumber`](../src/Variables.inc#L725), [`Mode3Unfurl_Init_Sub7_CueLevelNumber`](../src/bank5/mode3-mode6-init.asm#L114)
 - `+$34` (10 bytes, `$FF` = unused): cellar rooms (underworld); in the overworld the first four are the
   rooms joined by the shortcut cave: stairs 1 to 3 lead to the next 1 to 3 entries after the current
-  room, wrapping after the fourth. [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L725), [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L54), [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43)
+  room, wrapping after the fourth. [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L726), [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L55), [`Warp_CheckSubroomExit`](../src/bank5/cave-cellar-exits.asm#L43)
 - `+$3E`: boss room; the boss sound of a room stops once this room's flags say the boss is dead
-  (underworld only). [`LevelInfo_BossRoomId`](../src/Variables.inc#L727), [`Sample_SetBossRoarUW`](../src/bank5/boss-sound-door-face.asm#L42)
+  (underworld only). [`LevelInfo_BossRoomId`](../src/Variables.inc#L728), [`Sample_SetBossRoarUW`](../src/bank5/boss-sound-door-face.asm#L42)
 - `+$3F` (16 bytes): submenu map mask, one byte per map column after the rotation; bit `$80 >> row`
-  set = the room in that row is drawn. Room (row, column) uses byte `(column + rotation) & 15`. [`LevelInfo_SubmenuMapMask`](../src/Variables.inc#L728), [`Submenu_WriteSheetMapRowTransferRecord`](../src/bank5/submenu-map.asm#L49)
-- `+$4F` (to `+$7B`): transfer records that draw the status bar map. [`LevelInfo_StatusBarMapTransferBuf`](../src/Variables.inc#L729), [`Transfer_BufAddrs`](../src/bank6/transfer-buf-dispatch.asm#L42)
+  set = the room in that row is drawn. Room (row, column) uses byte `(column + rotation) & 15`. [`LevelInfo_SubmenuMapMask`](../src/Variables.inc#L729), [`Submenu_WriteSheetMapRowTransferRecord`](../src/bank5/submenu-map.asm#L49)
+- `+$4F` (to `+$7B`): transfer records that draw the status bar map. [`LevelInfo_StatusBarMapTransferBuf`](../src/Variables.inc#L730), [`Transfer_BufAddrs`](../src/bank6/transfer-buf-dispatch.asm#L42)
 - `+$7C` (96 bytes): three fade series of 4 steps x 8 palette bytes (written to PPU `$3F08`), used by
-  fade cycles `$00`, `$20` and `$40` and backwards by `$80`, `$A0` and `$C0`. [`LevelInfo_PaletteCycles`](../src/Variables.inc#L730), [`Palette_AnimateFade`](../src/bank1/world-fading.asm#L44)
-- `+$DC` (32 bytes): a fourth series, used by fade cycle `$60` when Link dies. [`LevelInfo_DeathPaletteSeries`](../src/Variables.inc#L731), [`Mode11Death_Init_Sub1`](../src/bank5/mode11-death-init.asm#L73), [`Palette_AnimateFade`](../src/bank1/world-fading.asm#L44)
+  fade cycles `$00`, `$20` and `$40` and backwards by `$80`, `$A0` and `$C0`. [`LevelInfo_PaletteCycles`](../src/Variables.inc#L731), [`Palette_AnimateFade`](../src/bank1/world-fading.asm#L44)
+- `+$DC` (32 bytes): a fourth series, used by fade cycle `$60` when Link dies. [`LevelInfo_DeathPaletteSeries`](../src/Variables.inc#L732), [`Mode11Death_Init_Sub1`](../src/bank5/mode11-death-init.asm#L73), [`Palette_AnimateFade`](../src/bank1/world-fading.asm#L44)
 - A transfer record is: PPU address (high byte, low byte), a control byte (bit 7: write downwards, bit 6:
   repeat one byte, bits 5-0: count, 0 = 64), then the data; a high byte >= `$80` ends the list. [`Transfer_WriteBuf`](../src/bank6/transfer-buf-dispatch.asm#L214), [`Transfer_WriteRecord`](../src/bank6/transfer-buf-dispatch.asm#L138)
 
@@ -219,10 +219,10 @@ In Q2 the level data is patched in RAM after it is copied. [`Mode2Load_Update_Fu
   more than the table holds (the first byte of whatever follows it). [`Mode2Load_Update_Full`](../src/bank6/level-load-mode2.asm#L297)
 - The tables replace the positions, map rotation and offset, start room, Triforce room, room flags
   address, level number, cellar rooms, boss room, map mask and status bar map; the palettes, the monster
-  counts and the start Y stay. `levelinfo.md` lists the patched blocks. [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L717)
+  counts and the start Y stay. `levelinfo.md` lists the patched blocks. [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L718)
 - The level number of a table is not always the number of the level it patches: in Q2 the number
   drawn as `LEVEL-n` differs from the internal level number ([`CurLevel`](../src/Variables.inc#L12)) for some levels (table below). All
-  listings use the internal number. [`LevelInfo_LevelNumber`](../src/Variables.inc#L724), [`Mode3Unfurl_Init_Sub7_CueLevelNumber`](../src/bank5/mode3-mode6-init.asm#L114)
+  listings use the internal number. [`LevelInfo_LevelNumber`](../src/Variables.inc#L725), [`Mode3Unfurl_Init_Sub7_CueLevelNumber`](../src/bank5/mode3-mode6-init.asm#L114)
 
 | Level | Table | Table bytes | Bytes copied | Last info offset written | Number shown |
 | --- | --- | --- | --- | --- | --- |

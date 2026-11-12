@@ -37,30 +37,30 @@
 ;     Mode5Play_GoToNextMode
 ;   - Object attribute $10 ("turn around when blocked") is in no Obj_TypeAttributes entry for
 ;     types $01-$5E, and every other store to ObjAttr writes $81 or copies a table value: the
-;     Reverse path is dead code. Reverse
+;     reverse path is dead code. Unused_WalkerReverseWhenBlocked
 ; CONTENTS: (generated; L = line in this file)
 ;   L0070 Link_ScreenEdgeBounds                       data  TABLE: Link's screen edge coordinates; index = 0 up, 1 down, 2 left, 3 right; value = ObjY or ObjX.
 ;   L0089 Walker_CheckTileCollision                   code  On a grid point, tests the tile ahead: Link stops or gets the screen edge test; a monster turns.
 ;   L0130 Unused_WalkerReverseWhenBlocked             code  Dead code: a blocked monster with object attribute $10 would reverse ObjDir here.
 ;   L0138 Walker_TestTileAhead                        code  Tests the tile ahead in direction [0F]; loop head of the monsters' alternate direction search.
 ;   L0150 Walker_RejectDirAndTryNext                  code  Monster's direction rejected (tile or room bound): turn around (attribute $10) or try the next.
-;   L0157 Walker_TryNextAltDir                        code  Takes the next alternate direction into [0F] and tests it, until the search ends.
-;   L0166 Link_StopAtUnwalkableTile                   code  Link on a grid point facing an unwalkable tile: stop; in the OW still run the screen edge test.
-;   L0186 Walker_CheckTileCollision_Return            code  Shared RTS of Walker_CheckTileCollision and Walker_AcceptMovingDir.
-;   L0193 Obj_ResetMovingDir                          code  Cancels the move: sets the moving direction [0F] to 0.
-;   L0199 Walker_AcceptMovingDir                      code  Accepts direction [0F]: a monster goes to the room bound test, Link to the screen edge test.
-;   L0242 Link_CheckScreenEdge                        code  Starts a room change when Link stands exactly on the screen edge his input direction points at.
-;   L0280 Mode5Play_GoToNextMode                      code  Ends play mode: adds 1 to GameMode (5 -> 6, leave room) and clears Link's movement state.
-;   L0292 Link_CheckScreenEdge_ReturnX0               code  Shared exit of Walker_AcceptMovingDir, Link_CheckScreenEdge and Mode5Play_GoToNextMode: returns X = 0 (Link).
-;   L0297 Walker_CheckRoomBound                       code  Monster with a walkable tile ahead: accepts [0F] as ObjDir unless it leads across a room bound.
-;   L0315 Walker_GetNextAltDir                        code  Gives the next direction to try for a blocked walker and advances the search step [0E].
-;   L0321 Walker_GetNextAltDir_JumpTable              data  TABLE: alternate direction search steps; index = step in [0E] (0-3); value = routine address.
-;   L0334 Walker_AltDir_GetRandomObjPerpendicularDir  code  Search step 0: returns a random direction perpendicular to the object's facing.
-;   L0355 Walker_AltDir_GetMovingOppositeDir          code  Search step 1: returns the opposite of the direction in [0F] (the one step 0 tried).
-;   L0376 Obj_ReverseDirAndMovingDir                  code  Reverses an object's facing and makes it the moving direction; also search step 2.
-;   L0386 Walker_AltDir_EndLoop                       code  Search step 3: ends the search; returns A = 0 and [0E] = 0.
-;   L0402 Walker_FaceUnblockedDir                     code  Turns a monster on a grid point to face an open direction, if the search below finds one.
-;   L0427 Walker_FaceUnblockedDir_Return              code  Shared RTS of Walker_FaceUnblockedDir; also the early exit of Link_EndMoveAndAnimate.
+;   L0158 Walker_TryNextAltDir                        code  Takes the next alternate direction into [0F] and tests it, until the search ends.
+;   L0167 Link_StopAtUnwalkableTile                   code  Link on a grid point facing an unwalkable tile: stop; in the OW still run the screen edge test.
+;   L0187 Walker_CheckTileCollision_Return            code  Shared RTS of Walker_CheckTileCollision and Walker_AcceptMovingDir.
+;   L0194 Obj_ResetMovingDir                          code  Cancels the move: sets the moving direction [0F] to 0.
+;   L0200 Walker_AcceptMovingDir                      code  Accepts direction [0F]: a monster goes to the room bound test, Link to the screen edge test.
+;   L0243 Link_CheckScreenEdge                        code  Starts a room change when Link stands exactly on the screen edge his input direction points at.
+;   L0281 Mode5Play_GoToNextMode                      code  Ends play mode: adds 1 to GameMode (5 -> 6, leave room) and clears Link's movement state.
+;   L0293 Link_CheckScreenEdge_ReturnX0               code  Shared exit of Walker_AcceptMovingDir, Link_CheckScreenEdge and Mode5Play_GoToNextMode: returns X = 0 (Link).
+;   L0298 Walker_CheckRoomBound                       code  Monster with a walkable tile ahead: accepts [0F] as ObjDir unless it leads across a room bound.
+;   L0316 Walker_GetNextAltDir                        code  Gives the next direction to try for a blocked walker and advances the search step [0E].
+;   L0322 Walker_GetNextAltDir_JumpTable              data  TABLE: alternate direction search steps; index = step in [0E] (0-3); value = routine address.
+;   L0335 Walker_AltDir_GetRandomObjPerpendicularDir  code  Search step 0: returns a random direction perpendicular to the object's facing.
+;   L0356 Walker_AltDir_GetMovingOppositeDir          code  Search step 1: returns the opposite of the direction in [0F] (the one step 0 tried).
+;   L0377 Obj_ReverseDirAndMovingDir                  code  Reverses an object's facing and makes it the moving direction; also search step 2.
+;   L0387 Walker_AltDir_EndLoop                       code  Search step 3: ends the search; returns A = 0 and [0E] = 0.
+;   L0403 Walker_FaceUnblockedDir                     code  Turns a monster on a grid point to face an open direction, if the search below finds one.
+;   L0428 Walker_FaceUnblockedDir_Return              code  Shared RTS of Walker_FaceUnblockedDir; also the early exit of Link_EndMoveAndAnimate.
 ; ============================================================================
 
 ; TABLE: Link's screen edge coordinates; index = 0 up, 1 down, 2 left, 3 right; value = ObjY or ObjX.
@@ -148,7 +148,8 @@ Walker_TestTileAhead:
 
 ; Monster's direction rejected (tile or room bound): turn around (attribute $10) or try the next.
 Walker_RejectDirAndTryNext:
-    ; Attribute $10 is never set (see Reverse), so this always falls into Walker_TryNextAltDir.
+    ; Attribute $10 is never set (see Unused_WalkerReverseWhenBlocked), so this always falls into
+    ; Walker_TryNextAltDir.
     LDA ObjAttr, X
     AND #$10
     BNE Unused_WalkerReverseWhenBlocked

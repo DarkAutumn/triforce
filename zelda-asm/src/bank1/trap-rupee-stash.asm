@@ -10,7 +10,7 @@
 ;           bank1/monster-collisions.asm (Person_DrawAndCheckCollisions_Common, the trap's collision
 ;           and draw tail; Damage_ObjTypeDamageToLink); bank1/link-collision-harm.asm (Link_CheckMonsterTouch,
 ;           Link_HarmByObjType); bank7/walker-move.asm (Obj_MoveByQSpeed); bank1/qspeed-direction-math.asm (q-speed
-;           arithmetic, Abs, Dir_GetOpposite); bank5/enter-room.asm (Room_EnterCommon: why the
+;           arithmetic, Math_Abs, Dir_GetOpposite); bank5/enter-room.asm (Room_EnterCommon: why the
 ;           generator is in object slot 1); bank5/room-history-uw.asm (RoomHistory_SaveKillCountUW: why a touched
 ;           rupee stash never returns); bank1/take-item.asm (Item_TakeOneRupee).
 ; KEY FACTS:

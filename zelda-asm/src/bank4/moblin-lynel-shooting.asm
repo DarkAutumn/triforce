@@ -6,8 +6,9 @@
 ;           Octorok): when they stop, when the shot leaves, what cancels it; the monster arrow's update.
 ; SEE ALSO: bank4/walker-wanderer-common.asm (Wanderer_MoveAndTurn: movement, turning, "wants to
 ;           shoot"); bank4/goriya.asm (Goriya_Update, used by the Lynel); bank4/octorok.asm (third
-;           caller of Shooter_RunShootTimer); bank4/shoot-helpers-candle.asm (Shooter_ShootIfWanted, Shooter_ShootLimited: the
-;           4-shot limit, Shoot); bank4/monster-shots-fireballs.asm (MonsterShot_Update for the Lynel's
+;           caller of Shooter_RunShootTimer); bank4/shoot-helpers-candle.asm (Shooter_ShootIfWanted,
+;           Shooter_ShootLimited: the 4-shot limit, Shooter_Shoot); bank4/monster-shots-fireballs.asm
+;           (MonsterShot_Update for the Lynel's
 ;           sword shot; MonsterShot_CheckLinkCollision, MonsterShot_Bounce, MonsterShot_DestroyCounted);
 ;           bank7/boomerang-arrow-food.asm (Boomerang_UpdateOrArrow, Arrow_Draw);
 ;           bank1/link-collision-harm.asm (which shots the shields block; damage to Link);
@@ -37,12 +38,12 @@
 ;     Obj_TypeAttributes): the object loop of the play update does both after the update.
 ;     Moblin_Update, Lynel_Update
 ; CONTENTS: (generated; L = line in this file)
-;   L0054 Moblin_Update                    code  Updates a Moblin (types $03, $04): wanders toward Link with turn rate $A0 and shoots arrows.
-;   L0068 Lynel_Update                     code  Updates a Lynel (types $01, $02): moves and aims with the Goriya routine and shoots sword shots.
-;   L0095 Shooter_RunShootTimer            code  Runs a walking shooter's shoot timer: stop for $30 frames, fire at $10, and set its q-speed.
-;   L0215 Shooter_ShootAndSetTimer         code  Shoots through Shooter_ShootIfWanted and, on success, sets the shooter's object timer to $80.
-;   L0223 Shooter_ShootAndSetTimer_Return  code  Shared RTS of Shooter_ShootAndSetTimer and MonsterArrow_Update.
-;   L0235 MonsterArrow_Update              code  Updates a monster's arrow (type $5B): flies at 2 pixels a frame, sparks out, or bounces off the shield.
+;   L0055 Moblin_Update                    code  Updates a Moblin (types $03, $04): wanders toward Link with turn rate $A0 and shoots arrows.
+;   L0069 Lynel_Update                     code  Updates a Lynel (types $01, $02): moves and aims with the Goriya routine and shoots sword shots.
+;   L0096 Shooter_RunShootTimer            code  Runs a walking shooter's shoot timer: stop for $30 frames, fire at $10, and set its q-speed.
+;   L0216 Shooter_ShootAndSetTimer         code  Shoots through Shooter_ShootIfWanted and, on success, sets the shooter's object timer to $80.
+;   L0224 Shooter_ShootAndSetTimer_Return  code  Shared RTS of Shooter_ShootAndSetTimer and MonsterArrow_Update.
+;   L0236 MonsterArrow_Update              code  Updates a monster's arrow (type $5B): flies at 2 pixels a frame, sparks out, or bounces off the shield.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------

@@ -417,7 +417,8 @@ ItemLiftTimer := $506               ; Frames left of the lift; $80 when an item 
 ;   Link_CheckLiftItem decrements it first and keeps Link halted while it is nonzero ($7F halted frames); Keese
 ;   do not move meanwhile. Item id 0 (bomb) is never lifted: ItemTypeToLift = 0 means none. Mode $13 reuses
 ;   the byte as a frame counter.
-ChildDigdoggerCount := $507         ; Small Digdoggers the big one splits into: 3 (Digdogger_InitWith3Children) or 1 (..2).
+ChildDigdoggerCount := $507         ; Small Digdoggers the big one splits into: 3 or 1.
+;   3 is set by Digdogger_InitWith3Children (type $38), 1 by Digdogger_InitWith1Child (type $39).
 IsWhirlwindSummoned := $508         ; 1 = the flute already summoned a whirlwind in this room: no second one.
 IsTriforceFanfareActive := $509     ; 1 while Link holds up the Triforce of Power (Link halted, ObjTimer $C0).
 LanmolaViableDirMask := $50F        ; Lanmola turn scratch: direction bits allowed (all but the opposite one).
@@ -577,8 +578,8 @@ InvMap9 := $66A                     ; Map of level 9: bit 0. Reached only by ind
 InvFairy := $66B                    ; Slot $14 of the fairy item (id $23). Never written: a fairy only heals.
 ;   The code reaches this byte only by index (InvItems, Y).
 InvClock := $66C                    ; Clock: 1 = monsters frozen, Link invincible. Zeroed by Link_ResetStateAndClock
-;   (every room entry, the mode 3 start, leaving the continue menu) and when a save slot is loaded; it is
-;   saved but never survives a load.
+;   (callers: Room_EnterCommon on room entry, Mode6Leave_Init on leaving a room, and the continue menu's
+;   Mode8Continue_Update_Full) and when a save slot is loaded; it is saved but never survives a load.
 InvRupees := $66D                   ; Rupees, 0-$FF. Changes by 1 via InvRupeesToAdd / InvRupeesToSubtract.
 InvKeys := $66E                     ; Keys, 0-$FF.
 ; Health. HeartValues and HeartPartial are item slots $18 and $19 of the items block.

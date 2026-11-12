@@ -20,7 +20,7 @@
 ;   - Blue candle (InvCandle = 1): refused once HasUsedCandle is set, so one fire per room visit; the red
 ;     candle is limited only by the two slots. Candle_Wield
 ;   - A dark dungeon room starts to light up only when a fire is standing (state $22), never while it
-;     still moves and never on the overworld (CurLevel = 0). Fire_Update@StandingFie, Candle_UpdateRoomLight
+;     still moves and never on the overworld (CurLevel = 0). Fire_Update@StandingFire, Candle_UpdateRoomLight
 ;   - The fire hurts Link in both states: within $0E pixels in X and Y (midpoints) and with Link's
 ;     invincibility timer at 0, he is knocked back and loses half a heart ($0080; a quarter with the
 ;     blue ring, an eighth with the red). Fire_Update@DrawAndCheckCollisions

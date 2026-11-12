@@ -11,7 +11,7 @@
 ;           bank7/walker-collision-screen-edge.asm (Link_CheckScreenEdge: room change only at grid offset 0);
 ;           bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate: grid offset +-8 becomes 0);
 ;           bank7/mode5-play-update.asm (Link_Update, the caller); bank1/qspeed-direction-math.asm
-;           (Dir_GetOpposite, Abs, Negate, the q-speed fraction).
+;           (Dir_GetOpposite, Math_Abs, Math_Negate, the q-speed fraction).
 ; KEY FACTS:
 ;   - A and B are read only while Link's state is 0. A swings the sword only when SwordBlockedLongTimer
 ;     and IsSwordBlocked are both 0; B is not subject to that test (Link_HandleInput).

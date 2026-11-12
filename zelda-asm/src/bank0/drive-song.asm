@@ -12,7 +12,8 @@
 ;     songs; $06 is Zelda's song (Song_PhraseHeaderOffsets entry $24); any other value is a single phrase picked by its
 ;     lowest set bit. Song_Drive, Song_PlayNextPhrase.
 ;   - First phrase / loop range (Song_PhraseHeaderOffsets entries): overworld 9 then 10-15; underworld 16-17; ending
-;     18-20 then 21-25; demo 26-35. Song_Drive@PlayFirst..., Song_PlayNextPhrase.
+;     18-20 then 21-25; demo 26-35. Song_Drive@PlayFirstOverworldPhrase (and the Underworld and Demo
+;     ones), Song_PlayNextPhrase.
 ;   - The square 1 track starts at script offset 0 and its $00 byte ends the phrase for every track.
 ;     Songs with a bit of $F1 set ($01, $10, $20, $40, $80) then play their next phrase or repeat;
 ;     all others stop through Song_Silence. Song_PlayFrame@SongEnded.
@@ -29,17 +30,17 @@
 ;   - Song_Silence clears CurSong and cuts every channel (ApuStatus 0 then $0F), which also stops a
 ;     playing DMC sample. Song_Silence.
 ; CONTENTS: (generated; L = line in this file)
-;   L0046 Song_Drive_KeepPlaying   code  Jump to Song_PlayFrame (within branch range of Song_Drive).
-;   L0053 Song_Drive               code  Starts the song in SongRequest, or plays one frame of the current song.
-;   L0089 Song_SetPrevPhraseIndex  code  Stores Y as the phrase index before the first phrase of a multi-phrase song (or its loop point).
-;   L0093 Song_PlayNextPhrase      code  Picks the next phrase of the song in A: advances SongPhraseIndex, wrapping to the song's loop point.
-;   L0145 Song_PrepPhrase          code  Loads the phrase header for Song_PhraseHeaderOffsets entry Y (1-based) and resets all track positions and c...
-;   L0174 Song_PlayFrame           code  Plays one frame of the current phrase, starting with the square 1 track.
-;   L0194 Song_Silence             code  Stops the song: clears CurSong and disables, then re-enables, the four tone and noise channels.
-;   L0203 Song_PlayAgain           code  Jump to Song_PlayNextPhrase for a song that repeats or continues.
-;   L0207 Song_PrepSq1Note         code  Handles a square 1 length control byte: sets the note length, then reads the note that follows.
-;   L0215 Song_PlaySq1Note         code  Starts the square 1 note in A (unless tune channel 1 is playing) and reloads its note counter.
-;   L0234 Song_ApplySq1Effects     code  Per-frame volume envelope and vibrato for square 1; then the square 0, triangle and noise tracks.
+;   L0047 Song_Drive_KeepPlaying   code  Jump to Song_PlayFrame (within branch range of Song_Drive).
+;   L0054 Song_Drive               code  Starts the song in SongRequest, or plays one frame of the current song.
+;   L0090 Song_SetPrevPhraseIndex  code  Stores Y as the phrase index before the first phrase of a multi-phrase song (or its loop point).
+;   L0094 Song_PlayNextPhrase      code  Picks the next phrase of the song in A: advances SongPhraseIndex, wrapping to the song's loop point.
+;   L0146 Song_PrepPhrase          code  Loads the phrase header for Song_PhraseHeaderOffsets entry Y (1-based) and resets all track positions and c...
+;   L0175 Song_PlayFrame           code  Plays one frame of the current phrase, starting with the square 1 track.
+;   L0195 Song_Silence             code  Stops the song: clears CurSong and disables, then re-enables, the four tone and noise channels.
+;   L0204 Song_PlayAgain           code  Jump to Song_PlayNextPhrase for a song that repeats or continues.
+;   L0208 Song_PrepSq1Note         code  Handles a square 1 length control byte: sets the note length, then reads the note that follows.
+;   L0216 Song_PlaySq1Note         code  Starts the square 1 note in A (unless tune channel 1 is playing) and reloads its note counter.
+;   L0235 Song_ApplySq1Effects     code  Per-frame volume envelope and vibrato for square 1; then the square 0, triangle and noise tracks.
 ; ============================================================================
 
 ; Jump to Song_PlayFrame (within branch range of Song_Drive).

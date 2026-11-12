@@ -6,7 +6,7 @@
 ;           (flying rock $53, $54, sword shot $57, magic shots $58/$59, $5A), the bounce off Link's
 ;           shield, destroying shots, and the aimed fireball's flight.
 ; SEE ALSO: bank1/link-collision-harm.asm (Link_CheckMonsterTouch: which shots the shields block, damage);
-;           bank4/shoot-helpers-candle.asm (Shooter_ShootLimited/Shoot: counted shots, limit of 4);
+;           bank4/shoot-helpers-candle.asm (Shooter_ShootLimited/Shooter_Shoot: counted shots, limit of 4);
 ;           bank4/walker-wanderer-common.asm (MonsterShot_Init: shot q-speed);
 ;           bank4/moblin-lynel-shooting.asm (monster arrow $5B reuses the bounce and destroy code);
 ;           bank1/shot-aim-boomerang-speed.asm (aiming helpers used by Fireball_Update).

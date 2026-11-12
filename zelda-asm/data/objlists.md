@@ -4,7 +4,7 @@ How to read this: a room's level block bytes give a 7-bit monster list id and a 
 lists every list reachable through [`Spawn_ObjListAddrs`](../src/bank5/mode-inits-obj-lists.asm#L185) (blob [`Spawn_ObjLists`](../src/bank5/mode-inits-obj-lists.asm#L180), `dat/ObjLists.dat`) and the object type names used in all listings.
 
 - Monster list id = level block C bits 5-0, plus `$40` when D bit 7 is set. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
-- Count = entry (C bits 7-6) of the level info's four monster counts ([`LevelInfo_FoeCounts`](../src/Variables.inc#L715)); `levelinfo.md` has them.
+- Count = entry (C bits 7-6) of the level info's four monster counts ([`LevelInfo_FoeCounts`](../src/Variables.inc#L716)); `levelinfo.md` has them.
 - Id `0`: no monsters. Id `$01`-`$61`: `count` objects of the object type equal to the id; for an id from
   `$32` up the count is forced to 1 (bosses and other single objects). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
 - Id `$62`-`$7F`: list number id - `$62` below; the first `count` bytes of the list are the object types of

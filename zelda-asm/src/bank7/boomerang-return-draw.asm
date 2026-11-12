@@ -20,11 +20,11 @@
 ;     $2x for 3 frames, then $50. Link's boomerang that overlaps a monster goes straight to $50, no
 ;     spark, from any state. Boomerang_HandleBlockedOrArrow (bank7/boomerang-arrow-food.asm),
 ;     Boomerang_DrawAndCheckCollision, Collision_CheckWeaponPointVsMonster (bank1/weapon-damage-death.asm)
-;   - Caught when both X and Y are within 8 pixels of the thrower's. Boomerang_UpdateSlowAndReturn@CheckOtherStates
+;   - Caught when both X and Y are within 8 pixels of the thrower's. Boomerang_UpdateSlowAndReturn@ReturnToThrower
 ;   - Link's catch: his state is ORed with $20 and his animation counter set to 1, slot $0F is freed.
-;     While his state is nonzero A and B are ignored (Link_HandleInput). Boomerang_UpdateSlowAndReturn@CheckOtherStates
+;     While his state is nonzero A and B are ignored (Link_HandleInput). Boomerang_UpdateSlowAndReturn@ReturnToThrower
 ;   - A monster's catch: thrower's state = 0 and its ObjTimer = $30, $50 or $70 frames chosen by
-;     Random,X (< $30, < $70, else); the boomerang is destroyed. Boomerang_UpdateSlowAndReturn@CatchBoomerang
+;     Random,X (< $30, < $70, else); the boomerang is destroyed. Boomerang_UpdateSlowAndReturn@MonsterCatches
 ;   - A monster's boomerang tests Link only on the frames its 2-frame animation counter does not expire
 ;     (every other frame), and can only collide in state $1x. Boomerang_AnimateAndCheckCollision,
 ;     Boomerang_DrawAndCheckCollision

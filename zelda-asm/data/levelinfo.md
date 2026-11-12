@@ -35,9 +35,9 @@ Q2     9      LEVEL-9   $74    $07       $17   $DD     $077F  $71,$72,$75,$76,$7
 ```
 
 - `level`: the internal level number ([`CurLevel`](../src/Variables.inc#L12)), which selects the block; `shown as`: the number drawn on
-  screen ([`LevelInfo_LevelNumber`](../src/Variables.inc#L724)). They differ for some levels in Q2. [`Mode3Unfurl_Init_Sub7_CueLevelNumber`](../src/bank5/mode3-mode6-init.asm#L114)
-- `start`, `Triforce`, `boss`: room ids ([`LevelInfo_StartRoomId`](../src/Variables.inc#L721), [`LevelInfo_TriforceRoomId`](../src/Variables.inc#L722), [`LevelInfo_BossRoomId`](../src/Variables.inc#L727)). In the overworld only the start room is read.
-- `cellars`: cellar rooms of the level; for the overworld, the four rooms the shortcut cave joins. [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L725)
+  screen ([`LevelInfo_LevelNumber`](../src/Variables.inc#L725)). They differ for some levels in Q2. [`Mode3Unfurl_Init_Sub7_CueLevelNumber`](../src/bank5/mode3-mode6-init.asm#L114)
+- `start`, `Triforce`, `boss`: room ids ([`LevelInfo_StartRoomId`](../src/Variables.inc#L722), [`LevelInfo_TriforceRoomId`](../src/Variables.inc#L723), [`LevelInfo_BossRoomId`](../src/Variables.inc#L728)). In the overworld only the start room is read.
+- `cellars`: cellar rooms of the level; for the overworld, the four rooms the shortcut cave joins. [`LevelInfo_CellarRoomIdArray`](../src/Variables.inc#L726)
 
 # Overworld (level 0), Q1
 

@@ -30,11 +30,11 @@
 ;     (Warp_StartStairsMode).
 ;   - The room's kill count is banked before each of these transitions (RoomHistory_SaveKillCount).
 ; CONTENTS: (generated; L = line in this file)
-;   L0054 Warp_CheckUnderLink         code  Starts a stairs, cave or level-entrance transition when Link stands on such a tile.
-;   L0130 Warp_StartStairsMode        code  Starts mode $10 (stairs) and records the mode to enter when it ends.
-;   L0150 RoomHistory_SaveKillCount   code  Banks the current room's kill count into the room's saved state (OW or UW version).
-;   L0158 Warp_CheckUnderLink_Return  code  Shared return of Warp_CheckUnderLink, RoomHistory_SaveKillCount and Warp_HandleOW.
-;   L0174 Warp_HandleOW               code  Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
+;   L0055 Warp_CheckUnderLink         code  Starts a stairs, cave or level-entrance transition when Link stands on such a tile.
+;   L0131 Warp_StartStairsMode        code  Starts mode $10 (stairs) and records the mode to enter when it ends.
+;   L0151 RoomHistory_SaveKillCount   code  Banks the current room's kill count into the room's saved state (OW or UW version).
+;   L0159 Warp_CheckUnderLink_Return  code  Shared return of Warp_CheckUnderLink, RoomHistory_SaveKillCount and Warp_HandleOW.
+;   L0175 Warp_HandleOW               code  Overworld part of Warp_CheckUnderLink: enters the cave, shortcut cave or level under Link.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -48,8 +48,9 @@
 ;       of the 16-pixel square Link stands on (Tile_GetUnderObj).
 ; NOTE: Requires grid offset 0, so a grid point that Link passes without a frame at offset 0 is not
 ;       tested.
-; NOTE: OW room $22 is tested by number: there X only has to be a multiple of 8 (upstream: the
-;       level 6 entrance is wide; which level uses the room is unverified here).
+; NOTE: OW room $22 is tested by number: there X only has to be a multiple of 8. In Q1 the room's
+;       attribute B is $18, cave index 6: the level 6 entrance (data/levelblock-ow.md); the Q2 patch
+;       changes it to cave index $21 (a cave; same file, second-quest rows).
 ; ----------------------------------------------------------------------------
 Warp_CheckUnderLink:
     ; Return if Link just came out of a cave, dungeon or cellar and has not

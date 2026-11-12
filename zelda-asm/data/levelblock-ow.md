@@ -10,14 +10,14 @@ Columns:
 - `exit`: X,Y where Link appears when he comes out of a cave or level (`A & $F0`, `(F & 7) * 16 + $4D`). [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
 - `zo`: `Z` = a Zora lives here (A bit 3). `se`: `S` = sea sound (A bit 2). [`Zora_TrySpawn`](../src/bank4/zora-ow-inits.asm#L75), [`Mode5Play_UpdateWorld`](../src/bank7/mode5-play-update.asm#L129)
 - `po`, `pi`: outer and inner palette selectors (A bits 1-0, B bits 1-0). [`Room_FillPlayAreaAttrs`](../src/bank5/mode7-scroll-init.asm#L379)
-- `dest`: where a stairs or cave entrance tile of the room leads (B bits 7-2). [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L174)
+- `dest`: where a stairs or cave entrance tile of the room leads (B bits 7-2). [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L175)
   `level n` is the internal level number ([`CurLevel`](../src/Variables.inc#L12)); in Q2 the number shown on screen differs for some
-  levels (see `levelinfo.md`). [`LevelInfo_LevelNumber`](../src/Variables.inc#L724)
-- `cnt`: monster count selected by C bits 7-6 from [`LevelInfo_FoeCounts`](../src/Variables.inc#L715) ($01 $04 $05 $06); `list`: monster list id (C bits 5-0, D bit 7).
+  levels (see `levelinfo.md`). [`LevelInfo_LevelNumber`](../src/Variables.inc#L725)
+- `cnt`: monster count selected by C bits 7-6 from [`LevelInfo_FoeCounts`](../src/Variables.inc#L716) ($01 $04 $05 $06); `list`: monster list id (C bits 5-0, D bit 7).
   The `monsters` text applies the rules of `objlists.md`. [`Room_EnterCommon`](../src/bank5/enter-room.asm#L137)
 - `lay`: room layout id (D bits 6-0), see `room-layouts.md`. [`RoomLayout_LayOutRoomOW`](../src/bank5/layout-room-ow.asm#L106)
 - `qs`: quest in which the room's tile-object secret works (F bits 7-6): `-` both, `Q1`, `Q2`. [`Secret_IsForOtherQuest`](../src/bank4/rock-wall-tree-secrets.asm#L331)
-- `stairs`: position index (F bits 5-4) and the X,Y it selects in [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L717), where secret stairs appear. [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280)
+- `stairs`: position index (F bits 5-4) and the X,Y it selects in [`LevelInfo_ShortcutOrItemPosArray`](../src/Variables.inc#L718), where secret stairs appear. [`Room_GetShortcutOrItemXYForRoomId`](../src/bank1/bomb-candle-wield.asm#L280)
 - `ed`: `E` = monsters enter from the screen edges (F bit 3). [`Spawn_AssignPositions`](../src/bank5/spawn-positions.asm#L64)
 - `tileobj`: the tile object the room's layout creates (type, X, Y), or the dock. [`RoomLayout_CheckTileObj`](../src/bank5/layout-room-ow.asm#L267), [`Room_SetUpTileObjOW`](../src/bank5/enter-room.asm#L423)
 - `monsters; cave`: the monsters made on entry (before the kill count is subtracted), then for a cave

@@ -13,7 +13,7 @@
 ;   - No whirlwind without at least one Triforce piece, and only in mode 5: Whirlwind_Summon.
 ;   - Each flute use steps TeleportingLevelIndex by +1 when Link faces right or up (ObjDir AND $09),
 ;     by -1 when he faces left or down, then keeps stepping the same way past levels whose piece
-;     is missing: Whirlwind_StepLevelIndex, Whirlwind_Summon@LoopTriforcePiece.
+;     is missing: Whirlwind_StepLevelIndex, Whirlwind_Summon@TestLevelPiece.
 ;   - Destination = level (TeleportingLevelIndex AND 7) + 1, levels 1-8 only. The index is kept
 ;     between rooms and it steps even when no whirlwind can be made: Whirlwind_Summon.
 ;   - One whirlwind per room visit (IsWhirlwindSummoned) and none while one carries Link; it needs a

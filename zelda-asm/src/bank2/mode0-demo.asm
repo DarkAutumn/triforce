@@ -167,7 +167,7 @@ Mode0Demo_Update_Sub2:
     LDX #$00                    ; 0: process hearts value; 1: process heart partial.
 
 @LoopHeart:
-    LDA ($00), Y                ; Load the hearts value or heart partial from Items block in file A.
+    LDA ($00), Y                ; Load the hearts value or heart partial from InvItems block in file A.
     PHA                         ; Push either value.
     TXA
     LSR
@@ -192,7 +192,7 @@ Mode0Demo_Update_Sub2:
     PLA                         ; Pop whatever we pushed: heart partial or full hearts value
     STA SaveSlotHearts, X       ; Copy to hearts in save slot info.
 
-    ; Point to the next byte in Items block.
+    ; Point to the next byte in InvItems block.
     ; hearts value -> hearts partial
     INY
     INX                         ; Increment the index of the value we check.

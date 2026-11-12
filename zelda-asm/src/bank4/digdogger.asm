@@ -4,7 +4,8 @@
 ; SUBJECTS: Digdogger
 ; TOPIC:    Digdogger update (big types $38/$39 and small type $18): shrinking and splitting after the
 ;           flute, speed oscillation, 8-way movement, four-corner collisions of the big body, drawing.
-; SEE ALSO: bank4/aquamentus-digdogger-dodongo-inits.asm (Digdogger_InitWith3Children/2: start speed, child count);
+; SEE ALSO: bank4/aquamentus-digdogger-dodongo-inits.asm (Digdogger_InitWith3Children and
+;           Digdogger_InitWith1Child: start speed, child count);
 ;           bank7/flute.asm (Flute_Wield sets FluteUsedState and the $98-frame freeze);
 ;           bank4/fairy-flyer-common.asm (Flyer_BoundByRoom, Dir_TurnObjTowardTarget8, Dir_TurnObjRandomly8, Dir_EightWayDirs);
 ;           bank1/monster-collisions.asm (Collision_CheckMonsterVsWeaponsAndLink, Damage_ObjTypeDamageToLink);
@@ -25,11 +26,11 @@
 ;     (Digdogger_HandleFlute@LoopMakeChild).
 ;   - The FluteUsedState = 2 path does not test the size: while one big Digdogger shrinks, any other
 ;     Digdogger in the room, big or small, also runs it and splits when its own ObjTimer reads 0
-;     (Digdogger_HandleFlute@SplitUp).
+;     (Digdogger_HandleFlute@Shrinking, Digdogger_HandleFlute@MakeChildren).
 ;   - While InvClock is set or the Digdogger is stunned, Digdogger_Update skips the flute handling, so
 ;     the split does not start or progress.
 ;   - During the shrink the Digdogger does not move, and it tests collisions only on the frame the
-;     shrink starts and on the 3 frames it is shown big again (Digdogger_HandleFlute@SplitUp).
+;     shrink starts and on the 3 frames it is shown big again (Digdogger_HandleFlute@Shrinking).
 ;   - Speed is a 16-bit value changed by 1 per frame. It starts at $003F and rises to the target; from
 ;     then on it swings between $0040 and $0080 (big, 0.25 to 0.5 pixels per frame) or $0140 and $0180
 ;     (small, 1.25 to 1.5) (Digdogger_SpeedUp, Digdogger_SlowDown, Digdogger_SetTargetSpeed). Only bits 5-7 of
@@ -42,27 +43,27 @@
 ;   - The big Digdogger is always drawn with a small one on top of its centre
 ;     (Digdogger_CheckBigCollisionsAndDraw falls into Digdogger_DrawAsLittle).
 ; CONTENTS: (generated; L = line in this file)
-;   L0071 Digdogger_CornerOffsetsX             data  TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
-;   L0076 Digdogger_CornerOffsetsY             data  TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
-;   L0090 Digdogger_HandleFlute                code  Runs a Digdogger after the flute was played: shrink for $40 frames, then split into small ones.
-;   L0191 Digdogger_TurnTowardTargetAndMove    code  Digdogger turn, Random,X >= $80: Dir_TurnObjTowardTarget8 (at most one 8-way step, steering at the
-;   L0201 Digdogger_Update                     code  Updates a Digdogger of either size (object types $18, $38, $39) for one frame.
-;   L0214 Digdogger_ChangeSpeedAndTurn         code  Normal movement of a Digdogger: change speed, turn every $10 frames, move, check collisions, draw.
-;   L0231 Digdogger_MoveAndCheckCollisions     code  Moves the Digdogger, then checks collisions and draws it.
-;   L0235 Digdogger_CheckCollisionsAndDraw     code  Checks room bounds and collisions and draws the Digdogger without moving it.
-;   L0252 Digdogger_CheckBigCollisionsAndDraw  code  Bounds and collision-tests the big Digdogger at its four corners, then draws it.
-;   L0303 Digdogger_DrawAsLittle               code  Draws a small Digdogger 8 pixels right of and below the object's position (the big one's centre).
-;   L0349 Digdogger_ChangeSpeed                code  Moves a Digdogger's 16-bit speed 1 unit toward its target: up when the speed flag is 0, else down.
-;   L0354 Digdogger_ChangeSpeed_JumpTable      data  TABLE: speed routines; index = Digdogger_ObjSpeedFlag (0 speeding up, 1 slowing down).
-;   L0363 Digdogger_SpeedUp                    code  Adds 1 to the 16-bit speed; at the target speed, switches to slowing down toward $0040/$0140.
-;   L0388 Digdogger_SlowDown                   code  Subtracts 1 from the 16-bit speed; at the target speed, switches to speeding up toward $0080/$0180.
-;   L0413 Digdogger_SetTargetSpeed             code  Sets the target speed to A (low byte), with high byte 0 for the big Digdogger and 1 for a small one.
-;   L0424 Digdogger_ChangeSpeed_Return         code  Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and Digdogger_SetTargetSpeed.
-;   L0436 Digdogger_Move                       code  Moves a Digdogger by its 16-bit speed along each axis of its 8-way direction.
-;   L0504 Digdogger_SpriteOffsetsX             data  TABLE: X offsets of the four 16x16 parts of the big Digdogger's image; index = part 0-3
-;   L0508 Digdogger_SpriteOffsetsY             data  TABLE: Y offsets of the four parts of the big Digdogger's image; index = part 0-3; value = pixels.
-;   L0514 Digdogger_SpriteAttrs                data  TABLE: sprite attributes of the four parts of the big Digdogger; index = part 0-3;
-;   L0524 Digdogger_Draw                       code  Draws a Digdogger: four 16x16 parts when big, one mirrored 16x16 image when small.
+;   L0072 Digdogger_CornerOffsetsX             data  TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;
+;   L0077 Digdogger_CornerOffsetsY             data  TABLE: Y steps between the tested corners of the big Digdogger; index = corner 0-3; value = signed
+;   L0091 Digdogger_HandleFlute                code  Runs a Digdogger after the flute was played: shrink for $40 frames, then split into small ones.
+;   L0192 Digdogger_TurnTowardTargetAndMove    code  Digdogger turn, Random,X >= $80: Dir_TurnObjTowardTarget8 (at most one 8-way step, steering at the
+;   L0202 Digdogger_Update                     code  Updates a Digdogger of either size (object types $18, $38, $39) for one frame.
+;   L0215 Digdogger_ChangeSpeedAndTurn         code  Normal movement of a Digdogger: change speed, turn every $10 frames, move, check collisions, draw.
+;   L0232 Digdogger_MoveAndCheckCollisions     code  Moves the Digdogger, then checks collisions and draws it.
+;   L0236 Digdogger_CheckCollisionsAndDraw     code  Checks room bounds and collisions and draws the Digdogger without moving it.
+;   L0253 Digdogger_CheckBigCollisionsAndDraw  code  Bounds and collision-tests the big Digdogger at its four corners, then draws it.
+;   L0304 Digdogger_DrawAsLittle               code  Draws a small Digdogger 8 pixels right of and below the object's position (the big one's centre).
+;   L0350 Digdogger_ChangeSpeed                code  Moves a Digdogger's 16-bit speed 1 unit toward its target: up when the speed flag is 0, else down.
+;   L0355 Digdogger_ChangeSpeed_JumpTable      data  TABLE: speed routines; index = Digdogger_ObjSpeedFlag (0 speeding up, 1 slowing down).
+;   L0364 Digdogger_SpeedUp                    code  Adds 1 to the 16-bit speed; at the target speed, switches to slowing down toward $0040/$0140.
+;   L0389 Digdogger_SlowDown                   code  Subtracts 1 from the 16-bit speed; at the target speed, switches to speeding up toward $0080/$0180.
+;   L0414 Digdogger_SetTargetSpeed             code  Sets the target speed to A (low byte), with high byte 0 for the big Digdogger and 1 for a small one.
+;   L0425 Digdogger_ChangeSpeed_Return         code  Shared exit of Digdogger_SpeedUp, Digdogger_SlowDown and Digdogger_SetTargetSpeed.
+;   L0437 Digdogger_Move                       code  Moves a Digdogger by its 16-bit speed along each axis of its 8-way direction.
+;   L0505 Digdogger_SpriteOffsetsX             data  TABLE: X offsets of the four 16x16 parts of the big Digdogger's image; index = part 0-3
+;   L0509 Digdogger_SpriteOffsetsY             data  TABLE: Y offsets of the four parts of the big Digdogger's image; index = part 0-3; value = pixels.
+;   L0515 Digdogger_SpriteAttrs                data  TABLE: sprite attributes of the four parts of the big Digdogger; index = part 0-3;
+;   L0525 Digdogger_Draw                       code  Draws a Digdogger: four 16x16 parts when big, one mirrored 16x16 image when small.
 ; ============================================================================
 
 ; TABLE: X steps between the corners of the big Digdogger tested for collisions; index = corner 0-3;

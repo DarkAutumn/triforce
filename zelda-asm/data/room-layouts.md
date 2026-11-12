@@ -2646,7 +2646,7 @@ sq  primary  tiles            object
 
 Square index to primary tile ([`RoomLayout_UWSquareTiles`](../src/bank5/uw-floor-push-block.asm#L57)). A primary from `$70` to `$F2` is the first of four consecutive
 tiles; any other fills the square with one tile. Tile `$B0` is the block a push block object is placed
-on; tiles `$70`-`$73` are stairs. [`RoomLayout_WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L177), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L228), [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L54)
+on; tiles `$70`-`$73` are stairs. [`RoomLayout_WriteSquareUW`](../src/bank5/uw-floor-push-block.asm#L177), [`PushBlock_FindAndCreate`](../src/bank5/uw-floor-push-block.asm#L228), [`Warp_CheckUnderLink`](../src/bank5/warps-stairs-caves.asm#L55)
 
 ```
 sq  primary  tiles

@@ -121,7 +121,7 @@ Mode1Menu_Update_Sub1Load:
     ; A save slot was chosen.
     JSR Ppu_TurnOffAllVideo
     JSR Save_FetchFileAAddressSet
-    LDY #$27                    ; Copy Items block from file A to profile.
+    LDY #$27                    ; Copy InvItems block from file A to profile.
 
 @CopyItems:
     LDA ($00), Y

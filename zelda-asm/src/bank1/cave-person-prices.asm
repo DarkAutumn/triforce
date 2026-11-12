@@ -103,7 +103,7 @@ Cave_UpdatePerson:
     RTS
 
 @UseLetter:
-    ; Request tune 1 bit $04 (which tune this is, is not established in this file).
+    ; Request the "secret found" tune (Tune1Request $04, the request Sfx_PlaySecretFoundTune makes).
     LDA #$04
     STA Tune1Request
 

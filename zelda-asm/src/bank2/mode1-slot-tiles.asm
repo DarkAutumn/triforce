@@ -33,11 +33,11 @@ Mode1Menu_Init_Sub1Palettes:
     LDA #$00
     STA CurSaveSlot
     JSR Save_FetchFileAAddressSet
-    LDY #$0B                    ; The ring is at this offset in Items block.
+    LDY #$0B                    ; The ring is at this offset in InvItems block.
     LDX #$00                    ; The offset to the byte we want to change in a palette.
 
 @LoopSlot:
-    TYA                         ; Save ring offset in Items block of current slot.
+    TYA                         ; Save ring offset in InvItems block of current slot.
     PHA
     LDA ($00), Y                ; Get the ring inventory value.
     TAY

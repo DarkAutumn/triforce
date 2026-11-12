@@ -15,12 +15,12 @@
 ;     its q-speed is not 0; between points it keeps walking in ObjDir. Wanderer_MoveAndTurn
 ;   - On a grid point it homes on the chase target when turn rate >= Random+1,X (chance about
 ;     (rate+1)/256; rate $FF always) and the target is within 8 pixels on one axis; it then faces the
-;     target along the other axis. Wanderer_MoveAndTurn@TurnVertically, @TurnHorizontally
+;     target along the other axis. Wanderer_Return@TurnVertically, Wanderer_Return@TurnHorizontally
 ;   - Otherwise it turns only when Wanderer_ObjTurnTimer is 0, and then perpendicular to its facing,
 ;     toward the chase target. Every turn reloads the timer from Random,X (0-$FF frames).
-;     Wanderer_MoveAndTurn@TurnIfTime, @SetDirTowardTarget
+;     Wanderer_Return@TurnIfTime, Wanderer_Return@SetDirTowardTarget
 ;   - Every turn sets Shooter_ObjWantsToShoot to 1; a grid point without a turn clears it.
-;     Wanderer_MoveAndTurn@SetDirTowardTarget, @TurnIfTime
+;     Wanderer_Return@SetDirTowardTarget, Wanderer_Return@TurnIfTime
 ;   - The target is ChaseTargetX/Y, not Link's position: wanderers follow the decoy point or the food
 ;     when the chase target is one of those. Wanderer_MoveAndTurn
 ;   - With the clock (InvClock) or while stunned a wanderer does nothing at all, and its turn timer

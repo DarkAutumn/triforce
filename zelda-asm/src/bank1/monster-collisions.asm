@@ -39,9 +39,9 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0061 Person_DrawAndCheckCollisions_Common    code  Runs the collision pass for object X, turns a "kill" of the slot-1 person into fireballs, and draws.
 ;   L0072 Person_Draw                             code  Draws object X at its position with frame 0 as a mirrored pair. IN: X = object slot.
-;   L0093 Collision_CheckMonsterVsWeaponsAndLink  code  Tests the monster in slot X against Link's six weapon slots, then against Link himself.
-;   L0165 Obj_GetMiddle                           code  Computes the middle point of object X for the collision tests.
-;   L0192 Damage_ObjTypeDamageToLink              data  TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
+;   L0097 Collision_CheckMonsterVsWeaponsAndLink  code  Tests the monster in slot X against Link's six weapon slots, then against Link himself.
+;   L0169 Obj_GetMiddle                           code  Computes the middle point of object X for the collision tests.
+;   L0196 Damage_ObjTypeDamageToLink              data  TABLE: damage an object does to Link when it touches him; index = object type $00-$5C; value: low
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -87,7 +87,11 @@ Person_Draw:
 ;       The timer is tested only here, and the weapon routines test neither it nor the metastate: two
 ;       weapons that overlap the monster in the same frame both deal their damage, and when the first
 ;       kills it the second runs the death code again if its damage is at least the HP left (the kill
-;       counters then count twice). A monster killed here still gets its touch test in this call.
+;       counters then count twice). Exception: a magic shot ($0E) that overlaps while Link has the book
+;       and makes a fire leaves [02] (the monster's middle X) = $F0 (SwordShot_HandleBlocked ->
+;       Candle_Wield -> Link_PlaceWeaponAhead), so slots $10, $11, $0D and $12 are tested against
+;       X = $F0 and normally miss on that frame. A monster killed here still gets its touch test in
+;       this call.
 ;       The capture test runs only while the monster's metastate is 0 (not dying).
 ; ----------------------------------------------------------------------------
 Collision_CheckMonsterVsWeaponsAndLink:

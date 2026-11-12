@@ -21,7 +21,7 @@
 ;     on the first frame). When a timer runs out: with Random,X >= $F0 (X = statue number) nothing is
 ;     shot and the statue waits $100 frames; else the timer is reloaded with $50, $80, $F0 or $60
 ;     frames (Random,X AND 3), so the next chance comes 81, 129, 241 or 97 frames later.
-;     Statue_Update@LoopFireball, Statue_FireballStartTimes
+;     Statue_Update@NextStatue, Statue_FireballStartTimes
 ;   - A statue whose timer ran out does not shoot when Link is within $18 pixels of the fireball's
 ;     start point on both axes (LinkX - X and LinkY - Y each in -$18..+$17); the timer is reloaded
 ;     anyway. Statue_Update@LoopAxis

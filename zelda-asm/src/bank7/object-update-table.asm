@@ -30,20 +30,22 @@
 ;     -> cloud or sparkle only; type >= $6A -> Cave_UpdatePerson (bank 1); else Obj_Update_JumpTable.
 ;   - Spawn cloud total: slot-number frames (first step, set by Obj_Init) + 6 + 6 frames; then the
 ;     metastate returns to 0 (Obj_EndMetastate). Armos ($1E), flying Ghini ($22) and types >= $53
-;     get no timer for the first step.
+;     get no timer for the first step. This holds only for types whose init leaves ObjTimer alone:
+;     the Octorok and Ghini ($21) inits replace the first step with (slot + 1) x $10 frames
+;     (Octorok_InitFast), the Tektite init with 4, 8, $14 or $28 frames (Tektite_Init).
 ;   - When a death sparkle ends (metastate $14): WorldKillCycle advances 0..9 except for types $5D
 ;     (dead dummy), $14 (child Gel), $1C (red Keese); RoomKillCount +1 except for those and Zora $11
 ;     (Obj_EndMetastate).
 ;   - The dead object then becomes type $60 (dropped item), uninitialized, attribute $81, with
 ;     Item_ObjMonsterType = the old type; Drop_SetUpItem decides what, if anything, drops.
 ; CONTENTS: (generated; L = line in this file)
-;   L0068 Obj_TypeAttributes    data  TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
-;   L0092 Obj_TypeHpPairs       data  TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
-;   L0107 Obj_Update            code  Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
-;   L0159 Obj_Update_JumpTable  data  TABLE: update routine per object type; index = object type $00-$69; value = routine address.
-;   L0272 Obj_UpdateMetastate   code  Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
-;   L0282 Obj_DoNothing         code  Does nothing (RTS): the update or init routine of object types that have none of their own.
-;   L0295 Obj_EndMetastate      code  Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
+;   L0070 Obj_TypeAttributes    data  TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
+;   L0098 Obj_TypeHpPairs       data  TABLE: starting HP, two object types per byte; index = object type / 2; value = HP nibble of the
+;   L0113 Obj_Update            code  Runs one object slot for this frame: its init, its spawn cloud or death sparkle, or its update.
+;   L0165 Obj_Update_JumpTable  data  TABLE: update routine per object type; index = object type $00-$69; value = routine address.
+;   L0278 Obj_UpdateMetastate   code  Draws and times an object's spawn cloud or death sparkle; hands the last step to the end routine.
+;   L0288 Obj_DoNothing         code  Does nothing (RTS): the update or init routine of object types that have none of their own.
+;   L0301 Obj_EndMetastate      code  Ends a spawn cloud (object starts acting) or a death (kill counters, slot becomes a dropped item).
 ; ============================================================================
 
 ; TABLE: behaviour attribute bits per object type; index = object type $00-$5E; value = bits, copied
@@ -84,8 +86,12 @@ Obj_TypeAttributes:
 ; into nibble x $10, which Obj_Init stores in ObjHP (always a multiple of $10).
 ; Each type's nibble is on its row of Obj_Update_JumpTable. Nibble 0 (Gels $14/$15, Keese $1B-$1D):
 ; any weapon hit kills, even one of damage 0 (Damage_DealToMonster). Nibble $F is given to types that are not
-; killed through ordinary HP loss (Boulder, Bubble, Dodongo, Digdogger, Ganon, Trap, ...; each
-; type's own code decides, not checked here: (unverified)).
+; killed through ordinary HP loss. For Dodongo ($31/$32: dies to a swallowed second bomb or to the
+; sword while stunned, Dodongo_CheckCollisions), the big Digdogger ($38/$39: ObjAttr bit $20, no
+; weapon test, Collision_CheckMonsterVsWeaponsAndLink) and the flying Gleeok head ($46: its death is
+; undone every frame, Gleeok_UpdateFlyingHead) the type's own code makes the HP irrelevant. For the
+; other $F types ($19, $1F, $20 Boulder, $22, $2B-$2F, $35-$37, $3E Ganon, $40, $49/$4A Trap) the
+; reason was not checked here (unverified).
 ; NOTE: 38 bytes cover types $00-$4B. Obj_Init does not bound the index, so types $4C and up are
 ;       given a nibble of the bytes that follow the table (the code of Obj_Update: $48, $A9, $04,
 ;       $20 give types $4C-$53 the nibbles 4, 8, $A, 9, 0, 4, 2, 0).

@@ -13,8 +13,9 @@
 ;           bank1/take-item.asm (room item pickup).
 ; KEY FACTS:
 ;   - Ganon is 32x32: his collision midpoint is (ObjX+$10, ObjY+$10) and Link is hit when both axis
-;     distances to Link's midpoint are < 9. The magic clock and stun do not protect Link from him; only
-;     Link's own invincibility timer does. Ganon_CheckCollisions
+;     distances to Link's midpoint are < 9. Only Link's invincibility timer is tested, not InvClock or
+;     the stun timers; but while InvClock is set Mode5Play_UpdateWorld adds $10 to that timer every
+;     frame, so the clock still protects Link on nearly every frame. Ganon_CheckCollisions
 ;   - Blue Ganon (ObjState 0) can only be hurt by the sword (slot $0D, fully extended) and only while his
 ;     ObjTimer is 0, i.e. while he is invisible. Each hit shows him for $40 frames. Ganon_CheckCollisions
 ;   - HP is $F0. Sword damage $10/$20/$40 means 15 wooden, 8 white or 4 magic sword hits bring it to 0.
@@ -32,29 +33,29 @@
 ;   - The palette routines write 3 colours at fixed offsets 4-6 of DynTileBuf, which is the record they
 ;     appended only when the buffer was empty. Ganon_AppendPaletteRowTransferRecord_Brown
 ; CONTENTS: (generated; L = line in this file)
-;   L0062 Ganon_BurstDirs                                data  TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
-;   L0067 Ganon_BurstSpriteAttrs                         data  TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
-;   L0073 Ganon_BurstTiles                               data  TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
-;   L0085 Ganon_SetUpBurstRays                           code  Places the 8 death-burst rays at Ganon's ashes and gives each its direction.
-;   L0110 Ganon_DrawCloud                                code  Draws one death-burst cloud at ([00], [01]): frame image $0C at cloud distance >= 6, $0D below.
-;   L0144 Ganon_DrawBurst                                code  Draws the death burst: 8 clouds closing in on the ashes and 8 rays flying outward.
-;   L0231 Ganon_GetCurCloudLeft                          code  Sets [00] to the X of the burst clouds left of the ashes (ObjX - cloud distance).
-;   L0242 Ganon_GetCurCloudRight                         code  Sets [00] to the X of the burst clouds right of the ashes (ObjX + cloud distance).
-;   L0253 Ganon_GetCurCloudTop                           code  Sets [01] to the Y of the burst clouds above the ashes (ObjY - cloud distance).
-;   L0264 Ganon_GetCurCloudBottom                        code  Sets [01] to the Y of the burst clouds below the ashes (ObjY + cloud distance).
-;   L0273 Ganon_FrameImages                              data  TABLE: frame images of Ganon's body; index = animation frame (0-5) * 4 + quarter (0 top left,
-;   L0279 Ganon_SpriteOffsetsX                           data  TABLE: X offset of each body quarter from ObjX; index = quarter 0-3; value = pixels.
-;   L0283 Ganon_SpriteOffsetsY                           data  TABLE: Y offset of each body quarter from ObjY; index = quarter 0-3; value = pixels.
-;   L0288 Ganon_SpriteHFlips                             data  TABLE: horizontal flip flag of each body quarter; index = quarter 0-3; value = 1 flipped (the right
-;   L0296 Ganon_DrawBody                                 code  Draws Ganon's 32x32 body as four 16x16 quarters for the current animation frame.
-;   L0356 Ganon_CheckCollisions                          code  Ganon's collision rules: hurts Link on contact, takes sword hits while invisible, arrow when brown.
-;   L0458 Ganon_PaletteTransferRecord                    data  DATA: template of the PPU transfer record for Ganon's palette: address $3F1C (sprite palette row 3,
-;   L0463 Ganon_PaletteColorSets                         data  TABLE: three sets of the 3 colours written over the template; index = 0-8, a set ends at index
-;   L0475 Ganon_AppendPaletteRowTransferRecord_Brown     code  Queues Ganon's brown palette ($07, $17, $30), used while he is vulnerable to the silver arrow.
-;   L0480 Ganon_AppendPaletteRowTransferRecord_Blue      code  Queues Ganon's blue palette ($16, $2C, $3C), used when the brown state ends.
-;   L0485 Ganon_AppendPaletteRowTransferRecord_Triforce  code  Queues the palette for the ashes and the Triforce of Power ($27, $06, $16) when Ganon bursts.
-;   L0526 Ganon_DrawAshes                                code  Draws Ganon's pile of ashes (frame image $0B) at his position.
-;   L0537 Ganon_ActivateRoomItem                         code  Makes the room item (the Triforce of Power in Ganon's room) appear, unless active or already taken.
+;   L0063 Ganon_BurstDirs                                data  TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
+;   L0068 Ganon_BurstSpriteAttrs                         data  TABLE: sprite attribute bits of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
+;   L0074 Ganon_BurstTiles                               data  TABLE: sprite tile of each burst ray; index = object slot ($02-$09; entries 0-1 unused);
+;   L0086 Ganon_SetUpBurstRays                           code  Places the 8 death-burst rays at Ganon's ashes and gives each its direction.
+;   L0111 Ganon_DrawCloud                                code  Draws one death-burst cloud at ([00], [01]): frame image $0C at cloud distance >= 6, $0D below.
+;   L0145 Ganon_DrawBurst                                code  Draws the death burst: 8 clouds closing in on the ashes and 8 rays flying outward.
+;   L0232 Ganon_GetCurCloudLeft                          code  Sets [00] to the X of the burst clouds left of the ashes (ObjX - cloud distance).
+;   L0243 Ganon_GetCurCloudRight                         code  Sets [00] to the X of the burst clouds right of the ashes (ObjX + cloud distance).
+;   L0254 Ganon_GetCurCloudTop                           code  Sets [01] to the Y of the burst clouds above the ashes (ObjY - cloud distance).
+;   L0265 Ganon_GetCurCloudBottom                        code  Sets [01] to the Y of the burst clouds below the ashes (ObjY + cloud distance).
+;   L0274 Ganon_FrameImages                              data  TABLE: frame images of Ganon's body; index = animation frame (0-5) * 4 + quarter (0 top left,
+;   L0280 Ganon_SpriteOffsetsX                           data  TABLE: X offset of each body quarter from ObjX; index = quarter 0-3; value = pixels.
+;   L0284 Ganon_SpriteOffsetsY                           data  TABLE: Y offset of each body quarter from ObjY; index = quarter 0-3; value = pixels.
+;   L0289 Ganon_SpriteHFlips                             data  TABLE: horizontal flip flag of each body quarter; index = quarter 0-3; value = 1 flipped (the right
+;   L0297 Ganon_DrawBody                                 code  Draws Ganon's 32x32 body as four 16x16 quarters for the current animation frame.
+;   L0360 Ganon_CheckCollisions                          code  Ganon's collision rules: hurts Link on contact, takes sword hits while invisible, arrow when brown.
+;   L0462 Ganon_PaletteTransferRecord                    data  DATA: template of the PPU transfer record for Ganon's palette: address $3F1C (sprite palette row 3,
+;   L0467 Ganon_PaletteColorSets                         data  TABLE: three sets of the 3 colours written over the template; index = 0-8, a set ends at index
+;   L0479 Ganon_AppendPaletteRowTransferRecord_Brown     code  Queues Ganon's brown palette ($07, $17, $30), used while he is vulnerable to the silver arrow.
+;   L0484 Ganon_AppendPaletteRowTransferRecord_Blue      code  Queues Ganon's blue palette ($16, $2C, $3C), used when the brown state ends.
+;   L0489 Ganon_AppendPaletteRowTransferRecord_Triforce  code  Queues the palette for the ashes and the Triforce of Power ($27, $06, $16) when Ganon bursts.
+;   L0530 Ganon_DrawAshes                                code  Draws Ganon's pile of ashes (frame image $0B) at his position.
+;   L0541 Ganon_ActivateRoomItem                         code  Makes the room item (the Triforce of Power in Ganon's room) appear, unless active or already taken.
 ; ============================================================================
 
 ; TABLE: direction of each death-burst ray; index = ray 0-7 (object slot $02-$09); value = direction
@@ -340,8 +341,11 @@ Ganon_DrawBody:
 ; IN:   X = Ganon's object slot; ObjState,X = 0 blue, nonzero brown (counts down from $FF).
 ; OUT:  [02], [03] = Ganon's midpoint; may start Ganon_ObjDyingCount,X.
 ; NOTE: Link: tested every frame of the fight unless Link's invincibility timer is running. The entry
-;       point used skips the magic clock and stun tests of Link_CheckMonsterTouch; its own tests remain
-;       (no hit while Link's state is exactly $40, halted, or while IsLinkParalyzed is set).
+;       point used skips the direct InvClock and stun tests of Link_CheckMonsterTouch; its own tests
+;       remain (no hit while Link's state is exactly $40, halted, or while IsLinkParalyzed is set).
+;       With the clock, Mode5Play_UpdateWorld adds $10 a frame to Link's invincibility timer and
+;       Obj_DecInvincibilityTimer takes 1 away every second frame: the byte wraps, and by that
+;       arithmetic it reads 0 here on 1 frame in 33, so the clock protects Link on the other frames.
 ;       Blue (ObjState 0): only the sword in slot $0D can hit, only while ObjTimer,X = 0 (he is
 ;       invisible), and only in sword state 2 (fully extended). A hit makes him visible for $40 frames
 ;       and causes no knockback. When his HP ($F0 at start) is used up, HP is set back to $F0, ObjState

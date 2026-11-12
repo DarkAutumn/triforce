@@ -28,13 +28,13 @@
 ;   L0064 Person_UpdateUnderworldTalker_JumpTable   data  TABLE: states of a talk-only dungeon person; index = ObjState+1; value = routine address.
 ;   L0072 Person_TalkerState0ResetText              code  Talk-only person state 0: restarts the text at its first character and goes to state 1.
 ;   L0078 Person_TalkerState2DoNothing              code  Talk-only person state 2: does nothing (the person stays); also the return of the routine above.
-;   L0088 Person_CheckCollisions                    code  Runs weapon and Link collisions for the person; a hit enables fireballs instead of killing him.
-;   L0106 Person_UpdateUnderworldComplex            code  Updates a dungeon person of levels 1, 2, 5, 7: draws him (and type $4F's rupee), runs his state.
-;   L0135 Person_UpdateUnderworldComplex_JumpTable  data  TABLE: states of a dungeon person in levels 1, 2, 5, 7; index = ObjState+1; value = routine address.
-;   L0146 Person_ComplexState0Begin                 code  Complex person state 0: type $4F shows its "-100" price; waits $0A frames before the text starts.
-;   L0170 Person_ComplexState2SellBombCapacity      code  Complex person state 2: type $4F sells 4 more bomb capacity for 100 rupees at its rupee.
-;   L0224 Person_State4DelayAndQuit                 code  Person state 4 (complex persons, life-or-money): frees the person's slot once ObjTimer+1 reaches 0.
-;   L0236 Person_DrawAndCheckCollisions             code  Checks the person's collisions (see Person_CheckCollisions), then draws him mirrored.
+;   L0089 Person_CheckCollisions                    code  Runs weapon and Link collisions for the person; a hit enables fireballs instead of killing him.
+;   L0107 Person_UpdateUnderworldComplex            code  Updates a dungeon person of levels 1, 2, 5, 7: draws him (and type $4F's rupee), runs his state.
+;   L0136 Person_UpdateUnderworldComplex_JumpTable  data  TABLE: states of a dungeon person in levels 1, 2, 5, 7; index = ObjState+1; value = routine address.
+;   L0147 Person_ComplexState0Begin                 code  Complex person state 0: type $4F shows its "-100" price; waits $0A frames before the text starts.
+;   L0171 Person_ComplexState2SellBombCapacity      code  Complex person state 2: type $4F sells 4 more bomb capacity for 100 rupees at its rupee.
+;   L0225 Person_State4DelayAndQuit                 code  Person state 4 (complex persons, life-or-money): frees the person's slot once ObjTimer+1 reaches 0.
+;   L0237 Person_DrawAndCheckCollisions             code  Checks the person's collisions (see Person_CheckCollisions), then draws him mirrored.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -83,7 +83,8 @@ Person_TalkerState2DoNothing:
 ; IN:   X = object slot (1).
 ; OUT:  IsPersonFireballsEnabled nonzero if the person's metastate became nonzero (he was "killed");
 ;       ObjMetastate+1 = 0 again.
-; NOTE: IsPersonFireballsEnabled is never cleared here; it is room state, cleared on room entry.
+; NOTE: IsPersonFireballsEnabled is never cleared here, and no code writes 0 to it by name: $04CC lies
+;       in the $0300-$051F range that Room_EnterCommon zeroes (Util_ClearRam0300UpTo) on room entry.
 ; ----------------------------------------------------------------------------
 Person_CheckCollisions:
     JSR Collision_CheckMonsterVsWeaponsAndLink

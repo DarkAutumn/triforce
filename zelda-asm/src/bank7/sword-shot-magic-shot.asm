@@ -29,12 +29,12 @@
 ;   L0043 SwordShot_SpreadCornerAttrs  data  TABLE: sprite attributes of the four corners of a spreading sword shot; index = corner loop index in
 ;   L0056 SwordShot_UpdateOrMagicShot  code  Updates Link's sword shot or magic shot each frame: moves it, stops it at the room bounds, draws it.
 ;   L0091 SwordShot_DrawOrMagicShot    code  Draws a flying sword shot or magic shot, flashing through the four sprite palettes.
-;   L0166 SwordShot_HandleBlocked      code  Stops Link's shot: a sword shot starts spreading; a magic shot vanishes (leaving a fire with the book).
-;   L0219 SwordShot_DeactivateSlot0E   code  Deactivates Link's shot in slot $0E; second entry of SwordShot_HandleBlocked and the end of SwordShot_Updat...
-;   L0223 SwordShot_Deactivate         code  Deactivates the shot in slot X (state = 0).
-;   L0233 SwordShot_StartSpread        code  Puts a stopped sword shot into the spreading state ($10 becomes $11) with corner offset -2.
-;   L0249 SwordShot_UpdateSpread       code  Draws the four corners of a spreading sword shot, moves them 1 pixel outward, and ends the shot.
-;   L0379 SwordShot_Return             code  Shared return (RTS) of SwordShot_UpdateSpread, Boomerang_UpdateOrFood and Boomerang_UpdateOrArrow.
+;   L0172 SwordShot_HandleBlocked      code  Stops Link's shot: a sword shot starts spreading; a magic shot vanishes (leaving a fire with the book).
+;   L0225 SwordShot_DeactivateSlot0E   code  Deactivates Link's shot in slot $0E; second entry of SwordShot_HandleBlocked and the end of SwordShot_Updat...
+;   L0229 SwordShot_Deactivate         code  Deactivates the shot in slot X (state = 0).
+;   L0239 SwordShot_StartSpread        code  Puts a stopped sword shot into the spreading state ($10 becomes $11) with corner offset -2.
+;   L0255 SwordShot_UpdateSpread       code  Draws the four corners of a spreading sword shot, moves them 1 pixel outward, and ends the shot.
+;   L0385 SwordShot_Return             code  Shared return (RTS) of SwordShot_UpdateSpread, Boomerang_UpdateOrFood and Boomerang_UpdateOrArrow.
 ; ============================================================================
 
 ; TABLE: sprite attributes of the four corners of a spreading sword shot; index = corner loop index in
@@ -162,6 +162,12 @@ SwordShot_DrawOrMagicShot:
 ;       a moving candle fire (state $21), the test below passes and that fire is turned into the
 ;       standing fire at the shot's position. Any other state in slot $11 (a bomb, a standing fire):
 ;       no fire is made.
+; NOTE: When a fire is made, Candle_Wield -> Link_UseItem_SetState10 -> Link_PlaceWeaponAhead
+;       overwrites [00] = 0, [01] = $10, [02] = $F0. Called from SwordShot_CheckMonsterCollision, [02]
+;       is the monster's middle X for the rest of that monster's weapon tests this frame (slots $10,
+;       $11, $0D, $12 in Collision_CheckMonsterVsWeaponsAndLink), so those are made against X = $F0:
+;       a magic shot hit with the book makes a bomb blast, fire, sword or rod/arrow miss that monster
+;       on that frame (unless its middle X really is near $F0).
 ; ----------------------------------------------------------------------------
 SwordShot_HandleBlocked:
     ; Bit 7 of the state clear: a sword shot. Go start spreading it.

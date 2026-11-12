@@ -3,7 +3,7 @@
 ; UPSTREAM: Z_01.asm 3511-3636
 ; SUBJECTS: Dir, Math, Obj
 ; TOPIC:    The two routines that turn an object's q-speed into whole-pixel steps and count them in the
-;           grid offset (with its limits); opposite direction and direction index; Abs and Negate.
+;           grid offset (with its limits); opposite direction and direction index; Math_Abs and Math_Negate.
 ; SEE ALSO: bank7/walker-move.asm (Obj_MoveByQSpeed: sets the limits, calls these four times a frame and moves
 ;           the coordinate by the returned carry); bank7/link-animate-ladder.asm (Link_EndMoveAndAnimate
 ;           sets Link's grid offset back to 0 at a multiple of 8); bank5/link-handle-input.asm (turning
@@ -24,13 +24,13 @@
 ;     not stopped (Obj_AddQSpeedToPosFrac).
 ;   - Dir_GetOpposite uses the lowest set direction bit (right, then left, then down, then up) and also
 ;     returns the direction index in Y: right 3, left 2, down 1, up 0. Direction 0 is not handled.
-;   - Abs and Negate leave $80 as $80.
+;   - Math_Abs and Math_Negate leave $80 as $80.
 ; CONTENTS: (generated; L = line in this file)
 ;   L0052 Obj_AddQSpeedToPosFrac    code  Adds the q-speed to the position fraction for a step right or down; a carry is one pixel.
 ;   L0094 Obj_SubQSpeedFromPosFrac  code  Subtracts the q-speed from the position fraction for a step left or up; a borrow is one pixel.
 ;   L0125 Dir_Opposites             data  TABLE: opposite of each direction; index = direction index (0 up, 1 down, 2 left, 3 right);
 ;   L0137 Dir_GetOpposite           code  Gives the opposite of a direction in A and the direction's index (0 up .. 3 right) in Y.
-;   L0155 Math_Abs                  code  Takes the absolute value of a signed byte (falls into Negate when A is negative).
+;   L0155 Math_Abs                  code  Takes the absolute value of a signed byte (falls into Math_Negate when A is negative).
 ;   L0163 Math_Negate               code  Negates a byte (two's complement).
 ; ============================================================================
 
@@ -147,10 +147,10 @@ Dir_GetOpposite:
     RTS
 
 ; ----------------------------------------------------------------------------
-; Takes the absolute value of a signed byte (falls into Negate when A is negative).
+; Takes the absolute value of a signed byte (falls into Math_Negate when A is negative).
 ; IN:   A = signed value
 ; OUT:  A = |A| ($80 stays $80)
-; NOTE: The branch for a non-negative value goes to the RTS at the end of Negate.
+; NOTE: The branch for a non-negative value goes to the RTS at the end of Math_Negate.
 ; ----------------------------------------------------------------------------
 Math_Abs:
     BPL :+

@@ -307,210 +307,210 @@ modes. `Upstream` is the name in the original disassembly when it differs.
 | `$0504` | `LeftAlignHalfWidthObj` |  | Variables.inc:414 | Nonzero while the lifted item is drawn: a narrow item is not centered. |
 | `$0505` | `ItemTypeToLift` |  | Variables.inc:415 | Item id Link is holding up, 0 = none ($1B Triforce piece in scenes). |
 | `$0506` | `ItemLiftTimer` |  | Variables.inc:416 | Frames left of the lift; $80 when an item is taken outside mode 5. |
-| `$0507` | `ChildDigdoggerCount` |  | Variables.inc:420 | Small Digdoggers the big one splits into: 3 (Digdogger_InitWith3Children) or 1 (..2). |
-| `$0508` | `IsWhirlwindSummoned` | `SummonedWhirlwind` | Variables.inc:421 | 1 = the flute already summoned a whirlwind in this room: no second one. |
-| `$0509` | `IsTriforceFanfareActive` | `TriforceFanfareActive` | Variables.inc:422 | 1 while Link holds up the Triforce of Power (Link halted, ObjTimer $C0). |
-| `$050A` | `CreditsRow` |  | Variables.inc:447 | Credits: tile row being drawn. |
-| `$050B` | `CreditsTileOffset` |  | Variables.inc:448 | Credits: pixels scrolled since the last row was drawn; a row every 8. |
-| `$050C` | `CreditsVramPage` |  | Variables.inc:449 | Credits: nametable page index 0-$B of the row being drawn. |
-| `$050D` | `CreditsVramLine` |  | Variables.inc:450 | Credits: line within the page (8 lines, 6 in pages with page mod 4 = 3). |
-| `$050E` | `CreditsLineIndex` |  | Variables.inc:451 | Credits: index of the next text line. |
-| `$050F` | `LanmolaViableDirMask` | `LamnolaViableDirMask` | Variables.inc:423 | Lanmola turn scratch: direction bits allowed (all but the opposite one). |
+| `$0507` | `ChildDigdoggerCount` |  | Variables.inc:420 | Small Digdoggers the big one splits into: 3 or 1. |
+| `$0508` | `IsWhirlwindSummoned` | `SummonedWhirlwind` | Variables.inc:422 | 1 = the flute already summoned a whirlwind in this room: no second one. |
+| `$0509` | `IsTriforceFanfareActive` | `TriforceFanfareActive` | Variables.inc:423 | 1 while Link holds up the Triforce of Power (Link halted, ObjTimer $C0). |
+| `$050A` | `CreditsRow` |  | Variables.inc:448 | Credits: tile row being drawn. |
+| `$050B` | `CreditsTileOffset` |  | Variables.inc:449 | Credits: pixels scrolled since the last row was drawn; a row every 8. |
+| `$050C` | `CreditsVramPage` |  | Variables.inc:450 | Credits: nametable page index 0-$B of the row being drawn. |
+| `$050D` | `CreditsVramLine` |  | Variables.inc:451 | Credits: line within the page (8 lines, 6 in pages with page mod 4 = 3). |
+| `$050E` | `CreditsLineIndex` |  | Variables.inc:452 | Credits: index of the next text line. |
+| `$050F` | `LanmolaViableDirMask` | `LamnolaViableDirMask` | Variables.inc:424 | Lanmola turn scratch: direction bits allowed (all but the opposite one). |
 | `$0510` | `Gleeok_WrithingCounter` |  | ObjVars.inc:236 | scalar; Gleeok body: fast animation steps left after a hit (set to 6). |
-| `$0510` | `ActiveRedLeeverCount` |  | Variables.inc:424 | Red Leevers (type $10) above ground; a third may not surface. |
+| `$0510` | `ActiveRedLeeverCount` |  | Variables.inc:425 | Red Leevers (type $10) above ground; a third may not surface. |
 | `$0511` | `GleeokDeadNeckMask` |  | Variables.inc:405 | Gleeok: bit n set = the head of neck n has been cut off. |
-| `$0512` | `IsLinkParalyzed` | `LinkParalyzed` | Variables.inc:425 | Nonzero while a Like-Like holds Link: direction input is discarded. |
-| `$0513` | `HasUsedCandle` | `UsedCandle` | Variables.inc:427 | 1 = a candle fire was made in this room; the blue candle then refuses. |
-| `$0514` | `IsZoraActive` | `ZoraActive` | Variables.inc:429 | 1 while the room's Zora exists (one at a time). |
-| `$0515` | `ActiveBoulderCount` | `ActiveBoulders` | Variables.inc:430 | Boulders (type $20) alive; the boulder spawner stops at 3. |
-| `$0519` | `ShutterTouchedDirs` |  | Variables.inc:431 | Direction bits of the open shutters Link has touched in this room. |
-| `$051A` | `SecretColorCycle` |  | Variables.inc:434 | Flute pond secret: 0 none, 1-$B draining, $C done. |
-| `$051B` | `FluteUsedState` | `UsedFlute` | Variables.inc:438 | 0; 1 once the flute was played in this room; 2 while Digdogger shrinks. |
-| `$051C` | `FadeCycle` |  | Variables.inc:439 | Palette fade: high nibble = series, low nibble = step 0-3 (4 = done). |
-| `$051D` | `PatternBlockIndex` |  | Variables.inc:442 | Index of the CHR pattern block being copied to the PPU (transfer loops). |
-| `$051E` | `IsRoomBrightening` | `BrighteningRoom` | Variables.inc:443 | 1 while a candle fire is fading a dark room to light. |
-| `$051F` | `CandleState` |  | Variables.inc:444 | Dark room lighting: 0 not lit, 1 brightening, 2 lit (Candle_UpdateRoomLight). |
-| `$0521` | `PrevOpenedDoors` |  | Variables.inc:454 | CurOpenedDoors of the room being left, kept while scrolling to the next. |
-| `$0522` | `WhirlwindTeleportingState` |  | Variables.inc:455 | 0 none, 1 whirlwind carrying Link away, 2 dropping him off. |
-| `$0523` | `TeleportingLevelIndex` |  | Variables.inc:456 | Whirlwind destination: (value & 7) = level number - 1. |
-| `$0524` | `SpawnCycle` |  | Variables.inc:459 | Next index 0-8 into the 9-entry spawn position list; kept between rooms. |
-| `$0525` | `CurEdgeSpawnCell` |  | Variables.inc:460 | Last screen-edge spawn cell: high nibble = row, low nibble = column. |
-| `$0526` | `LevelEntranceRoomId` | `CaveSourceRoomId` | Variables.inc:462 | Overworld room of the dungeon entrance last entered; $FF = none. |
-| `$0527` | `CellarSourceRoomId` |  | Variables.inc:464 | Dungeon room from which the current cellar was entered. |
-| `$0528` | `HasSkippedDemo` | `SkippedDemo` | Variables.inc:465 | $5A once Start was pressed in the title demo; stops the demo animation. |
-| `$0529` | `IsSwordShotForced` | `ForceSwordShot` | Variables.inc:466 | Nonzero would allow the sword shot at any health. Only ever cleared. |
-| `$052A` | `WorldKillCycle` |  | Variables.inc:467 | Kill cycle 0-9: column of the drop table used for the next drop. |
-| `$052B` | `RoomTileObjType` |  | Variables.inc:470 | Object type of the room's tile object found by the layout, 0 = none. |
-| `$052C` | `RoomTileObjX` |  | Variables.inc:471 | X of that tile object (column * $10). |
-| `$052D` | `RoomTileObjY` |  | Variables.inc:472 | Y of that tile object (row * $10 + $40). |
-| `$052E` | `IsSwordBlocked` | `SwordBlocked` | Variables.inc:473 | 1 = sword disabled until cured (set by Bubble type $2D, cleared by $2C). |
-| `$052F` | `MazeStep` |  | Variables.inc:475 | Correct steps so far (0-3) in the Lost Woods ($61) or Lost Hills ($1B). |
-| `$0530` | `PlayAreaAttrs` |  | Variables.inc:478 | [48] Nametable attribute bytes of the play area (from attrs A and B). |
-| `$0560` | `LevelKillCounts` |  | Variables.inc:479 | [128] per room of the current dungeon: kills banked when leaving it. |
-| `$05F0` | `CurNoteLowPeriodTrg` |  | Variables.inc:484 | Low period byte of the triangle note playing (base for vibrato). |
-| `$05F1` | `SongTrgSustainFlag` |  | Variables.inc:485 | Song phrase: header byte 7. Bit 7 set = triangle linear counter $1F, |
-| `$05F2` | `SampleCounter` |  | Variables.inc:487 | Frames left of the DMC sample ($A0 at start). |
-| `$05F3` | `SeaSfxCounter` |  | Variables.inc:488 | Sea noise effect phase counter, counts down from $D0. |
-| `$05F4` | `NoteLengthTableBase` |  | Variables.inc:489 | Song phrase: base offset into the note length table. |
-| `$05F5` | `FirstNoteIndexSongNoise` |  | Variables.inc:490 | Song phrase: script offset where the noise track starts (it loops). |
-| `$05F6` | `BackgroundSample` |  | Variables.inc:491 | Looping DMC sample (request bits $F0), restarted when no other plays. |
-| `$0600` | `SongRequest` |  | Variables.inc:492 | Song to start (one bit): $01 overworld, $02 Ganon, $04 end of level, |
-| `$0601` | `SampleRequest` |  | Variables.inc:495 | DMC sample to start (bit mask; bits $10-$40 loop). |
-| `$0602` | `Tune1Request` |  | Variables.inc:498 | Square-1 tune to start (bit mask). Bit 7 set = silence the song first, |
-| `$0603` | `EffectRequest` |  | Variables.inc:500 | Noise effect to start (bit mask). Sfx_Play ORs into it. |
-| `$0604` | `Tune0Request` |  | Variables.inc:501 | Square-0 tune to start (bit mask; $40 low-hearts beep, $80 stops song). |
-| `$0605` | `CurTune0` | `Tune0` | Variables.inc:502 | Square-0 tune playing (the whole Tune0Request byte), 0 = none. |
-| `$0606` | `CurEffect` | `Effect` | Variables.inc:503 | Noise effect playing, 0 = none. |
-| `$0607` | `CurTune1` | `Tune1` | Variables.inc:504 | Square-1 tune playing, 0 = none; the song skips square 1 meanwhile. |
-| `$0608` | `CurSample` | `Sample` | Variables.inc:505 | DMC sample playing, 0 = none. |
-| `$0609` | `CurSong` | `Song` | Variables.inc:506 | Song playing (its request bit), 0 = none. |
-| `$060A` | `NoteOffsetSongSq1` |  | Variables.inc:507 | Song script offset of the next square-1 note. |
-| `$060B` | `NoteOffsetSongSq0` |  | Variables.inc:508 | Song script offset of the next square-0 note (0 = track absent). |
-| `$060C` | `NoteOffsetSongTrg` |  | Variables.inc:509 | Song script offset of the next triangle note (0 = track absent). |
-| `$060D` | `NoteOffsetSongNoise` |  | Variables.inc:510 | Song script offset of the next noise note. |
-| `$060E` | `Tune0ScriptOffset` | `TunePtr0` | Variables.inc:511 | Offset of the next byte of the square-0 tune in Audio_Tune0Scripts. |
-| `$060F` | `NoteLengthSongSq0` |  | Variables.inc:512 | Length in frames of the current square-0 song note. |
-| `$0610` | `NoteLengthSongSq1` |  | Variables.inc:513 | Length in frames of the current square-1 song note. |
-| `$0611` | `NoteCounterSongSq1` |  | Variables.inc:514 | Frames left of the current square-1 song note. |
-| `$0612` | `CustomEnvelopeOffsetSongSq1` |  | Variables.inc:515 | Square-1 volume envelope position, counts down to 0. |
-| `$0613` | `NoteCounterSongSq0` |  | Variables.inc:516 | Frames left of the current square-0 song note. |
-| `$0614` | `CustomEnvelopeOffsetSongSq0` |  | Variables.inc:517 | Square-0 volume envelope position, counts down to 0. |
-| `$0615` | `NoteLengthSongTrg` |  | Variables.inc:518 | Length in frames of the current triangle song note. |
-| `$0616` | `NoteCounterSongTrg` |  | Variables.inc:519 | Frames left of the current triangle song note. |
-| `$0617` | `NoteCounterSongNoise` |  | Variables.inc:520 | Frames left of the current noise song note. |
-| `$0618` | `Tune1ScriptOffset` | `TunePtr1` | Variables.inc:521 | Offset of the next byte of the square-1 tune in Audio_Tune1Scripts. |
-| `$0619` | `SongEnvelopeSelector` |  | Variables.inc:522 | Song phrase: volume envelope selector (byte 6 of the phrase header). |
-| `$061A` | `UnusedSound61A` |  | Variables.inc:523 | Zeroed by Sample_Silence; no other code refers to it. |
-| `$061B` | `SongVibrationCounterSq1` |  | Variables.inc:524 | Frames since the square-1 song note began (vibrato phase). |
-| `$061C` | `SongVibrationCounterSq0` |  | Variables.inc:525 | Frames since the square-0 song note began (vibrato phase). |
-| `$061D` | `SongVibrationCounterTrg` |  | Variables.inc:526 | Frames since the triangle song note began (vibrato phase). |
-| `$061E` | `SongRepetitionsTrg` |  | Variables.inc:527 | Triangle track: repetitions left of the passage being repeated. |
-| `$061F` | `SongRepeatStartOffset` |  | Variables.inc:528 | Triangle track: script offset where the repeated passage starts. |
-| `$0620` | `CurRoomHistoryIndex` |  | Variables.inc:531 | Slot 0-5 of RoomHistory that the next new room overwrites. |
-| `$0621` | `RoomHistory` |  | Variables.inc:532 | [6] Ids of the last six different rooms entered (ring buffer). |
-| `$0627` | `WorldKillCount` |  | Variables.inc:536 | Monsters killed since Link was last harmed (zeroed by Link_BeHarmed). |
-| `$062D` | `QuestNumbers` |  | Variables.inc:541 | [3] per save slot: 0 = Q1, 1 = Q2. Read in play through CurSaveSlot. |
-| `$0630` | `DeathCounts` |  | Variables.inc:542 | [3] per save slot: deaths, stops at $FF. |
-| `$0633` | `IsSaveSlotActive` |  | Variables.inc:543 | [3] per save slot: nonzero = registered. The menu reads 5 entries. |
-| `$0636` | `IsRegisterSaveFileOptionEnabled` |  | Variables.inc:544 | IsSaveSlotActive[3], the menu's Register option: always 1. |
-| `$0637` | `IsEliminateSaveFileOptionEnabled` |  | Variables.inc:545 | IsSaveSlotActive[4], the menu's Eliminate option: always 1. |
-| `$0638` | `SaveSlotNames` | `Names` | Variables.inc:546 | [24] 3 slots x 8 characters: the slot names (tile codes, $24 = space). |
-| `$0650` | `SaveSlotHearts` |  | Variables.inc:547 | [6] 3 slots x (HeartValues, HeartPartial) shown on the file menu. |
-| `$0656` | `SelectedItemSlot` |  | Variables.inc:552 | Item slot on the B button: 0 boomerangs, 1-8 = InvItems+n, $F letter. |
-| `$0657` | `InvItems` | `Items` | Variables.inc:554 | [40] Base of the items block, indexed by item slot. InvItems+0 = sword. |
-| `$0657` | `InvSword` |  | Variables.inc:555 | Sword: 0 none, 1 wooden, 2 white, 3 magic. Same byte as InvItems. |
-| `$0658` | `InvBombs` |  | Variables.inc:557 | Bombs held, 0 to InvMaxBombs. A bomb pickup adds 4. |
-| `$0659` | `InvArrow` |  | Variables.inc:558 | Arrows: 0 none, 1 wooden (damage $20), 2 silver (damage $40). |
-| `$065A` | `InvBow` | `Bow` | Variables.inc:559 | Bow: 0 or 1. Without it the submenu skips the arrow slot and Arrow_Wield |
-| `$065B` | `InvCandle` |  | Variables.inc:561 | Candle: 0 none, 1 blue (one fire per room), 2 red. |
-| `$065C` | `InvFlute` |  | Variables.inc:562 | Flute: 0 or 1. The code reaches this byte only by index (InvItems, Y). |
-| `$065D` | `InvFood` |  | Variables.inc:563 | Food: 0 or 1. Zeroed when the Grumble Goriya takes it. |
-| `$065E` | `InvPotion` | `Potion` | Variables.inc:564 | Potion doses 0-2. Blue potion adds 1 (max 2), red sets 2; a use takes 1. |
-| `$065F` | `InvRod` |  | Variables.inc:565 | Magic rod: 0 or 1. The code reaches this byte only by index. |
-| `$0660` | `InvRaft` |  | Variables.inc:566 | Raft: 0 or 1. |
-| `$0661` | `InvBook` |  | Variables.inc:567 | Magic book: 0 or 1. With it a magic shot that ends makes a fire. |
-| `$0662` | `InvRing` |  | Variables.inc:568 | Ring: 0 none, 1 blue, 2 red. Damage to Link is halved once per grade. |
-| `$0663` | `InvLadder` |  | Variables.inc:569 | Ladder: 0 or 1. |
-| `$0664` | `InvMagicKey` |  | Variables.inc:570 | Magic key: 0 or 1. Opens locked doors without spending InvKeys. |
-| `$0665` | `InvBracelet` |  | Variables.inc:571 | Power bracelet: 0 or 1. Needed to push a rock ($62), not a gravestone. |
-| `$0666` | `InvLetter` |  | Variables.inc:572 | Letter: 0 none, 1 held, 2 shown to the cave person of type $74. |
-| `$0667` | `InvCompass` |  | Variables.inc:573 | Compasses of levels 1-8: bit (level - 1). Reached only by index ($10). |
-| `$0668` | `InvMap` |  | Variables.inc:574 | Maps of levels 1-8: bit (level - 1). Reached only by index (slot $11). |
-| `$0669` | `InvCompass9` |  | Variables.inc:575 | Compass of level 9: bit 0. Reached only by index (slot $12). |
-| `$066A` | `InvMap9` |  | Variables.inc:576 | Map of level 9: bit 0. Reached only by index (slot $13). |
-| `$066B` | `InvFairy` |  | Variables.inc:577 | Slot $14 of the fairy item (id $23). Never written: a fairy only heals. |
-| `$066C` | `InvClock` |  | Variables.inc:579 | Clock: 1 = monsters frozen, Link invincible. Zeroed by Link_ResetStateAndClock |
-| `$066D` | `InvRupees` |  | Variables.inc:582 | Rupees, 0-$FF. Changes by 1 via InvRupeesToAdd / InvRupeesToSubtract. |
-| `$066E` | `InvKeys` |  | Variables.inc:583 | Keys, 0-$FF. |
-| `$066F` | `HeartValues` |  | Variables.inc:592 | High nibble = heart containers - 1; low nibble = full hearts. |
-| `$0670` | `HeartPartial` |  | Variables.inc:594 | Partial heart fill: 0 empty, $01-$7F drawn half, $80-$FF drawn full. |
-| `$0671` | `InvTriforce` |  | Variables.inc:596 | Triforce pieces: bit (level - 1) for levels 1-8; $FF = all eight. |
-| `$0672` | `InvPowerTriforce` | `LastBossDefeated` | Variables.inc:597 | Slot $1B, Triforce of Power: 1 once its fanfare ends. Opens the shutters |
-| `$0673` | `InvFiveRupees` |  | Variables.inc:599 | Slot $1C of the 5-rupee item (id $0F). Never written: 5 x Item_TakeOneRupee. |
-| `$0674` | `InvBoomerang` |  | Variables.inc:601 | Wooden boomerang: 0 or 1. |
-| `$0675` | `InvMagicBoomerang` |  | Variables.inc:602 | Magic boomerang: 0 or 1. Sets the throw's range limit to $FF, else $31. |
-| `$0676` | `InvMagicShield` |  | Variables.inc:603 | Magic shield: 0 or 1. Zeroed when a Like-Like eats it. |
-| `$067C` | `InvMaxBombs` | `MaxBombs` | Variables.inc:606 | Bomb capacity: 8 in a new file, +4 per upgrade bought (100 rupees). |
-| `$067D` | `InvRupeesToAdd` | `RupeesToAdd` | Variables.inc:607 | Rupees still to be credited to InvRupees, 1 every second frame. |
-| `$067E` | `InvRupeesToSubtract` | `RupeesToSubtract` | Variables.inc:609 | Rupees still to be taken from InvRupees, 1 every second frame. |
-| `$067F` | `WorldFlags` |  | Variables.inc:613 | [384] One flag byte per room: $67F overworld, $6FF levels 1-6, $77F 7-9. |
-| `$2000` | `PpuControl` | `PpuControl_2000` | Variables.inc:622 | PPU control register (write). |
-| `$2001` | `PpuMask` | `PpuMask_2001` | Variables.inc:623 | PPU mask register (write). |
-| `$2002` | `PpuStatus` | `PpuStatus_2002` | Variables.inc:624 | PPU status register (read; reading resets the address latch). |
-| `$2003` | `OamAddr` | `OamAddr_2003` | Variables.inc:625 | OAM address (write). |
-| `$2004` | `OamData` | `OamData_2004` | Variables.inc:626 | OAM data. Not used by the code. |
-| `$2005` | `PpuScroll` | `PpuScroll_2005` | Variables.inc:627 | PPU scroll (two writes: X, Y). |
-| `$2006` | `PpuAddr` | `PpuAddr_2006` | Variables.inc:628 | PPU VRAM address (two writes: high, low). |
-| `$2007` | `PpuData` | `PpuData_2007` | Variables.inc:629 | PPU VRAM data. |
-| `$4000` | `Sq0Duty` | `Sq0Duty_4000` | Variables.inc:635 | Square 0: duty, envelope, volume. |
-| `$4001` | `Sq0Sweep` | `Sq0Sweep_4001` | Variables.inc:636 | Square 0: sweep. |
-| `$4002` | `Sq0Timer` | `Sq0Timer_4002` | Variables.inc:637 | Square 0: period low byte. |
-| `$4003` | `Sq0Length` | `Sq0Length_4003` | Variables.inc:638 | Square 0: length counter, period high bits. |
-| `$4004` | `Sq1Duty` | `Sq1Duty_4004` | Variables.inc:639 | Square 1: duty, envelope, volume. |
-| `$4005` | `Sq1Sweep` | `Sq1Sweep_4005` | Variables.inc:640 | Square 1: sweep. |
-| `$4006` | `Sq1Timer` | `Sq1Timer_4006` | Variables.inc:641 | Square 1: period low byte. |
-| `$4007` | `Sq1Length` | `Sq1Length_4007` | Variables.inc:642 | Square 1: length counter, period high bits. |
-| `$4008` | `TrgLinear` | `TrgLinear_4008` | Variables.inc:643 | Triangle: linear counter. |
-| `$400A` | `TrgTimer` | `TrgTimer_400A` | Variables.inc:644 | Triangle: period low byte. |
-| `$400B` | `TrgLength` | `TrgLength_400B` | Variables.inc:645 | Triangle: length counter, period high bits. |
-| `$400C` | `NoiseVolume` | `NoiseVolume_400C` | Variables.inc:646 | Noise: envelope, volume. |
-| `$400E` | `NoisePeriod` | `NoisePeriod_400E` | Variables.inc:647 | Noise: mode and period. |
-| `$400F` | `NoiseLength` | `NoiseLength_400F` | Variables.inc:648 | Noise: length counter. |
-| `$4010` | `DmcFreq` | `DmcFreq_4010` | Variables.inc:649 | DMC: flags and rate. |
-| `$4011` | `DmcCounter` | `DmcCounter_4011` | Variables.inc:650 | DMC: output level. |
-| `$4012` | `DmcAddress` | `DmcAddress_4012` | Variables.inc:651 | DMC: sample address. |
-| `$4013` | `DmcLength` | `DmcLength_4013` | Variables.inc:652 | DMC: sample length. |
-| `$4014` | `SpriteDma` | `SpriteDma_4014` | Variables.inc:630 | OAM DMA: page number of the sprite buffer to copy. |
-| `$4015` | `ApuStatus` | `ApuStatus_4015` | Variables.inc:653 | APU channel enables. |
-| `$4016` | `Ctrl1` | `Ctrl1_4016` | Variables.inc:631 | Controller strobe (write) and controller 1 data (read). |
-| `$4017` | `Ctrl2FrameCtr` | `Ctrl2_FrameCtr_4017` | Variables.inc:632 | Controller 2 data (read); APU frame counter (write). |
-| `$6001` | `SaveRamBegin` |  | Variables.inc:659 | $5A once save RAM is initialized (with SaveRamEnd = $A5). |
-| `$6002` | `SaveFileAName0` |  | Variables.inc:661 | [8] File A, slot 0: name. (The SaveFileA* blocks are addressed through |
-| `$600A` | `SaveFileAName1` |  | Variables.inc:663 | [8] File A, slot 1: name. |
-| `$6012` | `SaveFileAName2` |  | Variables.inc:664 | [8] File A, slot 2: name. |
-| `$601A` | `SaveFileAItems0` |  | Variables.inc:665 | [40] File A, slot 0: copy of the items block InvItems ($657-$67E). |
-| `$6042` | `SaveFileAItems1` |  | Variables.inc:666 | [40] File A, slot 1: items block. |
-| `$606A` | `SaveFileAItems2` |  | Variables.inc:667 | [40] File A, slot 2: items block. |
-| `$6092` | `SaveFileAWorldFlags0` |  | Variables.inc:668 | [384] File A, slot 0: copy of WorldFlags ($67F-$7FE). |
-| `$6212` | `SaveFileAWorldFlags1` |  | Variables.inc:669 | [384] File A, slot 1: world flags. |
-| `$6392` | `SaveFileAWorldFlags2` |  | Variables.inc:670 | [384] File A, slot 2: world flags. |
-| `$6512` | `SaveFileASlotActive0` |  | Variables.inc:671 | File A, slot 0: nonzero = slot registered (source of IsSaveSlotActive). |
-| `$6513` | `SaveFileASlotActive1` |  | Variables.inc:672 | File A, slot 1: slot registered. |
-| `$6514` | `SaveFileASlotActive2` |  | Variables.inc:673 | File A, slot 2: slot registered. |
-| `$6515` | `SaveFileAUnused0` | `SaveFileADeathCount0` | Variables.inc:674 | File A, slot 0: a byte with no use (only zeroed, summed and copied). |
-| `$6516` | `SaveFileAUnused1` | `SaveFileADeathCount1` | Variables.inc:676 | File A, slot 1: byte with no use. |
-| `$6517` | `SaveFileAUnused2` | `SaveFileADeathCount2` | Variables.inc:677 | File A, slot 2: byte with no use. |
-| `$6518` | `SaveFileADeaths0` |  | Variables.inc:678 | File A, slot 0: death count (source of DeathCounts). |
-| `$6519` | `SaveFileADeaths1` |  | Variables.inc:679 | File A, slot 1: death count. |
-| `$651A` | `SaveFileADeaths2` |  | Variables.inc:680 | File A, slot 2: death count. |
-| `$651B` | `SaveFileAQuestNumber0` |  | Variables.inc:681 | File A, slot 0: quest, 0 = Q1, 1 = Q2 (source of QuestNumbers). |
-| `$651C` | `SaveFileAQuestNumber1` |  | Variables.inc:682 | File A, slot 1: quest. |
-| `$651D` | `SaveFileAQuestNumber2` |  | Variables.inc:683 | File A, slot 2: quest. |
-| `$651E` | `SaveFileOpenMarkers` |  | Variables.inc:684 | [3] per slot: $5A while file A is whole; 0 during the B-to-A copy. |
-| `$6521` | `SaveFileCloseMarkers` |  | Variables.inc:685 | [3] per slot: $A5 while file A is whole; 0 during the B-to-A copy. |
-| `$6524` | `SaveFileAChecksums` | `FileAChecksums` | Variables.inc:686 | [3] x 2 bytes: file A checksum per slot; a mismatch reformats the slot. |
-| `$652A` | `IsSaveFileBCommitted` |  | Variables.inc:687 | [3] per slot: $FF = file B fully copied to file A; 0 = copy pending. |
-| `$6530` | `PlayAreaTiles` |  | Variables.inc:690 | [704] Play area tile map: 32 columns x 22 rows, stored by column. |
-| `$687E` | `LevelBlockAttrsA` |  | Variables.inc:694 | [128] Dungeon: bits 7-5 N door type, 4-2 S door type, 1-0 outer palette. |
-| `$68FE` | `LevelBlockAttrsB` |  | Variables.inc:697 | [128] Dungeon: bits 7-5 W door type, 4-2 E door type, 1-0 inner palette. |
-| `$697E` | `LevelBlockAttrsC` |  | Variables.inc:700 | [128] Bits 7-6 index into LevelInfo_FoeCounts, 5-0 monster list id. |
-| `$69FE` | `LevelBlockAttrsD` |  | Variables.inc:702 | [128] Bit 7 = bit 6 of the monster list id. Dungeon: bit 6 push block, |
-| `$6A7E` | `LevelBlockAttrsE` |  | Variables.inc:705 | [128] Dungeon: bit 7 dark room, 6-5 boss roar index, 4-0 room item id |
-| `$6AFE` | `LevelBlockAttrsF` |  | Variables.inc:708 | [128] Bits 5-4 index into LevelInfo_ShortcutOrItemPosArray. |
-| `$6B7E` | `LevelInfo_PalettesTransferBuf` |  | Variables.inc:714 | [36] PPU transfer record with the level's palettes. |
-| `$6BA2` | `LevelInfo_FoeCounts` |  | Variables.inc:715 | [4] Monster counts selectable by attr C bits 7-6 (dungeons: 3, 5, 6, 8). |
-| `$6BA6` | `LevelInfo_StartY` |  | Variables.inc:716 | Link's Y when the level is entered ($DD in dungeons, $8D overworld). |
-| `$6BA7` | `LevelInfo_ShortcutOrItemPosArray` |  | Variables.inc:717 | [4] Positions: high nibble X, low nibble Y (each * $10). |
-| `$6BAB` | `LevelInfo_SubmenuMapRotation` |  | Variables.inc:719 | Columns the submenu map is rotated to match the level's shape. |
-| `$6BAC` | `LevelInfo_StatusBarMapXOffset` |  | Variables.inc:720 | Pixels added to the status bar position marker's X. |
-| `$6BAD` | `LevelInfo_StartRoomId` |  | Variables.inc:721 | Room where Link starts the level. |
-| `$6BAE` | `LevelInfo_TriforceRoomId` |  | Variables.inc:722 | Room marked by the compass (Triforce marker on the status bar map). |
-| `$6BAF` | `LevelInfo_WorldFlagsAddr` |  | Variables.inc:723 | 2 bytes lo/hi: address of this level's 128 bytes in WorldFlags. |
-| `$6BB1` | `LevelInfo_LevelNumber` |  | Variables.inc:724 | Level number 1-9 for the "LEVEL-n" text; 0 = overworld. |
-| `$6BB2` | `LevelInfo_CellarRoomIdArray` |  | Variables.inc:725 | [10] Dungeon: room ids of the cellars, $FF-padded. |
-| `$6BBC` | `LevelInfo_BossRoomId` |  | Variables.inc:727 | Boss room; while its kills flag is not "all dead" rooms play the roar. |
-| `$6BBD` | `LevelInfo_SubmenuMapMask` |  | Variables.inc:728 | [16] per map column: bit set = a room exists in that row. |
-| `$6BCD` | `LevelInfo_StatusBarMapTransferBuf` |  | Variables.inc:729 | [45] PPU transfer record of the status bar map. |
-| `$6BFA` | `LevelInfo_PaletteCycles` |  | Variables.inc:730 | [96] Fade series: 8-byte palette halves, indexed through FadeCycle. |
-| `$6C5A` | `LevelInfo_DeathPaletteSeries` |  | Variables.inc:731 | [32] Fade series $60 (death): 4 steps of 8 bytes. |
-| `$7FFF` | `SaveRamEnd` |  | Variables.inc:732 | $A5 once save RAM is initialized; see SaveRamBegin. |
+| `$0512` | `IsLinkParalyzed` | `LinkParalyzed` | Variables.inc:426 | Nonzero while a Like-Like holds Link: direction input is discarded. |
+| `$0513` | `HasUsedCandle` | `UsedCandle` | Variables.inc:428 | 1 = a candle fire was made in this room; the blue candle then refuses. |
+| `$0514` | `IsZoraActive` | `ZoraActive` | Variables.inc:430 | 1 while the room's Zora exists (one at a time). |
+| `$0515` | `ActiveBoulderCount` | `ActiveBoulders` | Variables.inc:431 | Boulders (type $20) alive; the boulder spawner stops at 3. |
+| `$0519` | `ShutterTouchedDirs` |  | Variables.inc:432 | Direction bits of the open shutters Link has touched in this room. |
+| `$051A` | `SecretColorCycle` |  | Variables.inc:435 | Flute pond secret: 0 none, 1-$B draining, $C done. |
+| `$051B` | `FluteUsedState` | `UsedFlute` | Variables.inc:439 | 0; 1 once the flute was played in this room; 2 while Digdogger shrinks. |
+| `$051C` | `FadeCycle` |  | Variables.inc:440 | Palette fade: high nibble = series, low nibble = step 0-3 (4 = done). |
+| `$051D` | `PatternBlockIndex` |  | Variables.inc:443 | Index of the CHR pattern block being copied to the PPU (transfer loops). |
+| `$051E` | `IsRoomBrightening` | `BrighteningRoom` | Variables.inc:444 | 1 while a candle fire is fading a dark room to light. |
+| `$051F` | `CandleState` |  | Variables.inc:445 | Dark room lighting: 0 not lit, 1 brightening, 2 lit (Candle_UpdateRoomLight). |
+| `$0521` | `PrevOpenedDoors` |  | Variables.inc:455 | CurOpenedDoors of the room being left, kept while scrolling to the next. |
+| `$0522` | `WhirlwindTeleportingState` |  | Variables.inc:456 | 0 none, 1 whirlwind carrying Link away, 2 dropping him off. |
+| `$0523` | `TeleportingLevelIndex` |  | Variables.inc:457 | Whirlwind destination: (value & 7) = level number - 1. |
+| `$0524` | `SpawnCycle` |  | Variables.inc:460 | Next index 0-8 into the 9-entry spawn position list; kept between rooms. |
+| `$0525` | `CurEdgeSpawnCell` |  | Variables.inc:461 | Last screen-edge spawn cell: high nibble = row, low nibble = column. |
+| `$0526` | `LevelEntranceRoomId` | `CaveSourceRoomId` | Variables.inc:463 | Overworld room of the dungeon entrance last entered; $FF = none. |
+| `$0527` | `CellarSourceRoomId` |  | Variables.inc:465 | Dungeon room from which the current cellar was entered. |
+| `$0528` | `HasSkippedDemo` | `SkippedDemo` | Variables.inc:466 | $5A once Start was pressed in the title demo; stops the demo animation. |
+| `$0529` | `IsSwordShotForced` | `ForceSwordShot` | Variables.inc:467 | Nonzero would allow the sword shot at any health. Only ever cleared. |
+| `$052A` | `WorldKillCycle` |  | Variables.inc:468 | Kill cycle 0-9: column of the drop table used for the next drop. |
+| `$052B` | `RoomTileObjType` |  | Variables.inc:471 | Object type of the room's tile object found by the layout, 0 = none. |
+| `$052C` | `RoomTileObjX` |  | Variables.inc:472 | X of that tile object (column * $10). |
+| `$052D` | `RoomTileObjY` |  | Variables.inc:473 | Y of that tile object (row * $10 + $40). |
+| `$052E` | `IsSwordBlocked` | `SwordBlocked` | Variables.inc:474 | 1 = sword disabled until cured (set by Bubble type $2D, cleared by $2C). |
+| `$052F` | `MazeStep` |  | Variables.inc:476 | Correct steps so far (0-3) in the Lost Woods ($61) or Lost Hills ($1B). |
+| `$0530` | `PlayAreaAttrs` |  | Variables.inc:479 | [48] Nametable attribute bytes of the play area (from attrs A and B). |
+| `$0560` | `LevelKillCounts` |  | Variables.inc:480 | [128] per room of the current dungeon: kills banked when leaving it. |
+| `$05F0` | `CurNoteLowPeriodTrg` |  | Variables.inc:485 | Low period byte of the triangle note playing (base for vibrato). |
+| `$05F1` | `SongTrgSustainFlag` |  | Variables.inc:486 | Song phrase: header byte 7. Bit 7 set = triangle linear counter $1F, |
+| `$05F2` | `SampleCounter` |  | Variables.inc:488 | Frames left of the DMC sample ($A0 at start). |
+| `$05F3` | `SeaSfxCounter` |  | Variables.inc:489 | Sea noise effect phase counter, counts down from $D0. |
+| `$05F4` | `NoteLengthTableBase` |  | Variables.inc:490 | Song phrase: base offset into the note length table. |
+| `$05F5` | `FirstNoteIndexSongNoise` |  | Variables.inc:491 | Song phrase: script offset where the noise track starts (it loops). |
+| `$05F6` | `BackgroundSample` |  | Variables.inc:492 | Looping DMC sample (request bits $F0), restarted when no other plays. |
+| `$0600` | `SongRequest` |  | Variables.inc:493 | Song to start (one bit): $01 overworld, $02 Ganon, $04 end of level, |
+| `$0601` | `SampleRequest` |  | Variables.inc:496 | DMC sample to start (bit mask; bits $10-$40 loop). |
+| `$0602` | `Tune1Request` |  | Variables.inc:499 | Square-1 tune to start (bit mask). Bit 7 set = silence the song first, |
+| `$0603` | `EffectRequest` |  | Variables.inc:501 | Noise effect to start (bit mask). Sfx_Play ORs into it. |
+| `$0604` | `Tune0Request` |  | Variables.inc:502 | Square-0 tune to start (bit mask; $40 low-hearts beep, $80 stops song). |
+| `$0605` | `CurTune0` | `Tune0` | Variables.inc:503 | Square-0 tune playing (the whole Tune0Request byte), 0 = none. |
+| `$0606` | `CurEffect` | `Effect` | Variables.inc:504 | Noise effect playing, 0 = none. |
+| `$0607` | `CurTune1` | `Tune1` | Variables.inc:505 | Square-1 tune playing, 0 = none; the song skips square 1 meanwhile. |
+| `$0608` | `CurSample` | `Sample` | Variables.inc:506 | DMC sample playing, 0 = none. |
+| `$0609` | `CurSong` | `Song` | Variables.inc:507 | Song playing (its request bit), 0 = none. |
+| `$060A` | `NoteOffsetSongSq1` |  | Variables.inc:508 | Song script offset of the next square-1 note. |
+| `$060B` | `NoteOffsetSongSq0` |  | Variables.inc:509 | Song script offset of the next square-0 note (0 = track absent). |
+| `$060C` | `NoteOffsetSongTrg` |  | Variables.inc:510 | Song script offset of the next triangle note (0 = track absent). |
+| `$060D` | `NoteOffsetSongNoise` |  | Variables.inc:511 | Song script offset of the next noise note. |
+| `$060E` | `Tune0ScriptOffset` | `TunePtr0` | Variables.inc:512 | Offset of the next byte of the square-0 tune in Audio_Tune0Scripts. |
+| `$060F` | `NoteLengthSongSq0` |  | Variables.inc:513 | Length in frames of the current square-0 song note. |
+| `$0610` | `NoteLengthSongSq1` |  | Variables.inc:514 | Length in frames of the current square-1 song note. |
+| `$0611` | `NoteCounterSongSq1` |  | Variables.inc:515 | Frames left of the current square-1 song note. |
+| `$0612` | `CustomEnvelopeOffsetSongSq1` |  | Variables.inc:516 | Square-1 volume envelope position, counts down to 0. |
+| `$0613` | `NoteCounterSongSq0` |  | Variables.inc:517 | Frames left of the current square-0 song note. |
+| `$0614` | `CustomEnvelopeOffsetSongSq0` |  | Variables.inc:518 | Square-0 volume envelope position, counts down to 0. |
+| `$0615` | `NoteLengthSongTrg` |  | Variables.inc:519 | Length in frames of the current triangle song note. |
+| `$0616` | `NoteCounterSongTrg` |  | Variables.inc:520 | Frames left of the current triangle song note. |
+| `$0617` | `NoteCounterSongNoise` |  | Variables.inc:521 | Frames left of the current noise song note. |
+| `$0618` | `Tune1ScriptOffset` | `TunePtr1` | Variables.inc:522 | Offset of the next byte of the square-1 tune in Audio_Tune1Scripts. |
+| `$0619` | `SongEnvelopeSelector` |  | Variables.inc:523 | Song phrase: volume envelope selector (byte 6 of the phrase header). |
+| `$061A` | `UnusedSound61A` |  | Variables.inc:524 | Zeroed by Sample_Silence; no other code refers to it. |
+| `$061B` | `SongVibrationCounterSq1` |  | Variables.inc:525 | Frames since the square-1 song note began (vibrato phase). |
+| `$061C` | `SongVibrationCounterSq0` |  | Variables.inc:526 | Frames since the square-0 song note began (vibrato phase). |
+| `$061D` | `SongVibrationCounterTrg` |  | Variables.inc:527 | Frames since the triangle song note began (vibrato phase). |
+| `$061E` | `SongRepetitionsTrg` |  | Variables.inc:528 | Triangle track: repetitions left of the passage being repeated. |
+| `$061F` | `SongRepeatStartOffset` |  | Variables.inc:529 | Triangle track: script offset where the repeated passage starts. |
+| `$0620` | `CurRoomHistoryIndex` |  | Variables.inc:532 | Slot 0-5 of RoomHistory that the next new room overwrites. |
+| `$0621` | `RoomHistory` |  | Variables.inc:533 | [6] Ids of the last six different rooms entered (ring buffer). |
+| `$0627` | `WorldKillCount` |  | Variables.inc:537 | Monsters killed since Link was last harmed (zeroed by Link_BeHarmed). |
+| `$062D` | `QuestNumbers` |  | Variables.inc:542 | [3] per save slot: 0 = Q1, 1 = Q2. Read in play through CurSaveSlot. |
+| `$0630` | `DeathCounts` |  | Variables.inc:543 | [3] per save slot: deaths, stops at $FF. |
+| `$0633` | `IsSaveSlotActive` |  | Variables.inc:544 | [3] per save slot: nonzero = registered. The menu reads 5 entries. |
+| `$0636` | `IsRegisterSaveFileOptionEnabled` |  | Variables.inc:545 | IsSaveSlotActive[3], the menu's Register option: always 1. |
+| `$0637` | `IsEliminateSaveFileOptionEnabled` |  | Variables.inc:546 | IsSaveSlotActive[4], the menu's Eliminate option: always 1. |
+| `$0638` | `SaveSlotNames` | `Names` | Variables.inc:547 | [24] 3 slots x 8 characters: the slot names (tile codes, $24 = space). |
+| `$0650` | `SaveSlotHearts` |  | Variables.inc:548 | [6] 3 slots x (HeartValues, HeartPartial) shown on the file menu. |
+| `$0656` | `SelectedItemSlot` |  | Variables.inc:553 | Item slot on the B button: 0 boomerangs, 1-8 = InvItems+n, $F letter. |
+| `$0657` | `InvItems` | `Items` | Variables.inc:555 | [40] Base of the items block, indexed by item slot. InvItems+0 = sword. |
+| `$0657` | `InvSword` |  | Variables.inc:556 | Sword: 0 none, 1 wooden, 2 white, 3 magic. Same byte as InvItems. |
+| `$0658` | `InvBombs` |  | Variables.inc:558 | Bombs held, 0 to InvMaxBombs. A bomb pickup adds 4. |
+| `$0659` | `InvArrow` |  | Variables.inc:559 | Arrows: 0 none, 1 wooden (damage $20), 2 silver (damage $40). |
+| `$065A` | `InvBow` | `Bow` | Variables.inc:560 | Bow: 0 or 1. Without it the submenu skips the arrow slot and Arrow_Wield |
+| `$065B` | `InvCandle` |  | Variables.inc:562 | Candle: 0 none, 1 blue (one fire per room), 2 red. |
+| `$065C` | `InvFlute` |  | Variables.inc:563 | Flute: 0 or 1. The code reaches this byte only by index (InvItems, Y). |
+| `$065D` | `InvFood` |  | Variables.inc:564 | Food: 0 or 1. Zeroed when the Grumble Goriya takes it. |
+| `$065E` | `InvPotion` | `Potion` | Variables.inc:565 | Potion doses 0-2. Blue potion adds 1 (max 2), red sets 2; a use takes 1. |
+| `$065F` | `InvRod` |  | Variables.inc:566 | Magic rod: 0 or 1. The code reaches this byte only by index. |
+| `$0660` | `InvRaft` |  | Variables.inc:567 | Raft: 0 or 1. |
+| `$0661` | `InvBook` |  | Variables.inc:568 | Magic book: 0 or 1. With it a magic shot that ends makes a fire. |
+| `$0662` | `InvRing` |  | Variables.inc:569 | Ring: 0 none, 1 blue, 2 red. Damage to Link is halved once per grade. |
+| `$0663` | `InvLadder` |  | Variables.inc:570 | Ladder: 0 or 1. |
+| `$0664` | `InvMagicKey` |  | Variables.inc:571 | Magic key: 0 or 1. Opens locked doors without spending InvKeys. |
+| `$0665` | `InvBracelet` |  | Variables.inc:572 | Power bracelet: 0 or 1. Needed to push a rock ($62), not a gravestone. |
+| `$0666` | `InvLetter` |  | Variables.inc:573 | Letter: 0 none, 1 held, 2 shown to the cave person of type $74. |
+| `$0667` | `InvCompass` |  | Variables.inc:574 | Compasses of levels 1-8: bit (level - 1). Reached only by index ($10). |
+| `$0668` | `InvMap` |  | Variables.inc:575 | Maps of levels 1-8: bit (level - 1). Reached only by index (slot $11). |
+| `$0669` | `InvCompass9` |  | Variables.inc:576 | Compass of level 9: bit 0. Reached only by index (slot $12). |
+| `$066A` | `InvMap9` |  | Variables.inc:577 | Map of level 9: bit 0. Reached only by index (slot $13). |
+| `$066B` | `InvFairy` |  | Variables.inc:578 | Slot $14 of the fairy item (id $23). Never written: a fairy only heals. |
+| `$066C` | `InvClock` |  | Variables.inc:580 | Clock: 1 = monsters frozen, Link invincible. Zeroed by Link_ResetStateAndClock |
+| `$066D` | `InvRupees` |  | Variables.inc:583 | Rupees, 0-$FF. Changes by 1 via InvRupeesToAdd / InvRupeesToSubtract. |
+| `$066E` | `InvKeys` |  | Variables.inc:584 | Keys, 0-$FF. |
+| `$066F` | `HeartValues` |  | Variables.inc:593 | High nibble = heart containers - 1; low nibble = full hearts. |
+| `$0670` | `HeartPartial` |  | Variables.inc:595 | Partial heart fill: 0 empty, $01-$7F drawn half, $80-$FF drawn full. |
+| `$0671` | `InvTriforce` |  | Variables.inc:597 | Triforce pieces: bit (level - 1) for levels 1-8; $FF = all eight. |
+| `$0672` | `InvPowerTriforce` | `LastBossDefeated` | Variables.inc:598 | Slot $1B, Triforce of Power: 1 once its fanfare ends. Opens the shutters |
+| `$0673` | `InvFiveRupees` |  | Variables.inc:600 | Slot $1C of the 5-rupee item (id $0F). Never written: 5 x Item_TakeOneRupee. |
+| `$0674` | `InvBoomerang` |  | Variables.inc:602 | Wooden boomerang: 0 or 1. |
+| `$0675` | `InvMagicBoomerang` |  | Variables.inc:603 | Magic boomerang: 0 or 1. Sets the throw's range limit to $FF, else $31. |
+| `$0676` | `InvMagicShield` |  | Variables.inc:604 | Magic shield: 0 or 1. Zeroed when a Like-Like eats it. |
+| `$067C` | `InvMaxBombs` | `MaxBombs` | Variables.inc:607 | Bomb capacity: 8 in a new file, +4 per upgrade bought (100 rupees). |
+| `$067D` | `InvRupeesToAdd` | `RupeesToAdd` | Variables.inc:608 | Rupees still to be credited to InvRupees, 1 every second frame. |
+| `$067E` | `InvRupeesToSubtract` | `RupeesToSubtract` | Variables.inc:610 | Rupees still to be taken from InvRupees, 1 every second frame. |
+| `$067F` | `WorldFlags` |  | Variables.inc:614 | [384] One flag byte per room: $67F overworld, $6FF levels 1-6, $77F 7-9. |
+| `$2000` | `PpuControl` | `PpuControl_2000` | Variables.inc:623 | PPU control register (write). |
+| `$2001` | `PpuMask` | `PpuMask_2001` | Variables.inc:624 | PPU mask register (write). |
+| `$2002` | `PpuStatus` | `PpuStatus_2002` | Variables.inc:625 | PPU status register (read; reading resets the address latch). |
+| `$2003` | `OamAddr` | `OamAddr_2003` | Variables.inc:626 | OAM address (write). |
+| `$2004` | `OamData` | `OamData_2004` | Variables.inc:627 | OAM data. Not used by the code. |
+| `$2005` | `PpuScroll` | `PpuScroll_2005` | Variables.inc:628 | PPU scroll (two writes: X, Y). |
+| `$2006` | `PpuAddr` | `PpuAddr_2006` | Variables.inc:629 | PPU VRAM address (two writes: high, low). |
+| `$2007` | `PpuData` | `PpuData_2007` | Variables.inc:630 | PPU VRAM data. |
+| `$4000` | `Sq0Duty` | `Sq0Duty_4000` | Variables.inc:636 | Square 0: duty, envelope, volume. |
+| `$4001` | `Sq0Sweep` | `Sq0Sweep_4001` | Variables.inc:637 | Square 0: sweep. |
+| `$4002` | `Sq0Timer` | `Sq0Timer_4002` | Variables.inc:638 | Square 0: period low byte. |
+| `$4003` | `Sq0Length` | `Sq0Length_4003` | Variables.inc:639 | Square 0: length counter, period high bits. |
+| `$4004` | `Sq1Duty` | `Sq1Duty_4004` | Variables.inc:640 | Square 1: duty, envelope, volume. |
+| `$4005` | `Sq1Sweep` | `Sq1Sweep_4005` | Variables.inc:641 | Square 1: sweep. |
+| `$4006` | `Sq1Timer` | `Sq1Timer_4006` | Variables.inc:642 | Square 1: period low byte. |
+| `$4007` | `Sq1Length` | `Sq1Length_4007` | Variables.inc:643 | Square 1: length counter, period high bits. |
+| `$4008` | `TrgLinear` | `TrgLinear_4008` | Variables.inc:644 | Triangle: linear counter. |
+| `$400A` | `TrgTimer` | `TrgTimer_400A` | Variables.inc:645 | Triangle: period low byte. |
+| `$400B` | `TrgLength` | `TrgLength_400B` | Variables.inc:646 | Triangle: length counter, period high bits. |
+| `$400C` | `NoiseVolume` | `NoiseVolume_400C` | Variables.inc:647 | Noise: envelope, volume. |
+| `$400E` | `NoisePeriod` | `NoisePeriod_400E` | Variables.inc:648 | Noise: mode and period. |
+| `$400F` | `NoiseLength` | `NoiseLength_400F` | Variables.inc:649 | Noise: length counter. |
+| `$4010` | `DmcFreq` | `DmcFreq_4010` | Variables.inc:650 | DMC: flags and rate. |
+| `$4011` | `DmcCounter` | `DmcCounter_4011` | Variables.inc:651 | DMC: output level. |
+| `$4012` | `DmcAddress` | `DmcAddress_4012` | Variables.inc:652 | DMC: sample address. |
+| `$4013` | `DmcLength` | `DmcLength_4013` | Variables.inc:653 | DMC: sample length. |
+| `$4014` | `SpriteDma` | `SpriteDma_4014` | Variables.inc:631 | OAM DMA: page number of the sprite buffer to copy. |
+| `$4015` | `ApuStatus` | `ApuStatus_4015` | Variables.inc:654 | APU channel enables. |
+| `$4016` | `Ctrl1` | `Ctrl1_4016` | Variables.inc:632 | Controller strobe (write) and controller 1 data (read). |
+| `$4017` | `Ctrl2FrameCtr` | `Ctrl2_FrameCtr_4017` | Variables.inc:633 | Controller 2 data (read); APU frame counter (write). |
+| `$6001` | `SaveRamBegin` |  | Variables.inc:660 | $5A once save RAM is initialized (with SaveRamEnd = $A5). |
+| `$6002` | `SaveFileAName0` |  | Variables.inc:662 | [8] File A, slot 0: name. (The SaveFileA* blocks are addressed through |
+| `$600A` | `SaveFileAName1` |  | Variables.inc:664 | [8] File A, slot 1: name. |
+| `$6012` | `SaveFileAName2` |  | Variables.inc:665 | [8] File A, slot 2: name. |
+| `$601A` | `SaveFileAItems0` |  | Variables.inc:666 | [40] File A, slot 0: copy of the items block InvItems ($657-$67E). |
+| `$6042` | `SaveFileAItems1` |  | Variables.inc:667 | [40] File A, slot 1: items block. |
+| `$606A` | `SaveFileAItems2` |  | Variables.inc:668 | [40] File A, slot 2: items block. |
+| `$6092` | `SaveFileAWorldFlags0` |  | Variables.inc:669 | [384] File A, slot 0: copy of WorldFlags ($67F-$7FE). |
+| `$6212` | `SaveFileAWorldFlags1` |  | Variables.inc:670 | [384] File A, slot 1: world flags. |
+| `$6392` | `SaveFileAWorldFlags2` |  | Variables.inc:671 | [384] File A, slot 2: world flags. |
+| `$6512` | `SaveFileASlotActive0` |  | Variables.inc:672 | File A, slot 0: nonzero = slot registered (source of IsSaveSlotActive). |
+| `$6513` | `SaveFileASlotActive1` |  | Variables.inc:673 | File A, slot 1: slot registered. |
+| `$6514` | `SaveFileASlotActive2` |  | Variables.inc:674 | File A, slot 2: slot registered. |
+| `$6515` | `SaveFileAUnused0` | `SaveFileADeathCount0` | Variables.inc:675 | File A, slot 0: a byte with no use (only zeroed, summed and copied). |
+| `$6516` | `SaveFileAUnused1` | `SaveFileADeathCount1` | Variables.inc:677 | File A, slot 1: byte with no use. |
+| `$6517` | `SaveFileAUnused2` | `SaveFileADeathCount2` | Variables.inc:678 | File A, slot 2: byte with no use. |
+| `$6518` | `SaveFileADeaths0` |  | Variables.inc:679 | File A, slot 0: death count (source of DeathCounts). |
+| `$6519` | `SaveFileADeaths1` |  | Variables.inc:680 | File A, slot 1: death count. |
+| `$651A` | `SaveFileADeaths2` |  | Variables.inc:681 | File A, slot 2: death count. |
+| `$651B` | `SaveFileAQuestNumber0` |  | Variables.inc:682 | File A, slot 0: quest, 0 = Q1, 1 = Q2 (source of QuestNumbers). |
+| `$651C` | `SaveFileAQuestNumber1` |  | Variables.inc:683 | File A, slot 1: quest. |
+| `$651D` | `SaveFileAQuestNumber2` |  | Variables.inc:684 | File A, slot 2: quest. |
+| `$651E` | `SaveFileOpenMarkers` |  | Variables.inc:685 | [3] per slot: $5A while file A is whole; 0 during the B-to-A copy. |
+| `$6521` | `SaveFileCloseMarkers` |  | Variables.inc:686 | [3] per slot: $A5 while file A is whole; 0 during the B-to-A copy. |
+| `$6524` | `SaveFileAChecksums` | `FileAChecksums` | Variables.inc:687 | [3] x 2 bytes: file A checksum per slot; a mismatch reformats the slot. |
+| `$652A` | `IsSaveFileBCommitted` |  | Variables.inc:688 | [3] per slot: $FF = file B fully copied to file A; 0 = copy pending. |
+| `$6530` | `PlayAreaTiles` |  | Variables.inc:691 | [704] Play area tile map: 32 columns x 22 rows, stored by column. |
+| `$687E` | `LevelBlockAttrsA` |  | Variables.inc:695 | [128] Dungeon: bits 7-5 N door type, 4-2 S door type, 1-0 outer palette. |
+| `$68FE` | `LevelBlockAttrsB` |  | Variables.inc:698 | [128] Dungeon: bits 7-5 W door type, 4-2 E door type, 1-0 inner palette. |
+| `$697E` | `LevelBlockAttrsC` |  | Variables.inc:701 | [128] Bits 7-6 index into LevelInfo_FoeCounts, 5-0 monster list id. |
+| `$69FE` | `LevelBlockAttrsD` |  | Variables.inc:703 | [128] Bit 7 = bit 6 of the monster list id. Dungeon: bit 6 push block, |
+| `$6A7E` | `LevelBlockAttrsE` |  | Variables.inc:706 | [128] Dungeon: bit 7 dark room, 6-5 boss roar index, 4-0 room item id |
+| `$6AFE` | `LevelBlockAttrsF` |  | Variables.inc:709 | [128] Bits 5-4 index into LevelInfo_ShortcutOrItemPosArray. |
+| `$6B7E` | `LevelInfo_PalettesTransferBuf` |  | Variables.inc:715 | [36] PPU transfer record with the level's palettes. |
+| `$6BA2` | `LevelInfo_FoeCounts` |  | Variables.inc:716 | [4] Monster counts selectable by attr C bits 7-6 (dungeons: 3, 5, 6, 8). |
+| `$6BA6` | `LevelInfo_StartY` |  | Variables.inc:717 | Link's Y when the level is entered ($DD in dungeons, $8D overworld). |
+| `$6BA7` | `LevelInfo_ShortcutOrItemPosArray` |  | Variables.inc:718 | [4] Positions: high nibble X, low nibble Y (each * $10). |
+| `$6BAB` | `LevelInfo_SubmenuMapRotation` |  | Variables.inc:720 | Columns the submenu map is rotated to match the level's shape. |
+| `$6BAC` | `LevelInfo_StatusBarMapXOffset` |  | Variables.inc:721 | Pixels added to the status bar position marker's X. |
+| `$6BAD` | `LevelInfo_StartRoomId` |  | Variables.inc:722 | Room where Link starts the level. |
+| `$6BAE` | `LevelInfo_TriforceRoomId` |  | Variables.inc:723 | Room marked by the compass (Triforce marker on the status bar map). |
+| `$6BAF` | `LevelInfo_WorldFlagsAddr` |  | Variables.inc:724 | 2 bytes lo/hi: address of this level's 128 bytes in WorldFlags. |
+| `$6BB1` | `LevelInfo_LevelNumber` |  | Variables.inc:725 | Level number 1-9 for the "LEVEL-n" text; 0 = overworld. |
+| `$6BB2` | `LevelInfo_CellarRoomIdArray` |  | Variables.inc:726 | [10] Dungeon: room ids of the cellars, $FF-padded. |
+| `$6BBC` | `LevelInfo_BossRoomId` |  | Variables.inc:728 | Boss room; while its kills flag is not "all dead" rooms play the roar. |
+| `$6BBD` | `LevelInfo_SubmenuMapMask` |  | Variables.inc:729 | [16] per map column: bit set = a room exists in that row. |
+| `$6BCD` | `LevelInfo_StatusBarMapTransferBuf` |  | Variables.inc:730 | [45] PPU transfer record of the status bar map. |
+| `$6BFA` | `LevelInfo_PaletteCycles` |  | Variables.inc:731 | [96] Fade series: 8-byte palette halves, indexed through FadeCycle. |
+| `$6C5A` | `LevelInfo_DeathPaletteSeries` |  | Variables.inc:732 | [32] Fade series $60 (death): 4 steps of 8 bytes. |
+| `$7FFF` | `SaveRamEnd` |  | Variables.inc:733 | $A5 once save RAM is initialized; see SaveRamBegin. |

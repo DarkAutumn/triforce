@@ -161,7 +161,7 @@ Save_CalcFileAChecksum:
     JSR Save_AddToFileAChecksum
     DEY
     BPL @SumName
-    LDY #$27                    ; Add the Items block ($28 bytes) to [$0F:0E].
+    LDY #$27                    ; Add the InvItems block ($28 bytes) to [$0F:0E].
 
 @SumItems:
     LDA ($00), Y
@@ -217,7 +217,7 @@ Save_FormatFileA:
     STA ($04), Y
     DEY
     BPL @ClearName
-    LDY #$27                    ; Reset the file's Items block.
+    LDY #$27                    ; Reset the file's InvItems block.
     LDA #$00
 
 @ClearItems:
@@ -309,7 +309,7 @@ Save_CalcFileBChecksum:
     JSR Save_AddToFileBChecksum
     DEY
     BPL @SumName
-    LDY #$27                    ; Sum the $28 bytes of the file's Items block with [$CF:CE].
+    LDY #$27                    ; Sum the $28 bytes of the file's InvItems block with [$CF:CE].
 
 @SumItems:
     LDA ($C0), Y
@@ -364,7 +364,7 @@ Save_FormatFileB:
     STA ($C4), Y
     DEY
     BPL @ClearName
-    LDY #$27                    ; Clear $28 bytes of the Items block in file.
+    LDY #$27                    ; Clear $28 bytes of the InvItems block in file.
     LDA #$00
 
 @ClearItems:

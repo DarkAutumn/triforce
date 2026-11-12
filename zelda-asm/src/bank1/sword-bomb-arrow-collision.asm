@@ -33,27 +33,33 @@
 ;   - Bomb and fire knock the monster back unless its mask holds the damage type
 ;     (Bomb_CheckBombOrFireVsMonster).
 ; CONTENTS: (generated; L = line in this file)
-;   L0058 SwordShot_CheckMonsterCollision       code  Tests Link's sword shot or magic shot (slot Y = $0E) against the monster in slot X.
-;   L0120 Bomb_CheckBombOrFireVsMonster         code  Tests a detonating bomb or a fire in slot Y ($10 or $11) against the monster in slot X.
-;   L0171 Bomb_CheckBombOrFireVsMonster_Return  code  Shared exit of the bomb/fire, sword and stabbing tests.
-;   L0176 Sword_DamagePoints                    data  TABLE: sword damage points; index = InvSword - 1 (0 wooden, 1 white, 2 magic); value = damage in ObjHP
-;   L0186 Sword_CheckMonsterCollision           code  Tests Link's sword (slot Y = $0D) against the monster in slot X.
-;   L0209 Collision_CheckStabVsMonster          code  Tests a sword or rod swing against a monster with a box that is longer along Link's facing axis.
-;   L0243 Arrow_CheckArrowOrRodVsMonster        code  Tests the rod swing or the flying arrow in slot Y = $12 against the monster in slot X.
-;   L0281 Collision_CheckShotVsMonster          code  Tests an arrow, sword shot or magic shot against a monster; handles Pols Voice and the arrow's spark.
-;   L0312 Damage_ParryOrShove                   code  Knocks the monster in slot X back in the weapon's direction, or plays the parry tune for a Darknut.
-;   L0333 Damage_PlayParryTune                  code  Requests the parry tune (Tune0Request := 1).
-;   L0338 Collision_CheckShotVsMonster_Return   code  Shared exit of the arrow and shot tests.
+;   L0064 SwordShot_CheckMonsterCollision       code  Tests Link's sword shot or magic shot (slot Y = $0E) against the monster in slot X.
+;   L0126 Bomb_CheckBombOrFireVsMonster         code  Tests a detonating bomb or a fire in slot Y ($10 or $11) against the monster in slot X.
+;   L0177 Bomb_CheckBombOrFireVsMonster_Return  code  Shared exit of the bomb/fire, sword and stabbing tests.
+;   L0182 Sword_DamagePoints                    data  TABLE: sword damage points; index = InvSword - 1 (0 wooden, 1 white, 2 magic); value = damage in ObjHP
+;   L0192 Sword_CheckMonsterCollision           code  Tests Link's sword (slot Y = $0D) against the monster in slot X.
+;   L0215 Collision_CheckStabVsMonster          code  Tests a sword or rod swing against a monster with a box that is longer along Link's facing axis.
+;   L0249 Arrow_CheckArrowOrRodVsMonster        code  Tests the rod swing or the flying arrow in slot Y = $12 against the monster in slot X.
+;   L0287 Collision_CheckShotVsMonster          code  Tests an arrow, sword shot or magic shot against a monster; handles Pols Voice and the arrow's spark.
+;   L0318 Damage_ParryOrShove                   code  Knocks the monster in slot X back in the weapon's direction, or plays the parry tune for a Darknut.
+;   L0339 Damage_PlayParryTune                  code  Requests the parry tune (Tune0Request := 1).
+;   L0344 Collision_CheckShotVsMonster_Return   code  Shared exit of the arrow and shot tests.
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
 ; Tests Link's sword shot or magic shot (slot Y = $0E) against the monster in slot X.
 ; IN:   X = monster slot; Y = weapon slot ($0E); [02],[03] = monster's middle.
-; OUT:  [00] = weapon slot; [06] = 1 when they overlap (not written when the shot is spreading).
+; OUT:  [00] = weapon slot, except after the book-fire path below; [06] = 1 when they overlap (not
+;       written when the shot is spreading).
 ; NOTE: Sword shot: damage type 1, damage by the sword held ($10/$20/$40). Magic shot (state bit 7):
 ;       type $10, damage $20. Box: under $0C pixels on both axes. On any overlap, damage or not, the shot
 ;       ends (SwordShot_HandleBlocked): a sword shot starts spreading; a magic shot is removed, or with the
 ;       book turns into a fire if a fire slot is free.
+; NOTE: When the book makes that fire, Candle_Wield -> Link_UseItem_SetState10 -> Link_PlaceWeaponAhead
+;       leaves [00] = 0, [01] = $10, [02] = $F0. [02] is the monster's middle X for the remaining tests
+;       of this monster this frame (slots $10, $11, $0D, $12), which are then made against X = $F0: a
+;       bomb blast or fire (or the sword, rod or arrow) misses that monster on that frame unless the
+;       monster's middle X is near $F0.
 ; ----------------------------------------------------------------------------
 SwordShot_CheckMonsterCollision:
     STY $00                     ; [00] := weapon slot

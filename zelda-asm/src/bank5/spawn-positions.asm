@@ -202,7 +202,7 @@ Spawn_IsSafeSpot:
 ; OUT:  C set = too close; C clear = safe.
 ; NOTE: Too close means |Link X - X| < $22 and |Link Y - Y| < $22 (a $43-pixel square around Link's
 ;       position). $22 or more on either axis is safe. Entry point for screen-edge spawns.
-; NOTE: Each difference is an 8-bit subtraction made positive by Abs, so it wraps: a real distance
+; NOTE: Each difference is an 8-bit subtraction made positive by Math_Abs, so it wraps: a real distance
 ;       of $DF or more reads as $21 or less (Link at X $00, object at X $F0 = "distance" $10).
 ; ----------------------------------------------------------------------------
 Spawn_IsFarFromLink:
