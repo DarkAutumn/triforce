@@ -922,7 +922,8 @@ impl GameView {
 
     /// Directions the sword (A) can swing: Link_FilterInput's Link_BorderBounds on the facing's axis, as the game
     /// applies them (asm:Link_BorderBounds; measured by pressing A on every coordinate, N006). Inclusive ranges:
-    /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.
+    /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.  In an
+    /// underworld doorway only its own axis (the game doesn't turn Link sideways there).
     pub fn sword_directions(&self) -> Vec<Direction> {
         self.attack_directions(false)
     }
@@ -944,10 +945,21 @@ impl GameView {
             (Direction::N, y, if b_item { n_lo.max(84) } else { n_lo }, y_hi),
             (Direction::S, y, s_lo, if b_item { 189 } else { y_hi }),
         ];
+        // In an underworld doorway (outside the room's bounds) the game never turns Link sideways: a perpendicular
+        // press first walks him back into the room (measured in 4:0x11's S doorway). The executor turns him by
+        // writing ObjDir, which the game then follows without a tile test (asm:Walker_Move): through the wall into
+        // the next room. So in a doorway only attacks along its axis.
+        let underworld_room = !ow && !self.full_location().in_cave;
+        let vertical_doorway = underworld_room && !(UW_BOUND_T..=UW_BOUND_B).contains(&y);
+        let horizontal_doorway = underworld_room && !(UW_BOUND_L..=UW_BOUND_R).contains(&x);
         ranges
             .into_iter()
             .filter(|&(_, v, lo, hi)| (lo..=hi).contains(&v))
             .map(|(d, ..)| d)
+            .filter(|d| {
+                let sideways = if matches!(d, Direction::N | Direction::S) { horizontal_doorway } else { vertical_doorway };
+                !sideways
+            })
             .collect()
     }
 

@@ -1067,3 +1067,20 @@ fn d4_gleeoks_heads_are_the_enemies() {
         assert!(head.link_overlap_tiles().into_iter().all(|t| objective.targets.contains(&Target::Tile(t))));
     }
 }
+
+/// In an underworld doorway the game never turns Link sideways (a perpendicular press walks him back into the room
+/// first), so no sideways attack is legal there: the executor's turn would let the game walk him through the wall
+/// (4:0x11's S doorway: BOMB E landed him in 0x12, found by the explorer).
+#[test]
+fn no_sideways_attack_in_a_doorway() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((mut s, _)) = d4_room(&map, "4_11s_0", 0x11, "S") else { return };
+    // Link one step into the S doorway, facing S (where MOVE S 8 from the entry spot puts him).
+    s.apply_ram(&[(Var::LinkX, 120), (Var::LinkY, 191), (Var::LinkDirection, 4), (Var::Bombs, 1)]);
+    let state = s.state().clone();
+    assert!(state.link.position.y > 0xBD, "in the doorway: {:?}", state.link.position);
+    assert_eq!(s.mask().directions(ActionKind::Bomb), [Direction::N]);
+    assert!(s.mask().directions(ActionKind::Sword).iter().all(|d| matches!(d, Direction::N | Direction::S)));
+    act(&mut s, "MOVE N 16");
+    assert!(s.mask().directions(ActionKind::Bomb).contains(&Direction::E), "back in the room");
+}

@@ -1225,3 +1225,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   - **Uncounted kills** (`Change.observed.enemies_killed`): a monster that dies (starts its death sparkle or
     leaves its slot; a dived Zora is no kill) restarts the room-stall count even when `RoomKills` doesn't count it
     (a Vire's Red Keese, Gleeok's heads). Look-ahead predictions don't record kills.
+- **Doorway attacks** (found by the Dungeon 4 explorer: `BOMB E` from 4:0x11's S doorway landed Link in 0x12). In an
+  underworld doorway (outside the room's bounds) the game never turns Link sideways: a perpendicular press does
+  nothing (W doorway of 1:0x44, S doorway of 4:0x30) or walks him back into the room first (4:0x11). The executor
+  turned him by writing ObjDir, which the game then followed without a tile test, through the wall. The mask now
+  offers only attacks along the doorway's axis there (`GameView::attack_directions`); N006's measured bounds were
+  taken with the facing poked.
