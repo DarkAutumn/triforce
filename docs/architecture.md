@@ -467,7 +467,10 @@ step, so following an enemy that moves away pays again, and knockback resets the
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
   `eval` / `chain`; `--no-log` skips it) and end it `interrupted` on SIGTERM. `training-gui.py`'s [currently running] shows every live folder on the
-  machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`).
+  machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`). A
+  folder whose training ends stays shown while another is live (its plan is no longer `running`, or its process
+  is gone: `plan_is_live`); the "Clear finished" button hides those for the rest of the session, and trainings that
+  start later still appear.
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
   success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
   its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that

@@ -326,3 +326,41 @@ def test_machine_status_reads_cpu_gpu_and_load(tmp_path):
     assert gui.parse_gpu_utilization("NVIDIA-SMI has failed\n") is None
     assert gui.machine_text(63.4, 22.0, (14.21, 12.8, 11.0)) == "CPU 63%    GPU 22%    load 14.2 12.8 11.0"
     assert gui.machine_text(None, None, None) == "CPU –    GPU –    load –"
+
+
+def test_clear_finished_keeps_only_live_folders(qapp, tmp_path, monkeypatch):
+    """[currently running] keeps a folder whose training ended; 'Clear finished' drops it for good, leaving the live
+    ones, and a training that starts later still appears."""
+    import json
+    import time
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())      # only tmp_path's folders
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+
+    def plan(name, status='running'):
+        (tmp_path / name).mkdir(exist_ok=True)
+        (tmp_path / name / gui.PLAN_FILE).write_text(json.dumps(
+            {**running_plan(os.getpid(), time.time()), 'status': status, 'name': name, 'runs': []}))
+        return tmp_path / name
+
+    old, done, live = plan('261112_001_old', 'completed'), plan('261112_002_done'), plan('261112_003_live')
+    window = gui.Window(tmp_path, None)
+    try:
+        assert window.live_mode and window._shown_dirs() == [live, done]
+        assert not window.clear_button.isHidden() and not window.clear_button.isEnabled()
+        plan(done.name, 'completed')
+        window._scan_and_update()
+        assert window._shown_dirs() == [live, done]                     # finished, still shown
+        assert window.clear_button.isEnabled() and window.clear_button.text() == 'Clear finished (1)'
+        window.clear_button.click()
+        assert window._shown_dirs() == [live] and not window.clear_button.isEnabled()
+        window._scan_and_update()
+        assert window._shown_dirs() == [live]                           # doesn't come back
+        new = plan('261112_004_new')
+        window._scan_and_update()
+        assert window._shown_dirs() == [new, live]
+        assert old not in window._shown_dirs()
+        window.load(old)                                                # a picked folder: no button
+        assert window.clear_button.isHidden()
+    finally:
+        window.close()
+        window.deleteLater()
