@@ -44,11 +44,41 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples. The r71 goriya (`r71-goriya-cont`, 12M steps): 95.2%, −0.15 hearts
    per episode by sample (old `r68-clear5e` 95.4%, −0.16); 2:0x1e 90.0% −0.39 (round21.md §7).
-7. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work): chain
-   records count no hits (the Hits overlay is room-only) and name no route step (`room_stats.assign_steps` infers it
-   from the current route, so r70's D4 visits of the old 0x30 → 0x20 → 0x21 path show as `off`): a `hits` and a
-   `step` field in `RoomRecord` would make both exact; the death-rate scales (`DEATHS_BAD`) are first guesses; open
-   ideas: an overlay of death rate given entry (`death_rate_entered`), comparing two tags (r70 vs r71) room by room.
+7. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work):
+   - [x] chain records count hits and name their route step (round 22: `RoomRecord.hits` / `hits_dealt` / `step`;
+     `assign_steps` uses the recorded step and infers it only for older files; chain `hits_per_visit` feeds the
+     Hits overlay).
+   - [x] split by the clips switch (round 22: `by_clips` per room and scope, `--noclips` for a second tag,
+     `zelda-map.py`'s Clips selector and both route ways).
+   - [ ] the death-rate scales (`DEATHS_BAD`) are first guesses; open ideas: an overlay of death rate given entry
+     (`death_rate_entered`), comparing two tags (r70 vs r71) room by room; `eval_batch.report_commands` doesn't
+     write the `-both` file of a tag measured with and without clips (run `triforce room-stats TAG --noclips`).
+
+## Round 22: the run-time clips switch (Lee, Nov 13; branch `r22`)
+
+Decisions 2026-11-13 "The run-time clips switch and route stretches" and "Clips in training, evaluation and
+watching".
+
+- [x] **The switch** (`clips_allowed`, run-time, any decision), route stretches (`d4-island`), re-planning from
+  where Link stands, the clip counters and the wrap veto (below, under Dungeon 4).
+- [x] **The training mix** (`clips: {enabled, off_share}`, half the episodes with CLIP masked), per-switch metrics
+  and early stop; the evaluation split (`--clips both`, `by_clips`, the combined headline); the room-statistics
+  split; the training GUI (success chart and progress line per switch state, the Eval tab's "Clips switch").
+- [x] **Watching:** `play-zelda.py --clips on|off`, key `c`, the title's switch and per-queue "no clips" counts, a
+  cell's "no clips"; `--live` (the top left cell a live run where `c` acts from the next decision);
+  `zelda-headless.py --clips`.
+- [ ] **Train the clip families under the mix.** The round 21 models never trained with the switch off. `vire`
+  r71 evaluated with `--clips both` (20 episodes per state): 97.5% (on 99.4% of 480, off 96.0% of 600; 4:0x30 off
+  88%, 4:0x50 off 95% with −1.24 hearts). D4 chains of the r71 team, 20 runs each from `4_71s_0` (act model):
+  clips on 13/20, clips off 2/20 (deaths 0x31 5, 0x20 4, 0x13 4, 0x30 2, 0x12 2), `--clips-off-from 4:0x31` 8/20
+  (0x20 4 deaths): the plain way (0x31 W, 0x30 N, 0x20) is where an untrained switch-off costs.
+- [ ] **vire's curriculum for the plain way's states.** `4_30e_*` and `4_20s_*` have no Go-Explore tracks
+  (`trajectories/vire`, explored in round 21 before they existed); re-explore them (`python -m triforce.explore
+  --specialist vire --states 4_30e_0,...`). Curriculum starts play with the switch on, so a track from a state that
+  fixes it off needs a decision first.
+- [ ] **The live cell has no sound and no controller drawing** (its frames come from the chain pool, not a
+  `ReplayScreen`). Sound would need the pool's env to feed a `Synth` (`crates/zcore/src/sound.rs`) the way the
+  screen's cells do.
 
 ## Round 22: natural RNG (Lee, Nov 13; branch `r22-rng`)
 

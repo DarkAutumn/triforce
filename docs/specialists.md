@@ -49,19 +49,30 @@ block clip in 4:0x50's diagonal and 4:0x03), `stalfos-keese-gel` (the ladder cli
 (the block clip in 1:0x22) and the nine overworld families (the screen wrap; ow-lynel's 0x0a, ow-leever's 0x48 and
 ow-peahat's 0x45 offer none, so for those three the switch changes nothing yet).
 
+**Clips on and off** (round 22, Lee: "the models need to be trained with clips enabled, and also with the clip
+action masked so it has to traverse as normal"; `docs/architecture.md` "The run-time clips switch"): a clip family
+trains with both. `clips: true` now means `{enabled: true, off_share: 0.5}`: half the episodes start with the
+run-time switch off (CLIP masked, the objective and the path search without skips, the route's plain way through a
+stretch), half with it on; `off_share` sets another share. A start state the route enters on one way only fixes the
+switch (4:0x30 from E, 4:0x20 from S, 4:0x21 from W off; 4:0x21 from S on); curriculum starts keep it on. Training
+logs `clips/on|off/success_rate` (and episodes, health) per switch state, the early stop needs both, and the
+evaluation plays both (`--clips both`, the default for a clip family; `eval.json`'s headline figure is over both,
+`by_clips` per state). Families without clips play with the switch on and follow its way through a stretch.
+
 ### Dungeon 4 (scouted Nov 11, merged into `d2first` and trained Nov 12; `docs/routes/d4.md`)
 
-`d2first` goes on from the Dungeon 3 triforce through Dungeon 4 (steps 98–122; 98–120 since round 21's shortcut).
+`d2first` goes on from the Dungeon 3 triforce through Dungeon 4 (steps 98–122; 98–120 since round 21's shortcut;
+round 22 holds both ways as the `d4-island` stretch, `docs/routes/d4.md`).
 Its rooms are tagged by enemy as everywhere; the existing families train on their Dungeon 4 rooms' start states too.
 
 | Family | Main threat | Rooms (level, room) | Notes |
 |---|---|---|---|
-| `vire` (new) | Vire (splits into two Red Keese) | (4,0x71), (4,0x61), (4,0x50), (4,0x30), (4,0x31), (4,0x20), (4,0x12), (4,0x03) | The dungeon's main family, with its empty hall and triforce room. 0x30 S→E (a locked door); 0x31 twice (W→E after killing all five for the shutter; round 21: E→N through the locked door onto 0x21's island); 0x20 off the route since round 21 (tagged, no start state); 0x12: kill them, push the block, E through the shutter. `clips: true` (the block clip in 0x50). |
+| `vire` (new) | Vire (splits into two Red Keese) | (4,0x71), (4,0x61), (4,0x50), (4,0x30), (4,0x31), (4,0x20), (4,0x12), (4,0x03) | The dungeon's main family, with its empty hall and triforce room. 0x30 S→E (a locked door); 0x31 twice (W→E after killing all five for the shutter; then from E: with clips N through the locked door onto 0x21's island, without W); without clips 0x30 E→N (across the water on the ladder) and 0x20 S→E (round 22's plain way; round 21 had 0x20 off the route); 0x12: kill them, push the block, E through the shutter. `clips: true` (the block clip in 0x50), trained half with the switch off. |
 | `like-like` (new) | Like Like, Zol, Bubble | (4,0x32) | The Breakfast Room: kill them, push the block, down the stairs; back up, W. |
 | `boss-gleeok` (new) | Gleeok, two heads ($43) | (4,0x13) | Kill him, the heart container, N. |
 | `ow-peahat` (new) | Peahat | (0,0x45) | The island: from the raft's pier into the dungeon. |
 | `zol` | | + (4,0x40) | Five Zols in the dark; take the key (in the open). |
-| `stalfos-keese-gel` | | + (4,0x51), (4,0x21) | Eight Blue Keese (take the key, in the open); five Blue Gels in the dark, round 21: in from S onto the island, `CLIP N` (the ladder clip, `clips: true`), bomb the N wall (`items: {bombs: required}`, which unmasks BOMB only in this `requires_bombs` room). |
+| `stalfos-keese-gel` | | + (4,0x51), (4,0x21) | Eight Blue Keese (take the key, in the open); five Blue Gels in the dark: with clips in from S onto the island, `CLIP N` (the ladder clip, `clips: true`); without clips in from W; then bomb the N wall (`items: {bombs: required}`, which unmasks BOMB only in this `requires_bombs` room). |
 | `trap-room` | | + (4,0x11) | The rupee room: no monsters, no traps, bomb the E wall (Lee, Nov 12: it stays in this family). |
 | `equipment-room` | | + (4,0x60 cellar) | The ladder cellar. |
 

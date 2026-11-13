@@ -3,7 +3,8 @@
 //! A [`Producer`] is whatever simulates runs and records them (the chain pool).  The feed thread takes every
 //! finished run from it, reads what the queues rank by ([`Entry::read`]), offers it to the [`Queues`], and
 //! pauses the producer whenever [`Queues::wants_more`] says nothing is wanted; a pop starts it again.  The
-//! viewer only ever talks to the [`Feed`]: [`Feed::pop`], [`Feed::stats`].
+//! viewer only ever talks to the [`Feed`]: [`Feed::pop`], [`Feed::stats`], and [`Feed::file`] for a run it
+//! played itself (a live cell).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,8 +18,9 @@ use zcore::Rom;
 
 use crate::queues::{Entry, Queue, Queues};
 
-/// A finished run: its seed, its TFREPLAY bytes and the run-time clips switch it started with (round 22; None when
-/// the producer doesn't know).
+/// A finished run: its seed, its TFREPLAY bytes and the run-time clips switch it was played with (round 22; the one
+/// it started with, or for a run whose switch was flipped while it played, false if it was ever off; None when the
+/// producer doesn't know).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finished {
     pub seed: i64,
@@ -60,6 +62,23 @@ struct Shared {
     running: AtomicBool,
     stop: AtomicBool,
     error: Mutex<Option<String>>,
+    rom: Arc<Rom>,
+    save_dir: Option<PathBuf>,
+}
+
+impl Shared {
+    /// Reads a finished run, saves it to `save_dir` and offers it to the queues.
+    fn file(&self, run: Finished) -> Result<(), String> {
+        let Finished { seed, data, clips } = run;
+        let mut entry = Entry::read(&self.rom, seed, Arc::from(data))
+            .map_err(|e| format!("seed {seed}: its replay can't be read: {e}"))?;
+        entry.clips = clips;
+        if let Some(dir) = &self.save_dir {
+            save(dir, &entry).map_err(|e| format!("saving seed {seed}'s replay: {e}"))?;
+        }
+        self.queues.lock().offer(entry);
+        Ok(())
+    }
 }
 
 /// The queues and the thread filling them.  Dropping it stops the thread; [`Feed::close`] also gives the
@@ -81,6 +100,8 @@ impl<P: Producer> Feed<P> {
             running: AtomicBool::new(true),
             stop: AtomicBool::new(false),
             error: Mutex::new(None),
+            rom,
+            save_dir,
         });
         let state = shared.clone();
         let thread = std::thread::Builder::new()
@@ -97,14 +118,8 @@ impl<P: Producer> Feed<P> {
                     let began = std::time::Instant::now();
                     let result = producer.poll(Self::POLL).and_then(|runs| {
                         let idle = runs.is_empty();
-                        for Finished { seed, data, clips } in runs {
-                            let mut entry = Entry::read(&rom, seed, Arc::from(data))
-                                .map_err(|e| format!("seed {seed}: its replay can't be read: {e}"))?;
-                            entry.clips = clips;
-                            if let Some(dir) = &save_dir {
-                                save(dir, &entry).map_err(|e| format!("saving seed {seed}'s replay: {e}"))?;
-                            }
-                            state.queues.lock().offer(entry);
+                        for run in runs {
+                            state.file(run)?;
                         }
                         Ok(idle)
                     });
@@ -128,6 +143,13 @@ impl<P: Producer> Feed<P> {
     /// Takes the next run to watch from `queue` ([`Queues::pop`]).
     pub fn pop(&self, queue: Queue) -> Option<Entry> {
         self.shared.queues.lock().pop(queue)
+    }
+
+    /// Files a run finished elsewhere (`play-zelda`'s live cell) as if the producer had: saved to the save
+    /// directory and offered to the queues.  Its error (a replay that can't be read, a failed save) is returned,
+    /// not kept: the feed goes on.
+    pub fn file(&self, run: Finished) -> Result<(), String> {
+        self.shared.file(run)
     }
 
     pub fn stats(&self) -> Stats {

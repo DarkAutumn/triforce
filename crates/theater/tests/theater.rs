@@ -143,6 +143,28 @@ fn a_failing_producer_stops_the_feed() {
     assert_eq!(feed.stats().error.as_deref(), Some("the simulations crashed"));
 }
 
+#[test]
+fn a_run_played_elsewhere_is_filed_like_the_producers() {
+    let Some(rom) = rom() else { return };
+    let (_send, runs) = mpsc::channel();
+    let dir = std::env::temp_dir().join(format!("theater-file-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let feed = Feed::start(Scripted { runs, paused: Arc::default(), polls: 0 }, rom.clone(), Queues::new(2, 1, 0),
+                           Some(dir.clone()));
+    // A live run whose clips switch went off while it played: queued, counted and saved like a simulated one.
+    let death = recording(&rom, 40, 0, 10, &[Some(2)], ENDING_DEATH);
+    feed.file(finished(1_000_007, death.clone(), Some(false))).unwrap();
+    let stats = feed.stats();
+    assert_eq!((stats.runs, stats.len[3], stats.without_clips[3]), (1, 1, 1));
+    assert_eq!(std::fs::read(dir.join("01000007-death.tfreplay")).unwrap(), death);
+    let entry = feed.pop(Queue::Died).unwrap();
+    assert_eq!((entry.seed, entry.clips), (1_000_007, Some(false)));
+    // A replay that can't be read is the caller's error; the feed goes on.
+    assert!(feed.file(finished(8, b"garbage".to_vec(), None)).unwrap_err().starts_with("seed 8: its replay can't be read"));
+    assert!(feed.stats().error.is_none() && feed.stats().running);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn no_files() -> Resolver {
     Arc::new(|name: &str| Err(std::io::Error::other(format!("no state file {name}"))))
 }

@@ -23,7 +23,7 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPalet
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
 
 from . import replay
-from .play_grid import FILES, FRAME_SHAPE, GOLDEN, NES_FPS, QUEUES
+from .play_grid import FILES, FRAME_SHAPE, GOLDEN, LIVE, NES_FPS, QUEUES
 
 FPS_STEP = 10               # +/- change the frame-rate cap by this much
 MIN_FPS = 10
@@ -46,6 +46,7 @@ OUTCOME_STYLE = {'milestone': ('MILESTONE', '#3d8bff'), 'death': ('DIED', '#ff4d
                  'retreat-limit': ('RETREATS', '#f2c14e'),
                  'error': ('ERROR', '#a95cf0'), 'crash': ('CRASH', '#a95cf0')}
 OTHER_COLOR = '#f2c14e'
+CLIPS_COLOR = '#d9b8ff'     # the strip's word on a run played without clips (lavender: not an outcome colour)
 SOURCE_KEYS = {Qt.Key.Key_B: 'best', Qt.Key.Key_W: 'success', Qt.Key.Key_K: 'stuck', Qt.Key.Key_D: 'died',
                Qt.Key.Key_R: 'random', Qt.Key.Key_G: GOLDEN}
 
@@ -77,7 +78,7 @@ def cap_label(cap: float) -> str:
 
 
 class CellState:
-    """What a cell shows, folded from its status messages (wait | start | room | end | crash)."""
+    """What a cell shows, folded from its status messages (wait | start | room | end | crash | clips)."""
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self):
@@ -85,6 +86,8 @@ class CellState:
         self.waiting = False        # the source has nothing for the cell yet
         self.outcome = None
         self.reason = ''
+        self.clips: Optional[bool] = None       # the run's clips switch: False = without clips; None: unknown
+        self.clips_from: Optional[str] = None   # a live run: the room the switch went off in ('' = at its start)
         self._clear_room()
 
     def _clear_room(self):
@@ -98,10 +101,12 @@ class CellState:
         if event == 'wait':
             self.source, self.name, self.seed = message.get('source'), None, None
             self.waiting, self.outcome, self.reason = True, None, ''
+            self.clips = self.clips_from = None
             self._clear_room()
         elif event == 'start':
             self.source, self.name, self.seed = message.get('source'), message.get('name'), message.get('seed')
             self.waiting, self.outcome, self.reason = False, None, ''
+            self.clips, self.clips_from = message.get('clips'), message.get('clips_from')
             self._clear_room()
         elif event == 'room':
             self.playing = True
@@ -111,6 +116,10 @@ class CellState:
             self.room_name = message.get('name')
             self.rooms = message.get('rooms', self.rooms)
             self.cheated = dict(message.get('cheated', self.cheated))
+            if 'clips' in message:
+                self.clips, self.clips_from = message['clips'], message.get('clips_from')
+        elif event == 'clips':
+            self.clips, self.clips_from = message.get('clips'), message.get('clips_from')
         elif event == 'end':
             self.seed = message.get('seed', self.seed)
             self.outcome = message.get('outcome')
@@ -120,10 +129,21 @@ class CellState:
             self.reason = message.get('reason') or ''
 
     def label(self) -> str:
-        """'#29' for a simulated run (the title names its source), a replay file's name without its suffix."""
+        """'#29' for a simulated run (the title names its source), a replay file's name without its suffix, 'LIVE
+        #1000029' for the live cell's run."""
         if self.name:
             return self.name.removesuffix(replay.SUFFIX)
-        return '' if self.seed is None else f"#{self.seed}"
+        seed = '' if self.seed is None else f"#{self.seed}"
+        return f"LIVE {seed}".strip() if self.source == LIVE else seed
+
+    def clips_text(self) -> str:
+        """The cell's word on the clips switch: 'no clips' (played without), 'no clips from L4 0x31' (a live run
+        turned off there), 'clips again (off in L4 0x31)' (and back on); '' for a run with clips or unknown."""
+        if self.clips is False:
+            return f"no clips from {self.clips_from}" if self.clips_from else 'no clips'
+        if self.clips and self.clips_from is not None:
+            return f"clips again (off in {self.clips_from})" if self.clips_from else 'clips again'
+        return ''
 
     def placeholder(self) -> str:
         """What a cell without a picture says."""
@@ -168,11 +188,22 @@ def sound_text(on: bool, cap: float, error: Optional[str]) -> str:
     return 'sound on' if cap == NES_FPS else f"sound muted (not at {cap_label(NES_FPS)} fps)"
 
 
+def clips_title(clips: Optional[bool], live: bool = False) -> str:
+    """The title's word on the run-time clips switch (key c): '' for files."""
+    if clips is None:
+        return ''
+    runs = 'the live run and new runs' if live else 'new runs'
+    return f"clips {'on' if clips else 'OFF'} for {runs} (c)"
+
+
 def title_text(stats: dict, fps: Optional[float], cap: float, paused: bool, sound: str = '') -> str:
-    """The window title for ``ReplayGrid.stats()``: the source, its stock, the simulations, the frame rate, and
-    ``sound`` (``sound_text``)."""
+    """The window title for ``ReplayGrid.stats()``: the source, the clips switch, its stock (and of it the runs
+    played without clips), the simulations, the frame rate, and ``sound`` (``sound_text``)."""
     source = stats['source']
     parts = [f"Zelda — {source}"]
+    clips = clips_title(stats.get('clips'), stats.get('live', False))
+    if clips:
+        parts.append(clips)
     feed, paths = stats.get('feed'), stats.get('golden')
     if source == FILES:
         parts.append(f"{stats['files']} replay file{'' if stats['files'] == 1 else 's'}")
@@ -186,7 +217,10 @@ def title_text(stats: dict, fps: Optional[float], cap: float, paused: bool, soun
             text += f" · racing leg {paths['racing']} of {paths['parts']}"
         parts.append(text)
     elif source in QUEUES and feed is not None:
-        parts.append(' · '.join(f"{name} {feed['queues'][name]}" for name in QUEUES) + f" (of {feed['capacity']})")
+        without = feed.get('without_clips') or {}
+        parts.append(' · '.join(f"{name} {feed['queues'][name]}"
+                                + (f" ({without[name]} no clips)" if without.get(name) else '') for name in QUEUES)
+                     + f" (of {feed['capacity']})")
         endings = feed['endings']
         other = feed['runs'] - endings['win'] - endings['death'] - endings['stuck']
         text = f"{feed['runs']} runs: {endings['win']} won · {endings['death']} died · {endings['stuck']} stuck"
@@ -260,8 +294,17 @@ class CellView(QWidget):
         mono.setPointSizeF(9.5)
         painter.setFont(mono)
         painter.setPen(QColor(TEXT))
-        text = painter.fontMetrics().elidedText(self.strip_text(), Qt.TextElideMode.ElideRight, strip.width() - 12)
-        painter.drawText(strip.adjusted(6, 0, -6, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
+        area = strip.adjusted(6, 0, -6, 0)
+        badge = self.state.clips_text()
+        if badge:
+            # Right-aligned, before the run's text claims the rest: whether the run was played without clips.
+            width = painter.fontMetrics().horizontalAdvance(badge)
+            painter.setPen(QColor(CLIPS_COLOR))
+            painter.drawText(area, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, badge)
+            painter.setPen(QColor(TEXT))
+            area = area.adjusted(0, 0, -(width + 12), 0)
+        text = painter.fontMetrics().elidedText(self.strip_text(), Qt.TextElideMode.ElideRight, area.width())
+        painter.drawText(area, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
 
         if self.state.outcome:
             label, color = OUTCOME_STYLE.get(self.state.outcome, (self.state.outcome.upper(), OTHER_COLOR))
@@ -325,16 +368,18 @@ class Benchmark:
 
 class Window(QMainWindow):
     """The cells of a ReplayGrid-like object (start / frame / poll_status / stats / select / skip / set_fps /
-    set_paused / set_sound / frame_counters / emulated_frames / stop, ``fps``, ``source``).  Cell i shows the
-    grid's cell i.  The title (``title_text``) is refreshed every FPS_WINDOW seconds with the median of the cells'
-    frames per second (a cell showing a result is left out).
+    set_paused / set_sound / frame_counters / emulated_frames / stop, ``fps``, ``source``; ``clips`` / ``set_clips``
+    unless its source is files).  Cell i shows the grid's cell i.  The title (``title_text``) is refreshed every
+    FPS_WINDOW seconds with the median of the cells' frames per second (a cell showing a result is left out).
 
     ``sound``: whether a cell is heard, ``heard`` which (the top left one at first).  The grid is told to play
     that cell's sound only while the frame-rate cap is the console's; the cell has its yellow frame only then,
     and only in a window of more than one cell.
 
     Keys: b best, w success (wins), k stuck, d died, r random, g golden; n the next replay in every cell; s sound
-    off / on; u uncap / cap at the NES rate; + and - the cap in FPS_STEP steps (capped only); p pause."""
+    off / on; u uncap / cap at the NES rate; + and - the cap in FPS_STEP steps (capped only); p pause; c the
+    run-time clips switch off / on (``grid.set_clips``: new runs, and a live cell's run from its next decision;
+    not for files)."""
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, grid, cols: int, rows: int, scale: int, benchmark: Optional[float] = None,
@@ -442,6 +487,13 @@ class Window(QMainWindow):
         self._restart_rate()
         self.update_title()
 
+    def toggle_clips(self):
+        """Turns the run-time clips switch off or on (nothing happens on a grid that plays files)."""
+        if self.grid.source == FILES:
+            return
+        self.grid.set_clips(not self.grid.clips)
+        self.update_title()
+
     def handle_key(self, key) -> bool:
         """Acts on one of the window's keys (class doc).  Returns whether the key was one of them."""
         if key in SOURCE_KEYS:
@@ -450,6 +502,8 @@ class Window(QMainWindow):
             self.grid.skip()
         elif key == Qt.Key.Key_S:
             self.toggle_sound()
+        elif key == Qt.Key.Key_C:
+            self.toggle_clips()
         elif key == Qt.Key.Key_U:
             self.set_cap(NES_FPS if self.cap <= 0 else 0.0)
         elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal, Qt.Key.Key_Minus, Qt.Key.Key_Underscore):

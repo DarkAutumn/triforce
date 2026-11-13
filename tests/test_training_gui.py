@@ -383,6 +383,26 @@ def test_outcome_counts_carry_their_share_of_the_evaluation():
     assert gui.failure_rows(gui.eval_failures(ev), ev['episodes'])[0][2] == '6× (2.0%)'
 
 
+def test_a_clip_familys_evaluation_shows_each_switch_state():
+    assert gui.clips_sections({'success_rate': 0.8}) == []      # no split: nothing extra
+    ev = {'clips': 'both', 'by_clips': {
+        'off': {'episodes': 100, 'success_rate': 0.6, 'health_change': -1.25,
+                'by_room': {'4:0x31': 0.5, '4:0x30': 0.7}},
+        'on': {'episodes': 200, 'success_rate': 0.9, 'health_change': -0.5, 'by_room': {'4:0x31': 0.9}}}}
+    (kind, title, rows), (_, rooms_title, rooms) = gui.clips_sections(ev)
+    assert (kind, title) == ('bars', 'Clips switch (evaluated: both)')
+    assert [(label, rate, text) for label, rate, text, _ in rows] == [
+        ('clips on', 0.9, '90% of 200 · net -0.5 ♥'), ('clips off', 0.6, '60% of 100 · net -1.2 ♥')]
+    assert rooms_title == 'By start room · clips on / off'
+    assert [label for label, *_ in rooms] == ['4:0x30 off', '4:0x31 on', '4:0x31 off']
+    # an evaluation of one switch state: its row, no per-room split
+    (_, title, rows), = gui.clips_sections({'by_clips': {'off': ev['by_clips']['off']}})
+    assert title == 'Clips switch (evaluated: off)' and len(rows) == 1
+    progress = {'event': 'progress', 'iteration': 3, 'iterations': 10, 'steps': 1000, 'sps': 50,
+                'metrics': {'success_rate': 0.5, 'clips/on/success_rate': 0.75, 'clips/off/success_rate': 0.25}}
+    assert 'clips on 75% / off 25%' in gui.describe(progress)
+
+
 def write_batch(folder, pid, created):
     """A batch folder: d3 (chain) finished, family running, d4 (chain) and goriya pending."""
     import json

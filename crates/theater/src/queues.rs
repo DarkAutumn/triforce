@@ -76,7 +76,8 @@ pub struct Entry {
     pub frames: u32,
     /// The frame the models took over at: where watching starts.
     pub start: u32,
-    /// The run-time clips switch the run started with (round 22; None: unknown, e.g. a replay file).
+    /// The run-time clips switch the run was played with ([`crate::Finished::clips`]; round 22; None: unknown, e.g.
+    /// a replay file).
     pub clips: Option<bool>,
 }
 

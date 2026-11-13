@@ -345,16 +345,18 @@ class ChainPool:
     (``replay.record_options``; None = off): every run is recorded
     as a TFREPLAY file and reported as a ``replay`` event; ``replays`` (a ``ReplayDir``) keeps those as files.
     ``deterministic``: None = each policy's act mode (``Policies.deterministic``), else argmax (True) or sampling
-    (False) for every policy.  ``harvest`` (a directory; None = off): every correct room entry where the acting
-    specialist changes (a handoff) saves its pre-entry state as
     ``harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state`` (``n``: the room's index in the run), a start
-    state for that specialist's ``harvested_dir``."""
+    state for that specialist's ``harvested_dir``.  ``hold_finished_frame``: each finished run holds the env's
+    picture on its last screen until ``pool.set_hold(env, False)`` (a watched cell's result pause).  ``clips_live``:
+    ``pool.set_clips_allowed`` also flips the runs in progress, from their next decision (the route re-plans);
+    without it the switch reaches only the runs started afterwards."""
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
                  deterministic: Optional[bool] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: Optional[dict] = None,
-                 stall_steps: Optional[int] = None, replays: Optional[ReplayDir] = None, harvest=None):
+                 stall_steps: Optional[int] = None, replays: Optional[ReplayDir] = None, harvest=None,
+                 hold_finished_frame: bool = False, clips_live: bool = False):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         if replays is not None and record is None:
             raise ValueError("a replay folder needs record options (replay.record_options)")
@@ -371,7 +373,8 @@ class ChainPool:
                                  states_dir=states_dir, stall_steps=stall_steps,
                                  harvest=None if harvest is None else str(harvest),
                                  stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint,
-                                 clips=route.clips, clips_off_from=route.clips_off_from)
+                                 clips=route.clips, clips_off_from=route.clips_off_from,
+                                 hold_finished_frame=hold_finished_frame, clips_live=clips_live)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
 

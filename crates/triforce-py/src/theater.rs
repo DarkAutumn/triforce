@@ -110,6 +110,17 @@ impl PyReplayFeed {
         }
     }
 
+    /// Files a run played elsewhere (`play-zelda`'s live cell) as if the pool had finished it: `data` (its
+    /// TFREPLAY bytes) goes to the queues and to `save_dir`; `clips`: False when any of it was played with the
+    /// clips switch off.  A ValueError for a replay that can't be read or saved (the feed goes on).
+    #[pyo3(signature = (seed, data, clips=None))]
+    fn file(&self, py: Python<'_>, seed: i64, data: &[u8], clips: Option<bool>) -> PyResult<()> {
+        let feed = self.feed.lock();
+        let feed = feed.as_ref().ok_or_else(|| PyRuntimeError::new_err("the replay feed is closed"))?;
+        let run = Finished { seed, data: data.to_vec(), clips };
+        py.detach(|| feed.file(run)).map_err(PyValueError::new_err)
+    }
+
     /// `queues` ({name: entries}), `without_clips` ({name: entries played with the clips switch off}), `capacity`,
     /// `budget` (runs still owed to `best`), `primed` (whether `best` hands out runs yet), `runs` (finished so far),
     /// `endings` ({ending: runs}), `running` (the simulations are not paused by the feed) and `error` (why the feed
