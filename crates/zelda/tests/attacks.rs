@@ -1,6 +1,7 @@
 //! Attacks by buttons in the real game (round 21 movement cleanup; `zelda::attack`, `zelda::submenu`): the mask
 //! offers exactly the strikes the controller can make, the executor makes them without writing memory, and the item
-//! sub-screen selects every B item from every other one.
+//! sub-screen selects every B item from every other one; with the clips (`zelda::clips`): attacks at each clip's
+//! end, a clip right after an attack, and the turn and MOVE models of a laid ladder against the ladder clip's frames.
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -294,43 +295,61 @@ fn scan(states: &[&str], per_state: usize, walk_frames: u32) -> (Vec<String>, BT
         let mut chosen = sample(doorway);
         chosen.extend(sample(rest));
         for spot in &chosen {
-            s.restore(spot);
-            let view: Arc<GameView> = s.state().clone();
-            let mask = compute_action_mask(&view);
-            let available = view.available_actions();
-            for kind in KINDS {
-                let offered = view.attack_directions(kind);
-                if view.has_active_enemies() && view.weapon_ready(kind) && available[kind.index()] {
-                    assert_eq!(mask.directions(kind), offered, "{name} {kind:?} the mask is the plan's");
-                }
-                for d in directions(kind) {
-                    checked += 1;
-                    s.restore(spot);
-                    let at = format!("{name} {kind:?} {} at {}", d.name(), describe(&s));
-                    let (struck, written, stayed) = execute(&mut s, &pokes, spot, kind, d);
-                    if written != 0 {
-                        problems.push(format!("{at}: {written} memory writes"));
-                    }
-                    if offered.contains(&d) {
-                        if !(struck && stayed) {
-                            problems.push(format!("{at}: offered, struck {struck}, stayed {stayed}"));
-                        }
-                    } else if struck {
-                        problems.push(format!("{at}: refused but the executor struck"));
-                    } else if let Some(k) = buttons_can(&mut s, spot, kind, d) {
-                        s.restore(spot);
-                        let why = zelda::attack::explain(s.state(), kind, d).unwrap_err();
-                        let mut line = format!("[{why:?} k={k}] {at}");
-                        if std::env::var("TRIFORCE_ATTACK_DEBUG").is_ok() && why != Refusal::Band {
-                            line.push_str(&trace(&mut s, spot, kind, d));
-                        }
-                        workable.entry(format!("{name} {why:?}")).or_insert_with(Vec::new).push(line);
-                    }
-                }
-            }
+            checked += check_spot(&mut s, &pokes, name, spot, true, &mut problems, &mut workable);
         }
     }
     (problems, workable, checked)
+}
+
+/// Every attack from `spot` against the game: an offered one is struck the way asked by the controller alone with
+/// Link staying in the room, a refused one isn't struck by the executor; a refused strike that plain buttons can
+/// make is listed in `workable` under its refusal. `mask_is_plan` also checks the action mask offers the plan's
+/// directions where the weapon is legal. Returns the strikes checked.
+fn check_spot(
+    s: &mut S,
+    pokes: &AtomicU32,
+    name: &str,
+    spot: &Snap,
+    mask_is_plan: bool,
+    problems: &mut Vec<String>,
+    workable: &mut BTreeMap<String, Vec<String>>,
+) -> usize {
+    let mut checked = 0;
+    s.restore(spot);
+    let view: Arc<GameView> = s.state().clone();
+    let mask = compute_action_mask(&view);
+    let available = view.available_actions();
+    for kind in KINDS {
+        let offered = view.attack_directions(kind);
+        if mask_is_plan && view.has_active_enemies() && view.weapon_ready(kind) && available[kind.index()] {
+            assert_eq!(mask.directions(kind), offered, "{name} {kind:?} the mask is the plan's");
+        }
+        for d in directions(kind) {
+            checked += 1;
+            s.restore(spot);
+            let at = format!("{name} {kind:?} {} at {}", d.name(), describe(s));
+            let (struck, written, stayed) = execute(s, pokes, spot, kind, d);
+            if written != 0 {
+                problems.push(format!("{at}: {written} memory writes"));
+            }
+            if offered.contains(&d) {
+                if !(struck && stayed) {
+                    problems.push(format!("{at}: offered, struck {struck}, stayed {stayed}"));
+                }
+            } else if struck {
+                problems.push(format!("{at}: refused but the executor struck"));
+            } else if let Some(k) = buttons_can(s, spot, kind, d) {
+                s.restore(spot);
+                let why = zelda::attack::explain(s.state(), kind, d).unwrap_err();
+                let mut line = format!("[{why:?} k={k}] {at}");
+                if std::env::var("TRIFORCE_ATTACK_DEBUG").is_ok() && why != Refusal::Band {
+                    line.push_str(&trace(s, spot, kind, d));
+                }
+                workable.entry(format!("{name} {why:?}")).or_default().push(line);
+            }
+        }
+    }
+    checked
 }
 
 /// The plan's model next to the game holding the strike's facing, frame by frame (debugging a refusal).
@@ -582,4 +601,301 @@ fn turn_and_strike_in_every_situation() {
     assert_eq!((turn, after.0, after.1), (0, lx, ly));
     let (turn, after) = strike(&mut s, &pokes, Arrow, E, N, "ladder");
     assert_eq!((turn, after.0, after.1), (1, lx, ly), "turned on the ladder in place");
+}
+
+/// The end state of each kind of clip, clips on: the wrap W and E on the overworld start screen's row (X $F0 and
+/// $00; a sword given by test setup), the block clip N under 1:$22's east block (8 px into it, ($A0, $8D)) and the
+/// ladder clip N off 4:$21's island (X, $55) on three of its columns. Each with the clip's start (in the zone).
+fn clip_ends(s: &mut S) -> Vec<(String, Snap, Snap)> {
+    use Direction::{E, N, W};
+    let mut out = Vec::new();
+    let mut clip = |s: &mut S, label: String, d: Direction, end: (u8, u8)| {
+        assert!(zelda::clips::skip_available(s.state(), d), "{label}: not offered at {}", describe(s));
+        let start = s.snapshot();
+        let c = s.act(Action::parse(&format!("CLIP {}", d.name())).unwrap()).unwrap();
+        let outcome = c.clip.expect("a clip outcome");
+        assert!(outcome.completed(), "{label}: {outcome:?} at {}", describe(s));
+        assert_eq!((link_at(s).0, link_at(s).1, link_at(s).2), (end.0, end.1, 0), "{label}: {}", describe(s));
+        out.push((label, start, s.snapshot()));
+    };
+    for (d, pad, end_x) in [(W, buttons::LEFT, 0xF0), (E, buttons::RIGHT, 0x00)] {
+        load(s, "start");
+        s.nes_mut().poke(0x657, 1); // the wooden sword (test setup)
+        s.apply_ram(&[]);
+        s.set_clips(true);
+        let zone = |x: u8| if d == W { x <= 0x20 } else { x >= 0xD0 };
+        assert!(hold_until(s, pad, 120, |r| zone(r[0x70]) && r[0x394] == 0));
+        clip(s, format!("wrap {}", d.name()), d, (end_x, 0x8D));
+    }
+    load(s, "1_22e_0");
+    s.set_clips(true);
+    assert!(hold_until(s, buttons::LEFT, 120, |r| r[0x70] == 0xB0 && r[0x394] == 0));
+    assert!(hold_until(s, buttons::DOWN, 120, |r| r[0x84] == 0xAD && r[0x394] == 0));
+    assert!(hold_until(s, buttons::LEFT, 120, |r| r[0x70] == 0xA0 && r[0x394] == 0));
+    assert!(hold_until(s, buttons::UP, 120, |r| r[0x84] == 0xA5 && r[0x394] == 0));
+    clip(s, "block N under 1:$22's east block".into(), N, (0xA0, 0x8D));
+    for x in [0x50u8, 0x78, 0xA0] {
+        load(s, LADDER_21);
+        s.apply_ram(&[(zelda::Var::DoorwayDir, 0)]);
+        for (addr, value) in [(0x70, x), (0x84, 0x9D), (0x394, 0)] {
+            s.nes_mut().poke(addr, value); // Link on the island (test setup)
+        }
+        s.apply_ram(&[]);
+        s.set_clips(true);
+        assert!(s.state().ladder(), "{}", describe(s));
+        assert!(hold_until(s, buttons::UP, 30, |r| r[0x84] == 0x8D && r[0x394] == 0));
+        clip(s, format!("ladder N in 4:$21 from X {x:02X}"), N, (x, 0x55));
+    }
+    out
+}
+
+/// 4:$21 with the ladder, Link entering where the route does.
+const LADDER_21: &str = "4_21w_0";
+
+/// Attacks right after each kind of clip, from its end and from one and three frames of each direction after it:
+/// every strike offered is made the way asked by the controller alone with Link staying in the room, and every one
+/// refused is one the buttons can't make, or only after a walk out of a border band (a MOVE first: `Band`).
+#[test]
+fn attacks_right_after_each_clip() {
+    let Some((mut s, pokes)) = session() else { return };
+    let (mut problems, mut workable, mut checked) = (Vec::new(), BTreeMap::new(), 0);
+    for (label, _, end) in clip_ends(&mut s) {
+        s.restore(&end);
+        let room = room_of(&s);
+        let offers: Vec<String> = KINDS
+            .iter()
+            .map(|&k| format!("{k:?} {:?}", s.state().attack_directions(k).iter().map(|d| d.name()).collect::<Vec<_>>()))
+            .collect();
+        eprintln!("{label}: at {}: {}", describe(&s), offers.join(", "));
+        let mut spots = vec![end.clone()];
+        for pad in [buttons::UP, buttons::DOWN, buttons::LEFT, buttons::RIGHT] {
+            for frames in [1, 3] {
+                s.restore(&end);
+                s.press(pad, frames);
+                if in_play(&s, room) && ram(&s)[0xAC] == 0 {
+                    spots.push(s.snapshot());
+                }
+            }
+        }
+        for spot in &spots {
+            checked += check_spot(&mut s, &pokes, &label, spot, true, &mut problems, &mut workable);
+        }
+    }
+    let mut band = 0;
+    for (key, list) in &workable {
+        if key.ends_with("Band") {
+            band += list.len();
+        } else {
+            problems.extend(list.iter().cloned());
+        }
+    }
+    eprintln!("checked {checked} strikes after clips; {band} refused by a border band the buttons leave by walking");
+    assert!(problems.is_empty(), "{}", problems.iter().take(40).cloned().collect::<Vec<_>>().join("\n"));
+}
+
+/// A B item that is not the selected one, right at each clip's end: the action opens the sub-screen (the boomerang
+/// selected, a BOMB asked), selects the bombs, closes it and places the bomb the way asked; the frames are
+/// `menu_frames`, no memory is written and Link stays in the room.
+#[test]
+fn a_b_item_switch_at_each_clips_end() {
+    let Some((mut s, pokes)) = session() else { return };
+    let boomerang = zelda::submenu::slot(ActionKind::Boomerang).unwrap();
+    let mut switched = 0;
+    for (label, _, end) in clip_ends(&mut s) {
+        s.restore(&end);
+        s.nes_mut().poke(0x656, boomerang); // test setup: the boomerang selected
+        s.apply_ram(&[]);
+        let spot = s.snapshot();
+        for d in s.state().attack_directions(ActionKind::Bomb) {
+            let p = play(&mut s, &pokes, &spot, ActionKind::Bomb, d, false);
+            assert!(p.struck && p.stayed && p.written == 0, "{label}: BOMB {} struck {} stayed {}", d.name(), p.struck, p.stayed);
+            assert!(p.change.menu_frames > 100, "{label}: BOMB {}: {} sub-screen frames", d.name(), p.change.menu_frames);
+            assert_eq!(ram(&s)[0x656], zelda::submenu::slot(ActionKind::Bomb).unwrap());
+            switched += 1;
+        }
+    }
+    assert!(switched >= 6, "{switched} switches");
+}
+
+/// A CLIP right after an attack, from a start of each clip's zone: with the sword out (A pressed on the frame
+/// before) and in the catch pose of a returning boomerang ($AC != 0) the skip is either not offered or completes.
+#[test]
+fn a_clip_right_after_an_attack() {
+    let Some((mut s, _)) = session() else { return };
+    let (mut refused, mut done) = (0, 0);
+    for (label, start, end) in clip_ends(&mut s) {
+        s.restore(&end);
+        let want = (link_at(&s).0, link_at(&s).1);
+        let d = s.state().full_location();
+        s.restore(&start);
+        let heading = [Direction::N, Direction::S, Direction::W, Direction::E]
+            .into_iter()
+            .find(|&h| zelda::clips::skip_available(s.state(), h))
+            .unwrap();
+        let mut posed = Vec::new();
+        // The sword out.
+        s.press(buttons::A, 1);
+        if ram(&s)[0xB9] != 0 {
+            posed.push(("sword out", s.snapshot()));
+        }
+        // The catch pose: a boomerang thrown away from the clip, waited for.
+        s.restore(&start);
+        let away = heading.opposite();
+        if s.state().attack_directions(ActionKind::Boomerang).contains(&away) {
+            select(&mut s, ActionKind::Boomerang);
+            s.act(Action::new(ActionKind::Boomerang, away, 0).unwrap()).unwrap();
+            if hold_until(&mut s, 0, 180, |r| r[0xAC] != 0) {
+                posed.push(("catch pose", s.snapshot()));
+            }
+        }
+        assert!(!posed.is_empty(), "{label}: no pose reached");
+        for (pose, snap) in posed {
+            s.restore(&snap);
+            let at = format!("{label}, {pose}: {} $AC={:02X} $B9={:02X}", describe(&s), ram(&s)[0xAC], ram(&s)[0xB9]);
+            if !zelda::clips::skip_available(s.state(), heading) {
+                assert!(!s.mask().is_allowed(&Action::new(ActionKind::Clip, heading, 0).unwrap()), "{at}");
+                refused += 1;
+                continue;
+            }
+            let c = s.act(Action::new(ActionKind::Clip, heading, 0).unwrap()).unwrap();
+            let outcome = c.clip.expect("a clip outcome");
+            assert!(outcome.completed(), "{at}: offered but {outcome:?}, now {}", describe(&s));
+            assert_eq!((s.state().full_location(), link_at(&s).0, link_at(&s).1), (d, want.0, want.1), "{at}");
+            done += 1;
+        }
+    }
+    eprintln!("a CLIP right after an attack: {refused} refused, {done} completed");
+}
+
+/// 4:$21's N bomb wall after the ladder clip (end X $78, Y $55, 8 px into the top wall). BOMB N there is offered and
+/// the buttons place the bomb N, but it opens nothing: the bomb lies at Y $45, `$18` from the up wall's hotspot
+/// ($78, $5D), and the wall test wants less (asm:Bomb_TryOpenWall, asm:Bomb_WallHotspotsY; mechanics.md "Bomb
+/// walls"). From the N door spot ($78, $5D) a step S of the clip's end, BOMB N opens it and MOVE N leaves by it into
+/// $11 (the route's step 0x21 S -> N).
+#[test]
+fn bomb_n_after_the_ladder_clip() {
+    let Some((mut s, pokes)) = session() else { return };
+    let (label, _, end) = clip_ends(&mut s).into_iter().find(|(label, ..)| label.ends_with("X 78")).unwrap();
+    s.restore(&end);
+    assert!(!s.state().is_bomb_door_open(Direction::N), "{label}: the wall is open already");
+    assert!(s.state().attack_directions(ActionKind::Bomb).contains(&Direction::N), "{label}");
+    let p = play(&mut s, &pokes, &end, ActionKind::Bomb, Direction::N, true);
+    assert!(p.struck && p.stayed && p.written == 0, "{label}: BOMB N struck {} stayed {}", p.struck, p.stayed);
+    let r = ram(&s);
+    assert!((0..2).any(|i| r[0xBC + i] != 0 && r[0x84 + 0x10 + i] == 0x45), "{label}: bomb Y {:02X?}", &r[0x94..0x96]);
+    s.press(0, 120); // the fuse and the blast
+    assert!(!s.state().is_bomb_door_open(Direction::N), "{label}: a bomb from Y $55 opened the wall");
+
+    s.restore(&end);
+    assert!(hold_until(&mut s, buttons::DOWN, 30, |r| r[0x84] == 0x5D && r[0x394] == 0), "{}", describe(&s));
+    let spot = s.snapshot();
+    let p = play(&mut s, &pokes, &spot, ActionKind::Bomb, Direction::N, true);
+    assert!(p.struck && p.stayed && p.written == 0, "{label}: BOMB N from $5D");
+    s.press(0, 120);
+    assert!(s.state().is_bomb_door_open(Direction::N), "{label}: the N wall stayed shut at {}", describe(&s));
+    let room = s.state().full_location();
+    for _ in 0..4 {
+        if s.state().full_location() != room {
+            break;
+        }
+        s.act(Action::parse("MOVE N 16").unwrap()).unwrap();
+    }
+    assert_eq!(s.state().full_location(), zelda::MapLocation::new(4, 0x11, false), "{}", describe(&s));
+}
+
+/// Link stands on the laid ladder's line less than `$10` pixels from it (asm:Ladder_CheckAndDraw's test).
+fn on_laid_ladder(r: &[u8; 0x800]) -> bool {
+    let slot = r[0x64] as usize;
+    if slot == 0 || slot >= 12 {
+        return false;
+    }
+    let (x, y, lx, ly) = (r[0x70], r[0x84], r[0x70 + slot], r[0x84 + slot]);
+    if r[0x98 + slot] & 0x0C != 0 {
+        x == lx && (y.wrapping_add(3).wrapping_sub(ly) as i8).unsigned_abs() < 0x10
+    } else {
+        y.wrapping_add(3) == ly && (x.wrapping_sub(lx) as i8).unsigned_abs() < 0x10
+    }
+}
+
+/// The two models of a laid ladder against the game on every frame of the ladder clips of 4:$21 (N off the island
+/// on every column, W and E on its three rows, S from the top row) where Link is on the laid ladder: the turn model
+/// (`attack::step`, asm:Ladder_CheckAndDraw frame by frame) puts Link where one frame of each direction does, but
+/// for its unmodelled upward case E (`Refusal::Ladder`), and on a grid point the MOVE model
+/// (`GameView::can_link_move`: `ladder_move`, `lays_ladder`) allows exactly the directions that move Link that way
+/// within four frames.
+#[test]
+fn the_ladder_models_agree_on_the_ladder_clip_traces() {
+    use Direction::{E, N, S, W};
+    let Some((mut s, _)) = session() else { return };
+    let mut starts = Vec::new();
+    for x in (0x50..=0xA0).step_by(8) {
+        starts.push((x, 0x8D, N));
+        starts.push((x, 0x5D, S));
+    }
+    for row in [0x8D, 0x95, 0x9D] {
+        starts.push((0x50, row, W));
+        starts.push((0xA0, row, E));
+    }
+    let (mut frames, mut moves, mut case_e) = (0, 0, 0);
+    for (x, y, heading) in starts {
+        load(&mut s, LADDER_21);
+        s.apply_ram(&[(zelda::Var::DoorwayDir, 0)]);
+        for (addr, value) in [(0x70, x), (0x84, y), (0x394, 0)] {
+            s.nes_mut().poke(addr, value); // Link put at rest (test setup)
+        }
+        s.apply_ram(&[]);
+        s.set_clips(true);
+        let label = format!("CLIP {} from ({x:02X},{y:02X})", heading.name());
+        assert!(zelda::clips::skip_available(s.state(), heading), "{label}");
+        let trace = Arc::new(Mutex::new(Vec::new()));
+        let sink = trace.clone();
+        s.set_frame_sink(Some(Box::new(move |n: &Poked| sink.lock().push(n.snapshot()))));
+        let c = s.act(Action::new(ActionKind::Clip, heading, 0).unwrap()).unwrap();
+        s.set_frame_sink(None);
+        assert!(c.clip.is_some_and(|o| o.completed()), "{label}: {:?}", c.clip);
+        for state in trace.lock().iter() {
+            s.nes_mut().restore(state);
+            s.apply_ram(&[]);
+            let r = ram(&s);
+            if r[0x12] != 5 || r[0xAC] != 0 || !on_laid_ladder(&r) {
+                continue;
+            }
+            frames += 1;
+            let view = s.state().clone();
+            let link = zelda::attack::Link::read(&r);
+            let at = format!("{label}: at {} ladder {:02X?}", describe(&s), (r[0x64], r[0x70 + r[0x64] as usize], r[0x84 + r[0x64] as usize], r[0x98 + r[0x64] as usize]));
+            let here = s.snapshot();
+            for d in [N, S, W, E] {
+                s.restore(&here);
+                s.press(direction_buttons(d), 1);
+                let game = (link_at(&s).0, link_at(&s).1);
+                match zelda::attack::step(&view, &link, d) {
+                    Ok(n) => assert_eq!((n.x, n.y), game, "{at}: one frame {}: the turn model", d.name()),
+                    Err(Refusal::Ladder) => case_e += 1,
+                    Err(why) => panic!("{at}: one frame {}: the turn model refuses ({why:?})", d.name()),
+                }
+                if r[0x394] != 0 {
+                    continue;
+                }
+                moves += 1;
+                s.restore(&here);
+                let start = (r[0x70] as i32, r[0x84] as i32);
+                let mut moved = false;
+                for _ in 0..4 {
+                    s.press(direction_buttons(d), 1);
+                    let (nx, ny) = (link_at(&s).0 as i32, link_at(&s).1 as i32);
+                    let along = match d {
+                        N => start.1 - ny,
+                        S => ny - start.1,
+                        W => start.0 - nx,
+                        _ => nx - start.0,
+                    };
+                    moved |= along > 0;
+                }
+                assert_eq!(view.can_link_move(d), moved, "{at}: MOVE {}: the MOVE model", d.name());
+            }
+        }
+    }
+    eprintln!("{frames} frames on the laid ladder, {moves} MOVE checks on a grid point, {case_e} upward case E frames");
+    assert!(frames > 100 && moves > 20, "{frames} {moves}");
 }
