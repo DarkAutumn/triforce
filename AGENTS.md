@@ -148,7 +148,8 @@ what helps, and log everything.
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
   refusing it (replays embed states). Play (play-zelda, zelda-headless, the golden path) is stochastic by default
-  (`--act sample`; `--act argmax|model` are options); evaluation follows each model's act mode.
+  (`--act sample`, `registry.PLAY_ACT`; `--act model` or any act mode: `argmax`, `floor:0.1`, `temperature:0.75`,
+  `escape:16`, ... `docs/rust-actor.md` "Act modes", round 23); evaluation follows each model's act mode.
 - **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",
   "Watching"): `triforce eval-chain|evaluate --replays DIR`, `zelda-headless.py OUT [COUNT]
   [--wins-only|--deaths-only|--stuck-only] [--golden]`; optional streams `--streams rewards,decisions,keyframes`.

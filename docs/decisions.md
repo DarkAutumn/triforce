@@ -1577,3 +1577,16 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Nice 15 for training and evaluation only:** `train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`
   lower their own CPU priority (`--nice`, `$TRIFORCE_NICE`; children inherit it); play and replay tools keep
   normal priority.
+
+## 2026-11-13 — Act modes: rules over the joint action, and the play default (pending the lead's decision)
+
+- **What:** act modes beyond `sample`/`argmax`: `temperature:T`, `floor:P`, `minp:R`, `topp:P`, `escape:N` and `+`
+  combinations, applied to the joint action (256 actions), not per head; `escape` reads the env's linger count.
+  Every evaluation and chain record counts low-probability moves and what followed them, and the actions (variety).
+  Proposed: play default `floor:0.1`; evaluation/chains one global `floor:0.1`; training-time evaluation the same.
+- **Why:** the owner wants variety in play without rare bad moves. Joint, because "this action is unlikely" is a
+  joint statement (two 20% heads make a 4% action). Linger, because it already defines progress for the project.
+- **Evidence:** `docs/experiments/round23.md`: 36,400 single-room episodes per mode; every sharpened mode has
+  317-352 failures against sample 397 and argmax 402 (92 loops); rare moves are followed by a hit 1.4× as often as
+  any move. Chains beyond the baseline pending. Status: **pending**; `registry.PLAY_ACT` and the promoted `act` files
+  are unchanged.
