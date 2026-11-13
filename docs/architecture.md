@@ -190,6 +190,24 @@ Link's state 0, no knockback, and
   wrap, 0-1 after an E wrap) walkable and no slow tiles (`$74`/`$75`). T is `$00` (W) or `$F0` (E); the macro ends
   at X `$F0` offset 0 after a W wrap and X `$00` after an E wrap, where the opposite edge's room change is one MOVE
   away.
+- **wrap exit** (overworld, E only; round 22): the E wrap's zone, row line and run-up, but with the landing columns
+  0-1 solid, so the plain wrap is not offered, and only on the rows of the room's game.yaml W exit with `wrap:
+  true` (its `span`, Link's tile rows; `Room::wrap_exit`, `GameView::room`). The macro is the E wrap's, then Left
+  on the landing frame (X `$00`, offset 0, `Phase::Exit`): on the bound the overworld fires the W edge test whatever
+  the tile, and the room changes; the skip completes with that room change (`run_skip`'s carried-on rule) and ends
+  on the new room's first controllable frame, like any room change. The only one is room 0x75 into 0x74 (Dungeon 3's
+  entrance, from E), on rows Y `$65`-`$AD`: 0x74's column 29, which the arrival at X `$F0` reads going W, is open
+  there; on Y `$55`, `$5D`, `$B5`, `$BD` it is solid and Link would go back and forth between the two rooms (a
+  softlock), so those rows are not in the span (`zelda-asm/mechanics.md` "After the wrap, edge by edge"). The session
+  has no tile map of a room it isn't in (the zelda crate reads tiles only from RAM; no overworld layout decoder
+  exists in the crates), so the safe rows are game.yaml data, every one played by `crates/zelda/tests/wrap_exit.rs`
+  (each start of the zone on each safe row into 0x74 and walking on, the softlock rows by buttons, a hit on every
+  frame, the action sequence from 0x76's E edge into Dungeon 3: 779 frames, monsters removed). A hit before the
+  bound aborts as for the wrap; past it Link stays on the row (X `$F1`-`$00`), never stuck: MOVE W walks back into
+  the zone (or, from X `$00`, leaves by the W edge, which finishes the cut skip: `OpenClip::finished_by`). The
+  mirrored shape (a W wrap onto a solid right edge, then Right; 0x60 into 0x5F) is not offered: no route needs it.
+  `wraps_into_wrong_exits` vetoes the wrap exit unless the room behind the W exit is one of the objective's next
+  rooms. The room-to-room search (`GameMap::find_all_routes`) never takes a `wrap` exit; a route step may.
 - **block clip** (dungeon, N or S; no ladder out): not in a doorway, X on the column line and inside the X border
   band, T the first grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8
   pixels further (a 16-pixel square of blocks, statues or wall, never water `$F4`: with the ladder one square of
@@ -259,10 +277,14 @@ observation (`Room::wavefront(..., clips)`, `clips::skip_jumps`) treats every bl
 from each rest position of its zone to its end, at its frames converted to tiles (1.5 pixels a frame, 8 a tile); the
 search becomes Dijkstra only when a room has jumps, and the `target` direction follows a jump on the shortest way.
 The overworld wrap is no jump (it ends one MOVE from the opposite edge: a jump would point the way to that edge's
-exit out of the entry edge; the round-21 policies learned the wrap without one). So in 1:`$22` the objective targets
-the stairs (reached through the clip under the east block) instead of the push spots; in 4:`$50` the way to the N
-door goes through the diagonal (CLIP N at X `$B0`); 4:`$21`'s island, which no walk leaves, leads N by the ladder
-clip.
+exit out of the entry edge; the round-21 policies learned the wrap without one). The wrap exit is one: the wrap
+rows' W edge tiles are W exit tiles of the room (`Room::with_wrap_exit`; solid, walking never reaches them) and its
+jumps lead from G', G and the bound on those rows to them, so an objective leaving W points PBRS and the `target`
+direction at the E edge on a safe row (never a softlock row); with clips off nothing reaches that exit (no PBRS, no
+`target` direction; the room-stall penalty runs on, and leaving any other way is a wrong exit). So in 1:`$22` the
+objective targets the stairs (reached through the clip under the east block) instead of the push spots; in 4:`$50`
+the way to the N door goes through the diagonal (CLIP N at X `$B0`); 4:`$21`'s island, which no walk leaves, leads N
+by the ladder clip.
 
 ## Observation (`crates/env/src/observation.rs`)
 

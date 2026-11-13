@@ -1635,3 +1635,33 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Wrap veto:** a wrap is not offered when the objective leaves by the landing edge only within its game.yaml
   `span` and the landing row is outside it (0x5b rows `$B5`, `$BD`); wraps toward other uses stay.
 - **Evidence:** `crates/env/tests/clips_switch.rs`, `crates/env/tests/chain_clips.rs`, `game_map` stretch tests.
+## 2026-11-13 — The wrap exit: CLIP E out of 0x75's solid W edge into 0x74 (round 22)
+
+- **What:** a fourth skip kind, `SkipKind::WrapExit` (`crates/zelda/src/clips.rs`). `CLIP E` where the E wrap's
+  zone, row and run-up hold but the landing columns 0-1 are solid plays the E wrap, then Left on the landing frame
+  (X `$00`): the overworld makes the W edge test whatever the tile, and Link enters the room to the W at X `$F0`. It
+  is offered only on the rows of a game.yaml W exit marked `wrap: true` with a `span`: room 0x75 into 0x74, Link's
+  tile rows 5-14 (Y `$65`-`$AD`). It completes with the room change and counts as done. The path search gets jumps
+  from the zone on those rows to the W exit, so PBRS and `target` point at the E edge on a safe row when the step
+  leaves W, and only with clips on. The veto removes it when the objective does not leave W. The room-to-room
+  search never takes a `wrap` exit.
+- **Why:** the owner's Dungeon 3 approach with clips (0x77 → 0x76 → 0x75, wrap, → 0x74). Round 22's route scout
+  found that the wrap is an E wrap followed by Left. The round-21 CLIP refused it because the landing is solid.
+- **Rule per row, played** (`zelda-asm/mechanics.md` "After the wrap, edge by edge"):
+  - Y `$65`-`$AD`: Link arrives in 0x74 and walks on, because 0x74's column 29 is open.
+  - Y `$55`, `$5D`, `$B5`, `$BD`: a softlock. 0x74's column 29 and 0x75's column 2 are solid, so Link goes back
+    and forth between the two rooms. These rows are never offered.
+  - Y `$3D`-`$4D` and `$C5`-`$DD`: trees, no wrap.
+  - Timing: Left on the landing frame, or within the 5 frames after it while X <= `$07`. Later than that, Link is
+    in 0x75's W part, which is not a softlock.
+- **Whitelist, not a derived rule:** the zelda crate reads tiles only from RAM and has no overworld layout decoder
+  (`zelda-asm/tools/romdata.py` is Python over the ROM). The session therefore can't see 0x74's column 29 from 0x75.
+  The safe rows are game.yaml data, and `crates/zelda/tests/wrap_exit.rs` plays every one of them, plus the
+  softlock rows by buttons.
+- **Hits:** a hit ends the macro, as for the wrap. Before the bound Link is knocked back into the zone. Past it he
+  stays on the row at X `$F1`-`$00`. In every case MOVE and CLIP go on, and he is never stuck (tested on every
+  frame from both sides). From X `$00`, MOVE W leaves at once and counts as finishing the cut skip.
+- **Not offered:** the mirrored shape, a W wrap onto a solid right edge followed by Right (0x60 into 0x5F, a
+  softlock without the ladder). No route needs it.
+- **Evidence:** from 0x76's E edge into Dungeon 3 (monsters removed) takes 51 actions and 779 frames; the CLIP
+  itself takes 130.

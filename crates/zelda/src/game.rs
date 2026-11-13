@@ -513,10 +513,18 @@ impl GameView {
         (&self.ram[offset..offset + len]).try_into().unwrap()
     }
 
-    /// The room model built from the current tiles (with the ladder's crossings while Link holds it).
+    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, and the
+    /// game.yaml W wrap exit's rows).
     pub fn room(&self) -> &Room {
-        self.room
-            .get_or_init(|| Room::new(self.full_location(), self.current_tiles(), self.ladder()))
+        self.room.get_or_init(|| {
+            let wrap_exit = self
+                .map
+                .get(self.full_location())
+                .and_then(|r| r.exits.get(Direction::W.name()))
+                .filter(|exit| exit.wrap)
+                .and_then(|exit| exit.span);
+            Room::new(self.full_location(), self.current_tiles(), self.ladder()).with_wrap_exit(wrap_exit)
+        })
     }
 
     // --- objects ---

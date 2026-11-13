@@ -8,13 +8,15 @@
 //! when too close or in the wrong cadence, walk to the trick state, press one perpendicular frame, hold the heading).
 //! No RAM is written.
 //!
-//! Three uses: the overworld **wrap** (W, E): T is the screen bound, Link comes in at the opposite side of the same
+//! Four uses: the overworld **wrap** (W, E): T is the screen bound, Link comes in at the opposite side of the same
 //! room and the macro walks on to where that side's ordinary room change is one MOVE away (X `$F0` after a W wrap,
-//! `$00` after an E wrap); the dungeon **block clip** (N, S): T is where a 16-pixel solid square stops Link, the
-//! skip carries him 8 pixels into it (T -+ 8), from where a sideways MOVE goes on; and the dungeon **ladder clip**
-//! (any heading, Link holds the ladder): T is the laid ladder's distance-0 point, where water two or three squares
-//! wide stops the plain ladder; the skip carries Link over all of it (the relay lays a second ladder where needed)
-//! onto the land beyond.
+//! `$00` after an E wrap); the overworld **wrap exit** (E, round 22): an E wrap whose landing at X `$00` is solid,
+//! offered only on the rows of a game.yaml W `wrap` exit; Left on the landing frame fires the W screen edge test
+//! whatever the tile, and the macro ends in the room to the W (0x75 into 0x74, mechanics.md "After the wrap, edge
+//! by edge"); the dungeon **block clip** (N, S): T is where a 16-pixel solid square stops Link, the skip carries him
+//! 8 pixels into it (T -+ 8), from where a sideways MOVE goes on; and the dungeon **ladder clip** (any heading, Link
+//! holds the ladder): T is the laid ladder's distance-0 point, where water two or three squares wide stops the plain
+//! ladder; the skip carries Link over all of it (the relay lays a second ladder where needed) onto the land beyond.
 //!
 //! [`skip_target`] (state only) is the single availability rule of the mask, the executor and the observation;
 //! [`skip_jumps`] is the same rule from Link's rest positions, the jumps the path search adds
@@ -23,7 +25,7 @@
 
 use crate::actions::{ActionMask, CARDINALS};
 use crate::change::Change;
-use crate::enums::{ActionKind, Direction, Position};
+use crate::enums::{ActionKind, Direction, GAMEPLAY_START_Y, Position};
 use crate::executor::Interrupt;
 use crate::game::{GameView, at_dungeon_bound};
 use crate::room::{Jump, Room, WATER_TILE};
@@ -78,6 +80,8 @@ pub const MAX_STILL_FRAMES: u32 = 4;
 pub enum SkipKind {
     /// Overworld screen wrap (W, E).
     Wrap,
+    /// Overworld wrap exit (E): the E wrap onto a solid landing, then Left out of the W edge (game.yaml `wrap`).
+    WrapExit,
     /// Dungeon block clip (N, S).
     Block,
     /// Dungeon ladder clip (any heading).
@@ -88,6 +92,7 @@ impl SkipKind {
     pub const fn name(self) -> &'static str {
         match self {
             SkipKind::Wrap => "wrap",
+            SkipKind::WrapExit => "wrap-exit",
             SkipKind::Block => "block",
             SkipKind::Ladder => "ladder",
         }
@@ -102,8 +107,9 @@ pub struct SkipTarget {
     /// The grid point whose tests are skipped (X for W/E, Y for N/S).
     pub t: u8,
     /// Distance still to go to T in the heading's sense when the macro is done (negative: past T). A wrap ends 16
-    /// pixels past the bound (X `$F0` after a W wrap, `$00` after an E wrap); a block clip 8 pixels into the
-    /// square; a ladder clip on the land beyond the water with no ladder out (`$20`-`$30` past T, [`ladder_reach`]).
+    /// pixels past the bound (X `$F0` after a W wrap, `$00` after an E wrap; a wrap exit presses Left there and ends
+    /// in the next room); a block clip 8 pixels into the square; a ladder clip on the land beyond the water with no
+    /// ladder out (`$20`-`$30` past T, [`ladder_reach`]).
     pub end: i8,
 }
 
@@ -187,6 +193,8 @@ pub enum Phase {
     BackOff,
     /// Pressed: holding the heading until the end point.
     Crossing,
+    /// A wrap exit at its end point (X `$00`, inside the solid left edge): holding Left until the room changes.
+    Exit,
 }
 
 /// One frame's input.
@@ -225,12 +233,19 @@ impl Controller {
     /// The input for the frame that starts in `s`.
     pub fn decide(&mut self, s: SkipState) -> Decision {
         match self.phase {
+            Phase::Exit => Decision::Input(Input::Away),
             Phase::Crossing => {
                 // At the end point. A ladder out there is put away by one frame with nothing held (a held heading
                 // would lay another over water ahead: the relay; asm:Ladder_CheckAndDraw@StashLadder, state 2).
                 if s.p == self.target.end && s.o == 0 {
                     if self.target.kind == SkipKind::Ladder && s.ladder {
                         return Decision::Input(Input::Release);
+                    }
+                    // A wrap exit turns back on the landing frame: on the bound, Left fires the W edge test whatever
+                    // the tile (asm:Link_StopAtUnwalkableTile); a held Right would walk on into the room (column 2).
+                    if self.target.kind == SkipKind::WrapExit {
+                        self.phase = Phase::Exit;
+                        return Decision::Input(Input::Away);
                     }
                     return Decision::Done;
                 }
@@ -293,8 +308,8 @@ impl Controller {
 }
 
 /// Where the skip in `direction` is available in `state`, and where it goes (mechanics.md; round 21 contract
-/// "Availability"). Overworld W/E: the wrap; dungeon: the ladder clip, else (N/S) the block clip when it is useful.
-/// None elsewhere.
+/// "Availability"). Overworld W/E: the wrap, E also the wrap exit; dungeon: the ladder clip, else (N/S) the block clip
+/// when it is useful. None elsewhere.
 pub fn skip_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     if state.mode() != MODE_PLAY || state.link.status != 0 || state.var(Var::LinkShoveDir) != 0 {
         return None;
@@ -326,29 +341,42 @@ pub fn allow_clips(mask: &mut ActionMask, state: &GameView, except: &[Direction]
 }
 
 fn wrap_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
-    let (x, y) = (state.link.position.x, state.link.position.y);
     let offset = state.var(Var::LinkGridOffset);
     let facing = state.var(Var::LinkDirection) as u8;
-    // On a row line: Y a grid point, and the offset (if any) along the row.
-    if y & 7 != 5 || !(0x3D..=0xDD).contains(&y) || (offset != 0 && !matches!(facing, 1 | 2)) {
+    // The offset (if any) along the row.
+    if offset != 0 && !matches!(facing, 1 | 2) {
         return None;
     }
-    let (t, zone, run_up, landing): (u8, bool, [i32; 4], [i32; 2]) = match direction {
-        Direction::W => (OW_BOUND_W, x <= WRAP_ZONE as i32, [0, 1, 2, 3], [0x1E, 0x1F]),
-        _ => (OW_BOUND_E, (0xD0..=OW_BOUND_E as i32).contains(&x), [0x1C, 0x1D, 0x1E, 0x1F], [0, 1]),
+    let kind = wrap_at(state.room(), state.link.position.x, state.link.position.y, direction)?;
+    let t = if direction == Direction::W { OW_BOUND_W } else { OW_BOUND_E };
+    Some(SkipTarget { direction, kind, t, end: -16 })
+}
+
+/// The wrap heading `direction` (W or E) for Link at (x, y) in the overworld `room`, or None (position only;
+/// [`wrap_target`] adds Link's state): on a row line in the zone, every tile the macro walks over on the row (G' to the
+/// bound, the back-off included) open, and the landing cells at the opposite edge open (mechanics.md "After the wrap,
+/// edge by edge"; a solid one strands Link). An E wrap onto solid landing cells is the wrap exit where the room's
+/// game.yaml W `wrap` exit lists Link's tile row (`Room::wrap_exit`): there the arrival in the room to the W lets him
+/// walk on; elsewhere it is a softlock or no way out at all.
+fn wrap_at(room: &Room, x: i32, y: i32, direction: Direction) -> Option<SkipKind> {
+    if y & 7 != 5 || !(0x3D..=0xDD).contains(&y) {
+        return None;
+    }
+    let (zone, run_up, landing): (bool, [i32; 4], [i32; 2]) = match direction {
+        Direction::W => (x <= WRAP_ZONE as i32, [0, 1, 2, 3], [0x1E, 0x1F]),
+        _ => ((0xD0..=OW_BOUND_E as i32).contains(&x), [0x1C, 0x1D, 0x1E, 0x1F], [0, 1]),
     };
-    if !zone {
-        return None;
-    }
-    // Every tile the macro walks over on the row (G' to the bound, the back-off included) and the landing cells at
-    // the opposite edge (mechanics.md "After the wrap, edge by edge"; a solid one strands Link).
-    let room = state.room();
     let row = (y - 53).div_euclid(8);
     let open = |c: i32| room.is_tile_walkable(c, row) && !SLOW_TILES.contains(&room.tile(c, row));
-    if !run_up.into_iter().chain(landing).all(open) {
+    if !zone || !run_up.into_iter().all(open) {
         return None;
     }
-    Some(SkipTarget { direction, kind: SkipKind::Wrap, t, end: -16 })
+    if landing.into_iter().all(open) {
+        return Some(SkipKind::Wrap);
+    }
+    let tile_row = Position::new(x, y).tile().1;
+    (direction == Direction::E && room.wrap_exit().is_some_and(|(lo, hi)| (lo..=hi).contains(&tile_row)))
+        .then_some(SkipKind::WrapExit)
 }
 
 fn block_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
@@ -603,14 +631,19 @@ fn skip_cost(p: i32, end: i8, stashes: u8) -> i32 {
 }
 
 /// The skips of `room` as jumps of the path search (`Room::wavefront` with clips on): from every rest position
-/// (grid point, offset 0) of a skip's zone to Link's tile at its end, at [`skip_cost`]. Dungeon rooms only: the block
-/// clip (N, S) everywhere, the ladder clip (any heading) while Link holds the ladder (`Room::ladder`). The overworld
-/// wrap is not a jump: it ends one MOVE from the opposite edge, so a jump would make the path to that edge's exit
-/// lead out of the entry edge, and the policy learned the wrap without one (`docs/experiments/round21-gauntlet.md`).
+/// (grid point, offset 0) of a skip's zone to Link's tile at its end, at [`skip_cost`]. Dungeon rooms: the block
+/// clip (N, S) everywhere, the ladder clip (any heading) while Link holds the ladder (`Room::ladder`). Overworld rooms:
+/// only the wrap exit (`Room::wrap_exit`), from G', G and the bound on its rows to the tile off the W edge where the
+/// W exit's search starts. The overworld wrap is not a jump: it ends one MOVE from the opposite edge, so a jump would
+/// make the path to that edge's exit lead out of the entry edge, and the policy learned the wrap without one
+/// (`docs/experiments/round21-gauntlet.md`).
 pub fn skip_jumps(room: &Room) -> Vec<Jump> {
     let location = room.location;
-    if location.level == 0 || location.in_cave || !room.is_loaded() {
+    if location.in_cave || !room.is_loaded() {
         return Vec::new();
+    }
+    if location.level == 0 {
+        return wrap_exit_jumps(room);
     }
     let tile = |x: i32, y: i32| Position::new(x, y).tile();
     let mut jumps = Vec::new();
@@ -645,6 +678,25 @@ pub fn skip_jumps(room: &Room) -> Vec<Jump> {
                         jumps.push(Jump { from: at(t - p * s), to, direction, cost: skip_cost(p, end, stashes) });
                     }
                 }
+            }
+        }
+    }
+    jumps
+}
+
+/// The wrap exit's jumps of the overworld `room` ([`skip_jumps`]).
+fn wrap_exit_jumps(room: &Room) -> Vec<Jump> {
+    let Some((lo, hi)) = room.wrap_exit() else {
+        return Vec::new();
+    };
+    let mut jumps = Vec::new();
+    for row in lo..=hi {
+        let y = GAMEPLAY_START_Y + 8 * row + 5;
+        for p in [16, 8, 0] {
+            let x = i32::from(OW_BOUND_E) - p;
+            if wrap_at(room, x, y, Direction::E) == Some(SkipKind::WrapExit) {
+                let from = Position::new(x, y).tile();
+                jumps.push(Jump { from, to: (-1, row), direction: Direction::E, cost: skip_cost(p, -16, 0) });
             }
         }
     }
@@ -723,12 +775,22 @@ impl OpenClip {
     }
 
     /// The MOVE from `prev` to `state` finishes this skip: it heads the skip's way, stays in its room and on its line,
-    /// and ends at least as far past the skipped point as the macro's end point (in a block, beyond the square).
+    /// and ends at least as far past the skipped point as the macro's end point (in a block, beyond the square). A
+    /// wrap exit is finished by the MOVE W from its line that leaves the room by its W edge (only a Link past the
+    /// bound, X `$00`-`$07`, can: the edge is solid).
     pub fn finished_by(&self, action: &crate::actions::Action, prev: &GameView, state: &GameView) -> bool {
+        let on_line = across(prev, self.target.direction) == self.across;
+        if self.target.kind == SkipKind::WrapExit {
+            return action.kind == ActionKind::Move
+                && action.direction == Direction::W
+                && on_line
+                && prev.full_location() == self.location
+                && self.location.direction_to(state.full_location()) == Direction::W;
+        }
         action.kind == ActionKind::Move
             && action.direction == self.target.direction
             && state.full_location() == self.location
-            && across(prev, self.target.direction) == self.across
+            && on_line
             && across(state, self.target.direction) == self.across
             && self.target.read(state.ram()).p <= self.target.end
     }
@@ -1072,5 +1134,67 @@ mod tests {
             assert!(w.contains(&want), "{want:?} in {w:?}");
         }
         assert!(skip_jumps(dungeon_room_with(&[], &two, None, 0x78, 0x8D, &[]).room()).is_empty(), "no ladder");
+    }
+
+    /// A wrap exit turns back on the landing frame (X `$00`, offset 0) and holds Left from then on.
+    #[test]
+    fn a_wrap_exit_turns_back_on_the_landing_frame() {
+        let mut c = Controller::new(SkipTarget { direction: Direction::E, kind: SkipKind::WrapExit, t: 0xF0, end: -16 });
+        assert_eq!(c.decide(state(5, 3, true)), Decision::Input(Input::Press));
+        c.pressed(state(7, -7, false));
+        assert_eq!(c.decide(state(-8, 0, true)), Decision::Input(Input::Toward), "X $F8: on");
+        assert_eq!(c.decide(state(-15, 7, false)), Decision::Input(Input::Toward), "X $FF: on");
+        assert_eq!(c.decide(state(-16, 0, true)), Decision::Input(Input::Away), "landed: Left");
+        assert_eq!(c.phase, Phase::Exit);
+        assert_eq!(c.decide(state(-16, 0, true)), Decision::Input(Input::Away), "still Left");
+    }
+
+    /// An overworld room in play: every tile walkable but columns 0-1 (trees, every row), Link at rest on (x, y)
+    /// facing E.
+    fn overworld_room(location: u8, x: u8, y: u8) -> GameView {
+        use crate::tables::{GRID_COLS, GRID_ROWS, RAM_SIZE, TILE_LAYOUT};
+        let mut ram = [0u8; RAM_SIZE];
+        for c in 0..GRID_COLS {
+            for r in 0..GRID_ROWS {
+                ram[TILE_LAYOUT.0 + c * GRID_ROWS + r] = if c < 2 { 0xC5 } else { 0x26 };
+            }
+        }
+        let vars = [(Var::Level, 0), (Var::Location, location), (Var::Mode, MODE_PLAY), (Var::LinkX, x), (Var::LinkY, y)];
+        for (var, value) in vars {
+            ram[var.addr() as usize] = value;
+        }
+        ram[LINK_DIRECTION] = 1;
+        GameView::new(&ram, 0, false, std::sync::Arc::new(crate::GameMap::builtin()))
+    }
+
+    /// CLIP E onto the solid left edge is the wrap exit only in a room with a game.yaml W `wrap` exit (0x75) and only on
+    /// its rows (Link's tile rows 5-14, Y `$65`-`$AD`); never W; the path search jumps from G', G and the bound on
+    /// those rows off the W edge, and with clips a W target is reached from the zone (without clips not at all).
+    #[test]
+    fn the_wrap_exit_is_offered_only_on_its_rows() {
+        let kind = |room: u8, x: u8, y: u8, d: Direction| skip_target(&overworld_room(room, x, y), d).map(|t| t.kind);
+        for y in (0x3D..=0xDD).step_by(8) {
+            let safe = (0x65..=0xAD).contains(&y);
+            let want = safe.then_some(SkipKind::WrapExit);
+            assert_eq!(kind(0x75, 0xE0, y as u8, Direction::E), want, "0x75 Y {y:#04x}");
+            assert_eq!(kind(0x75, 0xD0, y as u8, Direction::E), want, "0x75 Y {y:#04x} from $D0");
+            assert_eq!(kind(0x77, 0xE0, y as u8, Direction::E), None, "0x77 has no wrap exit: Y {y:#04x}");
+            assert_eq!(kind(0x75, 0x10, y as u8, Direction::W), None, "W wrap onto open landing, run-up solid");
+        }
+        assert_eq!(kind(0x75, 0xC8, 0x8D, Direction::E), None, "outside the zone");
+        assert_eq!(kind(0x75, 0xE0, 0x8E, Direction::E), None, "not on a row line");
+        let view = overworld_room(0x75, 0xE0, 0x8D);
+        let room = view.room();
+        assert_eq!(room.wrap_exit(), Some((5, 14)));
+        let jumps = skip_jumps(room);
+        assert_eq!(jumps.len(), 30, "3 rest positions x 10 rows: {jumps:?}");
+        assert!(jumps.iter().all(|j| j.direction == Direction::E && j.to == (-1, j.from.1)), "{jumps:?}");
+        let from: std::collections::BTreeSet<(i32, i32)> = jumps.iter().map(|j| j.from).collect();
+        assert!(from.contains(&(28, 5)) && from.contains(&(30, 14)) && !from.contains(&(28, 4)), "{from:?}");
+        let w = [crate::room::Target::Dir(Direction::W)];
+        let with = room.wavefront(&w, &[], &[], true);
+        assert!(with.get(view.link.tile()).is_some_and(|d| d > 0), "the zone leads out W");
+        assert!(with.get((20, 3)).is_some(), "so does the rest of the E part");
+        assert_eq!(room.wavefront(&w, &[], &[], false).get(view.link.tile()), None, "no clips: no way out W");
     }
 }

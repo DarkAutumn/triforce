@@ -124,6 +124,11 @@ pub struct RoomExit {
     /// `dock: [col, row]` of a raft exit: the tile Link stands on to sail (asm:Dock_Update: the dock's column at
     /// y = $7D).  None for a pier, which is left by walking off the room's edge.
     pub dock: Option<Tile>,
+    /// `wrap: true` (an overworld W exit whose edge is solid on every row, with a `span`): left only by `CLIP E`'s
+    /// wrap exit (`crate::clips::SkipKind::WrapExit`: the E screen wrap lands Link at X `$00` inside the solid left
+    /// edge, Left there changes the room), and only on the `span` rows, the ones whose arrival in the room to the W
+    /// lets Link walk on (round 22: 0x75 into 0x74). The room-to-room search never takes it; a route step may.
+    pub wrap: bool,
 }
 
 /// A game.yaml room.
@@ -236,7 +241,7 @@ const ROOM_KEYS: [&str; 22] = [
     "stairs",
     "dark",
 ];
-const EXIT_KEYS: [&str; 5] = ["level", "location", "in_cave", "locked", "span"];
+const EXIT_KEYS: [&str; 6] = ["level", "location", "in_cave", "locked", "span", "wrap"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
 const STEP_KEYS: [&str; 11] = [
@@ -720,6 +725,12 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                 );
                 let span = get(dest, "span").map(|s| pair(s, &format!("{exit_what}: span"))).transpose()?;
                 let locked = flag(dest, "locked", &exit_what)?;
+                let wrap = flag(dest, "wrap", &exit_what)?;
+                if wrap && (level != 0 || loc.in_cave || dir != "W" || span.is_none()) {
+                    return err(format!(
+                        "{exit_what}: wrap needs an overworld room's W exit with a span (the rows the wrap exit is safe on)"
+                    ));
+                }
                 exits.insert(
                     dir.clone(),
                     RoomExit {
@@ -730,6 +741,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         bomb_wall: false,
                         raft: false,
                         dock: None,
+                        wrap,
                     },
                 );
             }
@@ -764,6 +776,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         bomb_wall: false,
                         raft: true,
                         dock: tile(get(dest, "dock"), &format!("{exit_what}: dock"))?,
+                        wrap: false,
                     },
                 );
             }
@@ -814,6 +827,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     bomb_wall: false,
                     raft: false,
                     dock: None,
+                    wrap: false,
                 },
             );
         }
@@ -1156,6 +1170,10 @@ impl GameMap {
                 let opened = opened_doors.contains(&(current, exit.direction.clone()));
                 // A raft crossing: only once it is "opened" (Link holds the raft).
                 if exit.raft && !opened {
+                    continue;
+                }
+                // A wrap exit: a skip, taken only where a route step names it.
+                if exit.wrap {
                     continue;
                 }
                 // An intact bomb wall: only where Link may bomb (BOMB is masked elsewhere, review F016).
@@ -1797,7 +1815,7 @@ mod tests {
     }
 
     /// F030: every non-maze N/S/E/W exit leads to a room that exists and has the opposite exit back, with the same
-    /// lock and bomb-wall marking (one convention on both sides of a door).
+    /// lock and bomb-wall marking (one convention on both sides of a door). A wrap exit (0x75 W) is one-way.
     #[test]
     fn exits_are_two_way_with_one_convention() {
         let map = GameMap::builtin();
@@ -1809,6 +1827,9 @@ mod tests {
                 let Some(d) = Direction::from_exit(&exit.direction).filter(|d| *d != Direction::None) else {
                     continue;
                 };
+                if exit.wrap {
+                    continue;
+                }
                 let other = map.get(exit.destination).unwrap_or_else(|| panic!("{at} {d:?}: no room there"));
                 if other.maze.is_some() {
                     continue;
@@ -1833,6 +1854,26 @@ mod tests {
         // Dungeon 3: 0x4c (requires_bombs) E into Manhandla's room.
         let (c, m) = (loc(3, 0x4c), loc(3, 0x4d));
         assert_eq!(map.find_path(c, m), Some(vec![c, m]));
+    }
+
+    /// Round 22: 0x75's W exit into 0x74 is a wrap exit on Link's tile rows 5-14; the room-to-room search never takes
+    /// it; `wrap` needs an overworld W exit with a span.
+    #[test]
+    fn the_wrap_exit_is_only_a_route_step_way() {
+        let map = GameMap::builtin();
+        let exit = &map.get(loc(0, 0x75)).unwrap().exits["W"];
+        assert_eq!((exit.destination, exit.wrap, exit.span), (loc(0, 0x74), true, Some((5, 14))));
+        assert!(!map.get(loc(0, 0x75)).unwrap().exits["E"].wrap);
+        let mut fork = GameMap::builtin();
+        for room in [0x75, 0x76] {
+            fork.get_mut(loc(0, room)).unwrap().specialist = Some("ow-tektite".into());
+        }
+        let path = fork.find_path(loc(0, 0x76), loc(0, 0x74)).unwrap();
+        assert!(!path.windows(2).any(|w| w == [loc(0, 0x75), loc(0, 0x74)]), "{path:?}");
+        let bad = GAME_YAML.replacen("      wrap: true\n      span: [5, 14]\n", "      wrap: true\n", 1);
+        assert_ne!(bad, GAME_YAML);
+        let e = GameMap::from_yaml(&bad, ROUTES_YAML).unwrap_err().0;
+        assert!(e.contains("wrap needs an overworld room's W exit with a span"), "{e}");
     }
 
     /// F165: every typo in game.yaml or routes.yaml that used to load as a default is an error naming the room or
