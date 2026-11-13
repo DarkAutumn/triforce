@@ -2312,13 +2312,25 @@ class DetailPane(QWidget):
         if key != self._key or force:
             self._key = key
             if model is None or not model.plan:
-                self.title.setText('')
+                self._clear()
                 return
             if selection == 'round' or not isinstance(selection, int) or selection >= len(model.runs):
                 self._show_round(model)
             else:
                 self._show_run(model, model.runs[selection])
         self._refresh_log(model, selection)
+
+    def _clear(self):
+        """Nothing is selected (e.g. [currently running] with nothing shown): every tab is emptied, so nothing stale
+        stays; the next selection fills them again."""
+        self.title.setText('')
+        for chart in self.charts.values():
+            chart.set_data([])
+        self.summary.set_sections([], '')
+        self.evaluation.set_sections([], '')
+        self.events.clear()
+        self.log.clear()
+        self._log_signature = None
 
     # -- run
 

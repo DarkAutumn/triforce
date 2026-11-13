@@ -400,12 +400,21 @@ def test_currently_running_stays_selected_while_nothing_runs(qapp, tmp_path, mon
         plan(live.name, 'completed')
         window._scan_and_update()
         assert window.live_mode and window._shown_dirs() == [live]      # finished, kept until cleared
+        detail = window.detail
+        window.poll(force=True)
+        assert live.name in detail.title.text() and detail.log.toPlainText() != ''
         window.clear_button.click()
         assert window.live_mode and window._shown_dirs() == [] and window.combo.currentIndex() == 0
+        # nothing shown: the charts, evaluation, log and events are emptied, not left stale
+        assert detail.title.text() == '' and detail.log.toPlainText() == '' and detail.events.toPlainText() == ''
+        assert detail.summary.sections == [] and detail.evaluation.sections == []
+        assert all(not chart.series for chart in detail.charts.values())
+        fresh = plan('261112_003_fresh')                                # the next run fills them again
+        window._scan_and_update()
+        assert window._shown_dirs() == [fresh] and fresh.name in detail.title.text()
     finally:
         window.close()
         window.deleteLater()
-
 
 
 # ------------------------------------------------------------------------------------------------ evaluation batches
