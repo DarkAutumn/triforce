@@ -3,16 +3,27 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
-## Next projects (Lee, Nov 11-12): top of the list
+## Next projects (Lee, Nov 11-12; ordered Nov 13 by what the r71 chains lose): top of the list
 
-Each is a project of its own.
+Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 runs per segment, final team
+`r71-1k-dks`): D2 85.6%, D1 99.1%, D3 46.5%, D4 56.4%, the full route 12.8% (15.4% in `r71-1k`: within noise).
 
-1. **The round 21 retrain (`r71`) and its chains** (round21.md §7-§8; running Nov 13): every family from scratch on
-   1.4.1.0, evaluated in both act modes, compared room by room with round 20's promoted runs, then 1000 runs per
-   chain segment. After it (Lee, Nov 12) fix only what the chains show is needed among round 20's open items: Gleeok
-   at low health, the D4 deaths in 0x12 and 0x30, real bombs into Dungeon 4 ("Left open by round 20" below); the
-   rest stays here. Then "Left open by round 21" (below), as the chains rank it.
-2. **Wallmaster doesn't collect the hearts its kills drop** (round18.md). The old model (r56) landed about 6 hits
+1. **Dungeon 3** (the weakest segment, 46.5% of 1000 D3 runs leave it): Manhandla 3:0x4d 132 deaths per 1000,
+   3:0x5b 126, 3:0x69 87, darknut 3:0x59 86 deaths and 24 stuck. By the room statistics (`r71-1k-dks`) the stretch
+   from D1's exit to D3's lets 37.4% through, 3:0x59 kills 19.2% of the runs that start it and 10.8% of full runs
+   (the most of any room). darknut and boss-manhandla ran the full 8M steps (darknut 16M with two continuations).
+   darknut plays sample because argmax loops in 3:0x59 when bombs are masked at the reserve (180 stuck per 1000 in
+   the D3 segment): train it more often with bombs at or below the reserve; its 3:0x59 hearts are also 0.11-0.15
+   below the old run (−0.51 against −0.36).
+2. **Gleeok at low health** (245 deaths per 1000 D4 runs, the most of any D4 room; 7.1% of full runs). Link arrives
+   with 2.68 hearts; below 3.5 hearts he wins 56% and Gleeok makes 239 of his 245 kills, at 3.5 hearts or more Link
+   wins 98-100%. Train boss-gleeok down to `hp: [0.15, max]` (from `r71-d`, keeping the full-health share) now that
+   the full-health fight is 99.7%, or raise the arrival health (4:0x12 0.81 hearts per visit, 4:0x31/0x32 0.6).
+3. **4:0x12** (vire): 95 deaths per 1000 D4 runs (141 in round 20); single room 97.7% −0.70.
+4. **Dungeon 2's 2:0x1e** (goriya): 57 deaths per 1000 D2 runs, the most in Dungeon 2 (moldorm 2:0x3e 36, 2:0x5e
+   19, Dodongo 14); single room 90.0% against the old 92.0%. Also the gate's argmax question ("Goriya 2:0x1e by
+   argmax" below) and item 6.
+5. **Wallmaster doesn't collect the hearts its kills drop** (round18.md). The old model (r56) landed about 6 hits
    per room on the Wallmasters and picked up the drops: +0.33 hearts per room in single-room evaluation, +0.85 per visit
    in the full route, where Link reaches 1:0x45 low on hearts and hands them on to Aquamentus and the rest of
    Dungeon 1. Every model trained on the current code rushes the exit instead (19–23 steps, 0.0 hearts): 100%
@@ -27,12 +38,13 @@ Each is a project of its own.
    Ideas: value hearts the way the chain does (a per-family `gamma`, or a terminal bonus scaled by the hearts Link
    brings into the next room, or a larger `reward-gained-health` at low health); start from the old model with
    that change; a curriculum of low-health starts; measure in the full route, where it matters.
-3. **goriya heart loss** (round18.md §2). goriya loses about +0.26 hearts per room (93% success) after 8M + 4M
+6. **goriya heart loss** (round18.md §2). goriya loses about +0.26 hearts per room (93% success) after 8M + 4M
    steps; Lee's target is −0.1 to −0.2, i.e. a net gain like stalfos-keese-gel's. More training of the same
    objective doesn't move it (r61 → r63a: +0.266 → +0.262). Likely needs shaping (boomerang blocks with the shield,
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
-   (52 `stuck` per 6000 runs), so it samples.
-4. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work): chain
+   (52 `stuck` per 6000 runs), so it samples. The r71 goriya (`r71-goriya-cont`, 12M steps): 95.2%, −0.15 hearts
+   per episode by sample (old `r68-clear5e` 95.4%, −0.16); 2:0x1e 90.0% −0.39 (round21.md §7).
+7. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work): chain
    records count no hits (the Hits overlay is room-only) and name no route step (`room_stats.assign_steps` infers it
    from the current route, so r70's D4 visits of the old 0x30 → 0x20 → 0x21 path show as `off`): a `hits` and a
    `step` field in `RoomRecord` would make both exact; the death-rate scales (`DEATHS_BAD`) are first guesses; open
@@ -52,7 +64,7 @@ buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged") is one c
   whole regression was the one-pixel error; closing the wall walk cost nothing measurable. The wall walk was the
   facing write's, not the game's; the movement cleanup (next item) removed the write and replaced the position rule
   with the buttons' own (`attack::plan`). The D2 segment still loses most in 2:0x1e (goriya, 61 deaths per 1000),
-  2:0x3e (moldorm, 53) and 2:0x5e (goriya, 35). The retrain is `r71` (Next projects 1).
+  2:0x3e (moldorm, 53) and 2:0x5e (goriya, 35). The r71 retrain brought D2 to 85.6% (the retrain item below).
 - [x] **Fewer writes to memory** (Lee, Nov 12; planned as round 22, done in round 21; round21.md §4). The executor
   played some actions by writing RAM instead of pressing buttons, which made combat easier than the real game:
   - [x] **Item selection:** a BOMB, BOOMERANG or ARROW action wrote `Var::SelectedItem` before pressing B. Now the
@@ -97,8 +109,15 @@ buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged") is one c
     never found the W→E wrap.
 - [x] **Round 20's "Future route"** (Lee): through the ladder clip from 0x31 N onto 0x21's island (below, under
   Dungeon 4).
+- [x] **The round 21 retrain (`r71`) and its chains** (round21.md §7-§11; decisions 2026-11-13 "The r71 retrain").
+  All 24 families from scratch on 1.4.1.0 (93.7M env steps, 20.3 h), evaluated in both act modes, compared room by
+  room with the runs they replaced, all promoted. 1000 runs per segment, the final team (`r71-1k-dks`, darknut
+  sampling): D2 85.6% (round 20 68.6%, round 19 82.1%), after D2 88.6%, D1 99.1%, after D1 99.4%, D3
+  46.5% (38.6%), after D3 100%, D4 56.4% (21.1%); from the start to Dungeon 3 56.7% (26.7%), to the D4 triforce
+  12.8% (1.8%; 15.4% in `r71-1k` with darknut on argmax, within noise). Round 20's open items as measured are
+  below, under Dungeon 4; what the chains lose most is "Next projects".
 
-Left open by round 21 (round21.md §9):
+Left open by round 21 (round21.md §10):
 
 - [ ] **The overworld ladder clip** (0x5f, 0x4f) is not built: it needs a wrap followed by a room change, and the
   room model doesn't cover the ladder in the overworld.
@@ -108,12 +127,44 @@ Left open by round 21 (round21.md §9):
   wrong exits (4 → 12 of 3,000, from 0_5bw and 0_63e) come from 0x5b's two E openings too.
 - [ ] **BOMB N from the end of 4:0x21's ladder clip** (Y `$55`, 8 pixels into the top wall) is legal and spends
   the bomb, but the wall stays shut (the bomb lands `$18` from the wall's hotspot); one step down (`MOVE S 8`) and it
-  opens. The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Watch the retrained
-  stalfos-keese-gel for wasted bombs (its 0x21 visit gets a cheated one).
-- [ ] **A clip cut short and finished by a walk isn't counted** (round21-vire-50.md, episode 107: a stalled clip left
-  Link 6 px into the block and `MOVE N 32` carried him through). The masks are the game's on every frame a clip can
-  be cut (`the_masks_are_the_games_wherever_a_clip_is_cut`), so only the `clips/*` counters miss it. Count a MOVE
-  that crosses a skip's square, or leave it.
+  opens. The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Measured on the r71
+  stalfos-keese-gel: 10 such bombs in 300 argmax episodes, against 497 of its 1033 BOMB decisions being BOMB S from
+  the top band, which opens the wall (round21.md §10). The waste is elsewhere (next item).
+- [ ] **stalfos-keese-gel wastes bombs in 4:0x21** (round 21 retrain). It presses BOMB N from the island's entry
+  spot (Y `$B6`, no wall in reach) once per episode (300 in 300; the five most common openings all do it), often a
+  second BOMB N mid-island and a second BOMB S at the top: 3.4-3.8 bombs per visit (3522 in 919 D4-segment
+  visits) where one opens the wall. All cheated in chains; with real bombs the room alone would take about 4, twice
+  the route's reserve of 2. Each bomb alternates with the boomerang through the sub-screen: 3.5 opens and 436 paused
+  frames per visit (about 7 s of real time). Options: mask BOMB N on the island south of the water, a bomb cost in
+  `required` rooms, or the `4_21s` curriculum (one bomb).
+- [ ] **Clip aborts in 4:0x21 are mostly hits on the ladder** (round 21 retrain). Of about 109 aborted clips in 300
+  sampled episodes, 92 came with a Keese or Gel hit during the 43-frame macro, 78 leaving Link at Y `$65` (from
+  where he still bombs): 4:0x21 loses 0.28 hearts per visit (0.03 on the old W route). In the D4 segment: 311
+  aborts in 919 visits, 244 visits with one aborted clip and no completed one.
+- [ ] **The clip counters' quirks.** A clip cut short and finished by a walk isn't counted (round21-vire-50.md,
+  episode 107: a stalled clip left Link 6 px into the block and `MOVE N 32` carried him through). And a `CLIP N`
+  that carries Link through 4:0x21's already opened wall into 0x11 in one action (6 of the r71 single-room
+  episodes) counts as `aborted` (`ClipAbort::Interrupted` on the room change) although it succeeded. The masks are
+  the game's on every frame a clip can be cut (`the_masks_are_the_games_wherever_a_clip_is_cut`), so only the
+  `clips/*` counters miss. Count a room change during a clip as done, and a MOVE that crosses a skip's square.
+- [ ] **ow-octorok walks into 0:0x64's cave** (round 21 retrain): 9 `r71-1k` runs end `left the route into untagged
+  (level 0, room 0x64, cave)` (6 in post-d1, 3 in full; about 2100 visits without a wrap; the final team's post-d1
+  measurement again 6), all from visits without a wrap, which take the long walk W past the cave mouth. The
+  single-room evaluation of 0:0x64 is 100%.
+- [ ] **Dodongo dies under sample** (round 21 retrain): 14 deaths per 1000 D2 runs (1-4 in rounds 19 and 20).
+  boss-dodongo `r71-e` plays sample (98.0%, 6 deaths in 300); by argmax no deaths but 7 stalls in 300.
+- [ ] **darknut 3:0x59** (round 21 retrain): argmax loops in the D3 segment when bombs are masked at the reserve
+  (180 stuck per 1000, against 3 loops in 2100 single-room episodes), so darknut plays sample (24 stuck, 86 deaths);
+  the single room stays at 96.2% −0.51 against the old 97.8% −0.36 after 16M steps. Next projects 1.
+- [ ] **goriya 2:0x1e** (round 21 retrain): 90.0% −0.39 against the old 92.0% −0.38 by sample; 57 deaths per 1000
+  D2 runs. Next projects 4.
+- [ ] **`menu_frames` is missing from evaluation records and training metrics** (round 21 retrain): sub-screen
+  frames had to be counted from argmax replays (START-press pairs). boss-manhandla opens it 2.8 times (346 frames)
+  per fight, vire 0.7 per episode, trap-room 3:0x4c 2.0-2.2, stalfos-keese-gel 4:0x21 3.5.
+- [ ] **The full-route figure is noisy at 1000 runs:** 12.8% (`r71-1k-dks`) and 15.4% (`r71-1k`) from two
+  measurements whose only difference (darknut's act mode) is equal there; only about 250 runs reach Dungeon 4.
+  Compare full-route numbers by their segments, or measure more runs.
+- [ ] **Not looked at:** chain runs `stuck` in trap-room 3:0x4c (6 per 1000 in `r71-1k`) and ow-octorok 0:0x4c (4).
 - [ ] **vire 0x50 without clips ends `stuck` at the N door** in 3-8 of 300 argmax episodes (Link pressing N into the
   wall 8+ px off the door's column; round21-vire-50.md). Not traced; with clips the route reaches the same row and
   never sticks there.
@@ -123,8 +174,8 @@ Left open by round 21 (round21.md §9):
   switches 0.14 times per episode (4% more emulated frames).
 - [ ] **Goriya 2:0x1e by argmax** (round21-gate.md): −5.5 points on both seeds of the gate's new build (−1.7 by
   sample), confounded by `e1fea65` (PBRS on the first step), which only the old build had. To settle it: goriya on
-  the cleanup with `e1fea65`, two seeds, 3M steps (about 45 minutes a pair). Check the `r71` goriya's argmax in
-  2:0x1e first.
+  the cleanup with `e1fea65`, two seeds, 3M steps (about 45 minutes a pair). The `r71` goriya's argmax figure for
+  2:0x1e was not taken (overall 94.7% −0.12 by argmax, 14 loops; it plays sample): take it first.
 - [ ] **Clips for levels 5-9.** Only levels 1 and 4 were scanned for skips; level 5's Blue Darknut rooms (`$05`,
   `$64`: blocks round their stairs; `zelda-asm/levels/level-5.md`) are the first to check when the route gets there.
 - [ ] **The final PPO update can change a model after its last logged iteration** (round21-trap-room.md §4:
@@ -138,8 +189,9 @@ Left open by round 21 (round21.md §9):
   the stored states, so nothing depends on them; re-explore to refresh the record.
 - [ ] **ARROW** is untested in a family (no route state holds arrows); strikes refused as `Band` need a MOVE out of
   the band first (doorway entry spots, screen edges).
-- [ ] **Round 20's open items** (below, under Dungeon 4): Gleeok at low health, the D4 deaths in 0x12 and 0x30,
-  bombs into Dungeon 4, linger over 500 steps.
+- [ ] **Round 20's open items** (below, under Dungeon 4, measured by the r71 chains): 4:0x30's deaths and Gleeok's
+  stalls are gone; Gleeok's deaths at low health (Next projects 2), 4:0x12 (Next projects 3) and real bombs into
+  Dungeon 4 stay open.
 
 ## Done (Nov 12): Dungeon 4 (Lee; round 20, 1.4.0.0)
 
@@ -159,21 +211,32 @@ Scouted Nov 11 (`docs/routes/d4.md`, decisions 2026-11-11), merged into `d2first
   didn't reset the stall penalty).
 - [x] **The explorer's cell key** and **the map objective's cache** (fixed during the scouting).
 
-Left open by round 20 (Lee, Nov 12: after the round 21 retrain, fix what the chains show is needed):
+Left open by round 20 (Lee, Nov 12: after the round 21 retrain, fix what the chains show is needed). Measured by
+the r71 chains (round21.md §9; D4 segment, 1000 runs):
 
-- [ ] **Gleeok at low health.** Link reaches 4:0x13 with 2.1 hearts on average; below 3.5 hearts (492 of 598 chain
-  visits) Gleeok wins 24%, dies 185 times and stalls 188 (hides for the 2000-step budget). The model was trained at
-  3.5–7 hearts. Ideas: health from the chain's arrivals (harvested states), a heart pickup before 0x13, or the
-  low-health range back once the full-health fight is solid.
-- [ ] **D4 deaths in 0x12 (141 per 1000) and 0x30 (119).**
+- [x] **Gleeok's stalls at low health.** Round 20: Link reached 4:0x13 with 2.1 hearts on average; below 3.5 hearts
+  (492 of 598 chain visits) Gleeok won 24%, died 185 times and stalled 188 (hid for the 2000-step budget). r71
+  (`boss-gleeok` `r71-d`, still trained at 3.5–7 hearts): arrival 2.68 hearts, below 3.5 hearts (538 of 809
+  visits) 56% won, 239 deaths, **0 stalls**; at 3.5 hearts or more 98-100%. The hiding is gone.
+- [ ] **Gleeok's deaths at low health** (Next projects 2): 245 per 1000 D4 runs, 239 of them below 3.5 hearts.
+  Ideas: `hp: [0.15, max]` now that the full-health fight is 99.7%, health from the chain's arrivals (harvested
+  states), a heart pickup before 0x13, less damage before it (4:0x12 0.81 hearts per visit, 4:0x31/0x32 0.6).
+- [x] **D4 deaths in 0x30** (119 per 1000 in round 20): solved by the shortcut, 0 deaths in 999 visits; 0x30 is
+  crossed once now.
+- [ ] **D4 deaths in 0x12** (Next projects 3): 141 per 1000 in round 20, 95 with r71.
 - [ ] **Bombs into Dungeon 4.** A real bomb for each wall (a pickup after Manhandla, 0x5b's `if_bombs_below`), and
-  then whether vire bombs 0x31/0x12 and walks past 0x61 as Lee wants (untested: no bombs above the reserve).
-- [ ] **Linger over 500 steps** in one single-room episode each: like-like (599), boss-gleeok (638),
-  stalfos-keese-gel (598). Not investigated before promotion.
+  then whether vire bombs 0x31/0x12 and walks past 0x61 as Lee wants. Measured with r71: from `4_71s_0` every wall
+  visit still takes a cheated bomb and no Vire is bombed; from the game start (`r71-1k` full) 35 of 241 visits to
+  4:0x21 and 20 of 232 to 4:0x11 used only real bombs, and Vires are bombed (0x31 in 157 of 505 visits, 413 bombs;
+  0x61 34 of 260; 0x12 7 of 232), bombs the walls then lack. Open; stalfos-keese-gel's 3.8 bombs per 0x21 visit
+  ("Left open by round 21") come first.
+- [x] **Linger over 500 steps** in one single-room episode each: like-like (599), boss-gleeok (638),
+  stalfos-keese-gel (598). r71 single rooms: like-like worst 91, boss-gleeok 25; over 500 only `no-damage` endings
+  of the 600-step cap (stalfos-keese-gel 3, goriya 1, zol 2-3). Chains: round21.md §9.
 - [x] **Future route** (Lee): 0x30 – 0x31 – 0x32 – 0x31 – 0x21 – 0x11 through a ladder clip from 0x31 N onto
   0x21's island. Done in round 21 (branch `ladder`, decisions 2026-11-12 "One clip design"): `d2first` goes 0x31
-  E → N, 0x21 S → N (CLIP N off the island, a step down, BOMB N); the 0x30 E → N and 0x20 steps are gone. Needs the
-  retrain (stalfos-keese-gel with clips).
+  E → N, 0x21 S → N (CLIP N off the island, a step down, BOMB N); the 0x30 E → N and 0x20 steps are gone.
+  stalfos-keese-gel learned it in the r71 retrain without a curriculum (4:0x21 100% in its single room).
 
 ## Done (Nov 12): bombs (Lee, Nov 11; round 19)
 

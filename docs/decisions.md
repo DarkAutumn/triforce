@@ -1555,3 +1555,25 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   `0000.state` 13 of 45 tracks still leave the room with the merged executor against 38 with `ladder`'s own (in the
   7 others `Game`, which has no cheat ledger, masks a BOMB), Link leaving the stored path 4-56 steps in. No track
   depends on replaying them; re-exploring under the new executor only refreshes the record.
+
+## 2026-11-13 — The r71 retrain: act modes, darknut on sample; room statistics, batched and niced evaluations
+
+- **Act mode per family, on evidence** (`docs/experiments/round21.md` §7-§8): success first, then hearts (within
+  about 0.5 points hearts decide), argmax avoided where it loops more. Argmax: the nine overworld families, moldorm,
+  wallmaster, trap-room, equipment-room, boss-manhandla, boss-gleeok. Sample: goriya, d2-rope, boss-dodongo,
+  stalfos-keese-gel, boss-aquamentus, zol, vire, like-like, darknut.
+- **darknut plays sample.** Its argmax won the single room (98.3% −0.36 against 97.8% −0.39) but ended 180 of 1000
+  D3-segment runs `stuck` in 3:0x59: the D3 start state's bombs are within the reserve of 5, so bombs are masked
+  and argmax loops (round 19's finding again). Sample: 24 stuck, D3 arrivals 46.5% against 41.0%. In the full route
+  (Link above the reserve) the two are equal there. The real fix, a darknut trained more often at or below the
+  reserve, is in the backlog.
+- **stalfos-keese-gel needs no curriculum for 4:0x21:** from scratch without one it wins the room from the S door
+  100%, ladder clip included; its `4_21s` tracks stay unused.
+- **Room statistics by scope** (`triforce room-stats`, `zelda-map.py`): the route is cut at the dungeon exits, and
+  a segment's runs are counted up to their first entry into the next segment's start step (the chain files play
+  on to the route's end), death rates per run started on the segment.
+- **Evaluations are batched:** several evaluations or the chains of a tag go through `triforce eval-batch NAME` as
+  one log folder and one GUI group, not as separate commands; `r56_chains.sh` is a batch.
+- **Nice 15 for training and evaluation only:** `train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`
+  lower their own CPU priority (`--nice`, `$TRIFORCE_NICE`; children inherit it); play and replay tools keep
+  normal priority.

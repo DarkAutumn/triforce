@@ -7,9 +7,9 @@ ways, picked one by experiment, folded in the movement cleanup planned for round
 RAM writes), took Dungeon 4's shortcut through 0x21 by the ladder clip, and closes with one full retrain of every
 family (`r71`) measured with 1000-run chains. Decisions: `docs/decisions.md` 2026-11-12 ("The grid-point skip in the
 agent", "Round 21: one change set, one retrain", "One clip design", "Attacks by buttons"), 2026-11-12/13 (the
-doorway mask) and 2026-11-13 ("Round 21 merged"). The three design experiments have their own reports:
-`round21-gauntlet.md` (the overworld wrap), `round21-trap-room.md` (1:0x22), `round21-vire-50.md` (4:0x50); the
-movement cleanup's gate is `round21-gate.md`.
+doorway mask) and 2026-11-13 ("Round 21 merged", "The r71 retrain"). The three design experiments have their own
+reports: `round21-gauntlet.md` (the overworld wrap), `round21-trap-room.md` (1:0x22), `round21-vire-50.md` (4:0x50);
+the movement cleanup's gate is `round21-gate.md`.
 
 ## Summary
 
@@ -38,9 +38,43 @@ The three findings that matter most:
    builds), with one exception on both goriya seeds: 2:0x1e under argmax, −5.5 points. That gate is confounded by a
    reward fix only the old build had (§4).
 
-The retrain is running (`r71`, every family from scratch on the merged code).
+**The retrain (`r71`, §7-§11):** all 24 families from scratch on the merged code, all promoted (93.7M env steps,
+20.3 h of wall time in two streams; five continuations: darknut twice, goriya, vire, zol). In single rooms no family
+is more than about 1 point or 0.15 hearts below the run it replaced, except goriya 2:0x1e (90.0% against 92.0%)
+and darknut 3:0x59 (96.2%, −0.51 hearts against 97.8%, −0.36). boss-gleeok went from 94.7% to 99.7% (+0.29 hearts
+against −0.66), moldorm from 86.0% to 89.3%.
 
-<!-- r71: summary numbers -->
+Chains, 1000 runs per segment, arrivals with the final team (`r71-1k-dks`: `r71-1k` with darknut playing sample;
+round 20's `r70-1k` and round 19's `r69-1k` in brackets):
+
+- D2 **85.6%** (68.6%, 82.1%), after D2 88.6% (83.5%), D1 99.1% (96.7%), after D1 99.4% (100.0%), D3 (to 0:0x74)
+  46.5% (38.6%), after D3 100.0% (99.8%), D4 **56.4%** (21.1%).
+- From the start: to Dungeon 3 56.7% (26.7%, round 19 36.3%), to the D4 triforce **12.8%** (1.8%). The same
+  segment with darknut on argmax (`r71-1k`, measured first) gave 15.4%; the two are within noise of each other
+  (247-260 runs reach Dungeon 4, 52-59% of those take its triforce), so the full route stands at about 13-15%.
+
+What each change bought, as far as the chain tables show it (the retrain changes every model at once, so none of
+this is an isolated measurement):
+
+- **The wraps:** every W→E or E→W crossing whose entry offers a wrap takes it, on every visit. The eight rooms
+  wrapped on every visit (0x59, 0x5a, 0x5b, 0x1b, 0x19, 0x18, 0x57, 0x56) lose 0.00 hearts per visit, 0:0x65 0.02
+  (0.50 on its 4 visits without), 0:0x64 0.00 with a wrap and 0.20 without; full → D2 is 100.0% (98.1%) (§8).
+- **The block clip in 4:0x50:** 1.00 clips per visit, 0.46 hearts lost per visit (0.73 in round 20); 1:0x22's clip
+  0.71 per visit.
+- **The shortcut:** 4:0x30 is crossed once instead of twice: 0 deaths in 999 visits (119 in 1871), 0.17 hearts per
+  visit (0.39). 4:0x20 is off the route. Its price is in 4:0x21, now entered from S: 0.28 hearts per visit (0.03
+  from W) and 3.8 bombs per visit where one opens the wall (§10).
+- **The corrected mask and attacks by buttons:** Dungeon 2 is back above round 19: 85.6% against 82.1% (82.7% with
+  round 20's models and only the mask fixed, §3). Deaths per 1000 in 2:0x1e 57 (round 19 66, round 20 134), 2:0x3e
+  36 (55, 76), 2:0x5e 19 (38, 52).
+- **Gleeok:** Link arrives with 2.68 hearts (2.12); below 3.5 hearts he wins 56% of the fights (24%) and never
+  stalls (188 stalls per 1000 before). Gleeok still kills Link in 245 of 1000 D4-segment runs, the most of any room
+  in its segment (§9).
+
+Where runs end now: Dungeon 3 (Manhandla 3:0x4d 132 per 1000, 3:0x5b 126, 3:0x69 87, darknut 3:0x59 86 and 24
+stuck), Gleeok (245) and 4:0x12 (95) in Dungeon 4, goriya 2:0x1e (57) in Dungeon 2. Over the full run the rooms
+that kill most runs are 3:0x59 (10.8%), 4:0x13 (7.1%) and 3:0x4d (6.2%), and the stretch from Dungeon 1's exit to
+Dungeon 3's is the weakest (37.4% of the runs that start it get through, §8).
 
 ## 1. The grid-point skip in the agent
 
@@ -383,78 +417,385 @@ but were trained on intermediate code and are not candidates).
 
 ## 7. The retrain (r71)
 
-Every family from scratch on the merged code (8M steps, `--parallel 8`, `--stop-success 0.99 --sil-coeff 0.1`, two
-streams), evaluated by sample and argmax (100 episodes per state, seed 0), act mode chosen per model. Each family is
-compared room by room with its round 20 promoted run's `eval.json` (evaluated on 1.4.0.0: the old models can't be
-evaluated on this code), by success and hearts; the clip families also by clips per episode in their clip rooms
-(1:0x22, 4:0x50, 4:0x21, the overworld crossings).
+Every family from scratch on the merged code (`9978e5d`, 1.4.1.0), evaluated by sample and argmax (100 episodes per
+state, seed 0), act mode chosen per model. Each family is compared room by room with the `eval.json` of the run it
+replaced (the team round 20 left, several of its runs from earlier rounds; evaluated on round 19 or 20 code: the
+old models don't load on 1.4.1.0), by success and hearts; the clip families also by clips per episode in their clip
+rooms (1:0x22, 4:0x50, 4:0x21, the overworld crossings). No code, YAML or state was changed during the retrain.
 
-<!-- r71: training table -->
+**Commands.** Every round: `scripts/train_round.py --steps S --parallel 8 --eval-parallel 3 --chain-runs 0
+--train-args "[--load models/<family>/<run>] --stop-success 0.99 --sil-coeff 0.1"`, without `--promote`; two
+streams side by side, each given the next round by expected duration. The round's own evaluation is sample mode
+(kept as `eval-sample.json`); the argmax one `triforce evaluate --specialist F --run-id R --act argmax
+--episodes-per-state 100 --seed 0 --replays DIR`. Promotion: `triforce promote F R --act A` with `eval.json` the
+chosen mode's evaluation.
 
-| family | run | act | success | hearts | watched rooms | linger worst | clips/ep |
-|---|---|---|---:|---:|---|---:|---:|
+| round id | families | steps | from |
+|---|---|---|---|
+| r71-a | trap-room, goriya, d2-rope | 8M | scratch |
+| r71-b | stalfos-keese-gel, vire, darknut | 8M | scratch |
+| r71-c | moldorm, like-like | 8M | scratch |
+| r71-d | ow-moblin, boss-gleeok, ow-octorok | 8M | scratch |
+| r71-e | boss-manhandla, boss-dodongo, boss-aquamentus, wallmaster, equipment-room, zol | 8M | scratch |
+| r71-ow | ow-lynel, ow-zora, ow-peahat, ow-tektite, ow-start, ow-boulder, ow-leever | 8M | scratch |
+| r71-darknut-cont, r71-darknut-cont2 | darknut | 4M each | r71-b, then r71-darknut-cont |
+| r71-goriya-cont | goriya | 4M | r71-a |
+| r71-vire-cont | vire | 4M (early stop) | r71-b |
+| r71-zol-cont | zol | 4M (early stop) | r71-e |
+
+**Training record** (20.3 h of wall time, 93.7M env steps in all):
+
+| family | run | status | steps trained | wall |
+|---|---|---|---:|---:|
+| ow-start | r71-ow | early stop | 0.36M | 0.07 h |
+| ow-octorok | r71-d | early stop | 2.13M | 0.51 h |
+| ow-zora | r71-ow | early stop | 1.15M | 0.18 h |
+| ow-moblin | r71-d | 8M | 8.00M | 1.68 h |
+| ow-leever | r71-ow | early stop | 0.86M | 0.12 h |
+| ow-tektite | r71-ow | early stop | 1.16M | 0.16 h |
+| ow-lynel | r71-ow | early stop | 6.59M | 1.52 h |
+| ow-boulder | r71-ow | early stop | 0.52M | 0.09 h |
+| ow-peahat | r71-ow | early stop | 0.38M | 0.08 h |
+| goriya | r71-a + r71-goriya-cont | 8M + 4M | 12.00M | 1.60 + 0.77 h |
+| d2-rope | r71-a | early stop | 5.99M | 1.17 h |
+| moldorm | r71-c | 8M | 8.00M | 1.51 h |
+| boss-dodongo | r71-e | early stop | 2.51M | 0.54 h |
+| stalfos-keese-gel | r71-b | early stop | 1.18M | 0.30 h |
+| wallmaster | r71-e | early stop | 1.35M | 0.26 h |
+| boss-aquamentus | r71-e | early stop | 1.28M | 0.25 h |
+| trap-room | r71-a | early stop | 1.09M | 0.32 h |
+| equipment-room | r71-e | early stop | 0.87M | 0.16 h |
+| zol | r71-e + r71-zol-cont | early stop ×2 | 0.63M + 0.24M | 0.14 + 0.06 h |
+| darknut | r71-b + cont + cont2 | 8M + 4M + 4M | 16.00M | 1.78 + 0.92 + 0.93 h |
+| boss-manhandla | r71-e | 8M | 8.00M | 2.29 h |
+| vire | r71-b + r71-vire-cont | early stop ×2 | 1.52M + 0.66M | 0.41 + 0.19 h |
+| like-like | r71-c | early stop | 3.18M | 0.63 h |
+| boss-gleeok | r71-d | 8M | 8.00M | 1.61 h |
+
+Checked on the way: `run.json` `curriculum_tracks` held the expected tracks (trap-room 18: 1_22c/e, 3_4cw,
+3_5ae/w, 4_11s; vire 24: 4_31e now N, 4_12w, 4_03s, 4_50e and the rest; stalfos-keese-gel none, by decision);
+episodes finished from the first iteration; `clips/*` counted where clips are on (trap-room 0.29 and
+stalfos-keese-gel 1.7 per episode at iterations 19-27, falling to one useful clip per episode later; vire,
+ow-moblin and ow-octorok too) and 0 where they are off.
+
+**Single rooms**, the promoted team in its act mode. Hearts: mean health change per episode; linger: the worst
+quiet streak in steps; clips: completed skips per episode; menu: sub-screen frames per episode, counted from the
+argmax replays (START-press pairs, (s2 − s1 + 1) + 59 frames each), because neither evaluation records nor metrics
+carry `menu_frames` (§10). Watched rooms: success, hearts (the replaced run in brackets).
+
+| family | run | act | success | hearts | watched rooms | linger worst | clips/ep | menu/ep | replaced: run, act, success, hearts |
+|---|---|---|---:|---:|---|---:|---:|---:|---|
+| ow-start | r71-ow | argmax | 100.0% | +0.00 | | 6 | 0.46 | 0 | r66-ow argmax 100.0%, +0.00 |
+| ow-octorok | r71-d | argmax | 99.0% | −0.06 | | 14 | 0.21 | 0 | r70-d4-cont argmax 99.0%, −0.09 |
+| ow-zora | r71-ow | argmax | 99.9% | −0.12 | | 55 | 0.36 | 1.6 | r70-d4-cont2 sample 99.3%, −0.20 |
+| ow-moblin | r71-d | argmax | 99.0% | −0.07 | | 22 | 0.11 | 0 | r70-d4-cont argmax 98.4%, −0.10 |
+| ow-leever | r71-ow | argmax | 99.7% | +0.11 | | 6 | – | 45.8 | r66-ow argmax 100.0%, +0.05 |
+| ow-tektite | r71-ow | argmax | 99.6% | +0.06 | | 20 | – | 0.1 | r70-d4-cont argmax 99.4%, +0.06 |
+| ow-lynel | r71-ow | argmax | 98.7% | −0.15 | | 53 | – | 0 | r66-ow argmax 98.2%, −0.22 |
+| ow-boulder | r71-ow | argmax | 100.0% | −0.01 | | 6 | 0.67 | 0 | r66-ow argmax 99.9%, −0.13 |
+| ow-peahat | r71-ow | argmax | 100.0% | −0.05 | | 1 | – | 0 | r70-d4-new argmax 100.0%, +0.00 |
+| goriya | r71-goriya-cont | sample | 95.2% | −0.15 | 2:0x1e 90.0 −0.39 (92.0 −0.38); 2:0x5e 86.3 −0.19 (86.3 −0.23); 1:0x44 100.0 −0.03 (99.3 −0.10) | 597 | – | 0 | r68-clear5e sample 95.4%, −0.16 |
+| d2-rope | r71-a | sample | 98.8% | +0.26 | | 87 | – | 0 | r67-share-b sample 98.3%, +0.26 |
+| moldorm | r71-c | argmax | 89.3% | −0.24 | 2:0x3e 89.3 −0.24 (86.0 −0.21) | 100 | – | 0 | r67-share-b argmax 86.0%, −0.21 |
+| boss-dodongo | r71-e | sample | 98.0% | +0.91 | | 75 | – | 3.3 | r66-dg argmax 98.3%, +0.90 |
+| stalfos-keese-gel | r71-b | sample | 99.7% | +0.02 | 4:0x21 (now from S) 100.0 −0.27 (from W: 98.0 −0.08) | 590 | 0.04 (0x21: 0.71) | 27.6 (0x21: 436) | r70-skg-cont argmax 99.6%, +0.03 |
+| wallmaster | r71-e | argmax | 100.0% | +0.00 | | 4 | – | 0 | r66-dg argmax 100.0%, +0.00 |
+| boss-aquamentus | r71-e | sample | 100.0% | +1.02 | | 17 | – | 0 | r66-dg argmax 100.0%, +1.02 |
+| trap-room | r71-a | argmax | 99.8% | −0.16 | 1:0x22 100.0 +0.00 (100.0 +0.00); 4:0x11 100.0 +0.00 (100.0 +0.00) | 105 | 0.20 | 66.2 | r70-d4-cont argmax 99.9%, −0.21 |
+| equipment-room | r71-e | argmax | 99.6% | −0.18 | | 29 | – | 0 | r70-d4-cont argmax 99.4%, −0.16 |
+| zol | r71-zol-cont | sample | 99.7% | +0.16 | 4:0x40 99.3 −0.22 (99.3 −0.27) | 593 | – | 0 | r70-d4-cont sample 99.6%, +0.12 |
+| darknut | r71-darknut-cont2 | sample | 97.8% | −0.39 | 3:0x59 96.2 −0.51 (97.8 −0.36) | 53 | – | 18.1 | r65-pilot-b sample 98.4%, −0.37 |
+| boss-manhandla | r71-e | argmax | 96.7% | −0.31 | 3:0x4d 96.7 −0.31 (95.0 −0.24) | 100 | – | 345.9 | r66-dg argmax 95.0%, −0.24 |
+| vire | r71-vire-cont | sample | 99.0% | −0.06 | 4:0x31 (E → N) 97.8 −0.44 (97.5 −0.65); 4:0x50 99.0 −0.44 (98.3 −0.54); 4:0x12 97.7 −0.70 (97.0 −0.61) | 55 | 0.13 (0x50: 1.0) | 88.0 | r70-d4-new sample 98.8%, −0.13 |
+| like-like | r71-c | sample | 98.3% | −0.53 | 4:0x32 98.3 −0.53 (98.0 −0.50) | 91 | – | 9.1 | r70-d4-new argmax 98.0%, −0.50 |
+| boss-gleeok | r71-d | argmax | 99.7% | +0.29 | 4:0x13 99.7 +0.29 (94.7 −0.66) | 25 | – | 0 | r70-gleeok-hp argmax 94.7%, −0.66 |
+
+**Act modes.** Success first, then hearts; a difference within about 0.5 points is decided on hearts, and argmax is
+avoided where it loops more (`stuck` or `no-damage` endings). Every overworld family took argmax (equal or better
+in every case); wallmaster and equipment-room are ties or within noise. The others, sample | argmax (success,
+hearts):
+
+| family | sample | argmax | choice |
+|---|---|---|---|
+| trap-room | 99.8 −0.18 | 99.8 −0.16 | argmax |
+| stalfos-keese-gel | 99.7 +0.02, 3 loops | 99.6 +0.03, 11 loops | sample |
+| d2-rope | 98.8 +0.26 | 97.7 +0.27, 20 loops | sample |
+| moldorm | 88.0 −0.20 | 89.3 −0.24 | argmax |
+| like-like | 98.3 −0.53 | 96.3 −0.57, 8 loops | sample |
+| goriya (cont) | 95.2 −0.15, 1 loop | 94.7 −0.12, 14 loops | sample |
+| vire (cont) | 99.0 −0.06 | 98.3 −0.02, 24 loops, linger 1025 in 4:0x31 | sample |
+| boss-manhandla | 93.7 −0.50 | 96.7 −0.31 | argmax |
+| boss-dodongo | 98.0 +0.91 | 97.7 +0.92, 6 max-steps + 1 stuck | sample |
+| boss-aquamentus | 100 | 99.7 | sample |
+| zol (cont) | 99.7 +0.16, 2 loops | 99.7 +0.16, 3 loops | sample |
+| boss-gleeok | 99.3 +0.01 | 99.7 +0.29 | argmax |
+| darknut (cont2) | 97.8 −0.39 | 98.3 −0.36 | **sample**, after the chains (§8) |
+
+In all: argmax for the nine overworld families, moldorm, wallmaster, trap-room, equipment-room, boss-manhandla and
+boss-gleeok; sample for goriya, d2-rope, boss-dodongo, stalfos-keese-gel, boss-aquamentus, zol, darknut, vire and
+like-like. boss-dodongo, stalfos-keese-gel, boss-aquamentus and like-like changed from argmax to sample, ow-zora
+from sample to argmax.
+
+**Linger:** every single-room episode over 500 quiet steps is a `no-damage` ending (the 600-step cap): goriya 1
+(2_1es_1), zol 2-3 (3_4bs, 3_6bs, 4_40s), stalfos-keese-gel 3 (1_74w). like-like (91) and boss-gleeok (25), each
+with one such episode in round 20, have none. Chains: §9.
+
+**Continued, and why:**
+
+- **darknut** (`r71-b`, 8M: sample 96.4% −0.53, 3:0x59 93.3% −0.67). The kill-all visit `3_59n_*` was at 77-86%
+  (the replaced run 92-95%) and training was still improving at 8M, so it was continued twice, 4M each. After the
+  first: 3:0x59 95.4 −0.60 by sample, 96.1 −0.55 by argmax; after the second (16M in all): 96.2 −0.51 and 97.3
+  −0.47. Promoted on argmax first, switched to sample after the D3 chain (§8).
+- **goriya** (`r71-a`, 8M: 94.5% −0.23; 2:0x1e 91.0, 2:0x5e 84.3). It passed the thresholds by sample, but it was
+  still improving at 8M and it is Dungeon 2's bottleneck, so it was continued 4M: 2:0x5e back to the old 86.3% with
+  better hearts, 2:0x1e 90.0%.
+- **vire** (`r71-b`: 4:0x50 97.7% −0.50). It clips every episode, but its hearts were far from the 0x50
+  experiment's (99-100%, −0.07 to −0.17), so it was continued; it early-stopped after 0.66M with 0x50 at 99.0%
+  −0.44. The experiment trained 0x50 alone; in the family the hits that remain land after the clip, on the top row,
+  as the experiment also found.
+- **zol** (`r71-e`: early stop at 0.63M; 4:0x40 −0.55 by sample against the old −0.27, 5 loops by argmax).
+  Continued; it early-stopped after 0.24M at 99.7% +0.16, 4:0x40 99.3% −0.22.
+- **stalfos-keese-gel** learned 4:0x21 from the S door without a curriculum (100%); its `4_21s` tracks stay unused.
+
+**The two rooms still below the old runs.** goriya 2:0x1e: 90.0% −0.39 against 92.0% −0.38 by sample. Its argmax
+figure for 2:0x1e is not in the record, so the gate's question (§4) stays open. darknut 3:0x59: 96.2% −0.51
+against 97.8% −0.36; its hearts stay 0.11-0.15 below the old run after 16M steps. The old run's evaluation ran on
+round 19 code (facing writes); the gate saw no build difference for darknut at 3M, so the rest is training budget
+or seed.
 
 ## 8. Chains, 1000 runs per segment
 
-`RUNS=1000 ACT=model TAG=r71-1k scripts/experiments/r56_chains.sh run`, each model's act mode, against round 20's
-`r70-1k` (and, for Dungeon 2, the round 20 models with only the mask fixed: 82.7%, §3).
+`RUNS=1000 ACT=model TAG=r71-1k PARALLEL=20 scripts/experiments/r56_chains.sh run`, then `report` (42 minutes, no
+training running), each model's act mode. After darknut was switched to sample, `TAG=r71-1k-dks` measured the `d3`
+and `full` segments again (`SEGMENTS=...`) and then, as one `triforce eval-batch` group (the batch runner's first
+use), the `post-d1` segment, the yardstick and the room statistics; its `d2`, `post-d2`, `d1`, `post-d3` and `d4`
+files are `r71-1k`'s (darknut plays only in Dungeon 3). **`r71-1k-dks` is the final team's measurement.** Against
+round 20's `r70-1k` and round 19's `r69-1k` (and, for Dungeon 2, the round 20 models with only the mask fixed:
+82.7%, §3). Arrivals:
 
-<!-- r71: chain tables -->
+| segment | r69-1k (round 19) | r70-1k (round 20) | r71-1k (darknut argmax) | **r71-1k-dks (final team)** |
+|---|---:|---:|---:|---:|
+| D2 | 82.1% | 68.6% | 85.6% | 85.6% |
+| after D2 | 85.9% | 83.5% | 88.6% | 88.6% |
+| D1 | 98.4% | 96.7% | 99.1% | 99.1% |
+| after D1 | 100.0% | 100.0% | 99.4% | 99.4% |
+| D3 (to 0:0x74) | 39.5%\* | 38.6% | 41.0% | **46.5%** |
+| after D3 (0:0x74 → 4:0x71) | – | 99.8% | 100.0% | 100.0% |
+| D4 (4:0x71 → the D4 triforce) | – | 21.1% | 56.4% | 56.4% |
+| full → D2 | 97.7% | 98.1% | 100.0% | 100.0% |
+| full → after D2 | 67.6% | 56.3% | 86.9% | 86.9% |
+| full → D1 | 55.2% | 45.8% | 75.6% | 75.6% |
+| full → D3 | 36.3% | 26.7% | 56.7% | 56.7% |
+| full → after D3 | – | 8.0% | 26.0% | 24.8% |
+| full route (D4 triforce) | – | 1.8% | 15.4% | **12.8%** |
 
-| segment | r70-1k (round 20) | r71-1k |
-|---|---:|---:|
-| D2 | 68.6% | |
-| after D2 | 83.5% | |
-| D1 | 96.7% | |
-| after D1 | 100.0% | |
-| D3 (to 0:0x74) | 38.6% | |
-| after D3 (0:0x74 → 4:0x71) | 99.8% | |
-| D4 (4:0x71 → the D4 triforce) | 21.1% | |
-| full → D2 | 98.1% | |
-| full → after D2 | 56.3% | |
-| full → D1 | 45.8% | |
-| full → D3 | 26.7% | |
-| full → after D3 | 8.0% | |
-| full route (D4 triforce) | 1.8% | |
+\* Round 19's D3 segment ended at the D3 triforce.
 
-D4 segment per room (1000 runs):
+**The full route is 12.8% with the final team and 15.4% with darknut on argmax; the two are within noise.** In the
+full segment the two act modes are equal in 3:0x59 (argmax 78 deaths and 30 stuck, sample 108 and 6): there Link
+carries more than Dungeon 3's reserve of 5 bombs, so his bombs aren't masked. 247-260 runs reach Dungeon 4 and
+52-59% of them take its triforce in the two measurements, and that spread alone covers the difference.
 
-| room | visits | deaths | stuck | hearts lost/visit | visits with a cheated bomb | bombs placed | clips/visit |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 4:0x71 | | | | | | | |
-| 4:0x61 | | | | | | | |
-| 4:0x51 | | | | | | | |
-| 4:0x50 | | | | | | | |
-| 4:0x40 | | | | | | | |
-| 4:0x30 | | | | | | | |
-| 4:0x31 | | | | | | | |
-| 4:0x32 | | | | | | | |
-| 4:0x60 cellar | | | | | | | |
-| 4:0x21 | | | | | | | |
-| 4:0x11 | | | | | | | |
-| 4:0x12 | | | | | | | |
-| 4:0x13 | | | | | | | |
-| 4:0x03 | | | | | | | |
+After D1 with the final team: 994 of 1000 arrive (Wilson 95% [98.7, 99.7]) with 5.05 hearts; the six others ended
+`exit-wrong` in 0:0x64 (the octorok's cave, §10). The full route's interval is [10.9, 15.0].
 
-## 9. Open problems and what was not done
+**By the owner's segments** (`triforce room-stats r71-1k-dks`: the route cut at the dungeon exits, each file's runs
+up to their first entry into the next segment's start step; deaths per run started on the segment). These runs
+arrive the way the route brings them, not from a start state, so they differ from the dungeon segments above:
 
-Each is in `docs/experiments/backlog.md`, "Left open by round 21", unless said otherwise.
+| segment (file) | arrive | worst rooms, deaths per run |
+|---|---:|---|
+| start → out of D2, 0:0x3c (`full`) | 86.9% | 2:0x5e 4.6%, 2:0x1e 3.4%, 2:0x3e 2.1% |
+| out of D2 → out of D1, 0:0x37 (`post-d2`) | 64.7% | 1:0x44 4.2%, 0:0x0a 4.0%, 1:0x33 4.0% |
+| out of D1 → out of D3, 0:0x74 (`post-d1`) | 37.4% | 3:0x59 19.2%, 3:0x4d 12.2%, 3:0x69 10.7% |
+| out of D3 → the D4 triforce (`post-d3`) | 53.2% | 4:0x13 28.6%, 4:0x12 8.6%, 4:0x31 3.2% |
+
+Over the full run the rooms that kill most runs are 3:0x59 (10.8% of runs), 4:0x13 (7.1%) and 3:0x4d (6.2%).
+From Dungeon 1's exit to Dungeon 3's is the weakest stretch, and darknut's 3:0x59 kills more runs that arrive by
+the route than the D3 segment's 86 per 1000.
+
+**Darknut's act mode.** In the D3 segment argmax ends 180 runs `stuck` in 3:0x59 (the kill-all visit, 2000-step
+room budget); the single room has 3 loops in 2100 episodes. The D3 start state's bombs are within the reserve of 5,
+so bombs are masked there: round 19's finding again. Sample cuts the stuck runs to 24 (at the price of 86 deaths
+against 75) and raises the segment's arrivals from 41.0% to 46.5%. So darknut plays sample, as round 19 decided; the
+real fix would be a darknut trained more often with bombs at or below the reserve.
+
+**Where runs end** (the final team; per 1000 runs of each segment):
+
+- D2: 2:0x1e 57 deaths, 2:0x3e 36, 2:0x5e 19, 2:0x0e 14, 2:0x2e 11.
+- after D2: 0:0x0a 40, 0:0x38 35, 0:0x27 21, 0:0x1a 14.
+- D3: 3:0x4d (Manhandla) 132, 3:0x5b 126, 3:0x69 87, 3:0x59 86 and 24 stuck.
+- D4: 4:0x13 (Gleeok) 245, 4:0x12 95, 4:0x32 35, 4:0x31 31.
+
+**Dungeon 4 per room** (D4 segment, 1000 runs; `r71-1k` and `r71-1k-dks` share the file). Clips aborted counts the
+aborted macros; the last column is round 20's `r70-1k`.
+
+| room | visits | deaths | stuck | hearts lost/visit | visits with a cheated bomb | bombs placed | clips/visit | clips aborted | r70-1k deaths / stuck / hearts |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 4:0x71 | 1000 | 0 | 0 | 0.00 | 0 | 0 | 0.00 | 0 | 0 / 0 / 0.00 |
+| 4:0x61 | 1000 | 0 | 0 | 0.22 | 0 | 0 | 0.00 | 0 | 0 / 0 / 0.18 |
+| 4:0x51 | 1000 | 0 | 0 | 0.20 | 0 | 0 | 0.00 | 0 | 1 / 0 / 0.11 |
+| 4:0x50 | 1000 | 1 | 0 | 0.46 | 0 | 0 | 1.00 | 3 | 0 / 0 / 0.73 |
+| 4:0x40 | 1000 | 1 | 0 | 0.29 | 0 | 0 | 0.00 | 0 | 5 / 3 / 0.50 |
+| 4:0x30 | 999 | 0 | 0 | 0.17 | 0 | 0 | 0.00 | 0 | 119 / 0 / 0.39 (1871 visits) |
+| 4:0x31 | 1947 | 31 | 0 | 0.61 | 0 | 0 | 0.00 | 0 | 78 / 0 / 0.75 |
+| 4:0x32 | 1943 | 35 | 0 | 0.64 | 0 | 0 | 0.00 | 0 | 23 / 0 / 0.65 |
+| 4:0x60 cellar | 959 | 13 | 0 | 0.15 | 0 | 0 | 0.00 | 0 | 10 / 0 / 0.17 |
+| 4:0x21 (from S; round 20 from W) | 919 | 10 | 2 | 0.28 | 919 | 3522 | 0.77 | 311 | 4 / 10 / 0.03 |
+| 4:0x11 | 908 | 0 | 0 | 0.00 | 907 | 907 | 0.00 | 0 | 0 / 0 / 0.00 |
+| 4:0x12 | 908 | 95 | 0 | 0.81 | 0 | 0 | 0.00 | 0 | 141 / 0 / 0.75 |
+| 4:0x13 | 809 | 245 | 0 | 0.61 | 0 | 0 | 0.00 | 0 | 199 / 188 / 0.93 |
+| 4:0x03 | 564 | 0 | 0 | 0.00 | 0 | 0 | 0.00 | 0 | 0 / 0 / 0.00 |
+
+4:0x20 is off the route (round 20: 761 visits, 8 deaths). 4:0x30 is crossed once (its second visit was the old
+route's); 4:0x21 costs 0.25 hearts per visit more than from W, nearly all from hits on the ladder (§10).
+
+**Dungeon 2 per room** (D2 segment, 1000 runs; deaths / hearts lost per visit / bombs placed). The hearts here are
+the retrain's own count over the chain records; §3's table counted 2:0x1e as 0.43 (round 19) and 0.75 (round 20)
+in the same files, so compare hearts only within one table. §3's "runs ended in" also includes stuck runs and other
+endings.
+
+| room | visits (r71) | r71-1k | r70-1k | r69-1k |
+|---|---:|---|---|---|
+| 2:0x7e | 1000 | 0 / 0.11 / 0 | 0 / 0.12 / 0 | 0 / 0.10 / 0 |
+| 2:0x6e | 1000 | 0 / 0.03 / 0 | 0 (3 stuck) / 0.05 / 0 | 0 / 0.03 / 0 |
+| 2:0x5e (goriya) | 1000 | 19 / 0.52 / 53 | 52 / 0.69 / 53 | 38 / 0.64 / 44 |
+| 2:0x4e (d2-rope) | 981 | 7 / 0.07 / 4 | 21 / 0.19 / 1 | 6 / 0.10 / 1 |
+| 2:0x3e (moldorm) | 974 | 36 / 0.42 / 1694 | 76 / 0.43 / 1581 | 55 / 0.41 / 1618 |
+| 2:0x2e (d2-rope) | 938 | 11 / 0.05 / 2 | 19 (3 stuck) / 0.09 / 0 | 9 / 0.07 / 0 |
+| 2:0x1e (goriya) | 927 | 57 / 0.52 / 823 | 134 (1 stuck) / 0.81 / 657 | 66 / 0.51 / 662 |
+| 2:0x0e (Dodongo) | 870 | 14 / 0.04 / 1843 | 4 / 0.01 / 1489 | 1 (1 stuck) / 0.01 / 1664 |
+
+No room in Dungeon 2 offers a clip. The goriya and moldorm rooms lose far fewer runs than in rounds 19 and 20; the
+d2-rope rooms are at round 19's level (7 and 11 deaths against 6 and 9). Dodongo's deaths rose from 1-4 to 14 per
+1000: boss-dodongo plays sample now (single room 98.0%, 6 deaths in 300 episodes, against argmax's 0 deaths and 7
+stalls).
+
+**Overworld wraps** (`r71-1k`'s full, post-d2, post-d1 and post-d3 segments together; "with" and "without" are
+visits with and without a wrap):
+
+| room | visits | with a wrap | wraps/visit | exit-correct with / without | deaths with / without | hearts lost/visit with / without | frames/visit with / without |
+|---|---:|---:|---:|---|---|---|---|
+| 0:0x59 | 1000 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 161 / – |
+| 0:0x5a | 1000 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 142 / – |
+| 0:0x5b | 1000 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 178 / – |
+| 0:0x1b | 1863 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 149 / – |
+| 0:0x19 | 1746 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 142 / – |
+| 0:0x18 | 1746 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 142 / – |
+| 0:0x57 | 2217 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 141 / – |
+| 0:0x56 | 2217 | 100% | 1.00 | 100% / – | 0 / – | 0.00 / – | 186 / – |
+| 0:0x65 | 4179 | 99.9% | 1.00 | 100% / 100% (4 visits) | 0 / 0 | 0.02 / 0.50 | 202 / 524 |
+| 0:0x64 | 4179 | 48% | 0.49 | 100% / 99.4% | 0 / 0 | 0.00 / 0.20 | 149 / 390 |
+| 0:0x55 | 4179 | 0.2% | 0.01 | 100% / 100% | 0 / 0 | 0.31 / 0.08 | 549 / 255 |
+
+- Every W→E or E→W crossing whose entry offers a wrap takes it, on every visit, and those rooms now cost no hearts.
+  full → D2 is 100.0% (98.1%): the approach to Dungeon 2 (0x59-0x5b) is all wraps.
+- In 0:0x64 the visits without a wrap lose 0.20 hearts per visit and hold all 9 wrong exits into 0x64's cave (§10).
+- No wrap was used in the other 25 overworld rooms on the route, including 0x77, 0x67, 0x68, 0x58, 0x5d, 0x4d,
+  0x2d, 0x2c, 0x1c, 0x1a, 0x17, 0x27, 0x28 and 0x63, which offer one: those are N/S entries, or the entry spot has no
+  wrap row.
+
+## 9. Round 20's open items, measured
+
+- **Gleeok at low health: mostly solved.** D4 segment (`r71-1k`, the final team's file): 809 visits, mean arrival
+  2.68 hearts (round 20 2.12).
+
+  | arrival hearts | visits | won | died | stuck | round 20: visits, won |
+  |---|---:|---:|---:|---:|---|
+  | ≥ 6 | 25 | 100% | 0 | 0 | 12, 100% |
+  | 3.5–6 | 246 | 98% | 6 | 0 | 94, 85% |
+  | < 3.5 | 538 | 56% | 239 | 0 | 492, 24% (185 deaths, 188 stuck) |
+
+  The hiding at low health is gone (no stalls, 188 before) although the model trained at `hp: [0.5, max]` (3.5-7
+  hearts); what remains is deaths below 3.5 hearts, 239 of the 245. Full route (`r71-1k`): 214 visits, mean
+  arrival 2.60, won 100% at 3.5 hearts or more and 61% below, 60 deaths.
+- **4:0x12** (vire): 95 deaths per 1000 (141), 0.81 hearts lost per visit (0.75); single room 97.7% −0.70 by sample.
+  Open.
+- **4:0x30: solved by the shortcut.** 0 deaths in 999 visits (119 in 1871); its second visit is off the route.
+- **Bombs into Dungeon 4.** From `4_71s_0` (the D4 segment) every visit to both walls uses a cheated bomb (919 and
+  907 visits) and no Vire is bombed: no real bomb reaches either wall. From the game start (`r71-1k`'s full segment)
+  real bombs sometimes do: 35 of 241 visits to 4:0x21 used only real bombs (the other 206 were cheated, 578
+  cheated bombs), 20 of 232 to 4:0x11. And Vires are bombed there: 0x31 in 157 of 505 visits (413 bombs), 0x61 in 34
+  of 260, 0x12 in 7 of 232; bombs spent on Vires above the reserve are bombs the walls then lack. stalfos-keese-gel
+  places 3.8 bombs per 0x21 visit where one opens the wall (§10). Open.
+- **Linger over 500 steps.** Single rooms: like-like and boss-gleeok have none now; stalfos-keese-gel 3, goriya 1,
+  zol 2-3, all `no-damage` endings (§7). Chains (visits over 500 quiet steps, every segment of `r71-1k`): darknut
+  3:0x59 407, all `stuck` (argmax; the final team's D3 segment has 24 stuck there); 3:0x5b 22 stuck;
+  stalfos-keese-gel 4:0x21 6 (5 stuck), 1:0x53 3, 1:0x33 2; trap-room 3:0x4c 6 stuck (not looked at); ow-octorok
+  0:0x4c 4 stuck; single visits in zol 3:0x7b, 3:0x6b and 4:0x40, boss-manhandla 3:0x4d (1 stuck), goriya 2:0x1e
+  (1836 steps, then won), d2-rope 2:0x2e (2250, then won), like-like 4:0x32 (553), vire 4:0x31 (671).
+
+## 10. Open problems and what was not done
+
+Each is in `docs/experiments/backlog.md`, "Left open by round 21", unless said otherwise. First what the retrain
+found, in the order the chains lose runs to it:
+
+- **Dungeon 3** (final team's D3 segment, 46.5%): Manhandla 3:0x4d 132 deaths per 1000, 3:0x5b 126, 3:0x69 87,
+  darknut 3:0x59 86 deaths and 24 stuck. Over the full run 3:0x59 kills the most runs of any room (10.8%), and
+  only 37.4% of the runs that leave Dungeon 1 get out of Dungeon 3 (§8). darknut and boss-manhandla are two of the
+  families that ran the full 8M steps (darknut 16M in all).
+- **Gleeok below 3.5 hearts:** 239 of his 245 kills per 1000 D4 runs (§9). Train boss-gleeok down to `hp: [0.15,
+  max]` now that the full-health fight is 99.7% (keeping the full-health share, from `r71-d`), or raise the
+  arrival health: 4:0x12 (0.81 hearts per visit) and 4:0x31/0x32 (0.6) are where it goes.
+- **4:0x12** (vire): 95 deaths per 1000 (§9).
+- **darknut in 3:0x59:** argmax loops when bombs are masked at the reserve (180 stuck per 1000 in the D3 segment,
+  §8), so darknut plays sample; its single-room hearts stay 0.11-0.15 below the old run (§7). The real fix is a
+  darknut trained more often with bombs at or below the reserve.
+- **goriya 2:0x1e:** 57 deaths per 1000, the most in Dungeon 2 (moldorm 2:0x3e 36); 90.0% in the single room
+  against the old 92.0%. Its argmax figure in 2:0x1e, the gate's open question (§4), was not taken.
+- **Dodongo under sample:** 14 deaths per 1000 in Dungeon 2 (1-4 before). Argmax had no deaths in the single room
+  but 7 stalls in 300.
+- **Bombs wasted in 4:0x21** (stalfos-keese-gel), read from its single-room replays (300 episodes per act mode):
+  - **The clip's end is not the problem.** BOMB S right after the clip opens the wall: from Y `$55`-`$59` the bomb
+    lands at `$65`-`$69`, within `$18` of the hotspot `$5D`. In the 300 argmax episodes, 497 of 1033 BOMB
+    decisions were BOMB S from the top band (Y < `$5D`); BOMB N from that band (the expected waste, "`BOMB N` at the
+    ladder clip's end" below) came 10 times. The mask is right there.
+  - **The waste is BOMB N from the island's entry spot** (Y `$B6`), 300 times in 300 episodes: the five most common
+    openings all do it, often with a second BOMB N mid-island and a second BOMB S at the top. That is 3.4-3.8 bombs
+    per visit (3522 in 919 chain visits) against 1 needed. In chains they are all cheated; with real bombs this
+    room alone would take about 4, twice the route's reserve. Options: mask BOMB N on the island south of the water
+    (no wall in reach), a bomb cost in `required` rooms, or the `4_21s` curriculum (one bomb).
+  - **The sub-screen time:** each bomb alternates with the boomerang through the item sub-screen, 3.5 opens and 436
+    paused frames per visit, about 7 s of real time.
+- **Clip aborts are mostly hits on the ladder.** Of about 109 aborted clips in the 300 sampled episodes, 92 came
+  with a Keese or Gel hit during the 43-frame macro, 78 of them leaving Link at Y `$65`, from where he still bombs.
+  That is where 4:0x21's 0.28 hearts per visit come from (0.03 on the old W route). In the chain: 311 aborts in
+  919 visits; 244 visits have one aborted clip and no completed one.
+- **The clip counter's quirks.** A clip cut short (stalled) and finished by a walk crosses the block with `clips/*`
+  at 0 (4:0x50, episode 107 of both `kind` seed 1 runs). And in 6 of the 4:0x21 episodes `CLIP N` carried Link
+  through the already opened wall into 0x11 in one action: counted `aborted` (`ClipAbort::Interrupted` on the room
+  change) although it succeeded. The masks are right in both; only the counters miss. Count a room change during a
+  clip as done, and a MOVE that crosses a skip's square.
+- **ow-octorok walks into 0:0x64's cave:** 9 runs end `left the route into untagged (level 0, room 0x64, cave)`
+  in `r71-1k` (6 in post-d1, 3 in full; about 2100 visits without a wrap; the final team's post-d1 measurement
+  again 6, `exit-wrong`). All come from visits without a wrap, which take the long walk W past the cave mouth; the
+  single-room evaluation of 0:0x64 is 100%.
+- **`menu_frames` is missing from evaluation records and training metrics.** The retrain had to count sub-screen
+  frames from the argmax replays (§7). Per fight or visit: boss-manhandla 2.8 opens (346 frames), vire 0.7 per
+  episode (4:0x31 W 1.1-3.0, 4:0x12 2.2-2.5), trap-room 3:0x4c 2.0-2.2, stalfos-keese-gel 4:0x21 3.5. Free to the
+  critic, as decided; watched replays and real play pay about 2 s each. Whether a B-item switch should cost
+  something stays open.
+- **The full-route figure is noisy at 1000 runs:** 12.8% (`r71-1k-dks`) and 15.4% (`r71-1k`) from two 1000-run
+  measurements whose only difference, darknut's act mode, doesn't matter there (§8). Only about 250 runs reach
+  Dungeon 4; compare full-route numbers by their segments, or measure more runs.
+- **Not looked at:** trap-room 3:0x4c (6 stuck in `r71-1k`), ow-octorok 0:0x4c (4 stuck).
+
+No new mask, executor or route defect was found. Every clip family learned its clip: 1:0x22's block clip at 0.71
+per visit (two visits), 4:0x50 at 1.00 per visit, 4:0x21 by the ladder clip, and the overworld wraps wherever an
+entry offers one.
+
+From the design and the experiments:
 
 - **The overworld ladder clip** (0x5f, 0x4f) is not built: it needs a wrap followed by a room change, and the room
   model doesn't cover the ladder on the overworld.
 - **Wraps onto a row whose landing leaves by an exit that doesn't count:** 0x5b row Y `$B5` wraps into the lower E
   opening, outside game.yaml's `span` (the scripted wrap fails 0_5bw_0 100 of 100; trained policies change rows
   first). The gate's ow-moblin wrong exits (4 → 12 of 3,000) come from the same edge.
-- **`BOMB N` at the ladder clip's end** (Y `$55`) is legal but wastes one of the route's two bombs; the mask could
-  leave it out there. Watch the retrained stalfos-keese-gel.
-- **A clip finished by a MOVE is not counted:** a clip cut short (stalled) and finished by a walk crosses the block
-  with `clips/*` at 0 (4:0x50, episode 107 of both `kind` seed 1 runs). The masks are right there; only the counter
-  misses it.
+- **`BOMB N` at the ladder clip's end** (Y `$55`) is legal and wastes the bomb; the retrained stalfos-keese-gel
+  does it 10 times in 300 argmax episodes (above). Masking it there would cost nothing, but it is not where the
+  bombs go.
 - **4:0x50 without clips ends `stuck` at the N door** in 3-8 of 300 argmax episodes (Link pressing N 8+ px off the
   door's column). Not traced.
-- **Whether a B-item switch should cost something:** 124-126 paused frames each, free to the critic, about 2 s of
-  real time when watched.
-- **Goriya 2:0x1e by argmax** (§4): the cleanup or the missing PBRS fix; not settled.
 - **Clips for levels 5-9:** only levels 1 and 4 were scanned; level 5's Blue Darknut rooms (`$05`, `$64`, blocks
   round their stairs; `zelda-asm/levels/level-5.md`) are the first to check.
 - **Training method:** the final PPO update changed two 0x22 models after their last logged iteration (no
@@ -465,13 +806,40 @@ Each is in `docs/experiments/backlog.md`, "Left open by round 21", unless said o
   were explored with the facing writes and no longer replay (13 of 45 tracks leave the room under the merged
   executor); training uses only their states, so re-exploring only refreshes the record.
 - **ARROW** is never legal yet: no route state holds arrows.
-- **Round 20's open items** stay open (the owner: fix after the retrain only what the chains show is needed): Gleeok
-  at low health, D4 deaths in 0x12 and 0x30, real bombs into Dungeon 4, linger over 500 steps in like-like,
-  boss-gleeok and stalfos-keese-gel.
+- **Round 20's open items** (§9): 4:0x30 is solved by the shortcut and Gleeok's stalls and the single-room linger of
+  like-like and boss-gleeok are gone; Gleeok's deaths at low health, 4:0x12 and real bombs into Dungeon 4 stay open.
 
 Not done in this round: the `edge-north`, `none-north` and `walk` arms of 0x22, the `long` and `edge` arms of 0x50
 (dropped when the design was chosen), clips in chains before the retrain, the gate's settling run for 2:0x1e.
 
-## 10. Promoted
+## 11. Promoted
 
-<!-- r71: promoted -->
+Every family, with `triforce promote F R --act A`; each promoted run's `act` matches its `ckpt.pt` sha1 and its
+`eval.json` is in that act mode (checked). The replaced runs are untouched.
+
+| family | promoted (act) | replaced (act) |
+|---|---|---|
+| ow-start | r71-ow (argmax) | r66-ow (argmax) |
+| ow-octorok | r71-d (argmax) | r70-d4-cont (argmax) |
+| ow-zora | r71-ow (argmax) | r70-d4-cont2 (sample) |
+| ow-moblin | r71-d (argmax) | r70-d4-cont (argmax) |
+| ow-leever | r71-ow (argmax) | r66-ow (argmax) |
+| ow-tektite | r71-ow (argmax) | r70-d4-cont (argmax) |
+| ow-lynel | r71-ow (argmax) | r66-ow (argmax) |
+| ow-boulder | r71-ow (argmax) | r66-ow (argmax) |
+| ow-peahat | r71-ow (argmax) | r70-d4-new (argmax) |
+| goriya | r71-goriya-cont (sample) | r68-clear5e (sample) |
+| d2-rope | r71-a (sample) | r67-share-b (sample) |
+| moldorm | r71-c (argmax) | r67-share-b (argmax) |
+| boss-dodongo | r71-e (sample) | r66-dg (argmax) |
+| stalfos-keese-gel | r71-b (sample) | r70-skg-cont (argmax) |
+| wallmaster | r71-e (argmax) | r66-dg (argmax) |
+| boss-aquamentus | r71-e (sample) | r66-dg (argmax) |
+| trap-room | r71-a (argmax) | r70-d4-cont (argmax) |
+| equipment-room | r71-e (argmax) | r70-d4-cont (argmax) |
+| zol | r71-zol-cont (sample) | r70-d4-cont (sample) |
+| darknut | r71-darknut-cont2 (sample) | r65-pilot-b (sample) |
+| boss-manhandla | r71-e (argmax) | r66-dg (argmax) |
+| vire | r71-vire-cont (sample) | r70-d4-new (sample) |
+| like-like | r71-c (sample) | r70-d4-new (argmax) |
+| boss-gleeok | r71-d (argmax) | r70-gleeok-hp (argmax) |

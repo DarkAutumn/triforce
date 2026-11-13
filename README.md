@@ -25,15 +25,17 @@ ladder).
 
 ## How well it plays
 
-<!-- r71: numbers (the round 21 retrain's 1000-run chains replace the table below) -->
-
-Out of 1,000 runs from the start of the game with the current team:
+Out of 1,000 runs from the start of the game with the current team (round 21, `docs/experiments/round21.md` §8):
 
 | Link reaches | Runs |
 |---|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 55% |
-| Dungeon 3 | 36% |
-| The Dungeon 3 triforce | 10% |
+| Dungeon 1 (after Dungeon 2 and the white sword) | 76% |
+| Dungeon 3 | 57% |
+| The Dungeon 3 triforce | 25% |
+| The Dungeon 4 triforce (the end of the route) | 13% |
+
+The last figure is noisy: a second 1,000-run measurement, differing only in how one model picks its actions in
+Dungeon 3, gave 15%.
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.

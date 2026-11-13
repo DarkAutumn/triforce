@@ -19,18 +19,27 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   writes neither Link's facing nor the selected item, a B item that isn't selected is chosen on the item sub-screen
   (`menu_frames`, left out of the action's frames), and the attack mask is what the buttons can do (`attack::plan`).
   Round 21 (`docs/experiments/round21.md`; decisions 2026-11-12 "Round 21: one change set, one retrain", "One clip
-  design", "Attacks by buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged") chose the CLIP kind
-  by experiment (`round21-gauntlet.md`, `round21-trap-room.md`, `round21-vire-50.md`), found that round 20's D2
-  regression was a one-pixel doorway-mask error (D2 82.7% with only that fixed, round 20 68.6%), and retrains every
-  family from scratch (`r71`): action schema 2, observation schema 4, no model trained before 1.4.1.0 loads.
-  <!-- r71: numbers --> (the r71 chain numbers and promoted runs go here.) Round 20's chains (1000 runs per segment,
-  the old models): D2 68.6%, after D2 83.5%, D1 96.7%, after D1 100%, D3 38.6%, after D3 99.8%, D4 21.1%; from the
-  start to Dungeon 3 26.7%, to the D4 triforce 1.8%. Act mode per model (`<run dir>/act`, bound to the checkpoint's
-  sha1). Measure chains with 1000 runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog
-  "Next projects"): the r71 chains, then what they show among round 20's open items (Gleeok at low health: Link
-  arrives with 2.1 hearts; D4's bombs; the 0x12/0x30 deaths), wallmaster heart gathering, goriya heart loss; round 21
-  left the overworld ladder clip, `BOMB N` at the ladder clip's end and goriya's 2:0x1e by argmax open. Every new
-  checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
+  design", "Attacks by buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged", "The r71 retrain")
+  chose the CLIP kind by experiment (`round21-gauntlet.md`, `round21-trap-room.md`, `round21-vire-50.md`), found
+  that round 20's D2 regression was a one-pixel doorway-mask error (D2 82.7% with only that fixed, round 20 68.6%),
+  and retrained every family from scratch (`r71`, all 24 promoted; action schema 2, observation schema 4, no model
+  trained before 1.4.1.0 loads). Chains, 1000 runs per segment, the final team (`r71-1k-dks`): D2 85.6%, after D2
+  88.6%, D1 99.1%, after D1 99.4%, D3 46.5%, after D3 100%, D4 56.4%; from the start to Dungeon 3 56.7%,
+  to the D4 triforce 12.8% (15.4% in `r71-1k` with darknut on argmax: within noise; round 20: D2 68.6%, D3 38.6%,
+  D4 21.1%, full 1.8%). Promoted runs and the runs they replaced: round21.md §11. Act mode per model (`<run
+  dir>/act`, bound to the checkpoint's sha1): argmax for the nine overworld families, moldorm, wallmaster,
+  trap-room, equipment-room, boss-manhandla and boss-gleeok; sample for goriya, d2-rope, boss-dodongo,
+  stalfos-keese-gel, boss-aquamentus, zol, vire, like-like and darknut (argmax loops in 3:0x59 when bombs are masked
+  at the reserve). Measure chains with 1000 runs per segment as one batch: `RUNS=1000 ACT=model TAG=<tag>
+  scripts/experiments/r56_chains.sh` (`triforce eval-batch TAG --chains TAG`: the eight segments into
+  `target/r56-chains/<TAG>-<segment>.jsonl`, then the yardstick and `<TAG>-room-stats.json`). Tags are
+  `<run prefix>-1k` (`r71-1k`); a variant team adds a suffix (`r71-1k-dks`, darknut sampling) and may measure only
+  some segments (`SEGMENTS=...`), the rest linked from the base tag. Next (backlog "Next projects", by what the
+  chains lose): Dungeon 3 (Manhandla 132 deaths per 1000 D3 runs, 3:0x5b 126, 3:0x69 87, darknut 3:0x59 86 and 24
+  stuck), Gleeok below 3.5 hearts (245 deaths per 1000 D4 runs), 4:0x12 (95), goriya 2:0x1e (57 per 1000 D2 runs),
+  the bombs stalfos-keese-gel wastes in 4:0x21 (3.8 per visit, one needed), wallmaster heart gathering, goriya heart
+  loss. Every new checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per
+  checkpoint).
 - **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
   `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
   earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`
