@@ -94,7 +94,7 @@ case "${1:-}" in
     all)    # SEED [ARM...]: every arm (or the ones given), two at a time
         seed=$2; shift 2
         arms=("$@"); [ ${#arms[@]} -gt 0 ] || arms=("${ARMS[@]}")
-        printf '%s\n' "${arms[@]}" | xargs -P 2 -I{} "$0" job {} "$seed"
+        printf '%s\n' "${arms[@]}" | xargs -P "${STREAMS:-2}" -I{} "$0" job {} "$seed"
         ;;
     *) sed -n '2,12p' "$0"; exit 2 ;;
 esac
