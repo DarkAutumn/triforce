@@ -54,10 +54,17 @@ impl AcceptSpec {
 }
 
 /// Coarse state summary: (level, room, cave, tile x/2, tile y/2, whole hearts, living enemies, their total health,
-/// keys, boomerang, the room's push block still unpushed).  Enemy health keeps multi-hit enemies leaving a trail of
-/// cells toward the kill.  The push block: a pushed block changes what the room is (stairs appear, a shutter
-/// opens), and a cell reached after the push must not lose to the same spot reached sooner before it.
-pub type CellKey = (u8, u8, bool, i32, i32, i32, usize, i32, i32, i32, bool);
+/// keys, boomerang, the room's push block still unpushed, the room's item taken).  Enemy health keeps multi-hit
+/// enemies leaving a trail of cells toward the kill.  The push block: a pushed block changes what the room is (stairs
+/// appear, a shutter opens), and a cell reached after the push must not lose to the same spot reached sooner before
+/// it.  The item: a pickup that changes nothing else the key reads (0x67's secret rupees, round 22: the cave's way
+/// out is the same cell before and after, and the shorter path, without them, kept it) must not either.
+pub type CellKey = (u8, u8, bool, i32, i32, i32, usize, i32, i32, i32, bool, bool);
+
+/// The item-taken flag of Link's room (`$10` of its room flags; an overworld cave's is its room's).
+pub fn room_item_taken(state: &GameView) -> bool {
+    room_flags(state.ram(), state.location()) & FLAG_ITEM_TAKEN != 0
+}
 
 /// Total health of the living enemies (drops with every damaging hit).
 pub fn enemy_health(state: &GameView) -> i32 {
@@ -84,6 +91,7 @@ pub fn cell_key(state: &GameView) -> CellKey {
         state.keys(),
         state.boomerang() as i32,
         state.push_block_pending(),
+        room_item_taken(state),
     )
 }
 
@@ -95,7 +103,7 @@ pub fn closeness(state: &GameView, wavefront: Option<&Wavefront>) -> f64 {
     }
 }
 
-/// Room entered, enemy damaged or killed, key or boomerang gained in one step.
+/// Room entered, enemy damaged or killed, key, boomerang or the room's item gained in one step.
 pub fn progress_events(prev: &GameView, curr: &GameView) -> u32 {
     if prev.full_location() != curr.full_location() {
         return 1;
@@ -104,6 +112,7 @@ pub fn progress_events(prev: &GameView, curr: &GameView) -> u32 {
         + (enemy_health(curr) < enemy_health(prev)) as u32
         + (curr.keys() > prev.keys()) as u32
         + ((curr.boomerang() as i32) > (prev.boomerang() as i32)) as u32
+        + (room_item_taken(curr) && !room_item_taken(prev)) as u32
 }
 
 /// A random legal action; repeats `previous` with REPEAT_PROBABILITY while it is still legal.

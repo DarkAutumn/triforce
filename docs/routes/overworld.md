@@ -197,6 +197,43 @@ container (existing `treasure`; needs the ladder); fairy ponds at 0x39 and 0x43 
 The boulder rooms list the boulders (`Unknown_32`) the ROM list doesn't hold (the generator spawns them). Three
 existing rooms got exits they lacked: 0x1b's maze loops, 0x1f N (the wall gap) and 0x6d E plus its level-8 `cave`.
 
+## The route after Dungeon 1 (round 22)
+
+Lee (Nov 13): from the D1 triforce (0x37) S to 0x67, bomb its wall and take the rupees, then on to Dungeon 3 (0x74)
+by the wrap with clips, or along row 6 without. `d2first` steps 68–87 (`triforce/routes.yaml`, the stretch
+`d3-approach`; decisions 2026-11-13 "Round 22 route"). The scout's findings, played in the game, are summarised
+here; the route tests are `crates/zelda/tests/route_ways.rs` (monsters removed, frame counts printed).
+
+| Step | Room | Entry → exit | Family | Notes |
+|---|---|---|---|---|
+| 68 | 0x37 | cave → E | ow-octorok | out of Dungeon 1 |
+| 69 | 0x38 | W → S | ow-zora | 0x37 leads only E, 0x38 only N/S/W |
+| 70 | 0x48 | N → S | ow-leever | |
+| 71 | 0x58 | N → **S** | ow-octorok | was W (to 0x57, 0x56, 0x55 and 0x65 N) |
+| 72 | 0x68 | **N** → W | ow-octorok | |
+| 73 | 0x67 | **E** → cave | ow-octorok | bomb the rock wall (tile (14, 2)): facing N on row Y `$5D` at X `$68`-`$78` |
+| 74 | 0x67 cave | S → S | ow-octorok | `waypoint: rupees`: the middle ware, taken only walking up at X `$78` |
+| 75–79 | 0x67, 0x77, 0x76, 0x75, 0x74 | cave → S, N → W, E → W, E → W (`CLIP E`), E → cave | ow-octorok, ow-start, ow-tektite, ow-leever, ow-tektite | the clip way |
+| 80–86 | 0x67, 0x66, 0x65, 0x64, 0x63, 0x73, 0x74 | cave → W, E → W ×3, E → S, N → E, W → cave | ow-octorok, ow-octorok, ow-zora, ow-octorok, ow-moblin, ow-moblin, ow-tektite | the plain way |
+| 87 | 3:0x7c | S → W | zol | both ways rejoin (`docs/routes/d3.md`) |
+
+- **0x67's secret** (`entrance` cave `0x21`, quest 1 only): the rock wall's tile object `$63` sits in slot 11; one
+  bomb opens it (`bomb_secret: [14, 2]`, `requires_bombs`). The cave says "IT'S A SECRET TO EVERYBODY" (Link
+  frozen ~170 frames) and pays its 30 rupees once (room flag `$10`) to a Link who walks up at X exactly `$78`
+  (`asm:Cave_State2TalkOrShopOrDoorCharge`); straight up from the entrance (X `$70`) he stops below the wares with
+  nothing. Out of the cave Link stands in the mouth at (`$70`, `$4D`). The rupees buy nothing on the route today
+  (arrows are 80 in shops off the route).
+- **The clip way:** 0x77 (empty) S → W along row `$8D`; 0x76 (4 red Tektites) W, but its straight lanes (Y
+  `$55`/`$5D`, `$B5`/`$BD`) deliver Link on 0x75's softlock rows, so he changes row (`$7D` in the test) before
+  leaving; 0x75's E part (Leevers, Peahats, a Zora; no N or S exit) is left only by `CLIP E`, the wrap exit
+  (decisions 2026-11-13 "The wrap exit"; rows Y `$65`-`$AD`), which lands Link in 0x74 at X `$F0`; 0x74 W to X
+  `$D0`, S to `$8D`, W to `$80`, N into the mouth.
+- **The plain way:** 0x66 (Octoroks) past its shop's open mouth (tile (14, 2): never Up at X `$70` on the top rows),
+  0x65 across its one ford (Y `$85`/`$8D`), 0x64 past the potion shop's open mouth along `$8D`, 0x63 S at X `$D0`,
+  0x73 E along `$8D`, 0x74 from W to the mouth. The clip way saves two room entries and about 700 frames.
+- **Clips switched off on the clip way** (decisions 2026-11-13 "The run-time clips switch"): in 0x77 back N; in 0x76
+  or 0x75's E part back E and N through 0x76's N edge (X `$C0`-`$D8`) into 0x66 from S, then W on the plain way.
+
 ## Open questions
 
 - Ladder crossings inside rooms (water one tile wide) and the coast heart's reach weren't mapped; no edge needs the

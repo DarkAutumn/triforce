@@ -1665,3 +1665,42 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   softlock without the ladder). No route needs it.
 - **Evidence:** from 0x76's E edge into Dungeon 3 (monsters removed) takes 51 actions and 779 frames; the CLIP
   itself takes 130.
+
+## 2026-11-13 — Round 22 route: 0x67's secret, both ways to Dungeon 3, 0x5b E → 0x5c → 0x4c, 0x01's key (Lee)
+
+- **What** (`triforce/routes.yaml` `d2first`, `docs/routes/overworld.md`, `d3.md`, `d4.md`): after Dungeon 1 the
+  route goes S from 0x58 to 0x68 and 0x67, bombs 0x67's rock wall and takes the secret cave's 30 rupees (`waypoint:
+  rupees`), then parts in the stretch `d3-approach`: with clips S to 0x77, W through 0x76 into 0x75's E part and
+  `CLIP E` (the wrap exit) into 0x74; without clips W along row 6 (0x66, 0x65 by its ford, 0x64), S at 0x63, E
+  through 0x73 into 0x74 from W. Both rejoin at 3:0x7c. Dungeon 3's last pass through 0x5b leaves E through its
+  bomb wall into 0x5c, N into 0x4c from S, E through 0x4c's bomb wall to Manhandla; 0x4b leaves the route. Dungeon 4
+  goes N from 0x11 (its N bomb wall) into 0x01 (its key, on the water: the ladder), E into 0x02, S into 0x12 (from
+  N). Steps: 0x58 S is 71, the cave 74, the clip way 75–79, the plain way 80–86, Dungeon 3 87–104, Dungeon 4's
+  entrance 112, 0x11 128, 0x01 129, 0x02 130, 0x12 131, the end 133.
+- **Lee's words and the lead's reading:** "0x11 north to 0x10 -> 0x20 -> 0x12" is read as 0x11 N → 0x01 → 0x02 →
+  0x12: 0x10 and 0x20 are not on a way to 0x12 and hold no key; north of 0x11 is 0x01, the key's room. The overworld
+  "wrap" is an E-edge wrap in 0x75 followed by Left (decisions "The wrap exit"); the plain way is not a straight
+  line (0x65's one ford, 0x63 S to 0x73).
+- **Bombs:** `bomb_reserve: 6` from Dungeon 3's entrance (one bomb per wall, a spare each, two for Manhandla; was 5
+  for one wall); 0x5b's last visit takes its bombs below 6 (`if_bombs_below: 6`), and 0x5b is `requires_bombs`
+  (darknut bombs `free`). 0x67's wall takes the bomb Link used to bring into Dungeon 3. Dungeon 4 keeps 2.
+- **BOMB only at the wall** (Lee: "Try to fix the 0x21 bombs thing"): a `required` family (ow-tektite, ow-octorok,
+  trap-room, stalfos-keese-gel) in a `requires_bombs` room is offered BOMB only where the bomb lands within the game's
+  reach of the wall the objective leaves through (16 px ahead after any turn; a dungeon wall within `$18` px of its
+  hotspot on both axes, a rock wall within `$10`), else only on the 10th damage-free kill; `free` families are
+  untouched. Played around every such wall on the route (`crates/zelda/tests/bomb_mask.rs`): every offered BOMB opens
+  the wall, every refused one the game would place leaves it shut.
+- **`waypoint: rupees`:** the cave's middle ware, which the game pays only to Link walking up at X `$78`; leaving
+  0x67 without it is `missed`, like the 0x2c heart. The rupees buy nothing on the route yet.
+- **What skipping 0x4b loses:** its key (spent at once on its own E door before: none on balance), 3 Zols (about
+  1.8 drops when killed outright) and 3 kills toward the help streak; it saves about 900 frames and costs a bomb.
+- **Two fixes the state build needed:**
+  - *The alternate 0x78 at 0x68.* `step_next_rooms` added any alternate replacing the step's next room that borders
+    the current room; 0x78 replaces 0x67 for 0x77 at the game start, and borders 0x68 too, so leaving 0x68 S into
+    0x78 counted as correct on step 72. The explorer took it in two of three chains. The alternate now counts only
+    from the room its first step is entered from (`crates/zelda/tests/objectives.rs`
+    `an_alternate_is_a_way_out_only_of_the_room_it_is_entered_from`).
+  - *Go-Explore's cells and the rupees.* The cell key (`env::explore::cell_key`) did not change when the rupees were
+    taken, so the cave's way out was one cell before and after, and the shorter path (without them, `missed`) kept
+    it: 52 cells, no success in 3000 iterations. The key now holds the room's item-taken flag and the pickup counts
+    as progress; the cave is solved in about 400 iterations (`crates/env/tests/explore_cells.rs`).

@@ -541,8 +541,9 @@ impl GameCompletion {
         Some((self.step?, self.step_exit(location, &step.exit)?))
     }
 
-    /// The rooms an edge step leaves toward: its exit's room `next` plus any alternate replacing that room which
-    /// borders this one (0x77 N to 0x67, or E to 0x78).
+    /// The rooms an edge step leaves toward: its exit's room `next` plus any alternate replacing that room whose first
+    /// step is entered from this room (0x77 N to 0x67, or E to 0x78, entered from W).  The entry side matters: 0x78
+    /// also borders 0x68, whose step toward 0x67 (round 22, after Dungeon 1) the alternate does not replace.
     fn step_next_rooms(&self, location: MapLocation, next: MapLocation) -> BTreeSet<MapLocation> {
         let mut rooms: BTreeSet<MapLocation> = [next].into_iter().collect();
         let Some(room) = self.map.get(location) else {
@@ -552,6 +553,7 @@ impl GameCompletion {
             if alternate.replaces.contains(&next)
                 && let Some(first) = alternate.with.first()
                 && room.neighbors().any(|n| n == first.location())
+                && Direction::from_exit(&first.entry) == Some(location.direction_to(first.location()).opposite())
             {
                 rooms.insert(first.location());
             }

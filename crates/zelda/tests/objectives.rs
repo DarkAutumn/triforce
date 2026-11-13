@@ -666,6 +666,25 @@ fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameC
     route_step(map, state, 3, room, entry)
 }
 
+/// The alternate 0x78 (routes.yaml `alternates`: 0x77 E -> 0x78 N -> 0x68 instead of 0x77 N -> 0x67 E -> 0x68) is a
+/// way out of 0x77 at the game start (its step enters 0x78 from W, from 0x77).  0x68 also borders 0x78, but the
+/// alternate doesn't start there: after Dungeon 1 (round 22: 0x58 S, 0x68 W, 0x67's secret cave) S into 0x78 is not a
+/// correct exit (the state builder's explorer took it, and a chain would have).
+#[test]
+fn an_alternate_is_a_way_out_only_of_the_room_it_is_entered_from() {
+    let Some(images) = images(&["0_77c_0", "0_68n_0"]) else { return };
+    let map = Arc::new(GameMap::builtin());
+    let start = view(&map, &images[0], 0);
+    let objective = route_step(&map, &start, 0, 0x77, "cave").objectives(None, &start);
+    assert_eq!(objective.next_rooms, [loc(0, 0x67), loc(0, 0x78)].into_iter().collect());
+
+    let after_d1 = view(&map, &images[1], 0);
+    assert_eq!(after_d1.triforce_pieces(), 2);
+    let objective = route_step(&map, &after_d1, 0, 0x68, "N").objectives(None, &after_d1);
+    assert_eq!(objective.next_rooms, [loc(0, 0x67)].into_iter().collect());
+    assert!(!exit_is_correct_at(&map, loc(0, 0x68), (16, 21), &objective, loc(0, 0x78)));
+}
+
 /// Dungeon 2's 0x5e (`treasure: clear`, round 19): no treasure, yet the objective fights its Red Goriyas (no correct
 /// exit while one lives, so leaving N early is a wrong exit) and heads N into 0x4e once they are dead.
 #[test]

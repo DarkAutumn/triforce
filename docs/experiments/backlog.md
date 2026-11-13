@@ -66,6 +66,31 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
   monster off the screen. Rebuilding the states and re-exploring the curricula (both now write only natural values)
   would clear them. Checkpoints taken from replays recorded before round 22 hold off-cycle registers unless redrawn.
 
+## Round 22: the route (Lee, Nov 13; branch `r22-route`)
+
+- [x] **The new ways** (decisions 2026-11-13 "Round 22 route"; `docs/routes/overworld.md`, `d3.md`, `d4.md`): after
+  Dungeon 1 S to 0x67's secret cave (bomb, 30 rupees at X `$78`), then the stretch `d3-approach` (clips: the wrap exit
+  through 0x75; plain: row 6, 0x73, 0x74 from W); Dungeon 3 0x5b E (bomb) → 0x5c → 0x4c S, 0x4b off the route,
+  `bomb_reserve: 6`; Dungeon 4 0x11 N → 0x01 (the key) → 0x02 → 0x12 from N. States, curricula, route tests
+  (`crates/zelda/tests/route_ways.rs`).
+- [ ] **Bomb fishing in 4:0x12** (Lee: "It would be nice if we used more bombs in 0x12 to fish for bomb drops, but
+  this isn't a directive"). The scout (`eval-chain --from 0_74c_0 --stop-at 4:0x13 --harvest`, 200 runs, 182 entries
+  into 0x12 on the old route): every Link arrived with **0 bombs**; the help streak `$50` on entry was typically 1-3
+  (median 3; 9 in 4 entries, 10 in 2). The mechanics (enemies.md "Drop tables"): the kill that brings `$50` to
+  exactly 10 arms a bomb drop (+4) only if it is a bomb kill, and the drop needs a death of a droppable type (a Vire
+  killed outright; split-off Keese don't drop). Proven in the game: one Vire left, `$50` = 9, one bomb, `BOMB S` on
+  it: the drop was bombs, +4. Round 21's chains in 0x12 (`r71-1k-dks-d4`): 373 10th kills in 908 visits, 0 bomb tries
+  (no bombs). Round 22's route helps the streak: 0x01's eight Keese come right before 0x02 (whose traps must not
+  touch Link). **Proposal, not applied:** `bomb_reserve: 3` from Dungeon 4's entrance, so one real bomb survives to
+  0x12 when Link arrives with three; it changes nothing for a Link holding 2 or fewer.
+- [ ] **Mid-stretch states for the clips switch.** Turned off on the clip way in 0x76 or 0x75's E part, the objective
+  leads back E and N into 0x66 from S (decisions 2026-11-13 "The run-time clips switch"); 0x66 from S and 0x76 from
+  W have no start states, so no family trains those entries. `entry_states path --source 0_75e_N --rooms 0:0x76` and
+  `--source 0_76e_N --rooms 0:0x66` would build them (ow-tektite's `0_76*` and ow-octorok's `0_66*` globs take them)
+  if chains show Links there.
+- [ ] **0x67's 30 rupees buy nothing on the route** (arrows are 80 in shops off the route; Link holds 42-54 after the
+  cave). The detour costs about 660 frames and one bomb.
+
 ## Done (Nov 13): round 21 (clips, attacks by buttons, the ladder clip; 1.4.1.0)
 
 Round 21 (round21.md; decisions 2026-11-12 "Round 21: one change set, one retrain", "One clip design", "Attacks by
@@ -141,12 +166,18 @@ Left open by round 21 (round21.md §10):
   lower E opening, outside game.yaml `span` (the scripted wrap fails 0_5bw_0 100 of 100; trained policies change
   rows first). Not offering the wrap there needs the objective's exits in the availability rule. The gate's ow-moblin
   wrong exits (4 → 12 of 3,000, from 0_5bw and 0_63e) come from 0x5b's two E openings too.
-- [ ] **BOMB N from the end of 4:0x21's ladder clip** (Y `$55`, 8 pixels into the top wall) is legal and spends
+- [x] **BOMB N from the end of 4:0x21's ladder clip** (Round 22: the BOMB mask for `required` families offers BOMB
+  only where the bomb opens the wall the objective leaves through, `zelda::bombs::landing`; `crates/env/tests/clips.rs`
+  checks it is not offered at the clip's end.) (Y `$55`, 8 pixels into the top wall) is legal and spends
   the bomb, but the wall stays shut (the bomb lands `$18` from the wall's hotspot); one step down (`MOVE S 8`) and it
   opens. The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Measured on the r71
   stalfos-keese-gel: 10 such bombs in 300 argmax episodes, against 497 of its 1033 BOMB decisions being BOMB S from
   the top band, which opens the wall (round21.md §10). The waste is elsewhere (next item).
-- [ ] **stalfos-keese-gel wastes bombs in 4:0x21** (round 21 retrain). It presses BOMB N from the island's entry
+- [x] **stalfos-keese-gel wastes bombs in 4:0x21** (round 21 retrain). (Round 22, Lee: "Try to fix the 0x21 bombs
+  thing": the BOMB mask above offers BOMB in 0x21 only where the bomb lands within the game's reach of the N wall's
+  hotspot, so never from the island's entry spot or mid-island; played in the game around every wall the rule touches,
+  `crates/zelda/tests/bomb_mask.rs`. The retrain will show what it does to the room.) It presses BOMB N from the
+  island's entry
   spot (Y `$B6`, no wall in reach) once per episode (300 in 300; the five most common openings all do it), often a
   second BOMB N mid-island and a second BOMB S at the top: 3.4-3.8 bombs per visit (3522 in 919 D4-segment
   visits) where one opens the wall. All cheated in chains; with real bombs the room alone would take about 4, twice
