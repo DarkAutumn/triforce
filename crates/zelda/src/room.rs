@@ -3,7 +3,9 @@
 //! Walkability uses the NES threshold system from asm:Tile_GetAheadOfObj.
 
 use crate::enums::{Direction, MapLocation, Tile};
-use std::collections::{HashSet, VecDeque};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashSet, VecDeque};
+use std::sync::OnceLock;
 
 pub const COLS: i32 = 32;
 pub const ROWS: i32 = 22;
@@ -135,6 +137,16 @@ impl Exits {
     }
 }
 
+/// A jump of the path search: Link at rest on tile `from` reaches tile `to` by one action heading `direction` (a
+/// grid-point skip, `crate::clips::skip_jumps`), worth `cost` tiles of walking.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Jump {
+    pub from: Tile,
+    pub to: Tile,
+    pub direction: Direction,
+    pub cost: i32,
+}
+
 /// A room's walkability model.
 #[derive(Clone, Debug)]
 pub struct Room {
@@ -144,8 +156,12 @@ pub struct Room {
     threshold: u8,
     corridor: [bool; CELLS],
     loaded: bool,
+    /// Link holds the ladder (`Room::new`).
+    ladder: bool,
     /// Per tile, the axes (`LADDER_V`, `LADDER_H`) along which Link holding the ladder crosses this water tile.
     ladder_axes: [u8; CELLS],
+    /// The room's skips as path-search jumps, built on first use (`crate::clips::skip_jumps`).
+    jumps: OnceLock<Vec<Jump>>,
     pub exits: Exits,
     pub cave_tile: Option<Tile>,
 }
@@ -174,7 +190,9 @@ impl Room {
             threshold,
             corridor: [false; CELLS],
             loaded: false,
+            ladder,
             ladder_axes: [0; CELLS],
+            jumps: OnceLock::new(),
             exits: Exits::default(),
             cave_tile: None,
         };
@@ -215,6 +233,16 @@ impl Room {
 
     pub fn is_loaded(&self) -> bool {
         self.loaded
+    }
+
+    /// Link holds the ladder (the water crossings and the ladder clip's jumps).
+    pub fn ladder(&self) -> bool {
+        self.ladder
+    }
+
+    /// The room's grid-point skips as path-search jumps (`crate::clips::skip_jumps`), built once per room model.
+    pub fn skip_jumps(&self) -> &[Jump] {
+        self.jumps.get_or_init(|| crate::clips::skip_jumps(self))
     }
 
     /// Raw tile value (column, row); panics out of bounds.
@@ -502,25 +530,29 @@ impl Room {
         exits
     }
 
-    /// The wavefront toward `targets` (`calculate_wavefront_for_link`).  `locked_doors` are treated as open.
+    /// The wavefront toward `targets` (`calculate_wavefront_for_link`).  `locked_doors` are treated as open.  With
+    /// `clips` the room's grid-point skips are jumps of the search ([`Room::skip_jumps`]; a specialist's `clips:
+    /// true`), so a place only a skip reaches (level 4 room `$21`'s island) still leads to the targets.
     pub fn wavefront(
         &self,
         targets: &[Target],
         impassible: &[Tile],
         locked_doors: &[Direction],
+        clips: bool,
     ) -> Wavefront {
+        let jumps = if clips { self.skip_jumps() } else { &[] };
         if locked_doors.is_empty() {
-            return self.wavefront_inner(targets, impassible);
+            return self.wavefront_inner(targets, impassible, jumps);
         }
         let mut room = self.clone();
         for &direction in locked_doors {
             room.add_locked_door_corridor(direction);
             room.exits.lists[exit_slot(direction)] = Some(vec![Self::door_exit_tile(direction)]);
         }
-        room.wavefront_inner(targets, impassible)
+        room.wavefront_inner(targets, impassible, jumps)
     }
 
-    fn wavefront_inner(&self, targets: &[Target], impassible: &[Tile]) -> Wavefront {
+    fn wavefront_inner(&self, targets: &[Target], impassible: &[Tile], jumps: &[Jump]) -> Wavefront {
         let impassible: HashSet<Tile> = impassible.iter().copied().collect();
         let mut starts: HashSet<Tile> = HashSet::new();
         let mut groups: Vec<(Direction, Vec<Tile>)> = Vec::new();
@@ -553,7 +585,7 @@ impl Room {
             }
         }
         starts.retain(|t| !impassible.contains(t));
-        Wavefront::compute(self, starts, &impassible)
+        Wavefront::compute(self, starts, &impassible, jumps)
     }
 }
 
@@ -570,45 +602,87 @@ const NEIGHBORS: [((i32, i32), Direction); 4] = [
 pub struct Wavefront {
     grid: Vec<i32>,
     offscreen: Vec<Tile>,
+    /// The skips the search used (`Room::wavefront` with clips), for walking down it (`Wavefront::jumps_from`).
+    jumps: Vec<Jump>,
 }
 
 impl Wavefront {
-    fn compute(room: &Room, starts: HashSet<Tile>, impassible: &HashSet<Tile>) -> Wavefront {
+    fn compute(room: &Room, starts: HashSet<Tile>, impassible: &HashSet<Tile>, jumps: &[Jump]) -> Wavefront {
         let mut grid = vec![-1i32; CELLS];
         let mut offscreen = Vec::new();
-        let mut todo = VecDeque::new();
         let mut starts: Vec<Tile> = starts.into_iter().collect();
         starts.sort_unstable();
-        for tile in starts {
+        for &tile in &starts {
             if in_bounds(tile.0, tile.1) {
                 grid[index(tile.0, tile.1)] = 0;
             } else {
                 offscreen.push(tile);
             }
-            todo.push_back((tile, 0));
         }
-        while let Some(((tx, ty), dist)) = todo.pop_front() {
+        // The walking neighbours that reach `(tx, ty)` (from off screen, every in-bounds neighbour).
+        let neighbours = |grid: &[i32], (tx, ty): Tile| -> [Option<Tile>; 4] {
             let source_offscreen = !in_bounds(tx, ty);
-            for ((dx, dy), direction) in NEIGHBORS {
+            NEIGHBORS.map(|((dx, dy), direction)| {
                 let (nx, ny) = (tx + dx, ty + dy);
-                if !in_bounds(nx, ny) || grid[index(nx, ny)] >= 0 || impassible.contains(&(nx, ny))
-                {
+                let open = in_bounds(nx, ny)
+                    && grid[index(nx, ny)] < 0
+                    && !impassible.contains(&(nx, ny))
+                    && (source_offscreen || room.can_move(nx, ny, direction));
+                open.then_some((nx, ny))
+            })
+        };
+        if jumps.is_empty() {
+            // Unit steps: breadth first.
+            let mut todo: VecDeque<(Tile, i32)> = starts.into_iter().map(|t| (t, 0)).collect();
+            while let Some((tile, dist)) = todo.pop_front() {
+                for (nx, ny) in neighbours(&grid, tile).into_iter().flatten() {
+                    grid[index(nx, ny)] = dist + 1;
+                    todo.push_back(((nx, ny), dist + 1));
+                }
+            }
+            return Wavefront { grid, offscreen, jumps: Vec::new() };
+        }
+        // Jumps cost more than a step: Dijkstra, a jump relaxing its start from its end (the search runs from the
+        // targets back toward Link). `best` holds tentative distances; `grid` the settled ones.
+        let mut best = vec![i32::MAX; CELLS];
+        let mut todo: BinaryHeap<Reverse<(i32, Tile)>> = starts.into_iter().map(|t| Reverse((0, t))).collect();
+        let mut by_end: Vec<&Jump> = jumps.iter().filter(|j| in_bounds(j.from.0, j.from.1)).collect();
+        by_end.sort_unstable_by_key(|j| j.to);
+        while let Some(Reverse((dist, tile))) = todo.pop() {
+            if in_bounds(tile.0, tile.1) {
+                let i = index(tile.0, tile.1);
+                // Settled before (the starts hold 0 from the beginning; a later pop is a stale entry).
+                if dist > 0 && grid[i] >= 0 {
                     continue;
                 }
-                if !source_offscreen && !room.can_move(nx, ny, direction) {
+                grid[i] = dist;
+            }
+            let next = neighbours(&grid, tile).into_iter().flatten().map(|t| (t, 1));
+            let first = by_end.partition_point(|j| j.to < tile);
+            let jumped = by_end[first..].iter().take_while(|j| j.to == tile).map(|j| (j.from, j.cost));
+            for ((nx, ny), cost) in next.chain(jumped) {
+                let i = index(nx, ny);
+                if grid[i] >= 0 || impassible.contains(&(nx, ny)) || dist + cost >= best[i] {
                     continue;
                 }
-                grid[index(nx, ny)] = dist + 1;
-                todo.push_back(((nx, ny), dist + 1));
+                best[i] = dist + cost;
+                todo.push(Reverse((dist + cost, (nx, ny))));
             }
         }
-        Wavefront { grid, offscreen }
+        Wavefront { grid, offscreen, jumps: jumps.to_vec() }
     }
+
+    /// The jumps that start on `tile` (skips the search knows; none without clips).
+    pub fn jumps_from(&self, tile: Tile) -> impl Iterator<Item = &Jump> {
+        self.jumps.iter().filter(move |j| j.from == tile)
+    }
+
     /// A wavefront from explicit distances (tests, synthetic objectives).
     pub fn from_distances(distances: impl IntoIterator<Item = (Tile, i32)>) -> Wavefront {
         let mut w = Wavefront {
             grid: vec![-1; CELLS],
             offscreen: Vec::new(),
+            jumps: Vec::new(),
         };
         for ((x, y), d) in distances {
             if in_bounds(x, y) {
@@ -663,9 +737,9 @@ mod tests {
         assert!(with.can_move(15, 9, Direction::N) && with.can_move(15, 8, Direction::N));
         assert!(!without.can_move(15, 9, Direction::N));
         assert!(!with.can_move(15, 8, Direction::E) && !with.can_move(15, 8, Direction::W));
-        let north = with.wavefront(&[Target::Tile((15, 2))], &[], &[]);
+        let north = with.wavefront(&[Target::Tile((15, 2))], &[], &[], false);
         assert!(north.get((15, 14)).is_some());
-        assert!(without.wavefront(&[Target::Tile((15, 2))], &[], &[]).get((15, 14)).is_none());
+        assert!(without.wavefront(&[Target::Tile((15, 2))], &[], &[], false).get((15, 14)).is_none());
         // Pixel moves: Link stops at Y = $85 without the ladder, goes on with it (level-4.md).
         assert!(!without.can_link_move_from(0x78, 0x85, Direction::N));
         assert!(with.can_link_move_from(0x78, 0x85, Direction::N) && with.can_link_move_from(0x78, 0x7D, Direction::N));
@@ -678,7 +752,7 @@ mod tests {
     fn the_ladder_does_not_cross_two_squares() {
         let wide = room(rows(8..12), true);
         assert!((8..12).all(|r| !wide.can_move(15, r, Direction::N)));
-        assert!(wide.wavefront(&[Target::Tile((15, 2))], &[], &[]).get((15, 16)).is_none());
+        assert!(wide.wavefront(&[Target::Tile((15, 2))], &[], &[], false).get((15, 16)).is_none());
     }
 
     /// A single water square in the floor (0x31's door line): crossed E and W with the ladder, not without.

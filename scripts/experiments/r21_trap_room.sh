@@ -3,7 +3,9 @@
 #
 #   scripts/experiments/r21_trap_room.sh tracks            # explore seeds 0-8, then assemble the south/north sets
 #   scripts/experiments/r21_trap_room.sh curricula         # only assemble them (trajectories/r21-trap22-{south,north})
-#   scripts/experiments/r21_trap_room.sh train ARM SEED    # ARM = <none|kind|long|edge>-<nocur|south|north>
+#   scripts/experiments/r21_trap_room.sh train ARM SEED    # ARM = <none|kind>-<nocur|south|north> (the round's
+#                                                          # long and edge arms were removed afterwards: their YAMLs
+#                                                          # are the record in experiments/r21/removed/)
 #   scripts/experiments/r21_trap_room.sh eval ARM SEED     # --act sample and --act argmax, 100 episodes per state
 #   scripts/experiments/r21_trap_room.sh analyze ARM SEED  # replays -> analysis.json (push/clip, behaviour)
 #   scripts/experiments/r21_trap_room.sh job ARM SEED      # train (unless done), eval, analyze
@@ -17,8 +19,8 @@ export TRIFORCE_STATES_DIR=experiments/r21/states
 PY=${PY:-.venv/bin/python}
 ITERATIONS=${ITERATIONS:-98}        # 98 x 4096 = 401,408 env steps per run, no early stop
 PARALLEL=${PARALLEL:-2}
-EXPLORE_YAML=experiments/r21/trap22-none-nocur.yaml   # clips.action none: the taught route is the push route
-ARMS=(none-nocur none-south kind-nocur kind-south long-nocur long-south edge-nocur edge-south kind-north long-north)
+EXPLORE_YAML=experiments/r21/trap22-none-nocur.yaml   # clips off: the taught route is the push route
+ARMS=(none-nocur none-south kind-nocur kind-south kind-north)
 
 # The tracks each curriculum uses (classified by scripts/experiments/r21_trap_tracks.py): explore seed:state.
 # South: round the south side of the diamond, push the west block N from below; north: round the north side,

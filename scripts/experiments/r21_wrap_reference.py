@@ -35,7 +35,7 @@ for name in STATES:
     target = NEXT[room][exit_dir]
     rng = random.Random(name)
     game = native.Game(seed=0, states_dir='experiments/r21/states')
-    game.set_clip_settings('kind')
+    game.set_clips(True)
     rows = []
     for ep in range(EPISODES):
         start = game.load(name, seed=ep, ram_overrides=hp_values(rng, 3))

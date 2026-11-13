@@ -337,6 +337,7 @@ fn no_objective() -> Objective {
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
         retreats: BTreeSet::new(),
+        clips: false,
     }
 }
 
@@ -1037,7 +1038,7 @@ fn wavefront_has_no_lane_below_the_bottom_tree_line() {
         .iter()
         .map(|&t| Target::Tile(t))
         .collect();
-    let wavefront = state.room().wavefront(&exits, &[], &[]);
+    let wavefront = state.room().wavefront(&exits, &[], &[], false);
     assert!(wavefront.get(state.link.tile()).is_some()); // the upper corridor reaches the E exit
     assert!(wavefront.get((2, 16)).is_none()); // the pocket doesn't
 }

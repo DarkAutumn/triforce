@@ -22,7 +22,7 @@ use crate::end_conditions::{
     NO_ROOM_PROGRESS, RETREAT,
 };
 use crate::error::EnvError;
-use crate::objective::{Attached, attach, clip_settings, needs_wavefront};
+use crate::objective::{Attached, attach, needs_wavefront};
 use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -38,7 +38,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
-use zelda::objectives::Objective;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
@@ -581,23 +580,22 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
-    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; and its clip
-    /// settings (`clips.action`, the correct exits of `objective`).  Recomputed every step: the 10th kill and the bomb
-    /// count change within a room, the objective with the room.
-    fn update_disabled_kinds(&mut self, objective: &Objective) {
+    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; and its `clips:`
+    /// switch (the CLIP kind).  Recomputed every step: the 10th kill and the bomb count change within a room.
+    fn update_disabled_kinds(&mut self) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
-        let clips = clip_settings(&self.config, self.session.state(), objective);
-        self.session.set_clip_settings(clips);
+        self.session.set_clips(self.config.clips);
         self.builder.bomb_reserve = reserve;
-        self.builder.clips = self.config.clips.action != crate::config::ClipAction::None;
+        self.builder.clips = self.config.clips;
     }
 
     /// Starts an episode from the session's state (loaded or restored).
     fn begin_episode(&mut self, name: String) -> Result<(Observation, StepInfo), EnvError> {
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
+        gc.set_clips(self.config.clips);
         // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
         let state = &self.cheats.begin(&mut self.session, &gc);
         let attached = attach(
@@ -608,7 +606,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             needs_wavefront(&self.config),
         );
         self.objectives = Some(gc);
-        self.update_disabled_kinds(&attached.objective);
+        self.update_disabled_kinds();
         let step = self.route_step.and_then(|i| self.data.map.routes.get(&self.route)?.get(i));
         (self.episode_target, self.episode_entry) = match step {
             Some(s) => (s.exit.clone(), s.entry.clone()),
@@ -703,10 +701,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.episode_frames = snapshot.episode_frames;
         self.reward_total = snapshot.reward_total;
         self.episode_rewards.clone_from(&snapshot.episode_rewards);
-        // The disabled kinds and clip settings depend on the state (the 10th kill, the bomb count, the objective)
-        // and aren't in the session snapshot.
-        if let Some(objective) = self.attached.as_ref().map(|a| a.objective.clone()) {
-            self.update_disabled_kinds(&objective);
+        // The disabled kinds depend on the state (the 10th kill, the bomb count) and aren't in the session snapshot.
+        if self.attached.is_some() {
+            self.update_disabled_kinds();
         }
     }
 
@@ -757,7 +754,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &self.config.reward,
             needs_wavefront(&self.config),
         );
-        self.update_disabled_kinds(&curr.objective);
+        self.update_disabled_kinds();
         self.linger.update(
             &LingerState::of(&change.previous, &prev.objective),
             &LingerState::of(&state, &curr.objective),

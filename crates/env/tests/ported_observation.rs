@@ -74,6 +74,7 @@ fn no_objective() -> Objective {
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
         retreats: BTreeSet::new(),
+        clips: false,
     }
 }
 

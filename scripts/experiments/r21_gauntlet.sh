@@ -4,10 +4,12 @@
 # YAML per arm under experiments/r21/ (they differ only in `clips:`), start states in experiments/r21/states.
 #
 #   scripts/experiments/r21_gauntlet.sh arm ARM SEED        train one arm from scratch, then evaluate and record replays
-#   scripts/experiments/r21_gauntlet.sh pass SEED [ARM...]  every arm (default all seven), JOBS at a time
+#   scripts/experiments/r21_gauntlet.sh pass SEED [ARM...]  every arm (default both), JOBS at a time
 #   scripts/experiments/r21_gauntlet.sh reference           the scripted wrap (CLIP toward the entry edge, MOVE out)
 #
-# ARM: none kind-jump kind-walk long-jump long-walk edge-jump edge-walk. Fixed budget, no early stop: ITERATIONS x
+# ARM: none kind-jump. The round also ran kind-walk long-jump long-walk edge-jump edge-walk; those designs were
+# removed afterwards (docs/decisions.md 2026-11-12): their YAMLs are the record in experiments/r21/removed/ and no
+# longer load. Fixed budget, no early stop: ITERATIONS x
 # 4096 env steps (default 256 = 1,048,576), --parallel 4, the round settings (--sil-coeff 0.1). Models in
 # models/gauntlet-<arm>/r21-s<seed>/ with eval-sample.json and eval-argmax.json (100 episodes per state, seed 0);
 # logs in logs/r21-gauntlet/; replays (2 episodes per state, sample, the decisions stream) in
@@ -20,7 +22,7 @@ ITERATIONS=${ITERATIONS:-256}
 PARALLEL=${PARALLEL:-4}
 JOBS=${JOBS:-3}
 EPISODES=${EPISODES:-100}
-ARMS="none kind-jump long-jump edge-jump kind-walk long-walk edge-walk"
+ARMS="none kind-jump"
 LOGS=logs/r21-gauntlet
 mkdir -p $LOGS target/r21-gauntlet/replays
 

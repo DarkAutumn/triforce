@@ -132,6 +132,7 @@ fn exit_spans_bound_targets_and_correct_exits() {
         next_rooms: [to].into_iter().collect(),
         pbrs_targets: Default::default(),
         retreats: Default::default(),
+        clips: false,
     };
     assert!(
         !exit_is_correct_at(&map, from, (31, 10), &objective, loc(0, 0x4b)),
@@ -766,7 +767,7 @@ fn d3_bomb_wall_exit_targets_its_bomb_spot_then_the_doorway() {
     assert_eq!(objective.kind, ObjectiveKind::Move);
     assert_eq!(objective.next_rooms, [boss].into_iter().collect());
     assert_eq!(objective.pbrs_targets, tiles(&[(24, 10)]));
-    assert_eq!(bomb_spot(Direction::E), (24, 10));
+    assert_eq!(bomb_spot(entered.room(), Direction::E), (24, 10));
 
     // On the bomb spot (16 px short of the hotspot (0xD0, 0x8D)) facing E with a bomb: the wall opens.
     s.apply_ram(&[
@@ -987,7 +988,7 @@ fn d4_the_ladder_crosses_the_water_row_of_0x30() {
         let objective = gc.objectives(None, state);
         assert_eq!(objective.kind, ObjectiveKind::Move);
         let targets: Vec<Target> = objective.pbrs_targets.into_iter().collect();
-        state.room().wavefront(&targets, &[], &[Direction::N]).get(state.link.tile()).is_some()
+        state.room().wavefront(&targets, &[], &[Direction::N], false).get(state.link.tile()).is_some()
     };
     let state = s.state().clone();
     assert!(state.ladder() && reaches(&mut gc, &state));
@@ -1029,7 +1030,7 @@ fn d4_the_ladder_shortens_0x31() {
     let distance = |state: &GameView| {
         state
             .room()
-            .wavefront(&[Target::Dir(Direction::W)], &[], &[Direction::W])
+            .wavefront(&[Target::Dir(Direction::W)], &[], &[Direction::W], false)
             .get(state.link.tile())
             .expect("the W door is reachable either way")
     };

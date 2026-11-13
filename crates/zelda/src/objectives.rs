@@ -88,6 +88,9 @@ pub struct Objective {
     /// before the white sword, to re-enter it).  Not correct exits either: no exit reward, the episode or room
     /// visit ends as `retreat`.
     pub retreats: BTreeSet<MapLocation>,
+    /// The acting specialist has clips on (`GameCompletion::set_clips`): the path search to the targets (the PBRS
+    /// wavefront, the `target` observation) knows the grid-point skips (`Room::wavefront`).
+    pub clips: bool,
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
@@ -295,6 +298,9 @@ pub struct GameCompletion {
     missed: Option<String>,
     /// The raft crossings were put into `opened_doors` (Link holds the raft).
     rafts_open: bool,
+    /// The acting specialist has clips on: the path search knows the grid-point skips, and a pending push block that
+    /// gates the stairs needs no push when a skip reaches them ([`GameCompletion::push_wanted`]).
+    clips: bool,
 }
 
 impl GameCompletion {
@@ -347,7 +353,13 @@ impl GameCompletion {
             heart_baseline: None,
             missed: None,
             rafts_open: false,
+            clips: false,
         })
+    }
+
+    /// Whether the acting specialist has clips on (its `clips:` switch; a chain sets it per room).
+    pub fn set_clips(&mut self, clips: bool) {
+        self.clips = clips;
     }
 
     pub fn route(&self) -> &str {
@@ -514,6 +526,7 @@ impl GameCompletion {
                 next_rooms: BTreeSet::new(),
                 pbrs_targets: BTreeSet::new(),
                 retreats: BTreeSet::new(),
+                clips: self.clips,
             };
         }
         self.update_exits(state);
@@ -541,6 +554,7 @@ impl GameCompletion {
             next_rooms: next_rooms.into_iter().collect(),
             pbrs_targets: pbrs,
             retreats: self.retreats(state.full_location()),
+            clips: self.clips,
         }
     }
 
@@ -749,6 +763,15 @@ impl GameCompletion {
             return None;
         }
         if !room.push_block.is_empty() && rooms.iter().any(|next| next.in_cave != loc.in_cave) {
+            // With clips a skip may reach the stairs without the push (level 1 room $22: the block clip under the
+            // east block into the diamond).
+            if self.clips {
+                let stairs: Vec<Target> = state.room().stairs_tiles().into_iter().map(Target::Tile).collect();
+                let wavefront = state.room().wavefront(&stairs, &[], &[], true);
+                if !stairs.is_empty() && wavefront.get(state.link.tile()).is_some() {
+                    return None;
+                }
+            }
             return Some(&room.push_block);
         }
         let shutter = room.push_block_opens?;
@@ -1061,7 +1084,7 @@ impl GameCompletion {
                         .map(Target::Tile),
                 ),
                 // An intact game.yaml bomb wall (Dungeon 3's 0x4c E into Manhandla's room): where to bomb it from.
-                None if walls & d.value() != 0 => targets.push(Target::Tile(bomb_spot(d))),
+                None if walls & d.value() != 0 => targets.push(Target::Tile(bomb_spot(&room, d))),
                 None => targets.push(Target::Dir(d)),
             }
         }
@@ -1080,8 +1103,9 @@ pub fn exit_span(map: &GameMap, location: MapLocation, direction: Direction) -> 
 /// (asm:Bomb_WallHotspotsX / asm:Bomb_WallHotspotsY), so the bomb he places 16 px ahead (asm:Link_PlaceWeaponAhead)
 /// lands on the hotspot; the game opens the wall for a bomb within $18 px of it (asm:Bomb_Update).  Beside an E/W
 /// wall that also keeps Link out of the column the corner blade traps slide along (|dx| < 14 from x $D0 or $20; 0x4c
-/// has them).
-pub fn bomb_spot(direction: Direction) -> Tile {
+/// has them).  Where Link can't stand there (level 4 room $21: water under its N wall), on the hotspot itself, against
+/// the wall: the bomb lands 16 px into it, still within reach (mechanics.md "Ladder clip", on to room $11).
+pub fn bomb_spot(room: &crate::room::Room, direction: Direction) -> Tile {
     let hotspot = BombWall::hotspot(direction);
     let (dx, dy) = match direction {
         Direction::N => (0, 16),
@@ -1089,7 +1113,13 @@ pub fn bomb_spot(direction: Direction) -> Tile {
         Direction::W => (16, 0),
         _ => (-16, 0),
     };
-    Position::new(hotspot.x + dx, hotspot.y + dy).tile()
+    let (x, y) = (hotspot.x + dx, hotspot.y + dy);
+    let row = (y - 53).div_euclid(8);
+    if room.is_tile_walkable(x.div_euclid(8), row) && room.is_tile_walkable(x.div_euclid(8) + 1, row) {
+        Position::new(x, y).tile()
+    } else {
+        hotspot.tile()
+    }
 }
 
 fn along_edge(tile: Tile, direction: Direction) -> i32 {
@@ -1208,6 +1238,7 @@ mod tests {
             next_rooms: [to].into_iter().collect(),
             pbrs_targets: BTreeSet::new(),
             retreats: BTreeSet::new(),
+            clips: false,
         };
         for (row, correct) in [(3, true), (4, true), (15, false), (16, false)] {
             assert_eq!(

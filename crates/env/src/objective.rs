@@ -39,8 +39,9 @@ fn item_targets<'a>(reward: &'a RewardConfig, state: &'a GameView) -> impl Itera
         .flat_map(|it| it.link_overlap_tiles().into_iter().map(Target::Tile))
 }
 
-/// The wavefront to `targets` (locked doors count as open while Link holds a key in a dungeon).
-fn wavefront_to(state: &GameView, targets: &[Target]) -> Wavefront {
+/// The wavefront to `objective`'s `targets` (locked doors count as open while Link holds a key in a dungeon; the
+/// grid-point skips are jumps when the objective's specialist has clips on).
+fn wavefront_to(state: &GameView, objective: &Objective, targets: &[Target]) -> Wavefront {
     let locked: Vec<Direction> = if state.keys() > 0 && state.level() > 0 {
         [Direction::N, Direction::S, Direction::E, Direction::W]
             .into_iter()
@@ -49,7 +50,7 @@ fn wavefront_to(state: &GameView, targets: &[Target]) -> Wavefront {
     } else {
         Vec::new()
     };
-    state.room().wavefront(targets, &[], &locked)
+    state.room().wavefront(targets, &[], &locked, objective.clips)
 }
 
 /// Whether a specialist needs the wavefront: for PBRS or for its `target` observation.
@@ -81,7 +82,7 @@ pub fn attach_objective(
     objective.pbrs_targets.extend(item_targets(reward, state));
     let wavefront = (wavefront && !state.game_over()).then(|| {
         let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
-        Arc::new(wavefront_to(state, &targets))
+        Arc::new(wavefront_to(state, &objective, &targets))
     });
     Attached {
         objective,
@@ -103,11 +104,11 @@ pub fn target_wavefront(
     targets.extend(item_targets(reward, state));
     targets.sort_unstable();
     targets.dedup();
-    Some(wavefront_to(state, &targets))
+    Some(wavefront_to(state, objective, &targets))
 }
 
 /// Direction bits (E 1, W 2, S 4, N 8) of the sides `objective`'s next rooms lie on from `state`'s room (a maze
-/// room's next step): the `next_room_*` observation and the correct exits of the `edge` clip trigger.
+/// room's next step): the `next_room_*` observation.
 pub fn exit_bits(state: &GameView, objective: &Objective) -> u8 {
     let location = state.full_location();
     let maze_step = state.peek(zelda::game_map::MAZE_STEP);
@@ -115,9 +116,4 @@ pub fn exit_bits(state: &GameView, objective: &Objective) -> u8 {
         .next_rooms
         .iter()
         .fold(0, |bits, next| bits | state.game_map().exit_direction(location, *next, maze_step).value())
-}
-
-/// The session's clip settings for `config` in `state` with `objective` (the trigger, the correct exits).
-pub fn clip_settings(config: &SpecialistConfig, state: &GameView, objective: &Objective) -> zelda::clips::ClipSettings {
-    zelda::clips::ClipSettings::new(config.clips.action.trigger(), exit_bits(state, objective))
 }

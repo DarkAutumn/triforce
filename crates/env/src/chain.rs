@@ -795,6 +795,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             Some(granted) => self.cheats.resume(&mut self.session, &gc, granted),
             None => self.cheats.begin(&mut self.session, &gc),
         };
+        gc.set_clips(self.clips_in(state.full_location()));
         self.objective = Some(gc.objectives(None, &state));
         self.objectives = Some(gc);
         Ok(self.advance())
@@ -832,11 +833,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev_objective = self.objective.take().expect("run started");
-        let objective = self
-            .objectives
-            .as_mut()
-            .expect("run started")
-            .objectives(Some(&change.previous), &state);
+        // A new room: the path search follows its family's `clips:` switch from the objective on.
+        let clips = (state.full_location() != change.previous.full_location()).then(|| self.clips_in(state.full_location()));
+        let gc = self.objectives.as_mut().expect("run started");
+        if let Some(clips) = clips {
+            gc.set_clips(clips);
+        }
+        let objective = gc.objectives(Some(&change.previous), &state);
         self.linger.update(
             &LingerState::of(&change.previous, &prev_objective),
             &LingerState::of(&state, &objective),
@@ -955,20 +958,27 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     }
 
     /// The session's disabled kinds for the acting specialist's `items` in Link's state, with the route's bomb
-    /// reserve at the step he plays (or played last), and that reserve for the observation; every step (the 10th
-    /// kill and the bomb count change within a room).
+    /// reserve at the step he plays (or played last), and that reserve for the observation, and its `clips:` switch;
+    /// every step (the 10th kill and the bomb count change within a room).
     fn update_disabled_kinds(&mut self) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let config = &self.current.as_ref().expect("acting specialist").config;
         let kinds = config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
-        let clips = match &self.objective {
-            Some(objective) => crate::objective::clip_settings(config, self.session.state(), objective),
-            None => zelda::clips::ClipSettings::new(config.clips.action.trigger(), 0),
-        };
-        self.session.set_clip_settings(clips);
+        self.session.set_clips(config.clips);
         self.builder.bomb_reserve = reserve;
-        self.builder.clips = config.clips.action != crate::config::ClipAction::None;
+        self.builder.clips = config.clips;
+    }
+
+    /// The `clips:` switch of the family `location` is tagged with in game.yaml (false for an untagged room or a
+    /// family that doesn't load: the acting specialist's errors are reported where it is chosen).
+    fn clips_in(&self, location: MapLocation) -> bool {
+        self.data
+            .map
+            .get(location)
+            .and_then(|room| room.specialist.clone())
+            .and_then(|name| self.config_for(&name).ok())
+            .is_some_and(|config| config.clips)
     }
 
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {

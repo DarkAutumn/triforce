@@ -242,6 +242,7 @@ fn critique(critic: &mut GameplayCritic, change: &Change, map: &GameMap) -> Step
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
         retreats: BTreeSet::new(),
+        clips: false,
     };
     let c = Critique {
         change,
@@ -584,6 +585,7 @@ fn measured_ending_credits_threshold_action_before_check() {
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
         retreats: BTreeSet::new(),
+        clips: false,
     };
     // Python's pbrs_wavefront {t: t}: a tile's distance is its column.
     let wavefront = Arc::new(Wavefront::from_distances((0..10).map(|x| ((x, 0), x))));

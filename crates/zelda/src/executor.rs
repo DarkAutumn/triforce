@@ -3,7 +3,7 @@
 use crate::actions::Action;
 use crate::blocks::{ProjectileBlock, ShieldWatch};
 use crate::clips::{
-    ClipAbort, ClipOutcome, ClipSettings, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, SkipTarget,
+    ClipAbort, ClipOutcome, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, SkipTarget, skip_target,
 };
 use crate::enums::{ActionKind, Direction, ObjectClass, selected};
 use crate::game::GameView;
@@ -63,6 +63,7 @@ const ADDR_HEARTS: usize = 0x66F;
 const ADDR_PARTIAL_HEARTS: usize = 0x670;
 const ADDR_LINK_DIRECTION: usize = 0x98;
 const ADDR_LINK_GRID_OFFSET: usize = 0x394;
+const ADDR_LADDER_SLOT: usize = 0x64;
 /// Frames an off-grid Link needs to reach the next grid point (at most 6 px at 1.5 px/frame, rounded up).
 const MAX_ALIGN_FRAMES: u32 = 6;
 const OBJ_X: usize = 0x70;
@@ -175,7 +176,7 @@ pub struct OptionResult {
     /// Frames of the option itself, before uncontrollable skipping.
     pub control_frames: u32,
     pub projectile_blocks: Vec<ProjectileBlock>,
-    /// The skip this option performed (a CLIP, or a MOVE under the `long`/`edge` triggers): `crate::clips`.
+    /// The skip a CLIP performed (`crate::clips`).
     pub clip: Option<ClipOutcome>,
 }
 
@@ -267,6 +268,8 @@ struct FrameWatch {
     treasure_flag: u8,
     doors: (u8, u8),
     link: (u8, u8),
+    /// `LadderSlot` ($64): a frame that lays or puts away the ladder doesn't move Link.
+    ladder: u8,
     near: u16,
 }
 
@@ -283,6 +286,7 @@ impl FrameWatch {
             treasure_flag: ram[ADDR_TREASURE_FLAG],
             doors: (ram[ADDR_OPENED_DOORS], ram[ADDR_TRIGGERED_DOOR_CMD]),
             link: (ram[ADDR_LINK_X], ram[ADDR_LINK_Y]),
+            ladder: ram[ADDR_LADDER_SLOT],
             near: 0,
         };
         let (lx, ly) = (w.link.0 as i32, w.link.1 as i32);
@@ -346,8 +350,6 @@ pub struct Executor<S> {
     /// Keep the last frame before each room entry an action causes.
     pub capture_pre_entry: bool,
     pub last_pre_entry: Option<S>,
-    /// How MOVE reaches the skip macro (`crate::clips`; the session sets it).
-    pub clips: ClipSettings,
     blocks: Option<Vec<ProjectileBlock>>,
 }
 
@@ -358,7 +360,6 @@ impl<S> Default for Executor<S> {
             just_exited_cave: false,
             capture_pre_entry: false,
             last_pre_entry: None,
-            clips: ClipSettings::default(),
             blocks: None,
         }
     }
@@ -399,8 +400,8 @@ impl<S> Executor<S> {
         self.blocks = Some(Vec::new());
         let result = (|| {
             let mut clip = None;
-            let interrupt = if let Some(target) = self.clips.action_target(state, action) {
-                let (interrupt, outcome) = self.run_skip(m, action.direction, target);
+            let interrupt = if action.kind == ActionKind::Clip {
+                let (interrupt, outcome) = self.run_skip(m, action.direction, skip_target(state, action.direction));
                 clip = Some(outcome);
                 interrupt
             } else if matches!(action.kind, ActionKind::Move | ActionKind::Wait) {
@@ -471,8 +472,9 @@ impl<S> Executor<S> {
             if is_move {
                 if after.link != before.link {
                     stalled = 0;
-                } else if !pushing {
-                    // Link moves at least every other frame; two still frames means he hit something.
+                } else if !pushing && after.ladder == before.ladder {
+                    // Link moves at least every other frame; two still frames means he hit something (a frame that
+                    // puts the ladder away or lays it is still too, asm:Ladder_CheckAndDraw@StashLadder).
                     stalled += 1;
                     if stalled >= 2 {
                         return Some(Interrupt::Wall);
@@ -520,6 +522,7 @@ impl<S> Executor<S> {
                 Input::Toward => target.walk(true),
                 Input::Away => target.walk(false),
                 Input::Press => target.press(),
+                Input::Release => 0,
             };
             self.step(m, buttons, 1);
             let after = FrameWatch::new(m.ram());

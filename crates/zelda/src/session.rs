@@ -1,7 +1,7 @@
 //! A game session: emulator, option executor and game model.
 
 use crate::actions::{Action, ActionMask, compute_action_mask};
-use crate::clips::ClipSettings;
+use crate::clips;
 use crate::change::{Change, LookAhead};
 use crate::enums::{ActionKind, Direction};
 use crate::executor::{Executor, FrameSink, MODE_CAVE, Machine, ZeldaError};
@@ -68,6 +68,8 @@ pub struct Session<N: Nes> {
     /// Actions since the last load.
     pub steps: u64,
     disabled_kinds: Vec<ActionKind>,
+    /// The CLIP kind is offered where a skip is available (`crate::clips`; a specialist's `clips: true`).
+    clips: bool,
     /// Which fired weapons to simulate forward to credit their hits to the firing step (default all).
     pub look_ahead: LookAhead,
     /// Simulation mode (search) holds the frame sink, render flag and pre-entry capture flag here.
@@ -86,6 +88,7 @@ impl<N: Nes> Session<N> {
             total_frames: 0,
             steps: 0,
             disabled_kinds: Vec::new(),
+            clips: false,
             look_ahead: LookAhead::All,
             stash: None,
         }
@@ -174,20 +177,21 @@ impl<N: Nes> Session<N> {
         }
     }
 
-    /// How the policy reaches the skip macro (`crate::clips`; the env sets it every step: the trigger from the
-    /// specialist's `clips.action`, the correct exits from the objective). The mask is recomputed when it changes.
-    pub fn set_clip_settings(&mut self, clips: ClipSettings) {
-        if self.executor.clips == clips {
+    /// Offer the CLIP kind where a grid-point skip is available (`crate::clips`; the env sets it from the acting
+    /// specialist's `clips:` switch). The mask is recomputed when it changes. A CLIP action runs the skip whatever
+    /// the switch says: the mask is what gates the policy.
+    pub fn set_clips(&mut self, clips: bool) {
+        if self.clips == clips {
             return;
         }
-        self.executor.clips = clips;
+        self.clips = clips;
         if let Some(state) = self.state.clone() {
             self.mask = self.compute_mask(&state);
         }
     }
 
-    pub fn clip_settings(&self) -> ClipSettings {
-        self.executor.clips
+    pub fn clips(&self) -> bool {
+        self.clips
     }
 
     /// Loads a machine state, applies randomization and overrides, and gains control of Link.
@@ -383,7 +387,9 @@ impl<N: Nes> Session<N> {
 
     fn compute_mask(&self, state: &GameView) -> ActionMask {
         let mut mask = compute_action_mask(state);
-        self.executor.clips.apply(&mut mask, state);
+        if self.clips {
+            clips::allow_clips(&mut mask, state);
+        }
         for &kind in &self.disabled_kinds {
             mask.disallow_kind(kind);
         }

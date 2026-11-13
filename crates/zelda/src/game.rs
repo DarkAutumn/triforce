@@ -690,6 +690,9 @@ impl GameView {
         if self.level() == 0 && leaves_ow_screen(px, py, direction) {
             return true;
         }
+        if let Some(on) = self.ladder_move(direction) {
+            return on;
+        }
         // A cellar has no doorways or room bounds (asm:Walker_Move skips both in mode 9): only its tiles block.
         let underworld_room = self.level() > 0 && !self.in_cellar();
         if underworld_room && direction == Direction::N && py <= OW_EDGE_N {
@@ -715,13 +718,66 @@ impl GameView {
                 return walkable(room.tile(0x1F, row).max(past));
             }
         }
-        if room.can_link_move_from(px, py, direction) {
+        if room.can_link_move_from(px, py, direction) || self.lays_ladder(px, py, direction) {
             return true;
         }
         if room.is_cave_entry_direction(px, py, direction) && !self.just_exited_cave {
             return true;
         }
         false
+    }
+
+    /// A MOVE on a laid ladder, Link on its line less than `$10` pixels from it (asm:Ladder_CheckAndDraw,
+    /// mechanics.md "Ladder clip"): back the way he came always (case C); on along it whatever the tile, the room
+    /// bound or a door said while not at its distance-0 point (case A), at it where the tile ahead is walkable (case
+    /// B; a ladder laid up also 8 pixels higher, case E); never sideways (case D). None off the ladder: the
+    /// ordinary rules (at `$10` it is put away, or Link steps onto it as from the bank).
+    fn ladder_move(&self, direction: Direction) -> Option<bool> {
+        let slot = self.byte(Var::LadderSlot) as usize;
+        if slot == 0 || slot >= tables::OBJ_ID.1 {
+            return None;
+        }
+        let ladder = Direction::from_value(self.ram[tables::OBJ_DIRECTION.0 + slot])?;
+        let (lx, ly) = (self.ram[tables::OBJ_POS_X.0 + slot] as i32, self.ram[tables::OBJ_POS_Y.0 + slot] as i32);
+        let (px, py) = (self.link.position.x, self.link.position.y);
+        let distance = match ladder {
+            Direction::N | Direction::S if px == lx => (py + 3 - ly).abs(),
+            Direction::W | Direction::E if py + 3 == ly => (px - lx).abs(),
+            _ => return None,
+        };
+        if distance >= 0x10 {
+            return None;
+        }
+        if direction == ladder.opposite() {
+            return Some(true);
+        }
+        if direction != ladder {
+            return Some(false);
+        }
+        let room = self.room();
+        Some(
+            distance != 0
+                || room.can_link_move_from(px, py, direction)
+                || (ladder == Direction::N && room.can_link_move_from(px, py - 8, direction)),
+        )
+    }
+
+    /// Link on a grid point (the caller's offset test) of a dungeon room with the ladder, out of a doorway, facing
+    /// water: the game lays the ladder one square ahead and walks him onto it (asm:Link_EndMoveAndAnimate@CheckLadder;
+    /// over water wider than one square he stops on it at its distance-0 point). It needs a monster slot, free or the
+    /// one of a ladder out that he is off (`ladder_move` is None there: it is put away first).
+    fn lays_ladder(&self, px: i32, py: i32, direction: Direction) -> bool {
+        if self.level() == 0 || self.in_cellar() || !self.ladder() || self.byte(Var::DoorwayDir) != 0 {
+            return false;
+        }
+        let room = self.room();
+        let inside = |c: i32, r: i32| (0..crate::room::COLS).contains(&c) && (0..crate::room::ROWS).contains(&r);
+        let water = Room::hotspot_tiles(px, py, direction)
+            .into_iter()
+            .all(|(c, r)| inside(c, r) && room.tile(c, r) == crate::room::WATER_TILE);
+        water
+            && (self.byte(Var::LadderSlot) != 0
+                || (1..tables::OBJ_ID.1).any(|slot| self.ram[tables::OBJ_ID.0 + slot] == 0))
     }
 
     fn can_pass_doorway(&self, px: i32, py: i32, direction: Direction) -> bool {

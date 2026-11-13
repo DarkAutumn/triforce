@@ -111,7 +111,7 @@ pub fn linger_wavefront(
         Vec::new()
     };
     let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
-    Arc::new(state.room().wavefront(&targets, &[], &locked))
+    Arc::new(state.room().wavefront(&targets, &[], &locked, objective.clips))
 }
 
 /// `LingerTracker.summary()`.
