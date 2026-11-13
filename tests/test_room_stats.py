@@ -111,22 +111,22 @@ def test_steps_follow_the_real_route_through_wrong_exits_and_retreats():
     assert room_stats.assign_steps(plan, records, start) == [start, start + 1, start, start + 1]
 
 
-def write_chain(directory, name, runs, start_from, team):
-    path = directory / f'tag-{name}.jsonl'
+def write_chain(directory, name, runs, start_from, team, tag='tag', **provenance):
+    path = directory / f'{tag}-{name}.jsonl'
     path.write_text(''.join(json.dumps(r) + '\n' for r in runs))
     models = [{'name': specialist, 'checkpoint': f'{specialist}/{run_id}/ckpt.pt', 'act': act}
               for specialist, (run_id, act) in team.items()]
     meta = {'provenance': {'route': 'test', 'start_from': start_from, 'models': models, 'code': 'c', 'data': 'd',
-                           'version': '0.0.0.0'}}
+                           'version': '0.0.0.0', **provenance}}
     path.with_name(path.name + '.meta.json').write_text(json.dumps(meta))
 
 
-def write_eval(models, specialist, run_id, act, visited):
+def write_eval(models, specialist, run_id, act, visited, **extra):
     directory = models / specialist / run_id
     directory.mkdir(parents=True)
     (directory / 'ckpt.pt').write_bytes(specialist.encode())
     registry.set_act_mode(directory, act)
-    (directory / 'eval.json').write_text(json.dumps({'format': 2, 'act': act, 'visited_rooms': visited}))
+    (directory / 'eval.json').write_text(json.dumps({'format': 2, 'act': act, 'visited_rooms': visited, **extra}))
 
 
 def eval_room(level, room, visits, deaths, timeouts=0):
@@ -155,8 +155,11 @@ def test_build_writes_every_scope_with_its_provenance(tmp_path, monkeypatch):
     assert (data['format'], data['tag'], data['route']) == (room_stats.FORMAT, 'tag', 'test')
     assert set(data['scopes']) == {'full', 'seg-a', 'room'}         # no post file: no seg-b
     assert data['scopes']['full']['source'] == {'file': 'tag-full.jsonl', 'runs': 4, 'start_from': None,
-                                                'route': 'test', 'act': {'argmax': 1, 'sample': 1}, 'code': 'c',
-                                                'data': 'd', 'version': '0.0.0.0'}
+                                                'route': 'test', 'act': {'argmax': 1, 'sample': 1}, 'clips': None,
+                                                'clips_off_from': None, 'code': 'c', 'data': 'd',
+                                                'version': '0.0.0.0'}
+    assert data['scopes']['full']['files'] == [data['scopes']['full']['source']]
+    assert (data['tags'], data['noclips']) == (['tag'], None)
     assert data['team']['goriya']['run'] == 'run-b' and data['promoted'] == {'goriya': 'run-b'}
     assert [s['name'] for s in data['segments']] == ['full', 'seg-a', 'seg-b']
     room = data['scopes']['room']
@@ -170,6 +173,11 @@ def test_build_writes_every_scope_with_its_provenance(tmp_path, monkeypatch):
     # Every scope's room entries carry the same fields.
     chain_entry = dict(data['scopes']['seg-a']['rooms']['0:0x11'])
     assert set(chain_entry) == set(entry)
+    # Files and evaluations from before the clips switch: every visit played on.
+    assert list(entry['by_clips']) == ['on'] and entry['by_clips']['on']['deaths'] == 2
+    assert list(chain_entry['by_clips']) == ['on'] and list(data['scopes']['full']['by_clips']) == ['on']
+    assert chain_entry['by_clips']['on'] == {k: v for k, v in chain_entry.items()
+                                             if k not in ('level', 'room', 'in_cave', 'by_clips')}
 
 
 def test_build_refuses_a_file_that_starts_elsewhere(tmp_path, monkeypatch):
@@ -180,3 +188,140 @@ def test_build_refuses_a_file_that_starts_elsewhere(tmp_path, monkeypatch):
         room_stats.build('tag', tmp_path, tmp_path / 'models')
     with pytest.raises(room_stats.RoomStatsError, match='no chain files'):
         room_stats.build('other', tmp_path, tmp_path / 'models')
+
+
+# Round 22: the clips switch.  One file with runs on, off, a run that turns the switch off on step 2 (eval-chain
+# --clips-off-from step:2) and a run from before the switch (no fields: on, steps inferred).
+def on(level, room, outcome='exit-correct', **kw):
+    return visit(level, room, outcome, clips_allowed=True, **kw)
+
+
+def off(level, room, outcome='exit-correct', **kw):
+    return visit(level, room, outcome, clips_allowed=False, **kw)
+
+
+def clips_run(seed, clips, rooms, result='failure'):
+    return {**run(seed, rooms, result), 'clips': clips}
+
+
+MIXED_RUNS = [
+    clips_run(0, True, [on(0, 0x10, step=0, hits=1), on(0, 0x11, step=1, hits=1), on(0, 0x12, step=2),
+                        on(1, 0x20, step=3), on(1, 0x10, step=4), on(0, 0x12, step=5), on(0, 0x11, step=6, hits=1),
+                        on(0, 0x01, step=7), visit(0, 0x01, 'milestone')], 'success'),
+    clips_run(1, False, [off(0, 0x10, step=0), off(0, 0x11, 'death', step=1, hits=2, health_out=0.0)]),
+    clips_run(2, True, [on(0, 0x10, step=0), on(0, 0x11, step=1, hits=0),
+                        off(0, 0x12, 'death', step=2, health_out=0.0, clips_flips=[{'step': 0, 'clips': False}])]),
+    run(3, [ok(0, 0x10), visit(0, 0x11, 'death', health_out=0.0)]),
+]
+
+
+def test_one_file_with_mixed_runs_splits_every_room_by_the_switch():
+    scope = room_stats.chain_scope(MIXED_RUNS, PLAN, FULL)
+    assert (scope['runs'], scope['arrived'], scope['endings']) == (4, 1, {'death': 3})
+    # Runs that played a visit with each switch: the flipping run 2 in both.
+    assert scope['by_clips'] == {
+        'on': {'runs': 3, 'arrived': 1, 'arrival_rate': 0.33333, 'endings': {'death': 1}, 'off_route_visits': 0},
+        'off': {'runs': 2, 'arrived': 0, 'arrival_rate': 0.0, 'endings': {'death': 2}, 'off_route_visits': 0}}
+    room = scope['rooms']['0:0x11']                     # the combined numbers stay what they were
+    assert (room['runs'], room['entered'], room['visits'], room['deaths'], room['death_rate']) == (4, 4, 5, 2, 0.5)
+    on_, off_ = room['by_clips']['on'], room['by_clips']['off']
+    assert (on_['runs'], on_['entered'], on_['visits'], on_['deaths'], on_['death_rate']) == (3, 3, 4, 1, 0.33333)
+    assert (off_['runs'], off_['entered'], off_['visits'], off_['deaths'], off_['death_rate']) == (2, 1, 1, 1, 0.5)
+    assert list(on_['steps']) == ['1', '6'] and list(off_['steps']) == ['1']
+    assert on_['steps']['1']['visits'] == 3 and 'level' not in on_
+    # Hits: the records' counts per visit that counts them (run 3, from before the field, doesn't).
+    assert (room['hits_per_visit'], on_['hits_per_visit'], off_['hits_per_visit']) == (1.0, 0.66667, 2.0)
+    assert scope['rooms']['1:0x20']['hits_per_visit'] is None
+    # 0:0x12: run 0 crossed it twice with the switch on, run 2 died there after turning it off.
+    room = scope['rooms']['0:0x12']
+    assert {switch: (e['visits'], e['deaths'], e['death_rate']) for switch, e in room['by_clips'].items()} == {
+        'on': (2, 0, 0.0), 'off': (1, 1, 0.5)}
+    assert list(scope['rooms']['1:0x20']['by_clips']) == ['on']        # only on visits: no off entry
+    # A segment splits the same way within its cut.
+    segment = room_stats.chain_scope(MIXED_RUNS, PLAN, FIRST)
+    assert segment['by_clips']['on']['arrived'] == 1 and segment['rooms']['0:0x11']['by_clips']['on']['visits'] == 3
+
+
+def test_assign_steps_uses_the_recorded_step_and_infers_without_it():
+    # Recorded: kept even where the cursor would pick another step of the room (a stretch's other way); a recorded
+    # step of another room (a changed route) or None is off the route.
+    records = [ok(0, 0x10, step=0), ok(0, 0x11, step=6), visit(0, 0x11, 'exit-wrong', step=3),
+               visit(1, 0x21, 'exit-wrong', step=None), visit(0, 0x01, 'milestone', step=7)]
+    assert room_stats.assign_steps(PLAN, records, 0) == [0, 6, None, None, None]
+    # Without the field (files from before round 22): inferred along the route.
+    records = [ok(0, 0x10), ok(0, 0x11), ok(0, 0x12), ok(1, 0x20)]
+    assert room_stats.assign_steps(PLAN, records, 0) == [0, 1, 2, 3]
+    # A recorded correct exit moves the cursor for a later record without one.
+    assert room_stats.assign_steps(PLAN, [ok(0, 0x12, step=5), ok(0, 0x11)], 0) == [5, 6]
+
+
+NOCLIPS_RUNS = [   # a switch-off tag: neither the runs nor the records name the switch, the file's meta does
+    run(0, [*THROUGH, ok(0, 0x12), ok(0, 0x11), ok(0, 0x01), visit(0, 0x01, 'milestone')], 'success'),
+    run(1, [ok(0, 0x10), visit(0, 0x11, 'death', health_out=0.0)]),
+]
+
+
+def test_two_tags_read_together_split_by_the_switch(tmp_path, monkeypatch):
+    monkeypatch.setattr(_native, 'route_steps', lambda name: PLAN)
+    monkeypatch.setattr(room_stats, 'SCOPES', (FULL, FIRST, SECOND))
+    chains, models = tmp_path / 'chains', tmp_path / 'models'
+    chains.mkdir()
+    post = [run(0, [ok(0, 0x12), visit(0, 0x11, 'death')])]
+    write_chain(chains, 'full', FULL_RUNS, None, {}, clips=True)
+    write_chain(chains, 'post', post, '0_12c_0', {}, clips=True)
+    write_chain(chains, 'full', NOCLIPS_RUNS, None, {}, tag='tag-noclips', clips=False)
+    # A segment the switch-off tag didn't measure, linked from the base tag: read once.
+    (chains / 'tag-noclips-post.jsonl').symlink_to('tag-post.jsonl')
+
+    assert room_stats.main(['tag', '--noclips', '--chains-dir', str(chains), '--models-dir', str(models)]) == 0
+    path = chains / 'tag-both-room-stats.json'
+    assert room_stats.output_path('tag', chains, 'tag-noclips') == path and room_stats.newest(chains) == path
+    data = room_stats.read(path)
+    assert (data['tag'], data['tags'], data['noclips']) == ('tag', ['tag', 'tag-noclips'], 'tag-noclips')
+    full = data['scopes']['full']
+    assert [(f['file'], f['runs'], f['clips']) for f in full['files']] == [
+        ('tag-full.jsonl', 4, True), ('tag-noclips-full.jsonl', 2, False)]
+    assert full['runs'] == 6 and {s: t['runs'] for s, t in full['by_clips'].items()} == {'on': 4, 'off': 2}
+    assert (full['by_clips']['on']['arrived'], full['by_clips']['off']['arrived']) == (1, 1)
+    room = full['rooms']['0:0x11']
+    assert (room['runs'], room['deaths'], room['death_rate']) == (6, 3, 0.5)
+    assert {s: (e['runs'], e['deaths'], e['death_rate']) for s, e in room['by_clips'].items()} == {
+        'on': (4, 2, 0.5), 'off': (2, 1, 0.5)}
+    assert data['scopes']['seg-b']['runs'] == 1 and len(data['scopes']['seg-b']['files']) == 1
+    # One tag alone writes the plain name; another switch-off tag by name; a missing one is an error.
+    assert room_stats.main(['tag', '--chains-dir', str(chains), '--models-dir', str(models)]) == 0
+    assert room_stats.read(chains / 'tag-room-stats.json')['scopes']['full']['by_clips'].keys() == {'on'}
+    assert room_stats.main(['tag', '--noclips', 'tag-noclips', '--chains-dir', str(chains),
+                            '--models-dir', str(models), '--output', str(tmp_path / 'x.json')]) == 0
+    assert room_stats.main(['tag', '--noclips', 'nope', '--chains-dir', str(chains),
+                            '--models-dir', str(models)]) == 2
+
+
+def test_the_room_scope_splits_by_the_evaluations_by_clips(tmp_path):
+    models = tmp_path / 'models'
+    both = {'1:0x20': eval_room(1, 0x20, 100, 10)}
+    write_eval(models, 'goriya', 'run-b', 'sample', both, clips='both', by_clips={
+        'on': {'episodes': 60, 'visited_rooms': {'1:0x20': eval_room(1, 0x20, 60, 3)}},
+        'off': {'episodes': 40, 'visited_rooms': {'1:0x20': eval_room(1, 0x20, 40, 7)}}})
+    write_eval(models, 'ow-octorok', 'run-a', 'argmax', {'0:0x11': eval_room(0, 0x11, 100, 2)})   # before the switch
+    team = {'goriya': {'run': 'run-b', 'act': 'sample'}, 'ow-octorok': {'run': 'run-a', 'act': 'argmax'}}
+    scope = room_stats.room_scope(models, team)
+    assert [(s['specialist'], s['clips'], s['visits']) for s in scope['sources']] == [
+        ('goriya', 'both', 100), ('ow-octorok', None, 100)]
+    room = scope['rooms']['1:0x20']
+    assert (room['runs'], room['deaths'], room['death_rate']) == (100, 10, 0.1)
+    assert {s: (e['runs'], e['deaths'], e['death_rate']) for s, e in room['by_clips'].items()} == {
+        'on': (60, 3, 0.05), 'off': (40, 7, 0.175)}
+    assert 'level' not in room['by_clips']['on'] and room['by_clips']['off']['steps'] is None
+    assert list(scope['rooms']['0:0x11']['by_clips']) == ['on']
+    merged, _ = room_stats.load_evals_by_clips(models, team=team)
+    assert room_stats.load_evals(models, team=team)[0] == merged['both']
+
+
+def test_old_room_stats_files_still_read(tmp_path):
+    path = tmp_path / 'old-room-stats.json'
+    path.write_text(json.dumps({'format': 1, 'tag': 'old', 'route': 'test', 'scopes': {}}))
+    assert room_stats.read(path)['tag'] == 'old'
+    path.write_text(json.dumps({'format': 0, 'scopes': {}}))
+    with pytest.raises(ValueError, match='format 1 or 2'):
+        room_stats.read(path)

@@ -95,7 +95,8 @@ def test_state_names_and_picture_choice(tmp_path):
 
 
 def test_load_evals_merges_rooms_by_visits(models):
-    stats, sources = zelda_map.load_evals(models)
+    merged, sources = zelda_map.load_evals_by_clips(models)
+    stats = merged['both']
     assert {(s['specialist'], s['status'], s['mode']) for s in sources} == {
         ('d2-rope', 'detailed', 'argmax'), ('goriya', 'detailed', 'sample'), ('ow-zora', 'old format', 'sample'),
         ('ow-start', 'no eval', None), ('ow-octorok', 'no eval', None)}
@@ -119,10 +120,10 @@ def test_load_evals_run_id_needs_an_evaluation_in_the_act_mode(models):
     run2.mkdir()
     (run2 / 'ckpt.pt').write_bytes(b'other weights')
     (run2 / 'eval.json').write_text(json.dumps({'format': 2, 'act': 'argmax', 'visited_rooms': {}}))
-    _, sources = zelda_map.load_evals(models, 'run2')
+    _, sources = zelda_map.load_evals_by_clips(models, 'run2')
     assert next(s for s in sources if s['specialist'] == 'goriya')['run'] == 'run1'    # run2 samples: no eval
     (run2 / 'eval-sample.json').write_text(json.dumps({'format': 2, 'act': 'sample', 'visited_rooms': {}}))
-    _, sources = zelda_map.load_evals(models, 'run2')
+    _, sources = zelda_map.load_evals_by_clips(models, 'run2')
     goriya = next(s for s in sources if s['specialist'] == 'goriya')
     assert (goriya['run'], goriya['mode'], goriya['file']) == ('run2', 'sample', 'eval-sample.json')
 
@@ -200,7 +201,7 @@ def write_room_stats(path):
     full = {'1:0x44': scope_entry(100, 80, 0.03, reach=0.5, steps={
                 '57': scope_entry(100, 50, 0.01, reach=0.5), '61': scope_entry(100, 30, 0.02, reach=0.3)}),
             '1:0x35': scope_entry(100, 20, 0.0, reach=0.2)}
-    data = {'format': ROOM_STATS_FORMAT, 'tag': 'r99', 'created': '2026-11-13T12:00:00',
+    data = {'format': 1, 'tag': 'r99', 'created': '2026-11-13T12:00:00',      # from before the clips switch
             'scopes': {
                 'full': {'runs': 100, 'arrival_rate': 0.1, 'start': 'start', 'cut': None, 'rooms': full},
                 'to-d1': {'runs': 200, 'arrival_rate': 0.5, 'start': '0_3cc_0', 'cut': '0_37c_0',
@@ -249,7 +250,107 @@ def test_window_scopes_from_a_room_stats_file(qapp, models, tmp_path):
     for text in ('Room · by scope', 'Full run', '· #61', 'To D1', 'Room only', '3.0%', '75%', '-0.50',
                  'Room · eval of the promoted models'):
         assert text in html
+    # A file from before the clips switch: its visits played on, there is nothing to show with it off.
+    assert [button.isEnabled() for button in window.clips_group.buttons()] == [True, True, False]
+    window.set_clips('on')
+    assert window.view.badges[0x44][0] == '50%' and '100 runs with clips on from start' in window.scope_info.text()
+    rows = zelda_map.scope_rows(window.scopes, '1:0x44', window.current_scope(), 'on')
+    assert [(label, current) for label, _, _, current in rows][:3] == [
+        ('Full run', True), ('· on #57', False), ('· on #61', False)]
     window.close()
+    window = zelda_map.MapWindow(models, {}, {}, stats_path=path, clips='off')
+    assert window.clips == 'both'
+    window.close()
+
+
+D4 = next(scope for scope in zelda_map.STAT_SCOPES if scope.name == 'd4')
+
+
+def d4_run(plan, steps, clips, death=None):
+    """A chain run of Dungeon 4 along the route's ``steps`` (round 22 records: step, switch, hits); ``death``: it
+    dies on its last step."""
+    records = [{'level': plan[i]['level'], 'room': f"0x{plan[i]['room']:02x}", 'in_cave': plan[i]['in_cave'],
+                'specialist': plan[i]['specialist'], 'steps': 20, 'frames': 200, 'health_in': 5.0,
+                'health_out': 4.5, 'outcome': 'exit-correct', 'hits': 1, 'step': i, 'clips_allowed': clips}
+               for i in steps]
+    if death:
+        records[-1].update(outcome='death', health_out=0.0, hits=4)
+    return {'route': 'd2first', 'result': 'failure' if death else 'success', 'clips': clips, 'rooms': records}
+
+
+def write_clips_room_stats(path):
+    """The d4 scope of 8 runs, from the room_stats code: 4 with the switch on (the ladder clip 4:0x31 -> 4:0x21; one
+    dies in 4:0x21), 4 with it off (the plain way through 4:0x30 and 4:0x20; two die in 4:0x20)."""
+    from triforce import room_stats  # pylint: disable=import-outside-toplevel
+    plan = list(zelda_map.native_route_steps('d2first'))
+    common = list(range(105, 115))
+    clip_way, plain_way, rest = [115, 116], [117, 118, 119, 120], list(range(121, 125))
+    runs = ([d4_run(plan, common + clip_way + rest, True) for _ in range(3)]
+            + [d4_run(plan, common + clip_way, True, death=True)]
+            + [d4_run(plan, common + plain_way + rest, False) for _ in range(2)]
+            + [d4_run(plan, common + plain_way[:3], False, death=True) for _ in range(2)])
+    data = {'format': ROOM_STATS_FORMAT, 'tag': 'r99', 'tags': ['r99', 'r99-noclips'], 'created': '2026-11-13',
+            'scopes': {'d4': room_stats.chain_scope(runs, plan, D4)}}
+    path.write_text(json.dumps(data))
+    return path
+
+
+def test_the_clips_selector_splits_rooms_and_the_route(qapp, models, tmp_path):
+    path = write_clips_room_stats(tmp_path / 'r99-both-room-stats.json')
+    window = zelda_map.MapWindow(models, {}, {}, stats_path=path, route='d2first')
+    window.resize(1200, 800)
+    window.show()
+    qapp.processEvents()
+    assert window.status.text().startswith('Room stats r99 + r99-noclips')
+    assert (window.scope, window.segment, window.clips) == ('segment', 'd4', 'both')
+    assert all(button.isEnabled() for button in window.clips_group.buttons())
+    window.tabs.setCurrentIndex(4)
+    window.set_overlay('deaths')
+    assert window.view.badges[0x20][0] == '25%' and window.view.badges[0x21][0] == '12%'      # of 8 runs
+    assert 'D4 alone · 8 runs from 4_71s_0, 62% reach the D4 triforce' == window.scope_info.text()
+    # Both ways drawn, the clip way's step numbers marked.
+    assert window.view.route_rooms[0x31] == [111, 115, 117] and 0x20 in window.view.route_rooms
+    assert window.view.route_marks and window.view.route_ways[115] == 'clips'
+    assert {(0x31, 0x21, 'clips'), (0x31, 0x30, 'plain'), (0x21, 0x11, None)} <= set(window.view.route_segments)
+    assert 'clip way dashed' in window.legend.text()
+    window.view.repaint()
+
+    window.set_clips('off')
+    assert window.clips_group.checkedId() == 2
+    assert window.view.badges[0x20][0] == '50%' and 0x21 in window.view.badges and window.view.badges[0x21][0] == '0%'
+    assert 'D4 alone · 4 runs with clips off from 4_71s_0, 50% reach' in window.scope_info.text()
+    assert window.view.route_rooms[0x31] == [111, 117] and not window.view.route_marks
+    assert (0x31, 0x21, 'clips') not in window.view.route_segments
+    assert (0x31, 0x30, 'plain') in window.view.route_segments and window.legend.text().endswith('the plain way')
+    window.set_overlay('hits')                                     # chain records count hits now
+    assert window.view.badges[0x20][0] == '2.50'
+    window.select_room(0x21)
+    rows = zelda_map.scope_rows(window.scopes, '4:0x21', window.current_scope(), 'off')
+    assert [(label, current) for label, _, _, current in rows] == [
+        ('D4 alone', False), ('· clips on', False), ('· clips off', True)]
+    html = window.details.text()
+    assert '· clips off' in html and 'plain way of d4-island' in html and 'clips way of' not in html
+
+    window.set_clips('on')
+    window.set_overlay('deaths')
+    assert 0x20 not in window.view.badges and 0x20 in window.view.dimmed and window.view.badges[0x21][0] == '25%'
+    assert 0x30 in window.view.route_rooms and 0x20 not in window.view.route_rooms
+    assert (0x31, 0x21, 'clips') in window.view.route_segments
+    assert not any(way == 'plain' for _, _, way in window.view.route_segments)
+    window.close()
+
+
+def test_screenshot_with_the_clips_selector(qapp, models, tmp_path, monkeypatch):
+    path = write_clips_room_stats(tmp_path / 'r99-both-room-stats.json')
+    monkeypatch.setattr(zelda_map, 'render_screens', lambda *args: ({}, zelda_map.Counter()))
+    for clips in ('off', 'both'):
+        out = tmp_path / f'map-{clips}.png'
+        assert zelda_map.main(['--models-dir', str(models), '--stats', str(path), '--route', 'd2first', '--clips',
+                               clips, '--scope', 'd4', '--level', '4', '--overlay', 'deaths', '--select', '0x21',
+                               '--screenshot', str(out)]) == 0
+        assert out.read_bytes()[:8] == b'\x89PNG\r\n\x1a\n' and out.stat().st_size > 10_000
+    args = zelda_map.build_parser().parse_args(['--select', '0x31', '--clips', 'off'])
+    assert (args.select, args.clips, args.level, args.overlay) == (0x31, 'off', 0, 'none')
 
 
 def test_window_finds_the_newest_room_stats_file(qapp, models, tmp_path):
@@ -284,8 +385,9 @@ def test_route_plan_and_overlay(qapp, models):
     assert plan[-1]['exit'] == 'triforce' and plan[-1]['hearts'] == 8
     skip = next(s for s in plan if (s['level'], s['room'], s['entry']) == (3, 0x69, 'N'))
     assert 'treasure skip' in zelda_map.step_text(skip)
-    assert (0x1a, 0x0a) in zelda_map.route_segments(plan, 0) and (0x0a, 0x1a) in zelda_map.route_segments(plan, 0)
-    assert (0x3c, 0x2c) not in zelda_map.route_segments(plan, 0)          # walls between them: the route goes round
+    walks = zelda_map.route_segments(plan, 0)
+    assert (0x1a, 0x0a, None) in walks and (0x0a, 0x1a, None) in walks
+    assert (0x3c, 0x2c) not in {walk[:2] for walk in walks}               # walls between them: the route goes round
     assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x74, 0x45}
     rooms = zelda_map.route_rooms(plan, 0)
     assert len(rooms[0x2c]) == 3 and len(rooms[0x1a]) == 2
@@ -296,7 +398,7 @@ def test_route_plan_and_overlay(qapp, models):
     window.show()
     qapp.processEvents()
     assert 'route d2first' in window.windowTitle()
-    assert window.view.route_rooms[0x0a] and (0x0a, 0x1a) in window.view.route_segments
+    assert window.view.route_rooms[0x0a] and (0x0a, 0x1a, None) in window.view.route_segments
     window.view.repaint()
     html = window.room_html(0, 0x2c)
     assert 'Route d2first' in html and 'waypoint heart' in html
