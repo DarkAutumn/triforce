@@ -499,7 +499,10 @@ impl<S> Executor<S> {
     /// The grid-point skip toward `target` (`crate::clips`): the decision table every frame until Link stands at the
     /// end point. A hit, a room change or game over end it at once (as a MOVE); spawns and nearby monsters don't.
     /// Missed presses back off and retry; the presses, a stand-still and a frame cap end it cleanly. Link is left
-    /// where he stands, from where MOVE (and the skip itself, after its back-off) works again.
+    /// where he stands, from where MOVE (and the skip itself, after its back-off) works again. A returning boomerang
+    /// caught during the skip puts Link in the catch pose, in which the game moves him by no input
+    /// (asm:Link_HandleInput): those frames are waited out with nothing pressed (at most `MAX_POSE_FRAMES`), outside
+    /// the decision table and the stand-still count, as `run_attack` does before its press.
     fn run_skip<N: Nes>(
         &mut self,
         m: &mut Machine<N>,
@@ -512,10 +515,27 @@ impl<S> Executor<S> {
         };
         let mut controller = Controller::new(target);
         let mut before = FrameWatch::new(m.ram());
-        let mut still = 0;
+        let (mut still, mut posed) = (0, 0);
         let mut abort = Some(ClipAbort::FrameCap);
         let mut interrupt = None;
+        let ended = |before: &FrameWatch, after: &FrameWatch| match detect_interrupt(before, after, 0) {
+            Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => Some(i),
+            _ if SCROLLING_MODES.contains(&after.mode) => Some(Interrupt::Transition),
+            _ => None,
+        };
         for _ in 0..MAX_SKIP_FRAMES {
+            if m.read(ADDR_LINK_STATUS) != 0 && posed < MAX_POSE_FRAMES {
+                posed += 1;
+                self.step(m, 0, 1);
+                let after = FrameWatch::new(m.ram());
+                if let Some(i) = ended(&before, &after) {
+                    interrupt = Some(i);
+                    abort = Some(ClipAbort::Interrupted(i));
+                    break;
+                }
+                before = after;
+                continue;
+            }
             let s = target.read(m.ram());
             let input = match controller.decide(s) {
                 Decision::Done => {
@@ -536,12 +556,7 @@ impl<S> Executor<S> {
             };
             self.step(m, buttons, 1);
             let after = FrameWatch::new(m.ram());
-            let ended = match detect_interrupt(&before, &after, 0) {
-                Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => Some(i),
-                _ if SCROLLING_MODES.contains(&after.mode) => Some(Interrupt::Transition),
-                _ => None,
-            };
-            if let Some(i) = ended {
+            if let Some(i) = ended(&before, &after) {
                 interrupt = Some(i);
                 abort = Some(ClipAbort::Interrupted(i));
                 break;
@@ -550,7 +565,8 @@ impl<S> Executor<S> {
             if input == Input::Press {
                 controller.pressed(now);
             }
-            still = if now.raw == s.raw { still + 1 } else { 0 };
+            // A frame that puts Link in the catch pose is no stand-still: the pose's frames are waited out above.
+            still = if now.raw == s.raw && m.read(ADDR_LINK_STATUS) == 0 { still + 1 } else { 0 };
             if still >= MAX_STILL_FRAMES {
                 abort = Some(ClipAbort::Stalled);
                 break;

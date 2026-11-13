@@ -604,8 +604,9 @@ fn turn_and_strike_in_every_situation() {
 }
 
 /// The end state of each kind of clip, clips on: the wrap W and E on the overworld start screen's row (X $F0 and
-/// $00; a sword given by test setup), the block clip N under 1:$22's east block (8 px into it, ($A0, $8D)) and the
-/// ladder clip N off 4:$21's island (X, $55) on three of its columns. Each with the clip's start (in the zone).
+/// $00; a sword given by test setup), the block clip N under 1:$22's east block (8 px into it, ($A0, $8D)) and in
+/// 4:$50 (($B0, $8D) to ($B0, $7D)), and the ladder clip N off 4:$21's island (X, $55) on three of its columns.
+/// Each with the clip's start (in the zone).
 fn clip_ends(s: &mut S) -> Vec<(String, Snap, Snap)> {
     use Direction::{E, N, W};
     let mut out = Vec::new();
@@ -634,6 +635,15 @@ fn clip_ends(s: &mut S) -> Vec<(String, Snap, Snap)> {
     assert!(hold_until(s, buttons::LEFT, 120, |r| r[0x70] == 0xA0 && r[0x394] == 0));
     assert!(hold_until(s, buttons::UP, 120, |r| r[0x84] == 0xA5 && r[0x394] == 0));
     clip(s, "block N under 1:$22's east block".into(), N, (0xA0, 0x8D));
+    // 4:$50 (the Vires' room), where round 21's experiment clips: N from ($B0, $8D) into the block above.
+    load(s, "4_50e_0");
+    s.apply_ram(&[(zelda::Var::DoorwayDir, 0)]);
+    for (addr, value) in [(0x70, 0xB0), (0x84, 0x8D), (0x394, 0)] {
+        s.nes_mut().poke(addr, value); // test setup
+    }
+    s.apply_ram(&[]);
+    s.set_clips(true);
+    clip(s, "block N in 4:$50".into(), N, (0xB0, 0x7D));
     for x in [0x50u8, 0x78, 0xA0] {
         load(s, LADDER_21);
         s.apply_ram(&[(zelda::Var::DoorwayDir, 0)]);
@@ -898,4 +908,121 @@ fn the_ladder_models_agree_on_the_ladder_clip_traces() {
     }
     eprintln!("{frames} frames on the laid ladder, {moves} MOVE checks on a grid point, {case_e} upward case E frames");
     assert!(frames > 100 && moves > 20, "{frames} {moves}");
+}
+
+/// A boomerang caught around a CLIP's decision, from a start of each clip's zone (round 21's 4:$50 experiment saw
+/// `CLIP N` stall when the catch pose, `$AC` = `$20`/`$21`/`$31`, began during the macro): the boomerang thrown
+/// away from the clip and Link left standing 0..k frames, k from four frames before the catch to two into it. With
+/// the pose on at the decision CLIP is not offered; otherwise it is, and it completes at the clip's end, the frames
+/// of a pose that starts during the macro waited out.
+#[test]
+fn a_boomerang_caught_around_a_clip() {
+    let Some((mut s, _)) = session() else { return };
+    let (mut refused, mut caught_in_macro, mut done) = (0, 0, 0);
+    for (label, start, end) in clip_ends(&mut s) {
+        s.restore(&end);
+        let (room, want) = (s.state().full_location(), (link_at(&s).0, link_at(&s).1));
+        s.restore(&start);
+        let heading = [Direction::N, Direction::S, Direction::W, Direction::E]
+            .into_iter()
+            .find(|&h| zelda::clips::skip_available(s.state(), h))
+            .unwrap();
+        let away = heading.opposite();
+        if !s.state().attack_directions(ActionKind::Boomerang).contains(&away) {
+            continue;
+        }
+        select(&mut s, ActionKind::Boomerang);
+        s.act(Action::new(ActionKind::Boomerang, away, 0).unwrap()).unwrap();
+        let thrown = s.snapshot();
+        let mut catch = None;
+        for f in 0..180u32 {
+            if ram(&s)[0xAC] != 0 {
+                catch = Some(f);
+                break;
+            }
+            s.press(0, 1);
+        }
+        // Not every catch puts Link in the pose (none within 180 frames from 4:$21's X $78 and $A0).
+        let Some(catch) = catch else {
+            eprintln!("{label}: no catch pose within 180 frames");
+            continue;
+        };
+        for k in catch.saturating_sub(4)..=catch + 2 {
+            s.restore(&thrown);
+            s.press(0, k);
+            let at = format!("{label}: {k} frames after the throw (catch at {catch}): {} $AC={:02X}", describe(&s), ram(&s)[0xAC]);
+            if !zelda::clips::skip_available(s.state(), heading) {
+                assert!(ram(&s)[0xAC] != 0, "{at}: not offered with Link free");
+                refused += 1;
+                continue;
+            }
+            caught_in_macro += usize::from(k < catch);
+            let c = s.act(Action::new(ActionKind::Clip, heading, 0).unwrap()).unwrap();
+            let outcome = c.clip.expect("a clip outcome");
+            assert!(outcome.completed(), "{at}: {outcome:?}, now {}", describe(&s));
+            assert_eq!((s.state().full_location(), link_at(&s).0, link_at(&s).1), (room, want.0, want.1), "{at}");
+            done += 1;
+        }
+    }
+    eprintln!("boomerang around a CLIP: {refused} refused in the pose, {done} completed ({caught_in_macro} caught during the macro)");
+    assert!(refused > 0 && caught_in_macro > 0, "{refused} {caught_in_macro}");
+}
+
+/// Wherever a clip can be cut short (a hit, a stand-still, a miss or the frame cap leave Link where he stands: every
+/// frame of each clip of [`clip_ends`], from its start to its end, partly inside a block, over the water on a
+/// ladder or past the screen's bound), the masks are the game's: the MOVE mask allows exactly the directions that
+/// move Link (or change the room) within 8 frames of holding them, and on every third such frame every attack
+/// offered is struck the way asked and every one refused is one the buttons can't make (but after a walk out of a
+/// border band).
+#[test]
+fn the_masks_are_the_games_wherever_a_clip_is_cut() {
+    let Some((mut s, pokes)) = session() else { return };
+    let (mut problems, mut workable) = (Vec::new(), BTreeMap::new());
+    let (mut frames, mut inside) = (0, 0);
+    for (label, start, _) in clip_ends(&mut s) {
+        s.restore(&start);
+        let heading = [Direction::N, Direction::S, Direction::W, Direction::E]
+            .into_iter()
+            .find(|&h| zelda::clips::skip_available(s.state(), h))
+            .unwrap();
+        let room = room_of(&s);
+        let trace = Arc::new(Mutex::new(Vec::new()));
+        let sink = trace.clone();
+        s.set_frame_sink(Some(Box::new(move |n: &Poked| sink.lock().push(n.snapshot()))));
+        s.act(Action::new(ActionKind::Clip, heading, 0).unwrap()).unwrap();
+        s.set_frame_sink(None);
+        for (i, state) in trace.lock().iter().enumerate() {
+            s.nes_mut().restore(state);
+            s.apply_ram(&[]);
+            let r = ram(&s);
+            if !in_play(&s, room) || r[0xAC] != 0 {
+                continue;
+            }
+            frames += 1;
+            inside += usize::from(r[0x394] != 0);
+            let at = format!("{label}, frame {i} of the clip: {}", describe(&s));
+            let here = s.snapshot();
+            let mask = *s.mask();
+            for d in [Direction::N, Direction::S, Direction::W, Direction::E] {
+                s.restore(&here);
+                let start = link_at(&s);
+                s.press(direction_buttons(d), 8);
+                let moved = link_at(&s).0 != start.0 || link_at(&s).1 != start.1 || !in_play(&s, room);
+                let legal = mask.is_allowed(&Action::new(ActionKind::Move, d, 8).unwrap());
+                if legal != moved {
+                    problems.push(format!("{at}: MOVE {} legal {legal}, the game moved {moved}", d.name()));
+                }
+            }
+            if i % 3 == 0 {
+                check_spot(&mut s, &pokes, &at, &here, true, &mut problems, &mut workable);
+            }
+        }
+    }
+    for (key, list) in &workable {
+        if !key.ends_with("Band") {
+            problems.extend(list.iter().cloned());
+        }
+    }
+    eprintln!("{frames} frames of clips checked, {inside} of them off the grid");
+    assert!(problems.is_empty(), "{}", problems.iter().take(40).cloned().collect::<Vec<_>>().join("\n"));
 }
