@@ -1297,3 +1297,38 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   diagonals), every one right in the game; in 0x50 one `CLIP N` from where `MOVE W` stops Link after the E door
   takes him to the N door in 318 frames against 424 for the plain way (monsters cleared). The experiment route
   `clips-gauntlet` still draws both targets and changes no family's resets (`crates/env/tests/clips.rs`).
+
+## 2026-11-12/13 — The doorway attack mask as the game does it; two reward fixes from round 21
+
+- **Asked for:** round 20's doorway fix (`c222323`, 2026-11-12 "Doorway attacks") cost the old D2 models 82.1% →
+  68.6% on the D2 segment, and its bounds were one pixel too tight (`backlog.md` item 3): find the game's rule, fix
+  it, measure what the too-tight mask cost; and two reward oddities of the round 21 gauntlet (`round21.md`
+  Observations 1-2).
+- **The game** (traced in zcore on the N door of 1:0x33, S of 1:0x53, W of 1:0x44, E of 1:0x72 and 4:0x11's open S
+  bomb wall; `zelda-asm/mechanics.md` "Doorway movement"): Link turns sideways only on a room position (X $20..$D0,
+  Y $5D..$BD); while `DoorwayDir` ($53) is set his input is forced onto the axis he faces. `DoorwayDir` alone is not
+  the rule: it is set on a room position (the E door's floor spot X $D0 reached facing E, whose door is touched
+  from $CF; a room's entry spot on the first frame) and clear in a doorway (4:0x11: one frame of S from the entry
+  spot puts Link on Y $BF with it clear, since the room bound is skipped on the frame it is still set). The
+  executor's facing write then breaks the game: in a doorway it pushes Link 1-2 px sideways into the door frame;
+  from 4:0x11's Y $BF its walk ahead onto the grid point passes the bomb wall and the written facing steers the
+  room change E into 0x12 (round 20's wall walk). The room's edge row and column (Y $5D, X $20) turn normally.
+- **Built** (`GameView::attack_directions`, `compute_action_mask`'s own `DoorwayDir` filter removed): an attack
+  across a doorway's axis is masked iff the executor's turn point (Link's position on his line's grid, else the
+  next grid point ahead along his facing, where `run_attack` turns him) is outside the room, or Link stands on it
+  with `DoorwayDir` set and the game's forced step ahead leaves the room. `doorway_turns_match_the_game`
+  (`crates/zelda/tests/zcore_session.rs`) checks every position walked in and out on all five doors: offered iff
+  the game turns Link on a room position and the executor's turn leaves him on one. With branch `moves` (attacks
+  turned by the d-pad) the executor half goes and the game's turn is the whole rule.
+- **Measured** on main's round 20 models with only this fix (branch `doorfix`): goriya `r68-clear5e` (sample, seed
+  0, 100 per state) 2:0x1e 92.0%, 2:0x5e 86.3%, 1:0x44 99.3%, exactly its numbers before `c222323` (2:0x1e
+  identical in every field); the D2 segment (1000 runs, act per model) 82.7% against 82.1% (round 19) and 68.6%
+  (round 20). The whole regression was the one-pixel error; closing the wall walk cost nothing measurable.
+- **Rewards:** `CLIP` is exempt from `penalty-attack-miss` like MOVE, WAIT and BOMB. PBRS pays from the first step
+  that moves Link: `critique_movement`'s baseline tile started unset at an episode's start and after a room change
+  or a hit, and once set it always equalled the previous state's tile, so the step now measures from that tile;
+  the room-changing or damaging step itself stays unshaped (no cross-room distance, no credit for knockback).
+  Sound for every family: the wavefront is the previous state's, in the same room; doorway tiles outside it pay
+  nothing as before.
+- **Version:** none (the lead sets round 21's version at landing); both are reward/mask changes, a REV bump by the
+  rule.

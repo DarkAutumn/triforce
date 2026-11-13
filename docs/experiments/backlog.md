@@ -34,13 +34,14 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
    it), and the D2 chain segment from 82.1% to 68.6%. Every underworld family trained before `c222323` (all but
    round 20's) should be retrained; the D2 families (goriya, d2-rope, moldorm, boss-dodongo) show it in the chains.
    Related: item 4 (the attack turn is a RAM write).
-   - **Before the retrain (found on the `clips` merge, Nov 12):** the doorway mask's bounds are one pixel too tight on
-     two sides. `GameView::attack_directions` calls Link "in a doorway" outside X `$21`..`$D0`, Y `$5E`..`$BD`, but
-     he stands in the room on X `$20` (the left column) and Y `$5D` (the top row; asm:Room_ObjBoundsUW, mechanics.md
-     "Screen edges": Y `$5D`..`$BD`, X `$20`..`$D0`). There the mask leaves only the doorway's axis: in 4:0x50, on
-     (`$A0`, `$5D`) with `DoorwayDir` 0, `sword_directions()` is [N, S] while a press of E turns and walks Link E
-     (measured). Every room's top row loses its sideways attacks and its left column its vertical ones. Check
-     against the game (and `DoorwayDir`) and fix before the full retrain.
+   - [x] **Before the retrain (found on the `clips` merge, Nov 12; fixed Nov 13, decisions.md 2026-11-12/13):** the
+     doorway mask's bounds were one pixel too tight on two sides (it called Link "in a doorway" on X `$20` and Y
+     `$5D`, the room's left column and top row). Now the mask follows the game's turn (traced on all four doors and
+     4:0x11). Measured with round 20's models and only that fix: goriya `r68-clear5e` back to its pre-`c222323`
+     numbers (2:0x1e 92.0%, 2:0x5e 86.3%, 1:0x44 99.3%), the D2 segment 82.7% (1000 runs; round 19 82.1%, round 20
+     68.6%). The whole D2 regression was the one-pixel error; the closed wall walk cost nothing measurable, so the
+     retrain need not recover anything from it. The D2 segment still loses most in 2:0x1e (goriya, 61 deaths per
+     1000), 2:0x3e (moldorm, 53) and 2:0x5e (goriya, 35).
 
 4. **Fewer writes to memory** (Lee, Nov 12). The executor plays some actions by writing RAM instead of pressing
    buttons, which makes combat easier than the real game:
@@ -115,11 +116,11 @@ Left open by round 20:
    - [x] **Round 21 gauntlet** (round21.md): the four ways of offering the wrap (`clips.action` none, kind, long,
      edge; `shaping` jump, walk) trained from scratch on 0x59, 0x5a and 0x5b with two target exits per entry. No
      design decided; problems it found, open:
-     - The first step that moves Link in an episode pays no PBRS (`critic.rs` `critique_movement`: it only sets
-       the baseline tile). A wrap from the entry bound at step 0 therefore earns nothing, the same wrap after one
+     - [x] The first step that moves Link in an episode paid no PBRS (`critic.rs` `critique_movement` only set
+       the baseline tile). A wrap from the entry bound at step 0 therefore earned nothing, the same wrap after one
        short step into the room up to +1 (jump); kind and edge policies step in and wrap back (3 steps, not 2).
-     - `CLIP` pays `penalty-attack-miss` (−0.01) under `kind` (`critique_attack` exempts only MOVE, WAIT, BOMB);
-       the MOVE triggers of `long`/`edge` don't.
+       Fixed Nov 13: every step pays from the previous tile.
+     - [x] `CLIP` paid `penalty-attack-miss` (−0.01) under `kind`; exempt since Nov 13.
      - `long`: a MOVE of 4-16 frames at the entry bound leaves by the wrong exit (−20), so a seed can learn to
        avoid MOVE toward the entry edge and never find the 32-frame wrap (seed 1: W→E crossings never wrap).
      - The wrap is offered on rows whose landing leaves by an exit that doesn't count (0x5b row Y $B5 lands in the
