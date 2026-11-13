@@ -59,14 +59,14 @@ pub const MAX_BOUNCES: u32 = 5;
 /// How a run starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RunStart {
-    /// From the route's start state ([`Route::start_state`]): the RNG bytes and spawns are redrawn per run.
+    /// From the route's start state ([`Route::start_state`]): a natural RNG state and the spawns are drawn per run.
     State,
     /// From console power on (`zelda::power_on`): `name` is registered after `delay` idle frames on the
     /// file-select screen (None: drawn per run from `0..=max_delay`).  No memory is written.
     PowerOn { name: String, delay: Option<u32>, max_delay: u32 },
     /// From a state another run reached (a state file's bytes: a replay's end state or keyframe), exactly as
-    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.  With `redraw_rng` the
-    /// game's RNG bytes are redrawn per run after the state is restored ([`Route::redrawing_rng`]).
+    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.  With `redraw_rng` a
+    /// natural RNG state is drawn per run after the state is restored ([`Route::redrawing_rng`]).
     Checkpoint { state: Arc<[u8]>, step: usize, granted: ItemCounts<u8>, redraw_rng: bool },
 }
 
@@ -231,10 +231,11 @@ impl Route {
         Ok(self)
     }
 
-    /// Whether a checkpoint start redraws the game's RNG bytes per run (as a start state's load does).  A
-    /// checkpoint is otherwise the same machine for every run, and models that act by argmax then play the
-    /// same game every time; the redraw is the only thing written, and a recording keeps it as edits.  Nothing
-    /// changes for the other starts (a start state always redraws; a power-on start writes nothing).
+    /// Whether a checkpoint start redraws the game's RNG register per run (as a start state's load does: a
+    /// natural state, `zelda::rng`).  A checkpoint is otherwise the same machine for every run, and models that
+    /// act by argmax then play the same game every time; the redraw is the only thing written, and a recording
+    /// keeps it as edits (and its phase as META `rng_phase`).  Nothing changes for the other starts (a start
+    /// state always redraws; a power-on start writes nothing).
     pub fn redrawing_rng(mut self, on: bool) -> Route {
         if let RunStart::Checkpoint { redraw_rng, .. } = &mut self.start {
             *redraw_rng = on;
@@ -758,8 +759,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             .map_err(|e| format!("harvest {}: {e}", path.display()))
     }
 
-    /// The route's start state loaded as a fresh run (RNG bytes and spawns redrawn from `rng`) and its route
-    /// state.
+    /// The route's start state loaded as a fresh run (a natural RNG state and the spawns drawn from `rng`) and its
+    /// route state.
     fn start_from_state(&mut self, rng: &mut ChaCha8Rng) -> Result<GameCompletion, EnvError> {
         let machine = self.store.load(&self.route.start_state)?;
         let opts = LoadOptions {
@@ -823,8 +824,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.game_start_route("start", rng)
     }
 
-    /// A checkpoint restored on its route step: no frame runs, and nothing is written unless `redraw_rng`
-    /// (then the game's RNG bytes, from `rng`).
+    /// A checkpoint restored on its route step: no frame runs, and nothing is written unless `redraw_rng` (then
+    /// a natural RNG state, its phase drawn from `rng`: `zelda::rng`), before the first frame.
     fn start_from_checkpoint(
         &mut self,
         state: &[u8],
@@ -835,8 +836,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let snapshot = self.store.decode(state)?;
         self.session.restore(&snapshot);
         if redraw_rng {
-            let bytes = zelda::vars::RNG_VARS.map(|var| (var, rng.random_range(1..=255u8)));
-            self.session.apply_ram(&bytes);
+            self.session.write_rng(zelda::rng::draw_phase(rng));
         }
         GameCompletion::new(self.data.map.clone(), &self.route.name, Some(step)).map_err(EnvError::State)
     }

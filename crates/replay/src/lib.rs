@@ -47,9 +47,10 @@
 //! The caller's object ([`RecordOptions::meta`]: `triforce`, `code`, `data`, `kind`, `route`, `stop_at`,
 //! `models`, ...) plus, added by [`Recorder::finish`]: `seed`; `source` (`{"kind": "power-on", "name",
 //! "delay"}`, `{"kind": "state", "name"}` or `{"kind": "checkpoint"}`); `ending` (`{"kind", "result",
-//! "outcome", "reason"}`); `buttons` (the controller byte's bits); `cheat_items`; with REWARDS
-//! `reward_terms` (names in first-use order); with DECISIONS `actions` ([`actions`]); after a stitch
-//! `segments` (`{frames, seed, ending}` per joined replay).
+//! "outcome", "reason"}`); `rng_phase` when the start wrote a natural RNG state (its steps from reset; the
+//! bytes are the frame-0 EDITS of `$18-$24`); `buttons` (the controller byte's bits); `cheat_items`; with
+//! REWARDS `reward_terms` (names in first-use order); with DECISIONS `actions` ([`actions`]); after a stitch
+//! `segments` (`{frames, seed, ending}` per joined replay, with its `rng_phase` when it has one).
 
 mod edit;
 mod format;

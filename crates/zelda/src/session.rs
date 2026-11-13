@@ -9,15 +9,18 @@ use crate::game::GameView;
 use crate::game_map::GameMap;
 use crate::ledger::FutureCreditLedger;
 use crate::nes::Nes;
+use crate::rng;
 use crate::room_entry::{is_pre_entry, make_room_fresh, pending_room, randomize_spawn};
-use crate::vars::{RNG_VARS, Var};
-use rand::{Rng, RngExt};
+use crate::vars::Var;
+use rand::Rng;
 use std::sync::Arc;
 
 /// How `Session::load` prepares a state.
 #[derive(Clone, Debug, Default)]
 pub struct LoadOptions {
-    /// Redraw the 12 RNG bytes (1..=255), and for a pre-entry state the spawn cycle and edge cell.
+    /// Write a natural RNG state (`crate::rng`: the register a phase drawn from the load's generator after
+    /// reset), and for a pre-entry state redraw the spawn cycle and the edge spawn cell.  Written right after
+    /// the restore, before any frame runs, so every frame of the episode runs on values the game can hold.
     pub randomize_rng: bool,
     /// For a pre-entry state, clear the pending room's kill history so it spawns every monster.
     pub fresh_room: bool,
@@ -84,6 +87,8 @@ pub struct Session<N: Nes> {
     pub look_ahead: LookAhead,
     /// Simulation mode (search) holds the frame sink, render flag and pre-entry capture flag here.
     stash: Option<Stash<N>>,
+    /// The RNG phase the last `load` or `write_rng` wrote (None: the last load wrote none, or a `restore`).
+    rng_phase: Option<u32>,
 }
 
 impl<N: Nes> Session<N> {
@@ -104,6 +109,7 @@ impl<N: Nes> Session<N> {
             open_clip: None,
             look_ahead: LookAhead::All,
             stash: None,
+            rng_phase: None,
         }
     }
 
@@ -240,6 +246,21 @@ impl<N: Nes> Session<N> {
         }
     }
 
+    /// The phase (`crate::rng`: steps from reset) of the natural RNG state the last `load` or `write_rng` wrote;
+    /// None when the last load wrote none or a `restore` came after it.  A recording keeps it (META `rng_phase`).
+    pub fn rng_phase(&self) -> Option<u32> {
+        self.rng_phase
+    }
+
+    /// Writes the RNG register `phase` steps after reset (`crate::rng::write`) at the current frame, no
+    /// emulation, and rebuilds the state and mask; `rng_phase` becomes `phase`.
+    pub fn write_rng(&mut self, phase: u32) -> &Arc<GameView> {
+        rng::write(&mut self.machine.nes, phase);
+        self.rng_phase = Some(phase);
+        self.rebuild();
+        self.state()
+    }
+
     /// Loads a machine state, applies randomization and overrides, and gains control of Link.
     pub fn load<R: Rng + ?Sized>(
         &mut self,
@@ -252,10 +273,11 @@ impl<N: Nes> Session<N> {
         self.executor.reset();
         self.ledger.clear();
         self.open_clip = None;
+        self.rng_phase = None;
         if opts.randomize_rng {
-            for var in RNG_VARS {
-                nes.poke(var.addr(), rng.random_range(1..=255u8));
-            }
+            let phase = rng::draw_phase(rng);
+            rng::write(nes, phase);
+            self.rng_phase = Some(phase);
         }
         if is_pre_entry(|a| nes.peek(a)) {
             if opts.randomize_rng {
@@ -325,6 +347,7 @@ impl<N: Nes> Session<N> {
         self.steps = snapshot.steps;
         self.ledger.clear();
         self.open_clip = None;
+        self.rng_phase = None;
         self.rebuild();
         self.state()
     }

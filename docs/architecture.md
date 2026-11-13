@@ -62,7 +62,7 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
 | `zelda::actions` | `ACTION_SCHEMA_VERSION` (2); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=104] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
 | `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG or ARROW whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). A CLIP runs the grid-point skip macro ("Grid-point skip" below; MOVE never does); `clip` reports its `ClipOutcome`. |
-| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clips` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clips(enabled)`, `skip_available(direction)`, `Change.clip`). |
+| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; `randomize_rng` writes a natural RNG state and the spawn draws right after the restore ("Randomness at a start" below), `rng_phase()` reports the phase, `write_rng(phase)` writes one at the current frame (a chain checkpoint's redraw); controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clips` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clips(enabled)`, `skip_available(direction)`, `Change.clip`). |
 | `zelda::Change` | previous/current `GameView`, action, frames, menu_frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. `frames` are the frames that count against the action: the option's minus its item sub-screen frames (`menu_frames`, the game paused). Discounting (`StepInfo.frames`, the pool's `Outcome.frames`, `rollout_buffer.py`), the frame penalty, the observation's history `frames`, heart timers and linger use `frames`; counts of frames played (`Session.total_frames`, `episode_frames`, visits, chain records, the pool's emulated frames, replays) add `menu_frames` back (`StepInfo.menu_frames`, Python `Change.menu_frames`, info `menu_frames`). Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
@@ -100,6 +100,36 @@ an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MO
 Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen wrap or an aborted one leaves Link)
 reads the tile under him (no look-ahead at X >= `$F0`), and N/S there read column `$1F` and the bytes after the tile
 map (`$67F0` on) as column `$20`, as the game does.
+
+### Randomness at a start (`crates/zelda/src/rng.rs`, `room_entry.rs`; round 22)
+
+The game's only random source is the 13-byte shift register `$18-$24` (`zelda-asm/mechanics.md` "# Random
+numbers"): one step per NMI frame, seeded at reset (`$40`, then 12 zeros), so its value is the number of frames
+since reset. From the seed it runs an 88-step lead-in and then a cycle of 32,767 states, the only values a game in
+play holds. `zelda::rng::natural(n)` is the register `n` steps after reset (a `u128` stepped `n` times, ~45 µs for
+the longest, against ~1 ms for a start state's load: no table); `rng::PHASES` = 88..=32854, each state of the cycle
+once; `rng::phase_of`, `rng::on_cycle` read a value back. `crates/zelda/tests/rng.rs` boots zcore and finds the
+game's register equal to `natural(steps)` on every frame (reset seeds it on frame 10; steps 87, 88, 32854, 32855 on
+frames 119, 120, 32886, 32887; 32855 is 88 again).
+
+Every write a start makes for randomness, made right after the restore and before any frame runs, so the entry
+frames, the spawn clouds and the first monster decisions all run on values the game can hold
+(`crates/zelda/tests/rng.rs` reads the register on every frame from the restore to 120 frames into play):
+
+| Write | When | Value |
+|---|---|---|
+| `$18-$24` RNG register | `Session::load` with `randomize_rng` (start states: training resets, evaluation, a chain's start state); a chain checkpoint with `redraw_rng` (`Session::write_rng`); search futures (`SpecialistEnv::perturb_rng`, phase from the future's key) | `natural(phase)`, the phase drawn uniformly from `PHASES` by the caller's seeded generator; `Session::rng_phase()` reports a start's phase (a recording keeps it, META `rng_phase`) |
+| `$524` SpawnCycle | a pre-entry load with `randomize_rng` | 0-8, every value asm:Spawn_AssignPositions stores |
+| `$525` CurEdgeSpawnCell | a pre-entry load with `randomize_rng`, any level (the cell persists through dungeons to the next edge-spawn room) | one of `room_entry::EDGE_SPAWN_CELLS` (41): `$40` (reset's) and the ring cells the search stops on in some edge-spawn room (top left tile below `$84`), derived from zelda-asm/data in a test; never the corners `$E0`/`$4F`, from which the search leaves the ring and places the monster off the screen or never ends |
+| room flags, `$560+room` | a pre-entry load with `fresh_room`: the pending room's saved kills | overworld bits 0-2 and dungeon bits 6-7 cleared, `LevelKillCounts` 0: a room never cleared; the room history (`$621-$626`) is left as it is (with the kills clear it decides nothing) |
+
+Before round 22 the register got 13 independent bytes 1-255 (almost never a state of the cycle), the edge cell
+any of the ring's 50 cells (the two corners included) on the overworld only, and a fresh room `$FF` (no room id)
+in its history slots. The reset's `ram_randomization` (hp, bombs, `help_count`) is no game randomness: it is written
+after the entry frames, once Link is controllable, and round 22 left it alone. A power-on start writes nothing.
+Stored start states were built by the old loads: 132 of the 364 hold `$FF` in their room history (only ever
+compared with room ids, so inert) and 120 an off-ring or corner edge cell (`$E0` in 109; `$10`, `$1F`, `$3F` in
+11): a randomized load replaces the cell, a load without it keeps it. Their own RNG registers are all on the cycle.
 
 ### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
 
@@ -911,7 +941,7 @@ The file layout is in `crates/replay/src/lib.rs`. It holds:
 
 | Section | What |
 |---|---|
-| META | JSON: what played (`triforce` version, `code`, `data`, `kind` chain/eval/train, `route`, `stop_at`, `models`), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), and the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions`) |
+| META | JSON: what played (`triforce` version, `code`, `data`, `kind` chain/eval/train, `route`, `stop_at`, `models`), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), `rng_phase` (the natural RNG state a start state or redrawn checkpoint wrote, steps from reset; a stitch keeps each segment's), and the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions`) |
 | SOURCE | where the machine starts: console power on (name, idle delay), a state file by name (and its hash), or the embedded START state |
 | INPUTS | the controller byte of every frame, run-length encoded |
 | EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
@@ -938,7 +968,8 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   (`crates/pool/tests/zelda.rs`).
 - **Reading.** `_native.Replay(data)`: `version`, `frames`, `ending`, `meta`, `source`, `inputs()`, `edits()`,
   `cheats()`, `events()`, `rewards()`, `decisions()`, `states()`, `end_ram()`. `tf replay info FILE` prints the
-  same.
+  same, and `rng:` the start's RNG phase read back from the frame-0 edits of `$18-$24` (checked against META
+  `rng_phase`; replays recorded before round 22 show 13 bytes the game never holds).
 - **Playing.** `_native.ReplayPlayer(data, states_dir=None)` (`step(frames, render)`, `seek(frame)`: from the
   nearest state at or before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
   FILE...` plays the whole replay and compares the machine with every recorded state (`ReplayError` naming the
@@ -976,8 +1007,9 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   segment differ only by the models' sampling noise (keyed to the run seed). Models that act by argmax would
   play one game from a checkpoint, so unless all sample (`--act argmax`, `--act model`) each game of a later
   segment has the game's random numbers redrawn from its seed when the checkpoint is restored
-  (`checkpoint={..., 'randomize_rng': True}`, `Route::redrawing_rng`: the write a start state's load makes),
-  recorded as edits at the checkpoint. A segment without a success in
+  (`checkpoint={..., 'randomize_rng': True}`, `Route::redrawing_rng`: the natural RNG state a start state's load
+  writes, "Randomness at a start" above), recorded as edits at the checkpoint and META `rng_phase` in the
+  segment. A segment without a success in
   `--attempts` runs (default 320) ends the path as a failure: its part is the run that got furthest (most
   rooms, then most frames), and the file is saved under that run's ending. Besides that redraw, a golden
   replay's memory edits are what any chain run's are: the action executor's writes of Link's facing (`$98`) and

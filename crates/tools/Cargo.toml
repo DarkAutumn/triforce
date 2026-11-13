@@ -22,6 +22,7 @@ tfreplay = { package = "replay", path = "../replay", features = ["zcore"] }
 sha1_smol = "1.0.1"
 toml = "1.2.0"
 zcore = { path = "../zcore" }
+zelda = { path = "../zelda" }
 
 [dev-dependencies]
 test-rom = { path = "../test-rom" }

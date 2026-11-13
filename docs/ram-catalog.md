@@ -182,12 +182,12 @@ Recommended grid: 16×11 of 16-px squares (row r covers y=$40+16r), class = max-
 | Address(es) | Meaning | Encoding | Valid when | Include? | Source |
 |---|---|---|---|---|---|
 | `$15` FrameCounter | frame counter | — | both | no (leaks time; use History) | asm:FrameCounter; ram.md |
-| `$18–$24` Random | LFSR RNG bytes, 13 (rng_0..12; `Nmi_Isr@ScrambleRandom` rotates $18–$24, monsters read `Random+1,X` up to $24) | — | both | no — load randomization redraws all 13 (`RNG_VARS`) | v1 gd.txt; asm:Random, asm:Nmi_Isr@ScrambleRandom |
+| `$18–$24` Random | LFSR RNG bytes, 13 (rng_0..12; `Nmi_Isr@ScrambleRandom` rotates $18–$24, monsters read `Random+1,X` up to $24); from reset an 88-step lead-in, then a cycle of 32,767 states (`zelda::rng`) | — | both | no — a randomized load writes a natural state, the register some 88..=32854 steps after reset (`zelda::rng::write`, round 22) | v1 gd.txt; asm:Random, asm:Nmi_Isr@ScrambleRandom, asm:Reset_ClearRam |
 | `$3C` FluteTimer | freeze while flute plays | timer | both | no | asm:Mode5Play_Update |
 | `$26` LongTimerCycle | divider for every 10-frame ("long") timer: counts 9 down to 0 and wraps; paces the stun timers and the `$4A`–`$4D` long timers alike | — | both | no | asm:LongTimerCycle, asm:Nmi_Isr |
 | `$4A`, `$4B`, `$4D` long timers | chase / edge-spawn / red-leever | timer | per type | no | asm:ChaseLongTimer, asm:MonstersFromEdgesLongTimer, asm:RedLeeverLongTimer |
 | `$60` IsChasingOtherTarget, `$61`/`$62` ChaseTargetX/Y | **where monsters chase** ("shadow Link"). With `$60`=0, current Link X/Y are copied before weapon/bait updates. When `$4A` expires (0–7 ticks, one per 10 frames), `$60` flips; on 0→1, if target X still equals current Link X, both target bytes XOR `$FF`. Without bait this normally mirrors the current position even if Link moved: the upstream disassembly's "last frame" comment was misleading (`zelda-asm/` corrects it). On 1→0 the old target survives that update. Bait can override actual coordinates without changing the flag. Mirrored Y may be outside the play area; use full-byte coordinates, not an inferred identity | position + refresh bool | both | candidate (round 7 audit): actual monsters' goal; no RNG required | asm:Mode5Play_UpdateWorld (instruction order), asm:Boomerang_UpdateOrFood (bait), asm:Nmi_Isr (timer); bank 4 chase movement |
-| `$524` SpawnCycle, `$525` CurEdgeSpawnCell | monster spawn pacing / edge cell | categorical | both | no | asm:SpawnCycle, asm:EdgeSpawn_FindNextCell@SetSpawnCell |
+| `$524` SpawnCycle, `$525` CurEdgeSpawnCell | monster spawn pacing / edge cell; a randomized pre-entry load draws SpawnCycle 0-8 and the cell from the 41 values the game holds (`zelda::room_entry::EDGE_SPAWN_CELLS`: `$40` and the ring cells open in some edge-spawn room; never the corners `$E0`/`$4F`) | categorical | both | no | asm:SpawnCycle, asm:EdgeSpawn_FindNextCell@SetSpawnCell |
 
 ## 8. Misc
 

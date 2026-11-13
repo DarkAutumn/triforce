@@ -1612,6 +1612,7 @@ dependencies = [
  "test-rom",
  "toml",
  "zcore",
+ "zelda",
 ]
 
 [[package]]

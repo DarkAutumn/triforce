@@ -17,7 +17,13 @@ fn stitch_error<T>(message: impl Into<String>) -> Result<T, ReplayError> {
 fn segments(meta: &Map<String, Value>, frames: u32) -> Vec<Value> {
     match meta.get("segments").and_then(Value::as_array) {
         Some(segments) => segments.clone(),
-        None => vec![json!({"frames": frames, "seed": meta.get("seed"), "ending": meta.get("ending")})],
+        None => {
+            let mut part = json!({"frames": frames, "seed": meta.get("seed"), "ending": meta.get("ending")});
+            if let Some(phase) = meta.get("rng_phase") {
+                part["rng_phase"] = phase.clone();
+            }
+            vec![part]
+        }
     }
 }
 
@@ -224,11 +230,15 @@ pub fn truncate(replay: &Replay, state_index: usize) -> Result<Vec<u8>, ReplayEr
             if start + frames <= u64::from(frame) {
                 kept.push(part);
             } else if start < u64::from(frame) {
-                kept.push(json!({
+                let mut cut = json!({
                     "frames": u64::from(frame) - start,
                     "seed": part.get("seed"),
                     "ending": ending_meta(&ending),
-                }));
+                });
+                if let Some(phase) = part.get("rng_phase") {
+                    cut["rng_phase"] = phase.clone();
+                }
+                kept.push(cut);
             }
             start += frames;
         }

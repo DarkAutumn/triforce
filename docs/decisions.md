@@ -1577,3 +1577,29 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Nice 15 for training and evaluation only:** `train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`
   lower their own CPU priority (`--nice`, `$TRIFORCE_NICE`; children inherit it); play and replay tools keep
   normal priority.
+
+## 2026-11-13 — Natural RNG at every start; spawn and fresh-room writes the game can hold (round 22, Lee)
+
+- **What:** a start from a saved state (training resets, evaluation, a chain's start state), a chain checkpoint
+  with `redraw_rng` and a search future (`perturb_rng`) write the RNG register (`$18-$24`) as a natural state: the
+  register `phase` steps after reset (`zelda::rng::natural`, the game's rule from the reset seed), the phase drawn
+  uniformly from the cycle's 32,767 states (88..=32854) by the caller's seeded generator. It replaced 13
+  independent bytes 1-255, which the game never holds. The write happens right after the restore, before any frame
+  runs (it already did), so the entry frames, spawn clouds and first monster decisions run on natural values. The
+  edge spawn cell is drawn from the 41 values the game holds (never the corners `$E0`/`$4F`) in every level, and a
+  fresh room clears only its saved kills, no longer writing `$FF` into the room history.
+- **Why:** Lee (Nov 13): "Set it with a natural state, including that second and a half where they are spawning
+  ... make it play for real with RNG." A corner edge cell sends asm:EdgeSpawn_FindNextCell off the ring (from `$E0`:
+  `$F0`, `$00`, ..., `$3F`, ...): a monster placed off the screen or a search that never ends; 120 of the 364
+  stored start states hold such a cell, left by the old draw.
+- **Computing, not a table:** the longest `natural` (32,854 steps of a `u128`) takes ~45 µs against ~1 ms for a
+  start state's load (1_44w, 300 loads), so no table file.
+- **Replays:** the bytes were and are frame-0 EDITS (corpus replays verify unchanged); META `rng_phase` now keeps
+  the phase (a stitch keeps each segment's), and `tf replay info` reads it back from the edits.
+- **Evidence:** `crates/zelda/tests/rng.rs` (the function equals the game's register on every frame from power on,
+  steps 0, 87, 88, 32854 and 32855 at frames 10, 119, 120, 32886, 32887; a randomized load's register on the cycle
+  on every frame from the restore through 120 frames of play), `room_entry` tests (the 41 cells derived from
+  zelda-asm/data), `chain_explore.rs`, `specialist_env.rs`, `pool/tests/zelda.rs` (recorded runs from a start state
+  and a redrawn checkpoint verify and carry the phase). The round 21 models under it (seed 0, 100 episodes per
+  state, act modes; old → new): goriya 95.2% → 95.8%, −0.15 → −0.19 hearts; ow-moblin 99.0% → 98.8%, −0.07 →
+  −0.07; boss-gleeok 99.7% → 99.7%, +0.29 → +0.11: every difference within two standard errors.
