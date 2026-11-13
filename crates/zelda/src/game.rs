@@ -41,10 +41,14 @@ const CAVE_PERSON_LINE_Y: i32 = 0x8E;
 const OW_EDGE_N: i32 = 0x3D;
 const OW_EDGE_W: i32 = 0x00;
 const OW_EDGE_E: i32 = 0xF0;
+// Room_BoundDir's bounds as `at_dungeon_bound` tests them: Link stops on X $20..$D0, Y $5D..$BD.
 const UW_BOUND_L: i32 = 0x21;
 const UW_BOUND_R: i32 = 0xD0;
 const UW_BOUND_T: i32 = 0x5E;
 const UW_BOUND_B: i32 = 0xBD;
+/// Where Link can stand in a dungeon room outside its doorways (asm:Room_ObjBoundsUW; mechanics.md "Screen edges").
+const UW_ROOM_X: std::ops::RangeInclusive<i32> = (UW_BOUND_L - 1)..=UW_BOUND_R;
+const UW_ROOM_Y: std::ops::RangeInclusive<i32> = (UW_BOUND_T - 1)..=UW_BOUND_B;
 
 /// asm:GleeokDeadNeckMask: bit n set once neck n's head is cut off.
 pub const GLEEOK_DEAD_NECK_MASK: usize = 0x511;
@@ -941,7 +945,7 @@ impl GameView {
     /// Directions the sword (A) can swing: Link_FilterInput's Link_BorderBounds on the facing's axis, as the game
     /// applies them (asm:Link_BorderBounds; measured by pressing A on every coordinate, N006). Inclusive ranges:
     /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.  In an
-    /// underworld doorway only its own axis (the game doesn't turn Link sideways there).
+    /// underworld doorway only its own axis: the game doesn't turn Link sideways there (`attack_directions`).
     pub fn sword_directions(&self) -> Vec<Direction> {
         self.attack_directions(false)
     }
@@ -963,22 +967,58 @@ impl GameView {
             (Direction::N, y, if b_item { n_lo.max(84) } else { n_lo }, y_hi),
             (Direction::S, y, s_lo, if b_item { 189 } else { y_hi }),
         ];
-        // In an underworld doorway (outside the room's bounds) the game never turns Link sideways: a perpendicular
-        // press first walks him back into the room (measured in 4:0x11's S doorway). The executor turns him by
-        // writing ObjDir, which the game then follows without a tile test (asm:Walker_Move): through the wall into
-        // the next room. So in a doorway only attacks along its axis.
-        let underworld_room = !ow && !self.full_location().in_cave;
-        let vertical_doorway = underworld_room && !(UW_BOUND_T..=UW_BOUND_B).contains(&y);
-        let horizontal_doorway = underworld_room && !(UW_BOUND_L..=UW_BOUND_R).contains(&x);
+        // No turn across a dungeon doorway's axis where the game can't make it. The executor turns Link for an
+        // attack by writing ObjDir, on the grid point ahead of him (`turn_point`: run_attack first walks him on to
+        // it along his line, as the game does with a sideways press). The game turns him only on a room position
+        // (X $20..$D0, Y $5D..$BD), and while DoorwayDir ($53) is set it forces his input onto the axis he faces
+        // (asm:Link_ModifyDirInDoorway): standing on a room position with it set (the E door's floor spot X $D0,
+        // reached facing E: its door is touched from X $CF), he is walked ahead and no turn comes if that leaves
+        // the room. Written anywhere else the turn breaks the game: in a doorway it pushes Link sideways into the
+        // door frame, and in 4:0x11 (Link on Y $BF with DoorwayDir clear, a step into the open S bomb wall from the
+        // entry spot) the walk ahead passes the wall and the written facing leads the room change E into 0x12
+        // (round 20 §2; the traces of round 21, decisions.md 2026-11-12).
+        let (across_ns, across_ew) = if !ow && !self.full_location().in_cave {
+            let (position, facing) = (self.link.position, self.link.direction);
+            let turn = self.turn_point();
+            let in_room = |p: Position| UW_ROOM_X.contains(&p.x) && UW_ROOM_Y.contains(&p.y);
+            let (dx, dy) = match facing {
+                Direction::N => (0, -1),
+                Direction::S => (0, 1),
+                Direction::W => (-1, 0),
+                Direction::E => (1, 0),
+                _ => (0, 0),
+            };
+            let pulled_out = turn == position
+                && self.byte(Var::DoorwayDir) != 0
+                && !in_room(Position::new(position.x + dx, position.y + dy));
+            let facing_ns = matches!(facing, Direction::N | Direction::S);
+            (
+                !UW_ROOM_Y.contains(&turn.y) || (pulled_out && facing_ns),
+                !UW_ROOM_X.contains(&turn.x) || (pulled_out && !facing_ns),
+            )
+        } else {
+            (false, false)
+        };
         ranges
             .into_iter()
             .filter(|&(_, v, lo, hi)| (lo..=hi).contains(&v))
             .map(|(d, ..)| d)
-            .filter(|d| {
-                let sideways = if matches!(d, Direction::N | Direction::S) { horizontal_doorway } else { vertical_doorway };
-                !sideways
-            })
+            .filter(|d| if matches!(d, Direction::N | Direction::S) { !across_ew } else { !across_ns })
             .collect()
+    }
+
+    /// The grid point at which the executor turns Link for an attack at right angles to his facing: his position
+    /// if he is on a grid point of his line, else the next one ahead along his facing. Dungeon grid: X a multiple
+    /// of 8, Y = 5 mod 8 ($5D, $65, ...).
+    fn turn_point(&self) -> Position {
+        let Position { x, y } = self.link.position;
+        match self.link.direction {
+            Direction::N => Position::new(x, y - (y - 5).rem_euclid(8)),
+            Direction::S => Position::new(x, y + (5 - y).rem_euclid(8)),
+            Direction::W => Position::new(x - x.rem_euclid(8), y),
+            Direction::E => Position::new(x + (-x).rem_euclid(8), y),
+            _ => self.link.position,
+        }
     }
 
     /// The sword is blocked (a Bubble's touch: SwordBlockedLongTimer $4C, or asm:IsSwordBlocked $52E); the game

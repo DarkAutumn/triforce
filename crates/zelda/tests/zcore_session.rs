@@ -397,3 +397,108 @@ fn attack_directions_match_the_game_at_every_coordinate() {
         }
     }
 }
+
+/// Sideways attacks at a dungeon doorway against the game, on all four sides (the N door of 1:0x33, S of 1:0x53, W
+/// of 1:0x44, E of 1:0x72) and at 4:0x11's open S bomb wall (round 20's wall walk). At every position Link takes
+/// from the entry spot into the room, out through the door frame a frame at a time and back in, an attack across
+/// the doorway's axis is offered iff the game turns Link that way (holding only that direction turns him on a room
+/// position of the same room) and the executor's turn is sound (after SWORD that way Link stands on a room
+/// position of the same room). So on the room's edge (Y $5D or $BD, X $20 or $D0) with DoorwayDir clear it is
+/// offered, on the first position in the doorway it is not.
+#[test]
+fn doorway_turns_match_the_game() {
+    let Some(nes) = open_core() else { return };
+    let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
+    let in_room = |x: u8, y: u8| (0x20..=0xD0).contains(&x) && (0x5D..=0xBD).contains(&y);
+    let held = |d: Direction| match d {
+        Direction::N => 0x10u8,
+        Direction::S => 0x20,
+        Direction::W => 0x40,
+        _ => 0x80,
+    };
+    for (name, door) in [
+        ("1_33n_0", Direction::N),
+        ("1_53s_0", Direction::S),
+        ("1_44w_0", Direction::W),
+        ("1_72e_0", Direction::E),
+        ("4_11s_0", Direction::S),
+    ] {
+        s.load(&common::load_named_state(name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+        for slot in 1..12u16 {
+            s.nes_mut().poke(0x34F + slot, 0);
+        }
+        let room = s.state().full_location();
+        let ok = |s: &mut Session<ZCore>| {
+            let (x, y) = (s.nes_mut().peek(0x70), s.nes_mut().peek(0x84));
+            s.state().full_location() == room && s.nes_mut().peek(0x12) == 5 && in_room(x, y)
+        };
+        let still = |s: &mut Session<ZCore>| s.state().full_location() == room && s.nes_mut().peek(0x12) == 5;
+        // The entry spot, one step toward the door from it (4:0x11: Y $BF with DoorwayDir clear), into the room,
+        // out to the door and back in from deep in the doorway.
+        let entry = s.snapshot();
+        let mut spots = vec![entry.clone()];
+        s.press(held(door), 1);
+        if still(&mut s) {
+            spots.push(s.snapshot());
+        }
+        s.restore(&entry);
+        for _ in 0..24 {
+            s.press(held(door.opposite()), 1);
+            spots.push(s.snapshot());
+        }
+        let mut deep = None;
+        for _ in 0..60 {
+            s.press(held(door), 1);
+            if !still(&mut s) {
+                break;
+            }
+            spots.push(s.snapshot());
+            let (x, y) = (s.nes_mut().peek(0x70) as i32, s.nes_mut().peek(0x84) as i32);
+            let depth = match door {
+                Direction::N => 0x5D - y,
+                Direction::S => y - 0xBD,
+                Direction::W => 0x20 - x,
+                _ => x - 0xD0,
+            };
+            if deep.is_none() && depth >= 12 {
+                deep = Some(s.snapshot());
+            }
+        }
+        if let Some(deep) = deep {
+            s.restore(&deep);
+            for _ in 0..16 {
+                s.press(held(door.opposite()), 1);
+                spots.push(s.snapshot());
+            }
+        }
+        let across = if matches!(door, Direction::N | Direction::S) { [Direction::E, Direction::W] } else { [Direction::N, Direction::S] };
+        let (mut offered_on_edge, mut masked_in_doorway) = (0, 0);
+        for spot in &spots {
+            for d in across {
+                s.restore(spot);
+                let (x, y, doorway) = (s.nes_mut().peek(0x70), s.nes_mut().peek(0x84), s.nes_mut().peek(0x53));
+                let at = format!("{name} {d:?} at ({x:02X},{y:02X}) $53={doorway} facing {}", s.nes_mut().peek(0x98));
+                let offered = s.state().sword_directions().contains(&d);
+                let mut game = false;
+                for _ in 0..16 {
+                    s.press(held(d), 1);
+                    if s.nes_mut().peek(0x98) == d.value() && ok(&mut s) {
+                        game = true;
+                        break;
+                    }
+                    if !still(&mut s) {
+                        break;
+                    }
+                }
+                s.restore(spot);
+                s.act(Action::parse(&format!("SWORD {}", d.name())).unwrap()).unwrap();
+                let executor = ok(&mut s);
+                assert_eq!(offered, game && executor, "{at}: game turns {game}, executor sound {executor}");
+                let edge = matches!((door, x, y), (Direction::N, _, 0x5D) | (Direction::S, _, 0xBD) | (Direction::W, 0x20, _) | (Direction::E, 0xD0, _));
+                offered_on_edge += (offered && edge && doorway == 0) as u32;
+                masked_in_doorway += (!offered && !in_room(x, y)) as u32;
+            }
+        }
+        assert!(offered_on_edge > 0 && masked_in_doorway > 0, "{name}: {offered_on_edge} {masked_in_doorway}");
+    }
+}

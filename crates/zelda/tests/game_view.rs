@@ -386,11 +386,14 @@ fn weapon_directions_respect_screen_bounds() {
     use Direction::*;
     assert_eq!(dirs(1, 120, 141), (vec![E, W, N, S], vec![E, W, N, S]));
     // Dungeon (measured, N006, with the facing poked): A on E/W x 23..=216, N y 84..=197, S y 85..=197; B also
-    // E x <= 208, W x >= 31, S y <= 189. Outside the room's bounds (x < $21 or > $D0, y < $5E or > $BD) Link is
-    // in a doorway, where the game never turns him sideways (measured: a perpendicular press does nothing, or
-    // walks him back into the room first), so only the doorway's axis is left there.
+    // E x <= 208, W x >= 31, S y <= 189. Outside the room (Link stands on x $20..=$D0, y $5D..=$BD) he is in a
+    // doorway, where the game never turns him sideways (`doorway_turns_match_the_game`), so only the doorway's axis
+    // is left there; the room's edge row and column keep all four.
     assert_eq!(dirs(1, 23, 141).0, vec![E, W]);
     assert_eq!(dirs(1, 22, 141), (vec![], vec![]));
+    assert_eq!(dirs(1, 32, 141).0, vec![E, W, N, S], "the left column");
+    assert_eq!(dirs(1, 120, 93).0, vec![E, W, N, S], "the top row");
+    assert_eq!(dirs(1, 120, 92).0, vec![N, S]);
     assert_eq!(dirs(1, 30, 141).1, vec![E], "too close to the west wall to throw west");
     assert_eq!(dirs(1, 31, 141).1, vec![E, W]);
     assert_eq!(dirs(1, 33, 141).1, vec![E, W, N, S]);
@@ -403,7 +406,12 @@ fn weapon_directions_respect_screen_bounds() {
     assert_eq!(dirs(1, 120, 85).1, vec![N, S]);
     assert_eq!(dirs(1, 120, 94).1, vec![E, W, N, S]);
     assert_eq!(dirs(1, 120, 189).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 120, 190).1, vec![N]);
+    // Facing N (Ram's default) off the grid a turn waits for the grid point ahead, $BD in the room; facing S it is
+    // $C5, in the doorway.
+    assert_eq!(dirs(1, 120, 190).1, vec![E, W, N]);
+    let mut r = Ram::new();
+    r.set(Var::LinkY, 190).set(Var::LinkDirection, 4);
+    assert_eq!(r.view().item_directions(), vec![N]);
     assert_eq!(dirs(1, 120, 197).0, vec![N, S]);
     assert_eq!(dirs(1, 120, 198), (vec![], vec![]));
     // Overworld: A on x 7..=232, y 69..=213; B also N y >= 84.
