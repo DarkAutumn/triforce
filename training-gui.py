@@ -6,7 +6,7 @@
 """Live training watcher for the event logs written by ``triforce.train``, ``scripts/train_round.py`` and the
 evaluations (``triforce eval-batch``: one group per batch, a row per evaluation; ``evaluate``, ``eval-chain``).
 
-    uv run training-gui.py                          # [currently running]: every live training (else the newest folder)
+    uv run training-gui.py                          # [currently running]: every live training (nothing while none is)
     uv run training-gui.py logs/261102_001_round3   # one log folder
     uv run training-gui.py /data/triforce-logs      # another logs root
 
@@ -2718,8 +2718,8 @@ class MachineStatus(QObject):
 class Window(QMainWindow):
     """Folder picker on top; one log folder, or every live one ([currently running]), on the left; details on
     the right.  ``auto_live`` (set by picking [currently running], or at startup without a folder; cleared by
-    picking a folder) switches to [currently running] whenever a training is live and back to the newest folder
-    when none is."""
+    picking a folder) keeps [currently running] selected: it shows the live folders and the finished ones not
+    cleared yet, and nothing while none is live; a training that starts appears by itself."""
 
     def __init__(self, root: Path, initial: Path | None):
         super().__init__()
@@ -2738,7 +2738,6 @@ class Window(QMainWindow):
         self.auto_selection = True
         self.t = 0.0
         self._t0 = time.monotonic()
-        self.empty_text = f"no training logs under {root}"
         self.dirs: list[Path] = []
         self.setWindowTitle('Triforce training')
         self.resize(1500, 920)
@@ -2829,7 +2828,7 @@ class Window(QMainWindow):
         return [view.dir for view in self.views if view.dir is not None]
 
     def _scan(self):
-        """Lists the log folders (dropdown) and finds the live ones; [currently running] is greyed when none is.
+        """Lists the log folders (dropdown) and finds the live ones; [currently running] can always be picked.
         Besides the root's folders: the folders of the jobs in the machine's job registry (every checkout's: the
         live ones and those that ended in the last ``RECENT_SECONDS``), and the live folders of the other logs roots
         running processes use (jobs of code from before the registry)."""
@@ -2853,7 +2852,7 @@ class Window(QMainWindow):
                                                                   or str(path.parent))
                 self.combo.addItem(f"{path.name}  ({where})" if where else path.name, str(path))
             self.combo.blockSignals(False)
-        self.combo.model().item(0).setEnabled(bool(self.live_dirs))
+        self.combo.model().item(0).setEnabled(True)
         self._sync_clear()
         self._sync_combo()
 
@@ -2873,28 +2872,25 @@ class Window(QMainWindow):
         self._update_mode()
 
     def _update_mode(self):
-        """The auto rules: live trainings -> [currently running] (finished ones stay while any is live), none ->
-        the newest folder.  A folder the user picked stays put."""
+        """[currently running] stays selected once entered (by picking it, or at startup without a folder): it shows
+        the live folders and the finished ones not cleared yet, or nothing while none is live.  A folder the user
+        picked stays put."""
         if self.live_mode:
             self.kept += [path for path in self.live_dirs if path not in self.kept]
-            if not self.live_dirs:
-                if self.dirs:
-                    self._enter_folder(self.dirs[0])
-                else:
-                    self.live_mode, self.kept = False, []
-                    self._show_dirs([])
-            else:
-                self._show_live()
+            self._show_live()
         elif self.auto_live:
-            if self.live_dirs:
-                self._enter_live()
-            elif self.dirs and self._shown_dirs()[:1] != [self.dirs[0]]:
-                self._enter_folder(self.dirs[0])
+            self._enter_live()
+
+    @property
+    def empty_text(self) -> str:
+        """What an empty view says."""
+        return 'nothing is running' if self.live_mode else f"no training logs under {self.root}"
 
     def _enter_live(self):
         self.live_mode = True
         self.kept = list(self.live_dirs)
         self._show_live()
+        self._sync_clear()
         self._sync_combo()
 
     def _finished(self) -> list[Path]:
@@ -2909,7 +2905,7 @@ class Window(QMainWindow):
         live = sorted((path for path in self.kept if path in self.live_dirs), key=log_dir_key, reverse=True)
         finished = self._finished()
         heading = len(live) if finished else None
-        if live + finished != self._shown_dirs() or heading != self._heading_at:
+        if live + finished != self._shown_dirs() or heading != self._heading_at or not self.views:
             self._show_dirs(live + finished, heading)
 
     def _sync_clear(self):
@@ -2976,7 +2972,7 @@ class Window(QMainWindow):
     def _picked(self, index: int):
         data = self.combo.itemData(index)
         if data == LIVE_KEY:
-            if not self.live_mode and self.live_dirs:
+            if not self.live_mode:
                 self.auto_live = True
                 self._enter_live()
             return
@@ -2999,7 +2995,6 @@ class Window(QMainWindow):
             self.load(path)
         else:
             self.root = path
-            self.empty_text = f"no training logs under {path}"
             self.auto_live = True
             self.live_mode, self.kept = False, []
             self._show_dirs([])
