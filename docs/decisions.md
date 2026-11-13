@@ -1297,3 +1297,43 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   diagonals), every one right in the game; in 0x50 one `CLIP N` from where `MOVE W` stops Link after the E door
   takes him to the N door in 318 frames against 424 for the plain way (monsters cleared). The experiment route
   `clips-gauntlet` still draws both targets and changes no family's resets (`crates/env/tests/clips.rs`).
+
+## 2026-11-12 — One clip design (the CLIP kind); the ladder clip; Dungeon 4's shortcut through 0x21 (Lee)
+
+- **The design: the CLIP action kind**, legal only where the skip is available (`zelda::clips::skip_target`), the
+  path search's skips as jumps (PBRS pays the whole wavefront difference). A specialist's YAML keeps one switch,
+  `clips: true|false` (default false; the old `{action, shaping}` block is refused). **Why:** in the round 21
+  experiments every arm that could clip learned it (`docs/experiments/round21.md`: the overworld wrap gauntlet,
+  98.6-99.6% for every clip arm against 96.2-96.4% without; `docs/experiments/round21-trap-room.md`: 1:0x22's block
+  clip, 18 of 18 runs), `walk` shaping made no measurable difference against `jump`, and the MOVE triggers each had a
+  bad seed (`long` seed 1 never wrapped W→E: a short MOVE at the entry bound is a wrong exit; `edge`'s every MOVE
+  into the square clips, so the push block can't be pushed from its zone). The 4:0x50 test (the block clip through
+  the Vire room's diagonal, branch of the `Vire50` experiment) is pending and doesn't change the design. Removed:
+  the `long`/`edge` MOVE triggers, `ClipSettings`, `walk` shaping (`critic::walk_cap`); MOVE never skips. The
+  removed arms' YAMLs are in `experiments/r21/removed/`.
+- **Clips on** for `vire` (0x50's diagonal, 0x03), `stalfos-keese-gel` (0x21), `trap-room` (1:0x22) and every
+  overworld family (the wrap). Route rooms that offer a wrap at all (Link at rest on every grid point of the edge
+  zones): 0x77, 0x67, 0x68, 0x58, 0x59, 0x5a, 0x5b, 0x5d, 0x4d, 0x2d, 0x2c, 0x1c, 0x1b, 0x1a, 0x19, 0x18, 0x17, 0x27,
+  0x28, 0x57, 0x56, 0x55, 0x65, 0x64, 0x63 (both edges, on 2-14 rows each); none in 0x5c, 0x4c, 0x3c, 0x3d, 0x0a,
+  0x38, 0x37, 0x48, 0x73, 0x74, 0x45. A wrap ends at the opposite edge, so it helps a W→E or E→W crossing: the entry
+  spot itself offers it in 0x5a, 0x5b, 0x64 (W→E) and 0x19, 0x18, 0x57, 0x64 (E→W); 0x59, 0x1b and 0x56 have wrap
+  rows elsewhere on the entry edge (a row change first); 0x5c has none. A step that enters N or S and leaves W or E
+  (0x67, 0x58, 0x4d, 0x2d, 0x1c, 0x27, 0x65) gains only when Link is near the opposite edge.
+- **The ladder clip** (`zelda-asm/mechanics.md` "Ladder clip"; `docs/architecture.md` "Grid-point skip"): a third
+  skip kind for dungeons, offered while Link holds the ladder where water two (up) or two to three (left, right,
+  down) squares wide stops the plain ladder, with land beyond; the macro relays a second ladder where needed and puts
+  the last one away. The MOVE mask models a laid ladder. Every offer in Dungeon 4 completes in the game (0x21, 0x20,
+  a few in 0x31); hits abort it and Link can always go on. The overworld ladder clip (0x5f, 0x4f) is not built.
+- **The route shortcut** (Lee): `d2first` goes 0x32 → 0x31 (E → N, its locked door, key 2) → 0x21 (S → N: onto the
+  island, `CLIP N` to Y `$55`, a step down, BOMB N from (`$78`, `$5D`); from `$55` the bomb is spent and the wall
+  stays shut) → 0x11, instead of 0x31 W → 0x30 N → 0x20 E → 0x21 from W. Two room entries fewer, the same 2 keys
+  (0x30 E, 0x31 N) and 2 bombs (`bomb_reserve: 2`). The route step by actions: 419 frames, 10 actions, the scroll into
+  0x11 included (`crates/env/tests/clips.rs`). States: `4_30e_*`, `4_20s_*`, `4_21w_*` deleted; `4_21s_*` new;
+  `4_11s_*` to `4_03s_*` built again from `4_31e_*` (`docs/routes/d4.md` "Start states"; the explorer now plays each
+  step with its family's `clips:` switch). Needs the retrain: stalfos-keese-gel has never seen 0x21 from S.
+- **Curricula** (`scripts/experiments/r21_states_curricula.sh curricula`; `trajectories/` is gitignored): explored
+  again for vire `4_31e_*` (now N), `4_12w_*`, `4_03s_*` and `4_50e_*`, trap-room `4_11s_*`, `1_22e_*` and `1_22c_*`,
+  new for stalfos-keese-gel `4_21s_*` (62-84 actions, 8-17 thousand env steps, each through `CLIP N`); the rest
+  copied from round 20's. With clips on, every 1:0x22 track (`1_22e_*`, `1_22c_*`) and `4_50e_0`/`_1` clip;
+  `4_50e_2` walks round. stalfos-keese-gel keeps no curriculum (round 20 learned 0x21's wall without one); its
+  tracks are ready for `curriculum: {enabled: true}` if the retrain fails that room.

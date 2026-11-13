@@ -49,10 +49,10 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
   (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
 - **Dungeon 4 (scouted Nov 11, trained Nov 12; `docs/routes/d4.md`):** all 20 rooms and the ladder cellar are in
-  `game.yaml`; `d2first` steps 98–122 go by raft from 0x55 to the island 0x45, take the keys of 0x51 and 0x40, the
-  ladder under the Breakfast Room 4:0x32, back W to 0x30, N across its water on the ladder, through two bomb walls
-  (0x21, 0x11; `bomb_reserve: 2`) to Gleeok and the triforce. Lee (Nov 12): the route must enter 0x21 from W
-  (0x30 – 0x20 – 0x21); 0x31 N lands on 0x21's island, which only a ladder clip (another agent's work) leaves.
+  `game.yaml`; `d2first` steps 98–120 go by raft from 0x55 to the island 0x45, take the keys of 0x51 and 0x40, the
+  ladder under the Breakfast Room 4:0x32, back W to 0x31 and N through its locked door onto 0x21's island, off it by
+  the ladder clip (round 21, `CLIP N`; stalfos-keese-gel has `clips: true`), through two bomb walls (0x21, 0x11;
+  `bomb_reserve: 2`) to Gleeok and the triforce. Before round 21 the route went 0x31 W – 0x30 N – 0x20 E – 0x21.
   routes.yaml keeps `{extends: <route>, steps: [...]}` for scouting the next dungeon. game.yaml rooms can carry a
   `name:` (the Breakfast Room).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.

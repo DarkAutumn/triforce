@@ -85,9 +85,10 @@ Left open by round 20:
   then whether vire bombs 0x31/0x12 and walks past 0x61 as Lee wants (untested: no bombs above the reserve).
 - [ ] **Linger over 500 steps** in one single-room episode each: like-like (599), boss-gleeok (638),
   stalfos-keese-gel (598). Not investigated before promotion.
-- [ ] **Future route** (Lee): 0x30 – 0x31 – 0x32 – 0x31 – 0x21 – 0x11 through a ladder clip from 0x31 N onto
-  0x21's island, once the clip (another agent's work) is ready; today the route goes back through 0x30 and 0x20
-  into 0x21 from W.
+- [x] **Future route** (Lee): 0x30 – 0x31 – 0x32 – 0x31 – 0x21 – 0x11 through a ladder clip from 0x31 N onto
+  0x21's island. Done in round 21 (branch `ladder`, decisions 2026-11-12 "One clip design"): `d2first` goes 0x31
+  E → N, 0x21 S → N (CLIP N off the island, a step down, BOMB N); the 0x30 E → N and 0x20 steps are gone. Needs the
+  retrain (stalfos-keese-gel with clips).
 
 5. **Clips and screen wraps** (Nov 12). The speedrun route uses the grid-point skip: one frame of perpendicular
    input 5 pixels short of a grid point skips that point's tests. All of it is reproduced with controller input and
@@ -107,14 +108,20 @@ Left open by round 20:
      or in the wrong cadence, Link has to walk away to the grid point 16 pixels before the target and come back
      (6-12 frames away, 7-8 back). A second skip in a row is impossible. A failed try stops Link where he would
      have stopped anyway; knockback spoils the cadence and the same back-off repairs it.
-   - [ ] **Not built: how the agent performs it.** Proposal from the discussion: clips are route exits in game.yaml
-     (whitelisted and verified per site); the executor inserts the one frame during a MOVE of 16 or 32 frames toward
-     an armed target (short moves stay plain), including the back-off when the cadence is wrong; no action or
-     observation change. A back-off makes the action longer than its duration, to be decided. The reproduction
-     scripts were throwaway (`/tmp/zasm/clips/*/repro.py`).
+   - [x] **How the agent performs it** (decided Nov 12, decisions 2026-11-12 "One clip design"): the CLIP action
+     kind, legal where the skip is available, per family `clips: true|false`; the executor plays the macro; MOVE
+     never skips. The `long`/`edge` MOVE triggers and `walk` shaping were removed. On: vire, stalfos-keese-gel,
+     trap-room and the overworld families. The ladder clip is built for dungeons; the path search knows the block
+     and ladder clips (not the wrap).
+   - [ ] **The overworld ladder clip** (0x5f, 0x4f) is not built: it needs a wrap followed by a room change, and the
+     room model doesn't cover the ladder in the overworld.
+   - [ ] **BOMB N from the end of 4:0x21's ladder clip** (Y `$55`, 8 pixels into the top wall) is legal and spends
+     the bomb, but the wall stays shut (the bomb lands outside the room); one step down (`MOVE S 8`) and it opens.
+     The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Watch the retrained
+     stalfos-keese-gel for wasted bombs (its 0x21 visit gets a cheated one).
    - [x] **Round 21 gauntlet** (round21.md): the four ways of offering the wrap (`clips.action` none, kind, long,
-     edge; `shaping` jump, walk) trained from scratch on 0x59, 0x5a and 0x5b with two target exits per entry. No
-     design decided; problems it found, open:
+     edge; `shaping` jump, walk) trained from scratch on 0x59, 0x5a and 0x5b with two target exits per entry. The
+     design chosen afterwards: `kind` with `jump` (see above). Problems it found:
      - The first step that moves Link in an episode pays no PBRS (`critic.rs` `critique_movement`: it only sets
        the baseline tile). A wrap from the entry bound at step 0 therefore earns nothing, the same wrap after one
        short step into the room up to +1 (jump); kind and edge policies step in and wrap back (3 steps, not 2).

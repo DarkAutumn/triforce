@@ -3370,7 +3370,7 @@ rooms:
     Vire: 5
   treasure: null
 - level: 4
-  location: '0x21'  # Blue Gels; its N wall is bombable into the rupee room
+  location: '0x21'  # Blue Gels; its N wall is bombable into the rupee room; the S door (locked) leads onto the island, which only the ladder clip leaves (round 21 route)
   specialist: stalfos-keese-gel  # Dungeon 4 (Nov 11)
   requires_bombs: true    # Lee (Nov 11): the N wall is bombed open into the rupee room
   exits:
@@ -3410,7 +3410,7 @@ rooms:
   treasure: null
   dark: true
 - level: 4
-  location: '0x31'  # Vires in a water maze; the land path winds from the W door to the E shutter (the ladder shortens it)
+  location: '0x31'  # Vires in a water maze; the land path winds from the W door to the E shutter (the ladder shortens it); the route leaves back N to 0x21
   specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:

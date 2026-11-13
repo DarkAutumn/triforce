@@ -50,12 +50,12 @@ everywhere; the existing families train on their Dungeon 4 rooms' start states t
 
 | Family | Main threat | Rooms (level, room) | Notes |
 |---|---|---|---|
-| `vire` (new) | Vire (splits into two Red Keese) | (4,0x71), (4,0x61), (4,0x50), (4,0x30), (4,0x31), (4,0x20), (4,0x12), (4,0x03) | The dungeon's main family, with its empty hall and triforce room. 0x30 twice (S→E, E→N: both locked doors); 0x31 twice (W→E after killing all five for the shutter; E→W); 0x12: kill them, push the block, E through the shutter. |
+| `vire` (new) | Vire (splits into two Red Keese) | (4,0x71), (4,0x61), (4,0x50), (4,0x30), (4,0x31), (4,0x20), (4,0x12), (4,0x03) | The dungeon's main family, with its empty hall and triforce room. 0x30 S→E (a locked door); 0x31 twice (W→E after killing all five for the shutter; round 21: E→N through the locked door onto 0x21's island); 0x20 off the route since round 21 (tagged, no start state); 0x12: kill them, push the block, E through the shutter. `clips: true` (the block clip in 0x50). |
 | `like-like` (new) | Like Like, Zol, Bubble | (4,0x32) | The Breakfast Room: kill them, push the block, down the stairs; back up, W. |
 | `boss-gleeok` (new) | Gleeok, two heads ($43) | (4,0x13) | Kill him, the heart container, N. |
 | `ow-peahat` (new) | Peahat | (0,0x45) | The island: from the raft's pier into the dungeon. |
 | `zol` | | + (4,0x40) | Five Zols in the dark; take the key (in the open). |
-| `stalfos-keese-gel` | | + (4,0x51), (4,0x21) | Eight Blue Keese (take the key, in the open); five Blue Gels in the dark, bomb the N wall (`items: {bombs: required}`, which unmasks BOMB only in this `requires_bombs` room). |
+| `stalfos-keese-gel` | | + (4,0x51), (4,0x21) | Eight Blue Keese (take the key, in the open); five Blue Gels in the dark, round 21: in from S onto the island, `CLIP N` (the ladder clip, `clips: true`), bomb the N wall (`items: {bombs: required}`, which unmasks BOMB only in this `requires_bombs` room). |
 | `trap-room` | | + (4,0x11) | The rupee room: no monsters, no traps, bomb the E wall (Lee, Nov 12: it stays in this family). |
 | `equipment-room` | | + (4,0x60 cellar) | The ladder cellar. |
 

@@ -1418,8 +1418,9 @@ mod tests {
         assert!(with_key == set(&[loc(1, 0x63)]) && !without.contains(&loc(1, 0x63)));
     }
 
-    /// Only the route's rooms (the bow detour included) and the alternate have a specialist; the experiment route
-    /// `clips-gauntlet` (round 21) crosses rooms of the default route only.
+    /// Only the route's rooms (the bow detour included), the alternate and 4:0x20 (off the route since round 21's
+    /// shortcut, still tagged `vire` so a chain that leaves 0x21's island W has a model) have a specialist; the
+    /// experiment route `clips-gauntlet` (round 21) crosses rooms of the default route only.
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
@@ -1427,12 +1428,13 @@ mod tests {
         let mut route: BTreeSet<L> = map.routes.values().flatten().map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
+        route.insert(loc(4, 0x20));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
         assert_eq!(tagged, route);
-        // Beyond the route's own rooms: only the alternate.
+        // Beyond the route's own rooms: only the alternate and 4:0x20.
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         let beyond: Vec<L> = route.difference(&default).copied().collect();
-        assert_eq!(beyond, [loc(0, 0x78)]);
+        assert_eq!(beyond, [loc(0, 0x78), loc(4, 0x20)]);
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
@@ -1691,22 +1693,22 @@ mod tests {
         assert_eq!(map.get(loc(3, 0x5b)).unwrap().treasure.as_deref(), Some("bombs"));
     }
 
-    /// Dungeon 4: Lee's directions follow real exits (the direct way to the ladder, back W to the Vire room, N, E,
-    /// the two bomb walls, the push-block shutter, Gleeok, the triforce); the rooms' special keys are read.
+    /// Dungeon 4: the route's way follows real exits (the direct way to the ladder, back W to 0x31, N through its
+    /// locked door onto 0x21's island (round 21: the ladder clip leaves it), the two bomb walls, the push-block
+    /// shutter, Gleeok, the triforce); the rooms' special keys are read.
     #[test]
     fn d4_lees_route_and_room_keys() {
         let map = GameMap::builtin();
         let mut at = loc(4, 0x71);
         let mut rooms = vec![at.value];
-        let way = ["N", "N", "W", "N", "N", "E", "E", "cave", "N", "W", "W", "N", "E", "N", "E", "E", "N"];
+        let way = ["N", "N", "W", "N", "N", "E", "E", "cave", "N", "W", "N", "N", "E", "E", "N"];
         for exit in way {
             at = map.get(at).unwrap().exits[exit].destination;
             rooms.push(at.value);
         }
-        assert_eq!(
-            rooms,
-            [0x71, 0x61, 0x51, 0x50, 0x40, 0x30, 0x31, 0x32, 0x60, 0x32, 0x31, 0x30, 0x20, 0x21, 0x11, 0x12, 0x13, 0x03]
-        );
+        assert_eq!(rooms, [0x71, 0x61, 0x51, 0x50, 0x40, 0x30, 0x31, 0x32, 0x60, 0x32, 0x31, 0x21, 0x11, 0x12, 0x13, 0x03]);
+        let steps: Vec<u8> = map.routes["d2first"].iter().filter(|s| s.level == 4).map(|s| s.room).collect();
+        assert_eq!(steps, rooms);
         let room = |id: u8| map.get(loc(4, id)).unwrap();
         // The Breakfast Room: a name, a block that reveals the stairs pushed any way, the ladder under it.
         let breakfast = room(0x32);
@@ -1715,8 +1717,9 @@ mod tests {
         assert_eq!(breakfast.exits["cave"].destination, L::new(4, 0x60, true));
         assert_eq!(map.get(L::new(4, 0x60, true)).unwrap().treasure.as_deref(), Some("ladder"));
         assert!(map.rooms().values().filter(|r| r.name.is_some()).count() == 1);
-        // Both locked doors of 0x30, the bomb walls into and out of the rupee room, the push-block shutter.
-        assert!(room(0x30).exits["E"].locked && room(0x30).exits["N"].locked && room(0x20).exits["S"].locked);
+        // The two locked doors the route opens (0x30 E, 0x31 N, whose other side is 0x21 S), the bomb walls into and
+        // out of the rupee room, the push-block shutter.
+        assert!(room(0x30).exits["E"].locked && room(0x31).exits["N"].locked && room(0x21).exits["S"].locked);
         assert_eq!((room(0x21).bomb_walls.as_slice(), room(0x21).requires_bombs), (&["N".to_owned()][..], true));
         assert_eq!(room(0x11).bomb_walls, ["N", "E", "S", "W"]);
         assert!(room(0x11).requires_bombs && room(0x11).enemies.is_empty());
