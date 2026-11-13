@@ -50,6 +50,22 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
    `step` field in `RoomRecord` would make both exact; the death-rate scales (`DEATHS_BAD`) are first guesses; open
    ideas: an overlay of death rate given entry (`death_rate_entered`), comparing two tags (r70 vs r71) room by room.
 
+## Round 22: natural RNG (Lee, Nov 13; branch `r22-rng`)
+
+- [x] **Natural RNG states** (decisions 2026-11-13 "Natural RNG at every start"): start states, a redrawn chain
+  checkpoint and search futures write the register some 88..=32854 steps after reset (`zelda::rng`), before any
+  frame runs; the edge spawn cell comes from the 41 values the game holds, in every level; a fresh room no longer
+  writes `$FF` into the room history. Replays keep the bytes as frame-0 edits and the phase as META `rng_phase`.
+- [x] **Measured on the r71 models** (seed 0, act modes): goriya, ow-moblin and boss-gleeok move within two
+  standard errors in success and hearts (boss-gleeok's +0.29 → +0.11 hearts is the largest, at the edge of the
+  noise; 300 episodes).
+- [ ] **Stored artefacts from the old draw.** 132 of the 364 start states hold `$FF` in the room history (inert:
+  only compared with room ids) and 120 an off-ring or corner edge cell (`$E0` in 109): a randomized load replaces
+  the cell, but a load without randomization (tests, `Game.load(randomize_rng=False)`) and every curriculum frame
+  (controllable, not pre-entry: no spawn draw) keep it; in an edge-spawn room such a cell sends the next edge
+  monster off the screen. Rebuilding the states and re-exploring the curricula (both now write only natural values)
+  would clear them. Checkpoints taken from replays recorded before round 22 hold off-cycle registers unless redrawn.
+
 ## Done (Nov 13): round 21 (clips, attacks by buttons, the ladder clip; 1.4.1.0)
 
 Round 21 (round21.md; decisions 2026-11-12 "Round 21: one change set, one retrain", "One clip design", "Attacks by

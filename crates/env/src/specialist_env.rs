@@ -31,7 +31,7 @@ use crate::start_states::{
     state_entry, state_label, verify_start_room,
 };
 use indexmap::IndexMap;
-use rand::{RngExt, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -48,7 +48,6 @@ use zelda::visits::{
     EXIT_DEATH, EXIT_OTHER, EXIT_SUCCESS, EXIT_TIMEOUT, RoomVisit, VisitEnd, VisitStep, VisitTracker,
     VisitView,
 };
-use zelda::vars::RNG_VARS;
 use zelda::{Action, LoadOptions, Nes, Session, SessionCheckpoint, SessionSnapshot};
 
 /// The terminal part of an info.
@@ -716,12 +715,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.session.set_simulating(on);
     }
 
-    /// Redraws the 12 RNG bytes (1..=255, as a reset's randomization) from a generator seeded with `key` alone (a
-    /// search future), never the env's own.
+    /// Writes a natural RNG state (`zelda::rng`), its phase drawn from a generator seeded with `key` alone (a
+    /// search future), never the env's own.  It is no episode start: the session's `rng_phase` stays.
     pub fn perturb_rng(&mut self, key: u64) {
-        let mut rng = ChaCha8Rng::seed_from_u64(key);
-        let values = RNG_VARS.map(|var| (var, rng.random_range(1..=255u8)));
-        self.session.apply_ram(&values);
+        let phase = zelda::rng::draw_phase(&mut ChaCha8Rng::seed_from_u64(key));
+        zelda::rng::write(self.session.nes_mut(), phase);
+        self.session.apply_ram(&[]);
     }
 
     /// `step` without side effects outside the episode (search): the same rewards, endings and observation, but

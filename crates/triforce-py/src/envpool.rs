@@ -152,7 +152,7 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 /// (`{'name': 'LINK', 'delay': None, 'max_delay': 32766}`: console power on, the name registered after `delay`
 /// idle frames on the file-select screen, None = drawn per run seed from `0..=max_delay`; no memory is
 /// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees], 'randomize_rng':
-/// False}`: a state another run reached, as is, or with `randomize_rng` the game's RNG bytes redrawn per run
+/// False}`: a state another run reached, as is, or with `randomize_rng` a natural RNG state drawn per run
 /// seed, so that runs acting by argmax differ; an entry of `Replay.states()` is one). It ends at the route's
 /// end, or on entering `stop_at` (a room) or route step `stop_step`'s room (on the route).
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]

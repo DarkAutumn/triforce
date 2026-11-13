@@ -676,6 +676,21 @@ fn replayed(replay: &Replay) -> ([u8; 0x800], [u8; 0x2000]) {
     (*player.nes().ram(), *player.nes().prg_ram())
 }
 
+/// The natural RNG state a replay's start wrote (`zelda::rng`): META `rng_phase`, and the frame-0 edits of
+/// `$18-$24` are that phase's register, so the start reads back from either.
+fn rng_start(replay: &Replay) -> u32 {
+    let phase = replay.meta().unwrap()["rng_phase"].as_u64().expect("META rng_phase");
+    let phase = u32::try_from(phase).unwrap();
+    let mut reg = [None; zelda::rng::LEN];
+    for e in replay.edits().map(|e| e.unwrap()).filter(|e| e.frame == 0 && (0x18..=0x24).contains(&e.addr)) {
+        reg[usize::from(e.addr - 0x18)] = Some(e.value);
+    }
+    let reg = reg.map(|b| b.expect("all 13 bytes are frame-0 edits"));
+    assert_eq!(reg, zelda::rng::natural(phase));
+    assert_eq!(zelda::rng::phase_of(&reg), Some(phase));
+    phase
+}
+
 fn recording(embed_start: bool) -> Option<Arc<RecordOptions>> {
     Some(Arc::new(RecordOptions {
         embed_start,
@@ -782,6 +797,7 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
     // Load randomization edits come first, the models take over once Link is controllable; the replay covers
     // the gain-control frames and every step.
     assert!(replay.edits().any(|e| e.unwrap().frame == 0));
+    assert!(zelda::rng::PHASES.contains(&rng_start(&replay)), "the start's natural RNG state is in the replay");
     let control_frame = replay.events().next().unwrap().unwrap();
     assert_eq!(control_frame.event, Event::Control);
     assert!(u64::from(replay.frames() - control_frame.frame) >= record.frames);
@@ -1088,6 +1104,7 @@ fn a_run_continued_from_a_checkpoint_stitches_onto_the_run_that_made_it() {
     let mut env = ChainRunEnv::new(data.clone(), a, TfzStore, route, Jobs::new([1u64]), all_policies(&data), init_a, None);
     let (run, first) = play_chain_recorded(&mut env, &control, options(), |_, _| zelda::Action::parse("MOVE S 16").unwrap());
     assert_eq!((run.result.as_str(), first.ending_name()), ("success", "win"));
+    let first_phase = rng_start(&first);
     assert_eq!(first.meta().unwrap()["ending"]["reason"], "reached route step 25 (level 0, room 0x4c)");
     let end = first.end_state();
     assert_eq!(end.context.step, Some(25));
@@ -1121,9 +1138,32 @@ fn a_run_continued_from_a_checkpoint_stitches_onto_the_run_that_made_it() {
         kinds,
         [(StateKind::Start, 0), (StateKind::Checkpoint, first.frames()), (StateKind::End, joined.frames())]
     );
-    assert_eq!(joined.meta().unwrap()["segments"].as_array().unwrap().len(), 2);
+    let segments = joined.meta().unwrap()["segments"].as_array().unwrap().clone();
+    assert_eq!(segments.len(), 2);
+    assert_eq!((segments[0]["rng_phase"].as_u64(), segments[1].get("rng_phase")), (Some(first_phase.into()), None));
     let boundary = joined.events().map(|e| e.unwrap()).find(|e| e.event == Event::Segment).unwrap();
     assert_eq!(boundary.frame, first.frames());
+
+    // With the RNG redrawn, a checkpoint start writes a natural state before its first frame: the replay keeps
+    // the phase and the bytes, verifies, and another seed is another phase.
+    let checkpoint = |seed: u64| {
+        let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
+        let route = route.with_checkpoint(&data.map, Arc::from(end.blob), 25, granted).unwrap().redrawing_rng(true);
+        let init = init();
+        let control = init.control.clone();
+        let mut env =
+            ChainRunEnv::new(data.clone(), open_core().unwrap(), TfzStore, route, Jobs::new([seed]), all_policies(&data), init, None);
+        env.chain_mut().max_steps = 20;
+        let mut rng = ChaCha8Rng::seed_from_u64(3);
+        let (_, replay) = play_chain_recorded(&mut env, &control, options(), |mask, _| random_action(mask, &mut rng, None));
+        replayed(&replay);
+        let first_edits = replay.edits().map(|e| e.unwrap()).take_while(|e| e.frame == 0).count();
+        assert!(first_edits >= zelda::rng::LEN);
+        rng_start(&replay)
+    };
+    let (two, again, three) = (checkpoint(2), checkpoint(2), checkpoint(3));
+    assert_eq!(two, again);
+    assert_ne!(two, three);
 }
 
 /// The tables a replay's streams index are the game's: the action space of the decision stream and the cheat

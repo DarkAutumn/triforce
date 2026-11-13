@@ -400,6 +400,28 @@ fn state_path(dir: &Path, name: &str) -> PathBuf {
     }
 }
 
+/// What the replay's start wrote into the RNG register (`$18-$24`): the frame-0 EDITS read back as a phase of
+/// the game's sequence (`zelda::rng::phase_of`), checked against META `rng_phase`.
+fn rng_start(replay: &tfreplay::Replay, meta: &serde_json::Map<String, serde_json::Value>) -> String {
+    let addrs = zelda::rng::ADDR..zelda::rng::ADDR + zelda::rng::LEN as u16;
+    let mut bytes = [None; zelda::rng::LEN];
+    for edit in replay.edits().filter_map(Result::ok).filter(|e| e.frame == 0 && addrs.contains(&e.addr)) {
+        bytes[usize::from(edit.addr - zelda::rng::ADDR)] = Some(edit.value);
+    }
+    let recorded = meta.get("rng_phase").and_then(serde_json::Value::as_u64);
+    let written = bytes.iter().filter(|b| b.is_some()).count();
+    if written < zelda::rng::LEN {
+        return format!("{written} of {} bytes written at frame 0", zelda::rng::LEN);
+    }
+    let bytes = bytes.map(Option::unwrap_or_default);
+    match (zelda::rng::phase_of(&bytes), recorded) {
+        (Some(phase), Some(meta)) if u64::from(phase) == meta => format!("phase {phase} (META and frame-0 edits)"),
+        (Some(phase), Some(meta)) => format!("phase {phase} in the frame-0 edits, META says {meta}"),
+        (Some(phase), None) => format!("phase {phase} (frame-0 edits)"),
+        (None, _) => "13 bytes written at frame 0, a value the game never holds (before natural RNG)".to_owned(),
+    }
+}
+
 fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
     match cmd {
         ReplayCmd::Info { file } => {
@@ -425,6 +447,7 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
             if let Some(segments) = meta.get("segments").and_then(|s| s.as_array()) {
                 println!("segments: {}", segments.len());
             }
+            println!("rng:      {}", rng_start(&replay, &meta));
             let mut states = [0usize; tfreplay::STATE_KINDS.len()];
             for state in replay.states() {
                 states[state.kind as usize] += 1;

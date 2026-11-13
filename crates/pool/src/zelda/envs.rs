@@ -108,14 +108,16 @@ fn begin_episode<N: Nes>(nes: &mut PoolNes<N>, control: &EnvControl, rooms: &mut
 }
 
 /// Once the episode's start is loaded and Link is controllable: says where the recording starts (the state
-/// file, embedded or by name and hash; `booted`: a power-on start's name and delay) and marks the models
-/// taking over.  `context`: what a run continuing from the start state needs.
+/// file, embedded or by name and hash; `booted`: a power-on start's name and delay), the natural RNG phase the
+/// start wrote (META `rng_phase`; its bytes are the frame-0 edits), and marks the models taking over.
+/// `context`: what a run continuing from the start state needs.
 fn start_recording<N: Nes, St: StateStore<N::State>>(
     session: &mut Session<PoolNes<N>>,
     store: &PoolStore<St>,
     context: Context,
     booted: Option<(&str, u32)>,
 ) -> Result<(), EnvError> {
+    let rng_phase = session.rng_phase();
     let nes = session.nes_mut();
     let Some(origin) = nes.origin().cloned() else {
         return Ok(());
@@ -123,6 +125,7 @@ fn start_recording<N: Nes, St: StateStore<N::State>>(
     let Some(rec) = nes.recorder_mut() else {
         return Ok(());
     };
+    rec.set_rng_phase(rng_phase);
     match origin {
         Origin::Name(name) => {
             let bytes = store.bytes(&name)?;

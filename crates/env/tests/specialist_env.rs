@@ -371,6 +371,36 @@ fn spaces_and_reset_contract() {
     assert_eq!(info.room, (1, 0x73, false));
 }
 
+/// A reset and a search's `perturb_rng` each leave the RNG register on the game's cycle (`zelda::rng`): the reset at
+/// the phase it reports (the same seed, the same phase), a perturbation at a phase of its key alone, without
+/// touching the reset's.
+#[test]
+fn reset_and_perturb_write_natural_rng_states() {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
+    let mut reset = |seed| {
+        env.reset(Some(seed), None).unwrap();
+        let phase = env.session().rng_phase().expect("a reset writes a phase");
+        // Entry frames ran since the write: the register is on the cycle, some steps on.
+        let reg = zelda::rng::read(env.session().nes());
+        assert!(zelda::rng::on_cycle(&reg), "seed {seed}");
+        phase
+    };
+    let (one, again, two) = (reset(1), reset(1), reset(2));
+    assert_eq!(one, again);
+    assert_ne!(one, two);
+    let mut perturbed = |key| {
+        env.perturb_rng(key);
+        assert_eq!(env.session().rng_phase(), Some(two), "a perturbation is no episode start");
+        zelda::rng::read(env.session().nes())
+    };
+    let (a, b, a_again) = (perturbed(10), perturbed(11), perturbed(10));
+    assert!(zelda::rng::on_cycle(&a) && zelda::rng::on_cycle(&b));
+    assert_eq!(a, a_again);
+    assert_ne!(a, b);
+    assert_eq!(Some(a), zelda::rng::phase_of(&a).map(zelda::rng::natural));
+}
+
 /// F109: an underworld cellar is a sub-room in the info's room, like the visit records (`1:0x7f:cave`).
 #[test]
 fn cellar_info_room_is_in_cave() {

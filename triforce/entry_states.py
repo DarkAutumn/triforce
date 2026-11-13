@@ -33,7 +33,7 @@ the route side n/s/e/w, ``c`` for coming out of a cave or dungeon stairs, ``cave
 alternate rooms are generated from the step they branch off.  ``entry_states.json`` records the route step,
 specialist and exploration cost of every file.
 
-``audit`` loads each start state several times the way training does (random RNG and spawn cycle, fresh room).
+``audit`` loads each start state several times the way training does (natural RNG state, spawn draws, fresh room).
 It reports the room each state really loads into, whether it was saved before entry, the monsters spawned versus
 the room's full count (``game.yaml``, Zoras excluded: they are not part of the room's monster list), the number
 of distinct spawn layouts at the first controllable frame, and Link's hearts.  Edge-spawn overworld rooms bring
@@ -87,7 +87,6 @@ BASE_HEARTS = 3                      # Link's containers at the start; each hear
 
 # RAM (docs/ram-catalog.md; zelda::room_entry, zelda::room_state).
 MODE, IS_UPDATING_MODE, LEVEL, ROOM, NEXT_ROOM = 0x12, 0x11, 0x10, 0xEB, 0xEC
-ROOM_HISTORY, HISTORY_LENGTH, NO_ROOM = 0x621, 6, 0xFF
 LEVEL_KILL_COUNTS, ROOM_FLAGS_OW, ROOM_FLAGS_UW = 0x560, 0x67F, 0x6FF
 TRANSITION_MODES = (0x02, 0x03, 0x06, 0x07, 0x0A, 0x10)     # always lead to EnterRoom
 ENTER_MODES = (0x04, 0x09, 0x0B, 0x0C)                      # init is EnterRoom
@@ -160,10 +159,8 @@ def pending_room(read: Callable[[int], int]) -> Optional[tuple]:
 
 
 def make_room_fresh(game: Game, level: int, room: int):
-    """Clears a room's kill history so EnterRoom spawns its full monster count."""
-    for i in range(HISTORY_LENGTH):
-        if game.read(ROOM_HISTORY + i) == room:
-            game.write(ROOM_HISTORY + i, NO_ROOM)
+    """Clears a room's saved kills so EnterRoom spawns its full monster count (`zelda::room_entry::make_room_fresh`:
+    values a room the run never cleared holds; with them clear the room history decides nothing, so it stays)."""
     if level == 0:
         game.write(ROOM_FLAGS_OW + room, game.read(ROOM_FLAGS_OW + room) & 0xF8)
     else:

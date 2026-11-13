@@ -685,7 +685,7 @@ pub struct PyGame {
 
 #[pymethods]
 impl PyGame {
-    /// A powered-on machine. `seed` seeds load randomization (RNG bytes, spawn cycle, edge cell);
+    /// A powered-on machine. `seed` seeds load randomization (a natural RNG state, spawn cycle, edge cell);
     /// `states_dir` overrides where bare state names resolve.
     #[new]
     #[pyo3(signature = (seed=0, render=false, states_dir=None, look_ahead=true))]
