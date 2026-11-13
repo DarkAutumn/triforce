@@ -8,8 +8,12 @@
 
 One tab per level (Overworld, Dungeon 1-9).  Each level's rooms are stitched into one picture: a room with a
 savestate (``triforce/states``) shows its playfield as Link enters it, rendered once and cached as a PNG in
-``screens/`` (re-rendered when its savestate is newer); a room without one is a dark tile.  The overworld is the full
-16x8 grid; a dungeon is the bounding box of its known rooms (``game.yaml``, savestates, eval data).
+``screens/``.  An overworld room without a savestate is walked into from the game start (``start.state``): Link is
+put on the edge of the room next to it, with ``RoomId`` set to that room, and walks out, so the game scrolls into the
+room and draws it itself; he enters from the first side (S, N, E, W) with an opening, as the game was at its start
+(no secret opened).  So the overworld is always the full 16x8 grid.  Each PNG records the state it was rendered from
+and is re-rendered when that changes or the state is newer.  A dungeon room without a savestate is a dark tile; a
+dungeon is the bounding box of its known rooms (``game.yaml``, savestates, eval data).
 
 Mouse wheel zooms around the cursor, dragging (or the arrow keys) pans, Home fits the map again, a click selects a
 room (the sidebar shows what is known about it).  The overlay buttons draw a value on every room with data: its hex
@@ -43,6 +47,7 @@ from pathlib import Path
 from typing import Optional
 
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QKeySequence, QPainter, QPalette, QPen, QPixmap, QPolygonF,
                            QShortcut)
@@ -86,6 +91,20 @@ PAN_STEP = 0.1             # arrow keys pan this share of the view
 DRAG_THRESHOLD = 4         # px of movement that turns a click into a drag
 ROUTE_COLOR = QColor('#5ce1e6')    # route overlay: cyan, apart from the blue-purple-red stat scale and the selection
 WALK_EXITS = ('N', 'S', 'E', 'W')
+# Walking into an overworld room without a savestate (render_screens).  The edge test and the scroll:
+# zelda-asm/mechanics.md "Screen edges and room transitions"; the mazes: "Lost Woods and Lost Hills".
+WALK_IN_BASE = 'start'                 # the savestate it starts from: the game start, no secret opened
+WALK_IN_SIDES = {                      # side Link enters by -> (room he leaves - room, button, his coordinate there)
+    's': (0x10, 'UP', 0x3D), 'n': (-0x10, 'DOWN', 0xDD), 'e': (1, 'LEFT', 0x00), 'w': (-1, 'RIGHT', 0xF0)}
+WALK_IN_ARRIVAL = {'s': 0xDD, 'n': 0x3D, 'e': 0xF0, 'w': 0x00}       # where the scroll leaves him
+WALK_IN_MIDDLE = {'s': 0x78, 'n': 0x78, 'e': 0x8D, 'w': 0x8D}        # the middle of each side, on Link's grid
+WALK_IN_MAZES = {                      # Lost Woods, Lost Hills: side -> the MazeStep that leads there (the free exit,
+    0x61: {'w': 0, 'e': 3},            # or the 4th correct step); any other exit brings the maze room back
+    0x1B: {'e': 0, 's': 3}}
+WALK_IN_FRAMES = 200                   # the scroll takes 104 frames at most
+MODE, LEVEL, ROOM_ID, MAZE_STEP = 0x12, 0x10, 0xEB, 0x52F  # GameMode, CurLevel, RoomId, MazeStep
+GRID_TILES_W, GRID_TILES_H = 32, 22    # the playfield's 8x8 tiles (render_grid)
+BLOCKED = '#CPK='                      # render_grid: blocked, cave, push block, locked or barred door
 
 
 # --------------------------------------------------------------------------------------------------------- theme
@@ -220,7 +239,7 @@ def parse_state_name(name: str) -> Optional[tuple[int, int, str, int]]:
 
 def scan_states(states_dir: Path) -> dict[Key, list[str]]:
     """(level, room, in_cave) -> the room's savestate names (sorted).  Side 'cave' is the cave interior.  The states
-    of a subfolder (the Dungeon 4 scouting states) are named with it ('d4/4_71s_0') and come after the folder's own."""
+    of a subfolder (a scouted route's states) are named with it ('d4/4_71s_0') and come after the folder's own."""
     states = defaultdict(list)
     root = Path(states_dir)
     for path in sorted(root.glob('*.state')) + sorted(root.glob('*/*.state')):
@@ -254,32 +273,124 @@ def cached_screens(screens_dir: Path) -> dict[Key, Path]:
     return screens
 
 
+def screen_source(path: Path) -> Optional[str]:
+    """The savestate a cached PNG was rendered from (its ``source`` text chunk), None if it has none."""
+    try:
+        with Image.open(path) as image:
+            return image.info.get('source')
+    except OSError:
+        return None
+
+
+def walk_in_rooms(states: dict[Key, list[str]]) -> list[Key]:
+    """The overworld rooms without a savestate: pictured by walking in (``walk_in``)."""
+    return [(0, room, False) for room in range(GRID_COLS * GRID_ROWS) if (0, room, False) not in states]
+
+
+def walk_in_source(room: int, side: str) -> Optional[int]:
+    """The room Link leaves to enter ``room`` by ``side``: None off the map, or out of a maze room by a side that
+    can't lead out of it (``WALK_IN_MAZES``)."""
+    source = room + WALK_IN_SIDES[side][0]
+    if not 0 <= source < GRID_COLS * GRID_ROWS or side not in WALK_IN_MAZES.get(source, {side: 0}):
+        return None
+    return source
+
+
+def walk_in(game, base: Path, room: int, side: str, along: int) -> bool:
+    """Loads ``base`` (an overworld state), makes the room Link stands in the one beside ``room`` (``RoomId``; out of
+    a maze room with the ``MazeStep`` that leads there), puts him on its edge (at ``along`` on it) and holds the
+    direction until the game has scrolled into ``room`` and plays there (mode 5).  The game draws the room itself,
+    from its own data.  False if it didn't get there."""
+    _, button, edge = WALK_IN_SIDES[side]
+    source = walk_in_source(room, side)
+    game.load(str(base), randomize_rng=False)
+    x, y = (along, edge) if side in 'sn' else (edge, along)
+    game.apply_ram({'location': source, 'link_x': x, 'link_y': y})
+    if source in WALK_IN_MAZES:
+        game.write(MAZE_STEP, WALK_IN_MAZES[source][side])
+    for _ in range(WALK_IN_FRAMES):
+        game.press(button, 1)
+        if game.read(MODE) == 5 and game.read(LEVEL) == 0 and game.read(ROOM_ID) == room:
+            return True
+    return False
+
+
+def walk_in_spots(walkable: list[list[bool]], side: str) -> list[int]:
+    """Where Link can come in by ``side``: his coordinates along it (8-pixel grid) where the four tiles under his
+    lower half, as the scroll leaves him (``WALK_IN_ARRIVAL``), are walkable."""
+    def free(x, y):
+        row, col = (y - 0x38) // 8, x // 8          # the playfield starts at y $40; his lower half is y + 8 .. 15
+        return all(walkable[r][c] for r in (row, row + 1) for c in (col, col + 1))
+    arrival = WALK_IN_ARRIVAL[side]
+    if side in 'sn':
+        return [x for x in range(0, 0xF1, 8) if free(x, arrival)]
+    return [y for y in range(0x3D, 0xDE, 8) if free(arrival, y)]
+
+
+def walk_in_entry(walkable: list[list[bool]], room: int) -> Optional[tuple[str, int]]:
+    """(side, coordinate along it) where Link enters ``room``: the first side (S, N, E, W) with an opening wide enough
+    for him on its edge, at the opening nearest the middle of the side.  None if no side has one (an island)."""
+    for side in WALK_IN_SIDES:
+        spots = walk_in_spots(walkable, side) if walk_in_source(room, side) is not None else []
+        if spots:
+            return side, min(spots, key=lambda spot: (abs(spot - WALK_IN_MIDDLE[side]), spot))
+    return None
+
+
+def walk_in_playfield(game, base: Path, room: int):
+    """The playfield of overworld ``room`` on the first frame Link plays in it, walked into from ``base``.  A first
+    walk in (by the first side the map allows, at its middle) reads the room's tiles to choose where Link comes in
+    (``walk_in_entry``; that first side if none is open), so he doesn't stand in a rock."""
+    first = next(side for side in WALK_IN_SIDES if walk_in_source(room, side) is not None)
+    if not walk_in(game, base, room, first, WALK_IN_MIDDLE[first]):
+        raise RuntimeError(f"couldn't walk into overworld room 0x{room:02x}")
+    game.apply_ram({'link_y': 0xF8})        # below the playfield: the tile grid shows no Link
+    lines = game.state.render_grid().splitlines()[1:1 + GRID_TILES_H]
+    walkable = [[char not in BLOCKED for char in line[-GRID_TILES_W:]] for line in lines]
+    side, along = walk_in_entry(walkable, room) or (first, WALK_IN_MIDDLE[first])
+    if not walk_in(game, base, room, side, along):
+        raise RuntimeError(f"couldn't walk into overworld room 0x{room:02x} by its {side.upper()} side")
+    return game.screen()[HUD_ROWS:HUD_ROWS + TILE_H]
+
+
 def render_screens(states: dict[Key, list[str]], screens_dir: Path, states_dir: Path = STATES_DIR,
                    rerender: bool = False) -> tuple[dict[Key, Path], Counter]:
-    """Renders the playfield (256x176) of each room with a savestate into ``screens_dir`` unless its PNG is newer
-    than the savestate (``rerender``: every room).  Returns the room -> PNG map (rooms with savestates only) and how
-    many were rendered per level.  The game is loaded through ``Game.load``, which runs to the first playable frame
-    (game mode 5).  Each PNG is replaced only by its new render, so a failed render keeps the cache; ``rerender``
-    drops the PNGs of rooms without a savestate once every room has rendered."""
+    """Renders the playfield (256x176) of each room with a savestate into ``screens_dir``, and of every overworld
+    room without one by walking into it from ``start.state`` (``walk_in_playfield``; when ``states_dir`` has it).  A
+    PNG is kept unless it is older than its state or was rendered from another one (its ``source`` text chunk);
+    ``rerender`` renders every room.  Returns the room -> PNG map and how many were rendered per level.  A
+    savestate is loaded through ``Game.load``, which runs to the first playable frame (game mode 5).  Each PNG is
+    replaced only by its new render, so a failed render keeps the cache; ``rerender`` drops the PNGs of rooms with
+    no picture source once every room has rendered."""
     screens_dir = Path(screens_dir)
     screens_dir.mkdir(parents=True, exist_ok=True)
+    sources = {key: (pick_state(names), Path(states_dir) / f'{pick_state(names)}.state')
+               for key, names in states.items()}
+    base = Path(states_dir) / f'{WALK_IN_BASE}.state'
+    if base.is_file():
+        sources.update({key: (f'{WALK_IN_BASE} walk-in', base) for key in walk_in_rooms(states)})
     screens, rendered = {}, Counter()
     game = None
-    for key, names in sorted(states.items()):
-        state = Path(states_dir) / f'{pick_state(names)}.state'
+    for key, (source, state) in sorted(sources.items()):
         out = screens_dir / screen_name(key)
-        if rerender or not out.exists() or out.stat().st_mtime < state.stat().st_mtime:
+        if (rerender or not out.exists() or out.stat().st_mtime < state.stat().st_mtime
+                or screen_source(out) != source):
             game = game or Game(render=True, states_dir=str(states_dir))
-            game.load(str(state), randomize_rng=False)
-            playfield = game.screen()[HUD_ROWS:HUD_ROWS + TILE_H]
+            if key in states:
+                game.load(str(state), randomize_rng=False)
+                playfield = game.screen()[HUD_ROWS:HUD_ROWS + TILE_H]
+            else:
+                playfield = walk_in_playfield(game, state, key[1])
+            info = PngInfo()
+            info.add_text('source', source)
             tmp = out.with_suffix('.tmp')
-            Image.fromarray(playfield).save(tmp, format='PNG')
+            Image.fromarray(playfield).save(tmp, format='PNG', pnginfo=info)
             os.replace(tmp, out)
             rendered[key[0]] += 1
         screens[key] = out
     if rerender:
         for key, path in cached_screens(screens_dir).items():
-            if key not in states:
+            if key not in sources:
                 path.unlink()
     return screens, rendered
 
@@ -418,8 +529,8 @@ def overlay_badge(overlay: str, room: int, stats: Optional[dict]) -> Optional[tu
 def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
     """The route's steps (``route_steps`` dicts) each with what Link carries on entering it: ``hearts`` (heart
     containers), ``sword``, ``items`` and ``triforce`` (levels).  Progress follows the treasures (``game.yaml``) of
-    the steps that take them: a heart container, a sword, the boomerang, bombs, the bow or the raft; a ``triforce`` exit
-    adds its piece."""
+    the steps that take them: a heart container, a sword, the boomerang, bombs, the bow, the raft or the ladder; a
+    ``triforce`` exit adds its piece."""
     rooms = game_rooms() if rooms is None else rooms
     hearts, sword, items, triforce = 3, 'none', [], []
     plan = []
@@ -430,7 +541,7 @@ def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
             hearts += 1
         elif treasure in ('wood-sword', 'white-sword', 'magic-sword'):
             sword = treasure.split('-')[0]
-        elif treasure in ('boomerang', 'bombs', 'bow', 'raft') and treasure not in items:
+        elif treasure in ('boomerang', 'bombs', 'bow', 'raft', 'ladder') and treasure not in items:
             items.append(treasure)
         if step['exit'] == 'triforce':
             triforce.append(step['level'])
@@ -990,7 +1101,9 @@ class MapWindow(QMainWindow):
             states = '<br>'.join(f"{name}{' (pictured)' if name == pictured else ''}" for name in names)
             info = self.rooms.get(key)
             enemies = ', '.join(f'{name} ×{count}' for name, count in ((info or {}).get('enemies') or {}).items())
-            details = [('Savestates', states or 'none'),
+            walked_in = not names and key in self.pixmaps and key[0] == 0 and not key[2]
+            details = [('Savestates', states or ('none (pictured by walking in from the game start)' if walked_in
+                                                 else 'none')),
                        ('Specialist', specialist_for(key) or 'none'),
                        ('Enemies', enemies or ('none' if info else 'unknown (not in game.yaml)')),
                        ('Treasure', str((info or {}).get('treasure') or 'none'))]
@@ -1030,7 +1143,9 @@ def main(argv=None) -> int:
         screens, rendered = render_screens(states, args.screens_dir, STATES_DIR, args.rerender)
     except Exception as error:      # pylint: disable=broad-except  # no ROM etc.: show what the cache has
         print(f"zelda-map: can't render room screenshots ({error}); using the cache", file=sys.stderr)
-        screens = {key: path for key, path in cached_screens(args.screens_dir).items() if key in states}
+        walk_ins = set(walk_in_rooms(states))
+        screens = {key: path for key, path in cached_screens(args.screens_dir).items()
+                   if key in states or key in walk_ins}
         rendered = Counter()
     if rendered:
         counts = ', '.join(f'{level_name(level)} {count}' for level, count in sorted(rendered.items()))

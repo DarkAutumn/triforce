@@ -10,7 +10,7 @@ use zelda::actions::{
     ActionMask, DIRECTIONS, DURATIONS, MASK_SIZE, direction_index, duration_index, is_directional,
     is_timed,
 };
-use zelda::enums::{ActionKind, Direction, GAMEPLAY_START_Y, ObjectClass, object};
+use zelda::enums::{ActionKind, Direction, GAMEPLAY_START_Y, ObjectClass, enemy, object};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::objectives::{Objective, ObjectiveKind};
@@ -778,8 +778,11 @@ impl ObservationBuilder {
                 _ => meta == 0,
             };
             let class = ObjectClass::of(t);
+            // Gleeok's neck base (slot 1) takes hits but never dies (zelda-asm `enemies.md` `# Gleeok`): only his
+            // heads (added below) are killable.
+            let gleeok_base = i == 0 && (enemy::GLEEOK..=enemy::GLEEOK4).contains(&t);
             let monster = class == ObjectClass::Monster;
-            f[e::HP] = if monster {
+            f[e::HP] = if monster && !gleeok_base {
                 ((at(OBJ_HP, i) >> 4) as f64 / 15.0) as f32
             } else {
                 0.0
@@ -806,7 +809,7 @@ impl ObservationBuilder {
             let harmless = monster && (at(OBJ_STUN, i) > 0 || flashing);
             f[e::HURTS_ON_TOUCH] =
                 b(harmful && active && !dying && !clock && !stunned_dodongo && !harmless);
-            f[e::KILLABLE] = b(monster && t != object::GUARD_FIRE);
+            f[e::KILLABLE] = b(monster && !gleeok_base && t != object::GUARD_FIRE);
             f[e::PROJECTILE] = b(projectile);
             f[e::BLOCKABLE] = b(matches!(t, 0x53 | 0x5B | 0x5C));
             f[e::SPAWNING] = b(spawning);
@@ -821,6 +824,22 @@ impl ObservationBuilder {
             for bit in 0..6 {
                 f[e::IMMUNE + bit] = b(m & (1 << bit) != 0);
             }
+        }
+        // Gleeok's attached heads have no object slot of their own (slots 2-6 are type 0): one entity per living
+        // neck in slot 2 + neck, at its head, with the HP byte and invincibility timer they share (slot 5's).
+        for (neck, (x, y)) in zelda::game::gleeok_heads(ram).into_iter().map(|(n, p)| (n, (p.x, p.y))) {
+            let i = 1 + neck;
+            let timer = ram[OBJ_INVINCIBILITY_TIMER + zelda::game::GLEEOK_HEAD_SLOT];
+            let mut f = [0f32; ENTITY_FEATURE_SIZE];
+            types[i] = enemy::GLEEOK_NECK_HEAD as i64;
+            xy[i] = [x as f32, y as f32];
+            f[e::PRESENCE] = 1.0;
+            f[e::HP] = ((ram[OBJ_HP + zelda::game::GLEEOK_HEAD_SLOT] >> 4) as f64 / 15.0) as f32;
+            f[e::INVINCIBILITY] = (timer as f64 / 32.0).min(1.0) as f32;
+            f[e::HURTS_ON_TOUCH] = b(timer == 0 && !clock);
+            f[e::KILLABLE] = 1.0;
+            f[e::ACTIVE] = 1.0;
+            feats[i] = f;
         }
 
         if rs.has_item {

@@ -39,16 +39,14 @@ Grouping rule (design §3.1, revised by Lee on Nov 3, 2026):
 | `boss-manhandla` | Manhandla ($3C) | (3,0x4d) | exit-correct after killing him and taking the heart container; then N into 0x3d. | Boss room per Lee's D3 route (entered through 0x4c's bombed wall); `requires_bombs` (Lee: kill him with bombs dropped in his path). |
 
 Rooms per family: `ow-start` 4, `ow-octorok` 9 (one an alternate), `ow-zora` 9, `ow-moblin` 7, `ow-leever` 1,
-`ow-tektite` 4, `ow-lynel` 2, `ow-boulder` 3, `stalfos-keese-gel` 10, `goriya` 4, `trap-room` 3, `equipment-room` 2,
-`wallmaster` 1, `boss-aquamentus` 1, `d2-rope` 6, `moldorm` 1, `boss-dodongo` 1, `zol` 6, `darknut` 3,
-`boss-manhandla` 1.
+`ow-tektite` 4, `ow-lynel` 2, `ow-boulder` 3, `stalfos-keese-gel` 12, `goriya` 4, `trap-room` 4, `equipment-room` 3,
+`wallmaster` 1, `boss-aquamentus` 1, `d2-rope` 6, `moldorm` 1, `boss-dodongo` 1, `zol` 7, `darknut` 3,
+`boss-manhandla` 1, `vire` 8, `like-like` 1, `boss-gleeok` 1, `ow-peahat` 1.
 
-### Dungeon 4 (scouted Nov 11, not trained; `docs/routes/d4.md`)
+### Dungeon 4 (scouted Nov 11, merged into `d2first` and trained Nov 12; `docs/routes/d4.md`)
 
-The route `d2first-d4` continues `d2first` through Dungeon 4. Its rooms are tagged by enemy as everywhere, but
-nothing trains there yet: the new families are `trainable: false` and their start states live in
-`triforce/states/d4/`; the existing families list their Dungeon 4 rooms in `rooms` without `start_states`, so
-their training and evaluation are what they were.
+`d2first` goes on from the Dungeon 3 triforce through Dungeon 4 (steps 98–122). Its rooms are tagged by enemy as
+everywhere; the existing families train on their Dungeon 4 rooms' start states too.
 
 | Family | Main threat | Rooms (level, room) | Notes |
 |---|---|---|---|
@@ -56,9 +54,9 @@ their training and evaluation are what they were.
 | `like-like` (new) | Like Like, Zol, Bubble | (4,0x32) | The Breakfast Room: kill them, push the block, down the stairs; back up, W. |
 | `boss-gleeok` (new) | Gleeok, two heads ($43) | (4,0x13) | Kill him, the heart container, N. |
 | `ow-peahat` (new) | Peahat | (0,0x45) | The island: from the raft's pier into the dungeon. |
-| `zol` | | + (4,0x40) | Five Zols in the dark; the key is left. |
-| `stalfos-keese-gel` | | + (4,0x51), (4,0x21) | Eight Blue Keese (the key is left); five Blue Gels in the dark, bomb the N wall (`items: {bombs: true}`, which unmasks BOMB only in this `requires_bombs` room). |
-| `trap-room` | | + (4,0x11) | The rupee room: no monsters, no traps, bomb the E wall. The nearest fit; Lee to confirm. |
+| `zol` | | + (4,0x40) | Five Zols in the dark; take the key (in the open). |
+| `stalfos-keese-gel` | | + (4,0x51), (4,0x21) | Eight Blue Keese (take the key, in the open); five Blue Gels in the dark, bomb the N wall (`items: {bombs: required}`, which unmasks BOMB only in this `requires_bombs` room). |
+| `trap-room` | | + (4,0x11) | The rupee room: no monsters, no traps, bomb the E wall (Lee, Nov 12: it stays in this family). |
 | `equipment-room` | | + (4,0x60 cellar) | The ladder cellar. |
 
 Removed with the reset (Nov 8): `ow-leever-peahat` (0x29, 0x2a, 0x2b: milestone1 only; 0x2c went to `ow-tektite`),
@@ -81,7 +79,6 @@ the fairy pond 0x39 (ow-start), 0x48 (ow-zora; back on the route since Nov 9 as 
 Every route room has route-generated pre-entry states (`python -m triforce.entry_states build`, chains 0–2, staged
 under `target/entry-states/<ts>` and copied in with `entry_states install <dir>`; `entry_states.json`); the bow
 detour's (Nov 9) were built from `1_43w_N` with `--start-step 55`, the way on to and through Dungeon 3 (Nov 9)
-from `1_36w_N` with `--start-step 67` (then `0_56e_N`, `--start-step 73`). The Dungeon 4 scouting states (Nov 11:
-`--route d2first-d4 --start-step 97` from `3_3ds_N`) are installed with `install <dir> --to triforce/states/d4`
-and audited with `audit --states 'triforce/states/d4/*.state' --route d2first-d4`: in the subfolder no trained
-family's `start_states` glob matches them (`docs/routes/d4.md`, "Start states").
+from `1_36w_N` with `--start-step 67` (then `0_56e_N`, `--start-step 73`). The Dungeon 4 states (Nov 11:
+`--route d2first-d4 --start-step 97` from `3_3ds_N`, then a route of its own) moved into the states dir with the
+route merge (Nov 12; `docs/routes/d4.md`, "Start states").

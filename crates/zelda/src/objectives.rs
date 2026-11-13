@@ -1298,7 +1298,10 @@ mod tests {
         assert!(raft(0x69, false, "cave") && raft(0x59, false, "S") && raft(0x3d, false, "S"));
         let first = progress.iter().position(|p| p.raft).unwrap();
         assert_eq!(steps[first - 1].location(), MapLocation::new(3, 0x0f, true));
-        assert!(progress[first..].iter().all(|p| p.raft && p.bow && p.triforces == 0b011));
+        assert!(progress[first..].iter().all(|p| p.raft && p.bow && p.triforces & 0b011 == 0b011));
+        let ladder = progress.iter().position(|p| p.ladder).unwrap();
+        assert_eq!(steps[ladder - 1].location(), MapLocation::new(4, 0x60, true));
+        assert!(progress[ladder..].iter().all(|p| p.raft && p.ladder && p.triforces & 0b111 == 0b111));
     }
 
     #[test]
@@ -1312,10 +1315,12 @@ mod tests {
                 (WAYPOINT_HEART, MapLocation::new(0, 0x2c, true), Some(1)),
                 (WAYPOINT_BOW, MapLocation::new(1, 0x7f, true), Some(1)),
                 (WAYPOINT_RAFT, MapLocation::new(3, 0x0f, true), Some(3)),
+                (WAYPOINT_LADDER, MapLocation::new(4, 0x60, true), Some(4)),
             ]
         );
         assert_eq!(w[0].after, [2].into_iter().collect());
         assert_eq!(w[1].after, [2].into_iter().collect());
         assert_eq!(w[2].after, [2, 1].into_iter().collect());
+        assert_eq!(w[3].after, [2, 1, 3].into_iter().collect());
     }
 }

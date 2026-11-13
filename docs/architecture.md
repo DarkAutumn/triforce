@@ -63,17 +63,21 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 | `zelda::actions` | `ACTION_SCHEMA_VERSION` (2); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=104] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
 | `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. An off-grid attack perpendicular to Link's travel first walks him to the grid point (holding `ObjDir` until `$394 == 0`, at most 6 frames); an attack press the game didn't read (a lag frame) is held one more frame. A CLIP (or a MOVE its `ClipSettings` turn into one) runs the grid-point skip macro ("Grid-point skip" below); `clip` reports its `ClipOutcome`. |
 | `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clip_settings` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clip_settings(action, correct_exits)`, `skip_available(direction)`, `Change.clip`). |
-| `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
+| `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
 Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's `Obj_Update` jump table) and
 `GameView`, the executor's interrupts, `room_state` and the observation share it: `enemies` are monsters only;
 `projectiles` are monster shots ($53–$5C); `hazards` hold boulders and the boulder generator ($20/$1F), traps
-($49/$4A), Bubbles ($2B–$2D) and standing fire ($40), which hurt but can't be hurt and are not fight targets;
-people, dropped items and tile objects are in none of the lists. The observation's "hurts on touch" flag follows
-the classifier; HP, stun and killable are monster-only. The executor interrupts on anything that can hurt Link
-except standing fire and the boulder generator. A slot that empties because a hazard destroyed itself or a Zora
-dived is not a kill.
+($49/$4A), Bubbles ($2B–$2D), standing fire ($40) and Gleeok's flying heads ($46), which hurt but can't be hurt
+and are not fight targets; people, dropped items and tile objects are in none of the lists. The observation's
+"hurts on touch" flag follows the classifier; HP, stun and killable are monster-only. The executor interrupts on
+anything that can hurt Link except standing fire and the boulder generator. A slot that empties because a hazard
+destroyed itself or a Zora dived is not a kill. Gleeok (Nov 12, `zelda::game::gleeok_heads`): his neck base in
+slot 1 never dies, so `GameView` files it under `hazards` and the observation marks it not killable; his attached
+heads have no slot of their own (slots 2–6 are type 0), so `GameView` and the observation add one enemy per living
+neck (id $42, slot 2 + neck) at the head's neck-array position, with slot 5's shared HP; a hit on that HP is
+credited once.
 
 The action mask (`zelda::actions::compute_action_mask`) offers only what the game would do. An attack is legal
 only where the game would start the weapon: Link's state allows it, the weapon's slot is free, the sword isn't
@@ -532,7 +536,10 @@ step, so following an enemy that moves away pays again, and knockback resets the
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
   `eval` / `chain`; `--no-log` skips it) and end it `interrupted` on SIGTERM. `training-gui.py`'s [currently running] shows every live folder on the
-  machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`).
+  machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`). A
+  folder whose training ends stays shown while another is live (its plan is no longer `running`, or its process
+  is gone: `plan_is_live`); the "Clear finished" button hides those for the rest of the session, and trainings that
+  start later still appear.
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
   success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
   its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that
@@ -605,9 +612,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
 
 - The route (`triforce/routes.yaml`, `zelda::game_map`; Python `triforce._native.route_steps()`,
   `_native.DEFAULT_ROUTE`): `d2first`, the route everything plays (Dungeon 2 first, the 0x2c heart, the white
-  sword, Dungeon 1 with the bow detour, then Dungeon 3 with the raft; `docs/routes/d2first.md`, `docs/routes/d3.md`).
-  A route is a list of steps or `{extends: <route above>, steps: [...]}`; `d2first-d4` continues `d2first` by raft
-  to Dungeon 4 and through it (`docs/routes/d4.md`: scouted, not trained; `--route d2first-d4`).
+  sword, Dungeon 1 with the bow detour, Dungeon 3 with the raft, then by raft to Dungeon 4, the ladder and Gleeok;
+  `docs/routes/d2first.md`, `docs/routes/d3.md`, `docs/routes/d4.md`). A route is a list of steps or
+  `{extends: <route above>, steps: [...]}` (a scouted continuation; none today).
   `GameCompletion(route, step)` follows it step by step: the step entering Link's room from the side he came in
   with the route's progress there (triforce pieces, sword, bow, raft, ladder) makes its edge exit the correct one (plus
   alternates replacing its next room); off the route and on
@@ -640,6 +647,9 @@ step, so following an enemy that moves away pays again, and knockback resets the
   over the old room's tiles, Link walking down the ladder) as uncontrollable, so no state is observed mid-entry. A
   cellar is side view, but its walkways ($24) and ladders ($6F) are ordinary walkable tiles, so the grid, wavefront
   and action mask need nothing new; `can_link_move` skips the underworld doorway/bound rules there (the game does).
+  With the ladder (`GameView::ladder`), an underworld room's `Room` also marks the water ($F4) the ladder crosses:
+  a run exactly one square (2 tiles) long between walkable tiles is passable along its axis only
+  (`Room::ladder_axes`, asm:Ladder_CheckAndDraw), for the wavefront and `can_link_move` alike (Dungeon 4's 0x30).
   `Room` gives a cellar one exit, N: the walkable top-row tiles of its ladder. In a sub-room the objective is its
   treasure while the route wants it there (the sword, the heart, the bow, the raft), else that exit (a cellar's game.yaml
   `N` room). Underworld stairs ($70 top-left tiles, `Room::stairs_tiles`) are the targets into a cellar. A pending

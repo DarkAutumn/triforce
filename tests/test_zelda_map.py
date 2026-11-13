@@ -183,12 +183,14 @@ def test_route_plan_and_overlay(qapp, models):
                                                                                 ['bombs', 'bow', 'boomerang'])
     manhandla = next(s for s in plan if (s['level'], s['room']) == (3, 0x4d))
     assert (manhandla['hearts'], manhandla['triforce'], 'raft' in manhandla['items']) == (6, [2, 1], True)
-    assert plan[-1]['exit'] == 'triforce' and plan[-1]['hearts'] == 7
+    gleeok = next(s for s in plan if (s['level'], s['room']) == (4, 0x13))
+    assert (gleeok['hearts'], gleeok['triforce'], 'ladder' in gleeok['items']) == (7, [2, 1, 3], True)
+    assert plan[-1]['exit'] == 'triforce' and plan[-1]['hearts'] == 8
     skip = next(s for s in plan if (s['level'], s['room'], s['entry']) == (3, 0x69, 'N'))
     assert 'treasure skip' in zelda_map.step_text(skip)
     assert (0x1a, 0x0a) in zelda_map.route_segments(plan, 0) and (0x0a, 0x1a) in zelda_map.route_segments(plan, 0)
     assert (0x3c, 0x2c) not in zelda_map.route_segments(plan, 0)          # walls between them: the route goes round
-    assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x74}
+    assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x74, 0x45}
     rooms = zelda_map.route_rooms(plan, 0)
     assert len(rooms[0x2c]) == 3 and len(rooms[0x1a]) == 2
     assert '#' in zelda_map.step_text(heart) and 'waypoint heart' in zelda_map.step_text(heart)
@@ -244,6 +246,39 @@ def test_render_screens_caches_playfields(tmp_path):
     assert not rendered
     _, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir, rerender=True)
     assert rendered == {1: 1}
+
+
+def test_overworld_rooms_without_a_savestate_are_walked_into(tmp_path, monkeypatch):
+    states_dir = tmp_path / 'states'
+    states_dir.mkdir()
+    for name in ('start', '0_77c_0', '0_1cs_0'):
+        shutil.copy(require_state(name), states_dir)
+    states = zelda_map.scan_states(states_dir)
+    assert len(zelda_map.walk_in_rooms(states)) == 126
+    # Two of them (0x0b lies above the Lost Hills, 0x1b, its only opening: entered with the maze's fourth step).
+    walked = ((0, 0x0b, False), (0, 0x1f, False))
+    monkeypatch.setattr(zelda_map, 'walk_in_rooms', lambda states: [key for key in walked if key not in states])
+    screens, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir)
+    assert rendered == {0: 4}
+    from PIL import Image  # pylint: disable=import-outside-toplevel
+    for key in ((0, 0x0b, False), (0, 0x1f, False)):
+        with Image.open(screens[key]) as image:
+            assert image.size == (zelda_map.TILE_W, zelda_map.TILE_H)
+        assert zelda_map.screen_source(screens[key]) == 'start walk-in'
+    assert zelda_map.screen_source(screens[(0, 0x77, False)]) == '0_77c_0'
+    game = zelda_map.Game(render=True, states_dir=str(states_dir))
+    zelda_map.walk_in_playfield(game, states_dir / 'start.state', 0x0b)
+    link_y = game.read(0x84)                    # he came in by the S edge, where the scroll leaves him at y $DD
+    assert (game.read(zelda_map.ROOM_ID), game.read(zelda_map.MODE), link_y) == (0x0b, 5, 0xDD)
+    _, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir)
+    assert not rendered
+    # A savestate for a walked-in room replaces its picture, even when the file is older than the PNG (0x1c's state
+    # file stands in for one of 0x1f: only the name and the date matter here).
+    shutil.copy(require_state('0_1cs_0'), states_dir / '0_1fs_0.state')
+    os.utime(states_dir / '0_1fs_0.state', (0, 0))
+    _, rendered = zelda_map.render_screens(zelda_map.scan_states(states_dir), tmp_path / 'screens', states_dir)
+    assert rendered == {0: 1}
+    assert zelda_map.screen_source(screens[(0, 0x1f, False)]) == '0_1fs_0'
 
 
 def test_a_failed_rerender_keeps_the_cache(tmp_path, monkeypatch):

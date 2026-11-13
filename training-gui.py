@@ -12,7 +12,9 @@
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
 [currently running] covers every live training on this machine, not only the logs root's: the logs roots of the
 running triforce processes (``process_log_roots``: worktrees, ``--logs-dir``, ``$TRIFORCE_LOGS_DIR``) are scanned
-too, and their folders are listed with their location.
+too, and their folders are listed with their location.  A folder stays in [currently running] after its training
+ends (while any other is live); 'Clear finished' hides those, leaving the live ones, and trainings that start later
+still appear.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
@@ -2388,7 +2390,8 @@ class Window(QMainWindow):
         self.views: list[FolderView] = []
         self.auto_live = initial is None
         self.live_mode = False
-        self.kept: list[Path] = []          # folders shown in this [currently running] session (live or finished)
+        self.kept: list[Path] = []          # folders shown in this [currently running] session (live or finished;
+                                            # 'Clear finished' drops the finished ones)
         self.live_dirs: list[Path] = []
         self.scanner = LiveScanner()
         self.selection: tuple[Path | None, object] | None = None    # (folder, run index | 'round')
@@ -2421,6 +2424,11 @@ class Window(QMainWindow):
         self.combo = FolderCombo()
         self.combo.activated.connect(self._picked)
         top.addWidget(self.combo)
+        self.clear_button = QPushButton('Clear finished')
+        self.clear_button.setToolTip("Hides the folders whose training has finished from [currently running], "
+                                     "leaving the live ones; trainings that start later still appear")
+        self.clear_button.clicked.connect(self.clear_finished)
+        top.addWidget(self.clear_button)
         open_button = QPushButton('Open…')
         open_button.clicked.connect(self._open)
         top.addWidget(open_button)
@@ -2496,6 +2504,7 @@ class Window(QMainWindow):
                 self.combo.addItem(label, str(path))
             self.combo.blockSignals(False)
         self.combo.model().item(0).setEnabled(bool(self.live_dirs))
+        self._sync_clear()
         self._sync_combo()
 
     def _sync_combo(self):
@@ -2540,6 +2549,23 @@ class Window(QMainWindow):
         self._show_dirs(list(self.kept))
         self._sync_combo()
 
+    def _sync_clear(self):
+        """'Clear finished' is there only in [currently running], enabled while it shows a finished folder."""
+        finished = sum(path not in self.live_dirs for path in self.kept) if self.live_mode else 0
+        self.clear_button.setVisible(self.live_mode)
+        self.clear_button.setEnabled(finished > 0)
+        self.clear_button.setText(f"Clear finished ({finished})" if finished else 'Clear finished')
+
+    def clear_finished(self):
+        """Drops the finished folders from [currently running]: only the live ones stay.  ``kept`` only ever gains
+        live folders, so a cleared one doesn't come back; trainings that start later are added as before."""
+        if not self.live_mode:
+            return
+        self._scan()
+        self.kept = [path for path in self.kept if path in self.live_dirs]
+        self._update_mode()
+        self._sync_clear()
+
     def _enter_folder(self, path: Path):
         self.live_mode = False
         self.kept = []
@@ -2574,6 +2600,7 @@ class Window(QMainWindow):
         if self.selection is not None and self.selection[0] not in dirs:
             self.selection = None
             self.auto_selection = True
+        self._sync_clear()
         self.poll(force=True)
 
     def _picked(self, index: int):

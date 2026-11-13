@@ -27,29 +27,13 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
    objective doesn't move it (r61 → r63a: +0.266 → +0.262). Likely needs shaping (boomerang blocks with the shield,
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples.
-3. **Dungeon 4** (scouted Nov 11, Lee; `docs/routes/d4.md`, decisions 2026-11-11). Done: the map (20 rooms, the
-   ladder cellar), the way there by raft, the route `d2first-d4` (`extends: d2first`, steps 98–122), room names
-   (`name: Breakfast Room`), 75 start states in `triforce/states/d4/` (chains 0–2, audit clean), the objective for
-   raft docks, revealed stairs and block-opened shutters. Not done, on purpose: training. To start it: d4.md "Start
-   states" (make the route the default, move the states up, `start_states` and `trainable: true`, explore).
-   Found on the way:
-   - [ ] **Bombs for Dungeon 4's two walls.** Manhandla eats the bombs 0x5b's last pass saves: the chains arrive
-     with 0, 3 and 2, and all three open 0x11's E wall with a cheated bomb (the explorer spent 3 on 0x21's wall in
-     chain 1). Options: a pickup after Manhandla, a higher `if_bombs_below` at 0x5b, or the bomb upgrade.
-   - [ ] **Gleeok has no method yet.** The explorer needed 189–314 thousand env steps (12–18 minutes) per chain to
-     kill him; nothing in the rewards or the observation is specific to his heads.
-   - [ ] **The rupee room 4:0x11 sits in `trap-room`** for want of a family (no monsters, no traps, two bomb
-     walls). Lee to confirm, or name another.
-   - [ ] **`treasure: skip` doesn't stop a pickup.** The route leaves the keys of 0x51 and 0x40, and the explorer
-     took both in every chain (a key counts as progress in its cell score). Harmless here; a model trained with
-     the skip would arrive at 0x30 with 5 keys, not 7.
-   - [x] **The explorer's cell key didn't tell "block pushed" from "not pushed"** (fixed: `push_block_pending` in
-     `CellKey`). 0x12 (kill five Vires, push, leave E) failed at 3,000 and 4,000 iterations with the old key and
-     once more at 4,000 with the new one; solved at 14,577 (331 thousand env steps, 23 minutes). The entry-state
-     builds ran with `--iterations 30000`; a chain takes 55–67 minutes on one core.
-   - [x] **The map objective's cache returned the targets from before a push** (stairs that appear with it): the
-     cache key holds "the room has stairs" now.
-   - A 3600 s tool timeout killed the first chain-0 build at step 120; long builds run without a deadline.
+3. **Retrain under the doorway mask (round20.md §5; Lee, Nov 12: a full retrain follows).** `c222323` stopped the
+   executor from turning Link sideways in an underworld doorway (the game can't; the executor's ObjDir write let
+   `BOMB E` walk Link through 4:0x11's wall into 0x12). Models trained before it used such attacks: the unchanged
+   goriya `r68-clear5e` drops from 92.0% to 85.3% in 2:0x1e on the fixed mask (identical to its old eval without
+   it), and the D2 chain segment from 82.1% to 68.6%. Every underworld family trained before `c222323` (all but
+   round 20's) should be retrained; the D2 families (goriya, d2-rope, moldorm, boss-dodongo) show it in the chains.
+   Related: item 4 (the attack turn is a RAM write).
 
 4. **Fewer writes to memory** (Lee, Nov 12). The executor plays some actions by writing RAM instead of pressing
    buttons, which makes combat easier than the real game:
@@ -64,6 +48,39 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
      anything else that calls `set_var` during play) and decide for each whether it stays. Expect a retrain and
      an action-schema or behaviour change (a `COMPAT` bump if the actions change), and re-measure every family in
      single rooms and chains.
+   - The turn write already caused one exploit (round20.md §2: walking through a wall from a doorway, now masked).
+
+## Done (Nov 12): Dungeon 4 (Lee; round 20, 1.4.0.0)
+
+Scouted Nov 11 (`docs/routes/d4.md`, decisions 2026-11-11), merged into `d2first` and trained Nov 12
+(round20.md, decisions 2026-11-12): D4 segment 21.1%, the full route to the D4 triforce 1.8% (1000 runs each).
+
+- [x] **The route:** `d2first` steps 98–122 end on the D4 triforce; `d2first-d4` deleted; the states moved up.
+- [x] **Bombs for Dungeon 4's two walls:** `bomb_reserve: 2` from 4:0x71, vire `bombs: free`. Measured: every chain
+  run arrives without bombs (Manhandla spends them), so both walls take a cheated bomb (753 and 739 visits per 1000
+  runs) and no Vire is ever bombed.
+- [x] **Gleeok has no method yet:** heads observed (synthetic enemies), base and flying heads are hazards, only head
+  damage pays; trained with start health [0.5, max] and no PBRS (94.7% in a single room).
+- [x] **The rupee room 4:0x11 sits in `trap-room`:** Lee, Nov 12: keep it.
+- [x] **`treasure: skip` doesn't stop a pickup:** moot, the route takes both keys now (no cheated key in 1000 runs).
+- [x] **The ladder** (water was always a wall; 0x30's N door needs it), **uncounted kills** (a Vire's Red Keese
+  didn't reset the stall penalty).
+- [x] **The explorer's cell key** and **the map objective's cache** (fixed during the scouting).
+
+Left open by round 20:
+
+- [ ] **Gleeok at low health.** Link reaches 4:0x13 with 2.1 hearts on average; below 3.5 hearts (492 of 598 chain
+  visits) Gleeok wins 24%, dies 185 times and stalls 188 (hides for the 2000-step budget). The model was trained at
+  3.5–7 hearts. Ideas: health from the chain's arrivals (harvested states), a heart pickup before 0x13, or the
+  low-health range back once the full-health fight is solid.
+- [ ] **D4 deaths in 0x12 (141 per 1000) and 0x30 (119).**
+- [ ] **Bombs into Dungeon 4.** A real bomb for each wall (a pickup after Manhandla, 0x5b's `if_bombs_below`), and
+  then whether vire bombs 0x31/0x12 and walks past 0x61 as Lee wants (untested: no bombs above the reserve).
+- [ ] **Linger over 500 steps** in one single-room episode each: like-like (599), boss-gleeok (638),
+  stalfos-keese-gel (598). Not investigated before promotion.
+- [ ] **Future route** (Lee): 0x30 – 0x31 – 0x32 – 0x31 – 0x21 – 0x11 through a ladder clip from 0x31 N onto
+  0x21's island, once the clip (another agent's work) is ready; today the route goes back through 0x30 and 0x20
+  into 0x21 from W.
 
 5. **Clips and screen wraps** (Nov 12). The speedrun route uses the grid-point skip: one frame of perpendicular
    input 5 pixels short of a grid point skips that point's tests. All of it is reproduced with controller input and
@@ -121,7 +138,7 @@ Left open by round 19 (§7), not fixed:
   is weaker than a sword-only model's (92–93% vs 96.5% won, round19.md §6).
 - **Single-room regressions** in §3 that the chains don't show beyond noise: ow-lynel (+0.09 hearts lost), ow-moblin
   (−0.7 points), boss-dodongo (98.3%).
-- **Dungeon 4's bomb reserve**: `d2first-d4` inherits D3's 5; set its own when D4 is trained.
+- [x] **Dungeon 4's bomb reserve**: 2 from 4:0x71 (round 20).
 
 ## Done (Nov 12): the annotated disassembly is in the repo (`zelda-asm/`)
 

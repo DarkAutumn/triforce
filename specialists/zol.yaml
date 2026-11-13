@@ -1,7 +1,7 @@
 name: zol
 rooms: ['(3, 0x7c)', '(3, 0x7b)', '(3, 0x6b)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x3d)', '(4, 0x40)']
-start_states: ['3_7c*_[0-9]', '3_7b*_[0-9]', '3_6b*_[0-9]', '3_49*_[0-9]', '3_4b*_[0-9]', '3_3d*_[0-9]']
-success: [exit-correct, triforce-collected]   # 0x3d ends on the D3 triforce (the route's end)
+start_states: ['3_7c*_[0-9]', '3_7b*_[0-9]', '3_6b*_[0-9]', '3_49*_[0-9]', '3_4b*_[0-9]', '3_3d*_[0-9]', '4_40*_[0-9]']
+success: [exit-correct, triforce-collected]   # 0x3d ends on the D3 triforce
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
@@ -16,6 +16,5 @@ notes: >-
   the Zol key rooms 0x7b (key visible; E to N), 0x6b (key when all are dead; S to N), 0x4b (key when all are dead;
   S to E through the locked door into the trap room 0x4c), 0x49 (Bubbles, Zols and Blue Keese, key visible; S and
   back S), and the empty triforce room 0x3d (ends on pickup), as stalfos-keese-gel holds D1's hall and triforce
-  room. Copied from stalfos-keese-gel/goriya (one-room, curriculum, 2000 steps). Dungeon 4 scouting (Nov 11): its
-  dark Zol room 0x40 (five Zols, the key left: S to N) is listed in `rooms` for the route d2first-d4; it has no
-  `start_states` yet, so nothing trains or is evaluated there until Lee starts Dungeon 4.
+  room. Copied from stalfos-keese-gel/goriya (one-room, curriculum, 2000 steps). Dungeon 4 (Nov 11-12): its dark
+  Zol room 0x40 (five Zols, the key in the open from the start: take it, S to N).

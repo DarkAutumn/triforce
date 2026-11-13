@@ -6,20 +6,30 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 12)
 
-- **Now (Nov 12, round 19, 1.3.2.0):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
+- **Now (Nov 12, round 20, 1.4.0.0):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
   them through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only trained
-  route (`docs/routes/d2first.md`, `docs/routes/d3.md`): game start → Dungeon 2 → the 0x2c heart cave → the white
-  sword → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla), ending on the D3 triforce. Round 19
-  added bombs (`docs/experiments/round19.md`, decisions 2026-11-11): per-family bomb use (`items.bombs`:
-  free/required/tenth/never), D3's reserve of 5, the 10th damage-free kill's forced bomb drop, observation schema 3,
-  and the whole team retrained; Link clears 2:0x5e (`treasure: clear`) for bomb drops before the Moldorm. 1000 runs
-  per segment: D2 82.1%, after D2 85.9%, D1 98.4%, after D1 100%, D3 39.5%; from the start to Dungeon 3 36.3%
-  (round 18 29.2%), to the D3 triforce 10.3% (10.6%). Act mode per model (`<run dir>/act`, bound to the
-  checkpoint's sha1): argmax except goriya, d2-rope, darknut, stalfos-keese-gel and zol. Measure chains with 1000
-  runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog "Next projects"): wallmaster
-  heart gathering, goriya heart loss, Dungeon 4, fewer writes to memory; round 19 left 3:0x59's stalls and
-  Manhandla's deaths open. Every new checkpoint needs its act mode re-measured, in single rooms and in chains
-  (argmax is fragile per checkpoint).
+  route (`docs/routes/d2first.md`, `docs/routes/d3.md`, `docs/routes/d4.md`): game start → Dungeon 2 → the 0x2c
+  heart cave → the white sword → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla) → by raft to
+  Dungeon 4 (the ladder, Gleeok), ending on the D4 triforce. Round 20 (`docs/experiments/round20.md`, decisions
+  2026-11-12) merged Dungeon 4 into the route, closed three engine gaps (the ladder crosses one-square water,
+  Gleeok's heads are observed and only head damage pays, uncounted kills reset the stall penalty), masked sideways
+  attacks in underworld doorways (the game can't do them; the executor's turn let Link walk through a wall), and
+  trained vire, like-like, boss-gleeok (start health [0.5, max], no PBRS), ow-peahat and the D4 rooms of the old
+  families. 1000 runs per segment: D2 68.6%, after D2 83.5%, D1 96.7%, after D1 100%, D3 38.6%, after D3 99.8%,
+  D4 21.1%; from the start to Dungeon 3 26.7%, to the D4 triforce 1.8%. **The doorway mask costs every model
+  trained before it** (D2 82.1% → 68.6%, round20.md §5): Lee (Nov 12) has a full retrain coming. Act mode per
+  model (`<run dir>/act`, bound to the checkpoint's sha1). Measure chains with 1000 runs per segment
+  (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog "Next projects"): the retrain under the doorway
+  mask, wallmaster heart gathering, goriya heart loss, fewer writes to memory; round 20 left Gleeok at low health
+  (Link arrives with 2.1 hearts), D4's bombs and 0x12/0x30 deaths open. Every new checkpoint needs its act mode
+  re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
+- **Clips (branch `clips`, round 21, 1.4.1.0; design pending):** the speedrunners' grid-point skip (the overworld
+  screen wrap W/E, the dungeon block clip N/S; `zelda-asm/mechanics.md`) played by the executor as a macro
+  (`zelda::clips`), offered per specialist by `clips: {action: none|kind|long|edge, shaping: jump|walk}` (default
+  `none`: no specialist under `specialists/` changes). Action schema 2 (the kind `CLIP`), observation features
+  `clip_usable_{N,S,W,E}`, counters `clips/*`, `eval.json` `by_state_target`; the COMPAT bump means no model
+  trained before it loads. Round 21 (`docs/experiments/round21.md`) compared the designs on the experiment route
+  `clips-gauntlet`; Lee picks the design.
 - **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
   `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
   earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`
@@ -38,14 +48,13 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
   (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
-- **Dungeon 4 is scouted, not trained (Nov 11; `docs/routes/d4.md`):** all 20 rooms and the ladder cellar are in
-  `game.yaml`; the route `d2first-d4` (`extends: d2first`: by raft from 0x55 to the island 0x45, Lee's directions
-  to the ladder under the Breakfast Room 4:0x32, back and through two bomb walls to Gleeok and the triforce) has
-  start states in `triforce/states/d4/`. `d2first` stays the default route of every tool and ends on the D3
-  triforce. The new families (`vire`, `like-like`, `boss-gleeok`, `ow-peahat`) are `trainable: false`; the
-  Dungeon 4 rooms of `zol`, `stalfos-keese-gel`, `trap-room` and `equipment-room` have no `start_states`, so those
-  families train and evaluate as before. To start Dungeon 4: `docs/routes/d4.md` "Start states". game.yaml rooms
-  can carry a `name:` (the Breakfast Room).
+- **Dungeon 4 (scouted Nov 11, trained Nov 12; `docs/routes/d4.md`):** all 20 rooms and the ladder cellar are in
+  `game.yaml`; `d2first` steps 98–122 go by raft from 0x55 to the island 0x45, take the keys of 0x51 and 0x40, the
+  ladder under the Breakfast Room 4:0x32, back W to 0x30, N across its water on the ladder, through two bomb walls
+  (0x21, 0x11; `bomb_reserve: 2`) to Gleeok and the triforce. Lee (Nov 12): the route must enter 0x21 from W
+  (0x30 – 0x20 – 0x21); 0x31 N lands on 0x21's island, which only a ladder clip (another agent's work) leaves.
+  routes.yaml keeps `{extends: <route>, steps: [...]}` for scouting the next dungeon. game.yaml rooms can carry a
+  `name:` (the Breakfast Room).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -57,8 +66,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 Specialist PPO models (one per room family) that carry the `d2first` chain (`triforce/routes.yaml`) from the game
 start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow) to Dungeon 3 (the raft,
-Manhandla) and its triforce (the route ends on taking it). Lee owns the direction; the standing invitation is to come
-up with ideas, test them, keep what helps, and log everything.
+Manhandla), then by raft to Dungeon 4 (the ladder, Gleeok) and its triforce (the route ends on taking it). Lee owns
+the direction; the standing invitation is to come up with ideas, test them, keep what helps, and log everything.
 
 ## Lee's standing rules
 
@@ -70,26 +79,28 @@ up with ideas, test them, keep what helps, and log everything.
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
   enemy type or per room beyond what Lee asks for. Families are the d2first route's rooms (`routes.yaml`
   `families`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-leever (0x48), ow-tektite (0x1a, 0x2c and its heart
-  cave, 0x74), ow-lynel, ow-boulder, stalfos-keese-gel, goriya, trap-room (1:0x22, 3:0x5a, 3:0x4c), equipment-room
-  (the item cellars 1:0x7f, 3:0x0f), wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo, zol,
-  darknut, boss-manhandla.
+  cave, 0x74), ow-lynel, ow-boulder, stalfos-keese-gel, goriya, trap-room (1:0x22, 3:0x5a, 3:0x4c, the rupee room
+  4:0x11), equipment-room (the item cellars 1:0x7f, 3:0x0f, 4:0x60), wallmaster, boss-aquamentus, d2-rope, moldorm
+  (2:0x3e), boss-dodongo, zol, darknut, boss-manhandla, vire, like-like (4:0x32), boss-gleeok, ow-peahat (0x45).
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are on the `v2-stable-retro` branch). No 16-heart states: max hearts follow
   the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
-  Manhandla). States are chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build
+  Manhandla, 8 after Gleeok). States are chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build
   states with `python -m triforce.entry_states build|path` (staged under `target/entry-states/<ts>`, then
   `entry_states install <dir>`) and check them with `... audit` (it enforces these rules and exits 1 on a problem).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
-  `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
+  `hp: [0.15, max]`; Lee, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
 - **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
-  Manhandla: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
-  (ow-tektite, trap-room: their `requires_bombs` rooms, the 0x2c rock wall and D3's bomb wall), `tenth` (the rest:
+  Manhandla, vire: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
+  (ow-tektite, trap-room, stalfos-keese-gel: their `requires_bombs` rooms, the 0x2c rock wall, D3's bomb wall and
+  D4's 0x21/0x11 walls), `never` (boss-gleeok: only the sword hurts him), `tenth` (the rest:
   only the 10th damage-free kill, `$50` = 9, whose bomb kill arms a forced drop of 4 bombs; allowed in every mode
   but `never`, below any reserve). routes.yaml `bomb_reserve: 5` from Dungeon 3's entrance (3 for the bomb wall, 2
-  for Manhandla); D3's central Darknut room takes its bombs at 4 or fewer. Every family trains with
+  for Manhandla), 2 from Dungeon 4's (its two walls); D3's central Darknut room takes its bombs at 4 or fewer.
+  Every family trains with
   `ram_randomization: {bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}` (`bombs_share`: half the resets keep
   the start state's own bombs, round 19). A Darknut facing opposite to Link's facing when he placed
   a bomb takes no damage from it (ASM and measured, round 19). Overworld families don't bomb but for the 10th kill.
@@ -103,7 +114,7 @@ up with ideas, test them, keep what helps, and log everything.
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.3.3.1`). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.4.1.0`). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
@@ -216,7 +227,8 @@ up with ideas, test them, keep what helps, and log everything.
   that wins 3% more but takes twice the damage loses in a chain.
 - **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10` (route `d2first`, the
   default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`; after
-  Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`. `--from`/`--stop-at` are checked before any run
+  Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3 `--from 0_74c_0`; Dungeon 4
+  `--from 4_71s_0`. `--from`/`--stop-at` are checked before any run
   (`--stop-at` must be a route room after the start step, or `step:N`, a later route step, reached only by the
   route's own exit: `step:24` is back on the overworld with Dungeon 2's triforce; exit 2 otherwise). `--power-on`
   starts from console power on instead of the `start` state (Game mechanics). Each call writes a fresh

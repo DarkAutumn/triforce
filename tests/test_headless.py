@@ -136,14 +136,15 @@ def test_a_bad_route_start_is_an_error(scripted_models, tmp_path, capsys):
 
 
 def test_golden_saves_one_stitched_replay_per_count(scripted_models, tmp_path, capsys, short_runs):
-    """From 0x3c (route step 24) the path has two segments: to step 68 (outside Dungeon 1), then the route's end.
+    """From 0x3c (route step 24) the path has three segments: to step 68 (outside Dungeon 1), step 98 (outside
+    Dungeon 3), then the route's end.
     Twenty steps don't get there: each path is its first segment's furthest run, saved under its ending."""
     status, saved, summary, err = run(capsys, tmp_path, 2, '--golden', '--from', require_state(SEGMENT_STATE),
                                       '--attempts', 2, '--parallel', 2, '--models-dir', scripted_models)
     files = sorted(tmp_path.iterdir())
     assert status == 0 and summary['saved'] == 2 and summary['runs'] == 4
-    # Each path owns (segments of the whole route) x attempts seeds: 3 x 2.
-    assert [path.name[:15] for path in files] == ['golden-00000000', 'golden-00000006']
+    # Each path owns (segments of the whole route) x attempts seeds: 4 x 2.
+    assert [path.name[:15] for path in files] == ['golden-00000000', 'golden-00000008']
     assert [json.loads(line.split(' ', 1)[1])['stop_step'] for line in err.splitlines()
             if line.startswith('segment ')] == [68, 68]
     assert err.count('failed in segment 0 (stop 68)') == 2

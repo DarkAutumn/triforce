@@ -1223,7 +1223,7 @@ rooms:
     wares: [[magic-shield, 130], [bombs, 20], [wood-arrow, 80]]  # [item, rupees], left to right
 - level: 0
   location: '0x45'  # the island of Dungeon 4: reached by raft from the dock of 0x55
-  specialist: ow-peahat  # d2first-d4 (Nov 11)
+  specialist: ow-peahat  # Dungeon 4 (Nov 11)
   exits:
     cave:  # Dungeon 4 entrance: Level_InfoUW4 StartRoomId
       level: 4
@@ -3275,7 +3275,7 @@ rooms:
   dark: true
 - level: 4
   location: '0x03'  # the triforce room
-  specialist: vire  # d2first-d4 (Nov 11)
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     S:  # open here; a shutter on 0x13's side
       level: 4
@@ -3301,7 +3301,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 4
   location: '0x11'  # the rupee room (ten rupees, a $35 rupee stash; no monsters): all four walls are bombable
-  specialist: trap-room  # d2first-d4 (Nov 11)
+  specialist: trap-room  # Dungeon 4 (Nov 11)
   requires_bombs: true    # Lee (Nov 11): the E wall is bombed open into the Vire room 0x12
   exits:
     N:  # bomb wall
@@ -3321,7 +3321,7 @@ rooms:
   bomb_walls: [N, E, S, W]
 - level: 4
   location: '0x12'  # Vires; pushing the block (once they are dead) opens the E shutter into the boss room (secret trigger 4)
-  specialist: vire  # d2first-d4 (Nov 11)
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:
       level: 4
@@ -3340,7 +3340,7 @@ rooms:
   push_block_opens: E  # the shutter into the boss room (trigger 4); the block needs the room clear
 - level: 4
   location: '0x13'  # Gleeok with two heads (object $43, Gleeok2); the heart container appears and the shutters open when it dies
-  specialist: boss-gleeok  # d2first-d4 (Nov 11)
+  specialist: boss-gleeok  # Dungeon 4 (Nov 11)
   exits:
     N:  # shutter
       level: 4
@@ -3354,7 +3354,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 4
   location: '0x20'  # Vires around a water ring
-  specialist: vire  # d2first-d4 (Nov 11)
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:  # open here; a shutter on 0x10's side
       level: 4
@@ -3371,7 +3371,7 @@ rooms:
   treasure: null
 - level: 4
   location: '0x21'  # Blue Gels; its N wall is bombable into the rupee room
-  specialist: stalfos-keese-gel  # d2first-d4 (Nov 11)
+  specialist: stalfos-keese-gel  # Dungeon 4 (Nov 11)
   requires_bombs: true    # Lee (Nov 11): the N wall is bombed open into the rupee room
   exits:
     N:  # bomb wall
@@ -3390,8 +3390,8 @@ rooms:
   bomb_walls: [N]
   dark: true
 - level: 4
-  location: '0x30'  # Vires and Bubbles (Lee: "the vire room we already pathed through")
-  specialist: vire  # d2first-d4 (Nov 11)
+  location: '0x30'  # Vires and Bubbles (Lee: "the vire room we already pathed through"); row 2 is water from wall to wall: N needs the ladder
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:
       level: 4
@@ -3410,8 +3410,8 @@ rooms:
   treasure: null
   dark: true
 - level: 4
-  location: '0x31'  # Vires in a water maze; the land path winds from the W door to the E shutter (no ladder needed)
-  specialist: vire  # d2first-d4 (Nov 11)
+  location: '0x31'  # Vires in a water maze; the land path winds from the W door to the E shutter (the ladder shortens it)
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:
       level: 4
@@ -3431,7 +3431,7 @@ rooms:
 - level: 4
   location: '0x32'  # Like Likes, Zols and Bubbles; a pushed block reveals the stairs to the ladder cellar 0x60
   name: Breakfast Room  # Lee (Nov 11): the room with the stairs to the ladder
-  specialist: like-like  # d2first-d4 (Nov 11)
+  specialist: like-like  # Dungeon 4 (Nov 11)
   exits:
     W:  # open here; a shutter on 0x31's side
       level: 4
@@ -3450,7 +3450,7 @@ rooms:
   stairs: [26, 4]
 - level: 4
   location: '0x40'  # Zols; the key is visible
-  specialist: zol  # d2first-d4 (Nov 11)
+  specialist: zol  # Dungeon 4 (Nov 11)
   exits:
     N:
       level: 4
@@ -3464,7 +3464,7 @@ rooms:
   dark: true
 - level: 4
   location: '0x50'  # Vires
-  specialist: vire  # d2first-d4 (Nov 11)
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:
       level: 4
@@ -3478,7 +3478,7 @@ rooms:
   dark: true
 - level: 4
   location: '0x51'  # Blue Keese; the key is visible
-  specialist: stalfos-keese-gel  # d2first-d4 (Nov 11)
+  specialist: stalfos-keese-gel  # Dungeon 4 (Nov 11)
   exits:
     S:
       level: 4
@@ -3491,7 +3491,7 @@ rooms:
   treasure: key
 - level: 4
   location: '0x61'  # Vires (hit, a Vire splits into two Red Keese)
-  specialist: vire  # d2first-d4 (Nov 11)
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:
       level: 4
@@ -3529,7 +3529,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 4
   location: '0x71'  # the entrance room (OW 0x45, cave index 4); S leaves the dungeon (omitted, as in D2)
-  specialist: vire  # d2first-d4 (Nov 11)
+  specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:
       level: 4
@@ -3542,7 +3542,7 @@ rooms:
 - level: 4
   location: '0x60'
   in_cave: true  # the ladder cellar under the Breakfast Room 0x32 (mode 9, side view), as D3's raft cellar
-  specialist: equipment-room  # d2first-d4 (Nov 11)
+  specialist: equipment-room  # Dungeon 4 (Nov 11)
   exits:
     N:  # up the left ladder (attr A = attr B = $32)
       level: 4

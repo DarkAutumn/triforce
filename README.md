@@ -105,7 +105,8 @@ restores the full 0–100% range. Health change encloses both real and total ser
 the "no change" reference appears only when zero is within that range.
 
 `zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
-first playable frames (cached in `screens/`, gitignored; `--rerender` rebuilds them); a dungeon's item cellars are
+first playable frames; an overworld room without a savestate is walked into from the game start, so the overworld
+is always all 128 rooms (cached in `screens/`, gitignored; `--rerender` rebuilds them); a dungeon's item cellars are
 drawn with their entrance room. It overlays per-room statistics: hits taken, hearts ± and death rate per visit.
 They come from each promoted model's evaluation of its current weights in its act mode (`eval.json` or
 `eval-<mode>.json`, `evaluate.read_evaluation`), `visited_rooms` (eval format 2, every room an evaluation episode

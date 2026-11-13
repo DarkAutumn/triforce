@@ -1,15 +1,17 @@
 #!/bin/bash
 # Round 16: the chain segments (AGENTS.md "Chain segments") for the promoted team, 120 runs each (seeds 0-119), in one
-# act mode, then the yardstick report. Every segment plays on to the route's end (the D3 triforce); its arrival is
+# act mode, then the yardstick report. Every segment plays on to the route's end (the D4 triforce); its arrival is
 # the first entry into the next segment's start room, so the segments add up along the route:
 #
 #   segment  from      arrival
-#   full     start     the D3 triforce (also reported at each milestone room: d2, post-d2, d1, post-d1, d3)
+#   full     start     the D4 triforce (also reported at each milestone room: d2, post-d2, d1, post-d1, d3, post-d3, d4)
 #   d2       2_7ds_0   0:0x3c (out of Dungeon 2, the post-d2 start)
 #   post-d2  0_3cc_0   1:0x73 (Dungeon 1's entrance)
 #   d1       1_73s_0   0:0x37 (out of Dungeon 1)
 #   post-d1  0_37c_0   3:0x7c (Dungeon 3's entrance)
-#   d3       3_7cs_0   the D3 triforce
+#   d3       3_7cs_0   0:0x74 (out of Dungeon 3)
+#   post-d3  0_74c_0   4:0x71 (Dungeon 4's entrance)
+#   d4       4_71s_0   the D4 triforce
 #
 #   ACT=sample TAG=r56-sample scripts/experiments/r56_chains.sh [run|report]
 #
@@ -23,12 +25,13 @@ TAG=${TAG:-r56-$ACT}
 RUNS=${RUNS:-120}
 PARALLEL=${PARALLEL:-10}
 OUT=${OUT:-target/r56-chains}
-SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0"}
+SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0"}
 mkdir -p $OUT
 
 target_of() {
   case $1 in
-    d2) echo 0:0x3c ;; post-d2) echo 1:0x73 ;; d1) echo 0:0x37 ;; post-d1) echo 3:0x7c ;; *) echo "" ;;
+    d2) echo 0:0x3c ;; post-d2) echo 1:0x73 ;; d1) echo 0:0x37 ;; post-d1) echo 3:0x7c ;;
+    d3) echo 0:0x74 ;; post-d3) echo 4:0x71 ;; *) echo "" ;;
   esac
 }
 
@@ -56,7 +59,7 @@ report() {
     chains+=(--chain "$name=$out${target:+@$target}")
     if [ $name = full ]; then
       seq=""
-      for milestone in d2:2:0x7d post-d2:0:0x3c d1:1:0x73 post-d1:0:0x37 d3:3:0x7c; do
+      for milestone in d2:2:0x7d post-d2:0:0x3c d1:1:0x73 post-d1:0:0x37 d3:3:0x7c post-d3:0:0x74 d4:4:0x71; do
         seq="${seq:+$seq,}${milestone#*:}"
         chains+=(--chain "full→${milestone%%:*}=$out@$seq")
       done

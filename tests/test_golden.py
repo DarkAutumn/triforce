@@ -16,9 +16,10 @@ def options(policies, route_name='d2first'):
 
 def test_checkpoints_follow_the_route_triforces():
     steps = _native.route_steps('d2first')
-    assert golden.checkpoints('d2first') == [24, 68]
-    # Back on the overworld outside Dungeon 2 and Dungeon 1; the route's last triforce is no checkpoint.
-    assert [(steps[k]['level'], steps[k]['room']) for k in golden.checkpoints('d2first')] == [(0, 0x3c), (0, 0x37)]
+    assert golden.checkpoints('d2first') == [24, 68, 98]
+    # Back on the overworld outside Dungeons 2, 1 and 3; the route's last triforce is no checkpoint.
+    assert [(steps[k]['level'], steps[k]['room']) for k in golden.checkpoints('d2first')] == [(0, 0x3c), (0, 0x37),
+                                                                                             (0, 0x74)]
     assert steps[-1]['exit'] == 'triforce'
 
 

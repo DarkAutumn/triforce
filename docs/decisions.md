@@ -1196,6 +1196,42 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   to Link's facing when he placed it, wherever it stands (measured over 6 seeds in 3:0x5b: 434 such cases, 0 hits;
   951 of 1478 others hit). No special handling: the observation has each Darknut's direction.
 
+## 2026-11-12 — Dungeon 4 joins d2first: the ladder, Gleeok's heads, uncounted kills (Lee)
+
+- **What Lee asked for:** finish Dungeon 4: merge it into the one route (delete `d2first-d4`), train its families,
+  measure them in single rooms and in chains, promote. Vires may be bombed (0x31 and 0x12 are good places, a Vire
+  killed outright can drop bombs; in 0x61 the model should learn to walk past). Take the keys of 0x51 and 0x40
+  (they lie on the floor from the start). Families stay as scouted (`vire`, `like-like`, `ow-peahat`,
+  `boss-gleeok`; the rupee room 0x11 stays in `trap-room`).
+- **Route:** the 25 steps follow the D3 triforce in `d2first` (steps 98–122); the route ends on the D4 triforce;
+  `bomb_reserve: 2` from 4:0x71 (the walls of 0x21 and 0x11; Lee named no number). The states moved from
+  `triforce/states/d4/` into `triforce/states/` (manifest route `d2first`). `extends:` stays for later scouting.
+- **What the scouting got wrong** (zelda-asm `levels/level-4.md`): the route does need the ladder (0x30's water row
+  before its N door, step 116), and the env had no idea water can be crossed. Gleeok's heads were invisible (slots
+  2–6 are type 0; the heads live in per-neck arrays) and his body and flying heads paid boss-hit rewards though
+  they can't die. A Vire split into Red Keese: their kills don't count in `RoomKills` ($34F), so the stall penalty
+  ramped up mid-fight.
+- **Engine fixes (no version change: no observation layout, action or network change; nothing trained sees the
+  changed cases but Dungeon 4):**
+  - **The ladder** (`zelda::room`, `Room::ladder_axes`): with the ladder, in an underworld room, a run of water
+    tiles exactly one square (2 tiles) long between two walkable tiles is passable along its axis
+    (asm:Link_EndMoveAndAnimate@CheckLadder, asm:Ladder_CheckAndDraw: perpendicular moves stop, two squares can't be
+    crossed). The wavefronts (PBRS, the target, linger, the explorer) and `can_link_move` follow it. The overworld
+    ladder rooms are not modelled. The executor is unchanged: holding a direction into the water lays the ladder.
+  - **Gleeok** (`zelda::game::gleeok_heads`): the neck base (slot 1) is a hazard (not killable in the
+    observation), the flying head ($46) a hazard and no longer a boss kind; one synthetic enemy per living attached
+    head (id $42, slot 2 + neck) at its neck-array position with slot 5's shared HP; a hit on the shared HP is
+    credited once. Only head damage pays `reward-boss-hit`.
+  - **Uncounted kills** (`Change.observed.enemies_killed`): a monster that dies (starts its death sparkle or
+    leaves its slot; a dived Zora is no kill) restarts the room-stall count even when `RoomKills` doesn't count it
+    (a Vire's Red Keese, Gleeok's heads). Look-ahead predictions don't record kills.
+- **Doorway attacks** (found by the Dungeon 4 explorer: `BOMB E` from 4:0x11's S doorway landed Link in 0x12). In an
+  underworld doorway (outside the room's bounds) the game never turns Link sideways: a perpendicular press does
+  nothing (W doorway of 1:0x44, S doorway of 4:0x30) or walks him back into the room first (4:0x11). The executor
+  turned him by writing ObjDir, which the game then followed without a tile test, through the wall. The mask now
+  offers only attacks along the doorway's axis there (`GameView::attack_directions`); N006's measured bounds were
+  taken with the facing poked.
+
 ## 2026-11-12 — The grid-point skip in the agent: the wrap and the block clip, every design behind config (version 1.3.3.0)
 
 - **Asked for:** the agent should use the frame-exact grid-point skip (`zelda-asm/mechanics.md`, "Screen wrap

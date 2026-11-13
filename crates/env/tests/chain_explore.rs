@@ -72,7 +72,7 @@ fn route_definition() {
     let (map, states) = (&data.map, &data.states_dir);
     let route = Route::load(map, states, "d2first", None, None).unwrap();
     assert_eq!(route.start_state, "start");
-    assert_eq!((route.terminal, route.final_triforce), (None, Some(3)));
+    assert_eq!((route.terminal, route.final_triforce), (None, Some(4)));
     let stop = MapLocation::new(1, 0x73, false);
     assert_eq!(
         Route::load(map, states, "d2first", Some(stop), None)
@@ -83,17 +83,20 @@ fn route_definition() {
     assert!(Route::load(map, states, "no-such-route", None, None).is_err());
 }
 
+/// Every route step names the family of its room.  An experiment route names none (`clips-gauntlet`: a specialist
+/// naming the route draws its steps), but its rooms are in families too.
 #[test]
 fn every_route_room_has_a_specialist() {
     let data = data();
     for (name, steps) in &data.map.routes {
+        let experiment = steps.iter().all(|step| step.specialist.is_none());
         for step in steps {
-            assert_eq!(
-                data.specialist_for(step.location()),
-                step.specialist.as_deref(),
-                "{name} {:?}",
-                step
-            );
+            let family = data.specialist_for(step.location());
+            if experiment {
+                assert!(family.is_some(), "{name} {step:?}");
+            } else {
+                assert_eq!(family, step.specialist.as_deref(), "{name} {:?}", step);
+            }
         }
     }
 }
