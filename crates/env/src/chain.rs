@@ -682,6 +682,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.current.as_ref().map(|c| &*c.name)
     }
 
+    /// The objective the last decision was built with (None before the first reset).
+    pub fn objective(&self) -> Option<&Objective> {
+        self.objective.as_ref()
+    }
+
     /// The stall budget is set and the acting room has gone `stall_steps` actions without damage either way.
     pub fn stalled(&self) -> bool {
         self.stall_steps.is_some_and(|n| self.no_damage >= n)

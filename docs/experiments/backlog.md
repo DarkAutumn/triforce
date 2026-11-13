@@ -137,7 +137,7 @@ Left open by round 21 (round21.md §10):
 
 - [ ] **The overworld ladder clip** (0x5f, 0x4f) is not built: it needs a wrap followed by a room change, and the
   room model doesn't cover the ladder in the overworld.
-- [ ] **Wraps onto a row whose landing leaves by an exit that doesn't count.** 0x5b row Y `$B5` wraps into the
+- [x] **Wraps onto a row whose landing leaves by an exit that doesn't count.** (Round 22: `objectives::wraps_into_wrong_exits` vetoes such a wrap when the objective leaves by that edge; 0x5b rows `$B5`, `$BD`.) 0x5b row Y `$B5` wraps into the
   lower E opening, outside game.yaml `span` (the scripted wrap fails 0_5bw_0 100 of 100; trained policies change
   rows first). Not offering the wrap there needs the objective's exits in the availability rule. The gate's ow-moblin
   wrong exits (4 → 12 of 3,000, from 0_5bw and 0_63e) come from 0x5b's two E openings too.
@@ -157,7 +157,7 @@ Left open by round 21 (round21.md §10):
   sampled episodes, 92 came with a Keese or Gel hit during the 43-frame macro, 78 leaving Link at Y `$65` (from
   where he still bombs): 4:0x21 loses 0.28 hearts per visit (0.03 on the old W route). In the D4 segment: 311
   aborts in 919 visits, 244 visits with one aborted clip and no completed one.
-- [ ] **The clip counters' quirks.** A clip cut short and finished by a walk isn't counted (round21-vire-50.md,
+- [x] **The clip counters' quirks.** (Round 22: a clip carried into the next room is done; a MOVE that finishes a cut clip counts in `clips/finished_by_move`.) A clip cut short and finished by a walk isn't counted (round21-vire-50.md,
   episode 107: a stalled clip left Link 6 px into the block and `MOVE N 32` carried him through). And a `CLIP N`
   that carries Link through 4:0x21's already opened wall into 0x11 in one action (6 of the r71 single-room
   episodes) counts as `aborted` (`ClipAbort::Interrupted` on the room change) although it succeeded. The masks are

@@ -724,7 +724,7 @@ fn walks(s: &mut S, d: Direction) -> bool {
     s.state().link.position != at
 }
 
-/// Every Dungeon 4 start state (round 20; round 21's route: 0x31 N, 0x21 from S), Link put on every grid point at
+/// Every Dungeon 4 start state (both ways of round 22's stretch d4-island), Link put on every grid point at
 /// rest out of the doorway: the block clip is offered in room $03 (under its two inner blocks at X $60 and $90, into
 /// the side pockets of the triforce's enclosure) and room $50 (its diagonal rows of blocks: 20 squares, each over its
 /// zone G'..T), nowhere else: not in the water rooms $21, $30, $31 (water is no block: the ladder clip's) nor in the
@@ -740,7 +740,7 @@ fn the_block_clip_in_dungeon_4() {
         .filter(|n| n.starts_with("4_"))
         .collect();
     names.sort();
-    assert_eq!(names.len(), 48, "{names:?}");
+    assert_eq!(names.len(), 57, "{names:?}");
     let mut want_03 = Vec::new();
     for y in [0x85, 0x8D, 0x95] {
         want_03.extend([(0x60, y, Direction::N), (0x90, y, Direction::N)]);

@@ -1603,3 +1603,35 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   and a redrawn checkpoint verify and carry the phase). The round 21 models under it (seed 0, 100 episodes per
   state, act modes; old → new): goriya 95.2% → 95.8%, −0.15 → −0.19 hearts; ow-moblin 99.0% → 98.8%, −0.07 →
   −0.07; boss-gleeok 99.7% → 99.7%, +0.29 → +0.11: every difference within two standard errors.
+
+## 2026-11-13 — The run-time clips switch and route stretches (round 22, Lee)
+
+- **Context:** Lee wants to turn clips off at any moment ("rest of the run no clips") and to run with and without
+  them; where the clip way and the plain way go through different rooms the route needs both.
+- **Decision:** one run-time switch `clips_allowed` (default on) beside the family's `clips: true`: CLIP is offered
+  only when both are on (`Session::set_clips_allowed`, `GameCompletion::set_clips_allowed`,
+  `SpecialistEnv::set_clips_allowed(Option<bool>)`, `ChainEnv::set_clips_allowed`, `Route::with_clips` with
+  `clips_off_from` a step or room; Python `Game.set_clips_allowed`, `Env.set_clips_allowed`). A flip takes effect at
+  the next decision the env or chain builds (the observation and mask already handed out stay valid); the mask, the
+  `clip_usable_*` bits (now read from the mask: no layout change), the objective and the path search follow it. Chain
+  records carry `clips_allowed` per visit (at its first decision) and `clips_flips` (`{step, clips}`, step 0 = at
+  the entry), runs `clips`.
+- **Route stretches:** routes.yaml `- stretch: NAME` with `parts`, `rejoins`, `clips:` and `plain:` step lists,
+  flattened into one numbered route (the clip way's steps first), each step tagged with its way. Checked at load
+  (parts/rejoin claims, each way a walk of game.yaml exits, same progress and bomb reserve at the rejoin, no waypoint
+  or triforce inside). First stretch: `d4-island` (clips 0x31 E→N, 0x21 S→N; plain 0x31 E→W, 0x30 E→N, 0x20 S→E,
+  0x21 W→N; rejoin 0x11), so D4's steps after it moved by 4 (`entry_states.json` renumbered; states 4_30e, 4_20s,
+  4_21w rebuilt with `entry_states path`).
+- **Re-planning:** off on the clip way, the plain step of Link's room entered from his side takes over (0x31 from E:
+  W); without one the objective leads to the walkable exit nearest (map path) to a room of the plain way or the rejoin
+  (0x21's island: its S door; 0x76 or 0x75's E part: back to 0x66), adopting a plain step whose exit he can walk to
+  as soon as he is in its room. No walkable exit leads there: the ordinary off-route objective. On while on the plain
+  way: the plain way holds to the rejoin (predictable; no turning back mid-stretch); elsewhere the clip way at once.
+  A start the route enters on one way only fixes the switch (`objectives::start_clips`: 4_21s on, 4_30e/4_20s/4_21w
+  off); a chain `--from` such a state with the other switch starts as a flip there.
+- **Clip counters:** a block or ladder clip whose crossing runs on into the next room counts as done; an aborted clip
+  that a later MOVE along its line carries past the clip's end point counts once in `finished_by_move` (kept in
+  `aborted`, not in `done`).
+- **Wrap veto:** a wrap is not offered when the objective leaves by the landing edge only within its game.yaml
+  `span` and the landing row is outside it (0x5b rows `$B5`, `$BD`); wraps toward other uses stay.
+- **Evidence:** `crates/env/tests/clips_switch.rs`, `crates/env/tests/chain_clips.rs`, `game_map` stretch tests.
