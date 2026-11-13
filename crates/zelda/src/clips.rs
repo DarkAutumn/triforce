@@ -604,7 +604,7 @@ fn skip_cost(p: i32, end: i8, stashes: u8) -> i32 {
 /// (grid point, offset 0) of a skip's zone to Link's tile at its end, at [`skip_cost`]. Dungeon rooms only: the block
 /// clip (N, S) everywhere, the ladder clip (any heading) while Link holds the ladder (`Room::ladder`). The overworld
 /// wrap is not a jump: it ends one MOVE from the opposite edge, so a jump would make the path to that edge's exit
-/// lead out of the entry edge, and the policy learned the wrap without one (`docs/experiments/round21.md`).
+/// lead out of the entry edge, and the policy learned the wrap without one (`docs/experiments/round21-gauntlet.md`).
 pub fn skip_jumps(room: &Room) -> Vec<Jump> {
     let location = room.location;
     if location.level == 0 || location.in_cave || !room.is_loaded() {

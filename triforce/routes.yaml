@@ -173,7 +173,7 @@ d2first:
 - {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
 - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
 - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
-# clips-gauntlet (round 21, docs/experiments/round21.md): an experiment route, not a way through the game.  Two
+# clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
 clips-gauntlet:

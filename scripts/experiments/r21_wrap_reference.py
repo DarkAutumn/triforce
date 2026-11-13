@@ -1,4 +1,4 @@
-"""Round 21 scripted reference (docs/experiments/round21.md): CLIP toward the entry edge, then MOVE out of the
+"""Round 21 scripted reference (docs/experiments/round21-gauntlet.md): CLIP toward the entry edge, then MOVE out of the
 opposite edge, EPISODES times per state with the gauntlet's hp randomisation (hp [0.15, max], full_hp 0.5; the
 states hold 3 hearts).  Run from the repo root (the states dir is experiments/r21/states):
 

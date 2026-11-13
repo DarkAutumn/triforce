@@ -4,6 +4,7 @@
 > `long` and `edge` triggers and the `walk` shaping were removed from the code; `clips:` is now a plain `true|false`
 > switch (`kind` with `jump`). The removed arms' YAMLs are in `experiments/r21/removed/` and no longer load; the kept
 > ones (`gauntlet-none`, `gauntlet-kind-jump`) say `clips: false|true`. This report describes the code as it ran.
+> The round's main document is `round21.md` (this report was `round21.md` until Nov 13).
 
 The owner wants the agent to perform the speedrunners' grid-point skip; branch `clips` (milestone 1, commit
 `671fa8a`, version 1.3.3.0) offers the overworld screen wrap to the policy in four ways, per specialist

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Round 21: the clips gauntlet (docs/experiments/round21.md). Overworld rooms 0x59, 0x5a, 0x5b entered from W (target
+# Round 21: the clips gauntlet (docs/experiments/round21-gauntlet.md). Overworld rooms 0x59, 0x5a, 0x5b entered from W (target
 # E or S) or E (target W or S), the target drawn per reset by the routes.yaml route `clips-gauntlet`; one specialist
 # YAML per arm under experiments/r21/ (they differ only in `clips:`), start states in experiments/r21/states.
 #

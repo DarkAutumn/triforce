@@ -1,4 +1,4 @@
-"""Round 21 (docs/experiments/round21.md): the gauntlet's tables from each run's eval-<act>.json and metrics.jsonl
+"""Round 21 (docs/experiments/round21-gauntlet.md): the gauntlet's tables from each run's eval-<act>.json and metrics.jsonl
 (`scripts/experiments/r21_gauntlet.sh`).  Prints markdown.
 
     python scripts/experiments/r21_report.py [SEED...]"""

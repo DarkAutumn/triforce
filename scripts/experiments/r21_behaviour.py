@@ -1,4 +1,4 @@
-"""Round 21 (docs/experiments/round21.md): how a gauntlet policy uses the wrap, from replays recorded with the
+"""Round 21 (docs/experiments/round21-gauntlet.md): how a gauntlet policy uses the wrap, from replays recorded with the
 decisions stream (`scripts/experiments/r21_gauntlet.sh`: target/r21-gauntlet/replays/<arm>-s<seed>/ next to the
 run's eval-replays.json, whose records give each replay's start state and target exit).
 
