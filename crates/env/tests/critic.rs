@@ -96,6 +96,7 @@ fn step(prev: &Ram, curr: &Ram, action: &str) -> Change {
     Change {
         action: Action::parse(action).unwrap(),
         frames: 8,
+        menu_frames: 0,
         interrupt: None,
         control_frames: 8,
         projectile_blocks: Vec::new(),

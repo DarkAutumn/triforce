@@ -182,6 +182,7 @@ impl PoolEnv for Fake {
         let outcome = Outcome {
             reward: self.rng.random::<f32>() + action as f32,
             frames: self.cfg.frames_per_step as i64,
+            menu_frames: 0,
             interrupt: action.rem_euclid(3),
             terminated,
             truncated,

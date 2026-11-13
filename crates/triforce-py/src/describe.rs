@@ -392,6 +392,9 @@ pub fn render_grid(state: &GameView) -> String {
 /// One step's outcome: frames, interrupt, hits, items, health.
 pub fn describe_change(change: &Change) -> String {
     let mut parts = vec![format!("{} -> {} frames", change.action, change.frames)];
+    if change.menu_frames > 0 {
+        parts.push(format!("+{} item sub-screen frames", change.menu_frames));
+    }
     if let Some(i) = change.interrupt {
         parts.push(format!("interrupt={}", i.name()));
     }

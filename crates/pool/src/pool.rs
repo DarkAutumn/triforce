@@ -94,8 +94,10 @@ pub struct Start {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Outcome {
     pub reward: f32,
-    /// Emulated frames the step took.
+    /// Frames the step took that count for discounting (the item sub-screen's left out).
     pub frames: i64,
+    /// Frames the step spent on the item sub-screen (the game paused); emulated as well.
+    pub menu_frames: i64,
     /// The env's interrupt code (0: none).
     pub interrupt: i64,
     pub terminated: bool,
@@ -927,7 +929,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
         env.decided(slot.policy, &action, &decision, self.actor.distribution(&self.scratch));
         Worker::<E>::execute(env, id, Some(action), slot, events)?;
         let o = slot.outcome;
-        self.shared.controls[id].add_emulated_frames(o.frames.max(0) as u64);
+        self.shared.controls[id].add_emulated_frames((o.frames + o.menu_frames).max(0) as u64);
         if !(o.terminated || o.truncated) {
             return Ok(Flow::Again);
         }

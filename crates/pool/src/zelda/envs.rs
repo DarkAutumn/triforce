@@ -310,6 +310,7 @@ fn specialist_outcome(r: &StepResult) -> Outcome {
     Outcome {
         reward: r.reward as f32,
         frames: r.info.frames as i64,
+        menu_frames: r.info.menu_frames as i64,
         interrupt: interrupt_code(r.info.interrupt),
         terminated: r.terminated,
         truncated: r.truncated,

@@ -387,7 +387,7 @@ fn attack_directions_match_the_game_at_every_coordinate() {
                     }
                     let view = s.apply_ram(&[]).clone();
                     let expected =
-                        if b_item { view.item_directions() } else { view.sword_directions() }.contains(&d);
+                        if b_item { view.attack_directions(zelda::ActionKind::Bomb) } else { view.sword_directions() }.contains(&d);
                     let bombs = s.nes_mut().peek(0x658);
                     s.press(button | press, 2);
                     let started = if b_item { s.nes_mut().peek(0x658) < bombs } else { s.nes_mut().peek(0xB9) != 0 };

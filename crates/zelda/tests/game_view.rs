@@ -381,7 +381,7 @@ fn weapon_directions_respect_screen_bounds() {
             .set(Var::LinkX, x)
             .set(Var::LinkY, y);
         let v = r.view();
-        (v.sword_directions(), v.item_directions())
+        (v.sword_directions(), v.attack_directions(zelda::ActionKind::Bomb))
     };
     use Direction::*;
     assert_eq!(dirs(1, 120, 141), (vec![E, W, N, S], vec![E, W, N, S]));

@@ -724,7 +724,7 @@ impl GameView {
         false
     }
 
-    fn can_pass_doorway(&self, px: i32, py: i32, direction: Direction) -> bool {
+    pub(crate) fn can_pass_doorway(&self, px: i32, py: i32, direction: Direction) -> bool {
         match direction {
             Direction::N | Direction::S if px != DOORWAY_REQUIRED_X => return false,
             Direction::E | Direction::W if py != DOORWAY_REQUIRED_Y => return false,
@@ -938,47 +938,22 @@ impl GameView {
         self.sword_directions().is_empty()
     }
 
-    /// Directions the sword (A) can swing: Link_FilterInput's Link_BorderBounds on the facing's axis, as the game
-    /// applies them (asm:Link_BorderBounds; measured by pressing A on every coordinate, N006). Inclusive ranges:
-    /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.  In an
-    /// underworld doorway only its own axis (the game doesn't turn Link sideways there).
+    /// Directions the sword (A) can strike in by buttons from here ([`crate::attack::plan`]): the press, or the
+    /// turn before it, inside asm:Link_FilterInput's border bands; no sideways turn where the game forbids it.
     pub fn sword_directions(&self) -> Vec<Direction> {
-        self.attack_directions(false)
+        self.attack_directions(crate::enums::ActionKind::Sword)
     }
 
-    /// Directions B items can be used: the A ranges narrowed by the inner bounds of the facing (E x <= 208,
-    /// W x >= 31, S y <= 189; overworld N y >= 84).
-    pub fn item_directions(&self) -> Vec<Direction> {
-        self.attack_directions(true)
-    }
-
-    fn attack_directions(&self, b_item: bool) -> Vec<Direction> {
-        let (x, y) = (self.link.position.x, self.link.position.y);
-        let ow = self.level() == 0;
-        let (x_lo, x_hi) = if ow { (7, 232) } else { (23, 216) };
-        let (n_lo, s_lo, y_hi) = if ow { (69, 69, 213) } else { (84, 85, 197) };
-        let ranges = [
-            (Direction::E, x, x_lo, if b_item { 208 } else { x_hi }),
-            (Direction::W, x, if b_item { 31 } else { x_lo }, x_hi),
-            (Direction::N, y, if b_item { n_lo.max(84) } else { n_lo }, y_hi),
-            (Direction::S, y, s_lo, if b_item { 189 } else { y_hi }),
-        ];
-        // In an underworld doorway (outside the room's bounds) the game never turns Link sideways: a perpendicular
-        // press first walks him back into the room (measured in 4:0x11's S doorway). The executor turns him by
-        // writing ObjDir, which the game then follows without a tile test (asm:Walker_Move): through the wall into
-        // the next room. So in a doorway only attacks along its axis.
-        let underworld_room = !ow && !self.full_location().in_cave;
-        let vertical_doorway = underworld_room && !(UW_BOUND_T..=UW_BOUND_B).contains(&y);
-        let horizontal_doorway = underworld_room && !(UW_BOUND_L..=UW_BOUND_R).contains(&x);
-        ranges
-            .into_iter()
-            .filter(|&(_, v, lo, hi)| (lo..=hi).contains(&v))
-            .map(|(d, ..)| d)
-            .filter(|d| {
-                let sideways = if matches!(d, Direction::N | Direction::S) { horizontal_doorway } else { vertical_doorway };
-                !sideways
-            })
-            .collect()
+    /// Directions an attack of `kind` can be made in by buttons from here ([`crate::attack::plan`]; the
+    /// boomerang's diagonals included). Weapon readiness and inventory are [`Self::weapon_ready`]'s and
+    /// [`Self::available_actions`]'.
+    pub fn attack_directions(&self, kind: crate::enums::ActionKind) -> Vec<Direction> {
+        let dirs: &[Direction] = if crate::actions::is_diagonal(kind) {
+            &crate::actions::DIRECTIONS
+        } else {
+            &crate::actions::CARDINALS
+        };
+        dirs.iter().copied().filter(|&d| crate::attack::plan(self, kind, d).is_some()).collect()
     }
 
     /// The sword is blocked (a Bubble's touch: SwordBlockedLongTimer $4C, or asm:IsSwordBlocked $52E); the game

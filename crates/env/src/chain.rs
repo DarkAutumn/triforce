@@ -861,7 +861,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.boss_stuns += boss.stuns;
         record.boss_eats += boss.eats;
         record.steps += 1;
-        record.frames += change.frames as u64;
+        record.frames += (change.frames + change.menu_frames) as u64;
         if change.health_lost > 0.0 || !change.observed.enemies_hit.is_empty() {
             self.no_damage = 0;
         } else {
@@ -869,7 +869,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         }
         record.no_damage_max = record.no_damage_max.max(self.no_damage);
         result.steps += 1;
-        result.frames += change.frames as u64;
+        result.frames += (change.frames + change.menu_frames) as u64;
         self.objective = Some(objective);
         self.prev_objective = Some(prev_objective);
         self.change = Some(change);

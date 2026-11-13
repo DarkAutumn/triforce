@@ -13,6 +13,7 @@ zcore = { path = "../zcore", optional = true }
 
 [dev-dependencies]
 movie = { path = "../movie" }
+parking_lot = "0.12.5"
 rand_chacha = "0.10.0"
 test-rom = { path = "../test-rom" }
 
