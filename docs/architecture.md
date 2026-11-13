@@ -608,23 +608,38 @@ every step, so following an enemy that moves away pays again, and knockback rese
   folder's `NNN` may have any width; it is allocated under `<logs>/.lock`. `round.jsonl` / `round.log` cover the round (chain,
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
-  `eval` / `chain`; `--no-log` skips it; `--events FILE` writes their events into a caller's stream instead) and
-  end it `interrupted` on SIGTERM. An evaluation batch (`triforce eval-batch`, below) is one folder, plan kind
+  `eval` / `chain`; `--no-log` skips it) and end it `interrupted` on SIGTERM. `--events FILE` (train, evaluate,
+  eval-chain) writes into a given stream: in a folder with a `training.json` its driver (train_round, eval-batch)
+  owns the plan, the stream and its `end`; in a folder without one the job writes its plan there
+  (`events.has_plan`), so every job has a plan. Every plan names its checkout (`checkout`, `branch`, `commit`) and
+  registers in the machine's job registry (`jobs.py`, below). An evaluation batch (`triforce eval-batch`, below) is
+  one folder, plan kind
   `eval-batch`: every evaluation a plan entry (`name`, `kind` chain / eval / report, `events`, `log`, `output`,
   `total` runs or episodes, `command`; status pending → `evaluating` → `ok` / `failed` / `interrupted` with its
   headline `chain_*` or `eval_*` fields and `wall_seconds`), one `<entry>.jsonl` each (the command's `chain_start`
   / `chain_progress` / `chain` or `eval_start` / `eval_progress` / `eval`, then the batch's `error` and `end`), and
   `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
-  `training-gui.py`'s [currently running] shows every live folder on the
-  machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`). A
-  folder whose training ends stays shown while another is live (its plan is no longer `running`, or its process
-  is gone: `plan_is_live`); the "Clear finished" button hides those for the rest of the session, and trainings that
+  `training-gui.py`'s [currently running] shows every live job on the machine, wherever it writes: the registry's
+  running jobs (pid alive with the recorded start time), its own logs root's, and, for code from before the
+  registry, the logs roots the running triforce processes use (`process_log_roots`). Folders from another checkout
+  are labelled with its directory and branch. Under a "finished" heading below the live ones: folders whose
+  training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
+  registry's jobs that ended in the last 24 hours (`RECENT_SECONDS`; one whose process died without ending its plan
+  shows "process gone"); the "Clear finished" button hides those for the rest of the session, and trainings that
   start later still appear. A batch folder is one group with its name and one row per evaluation: waiting,
   running (the bar is the runs or episodes done of the total, from `chain_progress` / `eval_progress`), done (its
   headline: a chain's arrivals and route-end success, an evaluation's success and health change; `resumed` when an
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
   outcomes with their share of the evaluation, `108× (10.8%)`: of the chain's runs (where the failed runs ended),
   or of the family evaluation's episodes (start room and ending; `eval` event `by_room_failures`).
+- Job registry (`jobs.py`): `TrainingPlan` registers every plan at its start (`jobs.register`) as one JSON file in
+  `jobs.jobs_dir()` (`$TRIFORCE_JOBS_DIR`, else `$XDG_STATE_HOME/triforce/jobs`, else
+  `$HOME/.local/state/triforce/jobs`: per user, outside every checkout), `<host>-<pid>-<process start>-<log
+  folder>.json`: `host`, `pid`, `pid_start` (the process start from `/proc`, so a reused pid is told apart),
+  `started`, `command`, `cwd`, `checkout`, `branch`, `commit`, `log_dir`, `plan`, `name`, `kind`, `status`
+  (`running`, then the plan's final status from `finish`) and `finished`. Writes are atomic; a registry that can't be
+  written warns once and the job goes on. Each registration deletes entries that ended (or whose process is gone)
+  more than 7 days ago (`PRUNE_SECONDS`). The tests register in a session directory (`tests/conftest.py`).
 - CPU priority (`jobs.py`): every training and evaluation entry point (`scripts/train_round.py`, `triforce.train`
   `cli`, `triforce.evaluate` `main`, `cli._cmd_eval_chain`, `eval_batch.main`) calls `jobs.lower_priority(--nice)`
   at start: niceness 15 by default (`$TRIFORCE_NICE` overrides it, 0 leaves it alone), only ever raised, so a

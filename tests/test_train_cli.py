@@ -449,6 +449,7 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
 
 def test_train_error_is_logged_before_raising(states_dir, tmp_path):
     events_path = tmp_path / 'stream.jsonl'
+    (tmp_path / 'training.json').write_text('{}')                   # a driver's plan: the driver owns 'end'
     with pytest.raises(Exception) as error:
         train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
                            '--curriculum', str(tmp_path / 'missing'), '--events', str(events_path)))
@@ -456,6 +457,23 @@ def test_train_error_is_logged_before_raising(states_dir, tmp_path):
     assert [e['event'] for e in events] == ['error', 'train_end']    # the caller owns 'end'
     assert str(error.value) in events[0]['message'] and 'Traceback' in events[0]['traceback']
     assert events[1]['status'] == 'error'
+
+
+def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_path):
+    """``--events FILE`` with no training.json beside it: the run writes its plan there (the GUI lists it), ends
+    its own stream and is in the job registry."""
+    from triforce import jobs
+    folder = tmp_path / 'somewhere'
+    events_path = folder / 'mine.jsonl'
+    with pytest.raises(Exception):
+        train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
+                           '--curriculum', str(tmp_path / 'missing'), '--events', str(events_path)))
+    plan = json.loads((folder / 'training.json').read_text())
+    assert plan['kind'] == 'train' and plan['status'] == 'failed' and plan['runs'][0]['events'] == 'mine.jsonl'
+    assert plan['runs'][0]['status'] == 'error' and plan['checkout'] and 'branch' in plan
+    assert [e['event'] for e in read_jsonl(str(events_path))] == ['error', 'train_end', 'end']
+    (job,) = [job for job in jobs.read_jobs() if job['log_dir'] == str(folder.resolve())]
+    assert job['status'] == 'failed' and job['kind'] == 'train' and job['pid'] == os.getpid()
 
 
 def test_an_interrupted_run_saves_but_exits_130(states_dir, tmp_path):

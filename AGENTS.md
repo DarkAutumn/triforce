@@ -247,9 +247,14 @@ what helps, and log everything.
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
   compare with its own `eval.json`, knowing the code under it differs (round 21).
-- **Start single trainings without `--events`** (round 21). `triforce.train --events FILE` appends to a stream its
-  caller owns and writes no `training.json`, so the training GUI never shows the run (only `scripts/train_round.py`
-  writes one for its stream). Without it the run gets its own `logs/<yymmdd>_<NNN>_<specialist>/`.
+- **Every job is in the job registry, and every job has a plan** (Lee, Nov 13; replaces round 21's "start single
+  trainings without `--events`"). Each plan (`train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`,
+  from any worktree or `--logs-dir`) registers itself in `$HOME/.local/state/triforce/jobs/` (`$XDG_STATE_HOME`;
+  `$TRIFORCE_JOBS_DIR` overrides; `triforce/jobs.py`) with its folder, checkout, branch and commit, and marks the
+  entry when it ends, so `training-gui.py`'s [currently running] lists every job on the machine with its checkout,
+  and those that ended in the last 24 hours under "finished". `--events FILE` into a folder without a
+  `training.json` now writes a plan there (a driver's folder with a plan keeps owning the stream). Still invisible:
+  a job that writes neither (`--no-log`), or a second `--events` job into a folder whose plan is someone else's.
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd2:
   --from 2_7ds_0 --runs 40' --chain ...`, or all eight with `--chains TAG`): full `triforce eval-chain --runs 20
   --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;

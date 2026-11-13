@@ -77,9 +77,11 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     tests' networks are tiny: more threads only wait for each other, and on a machine a training round keeps busy
     they made saving and loading the test team 20-40x slower (backlog, Nov 11).  ``TRIFORCE_NICE=0``: the training
     and evaluation entry points the tests call in-process don't lower the test runner's priority (an explicit value
-    is kept; tests of the niceness set their own)."""
+    is kept; tests of the niceness set their own).  ``TRIFORCE_JOBS_DIR``: the plans the tests write register in a
+    session directory, never in the user's job registry (the training GUI would list them)."""
     os.environ.setdefault('OMP_NUM_THREADS', '1')
     os.environ.setdefault('TRIFORCE_NICE', '0')
+    os.environ['TRIFORCE_JOBS_DIR'] = tempfile.mkdtemp(prefix='triforce-jobs-')
     _session['old_env'] = os.environ.get(STATES_DIR_ENV)
     _session['states_dir'] = Path(tempfile.mkdtemp(prefix='triforce-states-'))
     os.environ[STATES_DIR_ENV] = str(_session['states_dir'])

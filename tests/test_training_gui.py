@@ -334,6 +334,7 @@ def test_clear_finished_keeps_only_live_folders(qapp, tmp_path, monkeypatch):
     import json
     import time
     monkeypatch.setattr(gui, 'process_log_roots', lambda: set())      # only tmp_path's folders
+    monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
 
     def plan(name, status='running'):
@@ -444,6 +445,7 @@ def test_a_batch_plan_becomes_one_row_per_evaluation(qapp, tmp_path):
 def test_a_batch_shows_in_the_window(qapp, tmp_path, monkeypatch):
     import time
     monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     folder = tmp_path / '261113_001_r71-evals'
     write_batch(folder, os.getpid(), time.time())
@@ -458,6 +460,75 @@ def test_a_batch_shows_in_the_window(qapp, tmp_path, monkeypatch):
         assert window.detail.evaluation.sections[0][1] == 'Evaluations'
         assert [row[2] for row in window.detail.evaluation.sections[0][2]][:3] == [
             'arrive 4/10 = 40.0% · end 2/10 = 20.0%', 'evaluating', 'pending']
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+# ------------------------------------------------------------------------------------------------ the job registry
+
+def fake_job(registry, checkout, branch, name, *, pid, pid_start, status='running', finished=None):
+    """A job of another checkout: its log folder (``<checkout>/logs/<name>``, a plan naming the checkout) and its
+    registry entry."""
+    import json
+    import socket
+    folder = checkout / 'logs' / name
+    folder.mkdir(parents=True)
+    plan = {**running_plan(pid, time_now()), 'status': status, 'name': name, 'kind': 'train', 'runs': [],
+            'checkout': str(checkout), 'branch': branch}
+    (folder / gui.PLAN_FILE).write_text(json.dumps(plan))
+    registry.mkdir(exist_ok=True)
+    (registry / f'{name}.json').write_text(json.dumps({
+        'schema': 1, 'host': socket.gethostname(), 'pid': pid, 'pid_start': pid_start, 'status': status,
+        'started': iso(time_now() - 5), 'finished': finished, 'log_dir': str(folder), 'name': name,
+        'checkout': str(checkout), 'branch': branch}))
+    return folder
+
+
+def time_now():
+    import time
+    return time.time()
+
+
+def test_registry_folders_tell_live_recent_and_old_jobs_apart(tmp_path):
+    me = gui.process_started(os.getpid())
+    a = fake_job(tmp_path / 'jobs', tmp_path / 'wt-a', 'main', '261113_001_a', pid=os.getpid(), pid_start=me)
+    b = fake_job(tmp_path / 'jobs', tmp_path / 'wt-b', 'clips', '261113_002_b', pid=os.getpid(), pid_start=me,
+                 status='completed', finished=iso(time_now() - 60))
+    c = fake_job(tmp_path / 'jobs', tmp_path / 'wt-b', 'clips', '261112_003_c', pid=os.getpid(), pid_start=me,
+                 status='completed', finished=iso(time_now() - gui.RECENT_SECONDS - 60))
+    reused = fake_job(tmp_path / 'jobs', tmp_path / 'wt-c', 'x', '261113_004_reused', pid=os.getpid(),
+                      pid_start=me - 3600)                       # our pid, but another process's start time
+    jobs = gui.read_registry(tmp_path / 'jobs')
+    live, recent = gui.registry_folders(jobs, time_now())
+    assert live == [a] and recent == [reused, b] and c not in recent
+    assert gui.checkout_label({'checkout': str(tmp_path / 'wt-b'), 'branch': 'clips'}) == 'wt-b · clips'
+    assert gui.checkout_label({}) == ''
+
+
+def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeypatch):
+    """Jobs registered from two other worktrees: the live one in [currently running] with its checkout, the
+    finished one under the 'finished' heading; 'Clear finished' hides it."""
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    registry = tmp_path / 'jobs'
+    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
+    me = gui.process_started(os.getpid())
+    live = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_001_live', pid=os.getpid(), pid_start=me)
+    done = fake_job(registry, tmp_path / 'triforce-b', 'clips', '261113_002_done', pid=os.getpid(), pid_start=me,
+                    status='completed', finished=iso(time_now() - 60))
+    (tmp_path / 'gui-root').mkdir()
+    window = gui.Window(tmp_path / 'gui-root', None)
+    try:
+        assert window.live_mode and window._shown_dirs() == [live, done]
+        assert window._heading_at == 1 and not window.finished_heading.isHidden()
+        labels = [window.combo.itemText(i) for i in range(window.combo.count())]
+        assert '261113_001_live  (triforce-a · main)' in labels and '261113_002_done  (triforce-b · clips)' in labels
+        assert window.clear_button.text() == 'Clear finished (1)'
+        window.clear_button.click()
+        assert window._shown_dirs() == [live] and window.finished_heading.isHidden()
+        window._scan_and_update()
+        assert window._shown_dirs() == [live]                           # doesn't come back
     finally:
         window.close()
         window.deleteLater()

@@ -11,11 +11,14 @@ evaluations (``triforce eval-batch``: one group per batch, a row per evaluation;
     uv run training-gui.py /data/triforce-logs      # another logs root
 
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
-[currently running] covers every live training on this machine, not only the logs root's: the logs roots of the
-running triforce processes (``process_log_roots``: worktrees, ``--logs-dir``, ``$TRIFORCE_LOGS_DIR``) are scanned
-too, and their folders are listed with their location.  A folder stays in [currently running] after its training
-ends (while any other is live); 'Clear finished' hides those, leaving the live ones, and trainings that start later
-still appear.
+[currently running] covers every live training and evaluation on this machine, whatever checkout or logs root it
+writes to: every job registers its plan in the machine's job registry (``triforce/jobs.py``; ``jobs_dir``:
+``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``), and the
+roots of the running triforce processes (``process_log_roots``) are scanned too, for jobs of older code.  Folders
+from elsewhere are listed with their checkout and branch.  Below the live folders, under a 'finished' heading: the
+folders whose training ended while shown, and the registered jobs (any checkout) that ended in the last 24 hours
+(``RECENT_SECONDS``; a job whose process died without ending its plan shows as 'process gone').  'Clear finished'
+hides those, leaving the live ones, and trainings that start later still appear.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
@@ -1128,6 +1131,80 @@ def process_log_roots(proc: Path = Path('/proc')) -> set[Path]:
     return roots
 
 
+# The machine's job registry (``triforce/jobs.py``): every plan any checkout's jobs started, one JSON file each.
+JOBS_DIR_ENV = 'TRIFORCE_JOBS_DIR'
+RECENT_SECONDS = 24 * 3600     # finished registered jobs stay in [currently running] (under 'finished') this long
+
+
+def jobs_dir() -> Path:
+    """``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs`` (as
+    ``triforce.jobs.jobs_dir``)."""
+    if os.environ.get(JOBS_DIR_ENV):
+        return Path(os.environ[JOBS_DIR_ENV])
+    state = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local' / 'state')
+    return Path(state) / 'triforce' / 'jobs'
+
+
+def read_registry(directory: Path | None = None) -> list[dict]:
+    """Every readable job of the registry."""
+    directory = jobs_dir() if directory is None else directory
+    jobs = []
+    try:
+        paths = sorted(directory.glob('*.json'))
+    except OSError:
+        return jobs
+    for path in paths:
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and data.get('log_dir'):
+            jobs.append(data)
+    return jobs
+
+
+def job_alive(job: dict, proc: Path = Path('/proc')) -> bool | None:
+    """Is a registered job running?  False once it ended or its process is gone (a pid now used by a process that
+    started at another time counts as gone); None for another host's unfinished job."""
+    if job.get('status') != 'running':
+        return False
+    if job.get('host') != socket.gethostname():
+        return None
+    started = process_started(int(job.get('pid') or 0), proc)
+    if started is None:
+        return False
+    recorded = job.get('pid_start')
+    return recorded is None or abs(started - recorded) <= PID_START_SLACK
+
+
+def registry_folders(jobs: list[dict], now: float, proc: Path = Path('/proc')) -> tuple[list[Path], list[Path]]:
+    """(log folders of running jobs, of jobs that ended in the last ``RECENT_SECONDS``: finished, or their process
+    gone without a final status), each with its plan, newest first."""
+    live, recent = [], []
+    for job in jobs:
+        folder = Path(job['log_dir'])
+        if not (folder / PLAN_FILE).is_file():
+            continue
+        alive = job_alive(job, proc)
+        if alive is not False:
+            live.append(folder)
+            continue
+        ended = parse_time(job.get('finished')) or parse_time(job.get('started'))
+        if ended is not None and now - ended <= RECENT_SECONDS:
+            recent.append(folder)
+    order = lambda paths: sorted(dict.fromkeys(paths), key=log_dir_key, reverse=True)  # noqa: E731
+    return order(live), order(recent)
+
+
+def checkout_label(plan: dict) -> str:
+    """Where a plan's code runs: 'triforce-clips · clips' (the checkout's directory and branch), '' when the plan
+    doesn't say (older logs)."""
+    if not plan.get('checkout'):
+        return ''
+    name = Path(plan['checkout']).name
+    return f"{name} · {plan['branch']}" if plan.get('branch') else name
+
+
 class LiveScanner:
     """Which log folders have a live training; re-reads only the training.json files that changed."""
 
@@ -1154,6 +1231,14 @@ class LiveScanner:
             if plan_is_live(cached[1]):
                 result.append(log_dir)
         return result
+
+    def plan(self, log_dir: Path) -> dict:
+        """The folder's plan (cached as ``live`` reads them; {} when unreadable)."""
+        cached = self._plans.get(log_dir)
+        if cached is None:
+            self.live([log_dir])
+            cached = self._plans.get(log_dir)
+        return cached[1] if cached else {}
 
 
 # -------------------------------------------------------------------------------------------------------- painting
@@ -1404,7 +1489,10 @@ class Header(Clickable):
         status = model.status()
         color, label = STATUS.get(status, (C.muted, status))
         x += paint_pill(p, x, rect.top() + 17, label.upper(), color) + 6
-        paint_pill(p, x, rect.top() + 17, str(model.plan.get('kind', '')), C.muted)
+        x += paint_pill(p, x, rect.top() + 17, str(model.plan.get('kind', '')), C.muted) + 6
+        where = checkout_label(model.plan)
+        if where:
+            paint_pill(p, x, rect.top() + 17, where, C.faint)
 
         created, finished = model.created_ts, model.finished_ts
         elapsed = ((finished or now) - created) if created else None
@@ -2642,6 +2730,9 @@ class Window(QMainWindow):
         self.kept: list[Path] = []          # folders shown in this [currently running] session (live or finished;
                                             # 'Clear finished' drops the finished ones)
         self.live_dirs: list[Path] = []
+        self.recent: list[Path] = []        # registered jobs (any checkout) that ended in the last RECENT_SECONDS
+        self.cleared: set[Path] = set()     # finished folders 'Clear finished' hid (they don't come back)
+        self._heading_at: int | None = None
         self.scanner = LiveScanner()
         self.selection: tuple[Path | None, object] | None = None    # (folder, run index | 'round')
         self.auto_selection = True
@@ -2690,6 +2781,10 @@ class Window(QMainWindow):
         self.views_layout.setContentsMargins(0, 0, 6, 0)
         self.views_layout.setSpacing(18)
         self.views_layout.addStretch(1)
+        # [currently running]: the live folders first, then this heading and the finished ones.
+        self.finished_heading = QLabel(f"FINISHED · LAST {RECENT_SECONDS // 3600} H", left)
+        self.finished_heading.setStyleSheet(f"color: {C.muted.name()}; font-weight: 700; padding: 6px 2px 0 2px;")
+        self.finished_heading.hide()
         splitter.addWidget(scrolling(left))
         self.detail = DetailPane()
         splitter.addWidget(self.detail)
@@ -2735,11 +2830,16 @@ class Window(QMainWindow):
 
     def _scan(self):
         """Lists the log folders (dropdown) and finds the live ones; [currently running] is greyed when none is.
-        Besides the root's folders: the live folders of the other logs roots running processes use."""
+        Besides the root's folders: the folders of the jobs in the machine's job registry (every checkout's: the
+        live ones and those that ended in the last ``RECENT_SECONDS``), and the live folders of the other logs roots
+        running processes use (jobs of code from before the registry)."""
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
         others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
-        dirs += [path for path in self.scanner.live(others) if path not in dirs]
+        registered, recent = registry_folders(read_registry(), time.time())
+        dirs += [path for path in self.scanner.live(registered + others) if path not in dirs]
+        self.recent = [path for path in recent if path not in self.cleared]
+        dirs += [path for path in self.recent if path not in dirs]
         if not self.live_mode:
             dirs += [shown for shown in self._shown_dirs() if shown not in dirs]   # a folder outside root
         self.live_dirs = self.scanner.live(dirs)
@@ -2749,8 +2849,9 @@ class Window(QMainWindow):
             self.combo.clear()
             self.combo.addItem(LIVE_LABEL, LIVE_KEY)
             for path in dirs:
-                label = path.name if path.parent.resolve() == root else f"{path.name}  ({path.parent})"
-                self.combo.addItem(label, str(path))
+                where = '' if path.parent.resolve() == root else (checkout_label(self.scanner.plan(path))
+                                                                  or str(path.parent))
+                self.combo.addItem(f"{path.name}  ({where})" if where else path.name, str(path))
             self.combo.blockSignals(False)
         self.combo.model().item(0).setEnabled(bool(self.live_dirs))
         self._sync_clear()
@@ -2783,9 +2884,7 @@ class Window(QMainWindow):
                     self.live_mode, self.kept = False, []
                     self._show_dirs([])
             else:
-                wanted = sorted(self.kept, key=log_dir_key, reverse=True)
-                if wanted != self._shown_dirs():
-                    self._show_dirs(wanted)
+                self._show_live()
         elif self.auto_live:
             if self.live_dirs:
                 self._enter_live()
@@ -2795,22 +2894,38 @@ class Window(QMainWindow):
     def _enter_live(self):
         self.live_mode = True
         self.kept = list(self.live_dirs)
-        self._show_dirs(list(self.kept))
+        self._show_live()
         self._sync_combo()
+
+    def _finished(self) -> list[Path]:
+        """[currently running]'s finished folders, newest first: kept ones whose training ended and the registry's
+        recently ended jobs, minus what 'Clear finished' hid."""
+        paths = {path for path in self.kept if path not in self.live_dirs} | set(self.recent)
+        return sorted((path for path in paths if path not in self.live_dirs and path not in self.cleared),
+                      key=log_dir_key, reverse=True)
+
+    def _show_live(self):
+        """[currently running]: the live folders, newest first, then the 'finished' heading and the finished ones."""
+        live = sorted((path for path in self.kept if path in self.live_dirs), key=log_dir_key, reverse=True)
+        finished = self._finished()
+        heading = len(live) if finished else None
+        if live + finished != self._shown_dirs() or heading != self._heading_at:
+            self._show_dirs(live + finished, heading)
 
     def _sync_clear(self):
         """'Clear finished' is there only in [currently running], enabled while it shows a finished folder."""
-        finished = sum(path not in self.live_dirs for path in self.kept) if self.live_mode else 0
+        finished = len(self._finished()) if self.live_mode else 0
         self.clear_button.setVisible(self.live_mode)
         self.clear_button.setEnabled(finished > 0)
         self.clear_button.setText(f"Clear finished ({finished})" if finished else 'Clear finished')
 
     def clear_finished(self):
-        """Drops the finished folders from [currently running]: only the live ones stay.  ``kept`` only ever gains
-        live folders, so a cleared one doesn't come back; trainings that start later are added as before."""
+        """Hides the finished folders of [currently running] for the rest of the session: only the live ones stay,
+        a cleared folder doesn't come back, trainings that start later are added as before."""
         if not self.live_mode:
             return
         self._scan()
+        self.cleared |= set(self._finished())
         self.kept = [path for path in self.kept if path in self.live_dirs]
         self._update_mode()
         self._sync_clear()
@@ -2825,8 +2940,9 @@ class Window(QMainWindow):
         """Shows one log folder."""
         self._enter_folder(log_dir)
 
-    def _show_dirs(self, dirs: list[Path]):
-        """Shows these folders top to bottom, reusing the views (and their state) of folders already shown."""
+    def _show_dirs(self, dirs: list[Path], heading_at: int | None = None):
+        """Shows these folders top to bottom (the 'finished' heading before ``dirs[heading_at]``), reusing the
+        views (and their state) of folders already shown."""
         existing = {view.dir: view for view in self.views if view.dir is not None}
         views = []
         for path in dirs:
@@ -2843,9 +2959,14 @@ class Window(QMainWindow):
             self.views_layout.removeWidget(view)
             if view not in views:
                 view.deleteLater()
+        self.views_layout.removeWidget(self.finished_heading)
         for index, view in enumerate(views):
             self.views_layout.insertWidget(index, view)
         self.views = views
+        self._heading_at = heading_at if heading_at is not None and dirs else None
+        if self._heading_at is not None:
+            self.views_layout.insertWidget(self._heading_at, self.finished_heading)
+        self.finished_heading.setVisible(self._heading_at is not None)
         if self.selection is not None and self.selection[0] not in dirs:
             self.selection = None
             self.auto_selection = True

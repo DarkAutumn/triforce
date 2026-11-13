@@ -158,6 +158,24 @@ def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir,
                                                                             'finished': True}
 
 
+def test_eval_chain_events_into_a_folder_with_or_without_a_plan(models_dir, tmp_path):
+    """``--events FILE``: a folder without a plan gets one (kind chain, the stream as its events, finished
+    completed); a driver's folder with a plan keeps it untouched."""
+    chain = ['--models-dir', str(models_dir), 'eval-chain', '--stop-at', '0:0x77', '--runs', '1']
+    alone = tmp_path / 'alone' / 'chain.jsonl'
+    assert cli.main([*chain, '--output', str(tmp_path / 'a.jsonl'), '--events', str(alone)]) == 0
+    plan = json.loads((alone.parent / 'training.json').read_text())
+    assert plan['kind'] == 'chain' and plan['events'] == 'chain.jsonl' and plan['status'] == 'completed'
+    assert [json.loads(line)['event'] for line in alone.read_text().splitlines()] == [
+        'chain_start', 'chain_progress', 'chain']
+    driven = tmp_path / 'driven'
+    driven.mkdir()
+    (driven / 'training.json').write_text('{"kind": "eval-batch"}')
+    assert cli.main([*chain, '--output', str(tmp_path / 'b.jsonl'), '--events', str(driven / 'x.jsonl')]) == 0
+    assert json.loads((driven / 'training.json').read_text()) == {'kind': 'eval-batch'}
+    assert (driven / 'x.jsonl').read_text().count('"chain"') >= 1
+
+
 def test_eval_chain_keeps_the_runs_that_finished_before_a_failure(models_dir, tmp_path, monkeypatch):
     def failing_progress(_events, _runs):
         calls = []

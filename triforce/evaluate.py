@@ -71,7 +71,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import __version__, _native, registry, replay
-from .events import LOGS_DIR_ENV, EventLog, logged_job, write_json_atomic
+from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
 from .jobs import add_nice_argument, lower_priority
 from .metrics import heart_change_total
 from .provenance import code_version, data_hash, models_header
@@ -485,8 +485,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
     parser.add_argument('--events', default=None, metavar='JSONL',
-                        help="append the eval events to this stream instead of a log folder of its own (the caller, "
-                             "e.g. triforce eval-batch, owns the stream and writes its final 'end')")
+                        help="write the eval events to this stream: in a folder with a plan its driver (e.g. triforce "
+                             "eval-batch) owns it and writes the final 'end'; else this evaluation writes the plan")
     add_nice_argument(parser)
     parser.add_argument('--allow-incompatible-models', action='store_true',
                         help="load a model whose version differs from this code's in its first three numbers")
@@ -525,13 +525,16 @@ def main(argv=None):
     name = config.name
     checkpoint = resolve_checkpoint(name, args.checkpoint, args.run_id, args.models_dir)
     run_id = checkpoint.parent.name
-    # --events: the caller (e.g. triforce eval-batch) owns the stream, its log folder and the final 'end'.
-    log = nullcontext() if args.no_log or args.events else logged_job(
-        f'eval-{name}', 'eval', [{'specialist': name, 'run_id': run_id, 'events': f'{name}.jsonl',
+    # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
+    # into a folder without one: this evaluation writes a plan there, so the training GUI lists it.
+    stream = Path(args.events) if args.events else None
+    log = nullcontext() if args.no_log or (stream is not None and has_plan(stream)) else logged_job(
+        f'eval-{name}', 'eval', [{'specialist': name, 'run_id': run_id,
+                                  'events': stream.name if stream else f'{name}.jsonl',
                                   'run_dir': str(checkpoint.parent), 'status': 'evaluating'}], args.logs_dir,
-        nice=nice)
+        directory=None if stream is None else stream.parent, nice=nice)
     with log as plan:
-        events = (EventLog(args.events, specialist=name, run_id=run_id) if args.events else
+        events = (EventLog(stream, specialist=name, run_id=run_id) if stream is not None else
                   None if plan is None else EventLog(plan.directory / f'{name}.jsonl', specialist=name, run_id=run_id))
         try:
             result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,

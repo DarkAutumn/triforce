@@ -53,14 +53,17 @@ Standalone jobs log too (``logged_job``): ``python -m triforce.evaluate`` writes
 (plan kind ``eval``, one run evaluating, its ``<specialist>.jsonl`` with the eval events above) and ``triforce
 eval-chain`` writes ``<yymmdd>_<NNN>_eval-chain-<route>`` (plan kind ``chain``, no runs, ``round.jsonl`` with
 ``chain_start`` (runs, parallel, overrides, act), ``chain_progress`` (done, runs, successes, at most once a second
-and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off; ``--events FILE`` writes the events
-into a caller's stream instead (no folder of its own; the caller writes ``end``).
+and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off.  ``--events FILE`` (train, evaluate,
+eval-chain) writes the events into FILE: in a folder with a plan its driver owns the plan, the stream and its
+``end``; in a folder without one the job writes its plan there (``has_plan``), so every job has a plan.
 
 An evaluation batch (``triforce eval-batch NAME``, ``triforce/eval_batch.py``) writes ``<yymmdd>_<NNN>_<NAME>``: plan
 kind ``eval-batch`` with every evaluation listed up front (``name``, ``kind`` chain / eval / report, ``total``,
 ``output``, ``command``; pending, ``evaluating``, then ``ok`` / ``failed`` / ``interrupted`` with its headline),
 one ``<entry>.jsonl`` each (the chain_* or eval_* events above, then ``end``) and ``round.jsonl`` (``start``,
-``entry_start``, ``entry_end``, ``end``).  Plans carry ``nice``, the niceness the job runs at (``triforce.jobs``).
+``entry_start``, ``entry_end``, ``end``).  Plans carry ``nice``, the niceness the job runs at, and the checkout whose
+code runs (``checkout``, ``branch``, ``commit``); every plan is in the machine's job registry from its start to its
+``finish`` (``triforce.jobs``), which the GUI reads to find jobs in any checkout.
 """
 
 import fcntl
@@ -74,6 +77,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+from . import jobs
 
 LOGS_DIR_ENV = 'TRIFORCE_LOGS_DIR'
 PLAN_FILE = 'training.json'
@@ -184,18 +189,22 @@ class EventLog:
 
 
 class TrainingPlan:
-    """``training.json``: what this log folder is running, in order, and the status of each run."""
+    """``training.json``: what this log folder is running, in order, and the status of each run.  Every plan names
+    the checkout whose code runs it (``checkout``, ``branch``, ``commit``) and is recorded in the machine's job
+    registry (``jobs.register``) until ``finish`` marks it there too."""
 
     def __init__(self, directory: str | os.PathLike, name: str, kind: str, runs: list[dict], **extra):
         self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / PLAN_FILE
         self.data = {'schema': SCHEMA_VERSION, 'name': name, 'kind': kind, 'log_dir': str(self.directory),
                      'status': 'running', 'created': _now()['time'], 'updated': None, 'finished': None,
-                     'host': socket.gethostname(), 'pid': os.getpid(), **extra,
+                     'host': socket.gethostname(), 'pid': os.getpid(), **jobs.checkout(), **extra,
                      'runs': [{'index': i, 'status': 'pending', 'started': None, 'finished': None, **run}
                               for i, run in enumerate(runs)]}
         self._lock = threading.RLock()
         self.save()
+        self.job = jobs.register(self.directory, self.path, name, kind)
 
     def save(self):
         """Rewrites training.json atomically."""
@@ -216,20 +225,30 @@ class TrainingPlan:
             self.save()
 
     def finish(self, status: str, **fields):
-        """Marks the whole plan finished (completed | failed | interrupted)."""
+        """Marks the whole plan finished (completed | failed | interrupted), here and in the job registry."""
         with self._lock:
             self.data.update(status=status, finished=_now()['time'], **fields)
             self.save()
+            if self.job is not None:
+                self.job.finish(status)
+
+
+def has_plan(events_path) -> bool:
+    """Whether the folder of an event stream already has a plan (a driver such as train_round or eval-batch owns
+    it and the stream)."""
+    return (Path(events_path).parent / PLAN_FILE).is_file()
 
 
 @contextmanager
-def logged_job(what: str, kind: str, runs: list[dict], root=None, **extra):
-    """A log folder (``new_log_dir(what, root)``) with its ``training.json`` plan for a job outside a training
-    round, e.g. a standalone evaluation (``kind`` 'eval') or eval-chain ('chain'), so the training GUI shows it
-    while it runs.  Yields the ``TrainingPlan``; the plan finishes ``completed``, ``interrupted`` (Ctrl-C, or
-    SIGTERM, which the block turns into KeyboardInterrupt when it runs in the main thread) or ``failed`` with the
-    block."""
-    plan = TrainingPlan(new_log_dir(what, root), what, kind, runs, **extra)
+def logged_job(what: str, kind: str, runs: list[dict], root=None, *, directory=None, **extra):
+    """A log folder (``new_log_dir(what, root)``, or ``directory``: the folder of an ``--events`` stream that has
+    no plan yet) with its ``training.json`` plan for a job outside a training round, e.g. a standalone evaluation
+    (``kind`` 'eval') or eval-chain ('chain'), so the training GUI shows it while it runs.  Yields the
+    ``TrainingPlan``; the plan finishes ``completed``, ``interrupted`` (Ctrl-C, or SIGTERM, which the block turns
+    into KeyboardInterrupt when it runs in the main thread) or ``failed`` with the block."""
+    if directory is not None:
+        Path(directory).mkdir(parents=True, exist_ok=True)
+    plan = TrainingPlan(new_log_dir(what, root) if directory is None else directory, what, kind, runs, **extra)
     installed = threading.current_thread() is threading.main_thread()
     if installed:
         def interrupt(signum, _frame):

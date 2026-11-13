@@ -166,7 +166,7 @@ def _cmd_eval_chain(args):
     import time
     from contextlib import nullcontext
     from . import replay
-    from .events import EventLog, logged_job
+    from .events import EventLog, has_plan, logged_job
     from .jobs import lower_priority
     from .registry import act_override
     from .runner import RunnerError, parse_overrides, power_on_options
@@ -186,11 +186,14 @@ def _cmd_eval_chain(args):
     existing = check_output(output, provenance, args.append)
     what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
             + ('-power-on' if args.power_on else ''))
-    # --events: the caller (e.g. triforce eval-batch) owns the stream and its log folder.
-    log = nullcontext() if args.no_log or args.events else logged_job(
-        what, 'chain', [], args.logs_dir, events='round.jsonl', chain_runs=args.runs, nice=nice)
+    # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
+    # into a folder without one: this chain writes a plan there (the stream is the plan's), so the GUI lists it.
+    stream = Path(args.events) if args.events else None
+    log = nullcontext() if args.no_log or (stream is not None and has_plan(stream)) else logged_job(
+        what, 'chain', [], args.logs_dir, directory=None if stream is None else stream.parent,
+        events=stream.name if stream else 'round.jsonl', chain_runs=args.runs, nice=nice)
     with log as plan:
-        events = (EventLog(args.events) if args.events else
+        events = (EventLog(stream) if stream is not None else
                   None if plan is None else EventLog(plan.directory / 'round.jsonl'))
         if events is not None:
             events.emit('chain_start', runs=args.runs, parallel=args.parallel, overrides=overrides or None,
@@ -411,8 +414,8 @@ def add_eval_chain_arguments(chain):
     chain.add_argument('--logs-dir', default=None, help="event logs root (default $TRIFORCE_LOGS_DIR or <repo>/logs)")
     chain.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
     chain.add_argument('--events', default=None, metavar='JSONL',
-                       help="append the chain_* events to this stream instead of a log folder of its own (the caller, "
-                            "e.g. triforce eval-batch, owns the stream and writes its final 'end')")
+                       help="write the chain_* events to this stream: in a folder with a plan its driver (e.g. "
+                            "triforce eval-batch) owns it; else this chain writes the plan beside it")
     add_nice_argument(chain)
     chain.add_argument('--allow-incompatible-models', action='store_true', default=argparse.SUPPRESS,
                        help=ALLOW_HELP)

@@ -103,7 +103,8 @@ import torch
 from . import registry
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
-from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir, write_json_atomic
+from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
+                     write_json_atomic)
 from .jobs import add_nice_argument, lower_priority
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
@@ -309,7 +310,8 @@ def parse_args(argv=None):
                         help="share of resets that start on a trajectory while any is incomplete (default: config)")
     parser.add_argument('--curriculum-threshold', type=float, default=None, help="default: config")
     parser.add_argument('--events', default=None,
-                        help="append events to this JSONL (the caller owns the stream and writes its final 'end'); "
+                        help="append events to this JSONL; in a folder with a training.json its caller (train_round) "
+                             "owns the stream and writes its final 'end', else this run writes a plan beside it; "
                              "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
     parser.add_argument('--logs-dir', default=None, help=f"default ${LOGS_DIR_ENV} or <repo>/logs")
     add_nice_argument(parser)
@@ -403,19 +405,20 @@ def validate_args(args):
 
 
 def open_events(args, specialist: str, run_id: str, run_dir: Path, argv: list[str]):
-    """(EventLog, TrainingPlan or None).  With --events the caller owns the stream; otherwise this training run
-    gets its own log folder and writes the final 'end' event itself."""
+    """(EventLog, TrainingPlan or None).  ``--events FILE`` in a folder with a plan: the caller (train_round) owns
+    the plan, the stream and its final 'end'.  Otherwise this training run writes a plan, in FILE's folder or a log
+    folder of its own (``--logs-dir``), and the final 'end' event itself."""
     context = {'specialist': specialist, 'run_id': run_id}
-    if args.events:
+    if args.events and has_plan(args.events):
         return EventLog(args.events, **context), None
-    log_dir = new_log_dir(specialist, args.logs_dir)
-    plan = TrainingPlan(log_dir, specialist, 'train', [{
-        'specialist': specialist, 'run_id': run_id, 'events': f'{specialist}.jsonl', 'run_dir': str(run_dir),
+    stream = Path(args.events) if args.events else new_log_dir(specialist, args.logs_dir) / f'{specialist}.jsonl'
+    plan = TrainingPlan(stream.parent, specialist, 'train', [{
+        'specialist': specialist, 'run_id': run_id, 'events': stream.name, 'run_dir': str(run_dir),
         'target_iterations': args.iterations, 'target_steps': args.iterations * steps_per_iteration(args)}],
                         command=['python', '-m', 'triforce.train', *argv], nice=os.nice(0))
     plan.update_run(0, status='running')
-    print(f"[train] events: {log_dir / f'{specialist}.jsonl'}")
-    return EventLog(log_dir / f'{specialist}.jsonl', **context), plan
+    print(f"[train] events: {stream}")
+    return EventLog(stream, **context), plan
 
 
 def continued_run_dir(args, source: Optional[str], start_iteration: int) -> Optional[Path]:
