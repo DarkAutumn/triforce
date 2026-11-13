@@ -31,7 +31,7 @@ use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
-use zelda::game_map::GameMap;
+use zelda::game_map::{GameMap, Way};
 use zelda::hearts::{HeartTracker, HeartView};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
@@ -144,7 +144,7 @@ impl Route {
             clips_off_from: None,
         };
         if let Some(stop) = stop_at {
-            let start = start_step(steps, start_state);
+            let start = start_step(steps, start_state, true);
             let after: Vec<MapLocation> = steps[start + 1..].iter().map(|s| s.location()).collect();
             if !after.contains(&stop) {
                 let rooms: Vec<String> = after.iter().map(|l| describe(*l)).collect();
@@ -164,12 +164,13 @@ impl Route {
         Err(format!("Route '{name}' doesn't end on a triforce"))
     }
 
-    /// The route step a run starts on: the checkpoint's, else the start state's (0 from the game start).
+    /// The route step a run starts on: the checkpoint's, else the start state's on the way the run starts with (0
+    /// from the game start).
     fn first_step(&self, map: &GameMap) -> usize {
         match &self.start {
             RunStart::Checkpoint { step, .. } => *step,
             RunStart::PowerOn { .. } => 0,
-            RunStart::State => start_step(&map.routes[&self.name], &self.start_state),
+            RunStart::State => start_step(&map.routes[&self.name], &self.start_state, self.clips),
         }
     }
 
@@ -261,7 +262,9 @@ impl Route {
     }
 
     /// Runs start with the clips switch `on` and, with `off_from`, turn it off there (round 22). A flip step must be
-    /// a step of the route, a flip room a room of it.
+    /// a step of the route, a flip room a room of it. Without a flip the run stays on the way `on` selects, so a stop
+    /// room or stop step (set them first) must be on that way after the start step: `--stop-at 4:0x20` (the plain
+    /// way only) is refused with clips on.
     pub fn with_clips(mut self, map: &GameMap, on: bool, off_from: Option<ClipsFlip>) -> Result<Route, String> {
         let steps = &map.routes[&self.name];
         match off_from {
@@ -275,6 +278,20 @@ impl Route {
         }
         self.clips = on;
         self.clips_off_from = off_from;
+        if off_from.is_none() {
+            let first = self.first_step(map);
+            let way = Way::of(on).name();
+            if let Some(stop) = self.terminal
+                && !steps[first + 1..].iter().any(|s| s.on_way(on) && s.location() == stop)
+            {
+                return Err(format!("stop_at {} is not a room of the {way} way after the start step", describe(stop)));
+            }
+            if let Some(k) = self.terminal_step
+                && !steps[k].on_way(on)
+            {
+                return Err(format!("stop step {k} is not on the {way} way of route '{}'", self.name));
+            }
+        }
         Ok(self)
     }
 }
@@ -293,21 +310,24 @@ fn state_file_path(states_dir: &Path, name: &str) -> PathBuf {
 }
 
 /// The index of the first route step whose room and entry a state's name encodes (`<level>_<room><side>_…`,
-/// harvested `_h<seed>_<n>` alike); 0 for the game start and names that encode no step.
-fn start_step(steps: &[zelda::game_map::RouteStep], state: &str) -> usize {
+/// harvested `_h<seed>_<n>` alike), of the steps on the way `clips` selects if one of them does (4_31e: N with
+/// clips, W without), else of any; 0 for the game start and names that encode no step.
+fn start_step(steps: &[zelda::game_map::RouteStep], state: &str, clips: bool) -> usize {
     let label = state_label(state);
+    let encodes = |s: &zelda::game_map::RouteStep| {
+        let side = if s.in_cave {
+            "cave".to_owned()
+        } else if s.entry == "cave" {
+            "c".to_owned()
+        } else {
+            s.entry.to_ascii_lowercase()
+        };
+        label.starts_with(&format!("{}_{:02x}{side}_", s.level, s.room))
+    };
     steps
         .iter()
-        .position(|s| {
-            let side = if s.in_cave {
-                "cave".to_owned()
-            } else if s.entry == "cave" {
-                "c".to_owned()
-            } else {
-                s.entry.to_ascii_lowercase()
-            };
-            label.starts_with(&format!("{}_{:02x}{side}_", s.level, s.room))
-        })
+        .position(|s| s.on_way(clips) && encodes(s))
+        .or_else(|| steps.iter().position(encodes))
         .unwrap_or(0)
 }
 
@@ -761,6 +781,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             rng,
             Some(&self.route.name),
             &state,
+            self.route.clips,
         );
         GameCompletion::new(self.data.map.clone(), &route, step).map_err(EnvError::State)
     }

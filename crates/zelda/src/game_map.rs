@@ -313,6 +313,33 @@ impl TreasureRule {
     }
 }
 
+/// The two ways through a routes.yaml `stretch:` (round 22): the clip way (the run-time clips switch on) and the
+/// plain way (off).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Way {
+    Clips,
+    Plain,
+}
+
+impl Way {
+    /// The way the run-time clips switch selects.
+    pub const fn of(clips: bool) -> Way {
+        if clips { Way::Clips } else { Way::Plain }
+    }
+
+    pub const fn clips(self) -> bool {
+        matches!(self, Way::Clips)
+    }
+
+    /// The routes.yaml spelling: `clips` / `plain`.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Way::Clips => "clips",
+            Way::Plain => "plain",
+        }
+    }
+}
+
 /// One routes.yaml step.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteStep {
@@ -332,11 +359,56 @@ pub struct RouteStep {
     /// `requires_bombs` room: they are saved for what the route needs them for (Dungeon 3: its bomb wall and
     /// Manhandla).  None keeps the reserve of the steps before; the route starts at 0.
     pub bomb_reserve: Option<u8>,
+    /// The way of a `stretch:` this step belongs to (None: a step both ways share).
+    pub way: Option<Way>,
+    /// The name of that stretch.
+    pub stretch: Option<String>,
 }
 
 impl RouteStep {
     pub fn location(&self) -> MapLocation {
         MapLocation::new(self.level, self.room, self.in_cave)
+    }
+
+    /// The step is on the way the clips switch selects (`clips`): a shared step is on both.
+    pub fn on_way(&self, clips: bool) -> bool {
+        self.way.is_none_or(|w| w == Way::of(clips))
+    }
+}
+
+/// A routes.yaml `stretch:` of a route (round 22): where the clip way and the plain way go through different rooms.
+/// Both ways' steps sit in the route's step list, the clip way's first, each way's in order; `parts` is the first
+/// step of each way (the same room, entered the same way, left differently) and `rejoin` the shared step after
+/// both, which each way's last step leads into.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stretch {
+    pub name: String,
+    /// The clip way's steps (indices into the route).
+    pub clips: std::ops::Range<usize>,
+    /// The plain way's steps.
+    pub plain: std::ops::Range<usize>,
+    /// The shared step both ways lead into.
+    pub rejoin: usize,
+}
+
+impl Stretch {
+    /// The steps of `way`.
+    pub fn steps(&self, way: Way) -> std::ops::Range<usize> {
+        match way {
+            Way::Clips => self.clips.clone(),
+            Way::Plain => self.plain.clone(),
+        }
+    }
+
+    /// The way step `index` belongs to, if it is one of the stretch's.
+    pub fn way_of(&self, index: usize) -> Option<Way> {
+        if self.clips.contains(&index) {
+            Some(Way::Clips)
+        } else if self.plain.contains(&index) {
+            Some(Way::Plain)
+        } else {
+            None
+        }
     }
 }
 
@@ -354,11 +426,14 @@ type RouteRanks = HashMap<MapLocation, HashMap<MapLocation, usize>>;
 #[derive(Debug)]
 pub struct GameMap {
     rooms: IndexMap<MapLocation, GameRoom>,
-    /// Routes in routes.yaml order.
+    /// Routes in routes.yaml order: every step of both ways of a stretch, numbered in that order.
     pub routes: IndexMap<String, Vec<RouteStep>>,
+    /// Each route's `stretch:` blocks (round 22), in route order.
+    pub stretches: HashMap<String, Vec<Stretch>>,
     /// routes.yaml `alternates`, in file order.
     pub alternates: Vec<Alternate>,
-    route_ranks: HashMap<String, RouteRanks>,
+    /// Per (route, clips switch): the ranks of the steps on that way.
+    route_ranks: HashMap<(String, bool), RouteRanks>,
 }
 
 fn get<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
@@ -422,16 +497,116 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         treasure: TreasureRule::parse(get(v, "treasure")).map_err(|e| MapError(format!("{loc} {entry}: {}", e.0)))?,
         bomb_reserve: get(v, "bomb_reserve").map(|n| as_u8(n, &format!("{what}: bomb_reserve"))).transpose()?,
         entry,
+        way: None,
+        stretch: None,
     })
 }
 
 type Routes = IndexMap<String, Vec<RouteStep>>;
 
-/// A route is a list of steps, or `{extends: <route above>, steps: [...]}`: that route's steps, then these.
+const STRETCH_KEYS: [&str; 6] = ["stretch", "parts", "rejoins", "clips", "plain", "note"];
+
+/// A room and the side it is entered from (`{level, room, in_cave?, entry}`): a stretch's `parts` and `rejoins`.
+fn room_entry(v: Option<&Value>, what: &str) -> Result<(MapLocation, String), MapError> {
+    let Some(v) = v else {
+        return err(format!("{what}: needs it ({{level, room, entry}})"));
+    };
+    check_keys(v, &["level", "room", "in_cave", "entry"], what)?;
+    let entry = opt_string(v, "entry", what)?.ok_or_else(|| MapError(format!("{what}: needs entry")))?;
+    Ok((step_location(v)?, entry))
+}
+
+/// One list element of a route: a step, or a `stretch:` block (round 22) whose `clips:` and `plain:` steps follow
+/// each other in the list, tagged with their way. `claims` collects each stretch's `parts`/`rejoins` for
+/// [`check_stretch`].
+fn parse_element(v: &Value, steps: &mut Vec<RouteStep>, claims: &mut Vec<StretchClaim>) -> Result<(), MapError> {
+    let Some(name) = get(v, "stretch") else {
+        steps.push(parse_step(v)?);
+        return Ok(());
+    };
+    let name = name.as_str().ok_or_else(|| MapError(format!("routes.yaml stretch: a name, got {name:?}")))?;
+    let what = format!("routes.yaml stretch {name:?}");
+    check_keys(v, &STRETCH_KEYS, &what)?;
+    let parts = room_entry(get(v, "parts"), &format!("{what}: parts"))?;
+    let rejoins = room_entry(get(v, "rejoins"), &format!("{what}: rejoins"))?;
+    let start = steps.len();
+    for way in [Way::Clips, Way::Plain] {
+        let list = get(v, way.name()).and_then(Value::as_sequence).filter(|l| !l.is_empty());
+        let Some(list) = list else {
+            return err(format!("{what}: needs a non-empty `{}:` list of steps", way.name()));
+        };
+        for s in list {
+            if get(s, "stretch").is_some() {
+                return err(format!("{what}: a stretch inside a stretch"));
+            }
+            let mut step = parse_step(s)?;
+            step.way = Some(way);
+            step.stretch = Some(name.to_owned());
+            steps.push(step);
+        }
+    }
+    claims.push(StretchClaim { name: name.to_owned(), start, end: steps.len(), parts, rejoins });
+    Ok(())
+}
+
+/// What a `stretch:` block says about itself: its steps `start..end` in the route, where the ways part and rejoin.
+struct StretchClaim {
+    name: String,
+    start: usize,
+    end: usize,
+    parts: (MapLocation, String),
+    rejoins: (MapLocation, String),
+}
+
+/// The stretch block's own consistency: both ways begin in the `parts` room entered from its side and leave it
+/// differently, and the shared step right after the block is the `rejoins` room entered from its side. (That each
+/// way's steps lead into each other and into the rejoin is checked against game.yaml in `GameMap::from_yaml`.)
+fn check_stretch(route: &str, steps: &[RouteStep], claim: &StretchClaim) -> Result<(), MapError> {
+    let what = format!("routes.yaml: {route}: stretch {:?}", claim.name);
+    let block = &steps[claim.start..claim.end];
+    let first = |way: Way| block.iter().find(|s| s.way == Some(way)).expect("both ways have steps");
+    let (clips, plain) = (first(Way::Clips), first(Way::Plain));
+    for (way, step) in [(Way::Clips, clips), (Way::Plain, plain)] {
+        if (step.location(), &step.entry) != (claim.parts.0, &claim.parts.1) {
+            return err(format!(
+                "{what}: parts at {} from {}, but the {} way begins at {} from {}",
+                claim.parts.0,
+                claim.parts.1,
+                way.name(),
+                step.location(),
+                step.entry
+            ));
+        }
+    }
+    if clips.exit == plain.exit {
+        return err(format!("{what}: both ways leave {} by {}: they don't part there", claim.parts.0, clips.exit));
+    }
+    match steps.get(claim.end) {
+        Some(rejoin) if rejoin.way.is_none() && (rejoin.location(), &rejoin.entry) == (claim.rejoins.0, &claim.rejoins.1) => {
+            Ok(())
+        }
+        _ => err(format!(
+            "{what}: rejoins at {} from {}, which must be the shared step right after the stretch",
+            claim.rejoins.0, claim.rejoins.1
+        )),
+    }
+}
+
+/// A route is a list of steps, or `{extends: <route above>, steps: [...]}`: that route's steps, then these. Either
+/// list may hold `stretch:` blocks.
 fn parse_route(name: &str, value: &Value, routes: &Routes) -> Result<Vec<RouteStep>, MapError> {
-    let parse = |list: &[Value]| list.iter().map(parse_step).collect::<Result<Vec<_>, _>>();
+    let parse = |mut steps: Vec<RouteStep>, list: &[Value]| -> Result<Vec<RouteStep>, MapError> {
+        let mut claims = Vec::new();
+        for v in list {
+            parse_element(v, &mut steps, &mut claims)?;
+        }
+        for claim in &claims {
+            check_stretch(name, &steps, claim)?;
+        }
+        Ok(steps)
+    };
     if let Some(list) = value.as_sequence() {
-        return parse(list);
+        return parse(Vec::new(), list);
     }
     let what = format!("routes.yaml: route {name:?}");
     if !value.is_mapping() {
@@ -446,9 +621,28 @@ fn parse_route(name: &str, value: &Value, routes: &Routes) -> Result<Vec<RouteSt
     let Some(list) = get(value, "steps").and_then(Value::as_sequence) else {
         return err(format!("{what}: needs a `steps:` list"));
     };
-    let mut steps = base_steps.clone();
-    steps.extend(parse(list)?);
-    Ok(steps)
+    parse(base_steps.clone(), list)
+}
+
+/// The stretches of a route's steps (consecutive steps of one stretch name: the clip way's, then the plain way's).
+pub fn stretches_of(steps: &[RouteStep]) -> Vec<Stretch> {
+    let mut out: Vec<Stretch> = Vec::new();
+    for (i, step) in steps.iter().enumerate() {
+        let (Some(name), Some(way)) = (&step.stretch, step.way) else {
+            continue;
+        };
+        if out.last().is_none_or(|s| s.name != *name || s.rejoin != i) {
+            out.push(Stretch { name: name.clone(), clips: i..i, plain: i..i, rejoin: i });
+        }
+        let s = out.last_mut().expect("pushed");
+        match way {
+            Way::Clips => s.clips = s.clips.start..i + 1,
+            Way::Plain if s.plain.is_empty() => s.plain = i..i + 1,
+            Way::Plain => s.plain = s.plain.start..i + 1,
+        }
+        s.rejoin = i + 1;
+    }
+    out
 }
 
 fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
@@ -771,18 +965,37 @@ impl GameMap {
                 ));
             }
         }
+        let stretches: HashMap<String, Vec<Stretch>> =
+            routes.iter().map(|(name, steps)| (name.clone(), stretches_of(steps))).collect();
+        for (route, list) in &stretches {
+            check_stretch_ways(route, &routes[route], list, &rooms)?;
+        }
         let mut map = GameMap {
             rooms,
             routes,
+            stretches,
             alternates,
             route_ranks: HashMap::new(),
         };
         map.route_ranks = map
             .routes
             .iter()
-            .map(|(name, steps)| (name.clone(), map.route_ranks(steps)))
+            .flat_map(|(name, steps)| [true, false].map(|clips| ((name.clone(), clips), map.route_ranks(steps, clips))))
             .collect();
+        for (route, steps) in &map.routes {
+            crate::objectives::check_route_ways(&map, route, steps).map_err(MapError)?;
+        }
         Ok(map)
+    }
+
+    /// The steps of `route` on the way the clips switch selects (`clips`), with their indices.
+    pub fn way_steps<'a>(&'a self, route: &str, clips: bool) -> impl Iterator<Item = (usize, &'a RouteStep)> + 'a {
+        self.routes.get(route).into_iter().flatten().enumerate().filter(move |(_, s)| s.on_way(clips))
+    }
+
+    /// The stretch of `route` step `index` belongs to, if any.
+    pub fn stretch_of(&self, route: &str, index: usize) -> Option<&Stretch> {
+        self.stretches.get(route)?.iter().find(|s| s.way_of(index).is_some())
     }
 
     pub fn get(&self, location: MapLocation) -> Option<&GameRoom> {
@@ -1009,11 +1222,12 @@ impl GameMap {
         location: MapLocation,
         candidates: &BTreeSet<MapLocation>,
         route: &str,
+        clips: bool,
     ) -> BTreeSet<MapLocation> {
         let empty = HashMap::new();
         let ranks = self
             .route_ranks
-            .get(route)
+            .get(&(route.to_owned(), clips))
             .and_then(|t| t.get(&location))
             .unwrap_or(&empty);
         let Some(first) = candidates
@@ -1031,9 +1245,10 @@ impl GameMap {
             .collect()
     }
 
-    fn route_ranks(&self, main: &[RouteStep]) -> RouteRanks {
+    /// room -> exit room -> the first step on the way the clips switch selects taking it.
+    fn route_ranks(&self, main: &[RouteStep], clips: bool) -> RouteRanks {
         let mut ranks = RouteRanks::new();
-        for (index, step) in main.iter().enumerate() {
+        for (index, step) in main.iter().enumerate().filter(|(_, s)| s.on_way(clips)) {
             let loc = step.location();
             if let Some(exit) = self.rooms.get(&loc).and_then(|r| r.exits.get(&step.exit)) {
                 ranks
@@ -1045,6 +1260,41 @@ impl GameMap {
         }
         ranks
     }
+}
+
+/// Each way of each stretch is a walk: every step's exit (a game.yaml exit) leads into the next step's room from the
+/// side that step says, the last one's into the rejoin step's; and no stretch step takes a triforce, ends the route
+/// or holds a waypoint (both ways carry the same progress to the rejoin; `objectives::check_route_ways`).
+fn check_stretch_ways(
+    route: &str,
+    steps: &[RouteStep],
+    stretches: &[Stretch],
+    rooms: &IndexMap<MapLocation, GameRoom>,
+) -> Result<(), MapError> {
+    for stretch in stretches {
+        for way in [Way::Clips, Way::Plain] {
+            let what = format!("routes.yaml: {route}: stretch {:?}, the {} way", stretch.name, way.name());
+            let walk: Vec<&RouteStep> = stretch.steps(way).chain([stretch.rejoin]).map(|i| &steps[i]).collect();
+            for pair in walk.windows(2) {
+                let (from, to) = (pair[0], pair[1]);
+                if from.waypoint.is_some() || from.exit == "triforce" || from.exit == "terminal" {
+                    return err(format!("{what}: {} takes a waypoint or ends there; stretches may not", from.location()));
+                }
+                let next = rooms.get(&from.location()).and_then(|r| r.exits.get(&from.exit)).map(|e| e.destination);
+                let entry = crate::objectives::route_entry(from.location(), to.location());
+                if next != Some(to.location()) || entry != Some(to.entry.as_str()) {
+                    return err(format!(
+                        "{what}: {} leaves by {} into {next:?}, but the next step is {} from {}",
+                        from.location(),
+                        from.exit,
+                        to.location(),
+                        to.entry
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1180,20 +1430,24 @@ mod tests {
         assert_eq!((last.location(), last.exit.as_str()), (loc(4, 0x03), "triforce"));
         let triforces: Vec<u8> = steps.iter().filter(|s| s.exit == "triforce").map(|s| s.level).collect();
         assert_eq!(triforces, [2, 1, 3, 4]);
-        for pair in steps.windows(2) {
-            let (step, next) = (&pair[0], &pair[1]);
-            if step.exit == "triforce" {
-                let entrance = match step.level {
-                    2 => 0x3c,
-                    1 => 0x37,
-                    3 => 0x74,
-                    level => panic!("no step after the level {level} triforce"),
-                };
-                assert_eq!((next.location(), next.entry.as_str()), (loc(0, entrance), "cave"));
-                continue;
+        // Each way is a walk: consecutive steps on the way of the clips switch lead into each other.
+        for clips in [true, false] {
+            let way: Vec<&RouteStep> = map.way_steps(DEFAULT_ROUTE, clips).map(|(_, s)| s).collect();
+            for pair in way.windows(2) {
+                let (step, next) = (pair[0], pair[1]);
+                if step.exit == "triforce" {
+                    let entrance = match step.level {
+                        2 => 0x3c,
+                        1 => 0x37,
+                        3 => 0x74,
+                        level => panic!("no step after the level {level} triforce"),
+                    };
+                    assert_eq!((next.location(), next.entry.as_str()), (loc(0, entrance), "cave"));
+                    continue;
+                }
+                let exit = &map.get(step.location()).unwrap().exits[&step.exit];
+                assert_eq!(exit.destination, next.location(), "clips {clips}: {step:?} -> {next:?}");
             }
-            let exit = &map.get(step.location()).unwrap().exits[&step.exit];
-            assert_eq!(exit.destination, next.location(), "{step:?} -> {next:?}");
         }
         let waypoints: Vec<_> = steps
             .iter()
@@ -1428,13 +1682,12 @@ mod tests {
         let mut route: BTreeSet<L> = map.routes.values().flatten().map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
-        route.insert(loc(4, 0x20));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
         assert_eq!(tagged, route);
-        // Beyond the route's own rooms: only the alternate and 4:0x20.
+        // Beyond the route's own rooms: only the alternate (4:0x20 is on the D4 stretch's plain way since round 22).
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         let beyond: Vec<L> = route.difference(&default).copied().collect();
-        assert_eq!(beyond, [loc(0, 0x78), loc(4, 0x20)]);
+        assert_eq!(beyond, [loc(0, 0x78)]);
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
@@ -1693,22 +1946,37 @@ mod tests {
         assert_eq!(map.get(loc(3, 0x5b)).unwrap().treasure.as_deref(), Some("bombs"));
     }
 
-    /// Dungeon 4: the route's way follows real exits (the direct way to the ladder, back W to 0x31, N through its
-    /// locked door onto 0x21's island (round 21: the ladder clip leaves it), the two bomb walls, the push-block
-    /// shutter, Gleeok, the triforce); the rooms' special keys are read.
+    /// Dungeon 4: the route's ways follow real exits (the direct way to the ladder, back W to 0x31; the clip way N
+    /// through its locked door onto 0x21's island (round 21: the ladder clip leaves it), the plain way W, N, E round
+    /// to 0x21 (round 20's; round 22 has both); the two bomb walls, the push-block shutter, Gleeok, the triforce); the
+    /// stretch parts at 0x31 and rejoins at 0x11; the rooms' special keys are read.
     #[test]
     fn d4_lees_route_and_room_keys() {
         let map = GameMap::builtin();
-        let mut at = loc(4, 0x71);
-        let mut rooms = vec![at.value];
-        let way = ["N", "N", "W", "N", "N", "E", "E", "cave", "N", "W", "N", "N", "E", "E", "N"];
-        for exit in way {
-            at = map.get(at).unwrap().exits[exit].destination;
-            rooms.push(at.value);
+        let walk = |exits: &[&str]| {
+            let mut at = loc(4, 0x71);
+            let mut rooms = vec![at.value];
+            for exit in exits {
+                at = map.get(at).unwrap().exits[*exit].destination;
+                rooms.push(at.value);
+            }
+            rooms
+        };
+        let to_ladder = ["N", "N", "W", "N", "N", "E", "E", "cave", "N", "W"];
+        let clips = walk(&[&to_ladder[..], &["N", "N", "E", "E", "N"]].concat());
+        assert_eq!(clips, [0x71, 0x61, 0x51, 0x50, 0x40, 0x30, 0x31, 0x32, 0x60, 0x32, 0x31, 0x21, 0x11, 0x12, 0x13, 0x03]);
+        let plain = walk(&[&to_ladder[..], &["W", "N", "E", "N", "E", "E", "N"]].concat());
+        assert_eq!(plain[10..15], [0x31, 0x30, 0x20, 0x21, 0x11]);
+        for (on, rooms) in [(true, clips), (false, plain)] {
+            let steps: Vec<u8> = map.way_steps(DEFAULT_ROUTE, on).filter(|(_, s)| s.level == 4).map(|(_, s)| s.room).collect();
+            assert_eq!(steps, rooms, "clips {on}");
         }
-        assert_eq!(rooms, [0x71, 0x61, 0x51, 0x50, 0x40, 0x30, 0x31, 0x32, 0x60, 0x32, 0x31, 0x21, 0x11, 0x12, 0x13, 0x03]);
-        let steps: Vec<u8> = map.routes["d2first"].iter().filter(|s| s.level == 4).map(|s| s.room).collect();
-        assert_eq!(steps, rooms);
+        let stretches = &map.stretches[DEFAULT_ROUTE];
+        assert_eq!(stretches.len(), 1);
+        let s = &stretches[0];
+        let steps = &map.routes[DEFAULT_ROUTE];
+        assert_eq!((s.name.as_str(), s.clips.len(), s.plain.len(), s.plain.end), ("d4-island", 2, 4, s.rejoin));
+        assert_eq!((steps[s.clips.start].room, steps[s.plain.start].room, steps[s.rejoin].room), (0x31, 0x31, 0x11));
         let room = |id: u8| map.get(loc(4, id)).unwrap();
         // The Breakfast Room: a name, a block that reveals the stairs pushed any way, the ladder under it.
         let breakfast = room(0x32);
@@ -1728,6 +1996,36 @@ mod tests {
         let boss = room(0x13);
         assert_eq!((boss.enemies.get("Gleeok2"), boss.treasure.as_deref()), (Some(&1), Some("heart-container")));
         assert_eq!(room(0x03).treasure.as_deref(), Some("triforce"));
+    }
+
+    /// A `stretch:` block (round 22): both ways' steps in the route, the clip way's first, tagged with their way and
+    /// the stretch's name, numbered on; `stretches_of` finds it again. Its claims are checked: `parts` must be both
+    /// ways' first step (left differently), `rejoins` the shared step after the block, each way a walk of game.yaml
+    /// exits into the next step and the rejoin; unknown keys are errors.
+    #[test]
+    fn stretches_parse_and_check_their_claims() {
+        let map = GameMap::builtin();
+        let steps = &map.routes[DEFAULT_ROUTE];
+        let s = &map.stretches[DEFAULT_ROUTE][0];
+        assert_eq!(stretches_of(steps), map.stretches[DEFAULT_ROUTE]);
+        assert!(s.clips.clone().all(|i| steps[i].way == Some(Way::Clips) && steps[i].stretch.as_deref() == Some("d4-island")));
+        assert!(s.plain.clone().all(|i| steps[i].way == Some(Way::Plain)));
+        assert_eq!(s.clips.end, s.plain.start, "the plain way follows the clip way");
+        assert!(steps[s.clips.start - 1].way.is_none() && steps[s.rejoin].way.is_none());
+        assert!(steps[s.plain.start].on_way(false) && !steps[s.plain.start].on_way(true) && steps[s.rejoin].on_way(true));
+        let broken = |from: &str, to: &str| {
+            let routes = ROUTES_YAML.replacen(from, to, 1);
+            assert_ne!(routes, ROUTES_YAML, "{from}");
+            GameMap::from_yaml(GAME_YAML, &routes).unwrap_err().0
+        };
+        let e = broken("parts: {level: 4, room: '0x31', entry: E}", "parts: {level: 4, room: '0x31', entry: W}");
+        assert!(e.contains("parts at") && e.contains("d4-island"), "{e}");
+        let e = broken("rejoins: {level: 4, room: '0x11', entry: S}", "rejoins: {level: 4, room: '0x12', entry: W}");
+        assert!(e.contains("rejoins at"), "{e}");
+        let e = broken("  - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}\n", "");
+        assert!(e.contains("the plain way") && e.contains("leaves by"), "{e}");
+        let e = broken("  parts: {level: 4", "  part: x\n  parts: {level: 4");
+        assert!(e.contains("part"), "{e}");
     }
 
     /// `extends` needs a route above it and a `steps` list; a typo is a load error.

@@ -107,6 +107,7 @@ class RouteStep:
     entry: str                 # S/N/E/W, 'cave' (out of a cave or dungeon stairs) or 'start'
     exit: str
     specialist: str
+    way: Optional[str] = None  # 'clips' / 'plain': a step of one way of a routes.yaml stretch (None: both ways')
 
     @property
     def location(self) -> MapLocation:
@@ -121,7 +122,7 @@ class RouteStep:
 
 def _step(index: int, raw: dict) -> RouteStep:
     return RouteStep(index, raw['level'], raw['room'], bool(raw['in_cave']), raw['entry'], raw['exit'],
-                     raw['specialist'])
+                     raw['specialist'], raw.get('way'))
 
 
 def route_steps(route: str = DEFAULT_ROUTE) -> List[RouteStep]:
@@ -317,16 +318,20 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
                 source: str = START_STATE, states_dir: str = STATES_DIR, route: str = DEFAULT_ROUTE,
                 command: Optional[str] = None) -> tuple:
     """Plays ``route`` from ``source`` (the entry state of route step ``start_step``; the game's 'start' by
-    default), writing the entry state of every later step (and of alternates).  Each written file's entry is merged
+    default), writing the entry state of every later step on the clip way through the route's stretches (and of
+    alternates; a plain way's states are built with ``path``, round 22).  Each written file's entry is merged
     into ``<out>/entry_states.json`` right away, so an interrupted build keeps every file it wrote listed.  Returns
     (manifest entries, the file name of the first on-route step not rebuilt or None)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     game, rooms = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
     steps = route_steps(route)
     alternates = alternate_steps(steps)
+    # The clip way through every stretch (round 22): its steps follow each other.
+    way = [s for s in steps if s.way in (None, 'clips')]
+    first = next(i for i, s in enumerate(way) if s.index >= start_step)
     os.makedirs(out, exist_ok=True)
     manifest = []
-    for step, target in zip(steps[start_step:], steps[start_step + 1:]):
+    for step, target in zip(way[first:], way[first + 1:]):
         jobs = [(target, True)] + [(alt, False) for origin, alt in alternates if origin == step.index]
         next_source = None
         for goal, on_route in jobs:

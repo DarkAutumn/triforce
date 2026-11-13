@@ -465,7 +465,7 @@ fn dungeon_1_entrance_follows_the_route_steps() {
     let shortest = completion(&map).objectives(None, &from_s);
     assert_eq!(shortest.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(1, 0x63)]);
     // From S (a training reset): the first visit's step, W.
-    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), &mut rng, None, &from_s);
+    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), &mut rng, None, &from_s, true);
     assert_eq!(route, ROUTE);
     let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     let objective = gc.objectives(None, &from_s);
@@ -484,7 +484,7 @@ fn dungeon_1_entrance_follows_the_route_steps() {
             "0x73 from 0x{came_from:02x}"
         );
         assert_targets_are_correct_exits(&map, &state, &objective);
-        let (_, start) = start_route(&map, loc(1, 0x73), state_entry_of(came_from), &mut rng, None, &state);
+        let (_, start) = start_route(&map, loc(1, 0x73), state_entry_of(came_from), &mut rng, None, &state, true);
         assert_eq!(start, gc.step(), "a reset in the same room plays the same step");
     }
 }
@@ -506,7 +506,7 @@ fn lynel_room_retreat_and_return() {
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let at_0a = view(&map, &images[0], 0);
     assert_eq!(at_0a.sword(), SwordKind::Wood);
-    let (route, step) = start_route(&map, loc(0, 0x0a), Some("S"), &mut rng, None, &at_0a);
+    let (route, step) = start_route(&map, loc(0, 0x0a), Some("S"), &mut rng, None, &at_0a, true);
     let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     let objective = gc.objectives(None, &at_0a);
     assert_eq!(objective.kind, ObjectiveKind::Cave);
@@ -589,7 +589,7 @@ fn bow_detour_block_stairs_cellar_and_back() {
     }
     let entered = s.state().clone();
     assert!(entered.push_block_pending() && !entered.bow());
-    let (route, step) = start_route(&map, loc(1, 0x22), Some("E"), &mut rng, None, &entered);
+    let (route, step) = start_route(&map, loc(1, 0x22), Some("E"), &mut rng, None, &entered, true);
     let step = step.expect("0x22 from E is a route step");
     assert_eq!(map.routes[&route][step].exit, "cave");
     let mut gc = GameCompletion::new(map.clone(), &route, Some(step)).unwrap();
@@ -656,7 +656,7 @@ fn bow_detour_block_stairs_cellar_and_back() {
 /// The GameCompletion of the route step entering `level`:`room` from `entry` (as one-room training picks it).
 fn route_step(map: &Arc<GameMap>, state: &GameView, level: u8, room: u8, entry: &str) -> GameCompletion {
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step) = start_route(map, loc(level, room), Some(entry), &mut rng, None, state);
+    let (route, step) = start_route(map, loc(level, room), Some(entry), &mut rng, None, state, true);
     let step = step.unwrap_or_else(|| panic!("{level}:{room:#04x} from {entry} is a route step"));
     assert_eq!(map.routes[&route][step].location(), loc(level, room));
     GameCompletion::new(map.clone(), &route, Some(step)).unwrap()
@@ -810,7 +810,7 @@ fn a_stepless_completion_drops_every_finished_waypoint_at_once() {
     let map = Arc::new(GameMap::builtin());
     let state = view(&map, &images[0], 0);
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step) = start_route(&map, loc(1, 0x23), Some("W"), &mut rng, None, &state);
+    let (route, step) = start_route(&map, loc(1, 0x23), Some("W"), &mut rng, None, &state, true);
     assert!(step.is_some());
     let with_step = GameCompletion::new(map.clone(), &route, step).unwrap().objectives(None, &state);
     let stepless = GameCompletion::new(map.clone(), &route, None).unwrap().objectives(None, &state);
@@ -827,8 +827,8 @@ fn a_treasure_left_behind_does_not_take_the_next_rooms() {
     let (a, b) = (view(&map, &images[0], 0), view(&map, &images[1], 100));
     assert!(a.treasure().is_some(), "the map lies in 0x43");
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step_a) = start_route(&map, loc(1, 0x43), Some("N"), &mut rng, None, &a);
-    let (_, step_b) = start_route(&map, loc(1, 0x44), Some("W"), &mut rng, None, &b);
+    let (route, step_a) = start_route(&map, loc(1, 0x43), Some("N"), &mut rng, None, &a, true);
+    let (_, step_b) = start_route(&map, loc(1, 0x44), Some("W"), &mut rng, None, &b, true);
     let mut chain = GameCompletion::new(map.clone(), &route, step_a).unwrap();
     chain.objectives(None, &a);
     let walked = chain.objectives(Some(&a), &b);
@@ -849,7 +849,7 @@ fn d4_room(map: &Arc<GameMap>, name: &str, room: u8, entry: &str) -> Option<(Ses
             break;
         }
     }
-    let (route, step) = start_route(map, loc(4, room), Some(entry), &mut rng, None, s.state());
+    let (route, step) = start_route(map, loc(4, room), Some(entry), &mut rng, None, s.state(), true);
     assert_eq!(route, "d2first");
     let gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     Some((s, gc))
@@ -968,7 +968,7 @@ fn d4_raft_exit_targets_the_dock() {
     }
     let state = s.state().clone();
     assert!(state.raft() && !state.ladder());
-    let (route, step) = start_route(&map, loc(0, 0x55), Some("S"), &mut rng, None, &state);
+    let (route, step) = start_route(&map, loc(0, 0x55), Some("S"), &mut rng, None, &state, true);
     assert_eq!(route, "d2first");
     let objective = GameCompletion::new(map.clone(), &route, step).unwrap().objectives(None, &state);
     assert_eq!(objective.next_rooms, [loc(0, 0x45)].into());

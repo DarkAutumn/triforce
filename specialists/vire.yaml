@@ -1,6 +1,6 @@
 name: vire
 rooms: ['(4, 0x71)', '(4, 0x61)', '(4, 0x50)', '(4, 0x30)', '(4, 0x31)', '(4, 0x20)', '(4, 0x12)', '(4, 0x03)']
-start_states: ['4_71*_[0-9]', '4_61*_[0-9]', '4_50*_[0-9]', '4_30*_[0-9]', '4_31*_[0-9]', '4_12*_[0-9]', '4_03*_[0-9]']
+start_states: ['4_71*_[0-9]', '4_61*_[0-9]', '4_50*_[0-9]', '4_30*_[0-9]', '4_31*_[0-9]', '4_20*_[0-9]', '4_12*_[0-9]', '4_03*_[0-9]']
 success: [exit-correct, triforce-collected]   # 0x03 ends on the D4 triforce (the route's end)
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets

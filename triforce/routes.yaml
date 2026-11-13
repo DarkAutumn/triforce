@@ -21,6 +21,14 @@
 # in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.  An underworld item cellar is an
 # in_cave room too, under its own room id (Dungeon 1's bow cellar 0x7f under 0x22, Dungeon 3's raft cellar 0x0f
 # under 0x69), left N up its ladder.
+# `stretch: NAME` (round 22) is a list element holding two ways through the rooms where they differ, chosen by the
+# run-time clips switch: `clips:` (switch on) and `plain:` (off), each a list of steps.  `parts: {level, room, entry}`
+# names where they part (both ways' first step: that room, entered from that side, left differently) and `rejoins:`
+# where they meet again (the shared step right after the block, which each way's last step leads into).  Steps are
+# numbered in file order, the clip way's first; a run follows the way of its switch, and a step of the other way
+# is off its route.  Turned off on the clip way the objective leads back to the plain way; turned on on the plain
+# way the plain way holds to the rejoin (zelda::objectives::GameCompletion::set_clips_allowed).  Both ways must
+# carry the same progress and bomb reserve to the rejoin, and hold no waypoint or triforce.
 #
 # d2first: wood sword, east along row 5 to Dungeon 2 (3 hearts), Dodongo, his heart container and the D2 triforce
 # (warps Link to 0x3c); round to 0x2c, bomb its rock wall for the take-any cave's heart container (5 hearts), the
@@ -145,10 +153,11 @@ d2first:
 # Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
 # N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, Lee's directions: the keys of 0x51 and 0x40
 # (both in the open from the start), the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose
-# pushed block reveals the stairs), back W to the Vire room 0x31, N through its locked door onto the island of 0x21,
-# the ladder clip N over its two squares of water (round 21, Lee, Nov 12: the shortcut instead of W to 0x30, N, E;
-# only a family with `clips: true` leaves the island), bomb N into the rupee room 0x11, bomb E into the Vire room
-# 0x12, its pushed block opens the E shutter to Gleeok, N to the triforce.  Keys: 0x30's E door and 0x31's N door.
+# pushed block reveals the stairs), back W to the Vire room 0x31, then the stretch `d4-island`: with clips N through
+# its locked door onto the island of 0x21 and the ladder clip N over its two squares of water (round 21, Lee, Nov 12;
+# only a family with `clips: true` leaves the island), without clips W to 0x30, N over its water, E through 0x20 into
+# 0x21 from W (round 20's way; round 22 keeps both); bomb N into the rupee room 0x11, bomb E into the Vire room 0x12,
+# its pushed block opens the E shutter to Gleeok, N to the triforce.  Keys: 0x30's E door and (clip way) 0x31's N door.
 # Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11.
 - {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
 - {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
@@ -167,8 +176,19 @@ d2first:
 - {level: 4, room: '0x32', specialist: like-like, entry: W, exit: cave}
 - {level: 4, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ladder}
 - {level: 4, room: '0x32', specialist: like-like, entry: cave, exit: W}
-- {level: 4, room: '0x31', specialist: vire, entry: E, exit: N}
-- {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: S, exit: N}
+# Off 0x21's island by the ladder clip (round 21) or, without clips, round 20's way round through 0x30 and 0x20 (W N
+# E; the ladder crosses 0x30's water), into 0x21 from W and N through its bomb wall (round 22: both).
+- stretch: d4-island
+  parts: {level: 4, room: '0x31', entry: E}
+  rejoins: {level: 4, room: '0x11', entry: S}
+  clips:
+  - {level: 4, room: '0x31', specialist: vire, entry: E, exit: N}
+  - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: S, exit: N}
+  plain:
+  - {level: 4, room: '0x31', specialist: vire, entry: E, exit: W}
+  - {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
+  - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
+  - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
 - {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: E}
 - {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
 - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}

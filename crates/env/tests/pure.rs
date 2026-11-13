@@ -518,31 +518,16 @@ fn config_rooms_match_game_yaml_tags_and_routes() {
     }
 }
 
+/// Every step of d2first (both ways of its stretches) names a family that holds its room.
 #[test]
 fn every_route_room_belongs_to_its_family() {
     let data = GameData::load(&common::repo()).unwrap();
-    let routes = routes();
-    let steps = routes["d2first"]
-        .as_sequence()
-        .expect("d2first route");
-    assert!(!steps.is_empty());
+    let steps = &data.map.routes["d2first"];
+    assert!(steps.iter().any(|s| s.way.is_some()), "the route has stretches");
     for step in steps {
-        let level = step["level"].as_u64().unwrap() as u8;
-        let room = step["room"].as_str().unwrap();
-        let room = u8::from_str_radix(room.trim_start_matches("0x"), 16).unwrap();
-        let in_cave = step
-            .get("in_cave")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let location = MapLocation::new(level, room, in_cave);
-        let specialist = data
-            .specialist(step["specialist"].as_str().unwrap())
-            .unwrap();
-        assert!(
-            specialist.rooms.contains(&location),
-            "{location:?} not in {}",
-            specialist.name
-        );
+        let location = step.location();
+        let specialist = data.specialist(step.specialist.as_deref().unwrap()).unwrap();
+        assert!(specialist.rooms.contains(&location), "{location:?} not in {}", specialist.name);
     }
 }
 

@@ -114,9 +114,7 @@ const BELOW_EAST_BLOCK: [&str; 6] = ["MOVE W 32", "MOVE W 32", "MOVE W 8", "MOVE
 fn scenarios() -> Vec<Scenario> {
     // 4:$50: Link at ($B0, $8D), on the grid, under the block round 21's experiment clips N into.
     let at_50 = vec![(Var::DoorwayDir.addr(), 0), (0x70, 0xB0), (0x84, 0x8D), (0x394, 0)];
-    // 4:$21: the Gels gone (slots 1-11 emptied), so nothing interrupts.
-    let gels_gone: Vec<(u16, u8)> = (1..12).map(|slot| ((zelda::tables::OBJ_ID.0 + slot) as u16, 0)).collect();
-    let mut s = vec![
+    vec![
         // The overworld start room 0x77: in the W wrap zone (X <= $20 on the start row).
         Scenario {
             family: "ow-start",
@@ -153,27 +151,13 @@ fn scenarios() -> Vec<Scenario> {
             before: vec!["CLIP N"],
             after: vec!["WAIT 4", "MOVE W 8"],
         },
-        Scenario {
-            family: "stalfos-keese-gel",
-            state: "4_21s_0",
-            setup: gels_gone.clone(),
-            before: vec!["MOVE N 4", "MOVE N 32", "MOVE N 32"],
-            after: vec!["WAIT 4", "MOVE S 8"],
-        },
-    ];
-    s.push(Scenario {
-        family: "stalfos-keese-gel",
-        state: "4_21s_0",
-        setup: gels_gone,
-        before: vec!["MOVE N 4", "MOVE N 32", "MOVE N 32", "CLIP N"],
-        after: vec!["WAIT 4", "MOVE S 8"],
-    });
-    s
+    ]
 }
 
 /// Flipped off mid-room (in the wrap zone, below 1:$22's block and 8 pixels into it after the clip, under 4:$50's
-/// block and inside it after the clip, at 4:$21's water and beyond it after the ladder clip) the decisions are the
-/// ones the switch off from the start gives; flipped back on, the ones of the switch on from the start.
+/// block and inside it after the clip) the decisions are the ones the switch off from the start gives; flipped back
+/// on, the ones of the switch on from the start. (4:$21's island can't start with the switch off: its state is on the
+/// clip way only; `flipped_off_on_4_21s_island_the_route_replans`.)
 #[test]
 fn a_flip_mid_room_equals_the_switch_fixed_from_the_start() {
     let Some(mut nes) = open_core() else { return };
@@ -181,6 +165,40 @@ fn a_flip_mid_room_equals_the_switch_fixed_from_the_start() {
         nes = flip_matches_fixed(nes, &s, true, false);
         nes = flip_matches_fixed(nes, &s, false, true);
     }
+}
+
+/// 4:$21 entered from S (the island; its start state fixes the switch on: the clip way only). Turned off at the
+/// water, CLIP is gone and the objective re-plans to the island's only exit Link can walk to, its S door back into
+/// 0x31 (the plain way's step there leaves N, which no walk reaches from the island); turned back on, the clip way's
+/// N again. Turned off after the ladder clip, on the N shore, the plain way's step of 0x21 (from W, N through the
+/// bomb wall) takes over: N is walkable from there.
+#[test]
+fn flipped_off_on_4_21s_island_the_route_replans() {
+    let Some(nes) = open_core() else { return };
+    let gels_gone: Vec<(u16, u8)> = (1..12).map(|slot| ((zelda::tables::OBJ_ID.0 + slot) as u16, 0)).collect();
+    let room = |r: u8| -> BTreeSet<MapLocation> { [MapLocation::new(4, r, false)].into_iter().collect() };
+    let mut env = room_env(nes, "stalfos-keese-gel", "4_21s_0", false, &gels_gone);
+    assert!(env.clips_allowed(), "the island's state fixes the switch on");
+    for text in ["MOVE N 4", "MOVE N 32", "MOVE N 32"] {
+        act(&mut env, text);
+    }
+    let clip_n = Action::parse("CLIP N").unwrap();
+    assert!(env.session().mask().is_allowed(&clip_n));
+    assert_eq!(env.objective().unwrap().objective.next_rooms, room(0x11));
+    let at_water = env.save();
+    env.set_clips_allowed(Some(false));
+    let r = act(&mut env, "WAIT 4");
+    assert!(!env.session().mask().kind[ActionKind::Clip.index()] && usable(&r.obs) == [0.0; 4]);
+    assert_eq!(env.objective().unwrap().objective.next_rooms, room(0x31), "back S to 0x31");
+    env.set_clips_allowed(Some(true));
+    act(&mut env, "WAIT 4");
+    assert_eq!(env.objective().unwrap().objective.next_rooms, room(0x11), "N by the clip again");
+    assert!(env.session().mask().is_allowed(&clip_n));
+    env.load(&at_water);
+    act(&mut env, "CLIP N");
+    env.set_clips_allowed(Some(false));
+    act(&mut env, "WAIT 4");
+    assert_eq!(env.objective().unwrap().objective.next_rooms, room(0x11), "past the water: N, the plain step's");
 }
 
 /// The objective of the state the actions reach, with the switch `clips`, the last observation and the room's

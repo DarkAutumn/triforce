@@ -43,7 +43,7 @@ use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::hearts::{HeartSummary, HeartTracker, HeartView};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
-use zelda::objectives::{GameCompletion, start_route};
+use zelda::objectives::{GameCompletion, start_clips, start_route};
 use zelda::visits::{
     EXIT_DEATH, EXIT_OTHER, EXIT_SUCCESS, EXIT_TIMEOUT, RoomVisit, VisitEnd, VisitStep, VisitTracker,
     VisitView,
@@ -595,14 +595,18 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 state = self.session.apply_ram(&values).clone();
             }
         }
-        self.clips_allowed = self.clips_plan.unwrap_or(true);
+        let entry = state_entry(entry_name.as_deref().unwrap_or(&name));
+        // A start the route enters on one way of a stretch only fixes the switch (4:0x21 from S: the clip way).
+        let fixed = start_clips(&self.data.map, state.full_location(), entry, self.config.route.as_deref(), &state);
+        self.clips_allowed = fixed.or(self.clips_plan).unwrap_or(true);
         let (route, step) = start_route(
             &self.data.map,
             state.full_location(),
-            state_entry(entry_name.as_deref().unwrap_or(&name)),
+            entry,
             &mut self.rng,
             self.config.route.as_deref(),
             &state,
+            self.clips_allowed,
         );
         self.route = route;
         self.route_step = step;

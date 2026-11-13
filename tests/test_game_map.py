@@ -110,16 +110,26 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
                         (0, 0x63, False, 'S', 'E', 'ow-moblin'), (0, 0x64, False, 'W', 'E', 'ow-octorok'),
                         (0, 0x65, False, 'W', 'N', 'ow-zora'), (0, 0x55, False, 'S', 'N', 'ow-zora'),
                         (0, 0x45, False, 'S', 'cave', 'ow-peahat')]
-    # The direct way to the ladder (the Breakfast Room's stairs), back W to 0x31, N onto 0x21's island (round 21:
-    # the ladder clip leaves it), the two bomb walls, the push-block shutter, Gleeok, the triforce.
+    # The direct way to the ladder (the Breakfast Room's stairs), back W to 0x31, then the stretch d4-island (round
+    # 22): with clips N onto 0x21's island (the ladder clip leaves it), without clips W, N, E round into 0x21 from W;
+    # the two bomb walls, the push-block shutter, Gleeok, the triforce.
     assert [(room, cave, entry, exit, who) for level, room, cave, entry, exit, who in tail[7:]] == [
         (0x71, False, 'S', 'N', 'vire'), (0x61, False, 'S', 'N', 'vire'),
         (0x51, False, 'S', 'W', 'stalfos-keese-gel'), (0x50, False, 'E', 'N', 'vire'), (0x40, False, 'S', 'N', 'zol'),
         (0x30, False, 'S', 'E', 'vire'), (0x31, False, 'W', 'E', 'vire'), (0x32, False, 'W', 'cave', 'like-like'),
         (0x60, True, 'S', 'N', 'equipment-room'), (0x32, False, 'cave', 'W', 'like-like'),
-        (0x31, False, 'E', 'N', 'vire'), (0x21, False, 'S', 'N', 'stalfos-keese-gel'), (0x11, False, 'S', 'E', 'trap-room'),
+        (0x31, False, 'E', 'N', 'vire'), (0x21, False, 'S', 'N', 'stalfos-keese-gel'),
+        (0x31, False, 'E', 'W', 'vire'), (0x30, False, 'E', 'N', 'vire'), (0x20, False, 'S', 'E', 'vire'),
+        (0x21, False, 'W', 'N', 'stalfos-keese-gel'), (0x11, False, 'S', 'E', 'trap-room'),
         (0x12, False, 'W', 'E', 'vire'), (0x13, False, 'W', 'N', 'boss-gleeok'), (0x03, False, 'S', 'triforce', 'vire')]
     assert all(level == 4 for level, *_ in tail[7:])
+    ways = [(s['room'], s['way']) for s in steps[after_d3 + 17:after_d3 + 24]]
+    assert ways == [(0x31, 'clips'), (0x21, 'clips'), (0x31, 'plain'), (0x30, 'plain'), (0x20, 'plain'),
+                    (0x21, 'plain'), (0x11, None)]
+    [stretch] = native.route_stretches()
+    first = after_d3 + 17
+    assert stretch == {'name': 'd4-island', 'clips': [first, first + 1], 'plain': list(range(first + 2, first + 6)),
+                       'rejoin': first + 6}
     assert [(s['room'], s['waypoint']) for s in steps[after_d3:] if s['waypoint']] == [(0x60, 'ladder')]
     # Both keys in the open (0x51, 0x40) are taken (Lee, Nov 12): no treasure rule in Dungeon 4.
     assert [(s['room'], s['treasure']) for s in steps[after_d3:] if s['treasure']] == []

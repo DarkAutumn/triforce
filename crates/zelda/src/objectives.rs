@@ -12,7 +12,7 @@
 
 use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile};
 use crate::game::{BombWall, GameView};
-use crate::game_map::{GameMap, MAZE_STEP, RouteStep};
+use crate::game_map::{GameMap, MAZE_STEP, RouteStep, Way};
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
@@ -133,18 +133,34 @@ fn sword_treasure(treasure: &str) -> Option<SwordKind> {
         .map(|i| SWORD_UPGRADES.get(i + 1).map_or(SwordKind::Magic, |u| u.0))
 }
 
-/// [`StepProgress`] on entering each of `steps`.
-pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
-    let mut progress = StepProgress {
-        triforces: 0,
-        sword: SwordKind::None,
-        bow: false,
-        raft: false,
-        ladder: false,
-    };
-    let mut out = Vec::with_capacity(steps.len());
-    for step in steps {
-        out.push(progress);
+/// A value carried along the route, per step on entering it, along each way: `[clips, plain]`, None where the step
+/// isn't on that way (a stretch's other way). `step` moves the value past a step.
+fn along_ways<T: Clone>(steps: &[RouteStep], init: T, mut step: impl FnMut(&mut T, &RouteStep)) -> [Vec<Option<T>>; 2] {
+    [true, false].map(|clips| {
+        let mut value = init.clone();
+        steps
+            .iter()
+            .map(|s| {
+                s.on_way(clips).then(|| {
+                    let before = value.clone();
+                    step(&mut value, s);
+                    before
+                })
+            })
+            .collect()
+    })
+}
+
+/// Per step, the value along its own way (a shared step: the clip way's, which [`check_route_ways`] proves equal to
+/// the plain way's).
+fn per_step<T: Clone>(ways: [Vec<Option<T>>; 2]) -> Vec<T> {
+    let [clips, plain] = ways;
+    clips.into_iter().zip(plain).map(|(c, p)| c.or(p).expect("every step is on a way")).collect()
+}
+
+fn progress_ways(map: &GameMap, steps: &[RouteStep]) -> [Vec<Option<StepProgress>>; 2] {
+    let start = StepProgress { triforces: 0, sword: SwordKind::None, bow: false, raft: false, ladder: false };
+    along_ways(steps, start, |progress, step| {
         if step.exit == "triforce" && (1..=8).contains(&step.level) {
             progress.triforces |= 1 << (step.level - 1);
         }
@@ -164,8 +180,43 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
         if treasure == Some("ladder") {
             progress.ladder = true;
         }
+    })
+}
+
+/// The bomb reserve in force at each step (its own `bomb_reserve`, else the last before it on its way), per way.
+fn reserve_ways(steps: &[RouteStep]) -> [Vec<Option<u8>>; 2] {
+    let [clips, plain] = along_ways(steps, 0u8, |reserve, s| *reserve = s.bomb_reserve.unwrap_or(*reserve));
+    let own = |ways: Vec<Option<u8>>| -> Vec<Option<u8>> {
+        ways.into_iter().zip(steps).map(|(r, s)| r.map(|r| s.bomb_reserve.unwrap_or(r))).collect()
+    };
+    [own(clips), own(plain)]
+}
+
+/// [`StepProgress`] on entering each of `steps`, along the step's way.
+pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
+    per_step(progress_ways(map, steps))
+}
+
+/// Both ways of every stretch lead to the same thing (round 22): at every shared step the progress and the bomb
+/// reserve are the same whichever way Link came.
+pub fn check_route_ways(map: &GameMap, route: &str, steps: &[RouteStep]) -> Result<(), String> {
+    let [pc, pp] = progress_ways(map, steps);
+    let [rc, rp] = reserve_ways(steps);
+    for (i, step) in steps.iter().enumerate().filter(|(_, s)| s.way.is_none()) {
+        if pc[i] != pp[i] || rc[i] != rp[i] {
+            return Err(format!(
+                "routes.yaml: {route}: step {i} {} from {} is reached with {:?}/{:?} bombs kept by the clip way and \
+                 {:?}/{:?} by the plain way: a stretch's ways must carry the same progress and bomb reserve",
+                step.location(),
+                step.entry,
+                pc[i],
+                rc[i],
+                pp[i],
+                rp[i]
+            ));
+        }
     }
-    out
+    Ok(())
 }
 
 /// The routes.yaml entry of `curr` when Link comes from `prev`: the side he crossed (N/S/E/W), `S` into a cave, down
@@ -250,6 +301,8 @@ fn overlap(tiles: Vec<Tile>) -> impl Iterator<Item = Target> {
 enum RouteKey {
     /// (room, step, the room the step leaves toward).
     Step(MapLocation, usize, MapLocation),
+    /// Re-planning toward the plain way of this stretch (its index) from this room.
+    Replan(MapLocation, usize),
     Target(
         MapLocation,
         MapLocation,
@@ -305,11 +358,23 @@ pub struct GameCompletion {
     clips: bool,
     /// The run-time clips switch (round 22; default on).
     clips_allowed: bool,
+    /// The way the route follows through its stretches (true: the clip way). It is the switch's, but for one case:
+    /// turned on while Link is on a plain-way step, the plain way holds until the stretch's rejoin (round 22).
+    way: bool,
+    /// The side Link entered his room from (`route_entry`; the start step's at first).
+    entry: Option<String>,
+    /// The way changed: pick the step of Link's room again on the next [`GameCompletion::objectives`].
+    repick: bool,
+    /// Re-planning (round 22): the switch turned off while Link was on the clip way of this stretch (its index in
+    /// the route's stretches) and no plain-way step takes over where he stands: the objective leads him to the
+    /// nearest room of the plain way he can walk to ([`GameCompletion::replan_next_rooms`]).
+    replan: Option<usize>,
 }
 
 impl GameCompletion {
     /// `step` is the route step the episode starts at: waypoints before it are done, and its exit is the correct one
-    /// until Link leaves the room.
+    /// until Link leaves the room. The route follows the start step's way (the clip way from a shared step) until
+    /// [`GameCompletion::set_clips_allowed`] says otherwise.
     pub fn new(
         map: Arc<GameMap>,
         route: &str,
@@ -333,20 +398,14 @@ impl GameCompletion {
             .into_iter()
             .filter(|w| step.is_none_or(|s| w.step >= s))
             .collect();
-        let reserves = steps
-            .iter()
-            .scan(0u8, |reserve, s| {
-                *reserve = s.bomb_reserve.unwrap_or(*reserve);
-                Some(*reserve)
-            })
-            .collect();
+        let start = step.map(|s| &steps[s]);
         Ok(GameCompletion {
             map: map.clone(),
             route: route.to_owned(),
             progress: route_progress(&map, steps),
             step,
             last_step: step,
-            reserves,
+            reserves: per_step(reserve_ways(steps)),
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -359,6 +418,10 @@ impl GameCompletion {
             rafts_open: false,
             clips: false,
             clips_allowed: true,
+            way: start.and_then(|s| s.way).is_none_or(Way::clips),
+            entry: start.map(|s| s.entry.clone()),
+            repick: false,
+            replan: None,
         })
     }
 
@@ -367,12 +430,35 @@ impl GameCompletion {
         self.clips = clips;
     }
 
-    /// The run-time clips switch (round 22): off, the objective and the path search are the plain way's from the
-    /// next [`GameCompletion::objectives`] on, whatever the family says.
+    /// The run-time clips switch (round 22). From the next [`GameCompletion::objectives`] on, the path search and the
+    /// route's way follow it, re-planning from where Link stands:
+    /// - turned off on the clip way of a stretch, the plain-way step of Link's room entered from his side takes over
+    ///   (0x31 from E: W instead of N); without one he is off the route and the objective leads him to the nearest
+    ///   room of the plain way he can walk to (`replan`: 0x21's island, entered from S, has only its S door);
+    /// - turned on on the plain way, the plain way holds until the stretch rejoins (a run that turned back from the
+    ///   island takes the long way round, not back N); anywhere else the clip way is taken at once.
     pub fn set_clips_allowed(&mut self, allowed: bool) {
-        if self.clips_allowed != allowed {
-            self.clips_allowed = allowed;
-            self.last_route = None;
+        if self.clips_allowed == allowed {
+            return;
+        }
+        self.clips_allowed = allowed;
+        self.last_route = None;
+        let current = self.step.or(self.last_step).and_then(|i| self.map.routes[&self.route][i].way);
+        if allowed {
+            self.replan = None;
+            if current != Some(Way::Plain) {
+                self.way = true;
+                self.repick = true;
+            }
+            return;
+        }
+        if self.way {
+            self.way = false;
+            self.repick = true;
+            if current == Some(Way::Clips) {
+                let index = self.step.or(self.last_step).expect("a clip-way step");
+                self.replan = self.map.stretches[&self.route].iter().position(|s| s.way_of(index).is_some());
+            }
         }
     }
 
@@ -383,6 +469,16 @@ impl GameCompletion {
     /// The path search knows the skips: the family's switch and the run-time switch both on.
     pub fn clips_effective(&self) -> bool {
         self.clips && self.clips_allowed
+    }
+
+    /// The way the route follows (true: the clip way; see `set_clips_allowed`).
+    pub fn way(&self) -> Way {
+        Way::of(self.way)
+    }
+
+    /// Re-planning toward the plain way after the switch turned off on the clip way (round 22).
+    pub fn replanning(&self) -> bool {
+        self.replan.is_some()
     }
 
     pub fn route(&self) -> &str {
@@ -400,16 +496,18 @@ impl GameCompletion {
         self.step.or(self.last_step).map_or(0, |s| self.reserves[s])
     }
 
-    /// The step of the route that enters Link's room from `entry` with exactly Link's progress (`StepProgress`);
-    /// of several, the first at or after the current step.  None off the route: Link entered from another side, or
-    /// lacks what the route has there (0x1a from N without the white sword is a retreat from 0x0a, not the step
-    /// leaving W).
+    /// The step of the route on the way it follows that enters Link's room from `entry` with exactly Link's progress
+    /// (`StepProgress`); of several, the first at or after the current step.  None off the route: Link entered from
+    /// another side, or lacks what the route has there (0x1a from N without the white sword is a retreat from 0x0a,
+    /// not the step leaving W).
     fn route_step_at(&self, state: &GameView, entry: &str) -> Option<usize> {
         let here = state.full_location();
         let mut matching = self.map.routes[&self.route]
             .iter()
             .enumerate()
-            .filter(|(i, s)| s.location() == here && s.entry == entry && self.progress[*i].matches(state))
+            .filter(|(i, s)| {
+                s.on_way(self.way) && s.location() == here && s.entry == entry && self.progress[*i].matches(state)
+            })
             .map(|(i, _)| i);
         let first = matching.next()?;
         let current = self.step.unwrap_or(0);
@@ -468,7 +566,8 @@ impl GameCompletion {
         let steps = &self.map.routes[&self.route];
         let mut rooms = BTreeSet::new();
         for (i, step) in steps.iter().enumerate() {
-            if step.location() == location
+            if step.on_way(self.way)
+                && step.location() == location
                 && self.progress[i] == progress
                 && let Some(next) = self.step_exit(location, &step.exit)
             {
@@ -527,12 +626,32 @@ impl GameCompletion {
 
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
+        let here = state.full_location();
+        let entered = prev.is_some_and(|p| p.full_location() != here);
         if let Some(prev) = prev
-            && prev.full_location() != state.full_location()
+            && entered
         {
-            self.step = route_entry(prev.full_location(), state.full_location())
-                .and_then(|entry| self.route_step_at(state, entry));
+            self.entry = route_entry(prev.full_location(), here).map(str::to_owned);
+        }
+        if entered || self.repick {
+            self.repick = false;
+            self.step = self.entry.clone().and_then(|entry| self.route_step_at(state, &entry));
+            if self.step.is_none()
+                && let Some(stretch) = self.replan
+            {
+                self.step = self.adopt_plain_step(state, stretch);
+            }
+            match self.step.map(|i| self.map.routes[&self.route][i].way) {
+                // A shared step: the route takes the switch's way from here (the rejoin ends a held plain way).
+                Some(None) => {
+                    self.way = self.clips_allowed;
+                    self.replan = None;
+                }
+                Some(Some(_)) => self.replan = None,
+                None => {}
+            }
             self.last_step = self.step.or(self.last_step);
+            self.last_route = None;
         }
         self.open_raft_crossings(state);
         self.check_heart_waypoint(prev, state);
@@ -725,7 +844,7 @@ impl GameCompletion {
         let route_step = self.map.routes.get(&self.route).and_then(|steps| {
             steps
                 .iter()
-                .find(|s| s.exit == "triforce" && !state.has_triforce(s.level))
+                .find(|s| s.on_way(self.way) && s.exit == "triforce" && !state.has_triforce(s.level))
         });
         if let Some(step) = route_step {
             return Some(step.location());
@@ -1026,9 +1145,10 @@ impl GameCompletion {
             return self.subroom_exit(state);
         }
         let edge_step = self.edge_step(loc);
-        let key = match edge_step {
-            Some((step, next)) => RouteKey::Step(loc, step, next),
-            None => {
+        let key = match (edge_step, self.replan) {
+            (Some((step, next)), _) => RouteKey::Step(loc, step, next),
+            (None, Some(stretch)) => RouteKey::Replan(loc, stretch),
+            (None, None) => {
                 let Some(target) = self.target(state) else {
                     return (Vec::new(), BTreeSet::new());
                 };
@@ -1063,6 +1183,15 @@ impl GameCompletion {
         }
         let next_rooms = match &key {
             RouteKey::Step(_, _, next) => self.step_next_rooms(loc, *next),
+            RouteKey::Replan(_, stretch) => {
+                let rooms = self.replan_next_rooms(state, *stretch, walls);
+                if rooms.is_empty() {
+                    // No exit he can walk to leads back to the plain way: the objective of any off-route room.
+                    self.replan = None;
+                    return self.map_objective(state);
+                }
+                rooms
+            }
             RouteKey::Target(_, target, keys, collected, opened, _) => {
                 let mut next_rooms = self.map.find_next_rooms(loc, *target, *keys, collected, opened);
                 if next_rooms.is_empty() {
@@ -1074,46 +1203,112 @@ impl GameCompletion {
                     let both: BTreeSet<MapLocation> =
                         next_rooms.intersection(&route_next).copied().collect();
                     let candidates = if both.is_empty() { route_next } else { both };
-                    next_rooms = self.map.route_first(loc, &candidates, &self.route);
+                    next_rooms = self.map.route_first(loc, &candidates, &self.route, self.way);
                 }
                 next_rooms
             }
         };
-        let room = state.room();
         let mut targets = Vec::new();
         for next in &next_rooms {
-            let d = self.map.exit_direction(loc, *next, state.peek(MAZE_STEP));
-            if d == Direction::None {
-                if next.in_cave != loc.in_cave {
-                    targets.extend(self.cave_tiles(state).into_iter().map(Target::Tile));
-                }
-                continue;
-            }
-            // A raft crossing from a dock: stand on the dock (asm:Dock_Update sails from there).
-            let dock = self
-                .map
-                .get(loc)
-                .and_then(|r| r.exits.get(d.name()))
-                .filter(|exit| exit.raft)
-                .and_then(|exit| exit.dock);
-            if let Some(dock) = dock {
-                targets.push(Target::Tile(dock));
-                continue;
-            }
-            match room.exits.get(d) {
-                Some(tiles) => targets.extend(
-                    tiles_in_span(tiles, exit_span(&self.map, loc, d), d)
-                        .into_iter()
-                        .map(Target::Tile),
-                ),
-                // An intact game.yaml bomb wall (Dungeon 3's 0x4c E into Manhandla's room): where to bomb it from.
-                None if walls & d.value() != 0 => targets.push(Target::Tile(bomb_spot(&room, d))),
-                None => targets.push(Target::Dir(d)),
-            }
+            targets.extend(self.exit_targets(state, *next, walls));
         }
         let result = (targets, next_rooms);
         self.last_route = Some((key, shape, result.clone()));
         self.push_block_targets(state, result)
+    }
+
+    /// Where Link leaves his room for the neighbouring room `next`: the exit's tiles within game.yaml's `span`, a
+    /// raft crossing's dock, the spot to bomb an intact bomb wall from (`walls`: the intact walls' direction bits),
+    /// the cave tiles for a sub-room or level below, else the direction itself.
+    fn exit_targets(&self, state: &GameView, next: MapLocation, walls: u8) -> Vec<Target> {
+        let loc = state.full_location();
+        let d = self.map.exit_direction(loc, next, state.peek(MAZE_STEP));
+        if d == Direction::None {
+            if next.in_cave != loc.in_cave {
+                return self.cave_tiles(state).into_iter().map(Target::Tile).collect();
+            }
+            return Vec::new();
+        }
+        // A raft crossing from a dock: stand on the dock (asm:Dock_Update sails from there).
+        let dock = self
+            .map
+            .get(loc)
+            .and_then(|r| r.exits.get(d.name()))
+            .filter(|exit| exit.raft)
+            .and_then(|exit| exit.dock);
+        if let Some(dock) = dock {
+            return vec![Target::Tile(dock)];
+        }
+        let room = state.room();
+        match room.exits.get(d) {
+            Some(tiles) => tiles_in_span(tiles, exit_span(&self.map, loc, d), d).into_iter().map(Target::Tile).collect(),
+            // An intact game.yaml bomb wall (Dungeon 3's 0x4c E into Manhandla's room): where to bomb it from.
+            None if walls & d.value() != 0 => vec![Target::Tile(bomb_spot(&room, d))],
+            None => vec![Target::Dir(d)],
+        }
+    }
+
+    /// Link can walk from where he stands to `targets` without a skip (locked doors count as open while he holds a
+    /// key in a dungeon, as for the PBRS wavefront).
+    fn walkable(state: &GameView, targets: &[Target]) -> bool {
+        let locked: Vec<Direction> = if state.keys() > 0 && state.level() > 0 { PUSH_DIRECTIONS.to_vec() } else { Vec::new() };
+        !targets.is_empty() && state.room().wavefront(targets, &[], &locked, false).get(state.link.tile()).is_some()
+    }
+
+    /// The plain-way step of `stretch` in Link's room whose exit he can walk to, if any (re-planning: he entered the
+    /// room from another side than the step's, or the switch turned off in it).
+    fn adopt_plain_step(&self, state: &GameView, stretch: usize) -> Option<usize> {
+        let here = state.full_location();
+        let walls = state.bomb_walls().iter().fold(0u8, |mask, w| mask | w.wall_direction.value());
+        let steps = &self.map.routes[&self.route];
+        self.map.stretches[&self.route][stretch].plain.clone().find(|&i| {
+            let step = &steps[i];
+            step.location() == here
+                && self.progress[i].matches(state)
+                && self
+                    .step_exit(here, &step.exit)
+                    .is_some_and(|next| Self::walkable(state, &self.exit_targets(state, next, walls)))
+        })
+    }
+
+    /// Re-planning toward the plain way of `stretch` (round 22): of the room's exits Link can walk to without a skip,
+    /// the ones whose room is nearest (by the key-aware map path) to a room of the stretch's plain way or its rejoin.
+    /// Empty when he can walk to none.
+    fn replan_next_rooms(&self, state: &GameView, stretch: usize, walls: u8) -> BTreeSet<MapLocation> {
+        let here = state.full_location();
+        let steps = &self.map.routes[&self.route];
+        let s = &self.map.stretches[&self.route][stretch];
+        let goals: BTreeSet<MapLocation> = s.plain.clone().chain([s.rejoin]).map(|i| steps[i].location()).collect();
+        let Some(room) = self.map.get(here) else {
+            return BTreeSet::new();
+        };
+        let mut best: (usize, BTreeSet<MapLocation>) = (usize::MAX, BTreeSet::new());
+        for (name, exit) in &room.exits {
+            if Direction::from_exit(name).is_none() || !Self::walkable(state, &self.exit_targets(state, exit.destination, walls)) {
+                continue;
+            }
+            let distance = goals
+                .iter()
+                .filter_map(|&goal| {
+                    let route = self.map.find_route(
+                        exit.destination,
+                        goal,
+                        state.keys(),
+                        &self.collected_key_rooms,
+                        &self.opened_doors,
+                    )?;
+                    Some(route.len())
+                })
+                .min();
+            match distance {
+                Some(d) if d < best.0 => best = (d, [exit.destination].into_iter().collect()),
+                Some(d) if d == best.0 => {
+                    best.1.insert(exit.destination);
+                }
+                _ => {}
+            }
+        }
+        best.1
     }
 }
 
@@ -1225,23 +1420,16 @@ pub fn wraps_into_wrong_exits(map: &GameMap, state: &GameView, objective: &Objec
         .collect()
 }
 
-/// (route, step) for an episode starting in `location` entered from `entry` (`start_route`): the steps of `route`
-/// (of every route without one) entering the room from `entry` with exactly Link's progress (`StepProgress`: the
-/// triforce pieces and sword he holds), any step entering it from `entry` when none has his progress.  Steps
-/// leaving the room differently: one at random from `rng` (Python's `random` stream is not reproduced).  No step:
-/// `route` (else the default route) and None.
-pub fn start_route<R: Rng + ?Sized>(
-    map: &GameMap,
+/// The route steps `start_route` would choose among for an episode starting in `location` entered from `entry`
+/// (the steps of `route`, of every route without one, entering the room from `entry` with exactly Link's progress,
+/// any step entering it from `entry` when none has his progress), with their way: (route, step, way).
+fn start_candidates<'a>(
+    map: &'a GameMap,
     location: MapLocation,
-    entry: Option<&str>,
-    rng: &mut R,
+    entry: &str,
     route: Option<&str>,
     state: &GameView,
-) -> (String, Option<usize>) {
-    let fallback = route.unwrap_or(crate::game_map::DEFAULT_ROUTE);
-    let Some(entry) = entry else {
-        return (fallback.to_owned(), None);
-    };
+) -> Vec<(&'a str, usize, Option<crate::game_map::Way>)> {
     let mut candidates: Vec<(&str, usize, bool)> = Vec::new();
     for (name, steps) in &map.routes {
         if route.is_some_and(|r| r != name) {
@@ -1256,6 +1444,51 @@ pub fn start_route<R: Rng + ?Sized>(
     }
     if candidates.iter().any(|c| c.2) {
         candidates.retain(|c| c.2);
+    }
+    candidates.into_iter().map(|(name, i, _)| (name, i, map.routes[name][i].way)).collect()
+}
+
+/// The run-time clips switch an episode starting in `location` entered from `entry` must have (round 22): Some when
+/// the route enters the room that way on one way of a stretch only (4:0x21 from S: the clip way; from W, 4:0x30 from
+/// E and 4:0x20 from S: the plain way), None when either switch has a step there or none has.
+pub fn start_clips(
+    map: &GameMap,
+    location: MapLocation,
+    entry: Option<&str>,
+    route: Option<&str>,
+    state: &GameView,
+) -> Option<bool> {
+    let candidates = start_candidates(map, location, entry?, route, state);
+    let on = |clips: bool| candidates.iter().any(|c| c.2.is_none_or(|w| w.clips() == clips));
+    match (on(true), on(false)) {
+        (true, false) => Some(true),
+        (false, true) => Some(false),
+        _ => None,
+    }
+}
+
+/// (route, step) for an episode starting in `location` entered from `entry` (`start_route`) with the run-time clips
+/// switch `clips`: the steps of `route` (of every route without one) entering the room from `entry` with exactly
+/// Link's progress (`StepProgress`: the triforce pieces and sword he holds), any step entering it from `entry` when
+/// none has his progress; of those, the ones on the way `clips` selects when there are any (4:0x31 from E: N with
+/// clips, W without).  Steps leaving the room differently: one at random from `rng` (Python's `random` stream is not
+/// reproduced).  No step: `route` (else the default route) and None.
+pub fn start_route<R: Rng + ?Sized>(
+    map: &GameMap,
+    location: MapLocation,
+    entry: Option<&str>,
+    rng: &mut R,
+    route: Option<&str>,
+    state: &GameView,
+    clips: bool,
+) -> (String, Option<usize>) {
+    let fallback = route.unwrap_or(crate::game_map::DEFAULT_ROUTE);
+    let Some(entry) = entry else {
+        return (fallback.to_owned(), None);
+    };
+    let mut candidates = start_candidates(map, location, entry, route, state);
+    if candidates.iter().any(|c| c.2.is_none_or(|w| w.clips() == clips)) {
+        candidates.retain(|c| c.2.is_none_or(|w| w.clips() == clips));
     }
     let exits: BTreeSet<&str> = candidates
         .iter()
