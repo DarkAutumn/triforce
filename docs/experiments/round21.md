@@ -422,3 +422,37 @@ wraps toward the target edge; south = the 19 south tasks and which start states 
   within seed noise.
 - The behaviour table rests on 17 crossings per run; the per-direction and per-state numbers above come from the
   full evaluations.
+
+## After the merge with Dungeon 4 (1.4.1.0)
+
+`main`'s round 20 (Dungeon 4 in `d2first`, the ladder, Gleeok's heads, uncounted kills, the doorway attack mask) was
+merged into `clips`: version 1.4.1.0 (1.4.0.0 plus this branch's COMPAT bump; observation schema 4, action schema 2).
+No training; checks in the real game (`crates/zelda/tests/clips.rs`, `crates/env/tests/clips.rs`):
+
+- **Doorways:** no skip is offered while Link is in a doorway (`DoorwayDir`, or outside X `$20`..`$D0`, Y
+  `$5D`..`$BD`): every door entry state of levels 1-9, walked in frame by frame. In 4:0x50's E doorway the sword keeps
+  to E/W (round 20's rule); after a block clip the MOVE mask matches the game and the attack masks are
+  `GameView::sword_directions`.
+- **Ladder and water:** with the ladder out (4:0x30, Link on the ladder over the water row) nothing is offered. New
+  rule: no block clip into water (`$F4`); it changes nothing in Dungeon 4 (the other rules already leave its water
+  out) and is pinned by a synthetic room.
+- **Dungeon 4, every start state** (Link put on every grid point out of the doorway): room 0x03 offers 6 grid points,
+  room 0x50 60, no other room. CLIP from each completes with one press 8 pixels past T, and the sideways walk from
+  there goes where Link on T can't:
+
+| room | heading, X (T) | zone (Y) | way on |
+|---|---|---|---|
+| 0x03 | N, X `$60` (`$85`) and `$90` (`$85`) | `$85`-`$95` | W / E into the side pockets of the triforce's enclosure (reachable on foot too; no use to the route) |
+| 0x50 | N, X `$40` (`$65`, `$A5`), `$50` (`$95`), `$60` (`$85`), `$70` (`$75`), `$90` (`$A5`), `$A0` (`$95`), `$B0` (`$85`), `$C0` (`$75`), `$D0` (`$65`) | T to T + `$10` | W |
+| 0x50 | S, X `$20` (`$AD`), `$30` (`$9D`), `$40` (`$8D`), `$50` (`$7D`), `$60` (`$6D`), `$80` (`$9D`), `$90` (`$8D`), `$A0` (`$7D`), `$B0` (`$6D`, `$AD`) | T - `$10` to T | E |
+
+- **0x50 by one clip** (route: enter E, leave N; monsters cleared): plain `MOVE W 32`, `MOVE W 32`, `MOVE S 32`,
+  `MOVE W 16` ×2, `MOVE S 32`, `MOVE W 16`, `MOVE W 8`, `MOVE N 32` ×2, `MOVE E 8`, `MOVE N 32`, `MOVE W 8`, `MOVE N
+  32`: 14 actions, 424 frames into 4:0x40. With the clip: `MOVE W 32` ×2 (stopped on (`$B0`, `$8D`), G of the
+  right diagonal's square above), `CLIP N` (14 frames, to (`$B0`, `$7D`)), `MOVE W 8`, `MOVE N 32`, `MOVE W 16` ×2,
+  `MOVE N 32`: 8 actions, 318 frames. Both counts include the 191 frames of the last MOVE (out of the N door and the
+  scroll). In a trial with the Vires in the room (seed 0) a plain walk round the diagonal's bottom was hit; the clip
+  way was not.
+- **`clips-gauntlet`** still draws both targets for each of its 18 start states (40 seeds each), and the start states
+  of ow-zora, ow-moblin and every family with a Dungeon 4 room reset to the same `d2first` step with and without the
+  route in routes.yaml.

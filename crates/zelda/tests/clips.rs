@@ -745,3 +745,221 @@ fn the_way_through_22_by_moves_and_one_clip() {
         assert_eq!((frames, skips, hurt), (218, 1, 0.0), "{trigger:?}");
     }
 }
+
+const CARDINAL: [Direction; 4] = [Direction::N, Direction::S, Direction::W, Direction::E];
+
+/// Empties the monster slots (round 20's Dungeon 4 rooms below): frame counts and the macro's runs don't depend on
+/// where the Vires walk.
+fn clear_monsters(s: &mut S) {
+    for slot in 1..12 {
+        s.nes_mut().poke((zelda::tables::OBJ_ID.0 + slot) as u16, 0);
+    }
+    s.apply_ram(&[]);
+}
+
+/// Link put at rest on (x, y) (offset 0), as `offered_in_room` does.
+fn put(s: &mut S, x: i32, y: i32) {
+    let nes = s.nes_mut();
+    nes.poke(0x70, x as u8);
+    nes.poke(0x84, y as u8);
+    nes.poke(0x394, 0);
+    s.apply_ram(&[]);
+}
+
+/// Holding `d` for 8 frames moves Link.
+fn walks(s: &mut S, d: Direction) -> bool {
+    let at = s.state().link.position;
+    s.press(zelda::executor::direction_buttons(d), 8);
+    s.state().link.position != at
+}
+
+/// Every Dungeon 4 start state (round 20), Link put on every grid point at rest out of the doorway: the block clip is
+/// offered in room $03 (under its two inner blocks at X $60 and $90, into the side pockets of the triforce's
+/// enclosure) and room $50 (its diagonal rows of blocks: 20 squares, each over its zone G'..T), nowhere else: not in
+/// the water rooms $20, $21, $30, $31 (water is no block; the ladder crosses one square of it) nor in the cellar $60.
+/// In $03 and $50 every offered clip is right in the game: CLIP from each grid point completes with one press 8
+/// pixels past T, and from there a sideways walk goes on where Link stopped on T is walled off (useful clips only).
+#[test]
+fn the_block_clip_in_dungeon_4() {
+    let Some(mut s) = session() else { return };
+    let mut names: Vec<String> = std::fs::read_dir(common::repo().join("triforce/states"))
+        .unwrap()
+        .filter_map(|e| e.unwrap().file_name().into_string().unwrap().strip_suffix(".state").map(str::to_owned))
+        .filter(|n| n.starts_with("4_"))
+        .collect();
+    names.sort();
+    assert_eq!(names.len(), 54, "{names:?}");
+    let mut want_03 = Vec::new();
+    for y in [0x85, 0x8D, 0x95] {
+        want_03.extend([(0x60, y, Direction::N), (0x90, y, Direction::N)]);
+    }
+    for name in &names {
+        load(&mut s, name);
+        s.apply_ram(&[(Var::DoorwayDir, 0)]);
+        let got = offered_in_room(&mut s);
+        match &name[..4] {
+            "4_03" => assert_eq!(got, want_03, "{name}"),
+            "4_50" => assert_eq!(got.len(), 60, "{name}: {got:?}"),
+            _ => assert_eq!(got, vec![], "{name}"),
+        }
+    }
+    for name in ["4_03s_0", "4_50e_0"] {
+        load(&mut s, name);
+        s.apply_ram(&[(Var::DoorwayDir, 0)]);
+        clear_monsters(&mut s);
+        let room = s.snapshot();
+        let mut squares = std::collections::BTreeMap::new();
+        for (x, gy, d) in offered_in_room(&mut s) {
+            s.restore(&room);
+            put(&mut s, x, gy);
+            let t = i32::from(zelda::clips::skip_target(s.state(), d).expect("offered").t);
+            let end = if d == Direction::N { t - 8 } else { t + 8 };
+            let at = format!("{name} ({x:#04x}, {gy:#04x}) CLIP {} (T {t:#04x})", d.name());
+            let c = act(&mut s, &format!("CLIP {}", d.name()));
+            let clip = c.clip.expect("clip");
+            assert!(clip.completed() && clip.presses == 1, "{at}: {clip:?} now {}", describe(&s));
+            assert_eq!((link(&s).0, y(&s), link(&s).1), (x, end, 0), "{at}: {}", describe(&s));
+            let clipped = s.snapshot();
+            let way_on: Vec<Direction> = [Direction::W, Direction::E]
+                .into_iter()
+                .filter(|&side| {
+                    s.restore(&clipped);
+                    let on = walks(&mut s, side);
+                    s.restore(&room);
+                    put(&mut s, x, t);
+                    on && !walks(&mut s, side)
+                })
+                .collect();
+            assert!(!way_on.is_empty(), "{at}: no sideways way on that T doesn't have");
+            squares.entry((x, t, d.name())).or_insert_with(Vec::new).push((gy, way_on));
+        }
+        for ((x, t, d), zone) in &squares {
+            assert_eq!(zone.len(), 3, "{name} ({x:#04x}, T {t:#04x}) {d}: {zone:?}");
+            println!("{name}: X {x:#04x} heading {d} T {t:#04x}: from {:?}, then {:?}", zone.iter().map(|z| z.0).collect::<Vec<_>>(), zone[0].1);
+        }
+        assert_eq!(squares.len(), if name == "4_03s_0" { 2 } else { 20 }, "{name}");
+    }
+}
+
+/// Room 4:$50 (the route enters E and leaves N; diagonal rows of blocks, `zelda-asm/levels/level-4.md`): the plain
+/// way goes round the bottom of the right diagonal (W, S, W, S, W, N, E, N, W, N: 14 MOVEs, 424 frames to 4:$40
+/// from the room's first frame, the last MOVE's 191 frames of walking out and the scroll included); one CLIP N into
+/// the diagonal's square above ($B0, $8D), where Link's MOVE W stops, cuts through it (W, CLIP N, W, N, W, N: 8
+/// actions, 318 frames). Monsters cleared. In the E doorway nothing is offered and the sword keeps to the doorway's
+/// axis (round 20); after the clip the MOVE mask matches the game and the attack masks follow
+/// `GameView::sword_directions`.
+#[test]
+fn the_way_through_4_50_by_one_block_clip() {
+    let Some(mut s) = session() else { return };
+    let plain = [
+        "MOVE W 32", "MOVE W 32", "MOVE S 32", "MOVE W 16", "MOVE W 16", "MOVE S 32", "MOVE W 16", "MOVE W 8",
+        "MOVE N 32", "MOVE N 32", "MOVE E 8", "MOVE N 32", "MOVE W 8", "MOVE N 32",
+    ];
+    let clip = ["MOVE W 32", "MOVE W 32", "CLIP N", "MOVE W 8", "MOVE N 32", "MOVE W 16", "MOVE W 16", "MOVE N 32"];
+    let mut frames = Vec::new();
+    for (trigger, plan) in [(ClipTrigger::None, &plain[..]), (ClipTrigger::Kind, &clip[..])] {
+        load(&mut s, "4_50e_0");
+        clear_monsters(&mut s);
+        s.set_clip_settings(ClipSettings::new(trigger, 0));
+        assert_ne!(s.state().var(Var::DoorwayDir), 0, "{}", describe(&s));
+        assert!(CARDINAL.iter().all(|&d| !skip_available(s.state(), d)), "in the doorway: {}", describe(&s));
+        assert!(!s.mask().kind[ActionKind::Clip.index()]);
+        for kind in [ActionKind::Sword, ActionKind::Beams] {
+            assert!(s.mask().directions(kind).iter().all(|d| matches!(d, Direction::W | Direction::E)), "{kind:?}");
+        }
+        let (mut total, mut hurt) = (0, 0.0);
+        for text in plan {
+            let action = Action::parse(text).unwrap();
+            assert!(s.mask().is_allowed(&action), "{trigger:?} {text}: {}", describe(&s));
+            let c = s.act(action).unwrap();
+            total += c.frames;
+            hurt += c.health_lost;
+            if action.kind == ActionKind::Clip {
+                assert!(c.clip.is_some_and(|c| c.completed() && c.presses == 1), "{:?}", c.clip);
+                assert_eq!((link(&s).0, y(&s), c.frames), (0xB0, 0x7D, 14), "{}", describe(&s));
+                assert_move_mask_matches_the_game(&mut s, "after CLIP N");
+                let attacks = s.state().sword_directions();
+                assert_eq!(attacks.len(), 4, "inside the room's bounds: {attacks:?} {}", describe(&s));
+                let sorted = |mut v: Vec<Direction>| {
+                    v.sort_by_key(|d| d.value());
+                    v
+                };
+                for kind in [ActionKind::Sword, ActionKind::Beams] {
+                    if s.mask().kind[kind.index()] {
+                        assert_eq!(sorted(s.mask().directions(kind)), sorted(attacks.clone()), "{kind:?}");
+                    }
+                }
+            }
+        }
+        assert_eq!(s.state().full_location(), MapLocation::new(4, 0x40, false), "{trigger:?}: {}", describe(&s));
+        assert_eq!(hurt, 0.0, "{trigger:?}");
+        frames.push(total);
+    }
+    assert_eq!(frames, [424, 318]);
+}
+
+/// The skip is never offered in a dungeon doorway: every door entry state of levels 1-9, held into the room a frame
+/// at a time while Link is in the doorway (`DoorwayDir`, or outside the room's bounds X $20..$D0, Y $5D..$BD),
+/// offers no skip in any direction and no CLIP under `kind`.
+#[test]
+fn no_skip_in_a_doorway() {
+    let Some(mut s) = session() else { return };
+    let mut names: Vec<String> = std::fs::read_dir(common::repo().join("triforce/states"))
+        .unwrap()
+        .filter_map(|e| e.unwrap().file_name().into_string().unwrap().strip_suffix(".state").map(str::to_owned))
+        .filter(|n| {
+            let b = n.as_bytes();
+            n.len() == 7 && (b'1'..=b'9').contains(&b[0]) && b[1] == b'_' && b"nsew".contains(&b[4]) && b[5] == b'_'
+        })
+        .collect();
+    names.sort();
+    assert!(names.len() > 150, "{} states", names.len());
+    let mut frames = 0;
+    for name in &names {
+        load(&mut s, name);
+        s.set_clip_settings(ClipSettings::new(ClipTrigger::Kind, 0));
+        let inward = match name.as_bytes()[4] {
+            b'n' => Direction::S,
+            b's' => Direction::N,
+            b'e' => Direction::W,
+            _ => Direction::E,
+        };
+        let room = s.state().full_location();
+        for _ in 0..64 {
+            let st = s.state();
+            let (x, y) = (st.link.position.x, st.link.position.y);
+            let doorway = st.var(Var::DoorwayDir) != 0 || !(0x20..=0xD0).contains(&x) || !(0x5D..=0xBD).contains(&y);
+            if !doorway || st.mode() != 5 || st.full_location() != room {
+                break;
+            }
+            assert!(CARDINAL.iter().all(|&d| !skip_available(st, d)), "{name}: {}", describe(&s));
+            assert!(!s.mask().kind[ActionKind::Clip.index()], "{name}: {}", describe(&s));
+            s.press(zelda::executor::direction_buttons(inward), 1);
+            frames += 1;
+        }
+    }
+    assert!(frames > 1000, "{frames} doorway frames");
+}
+
+/// With the ladder out (`LadderSlot`) no skip is offered: 4:$30 from its E door with the ladder, Link walks W to X $80
+/// and N onto the ladder over the water row; on every frame the ladder is out nothing is offered and CLIP is masked.
+#[test]
+fn no_skip_with_the_ladder_out() {
+    let Some(mut s) = session() else { return };
+    load(&mut s, "4_30e_0");
+    clear_monsters(&mut s);
+    s.set_clip_settings(ClipSettings::new(ClipTrigger::Kind, 0));
+    assert!(s.state().ladder(), "{}", describe(&s));
+    walk(&mut s, Direction::W, 0x80);
+    let mut out = 0;
+    for _ in 0..48 {
+        s.press(zelda::executor::buttons::UP, 1);
+        if s.state().var(Var::LadderSlot) != 0 {
+            out += 1;
+            assert!(CARDINAL.iter().all(|&d| !skip_available(s.state(), d)), "{}", describe(&s));
+            assert!(!s.mask().kind[ActionKind::Clip.index()], "{}", describe(&s));
+        }
+    }
+    assert!(out >= 8, "{out} frames with the ladder out");
+    assert!(y(&s) < 0x75, "across the water: {}", describe(&s));
+}

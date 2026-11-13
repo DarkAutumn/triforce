@@ -1285,3 +1285,15 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   (models stamped 1.3.3.0 still load).
 - **Pending:** the choice between `kind`, `long` and `edge`, and between `jump` and `walk` (round 21 experiments).
   Not built (asked not to): the sword variant, the ladder clip, the N/S wraps.
+- **Merged with Dungeon 4 (version 1.4.1.0):** `main`'s 1.4.0.0 (round 20) plus this COMPAT bump (action schema 2,
+  observation schema 4, one above main's 3). Checked against round 20's engine in the real game
+  (`crates/zelda/tests/clips.rs`, `crates/zelda/src/clips.rs` tests): no skip in a doorway (every door entry of
+  levels 1-9 walked in frame by frame) nor with the ladder out (4:0x30's water row); after a clip the MOVE mask
+  matches the game and the attack masks are `GameView::attack_directions`'. New rule: no block clip into water
+  (`$F4`), which was never traced; with the ladder, one square of water is no stop (`Room::ladder_axes`) and the walk
+  toward wider water lays the ladder (the ladder clip, not built). It changes nothing in Dungeon 4's rooms, where
+  the other rules already leave the water out. Dungeon 4 offers the block clip in rooms 0x03 (6 grid points, into
+  the side pockets of the triforce's enclosure, of no use to the route) and 0x50 (60 grid points, 20 squares of its
+  diagonals), every one right in the game; in 0x50 one `CLIP N` from where `MOVE W` stops Link after the E door
+  takes him to the N door in 318 frames against 424 for the plain way (monsters cleared). The experiment route
+  `clips-gauntlet` still draws both targets and changes no family's resets (`crates/env/tests/clips.rs`).

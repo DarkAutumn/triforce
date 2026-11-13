@@ -211,3 +211,75 @@ fn the_block_clip_in_a_dungeon_room_per_design() {
         nes = env.into_parts().0.into_nes();
     }
 }
+
+/// A route exit's direction letter as the route writes it.
+fn exit_of(env: &Env) -> String {
+    let (route, step) = env.route();
+    DATA.map.routes[route][step.expect("a route step")].exit.clone()
+}
+
+/// The experiment route `clips-gauntlet` (round 21) after Dungeon 4 joined `d2first` (round 20): a specialist naming
+/// it draws both of its targets for every start state of the gauntlet (from W: E or S, from E: W or S), and it
+/// leaves every registered family's resets as they are without it: the start states of ow-zora and ow-moblin (whose
+/// rooms 0x59-0x5b it shares) and of every family with a Dungeon 4 room reset to the same `d2first` step with and
+/// without the route in routes.yaml.
+#[test]
+fn the_clips_gauntlet_draws_its_targets_and_leaves_the_families_alone() {
+    let (Some(nes), Some(nes2)) = (open_core(), open_core()) else { return };
+    let root = common::repo();
+    let text = std::fs::read_to_string(root.join("experiments/r21/gauntlet-kind-jump.yaml")).unwrap();
+    let config = SpecialistConfig::from_yaml(&text, "gauntlet-kind-jump", Some(&DATA.map)).unwrap();
+    let starts = config.resolve_start_states(&root.join("experiments/r21/states"));
+    assert_eq!(starts.len(), 18);
+    let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), EnvOptions::default())
+        .expect("gauntlet env");
+    for path in &starts {
+        let path = path.to_str().unwrap();
+        let entry = if path.contains("e_") { "E" } else { "W" };
+        let mut drawn = std::collections::BTreeSet::new();
+        for seed in 0..40 {
+            env.reset(Some(seed), Some(path)).unwrap();
+            assert_eq!(env.route().0, "clips-gauntlet", "{path}");
+            drawn.insert(exit_of(&env));
+        }
+        let want: std::collections::BTreeSet<String> =
+            [if entry == "W" { "E" } else { "W" }, "S"].into_iter().map(str::to_owned).collect();
+        assert_eq!(drawn, want, "{path}");
+    }
+    let nes = env.into_parts().0.into_nes();
+
+    // The same game data without the route.
+    let routes = std::fs::read_to_string(root.join("triforce/routes.yaml")).unwrap();
+    let (head, tail) = routes.split_once("# clips-gauntlet").expect("the route");
+    let tail = &tail[tail.find("\n# Equal-length alternates").expect("after it")..];
+    let game = std::fs::read_to_string(root.join("triforce/game.yaml")).unwrap();
+    let map = zelda::GameMap::from_yaml(&game, &format!("{head}{}", &tail[1..])).unwrap();
+    assert!(!map.routes.contains_key("clips-gauntlet") && map.routes.len() + 1 == DATA.map.routes.len());
+    let without = Arc::new(GameData { map: Arc::new(map), ..(**DATA).clone() });
+    let families = [
+        "ow-zora", "ow-moblin", "ow-octorok", "ow-tektite", "ow-peahat", "vire", "like-like", "boss-gleeok", "zol",
+        "stalfos-keese-gel", "equipment-room", "trap-room",
+    ];
+    let (mut nes, mut nes2) = (Some(nes), Some(nes2));
+    let mut resets = 0;
+    for name in families {
+        let config = DATA.specialists[name].clone();
+        let starts = config.resolve_start_states(&DATA.states_dir);
+        let mut with = SpecialistEnv::new(config.clone(), DATA.clone(), nes.take().unwrap(), TfzStore::new(), EnvOptions::default()).unwrap();
+        let mut alone = SpecialistEnv::new(config, without.clone(), nes2.take().unwrap(), TfzStore::new(), EnvOptions::default()).unwrap();
+        for path in &starts {
+            let path = path.to_str().unwrap();
+            for seed in 0..3 {
+                with.reset(Some(seed), Some(path)).unwrap();
+                alone.reset(Some(seed), Some(path)).unwrap();
+                let (a, b) = (with.route(), alone.route());
+                assert_eq!((a.0, a.1), (b.0, b.1), "{name} {path} seed {seed}");
+                assert_eq!(a.0, "d2first", "{name} {path} seed {seed}");
+                resets += 1;
+            }
+        }
+        nes = Some(with.into_parts().0.into_nes());
+        nes2 = Some(alone.into_parts().0.into_nes());
+    }
+    assert!(resets > 300, "{resets} resets");
+}

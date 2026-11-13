@@ -130,7 +130,9 @@ Link's state 0, no knockback, no ladder (`$64` = 0), and
   offset 0 after a W wrap and X `$00` after an E wrap, where the opposite edge's room change is one MOVE away.
 - **block clip** (dungeon, N or S): not in a doorway, X on the column line and inside the X border band, T the first
   grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8 pixels further (a
-  16-pixel square), G' inside the room bounds, the run-up cells open both ways, and the clip useful: from T -+ 8 a
+  16-pixel square of blocks, statues or wall, never water `$F4`: with the ladder one square of water is no stop
+  (`Room::ladder_axes`), and the walk toward wider water lays the ladder, the ladder clip's recipe), G' inside the
+  room bounds, the run-up cells open both ways, and the clip useful: from T -+ 8 a
   MOVE W or E is possible **and** the same move from T is blocked (the tile it enters is walled off from T; where it
   is open from T too, the clip only leads back out: half a column off a square, an isolated statue), and no stairs
   spot at G', G or T (the warp would take Link down in the middle of the macro). The macro ends at T -+ 8, offset 0.
@@ -149,6 +151,16 @@ Link's state 0, no knockback, no ladder (`$64` = 0), and
   `MOVE W 32`, `MOVE W 8` (the corner of the east block), `MOVE S 8`, `MOVE W 8` twice (Link turns on the next grid
   point; the lower-right block stops him on G = (`$A0`, `$9D`)), `CLIP N` (14 frames; `MOVE N 32` under `long`),
   `MOVE W 32`: in cellar `$7F` 218 frames after the room's first frame, the stairs' transition included.
+- Dungeon 4 (the start states under `triforce/states/`, Link put on every grid point out of the doorway): room `$03`
+  offers 6 grid points (the zones under its two inner blocks at X `$60` and `$90`, into the side pockets of the
+  triforce's enclosure, which the floor reaches as well), room `$50` 60 (20 squares of its diagonal rows), no other
+  room (the water rooms `$20`, `$21`, `$30`, `$31` and the cellar `$60` none). Each of them, CLIP from the grid point,
+  completes with one press and the sideways walk from T -+ 8 goes where Link on T can't. In `$50` (entered E, left
+  N) `MOVE W 32` twice stops Link on (`$B0`, `$8D`), G of the square above; `CLIP N` (14 frames) puts him at
+  (`$B0`, `$7D`) beyond the right diagonal, and `MOVE W 8`, `MOVE N 32`, `MOVE W 16` twice, `MOVE N 32` take him
+  to room `$40`: 318 frames from the room's first frame against 424 for the plain way round the diagonal's bottom
+  (14 MOVEs), monsters cleared. No skip is offered in a doorway (every door entry of levels 1-9 walked in frame by
+  frame) or with the ladder out (4:`$30`'s water row).
 
 `ClipSettings { trigger, correct_exits }` (`Session::set_clip_settings`; the env sets it every step) says how the
 policy reaches the macro, from the specialist's `clips.action`: `none` (no skip; CLIP masked), `kind` (CLIP legal in

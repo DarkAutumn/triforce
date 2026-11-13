@@ -22,7 +22,7 @@ use crate::change::Change;
 use crate::enums::{ActionKind, Direction};
 use crate::executor::Interrupt;
 use crate::game::{GameView, at_dungeon_bound};
-use crate::room::Room;
+use crate::room::{Room, WATER_TILE};
 use crate::vars::Var;
 use std::ops::AddAssign;
 
@@ -346,6 +346,12 @@ fn block_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     // A 16-pixel square: the grid point past T is stopped too; there the skip ends, inside the room bounds.
     let clipped = t + step;
     if !(UW_TOP..=UW_BOTTOM).contains(&clipped) || !blocked(clipped) {
+        return None;
+    }
+    // Blocks, statues and walls only, never water: the skip into water was not traced, and with the ladder the walk
+    // toward it lays the ladder (the ladder clip, a different recipe; mechanics.md "Ladder clip").
+    let water = |g: i32| Room::hotspot_tiles(x, g, direction).into_iter().any(|(c, r)| room.tile(c, r) == WATER_TILE);
+    if water(t) || water(clipped) {
         return None;
     }
     // G' (the back-off point) inside the room bounds; the run-up cells open both ways. Conservative: the macro can
@@ -709,6 +715,18 @@ mod tests {
     /// A level 1 room in play: floor inside the walls, 16-pixel squares with their top-left pixel at `squares`
     /// (dungeon tile rows start at Y $40) and a stairs square (tiles $70-$73) at `stairs`, Link at rest on (x, y).
     fn dungeon_room(squares: &[(usize, usize)], stairs: Option<(usize, usize)>, x: u8, y: u8) -> GameView {
+        dungeon_room_with(squares, &[], stairs, x, y, &[])
+    }
+
+    /// [`dungeon_room`] with water squares (tile $F4) at `water` and further RAM `vars`.
+    fn dungeon_room_with(
+        squares: &[(usize, usize)],
+        water: &[(usize, usize)],
+        stairs: Option<(usize, usize)>,
+        x: u8,
+        y: u8,
+        vars: &[(Var, u8)],
+    ) -> GameView {
         use crate::tables::{GRID_COLS, GRID_ROWS, RAM_SIZE, TILE_LAYOUT};
         let mut ram = [0u8; RAM_SIZE];
         let tile = |c: usize, r: usize| TILE_LAYOUT.0 + c * GRID_ROWS + r;
@@ -727,14 +745,36 @@ mod tests {
         for &at in squares {
             square(&mut ram, at, 0xB0, 0);
         }
+        for &at in water {
+            square(&mut ram, at, WATER_TILE, 0);
+        }
         if let Some(at) = stairs {
             square(&mut ram, at, 0x70, 1);
         }
-        let vars = [(Var::Level, 1), (Var::Location, 0x22), (Var::Mode, MODE_PLAY), (Var::LinkX, x), (Var::LinkY, y)];
-        for (var, value) in vars {
+        let base = [(Var::Level, 1), (Var::Location, 0x22), (Var::Mode, MODE_PLAY), (Var::LinkX, x), (Var::LinkY, y)];
+        for &(var, value) in base.iter().chain(vars) {
             ram[var.addr() as usize] = value;
         }
         GameView::new(&ram, 0, false, std::sync::Arc::new(crate::GameMap::builtin()))
+    }
+
+    /// The block clip goes into blocks, statues and walls, never into water: the pocket's square as water is not
+    /// offered, without the ladder (water a wall) or with it (one square of water, which the ladder crosses: not
+    /// even a stop). With a ladder out (`LadderSlot`) or in a doorway (`DoorwayDir`) nothing is offered.
+    #[test]
+    fn no_block_clip_into_water_with_a_ladder_out_or_from_a_doorway() {
+        let pocket = [(0x70, 0x90), (0x90, 0x90)];
+        let n = |view: &GameView| skip_target(view, Direction::N).map(|t| t.t);
+        let block = dungeon_room_with(&[(0x80, 0x80), (0x70, 0x90), (0x90, 0x90)], &[], None, 0x80, 0x95, &[]);
+        assert_eq!(n(&block), Some(0x85), "the pocket's block");
+        for ladder in [0, 1] {
+            let view = dungeon_room_with(&pocket, &[(0x80, 0x80)], None, 0x80, 0x95, &[(Var::StepLadder, ladder)]);
+            assert_eq!(n(&view), None, "water, ladder {ladder}");
+        }
+        for (var, value) in [(Var::LadderSlot, 0x0B), (Var::DoorwayDir, 8)] {
+            let view = dungeon_room_with(&[(0x80, 0x80), (0x70, 0x90), (0x90, 0x90)], &[], None, 0x80, 0x95, &[(var, value)]);
+            assert!(CARDINALS.into_iter().all(|d| !skip_available(&view, d)), "{var:?} {value}");
+        }
     }
 
     /// "Useful clips only": a block clip is offered where, from 8 pixels into the square, a sideways move enters a
