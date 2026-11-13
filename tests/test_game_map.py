@@ -12,22 +12,22 @@ from triforce.specialist import list_specialists
 
 
 def test_the_route_and_families():
-    # d2first is the route everything plays; d2first-d4 continues it through Dungeon 4 (scouted, not trained).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'd2first-d4'] and native.DEFAULT_ROUTE == 'd2first'
+    # d2first is the one route (Dungeon 4 merged in, Nov 12).
+    assert native.routes() == [native.DEFAULT_ROUTE] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
-def test_the_route_runs_from_the_start_to_the_d3_triforce():
+def test_the_route_runs_from_the_start_to_the_d4_triforce():
     steps = native.route_steps()
     assert [s['index'] for s in steps] == list(range(len(steps)))
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], first['specialist']) == (0, 0x77, 'start', 'ow-start')
-    assert (last['level'], last['room'], last['exit']) == (3, 0x3d, 'triforce')
+    assert (last['level'], last['room'], last['exit']) == (4, 0x03, 'triforce')
 
 
 def test_every_route_room_is_in_its_family():
     families = native.families()
-    for step in native.route_steps('d2first-d4'):
+    for step in native.route_steps('d2first'):
         room = (step['level'], step['room'], step['in_cave'])
         assert room in [tuple(r) for r in families[step['specialist']]], step
         assert native.specialist_for(room) == step['specialist']
@@ -48,7 +48,8 @@ def test_specialist_tags():
 def test_d2_then_the_heart_and_white_sword_then_the_d1_triforce():
     steps = native.route_steps()
     rooms = [(s['level'], s['room'], s['in_cave']) for s in steps]
-    assert [(s['level'], s['room']) for s in steps if s['exit'] == 'triforce'] == [(2, 0x0d), (1, 0x36), (3, 0x3d)]
+    assert [(s['level'], s['room']) for s in steps if s['exit'] == 'triforce'] == [(2, 0x0d), (1, 0x36), (3, 0x3d),
+                                                                                   (4, 0x03)]
     order = [rooms.index(r) for r in [(2, 0x0e, False), (0, 0x2c, True), (0, 0x0a, True), (1, 0x72, False),
                                       (1, 0x74, False), (1, 0x44, False)]]
     assert order == sorted(order)
@@ -78,7 +79,7 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
 def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
     steps = native.route_steps()
     start = next(i for i, s in enumerate(steps) if (s['level'], s['room']) == (3, 0x7c))
-    walk = [(s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in steps[start:]]
+    walk = [(s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in steps[start:start + 18]]
     assert walk == [(0x7c, False, 'S', 'W', 'zol'), (0x7b, False, 'E', 'N', 'zol'), (0x6b, False, 'S', 'N', 'zol'),
                     (0x5b, False, 'S', 'W', 'darknut'), (0x5a, False, 'E', 'W', 'trap-room'),
                     (0x59, False, 'E', 'N', 'darknut'), (0x49, False, 'S', 'S', 'zol'),
@@ -93,16 +94,16 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
         (0x5e, 'S', 'clear'), (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip'),
         (0x5b, 'W', 'if_bombs_below: 5')]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps if s['bomb_reserve'] is not None] == [
-        (3, 0x7c, 5)]
+        (3, 0x7c, 5), (4, 0x71, 2)]
     assert steps[start - 1]['room'] == 0x74 and steps[start - 1]['exit'] == 'cave'
     rooms_info = native.game_rooms()
     assert rooms_info[(3, 0x4c, False)]['requires_bombs'] and rooms_info[(3, 0x4d, False)]['requires_bombs']
 
 
-def test_d2first_d4_goes_on_by_raft_to_dungeon_4_and_follows_lees_directions():
-    base, steps = native.route_steps(), native.route_steps('d2first-d4')
-    assert steps[:len(base)] == base
-    tail = [(s['level'], s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in steps[len(base):]]
+def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_directions():
+    steps = native.route_steps('d2first')
+    after_d3 = next(i for i, s in enumerate(steps) if (s['level'], s['room']) == (3, 0x3d)) + 1
+    tail = [(s['level'], s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in steps[after_d3:]]
     # Back from Dungeon 3's mouth to the dock of 0x55, by raft to the island 0x45, into the dungeon.
     assert tail[:7] == [(0, 0x74, False, 'cave', 'W', 'ow-tektite'), (0, 0x73, False, 'E', 'N', 'ow-moblin'),
                         (0, 0x63, False, 'S', 'E', 'ow-moblin'), (0, 0x64, False, 'W', 'E', 'ow-octorok'),
@@ -119,8 +120,9 @@ def test_d2first_d4_goes_on_by_raft_to_dungeon_4_and_follows_lees_directions():
         (0x21, False, 'W', 'N', 'stalfos-keese-gel'), (0x11, False, 'S', 'E', 'trap-room'),
         (0x12, False, 'W', 'E', 'vire'), (0x13, False, 'W', 'N', 'boss-gleeok'), (0x03, False, 'S', 'triforce', 'vire')]
     assert all(level == 4 for level, *_ in tail[7:])
-    assert [(s['room'], s['waypoint']) for s in steps[len(base):] if s['waypoint']] == [(0x60, 'ladder')]
-    assert [(s['room'], s['treasure']) for s in steps[len(base):] if s['treasure']] == [(0x51, 'skip'), (0x40, 'skip')]
+    assert [(s['room'], s['waypoint']) for s in steps[after_d3:] if s['waypoint']] == [(0x60, 'ladder')]
+    # Both keys in the open (0x51, 0x40) are taken (Lee, Nov 12): no treasure rule in Dungeon 4.
+    assert [(s['room'], s['treasure']) for s in steps[after_d3:] if s['treasure']] == []
     rooms = native.game_rooms()
     assert rooms[(4, 0x32, False)]['name'] == 'Breakfast Room' and rooms[(4, 0x32, False)]['cave'] == (4, 0x60, True)
     assert rooms[(4, 0x60, True)]['treasure'] == 'ladder' and rooms[(4, 0x13, False)]['treasure'] == 'heart-container'

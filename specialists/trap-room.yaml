@@ -1,6 +1,6 @@
 name: trap-room
 rooms: ['(1, 0x22)', '(3, 0x5a)', '(3, 0x4c)', '(4, 0x11)']
-start_states: ['1_22*_[0-9]', '3_5a*_[0-9]', '3_4c*_[0-9]']
+start_states: ['1_22*_[0-9]', '3_5a*_[0-9]', '3_4c*_[0-9]', '4_11*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as the dungeon families (round 10 §8): dropped items are shaping targets
@@ -19,7 +19,6 @@ notes: >-
   Dungeon 3 (Nov 9, docs/routes/d3.md): 0x5a (4 Blue Keese, the compass) crossed E to W and back W to E; 0x4c
   (2 Zols, the map) from W: bomb the E wall (the objective points at the spot to bomb it from, facing the wall 16 px
   short of its hotspot, out of the right-hand traps' column) and go through into Manhandla's room. Bombs are on for
-  the family because of 0x4c (a cheated bomb if Link has none). Dungeon 4 scouting (Nov 11): the rupee room 0x11 (no
+  the family because of 0x4c (a cheated bomb if Link has none). Dungeon 4 (Nov 11-12): the rupee room 0x11 (no
   monsters and no traps, ten rupees, four bombable walls: in through the S wall, bomb the E wall into the Vire room
-  0x12) is listed in `rooms` for the route d2first-d4 as the nearest thing to it, a room Link crosses through a bomb
-  wall; it has no `start_states` yet. Lee may want it elsewhere.
+  0x12), the nearest thing to it, a room Link crosses through a bomb wall (Lee, Nov 12: it stays here).

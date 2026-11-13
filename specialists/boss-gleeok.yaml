@@ -1,20 +1,20 @@
 name: boss-gleeok
 rooms: ['(4, 0x13)']
-start_states: ['d4/4_13*_[0-9]']   # triforce/states/d4 (scouting states)
+start_states: ['4_13*_[0-9]']
 success: [exit-correct]                    # kill, take the heart container, leave N to the triforce room 0x03
 reward_profile: default
-reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
+reward: {pbrs: false, item_targets: true}  # Lee, Nov 12 (round 20): no PBRS; it punished dodging the flying heads and fireballs
 obs: {objective: true, target: true}       # schema 2
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
-items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
-curriculum: {enabled: true}             # trajectories/boss-gleeok (Go-Explore): not explored yet
+ram_randomization: {hp: [0.5, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # Lee, Nov 12: partial starts 3.5-7 hearts (at 1-3 hearts r70 never won)
+items: {bombs: never}                     # only the sword hurts Gleeok (invincibility mask $FE, zelda-asm/enemies.md)
+curriculum: {enabled: true}             # trajectories/boss-gleeok (Go-Explore paths per start state)
 one_room: true
 max_steps: 1000
-trainable: false                        # Dungeon 4 is scouted, not trained (Lee, Nov 11): set true to train it
 warm_start: null
 notes: >-
-  Gleeok (Dungeon 4 scouting, Nov 11; not trained): the two-headed one (object $43), a body at the top of the room
-  with two necks; only the heads take damage, a head that is cut off flies around the room and can't be hurt, and
-  both spit fireballs. Entered from W through 0x12's shutter (opened by its push block); the N and W shutters open
-  and the heart container appears when he dies; success is the N exit to the triforce room (the heart first).
-  Copied from boss-manhandla without the bombs.
+  Gleeok (Dungeon 4, Nov 11-12): the two-headed one (object $43), a body at the top of the room with two necks; only
+  the heads take damage (they share one HP byte, slot 5's), a head that is cut off flies around the room and can't
+  be hurt, and both spit fireballs. The env observes the attached heads as synthetic enemies (id $42 in slots 2+n)
+  and treats the body and the flying heads as hazards: only head damage pays. Entered from W through 0x12's shutter
+  (opened by its push block); the N and W shutters open and the heart container appears when he dies; success is
+  the N exit to the triforce room (the heart first). Copied from boss-manhandla without the bombs.

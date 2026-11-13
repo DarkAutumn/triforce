@@ -1168,22 +1168,27 @@ mod tests {
     }
 
     /// d2first: game start, D2 (its triforce), the 0x2c heart cave (a `heart` waypoint after D2, before D1), the
-    /// white sword at 0x0a, D1 (the bow cellar) to its triforce, then Dungeon 3 (the raft cellar) ending on its
-    /// triforce.  Every step leaves through an exit game.yaml has (caves and triforces aside), into the next step's
-    /// room; a triforce warps Link out to its level's entrance.
+    /// white sword at 0x0a, D1 (the bow cellar) to its triforce, Dungeon 3 (the raft cellar) to its triforce, then by
+    /// raft to Dungeon 4 (the ladder cellar) ending on its triforce.  Every step leaves through an exit game.yaml has
+    /// (caves and triforces aside), into the next step's room; a triforce warps Link out to its level's entrance.
     #[test]
     fn d2first_route_connects() {
         let map = GameMap::builtin();
         let steps = &map.routes["d2first"];
         assert_eq!((steps[0].entry.as_str(), steps[0].location()), ("start", START));
         let last = steps.last().unwrap();
-        assert_eq!((last.location(), last.exit.as_str()), (loc(3, 0x3d), "triforce"));
+        assert_eq!((last.location(), last.exit.as_str()), (loc(4, 0x03), "triforce"));
         let triforces: Vec<u8> = steps.iter().filter(|s| s.exit == "triforce").map(|s| s.level).collect();
-        assert_eq!(triforces, [2, 1, 3]);
+        assert_eq!(triforces, [2, 1, 3, 4]);
         for pair in steps.windows(2) {
             let (step, next) = (&pair[0], &pair[1]);
             if step.exit == "triforce" {
-                let entrance = if step.level == 2 { 0x3c } else { 0x37 };
+                let entrance = match step.level {
+                    2 => 0x3c,
+                    1 => 0x37,
+                    3 => 0x74,
+                    level => panic!("no step after the level {level} triforce"),
+                };
                 assert_eq!((next.location(), next.entry.as_str()), (loc(0, entrance), "cave"));
                 continue;
             }
@@ -1196,7 +1201,12 @@ mod tests {
             .collect();
         assert_eq!(
             waypoints,
-            [(L::new(0, 0x2c, true), "heart"), (L::new(1, 0x7f, true), "bow"), (L::new(3, 0x0f, true), "raft")]
+            [
+                (L::new(0, 0x2c, true), "heart"),
+                (L::new(1, 0x7f, true), "bow"),
+                (L::new(3, 0x0f, true), "raft"),
+                (L::new(4, 0x60, true), "ladder")
+            ]
         );
         assert!(!steps.iter().any(|s| s.location() == loc(0, 0x39) || s.location() == loc(2, 0x4f)));
         let retreats: Vec<_> = steps.iter().filter(|s| s.retreat.is_some()).collect();
@@ -1221,7 +1231,11 @@ mod tests {
             ]
         );
         let reserves: Vec<_> = steps.iter().filter_map(|s| Some((s.location(), s.bomb_reserve?))).collect();
-        assert_eq!(reserves, [(L::new(3, 0x7c, false), 5)], "Dungeon 3 keeps 5 bombs from its entrance");
+        assert_eq!(
+            reserves,
+            [(L::new(3, 0x7c, false), 5), (L::new(4, 0x71, false), 2)],
+            "Dungeon 3 keeps 5 bombs from its entrance, Dungeon 4 2 (its two bomb walls)"
+        );
     }
 
     /// routes.yaml `treasure:` parses `skip`, `take`, `clear` and `{if_bombs_below: N}`; anything else is a load error.
@@ -1404,20 +1418,20 @@ mod tests {
         assert!(with_key == set(&[loc(1, 0x63)]) && !without.contains(&loc(1, 0x63)));
     }
 
-    /// Only the routes' rooms (the bow detour included) and the alternate have a specialist.
+    /// Only the route's rooms (the bow detour included) and the alternate have a specialist.
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d2first-d4"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE]);
         let mut route: BTreeSet<L> = map.routes.values().flatten().map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
         assert_eq!(tagged, route);
-        // The default route's own rooms: everything but the island of Dungeon 4 and the dungeon.
+        // Beyond the route's own rooms: only the alternate.
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
-        let beyond: Vec<L> = route.difference(&default).copied().filter(|l| l.level != 4).collect();
-        assert_eq!(beyond, [loc(0, 0x45), loc(0, 0x78)]);
+        let beyond: Vec<L> = route.difference(&default).copied().collect();
+        assert_eq!(beyond, [loc(0, 0x78)]);
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
@@ -1712,32 +1726,9 @@ mod tests {
         assert_eq!(room(0x03).treasure.as_deref(), Some("triforce"));
     }
 
-    /// d2first-d4 is d2first and then the way to Dungeon 4 and through it; every step leaves through a real exit.
+    /// `extends` needs a route above it and a `steps` list; a typo is a load error.
     #[test]
-    fn d2first_d4_extends_d2first() {
-        let map = GameMap::builtin();
-        let (base, steps) = (&map.routes["d2first"], &map.routes["d2first-d4"]);
-        assert_eq!(&steps[..base.len()], &base[..]);
-        assert_eq!(steps.len(), base.len() + 25);
-        let last = steps.last().unwrap();
-        assert_eq!((last.location(), last.exit.as_str()), (loc(4, 0x03), "triforce"));
-        for pair in steps[base.len() - 1..].windows(2) {
-            let (step, next) = (&pair[0], &pair[1]);
-            if step.exit == "triforce" {
-                // The Dungeon 3 triforce warps Link to its entrance room.
-                assert_eq!((next.location(), next.entry.as_str()), (loc(0, 0x74), "cave"));
-                continue;
-            }
-            let exit = &map.get(step.location()).unwrap().exits[&step.exit];
-            assert_eq!(exit.destination, next.location(), "{step:?} -> {next:?}");
-        }
-        let tail = &steps[base.len()..];
-        let waypoints: Vec<_> = tail.iter().filter_map(|s| Some((s.location(), s.waypoint.as_deref()?))).collect();
-        assert_eq!(waypoints, [(L::new(4, 0x60, true), "ladder")]);
-        let skipped: Vec<_> = tail.iter().filter(|s| s.treasure == TreasureRule::Skip).map(|s| s.room).collect();
-        assert_eq!(skipped, [0x51, 0x40]);
-
-        // `extends` needs a route above it and a `steps` list; a typo is a load error.
+    fn route_extends_another_route() {
         let load = |text: &str| GameMap::from_yaml(GAME_YAML, text).map(|m| m.routes["b"].len());
         let a = "a:\n- {level: 0, room: '0x77', entry: start, exit: N}\n";
         let step = "{level: 0, room: '0x67', entry: S, exit: E}";

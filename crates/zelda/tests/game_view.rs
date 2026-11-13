@@ -96,7 +96,8 @@ fn object_slots_decode_into_enemies_items_and_projectiles_by_distance() {
     assert_eq!(v.link.direction, Direction::N);
 }
 
-/// F067: every object type's class follows asm:Obj_Update_JumpTable (types >= $6A are cave people).
+/// F067: every object type's class follows asm:Obj_Update_JumpTable (types >= $6A are cave people); Gleeok's flying
+/// head ($46), which never dies (asm:Gleeok_UpdateFlyingHead), is a hazard.
 #[test]
 fn object_classes_follow_the_jump_table() {
     use ObjectClass::*;
@@ -118,7 +119,7 @@ fn object_classes_follow_the_jump_table() {
         ("Digdogger", Monster), ("Lamnola", Monster), ("Lamnola", Monster), ("Manhandla", Monster),
         ("Aquamentus", Monster), ("Ganon", Monster), ("GuardFire", Monster), ("StandingFire", Hazard),
         ("Moldorm", Monster), ("Gleeok", Monster), ("Gleeok", Monster), ("Gleeok", Monster), ("Gleeok", Monster),
-        ("GleeokHead", Monster), ("Patra", Monster), ("Patra", Monster), ("Trap", Hazard), ("Trap", Hazard),
+        ("GleeokHead", Hazard), ("Patra", Monster), ("Patra", Monster), ("Trap", Hazard), ("Trap", Hazard),
         ("UnderworldPerson", Person), ("UnderworldPerson", Person), ("UnderworldPerson", Person),
         ("UnderworldPerson", Person), ("UnderworldPerson", Person), ("UnderworldPerson", Person),
         ("UnderworldPersonLifeOrMoney", Person), ("UnderworldPerson", Person), ("MonsterShot", Shot),
@@ -384,21 +385,27 @@ fn weapon_directions_respect_screen_bounds() {
     };
     use Direction::*;
     assert_eq!(dirs(1, 120, 141), (vec![E, W, N, S], vec![E, W, N, S]));
-    // Dungeon (measured, N006): A on E/W x 23..=216, N y 84..=197, S y 85..=197; B also E x <= 208, W x >= 31,
-    // S y <= 189.
-    assert_eq!(dirs(1, 23, 141).0, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 22, 141), (vec![N, S], vec![N, S]));
-    assert_eq!(dirs(1, 30, 141).1, vec![E, N, S], "too close to the west wall to throw west");
-    assert_eq!(dirs(1, 31, 141).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 209, 141).1, vec![W, N, S]);
-    assert_eq!(dirs(1, 216, 141).0, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 217, 141).0, vec![N, S]);
-    assert_eq!(dirs(1, 120, 83), (vec![E, W], vec![E, W]));
-    assert_eq!(dirs(1, 120, 84), (vec![E, W, N], vec![E, W, N]));
-    assert_eq!(dirs(1, 120, 85).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 120, 190).1, vec![E, W, N]);
-    assert_eq!(dirs(1, 120, 197).0, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 120, 198), (vec![E, W], vec![E, W]));
+    // Dungeon (measured, N006, with the facing poked): A on E/W x 23..=216, N y 84..=197, S y 85..=197; B also
+    // E x <= 208, W x >= 31, S y <= 189. Outside the room's bounds (x < $21 or > $D0, y < $5E or > $BD) Link is
+    // in a doorway, where the game never turns him sideways (measured: a perpendicular press does nothing, or
+    // walks him back into the room first), so only the doorway's axis is left there.
+    assert_eq!(dirs(1, 23, 141).0, vec![E, W]);
+    assert_eq!(dirs(1, 22, 141), (vec![], vec![]));
+    assert_eq!(dirs(1, 30, 141).1, vec![E], "too close to the west wall to throw west");
+    assert_eq!(dirs(1, 31, 141).1, vec![E, W]);
+    assert_eq!(dirs(1, 33, 141).1, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 208, 141).1, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 209, 141).1, vec![W]);
+    assert_eq!(dirs(1, 216, 141).0, vec![E, W]);
+    assert_eq!(dirs(1, 217, 141).0, vec![]);
+    assert_eq!(dirs(1, 120, 83), (vec![], vec![]));
+    assert_eq!(dirs(1, 120, 84), (vec![N], vec![N]));
+    assert_eq!(dirs(1, 120, 85).1, vec![N, S]);
+    assert_eq!(dirs(1, 120, 94).1, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 120, 189).1, vec![E, W, N, S]);
+    assert_eq!(dirs(1, 120, 190).1, vec![N]);
+    assert_eq!(dirs(1, 120, 197).0, vec![N, S]);
+    assert_eq!(dirs(1, 120, 198), (vec![], vec![]));
     // Overworld: A on x 7..=232, y 69..=213; B also N y >= 84.
     assert_eq!(dirs(0, 7, 69), (vec![E, W, N, S], vec![E, S]));
     assert_eq!(dirs(0, 6, 68), (vec![], vec![]));

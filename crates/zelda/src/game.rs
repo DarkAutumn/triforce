@@ -45,6 +45,37 @@ const UW_BOUND_R: i32 = 0xD0;
 const UW_BOUND_T: i32 = 0x5E;
 const UW_BOUND_B: i32 = 0xBD;
 
+/// asm:GleeokDeadNeckMask: bit n set once neck n's head is cut off.
+pub const GLEEOK_DEAD_NECK_MASK: usize = 0x511;
+/// Each neck's segment X / Y arrays (asm:Gleeok_NeckXAddrsLo/Hi, asm:Gleeok_NeckYAddrsLo/Hi): index 0 is the base
+/// (slot 1), index 4 the head (slot 5) while the neck is worked on.
+pub const GLEEOK_NECK_X: [usize; 4] = [0x438, 0x452, 0x46C, 0x395];
+pub const GLEEOK_NECK_Y: [usize; 4] = [0x445, 0x45F, 0x479, 0x3BD];
+const GLEEOK_HEAD_SEGMENT: usize = 4;
+/// The attached heads share slot 5's HP byte and invincibility timer (asm:Gleeok_Update@LoadNeckBytes).
+pub const GLEEOK_HEAD_SLOT: usize = 5;
+
+/// The attached heads of a Gleeok in slot 1 (types $42-$45, `type - $41` necks; zelda-asm `enemies.md` `# Gleeok`):
+/// (neck, head position) for every neck whose head is not cut off.  Empty without a Gleeok or while he dies.
+pub fn gleeok_heads(ram: &[u8]) -> Vec<(usize, Position)> {
+    let id = ram[tables::OBJ_ID.0 + 1];
+    let dying = (16..=19).contains(&ram[tables::OBJ_SPAWN_STATE.0 + 1]);
+    if !(enemy::GLEEOK..=enemy::GLEEOK4).contains(&id) || dying {
+        return Vec::new();
+    }
+    let dead = ram[GLEEOK_DEAD_NECK_MASK];
+    (0..(id - 0x41) as usize)
+        .filter(|n| dead & (1 << n) == 0)
+        .map(|n| {
+            let (x, y) = (
+                ram[GLEEOK_NECK_X[n] + GLEEOK_HEAD_SEGMENT],
+                ram[GLEEOK_NECK_Y[n] + GLEEOK_HEAD_SEGMENT],
+            );
+            (n, Position::new(x as i32, y as i32))
+        })
+        .collect()
+}
+
 /// Tiles an object of `dims` at `position` overlaps with Link's top-left tile (`link_overlap_tiles`).
 pub fn overlap_tiles(position: Position, dims: (i32, i32)) -> Vec<Tile> {
     let (tx, ty) = position.tile();
@@ -328,7 +359,14 @@ impl GameView {
             let id = table(&ram, tables::OBJ_ID, index);
             let position = read_position(&ram, index);
             let (distance, vector) = distance_and_vector(position, link.position);
-            match ObjectClass::of(id) {
+            // Gleeok's neck base (slot 1) hurts and can't be killed: a hazard; his heads are added below.
+            let class = match ObjectClass::of(id) {
+                ObjectClass::Monster if index == 1 && (enemy::GLEEOK..=enemy::GLEEOK4).contains(&id) => {
+                    ObjectClass::Hazard
+                }
+                class => class,
+            };
+            match class {
                 ObjectClass::Item => items.push(Item {
                     index: index as i8,
                     id: table(&ram, tables::OBJ_STATUS, index) as i16,
@@ -367,6 +405,24 @@ impl GameView {
                 }),
                 _ => {}
             }
+        }
+        // Gleeok's attached heads aren't objects (slots 2-6 are type 0): one enemy per living neck, in slot 2 + neck,
+        // all sharing slot 5's HP.
+        let head_health = (table(&ram, tables::OBJ_HEALTH, GLEEOK_HEAD_SLOT) >> 4) as i32;
+        for (neck, position) in gleeok_heads(&ram[..]) {
+            let (distance, vector) = distance_and_vector(position, link.position);
+            enemies.push(Enemy {
+                index: 2 + neck as u8,
+                id: enemy::GLEEOK_NECK_HEAD,
+                position,
+                direction: Direction::None,
+                health: head_health,
+                stun_timer: 0,
+                spawn_state: 0,
+                status: 0,
+                distance,
+                vector,
+            });
         }
         by_distance(&mut enemies, |e| e.distance);
         by_distance(&mut items, |e| e.distance);
@@ -455,10 +511,10 @@ impl GameView {
         (&self.ram[offset..offset + len]).try_into().unwrap()
     }
 
-    /// The room model built from the current tiles.
+    /// The room model built from the current tiles (with the ladder's crossings while Link holds it).
     pub fn room(&self) -> &Room {
         self.room
-            .get_or_init(|| Room::new(self.full_location(), self.current_tiles()))
+            .get_or_init(|| Room::new(self.full_location(), self.current_tiles(), self.ladder()))
     }
 
     // --- objects ---
@@ -866,7 +922,8 @@ impl GameView {
 
     /// Directions the sword (A) can swing: Link_FilterInput's Link_BorderBounds on the facing's axis, as the game
     /// applies them (asm:Link_BorderBounds; measured by pressing A on every coordinate, N006). Inclusive ranges:
-    /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.
+    /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.  In an
+    /// underworld doorway only its own axis (the game doesn't turn Link sideways there).
     pub fn sword_directions(&self) -> Vec<Direction> {
         self.attack_directions(false)
     }
@@ -888,10 +945,21 @@ impl GameView {
             (Direction::N, y, if b_item { n_lo.max(84) } else { n_lo }, y_hi),
             (Direction::S, y, s_lo, if b_item { 189 } else { y_hi }),
         ];
+        // In an underworld doorway (outside the room's bounds) the game never turns Link sideways: a perpendicular
+        // press first walks him back into the room (measured in 4:0x11's S doorway). The executor turns him by
+        // writing ObjDir, which the game then follows without a tile test (asm:Walker_Move): through the wall into
+        // the next room. So in a doorway only attacks along its axis.
+        let underworld_room = !ow && !self.full_location().in_cave;
+        let vertical_doorway = underworld_room && !(UW_BOUND_T..=UW_BOUND_B).contains(&y);
+        let horizontal_doorway = underworld_room && !(UW_BOUND_L..=UW_BOUND_R).contains(&x);
         ranges
             .into_iter()
             .filter(|&(_, v, lo, hi)| (lo..=hi).contains(&v))
             .map(|(d, ..)| d)
+            .filter(|d| {
+                let sideways = if matches!(d, Direction::N | Direction::S) { horizontal_doorway } else { vertical_doorway };
+                !sideways
+            })
             .collect()
     }
 

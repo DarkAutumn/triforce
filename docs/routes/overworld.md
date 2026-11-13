@@ -69,7 +69,7 @@ Existing entries are kept verbatim (data, comments, tags); new keys are appended
 - **Raft:** docks in 0x3f (x = $60) and 0x55 (x = $80) sail N to 0x2f and 0x45 with the raft (`asm:Dock_Update`;
   emulator: from the dock with the raft, 0x55 → 0x45 and 0x3f → 0x2f). Walking S off the piers of 0x2f/0x45 lands Link
   in the water at the top of 0x3f/0x55 without the raft, so those are `raft_exits` only. 0x2f has no walkable exit.
-  The route `d2first-d4` sails 0x55 → 0x45 (`docs/routes/d4.md`).
+  The route (`d2first`, after the D3 triforce) sails 0x55 → 0x45 (`docs/routes/d4.md`).
 - **Wrap-around:** the game doesn't stop E/W at the map edge (E from column 15 is the next row's column 0), but no
   column-0/15 room has an open outer edge.
 

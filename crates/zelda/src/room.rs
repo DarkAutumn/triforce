@@ -29,6 +29,12 @@ pub const OW_WALKABLE_OVERRIDES: [u8; 9] = [0x8D, 0x91, 0x9C, 0xAC, 0xAD, 0xCC, 
 /// Cave entry tiles the agent may walk into (asm:Warp_CheckUnderLink starts the cave from the tile under Link).
 const OW_CAVE_ENTRY_TILES: [u8; 1] = [TOP_CAVE_TILE];
 
+/// Underworld water (asm:RoomLayout_LayOutUWFloor's `W` square): a wall, but for the ladder.
+pub const WATER_TILE: u8 = 0xF4;
+/// `Room::ladder_axes` bits: a water tile the ladder crosses vertically / horizontally.
+pub const LADDER_V: u8 = 1;
+pub const LADDER_H: u8 = 2;
+
 /// Locked door tiles $98-$A7 (N, S, W, E).
 pub fn is_door_tile(tile: u8) -> bool {
     (0x98..0xA8).contains(&tile)
@@ -138,6 +144,8 @@ pub struct Room {
     threshold: u8,
     corridor: [bool; CELLS],
     loaded: bool,
+    /// Per tile, the axes (`LADDER_V`, `LADDER_H`) along which Link holding the ladder crosses this water tile.
+    ladder_axes: [u8; CELLS],
     pub exits: Exits,
     pub cave_tile: Option<Tile>,
 }
@@ -151,7 +159,8 @@ fn in_bounds(tc: i32, tr: i32) -> bool {
 }
 
 impl Room {
-    pub fn new(location: MapLocation, tiles: &Tiles) -> Room {
+    /// `ladder`: Link holds the ladder (`GameView::ladder`); in an underworld room its crossings become passable.
+    pub fn new(location: MapLocation, tiles: &Tiles, ladder: bool) -> Room {
         let overworld = location.level == 0;
         let threshold = if overworld {
             OW_FIRST_UNWALKABLE
@@ -165,6 +174,7 @@ impl Room {
             threshold,
             corridor: [false; CELLS],
             loaded: false,
+            ladder_axes: [0; CELLS],
             exits: Exits::default(),
             cave_tile: None,
         };
@@ -173,6 +183,10 @@ impl Room {
             .any(|&t| t < threshold || (overworld && ow_override(t)));
         if !overworld && !location.in_cave {
             room.compute_corridor_tiles();
+        }
+        // The overworld ladder rooms (asm:Ladder_RoomIdsOW) are not modelled: the route never enters them with it.
+        if ladder && !overworld && !location.in_cave {
+            room.compute_ladder_crossings();
         }
         room.exits = room.exit_tiles();
         // Underworld rooms have no cave mouths ($F3 is a cellar's background).
@@ -212,7 +226,8 @@ impl Room {
         &self.tiles
     }
 
-    /// NES walkability of a tile; off-screen is walkable (a room transition), as are doorway corridors.
+    /// NES walkability of a tile; off-screen is walkable (a room transition), as are doorway corridors.  The
+    /// terrain test: ladder crossings are not walkable here (`passable` adds them).
     pub fn is_tile_walkable(&self, tc: i32, tr: i32) -> bool {
         if !in_bounds(tc, tr) {
             return true;
@@ -227,12 +242,56 @@ impl Room {
         value < self.threshold
     }
 
+    /// Walkable, or a ladder crossing along `axis` (`LADDER_V` or `LADDER_H`).
+    fn passable(&self, tc: i32, tr: i32, axis: u8) -> bool {
+        self.is_tile_walkable(tc, tr) || (in_bounds(tc, tr) && self.ladder_axes[index(tc, tr)] & axis != 0)
+    }
+
+    /// Marks the water the ladder crosses (asm:Link_EndMoveAndAnimate@CheckLadder lays it on the one water square
+    /// ahead; asm:Ladder_CheckAndDraw lets Link go on only along it and only onto a walkable tile): a run of water
+    /// tiles exactly one square (2 tiles) long in a column (row) with a walkable tile at both ends is crossed
+    /// vertically (horizontally).  A strip two squares wide can't be crossed.
+    fn compute_ladder_crossings(&mut self) {
+        let water = |room: &Room, c: i32, r: i32| in_bounds(c, r) && room.tile(c, r) == WATER_TILE;
+        let mut marks = Vec::new();
+        for (axis, (dc, dr), lines, length) in [(LADDER_V, (0, 1), COLS, ROWS), (LADDER_H, (1, 0), ROWS, COLS)] {
+            for line in 0..lines {
+                let at = |k: i32| if axis == LADDER_V { (line, k) } else { (k, line) };
+                let mut k = 0;
+                while k < length {
+                    let (c, r) = at(k);
+                    if !water(self, c, r) {
+                        k += 1;
+                        continue;
+                    }
+                    let start = k;
+                    while k < length && water(self, at(k).0, at(k).1) {
+                        k += 1;
+                    }
+                    let (before, after) = (at(start - 1), at(k));
+                    if k - start == 2
+                        && in_bounds(before.0, before.1)
+                        && in_bounds(after.0, after.1)
+                        && self.is_tile_walkable(before.0, before.1)
+                        && self.is_tile_walkable(after.0, after.1)
+                    {
+                        marks.push((c, r, axis));
+                        marks.push((c + dc, r + dr, axis));
+                    }
+                }
+            }
+        }
+        for (c, r, axis) in marks {
+            self.ladder_axes[index(c, r)] |= axis;
+        }
+    }
+
     /// Whether Link at pixel (px, py) can move in `direction` (exact NES hotspots).
     pub fn can_link_move_from(&self, px: i32, py: i32, direction: Direction) -> bool {
         let feet_row = (py - 53).div_euclid(8);
         match direction {
-            Direction::W => self.is_tile_walkable((px - 8).div_euclid(8), feet_row),
-            Direction::E => self.is_tile_walkable((px + 16).div_euclid(8), feet_row),
+            Direction::W => self.passable((px - 8).div_euclid(8), feet_row, LADDER_H),
+            Direction::E => self.passable((px + 16).div_euclid(8), feet_row, LADDER_H),
             Direction::N => self.is_vertical_walkable(px.div_euclid(8), (py - 61).div_euclid(8)),
             Direction::S => self.is_vertical_walkable(px.div_euclid(8), (py - 45).div_euclid(8)),
             _ => false,
@@ -253,7 +312,8 @@ impl Room {
         if self.overworld && ow_override(value) {
             return true;
         }
-        value < self.threshold
+        let passable = |c: i32| self.tile(c, row) < self.threshold || self.ladder_axes[index(c, row)] & LADDER_V != 0;
+        passable(col) && passable(col + 1)
     }
 
     /// The tile(s) the NES collision check reads when Link at (px, py) moves in `direction`.
@@ -287,8 +347,8 @@ impl Room {
     /// Tile-space movement check used by the wavefront (Link's top-left tile at (tc, tr)).
     pub fn can_move(&self, tc: i32, tr: i32, direction: Direction) -> bool {
         match direction {
-            Direction::E => tr + 1 < ROWS && self.is_tile_walkable(tc + 2, tr + 1),
-            Direction::W => tr + 1 < ROWS && self.is_tile_walkable(tc - 1, tr + 1),
+            Direction::E => tr + 1 < ROWS && self.passable(tc + 2, tr + 1, LADDER_H),
+            Direction::W => tr + 1 < ROWS && self.passable(tc - 1, tr + 1, LADDER_H),
             Direction::S => tc + 1 < COLS && self.check_vertical(tc, tr + 2),
             Direction::N => tc + 1 < COLS && self.check_vertical(tc, tr),
             _ => false,
@@ -296,7 +356,7 @@ impl Room {
     }
 
     fn check_vertical(&self, tc: i32, tr: i32) -> bool {
-        self.is_tile_walkable(tc, tr) && self.is_tile_walkable(tc + 1, tr)
+        self.passable(tc, tr, LADDER_V) && self.passable(tc + 1, tr, LADDER_V)
     }
 
     fn compute_corridor_tiles(&mut self) {
@@ -573,5 +633,64 @@ impl Wavefront {
     /// Distance of `tile`, 1000 when unreachable (`Wavefront[tile]`).
     pub fn distance(&self, tile: Tile) -> i32 {
         self.get(tile).unwrap_or(1000)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FLOOR: u8 = 0x74;
+
+    /// A floor-only 4:0x30 with water on `water` tiles (column, row).
+    fn room(water: impl IntoIterator<Item = Tile>, ladder: bool) -> Room {
+        let mut tiles = [FLOOR; CELLS];
+        for (c, r) in water {
+            tiles[index(c, r)] = WATER_TILE;
+        }
+        Room::new(MapLocation::new(4, 0x30, false), &tiles, ladder)
+    }
+
+    fn rows(rows: std::ops::Range<i32>) -> Vec<Tile> {
+        (0..COLS).flat_map(|c| rows.clone().map(move |r| (c, r))).collect()
+    }
+
+    /// One square of water from wall to wall (0x30's row 2): crossed N with the ladder, a wall without it; on the
+    /// ladder Link can't turn.
+    #[test]
+    fn the_ladder_crosses_a_water_row_one_square_tall() {
+        let (with, without) = (room(rows(8..10), true), room(rows(8..10), false));
+        assert!(with.can_move(15, 9, Direction::N) && with.can_move(15, 8, Direction::N));
+        assert!(!without.can_move(15, 9, Direction::N));
+        assert!(!with.can_move(15, 8, Direction::E) && !with.can_move(15, 8, Direction::W));
+        let north = with.wavefront(&[Target::Tile((15, 2))], &[], &[]);
+        assert!(north.get((15, 14)).is_some());
+        assert!(without.wavefront(&[Target::Tile((15, 2))], &[], &[]).get((15, 14)).is_none());
+        // Pixel moves: Link stops at Y = $85 without the ladder, goes on with it (level-4.md).
+        assert!(!without.can_link_move_from(0x78, 0x85, Direction::N));
+        assert!(with.can_link_move_from(0x78, 0x85, Direction::N) && with.can_link_move_from(0x78, 0x7D, Direction::N));
+        // On the ladder (feet over the water at Y = $7D) Link can't turn.
+        assert!(!with.can_link_move_from(0x78, 0x7D, Direction::E) && !with.can_link_move_from(0x78, 0x7D, Direction::W));
+    }
+
+    /// Two squares of water: the ladder can't cross it (0x21's island).
+    #[test]
+    fn the_ladder_does_not_cross_two_squares() {
+        let wide = room(rows(8..12), true);
+        assert!((8..12).all(|r| !wide.can_move(15, r, Direction::N)));
+        assert!(wide.wavefront(&[Target::Tile((15, 2))], &[], &[]).get((15, 16)).is_none());
+    }
+
+    /// A single water square in the floor (0x31's door line): crossed E and W with the ladder, not without.
+    #[test]
+    fn the_ladder_crosses_a_single_square_sideways() {
+        let square = [(10, 9), (11, 9), (10, 10), (11, 10)];
+        let (with, without) = (room(square, true), room(square, false));
+        assert!(with.can_move(8, 8, Direction::E) && with.can_move(12, 8, Direction::W));
+        assert!(!without.can_move(8, 8, Direction::E) && !without.can_move(12, 8, Direction::W));
+        // Overworld rooms and cellars keep water a wall.
+        let mut tiles = [FLOOR; CELLS];
+        square.iter().for_each(|&(c, r)| tiles[index(c, r)] = WATER_TILE);
+        assert!(!Room::new(MapLocation::new(4, 0x60, true), &tiles, true).can_move(8, 8, Direction::E));
     }
 }

@@ -559,7 +559,11 @@ impl GameplayCritic {
             self.pbrs_tile = None;
             return;
         }
-        if !change.items_gained.is_empty() || curr.room_kills() > prev.room_kills() {
+        // A kill counts even when the game's RoomKills ($34F) doesn't (a Vire's Red Keese, Gleeok's heads).
+        if !change.items_gained.is_empty()
+            || curr.room_kills() > prev.room_kills()
+            || !change.observed.enemies_killed.is_empty()
+        {
             self.room_steps = 0;
         }
         self.room_steps += 1;
