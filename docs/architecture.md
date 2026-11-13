@@ -129,6 +129,10 @@ overworld (1 or 2 steps among boomerang, bombs and arrows). The game is paused t
 the frame counter and sound run), the sub-screen is always closed and the game back in mode 5 when the action
 goes on.
 
+A returning boomerang caught on a turn frame puts Link in the catch pose (`$20` -> `$21` -> `$31` -> 0), during which
+the game reads neither A nor B (asm:Link_HandleInput); the executor waits it out with nothing pressed (at most 32
+frames) so the press that follows is a new one.
+
 `crates/zelda/tests/attacks.rs` checks it in the real game: every offered strike over ten rooms' start states and
 the positions of a walk through their doorways is made with no memory write and no room change, and no refused
 one is made by any hold-then-press sequence but where a walk out of a border band would be needed.

@@ -375,41 +375,60 @@ fn modes_decide_cave_and_game_over() {
 
 #[test]
 fn weapon_directions_respect_screen_bounds() {
-    let dirs = |level: u8, x: u8, y: u8| {
-        let mut r = Ram::new();
-        r.set(Var::Level, level)
-            .set(Var::LinkX, x)
-            .set(Var::LinkY, y);
-        let v = r.view();
-        (v.sword_directions(), v.attack_directions(zelda::ActionKind::Bomb))
-    };
+    use zelda::attack::{Refusal, explain};
+    use ActionKind::{Bomb, Sword};
     use Direction::*;
-    assert_eq!(dirs(1, 120, 141), (vec![E, W, N, S], vec![E, W, N, S]));
-    // Dungeon (measured, N006, with the facing poked): A on E/W x 23..=216, N y 84..=197, S y 85..=197; B also
-    // E x <= 208, W x >= 31, S y <= 189. Outside the room's bounds (x < $21 or > $D0, y < $5E or > $BD) Link is
-    // in a doorway, where the game never turns him sideways (measured: a perpendicular press does nothing, or
-    // walks him back into the room first), so only the doorway's axis is left there.
-    assert_eq!(dirs(1, 23, 141).0, vec![E, W]);
-    assert_eq!(dirs(1, 22, 141), (vec![], vec![]));
-    assert_eq!(dirs(1, 30, 141).1, vec![E], "too close to the west wall to throw west");
-    assert_eq!(dirs(1, 31, 141).1, vec![E, W]);
-    assert_eq!(dirs(1, 33, 141).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 208, 141).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 209, 141).1, vec![W]);
-    assert_eq!(dirs(1, 216, 141).0, vec![E, W]);
-    assert_eq!(dirs(1, 217, 141).0, vec![]);
-    assert_eq!(dirs(1, 120, 83), (vec![], vec![]));
-    assert_eq!(dirs(1, 120, 84), (vec![N], vec![N]));
-    assert_eq!(dirs(1, 120, 85).1, vec![N, S]);
-    assert_eq!(dirs(1, 120, 94).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 120, 189).1, vec![E, W, N, S]);
-    assert_eq!(dirs(1, 120, 190).1, vec![N]);
-    assert_eq!(dirs(1, 120, 197).0, vec![N, S]);
-    assert_eq!(dirs(1, 120, 198), (vec![], vec![]));
+    let ram = |level: u8, x: u8, y: u8, facing: Direction| {
+        let mut r = Ram::new();
+        r.set(Var::Level, level).set(Var::LinkX, x).set(Var::LinkY, y).set(Var::LinkDirection, facing.value());
+        r
+    };
+    // Whether a strike of `kind` in `d` can be made with Link already facing `d` (no turn): A and B are filtered
+    // on the facing (asm:Link_FilterInput), so these are the bands measured with the facing poked (N006).
+    let facing = |level: u8, x: u8, y: u8, kind: ActionKind, d: Direction| {
+        ram(level, x, y, d).view().attack_directions(kind).contains(&d)
+    };
+    // Dungeon: A on E/W x 23..=216, N y 84..=197, S y 85..=197; B also E x <= 208, W x >= 31, S y <= 189.
+    for (d, inside, outside) in [(E, [23, 216], [22, 217]), (W, [23, 216], [22, 217])] {
+        assert!(inside.iter().all(|&x| facing(1, x, 141, Sword, d)), "{d:?}");
+        assert!(outside.iter().all(|&x| !facing(1, x, 141, Sword, d)), "{d:?}");
+    }
+    assert!(facing(1, 120, 84, Sword, N) && facing(1, 120, 197, Sword, N));
+    assert!(!facing(1, 120, 83, Sword, N) && !facing(1, 120, 198, Sword, N));
+    assert!(facing(1, 120, 85, Sword, S) && facing(1, 120, 197, Sword, S));
+    assert!(!facing(1, 120, 84, Sword, S) && !facing(1, 120, 198, Sword, S));
+    assert!(facing(1, 208, 141, Bomb, E) && !facing(1, 209, 141, Bomb, E));
+    assert!(facing(1, 31, 141, Bomb, W) && !facing(1, 30, 141, Bomb, W));
+    assert!(facing(1, 120, 189, Bomb, S) && !facing(1, 120, 190, Bomb, S));
     // Overworld: A on x 7..=232, y 69..=213; B also N y >= 84.
-    assert_eq!(dirs(0, 7, 69), (vec![E, W, N, S], vec![E, S]));
-    assert_eq!(dirs(0, 6, 68), (vec![], vec![]));
-    assert_eq!(dirs(0, 233, 214), (vec![], vec![]));
+    assert!(facing(0, 7, 100, Sword, W) && !facing(0, 6, 100, Sword, W));
+    assert!(facing(0, 232, 100, Sword, E) && !facing(0, 233, 100, Sword, E));
+    assert!(facing(0, 120, 69, Sword, N) && !facing(0, 120, 68, Sword, N));
+    assert!(facing(0, 120, 84, Bomb, N) && !facing(0, 120, 83, Bomb, N));
+    assert!(facing(0, 120, 213, Sword, S) && !facing(0, 120, 214, Sword, S));
+
+    // A turn: A is read before the direction rules turn Link, so the sword's band is the facing he has when A is
+    // pressed (W from x 6 facing N is a swing; facing W it isn't). Bombs and arrows turn first, then B: the
+    // strike's own band. (A turn on a grid point snaps Link to it, so the turn cases stand on grid points.)
+    assert_eq!(explain(&ram(0, 6, 141, N).view(), Sword, W), Ok(0));
+    assert_eq!(explain(&ram(0, 6, 141, W).view(), Sword, W), Err(Refusal::Band));
+    assert_eq!(explain(&ram(1, 120, 141, N).view(), Bomb, E), Ok(1));
+    assert_eq!(explain(&ram(1, 24, 141, N).view(), Bomb, W), Err(Refusal::Band));
+    // A dungeon's outer band drops the turn's input across the facing too: nothing from y 77 or 205.
+    for (y, f) in [(77, N), (205, N), (205, S)] {
+        assert_eq!(ram(1, 120, y, f).view().attack_directions(Sword), vec![], "y {y} facing {f:?}");
+        assert_eq!(ram(1, 120, y, f).view().attack_directions(Bomb), vec![], "y {y} facing {f:?}");
+    }
+    // In a doorway (DoorwayDir set) facing out of the room the game never turns Link sideways (a sideways press
+    // walks him on through the door); facing into the room it walks him back onto the room's edge first.
+    let mut doorway = ram(1, 120, 0xC5, S);
+    doorway.set(Var::DoorwayDir, S.value());
+    assert_eq!(doorway.view().attack_directions(Sword), vec![N, S]);
+    assert_eq!(explain(&doorway.view(), Sword, E), Err(Refusal::Doorway));
+    doorway.set(Var::LinkDirection, N.value());
+    doorway.0[0x3BC] = 0x60; // Link's walking speed (ObjQSpeedFrac)
+    let turn = explain(&doorway.view(), Sword, E).expect("into the room");
+    assert!((1..=zelda::attack::MAX_TURN_FRAMES).contains(&turn), "{turn}");
     // Off every axis the sword is screen-locked: no beams.
     let mut r = Ram::new();
     r.set(Var::LinkX, 10)
@@ -459,11 +478,12 @@ fn the_mask_offers_only_attacks_the_game_starts() {
     let mut bombs = r.clone();
     bombs.table(tables::OBJ_STATUS, 0x10, 0x12).table(tables::OBJ_STATUS, 0x11, 0x10);
     assert!(!allowed(&bombs, Bomb, Direction::N), "both bomb slots hold unexploded bombs");
-    // Underworld bounds: y 83 / 199 no attack N/S; x 213 no B item E (the sword still swings E).
-    for y in [83, 199] {
+    // Underworld bounds (Link facing N, on grid points): y 77 / 205 no attack N/S; x 216 no B item E (the sword
+    // still swings E).
+    for y in [77, 205] {
         assert!(!allowed(&armed(120, y), Sword, Direction::N) && !allowed(&armed(120, y), Bomb, Direction::S));
     }
-    assert!(!allowed(&armed(213, 141), Bomb, Direction::E) && allowed(&armed(213, 141), Sword, Direction::E));
+    assert!(!allowed(&armed(216, 141), Bomb, Direction::E) && allowed(&armed(216, 141), Sword, Direction::E));
 }
 
 #[test]

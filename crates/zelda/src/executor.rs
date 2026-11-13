@@ -65,6 +65,8 @@ const ADDR_HEARTS: usize = 0x66F;
 const ADDR_PARTIAL_HEARTS: usize = 0x670;
 /// Turn frames an attack may take beyond its plan (lag frames repeat a decision) before it gives up.
 const TURN_SLACK_FRAMES: u32 = 4;
+/// Frames an attack waits for Link's item-use pose (a boomerang caught during the turn) to end before its press.
+const MAX_POSE_FRAMES: u32 = 32;
 const OBJ_X: usize = 0x70;
 const OBJ_Y: usize = 0x84;
 const OBJ_ID: usize = 0x34F;
@@ -576,31 +578,38 @@ impl<S> Executor<S> {
             }
         }
         // The turn, closed loop on the real game (a lag frame repeats a decision); a few frames past the plan's
-        // count end it.
+        // count end it. A returning boomerang caught during the turn puts Link in the catch pose ($20 -> $21 -> $31
+        // -> 0), and the game reads A and B only once his state is 0 again (asm:Link_HandleInput): those frames are
+        // waited out with nothing pressed, so the press that follows is a new one.
         let mut before = FrameWatch::new(m.ram());
         let start_near = before.near;
-        let mut press = None;
-        for _ in 0..=turn_frames + TURN_SLACK_FRAMES {
-            match attack::next(kind, d, &attack::Link::read(m.ram())) {
-                attack::Next::Press(buttons) => {
-                    press = Some(buttons);
-                    break;
-                }
-                attack::Next::Impossible => break,
-                attack::Next::Turn(t) => {
-                    self.step(m, direction_buttons(t), 1);
-                    let after = FrameWatch::new(m.ram());
-                    match detect_interrupt(&before, &after, start_near) {
-                        Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => {
-                            return (Some(i), menu_frames);
-                        }
-                        _ if SCROLLING_MODES.contains(&after.mode) => return (Some(Interrupt::Transition), menu_frames),
-                        _ => {}
+        let (mut turns, mut posed) = (0, 0);
+        let press = loop {
+            let link = attack::Link::read(m.ram());
+            let input = if link.state != 0 && posed < MAX_POSE_FRAMES {
+                posed += 1;
+                0
+            } else {
+                match attack::next(kind, d, &link) {
+                    attack::Next::Press(buttons) => break Some(buttons),
+                    attack::Next::Turn(t) if turns <= turn_frames + TURN_SLACK_FRAMES => {
+                        turns += 1;
+                        direction_buttons(t)
                     }
-                    before = after;
+                    attack::Next::Turn(_) | attack::Next::Impossible => break None,
                 }
+            };
+            self.step(m, input, 1);
+            let after = FrameWatch::new(m.ram());
+            match detect_interrupt(&before, &after, start_near) {
+                Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => {
+                    return (Some(i), menu_frames);
+                }
+                _ if SCROLLING_MODES.contains(&after.mode) => return (Some(Interrupt::Transition), menu_frames),
+                _ => {}
             }
-        }
+            before = after;
+        };
         let Some(press) = press else {
             return (None, menu_frames);
         };

@@ -1297,3 +1297,101 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   diagonals), every one right in the game; in 0x50 one `CLIP N` from where `MOVE W` stops Link after the E door
   takes him to the N door in 318 frames against 424 for the plain way (monsters cleared). The experiment route
   `clips-gauntlet` still draws both targets and changes no family's resets (`crates/env/tests/clips.rs`).
+
+## 2026-11-12 — Attacks by buttons: no facing or selected-item writes (round 21, movement cleanup)
+
+- **What changed:** the executor no longer writes Link's facing (`$98`) to aim an attack nor the selected B item
+  (`$656`) to use one (backlog "Fewer writes to memory", Lee, Nov 12; round 21 decision 3). An attack is the button
+  sequence a player presses (`crates/zelda/src/attack.rs`, `submenu.rs`; architecture.md "Attacks by buttons"), and
+  the mask offers exactly the strikes those buttons can make from where Link stands
+  (`GameView::attack_directions(kind)` = `attack::plan`); the round 20 position rule (Link_BorderBounds ranges per
+  strike direction, "in a doorway" by position, the `DoorwayDir` `across` filter) is gone.
+- **Why:** the facing write was the cause of round 20's wall walk (round20.md §2): the game moves Link along `$98`
+  without a tile test between grid points, so a written sideways facing in 4:0x11's S doorway walked him through
+  the wall into 0x12 (`BOMB E`). Round 20 masked the symptom; with no write the game turns Link only by its own
+  rules and the walk can't happen (`objectives::no_sideways_attack_in_a_doorway` plays every sideways strike at every
+  spot of a walk out through 4:0x11's and 1:0x73's S doorways: Link stays in the room). The item write made combat
+  easier than the game: any B item at once, for free.
+- **The input sequences** (turn frames before the press; traced in `crates/zelda/tests/attacks.rs`):
+  - Sword on a grid point: direction+A on one frame (A is read before the direction rules turn Link, and the sword
+    takes his facing every frame): 0, no step. The border band tested is the facing Link has when A is pressed.
+  - Sword off the grid across the strike: hold the direction; the game walks Link on to the grid point or back to
+    the one he left (asm:Link_ModifyDirOnGridLine), then direction+A: 1-3 (4 where a lag frame repeats one).
+  - Bomb, arrow (they take the facing when B is read): one frame of the direction (Link turns; 1-2 px step if the
+    way is open), then B: 1 (+1-3 off the grid).
+  - Boomerang: direction+B on one frame, diagonals too: 0.
+  - The facing's border band drops the button: turn first, +1; where the strike's own facing is in the band, refused
+    (only a MOVE out would do).
+  - Dungeon doorway (`DoorwayDir` set): facing into the room, the held sideways direction walks Link onto the room's
+    edge, where he turns (up to ~22); facing out of the room, refused (the forced step would take him through the
+    door; the buttons can't do it either).
+  - Held by a Like-Like or knocked back: only the facing. Input that would leave the room (cave edge, cellar stairs,
+    screen edge on a turn, a door it would unlock or pass) is refused.
+  - A returning boomerang caught during the turn puts Link in the catch pose, in which the game ignores A and B
+    (asm:Link_HandleInput): the executor waits it out (at most 32 frames) before pressing. Found when the rewritten
+    F182 test (`every_legal_attack_starts_its_weapon_*`) saw a legal `BOMB N` place nothing in 3:0x49 and 3:0x4d.
+- **The sub-screen:** a BOMB, BOOMERANG or ARROW whose item is not selected opens the item sub-screen (START, 64
+  frames in a dungeon / 65 overworld to the first active frame, one cursor step per frame, START, 59 frames out):
+  123 + steps frames in a dungeon, 124 + steps overworld (1 step between boomerang and bombs, 2 to the arrow). The
+  game is paused throughout (only the random numbers, the frame counter and sound run): nothing moves and Link can't
+  be hit. So those frames don't count against the action (`Change.menu_frames`, outside `Change.frames`): discounting
+  (`StepInfo.frames`, the pool's rollout rows, `rollout_buffer.py`), the frame penalty, the observation's history,
+  heart timers and linger don't see them; every total of frames played does (`episode_frames`, visits, chain rooms
+  and runs, the pool's emulated frames, replays; `tests/native/test_menu_frames.py`). The game selects a lone B
+  item by itself (measured: bombs drawn into a goriya state with nothing selected are selected two frames later), so
+  the sub-screen is paid only by a switch between two held B items.
+- **Kept:** start-state RAM randomisation (RNG bytes, spawn cycle, edge cell, fresh room flags,
+  `ram_randomization`), the chain's RNG redraw at a checkpoint, the cheat ledger (bombs, keys, rupees a room needs),
+  the look-ahead's pokes (inside a snapshot that is restored; they never reach the played game) and `perturb_rng`
+  (search only). No other RAM write happens during play.
+- **Checked in the game:** `TRIFORCE_ATTACK_SCAN=15` (ten states, walks through their doorways and a random walk):
+  5,760 strikes, every offered one struck that way with no memory write and no room change; the refused ones the
+  buttons can make are all `Band` (148: the strike's own facing in a border band at a doorway's entry spot or the
+  screen edge, where only a MOVE out would do). The explorer still solves goriya's 1_44w_0 (149 steps, 17 sword or
+  beam strikes and a bomb).
+- **Cost** (a throwaway measurement: the old executor replayed with its `$98` write against `Session::act`, over the
+  start states of goriya (15) and ow-moblin (30) and 30 random-walk positions each). SWORD, mean frames of the
+  attack itself (`control_frames`):
+
+  | Family, positions | Direction | n | Old | New | Slower / faster |
+  |---|---|---|---|---|---|
+  | goriya, start | N, S | 3 each | 16.00 | 16.00 | 0 / 0 |
+  | goriya, walk | E, W | 246 each | 16.76 | 16.42 | 0 / 31 |
+  | goriya, walk | N, S | 188 each | 17.21 | 16.69 | 0 / 36 |
+  | ow-moblin, start | all | 60 | 16.00 | 17.00 | 60 / 0 |
+  | ow-moblin, walk | E, W | 667 each | 17.11-17.13 | 16.74-16.76 | 12 / 89 |
+  | ow-moblin, walk | N, S | 686 each | 16.97 | 16.66 | 19 / 80-81 |
+
+  Off the grid the game's own turn back to the nearer grid point beats the old walk on to the next one; at the
+  overworld entry spots (on the screen edge) the facing's band drops A, so every strike there turns first (+1).
+  Walk positions' turn frames: goriya 0: 600, 1: 112, 2: 114, 3: 42; ow-moblin 0: 1836, 1: 356, 2: 336, 3: 158,
+  4: 20. The mask, over (position, direction) pairs at the walk positions (direction rule only):
+
+  | Family | Kind | Old offered | New offered | Old offers now refused | New offers the old refused |
+  |---|---|---|---|---|---|
+  | goriya | SWORD | 868 | 1046 | 0 | 178 (17.0%) |
+  | goriya | BOMB, ARROW | 835 | 987 | 26 (3.1%) | 178 (18.0%) |
+  | goriya | BOOMERANG | 1557 | 2080 | 0 | 523 (25.1%) |
+  | ow-moblin | SWORD | 2706 | 3054 | 0 | 348 (11.4%) |
+  | ow-moblin | BOMB, ARROW | 2277 | 2254 | 31 (1.4%) | 8 (0.4%) |
+  | ow-moblin | BOOMERANG | 4747 | 5979 | 0 | 1232 (20.6%) |
+
+  At the start states goriya gains 6 SWORD, 6 BOOMERANG and 6 B-item offers and loses 3 B-item ones; ow-moblin's are
+  unchanged. Every old offer refused now is a `Band` refusal (the turn before B carries Link into the strike's band,
+  or a dungeon's outer band drops the turn's input): only a MOVE out would make it. The new offers: in goriya 168 of
+  178 per kind (BOOMERANG 448 of 523; all 6 at the start) were refused by the old doorway rule (by position, a pixel
+  too strict, and blanket on entry spots facing into the room), the rest and all of ow-moblin's by the old band
+  ranges, which tested the strike's direction where the game tests Link's facing when A (or the boomerang's B) is
+  pressed.
+- **Who pays the sub-screen:** goriya's states hold bombs only (5 of 15; 6 a bow without arrows; no boomerang), so
+  a goriya BOMB never does. ow-moblin: 8 of 30 states hold the boomerang and bombs with the boomerang selected, 4 the
+  boomerang alone; its bombs are `tenth`, so the 10th kill's BOMB pays 125 frames and the next BOOMERANG 125 again.
+  No route state holds arrows, so ARROW is never legal yet. Dungeon 3 and 4 states hold both with the boomerang
+  selected: a fight alternating them (3:0x5b, 0x59, 0x4b; 8 B actions) costs 12-14 counted frames per action and
+  124 paused frames per switch: 868 paused frames against 219-328 counted (waits included), three to four times the
+  fight's game time in real time.
+- **The retrain:** every model is retrained (round 21 is one COMPAT bump). Expect sword strikes as fast or faster
+  off the grid, one frame slower from the overworld edges, bombs one turn frame (and a 1-2 px step) slower when Link
+  faces elsewhere, no sideways attack deep in a doorway facing out, new sideways strikes on the room's edge rows,
+  more boomerang throws, and a B-item switch that is free to the critic but costs about 2 s of real time in chains
+  and replays.

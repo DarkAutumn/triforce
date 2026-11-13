@@ -67,7 +67,8 @@ const UP: u8 = 8;
 const BORDER_BOUNDS: [u8; 12] = [0xD6, 0x45, 0xE9, 0x07, 0xC6, 0x55, 0xD9, 0x17, 0xBE, 0x54, 0xD1, 0x1F];
 /// asm:Link_ScreenEdgeBounds, by reverse direction index (up, down, left, right).
 const SCREEN_EDGES: [u8; 4] = [0x3D, 0xDD, 0x00, 0xF0];
-/// asm:Doorway_RequiredCoords, asm:Doorway_BoundsMin/MaxOver, asm:Doorway_BoundsMin/MaxUnder (up, down, left, right).
+/// asm:Doorway_RequiredCoords, asm:Doorway_BoundsMinOver and asm:Doorway_BoundsMaxOver, asm:Doorway_BoundsMinUnder and
+/// asm:Doorway_BoundsMaxUnder (up, down, left, right).
 const DOORWAY_REQUIRED: [u8; 4] = [0x78, 0x78, 0x8D, 0x8D];
 const DOORWAY_WIDE: [(u8, u8); 4] = [(0x3D, 0x5E), (0xBD, 0xDE), (0x00, 0x21), (0xCF, 0xF1)];
 const DOORWAY_NARROW: [(u8, u8); 4] = [(0x3D, 0x5C), (0xBF, 0xDE), (0x00, 0x1F), (0xD2, 0xF1)];
