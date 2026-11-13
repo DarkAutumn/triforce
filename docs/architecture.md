@@ -484,9 +484,11 @@ count half-frames; the look-ahead credits only what a prediction adds over the o
 starts take their track's seed state's route step.
 
 PBRS (`critic.rs` `critique_movement`: F = (d(prev tile) − d(curr tile)) / `PBRS_SCALE` on the previous state's
-wavefront) telescopes exactly in the exit, treasure and item phases, whose targets don't move. In a fight room it
-is an approach reward, not potential-based: the targets are the moving enemies and the wavefront is rebuilt every
-step, so following an enemy that moves away pays again, and knockback resets the baseline for free.
+wavefront) telescopes exactly in the exit, treasure and item phases, whose targets don't move. Every step is
+shaped from Link's tile before it, the first of an episode and the one after a room change or a hit included; the
+step that changes rooms or takes damage itself is not (no cross-room distance, no credit for knockback). In a fight
+room it is an approach reward, not potential-based: the targets are the moving enemies and the wavefront is rebuilt
+every step, so following an enemy that moves away pays again, and knockback resets the baseline for free.
 
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
 

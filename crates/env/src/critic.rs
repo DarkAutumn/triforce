@@ -168,7 +168,6 @@ pub struct GameplayCritic {
     room_combat_counts: HashMap<MapLocation, i32>,
     room_steps: u32,
     stunned_enemies: HashSet<(MapLocation, u8)>,
-    pbrs_tile: Option<Tile>,
     puzzles_rewarded: HashSet<(MapLocation, String)>,
 }
 
@@ -186,7 +185,6 @@ impl GameplayCritic {
             room_combat_counts: HashMap::new(),
             room_steps: 0,
             stunned_enemies: HashSet::new(),
-            pbrs_tile: None,
             puzzles_rewarded: HashSet::new(),
         }
     }
@@ -217,7 +215,6 @@ impl GameplayCritic {
         self.room_combat_counts.clear();
         self.room_steps = 0;
         self.stunned_enemies.clear();
-        self.pbrs_tile = None;
         self.puzzles_rewarded.clear();
     }
 
@@ -476,7 +473,7 @@ impl GameplayCritic {
             } else {
                 rewards.add(Outcome::penalty("penalty-attack-cave", -REWARD_MAXIMUM));
             }
-        } else if !matches!(kind, ActionKind::Move | ActionKind::Wait | ActionKind::Bomb)
+        } else if !matches!(kind, ActionKind::Move | ActionKind::Wait | ActionKind::Bomb | ActionKind::Clip)
             && change.enemies_stunned.is_empty()
         {
             rewards.add(Outcome::penalty("penalty-attack-miss", -REWARD_MINIMUM));
@@ -555,13 +552,13 @@ impl GameplayCritic {
     }
 
     /// Room stall penalty plus PBRS: F = (d(prev tile) − d(curr tile)) / PBRS_SCALE on the previous state's
-    /// wavefront; MOVE always, other kinds only when Link's tile changed.
+    /// wavefront; MOVE always, other kinds only when Link's tile changed. Not on a step that changes rooms or takes
+    /// damage (no cross-room distances, no credit for a knockback); the step after one pays from where it left Link.
     fn critique_movement(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let change = c.change;
         let (prev, curr) = (&change.previous, &change.state);
         if change.health_lost != 0.0 || prev.full_location() != curr.full_location() {
             self.room_steps = 0;
-            self.pbrs_tile = None;
             return;
         }
         // A kill counts even when the game's RoomKills ($34F) doesn't (a Vire's Red Keese, Gleeok's heads).
@@ -586,18 +583,10 @@ impl GameplayCritic {
         if change.action.kind != ActionKind::Move && tile == prev.link.tile() {
             return;
         }
-        let Some(baseline) = self.pbrs_tile else {
-            self.pbrs_tile = Some(tile);
-            return;
-        };
         let Some(wf) = c.prev_wavefront else {
-            self.pbrs_tile = Some(tile);
             return;
         };
-        let old = wf.get(baseline);
-        let new = wf.get(tile);
-        self.pbrs_tile = Some(tile);
-        let (Some(old), Some(new)) = (old, new) else {
+        let (Some(old), Some(new)) = (wf.get(prev.link.tile()), wf.get(tile)) else {
             return;
         };
         let mut shaped = (old - new) as f64 / PBRS_SCALE;

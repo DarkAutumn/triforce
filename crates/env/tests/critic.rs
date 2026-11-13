@@ -191,7 +191,7 @@ fn hits_misses_and_cave_attacks() {
     let r = critique(&mut critic(), &step(&base, &base, "SWORD N"));
     assert_eq!(names(&r), ["penalty-attack-miss"]);
     assert_eq!(value(&r, "penalty-attack-miss"), -REWARD_MINIMUM);
-    for action in ["MOVE N 8", "WAIT 8", "BOMB N"] {
+    for action in ["MOVE N 8", "WAIT 8", "BOMB N", "CLIP N"] {
         let r = critique(&mut critic(), &step(&base, &base, action));
         assert!(!r.contains("penalty-attack-miss"), "{action}");
     }
@@ -712,7 +712,7 @@ fn quiet_enemy_penalty_needs_a_live_active_enemy_past_the_grace() {
 }
 
 #[test]
-fn pbrs_rewards_wavefront_progress_from_the_last_baseline() {
+fn pbrs_rewards_wavefront_progress_from_every_step() {
     let base = Ram::new(); // tile (15, 10)
     let wf =
         Wavefront::from_distances([((15, 10), 10), ((15, 9), 9), ((15, 8), 8), ((15, 11), 11)]);
@@ -726,8 +726,17 @@ fn pbrs_rewards_wavefront_progress_from_the_last_baseline() {
         critique_with(critic, &step(from, to, action), &obj, wf, 0)
     };
     let up = base.link(120, 133);
-    // The first step only sets the baseline.
-    assert!(run(&mut critic, &base, &base, "MOVE N 8", Some(&wf)).is_empty());
+    // The first step of an episode pays like any other.
+    let r = run(&mut critic, &base, &up, "MOVE N 8", Some(&wf));
+    assert_eq!(value(&r, "reward-pbrs-movement"), 1.0 / 20.0);
+    critic.clear();
+    // A step that takes damage (its knockback) or changes rooms is not shaped; the next step pays from where it
+    // left Link.
+    let hurt = up.with(Var::PartialHearts, 0x7F);
+    assert!(!run(&mut critic, &base, &hurt, "MOVE N 8", Some(&wf)).contains("reward-pbrs-movement"));
+    let r = run(&mut critic, &hurt, &hurt.link(120, 125), "MOVE N 8", Some(&wf));
+    assert_eq!(value(&r, "reward-pbrs-movement"), 1.0 / 20.0);
+    assert!(!run(&mut critic, &base, &up.room(EAST), "MOVE N 8", Some(&wf)).contains("reward-pbrs-movement"));
     let r = run(&mut critic, &base, &up, "MOVE N 8", Some(&wf));
     assert_eq!(value(&r, "reward-pbrs-movement"), 1.0 / 20.0);
     let down = base.link(120, 149);
