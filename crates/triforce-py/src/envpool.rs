@@ -222,7 +222,7 @@ impl PyChainTask {
     #[new]
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
                         states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None,
-                        stop_step=None, power_on=None, checkpoint=None))]
+                        stop_step=None, power_on=None, checkpoint=None, clips=true, clips_off_from=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -240,6 +240,8 @@ impl PyChainTask {
         stop_step: Option<usize>,
         power_on: Option<&Bound<'_, PyDict>>,
         checkpoint: Option<&Bound<'_, PyDict>>,
+        clips: bool,
+        clips_off_from: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         check_seeds(seeds.iter().copied())?;
         let configs = configs
@@ -272,6 +274,17 @@ impl PyChainTask {
         if let Some(step) = stop_step {
             route = route.with_stop_step(&data.map, step).map_err(config_err)?;
         }
+        // The run-time clips switch (round 22): `clips` at the start, off from `clips_off_from` (a route step index,
+        // or a room as `stop_at` spells one).
+        let off_from = match clips_off_from {
+            None => None,
+            Some(v) if v.extract::<usize>().is_ok() => Some(env::chain::ClipsFlip::Step(v.extract()?)),
+            Some(v) => {
+                let serde_json::Value::String(text) = room_value(v)? else { unreachable!() };
+                Some(env::chain::ClipsFlip::Room(parse_room(&text).map_err(|e| ConfigError::new_err(e.0))?))
+            }
+        };
+        route = route.with_clips(&data.map, clips, off_from).map_err(config_err)?;
         Ok(PyChainTask {
             configs,
             route,

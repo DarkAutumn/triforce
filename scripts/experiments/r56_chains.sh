@@ -22,7 +22,9 @@
 #
 # It is one batch of `triforce eval-batch TAG --chains TAG` (triforce/eval_batch.py): one log folder named for the
 # tag, one progress bar per segment in the training GUI, then the report, everything at nice 15. A segment whose
-# output exists is done; a rerun plays the rest. PARALLEL (default: every core), NICE (default 15).
+# output exists is done; a rerun plays the rest. PARALLEL (default: every core), NICE (default 15). CLIPS=off plays
+# every segment with the run-time clips switch off (round 22: CLIP masked, the plain way through every stretch);
+# give such a measurement its own tag, e.g. CLIPS=off TAG=r71-1k-noclips.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
@@ -32,6 +34,9 @@ RUNS=${RUNS:-120}
 OUT=${OUT:-target/r56-chains}
 SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0"}
 
+clips=()
+if [ -n "${CLIPS:-}" ]; then clips=(--chain-args "--clips $CLIPS"); fi
+
 case ${1:-all} in
   run) mode=(--no-report) ;;
   report) mode=(--report-only) ;;
@@ -39,4 +44,4 @@ case ${1:-all} in
   *) echo "usage: $0 [run|report|all]" >&2; exit 2 ;;
 esac
 exec $PY -m triforce.cli eval-batch "$TAG" --chains "$TAG" --act "$ACT" --runs "$RUNS" --chains-dir "$OUT" \
-  --segments "$SEGMENTS" ${PARALLEL:+--parallel $PARALLEL} ${NICE:+--nice $NICE} "${mode[@]}"
+  --segments "$SEGMENTS" ${PARALLEL:+--parallel $PARALLEL} ${NICE:+--nice $NICE} "${clips[@]}" "${mode[@]}"

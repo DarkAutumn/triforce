@@ -54,11 +54,13 @@ class Route:
     power_on: Optional[dict] = None
     checkpoint: Optional[dict] = None
     start_step: int = 0
+    clips: bool = True                          # the run-time clips switch a run starts with (round 22)
+    clips_off_from: Optional[object] = None     # turn it off on entering this route step (int) or room (MapLocation)
 
     @staticmethod
     def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None,
              states_dir=None, *, stop_step: Optional[int] = None, power_on: Optional[dict] = None,
-             checkpoint: Optional[dict] = None) -> 'Route':
+             checkpoint: Optional[dict] = None, clips: bool = True, clips_off_from=None) -> 'Route':
         """Loads a route from routes.yaml.  ``stop_at`` ends it on entering that room, ``stop_step`` on reaching
         that route step, instead of on its last step's triforce.  One of ``start_from`` (a savestate, e.g. a
         route entry state like ``2_7ds_0``, in ``states_dir``, default ``paths.STATES_DIR``, or a path),
@@ -111,7 +113,7 @@ class Route:
         if stop_step is not None and not start < stop_step < len(steps):
             raise RunnerError(f"--stop-at step:{stop_step} is not a step of route '{name}' after the start step "
                               f"{start}; steps: {start + 1}..={len(steps) - 1}")
-        return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint, start)
+        return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint, start, clips, clips_off_from)
 
 
 def _power_on(options: dict) -> dict:
@@ -368,7 +370,8 @@ class ChainPool:
                                  start_from=start_from, max_steps=max_steps, missing=policies.missing,
                                  states_dir=states_dir, stall_steps=stall_steps,
                                  harvest=None if harvest is None else str(harvest),
-                                 stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint)
+                                 stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint,
+                                 clips=route.clips, clips_off_from=route.clips_off_from)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
 
@@ -475,7 +478,9 @@ class Runner:
                                            'state_sha1': hashlib.sha1(route.checkpoint['state']).hexdigest()}
         return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
                 'power_on': route.power_on, 'checkpoint': checkpoint,
-                'stop_at': location_text(route.terminal), 'stop_step': route.stop_step,
+                'stop_at': location_text(route.terminal), 'stop_step': route.stop_step, 'clips': route.clips,
+                'clips_off_from': (route.clips_off_from if isinstance(route.clips_off_from, (int, type(None)))
+                                   else location_text(route.clips_off_from)),
                 'max_steps': self.max_steps, 'models': models,
                 'missing': dict(sorted(policies.missing.items())), 'version': __version__, 'code': code_version(),
                 'data': data_hash()}

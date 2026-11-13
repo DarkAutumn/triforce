@@ -11,14 +11,17 @@ from typing import Optional
 
 def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, deterministic=None,
                   stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
-                  power_on=None):
+                  power_on=None, clips=True, clips_off_from=None):
     """The route (``--from``, ``--stop-at`` and the power-on start checked, ``runner.Route.load``) and a ``Runner``
     with its models loaded (``--checkpoint`` overrides checked); raises ``RunnerError`` before anything plays.
     ``stop_at``: a room or ``step:N`` (``runner.parse_stop``); ``power_on``: ``Route.load``'s."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
     from .runner import Route, Runner, parse_stop
     stop_room, stop_step = parse_stop(stop_at)
-    route = Route.load(route_name, stop_room, start_from, stop_step=stop_step, power_on=power_on)
+    # --clips-off-from: a room or step:N, as --stop-at (round 22).
+    off_room, off_step = parse_stop(clips_off_from)
+    route = Route.load(route_name, stop_room, start_from, stop_step=stop_step, power_on=power_on, clips=clips,
+                       clips_off_from=off_step if off_step is not None else off_room)
     runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
                     specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest)
     return route, runner
@@ -177,7 +180,8 @@ def _cmd_eval_chain(args):
     output = args.output or os.path.join('runs', f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl")
     route, runner = prepare_chain(args.route, args.parallel, args.models_dir, overrides, act_override(args.act),
                                   args.stop_at, args.start_from, {config.name: config for config in configs},
-                                  args.threads, args.harvest, power_on_options(args))
+                                  args.threads, args.harvest, power_on_options(args), clips=args.clips == 'on',
+                                  clips_off_from=args.clips_off_from)
     provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
     try:
         record = replay.options_from(args, runner.record_meta(route))
@@ -392,6 +396,11 @@ def add_eval_chain_arguments(chain):
     chain.add_argument('--act', choices=ACT_CHOICES, default='model',
                        help="model: each model's act mode (registry); sample / argmax: that for every model")
     chain.add_argument('--stop-at', help=STOP_AT_HELP)
+    chain.add_argument('--clips', choices=('on', 'off'), default='on',
+                       help="the run-time clips switch every run starts with (round 22): off masks CLIP and takes the "
+                            "plain way through every routes.yaml stretch")
+    chain.add_argument('--clips-off-from', metavar='ROOM|step:N',
+                       help="turn the switch off on first entering this room (1:0x73) or route step (step:N)")
     chain.add_argument('--from', dest='start_from', help="start from this savestate instead of the game start, "
                                                          "e.g. a route entry state like 2_7ds_0")
     add_power_on_arguments(chain)
