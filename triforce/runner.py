@@ -209,14 +209,23 @@ class RoomRecord:
     bomb_tenth_tries: int = 0
     bomb_armed: int = 0
     bomb_picked_up: int = 0
-    # Grid-point skips in the visit (crates/zelda/src/clips.rs): completed, aborted, completed per direction.
-    # 0 in older records.
+    # Grid-point skips in the visit (crates/zelda/src/clips.rs): completed, aborted, completed per direction, and
+    # aborted ones a MOVE finished (round 22). 0 in older records.
     clip_done: int = 0
     clip_aborted: int = 0
     clip_done_n: int = 0
     clip_done_s: int = 0
     clip_done_w: int = 0
     clip_done_e: int = 0
+    clip_finished_by_move: int = 0
+    # Round 22 (None/absent in older records): actions that lost health and hits on enemies in the visit, the route
+    # step Link played on entering it (None off the route), the run-time clips switch then and every flip during the
+    # visit ({'step': actions into the visit, 'clips': the new value}; step 0 = at the entry).
+    hits: Optional[int] = None
+    hits_dealt: Optional[int] = None
+    step: Optional[int] = None
+    clips_allowed: Optional[bool] = None
+    clips_flips: List[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -230,6 +239,7 @@ class RunResult:
     frames: int = 0
     retreats: int = 0               # rooms left through a route step's `retreat` exit (4 end the run: retreat-limit)
     wrong_exits: int = 0            # wrong exits into tagged rooms (the 20th ends the run stuck: wrong-exit-limit)
+    clips: Optional[bool] = None    # the run-time clips switch the run started with (round 22; None in older files)
     rooms: List[RoomRecord] = field(default_factory=list)
 
     @property

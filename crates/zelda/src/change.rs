@@ -82,6 +82,9 @@ pub struct Change {
     pub projectile_blocks: Vec<ProjectileBlock>,
     /// The skip the option performed, if any (`crate::clips`).
     pub clip: Option<ClipOutcome>,
+    /// This MOVE finished a skip that an earlier CLIP of the room left cut short (`crate::clips::OpenClip`; set by
+    /// the session).
+    pub clip_finished_by_move: bool,
     pub previous: Arc<GameView>,
     pub state: Arc<GameView>,
     /// The mask of `state` (as `GameSession.act` sets it).
@@ -126,6 +129,7 @@ impl Change {
             control_frames: option.control_frames,
             projectile_blocks: option.projectile_blocks,
             clip: option.clip,
+            clip_finished_by_move: false,
             previous: prev,
             state: curr,
             action_mask,

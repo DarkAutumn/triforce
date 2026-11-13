@@ -290,17 +290,19 @@ def test_room_and_state_groups_average_health_hearts_blocks_and_count_endings():
 
 
 def test_clip_means_and_the_state_target_grouping():
-    def clips(done, aborted):
-        return {'done': done, 'aborted': aborted, 'done_n': 0, 'done_s': 0, 'done_w': done, 'done_e': 0}
+    def clips(done, aborted, moved=0):
+        return {'done': done, 'aborted': aborted, 'done_n': 0, 'done_s': 0, 'done_w': done, 'done_e': 0,
+                'finished_by_move': moved}
 
     records = [
         _record((0, 0x59, False), '0_59w_0', True, 3.0, 3.0, 'exit-correct', clips=clips(1, 0), target='S'),
-        _record((0, 0x59, False), '0_59w_0', False, 3.0, 3.0, 'exit-wrong', clips=clips(0, 1), target='E'),
+        _record((0, 0x59, False), '0_59w_0', False, 3.0, 3.0, 'exit-wrong', clips=clips(0, 1, 1), target='E'),
         _record((0, 0x59, False), '0_59w_0', True, 3.0, 3.0, 'exit-correct', clips=clips(3, 1), target='E'),
         _record((0, 0x59, False), '0_59w_1', True, 3.0, 3.0, 'exit-correct'),          # older: no counters
     ]
     assert _clip_stats(records) == {'mean_clips_done': 4 / 3, 'mean_clips_aborted': 2 / 3, 'mean_clips_done_n': 0,
-                                    'mean_clips_done_s': 0, 'mean_clips_done_w': 4 / 3, 'mean_clips_done_e': 0}
+                                    'mean_clips_done_s': 0, 'mean_clips_done_w': 4 / 3, 'mean_clips_done_e': 0,
+                                    'mean_clips_finished_by_move': 1 / 3}
     groups = _group(records, lambda r: f"{r['start_state']}:{r.get('target', '-')}")
     assert list(groups) == ['0_59w_0:E', '0_59w_0:S', '0_59w_1:-']
     assert (groups['0_59w_0:E']['success_rate'], groups['0_59w_0:E']['mean_clips_done']) == (0.5, 1.5)

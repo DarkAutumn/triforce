@@ -101,6 +101,7 @@ fn step(prev: &Ram, curr: &Ram, action: &str) -> Change {
         control_frames: 8,
         projectile_blocks: Vec::new(),
         clip: None,
+        clip_finished_by_move: false,
         previous,
         state,
         action_mask: ActionMask::default(),

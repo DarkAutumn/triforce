@@ -95,7 +95,7 @@ impl SkipKind {
 }
 
 /// Where the skip goes: the heading, T on the heading's axis and where the macro ends.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SkipTarget {
     pub direction: Direction,
     pub kind: SkipKind,
@@ -314,10 +314,12 @@ pub fn skip_available(state: &GameView, direction: Direction) -> bool {
     skip_target(state, direction).is_some()
 }
 
-/// Allows CLIP in every direction a skip is available (the session does it for a specialist with `clips: true`).
-pub fn allow_clips(mask: &mut ActionMask, state: &GameView) {
+/// Allows CLIP in every direction a skip is available but `except` (the session does it while a specialist with
+/// `clips: true` has the run-time switch on; `except` are the wraps the objective vetoes,
+/// `crate::objectives::wraps_into_wrong_exits`).
+pub fn allow_clips(mask: &mut ActionMask, state: &GameView, except: &[Direction]) {
     for d in CARDINALS {
-        if skip_available(state, d) {
+        if !except.contains(&d) && skip_available(state, d) {
             mask.allow(ActionKind::Clip, Some(d));
         }
     }
@@ -682,10 +684,14 @@ pub struct ClipOutcome {
     pub direction: Direction,
     /// None when the skip was unavailable.
     pub kind: Option<SkipKind>,
-    /// None: completed.
+    /// None: completed. A block or ladder clip whose crossing carries Link on into the next room (4:$21's `CLIP N`
+    /// through its opened wall into $11) is completed: the room change ends the macro, but past the skipped point.
     pub abort: Option<ClipAbort>,
     /// Perpendicular presses made.
     pub presses: u8,
+    /// Where the skip went (None when unavailable): what a MOVE must cross to finish an aborted one
+    /// ([`OpenClip`]).
+    pub target: Option<SkipTarget>,
 }
 
 impl ClipOutcome {
@@ -694,10 +700,50 @@ impl ClipOutcome {
     }
 }
 
+/// A skip that started (the macro walked or pressed) and was cut short in its room: a MOVE along its heading that
+/// crosses its square later counts as finishing it ([`ClipStats::finished_by_move`]; round 22). Kept by the session
+/// until the skip is finished that way, Link leaves the room, or another CLIP starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OpenClip {
+    pub target: SkipTarget,
+    /// Link's coordinate across the heading (X for N/S, Y for W/E) where the skip was cut: the line it runs on.
+    pub across: u8,
+    pub location: crate::enums::MapLocation,
+}
+
+impl OpenClip {
+    /// The skip of `outcome`, aborted in `state` (still in the room it started in), else None: completed, never
+    /// started (unavailable), or cut by a room change or game over.
+    pub fn of(outcome: &ClipOutcome, start: &GameView, state: &GameView) -> Option<OpenClip> {
+        let target = outcome.target?;
+        if outcome.completed() || start.full_location() != state.full_location() || state.game_over() {
+            return None;
+        }
+        Some(OpenClip { target, across: across(state, target.direction), location: state.full_location() })
+    }
+
+    /// The MOVE from `prev` to `state` finishes this skip: it heads the skip's way, stays in its room and on its line,
+    /// and ends at least as far past the skipped point as the macro's end point (in a block, beyond the square).
+    pub fn finished_by(&self, action: &crate::actions::Action, prev: &GameView, state: &GameView) -> bool {
+        action.kind == ActionKind::Move
+            && action.direction == self.target.direction
+            && state.full_location() == self.location
+            && across(prev, self.target.direction) == self.across
+            && across(state, self.target.direction) == self.across
+            && self.target.read(state.ram()).p <= self.target.end
+    }
+}
+
+/// Link's coordinate across `heading`: X for N/S, Y for W/E.
+fn across(state: &GameView, heading: Direction) -> u8 {
+    let ram = state.ram();
+    if matches!(heading, Direction::N | Direction::S) { ram[LINK_X] } else { ram[LINK_Y] }
+}
+
 /// Skips per episode, room visit or chain room ([`ClipStats::update`] per step).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ClipStats {
-    /// Skips completed.
+    /// Skips completed (the macro reached its end point, or carried Link on into the next room).
     pub done: u32,
     /// Skips started that did not complete (a hit, a missed press, unavailable).
     pub aborted: u32,
@@ -706,10 +752,17 @@ pub struct ClipStats {
     pub done_s: u32,
     pub done_w: u32,
     pub done_e: u32,
+    /// Aborted skips a later MOVE finished by crossing their square (round 22; [`OpenClip`]): each is also in
+    /// `aborted`, never in `done` (`done` counts the macro's own successes; the skip got done `done +
+    /// finished_by_move` times).
+    pub finished_by_move: u32,
 }
 
 impl ClipStats {
     pub fn update(&mut self, change: &Change) {
+        if change.clip_finished_by_move {
+            self.finished_by_move += 1;
+        }
         let Some(clip) = change.clip else {
             return;
         };
@@ -726,8 +779,8 @@ impl ClipStats {
         }
     }
 
-    /// `{done, aborted, done_n, done_s, done_w, done_e}`.
-    pub fn fields(&self) -> [(&'static str, u32); 6] {
+    /// `{done, aborted, done_n, done_s, done_w, done_e, finished_by_move}`.
+    pub fn fields(&self) -> [(&'static str, u32); 7] {
         [
             ("done", self.done),
             ("aborted", self.aborted),
@@ -735,6 +788,7 @@ impl ClipStats {
             ("done_s", self.done_s),
             ("done_w", self.done_w),
             ("done_e", self.done_e),
+            ("finished_by_move", self.finished_by_move),
         ]
     }
 }
@@ -747,6 +801,7 @@ impl AddAssign for ClipStats {
         self.done_s += o.done_s;
         self.done_w += o.done_w;
         self.done_e += o.done_e;
+        self.finished_by_move += o.finished_by_move;
     }
 }
 

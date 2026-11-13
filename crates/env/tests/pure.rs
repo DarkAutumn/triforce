@@ -224,6 +224,7 @@ fn block_change(events: Vec<ProjectileBlock>, room: MapLocation, map: &Arc<GameM
         control_frames: 8,
         projectile_blocks: events,
         clip: None,
+        clip_finished_by_move: false,
         previous: state.clone(),
         state,
         action_mask: ActionMask::default(),

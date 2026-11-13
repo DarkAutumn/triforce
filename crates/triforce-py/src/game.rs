@@ -477,6 +477,11 @@ impl PyChange {
         d.set_item("presses", clip.presses)?;
         Ok(Some(d))
     }
+    /// This MOVE finished a skip an earlier CLIP of the room left cut short (round 22; `zelda::clips::OpenClip`).
+    #[getter]
+    fn clip_finished_by_move(&self) -> bool {
+        self.change.clip_finished_by_move
+    }
     #[getter]
     fn health_lost(&self) -> f64 {
         self.change.health_lost
@@ -930,10 +935,22 @@ impl PyGame {
         Ok(())
     }
 
-    /// Offer the CLIP kind where a grid-point skip is available (`zelda::clips`; a specialist's `clips: true`). A
-    /// `CLIP <dir>` action runs the skip whatever this says (the mask only offers it when on).
+    /// Offer the CLIP kind where a grid-point skip is available (`zelda::clips`; a specialist's `clips: true`) and the
+    /// run-time switch allows it ([`set_clips_allowed`], default on). A `CLIP <dir>` action runs the skip whatever
+    /// this says (the mask only offers it when on).
     fn set_clips(&self, enabled: bool) {
         self.inner.lock().session.set_clips(enabled);
+    }
+
+    /// The run-time clips switch (round 22; default on): off masks CLIP whatever `set_clips` says, on the mask this
+    /// call recomputes.
+    fn set_clips_allowed(&self, allowed: bool) {
+        self.inner.lock().session.set_clips_allowed(allowed);
+    }
+
+    #[getter]
+    fn clips_allowed(&self) -> bool {
+        self.inner.lock().session.clips_allowed()
     }
 
     /// Whether the grid-point skip is available in `direction` now (`zelda::clips::skip_available`).

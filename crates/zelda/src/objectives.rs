@@ -88,8 +88,9 @@ pub struct Objective {
     /// before the white sword, to re-enter it).  Not correct exits either: no exit reward, the episode or room
     /// visit ends as `retreat`.
     pub retreats: BTreeSet<MapLocation>,
-    /// The acting specialist has clips on (`GameCompletion::set_clips`): the path search to the targets (the PBRS
-    /// wavefront, the `target` observation) knows the grid-point skips (`Room::wavefront`).
+    /// The path search to the targets (the PBRS wavefront, the `target` observation) knows the grid-point skips
+    /// (`Room::wavefront`): the acting specialist has clips on and the run-time switch allows them
+    /// (`GameCompletion::set_clips`, `GameCompletion::set_clips_allowed`).
     pub clips: bool,
 }
 
@@ -298,9 +299,12 @@ pub struct GameCompletion {
     missed: Option<String>,
     /// The raft crossings were put into `opened_doors` (Link holds the raft).
     rafts_open: bool,
-    /// The acting specialist has clips on: the path search knows the grid-point skips, and a pending push block that
-    /// gates the stairs needs no push when a skip reaches them ([`GameCompletion::push_wanted`]).
+    /// The acting specialist has clips on (its `clips:` switch): with [`GameCompletion::clips_allowed`] the path
+    /// search knows the grid-point skips, and a pending push block that gates the stairs needs no push when a skip
+    /// reaches them ([`GameCompletion::push_wanted`]).
     clips: bool,
+    /// The run-time clips switch (round 22; default on).
+    clips_allowed: bool,
 }
 
 impl GameCompletion {
@@ -354,12 +358,31 @@ impl GameCompletion {
             missed: None,
             rafts_open: false,
             clips: false,
+            clips_allowed: true,
         })
     }
 
     /// Whether the acting specialist has clips on (its `clips:` switch; a chain sets it per room).
     pub fn set_clips(&mut self, clips: bool) {
         self.clips = clips;
+    }
+
+    /// The run-time clips switch (round 22): off, the objective and the path search are the plain way's from the
+    /// next [`GameCompletion::objectives`] on, whatever the family says.
+    pub fn set_clips_allowed(&mut self, allowed: bool) {
+        if self.clips_allowed != allowed {
+            self.clips_allowed = allowed;
+            self.last_route = None;
+        }
+    }
+
+    pub fn clips_allowed(&self) -> bool {
+        self.clips_allowed
+    }
+
+    /// The path search knows the skips: the family's switch and the run-time switch both on.
+    pub fn clips_effective(&self) -> bool {
+        self.clips && self.clips_allowed
     }
 
     pub fn route(&self) -> &str {
@@ -526,7 +549,7 @@ impl GameCompletion {
                 next_rooms: BTreeSet::new(),
                 pbrs_targets: BTreeSet::new(),
                 retreats: BTreeSet::new(),
-                clips: self.clips,
+                clips: self.clips_effective(),
             };
         }
         self.update_exits(state);
@@ -554,7 +577,7 @@ impl GameCompletion {
             next_rooms: next_rooms.into_iter().collect(),
             pbrs_targets: pbrs,
             retreats: self.retreats(state.full_location()),
-            clips: self.clips,
+            clips: self.clips_effective(),
         }
     }
 
@@ -765,7 +788,7 @@ impl GameCompletion {
         if !room.push_block.is_empty() && rooms.iter().any(|next| next.in_cave != loc.in_cave) {
             // With clips a skip may reach the stairs without the push (level 1 room $22: the block clip under the
             // east block into the diamond).
-            if self.clips {
+            if self.clips_effective() {
                 let stairs: Vec<Target> = state.room().stairs_tiles().into_iter().map(Target::Tile).collect();
                 let wavefront = state.room().wavefront(&stairs, &[], &[], true);
                 if !stairs.is_empty() && wavefront.get(state.link.tile()).is_some() {
@@ -1174,6 +1197,32 @@ pub fn exit_is_correct_at(
         return true;
     }
     exit_span(map, from, d).is_none_or(|(lo, hi)| (lo..=hi).contains(&along_edge(link_tile, d)))
+}
+
+/// The overworld wraps (W, E) available in `state` that the objective should not be offered (round 22): a wrap lands
+/// on the opposite edge, one MOVE from that edge's room change, so its purpose is that edge's exit; when the
+/// objective counts that exit (its next rooms hold the room behind it) only within game.yaml's `span` and the
+/// landing row is outside it, the wrap leads only into an exit that isn't correct (0x5b's rows Y `$B5` and `$BD` land
+/// at the lower E opening; the span is the upper one). A wrap whose landing side the objective doesn't leave by (it
+/// goes on S, say) is kept, and so is one onto a row inside the span or onto an edge without a span.
+pub fn wraps_into_wrong_exits(map: &GameMap, state: &GameView, objective: &Objective) -> Vec<Direction> {
+    let here = state.full_location();
+    if here.level != 0 || here.in_cave {
+        return Vec::new();
+    }
+    let row = state.link.tile().1;
+    [Direction::W, Direction::E]
+        .into_iter()
+        .filter(|&d| {
+            let landing = d.opposite();
+            let Some(exit) = map.get(here).and_then(|r| r.exits.get(landing.name())) else {
+                return false;
+            };
+            objective.next_rooms.contains(&exit.destination)
+                && exit.span.is_some_and(|(lo, hi)| !(lo..=hi).contains(&row))
+                && crate::clips::skip_target(state, d).is_some_and(|t| t.kind == crate::clips::SkipKind::Wrap)
+        })
+        .collect()
 }
 
 /// (route, step) for an episode starting in `location` entered from `entry` (`start_route`): the steps of `route`

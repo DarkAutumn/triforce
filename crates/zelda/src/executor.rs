@@ -4,7 +4,8 @@ use crate::actions::Action;
 use crate::attack;
 use crate::blocks::{ProjectileBlock, ShieldWatch};
 use crate::clips::{
-    ClipAbort, ClipOutcome, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, SkipTarget, skip_target,
+    ClipAbort, ClipOutcome, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, Phase, SkipKind, SkipTarget,
+    skip_target,
 };
 use crate::enums::{ActionKind, Direction, ObjectClass};
 use crate::game::GameView;
@@ -510,7 +511,8 @@ impl<S> Executor<S> {
         target: Option<SkipTarget>,
     ) -> (Option<Interrupt>, ClipOutcome) {
         let Some(target) = target else {
-            let outcome = ClipOutcome { direction, kind: None, abort: Some(ClipAbort::Unavailable), presses: 0 };
+            let outcome =
+                ClipOutcome { direction, kind: None, abort: Some(ClipAbort::Unavailable), presses: 0, target: None };
             return (None, outcome);
         };
         let mut controller = Controller::new(target);
@@ -558,7 +560,14 @@ impl<S> Executor<S> {
             let after = FrameWatch::new(m.ram());
             if let Some(i) = ended(&before, &after) {
                 interrupt = Some(i);
-                abort = Some(ClipAbort::Interrupted(i));
+                // A block or ladder clip past its press, holding the heading, that runs on into the next room (4:$21's
+                // N wall already open) did what it set out to: Link is past the skipped point. A wrap never changes
+                // rooms on its crossing; one that does walked out the ordinary way.
+                let carried_on = i == Interrupt::Transition
+                    && controller.phase == Phase::Crossing
+                    && input == Input::Toward
+                    && target.kind != SkipKind::Wrap;
+                abort = if carried_on { None } else { Some(ClipAbort::Interrupted(i)) };
                 break;
             }
             let now = target.read(m.ram());
@@ -573,7 +582,8 @@ impl<S> Executor<S> {
             }
             before = after;
         }
-        let outcome = ClipOutcome { direction, kind: Some(target.kind), abort, presses: controller.presses };
+        let outcome =
+            ClipOutcome { direction, kind: Some(target.kind), abort, presses: controller.presses, target: Some(target) };
         (interrupt, outcome)
     }
 

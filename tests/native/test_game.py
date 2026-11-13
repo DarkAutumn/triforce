@@ -80,9 +80,14 @@ def test_clip_wraps_and_the_clips_switch_gates_the_mask(game):
     assert game.skip_available('W') and not game.skip_available('E')
     assert not game.is_allowed('CLIP W')
     game.set_clips(True)
-    assert game.is_allowed('CLIP W') and 'CLIP[W]' in game.legal
+    assert game.is_allowed('CLIP W') and 'CLIP[W]' in game.legal and game.clips_allowed
+    # The run-time switch (round 22) masks CLIP whatever the family's switch says, at once.
+    game.set_clips_allowed(False)
+    assert not game.is_allowed('CLIP W') and not game.clips_allowed
+    game.set_clips_allowed(True)
     change = game.act('CLIP W')
     assert change.clip == {'direction': 'W', 'kind': 'wrap', 'completed': True, 'abort': None, 'presses': 1}
+    assert not change.clip_finished_by_move
     assert (game.state.full_location, game.state.link['x']) == ((0, 0x77, False), 0xF0)
     assert game.act('MOVE E 8').clip is None
     assert game.state.full_location == (0, 0x78, False)

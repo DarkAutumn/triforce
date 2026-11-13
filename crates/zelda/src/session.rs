@@ -1,7 +1,7 @@
 //! A game session: emulator, option executor and game model.
 
 use crate::actions::{Action, ActionMask, compute_action_mask};
-use crate::clips;
+use crate::clips::{self, OpenClip};
 use crate::change::{Change, LookAhead};
 use crate::enums::{ActionKind, Direction};
 use crate::executor::{Executor, FrameSink, MODE_CAVE, Machine, ZeldaError};
@@ -46,6 +46,7 @@ pub struct SessionCheckpoint<S> {
     ledger: FutureCreditLedger,
     state: Option<Arc<GameView>>,
     mask: ActionMask,
+    open_clip: Option<OpenClip>,
 }
 
 /// What simulation mode put aside (`Session::set_simulating`).
@@ -68,8 +69,17 @@ pub struct Session<N: Nes> {
     /// Actions since the last load.
     pub steps: u64,
     disabled_kinds: Vec<ActionKind>,
-    /// The CLIP kind is offered where a skip is available (`crate::clips`; a specialist's `clips: true`).
+    /// The family offers the CLIP kind where a skip is available (`crate::clips`; a specialist's `clips: true`).
     clips: bool,
+    /// The run-time clips switch (round 22, default on): CLIP is offered only when the family has clips and this is
+    /// on ([`Session::clips_effective`]). The env and the chain runner set it; nothing in the game state holds it.
+    clips_allowed: bool,
+    /// Wraps (W/E) the objective says not to offer: their landing leaves the room only through an exit the
+    /// objective doesn't count (`crate::objectives::wraps_into_wrong_exits`; the env sets it every step).
+    vetoed_wraps: Vec<Direction>,
+    /// The skip a CLIP of this room left cut short ([`OpenClip`]), until a MOVE finishes it (`Change::
+    /// clip_finished_by_move`), Link leaves the room or another CLIP starts.
+    open_clip: Option<OpenClip>,
     /// Which fired weapons to simulate forward to credit their hits to the firing step (default all).
     pub look_ahead: LookAhead,
     /// Simulation mode (search) holds the frame sink, render flag and pre-entry capture flag here.
@@ -89,6 +99,9 @@ impl<N: Nes> Session<N> {
             steps: 0,
             disabled_kinds: Vec::new(),
             clips: false,
+            clips_allowed: true,
+            vetoed_wraps: Vec::new(),
+            open_clip: None,
             look_ahead: LookAhead::All,
             stash: None,
         }
@@ -178,20 +191,53 @@ impl<N: Nes> Session<N> {
     }
 
     /// Offer the CLIP kind where a grid-point skip is available (`crate::clips`; the env sets it from the acting
-    /// specialist's `clips:` switch). The mask is recomputed when it changes. A CLIP action runs the skip whatever
-    /// the switch says: the mask is what gates the policy.
+    /// specialist's `clips:` switch) and the run-time switch allows it ([`Session::set_clips_allowed`]). The mask is
+    /// recomputed when it changes. A CLIP action runs the skip whatever this says: the mask is what gates the policy.
     pub fn set_clips(&mut self, clips: bool) {
         if self.clips == clips {
             return;
         }
         self.clips = clips;
+        self.refresh_mask();
+    }
+
+    /// The family's switch ([`Session::set_clips`]).
+    pub fn clips(&self) -> bool {
+        self.clips
+    }
+
+    /// The run-time clips switch (round 22): off masks CLIP whatever the family says, from the mask this call
+    /// recomputes on. Default on.
+    pub fn set_clips_allowed(&mut self, allowed: bool) {
+        if self.clips_allowed == allowed {
+            return;
+        }
+        self.clips_allowed = allowed;
+        self.refresh_mask();
+    }
+
+    pub fn clips_allowed(&self) -> bool {
+        self.clips_allowed
+    }
+
+    /// CLIP is offered where a skip is available: the family's switch and the run-time switch both on.
+    pub fn clips_effective(&self) -> bool {
+        self.clips && self.clips_allowed
+    }
+
+    /// Wraps not to offer (`crate::objectives::wraps_into_wrong_exits`); the mask is recomputed when they change.
+    pub fn set_vetoed_wraps(&mut self, directions: &[Direction]) {
+        if self.vetoed_wraps == directions {
+            return;
+        }
+        self.vetoed_wraps = directions.to_vec();
+        self.refresh_mask();
+    }
+
+    fn refresh_mask(&mut self) {
         if let Some(state) = self.state.clone() {
             self.mask = self.compute_mask(&state);
         }
-    }
-
-    pub fn clips(&self) -> bool {
-        self.clips
     }
 
     /// Loads a machine state, applies randomization and overrides, and gains control of Link.
@@ -205,6 +251,7 @@ impl<N: Nes> Session<N> {
         nes.restore(state);
         self.executor.reset();
         self.ledger.clear();
+        self.open_clip = None;
         if opts.randomize_rng {
             for var in RNG_VARS {
                 nes.poke(var.addr(), rng.random_range(1..=255u8));
@@ -277,6 +324,7 @@ impl<N: Nes> Session<N> {
         self.total_frames = snapshot.total_frames;
         self.steps = snapshot.steps;
         self.ledger.clear();
+        self.open_clip = None;
         self.rebuild();
         self.state()
     }
@@ -290,6 +338,7 @@ impl<N: Nes> Session<N> {
             ledger: self.ledger.clone(),
             state: self.state.clone(),
             mask: self.mask,
+            open_clip: self.open_clip,
         }
     }
 
@@ -305,6 +354,7 @@ impl<N: Nes> Session<N> {
         self.ledger.clone_from(&checkpoint.ledger);
         self.state.clone_from(&checkpoint.state);
         self.mask = checkpoint.mask;
+        self.open_clip = checkpoint.open_clip;
     }
 
     /// Simulation mode (search): frames don't render or reach the frame sink (no publishing, pacing or pause
@@ -356,7 +406,15 @@ impl<N: Nes> Session<N> {
             curr = Arc::new(self.build_state());
         }
         self.mask = self.compute_mask(&curr);
-        let change = Change::new(
+        let finished = self
+            .open_clip
+            .is_some_and(|open| result.clip.is_none() && open.finished_by(&action, &prev, &curr));
+        self.open_clip = match &result.clip {
+            Some(outcome) => OpenClip::of(outcome, &prev, &curr),
+            None if finished || prev.full_location() != curr.full_location() => None,
+            None => self.open_clip,
+        };
+        let mut change = Change::new(
             &mut self.machine,
             prev,
             curr.clone(),
@@ -366,6 +424,7 @@ impl<N: Nes> Session<N> {
             &mut self.ledger,
             self.look_ahead,
         );
+        change.clip_finished_by_move = finished;
         self.state = Some(curr);
         Ok(change)
     }
@@ -387,8 +446,8 @@ impl<N: Nes> Session<N> {
 
     fn compute_mask(&self, state: &GameView) -> ActionMask {
         let mut mask = compute_action_mask(state);
-        if self.clips {
-            clips::allow_clips(&mut mask, state);
+        if self.clips_effective() {
+            clips::allow_clips(&mut mask, state, &self.vetoed_wraps);
         }
         for &kind in &self.disabled_kinds {
             mask.disallow_kind(kind);

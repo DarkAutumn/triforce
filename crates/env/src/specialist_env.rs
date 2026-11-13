@@ -256,6 +256,8 @@ pub struct EnvSnapshot<S> {
     boss: BossTransitions,
     bomb_stats: BombStats,
     clip_stats: ClipStats,
+    clips_allowed: bool,
+    pending_clips: Option<bool>,
     episode_steps: u64,
     episode_frames: u64,
     reward_total: f64,
@@ -308,6 +310,13 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     reward_total: f64,
     episode_rewards: IndexMap<&'static str, f64>,
     shaping: Option<ShapingDial>,
+    /// The run-time clips switch for the episodes to come (round 22): None draws it per episode, Some fixes it
+    /// ([`SpecialistEnv::set_clips_allowed`]).
+    clips_plan: Option<bool>,
+    /// The switch in force ([`SpecialistEnv::clips_allowed`]).
+    clips_allowed: bool,
+    /// A switch set mid-episode, applied before the next decision is built.
+    pending_clips: Option<bool>,
 }
 
 /// A shaping scale shared by a training pool's envs (f64 bits): the trainer lowers it between rollouts.
@@ -423,7 +432,35 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             episode_frames: 0,
             reward_total: 0.0,
             episode_rewards: IndexMap::new(),
+            clips_plan: None,
+            clips_allowed: true,
+            pending_clips: None,
         })
+    }
+
+    /// The run-time clips switch (round 22): `Some(on)` fixes it for this episode, from the next decision on (the
+    /// observation and mask already handed out stay as they are), and for every later one; `None` returns to
+    /// drawing it per episode. CLIP is offered only where the family has `clips: true` and the switch is on; the
+    /// objective, the path search and the `clip_usable_*` bits follow it.
+    pub fn set_clips_allowed(&mut self, allowed: Option<bool>) {
+        self.clips_plan = allowed;
+        if let Some(on) = allowed
+            && !self.done
+        {
+            self.pending_clips = Some(on);
+        }
+    }
+
+    /// The switch the last decision was built with.
+    pub fn clips_allowed(&self) -> bool {
+        self.clips_allowed
+    }
+
+    fn apply_clips_allowed(&mut self, on: bool) {
+        self.clips_allowed = on;
+        if let Some(gc) = &mut self.objectives {
+            gc.set_clips_allowed(on);
+        }
     }
 
     pub fn session(&self) -> &Session<N> {
@@ -558,6 +595,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 state = self.session.apply_ram(&values).clone();
             }
         }
+        self.clips_allowed = self.clips_plan.unwrap_or(true);
         let (route, step) = start_route(
             &self.data.map,
             state.full_location(),
@@ -584,15 +622,22 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
-    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; and its `clips:`
-    /// switch (the CLIP kind).  Recomputed every step: the 10th kill and the bomb count change within a room.
-    fn update_disabled_kinds(&mut self) {
+    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; its `clips:`
+    /// switch and the run-time one (the CLIP kind), and the wraps `objective` vetoes.  Recomputed every step: the
+    /// 10th kill and the bomb count change within a room.
+    fn update_disabled_kinds(&mut self, objective: &zelda::objectives::Objective) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
         self.session.set_clips(self.config.clips);
+        self.session.set_clips_allowed(self.clips_allowed);
+        let vetoed = if self.session.clips_effective() {
+            zelda::objectives::wraps_into_wrong_exits(&self.data.map, self.session.state(), objective)
+        } else {
+            Vec::new()
+        };
+        self.session.set_vetoed_wraps(&vetoed);
         self.builder.bomb_reserve = reserve;
-        self.builder.clips = self.config.clips;
     }
 
     /// Starts an episode from the session's state (loaded or restored).
@@ -600,6 +645,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
         gc.set_clips(self.config.clips);
+        gc.set_clips_allowed(self.clips_allowed);
+        self.pending_clips = None;
         // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
         let state = &self.cheats.begin(&mut self.session, &gc);
         let attached = attach(
@@ -610,7 +657,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             needs_wavefront(&self.config),
         );
         self.objectives = Some(gc);
-        self.update_disabled_kinds();
+        self.update_disabled_kinds(&attached.objective);
         let step = self.route_step.and_then(|i| self.data.map.routes.get(&self.route)?.get(i));
         (self.episode_target, self.episode_entry) = match step {
             Some(s) => (s.exit.clone(), s.entry.clone()),
@@ -677,6 +724,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             boss: self.boss,
             bomb_stats: self.bomb_stats,
             clip_stats: self.clip_stats,
+            clips_allowed: self.clips_allowed,
+            pending_clips: self.pending_clips,
             episode_steps: self.episode_steps,
             episode_frames: self.episode_frames,
             reward_total: self.reward_total,
@@ -701,13 +750,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.boss = snapshot.boss;
         self.bomb_stats = snapshot.bomb_stats;
         self.clip_stats = snapshot.clip_stats;
+        self.clips_allowed = snapshot.clips_allowed;
+        self.pending_clips = snapshot.pending_clips;
         self.episode_steps = snapshot.episode_steps;
         self.episode_frames = snapshot.episode_frames;
         self.reward_total = snapshot.reward_total;
         self.episode_rewards.clone_from(&snapshot.episode_rewards);
         // The disabled kinds depend on the state (the 10th kill, the bomb count) and aren't in the session snapshot.
-        if self.attached.is_some() {
-            self.update_disabled_kinds();
+        if let Some(attached) = self.attached.take() {
+            self.update_disabled_kinds(&attached.objective);
+            self.attached = Some(attached);
         }
     }
 
@@ -741,6 +793,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             )));
         }
         let change = self.session.act(action)?;
+        if let Some(on) = self.pending_clips.take() {
+            self.apply_clips_allowed(on);
+        }
         // The cheated items' state carries on (mask, observation); `change` keeps what the action did.
         let (cheats, state) = self.cheats.after_action(
             &mut self.session,
@@ -758,7 +813,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &self.config.reward,
             needs_wavefront(&self.config),
         );
-        self.update_disabled_kinds();
+        self.update_disabled_kinds(&curr.objective);
         self.linger.update(
             &LingerState::of(&change.previous, &prev.objective),
             &LingerState::of(&state, &curr.objective),
