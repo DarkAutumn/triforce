@@ -463,6 +463,73 @@ fn default_no_damage_steps() -> Option<i64> {
     Some(DEFAULT_NO_DAMAGE_STEPS)
 }
 
+/// The share of episodes a clip family (`clips: true` or `{enabled: true}` without `off_share`) starts with the
+/// run-time clips switch off (round 22): half with the skips, half without, so the model also learns the plain way.
+pub const DEFAULT_CLIPS_OFF_SHARE: f64 = 0.5;
+
+/// `clips:` of a specialist (`SpecialistConfig::clips`): `true`/`false` (the YAML 1.1 words as [`de_bool`]) or
+/// `{enabled: BOOL, off_share: SHARE}`. `off_share` defaults to [`DEFAULT_CLIPS_OFF_SHARE`] when enabled, else 0;
+/// it is the probability that an episode whose switch nothing fixes (the start state, `set_clips_allowed`) starts
+/// with it off ([`ClipsConfig::draw`]). A family without clips still follows the switch's way through a stretch.
+#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize)]
+pub struct ClipsConfig {
+    pub enabled: bool,
+    pub off_share: f64,
+}
+
+impl ClipsConfig {
+    pub fn new(enabled: bool) -> ClipsConfig {
+        ClipsConfig { enabled, off_share: if enabled { DEFAULT_CLIPS_OFF_SHARE } else { 0.0 } }
+    }
+
+    /// An episode's switch: off with probability `off_share` (no draw from `rng` at 0 or 1).
+    pub fn draw<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> bool {
+        use rand::RngExt;
+        if self.off_share <= 0.0 {
+            true
+        } else if self.off_share >= 1.0 {
+            false
+        } else {
+            rng.random::<f64>() >= self.off_share
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ClipsConfig {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Full {
+            #[serde(deserialize_with = "de_bool")]
+            enabled: bool,
+            #[serde(default)]
+            off_share: Option<f64>,
+        }
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Flag(#[serde(deserialize_with = "de_bool")] bool),
+            Full(Full),
+        }
+        let raw = Raw::deserialize(d).map_err(|_| {
+            serde::de::Error::custom("expected true/false or {enabled: BOOL, off_share: SHARE in [0, 1]}")
+        })?;
+        match raw {
+            Raw::Flag(enabled) => Ok(ClipsConfig::new(enabled)),
+            Raw::Full(Full { enabled, off_share }) => {
+                let mut clips = ClipsConfig::new(enabled);
+                if let Some(share) = off_share {
+                    if !(0.0..=1.0).contains(&share) {
+                        return Err(serde::de::Error::custom(format!("off_share must be in [0, 1], got {share}")));
+                    }
+                    clips.off_share = share;
+                }
+                Ok(clips)
+            }
+        }
+    }
+}
+
 /// One specialist task (design §3.3).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -488,11 +555,13 @@ pub struct SpecialistConfig {
     pub fresh_rooms: bool,
     #[serde(default)]
     pub items: ItemsConfig,
-    /// `clips: true`: the grid-point skips (`zelda::clips`: the overworld screen wrap, the dungeon block and ladder
-    /// clips) are offered as the CLIP action kind where they are available, and the path search behind PBRS and the
-    /// `target` observation knows them (round 21). Default false: CLIP masked everywhere.
-    #[serde(default, deserialize_with = "de_bool")]
-    pub clips: bool,
+    /// `clips:` (round 21; round 22: the training mix): `true`/`false`, or `{enabled: BOOL, off_share: SHARE}`.
+    /// `enabled`: the grid-point skips (`zelda::clips`: the overworld screen wrap, the dungeon block and ladder clips)
+    /// are offered as the CLIP action kind where they are available and the run-time switch is on, and the path
+    /// search behind PBRS and the `target` observation knows them. Default false: CLIP masked everywhere. `off_share`:
+    /// the share of training (and drawn) episodes that start with the run-time switch off ([`ClipsConfig`]).
+    #[serde(default)]
+    pub clips: ClipsConfig,
     #[serde(default)]
     pub curriculum: CurriculumConfig,
     #[serde(default, deserialize_with = "de_bool")]

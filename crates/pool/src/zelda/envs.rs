@@ -20,11 +20,56 @@ use rand_chacha::rand_core::SeedableRng;
 use replay::{Context, Ending, Event, Source, StateKind};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use zelda::cheats::{CheatItem, ItemCounts};
 use zelda::{Action, Nes, Session};
 
 pub type PoolSpecialistEnv<N, St> = SpecialistEnv<PoolNes<N>, PoolStore<St>>;
 pub type PoolChainEnv<N, St> = ChainEnv<PoolNes<N>, PoolStore<St>>;
+
+/// The run-time clips switch a chain pool's caller sets while it plays (round 22; `play-zelda.py`'s key): None
+/// leaves every run to its route's switch ([`Route::clips`]), `Some(on)` starts every run from now on with `on`,
+/// and, for a pool that applies it live ([`ChainRunEnv::set_clips_switch`]), flips the runs in progress at their
+/// next decision (`ChainEnv::set_clips_allowed`: the route re-plans from where Link stands). Shared by the pool's
+/// envs; every set bumps a generation, so a live env applies each one once.
+#[derive(Clone, Debug, Default)]
+pub struct ClipsSwitch(Arc<AtomicU32>);
+
+impl ClipsSwitch {
+    pub fn set(&self, on: Option<bool>) {
+        let code = match on {
+            None => 0,
+            Some(true) => 1,
+            Some(false) => 2,
+        };
+        let mut current = self.0.load(Ordering::Acquire);
+        loop {
+            let next = (((current >> 2) + 1) << 2) | code;
+            match self.0.compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => return,
+                Err(seen) => current = seen,
+            }
+        }
+    }
+
+    pub fn get(&self) -> Option<bool> {
+        Self::decode(self.0.load(Ordering::Acquire)).1
+    }
+
+    /// (generation, switch).
+    fn read(&self) -> (u32, Option<bool>) {
+        Self::decode(self.0.load(Ordering::Acquire))
+    }
+
+    fn decode(value: u32) -> (u32, Option<bool>) {
+        let on = match value & 3 {
+            1 => Some(true),
+            2 => Some(false),
+            _ => None,
+        };
+        (value >> 2, on)
+    }
+}
 
 /// Renders every real frame of `session` (gated by the pool's render flag in [`PoolNes`]), publishes rendered
 /// frames with `rgb` and paces.
@@ -504,11 +549,13 @@ where
     }
 }
 
-/// One evaluation episode: `SpecialistEnv::reset(seed, start_state)`.
+/// One evaluation episode: `SpecialistEnv::reset(seed, start_state)` with the run-time clips switch `clips` (None:
+/// drawn as in training, `clips: {off_share}`); a start state that fixes the switch wins.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvalJob {
     pub start_state: String,
     pub seed: u64,
+    pub clips: Option<bool>,
 }
 
 struct EvalEpisode {
@@ -516,6 +563,8 @@ struct EvalEpisode {
     room: (u8, u8, bool),
     start_health: f64,
     start_max_health: i32,
+    clips_allowed: bool,
+    clips_fixed: Option<bool>,
 }
 
 /// Evaluation episodes (`EvalTask`): each reset takes the next [`EvalJob`] from a list shared by the pool's envs;
@@ -616,6 +665,7 @@ where
         // rewards are recorded.
         let rewards = self.control.record_options().is_some_and(|o| o.rewards);
         self.env.session_mut().look_ahead = if rewards { zelda::LookAhead::All } else { zelda::LookAhead::Bombs };
+        self.env.set_clips_allowed(job.clips);
         let (o, info) = self.env.reset(Some(job.seed), Some(&job.start_state))?;
         self.cheated = info.cheated;
         let context = context(self.env.context());
@@ -628,6 +678,8 @@ where
             room: info.room,
             start_health: info.health,
             start_max_health: info.max_health,
+            clips_allowed: info.clips_allowed,
+            clips_fixed: info.clips_fixed,
         });
         Ok(Some(Start {
             policy: 0,
@@ -672,6 +724,8 @@ where
                 clip_stats: t.clip_stats,
                 target: t.target.clone(),
                 entry: t.entry.clone(),
+                clips_allowed: episode.clips_allowed,
+                clips_fixed: episode.clips_fixed,
                 visits: self.env.take_visits(),
             })));
             let (ending, job) = (specialist_ending(t), episode.job.seed as i64);
@@ -700,6 +754,9 @@ pub struct ChainRunEnv<N: Nes, St: StateStore<N::State>> {
     /// Rooms and cheated items of the run already in its recording.
     rooms_seen: usize,
     cheated: ItemCounts,
+    /// The caller's run-time clips switch, whether it flips runs in progress, and the generation applied last.
+    clips_switch: Option<(ClipsSwitch, bool)>,
+    clips_seen: u32,
 }
 
 impl<N, St> ChainRunEnv<N, St>
@@ -735,6 +792,8 @@ where
             hold_finished: false,
             rooms_seen: 0,
             cheated: ItemCounts::default(),
+            clips_switch: None,
+            clips_seen: 0,
         }
     }
 
@@ -759,6 +818,32 @@ where
     /// Hold the published frame on each finished run's last screen (`play_grid`'s result pause).
     pub fn set_hold_finished(&mut self, on: bool) {
         self.hold_finished = on;
+    }
+
+    /// Follow `switch` ([`ClipsSwitch`]): every run starts with its value when it has one and, with `live`, a run
+    /// in progress takes each new value at its next decision.
+    pub fn set_clips_switch(&mut self, switch: ClipsSwitch, live: bool) {
+        self.clips_switch = Some((switch, live));
+    }
+
+    /// Applies the caller's switch: at a run's start (`starting`) its value, during a live run each new value.
+    fn follow_clips_switch(&mut self, starting: bool) {
+        let Some((switch, live)) = &self.clips_switch else {
+            return;
+        };
+        let (generation, on) = switch.read();
+        if starting {
+            self.clips_seen = generation;
+            if let Some(on) = on {
+                self.chain.set_run_clips(on);
+            }
+        } else if *live && generation != self.clips_seen {
+            self.clips_seen = generation;
+            if let Some(on) = on {
+                self.chain.set_run_clips(on);
+                self.chain.set_clips_allowed(on);
+            }
+        }
     }
 
     fn frames(&self) -> u64 {
@@ -911,6 +996,7 @@ where
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
             (self.rooms_seen, self.cheated) = (0, ItemCounts::default());
             self.chain.set_rewards(self.control.record_options().is_some_and(|o| o.rewards));
+            self.follow_clips_switch(true);
             let status = self.chain.reset(Some(seed), &mut rng)?;
             let context = context(self.chain.context());
             let booted = self.chain.booted().map(|(name, delay)| (name.to_owned(), delay));
@@ -939,6 +1025,7 @@ where
         let action = Action::from_indices(kind, direction, duration)
             .map_err(|e| EnvError::InvalidAction(e.0))?;
         let before = self.frames();
+        self.follow_clips_switch(false);
         let status = self.chain.step(action)?;
         let frames = (self.frames() - before) as i64;
         if matches!(status, ChainStatus::Act { .. }) {

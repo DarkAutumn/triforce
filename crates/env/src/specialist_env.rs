@@ -105,6 +105,11 @@ pub struct StepInfo {
     pub route: String,
     /// Reset only: the start state's name or path.
     pub start_state: Option<String>,
+    /// The run-time clips switch this step's observation was built with (round 22).
+    pub clips_allowed: bool,
+    /// Reset only: the switch the start state fixes (`zelda::objectives::start_clips`: a room the route enters that
+    /// way on one way of a stretch only), None when either is possible.
+    pub clips_fixed: Option<bool>,
     /// Cheated items used so far this episode (not in the info dict; room events carry it).
     pub cheated: ItemCounts,
     pub terminal: Option<TerminalInfo>,
@@ -174,8 +179,10 @@ impl StepInfo {
             "route": self.route,
         });
         let o = m.as_object_mut().unwrap();
+        o.insert("clips_allowed".into(), json!(self.clips_allowed));
         if let Some(s) = &self.start_state {
             o.insert("start_state".into(), json!(s));
+            o.insert("clips_fixed".into(), json!(self.clips_fixed));
         }
         if let Some(t) = &self.terminal {
             o.insert("ending".into(), json!(t.ending));
@@ -314,6 +321,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     clips_plan: Option<bool>,
     /// The switch in force ([`SpecialistEnv::clips_allowed`]).
     clips_allowed: bool,
+    /// The switch the episode's start state fixes ([`StepInfo::clips_fixed`]).
+    clips_fixed: Option<bool>,
     /// A switch set mid-episode, applied before the next decision is built.
     pending_clips: Option<bool>,
 }
@@ -433,14 +442,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             episode_rewards: IndexMap::new(),
             clips_plan: None,
             clips_allowed: true,
+            clips_fixed: None,
             pending_clips: None,
         })
     }
 
     /// The run-time clips switch (round 22): `Some(on)` fixes it for this episode, from the next decision on (the
     /// observation and mask already handed out stay as they are), and for every later one; `None` returns to
-    /// drawing it per episode. CLIP is offered only where the family has `clips: true` and the switch is on; the
-    /// objective, the path search and the `clip_usable_*` bits follow it.
+    /// drawing it per episode (the family's `clips: {off_share}`, [`crate::config::ClipsConfig::draw`]). CLIP is
+    /// offered only where the family has clips enabled and the switch is on; the objective, the path search and the
+    /// `clip_usable_*` bits follow it. A start state that fixes the switch ([`StepInfo::clips_fixed`]) wins at reset.
     pub fn set_clips_allowed(&mut self, allowed: Option<bool>) {
         self.clips_plan = allowed;
         if let Some(on) = allowed
@@ -595,9 +606,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             }
         }
         let entry = state_entry(entry_name.as_deref().unwrap_or(&name));
-        // A start the route enters on one way of a stretch only fixes the switch (4:0x21 from S: the clip way).
+        // A start the route enters on one way of a stretch only fixes the switch (4:0x21 from S: the clip way); else
+        // `set_clips_allowed`'s, else a draw from the env's generator (`clips: {off_share}`, round 22). A curriculum
+        // start keeps it on: its track was explored with the switch on (`explore::explore_config`).
         let fixed = start_clips(&self.data.map, state.full_location(), entry, self.config.route.as_deref(), &state);
-        self.clips_allowed = fixed.or(self.clips_plan).unwrap_or(true);
+        self.clips_fixed = fixed;
+        self.clips_allowed = match fixed.or(self.clips_plan) {
+            Some(on) => on,
+            None if self.curriculum_tag.is_some() => true,
+            None => self.config.clips.draw(&mut self.rng),
+        };
         let (route, step) = start_route(
             &self.data.map,
             state.full_location(),
@@ -613,7 +631,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// Continues from a session snapshot (exact state, no RNG or RAM randomization; the cheated-items rule applies)
-    /// as a new episode labelled `name`; objectives, critic and end conditions restart as at reset; the route stays.
+    /// as a new episode labelled `name`; objectives, critic and end conditions restart as at reset; the route and the
+    /// clips switch stay (a switch `set_clips_allowed` fixed applies).
     pub fn restore(
         &mut self,
         snapshot: &SessionSnapshot<N::State>,
@@ -621,6 +640,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     ) -> Result<(Observation, StepInfo), EnvError> {
         self.curriculum_tag = None;
         self.session.restore(snapshot);
+        self.clips_fixed = None;
+        if let Some(on) = self.clips_plan {
+            self.clips_allowed = on;
+        }
         self.begin_episode(name.to_owned())
     }
 
@@ -632,7 +655,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
-        self.session.set_clips(self.config.clips);
+        self.session.set_clips(self.config.clips.enabled);
         self.session.set_clips_allowed(self.clips_allowed);
         let vetoed = if self.session.clips_effective() {
             zelda::objectives::wraps_into_wrong_exits(&self.data.map, self.session.state(), objective)
@@ -647,7 +670,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     fn begin_episode(&mut self, name: String) -> Result<(Observation, StepInfo), EnvError> {
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
-        gc.set_clips(self.config.clips);
+        gc.set_clips(self.config.clips.enabled);
         gc.set_clips_allowed(self.clips_allowed);
         self.pending_clips = None;
         // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
@@ -695,6 +718,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.attached = Some(attached);
         let mut info = self.info(state);
         info.start_state = Some(name.clone());
+        info.clips_fixed = self.clips_fixed;
         self.episode_state = name;
         Ok((obs, info))
     }
@@ -962,6 +986,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             specialist: self.specialist.clone(),
             route: self.route.clone(),
             start_state: None,
+            clips_allowed: self.clips_allowed,
+            clips_fixed: None,
             cheated: self.cheats.cheated,
             terminal: None,
         }

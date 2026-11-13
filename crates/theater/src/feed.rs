@@ -17,11 +17,20 @@ use zcore::Rom;
 
 use crate::queues::{Entry, Queue, Queues};
 
+/// A finished run: its seed, its TFREPLAY bytes and the run-time clips switch it started with (round 22; None when
+/// the producer doesn't know).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finished {
+    pub seed: i64,
+    pub data: Vec<u8>,
+    pub clips: Option<bool>,
+}
+
 /// Simulations that record their runs.  Used from the feed thread only.
 pub trait Producer: Send + 'static {
-    /// Waits up to `timeout` for runs to finish; returns the ones finished since the last call as (seed,
-    /// TFREPLAY bytes).  An error stops the feed for good.
-    fn poll(&mut self, timeout: Duration) -> Result<Vec<(i64, Vec<u8>)>, String>;
+    /// Waits up to `timeout` for runs to finish; returns the ones finished since the last call.  An error stops
+    /// the feed for good.
+    fn poll(&mut self, timeout: Duration) -> Result<Vec<Finished>, String>;
 
     /// Stops the simulations before their next frame, or lets them run again.
     fn set_paused(&mut self, paused: bool);
@@ -30,8 +39,9 @@ pub trait Producer: Send + 'static {
 /// What the feed holds and has done.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stats {
-    /// Entries per queue, in [`crate::QUEUES`] order.
+    /// Entries per queue, in [`crate::QUEUES`] order, and of those the runs played with the clips switch off.
     pub len: [usize; 5],
+    pub without_clips: [usize; 5],
     pub capacity: usize,
     /// Finished runs still owed to `best`.
     pub budget: usize,
@@ -87,9 +97,10 @@ impl<P: Producer> Feed<P> {
                     let began = std::time::Instant::now();
                     let result = producer.poll(Self::POLL).and_then(|runs| {
                         let idle = runs.is_empty();
-                        for (seed, data) in runs {
-                            let entry = Entry::read(&rom, seed, Arc::from(data))
+                        for Finished { seed, data, clips } in runs {
+                            let mut entry = Entry::read(&rom, seed, Arc::from(data))
                                 .map_err(|e| format!("seed {seed}: its replay can't be read: {e}"))?;
+                            entry.clips = clips;
                             if let Some(dir) = &save_dir {
                                 save(dir, &entry).map_err(|e| format!("saving seed {seed}'s replay: {e}"))?;
                             }
@@ -123,6 +134,7 @@ impl<P: Producer> Feed<P> {
         let queues = self.shared.queues.lock();
         Stats {
             len: Queue::ALL.map(|queue| queues.len(queue)),
+            without_clips: Queue::ALL.map(|queue| queues.without_clips(queue)),
             capacity: queues.capacity(),
             budget: queues.budget(),
             primed: queues.primed(),

@@ -759,6 +759,7 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
     let jobs = Jobs::new([EvalJob {
         start_state: start.into(),
         seed: 11,
+        clips: None,
     }]);
     let init = init();
     let control = init.control.clone();
@@ -1191,6 +1192,7 @@ fn eval_jobs() -> Vec<EvalJob> {
         .map(|seed| EvalJob {
             start_state: START.into(),
             seed,
+            clips: None,
         })
         .to_vec()
 }

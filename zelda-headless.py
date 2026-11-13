@@ -67,6 +67,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "2_7ds_0")
     add_power_on_arguments(parser)
     parser.add_argument('--stop-at', metavar='ROOM|step:N', help=STOP_AT_HELP)
+    parser.add_argument('--clips', choices=('on', 'off'), default='on',
+                        help="the run-time clips switch every run starts with (off: CLIP masked, the plain way "
+                             "through every routes.yaml stretch; golden paths always play with it on)")
     parser.add_argument('--act', choices=('sample', 'argmax', 'model'), default='sample',
                         help="sample: every model samples its actions (default: every seed differs); argmax: every "
                              "model's most likely action; model: each model's registered act mode")
@@ -129,7 +132,8 @@ def play(args, runner: Runner, folder: replay.ReplayDir) -> tuple[int, int]:
     """Plays runs until ``args.count`` replays are saved or the seeds run out; returns (the runs that finished,
     how many of them ended in an error)."""
     stop_room, stop_step = args.stop
-    route = Route.load(args.route, stop_room, args.start_from, stop_step=stop_step, power_on=args.power_on)
+    route = Route.load(args.route, stop_room, args.start_from, stop_step=stop_step, power_on=args.power_on,
+                       clips=args.clips == 'on')
     record = replay.record_options(runner.record_meta(route), args.streams, args.state, args.keyframe_frames)
     seeds = range(args.first_seed, args.first_seed + (args.count if args.only is None else args.max_runs))
     runs, errors = 0, []

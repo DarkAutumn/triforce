@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use replay::{Context, ENDING_DEATH, ENDING_STUCK, ENDING_WIN, Ending, Event, Player, RecordOptions, Recorder, Replay, Source};
 use theater::screen::FRAME_BYTES;
-use theater::{Entry, Feed, Producer, Queue, Queues, Resolver, Ring, Screen, Status, overlay};
+use theater::{Entry, Feed, Finished, Producer, Queue, Queues, Resolver, Ring, Screen, Status, overlay};
 use zcore::{Rom, ZCore, state_file};
 
 fn rom() -> Option<Arc<Rom>> {
@@ -60,13 +60,18 @@ fn an_entry_is_read_from_the_replay_alone() {
 
 /// Simulations a test scripts: runs arrive through a channel.
 struct Scripted {
-    runs: mpsc::Receiver<(i64, Vec<u8>)>,
+    runs: mpsc::Receiver<Finished>,
     paused: Arc<AtomicBool>,
     polls: usize,
 }
 
+/// A finished run as the producer hands it over (`clips`: the switch it started with).
+fn finished(seed: i64, data: Vec<u8>, clips: Option<bool>) -> Finished {
+    Finished { seed, data, clips }
+}
+
 impl Producer for Scripted {
-    fn poll(&mut self, timeout: Duration) -> Result<Vec<(i64, Vec<u8>)>, String> {
+    fn poll(&mut self, timeout: Duration) -> Result<Vec<Finished>, String> {
         self.polls += 1;
         match self.runs.recv_timeout(timeout) {
             Ok(run) => Ok(std::iter::once(run).chain(self.runs.try_iter()).collect()),
@@ -92,13 +97,15 @@ fn the_feed_fills_the_queues_and_pauses_the_simulations_while_nothing_is_wanted(
     assert!(feed.stats().running && feed.pop(Queue::Random).is_none());
 
     let win = recording(&rom, 60, 0, 10, &[Some(5)], ENDING_WIN);
-    send.send((3, win.clone())).unwrap();
-    send.send((4, recording(&rom, 40, 0, 10, &[Some(2)], ENDING_DEATH))).unwrap();
+    send.send(finished(3, win.clone(), Some(true))).unwrap();
+    send.send(finished(4, recording(&rom, 40, 0, 10, &[Some(2)], ENDING_DEATH), Some(false))).unwrap();
     wait_for("two runs", || feed.stats().runs == 2);
     let stats = feed.stats();
     assert_eq!((stats.len, stats.capacity, stats.endings), ([1, 1, 0, 1, 1], 1, [0, 1, 1, 0, 0, 0]));
+    // The death was played with the clips switch off: `died` holds it; `random` and `best` took the win.
+    assert_eq!(stats.without_clips, [0, 0, 0, 1, 0]);
     assert!(stats.running && !paused.load(Ordering::Acquire), "stuck has room");
-    send.send((5, recording(&rom, 30, 0, 10, &[Some(1)], ENDING_STUCK))).unwrap();
+    send.send(finished(5, recording(&rom, 30, 0, 10, &[Some(1)], ENDING_STUCK), None)).unwrap();
     wait_for("the pause", || paused.load(Ordering::Acquire));
     let stats = feed.stats();
     assert_eq!((stats.len, stats.running, stats.budget, stats.primed), ([1, 1, 1, 1, 1], false, 0, true));
@@ -111,13 +118,13 @@ fn the_feed_fills_the_queues_and_pauses_the_simulations_while_nothing_is_wanted(
 
     // A pop is wanted again: the simulations resume.  `best` holds the win; `random` the first run.
     let best = feed.pop(Queue::Best).unwrap();
-    assert_eq!((best.seed, &best.data[..], best.progress, best.start), (3, &win[..], 6, 10));
+    assert_eq!((best.seed, &best.data[..], best.progress, best.start, best.clips), (3, &win[..], 6, 10, Some(true)));
     wait_for("the resume", || !paused.load(Ordering::Acquire));
     assert!(feed.stats().running && feed.stats().budget == 1);
     assert_eq!(feed.pop(Queue::Random).unwrap().seed, 3, "random kept a copy of the first run");
 
     // A replay that can't be read stops the feed with the reason; the producer comes back on close.
-    send.send((9, b"garbage".to_vec())).unwrap();
+    send.send(finished(9, b"garbage".to_vec(), None)).unwrap();
     wait_for("the error", || feed.stats().error.is_some());
     let stats = feed.stats();
     assert!(!stats.running && stats.error.unwrap().starts_with("seed 9: its replay can't be read"));

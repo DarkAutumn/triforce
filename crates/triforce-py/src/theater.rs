@@ -6,7 +6,7 @@ use crate::context::{self, TfzStore};
 use crate::envpool::PyEnvPool;
 use crate::game::FRAME_SHAPE;
 use ::replay::ENDINGS;
-use ::theater::{Entry, Feed, Producer, QUEUES, Queue, Queues, Screen, Speaker};
+use ::theater::{Entry, Feed, Finished, Producer, QUEUES, Queue, Queues, Screen, Speaker};
 use numpy::{PyArray, PyArrayMethods};
 use parking_lot::Mutex;
 use pyo3::exceptions::{PyIndexError, PyRuntimeError, PyValueError};
@@ -23,8 +23,9 @@ struct PoolProducer {
 }
 
 impl Producer for PoolProducer {
-    fn poll(&mut self, timeout: Duration) -> Result<Vec<(i64, Vec<u8>)>, String> {
-        self.pool.get().take_replays(timeout)
+    fn poll(&mut self, timeout: Duration) -> Result<Vec<Finished>, String> {
+        let runs = self.pool.get().take_replays(timeout)?;
+        Ok(runs.into_iter().map(|(seed, data, clips)| Finished { seed, data, clips }).collect())
     }
 
     fn set_paused(&mut self, paused: bool) {
@@ -45,6 +46,7 @@ fn entry_dict<'py>(py: Python<'py>, entry: &Entry) -> PyResult<Bound<'py, PyDict
     d.set_item("hearts", f64::from(entry.hearts) / 2.0)?;
     d.set_item("frames", entry.frames)?;
     d.set_item("start", entry.start)?;
+    d.set_item("clips", entry.clips)?;
     Ok(d)
 }
 
@@ -97,8 +99,9 @@ impl PyReplayFeed {
 
     /// Takes the next run to watch from `queue` (`'best'`, `'success'`, `'stuck'`, `'died'`, `'random'`): a
     /// dict with `data` (the TFREPLAY bytes), `seed`, `ending`, `progress` (its furthest route step + 1; 0: never
-    /// on the route), `hearts` (at the end), `frames` (from `start`) and `start` (the frame the models took
-    /// over at); None when the queue has none (or `best` is still being chosen).
+    /// on the route), `hearts` (at the end), `frames` (from `start`), `start` (the frame the models took over at)
+    /// and `clips` (the run-time clips switch the run started with, round 22; None: unknown); None when the queue
+    /// has none (or `best` is still being chosen).
     fn pop<'py>(&self, py: Python<'py>, queue: &str) -> PyResult<Option<Bound<'py, PyDict>>> {
         let queue = self::queue(queue)?;
         match self.with(|feed| feed.pop(queue))? {
@@ -107,9 +110,10 @@ impl PyReplayFeed {
         }
     }
 
-    /// `queues` ({name: entries}), `capacity`, `budget` (runs still owed to `best`), `primed` (whether `best`
-    /// hands out runs yet), `runs` (finished so far), `endings` ({ending: runs}), `running` (the simulations
-    /// are not paused by the feed) and `error` (why the feed stopped, else None).
+    /// `queues` ({name: entries}), `without_clips` ({name: entries played with the clips switch off}), `capacity`,
+    /// `budget` (runs still owed to `best`), `primed` (whether `best` hands out runs yet), `runs` (finished so far),
+    /// `endings` ({ending: runs}), `running` (the simulations are not paused by the feed) and `error` (why the feed
+    /// stopped, else None).
     fn stats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let stats = self.with(|feed| feed.stats())?;
         let d = PyDict::new(py);
@@ -117,11 +121,16 @@ impl PyReplayFeed {
         for (name, len) in QUEUES.iter().zip(stats.len) {
             queues.set_item(name, len)?;
         }
+        let without_clips = PyDict::new(py);
+        for (name, len) in QUEUES.iter().zip(stats.without_clips) {
+            without_clips.set_item(name, len)?;
+        }
         let endings = PyDict::new(py);
         for (name, runs) in ENDINGS.iter().zip(stats.endings) {
             endings.set_item(name, runs)?;
         }
         d.set_item("queues", queues)?;
+        d.set_item("without_clips", without_clips)?;
         d.set_item("capacity", stats.capacity)?;
         d.set_item("budget", stats.budget)?;
         d.set_item("primed", stats.primed)?;

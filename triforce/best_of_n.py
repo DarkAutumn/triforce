@@ -4,18 +4,19 @@ From every seed start state of a specialist, the current policy plays ``runs`` e
 pool (each with its own seed, so RAM/load randomization and the keyed sampling noise differ per run: the outcomes
 spread over the futures the policy can't see, which favours robust play over lucky play).  Runs are ranked per start
 state by the true objective: success first, then hearts lost, then frames.  The top ``keep`` successful runs of each
-state supply ``(observation, mask, action)`` rows, kept per state so rare hard states aren't drowned out.
+state supply ``(observation, mask, action)`` rows, kept per state so rare hard states aren't drowned out (a clip
+family plays every state with the run-time clips switch on and off, and keeps each apart: ``clips.episode_jobs``).
 ``collect_best`` returns them as ``ppo.PPO(demo_batch=...)`` tensors (the filtered-BC term during PPO).
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Optional
 
 import numpy as np
 import torch
 
 from . import _native
+from .clips import episode_jobs, label as clips_label
 from .model import MASK_KEY
 
 
@@ -46,15 +47,13 @@ def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, t
                   states_dir=None, deterministic: bool = False, record: Optional[str] = None,
                   stop: Optional[Callable[[dict], bool]] = None) -> tuple[dict[int, dict], dict[int, dict]]:
     """Plays ``runs`` episodes from every seed start state of ``config`` with ``policy`` (a ``_native.Policy``) on
-    an ``EvalTask`` pool of ``parallel`` envs; episode ``i`` is seeded ``seed + i``.  Returns (eval records by seed,
-    recorded plays by job; ``record`` as ``EnvPool.play``'s).  ``stop(record)`` is called with each record as it
-    arrives: True ends the evaluation there (the pool closes; episodes still running are dropped)."""
+    an ``EvalTask`` pool of ``parallel`` envs, in each run-time clips switch state the family plays and the state
+    allows (``clips.episode_jobs``: both for a clip family); episode ``i`` is seeded ``seed + i``.  Returns (eval
+    records by seed, recorded plays by job; ``record`` as ``EnvPool.play``'s).  ``stop(record)`` is called with each
+    record as it arrives: True ends the evaluation there (the pool closes; episodes still running are dropped)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     states_dir = None if states_dir is None else str(states_dir)
-    states = sorted(Path(p).stem for p in config.resolve_start_states(states_dir))
-    if not states:
-        raise ValueError(f"{config.name} has no seed start states")
-    jobs = [(state, seed + index) for index, state in enumerate(s for s in states for _ in range(runs))]
+    jobs = episode_jobs(config, runs, seed, states_dir=states_dir)
     records: dict[int, dict] = {}
     plays: dict[int, dict] = {}
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
@@ -75,14 +74,15 @@ def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, t
 def success_by_state(config, policy, runs: int, seed: int = 0, parallel: int = 4, threads: Optional[int] = None,
                      states_dir=None, deterministic: bool = False,
                      stop: Optional[Callable[[dict], bool]] = None) -> dict[str, tuple[int, int]]:
-    """``play_episodes`` without recording: start state -> (successes, episodes) (only the episodes played before
-    ``stop`` ended it, if it did)."""
+    """``play_episodes`` without recording: start state (``clips.label``: ``<state>:clips-off`` with the switch
+    off) -> (successes, episodes) (only the episodes played before ``stop`` ended it, if it did)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     records, _ = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, deterministic, stop=stop)
     result: dict[str, tuple[int, int]] = {}
     for record in records.values():
-        successes, episodes = result.get(record['start_state'], (0, 0))
-        result[record['start_state']] = (successes + bool(record['success']), episodes + 1)
+        key = clips_label(record['start_state'], record.get('clips_allowed'))
+        successes, episodes = result.get(key, (0, 0))
+        result[key] = (successes + bool(record['success']), episodes + 1)
     return result
 
 
@@ -96,7 +96,7 @@ def collect_best(config, policy, runs: int, keep: int, seed: int = 0, parallel: 
                                    record='observations')
     by_state: dict[str, list[dict]] = {}
     for record in records.values():
-        by_state.setdefault(record['start_state'], []).append(record)
+        by_state.setdefault(clips_label(record['start_state'], record.get('clips_allowed')), []).append(record)
     chosen = []
     for state in sorted(by_state):
         best = sorted((r for r in by_state[state] if r['success']), key=lambda r: (rank_key(r), r['seed']))[:keep]

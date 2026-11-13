@@ -27,7 +27,7 @@ static DATA: LazyLock<Arc<GameData>> = LazyLock::new(common::game_data);
 fn room_env(nes: ZCore, family: &str, state: &str, clips: bool, setup: &[(u16, u8)]) -> Env {
     let mut config = (*DATA.specialists[family]).clone();
     config.ram_randomization = RamRandomization::default();
-    assert!(config.clips, "{family} has clips: true");
+    assert!(config.clips.enabled, "{family} has clips: true");
     let opts = EnvOptions { start_state: Some(state.into()), lenient_actions: true, ..Default::default() };
     let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env");
     env.set_clips_allowed(Some(clips));
@@ -218,7 +218,7 @@ fn objective_after(nes: ZCore, s: &Scenario, clips: bool) -> (Objective, Observa
 fn objective_without_clips(nes: ZCore, s: &Scenario) -> (Objective, ZCore) {
     let mut config = (*DATA.specialists[s.family]).clone();
     config.ram_randomization = RamRandomization::default();
-    config.clips = false;
+    config.clips = env::config::ClipsConfig::new(false);
     let opts = EnvOptions { start_state: Some(s.state.into()), lenient_actions: true, ..Default::default() };
     let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env");
     env.reset(Some(0), None).unwrap();
@@ -409,4 +409,51 @@ fn a_ladder_clip_cut_by_a_hit_and_finished_by_a_move_is_counted() {
         nes = env.into_parts().0.into_nes();
     }
     panic!("no ladder clip cut by a hit in 64 seeds");
+}
+
+/// The training mix (round 22): with nothing fixing it, every episode draws the switch from the env's generator at
+/// the family's `clips: {off_share}` (0 and 1 draw nothing) and the episode's route way follows it (4:0x31 from E:
+/// N with clips, W without); the same seed draws the same. A start state the plain way alone enters (4:0x30 from E)
+/// fixes it off whatever the share, and `set_clips_allowed` fixes it for every episode. The reset info carries both.
+#[test]
+fn the_switch_is_drawn_per_episode() {
+    let Some(mut nes) = open_core() else { return };
+    let exit_of = |env: &Env| {
+        let (route, step) = env.route();
+        DATA.map.routes[route][step.expect("a route step")].exit.clone()
+    };
+    for (share, state, plan, want) in [
+        (0.0, "4_31e_0", None, Some(true)),
+        (1.0, "4_31e_0", None, Some(false)),
+        (0.5, "4_31e_0", None, None),
+        (0.0, "4_30e_0", None, Some(false)),
+        (0.0, "4_31e_0", Some(false), Some(false)),
+        (1.0, "4_31e_0", Some(true), Some(true)),
+    ] {
+        let mut config = (*DATA.specialists["vire"]).clone();
+        config.ram_randomization = RamRandomization::default();
+        config.clips.off_share = share;
+        let opts = EnvOptions { start_state: Some(state.into()), ..Default::default() };
+        let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env");
+        env.set_clips_allowed(plan);
+        let label = format!("{state} off_share {share} plan {plan:?}");
+        let mut drawn = Vec::new();
+        for seed in 0..12 {
+            let (_, info) = env.reset(Some(seed), None).unwrap();
+            assert_eq!(info.clips_allowed, env.clips_allowed(), "{label}");
+            assert_eq!(info.clips_fixed, (state == "4_30e_0").then_some(false), "{label}");
+            assert_eq!(info.to_json()["clips_allowed"], info.clips_allowed, "{label}");
+            if state == "4_31e_0" {
+                assert_eq!(exit_of(&env), if info.clips_allowed { "N" } else { "W" }, "{label}: the way follows");
+            }
+            drawn.push(info.clips_allowed);
+        }
+        match want {
+            Some(on) => assert!(drawn.iter().all(|&d| d == on), "{label}: {drawn:?}"),
+            None => assert!(drawn.contains(&true) && drawn.contains(&false), "{label}: both drawn, {drawn:?}"),
+        }
+        let again: Vec<bool> = (0..12).map(|seed| env.reset(Some(seed), None).unwrap().1.clips_allowed).collect();
+        assert_eq!(again, drawn, "{label}: the same seeds draw the same");
+        nes = env.into_parts().0.into_nes();
+    }
 }
