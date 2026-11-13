@@ -70,7 +70,12 @@ impl Observed {
 #[derive(Clone, Debug)]
 pub struct Change {
     pub action: Action,
+    /// Frames that count against the action: every frame it played but the item sub-screen's (the game is paused
+    /// there). Discounting, the frame penalty, the observation's history, heart timers and linger use these.
     pub frames: u32,
+    /// Frames on the item sub-screen choosing the B item (`crate::submenu`), not in `frames`. Counts of frames
+    /// played (session and episode totals, per-visit and chain frames, replays) add them back.
+    pub menu_frames: u32,
     pub interrupt: Option<Interrupt>,
     pub control_frames: u32,
     /// Confirmed shield blocks during the option (never changed by look-ahead).
@@ -115,7 +120,8 @@ impl Change {
         };
         let mut change = Change {
             action,
-            frames: option.frames,
+            frames: option.frames - option.menu_frames,
+            menu_frames: option.menu_frames,
             interrupt: option.interrupt,
             control_frames: option.control_frames,
             projectile_blocks: option.projectile_blocks,
@@ -459,6 +465,7 @@ mod tests {
             control_frames: 4,
             projectile_blocks: Vec::new(),
             clip: None,
+            menu_frames: 0,
         };
         Change::new(
             m,

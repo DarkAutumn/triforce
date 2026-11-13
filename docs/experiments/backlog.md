@@ -42,21 +42,33 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
      68.6%). The whole D2 regression was the one-pixel error; the closed wall walk cost nothing measurable, so the
      retrain need not recover anything from it. The D2 segment still loses most in 2:0x1e (goriya, 61 deaths per
      1000), 2:0x3e (moldorm, 53) and 2:0x5e (goriya, 35).
+     The movement cleanup (item 4) then replaced the position rule: the mask asks the game's own `DoorwayDir` and
+     input rules (`attack::plan`; decisions 2026-11-12, "Attacks by buttons"), which give the top row and left
+     column their strikes too.
 
-4. **Fewer writes to memory** (Lee, Nov 12). The executor plays some actions by writing RAM instead of pressing
-   buttons, which makes combat easier than the real game:
-   - **Item selection:** a BOMB, BOOMERANG or ARROW action writes `Var::SelectedItem` before pressing B
+4. [x] **Fewer writes to memory** (Lee, Nov 12; done in round 21, decisions 2026-11-12 "Attacks by buttons"). The
+   executor plays some actions by writing RAM instead of pressing buttons, which makes combat easier than the real
+   game:
+   - [x] **Item selection:** a BOMB, BOOMERANG or ARROW action writes `Var::SelectedItem` before pressing B
      (`zelda::executor` `run_attack`). Select the item the way a player does: open the sub-screen with START, move
      the cursor to it, close it, and count those frames (and Link's exposure while the screen is up) against the
-     action.
-   - **Turning to attack:** every attack writes `Var::LinkDirection` to face Link the way he strikes (after walking
+     action. Done (`zelda::submenu`), but by the round 21 decision the sub-screen's frames (123-126, the game paused:
+     no exposure) are `menu_frames`, played and counted in every total but not against the action.
+   - [x] **Turning to attack:** every attack writes `Var::LinkDirection` to face Link the way he strikes (after walking
      him onto the grid point). A player has to turn by moving, which takes a step and can cost a hit. Turn with
-     the d-pad instead, so the turn is real and the models learn to face enemies before they swing.
-   - Then list the writes that remain (the cheat ledger's bombs/keys/rupees, start-state RAM randomization,
-     anything else that calls `set_var` during play) and decide for each whether it stays. Expect a retrain and
-     an action-schema or behaviour change (a `COMPAT` bump if the actions change), and re-measure every family in
-     single rooms and chains.
+     the d-pad instead, so the turn is real and the models learn to face enemies before they swing. Done
+     (`zelda::attack`): the sword turns on its press, bombs and arrows take a turn frame, the mask offers exactly the
+     strikes the buttons make.
+   - [x] Then list the writes that remain (the cheat ledger's bombs/keys/rupees, start-state RAM randomization,
+     anything else that calls `set_var` during play) and decide for each whether it stays. Kept: start-state RAM
+     randomisation, the chain's RNG redraw at a checkpoint, the cheat ledger, the look-ahead's pokes (inside a
+     restored snapshot) and `perturb_rng` (search only); nothing else writes during play.
    - The turn write already caused one exploit (round20.md §2: walking through a wall from a doorway, now masked).
+   - **What remains:** the full retrain and re-measuring every family in single rooms and chains (round 21);
+     whether a switch between two held B items, free to the critic, should cost something (124 paused frames each,
+     about 2 s of real time; a D3 fight alternating boomerang and bombs spends 3-4x its game time on the
+     sub-screen); ARROW is untested in a family (no route state holds arrows yet); strikes refused as `Band` need a
+     MOVE out of the band first (doorway entry spots, screen edges).
 
 ## Done (Nov 12): Dungeon 4 (Lee; round 20, 1.4.0.0)
 

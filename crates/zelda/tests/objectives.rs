@@ -1068,19 +1068,62 @@ fn d4_gleeoks_heads_are_the_enemies() {
     }
 }
 
-/// In an underworld doorway the game never turns Link sideways (a perpendicular press walks him back into the room
-/// first), so no sideways attack is legal there: the executor's turn would let the game walk him through the wall
-/// (4:0x11's S doorway: BOMB E landed him in 0x12, found by the explorer).
+/// Round 20: in 4:0x11's S doorway the executor turned Link sideways by writing his facing, and the game then walked
+/// him along it without a tile test, through the wall (BOMB E landed him in 0x12, found by the explorer). Attacks now
+/// turn Link by buttons only. Walking S frame by frame from the entry spot out through the doorway, every sideways
+/// strike is played at every spot, offered or not: Link stays in the room, on the doorway's line or inside it. Near
+/// the room a sideways strike walks him back onto the room's edge, where the game turns him (4:0x11); deep in a
+/// doorway facing out of the room the game can't turn him sideways (asm:Link_ModifyDirInDoorway forces the press
+/// onto his axis): the strike is refused and the executor, given it anyway, presses nothing (1:0x73).
 #[test]
 fn no_sideways_attack_in_a_doorway() {
-    let map = Arc::new(GameMap::builtin());
-    let Some((mut s, _)) = d4_room(&map, "4_11s_0", 0x11, "S") else { return };
-    // Link one step into the S doorway, facing S (where MOVE S 8 from the entry spot puts him).
-    s.apply_ram(&[(Var::LinkX, 120), (Var::LinkY, 191), (Var::LinkDirection, 4), (Var::Bombs, 1)]);
-    let state = s.state().clone();
-    assert!(state.link.position.y > 0xBD, "in the doorway: {:?}", state.link.position);
-    assert_eq!(s.mask().directions(ActionKind::Bomb), [Direction::N]);
-    assert!(s.mask().directions(ActionKind::Sword).iter().all(|d| matches!(d, Direction::N | Direction::S)));
-    act(&mut s, "MOVE N 16");
-    assert!(s.mask().directions(ActionKind::Bomb).contains(&Direction::E), "back in the room");
+    let (offered, refused, deepest) = sideways_in_the_s_doorway("4_11s_0", loc(4, 0x11));
+    assert!(offered > 0 && deepest > 0xBD, "4:0x11: offered {offered}, deepest y {deepest:#x}");
+    assert_eq!(refused, 0, "4:0x11's S door is a bombed wall: no spot deep in it");
+    let (_, refused, deepest) = sideways_in_the_s_doorway("1_73s_0", loc(1, 0x73));
+    assert!(refused > 0, "1:0x73: deepest y {deepest:#x}");
+}
+
+/// Plays BOMB E/W and SWORD E/W from every spot of a walk S out of state `name`'s entry spot (until the game leaves
+/// play): the strikes the buttons can make, those refused as a doorway's, the deepest Y reached in play.
+fn sideways_in_the_s_doorway(name: &str, room: MapLocation) -> (u32, u32, i32) {
+    use zelda::attack::{Refusal, explain};
+    use zelda::executor::buttons;
+    let Some(nes) = open_core() else { return (1, 1, 0xFF) };
+    let mut s = Session::new(Counted(nes, 0), Arc::new(GameMap::builtin()));
+    s.load(&load_named_state(name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    s.apply_ram(&[(Var::Bombs, 4)]);
+    let (mut offered, mut refused, mut deepest) = (0, 0, 0);
+    let mut spot = s.snapshot();
+    for frame in 0..40 {
+        let state = s.state().clone();
+        if state.full_location() != room || state.mode() != 5 {
+            break;
+        }
+        let (x0, y0) = (state.link.position.x, state.link.position.y);
+        deepest = deepest.max(y0);
+        for a in ["BOMB E", "BOMB W", "SWORD E", "SWORD W"] {
+            let action = Action::parse(a).unwrap();
+            // The mask offers only the strikes the buttons can make (the room's other gates aside).
+            let why = explain(&state, action.kind, action.direction);
+            assert!(!s.mask().is_allowed(&action) || why.is_ok(), "{name} frame {frame} {a}: {why:?}");
+            match why {
+                Ok(_) => offered += 1,
+                Err(Refusal::Doorway) => refused += 1,
+                Err(_) => {}
+            }
+            let c = act(&mut s, a);
+            let after = s.state().clone();
+            let (x, y) = (after.link.position.x, after.link.position.y);
+            assert_eq!(after.full_location(), room, "{name} frame {frame} {a} from ({x0},{y0}): {why:?}");
+            assert!(x == 0x78 || y <= 0xBD, "{name} frame {frame} {a} from ({x0},{y0}): Link at ({x},{y}) in the wall");
+            if why.is_err() {
+                assert_eq!((x, y, c.control_frames), (x0, y0, 0), "{name} frame {frame} {a}: refused, nothing pressed");
+            }
+            s.restore(&spot);
+        }
+        s.press(buttons::DOWN, 1);
+        spot = s.snapshot();
+    }
+    (offered, refused, deepest)
 }

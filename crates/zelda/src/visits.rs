@@ -137,7 +137,7 @@ impl VisitStep<'_> {
     /// Observed effects only: a hit counts on the step it lands.
     pub fn of(change: &Change) -> VisitStep<'_> {
         VisitStep {
-            frames: change.frames,
+            frames: change.frames + change.menu_frames,
             health_lost: change.health_lost,
             health_gained: change.health_gained,
             hits_dealt: change.observed.hits() as u32,

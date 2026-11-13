@@ -1,15 +1,17 @@
 //! Timed options frame by frame with interrupts, and uncontrollable-frame skipping.
 
 use crate::actions::Action;
+use crate::attack;
 use crate::blocks::{ProjectileBlock, ShieldWatch};
 use crate::clips::{
     ClipAbort, ClipOutcome, ClipSettings, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, SkipTarget,
 };
-use crate::enums::{ActionKind, Direction, ObjectClass, selected};
+use crate::enums::{ActionKind, Direction, ObjectClass};
 use crate::game::GameView;
 use crate::nes::Nes;
 use crate::room_entry::is_pre_entry;
 use crate::tables::{RAM_SIZE, SRAM_OFFSET};
+use crate::submenu;
 use crate::vars::Var;
 use std::fmt;
 
@@ -61,10 +63,10 @@ const ADDR_TRIGGERED_DOOR_CMD: usize = 0x54;
 const ADDR_OPENED_DOORS: usize = 0xEE;
 const ADDR_HEARTS: usize = 0x66F;
 const ADDR_PARTIAL_HEARTS: usize = 0x670;
-const ADDR_LINK_DIRECTION: usize = 0x98;
-const ADDR_LINK_GRID_OFFSET: usize = 0x394;
-/// Frames an off-grid Link needs to reach the next grid point (at most 6 px at 1.5 px/frame, rounded up).
-const MAX_ALIGN_FRAMES: u32 = 6;
+/// Turn frames an attack may take beyond its plan (lag frames repeat a decision) before it gives up.
+const TURN_SLACK_FRAMES: u32 = 4;
+/// Frames an attack waits for Link's item-use pose (a boomerang caught during the turn) to end before its press.
+const MAX_POSE_FRAMES: u32 = 32;
 const OBJ_X: usize = 0x70;
 const OBJ_Y: usize = 0x84;
 const OBJ_ID: usize = 0x34F;
@@ -170,6 +172,7 @@ impl std::error::Error for ZeldaError {}
 /// What happened while executing one option.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OptionResult {
+    /// Every frame the option played (the item sub-screen's included).
     pub frames: u32,
     pub interrupt: Option<Interrupt>,
     /// Frames of the option itself, before uncontrollable skipping.
@@ -177,6 +180,10 @@ pub struct OptionResult {
     pub projectile_blocks: Vec<ProjectileBlock>,
     /// The skip this option performed (a CLIP, or a MOVE under the `long`/`edge` triggers): `crate::clips`.
     pub clip: Option<ClipOutcome>,
+    /// Frames on the item sub-screen choosing the B item (`crate::submenu`), included in `frames`. The game is
+    /// paused for all of them, so they don't count against the action (discounting, frame penalties and the
+    /// observation's history use `frames - menu_frames`).
+    pub menu_frames: u32,
 }
 
 impl OptionResult {
@@ -399,6 +406,7 @@ impl<S> Executor<S> {
         self.blocks = Some(Vec::new());
         let result = (|| {
             let mut clip = None;
+            let mut menu_frames = 0;
             let interrupt = if let Some(target) = self.clips.action_target(state, action) {
                 let (interrupt, outcome) = self.run_skip(m, action.direction, target);
                 clip = Some(outcome);
@@ -406,8 +414,9 @@ impl<S> Executor<S> {
             } else if matches!(action.kind, ActionKind::Move | ActionKind::Wait) {
                 self.run_timed(m, action, state)
             } else {
-                self.run_attack(m, action);
-                None
+                let (interrupt, frames) = self.run_attack(m, action, state);
+                menu_frames = frames;
+                interrupt
             };
             let control_frames = (m.frame - start) as u32;
             if interrupt != Some(Interrupt::GameOver) && !is_game_over_mode(m.read(ADDR_MODE)) {
@@ -419,6 +428,7 @@ impl<S> Executor<S> {
                 control_frames,
                 projectile_blocks: self.blocks.take().unwrap_or_default(),
                 clip,
+                menu_frames,
             })
         })();
         self.blocks = None;
@@ -548,47 +558,66 @@ impl<S> Executor<S> {
         (interrupt, outcome)
     }
 
-    fn run_attack<N: Nes>(&mut self, m: &mut Machine<N>, action: &Action) {
-        let item = match action.kind {
-            ActionKind::Bomb => Some(selected::BOMBS),
-            ActionKind::Boomerang => Some(selected::BOOMERANG),
-            ActionKind::Arrow => Some(selected::ARROWS),
-            _ => None,
+    /// An attack played with the controller alone ([`crate::attack`]; no RAM is written): the item sub-screen
+    /// first when the B item isn't the selected one ([`Self::select_item`]), then the turn frames the game needs and
+    /// the press, then the weapon's own frames. An attack the buttons can't make from here (the mask doesn't offer
+    /// it) presses nothing. Returns the interrupt that cut the turn short (a hit, a room change, game over) and the
+    /// sub-screen frames.
+    fn run_attack<N: Nes>(&mut self, m: &mut Machine<N>, action: &Action, state: &GameView) -> (Option<Interrupt>, u32) {
+        let (kind, d) = (action.kind, action.direction);
+        let Some(turn_frames) = attack::plan(state, kind, d) else {
+            return (None, 0);
         };
-        if let Some(item) = item {
-            m.set_var(Var::SelectedItem, item);
-        }
-        let facing = match action.direction {
-            Direction::NW | Direction::NE => Direction::N,
-            Direction::SW | Direction::SE => Direction::S,
-            d => d,
-        };
-        // Off the grid the game moves Link along ObjDir without a tile test and snaps him at the next grid point
-        // (asm:Walker_Move / asm:Obj_SnapToGrid); it never turns him perpendicular there. So first walk him on to
-        // the grid point along his line (at most 6 frames), as the game would, then turn and attack.
-        let current = m.read(ADDR_LINK_DIRECTION);
-        let vertical = |d: u8| d & 0x0C != 0;
-        if m.read(ADDR_LINK_GRID_OFFSET) != 0 && vertical(current) != vertical(facing.value()) {
-            let along = direction_buttons(Direction::from_ram_value(current));
-            let mode = m.read(ADDR_MODE);
-            for _ in 0..MAX_ALIGN_FRAMES {
-                self.step(m, along, 1);
-                if m.read(ADDR_LINK_GRID_OFFSET) == 0 || m.read(ADDR_MODE) != mode {
-                    break;
-                }
+        let mut menu_frames = 0;
+        if let Some(slot) = submenu::slot(kind)
+            && m.read(submenu::ADDR_SELECTED_ITEM) != slot
+        {
+            menu_frames = self.select_item(m, slot);
+            if m.read(submenu::ADDR_SELECTED_ITEM) != slot {
+                return (None, menu_frames);
             }
         }
-        m.set_var(Var::LinkDirection, facing.value());
-        let button = if item.is_some() {
-            buttons::B
-        } else {
-            buttons::A
+        // The turn, closed loop on the real game (a lag frame repeats a decision); a few frames past the plan's
+        // count end it. A returning boomerang caught during the turn puts Link in the catch pose ($20 -> $21 -> $31
+        // -> 0), and the game reads A and B only once his state is 0 again (asm:Link_HandleInput): those frames are
+        // waited out with nothing pressed, so the press that follows is a new one.
+        let mut before = FrameWatch::new(m.ram());
+        let start_near = before.near;
+        let (mut turns, mut posed) = (0, 0);
+        let press = loop {
+            let link = attack::Link::read(m.ram());
+            let input = if link.state != 0 && posed < MAX_POSE_FRAMES {
+                posed += 1;
+                0
+            } else {
+                match attack::next(kind, d, &link) {
+                    attack::Next::Press(buttons) => break Some(buttons),
+                    attack::Next::Turn(t) if turns <= turn_frames + TURN_SLACK_FRAMES => {
+                        turns += 1;
+                        direction_buttons(t)
+                    }
+                    attack::Next::Turn(_) | attack::Next::Impossible => break None,
+                }
+            };
+            self.step(m, input, 1);
+            let after = FrameWatch::new(m.ram());
+            match detect_interrupt(&before, &after, start_near) {
+                Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => {
+                    return (Some(i), menu_frames);
+                }
+                _ if SCROLLING_MODES.contains(&after.mode) => return (Some(Interrupt::Transition), menu_frames),
+                _ => {}
+            }
+            before = after;
         };
-        // In a busy room the game skips input on lag frames: a one-frame press can go unread. Hold the button one
-        // more frame when nothing started (holding it is no new press once the game has read it).
-        self.step(m, direction_buttons(action.direction) | button, 1);
+        let Some(press) = press else {
+            return (None, menu_frames);
+        };
+        // In a busy room the game skips input on lag frames: a one-frame press can go unread. Hold the buttons one
+        // more frame when nothing started (holding is no new press once the game has read it).
+        self.step(m, press, 1);
         if m.read(ADDR_LINK_STATUS) == 0 && m.read(ADDR_SWORD_ANIMATION) == 0 {
-            self.step(m, direction_buttons(action.direction) | button, 1);
+            self.step(m, press, 1);
         }
         for _ in 0..MAX_ANIMATION_WAIT {
             self.step(m, 0, 1);
@@ -596,6 +625,56 @@ impl<S> Executor<S> {
                 break;
             }
         }
+        (None, menu_frames)
+    }
+
+    /// Selects B item `slot` on the item sub-screen ([`crate::submenu`]): START, the scroll in, one step per frame
+    /// toward the slot the shorter way (alternating the direction and the direction with Up, so every frame is a new
+    /// input), START on the frame that reaches it, the scroll out. Returns the frames played, all of them with the
+    /// game paused; the sub-screen is closed (`SubmenuState` 0, back in play) when it returns.
+    fn select_item<N: Nes>(&mut self, m: &mut Machine<N>, slot: u8) -> u32 {
+        let start = m.frame;
+        let active = submenu::active_state(m.read(ADDR_LEVEL));
+        self.step(m, buttons::START, 1);
+        if m.read(submenu::ADDR_SUBMENU_STATE) != 0 {
+            for _ in 0..submenu::MAX_OPEN_FRAMES {
+                if m.read(submenu::ADDR_SUBMENU_STATE) == active {
+                    break;
+                }
+                self.step(m, 0, 1);
+            }
+            let peek = |m: &Machine<N>| {
+                let ram = *m.ram();
+                move |addr: u16| ram[addr as usize]
+            };
+            for _ in 0..submenu::MAX_SELECT_FRAMES {
+                if m.read(submenu::ADDR_SUBMENU_STATE) != active {
+                    break;
+                }
+                let selected = m.read(submenu::ADDR_SELECTED_ITEM);
+                let inventory = peek(m);
+                let Some((dir, _)) = (selected != slot).then(|| submenu::way(inventory, selected, slot)).flatten() else {
+                    self.step(m, buttons::START, 1);
+                    break;
+                };
+                let input = if m.read(submenu::ADDR_SEARCH_DIR) == dir { dir | submenu::SEARCH_UP } else { dir };
+                let mut pad = if dir == submenu::SEARCH_RIGHT { buttons::RIGHT } else { buttons::LEFT };
+                if input & submenu::SEARCH_UP != 0 {
+                    pad |= buttons::UP;
+                }
+                if submenu::search(inventory, selected, dir) == slot {
+                    pad |= buttons::START;
+                }
+                self.step(m, pad, 1);
+            }
+            for _ in 0..submenu::MAX_CLOSE_FRAMES {
+                if m.read(submenu::ADDR_SUBMENU_STATE) == 0 {
+                    break;
+                }
+                self.step(m, 0, 1);
+            }
+        }
+        (m.frame - start) as u32
     }
 
     fn skip_uncontrollable<N: Nes>(
@@ -765,14 +844,14 @@ pub(crate) mod tests {
     #[test]
     fn executor_counts_blocks_in_attack_settling_and_uncontrollable_frames() {
         // The script never starts the sword (Link's state stays 0): the press is held a second frame, as on a lag
-        // frame.
+        // frame. Link already faces E in this RAM, so A goes alone (no turn to press).
         let mut m = machine(3, 0);
         let result = run(&mut m, "SWORD E");
         assert_eq!(
             (result.control_frames, result.frames, result.blocks()),
             (3, 4, 1)
         );
-        assert_eq!(m.nes.buttons, vec![buttons::RIGHT | buttons::A, buttons::RIGHT | buttons::A, 0, 0]);
+        assert_eq!(m.nes.buttons, vec![buttons::A, buttons::A, 0, 0]);
 
         let mut m = machine(6, 6);
         let result = run(&mut m, "WAIT 4");
@@ -1021,42 +1100,28 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn b_items_select_the_item_and_face_the_cardinal_part_of_a_diagonal() {
-        for (action, item, facing, pressed) in [
-            (
-                "BOOMERANG SW",
-                selected::BOOMERANG,
-                Direction::S,
-                buttons::DOWN | buttons::LEFT,
-            ),
-            (
-                "BOOMERANG NE",
-                selected::BOOMERANG,
-                Direction::N,
-                buttons::UP | buttons::RIGHT,
-            ),
-            ("ARROW W", selected::ARROWS, Direction::W, buttons::LEFT),
-            ("BOMB E", selected::BOMBS, Direction::E, buttons::RIGHT),
+    fn attacks_press_buttons_and_write_nothing() {
+        // (selected B item, facing, action, first frames pressed). The script's game never reacts, so a turn is
+        // repeated until the plan's slack runs out and the B item is never pressed after it.
+        let turn = vec![buttons::RIGHT; 1 + 1 + TURN_SLACK_FRAMES as usize];
+        for (selected, facing, action, pressed) in [
+            (0, 0, "BOOMERANG SW", vec![buttons::DOWN | buttons::LEFT | buttons::B]),
+            (0, 8, "BOOMERANG NE", vec![buttons::UP | buttons::RIGHT | buttons::B]),
+            (2, 2, "ARROW W", vec![buttons::B]),
+            (1, 2, "BOMB E", turn),
+            (7, 2, "SWORD S", vec![buttons::DOWN | buttons::A]),
+            (7, 4, "SWORD S", vec![buttons::A]),
+            // Not the selected B item: the sub-screen first (this script never opens it, so nothing follows).
+            (7, 2, "BOMB W", vec![buttons::START, 0]),
         ] {
             let mut ram = playable();
-            ram[Var::SelectedItem.addr() as usize] = 0x7;
+            ram[Var::SelectedItem.addr() as usize] = selected;
+            ram[Var::LinkDirection.addr() as usize] = facing;
             let mut m = scripted(ram, |_, _| {});
             execute(&mut m, action).unwrap();
-            assert_eq!(m.read(Var::SelectedItem.addr() as usize), item, "{action}");
-            assert_eq!(
-                m.read(Var::LinkDirection.addr() as usize),
-                facing.value(),
-                "{action}"
-            );
-            assert_eq!(m.nes.buttons[0], pressed | buttons::B, "{action}");
+            assert_eq!(m.nes.ram, ram, "{action}: no memory written");
+            assert_eq!(&m.nes.buttons[..pressed.len()], &pressed[..], "{action} facing {facing}");
         }
-        // The sword keeps the selected B item and presses A.
-        let mut ram = playable();
-        ram[Var::SelectedItem.addr() as usize] = 0x7;
-        let mut m = scripted(ram, |_, _| {});
-        execute(&mut m, "SWORD S").unwrap();
-        assert_eq!(m.read(Var::SelectedItem.addr() as usize), 0x7);
-        assert_eq!(m.nes.buttons[0], buttons::DOWN | buttons::A);
     }
 
     #[test]

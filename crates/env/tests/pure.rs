@@ -219,6 +219,7 @@ fn block_change(events: Vec<ProjectileBlock>, room: MapLocation, map: &Arc<GameM
     Change {
         action: Action::parse("MOVE E 8").unwrap(),
         frames: 8,
+        menu_frames: 0,
         interrupt: None,
         control_frames: 8,
         projectile_blocks: events,

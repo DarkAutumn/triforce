@@ -3,6 +3,7 @@
 //! Ported from the old Python game stack (removed; history in docs/decisions.md 2026-11-05).
 
 pub mod actions;
+pub mod attack;
 pub mod blocks;
 pub mod bombs;
 pub mod cheats;
@@ -22,6 +23,7 @@ pub mod room;
 pub mod room_entry;
 pub mod room_state;
 pub mod session;
+pub mod submenu;
 pub mod tables;
 pub mod tiles;
 pub mod vars;

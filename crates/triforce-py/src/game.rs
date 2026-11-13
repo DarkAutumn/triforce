@@ -438,9 +438,15 @@ impl PyChange {
     fn action_indices(&self) -> (usize, usize, usize) {
         action_indices(&self.change.action)
     }
+    /// The frames that count against the action (the item sub-screen's left out).
     #[getter]
     fn frames(&self) -> u32 {
         self.change.frames
+    }
+    /// Frames on the item sub-screen choosing the B item (the game paused; not in `frames`).
+    #[getter]
+    fn menu_frames(&self) -> u32 {
+        self.change.menu_frames
     }
     #[getter]
     fn interrupt(&self) -> Option<&'static str> {

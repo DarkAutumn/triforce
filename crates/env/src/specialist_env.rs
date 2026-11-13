@@ -90,7 +90,10 @@ pub struct TerminalInfo {
 /// One step's (or reset's) info.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StepInfo {
+    /// The frames that count against the action (discounting): the item sub-screen's are left out.
     pub frames: u32,
+    /// The step's frames on the item sub-screen (paused; `zelda::Change::menu_frames`).
+    pub menu_frames: u32,
     pub interrupt: Option<Interrupt>,
     pub action: Option<Action>,
     /// This step's reward terms (`rewards`).
@@ -160,6 +163,7 @@ impl StepInfo {
     pub fn to_json(&self) -> Value {
         let mut m = json!({
             "frames": self.frames,
+            "menu_frames": self.menu_frames,
             "interrupt": self.interrupt.map(Interrupt::name),
             "action": self.action.map(|a| a.to_string()),
             "rewards": self.rewards.iter().map(|(k, v)| (k.to_string(), json!(v))).collect::<serde_json::Map<_, _>>(),
@@ -789,7 +793,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         )?;
 
         self.episode_steps += 1;
-        self.episode_frames += change.frames as u64;
+        self.episode_frames += (change.frames + change.menu_frames) as u64;
         let mut terminal = None;
         if let (Some(ending), Some(outcome)) = (ending, outcome) {
             self.hearts.finish(Some(&HeartView::of(&state)));
@@ -870,6 +874,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.attached = Some(curr);
         let mut info = self.info(&state);
         info.frames = change.frames;
+        info.menu_frames = change.menu_frames;
         info.interrupt = change.interrupt;
         info.action = Some(action);
         info.rewards = rewards.terms().collect();
@@ -886,6 +891,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     fn info(&self, state: &GameView) -> StepInfo {
         StepInfo {
             frames: 0,
+            menu_frames: 0,
             interrupt: None,
             action: None,
             rewards: Vec::new(),

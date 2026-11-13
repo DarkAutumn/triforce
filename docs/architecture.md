@@ -61,9 +61,9 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 |---|---|
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
 | `zelda::actions` | `ACTION_SCHEMA_VERSION` (2); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=104] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
-| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. An off-grid attack perpendicular to Link's travel first walks him to the grid point (holding `ObjDir` until `$394 == 0`, at most 6 frames); an attack press the game didn't read (a lag frame) is held one more frame. A CLIP (or a MOVE its `ClipSettings` turn into one) runs the grid-point skip macro ("Grid-point skip" below); `clip` reports its `ClipOutcome`. |
+| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG or ARROW whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). A CLIP (or a MOVE its `ClipSettings` turn into one) runs the grid-point skip macro ("Grid-point skip" below); `clip` reports its `ClipOutcome`. |
 | `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clip_settings` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clip_settings(action, correct_exits)`, `skip_available(direction)`, `Change.clip`). |
-| `zelda::Change` | previous/current `GameView`, action, frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
+| `zelda::Change` | previous/current `GameView`, action, frames, menu_frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. `frames` are the frames that count against the action: the option's minus its item sub-screen frames (`menu_frames`, the game paused). Discounting (`StepInfo.frames`, the pool's `Outcome.frames`, `rollout_buffer.py`), the frame penalty, the observation's history `frames`, heart timers and linger use `frames`; counts of frames played (`Session.total_frames`, `episode_frames`, visits, chain records, the pool's emulated frames, replays) add `menu_frames` back (`StepInfo.menu_frames`, Python `Change.menu_frames`, info `menu_frames`). Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
 Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's `Obj_Update` jump table) and
@@ -80,17 +80,11 @@ neck (id $42, slot 2 + neck) at the head's neck-array position, with slot 5's sh
 credited once.
 
 The action mask (`zelda::actions::compute_action_mask`) offers only what the game would do. An attack is legal
-only where the game would start the weapon: Link's state allows it, the weapon's slot is free, the sword isn't
-blocked (`$4C`/`$52E`: SWORD and BEAMS masked), Link is inside the game's `Link_BorderBounds` for the facing, and a
-diagonal throw checks its N/S facing; no attack across the doorway Link stands in. The bounds are the measured
-inclusive ranges (`GameView::sword_directions` for A, the sword; `GameView::item_directions` for B items):
-
-| | E | W | N | S |
-|---|---|---|---|---|
-| Dungeon A | x 23–216 | x 23–216 | y 84–197 | y 85–197 |
-| Dungeon B | x 23–208 | x 31–216 | y 84–197 | y 85–189 |
-| Overworld A | x 7–232 | x 7–232 | y 69–213 | y 69–213 |
-| Overworld B | x 7–208 | x 31–232 | y 84–213 | y 69–189 |
+only where the game would start the weapon (Link's state allows it, the weapon's slot is free, the sword isn't
+blocked: `$4C`/`$52E` mask SWORD and BEAMS) and the buttons can make that strike from where Link stands
+(`GameView::attack_directions(kind)`, `sword_directions()`; `zelda::attack::plan`, below). A BOMB, BOOMERANG or ARROW
+that isn't the selected item also needs the item sub-screen to open (`zelda::submenu::can_open`: a play mode, not
+paused, no flute tune or candle brightening).
 
 BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, Lee Nov 11; in `SpecialistEnv` and
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
@@ -106,6 +100,43 @@ an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MO
 Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen wrap or an aborted one leaves Link)
 reads the tile under him (no look-ahead at X >= `$F0`), and N/S there read column `$1F` and the bytes after the tile
 map (`$67F0` on) as column `$20`, as the game does.
+
+### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
+
+The executor never writes Link's facing (`$98`) or the selected item (`$656`): an attack is the button sequence a
+player would press (decisions 2026-11-12, "Attacks by buttons"). `attack::next` picks each frame's input from
+Link's RAM and the executor plays it closed loop; `attack::plan` plays the same policy on a model of Link's input
+handling (`attack::step`: asm:Link_FilterInput, asm:Link_ModifyDirInDoorway, the grid-point and six between-grid
+cases, room bounds, asm:Doorway_CheckLink and asm:Door_Touch, the tile test, the screen and cave edges, the laid
+ladder, the q-speed move and grid fix-up) and returns the turn frames, or `explain` says why not (`Refusal`).
+
+| Situation | Input | Turn frames |
+|---|---|---|
+| Sword, on a grid point (or the strike on Link's own axis) | direction+A on one frame: A is read before the turn and the sword takes Link's facing every frame | 0, no step |
+| Sword, off the grid across the strike | hold the direction: the game walks Link on to the next grid point (4+ px out) or back to the one he left, then direction+A | 1-3 |
+| Bomb, arrow (they take the facing when B is read) | one frame of the direction (Link turns; a step of 1-2 px if the way is open, none against a wall or on the laid ladder), then B | 1 (+1-3 off the grid) |
+| Boomerang | direction+B on one frame: it flies along the held directions (diagonals too) | 0 |
+| Facing's border band drops the button (asm:Link_FilterInput tests the axis Link faces) | turn first (one frame), then the button | +1; refused (`Band`) where the strike's own facing is in the band: only a walk out (a MOVE) would do |
+| Dungeon doorway (`DoorwayDir` set: input forced onto the facing's axis) | facing into the room: hold the sideways direction, the forced step walks Link onto the room's edge, where he turns | up to ~22; facing out of the room: refused (`Doorway`) |
+| A Like-Like's hold, knockback | no turn: only Link's facing (the boomerang still follows the held direction under knockback) | `Held` |
+| Input that would leave the room | a cave's edge or cellar's stairs (they test the input), the screen edge on a turn step, a door the turn or the press would unlock (a key) or pass out through (false wall, opened bomb wall) | refused (`Leaves`); walking into an open doorway is allowed |
+
+The item sub-screen (`zelda::submenu`, asm:Submenu_UpdateActive): START, 64 frames (dungeon; 65 overworld) to the
+first active frame, one step per frame toward the item the shorter way round the ring (the search skips empty
+slots and the bow; alternating the direction and the direction with Up makes every frame a new input), START on
+the frame that reaches it, 59 frames of scrolling out: 123 + steps frames in a dungeon, 124 + steps in the
+overworld (1 or 2 steps among boomerang, bombs and arrows). The game is paused throughout (only the random numbers,
+the frame counter and sound run), the sub-screen is always closed and the game back in mode 5 when the action
+goes on.
+
+A returning boomerang caught on a turn frame puts Link in the catch pose (`$20` -> `$21` -> `$31` -> 0), during which
+the game reads neither A nor B (asm:Link_HandleInput); the executor waits it out with nothing pressed (at most 32
+frames) so the press that follows is a new one.
+
+`crates/zelda/tests/attacks.rs` checks it in the real game: every offered strike over ten rooms' start states and
+the positions of a walk through their doorways is made with no memory write and no room change, and no refused
+one is made by any hold-then-press sequence but where a walk out of a border band would be needed.
+
 
 ### Grid-point skip (`crates/zelda/src/clips.rs`, round 21)
 

@@ -46,9 +46,6 @@ const UW_BOUND_L: i32 = 0x21;
 const UW_BOUND_R: i32 = 0xD0;
 const UW_BOUND_T: i32 = 0x5E;
 const UW_BOUND_B: i32 = 0xBD;
-/// Where Link can stand in a dungeon room outside its doorways (asm:Room_ObjBoundsUW; mechanics.md "Screen edges").
-const UW_ROOM_X: std::ops::RangeInclusive<i32> = (UW_BOUND_L - 1)..=UW_BOUND_R;
-const UW_ROOM_Y: std::ops::RangeInclusive<i32> = (UW_BOUND_T - 1)..=UW_BOUND_B;
 
 /// asm:GleeokDeadNeckMask: bit n set once neck n's head is cut off.
 pub const GLEEOK_DEAD_NECK_MASK: usize = 0x511;
@@ -728,7 +725,7 @@ impl GameView {
         false
     }
 
-    fn can_pass_doorway(&self, px: i32, py: i32, direction: Direction) -> bool {
+    pub(crate) fn can_pass_doorway(&self, px: i32, py: i32, direction: Direction) -> bool {
         match direction {
             Direction::N | Direction::S if px != DOORWAY_REQUIRED_X => return false,
             Direction::E | Direction::W if py != DOORWAY_REQUIRED_Y => return false,
@@ -942,83 +939,22 @@ impl GameView {
         self.sword_directions().is_empty()
     }
 
-    /// Directions the sword (A) can swing: Link_FilterInput's Link_BorderBounds on the facing's axis, as the game
-    /// applies them (asm:Link_BorderBounds; measured by pressing A on every coordinate, N006). Inclusive ranges:
-    /// overworld E/W x 7..=232, N/S y 69..=213; underworld E/W x 23..=216, N y 84..=197, S y 85..=197.  In an
-    /// underworld doorway only its own axis: the game doesn't turn Link sideways there (`attack_directions`).
+    /// Directions the sword (A) can strike in by buttons from here ([`crate::attack::plan`]): the press, or the
+    /// turn before it, inside asm:Link_FilterInput's border bands; no sideways turn where the game forbids it.
     pub fn sword_directions(&self) -> Vec<Direction> {
-        self.attack_directions(false)
+        self.attack_directions(crate::enums::ActionKind::Sword)
     }
 
-    /// Directions B items can be used: the A ranges narrowed by the inner bounds of the facing (E x <= 208,
-    /// W x >= 31, S y <= 189; overworld N y >= 84).
-    pub fn item_directions(&self) -> Vec<Direction> {
-        self.attack_directions(true)
-    }
-
-    fn attack_directions(&self, b_item: bool) -> Vec<Direction> {
-        let (x, y) = (self.link.position.x, self.link.position.y);
-        let ow = self.level() == 0;
-        let (x_lo, x_hi) = if ow { (7, 232) } else { (23, 216) };
-        let (n_lo, s_lo, y_hi) = if ow { (69, 69, 213) } else { (84, 85, 197) };
-        let ranges = [
-            (Direction::E, x, x_lo, if b_item { 208 } else { x_hi }),
-            (Direction::W, x, if b_item { 31 } else { x_lo }, x_hi),
-            (Direction::N, y, if b_item { n_lo.max(84) } else { n_lo }, y_hi),
-            (Direction::S, y, s_lo, if b_item { 189 } else { y_hi }),
-        ];
-        // No turn across a dungeon doorway's axis where the game can't make it. The executor turns Link for an
-        // attack by writing ObjDir, on the grid point ahead of him (`turn_point`: run_attack first walks him on to
-        // it along his line, as the game does with a sideways press). The game turns him only on a room position
-        // (X $20..$D0, Y $5D..$BD), and while DoorwayDir ($53) is set it forces his input onto the axis he faces
-        // (asm:Link_ModifyDirInDoorway): standing on a room position with it set (the E door's floor spot X $D0,
-        // reached facing E: its door is touched from X $CF), he is walked ahead and no turn comes if that leaves
-        // the room. Written anywhere else the turn breaks the game: in a doorway it pushes Link sideways into the
-        // door frame, and in 4:0x11 (Link on Y $BF with DoorwayDir clear, a step into the open S bomb wall from the
-        // entry spot) the walk ahead passes the wall and the written facing leads the room change E into 0x12
-        // (round 20 §2; the traces of round 21, decisions.md 2026-11-12).
-        let (across_ns, across_ew) = if !ow && !self.full_location().in_cave {
-            let (position, facing) = (self.link.position, self.link.direction);
-            let turn = self.turn_point();
-            let in_room = |p: Position| UW_ROOM_X.contains(&p.x) && UW_ROOM_Y.contains(&p.y);
-            let (dx, dy) = match facing {
-                Direction::N => (0, -1),
-                Direction::S => (0, 1),
-                Direction::W => (-1, 0),
-                Direction::E => (1, 0),
-                _ => (0, 0),
-            };
-            let pulled_out = turn == position
-                && self.byte(Var::DoorwayDir) != 0
-                && !in_room(Position::new(position.x + dx, position.y + dy));
-            let facing_ns = matches!(facing, Direction::N | Direction::S);
-            (
-                !UW_ROOM_Y.contains(&turn.y) || (pulled_out && facing_ns),
-                !UW_ROOM_X.contains(&turn.x) || (pulled_out && !facing_ns),
-            )
+    /// Directions an attack of `kind` can be made in by buttons from here ([`crate::attack::plan`]; the
+    /// boomerang's diagonals included). Weapon readiness and inventory are [`Self::weapon_ready`]'s and
+    /// [`Self::available_actions`]'.
+    pub fn attack_directions(&self, kind: crate::enums::ActionKind) -> Vec<Direction> {
+        let dirs: &[Direction] = if crate::actions::is_diagonal(kind) {
+            &crate::actions::DIRECTIONS
         } else {
-            (false, false)
+            &crate::actions::CARDINALS
         };
-        ranges
-            .into_iter()
-            .filter(|&(_, v, lo, hi)| (lo..=hi).contains(&v))
-            .map(|(d, ..)| d)
-            .filter(|d| if matches!(d, Direction::N | Direction::S) { !across_ew } else { !across_ns })
-            .collect()
-    }
-
-    /// The grid point at which the executor turns Link for an attack at right angles to his facing: his position
-    /// if he is on a grid point of his line, else the next one ahead along his facing. Dungeon grid: X a multiple
-    /// of 8, Y = 5 mod 8 ($5D, $65, ...).
-    fn turn_point(&self) -> Position {
-        let Position { x, y } = self.link.position;
-        match self.link.direction {
-            Direction::N => Position::new(x, y - (y - 5).rem_euclid(8)),
-            Direction::S => Position::new(x, y + (5 - y).rem_euclid(8)),
-            Direction::W => Position::new(x - x.rem_euclid(8), y),
-            Direction::E => Position::new(x + (-x).rem_euclid(8), y),
-            _ => self.link.position,
-        }
+        dirs.iter().copied().filter(|&d| crate::attack::plan(self, kind, d).is_some()).collect()
     }
 
     /// The sword is blocked (a Bubble's touch: SwordBlockedLongTimer $4C, or asm:IsSwordBlocked $52E); the game

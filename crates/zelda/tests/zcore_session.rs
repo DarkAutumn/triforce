@@ -102,7 +102,7 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         let slot = darknut.index as u16;
         let peek = |s: &mut Session<ZCore>, a: u16| s.nes_mut().peek(a);
         let (x, y, dir) = (peek(&mut s, 0x70 + slot), peek(&mut s, 0x84 + slot), peek(&mut s, 0x98 + slot));
-        // Offset to the side his face points at (front) or the opposite side (back); Link faces him.
+        // Offset to the side his face points at (front) or the opposite side (back); the strike faces him.
         let (dx, dy, face): (i16, i16, u8) = match dir {
             1 => (16, 0, 2),
             2 => (-16, 0, 1),
@@ -111,12 +111,17 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         };
         let sign = if front { 1 } else { -1 };
         let face = if front { face } else { [0, 2, 1, 0, 8, 0, 0, 0, 4][face as usize] };
-        s.nes_mut().poke(0x70, (x as i16 + sign * dx) as u8);
-        s.nes_mut().poke(0x84, (y as i16 + sign * dy) as u8);
-        s.nes_mut().poke(0x98, face);
         // Hold the Darknut still (stun timer): one that turns toward Link during the swing makes a back stab a
         // front one.
         s.nes_mut().poke(0x3D + slot, 0x40);
+        // Link on the grid point beside him, out of the entry doorway (his facing is left alone: the action turns
+        // him by buttons).
+        s.nes_mut().poke(0x394, 0);
+        s.apply_ram(&[
+            (zelda::Var::LinkX, (x as i16 + sign * dx) as u8),
+            (zelda::Var::LinkY, (y as i16 + sign * dy) as u8),
+            (zelda::Var::DoorwayDir, 0),
+        ]);
         let hp = peek(&mut s, 0x485 + slot);
         let text = match face {
             1 => "SWORD E",
@@ -124,7 +129,12 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
             4 => "SWORD S",
             _ => "SWORD N",
         };
-        let change = s.act(Action::parse(text).unwrap()).unwrap();
+        // At full health the mask offers the strike as BEAMS (the same A press).
+        let a = Action::parse(text).unwrap();
+        let beams = Action::new(zelda::ActionKind::Beams, a.direction, 0).unwrap();
+        assert!(s.mask().is_allowed(&a) || s.mask().is_allowed(&beams), "front={front}: {text} offered");
+        let change = s.act(a).unwrap();
+        assert_eq!(peek(&mut s, 0x98), face, "front={front}: the buttons turned Link to face him");
         assert_eq!(change.blocks(), 0, "front={front}");
         assert_eq!(peek(&mut s, 0x485 + slot) != hp, expect_damage, "front={front}");
         assert_eq!(change.hits() > 0, expect_damage, "front={front}");
@@ -240,8 +250,9 @@ fn a_perpendicular_attack_off_grid_aligns_link_first() {
 }
 
 /// F182: over random legal play in the Bubble room (3:0x49) and Manhandla's room (3:0x4d), every legal attack
-/// option starts its weapon (the step runs the weapon's animation rather than a 1-3 frame no-op).  One test per
-/// room, so the two run in parallel.
+/// option starts its weapon (the step runs the weapon's animation rather than a 1-3 frame no-op), played by buttons
+/// alone: the sword, bombs and arrows leave Link facing the action's direction (the turn, or the walk to the grid
+/// point off the grid, is the game's own). One test per room, so the two run in parallel.
 #[test]
 fn every_legal_attack_starts_its_weapon_in_the_bubble_room() {
     every_legal_attack_starts_its_weapon("3_49s_0");
@@ -260,6 +271,7 @@ fn every_legal_attack_starts_its_weapon(name: &str) {
         .unwrap();
     s.nes_mut().poke(0x658, 8);
     let mut rng = ChaCha8Rng::seed_from_u64(3);
+    let mut turned = 0;
     for step in 0..500 {
         let hc = s.nes_mut().peek(0x66F);
         s.nes_mut().poke(0x66F, (hc & 0xF0) | (hc >> 4));
@@ -271,14 +283,7 @@ fn every_legal_attack_starts_its_weapon(name: &str) {
         for kind in [ActionKind::Sword, ActionKind::Beams, ActionKind::Boomerang, ActionKind::Arrow, ActionKind::Bomb] {
             for d in mask.directions(kind) {
                 let a = Action::new(kind, d, 0).unwrap();
-                // An off-grid perpendicular attack first walks Link to the grid (F160); what happens to him on
-                // the way is the room's doing, not the mask's.
-                let facing_vertical = matches!(d, Direction::N | Direction::S | Direction::NW | Direction::NE | Direction::SW | Direction::SE);
-                let line_vertical = s.nes_mut().peek(0x98) & 0x0C != 0;
-                if s.nes_mut().peek(0x394) != 0 && facing_vertical != line_vertical {
-                    continue;
-                }
-                let bombs = s.nes_mut().peek(0x658);
+                let (bombs, facing) = (s.nes_mut().peek(0x658), s.nes_mut().peek(0x98));
                 let c = s.act(a).unwrap();
                 let started = match kind {
                     ActionKind::Bomb => s.nes_mut().peek(0x658) < bombs,
@@ -286,17 +291,22 @@ fn every_legal_attack_starts_its_weapon(name: &str) {
                     _ => c.frames > 3,
                 };
                 // A hit during the step (Manhandla's room) may knock Link out of his attack: not the mask's fault.
-                assert!(
-                    started || c.health_lost > 0.0,
-                    "{name} step {step}: {a:?} did nothing ({} frames)",
-                    c.frames
-                );
+                if c.health_lost > 0.0 {
+                    s.restore(&snap);
+                    continue;
+                }
+                assert!(started, "{name} step {step}: {a:?} did nothing ({} frames)", c.frames);
+                if kind != ActionKind::Boomerang {
+                    assert_eq!(s.nes_mut().peek(0x98), d.value(), "{name} step {step}: {a:?} left Link facing elsewhere");
+                    turned += (facing != d.value()) as u32;
+                }
                 s.restore(&snap);
             }
         }
         let a = random_action(s.mask(), &mut rng);
         s.act(a).unwrap();
     }
+    assert!(turned > 0, "{name}: no attack needed a turn");
 }
 
 /// F094: walking out of a cave (0x0a's white-sword cave) or a dungeon (0_37c) and loading the pre-entry state of
@@ -387,7 +397,7 @@ fn attack_directions_match_the_game_at_every_coordinate() {
                     }
                     let view = s.apply_ram(&[]).clone();
                     let expected =
-                        if b_item { view.item_directions() } else { view.sword_directions() }.contains(&d);
+                        if b_item { view.attack_directions(zelda::ActionKind::Bomb) } else { view.sword_directions() }.contains(&d);
                     let bombs = s.nes_mut().peek(0x658);
                     s.press(button | press, 2);
                     let started = if b_item { s.nes_mut().peek(0x658) < bombs } else { s.nes_mut().peek(0xB9) != 0 };
@@ -402,9 +412,9 @@ fn attack_directions_match_the_game_at_every_coordinate() {
 /// of 1:0x44, E of 1:0x72) and at 4:0x11's open S bomb wall (round 20's wall walk). At every position Link takes
 /// from the entry spot into the room, out through the door frame a frame at a time and back in, an attack across
 /// the doorway's axis is offered iff the game turns Link that way (holding only that direction turns him on a room
-/// position of the same room) and the executor's turn is sound (after SWORD that way Link stands on a room
-/// position of the same room). So on the room's edge (Y $5D or $BD, X $20 or $D0) with DoorwayDir clear it is
-/// offered, on the first position in the doorway it is not.
+/// position of the same room), and the executor's SWORD that way, played by buttons, leaves him facing it on a room
+/// position of the same room; a refused one leaves him in the room. So on the room's edge (Y $5D or $BD, X $20 or
+/// $D0) with DoorwayDir clear it is offered, on the first position in the doorway it is not.
 #[test]
 fn doorway_turns_match_the_game() {
     let Some(nes) = open_core() else { return };
@@ -480,7 +490,7 @@ fn doorway_turns_match_the_game() {
                 let at = format!("{name} {d:?} at ({x:02X},{y:02X}) $53={doorway} facing {}", s.nes_mut().peek(0x98));
                 let offered = s.state().sword_directions().contains(&d);
                 let mut game = false;
-                for _ in 0..16 {
+                for _ in 0..40 {
                     s.press(held(d), 1);
                     if s.nes_mut().peek(0x98) == d.value() && ok(&mut s) {
                         game = true;
@@ -492,13 +502,21 @@ fn doorway_turns_match_the_game() {
                 }
                 s.restore(spot);
                 s.act(Action::parse(&format!("SWORD {}", d.name())).unwrap()).unwrap();
-                let executor = ok(&mut s);
-                assert_eq!(offered, game && executor, "{at}: game turns {game}, executor sound {executor}");
+                assert_eq!(offered, game, "{at}: game turns {game}");
+                if offered {
+                    let facing = s.nes_mut().peek(0x98);
+                    assert!(ok(&mut s) && facing == d.value(), "{at}: after SWORD facing {facing}");
+                } else {
+                    assert!(still(&mut s), "{at}: a refused SWORD left the room");
+                }
                 let edge = matches!((door, x, y), (Direction::N, _, 0x5D) | (Direction::S, _, 0xBD) | (Direction::W, 0x20, _) | (Direction::E, 0xD0, _));
                 offered_on_edge += (offered && edge && doorway == 0) as u32;
                 masked_in_doorway += (!offered && !in_room(x, y)) as u32;
             }
         }
-        assert!(offered_on_edge > 0 && masked_in_doorway > 0, "{name}: {offered_on_edge} {masked_in_doorway}");
+        // 4:0x11's S door is a bombed wall: the room changes a frame or two past its entry spot, so every spot out
+        // of the room there is one where the game still turns Link (into the room first); none is masked.
+        let deep_doorway = name != "4_11s_0";
+        assert!(offered_on_edge > 0 && (masked_in_doorway > 0 || !deep_doorway), "{name}: {offered_on_edge} {masked_in_doorway}");
     }
 }

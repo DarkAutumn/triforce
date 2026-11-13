@@ -292,9 +292,10 @@ impl fmt::Display for ActionMask {
     }
 }
 
-/// Legal actions of a state (`compute_action_mask`). An attack is legal only where the game would start its weapon:
-/// [`GameView::weapon_ready`] and the facing inside Link_FilterInput's Link_BorderBounds (`sword_directions`,
-/// `item_directions`; a diagonal throw faces N or S).
+/// Legal actions of a state (`compute_action_mask`). An attack is legal only where the game would start its weapon
+/// ([`GameView::weapon_ready`]) and the buttons can make that strike from here ([`crate::attack::plan`]: the press
+/// or a turn first, inside asm:Link_FilterInput's border bands, no sideways turn the game refuses); a B item that
+/// is not the selected one also needs the item sub-screen to open ([`crate::submenu::can_open`]).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let mut mask = ActionMask::default();
     let available = state.available_actions();
@@ -309,9 +310,7 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let has_enemies = state.has_active_enemies();
     let has_items = !state.items.is_empty();
     let has_bomb_walls = !state.bomb_walls().is_empty() || state.ow_bomb_secret_closed();
-    // In a dungeon doorway the attack ranges keep to the doorway's axis (`GameView::attack_directions`).
-    let sword_dirs = state.sword_directions();
-    let item_dirs = state.item_directions();
+    let menu_opens = crate::submenu::can_open(state);
 
     for kind in [
         ActionKind::Sword,
@@ -334,27 +333,11 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
         } else if !has_enemies && !(has_items && pickup) {
             continue;
         }
-        let dirs = if matches!(kind, ActionKind::Sword | ActionKind::Beams) {
-            &sword_dirs
-        } else {
-            &item_dirs
-        };
-        for d in CARDINALS {
-            if dirs.contains(&d) {
-                mask.allow(kind, Some(d));
-            }
+        if crate::submenu::needs_selection(state, kind) && !menu_opens {
+            continue;
         }
-        if is_diagonal(kind) {
-            for (diag, facing) in [
-                (Direction::NW, Direction::N),
-                (Direction::NE, Direction::N),
-                (Direction::SW, Direction::S),
-                (Direction::SE, Direction::S),
-            ] {
-                if item_dirs.contains(&facing) {
-                    mask.allow(kind, Some(diag));
-                }
-            }
+        for d in state.attack_directions(kind) {
+            mask.allow(kind, Some(d));
         }
     }
 
