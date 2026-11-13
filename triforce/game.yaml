@@ -2190,6 +2190,15 @@ rooms:
     E:
       level: 0
       location: '0x76'
+    W:
+      level: 0
+      location: '0x74'
+      # Columns 0-1 are trees on every row: only CLIP E's wrap exit leaves W (round 22; zelda-asm/mechanics.md "After
+      # the wrap, edge by edge"): the E wrap lands Link at X $00 inside them and Left changes the room. He arrives in
+      # 0x74 at X $F0 inside its trees and walks on only where its column 29 is open: Link's tile rows 5-14 (Y
+      # $65-$AD). Rows Y $55, $5D, $B5, $BD are a softlock (0x74's column 29 and 0x75's column 2 solid there).
+      wrap: true
+      span: [5, 14]
   enemies:
     BlueLeever: 2
     Peahat: 3

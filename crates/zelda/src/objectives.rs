@@ -1204,7 +1204,9 @@ pub fn exit_is_correct_at(
 /// objective counts that exit (its next rooms hold the room behind it) only within game.yaml's `span` and the
 /// landing row is outside it, the wrap leads only into an exit that isn't correct (0x5b's rows Y `$B5` and `$BD` land
 /// at the lower E opening; the span is the upper one). A wrap whose landing side the objective doesn't leave by (it
-/// goes on S, say) is kept, and so is one onto a row inside the span or onto an edge without a span.
+/// goes on S, say) is kept, and so is one onto a row inside the span or onto an edge without a span. A wrap exit
+/// (`crate::clips::SkipKind::WrapExit`, CLIP E out of the W edge) leaves the room: it is kept only while the room
+/// behind that W exit is one of the objective's next rooms.
 pub fn wraps_into_wrong_exits(map: &GameMap, state: &GameView, objective: &Objective) -> Vec<Direction> {
     let here = state.full_location();
     if here.level != 0 || here.in_cave {
@@ -1218,9 +1220,14 @@ pub fn wraps_into_wrong_exits(map: &GameMap, state: &GameView, objective: &Objec
             let Some(exit) = map.get(here).and_then(|r| r.exits.get(landing.name())) else {
                 return false;
             };
-            objective.next_rooms.contains(&exit.destination)
-                && exit.span.is_some_and(|(lo, hi)| !(lo..=hi).contains(&row))
-                && crate::clips::skip_target(state, d).is_some_and(|t| t.kind == crate::clips::SkipKind::Wrap)
+            let wanted = objective.next_rooms.contains(&exit.destination);
+            match crate::clips::skip_target(state, d).map(|t| t.kind) {
+                Some(crate::clips::SkipKind::Wrap) => {
+                    wanted && exit.span.is_some_and(|(lo, hi)| !(lo..=hi).contains(&row))
+                }
+                Some(crate::clips::SkipKind::WrapExit) => !wanted,
+                _ => false,
+            }
         })
         .collect()
 }
