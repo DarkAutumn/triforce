@@ -100,6 +100,7 @@ triforce promote <specialist> <run-id>
 triforce eval-chain --runs 20 --parallel 20                     # route d2first; writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
 triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 2's triforce
 triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
+triforce room-stats r70-1k                                     # per-room stats by scope (full run, segments, room only) of target/r56-chains/r70-1k-*.jsonl -> r70-1k-room-stats.json
 cargo run --release -p triforce-tools --bin tf -- replay verify runs/replays/*.tfreplay   # replay them on the emulator alone (replay info FILE prints one)
 cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
 ```

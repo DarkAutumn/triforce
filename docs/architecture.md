@@ -795,14 +795,36 @@ every step, so following an enemy that moves away pays again, and knockback rese
   the `chain_start` event; an existing `--output` is refused unless `--append` with the same provenance.
   `--checkpoint` must name a known specialist and an existing checkpoint. Exit 2 on a bad `--from`, `--stop-at` or
   `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
-  `triforce train|run|play|evaluate ...` forward to the module CLIs (`triforce --models-dir DIR train|run|evaluate`
-  forwards the models dir).
+  `triforce train|run|play|evaluate|room-stats ...` forward to the module CLIs (`triforce --models-dir DIR
+  train|run|evaluate|room-stats` forwards the models dir).
 - `scripts/yardstick.py report --run RUN [--mode sample|argmax] [--chain NAME=PATH[@L:0xRR] ...] --output OUT.json`
   reads each specialist's evaluation in the run's act mode (`evaluate.read_evaluation`; a missing one is an error
   unless `--allow-mode-mismatch`) and the chain files, and reports success (Wilson intervals), hearts and chain
   arrivals; it refuses appended chain files and `@` targets that aren't route rooms. `compare BASE NEW` marks rows
   `better`/`worse`/`~`, refuses rows measured in different act modes (unless `--allow-mode-mismatch`) and labels
   one-sided rows `missing`.
+- `triforce room-stats TAG [--chains-dir DIR] [--output FILE] [--route NAME]` (`room_stats.py`) writes
+  `<chains-dir>/<TAG>-room-stats.json` (default `target/r56-chains`, beside the chain files it reads;
+  `scripts/experiments/r56_chains.sh report` writes it after the yardstick): per-room statistics in every **scope**
+  (`room_stats.SCOPES`), one entry per room (`L:0xRR[:cave]`) with the same fields everywhere. `full`: the
+  `<TAG>-full` runs (game start to the D4 triforce); `death_rate` = runs that died in the room / runs started.
+  Segments, the route cut at the dungeon exits: `to-d2` (start → out of Dungeon 2, 0:0x3c; `<TAG>-full`), `to-d1`
+  (0:0x3c → out of Dungeon 1, 0:0x37; `post-d2`), `to-d3` (0:0x37 → out of Dungeon 3, 0:0x74; `post-d1`), `to-d4`
+  (0:0x74 → the triforce; `post-d3`): each file's runs up to their first entry into the next segment's start step
+  (the chain files play on to the route's end), `death_rate` per run started on the segment. `d2`..`d4`: the
+  dungeon files, cut the same way. `room`: the single-room evaluations (`visited_rooms`) of the models that played
+  the chains (the chain meta's checkpoints, each in its chain act mode), merged per room by visits; a run there is
+  an isolated episode that entered the room. Fields: `runs`, `entered`, `visits`, `reach_rate`, `deaths`/`death_rate`,
+  `stuck`/`stuck_rate`, `endings`/`end_rate`, `death_rate_entered`, `through_rate`, per visit `hearts_lost`
+  (chains: net, `max(0, in − out)`), `hearts_gained`, `hearts_change`, `hearts_healed`, `hits` (evaluations only:
+  chain records don't count hits), `steps`, `frames`, `clips` (`clip_done`), `bombs`, `cheated_bombs`, then
+  `wrong_exits`, `outcomes`, `specialists` and, in chain scopes, `steps` (the same per route step through the
+  room, `off` for visits the route doesn't explain). Chain records name no route step: `assign_steps` follows the
+  route from the start state's step (`state_step`, as `chain.rs` `start_step`), a visit taking the step of its
+  room nearest the cursor (2 back, 8 ahead) and a correct exit moving the cursor on. The file records `format` (1),
+  `tag`, `version`, `route`, `team` (the chains' runs and act modes), `promoted` (the models dir's promoted runs
+  when written), the scope definitions (`segments`) and each scope's `source` (file, runs, start, act modes,
+  code, data, version). `room_stats.newest()` (the newest `*-room-stats.json` by mtime) is zelda-map's default.
 - Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
   its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded
   objects; the chain pool uses them instead of reloading canonical YAML. Runtime item masks, observations

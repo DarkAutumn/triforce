@@ -1,4 +1,4 @@
-"""The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play."""
+"""The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play/evaluate/room-stats."""
 
 import argparse
 import json
@@ -290,9 +290,10 @@ def main(argv=None):
     """Entry point for the ``triforce`` console script."""
     argv = list(sys.argv[1:] if argv is None else argv)
     passthrough = {'train': ('triforce.train', 'cli'), 'run': ('triforce.run', 'main'),
-                   'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main')}
-    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate ...` forwards the rest to
-    # the module's own CLI.
+                   'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main'),
+                   'room-stats': ('triforce.room_stats', 'main')}
+    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate|room-stats ...` forwards the
+    # rest to the module's own CLI.
     models_dir, allow, rest = None, False, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
@@ -331,6 +332,8 @@ def main(argv=None):
     sub.add_parser('run', help="python -m triforce.run ...")
     sub.add_parser('play', help="python -m triforce.play ...")
     sub.add_parser('evaluate', help="python -m triforce.evaluate ... (one specialist on its own rooms)")
+    sub.add_parser('room-stats', help="python -m triforce.room_stats TAG ... (per-room chain and eval statistics "
+                                      "by scope: full run, segments, room only)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")

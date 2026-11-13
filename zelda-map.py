@@ -57,9 +57,8 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, 
 from triforce import registry
 from triforce._native import CHEAT_ITEMS, Game, game_rooms, routes, specialist_for
 from triforce._native import route_steps as native_route_steps
-from triforce.evaluate import read_evaluation
 from triforce.paths import STATES_DIR
-from triforce.specialist import list_specialists
+from triforce.room_stats import load_evals
 
 ROOT = Path(__file__).resolve().parent
 SCREENS_DIR = ROOT / 'screens'
@@ -70,12 +69,6 @@ TILE_W, TILE_H = 256, 176
 STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|cave)_(\d+)$')
 SCREEN_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(cave)?\.png$')
 SIDE_ORDER = ('s', 'n', 'e', 'w', 'c', 'cave')     # which entry's savestate pictures a room
-DETAILED_FORMAT = 2
-COUNT_KEYS = ('visits', 'episodes', 'deaths')
-MEAN_KEYS = ('steps_per_visit', 'health_lost_per_visit', 'health_gained_per_visit', 'health_change_per_visit',
-             'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit', 'bombs_used_per_visit',
-             *(f'cheated_{item}_per_visit' for item in CHEAT_ITEMS), 'boss_stuns_per_visit', 'boss_eats_per_visit')
-KIND_MEAN_KEYS = ('drops_per_visit', 'pickups_per_visit')
 ITEM_KINDS = ('heart', 'fairy', 'clock', 'rupee', 'blue_rupee', 'bombs')
 EXIT_ORDER = ('n', 's', 'e', 'w', 'cave', 'success', 'death', 'timeout', 'other')
 # Overlay colour scales: the value at which a room turns fully red (bad); zero (or better) is blue.
@@ -396,87 +389,6 @@ def render_screens(states: dict[Key, list[str]], screens_dir: Path, states_dir: 
 
 
 # --------------------------------------------------------------------------------------------------- eval data
-
-def merge_room_stats(entries: list[tuple[str, dict]]) -> dict:
-    """One room's ``visited_rooms`` stats from several specialists' evals -> one, weighted by visits: counts are
-    summed, per-visit means are sum(mean x visits) / total visits, the death rate is recomputed.  ``specialists``
-    lists (specialist, visits) of the evals that contributed."""
-    entries = [(name, stats) for name, stats in entries if stats.get('visits')]
-    if not entries:
-        return {}
-    first = entries[0][1]
-    merged = {'level': first['level'], 'room': first['room'], 'in_cave': bool(first.get('in_cave')),
-              'specialists': [(name, stats['visits']) for name, stats in entries]}
-    for key in COUNT_KEYS:
-        merged[key] = sum(stats.get(key) or 0 for _, stats in entries)
-    visits = merged['visits']
-    merged['death_rate'] = merged['deaths'] / visits
-    for key in MEAN_KEYS:
-        weighted = [(stats[key], stats['visits']) for _, stats in entries if stats.get(key) is not None]
-        weight = sum(v for _, v in weighted)
-        merged[key] = sum(value * v for value, v in weighted) / weight if weight else None
-    for key in KIND_MEAN_KEYS:
-        totals = Counter()
-        for _, stats in entries:
-            for kind, mean in (stats.get(key) or {}).items():
-                totals[kind] += mean * stats['visits']
-        merged[key] = {kind: total / visits for kind, total in totals.items() if total}
-    exits = Counter()
-    for _, stats in entries:
-        exits.update(stats.get('exits') or {})
-    merged['exits'] = dict(exits)
-    return merged
-
-
-def read_eval(run_dir: Path) -> tuple[str, Optional[dict], Optional[str], str]:
-    """(status, visited_rooms, act mode, why) of a run's evaluation of its current weights in its act mode
-    (``triforce.evaluate.read_evaluation``: ``eval.json`` or ``eval-<mode>.json``).  status: 'detailed', 'no eval'
-    (none in the run's act mode for these weights; ``why`` says what was found), 'unreadable' or 'old format'."""
-    try:
-        path, data = read_evaluation(run_dir)
-    except (FileNotFoundError, LookupError) as error:      # no ckpt.pt, or no evaluation of it in its act mode
-        return 'no eval', None, None, str(error)
-    except (OSError, ValueError) as error:
-        return 'unreadable', None, None, str(error)
-    mode = registry.eval_mode(data)
-    if data.get('format') != DETAILED_FORMAT or not isinstance(data.get('visited_rooms'), dict):
-        return 'old format', None, mode, path.name
-    return 'detailed', data['visited_rooms'], mode, path.name
-
-
-def load_evals(models_dir: Path, run_id: Optional[str] = None) -> tuple[dict[Key, dict], list[dict]]:
-    """The merged per-room stats of every promoted specialist's detailed eval (of its current weights, in its act
-    mode), and one source entry per promoted specialist: {'specialist', 'run', 'status', 'mode', 'file', 'rooms',
-    'visits'}.  With ``run_id``, a specialist's ``<run_id>`` evaluation is used instead when it has one (e.g. a round
-    trained with ``--no-promote``)."""
-    per_room, sources = defaultdict(list), []
-    root = Path(models_dir)
-    current = set(list_specialists())
-    for directory in sorted(root.iterdir()) if root.is_dir() else ():
-        # Current specialists only: models/ keeps the directories of retired families.
-        if directory.name not in current or not (directory / registry.PROMOTED_NAME).is_file():
-            continue
-        run = registry.promoted_run(directory.name, root)
-        read = None
-        if run_id and (directory / run_id / registry.CHECKPOINT_NAME).is_file():
-            read = read_eval(directory / run_id)
-            if read[0] == 'detailed':
-                run = run_id
-            else:
-                read = None
-        status, rooms, mode, file = read or read_eval(directory / run)
-        source = {'specialist': directory.name, 'run': run, 'status': status, 'mode': mode, 'file': file,
-                  'rooms': 0, 'visits': 0}
-        for stats in (rooms or {}).values():
-            if stats.get('visits'):
-                key = (int(stats['level']), int(stats['room']), bool(stats.get('in_cave')))
-                per_room[key].append((directory.name, stats))
-                source['rooms'] += 1
-                source['visits'] += stats['visits']
-        sources.append(source)
-    merged = {key: merge_room_stats(entries) for key, entries in per_room.items()}
-    return merged, sources
-
 
 def eval_status(sources: list[dict]) -> str:
     """'Eval data: 3 specialists (1,240 room visits; 2 argmax, 1 sample) · 9 without detailed evals'."""

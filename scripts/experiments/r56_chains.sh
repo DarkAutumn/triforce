@@ -15,8 +15,10 @@
 #
 #   ACT=sample TAG=r56-sample scripts/experiments/r56_chains.sh [run|report]
 #
-# ACT: model (each model's act file), sample or argmax. Output: target/r56-chains/<TAG>-<segment>.jsonl and
-# target/r56-chains/<TAG>-yardstick.json.
+# ACT: model (each model's act file), sample or argmax. Output: target/r56-chains/<TAG>-<segment>.jsonl,
+# target/r56-chains/<TAG>-yardstick.json and target/r56-chains/<TAG>-room-stats.json (`triforce room-stats`: per-room
+# statistics by scope, full run, the segments cut at the dungeon exits, each dungeon, the room alone; zelda-map.py
+# shows the newest).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
@@ -66,6 +68,7 @@ report() {
     fi
   done
   $PY scripts/yardstick.py report --run promoted "${chains[@]}" --output $OUT/$TAG-yardstick.json | sed -n '/^| segment/,$p'
+  $PY -m triforce.cli room-stats "$TAG" --chains-dir "$OUT"
 }
 
 case ${1:-all} in
