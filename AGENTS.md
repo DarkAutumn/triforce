@@ -226,6 +226,23 @@ what helps, and log everything.
   runs to the first playable frame) and check `$12 == 5` before capturing. Round 6: a mid-scroll screenshot of
   0x5c looked like a different room.
 - Launch long jobs through the tool's async/background mode; `( cmd & )` from a shell call gets killed.
+- **Evaluations go through the batch runner, as one named group** (Lee, Nov 13): never a string of separate
+  `triforce evaluate` / `eval-chain` calls. `triforce eval-batch NAME ...` (`triforce/eval_batch.py`) lists every
+  evaluation up front in one log folder (`training.json` kind `eval-batch`), runs them one after another (or family
+  evaluations side by side with `--jobs N` within `--parallel` cores) and the training GUI shows one group named
+  NAME with a progress bar per evaluation. The chains of a tag: `triforce eval-batch r71-1k --chains r71-1k --runs
+  1000 --act model` (what `scripts/experiments/r56_chains.sh` runs); every family's promoted run in both act modes:
+  `triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4`; a mixed batch: `triforce
+  eval-batch r71-check --chain 'd3: --from 3_7cs_0 --runs 200' --evaluate 'darknut: --specialist darknut --act
+  argmax'`. A failed entry is marked and the batch goes on (exit 1); SIGTERM marks the rest `interrupted`; running
+  the same batch again skips what is done (an existing chain output, an evaluation file holding the same
+  measurement; `--redo` measures again).
+- **Training and evaluation run at nice 15** (Lee, Nov 13): `scripts/train_round.py`, `triforce train`, `triforce
+  evaluate`, `triforce eval-chain` and `triforce eval-batch` lower their own CPU priority at start (`--nice N`, 0
+  leaves it alone; `$TRIFORCE_NICE` changes the default machine-wide; never raised, recorded in the plan and
+  `run.json`) and what they start inherits it. Play and replay tools (`play-zelda.py`, `zelda-headless.py`,
+  `create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority. I/O priority is left
+  alone.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
@@ -233,9 +250,11 @@ what helps, and log everything.
 - **Start single trainings without `--events`** (round 21). `triforce.train --events FILE` appends to a stream its
   caller owns and writes no `training.json`, so the training GUI never shows the run (only `scripts/train_round.py`
   writes one for its stream). Without it the run gets its own `logs/<yymmdd>_<NNN>_<specialist>/`.
-- **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10` (route `d2first`, the
-  default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`; after
-  Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3 `--from 0_74c_0`; Dungeon 4
+- **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd2:
+  --from 2_7ds_0 --runs 40' --chain ...`, or all eight with `--chains TAG`): full `triforce eval-chain --runs 20
+  --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
+  Dungeon 1 `--from 1_73s_0`; after Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3
+  `--from 0_74c_0`; Dungeon 4
   `--from 4_71s_0`. `--from`/`--stop-at` are checked before any run
   (`--stop-at` must be a route room after the start step, or `step:N`, a later route step, reached only by the
   route's own exit: `step:24` is back on the overworld with Dungeon 2's triforce; exit 2 otherwise). `--power-on`

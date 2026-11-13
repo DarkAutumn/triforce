@@ -364,3 +364,100 @@ def test_clear_finished_keeps_only_live_folders(qapp, tmp_path, monkeypatch):
     finally:
         window.close()
         window.deleteLater()
+
+
+# ------------------------------------------------------------------------------------------------ evaluation batches
+
+def test_outcome_counts_carry_their_share_of_the_evaluation():
+    assert gui.fmt_count_share(108, 1000) == '108× (10.8%)'
+    assert gui.fmt_count_share(4, 0) == '4×'
+    rows = gui.failure_rows({'3:0x59 darknut death': 10, '3:0x59 darknut stuck': 108}, 1000)
+    assert [(key, text) for key, _, text, _ in rows] == [('3:0x59 darknut stuck', '108× (10.8%)'),
+                                                         ('3:0x59 darknut death', '10× (1.0%)')]
+    assert rows[0][1] == pytest.approx(0.108)
+    # a family evaluation: per start room and ending, of all its episodes
+    ev = {'episodes': 300, 'by_room_failures': {'3:0x59': {'episodes': 100, 'failures': {'death': 6, 'timeout': 0}},
+                                                '3:0x5b': {'episodes': 200, 'failures': {}}}}
+    assert gui.eval_failures(ev) == {'3:0x59 death': 6}
+    assert gui.failure_rows(gui.eval_failures(ev), ev['episodes'])[0][2] == '6× (2.0%)'
+
+
+def write_batch(folder, pid, created):
+    """A batch folder: d3 (chain) finished, family running, d4 (chain) and goriya pending."""
+    import json
+    folder.mkdir(parents=True)
+    runs = [{'index': 0, 'name': 'd3', 'kind': 'chain', 'events': 'd3.jsonl', 'total': 10, 'status': 'ok',
+             'chain_runs': 10, 'chain_successes': 2, 'chain_success_rate': 0.2, 'chain_target': '0:0x74',
+             'chain_arrived': 4, 'chain_arrival_rate': 0.4, 'wall_seconds': 30.0},
+            {'index': 1, 'name': 'darknut-argmax', 'kind': 'eval', 'specialist': 'darknut', 'events': 'dk.jsonl',
+             'total': 400, 'status': 'evaluating'},
+            {'index': 2, 'name': 'd4', 'kind': 'chain', 'events': 'd4.jsonl', 'total': 10, 'status': 'pending'},
+            {'index': 3, 'name': 'goriya', 'kind': 'eval', 'specialist': 'goriya', 'events': 'goriya.jsonl',
+             'total': 300, 'status': 'pending'}]
+    (folder / gui.PLAN_FILE).write_text(json.dumps({**running_plan(pid, created), 'name': 'r71 evals',
+                                                     'kind': 'eval-batch', 'nice': 15, 'runs': runs}))
+    now = created + 10
+    lines = [{'event': 'chain_start', 'ts': now - 40, 'runs': 10},
+             {'event': 'chain_progress', 'ts': now - 20, 'done': 5, 'runs': 10, 'successes': 1},
+             {'event': 'chain', 'ts': now - 10, 'runs': 10, 'successes': 2, 'success_rate': 0.2,
+              'failures': {'3:0x59 darknut stuck': 5, '4:0x13 boss-gleeok death': 3}, 'errors': []},
+             {'event': 'end', 'ts': now - 10, 'status': 'ok', 'chain_runs': 10, 'chain_successes': 2,
+              'chain_success_rate': 0.2, 'chain_target': '0:0x74', 'chain_arrived': 4, 'chain_arrival_rate': 0.4,
+              'wall_seconds': 30.0}]
+    (folder / 'd3.jsonl').write_text(''.join(json.dumps(line) + '\n' for line in lines))
+    lines = [{'event': 'eval_start', 'ts': now - 5, 'episodes': 400},
+             {'event': 'eval_progress', 'ts': now - 1, 'done': 100, 'episodes': 400, 'success_rate': 0.9}]
+    (folder / 'dk.jsonl').write_text(''.join(json.dumps(line) + '\n' for line in lines))
+
+
+def test_a_batch_plan_becomes_one_row_per_evaluation(qapp, tmp_path):
+    import time
+    folder = tmp_path / '261113_001_r71-evals'
+    write_batch(folder, os.getpid(), time.time())
+    model = gui.Training(folder)
+    model.poll()
+    assert model.is_batch and model.name == 'r71 evals'
+    assert [run.name for run in model.runs] == ['d3', 'darknut-argmax', 'd4', 'goriya']
+    assert [run.kind for run in model.runs] == ['chain', 'eval', 'chain', 'eval']
+    assert model.statuses() == ['ok', 'evaluating', 'pending', 'pending']
+    d3, darknut, d4, goriya = model.runs
+    now = time.time()
+    assert d3.eval_rate() == 0.4 and d3.eval_rate_label() == 'arrive' and d3.eval_episodes() == 10
+    assert darknut.eval_done() == (100, 400) and darknut.fraction(now, 'evaluating') == 0.25
+    assert d4.eval_done() == (0, 10) and goriya.eval_rate() is None
+    assert model.fraction(now) == pytest.approx((1 + 0.25) / 4)
+    assert model.active_index() == 1
+    assert gui.batch_headline(d3) == 'arrive 4/10 = 40.0% · end 2/10 = 20.0%'
+    assert gui.batch_headline(d3, compact=True) == 'arrive 40.0% · end 20.0%'
+    assert gui.RunRow.numbers_text(darknut, 'evaluating') == '100 / 400 episodes'
+    assert gui.RunRow.numbers_text(d3, 'ok') == '10 runs'
+    assert gui.RunRow.phase_text(d4, 'pending', now) == 'waiting'
+    assert gui.RunRow.phase_text(darknut, 'evaluating', now).startswith('eval 100/400 episodes')
+    assert gui.RunRow.phase_text(d3, 'ok', now) == 'done · 30s'
+    sections = gui.chain_sections(d3.chain_result())
+    assert sections[0][2][0][:1] == ('arrived 0:0x74',) and sections[0][2][1][2] == '2/10'
+    assert sections[1][1] == 'Chain failures (share of all 10 runs)'
+    assert [text for _, _, text, _ in sections[1][2]] == ['5× (50.0%)', '3× (30.0%)']
+    assert model.batch_eta(now) is None              # no family evaluation has finished: no pace for goriya
+
+
+def test_a_batch_shows_in_the_window(qapp, tmp_path, monkeypatch):
+    import time
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    folder = tmp_path / '261113_001_r71-evals'
+    write_batch(folder, os.getpid(), time.time())
+    window = gui.Window(tmp_path, folder)
+    try:
+        view = window.findChildren(gui.FolderView)[0]
+        assert len(view.rows) == 4 and not view.chain_card.isVisible()
+        window.select(view, 0)
+        sections = window.detail.evaluation.sections
+        assert sections[1][1] == 'Chain failures (share of all 10 runs)'
+        window.select(view, 'round')
+        assert window.detail.evaluation.sections[0][1] == 'Evaluations'
+        assert [row[2] for row in window.detail.evaluation.sections[0][2]][:3] == [
+            'arrive 4/10 = 40.0% · end 2/10 = 20.0%', 'evaluating', 'pending']
+    finally:
+        window.close()
+        window.deleteLater()

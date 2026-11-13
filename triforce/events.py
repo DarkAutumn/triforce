@@ -53,7 +53,14 @@ Standalone jobs log too (``logged_job``): ``python -m triforce.evaluate`` writes
 (plan kind ``eval``, one run evaluating, its ``<specialist>.jsonl`` with the eval events above) and ``triforce
 eval-chain`` writes ``<yymmdd>_<NNN>_eval-chain-<route>`` (plan kind ``chain``, no runs, ``round.jsonl`` with
 ``chain_start`` (runs, parallel, overrides, act), ``chain_progress`` (done, runs, successes, at most once a second
-and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off.
+and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off; ``--events FILE`` writes the events
+into a caller's stream instead (no folder of its own; the caller writes ``end``).
+
+An evaluation batch (``triforce eval-batch NAME``, ``triforce/eval_batch.py``) writes ``<yymmdd>_<NNN>_<NAME>``: plan
+kind ``eval-batch`` with every evaluation listed up front (``name``, ``kind`` chain / eval / report, ``total``,
+``output``, ``command``; pending, ``evaluating``, then ``ok`` / ``failed`` / ``interrupted`` with its headline),
+one ``<entry>.jsonl`` each (the chain_* or eval_* events above, then ``end``) and ``round.jsonl`` (``start``,
+``entry_start``, ``entry_end``, ``end``).  Plans carry ``nice``, the niceness the job runs at (``triforce.jobs``).
 """
 
 import fcntl
@@ -197,10 +204,11 @@ class TrainingPlan:
             _write_json(self.path, self.data)
 
     def update_run(self, index: int, **fields):
-        """Sets fields on one run; status 'running' stamps started, a final status stamps finished (thread-safe)."""
+        """Sets fields on one run; status 'running' or 'evaluating' stamps started (once), a final status stamps
+        finished (thread-safe)."""
         with self._lock:
             run = self.data['runs'][index]
-            if fields.get('status') == 'running' and run['started'] is None:
+            if fields.get('status') in ('running', 'evaluating') and run['started'] is None:
                 run['started'] = _now()['time']
             if fields.get('status') not in (None, 'pending', 'running', 'evaluating'):
                 run['finished'] = _now()['time']

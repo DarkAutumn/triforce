@@ -3,6 +3,7 @@
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
         [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--act model|sample|argmax]
         [--output PATH] [--replays DIR [--streams LIST] [--keyframe-frames N] [--state embed|path]]
+        [--events JSONL] [--nice N]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
@@ -71,6 +72,7 @@ from typing import Callable, Optional
 
 from . import __version__, _native, registry, replay
 from .events import LOGS_DIR_ENV, EventLog, logged_job, write_json_atomic
+from .jobs import add_nice_argument, lower_priority
 from .metrics import heart_change_total
 from .provenance import code_version, data_hash, models_header
 from .replay import ReplayDir
@@ -463,10 +465,10 @@ def _fmt_linger(stats: dict) -> str:
             f"{stats['linger_worst_frames']:.0f} frames)")
 
 
-def main(argv=None):
-    """Command line."""
+def build_parser() -> argparse.ArgumentParser:
+    """The command line (``triforce.eval_batch`` checks a batch's evaluation entries with it)."""
     parser = argparse.ArgumentParser(prog='python -m triforce.evaluate', description=__doc__.split('\n\n')[0])
-    parser.add_argument('--specialist', required=True)
+    parser.add_argument('--specialist', required=True, help="specialist name or YAML path")
     parser.add_argument('--checkpoint', default=None, help="checkpoint file or run dir (default: promoted)")
     parser.add_argument('--run-id', default=None, help="evaluate <models>/<specialist>/<run-id>/ckpt.pt")
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
@@ -482,8 +484,33 @@ def main(argv=None):
     replay.add_arguments(parser, default_state='embed')
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
+    parser.add_argument('--events', default=None, metavar='JSONL',
+                        help="append the eval events to this stream instead of a log folder of its own (the caller, "
+                             "e.g. triforce eval-batch, owns the stream and writes its final 'end')")
+    add_nice_argument(parser)
     parser.add_argument('--allow-incompatible-models', action='store_true',
                         help="load a model whose version differs from this code's in its first three numbers")
+    return parser
+
+
+def resolve_checkpoint(name: str, checkpoint=None, run_id: Optional[str] = None, models_dir=None) -> Path:
+    """The ``ckpt.pt`` an evaluation plays: ``checkpoint`` (file or run dir), else ``run_id``'s, else the promoted
+    run's.  Raises FileNotFoundError when it doesn't exist."""
+    if checkpoint:
+        path = Path(checkpoint)
+        path = path / registry.CHECKPOINT_NAME if path.is_dir() else path
+    elif run_id:
+        path = registry.checkpoint_path(name, run_id, models_dir)
+    else:
+        path = registry.promoted_checkpoint(name, models_dir)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    return path
+
+
+def main(argv=None):
+    """Command line."""
+    parser = build_parser()
     args = parser.parse_args(argv)
     registry.set_allow_incompatible(args.allow_incompatible_models)
     try:
@@ -492,25 +519,20 @@ def main(argv=None):
         parser.error(str(error))
     if streams and args.replays is None:
         parser.error("--streams needs --replays")
+    nice = lower_priority(args.nice)
 
     config = load_specialist(args.specialist)
     name = config.name
-    if args.checkpoint:
-        checkpoint = Path(args.checkpoint)
-        checkpoint = checkpoint / registry.CHECKPOINT_NAME if checkpoint.is_dir() else checkpoint
-    elif args.run_id:
-        checkpoint = registry.checkpoint_path(name, args.run_id, args.models_dir)
-    else:
-        checkpoint = registry.promoted_checkpoint(name, args.models_dir)
-    if not checkpoint.is_file():
-        raise FileNotFoundError(checkpoint)
-
+    checkpoint = resolve_checkpoint(name, args.checkpoint, args.run_id, args.models_dir)
     run_id = checkpoint.parent.name
-    log = nullcontext() if args.no_log else logged_job(
+    # --events: the caller (e.g. triforce eval-batch) owns the stream, its log folder and the final 'end'.
+    log = nullcontext() if args.no_log or args.events else logged_job(
         f'eval-{name}', 'eval', [{'specialist': name, 'run_id': run_id, 'events': f'{name}.jsonl',
-                                  'run_dir': str(checkpoint.parent), 'status': 'evaluating'}], args.logs_dir)
+                                  'run_dir': str(checkpoint.parent), 'status': 'evaluating'}], args.logs_dir,
+        nice=nice)
     with log as plan:
-        events = None if plan is None else EventLog(plan.directory / f'{name}.jsonl', specialist=name, run_id=run_id)
+        events = (EventLog(args.events, specialist=name, run_id=run_id) if args.events else
+                  None if plan is None else EventLog(plan.directory / f'{name}.jsonl', specialist=name, run_id=run_id))
         try:
             result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
                                          registry.act_override(args.act), threads=args.threads, events=events,
@@ -520,14 +542,16 @@ def main(argv=None):
             if events is not None:
                 message = f"evaluation failed: {type(error).__name__}: {error}"
                 events.emit('error', message=message, traceback=traceback.format_exc())
-                events.emit('end', status='eval-failed', message=message)
+                if plan is not None:
+                    events.emit('end', status='eval-failed', message=message)
             raise
         output = (Path(args.output) if args.output else
                   default_output(checkpoint, name, args.act, args.episodes_per_state, args.seed))
         write_result(result, output)
         if events is not None:
-            summary = {'eval_success_rate': result['success_rate'], 'eval_episodes': result['episodes']}
             events.emit('eval', **eval_event(result), path=str(output))
+        if plan is not None:
+            summary = {'eval_success_rate': result['success_rate'], 'eval_episodes': result['episodes']}
             events.emit('end', status='ok', **summary)
             plan.update_run(0, status='ok', **summary)
     print(format_report(result))

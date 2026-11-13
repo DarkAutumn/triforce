@@ -608,11 +608,29 @@ every step, so following an enemy that moves away pays again, and knockback rese
   folder's `NNN` may have any width; it is allocated under `<logs>/.lock`. `round.jsonl` / `round.log` cover the round (chain,
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
-  `eval` / `chain`; `--no-log` skips it) and end it `interrupted` on SIGTERM. `training-gui.py`'s [currently running] shows every live folder on the
+  `eval` / `chain`; `--no-log` skips it; `--events FILE` writes their events into a caller's stream instead) and
+  end it `interrupted` on SIGTERM. An evaluation batch (`triforce eval-batch`, below) is one folder, plan kind
+  `eval-batch`: every evaluation a plan entry (`name`, `kind` chain / eval / report, `events`, `log`, `output`,
+  `total` runs or episodes, `command`; status pending → `evaluating` → `ok` / `failed` / `interrupted` with its
+  headline `chain_*` or `eval_*` fields and `wall_seconds`), one `<entry>.jsonl` each (the command's `chain_start`
+  / `chain_progress` / `chain` or `eval_start` / `eval_progress` / `eval`, then the batch's `error` and `end`), and
+  `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
+  `training-gui.py`'s [currently running] shows every live folder on the
   machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`). A
   folder whose training ends stays shown while another is live (its plan is no longer `running`, or its process
   is gone: `plan_is_live`); the "Clear finished" button hides those for the rest of the session, and trainings that
-  start later still appear.
+  start later still appear. A batch folder is one group with its name and one row per evaluation: waiting,
+  running (the bar is the runs or episodes done of the total, from `chain_progress` / `eval_progress`), done (its
+  headline: a chain's arrivals and route-end success, an evaluation's success and health change; `resumed` when an
+  earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
+  outcomes with their share of the evaluation, `108× (10.8%)`: of the chain's runs (where the failed runs ended),
+  or of the family evaluation's episodes (start room and ending; `eval` event `by_room_failures`).
+- CPU priority (`jobs.py`): every training and evaluation entry point (`scripts/train_round.py`, `triforce.train`
+  `cli`, `triforce.evaluate` `main`, `cli._cmd_eval_chain`, `eval_batch.main`) calls `jobs.lower_priority(--nice)`
+  at start: niceness 15 by default (`$TRIFORCE_NICE` overrides it, 0 leaves it alone), only ever raised, so a
+  child of a niced driver keeps its parent's (drivers pass theirs on as `$TRIFORCE_NICE`, `jobs.child_env`).
+  Library code never calls it: play and replay tools that share the evaluation code keep normal priority
+  (`tests/test_eval_batch.py` checks the call sites). I/O priority is left alone.
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
   success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
   its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that
@@ -680,6 +698,20 @@ every step, so following an enemy that moves away pays again, and knockback rese
   evaluation and ends open runs `interrupted`. `--train-args` expands only `{name}`; `--models-dir` defaults to
   `$TRIFORCE_MODELS_DIR` or `<repo>/models`. `--skip-existing` skips finished runs only; an unfinished run dir is renamed `<run>.partial-N`
   (`partial_set_aside` event) and the specialist trains fresh.
+- `triforce eval-batch NAME [--chains TAG] [--families all|a,b] [--chain '[ENTRY:] ARGS' ...] [--evaluate
+  '[ENTRY:] ARGS' ...] [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--redo]` (`eval_batch.py`):
+  evaluations as one named batch (log layout above), each its own process (`eval-chain` / `evaluate` with
+  `--events <batch>/<entry>.jsonl`), one at a time; `--jobs N` runs family evaluations side by side within
+  `--parallel` envs, chains and the report alone. `--chain` takes everything `eval-chain` does but `--append`
+  (its output is written as `<output>.tmp` and moved into place when it succeeded; a segment start without
+  `--stop-at` also counts arrivals at the next segment's start room); `--evaluate` everything `evaluate` does.
+  `--chains TAG` is `r56_chains.sh`: the eight segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
+  then the report entry (`scripts/yardstick.py report`, `triforce room-stats TAG`); `--families` the evaluation of
+  each family's promoted (or `--run-id`) run in each of `--acts`. A failed entry is marked and the batch goes on
+  (exit 1); SIGTERM / Ctrl-C stops the running ones and marks the rest `interrupted` (exit 130); exit 2 when the
+  batch can't run (a bad entry, nothing to run). A rerun skips what is done: a chain whose output exists, an
+  evaluation whose result file is the same measurement (`eval_batch.same_measurement`: specialist, act mode,
+  episodes per state, seed, checkpoint sha1, code and data versions); `--redo` measures those again.
 
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
 
@@ -795,8 +827,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
   the `chain_start` event; an existing `--output` is refused unless `--append` with the same provenance.
   `--checkpoint` must name a known specialist and an existing checkpoint. Exit 2 on a bad `--from`, `--stop-at` or
   `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
-  `triforce train|run|play|evaluate|room-stats ...` forward to the module CLIs (`triforce --models-dir DIR
-  train|run|evaluate|room-stats` forwards the models dir).
+  `triforce train|run|play|evaluate|eval-batch|room-stats ...` forward to the module CLIs (`triforce --models-dir DIR
+  train|run|evaluate|eval-batch|room-stats` forwards the models dir). `eval-chain --events FILE` appends its events to a
+  caller's stream (no folder of its own); `--nice N` (CPU priority, above).
 - `scripts/yardstick.py report --run RUN [--mode sample|argmax] [--chain NAME=PATH[@L:0xRR] ...] --output OUT.json`
   reads each specialist's evaluation in the run's act mode (`evaluate.read_evaluation`; a missing one is an error
   unless `--allow-mode-mismatch`) and the chain files, and reports success (Wilson intervals), hearts and chain

@@ -100,6 +100,9 @@ triforce promote <specialist> <run-id>
 triforce eval-chain --runs 20 --parallel 20                     # route d2first; writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
 triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 2's triforce
 triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
+triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the eight chain segments as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
+triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4   # every family's promoted run in both act modes, 4 side by side
+triforce eval-batch r71-check --chain 'd3: --from 3_7cs_0 --runs 200' --evaluate 'darknut: --specialist darknut --act argmax'   # a mixed batch (rerun: skips what is done)
 triforce room-stats r70-1k                                     # per-room stats by scope (full run, segments, room only) of target/r56-chains/r70-1k-*.jsonl -> r70-1k-room-stats.json
 cargo run --release -p triforce-tools --bin tf -- replay verify runs/replays/*.tfreplay   # replay them on the emulator alone (replay info FILE prints one)
 cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
@@ -109,6 +112,13 @@ Training GUI charts use the plotted history (respecting **skip startup**). Succe
 bands and ticks, enclosing every displayed success series and the early-stop/eval reference lines; any value below 25%
 restores the full 0–100% range. Health change encloses both real and total series with ±0.2 hearts of padding;
 the "no change" reference appears only when zero is within that range.
+
+Evaluations go through `triforce eval-batch NAME` (`triforce/eval_batch.py`): one log folder, every evaluation
+listed up front, shown in the training GUI as one group named NAME with a progress bar per evaluation; its Eval tab
+gives each outcome its share (`108× (10.8%)` of a chain's runs or of a family evaluation's episodes). Training and
+evaluation (`train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`) run at nice 15 by default (`--nice N`,
+0 leaves the priority alone, `$TRIFORCE_NICE` sets the default; the jobs they start inherit it); play and replay
+tools (`play-zelda.py`, `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf replay`) keep normal priority.
 
 `zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
 first playable frames; an overworld room without a savestate is walked into from the game start, so the overworld

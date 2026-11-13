@@ -15,65 +15,28 @@
 #
 #   ACT=sample TAG=r56-sample scripts/experiments/r56_chains.sh [run|report]
 #
-# ACT: model (each model's act file), sample or argmax. Output: target/r56-chains/<TAG>-<segment>.jsonl,
-# target/r56-chains/<TAG>-yardstick.json and target/r56-chains/<TAG>-room-stats.json (`triforce room-stats`: per-room
-# statistics by scope, full run, the segments cut at the dungeon exits, each dungeon, the room alone; zelda-map.py
-# shows the newest).
+# ACT: model (each model's act file), sample or argmax. Output: target/r56-chains/<TAG>-<segment>.jsonl (console
+# output in <TAG>-<segment>.log), target/r56-chains/<TAG>-yardstick.json and target/r56-chains/<TAG>-room-stats.json
+# (`triforce room-stats`: per-room statistics by scope, full run, the segments cut at the dungeon exits, each dungeon,
+# the room alone; zelda-map.py shows the newest).
+#
+# It is one batch of `triforce eval-batch TAG --chains TAG` (triforce/eval_batch.py): one log folder named for the
+# tag, one progress bar per segment in the training GUI, then the report, everything at nice 15. A segment whose
+# output exists is done; a rerun plays the rest. PARALLEL (default: every core), NICE (default 15).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 ACT=${ACT:-sample}
 TAG=${TAG:-r56-$ACT}
 RUNS=${RUNS:-120}
-PARALLEL=${PARALLEL:-10}
 OUT=${OUT:-target/r56-chains}
 SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0"}
-mkdir -p $OUT
-
-target_of() {
-  case $1 in
-    d2) echo 0:0x3c ;; post-d2) echo 1:0x73 ;; d1) echo 0:0x37 ;; post-d1) echo 3:0x7c ;;
-    d3) echo 0:0x74 ;; post-d3) echo 4:0x71 ;; *) echo "" ;;
-  esac
-}
-
-run() {
-  for segment in $SEGMENTS; do
-    name=${segment%%:*} from=${segment#*:}
-    out=$OUT/$TAG-$name.jsonl
-    [ -s $out ] && { echo "$name: done"; continue; }
-    from_args=(); [ $from != start ] && from_args=(--from $from)
-    rm -f $out.tmp $out.tmp.meta.json     # eval-chain refuses an existing --output
-    $PY -m triforce.cli eval-chain --runs $RUNS --parallel $PARALLEL --act $ACT "${from_args[@]}" \
-      --output $out.tmp > $OUT/$TAG-$name.log 2>&1 && mv $out.tmp.meta.json $out.meta.json && mv $out.tmp $out \
-      || echo "$name: eval-chain failed ($OUT/$TAG-$name.log)"
-    tail -1 $OUT/$TAG-$name.log
-  done
-}
-
-report() {
-  chains=()
-  for segment in $SEGMENTS; do
-    name=${segment%%:*}
-    out=$OUT/$TAG-$name.jsonl
-    [ -s $out ] || continue
-    target=$(target_of $name)
-    chains+=(--chain "$name=$out${target:+@$target}")
-    if [ $name = full ]; then
-      seq=""
-      for milestone in d2:2:0x7d post-d2:0:0x3c d1:1:0x73 post-d1:0:0x37 d3:3:0x7c post-d3:0:0x74 d4:4:0x71; do
-        seq="${seq:+$seq,}${milestone#*:}"
-        chains+=(--chain "full→${milestone%%:*}=$out@$seq")
-      done
-    fi
-  done
-  $PY scripts/yardstick.py report --run promoted "${chains[@]}" --output $OUT/$TAG-yardstick.json | sed -n '/^| segment/,$p'
-  $PY -m triforce.cli room-stats "$TAG" --chains-dir "$OUT"
-}
 
 case ${1:-all} in
-  run) run ;;
-  report) report ;;
-  all) run; report ;;
+  run) mode=(--no-report) ;;
+  report) mode=(--report-only) ;;
+  all) mode=() ;;
   *) echo "usage: $0 [run|report|all]" >&2; exit 2 ;;
 esac
+exec $PY -m triforce.cli eval-batch "$TAG" --chains "$TAG" --act "$ACT" --runs "$RUNS" --chains-dir "$OUT" \
+  --segments "$SEGMENTS" ${PARALLEL:+--parallel $PARALLEL} ${NICE:+--nice $NICE} "${mode[@]}"

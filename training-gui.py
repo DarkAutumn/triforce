@@ -3,7 +3,8 @@
 # requires-python = ">=3.12"
 # dependencies = ["pyside6-essentials>=6.7"]
 # ///
-"""Live training watcher for the event logs written by ``triforce.train`` and ``scripts/train_round.py``.
+"""Live training watcher for the event logs written by ``triforce.train``, ``scripts/train_round.py`` and the
+evaluations (``triforce eval-batch``: one group per batch, a row per evaluation; ``evaluate``, ``eval-chain``).
 
     uv run training-gui.py                          # [currently running]: every live training (else the newest folder)
     uv run training-gui.py logs/261102_001_round3   # one log folder
@@ -97,6 +98,7 @@ EVENT_COLORS = {
     'train_end': C.accent, 'skipped': C.muted, 'eval_start': C.eval, 'eval_progress': C.eval, 'eval': C.eval,
     'end': C.ok,
     'specialist_start': C.accent, 'specialist_end': C.ok, 'chain_start': C.eval, 'chain': C.eval,
+    'entry_start': C.accent, 'entry_end': C.ok,
 }
 
 QSS = """
@@ -171,6 +173,25 @@ def fmt_duration(seconds) -> str:
 def fmt_pct(value) -> str:
     """0.23 -> 23%."""
     return '–' if value is None else f'{value:.0%}'
+
+
+def fmt_count_share(count: int, total) -> str:
+    """An outcome's count and its share of the evaluation, '108× (10.8%)': of the chain's runs, or of the family
+    evaluation's episodes."""
+    return f"{count}× ({count / total:.1%})" if total else f"{count}×"
+
+
+def failure_rows(failures: dict, total) -> list[tuple]:
+    """BarList rows of outcome counts, most first: (key, share, '108× (10.8%)', red)."""
+    return [(key, count / total if total else None, fmt_count_share(count, total), C.bad)
+            for key, count in sorted(failures.items(), key=lambda item: (-item[1], item[0]))]
+
+
+def eval_failures(ev: dict) -> dict:
+    """A family evaluation's unsuccessful episodes by start room and ending, '3:0x59 death' -> count (from the
+    ``eval`` event's ``by_room_failures``)."""
+    return {f"{room} {ending}": count for room, stats in (ev.get('by_room_failures') or {}).items()
+            for ending, count in (stats.get('failures') or {}).items() if count}
 
 
 def fmt_hearts_change(value) -> str:
@@ -329,8 +350,18 @@ class JsonlTail:
         return reset, events
 
 
+# Plan entries of an evaluation batch (triforce eval-batch): no training, one evaluation each.
+EVAL_KINDS = ('chain', 'eval', 'report')
+
+
+def entry_name(entry: dict, index: int) -> str:
+    """A plan entry's display name: a batch entry's ``name``, else its specialist."""
+    return entry.get('name') or entry.get('specialist') or f'run {index}'
+
+
 class Run:
-    """One specialist run: its training.json entry plus everything its event stream said so far."""
+    """One specialist run, or one evaluation of a batch: its training.json entry plus everything its event stream
+    said so far."""
 
     def __init__(self, log_dir: Path, index: int, entry: dict):
         self.log_dir = log_dir
@@ -344,13 +375,20 @@ class Run:
         self.events: list[dict] = []
         self.start = self.early_stop = self.train_end = self.skipped = None
         self.eval_start = self.eval_progress = self.eval = self.end = self.checkpoint = None
+        self.chain_start = self.chain_progress = self.chain = None
         self.progress: list[dict] = []
         self.errors: list[dict] = []
         self._series: dict[tuple[str, int], tuple[int, int, list]] = {}
 
     @property
     def name(self) -> str:
-        return self.entry.get('specialist', f'run {self.index}')
+        return entry_name(self.entry, self.index)
+
+    @property
+    def kind(self) -> str:
+        """``chain`` / ``eval`` / ``report`` for an evaluation batch's entry, else '' (a training run)."""
+        kind = self.entry.get('kind')
+        return kind if kind in EVAL_KINDS else ''
 
     @property
     def events_file(self) -> str:
@@ -378,7 +416,7 @@ class Run:
         elif kind == 'error':
             self.errors.append(event)
         elif kind in ('start', 'early_stop', 'train_end', 'skipped', 'eval_start', 'eval_progress', 'eval', 'end',
-                      'checkpoint'):
+                      'checkpoint', 'chain_start', 'chain_progress', 'chain'):
             setattr(self, kind, event)
 
     # -- derived state
@@ -406,7 +444,7 @@ class Run:
             return 'pending'
         if live is False:
             return 'interrupted' if plan_status == 'interrupted' else 'lost'
-        if self.eval_start is not None or entry_status == 'evaluating':
+        if self.eval_start is not None or self.chain_start is not None or entry_status == 'evaluating':
             return 'evaluating'
         if not self.progress and self.train_end is None and self.skipped is None:
             return 'starting'
@@ -508,7 +546,11 @@ class Run:
         return min(guess, cap, self.target_steps or guess)
 
     def fraction(self, now: float, status: str) -> float:
-        """Training progress 0..1."""
+        """Training progress 0..1; an evaluation without training (a batch entry, a standalone evaluation): its
+        episodes or runs done."""
+        if status == 'evaluating' and not self.target_steps:
+            done, total = self.eval_done()
+            return min(1.0, done / total) if total else 0.0
         if status == 'evaluating' or (status in ('ok',) and not self.early_stop):
             return 1.0
         target = self.target_steps
@@ -529,6 +571,13 @@ class Run:
         return self.entry.get('error', '') or ''
 
     def eval_rate(self):
+        """The evaluation's success rate; a chain's arrival rate when it has an arrival room, else its success."""
+        if self.kind == 'chain':
+            for source in (self.end, self.entry):
+                for key in ('chain_arrival_rate', 'chain_success_rate'):
+                    if source and source.get(key) is not None:
+                        return source[key]
+            return (self.chain or {}).get('success_rate')
         for source in (self.eval, self.end, self.entry):
             if source:
                 value = source.get('success_rate') if source is self.eval else source.get('eval_success_rate')
@@ -536,7 +585,20 @@ class Run:
                     return value
         return None
 
+    def eval_rate_label(self) -> str:
+        """What ``eval_rate`` measures: 'arrive' (a chain with an arrival room), 'success' (a chain) or 'eval'."""
+        if self.kind != 'chain':
+            return 'eval'
+        arrived = any(source and source.get('chain_arrival_rate') is not None for source in (self.end, self.entry))
+        return 'arrive' if arrived else 'success'
+
     def eval_episodes(self):
+        """Episodes of the evaluation (a chain's runs)."""
+        if self.kind == 'chain':
+            for source in (self.end, self.entry):
+                if source and source.get('chain_runs') is not None:
+                    return source['chain_runs']
+            return (self.chain or {}).get('runs')
         for source in (self.eval, self.end, self.entry):
             if source:
                 value = source.get('episodes') if source is self.eval else source.get('eval_episodes')
@@ -544,18 +606,33 @@ class Run:
                     return value
         return None
 
+    def _eval_events(self) -> tuple:
+        """(start, progress, total key) of the evaluation's events: a chain's or a family evaluation's."""
+        if self.chain_start is not None or self.kind == 'chain':
+            return self.chain_start, self.chain_progress, 'runs'
+        return self.eval_start, self.eval_progress, 'episodes'
+
     def eval_done(self) -> tuple[int, int]:
-        """(episodes finished, episodes total) of the evaluation so far."""
-        total = (self.eval_progress or self.eval_start or {}).get('episodes') or 0
-        return (self.eval_progress or {}).get('done') or 0, total
+        """(episodes finished, episodes total) of the evaluation so far (a chain's runs)."""
+        start, progress, key = self._eval_events()
+        total = (progress or start or {}).get(key) or self.entry.get('total') or 0
+        return (progress or {}).get('done') or 0, total
 
     def eval_eta(self, now: float):
         """Seconds of evaluation left at the pace so far (None before the first episode finishes)."""
+        start, progress, _ = self._eval_events()
         done, total = self.eval_done()
-        if not done or self.eval_start is None:
+        if not done or start is None or progress is None:
             return None
-        per_episode = (self.eval_progress['ts'] - self.eval_start['ts']) / done
-        return max(0.0, per_episode * (total - done) - (now - self.eval_progress['ts']))
+        per_episode = (progress['ts'] - start['ts']) / done
+        return max(0.0, per_episode * (total - done) - (now - progress['ts']))
+
+    def chain_result(self):
+        """A chain entry's summary: its ``chain`` event (failures, errors...), with the plan's headline fields."""
+        if self.chain is None:
+            return None
+        return {**self.chain, **{key: value for key, value in {**self.entry, **(self.end or {})}.items()
+                                 if key.startswith('chain_')}}
 
     def train_success(self):
         """Last balanced success rate during training (raw rate when balanced isn't logged)."""
@@ -692,8 +769,8 @@ class Training:
         runs = []
         for index, entry in enumerate(plan.get('runs') or []):
             old = self.runs[index] if index < len(self.runs) else None
-            if old is not None and old.name == entry.get('specialist') and old.events_file == (
-                    entry.get('events') or f"{entry.get('specialist')}.jsonl"):
+            if old is not None and old.name == entry_name(entry, index) and old.events_file == (
+                    entry.get('events') or f"{entry_name(entry, index)}.jsonl"):
                 old.entry = entry
                 runs.append(old)
             else:
@@ -763,6 +840,8 @@ class Training:
         """Rough seconds left: the current run's estimate, then the finished runs' pace for the rest."""
         if self.plan.get('status') != 'running':
             return None
+        if self.is_batch:
+            return self.batch_eta(now)
         statuses = self.statuses()
         finished = [run for run, status in zip(self.runs, statuses) if status in ('ok', 'early')
                     and run.started_ts and run.finished_ts and run.steps]
@@ -794,6 +873,35 @@ class Training:
                     remaining += run.target_steps / rate
                 else:
                     remaining += run.target_steps * per_step
+        return remaining
+
+    @property
+    def is_batch(self) -> bool:
+        """An evaluation batch (``triforce eval-batch``): one evaluation per plan entry."""
+        return self.plan.get('kind') == 'eval-batch'
+
+    def batch_eta(self, now: float):
+        """Seconds left in an evaluation batch: the running evaluations' own estimates, then each pending one at the
+        pace (seconds per run or episode) of the finished ones of its kind.  None until there is a pace for every
+        kind still to come.  Entries running side by side are counted one after another (an upper bound)."""
+        pace: dict[str, list[float]] = {}
+        for run, status in zip(self.runs, self.statuses()):
+            seconds = run.end.get('wall_seconds') if run.end else None
+            units = run.entry.get('total') or run.eval_episodes()
+            if status == 'ok' and seconds and units and not run.end.get('resumed'):
+                pace.setdefault(run.kind, []).append(seconds / units)
+        remaining = 0.0
+        for run, status in zip(self.runs, self.statuses()):
+            if status == 'evaluating':
+                eta = run.eval_eta(now)
+                if eta is None:
+                    return None
+                remaining += eta
+            elif status == 'pending':
+                rates = pace.get(run.kind)
+                if not rates or not run.entry.get('total'):
+                    return None
+                remaining += run.entry['total'] * sum(rates) / len(rates)
         return remaining
 
     def chain(self):
@@ -902,6 +1010,13 @@ def describe(event: dict) -> str:
         return f"{get('runs')} runs · {get('parallel')} parallel"
     if kind == 'chain':
         return f"{get('successes')}/{get('runs')} = {fmt_pct(get('success_rate'))}"
+    if kind == 'chain_progress':
+        return f"{get('done')}/{get('runs')} runs · {get('successes')} reached the end"
+    if kind == 'entry_start':
+        return f"{get('name')} ({get('kind')})"
+    if kind == 'entry_end':
+        rate = get('chain_arrival_rate', get('chain_success_rate', get('eval_success_rate')))
+        return f"{get('name')}: {get('status')}" + (f" · {fmt_pct(rate)}" if rate is not None else '')
     return ''
 
 
@@ -1298,6 +1413,10 @@ class Header(Clickable):
             meta.append(f"{model.plan['host']} · pid {model.plan.get('pid')}")
         if model.plan.get('steps_budget'):
             meta.append(f"{fmt_steps(model.plan['steps_budget'])} steps each")
+        if model.is_batch:
+            meta.append(f"{len(model.runs)} evaluations")
+        if model.plan.get('nice') is not None:
+            meta.append(f"nice {model.plan['nice']}")
         p.setFont(font(9.5))
         p.setPen(C.muted)
         p.drawText(QPointF(left, rect.top() + 58), p.fontMetrics().elidedText(
@@ -1347,6 +1466,79 @@ class Header(Clickable):
             p.setPen(C.text)
             p.drawText(QRectF(left, bar.bottom() + 8, right - left, 18), Qt.AlignmentFlag.AlignRight,
                        f"≈ {fmt_duration(eta)} left")
+
+
+def chain_sections(result: dict) -> list:
+    """Eval tab sections of a chain's summary (a ``chain`` event, plus a batch entry's ``chain_*`` headline): its
+    arrivals and success, then where the other runs ended, each with its share of all the chain's runs."""
+    runs = result.get('runs') or result.get('chain_runs') or 0
+    rows = [('success', result.get('success_rate'), f"{result.get('successes')}/{runs}",
+             rate_color(result.get('success_rate')))]
+    if result.get('chain_arrived') is not None:
+        rate = result.get('chain_arrival_rate')
+        rows.insert(0, (f"arrived {result.get('chain_target')}", rate, f"{result['chain_arrived']}/{runs}",
+                        rate_color(rate)))
+    sections = [('bars', 'eval-chain', rows)]
+    failures = result.get('failures') or {}
+    if failures:
+        sections.append(('bars', f"Chain failures (share of all {runs} runs)", failure_rows(failures, runs)))
+    if result.get('errors'):
+        sections.append(('text', 'Chain errors', [(str(e), C.warn) for e in result['errors']]))
+    return sections
+
+
+def entry_summary(run: Run, status: str) -> list:
+    """Charts-page sections of an evaluation batch's entry: what it measured, how long it took, what ran."""
+    fields = {**run.entry, **(run.end or {})}
+    value = run.eval_rate()
+    rows = [(run.eval_rate_label(), value, fmt_pct(value) if value is not None else STATUS.get(status, ('', status))[1],
+             rate_color(value) if value is not None else C.idle)]
+    done, total = run.eval_done()
+    if run.kind != 'report':
+        unit = 'runs' if run.kind == 'chain' else 'episodes'
+        finished = run.eval_episodes() if status in FINISHED else None
+        rows.append((unit, 1.0 if finished else (done / total if total else 0.0),
+                     f"{finished}" if finished else f"{done}/{total}", C.eval))
+    text = [(f"wall time {fmt_duration(fields.get('wall_seconds'))}" if fields.get('wall_seconds') else
+             f"{STATUS.get(status, ('', status))[1]}", C.muted)]
+    if fields.get('output'):
+        text.append((f"output {fields['output']}", C.muted))
+    if fields.get('resumed'):
+        text.append(('measured by an earlier run of this batch (the result file was already there)', C.faint))
+    for command in run.entry.get('command') or []:
+        text.append(('$ ' + ' '.join(str(part) for part in command), C.faint))
+    return [('bars', run.kind, rows), ('text', 'Details', text)]
+
+
+def running_rate(run: Run):
+    """An evaluation's success so far: the family evaluation's running rate, or a chain's runs that reached the
+    route's end over its runs done (None before the first one)."""
+    if run.eval_progress is not None:
+        return run.eval_progress.get('success_rate')
+    done = (run.chain_progress or {}).get('done')
+    return run.chain_progress.get('successes', 0) / done if done else None
+
+
+def batch_headline(run: Run, compact: bool = False) -> str:
+    """A finished batch entry's result in a few words: 'arrive 388/1000 = 38.8% · end 220/1000 = 22.0%' (compact:
+    'arrive 38.8% · end 22.0%') or '98.3% · -0.12 ♥'."""
+    fields = {**run.entry, **(run.end or {})}
+    if run.kind == 'chain':
+        runs = fields.get('chain_runs')
+        parts = []
+        if fields.get('chain_arrived') is not None:
+            rate = f"{fields.get('chain_arrival_rate') or 0:.1%}"
+            parts.append(f"arrive {rate}" if compact else f"arrive {fields['chain_arrived']}/{runs} = {rate}")
+        if fields.get('chain_success_rate') is not None:
+            rate = f"{fields['chain_success_rate']:.1%}"
+            parts.append(f"end {rate}" if compact else f"end {fields.get('chain_successes')}/{runs} = {rate}")
+        return ' · '.join(parts)
+    if run.kind == 'eval' and fields.get('eval_success_rate') is not None:
+        text = f"{fields['eval_success_rate']:.1%}"
+        if fields.get('eval_health_change') is not None:
+            text += f" · {fmt_hearts_change(fields['eval_health_change'])}"
+        return text
+    return ''
 
 
 class RunRow(Clickable):
@@ -1416,7 +1608,11 @@ class RunRow(Clickable):
         label = ''
         if status == 'evaluating':
             done, total = run.eval_done()
-            label = f'eval {done}/{total}' if total else 'evaluating'
+            if run.kind == 'report':
+                label = 'report'
+            else:
+                noun = 'runs' if run.kind == 'chain' else 'eval'
+                label = f'{noun} {done}/{total}' if total else 'evaluating'
         elif status != 'pending':
             label = f'{self.shown:.0%}'
         hatch = 1.0 if status in ('early', 'failed', 'interrupted', 'lost') else None
@@ -1431,7 +1627,7 @@ class RunRow(Clickable):
         nx = bar.right() + 16
         p.setFont(font(9.5, QFont.Weight.DemiBold))
         p.setPen(C.text if status != 'pending' else C.faint)
-        p.drawText(QPointF(nx, rect.top() + 24), f"{fmt_steps(run.steps)} / {fmt_steps(run.target_steps)}")
+        p.drawText(QPointF(nx, rect.top() + 24), self.numbers_text(run, status))
         p.setFont(font(8.5))
         p.setPen(C.muted)
         p.drawText(QPointF(nx, rect.top() + 41), self.rate_text(run, status, now))
@@ -1444,12 +1640,13 @@ class RunRow(Clickable):
             if points:
                 paint_sparkline(p, spark, points, rate_color(points[-1][1]))
             evaluation = run.eval_rate()
-            if evaluation is None and status == 'evaluating' and run.eval_progress:
-                running = run.eval_progress.get('success_rate')
-                paint_pill(p, rect.right() - 12, cy - 10, f"eval ~{fmt_pct(running)}", rate_color(running),
+            what = run.eval_rate_label()
+            running = running_rate(run)
+            if evaluation is None and status == 'evaluating' and running is not None:
+                paint_pill(p, rect.right() - 12, cy - 10, f"{what} ~{fmt_pct(running)}", rate_color(running),
                            8.5, right=True)
             elif evaluation is not None:
-                paint_pill(p, rect.right() - 12, cy - 10, f"eval {fmt_pct(evaluation)}", rate_color(evaluation),
+                paint_pill(p, rect.right() - 12, cy - 10, f"{what} {fmt_pct(evaluation)}", rate_color(evaluation),
                            8.5, right=True)
             elif points:
                 # latest success and hearts change (exit - entry), e.g. "89% -0.2♥", right-aligned after the sparkline;
@@ -1475,10 +1672,27 @@ class RunRow(Clickable):
                                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, f"total {total:+.1f}♥")
 
     @staticmethod
+    def numbers_text(run: Run, status: str) -> str:
+        """Steps of a training run; runs or episodes of an evaluation (a batch entry, or a standalone evaluation's
+        run without a step target; done / total while it runs)."""
+        if not run.kind and (run.target_steps or (run.eval_start is None and run.eval is None)):
+            return f"{fmt_steps(run.steps)} / {fmt_steps(run.target_steps)}"
+        if run.kind == 'report':
+            return 'report'
+        unit = 'runs' if run.kind == 'chain' else 'episodes'
+        done, total = run.eval_done()
+        if status == 'evaluating':
+            return f"{done} / {total} {unit}"
+        total = run.eval_episodes() or total
+        return f"{total} {unit}" if total else unit
+
+    @staticmethod
     def phase_text(run: Run, status: str, now: float) -> str:
         iters = f"it {run.iteration}/{run.target_iterations}" if run.target_iterations else f"it {run.iteration}"
         started = run.started_ts
         duration = ((run.finished_ts or now) - started) if started else None
+        if run.kind and status != 'pending':
+            return RunRow.batch_phase_text(run, status, duration)
         if status == 'pending':
             return 'waiting'
         if status == 'starting':
@@ -1508,14 +1722,35 @@ class RunRow(Clickable):
             eta = run.eta(now)
             parts = [f"{sps:,.0f} sps" if sps else '', f"{fmt_duration(eta)} left" if eta is not None else '']
             return ' · '.join(part for part in parts if part)
-        if status == 'evaluating' and run.eval_progress:
+        if status == 'evaluating' and running_rate(run) is not None:
             eta = run.eval_eta(now)
-            parts = [f"success {fmt_pct(run.eval_progress.get('success_rate'))}",
-                     f"{fmt_duration(eta)} left" if eta is not None else '']
+            parts = [f"success {fmt_pct(running_rate(run))}", f"{fmt_duration(eta)} left" if eta is not None else '']
             return ' · '.join(part for part in parts if part)
+        if run.kind:
+            return batch_headline(run, compact=True) if status in FINISHED else ''
         if status in FINISHED and sps:
             return f"{sps:,.0f} sps"
         return ''
+
+    @staticmethod
+    def batch_phase_text(run: Run, status: str, duration) -> str:
+        """The second line of an evaluation batch's entry (it has no training iterations)."""
+        if status == 'evaluating':
+            done, total = run.eval_done()
+            if run.kind == 'report':
+                return f"report · {fmt_duration(duration)}"
+            if not total or (run.chain_start is None and run.eval_start is None):
+                return f"starting · {fmt_duration(duration)}"
+            unit = 'runs' if run.kind == 'chain' else 'episodes'
+            return f"{'chain' if run.kind == 'chain' else 'eval'} {done}/{total} {unit} · {fmt_duration(duration)}"
+        wall = (run.end or {}).get('wall_seconds') or run.entry.get('wall_seconds') or duration
+        if status == 'ok':
+            resumed = (run.end or {}).get('resumed') or run.entry.get('resumed')
+            return 'done earlier (resumed)' if resumed else f"done · {fmt_duration(wall)}"
+        if status == 'lost':
+            return 'process gone'
+        message = run.message()
+        return f"{status}: {message}" if message else status
 
 
 class ChainCard(Clickable):
@@ -1536,7 +1771,7 @@ class ChainCard(Clickable):
             result = chain['result']
             runs = result.get('runs') or 1
             for key, count in list((result.get('failures') or {}).items())[:5]:
-                lines.append((f"{count:>3}×  {key}  ({count / runs:.0%})", C.bad))
+                lines.append((f"{fmt_count_share(count, runs):>13}  {key}", C.bad))
             for error in (result.get('errors') or [])[:3]:
                 lines.append((f"error: {error}", C.warn))
         elif chain and chain['error']:
@@ -2002,11 +2237,14 @@ class DetailPane(QWidget):
     def _show_run(self, model: Training, run: Run):
         status = model.run_status(run)
         color, label = STATUS.get(status, (C.muted, status))
-        where = (run.start or {}).get('run_dir') or run.entry.get('run_dir') or ''
+        where = (run.start or {}).get('run_dir') or run.entry.get('output') or run.entry.get('run_dir') or ''
         self.title.setText(f"<span style='font-size:15pt; font-weight:700'>{run.name}</span>"
                            f"&nbsp;&nbsp;<span style='color:{color.name()}; font-weight:700'>{label}</span>"
                            f"<br><span style='color:{C.faint.name()}'>{where}</span>")
-        self.chart_stack.setCurrentIndex(0)
+        # An evaluation batch's entry has no training charts: its summary instead.
+        self.chart_stack.setCurrentIndex(1 if run.kind else 0)
+        if run.kind:
+            self.summary.set_sections(entry_summary(run, status), 'nothing yet')
         stop = (run.start or {}).get('stop_success')
         hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop is not None else []
         if run.eval_rate() is not None:
@@ -2091,6 +2329,18 @@ class DetailPane(QWidget):
             by_state = ev.get('by_state') or {}
             if by_state:
                 sections.append(('grid', 'By start state', sorted(by_state.items())))
+            failures = eval_failures(ev)
+            if failures:
+                sections.append(('bars', f"Failures (share of all {ev.get('episodes')} episodes)",
+                                 failure_rows(failures, ev.get('episodes'))))
+        elif run.chain is not None:
+            sections += chain_sections(run.chain_result())
+        elif run.chain_start is not None:
+            done, total = run.eval_done()
+            running = running_rate(run)
+            sections.append(('bars', 'eval-chain (running)', [
+                ('runs', done / total if total else 0.0, f"{done}/{total}", C.eval),
+                ('reached the end so far', running, fmt_pct(running), rate_color(running))]))
         elif run.eval_start:
             done, total = run.eval_done()
             running = (run.eval_progress or {}).get('success_rate')
@@ -2146,19 +2396,18 @@ class DetailPane(QWidget):
                                    ('bars', 'Steps / second', sps), ('bars', 'Wall time', wall)])
 
         sections = []
+        if model.is_batch:
+            rows = []
+            for run, status in zip(model.runs, model.statuses()):
+                value = run.eval_rate()
+                text = batch_headline(run) or (f"{run.eval_rate_label()} {fmt_pct(value)}" if value is not None
+                                               else STATUS.get(status, (C.muted, status))[1])
+                rows.append((run.name, value, text,
+                             rate_color(value) if value is not None else STATUS.get(status, (C.muted, ''))[0]))
+            sections.append(('bars', 'Evaluations', rows))
         chain = model.chain()
         if chain and chain['result']:
-            result = chain['result']
-            runs = result.get('runs') or 1
-            sections.append(('bars', 'eval-chain', [
-                ('success', result.get('success_rate'), f"{result.get('successes')}/{runs}",
-                 rate_color(result.get('success_rate')))]))
-            failures = result.get('failures') or {}
-            if failures:
-                sections.append(('bars', 'Chain failures', [(key, count / runs, f"{count}×", C.bad)
-                                                            for key, count in failures.items()]))
-            if result.get('errors'):
-                sections.append(('text', 'Chain errors', [(str(e), C.warn) for e in result['errors']]))
+            sections += chain_sections(chain['result'])
         errors = [(str(e.get('message', '')), C.bad) for e in model.round_errors()]
         for run in model.runs:
             errors += [(f"{run.name}: {e.get('message', '')}", C.bad) for e in run.errors]

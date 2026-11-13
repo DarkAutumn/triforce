@@ -28,6 +28,9 @@ Live monitoring: every round gets ``logs/<yymmdd>_<NNN>_<round>/`` (``--logs-dir
 with ``training.json`` (every specialist in run order with its status), ``<specialist>.jsonl`` event streams
 (training progress from ``triforce.train --events``, then ``eval`` and a final ``end``), ``<specialist>.log``
 console output, and ``round.jsonl`` / ``round.log`` for the round itself (chain results, errors, final ``end``).
+
+Priority: the round lowers its own CPU priority at start (``--nice N``, default ``$TRIFORCE_NICE`` else 15; 0 leaves
+it alone; ``triforce.jobs``), recorded in ``training.json`` (``nice``); the trainings and evaluations inherit it.
 """
 
 import argparse
@@ -50,6 +53,7 @@ from triforce import _native, registry
 from triforce.cli import chain_progress_events, eval_chain, meta_path
 from triforce.evaluate import default_output, eval_event, evaluate_specialist, write_result
 from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir, write_json_atomic
+from triforce.jobs import add_nice_argument, child_env, lower_priority
 from triforce.metrics import read_jsonl
 from triforce.specialist import list_specialists, load_specialist
 from triforce.train import interrupt_on_sigterm, run_status
@@ -95,6 +99,7 @@ def parse_args(argv=None):
                         help="extra arguments for triforce.train (one string; {name} expands to the specialist, "
                              "everything else, braces included, is passed as is)")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
+    add_nice_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -130,7 +135,7 @@ def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
     with open(run_dir / 'train.log', 'w', encoding='utf-8') as log, \
             open(log_dir / f'{name}.log', 'a', encoding='utf-8') as log_copy, \
             subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
-                             env={**os.environ, 'PYTHONUNBUFFERED': '1'}) as process:
+                             env={**child_env(args.nice), 'PYTHONUNBUFFERED': '1'}) as process:
         def copy_output():
             for line in process.stdout:
                 sys.stdout.write(line)
@@ -370,6 +375,7 @@ def main(argv=None):
         print(f"train_round: {problem}", file=sys.stderr)
         return 2
     models.mkdir(parents=True, exist_ok=True)
+    args.nice = lower_priority(args.nice)      # from here on: the niceness the round runs at
 
     log_dir = new_log_dir(args.round, args.logs_dir)
     _CONSOLE['file'] = open(log_dir / 'round.log', 'a', encoding='utf-8')  # pylint: disable=consider-using-with
@@ -379,10 +385,10 @@ def main(argv=None):
          'run_dir': str(registry.run_dir(name, args.round, models)), 'target_iterations': iterations,
          'target_steps': iterations * args.steps_per_update} for name in names],
                         command=[sys.executable, *sys.argv], models_dir=str(models), steps_budget=args.steps,
-                        events='round.jsonl', log='round.log', chain_runs=args.chain_runs)
+                        events='round.jsonl', log='round.log', chain_runs=args.chain_runs, nice=args.nice)
     events = EventLog(log_dir / 'round.jsonl', round=args.round)
     events.emit('start', specialists=names, steps_budget=args.steps, models_dir=str(models), log_dir=str(log_dir),
-                promote=args.promote, train_args=args.train_args, pid=os.getpid())
+                promote=args.promote, train_args=args.train_args, pid=os.getpid(), nice=args.nice)
     say(f"[round] {args.round}: {', '.join(names)}  (logs: {log_dir})")
     open_runs: dict[int, str] = {}      # plan runs still training or evaluating (index -> name)
     try:

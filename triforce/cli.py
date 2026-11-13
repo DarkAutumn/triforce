@@ -1,4 +1,5 @@
-"""The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play/evaluate/room-stats."""
+"""The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play/evaluate/eval-batch/
+room-stats.  ``eval-chain`` lowers its own priority (``--nice``, ``triforce.jobs``)."""
 
 import argparse
 import json
@@ -161,14 +162,16 @@ def chain_progress_events(events, runs: int):
 
 
 def _cmd_eval_chain(args):
-    # pylint: disable=import-outside-toplevel, too-many-locals
+    # pylint: disable=import-outside-toplevel, too-many-locals, too-many-statements
     import time
     from contextlib import nullcontext
     from . import replay
     from .events import EventLog, logged_job
+    from .jobs import lower_priority
     from .registry import act_override
     from .runner import RunnerError, parse_overrides, power_on_options
     from .specialist import load_specialist
+    nice = lower_priority(args.nice)
     configs = [load_specialist(path) for path in args.specialist_config]
     overrides = parse_overrides(args.checkpoint)
     output = args.output or os.path.join('runs', f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl")
@@ -183,14 +186,17 @@ def _cmd_eval_chain(args):
     existing = check_output(output, provenance, args.append)
     what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
             + ('-power-on' if args.power_on else ''))
-    log = nullcontext() if args.no_log else logged_job(what, 'chain', [], args.logs_dir, events='round.jsonl',
-                                                       chain_runs=args.runs)
+    # --events: the caller (e.g. triforce eval-batch) owns the stream and its log folder.
+    log = nullcontext() if args.no_log or args.events else logged_job(
+        what, 'chain', [], args.logs_dir, events='round.jsonl', chain_runs=args.runs, nice=nice)
     with log as plan:
-        events = None if plan is None else EventLog(plan.directory / 'round.jsonl')
+        events = (EventLog(args.events) if args.events else
+                  None if plan is None else EventLog(plan.directory / 'round.jsonl'))
         if events is not None:
             events.emit('chain_start', runs=args.runs, parallel=args.parallel, overrides=overrides or None,
                         act=args.act, route=args.route, start_from=args.start_from, stop_at=args.stop_at,
-                        power_on=route.power_on, output=output, replays=args.replays, provenance=provenance)
+                        power_on=route.power_on, output=output, replays=args.replays, provenance=provenance,
+                        nice=nice)
         try:
             chain_output = ChainOutput(output, provenance, existing)
             progress = None if events is None else chain_progress_events(events, args.runs)
@@ -291,9 +297,9 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     passthrough = {'train': ('triforce.train', 'cli'), 'run': ('triforce.run', 'main'),
                    'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main'),
-                   'room-stats': ('triforce.room_stats', 'main')}
-    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate|room-stats ...` forwards the
-    # rest to the module's own CLI.
+                   'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main')}
+    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate|eval-batch|room-stats ...`
+    # forwards the rest to the module's own CLI.
     models_dir, allow, rest = None, False, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
@@ -317,21 +323,18 @@ def main(argv=None):
             from .registry import set_allow_incompatible  # pylint: disable=import-outside-toplevel
             set_allow_incompatible(True)
         return getattr(importlib.import_module(module), entry)(forwarded)
-    from ._native import DEFAULT_ROUTE  # pylint: disable=import-outside-toplevel
-    from .paths import HARVESTED_DIR  # pylint: disable=import-outside-toplevel
-    from .registry import ACT_CHOICES, ACT_MODES, set_allow_incompatible  # pylint: disable=import-outside-toplevel
-    from .replay import add_arguments as replay_arguments  # pylint: disable=import-outside-toplevel
-    from .runner import STOP_AT_HELP, add_power_on_arguments  # pylint: disable=import-outside-toplevel
+    from .registry import ACT_MODES, set_allow_incompatible  # pylint: disable=import-outside-toplevel
 
-    allow_help = "load models whose version differs from this code's in its first three numbers"
     parser = argparse.ArgumentParser(prog='triforce')
     parser.add_argument('--models-dir', default=None)
-    parser.add_argument('--allow-incompatible-models', action='store_true', help=allow_help)
+    parser.add_argument('--allow-incompatible-models', action='store_true', help=ALLOW_HELP)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('train', help="python -m triforce.train ...")
     sub.add_parser('run', help="python -m triforce.run ...")
     sub.add_parser('play', help="python -m triforce.play ...")
     sub.add_parser('evaluate', help="python -m triforce.evaluate ... (one specialist on its own rooms)")
+    sub.add_parser('eval-batch', help="python -m triforce.eval_batch NAME ... (evaluations and chain segments in "
+                                      "one log folder, one after another, niced)")
     sub.add_parser('room-stats', help="python -m triforce.room_stats TAG ... (per-room chain and eval statistics "
                                       "by scope: full run, segments, room only)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
@@ -348,7 +351,36 @@ def main(argv=None):
     stamp.add_argument('--version', default=None, help="default: this code's version")
     stamp.add_argument('--force', action='store_true', help="overwrite a different existing stamp")
 
-    chain = sub.add_parser('eval-chain', help="run the route N times; the milestone metric")
+    add_eval_chain_arguments(sub.add_parser('eval-chain', help="run the route N times; the milestone metric"))
+
+    args = parser.parse_args(argv)
+    set_allow_incompatible(args.allow_incompatible_models)
+    if args.command in passthrough:     # reached only through options the passthrough above doesn't take
+        parser.error(f"{args.command}: put its options after the command (triforce {args.command} --help)")
+    if args.command == 'eval-chain':
+        from .registry import IncompatibleModelError  # pylint: disable=import-outside-toplevel
+        from .runner import RunnerError  # pylint: disable=import-outside-toplevel
+        try:
+            return _cmd_eval_chain(args)
+        except (RunnerError, IncompatibleModelError) as error:
+            print(f"triforce eval-chain: error: {error}", file=sys.stderr)
+            return 2
+    return {'promote': _cmd_promote, 'list': _cmd_list, 'stamp': _cmd_stamp}[args.command](args)
+
+
+ALLOW_HELP = "load models whose version differs from this code's in its first three numbers"
+
+
+def add_eval_chain_arguments(chain):
+    """``triforce eval-chain``'s options on ``chain`` (an argparse parser; ``triforce.eval_batch`` checks a batch's
+    chain entries with them)."""
+    # pylint: disable=import-outside-toplevel
+    from ._native import DEFAULT_ROUTE
+    from .jobs import add_nice_argument
+    from .paths import HARVESTED_DIR
+    from .registry import ACT_CHOICES
+    from .replay import add_arguments as replay_arguments
+    from .runner import STOP_AT_HELP, add_power_on_arguments
     chain.add_argument('--route', default=DEFAULT_ROUTE)
     chain.add_argument('--runs', type=int, default=20)
     chain.add_argument('--parallel', type=int, default=1, help="envs in the chain pool")
@@ -378,22 +410,12 @@ def main(argv=None):
                             "by a config with harvested_fraction > 0, or one without seed states)")
     chain.add_argument('--logs-dir', default=None, help="event logs root (default $TRIFORCE_LOGS_DIR or <repo>/logs)")
     chain.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
+    chain.add_argument('--events', default=None, metavar='JSONL',
+                       help="append the chain_* events to this stream instead of a log folder of its own (the caller, "
+                            "e.g. triforce eval-batch, owns the stream and writes its final 'end')")
+    add_nice_argument(chain)
     chain.add_argument('--allow-incompatible-models', action='store_true', default=argparse.SUPPRESS,
-                       help=allow_help)
-
-    args = parser.parse_args(argv)
-    set_allow_incompatible(args.allow_incompatible_models)
-    if args.command in passthrough:     # reached only through options the passthrough above doesn't take
-        parser.error(f"{args.command}: put its options after the command (triforce {args.command} --help)")
-    if args.command == 'eval-chain':
-        from .registry import IncompatibleModelError  # pylint: disable=import-outside-toplevel
-        from .runner import RunnerError  # pylint: disable=import-outside-toplevel
-        try:
-            return _cmd_eval_chain(args)
-        except (RunnerError, IncompatibleModelError) as error:
-            print(f"triforce eval-chain: error: {error}", file=sys.stderr)
-            return 2
-    return {'promote': _cmd_promote, 'list': _cmd_list, 'stamp': _cmd_stamp}[args.command](args)
+                       help=ALLOW_HELP)
 
 
 if __name__ == '__main__':

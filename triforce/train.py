@@ -104,6 +104,7 @@ from . import registry
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir, write_json_atomic
+from .jobs import add_nice_argument, lower_priority
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
@@ -311,6 +312,7 @@ def parse_args(argv=None):
                         help="append events to this JSONL (the caller owns the stream and writes its final 'end'); "
                              "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
     parser.add_argument('--logs-dir', default=None, help=f"default ${LOGS_DIR_ENV} or <repo>/logs")
+    add_nice_argument(parser)
     parser.add_argument('--allow-incompatible-models', action='store_true',
                         help="--load / warm-start from a model whose version differs from this code's in its first "
                              "three numbers")
@@ -339,9 +341,10 @@ def run_status(run_dir) -> Optional[str]:
 
 
 def cli(argv=None) -> int:
-    """``python -m triforce.train`` / ``triforce train``: trains, then exits 0, or ``EXIT_INTERRUPTED`` if the run was
-    interrupted (its checkpoint and summary are still saved)."""
+    """``python -m triforce.train`` / ``triforce train``: lowers its priority (``--nice``, ``triforce.jobs``), trains,
+    then exits 0, or ``EXIT_INTERRUPTED`` if the run was interrupted (its checkpoint and summary are still saved)."""
     interrupt_on_sigterm()
+    lower_priority(parse_args(argv).nice)
     return EXIT_INTERRUPTED if run_status(main(argv)) == 'interrupted' else 0
 
 
@@ -409,7 +412,7 @@ def open_events(args, specialist: str, run_id: str, run_dir: Path, argv: list[st
     plan = TrainingPlan(log_dir, specialist, 'train', [{
         'specialist': specialist, 'run_id': run_id, 'events': f'{specialist}.jsonl', 'run_dir': str(run_dir),
         'target_iterations': args.iterations, 'target_steps': args.iterations * steps_per_iteration(args)}],
-                        command=['python', '-m', 'triforce.train', *argv])
+                        command=['python', '-m', 'triforce.train', *argv], nice=os.nice(0))
     plan.update_run(0, status='running')
     print(f"[train] events: {log_dir / f'{specialist}.jsonl'}")
     return EventLog(log_dir / f'{specialist}.jsonl', **context), plan
@@ -577,7 +580,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                    'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                    'ppo_config': ppo_config.to_dict(), 'start_iteration': start_iteration,
                    'start_steps': start_steps, 'curriculum': trajectories, 'curriculum_tracks': tracks,
-                   'harvested': harvested}, file, indent=2, default=str)
+                   'harvested': harvested, 'nice': os.nice(0)}, file, indent=2, default=str)
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} "

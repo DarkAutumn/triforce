@@ -33,7 +33,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from triforce import _native, registry
+from triforce import _native, eval_batch, registry
 from triforce.evaluate import read_evaluation
 from triforce.events import write_json_atomic
 
@@ -96,37 +96,18 @@ def specialist_row(name: str, result: dict, source: str = 'evaluation') -> dict:
 
 
 def parse_target(target: str) -> list[tuple[int, int]]:
-    """'2:0x7d,0:0x3C' → [(2, 0x7d), (0, 0x3c)]; anything else raises."""
-    rooms = []
-    for room in target.split(','):
-        level, sep, number = room.strip().partition(':')
-        try:
-            if not sep or not number.lower().startswith('0x'):
-                raise ValueError(room)
-            rooms.append((int(level), int(number, 16)))
-        except ValueError:
-            raise YardstickError(f"arrival target {room!r} is not L:0xRR (in {target!r})") from None
-    return rooms
-
-
-def _location(record: dict) -> tuple[int, int]:
-    return int(record['level']), int(str(record['room']), 16)
+    """'2:0x7d,0:0x3C' → [(2, 0x7d), (0, 0x3c)]; anything else raises (``eval_batch.parse_target``)."""
+    try:
+        return eval_batch.parse_target(target)
+    except ValueError as error:
+        raise YardstickError(str(error)) from None
 
 
 def arrival(run: dict, target: str | None):
-    """The room record where `run` arrived: the first entry into `target` ('L:0xRR', outside caves) after its start
-    room, or with no target the last room of a successful run; None if it never got there.  `target` may list
-    rooms in order ('2:0x7d,0:0x3c'): the arrival is the entry into the last one after entering the others in turn."""
-    if target is None:
-        return run['rooms'][-1] if run['result'] == 'success' and run['rooms'] else None
-    rooms = parse_target(target)
-    at = 0
-    for record in run['rooms'][1:]:
-        if _location(record) == rooms[at] and not record['in_cave']:
-            at += 1
-            if at == len(rooms):
-                return record
-    return None
+    """``eval_batch.arrival``: the room record where `run` arrived at `target` ('L:0xRR[,L:0xRR...]'), else None."""
+    if target is not None:
+        parse_target(target)
+    return eval_batch.arrival(run, target)
 
 
 def read_chain(path: Path) -> list[dict]:
