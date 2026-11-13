@@ -1,4 +1,5 @@
-"""zelda-map.py: savestate names, merging evals' per-room stats, the window (Qt offscreen), screenshot rendering."""
+"""zelda-map.py: savestate names, merging evals' per-room stats, room-stats scopes, the window (Qt offscreen),
+screenshot rendering."""
 
 import importlib.util
 import json
@@ -13,6 +14,8 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtCore import QPointF  # noqa: E402  pylint: disable=wrong-import-position
 from PySide6.QtWidgets import QApplication  # noqa: E402  pylint: disable=wrong-import-position
+
+from triforce.room_stats import FORMAT as ROOM_STATS_FORMAT  # noqa: E402  pylint: disable=wrong-import-position
 
 from .conftest import require_state  # noqa: E402  pylint: disable=wrong-import-position
 
@@ -128,13 +131,23 @@ def test_level_bounds_and_badges():
     assert zelda_map.level_bounds(0, [0x77]) == (0, 0, 16, 8)
     assert zelda_map.level_bounds(4, []) == (0, 0, 16, 8)
     assert zelda_map.level_bounds(1, [0x22, 0x74, 0x41]) == (1, 2, 4, 6)
-    stats = {'hits_per_visit': 0.0, 'health_change_per_visit': -0.25, 'death_rate': 0.5}
+    stats = {'hits_per_visit': 0.0, 'hearts_change_per_visit': -0.25, 'death_rate': 0.5, 'reach_rate': 0.25}
     assert zelda_map.overlay_badge('location', 0x7, None)[0] == '07'
     assert zelda_map.overlay_badge('none', 0x7, stats) is None
     assert zelda_map.overlay_badge('hits', 0x7, None) is None
     assert zelda_map.overlay_badge('hits', 0x7, stats) == ('0.00', zelda_map.C.ok)
     assert zelda_map.overlay_badge('hearts', 0x7, stats)[0] == '-0.25'
     assert zelda_map.overlay_badge('deaths', 0x7, stats) == ('50%', zelda_map.C.bad)
+    assert zelda_map.overlay_badge('reach', 0x7, stats)[0] == '25%'
+    assert zelda_map.overlay_badge('hits', 0x7, {**stats, 'hits_per_visit': None}) is None    # chains count none
+    # The death rate's scale depends on the scope: 1% is half way to red on a full run, nearly blue in one room.
+    one = {'death_rate': 0.01}
+    assert zelda_map.overlay_badge('deaths', 0x7, one, 'full') == ('1.0%', zelda_map.C.warn)
+    assert zelda_map.overlay_badge('deaths', 0x7, one, 'room')[1] != zelda_map.C.warn
+    title, parts = zelda_map.scale_parts('deaths', 'full')
+    assert 'full runs' in title and [text for text, _ in parts] == ['0', '1.0%', '≥ 2.0%']
+    assert [color for _, color in parts] == [zelda_map.C.ok, zelda_map.C.warn, zelda_map.C.bad]
+    assert 'isolated episodes' in zelda_map.scale_html('deaths', 'room') and zelda_map.scale_html('none', 'room') == ''
 
 
 def test_window_overlays_selection_and_zoom(qapp, models, tmp_path):
@@ -143,11 +156,14 @@ def test_window_overlays_selection_and_zoom(qapp, models, tmp_path):
     window.resize(1200, 800)
     window.show()
     qapp.processEvents()
-    assert window.status.text().startswith('Eval data: 2 specialists')
+    assert window.status.text().startswith('No room-stats file')            # room only, from the evaluations
+    assert 'Eval data: 2 specialists' in window.status.text()
+    assert window.scope == 'room' and not window.scope_group.button(0).isEnabled()
+    assert not any(button.isEnabled() for button in window.segment_group.buttons())
 
     window.tabs.setCurrentIndex(1)
     window.set_overlay('deaths')
-    assert window.view.badges[0x44][0] == '8%'
+    assert window.view.badges[0x44][0] == '7.5%'
     assert 0x35 in window.view.badges and 0x22 not in window.view.badges
     window.select_room(0x44)
     html = window.details.text()
@@ -170,6 +186,86 @@ def test_window_overlays_selection_and_zoom(qapp, models, tmp_path):
     window.view.fit()
     assert window.view.room_at(window.view.tile_rect(0x44).center()) == 0x44
     window.close()
+
+
+def scope_entry(runs, visits, death, reach=None, change=-0.5, steps=None, hits=None):
+    """One room's entry in a room-stats scope (triforce.room_stats, format 1; the fields the map reads)."""
+    return {'runs': runs, 'entered': visits, 'visits': visits, 'reach_rate': reach, 'deaths': round(death * runs),
+            'death_rate': death, 'stuck': 0, 'stuck_rate': 0.0, 'hearts_change_per_visit': change,
+            'hits_per_visit': hits, 'clips_per_visit': None, 'steps': steps}
+
+
+def write_room_stats(path):
+    """1:0x44 on the full run (two route steps), on To D1 and alone; 1:0x35 on the full run only."""
+    full = {'1:0x44': scope_entry(100, 80, 0.03, reach=0.5, steps={
+                '57': scope_entry(100, 50, 0.01, reach=0.5), '61': scope_entry(100, 30, 0.02, reach=0.3)}),
+            '1:0x35': scope_entry(100, 20, 0.0, reach=0.2)}
+    data = {'format': ROOM_STATS_FORMAT, 'tag': 'r99', 'created': '2026-11-13T12:00:00',
+            'scopes': {
+                'full': {'runs': 100, 'arrival_rate': 0.1, 'start': 'start', 'cut': None, 'rooms': full},
+                'to-d1': {'runs': 200, 'arrival_rate': 0.5, 'start': '0_3cc_0', 'cut': '0_37c_0',
+                          'rooms': {'1:0x44': scope_entry(200, 150, 0.1, reach=0.75)}},
+                'room': {'runs': None, 'team': 'chains', 'sources': [{'status': 'detailed'}],
+                         'rooms': {'1:0x44': scope_entry(300, 300, 0.05, hits=1.5)}}}}
+    path.write_text(json.dumps(data))
+    return path
+
+
+def test_window_scopes_from_a_room_stats_file(qapp, models, tmp_path):
+    path = write_room_stats(tmp_path / 'r99-room-stats.json')
+    window = zelda_map.MapWindow(models, {}, {}, stats_path=path)
+    window.resize(1200, 800)
+    window.show()
+    qapp.processEvents()
+    assert window.status.text().startswith('Room stats r99 (r99-room-stats.json')
+    assert window.scope == 'full' and window.segment == 'to-d1'      # the first segment with data
+    enabled = {name for name, button in zip(zelda_map.SEGMENTS, window.segment_group.buttons()) if button.isEnabled()}
+    assert enabled == {'to-d1'}
+
+    window.tabs.setCurrentIndex(1)
+    window.set_overlay('deaths')
+    assert window.view.badges[0x44] == ('3.0%', zelda_map.C.bad)     # 3% of full runs: past the full-run scale
+    assert 'full runs' in window.legend.text() and '100 runs from start' in window.scope_info.text()
+    window.set_segment('to-d1')
+    assert window.scope == 'segment' and window.view.badges[0x44][0] == '10%'
+    assert 0x35 not in window.view.badges and 0x35 in window.view.dimmed and 0x44 not in window.view.dimmed
+    assert 'To D1 · 200 runs from 0_3cc_0, 50% reach 0_37c_0' == window.scope_info.text()
+    window.set_scope('room')
+    assert window.view.badges[0x44] == ('5.0%', zelda_map.badness_color(0.05 / zelda_map.DEATHS_BAD['room']))
+    assert not window.view.dimmed and 'isolated episodes' in window.legend.text()
+    window.set_overlay('hits')
+    assert window.view.badges[0x44][0] == '1.50'
+    window.set_overlay('reach')
+    assert 0x44 not in window.view.badges                          # isolated episodes have no reach
+    window.set_scope('full')
+    assert window.view.badges[0x44][0] == '50%' and window.view.badges[0x35][0] == '20%'
+
+    # The sidebar: one row per scope with data, a row per route step where a scope visits the room on several.
+    rows = zelda_map.scope_rows(window.scopes, '1:0x44', window.current_scope())
+    assert [(label, current) for label, _, _, current in rows] == [
+        ('Full run', True), ('· #57', False), ('· #61', False), ('To D1', False), ('Room only', False)]
+    window.select_room(0x44)
+    html = window.details.text()
+    for text in ('Room · by scope', 'Full run', '· #61', 'To D1', 'Room only', '3.0%', '75%', '-0.50',
+                 'Room · eval of the promoted models'):
+        assert text in html
+    window.close()
+
+
+def test_window_finds_the_newest_room_stats_file(qapp, models, tmp_path):
+    window = zelda_map.MapWindow(models, {}, {}, stats_dir=tmp_path)
+    assert window.status.text().startswith(f'No room-stats file (none in {tmp_path})') and window.scope == 'room'
+    write_room_stats(tmp_path / 'r99-room-stats.json')
+    window.reload()
+    assert window.stats_file == tmp_path / 'r99-room-stats.json' and window.scope == 'room'
+    window.set_scope('full')
+    assert window.current_scope() == 'full'
+    (tmp_path / 'broken-room-stats.json').write_text('{"format": 0}')
+    window.reload()                                                   # the newest is unreadable: say why
+    assert 'not a room-stats file' in window.status.text() and window.scope == 'room'
+    window.close()
+    args = zelda_map.build_parser().parse_args(['--stats', 'x.json'])
+    assert args.stats == Path('x.json')
 
 
 def test_route_plan_and_overlay(qapp, models):

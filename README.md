@@ -91,7 +91,7 @@ uv run training-gui.py                                          # live training 
 .venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --controller)
 .venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N)
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path: games race triforce to triforce from each winner's state, stitched into one replay
-.venv/bin/python zelda-map.py                                   # room map + per-room eval stats of the promoted models (--rerender)
+.venv/bin/python zelda-map.py                                   # room map + per-room stats by scope: full run, segment, room only (--stats FILE, --route d2first, --rerender)
 .venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states into target/entry-states/<ts> (start/build/path/install/audit)
 .venv/bin/python -m triforce.entry_states install target/entry-states/<ts>   # then copy the finished build into triforce/states
@@ -113,11 +113,17 @@ the "no change" reference appears only when zero is within that range.
 `zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
 first playable frames; an overworld room without a savestate is walked into from the game start, so the overworld
 is always all 128 rooms (cached in `screens/`, gitignored; `--rerender` rebuilds them); a dungeon's item cellars are
-drawn with their entrance room. It overlays per-room statistics: hits taken, hearts ± and death rate per visit.
-They come from each promoted model's evaluation of its current weights in its act mode (`eval.json` or
-`eval-<mode>.json`, `evaluate.read_evaluation`), `visited_rooms` (eval format 2, every room an evaluation episode
-visited), merged across specialists weighted by visits; other evals are skipped. Click a room for everything known
-about it; wheel zooms, drag or arrows pan, Home fits, F5 reloads.
+drawn with their entrance room. It overlays per-room statistics (hits taken, hearts ± per visit, death rate, reach)
+in a **scope**: Full run, a Segment (To D2 / To D1 / To D3 / To D4, the route cut at the dungeon exits, or a dungeon
+alone; the rooms off it dimmed) or Room only. The scopes come from the newest `target/r56-chains/*-room-stats.json`
+(`triforce room-stats TAG`, written by `scripts/experiments/r56_chains.sh report`; `--stats FILE` picks one): in
+a full run or a segment the death rate is the share of the runs started there that died in the room, in Room only
+the share of isolated evaluation episodes, each with its own colour scale (legend beside Reload). The sidebar's
+"by scope" table puts them side by side (and per route step where a room is visited more than once). Without a
+room-stats file it shows Room only from each promoted model's evaluation of its current weights in its act mode
+(`eval.json` or `eval-<mode>.json`, `evaluate.read_evaluation`, `visited_rooms`: eval format 2, every room an
+evaluation episode visited), merged across specialists weighted by visits; the sidebar always shows those
+evaluations too. Click a room for everything known about it; wheel zooms, drag or arrows pan, Home fits, F5 reloads.
 
 `triforce.play` is the debugging tool: it drives the game through the same Rust code path as training
 (option executor, interrupts, masks, look-ahead) and prints the room, entities, legal actions and an ASCII

@@ -32,6 +32,11 @@ Each is a project of its own.
    objective doesn't move it (r61 → r63a: +0.266 → +0.262). Likely needs shaping (boomerang blocks with the shield,
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples.
+4. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work): chain
+   records count no hits (the Hits overlay is room-only) and name no route step (`room_stats.assign_steps` infers it
+   from the current route, so r70's D4 visits of the old 0x30 → 0x20 → 0x21 path show as `off`): a `hits` and a
+   `step` field in `RoomRecord` would make both exact; the death-rate scales (`DEATHS_BAD`) are first guesses; open
+   ideas: an overlay of death rate given entry (`death_rate_entered`), comparing two tags (r70 vs r71) room by room.
 
 ## Done (Nov 13): round 21 (clips, attacks by buttons, the ladder clip; 1.4.1.0)
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Room map of the game with the promoted models' per-room evaluation statistics.
+"""Room map of the game with per-room statistics by scope: a full run, a segment of the route, the room alone.
 
     .venv/bin/python zelda-map.py                         # models/ (or $TRIFORCE_MODELS_DIR), screens/ cache
     .venv/bin/python zelda-map.py --models-dir /tmp/m     # another models root
     .venv/bin/python zelda-map.py --rerender              # rebuild every cached room screenshot
     .venv/bin/python zelda-map.py --route d2first         # draw a routes.yaml route over the map
+    .venv/bin/python zelda-map.py --stats FILE            # this room-stats file, not the newest
 
 One tab per level (Overworld, Dungeon 1-9).  Each level's rooms are stitched into one picture: a room with a
 savestate (``triforce/states``) shows its playfield as Link enters it, rendered once and cached as a PNG in
@@ -16,15 +17,35 @@ and is re-rendered when that changes or the state is newer.  A dungeon room with
 dungeon is the bounding box of its known rooms (``game.yaml``, savestates, eval data).
 
 Mouse wheel zooms around the cursor, dragging (or the arrow keys) pans, Home fits the map again, a click selects a
-room (the sidebar shows what is known about it).  The overlay buttons draw a value on every room with data: its hex
-location, hits taken per visit, hearts gained or lost per visit, or the share of visits that ended in death.
-Colours are colorblind-safe: blue is good, red is bad, purple in between.
+room (the sidebar shows what is known about it).  The overlay buttons draw a value on every room with data in the
+selected scope: its hex location, hits taken per visit (room only: chain records don't count hits), hearts gained or
+lost per visit, the death rate, or the reach (the share of the scope's runs that entered the room).  Colours are
+colorblind-safe: blue is good, red is bad, purple in between; the scale is in the legend beside Reload, and the death
+rate's differs by scope (``DEATHS_BAD``: 2% of full runs dying in one room is as bad as 5% of a segment's runs or 20%
+of isolated episodes).
 
-The statistics come from every promoted specialist's evaluation of its current weights in its act mode
+The scopes come from a room-stats file (``triforce room-stats TAG``, ``triforce.room_stats``; the newest
+``*-room-stats.json`` in ``target/r56-chains`` unless ``--stats FILE``):
+
+- **Full run**: chain runs from the game start to the D4 triforce; the death rate is the share of all runs that died
+  in the room, the chance of dying there on a full run.
+- **Segment** (the second row picks it): the route cut at the dungeon exits, To D2 (start -> out of Dungeon 2), To
+  D1, To D3, To D4, each from chain runs started at its first room; or a dungeon alone (D2 .. D4 alone, from its
+  entrance).  The death rate is per run started on the segment.  Rooms the segment's runs never entered are dimmed.
+- **Room only**: the single-room evaluations of the models that played the chains; the death rate is per isolated
+  episode that entered the room.
+
+The sidebar's "by scope" table has a row per scope with data for the room (and one per route step where a scope
+visits it on several steps): runs, visits, reach, death and stuck rates, hearts ± and grid-point skips (clips) per
+visit; the selected scope's row is highlighted.  Without a room-stats file the map shows the room-only scope of the
+promoted models' evaluations and the status bar says so.
+
+The rest of the sidebar shows every promoted specialist's evaluation of its current weights in its act mode
 (``triforce.evaluate.read_evaluation``: ``eval.json`` or ``eval-<mode>.json`` in ``<models>/<specialist>/<run-id>``)
 in the detailed format (``"format": 2``, written by ``triforce.evaluate``): ``visited_rooms`` holds per-room means
 over every visit to a room during evaluation, not just the start rooms.  Rooms seen by several specialists are merged
-weighted by visits; the status line counts the act modes.  Reload (or F5) re-reads them.
+weighted by visits; the status bar counts the act modes.  Reload (or F5) re-reads the evaluations and the room-stats
+file (the newest again, without ``--stats``).
 
 A dungeon's cellars (1:0x7f under 1:0x22, 3:0x0f under 3:0x69; ``game_rooms()`` 'cave' exits) are drawn with the
 room that has their stairs, as an overworld cave is with its room.
@@ -58,7 +79,8 @@ from triforce import registry
 from triforce._native import CHEAT_ITEMS, Game, game_rooms, routes, specialist_for
 from triforce._native import route_steps as native_route_steps
 from triforce.paths import STATES_DIR
-from triforce.room_stats import load_evals
+from triforce.room_stats import CHAINS_DIR, ROOM_SCOPE, SCOPES as STAT_SCOPES, eval_entry, load_evals
+from triforce.room_stats import newest as newest_stats, parse_room_key, read as read_stats, room_key
 
 ROOT = Path(__file__).resolve().parent
 SCREENS_DIR = ROOT / 'screens'
@@ -71,12 +93,22 @@ SCREEN_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(cave)?\.png$')
 SIDE_ORDER = ('s', 'n', 'e', 'w', 'c', 'cave')     # which entry's savestate pictures a room
 ITEM_KINDS = ('heart', 'fairy', 'clock', 'rupee', 'blue_rupee', 'bombs')
 EXIT_ORDER = ('n', 's', 'e', 'w', 'cave', 'success', 'death', 'timeout', 'other')
-# Overlay colour scales: the value at which a room turns fully red (bad); zero (or better) is blue.
+# Overlay colour scales: the value at which a room turns fully red (bad); zero (or better) is blue, half way purple.
 HITS_BAD = 1.0             # hits taken per visit
 HEARTS_BAD = 1.0           # hearts lost per visit (health change -1.0)
-DEATHS_BAD = 0.2           # share of visits ending in death
+# Death %: the share of runs dying in the room, by scope kind.  One room is a small part of a full run: 2% of all
+# full runs dying in one room is bad; a segment is a quarter of the route; an isolated episode is the room alone.
+DEATHS_BAD = {'full': 0.02, 'segment': 0.05, 'room': 0.20}
+REACH_BAD = 0.0            # Reach %: 100% of the runs is blue, falling linearly to red at this share
+DIM_ALPHA = 175            # a room off the selected segment is drawn under this much of the background
 OVERLAYS = (('none', 'None'), ('location', 'Location'), ('hits', 'Hits'), ('hearts', 'Hearts ±'),
-            ('deaths', 'Death %'))
+            ('deaths', 'Death %'), ('reach', 'Reach %'))
+SCOPE_KINDS = (('full', 'Full run'), ('segment', 'Segment'), (ROOM_SCOPE, 'Room only'))
+# The segment row: the route cut at the dungeon exits, then each dungeon alone (room_stats.SCOPES).
+SEGMENTS = tuple(scope.name for scope in STAT_SCOPES if scope.kind in ('segment', 'dungeon'))
+SEGMENT_LABELS = {'to-d2': 'To D2', 'to-d1': 'To D1', 'to-d3': 'To D3', 'to-d4': 'To D4',
+                  'd2': 'D2 alone', 'd1': 'D1 alone', 'd3': 'D3 alone', 'd4': 'D4 alone'}
+SCOPE_TABLE = ('Scope', 'Runs', 'Visits', 'Reach', 'Death', 'Stuck', '♥ ±/v', 'Clips/v')
 ZOOM_STEP = 1.15           # per wheel notch
 MAX_SCALE = 8.0            # 8x the NES pixels
 FIT_MARGIN = 12            # px around the fitted map
@@ -135,12 +167,16 @@ QRadioButton { color: #8a93a6; spacing: 6px; }
 QRadioButton:checked { color: #e7e9ee; }
 QRadioButton::indicator { width: 10px; height: 10px; border-radius: 6px; border: 1px solid #5b6475; background: #161a22; }
 QRadioButton::indicator:checked { background: #f2c14e; border-color: #f2c14e; }
+QRadioButton:disabled { color: #3a4252; }
+QRadioButton::indicator:disabled { border-color: #3a4252; }
 QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
 QScrollBar::handle:vertical { background: #2a3140; border-radius: 3px; min-height: 30px; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }
 QWidget#sidebar { background: #161a22; border: 1px solid #262c38; border-radius: 8px; }
 QLabel#title { font-size: 17px; font-weight: 700; }
 QLabel#muted { color: #8a93a6; }
+QStatusBar { background: #0e1116; }
+QStatusBar::item { border: none; }
 """
 
 
@@ -193,6 +229,13 @@ def fmt_num(value, digits: int = 2) -> str:
 def fmt_pct(value) -> str:
     """0.23 -> 23%."""
     return '–' if value is None else f'{value:.0%}'
+
+
+def fmt_rate(value) -> str:
+    """A share of runs: 0.23 -> 23%, under 10% with a decimal (0.018 -> 1.8%), exact zero 0%."""
+    if value is None:
+        return '–'
+    return '0%' if value == 0 else f'{value:.1%}' if value < 0.1 else f'{value:.0%}'
 
 
 def fmt_hearts(value, signed: bool = False) -> str:
@@ -405,6 +448,23 @@ def eval_status(sources: list[dict]) -> str:
     return text + (f" · {missing} without detailed evals" if missing else '')
 
 
+def stats_status(data: Optional[dict], path: Optional[Path], problem: Optional[str] = None) -> str:
+    """'Room stats r70-1k (r70-1k-room-stats.json, 2026-11-13T10:00:00)', or why there are none."""
+    if data is None:
+        return (f"No room-stats file ({problem or 'triforce room-stats TAG writes one'}): room only, from the "
+                "promoted models' evaluations")
+    return f"Room stats {data['tag']} ({path.name}, {data.get('created', '?')})"
+
+
+def scope_kind(scope: str) -> str:
+    """A scope's kind for the colour scales: 'full', 'segment' (a segment, or a dungeon alone) or 'room'."""
+    return scope if scope in ('full', ROOM_SCOPE) else 'segment'
+
+
+def scope_label(scope: str) -> str:
+    return {'full': 'Full run', ROOM_SCOPE: 'Room only'}.get(scope) or SEGMENT_LABELS.get(scope, scope)
+
+
 # --------------------------------------------------------------------------------------------------- map model
 
 def level_bounds(level: int, rooms) -> tuple[int, int, int, int]:
@@ -418,22 +478,63 @@ def level_bounds(level: int, rooms) -> tuple[int, int, int, int]:
     return min(cols), min(rows), max(cols) - min(cols) + 1, max(rows) - min(rows) + 1
 
 
-def overlay_badge(overlay: str, room: int, stats: Optional[dict]) -> Optional[tuple[str, QColor]]:
-    """(text, colour) drawn on a room for an overlay, or None (no overlay, or no data for a value overlay)."""
+def overlay_value(overlay: str, stats: Optional[dict]) -> Optional[float]:
+    """The value an overlay draws from a room's scope entry (``room_stats`` fields), None without one."""
+    key = {'hits': 'hits_per_visit', 'hearts': 'hearts_change_per_visit', 'deaths': 'death_rate',
+           'reach': 'reach_rate'}.get(overlay)
+    return stats.get(key) if key and stats else None
+
+
+def overlay_badness(overlay: str, value: float, kind: str) -> float:
+    """0 good .. 1 bad (and beyond) on the overlay's scale for a scope kind."""
+    if overlay == 'hits':
+        return value / HITS_BAD
+    if overlay == 'hearts':
+        return -value / HEARTS_BAD
+    if overlay == 'deaths':
+        return value / DEATHS_BAD[kind]
+    return (1 - value) / (1 - REACH_BAD)
+
+
+def overlay_badge(overlay: str, room: int, stats: Optional[dict], kind: str = ROOM_SCOPE
+                  ) -> Optional[tuple[str, QColor]]:
+    """(text, colour) drawn on a room for an overlay in a scope kind, or None (no overlay, or no data for a value
+    overlay)."""
     if overlay == 'location':
         return f'{room:02x}', C.text
-    if overlay == 'none' or not stats:
+    value = overlay_value(overlay, stats)
+    if value is None:
         return None
-    if overlay == 'hits' and stats.get('hits_per_visit') is not None:
-        value = stats['hits_per_visit']
-        return f'{value:.2f}', badness_color(value / HITS_BAD)
-    if overlay == 'hearts' and stats.get('health_change_per_visit') is not None:
-        value = stats['health_change_per_visit']
-        return f'{value:+.2f}', badness_color(-value / HEARTS_BAD)
-    if overlay == 'deaths' and stats.get('death_rate') is not None:
-        value = stats['death_rate']
-        return fmt_pct(value), badness_color(value / DEATHS_BAD)
-    return None
+    text = f'{value:.2f}' if overlay == 'hits' else f'{value:+.2f}' if overlay == 'hearts' else fmt_rate(value)
+    return text, badness_color(overlay_badness(overlay, value, kind))
+
+
+def scale_parts(overlay: str, kind: str) -> tuple[str, list[tuple[str, QColor]]]:
+    """The legend of an overlay's colour scale in a scope kind: (title, [(value, its colour)]); ('', []) for the
+    overlays without a scale."""
+    if overlay == 'hits':
+        return 'Hits / visit', [('0', C.ok), (f'{HITS_BAD / 2:.1f}', C.warn), (f'≥ {HITS_BAD:.1f}', C.bad)]
+    if overlay == 'hearts':
+        return 'Hearts ± / visit', [('≥ 0', C.ok), (f'{-HEARTS_BAD / 2:+.1f}', C.warn),
+                                    (f'≤ {-HEARTS_BAD:+.1f}', C.bad)]
+    if overlay == 'deaths':
+        bad = DEATHS_BAD[kind]
+        title = {'full': 'Death % of full runs', 'segment': 'Death % of the runs on the segment',
+                 ROOM_SCOPE: 'Death % of isolated episodes'}[kind]
+        return title, [('0', C.ok), (fmt_rate(bad / 2), C.warn), (f'≥ {fmt_rate(bad)}', C.bad)]
+    if overlay == 'reach':
+        return 'Reach % of runs', [('100%', C.ok), (fmt_rate((1 + REACH_BAD) / 2), C.warn),
+                                   (fmt_rate(REACH_BAD), C.bad)]
+    return '', []
+
+
+def scale_html(overlay: str, kind: str) -> str:
+    """'Death % of full runs: 0 · 1.0% · ≥ 2.0%', each value in its colour."""
+    title, parts = scale_parts(overlay, kind)
+    if not parts:
+        return ''
+    values = ' · '.join(f'<span style="color:{color.name()}">{text}</span>' for text, color in parts)
+    return f'{title}: {values}'
 
 
 # --------------------------------------------------------------------------------------------------------- route
@@ -537,6 +638,7 @@ class MapView(QWidget):
         self.route_rooms: dict[int, list[int]] = {}     # room -> route step indices (--route)
         self.route_segments: list[tuple[int, int]] = []
         self.route_caves: set[int] = set()
+        self.dimmed: set[int] = set()                    # rooms off the selected segment
 
     # model
     def set_level(self, bounds, tiles: dict[int, QPixmap], view: Optional[tuple] = None):
@@ -553,6 +655,10 @@ class MapView(QWidget):
 
     def set_badges(self, badges: dict):
         self.badges = badges
+        self.update()
+
+    def set_dimmed(self, rooms: set[int]):
+        self.dimmed = rooms
         self.update()
 
     def set_selected(self, room: Optional[int]):
@@ -645,6 +751,10 @@ class MapView(QWidget):
                 painter.fillRect(rect, C.card)
                 painter.setPen(grid)
                 painter.drawRect(rect.adjusted(0, 0, -1, -1))
+        for room in self.dimmed:
+            rect = self.tile_rect(room)
+            if rect.intersects(view):
+                painter.fillRect(rect, with_alpha(C.bg, DIM_ALPHA))
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.draw_route(painter, view)
         for room, (text, color) in self.badges.items():
@@ -795,7 +905,7 @@ def stats_rows(stats: dict) -> list[tuple[str, str]]:
         ('Evals (visits)', contributors),
         ('Visits', f"{stats['visits']:,}"),
         ('Episodes', f"{stats['episodes']:,}"),
-        ('Deaths', f"{stats['deaths']:,} ({fmt_pct(stats['death_rate'])} of visits)"),
+        ('Deaths', f"{stats['deaths']:,} ({fmt_rate(stats['death_rate'])} of visits)"),
         ('Steps / visit', fmt_num(stats.get('steps_per_visit'), 1)),
         ('Hearts lost / visit', fmt_hearts(stats.get('health_lost_per_visit'))),
         ('Hearts gained / visit', fmt_hearts(stats.get('health_gained_per_visit'))),
@@ -822,11 +932,53 @@ def stats_rows(stats: dict) -> list[tuple[str, str]]:
     return rows
 
 
+def scope_rows(scopes: dict[str, dict], key: str, current: str) -> list[tuple[str, dict, str, bool]]:
+    """(label, entry, scope, is it the selected scope) for each scope with an entry for room ``key``
+    ('1:0x44'): Full run, the segments in route order and the dungeons alone, Room only.  An entry spread over
+    several route steps adds a row per step after it ('· #44'; '· off route': visits the route doesn't explain)."""
+    rows = []
+    for scope in ('full', *SEGMENTS, ROOM_SCOPE):
+        entry = (scopes.get(scope) or {}).get(key)
+        if not entry:
+            continue
+        rows.append((scope_label(scope), entry, scope, scope == current))
+        steps = entry.get('steps') or {}
+        if len(steps) > 1:
+            rows.extend((f'· #{name}' if name != 'off' else '· off route', step, scope, False)
+                        for name, step in steps.items())
+    return rows
+
+
+def scope_table(rows: list[tuple[str, dict, str, bool]]) -> str:
+    """The sidebar's table of ``scope_rows``: runs, visits, reach, death and stuck rates (the death rate in its
+    scope's colour), hearts ± and clips per visit; the selected scope's row in the accent colour."""
+    head = ''.join(f'<th align="{"left" if i == 0 else "right"}" style="color:#8a93a6; font-weight:400">{name}</th>'
+                   for i, name in enumerate(SCOPE_TABLE))
+    lines = [f'<tr>{head}</tr>']
+    for label, entry, scope, current in rows:
+        death = entry.get('death_rate')
+        death = ('–' if death is None else
+                 f'<span style="color:{badness_color(death / DEATHS_BAD[scope_kind(scope)]).name()}">'
+                 f'{fmt_rate(death)}</span>')
+        change = entry.get('hearts_change_per_visit')
+        cells = [label, '–' if entry.get('runs') is None else f"{entry['runs']:,}", f"{entry['visits']:,}",
+                 fmt_rate(entry.get('reach_rate')), death, fmt_rate(entry.get('stuck_rate')),
+                 '–' if change is None else f'{change:+.2f}', fmt_num(entry.get('clips_per_visit'))]
+        style = ('color:#f2c14e; font-weight:600' if current else 'color:#8a93a6' if label.startswith('·') else '')
+        lines.append(f'<tr style="{style}">' + ''.join(
+            f'<td align="{"left" if i == 0 else "right"}">{cell}</td>' for i, cell in enumerate(cells)) + '</tr>')
+    return f'<table cellspacing="0" cellpadding="2">{"".join(lines)}</table>'
+
+
 class MapWindow(QMainWindow):
-    """Level tabs, overlay buttons and Reload on top; the map; the selected room's sidebar on the right."""
+    """Level tabs, the overlay and scope buttons and Reload on top; the map; the selected room's sidebar on the
+    right; the data's sources in the status bar.  ``stats_path`` is a room-stats file (``triforce.room_stats``);
+    without one, ``stats_dir`` is searched for the newest at every reload; with neither (or none found) the map
+    shows the room-only scope of the promoted models' evaluations."""
 
     def __init__(self, models_dir: Path, screens: dict[Key, Path], states: dict[Key, list[str]],
-                 rooms: Optional[dict] = None, run_id: Optional[str] = None, route: Optional[str] = None):
+                 rooms: Optional[dict] = None, run_id: Optional[str] = None, route: Optional[str] = None,
+                 stats_path: Optional[Path] = None, stats_dir: Optional[Path] = None):
         super().__init__()
         self.setWindowTitle('Zelda map' + (f' ({run_id} where evaluated, else promoted)' if run_id else '')
                             + (f' · route {route}' if route else ''))
@@ -840,8 +992,15 @@ class MapWindow(QMainWindow):
         self.plan = route_plan(route, self.rooms) if route else []
         self.pixmaps = {key: QPixmap(str(path)) for key, path in screens.items()}
         self.pixmaps = {key: pixmap for key, pixmap in self.pixmaps.items() if not pixmap.isNull()}
-        self.stats: dict[Key, dict] = {}
+        self.stats: dict[Key, dict] = {}            # the promoted models' merged evaluations (the details)
         self.sources: list[dict] = []
+        self.stats_path, self.stats_dir = stats_path, stats_dir
+        self.stats_data: Optional[dict] = None      # the room-stats file read
+        self.stats_file: Optional[Path] = None
+        self.scopes: dict[str, dict[str, dict]] = {}      # scope -> room key ('1:0x44') -> room_stats entry
+        self.scope_keys: set[Key] = set()
+        self.scope = 'full'                         # SCOPE_KINDS: full, segment or room
+        self.segment = SEGMENTS[0]
         self.level = 0
         self.overlay = 'none'
         self.selected: dict[int, int] = {}          # level -> selected room
@@ -859,24 +1018,32 @@ class MapWindow(QMainWindow):
         layout.addWidget(self.tabs)
 
         bar = QHBoxLayout()
-        bar.addWidget(QLabel('Overlay', objectName='muted'))
-        self.overlay_group = QButtonGroup(self)
-        for index, (key, label) in enumerate(OVERLAYS):
-            button = QRadioButton(label)
-            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            button.setChecked(key == self.overlay)
-            self.overlay_group.addButton(button, index)
-            bar.addWidget(button)
-        self.overlay_group.idClicked.connect(lambda index: self.set_overlay(OVERLAYS[index][0]))
+        self.overlay_group = self.radio_row(bar, 'Overlay', [label for _, label in OVERLAYS],
+                                            lambda index: self.set_overlay(OVERLAYS[index][0]))
+        self.overlay_group.button(0).setChecked(True)
         bar.addStretch(1)
-        self.status = QLabel(objectName='muted')
-        bar.addWidget(self.status)
+        self.legend = QLabel(objectName='muted')
+        self.legend.setTextFormat(Qt.TextFormat.RichText)
+        bar.addWidget(self.legend)
         reload_button = QPushButton('Reload')
         reload_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        reload_button.setToolTip('Re-read the promoted models\' evaluations (F5)')
+        reload_button.setToolTip('Re-read the room-stats file and the promoted models\' evaluations (F5)')
         reload_button.clicked.connect(self.reload)
         bar.addWidget(reload_button)
         layout.addLayout(bar)
+        scope_bar = QHBoxLayout()
+        self.scope_group = self.radio_row(scope_bar, 'Scope', [label for _, label in SCOPE_KINDS],
+                                          lambda index: self.set_scope(SCOPE_KINDS[index][0]))
+        scope_bar.addStretch(1)
+        self.scope_info = QLabel(objectName='muted')
+        scope_bar.addWidget(self.scope_info)
+        layout.addLayout(scope_bar)
+        segment_bar = QHBoxLayout()
+        segment_bar.addSpacing(24)
+        self.segment_group = self.radio_row(segment_bar, 'Segment', [SEGMENT_LABELS[name] for name in SEGMENTS],
+                                            lambda index: self.set_segment(SEGMENTS[index]))
+        segment_bar.addStretch(1)
+        layout.addLayout(segment_bar)
 
         body = QHBoxLayout()
         self.view = MapView()
@@ -885,15 +1052,29 @@ class MapWindow(QMainWindow):
         body.addWidget(self.build_sidebar())
         layout.addLayout(body, 1)
         self.setCentralWidget(root)
+        self.status = QLabel(objectName='muted')
+        self.statusBar().addWidget(self.status, 1)
         QShortcut(QKeySequence(Qt.Key.Key_F5), self, self.reload)
 
         self.reload()
         self.view.setFocus()
 
+    def radio_row(self, bar: QHBoxLayout, title: str, labels: list[str], clicked) -> QButtonGroup:
+        """A label and one radio button per label into ``bar``; ``clicked(index)``."""
+        bar.addWidget(QLabel(title, objectName='muted'))
+        group = QButtonGroup(self)
+        for index, label in enumerate(labels):
+            button = QRadioButton(label)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            group.addButton(button, index)
+            bar.addWidget(button)
+        group.idClicked.connect(clicked)
+        return group
+
     def build_sidebar(self) -> QWidget:
         sidebar = QWidget(objectName='sidebar')
         sidebar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-        sidebar.setFixedWidth(380)
+        sidebar.setFixedWidth(440)
         outer = QVBoxLayout(sidebar)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea()
@@ -918,15 +1099,43 @@ class MapWindow(QMainWindow):
 
     # data
     def reload(self):
-        """Re-reads every promoted specialist's evaluation (of its current weights, in its act mode)."""
+        """Re-reads the room-stats file (``stats_path``, else the newest in ``stats_dir``) and every promoted
+        specialist's evaluation (of its current weights, in its act mode)."""
         self.stats, self.sources = load_evals(self.models_dir, self.run_id)
-        self.status.setText(eval_status(self.sources))
+        path = self.stats_path or (newest_stats(self.stats_dir) if self.stats_dir else None)
+        self.stats_data, self.stats_file, problem = None, None, None
+        if path is not None:
+            try:
+                self.stats_data, self.stats_file = read_stats(path), Path(path)
+            except (OSError, ValueError) as error:
+                problem = str(error)
+        elif self.stats_dir is not None:
+            problem = f'none in {self.stats_dir}'
+        if self.stats_data:
+            self.scopes = {name: scope['rooms'] for name, scope in self.stats_data['scopes'].items()}
+        else:       # room only: the promoted models' evaluations under the room-stats names
+            self.scopes = {ROOM_SCOPE: {room_key(*key): eval_entry(merged)
+                                        for key, merged in self.stats.items() if merged}}
+        self.scope_keys = {parse_room_key(key) for rooms in self.scopes.values() for key in rooms}
+        available = {'full': 'full' in self.scopes, 'segment': any(s in self.scopes for s in SEGMENTS),
+                     ROOM_SCOPE: ROOM_SCOPE in self.scopes}
+        for index, (kind, _) in enumerate(SCOPE_KINDS):
+            self.scope_group.button(index).setEnabled(available[kind])
+        for index, name in enumerate(SEGMENTS):
+            self.segment_group.button(index).setEnabled(name in self.scopes)
+        if not available[self.scope]:
+            self.scope = next(kind for kind, _ in SCOPE_KINDS if available[kind] or kind == ROOM_SCOPE)
+        if self.segment not in self.scopes:
+            self.segment = next((name for name in SEGMENTS if name in self.scopes), SEGMENTS[0])
+        self.status.setText(f'{stats_status(self.stats_data, self.stats_file, problem)} · '
+                            f'{eval_status(self.sources)}')
         self.status.setToolTip('\n'.join(
             f"{s['specialist']} ({s['run']}"
             + (f", {s['mode']}, {s['file']}" if s['mode'] else '') + f"): {s['status']}"
             + (f", {s['rooms']} rooms, {s['visits']:,} visits" if s['status'] == 'detailed'
                else f" ({s['file']})" if not s['mode'] else '')
             for s in self.sources) or f'no promoted specialists in {self.models_dir}')
+        self.check_scope_buttons()
         if self.tabs.count():
             self.show_level(self.level, keep_view=True)
 
@@ -934,14 +1143,23 @@ class MapWindow(QMainWindow):
         """The key of a room's cave: its own id in a cave, or its dungeon cellar (1:0x22 -> (1, 0x7f, True))."""
         return self.cellar_of.get((level, room), (level, room, True))
 
-    def room_stats(self, level: int, room: int) -> Optional[dict]:
-        """The stats a room's overlay shows: the room itself, else its cave (or cellar)."""
-        return self.stats.get((level, room, False)) or self.stats.get(self.cave_key(level, room))
+    def current_scope(self) -> str:
+        """The scope the overlays draw: 'full', the selected segment, or 'room'."""
+        return self.segment if self.scope == 'segment' else self.scope
+
+    def room_entry(self, level: int, room: int, scope: Optional[str] = None) -> Optional[dict]:
+        """The scope entry a room's overlay shows: the room itself, else its cave or cellar (a dungeon's cellar is
+        shown on its entrance room only, not on the cellar's own room id)."""
+        rooms = self.scopes.get(scope or self.current_scope()) or {}
+        entry = rooms.get(room_key(level, room, False))
+        if entry is None and (level == 0 or (level, room) in self.cellar_of):
+            entry = rooms.get(room_key(*self.cave_key(level, room)))
+        return entry
 
     def level_rooms(self, level: int) -> set[int]:
-        """Rooms known on a level: game.yaml, savestates, eval data.  A dungeon's in-cave keys (its cellars, drawn
-        with their entrance room) are not map rooms."""
-        return {key[1] for source in (self.rooms, self.states, self.stats) for key in source
+        """Rooms known on a level: game.yaml, savestates, eval and room-stats data.  A dungeon's in-cave keys (its
+        cellars, drawn with their entrance room) are not map rooms."""
+        return {key[1] for source in (self.rooms, self.states, self.stats, self.scope_keys) for key in source
                 if key[0] == level and not (level > 0 and key[2])}
 
     # view
@@ -964,13 +1182,56 @@ class MapWindow(QMainWindow):
         self.overlay_group.button([key for key, _ in OVERLAYS].index(overlay)).setChecked(True)
         self.update_badges()
 
+    def set_scope(self, scope: str):
+        """Full run, Segment (the one in the segment row) or Room only."""
+        self.scope = scope
+        self.check_scope_buttons()
+        self.update_badges()
+        self.update_sidebar()
+
+    def check_scope_buttons(self):
+        self.scope_group.button([kind for kind, _ in SCOPE_KINDS].index(self.scope)).setChecked(True)
+        if self.segment in self.scopes:
+            self.segment_group.button(SEGMENTS.index(self.segment)).setChecked(True)
+        else:       # no segment data: none checked
+            self.segment_group.setExclusive(False)
+            for button in self.segment_group.buttons():
+                button.setChecked(False)
+            self.segment_group.setExclusive(True)
+
+    def set_segment(self, segment: str):
+        """Picks a segment (or a dungeon alone) and shows it."""
+        self.segment = segment
+        self.set_scope('segment')
+
+    def scope_text(self) -> str:
+        """'To D1 · 1,000 runs from 0_3cc_0, 48.0% reach 0_37c_0' for the scope row."""
+        scope = self.current_scope()
+        data = (self.stats_data or {}).get('scopes', {}).get(scope)
+        if scope == ROOM_SCOPE:
+            sources = data['sources'] if data else self.sources
+            team = 'the chains\' models' if data and data.get('team') == 'chains' else 'the promoted models'
+            detailed = sum(s['status'] == 'detailed' for s in sources)
+            return f'Room only · isolated episodes, {detailed} evaluations of {team}'
+        if not data:
+            return scope_label(scope)
+        end = 'reach the D4 triforce' if data.get('cut') is None else f"reach {data['cut']}"
+        return (f"{scope_label(scope)} · {data['runs']:,} runs from {data['start']}, "
+                f"{fmt_rate(data['arrival_rate'])} {end}")
+
     def update_badges(self):
+        kind = scope_kind(self.current_scope())
         badges = {}
         for room in self.view.rooms():
-            badge = overlay_badge(self.overlay, room, self.room_stats(self.level, room))
+            badge = overlay_badge(self.overlay, room, self.room_entry(self.level, room), kind)
             if badge:
                 badges[room] = badge
         self.view.set_badges(badges)
+        # A segment's rooms stand out: the rooms it never entered are dimmed.
+        self.view.set_dimmed({room for room in self.view.rooms() if self.room_entry(self.level, room) is None}
+                             if self.scope == 'segment' else set())
+        self.legend.setText(scale_html(self.overlay, kind))
+        self.scope_info.setText(self.scope_text())
 
     def select_room(self, room: int):
         self.selected[self.level] = room
@@ -990,14 +1251,14 @@ class MapWindow(QMainWindow):
         for label, key in ((self.picture, (self.level, room, False)), (self.cave_picture, cave)):
             pixmap = self.pixmaps.get(key)
             if pixmap:
-                label.setPixmap(pixmap.scaledToWidth(340, Qt.TransformationMode.SmoothTransformation))
+                label.setPixmap(pixmap.scaledToWidth(400, Qt.TransformationMode.SmoothTransformation))
         self.details.setText(self.room_html(self.level, room))
 
     def room_html(self, level: int, room: int) -> str:
-        """The sidebar text for a room: location, savestates, game.yaml, then the eval stats of the room and of
-        its cave (a dungeon room's cellar)."""
+        """The sidebar text for a room: location, its statistics by scope (room and cave), then per room and cave
+        the savestates, game.yaml and the promoted models' eval stats, and the route's steps through it."""
         cave = self.cave_key(level, room)
-        has_cave = any(cave in source for source in (self.rooms, self.states, self.stats))
+        has_cave = any(cave in source for source in (self.rooms, self.states, self.stats, self.scope_keys))
         cave_text = 'yes' if cave[1] == room else f'cellar 0x{cave[1]:02x}'
         name = (self.rooms.get((level, room, False)) or {}).get('name')      # game.yaml `name:` (the Breakfast Room)
         rows = [('Location', level_name(level)), ('Room', f'0x{room:02x} (column {room % GRID_COLS:X}, '
@@ -1006,6 +1267,10 @@ class MapWindow(QMainWindow):
                 ('Cave', f'{cave_text} (pictured below the room)' if cave in self.pixmaps
                  else cave_text if has_cave else 'no')]
         parts = [html_rows(rows)]
+        for key in ((level, room, False), cave) if has_cave else ((level, room, False),):
+            table = scope_rows(self.scopes, room_key(*key), self.current_scope())
+            if table:
+                parts.append(html_section(f"{'Cave' if key[2] else 'Room'} · by scope", scope_table(table)))
         for key in ((level, room, False), cave) if has_cave else ((level, room, False),):
             where = 'Cave' if key[2] else 'Room'
             names = self.states.get(key, [])
@@ -1023,7 +1288,7 @@ class MapWindow(QMainWindow):
             stats = self.stats.get(key)
             body = (html_rows(stats_rows(stats)) if stats
                     else '<p style="color:#8a93a6">No detailed eval data for this room.</p>')
-            parts.append(html_section(f'{where} · eval (every visit)', body))
+            parts.append(html_section(f'{where} · eval of the promoted models (every visit)', body))
         steps = [s for s in self.plan if s['level'] == level
                  and self.cellars.get((s['level'], s['room'], s['in_cave']), s['room']) == room]
         if steps:
@@ -1044,6 +1309,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="use each specialist's <run-id> evaluation where it has one, else the promoted run's")
     parser.add_argument('--route', default=None, choices=routes(),
                         help="draw this routes.yaml route over the map (default: none)")
+    parser.add_argument('--stats', type=Path, default=None, metavar='FILE',
+                        help="a room-stats file (triforce room-stats; default: the newest *-room-stats.json in "
+                             "<repo>/target/r56-chains, re-found on Reload)")
     return parser
 
 
@@ -1067,8 +1335,9 @@ def main(argv=None) -> int:
     app.setApplicationName('zelda-map')
     apply_theme(app)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    window = MapWindow(registry.models_root(args.models_dir), screens, states, run_id=args.run_id, route=args.route)
-    window.resize(1600, 900)
+    window = MapWindow(registry.models_root(args.models_dir), screens, states, run_id=args.run_id, route=args.route,
+                       stats_path=args.stats, stats_dir=None if args.stats else CHAINS_DIR)
+    window.resize(1600, 960)
     window.show()
     return app.exec()
 

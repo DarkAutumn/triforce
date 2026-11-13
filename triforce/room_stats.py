@@ -505,8 +505,7 @@ def output_path(tag: str, chains_dir: Path = CHAINS_DIR) -> Path:
 
 def newest(chains_dir: Path = CHAINS_DIR) -> Optional[Path]:
     """The most recently written ``*-room-stats.json`` in ``chains_dir`` (None without one)."""
-    files = sorted(Path(chains_dir).glob(f'*{SUFFIX}'), key=lambda p: p.stat().st_mtime) if Path(
-        chains_dir).is_dir() else []
+    files = sorted(Path(chains_dir).glob(f'*{SUFFIX}'), key=lambda path: path.stat().st_mtime)
     return files[-1] if files else None
 
 
@@ -541,7 +540,8 @@ def main(argv=None) -> int:
     parser.add_argument('--chains-dir', type=Path, default=CHAINS_DIR, help="default <repo>/target/r56-chains")
     parser.add_argument('--output', type=Path, default=None, help="default <chains-dir>/<TAG>-room-stats.json")
     parser.add_argument('--route', default=None, help="route the visits are matched to (default the chains')")
-    parser.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or <repo>/models)")
+    parser.add_argument('--models-dir', default=None,
+                        help="models root (default $TRIFORCE_MODELS_DIR or <repo>/models)")
     args = parser.parse_args(argv)
     try:
         data = build(args.tag, args.chains_dir, args.models_dir, args.route)

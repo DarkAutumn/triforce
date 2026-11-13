@@ -824,7 +824,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   room nearest the cursor (2 back, 8 ahead) and a correct exit moving the cursor on. The file records `format` (1),
   `tag`, `version`, `route`, `team` (the chains' runs and act modes), `promoted` (the models dir's promoted runs
   when written), the scope definitions (`segments`) and each scope's `source` (file, runs, start, act modes,
-  code, data, version). `room_stats.newest()` (the newest `*-room-stats.json` by mtime) is zelda-map's default.
+  code, data, version). `zelda-map.py` draws the scopes (Full run, Segment: the `to-*` segments and the dungeons
+  alone, rooms off the segment dimmed; Room only), each with its own death-rate colour scale (`DEATHS_BAD`), and
+  its sidebar tabulates a room's scopes side by side; it reads the newest `*-room-stats.json` by mtime
+  (`room_stats.newest()`) or `--stats FILE`, and without one shows Room only from the promoted models' evaluations.
 - Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
   its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded
   objects; the chain pool uses them instead of reloading canonical YAML. Runtime item masks, observations
