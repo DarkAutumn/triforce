@@ -68,9 +68,9 @@ def test_masked_and_malformed_actions(game):
     assert game.legal.startswith('MOVE[')
 
 
-def test_clip_wraps_and_the_clip_settings_gate_the_mask(game):
-    """The grid-point skip from Python (crates/zelda/src/clips.rs): `set_clip_settings`, the mask's CLIP, `act('CLIP
-    W')` and `Change.clip`; a CLIP where the skip is unavailable presses nothing."""
+def test_clip_wraps_and_the_clips_switch_gates_the_mask(game):
+    """The grid-point skip from Python (crates/zelda/src/clips.rs): `set_clips`, the mask's CLIP, `act('CLIP W')`
+    and `Change.clip`; a CLIP where the skip is unavailable presses nothing; MOVE never skips."""
     game.load('start', randomize_rng=False)
     unavailable = game.act('CLIP W')
     assert unavailable.clip == {'direction': 'W', 'kind': None, 'completed': False, 'abort': 'unavailable',
@@ -79,16 +79,15 @@ def test_clip_wraps_and_the_clip_settings_gate_the_mask(game):
         game.act('MOVE W 4')
     assert game.skip_available('W') and not game.skip_available('E')
     assert not game.is_allowed('CLIP W')
-    game.set_clip_settings('kind')
+    game.set_clips(True)
     assert game.is_allowed('CLIP W') and 'CLIP[W]' in game.legal
     change = game.act('CLIP W')
     assert change.clip == {'direction': 'W', 'kind': 'wrap', 'completed': True, 'abort': None, 'presses': 1}
     assert (game.state.full_location, game.state.link['x']) == ((0, 0x77, False), 0xF0)
-    game.set_clip_settings('edge', ['E'])
     assert game.act('MOVE E 8').clip is None
     assert game.state.full_location == (0, 0x78, False)
-    with pytest.raises(ValueError):
-        game.set_clip_settings('sword')
+    game.set_clips(False)
+    assert 'CLIP' not in game.legal
 
 
 def test_ram_read_write_and_variables(game):

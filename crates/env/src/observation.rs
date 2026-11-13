@@ -210,7 +210,7 @@ mod l {
     pub const DROP_ARMED: usize = 77;
     pub const DROP_IS_BOMBS: usize = 78;
     pub const FAIRY_NEXT: usize = 79;
-    /// The grid-point skip is available and the specialist's `clips.action` is not `none` (round 21; N, S, W, E).
+    /// The grid-point skip is available and the specialist has `clips: true` (round 21; N, S, W, E).
     pub const CLIP_USABLE: usize = 80;
 }
 
@@ -642,8 +642,8 @@ pub struct ObservationBuilder {
     /// The route's bomb reserve at the step Link plays (`GameCompletion::bomb_reserve`), for the `link` block;
     /// the env sets it before every observation.
     pub bomb_reserve: u8,
-    /// The specialist's `clips.action` is not `none`: the `link` block's `clip_usable_*` follow the skip's
-    /// availability (`zelda::clips::skip_available`); the env sets it with the bomb reserve.
+    /// The specialist has `clips: true`: the `link` block's `clip_usable_*` follow the skip's availability
+    /// (`zelda::clips::skip_available`); the env sets it with the bomb reserve.
     pub clips: bool,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
@@ -934,30 +934,36 @@ fn objective_kind_index(kind: ObjectiveKind) -> usize {
 const TARGET_STEPS: [(i32, i32); 4] = [(0, -1), (0, 1), (-1, 0), (1, 0)];
 const TARGET_DIRECTIONS: [Direction; 4] = [Direction::N, Direction::S, Direction::W, Direction::E];
 
-/// The neighbour of `tile` Link can step to (`legal` by direction index) with the lowest distance below
-/// `distance` (ties in N, S, W, E order): (direction index, tile, distance).
+/// The next step from `tile` down `wavefront` (`legal` by direction index for a walk): the walking neighbour or the
+/// jump (a grid-point skip the search knew, `Wavefront::jumps_from`) whose distance plus its cost is lowest and no
+/// more than `distance` (ties: walks in N, S, W, E order, then jumps): (direction index, tile, distance).
 fn descend(
     wavefront: &Wavefront,
     tile: (i32, i32),
     distance: i32,
     legal: impl Fn(usize) -> bool,
 ) -> Option<(usize, (i32, i32), i32)> {
-    let mut best: Option<(usize, (i32, i32), i32)> = None;
-    for (i, (dx, dy)) in TARGET_STEPS.into_iter().enumerate() {
+    let mut best: Option<(usize, (i32, i32), i32, i32)> = None;
+    let walks = TARGET_STEPS.into_iter().enumerate().filter_map(|(i, (dx, dy))| {
         let next = (tile.0 + dx, tile.1 + dy);
-        if let Some(d) = wavefront.get(next)
-            && d < best.map_or(distance, |b| b.2)
-            && legal(i)
-        {
-            best = Some((i, next, d));
+        Some((i, next, wavefront.get(next)?, 1, true))
+    });
+    let jumps = wavefront.jumps_from(tile).filter_map(|j| {
+        let i = TARGET_DIRECTIONS.iter().position(|&d| d == j.direction)?;
+        Some((i, j.to, wavefront.get(j.to)?, j.cost, false))
+    });
+    for (i, next, d, cost, walk) in walks.chain(jumps) {
+        if d + cost <= distance && best.is_none_or(|b| d + cost < b.2 + b.3) && (!walk || legal(i)) {
+            best = Some((i, next, d, cost));
         }
     }
-    best
+    best.map(|(i, next, d, _)| (i, next, d))
 }
 
-/// The `target` block: the first step of the walk down `wavefront` from Link's tile (one-hot N, S, W, E), the
-/// walking distance / 32, the pixel offset from Link to the target tile the descent reaches (/256, /176) and
-/// whether that tile is one of a dropped item's.  Without a wavefront, or with Link's tile unreachable, only the
+/// The `target` block: the first step of the walk down `wavefront` from Link's tile (one-hot N, S, W, E; a skip's
+/// heading where the search jumps), the walking distance / 32, the pixel offset from Link to the target tile the
+/// descent reaches (/256, /176) and whether that tile is one of a dropped item's.  Without a wavefront, or with
+/// Link's tile unreachable, only the
 /// distance is set (to 1).
 fn target_features(state: &GameView, wavefront: Option<&Wavefront>) -> [f32; TARGET_SIZE] {
     let mut v = [0f32; TARGET_SIZE];
@@ -1189,8 +1195,7 @@ fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8, clips: bool) -> [
     v[l::DROP_ARMED] = b(help >= 10);
     v[l::DROP_IS_BOMBS] = b(state.help_drop_is_bombs());
     v[l::FAIRY_NEXT] = b(state.kill_streak() == 15);
-    // The skip (`zelda::clips`): what CLIP's mask (`kind`) or a skipping MOVE (`long`, `edge`) needs, spelled out the
-    // same for every design (the mask is no network input).
+    // The skip (`zelda::clips`): where CLIP's mask allows it, spelled out (the mask is no network input).
     if clips {
         for (i, (d, _)) in DIR_BITS.iter().enumerate() {
             v[l::CLIP_USABLE + i] = b(zelda::clips::skip_available(state, *d));

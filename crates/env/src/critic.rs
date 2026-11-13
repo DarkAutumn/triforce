@@ -4,7 +4,7 @@
 //! decay per room, health halving of positive rewards, the room-stall ramp, Wallmaster shaping, one-time puzzle
 //! rewards and PBRS on the previous state's wavefront.
 
-use crate::config::{ClipShaping, ConfigError, SpecialistConfig};
+use crate::config::{ConfigError, SpecialistConfig};
 use crate::end_conditions::RETREAT;
 use crate::rewards::{
     NEUTRAL, Outcome, REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL,
@@ -161,9 +161,6 @@ pub struct GameplayCritic {
     /// The `retreat` ending is neutral (the default; `endings: {retreat: ...}` can make it a failure): leaving through
     /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
     pub neutral_retreat: bool,
-    /// `clips.shaping: walk`: on a step whose skip completed, PBRS pays at most what walking its frames could
-    /// (either sign; [`walk_cap`]).
-    pub clip_walk_shaping: bool,
     correct_locations: HashSet<MapLocation>,
     room_combat_counts: HashMap<MapLocation, i32>,
     room_steps: u32,
@@ -180,7 +177,6 @@ impl GameplayCritic {
             fixed_pickup_reward: false,
             boss_ate_bomb_penalty: REWARD_MEDIUM,
             neutral_retreat: true,
-            clip_walk_shaping: false,
             correct_locations: HashSet::new(),
             room_combat_counts: HashMap::new(),
             room_steps: 0,
@@ -205,7 +201,6 @@ impl GameplayCritic {
         critic.fixed_pickup_reward = config.reward.fixed_pickup_reward;
         critic.boss_ate_bomb_penalty = config.reward.boss_ate_bomb_penalty;
         critic.neutral_retreat = config.endings.get(RETREAT).is_none_or(|outcome| outcome == NEUTRAL);
-        critic.clip_walk_shaping = config.clips.shaping == ClipShaping::Walk;
         Ok(critic)
     }
 
@@ -589,25 +584,11 @@ impl GameplayCritic {
         let (Some(old), Some(new)) = (wf.get(prev.link.tile()), wf.get(tile)) else {
             return;
         };
-        let mut shaped = (old - new) as f64 / PBRS_SCALE;
-        if self.clip_walk_shaping && change.clip.is_some_and(|clip| clip.completed()) {
-            let cap = walk_cap(change.frames);
-            shaped = shaped.clamp(-cap, cap);
-        }
+        let shaped = (old - new) as f64 / PBRS_SCALE;
         if shaped > 0.0 {
             rewards.add(Outcome::reward("reward-pbrs-movement", shaped));
         } else if shaped < 0.0 {
             rewards.add(Outcome::penalty("penalty-pbrs-movement", shaped));
         }
     }
-}
-
-/// Link's walking speed (1.5 pixels a frame, asm:Link_InitSpeed) and tile size.
-const WALK_PIXELS_PER_FRAME: f64 = 1.5;
-const TILE_PIXELS: f64 = 8.0;
-
-/// The most PBRS a walk of `frames` frames can earn: frames × 1.5 px / 8 px per tile / `PBRS_SCALE`
-/// (`clips.shaping: walk`).
-pub fn walk_cap(frames: u32) -> f64 {
-    f64::from(frames) * WALK_PIXELS_PER_FRAME / TILE_PIXELS / PBRS_SCALE
 }

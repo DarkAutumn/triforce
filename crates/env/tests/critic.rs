@@ -133,6 +133,7 @@ fn objective(next_rooms: &[MapLocation]) -> Objective {
         next_rooms: next_rooms.iter().copied().collect(),
         pbrs_targets: BTreeSet::new(),
         retreats: BTreeSet::new(),
+        clips: false,
     }
 }
 

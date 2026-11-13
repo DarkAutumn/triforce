@@ -4,25 +4,30 @@
 //! One frame of perpendicular input 5 pixels short of a grid point T, in the right sub-pixel cadence, lets Link cross
 //! T with no frame starting on it, so T's tile and screen-edge tests are skipped. The agent's MOVE (4-32 frames)
 //! can't do that, so the executor plays it as a macro ([`Controller`], driven by `crate::executor`): it reads
-//! `$70`/`$84`, `$394` and `$3A8` every frame and follows the decision table of mechanics.md (back off to G' when too
-//! close or in the wrong cadence, walk to the trick state, press one perpendicular frame, hold the heading). No RAM
-//! is written.
+//! `$70`/`$84`, `$394`, `$3A8` and `$64` every frame and follows the decision table of mechanics.md (back off to G'
+//! when too close or in the wrong cadence, walk to the trick state, press one perpendicular frame, hold the heading).
+//! No RAM is written.
 //!
-//! Two uses: the overworld **wrap** (W, E): T is the screen bound, Link comes in at the opposite side of the same
+//! Three uses: the overworld **wrap** (W, E): T is the screen bound, Link comes in at the opposite side of the same
 //! room and the macro walks on to where that side's ordinary room change is one MOVE away (X `$F0` after a W wrap,
-//! `$00` after an E wrap); and the dungeon **block clip** (N, S): T is where a 16-pixel solid square stops Link, the
-//! skip carries him 8 pixels into it (T -+ 8), from where a sideways MOVE goes on.
+//! `$00` after an E wrap); the dungeon **block clip** (N, S): T is where a 16-pixel solid square stops Link, the
+//! skip carries him 8 pixels into it (T -+ 8), from where a sideways MOVE goes on; and the dungeon **ladder clip**
+//! (any heading, Link holds the ladder): T is the laid ladder's distance-0 point, where water two or three squares
+//! wide stops the plain ladder; the skip carries Link over all of it (the relay lays a second ladder where needed)
+//! onto the land beyond.
 //!
-//! [`skip_target`] (state only) is the single availability rule of the mask, the executor and the observation.
-//! [`ClipSettings`] (the specialist's `clips.action`, set on the session every step) says how the policy reaches the
-//! macro: the CLIP kind, the longest MOVE, or a MOVE out of an edge that is not a correct exit.
+//! [`skip_target`] (state only) is the single availability rule of the mask, the executor and the observation;
+//! [`skip_jumps`] is the same rule from Link's rest positions, the jumps the path search adds
+//! (`crate::room::Room::wavefront`). A specialist's `clips: true` turns both on: the CLIP kind ([`allow_clips`]) and
+//! the jumps. MOVE never performs a skip.
 
-use crate::actions::{Action, ActionMask, CARDINALS};
+use crate::actions::{ActionMask, CARDINALS};
 use crate::change::Change;
-use crate::enums::{ActionKind, Direction};
+use crate::enums::{ActionKind, Direction, Position};
 use crate::executor::Interrupt;
 use crate::game::{GameView, at_dungeon_bound};
-use crate::room::{Room, WATER_TILE};
+use crate::room::{Jump, Room, WATER_TILE};
+use crate::tables::{OBJ_DIRECTION, OBJ_ID, OBJ_POS_X, OBJ_POS_Y, OBJ_STATUS};
 use crate::vars::Var;
 use std::ops::AddAssign;
 
@@ -34,12 +39,17 @@ const WRAP_ZONE: u8 = 0x20;
 /// The overworld slow tiles (asm:Link_InitSpeed): they change Link's speed and zero `ObjPosFrac`, which the
 /// decision table does not model.
 const SLOW_TILES: [u8; 2] = [0x74, 0x75];
-/// Dungeon room bounds Link can stand on (asm:Room_ObjBoundsUW: Y $5D..$BD).
+/// Dungeon room bounds Link can stand on (asm:Room_ObjBoundsUW: X $20..$D0, Y $5D..$BD).
+const UW_LEFT: i32 = 0x20;
+const UW_RIGHT: i32 = 0xD0;
 const UW_TOP: i32 = 0x5D;
 const UW_BOTTOM: i32 = 0xBD;
-/// Dungeon outer border band on X (asm:Link_BorderBounds): a perpendicular press is dropped there.
+/// Dungeon outer border band (asm:Link_BorderBounds): a perpendicular press is dropped there, on the facing's axis
+/// (left X < $17, right X >= $D9, up Y < $55, down Y >= $C6).
 const UW_BAND_W: i32 = 0x17;
 const UW_BAND_E: i32 = 0xD9;
+const UW_BAND_N: i32 = 0x55;
+const UW_BAND_S: i32 = 0xC6;
 /// Play mode.
 const MODE_PLAY: u8 = 5;
 
@@ -49,12 +59,18 @@ const LINK_X: usize = Var::LinkX.addr() as usize;
 const LINK_Y: usize = Var::LinkY.addr() as usize;
 const LINK_GRID_OFFSET: usize = Var::LinkGridOffset.addr() as usize;
 const LINK_DIRECTION: usize = Var::LinkDirection.addr() as usize;
+/// `LadderSlot` (`$64`): the laid ladder's object slot, 0 = none out (asm:Ladder_CheckAndDraw).
+const LADDER_SLOT: usize = Var::LadderSlot.addr() as usize;
+/// The highest monster slot (asm:Obj_FindEmptyMonsterSlot searches $0B down to $01).
+const LAST_MONSTER_SLOT: usize = 0x0B;
 
-/// Frames the macro may take before it gives up (a run-up from 32 pixels with two back-offs takes about 90).
+/// Frames the macro may take before it gives up (a run-up from 32 pixels with two back-offs takes about 90; the
+/// longest ladder clip with a back-off about 60).
 pub const MAX_SKIP_FRAMES: u32 = 200;
 /// Presses the macro may make before it gives up (each failed one costs a back-off).
 pub const MAX_SKIP_PRESSES: u8 = 3;
-/// Frames in a row Link may stand still (no lag frame repeats this often) before the macro gives up.
+/// Frames in a row Link may stand still (no lag frame repeats this often; a ladder put away costs one) before the
+/// macro gives up.
 pub const MAX_STILL_FRAMES: u32 = 4;
 
 /// What the skip does in the direction it is offered.
@@ -64,6 +80,8 @@ pub enum SkipKind {
     Wrap,
     /// Dungeon block clip (N, S).
     Block,
+    /// Dungeon ladder clip (any heading).
+    Ladder,
 }
 
 impl SkipKind {
@@ -71,6 +89,7 @@ impl SkipKind {
         match self {
             SkipKind::Wrap => "wrap",
             SkipKind::Block => "block",
+            SkipKind::Ladder => "ladder",
         }
     }
 }
@@ -82,18 +101,13 @@ pub struct SkipTarget {
     pub kind: SkipKind,
     /// The grid point whose tests are skipped (X for W/E, Y for N/S).
     pub t: u8,
+    /// Distance still to go to T in the heading's sense when the macro is done (negative: past T). A wrap ends 16
+    /// pixels past the bound (X `$F0` after a W wrap, `$00` after an E wrap); a block clip 8 pixels into the
+    /// square; a ladder clip on the land beyond the water with no ladder out (`$20`-`$30` past T, [`ladder_reach`]).
+    pub end: i8,
 }
 
 impl SkipTarget {
-    /// Distance still to go to T in the heading's sense when the macro is done (negative: past T). A wrap ends 16
-    /// pixels past the bound (X `$F0` after a W wrap, `$00` after an E wrap); a block clip 8 pixels into the square.
-    pub const fn end(&self) -> i8 {
-        match self.kind {
-            SkipKind::Wrap => -16,
-            SkipKind::Block => -8,
-        }
-    }
-
     /// Heading toward smaller coordinates (W, N).
     fn negative(&self) -> bool {
         matches!(self.direction, Direction::W | Direction::N)
@@ -114,7 +128,10 @@ impl SkipTarget {
             (self.t.wrapping_sub(c) as i8, o, f == 0x00)
         };
         let facing = ram[LINK_DIRECTION] == self.direction.value();
-        SkipState { p, o: o_h, good, facing, raw: (c, ram[LINK_GRID_OFFSET], f, ram[LINK_DIRECTION]) }
+        // A ladder Link has been on (object state 2), not one just laid ahead of him (state 1).
+        let slot = ram[LADDER_SLOT] as usize;
+        let ladder = (1..=LAST_MONSTER_SLOT).contains(&slot) && ram[OBJ_STATUS.0 + slot] == 2;
+        SkipState { p, o: o_h, good, facing, ladder, raw: (c, ram[LINK_GRID_OFFSET], f, ram[LINK_DIRECTION]) }
     }
 
     /// The controller byte that walks Link along the heading (`toward`) or away from it.
@@ -146,6 +163,10 @@ pub struct SkipState {
     /// `ObjDir` is the heading (case 6 needs the offset's sign to agree with it: a Link walking away from T at the
     /// trick position only turns back).
     pub facing: bool,
+    /// A ladder Link has been on is out (`LadderSlot` != 0, its state 2): a ladder clip is done only once the last
+    /// one is put away. One just laid ahead of him at the end (two squares crossed, the walk on arrives facing more
+    /// water) stays, as after any walk toward water.
+    pub ladder: bool,
     /// (coordinate, `$394`, `$3A8`, `$98`) as read.
     pub raw: (u8, u8, u8, u8),
 }
@@ -174,6 +195,8 @@ pub enum Input {
     Toward,
     Away,
     Press,
+    /// Nothing held: at a ladder clip's end it puts the last ladder away and lays no new one.
+    Release,
 }
 
 /// The per-frame decision table (mechanics.md "Decision table"), first matching row.
@@ -201,15 +224,20 @@ impl Controller {
 
     /// The input for the frame that starts in `s`.
     pub fn decide(&mut self, s: SkipState) -> Decision {
-        let end = self.target.end();
         match self.phase {
             Phase::Crossing => {
-                if s.p == end && s.o == 0 {
+                // At the end point. A ladder out there is put away by one frame with nothing held (a held heading
+                // would lay another over water ahead: the relay; asm:Ladder_CheckAndDraw@StashLadder, state 2).
+                if s.p == self.target.end && s.o == 0 {
+                    if self.target.kind == SkipKind::Ladder && s.ladder {
+                        return Decision::Input(Input::Release);
+                    }
                     return Decision::Done;
                 }
                 if s.p == 0 && s.o == 0 {
-                    // Stopped on T: the press was missed (the edge or the square's test was made). Never hold the
-                    // heading here (at a screen bound that is the ordinary room change): back off and try again.
+                    // Stopped on T: the press was missed (the edge, the square's or the ladder's test was made).
+                    // Never hold the heading here (at a screen bound that is the ordinary room change): back off
+                    // and try again.
                     self.phase = Phase::BackOff;
                     return self.decide(s);
                 }
@@ -265,24 +293,34 @@ impl Controller {
 }
 
 /// Where the skip in `direction` is available in `state`, and where it goes (mechanics.md; round 21 contract
-/// "Availability"). Overworld W/E: the wrap; dungeon N/S: the block clip when it is useful. None elsewhere.
+/// "Availability"). Overworld W/E: the wrap; dungeon: the ladder clip, else (N/S) the block clip when it is useful.
+/// None elsewhere.
 pub fn skip_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
-    if state.mode() != MODE_PLAY
-        || state.link.status != 0
-        || state.var(Var::LinkShoveDir) != 0
-        || state.var(Var::LadderSlot) != 0
-    {
+    if state.mode() != MODE_PLAY || state.link.status != 0 || state.var(Var::LinkShoveDir) != 0 {
         return None;
     }
+    let ladder_out = state.var(Var::LadderSlot) != 0;
     match (state.level(), direction) {
-        (0, Direction::W | Direction::E) => wrap_target(state, direction),
-        (1.., Direction::N | Direction::S) => block_target(state, direction),
-        _ => None,
+        (0, Direction::W | Direction::E) if !ladder_out => wrap_target(state, direction),
+        (0, _) => None,
+        (_, Direction::N | Direction::S) => ladder_target(state, direction).or_else(|| {
+            if ladder_out { None } else { block_target(state, direction) }
+        }),
+        _ => ladder_target(state, direction),
     }
 }
 
 pub fn skip_available(state: &GameView, direction: Direction) -> bool {
     skip_target(state, direction).is_some()
+}
+
+/// Allows CLIP in every direction a skip is available (the session does it for a specialist with `clips: true`).
+pub fn allow_clips(mask: &mut ActionMask, state: &GameView) {
+    for d in CARDINALS {
+        if skip_available(state, d) {
+            mask.allow(ActionKind::Clip, Some(d));
+        }
+    }
 }
 
 fn wrap_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
@@ -308,21 +346,26 @@ fn wrap_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     if !run_up.into_iter().chain(landing).all(open) {
         return None;
     }
-    Some(SkipTarget { direction, kind: SkipKind::Wrap, t })
+    Some(SkipTarget { direction, kind: SkipKind::Wrap, t, end: -16 })
 }
 
 fn block_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     let (x, y) = (state.link.position.x, state.link.position.y);
     let offset = state.var(Var::LinkGridOffset);
     let facing = state.var(Var::LinkDirection) as u8;
-    if state.var(Var::DoorwayDir) != 0
-        || x & 7 != 0
-        || !(UW_BAND_W..UW_BAND_E).contains(&x)
-        || (offset != 0 && !matches!(facing, 4 | 8))
-    {
+    if state.var(Var::DoorwayDir) != 0 || (offset != 0 && !matches!(facing, 4 | 8)) {
         return None;
     }
-    let room = state.room();
+    let t = block_at(state.room(), x, y, direction)?;
+    Some(SkipTarget { direction, kind: SkipKind::Block, t: t as u8, end: -8 })
+}
+
+/// T of the block clip heading `direction` (N or S) for Link at (x, y), or None (position only; [`block_target`]
+/// adds Link's state).
+fn block_at(room: &Room, x: i32, y: i32, direction: Direction) -> Option<i32> {
+    if x & 7 != 0 || !(UW_BAND_W..UW_BAND_E).contains(&x) {
+        return None;
+    }
     let step: i32 = if direction == Direction::N { -8 } else { 8 };
     let back = direction.opposite();
     let blocked = |g: i32| !room.can_link_move_from(x, g, direction);
@@ -348,8 +391,7 @@ fn block_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     if !(UW_TOP..=UW_BOTTOM).contains(&clipped) || !blocked(clipped) {
         return None;
     }
-    // Blocks, statues and walls only, never water: the skip into water was not traced, and with the ladder the walk
-    // toward it lays the ladder (the ladder clip, a different recipe; mechanics.md "Ladder clip").
+    // Blocks, statues and walls only, never water: water ahead is the ladder clip's (or no clip without the ladder).
     let water = |g: i32| Room::hotspot_tiles(x, g, direction).into_iter().any(|(c, r)| room.tile(c, r) == WATER_TILE);
     if water(t) || water(clipped) {
         return None;
@@ -379,10 +421,7 @@ fn block_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     let sideways = [Direction::W, Direction::E].into_iter().any(|d| {
         !at_dungeon_bound(x, clipped, d) && room.can_link_move_from(x, clipped, d) && !room.can_link_move_from(x, t, d)
     });
-    if !sideways {
-        return None;
-    }
-    Some(SkipTarget { direction, kind: SkipKind::Block, t: t as u8 })
+    sideways.then_some(t)
 }
 
 /// Link at rest on (x, y) stands on a dungeon stairs square, whose warp check takes him down (asm:Warp_CheckUnderLink:
@@ -391,105 +430,223 @@ fn on_stairs(room: &Room, x: i32, y: i32) -> bool {
     x & 0xF == 0 && y & 0xF == 0xD && (0x70..=0x73).contains(&room.tile(x.div_euclid(8), (y - 53).div_euclid(8)))
 }
 
-/// How the policy reaches the skip (the specialist's `clips.action`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum ClipTrigger {
-    /// No skip anywhere: CLIP is masked and MOVE is plain.
-    #[default]
-    None,
-    /// The CLIP kind, legal where the skip is available.
-    Kind,
-    /// A MOVE of the longest duration (32) where the skip is available.
-    Long,
-    /// A MOVE of any duration where the skip is available and its direction is not a correct exit of the current
-    /// objective (a block clip has no exit side: any MOVE into the square).
-    Edge,
+/// What a tile test reads ahead of Link (the tiles `Room::hotspot_tiles` names).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Ahead {
+    /// Every tile is water (`$F4`): a ladder is laid there, or a laid one is needed.
+    Water,
+    /// Every tile is walkable (doorway corridors included, ladder crossings not).
+    Land,
+    /// Anything else (a wall, a block, water beside land).
+    Wall,
 }
 
-impl ClipTrigger {
-    pub const ALL: [ClipTrigger; 4] = [ClipTrigger::None, ClipTrigger::Kind, ClipTrigger::Long, ClipTrigger::Edge];
-
-    pub const fn name(self) -> &'static str {
-        match self {
-            ClipTrigger::None => "none",
-            ClipTrigger::Kind => "kind",
-            ClipTrigger::Long => "long",
-            ClipTrigger::Edge => "edge",
-        }
-    }
-
-    pub fn from_name(name: &str) -> Option<ClipTrigger> {
-        Self::ALL.into_iter().find(|t| t.name() == name)
+fn ahead(room: &Room, x: i32, y: i32, direction: Direction) -> Ahead {
+    let tiles = Room::hotspot_tiles(x, y, direction);
+    let inside = |&(c, r): &(i32, i32)| (0..crate::room::COLS).contains(&c) && (0..crate::room::ROWS).contains(&r);
+    if tiles.iter().all(|t| inside(t) && room.tile(t.0, t.1) == WATER_TILE) {
+        Ahead::Water
+    } else if tiles.iter().all(|&(c, r)| room.is_tile_walkable(c, r)) {
+        Ahead::Land
+    } else {
+        Ahead::Wall
     }
 }
 
-/// The session's clip settings, set every step by the env (the trigger from the config, the correct exits from the
-/// objective).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct ClipSettings {
-    pub trigger: ClipTrigger,
-    /// Direction bits (E 1, W 2, S 4, N 8) of the current objective's correct exits: the `edge` trigger leaves them
-    /// plain.
-    pub correct_exits: u8,
+/// -1 heading W or N (toward smaller coordinates), +1 heading E or S.
+fn sign(direction: Direction) -> i32 {
+    if matches!(direction, Direction::W | Direction::N) { -1 } else { 1 }
 }
 
-impl ClipSettings {
-    pub fn new(trigger: ClipTrigger, correct_exits: u8) -> ClipSettings {
-        ClipSettings { trigger, correct_exits }
+/// The ladder clip from the lay point `lay` (Link's coordinate on the heading's axis where the first ladder is laid,
+/// `across` his coordinate on the other axis), heading `direction`: (T, the macro's end in the heading's sense, the
+/// ladders put away on the way), or None where the game does not carry Link over the water onto land with one press
+/// (mechanics.md "Ladder clip", "Reach of one press").
+///
+/// - Up: the ladder is laid at the lay point L (G of the skip; G' = L + 8 is land), T = L - 8. Four tile rows of water
+///   (two squares: the plain ladder stops at T, where case E finds water 8 pixels higher too), the relay lays a
+///   second ladder at L - `$18`, and its distance-0 point L - `$20` must look onto land. Link ends at L - `$30`, the
+///   second ladder put away (room `$21`: Y `$55`, 8 pixels past the top bound).
+/// - Left, right, down: L is G' (the ladder lies one square ahead), T = L -+ `$10`, the square beyond it water too.
+///   At the relay L -+ `$20` the square ahead is land (two squares: Link walks on to L -+ `$30`, inside the room
+///   bounds) or water (three squares: a second ladder, whose distance-0 point L -+ `$30` must look onto land; Link
+///   ends at L -+ `$40`).
+fn ladder_reach(room: &Room, across: i32, lay: i32, direction: Direction) -> Option<(i32, i8, u8)> {
+    let horizontal = matches!(direction, Direction::W | Direction::E);
+    let s = sign(direction);
+    let at = |a: i32, d: Direction| if horizontal { ahead(room, a, across, d) } else { ahead(room, across, a, d) };
+    let water = |a: i32| at(a, direction) == Ahead::Water;
+    let land = |a: i32| at(a, direction) == Ahead::Land;
+    // Link stands on a grid point of the room's floor at the lay point.
+    let (lo, hi) = if horizontal { (UW_LEFT, UW_RIGHT) } else { (UW_TOP, UW_BOTTOM) };
+    let (cross_lo, cross_hi) = if horizontal { (UW_TOP, UW_BOTTOM) } else { (UW_LEFT, UW_RIGHT) };
+    let grid = |a: i32, horizontal_axis: bool| if horizontal_axis { a & 7 == 0 } else { a & 7 == 5 };
+    if !(lo..=hi).contains(&lay)
+        || !(cross_lo..=cross_hi).contains(&across)
+        || !grid(lay, horizontal)
+        || !grid(across, !horizontal)
+    {
+        return None;
     }
-
-    /// Whether a MOVE in `direction` (of any duration) triggers the skip under `edge`, given its target.
-    fn edge_skips(&self, target: &SkipTarget) -> bool {
-        target.kind == SkipKind::Block || self.correct_exits & target.direction.value() == 0
+    // On land there: both tiles of his hotspot row walkable (he can't stand on water without a ladder).
+    let (x, y) = if horizontal { (lay, across) } else { (across, lay) };
+    let row = (y - 53).div_euclid(8);
+    if !room.is_tile_walkable(x.div_euclid(8), row) || !room.is_tile_walkable(x.div_euclid(8) + 1, row) {
+        return None;
     }
-
-    /// The skip a MOVE `action` performs in `state` instead of the plain walk (`long`, `edge`).
-    pub fn move_target(&self, state: &GameView, action: &Action) -> Option<SkipTarget> {
-        if action.kind != ActionKind::Move {
+    let (t, end, stashes) = if direction == Direction::N {
+        let t = lay - 8;
+        let g2 = lay + 8;
+        if g2 > UW_BOTTOM || [lay, t, lay - 16, lay - 24].into_iter().any(|a| !water(a)) || !land(lay - 32) {
             return None;
         }
-        match self.trigger {
-            ClipTrigger::Long if action.duration == crate::actions::DURATIONS[3] => skip_target(state, action.direction),
-            ClipTrigger::Edge => skip_target(state, action.direction).filter(|t| self.edge_skips(t)),
-            _ => None,
+        // The run-up cell G' to L and the back-off from L to G'.
+        if !land(g2) || at(lay, Direction::S) != Ahead::Land {
+            return None;
+        }
+        (t, lay - 48, 2)
+    } else {
+        let t = lay + 16 * s;
+        if !water(lay) || !water(t) {
+            return None;
+        }
+        let relay = lay + 32 * s;
+        if land(relay) {
+            // Two squares: walking on after the relay, inside the room bounds.
+            let end = lay + 48 * s;
+            if !land(lay + 40 * s) || !(lo..=hi).contains(&end) {
+                return None;
+            }
+            (t, end, 1)
+        } else if water(relay) && land(lay + 48 * s) && land(lay + 56 * s) {
+            (t, lay + 64 * s, 2)
+        } else {
+            return None;
+        }
+    };
+    // The press is not dropped: the trick position (5 short of T) outside the outer border band on the heading's
+    // axis (asm:Link_MaskInputInBorder).
+    let trick = t - 5 * s;
+    let band = match direction {
+        Direction::W => trick >= UW_BAND_W,
+        Direction::E => trick < UW_BAND_E,
+        Direction::N => trick >= UW_BAND_N,
+        _ => trick < UW_BAND_S,
+    };
+    band.then_some((t, ((t - end) * s) as i8, stashes))
+}
+
+/// The ladder clip heading `direction` from Link's state: he holds the ladder, stands on the heading's line within
+/// 16 pixels of T (at the lay point or between G' and it with no ladder out; on a ladder laid along the heading),
+/// and a monster slot is free for the first ladder (asm:Obj_FindEmptyMonsterSlot).
+fn ladder_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
+    if !state.ladder() || state.var(Var::DoorwayDir) != 0 {
+        return None;
+    }
+    let horizontal = matches!(direction, Direction::W | Direction::E);
+    let (x, y) = (state.link.position.x, state.link.position.y);
+    let (along, across) = if horizontal { (x, y) } else { (y, x) };
+    let offset = state.var(Var::LinkGridOffset);
+    let facing = state.var(Var::LinkDirection) as u8;
+    let along_axis = if horizontal { matches!(facing, 1 | 2) } else { matches!(facing, 4 | 8) };
+    if offset != 0 && !along_axis {
+        return None;
+    }
+    let s = sign(direction);
+    let ram = state.ram();
+    let slot = ram[LADDER_SLOT] as usize;
+    let lays: Vec<i32> = if slot != 0 {
+        // A ladder out along the heading, Link on its line: T is its distance-0 point (ladder X, or ladder Y - 3).
+        if slot > LAST_MONSTER_SLOT || ram[OBJ_DIRECTION.0 + slot] != direction.value() {
+            return None;
+        }
+        let (lx, ly) = (ram[OBJ_POS_X.0 + slot] as i32, ram[OBJ_POS_Y.0 + slot] as i32);
+        let t = match horizontal {
+            true if ly == y + 3 => lx,
+            false if lx == x => ly - 3,
+            _ => return None,
+        };
+        vec![if direction == Direction::N { t + 8 } else { t - 16 * s }]
+    } else {
+        if !(1..=LAST_MONSTER_SLOT).any(|i| ram[OBJ_ID.0 + i] == 0) {
+            return None;
+        }
+        if direction == Direction::N {
+            // On or below G = L, at most 8 pixels: L is the grid point at or above Link, or the one above that.
+            let g = along - (along - 5).rem_euclid(8);
+            vec![g, g - 8]
+        } else {
+            vec![along]
+        }
+    };
+    lays.into_iter().find_map(|lay| {
+        let (t, end, _) = ladder_reach(state.room(), across, lay, direction)?;
+        let p = (t - along) * s;
+        (0..=16).contains(&p).then_some(SkipTarget { direction, kind: SkipKind::Ladder, t: t as u8, end })
+    })
+}
+
+/// Frames of a skip from rest `p` pixels before T (16: G', 8: G with the good fraction, 0: on T, which backs off two
+/// cells first) to its end `end`, rounded up to path-search tiles (8 pixels at 1.5 pixels a frame). `stashes`:
+/// ladders put away on the way, a still frame each; a ladder clip also lays its first ladder in a still frame.
+fn skip_cost(p: i32, end: i8, stashes: u8) -> i32 {
+    let approach = match p {
+        16.. => 7,
+        8..=15 => 2,
+        _ => 11 + 7,
+    } + i32::from(stashes > 0);
+    let crossing = ((5 - i32::from(end)) * 2 + 2) / 3 + i32::from(stashes);
+    let frames = approach + 1 + crossing;
+    (frames * 3 + 15) / 16
+}
+
+/// The skips of `room` as jumps of the path search (`Room::wavefront` with clips on): from every rest position
+/// (grid point, offset 0) of a skip's zone to Link's tile at its end, at [`skip_cost`]. Dungeon rooms only: the block
+/// clip (N, S) everywhere, the ladder clip (any heading) while Link holds the ladder (`Room::ladder`). The overworld
+/// wrap is not a jump: it ends one MOVE from the opposite edge, so a jump would make the path to that edge's exit
+/// lead out of the entry edge, and the policy learned the wrap without one (`docs/experiments/round21.md`).
+pub fn skip_jumps(room: &Room) -> Vec<Jump> {
+    let location = room.location;
+    if location.level == 0 || location.in_cave || !room.is_loaded() {
+        return Vec::new();
+    }
+    let tile = |x: i32, y: i32| Position::new(x, y).tile();
+    let mut jumps = Vec::new();
+    for x in (UW_LEFT..=UW_RIGHT).step_by(8) {
+        for y in (UW_TOP..=UW_BOTTOM).step_by(8) {
+            for direction in [Direction::N, Direction::S] {
+                if let Some(t) = block_at(room, x, y, direction) {
+                    let end = t + 8 * sign(direction);
+                    let p = (y - t).abs();
+                    jumps.push(Jump { from: tile(x, y), to: tile(x, end), direction, cost: skip_cost(p, -8, 0) });
+                }
+            }
         }
     }
-
-    /// The skip (if any) `action` performs: a CLIP's always (whatever the trigger; the mask gates the policy), a
-    /// MOVE's per [`ClipSettings::move_target`].
-    pub fn action_target(&self, state: &GameView, action: &Action) -> Option<Option<SkipTarget>> {
-        match action.kind {
-            ActionKind::Clip => Some(skip_target(state, action.direction)),
-            ActionKind::Move => self.move_target(state, action).map(Some),
-            _ => None,
-        }
-    }
-
-    /// Adds the trigger's legal actions to `mask` (computed from the state alone, CLIP never in it): CLIP in every
-    /// direction the skip is available (`kind`); MOVE in a direction whose MOVE performs the skip (`long`, `edge`),
-    /// so a MOVE into a square from the block-clip zone is legal.
-    pub fn apply(&self, mask: &mut ActionMask, state: &GameView) {
-        for d in CARDINALS {
-            match self.trigger {
-                ClipTrigger::None => {}
-                ClipTrigger::Kind => {
-                    if skip_available(state, d) {
-                        mask.allow(ActionKind::Clip, Some(d));
-                    }
-                }
-                ClipTrigger::Long => {
-                    if skip_available(state, d) {
-                        mask.allow(ActionKind::Move, Some(d));
-                    }
-                }
-                ClipTrigger::Edge => {
-                    if skip_target(state, d).is_some_and(|t| self.edge_skips(&t)) {
-                        mask.allow(ActionKind::Move, Some(d));
+    if room.ladder() {
+        for direction in CARDINALS {
+            let horizontal = matches!(direction, Direction::W | Direction::E);
+            let (lines, points) = if horizontal {
+                ((UW_TOP..=UW_BOTTOM).step_by(8), (UW_LEFT..=UW_RIGHT).step_by(8))
+            } else {
+                ((UW_LEFT..=UW_RIGHT).step_by(8), (UW_TOP..=UW_BOTTOM).step_by(8))
+            };
+            for across in lines {
+                for lay in points.clone() {
+                    let Some((t, end, stashes)) = ladder_reach(room, across, lay, direction) else {
+                        continue;
+                    };
+                    let s = sign(direction);
+                    let at = |a: i32| if horizontal { tile(a, across) } else { tile(across, a) };
+                    let to = at(t - i32::from(end) * s);
+                    for p in [16, 8, 0] {
+                        jumps.push(Jump { from: at(t - p * s), to, direction, cost: skip_cost(p, end, stashes) });
                     }
                 }
             }
         }
     }
+    jumps
 }
 
 /// Why a skip ended without completing.
@@ -598,11 +755,11 @@ mod tests {
     use super::*;
 
     fn state(p: i8, o: i8, good: bool) -> SkipState {
-        SkipState { p, o, good, facing: true, raw: (0, 0, 0, 0) }
+        SkipState { p, o, good, facing: true, ladder: false, raw: (0, 0, 0, 0) }
     }
 
     fn wrap_w() -> Controller {
-        Controller::new(SkipTarget { direction: Direction::W, kind: SkipKind::Wrap, t: 0 })
+        Controller::new(SkipTarget { direction: Direction::W, kind: SkipKind::Wrap, t: 0, end: -16 })
     }
 
     /// The left-edge frame table of mechanics.md: from rest on G = $08 with $80, Left 2, Up, then Left to $F0.
@@ -685,7 +842,7 @@ mod tests {
 
     #[test]
     fn right_and_down_headings_read_the_mirrored_state() {
-        let t = SkipTarget { direction: Direction::E, kind: SkipKind::Wrap, t: 0xF0 };
+        let t = SkipTarget { direction: Direction::E, kind: SkipKind::Wrap, t: 0xF0, end: -16 };
         let mut ram = [0u8; 0x800];
         (ram[0x70], ram[0x394], ram[LINK_POS_FRAC], ram[LINK_DIRECTION]) = (0xEB, 0x03, 0x00, 1);
         assert!(t.read(&ram).is_trick());
@@ -694,22 +851,26 @@ mod tests {
         (ram[0x70], ram[0x394]) = (0x00, 0x00);
         let s = t.read(&ram);
         assert_eq!((s.p, s.o), (-16, 0));
-        let t = SkipTarget { direction: Direction::N, kind: SkipKind::Block, t: 0x95 };
+        let t = SkipTarget { direction: Direction::N, kind: SkipKind::Block, t: 0x95, end: -8 };
         (ram[0x84], ram[0x394], ram[LINK_POS_FRAC], ram[LINK_DIRECTION]) = (0x9A, 0xFD, 0x80, 8);
         assert!(t.read(&ram).is_trick());
         (ram[0x84], ram[0x394]) = (0x8D, 0x00);
-        assert_eq!(t.read(&ram).p, t.end());
-        let t = SkipTarget { direction: Direction::S, kind: SkipKind::Block, t: 0x7D };
+        assert_eq!(t.read(&ram).p, t.end);
+        let t = SkipTarget { direction: Direction::S, kind: SkipKind::Block, t: 0x7D, end: -8 };
         (ram[0x84], ram[0x394], ram[LINK_POS_FRAC], ram[LINK_DIRECTION]) = (0x78, 0x03, 0x00, 4);
         assert!(t.read(&ram).is_trick());
     }
 
+    /// A ladder clip is done at its end point only once the last ladder is put away (the frame after arriving).
     #[test]
-    fn triggers_round_trip_by_name() {
-        for t in ClipTrigger::ALL {
-            assert_eq!(ClipTrigger::from_name(t.name()), Some(t));
-        }
-        assert_eq!(ClipTrigger::from_name("sword"), None);
+    fn a_ladder_clip_ends_with_the_ladder_put_away() {
+        let mut c = Controller::new(SkipTarget { direction: Direction::N, kind: SkipKind::Ladder, t: 0x7D, end: -40 });
+        c.phase = Phase::Crossing;
+        let at_end = SkipState { p: -40, o: 0, good: true, facing: true, ladder: true, raw: (0x55, 0, 0x80, 8) };
+        assert_eq!(c.decide(at_end), Decision::Input(Input::Release));
+        assert_eq!(c.decide(SkipState { ladder: false, ..at_end }), Decision::Done);
+        // Over the water at the relay (a grid point, the ladder out): on.
+        assert_eq!(c.decide(SkipState { p: -16, ..at_end }), Decision::Input(Input::Toward));
     }
 
     /// A level 1 room in play: floor inside the walls, 16-pixel squares with their top-left pixel at `squares`
@@ -812,5 +973,49 @@ mod tests {
             assert_eq!(target(&pocket_s, y, Direction::S), Some(0x7D), "pocket S, Y {y:#04x}");
         }
         assert_eq!(target(&[(0x80, 0x90)], 0x6D, Direction::S), None, "isolated square from above");
+    }
+
+    /// The ladder clip's reach (mechanics.md "Reach of one press"): up over exactly two squares of water with land
+    /// beyond (one square is the plain ladder's, three need a second press); left, right or down over two squares
+    /// (Link walks on after the relay) or three (a second ladder), with land beyond. Offered only with the ladder,
+    /// within 16 pixels of T, and its jumps start at every rest position of the zone.
+    #[test]
+    fn the_ladder_clip_crosses_two_or_three_squares_onto_land() {
+        let ladder = [(Var::StepLadder, 1)];
+        let room = |water: &[(usize, usize)]| dungeon_room_with(&[], water, None, 0x78, 0x8D, &ladder);
+        let reach = |water: &[(usize, usize)], across: i32, lay: i32, d: Direction| {
+            ladder_reach(room(water).room(), across, lay, d)
+        };
+        // Up from L = $85 (tile row 9 ahead): rows 6-9 water, row 5 land. Link ends at $55.
+        let two = [(0x78, 0x80), (0x78, 0x70)];
+        assert_eq!(reach(&two, 0x78, 0x85, Direction::N), Some((0x7D, -40, 2)));
+        assert_eq!(reach(&two[..1], 0x78, 0x85, Direction::N), None, "one square: the plain ladder");
+        assert_eq!(reach(&[(0x78, 0x80), (0x78, 0x70), (0x78, 0x60)], 0x78, 0x85, Direction::N), None, "three");
+        for y in [0x8D, 0x85, 0x89] {
+            let view = dungeon_room_with(&[], &two, None, 0x78, y, &ladder);
+            let t = skip_target(&view, Direction::N).expect("in the zone");
+            assert_eq!((t.kind, t.t, t.end), (SkipKind::Ladder, 0x7D, -40), "Y {y:#04x}");
+        }
+        assert!(skip_target(&dungeon_room_with(&[], &two, None, 0x78, 0x95, &ladder), Direction::N).is_none());
+        assert!(skip_target(&dungeon_room_with(&[], &two, None, 0x78, 0x8D, &[]), Direction::N).is_none(), "no ladder");
+        // Left from L = $60 on row Y $8D (tile row 11): two squares, then land: Link ends at $30.
+        let w2 = [(0x50, 0x90), (0x40, 0x90)];
+        assert_eq!(reach(&w2, 0x8D, 0x60, Direction::W), Some((0x50, -32, 1)));
+        let w3 = [(0x50, 0x90), (0x40, 0x90), (0x30, 0x90)];
+        assert_eq!(reach(&w3, 0x8D, 0x60, Direction::W), Some((0x50, -48, 2)));
+        let w4 = [(0x50, 0x90), (0x40, 0x90), (0x30, 0x90), (0x20, 0x90)];
+        assert_eq!(reach(&w4, 0x8D, 0x60, Direction::W), None, "four squares");
+        // The jumps: N from G', G and T to Link's tile at $55; W from L, G and T to his tile at $30 (on rows Y $85 and
+        // $8D, whose feet row is the water's; X $58 is no lay point: Link would stand half on the water).
+        let jumps = skip_jumps(room(&two).room());
+        let n: Vec<_> = jumps.iter().filter(|j| j.direction == Direction::N).map(|j| (j.from, j.to)).collect();
+        assert_eq!(n, [((15, 10), (15, 3)), ((15, 9), (15, 3)), ((15, 8), (15, 3))]);
+        let jumps = skip_jumps(room(&w2).room());
+        let w: Vec<_> = jumps.iter().filter(|j| j.direction == Direction::W).map(|j| (j.from, j.to)).collect();
+        assert_eq!(w.len(), 6, "{w:?}");
+        for want in [((12, 10), (6, 10)), ((11, 10), (6, 10)), ((10, 10), (6, 10)), ((12, 9), (6, 9))] {
+            assert!(w.contains(&want), "{want:?} in {w:?}");
+        }
+        assert!(skip_jumps(dungeon_room_with(&[], &two, None, 0x78, 0x8D, &[]).room()).is_empty(), "no ladder");
     }
 }

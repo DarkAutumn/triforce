@@ -930,22 +930,10 @@ impl PyGame {
         Ok(())
     }
 
-    /// How the policy reaches the grid-point skip (`zelda::clips`; a specialist's `clips.action`): `action` one of
-    /// `none`, `kind`, `long`, `edge`; `correct_exits` the directions (`'N'`, ...) the `edge` trigger leaves plain.
-    /// A `CLIP <dir>` action runs the skip whatever the trigger (the mask only offers it under `kind`).
-    #[pyo3(signature = (action, correct_exits=Vec::new()))]
-    fn set_clip_settings(&self, action: &str, correct_exits: Vec<String>) -> PyResult<()> {
-        let trigger = zelda::clips::ClipTrigger::from_name(action)
-            .ok_or_else(|| PyValueError::new_err(format!("unknown clips action {action:?}")))?;
-        let mut bits = 0;
-        for d in &correct_exits {
-            let direction = Direction::from_name(d)
-                .filter(|d| d.is_cardinal())
-                .ok_or_else(|| PyValueError::new_err(format!("unknown exit direction {d:?}")))?;
-            bits |= direction.value();
-        }
-        self.inner.lock().session.set_clip_settings(zelda::clips::ClipSettings::new(trigger, bits));
-        Ok(())
+    /// Offer the CLIP kind where a grid-point skip is available (`zelda::clips`; a specialist's `clips: true`). A
+    /// `CLIP <dir>` action runs the skip whatever this says (the mask only offers it when on).
+    fn set_clips(&self, enabled: bool) {
+        self.inner.lock().session.set_clips(enabled);
     }
 
     /// Whether the grid-point skip is available in `direction` now (`zelda::clips::skip_available`).

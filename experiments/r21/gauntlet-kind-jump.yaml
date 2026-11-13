@@ -10,7 +10,7 @@ obs: {objective: true, target: true}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: tenth}
 curriculum: {enabled: false}
-clips: {action: kind, shaping: jump}
+clips: true                     # ran as {action: kind, shaping: jump}, the design kept (docs/decisions.md 2026-11-12)
 route: clips-gauntlet            # target exit drawn per reset: from W, E or S; from E, W or S
 one_room: true
 max_steps: 600
