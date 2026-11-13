@@ -99,7 +99,7 @@ def test_compare_refuses_rows_measured_in_different_act_modes(tmp_path, capsys):
 
 def _evaluation(act):
     record = {'success': act == 'argmax', 'health': 3.0, 'start_health': 3.0, 'visits': []}
-    return {'format': 2, 'specialist': 'goriya', 'act': act, 'deterministic': act == 'argmax',
+    return {'format': 2, 'specialist': 'goriya', 'act': act,
             'records': [record] * 4}
 
 
@@ -130,7 +130,7 @@ def test_report_refuses_an_evaluation_in_the_other_act_mode(argmax_run, capsys):
     assert 'goriya' in capsys.readouterr().err and not (root / 'ys.json').exists()
     assert _report(root, '--allow-mode-mismatch') == 0
     row, = json.loads((root / 'ys.json').read_text())['specialists']
-    assert (row['act'], row['run_act'], row['deterministic']) == ('sample', 'argmax', False)
+    assert (row['act'], row['run_act']) == ('sample', 'argmax')
     assert '| goriya | sample (acts argmax) |' in capsys.readouterr().out
 
 
@@ -139,7 +139,7 @@ def test_report_reads_the_evaluation_in_the_run_act_mode(argmax_run, capsys):
     (run / 'eval-argmax.json').write_text(json.dumps(_evaluation('argmax')))
     assert _report(root) == 0
     row, = json.loads((root / 'ys.json').read_text())['specialists']
-    assert (row['act'], row['deterministic'], row['eval_file']) == ('argmax', True, 'eval-argmax.json')
+    assert (row['act'], row['eval_file']) == ('argmax', 'eval-argmax.json')
     assert row['success'][0] == 1.0 and '| goriya | argmax | 4 |' in capsys.readouterr().out
     assert _report(root, '--mode', 'sample') == 0
     row, = json.loads((root / 'ys.json').read_text())['specialists']

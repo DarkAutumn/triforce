@@ -9,8 +9,11 @@
 //! Determinism: one observation's outputs are a pure function of the weights and that observation (and noise),
 //! bit for bit, on the same binary (`kernels`). Python's torch forward agrees within float tolerance.
 
+pub mod act;
 pub mod kernels;
 pub mod noise;
+
+pub use act::{ActMode, Choose, Rule};
 
 use kernels::{argmax, axpy, dot, layer_norm, linear, masked_log_softmax, relu, tanh};
 use serde::Deserialize;
@@ -380,6 +383,20 @@ pub struct Scratch {
     logits: Vec<f32>,
     empty: Vec<bool>,
     masked: Vec<bool>,
+    /// [`Policy::act`]: the joint log-probs, the acting probabilities, their sort order and the joint noise.
+    joint: Vec<f32>,
+    acting: Vec<f64>,
+    order: Vec<usize>,
+    joint_noise: Vec<f32>,
+}
+
+/// What [`Policy::act`] adds to the [`Output`]: the log-prob of the chosen action under the distribution it was
+/// drawn from (the policy's for `sample`, the reshaped one for a rule; 0 for argmax) and that distribution's
+/// entropy over the joint actions (0 for argmax).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Acting {
+    pub log_prob: f32,
+    pub entropy: f32,
 }
 
 /// The network.
@@ -676,6 +693,10 @@ impl Policy {
             logits: vec![0.0; MAX_HEAD],
             empty: vec![false; self.slots],
             masked: vec![false; self.slots],
+            joint: vec![0.0; self.joint_size()],
+            acting: vec![0.0; self.joint_size()],
+            order: vec![0; self.joint_size()],
+            joint_noise: vec![0.0; self.joint_size()],
         }
     }
 
@@ -855,6 +876,13 @@ impl Policy {
     /// Evaluates one observation and picks an action (`model.py` `ZeldaPolicy.evaluate`).
     pub fn evaluate(&self, input: &Input, pick: Pick, s: &mut Scratch) -> Result<Output, PolicyError> {
         self.check(input)?;
+        self.check_pick(pick)?;
+        self.check_kinds(input)?;
+        let value = self.towers(input, s);
+        self.heads(input, pick, value, s)
+    }
+
+    fn check_pick(&self, pick: Pick) -> Result<(), PolicyError> {
         let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
         if let Pick::Given([k, d, u]) = pick
             && (k >= kinds || d >= dirs || u >= durs)
@@ -866,21 +894,36 @@ impl Policy {
         {
             return err(format!("noise has {} values, expected {}", noise.len(), kinds + dirs + durs));
         }
-        let kind_mask = &input.mask[..kinds];
-        if !kind_mask.iter().any(|&m| m) {
-            return err("empty kind mask");
+        Ok(())
+    }
+
+    /// The number of legal kinds (an error when none is).
+    fn check_kinds(&self, input: &Input) -> Result<usize, PolicyError> {
+        match input.mask[..self.kinds].iter().filter(|&&m| m).count() {
+            0 => err("empty kind mask"),
+            n => Ok(n),
         }
+    }
+
+    /// The trunk, the policy tower (into `s.tower_a`, which the heads read) and the value; returns the value.
+    fn towers(&self, input: &Input, s: &mut Scratch) -> f32 {
         self.features(input, s);
         self.policy_tower.apply(&s.features, &mut s.tower_a, &mut s.tower_b);
         self.value_tower.apply(&s.features, &mut s.value_a, &mut s.value_b);
         let mut value = [0f32];
         self.value_head.apply(&s.value_a, &mut value);
+        value[0]
+    }
 
+    /// The heads on `s.tower_a` ([`Policy::towers`]): the kind, then its direction and duration.
+    fn heads(&self, input: &Input, pick: Pick, value: f32, s: &mut Scratch) -> Result<Output, PolicyError> {
+        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        let kind_mask = &input.mask[..kinds];
         let mut out = Output {
             action: [0; 3],
             log_prob: 0.0,
             entropy: 0.0,
-            value: value[0],
+            value,
             head_log_probs: [[0.0; MAX_HEAD]; 3],
             head_applies: [false; 3],
             head_entropy: [0.0; 3],
@@ -945,12 +988,22 @@ impl Policy {
         s: &mut Scratch,
         dist: &mut [f32],
     ) -> Result<Output, PolicyError> {
-        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        self.check_distribution(dist)?;
+        let out = self.evaluate(input, pick, s)?;
+        self.distribution(input, s, dist);
+        Ok(out)
+    }
+
+    fn check_distribution(&self, dist: &[f32]) -> Result<(), PolicyError> {
         if dist.len() != self.distribution_size() {
             return err(format!("the distribution needs {} values, got {}", self.distribution_size(), dist.len()));
         }
-        let out = self.evaluate(input, pick, s)?;
-        // `s.tower_a` still holds the policy tower's output: the heads again, every kind's this time.
+        Ok(())
+    }
+
+    /// The factored distribution (`evaluate_with_distribution`) from `s.tower_a`: every kind's heads.
+    fn distribution(&self, input: &Input, s: &mut Scratch, dist: &mut [f32]) {
+        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
         let kind_mask = &input.mask[..kinds];
         let legal_kinds = kind_mask.iter().filter(|&&m| m).count();
         dist.fill(f32::NEG_INFINITY);
@@ -977,7 +1030,6 @@ impl Policy {
             let (lp, applies) = sub_log_probs(&s.logits[..durs], &input.mask[dur_at..dur_at + durs]);
             distribution_row(&mut dist[dur_at..dur_at + durs], &lp, &input.mask[dur_at..dur_at + durs], applies);
         }
-        Ok(out)
     }
 
     /// The log-prob of every joint action into `out` ([`Policy::joint_size`] values, [`Policy::joint_index`]
@@ -987,21 +1039,19 @@ impl Policy {
     /// value estimate.
     pub fn joint_log_probs(&self, input: &Input, s: &mut Scratch, out: &mut [f32]) -> Result<f32, PolicyError> {
         self.check(input)?;
-        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
         if out.len() != self.joint_size() {
             return err(format!("joint log-probs need {} values, got {}", self.joint_size(), out.len()));
         }
-        let kind_mask = &input.mask[..kinds];
-        let legal_kinds = kind_mask.iter().filter(|&&m| m).count();
-        if legal_kinds == 0 {
-            return err("empty kind mask");
-        }
-        self.features(input, s);
-        self.policy_tower.apply(&s.features, &mut s.tower_a, &mut s.tower_b);
-        self.value_tower.apply(&s.features, &mut s.value_a, &mut s.value_b);
-        let mut value = [0f32];
-        self.value_head.apply(&s.value_a, &mut value);
+        let legal_kinds = self.check_kinds(input)?;
+        let value = self.towers(input, s);
+        self.joint(input, legal_kinds, s, out)?;
+        finite_output(value, 0.0)
+    }
 
+    /// The joint log-probs (`joint_log_probs`) from `s.tower_a`.
+    fn joint(&self, input: &Input, legal_kinds: usize, s: &mut Scratch, out: &mut [f32]) -> Result<(), PolicyError> {
+        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        let kind_mask = &input.mask[..kinds];
         out.fill(f32::NEG_INFINITY);
         self.kind_head.apply(&s.tower_a, &mut s.logits);
         let mut kind_lp = [0f32; MAX_HEAD];
@@ -1042,7 +1092,90 @@ impl Policy {
         if out.iter().any(|v| v.is_nan()) {
             return err("non-finite policy output");
         }
-        finite_output(value[0], 0.0)
+        Ok(())
+    }
+
+    /// Acts on one observation as decision `step` of job `job` the way `choose` says (`act` module), with one
+    /// trunk pass: `Argmax` is `evaluate(Pick::Argmax)`; a plain draw is `evaluate(Pick::Sample(keyed_noise(job,
+    /// step)))`, bit for bit; a rule draws a joint action from the reshaped joint distribution with Gumbel noise
+    /// keyed by `act::joint_noise_key(job, step)` and scores it like `Pick::Given`. The [`Output`] is always the
+    /// unmodified policy's (its `log_prob` is the chosen action's under the policy); [`Acting`] describes the
+    /// distribution the action was drawn from. `given` (a replay) takes that action instead and scores it under
+    /// both (its acting log-prob is `-inf` where the rule removes it; 0 for argmax). `dist`, when given, gets the
+    /// factored distribution (`evaluate_with_distribution`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn act(
+        &self,
+        input: &Input,
+        choose: Choose,
+        job: i64,
+        step: i64,
+        given: Option<[usize; 3]>,
+        s: &mut Scratch,
+        dist: Option<&mut [f32]>,
+    ) -> Result<(Output, Acting), PolicyError> {
+        self.check(input)?;
+        if let Some(action) = given {
+            self.check_pick(Pick::Given(action))?;
+        }
+        if let Some(dist) = dist.as_deref() {
+            self.check_distribution(dist)?;
+        }
+        let legal_kinds = self.check_kinds(input)?;
+        let value = self.towers(input, s);
+        let mut joint = std::mem::take(&mut s.joint);
+        let joint_ok = self.joint(input, legal_kinds, s, &mut joint);
+        s.joint = joint;
+        joint_ok?;
+        let (out, acting) = match (choose, given) {
+            (Choose::Argmax, None) => (self.heads(input, Pick::Argmax, value, s)?, Acting::default()),
+            (Choose::Argmax, Some(action)) => (self.heads(input, Pick::Given(action), value, s)?, Acting::default()),
+            (Choose::Draw(rule), Some(action)) => {
+                let out = self.heads(input, Pick::Given(action), value, s)?;
+                let index = self.joint_index(action);
+                let acting = if rule.is_plain() {
+                    Acting {
+                        log_prob: out.log_prob,
+                        entropy: s.joint.iter().filter(|v| v.is_finite()).map(|&v| -v.exp() * v).sum(),
+                    }
+                } else {
+                    rule.probabilities(&s.joint, &mut s.acting, &mut s.order);
+                    Acting {
+                        log_prob: s.acting[index].ln() as f32,
+                        entropy: act::entropy(&s.acting) as f32,
+                    }
+                };
+                (out, acting)
+            }
+            (Choose::Draw(rule), None) if rule.is_plain() => {
+                let mut noise = [0f32; 3 * MAX_HEAD];
+                let noise = &mut noise[..self.noise_size()];
+                noise::keyed_noise(job, step, noise);
+                let out = self.heads(input, Pick::Sample(noise), value, s)?;
+                let entropy: f32 = s.joint.iter().filter(|v| v.is_finite()).map(|&v| -v.exp() * v).sum();
+                (
+                    out,
+                    Acting {
+                        log_prob: out.log_prob,
+                        entropy,
+                    },
+                )
+            }
+            (Choose::Draw(rule), None) => {
+                rule.probabilities(&s.joint, &mut s.acting, &mut s.order);
+                noise::gumbel(act::joint_noise_key(job, step), &mut s.joint_noise);
+                let index = Rule::draw(&s.acting, &s.joint_noise);
+                let acting = Acting {
+                    log_prob: s.acting[index].ln() as f32,
+                    entropy: act::entropy(&s.acting) as f32,
+                };
+                (self.heads(input, Pick::Given(self.joint_action(index)), value, s)?, acting)
+            }
+        };
+        if let Some(dist) = dist {
+            self.distribution(input, s, dist);
+        }
+        Ok((out, acting))
     }
 }
 

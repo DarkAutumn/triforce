@@ -11,6 +11,7 @@
 //! the episode ended in the room ([`VisitEnd`]).
 
 use crate::bombs::BombStats;
+use crate::decisions::{DecisionNote, DecisionStats};
 use crate::clips::ClipStats;
 use crate::change::Change;
 use crate::cheats::ItemCounts;
@@ -82,6 +83,8 @@ pub struct RoomVisit {
     pub boss_eats: u32,
     /// Skips completed and aborted ([`ClipStats`]).
     pub clips: ClipStats,
+    /// The decisions taken in the visit ([`crate::decisions`]; empty when the actor reported none).
+    pub decisions: DecisionStats,
     pub exit: &'static str,
 }
 
@@ -131,6 +134,9 @@ pub struct VisitStep<'a> {
     pub boss_eats: u32,
     /// The step's skip, if any (from the change).
     pub clips: ClipStats,
+    /// The decision that chose the step, when the actor reported it (set by the env; None from
+    /// [`VisitStep::of`]).
+    pub decision: Option<DecisionNote>,
 }
 
 impl VisitStep<'_> {
@@ -152,6 +158,7 @@ impl VisitStep<'_> {
                 clips.update(change);
                 clips
             },
+            decision: None,
         }
     }
 }
@@ -207,6 +214,9 @@ impl VisitTracker {
         visit.boss_stuns += step.boss_stuns;
         visit.boss_eats += step.boss_eats;
         visit.clips += step.clips;
+        visit
+            .decisions
+            .update(step.decision, step.health_lost > 0.0, end == VisitEnd::Ended(EXIT_DEATH));
         for &id in step.items_gained {
             if let Some(kind) = kind_index(id) {
                 visit.pickups[kind] += 1;
@@ -261,6 +271,7 @@ impl VisitTracker {
             boss_stuns: 0,
             boss_eats: 0,
             clips: ClipStats::default(),
+            decisions: DecisionStats::default(),
             exit: EXIT_OTHER,
         });
         self.floor.clone_from(&state.items);
@@ -322,6 +333,7 @@ mod tests {
             boss_stuns: 0,
             boss_eats: 0,
             clips: ClipStats::default(),
+            decision: None,
         }
     }
 

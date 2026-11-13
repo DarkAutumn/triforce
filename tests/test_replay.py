@@ -229,12 +229,12 @@ def test_runs_that_start_from_a_state_differ_by_the_random_numbers_drawn_for_the
     """What makes two argmax runs two games.  A start state's load redraws the game's random numbers from the run
     seed; a checkpoint is restored as it is unless asked (``randomize_rng``, the golden path's when its models
     don't all sample), and then the redraw is recorded as edits the stitched replay replays."""
-    runner = Runner(models_dir=scripted_models, max_steps=40, states_dir=states_dir, deterministic=True)
+    runner = Runner(models_dir=scripted_models, max_steps=40, states_dir=states_dir, act='argmax')
     route = Route.load('d2first', start_from=str(require_state(SEGMENT_STATE)), stop_step=SEGMENT_STOP_STEP)
     (_, first), (_, again), (_, other) = (record(runner, route, seed) for seed in (0, 0, 1))
     assert first.data == again.data, "the same seed is the same run"
     assert len(_rng_edits(first)) == 13 and _rng_edits(first) != _rng_edits(other)
-    assert all(model['deterministic'] for model in first.meta['models'])
+    assert all(model['act'] == 'argmax' for model in first.meta['models'])
 
     end = first.states()[-1]
     onward = Route.load('d2first', checkpoint=end)

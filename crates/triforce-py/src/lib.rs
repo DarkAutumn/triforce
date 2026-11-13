@@ -189,7 +189,7 @@ mod _native {
     #[pymodule_export]
     use crate::game::{PyChange, PyGame, PyGameState, PySnapshot, power_on_idle_states, power_on_name};
     #[pymodule_export]
-    use crate::policy::{PyPolicy, keyed_noise};
+    use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};
     #[pymodule_export]
     use crate::replay::{PyReplay, PyReplayPlayer, replay_stitch, replay_truncate, replay_verify};
     #[pymodule_export]

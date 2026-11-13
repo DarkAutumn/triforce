@@ -257,19 +257,20 @@ def test_same_seed_same_run(states_dir, models_dir):
 
 def test_runs_act_the_way_each_model_is_registered(states_dir, models_dir, tmp_path):
     """A run's ``act`` file (promote --act) makes that model act by argmax; the other models keep sampling, and
-    an explicit ``deterministic`` overrides every model."""
+    an explicit ``act`` overrides every model."""
     root = tmp_path / 'models'
     shutil.copytree(models_dir, root)
     registry.promote('ow-start', 'untrained', root=root, act='argmax')
     policies = Policies(root)
-    assert [name for name, argmax in zip(policies.names, policies.deterministic) if argmax] == ['ow-start']
+    assert [name for name, act in zip(policies.names, policies.acts) if act == 'argmax'] == ['ow-start']
+    assert set(policies.acts) == {'sample', 'argmax'}
 
-    def start_rooms(deterministic):
+    def start_rooms(act):
         """Each run's first room visit (the start room, ow-start's)."""
-        runner = Runner(models_dir=root, deterministic=deterministic, max_steps=30, parallel=2, states_dir=states_dir)
+        runner = Runner(models_dir=root, act=act, max_steps=30, parallel=2, states_dir=states_dir)
         return [r.to_dict()['rooms'][0] for r in runner.run_many(Route.load('d2first'), [3, 4])]
 
-    registered, argmax, sampled = start_rooms(None), start_rooms(True), start_rooms(False)
+    registered, argmax, sampled = start_rooms(None), start_rooms('argmax'), start_rooms('sample')
     assert all(room['specialist'] == 'ow-start' for room in registered)
     assert registered == argmax and registered != sampled
 
@@ -307,7 +308,7 @@ def test_a_chain_run_replays_its_actions_to_the_same_probabilities(states_dir, m
 
     def play(seeds, **kwargs):
         with runner.pool(route, seeds) as chain:
-            chain.pool.play(policies, deterministic=chain.deterministic, **kwargs)
+            chain.pool.play(policies, act=chain.acts, **kwargs)
             chain.pool.wait_idle()
             plays = {int(p['job']): p for p in chain.pool.poll_plays()}
             runs = {r.seed: r.to_dict() for _, r in chain.results(chain.poll_events())}

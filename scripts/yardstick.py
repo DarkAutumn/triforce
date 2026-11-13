@@ -211,7 +211,7 @@ def report(args) -> int:
             continue
         row = specialist_row(name, result, str(path))
         row.update(run=directory.name, eval_file=path.name, act=registry.eval_mode(result), run_act=expected,
-                   deterministic=result.get('deterministic'), checkpoint_sha1=result.get('checkpoint_sha1'))
+                   checkpoint_sha1=result.get('checkpoint_sha1'))
         specialists.append(row)
     if errors:
         raise YardstickError("no evaluation in the run's act mode (evaluate it, e.g. `python -m triforce.evaluate "
@@ -306,7 +306,7 @@ def main(argv=None) -> int:
     rep.add_argument('--run', default='promoted', help="every specialist's run id, or 'promoted'")
     rep.add_argument('--models-dir', default=None,
                      help="models root (default: $TRIFORCE_MODELS_DIR, else <repo>/models, like every other CLI)")
-    rep.add_argument('--mode', choices=registry.ACT_MODES, default=None,
+    rep.add_argument('--mode', type=registry.act_argument(allow_model=False), default=None,
                      help="report evaluations in this act mode (default: each run's own act mode)")
     rep.add_argument('--eval-name', default=None,
                      help="read this evaluation file in each run dir instead (it must be in the expected mode)")

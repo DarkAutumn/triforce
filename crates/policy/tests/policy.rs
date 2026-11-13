@@ -357,3 +357,61 @@ fn the_distribution_holds_every_joint_log_prob() {
     let v = [&o.history[..], &o.link[..]];
     assert!(p.evaluate_with_distribution(&input(&o, &v), Pick::Argmax, &mut s, &mut short).is_err());
 }
+
+/// `Policy::act`: argmax and a plain draw are `evaluate`'s, bit for bit; a rule draws only legal actions the rule
+/// keeps, scores them as `Pick::Given` does, and draws the same for the same (job, step).
+#[test]
+fn act_modes_follow_evaluate_and_their_rules() {
+    use policy::{ActMode, Choose};
+    let p = policy();
+    let mut o = obs(6);
+    // kind 0 illegal; kind 2: direction 1 illegal.
+    o.mask[0] = false;
+    o.mask[KINDS + 2 * DIRS + 1] = false;
+    let v = [&o.history[..], &o.link[..]];
+    let inp = input(&o, &v);
+    let mut s = p.scratch();
+    let mut joint = vec![0f32; p.joint_size()];
+    p.joint_log_probs(&inp, &mut s, &mut joint).unwrap();
+    let argmax = p.evaluate(&inp, Pick::Argmax, &mut s).unwrap();
+    let (out, acting) = p.act(&inp, Choose::Argmax, 1, 0, None, &mut s, None).unwrap();
+    assert_eq!(out, argmax);
+    assert_eq!((acting.log_prob, acting.entropy), (0.0, 0.0));
+    let entropy: f32 = joint.iter().filter(|v| v.is_finite()).map(|&v| -v.exp() * v).sum();
+    for step in 0..30 {
+        let mut noise = vec![0f32; p.noise_size()];
+        keyed_noise(9, step, &mut noise);
+        let sampled = p.evaluate(&inp, Pick::Sample(&noise), &mut s).unwrap();
+        let (out, acting) = p.act(&inp, ActMode::SAMPLE.choose(0), 9, step, None, &mut s, None).unwrap();
+        assert_eq!(out, sampled);
+        assert_eq!(acting.log_prob.to_bits(), out.log_prob.to_bits());
+        assert_eq!(acting.entropy.to_bits(), entropy.to_bits());
+    }
+    let mut dist = vec![0f32; p.distribution_size()];
+    for mode in ["floor:0.05", "temperature:0.5+minp:0.3", "topp:0.6", "escape:1+floor:0.1"] {
+        let mode: ActMode = mode.parse().unwrap();
+        let Choose::Draw(rule) = mode.choose(5) else { panic!("{mode} draws when stalled") };
+        let mut q = vec![0f64; p.joint_size()];
+        rule.probabilities(&joint, &mut q, &mut vec![0; p.joint_size()]);
+        let mut seen = vec![false; p.joint_size()];
+        for step in 0..200 {
+            let (out, acting) = p.act(&inp, mode.choose(5), 4, step, None, &mut s, Some(&mut dist)).unwrap();
+            let again = p.act(&inp, mode.choose(5), 4, step, None, &mut p.scratch(), None).unwrap();
+            assert_eq!((out, acting), again, "{mode} step {step}");
+            // Replaying the action scores it the same.
+            let scored = p.act(&inp, mode.choose(5), 4, step, Some(out.action), &mut s, None).unwrap();
+            assert_eq!(scored, (out, acting), "{mode} step {step} replayed");
+            let index = p.joint_index(out.action);
+            assert!(joint[index].is_finite() && q[index] > 0.0, "{mode} drew {:?}", out.action);
+            assert_eq!(out.log_prob.to_bits(), joint[index].to_bits());
+            assert!((acting.log_prob - q[index].ln() as f32).abs() < 1e-6);
+            seen[index] = true;
+        }
+        // Every kept action with a fair share turns up; nothing else does.
+        for (i, &kept) in q.iter().enumerate() {
+            if kept > 0.05 {
+                assert!(seen[i], "{mode}: joint action {i} (q {kept}) never drawn");
+            }
+        }
+    }
+}

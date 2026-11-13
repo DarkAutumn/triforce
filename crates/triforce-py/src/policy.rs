@@ -306,3 +306,41 @@ pub fn keyed_noise<'py>(
     }
     PyArray2::from_vec2(py, &rows).map_err(|e| PyValueError::new_err(e.to_string()))
 }
+
+/// An act mode spelling parsed (docs/rust-actor.md "Act modes"), a `ValueError` naming the problem otherwise.
+pub fn parse_act_mode(text: &str) -> PyResult<policy::ActMode> {
+    text.parse().map_err(PyValueError::new_err)
+}
+
+/// The canonical spelling of act mode `text` (`sample`, `argmax`, `temperature:T`, `floor:P`, `minp:R`, `topp:P`,
+/// `escape:N` and their `+` combinations); raises ValueError for anything else.
+#[pyfunction]
+pub fn act_mode(text: &str) -> PyResult<String> {
+    Ok(parse_act_mode(text)?.to_string())
+}
+
+/// The probabilities act mode `mode` draws from over joint log-probs `log_probs` (`-inf`: illegal), after `stall`
+/// decisions without progress: the rule's reshaped distribution, the policy's own for `sample`, one-hot at the
+/// first maximum for argmax (whose heads pick the kind first; a joint argmax can differ only on near ties).
+#[pyfunction]
+#[pyo3(signature = (mode, log_probs, stall=0))]
+pub fn act_probabilities<'py>(
+    py: Python<'py>,
+    mode: &str,
+    log_probs: Vec<f32>,
+    stall: u32,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    if !log_probs.iter().any(|v| v.is_finite()) {
+        return Err(PyValueError::new_err("no legal action"));
+    }
+    let n = log_probs.len();
+    let mut q = vec![0f64; n];
+    match parse_act_mode(mode)?.choose(stall) {
+        policy::Choose::Argmax => {
+            let best = (0..n).fold(0, |b, i| if log_probs[i] > log_probs[b] { i } else { b });
+            q[best] = 1.0;
+        }
+        policy::Choose::Draw(rule) => rule.probabilities(&log_probs, &mut q, &mut vec![0; n]),
+    }
+    Ok(PyArray1::from_vec(py, q))
+}

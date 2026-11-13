@@ -71,6 +71,53 @@ The learner recomputes `logp_old` and values with its own torch network over the
 6. **Search for training** (built; see "Search" below): inside training rollouts, at decision time, for a keyed
    share of decisions.
 
+## Act modes (round 23)
+
+How a policy picks its action outside training (`crates/policy/src/act.rs`, `Policy::act`; spelled the same
+everywhere: the `act` file, `--act` of `evaluate`, `eval-chain`, `run`, `eval-batch` (`--acts`), `r56_chains.sh`
+(`ACT=`), `play-zelda.py`, `zelda-headless.py`, `promote --act`, `train_round.py --eval-act`; `_native.act_mode`
+gives the canonical spelling). Training rollouts always sample from the unmodified policy (PPO needs it).
+
+The network is factored: p(kind) · p(direction | kind) · p(duration | kind), 8 × 8 × 4 = 256 joint actions
+(`joint_log_probs`). `sample` and `argmax` act per head, kind first, as before round 23 (bit for bit); every other
+rule reshapes the **joint** distribution, because "this action as a whole is unlikely" is a joint statement: a 20%
+kind with a 20% direction is a 4% action that no per-head threshold of 5% would remove, and a 3% direction of a
+90% kind is a 2.7% action a per-head rule would treat like a 3% one.
+
+| Spelling | Definition (q: the joint probabilities the action is drawn from) |
+|---|---|
+| `sample` | q = p, drawn per head (kind, then direction and duration given it) with `keyed_noise(job, step)` |
+| `argmax` | each head's most likely entry, kind first (no draw) |
+| `temperature:T` | q ∝ p^(1/T), T > 0 (T < 1 sharpens) |
+| `floor:P` | actions with q < P removed, the rest renormalised; the most probable action is never removed |
+| `minp:R` | actions with q < R · max q removed, renormalised (0 < R ≤ 1) |
+| `topp:P` | the fewest most probable actions whose q sum to at least P (ties: lower joint index first), renormalised |
+| `escape:N` | argmax while the env's linger count (decisions in a row without progress) is below N; from N on a draw by the other rules of the mode (plain `sample` without any) until progress resets the count |
+
+Rules combine with `+`, each at most once, applied in the table's order to the previous one's result
+(`temperature:0.7+floor:0.02`: sharpen, then drop what is under 2% of the sharpened distribution); `sample` and
+`argmax` stand alone. A rule's draw is Gumbel-argmax over the 256 joint actions with noise keyed by
+`act::joint_noise_key(job, step)` (`noise::gumbel`), so the reproducibility contract holds for every mode: the same
+seed plays the same actions on any env or thread, and a replay records inputs, so it verifies whatever the mode.
+Masks hold by construction (illegal joint actions have probability 0 and are never kept).
+
+**The stall signal of `escape`** is the env's linger count (`zelda::linger`, `LingerTracker::tail_steps`): steps
+since the last hit, kill, pickup, heal, room change or new best approach to the objective on a frozen wavefront,
+the same count the `no-room-progress` ending and the chain's stall check read. The pool asks the env for it
+before every decision (`PoolEnv::stall`; eval envs: the specialist env's tracker; chains: the acting room's). It was
+chosen over a repeated-state detector kept by the actor because it already defines "progress" for this project
+(walking in a loop or a moving monster can't reset it), it is per room visit, and it needs no state in the actor,
+which is shared by every env of a pool.
+
+**What a decision reports** (`pool::rollout::Decision`): `log_prob`/`entropy` stay the unmodified policy's (the
+chosen action's probability under the policy, whatever the mode); `act_log_prob`/`act_entropy` are the chosen
+action's log-prob under q and q's entropy over the joint actions (0 for argmax; `poll_plays` `act_log_prob`,
+`act_entropy`). Plays compute the joint distribution every decision for these (eight kinds' direction and duration
+heads: a few percent of a forward); training rollouts don't. A replay (`play(replay=...)`) scores the recorded
+action under `act` too. Every eval room visit and chain room record counts its decisions (`zelda::decisions`,
+`triforce/variety.py`): moves under 1% and 5% under the policy, those followed by a hit or death within 4
+decisions, the acting entropy and the actions themselves (for variety across runs).
+
 ## Tests (beyond each component's unit tests)
 
 - **Python ↔ Rust parity:** a fixed set of real observations (many rooms, masks with one/several legal kinds,

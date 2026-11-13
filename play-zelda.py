@@ -48,9 +48,10 @@ controller in the top right of every cell (over -LIFE-), the buttons held on eac
 The title shows the queues, the runs simulated and how they ended, how fast the cells play ("36 fps of 60.1
 max", ∞ when uncapped) and the sound.  --replays DIR also saves every simulated run.
 
-How the models act is chosen at startup: --act sample (the default: every model draws its action at random from
-its probabilities, so every run differs), --act argmax (every model takes its most likely action) or --act model
-(each model's registered act mode).  A run that doesn't sample is decided by the game's random numbers alone,
+How the models act is chosen at startup: --act MODE for every model (default registry.PLAY_ACT, which draws every
+action at random so every run differs; argmax takes each model's most likely action, a rule such as floor:0.03
+draws but never takes an action under 3%: docs/rust-actor.md "Act modes") or --act model (each model's registered
+act mode).  A run whose models don't all draw (argmax, escape) is decided by the game's random numbers alone,
 so those are redrawn from the run's seed whenever a start state is loaded (the game start, --from, and each
 checkpoint of a golden path); a run from console power on gets them from its idle delay instead, which must
 then be random.
@@ -108,11 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
                           f"taken (default {DEFAULT_PATIENCE}; 0: they run until every queue is full)")
     sim.add_argument('--first-seed', type=int, default=0, help="the first simulated run's seed (default 0)")
     sim.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or models/)")
-    sim.add_argument('--act', choices=('sample', 'argmax', 'model'), default='sample',
-                     help="sample: every model samples its actions (default: runs differ); argmax: every model's "
-                          "most likely action; model: each model's registered act mode.  Runs that don't "
-                          "sample differ by the game's random numbers, redrawn from each run's seed when its "
-                          "start state (or a golden path's checkpoint) is loaded")
+    sim.add_argument('--act', type=registry.act_argument(), default=registry.PLAY_ACT,
+                     help=f"the {registry.ACT_HELP} of every model (default {registry.PLAY_ACT}: runs differ), or "
+                          "model: each model's registered act mode.  Runs that don't draw every action differ by "
+                          "the game's random numbers, redrawn from each run's seed when its start state (or a "
+                          "golden path's checkpoint) is loaded")
     sim.add_argument('--from', dest='start_from', metavar='STATE',
                      help="start every run from this savestate instead of the game start, e.g. 2_7ds_0")
     add_power_on_arguments(sim)
@@ -168,9 +169,10 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
         args.stop = parse_stop(args.stop_at)
     except (RunnerError, ValueError) as error:
         parser.error(str(error))
-    if args.act == 'argmax' and args.power_on is not None and args.power_on['delay'] is not None:
-        parser.error("--act argmax with a fixed --delay plays the same game every time: nothing else is random "
-                     "from console power on (use --delay random, or leave --delay out)")
+    if (args.act != registry.MODEL_ACT and not registry.draws(args.act) and args.power_on is not None
+            and args.power_on['delay'] is not None):
+        parser.error(f"--act {args.act} with a fixed --delay can play the same game every time: nothing else is "
+                     "random from console power on (use --delay random, or leave --delay out)")
     registry.set_allow_incompatible(args.allow_incompatible_models)
     return args
 

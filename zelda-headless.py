@@ -15,9 +15,10 @@ running out of seeds (--max-runs) exits 1.  Files are OUT/<seed>-<ending>.tfrepl
 other, error): each replays bit for bit on the emulator alone (`tf replay info|verify FILE`,
 triforce._native.Replay / ReplayPlayer).
 
-The models sample their actions by default (every seed is a different game); --act model plays each model's
-registered act mode, --act argmax every model's most likely action (the runs then differ by the game's random
-numbers, redrawn from the seed when a start state or a golden path's checkpoint is loaded).  --power-on starts
+The models draw their actions by default (registry.PLAY_ACT: every seed is a different game); --act model plays
+each model's registered act mode, --act MODE any act mode (docs/rust-actor.md "Act modes"; with argmax the runs
+differ by the game's random numbers, redrawn from the seed when a start state or a golden path's checkpoint is
+loaded).  --power-on starts
 every run from console
 power on by controller inputs alone; the run's randomness is then --delay, the idle frames on the file-select
 screen (0..=32766, or random: drawn from each run's seed).
@@ -67,9 +68,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "2_7ds_0")
     add_power_on_arguments(parser)
     parser.add_argument('--stop-at', metavar='ROOM|step:N', help=STOP_AT_HELP)
-    parser.add_argument('--act', choices=('sample', 'argmax', 'model'), default='sample',
-                        help="sample: every model samples its actions (default: every seed differs); argmax: every "
-                             "model's most likely action; model: each model's registered act mode")
+    parser.add_argument('--act', type=registry.act_argument(), default=registry.PLAY_ACT,
+                        help=f"the {registry.ACT_HELP} of every model (default {registry.PLAY_ACT}: every seed "
+                             "differs), or model: each model's registered act mode")
     replay.add_arguments(parser, default_state='embed', replays=False)
     parser.add_argument('--golden', action='store_true',
                         help="play the golden path: games race from checkpoint to checkpoint (each triforce), and "
@@ -113,9 +114,10 @@ def parse_args(argv=None) -> argparse.Namespace:
         args.stop = parse_stop(args.stop_at)
     except (RunnerError, ValueError) as error:
         parser.error(str(error))
-    if args.golden and args.act == 'argmax' and args.power_on is not None and args.power_on['delay'] is not None:
-        parser.error("--golden --act argmax with a fixed --delay: every game of the first leg would be the same "
-                     "(use --delay random, or --act sample)")
+    if (args.golden and args.act != registry.MODEL_ACT and not registry.draws(args.act)
+            and args.power_on is not None and args.power_on['delay'] is not None):
+        parser.error(f"--golden --act {args.act} with a fixed --delay: every game of the first leg would be the "
+                     f"same (use --delay random, or --act {registry.PLAY_ACT})")
     return args
 
 
@@ -165,7 +167,7 @@ def play_golden(args, runner: Runner, folder: replay.ReplayDir) -> int:
         first_seed = args.first_seed + index * segments * args.attempts
         data, summary = golden.golden_path(
             runner.policies, args.route, args.parallel, first_seed, record, start_from=args.start_from,
-            power_on=args.power_on, attempts=args.attempts, deterministic=runner.deterministic,
+            power_on=args.power_on, attempts=args.attempts, act=runner.act,
             max_steps=runner.max_steps,
             on_segment=lambda segment: print(f"segment {json.dumps(segment)}", file=sys.stderr, flush=True))
         runs += sum(segment['runs_played'] for segment in summary['segments'])
@@ -184,7 +186,7 @@ def main(argv=None) -> int:
     args = parse_args(argv)
     registry.set_allow_incompatible(args.allow_incompatible_models)
     try:
-        runner = Runner(models_dir=args.models_dir, deterministic=registry.act_override(args.act),
+        runner = Runner(models_dir=args.models_dir, act=registry.act_override(args.act),
                         parallel=args.parallel)
         folder = replay.ReplayDir(args.out, only=None if args.only is None else [args.only])
         if args.golden:

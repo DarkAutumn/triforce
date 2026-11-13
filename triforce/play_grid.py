@@ -149,7 +149,7 @@ class FileSource:
 
 class GoldenSource:
     """Golden paths made one after another on a thread, while fewer than ``capacity`` are waiting.  ``kwargs``:
-    ``golden.golden_path``'s (``start_from``, ``power_on``, ``attempts``, ``states_dir``, ``deterministic``,
+    ``golden.golden_path``'s (``start_from``, ``power_on``, ``attempts``, ``states_dir``, ``act``,
     ``max_steps``)."""
     # pylint: disable=too-many-instance-attributes
 
@@ -244,14 +244,14 @@ class ReplayGrid:
     """Plays replays in ``cells`` cells (module doc).  ``source``: one of ``SOURCES``, or ignored with ``path``
     (a replay file or a directory of them).  The simulations play ``route`` (``stop_at``: a room, ``stop_step``,
     ``start_from``, ``power_on``: ``Route.load``'s) on ``parallel`` games with the promoted models of
-    ``models_dir`` acting as ``act`` says (``sample``, ``argmax``, ``model``).  ``replays``: a folder every
+    ``models_dir`` acting as ``act`` says (an act mode, default ``registry.PLAY_ACT``, or ``model``).  ``replays``: a folder every
     simulated run is also saved into; ``streams``, ``state`` and
     ``keyframe_frames``: ``replay.record_options``'s.  ``controller``: draw the controller into every frame."""
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, cells: int, fps: float, source: str = 'best', *, path=None, models_dir=None, states_dir=None,
                  route: str = ROUTE, parallel: int = 8, capacity: int = DEFAULT_CAPACITY,
-                 patience: int = DEFAULT_PATIENCE, golden_capacity: Optional[int] = None, act: str = 'sample',
+                 patience: int = DEFAULT_PATIENCE, golden_capacity: Optional[int] = None, act: str = registry.PLAY_ACT,
                  power_on: Optional[dict] = None, start_from: Optional[str] = None, stop_at=None,
                  stop_step: Optional[int] = None, stall_steps: Optional[int] = None, first_seed: int = 0,
                  attempts: int = golden.DEFAULT_ATTEMPTS, replays=None, streams=(), state: str = 'embed',
@@ -266,7 +266,7 @@ class ReplayGrid:
         self.states_dir = states_dir
         self.route, self.parallel, self.capacity, self.patience = route, parallel, capacity, patience
         self.golden_capacity = max(2, cells) if golden_capacity is None else golden_capacity
-        self.deterministic = registry.act_override(act)
+        self.act = registry.act_override(act)
         self.begin = {'power_on': power_on, 'start_from': start_from}      # where a simulated run starts
         self.stop_at, self.stop_step = stop_at, stop_step
         self.stall_steps, self.first_seed, self.attempts = stall_steps, first_seed, attempts
@@ -473,10 +473,10 @@ class ReplayGrid:
             route = Route.load(self.route, self.stop_at, states_dir=self.states_dir, stop_step=self.stop_step,
                                **self.begin)
             if source in QUEUES:
-                record = replay.record_options(chain_meta(policies, self.deterministic, route), **self.record)
+                record = replay.record_options(chain_meta(policies, self.act, route), **self.record)
                 seeds = range(self.first_seed, self.first_seed + SEEDS)
                 self._pool = ChainPool(route, seeds, policies, num_envs=self.parallel, threads=self.parallel,
-                                       deterministic=self.deterministic, states_dir=self.states_dir,
+                                       act=self.act, states_dir=self.states_dir,
                                        stall_steps=self.stall_steps, record=record)
                 self._pool.play()
                 self._feed = _native.ReplayFeed(self._pool.pool, capacity=self.capacity, candidates=self.parallel,
@@ -484,11 +484,11 @@ class ReplayGrid:
                                                 save_dir=None if self.replays is None else str(self.replays))
             else:
                 whole = Route.load(self.route, states_dir=self.states_dir, **self.begin)
-                record = replay.record_options(chain_meta(policies, self.deterministic, whole, golden=True),
+                record = replay.record_options(chain_meta(policies, self.act, whole, golden=True),
                                                **self.record)
                 self._golden = GoldenSource(policies, self.route, self.parallel, record, self.golden_capacity,
                                             self.first_seed, attempts=self.attempts, states_dir=self.states_dir,
-                                            deterministic=self.deterministic,
+                                            act=self.act,
                                             **self.begin)
         except Exception as error:  # pylint: disable=broad-exception-caught
             self._failed[source] = f"{type(error).__name__}: {error}"

@@ -633,7 +633,7 @@ def test_golden_paths_are_made_while_fewer_than_capacity_wait(scripted_models, s
     """The scripted segment as a one-leg golden path: paths are made until `capacity` wait, and again once one is
     taken."""
     policies = Policies(scripted_models)
-    record = replay.record_options(chain_meta(policies, False, Route.load('d2first'), golden=True))
+    record = replay.record_options(chain_meta(policies, 'sample', Route.load('d2first'), golden=True))
     source = GoldenSource(policies, 'd2first', 2, record, capacity=2, first_seed=100, attempts=4,
                           start_from=str(require_state(SEGMENT_STATE)), stops=[SEGMENT_STOP_STEP],
                           states_dir=states_dir)
@@ -684,7 +684,7 @@ def test_the_grid_switches_to_golden_paths_and_back(scripted_models, states_dir,
         (route, parallel, capacity, first_seed, kwargs, marked), = built
         assert (route, parallel, capacity, first_seed, marked) == ('d2first', 2, 2, 0, True)
         # Golden paths act as the queues' runs do (here argmax: their checkpoints redraw the random numbers).
-        assert (kwargs['attempts'], kwargs['deterministic'], kwargs['power_on']) == (7, True, None)
+        assert (kwargs['attempts'], kwargs['act'], kwargs['power_on']) == (7, 'argmax', None)
         assert kwargs['start_from'] == str(require_state(SEGMENT_STATE))
         stats = grid.stats()
         assert stats['feed'] is None and stats['golden']['ready'] == 1, "the queues' simulations never started"

@@ -19,7 +19,7 @@ use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::reward_track::RewardTrack;
 use crate::rewards::Scored;
-use crate::specialist_env::linger_json;
+use crate::specialist_env::{decisions_json, linger_json};
 use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
 use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
+use zelda::decisions::{DecisionNote, DecisionStats};
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::GameMap;
@@ -322,6 +323,8 @@ pub struct RoomRecord {
     pub boss_eats: u32,
     /// Grid-point skips completed and aborted during the visit (`zelda::clips`; JSON `clip_<field>`).
     pub clips: ClipStats,
+    /// The decisions taken in the visit (`zelda::decisions`; JSON `decisions`, `specialist_env::decisions_json`).
+    pub decisions: DecisionStats,
 }
 
 impl RoomRecord {
@@ -363,6 +366,7 @@ impl RoomRecord {
             boss_stuns: 0,
             boss_eats: 0,
             clips: ClipStats::default(),
+            decisions: DecisionStats::default(),
         }
     }
 
@@ -384,6 +388,7 @@ impl RoomRecord {
             "linger": self.linger.as_ref().map_or_else(|| json!({}), linger_json),
             "blocks": self.blocks, "no_damage_max": self.no_damage_max, "bombs_used": self.bombs_used,
             "boss_stuns": self.boss_stuns, "boss_eats": self.boss_eats,
+            "decisions": decisions_json(&self.decisions),
         });
         let o = m.as_object_mut().expect("object");
         for item in CheatItem::ALL {
@@ -522,6 +527,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     scored: Option<Scored>,
     /// The name and delay the current run booted with (a power-on start).
     booted: Option<(String, u32)>,
+    /// The decision that chooses the next step, for the room record ([`ChainEnv::note_decision`]).
+    decision: Option<DecisionNote>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
@@ -559,6 +566,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             track: None,
             scored: None,
             booted: None,
+            decision: None,
         }
     }
 
@@ -596,6 +604,16 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// The stall budget is set and the acting room has gone `stall_steps` actions without damage either way.
     pub fn stalled(&self) -> bool {
         self.stall_steps.is_some_and(|n| self.no_damage >= n)
+    }
+
+    /// The decision that chooses the next step (the pool's actor), counted in the room record's `decisions`.
+    pub fn note_decision(&mut self, note: DecisionNote) {
+        self.decision = Some(note);
+    }
+
+    /// Actions in a row without progress in the acting room (its linger count, `zelda::linger`).
+    pub fn quiet_steps(&self) -> u32 {
+        self.linger.tail_steps()
     }
 
     /// Cheated items used so far this run.
@@ -777,6 +795,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.track = None;
         self.scored = None;
         self.booted = None;
+        self.decision = None;
         let (started, granted) = match self.route.start.clone() {
             RunStart::State => (self.start_from_state(rng), None),
             RunStart::PowerOn { name, delay, max_delay } => {
@@ -871,6 +890,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             self.no_damage += 1;
         }
         record.no_damage_max = record.no_damage_max.max(self.no_damage);
+        record
+            .decisions
+            .update(self.decision.take(), change.health_lost > 0.0, state.game_over());
         result.steps += 1;
         result.frames += (change.frames + change.menu_frames) as u64;
         self.objective = Some(objective);

@@ -1,7 +1,7 @@
 """Evaluate one specialist on its own rooms: N episodes from every seed start state.
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
-        [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--act model|sample|argmax]
+        [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--act model|MODE]
         [--output PATH] [--replays DIR [--streams LIST] [--keyframe-frames N] [--state embed|path]]
         [--events JSONL] [--nice N]
 
@@ -10,14 +10,15 @@ isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_s
 ``--episodes-per-state`` times in a native ``EvalTask`` pool of ``--parallel`` envs (same rewards, end conditions
 and RAM randomization as training), episode ``i`` seeded with ``seed + i``.  The network acts inside the pool
 (``EnvPool.play`` with its Rust copy, docs/rust-actor.md) the way the run acts (``--act model``, the default: its
-registry act mode, ``registry.act_mode``) or as told (``sample`` / ``argmax``); sampling uses Gumbel noise keyed to
-(episode seed, decision), so an episode plays the same whichever env or thread runs it.
+registry act mode, ``registry.act_mode``) or as told (an act mode spelling: ``sample``, ``argmax``, ``floor:0.03``,
+...; docs/rust-actor.md "Act modes"); every draw uses Gumbel noise keyed to (episode seed, decision), so an episode
+plays the same whichever env or thread runs it.
 ``--replays`` records every episode as a replay file (``triforce.replay``).  The checkpoint defaults to the
 specialist's promoted model; records are sorted by seed.  The result goes to ``<checkpoint dir>/eval.json`` only
 for the canonical evaluation (the run's own act mode, ``--episodes-per-state 100``, ``--seed 0``, and the
 specialist the checkpoint was trained for); otherwise to ``eval[-<specialist>][-<act>][-e<N>][-s<seed>].json``,
 each part only where it differs (``default_output``).  Writes are atomic (``write_result``).  Every result names
-what produced it: ``act`` (``sample``/``argmax``) and ``deterministic``, ``checkpoint_sha1`` (of ``ckpt.pt``),
+what produced it: ``act`` (the canonical act mode), ``checkpoint_sha1`` (of ``ckpt.pt``),
 ``model_hash`` (the Rust network's), ``config`` (the specialist config as JSON), ``code`` and ``data``
 (``replay.code_version``/``data_hash``).  ``read_evaluation`` finds a run's evaluation in a given act mode.
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization);
@@ -77,6 +78,7 @@ from .metrics import heart_change_total
 from .provenance import code_version, data_hash, models_header
 from .replay import ReplayDir
 from .specialist import SpecialistConfig, load_specialist
+from .variety import VISIT_RISK_KEYS, decisions_of, risk, sequence, variety
 
 
 FORMAT = 2
@@ -91,13 +93,13 @@ def _room_key(room) -> str:
     return f"{level}:0x{location:02x}" + (":cave" if in_cave else "")
 
 
-def _play(pool, policy, deterministic: bool, total: int, on_episode: Optional[Callable[[dict, int, int], None]],
+def _play(pool, policy, act: str, total: int, on_episode: Optional[Callable[[dict, int, int], None]],
           replays: Optional[ReplayDir], distributions: bool) -> list[dict]:
     """Lets the eval pool play until every job ran; returns the records in completion order.  ``replays``: the
     folder every episode's recording (a ``replay`` event) is written to."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     records = []
-    pool.play([policy], deterministic=deterministic, distributions=distributions)
+    pool.play([policy], act=act, distributions=distributions)
     while True:
         idle = pool.wait_idle(timeout=0.1)
         for event in pool.poll_events():
@@ -192,8 +194,16 @@ def _group(records: list[dict], key) -> dict:
                    **_clip_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items)),
                    # how the unsuccessful episodes ended, e.g. {'death': 4}
-                   'failures': dict(Counter(r['ending'] for r in items if not r['success']))}
+                   'failures': dict(Counter(r['ending'] for r in items if not r['success'])),
+                   'risk': _risk(items),
+                   'variety': variety([sequence(r.get('visits') or ()) for r in items],
+                                      [r['frames'] for r in items if 'frames' in r])}
             for name, items in sorted(groups.items())}
+
+
+def _risk(records: list[dict]) -> dict:
+    """``variety.risk`` per episode over the records' visits."""
+    return risk(([decisions_of(visit) for visit in record.get('visits') or ()] for record in records), 'episode')
 
 
 def _room_visit_stats(visits: list[dict]) -> dict:
@@ -233,6 +243,10 @@ def _room_visit_stats(visits: list[dict]) -> dict:
         'drops_per_visit': items('drops'),
         'pickups_per_visit': items('pickups'),
         'exits': dict(Counter(visit['exit'] for visit in visits)),
+        **{key: value for key, value in risk(([decisions_of(visit)] for visit in visits), 'visit').items()
+           if key in VISIT_RISK_KEYS},
+        'variety': variety([sequence([visit]) for visit in visits],
+                           [visit['frames'] for visit in visits if 'frames' in visit]),
     }
 
 
@@ -250,14 +264,14 @@ def _visited_rooms(records: list[dict], specialist: str) -> dict:
 
 
 def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 100,
-                        parallel: int = 1, seed: int = 0, deterministic: Optional[bool] = None,
+                        parallel: int = 1, seed: int = 0, act: Optional[str] = None,
                         on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
                         threads: Optional[int] = None, states_dir=None, events=None, replays=None,
                         streams=(), state: str = 'embed',
                         keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES) -> dict:
     """Plays every seed start state `episodes_per_state` times on `parallel` envs and returns the summary dict
     (see module doc).  ``on_episode(record, done, total)`` is called as each episode finishes (completion order).
-    ``deterministic``: argmax (True) or sampling (False); None follows the run's act mode (``registry.act_mode``).
+    ``act``: an act mode spelling; None follows the run's act mode (``registry.act_mode``).
     ``threads``: the pool's worker threads (default min(parallel, cores)); ``states_dir``: where start states
     resolve (default the states directory); ``events``: an ``EventLog`` that
     gets ``eval_start`` and ``eval_progress`` (at most once a second) for the training GUI (the caller emits
@@ -275,23 +289,22 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
 
     registry.require_compatible(checkpoint)
     policy = registry.load_model(checkpoint)[0].to_native()
-    if deterministic is None:
-        deterministic = registry.act_mode(checkpoint) == 'argmax'
+    act = registry.act_mode(checkpoint) if act is None else registry.parse_act(act)
     checkpoint_sha1 = registry.checkpoint_sha1(checkpoint)
     record = None
     if replays is not None:
-        models = models_header([config.name], [policy], {config.name: str(checkpoint)}, [deterministic])
+        models = models_header([config.name], [policy], {config.name: str(checkpoint)}, [act])
         record = replay.record_options(replay.meta('eval', models, specialist=config.name), streams, state,
                                        keyframe_frames)
         replays = ReplayDir(replays)
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
     if events is not None:
         events.emit('eval_start', checkpoint=str(checkpoint), episodes_per_state=episodes_per_state,
-                    episodes=len(jobs), parallel=parallel, deterministic=deterministic)
+                    episodes=len(jobs), parallel=parallel, act=act)
         on_episode = _progress_events(events, on_episode)
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed,
                          record=record) as pool:
-        records = _play(pool, policy, deterministic, len(jobs), on_episode, replays,
+        records = _play(pool, policy, act, len(jobs), on_episode, replays,
                         bool(record and record['decisions']))
     records.sort(key=lambda r: r['seed'])
 
@@ -300,7 +313,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     return {
         'format': FORMAT,
         'specialist': config.name, 'checkpoint': str(checkpoint), 'episodes_per_state': episodes_per_state,
-        'seed': seed, 'deterministic': deterministic, 'act': 'argmax' if deterministic else 'sample',
+        'seed': seed, 'act': act,
         'checkpoint_sha1': checkpoint_sha1, 'model_hash': f'{policy.hash:016x}',
         'config': json.loads(config.to_json()), 'version': __version__, 'code': code_version(),
         'data': data_hash(),
@@ -322,6 +335,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),
         'endings': dict(Counter(r['ending'] for r in records)),
+        'risk': _risk(records),
         'by_room': _group(records, lambda r: _room_key(r['room'])),
         'by_state': _group(records, lambda r: r['start_state']),
         'by_state_target': _group(records, lambda r: f"{r['start_state']}:{r.get('target', '-')}"),
@@ -349,16 +363,16 @@ def write_result(result: dict, path) -> Path:
 def default_output(checkpoint, specialist: str, act: str, episodes_per_state: int, seed: int) -> Path:
     """Where an evaluation goes by default: ``<run dir>/eval.json`` for the canonical one, else
     ``eval[-<specialist>][-<act>][-e<N>][-s<seed>].json`` with each part only where it differs from canonical:
-    ``specialist`` other than the checkpoint's, ``act`` (``model|sample|argmax``) other than the run's act mode,
+    ``specialist`` other than the checkpoint's, ``act`` (``model`` or an act mode, canonical spelling) other than
+    the run's act mode,
     episodes per state other than 100, seed other than 0."""
     path = Path(checkpoint)
     path = path / registry.CHECKPOINT_NAME if path.is_dir() else path
     parts = ['eval']
     if registry.load_checkpoint(path, check_schema=False).get('specialist') != specialist:
         parts.append(specialist)
-    if act not in registry.ACT_CHOICES:
-        raise ValueError(f"act {act!r} is not one of {registry.ACT_CHOICES}")
-    if act != 'model' and act != registry.act_mode(path):
+    act = registry.parse_act(act, allow_model=True)
+    if act != registry.MODEL_ACT and act != registry.act_mode(path):
         parts.append(act)
     if episodes_per_state != DEFAULT_EPISODES_PER_STATE:
         parts.append(f'e{episodes_per_state}')
@@ -373,9 +387,7 @@ def read_evaluation(run_dir, mode: Optional[str] = None) -> tuple[Path, dict]:
     ``eval-<mode>.json`` under the same checks.  Raises LookupError naming what it found otherwise."""
     path = Path(run_dir)
     checkpoint = path / registry.CHECKPOINT_NAME if path.is_dir() else path
-    mode = registry.act_mode(checkpoint) if mode is None else mode
-    if mode not in registry.ACT_MODES:
-        raise ValueError(f"act mode {mode!r} is not one of {registry.ACT_MODES}")
+    mode = registry.act_mode(checkpoint) if mode is None else registry.parse_act(mode)
     sha1 = registry.checkpoint_sha1(checkpoint)
     found = []
     for name in ('eval.json', f'eval-{mode}.json'):
@@ -424,7 +436,7 @@ def eval_event(result: dict) -> dict:
                             for name, stats in result[group].items() if 'linger_max_steps' in stats}
         for group in ('by_room', 'by_state')}
     return {'success_rate': result['success_rate'], 'episodes': result['episodes'],
-            'deterministic': result['deterministic'],
+            'act': result['act'],
             'health': result['mean_health_fraction'], 'start_health': result['mean_start_health_fraction'],
             'health_change': result['mean_health_change'], 'health_change_total': result['mean_health_change_total'],
             'hearts_dropped': result['hearts_dropped'], 'hearts_taken': result['hearts_taken'],
@@ -444,12 +456,26 @@ def format_report(result: dict) -> str:
              f"health change {result['mean_health_change']:+.2f} (total {result['mean_health_change_total']:+.2f}) "
              f"hearts  dropped/taken/left {_fmt_hearts(result)}  steps {result['mean_steps']:.0f}"
              f"{_fmt_linger(result)}"]
+    if result.get('risk'):
+        lines.append('  ' + _fmt_risk(result['risk'], result['by_state']))
     for room, stats in sorted(result['by_room'].items(), key=lambda item: (item[1]['success_rate'], item[0])):
         top = max(stats['endings'].items(), key=lambda item: item[1])[0]
         lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['health_change']:+5.2f} "
                      f"({stats['health_change_total']:+5.2f}) hearts  {_fmt_hearts(stats)}  "
                      f"{stats['episodes']:4}  {top}{_fmt_linger(stats)}")
     return '\n'.join(lines)
+
+
+def _fmt_risk(stats: dict, by_state: dict) -> str:
+    """Low-probability moves per episode (and the share followed by a hit / death), the acting entropy and the
+    mean distinct-sequence share over the start states."""
+    def rate(value):
+        return '-' if value is None else f"{value:.0%}"
+    rates = [s['variety']['distinct_rate'] for s in by_state.values() if 'distinct_rate' in s.get('variety', {})]
+    distinct = f"  distinct {sum(rates) / len(rates):.0%}" if rates else ''
+    return (f"moves <1% {stats['low1_per_episode']:.2f}/ep (hit {rate(stats['low1_hit_rate'])}, death "
+            f"{rate(stats['low1_death_rate'])})  <5% {stats['low5_per_episode']:.2f}/ep (hit "
+            f"{rate(stats['low5_hit_rate'])})  acting entropy {stats['act_entropy_per_decision'] or 0:.2f}{distinct}")
 
 
 def _fmt_hearts(stats: dict) -> str:
@@ -476,8 +502,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
     parser.add_argument('--seed', type=int, default=DEFAULT_SEED)
-    parser.add_argument('--act', choices=registry.ACT_CHOICES, default='model',
-                        help="model: the run's act mode (registry); sample / argmax: act that way")
+    parser.add_argument('--act', type=registry.act_argument(), default=registry.MODEL_ACT,
+                        help=f"model: the run's act mode (registry); else the {registry.ACT_HELP}")
     parser.add_argument('--output', default=None,
                         help="JSON output (default: <checkpoint dir>/eval.json for the canonical evaluation, else "
                              "eval[-<specialist>][-<act>][-e<N>][-s<seed>].json)")

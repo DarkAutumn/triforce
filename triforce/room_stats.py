@@ -57,6 +57,7 @@ from typing import Optional
 from . import __version__, registry
 from .events import write_json_atomic
 from .paths import ROOT
+from .variety import VISIT_RISK_KEYS, decisions_of, risk, variety
 
 FORMAT = 1
 CHAINS_DIR = ROOT / 'target' / 'r56-chains'
@@ -189,6 +190,8 @@ class _Visits:
         self.specialists = Counter()
         self.sums = Counter()
         self.clips = False
+        self.decisions: list[Optional[dict]] = []
+        self.frame_list: list[int] = []
 
     def add(self, run: int, record: dict):
         self.visits += 1
@@ -207,6 +210,8 @@ class _Visits:
         if 'clip_done' in record:
             self.clips = True
             self.sums['clips'] += record['clip_done'] or 0
+        self.decisions.append(decisions_of(record))
+        self.frame_list.append(record.get('frames') or 0)
 
     def entry(self, runs: int) -> dict:
         entered, ended = len(self.entered), sum(self.endings.values())
@@ -235,6 +240,8 @@ class _Visits:
             'wrong_exits': self.outcomes['exit-wrong'],
             'outcomes': dict(self.outcomes),
             'specialists': dict(self.specialists),
+            'risk': risk(([d] for d in self.decisions), 'visit'),
+            'variety': variety([d['actions'] if d else None for d in self.decisions], self.frame_list),
         }
 
 
@@ -246,8 +253,10 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
     cut = state_step(plan, scope.cut) if scope.cut else None
     rooms, steps = defaultdict(_Visits), defaultdict(_Visits)
     arrived, endings, off_route = 0, Counter(), 0
+    per_run = []
     for index, run in enumerate(runs):
         visits, reached, ended = cut_run(plan, run, start, cut)
+        per_run.append([decisions_of(record) for record, _ in visits])
         arrived += reached
         for record, step in visits:
             key = room_key(*_location(record))
@@ -274,7 +283,7 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
     return {'name': scope.name, 'kind': scope.kind, 'label': scope.label, 'runs': count, 'arrived': arrived,
             'arrival_rate': _round(arrived / count) if count else None, 'endings': dict(endings),
             'off_route_visits': off_route, 'start': scope.start, 'start_step': start, 'cut': scope.cut,
-            'cut_step': cut, 'rooms': entries}
+            'cut_step': cut, 'risk': risk(per_run, 'run'), 'rooms': entries}
 
 
 def read_chain(path: Path) -> tuple[list[dict], dict]:
@@ -331,7 +340,7 @@ def mean_keys() -> tuple[str, ...]:
     return ('steps_per_visit', 'health_lost_per_visit', 'health_gained_per_visit', 'health_change_per_visit',
             'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit', 'bombs_used_per_visit',
             *(f'cheated_{item}_per_visit' for item in CHEAT_ITEMS), 'boss_stuns_per_visit', 'boss_eats_per_visit',
-            *(f'clip_{stat}_per_visit' for stat in CLIP_STATS))
+            *(f'clip_{stat}_per_visit' for stat in CLIP_STATS), *VISIT_RISK_KEYS)
 
 
 def merge_room_stats(entries: list[tuple[str, dict]]) -> dict:
@@ -436,6 +445,8 @@ def eval_entry(merged: dict) -> dict:
         'outcomes': dict(exits),
         'specialists': dict(merged.get('specialists') or []),
         'steps': None,
+        'risk': {key: _round(merged.get(key)) for key in VISIT_RISK_KEYS if merged.get(key) is not None},
+        'variety': None,
     }
 
 

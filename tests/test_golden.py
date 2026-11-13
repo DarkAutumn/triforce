@@ -3,7 +3,7 @@ replay."""
 
 import pytest
 
-from triforce import _native, golden, replay
+from triforce import _native, golden, registry, replay
 from triforce.runner import Policies, Route, Runner, RunnerError, chain_meta
 
 from .conftest import SEGMENT_START_STEP, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state
@@ -11,7 +11,7 @@ from .conftest import SEGMENT_START_STEP, SEGMENT_STATE, SEGMENT_STOP_STEP, requ
 
 def options(policies, route_name='d2first'):
     """Record options of golden-path runs played by ``policies`` (sampling)."""
-    return replay.record_options(chain_meta(policies, False, Route.load(route_name)))
+    return replay.record_options(chain_meta(policies, 'sample', Route.load(route_name)))
 
 
 def test_checkpoints_follow_the_route_triforces():
@@ -81,6 +81,14 @@ def test_no_playable_run_is_an_error_not_a_path(states_dir, tmp_path):
         golden.golden_path(policies, 'd2first', 2, 0, options(policies), stops=[])
 
 
+class FakePolicies:
+    """A stand-in ``Policies``: two models, one registered to sample and one to act by argmax."""
+
+    @staticmethod
+    def modes(act=None):
+        return ['sample', 'argmax'] if act is None else [registry.parse_act(act)] * 2
+
+
 class FakePool:
     """A stand-in ``ChainPool`` serving canned events: every seed's run and recording in the first poll."""
     scripts: list = []          # per pool built: {seed: (result dict, recording bytes)}
@@ -144,7 +152,7 @@ def test_the_fastest_winner_of_a_poll_becomes_the_next_checkpoint(stitchable, mo
         {21: ({**won, 'frames': 700}, second)},
     ]
     monkeypatch.setattr(golden, 'ChainPool', FakePool)
-    data, summary = golden.golden_path(object(), 'd2first', 4, 0, {'record': True},
+    data, summary = golden.golden_path(FakePolicies(), 'd2first', 4, 0, {'record': True},
                                        start_from=str(require_state(SEGMENT_STATE)),
                                        stops=[SEGMENT_STOP_STEP, None], attempts=20, threads=3)
     assert data == _native.replay_stitch(first, second)
@@ -156,18 +164,18 @@ def test_the_fastest_winner_of_a_poll_becomes_the_next_checkpoint(stitchable, mo
     end = _native.Replay(first).states()[-1]
     assert route_b.checkpoint == {'state': end['state'], 'step': SEGMENT_STOP_STEP, 'granted': end['granted'],
                                   'randomize_rng': False}
-    assert (kwargs_a['num_envs'], kwargs_a['threads'], kwargs_a['deterministic'], kwargs_a['record']) == (
-        4, 3, False, {'record': True})
+    assert (kwargs_a['num_envs'], kwargs_a['threads'], kwargs_a['act'], kwargs_a['record']) == (
+        4, 3, registry.PLAY_ACT, {'record': True})
 
-    # Unless every model samples, the games of the next segment would be one game: their random numbers are
-    # redrawn at the checkpoint.
-    for deterministic in (True, None):
+    # Unless every model draws its actions, the games of the next segment could be one game: their random numbers
+    # are redrawn at the checkpoint.
+    for act, redraw in (('argmax', True), ('escape:8', True), (None, True), ('floor:0.05', False)):
         FakePool.built = []
-        golden.golden_path(object(), 'd2first', 4, 0, {}, start_from=str(require_state(SEGMENT_STATE)),
-                           stops=[SEGMENT_STOP_STEP, None], attempts=20, deterministic=deterministic)
+        golden.golden_path(FakePolicies(), 'd2first', 4, 0, {}, start_from=str(require_state(SEGMENT_STATE)),
+                           stops=[SEGMENT_STOP_STEP, None], attempts=20, act=act)
         (_, _, kwargs_a), (route_b, _, kwargs_b) = FakePool.built
-        assert route_b.checkpoint['randomize_rng'] is True
-        assert kwargs_a['deterministic'] is kwargs_b['deterministic'] is deterministic
+        assert route_b.checkpoint['randomize_rng'] is redraw, act
+        assert kwargs_a['act'] == kwargs_b['act'] == act
 
 
 def test_a_segment_without_a_win_keeps_the_run_that_got_furthest(stitchable, monkeypatch):
@@ -182,7 +190,7 @@ def test_a_segment_without_a_win_keeps_the_run_that_got_furthest(stitchable, mon
     }]
     del FakePool.scripts[0][8]      # a run that never played has a result and no recording
     monkeypatch.setattr(golden, 'ChainPool', FakePool)
-    data, summary = golden.golden_path(object(), 'd2first', 2, 0, {}, start_from=str(require_state(SEGMENT_STATE)),
+    data, summary = golden.golden_path(FakePolicies(), 'd2first', 2, 0, {}, start_from=str(require_state(SEGMENT_STATE)),
                                        stops=[SEGMENT_STOP_STEP, None], attempts=5)
     assert data == first and len(FakePool.built) == 1, "the path ends with the lost segment"
     assert summary['result'] == 'failure' and [s['seed'] for s in summary['segments']] == [6]

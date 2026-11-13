@@ -2,8 +2,8 @@
 
     triforce eval-batch NAME [--chains TAG [--act sample] [--runs 120] [--segments SPEC] [--chains-dir DIR]
                                            [--chain-args ARGS] [--no-report | --report-only]]
-                             [--families all|a,b,c [--acts model[,sample,argmax]] [--run-id ID]
-                                           [--episodes-per-state N] [--seed S]]
+                             [--families all|a,b,c [--acts model[,MODE...]] [--run-id ID]
+                                           [--episodes-per-state N] [--seed S] [--output-dir DIR]]
                              [--chain '[ENTRY:] EVAL-CHAIN ARGS' ...] [--evaluate '[ENTRY:] EVALUATE ARGS' ...]
                              [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--redo]
                              [--logs-dir DIR] [--models-dir DIR] [--allow-incompatible-models]
@@ -22,8 +22,10 @@ A batch is a named list of evaluations, in command-line order:
   console output in ``<TAG>-<segment>.log``, then the report (``scripts/yardstick.py report`` into
   ``<TAG>-yardstick.json`` and ``triforce room-stats TAG``) as the batch's last entry.
 - ``--families all|a,b,c``: the evaluation of each family's promoted run (``--run-id``: that run) in each of
-  ``--acts`` (default ``model``: the run's own act mode, the canonical ``eval.json``); ``all`` = every specialist
-  with a promoted run (or that run), in route order.
+  ``--acts`` (default ``model``: the run's own act mode, the canonical ``eval.json``; else act mode spellings,
+  docs/rust-actor.md "Act modes"); ``all`` = every specialist with a promoted run (or that run), in route order.
+  ``--output-dir DIR`` writes each result to ``DIR/<specialist>-<act>.json`` instead of the run dir (a models
+  directory that must stay untouched).
 
 Each evaluation runs as its own process (``python -m triforce.cli eval-chain`` / ``python -m triforce.evaluate``
 with ``--events <batch folder>/<entry>.jsonl``), its console output in ``<entry>.log`` (or the chain segment's own
@@ -143,7 +145,8 @@ def chain_headline(summary: dict, runs: Optional[list[dict]] = None, target: Opt
 def eval_headline(event: dict) -> dict:
     """An evaluation entry's plan/end fields from its ``eval`` event (``evaluate.eval_event`` fields)."""
     return {'eval_success_rate': event.get('success_rate'), 'eval_episodes': event.get('episodes'),
-            'eval_act': ('argmax' if event['deterministic'] else 'sample') if 'deterministic' in event else None,
+            'eval_act': event.get('act', ('argmax' if event['deterministic'] else 'sample')
+                                  if 'deterministic' in event else None),
             'eval_health': event.get('health'), 'eval_health_change': event.get('health_change'),
             'eval_health_change_total': event.get('health_change_total'),
             'eval_hearts_dropped': event.get('hearts_dropped'), 'eval_hearts_taken': event.get('hearts_taken'),
@@ -468,7 +471,8 @@ def family_names(families: str, run_id: Optional[str], models_dir: Optional[str]
 
 
 def families_entries(families: str, options: Options, *, acts: list[str], run_id: Optional[str],
-                     episodes_per_state: Optional[int], seed: Optional[int]) -> list[Entry]:
+                     episodes_per_state: Optional[int], seed: Optional[int],
+                     output_dir: Optional[Path] = None) -> list[Entry]:
     """One evaluation per family and act mode."""
     names = family_names(families, run_id, options.models_dir)
     if not names:
@@ -478,7 +482,8 @@ def families_entries(families: str, options: Options, *, acts: list[str], run_id
         for act in acts:
             args = ['--specialist', name, '--act', act, *(['--run-id', run_id] if run_id else []),
                     *(['--episodes-per-state', str(episodes_per_state)] if episodes_per_state else []),
-                    *(['--seed', str(seed)] if seed is not None else [])]
+                    *(['--seed', str(seed)] if seed is not None else []),
+                    *(['--output', str(output_dir / f"{name}-{act}.json")] if output_dir is not None else [])]
             entries.append(eval_entry(name if acts == ['model'] else f"{name}-{act}", args, options))
     return entries
 
@@ -713,6 +718,7 @@ class _Ordered(argparse.Action):
 
 def build_parser() -> argparse.ArgumentParser:
     """The command line."""
+    from . import registry  # pylint: disable=import-outside-toplevel
     parser = argparse.ArgumentParser(prog='triforce eval-batch', description=__doc__.split('\n\n')[0],
                                      formatter_class=argparse.RawDescriptionHelpFormatter,
                                      epilog=__doc__.split('\n\n', 1)[1])
@@ -723,8 +729,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--families', action=_Ordered, metavar='all|a,b,c',
                         help="the evaluation of each family's promoted run (or --run-id)")
     chains = parser.add_argument_group('--chains')
-    chains.add_argument('--act', choices=('model', 'sample', 'argmax'), default='sample',
-                        help="act mode of the segments (default sample, as r56_chains.sh)")
+    chains.add_argument('--act', type=registry.act_argument(), default='sample',
+                        help="act mode of the segments (model or an act mode; default sample, as r56_chains.sh)")
     chains.add_argument('--runs', type=int, default=120, help="runs per segment (seeds 0..N-1)")
     chains.add_argument('--segments', default=SEGMENTS, help="NAME:START ... (START a state or 'start')")
     chains.add_argument('--chains-dir', type=Path, default=None, help="default <repo>/target/r56-chains")
@@ -732,10 +738,12 @@ def build_parser() -> argparse.ArgumentParser:
     chains.add_argument('--no-report', action='store_true', help="the segments only")
     chains.add_argument('--report-only', action='store_true', help="only the report (of the outputs that exist)")
     families = parser.add_argument_group('--families')
-    families.add_argument('--acts', default='model', help="comma-separated act modes: model, sample, argmax")
+    families.add_argument('--acts', default='model', help=f"comma-separated: model or an {registry.ACT_HELP}")
     families.add_argument('--run-id', default=None, help="evaluate this run of every family instead of the promoted")
     families.add_argument('--episodes-per-state', type=int, default=None, help="default evaluate's (100)")
     families.add_argument('--seed', type=int, default=None, help="default evaluate's (0)")
+    families.add_argument('--output-dir', type=Path, default=None,
+                          help="write each evaluation to DIR/<specialist>-<act>.json, not into the run dir")
     parser.add_argument('--parallel', type=int, default=os.cpu_count() or 1,
                         help="core budget; a chain's envs unless its ARGS set --parallel (default every core)")
     parser.add_argument('--eval-parallel', type=int, default=4,
@@ -754,7 +762,7 @@ def build_parser() -> argparse.ArgumentParser:
 def build_entries(args) -> list[Entry]:
     """The batch's entries in command-line order; raises BatchError (or argparse's SystemExit) when one is wrong."""
     # pylint: disable=import-outside-toplevel
-    from .registry import ACT_CHOICES
+    from . import registry
     from .room_stats import CHAINS_DIR
     options = Options(args.name, args.parallel, args.eval_parallel, args.models_dir, args.redo)
     entries = []
@@ -769,12 +777,18 @@ def build_entries(args) -> list[Entry]:
                                       chain_args=shlex.split(args.chain_args), report=not args.no_report,
                                       only_report=args.report_only)
         else:
-            acts = [act for act in args.acts.split(',') if act]
-            wrong = [act for act in acts if act not in ACT_CHOICES]
-            if wrong or not acts:
-                raise BatchError(f"--acts {args.acts}: each must be one of {', '.join(ACT_CHOICES)}")
+            try:
+                acts = [registry.parse_act(act, allow_model=True) for act in args.acts.split(',') if act]
+            except ValueError as error:
+                raise BatchError(f"--acts {args.acts}: {error}") from None
+            if not acts:
+                raise BatchError(f"--acts {args.acts}: no act mode")
+            output_dir = None if args.output_dir is None else args.output_dir.resolve()
+            if output_dir is not None:
+                output_dir.mkdir(parents=True, exist_ok=True)
             entries += families_entries(value, options, acts=acts, run_id=args.run_id,
-                                        episodes_per_state=args.episodes_per_state, seed=args.seed)
+                                        episodes_per_state=args.episodes_per_state, seed=args.seed,
+                                        output_dir=output_dir)
     if not entries:
         raise BatchError("nothing to run: give --chains, --families, --chain or --evaluate")
     return entries
