@@ -107,7 +107,7 @@ the direction; the standing invitation is to come up with ideas, test them, keep
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.3.2.0`). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.4.0.0`). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
