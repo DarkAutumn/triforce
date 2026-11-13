@@ -378,6 +378,23 @@ impl ItemsConfig {
         self.kinds_off(self.bombs.allows(map, state, reserve))
     }
 
+    /// What BOMB is kept to in `state` (round 22, 4:0x21's bomb waste): in a `requires_bombs` room where the mode is
+    /// `required`, only bombs landing in reach of what the objective leaves through (`zelda::objectives::
+    /// route_bomb_targets`: the intact route bomb wall, 0x2c's and 0x67's rock walls; none while it fights first);
+    /// not when the next kill arms a forced drop (any bomb kill pays itself back).  None: no limit (other modes and
+    /// rooms; `free` families bomb where they like).
+    pub fn bomb_targets(
+        &self,
+        map: &zelda::GameMap,
+        state: &zelda::GameView,
+        objective: Option<&zelda::objectives::Objective>,
+    ) -> Option<Vec<zelda::bombs::BombTarget>> {
+        let limited = self.bombs == BombUse::Required
+            && map.requires_bombs(state.full_location())
+            && !state.next_kill_arms_drop();
+        limited.then(|| objective.map_or_else(Vec::new, |o| zelda::objectives::route_bomb_targets(map, state, o)))
+    }
+
     /// Action kinds masked out whatever the state (`bombs: never`, `boomerang: false`, `arrows: false`).
     pub fn fixed_disabled_kinds(&self) -> Vec<ActionKind> {
         self.kinds_off(self.bombs != BombUse::Never)

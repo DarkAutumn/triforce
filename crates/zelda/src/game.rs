@@ -568,11 +568,13 @@ impl GameView {
         })
     }
 
-    /// An overworld room's game.yaml `bomb_secret` rock wall is still closed (no cave mouth in the room's tiles):
-    /// a bomb target, as an intact dungeon bomb wall is.
+    /// An overworld room's game.yaml `bomb_secret` rock wall is still closed: a bomb target, as an intact dungeon bomb
+    /// wall is.  The room's flag $80 (secret found, set by asm:Secret_RevealAndFlagTileObj on the blast) is clear and
+    /// its tiles show no cave mouth (a bombed wall leaves black tiles $24, not the mouth tile).
     pub fn ow_bomb_secret_closed(&self) -> bool {
         self.level() == 0
             && !self.in_cave()
+            && self.ram[crate::room_entry::ROOM_FLAGS_OW as usize + usize::from(self.location() & 0x7F)] & 0x80 == 0
             && self.room().cave_tile.is_none()
             && self.map.get(self.full_location()).is_some_and(|r| r.bomb_secret.is_some())
     }

@@ -250,7 +250,7 @@ const STEP_KEYS: [&str; 11] = [
 const STEP_ENTRIES: [&str; 6] = ["start", "N", "S", "E", "W", "cave"];
 /// `maze` ([`MAZE_EXIT`]) parses so `from_yaml` can say why a route may not take it.
 const STEP_EXITS: [&str; 8] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT];
-const WAYPOINTS: [&str; 4] = ["heart", "bow", "raft", "ladder"];
+const WAYPOINTS: [&str; 5] = ["heart", "rupees", "bow", "raft", "ladder"];
 const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];
 
 impl GameRoom {
@@ -1405,10 +1405,19 @@ mod tests {
         let map = GameMap::builtin();
         let tagged: Vec<_> = map.rooms().values().filter(|r| r.requires_bombs).map(|r| r.location).collect();
         // Dungeon 3's bombed E wall into the boss room and Manhandla (Lee, Nov 9); Dungeon 4's two bomb walls on the
-        // way to Gleeok (Lee, Nov 11).
+        // way to Gleeok (Lee, Nov 11); 0x67's rock wall (the secret rupees) and Dungeon 3's 0x5b E wall (round 22).
         assert_eq!(
             tagged,
-            vec![loc(0, 0x2c), loc(2, 0x0e), loc(3, 0x4c), loc(3, 0x4d), loc(4, 0x11), loc(4, 0x21)]
+            vec![
+                loc(0, 0x2c),
+                loc(0, 0x67),
+                loc(2, 0x0e),
+                loc(3, 0x4c),
+                loc(3, 0x4d),
+                loc(3, 0x5b),
+                loc(4, 0x11),
+                loc(4, 0x21)
+            ]
         );
         assert!(!map.requires_bombs(loc(9, 0x7f)));
         let room = map.get(loc(0, 0x2c)).unwrap();
@@ -1417,6 +1426,11 @@ mod tests {
         let cave = map.get(L::new(0, 0x2c, true)).unwrap();
         assert_eq!((cave.treasure.as_deref(), cave.treasure_tile), (Some("heart-container"), Some((19, 11))));
         assert_eq!(map.get(START).unwrap().bomb_secret, None);
+        let room = map.get(loc(0, 0x67)).unwrap();
+        assert_eq!(room.bomb_secret, Some((14, 2)));
+        assert_eq!(room.exits["cave"].destination, L::new(0, 0x67, true));
+        let cave = map.get(L::new(0, 0x67, true)).unwrap();
+        assert_eq!((cave.treasure.as_deref(), cave.treasure_tile), (Some("30-rupees"), None));
     }
 
     /// `requires_rupees: N` parses as a byte (no room sets it yet); an unknown or untagged room needs none.
@@ -1476,6 +1490,7 @@ mod tests {
             [
                 (L::new(0, 0x2c, true), "heart"),
                 (L::new(1, 0x7f, true), "bow"),
+                (L::new(0, 0x67, true), "rupees"),
                 (L::new(3, 0x0f, true), "raft"),
                 (L::new(4, 0x60, true), "ladder")
             ]
@@ -1499,14 +1514,15 @@ mod tests {
                 (loc(3, 0x5b), "S", TreasureRule::Skip),
                 (loc(3, 0x69), "N", TreasureRule::Skip),
                 (loc(3, 0x69), "cave", TreasureRule::Skip),
-                (loc(3, 0x5b), "W", TreasureRule::IfBombsBelow(5)),
+                (loc(3, 0x5b), "W", TreasureRule::IfBombsBelow(6)),
             ]
         );
         let reserves: Vec<_> = steps.iter().filter_map(|s| Some((s.location(), s.bomb_reserve?))).collect();
         assert_eq!(
             reserves,
-            [(L::new(3, 0x7c, false), 5), (L::new(4, 0x71, false), 2)],
-            "Dungeon 3 keeps 5 bombs from its entrance, Dungeon 4 2 (its two bomb walls)"
+            [(L::new(3, 0x7c, false), 6), (L::new(4, 0x71, false), 2)],
+            "Dungeon 3 keeps 6 bombs from its entrance (round 22: two walls and a spare each, two for Manhandla), \
+             Dungeon 4 2 (its two bomb walls)"
         );
     }
 
@@ -1690,8 +1706,8 @@ mod tests {
         assert!(with_key == set(&[loc(1, 0x63)]) && !without.contains(&loc(1, 0x63)));
     }
 
-    /// Only the route's rooms (the bow detour included), the alternate and 4:0x20 (off the route since round 21's
-    /// shortcut, still tagged `vire` so a chain that leaves 0x21's island W has a model) have a specialist; the
+    /// Only the route's rooms (the bow detour included), the alternate and the rooms that left the route in round 22
+    /// (0x56, 0x57 and 3:0x4b, still tagged so a chain that strays into them has a model) have a specialist; the
     /// experiment route `clips-gauntlet` (round 21) crosses rooms of the default route only.
     #[test]
     fn only_route_rooms_are_tagged() {
@@ -1701,7 +1717,9 @@ mod tests {
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
-        assert_eq!(tagged, route);
+        let strays: BTreeSet<L> = [loc(0, 0x56), loc(0, 0x57), loc(3, 0x4b)].into();
+        assert!(route.is_disjoint(&strays));
+        assert_eq!(tagged, route.union(&strays).copied().collect());
         // Beyond the route's own rooms: only the alternate (4:0x20 is on the D4 stretch's plain way since round 22).
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         let beyond: Vec<L> = route.difference(&default).copied().collect();
@@ -2004,17 +2022,21 @@ mod tests {
             rooms
         };
         let to_ladder = ["N", "N", "W", "N", "N", "E", "E", "cave", "N", "W"];
-        let clips = walk(&[&to_ladder[..], &["N", "N", "E", "E", "N"]].concat());
-        assert_eq!(clips, [0x71, 0x61, 0x51, 0x50, 0x40, 0x30, 0x31, 0x32, 0x60, 0x32, 0x31, 0x21, 0x11, 0x12, 0x13, 0x03]);
-        let plain = walk(&[&to_ladder[..], &["W", "N", "E", "N", "E", "E", "N"]].concat());
+        // Round 22: from the rupee room N into the Keese room 0x01 (its key), E into 0x02, S into 0x12.
+        let clips = walk(&[&to_ladder[..], &["N", "N", "N", "E", "S", "E", "N"]].concat());
+        assert_eq!(
+            clips,
+            [0x71, 0x61, 0x51, 0x50, 0x40, 0x30, 0x31, 0x32, 0x60, 0x32, 0x31, 0x21, 0x11, 0x01, 0x02, 0x12, 0x13, 0x03]
+        );
+        let plain = walk(&[&to_ladder[..], &["W", "N", "E", "N", "N", "E", "S", "E", "N"]].concat());
         assert_eq!(plain[10..15], [0x31, 0x30, 0x20, 0x21, 0x11]);
         for (on, rooms) in [(true, clips), (false, plain)] {
             let steps: Vec<u8> = map.way_steps(DEFAULT_ROUTE, on).filter(|(_, s)| s.level == 4).map(|(_, s)| s.room).collect();
             assert_eq!(steps, rooms, "clips {on}");
         }
         let stretches = &map.stretches[DEFAULT_ROUTE];
-        assert_eq!(stretches.len(), 1);
-        let s = &stretches[0];
+        assert_eq!(stretches.len(), 2);
+        let s = &stretches[1];
         let steps = &map.routes[DEFAULT_ROUTE];
         assert_eq!((s.name.as_str(), s.clips.len(), s.plain.len(), s.plain.end), ("d4-island", 2, 4, s.rejoin));
         assert_eq!((steps[s.clips.start].room, steps[s.plain.start].room, steps[s.rejoin].room), (0x31, 0x31, 0x11));
@@ -2031,6 +2053,7 @@ mod tests {
         assert!(room(0x30).exits["E"].locked && room(0x31).exits["N"].locked && room(0x21).exits["S"].locked);
         assert_eq!((room(0x21).bomb_walls.as_slice(), room(0x21).requires_bombs), (&["N".to_owned()][..], true));
         assert_eq!(room(0x11).bomb_walls, ["N", "E", "S", "W"]);
+        assert_eq!((room(0x01).treasure.as_deref(), room(0x01).bomb_walls.as_slice()), (Some("key"), &["S".to_owned()][..]));
         assert!(room(0x11).requires_bombs && room(0x11).enemies.is_empty());
         assert_eq!(room(0x12).push_block_opens, Some(Direction::E));
         assert_eq!(map.get(loc(3, 0x3b)).unwrap().push_block_opens, Some(Direction::N));
@@ -2047,7 +2070,7 @@ mod tests {
     fn stretches_parse_and_check_their_claims() {
         let map = GameMap::builtin();
         let steps = &map.routes[DEFAULT_ROUTE];
-        let s = &map.stretches[DEFAULT_ROUTE][0];
+        let s = &map.stretches[DEFAULT_ROUTE][1];
         assert_eq!(stretches_of(steps), map.stretches[DEFAULT_ROUTE]);
         assert!(s.clips.clone().all(|i| steps[i].way == Some(Way::Clips) && steps[i].stretch.as_deref() == Some("d4-island")));
         assert!(s.plain.clone().all(|i| steps[i].way == Some(Way::Plain)));

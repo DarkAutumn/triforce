@@ -80,6 +80,9 @@ pub struct Session<N: Nes> {
     /// Wraps (W/E) the objective says not to offer: their landing leaves the room only through an exit the
     /// objective doesn't count (`crate::objectives::wraps_into_wrong_exits`; the env sets it every step).
     vetoed_wraps: Vec<Direction>,
+    /// BOMB only where it lands in reach of one of these (round 22: a `required` family in a `requires_bombs` room,
+    /// `crate::objectives::route_bomb_targets`); None: wherever the game places it.  The env sets it every step.
+    bomb_targets: Option<Vec<crate::bombs::BombTarget>>,
     /// The skip a CLIP of this room left cut short ([`OpenClip`]), until a MOVE finishes it (`Change::
     /// clip_finished_by_move`), Link leaves the room or another CLIP starts.
     open_clip: Option<OpenClip>,
@@ -106,6 +109,7 @@ impl<N: Nes> Session<N> {
             clips: false,
             clips_allowed: true,
             vetoed_wraps: Vec::new(),
+            bomb_targets: None,
             open_clip: None,
             look_ahead: LookAhead::All,
             stash: None,
@@ -237,6 +241,16 @@ impl<N: Nes> Session<N> {
             return;
         }
         self.vetoed_wraps = directions.to_vec();
+        self.refresh_mask();
+    }
+
+    /// The bomb targets BOMB is kept to (None lifts the limit: the `bomb_targets` field's rule); the mask is
+    /// recomputed when they change.
+    pub fn set_bomb_targets(&mut self, targets: Option<&[crate::bombs::BombTarget]>) {
+        if self.bomb_targets.as_deref() == targets {
+            return;
+        }
+        self.bomb_targets = targets.map(<[_]>::to_vec);
         self.refresh_mask();
     }
 
@@ -474,6 +488,14 @@ impl<N: Nes> Session<N> {
         }
         for &kind in &self.disabled_kinds {
             mask.disallow_kind(kind);
+        }
+        if let Some(targets) = &self.bomb_targets {
+            for d in mask.directions(ActionKind::Bomb) {
+                let opens = crate::bombs::landing(state, d).is_some_and(|at| targets.iter().any(|t| t.in_reach(at)));
+                if !opens {
+                    mask.disallow(ActionKind::Bomb, d);
+                }
+            }
         }
         mask
     }

@@ -810,7 +810,8 @@ fn triforce_pickup_is_success_in_the_triforce_room() {
 
 /// Lee, Nov 11: BOMB by the family's mode, in 1:0x44 (no `requires_bombs` room; no reserve in Dungeon 1) with 4
 /// bombs: `free` allows it, `tenth` only on the 10th damage-free kill (`$50` = 9), `never` not even then; and in
-/// Dungeon 3 (reserve 5, 3:0x5b) `free` only above the reserve.  The observation's `bomb_usable` says the same.
+/// Dungeon 3 (reserve 6 since round 22, 3:0x59) `free` only above the reserve.  The observation's `bomb_usable` says
+/// the same.
 #[test]
 fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
     let Some(mut nes) = open_core() else { return };
@@ -823,9 +824,9 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 0, false),
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 9, true),
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Never, 4, 9, false),
-        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 5, 0, false),
-        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 6, 0, true),
-        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 1, 9, true),
+        ("darknut", "3_59e_0", "MOVE W 16", BombUse::Free, 6, 0, false),
+        ("darknut", "3_59e_0", "MOVE W 16", BombUse::Free, 7, 0, true),
+        ("darknut", "3_59e_0", "MOVE W 16", BombUse::Free, 1, 9, true),
     ];
     for (family, start, walk, mode, bombs, help, legal) in cases {
         let mut env = make_env(nes, family, Some(start), |c| {
@@ -2134,14 +2135,14 @@ fn target_direction_is_a_legal_move() {
     }
 }
 
-/// F016: bombs are legal only in a family's `requires_bombs` rooms: trap-room in 3:0x5a has none, at 3:0x4c's wall
+/// F016: bombs are legal only in a family's `requires_bombs` rooms: trap-room in 3:0x5a has none, at 4:0x11's N wall
 /// it does; ow-tektite in 0:0x1a has none, at 0x2c's rock wall it does.
 #[test]
 fn bombs_only_in_requires_bombs_rooms() {
     let Some(mut nes) = open_core() else { return };
     for (specialist, name, legal) in [
         ("trap-room", "3_5ae_0", false),
-        ("trap-room", "3_4cw_0", true),
+        ("trap-room", "4_11s_0", true),
         ("ow-tektite", "0_1an_0", false),
         ("ow-tektite", "0_2ce_0", true),
     ] {
@@ -2171,6 +2172,47 @@ fn bombs_only_in_requires_bombs_rooms() {
         assert_eq!(any, legal, "{specialist} {name}: {}", env.session().mask());
         nes = release(env);
     }
+}
+
+/// Round 22 (4:0x21's bomb waste): a `required` family in a `requires_bombs` room is offered BOMB only where the bomb
+/// lands in reach of the wall its objective leaves through (trap-room in 4:0x11, entered S, leaving N: BOMB N under
+/// the N wall, nothing in the room's middle, nothing at the E wall), and anywhere once the next kill is the 10th
+/// damage-free one; a `free` family is not limited (boss-manhandla in 3:0x4d).
+#[test]
+fn required_families_bomb_only_where_the_route_wall_opens() {
+    let Some(nes) = open_core() else { return };
+    let bomb = |env: &Env| env.session().mask().directions(ActionKind::Bomb);
+    let mut env = make_env(nes, "trap-room", Some("4_11s_0"), |_| {});
+    env.reset(Some(0), None).unwrap();
+    let place = |env: &mut Env, x: u8, y: u8, help: u8| {
+        env.session_mut().apply_ram(&[
+            (Var::LinkX, x),
+            (Var::LinkY, y),
+            (Var::Bombs, 4),
+            (Var::HelpDropCount, help),
+        ]);
+        act(env, "WAIT 8");
+    };
+    place(&mut env, 0x78, 0x6D, 0);
+    assert!(bomb(&env).contains(&Direction::N), "under the N wall: {}", env.session().mask());
+    place(&mut env, 0x40, 0x8D, 0);
+    assert!(bomb(&env).is_empty(), "the room's middle: {}", env.session().mask());
+    place(&mut env, 0xC0, 0x8D, 0);
+    assert!(bomb(&env).is_empty(), "at the E wall (not the route's): {}", env.session().mask());
+    place(&mut env, 0x40, 0x8D, 9);
+    assert!(!bomb(&env).is_empty(), "the 10th kill's bomb: {}", env.session().mask());
+    let nes = release(env);
+
+    let mut env = make_env(nes, "boss-manhandla", Some("3_4dw_0"), |_| {});
+    env.reset(Some(0), None).unwrap();
+    env.session_mut().apply_ram(&[(Var::Bombs, 4)]);
+    for _ in 0..20 {
+        if !bomb(&env).is_empty() {
+            break;
+        }
+        act(&mut env, "WAIT 8");
+    }
+    assert!(!bomb(&env).is_empty(), "Manhandla's room: {}", env.session().mask());
 }
 
 /// Gleeok's observation: his attached heads are entities (id $42) in slots 2 and 3, killable; his neck base in

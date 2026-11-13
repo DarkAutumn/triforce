@@ -1,6 +1,6 @@
 name: darknut
-rooms: ['(3, 0x5b)', '(3, 0x59)', '(3, 0x69)']
-start_states: ['3_5b*_[0-9]', '3_59*_[0-9]', '3_69*_[0-9]']
+rooms: ['(3, 0x5b)', '(3, 0x59)', '(3, 0x69)', '(3, 0x5c)']
+start_states: ['3_5b*_[0-9]', '3_59*_[0-9]', '3_69*_[0-9]', '3_5c*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
@@ -15,7 +15,9 @@ max_steps: 2000
 warm_start: null
 notes: >-
   Darknut rooms (Nov 9): shielded in front, hit only from the side or back. Dungeon 3 (docs/routes/d3.md): the central
-  room 0x5b (3 Darknuts, bombs when all are dead) S to W (treasure skipped) and later W to N (its bombs taken only
-  if Link holds fewer than 4: routes.yaml `treasure: {if_bombs_below: 4}`); 0x59 (5 Darknuts, kill-all S shutter)
+  room 0x5b (3 Darknuts, bombs when all are dead) S to W (treasure skipped) and later W to E through its bomb wall
+  (round 22; a `requires_bombs` room, so bombs are free there: its bombs taken only if Link holds fewer than 6,
+  routes.yaml `treasure: {if_bombs_below: 6}`, the reserve); 0x5c (3 Darknuts, round 22) W to N through its open
+  doorway; 0x59 (5 Darknuts, kill-all S shutter)
   E to N, N to S (kill them all: the shutter) and S to E; 0x69 (8 Darknuts, bombs) N to the stairs down to the raft
   cellar and back up N, never fighting for its treasure (Lee: `treasure: skip`). Copied from goriya.

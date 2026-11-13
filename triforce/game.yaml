@@ -1548,7 +1548,7 @@ rooms:
       dock: [16, 8]  # Link at x = $80, y = $7D: he sails N and lands on 0x45's pier
 - level: 0
   location: '0x56'
-  specialist: ow-zora  # d2first to Dungeon 3 (Nov 9)
+  specialist: ow-zora  # d2first to Dungeon 3 (Nov 9); off the route since round 22 (tagged for a Link who strays)
   exits:
     N:
       level: 0
@@ -1571,7 +1571,7 @@ rooms:
     rupees: 10
 - level: 0
   location: '0x57'
-  specialist: ow-octorok  # d2first to Dungeon 3 (Nov 9)
+  specialist: ow-octorok  # d2first to Dungeon 3 (Nov 9); off the route since round 22 (tagged for a Link who strays)
   exits:
     E:
       level: 0
@@ -1880,6 +1880,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x66'
+  specialist: ow-octorok  # d2first to Dungeon 3 without clips (round 22): from E leaves W; its shop's mouth is open
   exits:
     E:
       level: 0
@@ -1903,6 +1904,11 @@ rooms:
 - level: 0
   location: '0x67'
   specialist: ow-octorok
+  # Secret (round 22, played): a rock wall tile object (asm:RockWall_Update) at x=112 y=80, tiles (14-15, 2-3), first
+  # quest only (attr F `qs` Q1).  A bomb blast whose middle is within 16 px of the wall's on both axes opens it (room
+  # flag $80; Link facing N on Y $5D at X $68-$78, or at X $70 on Y $65/$6D) to the secret-rupee cave $21.
+  requires_bombs: true    # round 22 (Lee, Nov 13): bomb the wall and take the cave's 30 rupees (zelda::cheats cheats one in)
+  bomb_secret: [14, 2]
   exits:
     E:
       level: 0
@@ -1913,6 +1919,10 @@ rooms:
     W:
       level: 0
       location: '0x66'
+    cave:
+      level: 0
+      location: '0x67'
+      in_cave: true
   enemies:
     RedSlowOctorok: 4
   treasure: null
@@ -1922,6 +1932,19 @@ rooms:
     how: bomb
     tile: [14, 2]
     rupees: 30
+- level: 0
+  location: '0x67'
+  in_cave: true
+  specialist: ow-octorok
+  exits:
+    S:
+      level: 0
+      location: '0x67'
+  enemies: null
+  # "IT'S A SECRET TO EVERYBODY": one rupee ware in the middle (x=120 y=152), taken only walking up at X exactly $78
+  # (asm:Cave_State2TalkOrShopOrDoorCharge), the cave's default treasure tile; 30 rupees, once per game (room flag
+  # $10 of 0x67).
+  treasure: 30-rupees
 - level: 0
   location: '0x68'
   specialist: ow-octorok
@@ -2183,6 +2206,9 @@ rooms:
     tile: [16, 8]
 - level: 0
   location: '0x75'
+  # ow-leever (round 22, by enemy: two Blue and a Red Leever, three Peahats and a Zora, like 0x48): entered from E
+  # (0x76) into the E part (the river, columns 10-13, cuts it off from the W part), left W by CLIP E's wrap exit.
+  specialist: ow-leever
   exits:
     N:
       level: 0
@@ -2212,6 +2238,7 @@ rooms:
     tile: [4, 2]
 - level: 0
   location: '0x76'
+  specialist: ow-tektite  # round 22 (by enemy: four Red Tektites): from E (0x77's lane, Y $85/$8D) leaves W
   exits:
     N:
       level: 0
@@ -3048,7 +3075,7 @@ rooms:
 - level: 3
   location: '0x4c'  # blade traps and Zols (Lee: "trap/gel room"); its E wall is bombable into the boss room
   specialist: trap-room
-  requires_bombs: true    # Lee (Nov 9): the E wall is bombed open into the boss room
+  requires_bombs: true    # Lee (Nov 9): the E wall is bombed open into the boss room (round 22: entered from S)
   exits:
     E:  # bomb wall
       level: 3
@@ -3121,6 +3148,7 @@ rooms:
 - level: 3
   location: '0x5b'  # the central Darknut room; its bombs appear when the Darknuts are dead
   specialist: darknut
+  requires_bombs: true    # round 22 (Lee, Nov 13): its E wall is bombed open into 0x5c on the last visit
   exits:
     N:
       level: 3
@@ -3140,7 +3168,8 @@ rooms:
   bomb_walls: [E]
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
-  location: '0x5c'
+  location: '0x5c'  # three Red Darknuts (round 22: W in through the bombed wall, N out through the open doorway)
+  specialist: darknut
   exits:
     N:
       level: 3
@@ -3254,6 +3283,7 @@ rooms:
   treasure: null
 - level: 4
   location: '0x01'  # Blue Keese over water; the key in the middle needs the ladder
+  specialist: stalfos-keese-gel  # round 22 (Lee, Nov 13): S in through the wall bombed from 0x11, the key, E out
   exits:
     E:
       level: 4
@@ -3271,7 +3301,8 @@ rooms:
   bomb_walls: [S]
   dark: true
 - level: 4
-  location: '0x02'  # six blade traps ($49) in the dark; off the route
+  location: '0x02'  # six blade traps ($49) in the dark
+  specialist: trap-room  # round 22 (Lee, Nov 13): W in from 0x01, S out into the Vire room 0x12
   exits:
     S:
       level: 4
@@ -3311,7 +3342,7 @@ rooms:
 - level: 4
   location: '0x11'  # the rupee room (ten rupees, a $35 rupee stash; no monsters): all four walls are bombable
   specialist: trap-room  # Dungeon 4 (Nov 11)
-  requires_bombs: true    # Lee (Nov 11): the E wall is bombed open into the Vire room 0x12
+  requires_bombs: true    # Lee (Nov 11): a wall is bombed open (round 22, Nov 13: the N wall into the Keese room 0x01)
   exits:
     N:  # bomb wall
       level: 4
@@ -3330,7 +3361,7 @@ rooms:
   bomb_walls: [N, E, S, W]
 - level: 4
   location: '0x12'  # Vires; pushing the block (once they are dead) opens the E shutter into the boss room (secret trigger 4)
-  specialist: vire  # Dungeon 4 (Nov 11)
+  specialist: vire  # Dungeon 4 (Nov 11; round 22: entered from N, out of the trap room 0x02)
   exits:
     N:
       level: 4

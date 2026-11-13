@@ -7,6 +7,8 @@
 # The objective follows the steps: in a room the route enters from the side Link came in, with the triforce pieces,
 # sword, bow, raft and ladder the route has there, the step's exit is the correct one (zelda::objectives).
 # `waypoint: heart` (cave step): take the cave's heart container; leaving its room without it is `missed`.
+# `waypoint: rupees` (cave step): take the cave's rupees (0x67's secret, round 22); leaving its room without them is
+# `missed`.
 # `waypoint: bow` / `raft` / `ladder` (cellar step): take the cellar's item; until then the objective leads back to it.
 # A route is a list of steps, or `{extends: <a route above>, steps: [...]}`: that route's steps, then these.
 # An exit that is a game.yaml raft crossing (`raft_exits`) sends Link to its dock; the raft does the rest.
@@ -33,9 +35,10 @@
 # d2first: wood sword, east along row 5 to Dungeon 2 (3 hearts), Dodongo, his heart container and the D2 triforce
 # (warps Link to 0x3c); round to 0x2c, bomb its rock wall for the take-any cave's heart container (5 hearts), the
 # white sword at 0x0a, then west and south to Dungeon 1 (both key rooms, the bow cellar and the boomerang) through
-# Aquamentus (6 hearts) to the D1 triforce (warps Link to 0x37); then east, south and west to Dungeon 3 (0x74), the
-# raft cellar, Manhandla (7 hearts) and the D3 triforce (warps Link to 0x74); then back to 0x65, by raft from 0x55 to
-# the island 0x45 and Dungeon 4 (docs/routes/d4.md): the ladder, Gleeok (8 hearts); the route ends on taking the D4
+# Aquamentus (6 hearts) to the D1 triforce (warps Link to 0x37); then east and south to 0x67's secret cave (bomb, 30
+# rupees) and on to Dungeon 3 (0x74) by the wrap exit or along row 6, the raft cellar, Manhandla (7 hearts) and the D3
+# triforce (warps Link to 0x74); then back to 0x65, by raft from 0x55 to the island 0x45 and Dungeon 4
+# (docs/routes/d4.md): the ladder, 0x01's key, Gleeok (8 hearts); the route ends on taking the D4
 # triforce.  Never the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
@@ -112,27 +115,43 @@ d2first:
 - {level: 1, room: '0x45', specialist: wallmaster, entry: W, exit: N}
 - {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
 - {level: 1, room: '0x36', specialist: stalfos-keese-gel, entry: W, exit: triforce}
-# To Dungeon 3 (Nov 9): a shortest walk (11 rooms from 0x37).  0x38 S into the Leever room 0x48 is forced (0x37
-# leads only E, 0x38 only N/S/W), 0x74 is entered only from 0x73, and every shortest way passes 0x64 (its potion
-# shop's mouth is open: walking in is a wrong exit).  0x55's W third (the coast below 0x45) is walled off from its E
-# part without the ladder, so the walk turns S there; via 0x55 it meets one open cave (0x64), via 0x68/0x67/0x66 two.
+# To Dungeon 3 (round 22, Lee, Nov 13; docs/routes/overworld.md): 0x38 S into the Leever room 0x48 is forced (0x37
+# leads only E, 0x38 only N/S/W); S through 0x58 and 0x68 to 0x67, bomb its rock wall (first quest only) and take
+# the secret cave's 30 rupees (`waypoint: rupees`; the pickup works only walking up at X $78, the cave's middle ware).
+# Then the stretch `d3-approach`: with clips S to 0x77, W through 0x76 into 0x75's E part and CLIP E there (the wrap
+# exit: through 0x75's solid W edge into 0x74, which is entered from E only so); without clips W along row 6 (0x66,
+# 0x65 across its one ford, 0x64 past its potion shop's open mouth), S at 0x63 and E through 0x73 into 0x74 from W.
 - {level: 0, room: '0x37', specialist: ow-octorok, entry: cave, exit: E}
 - {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: S}
 - {level: 0, room: '0x48', specialist: ow-leever, entry: N, exit: S}
-- {level: 0, room: '0x58', specialist: ow-octorok, entry: N, exit: W}
-- {level: 0, room: '0x57', specialist: ow-octorok, entry: E, exit: W}
-- {level: 0, room: '0x56', specialist: ow-zora, entry: E, exit: W}
-- {level: 0, room: '0x55', specialist: ow-zora, entry: E, exit: S}
-- {level: 0, room: '0x65', specialist: ow-zora, entry: N, exit: W}
-- {level: 0, room: '0x64', specialist: ow-octorok, entry: E, exit: W}
-- {level: 0, room: '0x63', specialist: ow-moblin, entry: E, exit: S}
-- {level: 0, room: '0x73', specialist: ow-moblin, entry: N, exit: E}
-- {level: 0, room: '0x74', specialist: ow-tektite, entry: W, exit: cave}
-# Dungeon 3 (Lee, Nov 9; docs/routes/d3.md): W N N W W N S S (stairs: the raft) N E E N E E (bomb the E wall) N.
-# Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit and only at 4 bombs or
-# fewer (Lee, Nov 11); 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to the stairs.
-# Bomb reserve 5 (Lee, Nov 11): 3 for the bomb wall into Manhandla's room (3:0x4c), 2 for Manhandla.
-- {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 5}
+- {level: 0, room: '0x58', specialist: ow-octorok, entry: N, exit: S}
+- {level: 0, room: '0x68', specialist: ow-octorok, entry: N, exit: W}
+- {level: 0, room: '0x67', specialist: ow-octorok, entry: E, exit: cave}
+- {level: 0, room: '0x67', in_cave: true, specialist: ow-octorok, entry: S, exit: S, waypoint: rupees}
+- stretch: d3-approach
+  parts: {level: 0, room: '0x67', entry: cave}
+  rejoins: {level: 3, room: '0x7c', entry: S}
+  clips:
+  - {level: 0, room: '0x67', specialist: ow-octorok, entry: cave, exit: S}
+  - {level: 0, room: '0x77', specialist: ow-start, entry: N, exit: W}
+  - {level: 0, room: '0x76', specialist: ow-tektite, entry: E, exit: W}
+  - {level: 0, room: '0x75', specialist: ow-leever, entry: E, exit: W}
+  - {level: 0, room: '0x74', specialist: ow-tektite, entry: E, exit: cave}
+  plain:
+  - {level: 0, room: '0x67', specialist: ow-octorok, entry: cave, exit: W}
+  - {level: 0, room: '0x66', specialist: ow-octorok, entry: E, exit: W}
+  - {level: 0, room: '0x65', specialist: ow-zora, entry: E, exit: W}
+  - {level: 0, room: '0x64', specialist: ow-octorok, entry: E, exit: W}
+  - {level: 0, room: '0x63', specialist: ow-moblin, entry: E, exit: S}
+  - {level: 0, room: '0x73', specialist: ow-moblin, entry: N, exit: E}
+  - {level: 0, room: '0x74', specialist: ow-tektite, entry: W, exit: cave}
+# Dungeon 3 (Lee, Nov 9; round 22, Nov 13; docs/routes/d3.md): W N N W W N S S (stairs: the raft) N E E, bomb 0x5b's
+# E wall, N, bomb 0x4c's E wall, N (0x4b and its key door are off the route since round 22).
+# Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit (W to E) and only at 5 bombs
+# or fewer; 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to the stairs.
+# Bomb reserve 6 (round 22): one for each of the two bomb walls (3:0x5b E, 3:0x4c E) and a spare for each, two for
+# Manhandla (docs/decisions.md 2026-11-13).
+- {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 6}
 - {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
 - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N}
 - {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: W, treasure: skip}
@@ -145,9 +164,9 @@ d2first:
 - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
 - {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
 - {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
-- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: N, treasure: {if_bombs_below: 5}}
-- {level: 3, room: '0x4b', specialist: zol, entry: S, exit: E}
-- {level: 3, room: '0x4c', specialist: trap-room, entry: W, exit: E}
+- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E, treasure: {if_bombs_below: 6}}
+- {level: 3, room: '0x5c', specialist: darknut, entry: W, exit: N}
+- {level: 3, room: '0x4c', specialist: trap-room, entry: S, exit: E}
 - {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N}
 - {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce}
 # Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
@@ -156,9 +175,11 @@ d2first:
 # pushed block reveals the stairs), back W to the Vire room 0x31, then the stretch `d4-island`: with clips N through
 # its locked door onto the island of 0x21 and the ladder clip N over its two squares of water (round 21, Lee, Nov 12;
 # only a family with `clips: true` leaves the island), without clips W to 0x30, N over its water, E through 0x20 into
-# 0x21 from W (round 20's way; round 22 keeps both); bomb N into the rupee room 0x11, bomb E into the Vire room 0x12,
-# its pushed block opens the E shutter to Gleeok, N to the triforce.  Keys: 0x30's E door and (clip way) 0x31's N door.
-# Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11.
+# 0x21 from W (round 20's way; round 22 keeps both); bomb N into the rupee room 0x11 and N again into the dark Keese
+# room 0x01 (round 22, Lee, Nov 13: its key, on the water: the ladder), E into the dark trap room 0x02, S into the
+# Vire room 0x12, whose pushed block opens the E shutter to Gleeok, N to the triforce.  Keys: 0x30's E door and (clip
+# way) 0x31's N door; 0x01's key is a spare for later dungeons.
+# Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11 (both N).
 - {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
 - {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
 - {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: E}
@@ -189,8 +210,10 @@ d2first:
   - {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
   - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
   - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
-- {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: E}
-- {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
+- {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: N}
+- {level: 4, room: '0x01', specialist: stalfos-keese-gel, entry: S, exit: E}
+- {level: 4, room: '0x02', specialist: trap-room, entry: W, exit: S}
+- {level: 4, room: '0x12', specialist: vire, entry: N, exit: E}
 - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
 - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
@@ -212,20 +235,21 @@ clips-gauntlet:
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
-# Families by enemy (docs/specialists.md): the routes' rooms and the alternate 0x78.
+# Families by enemy (docs/specialists.md): the routes' rooms and the alternate 0x78; 0:0x56, 0:0x57 and 3:0x4b (off
+# the route since round 22) stay tagged, without start states, for a Link who strays into them.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)']
-  ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
+  ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']
   ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)']
   ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)']
-  ow-leever: ['(0, 0x48)']
+  ow-leever: ['(0, 0x48)', '(0, 0x75)']
   ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)']
-  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)']
+  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)']
   ow-peahat: ['(0, 0x45)']
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
-  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x21)', '(4, 0x51)']
+  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x01)', '(4, 0x21)', '(4, 0x51)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
-  trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)', '(4, 0x11)']
+  trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)', '(4, 0x02)', '(4, 0x11)']
   equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)']
   wallmaster: ['(1, 0x45)']
   boss-aquamentus: ['(1, 0x35)']
@@ -233,7 +257,7 @@ families:
   moldorm: ['(2, 0x3e)']
   boss-dodongo: ['(2, 0x0e)']
   zol: ['(3, 0x3d)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x6b)', '(3, 0x7b)', '(3, 0x7c)', '(4, 0x40)']
-  darknut: ['(3, 0x59)', '(3, 0x5b)', '(3, 0x69)']
+  darknut: ['(3, 0x59)', '(3, 0x5b)', '(3, 0x5c)', '(3, 0x69)']
   boss-manhandla: ['(3, 0x4d)']
   vire: ['(4, 0x03)', '(4, 0x12)', '(4, 0x20)', '(4, 0x30)', '(4, 0x31)', '(4, 0x50)', '(4, 0x61)', '(4, 0x71)']
   like-like: ['(4, 0x32)']

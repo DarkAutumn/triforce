@@ -99,7 +99,7 @@ def test_eval_chain_rejects_an_unknown_route(tmp_path, capsys):
 @pytest.mark.parametrize('args, message', [
     (['--from', 'nope_0'], "Unknown start state 'nope_0'"),
     (['--stop-at', '9:0x99'], "--stop-at 9:0x99 is not a room of route 'd2first' after the start step"),
-    (['--from', str(REPO_STATES_DIR / '2_7ds_0.state'), '--stop-at', '0:0x67'], "--stop-at 0:0x67 is not a room"),
+    (['--from', str(REPO_STATES_DIR / '2_7ds_0.state'), '--stop-at', '0:0x59'], "--stop-at 0:0x59 is not a room"),
     (['--stop-at', '1:73'], "is not a room (LEVEL:0xROOM"),
     (['--stop-at', 'step:0'], "--stop-at step:0 is not a step of route 'd2first' after the start step 0"),
     (['--stop-at', 'step:x'], "is not a route step (step:N"),

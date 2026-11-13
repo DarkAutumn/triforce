@@ -26,6 +26,10 @@ pub const CAVE_TREASURE_TILE: Tile = (0x0F, 0x0B);
 /// routes.yaml `waypoint: heart` (on a cave step): take the cave's heart container (game.yaml `treasure_tile`);
 /// done once the overworld room's item-taken flag is set.  Leaving its room without it is `missed`.
 pub const WAYPOINT_HEART: &str = "heart";
+/// routes.yaml `waypoint: rupees` (on a cave step, round 22: 0x67's secret cave): take the cave's rupees (its middle
+/// ware, [`CAVE_TREASURE_TILE`]: the game pays only to Link walking up at X $78); done once the overworld room's
+/// item-taken flag is set.  Leaving its room without them is `missed`, as for the heart.
+pub const WAYPOINT_RUPEES: &str = "rupees";
 /// routes.yaml `waypoint: bow` (on Dungeon 1's cellar step): take the cellar's bow; done once the cellar's item-taken
 /// flag is set.  Without it the route's later steps don't match (`StepProgress::bow`), so the objective sends Link
 /// back down the stairs.
@@ -654,7 +658,7 @@ impl GameCompletion {
             self.last_route = None;
         }
         self.open_raft_crossings(state);
-        self.check_heart_waypoint(prev, state);
+        self.check_cave_waypoint(prev, state);
         // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first).
         while let Some(i) = self.active_waypoint(state)
             && waypoint_done(&self.waypoints[i], state)
@@ -707,9 +711,10 @@ impl GameCompletion {
         })
     }
 
-    /// An active `heart` waypoint is missed when Link leaves its overworld room other than into the cave before the
-    /// item is taken, or takes the cave's item without gaining a heart container (the potion).
-    fn check_heart_waypoint(&mut self, prev: Option<&GameView>, state: &GameView) {
+    /// An active `heart` or `rupees` waypoint is missed when Link leaves its overworld room other than into the cave
+    /// before the item is taken; a `heart` one also when he takes the cave's item without gaining a heart container
+    /// (the potion).
+    fn check_cave_waypoint(&mut self, prev: Option<&GameView>, state: &GameView) {
         if self.missed.is_some() {
             return;
         }
@@ -717,17 +722,20 @@ impl GameCompletion {
             return;
         };
         let waypoint = &self.waypoints[i];
-        if waypoint.kind != WAYPOINT_HEART {
-            return;
-        }
+        let what = match waypoint.kind.as_str() {
+            WAYPOINT_HEART => "the heart container",
+            WAYPOINT_RUPEES => "the rupees",
+            _ => return,
+        };
+        let heart = waypoint.kind == WAYPOINT_HEART;
         let cave = waypoint.location;
         let room = MapLocation::new(cave.level, cave.value, false);
         let here = state.full_location();
-        if here == cave && self.heart_baseline.is_none() {
+        if heart && here == cave && self.heart_baseline.is_none() {
             self.heart_baseline = Some(state.max_health());
         }
         if waypoint_done(waypoint, state) {
-            if self.heart_baseline.is_some_and(|b| state.max_health() <= b) {
+            if heart && self.heart_baseline.is_some_and(|b| state.max_health() <= b) {
                 self.missed = Some(format!("took the other ware in {cave}, not the heart container"));
             }
             return;
@@ -737,7 +745,7 @@ impl GameCompletion {
             && here != room
             && here != cave
         {
-            self.missed = Some(format!("left {room} without the heart container"));
+            self.missed = Some(format!("left {room} without {what}"));
         }
     }
 
@@ -1427,6 +1435,31 @@ pub fn wraps_into_wrong_exits(map: &GameMap, state: &GameView, objective: &Objec
         .collect()
 }
 
+/// What a bomb should open in `state` (round 22): the intact game.yaml bomb walls the objective leaves through (a
+/// next room behind one: a dungeon wall, by its direction) and, when a next room is the room's cave behind a closed
+/// game.yaml `bomb_secret` rock wall, that rock wall.  Empty when the objective leaves through nothing bombable (a
+/// fight first, or another exit): a `required` family is offered BOMB only in reach of these
+/// (`env::config::ItemsConfig::bomb_targets`).
+pub fn route_bomb_targets(map: &GameMap, state: &GameView, objective: &Objective) -> Vec<crate::bombs::BombTarget> {
+    use crate::bombs::BombTarget;
+    let here = state.full_location();
+    let mut targets = Vec::new();
+    for &next in &objective.next_rooms {
+        let d = map.exit_direction(here, next, state.peek(MAZE_STEP));
+        if d != Direction::None {
+            if state.bomb_walls().iter().any(|w| w.wall_direction == d) {
+                targets.push(BombTarget::Wall(d));
+            }
+        } else if next.in_cave
+            && state.ow_bomb_secret_closed()
+            && let Some(tile) = map.get(here).and_then(|r| r.bomb_secret)
+        {
+            targets.push(BombTarget::rock(tile));
+        }
+    }
+    targets
+}
+
 /// The route steps `start_route` would choose among for an episode starting in `location` entered from `entry`
 /// (the steps of `route`, of every route without one, entering the room from `entry` with exactly Link's progress,
 /// any step entering it from `entry` when none has his progress), with their way: (route, step, way).
@@ -1634,6 +1667,7 @@ mod tests {
             [
                 (WAYPOINT_HEART, MapLocation::new(0, 0x2c, true), Some(1)),
                 (WAYPOINT_BOW, MapLocation::new(1, 0x7f, true), Some(1)),
+                (WAYPOINT_RUPEES, MapLocation::new(0, 0x67, true), Some(3)),
                 (WAYPOINT_RAFT, MapLocation::new(3, 0x0f, true), Some(3)),
                 (WAYPOINT_LADDER, MapLocation::new(4, 0x60, true), Some(4)),
             ]
@@ -1641,6 +1675,7 @@ mod tests {
         assert_eq!(w[0].after, [2].into_iter().collect());
         assert_eq!(w[1].after, [2].into_iter().collect());
         assert_eq!(w[2].after, [2, 1].into_iter().collect());
-        assert_eq!(w[3].after, [2, 1, 3].into_iter().collect());
+        assert_eq!(w[3].after, [2, 1].into_iter().collect());
+        assert_eq!(w[4].after, [2, 1, 3].into_iter().collect());
     }
 }

@@ -591,11 +591,21 @@ pub fn plan(view: &GameView, kind: ActionKind, d: Direction) -> Option<u32> {
 
 /// [`plan`] with the reason of a refusal.
 pub fn explain(view: &GameView, kind: ActionKind, d: Direction) -> Result<u32, Refusal> {
+    simulate(view, kind, d).map(|(frames, _)| frames)
+}
+
+/// Link (the input model) on the frame an attack of `kind` in `d` presses its button, after [`plan`]'s turn frames;
+/// None where [`plan`] refuses.  A bomb or an arrow starts from his position then (asm:Link_PlaceWeaponAhead).
+pub fn press_link(view: &GameView, kind: ActionKind, d: Direction) -> Option<Link> {
+    simulate(view, kind, d).ok().map(|(_, s)| s)
+}
+
+fn simulate(view: &GameView, kind: ActionKind, d: Direction) -> Result<(u32, Link), Refusal> {
     let mut s = Link::read(&view.ram()[..0x800]);
     for frames in 0..=MAX_TURN_FRAMES {
         match next(kind, d, &s) {
             Next::Press(press) if press_leaves(view, &s, press) => return Err(Refusal::Leaves),
-            Next::Press(_) => return Ok(frames),
+            Next::Press(_) => return Ok((frames, s)),
             Next::Impossible => {
                 let target = facing_for(d).value();
                 return Err(if matches!(kind, ActionKind::Move | ActionKind::Wait | ActionKind::Clip) {

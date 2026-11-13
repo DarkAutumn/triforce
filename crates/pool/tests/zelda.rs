@@ -943,15 +943,16 @@ fn recorded_chain_runs_carry_rooms_outcomes_and_keyframes() {
     assert_eq!(replay.cheats().count(), 0, "no room on the way needs an item");
 }
 
-/// The cheat ledger of a recorded run: every granted bomb placed in 0x2c (a `requires_bombs` room entered with
-/// none) is in the replay, at the frame after the action that placed it.
+/// The cheat ledger of a recorded run: every granted bomb placed in Dodongo's room (a `requires_bombs` room entered
+/// with none, where the `free` family bombs anywhere; round 22 keeps 0x2c's bombs to its rock wall) is in the replay,
+/// at the frame after the action that placed it.
 #[test]
 fn recorded_chain_runs_carry_the_cheated_items_spent() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let mut source = TfzStore.decode(&read_state("0_2cc_0").unwrap()).unwrap();
+    let mut source = TfzStore.decode(&read_state("2_0es_0").unwrap()).unwrap();
     source.machine.poke(0x658, 0); // no bombs
-    let start = std::env::temp_dir().join(format!("pool-cheats-{}-0_2cc_0.state", std::process::id()));
+    let start = std::env::temp_dir().join(format!("pool-cheats-{}-2_0es_0.state", std::process::id()));
     std::fs::write(&start, TfzStore.encode(&source).unwrap()).unwrap();
     let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some(start.to_str().unwrap())).unwrap();
     let init = init();
@@ -962,9 +963,12 @@ fn recorded_chain_runs_carry_the_cheated_items_spent() {
         embed_start: true,
         ..Default::default()
     };
+    // Bomb whenever offered, else walk in from the S door (no attack from the doorway), else wait.
     let (run, replay) = play_chain_recorded(&mut env, &control, options, |mask, _| {
+        let north = zelda::Action::parse("MOVE N 8").unwrap();
         match mask.directions(ActionKind::Bomb).first() {
             Some(&direction) => zelda::Action::new(ActionKind::Bomb, direction, 0).unwrap(),
+            None if mask.is_allowed(&north) => north,
             None => zelda::Action::parse("WAIT 8").unwrap(),
         }
     });

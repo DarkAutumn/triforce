@@ -1,6 +1,6 @@
 name: ow-leever
-rooms: ['(0, 0x48)']
-start_states: ['0_48*_[0-9]']
+rooms: ['(0, 0x48)', '(0, 0x75)']
+start_states: ['0_48*_[0-9]', '0_75*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
@@ -15,4 +15,7 @@ warm_start: null
 notes: >-
   Leever rooms (Nov 9): Leevers burrow and surface next to Link, unlike anything in the other overworld families.
   0x48 (Red Leever x4 and a Zora) is forced on the way from Dungeon 1 (0x37) to Dungeon 3 (0x74): from N (0x38)
-  leave S (0x58). Copied from ow-moblin (one-room, 600 steps, curriculum).
+  leave S (0x58). Round 22 (the wrap way to Dungeon 3, clips): 0x75 (two Blue and a Red Leever, three Peahats, a
+  Zora) from E into its E part, cut off by the river: leave W by CLIP E on a row Y $65-$AD (the wrap exit through its
+  solid W edge into 0x74; never offered on the softlock rows). Copied from ow-moblin (one-room, 600 steps,
+  curriculum).

@@ -286,7 +286,7 @@ def test_route_plan_and_overlay(qapp, models):
     assert 'treasure skip' in zelda_map.step_text(skip)
     assert (0x1a, 0x0a) in zelda_map.route_segments(plan, 0) and (0x0a, 0x1a) in zelda_map.route_segments(plan, 0)
     assert (0x3c, 0x2c) not in zelda_map.route_segments(plan, 0)          # walls between them: the route goes round
-    assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x74, 0x45}
+    assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x67, 0x74, 0x45}
     rooms = zelda_map.route_rooms(plan, 0)
     assert len(rooms[0x2c]) == 3 and len(rooms[0x1a]) == 2
     assert '#' in zelda_map.step_text(heart) and 'waypoint heart' in zelda_map.step_text(heart)

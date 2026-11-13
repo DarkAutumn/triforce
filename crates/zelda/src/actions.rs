@@ -221,6 +221,17 @@ impl ActionMask {
         self.duration[k] = [false; NUM_DURATIONS];
     }
 
+    /// Removes `kind` in `direction`; the kind goes when no direction is left.
+    pub fn disallow(&mut self, kind: ActionKind, direction: Direction) {
+        let k = kind.index();
+        if let Some(i) = direction_index(direction) {
+            self.direction[k][i] = false;
+        }
+        if !self.direction[k].iter().any(|&b| b) {
+            self.disallow_kind(kind);
+        }
+    }
+
     pub fn is_allowed(&self, action: &Action) -> bool {
         let k = action.kind.index();
         if !self.kind[k] {

@@ -1115,14 +1115,16 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     }
 
     /// The session's disabled kinds for the acting specialist's `items` in Link's state, with the route's bomb
-    /// reserve at the step he plays (or played last), and that reserve for the observation; its `clips:` switch with
-    /// the run-time one, and the wraps the objective vetoes; every step (the 10th kill and the bomb count change
-    /// within a room).
+    /// reserve at the step he plays (or played last), and that reserve for the observation; the bomb targets a
+    /// `required` family is kept to (`ItemsConfig::bomb_targets`); its `clips:` switch with the run-time one, and the
+    /// wraps the objective vetoes; every step (the 10th kill and the bomb count change within a room).
     fn update_disabled_kinds(&mut self) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let config = &self.current.as_ref().expect("acting specialist").config;
         let kinds = config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
+        let targets = config.items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref());
+        self.session.set_bomb_targets(targets.as_deref());
         self.session.set_clips(config.clips);
         self.session.set_clips_allowed(self.clips_allowed);
         let vetoed = match &self.objective {

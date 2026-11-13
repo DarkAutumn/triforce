@@ -625,13 +625,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
-    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; its `clips:`
-    /// switch and the run-time one (the CLIP kind), and the wraps `objective` vetoes.  Recomputed every step: the
-    /// 10th kill and the bomb count change within a room.
+    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; the bomb targets
+    /// a `required` family is kept to (`ItemsConfig::bomb_targets`); its `clips:` switch and the run-time one (the
+    /// CLIP kind), and the wraps `objective` vetoes.  Recomputed every step: the 10th kill and the bomb count change
+    /// within a room.
     fn update_disabled_kinds(&mut self, objective: &zelda::objectives::Objective) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
+        let targets = self.config.items.bomb_targets(&self.data.map, self.session.state(), Some(objective));
+        self.session.set_bomb_targets(targets.as_deref());
         self.session.set_clips(self.config.clips);
         self.session.set_clips_allowed(self.clips_allowed);
         let vetoed = if self.session.clips_effective() {

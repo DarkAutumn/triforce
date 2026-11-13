@@ -196,8 +196,9 @@ fn link_y(env: &Env) -> i32 {
 /// The route step 4:0x21 S -> N by actions: `MOVE N` onto the island (Link stops on T, Y $7D, at the water), `CLIP N`
 /// (the ladder clip, from T: back off to G' and over the two squares of water to Y $55, 8 pixels into the top wall),
 /// `MOVE S 8` off the wall, `BOMB N`, `WAIT` for the blast, `MOVE N` through the hole into the rupee room 0x11: the
-/// episode ends `exit-correct`. BOMB N from the clip's end (Y $55) spends the bomb and leaves the wall shut: the bomb
-/// lands outside the room, so the step down is needed (the objective's bomb spot is ($78, $5D)).
+/// episode ends `exit-correct`. BOMB N from the clip's end (Y $55) would spend the bomb and leave the wall shut (the
+/// bomb lands $18 px from the hotspot, out of reach), so since round 22 it is not offered there; the step down is
+/// needed (the objective's bomb spot is ($78, $5D)), where it is.
 #[test]
 fn the_route_step_through_4_21_by_the_ladder_clip() {
     let Some(nes) = open_core() else { return };
@@ -211,23 +212,14 @@ fn the_route_step_through_4_21_by_the_ladder_clip() {
     let r = act(&mut env, "CLIP N");
     frames += r.info.frames;
     assert_eq!((link_x(&env), link_y(&env), r.info.terminal.is_none()), (0x78, 0x55, true), "over the water");
-    let move_n = Action::parse("MOVE N 16").unwrap();
-    // From the clip's end the bomb is spent for nothing.
-    let end = env.save();
+    // From the clip's end a bomb would be spent for nothing: not offered.
+    let bomb_n = Action::parse("BOMB N").unwrap();
     let bombs = env.session().state().bombs();
-    assert!(bombs > 0 && env.session().mask().is_allowed(&Action::parse("BOMB N").unwrap()), "{bombs} bombs");
-    act(&mut env, "BOMB N");
-    for _ in 0..4 {
-        act(&mut env, "WAIT 32");
-    }
-    // The cheat ledger gives the room's bomb back (0x21 needs one), but the wall is still shut.
-    assert_eq!(env.session().state().full_location(), zelda::MapLocation::new(4, 0x21, false));
-    assert!(!env.session().mask().is_allowed(&move_n), "the wall is still shut");
-    env.load(&end);
+    assert!(bombs > 0 && !env.session().mask().is_allowed(&bomb_n), "{bombs} bombs: {}", env.session().mask());
     // One step down, then the bomb opens the wall.
-    for text in ["MOVE S 8", "BOMB N"] {
-        frames += act(&mut env, text).info.frames;
-    }
+    frames += act(&mut env, "MOVE S 8").info.frames;
+    assert!(env.session().mask().is_allowed(&bomb_n), "{}", env.session().mask());
+    frames += act(&mut env, "BOMB N").info.frames;
     // The wall opens at the end of the blast (about 80 frames after the press).
     for _ in 0..3 {
         frames += act(&mut env, "WAIT 32").info.frames;

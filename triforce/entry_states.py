@@ -215,12 +215,15 @@ def write_idle_states(out: Optional[str] = None) -> List[str]:
 def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
                 rooms: Optional[dict] = None) -> SpecialistConfig:
     """A one-room task from ``source``: leave this step's room through an objective-correct exit (or pick up the
-    triforce).  Bombs are usable only in a ``requires_bombs`` room (Dodongo, the 0x2c rock wall), where the bomb
-    rule keeps Link from running out (``required``; elsewhere ``never``, not even the 10th kill's, so a built state
-    carries the bombs the route does).  The grid-point skips (CLIP) follow the step's family's ``clips:`` switch, as
-    in a chain: 4:0x21 entered from S is left only by the ladder clip."""
+    triforce).  Bombs are usable only in a ``requires_bombs`` room, where the bomb rule keeps Link from running out
+    (elsewhere ``never``, not even the 10th kill's, so a built state carries the bombs the route does): a boss's
+    (Dodongo, Manhandla) as a weapon (``free``), a wall's (0x2c's and 0x67's rock walls, the dungeon bomb walls) only
+    where the bomb opens it (``required``, round 22).  The grid-point skips (CLIP) follow the step's family's
+    ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip."""
     rooms = game_rooms() if rooms is None else rooms
-    bombs = 'required' if rooms.get(step.location.as_tuple(), {}).get('requires_bombs') else 'never'
+    bombs = 'never'
+    if rooms.get(step.location.as_tuple(), {}).get('requires_bombs'):
+        bombs = 'free' if step.specialist.startswith('boss-') else 'required'
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
                             items={'bombs': bombs}, fresh_rooms=True, route=route,

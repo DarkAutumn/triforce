@@ -40,7 +40,7 @@ def test_specialist_tags():
     assert native.specialist_for('(1, 0x45)') == 'wallmaster'
     assert native.specialist_for((0, 0x0c)) is None
     assert native.specialist_for((0, 0x2c)) == native.specialist_for((0, 0x2c, True)) == 'ow-tektite'
-    for room in [(0, 0x29), (0, 0x39), (0, 0x49), (0, 0x66), (2, 0x6d), (3, 0x4a)]:     # off the route, untagged
+    for room in [(0, 0x29), (0, 0x39), (0, 0x49), (0, 0x6a), (2, 0x6d), (3, 0x4a)]:     # off the route, untagged
         assert native.specialist_for(room) is None, room
     assert {tuple(r) for r in native.families()['goriya']} == {(1, 0x44, False), (1, 0x23, False),
                                                                 (2, 0x5e, False), (2, 0x1e, False)}
@@ -73,7 +73,8 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
                       (0x43, False, 'N', 'E', 'stalfos-keese-gel'), (0x44, False, 'W', 'E', 'goriya')]
     assert steps[start + 4]['waypoint'] == 'bow'
     assert native.game_rooms()[(1, 0x7f, True)]['treasure'] == 'bow'
-    assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False), (4, 0x11, False)]
+    assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False), (4, 0x02, False),
+                                              (4, 0x11, False)]
     assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True)]
 
 
@@ -87,18 +88,18 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
                     (0x59, False, 'N', 'S', 'darknut'), (0x69, False, 'N', 'cave', 'darknut'),
                     (0x0f, True, 'S', 'N', 'equipment-room'), (0x69, False, 'cave', 'N', 'darknut'),
                     (0x59, False, 'S', 'E', 'darknut'), (0x5a, False, 'W', 'E', 'trap-room'),
-                    (0x5b, False, 'W', 'N', 'darknut'), (0x4b, False, 'S', 'E', 'zol'),
-                    (0x4c, False, 'W', 'E', 'trap-room'), (0x4d, False, 'W', 'N', 'boss-manhandla'),
+                    (0x5b, False, 'W', 'E', 'darknut'), (0x5c, False, 'W', 'N', 'darknut'),
+                    (0x4c, False, 'S', 'E', 'trap-room'), (0x4d, False, 'W', 'N', 'boss-manhandla'),
                     (0x3d, False, 'S', 'triforce', 'zol')]
     assert steps[start + 9]['waypoint'] == 'raft'
     assert [(s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
         (0x5e, 'S', 'clear'), (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip'),
-        (0x5b, 'W', 'if_bombs_below: 5')]
+        (0x5b, 'W', 'if_bombs_below: 6')]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps if s['bomb_reserve'] is not None] == [
-        (3, 0x7c, 5), (4, 0x71, 2)]
+        (3, 0x7c, 6), (4, 0x71, 2)]
     assert steps[start - 1]['room'] == 0x74 and steps[start - 1]['exit'] == 'cave'
     rooms_info = native.game_rooms()
-    assert rooms_info[(3, 0x4c, False)]['requires_bombs'] and rooms_info[(3, 0x4d, False)]['requires_bombs']
+    assert all(rooms_info[(3, room, False)]['requires_bombs'] for room in (0x5b, 0x4c, 0x4d))
 
 
 def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_directions():
@@ -120,13 +121,14 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
         (0x60, True, 'S', 'N', 'equipment-room'), (0x32, False, 'cave', 'W', 'like-like'),
         (0x31, False, 'E', 'N', 'vire'), (0x21, False, 'S', 'N', 'stalfos-keese-gel'),
         (0x31, False, 'E', 'W', 'vire'), (0x30, False, 'E', 'N', 'vire'), (0x20, False, 'S', 'E', 'vire'),
-        (0x21, False, 'W', 'N', 'stalfos-keese-gel'), (0x11, False, 'S', 'E', 'trap-room'),
-        (0x12, False, 'W', 'E', 'vire'), (0x13, False, 'W', 'N', 'boss-gleeok'), (0x03, False, 'S', 'triforce', 'vire')]
+        (0x21, False, 'W', 'N', 'stalfos-keese-gel'), (0x11, False, 'S', 'N', 'trap-room'),
+        (0x01, False, 'S', 'E', 'stalfos-keese-gel'), (0x02, False, 'W', 'S', 'trap-room'),
+        (0x12, False, 'N', 'E', 'vire'), (0x13, False, 'W', 'N', 'boss-gleeok'), (0x03, False, 'S', 'triforce', 'vire')]
     assert all(level == 4 for level, *_ in tail[7:])
     ways = [(s['room'], s['way']) for s in steps[after_d3 + 17:after_d3 + 24]]
     assert ways == [(0x31, 'clips'), (0x21, 'clips'), (0x31, 'plain'), (0x30, 'plain'), (0x20, 'plain'),
                     (0x21, 'plain'), (0x11, None)]
-    [stretch] = native.route_stretches()
+    stretch = native.route_stretches()[1]
     first = after_d3 + 17
     assert stretch == {'name': 'd4-island', 'clips': [first, first + 1], 'plain': list(range(first + 2, first + 6)),
                        'rejoin': first + 6}
@@ -137,7 +139,33 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
     assert rooms[(4, 0x32, False)]['name'] == 'Breakfast Room' and rooms[(4, 0x32, False)]['cave'] == (4, 0x60, True)
     assert rooms[(4, 0x60, True)]['treasure'] == 'ladder' and rooms[(4, 0x13, False)]['treasure'] == 'heart-container'
     assert rooms[(4, 0x21, False)]['requires_bombs'] and rooms[(4, 0x11, False)]['requires_bombs']
+    assert rooms[(4, 0x01, False)]['treasure'] == 'key'
     assert [room for room, info in rooms.items() if info['name']] == [(4, 0x32, False)]
+
+
+def test_after_d1_the_route_takes_0x67s_rupees_then_either_way_to_dungeon_3():
+    steps = native.route_steps('d2first')
+    start = next(i for i, s in enumerate(steps) if (s['level'], s['room'], s['entry']) == (0, 0x37, 'cave'))
+    walk = [(s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist'], s['way'], s['waypoint'])
+            for s in steps[start:start + 20]]
+    assert walk == [
+        (0x37, False, 'cave', 'E', 'ow-octorok', None, None), (0x38, False, 'W', 'S', 'ow-zora', None, None),
+        (0x48, False, 'N', 'S', 'ow-leever', None, None), (0x58, False, 'N', 'S', 'ow-octorok', None, None),
+        (0x68, False, 'N', 'W', 'ow-octorok', None, None), (0x67, False, 'E', 'cave', 'ow-octorok', None, None),
+        (0x67, True, 'S', 'S', 'ow-octorok', None, 'rupees'),
+        # The stretch d3-approach (round 22): the wrap way first, then the plain way along row 6.
+        (0x67, False, 'cave', 'S', 'ow-octorok', 'clips', None), (0x77, False, 'N', 'W', 'ow-start', 'clips', None),
+        (0x76, False, 'E', 'W', 'ow-tektite', 'clips', None), (0x75, False, 'E', 'W', 'ow-leever', 'clips', None),
+        (0x74, False, 'E', 'cave', 'ow-tektite', 'clips', None),
+        (0x67, False, 'cave', 'W', 'ow-octorok', 'plain', None), (0x66, False, 'E', 'W', 'ow-octorok', 'plain', None),
+        (0x65, False, 'E', 'W', 'ow-zora', 'plain', None), (0x64, False, 'E', 'W', 'ow-octorok', 'plain', None),
+        (0x63, False, 'E', 'S', 'ow-moblin', 'plain', None), (0x73, False, 'N', 'E', 'ow-moblin', 'plain', None),
+        (0x74, False, 'W', 'cave', 'ow-tektite', 'plain', None), (0x7c, False, 'S', 'W', 'zol', None, None)]
+    assert native.route_stretches()[0] == {'name': 'd3-approach', 'clips': list(range(start + 7, start + 12)),
+                                           'plain': list(range(start + 12, start + 19)), 'rejoin': start + 19}
+    rooms = native.game_rooms()
+    assert rooms[(0, 0x67, False)]['requires_bombs'] and rooms[(0, 0x67, False)]['cave'] == (0, 0x67, True)
+    assert rooms[(0, 0x67, True)]['treasure'] == '30-rupees'
 
 
 def test_alternates_replace_route_rooms():

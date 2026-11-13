@@ -139,12 +139,11 @@ chain_runs!(
     chain_rewards_are_the_training_rewards,
 );
 
-fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+/// `data` with `location`'s game.yaml `specialist:` tag removed.
+fn untag(data: &Arc<GameData>, location: MapLocation) -> Arc<GameData> {
     let mut map = GameMap::builtin();
-    map.get_mut(MapLocation::new(0, 0x77, false))
-        .unwrap()
-        .specialist = None;
-    let untagged = Arc::new(GameData {
+    map.get_mut(location).unwrap().specialist = None;
+    Arc::new(GameData {
         root: data.root.clone(),
         map: Arc::new(map),
         families: data.families.clone(),
@@ -152,7 +151,11 @@ fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCo
         specialists: data.specialists.clone(),
         states_dir: data.states_dir.clone(),
         trajectories_dir: data.trajectories_dir.clone(),
-    });
+    })
+}
+
+fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let untagged = untag(data, MapLocation::new(0, 0x77, false));
     let mut c = chain(nes, &untagged, d2first(data));
     let r = drive(&mut c, 0, random_policy);
     assert_eq!(r.result, "error");
@@ -165,7 +168,9 @@ fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCo
 }
 
 fn wrong_exit_into_untagged_room_is_a_failure(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let mut c = chain(nes, data, d2first(data));
+    // 0x76 (W of the start room) is tagged since round 22 (the wrap way to Dungeon 3): untagged here.
+    let untagged = untag(data, MapLocation::new(0, 0x76, false));
+    let mut c = chain(nes, &untagged, d2first(data));
     c.max_steps = 200;
     let r = drive(&mut c, 0, |_, _| parse("MOVE W 16"));
     assert_eq!(r.result, "failure");
