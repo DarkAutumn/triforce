@@ -6,7 +6,8 @@
 //! A decision is *low* at a threshold when its probability under the policy is below it ([`LOW_PROBS`]: 1% and 5%;
 //! a 1% one counts at both). It is *followed by a hit* when Link loses health on its own step or one of the next
 //! `FOLLOW - 1` steps of the same visit ([`FOLLOW`] decisions in all, about half a second of play), and *followed by
-//! a death* when the episode or run ends in death within them. Each decision counts at most once per kind.
+//! a death* when the episode or run ends in death within them. Each decision counts at most once per kind. The
+//! same is counted for every decision (`hit`, `death`): the base rate a low decision's is compared with.
 
 use std::fmt::Write;
 
@@ -34,16 +35,19 @@ pub struct DecisionStats {
     pub low: [u32; 2],
     pub low_hit: [u32; 2],
     pub low_death: [u32; 2],
+    /// Decisions (any) followed by a hit, by a death.
+    pub hit: u32,
+    pub death: u32,
     /// Sum of -ln p of the chosen actions under the policy.
     pub surprisal: f64,
     /// Sum of the acting distributions' entropies.
     pub act_entropy: f64,
     /// The joint action of every decision, in order.
     pub actions: Vec<u8>,
-    /// The last [`FOLLOW`] decisions' low thresholds (bit i: below `LOW_PROBS[i]`), most recent first.
+    /// The last [`FOLLOW`] steps' decisions: bit i below `LOW_PROBS[i]`, bit [`ANY`] a decision; most recent first.
     recent: [u8; FOLLOW],
     /// Whether a hit, a death was already counted for each of `recent`.
-    hit: [bool; FOLLOW],
+    hit_done: [bool; FOLLOW],
     dead: [bool; FOLLOW],
 }
 
@@ -52,16 +56,17 @@ impl DecisionStats {
     /// health (`hit`) or ended in death.
     pub fn update(&mut self, note: Option<DecisionNote>, hit: bool, died: bool) {
         self.recent.rotate_right(1);
-        self.hit.rotate_right(1);
+        self.hit_done.rotate_right(1);
         self.dead.rotate_right(1);
         self.recent[0] = 0;
-        self.hit[0] = false;
+        self.hit_done[0] = false;
         self.dead[0] = false;
         if let Some(note) = note {
             self.decisions += 1;
             self.surprisal -= note.log_prob as f64;
             self.act_entropy += note.act_entropy as f64;
             self.actions.push(note.action);
+            self.recent[0] |= 1 << ANY;
             for (i, &p) in LOW_PROBS.iter().enumerate() {
                 if note.log_prob < p.ln() {
                     self.low[i] += 1;
@@ -69,11 +74,15 @@ impl DecisionStats {
                 }
             }
         }
-        for (happened, done, counts) in [(hit, &mut self.hit, &mut self.low_hit), (died, &mut self.dead, &mut self.low_death)] {
+        let kinds = [
+            (hit, &mut self.hit_done, &mut self.low_hit, &mut self.hit),
+            (died, &mut self.dead, &mut self.low_death, &mut self.death),
+        ];
+        for (happened, done, counts, any) in kinds {
             if happened {
                 for (&bits, done) in self.recent.iter().zip(done.iter_mut()) {
                     if !*done {
-                        count(bits, counts);
+                        count(bits, counts, any);
                         *done = true;
                     }
                 }
@@ -91,11 +100,17 @@ impl DecisionStats {
     }
 }
 
-fn count(bits: u8, into: &mut [u32; 2]) {
+/// Bit of `DecisionStats::recent` for any decision.
+const ANY: usize = LOW_PROBS.len();
+
+fn count(bits: u8, into: &mut [u32; 2], any: &mut u32) {
     for (i, n) in into.iter_mut().enumerate() {
         if bits & (1 << i) != 0 {
             *n += 1;
         }
+    }
+    if bits & (1 << ANY) != 0 {
+        *any += 1;
     }
 }
 
@@ -130,6 +145,8 @@ mod tests {
         s.update(note(0.001, 8), false, false);
         s.update(None, true, true);
         assert_eq!((s.low, s.low_hit, s.low_death), ([2, 4], [2, 3], [1, 1]));
+        // Every decision: 3 + 1 at the first two hits, 4 at the third (death too), 1 at the last.
+        assert_eq!((s.hit, s.death), (3 + 1 + 4 + 1, 4 + 1));
         assert_eq!(s.decisions, 10);
         assert_eq!(s.actions.len(), 10);
         assert!((s.act_entropy - 5.0).abs() < 1e-9);

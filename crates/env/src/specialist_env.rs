@@ -139,11 +139,13 @@ pub fn linger_json(s: &LingerSummary) -> Value {
 
 /// A visit's decision statistics (`zelda::decisions`): `n` decisions, `low1`/`low5` (chosen with probability under
 /// 1%/5% under the policy), `low1_hit`/`low5_hit`/`low1_death`/`low5_death` (those followed by a hit or death
-/// within `zelda::decisions::FOLLOW` decisions), `surprisal` (sum of -ln p), `act_entropy` (sum of the acting
+/// within `zelda::decisions::FOLLOW` decisions), `hit`/`death` (any decision followed by one: the base rate),
+/// `surprisal` (sum of -ln p), `act_entropy` (sum of the acting
 /// distributions' entropies) and `actions` (two hex digits per decision: the joint action index).
 pub fn decisions_json(d: &DecisionStats) -> Value {
     json!({"n": d.decisions, "low1": d.low[0], "low5": d.low[1], "low1_hit": d.low_hit[0], "low5_hit": d.low_hit[1],
-           "low1_death": d.low_death[0], "low5_death": d.low_death[1], "surprisal": d.surprisal,
+           "low1_death": d.low_death[0], "low5_death": d.low_death[1], "hit": d.hit, "death": d.death,
+           "surprisal": d.surprisal,
            "act_entropy": d.act_entropy, "actions": d.actions_hex()})
 }
 

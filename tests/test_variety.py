@@ -24,7 +24,10 @@ def test_risk_sums_per_unit_and_skips_records_without_decisions():
     assert r['low5_per_episode'] == 2.0 and r['low5_hit_rate'] == 0.5 and r['low1_hit_rate'] == 1.0
     assert r['low1_death_rate'] == 0.0 and r['act_entropy_per_decision'] == pytest.approx(7 / 40)
     assert r['surprisal_per_decision'] == pytest.approx(0.5)
+    assert r['hit_rate'] is None, "records without the base counts have no base rate"
     assert risk([[None]], 'run') == {}
+    based = risk([[{**decisions_of(visit(10, 1, 2, 1, 1)), 'hit': 4, 'death': 1}]], 'run')
+    assert (based['hit_rate'], based['death_rate'], based['low5_hit_rate']) == (0.4, 0.1, 0.5)
 
 
 def test_the_mean_pair_prefix_is_every_pairs_common_prefix_averaged():

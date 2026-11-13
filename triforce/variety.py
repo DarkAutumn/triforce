@@ -4,7 +4,7 @@ Every evaluation room visit (``eval.json`` ``records[i]['visits'][j]['decisions'
 (``RoomRecord.decisions``) carries ``decisions`` (``crates/zelda/src/decisions.rs``): ``n`` decisions, ``low1`` /
 ``low5`` (actions chosen with probability under 1% / 5% under the unmodified policy, whatever the act mode),
 ``low1_hit`` / ``low5_hit`` / ``low1_death`` / ``low5_death`` (those followed by a hit, a death, within 4
-decisions), ``surprisal`` (sum of -ln p), ``act_entropy`` (sum of the entropies of the distributions the actions were
+decisions), ``hit`` / ``death`` (every decision followed by one: the base rate), ``surprisal`` (sum of -ln p), ``act_entropy`` (sum of the entropies of the distributions the actions were
 drawn from: 0 for argmax) and ``actions`` (two hex digits per decision, the joint action).  Records written before
 round 23 have none; every function here skips them.
 
@@ -22,7 +22,7 @@ from typing import Iterable, Optional
 # The per-visit decision means an evaluation's ``visited_rooms`` keep (``risk`` per visit), merged by room-stats.
 VISIT_RISK_KEYS = ('decisions_per_visit', 'low1_per_visit', 'low5_per_visit', 'low1_hit_per_visit',
                    'low5_hit_per_visit', 'low1_death_per_visit', 'low5_death_per_visit', 'act_entropy_per_decision')
-COUNTS = ('n', 'low1', 'low5', 'low1_hit', 'low5_hit', 'low1_death', 'low5_death')
+COUNTS = ('n', 'low1', 'low5', 'low1_hit', 'low5_hit', 'low1_death', 'low5_death', 'hit', 'death')
 SUMS = ('surprisal', 'act_entropy')
 
 
@@ -35,17 +35,20 @@ def decisions_of(record: dict) -> Optional[dict]:
 def risk(groups: Iterable[Iterable[dict]], unit: str) -> dict:
     """The decision counts of ``groups`` (each one unit: an episode, a run, a visit; a group is the ``decisions``
     dicts of its visits) summed and per unit: ``<unit>s`` counted (units with decision records), ``decisions``,
-    ``low1`` .. ``low5_death`` totals, ``<count>_per_<unit>``, ``low1_hit_rate`` / ``low5_hit_rate`` /
-    ``low1_death_rate`` / ``low5_death_rate`` (share of the low decisions followed by a hit or death),
+    ``low1`` .. ``death`` totals, ``<count>_per_<unit>``, ``low1_hit_rate`` / ``low5_hit_rate`` /
+    ``low1_death_rate`` / ``low5_death_rate`` (share of the low decisions followed by a hit or death) beside
+    ``hit_rate`` / ``death_rate`` (the same share of every decision, None in records without it),
     ``act_entropy`` and ``surprisal`` per decision.  {} when no unit has records."""
     totals = dict.fromkeys(COUNTS + SUMS, 0.0)
     units = 0
+    has_base = False
     for group in groups:
         seen = False
         for decisions in group:
             if decisions is None:
                 continue
             seen = True
+            has_base = has_base or 'hit' in decisions
             for key in COUNTS + SUMS:
                 totals[key] += decisions.get(key) or 0
         units += seen
@@ -59,6 +62,8 @@ def risk(groups: Iterable[Iterable[dict]], unit: str) -> dict:
     for low in ('low1', 'low5'):
         for what in ('hit', 'death'):
             result[f'{low}_{what}_rate'] = totals[f'{low}_{what}'] / totals[low] if totals[low] else None
+    for what in ('hit', 'death'):
+        result[f'{what}_rate'] = totals[what] / n if n and has_base else None
     result['decisions_per_' + unit] = n / units
     result['act_entropy_per_decision'] = totals['act_entropy'] / n if n else None
     result['surprisal_per_decision'] = totals['surprisal'] / n if n else None
