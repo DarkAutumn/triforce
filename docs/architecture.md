@@ -90,11 +90,11 @@ BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`,
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
 bomb kill then arms a forced drop of 4 bombs, `asm:Damage_KillMonster`); `required`, in game.yaml `requires_bombs`
 rooms and the 10th kill; `free`, in `requires_bombs` rooms, elsewhere while Link holds more than the route's bomb
-reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 5 from Dungeon 3's entrance), and the 10th
-kill (whatever the reserve). Families: `free` goriya, darknut, moldorm, boss-dodongo, boss-manhandla; `required`
-ow-tektite, trap-room; `tenth` the rest. The game's own rule comes first (bombs held, a free slot, an enemy or a
-bomb wall) and BOMB
-stays legal at an unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
+reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 5 from Dungeon 3's entrance, 2 from Dungeon
+4's), and the 10th kill (whatever the reserve). Families: `free` goriya, darknut, moldorm, boss-dodongo,
+boss-manhandla, vire; `required` ow-tektite, trap-room, stalfos-keese-gel; `never` boss-gleeok; `tenth` the rest.
+The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
+unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
 Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen wrap or an aborted one leaves Link)

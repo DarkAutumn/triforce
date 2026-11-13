@@ -3,7 +3,7 @@
 > **Afterwards (Nov 13, `docs/decisions.md` 2026-11-12 "One clip design", 2026-11-13 "Round 21 merged"):** `clips:` is now a
 > plain `true|false` switch; the four YAMLs say `clips: true` (`kind` arms) or `clips: false` (`none` arms), with
 > what they ran as. The catch-pose stall under "Oddities" is fixed: the CLIP macro waits the pose out. This report
-> describes the code as it ran.
+> describes the code as it ran. The round's main document is `round21.md`.
 
 Clips in the agent (branch `clips`, version 1.4.1.0, commit `ccaafe5`): the executor's block-clip macro, reached
 through `clips: {action: none|kind|long|edge}` (`docs/architecture.md` "Grid-point skip"). This experiment trains

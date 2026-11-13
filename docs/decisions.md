@@ -1230,7 +1230,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   nothing (W doorway of 1:0x44, S doorway of 4:0x30) or walks him back into the room first (4:0x11). The executor
   turned him by writing ObjDir, which the game then followed without a tile test, through the wall. The mask now
   offers only attacks along the doorway's axis there (`GameView::attack_directions`); N006's measured bounds were
-  taken with the facing poked.
+  taken with the facing poked. **Superseded in round 21:** the mask was one pixel too strict (entry 2026-11-12/13
+  "The doorway attack mask as the game does it") and the wall walk came from the executor's facing write, which is
+  gone (2026-11-12 "Attacks by buttons"): the mask is now what the buttons can do.
 
 ## 2026-11-12 — The grid-point skip in the agent: the wrap and the block clip, every design behind config (version 1.3.3.0)
 
@@ -1284,7 +1286,8 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   anyway. Both rule changes narrow the mask and `clip_usable_*` without changing the layout: REV bump to 1.3.3.1
   (models stamped 1.3.3.0 still load).
 - **Pending:** the choice between `kind`, `long` and `edge`, and between `jump` and `walk` (round 21 experiments).
-  Not built (asked not to): the sword variant, the ladder clip, the N/S wraps.
+  Not built (asked not to): the sword variant, the ladder clip, the N/S wraps. **Decided Nov 12** (entries below):
+  the CLIP kind with `jump` shaping, and the ladder clip built after all.
 - **Merged with Dungeon 4 (version 1.4.1.0):** `main`'s 1.4.0.0 (round 20) plus this COMPAT bump (action schema 2,
   observation schema 4, one above main's 3). Checked against round 20's engine in the real game
   (`crates/zelda/tests/clips.rs`, `crates/zelda/src/clips.rs` tests): no skip in a doorway (every door entry of
@@ -1298,20 +1301,42 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   takes him to the N door in 318 frames against 424 for the plain way (monsters cleared). The experiment route
   `clips-gauntlet` still draws both targets and changes no family's resets (`crates/env/tests/clips.rs`).
 
+## 2026-11-12 — Round 21: one change set, one retrain (Lee)
+
+- **What Lee decided** (Nov 12, final for the round): round 21 becomes one change set followed by one full retrain
+  of every family, under one COMPAT bump over `main`'s 1.4.0.0 (1.4.1.0; action schema 2, observation schema 4).
+  1. **Clips:** the CLIP action kind is the design; the `long`/`edge` MOVE triggers and `walk` shaping go; each
+     specialist keeps an on/off switch (next entry).
+  2. **The ladder clip** is built and Dungeon 4 takes the shortcut 0x31 N → 0x21 (in by the S door onto the island,
+     the ladder clip N, bomb the N wall) → 0x11 instead of 0x31 W → 0x30 → 0x20 → 0x21 (next entry).
+  3. **The movement cleanup, planned as round 22, is folded into round 21:** no facing write for an attack, no
+     selected-item write; attacks turn with the d-pad; an unselected B item is chosen on the item sub-screen, and
+     **those paused frames don't count against the action** (only the random numbers advance while the game is
+     paused): reported separately, left out of discounting, frame penalties and the observation's history. Start-state
+     RAM randomisation and the cheat ledger stay; any other RAM write during play is listed and removed unless needed
+     (entry "Attacks by buttons").
+  4. **Round 20's doorway problem:** the wall walk came from the facing write; with item 3 the cause is gone, and the
+     mask must offer exactly the attacks the game can do (round 20's mask was also one pixel too strict: entry
+     "The doorway attack mask as the game does it").
+  5. **After the retrain:** measure with 1000-run chains, then fix only what is needed among round 20's open items
+     (Gleeok at low health, deaths in 4:0x12 and 4:0x30, real bombs into Dungeon 4); the rest goes to the backlog.
+- **The round's document:** `docs/experiments/round21.md` (the experiments: `round21-gauntlet.md`,
+  `round21-trap-room.md`, `round21-vire-50.md`; the cleanup's gate: `round21-gate.md`).
+
 ## 2026-11-12 — One clip design (the CLIP kind); the ladder clip; Dungeon 4's shortcut through 0x21 (Lee)
 
-- **The design: the CLIP action kind**, legal only where the skip is available (`zelda::clips::skip_target`), the
-  path search's skips as jumps (PBRS pays the whole wavefront difference). A specialist's YAML keeps one switch,
-  `clips: true|false` (default false; the old `{action, shaping}` block is refused). **Why:** in the round 21
-  experiments every arm that could clip learned it (`docs/experiments/round21.md`: the overworld wrap gauntlet,
-  98.6-99.6% for every clip arm against 96.2-96.4% without; `docs/experiments/round21-trap-room.md`: 1:0x22's block
-  clip, 18 of 18 runs), `walk` shaping made no measurable difference against `jump`, and the MOVE triggers each had a
-  bad seed (`long` seed 1 never wrapped W→E: a short MOVE at the entry bound is a wrong exit; `edge`'s every MOVE
-  into the square clips, so the push block can't be pushed from its zone). The 4:0x50 test (the block clip through
-  the Vire room's diagonal, `docs/experiments/round21-vire-50.md`, merged afterwards) agrees: with clips every
-  episode clips N into the block above (`$B0`, `$8D`), 99-100% success and 0.07-0.17 hearts lost per episode against
-  95-99% and 0.48-0.61 on the zigzag without. Removed: the `long`/`edge` MOVE triggers, `ClipSettings`, `walk`
-  shaping (`critic::walk_cap`); MOVE never skips. The removed arms' YAMLs are in `experiments/r21/removed/`.
+- **The design: the CLIP action kind**, legal only where the skip is available (`zelda::clips::skip_target`), the path
+  search's skips as jumps (PBRS pays the whole wavefront difference). A specialist's YAML keeps one switch, `clips:
+  true|false` (default false; the old `{action, shaping}` block is refused). **Why:** in the round 21 experiments every
+  arm that could clip learned it (`docs/experiments/round21-gauntlet.md`: the overworld wrap gauntlet, 98.6-99.6% for
+  every clip arm against 96.2-96.4% without; `docs/experiments/round21-trap-room.md`: 1:0x22's block clip, 18 of 18
+  runs), `walk` shaping made no measurable difference against `jump`, and the MOVE triggers each had a bad seed (`long`
+  seed 1 never wrapped W→E: a short MOVE at the entry bound is a wrong exit; `edge`'s every MOVE into the square clips,
+  so the push block can't be pushed from its zone). The 4:0x50 test (the block clip through the Vire room's diagonal,
+  `docs/experiments/round21-vire-50.md`, merged afterwards) agrees: with clips every episode clips N into the block
+  above (`$B0`, `$8D`), 99-100% success and 0.07-0.17 hearts lost per episode against 95-99% and 0.48-0.61 on the zigzag
+  without. Removed: the `long`/`edge` MOVE triggers, `ClipSettings`, `walk` shaping (`critic::walk_cap`); MOVE never
+  skips. The removed arms' YAMLs are in `experiments/r21/removed/`.
 - **Clips on** for `vire` (0x50's diagonal, 0x03), `stalfos-keese-gel` (0x21), `trap-room` (1:0x22) and every
   overworld family (the wrap). Route rooms that offer a wrap at all (Link at rest on every grid point of the edge
   zones): 0x77, 0x67, 0x68, 0x58, 0x59, 0x5a, 0x5b, 0x5d, 0x4d, 0x2d, 0x2c, 0x1c, 0x1b, 0x1a, 0x19, 0x18, 0x17, 0x27,
@@ -1339,14 +1364,54 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   `4_50e_2` walks round. stalfos-keese-gel keeps no curriculum (round 20 learned 0x21's wall without one); its
   tracks are ready for `curriculum: {enabled: true}` if the retrain fails that room.
 
+## 2026-11-12/13 — The doorway attack mask as the game does it; two reward fixes from round 21
+
+- **Asked for:** round 20's doorway fix (`c222323`, 2026-11-12 "Doorway attacks") cost the old D2 models 82.1% →
+  68.6% on the D2 segment, and its bounds were one pixel too tight (`backlog.md`, the doorway regression): find the
+  game's rule, fix it, measure what the too-tight mask cost; and two reward oddities of the round 21 gauntlet
+  (`round21-gauntlet.md` Observations 1-2).
+- **The game** (traced in zcore on the N door of 1:0x33, S of 1:0x53, W of 1:0x44, E of 1:0x72 and 4:0x11's open S
+  bomb wall; `zelda-asm/mechanics.md` "Doorway movement"): Link turns sideways only on a room position (X $20..$D0,
+  Y $5D..$BD); while `DoorwayDir` ($53) is set his input is forced onto the axis he faces. `DoorwayDir` alone is not
+  the rule: it is set on a room position (the E door's floor spot X $D0 reached facing E, whose door is touched
+  from $CF; a room's entry spot on the first frame) and clear in a doorway (4:0x11: one frame of S from the entry
+  spot puts Link on Y $BF with it clear, since the room bound is skipped on the frame it is still set). The
+  executor's facing write then breaks the game: in a doorway it pushes Link 1-2 px sideways into the door frame;
+  from 4:0x11's Y $BF its walk ahead onto the grid point passes the bomb wall and the written facing steers the
+  room change E into 0x12 (round 20's wall walk). The room's edge row and column (Y $5D, X $20) turn normally.
+- **Built** (`GameView::attack_directions`, `compute_action_mask`'s own `DoorwayDir` filter removed): an attack
+  across a doorway's axis is masked iff the executor's turn point (Link's position on his line's grid, else the
+  next grid point ahead along his facing, where `run_attack` turns him) is outside the room, or Link stands on it
+  with `DoorwayDir` set and the game's forced step ahead leaves the room. `doorway_turns_match_the_game`
+  (`crates/zelda/tests/zcore_session.rs`) checks every position walked in and out on all five doors: offered iff
+  the game turns Link on a room position and the executor's turn leaves him on one. **Superseded on the merge with
+  `moves`** (next entry, "Attacks by buttons"): the mask is the buttons' (`attack::plan`) and this position rule is
+  gone; the test keeps its game half (offered iff holding the direction turns Link on a room position, every spot on
+  all five doors) and checks the button-played SWORD leaves him facing that way in the room. 4:0x11's bomb wall has
+  no spot deep enough for the game to refuse.
+- **Measured** on main's round 20 models with only this fix (branch `doorfix`): goriya `r68-clear5e` (sample, seed
+  0, 100 per state) 2:0x1e 92.0%, 2:0x5e 86.3%, 1:0x44 99.3%, exactly its numbers before `c222323` (2:0x1e
+  identical in every field); the D2 segment (1000 runs, act per model) 82.7% against 82.1% (round 19) and 68.6%
+  (round 20). The whole regression was the one-pixel error; closing the wall walk cost nothing measurable.
+- **Rewards:** `CLIP` is exempt from `penalty-attack-miss` like MOVE, WAIT and BOMB. PBRS pays from the first step
+  that moves Link: `critique_movement`'s baseline tile started unset at an episode's start and after a room change
+  or a hit, and once set it always equalled the previous state's tile, so the step now measures from that tile;
+  the room-changing or damaging step itself stays unshaped (no cross-room distance, no credit for knockback).
+  Sound for every family: the wavefront is the previous state's, in the same room; doorway tiles outside it pay
+  nothing as before.
+- **Version:** part of round 21's one COMPAT bump (1.4.1.0, entry "Round 21: one change set"); alone, both would
+  be a REV bump (reward and mask changes).
+
 ## 2026-11-12 — Attacks by buttons: no facing or selected-item writes (round 21, movement cleanup)
 
 - **What changed:** the executor no longer writes Link's facing (`$98`) to aim an attack nor the selected B item
-  (`$656`) to use one (backlog "Fewer writes to memory", Lee, Nov 12; round 21 decision 3). An attack is the button
-  sequence a player presses (`crates/zelda/src/attack.rs`, `submenu.rs`; architecture.md "Attacks by buttons"), and
-  the mask offers exactly the strikes those buttons can make from where Link stands
-  (`GameView::attack_directions(kind)` = `attack::plan`); the round 20 position rule (Link_BorderBounds ranges per
-  strike direction, "in a doorway" by position, the `DoorwayDir` `across` filter) is gone.
+  (`$656`) to use one (backlog "Fewer writes to memory", Lee, Nov 12; round 21 decision 3, planned as round 22 and
+  folded in). An attack is the button sequence a player presses (`crates/zelda/src/attack.rs`, `submenu.rs`;
+  architecture.md "Attacks by buttons"), and the mask offers exactly the strikes those buttons can make from where
+  Link stands (`GameView::attack_directions(kind)` = `attack::plan`); the round 20 position rule (Link_BorderBounds
+  ranges per strike direction, "in a doorway" by position, the `DoorwayDir` `across` filter) is gone. **This
+  supersedes** round 20's doorway mask (2026-11-12 "Dungeon 4 joins d2first", "Doorway attacks") and its one-pixel
+  correction (the entry above).
 - **Why:** the facing write was the cause of round 20's wall walk (round20.md §2): the game moves Link along `$98`
   without a tile test between grid points, so a written sideways facing in 4:0x11's S doorway walked him through
   the wall into 0x12 (`BOMB E`). Round 20 masked the symptom; with no write the game turns Link only by its own
@@ -1371,16 +1436,17 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   - A returning boomerang caught during the turn puts Link in the catch pose, in which the game ignores A and B
     (asm:Link_HandleInput): the executor waits it out (at most 32 frames) before pressing. Found when the rewritten
     F182 test (`every_legal_attack_starts_its_weapon_*`) saw a legal `BOMB N` place nothing in 3:0x49 and 3:0x4d.
-- **The sub-screen:** a BOMB, BOOMERANG or ARROW whose item is not selected opens the item sub-screen (START, 64
-  frames in a dungeon / 65 overworld to the first active frame, one cursor step per frame, START, 59 frames out):
-  123 + steps frames in a dungeon, 124 + steps overworld (1 step between boomerang and bombs, 2 to the arrow). The
-  game is paused throughout (only the random numbers, the frame counter and sound run): nothing moves and Link can't
-  be hit. So those frames don't count against the action (`Change.menu_frames`, outside `Change.frames`): discounting
-  (`StepInfo.frames`, the pool's rollout rows, `rollout_buffer.py`), the frame penalty, the observation's history,
-  heart timers and linger don't see them; every total of frames played does (`episode_frames`, visits, chain rooms
-  and runs, the pool's emulated frames, replays; `tests/native/test_menu_frames.py`). The game selects a lone B
-  item by itself (measured: bombs drawn into a goriya state with nothing selected are selected two frames later), so
-  the sub-screen is paid only by a switch between two held B items.
+- **The sub-screen:** a BOMB, BOOMERANG or ARROW whose item is not selected opens the item sub-screen (START, 64 frames
+  in a dungeon / 65 overworld to the first active frame, one cursor step per frame, START, 59 frames out): 123 + steps
+  frames in a dungeon, 124 + steps overworld (1 step between boomerang and bombs, 2 to the arrow). The game is paused
+  throughout (only the random numbers, the frame counter and sound run): nothing moves and Link can't be hit. So those
+  frames don't count against the action (Lee's decision 3, entry "Round 21: one change set"): `Change.menu_frames`,
+  outside `Change.frames`. Discounting (`StepInfo.frames`, the pool's rollout rows, `rollout_buffer.py`), the frame
+  penalty, the observation's history, heart timers and linger don't see them; every total of frames played does
+  (`episode_frames`, visits, chain rooms and runs, the pool's emulated frames, replays;
+  `tests/native/test_menu_frames.py`). The game selects a lone B item by itself (measured: bombs drawn into a goriya
+  state with nothing selected are selected two frames later), so the sub-screen is paid only by a switch between two
+  held B items.
 - **Kept:** start-state RAM randomisation (RNG bytes, spawn cycle, edge cell, fresh room flags,
   `ram_randomization`), the chain's RNG redraw at a checkpoint, the cheat ledger (bombs, keys, rupees a room needs),
   the look-ahead's pokes (inside a snapshot that is restored; they never reach the played game) and `perturb_rng`
@@ -1436,57 +1502,24 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   faces elsewhere, no sideways attack deep in a doorway facing out, new sideways strikes on the room's edge rows,
   more boomerang throws, and a B-item switch that is free to the critic but costs about 2 s of real time in chains
   and replays.
-
-## 2026-11-12/13 — The doorway attack mask as the game does it; two reward fixes from round 21
-
-- **Asked for:** round 20's doorway fix (`c222323`, 2026-11-12 "Doorway attacks") cost the old D2 models 82.1% →
-  68.6% on the D2 segment, and its bounds were one pixel too tight (`backlog.md` item 3): find the game's rule, fix
-  it, measure what the too-tight mask cost; and two reward oddities of the round 21 gauntlet (`round21.md`
-  Observations 1-2).
-- **The game** (traced in zcore on the N door of 1:0x33, S of 1:0x53, W of 1:0x44, E of 1:0x72 and 4:0x11's open S
-  bomb wall; `zelda-asm/mechanics.md` "Doorway movement"): Link turns sideways only on a room position (X $20..$D0,
-  Y $5D..$BD); while `DoorwayDir` ($53) is set his input is forced onto the axis he faces. `DoorwayDir` alone is not
-  the rule: it is set on a room position (the E door's floor spot X $D0 reached facing E, whose door is touched
-  from $CF; a room's entry spot on the first frame) and clear in a doorway (4:0x11: one frame of S from the entry
-  spot puts Link on Y $BF with it clear, since the room bound is skipped on the frame it is still set). The
-  executor's facing write then breaks the game: in a doorway it pushes Link 1-2 px sideways into the door frame;
-  from 4:0x11's Y $BF its walk ahead onto the grid point passes the bomb wall and the written facing steers the
-  room change E into 0x12 (round 20's wall walk). The room's edge row and column (Y $5D, X $20) turn normally.
-- **Built** (`GameView::attack_directions`, `compute_action_mask`'s own `DoorwayDir` filter removed): an attack
-  across a doorway's axis is masked iff the executor's turn point (Link's position on his line's grid, else the
-  next grid point ahead along his facing, where `run_attack` turns him) is outside the room, or Link stands on it
-  with `DoorwayDir` set and the game's forced step ahead leaves the room. `doorway_turns_match_the_game`
-  (`crates/zelda/tests/zcore_session.rs`) checks every position walked in and out on all five doors: offered iff
-  the game turns Link on a room position and the executor's turn leaves him on one. **Superseded on the merge with
-  `moves`** (entry above): the mask is the buttons' (`attack::plan`) and this position rule is gone; the test keeps
-  its game half (offered iff holding the direction turns Link on a room position, every spot on all five doors)
-  and checks the button-played SWORD leaves him facing that way in the room. 4:0x11's bomb wall has no spot deep
-  enough for the game to refuse.
-- **Measured** on main's round 20 models with only this fix (branch `doorfix`): goriya `r68-clear5e` (sample, seed
-  0, 100 per state) 2:0x1e 92.0%, 2:0x5e 86.3%, 1:0x44 99.3%, exactly its numbers before `c222323` (2:0x1e
-  identical in every field); the D2 segment (1000 runs, act per model) 82.7% against 82.1% (round 19) and 68.6%
-  (round 20). The whole regression was the one-pixel error; closing the wall walk cost nothing measurable.
-- **Rewards:** `CLIP` is exempt from `penalty-attack-miss` like MOVE, WAIT and BOMB. PBRS pays from the first step
-  that moves Link: `critique_movement`'s baseline tile started unset at an episode's start and after a room change
-  or a hit, and once set it always equalled the previous state's tile, so the step now measures from that tile;
-  the room-changing or damaging step itself stays unshaped (no cross-room distance, no credit for knockback).
-  Sound for every family: the wavefront is the previous state's, in the same room; doorway tiles outside it pay
-  nothing as before.
-- **Version:** none (the lead sets round 21's version at landing); both are reward/mask changes, a REV bump by the
-  rule.
+- **The gate before the merge** (`docs/experiments/round21-gate.md`; goriya with two seeds, darknut and ow-moblin,
+  from scratch on the old executor and on this one): no blocker. The same overall success, hearts and training speed;
+  no avoidance of B items; sub-screen frames add 4% to darknut rooms' emulated frames. One cost on both goriya seeds:
+  2:0x1e by argmax −5.5 points (by sample −1.7), confounded by the reward fixes of `e1fea65` that only the old build
+  had. Kept; the merged code has both.
 
 ## 2026-11-13 — Round 21 merged on `clips`: the clip design, attacks by buttons, the ladder clip
 
-- **Merged** into `clips`: `moves` (attacks by buttons), `ladder` (the CLIP kind as the one design, the ladder
-  clip, Dungeon 4's shortcut, its states) and `clips-run` (the 4:0x50 experiment, its YAMLs on the `clips:` switch).
-  No version or schema bump (action schema 2, observation schema 4; the lead sets the version at landing).
+- **Merged** into `clips`: `moves` (attacks by buttons), `ladder` (the CLIP kind as the one design, the ladder clip,
+  Dungeon 4's shortcut, its states) and `clips-run` (the 4:0x50 experiment, its YAMLs on the `clips:` switch). No
+  further version or schema bump: the round is 1.4.1.0 (action schema 2, observation schema 4).
 - **Reconciled:** the attack mask is `moves`' (`GameView::attack_directions(kind)` = `attack::plan`,
-  `compute_action_mask` without a `DoorwayDir` filter); the position rule of the entry above and its turn point are
-  gone, its test `doorway_turns_match_the_game` keeps the game half and checks the button-played SWORD instead of
-  the facing write (4:0x11's bomb wall has no spot deep enough for the game to refuse a turn). `Executor::execute`:
-  `ladder`'s CLIP arm (`ActionKind::Clip`, `skip_target`) beside `moves`' `run_attack` returning the sub-screen
-  frames; `FrameWatch.ladder` is used by MOVE's stall check only. The CLIP attack-miss exemption and the first-step
-  PBRS stay.
+  `compute_action_mask` without a `DoorwayDir` filter); the position rule of the doorway-mask entry (2026-11-12/13) and
+  its turn point are gone, its test `doorway_turns_match_the_game` keeps the game half and checks the button-played
+  SWORD instead of the facing write (4:0x11's bomb wall has no spot deep enough for the game to refuse a turn).
+  `Executor::execute`: `ladder`'s CLIP arm (`ActionKind::Clip`, `skip_target`) beside `moves`' `run_attack` returning
+  the sub-screen frames; `FrameWatch.ladder` is used by MOVE's stall check only. The CLIP attack-miss exemption and the
+  first-step PBRS stay.
 - **Two models of a laid ladder, kept apart:** `attack::step` predicts one frame of input for the turn before an
   attack, `GameView::can_link_move` (`ladder_move`, `lays_ladder`) whether a MOVE is legal; they answer different
   questions (a sideways press on the ladder goes on along it: movement for the first, an illegal MOVE for the

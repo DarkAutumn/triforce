@@ -4,36 +4,33 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 12)
+## Where things stand (Nov 13)
 
-- **Now (Nov 12, round 20, 1.4.0.0):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
+- **Now (Nov 13, round 21, 1.4.1.0):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
   them through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only trained
   route (`docs/routes/d2first.md`, `docs/routes/d3.md`, `docs/routes/d4.md`): game start → Dungeon 2 → the 0x2c
   heart cave → the white sword → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla) → by raft to
-  Dungeon 4 (the ladder, Gleeok), ending on the D4 triforce. Round 20 (`docs/experiments/round20.md`, decisions
-  2026-11-12) merged Dungeon 4 into the route, closed three engine gaps (the ladder crosses one-square water,
-  Gleeok's heads are observed and only head damage pays, uncounted kills reset the stall penalty), masked sideways
-  attacks in underworld doorways (the game can't do them; the executor's turn let Link walk through a wall), and
-  trained vire, like-like, boss-gleeok (start health [0.5, max], no PBRS), ow-peahat and the D4 rooms of the old
-  families. 1000 runs per segment: D2 68.6%, after D2 83.5%, D1 96.7%, after D1 100%, D3 38.6%, after D3 99.8%,
-  D4 21.1%; from the start to Dungeon 3 26.7%, to the D4 triforce 1.8%. **The doorway mask costs every model
-  trained before it** (D2 82.1% → 68.6%, round20.md §5): Lee (Nov 12) has a full retrain coming. Act mode per
-  model (`<run dir>/act`, bound to the checkpoint's sha1). Measure chains with 1000 runs per segment
-  (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog "Next projects"): the retrain under the doorway
-  mask, wallmaster heart gathering, goriya heart loss, fewer writes to memory; round 20 left Gleeok at low health
-  (Link arrives with 2.1 hearts), D4's bombs and 0x12/0x30 deaths open. Every new checkpoint needs its act mode
-  re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
-- **Round 21 (branch `clips`, 1.4.1.0; one change set, then a full retrain):** the speedrunners' grid-point skip
-  (the overworld screen wrap W/E, the dungeon block clip N/S, the dungeon ladder clip; `zelda-asm/mechanics.md`) is
-  the `CLIP` action kind, legal only where the skip is available, played by the executor as a macro
-  (`zelda::clips`), switched per specialist by `clips: true|false` (on: vire, stalfos-keese-gel, trap-room and the
-  overworld families); the path search treats block and ladder clips as jumps. Attacks are played by buttons: the
-  executor writes neither Link's facing nor the selected item, a B item that isn't selected is chosen on the item
-  sub-screen (`menu_frames`, left out of the action's frames), and the attack mask is what the buttons can do
-  (`attack::plan`; it replaced round 20's doorway rule). Dungeon 4 takes 0x31 N onto 0x21's island and the ladder
-  clip off it. Action schema 2 (the kind `CLIP`), observation schema 4 (`clip_usable_{N,S,W,E}`), counters
-  `clips/*`; no model trained before it loads. Decisions 2026-11-12 ("One clip design", "Attacks by buttons"),
-  2026-11-12/13 (the doorway mask) and 2026-11-13 ("Round 21 merged"); experiments `docs/experiments/round21*.md`.
+  Dungeon 4 (the ladder, the ladder clip off 0x21's island, Gleeok), ending on the D4 triforce. The actions are
+  MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW and, since round 21, `CLIP <N|S|W|E>`: the speedrunners'
+  grid-point skip (the overworld screen wrap W/E, the dungeon block clip N/S, the dungeon ladder clip;
+  `zelda-asm/mechanics.md`), legal only where a skip is available, played by the executor as a macro
+  (`zelda::clips`), on per family with `clips: true` (vire, stalfos-keese-gel, trap-room and the overworld
+  families); the path search treats block and ladder clips as jumps. Attacks are played by buttons: the executor
+  writes neither Link's facing nor the selected item, a B item that isn't selected is chosen on the item sub-screen
+  (`menu_frames`, left out of the action's frames), and the attack mask is what the buttons can do (`attack::plan`).
+  Round 21 (`docs/experiments/round21.md`; decisions 2026-11-12 "Round 21: one change set, one retrain", "One clip
+  design", "Attacks by buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged") chose the CLIP kind
+  by experiment (`round21-gauntlet.md`, `round21-trap-room.md`, `round21-vire-50.md`), found that round 20's D2
+  regression was a one-pixel doorway-mask error (D2 82.7% with only that fixed, round 20 68.6%), and retrains every
+  family from scratch (`r71`): action schema 2, observation schema 4, no model trained before 1.4.1.0 loads.
+  <!-- r71: numbers --> (the r71 chain numbers and promoted runs go here.) Round 20's chains (1000 runs per segment,
+  the old models): D2 68.6%, after D2 83.5%, D1 96.7%, after D1 100%, D3 38.6%, after D3 99.8%, D4 21.1%; from the
+  start to Dungeon 3 26.7%, to the D4 triforce 1.8%. Act mode per model (`<run dir>/act`, bound to the checkpoint's
+  sha1). Measure chains with 1000 runs per segment (`RUNS=1000 scripts/experiments/r56_chains.sh`). Next (backlog
+  "Next projects"): the r71 chains, then what they show among round 20's open items (Gleeok at low health: Link
+  arrives with 2.1 hearts; D4's bombs; the 0x12/0x30 deaths), wallmaster heart gathering, goriya heart loss; round 21
+  left the overworld ladder clip, `BOMB N` at the ladder clip's end and goriya's 2:0x1e by argmax open. Every new
+  checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
 - **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
   `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
   earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`
@@ -52,13 +49,14 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
   (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
-- **Dungeon 4 (scouted Nov 11, trained Nov 12; `docs/routes/d4.md`):** all 20 rooms and the ladder cellar are in
-  `game.yaml`; `d2first` steps 98–120 go by raft from 0x55 to the island 0x45, take the keys of 0x51 and 0x40, the
-  ladder under the Breakfast Room 4:0x32, back W to 0x31 and N through its locked door onto 0x21's island, off it by
-  the ladder clip (round 21, `CLIP N`; stalfos-keese-gel has `clips: true`), through two bomb walls (0x21, 0x11;
-  `bomb_reserve: 2`) to Gleeok and the triforce. Before round 21 the route went 0x31 W – 0x30 N – 0x20 E – 0x21.
-  routes.yaml keeps `{extends: <route>, steps: [...]}` for scouting the next dungeon. game.yaml rooms can carry a
-  `name:` (the Breakfast Room).
+- **Dungeon 4 (scouted Nov 11, trained Nov 12, the shortcut Nov 12; `docs/routes/d4.md`):** all 20 rooms and the
+  ladder cellar are in `game.yaml`; `d2first` steps 98–120 go by raft from 0x55 to the island 0x45, take the keys of
+  0x51 and 0x40, the ladder under the Breakfast Room 4:0x32, back W to 0x31 and N through its locked door onto
+  0x21's island, off it by the ladder clip (round 21, `CLIP N`, then one step down: from the clip's end a bomb
+  doesn't open the wall), through two bomb walls (0x21, 0x11; `bomb_reserve: 2`) to Gleeok and the triforce. Before
+  round 21 the route went 0x31 W – 0x30 N – 0x20 E – 0x21; 0x20 stays tagged `vire` but has no start state
+  (`4_30e_*`, `4_20s_*`, `4_21w_*` are gone, `4_21s_*` new). routes.yaml keeps `{extends: <route>, steps: [...]}`
+  for scouting the next dungeon. game.yaml rooms can carry a `name:` (the Breakfast Room).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -70,8 +68,9 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 Specialist PPO models (one per room family) that carry the `d2first` chain (`triforce/routes.yaml`) from the game
 start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow) to Dungeon 3 (the raft,
-Manhandla), then by raft to Dungeon 4 (the ladder, Gleeok) and its triforce (the route ends on taking it). Lee owns
-the direction; the standing invitation is to come up with ideas, test them, keep what helps, and log everything.
+Manhandla), then by raft to Dungeon 4 (the ladder, the ladder clip off 0x21's island, Gleeok) and its triforce (the
+route ends on taking it). Lee owns the direction; the standing invitation is to come up with ideas, test them, keep
+what helps, and log everything.
 
 ## Lee's standing rules
 
@@ -100,7 +99,8 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
   Manhandla, vire: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
   (ow-tektite, trap-room, stalfos-keese-gel: their `requires_bombs` rooms, the 0x2c rock wall, D3's bomb wall and
-  D4's 0x21/0x11 walls), `never` (boss-gleeok: only the sword hurts him), `tenth` (the rest:
+  D4's 0x21/0x11 walls; 0x21 from S since round 21: `CLIP N` off the island, one step down, then `BOMB N`),
+  `never` (boss-gleeok: only the sword hurts him), `tenth` (the rest:
   only the 10th damage-free kill, `$50` = 9, whose bomb kill arms a forced drop of 4 bombs; allowed in every mode
   but `never`, below any reserve). routes.yaml `bomb_reserve: 5` from Dungeon 3's entrance (3 for the bomb wall, 2
   for Manhandla), 2 from Dungeon 4's (its two walls); D3's central Darknut room takes its bombs at 4 or fewer.
@@ -228,7 +228,11 @@ the direction; the standing invitation is to come up with ideas, test them, keep
 - Launch long jobs through the tool's async/background mode; `( cmd & )` from a shell call gets killed.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
-  that wins 3% more but takes twice the damage loses in a chain.
+  that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
+  compare with its own `eval.json`, knowing the code under it differs (round 21).
+- **Start single trainings without `--events`** (round 21). `triforce.train --events FILE` appends to a stream its
+  caller owns and writes no `training.json`, so the training GUI never shows the run (only `scripts/train_round.py`
+  writes one for its stream). Without it the run gets its own `logs/<yymmdd>_<NNN>_<specialist>/`.
 - **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10` (route `d2first`, the
   default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`; after
   Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3 `--from 0_74c_0`; Dungeon 4

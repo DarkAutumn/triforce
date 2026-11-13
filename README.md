@@ -1,8 +1,9 @@
 # Triforce: a deep learning agent for The Legend of Zelda (NES)
 
 Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES. The agents play from the
-start of the game through Dungeon 2, go get the white sword, clear Dungeon 1, and finish on the triforce piece at
-the end of Dungeon 3, with a few detours along the way (a heart container, the bow, the raft).
+start of the game through Dungeon 2, go get the white sword, clear Dungeon 1 and Dungeon 3, and finish on the
+triforce piece at the end of Dungeon 4, with a few detours along the way (a heart container, the bow, the raft, the
+ladder).
 
 ![Six runs by the trained models, played back with play-zelda.py](docs/images/play-zelda.png)
 
@@ -10,17 +11,21 @@ the end of Dungeon 3, with a few detours along the way (a heart container, the b
 
 - **No pixels.** The networks never see the screen. Every observation is built from the game's RAM: Link, the
   enemies, projectiles and items, the room's tiles, and a pointer to the current objective.
-- **One model per kind of room.** There are 20 specialist PPO models, grouped by the enemies they face (Goriyas,
+- **One model per kind of room.** There are 24 specialist PPO models, grouped by the enemies they face (Goriyas,
   Darknuts, the Moldorm, each boss, and so on). A runner follows a fixed route through the game and hands each
   room to its specialist.
-- **Actions that mean something.** Each action is a short move (eight directions), a sword swing or an item, and
-  the agent only acts when the game would actually listen. The action mask offers only what the
-  game would really do at that moment, so the model never wastes a step on a sword swing the game would ignore.
+- **Actions that mean something.** Each action is a short move (eight directions), a sword swing, an item, or a
+  speedrunner's clip (the screen wrap, a clip into a block, a ladder clip over water), and the agent only acts when
+  the game would actually listen. The action mask offers only what the game would really do at that moment, so the
+  model never wastes a step on a sword swing the game would ignore. Every action is played with the controller
+  alone, as a player would press it.
 - **A fast emulator in Rust.** The NES emulator (`crates/zcore`, cut down from TetaNES), the game model, the
   environments and the policy's forward pass are all Rust. Python handles PPO training, evaluation and the tools,
   and talks to the game through the `triforce._native` extension module.
 
 ## How well it plays
+
+<!-- r71: numbers (the round 21 retrain's 1000-run chains replace the table below) -->
 
 Out of 1,000 runs from the start of the game with the current team:
 

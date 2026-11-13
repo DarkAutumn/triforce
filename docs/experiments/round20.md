@@ -6,6 +6,11 @@ and 0x40, let Vires be bombed (0x31 and 0x12; walk past them in 0x61), keep the 
 continue the old ones on their Dungeon 4 rooms, measure in single rooms and in chains, promote. Branch `d4`, run ids
 `r70-*`; the version goes to 1.4.0.0 with the merge (four dungeons). Decisions: `docs/decisions.md` 2026-11-12.
 
+> **Afterwards (round 21, `round21.md` §3):** the D2 regression of §5 was the doorway mask being one pixel too
+> strict (X `$20`, Y `$5D` counted as "in a doorway"), not the closed exploit: with only that fixed, the same models
+> reach 82.7% on the D2 segment (1000 runs). The wall walk of §2 came from the executor's facing write, not from the
+> game; round 21 plays attacks by buttons, which removed both the write and the position rule.
+
 ## Summary
 
 Dungeon 4 is part of `d2first` (steps 98–122; the route ends on the D4 triforce) and every family on it is trained

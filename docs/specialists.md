@@ -27,7 +27,7 @@ Grouping rule (design §3.1, revised by Lee on Nov 3, 2026):
 | `ow-boulder` | Falling boulders | (0,0x19), (0,0x18), (0,0x17) | exit-correct | Lee (Nov 8): boulders are hard to predict and can't be blocked. A boulder generator ($1F), its boulders ($20; both hazards, not enemies) and a Zora. |
 | `stalfos-keese-gel` | Stalfos / Keese / Gel | (1,0x73), (1,0x72), (1,0x74), (1,0x63), (1,0x53), (1,0x52), (1,0x42), (1,0x43), (1,0x33), (1,0x36) | exit-correct. 0x73 three times: W (key room 0x72), then E (key room 0x74), then N. 0x43 twice: from W N (the bow detour), from N E. 0x33 twice: from S N, from N S. At 0x36 the "exit" is triforce-collected (the D1 triforce; the route goes on from 0x37). | Was `d1-melee`. Includes the key rooms and all D1 locked doors on the way except 0x45 N. 0x36 (triforce room) and 0x73 (entrance hall) have no enemies and go to the nearest family. 0x33 (Stalfos×3, key) is north of 0x43, on the bow detour. |
 | `goriya` | Red Goriya | (2,0x5e), (2,0x1e), (1,0x44), (1,0x23) | exit-correct. 0x23 twice: from S W (to the trap room), from W S. | Every Red Goriya room, whatever the dungeon. 0x5e (×5) has the ringleader trigger; 0x1e (×5) needs kill-all to open the N shutter into Dodongo's room; 0x44 (×3) drops the boomerang when all are dead; 0x23 (×3) drops its key when all are dead, north of 0x33 on the bow detour. |
-| `trap-room` | Blade traps | (1,0x22), (3,0x5a), (3,0x4c) | exit-correct. 1:0x22 from E: push the west block N or S, take the stairs down to the bow cellar; out of the cellar: E. 3:0x5a E→W and W→E. 3:0x4c W→E: bomb the E wall into Manhandla's room. | Lee (Nov 9): blade-trap rooms. Four traps ($49) that slide at Link when he lines up with them and can't be killed; 0x22 has no monsters, 0x5a 4 Blue Keese, 0x4c 2 Zols. 3:0x4c is `requires_bombs`, so the family has bombs. |
+| `trap-room` | Blade traps | (1,0x22), (3,0x5a), (3,0x4c) | exit-correct. 1:0x22 from E: into the diamond, take the stairs down to the bow cellar (since round 21 by `CLIP N` under the east block; the push of the west block N or S still works); out of the cellar: E. 3:0x5a E→W and W→E. 3:0x4c W→E: bomb the E wall into Manhandla's room. | Lee (Nov 9): blade-trap rooms. Four traps ($49) that slide at Link when he lines up with them and can't be killed; 0x22 has no monsters, 0x5a 4 Blue Keese, 0x4c 2 Zols. 3:0x4c is `requires_bombs`, so the family has bombs. |
 | `equipment-room` | Blue Keese | (1,0x7f cellar), (3,0x0f cellar) | exit-correct: take the bow (raft), then up the left ladder to 0x22 (0x69) (leaving without it is a wrong exit). | Lee (Nov 9): every item cellar ("all equipment rooms are pretty much the same"): side view, walkways and ladders, four Blue Keese. |
 | `wallmaster` | Wallmaster | (1,0x45) | exit-correct. 0x45 exits N through a locked door. | Wallmasters need their own skills (v1's Wallmaster shaping, design §6). |
 | `boss-aquamentus` | Aquamentus | (1,0x35) | exit-correct after killing the boss and collecting the heart container; then E into 0x36. | Boss room per `asm:Level_InfoUW1` `asm:LevelInfo_BossRoomId`=$35. |
@@ -43,10 +43,16 @@ Rooms per family: `ow-start` 4, `ow-octorok` 9 (one an alternate), `ow-zora` 9, 
 `wallmaster` 1, `boss-aquamentus` 1, `d2-rope` 6, `moldorm` 1, `boss-dodongo` 1, `zol` 7, `darknut` 3,
 `boss-manhandla` 1, `vire` 8, `like-like` 1, `boss-gleeok` 1, `ow-peahat` 1.
 
+**Clips** (round 21; `docs/architecture.md` "Grid-point skip", `docs/experiments/round21.md`): a family's YAML
+`clips: true` offers the `CLIP` action where a skip is available in its rooms; the default is false. On: `vire` (the
+block clip in 4:0x50's diagonal and 4:0x03), `stalfos-keese-gel` (the ladder clip off 4:0x21's island), `trap-room`
+(the block clip in 1:0x22) and the nine overworld families (the screen wrap; ow-lynel's 0x0a, ow-leever's 0x48 and
+ow-peahat's 0x45 offer none, so for those three the switch changes nothing yet).
+
 ### Dungeon 4 (scouted Nov 11, merged into `d2first` and trained Nov 12; `docs/routes/d4.md`)
 
-`d2first` goes on from the Dungeon 3 triforce through Dungeon 4 (steps 98–122). Its rooms are tagged by enemy as
-everywhere; the existing families train on their Dungeon 4 rooms' start states too.
+`d2first` goes on from the Dungeon 3 triforce through Dungeon 4 (steps 98–122; 98–120 since round 21's shortcut).
+Its rooms are tagged by enemy as everywhere; the existing families train on their Dungeon 4 rooms' start states too.
 
 | Family | Main threat | Rooms (level, room) | Notes |
 |---|---|---|---|

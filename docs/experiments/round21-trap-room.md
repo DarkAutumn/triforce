@@ -3,7 +3,8 @@
 > **Afterwards (Nov 12, `docs/decisions.md` 2026-11-12 "One clip design"):** the owner chose the CLIP kind. The
 > `long` and `edge` triggers and the `walk` shaping were removed from the code; `clips:` is now a plain `true|false`
 > switch. The `long` and `edge` arms' YAMLs are in `experiments/r21/removed/` and no longer load; the kept ones
-> (`trap22-kind-*`, `trap22-none-*`) say `clips: true|false`. This report describes the code as it ran.
+> (`trap22-kind-*`, `trap22-none-*`) say `clips: true|false`. This report describes the code as it ran. The round's
+> main document is `round21.md`.
 
 Clips in the agent (branch `clips`, version 1.3.3.1, commit `376b6fd`): the executor's block-clip macro, reached
 through `clips: {action: none|kind|long|edge}` (`docs/architecture.md` "Grid-point skip", `docs/decisions.md`

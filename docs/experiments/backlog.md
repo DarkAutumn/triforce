@@ -3,11 +3,16 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
-## Next projects (Lee, Nov 11): top of the list
+## Next projects (Lee, Nov 11-12): top of the list
 
-Each is a project of its own, not a sub-item of the round 18 recovery.
+Each is a project of its own.
 
-1. **Wallmaster doesn't collect the hearts its kills drop** (round18.md). The old model (r56) landed about 6 hits
+1. **The round 21 retrain (`r71`) and its chains** (round21.md §7-§8; running Nov 13): every family from scratch on
+   1.4.1.0, evaluated in both act modes, compared room by room with round 20's promoted runs, then 1000 runs per
+   chain segment. After it (Lee, Nov 12) fix only what the chains show is needed among round 20's open items: Gleeok
+   at low health, the D4 deaths in 0x12 and 0x30, real bombs into Dungeon 4 ("Left open by round 20" below); the
+   rest stays here. Then "Left open by round 21" (below), as the chains rank it.
+2. **Wallmaster doesn't collect the hearts its kills drop** (round18.md). The old model (r56) landed about 6 hits
    per room on the Wallmasters and picked up the drops: +0.33 hearts per room in single-room evaluation, +0.85 per visit
    in the full route, where Link reaches 1:0x45 low on hearts and hands them on to Aquamentus and the rest of
    Dungeon 1. Every model trained on the current code rushes the exit instead (19–23 steps, 0.0 hearts): 100%
@@ -22,60 +27,122 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
    Ideas: value hearts the way the chain does (a per-family `gamma`, or a terminal bonus scaled by the hearts Link
    brings into the next room, or a larger `reward-gained-health` at low health); start from the old model with
    that change; a curriculum of low-health starts; measure in the full route, where it matters.
-2. **goriya heart loss** (round18.md §2). goriya loses about +0.26 hearts per room (93% success) after 8M + 4M
+3. **goriya heart loss** (round18.md §2). goriya loses about +0.26 hearts per room (93% success) after 8M + 4M
    steps; Lee's target is −0.1 to −0.2, i.e. a net gain like stalfos-keese-gel's. More training of the same
    objective doesn't move it (r61 → r63a: +0.266 → +0.262). Likely needs shaping (boomerang blocks with the shield,
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples.
-3. **Retrain under the doorway mask (round20.md §5; Lee, Nov 12: a full retrain follows).** `c222323` stopped the
-   executor from turning Link sideways in an underworld doorway (the game can't; the executor's ObjDir write let
-   `BOMB E` walk Link through 4:0x11's wall into 0x12). Models trained before it used such attacks: the unchanged
-   goriya `r68-clear5e` drops from 92.0% to 85.3% in 2:0x1e on the fixed mask (identical to its old eval without
-   it), and the D2 chain segment from 82.1% to 68.6%. Every underworld family trained before `c222323` (all but
-   round 20's) should be retrained; the D2 families (goriya, d2-rope, moldorm, boss-dodongo) show it in the chains.
-   Related: item 4 (the attack turn is a RAM write).
-   - [x] **Before the retrain (found on the `clips` merge, Nov 12; fixed Nov 13, decisions.md 2026-11-12/13):** the
-     doorway mask's bounds were one pixel too tight on two sides (it called Link "in a doorway" on X `$20` and Y
-     `$5D`, the room's left column and top row). Now the mask follows the game's turn (traced on all four doors and
-     4:0x11). Measured with round 20's models and only that fix: goriya `r68-clear5e` back to its pre-`c222323`
-     numbers (2:0x1e 92.0%, 2:0x5e 86.3%, 1:0x44 99.3%), the D2 segment 82.7% (1000 runs; round 19 82.1%, round 20
-     68.6%). The whole D2 regression was the one-pixel error; the closed wall walk cost nothing measurable, so the
-     retrain need not recover anything from it. The D2 segment still loses most in 2:0x1e (goriya, 61 deaths per
-     1000), 2:0x3e (moldorm, 53) and 2:0x5e (goriya, 35).
-     The movement cleanup (item 4) then replaced the position rule: the mask asks the game's own `DoorwayDir` and
-     input rules (`attack::plan`; decisions 2026-11-12, "Attacks by buttons"), which give the top row and left
-     column their strikes too.
 
-4. [x] **Fewer writes to memory** (Lee, Nov 12; done in round 21, decisions 2026-11-12 "Attacks by buttons"). The
-   executor plays some actions by writing RAM instead of pressing buttons, which makes combat easier than the real
-   game:
-   - [x] **Item selection:** a BOMB, BOOMERANG or ARROW action writes `Var::SelectedItem` before pressing B
-     (`zelda::executor` `run_attack`). Select the item the way a player does: open the sub-screen with START, move
-     the cursor to it, close it, and count those frames (and Link's exposure while the screen is up) against the
-     action. Done (`zelda::submenu`), but by the round 21 decision the sub-screen's frames (123-126, the game paused:
-     no exposure) are `menu_frames`, played and counted in every total but not against the action.
-   - [x] **Turning to attack:** every attack writes `Var::LinkDirection` to face Link the way he strikes (after walking
-     him onto the grid point). A player has to turn by moving, which takes a step and can cost a hit. Turn with
-     the d-pad instead, so the turn is real and the models learn to face enemies before they swing. Done
-     (`zelda::attack`): the sword turns on its press, bombs and arrows take a turn frame, the mask offers exactly the
-     strikes the buttons make.
-   - [x] Then list the writes that remain (the cheat ledger's bombs/keys/rupees, start-state RAM randomization,
-     anything else that calls `set_var` during play) and decide for each whether it stays. Kept: start-state RAM
-     randomisation, the chain's RNG redraw at a checkpoint, the cheat ledger, the look-ahead's pokes (inside a
-     restored snapshot) and `perturb_rng` (search only); nothing else writes during play.
-   - The turn write already caused one exploit (round20.md §2: walking through a wall from a doorway, now masked).
-   - **What remains:** the full retrain and re-measuring every family in single rooms and chains (round 21);
-     whether a switch between two held B items, free to the critic, should cost something (124 paused frames each,
-     about 2 s of real time; a D3 fight alternating boomerang and bombs spends 3-4x its game time on the
-     sub-screen); ARROW is untested in a family (no route state holds arrows yet); strikes refused as `Band` need a
-     MOVE out of the band first (doorway entry spots, screen edges).
+## Done (Nov 13): round 21 (clips, attacks by buttons, the ladder clip; 1.4.1.0)
+
+Round 21 (round21.md; decisions 2026-11-12 "Round 21: one change set, one retrain", "One clip design", "Attacks by
+buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged") is one change set and one retrain.
+
+- [x] **Round 20's doorway regression (round20.md §5).** `c222323` stopped the executor from turning Link sideways in
+  an underworld doorway (its ObjDir write let `BOMB E` walk Link through 4:0x11's wall into 0x12), and the D2 segment
+  fell from 82.1% to 68.6%; round 20 blamed the old models' use of attacks the game can't make and asked for a
+  retrain. **Answered (round21.md §3):** the mask's bounds were one pixel too tight (it called Link "in a doorway" on
+  X `$20` and Y `$5D`, the room's left column and top row). With only that fixed, goriya `r68-clear5e` is back to its
+  pre-`c222323` numbers (2:0x1e 92.0%, 2:0x5e 86.3%, 1:0x44 99.3%) and the D2 segment is 82.7% (1000 runs): the
+  whole regression was the one-pixel error; closing the wall walk cost nothing measurable. The wall walk was the
+  facing write's, not the game's; the movement cleanup (next item) removed the write and replaced the position rule
+  with the buttons' own (`attack::plan`). The D2 segment still loses most in 2:0x1e (goriya, 61 deaths per 1000),
+  2:0x3e (moldorm, 53) and 2:0x5e (goriya, 35). The retrain is `r71` (Next projects 1).
+- [x] **Fewer writes to memory** (Lee, Nov 12; planned as round 22, done in round 21; round21.md §4). The executor
+  played some actions by writing RAM instead of pressing buttons, which made combat easier than the real game:
+  - [x] **Item selection:** a BOMB, BOOMERANG or ARROW action wrote `Var::SelectedItem` before pressing B. Now the
+    item sub-screen chooses it (`zelda::submenu`: START, the cursor, START); by Lee's decision its frames (124-126,
+    the game paused: no exposure) are `menu_frames`, played and counted in every total but not against the action.
+  - [x] **Turning to attack:** every attack wrote `Var::LinkDirection` (after walking Link onto the grid point). Now
+    the d-pad turns him (`zelda::attack`): the sword turns on its press, bombs and arrows take a turn frame, the mask
+    offers exactly the strikes the buttons make.
+  - [x] **The writes that remain:** start-state RAM randomisation, the chain's RNG redraw at a checkpoint, the cheat
+    ledger, the look-ahead's pokes (inside a restored snapshot) and `perturb_rng` (search only); nothing else writes
+    during play.
+  - [x] **The gate** (round21-gate.md): no blocker; the one cost and the open questions are under "Left open by
+    round 21".
+- [x] **Clips and screen wraps** (Nov 12). The speedrun route uses the grid-point skip: one frame of perpendicular
+  input 5 pixels short of a grid point skips that point's tests. All of it is reproduced with controller input and
+  written up in `zelda-asm/mechanics.md` "Grid-point skip: block clip, ladder clip and their run-up" (rule, run-up,
+  recovery, decision table, frame tables, failures):
+  - [x] **East/west screen wrap** (room 0x77 both edges); the right wrap in 0x60 leaves Link in its left wall and
+    Left then enters 0x5f (room id − 1, no column check) standing on water. Without the ladder that is a softlock.
+  - [x] **Overworld ladder clip** in 0x5f (and 0x4f): from that arrival one press crosses three water squares to
+    the heart container (traced; not in the agent, below).
+  - [x] **Dungeon ladder clip** in 4:0x21 from the S door: one press crosses both water squares north (43 frames
+    from rest); with a bomb on the N wall it replaces 0x31 → 0x30 → 0x20. Also west and east off the island.
+  - [x] **Block clip** in 1:0x22: 8 pixels into a block from below, then sideways into the diamond and onto the
+    stairs (117 frames from the room entry, traps alive, no damage). The "reverse" clip is the same heading down.
+  - What the executor needs to know: the skip works from exactly one frame of the approach (two with the sword,
+    which is never needed and does nothing on a ladder). The sub-pixel byte (`asm:ObjPosFrac`) must have the right
+    value on the last grid point before the target, which only a full cell walked toward it guarantees; too close
+    or in the wrong cadence, Link has to walk away to the grid point 16 pixels before the target and come back
+    (6-12 frames away, 7-8 back). A second skip in a row is impossible. A failed try stops Link where he would
+    have stopped anyway; knockback spoils the cadence and the same back-off repairs it.
+  - [x] **How the agent performs it** (decided Nov 12, decisions 2026-11-12 "One clip design"; round21.md §2): the
+    CLIP action kind, legal where the skip is available, per family `clips: true|false`; the executor plays the
+    macro; MOVE never skips. The `long`/`edge` MOVE triggers and `walk` shaping were removed. On: vire,
+    stalfos-keese-gel, trap-room and the overworld families. The ladder clip is built for dungeons; the path search
+    knows the block and ladder clips (not the wrap).
+  - [x] **The three design experiments:** the overworld gauntlet (round21-gauntlet.md), 1:0x22
+    (round21-trap-room.md), 4:0x50 (round21-vire-50.md). Problems they found and fixed: the first step that moved
+    Link paid no PBRS (`critique_movement` only set the baseline tile; policies stepped in and wrapped back); `CLIP`
+    paid `penalty-attack-miss`; CLIP stalled in the catch pose (a boomerang caught during the macro). Moot with the
+    `long` trigger gone: a MOVE of 4-16 frames at the entry bound left by the wrong exit (−20), so `long` seed 1
+    never found the W→E wrap.
+- [x] **Round 20's "Future route"** (Lee): through the ladder clip from 0x31 N onto 0x21's island (below, under
+  Dungeon 4).
+
+Left open by round 21 (round21.md §9):
+
+- [ ] **The overworld ladder clip** (0x5f, 0x4f) is not built: it needs a wrap followed by a room change, and the
+  room model doesn't cover the ladder in the overworld.
+- [ ] **Wraps onto a row whose landing leaves by an exit that doesn't count.** 0x5b row Y `$B5` wraps into the
+  lower E opening, outside game.yaml `span` (the scripted wrap fails 0_5bw_0 100 of 100; trained policies change
+  rows first). Not offering the wrap there needs the objective's exits in the availability rule. The gate's ow-moblin
+  wrong exits (4 → 12 of 3,000, from 0_5bw and 0_63e) come from 0x5b's two E openings too.
+- [ ] **BOMB N from the end of 4:0x21's ladder clip** (Y `$55`, 8 pixels into the top wall) is legal and spends
+  the bomb, but the wall stays shut (the bomb lands `$18` from the wall's hotspot); one step down (`MOVE S 8`) and it
+  opens. The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Watch the retrained
+  stalfos-keese-gel for wasted bombs (its 0x21 visit gets a cheated one).
+- [ ] **A clip cut short and finished by a walk isn't counted** (round21-vire-50.md, episode 107: a stalled clip left
+  Link 6 px into the block and `MOVE N 32` carried him through). The masks are the game's on every frame a clip can
+  be cut (`the_masks_are_the_games_wherever_a_clip_is_cut`), so only the `clips/*` counters miss it. Count a MOVE
+  that crosses a skip's square, or leave it.
+- [ ] **vire 0x50 without clips ends `stuck` at the N door** in 3-8 of 300 argmax episodes (Link pressing N into the
+  wall 8+ px off the door's column; round21-vire-50.md). Not traced; with clips the route reaches the same row and
+  never sticks there.
+- [ ] **Whether a B-item switch should cost something.** A switch between two held B items is free to the critic
+  (124-126 paused frames, outside the action's frames by Lee's decision) but costs about 2 s of real time when
+  watched; a D3 fight alternating boomerang and bombs spends 3-4x its game time on the sub-screen. The gate's darknut
+  switches 0.14 times per episode (4% more emulated frames).
+- [ ] **Goriya 2:0x1e by argmax** (round21-gate.md): −5.5 points on both seeds of the gate's new build (−1.7 by
+  sample), confounded by `e1fea65` (PBRS on the first step), which only the old build had. To settle it: goriya on
+  the cleanup with `e1fea65`, two seeds, 3M steps (about 45 minutes a pair). Check the `r71` goriya's argmax in
+  2:0x1e first.
+- [ ] **Clips for levels 5-9.** Only levels 1 and 4 were scanned for skips; level 5's Blue Darknut rooms (`$05`,
+  `$64`: blocks round their stairs; `zelda-asm/levels/level-5.md`) are the first to check when the route gets there.
+- [ ] **The final PPO update can change a model after its last logged iteration** (round21-trap-room.md §4:
+  `kind-nocur` s1 fell from 100% to 75% training success in its last two iterations; `long-north` s1 logged 100% for
+  10 iterations, its checkpoint scores 75-82%). There is no best-checkpoint selection.
+- [ ] **`triforce.explore --variant` loses its tracks when `--specialist` is a YAML path** (it looks under the path,
+  the explorer writes under the config name, and still prints "solved" with the wrong path; round21-trap-room.md
+  §4). `1_22e_0` and `1_22e_1` give identical explore tracks for every seed.
+- [ ] **The curricula's action records are stale:** `trajectory.json` actions were explored with the facing writes
+  and no longer replay (13 of 45 tracks still leave the room under the merged executor). Training starts only from
+  the stored states, so nothing depends on them; re-explore to refresh the record.
+- [ ] **ARROW** is untested in a family (no route state holds arrows); strikes refused as `Band` need a MOVE out of
+  the band first (doorway entry spots, screen edges).
+- [ ] **Round 20's open items** (below, under Dungeon 4): Gleeok at low health, the D4 deaths in 0x12 and 0x30,
+  bombs into Dungeon 4, linger over 500 steps.
 
 ## Done (Nov 12): Dungeon 4 (Lee; round 20, 1.4.0.0)
 
 Scouted Nov 11 (`docs/routes/d4.md`, decisions 2026-11-11), merged into `d2first` and trained Nov 12
 (round20.md, decisions 2026-11-12): D4 segment 21.1%, the full route to the D4 triforce 1.8% (1000 runs each).
 
-- [x] **The route:** `d2first` steps 98–122 end on the D4 triforce; `d2first-d4` deleted; the states moved up.
+- [x] **The route:** `d2first` steps 98–122 end on the D4 triforce (98–120 since round 21's shortcut); `d2first-d4`
+  deleted; the states moved up.
 - [x] **Bombs for Dungeon 4's two walls:** `bomb_reserve: 2` from 4:0x71, vire `bombs: free`. Measured: every chain
   run arrives without bombs (Manhandla spends them), so both walls take a cheated bomb (753 and 739 visits per 1000
   runs) and no Vire is ever bombed.
@@ -87,7 +154,7 @@ Scouted Nov 11 (`docs/routes/d4.md`, decisions 2026-11-11), merged into `d2first
   didn't reset the stall penalty).
 - [x] **The explorer's cell key** and **the map objective's cache** (fixed during the scouting).
 
-Left open by round 20:
+Left open by round 20 (Lee, Nov 12: after the round 21 retrain, fix what the chains show is needed):
 
 - [ ] **Gleeok at low health.** Link reaches 4:0x13 with 2.1 hearts on average; below 3.5 hearts (492 of 598 chain
   visits) Gleeok wins 24%, dies 185 times and stalls 188 (hides for the 2000-step budget). The model was trained at
@@ -102,57 +169,6 @@ Left open by round 20:
   0x21's island. Done in round 21 (branch `ladder`, decisions 2026-11-12 "One clip design"): `d2first` goes 0x31
   E → N, 0x21 S → N (CLIP N off the island, a step down, BOMB N); the 0x30 E → N and 0x20 steps are gone. Needs the
   retrain (stalfos-keese-gel with clips).
-
-5. **Clips and screen wraps** (Nov 12). The speedrun route uses the grid-point skip: one frame of perpendicular
-   input 5 pixels short of a grid point skips that point's tests. All of it is reproduced with controller input and
-   written up in `zelda-asm/mechanics.md` "Grid-point skip: block clip, ladder clip and their run-up" (rule, run-up,
-   recovery, decision table, frame tables, failures):
-   - [x] **East/west screen wrap** (room 0x77 both edges); the right wrap in 0x60 leaves Link in its left wall and
-     Left then enters 0x5f (room id − 1, no column check) standing on water. Without the ladder that is a softlock.
-   - [x] **Overworld ladder clip** in 0x5f (and 0x4f): from that arrival one press crosses three water squares to
-     the heart container.
-   - [x] **Dungeon ladder clip** in 4:0x21 from the S door: one press crosses both water squares north (43 frames
-     from rest); with a bomb on the N wall it replaces 0x31 → 0x30 → 0x20. Also west and east off the island.
-   - [x] **Block clip** in 1:0x22: 8 pixels into a block from below, then sideways into the diamond and onto the
-     stairs (117 frames from the room entry, traps alive, no damage). The "reverse" clip is the same heading down.
-   - What the executor needs to know: the skip works from exactly one frame of the approach (two with the sword,
-     which is never needed and does nothing on a ladder). The sub-pixel byte (`asm:ObjPosFrac`) must have the right
-     value on the last grid point before the target, which only a full cell walked toward it guarantees; too close
-     or in the wrong cadence, Link has to walk away to the grid point 16 pixels before the target and come back
-     (6-12 frames away, 7-8 back). A second skip in a row is impossible. A failed try stops Link where he would
-     have stopped anyway; knockback spoils the cadence and the same back-off repairs it.
-   - [x] **How the agent performs it** (decided Nov 12, decisions 2026-11-12 "One clip design"): the CLIP action
-     kind, legal where the skip is available, per family `clips: true|false`; the executor plays the macro; MOVE
-     never skips. The `long`/`edge` MOVE triggers and `walk` shaping were removed. On: vire, stalfos-keese-gel,
-     trap-room and the overworld families. The ladder clip is built for dungeons; the path search knows the block
-     and ladder clips (not the wrap).
-   - [ ] **The overworld ladder clip** (0x5f, 0x4f) is not built: it needs a wrap followed by a room change, and the
-     room model doesn't cover the ladder in the overworld.
-   - [ ] **BOMB N from the end of 4:0x21's ladder clip** (Y `$55`, 8 pixels into the top wall) is legal and spends
-     the bomb, but the wall stays shut (the bomb lands outside the room); one step down (`MOVE S 8`) and it opens.
-     The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Watch the retrained
-     stalfos-keese-gel for wasted bombs (its 0x21 visit gets a cheated one).
-   - [x] **CLIP stalled in the catch pose** (round21-vire-50.md "Oddities"): a boomerang caught during the macro
-     held Link (`$AC` `$20`/`$21`/`$31`) and the macro aborted `stalled`. Fixed on the merge (decisions 2026-11-13
-     "Round 21 merged"): the macro waits the pose out, as attacks do; CLIP stays masked while the pose is on.
-   - [ ] **A clip cut short and finished by a walk isn't counted** (round21-vire-50.md, episode 107: a stalled
-     clip left Link 6 px into the block and `MOVE N 32` carried him through). The masks are the game's on every
-     frame a clip can be cut (`the_masks_are_the_games_wherever_a_clip_is_cut`), so only the `clips/*` counters
-     miss it. Count a MOVE that crosses a skip's square, or leave it.
-   - [ ] **vire 0x50 without clips ends `stuck` at the N door** in 3-8 of 300 argmax episodes (Link pressing N into
-     the wall 8+ px off the door's column; round21-vire-50.md). Not traced.
-   - [x] **Round 21 gauntlet** (round21.md): the four ways of offering the wrap (`clips.action` none, kind, long,
-     edge; `shaping` jump, walk) trained from scratch on 0x59, 0x5a and 0x5b with two target exits per entry. The
-     design chosen afterwards: `kind` with `jump` (see above). Problems it found:
-     - [x] The first step that moves Link in an episode paid no PBRS (`critic.rs` `critique_movement` only set
-       the baseline tile). A wrap from the entry bound at step 0 therefore earned nothing, the same wrap after one
-       short step into the room up to +1 (jump); kind and edge policies step in and wrap back (3 steps, not 2).
-       Fixed Nov 13: every step pays from the previous tile.
-     - [x] `CLIP` paid `penalty-attack-miss` (−0.01) under `kind`; exempt since Nov 13.
-     - `long`: a MOVE of 4-16 frames at the entry bound leaves by the wrong exit (−20), so a seed can learn to
-       avoid MOVE toward the entry edge and never find the 32-frame wrap (seed 1: W→E crossings never wrap).
-     - The wrap is offered on rows whose landing leaves by an exit that doesn't count (0x5b row Y $B5 lands in the
-       lower E opening, outside game.yaml `span`); policies learned to change rows first.
 
 ## Done (Nov 12): bombs (Lee, Nov 11; round 19)
 
