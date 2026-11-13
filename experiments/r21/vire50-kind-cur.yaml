@@ -1,0 +1,18 @@
+name: vire50-kind-cur
+# Round 21, the block clip in level 4 room 0x50 (docs/experiments/round21-vire-50.md). Modelled on
+# specialists/vire.yaml with only 0x50 (E door to N door, five Vires, dark); the arms differ only in `clips.action`
+# and the curriculum. Run from the repository root; the curriculum tracks (the plain zigzag, explored from
+# vire50-none-nocur) are rebuilt by scripts/experiments/r21_vire50.sh tracks.
+rooms: ['(4, 0x50)']
+start_states: ['4_50e_[0-9]']
+success: [exit-correct, triforce-collected]
+reward_profile: default
+reward: {pbrs: true, item_targets: true}
+obs: {objective: true, target: true}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+items: {bombs: free}
+curriculum: {enabled: true, trajectories: trajectories/r21-vire50}
+clips: true                     # ran as {action: kind, shaping: jump}, the design kept (docs/decisions.md 2026-11-12)
+one_room: true
+max_steps: 2000
+warm_start: null
