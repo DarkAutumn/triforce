@@ -34,6 +34,13 @@ Each is a project of its own, not a sub-item of the round 18 recovery.
    it), and the D2 chain segment from 82.1% to 68.6%. Every underworld family trained before `c222323` (all but
    round 20's) should be retrained; the D2 families (goriya, d2-rope, moldorm, boss-dodongo) show it in the chains.
    Related: item 4 (the attack turn is a RAM write).
+   - **Before the retrain (found on the `clips` merge, Nov 12):** the doorway mask's bounds are one pixel too tight on
+     two sides. `GameView::attack_directions` calls Link "in a doorway" outside X `$21`..`$D0`, Y `$5E`..`$BD`, but
+     he stands in the room on X `$20` (the left column) and Y `$5D` (the top row; asm:Room_ObjBoundsUW, mechanics.md
+     "Screen edges": Y `$5D`..`$BD`, X `$20`..`$D0`). There the mask leaves only the doorway's axis: in 4:0x50, on
+     (`$A0`, `$5D`) with `DoorwayDir` 0, `sword_directions()` is [N, S] while a press of E turns and walks Link E
+     (measured). Every room's top row loses its sideways attacks and its left column its vertical ones. Check
+     against the game (and `DoorwayDir`) and fix before the full retrain.
 
 4. **Fewer writes to memory** (Lee, Nov 12). The executor plays some actions by writing RAM instead of pressing
    buttons, which makes combat easier than the real game:
