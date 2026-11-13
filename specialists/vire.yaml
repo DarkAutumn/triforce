@@ -1,12 +1,13 @@
 name: vire
 rooms: ['(4, 0x71)', '(4, 0x61)', '(4, 0x50)', '(4, 0x30)', '(4, 0x31)', '(4, 0x20)', '(4, 0x12)', '(4, 0x03)']
-start_states: ['4_71*_[0-9]', '4_61*_[0-9]', '4_50*_[0-9]', '4_30*_[0-9]', '4_31*_[0-9]', '4_20*_[0-9]', '4_12*_[0-9]', '4_03*_[0-9]']
+start_states: ['4_71*_[0-9]', '4_61*_[0-9]', '4_50*_[0-9]', '4_30*_[0-9]', '4_31*_[0-9]', '4_12*_[0-9]', '4_03*_[0-9]']
 success: [exit-correct, triforce-collected]   # 0x03 ends on the D4 triforce (the route's end)
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: free}                       # Lee, Nov 12: Vires may be bombed (one killed outright can drop bombs), above D4's reserve of 2
+clips: true                                # round 21: the block clip (0x50's diagonal, 0x03) and the ladder clip
 curriculum: {enabled: true}             # trajectories/vire (Go-Explore paths per start state)
 one_room: true
 max_steps: 2000
@@ -14,10 +15,11 @@ warm_start: null
 notes: >-
   Vire rooms (Dungeon 4, Nov 11-12): a Vire hops toward Link and splits into two Red Keese when hit with less than a
   killing blow. Dungeon 4's empty entrance hall 0x71 (S to N) and triforce room 0x03 (ends on pickup), as zol holds
-  Dungeon 3's; 0x61 (three Vires: S to N; best walked past); the dark 0x50 (five: E to N); the dark 0x30 (three
-  Vires and two Bubbles: S in, E through the locked door; later E in, N across the water row on the ladder through
-  the other locked door); 0x31, a water maze whose land path winds from the W door to the E shutter (five Vires:
-  kill them all to open it on the way to the Breakfast Room; back from E to W, shorter on the ladder); 0x20, a
-  water ring (five: S to E); 0x12 (five: in through the W wall bombed from the rupee room, kill them, push the block
-  to open the E shutter into Gleeok's room). Bombs are free above the route's reserve of 2 (Lee, Nov 12: 0x31 and
-  0x12 are good places, a Vire killed outright can drop bombs). Copied from zol (one-room, curriculum, 2000 steps).
+  Dungeon 3's; 0x61 (three Vires: S to N; best walked past); the dark 0x50 (five: E to N; the block clip cuts its
+  diagonal); the dark 0x30 (three Vires and two Bubbles: S in, E through the locked door); 0x31, a water maze whose
+  land path winds from the W door to the E shutter (five Vires: kill them all to open it on the way to the Breakfast
+  Room; back from E, N through the locked door onto 0x21's island, round 21's shortcut); 0x20, a water ring off the
+  route since round 21 (tagged, no start state); 0x12 (five: in through the W wall bombed from the rupee room, kill
+  them, push the block to open the E shutter into Gleeok's room). Bombs are free above the route's reserve of 2 (Lee,
+  Nov 12: 0x31 and 0x12 are good places, a Vire killed outright can drop bombs). Copied from zol (one-room,
+  curriculum, 2000 steps).

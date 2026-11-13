@@ -145,9 +145,11 @@ d2first:
 # Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
 # N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, Lee's directions: the keys of 0x51 and 0x40
 # (both in the open from the start), the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose
-# pushed block reveals the stairs), back W W to the Vire room 0x30, N across its water on the ladder, E, bomb N into
-# the rupee room 0x11, bomb E into the Vire room 0x12, its pushed block opens the E shutter to Gleeok, N to the
-# triforce.  Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11.
+# pushed block reveals the stairs), back W to the Vire room 0x31, N through its locked door onto the island of 0x21,
+# the ladder clip N over its two squares of water (round 21, Lee, Nov 12: the shortcut instead of W to 0x30, N, E;
+# only a family with `clips: true` leaves the island), bomb N into the rupee room 0x11, bomb E into the Vire room
+# 0x12, its pushed block opens the E shutter to Gleeok, N to the triforce.  Keys: 0x30's E door and 0x31's N door.
+# Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11.
 - {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
 - {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
 - {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: E}
@@ -165,10 +167,8 @@ d2first:
 - {level: 4, room: '0x32', specialist: like-like, entry: W, exit: cave}
 - {level: 4, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ladder}
 - {level: 4, room: '0x32', specialist: like-like, entry: cave, exit: W}
-- {level: 4, room: '0x31', specialist: vire, entry: E, exit: W}
-- {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
-- {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
-- {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
+- {level: 4, room: '0x31', specialist: vire, entry: E, exit: N}
+- {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: S, exit: N}
 - {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: E}
 - {level: 4, room: '0x12', specialist: vire, entry: W, exit: E}
 - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}

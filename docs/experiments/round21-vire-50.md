@@ -1,5 +1,10 @@
 # Round 21: the block clip in level 4 room 0x50 (vire)
 
+> **Afterwards (Nov 13, `docs/decisions.md` 2026-11-12 "One clip design", 2026-11-13 "Round 21 merged"):** `clips:` is now a
+> plain `true|false` switch; the four YAMLs say `clips: true` (`kind` arms) or `clips: false` (`none` arms), with
+> what they ran as. The catch-pose stall under "Oddities" is fixed: the CLIP macro waits the pose out. This report
+> describes the code as it ran.
+
 Clips in the agent (branch `clips`, version 1.4.1.0, commit `ccaafe5`): the executor's block-clip macro, reached
 through `clips: {action: none|kind|long|edge}` (`docs/architecture.md` "Grid-point skip"). This experiment trains
 level 4 room 0x50 alone, from the E door to the N door. The room is dark and holds five Vires, and diagonal rows of

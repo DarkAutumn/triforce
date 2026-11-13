@@ -1,5 +1,10 @@
 # Round 21: the block clip in level 1 room 0x22 (trap room)
 
+> **Afterwards (Nov 12, `docs/decisions.md` 2026-11-12 "One clip design"):** the owner chose the CLIP kind. The
+> `long` and `edge` triggers and the `walk` shaping were removed from the code; `clips:` is now a plain `true|false`
+> switch. The `long` and `edge` arms' YAMLs are in `experiments/r21/removed/` and no longer load; the kept ones
+> (`trap22-kind-*`, `trap22-none-*`) say `clips: true|false`. This report describes the code as it ran.
+
 Clips in the agent (branch `clips`, version 1.3.3.1, commit `376b6fd`): the executor's block-clip macro, reached
 through `clips: {action: none|kind|long|edge}` (`docs/architecture.md` "Grid-point skip", `docs/decisions.md`
 2026-11-12). This experiment trains level 1 room 0x22 alone, from the E door to the stairs (the bow cellar 0x7f),

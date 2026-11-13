@@ -219,12 +219,14 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     """A one-room task from ``source``: leave this step's room through an objective-correct exit (or pick up the
     triforce).  Bombs are usable only in a ``requires_bombs`` room (Dodongo, the 0x2c rock wall), where the bomb
     rule keeps Link from running out (``required``; elsewhere ``never``, not even the 10th kill's, so a built state
-    carries the bombs the route does)."""
+    carries the bombs the route does).  The grid-point skips (CLIP) follow the step's family's ``clips:`` switch, as
+    in a chain: 4:0x21 entered from S is left only by the ladder clip."""
     rooms = game_rooms() if rooms is None else rooms
     bombs = 'required' if rooms.get(step.location.as_tuple(), {}).get('requires_bombs') else 'never'
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            items={'bombs': bombs}, fresh_rooms=True, route=route)
+                            items={'bombs': bombs}, fresh_rooms=True, route=route,
+                            clips=load_specialist(step.specialist).clips)
 
 
 def refill_hearts(game: Game):

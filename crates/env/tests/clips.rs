@@ -63,7 +63,9 @@ fn pbrs(r: &StepResult) -> f64 {
 /// ...}`) is refused.
 #[test]
 fn the_clips_switch_parses() {
-    let base = std::fs::read_to_string(common::repo().join("specialists/ow-start.yaml")).unwrap();
+    // ow-start says `clips: true`; without that line the switch is off.
+    let text = std::fs::read_to_string(common::repo().join("specialists/ow-start.yaml")).unwrap();
+    let base: String = text.lines().filter(|l| !l.starts_with("clips:")).map(|l| format!("{l}\n")).collect();
     for (value, want) in [
         ("true", Some(true)),
         ("false", Some(false)),
@@ -71,13 +73,11 @@ fn the_clips_switch_parses() {
         ("{action: none, shaping: jump}", None),
         ("long", None),
     ] {
-        let text = format!("{base}\nclips: {value}\n");
+        let text = format!("{base}clips: {value}\n");
         let parsed = SpecialistConfig::from_yaml(&text, "test", Some(&DATA.map)).ok().map(|c| c.clips);
         assert_eq!(parsed, want, "{value}");
     }
-    let text = std::fs::read_to_string(common::repo().join("specialists/ow-start.yaml")).unwrap();
-    let without: String = text.lines().filter(|l| !l.starts_with("clips:")).map(|l| format!("{l}\n")).collect();
-    let parsed = SpecialistConfig::from_yaml(&without, "test", Some(&DATA.map)).unwrap();
+    let parsed = SpecialistConfig::from_yaml(&base, "test", Some(&DATA.map)).unwrap();
     assert!(!parsed.clips, "default off");
 }
 
@@ -172,6 +172,127 @@ fn the_block_clip_in_a_dungeon_room() {
     }
 }
 
+/// The route's step 4:0x21 entered from S (round 21: through 0x31's N door onto the island) with the
+/// stalfos-keese-gel family (`clips: true`), RAM randomization off, the Gels emptied after the reset.
+fn make_room_21_env(nes: ZCore) -> Env {
+    let mut config = (*DATA.specialists["stalfos-keese-gel"]).clone();
+    config.ram_randomization = RamRandomization::default();
+    assert!(config.clips, "the family leaves the island by the ladder clip");
+    let opts = EnvOptions { start_state: Some("4_21s_0".into()), ..Default::default() };
+    let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env");
+    env.reset(Some(0), None).unwrap();
+    for slot in 1..12 {
+        zelda::Nes::poke(env.session_mut().nes_mut(), (zelda::tables::OBJ_ID.0 + slot) as u16, 0);
+    }
+    env.session_mut().apply_ram(&[]);
+    env
+}
+
+/// Link's Y.
+fn link_y(env: &Env) -> i32 {
+    env.session().state().link.position.y
+}
+
+/// The route step 4:0x21 S -> N by actions: `MOVE N` onto the island (Link stops on T, Y $7D, at the water), `CLIP N`
+/// (the ladder clip, from T: back off to G' and over the two squares of water to Y $55, 8 pixels into the top wall),
+/// `MOVE S 8` off the wall, `BOMB N`, `WAIT` for the blast, `MOVE N` through the hole into the rupee room 0x11: the
+/// episode ends `exit-correct`. BOMB N from the clip's end (Y $55) spends the bomb and leaves the wall shut: the bomb
+/// lands outside the room, so the step down is needed (the objective's bomb spot is ($78, $5D)).
+#[test]
+fn the_route_step_through_4_21_by_the_ladder_clip() {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_room_21_env(nes);
+    let mut frames = 0;
+    for text in ["MOVE N 4", "MOVE N 32", "MOVE N 32"] {
+        frames += act(&mut env, text).info.frames;
+    }
+    assert_eq!((link_x(&env), link_y(&env)), (0x78, 0x7D), "stopped on T at the water");
+    assert!(env.session().mask().is_allowed(&Action::parse("CLIP N").unwrap()));
+    let r = act(&mut env, "CLIP N");
+    frames += r.info.frames;
+    assert_eq!((link_x(&env), link_y(&env), r.info.terminal.is_none()), (0x78, 0x55, true), "over the water");
+    let move_n = Action::parse("MOVE N 16").unwrap();
+    // From the clip's end the bomb is spent for nothing.
+    let end = env.save();
+    let bombs = env.session().state().bombs();
+    assert!(bombs > 0 && env.session().mask().is_allowed(&Action::parse("BOMB N").unwrap()), "{bombs} bombs");
+    act(&mut env, "BOMB N");
+    for _ in 0..4 {
+        act(&mut env, "WAIT 32");
+    }
+    // The cheat ledger gives the room's bomb back (0x21 needs one), but the wall is still shut.
+    assert_eq!(env.session().state().full_location(), zelda::MapLocation::new(4, 0x21, false));
+    assert!(!env.session().mask().is_allowed(&move_n), "the wall is still shut");
+    env.load(&end);
+    // One step down, then the bomb opens the wall.
+    for text in ["MOVE S 8", "BOMB N"] {
+        frames += act(&mut env, text).info.frames;
+    }
+    // The wall opens at the end of the blast (about 80 frames after the press).
+    for _ in 0..3 {
+        frames += act(&mut env, "WAIT 32").info.frames;
+    }
+    let mut r = act(&mut env, "MOVE N 16");
+    frames += r.info.frames;
+    for _ in 0..3 {
+        if r.info.terminal.is_some() {
+            break;
+        }
+        r = act(&mut env, "MOVE N 16");
+        frames += r.info.frames;
+    }
+    let t = r.info.terminal.as_ref().expect("the bombed wall ends the episode");
+    assert_eq!((t.ending.as_str(), t.outcome), ("exit-correct", "success"));
+    assert_eq!((t.target.as_str(), t.entry.as_str()), ("N", "S"));
+    assert_eq!((t.clip_stats.done, t.clip_stats.done_n, t.clip_stats.aborted), (1, 1, 0));
+    assert_eq!(env.session().state().full_location(), zelda::MapLocation::new(4, 0x11, false));
+    println!("4:0x21 S -> N: {frames} frames, {} steps", t.episode_steps);
+    assert!(frames < 450, "{frames} frames");
+}
+
+/// The same route step with the boomerang selected (as Dungeon 4's states carry it): the `BOMB N` after the ladder
+/// clip opens the item sub-screen. Both reach the episode's end: the step's `menu_frames` (out of its `frames`) are
+/// in the terminal `episode_frames`, and the terminal info counts the clip; the Python info dict has both.
+#[test]
+fn menu_frames_and_clip_counters_reach_the_terminal_info() {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_room_21_env(nes);
+    let boomerang = zelda::submenu::slot(ActionKind::Boomerang).unwrap();
+    let st = env.session().state();
+    assert!(st.peek(0x674) != 0 || st.peek(0x675) != 0, "4_21s_0 holds a boomerang");
+    zelda::Nes::poke(env.session_mut().nes_mut(), 0x656, boomerang); // test setup: the boomerang selected
+    env.session_mut().apply_ram(&[]);
+    let (mut frames, mut menu) = (0u64, 0u64);
+    let mut bomb_menu = 0;
+    let mut last = None;
+    for text in ["MOVE N 4", "MOVE N 32", "MOVE N 32", "CLIP N", "MOVE S 8", "BOMB N", "WAIT 32", "WAIT 32", "WAIT 32"]
+        .into_iter()
+        .chain(std::iter::repeat_n("MOVE N 16", 4))
+    {
+        let r = act(&mut env, text);
+        frames += u64::from(r.info.frames);
+        menu += u64::from(r.info.menu_frames);
+        if text == "BOMB N" {
+            bomb_menu = r.info.menu_frames;
+        }
+        let done = r.info.terminal.is_some();
+        last = Some(r);
+        if done {
+            break;
+        }
+    }
+    let r = last.unwrap();
+    let t = r.info.terminal.as_ref().expect("the episode ends through the bombed wall");
+    assert_eq!((t.ending.as_str(), t.outcome), ("exit-correct", "success"));
+    assert!(bomb_menu > 100, "the BOMB opened the sub-screen: {bomb_menu} frames");
+    assert_eq!(menu, u64::from(bomb_menu), "only the BOMB paid the sub-screen");
+    assert_eq!(t.episode_frames, frames + menu, "episode_frames = frames + menu_frames");
+    assert_eq!((t.clip_stats.done, t.clip_stats.done_n, t.clip_stats.aborted), (1, 1, 0));
+    let info = r.info.to_json();
+    assert_eq!(info["clips"]["done"], 1, "{info}");
+    assert_eq!(info["episode_frames"], t.episode_frames, "{info}");
+    assert!(info.get("menu_frames").is_some(), "{info}");
+}
 
 /// A route exit's direction letter as the route writes it.
 fn exit_of(env: &Env) -> String {

@@ -61,8 +61,8 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 |---|---|
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
 | `zelda::actions` | `ACTION_SCHEMA_VERSION` (2); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=104] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
-| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG or ARROW whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). A CLIP (or a MOVE its `ClipSettings` turn into one) runs the grid-point skip macro ("Grid-point skip" below); `clip` reports its `ClipOutcome`. |
-| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clip_settings` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clip_settings(action, correct_exits)`, `skip_available(direction)`, `Change.clip`). |
+| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG or ARROW whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). A CLIP runs the grid-point skip macro ("Grid-point skip" below; MOVE never does); `clip` reports its `ClipOutcome`. |
+| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clips` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clips(enabled)`, `skip_available(direction)`, `Change.clip`). |
 | `zelda::Change` | previous/current `GameView`, action, frames, menu_frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. `frames` are the frames that count against the action: the option's minus its item sub-screen frames (`menu_frames`, the game paused). Discounting (`StepInfo.frames`, the pool's `Outcome.frames`, `rollout_buffer.py`), the frame penalty, the observation's history `frames`, heart timers and linger use `frames`; counts of frames played (`Session.total_frames`, `episode_frames`, visits, chain records, the pool's emulated frames, replays) add `menu_frames` back (`StepInfo.menu_frames`, Python `Change.menu_frames`, info `menu_frames`). Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
@@ -153,19 +153,20 @@ presses at most; a crossing that ends on T never holds the heading there), `Stal
 (200 frames), `Unavailable` (nothing pressed). Frames count like any option's.
 
 `skip_target(state, dir)` / `skip_available` is the one availability rule (mask, executor, observation): mode 5,
-Link's state 0, no knockback, no ladder (`$64` = 0), and
-- **wrap** (overworld, W or E): Link on a row line (Y a grid point; a nonzero offset only along the row); within 32
-  pixels of the bound (X <= `$20` going W, `$D0`..`$F0` going E; the bound itself included); the macro's run-up
-  columns of his hotspot row (0-3 W, `$1C`-`$1F` E) and the landing columns (`$1E`-`$1F` after a W wrap, 0-1 after
-  an E wrap) walkable and no slow tiles (`$74`/`$75`). T is `$00` (W) or `$F0` (E); the macro ends at X `$F0`
-  offset 0 after a W wrap and X `$00` after an E wrap, where the opposite edge's room change is one MOVE away.
-- **block clip** (dungeon, N or S): not in a doorway, X on the column line and inside the X border band, T the first
-  grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8 pixels further (a
-  16-pixel square of blocks, statues or wall, never water `$F4`: with the ladder one square of water is no stop
-  (`Room::ladder_axes`), and the walk toward wider water lays the ladder, the ladder clip's recipe), G' inside the
-  room bounds, the run-up cells open both ways, and the clip useful: from T -+ 8 a
-  MOVE W or E is possible **and** the same move from T is blocked (the tile it enters is walled off from T; where it
-  is open from T too, the clip only leads back out: half a column off a square, an isolated statue), and no stairs
+Link's state 0, no knockback, and
+- **wrap** (overworld, W or E; no ladder out): Link on a row line (Y a grid point; a nonzero offset only along the
+  row); within 32 pixels of the bound (X <= `$20` going W, `$D0`..`$F0` going E; the bound itself included); the
+  macro's run-up columns of his hotspot row (0-3 W, `$1C`-`$1F` E) and the landing columns (`$1E`-`$1F` after a W
+  wrap, 0-1 after an E wrap) walkable and no slow tiles (`$74`/`$75`). T is `$00` (W) or `$F0` (E); the macro ends
+  at X `$F0` offset 0 after a W wrap and X `$00` after an E wrap, where the opposite edge's room change is one MOVE
+  away.
+- **block clip** (dungeon, N or S; no ladder out): not in a doorway, X on the column line and inside the X border
+  band, T the first grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8
+  pixels further (a 16-pixel square of blocks, statues or wall, never water `$F4`: with the ladder one square of
+  water is no stop (`Room::ladder_axes`), and wider water is the ladder clip's), G' inside the room bounds, the
+  run-up cells open both ways, and the clip useful: from T -+ 8 a MOVE W or E is possible **and** the same move from
+  T is blocked (the tile it enters is walled off from T; where it is open from T too, the clip only leads back out:
+  half a column off a square, an isolated statue), and no stairs
   spot at G', G or T (the warp would take Link down in the middle of the macro). The macro ends at T -+ 8, offset 0.
   Never W or E (from the side the clip leads nowhere). The G' condition is conservative (the back-off always has
   room): it leaves out squares whose G' is past a bound or solid, where a Link on G with the good fraction could
@@ -180,30 +181,58 @@ Link's state 0, no knockback, no ladder (`$64` = 0), and
   as in the game). Level 2 room `$7D`: nothing (its statues stand alone, 16 pixels apart: G' is inside the next
   statue and the tiles beside each are open from T). The way through `$22` with button-free actions: `MOVE W 32`,
   `MOVE W 32`, `MOVE W 8` (the corner of the east block), `MOVE S 8`, `MOVE W 8` twice (Link turns on the next grid
-  point; the lower-right block stops him on G = (`$A0`, `$9D`)), `CLIP N` (14 frames; `MOVE N 32` under `long`),
+  point; the lower-right block stops him on G = (`$A0`, `$9D`)), `CLIP N` (14 frames),
   `MOVE W 32`: in cellar `$7F` 218 frames after the room's first frame, the stairs' transition included.
 - Dungeon 4 (the start states under `triforce/states/`, Link put on every grid point out of the doorway): room `$03`
   offers 6 grid points (the zones under its two inner blocks at X `$60` and `$90`, into the side pockets of the
   triforce's enclosure, which the floor reaches as well), room `$50` 60 (20 squares of its diagonal rows), no other
-  room (the water rooms `$20`, `$21`, `$30`, `$31` and the cellar `$60` none). Each of them, CLIP from the grid point,
+  room (the water rooms `$21`, `$30`, `$31` and the cellar `$60` none). Each of them, CLIP from the grid point,
   completes with one press and the sideways walk from T -+ 8 goes where Link on T can't. In `$50` (entered E, left
   N) `MOVE W 32` twice stops Link on (`$B0`, `$8D`), G of the square above; `CLIP N` (14 frames) puts him at
   (`$B0`, `$7D`) beyond the right diagonal, and `MOVE W 8`, `MOVE N 32`, `MOVE W 16` twice, `MOVE N 32` take him
   to room `$40`: 318 frames from the room's first frame against 424 for the plain way round the diagonal's bottom
   (14 MOVEs), monsters cleared. No skip is offered in a doorway (every door entry of levels 1-9 walked in frame by
-  frame) or with the ladder out (4:`$30`'s water row).
+  frame).
+- **ladder clip** (dungeon, any heading; Link holds the ladder, `zelda-asm/mechanics.md` "Ladder clip"): not in a
+  doorway, the offset zero or along the heading; either no ladder out and a monster slot free (the first ladder is
+  an object), or a ladder laid along the heading with Link on its line; Link within 16 pixels of T (the laid
+  ladder's distance-0 point, where water two or three squares wide stops the plain ladder), standing on land at the
+  lay point; the press outside the dungeon border band. **Up**: exactly two squares of water ahead with land beyond
+  (one square is the plain ladder's, three need a second press), G' 8 pixels behind the lay point L on land; Link
+  ends at L - `$30` with the second ladder put away (4:`$21`: Y `$55`, 8 pixels past the top bound). **Left, right,
+  down**: two squares of water then land (he ends at L -+ `$30`, the relay walking on inside the room's bounds) or
+  three (a second ladder; L -+ `$40`). At the end, if a ladder he crossed is still out, the macro holds nothing for
+  one frame, which puts it away (holding the heading would lay another over more water); a ladder freshly laid ahead
+  of him on arrival is left, as after any walk toward water. A miss stops Link on T on the ladder, backs off and
+  retries (3 presses at most); a hit aborts it (the damage interrupt), and the MOVE mask models a laid ladder (back
+  always, on unless at its distance-0 point, never sideways; MOVE toward water where the game lays the ladder is
+  legal), so Link is never left unable to move. Tested in the game (`crates/zelda/tests/clips.rs`): `$21` N from
+  every column of the island X `$50`-`$A0` and every start of the zone (both cadences, mid-cell, stopped on T after
+  a miss), W and E on rows Y `$8D`-`$9D`, S from the top row back onto the island, each with one press; with the
+  five Gels alive a hit aborts and a retry or a MOVE across completes; every offer in Dungeon 4 completes (`$21`,
+  `$20` (its ring row 1, from X `$60` Left to X `$20`), a few two-square spans of `$31`; none in `$30`, whose single
+  water row is the plain ladder's, and none with a ladder out over one square). CLIP N from G' takes about 44
+  frames, from T (where a MOVE N stops) 56 (a back-off first).
+- **The route through 4:`$21`** (round 21, `d2first`: in from `$31`'s N door onto the island, out by bombing the N
+  wall; `crates/env/tests/clips.rs`, the stalfos-keese-gel config, Gels emptied): `MOVE N 4`, `MOVE N 32` twice
+  (Link stops on T, Y `$7D`), `CLIP N` (to Y `$55`), `MOVE S 8`, `BOMB N`, `WAIT` for the blast, `MOVE N 16` into
+  the rupee room `$11`: `exit-correct`, 419 frames in 10 actions (the scroll into `$11` included). From the clip's
+  end (Y `$55`) BOMB N is legal and spends the bomb but the wall stays shut (the bomb lies `$18` from the wall's
+  hotspot, asm:Bomb_TryOpenWall); the objective's bomb spot is (`$78`, `$5D`) (`bomb_spot` uses the spot against
+  the wall where the usual one is water).
 
-`ClipSettings { trigger, correct_exits }` (`Session::set_clip_settings`; the env sets it every step) says how the
-policy reaches the macro, from the specialist's `clips.action`: `none` (no skip; CLIP masked), `kind` (CLIP legal in
-every direction the skip is available), `long` (MOVE of duration 32 in such a direction performs the skip; MOVE in
-that direction is made legal there), `edge` (MOVE of any duration performs the skip where it is available and the
-direction is not one of the objective's correct exits, `correct_exits` = the `next_room_*` bits; a block clip has no
-exit side). A CLIP action always runs the macro (the mask gates the policy, not the executor). In a dungeon (tested in
-`$22`): `long` clips with MOVE N/S 32 from anywhere in the zone, shorter MOVEs walk (and stop on T); `edge` clips with
-a MOVE of every duration; on T, where the plain walk is blocked, MOVE in the heading is legal under `long` and `edge`
-only. The push spots of `$22`'s west block (Link on T below or above it) lie in its zones: a plain MOVE N 16 or 32
-there pushes the block; under `long` MOVE N 32 clips instead (16 still pushes); under `edge` every MOVE clips and the
-block can't be pushed from there (the objective keeps pointing at the push spots while the push is pending).
+A specialist's `clips: true` (YAML; default false; `Session::set_clips`, set by the env every step and, in a chain,
+from the family of the room Link is in) offers the CLIP kind in every direction a skip is available
+(`clips::allow_clips`); CLIP is masked otherwise. A CLIP action always runs the macro (the mask gates the policy, not
+the executor); MOVE never performs a skip. With clips on, the path search behind PBRS, linger and the `target`
+observation (`Room::wavefront(..., clips)`, `clips::skip_jumps`) treats every block clip and ladder clip as a jump
+from each rest position of its zone to its end, at its frames converted to tiles (1.5 pixels a frame, 8 a tile); the
+search becomes Dijkstra only when a room has jumps, and the `target` direction follows a jump on the shortest way.
+The overworld wrap is no jump (it ends one MOVE from the opposite edge: a jump would point the way to that edge's
+exit out of the entry edge; the round-21 policies learned the wrap without one). So in 1:`$22` the objective targets
+the stairs (reached through the clip under the east block) instead of the push spots; in 4:`$50` the way to the N
+door goes through the diagonal (CLIP N at X `$B0`); 4:`$21`'s island, which no walk leaves, leads N by the ladder
+clip.
 
 ## Observation (`crates/env/src/observation.rs`)
 
@@ -218,7 +247,7 @@ Python sees the layout as
 |---|---|---|
 | `room_id` | int64 [1] | index < `ROOM_VOCAB` |
 | `room_state` | float32 [84] | per-room flags from `docs/ram-catalog.md` |
-| `link` | float32 [84] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and `clips.action` is not `none`) |
+| `link` | float32 [84] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and the specialist has `clips: true`) |
 | `entity_types` | int64 [12] | 0 = empty slot |
 | `entity_features` | float32 [12, 33] | feature 0 = presence |
 | `grid` | int64 [22, 32] | tile class per 8px tile, row-major |
@@ -398,15 +427,14 @@ treasure) a PBRS target the same way, hearts and fairies only while Link is belo
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
-`clips: {action: none|kind|long|edge, shaping: jump|walk}` (round 21; default `none`, `jump`; "Grid-point skip"
-above): `action` picks how the policy reaches the skip; `shaping` what PBRS pays on a step whose skip completed:
-`jump` the whole wavefront difference (as for any position change, inside the ±1 step clamp), `walk` that difference
-capped, either sign, at what walking the step's frames could earn (`critic::walk_cap`: frames × 1.5 / 8 / 20). The
-env sets the session's `ClipSettings` every step (the trigger, the objective's correct exits) and the observation's
-`clip_usable_*` follow `action` != `none`. Terminal `info['clips']` → training `clips/<stat>` per episode
-(`_native.CLIP_STATS`; progress events too), eval `mean_clips_<stat>` (overall, per room and state), per-visit
-`clip_<stat>` / `clip_<stat>_per_visit`, chain `RoomRecord.clip_<stat>`; eval records carry `target` and `entry`,
-and `eval.json` `by_state_target` groups by `<start state>:<target>`.
+`clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
+shaping: ...}` block is refused): the CLIP kind where a skip is available, the observation's `clip_usable_*` and the
+skips as path-search jumps (PBRS pays the whole wavefront difference of a skip step, as for any position change,
+inside the ±1 step clamp). On: `vire`, `stalfos-keese-gel`, `trap-room` and every overworld family. Terminal
+`info['clips']` → training `clips/<stat>` per episode (`_native.CLIP_STATS`; progress events too), eval
+`mean_clips_<stat>` (overall, per room and state), per-visit `clip_<stat>` / `clip_<stat>_per_visit`, chain
+`RoomRecord.clip_<stat>`; eval records carry `target` and `entry`, and `eval.json` `by_state_target` groups by
+`<start state>:<target>`.
 `reward.exit_health_weight` w (default 0.5, in [0, 1]; better-play §1b) sets how much of the success terminal rides
 on the health Link leaves with: `reward-terminal-success` = 20 × ((1 − w) + w × hp/max_hp) (`success_reward_value`;
 0.5 is the long-standing 20 × (0.5 + 0.5 × hp/max_hp), bit for bit; 1.0 pays 20 × hp/max_hp, 0 a flat 20).

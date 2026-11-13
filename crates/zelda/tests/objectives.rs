@@ -975,25 +975,22 @@ fn d4_raft_exit_targets_the_dock() {
     assert_eq!(objective.pbrs_targets, tiles(&[(16, 8)]));
 }
 
-/// Dungeon 4's 0x30 from E with the ladder (step 116): row 2 is water from wall to wall, and the N door behind it is
-/// the way on (zelda-asm `levels/level-4.md` "What it changes").  With the ladder the objective's wavefront reaches
-/// Link and walking N crosses; without it (InvLadder poked to 0) the wavefront doesn't reach him and Link stops at
-/// the water, as the game makes him.
+/// Dungeon 4's 0x30 (from S, step 110, the ladder given): row 2 is water from wall to wall before the N door
+/// (zelda-asm `levels/level-4.md` "What it changes"; round 21's route no longer goes that way, chains still can).
+/// With the ladder the wavefront to the N door reaches Link and walking N crosses; without it (InvLadder 0) the
+/// wavefront doesn't reach him and Link stops at the water, as the game makes him.
 #[test]
 fn d4_the_ladder_crosses_the_water_row_of_0x30() {
     let map = Arc::new(GameMap::builtin());
-    let Some((mut s, mut gc)) = d4_room(&map, "4_30e_0", 0x30, "E") else { return };
+    let Some((mut s, _)) = d4_room(&map, "4_30s_0", 0x30, "S") else { return };
     kill_monsters(&mut s);
-    let reaches = |gc: &mut GameCompletion, state: &GameView| {
-        let objective = gc.objectives(None, state);
-        assert_eq!(objective.kind, ObjectiveKind::Move);
-        let targets: Vec<Target> = objective.pbrs_targets.into_iter().collect();
-        state.room().wavefront(&targets, &[], &[Direction::N], false).get(state.link.tile()).is_some()
+    let reaches = |state: &GameView| {
+        state.room().wavefront(&[Target::Dir(Direction::N)], &[], &[Direction::N], false).get(state.link.tile()).is_some()
     };
-    let state = s.state().clone();
-    assert!(state.ladder() && reaches(&mut gc, &state));
+    let with = s.apply_ram(&[(Var::StepLadder, 1)]).clone();
+    assert!(with.ladder() && reaches(&with));
     let without = s.apply_ram(&[(Var::StepLadder, 0)]).clone();
-    assert!(!reaches(&mut gc, &without), "without the ladder the N door is cut off");
+    assert!(!reaches(&without), "without the ladder the N door is cut off");
 
     s.apply_ram(&[(Var::LinkX, 0x78), (Var::LinkY, 0x8D), (Var::StepLadder, 1)]);
     for _ in 0..4 {
@@ -1009,7 +1006,7 @@ fn d4_the_ladder_crosses_the_water_row_of_0x30() {
         crossed.full_location()
     );
 
-    let Some((mut s, _)) = d4_room(&map, "4_30e_0", 0x30, "E") else { return };
+    let Some((mut s, _)) = d4_room(&map, "4_30s_0", 0x30, "S") else { return };
     kill_monsters(&mut s);
     s.apply_ram(&[(Var::LinkX, 0x78), (Var::LinkY, 0x8D), (Var::StepLadder, 0)]);
     for _ in 0..4 {

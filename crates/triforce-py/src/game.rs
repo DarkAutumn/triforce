@@ -461,9 +461,9 @@ impl PyChange {
     fn blocks(&self) -> usize {
         self.change.blocks()
     }
-    /// The grid-point skip the option performed (`zelda::clips`): `{'direction', 'kind' ('wrap'/'block', None when
-    /// unavailable), 'completed', 'abort' (None, 'unavailable', 'interrupted', 'missed', 'stalled', 'frame-cap'),
-    /// 'presses'}`, or None.
+    /// The grid-point skip the option performed (`zelda::clips`): `{'direction', 'kind' ('wrap'/'block'/'ladder',
+    /// None when unavailable), 'completed', 'abort' (None, 'unavailable', 'interrupted', 'missed', 'stalled',
+    /// 'frame-cap'), 'presses'}`, or None.
     #[getter]
     fn clip<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
         let Some(clip) = self.change.clip else {

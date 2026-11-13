@@ -110,15 +110,14 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
                         (0, 0x63, False, 'S', 'E', 'ow-moblin'), (0, 0x64, False, 'W', 'E', 'ow-octorok'),
                         (0, 0x65, False, 'W', 'N', 'ow-zora'), (0, 0x55, False, 'S', 'N', 'ow-zora'),
                         (0, 0x45, False, 'S', 'cave', 'ow-peahat')]
-    # The direct way to the ladder (the Breakfast Room's stairs), back W to the Vire room, N, E, the two bomb
-    # walls, the push-block shutter, Gleeok, the triforce.
+    # The direct way to the ladder (the Breakfast Room's stairs), back W to 0x31, N onto 0x21's island (round 21:
+    # the ladder clip leaves it), the two bomb walls, the push-block shutter, Gleeok, the triforce.
     assert [(room, cave, entry, exit, who) for level, room, cave, entry, exit, who in tail[7:]] == [
         (0x71, False, 'S', 'N', 'vire'), (0x61, False, 'S', 'N', 'vire'),
         (0x51, False, 'S', 'W', 'stalfos-keese-gel'), (0x50, False, 'E', 'N', 'vire'), (0x40, False, 'S', 'N', 'zol'),
         (0x30, False, 'S', 'E', 'vire'), (0x31, False, 'W', 'E', 'vire'), (0x32, False, 'W', 'cave', 'like-like'),
         (0x60, True, 'S', 'N', 'equipment-room'), (0x32, False, 'cave', 'W', 'like-like'),
-        (0x31, False, 'E', 'W', 'vire'), (0x30, False, 'E', 'N', 'vire'), (0x20, False, 'S', 'E', 'vire'),
-        (0x21, False, 'W', 'N', 'stalfos-keese-gel'), (0x11, False, 'S', 'E', 'trap-room'),
+        (0x31, False, 'E', 'N', 'vire'), (0x21, False, 'S', 'N', 'stalfos-keese-gel'), (0x11, False, 'S', 'E', 'trap-room'),
         (0x12, False, 'W', 'E', 'vire'), (0x13, False, 'W', 'N', 'boss-gleeok'), (0x03, False, 'S', 'triforce', 'vire')]
     assert all(level == 4 for level, *_ in tail[7:])
     assert [(s['room'], s['waypoint']) for s in steps[after_d3:] if s['waypoint']] == [(0x60, 'ladder')]

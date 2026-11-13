@@ -7,6 +7,7 @@ reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r43)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
+clips: true                               # round 21: the screen wrap (W/E)
 max_steps: 1000
 warm_start: null
 notes: >-

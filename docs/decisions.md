@@ -1298,6 +1298,47 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   takes him to the N door in 318 frames against 424 for the plain way (monsters cleared). The experiment route
   `clips-gauntlet` still draws both targets and changes no family's resets (`crates/env/tests/clips.rs`).
 
+## 2026-11-12 — One clip design (the CLIP kind); the ladder clip; Dungeon 4's shortcut through 0x21 (Lee)
+
+- **The design: the CLIP action kind**, legal only where the skip is available (`zelda::clips::skip_target`), the
+  path search's skips as jumps (PBRS pays the whole wavefront difference). A specialist's YAML keeps one switch,
+  `clips: true|false` (default false; the old `{action, shaping}` block is refused). **Why:** in the round 21
+  experiments every arm that could clip learned it (`docs/experiments/round21.md`: the overworld wrap gauntlet,
+  98.6-99.6% for every clip arm against 96.2-96.4% without; `docs/experiments/round21-trap-room.md`: 1:0x22's block
+  clip, 18 of 18 runs), `walk` shaping made no measurable difference against `jump`, and the MOVE triggers each had a
+  bad seed (`long` seed 1 never wrapped W→E: a short MOVE at the entry bound is a wrong exit; `edge`'s every MOVE
+  into the square clips, so the push block can't be pushed from its zone). The 4:0x50 test (the block clip through
+  the Vire room's diagonal, `docs/experiments/round21-vire-50.md`, merged afterwards) agrees: with clips every
+  episode clips N into the block above (`$B0`, `$8D`), 99-100% success and 0.07-0.17 hearts lost per episode against
+  95-99% and 0.48-0.61 on the zigzag without. Removed: the `long`/`edge` MOVE triggers, `ClipSettings`, `walk`
+  shaping (`critic::walk_cap`); MOVE never skips. The removed arms' YAMLs are in `experiments/r21/removed/`.
+- **Clips on** for `vire` (0x50's diagonal, 0x03), `stalfos-keese-gel` (0x21), `trap-room` (1:0x22) and every
+  overworld family (the wrap). Route rooms that offer a wrap at all (Link at rest on every grid point of the edge
+  zones): 0x77, 0x67, 0x68, 0x58, 0x59, 0x5a, 0x5b, 0x5d, 0x4d, 0x2d, 0x2c, 0x1c, 0x1b, 0x1a, 0x19, 0x18, 0x17, 0x27,
+  0x28, 0x57, 0x56, 0x55, 0x65, 0x64, 0x63 (both edges, on 2-14 rows each); none in 0x5c, 0x4c, 0x3c, 0x3d, 0x0a,
+  0x38, 0x37, 0x48, 0x73, 0x74, 0x45. A wrap ends at the opposite edge, so it helps a W→E or E→W crossing: the entry
+  spot itself offers it in 0x5a, 0x5b, 0x64 (W→E) and 0x19, 0x18, 0x57, 0x64 (E→W); 0x59, 0x1b and 0x56 have wrap
+  rows elsewhere on the entry edge (a row change first); 0x5c has none. A step that enters N or S and leaves W or E
+  (0x67, 0x58, 0x4d, 0x2d, 0x1c, 0x27, 0x65) gains only when Link is near the opposite edge.
+- **The ladder clip** (`zelda-asm/mechanics.md` "Ladder clip"; `docs/architecture.md` "Grid-point skip"): a third
+  skip kind for dungeons, offered while Link holds the ladder where water two (up) or two to three (left, right,
+  down) squares wide stops the plain ladder, with land beyond; the macro relays a second ladder where needed and puts
+  the last one away. The MOVE mask models a laid ladder. Every offer in Dungeon 4 completes in the game (0x21, 0x20,
+  a few in 0x31); hits abort it and Link can always go on. The overworld ladder clip (0x5f, 0x4f) is not built.
+- **The route shortcut** (Lee): `d2first` goes 0x32 → 0x31 (E → N, its locked door, key 2) → 0x21 (S → N: onto the
+  island, `CLIP N` to Y `$55`, a step down, BOMB N from (`$78`, `$5D`); from `$55` the bomb is spent and the wall
+  stays shut) → 0x11, instead of 0x31 W → 0x30 N → 0x20 E → 0x21 from W. Two room entries fewer, the same 2 keys
+  (0x30 E, 0x31 N) and 2 bombs (`bomb_reserve: 2`). The route step by actions: 419 frames, 10 actions, the scroll into
+  0x11 included (`crates/env/tests/clips.rs`). States: `4_30e_*`, `4_20s_*`, `4_21w_*` deleted; `4_21s_*` new;
+  `4_11s_*` to `4_03s_*` built again from `4_31e_*` (`docs/routes/d4.md` "Start states"; the explorer now plays each
+  step with its family's `clips:` switch). Needs the retrain: stalfos-keese-gel has never seen 0x21 from S.
+- **Curricula** (`scripts/experiments/r21_states_curricula.sh curricula`; `trajectories/` is gitignored): explored
+  again for vire `4_31e_*` (now N), `4_12w_*`, `4_03s_*` and `4_50e_*`, trap-room `4_11s_*`, `1_22e_*` and `1_22c_*`,
+  new for stalfos-keese-gel `4_21s_*` (62-84 actions, 8-17 thousand env steps, each through `CLIP N`); the rest
+  copied from round 20's. With clips on, every 1:0x22 track (`1_22e_*`, `1_22c_*`) and `4_50e_0`/`_1` clip;
+  `4_50e_2` walks round. stalfos-keese-gel keeps no curriculum (round 20 learned 0x21's wall without one); its
+  tracks are ready for `curriculum: {enabled: true}` if the retrain fails that room.
+
 ## 2026-11-12 — Attacks by buttons: no facing or selected-item writes (round 21, movement cleanup)
 
 - **What changed:** the executor no longer writes Link's facing (`$98`) to aim an attack nor the selected B item
@@ -1433,3 +1474,51 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   nothing as before.
 - **Version:** none (the lead sets round 21's version at landing); both are reward/mask changes, a REV bump by the
   rule.
+
+## 2026-11-13 — Round 21 merged on `clips`: the clip design, attacks by buttons, the ladder clip
+
+- **Merged** into `clips`: `moves` (attacks by buttons), `ladder` (the CLIP kind as the one design, the ladder
+  clip, Dungeon 4's shortcut, its states) and `clips-run` (the 4:0x50 experiment, its YAMLs on the `clips:` switch).
+  No version or schema bump (action schema 2, observation schema 4; the lead sets the version at landing).
+- **Reconciled:** the attack mask is `moves`' (`GameView::attack_directions(kind)` = `attack::plan`,
+  `compute_action_mask` without a `DoorwayDir` filter); the position rule of the entry above and its turn point are
+  gone, its test `doorway_turns_match_the_game` keeps the game half and checks the button-played SWORD instead of
+  the facing write (4:0x11's bomb wall has no spot deep enough for the game to refuse a turn). `Executor::execute`:
+  `ladder`'s CLIP arm (`ActionKind::Clip`, `skip_target`) beside `moves`' `run_attack` returning the sub-screen
+  frames; `FrameWatch.ladder` is used by MOVE's stall check only. The CLIP attack-miss exemption and the first-step
+  PBRS stay.
+- **Two models of a laid ladder, kept apart:** `attack::step` predicts one frame of input for the turn before an
+  attack, `GameView::can_link_move` (`ladder_move`, `lays_ladder`) whether a MOVE is legal; they answer different
+  questions (a sideways press on the ladder goes on along it: movement for the first, an illegal MOVE for the
+  second), so they share no code. `the_ladder_models_agree_on_the_ladder_clip_traces`
+  (`crates/zelda/tests/attacks.rs`) checks both against the game on every frame of 4:0x21's ladder clips where Link
+  is on the laid ladder (N and S from 11 columns, W and E on 3 rows: 773 frames): each one-frame prediction is the
+  game's, and on the grid each MOVE is legal iff holding it moves Link that way (356 checks). The upward case E
+  that `attack::step` leaves unmodelled never occurs there.
+- **Fixed: CLIP in the catch pose.** The 4:0x50 experiment saw `CLIP N` abort `stalled` when a returning boomerang
+  was caught during the macro (`$AC` `$2x`, which zeroes Link's move: asm:Walker_Move@SetMovingDir). The macro now
+  presses nothing while Link's state is not 0 (at most `MAX_POSE_FRAMES`, outside the decision table and the
+  stand-still count), as `run_attack` does; CLIP stays masked while the pose is on (`skip_target`).
+  `a_boomerang_caught_around_a_clip` stalled before the fix (the wrap W, a catch 4 frames into the macro); now a
+  catch 1-4 frames into the macro completes every time (20 of 20) and in the pose CLIP is refused.
+- **Interactions checked in the game** (`crates/zelda/tests/attacks.rs`, `crates/env/tests/clips.rs`): at the end
+  of every clip (wrap W/E at X `$F0`/`$00`, block clip 8 px into 1:0x22's and 4:0x50's blocks, ladder clip at Y `$55`
+  in 4:0x21) and 1 or 3 frames of any direction after it, every offered attack is struck the way asked by buttons
+  alone and every refused one is one the buttons can't make but by walking out of a border band first (1,180
+  strikes; 40 such `Band` refusals); the same holds, with the MOVE mask, on every frame a clip
+  can be cut short (243 frames, 199 of them off the grid). A CLIP right after an attack (the sword out, the catch
+  pose) is refused. A BOMB with the boomerang selected at each clip's end opens the sub-screen (`menu_frames` over
+  100), places the bomb the way asked and writes no memory. BOMB N at the ladder clip's end places the bomb at Y
+  `$45`, `$18` from the wall's hotspot, so the wall stays shut; from (`$78`, `$5D`) it opens and MOVE N reaches
+  0x11. On the route step 0x21 S → N with the boomerang selected, the BOMB's sub-screen frames and the clip both
+  reach the terminal info (`episode_frames` = `frames` + `menu_frames`, `clips.done` 1). The explorer solves goriya
+  `1_44w_0` (149 steps), trap-room `1_22e_0` with clips (41 steps, one `CLIP S`) and stalfos-keese-gel `4_21s_0`
+  (71 steps, `CLIP N`).
+- **States and curricula:** `entry_states audit`: 364 states, 0 problems. All 15 rebuilt Dungeon 4 states and 50
+  older ones load to a playable frame and play. Curricula store a state per step and the curriculum starts
+  episodes from those states (`curriculum.rs` `load_tracks` reads only `NNNN.state`; `trajectory.json`'s actions
+  are a record, and best-of-N demonstrations come from live runs): every one of the 3,435 states of the 45 tracks
+  of `ladder`'s explore loads in play. Their actions no longer replay (explored with the facing writes): from
+  `0000.state` 13 of 45 tracks still leave the room with the merged executor against 38 with `ladder`'s own (in the
+  7 others `Game`, which has no cheat ledger, masks a BOMB), Link leaving the stored path 4-56 steps in. No track
+  depends on replaying them; re-exploring under the new executor only refreshes the record.

@@ -242,7 +242,9 @@ fn run_records_rooms_and_ends_cleanly(nes: ZCore, data: &Arc<GameData>) -> ZCore
     assert_eq!(r.rooms[0].specialist, "ow-start");
     assert_eq!(r.steps, r.rooms.iter().map(|x| x.steps).sum::<u64>());
     assert!(r.rooms.iter().all(|x| x.outcome != "in-progress"));
-    assert!(["stuck", "death", "milestone"].contains(&r.rooms.last().unwrap().outcome.as_str()));
+    // A random policy may also leave into an untagged room (ow-start's CLIP W/E wraps, round 21): `exit-wrong`.
+    let last = r.rooms.last().unwrap();
+    assert!(["stuck", "death", "milestone", "exit-wrong"].contains(&last.outcome.as_str()), "{} {}", last.outcome, r.reason);
     let room = &r.to_json()["rooms"][0];
     assert_eq!(room["specialist"], "ow-start");
     let n = |k: &str| room[k].as_u64().unwrap();

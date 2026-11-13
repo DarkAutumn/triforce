@@ -724,10 +724,11 @@ fn walks(s: &mut S, d: Direction) -> bool {
     s.state().link.position != at
 }
 
-/// Every Dungeon 4 start state (round 20), Link put on every grid point at rest out of the doorway: the block clip is
-/// offered in room $03 (under its two inner blocks at X $60 and $90, into the side pockets of the triforce's
-/// enclosure) and room $50 (its diagonal rows of blocks: 20 squares, each over its zone G'..T), nowhere else: not in
-/// the water rooms $20, $21, $30, $31 (water is no block: the ladder clip's) nor in the cellar $60.
+/// Every Dungeon 4 start state (round 20; round 21's route: 0x31 N, 0x21 from S), Link put on every grid point at
+/// rest out of the doorway: the block clip is offered in room $03 (under its two inner blocks at X $60 and $90, into
+/// the side pockets of the triforce's enclosure) and room $50 (its diagonal rows of blocks: 20 squares, each over its
+/// zone G'..T), nowhere else: not in the water rooms $21, $30, $31 (water is no block: the ladder clip's) nor in the
+/// cellar $60.
 /// In $03 and $50 every offered clip is right in the game: CLIP from each grid point completes with one press 8
 /// pixels past T, and from there a sideways walk goes on where Link stopped on T is walled off (useful clips only).
 #[test]
@@ -739,7 +740,7 @@ fn the_block_clip_in_dungeon_4() {
         .filter(|n| n.starts_with("4_"))
         .collect();
     names.sort();
-    assert_eq!(names.len(), 54, "{names:?}");
+    assert_eq!(names.len(), 48, "{names:?}");
     let mut want_03 = Vec::new();
     for y in [0x85, 0x8D, 0x95] {
         want_03.extend([(0x60, y, Direction::N), (0x90, y, Direction::N)]);
@@ -892,14 +893,33 @@ fn no_skip_in_a_doorway() {
     assert!(frames > 1000, "{frames} doorway frames");
 }
 
+/// Level 4 room $20 or $30 with the ladder, which round 21's route never enters with it: walked into through its E
+/// door from the W door of the room east of it (`4_21s_0`: $21, `4_31e_0`: $31), Link put on the door's row next to
+/// it, the monsters of both rooms emptied; Link at X $E0 in play.
+fn walked_in_west(s: &mut S, from: &str) {
+    load(s, from);
+    clear_monsters(s);
+    s.apply_ram(&[(Var::DoorwayDir, 0)]);
+    put(s, 0x20, 0x8D);
+    let room = s.state().full_location();
+    for _ in 0..8 {
+        act(s, "MOVE W 8");
+        if s.state().full_location() != room {
+            break;
+        }
+    }
+    assert!(s.state().full_location() != room && s.state().mode() == 5, "{}", describe(s));
+    clear_monsters(s);
+}
+
 /// Over one square of water (4:$30's water row, which the plain ladder crosses) no skip is offered: from its E door
 /// with the ladder, Link walks W to X $80 and N onto the ladder over the water row; on every frame the ladder is out
 /// nothing is offered and CLIP is masked.
 #[test]
 fn no_skip_with_the_ladder_out() {
     let Some(mut s) = session() else { return };
-    load(&mut s, "4_30e_0");
-    clear_monsters(&mut s);
+    walked_in_west(&mut s, "4_31e_0");
+    assert_eq!(s.state().full_location(), MapLocation::new(4, 0x30, false), "{}", describe(&s));
     s.set_clips(true);
     assert!(s.state().ladder(), "{}", describe(&s));
     walk(&mut s, Direction::W, 0x80);
@@ -916,10 +936,10 @@ fn no_skip_with_the_ladder_out() {
     assert!(y(&s) < 0x75, "across the water: {}", describe(&s));
 }
 
-/// Level 4 room $21 entered from W with the ladder (`4_21w_0`), Link put at rest on (x, y) out of the doorway, the
-/// Gels kept or emptied, clips on.
+/// Level 4 room $21 entered from S with the ladder (`4_21s_0`, round 21's route: onto the island through 0x31's N
+/// door), Link put at rest on (x, y) out of the doorway, the Gels kept or emptied, clips on.
 fn in_21(s: &mut S, x: i32, y: i32, gels: bool) -> Snap {
-    load(s, "4_21w_0");
+    load(s, "4_21s_0");
     if !gels {
         clear_monsters(s);
     }
@@ -1037,7 +1057,7 @@ fn assert_move_mask_matches_where_unhurt(s: &mut S, label: &str) {
     s.restore(&snap);
 }
 
-/// With the five Gels of $21 alive (as `4_21w_0` saved them), Link put on the island's G' ($78, $8D), after 0-290
+/// With the five Gels of $21 alive (as `4_21s_0` saved them), Link put on the island's G' ($78, $8D), after 0-290
 /// idle frames: CLIP N, and after a touch aborts it (the damage interrupt, Link knocked back on the island or on the
 /// ladder over the water) the MOVE mask is the game's and he is never stuck: CLIP N again from the zone (or a MOVE
 /// back into it first) completes at ($x, $55), or the knockback left him past T and MOVE N carries him over.
@@ -1050,7 +1070,7 @@ fn ladder_clip_with_the_gels_of_4_21() {
         s.restore(&base);
         s.press(0, delay);
         let mut done = false;
-        for step in 0..30 {
+        for step in 0..60 {
             let at = format!("delay {delay}, step {step}: {}", describe(&s));
             if y(&s) <= 0x5D {
                 assert_eq!(s.state().full_location(), MapLocation::new(4, 0x21, false), "{at}");
@@ -1073,11 +1093,14 @@ fn ladder_clip_with_the_gels_of_4_21() {
             if s.state().game_over() {
                 break;
             }
-            // Back into the zone: onto the grid column, then N or S toward G' (on the water past T: N over it).
+            // Back into the zone: onto the grid column a frame at a time (a MOVE of 4 frames walks 6 pixels, past
+            // it), then N or S toward G' (on the water past T: N over it).
             let (x, yy) = (link(&s).0, y(&s));
-            let text = if x % 8 != 0 {
-                if x % 8 < 4 { "MOVE W 4" } else { "MOVE E 4" }
-            } else if yy < 0x7D {
+            if x % 8 != 0 {
+                s.press(if x % 8 < 4 { LEFT } else { RIGHT }, 1);
+                continue;
+            }
+            let text = if yy < 0x7D {
                 "MOVE N 8"
             } else if yy > 0x8D {
                 "MOVE N 4"
@@ -1100,12 +1123,13 @@ fn ladder_clip_with_the_gels_of_4_21() {
     assert!(aborted > 0, "the Gels never touched Link");
 }
 
-/// Every Dungeon 4 start state with the ladder, Link put on every grid point at rest out of the doorway: the ladder
-/// clip is offered in room $21 only (N from every column of the island X $50..$A0, W and E on rows Y $8D..$9D, S
-/// from the top row back to the island), each over its zone; not in $30 (one row of water, the plain ladder's), $31
-/// (single squares), nor in $20, whose ring row 1 has three squares of water between land (from X $60, Left: Link
-/// reaches X $20) but whose other water is wider. Every offer completes in the game with one press at its end with
-/// no ladder out, and there the MOVE mask matches the game.
+/// Every Dungeon 4 start state with the ladder, and rooms $20 and $30 walked into from the E with it (no start state
+/// of round 21's route has the ladder there), Link put on every grid point at rest out of the doorway: the ladder
+/// clip is offered in room $21 (N from every column of the island X $50..$A0, W and E on rows Y $8D..$9D, S from the
+/// top row back to the island), each over its zone; in $20, whose ring row 1 has three squares of water between land
+/// (from X $60, Left: Link reaches X $20) but whose other water is wider; in $31 a few (two-square spans between its
+/// single squares); not in $30 (one row of water, the plain ladder's). Every offer completes in the game with one
+/// press at its end with no ladder out, and there the MOVE mask matches the game.
 #[test]
 fn the_ladder_clip_in_dungeon_4() {
     let Some(mut s) = session() else { return };
@@ -1115,7 +1139,7 @@ fn the_ladder_clip_in_dungeon_4() {
         .filter(|n| n.starts_with("4_"))
         .collect();
     names.sort();
-    let mut by_room: std::collections::BTreeMap<String, Vec<(i32, i32, Direction)>> = Default::default();
+    let mut rooms: Vec<(String, Snap)> = Vec::new();
     for name in &names {
         load(&mut s, name);
         if !s.state().ladder() || s.state().full_location().in_cave {
@@ -1123,6 +1147,17 @@ fn the_ladder_clip_in_dungeon_4() {
         }
         s.apply_ram(&[(Var::DoorwayDir, 0)]);
         clear_monsters(&mut s);
+        rooms.push((name.clone(), s.snapshot()));
+    }
+    for (name, from) in [("4_20 from 4_21s_0", "4_21s_0"), ("4_30 from 4_31e_0", "4_31e_0")] {
+        walked_in_west(&mut s, from);
+        s.apply_ram(&[(Var::DoorwayDir, 0)]);
+        assert!(s.state().ladder(), "{name}: {}", describe(&s));
+        rooms.push((name.to_owned(), s.snapshot()));
+    }
+    let mut by_room: std::collections::BTreeMap<String, Vec<(i32, i32, Direction)>> = Default::default();
+    for (name, snap) in &rooms {
+        s.restore(snap);
         s.set_clips(true);
         let room = s.snapshot();
         let got = offered(&mut s, SkipKind::Ladder);
@@ -1207,10 +1242,10 @@ fn first_jump(s: &S, wavefront: &zelda::room::Wavefront) -> Option<Direction> {
 #[test]
 fn the_path_search_knows_the_skips() {
     let Some(mut s) = session() else { return };
-    // $21: Link on the island at G' ($78, $8D).
+    // $21 from S (the route's step): Link on the island at G' ($78, $8D).
     in_21(&mut s, 0x78, 0x8D, false);
-    let (off_objective, off) = objective_here(&s, "W", false);
-    let (objective, on) = objective_here(&s, "W", true);
+    let (off_objective, off) = objective_here(&s, "S", false);
+    let (objective, on) = objective_here(&s, "S", true);
     assert_eq!(off_objective.pbrs_targets, objective.pbrs_targets, "the same targets");
     assert!(objective.next_rooms.contains(&MapLocation::new(4, 0x11, false)), "{objective:?}");
     assert_eq!(off.get(s.state().link.tile()), None, "no walk off the island");

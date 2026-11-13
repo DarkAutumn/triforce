@@ -500,9 +500,9 @@ impl<S> Executor<S> {
     /// end point. A hit, a room change or game over end it at once (as a MOVE); spawns and nearby monsters don't.
     /// Missed presses back off and retry; the presses, a stand-still and a frame cap end it cleanly. Link is left
     /// where he stands, from where MOVE (and the skip itself, after its back-off) works again. A returning boomerang
-    /// caught during the skip puts Link in the catch pose, in which the game moves him by no input
-    /// (asm:Link_HandleInput): those frames are waited out with nothing pressed (at most `MAX_POSE_FRAMES`), outside
-    /// the decision table and the stand-still count, as `run_attack` does before its press.
+    /// caught during the skip puts Link in the catch pose (`$20`, `$21`, then `$31` for a frame), in which the game
+    /// zeroes his move (asm:Walker_Move@SetMovingDir): those frames are waited out with nothing pressed (at most
+    /// `MAX_POSE_FRAMES`), outside the decision table and the stand-still count, as `run_attack` does before its press.
     fn run_skip<N: Nes>(
         &mut self,
         m: &mut Machine<N>,

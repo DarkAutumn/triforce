@@ -387,7 +387,7 @@ fn trace(s: &mut S, spot: &Snap, kind: ActionKind, d: Direction) -> String {
 #[test]
 fn the_mask_offers_exactly_the_strikes_the_buttons_make() {
     let states = [
-        "1_73s_0", "1_44w_0", "2_1es_0", "2_5es_0", "3_59e_0", "4_11s_0", "4_30e_0", "4_50e_0", "0_77c_0", "0_5bw_0",
+        "1_73s_0", "1_44w_0", "2_1es_0", "2_5es_0", "3_59e_0", "4_11s_0", "4_21s_0", "4_50e_0", "0_77c_0", "0_5bw_0",
     ];
     // TRIFORCE_ATTACK_SCAN=N: N doorway and N other positions per state from a longer walk, every refused strike
     // the buttons make listed (the round 21 scan); by default 6 + 6.
@@ -412,7 +412,7 @@ fn the_mask_offers_exactly_the_strikes_the_buttons_make() {
 #[test]
 fn the_sub_screen_selects_each_b_item_from_each_other() {
     let Some((mut s, pokes)) = session() else { return };
-    for (name, walk, open) in [("4_30e_0", buttons::LEFT, 64), ("0_77c_0", buttons::DOWN, 65)] {
+    for (name, walk, open) in [("4_31e_0", buttons::LEFT, 64), ("0_77c_0", buttons::DOWN, 65)] {
         load(&mut s, name);
         s.nes_mut().poke(0x65B, 1); // a blue candle in slot 4 (test setup)
         s.apply_ram(&[]);
@@ -587,8 +587,21 @@ fn turn_and_strike_in_every_situation() {
     assert_eq!(zelda::attack::explain(s.state(), Sword, E), Err(Refusal::Doorway), "{:02X?}", link_at(&s));
     assert_eq!(buttons_can(&mut s, &deep, Sword, E), None, "the game can't either");
 
-    // 4:0x30 from E: onto the ladder over the water row; on it Link turns in place.
-    load(&mut s, "4_30e_0");
+    // 4:0x30 from E (walked into from 0x31's W door, as round 21's route no longer enters it): onto the ladder over
+    // the water row; on it Link turns in place.
+    load(&mut s, "4_31e_0");
+    s.apply_ram(&[(zelda::Var::DoorwayDir, 0)]);
+    for (addr, value) in [(0x70, 0x20), (0x84, 0x8D), (0x394, 0)] {
+        s.nes_mut().poke(addr, value); // Link beside 0x31's W door (test setup)
+    }
+    s.apply_ram(&[]);
+    for _ in 0..8 {
+        if s.state().location() == 0x30 {
+            break;
+        }
+        s.act(Action::parse("MOVE W 8").unwrap()).unwrap();
+    }
+    assert_eq!((s.state().location(), ram(&s)[0x12]), (0x30, 5), "{:?}", link_at(&s));
     assert!(hold_until(&mut s, buttons::LEFT, 120, |r| r[0x70] == 0x78 && r[0x394] == 0));
     let on_ladder = |r: &[u8; 0x800]| {
         let slot = r[0x64] as usize;
@@ -660,7 +673,7 @@ fn clip_ends(s: &mut S) -> Vec<(String, Snap, Snap)> {
 }
 
 /// 4:$21 with the ladder, Link entering where the route does.
-const LADDER_21: &str = "4_21w_0";
+const LADDER_21: &str = "4_21s_0";
 
 /// Attacks right after each kind of clip, from its end and from one and three frames of each direction after it:
 /// every strike offered is made the way asked by the controller alone with Link staying in the room, and every one

@@ -23,13 +23,17 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   mask, wallmaster heart gathering, goriya heart loss, fewer writes to memory; round 20 left Gleeok at low health
   (Link arrives with 2.1 hearts), D4's bombs and 0x12/0x30 deaths open. Every new checkpoint needs its act mode
   re-measured, in single rooms and in chains (argmax is fragile per checkpoint).
-- **Clips (branch `clips`, round 21, 1.4.1.0; design pending):** the speedrunners' grid-point skip (the overworld
-  screen wrap W/E, the dungeon block clip N/S; `zelda-asm/mechanics.md`) played by the executor as a macro
-  (`zelda::clips`), offered per specialist by `clips: {action: none|kind|long|edge, shaping: jump|walk}` (default
-  `none`: no specialist under `specialists/` changes). Action schema 2 (the kind `CLIP`), observation features
-  `clip_usable_{N,S,W,E}`, counters `clips/*`, `eval.json` `by_state_target`; the COMPAT bump means no model
-  trained before it loads. Round 21 (`docs/experiments/round21.md`) compared the designs on the experiment route
-  `clips-gauntlet`; Lee picks the design.
+- **Round 21 (branch `clips`, 1.4.1.0; one change set, then a full retrain):** the speedrunners' grid-point skip
+  (the overworld screen wrap W/E, the dungeon block clip N/S, the dungeon ladder clip; `zelda-asm/mechanics.md`) is
+  the `CLIP` action kind, legal only where the skip is available, played by the executor as a macro
+  (`zelda::clips`), switched per specialist by `clips: true|false` (on: vire, stalfos-keese-gel, trap-room and the
+  overworld families); the path search treats block and ladder clips as jumps. Attacks are played by buttons: the
+  executor writes neither Link's facing nor the selected item, a B item that isn't selected is chosen on the item
+  sub-screen (`menu_frames`, left out of the action's frames), and the attack mask is what the buttons can do
+  (`attack::plan`; it replaced round 20's doorway rule). Dungeon 4 takes 0x31 N onto 0x21's island and the ladder
+  clip off it. Action schema 2 (the kind `CLIP`), observation schema 4 (`clip_usable_{N,S,W,E}`), counters
+  `clips/*`; no model trained before it loads. Decisions 2026-11-12 ("One clip design", "Attacks by buttons"),
+  2026-11-12/13 (the doorway mask) and 2026-11-13 ("Round 21 merged"); experiments `docs/experiments/round21*.md`.
 - **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
   `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
   earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`
@@ -49,10 +53,10 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
   (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
 - **Dungeon 4 (scouted Nov 11, trained Nov 12; `docs/routes/d4.md`):** all 20 rooms and the ladder cellar are in
-  `game.yaml`; `d2first` steps 98–122 go by raft from 0x55 to the island 0x45, take the keys of 0x51 and 0x40, the
-  ladder under the Breakfast Room 4:0x32, back W to 0x30, N across its water on the ladder, through two bomb walls
-  (0x21, 0x11; `bomb_reserve: 2`) to Gleeok and the triforce. Lee (Nov 12): the route must enter 0x21 from W
-  (0x30 – 0x20 – 0x21); 0x31 N lands on 0x21's island, which only a ladder clip (another agent's work) leaves.
+  `game.yaml`; `d2first` steps 98–120 go by raft from 0x55 to the island 0x45, take the keys of 0x51 and 0x40, the
+  ladder under the Breakfast Room 4:0x32, back W to 0x31 and N through its locked door onto 0x21's island, off it by
+  the ladder clip (round 21, `CLIP N`; stalfos-keese-gel has `clips: true`), through two bomb walls (0x21, 0x11;
+  `bomb_reserve: 2`) to Gleeok and the triforce. Before round 21 the route went 0x31 W – 0x30 N – 0x20 E – 0x21.
   routes.yaml keeps `{extends: <route>, steps: [...]}` for scouting the next dungeon. game.yaml rooms can carry a
   `name:` (the Breakfast Room).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
