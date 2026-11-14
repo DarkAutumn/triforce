@@ -17,7 +17,7 @@ first-quest:
   # was walked in the emulator Nov 13 (docs/routes/first-quest.md); the four wrap exits are in game.yaml now.
   - {leg: 'Dungeon 4 to Dungeon 5', level: 0, room: '0x45', entry: cave, exit: S, note: 'S off the pier at X $80: the raft back to the dock'}
   - {level: 0, room: '0x55', entry: N, exit: W, wrap: true, note: 'the river cuts the dock off from the W edge: screen wrap E on row Y $85 or $8D, then W (plain: S, 0x65 W, 0x64 N into 0x54)'}
-  - {level: 0, room: '0x54', entry: E, exit: W}
+  - {level: 0, room: '0x54', entry: E, exit: W, note: 'optional (bombs): N to 0x44''s shop and back, 4 bombs for 20 rupees: Dungeon 5 needs one bomb brought in'}
   - {level: 0, room: '0x53', entry: E, exit: W}
   - {level: 0, room: '0x52', entry: E, exit: W}
   - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $75-$9D)'}
@@ -94,7 +94,7 @@ first-quest:
   - {level: 7, room: '0x1a', entry: W, exit: cave, note: 'clips: block clip N from under the block, no fight; plain: FIGHT 3 Blue and 3 Red Goriyas, push the block N or S; the stairs'}
   - {level: 7, room: '0x4a', in_cave: true, entry: S, exit: N, note: 'the red candle'}
   - {level: 7, room: '0x1a', entry: cave, exit: E, note: 'bomb the E wall (bomb 3)'}
-  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'Blue Goriyas need not die; the E key door (key 3 of 3)'}
+  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'optional (bombs): kill the 6 Blue Goriyas for the room''s 4 bombs; the E key door (key 3 of 3)'}
   - {level: 7, room: '0x1c', entry: W, exit: N, note: 'one step out of the doorway, play the recorder; FIGHT: the 3 small Digdoggers: the N shutter'}
   - {level: 7, room: '0x0c', entry: S, exit: E, note: 'Dodongos: walk past along the S side; bomb the E wall (bomb 4)'}
   - {level: 7, room: '0x0d', entry: W, exit: cave, note: 'FIGHT: the 5 Wallmasters (a grab carries Link back to 0x79); round by the N side, push the block W: stairs appear in the NE corner'}

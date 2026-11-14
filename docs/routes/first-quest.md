@@ -103,7 +103,13 @@ with none. What can fill the gap, none of it in the draft yet:
 | 7:0x1b's room bombs | +4 (up to the bag's 8) | a fight with 6 Blue Goriyas |
 | 8:0x3f's room bombs | +4 | a fight with 3 Darknuts and 3 Gibdos in a room with no way back |
 | 0x6f's shop (two rooms E of Dungeon 8's entrance), or 0x44's (already visited for the arrows) | +4 per 20 rupees | rooms and rupees (see below) |
-| drops | bombs from Blue Darknuts, Goriyas, Vires, Moblins; the forced drop of a tenth damage-free kill made with a bomb | not counted here |
+| drops | bombs from Gibdos, Red Goriyas, Vires, Red Wizzrobes, Red Darknuts and Blue Moblins (the drop table's bomb row); the forced drop of a tenth damage-free kill made with a bomb | not counted here |
+
+One plan that adds up with no drop at all (Link leaves Dungeon 4 with no bombs), written into the draft's notes
+as optional: buy 4 at 0x44 on leg 1 (one room N of 0x54 and back; 20 rupees, which then needs 0x3d's 30 for the
+arrows and the food); Dungeon 5: 4, two walls, +4 = 6; Dungeon 7: three walls (3), 0x1b's room bombs (7), two
+walls: 5; Dungeon 6: 4; Dungeon 8: 2, and 0x3f's room bombs: 6; 0x05's wall: 5; level 9: four walls (1), the
+Patra's bombs (5), four walls: 1 left. Three fights (7:0x1b, 8:0x3f, 9:0x16) and one shop stop.
 
 **Rupees:** 42-54 after `d2first`'s 0x67 cave, +100 at 0x0f, -80 (arrows), -60 (food) leaves **2-14**, and each
 arrow shot costs one (one for level 6's Gohma, one for Ganon). Both purchases go through even at the low end; there
