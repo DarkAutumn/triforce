@@ -2694,7 +2694,10 @@ rooms:
 # Derived from rom.nes Level_BlockUW1to6Q1 (bins.xml offset 100096) + Level_InfoUW2 (offset 103672):
 # doors from attr A/B (asm:Door_FindTypeByDirBit), enemies from attr C/D + LevelInfo_FoeCounts
 # (asm:Room_EnterCommon@ResetObjLoop), item from attr E&$1F (asm:Room_SetUpItemAndPushBlock). Same method reproduces v1's D1 entries.
-# '# shutter' exits open when the room's kill-all trigger fires. Counts are first-visit (no RAM check yet).
+# '# shutter' exits open when the room's trigger fires (kill-all, a pushed block); each carries `shutter: true` on
+# the side that is the shutter (door type 7; the other side of the doorway may be an open door: '# open here; a
+# shutter on ...'s side').  The key is for display (zelda-map.py's door marks); nothing plays by it.  Counts are
+# first-visit (no RAM check yet).
 # Exit conventions (D1-D3, checked against the ROM's attr A/B by crates/zelda game_map tests): every door is an
 # exit on both sides; a key door is `locked: true` on both sides; a bombable wall is an exit marked `# bomb wall`
 # and listed in `bomb_walls` (path searches pass it only in a `requires_bombs` room or once opened); the
