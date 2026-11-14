@@ -21,7 +21,7 @@ pub mod queues;
 pub mod screen;
 pub mod speaker;
 
-pub use feed::{Feed, Producer, Stats};
+pub use feed::{Feed, Finished, Producer, Stats};
 pub use overlay::draw_controller;
 pub use queues::{Entry, QUEUES, Queue, Queues};
 pub use screen::{CellState, Resolver, Screen, Status};

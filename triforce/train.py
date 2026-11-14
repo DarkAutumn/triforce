@@ -103,6 +103,7 @@ import torch
 from . import registry
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
+from .clips import OFF_LABEL, episode_jobs
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
 from .jobs import add_nice_argument, lower_priority
@@ -137,6 +138,9 @@ class EarlyStop:
     (or an unwinnable) state and moves with the sampling as well as the policy.  Balanced = mean over start states of
     each state's exact success rate over its most recent whole cohorts that together cover at least ``window``
     episodes (a cohort with 113 episodes of a state counts all 113); every state seen needs ``min_episodes`` first.
+    A start state played with the run-time clips switch off is a state of its own (``<state>:clips-off``,
+    ``clips.label``; round 22), so a clip family's balanced rate weighs both switch states like rooms: neither
+    can carry the stop while the other fails (``balanced_by_switch`` keeps the mean of each, ``clips_balanced/*``).
     ``seed_states`` (the pool's seed labels, ``EnvPool.start_states``; None = every label, e.g. one pinned
     ``--start-state``) are the states balanced over: other room-entry episodes (harvested chain handoffs, one label
     per file) never move the rate; ``harvested`` holds their (successes, episodes) of the last update, logged as
@@ -159,6 +163,7 @@ class EarlyStop:
         self.results: Dict[str, Deque[tuple[int, int]]] = {}     # state -> per-cohort (successes, episodes)
         self.harvested = (0, 0)
         self.balanced: Optional[float] = None
+        self.balanced_by_switch: dict[str, float] = {}
         self.streak = 0
         self.iterations = 0
 
@@ -176,7 +181,8 @@ class EarlyStop:
         ``harvested`` instead."""
         counts: Dict[str, list[int]] = {}
         for (state, success), count in cohort.items():
-            if self.seed_states is not None and state not in self.seed_states:
+            base = state[:-len(OFF_LABEL)] if state is not None and state.endswith(OFF_LABEL) else state
+            if self.seed_states is not None and base not in self.seed_states:
                 self.harvested = (self.harvested[0] + (count if success else 0), self.harvested[1] + count)
                 continue
             entry = counts.setdefault(state, [0, 0])
@@ -199,8 +205,15 @@ class EarlyStop:
         rates = [self.state_rate(state) for state in self.results]
         if not rates or any(episodes < self.min_episodes for _, episodes in rates):
             self.balanced = None
+            self.balanced_by_switch = {}
         else:
             self.balanced = sum(successes / episodes for successes, episodes in rates) / len(rates)
+            by_switch: dict[str, list[float]] = {}
+            for state in self.results:
+                successes, episodes = self.state_rate(state)
+                switch = 'off' if str(state).endswith(OFF_LABEL) else 'on'
+                by_switch.setdefault(switch, []).append(successes / episodes)
+            self.balanced_by_switch = {name: sum(values) / len(values) for name, values in by_switch.items()}
         if self.threshold is None:
             return False
         blind = finished == 0 or (over_half_budget is not None and over_half_budget > 1 - self.threshold)
@@ -646,7 +659,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
 
     def confirm_stop(iteration: int) -> bool:
         """An early-stop proposal: evaluates the current weights (``CONFIRM_EPISODES`` sampled episodes per seed
-        start state); stops only if their success >= --stop-success, else the streak starts over.  The evaluation
+        start state, in each clips switch state the family plays: ``clips.episode_jobs``); stops only if their
+        success >= --stop-success, else the streak starts over.  The evaluation
         ends as soon as its failures rule the threshold out (``aborted``): the decision is the full one's.  A
         confirmed check also has to show that the hearts lost per episode (--stop-hearts-delta) and the bomb value
         per episode (--stop-bombs-delta) stopped improving against every earlier confirmed check (at least
@@ -655,7 +669,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
             return False        # too soon after the last confirmed check: keep training, keep the streak
         seed = pool_seed + start_iteration + iteration
         states_dir = None if args.states_dir is None else str(args.states_dir)
-        planned = CONFIRM_EPISODES * len(config.resolve_start_states(states_dir))
+        planned = len(episode_jobs(config, CONFIRM_EPISODES, states_dir=states_dir))
         failures, aborted = 0, False
         losses: list[float] = []
         values: list[float] = []
@@ -717,6 +731,9 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                             metrics.get('in_flight/over_half_budget'))
         if early.balanced is not None:
             metrics['balanced_success_rate'] = early.balanced
+        if len(early.balanced_by_switch) > 1:
+            for switch, rate in early.balanced_by_switch.items():
+                metrics[f'clips_balanced/{switch}'] = rate
         if early.harvested[1]:
             metrics['harvested/episodes'] = early.harvested[1]
             metrics['harvested/success_rate'] = early.harvested[0] / early.harvested[1]

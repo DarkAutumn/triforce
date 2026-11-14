@@ -240,6 +240,27 @@ def test_episode_metrics_summary():
     assert 'duration/SWORD/4' not in summary
 
 
+def test_clips_switch_metrics_split_success_and_hearts():
+    """Round 22: ``clips/enabled_share`` and per switch state ``clips/on|off/*`` from ``info['clips_allowed']``;
+    infos without it (older envs) count in neither, and nothing is reported without any."""
+    metrics = RolloutMetrics()
+    for outcome, clips, health in [('success', True, 3.0), ('success', True, 2.0), ('hard-failure', False, 0.0),
+                                   ('success', False, 3.0), ('success', None, 3.0)]:
+        info = {'outcome': outcome, 'health': health, 'start_health': 3.0, 'max_health': 3}
+        if clips is not None:
+            info['clips_allowed'] = clips
+        metrics.add_episode(info)
+    summary = metrics.summary()
+    assert summary['clips/enabled_share'] == 0.5
+    assert (summary['clips/on/episodes'], summary['clips/off/episodes']) == (2, 2)
+    assert (summary['clips/on/success_rate'], summary['clips/off/success_rate']) == (1.0, 0.5)
+    assert (summary['clips/on/health_change'], summary['clips/off/health_change']) == (-0.5, -1.5)
+    assert (summary['clips/on/hearts_at_exit'], summary['clips/off/hearts_at_exit']) == (2.5, 1.5)
+    none = RolloutMetrics()
+    none.add_episode({'outcome': 'success', 'health': 3.0, 'start_health': 3.0, 'max_health': 3})
+    assert not any(key.startswith('clips/on') or key == 'clips/enabled_share' for key in none.summary())
+
+
 def test_linger_metrics_weighted_curriculum_and_entry_rooms():
     first = second = RolloutMetrics()
 

@@ -219,15 +219,17 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     (elsewhere ``never``, not even the 10th kill's, so a built state carries the bombs the route does): a boss's
     (Dodongo, Manhandla) as a weapon (``free``), a wall's (0x2c's and 0x67's rock walls, the dungeon bomb walls) only
     where the bomb opens it (``required``, round 22).  The grid-point skips (CLIP) follow the step's family's
-    ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip."""
+    ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip.  The run-time switch is
+    no draw: on, off on a step of a stretch's plain way (round 22)."""
     rooms = game_rooms() if rooms is None else rooms
     bombs = 'never'
     if rooms.get(step.location.as_tuple(), {}).get('requires_bombs'):
         bombs = 'free' if step.specialist.startswith('boss-') else 'required'
+    clips = {'enabled': load_specialist(step.specialist).clips.enabled,
+             'off_share': 1.0 if step.way == 'plain' else 0.0}
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            items={'bombs': bombs}, fresh_rooms=True, route=route,
-                            clips=load_specialist(step.specialist).clips)
+                            items={'bombs': bombs}, fresh_rooms=True, route=route, clips=clips)
 
 
 def refill_hearts(game: Game):

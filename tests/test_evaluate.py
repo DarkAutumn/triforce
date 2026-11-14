@@ -13,9 +13,11 @@ import pytest
 
 import triforce
 from triforce import _native, evaluate, provenance, registry, replay
+from triforce.clips import episode_jobs
 from triforce.evaluate import (_boss_stats, _clip_stats, _group, _linger_stats, _room_key, _start_health_fraction,
                                _visited_rooms,
-                               default_output, evaluate_specialist, format_report, read_evaluation, write_result)
+                               default_output, eval_event, evaluate_specialist, format_report, read_evaluation,
+                               write_result)
 from triforce.model import ModelConfig
 from triforce.registry import save_checkpoint
 
@@ -196,11 +198,14 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
 
     def evaluate(parallel=3, threads=1):
         return evaluate_specialist(config, ckpt, episodes_per_state=5, parallel=parallel, threads=threads, seed=5,
-                                   states_dir=states_dir, on_episode=lambda r, done, total: seen.append((done, total)))
+                                   states_dir=states_dir, on_episode=lambda r, done, total: seen.append((done, total)),
+                                   clips='on')
 
     result = evaluate()
     records = result['records']
-    assert result['episodes'] == 5 == len(records)
+    assert result['episodes'] == 5 == len(records) and result['clips'] == 'on'
+    assert all(r['clips_allowed'] and r['clips_fixed'] is None for r in records)
+    assert set(result['by_clips']) == {'on'} and result['by_clips']['on']['success_rate'] == result['success_rate']
     assert seen == [(i, 5) for i in range(1, 6)]
     assert set(result['by_state']) == {'start'} and result['by_state']['start']['episodes'] == 5
     assert [r['seed'] for r in records] == list(range(5, 10))
@@ -234,6 +239,62 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
     assert evaluate()['records'] == records
     assert evaluate(parallel=3, threads=3)['records'] == records
     assert evaluate(parallel=2, threads=2)['records'] == records
+
+
+def test_a_clip_family_is_evaluated_with_the_switch_on_and_off(states_dir, tmp_path):
+    """Round 22: ``--clips both`` (a clip family's default) plays every start state with the run-time clips switch
+    on, then off, seeds following on; the switch-on half is the ``on`` evaluation.  The top-level figures are over
+    both, ``by_clips`` holds each; a family without clips plays ``on`` only."""
+    ckpt = save_checkpoint('ow-start', 'untrained', seeded_network(6, SMALL), root=tmp_path)
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=20)
+    run = lambda clips: evaluate_specialist(config, ckpt, episodes_per_state=3, parallel=3, seed=5,
+                                            states_dir=states_dir, clips=clips)
+    both, on, off = run(None), run('on'), run('off')
+    assert both['clips'] == 'both' and both['episodes'] == 6
+    assert [(r['seed'], r['clips_allowed']) for r in both['records']] == [(5, True), (6, True), (7, True),
+                                                                          (8, False), (9, False), (10, False)]
+    assert both['records'][:3] == on['records']
+    assert [r['clips_allowed'] for r in off['records']] == [False] * 3
+    assert both['success_rate'] == sum(r['success'] for r in both['records']) / 6
+    assert set(both['by_clips']) == {'on', 'off'}
+    assert both['by_clips']['on']['episodes'] == both['by_clips']['off']['episodes'] == 3
+    assert both['by_clips']['on']['success_rate'] == on['success_rate']
+    assert set(both['by_clips']['off']['by_room']) == {'0:0x77'} and 'visited_rooms' in both['by_clips']['off']
+    event = eval_event(both)
+    assert event['clips'] == 'both' and set(event['by_clips']) == {'on', 'off'}
+    assert 'clips on ' in format_report(both) and 'clips off' in format_report(both)
+    plain = evaluate_specialist(config.replace(clips=False), ckpt, episodes_per_state=2, parallel=2, seed=5,
+                                states_dir=states_dir)
+    assert plain['clips'] == 'on' and plain['episodes'] == 2
+
+
+def test_the_route_families_play_each_start_state_in_the_switch_states_it_allows(states_dir):
+    """Round 22's route: ``--clips both`` plays a start state in both switch states where both ways of a stretch
+    enter its room that way (or neither: a room off the stretches), and only in its way's switch state where one way
+    alone does (``triforce.clips.episode_jobs``, from the installed states)."""
+    del states_dir                                                           # requires the ROM
+    installed = Path(triforce.__file__).parent / 'states'
+    expect = {
+        'ow-octorok': {'0_67c': 'both', '0_67e': 'both', '0_68n': 'both', '0_66e': 'off', '0_64e': 'off',
+                       '0_64w': 'both'},
+        'ow-leever': {'0_75e': 'on', '0_48n': 'both'},
+        'ow-tektite': {'0_76e': 'on', '0_74e': 'on', '0_74w': 'off', '0_74c': 'both'},
+        'ow-start': {'0_77n': 'on'},
+        'ow-zora': {'0_65e': 'off', '0_65w': 'both'},
+        'ow-moblin': {'0_63e': 'off', '0_73n': 'off', '0_63s': 'both', '0_73e': 'both'},
+        'vire': {'4_31e': 'both', '4_30e': 'off', '4_20s': 'off', '4_31w': 'both', '4_12n': 'both'},
+        'stalfos-keese-gel': {'4_21s': 'on', '4_21w': 'off', '4_01s': 'both', '4_51s': 'both'},
+    }
+    for name, rooms in expect.items():
+        jobs = episode_jobs(_native.SpecialistConfig.load(name), 1, mode='both', states_dir=installed)
+        played = {}
+        for state, _, on in jobs:
+            played.setdefault(state, set()).add(on)
+        for prefix, mode in rooms.items():
+            chains = [state for state in played if state.startswith(prefix + '_')]
+            assert len(chains) == 3, (name, prefix, sorted(played))
+            want = {'both': {True, False}, 'on': {True}, 'off': {False}}[mode]
+            assert all(played[state] == want for state in chains), (name, prefix, {s: played[s] for s in chains})
 
 
 def test_linger_evaluation_aggregates_only_measured_records():

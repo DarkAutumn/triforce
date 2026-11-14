@@ -197,6 +197,35 @@ def eval_failures(ev: dict) -> dict:
             for ending, count in (stats.get('failures') or {}).items() if count}
 
 
+CLIP_SWITCHES = ('on', 'off')
+
+
+def clips_sections(ev: dict) -> list:
+    """A clip family's evaluation per run-time clips switch state (round 22; the ``eval`` event's ``by_clips``):
+    success and heart change of the episodes played with clips on and with clips off, then each start room's
+    success per state.  The ``Evaluation`` rows are both states together (``eval.json``'s headline figure).  None
+    for an evaluation without the split."""
+    switches = ev.get('by_clips') or {}
+    if not switches:
+        return []
+    names = [name for name in CLIP_SWITCHES if name in switches]
+    rows = []
+    for name in names:
+        stats = switches[name]
+        rate = stats.get('success_rate')
+        rows.append((f"clips {name}", rate, f"{fmt_pct(rate)} of {stats.get('episodes')} · net "
+                     f"{fmt_hearts_change(stats.get('health_change'))}", rate_color(rate)))
+    mode = ev.get('clips') or ('both' if len(names) > 1 else names[0])
+    sections = [('bars', f"Clips switch (evaluated: {mode})", rows)]
+    rooms = sorted({room for name in names for room in switches[name].get('by_room') or {}})
+    if len(names) > 1 and rooms:
+        sections.append(('bars', 'By start room · clips on / off',
+                         [(f"{room} {name}", switches[name]['by_room'][room],
+                           fmt_pct(switches[name]['by_room'][room]), rate_color(switches[name]['by_room'][room]))
+                          for room in rooms for name in names if room in (switches[name].get('by_room') or {})]))
+    return sections
+
+
 def fmt_hearts_change(value) -> str:
     """-1.5 -> '-1.5 ♥' (hearts at exit minus hearts at entry)."""
     return '–' if value is None else f'{value:+.1f} ♥'
@@ -968,6 +997,10 @@ def describe(event: dict) -> str:
             parts.append(f"balanced {fmt_pct(metrics['balanced_success_rate'])}")
         if 'success_rate' in metrics:
             parts.append(f"success {fmt_pct(metrics['success_rate'])}")
+        clips = [f"{state} {fmt_pct(metrics[f'clips/{state}/success_rate'])}" for state in CLIP_SWITCHES
+                 if f'clips/{state}/success_rate' in metrics]
+        if clips:
+            parts.append(f"clips {' / '.join(clips)}")
         if 'reward/total' in metrics:
             parts.append(f"reward {metrics['reward/total']:.1f}")
         parts.append(f"{get('sps', 0):.0f} sps")
@@ -2344,11 +2377,16 @@ class DetailPane(QWidget):
         skip = STARTUP_ITERATIONS if self.skip_startup and past else 0
         overlay = (f"Ignoring startup…  {done}/{STARTUP_ITERATIONS}"
                    if self.skip_startup and not past and status in ('starting', 'training') else '')
+        # A clip family's success per run-time clips switch state (round 22), only when the run logs it.
+        clip_series = [{'label': label, 'color': color, 'points': run.series(f'clips/{state}/success_rate', skip),
+                        'width': 1.4} for state, label, color in (('on', 'clips on', C.eval),
+                                                                  ('off', 'clips off', C.text))]
         self.charts['success'].set_data([
             {'label': 'success', 'color': C.accent, 'points': run.series('success_rate', skip), 'width': 1.4,
              'alpha': 150},
             {'label': 'curriculum', 'color': C.warn, 'points': run.series('curriculum/success_rate', skip),
              'width': 1.4},
+            *[series for series in clip_series if series['points']],
             {'label': 'balanced', 'color': C.ok, 'points': run.series('balanced_success_rate', skip), 'width': 2.4},
         ], hlines, overlay)
         self.charts['reward'].set_data([{'label': 'total', 'color': C.accent,
@@ -2398,6 +2436,7 @@ class DetailPane(QWidget):
             if ev.get('mean_bomb_placed') is not None:
                 rows.append(bomb_row('bombs', ev))
             sections.append(('bars', 'Evaluation', rows))
+            sections += clips_sections(ev)
             sections.append(('text', 'No progress · evaluation (action steps)', [
                 (fmt_linger(ev), C.warn if ev.get('linger_max_steps') is not None else C.faint),
                 ('Longest = episode longest quiet streak; tail = quiet steps at episode end. '

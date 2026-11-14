@@ -56,6 +56,14 @@ def test_parse_args_grid_path_and_sources(tmp_path):
     assert (args.sound, args.controller) == (True, False)
     args = play_zelda.parse_args(['--no-sound', '--controller'])
     assert (args.sound, args.controller) == (False, True)
+    # Clips on and no live cell unless asked; --live needs the models, not files.
+    assert (args.clips, args.live) == ('on', False)
+    args = play_zelda.parse_args(['--clips', 'off', '--live'])
+    assert (args.clips, args.live) == ('off', True)
+    for bad in (['--clips', 'maybe'], [str(Path(__file__)), '--live']):
+        with pytest.raises(SystemExit):
+            play_zelda.parse_args(bad)
+    assert 'c turns the' in ' '.join(play_zelda.build_parser().format_help().split())   # the keys in --help
     args = play_zelda.parse_args(['3x2', '--scale', '2', '--show', 'died', '--parallel', '4', '--capacity', '8',
                                   '--patience', '0', '--replays', 'out', '--streams', 'keyframes,rewards', '--act',
                                   'model', '--power-on', '--name', 'zed', '--delay', '77', '--stop-at', 'step:24'])
@@ -155,6 +163,31 @@ def test_footer_shows_cheated_items_once_used():
     assert 'cheated' not in state.strip_text()
 
 
+def test_a_cell_says_when_its_run_was_played_without_clips():
+    state = play_view.CellState()
+    state.apply({'cell': 0, 'event': 'start', 'seed': 3, 'source': 'best', 'name': None, 'clips': True})
+    assert state.clips_text() == ''
+    state.apply({'cell': 0, 'event': 'start', 'seed': 4, 'source': 'best', 'name': None, 'clips': False})
+    state.apply(_room(0, 1))
+    assert state.clips_text() == 'no clips' and 'no clips' not in state.strip_text()   # its own badge
+    state.apply({'cell': 0, 'event': 'start', 'seed': 7, 'source': 'files', 'name': 'run.tfreplay', 'clips': None})
+    assert state.clips_text() == ''
+    # The live cell: its label, then the key turns clips off in the room Link is in, and on again.
+    state.apply({'cell': 0, 'event': 'start', 'seed': 1000029, 'source': 'live', 'name': None, 'clips': True,
+                 'clips_from': None})
+    state.apply(_room(0, 1, level=4, room=0x31, specialist='vire', clips=True, clips_from=None))
+    assert state.strip_text() == 'LIVE #1000029  L4 0x31  vire' and state.clips_text() == ''
+    state.apply({'cell': 0, 'event': 'clips', 'clips': False, 'clips_from': 'L4 0x31'})
+    assert state.clips_text() == 'no clips from L4 0x31'
+    state.apply(_room(0, 2, level=4, room=0x30, specialist='vire', clips=False, clips_from='L4 0x31'))
+    assert state.clips_text() == 'no clips from L4 0x31'
+    state.apply({'cell': 0, 'event': 'clips', 'clips': True, 'clips_from': 'L4 0x31'})
+    assert state.clips_text() == 'clips again (off in L4 0x31)'
+    state.apply({'cell': 0, 'event': 'start', 'seed': None, 'source': 'live', 'name': None, 'clips': False,
+                 'clips_from': ''})
+    assert (state.label(), state.clips_text()) == ('LIVE', 'no clips')
+
+
 FEED = {'queues': {'best': 32, 'success': 3, 'stuck': 12, 'died': 32, 'random': 32}, 'capacity': 32, 'budget': 0,
         'primed': True, 'runs': 812, 'endings': {'unknown': 0, 'win': 9, 'death': 640, 'stuck': 150, 'other': 13,
                                                   'error': 0}, 'running': True, 'error': None}
@@ -186,6 +219,15 @@ def test_the_title_shows_the_source_its_stock_and_the_simulations():
     assert [sound(True, 50.0, None), sound(True, 0.0, None)] == ['sound muted (not at 60.1 fps)'] * 2
     assert [sound(False, nes, None), sound(False, nes, 'no device')] == ['sound off'] * 2
     assert sound(True, nes, 'no sound output device') == 'no sound: no sound output device'
+
+    # The clips switch (key c), and the runs of each queue played without clips.
+    clipped = {**stats, 'clips': False, 'live': False, 'feed': {**FEED, 'without_clips': {
+        'best': 0, 'success': 0, 'stuck': 2, 'died': 5, 'random': 7}}}
+    assert title(clipped, None, 60.0, False).startswith(
+        'Zelda — died — clips OFF for new runs (c) — best 32 · success 3 · stuck 12 (2 no clips) · died 32 '
+        '(5 no clips) · random 32 (7 no clips) (of 32)')
+    assert '— clips on for the live run and new runs (c) —' in title({**clipped, 'clips': True, 'live': True},
+                                                                      None, 60.0, False)
 
 
 # ---------------------------------------------------------------------------------------------- the window
@@ -333,12 +375,18 @@ def test_keys_choose_the_source_skip_step_the_cap_and_pause(qapp):  # pylint: di
     assert not fake.paused and 'paused' not in window.windowTitle()
     window.tick()
     assert fake.polls == polls + 1 and window.now() == 0.0    # resumes where it stopped
+
+    # c: the run-time clips switch off and on.
+    fake.clips, switched = True, []
+    fake.set_clips = lambda on: (switched.append(on), setattr(fake, 'clips', on))
+    assert window.handle_key(keys.Key_C) and window.handle_key(keys.Key_C) and switched == [False, True]
     window.shutdown()
 
-    # A grid that plays files has no queues to switch to.
+    # A grid that plays files has no queues to switch to, and no runs to switch clips for.
     files = FakeGrid(cells=1, messages=[], source='files')
     window = play_view.Window(files, cols=1, rows=1, scale=1)
     assert window.handle_key(keys.Key_D) and files.selected == [] and files.source == 'files'
+    assert window.handle_key(keys.Key_C) and not hasattr(files, 'clips')
     assert window.windowTitle().startswith('Zelda — files — 3 replay files')
     window.shutdown()
 
@@ -469,7 +517,7 @@ def test_one_replay_file_plays_on_loop(recordings, monkeypatch):  # pylint: disa
     watched = show.frames - show.start          # the frames before the models took over are skipped
     grid = ReplayGrid(2, fps=0, path=path)
     assert (grid.source, grid.stats()) == ('files', {'source': 'files', 'feed': None, 'golden': None, 'files': 1,
-                                                     'sound_error': None})
+                                                     'sound_error': None, 'clips': None, 'live': False})
     try:
         grid.start()
         messages = _collect(grid, lambda m: len(_events(m, 'end', 0)) >= 3)
@@ -485,6 +533,8 @@ def test_one_replay_file_plays_on_loop(recordings, monkeypatch):  # pylint: disa
         assert grid.emulated_frames()[0] >= 3 * watched > 0 and grid.emulated_frames()[1] == 0
         with pytest.raises(ValueError, match='plays replay files'):
             grid.select('best')
+        with pytest.raises(ValueError, match='plays replay files'):
+            grid.set_clips(False)
     finally:
         began = time.monotonic()
         grid.stop()
@@ -544,7 +594,8 @@ def test_cells_play_the_queues_the_simulations_fill(scripted_models, states_dir,
     monkeypatch.setattr(play_grid, 'RESULT_PAUSE', 0.05)
     saved = tmp_path / 'saved'
     grid = _segment_grid(scripted_models, states_dir, source='success', replays=saved)
-    assert grid.stats() == {'source': 'success', 'feed': None, 'golden': None, 'files': None, 'sound_error': None}
+    assert grid.stats() == {'source': 'success', 'feed': None, 'golden': None, 'files': None, 'sound_error': None,
+                            'clips': True, 'live': False}
     try:
         grid.start()
         messages = _collect(grid, lambda m: len(_events(m, 'end')) >= 4)
@@ -552,6 +603,7 @@ def test_cells_play_the_queues_the_simulations_fill(scripted_models, states_dir,
         assert {m['source'] for m in starts} == {'success'} and {m['cell'] for m in starts} == {0, 1}
         assert len({m['seed'] for m in starts}) == len(starts), "a run is taken out of its queue once"
         assert all((m['result'], m['outcome']) == ('success', 'milestone') for m in ends)
+        assert {m['clips'] for m in starts} == {True}, "the queued runs were played with clips on"
         # ow-octorok walks 0x3c; the milestone room it arrives in has nobody acting.
         assert {(m['room'], m['specialist']) for m in _events(messages, 'room')} == {(0x3c, 'ow-octorok'), (0x4c, None)}
 
@@ -614,6 +666,52 @@ def test_pausing_stops_the_picture_and_the_result_clock(scripted_models, states_
         _collect(grid, lambda m: len(_events(m, 'start')) >= 1)
     finally:
         grid.stop()
+
+
+def test_a_live_cell_plays_while_watched_takes_the_clips_key_and_files_its_runs(scripted_models, states_dir,
+                                                                                tmp_path, monkeypatch):
+    """--live: cell 0 is a run the models play as it is watched (its own one-env pool, the other cells replays).
+    The clips key reaches its run at once and every run after it; each finished live run joins the queues."""
+    monkeypatch.setattr(play_grid, 'RESULT_PAUSE', 0.05)
+    saved = tmp_path / 'saved'
+    grid = _segment_grid(scripted_models, states_dir, source='success', live=True, replays=saved)
+    assert (grid.stats()['live'], grid.clips) == (True, True)
+    try:
+        grid.start()
+        messages = _collect(grid, lambda m: len(_events(m, 'end', 0)) >= 2 and _events(m, 'end', 1))
+        live = [m for m in messages if m['cell'] == 0]
+        starts = _events(live, 'start')
+        assert {m['source'] for m in starts} == {'live'} and {m['clips'] for m in starts} == {True}
+        assert all(play_grid.SEEDS <= m['seed'] < 2 * play_grid.SEEDS for m in starts)
+        assert [m['seed'] for m in starts[:2]] == [play_grid.SEEDS, play_grid.SEEDS + 1], "seeds in order"
+        assert all((m['result'], m['outcome']) == ('success', 'milestone') for m in _events(live, 'end'))
+        rooms = _events(live, 'room')
+        assert rooms[0]['room'] == 0x3c and rooms[0]['clips'] is True and rooms[0]['clips_from'] is None
+        assert {m['source'] for m in _events(messages, 'start', 1)} == {'success'}, "the other cells play replays"
+        number, picture = grid.frame(0, 0)
+        assert number >= 1 and picture.shape == FRAME_SHAPE and picture.any()
+        assert grid.frame_counters()[0] >= number and grid.emulated_frames()[0] > 0
+
+        # The key: the live run hears it at once, and every run after it starts without clips.
+        grid.set_clips(False)
+        assert grid.clips is False and grid.stats()['clips'] is False
+        messages = _collect(grid, lambda m: [x for x in _events(m, 'start', 0) if x['clips'] is False]
+                            and len(_events(m, 'end', 0)) >= 2)
+        flip, = _events(messages, 'clips', 0)
+        # Where the switch went off: the room of the run on screen, or None while a result was up (the next run
+        # then starts without clips).
+        assert flip['clips'] is False and flip['clips_from'] in (None, '', 'L0 0x3c', 'L0 0x4c')
+        later = [m for m in _events(messages, 'start', 0) if m['clips'] is False][0]
+        assert later['clips_from'] == ''
+        # Finished live runs were filed like the simulations' (saved here under their seeds).
+        names = [p.name for p in saved.iterdir()]
+        assert any(int(name.split('-')[0]) >= play_grid.SEEDS for name in names)
+        grid.set_clips(True)
+    finally:
+        grid.stop()
+    assert grid.stopped and grid.frame(0, 0) is None
+    with pytest.raises(ValueError, match='live cell plays the models'):
+        ReplayGrid(2, 0, path=tmp_path, live=True)
 
 
 def test_a_team_without_its_first_model_crashes_every_cell_with_the_reason(states_dir, tmp_path):

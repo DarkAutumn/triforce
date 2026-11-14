@@ -159,10 +159,12 @@ pub fn random_action<R: Rng + ?Sized>(
     Action::new(kind, direction, duration).expect("legal action")
 }
 
-/// The specialist's config without RAM randomization: explore states as they are.
+/// The specialist's config without RAM randomization: explore states as they are; the run-time clips switch on (no
+/// draw, round 22): a curriculum track follows the route's clip way unless its start state fixes the plain way.
 pub fn explore_config(config: &SpecialistConfig) -> SpecialistConfig {
     SpecialistConfig {
         ram_randomization: RamRandomization::default(),
+        clips: crate::config::ClipsConfig { off_share: 0.0, ..config.clips },
         ..config.clone()
     }
 }

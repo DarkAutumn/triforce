@@ -2,8 +2,8 @@
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
         [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--act model|sample|argmax]
-        [--output PATH] [--replays DIR [--streams LIST] [--keyframe-frames N] [--state embed|path]]
-        [--events JSONL] [--nice N]
+        [--clips on|off|both] [--output PATH] [--replays DIR [--streams LIST] [--keyframe-frames N]
+        [--state embed|path]] [--events JSONL] [--nice N]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
@@ -39,6 +39,16 @@ skips per episode for each of ``_native.CLIP_STATS`` (``records[i]['clips']``: `
 ``done_n``/``done_s``/``done_w``/``done_e``; crates/zelda/src/clips.rs), also per room and per start state.  Records
 carry the route step's ``target`` exit and ``entry`` (routes.yaml strings, ``-`` off the route), and
 ``by_state_target`` groups by ``<start state>:<target>`` so one room trained toward two exits reads apart.
+
+The run-time clips switch (round 22, ``triforce.clips``): ``--clips both`` (the default for a family with clips
+enabled; ``on`` for the others) plays every start state with the switch on and with it off, as far as the state
+allows (a start state the route enters on one way of a stretch only fixes it: 4:0x21 from S plays on, 4:0x30 from
+E off), ``--clips on|off`` one of them (``clips.episode_jobs``; the switch-on half of ``both`` is the ``on``
+evaluation).  ``clips`` names the mode; every record carries ``clips_allowed`` (the switch it played) and
+``clips_fixed``.  The top-level figures (``success_rate``, ``mean_health_change`` and every group) are over every
+episode, both switch states together: a model weak without clips can't hide behind its clip runs.  ``by_clips``
+holds the same summary per switch state (``on`` / ``off``: ``episodes``, ``success_rate``, ``mean_health_change``,
+``mean_health_change_total``, ``mean_steps``, the hearts, ``by_room``, ``by_state``, ``by_state_target``).
 Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
 room and start-state aggregates report mean longest/tail steps and frames plus the worst measured streak.
 
@@ -71,6 +81,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import __version__, _native, registry, replay
+from .clips import MODES as CLIPS_MODES, default_mode as default_clips_mode, episode_jobs, name as switch_name
 from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
 from .jobs import add_nice_argument, lower_priority
 from .metrics import heart_change_total
@@ -254,7 +265,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
                         on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
                         threads: Optional[int] = None, states_dir=None, events=None, replays=None,
                         streams=(), state: str = 'embed',
-                        keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES) -> dict:
+                        keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES, clips: Optional[str] = None) -> dict:
     """Plays every seed start state `episodes_per_state` times on `parallel` envs and returns the summary dict
     (see module doc).  ``on_episode(record, done, total)`` is called as each episode finishes (completion order).
     ``deterministic``: argmax (True) or sampling (False); None follows the run's act mode (``registry.act_mode``).
@@ -263,15 +274,12 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     gets ``eval_start`` and ``eval_progress`` (at most once a second) for the training GUI (the caller emits
     ``eval``, ``eval_event`` fields, once it has written the result).  ``replays``: a folder every episode is
     recorded into as ``<seed>-<ending>.tfreplay`` (``streams``, ``state`` and ``keyframe_frames`` as
-    ``replay.record_options``)."""
+    ``replay.record_options``).  ``clips``: ``on`` / ``off`` / ``both`` (default ``clips.default_mode``)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     config = load_specialist(specialist) if isinstance(specialist, str) else specialist
     states_dir = None if states_dir is None else str(states_dir)
-    states = sorted(Path(p).stem for p in config.resolve_start_states(states_dir))
-    if not states:
-        raise ValueError(f"{config.name} has no seed start states")
-    episode_states = [state for state in states for _ in range(episodes_per_state)]
-    jobs = [(state, seed + index) for index, state in enumerate(episode_states)]
+    clips = default_clips_mode(config) if clips is None else clips
+    jobs = episode_jobs(config, episodes_per_state, seed, clips, states_dir)
 
     registry.require_compatible(checkpoint)
     policy = registry.load_model(checkpoint)[0].to_native()
@@ -295,15 +303,33 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
                         bool(record and record['decisions']))
     records.sort(key=lambda r: r['seed'])
 
-    count = len(records)
-    hearts = _heart_stats(records)
     return {
         'format': FORMAT,
         'specialist': config.name, 'checkpoint': str(checkpoint), 'episodes_per_state': episodes_per_state,
         'seed': seed, 'deterministic': deterministic, 'act': 'argmax' if deterministic else 'sample',
+        'clips': clips,
         'checkpoint_sha1': checkpoint_sha1, 'model_hash': f'{policy.hash:016x}',
         'config': json.loads(config.to_json()), 'version': __version__, 'code': code_version(),
         'data': data_hash(),
+        **_summary(records, config.name),
+        'by_clips': {name: _summary(items, config.name) for name, items in _by_switch(records).items()},
+        'records': records,
+    }
+
+
+def _by_switch(records: list[dict]) -> dict[str, list[dict]]:
+    """Records by the run-time clips switch they played (``on`` first; records without it played on)."""
+    groups: dict[str, list[dict]] = {}
+    for record in records:
+        groups.setdefault(switch_name(record.get('clips_allowed')), []).append(record)
+    return {name: groups[name] for name in ('on', 'off') if name in groups}
+
+
+def _summary(records: list[dict], specialist: str) -> dict:
+    """The headline figures and groups of a set of records (the whole evaluation, or one switch state)."""
+    count = len(records)
+    hearts = _heart_stats(records)
+    return {
         'episodes': count,
         'success_rate': sum(r['success'] for r in records) / count,
         'mean_health_fraction': sum(r['health'] / r['max_health'] if r['max_health'] else 0.0
@@ -325,8 +351,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'by_room': _group(records, lambda r: _room_key(r['room'])),
         'by_state': _group(records, lambda r: r['start_state']),
         'by_state_target': _group(records, lambda r: f"{r['start_state']}:{r.get('target', '-')}"),
-        'visited_rooms': _visited_rooms(records, config.name),
-        'records': records,
+        'visited_rooms': _visited_rooms(records, specialist),
     }
 
 
@@ -346,11 +371,14 @@ def write_result(result: dict, path) -> Path:
     return write_json_atomic(path, result)
 
 
-def default_output(checkpoint, specialist: str, act: str, episodes_per_state: int, seed: int) -> Path:
+def default_output(checkpoint, specialist: str, act: str, episodes_per_state: int, seed: int,
+                   clips: Optional[str] = None) -> Path:
     """Where an evaluation goes by default: ``<run dir>/eval.json`` for the canonical one, else
-    ``eval[-<specialist>][-<act>][-e<N>][-s<seed>].json`` with each part only where it differs from canonical:
-    ``specialist`` other than the checkpoint's, ``act`` (``model|sample|argmax``) other than the run's act mode,
-    episodes per state other than 100, seed other than 0."""
+    ``eval[-<specialist>][-<act>][-e<N>][-s<seed>][-clips<mode>].json`` with each part only where it differs from
+    canonical: ``specialist`` other than the checkpoint's, ``act`` (``model|sample|argmax``) other than the run's act
+    mode, episodes per state other than 100, seed other than 0, ``clips`` (``on|off|both``) other than the family's
+    default (``clips.default_mode``; None: the default)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     path = Path(checkpoint)
     path = path / registry.CHECKPOINT_NAME if path.is_dir() else path
     parts = ['eval']
@@ -364,6 +392,8 @@ def default_output(checkpoint, specialist: str, act: str, episodes_per_state: in
         parts.append(f'e{episodes_per_state}')
     if seed != DEFAULT_SEED:
         parts.append(f's{seed}')
+    if clips is not None and clips != default_clips_mode(load_specialist(specialist)):
+        parts.append(f'clips{clips}')
     return path.parent / ('-'.join(parts) + '.json')
 
 
@@ -417,12 +447,21 @@ def _progress_events(events, on_episode):
 def eval_event(result: dict) -> dict:
     """The fields of an event stream's ``eval`` event (triforce/events.py) for an ``evaluate_specialist`` result:
     headline numbers, per-room and per-state success, room failures and the flat ``linger_*`` stats plus
-    ``by_room_linger`` / ``by_state_linger``."""
+    ``by_room_linger`` / ``by_state_linger``; ``clips`` (the mode) and ``by_clips`` (per switch state: ``episodes``,
+    ``success_rate``, ``health_change``, ``by_room``, ``by_state``) when the evaluation has them."""
     linger = {key: value for key, value in result.items() if key.startswith('linger_')}
     linger_groups = {
         f'{group}_linger': {name: {key: value for key, value in stats.items() if key.startswith('linger_')}
                             for name, stats in result[group].items() if 'linger_max_steps' in stats}
         for group in ('by_room', 'by_state')}
+    switch = {}
+    if 'by_clips' in result:
+        switch = {'clips': result.get('clips'),
+                  'by_clips': {name: {'episodes': s['episodes'], 'success_rate': s['success_rate'],
+                                      'health_change': s['mean_health_change'],
+                                      'by_room': {room: r['success_rate'] for room, r in s['by_room'].items()},
+                                      'by_state': {state: r['success_rate'] for state, r in s['by_state'].items()}}
+                               for name, s in result['by_clips'].items()}}
     return {'success_rate': result['success_rate'], 'episodes': result['episodes'],
             'deterministic': result['deterministic'],
             'health': result['mean_health_fraction'], 'start_health': result['mean_start_health_fraction'],
@@ -433,23 +472,35 @@ def eval_event(result: dict) -> dict:
             'by_room_failures': {room: {'episodes': stats['episodes'], 'failures': stats['failures']}
                                  for room, stats in result['by_room'].items()},
             'by_state': {state: stats['success_rate'] for state, stats in result['by_state'].items()},
-            **linger, **linger_groups}
+            **linger, **linger_groups, **switch}
 
 
 def format_report(result: dict) -> str:
-    """Total line plus one line per room, worst success rate first.  Health change is real (total incl. hearts
-    wasted at full health); hearts are dropped/taken/left per episode."""
+    """Total line plus one line per room, worst success rate first; with both clips switch states played, a line
+    per switch state and each room's figures per switch state.  Health change is real (total incl. hearts wasted
+    at full health); hearts are dropped/taken/left per episode."""
     successes = sum(r['success'] for r in result['records'])
     lines = [f"{result['specialist']}: success {successes}/{result['episodes']} = {result['success_rate']:.0%}  "
              f"health change {result['mean_health_change']:+.2f} (total {result['mean_health_change_total']:+.2f}) "
              f"hearts  dropped/taken/left {_fmt_hearts(result)}  steps {result['mean_steps']:.0f}"
              f"{_fmt_linger(result)}"]
+    switches = result.get('by_clips') or {}
+    split = len(switches) > 1
+    for name, stats in switches.items() if split else ():
+        lines.append(f"  clips {name:3}: success {stats['success_rate']:.0%} of {stats['episodes']}  "
+                     f"health change {stats['mean_health_change']:+.2f}  steps {stats['mean_steps']:.0f}")
     for room, stats in sorted(result['by_room'].items(), key=lambda item: (item[1]['success_rate'], item[0])):
         top = max(stats['endings'].items(), key=lambda item: item[1])[0]
+        per_switch = ''.join(f"  {name} {_fmt_switch_room(s['by_room'][room])}"
+                             for name, s in switches.items() if split and room in s['by_room'])
         lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['health_change']:+5.2f} "
                      f"({stats['health_change_total']:+5.2f}) hearts  {_fmt_hearts(stats)}  "
-                     f"{stats['episodes']:4}  {top}{_fmt_linger(stats)}")
+                     f"{stats['episodes']:4}  {top}{per_switch}{_fmt_linger(stats)}")
     return '\n'.join(lines)
+
+
+def _fmt_switch_room(stats: dict) -> str:
+    return f"{stats['success_rate']:.0%}/{stats['health_change']:+.2f}"
 
 
 def _fmt_hearts(stats: dict) -> str:
@@ -478,9 +529,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--seed', type=int, default=DEFAULT_SEED)
     parser.add_argument('--act', choices=registry.ACT_CHOICES, default='model',
                         help="model: the run's act mode (registry); sample / argmax: act that way")
+    parser.add_argument('--clips', choices=CLIPS_MODES, default=None,
+                        help="the run-time clips switch: every start state with it on, off, or both (as far as the "
+                             "state allows); default both for a family with clips enabled, else on")
     parser.add_argument('--output', default=None,
                         help="JSON output (default: <checkpoint dir>/eval.json for the canonical evaluation, else "
-                             "eval[-<specialist>][-<act>][-e<N>][-s<seed>].json)")
+                             "eval[-<specialist>][-<act>][-e<N>][-s<seed>][-clips<mode>].json)")
     replay.add_arguments(parser, default_state='embed')
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
@@ -540,7 +594,7 @@ def main(argv=None):
             result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
                                          registry.act_override(args.act), threads=args.threads, events=events,
                                          replays=args.replays, streams=streams, state=args.state,
-                                         keyframe_frames=args.keyframe_frames)
+                                         keyframe_frames=args.keyframe_frames, clips=args.clips)
         except Exception as error:
             if events is not None:
                 message = f"evaluation failed: {type(error).__name__}: {error}"
@@ -549,7 +603,7 @@ def main(argv=None):
                     events.emit('end', status='eval-failed', message=message)
             raise
         output = (Path(args.output) if args.output else
-                  default_output(checkpoint, name, args.act, args.episodes_per_state, args.seed))
+                  default_output(checkpoint, name, args.act, args.episodes_per_state, args.seed, args.clips))
         write_result(result, output)
         if events is not None:
             events.emit('eval', **eval_event(result), path=str(output))

@@ -178,6 +178,18 @@ def test_early_stop_balances_seed_states_only():
     assert pinned.update([Counter({('x', True): 2})], 2) and pinned.harvested == (0, 0)
 
 
+def test_early_stop_balances_both_clips_switch_states():
+    """Round 22: a seed state played with the clips switch off is a state of its own (``a:clips-off``), so a
+    perfect switch-on half can't carry the stop while the switch-off half fails; it is no harvested label."""
+    early = train.EarlyStop(0.9, 1, min_episodes=2, seed_states=['a'])
+    on, off = 'a', f'a{train.OFF_LABEL}'
+    assert not early.update([Counter({(on, True): 10, (off, True): 3, (off, False): 7})], 20)
+    assert early.balanced == pytest.approx(0.65) and early.harvested == (0, 0)
+    assert early.balanced_by_switch == pytest.approx({'on': 1.0, 'off': 0.3})
+    assert early.update([Counter({(off, True): 20})], 20)       # the window's newest cohorts: off 20/20
+    assert early.balanced_by_switch == {'on': 1.0, 'off': 1.0}
+
+
 def test_training_logs_its_harvested_source_and_rate(states_dir, tmp_path, logs_dir):
     """F069/F140: run.json and the start event name the harvested dir, its state count and fraction; harvested
     episodes are logged as harvested/success_rate and the early stop balances over the seed state only."""
@@ -315,25 +327,30 @@ def test_cohort_rate_is_the_success_of_the_episodes_started_in_that_rollout():
 
 
 @pytest.mark.parametrize('outcomes,stops,played', [
-    ([False] * 40 + [True] * 10, False, 26),   # the 26th failure leaves at most 24/50 < 0.5: aborted there
-    ([True] * 30 + [False] * 20, True, 50),    # 20 failures still allow 0.5: played to the end, stops
-    ([True] * 50, True, 50)])
+    ([False] * 80 + [True] * 20, False, 51),   # the 51st failure leaves at most 49/100 < 0.5: aborted there
+    ([True] * 60 + [False] * 40, True, 100),   # 40 failures still allow 0.5: played to the end, stops
+    ([True] * 100, True, 100)])
 def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, logs_dir, monkeypatch, outcomes, stops,
                                                        played):
     """Every proposal runs an evaluation of the current weights; below --stop-success the run goes on.  The
-    evaluation ends as soon as its failures rule the threshold out, with the same decision."""
+    evaluation ends as soon as its failures rule the threshold out, with the same decision.  ow-start has clips:
+    the evaluation plays its start state with the clips switch on and off (``clips.episode_jobs``), 50 each."""
     calls = []
 
     def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, deterministic=False,
                   stop=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
         calls.append((runs, seed, parallel, deterministic))
-        successes = episodes = 0
-        for ok in outcomes[:runs]:
-            successes, episodes = successes + ok, episodes + 1
-            if stop({'success': ok, 'start_state': 'start', 'start_health': 3.0, 'health': 3.0}):
+        counts = {}
+        for index, ok in enumerate(outcomes[:2 * runs]):
+            clips = index < runs
+            label = 'start' if clips else f'start{train.OFF_LABEL}'
+            successes, episodes = counts.get(label, (0, 0))
+            counts[label] = (successes + ok, episodes + 1)
+            if stop({'success': ok, 'start_state': 'start', 'clips_allowed': clips, 'start_health': 3.0,
+                     'health': 3.0}):
                 break
-        return {'start': (successes, episodes)}
+        return counts
 
     monkeypatch.setattr(train, 'success_by_state', fake_eval)
     monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
@@ -349,10 +366,13 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
     assert [c['decision'] for c in checks] == (['stop'] if stops else ['continue'] * 3)
     check = checks[0]
     successes = sum(outcomes[:played])
-    assert (check['episodes'], check['planned'], check['failures']) == (played, 50, played - successes)
-    assert check['aborted'] == (played < 50)
-    assert check['rate'] == successes / played and check['states'] == {'start': check['rate']}
-    assert check['rate_upper_bound'] == (50 - (played - successes)) / 50
+    assert (check['episodes'], check['planned'], check['failures']) == (played, 100, played - successes)
+    assert check['aborted'] == (played < 100)
+    assert check['rate'] == successes / played
+    rate = lambda part: sum(part) / len(part)
+    assert check['states'] == {'start': rate(outcomes[:50]),
+                               **({f'start{train.OFF_LABEL}': rate(outcomes[50:played])} if played > 50 else {})}
+    assert check['rate_upper_bound'] == (100 - (played - successes)) / 100
     assert check['aborted'] == (check['rate_upper_bound'] < 0.5)
     assert calls[0] == (train.CONFIRM_EPISODES, 5 + 1, 2, False)
     assert ('early_stop' in [e['event'] for e in events]) == stops

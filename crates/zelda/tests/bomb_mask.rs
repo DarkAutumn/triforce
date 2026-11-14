@@ -123,10 +123,10 @@ fn bombs_at_0x67_open_its_rock_wall() {
     room("0_67s_0", BombTarget::rock((14, 2)), (0x70, 0x6D));
 }
 
-/// trap-room: Dungeon 3's 0x4c E wall into Manhandla's room.
+/// trap-room: Dungeon 3's 0x4c E wall into Manhandla's room (entered from S since round 22).
 #[test]
 fn bombs_at_3_0x4c_open_its_east_wall() {
-    room("3_4cw_0", BombTarget::Wall(Direction::E), (0xC0, 0x8D));
+    room("3_4cs_0", BombTarget::Wall(Direction::E), (0xC0, 0x8D));
 }
 
 /// trap-room: Dungeon 4's rupee room 0x11, its N wall into the Keese room 0x01 (round 22).

@@ -6,7 +6,7 @@
 mod common;
 
 use common::{TfzStore, ZCore, open_core};
-use env::config::{GameData, RamRandomization, SpecialistConfig};
+use env::config::{ClipsConfig, DEFAULT_CLIPS_OFF_SHARE, GameData, RamRandomization, SpecialistConfig};
 use env::observation::{Observation, feature_names};
 use env::specialist_env::{EnvOptions, SpecialistEnv, StepResult};
 use std::sync::{Arc, LazyLock};
@@ -19,7 +19,7 @@ static DATA: LazyLock<Arc<GameData>> = LazyLock::new(common::game_data);
 fn make_env(nes: ZCore, clips: bool) -> Env {
     let mut config = (*DATA.specialists["ow-start"]).clone();
     config.ram_randomization = RamRandomization::default();
-    config.clips = clips;
+    config.clips = ClipsConfig { enabled: clips, off_share: 0.0 };
     let opts = EnvOptions { start_state: Some("start".into()), ..Default::default() };
     SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env")
 }
@@ -59,26 +59,37 @@ fn pbrs(r: &StepResult) -> f64 {
         .sum()
 }
 
-/// `clips:` is one switch, `true` or `false` (default false); the removed designs' block (`{action: ..., shaping:
-/// ...}`) is refused.
+/// `clips:` is `true`/`false` (default false) or `{enabled, off_share}` (round 22; a clip family's `off_share`
+/// defaults to `DEFAULT_CLIPS_OFF_SHARE`); the removed designs' block (`{action: ..., shaping: ...}`) is refused.
 #[test]
 fn the_clips_switch_parses() {
     // ow-start says `clips: true`; without that line the switch is off.
     let text = std::fs::read_to_string(common::repo().join("specialists/ow-start.yaml")).unwrap();
     let base: String = text.lines().filter(|l| !l.starts_with("clips:")).map(|l| format!("{l}\n")).collect();
+    let half = DEFAULT_CLIPS_OFF_SHARE;
     for (value, want) in [
-        ("true", Some(true)),
-        ("false", Some(false)),
+        ("true", Some((true, half))),
+        ("false", Some((false, 0.0))),
+        ("{enabled: true}", Some((true, half))),
+        ("{enabled: on, off_share: 0.25}", Some((true, 0.25))),
+        ("{enabled: false, off_share: 0.5}", Some((false, 0.5))),
+        ("{enabled: true, off_share: 1.5}", None),
+        ("{off_share: 0.5}", None),
         ("{action: kind}", None),
         ("{action: none, shaping: jump}", None),
         ("long", None),
     ] {
         let text = format!("{base}clips: {value}\n");
-        let parsed = SpecialistConfig::from_yaml(&text, "test", Some(&DATA.map)).ok().map(|c| c.clips);
+        let parsed = SpecialistConfig::from_yaml(&text, "test", Some(&DATA.map))
+            .ok()
+            .map(|c| (c.clips.enabled, c.clips.off_share));
         assert_eq!(parsed, want, "{value}");
     }
     let parsed = SpecialistConfig::from_yaml(&base, "test", Some(&DATA.map)).unwrap();
-    assert!(!parsed.clips, "default off");
+    assert_eq!(parsed.clips, ClipsConfig { enabled: false, off_share: 0.0 }, "default off");
+    // The JSON form round-trips (Python's `replace`).
+    let json = SpecialistConfig::from_json(parsed.to_json(), Some(&DATA.map)).unwrap();
+    assert_eq!(json.clips, parsed.clips);
 }
 
 /// In the zone the mask has CLIP W and `clip_usable_W` is set with clips on; neither with clips off.
@@ -125,7 +136,7 @@ fn a_clip_is_counted_and_the_episode_carries_its_target() {
 fn make_room_22_env(nes: ZCore, clips: bool) -> Env {
     let mut config = (*DATA.specialists["trap-room"]).clone();
     config.ram_randomization = RamRandomization::default();
-    config.clips = clips;
+    config.clips = ClipsConfig { enabled: clips, off_share: 0.0 };
     let opts = EnvOptions { start_state: Some("1_22e_0".into()), ..Default::default() };
     SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env")
 }
@@ -177,7 +188,7 @@ fn the_block_clip_in_a_dungeon_room() {
 fn make_room_21_env(nes: ZCore) -> Env {
     let mut config = (*DATA.specialists["stalfos-keese-gel"]).clone();
     config.ram_randomization = RamRandomization::default();
-    assert!(config.clips, "the family leaves the island by the ladder clip");
+    assert!(config.clips.enabled, "the family leaves the island by the ladder clip");
     let opts = EnvOptions { start_state: Some("4_21s_0".into()), ..Default::default() };
     let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env");
     env.reset(Some(0), None).unwrap();

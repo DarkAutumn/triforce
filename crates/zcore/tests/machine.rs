@@ -386,7 +386,7 @@ fn shipped_states_replay_to_pinned_digests() {
         ("start", "5b39e90eb7f699a4a2efc605df7b0b118fa16ec2978971203a6404657c5d4945"),
         ("2_7ds_0", "f79fc3c6ea73241a00b7d1592c1c55b4f9ce3afaea64861feb52136bb7efdd86"),
         ("0_3cc_0", "c8f12d0c2942212951568ac6a62805c3555931e5b80c302f6964ac8fa76dfa27"),
-        ("3_7cs_0", "9f73cd2962a5844ad61e038affe1558c32f19612f8334879ba68f9298a0d508f"),
+        ("3_7cs_0", "3ee28a2ed2e339f160a8c6faf8bc29338e21023441e52fd5bbe2c439785a5132"),
     ];
     let mut got = Vec::new();
     for (name, _) in pins {

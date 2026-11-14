@@ -44,11 +44,41 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples. The r71 goriya (`r71-goriya-cont`, 12M steps): 95.2%, −0.15 hearts
    per episode by sample (old `r68-clear5e` 95.4%, −0.16); 2:0x1e 90.0% −0.39 (round21.md §7).
-7. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work): chain
-   records count no hits (the Hits overlay is room-only) and name no route step (`room_stats.assign_steps` infers it
-   from the current route, so r70's D4 visits of the old 0x30 → 0x20 → 0x21 path show as `off`): a `hits` and a
-   `step` field in `RoomRecord` would make both exact; the death-rate scales (`DEATHS_BAD`) are first guesses; open
-   ideas: an overlay of death rate given entry (`death_rate_entered`), comparing two tags (r70 vs r71) room by room.
+7. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work):
+   - [x] chain records count hits and name their route step (round 22: `RoomRecord.hits` / `hits_dealt` / `step`;
+     `assign_steps` uses the recorded step and infers it only for older files; chain `hits_per_visit` feeds the
+     Hits overlay).
+   - [x] split by the clips switch (round 22: `by_clips` per room and scope, `--noclips` for a second tag,
+     `zelda-map.py`'s Clips selector and both route ways).
+   - [ ] the death-rate scales (`DEATHS_BAD`) are first guesses; open ideas: an overlay of death rate given entry
+     (`death_rate_entered`), comparing two tags (r70 vs r71) room by room; `eval_batch.report_commands` doesn't
+     write the `-both` file of a tag measured with and without clips (run `triforce room-stats TAG --noclips`).
+
+## Round 22: the run-time clips switch (Lee, Nov 13; branch `r22`)
+
+Decisions 2026-11-13 "The run-time clips switch and route stretches" and "Clips in training, evaluation and
+watching".
+
+- [x] **The switch** (`clips_allowed`, run-time, any decision), route stretches (`d4-island`), re-planning from
+  where Link stands, the clip counters and the wrap veto (below, under Dungeon 4).
+- [x] **The training mix** (`clips: {enabled, off_share}`, half the episodes with CLIP masked), per-switch metrics
+  and early stop; the evaluation split (`--clips both`, `by_clips`, the combined headline); the room-statistics
+  split; the training GUI (success chart and progress line per switch state, the Eval tab's "Clips switch").
+- [x] **Watching:** `play-zelda.py --clips on|off`, key `c`, the title's switch and per-queue "no clips" counts, a
+  cell's "no clips"; `--live` (the top left cell a live run where `c` acts from the next decision);
+  `zelda-headless.py --clips`.
+- [ ] **Train the clip families under the mix.** The round 21 models never trained with the switch off. `vire`
+  r71 evaluated with `--clips both` (20 episodes per state): 97.5% (on 99.4% of 480, off 96.0% of 600; 4:0x30 off
+  88%, 4:0x50 off 95% with −1.24 hearts). D4 chains of the r71 team, 20 runs each from `4_71s_0` (act model):
+  clips on 13/20, clips off 2/20 (deaths 0x31 5, 0x20 4, 0x13 4, 0x30 2, 0x12 2), `--clips-off-from 4:0x31` 8/20
+  (0x20 4 deaths): the plain way (0x31 W, 0x30 N, 0x20) is where an untrained switch-off costs.
+- [ ] **vire's curriculum for the plain way's states.** `4_30e_*` and `4_20s_*` have no Go-Explore tracks
+  (`trajectories/vire`, explored in round 21 before they existed); re-explore them (`python -m triforce.explore
+  --specialist vire --states 4_30e_0,...`). Curriculum starts play with the switch on, so a track from a state that
+  fixes it off needs a decision first.
+- [ ] **The live cell has no sound and no controller drawing** (its frames come from the chain pool, not a
+  `ReplayScreen`). Sound would need the pool's env to feed a `Synth` (`crates/zcore/src/sound.rs`) the way the
+  screen's cells do.
 
 ## Round 22: natural RNG (Lee, Nov 13; branch `r22-rng`)
 
@@ -59,12 +89,25 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
 - [x] **Measured on the r71 models** (seed 0, act modes): goriya, ow-moblin and boss-gleeok move within two
   standard errors in success and hearts (boss-gleeok's +0.29 → +0.11 hearts is the largest, at the edge of the
   noise; 300 episodes).
-- [ ] **Stored artefacts from the old draw.** 132 of the 364 start states hold `$FF` in the room history (inert:
-  only compared with room ids) and 120 an off-ring or corner edge cell (`$E0` in 109): a randomized load replaces
-  the cell, but a load without randomization (tests, `Game.load(randomize_rng=False)`) and every curriculum frame
-  (controllable, not pre-entry: no spawn draw) keep it; in an edge-spawn room such a cell sends the next edge
-  monster off the screen. Rebuilding the states and re-exploring the curricula (both now write only natural values)
-  would clear them. Checkpoints taken from replays recorded before round 22 hold off-cycle registers unless redrawn.
+- [ ] **Stored artefacts from the old draw.** Before the route rebuild 132 of the 364 start states held `$FF` in
+  the room history (inert: only compared with room ids) and 120 an off-ring or corner edge cell (`$E0` in 109): a
+  randomized load replaces the cell, but a load without randomization (tests, `Game.load(randomize_rng=False)`) and
+  every curriculum frame (controllable, not pre-entry: no spawn draw) keep it; in an edge-spawn room such a cell
+  sends the next edge monster off the screen. Rebuilding the states and re-exploring the curricula (both now write
+  only natural values) would clear them. Checkpoints taken from replays recorded before round 22 hold off-cycle
+  registers unless redrawn. **After round 22's rebuild from 0x58 (step 71)**: 397 states, every state built from
+  0x58 leaving S on clean; listed (`$525` and `$621`-`$626` of each state file), not rebuilt:
+  - 71 chain-2 states with an edge cell the game can't hold (`$525`; `$E0` but for `0_3ds_2`, `0_4ce_2`, `0_4ds_2`,
+    `0_58s_2`, `0_5dw_2` `$3F`, `0_5cw_2` `$1F`, `0_59w_2` `$10`), all from before the rebuild:
+    the overworld's `0_0ac_2`, `0_0acave_2`, `0_0as_2`, `0_17e_2`, `0_18e_2`, `0_19e_2`, `0_1ae_2`, `0_1an_2`,
+    `0_1be_2`, `0_1cs_2`, `0_27n_2`, `0_28w_2`, `0_2cc_2`, `0_2ccave_2`, `0_2ce_2`, `0_2ds_2`, `0_37c_2`, `0_37e_2`,
+    `0_38n_2`, `0_38w_2`, `0_3cc_2`, `0_3cs_2`, `0_3ds_2`, `0_48n_2`, `0_4ce_2`, `0_4cn_2`, `0_4ds_2`, `0_4dw_2`,
+    `0_58n_2`, `0_58s_2`, `0_59w_2`, `0_5aw_2`, `0_5bw_2`, `0_5cw_2`, `0_5dw_2`, `0_67s_2`, `0_68w_2`, `0_77c_2`,
+    `0_78w_2`, Dungeon 1's 22 (`1_*_2`) and Dungeon 2's 10 (`2_*_2`);
+  - 93 with `$FF` in the room history (`$621`-`$626`), all three chains of `0_0ac`, `0_0acave`, `0_0as`, `0_17e`,
+    `0_18e`, `0_19e`, `0_1ae`, `0_1an`, `0_1be`, `0_1cs`, `0_27n`, `0_2cc`, `0_58s`, `0_59w`, `0_5aw`, `0_67s`,
+    `0_68w`, `0_77c`, `0_78w`, `1_22c`, `1_23w`, `1_33n`, `1_42s`, `1_43n`, `1_44w`, `1_52e`, `1_53s`, `1_63s`,
+    `1_73e`, `1_73w`, `1_74w`.
 
 ## Round 22: the route (Lee, Nov 13; branch `r22-route`)
 

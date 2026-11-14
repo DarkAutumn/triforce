@@ -10,8 +10,10 @@
     .venv/bin/python play-zelda.py 2x3 runs/replays    # a folder's replays (top level), six at a time, round and round
     .venv/bin/python play-zelda.py 3x2 --benchmark 30  # print the frame rate on screen, then quit
     .venv/bin/python play-zelda.py 2x2 --controller    # draw the controller, its held buttons lit, in every cell
+    .venv/bin/python play-zelda.py 3x2 --live          # the top left cell is a live game: c turns its clips off
+    .venv/bin/python play-zelda.py --clips off         # every simulated run without clips (c turns them back on)
 
-Every cell plays a replay; nothing on screen is a live game.  Without a path the models play the route (d2first)
+Every cell plays a replay; only a --live cell is a live game.  Without a path the models play the route (d2first)
 in the background, --parallel games at once, without a picture and as fast as they run.  Every finished run is a
 replay, filed into queues of --capacity (32) runs each:
 
@@ -33,7 +35,22 @@ was chosen at some point; they stop at one waiting per cell.
 Keys: b best, w success (wins), k stuck, d died, r random, g golden: every cell cuts to that source.  n: every
 cell goes on to its next replay.  u uncaps the frame rate (as fast as the replays play) or caps it again at the
 NES's 60.1 fps; while capped, + and - raise and lower the cap in steps of 10 (60.1 -> 50 -> 40, 60.1 -> 70, ...).
-p pauses and resumes the picture (the simulations go on filling their queues).
+p pauses and resumes the picture (the simulations go on filling their queues).  c turns the run-time clips switch
+off and on: for every run simulated from then on (the runs already in the queues keep theirs) and for the live
+cell's run from its next decision.
+
+Clips (round 22): --clips on|off is the switch the simulations start with (default on).  Off masks the CLIP
+action and the route takes its plain way through every stretch (Dungeon 4's island: 0x31 W, 0x30, 0x20, 0x21).
+The title says where the switch stands ("clips OFF for new runs (c)") and how many runs of each queue were
+played without clips; a cell whose run was played without clips says "no clips" at the right of its strip.
+Golden paths always play with clips on.
+
+--live: the top left cell is a live game instead of replays: the models play one run after another in it, paced
+at the cells' frame rate (u and +/- apply), while they are watched, so c says "rest of the run no clips" from the
+next decision on: the route re-plans from where Link stands (on 0x21's island he goes back S into 0x31 and round
+by the plain way) and the strip says "no clips from L4 0x31".  Each finished live run is filed into the queues
+like a simulated one (and saved with --replays).  The live cell has no sound and no --controller drawing; the
+sound starts on the next cell.  n and the source keys leave it playing.
 
 Sound: one cell is heard, the one with the yellow frame (the top left one at first).  Click a cell to hear that
 one instead; s turns sound off and on (--no-sound starts with it off).  A cell's sound is made as its frames
@@ -77,7 +94,8 @@ DEFAULT_STALL_STEPS = 300   # actions in a room without damage either way (round
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog='play-zelda.py', description=__doc__.split('\n\n')[0])
+    keys = next(part for part in __doc__.split('\n\n') if part.startswith('Keys:'))
+    parser = argparse.ArgumentParser(prog='play-zelda.py', description=__doc__.split('\n\n')[0], epilog=keys)
     parser.add_argument('what', nargs='*', metavar='GRID | PATH',
                         help=f"COLUMNSxROWS of cells (default {DEFAULT_GRID}; 1x1 for one replay file), and/or a "
                              f"replay file (played on loop) or a folder of *{replay.SUFFIX} files (its top level, "
@@ -101,6 +119,12 @@ def build_parser() -> argparse.ArgumentParser:
     sim.add_argument('--parallel', type=int, default=DEFAULT_PARALLEL, metavar='N',
                      help=f"games simulated at once, and runs tried for each best run taken (default "
                           f"{DEFAULT_PARALLEL})")
+    sim.add_argument('--clips', choices=('on', 'off'), default='on',
+                     help="the run-time clips switch the runs start with (default on; off: CLIP masked, the plain "
+                          "way through every route stretch); key c turns it off and on while watching")
+    sim.add_argument('--live', action='store_true',
+                     help="the top left cell is a live game: the models play it as it is watched, and key c "
+                          "acts on the run in progress from its next decision; its finished runs join the queues")
     sim.add_argument('--capacity', type=int, default=DEFAULT_CAPACITY, metavar='N',
                      help=f"runs each queue holds (default {DEFAULT_CAPACITY})")
     sim.add_argument('--patience', type=int, default=DEFAULT_PATIENCE, metavar='N',
@@ -146,6 +170,8 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
             parser.error(f"{args.path} is not a grid (COLUMNSxROWS), a replay file or a folder of replays")
         if args.show is not None:
             parser.error("--show chooses a queue of simulated runs: not with a replay file or folder")
+        if args.live:
+            parser.error("--live plays the models: not with a replay file or folder")
     else:
         args.show = args.show or QUEUES[0]
     try:
@@ -194,12 +220,14 @@ def main(argv=None) -> int:
                           power_on=args.power_on, start_from=args.start_from, stop_at=args.stop[0],
                           stop_step=args.stop[1], stall_steps=args.stall_steps or None, first_seed=args.first_seed,
                           attempts=args.attempts, replays=args.replays, streams=args.streams, state=args.state,
-                          keyframe_frames=args.keyframe_frames, controller=args.controller)
+                          keyframe_frames=args.keyframe_frames, controller=args.controller,
+                          clips=args.clips == 'on', live=args.live)
     except (ValueError, _native.ReplayError) as error:
         parser.error(str(error))
-    # A benchmark is a measurement, often run unattended: it stays silent.
+    # A benchmark is a measurement, often run unattended: it stays silent.  A live cell has no sound: the next one
+    # is heard.
     window = Window(grid, cols, rows, args.scale, benchmark=args.benchmark,
-                    sound=args.sound and args.benchmark is None)
+                    sound=args.sound and args.benchmark is None, heard=1 if args.live and cols * rows > 1 else 0)
     app.aboutToQuit.connect(window.shutdown)
     window.start()
     window.show()

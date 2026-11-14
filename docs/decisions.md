@@ -1635,6 +1635,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Wrap veto:** a wrap is not offered when the objective leaves by the landing edge only within its game.yaml
   `span` and the landing row is outside it (0x5b rows `$B5`, `$BD`); wraps toward other uses stay.
 - **Evidence:** `crates/env/tests/clips_switch.rs`, `crates/env/tests/chain_clips.rs`, `game_map` stretch tests.
+
 ## 2026-11-13 — The wrap exit: CLIP E out of 0x75's solid W edge into 0x74 (round 22)
 
 - **What:** a fourth skip kind, `SkipKind::WrapExit` (`crates/zelda/src/clips.rs`). `CLIP E` where the E wrap's
@@ -1665,6 +1666,38 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   softlock without the ladder). No route needs it.
 - **Evidence:** from 0x76's E edge into Dungeon 3 (monsters removed) takes 51 actions and 779 frames; the CLIP
   itself takes 130.
+
+## 2026-11-13 — Clips in training, evaluation and watching: the mix, the combined figure, the key (round 22, Lee)
+
+- **Context:** Lee: "The models need to be trained with clips enabled, and also with the clip action masked so it
+  has to traverse as normal. Keep track of stats of rooms on how well the model does with and without clipping",
+  and "imagine I'm watching live, not a replay, and want to just say: ok, rest of the run no clips". The switch
+  itself is the entry above.
+- **Decision, training:** a clip family's `clips: true` is `{enabled: true, off_share: 0.5}`
+  (`env::config::ClipsConfig`, `DEFAULT_CLIPS_OFF_SHARE`): each episode draws its switch from the env's seeded
+  generator, off with probability `off_share`, unless its start state fixes it (a room the route enters on one way
+  only) or `Env.set_clips_allowed` does; curriculum starts and exploration keep it on (their tracks were explored
+  with it on). Half and half because a model that never trains the plain way can't take it when Lee turns clips
+  off mid-run, and the clip way still needs its practice; `off_share` is there to move it by experiment. Metrics
+  `clips/enabled_share` and `clips/on|off/{episodes, success_rate, health_change, hearts_at_exit}`; the early stop
+  counts `<state>:clips-off` as a start state of its own, so both switch states must clear the bar.
+- **Decision, evaluation:** `--clips both` is the default for a clip family (`on` for the others) and the
+  canonical `eval.json`. Its headline figure (`success_rate`, `mean_health_change`, every group) is over both
+  switch states together: a model weak without clips can't hide behind its clip runs, and
+  comparisons stay one number. `by_clips` keeps the full summary per switch state; the switch-on half is exactly
+  the `--clips on` evaluation (same seeds), so older single-state numbers compare with it. Room statistics split
+  the same way (`room-stats` `by_clips`, `--noclips` for a second tag; `zelda-map.py`'s Clips selector).
+- **Decision, watching:** `play-zelda.py --clips on|off` sets the switch the simulations start with; key `c` turns
+  it off and on for every run started afterwards (`EnvPool.set_clips_allowed`; queued runs keep theirs, each feed
+  entry carries its switch and a cell's strip says "no clips"). `--live` makes the top left cell a live game (a
+  one-env chain pool paced at the cells' frame rate, `ChainTask(clips_live=True)`), where `c` acts on the run in
+  progress from its next decision and the route re-plans from where Link stands; the finished live run is filed
+  into the queues like a simulated one (`ReplayFeed.file`). Golden paths stay on clips.
+- **Evidence:** `crates/env/tests/clips_switch.rs` (the per-episode draw), `tests/test_evaluate.py`,
+  `tests/test_train_cli.py`, `tests/test_room_stats.py`, `crates/theater/tests/theater.rs`
+  (`a_run_played_elsewhere_is_filed_like_the_producers`), `tests/test_play_zelda.py`
+  (`test_a_live_cell_plays_while_watched_takes_the_clips_key_and_files_its_runs`); offscreen with the round 21 team
+  from `4_31e_0`: `c` in 0x31 and the live run turned W into 0x30 ("no clips from L4 0x31").
 
 ## 2026-11-13 — Round 22 route: 0x67's secret, both ways to Dungeon 3, 0x5b E → 0x5c → 0x4c, 0x01's key (Lee)
 

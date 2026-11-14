@@ -917,6 +917,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.pending_clips = Some(on);
     }
 
+    /// The switch runs started from now on begin with (the route's [`Route::clips`]; `play-zelda.py`'s key through
+    /// the pool's `ClipsSwitch`). Unlike [`Route::with_clips`] nothing is checked: a stop room or step the new
+    /// way never reaches lets the run play on to the route's end.
+    pub fn set_run_clips(&mut self, on: bool) {
+        self.route.clips = on;
+    }
+
     /// The switch the last decision was built with.
     pub fn clips_allowed(&self) -> bool {
         self.clips_allowed
@@ -1125,7 +1132,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.session.set_disabled_kinds(&kinds);
         let targets = config.items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref());
         self.session.set_bomb_targets(targets.as_deref());
-        self.session.set_clips(config.clips);
+        self.session.set_clips(config.clips.enabled);
         self.session.set_clips_allowed(self.clips_allowed);
         let vetoed = match &self.objective {
             Some(objective) if self.session.clips_effective() => {
@@ -1145,7 +1152,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             .get(location)
             .and_then(|room| room.specialist.clone())
             .and_then(|name| self.config_for(&name).ok())
-            .is_some_and(|config| config.clips)
+            .is_some_and(|config| config.clips.enabled)
     }
 
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {

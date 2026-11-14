@@ -510,13 +510,21 @@ fn ladder_moving(view: &GameView, s: &Link, n: &mut Link, input: u8, moving: u8)
 /// Whether pressing `press` (controller bits) now would take Link out of the room or through a door: the input
 /// alone leaves a cave or cellar, or the held direction touches a door he can pass on the doorway's floor spot
 /// (asm:Doorway_CheckLink restores the move the sword stopped, and a false or bombed wall changes rooms at once).
+/// The held directions are first filtered as in [`step`] (asm:Link_FilterInput, asm:Link_ModifyDirInDoorway): in a
+/// doorway a diagonal boomerang throw facing into the room walks Link backward, out through its door.
 fn press_leaves(view: &GameView, s: &Link, press: u8) -> bool {
-    let held = [(buttons::RIGHT, RIGHT), (buttons::LEFT, LEFT), (buttons::DOWN, DOWN), (buttons::UP, UP)]
+    let mut held = [(buttons::RIGHT, RIGHT), (buttons::LEFT, LEFT), (buttons::DOWN, DOWN), (buttons::UP, UP)]
         .into_iter()
         .filter(|&(b, _)| press & b != 0)
         .fold(0, |bits, (_, g)| bits | g);
+    if s.level != 0 && border_bands(s.level, s.dir, s.x, s.y).1 {
+        held &= axis(s.dir);
+    }
     if held == 0 {
         return false;
+    }
+    if s.level != 0 && s.doorway != 0 {
+        held = if s.dir & held != 0 || opposite(s.dir) & held == 0 { s.dir } else { opposite(s.dir) };
     }
     if input_leaves(s, held) {
         return true;

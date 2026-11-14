@@ -724,12 +724,13 @@ fn walks(s: &mut S, d: Direction) -> bool {
     s.state().link.position != at
 }
 
-/// Every Dungeon 4 start state (both ways of round 22's stretch d4-island), Link put on every grid point at
-/// rest out of the doorway: the block clip is offered in room $03 (under its two inner blocks at X $60 and $90, into
-/// the side pockets of the triforce's enclosure) and room $50 (its diagonal rows of blocks: 20 squares, each over its
-/// zone G'..T), nowhere else: not in the water rooms $21, $30, $31 (water is no block: the ladder clip's) nor in the
-/// cellar $60.
-/// In $03 and $50 every offered clip is right in the game: CLIP from each grid point completes with one press 8
+/// Every Dungeon 4 start state (both ways of round 22's stretch d4-island, and the 0x01 / 0x02 / 0x12-from-N way),
+/// Link put on every grid point at rest out of the doorway: the block clip is offered in room $03 (under its two
+/// inner blocks at X $60 and $90, into the side pockets of the triforce's enclosure), room $50 (its diagonal rows
+/// of blocks: 20 squares, each over its zone G'..T) and room $02 (round 22's dark trap room: the blocks in columns
+/// X $30 and $C0, N and S of its middle row: 4 squares), nowhere else: not in the water rooms $01, $21, $30, $31
+/// (water is no block: the ladder clip's) nor in the cellar $60.
+/// In $03, $50 and $02 every offered clip is right in the game: CLIP from each grid point completes with one press 8
 /// pixels past T, and from there a sideways walk goes on where Link stopped on T is walled off (useful clips only).
 #[test]
 fn the_block_clip_in_dungeon_4() {
@@ -740,7 +741,7 @@ fn the_block_clip_in_dungeon_4() {
         .filter(|n| n.starts_with("4_"))
         .collect();
     names.sort();
-    assert_eq!(names.len(), 57, "{names:?}");
+    assert_eq!(names.len(), 63, "{names:?}");
     let mut want_03 = Vec::new();
     for y in [0x85, 0x8D, 0x95] {
         want_03.extend([(0x60, y, Direction::N), (0x90, y, Direction::N)]);
@@ -752,10 +753,11 @@ fn the_block_clip_in_dungeon_4() {
         match &name[..4] {
             "4_03" => assert_eq!(got, want_03, "{name}"),
             "4_50" => assert_eq!(got.len(), 60, "{name}: {got:?}"),
+            "4_02" => assert_eq!(got.len(), 12, "{name}: {got:?}"),
             _ => assert_eq!(got, vec![], "{name}"),
         }
     }
-    for name in ["4_03s_0", "4_50e_0"] {
+    for name in ["4_03s_0", "4_50e_0", "4_02w_0"] {
         load(&mut s, name);
         s.apply_ram(&[(Var::DoorwayDir, 0)]);
         clear_monsters(&mut s);
@@ -789,7 +791,7 @@ fn the_block_clip_in_dungeon_4() {
             assert_eq!(zone.len(), 3, "{name} ({x:#04x}, T {t:#04x}) {d}: {zone:?}");
             println!("{name}: X {x:#04x} heading {d} T {t:#04x}: from {:?}, then {:?}", zone.iter().map(|z| z.0).collect::<Vec<_>>(), zone[0].1);
         }
-        assert_eq!(squares.len(), if name == "4_03s_0" { 2 } else { 20 }, "{name}");
+        assert_eq!(squares.len(), match name { "4_03s_0" => 2, "4_02w_0" => 4, _ => 20 }, "{name}");
     }
 }
 

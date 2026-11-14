@@ -623,7 +623,7 @@ wheels = [
 
 [[package]]
 name = "triforce"
-version = "1.4.1.0"
+version = "1.4.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "gymnasium" },
