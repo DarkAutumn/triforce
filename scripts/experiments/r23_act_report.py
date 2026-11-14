@@ -15,9 +15,9 @@ distinct action sequences, the mean first diverging decision of two episodes, th
 Chains (``<dir>/chains/r23-<mode>-<segment>.jsonl``, ``triforce eval-chain``): per segment and mode the arrivals
 (``triforce.eval_batch.arrival``: the next segment's start room; the D4 triforce for ``d4`` and ``full``) with the
 SE, how the other runs ended before arriving (death, stuck, other), hearts at the arrival (Link's health on
-arriving, ``arrival_hearts``: out of a dungeon, the health he entered its triforce room with, since the triforce
-refills his hearts), frames to it, and the same move counts and variety (the segment's start room, every run from
-the same state) up to the arrival.
+arriving, ``triforce.eval_batch.arrival_hearts``: out of a dungeon, the health he entered its triforce room with,
+since the triforce refills his hearts), frames to it, and the same move counts and variety (the segment's start
+room, every run from the same state) up to the arrival.
 """
 
 import argparse
@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from triforce import registry  # noqa: E402  pylint: disable=wrong-import-position
-from triforce.eval_batch import TARGETS, arrival  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.eval_batch import TARGETS, arrival, arrival_hearts  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.variety import decisions_of, risk, sequence, variety  # noqa: E402  pylint: disable=wrong-import-position
 
 LOOPS = ('stuck', 'no-damage', 'no-room-progress', 'max-steps')
@@ -139,19 +139,6 @@ def mode_totals(rows: dict) -> dict:
             'distinct': weighted('distinct'), 'diverge': weighted('diverge'), 'frames_sd': weighted('frames_sd')}
 
 
-def arrival_hearts(rooms: list[dict], index: int) -> float:
-    """Link's health on arriving at a segment's end, ``rooms[index]`` the arrival record (``eval_batch.arrival``):
-    its ``health_in``, unless he arrived out of a dungeon (the dungeon's last room before an overworld arrival, or
-    the route's last room before its closing milestone record), where taking the triforce refilled his hearts on the
-    way out: then the health he entered that last dungeon room with (the triforce room)."""
-    record = rooms[index]
-    if record.get('outcome') == 'milestone' or record['level'] == 0:
-        before = [r for r in rooms[:index] if r.get('outcome') != 'milestone']
-        if before and before[-1]['level'] != 0:
-            return float(before[-1]['health_in'])
-    return float(record['health_in'])
-
-
 def segment_summary(runs: list[dict], segment: str) -> dict:
     """One chain segment file's row."""
     target = TARGETS.get(segment)
@@ -162,7 +149,7 @@ def segment_summary(runs: list[dict], segment: str) -> dict:
         upto = rooms[:rooms.index(record) + 1] if record is not None and target is not None else rooms
         if record is not None:
             arrived += 1
-            hearts.append(arrival_hearts(rooms, rooms.index(record)))
+            hearts.append(arrival_hearts(run, record))
             frames.append(sum(r.get('frames') or 0 for r in (upto[:-1] if target is not None else upto)))
         else:
             last = rooms[-1] if rooms else {}

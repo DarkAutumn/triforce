@@ -127,6 +127,20 @@ def arrival(run: dict, target: Optional[str]):
     return None
 
 
+def arrival_hearts(run: dict, record: dict) -> float:
+    """Link's health on arriving, ``record`` the run's arrival (``arrival``): its ``health_in``, unless he arrived out
+    of a dungeon (an overworld arrival, or the route's closing milestone record, right after a dungeon room), where
+    taking the triforce refilled his hearts on the way out: then the health he entered that last dungeon room (the
+    triforce room) with."""
+    rooms = run['rooms']
+    index = next(i for i, room in enumerate(rooms) if room is record)
+    if record.get('outcome') == 'milestone' or int(record['level']) == 0:
+        before = [room for room in rooms[:index] if room.get('outcome') != 'milestone']
+        if before and int(before[-1]['level']) != 0:
+            return float(before[-1]['health_in'])
+    return float(record['health_in'])
+
+
 def read_runs(path: Path) -> list[dict]:
     """The runs of an eval-chain output (JSON lines)."""
     return [json.loads(line) for line in Path(path).read_text(encoding='utf-8').splitlines() if line.strip()]

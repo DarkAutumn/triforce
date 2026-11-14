@@ -17,8 +17,9 @@ markdown tables:
 - per specialist: success rate (Wilson interval), hearts lost per room visit, health change per episode, frames
   per room visit (tie-breaker only);
 - per chain segment: arrivals (Wilson interval) and hearts at arrival: with `@L:0xRR` the runs that entered that
-  room (the segment's end, e.g. the next segment's start room) and their health on entering it, else the
-  successful runs and their last room's entry health; plus the five rooms where the other runs ended.
+  room (the segment's end, e.g. the next segment's start room), else the successful runs, and Link's health on
+  arriving (`eval_batch.arrival_hearts`: out of a dungeon, the health he entered its triforce room with, since the
+  triforce refills his hearts); plus the five rooms where the other runs ended.
 
 `compare` prints, per row, both values and whether the intervals separate (`better` / `worse` / `~` overlapping).
 Specialist rows measured in different act modes are not compared (exit 1) unless `--allow-mode-mismatch`.
@@ -134,7 +135,7 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
         if unknown:
             raise YardstickError(f"{path}: target rooms {[f'{l}:0x{r:02x}' for l, r in unknown]} are not rooms "
                                  f"of route {route!r}")
-    arrived = [room for room in (arrival(r, target) for r in runs) if room is not None]
+    arrived = [(r, room) for r, room in ((r, arrival(r, target)) for r in runs) if room is not None]
     ends = Counter()
     for r in runs:
         if arrival(r, target) is None and r['rooms']:
@@ -146,7 +147,7 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
         'runs': len(runs),
         'arrived': len(arrived),
         'arrivals': wilson(len(arrived), len(runs)),
-        'hearts_at_arrival': mean_ci([room['health_in'] for room in arrived]),
+        'hearts_at_arrival': mean_ci([eval_batch.arrival_hearts(r, room) for r, room in arrived]),
         'where_runs_end': ends.most_common(5),
     }
 

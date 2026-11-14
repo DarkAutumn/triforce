@@ -219,7 +219,32 @@ checkpoint), so this is to be rerun after every retrain.
 
 ## 7. Merge check: the round 21 team in `escape:16` on the merged tree
 
-<!-- r23: merge check -->
+Not a measurement of the team: a check that the merged tree plays, records and reports every segment in an act mode
+with the round 22 route and states. The round 21 models (`r71`, promoted in the main checkout, read-only) never
+trained round 22's new rooms (0x67 and its cave, the stretches, 3:0x5c, 4:0x01/0x02), so runs fail there.
+
+    TRIFORCE_MODELS_DIR=<round 21 models> triforce eval-batch r23-merge-check --chains r23-merge-check \
+        --act escape:16 --runs 20 --chains-dir target/r23-merge-check --parallel 8
+
+| segment | runs | arrivals | hearts at arrival | where the others end |
+|---|---:|---|---|---|
+| full | 20 | 0 | – | 0:0x67 missed 7, 0:0x75 stuck 4, 0:0x0a death 2, 0:0x27 death 2, 3:0x69 death 1 |
+| d2 | 20 | 17 (85%) | 3.29 | 2:0x1e death 2, 2:0x2e death 1 |
+| post-d2 | 20 | 18 (90%) | 2.69 | 0:0x0a death 2 |
+| d1 | 20 | 20 (100%) | 5.22 | |
+| post-d1 | 20 | 10 (50%) | 3.00 | 0:0x67 missed 4, 0:0x75 stuck 3, 0:0x67 stuck 1, 0:0x67 death 1, 0:0x76 death 1 |
+| d3 | 20 | 0 | – | 3:0x5b death 8, 3:0x5b stuck 7, 3:0x69 death 4, 3:0x59 death 1 |
+| post-d3 | 20 | 20 (100%) | 6.58 | |
+| d4 | 20 | 0 | – | 4:0x11 stuck 18, 4:0x13 death 1, 4:0x02 death 1 |
+
+- Every run started with the switch on; every room record (milestones included) carries `clips_allowed`, `step` and
+  `decisions`, whose `n` equals the visit's steps (279,568 decisions); 423 of 5,582 visits drew at least once
+  (escape stalled), the rest were argmax throughout. The provenance names `escape:16` for every model.
+- Where runs fail is where round 22 changed the route: 0x67 (its rupee waypoint), 0x75 (the wrap exit), 3:0x5b (its
+  new E bomb wall) and 4:0x11 (N into 0x01 now). Round 22's own 20-run checks with this team stuck in 0x75 and
+  4:0x11 too (decisions 2026-11-13 "Round 22 merged"); the causes were not looked at here.
+- Hearts at arrival are the corrected ones (the yardstick shares `eval_batch.arrival_hearts`): out of Dungeon 1,
+  5.22 is Link's health entering its triforce room; the old reading said 6.00, the max.
 
 ## 8. On the round 22 team
 

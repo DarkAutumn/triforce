@@ -1800,8 +1800,10 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   without progress until progress). At most one of `escape` and `relax`; `relax` needs another rule. Measured on
   nothing yet: it is in the rerun's `CHAIN_MODES`.
 - **Also:** `train --confirm-act MODE` (early-stop confirmation; `train_round.py --eval-act` passes its mode; PPO's
-  rollouts always sample); the chain report's hearts at arrival read Link's health entering the triforce room;
-  `r23_act_pilot.sh` takes `CLIPS=on|off`; `registry.PLAY_ACT` stays `sample`, the one constant every play tool reads.
+  rollouts always sample); hearts at arrival (the pilot report and the yardstick, `eval_batch.arrival_hearts`) are
+  Link's health entering the triforce room when the arrival is out of a dungeon (they read the max hearts the
+  triforce refills: D1 6.00 against 5.22 in the merge check); `r23_act_pilot.sh` takes `CLIPS=on|off`;
+  `registry.PLAY_ACT` stays `sample`, the one constant every play tool reads.
 - **Evidence:** `tests/test_evaluate.py` (`--act escape:16 --clips both`: argmax's first 16 decisions, draws once
   stalled, recordings verify), `tests/test_cli.py` (`eval-chain --act temperature:0.75 --clips off`),
   `tests/test_runner.py` (a `temperature:0.75+relax:4` run flipped mid-room by `clips_live` replays bit for bit),
