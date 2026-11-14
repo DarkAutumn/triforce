@@ -1649,6 +1649,21 @@ def entry_summary(run: Run, status: str) -> list:
     return [('bars', run.kind, rows), ('text', 'Details', text)]
 
 
+TITLE_PLANS = 3     # running plans named in the window title; the rest are counted
+
+
+def window_title(models: list, now: float) -> str:
+    """The window title: the running plans with their progress, the first few by name (a compositor refuses a long
+    title, and dozens of batch entries make one)."""
+    running = [model for model in models if model.status() == 'running']
+    if not running:
+        return 'Triforce training'
+    parts = [f"{model.fraction(now):.0%} {model.name}" for model in running[:TITLE_PLANS]]
+    if len(running) > TITLE_PLANS:
+        parts.append(f"+{len(running) - TITLE_PLANS} more")
+    return ' · '.join(parts) + ' — Triforce training'
+
+
 def running_rate(run: Run):
     """An evaluation's success so far: the family evaluation's running rate, or a chain's runs that reached the
     route's end over its runs done (None before the first one)."""
@@ -3118,9 +3133,7 @@ class Window(QMainWindow):
         if changed or force:
             self._apply_selection()
             now = time.time()
-            models = [view.model for view in self.views if view.model is not None]
-            self.setWindowTitle(' · '.join(f"{model.fraction(now):.0%} {model.name}" for model in models)
-                                + ' — Triforce training' if models else 'Triforce training')
+            self.setWindowTitle(window_title([view.model for view in self.views if view.model is not None], now))
         else:
             self._refresh_detail()      # console log may still be growing
 

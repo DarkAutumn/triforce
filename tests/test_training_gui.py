@@ -312,6 +312,26 @@ def test_eval_chain_throughput_reads_episodes_per_second_or_seconds_per_episode(
     assert gui.chain_speed({'start': start, 'result': None, 'progress': None}) == ''
 
 
+def test_window_title_names_a_few_running_plans_and_counts_the_rest():
+    """Finished plans stay out of the title and many running ones are counted, so it stays short."""
+    class Plan:
+        def __init__(self, name, status, done):
+            self.name, self._status, self._done = name, status, done
+
+        def status(self):
+            return self._status
+
+        def fraction(self, now):
+            return self._done
+
+    finished = [Plan(f'old-{index}', 'completed', 1.0) for index in range(40)]
+    assert gui.window_title(finished, 0.0) == 'Triforce training'
+    assert gui.window_title(finished + [Plan('r72-ow', 'running', 0.5)], 0.0) == '50% r72-ow — Triforce training'
+    many = [Plan(f'r23-pilot-{index}', 'running', 0.25) for index in range(30)]
+    assert gui.window_title(finished + many, 0.0) == (
+        '25% r23-pilot-0 · 25% r23-pilot-1 · 25% r23-pilot-2 · +27 more — Triforce training')
+
+
 def test_machine_status_reads_cpu_gpu_and_load(tmp_path):
     stat = tmp_path / 'stat'
     stat.write_text("cpu  100 0 50 800 50 0 0 0 0 0\ncpu0 1 2 3 4\n")
