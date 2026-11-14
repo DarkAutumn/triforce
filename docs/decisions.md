@@ -1771,3 +1771,29 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Version:** REV, 1.4.1.1: the RNG at starts, the switch and its training mix, the BOMB mask and the route change
   behaviour, not the observation, the actions or the network. Round 21's boss-aquamentus and goriya load and play
   as before (100% +0.87 hearts; 96.7% -0.17).
+
+## 2026-11-14 — The r72 retrain: act modes, more plain-way practice for ow-moblin and ow-zora, second passes at 0.995 (round 22)
+
+- **Which families** (`docs/experiments/round22.md` §7): every family whose rooms, entries, exits or masks changed in
+  round 22, ow-octorok from scratch (its task changed most: bomb 0x67's wall, the cave, both ways; round 21's model
+  never bombs), the others continued from their round 21 runs (1.4.1.1 is compatible); like-like too, because its
+  round 21 run lost 0.90 hearts per episode on the rebuilt states and natural RNG (0.53 in its own evaluation). The
+  other 12 families keep their round 21 runs: re-evaluated on the new states and RNG in both act modes, all within
+  noise, act modes unchanged.
+- **Act mode per family, on evidence** (as in round 21: success first, then hearts within about 0.5 points, argmax
+  avoided where it loops more): argmax for ow-octorok, ow-start, ow-leever, ow-tektite, ow-boulder, ow-zora,
+  ow-moblin, trap-room and like-like (from sample: equal success and hearts, linger worst 98 steps against 539);
+  sample for stalfos-keese-gel (1 loop against 16 by argmax), darknut (0 against 16) and vire (6 against 38, 19 of
+  them in 4:0x12 from N). The kept families keep theirs.
+- **`off_share: 0.75` for ow-moblin and ow-zora** (`5efba1c`): after the first pass both crossed a D2-approach room
+  clearly worse without clips (ow-moblin 0x5b W→E 89-91%, ow-zora 0x5a 96-98%, against 100% with the wrap), so three
+  of four episodes play the plain way. It brought ow-moblin's 0x5b to 92% (−0.23) and ow-zora's 0x59 to 100%, not
+  0x5a (96%). Kept: with clips both stay at 98.7-99.9% overall (0x5b with the wrap 99.3%, 0x5a 100%).
+- **Second passes at `--stop-success 0.995`:** the balanced early stop at 0.99 passed vire (4:0x50 without clips
+  95.7%) and ow-zora (0x5a 96%) after about 0.55M steps. vire (4M more), like-like (3.75M) and the `off_share` runs
+  continued at 0.995: vire's 4:0x50 off went to 99.0%.
+- **ow-moblin from scratch (r72-moblin-new, 8M steps at `off_share: 0.75`) not promoted:** 0x5b W→E without clips
+  92.3% at −0.35..−0.37 hearts, no better than the continued r72-moblin-off (91.7% −0.22) and worse in hearts; the
+  plain 0x5b stays about 3 points under round 20's pre-clip model (94-96%).
+- **Chains with both switch states as the round's measure:** `r72-1k` (clips on) and `r72-1k-noclips`, 1000 runs
+  per segment, and `room-stats --noclips` for the per-room split; full route 13.6% and 4.8% (round 21 12.8%).
