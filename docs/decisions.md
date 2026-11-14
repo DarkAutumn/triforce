@@ -1977,9 +1977,11 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Detection:** same maze room before and after the step, and either `MazeStep` rose (only a matching loop raises
   it) or the step ended on a room transition (the scroll); the loop's edge is Link's facing, the direction
   asm:Maze_CheckStep tests. Random play in 0x1b found no other step that matches (`crates/env/tests/maze.rs`).
-- **What a model sees of the maze:** `room_changed` and `entered_from` on each loop now; the sequence's progress
-  itself is to be the room_state feature `maze_step` (MazeStep / 4 in a maze room, 0 elsewhere), added on top of the
-  action-kinds branch whose checkpoint conversion (OBS_SCHEMA 5, `convert.ADDED`) already reserves it.
+- **What a model sees of the maze:** `room_changed` and `entered_from` on each loop, and the room_state feature
+  `maze_step` (the last one: `MazeStep` / the sequence's length in a maze room, 0, 1/4, 2/4, 3/4 through the Lost
+  Hills; 0 elsewhere, also in 0x0b where `MazeStep` stays 3). It rides on the action kinds' schema 5: `convert.ADDED`
+  gives it a zero column, so a converted 1.4.1 model acts as before (`tests/test_convert.py` drops the column with
+  the other added ones and gets bit-identical outputs).
 - **Changed for `d2first`:** its 0x1b step leaves W, so an N loop there is now a wrong exit (it was invisible
   before: the episode went on). Nothing changes outside maze rooms: 20 runs `eval-chain --from 0_3cc_0` with the
   promoted models give the same jsonl as `main` (the two new record keys dropped), and that segment crosses 0x1b.

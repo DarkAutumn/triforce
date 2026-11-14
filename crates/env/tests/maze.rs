@@ -101,6 +101,11 @@ fn history(obs: &Observation, name: &str) -> f32 {
     obs.history[feature_names().history.iter().position(|n| n == name).unwrap()]
 }
 
+/// The observation's `maze_step` (room_state): `MazeStep` / 4 in the Lost Hills, 0 elsewhere.
+fn maze_feature(obs: &Observation) -> f32 {
+    obs.room_state[feature_names().room_state.iter().position(|n| n == "maze_step").unwrap()]
+}
+
 type Chain = ChainEnv<ZCore, TfzStore>;
 
 /// A `d5maze` chain run from `start` to Dungeon 5's first room, reset with seed 0.
@@ -145,14 +150,16 @@ fn four_norths_through_the_lost_hills_reach_dungeon_5() {
         assert_eq!((state.full_location(), state.peek(MAZE_STEP)), (HILLS, k), "loop {k}");
         assert!(!new_room, "a loop continues the visit");
         assert_eq!((history(&obs, "room_changed"), history(&obs, "entered_from_S")), (1.0, 1.0), "loop {k}");
+        assert_eq!(maze_feature(&obs), k as f32 / 4.0, "the observation tells loop {k} from the others");
         assert_eq!(c.objective().unwrap().next_rooms, BTreeSet::from([TOP]), "loop {k}");
         let record = c.result().unwrap().rooms.last().unwrap().clone();
         assert_eq!((record.room.as_str(), record.maze_loops, record.maze_wrong_loops), ("0x1b", k as u32, 0));
         assert_eq!(c.result().unwrap().wrong_exits, 0);
     }
     let walk = walk_out(c.session_mut(), Direction::N);
-    let ChainStatus::Act { specialist, new_room, .. } = play(&mut c, &walk) else { panic!("run ended") };
+    let ChainStatus::Act { specialist, new_room, obs } = play(&mut c, &walk) else { panic!("run ended") };
     assert_eq!((c.session().state().full_location(), &*specialist, new_room), (TOP, "ow-leever", true));
+    assert_eq!(maze_feature(&obs), 0.0, "0x0b is no maze, though MazeStep stays 3");
     assert_eq!(c.context().0, Some(d5maze_step(&data, TOP, "S")));
     let rooms = &c.result().unwrap().rooms;
     let hills = &rooms[rooms.len() - 2];
@@ -235,7 +242,8 @@ fn a_one_room_episode_on_0x1b_ends_correct_only_after_the_fourth_north() {
     let start = leg_state(dir.path(), "0_1be_0");
     let start = start.to_str().unwrap();
     let mut env = hills_env(nes, &data);
-    env.reset(Some(0), Some(start)).unwrap();
+    let (obs, _) = env.reset(Some(0), Some(start)).unwrap();
+    assert_eq!(maze_feature(&obs), 0.0, "entered from E: step 0");
     assert_eq!(env.route(), ("d5maze", Some(d5maze_step(&data, HILLS, "E"))));
     for k in 1..=4 {
         let walk = walk_out(env.session_mut(), Direction::N);

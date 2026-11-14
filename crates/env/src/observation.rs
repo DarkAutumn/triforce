@@ -24,7 +24,8 @@ use zelda::{Action, Change};
 
 /// 4: the CLIP kind in `history` (8 kinds) and `link` `clip_usable_{N,S,W,E}` (round 21). 5: RECORDER, FOOD and
 /// CANDLE in `history` (11 kinds, after CLIP) and `link` `recorder_usable`, `food_usable`, `candle_usable` (at its end;
-/// round 24). A schema 4 checkpoint is widened by `triforce convert-model` (zero weights on the new columns).
+/// round 24), and `room_state` `maze_step` (at its end; round 24). A schema 4 checkpoint is widened by `triforce
+/// convert-model` (zero weights on the new columns).
 pub const OBS_SCHEMA_VERSION: u32 = 5;
 
 /// NES object slots 1-$B, then the room item ("treasure").
@@ -38,7 +39,7 @@ pub const ITEM_TYPE_BASE: i64 = 0x80;
 /// 0 = empty, 1-$7F = ObjType, $80+ = item kinds.
 pub const ENTITY_VOCAB: usize = ITEM_TYPE_BASE as usize + NUM_ITEM_IDS as usize;
 
-pub const ROOM_STATE_SIZE: usize = 84;
+pub const ROOM_STATE_SIZE: usize = 85;
 pub const LINK_SIZE: usize = 87;
 pub const ENTITY_FEATURE_SIZE: usize = 33;
 pub const HISTORY_SIZE: usize = 38;
@@ -146,6 +147,8 @@ mod r {
     pub const IS_START_ROOM: usize = 81;
     pub const IS_BOSS_ROOM: usize = 82;
     pub const IS_TRIFORCE_ROOM: usize = 83;
+    /// `MazeStep` / the sequence's length in a maze room (0, 1/4, 2/4, 3/4 through the Lost Hills), 0 elsewhere.
+    pub const MAZE_STEP: usize = 84;
 }
 
 // link offsets
@@ -330,6 +333,7 @@ fn build_feature_names() -> FeatureNames {
         "is_start_room",
         "is_boss_room",
         "is_triforce_room",
+        "maze_step",
     ]));
 
     let mut link = s(&["x", "y", "grid_offset", "sub_x", "sub_y"]);
@@ -735,7 +739,7 @@ impl ObservationBuilder {
         self.prev_room = Some(key);
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
-            room_state: room_state(&rs),
+            room_state: room_state(&rs, state),
             link: link(state, mask, self.bomb_reserve),
             entity_types,
             entity_features,
@@ -1047,7 +1051,7 @@ fn direction_back(state: &GameView, prev: (u8, bool, u8)) -> Option<Direction> {
     })
 }
 
-fn room_state(rs: &RoomState) -> [f32; ROOM_STATE_SIZE] {
+fn room_state(rs: &RoomState, state: &GameView) -> [f32; ROOM_STATE_SIZE] {
     let mut v = [0f32; ROOM_STATE_SIZE];
     v[r::IN_CAVE] = b(rs.in_cave);
     v[r::IN_CELLAR] = b(rs.in_cellar);
@@ -1106,6 +1110,10 @@ fn room_state(rs: &RoomState) -> [f32; ROOM_STATE_SIZE] {
     v[r::IS_START_ROOM] = b(rs.is_start_room);
     v[r::IS_BOSS_ROOM] = b(rs.is_boss_room);
     v[r::IS_TRIFORCE_ROOM] = b(rs.is_triforce_room);
+    // Round 24: how far the maze's sequence is matched, which nothing else shows (each loop looks like the 1st).
+    if let Some(maze) = zelda::game_map::Maze::at(state.full_location()) {
+        v[r::MAZE_STEP] = (state.peek(zelda::game_map::MAZE_STEP) as f64 / maze.sequence.len() as f64) as f32;
+    }
     v
 }
 
@@ -1240,6 +1248,7 @@ mod tests {
             (r::BLOCK_PUSH_COMPLETE, "block_push_complete_0"),
             (r::ENEMIES_REMAINING, "enemies_remaining"),
             (r::IS_TRIFORCE_ROOM, "is_triforce_room"),
+            (r::MAZE_STEP, "maze_step"),
         ] {
             assert_eq!(n.room_state[offset], name);
         }

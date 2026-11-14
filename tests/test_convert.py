@@ -16,7 +16,7 @@ import torch
 
 from triforce import _native, convert, registry
 from triforce.actions import NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
-from triforce.observation import HISTORY_FEATURES, LINK_FEATURES
+from triforce.observation import HISTORY_FEATURES, LINK_FEATURES, ROOM_STATE_FEATURES
 
 from .conftest import REPO_STATES_DIR
 
@@ -59,10 +59,11 @@ def _native_policy(checkpoint: dict):
 
 
 def _old_layout(obs: dict) -> dict:
-    """Current observations in the source layout: the added history and link columns and the new kinds' mask
-    entries removed."""
+    """Current observations in the source layout: the added history, link and room_state columns (`maze_step`, 0
+    outside a maze) and the new kinds' mask entries removed."""
     keep = {key: [names.index(n) for n in convert.old_names(key)]
-            for key, names in (('history', HISTORY_FEATURES), ('link', LINK_FEATURES))}
+            for key, names in (('history', HISTORY_FEATURES), ('link', LINK_FEATURES),
+                               ('room_state', ROOM_STATE_FEATURES))}
     old = {key: (value[:, keep[key]] if key in keep else value) for key, value in obs.items()}
     mask = obs['action_mask']
     k, d, u = NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS
@@ -92,6 +93,7 @@ def test_the_widened_model_acts_as_the_source(converted):
     observations = {k: np.stack([np.asarray(r[k]) for r in rows]) for k in rows[0]}
     mask = observations['action_mask']
     assert not mask[:, OLD_KINDS:NUM_KINDS].any(), "the family masks the new kinds"
+    assert not observations['room_state'][:, ROOM_STATE_FEATURES.index('maze_step')].any(), "no maze here"
     n = len(mask)
     for noise_of in (None, lambda p: _native.keyed_noise(list(range(n)), [2] * n, p.noise_size)):
         pick = (lambda p: {'deterministic': True}) if noise_of is None else (lambda p: {'noise': noise_of(p)})
@@ -120,7 +122,9 @@ def test_new_rows_optimizer_and_files(converted):
     for name in convert.KIND_ROWS:
         assert torch.equal(state[name][:OLD_KINDS], old[name])
     for name in convert.FIRST_LAYERS:
-        assert state[name].shape[1] == old[name].shape[1] + 6 and torch.count_nonzero(state[name]) == \
+        # Every added feature: the three kinds' history and link columns, room_state's maze_step.
+        added = sum(len(names) for names in convert.ADDED.values())
+        assert added == 7 and state[name].shape[1] == old[name].shape[1] + added and torch.count_nonzero(state[name]) == \
             torch.count_nonzero(old[name])
     names = [n for n, _ in registry.load_model(target)[0].named_parameters()]
     for index, entry in widened['optimizer']['state'].items():

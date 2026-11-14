@@ -381,7 +381,7 @@ Python sees the layout as
 | Key | dtype / shape | Notes |
 |---|---|---|
 | `room_id` | int64 [1] | index < `ROOM_VOCAB` |
-| `room_state` | float32 [84] | per-room flags from `docs/ram-catalog.md` |
+| `room_state` | float32 [85] | per-room flags from `docs/ram-catalog.md`; schema 5 ends with `maze_step` (`MazeStep` / 4 in a maze room, else 0: which loop of the Lost Hills this is) |
 | `link` | float32 [87] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and the specialist has `clips: true`); schema 5 `recorder_usable`, `food_usable`, `candle_usable` (the mask allows the kind) |
 | `entity_types` | int64 [12] | 0 = empty slot |
 | `entity_features` | float32 [12, 33] | feature 0 = presence |
@@ -409,7 +409,8 @@ so schema 1 and 2 checkpoints no longer load (their `link` is 81 wide): every fa
 1.3.3.0, Nov 12) added the CLIP kind (`history` one-hots 8 kinds, the mask is 104 wide) and `link`'s
 `clip_usable_*`: no schema 3 checkpoint loads (action schema 2). Schema 5 (version 1.4.2.0, Nov 14) added RECORDER,
 FOOD and CANDLE (`history` one-hots 11 kinds, the new ones after `kind_CLIP`; the mask is 143 wide; action schema 3)
-and `link`'s `recorder_usable`, `food_usable`, `candle_usable` at its end. A 1.4.1 checkpoint is widened by
+and `link`'s `recorder_usable`, `food_usable`, `candle_usable` at its end, and `room_state`'s `maze_step` at its end
+(round 24, the maze slice). A 1.4.1 checkpoint is widened by
 `triforce convert-model` (`triforce/convert.py`, below), not retrained.
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
@@ -1009,7 +1010,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   correct loop pays `reward-new-location` once per maze step (`reward-revisit-location` again), a wrong one
   `penalty-wrong-location`; no PBRS or stall penalty on the loop step (Link lands at the far edge). Linger: a correct
   loop is progress, a wrong one only a new baseline. Observation: `room_changed`, `entered_from` the edge Link
-  stands at, fresh velocities. Visits and chain records go on through a loop; `RoomRecord.maze_loops` /
+  stands at, fresh velocities, and `room_state` `maze_step` (`MazeStep` / 4 in a maze room, else 0; schema 5). Visits and chain records go on through a loop; `RoomRecord.maze_loops` /
   `maze_wrong_loops` count them and each wrong loop is one of the run's wrong exits (`wrong-exit-limit`); the heart
   tracker counts the floor's hearts as left. Go-Explore's cell key holds the maze step (`env::explore::maze_step`)
   and a loop that advances it is progress, so `explore`, `entry_states build --route d5maze` and `path --route R`
