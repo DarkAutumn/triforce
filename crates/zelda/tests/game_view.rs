@@ -288,7 +288,7 @@ fn b_item_actions_follow_the_inventory() {
     let none = actions(&[]);
     assert_eq!(
         none,
-        [true, true, false, false, false, false, false, false],
+        [true, true, false, false, false, false, false, false, false, false, false],
         "MOVE and WAIT only (CLIP is the session's)"
     );
     assert!(actions(&[(Var::Bombs, 1)])[ActionKind::Bomb.index()]);
@@ -305,6 +305,11 @@ fn b_item_actions_follow_the_inventory() {
     }
     assert!(actions(&[(Var::RegularBoomerang, 1)])[ActionKind::Boomerang.index()]);
     assert!(actions(&[(Var::MagicBoomerang, 1)])[ActionKind::Boomerang.index()]);
+    assert!(actions(&[(Var::Whistle, 1)])[ActionKind::Recorder.index()]);
+    assert!(actions(&[(Var::Food, 1)])[ActionKind::Food.index()]);
+    for candle in [1, 2] {
+        assert!(actions(&[(Var::Candle, candle)])[ActionKind::Candle.index()]);
+    }
 }
 
 #[test]

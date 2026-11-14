@@ -11,12 +11,13 @@ import pytest
 import torch
 
 from triforce import _native as native
+from triforce.actions import JOINT_SIZE
 from triforce.rollout_buffer import RolloutBuffer
 
 from ..conftest import REPO_STATES_DIR, require_state
 from ..networks import random_network as network
 
-ENVS, STEPS, JOINT = 4, 6, 256
+ENVS, STEPS, JOINT = 4, 6, JOINT_SIZE
 SEARCH = {'candidates': 3, 'simulations': 4, 'futures': 2, 'depth': 2}
 
 

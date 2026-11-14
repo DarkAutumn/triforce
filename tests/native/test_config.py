@@ -19,8 +19,10 @@ def test_load_and_fields(tmp_path):
     assert config.max_steps == 321
     assert config.reward.pbrs is False and config.items.bombs == 'never'
     assert config.curriculum.enabled is False
-    assert config.disabled_kinds() == ['BOMB']
-    assert config.replace(items={'bombs': 'tenth'}).disabled_kinds() == []
+    assert config.disabled_kinds() == ['BOMB', 'RECORDER', 'FOOD', 'CANDLE']
+    assert config.replace(items={'bombs': 'tenth'}).disabled_kinds() == ['RECORDER', 'FOOD', 'CANDLE']
+    assert config.replace(items={'bombs': 'tenth', 'recorder': True, 'food': True, 'candle': True}
+                          ).disabled_kinds() == []
     ram = config.to_dict()['ram_randomization']
     assert (ram['hp'], ram['full_hp']) == ([0.25, 'max'], 0.3)
     assert native.SpecialistConfig.load('ow-start').name == 'ow-start'

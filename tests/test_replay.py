@@ -15,7 +15,7 @@ from triforce.runner import Route, Runner
 from .conftest import REPO_STATES_DIR, SEGMENT_START_STEP, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state
 
 STREAMS = ('rewards', 'decisions', 'keyframes')
-KINDS, DIRECTIONS, DURATIONS = 8, 8, 4
+KINDS, DIRECTIONS, DURATIONS = 11, 8, 4
 DISTRIBUTION = KINDS + KINDS * DIRECTIONS + KINDS * DURATIONS
 
 

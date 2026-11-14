@@ -1,5 +1,5 @@
 """The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play/evaluate/eval-batch/
-room-stats.  ``eval-chain`` lowers its own priority (``--nice``, ``triforce.jobs``)."""
+room-stats/convert-model.  ``eval-chain`` lowers its own priority (``--nice``, ``triforce.jobs``)."""
 
 import argparse
 import json
@@ -304,9 +304,10 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     passthrough = {'train': ('triforce.train', 'cli'), 'run': ('triforce.run', 'main'),
                    'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main'),
-                   'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main')}
-    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate|eval-batch|room-stats ...`
-    # forwards the rest to the module's own CLI.
+                   'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
+                   'convert-model': ('triforce.convert', 'main')}
+    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate|eval-batch|room-stats|
+    # convert-model ...` forwards the rest to the module's own CLI.
     models_dir, allow, rest = None, False, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
@@ -344,6 +345,8 @@ def main(argv=None):
                                       "one log folder, one after another, niced)")
     sub.add_parser('room-stats', help="python -m triforce.room_stats TAG ... (per-room chain and eval statistics "
                                       "by scope: full run, segments, room only)")
+    sub.add_parser('convert-model', help="python -m triforce.convert RUN_DIR... | --promoted --out DIR (widen 1.4.1 "
+                                         "checkpoints to this code's action kinds and observation)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")

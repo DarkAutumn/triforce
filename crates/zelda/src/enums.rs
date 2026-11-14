@@ -18,10 +18,16 @@ pub enum ActionKind {
     Arrow = 6,
     /// The grid-point skip macro (`crate::clips`): the overworld screen wrap (W, E) or the dungeon block clip (N, S).
     Clip = 7,
+    /// Play the recorder (B item slot 5): no direction, no duration; the option waits out the tune's freeze.
+    Recorder = 8,
+    /// Lay the food (B item slot 6) ahead of Link (N, S, W, E).
+    Food = 9,
+    /// A candle fire (B item slot 4) ahead of Link (N, S, W, E).
+    Candle = 10,
 }
 
 impl ActionKind {
-    pub const ALL: [ActionKind; 8] = [
+    pub const ALL: [ActionKind; 11] = [
         ActionKind::Move,
         ActionKind::Wait,
         ActionKind::Sword,
@@ -30,6 +36,9 @@ impl ActionKind {
         ActionKind::Boomerang,
         ActionKind::Arrow,
         ActionKind::Clip,
+        ActionKind::Recorder,
+        ActionKind::Food,
+        ActionKind::Candle,
     ];
 
     pub fn from_index(index: usize) -> Option<ActionKind> {
@@ -50,6 +59,9 @@ impl ActionKind {
             ActionKind::Boomerang => "BOOMERANG",
             ActionKind::Arrow => "ARROW",
             ActionKind::Clip => "CLIP",
+            ActionKind::Recorder => "RECORDER",
+            ActionKind::Food => "FOOD",
+            ActionKind::Candle => "CANDLE",
         }
     }
 
@@ -600,8 +612,13 @@ mod tests {
             assert_eq!(k.index(), i);
             assert_eq!(ActionKind::from_name(k.name()), Some(k));
         }
-        assert_eq!(ActionKind::from_index(8), None);
+        assert_eq!(ActionKind::from_index(11), None);
+        // Existing head indices never move (a widened checkpoint keeps its rows): new kinds go at the end.
         assert_eq!(ActionKind::Clip.index(), 7);
+        assert_eq!(
+            [ActionKind::Recorder, ActionKind::Food, ActionKind::Candle].map(ActionKind::index),
+            [8, 9, 10]
+        );
         assert_eq!(ActionKind::from_name("move"), None);
     }
 

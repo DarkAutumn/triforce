@@ -983,6 +983,9 @@ impl GameView {
         if self.boomerang() != BoomerangKind::None {
             a[K::Boomerang.index()] = true;
         }
+        a[K::Recorder.index()] = self.byte(Var::Whistle) != 0;
+        a[K::Food.index()] = self.byte(Var::Food) != 0;
+        a[K::Candle.index()] = self.byte(Var::Candle) != 0;
         a
     }
 
@@ -1031,7 +1034,10 @@ impl GameView {
 
     /// The game would start `kind`'s weapon now (Link_HandleInput and the *_Wield routines): Link is in his normal
     /// state ($AC = 0), the sword is not blocked and its slot ($B9) is free for SWORD/BEAMS, the boomerang ($BB) and
-    /// arrow ($BE) slots are free or returning (bit 7), and Bomb_Wield finds a bomb slot ($BC/$BD).
+    /// arrow ($BE) slots are free or returning (bit 7), and Bomb_Wield finds a bomb slot ($BC/$BD). The food needs
+    /// slot $0F empty (asm:Food_Wield: no boomerang out, no food down); the candle an empty $10 or $11 and, blue, no
+    /// fire yet in this room (asm:Candle_Wield, `HasUsedCandle` $513); the recorder no tune playing (`FluteTimer`
+    /// $3C; asm:Flute_Wield leaves Link's state at 0).
     pub fn weapon_ready(&self, kind: crate::enums::ActionKind) -> bool {
         use crate::enums::ActionKind as K;
         if self.link.status != 0 {
@@ -1054,6 +1060,12 @@ impl GameView {
                 };
                 other == 0 || other >= 0x13
             }
+            K::Food => self.peek(0xBB) == 0,
+            K::Candle => {
+                (self.peek(0xBC) == 0 || self.peek(0xBD) == 0)
+                    && (self.byte(Var::Candle) != 1 || self.peek(0x513) == 0)
+            }
+            K::Recorder => self.peek(0x3C) == 0,
             K::Move | K::Wait | K::Clip => true,
         }
     }

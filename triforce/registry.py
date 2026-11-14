@@ -216,6 +216,12 @@ def set_allow_incompatible(on: bool) -> None:
         os.environ[ALLOW_INCOMPATIBLE_ENV] = '1'
 
 
+# Models of this version prefix `triforce convert-model` widens to this code's layout (triforce/convert.py).
+CONVERTIBLE_VERSION = '1.4.1'
+CONVERT_HINT = ("a 1.4.1 model is widened to this code's action kinds and observation by `triforce convert-model "
+                "RUN_DIR... --out DIR` (or `triforce --models-dir MODELS convert-model --promoted --out DIR`)")
+
+
 def require_compatible(checkpoint) -> None:
     """Raises ``IncompatibleModelError`` unless the model in ``checkpoint`` (file or run dir) carries a version
     compatible with this code's; with ``$TRIFORCE_ALLOW_INCOMPATIBLE_MODELS=1`` it warns instead."""
@@ -227,6 +233,8 @@ def require_compatible(checkpoint) -> None:
     if os.environ.get(ALLOW_INCOMPATIBLE_ENV) == '1':
         warnings.warn(message, stacklevel=2)
         return
+    if found is not None and compatible(found, CONVERTIBLE_VERSION + '.0'):
+        raise IncompatibleModelError(f"{message}; {CONVERT_HINT}")
     raise IncompatibleModelError(f"{message}; stamp a model known to be compatible with `triforce stamp`, or pass "
                                  "--allow-incompatible-models")
 
@@ -286,8 +294,9 @@ def load_checkpoint(path, check_schema: bool = True) -> dict:
     if check_schema:
         action = checkpoint.get('action_schema_version')
         if action != ACTION_SCHEMA_VERSION:
+            hint = f"; {CONVERT_HINT}" if action == 2 else ""
             raise SchemaMismatchError(f"{path}: action_schema_version is {action}, "
-                                      f"code expects {ACTION_SCHEMA_VERSION}")
+                                      f"code expects {ACTION_SCHEMA_VERSION}{hint}")
         obs = checkpoint.get('obs_schema_version')
         if obs != obs_schema_version():
             problem = (_obs_layout_problem(checkpoint) if isinstance(obs, int) and obs < obs_schema_version()

@@ -47,6 +47,11 @@ fn config() -> ModelConfig {
 
 /// Every weight the config needs, with values from a fixed hash of (name, index).
 fn weights(seed: u64) -> HashMap<String, Tensor> {
+    weights_for(seed, KINDS, 3)
+}
+
+/// [`weights`] for `kinds` action kinds and a `link` vector of `link` values.
+fn weights_for(seed: u64, kinds: usize, link: usize) -> HashMap<String, Tensor> {
     let mut w = HashMap::new();
     let mut add = |name: &str, shape: &[usize]| {
         let n: usize = shape.iter().product();
@@ -87,7 +92,7 @@ fn weights(seed: u64) -> HashMap<String, Tensor> {
     // 6×8 → 6×8 → 3×4 → 2×2.
     add("grid_encoder.head.0.weight", &[8, 6 * 2 * 2]);
     add("grid_encoder.head.0.bias", &[8]);
-    let features = 4 + 8 + 8 + 2 + 3;
+    let features = 4 + 8 + 8 + 2 + link;
     for tower in ["policy_net", "value_net"] {
         for (i, inp) in [(0, features), (3, 16), (6, 16)] {
             add(&format!("mlp_extractor.{tower}.{i}.weight"), &[16, inp]);
@@ -96,12 +101,12 @@ fn weights(seed: u64) -> HashMap<String, Tensor> {
             add(&format!("mlp_extractor.{tower}.{}.bias", i + 1), &[16]);
         }
     }
-    for (name, out) in [("kind_head", KINDS), ("kind_condition", 16), ("direction_head", DIRS), ("duration_head", DURS)]
+    for (name, out) in [("kind_head", kinds), ("kind_condition", 16), ("direction_head", DIRS), ("duration_head", DURS)]
     {
         add(&format!("{name}.weight"), &[out, 16]);
         add(&format!("{name}.bias"), &[out]);
     }
-    add("kind_embedding.weight", &[KINDS, 16]);
+    add("kind_embedding.weight", &[kinds, 16]);
     add("value_head.weight", &[1, 16]);
     add("value_head.bias", &[1]);
     w
@@ -413,5 +418,100 @@ fn act_modes_follow_evaluate_and_their_rules() {
                 assert!(seen[i], "{mode}: joint action {i} (q {kept}) never drawn");
             }
         }
+    }
+}
+
+/// The bits of everything an evaluation reports.
+fn bits(o: &policy::Output) -> Vec<u32> {
+    let mut v = vec![o.value.to_bits(), o.log_prob.to_bits(), o.entropy.to_bits()];
+    v.extend(o.action.iter().map(|&a| a as u32));
+    v.extend(o.head_log_prob.iter().chain(&o.head_entropy).map(|x| x.to_bits()));
+    v
+}
+
+/// A first-layer input column whose weights are all zero is dropped (`Policy::live`): a model widened with zero
+/// columns in the middle of its features computes bit for bit what the narrow one does, whatever the new inputs
+/// hold (without the drop, the later columns would sum in other lanes).
+#[test]
+fn zero_input_columns_change_no_bit() {
+    let narrow = policy();
+    // Every other weight is the same hash of (name, index): only the first layers' columns move. The narrow
+    // features: room 4, entities 8, grid 8, history 2, link 3; the wide link has two columns after its first, at
+    // features 23 and 24.
+    let mut w = weights_for(1, KINDS, 5);
+    let source = weights(1);
+    for tower in ["policy_net", "value_net"] {
+        let name = format!("mlp_extractor.{tower}.0.weight");
+        let old = &source[&name].data;
+        let wide = w.get_mut(&name).unwrap();
+        for (r, row) in wide.data.chunks_exact_mut(27).enumerate() {
+            let src = &old[r * 25..(r + 1) * 25];
+            row[..23].copy_from_slice(&src[..23]);
+            row[23..25].fill(0.0);
+            row[25..].copy_from_slice(&src[23..]);
+        }
+    }
+    let wide = Policy::new(ModelConfig::from_json(&config_json(&[(r#""shape": [3]"#, r#""shape": [5]"#)])).unwrap(), w)
+        .unwrap();
+    for seed in 0..20 {
+        let o = obs(seed);
+        let link = [o.link[0], 0.75, -2.5, o.link[1], o.link[2]];
+        let (vn, vw) = ([&o.history[..], &o.link[..]], [&o.history[..], &link[..]]);
+        let mut noise = vec![0f32; narrow.noise_size()];
+        keyed_noise(seed as i64, 2, &mut noise);
+        for pick in [Pick::Argmax, Pick::Sample(&noise)] {
+            let a = narrow.evaluate(&input(&o, &vn), pick, &mut narrow.scratch()).unwrap();
+            let b = wide.evaluate(&input(&o, &vw), pick, &mut wide.scratch()).unwrap();
+            assert_eq!(bits(&a), bits(&b), "seed {seed} {pick:?}");
+        }
+    }
+}
+
+/// Kinds added after the eighth (`LEAD_KINDS`) take their plain-draw noise after the direction and duration heads',
+/// so a model widened with new kinds, masked, draws the same actions from the same `keyed_noise` (job, step) as the
+/// one it was widened from.
+#[test]
+fn added_kinds_draw_as_before_while_masked() {
+    let mask = |kinds: usize| kinds * (1 + DIRS + DURS);
+    let config = |kinds: usize| {
+        let edit = (format!(r#""action_mask": {{"shape": [{MASK}]"#), format!(r#""action_mask": {{"shape": [{}]"#, mask(kinds)));
+        ModelConfig::from_json(&config_json(&[(&edit.0, &edit.1)])).unwrap()
+    };
+    let old = weights_for(3, 8, 3);
+    let mut new = weights_for(3, 11, 3);
+    for (name, t) in &old {
+        if !name.starts_with("kind_head") && name != "kind_embedding.weight" {
+            new.insert(name.clone(), t.clone());
+        }
+    }
+    // The old kinds' rows kept; the new rows are whatever the hash gave.
+    for name in ["kind_head.weight", "kind_head.bias", "kind_embedding.weight"] {
+        let n = old[name].data.len();
+        new.get_mut(name).unwrap().data[..n].copy_from_slice(&old[name].data);
+    }
+    let (p8, p11) = (Policy::new(config(8), old).unwrap(), Policy::new(config(11), new).unwrap());
+    for seed in 0..40u64 {
+        let mut o = obs(seed);
+        let m8: Vec<bool> = (0..mask(8)).map(|i| (policy::noise::mix(seed * 77 + i as u64) & 3) != 0).collect();
+        let mut m11 = vec![false; mask(11)];
+        m11[..8].copy_from_slice(&m8[..8]);
+        m11[11..11 + 8 * DIRS].copy_from_slice(&m8[8..8 + 8 * DIRS]);
+        m11[11 + 11 * DIRS..11 + 11 * DIRS + 8 * DURS].copy_from_slice(&m8[8 + 8 * DIRS..]);
+        if !m8[..8].contains(&true) {
+            continue;
+        }
+        let v = [&o.history[..], &o.link[..]];
+        o.mask = m8;
+        let a = p8.act(&input(&o, &v), policy::ActMode::SAMPLE.choose(0), seed as i64, 4, None, &mut p8.scratch(), None);
+        let rule: policy::ActMode = "temperature:0.5".parse().unwrap();
+        let ra = p8.act(&input(&o, &v), rule.choose(0), seed as i64, 4, None, &mut p8.scratch(), None).unwrap();
+        o.mask = m11;
+        let b = p11.act(&input(&o, &v), policy::ActMode::SAMPLE.choose(0), seed as i64, 4, None, &mut p11.scratch(), None);
+        let rb = p11.act(&input(&o, &v), rule.choose(0), seed as i64, 4, None, &mut p11.scratch(), None).unwrap();
+        let (a, b) = (a.unwrap(), b.unwrap());
+        assert_eq!(bits(&a.0), bits(&b.0), "seed {seed}: sample");
+        assert_eq!((a.1.log_prob.to_bits(), a.1.entropy.to_bits()), (b.1.log_prob.to_bits(), b.1.entropy.to_bits()));
+        assert_eq!(bits(&ra.0), bits(&rb.0), "seed {seed}: temperature");
+        assert_eq!(ra.1.log_prob.to_bits(), rb.1.log_prob.to_bits());
     }
 }
