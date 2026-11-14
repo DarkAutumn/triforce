@@ -35,8 +35,9 @@ next decision and the route re-plans from where Link stands.  Each finished live
 a simulated one (``ReplayFeed.file``; saved with ``replays`` too), the simulations starting with the live cell.
 
 ``poll_status()`` returns what happened since the last call, as dicts with ``cell`` and ``event``: ``wait`` (the
-source has nothing yet), ``start`` (``seed``, ``source``, ``name``, ``clips``), ``room`` (``specialist``,
-``level``, ``room``, ``rooms``: rooms entered so far, ``cheated``: cheated items used so far), ``end`` (``seed``,
+source has nothing yet), ``start`` (``seed``, ``source``, ``name``, ``clips``), ``room`` (``specialist``, ``act``:
+the act mode that specialist plays by, from the recording's META ``models`` or the live cell's policies; ``level``,
+``room``, ``rooms``: rooms entered so far, ``cheated``: cheated items used so far), ``end`` (``seed``,
 ``result``, ``outcome``, ``reason``), ``crash`` (``reason``: the cell's replay could not be played, or the source
 failed) and, from a live cell, ``clips`` (``clips``, ``clips_from``: the room the switch went off in during the
 run, '' at its start; also on its ``start`` and ``room`` messages).  A finished
@@ -91,6 +92,8 @@ class Show:
         meta, events = recording.meta, recording.events()
         ending = meta.get('ending') or {}
         models = [model.get('name') for model in meta.get('models') or []]
+        acts = [model.get('act') or {True: 'argmax', False: 'sample'}.get(model.get('deterministic'))
+                for model in meta.get('models') or []]      # before round 23: deterministic
         self.data, self.source, self.name, self.clips = data, source, name, clips
         self.seed = meta.get('seed')
         self.frames = recording.frames
@@ -99,10 +102,12 @@ class Show:
         # Watching starts where the models took over: a power-on run's boot and idle are skipped.
         self.start = next((event['frame'] for event in events if event['type'] == 'control'), 0)
         self.specialist = meta.get('specialist')        # an evaluation episode's (it has no room events)
+        self.act = acts[0] if len(set(acts)) == 1 else None     # its one model's act mode
         names = room_names()
-        self.rooms = [(event['frame'], models[event['policy']] if event['policy'] is not None
-                       and event['policy'] < len(models) else None, event['level'], event['room'],
-                       names.get((event['level'], event['room'], event['in_cave'])))
+        self.rooms = [(event['frame'], *((models[event['policy']], acts[event['policy']])
+                                          if event['policy'] is not None and event['policy'] < len(models)
+                                          else (None, None)),
+                       event['level'], event['room'], names.get((event['level'], event['room'], event['in_cave'])))
                       for event in events if event['type'] == 'room']
         self._room_frames = [room[0] for room in self.rooms]
         self.cheats = recording.cheats()
@@ -110,13 +115,13 @@ class Show:
     def status(self, frame: int) -> dict:
         """The ``room`` message's fields ``frame`` input frames into the replay."""
         entered = bisect.bisect_right(self._room_frames, frame)
-        _, specialist, level, room, name = (self.rooms[entered - 1] if entered
-                                            else (0, self.specialist, None, None, None))
+        _, specialist, act, level, room, name = (self.rooms[entered - 1] if entered
+                                                 else (0, self.specialist, self.act, None, None, None))
         cheated = dict.fromkeys(_native.CHEAT_ITEMS, 0)
         for at, item, count in self.cheats:
             if at <= frame:
                 cheated[item] += count
-        return {'specialist': specialist, 'level': level, 'room': room, 'name': name, 'rooms': entered,
+        return {'specialist': specialist, 'act': act, 'level': level, 'room': room, 'name': name, 'rooms': entered,
                 'cheated': cheated}
 
 
@@ -271,6 +276,7 @@ class LiveCell:
         self.pool.pool.set_clips_allowed(clips)
         self._lock = threading.Lock()
         self.clips = clips
+        self._acts = dict(zip(policies.names, policies.modes(act)))    # each specialist's act mode
         self._runs = 0                          # runs started
         self._room: Optional[str] = None        # where Link is ('L4 0x31')
         self._clips_from: Optional[str] = None  # where the switch went off during this run ('' = at its start)
@@ -339,7 +345,8 @@ class LiveCell:
             self._held_until = float('inf') if setup_error else now + RESULT_PAUSE
         elif kind == 'room':
             name = room_names().get((event['level'], event['room'], event['in_cave']))
-            message = {'cell': 0, 'event': 'room', 'specialist': event['specialist'], 'level': event['level'],
+            message = {'cell': 0, 'event': 'room', 'specialist': event['specialist'],
+                       'act': self._acts.get(event['specialist']), 'level': event['level'],
                        'room': event['room'], 'name': name, 'rooms': int(event['rooms']),
                        'cheated': {item: int(n) for item, n in event['cheated'].items()}}
             if self._held_until is not None:

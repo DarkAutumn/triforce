@@ -292,7 +292,10 @@ fn recording(button: u8) -> Vec<u8> {
     let start = std::fs::read(repo().join(RECORDING_START)).unwrap();
     let mut nes = ZCore::power_on(rom.clone());
     nes.restore(&state_file::decode(&rom, &start).unwrap().machine);
-    let options = RecordOptions { meta: serde_json::json!({"triforce": "test", "segment": "full"}), ..Default::default() };
+    let meta = serde_json::json!({"triforce": "test", "segment": "full", "models": [
+        {"name": "ow-start", "act": "temperature:0.75+relax:16"}, {"name": "ow-octorok", "act": "argmax"},
+        {"name": "goriya", "act": "temperature:0.75+relax:16"}]});
+    let options = RecordOptions { meta, ..Default::default() };
     let mut rec = Recorder::new(Arc::new(options));
     rec.embed_start(Some("0_77c_0"), Context::default(), &start);
     for _ in 0..60 {
@@ -360,7 +363,8 @@ fn movie_import_writes_a_movie_that_plays_to_the_recorded_end() {
     assert!(stdout(&out).ends_with("full-500.tfreplay: ok, 60 frames, 0 edits, 2 states\n"), "{}", stdout(&out));
     let out = tf(&["replay", "info", &tmp.arg("full-500.tfreplay")]);
     let info = stdout(&out);
-    for line in ["frames:   60", "source:   embedded state 0_77c_0", "triforce: test", "states:   1 START, 1 END"] {
+    for line in ["frames:   60", "source:   embedded state 0_77c_0", "triforce: test", "states:   1 START, 1 END",
+                 "act:      argmax: ow-octorok; temperature:0.75+relax:16: ow-start, goriya"] {
         assert!(info.contains(line), "{line:?} missing from:\n{info}");
     }
 
@@ -437,6 +441,8 @@ fn the_replay_corpus_still_verifies() {
         assert!(golden.contains(line), "{line}: {golden}");
     }
     assert!(golden.contains("source:   power-on LINK ") && golden.contains("(0 edits before it)"), "{golden}");
+    // Recorded before act modes: META says `deterministic`, read as argmax or sample.
+    assert!(golden.lines().any(|l| l.starts_with("act:      ") && (l.contains("sample") || l.contains("argmax"))), "{golden}");
     let power_on = info("v0-power-on");
     for line in ["source:   power-on LINK 100", "KEYFRAME", " REWARDS ", " DECISIONS ", "(0 edits before it)"] {
         assert!(power_on.contains(line), "{line}: {power_on}");

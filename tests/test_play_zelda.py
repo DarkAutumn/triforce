@@ -139,6 +139,9 @@ def test_a_cell_says_where_its_replay_is_from_and_how_it_goes():
     assert state.strip_text() == '00000007-win  L4 0x32 Breakfast Room  like-like'
     state.apply(_room(0, 2, specialist='vire', level=4, room=0x31, name=None))
     assert state.strip_text() == '00000007-win  L4 0x31  vire'
+    # The act mode the specialist plays by, when the recording names it.
+    state.apply(_room(0, 3, specialist='vire', act='temperature:0.75+relax:16', level=4, room=0x31))
+    assert state.strip_text() == '00000007-win  L4 0x31  vire (temperature:0.75+relax:16)'
 
     # A cell whose replay can't play says why; a dark cell of a file grid says nothing.
     state.apply({'cell': 0, 'event': 'crash', 'reason': 'ReplayError: not a TFREPLAY file'})
@@ -499,6 +502,8 @@ def test_a_show_reads_what_the_strip_says_from_the_replay(recordings):  # pylint
     assert win.reason == f'reached route step {SEGMENT_STOP_STEP} (level 0, room 0x4c)'
     first, last = win.status(win.start), win.status(win.frames)
     assert (first['specialist'], first['level'], first['room'], first['rooms']) == ('ow-octorok', 0, 0x3c, 1)
+    acts = {model['name']: model['act'] for model in _native.Replay(win.data).meta['models']}
+    assert first['act'] == acts['ow-octorok'] is not None       # the act mode the recording names
     assert (last['room'], last['rooms'], last['name']) == (0x4c, 2, None)
     assert play_grid.room_names() == {(4, 0x32, False): 'Breakfast Room'}
     assert last['cheated'] == {'bombs': 0, 'keys': 0, 'rupees': 0}
@@ -729,6 +734,7 @@ def test_a_live_cell_plays_in_the_act_mode_it_was_given(scripted_models, states_
         live = [m for m in messages if m['cell'] == 0]
         assert {m['source'] for m in _events(live, 'start')} == {'live'}
         assert all((m['result'], m['outcome']) == ('success', 'milestone') for m in _events(live, 'end'))
+        assert {m['act'] for m in _events(live, 'room')} == {mode}
         files = _wait(lambda: [p for p in saved.iterdir() if int(p.name.split('-')[0]) >= play_grid.SEEDS],
                       lambda found: found)
     finally:
