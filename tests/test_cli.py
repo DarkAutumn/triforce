@@ -143,7 +143,7 @@ def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir,
     goriya = registry.promoted_checkpoint('goriya', models_dir)
     assert models['goriya']['checkpoint'] == f'goriya/{goriya.parent.name}/ckpt.pt'    # no local directory
     assert models['goriya']['checkpoint_sha1'] == registry.checkpoint_sha1(goriya)
-    assert models['goriya']['act'] == 'sample' and meta['provenance']['stop_at'] == '0:0x77'
+    assert models['goriya']['act'] == registry.DEFAULT_ACT and meta['provenance']['stop_at'] == '0:0x77'
     # An existing output is never appended to implicitly.
     assert cli.main([*chain, '--runs', '1', '--first-seed', '5']) == 2
     assert 'exists; pass --append' in capsys.readouterr().err

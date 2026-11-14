@@ -52,7 +52,10 @@ CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
 ACT_NAME = 'act'
 VERSION_NAME = 'version'
-DEFAULT_ACT = 'sample'
+# The act mode of the whole project (round 23, decided Nov 14; docs/decisions.md "One act mode"): evaluation,
+# chains, the early-stop confirmation, a run without an ``act`` file, and play (``PLAY_ACT``).
+ACT_RULE = 'temperature:0.5+relax:16'
+DEFAULT_ACT = ACT_RULE
 # ``--act model``: each model acts by its own act mode.
 MODEL_ACT = 'model'
 
@@ -81,8 +84,8 @@ ACT_HELP = ("act mode: sample, argmax, temperature:T, floor:P, minp:R, topp:P, e
 
 
 # How the play tools (play-zelda.py with its live cell, zelda-headless.py, the golden path) act by default: never
-# argmax, so every run differs (round 23, docs/experiments/round23.md). Every play tool reads this one constant.
-PLAY_ACT = 'sample'
+# argmax, so every run differs (round 23, docs/experiments/round23.md §10). Every play tool reads this one constant.
+PLAY_ACT = ACT_RULE
 
 
 def draws(mode: str) -> bool:
@@ -346,7 +349,7 @@ def eval_mode(result: dict) -> Optional[str]:
 
 def act_mode(checkpoint) -> str:
     """How the model in ``checkpoint`` (file or run dir) acts: its run dir's ``act`` when that was set for these
-    weights (its sha1 matches ``ckpt.pt``), else ``sample`` (a warning says why when an ``act`` file exists)."""
+    weights (its sha1 matches ``ckpt.pt``), else ``DEFAULT_ACT`` (a warning says why when an ``act`` file exists)."""
     ckpt = _resolve(checkpoint)
     path = ckpt.parent / ACT_NAME
     if not path.is_file():
@@ -357,11 +360,12 @@ def act_mode(checkpoint) -> str:
     except ValueError as error:
         raise ValueError(f"{path}: {error}") from None
     if len(fields) != 2:
-        warnings.warn(f"{path}: act file without the checkpoint hash (old format); the model samples", stacklevel=2)
+        warnings.warn(f"{path}: act file without the checkpoint hash (old format); the model acts by {DEFAULT_ACT}",
+                      stacklevel=2)
         return DEFAULT_ACT
     if fields[1] != checkpoint_sha1(ckpt):
         warnings.warn(f"{path}: act mode {mode!r} was set for other weights (sha1 {fields[1]}, {ckpt.name} is "
-                      f"{checkpoint_sha1(ckpt)}); the model samples", stacklevel=2)
+                      f"{checkpoint_sha1(ckpt)}); the model acts by {DEFAULT_ACT}", stacklevel=2)
         return DEFAULT_ACT
     return mode
 

@@ -49,8 +49,9 @@ def qapp():
 def test_parse_args_grid_path_and_sources(tmp_path):
     args = play_zelda.parse_args([])
     assert (args.grid, args.path, args.show, args.scale, args.fps) == ((4, 3), None, 'best', 2, play_grid.NES_FPS)
-    # Play samples by default, saves nothing, and starts from the start state.
-    assert (args.act, args.replays, args.state, args.streams, args.power_on) == ('sample', None, 'embed', (), None)
+    # Play acts by the project's play mode by default, saves nothing, and starts from the start state.
+    assert (args.act, args.replays, args.state, args.streams, args.power_on) == (registry.PLAY_ACT, None, 'embed', (),
+                                                                                None)
     assert (args.parallel, args.capacity, args.patience, args.first_seed, args.stop) == (8, 32, 64, 0, (None, None))
     # A cell is heard and the controller is not drawn, unless asked otherwise.
     assert (args.sound, args.controller) == (True, False)

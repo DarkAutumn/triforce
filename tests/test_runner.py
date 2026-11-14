@@ -72,7 +72,7 @@ def test_eval_chain_summary_names_every_model_and_its_act_mode(models_dir, tmp_p
     provenance = summary['provenance']
     models = {model['name']: model for model in provenance['models']}
     assert sorted(models) == sorted(Policies(root).names)
-    assert models['goriya']['act'] == 'argmax' and models['ow-start']['act'] == 'sample'
+    assert models['goriya']['act'] == 'argmax' and models['ow-start']['act'] == registry.DEFAULT_ACT
     assert models['zol']['checkpoint'] == 'zol/other/ckpt.pt'     # no local directory: the sha1 identifies it
     assert models['zol']['checkpoint_sha1'] == registry.checkpoint_sha1(other)
     assert (provenance['route'], provenance['start_from'], provenance['stop_at']) == ('d2first', None, '0:0x77')
@@ -288,14 +288,14 @@ def test_same_seed_same_run(states_dir, models_dir):
 
 
 def test_runs_act_the_way_each_model_is_registered(states_dir, models_dir, tmp_path):
-    """A run's ``act`` file (promote --act) makes that model act by argmax; the other models keep sampling, and
-    an explicit ``act`` overrides every model."""
+    """A run's ``act`` file (promote --act) makes that model act by argmax; the other models keep the default
+    (``registry.DEFAULT_ACT``), and an explicit ``act`` overrides every model."""
     root = tmp_path / 'models'
     shutil.copytree(models_dir, root)
     registry.promote('ow-start', 'untrained', root=root, act='argmax')
     policies = Policies(root)
     assert [name for name, act in zip(policies.names, policies.acts) if act == 'argmax'] == ['ow-start']
-    assert set(policies.acts) == {'sample', 'argmax'}
+    assert set(policies.acts) == {registry.DEFAULT_ACT, 'argmax'}
 
     def start_rooms(act):
         """Each run's first room visit (the start room, ow-start's)."""
