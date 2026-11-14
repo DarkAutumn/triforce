@@ -161,8 +161,11 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   needs it; by buttons it is 38 frames from the arrival to the heart container.
 - [ ] **Leaving a maze by its sequence** in a route (the plain ways through the Lost Woods and the Lost Hills):
   `routes.yaml` refuses it and the envs don't handle a visit that loops back into its own room.
-- [ ] **New action kinds** for the route: the recorder, food, the candle (and arrows need a state that holds
-  them). One model-incompatible bump for all of them.
+- [x] **New action kinds** for the route: the recorder, food, the candle, in one model-incompatible bump (1.4.2.0,
+  branch `r24-kinds`; decisions 2026-11-14 "Three item kinds and the model conversion"); the promoted 1.4.1 runs are
+  widened by `triforce convert-model`, not retrained. Left: the recorder on the overworld (the whirlwind, 0x42's
+  pond: `actions::recorder_wanted` widens), route uses of the food (7:0x28's Grumble Goriya, baiting) and the candle
+  (trees, dark rooms), and arrows need a state that holds them.
 - [ ] **What the objective does not know yet:** buying in a shop, a take-any cave's right ware, the armos and the
   gravestone, burning a tree, the whirlwind, tunnels (a cellar with two exits), level 9's one-way shutters, the
   end of the game.
