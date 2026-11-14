@@ -540,3 +540,47 @@ def test_digdogger_is_out_of_reach_until_the_recorder(probe):
     types = list(np.asarray(room.obs['entity_types']))
     assert 0x38 not in types and room.obs['entity_features'][types.index(0x18)][killable] == 1
     assert room.objective() == 'FIGHT'
+
+
+def test_the_boss_family_plays_the_recorder(probe):
+    """boss-digdogger (`items: {recorder: true}`) is offered RECORDER while the big Digdogger hasn't heard it; the
+    env plays it (the action kind, through the sub-screen): the play pays `reward-recorder-split` once, is no attack
+    miss, the big one splits into the small, killable one, RECORDER is masked from then on, and a sword hit on the
+    small one is a boss hit (`reward-boss-hit`)."""
+    from triforce._native import ENTITY_FEATURES
+    killable = ENTITY_FEATURES.index('killable')
+    snapshot = enter(probe, 0x24, 'E', recorder=True, settle=90)
+    step = step_of(0x24, 'E')
+    room = Room('boss-digdogger', step, snapshot)
+    assert not room.allowed('RECORDER'), 'in the doorway no B item is offered'
+    room.act('MOVE W 16')
+    assert room.allowed('RECORDER')
+    room.act('RECORDER')
+    assert room.rewards.get('reward-recorder-split') == pytest.approx(0.75), room.rewards
+    assert 'penalty-attack-miss' not in room.rewards
+    for _ in range(8):
+        if 0x18 in list(np.asarray(room.obs['entity_types'])):
+            break
+        room.act('WAIT 8')
+    types = list(np.asarray(room.obs['entity_types']))
+    assert 0x38 not in types and room.obs['entity_features'][types.index(0x18)][killable] == 1
+    assert not room.allowed('RECORDER') and room.objective() == 'FIGHT' and not room.done
+    room.act('WAIT 8')
+    assert room.rewards['reward-recorder-split'] == pytest.approx(0.75), 'paid once'
+
+    # The small one in front of Link's sword: a boss hit.
+    game = probe.game
+    game.restore(room.env.snapshot())
+    hit = False
+    for _ in range(12):
+        slot = next(s for s in range(1, 12) if game.read(OBJ_ID + s) == 0x18)
+        x, y = game.read(0x70 + slot), game.read(0x84 + slot)
+        place(game, max(x - 14, 0x20), y, 'E')
+        attack = Room('boss-digdogger', step, game.snapshot())
+        attack.act('SWORD E')
+        if 'reward-boss-hit' in attack.rewards:
+            assert 'reward-hit' not in attack.rewards
+            hit = True
+            break
+        game.press('NONE', 3)
+    assert hit, 'no sword hit on the small Digdogger'

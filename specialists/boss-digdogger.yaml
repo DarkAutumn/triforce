@@ -6,7 +6,7 @@ reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
 obs: {objective: true, target: true}       # schema 2
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
-items: {bombs: free}                       # the owner (Nov 14): bombs on the boss (the route's reserve is 0 here)
+items: {bombs: free, recorder: true}       # the owner (Nov 14): bombs on the boss (the route's reserve is 0 here); the recorder splits him
 curriculum: {enabled: true}             # trajectories/boss-digdogger (Go-Explore paths per start state)
 one_room: true
 max_steps: 1000
@@ -19,4 +19,5 @@ notes: >-
   a bomb on the big one's top-left, the recorder within 46 frames, the sword on the small one's first hittable frame
   with the bomb, one more hit when its flash ends. Statue fireballs can't be blocked (no magic shield). Entered from E
   through the key door; the heart container (11 hearts) appears on the kill; the N shutter to the triforce room 0x14.
-  The recorder is an action kind of round 24 (`items: {recorder: true}` once it lands). Copied from boss-manhandla.
+  RECORDER (round 24) is offered while the big one hasn't heard it: the play that starts the split pays
+  reward-recorder-split once, and the small one's hits are boss hits (reward-boss-hit). Copied from boss-manhandla.

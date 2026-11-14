@@ -5,9 +5,9 @@ round docs still call it that.)
 
 ## Next projects (Lee, Nov 11-12; ordered Nov 14 by what the r72 chains lose): top of the list
 
-- [ ] **Dungeon 5, second pass (round 24, `r24-d5`; docs/routes/d5.md):** `items: {recorder: true}` on
-  boss-digdogger once `r24-kinds` lands, and the boss's rewards (the shrink; hits on the small one pay `reward-hit`,
-  not `reward-boss-hit`: $18 is no BOSS_KINDS type); states from the leg's played entrance, curricula, trainings.
+- [ ] **Dungeon 5, second pass (round 24, `r24-d5`; docs/routes/d5.md):** states from the leg's played entrance,
+  curricula, trainings. (Done at the integration: `items: {recorder: true}` on boss-digdogger, the recorder that
+  splits him pays `reward-recorder-split` once, the small one's hits pay `reward-boss-hit`: $18 is in BOSS_KINDS.)
   The explorer doesn't clear the Olive Garden (132,737 env steps, 3 attempts): its curriculum needs another way in.
   `max_steps` of the new families (1500/600/1000) are guesses until their explored paths are measured. The cheat
   gives a bomb in 0x66/0x65 on the way back too (`requires_bombs` is per room), unused there.

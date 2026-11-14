@@ -300,6 +300,36 @@ fn dodongo_stun_pays_and_a_swallowed_bomb_costs() {
     }
 }
 
+/// Digdogger (round 24): the recorder that starts the big one's split (FluteUsedState $51B rising from 0 with a big
+/// Digdogger in the room) pays `reward-recorder-split` once per room; a recorder use is never an attack miss; the
+/// small one's hits are boss hits.
+#[test]
+fn digdogger_recorder_split_pays_once_and_the_small_one_is_the_boss() {
+    const FLUTE_USED_STATE: usize = 0x51B;
+    let mut big = Ram::new();
+    big.enemy(1, enemy::DIGDOGGER2, 112, 100);
+    let mut heard = big.clone();
+    heard.0[FLUTE_USED_STATE] = 1;
+    let mut once = critic();
+    let r = critique(&mut once, &step(&big, &heard, "RECORDER"));
+    assert_eq!(names(&r), ["reward-recorder-split"]);
+    assert_eq!(value(&r, "reward-recorder-split"), REWARD_LARGE);
+    // Once per room and episode; a new episode pays again.
+    let r = critique(&mut once, &step(&big, &heard, "RECORDER"));
+    assert!(names(&r).is_empty(), "{:?}", names(&r));
+    once.clear();
+    assert_eq!(names(&critique(&mut once, &step(&big, &heard, "RECORDER"))), ["reward-recorder-split"]);
+    // A tune that took no hold (the room had heard it), or none without a big Digdogger: nothing, and no miss.
+    for (before, after) in [(heard.clone(), heard.clone()), (Ram::new(), Ram::new())] {
+        let r = critique(&mut critic(), &step(&before, &after, "RECORDER"));
+        assert!(names(&r).is_empty(), "{:?}", names(&r));
+    }
+    let mut small = Ram::new();
+    small.enemy(1, enemy::DIGDOGGER_CHILD, 112, 100);
+    let r = critique(&mut critic(), &hits(step(&small, &small, "SWORD E"), &[(1, 1)]));
+    assert_eq!(names(&r), ["reward-boss-hit"]);
+}
+
 /// Events inside one step still count: bloated, back to walking and stunned (1 -> 2 at the boundaries), a stun
 /// that ended and restarted (the timer goes up), and each of two Dodongos.
 #[test]

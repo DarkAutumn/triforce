@@ -28,7 +28,7 @@ pub const REWARD_TERMINAL_SUCCESS: &str = "reward-terminal-success";
 pub const PENALTY_TERMINAL_FAILURE: &str = "penalty-terminal-failure";
 
 /// Every reward and penalty term name the critic and terminal rewards can produce, rewards first (metrics).
-pub const REWARD_TERMS: [&str; 56] = [
+pub const REWARD_TERMS: [&str; 57] = [
     "reward-gained-sword",
     "reward-gained-arrows",
     "reward-gained-bow",
@@ -55,6 +55,7 @@ pub const REWARD_TERMS: [&str; 56] = [
     "reward-gained-health",
     "reward-boss-hit",
     "reward-boss-stunned",
+    "reward-recorder-split",
     "reward-beam-hit",
     "reward-beam-distance",
     "reward-hit",

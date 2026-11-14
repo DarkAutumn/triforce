@@ -330,8 +330,10 @@ pub mod enemy {
     pub const PATRA: u8 = 0x47;
     pub const PATRA2: u8 = 0x48;
 
-    /// Boss object types (`critics.BOSS_KINDS`); the flying Gleeok head can't die, so it is none.
-    pub const BOSS_KINDS: [u8; 14] = [
+    /// Boss object types (`critics.BOSS_KINDS`); the flying Gleeok head can't die, so it is none. The small
+    /// Digdogger the recorder splits the big one into is the boss from then on (its hits are boss hits, its death the
+    /// boss kill; round 24).
+    pub const BOSS_KINDS: [u8; 15] = [
         AQUAMENTUS,
         DODONGO,
         DODONGO2,
@@ -340,6 +342,7 @@ pub mod enemy {
         RED_GOHMA,
         DIGDOGGER2,
         DIGDOGGER3,
+        DIGDOGGER_CHILD,
         GLEEOK,
         GLEEOK2,
         GLEEOK3,

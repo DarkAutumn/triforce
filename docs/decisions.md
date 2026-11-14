@@ -2020,3 +2020,17 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   kind (second pass).
 - **Sword-through needs no reward change:** a hit pays `reward-hit`, walking into the flashing monster costs nothing
   (tested in 0x47); a parried Darknut hit is a miss, as it gives no flash.
+## 2026-11-14 — Digdogger's recorder and rewards (round 24, integration)
+
+- **boss-digdogger plays the recorder:** `items: {recorder: true}`; the mask offers RECORDER where a big Digdogger
+  hasn't heard it (`recorder_wanted`, out of the doorway: no B item is offered there).
+- **The split pays once:** the RECORDER step on which FluteUsedState ($51B) rises from 0 with a big Digdogger in the
+  room pays `reward-recorder-split` (0.75, as a Dodongo stun), once per room and episode (REWARD_TERMS 57). A recorder
+  use was already never `penalty-attack-miss` (`r24-kinds`).
+- **The small Digdogger ($18) is a boss** (`enemy::BOSS_KINDS`): its hits pay `reward-boss-hit` instead of
+  `reward-hit` (it is the only form a weapon hurts, so the boss fight's hits are its hits), and linger's boss kill is
+  its death, not the split. $18 appears only from a split (Dungeon 5's 0x24, Dungeon 7's three), so nothing else
+  changes. No version bump: the round's COMPAT change (1.4.2.0) is not released yet.
+- **Evidence:** `crates/env/tests/critic.rs` `digdogger_recorder_split_pays_once_and_the_small_one_is_the_boss`;
+  `tests/test_d5.py::test_the_boss_family_plays_the_recorder` (the family's env in 5:0x24: offered, played, split,
+  paid once, masked after, a sword hit on the small one pays `reward-boss-hit`).

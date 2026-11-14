@@ -36,6 +36,8 @@ pub const COMBAT_DECAY_RATE: f64 = 0.5;
 pub const REWARD_PROFILES: [&str; 1] = ["default"];
 /// ObjDir of the push block (object slot $B): the direction it was pushed (asm:PushBlock_State0Idle).
 const PUSH_BLOCK_DIRECTION: u16 = 0x98 + 0x0B;
+/// asm:FluteUsedState: 0 until the recorder is played in the room (the game zeroes it on room entry).
+const FLUTE_USED_STATE: u16 = 0x51B;
 
 /// Equipment pickups, in `_EQUIPMENT_ATTRS` order: (name, value). Bombs pay like rupees (a dropped resource); the
 /// cheat ledger's grants happen outside the action's `Change`, so a grant is no pickup.
@@ -234,6 +236,7 @@ impl GameplayCritic {
         }
         self.critique_attack(c, rewards);
         self.critique_dodongo(c, rewards);
+        self.critique_recorder(c, rewards);
         self.critique_item_usage(c, rewards);
         self.critique_equipment_pickup(c, rewards);
         self.critique_puzzles(c, rewards);
@@ -544,6 +547,25 @@ impl GameplayCritic {
         }
         if t.eats > 0 && self.boss_ate_bomb_penalty > 0.0 {
             rewards.add(Outcome::penalty("penalty-boss-ate-bomb", -self.boss_ate_bomb_penalty));
+        }
+    }
+
+    /// Digdogger (round 24): the recorder played where a big Digdogger hasn't heard it (asm:FluteUsedState $51B
+    /// rising from 0; the action mask offers RECORDER only there, `zelda::actions::recorder_wanted`) starts his split
+    /// into the small one, the only form a weapon hurts. Pays `reward-recorder-split` once per room per episode; the
+    /// small one's hits are boss hits (`enemy::BOSS_KINDS`), and the recorder is never an attack miss.
+    fn critique_recorder(&mut self, c: &Critique, rewards: &mut StepRewards) {
+        let change = c.change;
+        let (prev, curr) = (&change.previous, &change.state);
+        let location = curr.full_location();
+        if change.action.kind == ActionKind::Recorder
+            && location == prev.full_location()
+            && prev.peek(FLUTE_USED_STATE) == 0
+            && curr.peek(FLUTE_USED_STATE) != 0
+            && prev.enemies.iter().any(|e| e.is_big_digdogger())
+            && self.puzzles_rewarded.insert((location, "recorder-split".to_owned()))
+        {
+            rewards.add(Outcome::reward("reward-recorder-split", REWARD_LARGE));
         }
     }
 

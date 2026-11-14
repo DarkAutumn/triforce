@@ -521,6 +521,12 @@ successful episodes with a stun and no swallow: stun-and-sword kills, not swallo
 start state), `visited_rooms` `boss_stuns_per_visit`/`boss_eats_per_visit` (zelda-map's sidebar, when non-zero);
 chain `RoomRecord.boss_stuns/boss_eats`.
 
+Digdogger (round 24): RECORDER is offered only where a big Digdogger ($38/$39) has not heard the tune
+(`zelda::actions::recorder_wanted`; the family needs `items: {recorder: true}`, boss-digdogger has it). The play that
+starts his split (FluteUsedState $51B rising from 0 with a big one in the room) pays `reward-recorder-split` (0.75)
+once per room and episode; a recorder use is never `penalty-attack-miss`. The small Digdogger ($18) is in
+`enemy::BOSS_KINDS`: its hits pay `reward-boss-hit`, and its death is the boss kill for linger's `boss_kill_steps`.
+
 ### Lingering (`crates/zelda/src/linger.rs`)
 
 `LingerTracker.reset(state)` / `update(change, hearts_taken=0)` measures progress without changing gameplay.
