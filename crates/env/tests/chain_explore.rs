@@ -84,7 +84,8 @@ fn route_definition() {
 }
 
 /// Every route step names the family of its room.  An experiment route names none (`clips-gauntlet`: a specialist
-/// naming the route draws its steps), but its rooms are in families too.
+/// naming the route draws its steps), but its rooms are in families too.  A `terminal` step (the route ends on
+/// entering its room) is never played and needs no family.
 #[test]
 fn every_route_room_has_a_specialist() {
     let data = data();
@@ -94,7 +95,7 @@ fn every_route_room_has_a_specialist() {
             let family = data.specialist_for(step.location());
             if experiment {
                 assert!(family.is_some(), "{name} {step:?}");
-            } else {
+            } else if step.exit != "terminal" {
                 assert_eq!(family, step.specialist.as_deref(), "{name} {:?}", step);
             }
         }

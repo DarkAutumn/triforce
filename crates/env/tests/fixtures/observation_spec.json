@@ -83,7 +83,8 @@
   "has_compass",
   "is_start_room",
   "is_boss_room",
-  "is_triforce_room"
+  "is_triforce_room",
+  "maze_step"
  ],
  "LINK_FEATURES": [
   "x",
@@ -340,7 +341,7 @@
   },
   "room_state": {
    "shape": [
-    84
+    85
    ],
    "dtype": "float32",
    "low": 0.0,

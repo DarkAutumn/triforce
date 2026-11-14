@@ -4,9 +4,10 @@
 //! Link, and walking the same loop cannot repeatedly reset the clock.  The distance baseline refreshes after a
 //! hit, kill, pickup/healing, room exit or objective phase change (its kind, next rooms or, but in a fight, its
 //! targets: a shutter or bomb wall that opens, a pushed block), and while the frozen wavefront can't reach Link; a
-//! refresh by itself is not progress.
+//! refresh by itself is not progress.  A maze loop (`Change::maze_loop`) refreshes it too: a correct one counts as a
+//! room change (progress), a wrong one does not.
 
-use crate::change::Change;
+use crate::change::{Change, MazeLoop};
 use crate::enums::{Direction, MapLocation, Tile, enemy};
 use crate::game::GameView;
 use crate::objectives::{Objective, ObjectiveKind};
@@ -77,6 +78,8 @@ pub struct LingerStep {
     pub gained_triforce: bool,
     pub enemies_hit: bool,
     pub health_gained: f64,
+    /// The step looped through a maze room (`Change::maze_loop`).
+    pub maze_loop: Option<MazeLoop>,
 }
 
 impl LingerStep {
@@ -88,6 +91,7 @@ impl LingerStep {
             gained_triforce: change.gained_triforce(),
             enemies_hit: !change.observed.enemies_hit.is_empty(),
             health_gained: change.health_gained,
+            maze_loop: change.maze_loop(),
         }
     }
 }
@@ -174,7 +178,11 @@ impl LingerTracker {
         let s = &mut self.s;
         s.steps += 1;
         s.frames += step.frames;
-        let changed_room = prev.full_location != curr.full_location;
+        // A maze loop scrolls the room in again: a correct one (`MazeLoop::correct`, toward the objective's next room)
+        // is a room change; a wrong one only puts Link back at an edge, a new baseline but no progress.
+        let looped = step.maze_loop;
+        let changed_room =
+            prev.full_location != curr.full_location || looped.is_some_and(|l| l.correct(&prev.next_rooms));
         let pickup = step.items_gained
             || hearts_taken > 0
             || step.gained_triforce
@@ -200,6 +208,7 @@ impl LingerTracker {
         let mut approaching = false;
         if !tangible
             && same_phase
+            && looped.is_none()
             && let Some(w) = &self.wavefront
             && curr.tile != prev.tile
             && let Some(distance) = w.get(curr.tile)
@@ -221,7 +230,7 @@ impl LingerTracker {
         let blind = curr.has_targets
             && self.best.is_none()
             && self.wavefront.as_ref().is_none_or(|w| w.get(curr.tile).is_none());
-        if tangible || !same_phase || (!self.has_targets && curr.has_targets) || blind {
+        if tangible || !same_phase || (!self.has_targets && curr.has_targets) || blind || looped.is_some() {
             self.baseline(curr, wavefront);
         }
     }
@@ -301,6 +310,7 @@ mod tests {
             gained_triforce: false,
             enemies_hit: hit,
             health_gained: gained,
+            maze_loop: None,
         };
         t.update(&prev.st, &curr.st, &step, taken, wf(curr));
     }

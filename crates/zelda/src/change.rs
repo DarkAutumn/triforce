@@ -3,12 +3,14 @@
 use crate::actions::{Action, ActionMask};
 use crate::clips::ClipOutcome;
 use crate::blocks::ProjectileBlock;
-use crate::enums::{AnimationKind, AnimationState, enemy};
+use crate::enums::{AnimationKind, AnimationState, Direction, MapLocation, enemy};
 use crate::executor::{Interrupt, Machine, OptionResult};
 use crate::game::GameView;
+use crate::game_map::{MAZE_STEP, Maze};
 use crate::ledger::{FutureCreditLedger, Prediction, add_hit};
 use crate::nes::Nes;
 use crate::vars::Var;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 /// Safety cap on one look-ahead.
@@ -64,6 +66,50 @@ impl Observed {
     pub fn hits(&self) -> usize {
         self.enemies_hit.len()
     }
+}
+
+/// One loop through a maze room (asm:Maze_CheckStep): Link left the Lost Hills or the Lost Woods through an edge that
+/// isn't its way out, and the game scrolled the same room in again. The room id doesn't change, so nothing that keys
+/// on [`Change::changed_location`] sees it: [`Change::entered_room`] does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MazeLoop {
+    /// The maze room.
+    pub room: MapLocation,
+    /// The edge Link left by: his facing at the room change, which is what the game tests, and he walks in with it.
+    pub direction: Direction,
+    /// `MazeStep` ($52F) went up: the edge was the sequence's next direction. Else it was reset to 0 (a wrong edge).
+    pub advanced: bool,
+    /// `MazeStep` after the loop: how many directions of the sequence are matched (0 after a wrong edge).
+    pub step: u8,
+}
+
+impl MazeLoop {
+    /// The loop is a correct exit of an objective leaving toward `next_rooms`: it advanced the sequence and the
+    /// objective leaves toward the maze's destination (a route step's `exit: maze`, or the path search's way to a
+    /// target beyond it). Any other loop is a wrong exit of the room: the edge reset the sequence, or the objective
+    /// wanted another way out (the free edge's room).
+    pub fn correct(&self, next_rooms: &BTreeSet<MapLocation>) -> bool {
+        self.advanced && Maze::at(self.room).is_some_and(|m| next_rooms.contains(&m.destination))
+    }
+}
+
+/// The maze loop between `prev` and `curr` (one step apart; `interrupt` is the step's): both in the same maze room,
+/// and either `MazeStep` went up (only a matching loop raises it) or the step ended on a room transition there (the
+/// mode left play for the scroll: a wrong edge, which leaves `MazeStep` at 0, or resets it). None otherwise (the
+/// free edge and the sequence's last direction change the room).
+pub fn maze_loop(prev: &GameView, curr: &GameView, interrupt: Option<Interrupt>) -> Option<MazeLoop> {
+    let room = curr.full_location();
+    if prev.full_location() != room || curr.game_over() || Maze::at(room).is_none() {
+        return None;
+    }
+    let step = curr.peek(MAZE_STEP);
+    let advanced = step == prev.peek(MAZE_STEP).wrapping_add(1);
+    (advanced || interrupt == Some(Interrupt::Transition)).then_some(MazeLoop {
+        room,
+        direction: curr.link.direction,
+        advanced,
+        step,
+    })
 }
 
 /// The changes between two consecutive controllable states.
@@ -140,7 +186,7 @@ impl Change {
             enemies_stunned: Vec::new(),
             items_gained: Vec::new(),
         };
-        if change.changed_location() {
+        if change.entered_room() {
             ledger.clear();
         } else {
             let (prev, curr) = (change.previous.clone(), change.state.clone());
@@ -179,6 +225,17 @@ impl Change {
 
     pub fn changed_location(&self) -> bool {
         self.previous.full_location() != self.state.full_location()
+    }
+
+    /// The step looped through a maze room ([`maze_loop`]).
+    pub fn maze_loop(&self) -> Option<MazeLoop> {
+        maze_loop(&self.previous, &self.state, self.interrupt)
+    }
+
+    /// Link entered a room: he changed location, or a maze loop brought him back into the maze room (the game
+    /// scrolled in a fresh copy of it: monsters, drops and Link's place are those of a room entry).
+    pub fn entered_room(&self) -> bool {
+        self.changed_location() || self.maze_loop().is_some()
     }
 
     pub fn gained_triforce(&self) -> bool {
@@ -231,7 +288,7 @@ impl Change {
     /// A dropped item of kind `id` appeared in the room this step (a slot holding it that didn't before).
     pub fn dropped(&self, id: i16) -> bool {
         let had = |index: i8| self.previous.items.iter().any(|i| i.index == index && i.id == id);
-        self.previous.full_location() == self.state.full_location()
+        !self.entered_room()
             && self.state.items.iter().any(|i| i.id == id && !had(i.index))
     }
 

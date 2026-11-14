@@ -261,7 +261,7 @@ const STEP_KEYS: [&str; 11] = [
     "level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "bomb_reserve", "note",
 ];
 const STEP_ENTRIES: [&str; 6] = ["start", "N", "S", "E", "W", "cave"];
-/// `maze` ([`MAZE_EXIT`]) parses so `from_yaml` can say why a route may not take it.
+/// `maze` ([`MAZE_EXIT`]): a maze room left by its sequence, into the maze's destination.
 const STEP_EXITS: [&str; 8] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT];
 const WAYPOINTS: [&str; 6] = ["heart", "rupees", "bow", "raft", "ladder", "recorder"];
 const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];
@@ -1024,15 +1024,19 @@ impl GameMap {
             if step.exit == "triforce" && room.treasure.as_deref() != Some("triforce") {
                 return err(format!("{at}: exit triforce, but the room's treasure is {:?}", room.treasure));
             }
-            let Some(maze) = room.maze else {
+            // A maze room is left by its free edge or by its sequence (`exit: maze`); its other edges only loop back.
+            let maze = room.maze;
+            if step.exit == MAZE_EXIT && maze.is_none() {
+                return err(format!("{at}: exit maze, but the room is no maze (asm:Maze_CheckStep: 0x1b, 0x61)"));
+            }
+            let Some(maze) = maze else {
                 continue;
             };
-            let loops = Direction::from_exit(&step.exit).is_some_and(|d| d != maze.free);
-            if step.exit == MAZE_EXIT || loops {
+            if Direction::from_exit(&step.exit).is_some_and(|d| d != maze.free) {
                 return err(format!(
-                    "routes.yaml: {route}: a step leaves the maze {} through {:?}; routes through a maze's sequence \
-                     are unsupported (the envs don't handle a room visit that loops back into itself)",
-                    maze.room, step.exit
+                    "routes.yaml: {route}: a step leaves the maze {} through {:?}, an edge that loops back into it; \
+                     the way out is `exit: maze` (the sequence {:?} into {}) or the free edge {:?}",
+                    maze.room, step.exit, maze.sequence, maze.destination, maze.free
                 ));
             }
         }
@@ -1773,14 +1777,16 @@ mod tests {
         assert!(with_key == set(&[loc(1, 0x63)]) && !without.contains(&loc(1, 0x63)));
     }
 
-    /// Only the route's rooms (the bow detour included), the alternate and the rooms that left the route in round 22
-    /// (0x56, 0x57 and 3:0x4b, still tagged so a chain that strays into them has a model) have a specialist; the
-    /// experiment route `clips-gauntlet` (round 21) crosses rooms of the default route only.
+    /// Only the routes' played rooms (the bow detour included; a `terminal` step's room is only entered), the alternate
+    /// and the rooms that left the route in round 22 (0x56, 0x57 and 3:0x4b, still tagged so a chain that strays into
+    /// them has a model) have a specialist; the experiment route `clips-gauntlet` (round 21) crosses rooms of the
+    /// default route only; the scouting route `d5maze` (round 24) adds 0x0b.
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d5", "d5leg", "clips-gauntlet"]);
-        let mut route: BTreeSet<L> = map.routes.values().flatten().map(RouteStep::location).collect();
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d5", "d5leg", "d5maze", "clips-gauntlet"]);
+        let played = map.routes.values().flatten().filter(|s| s.exit != "terminal");
+        let mut route: BTreeSet<L> = played.map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
@@ -1788,7 +1794,7 @@ mod tests {
         assert!(route.is_disjoint(&strays));
         assert_eq!(tagged, route.union(&strays).copied().collect());
         // Beyond the routes' own rooms (d5leg, round 24, extends d2first): only the alternate (4:0x20 is on the D4
-        // stretch's plain way since round 22) and Dungeon 5 (route d5, round 24).
+        // stretch's plain way since round 22) and Dungeon 5 (route d5, round 24); d5maze's rooms are d5leg's.
         let own: BTreeSet<L> = map.routes["d5leg"].iter().map(RouteStep::location).collect();
         assert!(map.routes[DEFAULT_ROUTE].iter().all(|s| own.contains(&s.location())));
         let beyond: Vec<L> = route.difference(&own).copied().filter(|l| l.level != 5).collect();
@@ -1882,7 +1888,8 @@ mod tests {
         assert_eq!(map.find_path(loc(0, 0x1b), loc(0, 0x0b)), Some(vec![loc(0, 0x1b), loc(0, 0x0b)]));
     }
 
-    /// game.yaml's `maze:` blocks must match the game, and a route may not leave through a maze's sequence.
+    /// game.yaml's `maze:` blocks must match the game; a route leaves a maze by `exit: maze` (its sequence) or its
+    /// free edge, never by an edge that loops back, and only a maze room has `exit: maze`.
     #[test]
     fn maze_yaml_and_routes_are_checked() {
         let wrong = GAME_YAML.replacen("sequence: [N, W, S, W]", "sequence: [N, W, S, S]", 1);
@@ -1891,14 +1898,29 @@ mod tests {
         let missing = GAME_YAML.replacen("  maze:  # asm:Maze_CheckStep asm:Maze_LostWoodsDirs", "  maze_unused:  #", 1);
         let e = GameMap::from_yaml(&missing, ROUTES_YAML).unwrap_err().0;
         assert!(e.contains("needs its game.yaml `maze:` block"), "{e}");
-        let through = ROUTES_YAML.replacen(
-            "- {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: W}",
-            "- {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: maze}",
+        let step = "- {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: W}";
+        let with_exit = |exit: &str| {
+            let routes = ROUTES_YAML.replacen(step, &step.replace("exit: W", &format!("exit: {exit}")), 1);
+            assert_ne!(routes, ROUTES_YAML);
+            GameMap::from_yaml(GAME_YAML, &routes)
+        };
+        assert!(with_exit("maze").is_ok());
+        let e = with_exit("N").unwrap_err().0;
+        assert!(e.contains("loops back into it") && e.contains("`exit: maze`"), "{e}");
+        let not_a_maze = ROUTES_YAML.replacen(
+            "- {level: 0, room: '0x1c', specialist: ow-start, entry: S, exit: W}",
+            "- {level: 0, room: '0x1c', specialist: ow-start, entry: S, exit: maze}",
             1,
         );
-        assert_ne!(through, ROUTES_YAML);
-        let e = GameMap::from_yaml(GAME_YAML, &through).unwrap_err().0;
-        assert!(e.contains("unsupported"), "{e}");
+        let e = GameMap::from_yaml(GAME_YAML, &not_a_maze).unwrap_err().0;
+        assert!(e.contains("the room is no maze"), "{e}");
+        // The scouting route d5maze leaves 0x1b by the sequence into 0x0b, entered from S.
+        let map = GameMap::builtin();
+        let steps = &map.routes["d5maze"];
+        let i = steps.iter().position(|s| s.exit == MAZE_EXIT).expect("the maze step");
+        assert_eq!((steps[i].location(), steps[i].entry.as_str()), (loc(0, 0x1b), "E"));
+        assert_eq!((steps[i + 1].location(), steps[i + 1].entry.as_str()), (loc(0, 0x0b), "S"));
+        assert_eq!(map.get(loc(0, 0x1b)).unwrap().exits[MAZE_EXIT].destination, steps[i + 1].location());
     }
 
     /// F030: every non-maze N/S/E/W exit leads to a room that exists and has the opposite exit back, with the same

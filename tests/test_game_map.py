@@ -12,10 +12,10 @@ from triforce.specialist import list_specialists
 
 
 def test_the_route_and_families():
-    # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12); d5 and d5leg (round 24) extend it
-    # for scouting (Dungeon 5; the clip way to it); clips-gauntlet is round 21's experiment route (two targets per room
-    # and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'd5', 'd5leg', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12); d5, d5leg and d5maze (round 24)
+    # extend it for scouting (Dungeon 5; the clip way to it; the plain way up the mountain through the Lost Hills);
+    # clips-gauntlet is round 21's experiment route (two targets per room and entry, drawn by a specialist naming it).
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd5', 'd5leg', 'd5maze', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 

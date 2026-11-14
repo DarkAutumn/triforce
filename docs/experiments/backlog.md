@@ -172,8 +172,11 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   curricula and trainings for the 14 new family rooms; the plain ways in a full route (with the Lost Hills);
   0x5f's heart objective appears a few frames into play, so its first decision targets `treasure_tile`; the walker
   in `d5_leg.rs` lines Link up on cave mouths by single frames (MOVE is 4 or 8 frames), a policy has to learn it.
-- [ ] **Leaving a maze by its sequence** in a route (the plain ways through the Lost Woods and the Lost Hills):
-  `routes.yaml` refuses it and the envs don't handle a visit that loops back into its own room.
+- [x] **Leaving a maze by its sequence** in a route (round 24, slice r24-maze; decisions 2026-11-14 "A maze loop is a
+  room transition"): `exit: maze`, `zelda::MazeLoop` everywhere a run is followed, the scouting route `d5maze`.
+- [ ] **The maze in training:** 0x1b from E needs played states of the leg (the plain mountain way), a curriculum
+  (`python -m triforce.explore` finds the four Ns unaided) and ow-start trained on it with the `maze_step`
+  observation; the Lost Woods (0x61: N, W, S, W) has monsters and no route step yet.
 - [x] **New action kinds** for the route: the recorder, food, the candle, in one model-incompatible bump (1.4.2.0,
   branch `r24-kinds`; decisions 2026-11-14 "Three item kinds and the model conversion"); the promoted 1.4.1 runs are
   widened by `triforce convert-model`, not retrained. Left: the recorder on the overworld (the whirlwind, 0x42's

@@ -54,12 +54,24 @@ impl AcceptSpec {
 }
 
 /// Coarse state summary: (level, room, cave, tile x/2, tile y/2, whole hearts, living enemies, their total health,
-/// keys, boomerang, the room's push block still unpushed, the room's item taken).  Enemy health keeps multi-hit
-/// enemies leaving a trail of cells toward the kill.  The push block: a pushed block changes what the room is (stairs
-/// appear, a shutter opens), and a cell reached after the push must not lose to the same spot reached sooner before
-/// it.  The item: a pickup that changes nothing else the key reads (0x67's secret rupees, round 22: the cave's way
-/// out is the same cell before and after, and the shorter path, without them, kept it) must not either.
-pub type CellKey = (u8, u8, bool, i32, i32, i32, usize, i32, i32, i32, bool, bool);
+/// keys, boomerang, the room's push block still unpushed, (the room's item taken, the maze step)).  Enemy health
+/// keeps multi-hit enemies leaving a trail of cells toward the kill.  The push block: a pushed block changes what the
+/// room is (stairs appear, a shutter opens), and a cell reached after the push must not lose to the same spot reached
+/// sooner before it.  The item: a pickup that changes nothing else the key reads (0x67's secret rupees, round 22:
+/// the cave's way out is the same cell before and after, and the shorter path, without them, kept it) must not
+/// either.  The maze step ([`maze_step`], round 24): each loop of the Lost Hills' sequence is the same room again, and
+/// the 3rd loop's spot must not lose to the 1st's.  (A pair: tuples hash up to 12 fields.)
+pub type CellKey = (u8, u8, bool, i32, i32, i32, usize, i32, i32, i32, bool, (bool, u8));
+
+/// `MazeStep` ($52F) in a maze room (how many directions of its sequence Link has matched), 0 elsewhere: the counter
+/// keeps its value out of the Lost Hills' free edge and after the sequence's last direction, where it means nothing.
+pub fn maze_step(state: &GameView) -> u8 {
+    if zelda::game_map::Maze::at(state.full_location()).is_some() {
+        state.peek(zelda::game_map::MAZE_STEP)
+    } else {
+        0
+    }
+}
 
 /// The item-taken flag of Link's room (`$10` of its room flags; an overworld cave's is its room's).
 pub fn room_item_taken(state: &GameView) -> bool {
@@ -91,7 +103,7 @@ pub fn cell_key(state: &GameView) -> CellKey {
         state.keys(),
         state.boomerang() as i32,
         state.push_block_pending(),
-        room_item_taken(state),
+        (room_item_taken(state), maze_step(state)),
     )
 }
 
@@ -103,9 +115,10 @@ pub fn closeness(state: &GameView, wavefront: Option<&Wavefront>) -> f64 {
     }
 }
 
-/// Room entered, enemy damaged or killed, key, boomerang or the room's item gained in one step.
+/// Room entered (a loop that advanced a maze's sequence too), enemy damaged or killed, key, boomerang or the room's item
+/// gained in one step.
 pub fn progress_events(prev: &GameView, curr: &GameView) -> u32 {
-    if prev.full_location() != curr.full_location() {
+    if prev.full_location() != curr.full_location() || maze_step(curr) > maze_step(prev) {
         return 1;
     }
     (curr.room_kills() > prev.room_kills()) as u32

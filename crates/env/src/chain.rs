@@ -385,6 +385,11 @@ pub struct RoomRecord {
     /// during it: (actions into the visit, the new value).
     pub clips_allowed: bool,
     pub clips_flips: Vec<(u64, bool)>,
+    /// Loops through a maze room during the visit (round 24; `zelda::MazeLoop`): correct ones (the sequence's next
+    /// edge, toward the objective's next room) and wrong ones (each also one of the run's wrong exits). The visit goes
+    /// on through both; leaving by the sequence's last edge is the visit's exit.
+    pub maze_loops: u32,
+    pub maze_wrong_loops: u32,
 }
 
 impl RoomRecord {
@@ -434,6 +439,8 @@ impl RoomRecord {
             step: None,
             clips_allowed,
             clips_flips: Vec::new(),
+            maze_loops: 0,
+            maze_wrong_loops: 0,
         }
     }
 
@@ -460,6 +467,7 @@ impl RoomRecord {
             "clips_allowed": self.clips_allowed,
             "clips_flips": self.clips_flips.iter().map(|(steps, on)| json!({"step": steps, "clips": on}))
                 .collect::<Vec<_>>(),
+            "maze_loops": self.maze_loops, "maze_wrong_loops": self.maze_wrong_loops,
         });
         let o = m.as_object_mut().expect("object");
         for item in CheatItem::ALL {
@@ -992,7 +1000,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         );
         self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
-        self.hearts.update(&HeartView::of(&state), change.frames);
+        self.hearts.follow(&HeartView::of(&state), &change);
         let prev_objective = self.objective.take().expect("run started");
         let entered = state.full_location() != change.previous.full_location();
         // A new room: the path search follows its family's `clips:` switch from the objective on.
@@ -1369,6 +1377,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 obs = self.build_obs(&objective);
             }
         } else {
+            if let Some(done) = self.maze_loop_entry(location) {
+                return Ok(done);
+            }
             self.update_disabled_kinds();
             obs = self.build_obs(&objective);
         }
@@ -1422,6 +1433,40 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             obs: Box::new(obs),
             new_room,
         })
+    }
+
+    /// A maze loop the last step made (round 24): the visit goes on (one record per visit, as for the game the room
+    /// is entered again), counting it as correct (`MazeLoop::correct`: progress, a room change for the stall counter
+    /// and linger) or wrong (one of the run's wrong exits, as a wrong exit into another room is: the run ends `stuck`
+    /// at the limit). Some(done) when it ended the run.
+    fn maze_loop_entry(&mut self, location: MapLocation) -> Option<ChainStatus> {
+        let looped = self.change.as_ref()?.maze_loop()?;
+        let correct = looped.correct(&self.prev_objective.as_ref()?.next_rooms);
+        self.no_damage = 0;
+        let result = self.result.as_mut().unwrap();
+        let record = result.rooms.last_mut().unwrap();
+        if correct {
+            record.maze_loops += 1;
+            return None;
+        }
+        record.maze_wrong_loops += 1;
+        result.wrong_exits += 1;
+        if result.wrong_exits < self.max_wrong_exits {
+            return None;
+        }
+        record.outcome = "stuck".into();
+        let from = record.specialist.clone();
+        result.result = "failure".into();
+        result.reason = format!(
+            "wrong-exit-limit: {from} looped back into {} by its {} edge, the run's {}th wrong exit (at most {} per run)",
+            describe(location),
+            looped.direction.name(),
+            result.wrong_exits,
+            self.max_wrong_exits
+        );
+        let state = self.session.state().clone();
+        self.finish_record(&state);
+        Some(ChainStatus::Done(self.result.clone().unwrap()))
     }
 
     fn build_obs(&mut self, objective: &Objective) -> Observation {

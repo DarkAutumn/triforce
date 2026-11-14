@@ -864,7 +864,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         );
         self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
-        self.hearts.update(&HeartView::of(&state), change.frames);
+        self.hearts.follow(&HeartView::of(&state), &change);
         let prev = self.attached.take().expect("episode started");
         let curr = attach(
             self.objectives.as_mut().expect("episode started"),

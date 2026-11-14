@@ -67,11 +67,12 @@ def test_collect_best_keeps_the_top_successes_of_each_state(monkeypatch):
 
 @pytest.fixture(name='walk_north')
 def fixture_walk_north():
-    """ow-start's 0x1b east-entry states, where walking north succeeds in some runs and times out in others (Link
-    enters at the east edge; west of his entry row is blocked in the rebuilt states, north is open in some)."""
+    """ow-octorok's 0x68 west-entry states (leave N), where walking north succeeds in some runs and times out in others
+    (the Octoroks' shots and spawns differ per run).  Round 24: 0x1b's east entry no longer serves, its N edge is a
+    Lost Hills loop, a wrong exit for d2first."""
     for chain in range(3):
-        require_state(f'0_1be_{chain}')
-    return _native.SpecialistConfig.load('ow-start').replace(start_states=['0_1be_*'], max_steps=30)
+        require_state(f'0_68w_{chain}')
+    return _native.SpecialistConfig.load('ow-octorok').replace(start_states=['0_68w_*'], max_steps=30)
 
 
 def test_collect_best_on_the_native_pool(walk_north):

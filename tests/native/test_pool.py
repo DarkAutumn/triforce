@@ -197,7 +197,8 @@ def test_each_policy_acts_in_its_own_mode_across_a_handoff(states_dir, flags):
     decision is taken by the room's specialist (the policy column follows the rooms' step counts) and is that
     policy's argmax where its flag is set, else its sample under ``keyed_noise([run seed], [decision in the run])``."""
     names = ['ow-moblin', 'ow-zora']
-    policies = [random_network(1).to_native(), leaning(2, 'MOVE E 16').to_native()]
+    # Seed 4 since round 24's `maze_step` input (the random network's weights follow the layout; 2 stopped short of 0x5b).
+    policies = [random_network(1).to_native(), leaning(4, 'MOVE E 16').to_native()]
     task = native.ChainTask(names, 'd2first', seeds=[0, 1, 2], start_from=str(require_state('0_5aw_0')),
                             max_steps=60, states_dir=str(states_dir))
     with native.EnvPool(task, num_envs=2, seed=0) as pool:

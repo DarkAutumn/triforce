@@ -92,7 +92,7 @@ impl RewardTrack {
         objective: &Objective,
     ) -> Result<Scored, EnvError> {
         let taken = self.hearts.taken;
-        self.hearts.update(&HeartView::of(state), change.frames);
+        self.hearts.follow(&HeartView::of(state), change);
         let curr = attach(&self.config, state, objective);
         let prev = std::mem::replace(&mut self.attached, curr);
         let curr = &self.attached;

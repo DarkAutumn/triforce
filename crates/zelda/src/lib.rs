@@ -32,7 +32,7 @@ pub mod vars;
 pub mod visits;
 
 pub use actions::{Action, ActionMask, MASK_SIZE, compute_action_mask};
-pub use change::{Change, LookAhead, Observed};
+pub use change::{Change, LookAhead, MazeLoop, Observed};
 pub use enums::{ActionKind, Direction, MapLocation, Position, Tile};
 pub use executor::{Interrupt, OptionResult, ZeldaError};
 pub use game::GameView;
