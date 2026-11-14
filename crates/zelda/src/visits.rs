@@ -1,7 +1,8 @@
 //! Per-room-visit statistics for evaluation episodes (`eval.json` `records[i]['visits']`).
 //!
 //! A visit starts at reset and at every room change (level, room or cave) and ends at the next room change or at
-//! the episode's end. The step that changes rooms belongs to the room Link left. Drops count dropped items per
+//! the episode's end (a maze loop back into the same room continues it). The step that changes rooms belongs to the
+//! room Link left. Drops count dropped items per
 //! kind as they appear (a new slot, or a slot whose lifetime timer went up, as `HeartTracker` counts hearts; items
 //! on the floor when a visit starts count too); pickups are `Change.items_gained`; hits are steps that lost
 //! health; keys are rises of the key count (the env passes Link's natural keys: a cheated key is no gain); bombs
@@ -15,7 +16,7 @@ use crate::decisions::{DecisionNote, DecisionStats};
 use crate::clips::ClipStats;
 use crate::change::Change;
 use crate::cheats::ItemCounts;
-use crate::enums::{MapLocation, item};
+use crate::enums::{Direction, MapLocation, item};
 use crate::game::GameView;
 
 /// The dropped-item kinds counted, in `drops`/`pickups` index order.
@@ -137,6 +138,9 @@ pub struct VisitStep<'a> {
     /// The decision that chose the step, when the actor reported it (set by the env; None from
     /// [`VisitStep::of`]).
     pub decision: Option<DecisionNote>,
+    /// The edge of a maze loop the step made (`Change::maze_loop`): the visit goes on through a loop, and an episode
+    /// it ends (a wrong loop: `exit-wrong`) records that edge as the exit.
+    pub maze_loop: Option<Direction>,
 }
 
 impl VisitStep<'_> {
@@ -159,6 +163,7 @@ impl VisitStep<'_> {
                 clips
             },
             decision: None,
+            maze_loop: change.maze_loop().map(|l| l.direction),
         }
     }
 }
@@ -174,6 +179,17 @@ pub fn exit_direction(from: MapLocation, to: MapLocation) -> &'static str {
         (0, 1) => "s",
         (1, 0) => "e",
         (-1, 0) => "w",
+        _ => EXIT_OTHER,
+    }
+}
+
+/// The exit of a visit left through edge `d` back into the same room (a maze loop): `n`/`s`/`e`/`w`.
+pub fn edge_exit(d: Direction) -> &'static str {
+    match d {
+        Direction::N => "n",
+        Direction::S => "s",
+        Direction::E => "e",
+        Direction::W => "w",
         _ => EXIT_OTHER,
     }
 }
@@ -234,6 +250,7 @@ impl VisitTracker {
         }
         let exit = match end {
             VisitEnd::Continue if !moved => return,
+            VisitEnd::Left if !moved && step.maze_loop.is_some() => edge_exit(step.maze_loop.expect("a loop")),
             VisitEnd::Continue | VisitEnd::Left => exit_direction(visit.location, state.location),
             VisitEnd::Ended(exit) => exit,
         };
@@ -334,6 +351,7 @@ mod tests {
             boss_eats: 0,
             clips: ClipStats::default(),
             decision: None,
+            maze_loop: None,
         }
     }
 

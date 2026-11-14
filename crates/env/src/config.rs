@@ -944,7 +944,8 @@ impl GameData {
             }
         }
         for (route, steps) in &self.map.routes {
-            for (i, step) in steps.iter().enumerate() {
+            // A `terminal` step's room is only entered (the run ends there): it needs no family yet.
+            for (i, step) in steps.iter().enumerate().filter(|(_, s)| s.exit != "terminal") {
                 let location = step.location();
                 let tag = self.map.get(location).and_then(|r| r.specialist.as_deref());
                 let Some(tag) = tag else {

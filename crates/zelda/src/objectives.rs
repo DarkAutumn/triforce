@@ -12,7 +12,7 @@
 
 use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile};
 use crate::game::{BombWall, GameView};
-use crate::game_map::{GameMap, MAZE_STEP, RouteStep, Way};
+use crate::game_map::{GameMap, MAZE_EXIT, MAZE_STEP, RouteStep, Way};
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
@@ -533,11 +533,14 @@ impl GameCompletion {
         Some(self.map.get(location)?.exits.get(exit)?.destination)
     }
 
-    /// The current step and the room it leaves toward, when it leaves through a room edge (N/S/E/W).  None off the
-    /// route or when the step leaves through a cave, stairs or a triforce (the room objective handles those).
+    /// The current step and the room it leaves toward, when it leaves through a room edge (N/S/E/W, or a maze's
+    /// sequence: `exit: maze`, toward the maze's destination by the edge `MazeStep` asks for).  None off the route or
+    /// when the step leaves through a cave, stairs or a triforce (the room objective handles those).
     fn edge_step(&self, location: MapLocation) -> Option<(usize, MapLocation)> {
         let step = self.current_step(location)?;
-        Direction::from_exit(&step.exit)?;
+        if step.exit != MAZE_EXIT {
+            Direction::from_exit(&step.exit)?;
+        }
         Some((self.step?, self.step_exit(location, &step.exit)?))
     }
 

@@ -463,7 +463,9 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
     """Walks ``rooms`` in order from ``source`` (a state in the room before the first of them), writing each room's
     entry state.  Go-Explore only has to enter the next room, whatever the objective wants, so this works for rooms
     off a route (e.g. Dungeon 1's north rooms toward the bow) and for a route the objective doesn't follow.  With
-    ``route``, manifest entries record their step on it (``path_route_fields``); otherwise ``route_step: -1``.
+    ``route``, manifest entries record their step on it (``path_route_fields``), and the explored env follows it where
+    a step has Link's room, entry and progress (round 24: through a maze, whose loops end a try unless the objective
+    leads through the sequence, as d5maze's 0x1b ``exit: maze`` does); otherwise ``route_step: -1``.
     Off-route entries record ``from_step``, the route step they were reached from (for route-progress checks).
     The entry side is ``path_entry``'s (a dungeon's entrance room is entered S, the overworld out of a dungeon
     ``cave``).  Each written file's entry is merged into ``<out>/entry_states.json`` right away.
@@ -491,7 +493,7 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
         started = time.time()
         seed = chain + 1000 * retries[i]
         pre_entry, stats = cross_room(step, goal, sources[i], seed, iterations, patience, states_dir=states_dir,
-                                      rooms=room_info)
+                                      rooms=room_info, route=route or DEFAULT_ROUTE)
         label = f"[path] {current.level}:0x{current.value:02x} -> {goal.filename(chain)}"
         if pre_entry is None:
             if i > 0 and retries[i - 1] < PATH_BACKTRACKS:
@@ -770,7 +772,8 @@ def build_parser() -> argparse.ArgumentParser:
     path_parser.add_argument('--patience', type=int, default=200)
     path_parser.add_argument('--out', default=None, help=out_help)
     path_parser.add_argument('--route', default=DEFAULT_ROUTE,
-                             help="routes.yaml route the rooms belong to (manifest step)")
+                             help="routes.yaml route the rooms belong to (manifest step; the explored objective "
+                                  "follows its steps where Link's progress matches, e.g. through a maze)")
     install_parser = sub.add_parser('install', help="copy a finished staged build into the states dir")
     install_parser.add_argument('staged', help="the build's --out directory")
     install_parser.add_argument('--partial', action='store_true', help="install a build that failed part-way")

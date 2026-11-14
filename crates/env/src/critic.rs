@@ -162,6 +162,8 @@ pub struct GameplayCritic {
     /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
     pub neutral_retreat: bool,
     correct_locations: HashSet<MapLocation>,
+    /// The maze steps (room, `MazeStep` after the loop) correct maze loops reached, rewarded like new rooms.
+    correct_loops: HashSet<(MapLocation, u8)>,
     room_combat_counts: HashMap<MapLocation, i32>,
     room_steps: u32,
     stunned_enemies: HashSet<(MapLocation, u8)>,
@@ -178,6 +180,7 @@ impl GameplayCritic {
             boss_ate_bomb_penalty: REWARD_MEDIUM,
             neutral_retreat: true,
             correct_locations: HashSet::new(),
+            correct_loops: HashSet::new(),
             room_combat_counts: HashMap::new(),
             room_steps: 0,
             stunned_enemies: HashSet::new(),
@@ -207,6 +210,7 @@ impl GameplayCritic {
     /// Called at every episode start.
     pub fn clear(&mut self) {
         self.correct_locations.clear();
+        self.correct_loops.clear();
         self.room_combat_counts.clear();
         self.room_steps = 0;
         self.stunned_enemies.clear();
@@ -525,8 +529,21 @@ impl GameplayCritic {
         }
     }
 
+    /// A correct exit pays `reward-new-location` the first time into a room, else `reward-revisit-location`; a wrong
+    /// one `penalty-wrong-location` (but a neutral retreat). A maze loop is a room transition (round 24): a correct
+    /// one (`MazeLoop::correct`) pays as a new room once per step of the sequence, a wrong one as a wrong exit.
     fn critique_location_change(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let change = c.change;
+        if let Some(l) = change.maze_loop() {
+            if !l.correct(&c.prev_objective.next_rooms) {
+                rewards.add(Outcome::penalty("penalty-wrong-location", -REWARD_SMALL));
+            } else if self.correct_loops.insert((l.room, l.step)) {
+                rewards.add(Outcome::reward("reward-new-location", REWARD_MAXIMUM));
+            } else {
+                rewards.add(Outcome::reward("reward-revisit-location", REWARD_TINY));
+            }
+            return;
+        }
         let (prev, curr) = (
             change.previous.full_location(),
             change.state.full_location(),
@@ -547,12 +564,13 @@ impl GameplayCritic {
     }
 
     /// Room stall penalty plus PBRS: F = (d(prev tile) − d(curr tile)) / PBRS_SCALE on the previous state's
-    /// wavefront; MOVE always, other kinds only when Link's tile changed. Not on a step that changes rooms or takes
-    /// damage (no cross-room distances, no credit for a knockback); the step after one pays from where it left Link.
+    /// wavefront; MOVE always, other kinds only when Link's tile changed. Not on a step that enters a room (a maze
+    /// loop too: it puts Link back at the far edge, no fall in potential) or takes damage (no cross-room distances,
+    /// no credit for a knockback); the step after one pays from where it left Link.
     fn critique_movement(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let change = c.change;
         let (prev, curr) = (&change.previous, &change.state);
-        if change.health_lost != 0.0 || prev.full_location() != curr.full_location() {
+        if change.health_lost != 0.0 || change.entered_room() {
             self.room_steps = 0;
             return;
         }

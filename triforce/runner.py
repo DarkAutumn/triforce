@@ -232,6 +232,10 @@ class RoomRecord:
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
     # within 4 decisions), surprisal, act_entropy and actions (hex, two digits per decision).  {} in older records.
     decisions: dict = field(default_factory=dict)
+    # Maze loops during the visit (round 24, crates/zelda/src/change.rs MazeLoop): correct ones (the sequence's next
+    # edge, the visit goes on) and wrong ones (each one of the run's wrong exits).  0 in older records.
+    maze_loops: int = 0
+    maze_wrong_loops: int = 0
 
 
 @dataclass

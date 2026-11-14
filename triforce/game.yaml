@@ -202,6 +202,7 @@ rooms:
   treasure: white-sword  # middle ware $02; the old man hands it over only at 5+ heart containers
 - level: 0
   location: '0x0b'
+  specialist: ow-leever
   exits:
     S:
       level: 0

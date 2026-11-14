@@ -675,11 +675,12 @@ impl ObservationBuilder {
         self.prev_types = [0; NUM_ENTITY_SLOTS];
         let p = state.link.position;
         self.entered_from = entry_side_from_position(state.level(), p.x, p.y);
-        self.build_state(state, objective, wavefront, mask, None, 0, None)
+        self.build_state(state, objective, wavefront, mask, None, 0, None, false)
     }
 
     /// The observation after a step to `state`: `change.state`, or the state a RAM fix-up after the action rebuilt
-    /// (the cheated items, `zelda::cheats`); `objective` and `wavefront` belong to `state`.
+    /// (the cheated items, `zelda::cheats`); `objective` and `wavefront` belong to `state`.  A maze loop
+    /// (`Change::maze_loop`) is a room change: `room_changed`, `entered_from` the edge Link stands at, fresh velocities.
     pub fn build(
         &mut self,
         change: &Change,
@@ -696,6 +697,7 @@ impl ObservationBuilder {
             Some(&change.action),
             change.frames,
             change.interrupt,
+            change.maze_loop().is_some(),
         )
     }
 
@@ -709,14 +711,18 @@ impl ObservationBuilder {
         action: Option<&Action>,
         frames: u32,
         interrupt: Option<Interrupt>,
+        looped: bool,
     ) -> Observation {
         let rs = decode_room_state(state.ram());
         let key = (rs.level, rs.in_cave, rs.room);
-        let room_changed = self.prev_room.is_some_and(|p| p != key);
-        if room_changed {
+        let room_changed = looped || self.prev_room.is_some_and(|p| p != key);
+        if looped {
+            let p = state.link.position;
+            self.entered_from = entry_side_from_position(state.level(), p.x, p.y);
+        } else if room_changed {
             self.entered_from = direction_back(state, self.prev_room.unwrap());
         }
-        let same_room = self.prev_room == Some(key);
+        let same_room = !looped && self.prev_room == Some(key);
         let (entity_types, entity_features) = self.entities(state, &rs, frames, same_room);
         self.prev_room = Some(key);
         Observation {

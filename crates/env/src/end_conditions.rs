@@ -158,7 +158,8 @@ pub enum EndCondition {
     GainedTriforce,
     /// Collected a heart container (it appears only after the boss dies).
     BossDeadAndHeart,
-    /// Room transitions: wrong exits, `enter-room` successes, leaving the family (`one_room`: any room).
+    /// Room transitions: wrong exits, `enter-room` successes, leaving the family (`one_room`: any room); a maze loop
+    /// (`zelda::MazeLoop`) is a wrong exit unless it is correct (`MazeLoop::correct`), when the episode goes on.
     RoomExit {
         rooms: HashSet<MapLocation>,
         enter_rooms: HashSet<MapLocation>,
@@ -233,6 +234,11 @@ impl EndCondition {
                 enter_rooms,
                 one_room,
             } => {
+                // A maze loop brings Link back into the same room: a correct one (toward the objective's next room)
+                // goes on, a wrong one is a wrong exit of the room.
+                if let Some(l) = v.change.maze_loop() {
+                    return (!l.correct(&v.prev_objective.next_rooms)).then(|| EXIT_WRONG.to_owned());
+                }
                 if prev.full_location() == curr.full_location() {
                     return None;
                 }
@@ -267,7 +273,14 @@ impl EndCondition {
                     *position_duration = 0;
                 }
                 let location = curr.full_location();
-                if prev.full_location() == location {
+                if let Some(l) = v.change.maze_loop() {
+                    // A correct maze loop is a new room of the way (the sequence's next step); a wrong one isn't.
+                    if l.correct(&v.prev_objective.next_rooms) {
+                        *last_progress = 0;
+                    } else {
+                        *last_progress += 1;
+                    }
+                } else if prev.full_location() == location {
                     *last_progress += 1;
                 } else if v.exit_is_correct(location) && !entered_rooms.contains(&location) {
                     entered_rooms.insert(location);
@@ -280,7 +293,7 @@ impl EndCondition {
             }
             EndCondition::NoDamage { limit, quiet } => {
                 let damage = v.change.health_lost > 0.0 || !v.change.observed.enemies_hit.is_empty();
-                if damage || prev.full_location() != curr.full_location() {
+                if damage || v.change.entered_room() {
                     *quiet = 0;
                 } else {
                     *quiet += 1;
