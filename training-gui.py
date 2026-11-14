@@ -12,7 +12,8 @@ evaluations (``triforce eval-batch``: one group per batch, a row per evaluation;
     uv run training-gui.py --web-only               # no window: only the web view (no display needed)
 
 Beside the window it serves a read-only web view of the runs going on now at http://<host>:22222/ (``--web-port``,
-``--web-host``: default every interface; ``--no-web``): one card per run, newest first, a finished one for 60 s.
+``--web-host``: default every interface; ``--no-web`` to go without): one card per run, newest first, a finished
+one for 60 s.  A second training-gui on the same port does not start: it says so and exits 1.
 
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
 [currently running] covers every live training and evaluation on this machine, whatever checkout or logs root it
@@ -4105,13 +4106,12 @@ def main(argv=None) -> int:
         try:
             server = WebServer(WebState(root, expire=args.web_expire), args.web_host, args.web_port)
         except OSError as error:
-            print(f"training-gui: no web view, {args.web_host}:{args.web_port} unavailable: "
-                  f"{error.strerror or error}", file=sys.stderr, flush=True)
-            if args.web_only:
-                return 1
-        else:
-            server.start()
-            print(f"training-gui: web view at {server.url}", flush=True)
+            print(f"training-gui: the web view's port {args.web_host}:{args.web_port} is unavailable "
+                  f"({error.strerror or error}): is another training-gui running?  "
+                  "--web-port N for another port, --no-web for no web view", file=sys.stderr, flush=True)
+            return 1
+        server.start()
+        print(f"training-gui: web view at {server.url}", flush=True)
     if args.web_only:
         try:
             server.wait()

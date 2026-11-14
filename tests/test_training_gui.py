@@ -827,8 +827,9 @@ def test_web_server_serves_the_page_and_the_snapshot_and_nothing_else(tmp_path, 
         server.stop()
 
 
-def test_a_taken_port_is_reported(tmp_path, web_env, monkeypatch, capsys):
-    """--web-only exits 1; the window goes on without the web view after one line."""
+def test_a_taken_port_stops_a_second_gui(tmp_path, web_env, monkeypatch, capsys):
+    """The web view is on unless --no-web: a second training-gui on the same port says so in one line and exits 1,
+    with or without a window; --no-web starts the window without it."""
     import socket
     taken = socket.socket()
     taken.bind(('127.0.0.1', 0))
@@ -837,9 +838,6 @@ def test_a_taken_port_is_reported(tmp_path, web_env, monkeypatch, capsys):
     try:
         with pytest.raises(OSError):
             gui.WebServer(gui.WebState(tmp_path, machine=lambda: ''), '127.0.0.1', port)
-        args = ['--web-host', '127.0.0.1', '--web-port', str(port), str(tmp_path)]
-        assert gui.main(['--web-only', *args]) == 1
-        assert capsys.readouterr().err.count('\n') == 1
 
         class App:
             def __init__(self, _argv): pass
@@ -850,9 +848,13 @@ def test_a_taken_port_is_reported(tmp_path, web_env, monkeypatch, capsys):
         monkeypatch.setattr(gui, 'QApplication', App)
         monkeypatch.setattr(gui, 'apply_theme', lambda app: None)
         monkeypatch.setattr(gui, 'Window', lambda root, initial: type('W', (), {'show': lambda _: shown.append(1)})())
-        assert gui.main(args) == 0 and shown == [1]
-        err = capsys.readouterr().err
-        assert err.count('\n') == 1 and f'127.0.0.1:{port}' in err
+        args = ['--web-host', '127.0.0.1', '--web-port', str(port), str(tmp_path)]
+        for mode in (['--web-only'], []):
+            assert gui.main([*mode, *args]) == 1 and shown == []
+            err = capsys.readouterr().err
+            assert err.count('\n') == 1 and f'127.0.0.1:{port}' in err and '--no-web' in err
+        assert gui.main(['--no-web', *args]) == 0 and shown == [1]
+        assert capsys.readouterr().err == ''
     finally:
         taken.close()
 

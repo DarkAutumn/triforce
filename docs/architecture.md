@@ -773,7 +773,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `run_eval_sections`). No selection: a card per active run (training run, batch evaluation, eval-chain), newest
   start first; pending runs only in their live plan's queue line; a run that ended stays 60 s after its end
   (`WEB_EXPIRE`; a run seen running whose process died, from when that was seen), so runs that ended before the
-  server started never show. A taken port: one line on stderr and the window goes on, `--web-only` exits 1.
+  server started never show. A taken port (a second training-gui) is an error: one line on stderr and exit 1, with
+  or without a window; `--no-web` is the only way to run without the web view.
 - Job registry (`jobs.py`): `TrainingPlan` registers every plan at its start (`jobs.register`) as one JSON file in
   `jobs.jobs_dir()` (`$TRIFORCE_JOBS_DIR`, else `$XDG_STATE_HOME/triforce/jobs`, else
   `$HOME/.local/state/triforce/jobs`: per user, outside every checkout), `<host>-<pid>-<process start>-<log

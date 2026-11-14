@@ -127,8 +127,9 @@ can watch; `--no-web` turns it off, `--web-only` runs it without a window or dis
 training run, evaluation and eval-chain going on, newest start on top, with the window's row and detail tabs (bar,
 steps or episodes, speed, elapsed, time left, success, the charts, the evaluation, the last 15 console lines), one
 line per live plan with its progress and queue, and the machine line. A run that ends stays 60 seconds with its
-final figures. The page asks for `/api/state` (JSON) every second; nothing else is served. A taken port: the window
-says so in one line and goes on without it, `--web-only` exits 1.
+final figures. The page asks for `/api/state` (JSON) every second; nothing else is served. The web view is on unless
+`--no-web` is given; a taken port (a second training-gui) is an error: one line and exit 1 (`--web-port N` for
+another port).
 
 Evaluations go through `triforce eval-batch NAME` (`triforce/eval_batch.py`): one log folder, every evaluation
 listed up front, shown in the training GUI as one group named NAME with a progress bar per evaluation; its Eval tab
