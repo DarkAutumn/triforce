@@ -367,6 +367,56 @@ def test_clear_finished_keeps_only_live_folders(qapp, tmp_path, monkeypatch):
         window.deleteLater()
 
 
+def test_currently_running_stays_selected_while_nothing_runs(qapp, tmp_path, monkeypatch):
+    """[currently running] can be picked and stays selected with no live training: it shows nothing (or the finished
+    folders not cleared yet), and a training that starts later appears in it."""
+    import json
+    import time
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    monkeypatch.setattr(gui, 'read_registry', lambda: [])
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+
+    def plan(name, status='running'):
+        (tmp_path / name).mkdir(exist_ok=True)
+        (tmp_path / name / gui.PLAN_FILE).write_text(json.dumps(
+            {**running_plan(os.getpid(), time.time()), 'status': status, 'name': name, 'runs': []}))
+        return tmp_path / name
+
+    old = plan('261112_001_old', 'completed')
+    window = gui.Window(tmp_path, None)
+    try:
+        assert window.live_mode and window._shown_dirs() == []          # startup: nothing running, nothing shown
+        assert window.combo.currentIndex() == 0 and window.combo.model().item(0).isEnabled()
+        assert window.empty_text == 'nothing is running'
+        window.combo.activated.emit(window.combo.findData(str(old)))    # the user picks a folder
+        assert not window.live_mode and window._shown_dirs() == [old]
+        window.combo.activated.emit(0)                                  # and goes back to [currently running]
+        assert window.live_mode and window._shown_dirs() == [] and window.combo.currentIndex() == 0
+        window._scan_and_update()
+        assert window.live_mode and window.combo.currentIndex() == 0    # it stays there
+        live = plan('261112_002_live')
+        window._scan_and_update()
+        assert window._shown_dirs() == [live]
+        plan(live.name, 'completed')
+        window._scan_and_update()
+        assert window.live_mode and window._shown_dirs() == [live]      # finished, kept until cleared
+        detail = window.detail
+        window.poll(force=True)
+        assert live.name in detail.title.text() and detail.log.toPlainText() != ''
+        window.clear_button.click()
+        assert window.live_mode and window._shown_dirs() == [] and window.combo.currentIndex() == 0
+        # nothing shown: the charts, evaluation, log and events are emptied, not left stale
+        assert detail.title.text() == '' and detail.log.toPlainText() == '' and detail.events.toPlainText() == ''
+        assert detail.summary.sections == [] and detail.evaluation.sections == []
+        assert all(not chart.series for chart in detail.charts.values())
+        fresh = plan('261112_003_fresh')                                # the next run fills them again
+        window._scan_and_update()
+        assert window._shown_dirs() == [fresh] and fresh.name in detail.title.text()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 # ------------------------------------------------------------------------------------------------ evaluation batches
 
 def test_outcome_counts_carry_their_share_of_the_evaluation():
