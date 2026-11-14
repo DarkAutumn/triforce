@@ -1211,8 +1211,7 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   is read again each time round. More cells than files leaves the rest dark.
 - `n` sends every cell to its next replay. The title shows the source, the queues' stock, the runs simulated
   and how they ended, whether the simulations run, the cells' frame rate and the sound; a cell's strip shows
-  the run's seed, the room, the acting specialist with its act mode ("goriya (sample)", from the recording's META
-  or, in the live cell, the policies) and cheated items used. `--benchmark SECONDS` prints
+  the run's seed, the room, the acting specialist and cheated items used. `--benchmark SECONDS` prints
   the frame rate as JSON and quits (silent).
 - **Clips** (round 22). `--clips on|off` is the run-time switch the simulations start with (default on); key `c`
   turns it off and on (`ReplayGrid.set_clips`: `EnvPool.set_clips_allowed` on the simulations' pool, so every run
