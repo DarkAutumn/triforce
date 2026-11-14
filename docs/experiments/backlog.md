@@ -67,15 +67,21 @@ Team: 12 families retrained (`r72-*`), 12 kept on round 21 runs. Chains, 1000 ru
 (`r72-1k`) | off (`r72-1k-noclips`): D2 87.2 | 87.2, after D2 91.0 | 89.5, D1 98.9 | 99.5, after D1 99.9 | 98.9,
 D3 50.4 | 50.4, after D3 100 | 100, D4 73.6 | 56.8, full route 13.6 | 4.8 (round 21: 12.8).
 
-- [ ] **3:0x5b's last pass (darknut, W → E through the bomb wall) at 6 or more bombs**: in the D3 segment 41% of
+- [x] **3:0x5b's last pass (darknut, W → E through the bomb wall) at 6 or more bombs**: in the D3 segment 41% of
   those visits die (70 of 170) against 11-14% with 1-5 bombs (the route then takes the room's treasure first,
   `if_bombs_below: 6`). The full route brings real bombs there: 145 deaths in 404 visits (round 21's W → N: 39 in
   373); full → after D3 19.5% against 24.8%. Single room 3_5bw is 97.0% −0.72 over the whole bomb mix. Train darknut
   with more resets at 6-8 bombs on 3_5bw, or take the treasure only above a health floor.
-- [ ] **A second BOMB inside the first bomb's fuse** (stalfos-keese-gel 4:0x21, 1.6-1.8 bombs per visit, one
+  Round 23 (decisions 2026-11-14 "0x5b's last pass"): the rule read live flipped the walk to the wall into a fight
+  as soon as a bomb spent at 6 left 5 (the wall opened with 0.34 kills, then Link fought beside it). The step now
+  always fights and takes the bombs: r72 team, same seeds, D3 segment 0x5b deaths 149 → 93 of 851 (at 6+ bombs 70
+  → 16 of 170), out of D3 50.6% → 54.7%; full route 0x5b 145 → 59 of 404, out of D3 19.5% → 27.5%. No retraining.
+- [x] **A second BOMB inside the first bomb's fuse** (stalfos-keese-gel 4:0x21, 1.6-1.8 bombs per visit, one
   needed): the first bomb is in reach and opens the wall, but the model places another while the first is in state
   `$12`/`$13` (the game allows it from `$13`), before `CurOpenedDoors` changes (from S: BOMB N on the island, CLIP N,
   BOMB S at Y `$57`; from W: BOMB at Y `$5D` twice). Mask BOMB while a live bomb is in reach of the same wall.
+  Round 23 (decisions 2026-11-14 "One bomb per wall"): done; stalfos-keese-gel 4:0x21 1.77 → 1.23 bombs per
+  episode (sample; the rest are 10th-kill bombs, 0.28), trap-room 3:0x4c/4:0x11 1.08 → 1.07.
 - [ ] **The plain way costs the hearts Dungeon 2 and Gleeok then take**: clips off, Link reaches 2:0x5e with 2.24
   hearts (on 2.63; 0x5b W→E alone 0.40 per visit) and 2:0x5e kills 125 of 1000 full runs (on 42); in D4 0x31 E→W and
   0x30 cost 0.9 hearts and 62 deaths, Gleeok arrival 2.65 (on 3.27). ow-moblin's plain 0x5b stays at 92% (pre-clip
@@ -345,12 +351,12 @@ the r71 chains (round21.md §9; D4 segment, 1000 runs):
 - [x] **D4 deaths in 0x30** (119 per 1000 in round 20): solved by the shortcut, 0 deaths in 999 visits; 0x30 is
   crossed once now.
 - [ ] **D4 deaths in 0x12** (Next projects 3): 141 per 1000 in round 20, 95 with r71.
-- [ ] **Bombs into Dungeon 4.** A real bomb for each wall (a pickup after Manhandla, 0x5b's `if_bombs_below`), and
+- [ ] **Bombs into Dungeon 4.** A real bomb for each wall (a pickup after Manhandla; round 23: 0x5b's last pass takes
+  its bombs whatever Link holds), and
   then whether vire bombs 0x31/0x12 and walks past 0x61 as Lee wants. Measured with r71: from `4_71s_0` every wall
   visit still takes a cheated bomb and no Vire is bombed; from the game start (`r71-1k` full) 35 of 241 visits to
   4:0x21 and 20 of 232 to 4:0x11 used only real bombs, and Vires are bombed (0x31 in 157 of 505 visits, 413 bombs;
-  0x61 34 of 260; 0x12 7 of 232), bombs the walls then lack. Open; stalfos-keese-gel's 3.8 bombs per 0x21 visit
-  ("Left open by round 21") come first.
+  0x61 34 of 260; 0x12 7 of 232), bombs the walls then lack. Open; round 23 keeps 0x21 to one bomb per wall.
 - [x] **Linger over 500 steps** in one single-room episode each: like-like (599), boss-gleeok (638),
   stalfos-keese-gel (598). r71 single rooms: like-like worst 91, boss-gleeok 25; over 500 only `no-damage` endings
   of the 600-step cap (stalfos-keese-gel 3, goriya 1, zol 2-3). Chains: round21.md §9.

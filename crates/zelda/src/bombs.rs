@@ -33,6 +33,22 @@ impl BombTarget {
             BombTarget::Rock(at) => near(at, 0x10),
         }
     }
+
+    /// A bomb of Link's already lies in reach of this target ([`live_bombs`]): it opens it when its blast ends (a
+    /// wall, asm:Bomb_TryOpenWall) or during it (a rock wall, asm:RockWall_Update), so another bomb adds nothing
+    /// until that one is gone (round 23: a second BOMB in the first one's fuse or blast at 4:0x21).
+    pub fn awaits_bomb(&self, state: &GameView) -> bool {
+        live_bombs(state).any(|b| self.in_reach(b))
+    }
+}
+
+/// Where Link's bombs lie: object slots `$10` and `$11` in a bomb state, `$11` (placed) to `$14` (fading, after the
+/// wall test); fires in the same slots (`$21`/`$22`) and empty slots are none (asm:Bomb_UpdateBombOrFire;
+/// `ObjState` `$AC`, `ObjX` `$70`, `ObjY` `$84`).
+pub fn live_bombs(state: &GameView) -> impl Iterator<Item = Position> + '_ {
+    [0x10u16, 0x11].into_iter().filter(move |&slot| (0x11..=0x14).contains(&state.peek(0xAC + slot))).map(
+        move |slot| Position::new(i32::from(state.peek(0x70 + slot)), i32::from(state.peek(0x84 + slot))),
+    )
 }
 
 /// Where a BOMB in `d` lands from `state`: 16 px ahead of Link, facing `d`, on the frame its press comes after the

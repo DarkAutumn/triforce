@@ -91,10 +91,16 @@ BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`,
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
 bomb kill then arms a forced drop of 4 bombs, `asm:Damage_KillMonster`); `required`, in game.yaml `requires_bombs`
 rooms and the 10th kill; `free`, in `requires_bombs` rooms, elsewhere while Link holds more than the route's bomb
-reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 5 from Dungeon 3's entrance, 2 from Dungeon
+reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 6 from Dungeon 3's entrance, 2 from Dungeon
 4's), and the 10th kill (whatever the reserve). Families: `free` goriya, darknut, moldorm, boss-dodongo,
-boss-manhandla, vire; `required` ow-tektite, trap-room, stalfos-keese-gel; `never` boss-gleeok; `tenth` the rest.
-The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
+boss-manhandla, vire; `required` ow-tektite, ow-octorok, trap-room, stalfos-keese-gel; `never` boss-gleeok; `tenth`
+the rest. In a `requires_bombs` room a `required` family is kept to the bombs that open the wall the objective
+leaves through (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`; round 22): BOMB only where the bomb lands
+in reach of it (`zelda::bombs::landing`, `BombTarget::in_reach`: a dungeon wall within `$18` px of its hotspot, a
+rock wall within `$10`) and, since round 23, not while one of Link's bombs (slot `$10`/`$11` in state `$11`-`$14`,
+`zelda::bombs::live_bombs`) already lies in reach of that wall: the wall test comes once, when that bomb's blast ends
+(`asm:Bomb_TryOpenWall`), so a second bomb only spends a bomb (`BombTarget::awaits_bomb`). The 10th damage-free kill
+lifts both limits. The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
 unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks

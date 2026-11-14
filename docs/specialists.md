@@ -47,8 +47,9 @@ Rooms per family: `ow-start` 4, `ow-octorok` 11 (one an alternate), `ow-zora` 9,
 
 **Bombs in `required` families** (round 22; decisions 2026-11-13 "Round 22 route"): ow-tektite, ow-octorok,
 trap-room and stalfos-keese-gel are offered BOMB in their `requires_bombs` rooms only where the bomb would open the
-wall the objective leaves through (a dungeon bomb wall within `$18` px of its hotspot, a rock wall within `$10` px),
-else only on the 10th damage-free kill; `free` families (darknut, vire, the bosses) are untouched.
+wall the objective leaves through (a dungeon bomb wall within `$18` px of its hotspot, a rock wall within `$10` px)
+and, since round 23, not while a bomb of Link's already lies in reach of that wall (decisions 2026-11-14 "One bomb
+per wall"), else only on the 10th damage-free kill; `free` families (darknut, vire, the bosses) are untouched.
 
 **Clips** (round 21; `docs/architecture.md` "Grid-point skip", `docs/experiments/round21.md`): a family's YAML
 `clips: true` offers the `CLIP` action where a skip is available in its rooms; the default is false. On: `vire` (the

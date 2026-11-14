@@ -81,7 +81,8 @@ pub struct Session<N: Nes> {
     /// objective doesn't count (`crate::objectives::wraps_into_wrong_exits`; the env sets it every step).
     vetoed_wraps: Vec<Direction>,
     /// BOMB only where it lands in reach of one of these (round 22: a `required` family in a `requires_bombs` room,
-    /// `crate::objectives::route_bomb_targets`); None: wherever the game places it.  The env sets it every step.
+    /// `crate::objectives::route_bomb_targets`) that no live bomb of Link's reaches yet (round 23,
+    /// `BombTarget::awaits_bomb`); None: wherever the game places it.  The env sets it every step.
     bomb_targets: Option<Vec<crate::bombs::BombTarget>>,
     /// The skip a CLIP of this room left cut short ([`OpenClip`]), until a MOVE finishes it (`Change::
     /// clip_finished_by_move`), Link leaves the room or another CLIP starts.
@@ -490,8 +491,11 @@ impl<N: Nes> Session<N> {
             mask.disallow_kind(kind);
         }
         if let Some(targets) = &self.bomb_targets {
+            // A target one of Link's bombs already reaches takes no other until that bomb is gone.
+            let wanted = |t: &crate::bombs::BombTarget| !t.awaits_bomb(state);
             for d in mask.directions(ActionKind::Bomb) {
-                let opens = crate::bombs::landing(state, d).is_some_and(|at| targets.iter().any(|t| t.in_reach(at)));
+                let opens = crate::bombs::landing(state, d)
+                    .is_some_and(|at| targets.iter().any(|t| t.in_reach(at) && wanted(t)));
                 if !opens {
                     mask.disallow(ActionKind::Bomb, d);
                 }

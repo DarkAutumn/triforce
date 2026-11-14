@@ -1808,3 +1808,50 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   stalled, recordings verify), `tests/test_cli.py` (`eval-chain --act temperature:0.75 --clips off`),
   `tests/test_runner.py` (a `temperature:0.75+relax:4` run flipped mid-room by `clips_live` replays bit for bit),
   `tests/test_play_zelda.py` (the live cell in a `relax` mode), `round23.md` §7 (the 20-run merge check).
+
+## 2026-11-14 — One bomb per wall: no BOMB while a live bomb already reaches the wall (round 23)
+
+- **What:** round 22's BOMB mask for `required` families (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`)
+  also leaves out a target one of Link's bombs already lies in reach of (`zelda::bombs::live_bombs`: slots `$10`/`$11`
+  in state `$11` placed, `$12` fuse, `$13` blast or `$14` fading; `BombTarget::awaits_bomb`), until that bomb is gone
+  or the wall is open. A bomb out of reach blocks nothing; `free` families and the 10th damage-free kill are
+  untouched (no limit there).
+- **Why:** the wall test runs once per bomb, when its blast ends (`asm:Bomb_TryOpenWall`; a rock wall opens during
+  the blast, `asm:RockWall_Update`), and the game accepts a second bomb from the first one's blast on, so a second
+  bomb in reach only spends a bomb. stalfos-keese-gel did it at 4:0x21 (1.6-1.8 bombs per visit; r72 problem 2:
+  BOMB N on the island, CLIP N, BOMB S at Y `$57`; from W BOMB at Y `$5D` twice). Dungeon 4 keeps 2 bombs for its two
+  walls.
+- **Evidence:** `crates/zelda/tests/bomb_mask.rs` `one_bomb`, played in 0:0x2c, 0:0x67, 3:0x4c, 4:0x11 and 4:0x21
+  from W and from S: after the first bomb the mask offers, no BOMB in any direction until the bomb is gone, and the
+  target is then open (at a wall the game itself would have taken a second bomb in the blast); a live bomb out of
+  reach leaves the good BOMB offered and it opens the wall; a bomb gone unexploded frees the target. Without the rule
+  the test fails at the three dungeon walls in the blast (step 7, slot `$13`). Evaluation (round 22 models, 100
+  episodes per state, seed 0, eval-batch, the models' act modes): stalfos-keese-gel (sample) 4:0x21 from S 1.68-1.81
+  → 1.18-1.27 bombs per episode, from W 1.73-1.80 → 1.17-1.27, success 99.7% both, 10th-kill tries 0.26-0.28 per
+  episode (they keep their bomb); argmax after 1.06-1.24. trap-room (argmax) 3:0x4c 1.04-1.08 → 1.02-1.06, 4:0x11
+  1.08-1.12 both (its extra bombs are 10th-kill bombs). The rock walls can't take a second bomb in time (the game
+  refuses one in the fuse, and the rock opens as the blast starts).
+
+## 2026-11-14 — 0x5b's last pass: fight first whatever Link holds (round 23)
+
+- **What:** `d2first` step 100 (3:0x5b W → E) drops `treasure: {if_bombs_below: 6}`: the objective kills the three
+  Darknuts, takes their bombs and then leaves through the E bomb wall, whatever Link holds. Lee's Nov 9 plan took the
+  bombs only below 4 (round 22: below 6, the reserve). `TreasureRule::IfBombsBelow` stays in the route language; no
+  step uses it.
+- **Why** (r72 problem 1: 145 of 404 full-route visits died there): the rule is read live, so at 6 bombs the
+  objective was the wall, and the first bomb Link placed (at the wall or a Darknut; darknut bombs `free` in
+  `requires_bombs` 0x5b) left 5 and turned it into the fight. From the D3 segment's replays (r72, 851 last passes):
+  below 6 bombs Link cleared the room first in 577 of 603 openings (2.94 kills at the opening), 12% died, survivors
+  lost 0.43 hearts; at 6 or more he opened the wall at 0.34 kills, mostly with 4-5 bombs left, stayed 647 frames
+  more (against 222) fighting beside the open wall, 41% died (26 of them after the opening), survivors lost 1.62
+  hearts. Link reached the room with the same health either way (2.75 / 2.99 hearts).
+- **Evidence** (round 22 promoted team, the models' act modes, clips on, the same seeds before and after,
+  `target/r23prep/chains/`): D3 segment `--from 3_7cs_0 --stop-at 0:0x74`, 1000 runs: 0x5b last-pass deaths 149 →
+  93 of 851 (at 6+ bombs 70 → 16 of 170; below 6 79 → 77), survivors' hearts lost 0.60 → 0.42, frames 1123 → 1080,
+  out of Dungeon 3 50.6% → 54.7% (61 runs gained, 20 lost). Full route `--stop-at 4:0x71`, 1000 runs: 0x5b deaths
+  145 → 59 of 404, out of Dungeon 3 19.5% → 27.5% (89 gained, 9 lost); Manhandla 64/259 → 69/345 visits. From
+  `3_5bw_0` with N bombs and H hearts set (500 runs each, to 0:0x74; deaths in 0x5b, arrivals): 6 bombs 3 hearts
+  27.0% → 5.0%, 42.6% → 69.0%; 8 bombs 3 hearts 5.2% → 5.2%, 60.2% → 68.6% (Link no longer leaves at once: 0.84 →
+  0.22 hearts lost, Manhandla deaths 157 → 120); 6 bombs 6 hearts 91.2% → 97.4%; 8 bombs 6 hearts 96.8% → 97.0%; 3
+  bombs (the rule unchanged) 96.0% / 96.2% and 73.2% / 73.0%. No retraining: darknut's 3_5bw resets now train the
+  fight at every bomb count, which a retrain would sharpen.

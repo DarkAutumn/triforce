@@ -147,8 +147,10 @@ d2first:
   - {level: 0, room: '0x74', specialist: ow-tektite, entry: W, exit: cave}
 # Dungeon 3 (Lee, Nov 9; round 22, Nov 13; docs/routes/d3.md): W N N W W N S S (stairs: the raft) N E E, bomb 0x5b's
 # E wall, N, bomb 0x4c's E wall, N (0x4b and its key door are off the route since round 22).
-# Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit (W to E) and only at 5 bombs
-# or fewer; 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to the stairs.
+# Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit (W to E), whatever Link holds
+# (round 23: `if_bombs_below: 6` turned the walk to the wall into a fight beside the opened wall whenever a bomb spent
+# at 6 left 5; docs/decisions.md 2026-11-14); 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to
+# the stairs.
 # Bomb reserve 6 (round 22): one for each of the two bomb walls (3:0x5b E, 3:0x4c E) and a spare for each, two for
 # Manhandla (docs/decisions.md 2026-11-13).
 - {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 6}
@@ -164,7 +166,7 @@ d2first:
 - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
 - {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
 - {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
-- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E, treasure: {if_bombs_below: 6}}
+- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E}
 - {level: 3, room: '0x5c', specialist: darknut, entry: W, exit: N}
 - {level: 3, room: '0x4c', specialist: trap-room, entry: S, exit: E}
 - {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N}

@@ -251,3 +251,29 @@ trained round 22's new rooms (0x67 and its cave, the stretches, 3:0x5c, 4:0x01/0
 <!-- r23: on the round 22 team -->
 
 Not measured yet: the commands of §6, after the round 22 retrain.
+
+## 9. Two round 22 problems fixed before the rerun (Nov 14)
+
+Both on the round 22 promoted team (`r72-*` and the kept `r71-*`), each model in its own act mode, clips on, in the
+code after `git merge main` (`13c1636`); details and every number in `docs/decisions.md` 2026-11-14.
+
+- **One bomb per wall** (r72 problem 2): the `required` families' BOMB mask also leaves out a wall a live bomb of
+  Link's already reaches (fuse, blast or fading). Eval-batch, 100 episodes per state of the affected rooms, seed 0:
+  stalfos-keese-gel 4:0x21 1.77 → 1.23 bombs per episode (sample; 0.28 of them 10th-kill bombs), success 99.7%
+  before and after, hearts -0.14 both; trap-room 3:0x4c / 4:0x11 1.08 → 1.07 (argmax, 100% both). Played in the game
+  in every room the mask covers (`crates/zelda/tests/bomb_mask.rs` `one_bomb`).
+- **0x5b's last pass fights first** (r72 problem 1): `if_bombs_below: 6`, read live, became a fight beside the
+  opened wall once a bomb spent at 6 left 5. Route step 100 now always takes the treasure. Same seeds before and
+  after:
+
+| measure | before | after |
+|---|---:|---:|
+| D3 segment (1000 runs): 0x5b W → E deaths | 149 / 851 | 93 / 851 |
+| … at 6+ bombs on entry (replays) | 70 / 170 | 16 / 170 |
+| … survivors' hearts lost, frames | 0.60, 1123 | 0.42, 1080 |
+| D3 segment: out of Dungeon 3 | 50.6% | 54.7% |
+| full route (1000 runs): 0x5b deaths | 145 / 404 | 59 / 404 |
+| full route: out of Dungeon 3 (at 4:0x71) | 19.5% | 27.5% |
+| `3_5bw_0` at 6 bombs, 3 hearts (500 runs): 0x5b deaths, out of D3 | 27.0%, 42.6% | 5.0%, 69.0% |
+| `3_5bw_0` at 8 bombs, 3 hearts: 0x5b deaths, out of D3 | 5.2%, 60.2% | 5.2%, 68.6% |
+| `3_5bw_0` at 3 bombs, 3 hearts (rule unchanged) | 5.8%, 73.2% | 4.8%, 73.0% |

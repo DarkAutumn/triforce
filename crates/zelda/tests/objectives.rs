@@ -707,13 +707,14 @@ fn d2_goriya_room_is_cleared_before_leaving() {
     assert_eq!(objective.next_rooms, [loc(2, 0x4e)].into_iter().collect());
 }
 
-/// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11; round 22: take at 5 bombs or fewer) and bomb reserve.
-/// 0x69 from N (`treasure: skip`) heads for the stairs down to the raft cellar past its Darknuts, where the default
-/// rule (off the route) fights them for the bombs they guard; 0x5b from S (`skip`) leaves W at once; 0x5b from W
-/// (`if_bombs_below: 6`) fights for its bombs and takes them only while Link holds 5 or fewer, else leaves E through
-/// its bomb wall (round 22).  The reserve is 6 from the dungeon's entrance on (routes.yaml `bomb_reserve`).
+/// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11; round 23: 0x5b's last visit always takes) and bomb
+/// reserve.  0x69 from N (`treasure: skip`) heads for the stairs down to the raft cellar past its Darknuts, where the
+/// default rule (off the route) fights them for the bombs they guard; 0x5b from S (`skip`) leaves W at once; 0x5b from
+/// W (the default, take) fights for its bombs and takes them whatever Link holds, then leaves E through its bomb wall
+/// (round 22's `if_bombs_below: 6` flipped to the fight when a bomb spent at 6 left 5, with the wall open and the
+/// Darknuts alive: decisions 2026-11-14).  The reserve is 6 from the dungeon's entrance on (`bomb_reserve`).
 #[test]
-fn d3_treasure_rules_skip_and_take_at_five_bombs_or_fewer() {
+fn d3_treasure_rules_skip_and_take_on_the_last_pass() {
     let Some(images) = images(&["3_69n_0", "3_5bs_0", "3_5bw_0"]) else {
         return;
     };
@@ -734,30 +735,24 @@ fn d3_treasure_rules_skip_and_take_at_five_bombs_or_fewer() {
     assert_eq!(objective.kind, ObjectiveKind::Move);
     assert_eq!(objective.next_rooms, [loc(3, 0x5a)].into_iter().collect());
 
-    for (bombs, kind) in [
-        (0, ObjectiveKind::Fight),
-        (5, ObjectiveKind::Fight),
-        (6, ObjectiveKind::Move),
-        (8, ObjectiveKind::Move),
-    ] {
+    for bombs in [0, 5, 6, 8] {
         let mut ram = images[2].clone();
         set(&mut ram, Var::Bombs, bombs);
         let state = view(&map, &ram, 0);
         assert!(!state.enemies.is_empty());
         let objective = d3_step(&map, &state, 0x5b, "W").objectives(None, &state);
-        assert_eq!(objective.kind, kind, "{bombs} bombs");
-        let next = if kind == ObjectiveKind::Move { vec![loc(3, 0x5c)] } else { vec![] };
-        assert_eq!(objective.next_rooms, next.into_iter().collect(), "{bombs} bombs");
+        assert_eq!(objective.kind, ObjectiveKind::Fight, "{bombs} bombs");
+        assert!(objective.next_rooms.is_empty(), "{bombs} bombs");
     }
-    // The Darknuts dead and their bombs on the floor: taken at 5 bombs or fewer, left from 6 on.
-    for (bombs, kind) in [(5, ObjectiveKind::Treasure), (6, ObjectiveKind::Move)] {
+    // The Darknuts dead and their bombs on the floor: taken whatever Link holds.
+    for bombs in [5, 6, 8] {
         let mut ram = images[2].clone();
         clear_objects(&mut ram);
         show_treasure(&mut ram, 120, 141);
         set(&mut ram, Var::Bombs, bombs);
         let state = view(&map, &ram, 0);
         let objective = d3_step(&map, &state, 0x5b, "W").objectives(None, &state);
-        assert_eq!(objective.kind, kind, "{bombs} bombs, treasure showing");
+        assert_eq!(objective.kind, ObjectiveKind::Treasure, "{bombs} bombs, treasure showing");
     }
 }
 
