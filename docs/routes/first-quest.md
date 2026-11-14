@@ -181,10 +181,9 @@ Nothing of this route can be played by the agent yet. What it needs beyond rooms
 
 ## Open questions for Lee
 
-The Nov 13 questions are answered above. Left:
+The Nov 13 questions are answered above; the wand and the book stay out too (Lee, Nov 14). Left:
 
-1. The wand, the book and the magic key are left out; say if any should come back.
-2. Without drops the route cheats seven bombs (the table above); 5:0x56's Dodongos (+4) is the one source named
+1. Without drops the route cheats seven bombs (the table above); 5:0x56's Dodongos (+4) is the one source named
    for later.
 
 ## Tools made for this

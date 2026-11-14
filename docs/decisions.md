@@ -1811,4 +1811,4 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   The draft holds them as `stretch:` blocks like `d2first` (`triforce/draft_routes.py`, `exit: maze` for a maze's
   sequence); `zelda-map.py`'s Clips selector shows either way whenever the route has a stretch.
 - **The overworld ladder clip and the rest of the movement** are the next phase; this one ends with the draft.
-- **No blue ring:** a different route.
+- **No blue ring:** a different route. No wand, no book.
