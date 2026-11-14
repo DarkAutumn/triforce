@@ -149,14 +149,14 @@ def _round(value):
 
 def state_step(plan: list[dict], state: str) -> int:
     """The route step a chain started from ``state`` begins at (``crates/env/src/chain.rs`` ``start_step``): the
-    first step whose ``<level>_<room><side>_`` prefixes the label (side: ``cave`` in a cave, ``c`` out of one, else
-    the entry); ``start`` is step 0.  Raises RoomStatsError for a state no step has."""
+    first step whose room, entry and visit the state's name spells (``_native.state_name``: a later visit's
+    ``_v<visit>``); ``start`` is step 0.  Raises RoomStatsError for a state no step has."""
+    from ._native import state_name  # pylint: disable=import-outside-toplevel
     if state == 'start':
         return 0
-    label = state.rsplit('/', 1)[-1]
+    named = state_name(state)
     for step in plan:
-        side = 'cave' if step['in_cave'] else 'c' if step['entry'] == 'cave' else step['entry'].lower()
-        if label.startswith(f"{step['level']}_{step['room']:02x}{side}_"):
+        if named == (step['level'], step['room'], step['in_cave'], step['entry'], step.get('visit', 1)):
             return step['index']
     raise RoomStatsError(f"no route step starts at {state}")
 

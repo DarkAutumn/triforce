@@ -28,7 +28,7 @@ use crate::rewards::{SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
     StartStatePool, StartWeights, StateStore, ram_randomization_values,
-    state_entry, state_label, verify_start_room,
+    state_entry, state_label, state_visit, verify_start_room,
 };
 use indexmap::IndexMap;
 use rand::SeedableRng;
@@ -629,11 +629,13 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 state = self.session.apply_ram(&values).clone();
             }
         }
-        let entry = state_entry(entry_name.as_deref().unwrap_or(&name));
+        let entry_name = entry_name.as_deref().unwrap_or(&name);
+        let (entry, visit) = (state_entry(entry_name), state_visit(entry_name));
         // A start the route enters on one way of a stretch only fixes the switch (4:0x21 from S: the clip way); else
         // `set_clips_allowed`'s, else a draw from the env's generator (`clips: {off_share}`, round 22). A curriculum
         // start keeps it on: its track was explored with the switch on (`explore::explore_config`).
-        let fixed = start_clips(&self.data.map, state.full_location(), entry, self.config.route.as_deref(), &state);
+        let route = self.config.route.as_deref();
+        let fixed = start_clips(&self.data.map, state.full_location(), entry, visit, route, &state);
         self.clips_fixed = fixed;
         self.clips_allowed = match fixed.or(self.clips_plan) {
             Some(on) => on,
@@ -644,8 +646,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &self.data.map,
             state.full_location(),
             entry,
+            visit,
             &mut self.rng,
-            self.config.route.as_deref(),
+            route,
             &state,
             self.clips_allowed,
         );

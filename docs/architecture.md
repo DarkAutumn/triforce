@@ -965,8 +965,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   a step leaving through one targets its `dock:` tile (`asm:Dock_Update` sails from there), and path searches use a
   raft crossing only while Link holds the raft.
   An overworld cave hidden behind a rock wall (game.yaml `bomb_secret`) is entered through that wall's tiles.
-  Training episodes take their step from the start state's name and Link's progress
-  (`zelda::objectives::start_route`, `env::start_states::state_entry`).
+  Training episodes take their step from the start state's name (its entry and visit, "Entry states" below) and
+  Link's progress (`zelda::objectives::start_route`, `env::start_states::StateName`).
 - **Underworld item cellars** (mode 9; Dungeon 1's bow cellar 0x7f under 0x22, Dungeon 3's raft cellar 0x0f under
   0x69) are sub-rooms like caves:
   `GameView::full_location` sets `in_cave` in a cave (mode $B) or a cellar (`in_cellar`, mode 9), whose
@@ -1121,9 +1121,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (a room entry through a correct exit where the acting specialist changes; not same-family entries, retreats,
   wrong exits or the run's first room), saves the entry's pre-entry snapshot (the same kind of state
   `entry_states` writes: the frame before the room entry, so a load replays the entry and
-  redraws the spawn) as `DIR/<new specialist>/<level>_<room><side>_h<seed>_<n>.state` (`harvest_filename`: `side`
-  is the routes.yaml entry, `zelda::objectives::route_entry`, spelled like the seed states: n/s/e/w, `s` down a
-  level's stairs, `c` out of a cave, cellar or level, `cave` a cave or cellar interior; `n` = the room's index in the
+  redraws the spawn) as `DIR/<new specialist>/<level>_<room><side>[_v<visit>]_h<seed>_<n>.state`
+  (`harvest_filename`: `side` is the routes.yaml entry, `zelda::objectives::route_entry`, spelled like the seed
+  states: n/s/e/w, `s` down a level's stairs, `c` out of a cave, cellar or level, `cave` a cave or cellar interior;
+  `_v<visit>` the visit of the route step Link plays there, "Entry states" below; `n` = the room's index in the
   run; a Wallmaster drag is no entry and isn't saved). Names depend on the run seed and room index only, so the
   files are the same for any `--parallel`/`--threads`; a rerun of a seed overwrites its files. `DIR` defaults to
   `paths.HARVESTED_DIR` (`<states dir>/harvested`), which is where every specialist's `harvested_dir`
@@ -1366,6 +1367,38 @@ cost. Discovery and exact replay both enforce these requirements before returnin
 This preserves intended off-route traversal without accepting premature key-room exits or depleted inventory.
 `step_config` turns bombs on only in `requires_bombs` rooms and masks them everywhere else. Route changes still require rebuilding and auditing
 downstream inventories and refreshing affected curriculum snapshots; old filenames alone do not prove progress.
+
+**State names** (round 24). A start state is `<level>_<room><side>[_v<visit>]_<chain>.state`: `room` two lower-case
+hex digits, `side` the routes.yaml entry (`n`/`s`/`e`/`w`; `c` out of a cave, cellar or dungeon stairs; `cave` a cave
+or cellar interior, entered from S), `chain` 0-2. `visit` is the route's visit to that room from that side
+(`zelda::game_map::route_visits`, `GameMap.visits`, the `visit` of `_native.route_steps()`): 1 + the earlier steps
+entering the room from that side, not counting the other way of the step's own stretch (its `parts` step is the same
+visit on the other way: `0_55n` for both) nor a step right after one entering the room the same way (another target
+of the same visit: clips-gauntlet). The first visit has no `_v` field, so every name from before round 24 is its
+first visit and stays valid; a later one is `_v2`, `_v3`, ... without leading zeros (`0_1be_v2_0`, the leg to
+Dungeon 5 entering 0x1b from E again; `5_07cave_v2_1`, Dungeon 5's tunnel cellar from the 0x06 side). The number
+changes only when a step entering the same room from the same side is added earlier on the route, never with the
+step numbers. A family's room glob `<level>_<room>*_[0-9]` takes every visit; trajectory directories, `by_state`
+keys and the GUI's labels carry the name as it is. One implementation per language reads them:
+`env::start_states::StateName` (Rust; `_native.state_name(name)` gives Python its `(level, room, in_cave, entry,
+visit)`, used by `runner` `--from` and `room_stats`), `entry_states.parse_state_name` (the audit's NAME rule, chain
+0-2) and `zelda-map.py`'s picture choice; `entry_states.state_stem` and `StateName::stem` make them.
+
+A state finds its step by its name: the step of the route (of every route without one) entering its room from its
+side with its visit (any visit when the route has none such), then with Link's progress (`StepProgress`), then on the
+clips switch's way (`objectives::start_route`, `start_clips`; the chain's `--from`, `chain.rs` `start_step`,
+`runner._start_step`, `room_stats.state_step`). In play a room entry picks its step by entry and progress, the
+first at or after the current step (`route_step_at`), so a later visit whose progress equals an earlier one's (the
+tunnel cellar before the recorder is progress) still follows the route. The audit takes a manifest's `route_step`
+first, else the name's step (`RouteIndex.by_name`). `build` names each step's file by its visit; `path` walks on from
+its source's step (its manifest's) and names each room by the next step entering it that way after the previous one
+(`route_step_index(..., after=)`). A cellar's entry is always `S` (`route_entry`); the two visits of a tunnel cellar
+are told apart by the visit, which is which ladder Link came down on that route.
+
+**Hearts along a way.** HEARTS expects 3 + one per heart-container room before the step **on the way the step is
+on** (`RouteIndex.hearts`): a stretch lists its clip way before its plain way, so a plain-way step counts the shared
+steps and the plain way's (the leg's coast-heart has 0x5f on both ways: 8 hearts up to it on either way, 9 after),
+a clip-way or shared step the shared steps and the clip way's.
 
 ## Draft routes, the dungeon probe and a level's rooms from the ROM (`draft_routes.py`, `probe.py`, `scripts/level_rooms.py`)
 

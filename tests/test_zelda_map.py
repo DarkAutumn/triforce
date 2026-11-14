@@ -75,24 +75,28 @@ def models(tmp_path):
 
 
 def test_state_names_and_picture_choice(tmp_path):
-    assert zelda_map.parse_state_name('0_4ce_1') == (0, 0x4c, 'e', 1)
-    assert zelda_map.parse_state_name('0_77cave_0') == (0, 0x77, 'cave', 0)
-    assert zelda_map.parse_state_name('0_37c_2') == (0, 0x37, 'c', 2)
+    assert zelda_map.parse_state_name('0_4ce_1') == (0, 0x4c, 'e', 1, 1)
+    assert zelda_map.parse_state_name('0_77cave_0') == (0, 0x77, 'cave', 0, 1)
+    assert zelda_map.parse_state_name('0_37c_2') == (0, 0x37, 'c', 2, 1)
+    assert zelda_map.parse_state_name('0_37e_v2_0') == (0, 0x37, 'e', 0, 2)     # the route's second entry from E
+    assert zelda_map.parse_state_name('0_37e_v1_0') is None
     assert zelda_map.parse_state_name('start') is None
-    for name in ('0_37c_0', '0_37e_0', '0_37e_1', '0_77cave_0', 'start'):
+    for name in ('0_37c_0', '0_37e_0', '0_37e_v2_0', '0_37e_1', '0_77cave_0', 'start'):
         (tmp_path / f'{name}.state').write_bytes(b'')
     states = zelda_map.scan_states(tmp_path)
-    assert states == {(0, 0x37, False): ['0_37c_0', '0_37e_0', '0_37e_1'], (0, 0x77, True): ['0_77cave_0']}
+    assert states == {(0, 0x37, False): ['0_37c_0', '0_37e_0', '0_37e_1', '0_37e_v2_0'],
+                      (0, 0x77, True): ['0_77cave_0']}
     assert zelda_map.pick_state(states[(0, 0x37, False)]) == '0_37e_0'
+    assert zelda_map.pick_state(['0_37e_v2_0', '0_37e_0']) == '0_37e_0'
     # A subfolder's states (the Dungeon 4 scouting states) are found too; the folder's own picture a shared room.
     (tmp_path / 'd4').mkdir()
     for name in ('0_37e_0', '4_32w_0', 'idle_12'):
         (tmp_path / 'd4' / f'{name}.state').write_bytes(b'')
     states = zelda_map.scan_states(tmp_path)
-    assert states[(0, 0x37, False)] == ['0_37c_0', '0_37e_0', '0_37e_1', 'd4/0_37e_0']
+    assert states[(0, 0x37, False)] == ['0_37c_0', '0_37e_0', '0_37e_1', '0_37e_v2_0', 'd4/0_37e_0']
     assert states[(4, 0x32, False)] == ['d4/4_32w_0'] and len(states) == 3
     assert zelda_map.pick_state(states[(0, 0x37, False)]) == '0_37e_0'
-    assert zelda_map.parse_state_name('d4/4_60cave_2') == (4, 0x60, 'cave', 2)
+    assert zelda_map.parse_state_name('d4/4_60cave_2') == (4, 0x60, 'cave', 2, 1)
 
 
 def test_load_evals_merges_rooms_by_visits(models):

@@ -14,7 +14,6 @@ import difflib
 import hashlib
 import json
 import os
-import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -143,21 +142,13 @@ def _start_state_path(name: str, states_dir=None) -> Path:
     return Path(states_dir or STATES_DIR) / (name if name.endswith('.state') else f'{name}.state')
 
 
-_STATE_NAME = re.compile(r'^(\d+)_([0-9a-f]{2})(n|s|e|w|c|cave)(?:_h\d+)?_\d+$')
-_STATE_SIDES = {'n': ('N', False), 's': ('S', False), 'e': ('E', False), 'w': ('W', False), 'c': ('cave', False),
-                'cave': ('S', True)}
-
-
 def _start_step(steps: List[dict], label: str) -> int:
-    """The first route step a start state named ``<level>_<room><side>_<chain>`` (or a harvested
-    ``..._h<seed>_<n>``) begins: same room and entry (``start_states::state_entry``); 0 when the name doesn't say."""
-    match = _STATE_NAME.match(label)
-    if match is None:
-        return 0
-    entry, in_cave = _STATE_SIDES[match.group(3)]
-    room = (int(match.group(1)), int(match.group(2), 16), in_cave)
-    return next((s['index'] for s in steps if (s['level'], s['room'], s['in_cave']) == room and s['entry'] == entry),
-                0)
+    """The first route step a start state named ``<level>_<room><side>[_v<visit>]_<chain>`` (or a harvested
+    ``..._h<seed>_<n>``) begins: same room, entry and visit (``_native.state_name``, the env's
+    ``start_states::StateName``); 0 when the name doesn't say."""
+    named = _native.state_name(label)
+    return next((s['index'] for s in steps
+                 if (s['level'], s['room'], s['in_cave'], s['entry'], s['visit']) == named), 0)
 
 
 @dataclass

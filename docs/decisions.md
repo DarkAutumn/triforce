@@ -1962,3 +1962,33 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Proof:** the 24 promoted runs, 20 episodes per state, seed 0, original on 1.4.1.2 vs converted on 1.4.2.0, in
   argmax and `temperature:0.5+relax:16`: every compared pair per-episode identical (outcome, steps, frames, hearts,
   whole records); the table is in the branch's final report (`target/proof/`).
+## 2026-11-14 — State names for later visits; hearts counted along each way (round 24)
+
+- **What:** a route may enter a room from the same side more than once. Each visit has its own start states,
+  `<level>_<room><side>_v<visit>_<chain>` (`_v2`, `_v3`, ...; the first visit keeps the bare name), its own curriculum
+  tracks (the trajectory directory is the state's name) and its own audit rule. The visit is
+  `zelda::game_map::route_visits`: 1 + the earlier steps entering the room from that side, not counting the other way
+  of the step's own stretch (both `parts` steps are one visit, one name) nor a step right after one entering the room
+  the same way (clips-gauntlet's second target of a visit). A state starts the step its name spells: single-room
+  training and evaluation (`start_route`/`start_clips` take the name's visit, then Link's progress), a chain's
+  `--from` (`chain.rs` `start_step`, `runner._start_step`), room statistics (`room_stats.state_step`), harvested
+  handoffs (named for the visit of the step Link plays). `path` names each room by the next step entering it that
+  way after its source's step. The audit's HEARTS rule counts heart-container rooms along the way a step is on: a
+  stretch lists its clip way first, so the plain way's steps no longer count the clip way's heart room (the leg's
+  coast-heart: 0x5f on both ways). Max hearts: 8 after Dungeon 4, 9 after 0x5f, 10 after 0x2f's cave, 11 after
+  Digdogger.
+- **Why:** the leg to Dungeon 5 enters nine `d2first` (room, side) pairs again (`0_59w`, `0_5aw`, `0_5bw`, `0_5cw`,
+  `0_5dw`, `0_2ds`, `0_2ce`, `0_1cs`, `0_1be`) and Dungeon 5's tunnel cellar 0x07 is entered from S twice; the old
+  names wrote both visits to one file and the audit took the first step of a name. A number by visit, not by step,
+  stays the same when steps are added earlier on the route, reads as what it is, and is safe in file names and in
+  the families' room globs (`<level>_<room>*_[0-9]` takes every visit, so no specialist yaml changes). Every
+  existing name is a first visit. A cellar's entry stays `S`: the two tunnel visits differ by visit (which ladder Link
+  came down follows from the route), so no new entry letter.
+- **Evidence:** the audit of the 397 shipped states, text and JSON (route step and expected hearts of every state),
+  is identical before and after; every specialist's start states start the same (route, step) on six seeds each
+  (2382 resets, identical); `crates/env/tests/state_visits.rs` (a test route `revisit` from the D4 triforce:
+  `0_5dw_v2_0` with that visit's progress starts the second visit and its objective leads S to 0x6d, `0_5dw_0` N to
+  0x4d, a plain copy named `_v2` starts the second visit by its name; `--from 0_5dw_v2_0` starts after the first);
+  `game_map` `route_visits_name_each_visit_once` (every route: one name per visit); `start_states`
+  `state_names_round_trip`; `tests/test_entry_states.py` (the audit on `revisit`: 8 hearts up to 0x5f on either
+  way, 9 after the rejoin; `path` names `_v2` files after the D4 triforce).

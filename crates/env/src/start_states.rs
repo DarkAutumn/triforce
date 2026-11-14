@@ -366,45 +366,90 @@ pub fn state_label(name: &str) -> &str {
     base.strip_suffix(".state").unwrap_or(base)
 }
 
-/// The routes.yaml `entry` an entry-state name encodes (`<level>_<room><side>_<chain>`: n/s/e/w, `c` = out of a
-/// cave or dungeon stairs, `cave` = a cave interior, entered from S; harvested chain handoffs
-/// `<level>_<room><side>_h<seed>_<n>` read the same), 'start' for the game start, else None.
+/// The routes.yaml `entry` an entry-state name encodes ([`StateName`]), 'start' for the game start, else None.
 pub fn state_entry(name: &str) -> Option<&'static str> {
-    let label = state_label(name);
-    if label == "start" {
+    if state_label(name) == "start" {
         return Some("start");
     }
-    let (head, chain) = label.rsplit_once('_')?;
-    if chain.is_empty() || !chain.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    let head = match head.rsplit_once('_') {
-        Some((rest, tag))
-            if tag.len() > 1
-                && tag.starts_with('h')
-                && tag.bytes().skip(1).all(|b| b.is_ascii_digit()) =>
-        {
-            rest
+    StateName::parse(name).map(|n| n.entry)
+}
+
+/// The route visit an entry-state name spells ([`StateName`]); None for a name that isn't an entry state's ('start'
+/// included).
+pub fn state_visit(name: &str) -> Option<u32> {
+    StateName::parse(name).map(|n| n.visit)
+}
+
+/// What an entry-state name says (`docs/architecture.md` "Start states"): `<level>_<room><side>[_v<visit>]_<chain>`,
+/// harvested chain handoffs `<level>_<room><side>[_v<visit>]_h<seed>_<n>`. `side` is the routes.yaml entry: n/s/e/w,
+/// `c` = out of a cave or dungeon stairs, `cave` = a cave or cellar interior (entered from S). `visit` is the route's
+/// visit to the room from that side (`zelda::game_map::route_visits`): the first has no `_v` field, a later one is
+/// `_v2`, `_v3`, ... (no leading zeros), so every visit has one name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StateName {
+    pub location: MapLocation,
+    /// The routes.yaml entry: N/S/E/W or `cave`.
+    pub entry: &'static str,
+    pub visit: u32,
+}
+
+impl StateName {
+    /// Reads a state name or path ('…/0_1be_v2_0.state'); None for a name that isn't an entry state's.
+    pub fn parse(name: &str) -> Option<StateName> {
+        let label = state_label(name);
+        let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+        let (head, chain) = label.rsplit_once('_')?;
+        if !digits(chain) {
+            return None;
         }
-        _ => head,
-    };
-    let (level, rest) = head.split_once('_')?;
-    if level.is_empty() || !level.bytes().all(|b| b.is_ascii_digit()) || rest.len() < 3 {
-        return None;
+        let head = match head.rsplit_once('_') {
+            Some((rest, tag)) if tag.strip_prefix('h').is_some_and(digits) => rest,
+            _ => head,
+        };
+        let (head, visit) = match head.rsplit_once('_') {
+            Some((rest, tag)) if tag.starts_with('v') => {
+                let number = &tag[1..];
+                let visit: u32 = if digits(number) && !number.starts_with('0') { number.parse().ok()? } else { 0 };
+                if visit < 2 {
+                    return None;
+                }
+                (rest, visit)
+            }
+            _ => (head, 1),
+        };
+        let (level, rest) = head.split_once('_')?;
+        if !digits(level) || rest.len() < 3 {
+            return None;
+        }
+        let (room, side) = rest.split_at(2);
+        if !room.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return None;
+        }
+        let entry = match side {
+            "cave" => "S",
+            "c" => "cave",
+            "n" => "N",
+            "s" => "S",
+            "e" => "E",
+            "w" => "W",
+            _ => return None,
+        };
+        let location = MapLocation::new(level.parse().ok()?, u8::from_str_radix(room, 16).ok()?, side == "cave");
+        Some(StateName { location, entry, visit })
     }
-    let (room, side) = rest.split_at(2);
-    if !room.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
-        return None;
+
+    /// The name without its chain: `0_1be`, `0_1be_v2`, `5_07cave_v2`.
+    pub fn stem(&self) -> String {
+        let side = if self.location.in_cave {
+            "cave".to_owned()
+        } else if self.entry == "cave" {
+            "c".to_owned()
+        } else {
+            self.entry.to_ascii_lowercase()
+        };
+        let visit = if self.visit > 1 { format!("_v{}", self.visit) } else { String::new() };
+        format!("{}_{:02x}{side}{visit}", self.location.level, self.location.value)
     }
-    Some(match side {
-        "cave" => "S",
-        "c" => "cave",
-        "n" => "N",
-        "s" => "S",
-        "e" => "E",
-        "w" => "W",
-        _ => return None,
-    })
 }
 
 /// Errors if a loaded start state is outside the specialist's rooms.
@@ -493,21 +538,15 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
     values
 }
 
-/// A chain handoff's harvested start-state file name, `<level>_<room><side>_h<seed>_<n>.state` (`n`: the run's room
-/// index; `side` the routes.yaml entry (`zelda::objectives::route_entry`) named as the seed states name it: n/s/e/w,
-/// `c` out of a cave, cellar or level, `cave` a cave or cellar interior), so [`state_entry`] reads back the entry.
-/// Keyed by run seed and room index alone, so a chain writes the same files on any thread count.  None for a jump
-/// that isn't one room's entry (a Wallmaster's drag).
-pub fn harvest_filename(prev: MapLocation, curr: MapLocation, seed: u64, n: usize) -> Option<String> {
+/// A chain handoff's harvested start-state file name, `<stem>_h<seed>_<n>.state` (`n`: the run's room index; the stem
+/// [`StateName::stem`] of the routes.yaml entry (`zelda::objectives::route_entry`) and `visit`, the route visit of the
+/// step Link plays there, 1 off the route), so [`StateName::parse`] reads back the entry and the visit.  Keyed by run
+/// seed and room index alone, so a chain writes the same files on any thread count.  None for a jump that isn't one
+/// room's entry (a Wallmaster's drag).
+pub fn harvest_filename(prev: MapLocation, curr: MapLocation, visit: u32, seed: u64, n: usize) -> Option<String> {
     let entry = route_entry(prev, curr)?;
-    let side = if curr.in_cave {
-        "cave".to_owned()
-    } else if entry == "cave" {
-        "c".to_owned()
-    } else {
-        entry.to_ascii_lowercase()
-    };
-    Some(format!("{}_{:02x}{side}_h{seed}_{n}.state", curr.level, curr.value))
+    let stem = StateName { location: curr, entry, visit }.stem();
+    Some(format!("{stem}_h{seed}_{n}.state"))
 }
 
 #[cfg(test)]
@@ -762,23 +801,57 @@ mod tests {
         assert_eq!(state_entry("1_7fcave_h7_12"), Some("S"));
         assert_eq!(state_entry("0_37c_h0_0"), Some("cave"));
         assert_eq!(state_entry("1_73s_hx_3"), None);
+        // A later visit (`_v<N>`, N >= 2, no leading zeros) reads the same entry; the first visit has no field.
+        assert_eq!(state_entry("0_1be_v2_0"), Some("E"));
+        assert_eq!(state_entry("/s/5_07cave_v2_1.state"), Some("S"));
+        assert_eq!(state_entry("0_1be_v2_h42_3"), Some("E"));
+        for bad in ["0_1be_v1_0", "0_1be_v02_0", "0_1be_v_0", "0_1be_vx_0", "0_1be_h3_v2_0", "start"] {
+            assert_eq!(state_visit(bad), None, "{bad}");
+        }
+        assert_eq!(state_visit("0_1be_0"), Some(1));
+        assert_eq!(state_visit("0_1be_v2_0"), Some(2));
+        assert_eq!(state_visit("0_1be_v12_h7_0"), Some(12));
+    }
+
+    /// Make, parse, glob: a name reads back its room, entry and visit, its stem makes it again, and a family's room
+    /// glob (`<level>_<room>*_[0-9]`) takes every visit.
+    #[test]
+    fn state_names_round_trip() {
+        let m = MapLocation::new;
+        for (name, location, entry, visit) in [
+            ("0_1be_0", m(0, 0x1b, false), "E", 1),
+            ("0_1be_v2_2", m(0, 0x1b, false), "E", 2),
+            ("5_07cave_1", m(5, 0x07, true), "S", 1),
+            ("5_07cave_v2_0", m(5, 0x07, true), "S", 2),
+            ("0_3cc_v3_1", m(0, 0x3c, false), "cave", 3),
+            ("4_31e_0", m(4, 0x31, false), "E", 1),
+        ] {
+            let parsed = StateName::parse(name).unwrap_or_else(|| panic!("{name}"));
+            assert_eq!(parsed, StateName { location, entry, visit }, "{name}");
+            assert_eq!(format!("{}_{}", parsed.stem(), &name[name.len() - 1..]), name);
+            let pattern = format!("{}_{:02x}*_[0-9].state", location.level, location.value);
+            assert!(crate::config::fnmatch(pattern.as_bytes(), format!("{name}.state").as_bytes()), "{pattern} {name}");
+        }
     }
 
     #[test]
     fn harvest_names_read_back_the_route_entry() {
         let m = MapLocation::new;
-        for (prev, curr, name) in [
-            (m(1, 0x74, false), m(1, 0x73, false), "1_73e_h42_3.state"),
-            (m(0, 0x3c, false), m(2, 0x7d, false), "2_7ds_h42_3.state"), // down the level's stairs
-            (m(2, 0x0d, false), m(0, 0x3c, false), "0_3cc_h42_3.state"), // the triforce's warp out
-            (m(1, 0x22, false), m(1, 0x7f, true), "1_7fcave_h42_3.state"), // down into the cellar
-            (m(1, 0x7f, true), m(1, 0x22, false), "1_22c_h42_3.state"),   // back up
+        for (prev, curr, visit, name) in [
+            (m(1, 0x74, false), m(1, 0x73, false), 1, "1_73e_h42_3.state"),
+            (m(0, 0x3c, false), m(2, 0x7d, false), 1, "2_7ds_h42_3.state"), // down the level's stairs
+            (m(2, 0x0d, false), m(0, 0x3c, false), 1, "0_3cc_h42_3.state"), // the triforce's warp out
+            (m(1, 0x22, false), m(1, 0x7f, true), 1, "1_7fcave_h42_3.state"), // down into the cellar
+            (m(1, 0x7f, true), m(1, 0x22, false), 1, "1_22c_h42_3.state"),   // back up
+            (m(0, 0x1c, false), m(0, 0x1b, false), 2, "0_1be_v2_h42_3.state"), // a later visit
+            (m(5, 0x06, false), m(5, 0x07, true), 2, "5_07cave_v2_h42_3.state"),
         ] {
-            let harvested = harvest_filename(prev, curr, 42, 3).unwrap();
+            let harvested = harvest_filename(prev, curr, visit, 42, 3).unwrap();
             assert_eq!(harvested, name);
             assert_eq!(state_entry(&harvested), route_entry(prev, curr), "{name}");
+            assert_eq!(state_visit(&harvested), Some(visit), "{name}");
         }
-        assert_eq!(harvest_filename(m(1, 0x45, false), m(1, 0x73, false), 0, 1), None);
+        assert_eq!(harvest_filename(m(1, 0x45, false), m(1, 0x73, false), 1, 0, 1), None);
     }
 
     fn hearts(values: &[(Var, u8)]) -> f64 {

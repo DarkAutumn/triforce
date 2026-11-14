@@ -51,6 +51,22 @@ def test_route_checks_the_start_state_and_the_stop_room(tmp_path):
                       states_dir=REPO_STATES_DIR).terminal == MapLocation(1, 0x73, False)
 
 
+def test_a_start_state_names_its_visit():
+    """A later visit's ``_v<visit>`` picks that visit's step (``--from``, room-stats), the bare name the first's;
+    harvested names alike, other names step 0."""
+    from triforce import room_stats                    # pylint: disable=import-outside-toplevel
+    from triforce.runner import _start_step            # pylint: disable=import-outside-toplevel
+    from .test_entry_states import _revisit_steps      # pylint: disable=import-outside-toplevel
+    steps = _revisit_steps()
+    first = len(_native.route_steps('d2first'))
+    early = next(s['index'] for s in steps if (s['level'], s['room'], s['entry']) == (0, 0x5d, 'W'))
+    for label, step in (('0_5dw_0', early), ('0_5dw_v2_1', first + 1), ('0_5dw_v2_h7_3', first + 1),
+                        ('1_7fcave_v2_0', first + 12), ('0_6fs_v2_2', first + 11), ('0_5dw_v3_0', 0), ('x', 0)):
+        assert _start_step(steps, label) == step, label
+        if step:
+            assert room_stats.state_step(steps, f'd5/{label}') == step, label
+
+
 def test_checkpoint_overrides_must_name_a_specialist_and_a_checkpoint(models_dir, tmp_path):
     checkpoint = registry.promoted_checkpoint('ow-start', models_dir)
     with pytest.raises(RunnerError, match=r"unknown specialist\(s\) \['no-such'\]"):

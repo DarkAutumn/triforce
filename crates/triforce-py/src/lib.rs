@@ -24,7 +24,9 @@ use pyo3::prelude::*;
 /// The route's room visits as dicts (`index`, `level`, `room`, `in_cave`, `entry`, `exit`, `specialist`,
 /// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip`, `clear` or `if_bombs_below: N`,
 /// `bomb_reserve`: the step's routes.yaml `bomb_reserve` or None, `way`: 'clips' or 'plain' for a step of one way of
-/// a `stretch:` (None: both ways'), `stretch`: its name). Both ways' steps are listed, numbered in file order.
+/// a `stretch:` (None: both ways'), `stretch`: its name, `visit`: the route's visit to the room from that side,
+/// `zelda::game_map::route_visits`, which a later visit's state names spell). Both ways' steps are listed, numbered
+/// in file order.
 #[pyfunction]
 #[pyo3(signature = (route=zelda::game_map::DEFAULT_ROUTE))]
 fn route_steps<'py>(
@@ -38,10 +40,11 @@ fn route_steps<'py>(
             "Unknown route '{route}' (routes.yaml has {known:?})"
         ))
     })?;
+    let visits = &data.map.visits[route];
     steps
         .iter()
         .enumerate()
-        .map(|(i, s)| step_dict(py, i, s))
+        .map(|(i, s)| step_dict(py, i, s, visits[i]))
         .collect()
 }
 
@@ -49,6 +52,7 @@ fn step_dict<'py>(
     py: Python<'py>,
     index: usize,
     s: &zelda::game_map::RouteStep,
+    visit: u32,
 ) -> PyResult<Bound<'py, pyo3::types::PyDict>> {
     let d = pyo3::types::PyDict::new(py);
     d.set_item("index", index)?;
@@ -68,6 +72,7 @@ fn step_dict<'py>(
     d.set_item("bomb_reserve", s.bomb_reserve)?;
     d.set_item("way", s.way.map(|w| w.name()))?;
     d.set_item("stretch", s.stretch.as_deref())?;
+    d.set_item("visit", visit)?;
     Ok(d)
 }
 
@@ -94,21 +99,30 @@ fn route_stretches<'py>(py: Python<'py>, route: &str) -> PyResult<Vec<Bound<'py,
 }
 
 /// routes.yaml `alternates` as dicts: `replaces` [(level, room, in_cave)] and `with` [step dicts, `index`
-/// counting within the alternate].
+/// counting within the alternate, `visit` as if it stood at the default route's step of its replaced room].
 #[pyfunction]
 fn route_alternates<'py>(py: Python<'py>) -> PyResult<Vec<Bound<'py, pyo3::types::PyDict>>> {
     let data = context::data(py, None)?;
+    let steps = &data.map.routes[zelda::game_map::DEFAULT_ROUTE];
+    let stretches = &data.map.stretches[zelda::game_map::DEFAULT_ROUTE];
     data.map
         .alternates
         .iter()
         .map(|a| {
             let d = pyo3::types::PyDict::new(py);
             d.set_item("replaces", envpool::rooms(&a.replaces))?;
+            let at = a.replaces.first().and_then(|r| {
+                steps.iter().position(|s| (s.level, s.room) == (r.level, r.value))
+            });
             let with = a
                 .with
                 .iter()
                 .enumerate()
-                .map(|(i, s)| step_dict(py, i, s))
+                .map(|(i, s)| {
+                    let at = at.map(|at| (at + i).min(steps.len()));
+                    let visit = at.map_or(1, |at| zelda::game_map::visit_at(steps, stretches, at, s));
+                    step_dict(py, i, s, visit)
+                })
                 .collect::<PyResult<Vec<_>>>()?;
             d.set_item("with", with)?;
             Ok(d)
@@ -195,6 +209,15 @@ fn specialist_for(py: Python<'_>, location: &Bound<'_, PyAny>) -> PyResult<Optio
         .map(str::to_owned))
 }
 
+/// What a start state's name or path says (`env::start_states::StateName`, docs/architecture.md "Start states"):
+/// `(level, room, in_cave, entry, visit)` of `<level>_<room><side>[_v<visit>]_<chain>` (harvested
+/// `..._h<seed>_<n>` alike; `entry` the routes.yaml entry N/S/E/W or 'cave', `visit` 1 for the bare name), else None.
+#[pyfunction]
+fn state_name(name: &str) -> Option<(u8, u8, bool, &'static str, u32)> {
+    env::start_states::StateName::parse(name)
+        .map(|n| (n.location.level, n.location.value, n.location.in_cave, n.entry, n.visit))
+}
+
 /// The repo root, ROM path and default states directory this module uses.
 #[pyfunction]
 fn paths(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
@@ -214,7 +237,9 @@ mod _native {
     use pyo3::types::PyDict;
 
     #[pymodule_export]
-    use super::{families, game_rooms, paths, route_alternates, route_steps, route_stretches, routes, specialist_for};
+    use super::{
+        families, game_rooms, paths, route_alternates, route_steps, route_stretches, routes, specialist_for, state_name,
+    };
     #[pymodule_export]
     use crate::config::PySpecialistConfig;
     #[pymodule_export]

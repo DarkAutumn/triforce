@@ -133,7 +133,11 @@ the direction; the standing invitation is to come up with ideas, test them, keep
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are on the `v2-stable-retro` branch). No 16-heart states: max hearts follow
   the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
-  Manhandla, 8 after Gleeok). States are chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build
+  Manhandla, 8 after Gleeok, 9 after 0x5f's heart container, 10 after 0x2f's cave, 11 after Digdogger), counted
+  along the stretch way a step is on (a plain-way step doesn't count the clip way's heart room). States are chains
+  0–2, `<level>_<room><entry>[_v<visit>]_<chain>`: a later visit of the route to a room from the same side adds
+  `_v2`, `_v3`, ... (`0_1be_v2_0`; the first visit keeps the bare name; `docs/architecture.md` "State names"). Boss
+  rooms keep only the fight entry. Build
   states with `python -m triforce.entry_states build|path` (staged under `target/entry-states/<ts>`, then
   `entry_states install <dir>`) and check them with `... audit` (it enforces these rules and exits 1 on a problem).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to

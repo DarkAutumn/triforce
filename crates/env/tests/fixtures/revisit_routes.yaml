@@ -1,0 +1,27 @@
+# Test routes for later visits (state names `<level>_<room><side>_v<visit>_<chain>`, docs/architecture.md "Start
+# states"), appended to triforce/routes.yaml by crates/env/tests/state_visits.rs and tests/test_entry_states.py.
+# `revisit` goes on from the D4 triforce like the leg to Dungeon 5: 0x5c and 0x5d from W a second time (0x5d left S,
+# not N as d2first's first visit), then a stretch with the heart container room 0x5f on both ways (the plain way's
+# steps come after the clip way's 0x5f in the list), a room only the plain way enters (0x6f from S) entered again on
+# a shared step, and D1's bow cellar entered from S a second time (as Dungeon 5's tunnel cellar 0x07).
+revisit:
+  extends: d2first
+  steps:
+  - {level: 0, room: '0x5c', specialist: ow-moblin, entry: W, exit: E}
+  - {level: 0, room: '0x5d', specialist: ow-moblin, entry: W, exit: S}
+  - {level: 0, room: '0x6d', specialist: ow-moblin, entry: N, exit: E}
+  - {level: 0, room: '0x6e', specialist: ow-moblin, entry: W, exit: E}
+  - stretch: coast-test
+    parts: {level: 0, room: '0x6f', entry: W}
+    rejoins: {level: 0, room: '0x4f', entry: S}
+    clips:
+    - {level: 0, room: '0x6f', specialist: ow-zora, entry: W, exit: N}
+    - {level: 0, room: '0x5f', specialist: ow-zora, entry: S, exit: N}
+    plain:
+    - {level: 0, room: '0x6f', specialist: ow-zora, entry: W, exit: S}
+    - {level: 0, room: '0x7f', specialist: ow-zora, entry: N, exit: N}
+    - {level: 0, room: '0x6f', specialist: ow-zora, entry: S, exit: N}
+    - {level: 0, room: '0x5f', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x4f', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x6f', specialist: ow-zora, entry: S, exit: N}
+  - {level: 1, room: '0x7f', in_cave: true, specialist: equipment-room, entry: S, exit: N}
