@@ -337,10 +337,10 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
     the evaluation plays its start state with the clips switch on and off (``clips.episode_jobs``), 50 each."""
     calls = []
 
-    def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, deterministic=False,
+    def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, act='sample',
                   stop=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
-        calls.append((runs, seed, parallel, deterministic))
+        calls.append((runs, seed, parallel, act))
         counts = {}
         for index, ok in enumerate(outcomes[:2 * runs]):
             clips = index < runs
@@ -374,7 +374,7 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
                                **({f'start{train.OFF_LABEL}': rate(outcomes[50:played])} if played > 50 else {})}
     assert check['rate_upper_bound'] == (100 - (played - successes)) / 100
     assert check['aborted'] == (check['rate_upper_bound'] < 0.5)
-    assert calls[0] == (train.CONFIRM_EPISODES, 5 + 1, 2, False)
+    assert calls[0] == (train.CONFIRM_EPISODES, 5 + 1, 2, 'sample')
     assert ('early_stop' in [e['event'] for e in events]) == stops
 
 
@@ -383,7 +383,7 @@ def _plateau_checks(states_dir, tmp_path, logs_dir, monkeypatch, run_id, outcome
     ``outcomes[k]`` = (hearts lost, bombs dict) for every episode; returns the early_stop_check events."""
     outcomes = iter(outcomes)
 
-    def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, deterministic=False,
+    def fake_eval(config, policy, runs, seed=0, parallel=4, threads=None, states_dir=None, act='sample',
                   stop=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
         lost, bombs = next(outcomes)

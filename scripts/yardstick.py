@@ -17,8 +17,9 @@ markdown tables:
 - per specialist: success rate (Wilson interval), hearts lost per room visit, health change per episode, frames
   per room visit (tie-breaker only);
 - per chain segment: arrivals (Wilson interval) and hearts at arrival: with `@L:0xRR` the runs that entered that
-  room (the segment's end, e.g. the next segment's start room) and their health on entering it, else the
-  successful runs and their last room's entry health; plus the five rooms where the other runs ended.
+  room (the segment's end, e.g. the next segment's start room), else the successful runs, and Link's health on
+  arriving (`eval_batch.arrival_hearts`: out of a dungeon, the health he entered its triforce room with, since the
+  triforce refills his hearts); plus the five rooms where the other runs ended.
 
 `compare` prints, per row, both values and whether the intervals separate (`better` / `worse` / `~` overlapping).
 Specialist rows measured in different act modes are not compared (exit 1) unless `--allow-mode-mismatch`.
@@ -134,7 +135,7 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
         if unknown:
             raise YardstickError(f"{path}: target rooms {[f'{l}:0x{r:02x}' for l, r in unknown]} are not rooms "
                                  f"of route {route!r}")
-    arrived = [room for room in (arrival(r, target) for r in runs) if room is not None]
+    arrived = [(r, room) for r, room in ((r, arrival(r, target)) for r in runs) if room is not None]
     ends = Counter()
     for r in runs:
         if arrival(r, target) is None and r['rooms']:
@@ -146,7 +147,7 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
         'runs': len(runs),
         'arrived': len(arrived),
         'arrivals': wilson(len(arrived), len(runs)),
-        'hearts_at_arrival': mean_ci([room['health_in'] for room in arrived]),
+        'hearts_at_arrival': mean_ci([eval_batch.arrival_hearts(r, room) for r, room in arrived]),
         'where_runs_end': ends.most_common(5),
     }
 
@@ -211,7 +212,7 @@ def report(args) -> int:
             continue
         row = specialist_row(name, result, str(path))
         row.update(run=directory.name, eval_file=path.name, act=registry.eval_mode(result), run_act=expected,
-                   deterministic=result.get('deterministic'), checkpoint_sha1=result.get('checkpoint_sha1'))
+                   checkpoint_sha1=result.get('checkpoint_sha1'))
         specialists.append(row)
     if errors:
         raise YardstickError("no evaluation in the run's act mode (evaluate it, e.g. `python -m triforce.evaluate "
@@ -306,7 +307,7 @@ def main(argv=None) -> int:
     rep.add_argument('--run', default='promoted', help="every specialist's run id, or 'promoted'")
     rep.add_argument('--models-dir', default=None,
                      help="models root (default: $TRIFORCE_MODELS_DIR, else <repo>/models, like every other CLI)")
-    rep.add_argument('--mode', choices=registry.ACT_MODES, default=None,
+    rep.add_argument('--mode', type=registry.act_argument(allow_model=False), default=None,
                      help="report evaluations in this act mode (default: each run's own act mode)")
     rep.add_argument('--eval-name', default=None,
                      help="read this evaluation file in each run dir instead (it must be in the expected mode)")

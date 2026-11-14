@@ -121,11 +121,15 @@ def test_read_evaluation_finds_the_evaluation_in_the_act_mode_of_the_current_wei
     with pytest.raises(LookupError, match='no eval.json or eval-argmax.json'):
         read_evaluation(run)
     assert read_evaluation(run, 'sample')[0] == run / 'eval-sample.json'
-    write_result({'act': 'argmax', 'deterministic': True, 'checkpoint_sha1': 'f' * 40}, run / 'eval-argmax.json')
+    write_result({'act': 'argmax', 'checkpoint_sha1': 'f' * 40}, run / 'eval-argmax.json')
     with pytest.raises(LookupError, match='other weights'):
         read_evaluation(run)
-    write_result({'act': 'argmax', 'deterministic': True, 'checkpoint_sha1': sha1}, run / 'eval-argmax.json')
+    write_result({'act': 'argmax', 'checkpoint_sha1': sha1}, run / 'eval-argmax.json')
     assert read_evaluation(run)[0] == run / 'eval-argmax.json'
+    registry.set_act_mode(run, 'floor:0.03+temperature:0.7')        # any act mode, by its canonical spelling
+    write_result({'act': 'temperature:0.7+floor:0.03', 'checkpoint_sha1': sha1},
+                 run / 'eval-temperature:0.7+floor:0.03.json')
+    assert read_evaluation(run)[0] == run / 'eval-temperature:0.7+floor:0.03.json'
 
 
 def test_start_health_fraction_uses_the_max_hearts_at_the_start():
@@ -140,9 +144,8 @@ def test_evaluation_names_its_inputs(states_dir, tmp_path):
     """F080 (2): the result carries the act mode, the checkpoint's sha1, the network hash and the config."""
     checkpoint = save_checkpoint('ow-start', 'p', seeded_network(5, SMALL), root=tmp_path)
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=3)
-    result = evaluate_specialist(config, checkpoint, episodes_per_state=1, states_dir=states_dir,
-                                 deterministic=True)
-    assert (result['act'], result['deterministic']) == ('argmax', True)
+    result = evaluate_specialist(config, checkpoint, episodes_per_state=1, states_dir=states_dir, act='argmax')
+    assert result['act'] == 'argmax'
     assert result['checkpoint_sha1'] == registry.checkpoint_sha1(checkpoint)
     assert result['model_hash'] == f"{registry.load_model(checkpoint)[0].to_native().hash:016x}"
     assert result['code'] == provenance.code_version() and result['data'] == provenance.data_hash()
@@ -153,26 +156,28 @@ def test_evaluation_names_its_inputs(states_dir, tmp_path):
 
 
 def test_evaluation_acts_the_way_the_run_is_registered_unless_told(states_dir, tmp_path):
-    """F129: ``deterministic=None`` (``--act model``) follows the run's act file; True/False and ``--act`` override
-    it. The recordings name the mode and their inputs are the ones that mode plays."""
+    """F129: ``act=None`` (``--act model``) follows the run's act file; an act mode and ``--act`` override it. The
+    recordings name the mode, their inputs are the ones that mode plays, and a rule's recordings verify."""
     checkpoint = save_checkpoint('ow-start', 'act', seeded_network(7, SMALL), root=tmp_path)
     config = tmp_path / 'ow-start.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
                       "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 20\n")
 
     def played(result, folder):
-        """(result's act, the recordings' deterministic flag, every episode's inputs by seed)."""
+        """(result's act, the recordings' act mode, every episode's inputs by seed)."""
         files = sorted(folder.iterdir())
         assert [f.name[:8] for f in files] == ['00000000', '00000001'] and all(f.suffix == '.tfreplay' for f in files)
         recordings = [_native.Replay(f.read_bytes()) for f in files]
-        flag, = {r.meta['models'][0]['deterministic'] for r in recordings}
+        flag, = {r.meta['models'][0]['act'] for r in recordings}
+        for f in files:
+            assert _native.replay_verify(f.read_bytes(), states_dir=str(states_dir))['frames'] > 0
         assert all(r.meta['kind'] == 'eval' and r.meta['specialist'] == 'ow-start' for r in recordings)
         return result['act'], flag, [r.inputs().tobytes() for r in recordings]
 
-    def play(name, deterministic):
+    def play(name, act):
         folder = tmp_path / name
         return played(evaluate_specialist(str(config), checkpoint, episodes_per_state=2, states_dir=states_dir,
-                                          deterministic=deterministic, replays=folder), folder)
+                                          act=act, replays=folder), folder)
 
     def cli(name, act):
         folder, output = tmp_path / name, tmp_path / f'{name}.json'
@@ -180,9 +185,12 @@ def test_evaluation_acts_the_way_the_run_is_registered_unless_told(states_dir, t
                               '--episodes-per-state', '2', '--replays', str(folder), '--output', str(output)]) == 0
         return played(json.loads(output.read_text()), folder)
 
-    sampled, argmax = play('sampled', False), play('argmax', True)
-    assert sampled[:2] == ('sample', False) and argmax[:2] == ('argmax', True)
+    sampled, argmax = play('sampled', 'sample'), play('argmax', 'argmax')
+    assert sampled[:2] == ('sample', 'sample') and argmax[:2] == ('argmax', 'argmax')
     assert sampled[2] != argmax[2], "argmax and sampling play differently"
+    floor = play('floor', 'floor:0.2')
+    assert floor[:2] == ('floor:0.2', 'floor:0.2') and floor == play('floor-again', 'floor:0.2')
+    assert floor == cli('floor-cli', 'floor:0.20')
     assert play('unregistered', None) == sampled == cli('model-sample', 'model')
     registry.set_act_mode(checkpoint.parent, 'argmax')
     assert play('registered', None) == argmax == cli('model-argmax', 'model')
@@ -266,6 +274,49 @@ def test_a_clip_family_is_evaluated_with_the_switch_on_and_off(states_dir, tmp_p
     plain = evaluate_specialist(config.replace(clips=False), ckpt, episodes_per_state=2, parallel=2, seed=5,
                                 states_dir=states_dir)
     assert plain['clips'] == 'on' and plain['episodes'] == 2
+
+
+def test_an_escape_evaluation_of_both_switch_states(states_dir, tmp_path):
+    """Rounds 22 and 23 merged: ``evaluate --act escape:16 --clips both`` plays every start state with the switch on
+    and off in the act mode, which reads the eval env's no-progress count: each episode plays argmax's first 16
+    decisions (the count can't reach 16 before), and draws once Link has stalled 16 decisions.  The result, every
+    switch state's summary and the recordings name the mode; every record carries its switch and its decisions; the
+    recordings verify."""
+    checkpoint = save_checkpoint('ow-start', 'escape', seeded_network(7, SMALL), root=tmp_path)
+    config = tmp_path / 'ow-start.yaml'
+    config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 60\nclips: true\n")
+
+    def run(act):
+        output, folder = tmp_path / f'{act}.json', tmp_path / act
+        assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--no-log', '--act', act,
+                              '--clips', 'both', '--episodes-per-state', '2', '--parallel', '2',
+                              '--replays', str(folder), '--output', str(output)]) == 0
+        return json.loads(output.read_text()), sorted(folder.iterdir())
+
+    escape, files = run('escape:16')
+    argmax, _ = run('argmax')
+    assert (escape['act'], escape['clips'], escape['episodes']) == ('escape:16', 'both', 4)
+    assert [r['clips_allowed'] for r in escape['records']] == [True, True, False, False]
+    assert set(escape['by_clips']) == {'on', 'off'} and escape['risk']['episodes'] == 4
+    assert all(escape['by_clips'][s]['risk']['episodes'] == 2 for s in ('on', 'off'))
+    assert eval_event(escape)['act'] == 'escape:16' and eval_event(escape)['risk'] == escape['risk']
+
+    def actions(record):
+        return ''.join(v['decisions']['actions'] for v in record['visits'])
+    stalled = 0
+    for mine, greedy in zip(escape['records'], argmax['records']):
+        assert mine['clips_allowed'] == greedy['clips_allowed'] and mine['seed'] == greedy['seed']
+        assert actions(mine)[:32] == actions(greedy)[:32], "the first 16 decisions are argmax's"
+        drawn = sum(v['decisions']['act_entropy'] for v in mine['visits'])
+        stalled += drawn > 0
+        if drawn == 0:
+            assert actions(mine) == actions(greedy), "never stalled: argmax throughout"
+    assert stalled, "an untrained model stalls within 60 steps and escape then draws"
+    recordings = [_native.Replay(f.read_bytes()) for f in files]
+    assert {r.meta['models'][0]['act'] for r in recordings} == {'escape:16'}
+    for f in files:
+        assert _native.replay_verify(f.read_bytes(), states_dir=str(states_dir))['frames'] > 0
 
 
 def test_the_route_families_play_each_start_state_in_the_switch_states_it_allows(states_dir):

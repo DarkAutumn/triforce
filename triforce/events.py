@@ -40,7 +40,7 @@ Events written by ``triforce.train`` (one specialist):
 
 Added by ``scripts/train_round.py`` and ``triforce.evaluate``: ``eval_start``, ``eval_progress`` (at most once a
 second: done, episodes, running success_rate) and ``eval`` (specialist evaluation, ``evaluate.eval_event``:
-success_rate, episodes, deterministic, health, health_change, health_change_total, hearts_dropped / hearts_taken /
+success_rate, episodes, act (the act mode), health, health_change, health_change_total, hearts_dropped / hearts_taken /
 hearts_left per episode, flat ``linger_*`` means/maxima, by_room, by_room_failures, by_state, by_room_linger,
 by_state_linger, path; in a round it runs on a
 background thread while the next specialist trains, so these can arrive after the next stream's ``start``) and

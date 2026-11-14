@@ -8,9 +8,14 @@ use crate::layout::{ObsColumns, ObsData, ObsLayout};
 /// What an [`Actor`] reports for one decision.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Decision {
+    /// The chosen action's log-prob and the summed head entropies under the policy (whatever the act mode).
     pub log_prob: f32,
     pub entropy: f32,
     pub value: f32,
+    /// The chosen action's log-prob under the distribution it was drawn from, and that distribution's entropy over
+    /// the joint actions (0 for argmax; 0 too where the actor doesn't report them: rollouts and replays).
+    pub act_log_prob: f32,
+    pub act_entropy: f32,
 }
 
 /// Decides actions inside the pool. Shared by every worker; each worker keeps its own [`Actor::Scratch`].
@@ -20,13 +25,16 @@ pub trait Actor<A>: Send + Sync {
     fn scratch(&self) -> Self::Scratch;
 
     /// The action for `obs`, acted on by policy `policy`, decision `step` of the episode keyed `job` (keyed
-    /// randomness: the same (job, step) draws the same noise wherever and whenever it runs).
+    /// randomness: the same (job, step) draws the same noise wherever and whenever it runs), after `stall`
+    /// decisions in a row without progress ([`crate::PoolEnv::stall`]).
+    #[allow(clippy::too_many_arguments)]
     fn act(
         &self,
         obs: &ObsData,
         policy: i64,
         job: i64,
         step: i64,
+        stall: u32,
         scratch: &mut Self::Scratch,
     ) -> Result<(A, Decision), String>;
 

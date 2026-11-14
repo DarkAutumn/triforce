@@ -17,7 +17,7 @@ use super::actor::{ActorScratch, MAX_VECTORS, PolicyActor, input};
 use crate::layout::{ObsData, ObsLayout};
 use crate::pool::SearchEnv;
 use crate::rollout::{Actor, Decision, PlanError, Planner, SearchRow};
-use policy::Pick;
+use policy::{ActMode, Pick};
 use policy::noise::{gumbel, key_of, uniform};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -209,7 +209,7 @@ impl Root {
     }
 }
 
-/// Gumbel search over a [`PolicyActor`]'s policies (their `deterministic` flags: no root noise).  Inside the futures
+/// Gumbel search over a [`PolicyActor`]'s policies (an `argmax` act mode: no root noise).  Inside the futures
 /// the policies always act by argmax, so a candidate's Q differs from another's by the candidate and the env's RNG
 /// redraws alone, not by per-candidate action sampling (review F180: sampled sims made the ranking mostly noise).
 pub struct GumbelSearch {
@@ -340,7 +340,7 @@ impl<E: SearchEnv<Action = ZeldaAction>> Planner<E> for GumbelSearch {
                 .map_err(|e| PlanError::Usage(e.0))?
         };
         let mut g = vec![0f32; joint];
-        if !self.actor.deterministic[p] {
+        if self.actor.modes[p] != ActMode::Argmax {
             gumbel(key_of(&[job as u64, step as u64, TAG_ROOT]), &mut g);
         }
         // Gumbel-top-k: the legal joint actions by g + logit, best first.
@@ -399,6 +399,7 @@ impl<E: SearchEnv<Action = ZeldaAction>> Planner<E> for GumbelSearch {
                 log_prob: out.log_prob,
                 entropy: out.entropy,
                 value: out.value,
+                ..Decision::default()
             }
         };
         let row = SearchRow {

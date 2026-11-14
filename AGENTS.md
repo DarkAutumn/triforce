@@ -4,42 +4,51 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 13)
+## Where things stand (Nov 14)
 
-- **Now (Nov 13, round 21, 1.4.1.0):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
+- **Now (Nov 14, round 23, 1.4.1.2):** the emulator (`crates/zcore`), game, env and pool are Rust and Python drives
   them through `triforce._native`; inference runs in Rust too (`docs/rust-actor.md`). `d2first` is the only trained
-  route (`docs/routes/d2first.md`, `docs/routes/d3.md`, `docs/routes/d4.md`): game start → Dungeon 2 → the 0x2c
-  heart cave → the white sword → Dungeon 1 (with the bow detour) → Dungeon 3 (the raft, Manhandla) → by raft to
-  Dungeon 4 (the ladder, the ladder clip off 0x21's island, Gleeok), ending on the D4 triforce. The actions are
-  MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW and, since round 21, `CLIP <N|S|W|E>`: the speedrunners'
-  grid-point skip (the overworld screen wrap W/E, the dungeon block clip N/S, the dungeon ladder clip;
-  `zelda-asm/mechanics.md`), legal only where a skip is available, played by the executor as a macro
-  (`zelda::clips`), on per family with `clips: true` (vire, stalfos-keese-gel, trap-room and the overworld
-  families); the path search treats block and ladder clips as jumps. Attacks are played by buttons: the executor
-  writes neither Link's facing nor the selected item, a B item that isn't selected is chosen on the item sub-screen
-  (`menu_frames`, left out of the action's frames), and the attack mask is what the buttons can do (`attack::plan`).
-  Round 21 (`docs/experiments/round21.md`; decisions 2026-11-12 "Round 21: one change set, one retrain", "One clip
-  design", "Attacks by buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged", "The r71 retrain")
-  chose the CLIP kind by experiment (`round21-gauntlet.md`, `round21-trap-room.md`, `round21-vire-50.md`), found
-  that round 20's D2 regression was a one-pixel doorway-mask error (D2 82.7% with only that fixed, round 20 68.6%),
-  and retrained every family from scratch (`r71`, all 24 promoted; action schema 2, observation schema 4, no model
-  trained before 1.4.1.0 loads). Chains, 1000 runs per segment, the final team (`r71-1k-dks`): D2 85.6%, after D2
-  88.6%, D1 99.1%, after D1 99.4%, D3 46.5%, after D3 100%, D4 56.4%; from the start to Dungeon 3 56.7%,
-  to the D4 triforce 12.8% (15.4% in `r71-1k` with darknut on argmax: within noise; round 20: D2 68.6%, D3 38.6%,
-  D4 21.1%, full 1.8%). Promoted runs and the runs they replaced: round21.md §11. Act mode per model (`<run
-  dir>/act`, bound to the checkpoint's sha1): argmax for the nine overworld families, moldorm, wallmaster,
-  trap-room, equipment-room, boss-manhandla and boss-gleeok; sample for goriya, d2-rope, boss-dodongo,
-  stalfos-keese-gel, boss-aquamentus, zol, vire, like-like and darknut (argmax loops in 3:0x59 when bombs are masked
-  at the reserve). Measure chains with 1000 runs per segment as one batch: `RUNS=1000 ACT=model TAG=<tag>
-  scripts/experiments/r56_chains.sh` (`triforce eval-batch TAG --chains TAG`: the eight segments into
-  `target/r56-chains/<TAG>-<segment>.jsonl`, then the yardstick and `<TAG>-room-stats.json`). Tags are
-  `<run prefix>-1k` (`r71-1k`); a variant team adds a suffix (`r71-1k-dks`, darknut sampling) and may measure only
-  some segments (`SEGMENTS=...`), the rest linked from the base tag. Next (backlog "Next projects", by what the
-  chains lose): Dungeon 3 (Manhandla 132 deaths per 1000 D3 runs, 3:0x5b 126, 3:0x69 87, darknut 3:0x59 86 and 24
-  stuck), Gleeok below 3.5 hearts (245 deaths per 1000 D4 runs), 4:0x12 (95), goriya 2:0x1e (57 per 1000 D2 runs),
-  the bombs stalfos-keese-gel wastes in 4:0x21 (3.8 per visit, one needed), wallmaster heart gathering, goriya heart
-  loss. Every new checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per
-  checkpoint).
+  route (`docs/routes/d2first.md`, `overworld.md`, `d3.md`, `d4.md`): game start → Dungeon 2 → the 0x2c heart cave →
+  the white sword → Dungeon 1 (with the bow detour) → S to 0x67 (bomb its rock wall, the secret cave's 30 rupees) →
+  the stretch `d3-approach` (clips: 0x77, 0x76, 0x75 and the wrap exit `CLIP E` into 0x74; plain: 0x66, 0x65, 0x64,
+  0x63, 0x73, 0x74 from W) → Dungeon 3 (the raft; 0x5b E through its bomb wall → 0x5c → 0x4c from S,
+  Manhandla) → by raft to Dungeon 4 (the ladder; the stretch `d4-island`: clips 0x31 N and the ladder clip off
+  0x21's island, plain 0x31 W – 0x30 – 0x20 – 0x21; then 0x11 N → 0x01's key → 0x02 → 0x12 from N, Gleeok), ending
+  on the D4 triforce. The actions are MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW and `CLIP <N|S|W|E>` (round
+  21: the speedrunners' grid-point skip, played by the executor as a macro; round 22 adds the wrap exit), on per
+  family with `clips`; attacks are played by buttons (no facing or selected-item writes, `menu_frames`). Round 22
+  (`docs/experiments/round22.md`; decisions 2026-11-13 "Natural RNG at every start", "The run-time clips switch and
+  route stretches", "The wrap exit", "Clips in training, evaluation and watching", "Round 22 route", "Round 22
+  merged", 2026-11-14 "The r72 retrain"): every start writes a natural RNG state (a phase of the game's cycle; the
+  edge cell and fresh-room writes holdable; replays keep the phase); a run-time clips switch (`clips_allowed`, any
+  decision; the route re-plans from where Link stands) with clip families training half their episodes with CLIP
+  masked and evaluating both (`--clips both`, one combined figure, `by_clips`); the BOMB mask for `required`
+  families (BOMB only where it opens the route's wall); states rebuilt from 0x58; 12 families retrained (`r72-*`),
+  12 kept on round 21 runs. Chains, 1000 runs per segment, clips on (`r72-1k`) | off (`r72-1k-noclips`): D2 87.2 |
+  87.2%, after D2 91.0 | 89.5%, D1 98.9 | 99.5%, after D1 99.9 | 98.9%, D3 50.4 | 50.4%, after D3 100 | 100%, D4
+  73.6 | 56.8%; from the start to Dungeon 3 59.5 | 41.0%, to the D3 triforce 19.5 | 10.2%, to the D4 triforce
+  13.6 | 4.8% (round 21 `r71-1k-dks`: D4 56.4%, to the D3 triforce 24.8%, full 12.8%; within noise of 13.6%).
+  Promoted runs and the ones they replaced: round22.md §10. Act mode per model (`<run dir>/act`, bound to the
+  checkpoint's sha1): argmax for the nine overworld families, moldorm, wallmaster, trap-room, equipment-room,
+  boss-manhandla, boss-gleeok and like-like; sample for goriya, d2-rope, boss-dodongo, stalfos-keese-gel,
+  boss-aquamentus, zol, vire and darknut. Measure chains with 1000 runs per segment as one batch, both switch
+  states: `RUNS=1000 ACT=model TAG=<tag> scripts/experiments/r56_chains.sh` and `CLIPS=off TAG=<tag>-noclips ...`
+  (`triforce eval-batch TAG --chains TAG`: the eight segments into `target/r56-chains/<TAG>-<segment>.jsonl`, then
+  the yardstick and `<TAG>-room-stats.json`; `triforce room-stats <tag> --noclips` for both). Tags are `<run
+  prefix>-1k` (`r72-1k`); a variant team adds a suffix (`r71-1k-dks`) and may measure only some segments
+  (`SEGMENTS=...`), the rest linked from the base tag. Round 23 (1.4.1.2; act modes, one bomb per wall, 3:0x5b's
+  last pass fights first) is on `main`: next bullet. <!-- r23 --> Then (backlog "Next projects", by what the r72
+  chains lose): 3:0x5b's last pass at 6 or more bombs (darknut; 145 deaths per 1000 full runs), Gleeok below 3.5
+  hearts (192 per 1000 D4 runs), the rest of Dungeon 3 (Manhandla 168 per 1000 D3 runs, 3:0x59 80), the plain
+  way's heart cost (clips off), Dungeon 2. Every new checkpoint needs its act mode re-measured, in single rooms and
+  in chains (argmax is fragile per checkpoint).
+- **Round 23 (act modes, Nov 13; `docs/experiments/round23.md`, decisions 2026-11-13 "Act modes"):** act modes over
+  the joint action (`temperature:T`, `floor:P`, `minp:R`, `topp:P`, the stall rules `escape:N` and `relax:N`, `+`
+  combinations) in every tool that plays, beside round 22's `--clips`; every evaluation and chain room record
+  counts its decisions (moves under 1%/5% and what followed them, the actions). The pilot on the round 21 team: one
+  global `escape:16` took the full route from 12.8% to 20.5% (1000 runs per segment). Pending: the rerun on the
+  round 22 team with clips on and off (`scripts/experiments/r23_act_pilot.sh`, `CLIPS=on|off`), then the lead's
+  choice of the evaluation rule and the play default (`registry.PLAY_ACT`, still `sample`).
 - **The rest of the first quest is drafted, not built (Nov 13; `docs/routes/first-quest.md`):** `game.yaml` holds
   every room of Dungeons 5-9 (written by `scripts/level_rooms.py` from the ROM's level data; door kinds checked
   against the running game), and `triforce/draft_routes.yaml` holds `first-quest`: `d2first`, then Lee's overworld
@@ -48,9 +57,10 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   dungeon level); `routes.yaml`, the objective and training know nothing of it, and its rooms have no family, no
   states and no model. Every draft step was walked in the emulator with the fights skipped (`triforce/probe.py`
   puts Link into any dungeon room without a savestate). Lee's first review (Nov 14): bombs only from rooms on the
-  way (5:0x65, 7:0x1b when not full, 9:0x16) and drops, else cheated; take the route's keys; every overworld leg
-  has a plain way (`stretch:` blocks, the Lost Woods and Lost Hills by `exit: maze`). Next phase: the movement
-  (the overworld ladder clip, wraps, maze exits, recorder, food, candle), then the steps move into `routes.yaml`.
+  way (5:0x65, 7:0x1b when not full, 9:0x16) and drops, else cheated; take the route's keys; no magic key, wand or
+  book; every overworld leg has a plain way (`stretch:` blocks, the Lost Woods and Lost Hills by `exit: maze`).
+  Next phase: the movement (the overworld ladder clip, wraps, maze exits, recorder, food, candle), then the steps
+  move into `routes.yaml`.
 - **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
   `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
   earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`
@@ -69,14 +79,16 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
   (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
-- **Dungeon 4 (scouted Nov 11, trained Nov 12, the shortcut Nov 12; `docs/routes/d4.md`):** all 20 rooms and the
-  ladder cellar are in `game.yaml`; `d2first` goes by raft from 0x55 to the island 0x45, takes the keys of 0x51 and
-  0x40, the ladder under the Breakfast Room 4:0x32, back W to 0x31, then (round 22: the stretch `d4-island`, both
-  ways in the route) with clips N through its locked door onto 0x21's island and off it by the ladder clip (round
-  21, `CLIP N`, then one step down: from the clip's end a bomb doesn't open the wall), without clips 0x31 W – 0x30 N
-  – 0x20 E – 0x21 (the route before round 21; `4_30e_*`, `4_20s_*`, `4_21w_*` built again), through two bomb walls
-  (0x21, 0x11; `bomb_reserve: 2`) to Gleeok and the triforce. routes.yaml keeps `{extends: <route>, steps: [...]}`
-  for scouting the next dungeon. game.yaml rooms can carry a `name:` (the Breakfast Room).
+- **Dungeon 4 (scouted Nov 11, trained Nov 12, the shortcut Nov 12, the key detour Nov 13; `docs/routes/d4.md`):**
+  all 20 rooms and the ladder cellar are in `game.yaml`; `d2first` goes by raft from 0x55 to the island 0x45, takes
+  the keys of 0x51 and 0x40, the ladder under the Breakfast Room 4:0x32, back W to 0x31, then (round 22: the stretch
+  `d4-island`, both ways in the route) with clips N through its locked door onto 0x21's island and off it by the
+  ladder clip (round 21, `CLIP N`, then one step down: from the clip's end a bomb doesn't open the wall), without
+  clips 0x31 W – 0x30 N – 0x20 E – 0x21 (the route before round 21; `4_30e_*`, `4_20s_*`, `4_21w_*` built again),
+  N through 0x21's bomb wall into 0x11, and (round 22) N through 0x11's bomb wall into 0x01 (its key, on the water:
+  the ladder), E into 0x02 (traps), S into 0x12 (from N) to Gleeok and the triforce (`bomb_reserve: 2`, the two
+  walls; the 0x01 key is a spare, D4 needs none). routes.yaml keeps `{extends: <route>, steps: [...]}` for scouting
+  the next dungeon. game.yaml rooms can carry a `name:` (the Breakfast Room).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -121,7 +133,8 @@ the direction; the standing invitation is to come up with ideas, test them, keep
 - **Clip families train with clips on and with CLIP masked** (Lee, Nov 13, round 22): "the models need to be
   trained with clips enabled, and also with the clip action masked so it has to traverse as normal". A family's
   `clips: true` is `{enabled: true, off_share: 0.5}`: half the episodes start with the run-time clips switch off
-  (the plain way, also through a route `stretch:`), and the early stop and the evaluation (`--clips both`) take
+  (the plain way, also through a route `stretch:`; ow-moblin and ow-zora `off_share: 0.75` since the r72 retrain,
+  for their weak plain crossings 0x5b and 0x5a), and the early stop and the evaluation (`--clips both`) take
   both. Lee can turn clips off at any moment while watching (`play-zelda.py`, key `c`), so the plain way must stay
   trained; track rooms with and without clips (`by_clips` in `eval.json` and `room-stats`).
 - **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
@@ -151,7 +164,7 @@ the direction; the standing invitation is to come up with ideas, test them, keep
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.4.1.0`). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.4.1.2`). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
@@ -171,8 +184,12 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
-  refusing it (replays embed states). Play (play-zelda, zelda-headless, the golden path) is stochastic by default
-  (`--act sample`; `--act argmax|model` are options); evaluation follows each model's act mode.
+  refusing it (replays embed states). Play (play-zelda with its live cell, zelda-headless, the golden path) is
+  stochastic by default (one constant, `registry.PLAY_ACT`, now `sample`); `--act model` or any act mode
+  (`argmax`, `floor:0.1`, `temperature:0.75`, `escape:16`, `temperature:0.75+relax:16`, ...: `docs/rust-actor.md`
+  "Act modes", round 23) beside `--clips on|off`; evaluation follows each model's act mode. `escape:N` plays argmax
+  until Link has made no progress for N decisions, then draws; `relax:N` draws by the other rules until then, then
+  from the plain policy (so `temperature:T+escape:N` is mostly argmax, `temperature:T+relax:N` draws every action).
 - **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",
   "Watching"): `triforce eval-chain|evaluate --replays DIR`, `zelda-headless.py OUT [COUNT]
   [--wins-only|--deaths-only|--stuck-only] [--golden] [--clips on|off]`; optional streams `--streams
@@ -186,8 +203,9 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   buttons. Clips (round 22): `--clips on|off` starts the runs with the run-time clips switch on or off, key `c`
   turns it off and on for every run started afterwards (the title says where it stands; a cell's strip says "no
   clips" for a run played without). `--live` makes the top left cell a live game the models play while it is
-  watched: `c` acts on that run from its next decision and the route re-plans from where Link stands ("rest of
-  the run no clips"); its finished runs join the queues. The keys are in `--help`. `create-video.py OUT [GRID]
+  watched (in the `--act` mode, as the simulations): `c` acts on that run from its next decision and the route
+  re-plans from where Link stands ("rest of the run no clips"); its finished runs join the queues. The keys are
+  in `--help`. `create-video.py OUT [GRID]
   REPLAY... [--sound] [--controller]` films replays the same way into a video file (`ffmpeg`).
 - **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
   "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and

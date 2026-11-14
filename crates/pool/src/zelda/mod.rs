@@ -27,7 +27,7 @@ pub use search::{GumbelSearch, SearchConfig, SearchScratch};
 use crate::layout::{Dtype, KeySpec, ObsLayout, ObsRow};
 use env::chain::RunResult;
 use env::observation::{GRID_COLS, OBS_SPEC, Observation};
-use env::specialist_env::{StepInfo, bombs_json, cheated_json, clips_json, hearts_json, linger_json};
+use env::specialist_env::{StepInfo, bombs_json, cheated_json, clips_json, decisions_json, hearts_json, linger_json};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use zelda::bombs::BombStats;
@@ -199,6 +199,7 @@ pub fn visit_json(v: &RoomVisit) -> Value {
         "health_lost": v.health_lost, "health_gained": v.health_gained, "hits": v.hits, "hits_dealt": v.hits_dealt,
         "drops": item_counts(&v.drops), "pickups": item_counts(&v.pickups), "keys_gained": v.keys_gained,
         "bombs_used": v.bombs_used, "boss_stuns": v.boss_stuns, "boss_eats": v.boss_eats, "exit": v.exit,
+        "decisions": decisions_json(&v.decisions),
     });
     let o = m.as_object_mut().expect("object");
     for item in CheatItem::ALL {

@@ -312,6 +312,26 @@ def test_eval_chain_throughput_reads_episodes_per_second_or_seconds_per_episode(
     assert gui.chain_speed({'start': start, 'result': None, 'progress': None}) == ''
 
 
+def test_window_title_names_a_few_running_plans_and_counts_the_rest():
+    """Finished plans stay out of the title and many running ones are counted, so it stays short."""
+    class Plan:
+        def __init__(self, name, status, done):
+            self.name, self._status, self._done = name, status, done
+
+        def status(self):
+            return self._status
+
+        def fraction(self, now):
+            return self._done
+
+    finished = [Plan(f'old-{index}', 'completed', 1.0) for index in range(40)]
+    assert gui.window_title(finished, 0.0) == 'Triforce training'
+    assert gui.window_title(finished + [Plan('r72-ow', 'running', 0.5)], 0.0) == '50% r72-ow — Triforce training'
+    many = [Plan(f'r23-pilot-{index}', 'running', 0.25) for index in range(30)]
+    assert gui.window_title(finished + many, 0.0) == (
+        '25% r23-pilot-0 · 25% r23-pilot-1 · 25% r23-pilot-2 · +27 more — Triforce training')
+
+
 def test_machine_status_reads_cpu_gpu_and_load(tmp_path):
     stat = tmp_path / 'stat'
     stat.write_text("cpu  100 0 50 800 50 0 0 0 0 0\ncpu0 1 2 3 4\n")
@@ -451,6 +471,21 @@ def test_a_clip_familys_evaluation_shows_each_switch_state():
     progress = {'event': 'progress', 'iteration': 3, 'iterations': 10, 'steps': 1000, 'sps': 50,
                 'metrics': {'success_rate': 0.5, 'clips/on/success_rate': 0.75, 'clips/off/success_rate': 0.25}}
     assert 'clips on 75% / off 25%' in gui.describe(progress)
+
+
+def test_an_evaluations_act_mode_and_decision_statistics_show():
+    """Round 23 on the merged tree: the ``eval`` event's ``act`` and ``risk`` (``variety.risk`` per episode)."""
+    assert gui.decisions_section({'act': 'sample'}) == []      # an evaluation from before the decision records
+    ev = {'act': 'temperature:0.75+relax:16',
+          'risk': {'decisions': 400, 'episodes': 4, 'decisions_per_episode': 100.0, 'low1_per_episode': 0.25,
+                   'low1_hit_rate': 0.5, 'low1_death_rate': None, 'low5_per_episode': 1.5, 'low5_hit_rate': 0.1,
+                   'hit_rate': 0.05, 'act_entropy_per_decision': 0.42}}
+    (kind, title, lines), = gui.decisions_section(ev)
+    assert (kind, title) == ('text', 'Decisions · act temperature:0.75+relax:16')
+    assert [text for text, _ in lines] == [
+        'moves <1% 0.25/episode · followed by a hit 50%, a death –',
+        'moves <5% 1.50/episode · followed by a hit 10% (every move 5%)',
+        'acting entropy 0.42 per decision · 100 decisions/episode']
 
 
 def write_batch(folder, pid, created):

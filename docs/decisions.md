@@ -1772,6 +1772,116 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   behaviour, not the observation, the actions or the network. Round 21's boss-aquamentus and goriya load and play
   as before (100% +0.87 hearts; 96.7% -0.17).
 
+## 2026-11-13 — Act modes: rules over the joint action, and the play default (pending the lead's decision)
+
+- **What:** act modes beyond `sample`/`argmax`: `temperature:T`, `floor:P`, `minp:R`, `topp:P`, `escape:N` and `+`
+  combinations, applied to the joint action (256 actions), not per head; `escape` reads the env's linger count.
+  Every evaluation and chain record counts low-probability moves and what followed them, and the actions (variety).
+  Proposed: evaluation, chains and training-time evaluation one global `escape:16`; play default `temperature:0.75`.
+- **Why:** the owner wants variety in play without rare bad moves. Joint, because "this action is unlikely" is a
+  joint statement (two 20% heads make a 4% action). Linger, because it already defines progress for the project.
+- **Evidence:** `docs/experiments/round23.md`: 36,400 single-room episodes per mode; every sharpened mode has
+  317-352 failures against sample 397 and argmax 402 (92 loops); rare moves are followed by a hit 1.4× as often as
+  any move. Chains (1000 runs): full route 12.8% (r71 per family) → 20.5% with `escape:16` for all; sample 8.7%,
+  argmax 14.0% (179 stuck), temperature:0.75 15.0%. Status: **pending**; `registry.PLAY_ACT` and the promoted `act`
+  files are unchanged.
+
+## 2026-11-13 — Round 23 merged with round 22: act modes beside the clips switch; `relax`, the other stall reading
+
+- **What:** `r23` merged with `main` (1.4.1.1; no version change, the lead sets round 23's). Every tool that plays
+  takes `--act MODE` and `--clips` side by side (evaluate, eval-chain, eval-batch, `r56_chains.sh`, the chain pool
+  with `clips_live`, the theater feed, `play-zelda.py` and its live cell, `zelda-headless.py`, the golden path);
+  records carry the switch fields and `decisions`; `room-stats` and evaluations split the decision statistics by
+  the switch (`by_clips[*].risk`); the training GUI titles an evaluation with its act mode and shows its decisions.
+  A chain's milestone record now carries the switch the run ended with (it said on whatever the switch).
+- **`relax:N`:** `temperature:T+escape:N` is argmax until Link has made no progress for N decisions, then a
+  temperature draw: mostly argmax, so it can't give the owner's "not the same every time". `temperature:T+relax:N`
+  is the other reading: a temperature draw at every decision, a plain `sample` while stalled (from N decisions
+  without progress until progress). At most one of `escape` and `relax`; `relax` needs another rule. Measured on
+  nothing yet: it is in the rerun's `CHAIN_MODES`.
+- **Also:** `train --confirm-act MODE` (early-stop confirmation; `train_round.py --eval-act` passes its mode; PPO's
+  rollouts always sample); hearts at arrival (the pilot report and the yardstick, `eval_batch.arrival_hearts`) are
+  Link's health entering the triforce room when the arrival is out of a dungeon (they read the max hearts the
+  triforce refills: D1 6.00 against 5.22 in the merge check); `r23_act_pilot.sh` takes `CLIPS=on|off`;
+  `registry.PLAY_ACT` stays `sample`, the one constant every play tool reads.
+- **Evidence:** `tests/test_evaluate.py` (`--act escape:16 --clips both`: argmax's first 16 decisions, draws once
+  stalled, recordings verify), `tests/test_cli.py` (`eval-chain --act temperature:0.75 --clips off`),
+  `tests/test_runner.py` (a `temperature:0.75+relax:4` run flipped mid-room by `clips_live` replays bit for bit),
+  `tests/test_play_zelda.py` (the live cell in a `relax` mode), `round23.md` §7 (the 20-run merge check).
+
+## 2026-11-14 — The r72 retrain: act modes, more plain-way practice for ow-moblin and ow-zora, second passes at 0.995 (round 22)
+
+- **Which families** (`docs/experiments/round22.md` §7): every family whose rooms, entries, exits or masks changed in
+  round 22, ow-octorok from scratch (its task changed most: bomb 0x67's wall, the cave, both ways; round 21's model
+  never bombs), the others continued from their round 21 runs (1.4.1.1 is compatible); like-like too, because its
+  round 21 run lost 0.90 hearts per episode on the rebuilt states and natural RNG (0.53 in its own evaluation). The
+  other 12 families keep their round 21 runs: re-evaluated on the new states and RNG in both act modes, all within
+  noise, act modes unchanged.
+- **Act mode per family, on evidence** (as in round 21: success first, then hearts within about 0.5 points, argmax
+  avoided where it loops more): argmax for ow-octorok, ow-start, ow-leever, ow-tektite, ow-boulder, ow-zora,
+  ow-moblin, trap-room and like-like (from sample: equal success and hearts, linger worst 98 steps against 539);
+  sample for stalfos-keese-gel (1 loop against 16 by argmax), darknut (0 against 16) and vire (6 against 38, 19 of
+  them in 4:0x12 from N). The kept families keep theirs.
+- **`off_share: 0.75` for ow-moblin and ow-zora** (`5efba1c`): after the first pass both crossed a D2-approach room
+  clearly worse without clips (ow-moblin 0x5b W→E 89-91%, ow-zora 0x5a 96-98%, against 100% with the wrap), so three
+  of four episodes play the plain way. It brought ow-moblin's 0x5b to 92% (−0.23) and ow-zora's 0x59 to 100%, not
+  0x5a (96%). Kept: with clips both stay at 98.7-99.9% overall (0x5b with the wrap 99.3%, 0x5a 100%).
+- **Second passes at `--stop-success 0.995`:** the balanced early stop at 0.99 passed vire (4:0x50 without clips
+  95.7%) and ow-zora (0x5a 96%) after about 0.55M steps. vire (4M more), like-like (3.75M) and the `off_share` runs
+  continued at 0.995: vire's 4:0x50 off went to 99.0%.
+- **ow-moblin from scratch (r72-moblin-new, 8M steps at `off_share: 0.75`) not promoted:** 0x5b W→E without clips
+  92.3% at −0.35..−0.37 hearts, no better than the continued r72-moblin-off (91.7% −0.22) and worse in hearts; the
+  plain 0x5b stays about 3 points under round 20's pre-clip model (94-96%).
+- **Chains with both switch states as the round's measure:** `r72-1k` (clips on) and `r72-1k-noclips`, 1000 runs
+  per segment, and `room-stats --noclips` for the per-room split; full route 13.6% and 4.8% (round 21 12.8%).
+
+## 2026-11-14 — One bomb per wall: no BOMB while a live bomb already reaches the wall (round 23)
+
+- **What:** round 22's BOMB mask for `required` families (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`)
+  also leaves out a target one of Link's bombs already lies in reach of (`zelda::bombs::live_bombs`: slots `$10`/`$11`
+  in state `$11` placed, `$12` fuse, `$13` blast or `$14` fading; `BombTarget::awaits_bomb`), until that bomb is gone
+  or the wall is open. A bomb out of reach blocks nothing; `free` families and the 10th damage-free kill are
+  untouched (no limit there).
+- **Why:** the wall test runs once per bomb, when its blast ends (`asm:Bomb_TryOpenWall`; a rock wall opens during
+  the blast, `asm:RockWall_Update`), and the game accepts a second bomb from the first one's blast on, so a second
+  bomb in reach only spends a bomb. stalfos-keese-gel did it at 4:0x21 (1.6-1.8 bombs per visit; r72 problem 2:
+  BOMB N on the island, CLIP N, BOMB S at Y `$57`; from W BOMB at Y `$5D` twice). Dungeon 4 keeps 2 bombs for its two
+  walls.
+- **Evidence:** `crates/zelda/tests/bomb_mask.rs` `one_bomb`, played in 0:0x2c, 0:0x67, 3:0x4c, 4:0x11 and 4:0x21
+  from W and from S: after the first bomb the mask offers, no BOMB in any direction until the bomb is gone, and the
+  target is then open (at a wall the game itself would have taken a second bomb in the blast); a live bomb out of
+  reach leaves the good BOMB offered and it opens the wall; a bomb gone unexploded frees the target. Without the rule
+  the test fails at the three dungeon walls in the blast (step 7, slot `$13`). Evaluation (round 22 models, 100
+  episodes per state, seed 0, eval-batch, the models' act modes): stalfos-keese-gel (sample) 4:0x21 from S 1.68-1.81
+  → 1.18-1.27 bombs per episode, from W 1.73-1.80 → 1.17-1.27, success 99.7% both, 10th-kill tries 0.26-0.28 per
+  episode (they keep their bomb); argmax after 1.06-1.24. trap-room (argmax) 3:0x4c 1.04-1.08 → 1.02-1.06, 4:0x11
+  1.08-1.12 both (its extra bombs are 10th-kill bombs). The rock walls can't take a second bomb in time (the game
+  refuses one in the fuse, and the rock opens as the blast starts).
+
+## 2026-11-14 — 0x5b's last pass: fight first whatever Link holds (round 23)
+
+- **What:** `d2first` step 100 (3:0x5b W → E) drops `treasure: {if_bombs_below: 6}`: the objective kills the three
+  Darknuts, takes their bombs and then leaves through the E bomb wall, whatever Link holds. Lee's Nov 9 plan took the
+  bombs only below 4 (round 22: below 6, the reserve). `TreasureRule::IfBombsBelow` stays in the route language; no
+  step uses it.
+- **Why** (r72 problem 1: 145 of 404 full-route visits died there): the rule is read live, so at 6 bombs the
+  objective was the wall, and the first bomb Link placed (at the wall or a Darknut; darknut bombs `free` in
+  `requires_bombs` 0x5b) left 5 and turned it into the fight. From the D3 segment's replays (r72, 851 last passes):
+  below 6 bombs Link cleared the room first in 577 of 603 openings (2.94 kills at the opening), 12% died, survivors
+  lost 0.43 hearts; at 6 or more he opened the wall at 0.34 kills, mostly with 4-5 bombs left, stayed 647 frames
+  more (against 222) fighting beside the open wall, 41% died (26 of them after the opening), survivors lost 1.62
+  hearts. Link reached the room with the same health either way (2.75 / 2.99 hearts).
+- **Evidence** (round 22 promoted team, the models' act modes, clips on, the same seeds before and after,
+  `target/r23prep/chains/`): D3 segment `--from 3_7cs_0 --stop-at 0:0x74`, 1000 runs: 0x5b last-pass deaths 149 →
+  93 of 851 (at 6+ bombs 70 → 16 of 170; below 6 79 → 77), survivors' hearts lost 0.60 → 0.42, frames 1123 → 1080,
+  out of Dungeon 3 50.6% → 54.7% (61 runs gained, 20 lost). Full route `--stop-at 4:0x71`, 1000 runs: 0x5b deaths
+  145 → 59 of 404, out of Dungeon 3 19.5% → 27.5% (89 gained, 9 lost); Manhandla 64/259 → 69/345 visits. From
+  `3_5bw_0` with N bombs and H hearts set (500 runs each, to 0:0x74; deaths in 0x5b, arrivals): 6 bombs 3 hearts
+  27.0% → 5.0%, 42.6% → 69.0%; 8 bombs 3 hearts 5.2% → 5.2%, 60.2% → 68.6% (Link no longer leaves at once: 0.84 →
+  0.22 hearts lost, Manhandla deaths 157 → 120); 6 bombs 6 hearts 91.2% → 97.4%; 8 bombs 6 hearts 96.8% → 97.0%; 3
+  bombs (the rule unchanged) 96.0% / 96.2% and 73.2% / 73.0%. No retraining: darknut's 3_5bw resets now train the
+  fight at every bomb count, which a retrain would sharpen.
+
 ## 2026-11-13 — The rest of the first quest: a draft route, drawn on the map before anything is built (Lee)
 
 - **What:** `triforce/draft_routes.yaml` `first-quest` extends `d2first` with Lee's overworld legs and a path

@@ -44,7 +44,7 @@ def rank_key(record: dict) -> tuple:
 
 
 def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, threads: Optional[int] = None,
-                  states_dir=None, deterministic: bool = False, record: Optional[str] = None,
+                  states_dir=None, act: str = 'sample', record: Optional[str] = None,
                   stop: Optional[Callable[[dict], bool]] = None) -> tuple[dict[int, dict], dict[int, dict]]:
     """Plays ``runs`` episodes from every seed start state of ``config`` with ``policy`` (a ``_native.Policy``) on
     an ``EvalTask`` pool of ``parallel`` envs, in each run-time clips switch state the family plays and the state
@@ -58,7 +58,7 @@ def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, t
     plays: dict[int, dict] = {}
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
-        pool.play([policy], deterministic=deterministic, record=record)
+        pool.play([policy], act=act, record=record)
         stopped = False
         while not stopped:
             idle = pool.wait_idle(timeout=0.1)
@@ -72,12 +72,12 @@ def play_episodes(config, policy, runs: int, seed: int = 0, parallel: int = 4, t
 
 
 def success_by_state(config, policy, runs: int, seed: int = 0, parallel: int = 4, threads: Optional[int] = None,
-                     states_dir=None, deterministic: bool = False,
+                     states_dir=None, act: str = 'sample',
                      stop: Optional[Callable[[dict], bool]] = None) -> dict[str, tuple[int, int]]:
     """``play_episodes`` without recording: start state (``clips.label``: ``<state>:clips-off`` with the switch
     off) -> (successes, episodes) (only the episodes played before ``stop`` ended it, if it did)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    records, _ = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, deterministic, stop=stop)
+    records, _ = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, act, stop=stop)
     result: dict[str, tuple[int, int]] = {}
     for record in records.values():
         key = clips_label(record['start_state'], record.get('clips_allowed'))
@@ -87,12 +87,12 @@ def success_by_state(config, policy, runs: int, seed: int = 0, parallel: int = 4
 
 
 def collect_best(config, policy, runs: int, keep: int, seed: int = 0, parallel: int = 4,
-                 threads: Optional[int] = None, states_dir=None, deterministic: bool = False) -> BestRuns:
+                 threads: Optional[int] = None, states_dir=None, act: str = 'sample') -> BestRuns:
     """Plays ``runs`` episodes from every seed start state of ``config`` with ``policy`` (a ``_native.Policy``)
     and returns the top ``keep`` successful runs per state as demo tensors.  Episode ``i`` is seeded
     ``seed + i``."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-    records, plays = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, deterministic,
+    records, plays = play_episodes(config, policy, runs, seed, parallel, threads, states_dir, act,
                                    record='observations')
     by_state: dict[str, list[dict]] = {}
     for record in records.values():

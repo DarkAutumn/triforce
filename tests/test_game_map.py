@@ -92,9 +92,9 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
                     (0x4c, False, 'S', 'E', 'trap-room'), (0x4d, False, 'W', 'N', 'boss-manhandla'),
                     (0x3d, False, 'S', 'triforce', 'zol')]
     assert steps[start + 9]['waypoint'] == 'raft'
+    # 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14).
     assert [(s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
-        (0x5e, 'S', 'clear'), (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip'),
-        (0x5b, 'W', 'if_bombs_below: 6')]
+        (0x5e, 'S', 'clear'), (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip')]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps if s['bomb_reserve'] is not None] == [
         (3, 0x7c, 6), (4, 0x71, 2)]
     assert steps[start - 1]['room'] == 0x74 and steps[start - 1]['exit'] == 'cave'

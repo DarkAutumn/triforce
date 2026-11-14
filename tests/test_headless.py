@@ -94,7 +94,7 @@ def test_a_power_on_argmax_run_is_the_same_file_every_time(scripted_models, tmp_
     assert sorted(name[:8] for name in first) == ['00000007', '00000008'] and play('b') == first
     recording = _native.Replay(next(iter(first.values())))
     assert recording.source == {'kind': 'power-on', 'name': 'LINK', 'delay': 5}
-    assert [model['deterministic'] for model in recording.meta['models']] == [True] * len(recording.meta['models'])
+    assert [model['act'] for model in recording.meta['models']] == ['argmax'] * len(recording.meta['models'])
     # A random delay is the seed's: the same again, and not the fixed one's game.
     drawn = play('c', '--delay', 'random')
     assert play('d', '--delay', 'random') == drawn

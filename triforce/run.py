@@ -17,7 +17,7 @@ from typing import List, Optional
 import numpy as np
 
 from . import _native, replay
-from .registry import ACT_CHOICES, act_override, set_allow_incompatible
+from .registry import ACT_HELP, MODEL_ACT, act_argument, act_override, set_allow_incompatible
 from .runner import Route, Runner, RunResult, parse_location, parse_overrides, write_jsonl
 
 FRAME_RATE = 60.0988
@@ -126,8 +126,8 @@ def main(argv=None):
     view.add_argument('--render', action='store_true', help="show the game in a window with an overlay")
     view.add_argument('--video', metavar='PATH', help="write every frame of the run to this mp4 (needs ffmpeg)")
     parser.add_argument('--fps', type=float, default=60.0, help="with --render: frames per second (0 = unthrottled)")
-    parser.add_argument('--act', choices=ACT_CHOICES, default='model',
-                        help="model: each model's act mode (registry); sample / argmax: that for every model")
+    parser.add_argument('--act', type=act_argument(), default=MODEL_ACT,
+                        help=f"model: each model's act mode (registry); else the {ACT_HELP} for every model")
     parser.add_argument('--stop-at', help="end the route on entering this room instead, e.g. 1:0x73")
     parser.add_argument('--from', dest='start_from', help="start from this savestate (e.g. 2_7ds_0), not the game start")
     parser.add_argument('--models-dir', default=None)
@@ -146,7 +146,7 @@ def main(argv=None):
             raise RuntimeError(f"--video {args.video}: {folder} is not a writable directory")
     route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None, args.start_from)
     overrides = parse_overrides(args.checkpoint)
-    runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=act_override(args.act))
+    runner = Runner(models_dir=args.models_dir, checkpoints=overrides, act=act_override(args.act))
     recording = None
     if args.video:
         result, recording = record_replay(runner, route, args.seed)

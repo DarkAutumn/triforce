@@ -212,13 +212,22 @@ impl Actor<i64> for TestActor {
 
     fn scratch(&self) {}
 
-    fn act(&self, obs: &ObsData, policy: i64, job: i64, step: i64, _: &mut ()) -> Result<(i64, Decision), String> {
+    fn act(
+        &self,
+        obs: &ObsData,
+        policy: i64,
+        job: i64,
+        step: i64,
+        _: u32,
+        _: &mut (),
+    ) -> Result<(i64, Decision), String> {
         let id = obs.i64(ID);
         let action = (id[3].rem_euclid(7) + id[4] + id[0]) % 5;
         let decision = Decision {
             log_prob: job as f32,
             entropy: step as f32,
             value: policy as f32,
+            ..Decision::default()
         };
         Ok((action, decision))
     }
@@ -586,7 +595,7 @@ fn an_actor_error_fails_the_call_not_the_env() {
     impl Actor<i64> for Refuses {
         type Scratch = ();
         fn scratch(&self) {}
-        fn act(&self, _: &ObsData, policy: i64, _: i64, _: i64, _: &mut ()) -> Result<(i64, Decision), String> {
+        fn act(&self, _: &ObsData, policy: i64, _: i64, _: i64, _: u32, _: &mut ()) -> Result<(i64, Decision), String> {
             if policy == 1 { Err("no policy 1".into()) } else { Ok((0, Decision::default())) }
         }
         fn value(&self, _: &ObsData, _: i64, _: &mut ()) -> Result<f32, String> {

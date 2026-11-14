@@ -38,7 +38,8 @@ flowchart LR
 Everything runs in one process. Each env owns its own `ZCore`; `Pool` pins envs round-robin to persistent OS
 threads and steps them without the GIL. The agent acts inside the pool (`docs/rust-actor.md`): each worker picks its
 envs' actions with the Rust copy of the network (`crates/policy`, one per specialist; `ZeldaPolicy.to_native()`),
-sampling with Gumbel noise keyed to (episode job, decision) or taking each head's argmax. The job is an eval job's
+by its act mode (`docs/rust-actor.md` "Act modes": `sample`, `argmax`, or a rule over the joint distribution such
+as `floor:0.03`; every draw uses Gumbel noise keyed to (episode job, decision)). The job is an eval job's
 or chain run's seed, or a per-episode key in training, so an episode plays the same on any env or thread.
 Training makes one `rollout(policies, T, buffers)` call per rollout: every env steps `T` decisions and the buffers
 get, per env, the `T + 1` observations, the actions, the Rust policy's log-prob/entropy/value, rewards, frames,
@@ -90,10 +91,16 @@ BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`,
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
 bomb kill then arms a forced drop of 4 bombs, `asm:Damage_KillMonster`); `required`, in game.yaml `requires_bombs`
 rooms and the 10th kill; `free`, in `requires_bombs` rooms, elsewhere while Link holds more than the route's bomb
-reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 5 from Dungeon 3's entrance, 2 from Dungeon
+reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 6 from Dungeon 3's entrance, 2 from Dungeon
 4's), and the 10th kill (whatever the reserve). Families: `free` goriya, darknut, moldorm, boss-dodongo,
-boss-manhandla, vire; `required` ow-tektite, trap-room, stalfos-keese-gel; `never` boss-gleeok; `tenth` the rest.
-The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
+boss-manhandla, vire; `required` ow-tektite, ow-octorok, trap-room, stalfos-keese-gel; `never` boss-gleeok; `tenth`
+the rest. In a `requires_bombs` room a `required` family is kept to the bombs that open the wall the objective
+leaves through (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`; round 22): BOMB only where the bomb lands
+in reach of it (`zelda::bombs::landing`, `BombTarget::in_reach`: a dungeon wall within `$18` px of its hotspot, a
+rock wall within `$10`) and, since round 23, not while one of Link's bombs (slot `$10`/`$11` in state `$11`-`$14`,
+`zelda::bombs::live_bombs`) already lies in reach of that wall: the wall test comes once, when that bomb's blast ends
+(`asm:Bomb_TryOpenWall`), so a second bomb only spends a bomb (`BombTarget::awaits_bomb`). The 10th damage-free kill
+lifts both limits. The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
 unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
@@ -682,13 +689,17 @@ every step, so following an enemy that moves away pays again, and knockback rese
   iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id> [--act MODE]`
   sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`), one line `<mode> <ckpt.pt sha1>`:
-  `sample` (keyed sampling; the default without the file) or `argmax`, chosen by evaluating both (better-play §6b)
-  and set with `promote --act` (`registry.set_act_mode`, atomic). The mode is bound to the checkpoint: an `act`
+  an act mode (`docs/rust-actor.md` "Act modes"; `sample`, keyed sampling, is the default without the file), chosen
+  by evaluating (better-play §6b, round 23) and set with `promote --act` (`registry.set_act_mode`, atomic;
+  `registry.parse_act` gives the canonical spelling). The mode is bound to the checkpoint: an `act`
   file of other weights, or one without the hash (old format), means `sample` with a warning until the run is
   re-measured and set again. `set_act_mode` renames an `eval.json` measured in the other mode to
   `eval-<that mode>.json`, so `eval.json` stays the evaluation in the model's act mode.
-  Evaluation, chains, `run` and the watch player follow it per model; their `--act sample|argmax` forces one mode
-  for every model (`--act model`, the default, follows the registry).
+  Evaluation, chains and `run` follow it per model; their `--act MODE` forces one mode for every model (`--act
+  model`, their default, follows the registry). The play tools (`play-zelda.py` with its live cell,
+  `zelda-headless.py`, the golden path) default to the one constant `registry.PLAY_ACT` instead (now `sample`),
+  never argmax. The act modes and the run-time clips switch (round 22) are independent: every tool that takes
+  `--act` takes `--clips` beside it, and a record carries both its switch fields and its decision statistics.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
   arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
   with its trajectory.json time); `train_summary.json`
@@ -769,10 +780,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   many consecutive iterations. Guards: no proposal before `ceil(max_steps / steps per env) + patience`
   iterations; an iteration that finished no room-entry episode, or whose `in_flight/over_half_budget` exceeds
   1 − R, resets the streak. A proposal stops training only if a confirmation evaluation of the current weights
-  (`CONFIRM_EPISODES` = 50 sampled episodes per seed start state on an `EvalTask` pool, seed = pool seed +
-  iteration, `--parallel` envs) also reaches R; otherwise the streak restarts. The evaluation ends as soon as its
-  failures rule R out (same decision; the event says `aborted`, with `failures` and `rate_upper_bound`). Every check
-  is an `early_stop_check` event with its rate. Harvested start states never move the rate (they are logged as
+  (`CONFIRM_EPISODES` = 50 episodes per seed start state on an `EvalTask` pool, seed = pool seed + iteration,
+  `--parallel` envs, acting by `--confirm-act MODE`, default `sample`; `scripts/train_round.py --eval-act MODE`
+  passes its mode) also reaches R; otherwise the streak restarts. The rollouts always sample from the unmodified
+  policy (PPO needs it). The evaluation ends as soon as its failures rule R out (same decision; the event says
+  `aborted`, with `failures` and `rate_upper_bound`). Every check is an `early_stop_check` event with its rate and
+  `act`. Harvested start states never move the rate (they are logged as
   `harvested/*`). The raw `success_rate` is biased toward the states the start-state pool oversamples
   (failures), so it is not used for stopping.
 - `python -m triforce.explore --specialist NAME` (Go-Explore phase A; `crates/env/src/explore.rs`, CLI `explore.py`): per seed start state, an
@@ -807,14 +820,18 @@ every step, so following an enemy that moves away pays again, and knockback rese
   Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
   over).
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
-  deterministic=None, on_episode=None, *, threads=None, states_dir=None, events=None, replays=None, streams=(),
+  act=None, on_episode=None, *, threads=None, states_dir=None, events=None, replays=None, streams=(),
   state='embed', keyframe_frames=600)` plays every seed start state N
-  times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed; `deterministic` None
+  times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed; `act` None
   follows the run's act mode; `replays`: a folder every episode is recorded into, `--replays DIR`) and
-  returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate
-  --specialist NAME [--act model|sample|argmax]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint
+  returns success rate, outcomes/endings and per-room/per-state breakdowns, plus the decision statistics (round
+  23, `triforce/variety.py`): `risk` (moves under 1%/5% under the policy per episode, the share followed by a hit
+  or death within 4 decisions, the acting entropy per decision), `by_room`/`by_state` `risk` and `variety`
+  (distinct action sequences, first diverging decision, frames spread from the same start) and per visited room
+  the per-visit decision means and `variety`; `python -m triforce.evaluate
+  --specialist NAME [--act model|MODE]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint
   only for a canonical run (the model's act mode, 100 episodes per state, seed 0, the checkpoint's specialist);
-  otherwise `eval[-<specialist>][-<act>][-e<N>][-s<seed>].json` with each part only where it differs
+  otherwise `eval[-<specialist>][-<act>][-e<N>][-s<seed>][-clips<mode>].json` with each part only where it differs
   (`evaluate.default_output`). Writes are atomic. Results carry `act`, `checkpoint_sha1`, `model_hash`, `config`,
   `code` and `data`, and per-episode records carry `start_max_health` (`mean_start_health_fraction` divides by it).
   `evaluate.read_evaluation(run_dir, mode=None)` is the reader: `eval.json` if it was measured in that mode for the
@@ -827,13 +844,18 @@ every step, so following an enemy that moves away pays again, and knockback rese
   top-level figures and
   every group are over both switch states together, the headline a model weak without clips can't hide behind;
   `by_clips` (`{on: ..., off: ...}`) holds the whole summary per switch state (`by_room`, `by_state`,
-  `visited_rooms` included), `clips` the mode, and every record `clips_allowed` and `clips_fixed`. `clips` is part
-  of what makes two evaluations the same measurement (`eval_batch`). The `eval` event carries `clips` and a
-  compact `by_clips` (`episodes`, `success_rate`, `health_change`, `by_room`, `by_state` per switch state): the
-  training GUI's Eval tab shows a "Clips switch" section (each state's success and heart change, the evaluated
-  mode) and each start room's success per state under the combined figures.
+  `visited_rooms` and `risk` included), `clips` the mode, and every record `clips_allowed` and `clips_fixed`
+  beside its visits' `decisions`. `clips` is part of what makes two evaluations the same measurement
+  (`eval_batch`). The `eval` event carries `act`, `risk` (per episode), `clips` and a compact `by_clips`
+  (`episodes`, `success_rate`, `health_change`, `by_room`, `by_state` per switch state): the training GUI's Eval
+  tab titles the figures with the act mode ("Evaluation · act escape:16"), shows a "Clips switch" section (each
+  state's success and heart change, the evaluated mode), each start room's success per state under the combined
+  figures, and a "Decisions" section (moves under 1%/5% per episode, the share followed by a hit or a death
+  beside every move's, the acting entropy).
 - `scripts/train_round.py --round ID` trains every trainable specialist (route order) and evaluates each
-  (`evaluate.default_output`), then runs `eval-chain`; summaries go to `models/<round>-summary.json`,
+  (`evaluate.default_output`; `--eval-act MODE`: in that act mode, and the training's early-stop confirmation
+  acts by it too, `train --confirm-act`; default `model`, the run's own, with a sampling confirmation), then runs
+  `eval-chain`; summaries go to `models/<round>-summary.json`,
   `models/<round>-chain.jsonl` (written run by run, with its `.meta.json`) and `models/<round>-chain-summary.json`.
   Nothing is promoted unless `--promote` is given: then a run that finished (exit 0, status completed/early_stop)
   and evaluated successfully is promoted, and the summary's `previous_promoted` keeps the replaced run ids and act
@@ -852,7 +874,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `--stop-at` also counts arrivals at the next segment's start room); `--evaluate` everything `evaluate` does.
   `--chains TAG` is `r56_chains.sh`: the eight segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
   then the report entry (`scripts/yardstick.py report`, `triforce room-stats TAG`); `--families` the evaluation of
-  each family's promoted (or `--run-id`) run in each of `--acts`. A failed entry is marked and the batch goes on
+  each family's promoted (or `--run-id`) run in each of `--acts` (`model` or act mode spellings; `--clips` for
+  every one; `--output-dir DIR` writes `DIR/<family>-<act>[-clips<mode>].json` instead of into the run dir). A
+  failed entry is marked and the batch goes on
   (exit 1); SIGTERM / Ctrl-C stops the running ones and marks the rest `interrupted` (exit 130); exit 2 when the
   batch can't run (a bad entry, nothing to run). A rerun skips what is done: a chain whose output exists, an
   evaluation whose result file is the same measurement (`eval_batch.same_measurement`: specialist, act mode,
@@ -940,12 +964,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (`wrong-exit-limit: ...`; `RunResult.wrong_exits` counts them), and so does the 5th return in a row into the room
   before the last, back and forth between two rooms whatever the exits (`bounce-limit: ...`, `MAX_BOUNCES`;
   crossings through a `retreat` exit don't count).
-- `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=None,
+- `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, act=None,
   max_steps=50000, specialist_configs=None, networks=None, parallel=1, threads=None, states_dir=None,
   harvest=None)` lets a `ChainTask` pool play
-  (`EnvPool.play` with each specialist's Rust network and its act mode, `Policies.deterministic`; sampled actions
-  use Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel` or `--threads`;
-  argmax is each head's argmax; `deterministic` True/False forces one mode for all):
+  (`EnvPool.play` with each specialist's Rust network and its act mode, `Policies.acts`; drawn actions use
+  Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel` or `--threads`;
+  `act` forces one mode for all; every room record carries `decisions`, `zelda::decisions`):
   `run(route, seed) -> RunResult`, `run_many(route, seeds, on_result=None, record=None, replays=None)` (`record`:
   `replay.record_options(runner.record_meta(route), ...)`, `replays`: a `replay.ReplayDir`; every run recorded as
   `<seed>-<ending>.tfreplay`). On each
@@ -1001,12 +1025,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `stuck`/`stuck_rate`, `endings`/`end_rate`, `death_rate_entered`, `through_rate`, per visit `hearts_lost`
   (chains: net, `max(0, in − out)`), `hearts_gained`, `hearts_change`, `hearts_healed`, `hits` (chains: the
   records' `hits`, round 22; None for older files), `steps`, `frames`, `clips` (`clip_done`), `bombs`, `cheated_bombs`,
-  then `wrong_exits`, `outcomes`, `specialists` and, in chain scopes, `steps` (the same per route step through the
-  room, `off` for visits the route doesn't explain). A chain visit's route step is its record's `step` (round 22;
-  None, or a step that isn't this route's for the room: off the route); for older records without the field
-  `assign_steps` infers it, following the route from the start state's step (`state_step`, as `chain.rs`
-  `start_step`), a visit taking the step of its room nearest the cursor (2 back, 8 ahead) and a correct exit moving
-  the cursor on. The file records `format` (2; format-1 files still read, as clips on),
+  then `wrong_exits`, `outcomes`, `specialists`, `risk` (`variety.risk` per visit: moves under 1%/5% under the
+  policy, the share followed by a hit or death within 4 decisions, the acting entropy; the room scope's from the
+  evaluations' per-visit means), `variety` (chain scopes: distinct action sequences of the room's visits, mean
+  first diverging decision, frames spread) and, in chain scopes, `steps` (the same per route step through the
+  room, `off` for visits the route doesn't explain); each chain scope also has `risk` per run (and per switch state
+  in its `by_clips`). A chain visit's route step is its record's `step` (round 22; None, or a step that isn't this
+  route's for the room: off the route); for older records without the field `assign_steps` infers it, following
+  the route from the start state's step (`state_step`, as `chain.rs` `start_step`), a visit taking the step of its
+  room nearest the cursor (2 back, 8 ahead) and a correct exit moving the cursor on. The file records `format` (2;
+  format-1 files still read, as clips on),
   `tag`, `version`, `route`, `team` (the chains' runs and act modes), `promoted` (the models dir's promoted runs
   when written), the scope definitions (`segments`) and each scope's `source` (file, runs, start, act modes,
   code, data, version). `zelda-map.py` draws the scopes (Full run, Segment: the `to-*` segments and the dungeons
@@ -1109,7 +1137,7 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
 
 - `zelda-headless.py OUT [COUNT] [--wins-only | --deaths-only | --stuck-only] [--parallel N] [--first-seed S]
   [--max-runs M] [--route R] [--from STATE | --power-on [--name NAME] [--delay N|random]]
-  [--stop-at ROOM|step:N] [--act sample|argmax|model] [--streams LIST] [--keyframe-frames N]
+  [--stop-at ROOM|step:N] [--act MODE|model] [--streams LIST] [--keyframe-frames N]
   [--state embed|path] [--golden [--attempts A]] [--clips on|off] [--models-dir DIR]
   [--allow-incompatible-models]` plays the route in one chain pool without a window or rendering and writes
   replays into `OUT`
@@ -1117,9 +1145,9 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   it plays on (at most `--max-runs`, default 1000 × COUNT) until COUNT runs ended that way and drops the
   others. It prints one line per saved file (`path  ending  frames  seed`) and a JSON summary (`saved`, `runs`,
   `endings`, `out`). Exit 0 when COUNT replays were saved and no run ended in an error, 1 otherwise, 2 on a
-  bad command line, route or model set. Play samples by default (`--act`), so every seed is another game.
-  `--clips off` starts every run with the run-time clips switch off (CLIP masked, the plain way through every
-  stretch); golden paths always play with clips on.
+  bad command line, route or model set. Play draws its actions by default (`--act`, `registry.PLAY_ACT`), so
+  every seed is another game. `--clips off` starts every run with the run-time clips switch off (CLIP masked, the
+  plain way through every stretch); golden paths always play with clips on.
 - **The golden path** (`--golden`; `golden.golden_path(policies, route, parallel, first_seed, record, ...)`):
   the route is cut at its checkpoints, the overworld rooms Link stands in right after a triforce that is not the
   route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
@@ -1128,9 +1156,10 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
   checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
   written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
-  triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model sampling (the default) the games of a
-  segment differ only by the models' sampling noise (keyed to the run seed). Models that act by argmax would
-  play one game from a checkpoint, so unless all sample (`--act argmax`, `--act model`) each game of a later
+  triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model drawing its actions (the default,
+  `registry.draws`) the games of a segment differ only by the models' draws (keyed to the run seed). Models that
+  act by argmax (or `escape`) could play one game from a checkpoint, so unless all draw (`--act argmax`, `--act
+  model`) each game of a later
   segment has the game's random numbers redrawn from its seed when the checkpoint is restored
   (`checkpoint={..., 'randomize_rng': True}`, `Route::redrawing_rng`: the natural RNG state a start state's load
   writes, "Randomness at a start" above), recorded as edits at the checkpoint and META `rng_phase` in the
@@ -1162,11 +1191,13 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   `--patience` (64) finished runs in a row that no queue took they wait for the next take (0: never).
   `--replays DIR` saves every simulated run. `--from`, `--power-on`, `--stop-at`, `--stall-steps` and `--act`
   shape the runs as in `zelda-headless.py`.
-- **Acting** (`--act`, chosen at startup): `sample` (default) draws every action from the model's
-  probabilities, `argmax` takes the most likely one, `model` follows each model's registered mode. Runs that
-  don't sample differ by the game's random numbers alone: those are redrawn from the run seed when a start
-  state is loaded (the game start, `--from`) and at a golden path's checkpoints; from power on they come from
-  the idle delay, so `--act argmax` with a fixed `--delay` is refused.
+- **Acting** (`--act`, chosen at startup, for the simulations and the live cell alike): `registry.PLAY_ACT`
+  (default) draws every action at random, an act mode applies to every model (`argmax` takes the most likely one;
+  `temperature:T+relax:N` draws every action and breaks loops), `model` follows each model's registered mode. Runs
+  that don't draw every action differ by the game's random numbers alone: those are redrawn from the run
+  seed when a start state is loaded (the game start, `--from`) and at a golden path's checkpoints; from power on
+  they come from the idle delay, so a mode that doesn't draw (`argmax`, `escape`) with a fixed `--delay` is
+  refused.
 - **Golden paths** (`--show golden`, key `g`): `play_grid.GoldenSource` makes golden paths one after another
   on a Python thread while fewer than one per cell wait; failed paths are dropped.
 - **Replay files** (PATH): one file plays on loop (in one cell unless a grid is given); a folder's top-level

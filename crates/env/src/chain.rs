@@ -19,7 +19,7 @@ use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::reward_track::RewardTrack;
 use crate::rewards::Scored;
-use crate::specialist_env::linger_json;
+use crate::specialist_env::{decisions_json, linger_json};
 use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
 use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
+use zelda::decisions::{DecisionNote, DecisionStats};
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::{GameMap, Way};
@@ -377,6 +378,8 @@ pub struct RoomRecord {
     pub boss_eats: u32,
     /// Grid-point skips completed and aborted during the visit (`zelda::clips`; JSON `clip_<field>`).
     pub clips: ClipStats,
+    /// The decisions taken in the visit (`zelda::decisions`; JSON `decisions`, `specialist_env::decisions_json`).
+    pub decisions: DecisionStats,
     /// Actions that lost health during the visit (as an evaluation's `hits`), and hits on enemies
     /// (`Change::observed`; round 22).
     pub hits: u32,
@@ -390,7 +393,8 @@ pub struct RoomRecord {
 }
 
 impl RoomRecord {
-    /// `keys`: Link's natural keys (`CheatLedger::natural`).
+    /// `keys`: Link's natural keys (`CheatLedger::natural`); `clips_allowed`: the run-time clips switch now (the
+    /// milestone record's too: the switch the run ended with).
     fn new(
         index: usize,
         location: MapLocation,
@@ -398,6 +402,7 @@ impl RoomRecord {
         state: &GameView,
         keys: i32,
         outcome: &str,
+        clips_allowed: bool,
     ) -> Self {
         RoomRecord {
             index,
@@ -428,10 +433,11 @@ impl RoomRecord {
             boss_stuns: 0,
             boss_eats: 0,
             clips: ClipStats::default(),
+            decisions: DecisionStats::default(),
             hits: 0,
             hits_dealt: 0,
             step: None,
-            clips_allowed: true,
+            clips_allowed,
             clips_flips: Vec::new(),
         }
     }
@@ -454,6 +460,7 @@ impl RoomRecord {
             "linger": self.linger.as_ref().map_or_else(|| json!({}), linger_json),
             "blocks": self.blocks, "no_damage_max": self.no_damage_max, "bombs_used": self.bombs_used,
             "boss_stuns": self.boss_stuns, "boss_eats": self.boss_eats,
+            "decisions": decisions_json(&self.decisions),
             "hits": self.hits, "hits_dealt": self.hits_dealt, "step": self.step,
             "clips_allowed": self.clips_allowed,
             "clips_flips": self.clips_flips.iter().map(|(steps, on)| json!({"step": steps, "clips": on}))
@@ -599,6 +606,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     scored: Option<Scored>,
     /// The name and delay the current run booted with (a power-on start).
     booted: Option<(String, u32)>,
+    /// The decision that chooses the next step, for the room record ([`ChainEnv::note_decision`]).
+    decision: Option<DecisionNote>,
     /// The run-time clips switch in force ([`ChainEnv::set_clips_allowed`]).
     clips_allowed: bool,
     /// A switch set mid-run, applied before the next decision is built.
@@ -644,6 +653,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             track: None,
             scored: None,
             booted: None,
+            decision: None,
             clips_allowed: true,
             pending_clips: None,
             clips_flipped: false,
@@ -690,6 +700,16 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// The stall budget is set and the acting room has gone `stall_steps` actions without damage either way.
     pub fn stalled(&self) -> bool {
         self.stall_steps.is_some_and(|n| self.no_damage >= n)
+    }
+
+    /// The decision that chooses the next step (the pool's actor), counted in the room record's `decisions`.
+    pub fn note_decision(&mut self, note: DecisionNote) {
+        self.decision = Some(note);
+    }
+
+    /// Actions in a row without progress in the acting room (its linger count, `zelda::linger`).
+    pub fn quiet_steps(&self) -> u32 {
+        self.linger.tail_steps()
     }
 
     /// Cheated items used so far this run.
@@ -872,6 +892,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.track = None;
         self.scored = None;
         self.booted = None;
+        self.decision = None;
         let (started, granted) = match self.route.start.clone() {
             RunStart::State => (self.start_from_state(rng), None),
             RunStart::PowerOn { name, delay, max_delay } => {
@@ -1035,6 +1056,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             self.no_damage += 1;
         }
         record.no_damage_max = record.no_damage_max.max(self.no_damage);
+        record
+            .decisions
+            .update(self.decision.take(), change.health_lost > 0.0, state.game_over());
         result.steps += 1;
         result.frames += (change.frames + change.menu_frames) as u64;
         self.objective = Some(objective);
@@ -1070,7 +1094,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             let location = state.full_location();
             result
                 .rooms
-                .push(RoomRecord::new(index, location, "-", &state, keys, "milestone"));
+                .push(RoomRecord::new(index, location, "-", &state, keys, "milestone", self.clips_allowed));
             return Ok(ChainStatus::Done(result.clone()));
         }
         Ok(self.advance())
@@ -1242,7 +1266,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 let index = result.rooms.len();
                 result
                     .rooms
-                    .push(RoomRecord::new(index, location, "-", &state, keys, "milestone"));
+                    .push(RoomRecord::new(index, location, "-", &state, keys, "milestone", self.clips_allowed));
                 return Ok(ChainStatus::Done(result.clone()));
             }
             let room = map.get(location);
@@ -1293,9 +1317,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 ));
             };
             let index = result.rooms.len();
-            let mut record = RoomRecord::new(index, location, &name, &state, keys, "in-progress");
+            let mut record =
+                RoomRecord::new(index, location, &name, &state, keys, "in-progress", self.clips_allowed);
             record.step = on_step;
-            record.clips_allowed = self.clips_allowed;
             record.clips_flips.extend(self.entry_flip.take().map(|on| (0, on)));
             result.rooms.push(record);
             self.hearts.reset(&HeartView::of(&state));

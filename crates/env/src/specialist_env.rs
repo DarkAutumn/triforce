@@ -42,6 +42,7 @@ use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::hearts::{HeartSummary, HeartTracker, HeartView};
+use zelda::decisions::{DecisionNote, DecisionStats};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, start_clips, start_route};
 use zelda::visits::{
@@ -138,6 +139,18 @@ pub fn linger_json(s: &LingerSummary) -> Value {
            "tail_frames": s.tail_frames, "steps": s.steps, "frames": s.frames,
            "boss_kill_steps": s.boss_kill_steps, "boss_kill_frames": s.boss_kill_frames,
            "heart_container_steps": s.heart_container_steps, "heart_container_frames": s.heart_container_frames})
+}
+
+/// A visit's decision statistics (`zelda::decisions`): `n` decisions, `low1`/`low5` (chosen with probability under
+/// 1%/5% under the policy), `low1_hit`/`low5_hit`/`low1_death`/`low5_death` (those followed by a hit or death
+/// within `zelda::decisions::FOLLOW` decisions), `hit`/`death` (any decision followed by one: the base rate),
+/// `surprisal` (sum of -ln p), `act_entropy` (sum of the acting
+/// distributions' entropies) and `actions` (two hex digits per decision: the joint action index).
+pub fn decisions_json(d: &DecisionStats) -> Value {
+    json!({"n": d.decisions, "low1": d.low[0], "low5": d.low[1], "low1_hit": d.low_hit[0], "low5_hit": d.low_hit[1],
+           "low1_death": d.low_death[0], "low5_death": d.low_death[1], "hit": d.hit, "death": d.death,
+           "surprisal": d.surprisal,
+           "act_entropy": d.act_entropy, "actions": d.actions_hex()})
 }
 
 /// `{bombs, keys, rupees}`: cheated items used (`zelda::cheats`).
@@ -289,6 +302,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     left_with: ItemCounts<Option<u8>>,
     /// Per-room-visit statistics (only with `EnvOptions::track_visits`).
     visits: Option<VisitTracker>,
+    /// The decision that chooses the next step, for the visit statistics ([`SpecialistEnv::note_decision`]).
+    decision: Option<DecisionNote>,
     pool: Option<StartStatePool>,
     curriculum: Option<SharedCurriculum>,
     critic: GameplayCritic,
@@ -417,6 +432,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             cheats: CheatLedger::default(),
             left_with: ItemCounts::default(),
             visits: opts.track_visits.then(VisitTracker::default),
+            decision: None,
             pool,
             curriculum,
             critic,
@@ -536,6 +552,14 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     /// The room visits of the episode that just ended (empty without `EnvOptions::track_visits`).
     pub fn take_visits(&mut self) -> Vec<RoomVisit> {
         self.visits.as_mut().map_or_else(Vec::new, VisitTracker::take)
+    }
+
+    /// The decision that chooses the next step (the pool's actor), counted in the room visit's statistics
+    /// (`zelda::decisions`; ignored without `EnvOptions::track_visits`).
+    pub fn note_decision(&mut self, note: DecisionNote) {
+        if self.visits.is_some() {
+            self.decision = Some(note);
+        }
     }
 
     /// Starts an episode: `seed` reseeds the env RNG; `start_state` overrides the pool/curriculum.
@@ -696,6 +720,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.end_conditions.clear();
         self.start_health = state.health();
         self.hearts.reset(&HeartView::of(state));
+        self.decision = None;
         if let Some(visits) = &mut self.visits {
             visits.reset(&natural_visit_view(&self.cheats, state));
         }
@@ -932,6 +957,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             step.cheated = cheats.cheated;
             step.boss_stuns = boss.stuns;
             step.boss_eats = boss.eats;
+            step.decision = self.decision.take();
             visits.update(&natural_visit_view(&self.cheats, &state), &step, end);
         }
         let reward = rewards.value();

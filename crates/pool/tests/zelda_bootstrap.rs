@@ -48,7 +48,15 @@ impl Actor<ZeldaAction> for Waits {
 
     fn scratch(&self) {}
 
-    fn act(&self, obs: &ObsData, _: i64, _: i64, _: i64, _: &mut ()) -> Result<(ZeldaAction, Decision), String> {
+    fn act(
+        &self,
+        obs: &ObsData,
+        _: i64,
+        _: i64,
+        _: i64,
+        _: u32,
+        _: &mut (),
+    ) -> Result<(ZeldaAction, Decision), String> {
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
         let mask = ActionMask::from_flat(&flat);
         let action = Action::parse("WAIT 8").map_err(|e| e.to_string())?;

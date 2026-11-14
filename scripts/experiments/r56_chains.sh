@@ -15,8 +15,9 @@
 #
 #   ACT=sample TAG=r56-sample scripts/experiments/r56_chains.sh [run|report]
 #
-# ACT: model (each model's act file), sample or argmax. Output: target/r56-chains/<TAG>-<segment>.jsonl (console
-# output in <TAG>-<segment>.log), target/r56-chains/<TAG>-yardstick.json and target/r56-chains/<TAG>-room-stats.json
+# ACT: model (each model's act file) or an act mode (sample, argmax, floor:0.03, ...: docs/rust-actor.md "Act modes").
+# Output: target/r56-chains/<TAG>-<segment>.jsonl (console output in <TAG>-<segment>.log),
+# target/r56-chains/<TAG>-yardstick.json and target/r56-chains/<TAG>-room-stats.json
 # (`triforce room-stats`: per-room statistics by scope, full run, the segments cut at the dungeon exits, each dungeon,
 # the room alone; zelda-map.py shows the newest).
 #

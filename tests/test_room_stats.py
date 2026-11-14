@@ -250,8 +250,10 @@ def test_one_file_with_mixed_runs_splits_every_room_by_the_switch():
     assert (scope['runs'], scope['arrived'], scope['endings']) == (4, 1, {'death': 3})
     # Runs that played a visit with each switch: the flipping run 2 in both.
     assert scope['by_clips'] == {
-        'on': {'runs': 3, 'arrived': 1, 'arrival_rate': 0.33333, 'endings': {'death': 1}, 'off_route_visits': 0},
-        'off': {'runs': 2, 'arrived': 0, 'arrival_rate': 0.0, 'endings': {'death': 2}, 'off_route_visits': 0}}
+        'on': {'runs': 3, 'arrived': 1, 'arrival_rate': 0.33333, 'endings': {'death': 1}, 'off_route_visits': 0,
+               'risk': {}},
+        'off': {'runs': 2, 'arrived': 0, 'arrival_rate': 0.0, 'endings': {'death': 2}, 'off_route_visits': 0,
+                'risk': {}}}
     room = scope['rooms']['0:0x11']                     # the combined numbers stay what they were
     assert (room['runs'], room['entered'], room['visits'], room['deaths'], room['death_rate']) == (4, 4, 5, 2, 0.5)
     on_, off_ = room['by_clips']['on'], room['by_clips']['off']
@@ -270,6 +272,31 @@ def test_one_file_with_mixed_runs_splits_every_room_by_the_switch():
     # A segment splits the same way within its cut.
     segment = room_stats.chain_scope(MIXED_RUNS, PLAN, FIRST)
     assert segment['by_clips']['on']['arrived'] == 1 and segment['rooms']['0:0x11']['by_clips']['on']['visits'] == 3
+
+
+def test_the_decision_statistics_split_by_the_switch():
+    """Rounds 22 and 23 merged: a room entry's ``risk`` and a scope's ``risk`` (per run) cover every visit, and each
+    switch state's those visits played in it; a run that flips counts in both."""
+    def decisions(n, low1, low1_hit=0, death=0):
+        return {'decisions': {'n': n, 'low1': low1, 'low5': low1, 'low1_hit': low1_hit, 'low5_hit': low1_hit,
+                              'low1_death': 0, 'low5_death': 0, 'hit': low1_hit, 'death': death, 'surprisal': 1.0,
+                              'act_entropy': 0.5, 'actions': '00' * n}}
+    runs = [clips_run(0, True, [on(0, 0x10, step=0, **decisions(10, 2, 1)), on(0, 0x11, step=1, **decisions(10, 0)),
+                                on(0, 0x12, step=2, **decisions(10, 1)), on(1, 0x20, step=3), on(1, 0x10, step=4),
+                                on(0, 0x12, step=5), on(0, 0x11, step=6), on(0, 0x01, step=7),
+                                visit(0, 0x01, 'milestone')], 'success'),
+            clips_run(1, True, [on(0, 0x10, step=0, **decisions(4, 1)),
+                                off(0, 0x11, 'death', step=1, health_out=0.0, clips_flips=[{'step': 0, 'clips': False}],
+                                    **decisions(6, 3, 0, 1))])]
+    scope = room_stats.chain_scope(runs, PLAN, FULL)
+    assert (scope['risk']['runs'], scope['risk']['decisions'], scope['risk']['low1']) == (2, 40, 7)
+    on_, off_ = scope['by_clips']['on']['risk'], scope['by_clips']['off']['risk']
+    assert (on_['runs'], on_['decisions'], on_['low1'], on_['low1_hit']) == (2, 34, 4, 1)
+    assert (off_['runs'], off_['decisions'], off_['low1'], off_['death']) == (1, 6, 3, 1)
+    room = scope['rooms']['0:0x11']
+    assert (room['risk']['visits'], room['risk']['decisions']) == (2, 16)
+    assert room['by_clips']['off']['risk']['low1_per_visit'] == 3.0
+    assert room['by_clips']['on']['risk']['low1_per_visit'] == 0.0
 
 
 def test_assign_steps_uses_the_recorded_step_and_infers_without_it():

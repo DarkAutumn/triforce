@@ -24,8 +24,8 @@ import torch
 from . import __version__, _native, replay
 from .paths import STATES_DIR
 from .provenance import code_version, data_hash, location_text, models_header
-from .registry import (CHECKPOINT_NAME, act_mode, checkpoint_sha1, load_model, promoted_checkpoint,
-                       require_compatible)
+from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_model, parse_act,
+                       promoted_checkpoint, require_compatible)
 from .replay import ReplayDir
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
@@ -228,6 +228,10 @@ class RoomRecord:
     step: Optional[int] = None
     clips_allowed: Optional[bool] = None
     clips_flips: List[dict] = field(default_factory=list)
+    # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
+    # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
+    # within 4 decisions), surprisal, act_entropy and actions (hex, two digits per decision).  {} in older records.
+    decisions: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -291,8 +295,8 @@ class Policies:
     ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model; ``networks``
     (name -> a ``ZeldaPolicy``) supplies a model directly; ``specialist_configs`` (name -> config) replaces a
     specialist's canonical YAML at runtime.  ``checkpoints`` afterwards maps each loaded name to its file and
-    ``deterministic`` holds, per policy, whether its model acts by argmax (the run's act mode, ``registry``; a
-    given network samples)."""
+    ``acts`` holds, per policy, its model's act mode (the run's, ``registry.act_mode``; a given network
+    samples)."""
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
@@ -312,11 +316,11 @@ class Policies:
         self.configs: List[SpecialistConfig] = []
         self.policies: list = []
         self.checkpoints: Dict[str, str] = {}
-        self.deterministic: List[bool] = []
+        self.acts: List[str] = []
         self.missing: Dict[str, str] = {}
         for name in sorted(known):
             network = given.get(name)
-            argmax = False
+            act = DEFAULT_ACT
             if network is None:
                 if name in overrides:
                     path = overrides[name]
@@ -330,11 +334,15 @@ class Policies:
                 with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
                     network, _ = load_model(path)
                 self.checkpoints[name] = str(path)
-                argmax = act_mode(path) == 'argmax'
+                act = act_mode(path)
             self.names.append(name)
             self.configs.append(configs.get(name) or load_specialist(name))
             self.policies.append(network.to_native())
-            self.deterministic.append(argmax)
+            self.acts.append(act)
+
+    def modes(self, act: Optional[str] = None) -> List[str]:
+        """Per policy the act mode it plays by: its own (``acts``) for None, else ``act`` for every policy."""
+        return list(self.acts) if act is None else [parse_act(act)] * len(self.policies)
 
 
 class ChainPool:
@@ -344,7 +352,9 @@ class ChainPool:
     actions in a room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``record``
     (``replay.record_options``; None = off): every run is recorded
     as a TFREPLAY file and reported as a ``replay`` event; ``replays`` (a ``ReplayDir``) keeps those as files.
-    ``deterministic``: None = each policy's act mode (``Policies.deterministic``), else argmax (True) or sampling
+    ``act``: None = each policy's act mode (``Policies.acts``), else this act mode for every policy.  ``harvest`` (a
+    directory; None = off): every correct room entry where the acting specialist changes (a handoff) saves its
+    pre-entry state as
     ``harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state`` (``n``: the room's index in the run), a start
     state for that specialist's ``harvested_dir``.  ``hold_finished_frame``: each finished run holds the env's
     picture on its last screen until ``pool.set_hold(env, False)`` (a watched cell's result pause).  ``clips_live``:
@@ -353,7 +363,7 @@ class ChainPool:
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
-                 deterministic: Optional[bool] = None,
+                 act: Optional[str] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: Optional[dict] = None,
                  stall_steps: Optional[int] = None, replays: Optional[ReplayDir] = None, harvest=None,
                  hold_finished_frame: bool = False, clips_live: bool = False):
@@ -362,8 +372,7 @@ class ChainPool:
             raise ValueError("a replay folder needs record options (replay.record_options)")
         self.route = route
         self.policies = policies
-        self.deterministic = (list(policies.deterministic) if deterministic is None
-                              else [bool(deterministic)] * len(policies.policies))
+        self.acts = policies.modes(act)
         self.record = record
         self.replays = replays
         start_from = None if route.start_state == 'start' else route.start_state
@@ -380,7 +389,7 @@ class ChainPool:
 
     def play(self):
         """Every env starts acting on its own (``EnvPool.play``)."""
-        self.pool.play(self.policies.policies, deterministic=self.deterministic,
+        self.pool.play(self.policies.policies, act=self.acts,
                        distributions=bool(self.record and self.record.get('decisions')))
 
     def poll_events(self) -> List[dict]:
@@ -428,7 +437,7 @@ class Runner:
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
-                 deterministic: Optional[bool] = None,
+                 act: Optional[str] = None,
                  max_steps: int = DEFAULT_MAX_STEPS,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
@@ -438,12 +447,12 @@ class Runner:
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
         networks: specialist name → a ``ZeldaPolicy`` to act with instead of a checkpoint.
         parallel: envs in the chain pool; threads: its worker threads (default min(parallel, cores)).
-        deterministic: None = each model's act mode (registry), else argmax (True) or sampling (False) for all.
+        act: None = each model's act mode (registry), else this act mode for all.
         harvest: save every handoff's pre-entry state under this directory (``ChainPool``).
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.policies = Policies(models_dir, checkpoints, specialist_configs, networks)
-        self.deterministic = deterministic
+        self.act = None if act is None else parse_act(act)
         self.max_steps = max_steps
         self.parallel = parallel
         self.threads = threads
@@ -455,12 +464,12 @@ class Runner:
         ``record``, ``replays``, ``stall_steps``)."""
         kwargs.setdefault('num_envs', self.parallel)
         kwargs.setdefault('threads', self.threads)
-        return ChainPool(route, seeds, self.policies, deterministic=self.deterministic, max_steps=self.max_steps,
+        return ChainPool(route, seeds, self.policies, act=self.act, max_steps=self.max_steps,
                          states_dir=self.states_dir, harvest=self.harvest, **kwargs)
 
     def record_meta(self, route: Route, **extra) -> dict:
         """The META object of recordings of ``route`` played by this runner (``chain_meta``)."""
-        return chain_meta(self.policies, self.deterministic, route, **extra)
+        return chain_meta(self.policies, self.act, route, **extra)
 
     def provenance(self, route: Route) -> dict:
         """What plays ``route``: per policy its name, checkpoint, ``ckpt.pt`` sha1, Rust network hash, act mode and
@@ -468,13 +477,10 @@ class Runner:
         game data hash (``replay``).  Stored with every chain result (``chain_summary``, ``eval-chain``'s
         ``<output>.meta.json``)."""
         policies = self.policies
-        deterministic = (list(policies.deterministic) if self.deterministic is None
-                         else [bool(self.deterministic)] * len(policies.policies))
-        models = models_header(policies.names, policies.policies, policies.checkpoints, deterministic)
+        models = models_header(policies.names, policies.policies, policies.checkpoints, policies.modes(self.act))
         for model, config in zip(models, policies.configs):
             checkpoint = policies.checkpoints.get(model['name'])
             model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
-            model['act'] = 'argmax' if model['deterministic'] else 'sample'
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
         checkpoint = route.checkpoint and {'step': route.checkpoint['step'], 'granted': route.checkpoint['granted'],
                                            'randomize_rng': route.checkpoint['randomize_rng'],
@@ -612,9 +618,8 @@ def chain_summary(results: List[RunResult]) -> dict:
     return summary
 
 
-def chain_meta(policies: Policies, deterministic: Optional[bool], route: Route, **extra) -> dict:
-    """The META object of recordings of ``route`` played by ``policies`` (``replay.meta``; ``deterministic``:
+def chain_meta(policies: Policies, act: Optional[str], route: Route, **extra) -> dict:
+    """The META object of recordings of ``route`` played by ``policies`` (``replay.meta``; ``act``:
     ``ChainPool``'s; ``extra``: more entries): what ``replay.record_options`` takes."""
-    modes = list(policies.deterministic) if deterministic is None else [bool(deterministic)] * len(policies.policies)
-    models = models_header(policies.names, policies.policies, policies.checkpoints, modes)
+    models = models_header(policies.names, policies.policies, policies.checkpoints, policies.modes(act))
     return replay.meta('chain', models, route.name, stop_text(route), **extra)

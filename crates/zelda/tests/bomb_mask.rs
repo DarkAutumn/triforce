@@ -2,7 +2,7 @@
 //! `zelda::bombs::BombTarget`, `zelda::bombs::landing`).  Played in the game for every room the rule touches on the
 //! route (the `requires_bombs` rooms of the `required` families): around each wall, from every grid point and in
 //! every direction the game lets Link place a bomb, a BOMB the mask offers opens the wall with that one bomb, and one
-//! it doesn't offer leaves the wall shut.
+//! it doesn't offer leaves the wall shut.  Round 23: one bomb per wall (`BombTarget::awaits_bomb`, `one_bomb`).
 mod common;
 
 use common::{load_named_state, open_core};
@@ -10,9 +10,9 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
 use zcore::ZCore;
-use zelda::bombs::BombTarget;
+use zelda::bombs::{BombTarget, landing, live_bombs};
 use zelda::game::GameView;
-use zelda::{Action, ActionKind, Direction, GameMap, LoadOptions, Session, Var};
+use zelda::{Action, ActionKind, Direction, GameMap, LoadOptions, Position, Session, Var};
 
 /// Object type of the overworld rock wall tile object (asm:RockWall_Update).
 const ROCK_WALL: u8 = 0x63;
@@ -49,9 +49,8 @@ fn place(s: &mut Session<ZCore>, x: u8, y: u8) {
     ]);
 }
 
-/// Sweeps the grid points within 48 px of `centre`: (offered, opened) pairs, all equal.  Returns the number of
-/// BOMBs offered and the number refused that the game would have placed.
-fn sweep(state: &str, target: BombTarget, centre: (i32, i32)) -> (usize, usize) {
+/// The state loaded and played to its first frame where Link can move, the target still shut.
+fn start(state: &str, target: BombTarget) -> Session<ZCore> {
     let nes = open_core().expect("ROM");
     let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
     let mut rng = ChaCha8Rng::seed_from_u64(0);
@@ -63,45 +62,147 @@ fn sweep(state: &str, target: BombTarget, centre: (i32, i32)) -> (usize, usize) 
         act(&mut s, "WAIT 8");
     }
     assert!(shut(s.state(), target), "{state}: {target:?} is shut at the start");
-    let start = s.snapshot();
-    let (mut offered, mut refused) = (0, 0);
-    for dy in (-48..=48).step_by(8) {
-        for dx in (-48..=48).step_by(8) {
+    s
+}
+
+/// The grid points within 48 px of `centre` Link can be placed on.
+fn grid(centre: (i32, i32)) -> impl Iterator<Item = (u8, u8)> {
+    (-48..=48).step_by(8).flat_map(move |dy| {
+        (-48..=48).step_by(8).filter_map(move |dx| {
             let (x, y) = (centre.0 + dx, centre.1 + dy);
-            if !(0x10..=0xE0).contains(&x) || !(0x45..=0xD5).contains(&y) {
+            ((0x10..=0xE0).contains(&x) && (0x45..=0xD5).contains(&y)).then_some((x as u8, y as u8))
+        })
+    })
+}
+
+fn bomb(d: Direction) -> Action {
+    Action::new(ActionKind::Bomb, d, 0).unwrap()
+}
+
+/// Sweeps the grid points within 48 px of `centre`: (offered, opened) pairs, all equal.  Returns the number of
+/// BOMBs offered and the number refused that the game would have placed.
+fn sweep(state: &str, target: BombTarget, centre: (i32, i32)) -> (usize, usize) {
+    let mut s = start(state, target);
+    let begin = s.snapshot();
+    let (mut offered, mut refused) = (0, 0);
+    for (x, y) in grid(centre) {
+        for d in CARDINALS {
+            s.restore(&begin);
+            s.set_bomb_targets(None);
+            place(&mut s, x, y);
+            if !s.mask().is_allowed(&bomb(d)) {
                 continue;
             }
-            for d in CARDINALS {
-                s.restore(&start);
-                s.set_bomb_targets(None);
-                place(&mut s, x as u8, y as u8);
-                let bomb = Action::new(ActionKind::Bomb, d, 0).unwrap();
-                if !s.mask().is_allowed(&bomb) {
-                    continue;
-                }
-                s.set_bomb_targets(Some(&[target]));
-                let allowed = s.mask().is_allowed(&bomb);
-                s.act(bomb).unwrap();
-                for _ in 0..8 {
-                    act(&mut s, "WAIT 16");
-                }
-                let opened = !shut(s.state(), target);
-                assert_eq!(
-                    allowed, opened,
-                    "{state}: Link at (${x:02X}, ${y:02X}), BOMB {d:?}: offered {allowed}, the bomb opened {target:?}: {opened} (room flags ${:02X}, cave tile {:?}, link {:?})",
-                    s.state().peek(0x67F + u16::from(s.state().location())),
-                    s.state().room().cave_tile,
-                    s.state().link.position
-                );
-                if allowed { offered += 1 } else { refused += 1 }
+            s.set_bomb_targets(Some(&[target]));
+            let allowed = s.mask().is_allowed(&bomb(d));
+            s.act(bomb(d)).unwrap();
+            for _ in 0..8 {
+                act(&mut s, "WAIT 16");
             }
+            let opened = !shut(s.state(), target);
+            assert_eq!(
+                allowed, opened,
+                "{state}: Link at (${x:02X}, ${y:02X}), BOMB {d:?}: offered {allowed}, the bomb opened {target:?}: {opened} (room flags ${:02X}, cave tile {:?}, link {:?})",
+                s.state().peek(0x67F + u16::from(s.state().location())),
+                s.state().room().cave_tile,
+                s.state().link.position
+            );
+            if allowed { offered += 1 } else { refused += 1 }
         }
     }
     (offered, refused)
 }
 
+/// What the env offers once a bomb has done its work: the target while it is shut, nothing once it is open
+/// (`route_bomb_targets` drops an opened wall).
+fn retarget(s: &mut Session<ZCore>, target: BombTarget) {
+    let targets: &[BombTarget] = if shut(s.state(), target) { &[target] } else { &[] };
+    s.set_bomb_targets(Some(targets));
+}
+
+fn no_bomb_offered(s: &Session<ZCore>) -> bool {
+    CARDINALS.into_iter().all(|d| !s.mask().is_allowed(&bomb(d)))
+}
+
+/// Round 23 (a second BOMB in the first one's fuse or blast at 4:0x21): one bomb per target.
+/// - After a bomb the mask offers in reach of the target, no BOMB is offered while that bomb lives (fuse, blast,
+///   fading), though for a wall the game would place one from the blast on; then the target is open.
+/// - A bomb out of reach blocks nothing: with it still live a BOMB in reach is offered, and it opens the target.
+/// - A bomb in reach that is gone without its blast (its slot emptied) frees the target again.
+fn one_bomb(state: &str, target: BombTarget, centre: (i32, i32)) {
+    let mut s = start(state, target);
+    let begin = s.snapshot();
+    let spots: Vec<(u8, u8, Direction)> =
+        grid(centre).flat_map(|(x, y)| CARDINALS.map(move |d| (x, y, d))).collect();
+    let offered_at = |s: &mut Session<ZCore>, targets: Option<&[BombTarget]>, keep: &dyn Fn(Position) -> bool| {
+        spots.iter().copied().find(|&(x, y, d)| {
+            s.restore(&begin);
+            place(s, x, y);
+            s.set_bomb_targets(targets);
+            s.mask().is_allowed(&bomb(d)) && landing(s.state(), d).is_some_and(keep)
+        })
+    };
+    let (x, y, d) = offered_at(&mut s, Some(&[target]), &|_| true).expect("a BOMB the mask offers");
+    let (fx, fy, fd) = offered_at(&mut s, None, &|at| !target.in_reach(at)).expect("a BOMB out of reach");
+
+    // The good bomb, then nothing until it is gone.
+    s.restore(&begin);
+    place(&mut s, x, y);
+    s.set_bomb_targets(Some(&[target]));
+    s.act(bomb(d)).unwrap();
+    let (mut steps, mut game_would) = (0, false);
+    while live_bombs(s.state()).next().is_some() {
+        assert!(target.awaits_bomb(s.state()) || !shut(s.state(), target), "{state}: the bomb lies in reach");
+        retarget(&mut s, target);
+        assert!(no_bomb_offered(&s), "{state}: step {steps}: a second BOMB offered while the first lives (slots ${:02X} ${:02X})", s.state().peek(0xBC), s.state().peek(0xBD));
+        s.set_bomb_targets(None);
+        game_would |= s.mask().is_allowed(&bomb(d));
+        act(&mut s, "WAIT 4");
+        steps += 1;
+        assert!(steps < 40, "{state}: the bomb never went");
+    }
+    assert!(!shut(s.state(), target), "{state}: the one bomb opened {target:?}");
+    if matches!(target, BombTarget::Wall(_)) {
+        // A rock wall opens as the blast starts, so the game itself has no bomb target left by then.
+        assert!(game_would, "{state}: the game would have placed a second bomb in the first one's blast");
+    }
+
+    // A bomb out of reach, then the good one while it still lives.
+    s.restore(&begin);
+    place(&mut s, fx, fy);
+    s.set_bomb_targets(None);
+    s.act(bomb(fd)).unwrap();
+    while live_bombs(s.state()).next().is_some() && !s.mask().is_allowed(&bomb(fd)) {
+        act(&mut s, "WAIT 4");
+    }
+    let far = live_bombs(s.state()).next().expect("the far bomb is still live");
+    assert!(!target.in_reach(far), "{state}: the far bomb at {far:?}");
+    place(&mut s, x, y);
+    retarget(&mut s, target);
+    assert!(s.mask().is_allowed(&bomb(d)), "{state}: a bomb out of reach blocked the good one");
+    s.act(bomb(d)).unwrap();
+    for _ in 0..8 {
+        act(&mut s, "WAIT 16");
+    }
+    assert!(!shut(s.state(), target), "{state}: the good bomb opened {target:?} beside the far one");
+
+    // The good bomb vanishes in its fuse: the target is free again.
+    s.restore(&begin);
+    place(&mut s, x, y);
+    s.set_bomb_targets(Some(&[target]));
+    s.act(bomb(d)).unwrap();
+    retarget(&mut s, target);
+    assert!(no_bomb_offered(&s), "{state}: a second BOMB offered in the first one's fuse");
+    for slot in [0xBC, 0xBD] {
+        zelda::Nes::poke(s.nes_mut(), slot, 0);
+    }
+    s.apply_ram(&[]);
+    retarget(&mut s, target);
+    assert!(s.mask().is_allowed(&bomb(d)), "{state}: the target stays blocked after its bomb is gone");
+}
+
 /// One room on the route where a `required` family bombs: it offers some BOMBs, refuses some the game would place,
-/// and the two agree with the game (`sweep`).
+/// and the two agree with the game (`sweep`); one bomb per wall (`one_bomb`).
 fn room(state: &str, target: BombTarget, centre: (i32, i32)) {
     if open_core().is_none() {
         return;
@@ -109,6 +210,7 @@ fn room(state: &str, target: BombTarget, centre: (i32, i32)) {
     let (offered, refused) = sweep(state, target, centre);
     println!("{state}: {offered} BOMBs offered, {refused} refused");
     assert!(offered > 0 && refused > 0, "{state}: {offered} offered, {refused} refused");
+    one_bomb(state, target, centre);
 }
 
 /// ow-tektite: 0x2c's rock wall (the take-any cave's heart).

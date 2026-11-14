@@ -9,9 +9,10 @@ same shape and vocabulary (schema 1 is schema 2 without ``target``).  The networ
 
 The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``.
 
-How a run's model acts (better-play §6b) is ``<run dir>/act``: ``<mode> <sha1 of ckpt.pt>``, ``mode`` being
-``sample`` (keyed sampling, the default when the file is absent) or ``argmax``, chosen by evaluating both and set
-with ``promote --act``.  The mode belongs to the weights it was measured for: when ``ckpt.pt`` no longer has that
+How a run's model acts (better-play §6b) is ``<run dir>/act``: ``<mode> <sha1 of ckpt.pt>``, ``mode`` being an act
+mode spelling (docs/rust-actor.md "Act modes": ``sample``, the default when the file is absent, ``argmax``,
+``temperature:T``, ``floor:P``, ``minp:R``, ``topp:P``, ``escape:N`` and ``+`` combinations; ``parse_act`` gives
+the canonical spelling), chosen by evaluating and set with ``promote --act``.  The mode belongs to the weights it was measured for: when ``ckpt.pt`` no longer has that
 hash (retrained or replaced in place) or the file is the old one-word format, ``act_mode`` warns and returns
 ``sample``.  Chains, the watch player and evaluation follow it unless told otherwise.
 
@@ -43,6 +44,7 @@ import torch
 
 from . import __version__
 from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
+from ._native import act_mode as act_mode_spelling
 
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
 ALLOW_INCOMPATIBLE_ENV = 'TRIFORCE_ALLOW_INCOMPATIBLE_MODELS'
@@ -50,16 +52,51 @@ CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
 ACT_NAME = 'act'
 VERSION_NAME = 'version'
-ACT_MODES = ('sample', 'argmax')
-ACT_CHOICES = ('model',) + ACT_MODES
+DEFAULT_ACT = 'sample'
+# ``--act model``: each model acts by its own act mode.
+MODEL_ACT = 'model'
 
 
-def act_override(choice: str) -> Optional[bool]:
-    """A command line ``--act`` choice as a ``deterministic`` setting: None for ``model`` (each model's act mode),
-    else whether every model acts by argmax."""
-    if choice not in ACT_CHOICES:
-        raise ValueError(f"--act {choice!r} is not one of {ACT_CHOICES}")
-    return None if choice == 'model' else choice == 'argmax'
+def parse_act(text: str, allow_model: bool = False) -> str:
+    """The canonical spelling of act mode ``text`` (``_native.act_mode``; ``model`` too with ``allow_model``);
+    raises ValueError for anything else."""
+    if allow_model and text == MODEL_ACT:
+        return MODEL_ACT
+    return act_mode_spelling(text)
+
+
+def act_argument(allow_model: bool = True):
+    """An argparse ``type`` for ``--act``: the canonical spelling, or an argparse error naming the problem."""
+    def parse(text: str) -> str:
+        try:
+            return parse_act(text, allow_model)
+        except ValueError as error:
+            raise argparse.ArgumentTypeError(str(error)) from None
+    parse.__name__ = 'act mode'
+    return parse
+
+
+ACT_HELP = ("act mode: sample, argmax, temperature:T, floor:P, minp:R, topp:P, escape:N, relax:N or a '+' "
+            "combination (docs/rust-actor.md \"Act modes\")")
+
+
+# How the play tools (play-zelda.py with its live cell, zelda-headless.py, the golden path) act by default: never
+# argmax, so every run differs (round 23, docs/experiments/round23.md). Every play tool reads this one constant.
+PLAY_ACT = 'sample'
+
+
+def draws(mode: str) -> bool:
+    """Whether act mode ``mode`` draws every decision at random (``sample``, the rules, and ``relax``: a rule's draw,
+    a plain one when stalled), unlike ``argmax`` and ``escape`` (argmax until stalled)."""
+    mode = parse_act(mode)
+    return mode != 'argmax' and 'escape:' not in mode
+
+
+def act_override(choice: str) -> Optional[str]:
+    """A command line ``--act`` choice as an override: None for ``model`` (each model's act mode), else the
+    canonical spelling every model acts by."""
+    choice = parse_act(choice, allow_model=True)
+    return None if choice == MODEL_ACT else choice
 
 
 class SchemaMismatchError(ValueError):
@@ -297,9 +334,12 @@ def promote(specialist: str, run_id: str, root=None, act: Optional[str] = None) 
 
 
 def eval_mode(result: dict) -> Optional[str]:
-    """The act mode an evaluation result was measured in (``act``, else its ``deterministic`` flag)."""
-    if result.get('act') in ACT_MODES:
-        return result['act']
+    """The act mode an evaluation result was measured in (``act``, else the ``deterministic`` flag of results
+    written before act modes had rules)."""
+    try:
+        return parse_act(result['act'])
+    except (KeyError, TypeError, ValueError):
+        pass
     deterministic = result.get('deterministic')
     return None if deterministic is None else ('argmax' if deterministic else 'sample')
 
@@ -310,18 +350,19 @@ def act_mode(checkpoint) -> str:
     ckpt = _resolve(checkpoint)
     path = ckpt.parent / ACT_NAME
     if not path.is_file():
-        return 'sample'
+        return DEFAULT_ACT
     fields = path.read_text(encoding='utf-8').split()
-    mode = fields[0] if fields else ''
-    if mode not in ACT_MODES:
-        raise ValueError(f"{path}: act mode {mode!r} is not one of {ACT_MODES}")
+    try:
+        mode = parse_act(fields[0] if fields else '')
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from None
     if len(fields) != 2:
         warnings.warn(f"{path}: act file without the checkpoint hash (old format); the model samples", stacklevel=2)
-        return 'sample'
+        return DEFAULT_ACT
     if fields[1] != checkpoint_sha1(ckpt):
         warnings.warn(f"{path}: act mode {mode!r} was set for other weights (sha1 {fields[1]}, {ckpt.name} is "
                       f"{checkpoint_sha1(ckpt)}); the model samples", stacklevel=2)
-        return 'sample'
+        return DEFAULT_ACT
     return mode
 
 
@@ -330,8 +371,7 @@ def set_act_mode(checkpoint, mode: str) -> Path:
     returns the ``act`` file (written atomically).  An ``eval.json`` measured in the other mode is renamed to
     ``eval-<its mode>.json`` (an existing file of that name is kept as ``eval-<its mode>.replaced.json``), so
     ``eval.json`` stays the evaluation in the model's act mode."""
-    if mode not in ACT_MODES:
-        raise ValueError(f"act mode {mode!r} is not one of {ACT_MODES}")
+    mode = parse_act(mode)
     ckpt = _resolve(checkpoint)
     path = ckpt.parent / ACT_NAME
     tmp = path.with_name(f'.{ACT_NAME}.{os.getpid()}.tmp')
@@ -376,7 +416,8 @@ def main(argv=None):
     promote_parser = sub.add_parser('promote')
     promote_parser.add_argument('specialist')
     promote_parser.add_argument('run_id')
-    promote_parser.add_argument('--act', choices=ACT_MODES, default=None, help="also set how the run acts")
+    promote_parser.add_argument('--act', type=act_argument(allow_model=False), default=None,
+                                help=f"also set how the run acts ({ACT_HELP})")
     args = parser.parse_args(argv)
 
     if args.command == 'list':

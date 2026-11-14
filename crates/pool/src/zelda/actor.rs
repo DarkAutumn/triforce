@@ -1,12 +1,14 @@
 //! The policy network as the pool's [`Actor`]: `policy::Policy` per specialist index, reading the Zelda
-//! observation layout. Sampling uses keyed Gumbel noise (job, decision step), argmax when deterministic. A
-//! replaying actor takes each decision's action from a recorded play instead and scores it.
+//! observation layout. Each policy acts by its [`ActMode`] (docs/rust-actor.md "Act modes"): sampling with keyed
+//! Gumbel noise (job, decision step), argmax, or a rule over the joint distribution; `escape` reads the env's count
+//! of decisions without progress. A replaying actor takes each decision's action from a recorded play instead and
+//! scores it.
 
 use super::ZeldaAction;
 use crate::layout::{ObsData, ObsLayout};
 use crate::rollout::{Actor, Decision};
 use policy::noise::keyed_noise;
-use policy::{Input, Pick, Policy};
+use policy::{ActMode, Choose, Input, Pick, Policy};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,12 +24,14 @@ pub struct PolicyActor {
     features: usize,
     grid: usize,
     mask: usize,
-    /// Per policy: argmax instead of keyed sampling.
-    pub(super) deterministic: Vec<bool>,
+    /// Per policy: how it acts.
+    pub(super) modes: Vec<ActMode>,
     /// Replaying: each episode's (job's) recorded actions, by decision step.
     replay: Option<HashMap<i64, Vec<ZeldaAction>>>,
     /// Keep every decision's whole distribution (`Actor::distribution`; for recordings).
     distributions: bool,
+    /// Report the acting distribution's log-prob and entropy (`Decision::act_log_prob`/`act_entropy`; plays).
+    acting: bool,
 }
 
 pub struct ActorScratch {
@@ -39,11 +43,10 @@ pub struct ActorScratch {
 }
 
 impl PolicyActor {
-    /// `policies[p]` acts where the pool's policy column is `p`, with argmax where `deterministic[p]` (one flag per
-    /// policy).
-    pub fn new(layout: &ObsLayout, policies: Vec<Arc<Policy>>, deterministic: Vec<bool>) -> Result<PolicyActor, String> {
-        if deterministic.len() != policies.len() {
-            return Err(format!("{} deterministic flags for {} policies", deterministic.len(), policies.len()));
+    /// `policies[p]` acts where the pool's policy column is `p`, by `modes[p]` (one mode per policy).
+    pub fn new(layout: &ObsLayout, policies: Vec<Arc<Policy>>, modes: Vec<ActMode>) -> Result<PolicyActor, String> {
+        if modes.len() != policies.len() {
+            return Err(format!("{} act modes for {} policies", modes.len(), policies.len()));
         }
         let key = |name: &str| layout.key(name).ok_or_else(|| format!("the pool's observations have no '{name}'"));
         let mut vectors = Vec::new();
@@ -69,9 +72,10 @@ impl PolicyActor {
             mask: key("action_mask")?,
             vectors,
             policies,
-            deterministic,
+            modes,
             replay: None,
             distributions: false,
+            acting: false,
         })
     }
 
@@ -82,16 +86,25 @@ impl PolicyActor {
         self
     }
 
+    /// Report every decision's acting log-prob and entropy (`Decision::act_log_prob`/`act_entropy`), which costs
+    /// the joint distribution per decision (every kind's direction and duration heads). Modes with a rule or
+    /// `escape` always pay it; `sample` and `argmax` only with this on (plays: evaluation and chain statistics).
+    pub fn with_acting(mut self, on: bool) -> Self {
+        self.acting = on;
+        self
+    }
+
     /// Replays recorded episodes: decision `t` of the episode keyed `job` takes `actions[job][t]` (and reports
-    /// the policy's log-prob, entropy and value for it). An episode outside `actions`, or one that runs past
+    /// the policy's log-prob, entropy and value for it, and with [`PolicyActor::with_acting`] its acting log-prob
+    /// and entropy under `modes`, the modes it was played in). An episode outside `actions`, or one that runs past
     /// its recorded actions (the replay diverged), fails the env.
     pub fn replay(
         layout: &ObsLayout,
         policies: Vec<Arc<Policy>>,
+        modes: Vec<ActMode>,
         actions: HashMap<i64, Vec<ZeldaAction>>,
     ) -> Result<PolicyActor, String> {
-        let n = policies.len();
-        let mut actor = PolicyActor::new(layout, policies, vec![true; n])?;
+        let mut actor = PolicyActor::new(layout, policies, modes)?;
         actor.replay = Some(actions);
         Ok(actor)
     }
@@ -145,40 +158,59 @@ impl Actor<ZeldaAction> for PolicyActor {
         policy: i64,
         job: i64,
         step: i64,
+        stall: u32,
         s: &mut ActorScratch,
     ) -> Result<(ZeldaAction, Decision), String> {
         let p = self.policy(policy)?;
         let net = &self.policies[p];
         let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
         let input = input(self, p, obs, &mut vectors);
-        let noise = &mut s.noise[..net.noise_size()];
-        let pick = if let Some(replay) = &self.replay {
-            let recorded = replay
-                .get(&job)
-                .ok_or_else(|| format!("no recorded play of job {job}"))?;
-            let action = usize::try_from(step).ok().and_then(|t| recorded.get(t)).ok_or_else(|| {
-                format!(
-                    "the replay of job {job} went on past its {} recorded decisions",
-                    recorded.len()
-                )
-            })?;
-            let bad = || format!("bad recorded action {action:?} of job {job} (heads {:?})", net.head_sizes());
-            let index = |i: i64, n: usize| usize::try_from(i).ok().filter(|&i| i < n).ok_or_else(bad);
-            let [kinds, dirs, durs] = net.head_sizes();
-            Pick::Given([index(action[0], kinds)?, index(action[1], dirs)?, index(action[2], durs)?])
-        } else if self.deterministic[p] {
-            Pick::Argmax
-        } else {
-            keyed_noise(job, step, noise);
-            Pick::Sample(noise)
+        s.dist_len = if self.distributions { net.distribution_size() } else { 0 };
+        let choose = self.modes[p].choose(stall);
+        let plain = match choose {
+            Choose::Argmax => true,
+            Choose::Draw(rule) => rule.is_plain(),
         };
-        let out = if self.distributions {
-            s.dist_len = net.distribution_size();
-            net.evaluate_with_distribution(&input, pick, &mut s.scratches[p], &mut s.dist[..s.dist_len])
+        let given = match &self.replay {
+            None => None,
+            Some(replay) => {
+                let recorded = replay
+                    .get(&job)
+                    .ok_or_else(|| format!("no recorded play of job {job}"))?;
+                let action = usize::try_from(step).ok().and_then(|t| recorded.get(t)).ok_or_else(|| {
+                    format!(
+                        "the replay of job {job} went on past its {} recorded decisions",
+                        recorded.len()
+                    )
+                })?;
+                let bad = || format!("bad recorded action {action:?} of job {job} (heads {:?})", net.head_sizes());
+                let index = |i: i64, n: usize| usize::try_from(i).ok().filter(|&i| i < n).ok_or_else(bad);
+                let [kinds, dirs, durs] = net.head_sizes();
+                Some([index(action[0], kinds)?, index(action[1], dirs)?, index(action[2], durs)?])
+            }
+        };
+        let (out, acting) = if self.acting || !plain {
+            let dist = self.distributions.then(|| &mut s.dist[..s.dist_len]);
+            net.act(&input, choose, job, step, given, &mut s.scratches[p], dist)
+                .map_err(|e| e.0)?
         } else {
-            net.evaluate(&input, pick, &mut s.scratches[p])
-        }
-        .map_err(|e| e.0)?;
+            let noise = &mut s.noise[..net.noise_size()];
+            let pick = if let Some(action) = given {
+                Pick::Given(action)
+            } else if choose == Choose::Argmax {
+                Pick::Argmax
+            } else {
+                keyed_noise(job, step, noise);
+                Pick::Sample(noise)
+            };
+            let out = if self.distributions {
+                net.evaluate_with_distribution(&input, pick, &mut s.scratches[p], &mut s.dist[..s.dist_len])
+            } else {
+                net.evaluate(&input, pick, &mut s.scratches[p])
+            }
+            .map_err(|e| e.0)?;
+            (out, policy::Acting::default())
+        };
         let [k, d, u] = out.action;
         Ok((
             [k as i64, d as i64, u as i64],
@@ -186,6 +218,8 @@ impl Actor<ZeldaAction> for PolicyActor {
                 log_prob: out.log_prob,
                 entropy: out.entropy,
                 value: out.value,
+                act_log_prob: acting.log_prob,
+                act_entropy: acting.entropy,
             },
         ))
     }

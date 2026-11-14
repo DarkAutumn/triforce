@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 
-def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, deterministic=None,
+def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
                   stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
                   power_on=None, clips=True, clips_off_from=None):
     """The route (``--from``, ``--stop-at`` and the power-on start checked, ``runner.Route.load``) and a ``Runner``
@@ -22,18 +22,18 @@ def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides
     off_room, off_step = parse_stop(clips_off_from)
     route = Route.load(route_name, stop_room, start_from, stop_step=stop_step, power_on=power_on, clips=clips,
                        clips_off_from=off_step if off_step is not None else off_room)
-    runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
+    runner = Runner(models_dir=models_dir, checkpoints=overrides, act=act,
                     specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest)
     return route, runner
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
-               deterministic=None, stop_at=None, first_seed: int = 0, start_from=None,
+               act=None, stop_at=None, first_seed: int = 0, start_from=None,
                specialist_configs=None, threads=None, on_result=None, harvest=None, output=None,
                power_on=None, replays=None, streams=(), state='embed', keyframe_frames=None):
     """Runs the route once per seed in one chain pool of ``parallel`` envs (``threads`` worker threads), with
     optional checkpoint overrides and loaded specialist configs;
-    ``deterministic``: None = each model's act mode, else argmax (True) or sampling (False) for all;
+    ``act``: None = each model's act mode, else this act mode for all;
     ``on_result(result)`` as each run finishes; ``harvest``: save every handoff's pre-entry state under this
     directory (``runner.ChainPool``); ``output``: a new JSON-lines file each run is written to as it finishes
     (``ChainOutput``, refused if it exists); ``stop_at`` and ``power_on``: ``prepare_chain``'s; ``replays``: a
@@ -42,7 +42,7 @@ def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, o
     what played (``Runner.provenance`` plus ``first_seed`` and ``runs``)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, import-outside-toplevel
     from . import replay
-    route, runner = prepare_chain(route_name, parallel, models_dir, overrides, deterministic, stop_at, start_from,
+    route, runner = prepare_chain(route_name, parallel, models_dir, overrides, act, stop_at, start_from,
                                   specialist_configs, threads, harvest, power_on)
     provenance = {**runner.provenance(route), 'first_seed': first_seed, 'runs': runs}
     record = None
@@ -330,7 +330,7 @@ def main(argv=None):
             from .registry import set_allow_incompatible  # pylint: disable=import-outside-toplevel
             set_allow_incompatible(True)
         return getattr(importlib.import_module(module), entry)(forwarded)
-    from .registry import ACT_MODES, set_allow_incompatible  # pylint: disable=import-outside-toplevel
+    from .registry import ACT_HELP, act_argument, set_allow_incompatible  # pylint: disable=import-outside-toplevel
 
     parser = argparse.ArgumentParser(prog='triforce')
     parser.add_argument('--models-dir', default=None)
@@ -349,7 +349,8 @@ def main(argv=None):
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
     promote.add_argument('specialist')
     promote.add_argument('run_id')
-    promote.add_argument('--act', choices=ACT_MODES, default=None, help="also set how the run acts")
+    promote.add_argument('--act', type=act_argument(allow_model=False), default=None,
+                         help=f"also set how the run acts ({ACT_HELP})")
 
     stamp = sub.add_parser('stamp', help="stamp runs with the triforce version their models are compatible with "
                                          "(default: every promoted run, this code's version)")
@@ -385,7 +386,7 @@ def add_eval_chain_arguments(chain):
     from ._native import DEFAULT_ROUTE
     from .jobs import add_nice_argument
     from .paths import HARVESTED_DIR
-    from .registry import ACT_CHOICES
+    from .registry import ACT_HELP, MODEL_ACT, act_argument
     from .replay import add_arguments as replay_arguments
     from .runner import STOP_AT_HELP, add_power_on_arguments
     chain.add_argument('--route', default=DEFAULT_ROUTE)
@@ -393,8 +394,8 @@ def add_eval_chain_arguments(chain):
     chain.add_argument('--parallel', type=int, default=1, help="envs in the chain pool")
     chain.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
     chain.add_argument('--first-seed', type=int, default=0)
-    chain.add_argument('--act', choices=ACT_CHOICES, default='model',
-                       help="model: each model's act mode (registry); sample / argmax: that for every model")
+    chain.add_argument('--act', type=act_argument(), default=MODEL_ACT,
+                       help=f"model: each model's act mode (registry); else the {ACT_HELP} for every model")
     chain.add_argument('--stop-at', help=STOP_AT_HELP)
     chain.add_argument('--clips', choices=('on', 'off'), default='on',
                        help="the run-time clips switch every run starts with (round 22): off masks CLIP and takes the "

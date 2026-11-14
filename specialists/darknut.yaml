@@ -5,8 +5,8 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-# hp as every dungeon family; bombs drawn 0-8 so 0x5b's last visit trains both sides of its treasure rule (take the
-# bombs only below 4); help_count drawn 0-9 so the 10th damage-free kill's forced bomb drop comes at any point.
+# hp as every dungeon family; bombs drawn 0-8: Link reaches these rooms with any count, and they are a weapon above
+# the reserve; help_count drawn 0-9 so the 10th damage-free kill's forced bomb drop comes at any point.
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: free}                       # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve
 curriculum: {enabled: true}             # trajectories/darknut (Go-Explore paths per start state)
@@ -16,8 +16,8 @@ warm_start: null
 notes: >-
   Darknut rooms (Nov 9): shielded in front, hit only from the side or back. Dungeon 3 (docs/routes/d3.md): the central
   room 0x5b (3 Darknuts, bombs when all are dead) S to W (treasure skipped) and later W to E through its bomb wall
-  (round 22; a `requires_bombs` room, so bombs are free there: its bombs taken only if Link holds fewer than 6,
-  routes.yaml `treasure: {if_bombs_below: 6}`, the reserve); 0x5c (3 Darknuts, round 22) W to N through its open
+  (round 22; a `requires_bombs` room, so bombs are free there: the Darknuts killed and their bombs taken whatever
+  Link holds, round 23, then the wall); 0x5c (3 Darknuts, round 22) W to N through its open
   doorway; 0x59 (5 Darknuts, kill-all S shutter)
   E to N, N to S (kill them all: the shutter) and S to E; 0x69 (8 Darknuts, bombs) N to the stairs down to the raft
   cellar and back up N, never fighting for its treasure (Lee: `treasure: skip`). Copied from goriya.

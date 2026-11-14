@@ -223,6 +223,38 @@ def test_a_run_ends_on_its_stop_step_and_another_continues_from_its_end(states_d
     assert _native.replay_verify(joined.data)['frames'] == joined.frames
 
 
+def test_a_run_in_an_act_mode_with_the_switch_flipped_mid_run_replays_bit_exactly(states_dir, models_dir):
+    """Rounds 22 and 23 merged: a chain run recorded in a non-default act mode (a rule with ``relax``, which reads the
+    chain's no-progress count) whose clips switch is turned off while it plays (``clips_live``, as the live cell's
+    key) records the flip inside its first room, names its act mode, and replays bit for bit."""
+    mode = 'temperature:0.75+relax:4'
+    runner = Runner(models_dir=models_dir, max_steps=40, states_dir=states_dir, act=mode,
+                    networks={'ow-octorok': scripted('MOVE S 16')})
+    route = Route.load('d2first', start_from=str(require_state('0_3cc_0')), stop_step=25)
+    record = replay.record_options(runner.record_meta(route))
+    events, flipped = [], False
+    # Paced at 60 frames a second, the run is still in its first room when its room event arrives.
+    with runner.pool(route, [0], record=record, num_envs=1, threads=1, fps=60.0, clips_live=True) as chain:
+        chain.play()
+        idle = False
+        while not idle:
+            idle = chain.pool.wait_idle(timeout=0.02)
+            new = chain.poll_events()
+            events += new
+            if not flipped and any(e['type'] == 'room' for e in new):
+                chain.pool.set_clips_allowed(False)
+                flipped = True
+    (_, result), = chain.results(events)
+    assert (result.result, result.clips) == ('success', True)
+    first = result.rooms[0]
+    assert first.room == '0x3c' and first.clips_allowed is True
+    (flip,) = first.clips_flips
+    assert flip['clips'] is False and 0 < flip['step'] <= first.steps
+    assert result.rooms[-1].clips_allowed is False
+    recording, = [_native.Replay(e['data']) for e in events if e['type'] == 'replay']
+    assert {m['act'] for m in recording.meta['models']} == {mode}
+    assert _native.replay_verify(recording.data, states_dir=str(states_dir))['frames'] == recording.frames
+
 
 def test_missing_promoted_model_is_an_error(states_dir, tmp_path):
     result = Runner(models_dir=tmp_path, states_dir=states_dir).run(Route.load('d2first'), seed=0)
@@ -257,19 +289,20 @@ def test_same_seed_same_run(states_dir, models_dir):
 
 def test_runs_act_the_way_each_model_is_registered(states_dir, models_dir, tmp_path):
     """A run's ``act`` file (promote --act) makes that model act by argmax; the other models keep sampling, and
-    an explicit ``deterministic`` overrides every model."""
+    an explicit ``act`` overrides every model."""
     root = tmp_path / 'models'
     shutil.copytree(models_dir, root)
     registry.promote('ow-start', 'untrained', root=root, act='argmax')
     policies = Policies(root)
-    assert [name for name, argmax in zip(policies.names, policies.deterministic) if argmax] == ['ow-start']
+    assert [name for name, act in zip(policies.names, policies.acts) if act == 'argmax'] == ['ow-start']
+    assert set(policies.acts) == {'sample', 'argmax'}
 
-    def start_rooms(deterministic):
+    def start_rooms(act):
         """Each run's first room visit (the start room, ow-start's)."""
-        runner = Runner(models_dir=root, deterministic=deterministic, max_steps=30, parallel=2, states_dir=states_dir)
+        runner = Runner(models_dir=root, act=act, max_steps=30, parallel=2, states_dir=states_dir)
         return [r.to_dict()['rooms'][0] for r in runner.run_many(Route.load('d2first'), [3, 4])]
 
-    registered, argmax, sampled = start_rooms(None), start_rooms(True), start_rooms(False)
+    registered, argmax, sampled = start_rooms(None), start_rooms('argmax'), start_rooms('sample')
     assert all(room['specialist'] == 'ow-start' for room in registered)
     assert registered == argmax and registered != sampled
 
@@ -307,7 +340,7 @@ def test_a_chain_run_replays_its_actions_to_the_same_probabilities(states_dir, m
 
     def play(seeds, **kwargs):
         with runner.pool(route, seeds) as chain:
-            chain.pool.play(policies, deterministic=chain.deterministic, **kwargs)
+            chain.pool.play(policies, act=chain.acts, **kwargs)
             chain.pool.wait_idle()
             plays = {int(p['job']): p for p in chain.pool.poll_plays()}
             runs = {r.seed: r.to_dict() for _, r in chain.results(chain.poll_events())}

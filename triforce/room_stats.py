@@ -30,8 +30,10 @@ runs: survival out of it), per visit ``hearts_lost`` (``max(0, health_in - healt
 ``hearts_change``, ``hearts_healed``, ``hits`` (actions that lost health: the records' ``hits``, round 22; None in
 files from before it), ``steps``, ``frames``, ``clips`` (``clip_done``; None in files from before clips), ``bombs``
 (placed) and ``cheated_bombs``, then ``wrong_exits`` (visits that left by a wrong exit), ``outcomes`` (visits by
-outcome), ``specialists`` (visits by specialist) and ``steps`` (the same fields per route step through the room:
-``"44"``, or ``"off"`` for visits off the route).  A visit's route step is the record's ``step`` (round 22: the step
+outcome), ``specialists`` (visits by specialist), ``risk`` (the visits' decision statistics, round 23:
+``variety.risk`` per visit) and ``variety`` (the visits' action sequences) and ``steps`` (the same fields per route
+step through the room: ``"44"``, or ``"off"`` for visits off the route).  A chain scope also has ``risk`` per run.
+A visit's route step is the record's ``step`` (round 22: the step
 Link played on entering the room); for older records it is inferred (``assign_steps``: the route's steps matched
 along the run).  The route is this code's (``--route``, default the chains'); visits the route doesn't explain (a
 route changed since the chains ran) count as ``off``.  A room scope entry has the same names: ``runs`` =
@@ -46,8 +48,9 @@ itself stays the combined numbers.  A chain visit's switch is its record's ``cli
 visit began), else its run's ``clips``, else the chain file's (``.meta.json`` ``clips``), else on (files from before
 the switch played with clips allowed).  In a chain scope a switch state's ``runs`` are the runs that played a visit
 in it, so the switch's ``death_rate`` is per run that played with it; the scope has ``by_clips`` too (``runs``,
-``arrived``, ``arrival_rate``, ``endings``, ``off_route_visits``; arrivals and endings in the switch of the run's
-last visit).  The room scope splits by each evaluation's ``by_clips[switch]['visited_rooms']``; an evaluation from
+``arrived``, ``arrival_rate``, ``endings``, ``off_route_visits``, ``risk`` over the visits in that state; arrivals
+and endings in the switch of the run's last visit).  The room scope splits by each evaluation's
+``by_clips[switch]['visited_rooms']``; an evaluation from
 before the switch counts as on.  The switch-off runs come from the same file (``--clips-off-from``) or from a second
 tag: ``--noclips`` reads ``<TAG>-noclips-*.jsonl`` too (``CLIPS=off TAG=<TAG>-noclips r56_chains.sh``; ``--noclips
 TAG2`` another tag), each scope from both tags' files together (a file both link to counts once), and writes
@@ -73,6 +76,7 @@ from typing import Optional
 from . import __version__, registry
 from .events import write_json_atomic
 from .paths import ROOT
+from .variety import VISIT_RISK_KEYS, decisions_of, risk, variety
 
 FORMAT = 2                              # 2: by_clips (round 22); 1 is still read (every visit then played on)
 READ_FORMATS = (1, 2)
@@ -217,6 +221,8 @@ class _Visits:
         self.specialists = Counter()
         self.sums = Counter()
         self.clips = False
+        self.decisions: list[Optional[dict]] = []
+        self.frame_list: list[int] = []
         self.hit_visits = 0                 # visits whose record counts hits (round 22)
 
     def add(self, run: int, record: dict):
@@ -236,6 +242,8 @@ class _Visits:
         if 'clip_done' in record:
             self.clips = True
             self.sums['clips'] += record['clip_done'] or 0
+        self.decisions.append(decisions_of(record))
+        self.frame_list.append(record.get('frames') or 0)
         if record.get('hits') is not None:
             self.hit_visits += 1
             self.sums['hits'] += record['hits']
@@ -267,6 +275,8 @@ class _Visits:
             'wrong_exits': self.outcomes['exit-wrong'],
             'outcomes': dict(self.outcomes),
             'specialists': dict(self.specialists),
+            'risk': risk(([d] for d in self.decisions), 'visit'),
+            'variety': variety([d['actions'] if d else None for d in self.decisions], self.frame_list),
         }
 
 
@@ -296,23 +306,30 @@ def _room_entries(rooms: dict, steps: dict, count: int, plan: list[dict]) -> dic
 
 def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
     """One chain scope: ``runs`` (started), ``arrived`` / ``arrival_rate`` (runs that reached the cut, or the
-    route's end), ``endings`` (how the others ended), ``off_route_visits`` and ``rooms``: room key -> ``chain_entry``
-    with its ``steps``.  Every room entry also has ``by_clips``: the same entry (``steps`` included) over the visits
-    of each switch state (``visit_switch``; only those it has), and so has the scope (``runs``, ``arrived``,
-    ``arrival_rate``, ``endings``, ``off_route_visits``).  A switch state's ``runs`` are the scope's runs that played
-    a visit in it (a run without visits counts in its start switch), so a run that flips (``--clips-off-from``)
-    counts in both; a run's arrival and its ending count in the switch of its last visit."""
+    route's end), ``endings`` (how the others ended), ``off_route_visits``, ``risk`` (the decision statistics per run,
+    ``variety.risk``) and ``rooms``: room key -> ``chain_entry`` with its ``steps``.  Every room entry also has
+    ``by_clips``: the same entry (``steps`` included) over the visits of each switch state (``visit_switch``; only
+    those it has), and so has the scope (``runs``, ``arrived``, ``arrival_rate``, ``endings``, ``off_route_visits``,
+    ``risk`` over the visits in that state).  A switch state's ``runs`` are the scope's runs that played a visit in it
+    (a run without visits counts in its start switch), so a run that flips (``--clips-off-from``) counts in both; a
+    run's arrival and its ending count in the switch of its last visit."""
     start = state_step(plan, scope.start)
     cut = state_step(plan, scope.cut) if scope.cut else None
     # Keyed by group: None (every visit) or a switch state.
     rooms, steps = defaultdict(_Visits), defaultdict(_Visits)
     played = {switch: set() for switch in SWITCHES}
     arrived, endings, off_route = Counter(), defaultdict(Counter), Counter()
+    per_run = {group: [] for group in (None, *SWITCHES)}     # group -> per run, its visits' decisions
     for index, run in enumerate(runs):
         visits, reached, ended = cut_run(plan, run, start, cut)
         switches = [visit_switch(record, run) for record, _ in visits]
         last = switches[-1] if switches else visit_switch({}, run)
         played[last].add(index)
+        per_run[None].append([decisions_of(record) for record, _ in visits])
+        for switch in SWITCHES:
+            mine = [decisions_of(record) for (record, _), s in zip(visits, switches) if s == switch]
+            if mine or switch == last:
+                per_run[switch].append(mine)
         for (record, step), switch in zip(visits, switches):
             played[switch].add(index)
             key = room_key(*_location(record))
@@ -341,7 +358,8 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
     def totals(group):
         count = counts[group]
         return {'runs': count, 'arrived': arrived[group], 'arrival_rate': _round(arrived[group] / count) if count
-                else None, 'endings': dict(endings[group]), 'off_route_visits': off_route[group]}
+                else None, 'endings': dict(endings[group]), 'off_route_visits': off_route[group],
+                'risk': risk(per_run[group], 'run')}
     return {'name': scope.name, 'kind': scope.kind, 'label': scope.label, **totals(None), 'start': scope.start,
             'start_step': start, 'cut': scope.cut, 'cut_step': cut, 'rooms': entries,
             'by_clips': {switch: totals(switch) for switch in SWITCHES if counts[switch]}}
@@ -411,7 +429,7 @@ def mean_keys() -> tuple[str, ...]:
     return ('steps_per_visit', 'health_lost_per_visit', 'health_gained_per_visit', 'health_change_per_visit',
             'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit', 'bombs_used_per_visit',
             *(f'cheated_{item}_per_visit' for item in CHEAT_ITEMS), 'boss_stuns_per_visit', 'boss_eats_per_visit',
-            *(f'clip_{stat}_per_visit' for stat in CLIP_STATS))
+            *(f'clip_{stat}_per_visit' for stat in CLIP_STATS), *VISIT_RISK_KEYS)
 
 
 def merge_room_stats(entries: list[tuple[str, dict]]) -> dict:
@@ -528,6 +546,8 @@ def eval_entry(merged: dict) -> dict:
         'outcomes': dict(exits),
         'specialists': dict(merged.get('specialists') or []),
         'steps': None,
+        'risk': {key: _round(merged.get(key)) for key in VISIT_RISK_KEYS if merged.get(key) is not None},
+        'variety': None,
     }
 
 

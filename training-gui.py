@@ -226,6 +226,24 @@ def clips_sections(ev: dict) -> list:
     return sections
 
 
+def decisions_section(ev: dict) -> list:
+    """The act mode and decision statistics of an evaluation (round 23; the ``eval`` event's ``act`` and ``risk``,
+    ``variety.risk`` per episode): moves the policy gave under 1% / 5% per episode, the share of them followed by a
+    hit or a death within 4 decisions beside the same share of every decision, and the acting entropy per
+    decision.  None for an evaluation without decision records."""
+    risk = ev.get('risk') or {}
+    if not risk.get('decisions'):
+        return []
+    entropy = risk.get('act_entropy_per_decision')
+    lines = [(f"moves <1% {risk.get('low1_per_episode', 0):.2f}/episode · followed by a hit "
+              f"{fmt_pct(risk.get('low1_hit_rate'))}, a death {fmt_pct(risk.get('low1_death_rate'))}", C.text),
+             (f"moves <5% {risk.get('low5_per_episode', 0):.2f}/episode · followed by a hit "
+              f"{fmt_pct(risk.get('low5_hit_rate'))} (every move {fmt_pct(risk.get('hit_rate'))})", C.text),
+             (f"acting entropy {0.0 if entropy is None else entropy:.2f} per decision · "
+              f"{risk.get('decisions_per_episode', 0):.0f} decisions/episode", C.muted)]
+    return [('text', f"Decisions · act {ev.get('act') or '?'}", lines)]
+
+
 def fmt_hearts_change(value) -> str:
     """-1.5 -> '-1.5 ♥' (hearts at exit minus hearts at entry)."""
     return '–' if value is None else f'{value:+.1f} ♥'
@@ -1631,6 +1649,21 @@ def entry_summary(run: Run, status: str) -> list:
     return [('bars', run.kind, rows), ('text', 'Details', text)]
 
 
+TITLE_PLANS = 3     # running plans named in the window title; the rest are counted
+
+
+def window_title(models: list, now: float) -> str:
+    """The window title: the running plans with their progress, the first few by name (a compositor refuses a long
+    title, and dozens of batch entries make one)."""
+    running = [model for model in models if model.status() == 'running']
+    if not running:
+        return 'Triforce training'
+    parts = [f"{model.fraction(now):.0%} {model.name}" for model in running[:TITLE_PLANS]]
+    if len(running) > TITLE_PLANS:
+        parts.append(f"+{len(running) - TITLE_PLANS} more")
+    return ' · '.join(parts) + ' — Triforce training'
+
+
 def running_rate(run: Run):
     """An evaluation's success so far: the family evaluation's running rate, or a chain's runs that reached the
     route's end over its runs done (None before the first one)."""
@@ -2447,8 +2480,9 @@ class DetailPane(QWidget):
                                            ev['hearts_left']))
             if ev.get('mean_bomb_placed') is not None:
                 rows.append(bomb_row('bombs', ev))
-            sections.append(('bars', 'Evaluation', rows))
+            sections.append(('bars', f"Evaluation · act {ev['act']}" if ev.get('act') else 'Evaluation', rows))
             sections += clips_sections(ev)
+            sections += decisions_section(ev)
             sections.append(('text', 'No progress · evaluation (action steps)', [
                 (fmt_linger(ev), C.warn if ev.get('linger_max_steps') is not None else C.faint),
                 ('Longest = episode longest quiet streak; tail = quiet steps at episode end. '
@@ -3099,9 +3133,7 @@ class Window(QMainWindow):
         if changed or force:
             self._apply_selection()
             now = time.time()
-            models = [view.model for view in self.views if view.model is not None]
-            self.setWindowTitle(' · '.join(f"{model.fraction(now):.0%} {model.name}" for model in models)
-                                + ' — Triforce training' if models else 'Triforce training')
+            self.setWindowTitle(window_title([view.model for view in self.views if view.model is not None], now))
         else:
             self._refresh_detail()      # console log may still be growing
 

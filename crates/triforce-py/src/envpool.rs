@@ -17,7 +17,8 @@ use numpy::{
     PyArray, PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn, PyReadwriteArrayDyn,
     PyUntypedArrayMethods,
 };
-use crate::policy::PyPolicy;
+use crate::policy::{PyPolicy, parse_act_mode};
+use policy::ActMode;
 use pool::rollout::{EnvRollout, Play, Record};
 use pool::zelda::{
     ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, GumbelSearch, PolicyActor, RgbFn, SearchConfig, TaskEnv, TrainEnv,
@@ -910,6 +911,8 @@ fn play_dict<'py>(py: Python<'py>, env: usize, play: &Play<ZeldaAction>) -> PyRe
     d.set_item("log_prob", PyArray::from_vec(py, column(|d| d.log_prob)))?;
     d.set_item("entropy", PyArray::from_vec(py, column(|d| d.entropy)))?;
     d.set_item("value", PyArray::from_vec(py, column(|d| d.value)))?;
+    d.set_item("act_log_prob", PyArray::from_vec(py, column(|d| d.act_log_prob)))?;
+    d.set_item("act_entropy", PyArray::from_vec(py, column(|d| d.act_entropy)))?;
     if let Some(obs) = &play.obs {
         let o = PyDict::new(py);
         for (key, column) in LAYOUT.keys().iter().zip(&obs.columns) {
@@ -1093,8 +1096,10 @@ impl PyEnvPool {
     ) -> PyResult<usize> {
         self.check_policies(policies.len())?;
         let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
-        let flags = vec![deterministic; nets.len()];
-        let actor = Arc::new(PolicyActor::new(&LAYOUT, nets, flags).map_err(PyValueError::new_err)?);
+        // Training samples from the unmodified policy (PPO needs it); act modes are for plays.
+        let mode = if deterministic { ActMode::Argmax } else { ActMode::SAMPLE };
+        let modes = vec![mode; nets.len()];
+        let actor = Arc::new(PolicyActor::new(&LAYOUT, nets, modes).map_err(PyValueError::new_err)?);
         let search = search.map(search_config).transpose()?;
         if search.is_some() && !matches!(self.kind, Kind::Train) {
             return Err(PyValueError::new_err("search needs a TrainTask pool"));
@@ -1122,22 +1127,25 @@ impl PyEnvPool {
     }
 
     /// Lets every env act on its own with the Rust `policies` (one `_native.Policy` per policy index), decision
-    /// after decision on the worker threads, until the task's jobs run out (eval jobs, chain seeds). Sampled
-    /// with keyed noise (job, decision) unless `deterministic` (a bool for every policy, or one per policy).
+    /// after decision on the worker threads, until the task's jobs run out (eval jobs, chain seeds). Each policy
+    /// acts by its act mode (`act`: one spelling for every policy or one per policy; default `sample`;
+    /// `act_mode` parses them, docs/rust-actor.md "Act modes"): sampled with keyed noise (job, decision), argmax,
+    /// or a rule over the joint distribution; `escape` reads the env's count of decisions without progress.
     /// Returns at once; follow it with `poll_events`,
     /// `poll_plays`, `active` and `wait_idle`. A chain run that ends with `hold_finished_frame` parks its env
     /// until `set_hold(env, False)`. `record`: None, 'actions' or 'observations' (see `poll_plays`).
     /// `replay` {job: [n, 3] actions}: replay those recorded episodes instead (the policies score the recorded
-    /// actions; a job outside `replay` or a replay running past its actions fails the env). `distributions`:
+    /// actions, under `act` too; a job outside `replay` or a replay running past its actions fails the env). `distributions`:
     /// every decision's whole action distribution goes to the env's recording (`EnvPool(record={'decisions':
-    /// True})`; it costs the other kinds' heads per decision). After `play` the pool only plays (`rollout` and
-    /// another `play` raise).
-    #[pyo3(signature = (policies, deterministic=None, record=None, replay=None, distributions=false))]
+    /// True})`; it costs the other kinds' heads per decision). Every decision's acting log-prob and entropy
+    /// (`poll_plays` `act_log_prob`/`act_entropy`, the eval and chain records' decision statistics) are computed
+    /// from the joint distribution. After `play` the pool only plays (`rollout` and another `play` raise).
+    #[pyo3(signature = (policies, act=None, record=None, replay=None, distributions=false))]
     fn play(
         &self,
         py: Python<'_>,
         policies: Vec<PyRef<'_, PyPolicy>>,
-        deterministic: Option<&Bound<'_, PyAny>>,
+        act: Option<&Bound<'_, PyAny>>,
         record: Option<&str>,
         replay: Option<HashMap<i64, Bound<'_, PyAny>>>,
         distributions: bool,
@@ -1154,15 +1162,25 @@ impl PyEnvPool {
         };
         self.check_policies(policies.len())?;
         let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
-        let flags: Vec<bool> = match deterministic {
-            None => vec![false; nets.len()],
-            Some(d) => match d.extract::<bool>() {
-                Ok(all) => vec![all; nets.len()],
-                Err(_) => d.extract()?,
+        let modes: Vec<ActMode> = match act {
+            None => vec![ActMode::SAMPLE; nets.len()],
+            Some(a) => match a.extract::<String>() {
+                Ok(all) => vec![parse_act_mode(&all)?; nets.len()],
+                Err(_) => {
+                    let each: Vec<String> = a.extract()?;
+                    if each.len() != nets.len() {
+                        return Err(PyValueError::new_err(format!(
+                            "{} act modes for {} policies",
+                            each.len(),
+                            nets.len()
+                        )));
+                    }
+                    each.iter().map(|m| parse_act_mode(m)).collect::<PyResult<_>>()?
+                }
             },
         };
         let actor = match replay {
-            None => PolicyActor::new(&LAYOUT, nets, flags),
+            None => PolicyActor::new(&LAYOUT, nets, modes),
             Some(plays) => {
                 let mut actions = HashMap::new();
                 for (job, a) in plays {
@@ -1176,10 +1194,11 @@ impl PyEnvPool {
                     let flat = a.as_slice().map_err(|e| PyValueError::new_err(e.to_string()))?;
                     actions.insert(job, flat.as_chunks::<3>().0.to_vec());
                 }
-                PolicyActor::replay(&LAYOUT, nets, actions)
+                PolicyActor::replay(&LAYOUT, nets, modes, actions)
             }
         }
         .map_err(PyValueError::new_err)?
+        .with_acting(true)
         .with_distributions(distributions);
         py.detach(|| self.pool.play(Arc::new(actor), record))
             .map_err(pool_err)

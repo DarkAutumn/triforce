@@ -21,7 +21,9 @@ use replay::{Context, Ending, Event, Source, StateKind};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use zelda::actions::{NUM_DIRECTIONS, NUM_DURATIONS};
 use zelda::cheats::{CheatItem, ItemCounts};
+use zelda::decisions::DecisionNote;
 use zelda::{Action, Nes, Session};
 
 pub type PoolSpecialistEnv<N, St> = SpecialistEnv<PoolNes<N>, PoolStore<St>>;
@@ -338,6 +340,17 @@ fn chain_ending(result: &RunResult) -> Ending {
     }
 }
 
+/// A decision as the room visit statistics keep it (`zelda::decisions`).
+fn decision_note(action: &ZeldaAction, decision: &Decision) -> DecisionNote {
+    let [kind, direction, duration] = *action;
+    let index = (kind * NUM_DIRECTIONS as i64 + direction) * NUM_DURATIONS as i64 + duration;
+    DecisionNote {
+        log_prob: decision.log_prob,
+        act_entropy: decision.act_entropy,
+        action: u8::try_from(index).unwrap_or(u8::MAX),
+    }
+}
+
 /// A decision for the recording's decision stream, when it keeps one and the actor reports distributions.
 fn record_decision<N: Nes>(
     nes: &mut PoolNes<N>,
@@ -462,6 +475,10 @@ where
 
     fn layout(&self) -> ObsLayout {
         obs_layout()
+    }
+
+    fn stall(&self) -> u32 {
+        self.env.linger.tail_steps()
     }
 
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
@@ -643,7 +660,12 @@ where
         obs_layout()
     }
 
+    fn stall(&self) -> u32 {
+        self.env.linger.tail_steps()
+    }
+
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+        self.env.note_decision(decision_note(action, decision));
         record_decision(self.env.session_mut().nes_mut(), policy, action, decision, distribution);
     }
 
@@ -978,7 +1000,12 @@ where
         obs_layout()
     }
 
+    fn stall(&self) -> u32 {
+        self.chain.quiet_steps()
+    }
+
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+        self.chain.note_decision(decision_note(action, decision));
         record_decision(self.chain.session_mut().nes_mut(), policy, action, decision, distribution);
     }
 
@@ -1066,6 +1093,14 @@ where
 
     fn layout(&self) -> ObsLayout {
         obs_layout()
+    }
+
+    fn stall(&self) -> u32 {
+        match self {
+            TaskEnv::Train(e) => e.stall(),
+            TaskEnv::Eval(e) => e.stall(),
+            TaskEnv::Chain(e) => e.stall(),
+        }
     }
 
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {

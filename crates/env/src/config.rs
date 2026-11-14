@@ -380,9 +380,10 @@ impl ItemsConfig {
 
     /// What BOMB is kept to in `state` (round 22, 4:0x21's bomb waste): in a `requires_bombs` room where the mode is
     /// `required`, only bombs landing in reach of what the objective leaves through (`zelda::objectives::
-    /// route_bomb_targets`: the intact route bomb wall, 0x2c's and 0x67's rock walls; none while it fights first);
-    /// not when the next kill arms a forced drop (any bomb kill pays itself back).  None: no limit (other modes and
-    /// rooms; `free` families bomb where they like).
+    /// route_bomb_targets`: the intact route bomb wall, 0x2c's and 0x67's rock walls; none while it fights first)
+    /// and not yet reached by a live bomb of Link's (round 23, `zelda::bombs::BombTarget::awaits_bomb`, applied by
+    /// the session's mask); not when the next kill arms a forced drop (any bomb kill pays itself back).  None: no
+    /// limit (other modes and rooms; `free` families bomb where they like).
     pub fn bomb_targets(
         &self,
         map: &zelda::GameMap,

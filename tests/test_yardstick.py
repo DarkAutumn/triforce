@@ -99,7 +99,7 @@ def test_compare_refuses_rows_measured_in_different_act_modes(tmp_path, capsys):
 
 def _evaluation(act):
     record = {'success': act == 'argmax', 'health': 3.0, 'start_health': 3.0, 'visits': []}
-    return {'format': 2, 'specialist': 'goriya', 'act': act, 'deterministic': act == 'argmax',
+    return {'format': 2, 'specialist': 'goriya', 'act': act,
             'records': [record] * 4}
 
 
@@ -130,7 +130,7 @@ def test_report_refuses_an_evaluation_in_the_other_act_mode(argmax_run, capsys):
     assert 'goriya' in capsys.readouterr().err and not (root / 'ys.json').exists()
     assert _report(root, '--allow-mode-mismatch') == 0
     row, = json.loads((root / 'ys.json').read_text())['specialists']
-    assert (row['act'], row['run_act'], row['deterministic']) == ('sample', 'argmax', False)
+    assert (row['act'], row['run_act']) == ('sample', 'argmax')
     assert '| goriya | sample (acts argmax) |' in capsys.readouterr().out
 
 
@@ -139,7 +139,7 @@ def test_report_reads_the_evaluation_in_the_run_act_mode(argmax_run, capsys):
     (run / 'eval-argmax.json').write_text(json.dumps(_evaluation('argmax')))
     assert _report(root) == 0
     row, = json.loads((root / 'ys.json').read_text())['specialists']
-    assert (row['act'], row['deterministic'], row['eval_file']) == ('argmax', True, 'eval-argmax.json')
+    assert (row['act'], row['eval_file']) == ('argmax', 'eval-argmax.json')
     assert row['success'][0] == 1.0 and '| goriya | argmax | 4 |' in capsys.readouterr().out
     assert _report(root, '--mode', 'sample') == 0
     row, = json.loads((root / 'ys.json').read_text())['specialists']
@@ -204,6 +204,22 @@ def test_chain_row_counts_arrivals_hearts_and_where_the_others_end(tmp_path):
     assert row['arrivals'] == yardstick.wilson(2, 5)
     assert row['hearts_at_arrival'] == yardstick.mean_ci([4.0, 2.0])
     assert row['where_runs_end'] == [('2:0x7e death', 2), ('0:0x2c:cave timeout', 1)]
+
+
+def test_hearts_at_arrival_are_the_health_before_the_triforce_refill():
+    """Out of a dungeon the triforce has refilled Link's hearts: his health on arriving is the one he entered the
+    triforce room with (the room before an overworld arrival, or the last room before the route's milestone record);
+    any other arrival is its own entry health."""
+    from triforce.eval_batch import arrival_hearts  # pylint: disable=import-outside-toplevel
+    out = _run(0, [_room(2, '0x0e'), _room(2, '0x0d', health=2.5), _room(0, '0x3c', health=4.0)])
+    assert arrival_hearts(out, yardstick.arrival(out, '0:0x3c')) == 2.5
+    end = _run(1, [_room(4, '0x13'), _room(4, '0x03', health=4.5), _room(0, '0x45', health=8.0, outcome='milestone')],
+               result='success')
+    assert arrival_hearts(end, yardstick.arrival(end, None)) == 4.5
+    entrance = _run(2, [_room(0, '0x74', health=6.0), _room(4, '0x71', health=6.5)])
+    assert arrival_hearts(entrance, yardstick.arrival(entrance, '4:0x71')) == 6.5
+    walk = _run(3, [_room(0, '0x3c'), _room(0, '0x4c', health=2.0)])
+    assert arrival_hearts(walk, yardstick.arrival(walk, '0:0x4c')) == 2.0
 
 
 def test_chain_files_without_runs_or_with_several_routes_are_errors(tmp_path):

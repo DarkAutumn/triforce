@@ -48,14 +48,14 @@ def checkpoint_label(checkpoint) -> str:
     return '/'.join(path.parts[-3:])
 
 
-def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, deterministic: Iterable[bool]) -> list:
+def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, acts: Iterable[str]) -> list:
     """The ``models`` entry: per policy index, its name, checkpoint (``checkpoint_label``), Rust network hash,
-    whether it acted by argmax and the triforce version its run dir is stamped with (None without a checkpoint or
-    a stamp)."""
+    the act mode it played by (``act``, canonical spelling) and the triforce version its run dir is stamped with
+    (None without a checkpoint or a stamp)."""
     return [{'name': name, 'checkpoint': None if checkpoints.get(name) is None else checkpoint_label(checkpoints[name]),
-             'hash': f'{policy.hash:016x}', 'deterministic': bool(argmax),
+             'hash': f'{policy.hash:016x}', 'act': act,
              'version': None if checkpoints.get(name) is None else model_version(checkpoints[name])}
-            for name, policy, argmax in zip(names, policies, deterministic)]
+            for name, policy, act in zip(names, policies, acts)]
 
 
 def state_hash(name: str, states_dir=None) -> Optional[str]:

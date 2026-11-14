@@ -232,7 +232,15 @@ impl<F: FnMut(&ActionMask, i64) -> zelda::Action + Send> Actor<ZeldaAction> for 
 
     fn scratch(&self) {}
 
-    fn act(&self, obs: &ObsData, _: i64, job: i64, _: i64, _: &mut ()) -> Result<(ZeldaAction, Decision), String> {
+    fn act(
+        &self,
+        obs: &ObsData,
+        _: i64,
+        job: i64,
+        _: i64,
+        _: u32,
+        _: &mut (),
+    ) -> Result<(ZeldaAction, Decision), String> {
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
         let action = (self.0.lock())(&ActionMask::from_flat(&flat), job);
         Ok((action.to_indices().map(|i| i as i64), Decision::default()))
@@ -400,13 +408,18 @@ fn chain_runs_in_a_pool_match_direct_runs() {
     let run = events.iter().filter(|e| matches!(e, ZeldaEvent::Run(_))).count();
     assert_eq!(run, seeds.len());
     assert_eq!(pool.active(), 0);
-    let pooled: Vec<RunResult> = events
+    let mut pooled: Vec<RunResult> = events
         .iter()
         .filter_map(|e| match e {
             ZeldaEvent::Run(r) => Some((**r).clone()),
             _ => None,
         })
         .collect();
+    // The pool's actor reports every decision (the direct runs have no actor): one per step of each room.
+    for room in pooled.iter_mut().flat_map(|r| r.rooms.iter_mut()) {
+        assert_eq!(room.decisions.decisions as u64, room.steps, "{room:?}");
+        room.decisions = Default::default();
+    }
     assert_eq!(pooled, runs);
     // Room events per run: each run reports its start room first, then only changes.
     let mut per_run = vec![Vec::new()];
@@ -441,7 +454,15 @@ impl Actor<ZeldaAction> for Recorder {
 
     fn scratch(&self) {}
 
-    fn act(&self, obs: &ObsData, policy: i64, job: i64, step: i64, _: &mut ()) -> Result<(ZeldaAction, Decision), String> {
+    fn act(
+        &self,
+        obs: &ObsData,
+        policy: i64,
+        job: i64,
+        step: i64,
+        _: u32,
+        _: &mut (),
+    ) -> Result<(ZeldaAction, Decision), String> {
         self.decisions.lock().push((policy, job, step));
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
         let mask = ActionMask::from_flat(&flat);
@@ -1280,6 +1301,11 @@ fn eval_jobs_are_shared_and_each_result_is_independent_of_the_env() {
         }
     }
     records.sort_by_key(|r| r.seed);
+    // The pool's actor reports every decision (the direct episodes have no actor): one per step of each visit.
+    for visit in records.iter_mut().flat_map(|r| r.visits.iter_mut()) {
+        assert_eq!(visit.decisions.decisions, visit.steps, "{visit:?}");
+        visit.decisions = Default::default();
+    }
     assert_eq!(
         records, expected,
         "every job played once, with the same result as directly"

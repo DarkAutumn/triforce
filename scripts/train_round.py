@@ -2,13 +2,16 @@
 """Train every specialist once, evaluate each on its own rooms, then evaluate the route.
 
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
-        [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100]
+        [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100] [--eval-act model]
         [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--promote] [--train-args '...{name}...']
 
 Specialists (trainable, with seed start states; route order of the route, ``d2first``) train one at a time as
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
 ``<models>/<name>/<round>/train.log``.  Each trained run is evaluated with ``triforce.evaluate`` in its act mode
-(``eval.json`` in the run dir, ``evaluate.default_output``).  Nothing is promoted unless ``--promote`` is given:
+(``eval.json`` in the run dir, ``evaluate.default_output``), or in ``--eval-act MODE`` (any act mode,
+docs/rust-actor.md "Act modes"; ``eval-<mode>.json`` unless it is the run's own); with a MODE the training's
+early-stop confirmation acts by it too (``triforce.train --confirm-act MODE``; with ``model``, the default, it samples).
+Training's rollouts always sample from the unmodified policy.  Nothing is promoted unless ``--promote`` is given:
 then each run whose evaluation succeeded is promoted (pointer only; the run's own act mode).  The specialists'
 promoted run ids and act modes from before the round are kept in the summary (``previous_promoted``) so a
 promotion can be undone.  Then ``eval-chain`` runs the route: with ``--promote`` on the promoted models, else on
@@ -87,6 +90,9 @@ def parse_args(argv=None):
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: all trainable)")
     parser.add_argument('--episodes-per-state', type=int, default=100)
+    parser.add_argument('--eval-act', type=registry.act_argument(), default=registry.MODEL_ACT,
+                        help=f"act mode of each run's evaluation: model (the run's own, default) or an "
+                             f"{registry.ACT_HELP}")
     parser.add_argument('--chain-runs', type=int, default=20)
     parser.add_argument('--chain-parallel', type=int, default=10)
     parser.add_argument('--skip-existing', action='store_true',
@@ -128,7 +134,8 @@ def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
                '--iterations', str(iterations_for(args)), '--steps-per-update', str(args.steps_per_update),
                '--parallel', str(args.parallel), '--device', args.device, '--models-dir', str(models),
                '--stop-success', str(STOP_SUCCESS), '--stop-patience', str(STOP_PATIENCE),
-               '--events', str(log_dir / f'{name}.jsonl')]
+               '--events', str(log_dir / f'{name}.jsonl'),
+               *(['--confirm-act', args.eval_act] if args.eval_act != registry.MODEL_ACT else [])]
     command += shlex.split(args.train_args.replace('{name}', name))
     run_dir.mkdir(parents=True, exist_ok=True)
     say(f"[round] training {name}: {' '.join(command)}")
@@ -272,8 +279,10 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path, models: Path,
     try:
         check_stop()
         result = evaluate_specialist(name, record['checkpoint'], args.episodes_per_state,
-                                     parallel=args.eval_parallel, seed=0, events=events, on_episode=check_stop)
-        path = write_result(result, default_output(record['checkpoint'], name, 'model', args.episodes_per_state, 0))
+                                     parallel=args.eval_parallel, seed=0, act=registry.act_override(args.eval_act),
+                                     events=events, on_episode=check_stop)
+        path = write_result(result, default_output(record['checkpoint'], name, args.eval_act,
+                                                   args.episodes_per_state, 0))
     except EvaluationCancelled as error:
         record.update(status='interrupted', error=f"evaluation stopped: {error}")
         say(f"[round] {name}: {record['error']}")

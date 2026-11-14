@@ -276,8 +276,9 @@ pub enum TreasureRule {
     Take,
     /// `treasure: skip`: leave it (Dungeon 3's 0x69: pass its eight Darknuts to the stairs; 0x5b's first visit).
     Skip,
-    /// `treasure: {if_bombs_below: N}`: take it only while Link holds fewer than N bombs (Dungeon 3's 0x5b bombs on
-    /// its last visit, Lee: D4 needs 2).
+    /// `treasure: {if_bombs_below: N}`: take it only while Link holds fewer than N bombs, read live (no route step
+    /// uses it since round 23: at Dungeon 3's 0x5b a bomb spent at N left N - 1 and turned the walk to the wall into a
+    /// fight beside an opened wall; decisions 2026-11-14).
     IfBombsBelow(u8),
     /// `treasure: clear`: fight until the room's enemies are dead even without a treasure, then take what they drop
     /// (Dungeon 2's 0x5e: its Red Goriyas' bomb drops help against the Moldorm next door; round 19).
@@ -1515,6 +1516,7 @@ mod tests {
             (retreats[0].location(), retreats[0].exit.as_str(), retreats[0].retreat.as_deref()),
             (loc(0, 0x0a), "cave", Some("S"))
         );
+        // 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14).
         let rules: Vec<_> = steps
             .iter()
             .filter(|s| s.treasure != TreasureRule::Take)
@@ -1527,7 +1529,6 @@ mod tests {
                 (loc(3, 0x5b), "S", TreasureRule::Skip),
                 (loc(3, 0x69), "N", TreasureRule::Skip),
                 (loc(3, 0x69), "cave", TreasureRule::Skip),
-                (loc(3, 0x5b), "W", TreasureRule::IfBombsBelow(6)),
             ]
         );
         let reserves: Vec<_> = steps.iter().filter_map(|s| Some((s.location(), s.bomb_reserve?))).collect();

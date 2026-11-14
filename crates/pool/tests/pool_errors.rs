@@ -74,7 +74,7 @@ struct Zero;
 impl Actor<i64> for Zero {
     type Scratch = ();
     fn scratch(&self) {}
-    fn act(&self, _: &ObsData, _: i64, _: i64, _: i64, _: &mut ()) -> Result<(i64, Decision), String> {
+    fn act(&self, _: &ObsData, _: i64, _: i64, _: i64, _: u32, _: &mut ()) -> Result<(i64, Decision), String> {
         Ok((0, Decision::default()))
     }
     fn value(&self, _: &ObsData, _: i64, _: &mut ()) -> Result<f32, String> {
