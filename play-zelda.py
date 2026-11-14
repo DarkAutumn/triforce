@@ -58,8 +58,7 @@ are played, so there is sound only at the NES's own frame rate: at any other cap
 A replay that starts from a savestate has no sound state to start from, so each voice comes in with its next
 note.
 
-The strip under a cell names the run's seed (a replay file: its name), the room, the specialist acting with the act
-mode it plays by ("goriya (sample)", from the recording), and any
+The strip under a cell names the run's seed (a replay file: its name), the room, the specialist acting, and any
 cheated items the run used.  When a replay ends its result shows for a few seconds, then the cell takes the next
 one.  A run from console power on is shown from the moment the models take over.  --controller draws the
 controller in the top right of every cell (over -LIFE-), the buttons held on each frame lit white.
