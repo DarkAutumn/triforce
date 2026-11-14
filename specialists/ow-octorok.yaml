@@ -1,12 +1,12 @@
 name: ow-octorok
-rooms: ['(0, 0x67)', '(0, 0x68)', '(0, 0x58)', '(0, 0x37)', '(0, 0x4c)', '(0, 0x3c)', '(0, 0x78)', '(0, 0x57)', '(0, 0x64)']
-start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c*_[0-9]', '0_3c*_[0-9]', '0_78*_[0-9]', '0_57*_[0-9]', '0_64*_[0-9]']
+rooms: ['(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x58)', '(0, 0x37)', '(0, 0x4c)', '(0, 0x3c)', '(0, 0x78)', '(0, 0x57)', '(0, 0x64)', '(0, 0x66)']
+start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c*_[0-9]', '0_3c*_[0-9]', '0_78*_[0-9]', '0_64*_[0-9]', '0_66*_[0-9]']
 success: [exit-correct, enter-room:1:0x73, enter-room:2:0x7d]
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
-items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
+items: {bombs: required}                   # round 22: 0x67's rock wall (its requires_bombs room); else the 10th kill
 clips: true                               # round 21: the screen wrap (W/E)
 one_room: true                          # round 5: per-room episodes (d1-melee trained 2.5-4x faster with them)
 max_steps: 2000
@@ -15,6 +15,9 @@ notes: >-
   0x37 (first visit) and 0x3c exit through the dungeon stairs: enter-room (1,0x73) / (2,0x7d).
   Start states are the route-generated pre-entry states (<room><entry>_<chain>, triforce/entry_states.py).
   0x3c and 0x4c are crossed twice: to the D2 stairs (0x4c from E leaves N), and after the D2 triforce's warp to
-  0x3c (0x3c leaves S, 0x4c from N leaves E). On to Dungeon 3 (Nov 9): 0x37 after the D1 triforce's warp leaves E,
-  0x58 from N leaves W, 0x57 (Octoroks walking in from the edges) and 0x64 (its potion shop's open mouth is a wrong
-  exit) from E leave W.
+  0x3c (0x3c leaves S, 0x4c from N leaves E). On to Dungeon 3 (round 22, docs/routes/overworld.md): 0x37 after the D1
+  triforce's warp leaves E, 0x58 from N leaves S, 0x68 from N leaves W, 0x67 from E: bomb its rock wall (BOMB is
+  offered only where the bomb opens it; a cheated bomb if Link has none) and enter the secret cave, take the 30
+  rupees (walking up at X $78; leaving the room without them is `missed`), then out of the cave S (clips: the wrap
+  way through 0x77) or W (without clips: 0x66 from E leaves W, past its shop's open mouth; 0x64 from E leaves W, past
+  its potion shop's). 0x57 is off the route since round 22 (tagged, no start state).

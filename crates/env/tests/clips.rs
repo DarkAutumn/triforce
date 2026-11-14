@@ -6,7 +6,7 @@
 mod common;
 
 use common::{TfzStore, ZCore, open_core};
-use env::config::{GameData, RamRandomization, SpecialistConfig};
+use env::config::{ClipsConfig, DEFAULT_CLIPS_OFF_SHARE, GameData, RamRandomization, SpecialistConfig};
 use env::observation::{Observation, feature_names};
 use env::specialist_env::{EnvOptions, SpecialistEnv, StepResult};
 use std::sync::{Arc, LazyLock};
@@ -19,7 +19,7 @@ static DATA: LazyLock<Arc<GameData>> = LazyLock::new(common::game_data);
 fn make_env(nes: ZCore, clips: bool) -> Env {
     let mut config = (*DATA.specialists["ow-start"]).clone();
     config.ram_randomization = RamRandomization::default();
-    config.clips = clips;
+    config.clips = ClipsConfig { enabled: clips, off_share: 0.0 };
     let opts = EnvOptions { start_state: Some("start".into()), ..Default::default() };
     SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env")
 }
@@ -59,26 +59,37 @@ fn pbrs(r: &StepResult) -> f64 {
         .sum()
 }
 
-/// `clips:` is one switch, `true` or `false` (default false); the removed designs' block (`{action: ..., shaping:
-/// ...}`) is refused.
+/// `clips:` is `true`/`false` (default false) or `{enabled, off_share}` (round 22; a clip family's `off_share`
+/// defaults to `DEFAULT_CLIPS_OFF_SHARE`); the removed designs' block (`{action: ..., shaping: ...}`) is refused.
 #[test]
 fn the_clips_switch_parses() {
     // ow-start says `clips: true`; without that line the switch is off.
     let text = std::fs::read_to_string(common::repo().join("specialists/ow-start.yaml")).unwrap();
     let base: String = text.lines().filter(|l| !l.starts_with("clips:")).map(|l| format!("{l}\n")).collect();
+    let half = DEFAULT_CLIPS_OFF_SHARE;
     for (value, want) in [
-        ("true", Some(true)),
-        ("false", Some(false)),
+        ("true", Some((true, half))),
+        ("false", Some((false, 0.0))),
+        ("{enabled: true}", Some((true, half))),
+        ("{enabled: on, off_share: 0.25}", Some((true, 0.25))),
+        ("{enabled: false, off_share: 0.5}", Some((false, 0.5))),
+        ("{enabled: true, off_share: 1.5}", None),
+        ("{off_share: 0.5}", None),
         ("{action: kind}", None),
         ("{action: none, shaping: jump}", None),
         ("long", None),
     ] {
         let text = format!("{base}clips: {value}\n");
-        let parsed = SpecialistConfig::from_yaml(&text, "test", Some(&DATA.map)).ok().map(|c| c.clips);
+        let parsed = SpecialistConfig::from_yaml(&text, "test", Some(&DATA.map))
+            .ok()
+            .map(|c| (c.clips.enabled, c.clips.off_share));
         assert_eq!(parsed, want, "{value}");
     }
     let parsed = SpecialistConfig::from_yaml(&base, "test", Some(&DATA.map)).unwrap();
-    assert!(!parsed.clips, "default off");
+    assert_eq!(parsed.clips, ClipsConfig { enabled: false, off_share: 0.0 }, "default off");
+    // The JSON form round-trips (Python's `replace`).
+    let json = SpecialistConfig::from_json(parsed.to_json(), Some(&DATA.map)).unwrap();
+    assert_eq!(json.clips, parsed.clips);
 }
 
 /// In the zone the mask has CLIP W and `clip_usable_W` is set with clips on; neither with clips off.
@@ -125,7 +136,7 @@ fn a_clip_is_counted_and_the_episode_carries_its_target() {
 fn make_room_22_env(nes: ZCore, clips: bool) -> Env {
     let mut config = (*DATA.specialists["trap-room"]).clone();
     config.ram_randomization = RamRandomization::default();
-    config.clips = clips;
+    config.clips = ClipsConfig { enabled: clips, off_share: 0.0 };
     let opts = EnvOptions { start_state: Some("1_22e_0".into()), ..Default::default() };
     SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env")
 }
@@ -177,7 +188,7 @@ fn the_block_clip_in_a_dungeon_room() {
 fn make_room_21_env(nes: ZCore) -> Env {
     let mut config = (*DATA.specialists["stalfos-keese-gel"]).clone();
     config.ram_randomization = RamRandomization::default();
-    assert!(config.clips, "the family leaves the island by the ladder clip");
+    assert!(config.clips.enabled, "the family leaves the island by the ladder clip");
     let opts = EnvOptions { start_state: Some("4_21s_0".into()), ..Default::default() };
     let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env");
     env.reset(Some(0), None).unwrap();
@@ -196,8 +207,9 @@ fn link_y(env: &Env) -> i32 {
 /// The route step 4:0x21 S -> N by actions: `MOVE N` onto the island (Link stops on T, Y $7D, at the water), `CLIP N`
 /// (the ladder clip, from T: back off to G' and over the two squares of water to Y $55, 8 pixels into the top wall),
 /// `MOVE S 8` off the wall, `BOMB N`, `WAIT` for the blast, `MOVE N` through the hole into the rupee room 0x11: the
-/// episode ends `exit-correct`. BOMB N from the clip's end (Y $55) spends the bomb and leaves the wall shut: the bomb
-/// lands outside the room, so the step down is needed (the objective's bomb spot is ($78, $5D)).
+/// episode ends `exit-correct`. BOMB N from the clip's end (Y $55) would spend the bomb and leave the wall shut (the
+/// bomb lands $18 px from the hotspot, out of reach), so since round 22 it is not offered there; the step down is
+/// needed (the objective's bomb spot is ($78, $5D)), where it is.
 #[test]
 fn the_route_step_through_4_21_by_the_ladder_clip() {
     let Some(nes) = open_core() else { return };
@@ -211,23 +223,14 @@ fn the_route_step_through_4_21_by_the_ladder_clip() {
     let r = act(&mut env, "CLIP N");
     frames += r.info.frames;
     assert_eq!((link_x(&env), link_y(&env), r.info.terminal.is_none()), (0x78, 0x55, true), "over the water");
-    let move_n = Action::parse("MOVE N 16").unwrap();
-    // From the clip's end the bomb is spent for nothing.
-    let end = env.save();
+    // From the clip's end a bomb would be spent for nothing: not offered.
+    let bomb_n = Action::parse("BOMB N").unwrap();
     let bombs = env.session().state().bombs();
-    assert!(bombs > 0 && env.session().mask().is_allowed(&Action::parse("BOMB N").unwrap()), "{bombs} bombs");
-    act(&mut env, "BOMB N");
-    for _ in 0..4 {
-        act(&mut env, "WAIT 32");
-    }
-    // The cheat ledger gives the room's bomb back (0x21 needs one), but the wall is still shut.
-    assert_eq!(env.session().state().full_location(), zelda::MapLocation::new(4, 0x21, false));
-    assert!(!env.session().mask().is_allowed(&move_n), "the wall is still shut");
-    env.load(&end);
+    assert!(bombs > 0 && !env.session().mask().is_allowed(&bomb_n), "{bombs} bombs: {}", env.session().mask());
     // One step down, then the bomb opens the wall.
-    for text in ["MOVE S 8", "BOMB N"] {
-        frames += act(&mut env, text).info.frames;
-    }
+    frames += act(&mut env, "MOVE S 8").info.frames;
+    assert!(env.session().mask().is_allowed(&bomb_n), "{}", env.session().mask());
+    frames += act(&mut env, "BOMB N").info.frames;
     // The wall opens at the end of the blast (about 80 frames after the press).
     for _ in 0..3 {
         frames += act(&mut env, "WAIT 32").info.frames;

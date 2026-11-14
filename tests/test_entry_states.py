@@ -136,6 +136,15 @@ def test_game_rooms_reads_game_yaml():
     assert counts[(1, 0x7f)] == 4                   # the bow cellar's Blue Keese (an underworld in_cave room)
 
 
+def test_state_building_bombs_a_boss_freely_and_a_wall_only_where_it_opens():
+    steps = {s.filename(0): s for s in route_steps()}
+    bombs = {name: entry_states.step_config(steps[name], name).items.bombs
+             for name in ('2_0es_0.state', '3_4dw_0.state', '0_2ce_0.state', '0_67e_0.state', '4_11s_0.state',
+                          '0_1ae_0.state')}
+    assert bombs == {'2_0es_0.state': 'free', '3_4dw_0.state': 'free', '0_2ce_0.state': 'required',
+                     '0_67e_0.state': 'required', '4_11s_0.state': 'required', '0_1ae_0.state': 'never'}
+
+
 def test_pre_entry_snapshot_is_written_fresh_and_audits_clean(game, tmp_path):
     pre_entry = walk_north_with_capture(game)
     game.restore(pre_entry)

@@ -63,7 +63,7 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
 | `zelda::actions` | `ACTION_SCHEMA_VERSION` (2); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=104] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
 | `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG or ARROW whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). A CLIP runs the grid-point skip macro ("Grid-point skip" below; MOVE never does); `clip` reports its `ClipOutcome`. |
-| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clips` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clips(enabled)`, `skip_available(direction)`, `Change.clip`). |
+| `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; `randomize_rng` writes a natural RNG state and the spawn draws right after the restore ("Randomness at a start" below), `rng_phase()` reports the phase, `write_rng(phase)` writes one at the current frame (a chain checkpoint's redraw); controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clips` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clips(enabled)`, `skip_available(direction)`, `Change.clip`). |
 | `zelda::Change` | previous/current `GameView`, action, frames, menu_frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. `frames` are the frames that count against the action: the option's minus its item sub-screen frames (`menu_frames`, the game paused). Discounting (`StepInfo.frames`, the pool's `Outcome.frames`, `rollout_buffer.py`), the frame penalty, the observation's history `frames`, heart timers and linger use `frames`; counts of frames played (`Session.total_frames`, `episode_frames`, visits, chain records, the pool's emulated frames, replays) add `menu_frames` back (`StepInfo.menu_frames`, Python `Change.menu_frames`, info `menu_frames`). Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
@@ -101,6 +101,36 @@ an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MO
 Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen wrap or an aborted one leaves Link)
 reads the tile under him (no look-ahead at X >= `$F0`), and N/S there read column `$1F` and the bytes after the tile
 map (`$67F0` on) as column `$20`, as the game does.
+
+### Randomness at a start (`crates/zelda/src/rng.rs`, `room_entry.rs`; round 22)
+
+The game's only random source is the 13-byte shift register `$18-$24` (`zelda-asm/mechanics.md` "# Random
+numbers"): one step per NMI frame, seeded at reset (`$40`, then 12 zeros), so its value is the number of frames
+since reset. From the seed it runs an 88-step lead-in and then a cycle of 32,767 states, the only values a game in
+play holds. `zelda::rng::natural(n)` is the register `n` steps after reset (a `u128` stepped `n` times, ~45 µs for
+the longest, against ~1 ms for a start state's load: no table); `rng::PHASES` = 88..=32854, each state of the cycle
+once; `rng::phase_of`, `rng::on_cycle` read a value back. `crates/zelda/tests/rng.rs` boots zcore and finds the
+game's register equal to `natural(steps)` on every frame (reset seeds it on frame 10; steps 87, 88, 32854, 32855 on
+frames 119, 120, 32886, 32887; 32855 is 88 again).
+
+Every write a start makes for randomness, made right after the restore and before any frame runs, so the entry
+frames, the spawn clouds and the first monster decisions all run on values the game can hold
+(`crates/zelda/tests/rng.rs` reads the register on every frame from the restore to 120 frames into play):
+
+| Write | When | Value |
+|---|---|---|
+| `$18-$24` RNG register | `Session::load` with `randomize_rng` (start states: training resets, evaluation, a chain's start state); a chain checkpoint with `redraw_rng` (`Session::write_rng`); search futures (`SpecialistEnv::perturb_rng`, phase from the future's key) | `natural(phase)`, the phase drawn uniformly from `PHASES` by the caller's seeded generator; `Session::rng_phase()` reports a start's phase (a recording keeps it, META `rng_phase`) |
+| `$524` SpawnCycle | a pre-entry load with `randomize_rng` | 0-8, every value asm:Spawn_AssignPositions stores |
+| `$525` CurEdgeSpawnCell | a pre-entry load with `randomize_rng`, any level (the cell persists through dungeons to the next edge-spawn room) | one of `room_entry::EDGE_SPAWN_CELLS` (41): `$40` (reset's) and the ring cells the search stops on in some edge-spawn room (top left tile below `$84`), derived from zelda-asm/data in a test; never the corners `$E0`/`$4F`, from which the search leaves the ring and places the monster off the screen or never ends |
+| room flags, `$560+room` | a pre-entry load with `fresh_room`: the pending room's saved kills | overworld bits 0-2 and dungeon bits 6-7 cleared, `LevelKillCounts` 0: a room never cleared; the room history (`$621-$626`) is left as it is (with the kills clear it decides nothing) |
+
+Before round 22 the register got 13 independent bytes 1-255 (almost never a state of the cycle), the edge cell
+any of the ring's 50 cells (the two corners included) on the overworld only, and a fresh room `$FF` (no room id)
+in its history slots. The reset's `ram_randomization` (hp, bombs, `help_count`) is no game randomness: it is written
+after the entry frames, once Link is controllable, and round 22 left it alone. A power-on start writes nothing.
+Stored start states were built by the old loads: 132 of the 364 hold `$FF` in their room history (only ever
+compared with room ids, so inert) and 120 an off-ring or corner edge cell (`$E0` in 109; `$10`, `$1F`, `$3F` in
+11): a randomized load replaces the cell, a load without it keeps it. Their own RNG registers are all on the cycle.
 
 ### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
 
@@ -161,6 +191,24 @@ Link's state 0, no knockback, and
   wrap, 0-1 after an E wrap) walkable and no slow tiles (`$74`/`$75`). T is `$00` (W) or `$F0` (E); the macro ends
   at X `$F0` offset 0 after a W wrap and X `$00` after an E wrap, where the opposite edge's room change is one MOVE
   away.
+- **wrap exit** (overworld, E only; round 22): the E wrap's zone, row line and run-up, but with the landing columns
+  0-1 solid, so the plain wrap is not offered, and only on the rows of the room's game.yaml W exit with `wrap:
+  true` (its `span`, Link's tile rows; `Room::wrap_exit`, `GameView::room`). The macro is the E wrap's, then Left
+  on the landing frame (X `$00`, offset 0, `Phase::Exit`): on the bound the overworld fires the W edge test whatever
+  the tile, and the room changes; the skip completes with that room change (`run_skip`'s carried-on rule) and ends
+  on the new room's first controllable frame, like any room change. The only one is room 0x75 into 0x74 (Dungeon 3's
+  entrance, from E), on rows Y `$65`-`$AD`: 0x74's column 29, which the arrival at X `$F0` reads going W, is open
+  there; on Y `$55`, `$5D`, `$B5`, `$BD` it is solid and Link would go back and forth between the two rooms (a
+  softlock), so those rows are not in the span (`zelda-asm/mechanics.md` "After the wrap, edge by edge"). The session
+  has no tile map of a room it isn't in (the zelda crate reads tiles only from RAM; no overworld layout decoder
+  exists in the crates), so the safe rows are game.yaml data, every one played by `crates/zelda/tests/wrap_exit.rs`
+  (each start of the zone on each safe row into 0x74 and walking on, the softlock rows by buttons, a hit on every
+  frame, the action sequence from 0x76's E edge into Dungeon 3: 779 frames, monsters removed). A hit before the
+  bound aborts as for the wrap; past it Link stays on the row (X `$F1`-`$00`), never stuck: MOVE W walks back into
+  the zone (or, from X `$00`, leaves by the W edge, which finishes the cut skip: `OpenClip::finished_by`). The
+  mirrored shape (a W wrap onto a solid right edge, then Right; 0x60 into 0x5F) is not offered: no route needs it.
+  `wraps_into_wrong_exits` vetoes the wrap exit unless the room behind the W exit is one of the objective's next
+  rooms. The room-to-room search (`GameMap::find_all_routes`) never takes a `wrap` exit; a route step may.
 - **block clip** (dungeon, N or S; no ladder out): not in a doorway, X on the column line and inside the X border
   band, T the first grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8
   pixels further (a 16-pixel square of blocks, statues or wall, never water `$F4`: with the ladder one square of
@@ -230,10 +278,66 @@ observation (`Room::wavefront(..., clips)`, `clips::skip_jumps`) treats every bl
 from each rest position of its zone to its end, at its frames converted to tiles (1.5 pixels a frame, 8 a tile); the
 search becomes Dijkstra only when a room has jumps, and the `target` direction follows a jump on the shortest way.
 The overworld wrap is no jump (it ends one MOVE from the opposite edge: a jump would point the way to that edge's
-exit out of the entry edge; the round-21 policies learned the wrap without one). So in 1:`$22` the objective targets
-the stairs (reached through the clip under the east block) instead of the push spots; in 4:`$50` the way to the N
-door goes through the diagonal (CLIP N at X `$B0`); 4:`$21`'s island, which no walk leaves, leads N by the ladder
-clip.
+exit out of the entry edge; the round-21 policies learned the wrap without one). The wrap exit is one: the wrap
+rows' W edge tiles are W exit tiles of the room (`Room::with_wrap_exit`; solid, walking never reaches them) and its
+jumps lead from G', G and the bound on those rows to them, so an objective leaving W points PBRS and the `target`
+direction at the E edge on a safe row (never a softlock row); with clips off nothing reaches that exit (no PBRS, no
+`target` direction; the room-stall penalty runs on, and leaving any other way is a wrong exit). So in 1:`$22` the
+objective targets the stairs (reached through the clip under the east block) instead of the push spots; in 4:`$50`
+the way to the N door goes through the diagonal (CLIP N at X `$B0`); 4:`$21`'s island, which no walk leaves, leads N
+by the ladder clip.
+
+### The run-time clips switch, route stretches and re-planning (round 22)
+
+Beside the family's `clips:` there is one run-time switch, `clips_allowed` (default on): CLIP is offered only when
+the family has clips enabled **and** the switch is on (`Session::set_clips_allowed` / `clips_allowed` /
+`clips_effective`, `GameCompletion::set_clips_allowed`, `SpecialistEnv::set_clips_allowed(Option<bool>)`: `Some`
+fixes it, `None` draws it per episode; `ChainEnv::set_clips_allowed(bool)`; Python `Game.set_clips_allowed`,
+`Env.set_clips_allowed(True|False|None)`). A flip in an env or a chain takes effect at the next decision it builds,
+so the observation and mask already handed out stay valid; the mask, the `clip_usable_*` bits (read from the mask:
+the switch and the wrap veto are in them, the layout is unchanged), the objective, PBRS, `target` and linger follow
+it. Off, the objective takes the plain way inside a room too: 1:`$22` targets the push spots (as a `clips: false`
+family) instead of the stairs; 4:`$50` keeps its exit, its `target` features differ (no jump). Tests
+(`crates/env/tests/clips_switch.rs`): a flip mid-room gives the decisions of a switch fixed from the start (0x77's
+wrap zone, 1:`$22` and 4:`$50` before and after the clip).
+
+**Stretches.** Where the clip way and the plain way go through different rooms, routes.yaml has a stretch: one list
+element `- stretch: NAME` with `parts` (the step both ways start from), `rejoins` (the shared step right after),
+`clips:` and `plain:` step lists. `zelda::game_map` flattens it into the one numbered route (the clip way's steps
+first, then the plain way's, then the rejoin), each step tagged with its `way` and `stretch` (Python
+`route_steps()` dicts; `route_stretches()`). Checked at load: both ways start at `parts` and leave it by different
+exits, each is a walk of game.yaml exits into the next step, both reach the rejoin with the same progress and bomb
+reserve, and no waypoint or triforce lies inside. `d3-approach` (0x67 out of its secret cave, round 22): clips
+0x67 S, 0x77 N→W, 0x76 E→W, 0x75 E→W (the wrap exit, `CLIP E`), 0x74 E→cave; plain 0x67 W, 0x66, 0x65, 0x64 E→W,
+0x63 E→S, 0x73 N→E, 0x74 W→cave; rejoin 3:0x7c from S (`docs/routes/overworld.md`). `d4-island` (4:`$31` E):
+clips `$31` E→N, `$21` S→N; plain `$31` E→W, `$30` E→N, `$20` S→E, `$21` W→N; rejoin `$11` from S
+(`docs/routes/d4.md`). `Route::with_clips(map, on, Option<ClipsFlip::{Step, Room}>)` picks the way a run starts
+on; `--from` picks the step of the run's way first, then any way (`4_31e` leaves N with clips, W without; `0_67c`
+S or W); a `--stop-at` room or `step:N` the run's way never reaches is refused unless the switch flips on the way.
+A start state the route enters on one way only fixes the switch (`objectives::start_clips`: `0_77n`, `0_76e`,
+`0_75e`, `0_74e`, `4_21s` on; `0_66e`, `0_65e`,
+`0_64e`, `0_63e`, `0_73n`, `0_74w`, `4_30e`, `4_20s`, `4_21w` off); a chain `--from` such a state with the other
+switch starts as a flip there. `entry_states build` follows the clip way; the plain way's states come from
+`entry_states path` (the audit expects both). Exploration (curricula) keeps the switch on unless the state fixes
+it, so a plain-only state's track is explored, and replayed, with it off.
+
+**Re-planning.** Off while on the clip way: the plain step of Link's room for the side he came in takes over
+(`$31` from E turns W). Where no plain step fits, the objective leads through the exits he can walk to without a
+skip, choosing the one nearest by map path to a room of the plain way or the rejoin, and adopts a plain step as
+soon as he is in its room and can walk to its exit (0x21's island: back through its S door into `$31`, then W).
+No walkable exit leads back: the ordinary off-route objective. On while on the plain way: the plain way holds to
+the rejoin (no turning back mid-stretch); anywhere else the clip way at once. Chain `RoomRecord`s carry
+`clips_allowed` (the switch at the visit's first decision) and `clips_flips` (`{step, clips}`, step 0 = at the
+entry); `RunResult.clips` is the switch the run started with (`crates/env/tests/chain_clips.rs`).
+
+**Counters.** A block or ladder clip whose crossing runs on into the next room counts as `done` (4:`$21`'s CLIP N
+through the opened wall into `$11`). An aborted clip that a later MOVE along the same line carries past the clip's
+end point counts once in `ClipStats::finished_by_move` (it stays in `aborted`, not in `done`; tested in the game: a
+ladder clip cut by a Gel or Keese hit, then `MOVE N 16`). `CLIP_STATS` has 7 fields.
+
+**Wrap veto.** `objectives::wraps_into_wrong_exits` drops a wrap when the objective leaves by the landing edge only
+within its game.yaml `span` and the landing row is outside it (0x5b: rows `$B5` and `$BD` vetoed, `$55` and `$5D`
+kept); a wrap whose landing edge the objective doesn't use (it goes S) stays.
 
 ## Observation (`crates/env/src/observation.rs`)
 
@@ -436,6 +540,19 @@ inside the ±1 step clamp). On: `vire`, `stalfos-keese-gel`, `trap-room` and eve
 `mean_clips_<stat>` (overall, per room and state), per-visit `clip_<stat>` / `clip_<stat>_per_visit`, chain
 `RoomRecord.clip_<stat>`; eval records carry `target` and `entry`, and `eval.json` `by_state_target` groups by
 `<start state>:<target>`.
+The round 22 form is `clips: {enabled: BOOL, off_share: SHARE}` (`env::config::ClipsConfig`; `true`/`false` still
+mean `{enabled: ...}`): the **training mix**. `off_share` (in [0, 1]; default `DEFAULT_CLIPS_OFF_SHARE` 0.5 for a
+clip family, 0 otherwise) is the share of episodes that start with the run-time switch off, so a clip family learns
+the plain way as well as the skips. An episode's switch: a start state that fixes it wins, then
+`Env.set_clips_allowed`, then a draw from the env's seeded generator (`ClipsConfig::draw`); curriculum starts and
+exploration keep it on (their tracks were explored with it on), and the entry-state builder never draws. Terminal
+`info['clips_allowed']` / `info['clips_fixed']` → training metrics `clips/enabled_share` and per switch state
+`clips/on|off/{episodes, success_rate, health_change, hearts_at_exit}` (`metrics.RolloutMetrics`; the training
+GUI draws `clips on` / `clips off` on the success chart and names them in the progress line). The early stop
+counts a state played with the switch off as its own start state
+(`<state>:clips-off`, `clips.label`), so the balanced rate is the mean over both and one switch state can't carry
+the stop while the other fails (`clips_balanced/on|off`: the balanced rate of each switch state's labels alone);
+its confirmation evaluation plays both.
 `reward.exit_health_weight` w (default 0.5, in [0, 1]; better-play §1b) sets how much of the success terminal rides
 on the health Link leaves with: `reward-terminal-success` = 20 × ((1 − w) + w × hp/max_hp) (`success_reward_value`;
 0.5 is the long-standing 20 × (0.5 + 0.5 × hp/max_hp), bit for bit; 1.0 pays 20 × hp/max_hp, 0 a flat 20).
@@ -573,8 +690,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   re-measured and set again. `set_act_mode` renames an `eval.json` measured in the other mode to
   `eval-<that mode>.json`, so `eval.json` stays the evaluation in the model's act mode.
   Evaluation, chains and `run` follow it per model; their `--act MODE` forces one mode for every model (`--act
-  model`, their default, follows the registry). The play tools default to `registry.PLAY_ACT` instead, never
-  argmax.
+  model`, their default, follows the registry). The play tools (`play-zelda.py` with its live cell,
+  `zelda-headless.py`, the golden path) default to the one constant `registry.PLAY_ACT` instead (now `sample`),
+  never argmax. The act modes and the run-time clips switch (round 22) are independent: every tool that takes
+  `--act` takes `--clips` beside it, and a record carries both its switch fields and its decision statistics.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
   arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
   with its trajectory.json time); `train_summary.json`
@@ -655,10 +774,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   many consecutive iterations. Guards: no proposal before `ceil(max_steps / steps per env) + patience`
   iterations; an iteration that finished no room-entry episode, or whose `in_flight/over_half_budget` exceeds
   1 − R, resets the streak. A proposal stops training only if a confirmation evaluation of the current weights
-  (`CONFIRM_EPISODES` = 50 sampled episodes per seed start state on an `EvalTask` pool, seed = pool seed +
-  iteration, `--parallel` envs) also reaches R; otherwise the streak restarts. The evaluation ends as soon as its
-  failures rule R out (same decision; the event says `aborted`, with `failures` and `rate_upper_bound`). Every check
-  is an `early_stop_check` event with its rate. Harvested start states never move the rate (they are logged as
+  (`CONFIRM_EPISODES` = 50 episodes per seed start state on an `EvalTask` pool, seed = pool seed + iteration,
+  `--parallel` envs, acting by `--confirm-act MODE`, default `sample`; `scripts/train_round.py --eval-act MODE`
+  passes its mode) also reaches R; otherwise the streak restarts. The rollouts always sample from the unmodified
+  policy (PPO needs it). The evaluation ends as soon as its failures rule R out (same decision; the event says
+  `aborted`, with `failures` and `rate_upper_bound`). Every check is an `early_stop_check` event with its rate and
+  `act`. Harvested start states never move the rate (they are logged as
   `harvested/*`). The raw `success_rate` is biased toward the states the start-state pool oversamples
   (failures), so it is not used for stopping.
 - `python -m triforce.explore --specialist NAME` (Go-Explore phase A; `crates/env/src/explore.rs`, CLI `explore.py`): per seed start state, an
@@ -704,13 +825,31 @@ every step, so following an enemy that moves away pays again, and knockback rese
   the per-visit decision means and `variety`; `python -m triforce.evaluate
   --specialist NAME [--act model|MODE]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint
   only for a canonical run (the model's act mode, 100 episodes per state, seed 0, the checkpoint's specialist);
-  otherwise `eval[-<specialist>][-<act>][-e<N>][-s<seed>].json` with each part only where it differs
+  otherwise `eval[-<specialist>][-<act>][-e<N>][-s<seed>][-clips<mode>].json` with each part only where it differs
   (`evaluate.default_output`). Writes are atomic. Results carry `act`, `checkpoint_sha1`, `model_hash`, `config`,
   `code` and `data`, and per-episode records carry `start_max_health` (`mean_start_health_fraction` divides by it).
   `evaluate.read_evaluation(run_dir, mode=None)` is the reader: `eval.json` if it was measured in that mode for the
   current weights, else `eval-<mode>.json`, else LookupError.
+  **Clips** (round 22, `triforce.clips`): `--clips on|off|both` (default `both` for a family with clips enabled,
+  `on` for the others; `evaluate_specialist(clips=...)`, `eval-batch --families ... --clips`) plays each start
+  state in the switch states the mode names and the state allows (`clips.episode_jobs`: a state the route enters on
+  one way only, e.g. vire's `4_30e` and `4_20s`, plays only with clips off; the switch-on half of `both` is exactly
+  the `on` evaluation). The default mode is the canonical `eval.json`; another is `eval[-…]-clips<mode>.json`. The
+  top-level figures and
+  every group are over both switch states together, the headline a model weak without clips can't hide behind;
+  `by_clips` (`{on: ..., off: ...}`) holds the whole summary per switch state (`by_room`, `by_state`,
+  `visited_rooms` and `risk` included), `clips` the mode, and every record `clips_allowed` and `clips_fixed`
+  beside its visits' `decisions`. `clips` is part of what makes two evaluations the same measurement
+  (`eval_batch`). The `eval` event carries `act`, `risk` (per episode), `clips` and a compact `by_clips`
+  (`episodes`, `success_rate`, `health_change`, `by_room`, `by_state` per switch state): the training GUI's Eval
+  tab titles the figures with the act mode ("Evaluation · act escape:16"), shows a "Clips switch" section (each
+  state's success and heart change, the evaluated mode), each start room's success per state under the combined
+  figures, and a "Decisions" section (moves under 1%/5% per episode, the share followed by a hit or a death
+  beside every move's, the acting entropy).
 - `scripts/train_round.py --round ID` trains every trainable specialist (route order) and evaluates each
-  (`evaluate.default_output`), then runs `eval-chain`; summaries go to `models/<round>-summary.json`,
+  (`evaluate.default_output`; `--eval-act MODE`: in that act mode, and the training's early-stop confirmation
+  acts by it too, `train --confirm-act`; default `model`, the run's own, with a sampling confirmation), then runs
+  `eval-chain`; summaries go to `models/<round>-summary.json`,
   `models/<round>-chain.jsonl` (written run by run, with its `.meta.json`) and `models/<round>-chain-summary.json`.
   Nothing is promoted unless `--promote` is given: then a run that finished (exit 0, status completed/early_stop)
   and evaluated successfully is promoted, and the summary's `previous_promoted` keeps the replaced run ids and act
@@ -729,8 +868,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `--stop-at` also counts arrivals at the next segment's start room); `--evaluate` everything `evaluate` does.
   `--chains TAG` is `r56_chains.sh`: the eight segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
   then the report entry (`scripts/yardstick.py report`, `triforce room-stats TAG`); `--families` the evaluation of
-  each family's promoted (or `--run-id`) run in each of `--acts` (`model` or act mode spellings; `--output-dir DIR`
-  writes `DIR/<family>-<act>.json` instead of into the run dir). A failed entry is marked and the batch goes on
+  each family's promoted (or `--run-id`) run in each of `--acts` (`model` or act mode spellings; `--clips` for
+  every one; `--output-dir DIR` writes `DIR/<family>-<act>[-clips<mode>].json` instead of into the run dir). A
+  failed entry is marked and the batch goes on
   (exit 1); SIGTERM / Ctrl-C stops the running ones and marks the rest `interrupted` (exit 130); exit 2 when the
   batch can't run (a bad entry, nothing to run). A rerun skips what is done: a chain whose output exists, an
   evaluation whose result file is the same measurement (`eval_batch.same_measurement`: specialist, act mode,
@@ -798,7 +938,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
   targets (no route cache in a maze room) and the observation's objective direction. A routes.yaml step leaving
   through a maze's sequence is a load error: the envs don't model a room visit that loops back into itself.
 - `Route.load(name, stop_at=None, start_from=None, states_dir=None, *, stop_step=None, power_on=None,
-  checkpoint=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate, or at one of:
+  checkpoint=None, clips=True, clips_off_from=None)` reads `triforce/routes.yaml` (`clips`: the run-time switch a
+  run starts with; `clips_off_from`: a route step (int) or room where it turns off; "The run-time clips switch"
+  above). A route starts at the `start` savestate, or at one of:
   `start_from` (a savestate); `power_on` (`{'name', 'delay', 'max_delay'}`: console power on, the game booted by
   controller inputs alone, `zelda::power_on`; the delay, the idle frames on the file-select screen, 0..=32766, is
   the run's only randomness and is drawn from the run seed when None; no memory is written and the load
@@ -841,13 +983,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
 - `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE | --power-on
   [--name NAME] [--delay N|random]] [--stop-at L:0xRR | step:N]
   [--act MODE] [--checkpoint S=PATH] [--output PATH [--append]] [--replays DIR [--streams LIST]
-  [--keyframe-frames N] [--state embed|path]] [--harvest [DIR]]
+  [--keyframe-frames N] [--state embed|path]] [--harvest [DIR]] [--clips on|off] [--clips-off-from ROOM|step:N]
   [--logs-dir DIR | --no-log]` → success
   rate and per-room failure counts (`runner.chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). Runs go to `--output` (default
   `runs/eval-chain-<yymmdd-HHMMSS>.jsonl`) as they finish, with the provenance (models, checkpoints, act modes,
   route, code, data) in `<output>.meta.json` (the batch is marked `finished` at the end), in the summary and in
   the `chain_start` event; an existing `--output` is refused unless `--append` with the same provenance.
+  `--clips on|off` is the run-time switch every run starts with, `--clips-off-from ROOM|step:N` turns it off on
+  entering that room or route step (round 22; the meta records both; `RunResult.clips`, `RoomRecord.clips_allowed`
+  / `clips_flips`); `CLIPS=on|off` passes `--clips` in `scripts/experiments/r56_chains.sh`.
   `--checkpoint` must name a known specialist and an existing checkpoint. Exit 2 on a bad `--from`, `--stop-at` or
   `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate|eval-batch|room-stats ...` forward to the module CLIs (`triforce --models-dir DIR
@@ -859,8 +1004,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   arrivals; it refuses appended chain files and `@` targets that aren't route rooms. `compare BASE NEW` marks rows
   `better`/`worse`/`~`, refuses rows measured in different act modes (unless `--allow-mode-mismatch`) and labels
   one-sided rows `missing`.
-- `triforce room-stats TAG [--chains-dir DIR] [--output FILE] [--route NAME]` (`room_stats.py`) writes
-  `<chains-dir>/<TAG>-room-stats.json` (default `target/r56-chains`, beside the chain files it reads;
+- `triforce room-stats TAG [--noclips [TAG2]] [--chains-dir DIR] [--output FILE] [--route NAME]` (`room_stats.py`)
+  writes `<chains-dir>/<TAG>-room-stats.json` (default `target/r56-chains`, beside the chain files it reads;
   `scripts/experiments/r56_chains.sh report` writes it after the yardstick): per-room statistics in every **scope**
   (`room_stats.SCOPES`), one entry per room (`L:0xRR[:cave]`) with the same fields everywhere. `full`: the
   `<TAG>-full` runs (game start to the D4 triforce); `death_rate` = runs that died in the room / runs started.
@@ -872,21 +1017,39 @@ every step, so following an enemy that moves away pays again, and knockback rese
   the chains (the chain meta's checkpoints, each in its chain act mode), merged per room by visits; a run there is
   an isolated episode that entered the room. Fields: `runs`, `entered`, `visits`, `reach_rate`, `deaths`/`death_rate`,
   `stuck`/`stuck_rate`, `endings`/`end_rate`, `death_rate_entered`, `through_rate`, per visit `hearts_lost`
-  (chains: net, `max(0, in − out)`), `hearts_gained`, `hearts_change`, `hearts_healed`, `hits` (evaluations only:
-  chain records don't count hits), `steps`, `frames`, `clips` (`clip_done`), `bombs`, `cheated_bombs`, then
-  `wrong_exits`, `outcomes`, `specialists`, `risk` (`variety.risk` per visit: moves under 1%/5% under the policy,
-  the share followed by a hit or death within 4 decisions, the acting entropy; the room scope's from the
+  (chains: net, `max(0, in − out)`), `hearts_gained`, `hearts_change`, `hearts_healed`, `hits` (chains: the
+  records' `hits`, round 22; None for older files), `steps`, `frames`, `clips` (`clip_done`), `bombs`, `cheated_bombs`,
+  then `wrong_exits`, `outcomes`, `specialists`, `risk` (`variety.risk` per visit: moves under 1%/5% under the
+  policy, the share followed by a hit or death within 4 decisions, the acting entropy; the room scope's from the
   evaluations' per-visit means), `variety` (chain scopes: distinct action sequences of the room's visits, mean
   first diverging decision, frames spread) and, in chain scopes, `steps` (the same per route step through the
-  room, `off` for visits the route doesn't explain); each chain scope also has `risk` per run. Chain records name no route step: `assign_steps` follows the
-  route from the start state's step (`state_step`, as `chain.rs` `start_step`), a visit taking the step of its
-  room nearest the cursor (2 back, 8 ahead) and a correct exit moving the cursor on. The file records `format` (1),
+  room, `off` for visits the route doesn't explain); each chain scope also has `risk` per run (and per switch state
+  in its `by_clips`). A chain visit's route step is its record's `step` (round 22; None, or a step that isn't this
+  route's for the room: off the route); for older records without the field `assign_steps` infers it, following
+  the route from the start state's step (`state_step`, as `chain.rs` `start_step`), a visit taking the step of its
+  room nearest the cursor (2 back, 8 ahead) and a correct exit moving the cursor on. The file records `format` (2;
+  format-1 files still read, as clips on),
   `tag`, `version`, `route`, `team` (the chains' runs and act modes), `promoted` (the models dir's promoted runs
   when written), the scope definitions (`segments`) and each scope's `source` (file, runs, start, act modes,
   code, data, version). `zelda-map.py` draws the scopes (Full run, Segment: the `to-*` segments and the dungeons
   alone, rooms off the segment dimmed; Room only), each with its own death-rate colour scale (`DEATHS_BAD`), and
   its sidebar tabulates a room's scopes side by side; it reads the newest `*-room-stats.json` by mtime
   (`room_stats.newest()`) or `--stats FILE`, and without one shows Room only from the promoted models' evaluations.
+  **Clips** (round 22): every room entry keeps the combined numbers and adds `by_clips: {on: {...}, off: {...}}`
+  with the same fields over the visits played with the switch on / off (a chain visit's switch is its record's
+  `clips_allowed`, else the run's `clips`, else the file's `.meta.json` `clips`, else on; the room scope uses each
+  evaluation's `by_clips[switch]['visited_rooms']`, an evaluation without it counting as on). A chain scope also
+  has `by_clips` totals (`runs`: the runs that played a visit with that switch, so a run flipped by
+  `--clips-off-from` counts in both; `arrived` / `endings` under the switch of the run's last visit). The switch-off
+  runs come from the same files or from a second tag: `--noclips` reads `<TAG>-noclips-*.jsonl` (the
+  `CLIPS=off TAG=<TAG>-noclips scripts/experiments/r56_chains.sh` convention; `--noclips TAG2` names another tag;
+  put it after `TAG`) with `<TAG>-*.jsonl` and writes `<TAG>-both-room-stats.json` (`tags`, per scope `files`; a
+  file linked from both tags counts once). `zelda-map.py` has a Clips selector (Both / On / Off) beside Scope: the
+  overlays, the dimming and the scope line show the selected switch state's numbers, the sidebar's by-scope table
+  lists the combined row, `· clips on` and `· clips off` under each scope; with `--route`, On draws the clip way of
+  each stretch, Off the plain way, Both both (the clip way dashed and offset, step numbers marked `c` / `p`).
+  `--clips/--scope/--level/--overlay/--select/--screenshot FILE` render one view to a PNG without a display
+  (`QT_QPA_PLATFORM=offscreen`).
 - Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
   its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded
   objects; the chain pool uses them instead of reloading canonical YAML. Runtime item masks, observations
@@ -922,7 +1085,7 @@ The file layout is in `crates/replay/src/lib.rs`. It holds:
 
 | Section | What |
 |---|---|
-| META | JSON: what played (`triforce` version, `code`, `data`, `kind` chain/eval/train, `route`, `stop_at`, `models`), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), and the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions`) |
+| META | JSON: what played (`triforce` version, `code`, `data`, `kind` chain/eval/train, `route`, `stop_at`, `models`), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), `rng_phase` (the natural RNG state a start state or redrawn checkpoint wrote, steps from reset; a stitch keeps each segment's), and the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions`) |
 | SOURCE | where the machine starts: console power on (name, idle delay), a state file by name (and its hash), or the embedded START state |
 | INPUTS | the controller byte of every frame, run-length encoded |
 | EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
@@ -949,7 +1112,8 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   (`crates/pool/tests/zelda.rs`).
 - **Reading.** `_native.Replay(data)`: `version`, `frames`, `ending`, `meta`, `source`, `inputs()`, `edits()`,
   `cheats()`, `events()`, `rewards()`, `decisions()`, `states()`, `end_ram()`. `tf replay info FILE` prints the
-  same.
+  same, and `rng:` the start's RNG phase read back from the frame-0 edits of `$18-$24` (checked against META
+  `rng_phase`; replays recorded before round 22 show 13 bytes the game never holds).
 - **Playing.** `_native.ReplayPlayer(data, states_dir=None)` (`step(frames, render)`, `seek(frame)`: from the
   nearest state at or before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
   FILE...` plays the whole replay and compares the machine with every recorded state (`ReplayError` naming the
@@ -968,14 +1132,16 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
 - `zelda-headless.py OUT [COUNT] [--wins-only | --deaths-only | --stuck-only] [--parallel N] [--first-seed S]
   [--max-runs M] [--route R] [--from STATE | --power-on [--name NAME] [--delay N|random]]
   [--stop-at ROOM|step:N] [--act MODE|model] [--streams LIST] [--keyframe-frames N]
-  [--state embed|path] [--golden [--attempts A]] [--models-dir DIR] [--allow-incompatible-models]` plays the
-  route in one chain pool without a window or rendering and writes replays into `OUT`
+  [--state embed|path] [--golden [--attempts A]] [--clips on|off] [--models-dir DIR]
+  [--allow-incompatible-models]` plays the route in one chain pool without a window or rendering and writes
+  replays into `OUT`
   (`<seed>-<ending>.tfreplay`). Without a filter it plays seeds `S .. S+COUNT-1` and saves them all; with one
   it plays on (at most `--max-runs`, default 1000 × COUNT) until COUNT runs ended that way and drops the
   others. It prints one line per saved file (`path  ending  frames  seed`) and a JSON summary (`saved`, `runs`,
   `endings`, `out`). Exit 0 when COUNT replays were saved and no run ended in an error, 1 otherwise, 2 on a
   bad command line, route or model set. Play draws its actions by default (`--act`, `registry.PLAY_ACT`), so
-  every seed is another game.
+  every seed is another game. `--clips off` starts every run with the run-time clips switch off (CLIP masked, the
+  plain way through every stretch); golden paths always play with clips on.
 - **The golden path** (`--golden`; `golden.golden_path(policies, route, parallel, first_seed, record, ...)`):
   the route is cut at its checkpoints, the overworld rooms Link stands in right after a triforce that is not the
   route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
@@ -989,8 +1155,9 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   act by argmax (or `escape`) could play one game from a checkpoint, so unless all draw (`--act argmax`, `--act
   model`) each game of a later
   segment has the game's random numbers redrawn from its seed when the checkpoint is restored
-  (`checkpoint={..., 'randomize_rng': True}`, `Route::redrawing_rng`: the write a start state's load makes),
-  recorded as edits at the checkpoint. A segment without a success in
+  (`checkpoint={..., 'randomize_rng': True}`, `Route::redrawing_rng`: the natural RNG state a start state's load
+  writes, "Randomness at a start" above), recorded as edits at the checkpoint and META `rng_phase` in the
+  segment. A segment without a success in
   `--attempts` runs (default 320) ends the path as a failure: its part is the run that got furthest (most
   rooms, then most frames), and the file is saved under that run's ending. Besides that redraw, a golden
   replay's memory edits are what any chain run's are: the action executor's writes of Link's facing (`$98`) and
@@ -998,9 +1165,10 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
 
 ## Watching (`play-zelda.py`, `play_grid.py`, `play_view.py`, `crates/theater`)
 
-`play-zelda.py [COLUMNSxROWS] [PATH]` shows a grid of cells, and every cell plays a replay: nothing on screen is
-a live game. `play_grid.ReplayGrid` decides what each cell plays next; `_native.ReplayScreen` (`theater::Screen`)
-plays it, one thread per cell on the emulator alone, paced at the frame rate (keys `u`, `+`, `-`; `p` pauses).
+`play-zelda.py [COLUMNSxROWS] [PATH]` shows a grid of cells, and every cell plays a replay; only a `--live` cell
+(below) is a live game. `play_grid.ReplayGrid` decides what each cell plays next; `_native.ReplayScreen`
+(`theater::Screen`) plays it, one thread per cell on the emulator alone, paced at the frame rate (keys `u`, `+`,
+`-`; `p` pauses).
 `play_view.Window` is the Qt window (cells, strips, keys), shared with `create-video.py`.
 A power-on run is shown from the frame the models took over. When a replay ends its result stays up
 `RESULT_PAUSE` (3 s) while the cell's next replay loads behind it (`play(hold=True)`, then `release`).
@@ -1017,9 +1185,10 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   `--patience` (64) finished runs in a row that no queue took they wait for the next take (0: never).
   `--replays DIR` saves every simulated run. `--from`, `--power-on`, `--stop-at`, `--stall-steps` and `--act`
   shape the runs as in `zelda-headless.py`.
-- **Acting** (`--act`, chosen at startup): `registry.PLAY_ACT` (default) draws every action at random, an act
-  mode applies to every model (`argmax` takes the most likely one), `model` follows each model's registered mode.
-  Runs that don't draw every action differ by the game's random numbers alone: those are redrawn from the run
+- **Acting** (`--act`, chosen at startup, for the simulations and the live cell alike): `registry.PLAY_ACT`
+  (default) draws every action at random, an act mode applies to every model (`argmax` takes the most likely one;
+  `temperature:T+relax:N` draws every action and breaks loops), `model` follows each model's registered mode. Runs
+  that don't draw every action differ by the game's random numbers alone: those are redrawn from the run
   seed when a start state is loaded (the game start, `--from`) and at a golden path's checkpoints; from power on
   they come from the idle delay, so a mode that doesn't draw (`argmax`, `escape`) with a fixed `--delay` is
   refused.
@@ -1032,6 +1201,27 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   and how they ended, whether the simulations run, the cells' frame rate and the sound; a cell's strip shows
   the run's seed, the room, the acting specialist and cheated items used. `--benchmark SECONDS` prints
   the frame rate as JSON and quits (silent).
+- **Clips** (round 22). `--clips on|off` is the run-time switch the simulations start with (default on); key `c`
+  turns it off and on (`ReplayGrid.set_clips`: `EnvPool.set_clips_allowed` on the simulations' pool, so every run
+  started afterwards; the runs already queued keep theirs). Each feed entry carries the switch its run was played
+  with (`theater::Finished::clips`, `Entry::clips`: from the pool's `run` event, `RunResult.clips`; a live run
+  counts as without clips if the switch was ever off during it). The title says where the switch stands ("clips
+  OFF for new runs (c)") and, per queue, how many runs were played without clips (`ReplayFeed.stats()
+  ['without_clips']`); a cell whose run was played without clips says "no clips" at the right of its strip
+  (`CellState.clips_text`). Golden paths always play with clips on; replay files know no switch. The keys are also
+  in `--help`.
+- **The live cell** (`--live`; not with a PATH). The top left cell is `play_grid.LiveCell`: the models play one
+  run after another in it while it is watched, on a one-env `ChainPool` (`num_envs=1`, rendering on, paced at the
+  cells' frame rate: `u`, `+`, `-` and `p` apply; `hold_finished_frame=True`, so each result stays up
+  `RESULT_PAUSE` on the run's last picture while the next run waits; `clips_live=True`). Its runs take seeds in
+  order from `--first-seed` + 1,000,000 (`SEEDS`), after the simulations' own. Key `c` reaches the run in
+  progress from its next decision (`ChainRunEnv::set_clips_switch`, a `ClipsSwitch` generation per set) and the
+  route re-plans from where Link stands ("The run-time clips switch" above): the strip says "no clips from L4
+  0x31" (the room it went off in), "clips again (off in L4 0x31)" when turned back on. Each finished live run is
+  filed into the queues like a simulated one (`ReplayFeed.file(seed, data, clips)`, `theater::Feed::file`: saved
+  with `--replays`, offered to the queues, counted), so the simulations start with the live cell. The live cell
+  has no sound and no `--controller` drawing (its frames come from the pool, `EnvPool.frame`, not a
+  `ReplayScreen`); the sound starts on the next cell. `n` and the source keys leave it playing.
 - **Sound.** One cell is heard: the top left one at first, a click on a cell moves it, `s` turns it off and on
   (`--no-sound` starts off). In a grid of several cells the heard one has a yellow frame while it sounds.
   `ReplayScreen.set_sound(cell)` opens the default sound device (`theater::Speaker`, `cpal`) and the cell's

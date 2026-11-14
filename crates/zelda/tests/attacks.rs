@@ -565,10 +565,11 @@ fn turn_and_strike_in_every_situation() {
     }
     assert!(turned > 0);
 
-    // 4:0x11's S doorway (round 20's wall walk past the open bomb wall): on the entry spot DoorwayDir is set and
-    // Link faces N, into the room; a step S puts him in the doorway with DoorwayDir clear (78,BF) facing S. From
-    // both a sideways strike is the game's: it walks him back onto the room's edge and turns him there.
-    load(&mut s, "4_11s_0");
+    // 4:0x11's S doorway (round 20's wall walk past the open bomb wall): on the entry spot (78,BD) DoorwayDir is set
+    // and Link faces N, into the room; a step S puts him in the doorway with DoorwayDir clear (78,BF) facing S. From
+    // both a sideways strike is the game's: it walks him back onto the room's edge and turns him there. (Chain 1's
+    // state: round 22's `4_11s_0` starts deeper in the doorway, at (78,C4).)
+    load(&mut s, "4_11s_1");
     for step in [0, 1] {
         s.press(buttons::DOWN, step);
         let at = link_at(&s);
@@ -609,6 +610,10 @@ fn turn_and_strike_in_every_situation() {
     };
     assert!(hold_until(&mut s, buttons::UP, 120, on_ladder), "{:?}", link_at(&s));
     s.press(0, 1);
+    // One of 0x30's two flashing Bubbles touched on the way (where they float depends on the state's draw) blocks
+    // the sword for up to 160 frames (asm:SwordBlockedLongTimer; the mask then offers no sword): clear it (test setup).
+    s.nes_mut().poke(0x4C, 0);
+    s.apply_ram(&[]);
     let (lx, ly, ..) = link_at(&s);
     let (turn, after) = strike(&mut s, &pokes, Sword, E, N, "ladder");
     assert_eq!((turn, after.0, after.1), (0, lx, ly));

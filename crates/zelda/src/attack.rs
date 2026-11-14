@@ -510,13 +510,21 @@ fn ladder_moving(view: &GameView, s: &Link, n: &mut Link, input: u8, moving: u8)
 /// Whether pressing `press` (controller bits) now would take Link out of the room or through a door: the input
 /// alone leaves a cave or cellar, or the held direction touches a door he can pass on the doorway's floor spot
 /// (asm:Doorway_CheckLink restores the move the sword stopped, and a false or bombed wall changes rooms at once).
+/// The held directions are first filtered as in [`step`] (asm:Link_FilterInput, asm:Link_ModifyDirInDoorway): in a
+/// doorway a diagonal boomerang throw facing into the room walks Link backward, out through its door.
 fn press_leaves(view: &GameView, s: &Link, press: u8) -> bool {
-    let held = [(buttons::RIGHT, RIGHT), (buttons::LEFT, LEFT), (buttons::DOWN, DOWN), (buttons::UP, UP)]
+    let mut held = [(buttons::RIGHT, RIGHT), (buttons::LEFT, LEFT), (buttons::DOWN, DOWN), (buttons::UP, UP)]
         .into_iter()
         .filter(|&(b, _)| press & b != 0)
         .fold(0, |bits, (_, g)| bits | g);
+    if s.level != 0 && border_bands(s.level, s.dir, s.x, s.y).1 {
+        held &= axis(s.dir);
+    }
     if held == 0 {
         return false;
+    }
+    if s.level != 0 && s.doorway != 0 {
+        held = if s.dir & held != 0 || opposite(s.dir) & held == 0 { s.dir } else { opposite(s.dir) };
     }
     if input_leaves(s, held) {
         return true;
@@ -591,11 +599,21 @@ pub fn plan(view: &GameView, kind: ActionKind, d: Direction) -> Option<u32> {
 
 /// [`plan`] with the reason of a refusal.
 pub fn explain(view: &GameView, kind: ActionKind, d: Direction) -> Result<u32, Refusal> {
+    simulate(view, kind, d).map(|(frames, _)| frames)
+}
+
+/// Link (the input model) on the frame an attack of `kind` in `d` presses its button, after [`plan`]'s turn frames;
+/// None where [`plan`] refuses.  A bomb or an arrow starts from his position then (asm:Link_PlaceWeaponAhead).
+pub fn press_link(view: &GameView, kind: ActionKind, d: Direction) -> Option<Link> {
+    simulate(view, kind, d).ok().map(|(_, s)| s)
+}
+
+fn simulate(view: &GameView, kind: ActionKind, d: Direction) -> Result<(u32, Link), Refusal> {
     let mut s = Link::read(&view.ram()[..0x800]);
     for frames in 0..=MAX_TURN_FRAMES {
         match next(kind, d, &s) {
             Next::Press(press) if press_leaves(view, &s, press) => return Err(Refusal::Leaves),
-            Next::Press(_) => return Ok(frames),
+            Next::Press(_) => return Ok((frames, s)),
             Next::Impossible => {
                 let target = facing_for(d).value();
                 return Err(if matches!(kind, ActionKind::Move | ActionKind::Wait | ActionKind::Clip) {

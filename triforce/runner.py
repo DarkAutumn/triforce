@@ -54,11 +54,13 @@ class Route:
     power_on: Optional[dict] = None
     checkpoint: Optional[dict] = None
     start_step: int = 0
+    clips: bool = True                          # the run-time clips switch a run starts with (round 22)
+    clips_off_from: Optional[object] = None     # turn it off on entering this route step (int) or room (MapLocation)
 
     @staticmethod
     def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None,
              states_dir=None, *, stop_step: Optional[int] = None, power_on: Optional[dict] = None,
-             checkpoint: Optional[dict] = None) -> 'Route':
+             checkpoint: Optional[dict] = None, clips: bool = True, clips_off_from=None) -> 'Route':
         """Loads a route from routes.yaml.  ``stop_at`` ends it on entering that room, ``stop_step`` on reaching
         that route step, instead of on its last step's triforce.  One of ``start_from`` (a savestate, e.g. a
         route entry state like ``2_7ds_0``, in ``states_dir``, default ``paths.STATES_DIR``, or a path),
@@ -111,7 +113,7 @@ class Route:
         if stop_step is not None and not start < stop_step < len(steps):
             raise RunnerError(f"--stop-at step:{stop_step} is not a step of route '{name}' after the start step "
                               f"{start}; steps: {start + 1}..={len(steps) - 1}")
-        return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint, start)
+        return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint, start, clips, clips_off_from)
 
 
 def _power_on(options: dict) -> dict:
@@ -209,14 +211,23 @@ class RoomRecord:
     bomb_tenth_tries: int = 0
     bomb_armed: int = 0
     bomb_picked_up: int = 0
-    # Grid-point skips in the visit (crates/zelda/src/clips.rs): completed, aborted, completed per direction.
-    # 0 in older records.
+    # Grid-point skips in the visit (crates/zelda/src/clips.rs): completed, aborted, completed per direction, and
+    # aborted ones a MOVE finished (round 22). 0 in older records.
     clip_done: int = 0
     clip_aborted: int = 0
     clip_done_n: int = 0
     clip_done_s: int = 0
     clip_done_w: int = 0
     clip_done_e: int = 0
+    clip_finished_by_move: int = 0
+    # Round 22 (None/absent in older records): actions that lost health and hits on enemies in the visit, the route
+    # step Link played on entering it (None off the route), the run-time clips switch then and every flip during the
+    # visit ({'step': actions into the visit, 'clips': the new value}; step 0 = at the entry).
+    hits: Optional[int] = None
+    hits_dealt: Optional[int] = None
+    step: Optional[int] = None
+    clips_allowed: Optional[bool] = None
+    clips_flips: List[dict] = field(default_factory=list)
     # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
     # within 4 decisions), surprisal, act_entropy and actions (hex, two digits per decision).  {} in older records.
@@ -234,6 +245,7 @@ class RunResult:
     frames: int = 0
     retreats: int = 0               # rooms left through a route step's `retreat` exit (4 end the run: retreat-limit)
     wrong_exits: int = 0            # wrong exits into tagged rooms (the 20th ends the run stuck: wrong-exit-limit)
+    clips: Optional[bool] = None    # the run-time clips switch the run started with (round 22; None in older files)
     rooms: List[RoomRecord] = field(default_factory=list)
 
     @property
@@ -340,16 +352,21 @@ class ChainPool:
     actions in a room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``record``
     (``replay.record_options``; None = off): every run is recorded
     as a TFREPLAY file and reported as a ``replay`` event; ``replays`` (a ``ReplayDir``) keeps those as files.
-    ``act``: None = each policy's act mode (``Policies.acts``), else this act mode for every policy.  ``harvest`` (a directory; None = off): every correct room entry where the acting
-    specialist changes (a handoff) saves its pre-entry state as
+    ``act``: None = each policy's act mode (``Policies.acts``), else this act mode for every policy.  ``harvest`` (a
+    directory; None = off): every correct room entry where the acting specialist changes (a handoff) saves its
+    pre-entry state as
     ``harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state`` (``n``: the room's index in the run), a start
-    state for that specialist's ``harvested_dir``."""
+    state for that specialist's ``harvested_dir``.  ``hold_finished_frame``: each finished run holds the env's
+    picture on its last screen until ``pool.set_hold(env, False)`` (a watched cell's result pause).  ``clips_live``:
+    ``pool.set_clips_allowed`` also flips the runs in progress, from their next decision (the route re-plans);
+    without it the switch reaches only the runs started afterwards."""
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
                  act: Optional[str] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: Optional[dict] = None,
-                 stall_steps: Optional[int] = None, replays: Optional[ReplayDir] = None, harvest=None):
+                 stall_steps: Optional[int] = None, replays: Optional[ReplayDir] = None, harvest=None,
+                 hold_finished_frame: bool = False, clips_live: bool = False):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         if replays is not None and record is None:
             raise ValueError("a replay folder needs record options (replay.record_options)")
@@ -364,7 +381,9 @@ class ChainPool:
                                  start_from=start_from, max_steps=max_steps, missing=policies.missing,
                                  states_dir=states_dir, stall_steps=stall_steps,
                                  harvest=None if harvest is None else str(harvest),
-                                 stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint)
+                                 stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint,
+                                 clips=route.clips, clips_off_from=route.clips_off_from,
+                                 hold_finished_frame=hold_finished_frame, clips_live=clips_live)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
 
@@ -468,7 +487,9 @@ class Runner:
                                            'state_sha1': hashlib.sha1(route.checkpoint['state']).hexdigest()}
         return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
                 'power_on': route.power_on, 'checkpoint': checkpoint,
-                'stop_at': location_text(route.terminal), 'stop_step': route.stop_step,
+                'stop_at': location_text(route.terminal), 'stop_step': route.stop_step, 'clips': route.clips,
+                'clips_off_from': (route.clips_off_from if isinstance(route.clips_off_from, (int, type(None)))
+                                   else location_text(route.clips_off_from)),
                 'max_steps': self.max_steps, 'models': models,
                 'missing': dict(sorted(policies.missing.items())), 'version': __version__, 'code': code_version(),
                 'data': data_hash()}

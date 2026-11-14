@@ -59,12 +59,12 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
   (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
 - **Dungeon 4 (scouted Nov 11, trained Nov 12, the shortcut Nov 12; `docs/routes/d4.md`):** all 20 rooms and the
-  ladder cellar are in `game.yaml`; `d2first` steps 98–120 go by raft from 0x55 to the island 0x45, take the keys of
-  0x51 and 0x40, the ladder under the Breakfast Room 4:0x32, back W to 0x31 and N through its locked door onto
-  0x21's island, off it by the ladder clip (round 21, `CLIP N`, then one step down: from the clip's end a bomb
-  doesn't open the wall), through two bomb walls (0x21, 0x11; `bomb_reserve: 2`) to Gleeok and the triforce. Before
-  round 21 the route went 0x31 W – 0x30 N – 0x20 E – 0x21; 0x20 stays tagged `vire` but has no start state
-  (`4_30e_*`, `4_20s_*`, `4_21w_*` are gone, `4_21s_*` new). routes.yaml keeps `{extends: <route>, steps: [...]}`
+  ladder cellar are in `game.yaml`; `d2first` goes by raft from 0x55 to the island 0x45, takes the keys of 0x51 and
+  0x40, the ladder under the Breakfast Room 4:0x32, back W to 0x31, then (round 22: the stretch `d4-island`, both
+  ways in the route) with clips N through its locked door onto 0x21's island and off it by the ladder clip (round
+  21, `CLIP N`, then one step down: from the clip's end a bomb doesn't open the wall), without clips 0x31 W – 0x30 N
+  – 0x20 E – 0x21 (the route before round 21; `4_30e_*`, `4_20s_*`, `4_21w_*` built again), through two bomb walls
+  (0x21, 0x11; `bomb_reserve: 2`) to Gleeok and the triforce. routes.yaml keeps `{extends: <route>, steps: [...]}`
   for scouting the next dungeon. game.yaml rooms can carry a `name:` (the Breakfast Room).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
@@ -76,10 +76,11 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 ## Goal
 
 Specialist PPO models (one per room family) that carry the `d2first` chain (`triforce/routes.yaml`) from the game
-start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow) to Dungeon 3 (the raft,
-Manhandla), then by raft to Dungeon 4 (the ladder, the ladder clip off 0x21's island, Gleeok) and its triforce (the
-route ends on taking it). Lee owns the direction; the standing invitation is to come up with ideas, test them, keep
-what helps, and log everything.
+start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow), then S to 0x67's secret
+cave (bomb its wall, 30 rupees) and on to Dungeon 3 by the wrap exit through 0x75 (clips on) or along row 6 (clips
+off) (the raft; 0x5b E → 0x5c → 0x4c S, Manhandla), then by raft to Dungeon 4 (the ladder, 0x21's island by the
+ladder clip or round by 0x30 and 0x20, 0x01's key, Gleeok) and its triforce (the route ends on taking it). Lee owns
+the direction; the standing invitation is to come up with ideas, test them, keep what helps, and log everything.
 
 ## Lee's standing rules
 
@@ -90,10 +91,12 @@ what helps, and log everything.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
   enemy type or per room beyond what Lee asks for. Families are the d2first route's rooms (`routes.yaml`
-  `families`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-leever (0x48), ow-tektite (0x1a, 0x2c and its heart
-  cave, 0x74), ow-lynel, ow-boulder, stalfos-keese-gel, goriya, trap-room (1:0x22, 3:0x5a, 3:0x4c, the rupee room
-  4:0x11), equipment-room (the item cellars 1:0x7f, 3:0x0f, 4:0x60), wallmaster, boss-aquamentus, d2-rope, moldorm
-  (2:0x3e), boss-dodongo, zol, darknut, boss-manhandla, vire, like-like (4:0x32), boss-gleeok, ow-peahat (0x45).
+  `families`): ow-start, ow-octorok (0x66, 0x67 and its secret cave since round 22), ow-zora, ow-moblin, ow-leever
+  (0x48, 0x75), ow-tektite (0x1a, 0x2c and its heart cave, 0x74, 0x76), ow-lynel, ow-boulder, stalfos-keese-gel
+  (4:0x01 since round 22), goriya, trap-room (1:0x22, 3:0x5a, 3:0x4c, the rupee room 4:0x11, 4:0x02), equipment-room
+  (the item cellars 1:0x7f, 3:0x0f, 4:0x60), wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo,
+  zol, darknut (3:0x5c since round 22), boss-manhandla, vire, like-like (4:0x32), boss-gleeok, ow-peahat (0x45).
+  0:0x56, 0:0x57 and 3:0x4b left the route in round 22 but stay tagged (no start states).
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
@@ -104,19 +107,29 @@ what helps, and log everything.
   `entry_states install <dir>`) and check them with `... audit` (it enforces these rules and exits 1 on a problem).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`; Lee, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
+- **Clip families train with clips on and with CLIP masked** (Lee, Nov 13, round 22): "the models need to be
+  trained with clips enabled, and also with the clip action masked so it has to traverse as normal". A family's
+  `clips: true` is `{enabled: true, off_share: 0.5}`: half the episodes start with the run-time clips switch off
+  (the plain way, also through a route `stretch:`), and the early stop and the evaluation (`--clips both`) take
+  both. Lee can turn clips off at any moment while watching (`play-zelda.py`, key `c`), so the plain way must stay
+  trained; track rooms with and without clips (`by_clips` in `eval.json` and `room-stats`).
 - **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
   Manhandla, vire: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
-  (ow-tektite, trap-room, stalfos-keese-gel: their `requires_bombs` rooms, the 0x2c rock wall, D3's bomb wall and
-  D4's 0x21/0x11 walls; 0x21 from S since round 21: `CLIP N` off the island, one step down, then `BOMB N`),
+  (ow-tektite, ow-octorok since round 22, trap-room, stalfos-keese-gel: their `requires_bombs` rooms, the 0x2c and
+  0x67 rock walls, D3's 0x4c wall and D4's 0x21/0x11 walls; 0x21 from S since round 21: `CLIP N` off the island, one
+  step down, then `BOMB N`; round 22: BOMB is offered there only where the bomb opens the wall the objective
+  leaves through, else only on the 10th kill),
   `never` (boss-gleeok: only the sword hurts him), `tenth` (the rest:
   only the 10th damage-free kill, `$50` = 9, whose bomb kill arms a forced drop of 4 bombs; allowed in every mode
-  but `never`, below any reserve). routes.yaml `bomb_reserve: 5` from Dungeon 3's entrance (3 for the bomb wall, 2
-  for Manhandla), 2 from Dungeon 4's (its two walls); D3's central Darknut room takes its bombs at 4 or fewer.
+  but `never`, below any reserve). routes.yaml `bomb_reserve: 6` from Dungeon 3's entrance (round 22: the walls of
+  0x5b and 0x4c, a spare each, 2 for Manhandla), 2 from Dungeon 4's (its two walls); D3's central Darknut room takes
+  its bombs at 5 or fewer on its last pass (W → E through its own bomb wall).
   Every family trains with
   `ram_randomization: {bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}` (`bombs_share`: half the resets keep
   the start state's own bombs, round 19). A Darknut facing opposite to Link's facing when he placed
-  a bomb takes no damage from it (ASM and measured, round 19). Overworld families don't bomb but for the 10th kill.
+  a bomb takes no damage from it (ASM and measured, round 19). Overworld families don't bomb but for the 10th kill
+  and the rock walls of 0x2c (ow-tektite) and 0x67 (ow-octorok).
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
@@ -152,15 +165,20 @@ what helps, and log everything.
   `escape:16`, ... `docs/rust-actor.md` "Act modes", round 23); evaluation follows each model's act mode.
 - **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",
   "Watching"): `triforce eval-chain|evaluate --replays DIR`, `zelda-headless.py OUT [COUNT]
-  [--wins-only|--deaths-only|--stuck-only] [--golden]`; optional streams `--streams rewards,decisions,keyframes`.
+  [--wins-only|--deaths-only|--stuck-only] [--golden] [--clips on|off]`; optional streams `--streams
+  rewards,decisions,keyframes`.
   `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
-  `play-zelda.py` only ever plays replays: of runs it simulates in the background and files into queues
+  `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
   simulations run unpaced on `--parallel` (8) cores until the queues are full: mind that next to a training
   round. One cell is heard (yellow frame; key `s`, click to move; `--no-sound`), `--controller` draws the held
-  buttons; `create-video.py OUT [GRID] REPLAY... [--sound] [--controller]` films replays the same way into a
-  video file (`ffmpeg`).
+  buttons. Clips (round 22): `--clips on|off` starts the runs with the run-time clips switch on or off, key `c`
+  turns it off and on for every run started afterwards (the title says where it stands; a cell's strip says "no
+  clips" for a run played without). `--live` makes the top left cell a live game the models play while it is
+  watched: `c` acts on that run from its next decision and the route re-plans from where Link stands ("rest of
+  the run no clips"); its finished runs join the queues. The keys are in `--help`. `create-video.py OUT [GRID]
+  REPLAY... [--sound] [--controller]` films replays the same way into a video file (`ffmpeg`).
 - **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
   "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and
   training don't change with it, and must not: no sound state goes into `MachineState`. A replay that starts
@@ -269,16 +287,24 @@ what helps, and log everything.
   --from 2_7ds_0 --runs 40' --chain ...`, or all eight with `--chains TAG`): full `triforce eval-chain --runs 20
   --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
   Dungeon 1 `--from 1_73s_0`; after Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3
-  `--from 0_74c_0`; Dungeon 4
-  `--from 4_71s_0`. `--from`/`--stop-at` are checked before any run
+  `--from 0_74c_0`; Dungeon 4 `--from 4_71s_0` (round 22: the same names; `3_7cs`, `0_74c` and `4_71s` rebuilt).
+  The two stretches (`d3-approach` after Dungeon 1, `d4-island` in Dungeon 4) follow the run-time switch: `--clips
+  on|off` measures each way (`--clips-off-from ROOM|step:N` flips it mid-run). `--from`/`--stop-at` are checked
+  before any run
   (`--stop-at` must be a route room after the start step, or `step:N`, a later route step, reached only by the
-  route's own exit: `step:24` is back on the overworld with Dungeon 2's triforce; exit 2 otherwise). `--power-on`
+  route's own exit: `step:24` is back on the overworld with Dungeon 2's triforce; exit 2 otherwise). Step numbers
+  move whenever the route changes: list them (with each step's `way` and `stretch`) with `.venv/bin/python -c
+  "from triforce import _native; [print(s) for s in _native.route_steps('d2first')]"` rather than trusting a
+  number in a doc. `--clips on|off` starts every run with the run-time clips switch on or off (off: the plain way
+  through every stretch), `--clips-off-from ROOM|step:N` turns it off on the way; `CLIPS=off
+  TAG=<tag>-noclips scripts/experiments/r56_chains.sh` measures the segments without clips and `triforce
+  room-stats <tag> --noclips` reads both tags into `<tag>-both-room-stats.json` (per room `by_clips`). `--power-on`
   starts from console power on instead of the `start` state (Game mechanics). Each call writes a fresh
   `runs/eval-chain-<yymmdd-HHMMSS>.jsonl` (or `--output`, refused if it exists unless `--append` with the same
   provenance) plus `<output>.meta.json`; exit 1 if any run ends `error`. A run ends `stuck` (`wrong-exit-limit`)
   on its 20th wrong exit into a tagged room, or (`bounce-limit`) on its 5th return in a row into the room before
   the last (back and forth between two rooms). Per-room hp loss and deaths come from the chain jsonl (`RoomRecord`
-  also has `hearts_dropped/taken/left/...`).
+  also has `hearts_dropped/taken/left/...`, `clips_allowed` and `clips_flips`).
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
   room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`; it refuses

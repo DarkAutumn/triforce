@@ -20,7 +20,7 @@ mod nes;
 mod search;
 
 pub use actor::{ActorScratch, PolicyActor};
-pub use envs::{ChainRunEnv, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
+pub use envs::{ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
 pub use nes::{Origin, PoolNes, PoolState, PoolStore, RgbFn};
 pub use search::{GumbelSearch, SearchConfig, SearchScratch};
 
@@ -153,6 +153,9 @@ pub struct EvalRecord {
     /// The route step's exit and entry (`-` off the route): evaluation groups by (start state, target).
     pub target: String,
     pub entry: String,
+    /// The run-time clips switch the episode started with, and whether its start state fixed it (round 22).
+    pub clips_allowed: bool,
+    pub clips_fixed: Option<bool>,
     /// Every room visit, in order (`zelda::visits`).
     pub visits: Vec<RoomVisit>,
 }
@@ -171,6 +174,7 @@ impl EvalRecord {
             "cheated": cheated_json(&self.cheated),
             "boss": {"stuns": self.boss_stuns, "eats": self.boss_eats},
             "clips": clips_json(&self.clip_stats), "target": self.target, "entry": self.entry,
+            "clips_allowed": self.clips_allowed, "clips_fixed": self.clips_fixed,
             "visits": self.visits.iter().map(visit_json).collect::<Vec<_>>(),
         })
     }

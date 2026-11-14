@@ -76,18 +76,22 @@ def play_to_the_end(pool, policies, **kwargs):
 
 
 def test_eval_task_records(states_dir):
+    """Jobs are ``(state, seed)`` (the clips switch drawn as in training) or ``(state, seed, clips)``; records carry
+    the switch the episode played (``clips_allowed``) and whether its start state fixed it."""
     config = native.SpecialistConfig.load('ow-start').replace(max_steps=3)
-    jobs = [('start', seed) for seed in (9, 3, 6, 1, 4)]
+    jobs = [('start', seed) for seed in (9, 3, 6, 1, 4)] + [('start', 7, True), ('start', 8, False)]
     task = native.EvalTask(config, jobs, states_dir=str(states_dir))
-    assert task.jobs == jobs
+    assert task.jobs == [(*job, None) if len(job) == 2 else job for job in jobs]
     with native.EnvPool(task, num_envs=2, threads=2, seed=0) as pool:
         records = [e['record'] for e in play_to_the_end(pool, [scripted('WAIT 4').to_native()])
                    if e['type'] == 'eval']
         assert pool.active == 0
     records.sort(key=lambda r: r['seed'])
-    assert [r['seed'] for r in records] == [1, 3, 4, 6, 9]
+    assert [r['seed'] for r in records] == [1, 3, 4, 6, 7, 8, 9]
     assert all(r['start_state'] == 'start' and r['steps'] == 3 and r['outcome'] == 'soft-failure'
-               and r['room'] == [0, 0x77, False] for r in records)
+               and r['room'] == [0, 0x77, False] and r['clips_fixed'] is None for r in records)
+    switch = {r['seed']: r['clips_allowed'] for r in records}
+    assert (switch[7], switch[8]) == (True, False)
 
 
 def test_chain_task_missing_models(states_dir):

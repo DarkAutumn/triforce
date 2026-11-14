@@ -21,7 +21,8 @@ use crate::policy::{PyPolicy, parse_act_mode};
 use policy::ActMode;
 use pool::rollout::{EnvRollout, Play, Record};
 use pool::zelda::{
-    ChainRunEnv, EvalEnv, EvalJob, GumbelSearch, PolicyActor, RgbFn, SearchConfig, TaskEnv, TrainEnv, ZeldaAction,
+    ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, GumbelSearch, PolicyActor, RgbFn, SearchConfig, TaskEnv, TrainEnv,
+    ZeldaAction,
     ZeldaEvent,
 };
 use pool::{Column, Dtype, EnvInit, Jobs, Pool, PoolOptions};
@@ -87,7 +88,9 @@ impl PyTrainTask {
     }
 }
 
-/// Evaluation episodes: one per `(start_state, seed)` job, shared by the pool's envs.
+/// Evaluation episodes: one per `(start_state, seed)` or `(start_state, seed, clips)` job, shared by the pool's envs.
+/// `clips`: the run-time clips switch of the episode (None, or a 2-tuple: drawn as in training); a start state that
+/// fixes the switch wins (the record's `clips_allowed` / `clips_fixed`).
 #[pyclass(module = "triforce._native", name = "EvalTask", frozen)]
 pub struct PyEvalTask {
     config: Arc<SpecialistConfig>,
@@ -103,27 +106,33 @@ impl PyEvalTask {
     fn new(
         py: Python<'_>,
         config: &Bound<'_, PyAny>,
-        jobs: Vec<(String, u64)>,
+        jobs: Vec<Bound<'_, PyAny>>,
         states_dir: Option<PathBuf>,
         room_events: bool,
     ) -> PyResult<Self> {
-        check_seeds(jobs.iter().map(|(_, seed)| *seed))?;
+        let jobs = jobs
+            .iter()
+            .map(|job| match job.extract::<(String, u64, Option<bool>)>() {
+                Ok((start_state, seed, clips)) => Ok(EvalJob { start_state, seed, clips }),
+                Err(_) => job
+                    .extract::<(String, u64)>()
+                    .map(|(start_state, seed)| EvalJob { start_state, seed, clips: None }),
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        check_seeds(jobs.iter().map(|j| j.seed))?;
         Ok(PyEvalTask {
             config: extract_config(py, config)?,
-            jobs: jobs
-                .into_iter()
-                .map(|(start_state, seed)| EvalJob { start_state, seed })
-                .collect(),
+            jobs,
             states_dir,
             room_events,
         })
     }
 
     #[getter]
-    fn jobs(&self) -> Vec<(String, u64)> {
+    fn jobs(&self) -> Vec<(String, u64, Option<bool>)> {
         self.jobs
             .iter()
-            .map(|j| (j.start_state.clone(), j.seed))
+            .map(|j| (j.start_state.clone(), j.seed, j.clips))
             .collect()
     }
 }
@@ -153,9 +162,12 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 /// (`{'name': 'LINK', 'delay': None, 'max_delay': 32766}`: console power on, the name registered after `delay`
 /// idle frames on the file-select screen, None = drawn per run seed from `0..=max_delay`; no memory is
 /// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees], 'randomize_rng':
-/// False}`: a state another run reached, as is, or with `randomize_rng` the game's RNG bytes redrawn per run
+/// False}`: a state another run reached, as is, or with `randomize_rng` a natural RNG state drawn per run
 /// seed, so that runs acting by argmax differ; an entry of `Replay.states()` is one). It ends at the route's
-/// end, or on entering `stop_at` (a room) or route step `stop_step`'s room (on the route).
+/// end, or on entering `stop_at` (a room) or route step `stop_step`'s room (on the route). `clips` / `clips_off_from`:
+/// the run-time clips switch every run starts with and where it turns off (round 22); `EnvPool.set_clips_allowed`
+/// changes it while the pool plays: for the runs started from then on, and with `clips_live` also for the runs in
+/// progress, from their next decision (the route re-plans).
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
     configs: Vec<Arc<SpecialistConfig>>,
@@ -167,6 +179,7 @@ pub struct PyChainTask {
     missing: HashMap<String, String>,
     states_dir: Option<PathBuf>,
     harvest: Option<PathBuf>,
+    clips_live: bool,
 }
 
 fn config_err(message: impl Into<String>) -> PyErr {
@@ -223,7 +236,8 @@ impl PyChainTask {
     #[new]
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
                         states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None,
-                        stop_step=None, power_on=None, checkpoint=None))]
+                        stop_step=None, power_on=None, checkpoint=None, clips=true, clips_off_from=None,
+                        clips_live=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -241,6 +255,9 @@ impl PyChainTask {
         stop_step: Option<usize>,
         power_on: Option<&Bound<'_, PyDict>>,
         checkpoint: Option<&Bound<'_, PyDict>>,
+        clips: bool,
+        clips_off_from: Option<&Bound<'_, PyAny>>,
+        clips_live: bool,
     ) -> PyResult<Self> {
         check_seeds(seeds.iter().copied())?;
         let configs = configs
@@ -273,6 +290,17 @@ impl PyChainTask {
         if let Some(step) = stop_step {
             route = route.with_stop_step(&data.map, step).map_err(config_err)?;
         }
+        // The run-time clips switch (round 22): `clips` at the start, off from `clips_off_from` (a route step index,
+        // or a room as `stop_at` spells one).
+        let off_from = match clips_off_from {
+            None => None,
+            Some(v) if v.extract::<usize>().is_ok() => Some(env::chain::ClipsFlip::Step(v.extract()?)),
+            Some(v) => {
+                let serde_json::Value::String(text) = room_value(v)? else { unreachable!() };
+                Some(env::chain::ClipsFlip::Room(parse_room(&text).map_err(|e| ConfigError::new_err(e.0))?))
+            }
+        };
+        route = route.with_clips(&data.map, clips, off_from).map_err(config_err)?;
         Ok(PyChainTask {
             configs,
             route,
@@ -283,6 +311,7 @@ impl PyChainTask {
             missing: missing.unwrap_or_default(),
             states_dir,
             harvest,
+            clips_live,
         })
     }
 
@@ -317,6 +346,8 @@ pub struct PyEnvPool {
     /// The train pool's shared seed-state weights and its seed-state labels (None for eval and chain pools and a
     /// train pool pinned to one `start_state`).
     start_weights: Option<(StartWeights, Vec<String>)>,
+    /// A chain pool's run-time clips switch (`set_clips_allowed`; None for train and eval pools).
+    clips_switch: Option<ClipsSwitch>,
 }
 
 fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult<PyEnvPool> {
@@ -368,6 +399,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             kind: Kind::Train,
             shaping: Some(shaping),
             start_weights,
+            clips_switch: None,
         });
     }
     if let Ok(t) = task.cast::<PyEvalTask>() {
@@ -401,6 +433,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             kind: Kind::Eval,
             shaping: None,
             start_weights: None,
+            clips_switch: None,
         });
     }
     if let Ok(t) = task.cast::<PyChainTask>() {
@@ -419,6 +452,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             .iter()
             .map(|c| (c.name.clone(), c.clone()))
             .collect();
+        let switch = ClipsSwitch::default();
         let make = |init: EnvInit| {
             let mut env = ChainRunEnv::new(
                 data.clone(),
@@ -437,6 +471,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             chain.set_harvest(t.harvest.clone());
             env.missing_mut().extend(t.missing.clone());
             env.set_hold_finished(t.hold_finished_frame);
+            env.set_clips_switch(switch.clone(), t.clips_live);
             Ok(TaskEnv::Chain(env))
         };
         let pool = py.detach(|| Pool::new(opts, make)).map_err(pool_err)?;
@@ -447,6 +482,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             kind: Kind::Chain,
             shaping: None,
             start_weights: None,
+            clips_switch: Some(switch),
         });
     }
     Err(PyTypeError::new_err(
@@ -1226,6 +1262,26 @@ impl PyEnvPool {
         self.pool.set_fps(env, fps).map_err(pool_err)
     }
 
+    /// A chain pool's run-time clips switch (round 22): `True`/`False` for every run started from now on (and, for
+    /// a `ChainTask(clips_live=True)`, the runs in progress from their next decision); None: each run its route's
+    /// (`ChainTask(clips=...)`). A ValueError for a train or eval pool.
+    #[pyo3(signature = (on))]
+    fn set_clips_allowed(&self, on: Option<bool>) -> PyResult<()> {
+        match &self.clips_switch {
+            Some(switch) => {
+                switch.set(on);
+                Ok(())
+            }
+            None => Err(PyValueError::new_err("only a chain pool has a run-time clips switch to set")),
+        }
+    }
+
+    /// What `set_clips_allowed` set last (None: each run its route's; also for train and eval pools).
+    #[getter]
+    fn clips_allowed(&self) -> Option<bool> {
+        self.clips_switch.as_ref().and_then(ClipsSwitch::get)
+    }
+
     /// Env `env`'s latest frame if newer than counter `since`: `(counter, frame)` with a (240, 256, 3) uint8
     /// array (written into `out` when given), else None.
     #[pyo3(signature = (env, since=0, out=None))]
@@ -1345,14 +1401,24 @@ impl PyEnvPool {
 
     /// For the replay feed's thread (no interpreter lock needed): waits up to `timeout` for the pool to go
     /// idle, then takes its events and returns the recordings of the runs and episodes that finished, as
-    /// (job, TFREPLAY bytes).  The other events are dropped.  An env's failure is the error.
-    pub(crate) fn take_replays(&self, timeout: Duration) -> Result<Vec<(i64, Vec<u8>)>, String> {
+    /// (job, TFREPLAY bytes, the run-time clips switch a chain run started with: its `run` event's `clips`).  The
+    /// other events are dropped.  An env's failure is the error.
+    pub(crate) fn take_replays(&self, timeout: Duration) -> Result<Vec<(i64, Vec<u8>, Option<bool>)>, String> {
         self.pool.wait_idle(Some(timeout)).map_err(|e| e.to_string())?;
-        let replays = self.pool.poll_events().into_iter().filter_map(|(_, event)| match event {
-            ZeldaEvent::Replay { job, data } => Some((job, data)),
-            _ => None,
-        });
-        Ok(replays.collect())
+        let mut clips = HashMap::new();
+        let mut replays = Vec::new();
+        for (_, event) in self.pool.poll_events() {
+            match event {
+                ZeldaEvent::Run(result) => {
+                    if let Some(seed) = result.seed {
+                        clips.insert(seed as i64, result.clips);
+                    }
+                }
+                ZeldaEvent::Replay { job, data } => replays.push((job, data)),
+                _ => {}
+            }
+        }
+        Ok(replays.into_iter().map(|(job, data)| (job, data, clips.get(&job).copied())).collect())
     }
 
     pub(crate) fn pause(&self, on: bool) {

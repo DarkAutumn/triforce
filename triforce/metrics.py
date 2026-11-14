@@ -42,6 +42,10 @@
 - ``clips/<stat>`` for each of ``CLIP_STATS`` per completed episode (``info['clips']``; crates/zelda/src/clips.rs):
   grid-point skips completed (``clips/done``), started and not completed (``clips/aborted``), completed per
   direction (``clips/done_n`` ...).
+- ``clips/enabled_share``: the share of completed episodes played with the run-time clips switch on
+  (``info['clips_allowed']``, round 22: drawn per episode at the family's ``clips: {off_share}``), and per switch
+  state ``clips/on/...`` and ``clips/off/...``: ``episodes``, ``success_rate``, ``health_change`` and
+  ``hearts_at_exit`` (once any episode carries the switch; a state without episodes in the rollout is left out).
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /
   ``info['episode_steps']``).
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
@@ -66,6 +70,7 @@ import numpy as np
 
 from ._native import BOMB_STATS, CHEAT_ITEMS, CLIP_STATS, INTERRUPTS
 from .actions import DURATIONS, KINDS, TIMED_KINDS
+from .clips import label as clips_label
 
 
 def heart_change_total(health_change: float, hearts: Optional[dict]) -> float:
@@ -100,6 +105,8 @@ class RolloutMetrics:
         self.boss_stuns = 0
         self.boss_eats = 0
         self.clip_stats = Counter()
+        # per run-time clips switch state ('on' / 'off'): episodes, successes, health change, hearts at exit
+        self.switch = {state: Counter() for state in ('on', 'off')}
         self.episode_frames = 0
         self.episode_steps = 0
         self.interrupts = Counter()
@@ -186,6 +193,12 @@ class RolloutMetrics:
         clips = info.get('clips') or {}
         for stat in CLIP_STATS:
             self.clip_stats[stat] += clips.get(stat, 0)
+        if 'clips_allowed' in info:
+            switch = self.switch['on' if info['clips_allowed'] else 'off']
+            switch['episodes'] += 1
+            switch['successes'] += info.get('outcome') == 'success'
+            switch['health_change'] += health_change
+            switch['hearts'] += health
         self.health_fraction += health / max_health if max_health > 0 else 0.0
         self.episode_frames += int(info.get('episode_frames', 0))
         self.episode_steps += int(info.get('episode_steps', 0))
@@ -243,6 +256,16 @@ class RolloutMetrics:
             result['boss/eats'] = self.boss_eats / eps
             for stat in CLIP_STATS:
                 result[f'clips/{stat}'] = self.clip_stats[stat] / eps
+            switched = self.switch['on']['episodes'] + self.switch['off']['episodes']
+            if switched:
+                result['clips/enabled_share'] = self.switch['on']['episodes'] / switched
+                for state, counts in self.switch.items():
+                    if counts['episodes']:
+                        n = float(counts['episodes'])
+                        result[f'clips/{state}/episodes'] = n
+                        result[f'clips/{state}/success_rate'] = counts['successes'] / n
+                        result[f'clips/{state}/health_change'] = counts['health_change'] / n
+                        result[f'clips/{state}/hearts_at_exit'] = counts['hearts'] / n
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
         if self.curriculum_episodes:
@@ -288,7 +311,8 @@ class EpisodeTracker:
     whether each env's next observation starts a new episode (``fresh``) and the rollout's ``episode`` events.  An
     episode belongs to the cohort of the rollout holding its first row.  A cohort is released once every episode in
     it, and in every earlier cohort, has ended; it carries the per (start state, success) counts of its room-entry
-    episodes (curriculum ones only close it).  ``budget``: the env's step limit (``max_steps``), for
+    episodes (curriculum ones only close it), a state played with the clips switch off counted apart as
+    ``<state>:clips-off`` (``clips.label``, round 22).  ``budget``: the env's step limit (``max_steps``), for
     ``in_flight/over_half_budget``."""
 
     def __init__(self, budget: Optional[int] = None):
@@ -321,7 +345,8 @@ class EpisodeTracker:
             if success:
                 self.slowest_success = max(self.slowest_success, int(info.get('episode_steps', 0)))
             if start is not None:
-                self._open[start][1][(info.get('start_state'), success)] += 1
+                key = clips_label(info.get('start_state'), info.get('clips_allowed'))
+                self._open[start][1][(key, success)] += 1
         released = []
         while self.released < self.rollouts and self._open[self.released + 1][0] == 0:
             self.released += 1

@@ -111,7 +111,7 @@ def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states
     # Through the native eval pool (PoolInference / RolloutPolicy over current rows).
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=5)
     result = evaluate_specialist(config, tmp_path / 'ow-start' / 'schema1', episodes_per_state=2, parallel=2,
-                                 threads=1, states_dir=states_dir)
+                                 threads=1, states_dir=states_dir, clips='on')
     assert result['episodes'] == 2 and all(0 < r['steps'] <= 5 for r in result['records'])
 
 

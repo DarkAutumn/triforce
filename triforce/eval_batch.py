@@ -3,7 +3,8 @@
     triforce eval-batch NAME [--chains TAG [--act sample] [--runs 120] [--segments SPEC] [--chains-dir DIR]
                                            [--chain-args ARGS] [--no-report | --report-only]]
                              [--families all|a,b,c [--acts model[,MODE...]] [--run-id ID]
-                                           [--episodes-per-state N] [--seed S] [--output-dir DIR]]
+                                           [--episodes-per-state N] [--seed S] [--clips on|off|both]
+                                           [--output-dir DIR]]
                              [--chain '[ENTRY:] EVAL-CHAIN ARGS' ...] [--evaluate '[ENTRY:] EVALUATE ARGS' ...]
                              [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--redo]
                              [--logs-dir DIR] [--models-dir DIR] [--allow-incompatible-models]
@@ -24,8 +25,10 @@ A batch is a named list of evaluations, in command-line order:
 - ``--families all|a,b,c``: the evaluation of each family's promoted run (``--run-id``: that run) in each of
   ``--acts`` (default ``model``: the run's own act mode, the canonical ``eval.json``; else act mode spellings,
   docs/rust-actor.md "Act modes"); ``all`` = every specialist with a promoted run (or that run), in route order.
-  ``--output-dir DIR`` writes each result to ``DIR/<specialist>-<act>.json`` instead of the run dir (a models
-  directory that must stay untouched).
+  ``--clips`` goes to every evaluation (default: each family's own, ``clips.default_mode``: both switch states for a
+  clip family; the headline then adds ``eval_clips_on_success_rate`` / ``eval_clips_off_success_rate``).
+  ``--output-dir DIR`` writes each result to ``DIR/<specialist>-<act>[-clips<mode>].json`` instead of the run dir (a
+  models directory that must stay untouched).
 
 Each evaluation runs as its own process (``python -m triforce.cli eval-chain`` / ``python -m triforce.evaluate``
 with ``--events <batch folder>/<entry>.jsonl``), its console output in ``<entry>.log`` (or the chain segment's own
@@ -150,7 +153,9 @@ def eval_headline(event: dict) -> dict:
             'eval_health': event.get('health'), 'eval_health_change': event.get('health_change'),
             'eval_health_change_total': event.get('health_change_total'),
             'eval_hearts_dropped': event.get('hearts_dropped'), 'eval_hearts_taken': event.get('hearts_taken'),
-            'eval_hearts_left': event.get('hearts_left')}
+            'eval_hearts_left': event.get('hearts_left'),
+            **{f'eval_clips_{switch}_success_rate': stats.get('success_rate')
+               for switch, stats in (event.get('by_clips') or {}).items()}}
 
 
 def _pct(value) -> str:
@@ -330,7 +335,7 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
 
 # What makes an evaluation result the same measurement as the one an entry would make (seeded episodes play the
 # same, so measuring it again would give the same numbers).
-MEASUREMENT_FIELDS = ('specialist', 'act', 'episodes_per_state', 'seed', 'checkpoint_sha1', 'code', 'data')
+MEASUREMENT_FIELDS = ('specialist', 'act', 'episodes_per_state', 'seed', 'clips', 'checkpoint_sha1', 'code', 'data')
 
 
 def same_measurement(result: dict, expected: dict) -> bool:
@@ -345,6 +350,7 @@ def eval_entry(name: Optional[str], args: list[str], options: Options) -> Entry:
     """A ``triforce evaluate ARGS`` entry; its result file is evaluate's (``--output`` or ``default_output``)."""
     # pylint: disable=import-outside-toplevel
     from . import registry
+    from .clips import default_mode, episode_jobs
     from .evaluate import build_parser, default_output, eval_event, resolve_checkpoint
     from .provenance import code_version, data_hash
     from .specialist import load_specialist
@@ -363,8 +369,10 @@ def eval_entry(name: Optional[str], args: list[str], options: Options) -> Entry:
     if name is None:
         name = config.name + (f"-{parsed.run_id}" if parsed.run_id else '') + (
             f"-{parsed.act}" if parsed.act != 'model' else '')
+    clips = parsed.clips or default_mode(config)
     output = Path(parsed.output) if parsed.output else default_output(checkpoint, config.name, parsed.act,
-                                                                      parsed.episodes_per_state, parsed.seed)
+                                                                      parsed.episodes_per_state, parsed.seed,
+                                                                      parsed.clips)
     parallel = parsed.parallel if _has_option(args, '--parallel') else options.eval_parallel
     if not _has_option(args, '--parallel'):
         args = [*args, '--parallel', str(parallel)]
@@ -387,17 +395,17 @@ def eval_entry(name: Optional[str], args: list[str], options: Options) -> Entry:
         except ValueError:
             return None
         expected = {'specialist': config.name, 'act': act, 'episodes_per_state': parsed.episodes_per_state,
-                    'seed': parsed.seed, 'checkpoint_sha1': registry.checkpoint_sha1(checkpoint),
+                    'seed': parsed.seed, 'clips': clips, 'checkpoint_sha1': registry.checkpoint_sha1(checkpoint),
                     'code': code_version(), 'data': data_hash()}
         if not same_measurement(result, expected):
             return None
         event = eval_event(result)
         return eval_headline(event), [('eval', {**event, 'path': str(output), 'resumed': True})]
 
-    states = len(config.resolve_start_states())
+    episodes = len(episode_jobs(config, parsed.episodes_per_state, parsed.seed, clips))
     fields = {'specialist': config.name, 'run_id': checkpoint.parent.name, 'run_dir': str(checkpoint.parent),
-              'act': act, 'episodes_per_state': parsed.episodes_per_state, 'seed': parsed.seed}
-    return Entry(name, 'eval', [command], parallel=parallel, total=states * parsed.episodes_per_state,
+              'act': act, 'episodes_per_state': parsed.episodes_per_state, 'seed': parsed.seed, 'clips': clips}
+    return Entry(name, 'eval', [command], parallel=parallel, total=episodes,
                  output=output, fields=fields, complete=complete, resume=resume)
 
 
@@ -472,8 +480,9 @@ def family_names(families: str, run_id: Optional[str], models_dir: Optional[str]
 
 def families_entries(families: str, options: Options, *, acts: list[str], run_id: Optional[str],
                      episodes_per_state: Optional[int], seed: Optional[int],
-                     output_dir: Optional[Path] = None) -> list[Entry]:
-    """One evaluation per family and act mode."""
+                     clips: Optional[str] = None, output_dir: Optional[Path] = None) -> list[Entry]:
+    """One evaluation per family and act mode (``clips``: every evaluation's ``--clips``, None: each family's
+    default; ``output_dir``: each result to ``<output_dir>/<entry>.json`` instead of the run dir)."""
     names = family_names(families, run_id, options.models_dir)
     if not names:
         raise BatchError(f"--families {families}: no specialist with a {'run ' + run_id if run_id else 'promoted run'}")
@@ -483,8 +492,11 @@ def families_entries(families: str, options: Options, *, acts: list[str], run_id
             args = ['--specialist', name, '--act', act, *(['--run-id', run_id] if run_id else []),
                     *(['--episodes-per-state', str(episodes_per_state)] if episodes_per_state else []),
                     *(['--seed', str(seed)] if seed is not None else []),
-                    *(['--output', str(output_dir / f"{name}-{act}.json")] if output_dir is not None else [])]
-            entries.append(eval_entry(name if acts == ['model'] else f"{name}-{act}", args, options))
+                    *(['--clips', clips] if clips else [])]
+            suffix = f"-clips{clips}" if clips else ''
+            if output_dir is not None:
+                args += ['--output', str(output_dir / f"{name}-{act}{suffix}.json")]
+            entries.append(eval_entry((name if acts == ['model'] else f"{name}-{act}") + suffix, args, options))
     return entries
 
 
@@ -742,8 +754,11 @@ def build_parser() -> argparse.ArgumentParser:
     families.add_argument('--run-id', default=None, help="evaluate this run of every family instead of the promoted")
     families.add_argument('--episodes-per-state', type=int, default=None, help="default evaluate's (100)")
     families.add_argument('--seed', type=int, default=None, help="default evaluate's (0)")
+    families.add_argument('--clips', choices=('on', 'off', 'both'), default=None,
+                          help="every evaluation's clips switch states (default each family's: both for clips on)")
     families.add_argument('--output-dir', type=Path, default=None,
-                          help="write each evaluation to DIR/<specialist>-<act>.json, not into the run dir")
+                          help="write each evaluation to DIR/<specialist>-<act>[-clips<mode>].json, not into the "
+                               "run dir")
     parser.add_argument('--parallel', type=int, default=os.cpu_count() or 1,
                         help="core budget; a chain's envs unless its ARGS set --parallel (default every core)")
     parser.add_argument('--eval-parallel', type=int, default=4,
@@ -787,7 +802,7 @@ def build_entries(args) -> list[Entry]:
             if output_dir is not None:
                 output_dir.mkdir(parents=True, exist_ok=True)
             entries += families_entries(value, options, acts=acts, run_id=args.run_id,
-                                        episodes_per_state=args.episodes_per_state, seed=args.seed,
+                                        episodes_per_state=args.episodes_per_state, seed=args.seed, clips=args.clips,
                                         output_dir=output_dir)
     if not entries:
         raise BatchError("nothing to run: give --chains, --families, --chain or --evaluate")

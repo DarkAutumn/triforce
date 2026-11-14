@@ -1,7 +1,7 @@
 //! A game session: emulator, option executor and game model.
 
 use crate::actions::{Action, ActionMask, compute_action_mask};
-use crate::clips;
+use crate::clips::{self, OpenClip};
 use crate::change::{Change, LookAhead};
 use crate::enums::{ActionKind, Direction};
 use crate::executor::{Executor, FrameSink, MODE_CAVE, Machine, ZeldaError};
@@ -9,15 +9,18 @@ use crate::game::GameView;
 use crate::game_map::GameMap;
 use crate::ledger::FutureCreditLedger;
 use crate::nes::Nes;
+use crate::rng;
 use crate::room_entry::{is_pre_entry, make_room_fresh, pending_room, randomize_spawn};
-use crate::vars::{RNG_VARS, Var};
-use rand::{Rng, RngExt};
+use crate::vars::Var;
+use rand::Rng;
 use std::sync::Arc;
 
 /// How `Session::load` prepares a state.
 #[derive(Clone, Debug, Default)]
 pub struct LoadOptions {
-    /// Redraw the 12 RNG bytes (1..=255), and for a pre-entry state the spawn cycle and edge cell.
+    /// Write a natural RNG state (`crate::rng`: the register a phase drawn from the load's generator after
+    /// reset), and for a pre-entry state redraw the spawn cycle and the edge spawn cell.  Written right after
+    /// the restore, before any frame runs, so every frame of the episode runs on values the game can hold.
     pub randomize_rng: bool,
     /// For a pre-entry state, clear the pending room's kill history so it spawns every monster.
     pub fresh_room: bool,
@@ -46,6 +49,7 @@ pub struct SessionCheckpoint<S> {
     ledger: FutureCreditLedger,
     state: Option<Arc<GameView>>,
     mask: ActionMask,
+    open_clip: Option<OpenClip>,
 }
 
 /// What simulation mode put aside (`Session::set_simulating`).
@@ -68,12 +72,26 @@ pub struct Session<N: Nes> {
     /// Actions since the last load.
     pub steps: u64,
     disabled_kinds: Vec<ActionKind>,
-    /// The CLIP kind is offered where a skip is available (`crate::clips`; a specialist's `clips: true`).
+    /// The family offers the CLIP kind where a skip is available (`crate::clips`; a specialist's `clips: true`).
     clips: bool,
+    /// The run-time clips switch (round 22, default on): CLIP is offered only when the family has clips and this is
+    /// on ([`Session::clips_effective`]). The env and the chain runner set it; nothing in the game state holds it.
+    clips_allowed: bool,
+    /// Wraps (W/E) the objective says not to offer: their landing leaves the room only through an exit the
+    /// objective doesn't count (`crate::objectives::wraps_into_wrong_exits`; the env sets it every step).
+    vetoed_wraps: Vec<Direction>,
+    /// BOMB only where it lands in reach of one of these (round 22: a `required` family in a `requires_bombs` room,
+    /// `crate::objectives::route_bomb_targets`); None: wherever the game places it.  The env sets it every step.
+    bomb_targets: Option<Vec<crate::bombs::BombTarget>>,
+    /// The skip a CLIP of this room left cut short ([`OpenClip`]), until a MOVE finishes it (`Change::
+    /// clip_finished_by_move`), Link leaves the room or another CLIP starts.
+    open_clip: Option<OpenClip>,
     /// Which fired weapons to simulate forward to credit their hits to the firing step (default all).
     pub look_ahead: LookAhead,
     /// Simulation mode (search) holds the frame sink, render flag and pre-entry capture flag here.
     stash: Option<Stash<N>>,
+    /// The RNG phase the last `load` or `write_rng` wrote (None: the last load wrote none, or a `restore`).
+    rng_phase: Option<u32>,
 }
 
 impl<N: Nes> Session<N> {
@@ -89,8 +107,13 @@ impl<N: Nes> Session<N> {
             steps: 0,
             disabled_kinds: Vec::new(),
             clips: false,
+            clips_allowed: true,
+            vetoed_wraps: Vec::new(),
+            bomb_targets: None,
+            open_clip: None,
             look_ahead: LookAhead::All,
             stash: None,
+            rng_phase: None,
         }
     }
 
@@ -178,20 +201,78 @@ impl<N: Nes> Session<N> {
     }
 
     /// Offer the CLIP kind where a grid-point skip is available (`crate::clips`; the env sets it from the acting
-    /// specialist's `clips:` switch). The mask is recomputed when it changes. A CLIP action runs the skip whatever
-    /// the switch says: the mask is what gates the policy.
+    /// specialist's `clips:` switch) and the run-time switch allows it ([`Session::set_clips_allowed`]). The mask is
+    /// recomputed when it changes. A CLIP action runs the skip whatever this says: the mask is what gates the policy.
     pub fn set_clips(&mut self, clips: bool) {
         if self.clips == clips {
             return;
         }
         self.clips = clips;
+        self.refresh_mask();
+    }
+
+    /// The family's switch ([`Session::set_clips`]).
+    pub fn clips(&self) -> bool {
+        self.clips
+    }
+
+    /// The run-time clips switch (round 22): off masks CLIP whatever the family says, from the mask this call
+    /// recomputes on. Default on.
+    pub fn set_clips_allowed(&mut self, allowed: bool) {
+        if self.clips_allowed == allowed {
+            return;
+        }
+        self.clips_allowed = allowed;
+        self.refresh_mask();
+    }
+
+    pub fn clips_allowed(&self) -> bool {
+        self.clips_allowed
+    }
+
+    /// CLIP is offered where a skip is available: the family's switch and the run-time switch both on.
+    pub fn clips_effective(&self) -> bool {
+        self.clips && self.clips_allowed
+    }
+
+    /// Wraps not to offer (`crate::objectives::wraps_into_wrong_exits`); the mask is recomputed when they change.
+    pub fn set_vetoed_wraps(&mut self, directions: &[Direction]) {
+        if self.vetoed_wraps == directions {
+            return;
+        }
+        self.vetoed_wraps = directions.to_vec();
+        self.refresh_mask();
+    }
+
+    /// The bomb targets BOMB is kept to (None lifts the limit: the `bomb_targets` field's rule); the mask is
+    /// recomputed when they change.
+    pub fn set_bomb_targets(&mut self, targets: Option<&[crate::bombs::BombTarget]>) {
+        if self.bomb_targets.as_deref() == targets {
+            return;
+        }
+        self.bomb_targets = targets.map(<[_]>::to_vec);
+        self.refresh_mask();
+    }
+
+    fn refresh_mask(&mut self) {
         if let Some(state) = self.state.clone() {
             self.mask = self.compute_mask(&state);
         }
     }
 
-    pub fn clips(&self) -> bool {
-        self.clips
+    /// The phase (`crate::rng`: steps from reset) of the natural RNG state the last `load` or `write_rng` wrote;
+    /// None when the last load wrote none or a `restore` came after it.  A recording keeps it (META `rng_phase`).
+    pub fn rng_phase(&self) -> Option<u32> {
+        self.rng_phase
+    }
+
+    /// Writes the RNG register `phase` steps after reset (`crate::rng::write`) at the current frame, no
+    /// emulation, and rebuilds the state and mask; `rng_phase` becomes `phase`.
+    pub fn write_rng(&mut self, phase: u32) -> &Arc<GameView> {
+        rng::write(&mut self.machine.nes, phase);
+        self.rng_phase = Some(phase);
+        self.rebuild();
+        self.state()
     }
 
     /// Loads a machine state, applies randomization and overrides, and gains control of Link.
@@ -205,10 +286,12 @@ impl<N: Nes> Session<N> {
         nes.restore(state);
         self.executor.reset();
         self.ledger.clear();
+        self.open_clip = None;
+        self.rng_phase = None;
         if opts.randomize_rng {
-            for var in RNG_VARS {
-                nes.poke(var.addr(), rng.random_range(1..=255u8));
-            }
+            let phase = rng::draw_phase(rng);
+            rng::write(nes, phase);
+            self.rng_phase = Some(phase);
         }
         if is_pre_entry(|a| nes.peek(a)) {
             if opts.randomize_rng {
@@ -277,6 +360,8 @@ impl<N: Nes> Session<N> {
         self.total_frames = snapshot.total_frames;
         self.steps = snapshot.steps;
         self.ledger.clear();
+        self.open_clip = None;
+        self.rng_phase = None;
         self.rebuild();
         self.state()
     }
@@ -290,6 +375,7 @@ impl<N: Nes> Session<N> {
             ledger: self.ledger.clone(),
             state: self.state.clone(),
             mask: self.mask,
+            open_clip: self.open_clip,
         }
     }
 
@@ -305,6 +391,7 @@ impl<N: Nes> Session<N> {
         self.ledger.clone_from(&checkpoint.ledger);
         self.state.clone_from(&checkpoint.state);
         self.mask = checkpoint.mask;
+        self.open_clip = checkpoint.open_clip;
     }
 
     /// Simulation mode (search): frames don't render or reach the frame sink (no publishing, pacing or pause
@@ -356,7 +443,15 @@ impl<N: Nes> Session<N> {
             curr = Arc::new(self.build_state());
         }
         self.mask = self.compute_mask(&curr);
-        let change = Change::new(
+        let finished = self
+            .open_clip
+            .is_some_and(|open| result.clip.is_none() && open.finished_by(&action, &prev, &curr));
+        self.open_clip = match &result.clip {
+            Some(outcome) => OpenClip::of(outcome, &prev, &curr),
+            None if finished || prev.full_location() != curr.full_location() => None,
+            None => self.open_clip,
+        };
+        let mut change = Change::new(
             &mut self.machine,
             prev,
             curr.clone(),
@@ -366,6 +461,7 @@ impl<N: Nes> Session<N> {
             &mut self.ledger,
             self.look_ahead,
         );
+        change.clip_finished_by_move = finished;
         self.state = Some(curr);
         Ok(change)
     }
@@ -387,11 +483,19 @@ impl<N: Nes> Session<N> {
 
     fn compute_mask(&self, state: &GameView) -> ActionMask {
         let mut mask = compute_action_mask(state);
-        if self.clips {
-            clips::allow_clips(&mut mask, state);
+        if self.clips_effective() {
+            clips::allow_clips(&mut mask, state, &self.vetoed_wraps);
         }
         for &kind in &self.disabled_kinds {
             mask.disallow_kind(kind);
+        }
+        if let Some(targets) = &self.bomb_targets {
+            for d in mask.directions(ActionKind::Bomb) {
+                let opens = crate::bombs::landing(state, d).is_some_and(|at| targets.iter().any(|t| t.in_reach(at)));
+                if !opens {
+                    mask.disallow(ActionKind::Bomb, d);
+                }
+            }
         }
         mask
     }

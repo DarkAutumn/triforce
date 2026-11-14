@@ -253,7 +253,7 @@ def test_evaluation_episodes_are_recorded_with_their_endings(scripted_models, st
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=25)
     folder = tmp_path / 'episodes'
     result = evaluate_specialist(config, checkpoint, episodes_per_state=3, parallel=2, seed=4, states_dir=states_dir,
-                                 replays=folder, streams=STREAMS, keyframe_frames=60)
+                                 replays=folder, streams=STREAMS, keyframe_frames=60, clips='on')
     files = sorted(folder.iterdir())
     assert [path.name[:8] for path in files] == ['00000004', '00000005', '00000006']
     for path, episode in zip(files, result['records']):

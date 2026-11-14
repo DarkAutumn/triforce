@@ -1,6 +1,6 @@
 name: stalfos-keese-gel
-rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)', '(4, 0x51)', '(4, 0x21)']
-start_states: ['1_73*_[0-9]', '1_72*_[0-9]', '1_74*_[0-9]', '1_63*_[0-9]', '1_53*_[0-9]', '1_52*_[0-9]', '1_42*_[0-9]', '1_43*_[0-9]', '1_36*_[0-9]', '1_33*_[0-9]', '4_51*_[0-9]', '4_21*_[0-9]']
+rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)', '(4, 0x51)', '(4, 0x21)', '(4, 0x01)']
+start_states: ['1_73*_[0-9]', '1_72*_[0-9]', '1_74*_[0-9]', '1_63*_[0-9]', '1_53*_[0-9]', '1_52*_[0-9]', '1_42*_[0-9]', '1_43*_[0-9]', '1_36*_[0-9]', '1_33*_[0-9]', '4_51*_[0-9]', '4_21*_[0-9]', '4_01*_[0-9]']
 success: [exit-correct, triforce-collected]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §9 (r41): dropped items are shaping targets
@@ -16,5 +16,7 @@ notes: >-
   hall and the triforce room (ends on pickup), including the Stalfos key room 0x33 north of the Gel map room,
   crossed twice on the bow detour (S to N, then N to S; Nov 9). Start states are pre-entry states from
   triforce/entry_states.py. Dungeon 4 (Nov 11-12): its Keese room 0x51 (eight Blue Keese, the key in the open from
-  the start: take it, S to W) and its dark Gel room 0x21 (five Blue Gels: W in, bomb the N wall into the rupee
-  room).
+  the start: take it, S to W) and its dark Gel room 0x21 (five Blue Gels: W in, or S onto its island and the ladder
+  clip N; bomb the N wall into the rupee room: BOMB is offered only where the bomb opens it). Round 22: the dark
+  Keese room 0x01 (eight Blue Keese over water) S in through the wall bombed from 0x11, take the key in the middle
+  (the ladder crosses one water square), E out across the single square at X $B0.

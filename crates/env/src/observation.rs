@@ -210,7 +210,8 @@ mod l {
     pub const DROP_ARMED: usize = 77;
     pub const DROP_IS_BOMBS: usize = 78;
     pub const FAIRY_NEXT: usize = 79;
-    /// The grid-point skip is available and the specialist has `clips: true` (round 21; N, S, W, E).
+    /// CLIP is offered in this direction: the skip is available, the specialist has `clips: true` and the run-time
+    /// switch is on, and it is no vetoed wrap (round 21; round 22: the switch and the veto; N, S, W, E).
     pub const CLIP_USABLE: usize = 80;
 }
 
@@ -642,9 +643,6 @@ pub struct ObservationBuilder {
     /// The route's bomb reserve at the step Link plays (`GameCompletion::bomb_reserve`), for the `link` block;
     /// the env sets it before every observation.
     pub bomb_reserve: u8,
-    /// The specialist has `clips: true`: the `link` block's `clip_usable_*` follow the skip's availability
-    /// (`zelda::clips::skip_available`); the env sets it with the bomb reserve.
-    pub clips: bool,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
@@ -657,7 +655,6 @@ impl ObservationBuilder {
             objective,
             target,
             bomb_reserve: 0,
-            clips: false,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
@@ -725,7 +722,7 @@ impl ObservationBuilder {
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs),
-            link: link(state, mask, self.bomb_reserve, self.clips),
+            link: link(state, mask, self.bomb_reserve),
             entity_types,
             entity_features,
             grid: build_grid(state, &rs),
@@ -1098,7 +1095,7 @@ fn room_state(rs: &RoomState) -> [f32; ROOM_STATE_SIZE] {
     v
 }
 
-fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8, clips: bool) -> [f32; LINK_SIZE] {
+fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8) -> [f32; LINK_SIZE] {
     use zelda::Var;
     let ram = state.ram();
     let info = |v: Var| state.var(v);
@@ -1195,11 +1192,10 @@ fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8, clips: bool) -> [
     v[l::DROP_ARMED] = b(help >= 10);
     v[l::DROP_IS_BOMBS] = b(state.help_drop_is_bombs());
     v[l::FAIRY_NEXT] = b(state.kill_streak() == 15);
-    // The skip (`zelda::clips`): where CLIP's mask allows it, spelled out (the mask is no network input).
-    if clips {
-        for (i, (d, _)) in DIR_BITS.iter().enumerate() {
-            v[l::CLIP_USABLE + i] = b(zelda::clips::skip_available(state, *d));
-        }
+    // The skip (`zelda::clips`): where CLIP's mask allows it, spelled out (the mask is no network input). The mask
+    // offers it with the family's `clips: true` and the run-time switch on, minus vetoed wraps (round 22).
+    for (i, (d, _)) in DIR_BITS.iter().enumerate() {
+        v[l::CLIP_USABLE + i] = b(zelda::Action::new(ActionKind::Clip, *d, 0).is_ok_and(|a| mask.is_allowed(&a)));
     }
     v
 }

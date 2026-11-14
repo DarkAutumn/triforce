@@ -4,7 +4,8 @@ use crate::actions::Action;
 use crate::attack;
 use crate::blocks::{ProjectileBlock, ShieldWatch};
 use crate::clips::{
-    ClipAbort, ClipOutcome, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, SkipTarget, skip_target,
+    ClipAbort, ClipOutcome, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, Phase, SkipKind, SkipTarget,
+    skip_target,
 };
 use crate::enums::{ActionKind, Direction, ObjectClass};
 use crate::game::GameView;
@@ -497,9 +498,11 @@ impl<S> Executor<S> {
     }
 
     /// The grid-point skip toward `target` (`crate::clips`): the decision table every frame until Link stands at the
-    /// end point. A hit, a room change or game over end it at once (as a MOVE); spawns and nearby monsters don't.
-    /// Missed presses back off and retry; the presses, a stand-still and a frame cap end it cleanly. Link is left
-    /// where he stands, from where MOVE (and the skip itself, after its back-off) works again. A returning boomerang
+    /// end point (a wrap exit: then Left until the room change starts). A hit, a room change or game over end it at
+    /// once (as a MOVE); spawns and nearby monsters don't. Missed presses back off and retry; the presses, a
+    /// stand-still and a frame cap end it cleanly. Link is left where he stands, from where MOVE (and the skip itself,
+    /// after its back-off) works again; a wrap exit cut past the bound leaves him at X `$F1`-`$00` on its row, where
+    /// MOVE E or W goes on and MOVE W from X `$00` leaves by the W edge (zelda-asm/mechanics.md). A returning boomerang
     /// caught during the skip puts Link in the catch pose (`$20`, `$21`, then `$31` for a frame), in which the game
     /// zeroes his move (asm:Walker_Move@SetMovingDir): those frames are waited out with nothing pressed (at most
     /// `MAX_POSE_FRAMES`), outside the decision table and the stand-still count, as `run_attack` does before its press.
@@ -510,7 +513,8 @@ impl<S> Executor<S> {
         target: Option<SkipTarget>,
     ) -> (Option<Interrupt>, ClipOutcome) {
         let Some(target) = target else {
-            let outcome = ClipOutcome { direction, kind: None, abort: Some(ClipAbort::Unavailable), presses: 0 };
+            let outcome =
+                ClipOutcome { direction, kind: None, abort: Some(ClipAbort::Unavailable), presses: 0, target: None };
             return (None, outcome);
         };
         let mut controller = Controller::new(target);
@@ -558,7 +562,19 @@ impl<S> Executor<S> {
             let after = FrameWatch::new(m.ram());
             if let Some(i) = ended(&before, &after) {
                 interrupt = Some(i);
-                abort = Some(ClipAbort::Interrupted(i));
+                // A block or ladder clip past its press, holding the heading, that runs on into the next room (4:$21's
+                // N wall already open) did what it set out to: Link is past the skipped point. A wrap exit ends this
+                // way: its Left on the landing frame starts the room change. A wrap never changes rooms on its
+                // crossing; one that does walked out the ordinary way.
+                let carried_on = i == Interrupt::Transition
+                    && match target.kind {
+                        SkipKind::WrapExit => controller.phase == Phase::Exit && input == Input::Away,
+                        SkipKind::Wrap => false,
+                        SkipKind::Block | SkipKind::Ladder => {
+                            controller.phase == Phase::Crossing && input == Input::Toward
+                        }
+                    };
+                abort = if carried_on { None } else { Some(ClipAbort::Interrupted(i)) };
                 break;
             }
             let now = target.read(m.ram());
@@ -573,7 +589,8 @@ impl<S> Executor<S> {
             }
             before = after;
         }
-        let outcome = ClipOutcome { direction, kind: Some(target.kind), abort, presses: controller.presses };
+        let outcome =
+            ClipOutcome { direction, kind: Some(target.kind), abort, presses: controller.presses, target: Some(target) };
         (interrupt, outcome)
     }
 

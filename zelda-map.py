@@ -4,8 +4,8 @@
     .venv/bin/python zelda-map.py                         # models/ (or $TRIFORCE_MODELS_DIR), screens/ cache
     .venv/bin/python zelda-map.py --models-dir /tmp/m     # another models root
     .venv/bin/python zelda-map.py --rerender              # rebuild every cached room screenshot
-    .venv/bin/python zelda-map.py --route d2first         # draw a routes.yaml route over the map
     .venv/bin/python zelda-map.py --stats FILE            # this room-stats file, not the newest
+    .venv/bin/python zelda-map.py --clips off --level 4 --overlay deaths --screenshot map.png   # a picture, no window
 
 One tab per level (Overworld, Dungeon 1-9).  Each level's rooms are stitched into one picture: a room with a
 savestate (``triforce/states``) shows its playfield as Link enters it, rendered once and cached as a PNG in
@@ -18,11 +18,11 @@ dungeon is the bounding box of its known rooms (``game.yaml``, savestates, eval 
 
 Mouse wheel zooms around the cursor, dragging (or the arrow keys) pans, Home fits the map again, a click selects a
 room (the sidebar shows what is known about it).  The overlay buttons draw a value on every room with data in the
-selected scope: its hex location, hits taken per visit (room only: chain records don't count hits), hearts gained or
-lost per visit, the death rate, or the reach (the share of the scope's runs that entered the room).  Colours are
-colorblind-safe: blue is good, red is bad, purple in between; the scale is in the legend beside Reload, and the death
-rate's differs by scope (``DEATHS_BAD``: 2% of full runs dying in one room is as bad as 5% of a segment's runs or 20%
-of isolated episodes).
+selected scope: its hex location, hits taken per visit (actions that lost health; chain files from before round 22
+count none), hearts gained or lost per visit, the death rate, or the reach (the share of the scope's runs that
+entered the room).  Colours are colorblind-safe: blue is good, red is bad, purple in between; the scale is in the
+legend beside Reload, and the death rate's differs by scope (``DEATHS_BAD``: 2% of full runs dying in one room is as
+bad as 5% of a segment's runs or 20% of isolated episodes).
 
 The scopes come from a room-stats file (``triforce room-stats TAG``, ``triforce.room_stats``; the newest
 ``*-room-stats.json`` in ``target/r56-chains`` unless ``--stats FILE``):
@@ -35,10 +35,18 @@ The scopes come from a room-stats file (``triforce room-stats TAG``, ``triforce.
 - **Room only**: the single-room evaluations of the models that played the chains; the death rate is per isolated
   episode that entered the room.
 
-The sidebar's "by scope" table has a row per scope with data for the room (and one per route step where a scope
-visits it on several steps): runs, visits, reach, death and stuck rates, hearts ± and grid-point skips (clips) per
-visit; the selected scope's row is highlighted.  Without a room-stats file the map shows the room-only scope of the
-promoted models' evaluations and the status bar says so.
+The clips selector beside the scopes (Both, On, Off) picks the visits by the run-time clips switch they played
+(round 22; ``room_stats`` ``by_clips``: CLIP offered and the clip way through each routes.yaml ``stretch``, or masked
+and the plain way): Both is the combined numbers, On and Off each switch state's alone (a room-stats file from before
+the switch, format 1, counts as on).  Off needs switch-off runs: a chain file played ``--clips off`` or turned off on
+the way (``--clips-off-from``), read with its tag (``triforce room-stats TAG --noclips``), and evaluations with
+``by_clips``.
+
+The sidebar's "by scope" table has a row per scope with data for the room, under it a row per switch state the room
+has visits in (``· clips on``, ``· clips off``) and one per route step where the selection visits it on several
+steps: runs, visits, reach, death and stuck rates, hearts ± and grid-point skips (clips) per visit; the selected scope
+and switch's row is highlighted.  Without a room-stats file the map shows the room-only scope of the promoted models'
+evaluations and the status bar says so.
 
 The rest of the sidebar shows every promoted specialist's evaluation of its current weights in its act mode
 (``triforce.evaluate.read_evaluation``: ``eval.json`` or ``eval-<mode>.json`` in ``<models>/<specialist>/<run-id>``)
@@ -53,7 +61,12 @@ room that has their stairs, as an overworld cave is with its room.
 ``--route NAME`` draws a ``routes.yaml`` route: its rooms outlined, arrows between consecutive rooms, each room's
 step numbers (``cave`` where the route takes a cave or dungeon stairs), and in the sidebar every step through the
 selected room with its entry and exit, specialist and what Link carries on entering it (max hearts, sword, items,
-triforce pieces, from the route's treasures in ``game.yaml``).
+triforce pieces, from the route's treasures in ``game.yaml``).  A stretch's two ways follow the clips selector: On
+draws the clip way, Off the plain way, Both both; the clip way's arrows and rooms are dashed (and offset beside a
+plain arrow between the same rooms), and with Both its step numbers end in ``c`` (clip way) or ``p`` (plain way).
+
+``--screenshot FILE`` saves the window as a PNG instead of showing it (with ``QT_QPA_PLATFORM=offscreen`` no display
+is needed); ``--clips``, ``--scope``, ``--level``, ``--overlay`` and ``--select`` set what it shows.
 """
 
 import argparse
@@ -79,8 +92,8 @@ from triforce import registry
 from triforce._native import CHEAT_ITEMS, Game, game_rooms, routes, specialist_for
 from triforce._native import route_steps as native_route_steps
 from triforce.paths import STATES_DIR
-from triforce.room_stats import CHAINS_DIR, ROOM_SCOPE, SCOPES as STAT_SCOPES, eval_entry, load_evals
-from triforce.room_stats import newest as newest_stats, parse_room_key, read as read_stats, room_key
+from triforce.room_stats import BOTH, CHAINS_DIR, ROOM_SCOPE, SCOPES as STAT_SCOPES, SWITCHES, load_evals_by_clips
+from triforce.room_stats import newest as newest_stats, parse_room_key, read as read_stats, room_entries, room_key
 
 ROOT = Path(__file__).resolve().parent
 SCREENS_DIR = ROOT / 'screens'
@@ -104,6 +117,8 @@ DIM_ALPHA = 175            # a room off the selected segment is drawn under this
 OVERLAYS = (('none', 'None'), ('location', 'Location'), ('hits', 'Hits'), ('hearts', 'Hearts ±'),
             ('deaths', 'Death %'), ('reach', 'Reach %'))
 SCOPE_KINDS = (('full', 'Full run'), ('segment', 'Segment'), (ROOM_SCOPE, 'Room only'))
+CLIPS_CHOICES = ((BOTH, 'Both'), ('on', 'On'), ('off', 'Off'))     # the clips selector: room_stats by_clips
+WAY_MARKS = {'clips': 'c', 'plain': 'p'}   # route step numbers on a stretch's way when both ways are drawn
 # The segment row: the route cut at the dungeon exits, then each dungeon alone (room_stats.SCOPES).
 SEGMENTS = tuple(scope.name for scope in STAT_SCOPES if scope.kind in ('segment', 'dungeon'))
 SEGMENT_LABELS = {'to-d2': 'To D2', 'to-d1': 'To D1', 'to-d3': 'To D3', 'to-d4': 'To D4',
@@ -453,7 +468,8 @@ def stats_status(data: Optional[dict], path: Optional[Path], problem: Optional[s
     if data is None:
         return (f"No room-stats file ({problem or 'triforce room-stats TAG writes one'}): room only, from the "
                 "promoted models' evaluations")
-    return f"Room stats {data['tag']} ({path.name}, {data.get('created', '?')})"
+    tags = ' + '.join(data.get('tags') or [data['tag']])
+    return f"Room stats {tags} ({path.name}, {data.get('created', '?')})"
 
 
 def scope_kind(scope: str) -> str:
@@ -463,6 +479,17 @@ def scope_kind(scope: str) -> str:
 
 def scope_label(scope: str) -> str:
     return {'full': 'Full run', ROOM_SCOPE: 'Room only'}.get(scope) or SEGMENT_LABELS.get(scope, scope)
+
+
+def clips_entry(entry: Optional[dict], clips: str) -> Optional[dict]:
+    """A room's (or a scope's) entry for the clips selector: the entry itself (the combined numbers) for ``both``,
+    else its ``by_clips`` entry of that switch state (None without visits in it).  An entry without ``by_clips`` (a
+    room-stats file from before the switch, format 1) played on."""
+    if entry is None or clips == BOTH:
+        return entry
+    if 'by_clips' not in entry:
+        return entry if clips == 'on' else None
+    return entry['by_clips'].get(clips)
 
 
 # --------------------------------------------------------------------------------------------------- map model
@@ -561,28 +588,52 @@ def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
     return plan
 
 
-def route_rooms(plan: list[dict], level: int, cellars: Optional[dict] = None) -> dict[int, list[int]]:
+def way_plan(plan: list[dict], clips: str) -> list[dict]:
+    """The route steps a clips selection plays: ``on`` leaves out the plain way of every stretch (``route_steps``
+    ``way``), ``off`` the clip way, ``both`` keeps both."""
+    if clips == BOTH:
+        return plan
+    skip = 'plain' if clips == 'on' else 'clips'
+    return [step for step in plan if step.get('way') != skip]
+
+
+def route_rooms(plan: list[dict], level: int, cellars: Optional[dict] = None,
+                clips: str = BOTH) -> dict[int, list[int]]:
     """Room -> the route step indices in it (its cave's included, a dungeon cellar's on its entrance room: see
-    ``cellar_entrances``) on ``level``."""
+    ``cellar_entrances``) on ``level``, of the steps ``clips`` plays (``way_plan``)."""
     cellars = cellars or {}
     result = defaultdict(list)
-    for step in plan:
+    for step in way_plan(plan, clips):
         if step['level'] == level:
             key = (step['level'], step['room'], step['in_cave'])
             result[cellars.get(key, step['room'])].append(step['index'])
     return dict(result)
 
 
-def route_segments(plan: list[dict], level: int) -> list[tuple[int, int]]:
-    """(from room, to room) of each walk between two rooms on ``level``: a step leaving N/S/E/W into the next step."""
-    return [(a['room'], b['room']) for a, b in zip(plan, plan[1:])
-            if a['level'] == b['level'] == level and not a['in_cave'] and not b['in_cave']
-            and a['exit'] in WALK_EXITS and a['room'] != b['room']]
+def route_segments(plan: list[dict], level: int, clips: str = BOTH) -> list[tuple[int, int, Optional[str]]]:
+    """(from room, to room, way) of each walk between two rooms on ``level``: a step leaving N/S/E/W into the next
+    step ``clips`` plays (``way_plan``; ``both``: the walks of either switch state).  ``way`` is the stretch's way
+    only one switch state walks ('clips' or 'plain'), None for a walk both take (the route's common path, and into
+    or out of a stretch where both ways use the same door)."""
+    walks = {}
+    for switch in SWITCHES:
+        steps = way_plan(plan, switch)
+        walks[switch] = [(a['room'], b['room']) for a, b in zip(steps, steps[1:])
+                         if a['level'] == b['level'] == level and not a['in_cave'] and not b['in_cave']
+                         and a['exit'] in WALK_EXITS and a['room'] != b['room']]
+    segments = []
+    for switch in SWITCHES if clips == BOTH else (clips,):
+        for walk in walks[switch]:
+            way = None if all(walk in walks[s] for s in SWITCHES) else 'clips' if switch == 'on' else 'plain'
+            if (*walk, way) not in segments:
+                segments.append((*walk, way))
+    return segments
 
 
-def route_caves(plan: list[dict], level: int) -> set[int]:
-    """Rooms on ``level`` where the route goes into a cave or down dungeon stairs."""
-    return {s['room'] for s in plan if s['level'] == level and not s['in_cave'] and s['exit'] == 'cave'}
+def route_caves(plan: list[dict], level: int, clips: str = BOTH) -> set[int]:
+    """Rooms on ``level`` where the steps ``clips`` plays go into a cave or down dungeon stairs."""
+    return {s['room'] for s in way_plan(plan, clips)
+            if s['level'] == level and not s['in_cave'] and s['exit'] == 'cave'}
 
 
 def cellar_entrances(rooms: dict) -> dict[Key, int]:
@@ -606,6 +657,7 @@ def step_text(step: dict) -> str:
     waypoint = f" · waypoint {step['waypoint']}" if step.get('waypoint') else ''
     waypoint += f" · retreat {step['retreat']}" if step.get('retreat') else ''
     waypoint += f" · treasure {step['treasure']}" if step.get('treasure') else ''
+    waypoint += f" · {step['way']} way of {step['stretch']}" if step.get('way') else ''
     return (f"#{step['index']}{where} {step['entry']}→{step['exit']} · {step['specialist'] or 'none'} · "
             f"{', '.join(carried)}{waypoint}")
 
@@ -636,8 +688,10 @@ class MapView(QWidget):
         self.font_ = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         self.font_.setBold(True)
         self.route_rooms: dict[int, list[int]] = {}     # room -> route step indices (--route)
-        self.route_segments: list[tuple[int, int]] = []
+        self.route_segments: list[tuple[int, int, Optional[str]]] = []
         self.route_caves: set[int] = set()
+        self.route_ways: dict[int, Optional[str]] = {}  # step index -> its stretch way ('clips', 'plain', None)
+        self.route_marks = False                        # mark step numbers with their way (both ways drawn)
         self.dimmed: set[int] = set()                    # rooms off the selected segment
 
     # model
@@ -665,9 +719,12 @@ class MapView(QWidget):
         self.selected = room
         self.update()
 
-    def set_route(self, rooms: dict[int, list[int]], segments: list[tuple[int, int]], caves: set[int]):
-        """The route overlay of this level (``route_rooms``, ``route_segments``, ``route_caves``)."""
+    def set_route(self, rooms: dict[int, list[int]], segments: list[tuple[int, int, Optional[str]]], caves: set[int],
+                  ways: Optional[dict[int, Optional[str]]] = None, marks: bool = False):
+        """The route overlay of this level (``route_rooms``, ``route_segments``, ``route_caves``); ``ways`` the
+        stretch way of each step (clip-way rooms are outlined dashed), ``marks`` ends step numbers in ``WAY_MARKS``."""
         self.route_rooms, self.route_segments, self.route_caves = rooms, segments, caves
+        self.route_ways, self.route_marks = ways or {}, marks
         self.update()
 
     # geometry
@@ -772,26 +829,33 @@ class MapView(QWidget):
 
     def draw_route(self, painter: QPainter, view: QRect):
         """Route rooms outlined, an arrow per walk between rooms (back-and-forth walks side by side), step numbers in
-        each room's corner and 'cave' where the route goes underground."""
+        each room's corner and 'cave' where the route goes underground.  The clip way of a stretch is dashed: its
+        arrows (beside a plain-way arrow between the same rooms) and the rooms only it passes."""
         if not self.route_rooms:
             return
         width = max(2.0, min(6.0, TILE_W * self.scale * 0.02))
+
+        def pens(dashed: bool) -> tuple[QPen, QPen]:
+            halo, line = QPen(with_alpha(C.bg, 160), width + 3), QPen(ROUTE_COLOR, width)
+            for pen in (halo, line) if dashed else ():
+                pen.setStyle(Qt.PenStyle.DashLine)
+            return halo, line
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        for room in self.route_rooms:
+        for room, steps in self.route_rooms.items():
             rect = QRectF(self.tile_rect(room)).adjusted(width, width, -width, -width)
             if rect.intersects(QRectF(view)):
-                painter.setPen(QPen(with_alpha(C.bg, 160), width + 3))
-                painter.drawRect(rect)
-                painter.setPen(QPen(ROUTE_COLOR, width))
-                painter.drawRect(rect)
-        for a, b in self.route_segments:
+                for pen in pens(all(self.route_ways.get(i) == 'clips' for i in steps)):
+                    painter.setPen(pen)
+                    painter.drawRect(rect)
+        for a, b, way in self.route_segments:
             start, end = QPointF(self.tile_rect(a).center()), QPointF(self.tile_rect(b).center())
             delta = end - start
             length = max(1.0, (delta.x() ** 2 + delta.y() ** 2) ** 0.5)
             unit = QPointF(delta.x() / length, delta.y() / length)
-            side = QPointF(-unit.y(), unit.x()) * (width * 2.5)     # keep A->B and B->A apart
+            # Keep A->B and B->A apart, and a clip-way walk beside a plain one between the same rooms.
+            side = QPointF(-unit.y(), unit.x()) * (width * (5.5 if way == 'clips' else 2.5))
             start, end = start + side + unit * length * 0.2, end + side - unit * length * 0.2
-            for pen in (QPen(with_alpha(C.bg, 160), width + 3), QPen(ROUTE_COLOR, width)):
+            for pen in pens(way == 'clips'):
                 painter.setPen(pen)
                 painter.drawLine(start, end)
             head = width * 4
@@ -808,7 +872,8 @@ class MapView(QWidget):
                 continue
             font.setPixelSize(max(9, min(20, round(rect.width() * 0.09))))
             painter.setFont(font)
-            text = ' '.join(f'#{i}' for i in steps) + ('  cave' if room in self.route_caves else '')
+            text = ' '.join(f"#{i}{WAY_MARKS.get(self.route_ways.get(i), '') if self.route_marks else ''}"
+                            for i in steps) + ('  cave' if room in self.route_caves else '')
             box = QRectF(rect).adjusted(width * 2, width * 2, -width * 2, -width * 2)
             painter.setPen(with_alpha(C.bg, 220))
             painter.drawText(box.translated(1, 1), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, text)
@@ -932,19 +997,29 @@ def stats_rows(stats: dict) -> list[tuple[str, str]]:
     return rows
 
 
-def scope_rows(scopes: dict[str, dict], key: str, current: str) -> list[tuple[str, dict, str, bool]]:
-    """(label, entry, scope, is it the selected scope) for each scope with an entry for room ``key``
-    ('1:0x44'): Full run, the segments in route order and the dungeons alone, Room only.  An entry spread over
-    several route steps adds a row per step after it ('· #44'; '· off route': visits the route doesn't explain)."""
+def scope_rows(scopes: dict[str, dict], key: str, current: str,
+               clips: str = BOTH) -> list[tuple[str, dict, str, bool]]:
+    """(label, entry, scope, is it the selection) for each scope with an entry for room ``key`` ('1:0x44'): Full
+    run, the segments in route order and the dungeons alone, Room only.  Under each, a row per switch state the room
+    has visits in ('· clips on', '· clips off'; ``by_clips``, none in a file from before the switch), then, where the
+    clips selection's entry (``clips_entry``) is spread over several route steps, a row per step ('· #44', with a
+    switch state '· off #44'; '· off route': visits the route doesn't explain).  The selection is the selected
+    scope's row of the selected switch state (the scope's own row for ``both``)."""
     rows = []
     for scope in ('full', *SEGMENTS, ROOM_SCOPE):
         entry = (scopes.get(scope) or {}).get(key)
         if not entry:
             continue
-        rows.append((scope_label(scope), entry, scope, scope == current))
-        steps = entry.get('steps') or {}
+        split = entry.get('by_clips')
+        rows.append((scope_label(scope), entry, scope,
+                     scope == current and (clips == BOTH or (split is None and clips == 'on'))))
+        rows.extend((f'· clips {switch}', switch_entry, scope, scope == current and clips == switch)
+                    for switch, switch_entry in (split or {}).items())
+        selected = clips_entry(entry, clips)
+        steps = (selected or {}).get('steps') or {}
+        prefix = '· ' if clips == BOTH else f'· {clips} '
         if len(steps) > 1:
-            rows.extend((f'· #{name}' if name != 'off' else '· off route', step, scope, False)
+            rows.extend((f'{prefix}#{name}' if name != 'off' else f'{prefix}off route', step, scope, False)
                         for name, step in steps.items())
     return rows
 
@@ -971,14 +1046,14 @@ def scope_table(rows: list[tuple[str, dict, str, bool]]) -> str:
 
 
 class MapWindow(QMainWindow):
-    """Level tabs, the overlay and scope buttons and Reload on top; the map; the selected room's sidebar on the
-    right; the data's sources in the status bar.  ``stats_path`` is a room-stats file (``triforce.room_stats``);
+    """Level tabs, the overlay, scope and clips buttons and Reload on top; the map; the selected room's sidebar on
+    the right; the data's sources in the status bar.  ``stats_path`` is a room-stats file (``triforce.room_stats``);
     without one, ``stats_dir`` is searched for the newest at every reload; with neither (or none found) the map
-    shows the room-only scope of the promoted models' evaluations."""
+    shows the room-only scope of the promoted models' evaluations.  ``clips`` is the selector's first state."""
 
     def __init__(self, models_dir: Path, screens: dict[Key, Path], states: dict[Key, list[str]],
                  rooms: Optional[dict] = None, run_id: Optional[str] = None, route: Optional[str] = None,
-                 stats_path: Optional[Path] = None, stats_dir: Optional[Path] = None):
+                 stats_path: Optional[Path] = None, stats_dir: Optional[Path] = None, clips: str = BOTH):
         super().__init__()
         self.setWindowTitle('Zelda map' + (f' ({run_id} where evaluated, else promoted)' if run_id else '')
                             + (f' · route {route}' if route else ''))
@@ -1001,6 +1076,7 @@ class MapWindow(QMainWindow):
         self.scope_keys: set[Key] = set()
         self.scope = 'full'                         # SCOPE_KINDS: full, segment or room
         self.segment = SEGMENTS[0]
+        self.clips = clips                          # CLIPS_CHOICES: both, on or off
         self.level = 0
         self.overlay = 'none'
         self.selected: dict[int, int] = {}          # level -> selected room
@@ -1034,6 +1110,14 @@ class MapWindow(QMainWindow):
         scope_bar = QHBoxLayout()
         self.scope_group = self.radio_row(scope_bar, 'Scope', [label for _, label in SCOPE_KINDS],
                                           lambda index: self.set_scope(SCOPE_KINDS[index][0]))
+        scope_bar.addSpacing(24)
+        self.clips_group = self.radio_row(scope_bar, 'Clips', [label for _, label in CLIPS_CHOICES],
+                                          lambda index: self.set_clips(CLIPS_CHOICES[index][0]))
+        for index, (_, label) in enumerate(CLIPS_CHOICES):
+            self.clips_group.button(index).setToolTip(
+                {'Both': 'every visit, with the run-time clips switch on and off',
+                 'On': 'visits with the clips switch on (CLIP offered, the clip way through a stretch)',
+                 'Off': 'visits with the clips switch off (CLIP masked, the plain way)'}[label])
         scope_bar.addStretch(1)
         self.scope_info = QLabel(objectName='muted')
         scope_bar.addWidget(self.scope_info)
@@ -1101,7 +1185,8 @@ class MapWindow(QMainWindow):
     def reload(self):
         """Re-reads the room-stats file (``stats_path``, else the newest in ``stats_dir``) and every promoted
         specialist's evaluation (of its current weights, in its act mode)."""
-        self.stats, self.sources = load_evals(self.models_dir, self.run_id)
+        merged, self.sources = load_evals_by_clips(self.models_dir, self.run_id)
+        self.stats = merged[BOTH]
         path = self.stats_path or (newest_stats(self.stats_dir) if self.stats_dir else None)
         self.stats_data, self.stats_file, problem = None, None, None
         if path is not None:
@@ -1114,8 +1199,7 @@ class MapWindow(QMainWindow):
         if self.stats_data:
             self.scopes = {name: scope['rooms'] for name, scope in self.stats_data['scopes'].items()}
         else:       # room only: the promoted models' evaluations under the room-stats names
-            self.scopes = {ROOM_SCOPE: {room_key(*key): eval_entry(merged)
-                                        for key, merged in self.stats.items() if merged}}
+            self.scopes = {ROOM_SCOPE: room_entries(merged)}
         self.scope_keys = {parse_room_key(key) for rooms in self.scopes.values() for key in rooms}
         available = {'full': 'full' in self.scopes, 'segment': any(s in self.scopes for s in SEGMENTS),
                      ROOM_SCOPE: ROOM_SCOPE in self.scopes}
@@ -1127,6 +1211,13 @@ class MapWindow(QMainWindow):
             self.scope = next(kind for kind, _ in SCOPE_KINDS if available[kind] or kind == ROOM_SCOPE)
         if self.segment not in self.scopes:
             self.segment = next((name for name in SEGMENTS if name in self.scopes), SEGMENTS[0])
+        # The switch states with data (an entry from before the switch played on); a missing one can't be picked.
+        switches = {BOTH} | {switch for rooms in self.scopes.values() for entry in rooms.values()
+                             for switch in entry.get('by_clips') or ('on',)}
+        for index, (switch, _) in enumerate(CLIPS_CHOICES):
+            self.clips_group.button(index).setEnabled(switch in switches)
+        if self.clips not in switches:
+            self.clips = BOTH
         self.status.setText(f'{stats_status(self.stats_data, self.stats_file, problem)} · '
                             f'{eval_status(self.sources)}')
         self.status.setToolTip('\n'.join(
@@ -1136,6 +1227,7 @@ class MapWindow(QMainWindow):
                else f" ({s['file']})" if not s['mode'] else '')
             for s in self.sources) or f'no promoted specialists in {self.models_dir}')
         self.check_scope_buttons()
+        self.clips_group.button([switch for switch, _ in CLIPS_CHOICES].index(self.clips)).setChecked(True)
         if self.tabs.count():
             self.show_level(self.level, keep_view=True)
 
@@ -1148,13 +1240,13 @@ class MapWindow(QMainWindow):
         return self.segment if self.scope == 'segment' else self.scope
 
     def room_entry(self, level: int, room: int, scope: Optional[str] = None) -> Optional[dict]:
-        """The scope entry a room's overlay shows: the room itself, else its cave or cellar (a dungeon's cellar is
-        shown on its entrance room only, not on the cellar's own room id)."""
+        """The scope entry a room's overlay shows, of the clips selection (``clips_entry``): the room itself, else its
+        cave or cellar (a dungeon's cellar is shown on its entrance room only, not on the cellar's own room id)."""
         rooms = self.scopes.get(scope or self.current_scope()) or {}
         entry = rooms.get(room_key(level, room, False))
         if entry is None and (level == 0 or (level, room) in self.cellar_of):
             entry = rooms.get(room_key(*self.cave_key(level, room)))
-        return entry
+        return clips_entry(entry, self.clips)
 
     def level_rooms(self, level: int) -> set[int]:
         """Rooms known on a level: game.yaml, savestates, eval and room-stats data.  A dungeon's in-cave keys (its
@@ -1171,8 +1263,9 @@ class MapWindow(QMainWindow):
         bounds = level_bounds(level, self.level_rooms(level))
         view = self.view.view_state() if keep_view and bounds == self.view.bounds else self.views.get(level)
         self.view.set_level(bounds, tiles, view)
-        self.view.set_route(route_rooms(self.plan, level, self.cellars), route_segments(self.plan, level),
-                            route_caves(self.plan, level))
+        self.view.set_route(route_rooms(self.plan, level, self.cellars, self.clips),
+                            route_segments(self.plan, level, self.clips), route_caves(self.plan, level, self.clips),
+                            {step['index']: step.get('way') for step in self.plan}, self.clips == BOTH)
         self.update_badges()
         self.view.set_selected(self.selected.get(level))
         self.update_sidebar()
@@ -1204,20 +1297,39 @@ class MapWindow(QMainWindow):
         self.segment = segment
         self.set_scope('segment')
 
+    def set_clips(self, clips: str):
+        """Both (every visit), On or Off: the visits of one clips switch state, and the route's way through each
+        stretch."""
+        self.clips = clips
+        self.clips_group.button([switch for switch, _ in CLIPS_CHOICES].index(clips)).setChecked(True)
+        self.show_level(self.level, keep_view=True)
+
     def scope_text(self) -> str:
-        """'To D1 · 1,000 runs from 0_3cc_0, 48.0% reach 0_37c_0' for the scope row."""
+        """'To D1 · 1,000 runs from 0_3cc_0, 48.0% reach 0_37c_0' for the scope row ('... 400 runs with clips off
+        from ...' for a switch state)."""
         scope = self.current_scope()
         data = (self.stats_data or {}).get('scopes', {}).get(scope)
+        switch = '' if self.clips == BOTH else f' with clips {self.clips}'
         if scope == ROOM_SCOPE:
             sources = data['sources'] if data else self.sources
             team = 'the chains\' models' if data and data.get('team') == 'chains' else 'the promoted models'
             detailed = sum(s['status'] == 'detailed' for s in sources)
-            return f'Room only · isolated episodes, {detailed} evaluations of {team}'
+            return f'Room only · isolated episodes{switch}, {detailed} evaluations of {team}'
         if not data:
             return scope_label(scope)
+        totals = clips_entry(data, self.clips)
+        if totals is None:
+            return f'{scope_label(scope)} · no runs{switch}'
         end = 'reach the D4 triforce' if data.get('cut') is None else f"reach {data['cut']}"
-        return (f"{scope_label(scope)} · {data['runs']:,} runs from {data['start']}, "
-                f"{fmt_rate(data['arrival_rate'])} {end}")
+        return (f"{scope_label(scope)} · {totals['runs']:,} runs{switch} from {data['start']}, "
+                f"{fmt_rate(totals['arrival_rate'])} {end}")
+
+    def route_note(self) -> str:
+        """The route's ways in the legend, on a level where a stretch has two ways."""
+        if not any(step['level'] == self.level and step.get('way') for step in self.plan):
+            return ''
+        return {BOTH: 'Route: clip way dashed (#…c), plain way solid (#…p)', 'on': 'Route: the clip way (dashed)',
+                'off': 'Route: the plain way'}[self.clips]
 
     def update_badges(self):
         kind = scope_kind(self.current_scope())
@@ -1230,7 +1342,7 @@ class MapWindow(QMainWindow):
         # A segment's rooms stand out: the rooms it never entered are dimmed.
         self.view.set_dimmed({room for room in self.view.rooms() if self.room_entry(self.level, room) is None}
                              if self.scope == 'segment' else set())
-        self.legend.setText(scale_html(self.overlay, kind))
+        self.legend.setText(' · '.join(text for text in (scale_html(self.overlay, kind), self.route_note()) if text))
         self.scope_info.setText(self.scope_text())
 
     def select_room(self, room: int):
@@ -1268,7 +1380,7 @@ class MapWindow(QMainWindow):
                  else cave_text if has_cave else 'no')]
         parts = [html_rows(rows)]
         for key in ((level, room, False), cave) if has_cave else ((level, room, False),):
-            table = scope_rows(self.scopes, room_key(*key), self.current_scope())
+            table = scope_rows(self.scopes, room_key(*key), self.current_scope(), self.clips)
             if table:
                 parts.append(html_section(f"{'Cave' if key[2] else 'Room'} · by scope", scope_table(table)))
         for key in ((level, room, False), cave) if has_cave else ((level, room, False),):
@@ -1289,7 +1401,7 @@ class MapWindow(QMainWindow):
             body = (html_rows(stats_rows(stats)) if stats
                     else '<p style="color:#8a93a6">No detailed eval data for this room.</p>')
             parts.append(html_section(f'{where} · eval of the promoted models (every visit)', body))
-        steps = [s for s in self.plan if s['level'] == level
+        steps = [s for s in way_plan(self.plan, self.clips) if s['level'] == level
                  and self.cellars.get((s['level'], s['room'], s['in_cave']), s['room']) == room]
         if steps:
             parts.append(html_section(f'Route {self.route}', '<br>'.join(step_text(s) for s in steps)))
@@ -1312,7 +1424,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--stats', type=Path, default=None, metavar='FILE',
                         help="a room-stats file (triforce room-stats; default: the newest *-room-stats.json in "
                              "<repo>/target/r56-chains, re-found on Reload)")
+    parser.add_argument('--clips', default=BOTH, choices=[switch for switch, _ in CLIPS_CHOICES],
+                        help="the clips selector: every visit (both, the default) or one switch state's")
+    parser.add_argument('--scope', default=None, choices=['full', *SEGMENTS, ROOM_SCOPE],
+                        help="the scope shown first (a segment's name picks Segment)")
+    parser.add_argument('--level', type=int, default=0, choices=LEVELS, help="the tab shown first (0: overworld)")
+    parser.add_argument('--overlay', default='none', choices=[key for key, _ in OVERLAYS],
+                        help="the overlay shown first")
+    parser.add_argument('--select', type=lambda text: int(text, 16), default=None, metavar='ROOM',
+                        help="select this room (hex, e.g. 0x31) on the --level tab")
+    parser.add_argument('--screenshot', type=Path, default=None, metavar='FILE',
+                        help="save the window as a PNG and exit (QT_QPA_PLATFORM=offscreen needs no display)")
     return parser
+
+
+def set_view(window: MapWindow, scope: Optional[str] = None, level: int = 0, overlay: str = 'none',
+             select: Optional[int] = None):
+    """Shows ``level``'s tab, the ``overlay``, the ``scope`` ('full', 'room' or a segment's name; None keeps the
+    window's) and selects room ``select`` on that level."""
+    window.tabs.setCurrentIndex(level)
+    window.set_overlay(overlay)
+    if scope in SEGMENTS:
+        window.set_segment(scope)
+    elif scope is not None:
+        window.set_scope(scope)
+    if select is not None:
+        window.select_room(select)
 
 
 def main(argv=None) -> int:
@@ -1331,14 +1468,23 @@ def main(argv=None) -> int:
         counts = ', '.join(f'{level_name(level)} {count}' for level, count in sorted(rendered.items()))
         print(f"zelda-map: rendered {sum(rendered.values())} room screenshots ({counts}) in "
               f"{time.perf_counter() - started:.1f}s into {args.screens_dir}", file=sys.stderr)
-    app = QApplication(sys.argv[:1])
+    app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName('zelda-map')
     apply_theme(app)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     window = MapWindow(registry.models_root(args.models_dir), screens, states, run_id=args.run_id, route=args.route,
-                       stats_path=args.stats, stats_dir=None if args.stats else CHAINS_DIR)
+                       stats_path=args.stats, stats_dir=None if args.stats else CHAINS_DIR, clips=args.clips)
     window.resize(1600, 960)
     window.show()
+    set_view(window, args.scope, args.level, args.overlay, args.select)
+    if args.screenshot:
+        app.processEvents()
+        window.view.fit()
+        app.processEvents()
+        saved = window.grab().save(str(args.screenshot))
+        window.close()
+        print(f"zelda-map: {'saved' if saved else 'could not save'} {args.screenshot}", file=sys.stderr)
+        return 0 if saved else 1
     return app.exec()
 
 

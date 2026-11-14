@@ -30,7 +30,7 @@ def test_every_exit_has_its_way_back():
         if in_cave or entry.get('maze'):
             continue
         for side, exit in (entry['exits'] or {}).items():
-            if side not in OPPOSITE:
+            if side not in OPPOSITE or exit.get('wrap'):  # a wrap exit (0x75 W, a skip) is one-way
                 continue
             target = (exit['level'], int(exit['location'], 16), bool(exit.get('in_cave')))
             assert target in by_key, f"{level}:{room:#04x} {side} -> {target}: not in game.yaml"

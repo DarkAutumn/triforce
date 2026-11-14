@@ -23,7 +23,8 @@ use pyo3::prelude::*;
 
 /// The route's room visits as dicts (`index`, `level`, `room`, `in_cave`, `entry`, `exit`, `specialist`,
 /// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip`, `clear` or `if_bombs_below: N`,
-/// `bomb_reserve`: the step's routes.yaml `bomb_reserve` or None).
+/// `bomb_reserve`: the step's routes.yaml `bomb_reserve` or None, `way`: 'clips' or 'plain' for a step of one way of
+/// a `stretch:` (None: both ways'), `stretch`: its name). Both ways' steps are listed, numbered in file order.
 #[pyfunction]
 #[pyo3(signature = (route=zelda::game_map::DEFAULT_ROUTE))]
 fn route_steps<'py>(
@@ -65,7 +66,31 @@ fn step_dict<'py>(
     d.set_item("retreat", s.retreat.as_deref())?;
     d.set_item("treasure", s.treasure.describe())?;
     d.set_item("bomb_reserve", s.bomb_reserve)?;
+    d.set_item("way", s.way.map(|w| w.name()))?;
+    d.set_item("stretch", s.stretch.as_deref())?;
     Ok(d)
+}
+
+/// The route's `stretch:` blocks (round 22) as dicts: `name`, `clips` and `plain` (each way's step indices) and
+/// `rejoin` (the shared step both lead into; the ways part at the first step of each).
+#[pyfunction]
+#[pyo3(signature = (route=zelda::game_map::DEFAULT_ROUTE))]
+fn route_stretches<'py>(py: Python<'py>, route: &str) -> PyResult<Vec<Bound<'py, pyo3::types::PyDict>>> {
+    let data = context::data(py, None)?;
+    let stretches = data.map.stretches.get(route).ok_or_else(|| {
+        errors::ConfigError::new_err(format!("Unknown route '{route}'"))
+    })?;
+    stretches
+        .iter()
+        .map(|s| {
+            let d = pyo3::types::PyDict::new(py);
+            d.set_item("name", &s.name)?;
+            d.set_item("clips", s.clips.clone().collect::<Vec<_>>())?;
+            d.set_item("plain", s.plain.clone().collect::<Vec<_>>())?;
+            d.set_item("rejoin", s.rejoin)?;
+            Ok(d)
+        })
+        .collect()
 }
 
 /// routes.yaml `alternates` as dicts: `replaces` [(level, room, in_cave)] and `with` [step dicts, `index`
@@ -172,7 +197,7 @@ mod _native {
     use pyo3::types::PyDict;
 
     #[pymodule_export]
-    use super::{families, game_rooms, paths, route_alternates, route_steps, routes, specialist_for};
+    use super::{families, game_rooms, paths, route_alternates, route_steps, route_stretches, routes, specialist_for};
     #[pymodule_export]
     use crate::config::PySpecialistConfig;
     #[pymodule_export]

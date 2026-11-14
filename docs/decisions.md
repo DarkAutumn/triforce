@@ -1578,6 +1578,200 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   lower their own CPU priority (`--nice`, `$TRIFORCE_NICE`; children inherit it); play and replay tools keep
   normal priority.
 
+## 2026-11-13 — Natural RNG at every start; spawn and fresh-room writes the game can hold (round 22, Lee)
+
+- **What:** a start from a saved state (training resets, evaluation, a chain's start state), a chain checkpoint
+  with `redraw_rng` and a search future (`perturb_rng`) write the RNG register (`$18-$24`) as a natural state: the
+  register `phase` steps after reset (`zelda::rng::natural`, the game's rule from the reset seed), the phase drawn
+  uniformly from the cycle's 32,767 states (88..=32854) by the caller's seeded generator. It replaced 13
+  independent bytes 1-255, which the game never holds. The write happens right after the restore, before any frame
+  runs (it already did), so the entry frames, spawn clouds and first monster decisions run on natural values. The
+  edge spawn cell is drawn from the 41 values the game holds (never the corners `$E0`/`$4F`) in every level, and a
+  fresh room clears only its saved kills, no longer writing `$FF` into the room history.
+- **Why:** Lee (Nov 13): "Set it with a natural state, including that second and a half where they are spawning
+  ... make it play for real with RNG." A corner edge cell sends asm:EdgeSpawn_FindNextCell off the ring (from `$E0`:
+  `$F0`, `$00`, ..., `$3F`, ...): a monster placed off the screen or a search that never ends; 120 of the 364
+  stored start states hold such a cell, left by the old draw.
+- **Computing, not a table:** the longest `natural` (32,854 steps of a `u128`) takes ~45 µs against ~1 ms for a
+  start state's load (1_44w, 300 loads), so no table file.
+- **Replays:** the bytes were and are frame-0 EDITS (corpus replays verify unchanged); META `rng_phase` now keeps
+  the phase (a stitch keeps each segment's), and `tf replay info` reads it back from the edits.
+- **Evidence:** `crates/zelda/tests/rng.rs` (the function equals the game's register on every frame from power on,
+  steps 0, 87, 88, 32854 and 32855 at frames 10, 119, 120, 32886, 32887; a randomized load's register on the cycle
+  on every frame from the restore through 120 frames of play), `room_entry` tests (the 41 cells derived from
+  zelda-asm/data), `chain_explore.rs`, `specialist_env.rs`, `pool/tests/zelda.rs` (recorded runs from a start state
+  and a redrawn checkpoint verify and carry the phase). The round 21 models under it (seed 0, 100 episodes per
+  state, act modes; old → new): goriya 95.2% → 95.8%, −0.15 → −0.19 hearts; ow-moblin 99.0% → 98.8%, −0.07 →
+  −0.07; boss-gleeok 99.7% → 99.7%, +0.29 → +0.11: every difference within two standard errors.
+
+## 2026-11-13 — The run-time clips switch and route stretches (round 22, Lee)
+
+- **Context:** Lee wants to turn clips off at any moment ("rest of the run no clips") and to run with and without
+  them; where the clip way and the plain way go through different rooms the route needs both.
+- **Decision:** one run-time switch `clips_allowed` (default on) beside the family's `clips: true`: CLIP is offered
+  only when both are on (`Session::set_clips_allowed`, `GameCompletion::set_clips_allowed`,
+  `SpecialistEnv::set_clips_allowed(Option<bool>)`, `ChainEnv::set_clips_allowed`, `Route::with_clips` with
+  `clips_off_from` a step or room; Python `Game.set_clips_allowed`, `Env.set_clips_allowed`). A flip takes effect at
+  the next decision the env or chain builds (the observation and mask already handed out stay valid); the mask, the
+  `clip_usable_*` bits (now read from the mask: no layout change), the objective and the path search follow it. Chain
+  records carry `clips_allowed` per visit (at its first decision) and `clips_flips` (`{step, clips}`, step 0 = at
+  the entry), runs `clips`.
+- **Route stretches:** routes.yaml `- stretch: NAME` with `parts`, `rejoins`, `clips:` and `plain:` step lists,
+  flattened into one numbered route (the clip way's steps first), each step tagged with its way. Checked at load
+  (parts/rejoin claims, each way a walk of game.yaml exits, same progress and bomb reserve at the rejoin, no waypoint
+  or triforce inside). First stretch: `d4-island` (clips 0x31 E→N, 0x21 S→N; plain 0x31 E→W, 0x30 E→N, 0x20 S→E,
+  0x21 W→N; rejoin 0x11), so D4's steps after it moved by 4 (`entry_states.json` renumbered; states 4_30e, 4_20s,
+  4_21w rebuilt with `entry_states path`).
+- **Re-planning:** off on the clip way, the plain step of Link's room entered from his side takes over (0x31 from E:
+  W); without one the objective leads to the walkable exit nearest (map path) to a room of the plain way or the rejoin
+  (0x21's island: its S door; 0x76 or 0x75's E part: back to 0x66), adopting a plain step whose exit he can walk to
+  as soon as he is in its room. No walkable exit leads there: the ordinary off-route objective. On while on the plain
+  way: the plain way holds to the rejoin (predictable; no turning back mid-stretch); elsewhere the clip way at once.
+  A start the route enters on one way only fixes the switch (`objectives::start_clips`: 4_21s on, 4_30e/4_20s/4_21w
+  off); a chain `--from` such a state with the other switch starts as a flip there.
+- **Clip counters:** a block or ladder clip whose crossing runs on into the next room counts as done; an aborted clip
+  that a later MOVE along its line carries past the clip's end point counts once in `finished_by_move` (kept in
+  `aborted`, not in `done`).
+- **Wrap veto:** a wrap is not offered when the objective leaves by the landing edge only within its game.yaml
+  `span` and the landing row is outside it (0x5b rows `$B5`, `$BD`); wraps toward other uses stay.
+- **Evidence:** `crates/env/tests/clips_switch.rs`, `crates/env/tests/chain_clips.rs`, `game_map` stretch tests.
+
+## 2026-11-13 — The wrap exit: CLIP E out of 0x75's solid W edge into 0x74 (round 22)
+
+- **What:** a fourth skip kind, `SkipKind::WrapExit` (`crates/zelda/src/clips.rs`). `CLIP E` where the E wrap's
+  zone, row and run-up hold but the landing columns 0-1 are solid plays the E wrap, then Left on the landing frame
+  (X `$00`): the overworld makes the W edge test whatever the tile, and Link enters the room to the W at X `$F0`. It
+  is offered only on the rows of a game.yaml W exit marked `wrap: true` with a `span`: room 0x75 into 0x74, Link's
+  tile rows 5-14 (Y `$65`-`$AD`). It completes with the room change and counts as done. The path search gets jumps
+  from the zone on those rows to the W exit, so PBRS and `target` point at the E edge on a safe row when the step
+  leaves W, and only with clips on. The veto removes it when the objective does not leave W. The room-to-room
+  search never takes a `wrap` exit.
+- **Why:** the owner's Dungeon 3 approach with clips (0x77 → 0x76 → 0x75, wrap, → 0x74). Round 22's route scout
+  found that the wrap is an E wrap followed by Left. The round-21 CLIP refused it because the landing is solid.
+- **Rule per row, played** (`zelda-asm/mechanics.md` "After the wrap, edge by edge"):
+  - Y `$65`-`$AD`: Link arrives in 0x74 and walks on, because 0x74's column 29 is open.
+  - Y `$55`, `$5D`, `$B5`, `$BD`: a softlock. 0x74's column 29 and 0x75's column 2 are solid, so Link goes back
+    and forth between the two rooms. These rows are never offered.
+  - Y `$3D`-`$4D` and `$C5`-`$DD`: trees, no wrap.
+  - Timing: Left on the landing frame, or within the 5 frames after it while X <= `$07`. Later than that, Link is
+    in 0x75's W part, which is not a softlock.
+- **Whitelist, not a derived rule:** the zelda crate reads tiles only from RAM and has no overworld layout decoder
+  (`zelda-asm/tools/romdata.py` is Python over the ROM). The session therefore can't see 0x74's column 29 from 0x75.
+  The safe rows are game.yaml data, and `crates/zelda/tests/wrap_exit.rs` plays every one of them, plus the
+  softlock rows by buttons.
+- **Hits:** a hit ends the macro, as for the wrap. Before the bound Link is knocked back into the zone. Past it he
+  stays on the row at X `$F1`-`$00`. In every case MOVE and CLIP go on, and he is never stuck (tested on every
+  frame from both sides). From X `$00`, MOVE W leaves at once and counts as finishing the cut skip.
+- **Not offered:** the mirrored shape, a W wrap onto a solid right edge followed by Right (0x60 into 0x5F, a
+  softlock without the ladder). No route needs it.
+- **Evidence:** from 0x76's E edge into Dungeon 3 (monsters removed) takes 51 actions and 779 frames; the CLIP
+  itself takes 130.
+
+## 2026-11-13 — Clips in training, evaluation and watching: the mix, the combined figure, the key (round 22, Lee)
+
+- **Context:** Lee: "The models need to be trained with clips enabled, and also with the clip action masked so it
+  has to traverse as normal. Keep track of stats of rooms on how well the model does with and without clipping",
+  and "imagine I'm watching live, not a replay, and want to just say: ok, rest of the run no clips". The switch
+  itself is the entry above.
+- **Decision, training:** a clip family's `clips: true` is `{enabled: true, off_share: 0.5}`
+  (`env::config::ClipsConfig`, `DEFAULT_CLIPS_OFF_SHARE`): each episode draws its switch from the env's seeded
+  generator, off with probability `off_share`, unless its start state fixes it (a room the route enters on one way
+  only) or `Env.set_clips_allowed` does; curriculum starts and exploration keep it on (their tracks were explored
+  with it on). Half and half because a model that never trains the plain way can't take it when Lee turns clips
+  off mid-run, and the clip way still needs its practice; `off_share` is there to move it by experiment. Metrics
+  `clips/enabled_share` and `clips/on|off/{episodes, success_rate, health_change, hearts_at_exit}`; the early stop
+  counts `<state>:clips-off` as a start state of its own, so both switch states must clear the bar.
+- **Decision, evaluation:** `--clips both` is the default for a clip family (`on` for the others) and the
+  canonical `eval.json`. Its headline figure (`success_rate`, `mean_health_change`, every group) is over both
+  switch states together: a model weak without clips can't hide behind its clip runs, and
+  comparisons stay one number. `by_clips` keeps the full summary per switch state; the switch-on half is exactly
+  the `--clips on` evaluation (same seeds), so older single-state numbers compare with it. Room statistics split
+  the same way (`room-stats` `by_clips`, `--noclips` for a second tag; `zelda-map.py`'s Clips selector).
+- **Decision, watching:** `play-zelda.py --clips on|off` sets the switch the simulations start with; key `c` turns
+  it off and on for every run started afterwards (`EnvPool.set_clips_allowed`; queued runs keep theirs, each feed
+  entry carries its switch and a cell's strip says "no clips"). `--live` makes the top left cell a live game (a
+  one-env chain pool paced at the cells' frame rate, `ChainTask(clips_live=True)`), where `c` acts on the run in
+  progress from its next decision and the route re-plans from where Link stands; the finished live run is filed
+  into the queues like a simulated one (`ReplayFeed.file`). Golden paths stay on clips.
+- **Evidence:** `crates/env/tests/clips_switch.rs` (the per-episode draw), `tests/test_evaluate.py`,
+  `tests/test_train_cli.py`, `tests/test_room_stats.py`, `crates/theater/tests/theater.rs`
+  (`a_run_played_elsewhere_is_filed_like_the_producers`), `tests/test_play_zelda.py`
+  (`test_a_live_cell_plays_while_watched_takes_the_clips_key_and_files_its_runs`); offscreen with the round 21 team
+  from `4_31e_0`: `c` in 0x31 and the live run turned W into 0x30 ("no clips from L4 0x31").
+
+## 2026-11-13 — Round 22 route: 0x67's secret, both ways to Dungeon 3, 0x5b E → 0x5c → 0x4c, 0x01's key (Lee)
+
+- **What** (`triforce/routes.yaml` `d2first`, `docs/routes/overworld.md`, `d3.md`, `d4.md`): after Dungeon 1 the
+  route goes S from 0x58 to 0x68 and 0x67, bombs 0x67's rock wall and takes the secret cave's 30 rupees (`waypoint:
+  rupees`), then parts in the stretch `d3-approach`: with clips S to 0x77, W through 0x76 into 0x75's E part and
+  `CLIP E` (the wrap exit) into 0x74; without clips W along row 6 (0x66, 0x65 by its ford, 0x64), S at 0x63, E
+  through 0x73 into 0x74 from W. Both rejoin at 3:0x7c. Dungeon 3's last pass through 0x5b leaves E through its
+  bomb wall into 0x5c, N into 0x4c from S, E through 0x4c's bomb wall to Manhandla; 0x4b leaves the route. Dungeon 4
+  goes N from 0x11 (its N bomb wall) into 0x01 (its key, on the water: the ladder), E into 0x02, S into 0x12 (from
+  N). Steps: 0x58 S is 71, the cave 74, the clip way 75–79, the plain way 80–86, Dungeon 3 87–104, Dungeon 4's
+  entrance 112, 0x11 128, 0x01 129, 0x02 130, 0x12 131, the end 133.
+- **Lee's words and the lead's reading:** "0x11 north to 0x10 -> 0x20 -> 0x12" is read as 0x11 N → 0x01 → 0x02 →
+  0x12: 0x10 and 0x20 are not on a way to 0x12 and hold no key; north of 0x11 is 0x01, the key's room. The overworld
+  "wrap" is an E-edge wrap in 0x75 followed by Left (decisions "The wrap exit"); the plain way is not a straight
+  line (0x65's one ford, 0x63 S to 0x73).
+- **Bombs:** `bomb_reserve: 6` from Dungeon 3's entrance (one bomb per wall, a spare each, two for Manhandla; was 5
+  for one wall); 0x5b's last visit takes its bombs below 6 (`if_bombs_below: 6`), and 0x5b is `requires_bombs`
+  (darknut bombs `free`). 0x67's wall takes the bomb Link used to bring into Dungeon 3. Dungeon 4 keeps 2.
+- **BOMB only at the wall** (Lee: "Try to fix the 0x21 bombs thing"): a `required` family (ow-tektite, ow-octorok,
+  trap-room, stalfos-keese-gel) in a `requires_bombs` room is offered BOMB only where the bomb lands within the game's
+  reach of the wall the objective leaves through (16 px ahead after any turn; a dungeon wall within `$18` px of its
+  hotspot on both axes, a rock wall within `$10`), else only on the 10th damage-free kill; `free` families are
+  untouched. Played around every such wall on the route (`crates/zelda/tests/bomb_mask.rs`): every offered BOMB opens
+  the wall, every refused one the game would place leaves it shut.
+- **`waypoint: rupees`:** the cave's middle ware, which the game pays only to Link walking up at X `$78`; leaving
+  0x67 without it is `missed`, like the 0x2c heart. The rupees buy nothing on the route yet.
+- **What skipping 0x4b loses:** its key (spent at once on its own E door before: none on balance), 3 Zols (about
+  1.8 drops when killed outright) and 3 kills toward the help streak; it saves about 900 frames and costs a bomb.
+- **Two fixes the state build needed:**
+  - *The alternate 0x78 at 0x68.* `step_next_rooms` added any alternate replacing the step's next room that borders
+    the current room; 0x78 replaces 0x67 for 0x77 at the game start, and borders 0x68 too, so leaving 0x68 S into
+    0x78 counted as correct on step 72. The explorer took it in two of three chains. The alternate now counts only
+    from the room its first step is entered from (`crates/zelda/tests/objectives.rs`
+    `an_alternate_is_a_way_out_only_of_the_room_it_is_entered_from`).
+  - *Go-Explore's cells and the rupees.* The cell key (`env::explore::cell_key`) did not change when the rupees were
+    taken, so the cave's way out was one cell before and after, and the shorter path (without them, `missed`) kept
+    it: 52 cells, no success in 3000 iterations. The key now holds the room's item-taken flag and the pickup counts
+    as progress; the cave is solved in about 400 iterations (`crates/env/tests/explore_cells.rs`).
+- **States and curricula** (`scripts/experiments/r22_states_curricula.sh`): the states from 0x58 leaving S (step 71)
+  to the D4 triforce were built again, both ways of both stretches (the clip way by `build`, the plain ways by
+  `path`), every crossing on its first attempt; audit 397 states, 0 problems. The curricula were explored again on
+  the merged tree (round 22's per-episode switch: a state the route enters on one way only is explored with that
+  way's switch, every other with it on): 267 tracks in 18 families, 156 new and 111 copied from round 21's
+  (unchanged state files), every state solved; 15 explored with the switch off (ow-moblin `0_63e`, `0_73n`, ow-zora
+  `0_65e`, vire `4_30e`, `4_20s`), none of them clipping. Tracks that clip: ow-leever `0_75e_*` (the wrap exit,
+  `CLIP E`), ow-moblin `0_63s_0`, ow-zora `0_65w_*` (wraps), trap-room's six 1:0x22 tracks and vire `4_50e_*` (block
+  clips).
+
+## 2026-11-13 — Round 22 merged: the clips switch and training mix with the new route; 1.4.1.1
+
+- **What:** `r22` (natural RNG, the run-time clips switch, `clips: {enabled, off_share}`, the evaluation and
+  room-statistics split, `play-zelda.py --clips/--live`) merged into `r22-route` (the wrap exit, the route changes,
+  the BOMB mask, the rebuilt states). Both stretches (`d3-approach`, `d4-island`) are in the one route; Dungeon 4 is
+  steps 112-133.
+- **Proven on the merged tree:** a training reset of each changed family draws the switch and takes the way and next
+  room that fit it (ow-octorok `0_67c`: S with clips, W without; ow-leever `0_75e`: fixed on; vire `4_31e`: N or W;
+  stalfos-keese-gel `4_21s` on, `4_21w` off; `crates/env/tests/clips_switch.rs`); `evaluate --clips both` plays each
+  state in the switch states it allows (`tests/test_evaluate.py`); `room-stats` keeps the recorded step on both ways
+  of both stretches (`tests/test_room_stats.py`, and on the chain checks below); `zelda-map.py --route d2first`
+  draws both ways; `play-zelda.py --live` starts; a smoke training of ow-octorok and stalfos-keese-gel logs both
+  switch states.
+- **Chain checks** (round 21 models, 20 runs each, one `eval-batch`): `--from 0_67c_0 --stop-at 3:0x7c` with clips
+  11/20 (the clip way through 0x77, 0x76, 0x75; 8 stuck bouncing between 0x75 and 0x76: ow-leever never learned the
+  wrap exit), without 20/20 (the plain way, 0x66-0x74 from W); `--from 4_71s_0` with clips 0/20 (17 stuck in 0x11:
+  trap-room bombs its old E wall), without 0/20 (deaths in 0x20, 0x31, 0x32; 3 stuck in 0x11). Every run started
+  on its switch and every room record carries it and its step.
+- **Fixes on the way:** a boomerang press in a doorway is filtered as the game filters it before the leave check
+  (`attack::press_leaves`): round 22's `4_11s_0` starts deeper in the doorway (78,C4) and a diagonal throw walked Link
+  back out. 4:0x02's blocks offer the block clip (4 squares, played in `the_block_clip_in_dungeon_4`).
+- **Version:** REV, 1.4.1.1: the RNG at starts, the switch and its training mix, the BOMB mask and the route change
+  behaviour, not the observation, the actions or the network. Round 21's boss-aquamentus and goriya load and play
+  as before (100% +0.87 hearts; 96.7% -0.17).
+
 ## 2026-11-13 — Act modes: rules over the joint action, and the play default (pending the lead's decision)
 
 - **What:** act modes beyond `sample`/`argmax`: `temperature:T`, `floor:P`, `minp:R`, `topp:P`, `escape:N` and `+`
@@ -1591,3 +1785,24 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   any move. Chains (1000 runs): full route 12.8% (r71 per family) → 20.5% with `escape:16` for all; sample 8.7%,
   argmax 14.0% (179 stuck), temperature:0.75 15.0%. Status: **pending**; `registry.PLAY_ACT` and the promoted `act`
   files are unchanged.
+
+## 2026-11-13 — Round 23 merged with round 22: act modes beside the clips switch; `relax`, the other stall reading
+
+- **What:** `r23` merged with `main` (1.4.1.1; no version change, the lead sets round 23's). Every tool that plays
+  takes `--act MODE` and `--clips` side by side (evaluate, eval-chain, eval-batch, `r56_chains.sh`, the chain pool
+  with `clips_live`, the theater feed, `play-zelda.py` and its live cell, `zelda-headless.py`, the golden path);
+  records carry the switch fields and `decisions`; `room-stats` and evaluations split the decision statistics by
+  the switch (`by_clips[*].risk`); the training GUI titles an evaluation with its act mode and shows its decisions.
+  A chain's milestone record now carries the switch the run ended with (it said on whatever the switch).
+- **`relax:N`:** `temperature:T+escape:N` is argmax until Link has made no progress for N decisions, then a
+  temperature draw: mostly argmax, so it can't give the owner's "not the same every time". `temperature:T+relax:N`
+  is the other reading: a temperature draw at every decision, a plain `sample` while stalled (from N decisions
+  without progress until progress). At most one of `escape` and `relax`; `relax` needs another rule. Measured on
+  nothing yet: it is in the rerun's `CHAIN_MODES`.
+- **Also:** `train --confirm-act MODE` (early-stop confirmation; `train_round.py --eval-act` passes its mode; PPO's
+  rollouts always sample); the chain report's hearts at arrival read Link's health entering the triforce room;
+  `r23_act_pilot.sh` takes `CLIPS=on|off`; `registry.PLAY_ACT` stays `sample`, the one constant every play tool reads.
+- **Evidence:** `tests/test_evaluate.py` (`--act escape:16 --clips both`: argmax's first 16 decisions, draws once
+  stalled, recordings verify), `tests/test_cli.py` (`eval-chain --act temperature:0.75 --clips off`),
+  `tests/test_runner.py` (a `temperature:0.75+relax:4` run flipped mid-room by `clips_live` replays bit for bit),
+  `tests/test_play_zelda.py` (the live cell in a `relax` mode), `round23.md` §7 (the 20-run merge check).

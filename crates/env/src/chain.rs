@@ -32,7 +32,7 @@ use zelda::clips::ClipStats;
 use zelda::decisions::{DecisionNote, DecisionStats};
 use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
-use zelda::game_map::GameMap;
+use zelda::game_map::{GameMap, Way};
 use zelda::hearts::{HeartTracker, HeartView};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
@@ -60,15 +60,24 @@ pub const MAX_BOUNCES: u32 = 5;
 /// How a run starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RunStart {
-    /// From the route's start state ([`Route::start_state`]): the RNG bytes and spawns are redrawn per run.
+    /// From the route's start state ([`Route::start_state`]): a natural RNG state and the spawns are drawn per run.
     State,
     /// From console power on (`zelda::power_on`): `name` is registered after `delay` idle frames on the
     /// file-select screen (None: drawn per run from `0..=max_delay`).  No memory is written.
     PowerOn { name: String, delay: Option<u32>, max_delay: u32 },
     /// From a state another run reached (a state file's bytes: a replay's end state or keyframe), exactly as
-    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.  With `redraw_rng` the
-    /// game's RNG bytes are redrawn per run after the state is restored ([`Route::redrawing_rng`]).
+    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.  With `redraw_rng` a
+    /// natural RNG state is drawn per run after the state is restored ([`Route::redrawing_rng`]).
     Checkpoint { state: Arc<[u8]>, step: usize, granted: ItemCounts<u8>, redraw_rng: bool },
+}
+
+/// Where a run turns the clips switch off ([`Route::with_clips`]; `eval-chain --clips-off-from`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClipsFlip {
+    /// On entering this route step (on the route).
+    Step(usize),
+    /// On first entering this room.
+    Room(MapLocation),
 }
 
 /// Where a route starts and how it ends.
@@ -85,6 +94,11 @@ pub struct Route {
     /// Taking this level's triforce ends the run (the route's last step exits `triforce`; None with `stop_at`
     /// or a stop step).
     pub final_triforce: Option<u8>,
+    /// The run-time clips switch a run starts with (round 22; default on): it selects the route's way through
+    /// every stretch (routes.yaml `stretch:`) and, with the family's `clips: true`, offers CLIP.
+    pub clips: bool,
+    /// Turn the switch off here during each run (None: never).
+    pub clips_off_from: Option<ClipsFlip>,
 }
 
 impl Route {
@@ -127,9 +141,11 @@ impl Route {
             terminal,
             terminal_step: None,
             final_triforce,
+            clips: true,
+            clips_off_from: None,
         };
         if let Some(stop) = stop_at {
-            let start = start_step(steps, start_state);
+            let start = start_step(steps, start_state, true);
             let after: Vec<MapLocation> = steps[start + 1..].iter().map(|s| s.location()).collect();
             if !after.contains(&stop) {
                 let rooms: Vec<String> = after.iter().map(|l| describe(*l)).collect();
@@ -149,12 +165,13 @@ impl Route {
         Err(format!("Route '{name}' doesn't end on a triforce"))
     }
 
-    /// The route step a run starts on: the checkpoint's, else the start state's (0 from the game start).
+    /// The route step a run starts on: the checkpoint's, else the start state's on the way the run starts with (0
+    /// from the game start).
     fn first_step(&self, map: &GameMap) -> usize {
         match &self.start {
             RunStart::Checkpoint { step, .. } => *step,
             RunStart::PowerOn { .. } => 0,
-            RunStart::State => start_step(&map.routes[&self.name], &self.start_state),
+            RunStart::State => start_step(&map.routes[&self.name], &self.start_state, self.clips),
         }
     }
 
@@ -215,10 +232,11 @@ impl Route {
         Ok(self)
     }
 
-    /// Whether a checkpoint start redraws the game's RNG bytes per run (as a start state's load does).  A
-    /// checkpoint is otherwise the same machine for every run, and models that act by argmax then play the
-    /// same game every time; the redraw is the only thing written, and a recording keeps it as edits.  Nothing
-    /// changes for the other starts (a start state always redraws; a power-on start writes nothing).
+    /// Whether a checkpoint start redraws the game's RNG register per run (as a start state's load does: a
+    /// natural state, `zelda::rng`).  A checkpoint is otherwise the same machine for every run, and models that
+    /// act by argmax then play the same game every time; the redraw is the only thing written, and a recording
+    /// keeps it as edits (and its phase as META `rng_phase`).  Nothing changes for the other starts (a start
+    /// state always redraws; a power-on start writes nothing).
     pub fn redrawing_rng(mut self, on: bool) -> Route {
         if let RunStart::Checkpoint { redraw_rng, .. } = &mut self.start {
             *redraw_rng = on;
@@ -244,6 +262,40 @@ impl Route {
         self.final_triforce = None;
         Ok(self)
     }
+
+    /// Runs start with the clips switch `on` and, with `off_from`, turn it off there (round 22). A flip step must be
+    /// a step of the route, a flip room a room of it. Without a flip the run stays on the way `on` selects, so a stop
+    /// room or stop step (set them first) must be on that way after the start step: `--stop-at 4:0x20` (the plain
+    /// way only) is refused with clips on.
+    pub fn with_clips(mut self, map: &GameMap, on: bool, off_from: Option<ClipsFlip>) -> Result<Route, String> {
+        let steps = &map.routes[&self.name];
+        match off_from {
+            Some(ClipsFlip::Step(k)) if k >= steps.len() => {
+                return Err(format!("clips-off step {k} is not a step of route '{}' ({} steps)", self.name, steps.len()));
+            }
+            Some(ClipsFlip::Room(room)) if !steps.iter().any(|s| s.location() == room) => {
+                return Err(format!("clips-off room {} is not a room of route '{}'", describe(room), self.name));
+            }
+            _ => {}
+        }
+        self.clips = on;
+        self.clips_off_from = off_from;
+        if off_from.is_none() {
+            let first = self.first_step(map);
+            let way = Way::of(on).name();
+            if let Some(stop) = self.terminal
+                && !steps[first + 1..].iter().any(|s| s.on_way(on) && s.location() == stop)
+            {
+                return Err(format!("stop_at {} is not a room of the {way} way after the start step", describe(stop)));
+            }
+            if let Some(k) = self.terminal_step
+                && !steps[k].on_way(on)
+            {
+                return Err(format!("stop step {k} is not on the {way} way of route '{}'", self.name));
+            }
+        }
+        Ok(self)
+    }
 }
 
 /// Where a state store finds `name` (`TfzStore::path`): an absolute or existing path, else
@@ -260,21 +312,24 @@ fn state_file_path(states_dir: &Path, name: &str) -> PathBuf {
 }
 
 /// The index of the first route step whose room and entry a state's name encodes (`<level>_<room><side>_…`,
-/// harvested `_h<seed>_<n>` alike); 0 for the game start and names that encode no step.
-fn start_step(steps: &[zelda::game_map::RouteStep], state: &str) -> usize {
+/// harvested `_h<seed>_<n>` alike), of the steps on the way `clips` selects if one of them does (4_31e: N with
+/// clips, W without), else of any; 0 for the game start and names that encode no step.
+fn start_step(steps: &[zelda::game_map::RouteStep], state: &str, clips: bool) -> usize {
     let label = state_label(state);
+    let encodes = |s: &zelda::game_map::RouteStep| {
+        let side = if s.in_cave {
+            "cave".to_owned()
+        } else if s.entry == "cave" {
+            "c".to_owned()
+        } else {
+            s.entry.to_ascii_lowercase()
+        };
+        label.starts_with(&format!("{}_{:02x}{side}_", s.level, s.room))
+    };
     steps
         .iter()
-        .position(|s| {
-            let side = if s.in_cave {
-                "cave".to_owned()
-            } else if s.entry == "cave" {
-                "c".to_owned()
-            } else {
-                s.entry.to_ascii_lowercase()
-            };
-            label.starts_with(&format!("{}_{:02x}{side}_", s.level, s.room))
-        })
+        .position(|s| s.on_way(clips) && encodes(s))
+        .or_else(|| steps.iter().position(encodes))
         .unwrap_or(0)
 }
 
@@ -325,10 +380,21 @@ pub struct RoomRecord {
     pub clips: ClipStats,
     /// The decisions taken in the visit (`zelda::decisions`; JSON `decisions`, `specialist_env::decisions_json`).
     pub decisions: DecisionStats,
+    /// Actions that lost health during the visit (as an evaluation's `hits`), and hits on enemies
+    /// (`Change::observed`; round 22).
+    pub hits: u32,
+    pub hits_dealt: u32,
+    /// The route step Link played on entering the room (`GameCompletion::step`; None off the route; round 22).
+    pub step: Option<usize>,
+    /// The run-time clips switch when the visit began (round 22; [`ChainEnv::set_clips_allowed`]), and every flip
+    /// during it: (actions into the visit, the new value).
+    pub clips_allowed: bool,
+    pub clips_flips: Vec<(u64, bool)>,
 }
 
 impl RoomRecord {
-    /// `keys`: Link's natural keys (`CheatLedger::natural`).
+    /// `keys`: Link's natural keys (`CheatLedger::natural`); `clips_allowed`: the run-time clips switch now (the
+    /// milestone record's too: the switch the run ended with).
     fn new(
         index: usize,
         location: MapLocation,
@@ -336,6 +402,7 @@ impl RoomRecord {
         state: &GameView,
         keys: i32,
         outcome: &str,
+        clips_allowed: bool,
     ) -> Self {
         RoomRecord {
             index,
@@ -367,6 +434,11 @@ impl RoomRecord {
             boss_eats: 0,
             clips: ClipStats::default(),
             decisions: DecisionStats::default(),
+            hits: 0,
+            hits_dealt: 0,
+            step: None,
+            clips_allowed,
+            clips_flips: Vec::new(),
         }
     }
 
@@ -389,6 +461,10 @@ impl RoomRecord {
             "blocks": self.blocks, "no_damage_max": self.no_damage_max, "bombs_used": self.bombs_used,
             "boss_stuns": self.boss_stuns, "boss_eats": self.boss_eats,
             "decisions": decisions_json(&self.decisions),
+            "hits": self.hits, "hits_dealt": self.hits_dealt, "step": self.step,
+            "clips_allowed": self.clips_allowed,
+            "clips_flips": self.clips_flips.iter().map(|(steps, on)| json!({"step": steps, "clips": on}))
+                .collect::<Vec<_>>(),
         });
         let o = m.as_object_mut().expect("object");
         for item in CheatItem::ALL {
@@ -420,6 +496,8 @@ pub struct RunResult {
     /// Wrong exits into tagged rooms (`exit-wrong` and the run goes on); the `MAX_WRONG_EXITS`-th ends the run.
     pub wrong_exits: u32,
     pub rooms: Vec<RoomRecord>,
+    /// The clips switch the run started with (round 22; each room's record has its own and the flips).
+    pub clips: bool,
 }
 
 impl RunResult {
@@ -428,6 +506,7 @@ impl RunResult {
         json!({
             "route": self.route, "seed": self.seed, "result": self.result, "reason": self.reason,
             "steps": self.steps, "frames": self.frames, "retreats": self.retreats, "wrong_exits": self.wrong_exits,
+            "clips": self.clips,
             "rooms": self.rooms.iter().map(RoomRecord::to_json).collect::<Vec<_>>(),
         })
     }
@@ -529,6 +608,14 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     booted: Option<(String, u32)>,
     /// The decision that chooses the next step, for the room record ([`ChainEnv::note_decision`]).
     decision: Option<DecisionNote>,
+    /// The run-time clips switch in force ([`ChainEnv::set_clips_allowed`]).
+    clips_allowed: bool,
+    /// A switch set mid-run, applied before the next decision is built.
+    pending_clips: Option<bool>,
+    /// The route's `clips_off_from` fired this run.
+    clips_flipped: bool,
+    /// A flip that takes effect at the room entry just made: the new room's record lists it at step 0.
+    entry_flip: Option<bool>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
@@ -567,6 +654,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             scored: None,
             booted: None,
             decision: None,
+            clips_allowed: true,
+            pending_clips: None,
+            clips_flipped: false,
+            entry_flip: None,
         }
     }
 
@@ -599,6 +690,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// The specialist acting now.
     pub fn specialist(&self) -> Option<&str> {
         self.current.as_ref().map(|c| &*c.name)
+    }
+
+    /// The objective the last decision was built with (None before the first reset).
+    pub fn objective(&self) -> Option<&Objective> {
+        self.objective.as_ref()
     }
 
     /// The stall budget is set and the acting room has gone `stall_steps` actions without damage either way.
@@ -688,8 +784,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             .map_err(|e| format!("harvest {}: {e}", path.display()))
     }
 
-    /// The route's start state loaded as a fresh run (RNG bytes and spawns redrawn from `rng`) and its route
-    /// state.
+    /// The route's start state loaded as a fresh run (a natural RNG state and the spawns drawn from `rng`) and its
+    /// route state.
     fn start_from_state(&mut self, rng: &mut ChaCha8Rng) -> Result<GameCompletion, EnvError> {
         let machine = self.store.load(&self.route.start_state)?;
         let opts = LoadOptions {
@@ -711,6 +807,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             rng,
             Some(&self.route.name),
             &state,
+            self.route.clips,
         );
         GameCompletion::new(self.data.map.clone(), &route, step).map_err(EnvError::State)
     }
@@ -752,8 +849,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.game_start_route("start", rng)
     }
 
-    /// A checkpoint restored on its route step: no frame runs, and nothing is written unless `redraw_rng`
-    /// (then the game's RNG bytes, from `rng`).
+    /// A checkpoint restored on its route step: no frame runs, and nothing is written unless `redraw_rng` (then
+    /// a natural RNG state, its phase drawn from `rng`: `zelda::rng`), before the first frame.
     fn start_from_checkpoint(
         &mut self,
         state: &[u8],
@@ -764,8 +861,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let snapshot = self.store.decode(state)?;
         self.session.restore(&snapshot);
         if redraw_rng {
-            let bytes = zelda::vars::RNG_VARS.map(|var| (var, rng.random_range(1..=255u8)));
-            self.session.apply_ram(&bytes);
+            self.session.write_rng(zelda::rng::draw_phase(rng));
         }
         GameCompletion::new(self.data.map.clone(), &self.route.name, Some(step)).map_err(EnvError::State)
     }
@@ -787,6 +883,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             frames: 0,
             retreats: 0,
             wrong_exits: 0,
+            clips: self.route.clips,
             rooms: Vec::new(),
         });
         self.current = None;
@@ -815,9 +912,54 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             None => self.cheats.begin(&mut self.session, &gc),
         };
         gc.set_clips(self.clips_in(state.full_location()));
-        self.objective = Some(gc.objectives(None, &state));
+        self.clips_allowed = self.route.clips;
+        self.pending_clips = None;
+        self.clips_flipped = false;
+        self.entry_flip = None;
+        gc.set_clips_allowed(self.clips_allowed);
+        let mut objective = gc.objectives(None, &state);
+        if self.clips_flip_due(&gc, state.full_location()) {
+            self.clips_flipped = true;
+            self.entry_flip = Some(false);
+            self.clips_allowed = false;
+            gc.set_clips_allowed(false);
+            objective = gc.objectives(None, &state);
+        }
+        self.objective = Some(objective);
         self.objectives = Some(gc);
         Ok(self.advance())
+    }
+
+    /// The run-time clips switch (round 22): from the next decision on (the observation and mask already handed out
+    /// stay as they are) CLIP is offered only where the family has `clips: true` and this is on, and the route
+    /// follows the way it selects through every stretch (`zelda::objectives`, re-planning from where Link stands).
+    /// The flip is recorded in the room records. Runs started later begin with [`Route::clips`].
+    pub fn set_clips_allowed(&mut self, on: bool) {
+        self.pending_clips = Some(on);
+    }
+
+    /// The switch runs started from now on begin with (the route's [`Route::clips`]; `play-zelda.py`'s key through
+    /// the pool's `ClipsSwitch`). Unlike [`Route::with_clips`] nothing is checked: a stop room or step the new
+    /// way never reaches lets the run play on to the route's end.
+    pub fn set_run_clips(&mut self, on: bool) {
+        self.route.clips = on;
+    }
+
+    /// The switch the last decision was built with.
+    pub fn clips_allowed(&self) -> bool {
+        self.clips_allowed
+    }
+
+    /// The route's `clips_off_from` fires here: the switch is on, it hasn't fired this run, and Link is in its room
+    /// (a room) or on its step (a step).
+    fn clips_flip_due(&self, gc: &GameCompletion, location: MapLocation) -> bool {
+        self.clips_allowed
+            && !self.clips_flipped
+            && match self.route.clips_off_from {
+                Some(ClipsFlip::Room(room)) => room == location,
+                Some(ClipsFlip::Step(k)) => gc.step() == Some(k),
+                None => false,
+            }
     }
 
     /// Executes the acting specialist's action.
@@ -852,13 +994,30 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev_objective = self.objective.take().expect("run started");
+        let entered = state.full_location() != change.previous.full_location();
         // A new room: the path search follows its family's `clips:` switch from the objective on.
-        let clips = (state.full_location() != change.previous.full_location()).then(|| self.clips_in(state.full_location()));
+        let clips = entered.then(|| self.clips_in(state.full_location()));
         let gc = self.objectives.as_mut().expect("run started");
         if let Some(clips) = clips {
             gc.set_clips(clips);
         }
-        let objective = gc.objectives(Some(&change.previous), &state);
+        let mut flip = self.pending_clips.take().filter(|&on| on != self.clips_allowed);
+        if let Some(on) = flip {
+            gc.set_clips_allowed(on);
+        }
+        let mut objective = gc.objectives(Some(&change.previous), &state);
+        if let Some(on) = flip {
+            self.clips_allowed = on;
+        }
+        let gc = self.objectives.as_ref().expect("run started");
+        if entered && self.clips_flip_due(gc, state.full_location()) {
+            self.clips_flipped = true;
+            self.clips_allowed = false;
+            flip = Some(false);
+            let gc = self.objectives.as_mut().expect("run started");
+            gc.set_clips_allowed(false);
+            objective = gc.objectives(None, &state);
+        }
         self.linger.update(
             &LingerState::of(&change.previous, &prev_objective),
             &LingerState::of(&state, &objective),
@@ -878,11 +1037,18 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.bombs_used += cheats.used.bombs;
         record.bombs.update(&change);
         record.clips.update(&change);
+        record.hits += u32::from(change.health_lost > 0.0);
+        record.hits_dealt += change.observed.hits() as u32;
         record.cheated += cheats.cheated;
         let boss = BossTransitions::of(&change);
         record.boss_stuns += boss.stuns;
         record.boss_eats += boss.eats;
         record.steps += 1;
+        match flip {
+            Some(on) if entered => self.entry_flip = Some(on),
+            Some(on) => record.clips_flips.push((record.steps, on)),
+            None => {}
+        }
         record.frames += (change.frames + change.menu_frames) as u64;
         if change.health_lost > 0.0 || !change.observed.enemies_hit.is_empty() {
             self.no_damage = 0;
@@ -928,7 +1094,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             let location = state.full_location();
             result
                 .rooms
-                .push(RoomRecord::new(index, location, "-", &state, keys, "milestone"));
+                .push(RoomRecord::new(index, location, "-", &state, keys, "milestone", self.clips_allowed));
             return Ok(ChainStatus::Done(result.clone()));
         }
         Ok(self.advance())
@@ -980,16 +1146,26 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     }
 
     /// The session's disabled kinds for the acting specialist's `items` in Link's state, with the route's bomb
-    /// reserve at the step he plays (or played last), and that reserve for the observation, and its `clips:` switch;
-    /// every step (the 10th kill and the bomb count change within a room).
+    /// reserve at the step he plays (or played last), and that reserve for the observation; the bomb targets a
+    /// `required` family is kept to (`ItemsConfig::bomb_targets`); its `clips:` switch with the run-time one, and the
+    /// wraps the objective vetoes; every step (the 10th kill and the bomb count change within a room).
     fn update_disabled_kinds(&mut self) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let config = &self.current.as_ref().expect("acting specialist").config;
         let kinds = config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
         self.session.set_disabled_kinds(&kinds);
-        self.session.set_clips(config.clips);
+        let targets = config.items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref());
+        self.session.set_bomb_targets(targets.as_deref());
+        self.session.set_clips(config.clips.enabled);
+        self.session.set_clips_allowed(self.clips_allowed);
+        let vetoed = match &self.objective {
+            Some(objective) if self.session.clips_effective() => {
+                zelda::objectives::wraps_into_wrong_exits(&self.data.map, self.session.state(), objective)
+            }
+            _ => Vec::new(),
+        };
+        self.session.set_vetoed_wraps(&vetoed);
         self.builder.bomb_reserve = reserve;
-        self.builder.clips = config.clips;
     }
 
     /// The `clips:` switch of the family `location` is tagged with in game.yaml (false for an untagged room or a
@@ -1000,7 +1176,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             .get(location)
             .and_then(|room| room.specialist.clone())
             .and_then(|name| self.config_for(&name).ok())
-            .is_some_and(|config| config.clips)
+            .is_some_and(|config| config.clips.enabled)
     }
 
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {
@@ -1090,7 +1266,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 let index = result.rooms.len();
                 result
                     .rooms
-                    .push(RoomRecord::new(index, location, "-", &state, keys, "milestone"));
+                    .push(RoomRecord::new(index, location, "-", &state, keys, "milestone", self.clips_allowed));
                 return Ok(ChainStatus::Done(result.clone()));
             }
             let room = map.get(location);
@@ -1141,14 +1317,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 ));
             };
             let index = result.rooms.len();
-            result.rooms.push(RoomRecord::new(
-                index,
-                location,
-                &name,
-                &state,
-                keys,
-                "in-progress",
-            ));
+            let mut record =
+                RoomRecord::new(index, location, &name, &state, keys, "in-progress", self.clips_allowed);
+            record.step = on_step;
+            record.clips_flips.extend(self.entry_flip.take().map(|on| (0, on)));
+            result.rooms.push(record);
             self.hearts.reset(&HeartView::of(&state));
             self.no_damage = 0;
             self.linger.reset(&LingerState::of(&state, &objective), || {

@@ -33,7 +33,7 @@ the route side n/s/e/w, ``c`` for coming out of a cave or dungeon stairs, ``cave
 alternate rooms are generated from the step they branch off.  ``entry_states.json`` records the route step,
 specialist and exploration cost of every file.
 
-``audit`` loads each start state several times the way training does (random RNG and spawn cycle, fresh room).
+``audit`` loads each start state several times the way training does (natural RNG state, spawn draws, fresh room).
 It reports the room each state really loads into, whether it was saved before entry, the monsters spawned versus
 the room's full count (``game.yaml``, Zoras excluded: they are not part of the room's monster list), the number
 of distinct spawn layouts at the first controllable frame, and Link's hearts.  Edge-spawn overworld rooms bring
@@ -87,7 +87,6 @@ BASE_HEARTS = 3                      # Link's containers at the start; each hear
 
 # RAM (docs/ram-catalog.md; zelda::room_entry, zelda::room_state).
 MODE, IS_UPDATING_MODE, LEVEL, ROOM, NEXT_ROOM = 0x12, 0x11, 0x10, 0xEB, 0xEC
-ROOM_HISTORY, HISTORY_LENGTH, NO_ROOM = 0x621, 6, 0xFF
 LEVEL_KILL_COUNTS, ROOM_FLAGS_OW, ROOM_FLAGS_UW = 0x560, 0x67F, 0x6FF
 TRANSITION_MODES = (0x02, 0x03, 0x06, 0x07, 0x0A, 0x10)     # always lead to EnterRoom
 ENTER_MODES = (0x04, 0x09, 0x0B, 0x0C)                      # init is EnterRoom
@@ -107,6 +106,7 @@ class RouteStep:
     entry: str                 # S/N/E/W, 'cave' (out of a cave or dungeon stairs) or 'start'
     exit: str
     specialist: str
+    way: Optional[str] = None  # 'clips' / 'plain': a step of one way of a routes.yaml stretch (None: both ways')
 
     @property
     def location(self) -> MapLocation:
@@ -121,7 +121,7 @@ class RouteStep:
 
 def _step(index: int, raw: dict) -> RouteStep:
     return RouteStep(index, raw['level'], raw['room'], bool(raw['in_cave']), raw['entry'], raw['exit'],
-                     raw['specialist'])
+                     raw['specialist'], raw.get('way'))
 
 
 def route_steps(route: str = DEFAULT_ROUTE) -> List[RouteStep]:
@@ -160,10 +160,8 @@ def pending_room(read: Callable[[int], int]) -> Optional[tuple]:
 
 
 def make_room_fresh(game: Game, level: int, room: int):
-    """Clears a room's kill history so EnterRoom spawns its full monster count."""
-    for i in range(HISTORY_LENGTH):
-        if game.read(ROOM_HISTORY + i) == room:
-            game.write(ROOM_HISTORY + i, NO_ROOM)
+    """Clears a room's saved kills so EnterRoom spawns its full monster count (`zelda::room_entry::make_room_fresh`:
+    values a room the run never cleared holds; with them clear the room history decides nothing, so it stays)."""
     if level == 0:
         game.write(ROOM_FLAGS_OW + room, game.read(ROOM_FLAGS_OW + room) & 0xF8)
     else:
@@ -217,16 +215,21 @@ def write_idle_states(out: Optional[str] = None) -> List[str]:
 def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
                 rooms: Optional[dict] = None) -> SpecialistConfig:
     """A one-room task from ``source``: leave this step's room through an objective-correct exit (or pick up the
-    triforce).  Bombs are usable only in a ``requires_bombs`` room (Dodongo, the 0x2c rock wall), where the bomb
-    rule keeps Link from running out (``required``; elsewhere ``never``, not even the 10th kill's, so a built state
-    carries the bombs the route does).  The grid-point skips (CLIP) follow the step's family's ``clips:`` switch, as
-    in a chain: 4:0x21 entered from S is left only by the ladder clip."""
+    triforce).  Bombs are usable only in a ``requires_bombs`` room, where the bomb rule keeps Link from running out
+    (elsewhere ``never``, not even the 10th kill's, so a built state carries the bombs the route does): a boss's
+    (Dodongo, Manhandla) as a weapon (``free``), a wall's (0x2c's and 0x67's rock walls, the dungeon bomb walls) only
+    where the bomb opens it (``required``, round 22).  The grid-point skips (CLIP) follow the step's family's
+    ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip.  The run-time switch is
+    no draw: on, off on a step of a stretch's plain way (round 22)."""
     rooms = game_rooms() if rooms is None else rooms
-    bombs = 'required' if rooms.get(step.location.as_tuple(), {}).get('requires_bombs') else 'never'
+    bombs = 'never'
+    if rooms.get(step.location.as_tuple(), {}).get('requires_bombs'):
+        bombs = 'free' if step.specialist.startswith('boss-') else 'required'
+    clips = {'enabled': load_specialist(step.specialist).clips.enabled,
+             'off_share': 1.0 if step.way == 'plain' else 0.0}
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            items={'bombs': bombs}, fresh_rooms=True, route=route,
-                            clips=load_specialist(step.specialist).clips)
+                            items={'bombs': bombs}, fresh_rooms=True, route=route, clips=clips)
 
 
 def refill_hearts(game: Game):
@@ -317,16 +320,20 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
                 source: str = START_STATE, states_dir: str = STATES_DIR, route: str = DEFAULT_ROUTE,
                 command: Optional[str] = None) -> tuple:
     """Plays ``route`` from ``source`` (the entry state of route step ``start_step``; the game's 'start' by
-    default), writing the entry state of every later step (and of alternates).  Each written file's entry is merged
+    default), writing the entry state of every later step on the clip way through the route's stretches (and of
+    alternates; a plain way's states are built with ``path``, round 22).  Each written file's entry is merged
     into ``<out>/entry_states.json`` right away, so an interrupted build keeps every file it wrote listed.  Returns
     (manifest entries, the file name of the first on-route step not rebuilt or None)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     game, rooms = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
     steps = route_steps(route)
     alternates = alternate_steps(steps)
+    # The clip way through every stretch (round 22): its steps follow each other.
+    way = [s for s in steps if s.way in (None, 'clips')]
+    first = next(i for i, s in enumerate(way) if s.index >= start_step)
     os.makedirs(out, exist_ok=True)
     manifest = []
-    for step, target in zip(steps[start_step:], steps[start_step + 1:]):
+    for step, target in zip(way[first:], way[first + 1:]):
         jobs = [(target, True)] + [(alt, False) for origin, alt in alternates if origin == step.index]
         next_source = None
         for goal, on_route in jobs:

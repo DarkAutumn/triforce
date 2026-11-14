@@ -465,7 +465,7 @@ fn dungeon_1_entrance_follows_the_route_steps() {
     let shortest = completion(&map).objectives(None, &from_s);
     assert_eq!(shortest.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(1, 0x63)]);
     // From S (a training reset): the first visit's step, W.
-    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), &mut rng, None, &from_s);
+    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), &mut rng, None, &from_s, true);
     assert_eq!(route, ROUTE);
     let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     let objective = gc.objectives(None, &from_s);
@@ -484,7 +484,7 @@ fn dungeon_1_entrance_follows_the_route_steps() {
             "0x73 from 0x{came_from:02x}"
         );
         assert_targets_are_correct_exits(&map, &state, &objective);
-        let (_, start) = start_route(&map, loc(1, 0x73), state_entry_of(came_from), &mut rng, None, &state);
+        let (_, start) = start_route(&map, loc(1, 0x73), state_entry_of(came_from), &mut rng, None, &state, true);
         assert_eq!(start, gc.step(), "a reset in the same room plays the same step");
     }
 }
@@ -506,7 +506,7 @@ fn lynel_room_retreat_and_return() {
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let at_0a = view(&map, &images[0], 0);
     assert_eq!(at_0a.sword(), SwordKind::Wood);
-    let (route, step) = start_route(&map, loc(0, 0x0a), Some("S"), &mut rng, None, &at_0a);
+    let (route, step) = start_route(&map, loc(0, 0x0a), Some("S"), &mut rng, None, &at_0a, true);
     let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     let objective = gc.objectives(None, &at_0a);
     assert_eq!(objective.kind, ObjectiveKind::Cave);
@@ -589,7 +589,7 @@ fn bow_detour_block_stairs_cellar_and_back() {
     }
     let entered = s.state().clone();
     assert!(entered.push_block_pending() && !entered.bow());
-    let (route, step) = start_route(&map, loc(1, 0x22), Some("E"), &mut rng, None, &entered);
+    let (route, step) = start_route(&map, loc(1, 0x22), Some("E"), &mut rng, None, &entered, true);
     let step = step.expect("0x22 from E is a route step");
     assert_eq!(map.routes[&route][step].exit, "cave");
     let mut gc = GameCompletion::new(map.clone(), &route, Some(step)).unwrap();
@@ -656,7 +656,7 @@ fn bow_detour_block_stairs_cellar_and_back() {
 /// The GameCompletion of the route step entering `level`:`room` from `entry` (as one-room training picks it).
 fn route_step(map: &Arc<GameMap>, state: &GameView, level: u8, room: u8, entry: &str) -> GameCompletion {
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step) = start_route(map, loc(level, room), Some(entry), &mut rng, None, state);
+    let (route, step) = start_route(map, loc(level, room), Some(entry), &mut rng, None, state, true);
     let step = step.unwrap_or_else(|| panic!("{level}:{room:#04x} from {entry} is a route step"));
     assert_eq!(map.routes[&route][step].location(), loc(level, room));
     GameCompletion::new(map.clone(), &route, Some(step)).unwrap()
@@ -664,6 +664,25 @@ fn route_step(map: &Arc<GameMap>, state: &GameView, level: u8, room: u8, entry: 
 
 fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameCompletion {
     route_step(map, state, 3, room, entry)
+}
+
+/// The alternate 0x78 (routes.yaml `alternates`: 0x77 E -> 0x78 N -> 0x68 instead of 0x77 N -> 0x67 E -> 0x68) is a
+/// way out of 0x77 at the game start (its step enters 0x78 from W, from 0x77).  0x68 also borders 0x78, but the
+/// alternate doesn't start there: after Dungeon 1 (round 22: 0x58 S, 0x68 W, 0x67's secret cave) S into 0x78 is not a
+/// correct exit (the state builder's explorer took it, and a chain would have).
+#[test]
+fn an_alternate_is_a_way_out_only_of_the_room_it_is_entered_from() {
+    let Some(images) = images(&["0_77c_0", "0_68n_0"]) else { return };
+    let map = Arc::new(GameMap::builtin());
+    let start = view(&map, &images[0], 0);
+    let objective = route_step(&map, &start, 0, 0x77, "cave").objectives(None, &start);
+    assert_eq!(objective.next_rooms, [loc(0, 0x67), loc(0, 0x78)].into_iter().collect());
+
+    let after_d1 = view(&map, &images[1], 0);
+    assert_eq!(after_d1.triforce_pieces(), 2);
+    let objective = route_step(&map, &after_d1, 0, 0x68, "N").objectives(None, &after_d1);
+    assert_eq!(objective.next_rooms, [loc(0, 0x67)].into_iter().collect());
+    assert!(!exit_is_correct_at(&map, loc(0, 0x68), (16, 21), &objective, loc(0, 0x78)));
 }
 
 /// Dungeon 2's 0x5e (`treasure: clear`, round 19): no treasure, yet the objective fights its Red Goriyas (no correct
@@ -688,13 +707,13 @@ fn d2_goriya_room_is_cleared_before_leaving() {
     assert_eq!(objective.next_rooms, [loc(2, 0x4e)].into_iter().collect());
 }
 
-/// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11: take at 4 bombs or fewer) and bomb reserve.  0x69 from
-/// N (`treasure: skip`) heads for the stairs down to the raft cellar past its Darknuts, where the default rule (off
-/// the route) fights them for the bombs they guard; 0x5b from S (`skip`) leaves W at once; 0x5b from W
-/// (`if_bombs_below: 5`) fights for its bombs and takes them only while Link holds 4 or fewer, else leaves N.  The
-/// reserve is 5 from the dungeon's entrance on (routes.yaml `bomb_reserve`).
+/// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11; round 22: take at 5 bombs or fewer) and bomb reserve.
+/// 0x69 from N (`treasure: skip`) heads for the stairs down to the raft cellar past its Darknuts, where the default
+/// rule (off the route) fights them for the bombs they guard; 0x5b from S (`skip`) leaves W at once; 0x5b from W
+/// (`if_bombs_below: 6`) fights for its bombs and takes them only while Link holds 5 or fewer, else leaves E through
+/// its bomb wall (round 22).  The reserve is 6 from the dungeon's entrance on (routes.yaml `bomb_reserve`).
 #[test]
-fn d3_treasure_rules_skip_and_take_at_four_bombs_or_fewer() {
+fn d3_treasure_rules_skip_and_take_at_five_bombs_or_fewer() {
     let Some(images) = images(&["3_69n_0", "3_5bs_0", "3_5bw_0"]) else {
         return;
     };
@@ -710,15 +729,15 @@ fn d3_treasure_rules_skip_and_take_at_four_bombs_or_fewer() {
     let central = view(&map, &images[1], 0);
     assert!(!central.enemies.is_empty());
     let mut central_step = d3_step(&map, &central, 0x5b, "S");
-    assert_eq!(central_step.bomb_reserve(), 5);
+    assert_eq!(central_step.bomb_reserve(), 6);
     let objective = central_step.objectives(None, &central);
     assert_eq!(objective.kind, ObjectiveKind::Move);
     assert_eq!(objective.next_rooms, [loc(3, 0x5a)].into_iter().collect());
 
     for (bombs, kind) in [
         (0, ObjectiveKind::Fight),
-        (4, ObjectiveKind::Fight),
-        (5, ObjectiveKind::Move),
+        (5, ObjectiveKind::Fight),
+        (6, ObjectiveKind::Move),
         (8, ObjectiveKind::Move),
     ] {
         let mut ram = images[2].clone();
@@ -727,11 +746,11 @@ fn d3_treasure_rules_skip_and_take_at_four_bombs_or_fewer() {
         assert!(!state.enemies.is_empty());
         let objective = d3_step(&map, &state, 0x5b, "W").objectives(None, &state);
         assert_eq!(objective.kind, kind, "{bombs} bombs");
-        let next = if kind == ObjectiveKind::Move { vec![loc(3, 0x4b)] } else { vec![] };
+        let next = if kind == ObjectiveKind::Move { vec![loc(3, 0x5c)] } else { vec![] };
         assert_eq!(objective.next_rooms, next.into_iter().collect(), "{bombs} bombs");
     }
-    // The Darknuts dead and their bombs on the floor: taken at 4 bombs or fewer, left from 5 on.
-    for (bombs, kind) in [(4, ObjectiveKind::Treasure), (5, ObjectiveKind::Move)] {
+    // The Darknuts dead and their bombs on the floor: taken at 5 bombs or fewer, left from 6 on.
+    for (bombs, kind) in [(5, ObjectiveKind::Treasure), (6, ObjectiveKind::Move)] {
         let mut ram = images[2].clone();
         clear_objects(&mut ram);
         show_treasure(&mut ram, 120, 141);
@@ -742,16 +761,16 @@ fn d3_treasure_rules_skip_and_take_at_four_bombs_or_fewer() {
     }
 }
 
-/// Dungeon 3's 0x4c from W leaves E through an intact bomb wall into Manhandla's room: the objective's target is
-/// the wall's bomb spot (16 px short of its hotspot), a bomb placed from it facing E opens the wall, and the target
-/// becomes the open doorway, a correct exit into 0x4d that Link walks through.
+/// Dungeon 3's 0x4c (round 22: entered from S) leaves E through an intact bomb wall into Manhandla's room: the
+/// objective's target is the wall's bomb spot (16 px short of its hotspot), a bomb placed from it facing E opens the
+/// wall, and the target becomes the open doorway, a correct exit into 0x4d that Link walks through.
 #[test]
 fn d3_bomb_wall_exit_targets_its_bomb_spot_then_the_doorway() {
     let Some(nes) = open_core() else { return };
     let map = Arc::new(GameMap::builtin());
     let mut s = Session::new(Counted(nes, 0), map.clone());
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    s.load(&load_named_state("3_4cw_0"), &LoadOptions::default(), &mut rng)
+    s.load(&load_named_state("3_4cs_0"), &LoadOptions::default(), &mut rng)
         .unwrap();
     for _ in 0..30 {
         if act(&mut s, "WAIT 8").interrupt.is_none() {
@@ -761,7 +780,7 @@ fn d3_bomb_wall_exit_targets_its_bomb_spot_then_the_doorway() {
     let entered = s.state().clone();
     let walls: Vec<Direction> = entered.bomb_walls().iter().map(|w| w.wall_direction).collect();
     assert_eq!(walls, [Direction::E]);
-    let mut gc = d3_step(&map, &entered, 0x4c, "W");
+    let mut gc = d3_step(&map, &entered, 0x4c, "S");
     let boss = loc(3, 0x4d);
     let objective = gc.objectives(None, &entered);
     assert_eq!(objective.kind, ObjectiveKind::Move);
@@ -810,7 +829,7 @@ fn a_stepless_completion_drops_every_finished_waypoint_at_once() {
     let map = Arc::new(GameMap::builtin());
     let state = view(&map, &images[0], 0);
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step) = start_route(&map, loc(1, 0x23), Some("W"), &mut rng, None, &state);
+    let (route, step) = start_route(&map, loc(1, 0x23), Some("W"), &mut rng, None, &state, true);
     assert!(step.is_some());
     let with_step = GameCompletion::new(map.clone(), &route, step).unwrap().objectives(None, &state);
     let stepless = GameCompletion::new(map.clone(), &route, None).unwrap().objectives(None, &state);
@@ -827,8 +846,8 @@ fn a_treasure_left_behind_does_not_take_the_next_rooms() {
     let (a, b) = (view(&map, &images[0], 0), view(&map, &images[1], 100));
     assert!(a.treasure().is_some(), "the map lies in 0x43");
     let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let (route, step_a) = start_route(&map, loc(1, 0x43), Some("N"), &mut rng, None, &a);
-    let (_, step_b) = start_route(&map, loc(1, 0x44), Some("W"), &mut rng, None, &b);
+    let (route, step_a) = start_route(&map, loc(1, 0x43), Some("N"), &mut rng, None, &a, true);
+    let (_, step_b) = start_route(&map, loc(1, 0x44), Some("W"), &mut rng, None, &b, true);
     let mut chain = GameCompletion::new(map.clone(), &route, step_a).unwrap();
     chain.objectives(None, &a);
     let walked = chain.objectives(Some(&a), &b);
@@ -849,7 +868,7 @@ fn d4_room(map: &Arc<GameMap>, name: &str, room: u8, entry: &str) -> Option<(Ses
             break;
         }
     }
-    let (route, step) = start_route(map, loc(4, room), Some(entry), &mut rng, None, s.state());
+    let (route, step) = start_route(map, loc(4, room), Some(entry), &mut rng, None, s.state(), true);
     assert_eq!(route, "d2first");
     let gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     Some((s, gc))
@@ -915,12 +934,12 @@ fn d4_breakfast_room_fights_then_pushes_the_block_for_its_stairs() {
     assert_eq!((objective.pbrs_targets, objective.next_rooms), (tiles(&[(26, 4)]), [cellar].into()));
 }
 
-/// Dungeon 4's 0x12 on the way to Gleeok: its block opens the E shutter (game.yaml `push_block_opens: E`), once the
-/// Vires are dead.  Fight, then the push spots, then the open door.
+/// Dungeon 4's 0x12 on the way to Gleeok (round 22: entered from N): its block opens the E shutter (game.yaml
+/// `push_block_opens: E`), once the Vires are dead.  Fight, then the push spots, then the open door.
 #[test]
 fn d4_push_block_opens_the_shutter_to_the_boss() {
     let map = Arc::new(GameMap::builtin());
-    let Some((mut s, mut gc)) = d4_room(&map, "4_12w_0", 0x12, "W") else { return };
+    let Some((mut s, mut gc)) = d4_room(&map, "4_12n_0", 0x12, "N") else { return };
     let boss = loc(4, 0x13);
     let entered = s.state().clone();
     assert!(entered.is_door_barred(Direction::E) && entered.push_block_pending());
@@ -968,7 +987,7 @@ fn d4_raft_exit_targets_the_dock() {
     }
     let state = s.state().clone();
     assert!(state.raft() && !state.ladder());
-    let (route, step) = start_route(&map, loc(0, 0x55), Some("S"), &mut rng, None, &state);
+    let (route, step) = start_route(&map, loc(0, 0x55), Some("S"), &mut rng, None, &state, true);
     assert_eq!(route, "d2first");
     let objective = GameCompletion::new(map.clone(), &route, step).unwrap().objectives(None, &state);
     assert_eq!(objective.next_rooms, [loc(0, 0x45)].into());

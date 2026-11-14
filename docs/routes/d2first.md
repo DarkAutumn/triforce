@@ -41,9 +41,16 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white.
 | 56–63 | 1:33 23 22 7f(cellar) 22 23 33 43 | the bow detour (below): S→N (key), S→W (key), E→stairs, S→N (bow), stairs→E, W→S, N→S, N→E | stalfos-keese-gel, goriya, **trap-room**, **equipment-room** | 5 / Wh, bow |
 | 64–66 | 1:44 45 35 | W→E (boomerang), W→N, S→E | goriya, wallmaster, boss-aquamentus | 5 / Wh, bow |
 | 67 | 1:36 | W → triforce (warps to 0:37) | stalfos-keese-gel | 6 / Wh |
-| 68–79 | 0:37 38 48 58 57 56 55 65 64 63 73 74 | to Dungeon 3 (below): cave→E, W→S, N→S, N→W, E→W, E→W, E→S, N→W, E→W, E→S, N→E, W→cave | ow-octorok, ow-zora, **ow-leever**, ow-moblin, ow-tektite | 6 / Wh, triforce 2+1 |
-| 80–96 | 3:7c … 4d | Dungeon 3 (`docs/routes/d3.md`): the raft cellar 0x0f, the bomb wall into Manhandla 0x4d | **zol**, **darknut**, trap-room, equipment-room, **boss-manhandla** | 6 → 7 / Wh, raft |
-| 97 | 3:3d | S → triforce: **route ends** | zol | 7 / Wh |
+| 68–74 | 0:37 38 48 58 68 67, 67 cave | to 0x67's secret (round 22, `docs/routes/overworld.md`): cave→E, W→S, N→S, N→S, N→W, E→cave (bomb the rock wall), S→S (`waypoint: rupees`) | ow-octorok, ow-zora, **ow-leever** | 6 / Wh, triforce 2+1, +30 rupees |
+| 75–79 | 0:67 77 76 75 74 | stretch `d3-approach`, clip way: cave→S, N→W, E→W, E→W (`CLIP E`, the wrap exit), E→cave | ow-octorok, ow-start, ow-tektite, ow-leever | 6 / Wh |
+| 80–86 | 0:67 66 65 64 63 73 74 | plain way: cave→W, E→W, E→W, E→W, E→S, N→E, W→cave | ow-octorok, ow-zora, ow-moblin, ow-tektite | 6 / Wh |
+| 87–103 | 3:7c … 4d | Dungeon 3 (`docs/routes/d3.md`): the raft cellar 0x0f, 0x5b E (bomb wall), 0x5c, 0x4c S → E (bomb wall) into Manhandla 0x4d | **zol**, **darknut**, trap-room, equipment-room, **boss-manhandla** | 6 → 7 / Wh, raft |
+| 104 | 3:3d | S → triforce (warps to 0:74) | zol | 7 / Wh |
+| 105–111 | 0:74 73 63 64 65 55 45 | back to 0x65, by raft to the island (`docs/routes/d4.md`) | ow-tektite, ow-moblin, ow-octorok, ow-zora, **ow-peahat** | 7 / Wh, triforce 3 |
+| 112–121 | 4:71 … 32 | Dungeon 4 to the ladder cellar 0x60 and back to 0x32 | **vire**, stalfos-keese-gel, zol, **like-like**, equipment-room | 7 / Wh, ladder |
+| 122–127 | 4:31 21 / 4:31 30 20 21 | stretch `d4-island`: clip way 0x31 E→N, 0x21 S→N (ladder clip); plain way 0x31 E→W, 0x30 E→N, 0x20 S→E, 0x21 W→N | vire, stalfos-keese-gel | 7 / Wh |
+| 128–132 | 4:11 01 02 12 13 | 0x11 S→N (bomb wall), 0x01 S→E (the key, round 22), 0x02 W→S, 0x12 N→E (push block, shutter), Gleeok | trap-room, stalfos-keese-gel, vire, **boss-gleeok** | 7 → 8 / Wh |
+| 133 | 4:03 | S → triforce: **route ends** | vire | 8 / Wh |
 
 Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs
@@ -159,13 +166,15 @@ this route).
   finds the step entering Link's room from the side he came in (`route_entry`: N/S/E/W, `S` into a cave, down
   stairs or down a cellar's, `cave` out of one or after the triforce's warp) with exactly the progress the route
   has there (`StepProgress`: triforce pieces, sword, bow and raft). A step leaving through a room edge makes that
-  exit the correct one (plus the alternate 0x78 at 0x77). Off the route — no matching step, e.g. 0x1a from N
+  exit the correct one (plus the alternate 0x78 at 0x77, the room its step enters 0x78 from: round 22's 0x68 borders
+  0x78 too, and leaving it S is not correct). Off the route — no matching step, e.g. 0x1a from N
   without the white sword, or 0x22 out of the cellar without the bow — and on cave, stairs and triforce steps, the
   key-aware shortest path to the target (sword, heart then bow or raft waypoint, triforce in route order) decides.
   One-room training (`start_route`) picks the step the same way from the start state's entry; rooms the route
-  crosses twice (0x77, 0x3c, 0x4c, 0x4d, 0x2c, 0x1a, 0x0a, 0x37, 0x38, 0x58, 1:0x73, 0x43, 0x33, 0x23, 0x22, 3:0x5b,
-  0x5a, 0x69; 3:0x59 three times) are entered from a different side each time, so each step has its own start
-  states and resets play every one.
+  crosses more than once (0x77, 0x67, 0x68, 0x3c, 0x4c, 0x4d, 0x2c, 0x1a, 0x0a, 0x37, 0x38, 0x58, 0x74, 0x73, 0x63,
+  0x64, 0x65, 1:0x73, 0x43, 0x33, 0x23, 0x22, 3:0x5b, 0x5a, 0x69, 3:0x59, 4:0x31, 4:0x32, 4:0x21) are entered from
+  a different side each time, or on the other way of a stretch, so each step has its own start states and resets
+  play every one.
 - `retreat: S` on step 35 (see below); routes end on their last triforce (no `terminal` exits any more): since Nov 9
   the D3 triforce (`chain::Route::final_triforce` = 3; the D1 and D2 triforces warp Link on).
 - `treasure:` on a step (Nov 9, `game_map::TreasureRule`): `skip`, `clear` or `{if_bombs_below: N}`; without it the

@@ -81,13 +81,16 @@ def test_collect_best_on_the_native_pool(walk_north):
     by_state = {}
     for record in sorted(records.values(), key=lambda r: (best_of_n.rank_key(r), r['seed'])):
         if record['success']:
-            by_state.setdefault(record['start_state'], []).append(record)
+            # ow-start has clips: every state is played with the switch on and off, each kept apart (round 22)
+            by_state.setdefault(best_of_n.clips_label(record['start_state'], record['clips_allowed']),
+                                []).append(record)
     # The precondition the selection checks below need: some runs fail, and some state has two successes (so
     # keeping one per state drops one). If rebuilt states break it, pick another scripted move or state set.
     assert not all(r['success'] for r in records.values()), "every run succeeded"
     assert any(len(runs) >= 2 for runs in by_state.values()), f"no state with two successes: {by_state.keys()}"
     best = best_of_n.collect_best(walk_north, policy, 4, 1, seed=24, parallel=4, states_dir=REPO_STATES_DIR)
-    assert best.episodes == len(records) == 4 * 3
+    assert best.episodes == len(records) == 4 * 3 * 2
+    assert sorted(r['clips_allowed'] for r in records.values()) == [False] * 12 + [True] * 12
     assert best.successes == sum(r['success'] for r in records.values())
     kept = [r for runs in by_state.values() for r in runs[:1]]
     assert 0 < best.kept == len(kept) < best.successes and best.states == len(by_state)
@@ -101,7 +104,7 @@ def test_collect_best_on_the_native_pool(walk_north):
 def test_collect_best_without_a_success_is_empty(walk_north):
     best = best_of_n.collect_best(walk_north.replace(max_steps=3), scripted('WAIT 8').to_native(), 2, 2,
                                   parallel=4, states_dir=REPO_STATES_DIR)
-    assert (best.episodes, best.successes, best.kept, best.states, best.steps) == (6, 0, 0, 0, 0)
+    assert (best.episodes, best.successes, best.kept, best.states, best.steps) == (12, 0, 0, 0, 0)
     assert best.batch[0] == {}
 
 

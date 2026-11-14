@@ -261,6 +261,20 @@ impl PyEnv {
         self.inner.lock().env.set_route(route, step);
     }
 
+    /// The run-time clips switch (round 22): `True`/`False` fixes it from the next decision on (the observation and
+    /// mask already returned stay as they are) and for every later episode; `None` draws it per episode again (the
+    /// family's `clips: {off_share}`). CLIP is offered only where the family has clips and the switch is on.
+    #[pyo3(signature = (allowed))]
+    fn set_clips_allowed(&self, allowed: Option<bool>) {
+        self.inner.lock().env.set_clips_allowed(allowed);
+    }
+
+    /// The switch the last observation was built with.
+    #[getter]
+    fn clips_allowed(&self) -> bool {
+        self.inner.lock().env.clips_allowed()
+    }
+
     #[getter]
     fn get_render(&self) -> bool {
         self.inner.lock().render

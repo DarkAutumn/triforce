@@ -88,24 +88,27 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python -m triforce.train --specialist ow-zora --parallel 16   # curriculum: on in ow-zora.yaml
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist (promotes only with --promote)
 uv run training-gui.py                                          # live monitor: every running training/evaluation on the machine, any worktree (job registry, $TRIFORCE_JOBS_DIR), else the newest logs/ folder
-.venv/bin/python play-zelda.py 4x3                               # watch replays of the promoted models' runs as they are simulated: the best so far (keys b w k d r g: best/success/stuck/died/random/golden; n next; s sound, click a cell to hear it; u/+/-/p; --controller, --act argmax|sample|model, --power-on, --stop-at)
+.venv/bin/python play-zelda.py 4x3                               # watch replays of the promoted models' runs as they are simulated: the best so far (keys b w k d r g: best/success/stuck/died/random/golden; n next; s sound, click a cell to hear it; u/+/-/p; c clips off/on; --controller, --act argmax|sample|model, --power-on, --stop-at, --clips on|off)
+.venv/bin/python play-zelda.py 3x2 --live                        # the top left cell is a live game: c turns clips off (and on) for the rest of that run, the route re-plans from where Link stands
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
 .venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --controller)
-.venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N)
+.venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off)
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path: games race triforce to triforce from each winner's state, stitched into one replay
-.venv/bin/python zelda-map.py                                   # room map + per-room stats by scope: full run, segment, room only (--stats FILE, --route d2first, --rerender)
+.venv/bin/python zelda-map.py                                   # room map + per-room stats by scope: full run, segment, room only; clips both/on/off (--stats FILE, --route d2first, --rerender)
 .venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states into target/entry-states/<ts> (start/build/path/install/audit)
 .venv/bin/python -m triforce.entry_states install target/entry-states/<ts>   # then copy the finished build into triforce/states
 .venv/bin/python -m triforce.entry_states idle                  # regenerate the power-on idle states (triforce/states/power_on) after a state-format or emulator change
 triforce promote <specialist> <run-id>
 triforce eval-chain --runs 20 --parallel 20                     # route d2first; writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
+triforce eval-chain --from 4_71s_0 --runs 20 --clips off       # every run with clips off (the plain way through every stretch); --clips-off-from 4:0x31 turns them off on the way
 triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 2's triforce
 triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
 triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the eight chain segments as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
 triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4   # every family's promoted run in both act modes, 4 side by side
 triforce eval-batch r71-check --chain 'd3: --from 3_7cs_0 --runs 200' --evaluate 'darknut: --specialist darknut --act argmax'   # a mixed batch (rerun: skips what is done)
 triforce room-stats r70-1k                                     # per-room stats by scope (full run, segments, room only) of target/r56-chains/r70-1k-*.jsonl -> r70-1k-room-stats.json
+triforce room-stats r72-1k --noclips                           # with r72-1k-noclips-*.jsonl (CLIPS=off TAG=r72-1k-noclips r56_chains.sh): by_clips per room -> r72-1k-both-room-stats.json
 cargo run --release -p triforce-tools --bin tf -- replay verify runs/replays/*.tfreplay   # replay them on the emulator alone (replay info FILE prints one)
 cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
 ```
@@ -131,7 +134,9 @@ alone; the rooms off it dimmed) or Room only. The scopes come from the newest `t
 (`triforce room-stats TAG`, written by `scripts/experiments/r56_chains.sh report`; `--stats FILE` picks one): in
 a full run or a segment the death rate is the share of the runs started there that died in the room, in Room only
 the share of isolated evaluation episodes, each with its own colour scale (legend beside Reload). The sidebar's
-"by scope" table puts them side by side (and per route step where a room is visited more than once). Without a
+"by scope" table puts them side by side (and per route step where a room is visited more than once). The Clips
+selector (Both / On / Off) shows the runs and episodes played with the run-time clips switch on, off or both
+(`by_clips`; with `--route` On draws the clip way of each route stretch, Off the plain way). Without a
 room-stats file it shows Room only from each promoted model's evaluation of its current weights in its act mode
 (`eval.json` or `eval-<mode>.json`, `evaluate.read_evaluation`, `visited_rooms`: eval format 2, every room an
 evaluation episode visited), merged across specialists weighted by visits; the sidebar always shows those

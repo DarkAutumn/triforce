@@ -10,33 +10,36 @@ from triforce import registry, run
 from triforce.actions import Action
 from triforce.runner import Route, Runner, RunnerError
 
+from .conftest import require_state
+
 
 @pytest.fixture(scope='module')
-def west_checkpoint(models_dir, tmp_path_factory):
-    """ow-start's untrained network forced to MOVE W 16: from the start it walks into untagged 0x76."""
-    network, _ = registry.load_model(models_dir / 'ow-start' / 'untrained')
-    kind, direction, duration = Action.parse('MOVE W 16').to_indices()
+def east_checkpoint(models_dir, tmp_path_factory):
+    """ow-moblin's untrained network forced to MOVE E 16: from 0x5d entered W it walks into untagged 0x5e (round 22
+    tagged every room next to the start room, where this test used to walk W)."""
+    network, _ = registry.load_model(models_dir / 'ow-moblin' / 'untrained')
+    kind, direction, duration = Action.parse('MOVE E 16').to_indices()
     with torch.no_grad():
         for head, index in ((network.kind_head, kind), (network.direction_head, direction),
                             (network.duration_head, duration)):
             head.weight.zero_()
             head.bias.fill_(-100)
             head.bias[index] = 100
-    root = tmp_path_factory.mktemp('west')
-    return registry.save_checkpoint('ow-start', 'west', network, root=root).parent
+    root = tmp_path_factory.mktemp('east')
+    return registry.save_checkpoint('ow-moblin', 'east', network, root=root).parent
 
 
 def _records(path):
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
-def test_failed_run_reports_rooms_and_exits_nonzero(models_dir, west_checkpoint, tmp_path, capsys):
+def test_failed_run_reports_rooms_and_exits_nonzero(models_dir, east_checkpoint, tmp_path, capsys):
     output = tmp_path / 'runs' / 'runner.jsonl'
-    assert run.main(['--models-dir', str(models_dir), '--checkpoint', f'ow-start={west_checkpoint}', '--seed', '3',
-                     '--act', 'argmax', '--output', str(output)]) == 1
+    assert run.main(['--models-dir', str(models_dir), '--checkpoint', f'ow-moblin={east_checkpoint}', '--seed', '3',
+                     '--act', 'argmax', '--from', str(require_state('0_5dw_0')), '--output', str(output)]) == 1
     lines = capsys.readouterr().out.splitlines()
     room, summary = lines
-    assert room.split()[:4] == ['0', 'L0', '0x77', 'ow-start'] and 'exit-wrong' in room
+    assert room.split()[:4] == ['0', 'L0', '0x5d', 'ow-moblin'] and 'exit-wrong' in room
     assert summary.startswith('failure')
     record, = _records(output)
     assert (record['route'], record['seed'], record['result']) == ('d2first', 3, 'failure')

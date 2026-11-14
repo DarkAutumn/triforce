@@ -49,11 +49,94 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples. The r71 goriya (`r71-goriya-cont`, 12M steps): 95.2%, −0.15 hearts
    per episode by sample (old `r68-clear5e` 95.4%, −0.16); 2:0x1e 90.0% −0.39 (round21.md §7).
-7. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work): chain
-   records count no hits (the Hits overlay is room-only) and name no route step (`room_stats.assign_steps` infers it
-   from the current route, so r70's D4 visits of the old 0x30 → 0x20 → 0x21 path show as `off`): a `hits` and a
-   `step` field in `RoomRecord` would make both exact; the death-rate scales (`DEATHS_BAD`) are first guesses; open
-   ideas: an overlay of death rate given entry (`death_rate_entered`), comparing two tags (r70 vs r71) room by room.
+7. **Room stats by scope, next pass** (`triforce room-stats`, `zelda-map.py` scopes, Nov 13; the basics work):
+   - [x] chain records count hits and name their route step (round 22: `RoomRecord.hits` / `hits_dealt` / `step`;
+     `assign_steps` uses the recorded step and infers it only for older files; chain `hits_per_visit` feeds the
+     Hits overlay).
+   - [x] split by the clips switch (round 22: `by_clips` per room and scope, `--noclips` for a second tag,
+     `zelda-map.py`'s Clips selector and both route ways).
+   - [ ] the death-rate scales (`DEATHS_BAD`) are first guesses; open ideas: an overlay of death rate given entry
+     (`death_rate_entered`), comparing two tags (r70 vs r71) room by room; `eval_batch.report_commands` doesn't
+     write the `-both` file of a tag measured with and without clips (run `triforce room-stats TAG --noclips`).
+
+## Round 22: the run-time clips switch (Lee, Nov 13; branch `r22`)
+
+Decisions 2026-11-13 "The run-time clips switch and route stretches" and "Clips in training, evaluation and
+watching".
+
+- [x] **The switch** (`clips_allowed`, run-time, any decision), route stretches (`d4-island`), re-planning from
+  where Link stands, the clip counters and the wrap veto (below, under Dungeon 4).
+- [x] **The training mix** (`clips: {enabled, off_share}`, half the episodes with CLIP masked), per-switch metrics
+  and early stop; the evaluation split (`--clips both`, `by_clips`, the combined headline); the room-statistics
+  split; the training GUI (success chart and progress line per switch state, the Eval tab's "Clips switch").
+- [x] **Watching:** `play-zelda.py --clips on|off`, key `c`, the title's switch and per-queue "no clips" counts, a
+  cell's "no clips"; `--live` (the top left cell a live run where `c` acts from the next decision);
+  `zelda-headless.py --clips`.
+- [ ] **Train the clip families under the mix.** The round 21 models never trained with the switch off. `vire`
+  r71 evaluated with `--clips both` (20 episodes per state): 97.5% (on 99.4% of 480, off 96.0% of 600; 4:0x30 off
+  88%, 4:0x50 off 95% with −1.24 hearts). D4 chains of the r71 team, 20 runs each from `4_71s_0` (act model):
+  clips on 13/20, clips off 2/20 (deaths 0x31 5, 0x20 4, 0x13 4, 0x30 2, 0x12 2), `--clips-off-from 4:0x31` 8/20
+  (0x20 4 deaths): the plain way (0x31 W, 0x30 N, 0x20) is where an untrained switch-off costs.
+- [x] **vire's curriculum for the plain way's states.** Explored on the merged tree with the switch the state fixes
+  (off for `4_30e_*`, `4_20s_*`, and for the overworld plain way's `0_63e`, `0_73n`, `0_65e`); a curriculum start
+  keeps the state's fixed switch (decisions 2026-11-13 "Round 22 route", States and curricula).
+- [ ] **The live cell has no sound and no controller drawing** (its frames come from the chain pool, not a
+  `ReplayScreen`). Sound would need the pool's env to feed a `Synth` (`crates/zcore/src/sound.rs`) the way the
+  screen's cells do.
+
+## Round 22: natural RNG (Lee, Nov 13; branch `r22-rng`)
+
+- [x] **Natural RNG states** (decisions 2026-11-13 "Natural RNG at every start"): start states, a redrawn chain
+  checkpoint and search futures write the register some 88..=32854 steps after reset (`zelda::rng`), before any
+  frame runs; the edge spawn cell comes from the 41 values the game holds, in every level; a fresh room no longer
+  writes `$FF` into the room history. Replays keep the bytes as frame-0 edits and the phase as META `rng_phase`.
+- [x] **Measured on the r71 models** (seed 0, act modes): goriya, ow-moblin and boss-gleeok move within two
+  standard errors in success and hearts (boss-gleeok's +0.29 → +0.11 hearts is the largest, at the edge of the
+  noise; 300 episodes).
+- [ ] **Stored artefacts from the old draw.** Before the route rebuild 132 of the 364 start states held `$FF` in
+  the room history (inert: only compared with room ids) and 120 an off-ring or corner edge cell (`$E0` in 109): a
+  randomized load replaces the cell, but a load without randomization (tests, `Game.load(randomize_rng=False)`) and
+  every curriculum frame (controllable, not pre-entry: no spawn draw) keep it; in an edge-spawn room such a cell
+  sends the next edge monster off the screen. Rebuilding the states and re-exploring the curricula (both now write
+  only natural values) would clear them. Checkpoints taken from replays recorded before round 22 hold off-cycle
+  registers unless redrawn. **After round 22's rebuild from 0x58 (step 71)**: 397 states, every state built from
+  0x58 leaving S on clean; listed (`$525` and `$621`-`$626` of each state file), not rebuilt:
+  - 71 chain-2 states with an edge cell the game can't hold (`$525`; `$E0` but for `0_3ds_2`, `0_4ce_2`, `0_4ds_2`,
+    `0_58s_2`, `0_5dw_2` `$3F`, `0_5cw_2` `$1F`, `0_59w_2` `$10`), all from before the rebuild:
+    the overworld's `0_0ac_2`, `0_0acave_2`, `0_0as_2`, `0_17e_2`, `0_18e_2`, `0_19e_2`, `0_1ae_2`, `0_1an_2`,
+    `0_1be_2`, `0_1cs_2`, `0_27n_2`, `0_28w_2`, `0_2cc_2`, `0_2ccave_2`, `0_2ce_2`, `0_2ds_2`, `0_37c_2`, `0_37e_2`,
+    `0_38n_2`, `0_38w_2`, `0_3cc_2`, `0_3cs_2`, `0_3ds_2`, `0_48n_2`, `0_4ce_2`, `0_4cn_2`, `0_4ds_2`, `0_4dw_2`,
+    `0_58n_2`, `0_58s_2`, `0_59w_2`, `0_5aw_2`, `0_5bw_2`, `0_5cw_2`, `0_5dw_2`, `0_67s_2`, `0_68w_2`, `0_77c_2`,
+    `0_78w_2`, Dungeon 1's 22 (`1_*_2`) and Dungeon 2's 10 (`2_*_2`);
+  - 93 with `$FF` in the room history (`$621`-`$626`), all three chains of `0_0ac`, `0_0acave`, `0_0as`, `0_17e`,
+    `0_18e`, `0_19e`, `0_1ae`, `0_1an`, `0_1be`, `0_1cs`, `0_27n`, `0_2cc`, `0_58s`, `0_59w`, `0_5aw`, `0_67s`,
+    `0_68w`, `0_77c`, `0_78w`, `1_22c`, `1_23w`, `1_33n`, `1_42s`, `1_43n`, `1_44w`, `1_52e`, `1_53s`, `1_63s`,
+    `1_73e`, `1_73w`, `1_74w`.
+
+## Round 22: the route (Lee, Nov 13; branch `r22-route`)
+
+- [x] **The new ways** (decisions 2026-11-13 "Round 22 route"; `docs/routes/overworld.md`, `d3.md`, `d4.md`): after
+  Dungeon 1 S to 0x67's secret cave (bomb, 30 rupees at X `$78`), then the stretch `d3-approach` (clips: the wrap exit
+  through 0x75; plain: row 6, 0x73, 0x74 from W); Dungeon 3 0x5b E (bomb) → 0x5c → 0x4c S, 0x4b off the route,
+  `bomb_reserve: 6`; Dungeon 4 0x11 N → 0x01 (the key) → 0x02 → 0x12 from N. States, curricula, route tests
+  (`crates/zelda/tests/route_ways.rs`).
+- [ ] **Bomb fishing in 4:0x12** (Lee: "It would be nice if we used more bombs in 0x12 to fish for bomb drops, but
+  this isn't a directive"). The scout (`eval-chain --from 0_74c_0 --stop-at 4:0x13 --harvest`, 200 runs, 182 entries
+  into 0x12 on the old route): every Link arrived with **0 bombs**; the help streak `$50` on entry was typically 1-3
+  (median 3; 9 in 4 entries, 10 in 2). The mechanics (enemies.md "Drop tables"): the kill that brings `$50` to
+  exactly 10 arms a bomb drop (+4) only if it is a bomb kill, and the drop needs a death of a droppable type (a Vire
+  killed outright; split-off Keese don't drop). Proven in the game: one Vire left, `$50` = 9, one bomb, `BOMB S` on
+  it: the drop was bombs, +4. Round 21's chains in 0x12 (`r71-1k-dks-d4`): 373 10th kills in 908 visits, 0 bomb tries
+  (no bombs). Round 22's route helps the streak: 0x01's eight Keese come right before 0x02 (whose traps must not
+  touch Link). **Proposal, not applied:** `bomb_reserve: 3` from Dungeon 4's entrance, so one real bomb survives to
+  0x12 when Link arrives with three; it changes nothing for a Link holding 2 or fewer.
+- [ ] **Mid-stretch states for the clips switch.** Turned off on the clip way in 0x76 or 0x75's E part, the objective
+  leads back E and N into 0x66 from S (decisions 2026-11-13 "The run-time clips switch"); 0x66 from S and 0x76 from
+  W have no start states, so no family trains those entries. `entry_states path --source 0_75e_N --rooms 0:0x76` and
+  `--source 0_76e_N --rooms 0:0x66` would build them (ow-tektite's `0_76*` and ow-octorok's `0_66*` globs take them)
+  if chains show Links there.
+- [ ] **0x67's 30 rupees buy nothing on the route** (arrows are 80 in shops off the route; Link holds 42-54 after the
+  cave). The detour costs about 660 frames and one bomb.
 
 ## Done (Nov 13): round 21 (clips, attacks by buttons, the ladder clip; 1.4.1.0)
 
@@ -126,16 +209,22 @@ Left open by round 21 (round21.md §10):
 
 - [ ] **The overworld ladder clip** (0x5f, 0x4f) is not built: it needs a wrap followed by a room change, and the
   room model doesn't cover the ladder in the overworld.
-- [ ] **Wraps onto a row whose landing leaves by an exit that doesn't count.** 0x5b row Y `$B5` wraps into the
+- [x] **Wraps onto a row whose landing leaves by an exit that doesn't count.** (Round 22: `objectives::wraps_into_wrong_exits` vetoes such a wrap when the objective leaves by that edge; 0x5b rows `$B5`, `$BD`.) 0x5b row Y `$B5` wraps into the
   lower E opening, outside game.yaml `span` (the scripted wrap fails 0_5bw_0 100 of 100; trained policies change
   rows first). Not offering the wrap there needs the objective's exits in the availability rule. The gate's ow-moblin
   wrong exits (4 → 12 of 3,000, from 0_5bw and 0_63e) come from 0x5b's two E openings too.
-- [ ] **BOMB N from the end of 4:0x21's ladder clip** (Y `$55`, 8 pixels into the top wall) is legal and spends
+- [x] **BOMB N from the end of 4:0x21's ladder clip** (Round 22: the BOMB mask for `required` families offers BOMB
+  only where the bomb opens the wall the objective leaves through, `zelda::bombs::landing`; `crates/env/tests/clips.rs`
+  checks it is not offered at the clip's end.) (Y `$55`, 8 pixels into the top wall) is legal and spends
   the bomb, but the wall stays shut (the bomb lands `$18` from the wall's hotspot); one step down (`MOVE S 8`) and it
   opens. The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Measured on the r71
   stalfos-keese-gel: 10 such bombs in 300 argmax episodes, against 497 of its 1033 BOMB decisions being BOMB S from
   the top band, which opens the wall (round21.md §10). The waste is elsewhere (next item).
-- [ ] **stalfos-keese-gel wastes bombs in 4:0x21** (round 21 retrain). It presses BOMB N from the island's entry
+- [x] **stalfos-keese-gel wastes bombs in 4:0x21** (round 21 retrain). (Round 22, Lee: "Try to fix the 0x21 bombs
+  thing": the BOMB mask above offers BOMB in 0x21 only where the bomb lands within the game's reach of the N wall's
+  hotspot, so never from the island's entry spot or mid-island; played in the game around every wall the rule touches,
+  `crates/zelda/tests/bomb_mask.rs`. The retrain will show what it does to the room.) It presses BOMB N from the
+  island's entry
   spot (Y `$B6`, no wall in reach) once per episode (300 in 300; the five most common openings all do it), often a
   second BOMB N mid-island and a second BOMB S at the top: 3.4-3.8 bombs per visit (3522 in 919 D4-segment
   visits) where one opens the wall. All cheated in chains; with real bombs the room alone would take about 4, twice
@@ -146,7 +235,7 @@ Left open by round 21 (round21.md §10):
   sampled episodes, 92 came with a Keese or Gel hit during the 43-frame macro, 78 leaving Link at Y `$65` (from
   where he still bombs): 4:0x21 loses 0.28 hearts per visit (0.03 on the old W route). In the D4 segment: 311
   aborts in 919 visits, 244 visits with one aborted clip and no completed one.
-- [ ] **The clip counters' quirks.** A clip cut short and finished by a walk isn't counted (round21-vire-50.md,
+- [x] **The clip counters' quirks.** (Round 22: a clip carried into the next room is done; a MOVE that finishes a cut clip counts in `clips/finished_by_move`.) A clip cut short and finished by a walk isn't counted (round21-vire-50.md,
   episode 107: a stalled clip left Link 6 px into the block and `MOVE N 32` carried him through). And a `CLIP N`
   that carries Link through 4:0x21's already opened wall into 0x11 in one action (6 of the r71 single-room
   episodes) counts as `aborted` (`ClipAbort::Interrupted` on the room change) although it succeeded. The masks are

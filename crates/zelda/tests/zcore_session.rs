@@ -78,27 +78,35 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         controllable: true,
         overrides: Vec::new(),
     };
-    // A Darknut well inside the room, so Link fits on either side of him (the state's layout decides where they
-    // stand after 2 s; try seeds until one is).
-    let interior = |e: &zelda::game::Enemy| {
-        (48..=192).contains(&e.position.x) && (101..=165).contains(&e.position.y) && e.distance > 48.0
+    // A Darknut well inside the room, so Link fits on either side of him, and on a grid point: one caught between two
+    // squares walks on to the next and turns, stunned or not, and the stab lands on his side. The state's layout
+    // decides where they stand after 2 s; then up to 64 frames more until one is on a grid point; try seeds until
+    // one is.
+    let chosen = |e: &zelda::game::Enemy| {
+        matches!(e.id, 0x0B | 0x0C)
+            && e.spawn_state == 0
+            && (48..=192).contains(&e.position.x)
+            && (101..=165).contains(&e.position.y)
+            && e.distance > 48.0
+            && e.position.x % 16 == 0
+            && e.position.y % 16 == 13
     };
-    let seed = (0..64u64)
-        .find(|&seed| {
-            s.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
-            s.press(0, 120);
-            s.state().enemies.iter().any(|e| matches!(e.id, 0x0B | 0x0C) && e.spawn_state == 0 && interior(e))
-        })
-        .expect("a seed with a Darknut inside the room");
-    for (front, expect_damage) in [(true, false), (false, true)] {
+    let settle = |s: &mut Session<ZCore>, seed: u64| {
         s.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
         s.press(0, 120);
+        for _ in 0..64 {
+            if s.state().enemies.iter().any(chosen) {
+                return true;
+            }
+            s.press(0, 1);
+        }
+        false
+    };
+    let seed = (0..64u64).find(|&seed| settle(&mut s, seed)).expect("a seed with a Darknut inside the room");
+    for (front, expect_damage) in [(true, false), (false, true)] {
+        assert!(settle(&mut s, seed));
         let state = s.state().clone();
-        let darknut = state
-            .enemies
-            .iter()
-            .find(|e| matches!(e.id, 0x0B | 0x0C) && e.spawn_state == 0 && interior(e))
-            .expect("a Darknut");
+        let darknut = state.enemies.iter().find(|e| chosen(e)).expect("a Darknut");
         let slot = darknut.index as u16;
         let peek = |s: &mut Session<ZCore>, a: u16| s.nes_mut().peek(a);
         let (x, y, dir) = (peek(&mut s, 0x70 + slot), peek(&mut s, 0x84 + slot), peek(&mut s, 0x98 + slot));

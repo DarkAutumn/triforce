@@ -18,19 +18,19 @@ Contents (generated; `L` = line in this file):
 - L289 Tile collision and walking half into blocks
 - L346 Screen edges and room transitions
 - L400 Screen wrap (overworld)
-- L485 Grid-point skip: block clip, ladder clip and their run-up
-- L775 Doorways, doors, keys, shutters and bomb walls
-- L832 Push blocks and room secrets
-- L867 Stairs, cellars and caves
-- L910 Lost Woods and Lost Hills (mazes)
-- L925 Special-cased rooms
-- L965 Ladder and raft
-- L989 Monster spawning, edge spawns and respawn (room history)
-- L1051 Combat: collision boxes, damage, invincibility, knockback, stun
-- L1123 Hearts, rings and death
-- L1160 Room flags and saved state
-- L1189 Level data formats
-- L1202 Second quest differences
+- L489 Grid-point skip: block clip, ladder clip and their run-up
+- L779 Doorways, doors, keys, shutters and bomb walls
+- L836 Push blocks and room secrets
+- L871 Stairs, cellars and caves
+- L914 Lost Woods and Lost Hills (mazes)
+- L929 Special-cased rooms
+- L969 Ladder and raft
+- L993 Monster spawning, edge spawns and respawn (room history)
+- L1055 Combat: collision boxes, damage, invincibility, knockback, stun
+- L1127 Hearts, rings and death
+- L1164 Room flags and saved state
+- L1193 Level data formats
+- L1206 Second quest differences
 <!-- /toc -->
 
 # Game modes and the frame loop
@@ -469,6 +469,10 @@ reproduced frame by frame.
 - Left onto a row whose right edge is solid: he stops at X = `$F8` and is stuck: the tile ahead (column `$1E`) and the tile under him (column `$1F`; no look-ahead at X >= `$F0`) are solid, and `$F8` is not the right bound (trace: room `$38`, Y = `$8D`; no direction moved him). [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123) [`Link_ScreenEdgeBounds`](src/bank7/walker-collision-screen-edge.asm#L70)
 - Right: the grid point X = `$F8` reads the tile under him, then X = `$00` reads column 2 (X + `$10`). Columns 0 and 1, the 16-pixel square at the left edge, are never read (trace: room `$78`, rows Y = `$75` with columns 0-1 solid and Y = `$7D` with column 0 solid: he stands at X = `$00` inside them and walks on to X = `$10`). [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123) [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
 - Right onto a row with two solid squares at the left (trace: room `$37`, Y = `$8D`): he stops at X = `$00` inside the wall; Right, Up and Down do nothing; Left fires the edge test, because X equals the bound and the overworld makes the test even with an unwalkable tile ahead. The room changes to `$36`, where he arrives at X = `$F0` inside solid tiles and cannot walk on: the arrival spot is never tested against the new room. Second trace: room `$60` (row 6, column 0), rows Y = `$85` and `$8D`: Left enters room `$5F`, the last room of the row above, at X = `$F0` standing on water (the ladder clip in `# Grid-point skip: block clip, ladder clip and their run-up`). [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167) [`Room_EnterCommon@Method2`](src/bank5/enter-room.asm#L211)
+- Right onto two solid squares at the left with column 2 open (trace: room `$75` into room `$74`, every row Y = `$55` to `$BD`; `$75`'s left edge, columns 0-1, is trees on every row and nothing else leaves it to the left): on the landing frame Link stands at X = `$00` inside the trees. Held Right walks him on into the room, and from the grid point X = `$08` Left stops on the trees. Left on the landing frame, or later while X <= `$07` (up to 5 more frames of Right), walks him back onto `$00`, retracing the pixels he came by, and fires the edge test there: room `$74`, X = `$F0`. From rest at X = `$E0` with `$3A8` = `$00`: Right 8 frames (X = `$EB`), Up 1, Right 15 (X = `$00`), Left 1; room `$74` plays 104 frames after the Left frame, 129 after the first Right. [`Link_ModifyDirOnGridLine`](src/bank5/link-handle-input.asm#L338) [`Link_StopAtUnwalkableTile`](src/bank7/walker-collision-screen-edge.asm#L167) [`Link_CheckScreenEdge`](src/bank7/walker-collision-screen-edge.asm#L243)
+- What the arrival at X = `$F0` reads: Left looks 8 pixels ahead, column `$1D` (29); Up and Down read columns `$1E` and `$1F`; Right is the bound and goes back to the room on the right at X = `$00`. Room `$74`'s columns `$1E`-`$1F` are trees on every row and column `$1D` is open on rows 6-15 (Y = `$65` to `$AD`): there Link walks on to the left (trace: rows Y = `$65`-`$AD`). [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65) [`Tile_GetAtObjOffset@AdjustX`](src/bank7/tile-collision.asm#L123)
+- The softlock rows, Y = `$55`, `$5D`, `$B5` and `$BD` (trace): `$74`'s column `$1D` is solid, so at X = `$F0` only Right moves Link, back into `$75` at X = `$00`; `$75`'s column 2 is solid there too, so only Left moves him, into `$74` again. He goes back and forth between the two rooms and nowhere else. Above and below them (Y = `$3D`-`$4D`, `$C5`-`$DD`) the right edge of `$75` is trees: no wrap. [`Link_CheckScreenEdge`](src/bank7/walker-collision-screen-edge.asm#L243) [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)
+- A hit during it (trace: a Peahat put beside Link on either side on every frame from X = `$E0` to the room change, rows Y = `$65`, `$8D`, `$AD`): the knockback runs along the row (the axis he faces). Before the bound, and past it up to X = `$F7`, a knockback to the left carries him back into `$75` (its trees at columns `$18`-`$19` stop it at X = `$D0` on those rows); from X = `$F8` to `$FD` a knockback to the right stops after a pixel or two, at X = `$FA`-`$FE`, and he stays there on the row, from where Left walks back into the room and Right on to X = `$00`; on the landing frame the left bound stops a knockback to the left at X = `$00`, where Left then leaves at once. From none of them is Link stuck. The frame Left fires the edge test starts the room change: no hit lands after it. [`Shove_MovePixels@CheckBoundary`](src/bank7/shove.asm#L146) [`Shove_Begin@UseDistance`](src/bank1/shove-knockback.asm#L100)
 - Up (the vertical variant): Link passes `$3D` (`$3E` to `$3C`) and reaches grid points `$35`, `$2D` ... `$05` over the status bar, then `$FD`, `$F5`, `$ED` and `$E5` at the bottom of the screen. [`Obj_MoveByQSpeed`](src/bank7/walker-move.asm#L244)
 - He keeps moving there because nothing bounds him and the lookup has no row check: at the ten grid points `$35`, `$2D` ... `$05`, `$FD`, `$F5`, `$ED` it reads rows 9, 8 ... 0 of columns c + 1 and c + 2, tiles of the same room one column to the right. He stops where one of them is unwalkable (trace: room `$5D`, X = `$30`, a passage 2 tiles wide: stops at Y = `$25`, column 8 row 7 solid). [`Tile_GetAtObjOffset@FetchTile`](src/bank7/tile-collision.asm#L144)
 - At Y = `$E5` the lookup is back inside the map: row 21, the bottom row, of his own columns. Solid: he stops at `$E5`, 8 pixels below the bottom bound; Down takes him back through `$ED`, `$F5` (trace: room `$77`, X = `$78`). Open: he walks up into the room from its bottom edge, a complete vertical wrap (trace: room `$3D`, X = `$70`, openings at columns `$0E`-`$11` top and bottom). [`Tile_GetAheadOfObj`](src/bank7/tile-collision.asm#L65)

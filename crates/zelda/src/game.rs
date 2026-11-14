@@ -513,10 +513,18 @@ impl GameView {
         (&self.ram[offset..offset + len]).try_into().unwrap()
     }
 
-    /// The room model built from the current tiles (with the ladder's crossings while Link holds it).
+    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, and the
+    /// game.yaml W wrap exit's rows).
     pub fn room(&self) -> &Room {
-        self.room
-            .get_or_init(|| Room::new(self.full_location(), self.current_tiles(), self.ladder()))
+        self.room.get_or_init(|| {
+            let wrap_exit = self
+                .map
+                .get(self.full_location())
+                .and_then(|r| r.exits.get(Direction::W.name()))
+                .filter(|exit| exit.wrap)
+                .and_then(|exit| exit.span);
+            Room::new(self.full_location(), self.current_tiles(), self.ladder()).with_wrap_exit(wrap_exit)
+        })
     }
 
     // --- objects ---
@@ -560,11 +568,13 @@ impl GameView {
         })
     }
 
-    /// An overworld room's game.yaml `bomb_secret` rock wall is still closed (no cave mouth in the room's tiles):
-    /// a bomb target, as an intact dungeon bomb wall is.
+    /// An overworld room's game.yaml `bomb_secret` rock wall is still closed: a bomb target, as an intact dungeon bomb
+    /// wall is.  The room's flag $80 (secret found, set by asm:Secret_RevealAndFlagTileObj on the blast) is clear and
+    /// its tiles show no cave mouth (a bombed wall leaves black tiles $24, not the mouth tile).
     pub fn ow_bomb_secret_closed(&self) -> bool {
         self.level() == 0
             && !self.in_cave()
+            && self.ram[crate::room_entry::ROOM_FLAGS_OW as usize + usize::from(self.location() & 0x7F)] & 0x80 == 0
             && self.room().cave_tile.is_none()
             && self.map.get(self.full_location()).is_some_and(|r| r.bomb_secret.is_some())
     }

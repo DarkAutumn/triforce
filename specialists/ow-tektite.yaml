@@ -1,6 +1,6 @@
 name: ow-tektite
-rooms: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)']
-start_states: ['0_1a*_[0-9]', '0_2c*_[0-9]', '0_74*_[0-9]']
+rooms: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)']
+start_states: ['0_1a*_[0-9]', '0_2c*_[0-9]', '0_74*_[0-9]', '0_76*_[0-9]']
 success: [exit-correct, enter-room:3:0x7c]
 reward_profile: default
 reward: {pbrs: true}
@@ -17,4 +17,6 @@ notes: >-
   retreat from 0x0a) the objective sends Link back N. 0x2c (Red Tektite x4, Lee Nov 8): from E bomb the rock wall
   and enter the take-any cave, take the heart container (right ware; the potion or leaving without it is
   `missed`), then N out of the room. 0x74 (one Red Tektite; Nov 9): from W into Dungeon 3's open entrance
-  (enter-room 3:0x7c).
+  (enter-room 3:0x7c); round 22 (the wrap way, clips): also from E, where CLIP E's wrap exit out of 0x75 lands Link at
+  X $F0 inside its tree columns, and 0x76 (four Red Tektites) from E (0x77's lane) leaves W; its rock wall (the money
+  game) is not bombed.

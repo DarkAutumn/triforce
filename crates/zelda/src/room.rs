@@ -162,6 +162,9 @@ pub struct Room {
     ladder_axes: [u8; CELLS],
     /// The room's skips as path-search jumps, built on first use (`crate::clips::skip_jumps`).
     jumps: OnceLock<Vec<Jump>>,
+    /// Link's tile rows (game.yaml `span`) of the room's W wrap exit (`crate::game_map::RoomExit::wrap`), left only
+    /// by `CLIP E` ([`Room::with_wrap_exit`]).
+    wrap_exit: Option<(i32, i32)>,
     pub exits: Exits,
     pub cave_tile: Option<Tile>,
 }
@@ -195,6 +198,7 @@ impl Room {
             jumps: OnceLock::new(),
             exits: Exits::default(),
             cave_tile: None,
+            wrap_exit: None,
         };
         room.loaded = tiles
             .iter()
@@ -238,6 +242,26 @@ impl Room {
     /// Link holds the ladder (the water crossings and the ladder clip's jumps).
     pub fn ladder(&self) -> bool {
         self.ladder
+    }
+
+    /// The room with its game.yaml W wrap exit's rows (`GameView::room`): the W edge tiles of those rows become W exit
+    /// tiles (solid, so walking never reaches them: only a Link standing at X `$00`, past the bound, is on one), and
+    /// the wrap exit's jumps lead there ([`Room::skip_jumps`], with clips).
+    pub fn with_wrap_exit(mut self, rows: Option<(i32, i32)>) -> Room {
+        self.wrap_exit = rows;
+        self.jumps = OnceLock::new();
+        if let Some((lo, hi)) = rows {
+            let mut tiles = self.exits.get(Direction::W).unwrap_or_default().to_vec();
+            let edge: Vec<Tile> = (lo..=hi).map(|r| (0, r)).filter(|t| !tiles.contains(t)).collect();
+            tiles.extend(edge);
+            self.exits.set(Direction::W, tiles, true);
+        }
+        self
+    }
+
+    /// Link's tile rows of the room's W wrap exit, if it has one.
+    pub fn wrap_exit(&self) -> Option<(i32, i32)> {
+        self.wrap_exit
     }
 
     /// The room's grid-point skips as path-search jumps (`crate::clips::skip_jumps`), built once per room model.
@@ -532,7 +556,8 @@ impl Room {
 
     /// The wavefront toward `targets` (`calculate_wavefront_for_link`).  `locked_doors` are treated as open.  With
     /// `clips` the room's grid-point skips are jumps of the search ([`Room::skip_jumps`]; a specialist's `clips:
-    /// true`), so a place only a skip reaches (level 4 room `$21`'s island) still leads to the targets.
+    /// true`), so a place only a skip reaches (level 4 room `$21`'s island, the W exit of a room with a wrap exit)
+    /// still leads to the targets.
     pub fn wavefront(
         &self,
         targets: &[Target],

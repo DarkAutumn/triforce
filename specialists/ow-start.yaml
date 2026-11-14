@@ -13,4 +13,5 @@ warm_start: null
 notes: >-
   Rooms without enemies where Link walks to a spot. Start screen + sword cave: the correct exit depends on
   progress (no sword -> cave; in the cave -> S once the sword is taken; with sword -> N, 0x78 E is the tagged
-  alternate). 0x1c (from S, leave W) and the mountain maze 0x1b (from E, leave W) after the 0x2c heart cave.
+  alternate). 0x1c (from S, leave W) and the mountain maze 0x1b (from E, leave W) after the 0x2c heart cave. Round
+  22: 0x77 again on the wrap way to Dungeon 3, from N (out of 0x67) leave W along its open rows (Y $85/$8D).

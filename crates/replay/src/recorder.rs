@@ -50,6 +50,7 @@ pub struct Recorder {
     reward_terms: Vec<&'static str>,
     distribution: Option<usize>,
     keyframe: u32,
+    rng_phase: Option<u32>,
 }
 
 impl Recorder {
@@ -70,6 +71,7 @@ impl Recorder {
             reward_terms: Vec::new(),
             distribution: None,
             keyframe: 0,
+            rng_phase: None,
         }
     }
 
@@ -125,6 +127,12 @@ impl Recorder {
 
     pub fn set_source(&mut self, source: Source) {
         self.source = source;
+    }
+
+    /// The phase of the natural RNG state the start wrote (steps from reset, `zelda::rng`), kept as META
+    /// `rng_phase`; the bytes themselves are the start's edits.  None: the start wrote none.
+    pub fn set_rng_phase(&mut self, phase: Option<u32>) {
+        self.rng_phase = phase;
     }
 
     /// The state (`blob`: `TFZSTATE` bytes) the recording started from, given once the run is under way:
@@ -203,6 +211,9 @@ impl Recorder {
         meta.insert("seed".into(), json!(seed));
         meta.insert("source".into(), source_meta(&self.source, self.start_name.as_deref()));
         meta.insert("ending".into(), ending_meta(&ending));
+        if let Some(phase) = self.rng_phase {
+            meta.insert("rng_phase".into(), json!(phase));
+        }
         meta.insert("buttons".into(), Value::Object(BUTTONS.iter().map(|&(n, b)| (n.into(), json!(b))).collect()));
         meta.insert("cheat_items".into(), json!(CHEAT_ITEMS));
         if self.options.rewards {

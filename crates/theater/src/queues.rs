@@ -76,6 +76,9 @@ pub struct Entry {
     pub frames: u32,
     /// The frame the models took over at: where watching starts.
     pub start: u32,
+    /// The run-time clips switch the run was played with ([`crate::Finished::clips`]; round 22; None: unknown, e.g.
+    /// a replay file).
+    pub clips: Option<bool>,
 }
 
 impl Entry {
@@ -103,6 +106,7 @@ impl Entry {
             hearts,
             frames: replay.frames() - start.min(replay.frames()),
             start,
+            clips: None,
             data,
         })
     }
@@ -171,6 +175,15 @@ impl Queues {
 
     pub fn is_empty(&self, queue: Queue) -> bool {
         self.len(queue) == 0
+    }
+
+    /// Entries of `queue` played with the clips switch off.
+    pub fn without_clips(&self, queue: Queue) -> usize {
+        let off = |entry: &&Entry| entry.clips == Some(false);
+        match queue {
+            Queue::Best => self.best.iter().filter(off).count(),
+            queue => self.fifo[queue as usize - 1].iter().filter(off).count(),
+        }
     }
 
     /// Finished runs still owed to `best`.
@@ -263,6 +276,7 @@ mod tests {
             hearts,
             frames,
             start: 0,
+            clips: None,
         }
     }
 

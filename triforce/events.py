@@ -101,8 +101,13 @@ PROGRESS_METRICS += tuple(f'{prefix}/{key}' for prefix in ('linger', 'curriculum
 # `bombs/<stat>` for `_native.BOMB_STATS` (spelled out: this module doesn't load the native module, the GUI reads it).
 PROGRESS_METRICS += tuple(f'bombs/{stat}' for stat in ('placed', 'hits', 'misses', 'damage', 'tenth_kills',
                                                        'tenth_tries', 'armed', 'picked_up'))
-# `clips/<stat>` for `_native.CLIP_STATS` (spelled out likewise).
-PROGRESS_METRICS += tuple(f'clips/{stat}' for stat in ('done', 'aborted', 'done_n', 'done_s', 'done_w', 'done_e'))
+# `clips/<stat>` for `_native.CLIP_STATS` (spelled out likewise), and the run-time switch's share and per-state
+# numbers (round 22, `metrics.RolloutMetrics`).
+PROGRESS_METRICS += tuple(f'clips/{stat}' for stat in ('done', 'aborted', 'done_n', 'done_s', 'done_w', 'done_e',
+                                                       'finished_by_move'))
+PROGRESS_METRICS += ('clips/enabled_share', 'clips_balanced/on', 'clips_balanced/off') + tuple(
+    f'clips/{state}/{key}' for state in ('on', 'off')
+    for key in ('episodes', 'success_rate', 'health_change', 'hearts_at_exit'))
 
 
 def logs_root(root: Optional[str | os.PathLike] = None) -> Path:
