@@ -1,5 +1,5 @@
 name: ow-lynel
-rooms: ['(0, 0x0a)', '(0, 0x0a, cave)']
+rooms: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)']
 start_states: ['0_0a*_[0-9]']
 success: [exit-correct]
 endings: {retreat: soft-failure}           # Lee (Nov 8): a retreat counts as a wrong exit for the first baseline

@@ -1,5 +1,5 @@
 name: ow-peahat
-rooms: ['(0, 0x45)']
+rooms: ['(0, 0x45)', '(0, 0x1d)', '(0, 0x1f)']
 start_states: ['0_45*_[0-9]']
 success: [exit-correct, enter-room:4:0x71]
 reward_profile: default

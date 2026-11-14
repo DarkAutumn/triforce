@@ -202,6 +202,7 @@ rooms:
   treasure: white-sword  # middle ware $02; the old man hands it over only at 5+ heart containers
 - level: 0
   location: '0x0b'
+  specialist: ow-leever
   exits:
     S:
       level: 0
@@ -219,6 +220,7 @@ rooms:
     tile: [14, 8]
 - level: 0
   location: '0x0c'
+  specialist: ow-tektite  # round 24: the clip way to Dungeon 5 leaves W by the wrap exit
   exits:
     E:
       level: 0
@@ -245,6 +247,7 @@ rooms:
     wares: [[magic-shield, 160], [key, 100], [blue-candle, 60]]  # [item, rupees], left to right
 - level: 0
   location: '0x0d'
+  specialist: ow-tektite  # round 24: the clip way to Dungeon 5 (from S, W)
   exits:
     S:
       level: 0
@@ -278,10 +281,15 @@ rooms:
     wares: [letter]
 - level: 0
   location: '0x0f'
+  specialist: ow-start  # round 24: the secret cave's 100 rupees, through 0x1f's wall gap
   exits:
     S:
       level: 0
       location: '0x1f'
+    cave:
+      level: 0
+      location: '0x0f'
+      in_cave: true
   enemies: null
   treasure: null
   entrance:  # cave index $22 (OW attr B >> 2)
@@ -290,6 +298,19 @@ rooms:
     how: open
     tile: [16, 8]
     rupees: 100
+- level: 0
+  location: '0x0f'
+  in_cave: true
+  specialist: ow-start
+  exits:
+    S:
+      level: 0
+      location: '0x0f'
+  enemies: null
+  # "IT'S A SECRET TO EVERYBODY": one rupee ware in the middle, taken only walking up at X exactly $78
+  # (asm:Cave_State2TalkOrShopOrDoorCharge), the cave's default treasure tile; 100 rupees, once per game (room flag
+  # $10 of 0x0f).
+  treasure: 100-rupees
 - level: 0
   location: '0x10'
   exits:
@@ -543,6 +564,7 @@ rooms:
     how: armos
 - level: 0
   location: '0x1d'
+  specialist: ow-peahat  # round 24: to Dungeon 5, S -> E, then E -> N (its E part)
   # Two parts (Nov 13): tile columns 10-12 are solid in every row.  The W edge (and the rock's any-road) is cut off
   # from the N (X $D0), E and S (X $70-$80) edges.
   exits:
@@ -568,6 +590,7 @@ rooms:
     tile: [10, 6]
 - level: 0
   location: '0x1e'
+  specialist: ow-tektite  # round 24: to Dungeon 5, W -> E and back E -> W
   exits:
     N:
       level: 0
@@ -590,6 +613,7 @@ rooms:
     costs: 20
 - level: 0
   location: '0x1f'
+  specialist: ow-peahat  # round 24: to Dungeon 5, W -> N through the wall gap at X $80 and back N -> W
   exits:
     N:  # a gap in the rock wall at x=$80 only (asm:Tile_GetAtObjOffset false-wall exception; mapping, emulator-checked)
       level: 0
@@ -901,7 +925,12 @@ rooms:
   treasure: null
 - level: 0
   location: '0x2f'
-  exits: null
+  specialist: ow-start  # round 24: the take-any cave's heart container (10 hearts), reached by raft from 0x3f
+  exits:
+    cave:
+      level: 0
+      location: '0x2f'
+      in_cave: true
   enemies: null
   treasure: null
   raft_exits:  # walking S off the pier with the raft (asm:Dock_Update; emulator-checked): an exit path searches use only with the raft
@@ -914,6 +943,19 @@ rooms:
     how: open
     tile: [12, 8]
     wares: [red-potion, heart-container]
+- level: 0
+  location: '0x2f'
+  in_cave: true
+  specialist: ow-start
+  exits:
+    S:
+      level: 0
+      location: '0x2f'
+  enemies: null
+  # The take-any cave $11, as 0x2c's: a red potion on the left, the heart container on the right (the route's
+  # `waypoint: heart`); either pick sets 0x2f's item flag and ends the offer.
+  treasure: heart-container
+  treasure_tile: [19, 11]
 - level: 0
   location: '0x30'
   exits:
@@ -1136,6 +1178,7 @@ rooms:
     rupees: 30
 - level: 0
   location: '0x3e'
+  specialist: ow-zora  # round 24: to Dungeon 5, E -> W by the wrap exit
   exits:
     N:
       level: 0
@@ -1157,6 +1200,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x3f'
+  specialist: ow-zora  # round 24: to Dungeon 5, S -> N by raft to 0x2f, back N -> W
   exits:
     S:
       level: 0
@@ -1444,6 +1488,7 @@ rooms:
     rupees: 10
 - level: 0
   location: '0x4f'
+  specialist: ow-zora  # round 24: to Dungeon 5, S -> N (a ladder room, asm:Ladder_RoomIdsOW)
   exits:
     N:
       level: 0
@@ -1458,6 +1503,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x50'
+  specialist: ow-lynel  # round 24: to Dungeon 5, E -> S (from 0x51's wrap exit)
   exits:
     N:
       level: 0
@@ -1470,6 +1516,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x51'
+  specialist: ow-moblin  # round 24: to Dungeon 5, E -> W by the wrap exit
   exits:
     E:
       level: 0
@@ -1496,6 +1543,7 @@ rooms:
     rupees: 10
 - level: 0
   location: '0x52'
+  specialist: ow-moblin  # round 24: to Dungeon 5, E -> W
   exits:
     N:
       level: 0
@@ -1516,6 +1564,7 @@ rooms:
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
 - level: 0
   location: '0x53'
+  specialist: ow-moblin  # round 24: to Dungeon 5, E -> W
   exits:
     N:
       level: 0
@@ -1536,6 +1585,7 @@ rooms:
   # No entrance in quest 1: the tree (burn it) secret is quest 2 only (attr F >> 6 = 2).
 - level: 0
   location: '0x54'
+  specialist: ow-zora  # round 24: to Dungeon 5, E -> W
   exits:
     N:
       level: 0
@@ -1570,6 +1620,9 @@ rooms:
     W:
       level: 0
       location: '0x54'
+      # Round 24: the W part is reached from the dock side only by the screen wrap (CLIP E on Link's tile rows 9-10,
+      # Y $85/$8D: the E edge's run-up and the W edge's landing are open there alone), then W.
+      wrap_in: [9, 10]
   enemies:
     RedSlowOctorok: 1
     Zora: 1
@@ -1766,6 +1819,7 @@ rooms:
     wares: [[magic-shield, 160], [key, 100], [blue-candle, 60]]  # [item, rupees], left to right
 - level: 0
   location: '0x5f'
+  specialist: ow-zora  # round 24: to Dungeon 5, E -> N (the ladder clip from 0x60's wrap exit to the heart container)
   exits:
     N:
       level: 0
@@ -1777,9 +1831,14 @@ rooms:
     BlueSlowOctorok: 2
     RedOctorok: 3
     Zora: 1
+  # The overworld's only room item (asm:Room_SetUpItemAndPushBlock): the heart container at ($C0, $90) on the E
+  # platform of rows 10-11, made a few frames into play (mode 5's entry tasks); taken on every way to Dungeon 5.
+  # treasure_tile: Link's tile on the platform (X $C0, Y $8D), the target until the item is made.
   treasure: heart-container
+  treasure_tile: [24, 10]
 - level: 0
   location: '0x60'
+  specialist: ow-lynel  # round 24: to Dungeon 5, N -> W by the wrap exit round the world
   exits:
     N:
       level: 0
@@ -1793,7 +1852,8 @@ rooms:
       # Columns 0-3 are solid on every row: CLIP E's wrap exit (rows 7-12, Y $75-$9D, work) puts Link in 0x5f at
       # X $F0 ON WATER.  Needs the ladder and the ladder clip W (mechanics.md "Overworld: room $5F"): only rows
       # 9-10 (Y $85, $8D) lead to the heart container's platform and on to land (walked Nov 13); without the
-      # ladder the arrival is a softlock.  The ladder clip is not built for the overworld (clips.rs).
+      # ladder the arrival is a softlock.  Round 24: the ladder clip is offered there (zelda::clips), and the
+      # run-time switch off waits on that water (zelda::objectives::stranded).
       wrap: true
       span: [9, 10]
   enemies:

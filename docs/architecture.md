@@ -212,9 +212,23 @@ Link's state 0, no knockback, and
   frame, the action sequence from 0x76's E edge into Dungeon 3: 779 frames, monsters removed). A hit before the
   bound aborts as for the wrap; past it Link stays on the row (X `$F1`-`$00`), never stuck: MOVE W walks back into
   the zone (or, from X `$00`, leaves by the W edge, which finishes the cut skip: `OpenClip::finished_by`). The
-  mirrored shape (a W wrap onto a solid right edge, then Right; 0x60 into 0x5F) is not offered: no route needs it.
+  mirrored shape (a W wrap onto a solid right edge, then Right) is not offered: no route needs it. Round 24: 0x51,
+  0x3e, 0x0c and 0x60 have wrap exits too; 0x60's is round the world (room id - 1: `MapLocation::direction_to`
+  makes 0x5f its W neighbour, entered from E) and lands on 0x5f's water, on rows 9-10 only.
   `wraps_into_wrong_exits` vetoes the wrap exit unless the room behind the W exit is one of the objective's next
   rooms. The room-to-room search (`GameMap::find_all_routes`) never takes a `wrap` exit; a route step may.
+- **wrap in** (overworld, round 24): a game.yaml W or E exit with `wrap_in: [lo, hi]` (0x55's W part, cut off by
+  the river) is reached only by the plain wrap toward it on those rows (`Room::wrap_in`): the path search jumps from
+  the wrap's zone to the landing tile at the opposite edge (`clips::skip_jumps`), the one plain overworld wrap that
+  is a jump.
+- **overworld ladder clip** (round 24; W, E): in the game's ladder rooms (asm:Ladder_RoomIdsOW, `Room::ladder`), the
+  dungeon ladder clip's reach with the screen bounds, no border band and a lay point allowed on water: 0x5f from
+  the arrival at X `$F0` (L), T `$E0`, the relay at `$D0` onto the heart's platform, Link ends at `$C0`; 38 frames,
+  the heart container taken at `$C8` on the way (`crates/zelda/tests/d5_leg.rs`). The plain overworld ladder works
+  as in a dungeon there (overworld water `$8D`-`$98` but `$8D`/`$91`: `Room::is_water`, crossings,
+  `GameView::lays_ladder`). Room 0x1f's wall gap (X `$80`, Y < `$56`, asm:Tile_GetAtObjOffset@SetTile) is in the room
+  model and the mask. The run-time switch off waits while `objectives::stranded` (no exit walkable, one with the
+  skips: 0x5f's water), so the clip way holds there.
 - **block clip** (dungeon, N or S; no ladder out): not in a doorway, X on the column line and inside the X border
   band, T the first grid point ahead (at most 16 pixels) whose N/S test is blocked by a square that also blocks 8
   pixels further (a 16-pixel square of blocks, statues or wall, never water `$F4`: with the ladder one square of

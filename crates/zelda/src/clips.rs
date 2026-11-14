@@ -46,6 +46,11 @@ const UW_LEFT: i32 = 0x20;
 const UW_RIGHT: i32 = 0xD0;
 const UW_TOP: i32 = 0x5D;
 const UW_BOTTOM: i32 = 0xBD;
+/// Overworld screen bounds Link can stand on (asm:Link_ScreenEdgeBounds: X $00..$F0, Y $3D..$DD).
+const OW_LEFT: i32 = OW_BOUND_W as i32;
+const OW_RIGHT: i32 = OW_BOUND_E as i32;
+const OW_TOP: i32 = 0x3D;
+const OW_BOTTOM: i32 = 0xDD;
 /// Dungeon outer border band (asm:Link_BorderBounds): a perpendicular press is dropped there, on the facing's axis
 /// (left X < $17, right X >= $D9, up Y < $55, down Y >= $C6).
 const UW_BAND_W: i32 = 0x17;
@@ -308,15 +313,19 @@ impl Controller {
 }
 
 /// Where the skip in `direction` is available in `state`, and where it goes (mechanics.md; round 21 contract
-/// "Availability"). Overworld W/E: the wrap, E also the wrap exit; dungeon: the ladder clip, else (N/S) the block clip
-/// when it is useful. None elsewhere.
+/// "Availability"). Overworld W/E: the wrap, E also the wrap exit, else (round 24) the ladder clip in a room where the
+/// game lays the ladder (0x5f's heart container from the wrap arrival on its water); dungeon: the ladder clip, else
+/// (N/S) the block clip when it is useful. None elsewhere.
 pub fn skip_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
     if state.mode() != MODE_PLAY || state.link.status != 0 || state.var(Var::LinkShoveDir) != 0 {
         return None;
     }
     let ladder_out = state.var(Var::LadderSlot) != 0;
     match (state.level(), direction) {
-        (0, Direction::W | Direction::E) if !ladder_out => wrap_target(state, direction),
+        (0, Direction::W | Direction::E) => {
+            let wrap = if ladder_out { None } else { wrap_target(state, direction) };
+            wrap.or_else(|| ladder_target(state, direction))
+        }
         (0, _) => None,
         (_, Direction::N | Direction::S) => ladder_target(state, direction).or_else(|| {
             if ladder_out { None } else { block_target(state, direction) }
@@ -474,7 +483,7 @@ enum Ahead {
 fn ahead(room: &Room, x: i32, y: i32, direction: Direction) -> Ahead {
     let tiles = Room::hotspot_tiles(x, y, direction);
     let inside = |&(c, r): &(i32, i32)| (0..crate::room::COLS).contains(&c) && (0..crate::room::ROWS).contains(&r);
-    if tiles.iter().all(|t| inside(t) && room.tile(t.0, t.1) == WATER_TILE) {
+    if tiles.iter().all(|t| inside(t) && room.is_water(room.tile(t.0, t.1))) {
         Ahead::Water
     } else if tiles.iter().all(|&(c, r)| room.is_tile_walkable(c, r)) {
         Ahead::Land
@@ -501,15 +510,25 @@ fn sign(direction: Direction) -> i32 {
 ///   At the relay L -+ `$20` the square ahead is land (two squares: Link walks on to L -+ `$30`, inside the room
 ///   bounds) or water (three squares: a second ladder, whose distance-0 point L -+ `$30` must look onto land; Link
 ///   ends at L -+ `$40`).
+///
+/// Overworld (round 24, W and E only; mechanics.md "Overworld: room `$5F`"): the screen bounds instead of the
+/// dungeon's, no border band (its mask leaves the perpendicular press alone, asm:Link_MaskInputInBorder), and L may
+/// be on water: 0x5f's arrival from 0x60's wrap exit (X `$F0`), where Left lays the first ladder at `$E0`.
 fn ladder_reach(room: &Room, across: i32, lay: i32, direction: Direction) -> Option<(i32, i8, u8)> {
     let horizontal = matches!(direction, Direction::W | Direction::E);
+    let overworld = room.location.level == 0;
+    if overworld && !horizontal {
+        return None;
+    }
     let s = sign(direction);
     let at = |a: i32, d: Direction| if horizontal { ahead(room, a, across, d) } else { ahead(room, across, a, d) };
     let water = |a: i32| at(a, direction) == Ahead::Water;
     let land = |a: i32| at(a, direction) == Ahead::Land;
     // Link stands on a grid point of the room's floor at the lay point.
-    let (lo, hi) = if horizontal { (UW_LEFT, UW_RIGHT) } else { (UW_TOP, UW_BOTTOM) };
-    let (cross_lo, cross_hi) = if horizontal { (UW_TOP, UW_BOTTOM) } else { (UW_LEFT, UW_RIGHT) };
+    let ((left, right), (top, bottom)) =
+        if overworld { ((OW_LEFT, OW_RIGHT), (OW_TOP, OW_BOTTOM)) } else { ((UW_LEFT, UW_RIGHT), (UW_TOP, UW_BOTTOM)) };
+    let (lo, hi) = if horizontal { (left, right) } else { (top, bottom) };
+    let (cross_lo, cross_hi) = if horizontal { (top, bottom) } else { (left, right) };
     let grid = |a: i32, horizontal_axis: bool| if horizontal_axis { a & 7 == 0 } else { a & 7 == 5 };
     if !(lo..=hi).contains(&lay)
         || !(cross_lo..=cross_hi).contains(&across)
@@ -518,10 +537,12 @@ fn ladder_reach(room: &Room, across: i32, lay: i32, direction: Direction) -> Opt
     {
         return None;
     }
-    // On land there: both tiles of his hotspot row walkable (he can't stand on water without a ladder).
+    // On land there: both tiles of his hotspot row walkable (he can't stand on water without a ladder), or on the
+    // overworld's water where a room change put him.
     let (x, y) = if horizontal { (lay, across) } else { (across, lay) };
     let row = (y - 53).div_euclid(8);
-    if !room.is_tile_walkable(x.div_euclid(8), row) || !room.is_tile_walkable(x.div_euclid(8) + 1, row) {
+    let floor = |c: i32| room.is_tile_walkable(c, row) || (overworld && room.is_water(room.tile(c, row)));
+    if !floor(x.div_euclid(8)) || !floor(x.div_euclid(8) + 1) {
         return None;
     }
     let (t, end, stashes) = if direction == Direction::N {
@@ -554,23 +575,25 @@ fn ladder_reach(room: &Room, across: i32, lay: i32, direction: Direction) -> Opt
             return None;
         }
     };
-    // The press is not dropped: the trick position (5 short of T) outside the outer border band on the heading's
-    // axis (asm:Link_MaskInputInBorder).
+    // The press is not dropped: the trick position (5 short of T) outside the dungeon's outer border band on the
+    // heading's axis (asm:Link_MaskInputInBorder).
     let trick = t - 5 * s;
-    let band = match direction {
-        Direction::W => trick >= UW_BAND_W,
-        Direction::E => trick < UW_BAND_E,
-        Direction::N => trick >= UW_BAND_N,
-        _ => trick < UW_BAND_S,
-    };
+    let band = overworld
+        || match direction {
+            Direction::W => trick >= UW_BAND_W,
+            Direction::E => trick < UW_BAND_E,
+            Direction::N => trick >= UW_BAND_N,
+            _ => trick < UW_BAND_S,
+        };
     band.then_some((t, ((t - end) * s) as i8, stashes))
 }
 
-/// The ladder clip heading `direction` from Link's state: he holds the ladder, stands on the heading's line within
-/// 16 pixels of T (at the lay point or between G' and it with no ladder out; on a ladder laid along the heading),
-/// and a monster slot is free for the first ladder (asm:Obj_FindEmptyMonsterSlot).
+/// The ladder clip heading `direction` from Link's state: he holds the ladder in a room where the game lays it
+/// (`Room::ladder`), stands on the heading's line within 16 pixels of T (at the lay point or between G' and it with
+/// no ladder out; on a ladder laid along the heading), and a monster slot is free for the first ladder
+/// (asm:Obj_FindEmptyMonsterSlot).
 fn ladder_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
-    if !state.ladder() || state.var(Var::DoorwayDir) != 0 {
+    if !state.room().ladder() || state.var(Var::DoorwayDir) != 0 {
         return None;
     }
     let horizontal = matches!(direction, Direction::W | Direction::E);
@@ -633,17 +656,24 @@ fn skip_cost(p: i32, end: i8, stashes: u8) -> i32 {
 /// The skips of `room` as jumps of the path search (`Room::wavefront` with clips on): from every rest position
 /// (grid point, offset 0) of a skip's zone to Link's tile at its end, at [`skip_cost`]. Dungeon rooms: the block
 /// clip (N, S) everywhere, the ladder clip (any heading) while Link holds the ladder (`Room::ladder`). Overworld rooms:
-/// only the wrap exit (`Room::wrap_exit`), from G', G and the bound on its rows to the tile off the W edge where the
-/// W exit's search starts. The overworld wrap is not a jump: it ends one MOVE from the opposite edge, so a jump would
-/// make the path to that edge's exit lead out of the entry edge, and the policy learned the wrap without one
-/// (`docs/experiments/round21-gauntlet.md`).
+/// the wrap exit (`Room::wrap_exit`), from G', G and the bound on its rows to the tile off the W edge where the W
+/// exit's search starts; the wrap onto the side of the room a game.yaml `wrap_in` exit is on (`Room::wrap_in`, round
+/// 24: 0x55's W third), to the landing tile at the opposite edge; and the ladder clip (W, E) in a room where the game
+/// lays the ladder (round 24: 0x5f). Any other overworld wrap is not a jump: it ends one MOVE from the opposite edge,
+/// so a jump would make the path to that edge's exit lead out of the entry edge, and the policy learned the wrap
+/// without one (`docs/experiments/round21-gauntlet.md`).
 pub fn skip_jumps(room: &Room) -> Vec<Jump> {
     let location = room.location;
     if location.in_cave || !room.is_loaded() {
         return Vec::new();
     }
     if location.level == 0 {
-        return wrap_exit_jumps(room);
+        let mut jumps = wrap_exit_jumps(room);
+        jumps.extend(wrap_in_jumps(room));
+        if room.ladder() {
+            jumps.extend(ladder_jumps(room, [Direction::W, Direction::E], (OW_LEFT, OW_RIGHT), (OW_TOP, OW_BOTTOM)));
+        }
+        return jumps;
     }
     let tile = |x: i32, y: i32| Position::new(x, y).tile();
     let mut jumps = Vec::new();
@@ -659,24 +689,38 @@ pub fn skip_jumps(room: &Room) -> Vec<Jump> {
         }
     }
     if room.ladder() {
-        for direction in CARDINALS {
-            let horizontal = matches!(direction, Direction::W | Direction::E);
-            let (lines, points) = if horizontal {
-                ((UW_TOP..=UW_BOTTOM).step_by(8), (UW_LEFT..=UW_RIGHT).step_by(8))
-            } else {
-                ((UW_LEFT..=UW_RIGHT).step_by(8), (UW_TOP..=UW_BOTTOM).step_by(8))
-            };
-            for across in lines {
-                for lay in points.clone() {
-                    let Some((t, end, stashes)) = ladder_reach(room, across, lay, direction) else {
-                        continue;
-                    };
-                    let s = sign(direction);
-                    let at = |a: i32| if horizontal { tile(a, across) } else { tile(across, a) };
-                    let to = at(t - i32::from(end) * s);
-                    for p in [16, 8, 0] {
-                        jumps.push(Jump { from: at(t - p * s), to, direction, cost: skip_cost(p, end, stashes) });
-                    }
+        jumps.extend(ladder_jumps(room, CARDINALS, (UW_LEFT, UW_RIGHT), (UW_TOP, UW_BOTTOM)));
+    }
+    jumps
+}
+
+/// The ladder clip's jumps of `room` heading `directions`, lay points and lines within the bounds `(left, right)`
+/// and `(top, bottom)` ([`skip_jumps`]).
+fn ladder_jumps<const N: usize>(
+    room: &Room,
+    directions: [Direction; N],
+    (left, right): (i32, i32),
+    (top, bottom): (i32, i32),
+) -> Vec<Jump> {
+    let tile = |x: i32, y: i32| Position::new(x, y).tile();
+    let mut jumps = Vec::new();
+    for direction in directions {
+        let horizontal = matches!(direction, Direction::W | Direction::E);
+        let (lines, points) = if horizontal {
+            ((top..=bottom).step_by(8), (left..=right).step_by(8))
+        } else {
+            ((left..=right).step_by(8), (top..=bottom).step_by(8))
+        };
+        for across in lines {
+            for lay in points.clone() {
+                let Some((t, end, stashes)) = ladder_reach(room, across, lay, direction) else {
+                    continue;
+                };
+                let s = sign(direction);
+                let at = |a: i32| if horizontal { tile(a, across) } else { tile(across, a) };
+                let to = at(t - i32::from(end) * s);
+                for p in [16, 8, 0] {
+                    jumps.push(Jump { from: at(t - p * s), to, direction, cost: skip_cost(p, end, stashes) });
                 }
             }
         }
@@ -697,6 +741,28 @@ fn wrap_exit_jumps(room: &Room) -> Vec<Jump> {
             if wrap_at(room, x, y, Direction::E) == Some(SkipKind::WrapExit) {
                 let from = Position::new(x, y).tile();
                 jumps.push(Jump { from, to: (-1, row), direction: Direction::E, cost: skip_cost(p, -16, 0) });
+            }
+        }
+    }
+    jumps
+}
+
+/// The jumps of the overworld `room`'s `wrap_in` exit ([`skip_jumps`]): for a W exit the E wrap from G', G and the
+/// bound on its rows to the landing at X `$00`, for an E exit the W wrap to X `$F0`, where that exit is one MOVE away.
+fn wrap_in_jumps(room: &Room) -> Vec<Jump> {
+    let Some((exit, (lo, hi))) = room.wrap_in() else {
+        return Vec::new();
+    };
+    let wrap = exit.opposite();
+    let (bound, landing) = if wrap == Direction::E { (OW_RIGHT, OW_LEFT) } else { (OW_LEFT, OW_RIGHT) };
+    let mut jumps = Vec::new();
+    for row in lo..=hi {
+        let y = GAMEPLAY_START_Y + 8 * row + 5;
+        for p in [16, 8, 0] {
+            let x = bound - p * sign(wrap);
+            if wrap_at(room, x, y, wrap) == Some(SkipKind::Wrap) {
+                let (from, to) = (Position::new(x, y).tile(), Position::new(landing, y).tile());
+                jumps.push(Jump { from, to, direction: wrap, cost: skip_cost(p, -16, 0) });
             }
         }
     }

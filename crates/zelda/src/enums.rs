@@ -486,7 +486,9 @@ impl MapLocation {
     }
 
     /// Direction of movement from this room to `next` (`get_direction_to`): out of a cave S, out of a cellar N (up
-    /// its ladder).
+    /// its ladder). An overworld W or E edge leads to room id - 1 or + 1 in 8 bits (asm:Room_CalcNextRoomForDoor), so
+    /// out of column 0 W is the last room of the row above and out of column 15 E the first of the row below (round
+    /// 24: 0x60's wrap exit into 0x5f, entered from E).
     pub fn direction_to(self, next: MapLocation) -> Direction {
         if self.in_cave && !next.in_cave {
             return if self.level == 0 {
@@ -504,6 +506,14 @@ impl MapLocation {
         if next.in_cave && !self.in_cave {
             // Into a cave or down a cellar's stairs: no edge (a cellar's room id isn't a neighbour).
             return Direction::None;
+        }
+        if self.level == 0 && next.level == 0 && !self.in_cave && !next.in_cave {
+            if self.x() == 0 && next.value == self.value.wrapping_sub(1) {
+                return Direction::W;
+            }
+            if self.x() == 15 && next.value == self.value.wrapping_add(1) {
+                return Direction::E;
+            }
         }
         if self.manhattan_distance(next) == 1 {
             if self.x() < next.x() {
@@ -643,6 +653,13 @@ mod tests {
         for v in [0x66, 0x79, 0x77] {
             assert_eq!(room.direction_to(at(v)), Direction::None, "{v:#x}");
         }
+        // Round the world: out of column 0 W into the row above's column 15, out of column 15 E into the next row's
+        // column 0 (asm:Room_CalcNextRoomForDoor); not in a dungeon.
+        assert_eq!(at(0x60).direction_to(at(0x5f)), Direction::W);
+        assert_eq!(at(0x5f).direction_to(at(0x60)), Direction::E);
+        assert_eq!(at(0x0f).direction_to(at(0x10)), Direction::E);
+        assert_eq!(at(0x60).direction_to(at(0x6f)), Direction::None);
+        assert_eq!(MapLocation::new(1, 0x60, false).direction_to(MapLocation::new(1, 0x5f, false)), Direction::None);
         // Leaving a cave goes south; into a dungeon south, out of one north.
         let cave = MapLocation::new(0, 0x77, true);
         assert_eq!(cave.direction_to(room), Direction::S);

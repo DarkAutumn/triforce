@@ -1,5 +1,5 @@
 name: ow-tektite
-rooms: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)']
+rooms: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)']
 start_states: ['0_1a*_[0-9]', '0_2c*_[0-9]', '0_74*_[0-9]', '0_76*_[0-9]']
 success: [exit-correct, enter-room:3:0x7c]
 reward_profile: default

@@ -129,6 +129,11 @@ pub struct RoomExit {
     /// edge, Left there changes the room), and only on the `span` rows, the ones whose arrival in the room to the W
     /// lets Link walk on (round 22: 0x75 into 0x74). The room-to-room search never takes it; a route step may.
     pub wrap: bool,
+    /// `wrap_in: [lo, hi]` (round 24; an overworld W or E exit): the side of the room this exit is on is reached
+    /// from the other side only by the screen wrap toward it, on Link's tile rows `lo..=hi` (0x55's W third, cut off
+    /// by the river: `CLIP E` from the dock side on rows Y `$85`/`$8D`, then W). The path search knows that wrap as a
+    /// jump with clips (`crate::clips::skip_jumps`); the room-to-room search takes the exit as any other.
+    pub wrap_in: Option<(i32, i32)>,
     /// `shutter: true` (a dungeon door): this side of the doorway is a shutter (door type 7), shut on entry and
     /// opened by the room's `trigger`.  For display (`zelda-map.py`); nothing plays by it.
     pub shutter: bool,
@@ -249,7 +254,7 @@ const ROOM_KEYS: [&str; 22] = [
     "stairs",
     "dark",
 ];
-const EXIT_KEYS: [&str; 7] = ["level", "location", "in_cave", "locked", "shutter", "span", "wrap"];
+const EXIT_KEYS: [&str; 8] = ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
 const STEP_KEYS: [&str; 11] = [
@@ -740,6 +745,12 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         "{exit_what}: wrap needs an overworld room's W exit with a span (the rows the wrap exit is safe on)"
                     ));
                 }
+                let wrap_in = get(dest, "wrap_in").map(|s| pair(s, &format!("{exit_what}: wrap_in"))).transpose()?;
+                if wrap_in.is_some() && (level != 0 || loc.in_cave || !matches!(dir.as_str(), "W" | "E") || wrap) {
+                    return err(format!(
+                        "{exit_what}: wrap_in needs an overworld room's W or E exit that isn't a wrap exit"
+                    ));
+                }
                 exits.insert(
                     dir.clone(),
                     RoomExit {
@@ -751,6 +762,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         raft: false,
                         dock: None,
                         wrap,
+                        wrap_in,
                         shutter: flag(dest, "shutter", &exit_what)?,
                     },
                 );
@@ -787,6 +799,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         raft: true,
                         dock: tile(get(dest, "dock"), &format!("{exit_what}: dock"))?,
                         wrap: false,
+                        wrap_in: None,
                         shutter: false,
                     },
                 );
@@ -839,6 +852,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     raft: false,
                     dock: None,
                     wrap: false,
+                    wrap_in: None,
                     shutter: false,
                 },
             );
@@ -1411,7 +1425,8 @@ mod tests {
             set(&[loc(1, 0x44), loc(1, 0x23), loc(2, 0x5e), loc(2, 0x1e)])
         );
         assert_eq!(map.rooms_for_specialist("wallmaster"), vec![loc(1, 0x45)]);
-        assert_eq!(map.get(loc(0, 0x0c)).unwrap().specialist, None);
+        assert_eq!(map.get(loc(0, 0x00)).unwrap().specialist, None);
+        assert_eq!(map.get(loc(0, 0x0c)).unwrap().specialist.as_deref(), Some("ow-tektite"), "d5leg (round 24)");
     }
 
     #[test]
@@ -1728,7 +1743,7 @@ mod tests {
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "clips-gauntlet"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d5leg", "clips-gauntlet"]);
         let mut route: BTreeSet<L> = map.routes.values().flatten().map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
@@ -1736,9 +1751,11 @@ mod tests {
         let strays: BTreeSet<L> = [loc(0, 0x56), loc(0, 0x57), loc(3, 0x4b)].into();
         assert!(route.is_disjoint(&strays));
         assert_eq!(tagged, route.union(&strays).copied().collect());
-        // Beyond the route's own rooms: only the alternate (4:0x20 is on the D4 stretch's plain way since round 22).
-        let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
-        let beyond: Vec<L> = route.difference(&default).copied().collect();
+        // Beyond the routes' own rooms (d5leg, round 24, extends d2first): only the alternate (4:0x20 is on the D4
+        // stretch's plain way since round 22).
+        let own: BTreeSet<L> = map.routes["d5leg"].iter().map(RouteStep::location).collect();
+        assert!(map.routes[DEFAULT_ROUTE].iter().all(|s| own.contains(&s.location())));
+        let beyond: Vec<L> = route.difference(&own).copied().collect();
         assert_eq!(beyond, [loc(0, 0x78)]);
     }
 
@@ -1961,9 +1978,9 @@ mod tests {
         assert!(e.contains("listed twice"), "{e}");
     }
 
-    /// Every overworld room is mapped; edge exits lead to the neighbouring room (a maze's loops to itself; a wrap
-    /// exit out of column 0 to room id - 1, the last room of the row above: 0x60 into 0x5f); each dungeon has its
-    /// entrance cave; 0x1f's gap in the north wall reaches 0x0f.
+    /// Every overworld room is mapped; edge exits lead to the neighbouring room (a maze's loops to itself; out of
+    /// column 0 W to room id - 1, the last room of the row above: 0x60's wrap exit into 0x5f, `direction_to`); each
+    /// dungeon has its entrance cave; 0x1f's gap in the north wall reaches 0x0f.
     #[test]
     fn whole_overworld_is_mapped() {
         let map = GameMap::builtin();
@@ -1979,8 +1996,7 @@ mod tests {
                     continue;
                 };
                 let neighbour = at.direction_to(exit.destination) == d;
-                let round_the_world = exit.wrap && room % 16 == 0 && exit.destination == loc(0, room - 1);
-                assert!(neighbour || round_the_world || (r.maze.is_some() && exit.destination == at), "{at} {d:?}");
+                assert!(neighbour || (r.maze.is_some() && exit.destination == at), "{at} {d:?}");
                 assert!(map.contains(exit.destination), "{at} {d:?}");
             }
         }
