@@ -264,8 +264,9 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   machine about 2.5 and 1.5 minutes after the build; next to a training round 2-3x that, from oversubscription).
   Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
-- Training GUI: `uv run training-gui.py` (PEP 723 script; `play-zelda.py`, `create-video.py` and `zelda-map.py` run
-  from the venv, which has PySide6 through the `dev` extra).
+- Training GUI: `uv run training-gui.py` (PEP 723 script; it also serves a read-only web view of the current runs on
+  port 22222, every interface: `--web-port`, `--web-host`, `--no-web`, `--web-only` without a window or display;
+  `play-zelda.py`, `create-video.py` and `zelda-map.py` run from the venv, which has PySide6 through the `dev` extra).
 - `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
   `metrics.jsonl`, `run.json`, `train.log`, `act` (`<mode> <ckpt.pt sha1>`) and `eval.json`, the canonical
   evaluation (the model's act mode, 100 episodes per state, seed 0); other evaluations are

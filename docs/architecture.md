@@ -763,6 +763,17 @@ every step, so following an enemy that moves away pays again, and knockback rese
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
   outcomes with their share of the evaluation, `108× (10.8%)`: of the chain's runs (where the failed runs ended),
   or of the family evaluation's episodes (start room and ending; `eval` event `by_room_failures`).
+- Web view (`training-gui.py`, `WebState`/`WebServer`): beside the window (or alone, `--web-only`, no display
+  needed) a stdlib `ThreadingHTTPServer` on `--web-host` (default `0.0.0.0`, every interface) port `--web-port`
+  (default 22222; `--no-web` off) answers GET `/` (one page, no external assets, its first snapshot inlined) and
+  `/api/state` (JSON), 404 for anything else; nothing reaches the filesystem from a request. Its own thread builds a
+  snapshot a second from its own `Training` models, found as [currently running] finds folders, so the window and
+  the server never wait for each other; the window's widgets and the page share the Qt-free presentation code
+  (`plan_meta`, `row_phase`, `row_badge`, `chain_bar`, `CHARTS`/`run_chart_data`/`chart_bounds`,
+  `run_eval_sections`). No selection: a card per active run (training run, batch evaluation, eval-chain), newest
+  start first; pending runs only in their live plan's queue line; a run that ended stays 60 s after its end
+  (`WEB_EXPIRE`; a run seen running whose process died, from when that was seen), so runs that ended before the
+  server started never show. A taken port: one line on stderr and the window goes on, `--web-only` exits 1.
 - Job registry (`jobs.py`): `TrainingPlan` registers every plan at its start (`jobs.register`) as one JSON file in
   `jobs.jobs_dir()` (`$TRIFORCE_JOBS_DIR`, else `$XDG_STATE_HOME/triforce/jobs`, else
   `$HOME/.local/state/triforce/jobs`: per user, outside every checkout), `<host>-<pid>-<process start>-<log

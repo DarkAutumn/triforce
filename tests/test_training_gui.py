@@ -535,11 +535,11 @@ def test_a_batch_plan_becomes_one_row_per_evaluation(qapp, tmp_path):
     assert model.active_index() == 1
     assert gui.batch_headline(d3) == 'arrive 4/10 = 40.0% · end 2/10 = 20.0%'
     assert gui.batch_headline(d3, compact=True) == 'arrive 40.0% · end 20.0%'
-    assert gui.RunRow.numbers_text(darknut, 'evaluating') == '100 / 400 episodes'
-    assert gui.RunRow.numbers_text(d3, 'ok') == '10 runs'
-    assert gui.RunRow.phase_text(d4, 'pending', now) == 'waiting'
-    assert gui.RunRow.phase_text(darknut, 'evaluating', now).startswith('eval 100/400 episodes')
-    assert gui.RunRow.phase_text(d3, 'ok', now) == 'done · 30s'
+    assert gui.row_numbers(darknut, 'evaluating') == '100 / 400 episodes'
+    assert gui.row_numbers(d3, 'ok') == '10 runs'
+    assert gui.row_phase(d4, 'pending', now) == 'waiting'
+    assert gui.row_phase(darknut, 'evaluating', now).startswith('eval 100/400 episodes')
+    assert gui.row_phase(d3, 'ok', now) == 'done · 30s'
     sections = gui.chain_sections(d3.chain_result())
     assert sections[0][2][0][:1] == ('arrived 0:0x74',) and sections[0][2][1][2] == '2/10'
     assert sections[1][1] == 'Chain failures (share of all 10 runs)'
@@ -637,3 +637,244 @@ def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeyp
     finally:
         window.close()
         window.deleteLater()
+
+
+# ------------------------------------------------------------------------------------------------------- the web view
+
+def write_events(path, events):
+    import json
+    path.write_text(''.join(json.dumps(event) + '\n' for event in events))
+
+
+def training_events(start, iterations, *, end=None):
+    """A training run's events: start at ``start``, one progress event a second, an ``end`` event at ``end``."""
+    events = [{'event': 'start', 'ts': start, 'target_steps': 1000, 'target_iterations': 10, 'start_iteration': 0,
+               'start_steps': 0, 'steps_per_update': 100, 'stop_success': 0.95}]
+    for i in range(1, iterations + 1):
+        events.append({'event': 'progress', 'ts': start + i, 'iteration': i, 'steps': 100 * i, 'sps': 100.0,
+                       'eta': 10.0 - i, 'metrics': {'success_rate': 0.1 * i, 'balanced_success_rate': 0.09 * i,
+                                                     'reward/total': float(i), 'clips/on/success_rate': 0.5}})
+    if end is not None:
+        events.append({'event': 'end', 'ts': end, 'status': 'ok'})
+    return events
+
+
+def web_plan(root, name, *, created, pid=None, status='running', finished=None, runs=(), kind='round'):
+    """A log folder: its plan (``runs``: (entry, events) pairs, each run's events in ``<name>.jsonl``)."""
+    import json
+    folder = root / name
+    folder.mkdir(exist_ok=True)
+    entries = []
+    for index, (entry, events) in enumerate(runs):
+        entries.append({'index': index, **entry})
+        if events is not None:
+            write_events(folder / f"{entry.get('name') or entry['specialist']}.jsonl", events)
+    plan = {**running_plan(pid or os.getpid(), created), 'status': status, 'name': name, 'kind': kind,
+            'finished': iso(finished) if finished else None, 'runs': entries}
+    (folder / gui.PLAN_FILE).write_text(json.dumps(plan))
+    return folder
+
+
+@pytest.fixture
+def web_env(monkeypatch):
+    """Only the test's own logs root: no other process's roots, no job registry."""
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    monkeypatch.setattr(gui, 'read_registry', lambda: [])
+
+
+def test_web_snapshot_shows_current_runs_newest_first_and_expires_finished_ones(tmp_path, web_env):
+    import subprocess
+    import time
+    now = time.time()
+    clock = [now]
+    state = gui.WebState(tmp_path, clock=lambda: clock[0], machine=lambda: 'CPU 5%', scan_every=0)
+    # A live plan is created after its process started (plan_alive refuses a reused pid); the runs' own times
+    # come from their events.
+    me = gui.process_started(os.getpid())
+    # a round: ow-start done 30 s ago, ow-octorok training since 20 s ago, goriya queued
+    round_dir = web_plan(tmp_path, '261114_001_round', created=me, runs=[
+        ({'specialist': 'ow-start', 'status': 'ok'}, training_events(now - 200, 10, end=now - 30)),
+        ({'specialist': 'ow-octorok', 'status': 'running'}, training_events(now - 20, 4)),
+        ({'specialist': 'goriya', 'status': 'pending'}, None)])
+    (round_dir / 'ow-octorok.log').write_text(''.join(f'line {i}\n' for i in range(20)))
+    # an evaluation batch started 5 s ago
+    web_plan(tmp_path, '261114_002_batch', created=me + 0.5, kind='eval-batch', runs=[
+        ({'name': 'darknut', 'kind': 'eval', 'specialist': 'darknut', 'events': 'darknut.jsonl', 'total': 400,
+          'status': 'evaluating'},
+         [{'event': 'eval_start', 'ts': now - 5, 'episodes': 400},
+          {'event': 'eval_progress', 'ts': now - 1, 'done': 100, 'episodes': 400, 'success_rate': 0.9}])])
+    # a round that ended an hour ago, and one whose process is about to die
+    web_plan(tmp_path, '261113_009_old', created=now - 7200, status='completed', finished=now - 3600, runs=[
+        ({'specialist': 'zol', 'status': 'ok'}, training_events(now - 7200, 10, end=now - 3600))])
+    child = subprocess.Popen(['sleep', '60'])
+    try:
+        web_plan(tmp_path, '261114_003_dies', created=max(time.time(), me + 1), pid=child.pid, runs=[
+            ({'specialist': 'vire', 'status': 'running'}, training_events(now - 50, 3))])
+        snapshot = state.refresh()
+        ids = [card['id'] for card in snapshot['cards']]
+        assert ids == [f"{tmp_path}/261114_002_batch#0", f"{tmp_path}/261114_001_round#1",
+                       f"{tmp_path}/261114_003_dies#0", f"{tmp_path}/261114_001_round#0"]
+        batch, octorok, vire, start = snapshot['cards']
+        assert [card['active'] for card in snapshot['cards']] == [True, True, True, False]
+        assert start['status'] == 'ok' and start['expires_in'] == pytest.approx(30)
+        assert octorok['status'] == 'training' and octorok['expires_in'] is None
+        assert octorok['numbers'] == '400 / 1.0k' and octorok['phase'] == 'training · it 4/10'
+        assert octorok['clips'] == 'clips on 50%' and octorok['plan'] == '261114_001_round'
+        assert [chart['key'] for chart in octorok['charts']] == list(gui.CHARTS)
+        success = octorok['charts'][0]
+        assert success['overlay'].startswith('Ignoring startup') and success['series'][0]['label'] == 'success'
+        assert octorok['log'] == [f'line {i}' for i in range(5, 20)] and octorok['log_name'] == 'ow-octorok.log'
+        assert batch['numbers'] == '100 / 400 episodes' and batch['charts'] == [] and batch['summary']
+        assert batch['eval'][0][1] == 'Evaluation (running)'
+        assert snapshot['machine'] == 'CPU 5%'
+        plans = {plan['plan']: plan for plan in snapshot['plans']}
+        assert list(plans) == ['261114_003_dies', '261114_002_batch', '261114_001_round']   # newest plan first
+        assert plans['261114_001_round']['queued'] == ['goriya'] and plans['261114_002_batch']['queued'] == []
+        assert 'goriya' not in [card['name'] for card in snapshot['cards']]          # pending: queued line only
+
+        child.kill()
+        child.wait()                                    # the process dies: its run is 'process gone' from now on
+        clock[0] = now + 31                             # ow-start ended 61 s ago
+        snapshot = state.refresh()
+        cards = {card['id']: card for card in snapshot['cards']}
+        assert f"{tmp_path}/261114_001_round#0" not in cards
+        vire = cards[f"{tmp_path}/261114_003_dies#0"]
+        assert vire['status'] == 'lost' and not vire['active'] and vire['expires_in'] == pytest.approx(60)
+        assert '261114_003_dies' not in [plan['plan'] for plan in snapshot['plans']]
+    finally:
+        child.kill()
+        child.wait()
+
+    # the round finishes: ow-octorok's card stays 60 s with its final figures, the round's line goes
+    web_plan(tmp_path, '261114_001_round', created=me, status='completed', finished=now + 31, runs=[
+        ({'specialist': 'ow-start', 'status': 'ok'}, training_events(now - 200, 10, end=now - 30)),
+        ({'specialist': 'ow-octorok', 'status': 'ok'}, training_events(now - 20, 10, end=now + 31)),
+        ({'specialist': 'goriya', 'status': 'pending'}, None)])
+    clock[0] = now + 50
+    snapshot = state.refresh()
+    cards = {card['id']: card for card in snapshot['cards']}
+    octorok = cards[f"{tmp_path}/261114_001_round#1"]
+    assert octorok['status'] == 'ok' and octorok['expires_in'] == pytest.approx(41)
+    assert octorok['numbers'] == '1.0k / 1.0k' and octorok['fraction'] == 1.0
+    assert [plan['plan'] for plan in snapshot['plans']] == ['261114_002_batch']
+    clock[0] = now + 91.5                               # 60.5 s after the round ended, 60.5 s after vire was seen gone
+    snapshot = state.refresh()
+    assert [card['id'] for card in snapshot['cards']] == [f"{tmp_path}/261114_002_batch#0"]
+    assert tmp_path / '261114_001_round' not in state.models     # let go, not read again
+    # a server started now never shows what ended before it
+    fresh = gui.WebState(tmp_path, clock=lambda: clock[0], machine=lambda: '', scan_every=0)
+    assert [card['id'] for card in fresh.refresh()['cards']] == [f"{tmp_path}/261114_002_batch#0"]
+
+
+def test_web_snapshot_with_nothing_running(tmp_path, web_env):
+    import time
+    now = time.time()
+    web_plan(tmp_path, '261113_009_old', created=now - 7200, status='completed', finished=now - 3600, runs=[
+        ({'specialist': 'zol', 'status': 'ok'}, training_events(now - 7200, 10, end=now - 3600))])
+    snapshot = gui.WebState(tmp_path, machine=lambda: '', scan_every=0).refresh()
+    assert snapshot['cards'] == [] and snapshot['plans'] == []
+
+
+def test_web_snapshot_shows_a_standalone_eval_chain(tmp_path, web_env):
+    import time
+    now = time.time()
+    folder = web_plan(tmp_path, '261114_004_eval-chain', created=now, kind='chain')
+    write_events(folder / 'round.jsonl', [
+        {'event': 'chain_start', 'ts': now - 20, 'runs': 10, 'parallel': 5},
+        {'event': 'chain_progress', 'ts': now - 10, 'done': 4, 'runs': 10, 'successes': 3}])
+    plan = gui.json.loads((folder / gui.PLAN_FILE).read_text())
+    (folder / gui.PLAN_FILE).write_text(gui.json.dumps({**plan, 'events': 'round.jsonl', 'chain_runs': 10}))
+    card, = gui.WebState(tmp_path, clock=lambda: now, machine=lambda: '', scan_every=0).refresh()['cards']
+    assert card['kind'] == 'eval-chain' and card['status'] == 'running' and card['active']
+    assert card['blocks'] == [10, 4, 3] and card['bar_label'] == '4/10 runs · 3 reached the end'
+    assert card['numbers'] == '4 / 10 runs' and card['speed'] == '2.5 s/ep' and card['eta'] == '5s'
+
+
+def fetch(url):
+    import urllib.error
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return response.status, response.headers.get('Content-Type'), response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.headers.get('Content-Type'), error.read()
+
+
+def test_web_server_serves_the_page_and_the_snapshot_and_nothing_else(tmp_path, web_env):
+    import json
+    import time
+    now = time.time()
+    web_plan(tmp_path, '261114_001_round', created=now, runs=[
+        ({'specialist': 'ow-start', 'status': 'running'}, training_events(now - 20, 12))])
+    state = gui.WebState(tmp_path, clock=lambda: now, machine=lambda: 'CPU 1%', scan_every=0)
+    server = gui.WebServer(state, '127.0.0.1', 0)
+    server.start(poll=False)
+    try:
+        base = f"http://127.0.0.1:{server.port}"
+        status, kind, body = fetch(f"{base}/api/state")
+        assert status == 200 and json.loads(body)['loading']           # before the first snapshot
+        snapshot = state.refresh()
+        status, kind, body = fetch(f"{base}/api/state")
+        assert status == 200 and kind.startswith('application/json') and json.loads(body) == snapshot
+        assert [card['name'] for card in snapshot['cards']] == ['ow-start']
+        status, kind, body = fetch(f"{base}/?anything=1")
+        assert status == 200 and kind.startswith('text/html') and b'<title>Triforce training</title>' in body
+        assert gui.C.ok.name().encode() in body                        # the window's palette
+        assert b'const INITIAL = {' in body and b'"name":"ow-start"' in body     # first paint has the cards
+        for path in ('/nope', '/api', '/api/state/x', '/training.json', '/../logs', '/261114_001_round/'):
+            assert fetch(f"{base}{path}")[0] == 404, path
+    finally:
+        server.stop()
+
+
+def test_a_taken_port_is_reported(tmp_path, web_env, monkeypatch, capsys):
+    """--web-only exits 1; the window goes on without the web view after one line."""
+    import socket
+    taken = socket.socket()
+    taken.bind(('127.0.0.1', 0))
+    taken.listen()
+    port = taken.getsockname()[1]
+    try:
+        with pytest.raises(OSError):
+            gui.WebServer(gui.WebState(tmp_path, machine=lambda: ''), '127.0.0.1', port)
+        args = ['--web-host', '127.0.0.1', '--web-port', str(port), str(tmp_path)]
+        assert gui.main(['--web-only', *args]) == 1
+        assert capsys.readouterr().err.count('\n') == 1
+
+        class App:
+            def __init__(self, _argv): pass
+            def setApplicationName(self, _name): pass
+            def exec(self): return 0
+
+        shown = []
+        monkeypatch.setattr(gui, 'QApplication', App)
+        monkeypatch.setattr(gui, 'apply_theme', lambda app: None)
+        monkeypatch.setattr(gui, 'Window', lambda root, initial: type('W', (), {'show': lambda _: shown.append(1)})())
+        assert gui.main(args) == 0 and shown == [1]
+        err = capsys.readouterr().err
+        assert err.count('\n') == 1 and f'127.0.0.1:{port}' in err
+    finally:
+        taken.close()
+
+
+def test_web_only_runs_without_a_display(tmp_path):
+    """A child process with no display at all (no DISPLAY, WAYLAND_DISPLAY or QT_QPA_PLATFORM) serves the page."""
+    import json
+    import subprocess
+    import sys
+    env = {key: value for key, value in os.environ.items()
+           if key not in ('DISPLAY', 'WAYLAND_DISPLAY', 'QT_QPA_PLATFORM')}
+    env[gui.JOBS_DIR_ENV] = str(tmp_path / 'jobs')
+    (tmp_path / 'logs').mkdir()
+    child = subprocess.Popen([sys.executable, str(ROOT / 'training-gui.py'), '--web-only', '--web-host', '127.0.0.1',
+                              '--web-port', '0', str(tmp_path / 'logs')], env=env, stdout=subprocess.PIPE, text=True)
+    try:
+        line = child.stdout.readline()
+        assert line.startswith('training-gui: web view at http://127.0.0.1:'), line
+        base = line.split(' at ', 1)[1].strip().rstrip('/')
+        assert fetch(f"{base}/")[0] == 200
+        status, _, body = fetch(f"{base}/api/state")
+        assert status == 200 and 'cards' in json.loads(body)      # the machine's real runs, if any: not checked
+    finally:
+        child.terminate()
+        child.wait(timeout=10)

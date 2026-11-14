@@ -89,7 +89,8 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python -m triforce.explore --specialist ow-zora --parallel 16   # Go-Explore: trajectories/ow-zora
 .venv/bin/python -m triforce.train --specialist ow-zora --parallel 16   # curriculum: on in ow-zora.yaml
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist (promotes only with --promote)
-uv run training-gui.py                                          # live monitor: every running training/evaluation on the machine, any worktree (job registry, $TRIFORCE_JOBS_DIR), else the newest logs/ folder
+uv run training-gui.py                                          # live monitor: every running training/evaluation on the machine, any worktree (job registry, $TRIFORCE_JOBS_DIR), else the newest logs/ folder; also serves http://<host>:22222/
+uv run training-gui.py --web-only                               # only the web view, no window (no display needed, e.g. over SSH)
 .venv/bin/python play-zelda.py 4x3                               # watch replays of the promoted models' runs as they are simulated: the best so far (keys b w k d r g: best/success/stuck/died/random/golden; n next; s sound, click a cell to hear it; u/+/-/p; c clips off/on; --controller, --act argmax|sample|model, --power-on, --stop-at, --clips on|off)
 .venv/bin/python play-zelda.py 3x2 --live                        # the top left cell is a live game: c turns clips off (and on) for the rest of that run, the route re-plans from where Link stands
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
@@ -119,6 +120,15 @@ Training GUI charts use the plotted history (respecting **skip startup**). Succe
 bands and ticks, enclosing every displayed success series and the early-stop/eval reference lines; any value below 25%
 restores the full 0–100% range. Health change encloses both real and total series with ±0.2 hearts of padding;
 the "no change" reference appears only when zero is within that range.
+
+The training GUI also serves a read-only web view of what runs now, for a phone or another machine:
+`http://<host>:22222/` (`--web-port N`; `--web-host HOST`, default `0.0.0.0`, every interface: anyone on the network
+can watch; `--no-web` turns it off, `--web-only` runs it without a window or display). No picking: one card per
+training run, evaluation and eval-chain going on, newest start on top, with the window's row and detail tabs (bar,
+steps or episodes, speed, elapsed, time left, success, the charts, the evaluation, the last 15 console lines), one
+line per live plan with its progress and queue, and the machine line. A run that ends stays 60 seconds with its
+final figures. The page asks for `/api/state` (JSON) every second; nothing else is served. A taken port: the window
+says so in one line and goes on without it, `--web-only` exits 1.
 
 Evaluations go through `triforce eval-batch NAME` (`triforce/eval_batch.py`): one log folder, every evaluation
 listed up front, shown in the training GUI as one group named NAME with a progress bar per evaluation; its Eval tab

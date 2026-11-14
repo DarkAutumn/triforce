@@ -9,6 +9,10 @@ evaluations (``triforce eval-batch``: one group per batch, a row per evaluation;
     uv run training-gui.py                          # [currently running]: every live training (nothing while none is)
     uv run training-gui.py logs/261102_001_round3   # one log folder
     uv run training-gui.py /data/triforce-logs      # another logs root
+    uv run training-gui.py --web-only               # no window: only the web view (no display needed)
+
+Beside the window it serves a read-only web view of the runs going on now at http://<host>:22222/ (``--web-port``,
+``--web-host``: default every interface; ``--no-web``): one card per run, newest first, a finished one for 60 s.
 
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
 [currently running] covers every live training and evaluation on this machine, whatever checkout or logs root it
@@ -31,10 +35,14 @@ import math
 import os
 import re
 import socket
+import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from PySide6.QtCore import QObject, QPointF, QProcess, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QLinearGradient, QPainter, QPainterPath,
@@ -198,6 +206,13 @@ def eval_failures(ev: dict) -> dict:
 
 
 CLIP_SWITCHES = ('on', 'off')
+
+
+def fmt_clips(metrics: dict) -> str:
+    """A clip family's training success per run-time clips switch state, 'clips on 75% / off 25%' ('' without)."""
+    clips = [f"{state} {fmt_pct(metrics[f'clips/{state}/success_rate'])}" for state in CLIP_SWITCHES
+             if f'clips/{state}/success_rate' in metrics]
+    return f"clips {' / '.join(clips)}" if clips else ''
 
 
 def clips_sections(ev: dict) -> list:
@@ -1015,10 +1030,9 @@ def describe(event: dict) -> str:
             parts.append(f"balanced {fmt_pct(metrics['balanced_success_rate'])}")
         if 'success_rate' in metrics:
             parts.append(f"success {fmt_pct(metrics['success_rate'])}")
-        clips = [f"{state} {fmt_pct(metrics[f'clips/{state}/success_rate'])}" for state in CLIP_SWITCHES
-                 if f'clips/{state}/success_rate' in metrics]
+        clips = fmt_clips(metrics)
         if clips:
-            parts.append(f"clips {' / '.join(clips)}")
+            parts.append(clips)
         if 'reward/total' in metrics:
             parts.append(f"reward {metrics['reward/total']:.1f}")
         parts.append(f"{get('sps', 0):.0f} sps")
@@ -1292,6 +1306,395 @@ class LiveScanner:
         return cached[1] if cached else {}
 
 
+# ---------------------------------------------------------------------------------------------------- presentation
+# What the window's header, rows, chain card and detail tabs say, without Qt widgets: the web view shows the same.
+
+def plan_meta(model: Training, now: float) -> list[str]:
+    """A plan's timing line: start, elapsed, host and pid, budget, evaluations, nice."""
+    created, finished = model.created_ts, model.finished_ts
+    elapsed = ((finished or now) - created) if created else None
+    meta = [f"started {fmt_clock(created)}", f"elapsed {fmt_duration(elapsed)}"]
+    if model.plan.get('host'):
+        meta.append(f"{model.plan['host']} · pid {model.plan.get('pid')}")
+    if model.plan.get('steps_budget'):
+        meta.append(f"{fmt_steps(model.plan['steps_budget'])} steps each")
+    if model.is_batch:
+        meta.append(f"{len(model.runs)} evaluations")
+    if model.plan.get('nice') is not None:
+        meta.append(f"nice {model.plan['nice']}")
+    return meta
+
+
+def plan_counts(model: Training, statuses: list[str]) -> list[str]:
+    """A plan's run counts: '3 / 10 done', the unhappy endings, the run going on now."""
+    counts = {}
+    for status in statuses:
+        counts[status] = counts.get(status, 0) + 1
+    done = sum(counts.get(s, 0) for s in FINISHED)
+    summary = [f"{done} / {len(statuses)} done"] if statuses else []
+    for key in ('early', 'failed', 'interrupted', 'lost'):
+        if counts.get(key):
+            summary.append(f"{counts[key]} {STATUS[key][1]}")
+    active = model.active_index()
+    if active is not None:
+        summary.append(f"now: {model.runs[active].name}")
+    return summary
+
+
+def row_fraction(run: Run, status: str, now: float) -> float:
+    """A run row's bar fill: training progress, or episodes evaluated while evaluating."""
+    if status == 'evaluating':
+        done, total = run.eval_done()
+        return done / total if total else 0.0
+    return run.fraction(now, status)
+
+
+def row_bar_label(run: Run, status: str, shown: float) -> str:
+    """The text on a run row's bar (``shown``: the fill drawn)."""
+    if status == 'evaluating':
+        done, total = run.eval_done()
+        if run.kind == 'report':
+            return 'report'
+        noun = 'runs' if run.kind == 'chain' else 'eval'
+        return f'{noun} {done}/{total}' if total else 'evaluating'
+    if status == 'starting':
+        return 'starting'
+    return f'{shown:.0%}' if status != 'pending' else ''
+
+
+def row_numbers(run: Run, status: str) -> str:
+    """Steps of a training run; runs or episodes of an evaluation (a batch entry, or a standalone evaluation's
+    run without a step target; done / total while it runs)."""
+    if not run.kind and (run.target_steps or (run.eval_start is None and run.eval is None)):
+        return f"{fmt_steps(run.steps)} / {fmt_steps(run.target_steps)}"
+    if run.kind == 'report':
+        return 'report'
+    unit = 'runs' if run.kind == 'chain' else 'episodes'
+    done, total = run.eval_done()
+    if status == 'evaluating':
+        return f"{done} / {total} {unit}"
+    total = run.eval_episodes() or total
+    return f"{total} {unit}" if total else unit
+
+
+def row_phase(run: Run, status: str, now: float) -> str:
+    """A run row's second line: what it is doing (or how it ended)."""
+    iters = f"it {run.iteration}/{run.target_iterations}" if run.target_iterations else f"it {run.iteration}"
+    started = run.started_ts
+    duration = ((run.finished_ts or now) - started) if started else None
+    if run.kind and status != 'pending':
+        return batch_phase(run, status, duration)
+    if status == 'pending':
+        return 'waiting'
+    if status == 'starting':
+        return f"starting · {fmt_duration(duration)}"
+    if status == 'training':
+        return f"training · {iters}"
+    if status == 'evaluating':
+        done, total = run.eval_done()
+        since = now - run.eval_start['ts'] if run.eval_start else None
+        if not total:
+            return 'eval starting'
+        return f"eval {done}/{total} episodes · {fmt_duration(since)}"
+    if status == 'ok':
+        return f"done · {iters} · {fmt_duration(duration)}"
+    if status == 'early':
+        stop = run.early_stop or {}
+        return f"early stop at it {stop.get('iteration', run.iteration)} · {fmt_duration(duration)}"
+    if status == 'lost':
+        return f"process gone · {iters}"
+    message = run.message()
+    return f"{(run.end or run.entry).get('status', status)}: {message}" if message else f"{status} · {iters}"
+
+
+def row_rate(run: Run, status: str, now: float) -> str:
+    """A run row's speed line: steps/second and time left, or the evaluation's success so far."""
+    sps = run.sps()
+    if status == 'training':
+        eta = run.eta(now)
+        parts = [f"{sps:,.0f} sps" if sps else '', f"{fmt_duration(eta)} left" if eta is not None else '']
+        return ' · '.join(part for part in parts if part)
+    if status == 'evaluating' and running_rate(run) is not None:
+        eta = run.eval_eta(now)
+        parts = [f"success {fmt_pct(running_rate(run))}", f"{fmt_duration(eta)} left" if eta is not None else '']
+        return ' · '.join(part for part in parts if part)
+    if run.kind:
+        return batch_headline(run, compact=True) if status in FINISHED else ''
+    if status in FINISHED and sps:
+        return f"{sps:,.0f} sps"
+    return ''
+
+
+def batch_phase(run: Run, status: str, duration) -> str:
+    """The second line of an evaluation batch's entry (it has no training iterations)."""
+    if status == 'evaluating':
+        done, total = run.eval_done()
+        if run.kind == 'report':
+            return f"report · {fmt_duration(duration)}"
+        if not total or (run.chain_start is None and run.eval_start is None):
+            return f"starting · {fmt_duration(duration)}"
+        unit = 'runs' if run.kind == 'chain' else 'episodes'
+        return f"{'chain' if run.kind == 'chain' else 'eval'} {done}/{total} {unit} · {fmt_duration(duration)}"
+    wall = (run.end or {}).get('wall_seconds') or run.entry.get('wall_seconds') or duration
+    if status == 'ok':
+        resumed = (run.end or {}).get('resumed') or run.entry.get('resumed')
+        return 'done earlier (resumed)' if resumed else f"done · {fmt_duration(wall)}"
+    if status == 'lost':
+        return 'process gone'
+    message = run.message()
+    return f"{status}: {message}" if message else status
+
+
+def success_key(run: Run) -> str:
+    """The success metric a run row's sparkline draws: balanced once it has two points, else the raw rate."""
+    return 'balanced_success_rate' if len(run.series('balanced_success_rate')) >= 2 else 'success_rate'
+
+
+def row_badge(run: Run, status: str):
+    """What a run row shows after its sparkline: ('pill', text, color) for an evaluation's rate (final, or '~' while
+    it runs); ('parts', [(text, color)], total) for a training run's latest success and hearts change (exit -
+    entry; ``total`` adds the hearts picked up at full health, None in older logs); None before either."""
+    evaluation = run.eval_rate()
+    what = run.eval_rate_label()
+    running = running_rate(run)
+    if evaluation is None and status == 'evaluating' and running is not None:
+        return 'pill', f"{what} ~{fmt_pct(running)}", rate_color(running)
+    if evaluation is not None:
+        return 'pill', f"{what} {fmt_pct(evaluation)}", rate_color(evaluation)
+    points = run.series(success_key(run))
+    if not points:
+        return None
+    real, total = run.last('health_change'), run.last('health_change_total')
+    parts = [(fmt_pct(points[-1][1]), rate_color(points[-1][1]))]
+    if real is not None:
+        parts.append((f"{real:+.1f}♥", C.muted))
+    return 'parts', parts, (f"total {total:+.1f}♥" if real is not None and total is not None else None)
+
+
+def chain_caption(chain: dict, now: float) -> tuple[str, list[str]]:
+    """An eval-chain card's second line (its run count) and third (elapsed time and throughput)."""
+    status = chain['status']
+    runs = chain['runs']
+    sub = f"{runs} runs" + (f" · {chain['parallel']} parallel" if chain['parallel'] else '')
+    timing = []
+    if status == 'running' and chain['start']:
+        timing.append(fmt_duration(now - chain['start']['ts']))
+    elif status in ('pending', 'skipped'):
+        sub = STATUS[status][1] + f" · {runs} runs"
+    speed = chain_speed(chain)
+    if speed:
+        timing.append(speed)
+    return sub, timing
+
+
+def chain_lines(chain: dict | None) -> list[tuple[str, QColor]]:
+    """An eval-chain card's lines below its bar: the first failures and errors of a finished chain, or its error."""
+    lines = []
+    if chain and chain['result']:
+        result = chain['result']
+        runs = result.get('runs') or 1
+        for key, count in list((result.get('failures') or {}).items())[:5]:
+            lines.append((f"{fmt_count_share(count, runs):>13}  {key}", C.bad))
+        for error in (result.get('errors') or [])[:3]:
+            lines.append((f"error: {error}", C.warn))
+    elif chain and chain['error']:
+        lines.append((str(chain['error'].get('message', '')), C.bad))
+    return lines
+
+
+def chain_bar(chain: dict):
+    """An eval-chain's bar of runs, (total, done, successes, label), once runs have finished (None before): every
+    run of a finished chain, the runs done so far of a running one."""
+    result = chain['result']
+    progress = chain['progress'] if chain['status'] == 'running' else None
+    if not result and not progress:
+        return None
+    total = max(1, (result or {}).get('runs') or chain['runs'] or 1)
+    successes = (result or progress).get('successes') or 0
+    done = total if result else min(total, progress.get('done') or 0)
+    label = (f"{successes}/{total} = {fmt_pct(result.get('success_rate'))}" if result
+             else f"{done}/{total} runs · {successes} reached the end")
+    return total, done, successes, label
+
+
+# The training charts of a run (the Charts tab, the web view): key -> (title, value format, y scale, empty text).
+CHARTS = {
+    'success': ('Success', fmt_pct, 'success', 'no data yet'),
+    'reward': ('Reward / episode', lambda v: f'{v:.2f}', 'auto', 'no data yet'),
+    'health': ('Health change', fmt_hearts_change, 'health', 'no data yet'),
+    'length': ('Episode steps', lambda v: f'{v:.0f}', 'auto', 'no data yet'),
+    'kl': ('Approx KL', lambda v: f'{v:.3f}', 'auto', 'no data yet'),
+    'sps': ('Steps / second', lambda v: f'{v:.0f}', 'auto', 'no data yet'),
+    'bombs': ('Bombs / episode', lambda v: f'{v:.2f}', 'auto', 'unavailable (no bomb measurements)'),
+    'bomb_reward': ('Bomb reward / episode', lambda v: f'{v:+.2f}', 'auto', 'unavailable (no bomb measurements)'),
+}
+
+
+def chart_bounds(scale: str, series: list[dict], hlines) -> tuple[float, float]:
+    """A chart's y range for its plotted series (those with points); health's zero reference must not expand its
+    range."""
+    values = [pt[1] for s in series for pt in s['points']]
+    if scale != 'health':
+        values.extend(value for value, _, _ in hlines)
+    if not values:
+        return (-0.2, 0.2) if scale == 'health' else (0.0, 1.0)
+    low, high = min(values), max(values)
+    if scale == 'success':
+        if low < 0.25:
+            return 0.0, 1.0
+        low_band, high_band = math.floor(low * 10), math.ceil(high * 10)
+        # Constant values still need a nonzero band (100%: 90–100%).
+        if low_band == high_band:
+            high_band = min(10, high_band + 1)
+            low_band = high_band - 1
+        return low_band / 10, high_band / 10
+    if scale == 'health':
+        return low - 0.2, high + 0.2
+    pad = (high - low) * 0.1 or abs(high) * 0.1 or 1.0
+    return low - pad, high + pad
+
+
+def chart_ticks(scale: str, y0: float, y1: float) -> list[float]:
+    """The y values of a chart's grid lines, bottom to top: every 10% of a success chart, else four intervals."""
+    yspan = (y1 - y0) or 1
+    intervals = round(yspan * 10) if scale == 'success' else 4
+    return [y0 + yspan * i / intervals for i in range(intervals + 1)]
+
+
+def startup_skip(run: Run, status: str, skip_startup: bool) -> tuple[int, str]:
+    """(iterations the charts leave out, overlay text).  Skip startup leaves the run's first STARTUP_ITERATIONS out;
+    until training gets past them the charts are greyed out over the raw points; a run that ended earlier just shows
+    everything it has."""
+    done = run.iterations_run
+    past = done >= STARTUP_ITERATIONS
+    skip = STARTUP_ITERATIONS if skip_startup and past else 0
+    overlay = (f"Ignoring startup…  {done}/{STARTUP_ITERATIONS}"
+               if skip_startup and not past and status in ('starting', 'training') else '')
+    return skip, overlay
+
+
+def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tuple]]]:
+    """Each training chart's (series, horizontal lines) for a run, leaving out its first ``skip`` iterations."""
+    stop = (run.start or {}).get('stop_success')
+    hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop is not None else []
+    if run.eval_rate() is not None:
+        hlines.append((run.eval_rate(), C.eval, f"eval {fmt_pct(run.eval_rate())}"))
+    # A clip family's success per run-time clips switch state (round 22), only when the run logs it.
+    clip_series = [{'label': label, 'color': color, 'points': run.series(f'clips/{state}/success_rate', skip),
+                    'width': 1.4} for state, label, color in (('on', 'clips on', C.eval),
+                                                              ('off', 'clips off', C.text))]
+    earned, cost, net = bomb_reward_series(run, skip)
+    return {
+        'success': ([
+            {'label': 'success', 'color': C.accent, 'points': run.series('success_rate', skip), 'width': 1.4,
+             'alpha': 150},
+            {'label': 'curriculum', 'color': C.warn, 'points': run.series('curriculum/success_rate', skip),
+             'width': 1.4},
+            *[series for series in clip_series if series['points']],
+            {'label': 'balanced', 'color': C.ok, 'points': run.series('balanced_success_rate', skip), 'width': 2.4},
+        ], hlines),
+        'reward': ([{'label': 'total', 'color': C.accent, 'points': run.series('reward/total', skip), 'area': True}],
+                   []),
+        # hearts at exit - entry; total adds the dropped hearts picked up at full health (absent in older logs).
+        # Total first: the legend drops entries from the left when the title leaves no room, so 'real' stays.
+        'health': ([
+            {'label': 'total (+wasted)', 'color': C.accent, 'points': run.series('health_change_total', skip),
+             'width': 1.4},
+            {'label': 'real', 'color': C.ok, 'points': run.series('health_change', skip), 'area': True},
+        ], [(0.0, C.faint, 'no change (exit = entry)')]),
+        'length': ([{'label': 'steps', 'color': C.warn, 'points': run.series('episode_steps', skip), 'area': True}],
+                   []),
+        'kl': ([{'label': 'kl', 'color': C.eval, 'points': run.series('losses/approx_kl', skip)}], []),
+        'sps': ([{'label': 'sps', 'color': C.muted, 'points': run.series('charts/SPS', skip), 'area': True}], []),
+        'bombs': ([
+            {'label': 'placed', 'color': C.accent, 'points': run.series('bombs/placed', skip), 'width': 1.4},
+            {'label': 'hits', 'color': C.ok, 'points': run.series('bombs/hits', skip), 'area': True},
+            {'label': 'misses', 'color': C.bad, 'points': run.series('bombs/misses', skip), 'width': 1.4},
+            {'label': 'damage', 'color': C.eval, 'points': run.series('bombs/damage', skip), 'width': 2.4},
+        ], []),
+        'bomb_reward': ([
+            {'label': 'earned', 'color': C.ok, 'points': earned, 'width': 1.4},
+            {'label': 'cost', 'color': C.bad, 'points': cost, 'width': 1.4},
+            {'label': 'net', 'color': C.accent, 'points': net, 'area': True, 'width': 2.4},
+        ], [(0.0, C.faint, 'break-even')]),
+    }
+
+
+def run_eval_sections(run: Run) -> list:
+    """The Eval tab of a run: its evaluation (or a chain's summary, or the evaluation running), the training's
+    dropped hearts, and its problems."""
+    sections = []
+    if run.eval:
+        ev = run.eval
+        rows = [
+            ('success', ev.get('success_rate'), f"{fmt_pct(ev.get('success_rate'))} of {ev.get('episodes')}",
+             rate_color(ev.get('success_rate'))),
+            # Hearts at the end / max hearts, averaged; episodes start with randomized hp, so the start figure
+            # (absent in older logs) is the comparison.
+            ('end health', ev.get('health'),
+             (f"{fmt_pct(ev.get('health'))} (started {fmt_pct(ev['start_health'])})"
+              if ev.get('start_health') is not None else fmt_pct(ev.get('health')))
+             + f" · net {fmt_hearts_pair(ev.get('health_change'), ev.get('health_change_total'))}",
+             C.ok)]
+        if ev.get('hearts_dropped') is not None:
+            rows.append(heart_drop_row('dropped hearts', ev['hearts_dropped'], ev['hearts_taken'],
+                                       ev['hearts_left']))
+        if ev.get('mean_bomb_placed') is not None:
+            rows.append(bomb_row('bombs', ev))
+        sections.append(('bars', f"Evaluation · act {ev['act']}" if ev.get('act') else 'Evaluation', rows))
+        sections += clips_sections(ev)
+        sections += decisions_section(ev)
+        sections.append(('text', 'No progress · evaluation (action steps)', [
+            (fmt_linger(ev), C.warn if ev.get('linger_max_steps') is not None else C.faint),
+            ('Longest = episode longest quiet streak; tail = quiet steps at episode end. '
+             'Means are per episode; worst is the largest streak across evaluated episodes.', C.muted)]))
+        by_room = ev.get('by_room') or {}
+        if by_room:
+            # Success rate of the episodes that started in each room (a failure may happen in a later room).
+            failures = ev.get('by_room_failures') or {}
+            sections.append(('bars', 'By start room', [(room, value, fmt_room(value, failures.get(room)),
+                                                        rate_color(value))
+                                                       for room, value in sorted(by_room.items())]))
+            room_linger = ev.get('by_room_linger') or {}
+            sections.append(('text', 'No progress · by room (action steps)',
+                             [(f'{room}: {fmt_linger(room_linger.get(room) or {})}',
+                               C.warn if room_linger.get(room) else C.faint)
+                              for room in sorted(by_room)]))
+        by_state = ev.get('by_state') or {}
+        if by_state:
+            sections.append(('grid', 'By start state', sorted(by_state.items())))
+        failures = eval_failures(ev)
+        if failures:
+            sections.append(('bars', f"Failures (share of all {ev.get('episodes')} episodes)",
+                             failure_rows(failures, ev.get('episodes'))))
+    elif run.chain is not None:
+        sections += chain_sections(run.chain_result())
+    elif run.chain_start is not None:
+        done, total = run.eval_done()
+        running = running_rate(run)
+        sections.append(('bars', 'eval-chain (running)', [
+            ('runs', done / total if total else 0.0, f"{done}/{total}", C.eval),
+            ('reached the end so far', running, fmt_pct(running), rate_color(running))]))
+    elif run.eval_start:
+        done, total = run.eval_done()
+        running = (run.eval_progress or {}).get('success_rate')
+        sections.append(('bars', 'Evaluation (running)', [
+            ('episodes', done / total if total else 0.0, f"{done}/{total}", C.eval),
+            ('success so far', running, fmt_pct(running), rate_color(running))]))
+    drops = [run.recent_mean(f'hearts/{key}') for key in ('dropped', 'taken', 'left')]
+    if drops[0] is not None:
+        if not sections:
+            sections.append(('text', 'Evaluation', [('not evaluated yet', C.faint)]))
+        sections.append(('bars', 'Training (last 10 iterations)', [heart_drop_row('dropped hearts', *drops)]))
+    problems = [(str(e.get('message', '')), C.bad) for e in run.errors]
+    if run.end and run.end.get('message') and all(run.end['message'] != text for text, _ in problems):
+        problems.append((run.end['message'], C.warn))
+    if problems:
+        sections.append(('text', 'Problems', problems))
+    return sections
+
+
+
 # -------------------------------------------------------------------------------------------------------- painting
 
 def rounded(rect: QRectF, radius: float) -> QPainterPath:
@@ -1545,17 +1948,7 @@ class Header(Clickable):
         if where:
             paint_pill(p, x, rect.top() + 17, where, C.faint)
 
-        created, finished = model.created_ts, model.finished_ts
-        elapsed = ((finished or now) - created) if created else None
-        meta = [f"started {fmt_clock(created)}", f"elapsed {fmt_duration(elapsed)}"]
-        if model.plan.get('host'):
-            meta.append(f"{model.plan['host']} · pid {model.plan.get('pid')}")
-        if model.plan.get('steps_budget'):
-            meta.append(f"{fmt_steps(model.plan['steps_budget'])} steps each")
-        if model.is_batch:
-            meta.append(f"{len(model.runs)} evaluations")
-        if model.plan.get('nice') is not None:
-            meta.append(f"nice {model.plan['nice']}")
+        meta = plan_meta(model, now)
         p.setFont(font(9.5))
         p.setPen(C.muted)
         p.drawText(QPointF(left, rect.top() + 58), p.fontMetrics().elidedText(
@@ -1585,17 +1978,7 @@ class Header(Clickable):
         fraction = model.fraction(now)
         paint_bar_label(p, bar, f'{fraction:.0%}', 9.5)
 
-        counts = {}
-        for status in statuses:
-            counts[status] = counts.get(status, 0) + 1
-        done = sum(counts.get(s, 0) for s in FINISHED)
-        summary = [f"{done} / {len(statuses)} done"] if statuses else []
-        for key in ('early', 'failed', 'interrupted', 'lost'):
-            if counts.get(key):
-                summary.append(f"{counts[key]} {STATUS[key][1]}")
-        active = model.active_index()
-        if active is not None:
-            summary.append(f"now: {model.runs[active].name}")
+        summary = plan_counts(model, statuses)
         p.setFont(font(9.5))
         p.setPen(C.muted)
         p.drawText(QPointF(left, bar.bottom() + 22), '   ·   '.join(summary))
@@ -1720,11 +2103,7 @@ class RunRow(Clickable):
         """Bar fill: training progress, or episodes evaluated while evaluating."""
         model = self.view.model
         run = model.runs[self.index]
-        status = model.run_status(run)
-        if status == 'evaluating':
-            done, total = run.eval_done()
-            return done / total if total else 0.0
-        return run.fraction(time.time(), status)
+        return row_fraction(run, model.run_status(run), time.time())
 
     def paintEvent(self, _event):
         model = self.view.model
@@ -1752,26 +2131,17 @@ class RunRow(Clickable):
                                                                           int(name_w)))
         p.setFont(font(9))
         p.setPen(color if status in ('failed', 'interrupted', 'lost') else C.muted)
-        phase = self.phase_text(run, status, now)
+        phase = row_phase(run, status, now)
         p.drawText(QPointF(rect.left() + 40, rect.top() + 41),
                    p.fontMetrics().elidedText(phase, Qt.TextElideMode.ElideRight, int(name_w)))
 
         # bar
         right_w = 320.0 if width > 760 else 150.0
         bar = QRectF(rect.left() + 40 + name_w + 14, cy - 8, max(60.0, width - name_w - right_w - 70), 16)
-        label = ''
-        if status == 'evaluating':
-            done, total = run.eval_done()
-            if run.kind == 'report':
-                label = 'report'
-            else:
-                noun = 'runs' if run.kind == 'chain' else 'eval'
-                label = f'{noun} {done}/{total}' if total else 'evaluating'
-        elif status != 'pending':
-            label = f'{self.shown:.0%}'
+        label = row_bar_label(run, status, self.shown)
         hatch = 1.0 if status in ('early', 'failed', 'interrupted', 'lost') else None
         if status == 'starting':
-            paint_bar(p, bar, 1.0, with_alpha(C.accent, 90), t, stripes=True, label='starting')
+            paint_bar(p, bar, 1.0, with_alpha(C.accent, 90), t, stripes=True, label=label)
         else:
             paint_bar(p, bar, self.shown, color, t,
                       ticks=run.target_iterations if status not in ('pending', 'evaluating') else 0,
@@ -1781,35 +2151,25 @@ class RunRow(Clickable):
         nx = bar.right() + 16
         p.setFont(font(9.5, QFont.Weight.DemiBold))
         p.setPen(C.text if status != 'pending' else C.faint)
-        p.drawText(QPointF(nx, rect.top() + 24), self.numbers_text(run, status))
+        p.drawText(QPointF(nx, rect.top() + 24), row_numbers(run, status))
         p.setFont(font(8.5))
         p.setPen(C.muted)
-        p.drawText(QPointF(nx, rect.top() + 41), self.rate_text(run, status, now))
+        p.drawText(QPointF(nx, rect.top() + 41), row_rate(run, status, now))
 
         if right_w >= 320:
             # success sparkline + eval
             spark = QRectF(rect.right() - 178, rect.top() + 12, 78, rect.height() - 24)
-            key = 'balanced_success_rate' if len(run.series('balanced_success_rate')) >= 2 else 'success_rate'
-            points = run.series(key)
+            points = run.series(success_key(run))
             if points:
                 paint_sparkline(p, spark, points, rate_color(points[-1][1]))
-            evaluation = run.eval_rate()
-            what = run.eval_rate_label()
-            running = running_rate(run)
-            if evaluation is None and status == 'evaluating' and running is not None:
-                paint_pill(p, rect.right() - 12, cy - 10, f"{what} ~{fmt_pct(running)}", rate_color(running),
-                           8.5, right=True)
-            elif evaluation is not None:
-                paint_pill(p, rect.right() - 12, cy - 10, f"{what} {fmt_pct(evaluation)}", rate_color(evaluation),
-                           8.5, right=True)
-            elif points:
+            badge = row_badge(run, status)
+            if badge is not None and badge[0] == 'pill':
+                paint_pill(p, rect.right() - 12, cy - 10, badge[1], badge[2], 8.5, right=True)
+            elif badge is not None:
                 # latest success and hearts change (exit - entry), e.g. "89% -0.2♥", right-aligned after the sparkline;
                 # below it the total change, which adds hearts picked up at full health (absent in older logs)
-                real, total = run.last('health_change'), run.last('health_change_total')
-                parts = [(fmt_pct(points[-1][1]), rate_color(points[-1][1]))]
-                if real is not None:
-                    parts.append((f"{real:+.1f}♥", C.muted))
-                top = cy - 10 if total is None or real is None else cy - 17
+                _, parts, total = badge
+                top = cy - 10 if total is None else cy - 17
                 p.setFont(font(8.5, QFont.Weight.Bold))
                 metrics = p.fontMetrics()
                 x = rect.right() - 10
@@ -1819,92 +2179,11 @@ class RunRow(Clickable):
                     p.drawText(QRectF(x, top, metrics.horizontalAdvance(text) + 1, 20),
                                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
                     x -= 6
-                if real is not None and total is not None:
+                if total is not None:
                     p.setFont(font(7.5, QFont.Weight.DemiBold))
                     p.setPen(C.faint)
                     p.drawText(QRectF(rect.right() - 100, cy + 1, 90, 16),
-                               Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, f"total {total:+.1f}♥")
-
-    @staticmethod
-    def numbers_text(run: Run, status: str) -> str:
-        """Steps of a training run; runs or episodes of an evaluation (a batch entry, or a standalone evaluation's
-        run without a step target; done / total while it runs)."""
-        if not run.kind and (run.target_steps or (run.eval_start is None and run.eval is None)):
-            return f"{fmt_steps(run.steps)} / {fmt_steps(run.target_steps)}"
-        if run.kind == 'report':
-            return 'report'
-        unit = 'runs' if run.kind == 'chain' else 'episodes'
-        done, total = run.eval_done()
-        if status == 'evaluating':
-            return f"{done} / {total} {unit}"
-        total = run.eval_episodes() or total
-        return f"{total} {unit}" if total else unit
-
-    @staticmethod
-    def phase_text(run: Run, status: str, now: float) -> str:
-        iters = f"it {run.iteration}/{run.target_iterations}" if run.target_iterations else f"it {run.iteration}"
-        started = run.started_ts
-        duration = ((run.finished_ts or now) - started) if started else None
-        if run.kind and status != 'pending':
-            return RunRow.batch_phase_text(run, status, duration)
-        if status == 'pending':
-            return 'waiting'
-        if status == 'starting':
-            return f"starting · {fmt_duration(duration)}"
-        if status == 'training':
-            return f"training · {iters}"
-        if status == 'evaluating':
-            done, total = run.eval_done()
-            since = now - run.eval_start['ts'] if run.eval_start else None
-            if not total:
-                return 'eval starting'
-            return f"eval {done}/{total} episodes · {fmt_duration(since)}"
-        if status == 'ok':
-            return f"done · {iters} · {fmt_duration(duration)}"
-        if status == 'early':
-            stop = run.early_stop or {}
-            return f"early stop at it {stop.get('iteration', run.iteration)} · {fmt_duration(duration)}"
-        if status == 'lost':
-            return f"process gone · {iters}"
-        message = run.message()
-        return f"{(run.end or run.entry).get('status', status)}: {message}" if message else f"{status} · {iters}"
-
-    @staticmethod
-    def rate_text(run: Run, status: str, now: float) -> str:
-        sps = run.sps()
-        if status == 'training':
-            eta = run.eta(now)
-            parts = [f"{sps:,.0f} sps" if sps else '', f"{fmt_duration(eta)} left" if eta is not None else '']
-            return ' · '.join(part for part in parts if part)
-        if status == 'evaluating' and running_rate(run) is not None:
-            eta = run.eval_eta(now)
-            parts = [f"success {fmt_pct(running_rate(run))}", f"{fmt_duration(eta)} left" if eta is not None else '']
-            return ' · '.join(part for part in parts if part)
-        if run.kind:
-            return batch_headline(run, compact=True) if status in FINISHED else ''
-        if status in FINISHED and sps:
-            return f"{sps:,.0f} sps"
-        return ''
-
-    @staticmethod
-    def batch_phase_text(run: Run, status: str, duration) -> str:
-        """The second line of an evaluation batch's entry (it has no training iterations)."""
-        if status == 'evaluating':
-            done, total = run.eval_done()
-            if run.kind == 'report':
-                return f"report · {fmt_duration(duration)}"
-            if not total or (run.chain_start is None and run.eval_start is None):
-                return f"starting · {fmt_duration(duration)}"
-            unit = 'runs' if run.kind == 'chain' else 'episodes'
-            return f"{'chain' if run.kind == 'chain' else 'eval'} {done}/{total} {unit} · {fmt_duration(duration)}"
-        wall = (run.end or {}).get('wall_seconds') or run.entry.get('wall_seconds') or duration
-        if status == 'ok':
-            resumed = (run.end or {}).get('resumed') or run.entry.get('resumed')
-            return 'done earlier (resumed)' if resumed else f"done · {fmt_duration(wall)}"
-        if status == 'lost':
-            return 'process gone'
-        message = run.message()
-        return f"{status}: {message}" if message else status
+                               Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, total)
 
 
 class ChainCard(Clickable):
@@ -1920,18 +2199,8 @@ class ChainCard(Clickable):
 
     def refresh(self):
         chain = self.view.model.chain() if self.view.model else None
-        lines = []
-        if chain and chain['result']:
-            result = chain['result']
-            runs = result.get('runs') or 1
-            for key, count in list((result.get('failures') or {}).items())[:5]:
-                lines.append((f"{fmt_count_share(count, runs):>13}  {key}", C.bad))
-            for error in (result.get('errors') or [])[:3]:
-                lines.append((f"error: {error}", C.warn))
-        elif chain and chain['error']:
-            lines.append((str(chain['error'].get('message', '')), C.bad))
-        self.lines = lines
-        self.setFixedHeight(self.TOP + (len(lines) * 18 + 6 if lines else 0))
+        self.lines = chain_lines(chain)
+        self.setFixedHeight(self.TOP + (len(self.lines) * 18 + 6 if self.lines else 0))
         self.setVisible(chain is not None)
 
     def animating(self) -> bool:
@@ -1959,17 +2228,8 @@ class ChainCard(Clickable):
         p.drawText(QPointF(rect.left() + 40, rect.top() + 23), 'eval-chain')
         p.setFont(font(9))
         p.setPen(C.muted)
-        runs = chain['runs']
         # Second line: the run count; third: elapsed time and throughput (each elided to the name column).
-        sub = f"{runs} runs" + (f" · {chain['parallel']} parallel" if chain['parallel'] else '')
-        timing = []
-        if status == 'running' and chain['start']:
-            timing.append(fmt_duration(now - chain['start']['ts']))
-        elif status in ('pending', 'skipped'):
-            sub = STATUS[status][1] + f" · {runs} runs"
-        speed = chain_speed(chain)
-        if speed:
-            timing.append(speed)
+        sub, timing = chain_caption(chain, now)
         metrics = p.fontMetrics()
         p.drawText(QPointF(rect.left() + 40, rect.top() + 41),
                    metrics.elidedText(sub, Qt.TextElideMode.ElideRight, int(name_w)))
@@ -1985,12 +2245,10 @@ class ChainCard(Clickable):
         left = rect.left() + 40 + name_w + 14
         bar = QRectF(left, cy - 8, max(60.0, rect.right() - 16 - right_w - left), 16)
 
-        progress = chain['progress'] if status == 'running' else None
-        if result or progress:
+        blocks = chain_bar(chain)
+        if blocks is not None:
             # finished: every run, successes first; running: the runs done so far, the rest still empty
-            total = max(1, (result or {}).get('runs') or chain['runs'] or 1)
-            successes = (result or progress).get('successes') or 0
-            done = total if result else min(total, progress.get('done') or 0)
+            total, done, successes, label = blocks
             path = rounded(bar, bar.height() / 2)
             p.fillPath(path, C.track)
             p.save()
@@ -2006,10 +2264,9 @@ class ChainCard(Clickable):
                 p.fillRect(QRectF(bar.left() + bar.width() * successes / total, bar.top(),
                                   bar.width() * (done - successes) / total, bar.height()), with_alpha(C.bad, 170))
             p.restore()
+            paint_bar_label(p, bar, label)
             if result is None:
-                paint_bar_label(p, bar, f"{done}/{total} runs · {successes} reached the end")
                 return
-            paint_bar_label(p, bar, f"{successes}/{total} = {fmt_pct(result.get('success_rate'))}")
             p.setFont(font(9.5, QFont.Weight.DemiBold))
             p.setPen(rate_color(result.get('success_rate')))
             p.drawText(QPointF(bar.right() + 16, cy + 5), f"{fmt_pct(result.get('success_rate'))} success")
@@ -2052,26 +2309,7 @@ class LineChart(QWidget):
         self.update()
 
     def y_bounds(self) -> tuple[float, float]:
-        """Scale plotted values; health's zero reference must not expand its range."""
-        values = [pt[1] for series in self.series for pt in series['points']]
-        if self.scale != 'health':
-            values.extend(value for value, _, _ in self.hlines)
-        if not values:
-            return (-0.2, 0.2) if self.scale == 'health' else (0.0, 1.0)
-        low, high = min(values), max(values)
-        if self.scale == 'success':
-            if low < 0.25:
-                return 0.0, 1.0
-            low_band, high_band = math.floor(low * 10), math.ceil(high * 10)
-            # Constant values still need a nonzero band (100%: 90–100%).
-            if low_band == high_band:
-                high_band = min(10, high_band + 1)
-                low_band = high_band - 1
-            return low_band / 10, high_band / 10
-        if self.scale == 'health':
-            return low - 0.2, high + 0.2
-        pad = (high - low) * 0.1 or abs(high) * 0.1 or 1.0
-        return low - pad, high + pad
+        return chart_bounds(self.scale, self.series, self.hlines)
 
     def paintEvent(self, _event):
         p = QPainter(self)
@@ -2135,10 +2373,9 @@ class LineChart(QWidget):
                            plot.bottom() - (min(y1, max(y0, py)) - y0) / yspan * plot.height())
 
         p.setFont(font(8))
-        intervals = round(yspan * 10) if self.scale == 'success' else 4
-        for i in range(intervals + 1):
-            value = y0 + yspan * i / intervals
-            y = plot.bottom() - plot.height() * i / intervals
+        ticks = chart_ticks(self.scale, y0, y1)
+        for i, value in enumerate(ticks):
+            y = plot.bottom() - plot.height() * i / (len(ticks) - 1)
             p.setPen(QPen(with_alpha(C.border, 200), 1))
             p.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
             p.setPen(C.faint)
@@ -2310,18 +2547,8 @@ class DetailPane(QWidget):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
 
-        self.charts = {
-            'success': LineChart('Success', fmt_pct, scale='success'),
-            'reward': LineChart('Reward / episode'),
-            'health': LineChart('Health change', fmt=fmt_hearts_change, scale='health'),
-            'length': LineChart('Episode steps', fmt=lambda v: f'{v:.0f}'),
-            'kl': LineChart('Approx KL', fmt=lambda v: f'{v:.3f}'),
-            'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
-            'bombs': LineChart('Bombs / episode', fmt=lambda v: f'{v:.2f}',
-                               empty='unavailable (no bomb measurements)'),
-            'bomb_reward': LineChart('Bomb reward / episode', fmt=lambda v: f'{v:+.2f}',
-                                     empty='unavailable (no bomb measurements)'),
-        }
+        self.charts = {key: LineChart(title, fmt, scale=scale, empty=empty)
+                       for key, (title, fmt, scale, empty) in CHARTS.items()}
         self.charts['bombs'].setToolTip(
             'Means per completed episode in each PPO iteration.\n'
             'Placed: bombs Link placed. Hits: enemy hits credited to bombs (the look-ahead credits a bomb\'s hits '
@@ -2411,126 +2638,11 @@ class DetailPane(QWidget):
         self.chart_stack.setCurrentIndex(1 if run.kind else 0)
         if run.kind:
             self.summary.set_sections(entry_summary(run, status), 'nothing yet')
-        stop = (run.start or {}).get('stop_success')
-        hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop is not None else []
-        if run.eval_rate() is not None:
-            hlines.append((run.eval_rate(), C.eval, f"eval {fmt_pct(run.eval_rate())}"))
-        # Skip startup: leave the run's first STARTUP_ITERATIONS out of the charts.  Until training gets past them,
-        # grey the charts out over the raw points; a run that ended earlier just shows everything it has.
-        done = run.iterations_run
-        past = done >= STARTUP_ITERATIONS
-        skip = STARTUP_ITERATIONS if self.skip_startup and past else 0
-        overlay = (f"Ignoring startup…  {done}/{STARTUP_ITERATIONS}"
-                   if self.skip_startup and not past and status in ('starting', 'training') else '')
-        # A clip family's success per run-time clips switch state (round 22), only when the run logs it.
-        clip_series = [{'label': label, 'color': color, 'points': run.series(f'clips/{state}/success_rate', skip),
-                        'width': 1.4} for state, label, color in (('on', 'clips on', C.eval),
-                                                                  ('off', 'clips off', C.text))]
-        self.charts['success'].set_data([
-            {'label': 'success', 'color': C.accent, 'points': run.series('success_rate', skip), 'width': 1.4,
-             'alpha': 150},
-            {'label': 'curriculum', 'color': C.warn, 'points': run.series('curriculum/success_rate', skip),
-             'width': 1.4},
-            *[series for series in clip_series if series['points']],
-            {'label': 'balanced', 'color': C.ok, 'points': run.series('balanced_success_rate', skip), 'width': 2.4},
-        ], hlines, overlay)
-        self.charts['reward'].set_data([{'label': 'total', 'color': C.accent,
-                                         'points': run.series('reward/total', skip), 'area': True}], (), overlay)
-        # hearts at exit - entry; total adds the dropped hearts picked up at full health (absent in older logs).
-        # Total first: the legend drops entries from the left when the title leaves no room, so 'real' stays.
-        self.charts['health'].set_data([
-            {'label': 'total (+wasted)', 'color': C.accent, 'points': run.series('health_change_total', skip),
-             'width': 1.4},
-            {'label': 'real', 'color': C.ok, 'points': run.series('health_change', skip), 'area': True},
-        ], [(0.0, C.faint, 'no change (exit = entry)')], overlay)
-        self.charts['length'].set_data([{'label': 'steps', 'color': C.warn,
-                                         'points': run.series('episode_steps', skip), 'area': True}], (), overlay)
-        self.charts['kl'].set_data([{'label': 'kl', 'color': C.eval, 'points': run.series('losses/approx_kl', skip)}],
-                                   (), overlay)
-        self.charts['sps'].set_data([{'label': 'sps', 'color': C.muted, 'points': run.series('charts/SPS', skip),
-                                      'area': True}], (), overlay)
-        self.charts['bombs'].set_data([
-            {'label': 'placed', 'color': C.accent, 'points': run.series('bombs/placed', skip), 'width': 1.4},
-            {'label': 'hits', 'color': C.ok, 'points': run.series('bombs/hits', skip), 'area': True},
-            {'label': 'misses', 'color': C.bad, 'points': run.series('bombs/misses', skip), 'width': 1.4},
-            {'label': 'damage', 'color': C.eval, 'points': run.series('bombs/damage', skip), 'width': 2.4},
-        ], (), overlay)
-        earned, cost, net = bomb_reward_series(run, skip)
-        self.charts['bomb_reward'].set_data([
-            {'label': 'earned', 'color': C.ok, 'points': earned, 'width': 1.4},
-            {'label': 'cost', 'color': C.bad, 'points': cost, 'width': 1.4},
-            {'label': 'net', 'color': C.accent, 'points': net, 'area': True, 'width': 2.4},
-        ], [(0.0, C.faint, 'break-even')], overlay)
-
-        sections = []
-        if run.eval:
-            ev = run.eval
-            rows = [
-                ('success', ev.get('success_rate'), f"{fmt_pct(ev.get('success_rate'))} of {ev.get('episodes')}",
-                 rate_color(ev.get('success_rate'))),
-                # Hearts at the end / max hearts, averaged; episodes start with randomized hp, so the start figure
-                # (absent in older logs) is the comparison.
-                ('end health', ev.get('health'),
-                 (f"{fmt_pct(ev.get('health'))} (started {fmt_pct(ev['start_health'])})"
-                  if ev.get('start_health') is not None else fmt_pct(ev.get('health')))
-                 + f" · net {fmt_hearts_pair(ev.get('health_change'), ev.get('health_change_total'))}",
-                 C.ok)]
-            if ev.get('hearts_dropped') is not None:
-                rows.append(heart_drop_row('dropped hearts', ev['hearts_dropped'], ev['hearts_taken'],
-                                           ev['hearts_left']))
-            if ev.get('mean_bomb_placed') is not None:
-                rows.append(bomb_row('bombs', ev))
-            sections.append(('bars', f"Evaluation · act {ev['act']}" if ev.get('act') else 'Evaluation', rows))
-            sections += clips_sections(ev)
-            sections += decisions_section(ev)
-            sections.append(('text', 'No progress · evaluation (action steps)', [
-                (fmt_linger(ev), C.warn if ev.get('linger_max_steps') is not None else C.faint),
-                ('Longest = episode longest quiet streak; tail = quiet steps at episode end. '
-                 'Means are per episode; worst is the largest streak across evaluated episodes.', C.muted)]))
-            by_room = ev.get('by_room') or {}
-            if by_room:
-                # Success rate of the episodes that started in each room (a failure may happen in a later room).
-                failures = ev.get('by_room_failures') or {}
-                sections.append(('bars', 'By start room', [(room, value, fmt_room(value, failures.get(room)),
-                                                            rate_color(value))
-                                                           for room, value in sorted(by_room.items())]))
-                room_linger = ev.get('by_room_linger') or {}
-                sections.append(('text', 'No progress · by room (action steps)',
-                                 [(f'{room}: {fmt_linger(room_linger.get(room) or {})}',
-                                   C.warn if room_linger.get(room) else C.faint)
-                                  for room in sorted(by_room)]))
-            by_state = ev.get('by_state') or {}
-            if by_state:
-                sections.append(('grid', 'By start state', sorted(by_state.items())))
-            failures = eval_failures(ev)
-            if failures:
-                sections.append(('bars', f"Failures (share of all {ev.get('episodes')} episodes)",
-                                 failure_rows(failures, ev.get('episodes'))))
-        elif run.chain is not None:
-            sections += chain_sections(run.chain_result())
-        elif run.chain_start is not None:
-            done, total = run.eval_done()
-            running = running_rate(run)
-            sections.append(('bars', 'eval-chain (running)', [
-                ('runs', done / total if total else 0.0, f"{done}/{total}", C.eval),
-                ('reached the end so far', running, fmt_pct(running), rate_color(running))]))
-        elif run.eval_start:
-            done, total = run.eval_done()
-            running = (run.eval_progress or {}).get('success_rate')
-            sections.append(('bars', 'Evaluation (running)', [
-                ('episodes', done / total if total else 0.0, f"{done}/{total}", C.eval),
-                ('success so far', running, fmt_pct(running), rate_color(running))]))
-        drops = [run.recent_mean(f'hearts/{key}') for key in ('dropped', 'taken', 'left')]
-        if drops[0] is not None:
-            if not sections:
-                sections.append(('text', 'Evaluation', [('not evaluated yet', C.faint)]))
-            sections.append(('bars', 'Training (last 10 iterations)', [heart_drop_row('dropped hearts', *drops)]))
-        problems = [(str(e.get('message', '')), C.bad) for e in run.errors]
-        if run.end and run.end.get('message') and all(run.end['message'] != text for text, _ in problems):
-            problems.append((run.end['message'], C.warn))
-        if problems:
-            sections.append(('text', 'Problems', problems))
-        self.evaluation.set_sections(sections, 'not evaluated yet')
+        # Skip startup: leave the run's first STARTUP_ITERATIONS out of the charts.
+        skip, overlay = startup_skip(run, status, self.skip_startup)
+        for key, (series, hlines) in run_chart_data(run, skip).items():
+            self.charts[key].set_data(series, hlines, overlay)
+        self.evaluation.set_sections(run_eval_sections(run), 'not evaluated yet')
         self._set_events([(run.name, event) for event in run.events])
 
     # -- round
@@ -3143,6 +3255,826 @@ class Window(QMainWindow):
             view.frame()
 
 
+# -------------------------------------------------------------------------------------------------------- web view
+# The runs going on now, served over HTTP beside the window (or without one, ``--web-only``): one page that polls
+# one JSON snapshot.  Read-only: GET ``/`` and ``/api/state``, nothing else.  The server's thread keeps its own
+# Training models, read by the same code as the window's, so neither ever waits for the other.
+
+WEB_PORT = 22222
+WEB_HOST = '0.0.0.0'
+WEB_EXPIRE = 60.0           # seconds a finished run stays on the page
+WEB_POLL = 1.0              # seconds between snapshots
+WEB_SCAN = 2.0              # seconds between log folder scans (the window's scan timer)
+WEB_LOG_LINES = 15          # console log lines per card
+WEB_LOG_BYTES = 16 * 1024   # read from the end of a console log for them
+WEB_POINTS = 400            # chart points per series sent to the page (evenly thinned, the last one kept)
+
+
+def json_safe(value):
+    """``value`` with every non-finite float as None (JSON has no NaN or infinity)."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
+    return value
+
+
+def web_sections(sections: list) -> list:
+    """BarList sections for the page: ['bars', title, [[label, value, text, color]]], ['grid', title, [[label,
+    value, color]]], ['text', title, [[text, color]]] (colors as #rrggbb)."""
+    result = []
+    for kind, title, rows in sections:
+        if kind == 'bars':
+            rows = [[label, value, text, color.name()] for label, value, text, color in rows]
+        elif kind == 'grid':
+            rows = [[label, value, rate_color(value).name()] for label, value in rows]
+        else:
+            rows = [[text, color.name()] for text, color in rows]
+        result.append([kind, title, rows])
+    return result
+
+
+def thin(points: list, limit: int = WEB_POINTS) -> list:
+    """At most ``limit`` evenly spaced points, the last one always among them."""
+    if len(points) <= limit:
+        return points
+    step = (len(points) - 1) / (limit - 1)
+    return [points[round(i * step)] for i in range(limit)]
+
+
+def web_charts(run: Run, status: str) -> list[dict]:
+    """A run's training charts for the page, as the Charts tab draws them (startup skipped): y range, grid lines with
+    their labels, the horizontal lines inside the range and each series with points."""
+    skip, overlay = startup_skip(run, status, True)
+    charts = []
+    for key, (series, hlines) in run_chart_data(run, skip).items():
+        title, fmt, scale, empty = CHARTS[key]
+        plotted = [s for s in series if s['points']]
+        y0, y1 = chart_bounds(scale, plotted, hlines)
+        charts.append({
+            'key': key, 'title': title, 'empty': empty, 'overlay': overlay, 'y': [y0, y1],
+            'ticks': [[value, fmt(value)] for value in chart_ticks(scale, y0, y1)],
+            'hlines': [[value, color.name(), label] for value, color, label in hlines if y0 <= value <= y1],
+            'series': [{'label': s['label'], 'color': s['color'].name(), 'last': fmt(s['points'][-1][1]),
+                        'points': thin(s['points']), 'area': bool(s.get('area')), 'width': s.get('width', 2.0),
+                        'alpha': s.get('alpha', 255) / 255} for s in plotted]})
+    return charts
+
+
+def log_tail(path: Path | None, lines: int = WEB_LOG_LINES) -> list[str]:
+    """The last lines of a console log (none without one)."""
+    if path is None:
+        return []
+    text = read_tail(path, WEB_LOG_BYTES)
+    return text.split('\n')[-lines:] if text else []
+
+
+def run_speed(run: Run, status: str) -> str:
+    """A run's throughput: steps/second while it trains (and once trained), an evaluation's episodes (a chain's
+    runs) per second while it evaluates or once it has."""
+    start, progress, _ = run._eval_events()
+    if (run.kind or status == 'evaluating') and start and progress:
+        return fmt_episode_rate(progress.get('done') or 0, progress['ts'] - start['ts'])
+    sps = run.sps() if not run.kind else None
+    return f"{sps:,.0f} sps" if sps else ''
+
+
+def run_outcome(run: Run, status: str) -> str:
+    """The row's speed line without what the card's speed and time left already say: an evaluation's success so
+    far, a finished batch entry's result."""
+    running = running_rate(run)
+    if status == 'evaluating' and running is not None:
+        return f"success {fmt_pct(running)}"
+    return batch_headline(run, compact=True) if run.kind and status in FINISHED else ''
+
+
+def chain_eta(chain: dict, now: float):
+    """Seconds left in a running eval-chain at its pace so far (None before its first run finishes)."""
+    start, progress = chain['start'], chain['progress']
+    done = (progress or {}).get('done') or 0
+    if chain['status'] != 'running' or not done or start is None:
+        return None
+    return max(0.0, (progress['ts'] - start['ts']) / done * (chain['runs'] - done) - (now - progress['ts']))
+
+
+def web_badge(badge) -> dict:
+    """``row_badge`` for the page: {'pill': bool, 'parts': [[text, color]], 'note': text}."""
+    if badge is None:
+        return {'pill': False, 'parts': [], 'note': ''}
+    if badge[0] == 'pill':
+        return {'pill': True, 'parts': [[badge[1], badge[2].name()]], 'note': ''}
+    return {'pill': False, 'parts': [[text, color.name()] for text, color in badge[1]], 'note': badge[2] or ''}
+
+
+def bar_style(status: str) -> str:
+    """How the page draws a status's bar, as the window does: shimmer while training, stripes while evaluating or
+    starting, hatched for an unhappy ending."""
+    if status in ('early', 'failed', 'interrupted', 'lost'):
+        return 'hatch'
+    return status if status in ('starting', 'training', 'evaluating', 'running') else ''
+
+
+def plan_fields(model: Training) -> dict:
+    """What every card of a plan says about it."""
+    return {'plan': model.name, 'plan_kind': str(model.plan.get('kind') or ''), 'checkout': checkout_label(model.plan)}
+
+
+def run_card(model: Training, run: Run, status: str, now: float) -> dict:
+    """One run's card: a training run of a round or an evaluation of a batch (its row and its detail tabs)."""
+    eta = run.eta(now) if status == 'training' else run.eval_eta(now) if status == 'evaluating' else None
+    started = run.started_ts
+    elapsed = ((run.finished_ts or now) - started) if started else None
+    fraction = row_fraction(run, status, now)
+    metrics = (run.progress[-1].get('metrics') or {}) if run.progress else {}
+    log = run.log_path
+    return {
+        **plan_fields(model), 'kind': run.kind or 'train', 'name': run.name,
+        'family': run.entry.get('specialist') or (run.start or {}).get('specialist') or '',
+        'where': (run.start or {}).get('run_dir') or run.entry.get('output') or run.entry.get('run_dir') or '',
+        'fraction': 1.0 if status == 'starting' else fraction, 'bar_label': row_bar_label(run, status, fraction),
+        'bar': bar_style(status), 'blocks': None, 'numbers': row_numbers(run, status),
+        'phase': row_phase(run, status, now), 'outcome': run_outcome(run, status), 'speed': run_speed(run, status),
+        'elapsed': fmt_duration(elapsed) if elapsed is not None else '', 'eta': fmt_duration(eta) if eta is not None
+        else '', 'badge': web_badge(row_badge(run, status)), 'clips': fmt_clips(metrics),
+        'act': str(run.entry.get('act') or (run.eval or {}).get('act') or ''), 'lines': [],
+        'charts': [] if run.kind else web_charts(run, status),
+        'summary': web_sections(entry_summary(run, status)) if run.kind else [],
+        'eval': web_sections(run_eval_sections(run)), 'log': log_tail(log), 'log_name': log.name,
+    }
+
+
+def chain_card(model: Training, chain: dict, now: float) -> dict:
+    """A plan's eval-chain card (a standalone eval-chain, or the chain after a round): its chain card and the round's
+    Eval tab."""
+    status = chain['status']
+    sub, _ = chain_caption(chain, now)
+    blocks = chain_bar(chain)
+    total, done, successes = blocks[:3] if blocks else (chain['runs'], 0, 0)
+    started = (chain['start'] or {}).get('ts')
+    end = (chain['result'] or chain['error'] or {}).get('ts') or model.finished_ts
+    elapsed = ((end or now) - started) if started else None
+    eta = chain_eta(chain, now)
+    rate = successes / done if done else None
+    result = chain['result']
+    log = model.log_path
+    return {
+        **plan_fields(model), 'kind': 'eval-chain', 'name': 'eval-chain', 'family': str(model.plan.get('route') or ''),
+        'where': '', 'fraction': (done / total if total else 0.0) if blocks else (1.0 if status == 'running' else 0.0),
+        'bar_label': blocks[3] if blocks else ('running' if status == 'running' else ''),
+        'bar': bar_style(status), 'blocks': [total, done, successes] if blocks else None,
+        'numbers': f"{done} / {total} runs", 'phase': sub, 'outcome': '', 'speed': chain_speed(chain),
+        'elapsed': fmt_duration(elapsed) if elapsed is not None else '',
+        'eta': fmt_duration(eta) if eta is not None else '',
+        'badge': web_badge(None if rate is None else ('pill', f"success {fmt_pct(rate)}", rate_color(rate))),
+        'clips': '', 'act': '', 'lines': [[text, color.name()] for text, color in chain_lines(chain)], 'charts': [],
+        'summary': [], 'eval': web_sections(chain_sections(result)) if result else [],
+        'log': log_tail(log), 'log_name': log.name if log else '',
+    }
+
+
+class MachineSampler:
+    """``MachineStatus`` without Qt, for the web view's thread: at most one sample every MACHINE_MS, nvidia-smi run
+    synchronously (with a timeout).  Without nvidia-smi the GPU stays unknown and is not asked again."""
+
+    def __init__(self):
+        self.cpu = self.gpu = self.load = None
+        self._times = read_cpu_times()
+        self._gpu_available = True
+        self._at = None
+
+    def sample(self):
+        times = read_cpu_times()
+        self.cpu = cpu_percent(self._times, times) if times is not None else None
+        self._times = times or self._times
+        try:
+            self.load = os.getloadavg()
+        except OSError:
+            self.load = None
+        if self._gpu_available:
+            try:
+                done = subprocess.run(NVIDIA_SMI, capture_output=True, text=True, timeout=5)
+                self.gpu = parse_gpu_utilization(done.stdout) if done.returncode == 0 else None
+            except OSError:
+                self._gpu_available, self.gpu = False, None
+            except subprocess.SubprocessError:
+                self.gpu = None
+
+    def line(self) -> str:
+        """The status bar line, sampled again when the last sample is MACHINE_MS old."""
+        now = time.monotonic()
+        if self._at is None or now - self._at >= MACHINE_MS / 1000:
+            self._at = now
+            self.sample()
+        return machine_text(self.cpu, self.gpu, self.load)
+
+
+class WebState:
+    """What the page shows: the runs going on now, newest start first, and each live plan's queue.
+
+    Its folders are found as [currently running] finds them (the logs root, the job registry, the running triforce
+    processes' roots), each read by its own ``Training``.  A card is a training run of a round, an evaluation of a
+    batch, or a plan's eval-chain; pending runs are only listed in their plan's line.  A run that ended stays
+    ``expire`` seconds after its end (the time its events or plan record; a run seen running that ended without one,
+    e.g. its process died, from when it was seen ended), so runs that ended before the server started never show.
+    ``clock`` is the time source (tests inject one); ``machine`` returns the machine line."""
+
+    def __init__(self, root: Path, *, clock=time.time, expire: float = WEB_EXPIRE, machine=None,
+                 scan_every: float = WEB_SCAN):
+        self.root = root
+        self.clock = clock
+        self.expire = expire
+        self.machine = machine if machine is not None else MachineSampler().line
+        self.scan_every = scan_every
+        self.scanner = LiveScanner()
+        self.models: dict[Path, Training] = {}
+        self.dropped: set[Path] = set()       # finished folders already shown and let go (not read again)
+        self.seen_active: set[str] = set()
+        self.ended: dict[str, float] = {}     # cards seen active that ended without a time of their own
+        self.first_seen: dict[str, float] = {}
+        self._scanned = None
+        self._lock = threading.Lock()
+        self.snapshot: dict = {}
+        self._body = json.dumps({'loading': True, 'cards': [], 'plans': []}).encode()
+
+    def body(self) -> bytes:
+        """The latest snapshot as JSON."""
+        with self._lock:
+            return self._body
+
+    def _recent(self, plan: dict, now: float) -> bool:
+        """Did the plan end (or last write itself) under ``expire`` seconds ago?"""
+        ended = parse_time(plan.get('finished')) or parse_time(plan.get('updated'))
+        return ended is not None and now - ended < self.expire
+
+    def scan(self, now: float):
+        """Finds the folders to read: every live plan, and plans that ended within ``expire`` seconds."""
+        dirs = find_log_dirs(self.root)
+        root = self.root.resolve()
+        others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
+        registered, recent = registry_folders(read_registry(), now)
+        candidates = list(dict.fromkeys(dirs + registered + others + recent))
+        live = set(self.scanner.live(candidates))
+        self.dropped -= live
+        for path in candidates:
+            if path in self.models or path in self.dropped:
+                continue
+            if path in live or self._recent(self.scanner.plan(path), now):
+                self.models[path] = Training(path)
+
+    def _visible(self, key: str, active: bool, ended, now: float) -> tuple[bool, float | None]:
+        """(shown, seconds left on the page) of a card: active ones always, ended ones ``expire`` seconds after
+        ``ended`` (or after they were seen ended)."""
+        if active:
+            self.seen_active.add(key)
+            self.ended.pop(key, None)
+            return True, None
+        if ended is None and key in self.seen_active:
+            ended = self.ended.setdefault(key, now)
+        if ended is None or now - ended >= self.expire:
+            return False, None
+        return True, self.expire - (now - ended)
+
+    def _cards(self, model: Training, now: float) -> list[dict]:
+        cards = []
+        for run in model.runs:
+            status = model.run_status(run)
+            if status in ('pending', 'skipped'):
+                continue
+            key = f"{model.dir}#{run.index}"
+            shown, left = self._visible(key, status in ACTIVE, run.finished_ts or model.finished_ts, now)
+            if shown:
+                started = run.started_ts or self.first_seen.setdefault(key, now)
+                cards.append({'id': key, 'started_ts': started, 'status': status, 'expires_in': left,
+                              **run_card(model, run, status, now)})
+        chain = model.chain()
+        if chain is not None and chain['status'] not in ('pending', 'skipped'):
+            key = f"{model.dir}#chain"
+            ended = (chain['result'] or chain['error'] or {}).get('ts') or model.finished_ts
+            shown, left = self._visible(key, chain['status'] == 'running', ended, now)
+            if shown:
+                started = (chain['start'] or {}).get('ts') or self.first_seen.setdefault(key, now)
+                cards.append({'id': key, 'started_ts': started, 'status': chain['status'], 'expires_in': left,
+                              **chain_card(model, chain, now)})
+        for card in cards:
+            color, label = STATUS.get(card['status'], (C.muted, card['status']))
+            card.update(status_label=label, color=color.name(), active=card['status'] in ACTIVE,
+                        started=fmt_clock(card['started_ts']))
+        return cards
+
+    @staticmethod
+    def _plan_line(model: Training, now: float) -> dict:
+        """A live plan's line: its header's facts and the runs it has queued."""
+        statuses = model.statuses()
+        queued = [run.name for run, status in zip(model.runs, statuses) if status == 'pending']
+        chain = model.chain()
+        if chain is not None and chain['status'] == 'pending':
+            queued.append('eval-chain')
+        eta = model.eta(now)
+        color, label = STATUS.get(model.status(), (C.muted, model.status()))
+        return {'id': str(model.dir), **plan_fields(model), 'status': model.status(), 'status_label': label,
+                'color': color.name(), 'fraction': model.fraction(now), 'eta': fmt_duration(eta) if eta is not None
+                else '', 'meta': plan_meta(model, now), 'counts': plan_counts(model, statuses), 'queued': queued,
+                'created_ts': model.created_ts}
+
+    def refresh(self) -> dict:
+        """Reads what changed and builds a new snapshot; returns it (the server's thread calls this)."""
+        now = self.clock()
+        tick = time.monotonic()
+        if self._scanned is None or tick - self._scanned >= self.scan_every:
+            self._scanned = tick
+            self.scan(now)
+        cards, plans = [], []
+        for path, model in list(self.models.items()):
+            model.poll()
+            shown = self._cards(model, now)
+            cards += shown
+            if model.status() == 'running':
+                plans.append(self._plan_line(model, now))
+            elif not shown and not self._recent(model.plan, now):
+                del self.models[path]
+                self.dropped.add(path)
+        cards.sort(key=lambda card: (-card['started_ts'], card['id']))
+        plans.sort(key=lambda plan: (-(plan['created_ts'] or 0), plan['id']))
+        snapshot = json_safe({'now': now, 'clock': fmt_clock(now), 'host': socket.gethostname(),
+                              'machine': self.machine(), 'expire': self.expire, 'plans': plans, 'cards': cards})
+        body = json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        with self._lock:
+            self.snapshot, self._body = snapshot, body
+        return snapshot
+
+
+WEB_PALETTE = ('bg', 'card', 'card_hi', 'border', 'track', 'text', 'muted', 'faint', 'accent', 'eval', 'ok', 'warn',
+               'bad', 'idle')
+
+
+def web_page() -> bytes:
+    """The page, in the window's palette (``C``: ``--card-hi`` etc.)."""
+    palette = ''.join(f"--{name.replace('_', '-')}:{getattr(C, name).name()};" for name in WEB_PALETTE)
+    return WEB_PAGE.replace('/*PALETTE*/', palette).encode('utf-8')
+
+
+# The page: no external assets; it asks for api/state every second and updates its cards in place (newest start
+# first), so open sections and scroll positions stay.
+WEB_PAGE = r'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triforce training</title>
+<style>
+:root{/*PALETTE*/color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,
+  "Noto Sans",sans-serif;overflow-anchor:none;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--border);
+  padding:9px 16px;display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline}
+.brand{font-weight:800;font-size:17px}
+.brand small{color:var(--muted);font-weight:400;font-size:13px;margin-left:6px}
+.machine{color:var(--muted);white-space:pre;font-variant-numeric:tabular-nums}
+.conn{margin-left:auto;color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
+.conn.lost{color:var(--bad);font-weight:700}
+main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
+#plans{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.plan{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 12px;display:flex;
+  flex-wrap:wrap;gap:3px 12px;align-items:center;font-size:13px}
+.plan .pname{font-weight:700;font-size:14px}
+.mini{display:inline-block;width:110px;height:8px;border-radius:4px;background:var(--track);overflow:hidden;
+  vertical-align:middle}
+.mini>span{display:block;height:100%;background:var(--c)}
+.muted{color:var(--muted)}.faint{color:var(--faint)}
+.queued{color:var(--muted);flex-basis:100%}
+.queued b{color:var(--faint);font-weight:600}
+#empty{color:var(--muted);text-align:center;padding:70px 10px;font-size:16px}
+#empty small{display:block;color:var(--faint);font-size:13px;margin-top:6px}
+#cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,640px),1fr));gap:14px;align-items:start}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px 10px;min-width:0;
+  position:relative}
+.card.active{border-left:3px solid var(--c)}
+.card.finished{opacity:.8}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--c);flex:none;display:inline-block}
+.active .dot,.plan .dot{box-shadow:0 0 0 0 var(--c);animation:pulse 1.6s ease-out infinite}
+.name{font-weight:700;font-size:16px;overflow-wrap:anywhere}
+.family{color:var(--muted)}
+.pill{display:inline-block;border-radius:9px;padding:0 8px;font-size:11px;font-weight:700;line-height:18px;
+  border:1px solid currentColor;white-space:nowrap}
+.pill:empty{display:none}
+.pill.status{color:var(--c);text-transform:uppercase}
+.pill.kind,.pill.ends{color:var(--muted)}
+.badge{margin-left:auto;display:flex;gap:6px;align-items:baseline;font-weight:700;font-size:13px}
+.badge .note{color:var(--faint);font-size:11px;font-weight:600}
+.badge .pill{font-size:12px}
+.sub{color:var(--muted);font-size:12.5px;margin-top:3px;overflow-wrap:anywhere}
+.where{color:var(--faint);font-size:12px;overflow-wrap:anywhere}
+.phase{color:var(--muted);font-size:13px;margin:6px 0 4px}
+.phase.bad{color:var(--c)}
+.bar{position:relative;height:20px;border-radius:10px;background:var(--track);overflow:hidden}
+.bar .fill{position:absolute;left:0;top:0;bottom:0;width:0;background-color:var(--c);transition:width .9s ease}
+.bar.training .fill{background-image:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.28) 50%,
+  transparent 65%);background-size:300% 100%;animation:shimmer 2.4s linear infinite}
+.bar.evaluating .fill,.bar.running .fill,.bar.starting .fill{background-image:repeating-linear-gradient(-45deg,
+  rgba(255,255,255,.2) 0 6px,transparent 6px 12px);background-size:17px 17px;animation:stripes 1s linear infinite}
+.bar.starting .fill{opacity:.4}
+.bar.hatch .fill{background-image:repeating-linear-gradient(-45deg,rgba(14,17,22,.55) 0 3px,transparent 3px 8px)}
+.bar .blocks{position:absolute;inset:0;display:flex}
+.bar .blocks span{height:100%;flex:none}
+.bar .label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;
+  font-size:12px;text-shadow:0 1px 2px #000,0 0 3px #000;white-space:nowrap}
+.facts{display:flex;flex-wrap:wrap;gap:2px 16px;margin:7px 0 2px;font-size:13px;font-variant-numeric:tabular-nums}
+.facts span{white-space:nowrap}
+.facts i{font-style:normal;color:var(--faint);margin-right:4px}
+.lines{font:12px/1.5 ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;white-space:pre;overflow-x:auto}
+.lines:empty{display:none}
+details{margin-top:8px;border-top:1px solid var(--border);padding-top:6px}
+summary{cursor:pointer;color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.04em;
+  text-transform:uppercase;user-select:none}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:8px;margin-top:6px}
+details.d-more{border-top:none;margin-top:4px;padding-top:0}
+details.d-more>summary{font-size:11px;padding:4px 0}
+.charts svg{width:100%;height:auto;display:block}
+svg .ct{font:700 11.5px system-ui,sans-serif;fill:var(--muted)}
+svg .cl{font:600 10.5px system-ui,sans-serif}
+svg .ca{font:10px system-ui,sans-serif;fill:var(--faint)}
+svg .ce{font:11px system-ui,sans-serif;fill:var(--faint)}
+svg .co{font:700 12px system-ui,sans-serif;fill:var(--muted)}
+.sections{margin-top:4px}
+.sec{margin:8px 0 10px}
+.st{color:var(--muted);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
+  margin-bottom:3px}
+.brow{display:grid;grid-template-columns:minmax(70px,30%) minmax(40px,1fr) auto;gap:10px;align-items:center;
+  min-height:22px;font-size:12.5px}
+.bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt{height:10px;border-radius:5px;background:var(--track);overflow:hidden}
+.bt span{display:block;height:100%}
+.bv{font-weight:600;max-width:52vw;overflow-wrap:anywhere}
+.cells{display:flex;flex-wrap:wrap;gap:4px}
+.cell{width:64px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+  font-size:10.5px;font-weight:600}
+.tl{font-size:12.5px;margin:2px 0;overflow-wrap:anywhere}
+.empty{color:var(--faint);font-size:13px;padding:6px 0}
+pre.log{margin:6px 0 0;background:#11141a;border-radius:8px;padding:8px 10px;color:#c9cfdb;
+  font:12px/1.45 ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;max-height:330px;overflow:auto;
+  white-space:pre}
+@keyframes shimmer{from{background-position:150% 0}to{background-position:-150% 0}}
+@keyframes stripes{from{background-position:0 0}to{background-position:17px 0}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--c)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0
+  transparent}}
+@media (max-width:520px){main{padding:10px 8px 40px}header{padding:6px 10px;gap:0 12px}.brand{font-size:15px}
+  .brand small{display:none}.machine{font-size:12px}.conn{font-size:11px}.card{padding:10px 10px 8px}
+  .badge{margin-left:0;flex-basis:100%}.plan{padding:6px 10px}.mini{width:80px}summary{padding:6px 0}
+  pre.log{font-size:11px;max-height:260px}.plan .faint,.where{display:none}}
+</style></head>
+<body>
+<header><span class="brand">&#9650; Triforce<small>training monitor &middot; currently running</small></span>
+<span class="machine" id="machine"></span><span class="conn" id="conn">connecting…</span></header>
+<main><div id="plans"></div><div id="empty" hidden></div><div id="cards"></div></main>
+<script>
+'use strict';
+const $ = (selector, root = document) => root.querySelector(selector);
+const esc = text => String(text ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;',
+                                                                 '"': '&quot;'})[c]);
+const cards = new Map();
+// A wide screen opens every section of a new card; a phone opens the charts' first two (success, reward) and the
+// evaluation, the other charts and the log one tap away.  Whatever is opened or closed stays so on that card.
+const WIDE = matchMedia('(min-width: 900px)').matches;
+const MAIN_CHARTS = 2;
+let gradients = 0;
+
+function setText(el, text) { text = text ?? ''; if (el.textContent !== text) el.textContent = text; }
+function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
+function rgba(hex, alpha) {
+  const v = parseInt(hex.slice(1), 16);
+  return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${alpha.toFixed(3)})`;
+}
+const pct = value => value == null ? 0 : Math.max(0, Math.min(100, value * 100));
+
+function sectionsHtml(sections, empty) {
+  if (!sections.length) return `<div class="empty">${esc(empty)}</div>`;
+  return sections.map(([kind, title, rows]) => {
+    let body;
+    if (kind === 'bars') {
+      body = rows.map(([label, value, text, color]) =>
+        `<div class="brow"><span class="bl" title="${esc(label)}">${esc(label)}</span>` +
+        `<span class="bt"><span style="width:${pct(value)}%;background:${color}"></span></span>` +
+        `<span class="bv" style="color:${value == null ? 'var(--faint)' : color}">${esc(text)}</span></div>`).join('');
+    } else if (kind === 'grid') {
+      body = '<div class="cells">' + rows.map(([label, value, color]) =>
+        `<span class="cell" title="${esc(label)} ${Math.round(pct(value))}%" ` +
+        `style="background:${rgba(color, (60 + 150 * (value || 0)) / 255)}">${esc(label)}</span>`).join('') + '</div>';
+    } else {
+      body = rows.map(([text, color]) => `<div class="tl" style="color:${color}">${esc(text)}</div>`).join('');
+    }
+    return `<div class="sec"><div class="st">${esc(title)}</div>${body}</div>`;
+  }).join('');
+}
+
+// One chart as the window's LineChart paints it: title, last values, grid, iteration range, reference lines, series.
+function chartSvg(chart) {
+  const W = 420, H = 190, P = {l: 46, t: 32, w: W - 60, h: H - 52};
+  const title = chart.title.toUpperCase();
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(chart.title)}">` +
+    `<rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" rx="8" fill="var(--bg)" stroke="var(--border)"/>` +
+    `<text x="12" y="20" class="ct">${esc(title)}</text>`;
+  let x = W - 10;
+  const limit = 12 + title.length * 6.6 + 12;
+  for (const series of [...chart.series].reverse()) {
+    const text = `${series.label} ${series.last}`, width = text.length * 5.4;
+    if (x - width < limit) break;
+    svg += `<text x="${x}" y="20" text-anchor="end" class="cl" fill="${series.color}">${esc(text)}</text>`;
+    x -= width + 14;
+  }
+  const overlay = chart.overlay ? `<rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" rx="8" fill="var(--bg)" ` +
+    `fill-opacity=".78"/><text x="${W / 2}" y="${H / 2 + 4}" text-anchor="middle" class="co">` +
+    `${esc(chart.overlay)}</text>` : '';
+  if (!chart.series.length) {
+    return svg + `<text x="${P.l + P.w / 2}" y="${P.t + P.h / 2}" text-anchor="middle" class="ce">` +
+      `${esc(chart.empty)}</text>${overlay}</svg>`;
+  }
+  let x0 = Infinity, x1 = -Infinity;
+  for (const series of chart.series) for (const [px] of series.points) { x0 = Math.min(x0, px); x1 = Math.max(x1, px); }
+  const [y0, y1] = chart.y, xspan = (x1 - x0) || 1, yspan = (y1 - y0) || 1;
+  const X = v => (P.l + (v - x0) / xspan * P.w).toFixed(1);
+  const Y = v => (P.t + P.h - (Math.min(y1, Math.max(y0, v)) - y0) / yspan * P.h).toFixed(1);
+  const intervals = Math.max(1, chart.ticks.length - 1);
+  chart.ticks.forEach(([value, label], i) => {
+    const y = (P.t + P.h - P.h * i / intervals).toFixed(1);
+    svg += `<line x1="${P.l}" x2="${P.l + P.w}" y1="${y}" y2="${y}" stroke="var(--border)" stroke-opacity=".8"/>` +
+      `<text x="42" y="${+y + 3}" text-anchor="end" class="ca">${esc(label)}</text>`;
+  });
+  svg += `<text x="${P.l}" y="${P.t + P.h + 13}" class="ca">it ${x0}</text>` +
+    `<text x="${P.l + P.w}" y="${P.t + P.h + 13}" text-anchor="end" class="ca">it ${x1}</text>`;
+  for (const [value, color, label] of chart.hlines) {
+    const y = Y(value);
+    svg += `<line x1="${P.l}" x2="${P.l + P.w}" y1="${y}" y2="${y}" stroke="${color}" stroke-dasharray="4 3"/>` +
+      `<text x="${P.l + 4}" y="${y - 4}" class="ca" fill="${color}" style="fill:${color}">${esc(label)}</text>`;
+  }
+  for (const series of chart.series) {
+    const points = series.points, color = series.color;
+    const line = points.map(([px, py], i) => `${i ? 'L' : 'M'}${X(px)} ${Y(py)}`).join('');
+    const [lx, ly] = points[points.length - 1];
+    if (series.area && points.length > 1) {
+      const id = `g${++gradients}`;
+      svg += `<defs><linearGradient id="${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${color}" ` +
+        `stop-opacity=".27"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>` +
+        `<path d="${line}L${X(lx)} ${Y(y0)}L${X(points[0][0])} ${Y(y0)}Z" fill="url(#${id})"/>`;
+    }
+    if (points.length > 1) {
+      svg += `<path d="${line}" fill="none" stroke="${color}" stroke-opacity="${series.alpha}" ` +
+        `stroke-width="${series.width}" stroke-linejoin="round"/>`;
+    }
+    svg += `<circle cx="${X(lx)}" cy="${Y(ly)}" r="3" fill="${color}"/>`;
+  }
+  return svg + overlay + '</svg>';
+}
+
+function skeleton() {
+  const el = document.createElement('article');
+  el.className = 'card';
+  el.innerHTML = '<div class="top"><span class="dot"></span><span class="name"></span><span class="family"></span>' +
+    '<span class="pill status"></span><span class="pill kind"></span><span class="pill ends"></span>' +
+    '<span class="badge"></span></div><div class="sub"></div><div class="where"></div><div class="phase"></div>' +
+    '<div class="bar"><div class="fill"></div><div class="blocks"></div><div class="label"></div></div>' +
+    '<div class="facts"></div><div class="lines"></div>' +
+    '<details class="d-charts" open><summary>Charts</summary><div class="charts main"></div>' +
+    `<details class="d-more"${WIDE ? ' open' : ''}><summary>More charts</summary><div class="charts more"></div>` +
+    '</details></details>' +
+    '<details class="d-summary" open><summary>Summary</summary><div class="sections summary"></div></details>' +
+    '<details class="d-eval" open><summary>Eval</summary><div class="sections eval"></div></details>' +
+    `<details class="d-log"${WIDE ? ' open' : ''}><summary>Log</summary><pre class="log"></pre></details>`;
+  return el;
+}
+
+function update(el, card) {
+  el.style.setProperty('--c', card.color);
+  el.classList.toggle('active', card.active);
+  el.classList.toggle('finished', !card.active);
+  setText($('.name', el), card.name);
+  setText($('.family', el), card.family && card.family !== card.name ? card.family : '');
+  setText($('.pill.status', el), card.status_label);
+  setText($('.pill.kind', el), card.kind);
+  setText($('.pill.ends', el), card.active || card.expires_in == null ? '' :
+    `ended · gone in ${Math.max(0, Math.ceil(card.expires_in))}s`);
+  const badge = card.badge;
+  setHTML($('.badge', el), badge.parts.map(([text, color]) => badge.pill ?
+    `<span class="pill" style="color:${color}">${esc(text)}</span>` : `<span style="color:${color}">${esc(text)}</span>`)
+    .join('') + (badge.note ? `<span class="note">${esc(badge.note)}</span>` : ''));
+  setText($('.sub', el), [card.plan + (card.plan_kind ? ` (${card.plan_kind})` : ''), card.checkout,
+    card.act ? `act ${card.act}` : '', `started ${card.started}`].filter(Boolean).join('  ·  '));
+  setText($('.where', el), card.where);
+  const phase = $('.phase', el);
+  setText(phase, card.phase);
+  phase.classList.toggle('bad', ['failed', 'interrupted', 'lost'].includes(card.status));
+  const bar = $('.bar', el);
+  bar.className = 'bar ' + card.bar;
+  $('.fill', bar).style.width = (card.blocks ? 0 : pct(card.fraction)) + '%';
+  let blocks = '';
+  if (card.blocks) {
+    const [total, done, successes] = card.blocks;
+    const ok = 'var(--ok)', bad = rgba(getComputedStyle(document.documentElement).getPropertyValue('--bad').trim(),
+                                       170 / 255);
+    if (total <= 120) {
+      const gap = bar.clientWidth / total > 6 ? 2 : 0;
+      for (let i = 0; i < done; i++) {
+        blocks += `<span style="width:calc(${100 / total}% - ${gap}px);margin-right:${gap}px;` +
+          `background:${i < successes ? ok : bad}"></span>`;
+      }
+    } else {
+      blocks = `<span style="width:${100 * successes / total}%;background:${ok}"></span>` +
+        `<span style="width:${100 * (done - successes) / total}%;background:${bad}"></span>`;
+    }
+  }
+  setHTML($('.blocks', bar), blocks);
+  setText($('.label', bar), card.bar_label);
+  const facts = [[card.numbers, ''], [card.speed, ''], [card.elapsed, 'elapsed'], [card.eta, 'left'],
+                 [card.outcome, ''], [card.clips, '']].filter(([text]) => text);
+  setHTML($('.facts', el), facts.map(([text, what]) =>
+    what === 'left' ? `<span>${esc(text)}<i style="margin:0 0 0 4px">left</i></span>` :
+    `<span>${what ? `<i>${what}</i>` : ''}${esc(text)}</span>`).join(''));
+  setHTML($('.lines', el), card.lines.map(([text, color]) => `<div style="color:${color}">${esc(text)}</div>`)
+    .join(''));
+  $('.d-charts', el).hidden = !card.charts.length;
+  if (card.charts.length) {
+    // nothing plotted yet (a run just starting): one line, not eight empty charts
+    const plotted = card.charts.some(chart => chart.series.length);
+    setHTML($('.charts.main', el), plotted ? card.charts.slice(0, MAIN_CHARTS).map(chartSvg).join('') :
+      `<div class="empty">${esc(card.charts[0].overlay || card.charts[0].empty)}</div>`);
+    $('.d-more', el).hidden = !plotted;
+    if (plotted) setHTML($('.charts.more', el), card.charts.slice(MAIN_CHARTS).map(chartSvg).join(''));
+  }
+  $('.d-summary', el).hidden = !card.summary.length;
+  setHTML($('.summary', el), sectionsHtml(card.summary, ''));
+  setHTML($('.eval', el), sectionsHtml(card.eval, card.kind === 'eval-chain' ? 'no chain results yet' :
+                                                  'not evaluated yet'));
+  const log = $('.log', el), details = $('.d-log', el);
+  details.hidden = !card.log_name;
+  setText($('summary', details), card.log_name ? `Log · ${card.log_name}` : 'Log');
+  const text = card.log.join('\n') || '(nothing logged yet)';
+  if (log.textContent !== text) {
+    const bottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+    log.textContent = text;
+    if (bottom) log.scrollTop = log.scrollHeight;
+  }
+}
+
+function render(state) {
+  // Keep what is on screen where it is when cards come, go or grow above it (Safari has no scroll anchoring).
+  let anchor = null, anchorTop = 0;
+  if (window.scrollY > 0) {
+    for (const el of cards.values()) {
+      const rect = el.getBoundingClientRect();
+      if (rect.bottom > 0 && (!anchor || rect.top < anchorTop)) { anchor = el; anchorTop = rect.top; }
+    }
+  }
+  setText($('#machine'), state.machine || '');
+  setHTML($('#plans'), (state.plans || []).map(plan => {
+    const queued = plan.queued.length ? `<span class="queued"><b>queued</b> ${esc(plan.queued.join(', '))}</span>` : '';
+    return `<div class="plan" style="--c:${plan.color}"><span class="dot"></span><span class="pname">` +
+      `${esc(plan.plan)}</span><span class="pill" style="color:var(--muted)">${esc(plan.plan_kind)}</span>` +
+      (plan.checkout ? `<span class="pill" style="color:var(--faint)">${esc(plan.checkout)}</span>` : '') +
+      `<span class="mini"><span style="width:${pct(plan.fraction)}%"></span></span><b>` +
+      `${Math.floor(pct(plan.fraction))}%</b>` + (plan.eta ? `<span>≈ ${esc(plan.eta)} left</span>` : '') +
+      `<span class="muted">${esc(plan.counts.join('  ·  '))}</span>` +
+      `<span class="faint">${esc(plan.meta.join('  ·  '))}</span>${queued}</div>`;
+  }).join(''));
+  const container = $('#cards'), seen = new Set();
+  let previous = null;
+  for (const card of state.cards || []) {
+    seen.add(card.id);
+    let el = cards.get(card.id);
+    if (!el) { el = skeleton(); cards.set(card.id, el); }
+    const next = previous ? previous.nextSibling : container.firstChild;
+    if (next !== el) container.insertBefore(el, next);
+    update(el, card);
+    previous = el;
+  }
+  for (const [id, el] of cards) if (!seen.has(id)) { el.remove(); cards.delete(id); }
+  if (anchor && anchor.isConnected) {
+    const shift = anchor.getBoundingClientRect().top - anchorTop;
+    if (Math.abs(shift) > 0.5) window.scrollBy(0, shift);
+  }
+  const empty = $('#empty');
+  empty.hidden = !!(state.cards || []).length || state.loading;
+  setHTML(empty, (state.plans || []).length ? 'Nothing is running right now; the plans above have runs queued.' :
+    'Nothing is running.<small>Trainings and evaluations that start appear here by themselves.</small>');
+  const active = (state.cards || []).filter(card => card.active).length;
+  document.title = active ? `${active} running — Triforce training` : 'Triforce training';
+}
+
+function show(state) {
+  render(state);
+  const conn = $('#conn');
+  conn.classList.remove('lost');
+  setText(conn, state.loading ? 'loading…' : `${state.host} · ${state.clock}`);
+}
+
+async function poll() {
+  try {
+    const response = await fetch('api/state', {cache: 'no-store'});
+    if (!response.ok) throw new Error(response.status);
+    show(await response.json());
+  } catch (error) {
+    const conn = $('#conn');
+    conn.classList.add('lost');
+    setText(conn, 'connection lost, retrying…');
+  }
+  setTimeout(poll, 1000);
+}
+const INITIAL = /*STATE*/null;      // the snapshot when the page was served: the first paint has the cards
+if (INITIAL) show(INITIAL);
+setTimeout(poll, INITIAL ? 1000 : 0);
+</script>
+</body></html>
+'''
+
+
+class WebHandler(BaseHTTPRequestHandler):
+    """GET (and HEAD) ``/`` (the page) and ``/api/state`` (the snapshot); 404 for anything else."""
+
+    server_version = 'triforce-training-gui'
+
+    def do_GET(self):
+        self._respond(True)
+
+    def do_HEAD(self):
+        self._respond(False)
+
+    def _respond(self, with_body: bool):
+        path = urlsplit(self.path).path
+        if path == '/':
+            # '<' only occurs inside JSON strings, where \u003c means the same and can't end the script element
+            before, after = self.server.web.page.split(b'/*STATE*/null', 1)
+            data = before + self.server.web.state.body().replace(b'<', b'\\u003c') + after
+            kind = 'text/html; charset=utf-8'
+        elif path == '/api/state':
+            data, kind = self.server.web.state.body(), 'application/json; charset=utf-8'
+        else:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header('Content-Type', kind)
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        if with_body:
+            self.wfile.write(data)
+
+    def log_message(self, *_args):
+        """Quiet: the page asks every second."""
+
+
+class WebServer:
+    """The web view: binds at construction (OSError when the port is taken), then ``start`` runs the HTTP server and
+    the snapshot thread (``poll=False``: no snapshot thread; the caller refreshes ``state``)."""
+
+    def __init__(self, state: WebState, host: str = WEB_HOST, port: int = WEB_PORT, interval: float = WEB_POLL):
+        self.state = state
+        self.interval = interval
+        self.page = web_page()
+        self.httpd = ThreadingHTTPServer((host, port), WebHandler)
+        self.httpd.daemon_threads = True
+        self.httpd.web = self
+        self._stop = threading.Event()
+        self._threads: list[threading.Thread] = []
+
+    @property
+    def port(self) -> int:
+        return self.httpd.server_address[1]
+
+    @property
+    def url(self) -> str:
+        host = self.httpd.server_address[0]
+        if host in ('0.0.0.0', '::', ''):
+            host = socket.gethostname()
+        return f"http://{host}:{self.port}/"
+
+    def start(self, poll: bool = True):
+        self._threads = [threading.Thread(target=self.httpd.serve_forever, name='web-http', daemon=True)]
+        if poll:
+            self._threads.append(threading.Thread(target=self._poll, name='web-state', daemon=True))
+        for thread in self._threads:
+            thread.start()
+
+    def _poll(self):
+        """Snapshots until stopped; a failed one is reported and the next one tried (the page keeps the last)."""
+        while not self._stop.is_set():
+            try:
+                self.state.refresh()
+            except Exception as error:      # noqa: BLE001 - the thread must outlive one bad read
+                print(f"training-gui: web snapshot failed: {error!r}", file=sys.stderr)
+            self._stop.wait(self.interval)
+
+    def wait(self):
+        """Blocks until ``stop`` (from another thread) or Ctrl-C."""
+        while not self._stop.wait(0.5):
+            pass
+
+    def stop(self):
+        self._stop.set()
+        if self._threads:
+            self.httpd.shutdown()       # waits for serve_forever, which only a started server runs
+        self.httpd.server_close()
+
+
 def resolve(path_arg) -> tuple[Path, Path | None]:
     """(logs root, initial folder or None)."""
     if path_arg:
@@ -3158,14 +4090,45 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('path', nargs='?', help=f"log folder (has {PLAN_FILE}) or logs root "
                                                 f"(default ${LOGS_DIR_ENV} or logs/ next to this script)")
+    parser.add_argument('--web-port', type=int, default=WEB_PORT, metavar='N',
+                        help=f"port of the web view of the runs going on now (default {WEB_PORT})")
+    parser.add_argument('--web-host', default=WEB_HOST, metavar='HOST',
+                        help=f"address the web view binds (default {WEB_HOST}: every interface)")
+    web = parser.add_mutually_exclusive_group()
+    web.add_argument('--no-web', action='store_true', help="no web view")
+    web.add_argument('--web-only', action='store_true', help="only the web view, no window (needs no display)")
+    parser.add_argument('--web-expire', type=float, default=WEB_EXPIRE, help=argparse.SUPPRESS)  # tests: seconds
     args = parser.parse_args(argv)
     root, initial = resolve(args.path)
+    server = None
+    if not args.no_web:
+        try:
+            server = WebServer(WebState(root, expire=args.web_expire), args.web_host, args.web_port)
+        except OSError as error:
+            print(f"training-gui: no web view, {args.web_host}:{args.web_port} unavailable: "
+                  f"{error.strerror or error}", file=sys.stderr, flush=True)
+            if args.web_only:
+                return 1
+        else:
+            server.start()
+            print(f"training-gui: web view at {server.url}", flush=True)
+    if args.web_only:
+        try:
+            server.wait()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.stop()
+        return 0
     app = QApplication(sys.argv[:1])
     app.setApplicationName('Triforce training')
     apply_theme(app)
     window = Window(root, initial)
     window.show()
-    return app.exec()
+    code = app.exec()
+    if server is not None:
+        server.stop()
+    return code
 
 
 if __name__ == '__main__':
