@@ -133,6 +133,7 @@ fn exit_spans_bound_targets_and_correct_exits() {
         pbrs_targets: Default::default(),
         retreats: Default::default(),
         clips: false,
+        treasure_refused: false,
     };
     assert!(
         !exit_is_correct_at(&map, from, (31, 10), &objective, loc(0, 0x4b)),
@@ -1138,4 +1139,73 @@ fn sideways_in_the_s_doorway(name: &str, room: MapLocation) -> (u32, u32, i32) {
         spot = s.snapshot();
     }
     (offered, refused, deepest)
+}
+
+/// A Dungeon 5 view (round 24, route d5) from a Dungeon 4 image: Link in `room` (game mode `mode`: 5 playing, 9 in a
+/// cellar) with what the route holds there (Dungeons 1-4's pieces, the white sword, bow, raft, ladder) and the
+/// recorder or not; no objects.
+fn d5_view(map: &Arc<GameMap>, image: &[u8; RAM_SIZE], room: u8, mode: u8, recorder: bool) -> GameView {
+    let mut ram = in_room(image, room);
+    clear_objects(&mut ram);
+    for (var, value) in [
+        (Var::Level, 5),
+        (Var::Mode, mode),
+        (Var::Triforce, 0x0F),
+        (Var::Sword, 2),
+        (Var::Bow, 1),
+        (Var::Raft, 1),
+        (Var::StepLadder, 1),
+        (Var::Whistle, recorder as u8),
+    ] {
+        set(&mut ram, var, value);
+    }
+    view(map, &ram, 0)
+}
+
+/// Dungeon 5: the recorder is route progress (`waypoint: recorder`, round 24).  The tunnel cellar 0x07 is entered
+/// from its stairs twice: a reset there picks the westbound step (leave E, up the right ladder, to 0x06) without
+/// the recorder and the way back (W, to 0x64) with it.  Out of the recorder cellar into the Olive Garden 0x05
+/// without the recorder Link is off the route and the objective sends him back down; with it, E.
+#[test]
+fn d5_the_recorder_tells_the_tunnel_cellar_visits_and_the_way_back_apart() {
+    let Some(images) = images(&["4_03s_0"]) else { return };
+    let map = Arc::new(GameMap::builtin());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let (tunnel, recorder_cellar) = (MapLocation::new(5, 0x07, true), MapLocation::new(5, 0x04, true));
+    for (recorder, exit, next) in [(false, "E", loc(5, 0x06)), (true, "W", loc(5, 0x64))] {
+        let state = d5_view(&map, &images[0], 0x07, 9, recorder);
+        assert_eq!(state.full_location(), tunnel);
+        let (route, step) = start_route(&map, tunnel, Some("S"), &mut rng, Some("d5"), &state, true);
+        let step = step.expect("a d5 step");
+        assert_eq!(map.routes[&route][step].exit, exit, "recorder {recorder}");
+        let objective = GameCompletion::new(map.clone(), &route, Some(step)).unwrap().objectives(None, &state);
+        assert_eq!(objective.next_rooms, [next].into(), "recorder {recorder}");
+    }
+    for (recorder, next) in [(false, recorder_cellar), (true, loc(5, 0x06))] {
+        let below = d5_view(&map, &images[0], 0x04, 9, recorder);
+        let out = d5_view(&map, &images[0], 0x05, 5, recorder);
+        let (route, step) = start_route(&map, recorder_cellar, Some("S"), &mut rng, Some("d5"), &below, true);
+        let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
+        gc.objectives(None, &below);
+        let objective = gc.objectives(Some(&below), &out);
+        assert_eq!(gc.step().is_some(), recorder, "the way back is a step only with the recorder");
+        assert_eq!(objective.next_rooms, [next].into(), "recorder {recorder}");
+    }
+}
+
+/// The big Digdogger is 32x32 (4x4 tiles, zelda-asm/enemies.md "# Digdogger"): the fight's targets surround the
+/// whole body, not a 16x16 corner.
+#[test]
+fn d5_the_big_digdogger_covers_four_by_four_tiles() {
+    let Some(images) = images(&["4_03s_0"]) else { return };
+    let map = Arc::new(GameMap::builtin());
+    let mut ram = in_room(&images[0], 0x24);
+    clear_objects(&mut ram);
+    set(&mut ram, Var::Level, 5);
+    ram[tables::OBJ_ID.0 + 1] = zelda::enums::enemy::DIGDOGGER2;
+    ram[tables::OBJ_POS_X.0 + 1] = 0x60;
+    ram[tables::OBJ_POS_Y.0 + 1] = 0x8D;
+    let state = view(&map, &ram, 0);
+    let big = state.enemies.iter().find(|e| e.is_big_digdogger()).expect("the big Digdogger");
+    assert_eq!((big.dims(), big.link_overlap_tiles().len()), ((4, 4), 25));
 }

@@ -14,7 +14,7 @@ from triforce.specialist import list_specialists
 def test_the_route_and_families():
     # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12); clips-gauntlet is round 21's
     # experiment route (two targets per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd5', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
@@ -75,7 +75,8 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
     assert native.game_rooms()[(1, 0x7f, True)]['treasure'] == 'bow'
     assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False), (4, 0x02, False),
                                               (4, 0x11, False)]
-    assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True)]
+    assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True), (5, 0x04, True),
+                                                   (5, 0x07, True)]
 
 
 def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
@@ -140,7 +141,7 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
     assert rooms[(4, 0x60, True)]['treasure'] == 'ladder' and rooms[(4, 0x13, False)]['treasure'] == 'heart-container'
     assert rooms[(4, 0x21, False)]['requires_bombs'] and rooms[(4, 0x11, False)]['requires_bombs']
     assert rooms[(4, 0x01, False)]['treasure'] == 'key'
-    assert [room for room, info in rooms.items() if info['name']] == [(4, 0x32, False)]
+    assert [room for room, info in rooms.items() if info['name']] == [(4, 0x32, False), (5, 0x05, False)]
 
 
 def test_after_d1_the_route_takes_0x67s_rupees_then_either_way_to_dungeon_3():

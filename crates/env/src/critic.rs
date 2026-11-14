@@ -15,9 +15,9 @@ use zelda::enums::{
     ActionKind, AnimationKind, AnimationState, Direction, MapLocation, SwordKind, Tile, enemy,
 };
 use zelda::game::GameView;
-use zelda::objectives::{Objective, exit_is_correct};
+use zelda::objectives::{FLAG_ITEM_TAKEN, Objective, exit_is_correct};
 use zelda::room::{Target, Wavefront};
-use zelda::room_state::{SecretTrigger, decode_room_state};
+use zelda::room_state::{SecretTrigger, decode_room_state, room_flags};
 use zelda::{Change, GameMap, Var, tables};
 
 pub const BEAM_DISTANCE_THRESHOLD: f32 = 48.0;
@@ -262,6 +262,19 @@ impl GameplayCritic {
 
     fn critique_equipment_pickup(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let (prev, curr) = (&c.change.previous, &c.change.state);
+        // A treasure the route step refuses (routes.yaml `treasure: refuse`, Dungeon 5's 0x65 westbound): its pickup
+        // (the room's item-taken flag rising, asm:Item_TryTake) costs instead of paying.
+        let room = curr.full_location();
+        if c.prev_objective.treasure_refused
+            && room == prev.full_location()
+            && room.level > 0
+            && !room.in_cave
+            && room_flags(curr.ram(), room.value) & FLAG_ITEM_TAKEN != 0
+            && room_flags(prev.ram(), room.value) & FLAG_ITEM_TAKEN == 0
+        {
+            rewards.add(Outcome::penalty("penalty-refused-treasure", -REWARD_LARGE));
+            return;
+        }
         for (attr, name, value) in EQUIPMENT {
             // The map and compass are the current level's: walking into a dungeon whose map Link holds is no pickup.
             if matches!(attr, "map" | "compass") && prev.level() != curr.level() {

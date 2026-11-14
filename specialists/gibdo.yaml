@@ -1,0 +1,25 @@
+name: gibdo
+rooms: ['(5, 0x76)', '(5, 0x66)', '(5, 0x65)', '(5, 0x47)', '(5, 0x26)', '(5, 0x14)']
+start_states: []                           # round 24: the second pass adds its states (the leg's played entrance)
+success: [exit-correct, triforce-collected]   # 0x14 ends on the D5 triforce
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
+items: {bombs: required}                   # its requires_bombs rooms 0x66 and 0x65: one bomb at each W wall (offered only in reach of it); else the 10th kill
+curriculum: {enabled: true}             # trajectories/gibdo (Go-Explore paths per start state)
+one_room: true
+max_steps: 1500
+warm_start: null
+trainable: false                           # round 24: no start states until the second pass (the leg's played entrance)
+notes: >-
+  Gibdo rooms (Dungeon 5, round 24; docs/routes/d5.md): Gibdos are slow mummies, 2 hearts a touch, four white-sword
+  hits; a hit one flashes about 32 frames, and Link walks through a flashing monster unhurt (the owner's
+  sword-through, measured for Gibdos, side-on Darknuts and Pols Voices). A Gibdo in slot 1 carries the room item
+  (0x66's key, 0x65's bombs), taken by touching it, whatever its flash. The empty entrance 0x76 (S to N); the dark
+  0x66 S to W (don't fight: its key is not wanted, `treasure: skip`; bomb the W wall) and on the way back W to N
+  (kill the three: the N shutter; the key; N over the water by the ladder); 0x65 E to W (its four bombs refused,
+  `treasure: refuse`: taking them costs; bomb the W wall) and back W to E (the bombs taken); 0x47 S to N (straight
+  up at X $78, the ladder over the middle water, swinging at Gibdos in the way; its key skipped); 0x26 E to W
+  (round the water ring by row 0 or 6; its key skipped); the empty triforce room 0x14 (ends on the pickup).
+  Copied from stalfos-keese-gel (bombs `required`, one-room, curriculum).

@@ -147,12 +147,20 @@ pub struct Enemy {
 }
 
 impl Enemy {
+    /// Tiles (8 px) the monster covers from its position: Aquamentus 3x3, the big Digdogger 4x4 (32x32 px, tested at
+    /// four 16x16 corners, zelda-asm/enemies.md "# Digdogger"), the rest 2x2.
     pub fn dims(&self) -> (i32, i32) {
-        if self.id == enemy::AQUAMENTUS {
-            (3, 3)
-        } else {
-            (2, 2)
+        match self.id {
+            enemy::AQUAMENTUS => (3, 3),
+            enemy::DIGDOGGER2 | enemy::DIGDOGGER3 => (4, 4),
+            _ => (2, 2),
         }
+    }
+
+    /// The big Digdogger (`$38`, `$39` before its init): no weapon touches it until the recorder splits it into the
+    /// small one (`$18`, an ordinary monster; attribute `$A9`, asm:Collision_CheckMonsterVsWeaponsAndLink).
+    pub fn is_big_digdogger(&self) -> bool {
+        matches!(self.id, enemy::DIGDOGGER2 | enemy::DIGDOGGER3)
     }
 
     pub fn tile(&self) -> Tile {
@@ -883,6 +891,11 @@ impl GameView {
 
     pub fn ladder(&self) -> bool {
         self.byte(Var::StepLadder) != 0
+    }
+
+    /// Link holds the recorder (`InvFlute` $65C; Dungeon 5's cellar 0x04).
+    pub fn recorder(&self) -> bool {
+        self.byte(Var::Whistle) != 0
     }
 
     pub fn rupees(&self) -> i32 {

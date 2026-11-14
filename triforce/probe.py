@@ -18,7 +18,7 @@ Nothing here is how the game is played: it writes the room id, the level block a
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from triforce._native import Game, game_rooms
 
@@ -38,6 +38,11 @@ ENTRY_ORDER = (OPEN, SHUTTER, 5, 6, BOMB)                # which of a room's own
 DARK = 0x80                                              # attr E: the room is dark
 CAVE_MOUTH = (0x40, 0x5D)                                # under 0x77's cave mouth: Up from here enters it
 ENTER_FRAMES, WALK_FRAMES, SETTLE_FRAMES = 600, 400, 90
+# What the route holds on entering Dungeon 5 (round 24; `write_entry_state`'s development state until the leg from
+# Dungeon 4 delivers a played one): the white sword, the wooden boomerang, the bow without arrows, the raft, the
+# ladder, Dungeons 1-4's triforce pieces, 10 full heart containers and 6 keys; bombs are the caller's (0-8).
+D5_INVENTORY = {'sword': 2, 'regular_boomerang': 1, 'bow': 1, 'arrows': 0, 'raft': 1, 'step_ladder': 1,
+                'triforce': 0x0F, 'hearts_and_containers': 0x99, 'partial_hearts': 0xFF, 'keys': 6, 'rupees': 0}
 
 
 class ProbeError(RuntimeError):
@@ -130,11 +135,15 @@ class Probe:
             raise ProbeError(f'did not get into {level}:0x{room:02x} from {entry} (mode {game.read(MODE)}, room '
                              f'0x{game.read(ROOM_ID):02x})')
 
-    def enter_room(self, level: int, room: int, entry: Optional[str] = None, lit: bool = True) -> str:
+    def enter_room(self, level: int, room: int, entry: Optional[str] = None, lit: bool = True,
+                   setup: Optional[Callable[[Game], None]] = None) -> str:
         """Link playing in ``room`` of ``level``, on its first frame, come in by ``entry`` (default: the best of its
-        own doors, ``ENTRY_ORDER``).  ``lit`` clears the room's dark flag first.  Returns the side he came in by.
-        The start room entered without an ``entry`` is the level entry itself (he stands at its S door)."""
+        own doors, ``ENTRY_ORDER``).  ``lit`` clears the room's dark flag first; ``setup(game)`` runs in the level's
+        start room before Link walks (items, room flags: what a route would have done by then).  Returns the side he
+        came in by.  The start room entered without an ``entry`` is the level entry itself (he stands at its S door)."""
         start = self.enter_level(level)
+        if setup is not None:
+            setup(self.game)
         if room == start and entry is None:
             return 'S'
         hops = self._hops(start, level, room, entry)
@@ -160,3 +169,30 @@ class Probe:
         self.enter_room(level, room)
         self.settle()
         return self.game.screen()[HUD_ROWS:HUD_ROWS + TILE_H]
+
+
+def write_entry_state(path, level: int, inventory: dict, states_dir) -> None:
+    """Writes a pre-entry state of ``level``'s start room (the frame before Link, come down its stairs, plays in it),
+    with ``inventory`` (``Game.set_value`` names) written first: a development state for a dungeon no played state
+    reaches yet (round 24: Dungeon 5 with ``D5_INVENTORY``), for tests and scouting only.  Never install one into
+    triforce/states: its inventory is written, not played (the audit flags its name and hearts)."""
+    from triforce.entry_states import is_pre_entry      # pylint: disable=import-outside-toplevel
+    probe = Probe(states_dir)
+    game = probe.game
+    game.load(str(Path(states_dir) / 'start.state'), randomize_rng=False)
+    for name, value in inventory.items():
+        game.set_value(name, value)
+    game.apply_ram({'location': probe.entrances[level], 'link_x': CAVE_MOUTH[0], 'link_y': CAVE_MOUTH[1]})
+    pre_entry = None
+    for _ in range(ENTER_FRAMES):
+        if is_pre_entry(game.read):
+            pre_entry = game.snapshot()
+        game.press('UP', 1)
+        if game.read(MODE) == PLAY and game.read(LEVEL) == level:
+            break
+    else:
+        raise ProbeError(f'level {level} did not load')
+    if pre_entry is None:
+        raise ProbeError(f'no pre-entry frame on the way into level {level}')
+    game.restore(pre_entry)
+    game.save_state_file(str(path))

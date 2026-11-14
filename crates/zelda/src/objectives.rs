@@ -40,6 +40,12 @@ pub const WAYPOINT_RAFT: &str = "raft";
 /// routes.yaml `waypoint: ladder` (on Dungeon 4's cellar step under the Breakfast Room 0x32): take the cellar's
 /// ladder, as the bow (`StepProgress::ladder`).
 pub const WAYPOINT_LADDER: &str = "ladder";
+/// routes.yaml `waypoint: recorder` (on Dungeon 5's cellar step under 0x05, the Olive Garden): take the cellar's
+/// recorder, as the bow (`StepProgress::recorder`; it also tells the two visits of the tunnel cellar 0x07 apart).
+pub const WAYPOINT_RECORDER: &str = "recorder";
+/// A cellar's ladders at X >= $80 (tile column 16) lead to the room in its attribute B, the rest to attribute A's
+/// (asm:Warp_CheckSubroomExit): the game.yaml exits `E` and `W` of a tunnel cellar.
+const CELLAR_EAST_COLUMN: i32 = 16;
 /// IsRoomAllDead ($34D): the room's monsters are all dead (a push block moves only then, asm:PushBlock_Update).
 const ROOM_ALL_DEAD: u16 = 0x34D;
 const PUSH_DIRECTIONS: [Direction; 4] = [Direction::N, Direction::S, Direction::E, Direction::W];
@@ -96,10 +102,13 @@ pub struct Objective {
     /// (`Room::wavefront`): the acting specialist has clips on and the run-time switch allows them
     /// (`GameCompletion::set_clips`, `GameCompletion::set_clips_allowed`).
     pub clips: bool,
+    /// The route step Link plays here refuses the room's treasure (routes.yaml `treasure: refuse`, Dungeon 5's 0x65
+    /// westbound): taking it costs (the env critic's `penalty-refused-treasure`).
+    pub treasure_refused: bool,
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
-/// earlier cave steps handed over and whether earlier cellar steps gave the bow, the raft and the ladder.
+/// earlier cave steps handed over and whether earlier cellar steps gave the bow, the raft, the ladder and the recorder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepProgress {
     pub triforces: u8,
@@ -107,6 +116,7 @@ pub struct StepProgress {
     pub bow: bool,
     pub raft: bool,
     pub ladder: bool,
+    pub recorder: bool,
 }
 
 impl StepProgress {
@@ -120,6 +130,7 @@ impl StepProgress {
             bow: state.bow(),
             raft: state.raft(),
             ladder: state.ladder(),
+            recorder: state.recorder(),
         }
     }
 
@@ -163,7 +174,8 @@ fn per_step<T: Clone>(ways: [Vec<Option<T>>; 2]) -> Vec<T> {
 }
 
 fn progress_ways(map: &GameMap, steps: &[RouteStep]) -> [Vec<Option<StepProgress>>; 2] {
-    let start = StepProgress { triforces: 0, sword: SwordKind::None, bow: false, raft: false, ladder: false };
+    let start =
+        StepProgress { triforces: 0, sword: SwordKind::None, bow: false, raft: false, ladder: false, recorder: false };
     along_ways(steps, start, |progress, step| {
         if step.exit == "triforce" && (1..=8).contains(&step.level) {
             progress.triforces |= 1 << (step.level - 1);
@@ -183,6 +195,9 @@ fn progress_ways(map: &GameMap, steps: &[RouteStep]) -> [Vec<Option<StepProgress
         }
         if treasure == Some("ladder") {
             progress.ladder = true;
+        }
+        if treasure == Some("recorder") {
+            progress.recorder = true;
         }
     })
 }
@@ -675,6 +690,7 @@ impl GameCompletion {
                 pbrs_targets: BTreeSet::new(),
                 retreats: BTreeSet::new(),
                 clips: self.clips_effective(),
+                treasure_refused: false,
             };
         }
         self.update_exits(state);
@@ -703,6 +719,9 @@ impl GameCompletion {
             pbrs_targets: pbrs,
             retreats: self.retreats(state.full_location()),
             clips: self.clips_effective(),
+            treasure_refused: self
+                .current_step(state.full_location())
+                .is_some_and(|s| s.treasure == crate::game_map::TreasureRule::Refuse),
         }
     }
 
@@ -781,11 +800,11 @@ impl GameCompletion {
             return;
         };
         for exit in room.exits.values() {
-            if exit.locked {
+            if exit.locked || exit.bomb_wall {
                 let key = (loc, exit.direction.clone());
                 if !self.opened_doors.contains(&key)
                     && let Some(d) = Direction::from_exit(&exit.direction)
-                    && !state.is_door_locked(d)
+                    && if exit.locked { !state.is_door_locked(d) } else { state.is_bomb_door_open(d) }
                 {
                     self.opened_doors.insert(key);
                     self.closest.get_mut().clear();
@@ -806,9 +825,11 @@ impl GameCompletion {
             {
                 self.closest.get_mut().clear();
             }
+            // An opened key door or bombed wall (round 24: a bomb wall the route opened is open to the path searches
+            // from either side; 5:0x06 back down to the tunnel goes through 0x64's E wall, bombed from 0x65).
             for exit in room.exits.values() {
                 if let Some(d) = Direction::from_exit(&exit.direction)
-                    && exit.locked
+                    && (exit.locked || exit.bomb_wall)
                     && flags & d.value() != 0
                     && self.opened_doors.insert((*loc, exit.direction.clone()))
                 {
@@ -1054,17 +1075,29 @@ impl GameCompletion {
     }
 
     /// The way out of a sub-room: a cave's S edge to its overworld room, a cellar's ladder (N, the top row) to the
-    /// room its game.yaml exit names.
+    /// room its game.yaml exit names.  A tunnel cellar has two ladders, game.yaml exits `W` (Link's X < $80: the room
+    /// in attribute A) and `E` (attribute B; asm:Warp_CheckSubroomExit): on a route step only the step's own ladder
+    /// is the way out (Dungeon 5's 0x07, between 0x64 and 0x06); off the route either.
     fn subroom_exit(&self, state: &GameView) -> MapObjective {
         let loc = state.full_location();
-        let (direction, rooms) = if state.in_cellar() {
-            let rooms = self.map.get(loc).map(|r| r.neighbors().collect()).unwrap_or_default();
-            (Direction::N, rooms)
-        } else {
-            (Direction::S, [MapLocation::new(loc.level, loc.value, false)].into_iter().collect())
+        if !state.in_cellar() {
+            let rooms = [MapLocation::new(loc.level, loc.value, false)].into_iter().collect();
+            let exits = state.room().exits.get(Direction::S).unwrap_or_default();
+            return (exits.iter().map(|&t| Target::Tile(t)).collect(), rooms);
+        }
+        let Some(room) = self.map.get(loc) else {
+            return (Vec::new(), BTreeSet::new());
         };
-        let exits = state.room().exits.get(direction).unwrap_or_default();
-        (exits.iter().map(|&t| Target::Tile(t)).collect(), rooms)
+        let ladder = self.current_step(loc).and_then(|s| Some((s.exit.as_str(), room.exits.get(&s.exit)?.destination)));
+        let (half, rooms): (Option<bool>, BTreeSet<MapLocation>) = match ladder {
+            Some(("E", next)) => (Some(true), [next].into_iter().collect()),
+            Some(("W", next)) => (Some(false), [next].into_iter().collect()),
+            Some((_, next)) => (None, [next].into_iter().collect()),
+            None => (None, room.neighbors().collect()),
+        };
+        let exits = state.room().exits.get(Direction::N).unwrap_or_default();
+        let tiles = exits.iter().filter(|t| half.is_none_or(|east| (t.0 >= CELLAR_EAST_COLUMN) == east));
+        (tiles.map(|&t| Target::Tile(t)).collect(), rooms)
     }
 
     fn dungeon_room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
@@ -1574,6 +1607,7 @@ mod tests {
             pbrs_targets: BTreeSet::new(),
             retreats: BTreeSet::new(),
             clips: false,
+            treasure_refused: false,
         };
         for (row, correct) in [(3, true), (4, true), (15, false), (16, false)] {
             assert_eq!(
@@ -1690,5 +1724,28 @@ mod tests {
         assert_eq!(w[2].after, [2, 1].into_iter().collect());
         assert_eq!(w[3].after, [2, 1].into_iter().collect());
         assert_eq!(w[4].after, [2, 1, 3].into_iter().collect());
+    }
+
+    /// d5 (round 24): the recorder from Dungeon 5's cellar 0x04 on (the tunnel cellar's two visits differ by it), a
+    /// `recorder` waypoint between the D4 and D5 triforces; d2first never has it.
+    #[test]
+    fn d5_takes_the_recorder_in_the_olive_gardens_cellar() {
+        let map = GameMap::builtin();
+        let steps = &map.routes["d5"];
+        let progress = route_progress(&map, steps);
+        assert!(route_progress(&map, &map.routes["d2first"]).iter().all(|p| !p.recorder));
+        let tunnel: Vec<bool> = steps
+            .iter()
+            .zip(&progress)
+            .filter(|(s, _)| s.location() == MapLocation::new(5, 0x07, true))
+            .map(|(_, p)| p.recorder)
+            .collect();
+        assert_eq!(tunnel, [false, true]);
+        let first = progress.iter().position(|p| p.recorder).unwrap();
+        assert_eq!(steps[first - 1].location(), MapLocation::new(5, 0x04, true));
+        let w = route_waypoints(steps);
+        let last = w.last().unwrap();
+        assert_eq!((last.kind.as_str(), last.location, last.before), (WAYPOINT_RECORDER, steps[first - 1].location(), Some(5)));
+        assert_eq!(last.after, [2, 1, 3, 4].into_iter().collect());
     }
 }

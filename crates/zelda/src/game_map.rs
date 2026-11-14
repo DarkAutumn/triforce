@@ -258,7 +258,7 @@ const STEP_KEYS: [&str; 11] = [
 const STEP_ENTRIES: [&str; 6] = ["start", "N", "S", "E", "W", "cave"];
 /// `maze` ([`MAZE_EXIT`]) parses so `from_yaml` can say why a route may not take it.
 const STEP_EXITS: [&str; 8] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT];
-const WAYPOINTS: [&str; 5] = ["heart", "rupees", "bow", "raft", "ladder"];
+const WAYPOINTS: [&str; 6] = ["heart", "rupees", "bow", "raft", "ladder", "recorder"];
 const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];
 
 impl GameRoom {
@@ -276,6 +276,9 @@ pub enum TreasureRule {
     Take,
     /// `treasure: skip`: leave it (Dungeon 3's 0x69: pass its eight Darknuts to the stairs; 0x5b's first visit).
     Skip,
+    /// `treasure: refuse`: leave it, and taking it costs (`env` critic `penalty-refused-treasure`): Dungeon 5's 0x65
+    /// westbound, whose Gibdo carries the 4 bombs the route takes on the way back (the owner, Nov 14).
+    Refuse,
     /// `treasure: {if_bombs_below: N}`: take it only while Link holds fewer than N bombs, read live (no route step
     /// uses it since round 23: at Dungeon 3's 0x5b a bomb spent at N left N - 1 and turned the walk to the wall into a
     /// fight beside an opened wall; decisions 2026-11-14).
@@ -290,7 +293,7 @@ impl TreasureRule {
     pub fn wants(self, bombs: i32) -> bool {
         match self {
             TreasureRule::Take => true,
-            TreasureRule::Skip => false,
+            TreasureRule::Skip | TreasureRule::Refuse => false,
             TreasureRule::Clear => true,
             TreasureRule::IfBombsBelow(n) => bombs < i32::from(n),
         }
@@ -301,6 +304,7 @@ impl TreasureRule {
         match self {
             TreasureRule::Take => None,
             TreasureRule::Skip => Some("skip".into()),
+            TreasureRule::Refuse => Some("refuse".into()),
             TreasureRule::Clear => Some("clear".into()),
             TreasureRule::IfBombsBelow(n) => Some(format!("if_bombs_below: {n}")),
         }
@@ -314,15 +318,16 @@ impl TreasureRule {
             return match text {
                 "take" => Ok(TreasureRule::Take),
                 "skip" => Ok(TreasureRule::Skip),
+                "refuse" => Ok(TreasureRule::Refuse),
                 "clear" => Ok(TreasureRule::Clear),
-                _ => err(format!("treasure: {text:?} (take, skip, clear or {{if_bombs_below: N}})")),
+                _ => err(format!("treasure: {text:?} (take, skip, refuse, clear or {{if_bombs_below: N}})")),
             };
         }
         match get(v, "if_bombs_below") {
             Some(n) if v.as_mapping().is_some_and(|m| m.len() == 1) => {
                 Ok(TreasureRule::IfBombsBelow(as_u8(n, "treasure: if_bombs_below")?))
             }
-            _ => err(format!("treasure: {v:?} (take, skip, clear or {{if_bombs_below: N}})")),
+            _ => err(format!("treasure: {v:?} (take, skip, refuse, clear or {{if_bombs_below: N}})")),
         }
     }
 }
@@ -1456,7 +1461,9 @@ mod tests {
                 loc(3, 0x4d),
                 loc(3, 0x5b),
                 loc(4, 0x11),
-                loc(4, 0x21)
+                loc(4, 0x21),
+                loc(5, 0x65),
+                loc(5, 0x66)
             ]
         );
         assert!(!map.requires_bombs(loc(9, 0x7f)));
@@ -1566,12 +1573,14 @@ mod tests {
         );
     }
 
-    /// routes.yaml `treasure:` parses `skip`, `take`, `clear` and `{if_bombs_below: N}`; anything else is a load error.
+    /// routes.yaml `treasure:` parses `skip`, `refuse`, `take`, `clear` and `{if_bombs_below: N}`; anything else is a
+    /// load error.
     #[test]
     fn treasure_rules_parse_and_reject_typos() {
         let route = |rule: &str| format!("r:\n- {{level: 3, room: '0x5b', entry: S, exit: W, treasure: {rule}}}\n");
         let rule = |text: &str| GameMap::from_yaml(GAME_YAML, &route(text)).map(|m| m.routes["r"][0].treasure);
         assert_eq!(rule("skip").unwrap(), TreasureRule::Skip);
+        assert_eq!(rule("refuse").unwrap(), TreasureRule::Refuse);
         assert_eq!(rule("take").unwrap(), TreasureRule::Take);
         assert_eq!(rule("clear").unwrap(), TreasureRule::Clear);
         assert_eq!(rule("{if_bombs_below: 4}").unwrap(), TreasureRule::IfBombsBelow(4));
@@ -1582,6 +1591,7 @@ mod tests {
         let wants = |r: TreasureRule| [0, 3, 4, 8].map(|bombs| r.wants(bombs));
         assert_eq!(wants(TreasureRule::Take), [true; 4]);
         assert_eq!(wants(TreasureRule::Skip), [false; 4]);
+        assert_eq!(wants(TreasureRule::Refuse), [false; 4]);
         assert_eq!(wants(TreasureRule::Clear), [true; 4]);
         assert_eq!(wants(TreasureRule::IfBombsBelow(4)), [true, true, false, false]);
     }
@@ -1754,7 +1764,7 @@ mod tests {
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "clips-gauntlet"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d5", "clips-gauntlet"]);
         let mut route: BTreeSet<L> = map.routes.values().flatten().map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
@@ -1762,9 +1772,10 @@ mod tests {
         let strays: BTreeSet<L> = [loc(0, 0x56), loc(0, 0x57), loc(3, 0x4b)].into();
         assert!(route.is_disjoint(&strays));
         assert_eq!(tagged, route.union(&strays).copied().collect());
-        // Beyond the route's own rooms: only the alternate (4:0x20 is on the D4 stretch's plain way since round 22).
+        // Beyond the route's own rooms: only the alternate (4:0x20 is on the D4 stretch's plain way since round 22)
+        // and Dungeon 5 (route d5, round 24).
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
-        let beyond: Vec<L> = route.difference(&default).copied().collect();
+        let beyond: Vec<L> = route.difference(&default).copied().filter(|l| l.level != 5).collect();
         assert_eq!(beyond, [loc(0, 0x78)]);
     }
 
@@ -2091,7 +2102,7 @@ mod tests {
         assert_eq!(breakfast.push_block, [Direction::N, Direction::S, Direction::E, Direction::W]);
         assert_eq!(breakfast.exits["cave"].destination, L::new(4, 0x60, true));
         assert_eq!(map.get(L::new(4, 0x60, true)).unwrap().treasure.as_deref(), Some("ladder"));
-        assert!(map.rooms().values().filter(|r| r.name.is_some()).count() == 1);
+        assert!(map.rooms().values().filter(|r| r.name.is_some()).count() == 2, "the Breakfast Room, the Olive Garden");
         // The two locked doors the route opens (0x30 E, 0x31 N, whose other side is 0x21 S), the bomb walls into and
         // out of the rupee room, the push-block shutter.
         assert!(room(0x30).exits["E"].locked && room(0x31).exits["N"].locked && room(0x21).exits["S"].locked);

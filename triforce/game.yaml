@@ -3665,7 +3665,9 @@ rooms:
   treasure: ladder
 # --- Dungeon 5 (level 5) (scripts/level_rooms.py from the ROM; zelda-asm/levels/level-5.md) ---
 - level: 5
-  location: '0x05'
+  location: '0x05'  # 6 Blue Darknuts; a pushed block (the room clear) reveals the stairs to the recorder cellar 0x04
+  name: Olive Garden  # the owner (Nov 14): the recorder looks like a breadstick; one of the hardest rooms of the game
+  specialist: darknut  # Dungeon 5 (round 24)
   exits:
     E:
       level: 5
@@ -3683,6 +3685,7 @@ rooms:
   stairs: [26, 4]
 - level: 5
   location: '0x06'
+  specialist: darknut  # Dungeon 5 (round 24): no monsters; the push block of the Darknut stretch 0x64-0x05
   exits:
     S:
       level: 5
@@ -3704,6 +3707,7 @@ rooms:
   stairs: [16, 10]
 - level: 5
   location: '0x14'  # the triforce room
+  specialist: gibdo  # Dungeon 5 (round 24): no monsters; the dungeon's main family, as its entrance 0x76
   exits:
     S:  # open here; a shutter on 0x24's side
       level: 5
@@ -3746,6 +3750,7 @@ rooms:
   bomb_walls: [W]
 - level: 5
   location: '0x24'  # the boss room
+  specialist: boss-digdogger  # Dungeon 5 (round 24)
   exits:
     N:  # shutter
       level: 5
@@ -3764,6 +3769,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 5
   location: '0x25'
+  specialist: pols-voice  # Dungeon 5 (round 24)
   exits:
     N:  # bomb wall
       level: 5
@@ -3781,6 +3787,7 @@ rooms:
   bomb_walls: [N]
 - level: 5
   location: '0x26'
+  specialist: gibdo  # Dungeon 5 (round 24)
   exits:
     E:
       level: 5
@@ -3795,6 +3802,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 5
   location: '0x27'
+  specialist: pols-voice  # Dungeon 5 (round 24): two Pols Voices, two Gibdos, two Keese; the key in the open
   exits:
     S:
       level: 5
@@ -3822,6 +3830,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 5
   location: '0x37'
+  specialist: darknut  # Dungeon 5 (round 24)
   exits:
     N:
       level: 5
@@ -3849,6 +3858,7 @@ rooms:
   dark: true
 - level: 5
   location: '0x47'
+  specialist: gibdo  # Dungeon 5 (round 24)
   exits:
     N:
       level: 5
@@ -3879,6 +3889,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 5
   location: '0x56'
+  specialist: dodongo-crossing  # Dungeon 5 (round 24): three Dodongos to walk past (not a boss room)
   exits:
     N:
       level: 5
@@ -3900,6 +3911,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 5
   location: '0x57'
+  specialist: zol  # Dungeon 5 (round 24)
   exits:
     N:
       level: 5
@@ -3914,6 +3926,7 @@ rooms:
   dark: true
 - level: 5
   location: '0x64'
+  specialist: darknut  # Dungeon 5 (round 24): the block clip (clips) or the fight and the push (plain)
   exits:
     E:  # bomb wall
       level: 5
@@ -3933,6 +3946,8 @@ rooms:
   stairs: [16, 10]
 - level: 5
   location: '0x65'
+  specialist: gibdo  # Dungeon 5 (round 24)
+  requires_bombs: true    # round 24: its W wall is bombed open into 0x64 (zelda::cheats cheats one in)
   exits:
     N:  # shutter
       level: 5
@@ -3950,6 +3965,8 @@ rooms:
   bomb_walls: [E, W]
 - level: 5
   location: '0x66'
+  specialist: gibdo  # Dungeon 5 (round 24)
+  requires_bombs: true    # round 24: its W wall is bombed open into 0x65 (zelda::cheats cheats one in)
   exits:
     N:  # shutter
       level: 5
@@ -3987,6 +4004,7 @@ rooms:
   bomb_walls: [S]
 - level: 5
   location: '0x76'  # the start room: S leaves to the overworld
+  specialist: gibdo  # Dungeon 5 (round 24): no monsters; the dungeon's main family
   exits:
     N:
       level: 5
@@ -4013,6 +4031,7 @@ rooms:
 - level: 5
   location: '0x07'
   in_cave: true  # the tunnel between 0x64 and 0x06 (side view)
+  specialist: equipment-room  # Dungeon 5 (round 24): left by the route step's ladder
   exits:
     E:  # up the right ladder (attr B = $06)
       level: 5
@@ -4026,6 +4045,7 @@ rooms:
 - level: 5
   location: '0x04'
   in_cave: true  # the item cellar under 0x05 (side view)
+  specialist: equipment-room  # Dungeon 5 (round 24)
   exits:
     N:  # up the ladder (attr A = attr B = $05)
       level: 5

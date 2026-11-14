@@ -689,7 +689,9 @@ Bombs (Lee, Nov 11): placing one costs `penalty-bomb-used` (−0.25, also what a
 hit the look-ahead credits to it pays `reward-bomb-hit` (0.5, plus the usual `reward-hit`), a 10th damage-free kill
 made with a bomb (it arms a forced drop of 4 bombs) pays `reward-armed-bomb-drop` (0.75) on the step it happens, and
 a bomb pickup pays `reward-gained-bombs` (0.5) like other item
-pickups (cheat grants don't count); the map/compass reward is not paid on a level change; dropped-item lifetimes
+pickups (cheat grants don't count), but the room treasure of a route step with `treasure: refuse` (round 24, 5:0x65
+westbound) costs `penalty-refused-treasure` (−0.75) instead (`Objective::treasure_refused`; its item-taken flag
+rising); the map/compass reward is not paid on a level change; dropped-item lifetimes
 count half-frames; the look-ahead credits only what a prediction adds over the ones still pending. Curriculum
 starts take their track's seed state's route step.
 

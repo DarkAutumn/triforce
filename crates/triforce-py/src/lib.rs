@@ -22,7 +22,7 @@ mod theater;
 use pyo3::prelude::*;
 
 /// The route's room visits as dicts (`index`, `level`, `room`, `in_cave`, `entry`, `exit`, `specialist`,
-/// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip`, `clear` or `if_bombs_below: N`,
+/// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip`, `refuse`, `clear` or `if_bombs_below: N`,
 /// `bomb_reserve`: the step's routes.yaml `bomb_reserve` or None, `way`: 'clips' or 'plain' for a step of one way of
 /// a `stretch:` (None: both ways'), `stretch`: its name, `visit`: the route's visit to the room from that side,
 /// `zelda::game_map::route_visits`, which a later visit's state names spell). Both ways' steps are listed, numbered
