@@ -167,14 +167,15 @@ def test_search_settings_reach_the_search(states_dir, tmp_path):
             out[name] = argmax_rollout(p, policy, search, steps=1)
     first = lambda name, key: out[name][key][:, 0]
     assert first('futures', 'search_q').tobytes() == first('base', 'search_q').tobytes()
-    # RNG redraws matter where enemies move: Dungeon 1's 0x44 (goriya).
+    # RNG redraws matter where enemies move: Dungeon 1's 0x44 (goriya), with a network whose futures don't all end
+    # in the same death (seed 0's do since round 24 widened the heads; its Qs then match with or without redraws).
     require_state('1_44w_0')
     config = native.SpecialistConfig.load('goriya').replace(start_states=['1_44w_0'], max_steps=50)
-    redraws = {}
+    redraws, goriya = {}, network(1).to_native()
     for name, perturb in (('same', False), ('redrawn', True)):
         task = native.TrainTask(config, str(tmp_path / f'goriya-{name}'), states_dir=str(REPO_STATES_DIR))
         with native.EnvPool(task, num_envs=ENVS, threads=1, seed=9) as p:
-            redraws[name] = argmax_rollout(p, policy, dict(base, futures=4, depth=6, perturb_rng=perturb), steps=1)
+            redraws[name] = argmax_rollout(p, goriya, dict(base, futures=4, depth=6, perturb_rng=perturb), steps=1)
     assert not np.array_equal(redraws['redrawn']['search_q'][:, 0], redraws['same']['search_q'][:, 0])
     assert not np.array_equal(first('gamma', 'search_q'), first('base', 'search_q'))
     assert not np.array_equal(first('depth', 'search_q'), first('base', 'search_q'))
