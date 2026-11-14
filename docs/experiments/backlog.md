@@ -54,6 +54,31 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
      (`death_rate_entered`), comparing two tags (r70 vs r71) room by room; `eval_batch.report_commands` doesn't
      write the `-both` file of a tag measured with and without clips (run `triforce room-stats TAG --noclips`).
 
+## Round 22 retrain (r72, Nov 13-14): what the chains lose now
+
+Team: 12 families retrained (`r72-*`), 12 kept on round 21 runs. Chains, 1000 runs per segment, clips on
+(`r72-1k`) | off (`r72-1k-noclips`): D2 87.2 | 87.2, after D2 91.0 | 89.5, D1 98.9 | 99.5, after D1 99.9 | 98.9,
+D3 50.4 | 50.4, after D3 100 | 100, D4 73.6 | 56.8, full route 13.6 | 4.8 (round 21: 12.8).
+
+- [ ] **3:0x5b's last pass (darknut, W → E through the bomb wall) at 6 or more bombs**: in the D3 segment 41% of
+  those visits die (70 of 170) against 11-14% with 1-5 bombs (the route then takes the room's treasure first,
+  `if_bombs_below: 6`). The full route brings real bombs there: 145 deaths in 404 visits (round 21's W → N: 39 in
+  373); full → after D3 19.5% against 24.8%. Single room 3_5bw is 97.0% −0.72 over the whole bomb mix. Train darknut
+  with more resets at 6-8 bombs on 3_5bw, or take the treasure only above a health floor.
+- [ ] **A second BOMB inside the first bomb's fuse** (stalfos-keese-gel 4:0x21, 1.6-1.8 bombs per visit, one
+  needed): the first bomb is in reach and opens the wall, but the model places another while the first is in state
+  `$12`/`$13` (the game allows it from `$13`), before `CurOpenedDoors` changes (from S: BOMB N on the island, CLIP N,
+  BOMB S at Y `$57`; from W: BOMB at Y `$5D` twice). Mask BOMB while a live bomb is in reach of the same wall.
+- [ ] **The plain way costs the hearts Dungeon 2 and Gleeok then take**: clips off, Link reaches 2:0x5e with 2.24
+  hearts (on 2.63; 0x5b W→E alone 0.40 per visit) and 2:0x5e kills 125 of 1000 full runs (on 42); in D4 0x31 E→W and
+  0x30 cost 0.9 hearts and 62 deaths, Gleeok arrival 2.65 (on 3.27). ow-moblin's plain 0x5b stays at 92% (pre-clip
+  model 95-96%) after `off_share: 0.75` (4M) and a retrain from scratch (8M); ow-zora's plain 0x5a at 96%.
+- [ ] **The balanced early stop passes a weak room**: vire (4:0x50 without clips 95.7%) and ow-zora (0x5a 96%)
+  stopped at `--stop-success 0.99` after about 0.55M steps; continuations used 0.995.
+- [ ] **Bomb fishing in 4:0x12** (measure only): the D4 segment brings no bombs (every wall bomb cheated); kill
+  streak on entering 0x12 averages 5.4 (on) / 4.6 (off), 9 or more in 17% / 5%. Measure on the full route with
+  replays before deciding.
+
 ## Round 22: the run-time clips switch (Lee, Nov 13; branch `r22`)
 
 Decisions 2026-11-13 "The run-time clips switch and route stretches" and "Clips in training, evaluation and
