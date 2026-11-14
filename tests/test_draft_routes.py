@@ -30,8 +30,12 @@ def test_the_shipped_drafts_hold_against_game_yaml():
 
 
 def test_a_walk_a_wrap_exit_and_the_whirlwind_are_followed(tmp_path):
-    """0x52 W into 0x51, the wrap exit out of 0x51 (game.yaml has no W exit there) into 0x50 from E, the whirlwind to
-    Dungeon 1's entrance, down into the level's start room."""
+    """0x52 W into 0x51, game.yaml's wrap exit out of 0x51's solid W edge into 0x50 from E, the whirlwind to Dungeon
+    1's entrance, down into the level's start room; and the wrap round the world, 0x60 into 0x5f."""
+    assert problems_of(tmp_path, """\
+        - {level: 0, room: '0x60', entry: N, exit: W, wrap: true}
+        - {level: 0, room: '0x5f', entry: E, exit: end}
+        """) == []
     assert problems_of(tmp_path, """\
         - {level: 0, room: '0x52', entry: N, exit: W}
         - {level: 0, room: '0x51', entry: E, exit: W, wrap: true}
@@ -42,10 +46,13 @@ def test_a_walk_a_wrap_exit_and_the_whirlwind_are_followed(tmp_path):
 
 
 @pytest.mark.parametrize('steps, problem', [
-    # 0x51 has no W exit: only a wrap gets out that way
+    # 0x51's W exit is a wrap exit: only a wrap gets out that way
     ("- {level: 0, room: '0x51', entry: E, exit: W}\n- {level: 0, room: '0x50', entry: E, exit: end}",
+     'W is a wrap exit'),
+    # 0x50 has no W exit at all
+    ("- {level: 0, room: '0x50', entry: E, exit: W, wrap: true}\n- {level: 0, room: '0x4f', entry: E, exit: end}",
      'W is not an exit of the room'),
-    # a wrap exit leads into room - 1, nowhere else
+    # a wrap exit leads into the room game.yaml names, nowhere else
     ("- {level: 0, room: '0x51', entry: E, exit: W, wrap: true}\n- {level: 0, room: '0x40', entry: S, exit: end}",
      'W leads to 0:0x50'),
     # 0x52 W is 0x51

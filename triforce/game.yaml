@@ -226,6 +226,14 @@ rooms:
     S:
       level: 0
       location: '0x1c'
+    W:
+      level: 0
+      location: '0x0b'
+      # Columns 0-9 are solid on every row: only CLIP E's wrap exit leaves W, onto the mountain top without the
+      # Lost Hills (walked Nov 13).  Rows 5-14 (Y $65-$AD); Y $5D and $B5 are open at the edge but one cell deep
+      # (no run-up: the room changes E).  0x0b's column 29 is open on rows 5-16.  No softlock row.
+      wrap: true
+      span: [5, 14]
   enemies:
     RedTektite: 6
   treasure: null
@@ -415,6 +423,8 @@ rooms:
 - level: 0
   location: '0x17'
   specialist: ow-boulder
+  # Two parts joined only by the ladder (Nov 13; the river, tile columns 12-13, one square wide): N (X $40) and W
+  # are W of it, S (X $70-$A0) and E are E of it.
   exits:
     N:
       level: 0
@@ -533,6 +543,8 @@ rooms:
     how: armos
 - level: 0
   location: '0x1d'
+  # Two parts (Nov 13): tile columns 10-12 are solid in every row.  The W edge (and the rock's any-road) is cut off
+  # from the N (X $D0), E and S (X $70-$80) edges.
   exits:
     N:
       level: 0
@@ -618,10 +630,11 @@ rooms:
   enemies:
     Ghini: 1
   treasure: null
-  entrance:  # cave index $13 (OW attr B >> 2); gravestone at x=144 y=144 (quest 1): push it; ROM only, not walked
+  entrance:  # cave index $13 (OW attr B >> 2); the gravestone at x=144 y=144 (the third of the middle row): push it up or down (no bracelet); walked Nov 13: stairs where it stood, the sword is the middle ware, refused under 12 heart containers
     cave: '0x13'
     contents: magic-sword
     how: push
+    tile: [18, 10]
     wares: [magic-sword]
     needs_hearts: 12
 - level: 0
@@ -715,6 +728,8 @@ rooms:
 - level: 0
   location: '0x27'
   specialist: ow-zora
+  # The river of 0x17 runs on here (Nov 13): W (Y $75-$8D) is W of it; N (X $70-$A0) and E are E of it; the ladder
+  # joins them.
   exits:
     N:
       level: 0
@@ -975,10 +990,11 @@ rooms:
   enemies:
     BlueLeever: 4
   treasure: null
-  entrance:  # cave index $20 (OW attr B >> 2); the armos at x=64 y=128 hides stairs (asm:Armos_SecretXs)
+  entrance:  # cave index $20 (OW attr B >> 2); the armos at x=64 y=128 hides stairs (asm:Armos_SecretXs); touched from the side it costs nothing, from below a heart (walked Nov 13); the stairs are not saved
     cave: '0x20'
     contents: shop
     how: armos
+    tile: [8, 8]
     wares: [[key, 80], [blue-ring, 250], [food, 60]]  # [item, rupees], left to right
 - level: 0
   location: '0x35'
@@ -1116,6 +1132,7 @@ rooms:
     cave: '0x21'
     contents: secret-rupees
     how: armos
+    tile: [18, 8]
     rupees: 30
 - level: 0
   location: '0x3e'
@@ -1126,6 +1143,13 @@ rooms:
     E:
       level: 0
       location: '0x3f'
+    W:
+      level: 0
+      location: '0x3d'
+      # Columns 0-3 are solid on every row: only CLIP E's wrap exit leaves W (walked Nov 13).  Rows 9-16 (Y
+      # $85-$BD, the rows the E edge is open); 0x3d's column 29 is open on all of them.  No softlock row.
+      wrap: true
+      span: [9, 16]
   enemies:
     BlueSlowOctorok: 2
     RedOctorok: 3
@@ -1453,6 +1477,14 @@ rooms:
     S:
       level: 0
       location: '0x61'
+    W:
+      level: 0
+      location: '0x50'
+      # Columns 0-1 are solid on every row: only CLIP E's wrap exit leaves W (walked Nov 13 on every row, both
+      # sub-pixel phases).  The E edge is open on Link's tile rows 7-12 (Y $75-$9D); he arrives in 0x50 at X $F0
+      # and walks on on every one of them (0x50's columns 28-29 are open).  No softlock row.
+      wrap: true
+      span: [7, 12]
   enemies:
     BlueMoblin: 5
   treasure: null
@@ -1526,7 +1558,8 @@ rooms:
   location: '0x55'
   specialist: ow-zora  # d2first to Dungeon 3 (Nov 9): from E leaves S
   # Two parts (Nov 9, tile grid at mode 5): tile columns 10-13 are impassable in every row, so the W edge (and the
-  # S edge's left lanes) can't be reached from the E edge, the dock or the S edge's right lanes, and back.
+  # S edge's left lanes) can't be reached from the E edge, the dock or the S edge's right lanes, and back.  The dock
+  # side reaches the W part by CLIP E (a screen wrap inside the room) on rows Y $85/$8D (walked Nov 13).
   exits:
     E:
       level: 0
@@ -1749,6 +1782,15 @@ rooms:
     E:
       level: 0
       location: '0x61'
+    W:
+      level: 0
+      location: '0x5f'  # room id - 1: the last room of the row above
+      # Columns 0-3 are solid on every row: CLIP E's wrap exit (rows 7-12, Y $75-$9D, work) puts Link in 0x5f at
+      # X $F0 ON WATER.  Needs the ladder and the ladder clip W (mechanics.md "Overworld: room $5F"): only rows
+      # 9-10 (Y $85, $8D) lead to the heart container's platform and on to land (walked Nov 13); without the
+      # ladder the arrival is a softlock.  The ladder clip is not built for the overworld (clips.rs).
+      wrap: true
+      span: [9, 10]
   enemies:
     Peahat: 2
     RedLynel: 2
@@ -3651,6 +3693,9 @@ rooms:
       in_cave: true
   enemies: null
   treasure: null
+  # As 0x64: push the west block (top-left tile (12, 10)) N or S; no monsters here, so it moves at once.
+  # Link comes out of the tunnel at ($60,$9D), right under it (walked Nov 13).
+  push_block: [N, S]
   stairs: [16, 10]
 - level: 5
   location: '0x14'  # the triforce room
@@ -3876,6 +3921,10 @@ rooms:
     BlueDarknut: 5
   treasure: null
   bomb_walls: [E]
+  # The stairs sit inside a diamond of blocks, as in 1:0x22 (layout $1A); pushing the west block (top-left tile
+  # (12, 10)) N or S opens it (E walls the stairs in until re-entry). It moves only once the 5 Blue Darknuts are
+  # dead; a block clip N from ($A0,$9D) reaches the stairs without the fight (walked Nov 13).
+  push_block: [N, S]
   stairs: [16, 10]
 - level: 5
   location: '0x65'

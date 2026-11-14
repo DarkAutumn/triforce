@@ -11,8 +11,9 @@ has ``level``, ``room`` (quoted hex), ``in_cave``, ``entry`` and ``exit`` as in 
 - ``exit: recorder`` / ``entry: recorder``: the whirlwind carries Link to a dungeon's entrance room
   (asm:Whirlwind_PrevRoomIds; zelda-asm/items.md "On the overworld, the whirlwind");
 - ``exit: end``: the route ends in this room;
-- ``wrap: true``: the room is crossed by a screen wrap.  With an ``exit: W`` that game.yaml doesn't have it is a wrap
-  exit (the E wrap lands Link in the solid left edge and Left changes the room to ``room - 1``: 0x60 into 0x5f);
+- ``wrap: true``: the room is crossed by a screen wrap (``CLIP E`` / ``CLIP W``).  It is required on a step that
+  leaves through one of game.yaml's wrap exits (a W exit with ``wrap: true``: 0x51 into 0x50, 0x60 into 0x5f), which
+  nothing but the wrap gets out of;
 - ``note``: what Link does here, shown on the map; ``leg``: a name for the part of the route this step starts.
 
 ``problems`` checks a draft against game.yaml: every room exists, every exit is one of the room's and leads into the
@@ -31,7 +32,6 @@ ENTRIES = ('start', 'N', 'S', 'E', 'W', 'cave', 'recorder')
 EXITS = ('N', 'S', 'E', 'W', 'cave', 'triforce', 'recorder', 'end')
 STEP_KEYS = {'level', 'room', 'in_cave', 'entry', 'exit', 'wrap', 'note', 'leg'}
 OPPOSITE = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
-WRAP_EXITS = {'W': -1}                 # a wrap exit leaves W only (zelda-asm/mechanics.md "After the wrap, edge by edge")
 WHIRLWIND_ROOMS = (0x37, 0x3C, 0x74, 0x45, 0x0B, 0x22, 0x42, 0x6D)     # where it sets Link down, levels 1-8
 
 
@@ -130,13 +130,13 @@ def problems(plan: list[dict], rooms: Optional[dict] = None) -> list[str]:
                 found.append(f'{at}: the whirlwind sets Link down at a dungeon entrance, not in {describe(after)}')
             entry = 'recorder'
         elif exit_ in exits:
+            if exits[exit_]['wrap'] and not step['wrap']:
+                found.append(f'{at}: {exit_} is a wrap exit (game.yaml): the step needs `wrap: true`')
+                continue
             target = tuple(exits[exit_]['to'])
             entry = 'S' if exit_ == 'cave' else 'cave' if step['in_cave'] else OPPOSITE[exit_]
-        elif step['wrap'] and exit_ in WRAP_EXITS and step['level'] == 0 and not step['in_cave']:
-            target, entry = (0, step['room'] + WRAP_EXITS[exit_], False), OPPOSITE[exit_]
         else:
-            found.append(f"{at}: {exit_} is not an exit of the room (game.yaml has {list(exits)}"
-                         f"{'; a wrap exit leaves W' if step['wrap'] else ''})")
+            found.append(f'{at}: {exit_} is not an exit of the room (game.yaml has {list(exits)})')
             continue
         if target is not None and key(after) != target:
             found.append(f"{at}: {exit_} leads to {target[0]}:0x{target[1]:02x}{' (cave)' if target[2] else ''}, "
