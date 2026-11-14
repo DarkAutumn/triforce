@@ -19,7 +19,7 @@ import time
 from typing import Callable, Optional
 
 from PySide6.QtCore import QRect, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPalette, QPen
+from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QFontDatabase, QImage, QPainter, QPalette, QPen
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
 
 from . import replay
@@ -49,6 +49,10 @@ OTHER_COLOR = '#f2c14e'
 CLIPS_COLOR = '#d9b8ff'     # the strip's word on a run played without clips (lavender: not an outcome colour)
 SOURCE_KEYS = {Qt.Key.Key_B: 'best', Qt.Key.Key_W: 'success', Qt.Key.Key_K: 'stuck', Qt.Key.Key_D: 'died',
                Qt.Key.Key_R: 'random', Qt.Key.Key_G: GOLDEN}
+# The Show menu: (label, key, source), in the keys' order.
+SOURCE_MENU = (('Best', 'B', 'best'), ('Wins', 'W', 'success'), ('Stuck', 'K', 'stuck'), ('Died', 'D', 'died'),
+               ('Random', 'R', 'random'), ('Golden path', 'G', GOLDEN))
+SCALES = (1, 2, 3, 4)       # the View menu's cell scales
 
 FRAME_HEIGHT, FRAME_WIDTH, _ = FRAME_SHAPE
 GRID = re.compile(r'(\d+)[xX](\d+)')
@@ -256,6 +260,12 @@ class CellView(QWidget):
         self.image: Optional[QImage] = None
         self._pixels = None
 
+    def set_scale(self, scale: int):
+        """Shows the picture at another integer scale."""
+        self.scale = scale
+        self.setFixedSize(FRAME_WIDTH * scale, FRAME_HEIGHT * scale + STRIP_HEIGHT)
+        self.update()
+
     def clear(self):
         """Drops the picture (the cell's next replay is loading); a later frame shows again."""
         self.image = self._pixels = None
@@ -379,7 +389,7 @@ class Window(QMainWindow):
     Keys: b best, w success (wins), k stuck, d died, r random, g golden; n the next replay in every cell; s sound
     off / on; u uncap / cap at the NES rate; + and - the cap in FPS_STEP steps (capped only); p pause; c the
     run-time clips switch off / on (``grid.set_clips``: new runs, and a live cell's run from its next decision;
-    not for files)."""
+    not for files).  ``add_menus`` puts the same, and what has no key, into a menu bar."""
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, grid, cols: int, rows: int, scale: int, benchmark: Optional[float] = None,
@@ -394,6 +404,10 @@ class Window(QMainWindow):
         self.paused = False
         self.sound = sound
         self.heard = heard
+        self.scale = scale
+        self.setup: dict = {}               # what a remade grid is made with (add_menus: act, live)
+        self._remake: Optional[Callable] = None
+        self._menu_sync: list = []          # one function per menu item: sets its check mark / whether it is on
         self._paused_at: Optional[float] = None
         self._paused_total = 0.0
         self._restart_rate()
@@ -505,10 +519,9 @@ class Window(QMainWindow):
         elif key == Qt.Key.Key_C:
             self.toggle_clips()
         elif key == Qt.Key.Key_U:
-            self.set_cap(NES_FPS if self.cap <= 0 else 0.0)
+            self.toggle_cap()
         elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal, Qt.Key.Key_Minus, Qt.Key.Key_Underscore):
-            if self.cap > 0:
-                self.set_cap(step_cap(self.cap, 1 if key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal) else -1))
+            self.nudge_cap(1 if key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal) else -1)
         elif key == Qt.Key.Key_P:
             self.set_paused(not self.paused)
         else:
@@ -518,6 +531,132 @@ class Window(QMainWindow):
     def keyPressEvent(self, event):  # pylint: disable=invalid-name
         if not self.handle_key(event.key()):
             super().keyPressEvent(event)
+
+    def toggle_cap(self):
+        """Uncaps the cells' frame rate, or caps it at the console's."""
+        self.set_cap(NES_FPS if self.cap <= 0 else 0.0)
+
+    def nudge_cap(self, step: int):
+        """Moves the cap one FPS_STEP up (1) or down (-1); nothing while uncapped."""
+        if self.cap > 0:
+            self.set_cap(step_cap(self.cap, step))
+
+    def set_scale(self, scale: int):
+        """Shows every cell at another integer scale (the window takes the cells' size)."""
+        self.scale = scale
+        for view in self.views:
+            view.set_scale(scale)
+        self.centralWidget().layout().activate()
+        self.adjustSize()
+        self._sync_menus()
+
+    def toggle_controller(self):
+        """Draws the controller into the replayed frames, or stops (a grid with ``set_controller``)."""
+        self.grid.set_controller(not self.grid.controller)
+        self._sync_menus()
+
+    def remake(self, **settings):
+        """Replaces the grid by one remade with ``settings`` (``add_menus``'s ``remake``: the act mode, the live
+        cell): the old grid's simulations stop and the new one's start with empty queues, on the source, cap,
+        pause, clips switch, controller and sound as they are now."""
+        if self._remake is None:
+            return
+        old = self.grid
+        self.setup.update(settings)
+        old.stop()
+        self.grid = self._remake(source=old.source, fps=self.cap, clips=old.clips,
+                                 controller=getattr(old, 'controller', False), **self.setup)
+        for view in self.views:
+            view.state = CellState()
+            view.frame_no = 0
+            view.clear()
+        if self.setup.get('live') and self.heard == 0 and len(self.views) > 1:
+            self.heard = 1              # a live cell has no sound: the next one is heard
+        if self.paused:
+            self.grid.set_paused(True)
+        self.fps = None
+        self._restart_rate()
+        self._apply_sound()
+        self.grid.start()
+
+    def add_menus(self, remake: Optional[Callable] = None, act: Optional[str] = None, acts=(),
+                  live: bool = False):
+        """Adds the menu bar: every key's action as a menu item that names its key (the keys stay), and what has
+        no key: the controller overlay (a grid with ``set_controller``), the cells' scale and, with ``remake``
+        (``remake(**settings) -> grid``: a new grid like this one but for ``settings``, which always has
+        ``source``, ``fps``, ``clips``, ``controller``, ``act`` and ``live``), the act mode (one of ``acts``, as
+        (mode, label); now ``act``) and the live cell (now ``live``).  Changing either starts the simulations
+        again (``remake``).  A grid that plays files has no sources, clips, act mode or live cell."""
+        # pylint: disable=too-many-locals
+        self._remake, self.setup = remake, {'act': act, 'live': live}
+        files = self.grid.source == FILES
+        can_remake = remake is not None and not files
+        bar = self.menuBar()
+
+        show = bar.addMenu('&Show')
+        if not files:
+            sources = QActionGroup(self)
+            for label, key, source in SOURCE_MENU:
+                self._item(show, label, key, lambda source=source: self.select(source),
+                           checked=lambda source=source: self.grid.source == source, group=sources)
+            show.addSeparator()
+        self._item(show, 'Next replay in every cell', 'N', lambda: self.grid.skip())
+        if can_remake:
+            show.addSeparator()
+            self._item(show, 'Live game in the top left cell', '',
+                       lambda: self.remake(live=not self.setup['live']), checked=lambda: self.setup['live'])
+
+        playback = bar.addMenu('&Playback')
+        self._item(playback, 'Pause', 'P', lambda: self.set_paused(not self.paused), checked=lambda: self.paused)
+        self._item(playback, 'Uncapped speed', 'U', self.toggle_cap, checked=lambda: self.cap <= 0)
+        self._item(playback, 'Faster', '+', lambda: self.nudge_cap(1), enabled=lambda: self.cap > 0)
+        self._item(playback, 'Slower', '-', lambda: self.nudge_cap(-1), enabled=lambda: self.cap > 0)
+
+        if not files:
+            options = bar.addMenu('&Options')
+            self._item(options, 'Clips', 'C', self.toggle_clips, checked=lambda: bool(self.grid.clips))
+            if can_remake and acts:
+                modes = options.addMenu('Act mode')
+                group = QActionGroup(self)
+                for mode, label in acts:
+                    self._item(modes, label, '', lambda mode=mode: self.remake(act=mode),
+                               checked=lambda mode=mode: self.setup['act'] == mode, group=group)
+
+        view = bar.addMenu('&View')
+        self._item(view, 'Sound', 'S', self.toggle_sound, checked=lambda: self.sound)
+        if hasattr(self.grid, 'set_controller'):
+            self._item(view, 'Controller', '', self.toggle_controller, checked=lambda: self.grid.controller)
+        scales = view.addMenu('Scale')
+        group = QActionGroup(self)
+        for scale in SCALES:
+            self._item(scales, f"{scale}×", '', lambda scale=scale: self.set_scale(scale),
+                       checked=lambda scale=scale: self.scale == scale, group=group)
+        self._sync_menus()
+
+    def _item(self, menu, label: str, key: str, do: Callable[[], None], checked: Optional[Callable] = None,
+              enabled: Optional[Callable] = None, group: Optional[QActionGroup] = None) -> QAction:
+        """One menu item.  ``key`` is shown beside it and is not a shortcut: the window's own key handling stays
+        the only one.  ``checked`` / ``enabled``: read whenever the window's state may have changed."""
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
+        action = QAction(f"{label}\t{key}" if key else label, self)
+        menu.addAction(action)
+        if checked is not None:
+            action.setCheckable(True)
+            self._menu_sync.append(lambda: action.setChecked(bool(checked())))
+        if enabled is not None:
+            self._menu_sync.append(lambda: action.setEnabled(bool(enabled())))
+        if group is not None:
+            group.addAction(action)
+
+        def triggered(_checked=False):
+            do()
+            self._sync_menus()      # also when nothing changed: the click itself moved the check mark
+        action.triggered.connect(triggered)
+        return action
+
+    def _sync_menus(self):
+        for sync in self._menu_sync:
+            sync()
 
     def tick(self):
         """Applies status messages, then shows any new frames.  Does nothing while paused."""
@@ -554,6 +693,7 @@ class Window(QMainWindow):
         stats = self.grid.stats()
         sound = sound_text(self.sound, self.cap, stats.get('sound_error'))
         self.setWindowTitle(title_text(stats, self.fps, self.cap, self.paused, sound))
+        self._sync_menus()
 
     def shutdown(self):
         """Stops the cells and the simulations (idempotent)."""

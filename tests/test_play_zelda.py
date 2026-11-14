@@ -392,6 +392,144 @@ def test_keys_choose_the_source_skip_step_the_cap_and_pause(qapp):  # pylint: di
     window.shutdown()
 
 
+def _menus(window) -> dict:
+    """The window's menu items by 'Menu/Item' (a submenu: 'Menu/Sub/Item'), key hints cut off."""
+    found = {}
+
+    def walk(menu, prefix):
+        for action in menu.actions():
+            if action.menu() is not None:
+                walk(action.menu(), f"{prefix}{action.text()}/")
+            elif not action.isSeparator():
+                found[prefix + action.text().split('\t')[0]] = action
+    for top in window.menuBar().actions():
+        walk(top.menu(), top.text().replace('&', '') + '/')
+    return found
+
+
+class MenuGrid(FakeGrid):
+    """A FakeGrid with the clips switch and the controller drawing."""
+
+    def __init__(self, clips=True, controller=False, **kwargs):
+        super().__init__(**kwargs)
+        self.clips, self.controller = clips, controller
+
+    def set_clips(self, on):
+        self.clips = on
+
+    def set_controller(self, on):
+        self.controller = on
+
+
+def test_menus_do_what_the_keys_do_and_follow_them(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    """Every key's action is a menu item with the key beside it; its check mark follows the window whether the
+    change came from the menu or the key; the controller and the scale have items only."""
+    fake = MenuGrid(cells=2, messages=[])
+    window = play_view.Window(fake, cols=2, rows=1, scale=2)
+    window.add_menus()
+    items = _menus(window)
+    assert list(items) == [
+        'Show/Best', 'Show/Wins', 'Show/Stuck', 'Show/Died', 'Show/Random', 'Show/Golden path',
+        'Show/Next replay in every cell', 'Playback/Pause', 'Playback/Uncapped speed', 'Playback/Faster',
+        'Playback/Slower', 'Options/Clips', 'View/Sound', 'View/Controller', 'View/Scale/1×', 'View/Scale/2×',
+        'View/Scale/3×', 'View/Scale/4×']
+    assert items['Show/Died'].text() == 'Died\tD' and items['View/Controller'].text() == 'Controller'
+    assert not items['Show/Died'].shortcut().toString()      # the key is named, not bound twice
+    checked = lambda: sorted(name for name, item in items.items() if item.isChecked())   # noqa: E731
+    assert checked() == ['Options/Clips', 'Show/Best', 'View/Scale/2×', 'View/Sound']
+
+    items['Show/Died'].trigger()
+    items['Show/Next replay in every cell'].trigger()
+    items['Options/Clips'].trigger()
+    items['View/Controller'].trigger()
+    items['Playback/Pause'].trigger()
+    assert (fake.selected, fake.skips, fake.clips, fake.controller, fake.paused) == (['died'], 1, False, True, True)
+    assert checked() == ['Playback/Pause', 'Show/Died', 'View/Controller', 'View/Scale/2×', 'View/Sound']
+
+    # The keys move the check marks too.
+    for key in (Qt.Key.Key_P, Qt.Key.Key_W, Qt.Key.Key_C, Qt.Key.Key_S, Qt.Key.Key_U):
+        window.handle_key(key)
+    assert checked() == ['Options/Clips', 'Playback/Uncapped speed', 'Show/Wins', 'View/Controller',
+                         'View/Scale/2×']
+    assert not items['Playback/Faster'].isEnabled() and not items['Playback/Slower'].isEnabled()
+    items['Playback/Uncapped speed'].trigger()
+    items['Playback/Slower'].trigger()
+    assert fake.fps == 50 and items['Playback/Faster'].isEnabled()
+    # Choosing the source already shown leaves its mark.
+    items['Show/Wins'].trigger()
+    assert fake.selected == ['died', 'success'] and items['Show/Wins'].isChecked()
+
+    items['View/Scale/3×'].trigger()
+    width, height = play_grid.FRAME_SHAPE[1] * 3, play_grid.FRAME_SHAPE[0] * 3 + play_view.STRIP_HEIGHT
+    assert all((view.width(), view.height(), view.scale) == (width, height, 3) for view in window.views)
+    window.shutdown()
+
+    # A grid that plays files: no sources, clips, act mode or live cell, whatever is offered.
+    files = FakeGrid(cells=1, messages=[], source='files')
+    window = play_view.Window(files, cols=1, rows=1, scale=1)
+    window.add_menus(remake=lambda **_: files, act='sample', acts=[('sample', 'sample')])
+    assert list(_menus(window)) == [
+        'Show/Next replay in every cell', 'Playback/Pause', 'Playback/Uncapped speed', 'Playback/Faster',
+        'Playback/Slower', 'View/Sound', 'View/Scale/1×', 'View/Scale/2×', 'View/Scale/3×', 'View/Scale/4×']
+    window.shutdown()
+
+
+def test_the_act_mode_and_the_live_cell_remake_the_grid(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    """Options > Act mode and Show > Live game stop the grid and start one made with the new setting and the
+    window's source, cap, clips, controller, pause and sound as they are; the cells start over."""
+    made = []
+
+    def remake(**settings):
+        made.append(settings)
+        grid = MenuGrid(cells=2, messages=[], source=settings['source'], clips=settings['clips'],
+                        controller=settings['controller'])
+        grid.fps = settings['fps']
+        return grid
+
+    first = MenuGrid(cells=2)
+    window = play_view.Window(first, cols=2, rows=1, scale=1)
+    window.add_menus(remake=remake, act='temperature:0.5+relax:16', live=False,
+                     acts=[('temperature:0.5+relax:16', 'temperature:0.5+relax:16 (default)'), ('argmax', 'argmax')])
+    items = _menus(window)
+    assert items['Options/Act mode/temperature:0.5+relax:16 (default)'].isChecked()
+    window.start()
+    window.tick()
+    assert window.views[0].image is not None and window.views[0].state.seed == 5
+    for key in (Qt.Key.Key_D, Qt.Key.Key_C, Qt.Key.Key_Minus, Qt.Key.Key_P):
+        window.handle_key(key)
+
+    items['Options/Act mode/argmax'].trigger()
+    second = window.grid
+    assert made == [{'source': 'died', 'fps': 50.0, 'clips': False, 'controller': False, 'act': 'argmax',
+                     'live': False}]
+    assert first.stops == 1 and second is not first and second.started and second.paused and second.fps == 50.0
+    assert window.views[0].image is None and window.views[0].state.seed is None     # the old run is gone
+    assert items['Options/Act mode/argmax'].isChecked() and second.heard[-1] is None    # muted: not at the NES rate
+
+    # The live cell takes the top left: it has no sound, so the next cell is the one heard.
+    window.handle_key(Qt.Key.Key_Equal)
+    items['Show/Live game in the top left cell'].trigger()
+    assert made[-1] == {'source': 'died', 'fps': play_grid.NES_FPS, 'clips': False, 'controller': False,
+                        'act': 'argmax', 'live': True}
+    assert items['Show/Live game in the top left cell'].isChecked() and window.grid.heard[-1] == 1
+    window.shutdown()
+    assert second.stops == 1 and window.grid.stops == 1
+
+
+def test_the_act_menu_lists_the_standing_modes_and_the_one_in_use():
+    """The default first and marked, the mode given with --act added; with a fixed power-on delay only the modes
+    that draw every action (nothing else is random then)."""
+    module = _load_script()
+    default = registry.PLAY_ACT
+    assert module.menu_acts(default, fixed_delay=False) == [
+        (default, f"{default} (default)"), ('sample', 'sample'),
+        ('temperature:0.75+relax:16', 'temperature:0.75+relax:16'), ('escape:16', 'escape:16'),
+        ('argmax', 'argmax'), ('model', "each model's own")]
+    assert module.menu_acts('floor:0.03', fixed_delay=False)[-1] == ('floor:0.03', 'floor:0.03')
+    assert [mode for mode, _ in module.menu_acts(default, fixed_delay=True)] == [
+        default, 'sample', 'temperature:0.75+relax:16']
+
+
 def test_one_cell_is_heard_s_toggles_it_a_click_moves_it_and_it_is_muted_off_the_nes_rate(qapp):  # pylint: disable=redefined-outer-name, unused-argument
     keys, nes = Qt.Key, play_grid.NES_FPS
     fake = FakeGrid(cells=4, messages=[])

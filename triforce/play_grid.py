@@ -521,6 +521,13 @@ class ReplayGrid:
             self._sound = cell
             self._apply_sound()
 
+    def set_controller(self, on: bool) -> None:
+        """Draws the controller into every replayed frame from the next one on, or stops."""
+        with self._lock:
+            self.controller = on
+            if self._screen is not None:
+                self._screen.set_controller(on)
+
     def _apply_sound(self) -> None:
         """Tells the screen who is heard (the lock is held); a live cell has no sound."""
         if self._screen is None:

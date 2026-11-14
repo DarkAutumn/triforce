@@ -27,10 +27,11 @@ replay, filed into queues of --capacity (32) runs each:
     golden    golden paths: games race to the next triforce, the first to stand outside with it is where every
               game starts the next leg, and the winners are stitched into one run to the route's last triforce
 
-The simulations stop when every queue is full and start again when a cell takes a run.  A queue that fills
-slowly does not keep them running for good: after --patience (64) finished runs in a row that no queue took,
-they wait for the next run to be taken (--patience 0: never wait).  Golden paths are only made while that source
-was chosen at some point; they stop at one waiting per cell.
+The simulations stop when the queues are full and start again when a cell takes a run.  The stuck queue never
+keeps them running: it holds the stuck runs that came by, and once they are watched its cells wait.  A queue
+that fills slowly does not keep them running for good either: after --patience (64) finished runs in a row that
+no queue took, they wait for the next run to be taken (--patience 0: never wait).  Golden paths are only made
+while that source was chosen at some point; they stop at one waiting per cell.
 
 Keys: b best, w success (wins), k stuck, d died, r random, g golden: every cell cuts to that source.  n: every
 cell goes on to its next replay.  u uncaps the frame rate (as fast as the replays play) or caps it again at the
@@ -38,6 +39,12 @@ NES's 60.1 fps; while capped, + and - raise and lower the cap in steps of 10 (60
 p pauses and resumes the picture (the simulations go on filling their queues).  c turns the run-time clips switch
 off and on: for every run simulated from then on (the runs already in the queues keep theirs) and for the live
 cell's run from its next decision.
+
+Menus: the bar at the top has every key's action (each item names its key) and the options without a key.  Show:
+the source, the next replay, the live cell on or off.  Playback: pause and the frame-rate cap.  Options: clips,
+and the act mode (a few standing choices and the one given with --act).  View: sound, the controller drawing and
+the cells' scale.  Changing the act mode or the live cell starts the simulations again with empty queues: the
+runs in them were played the old way.
 
 Clips (round 22): --clips on|off is the switch the simulations start with (default on).  Off masks the CLIP
 action and the route takes its plain way through every stretch (Dungeon 4's island: 0x31 W, 0x30, 0x20, 0x21).
@@ -65,15 +72,15 @@ controller in the top right of every cell (over -LIFE-), the buttons held on eac
 The title shows the queues, the runs simulated and how they ended, how fast the cells play ("36 fps of 60.1
 max", ∞ when uncapped) and the sound.  --replays DIR also saves every simulated run.
 
-How the models act is chosen at startup, for the simulations and the live cell alike: --act MODE for every model
+How the models act, for the simulations and the live cell alike: --act MODE for every model
 (default registry.PLAY_ACT, which draws every action at random so every run differs; argmax takes each model's
 most likely action, a rule such as floor:0.03 draws but never takes an action under 3%, temperature:0.75+relax:16
 draws sharpened and from the whole policy once Link stalls: docs/rust-actor.md "Act modes") or --act model (each
-model's registered act mode).  A run whose models don't all draw (argmax, escape) is decided by the game's random
-numbers alone,
+model's registered act mode); the Options menu changes it while watching.  A run whose models don't all draw
+(argmax, escape) is decided by the game's random numbers alone,
 so those are redrawn from the run's seed whenever a start state is loaded (the game start, --from, and each
 checkpoint of a golden path); a run from console power on gets them from its idle delay instead, which must
-then be random.
+then be random (with a fixed --delay the menu offers only the modes that draw).
 """
 
 import argparse
@@ -94,6 +101,8 @@ DEFAULT_GRID = '4x3'
 DEFAULT_SCALE = 2
 DEFAULT_PARALLEL = 8
 DEFAULT_STALL_STEPS = 300   # actions in a room without damage either way (round 10 §6)
+# The Options menu's act modes beside the one given with --act (docs/experiments/round23.md).
+MENU_ACTS = (registry.PLAY_ACT, 'sample', 'temperature:0.75+relax:16', 'escape:16', 'argmax', registry.MODEL_ACT)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -205,6 +214,17 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
     return args
 
 
+def menu_acts(act: str, fixed_delay: bool) -> list:
+    """The Options menu's act modes as (mode, label): ``MENU_ACTS`` and ``act`` (the one in use).  ``fixed_delay``
+    (a run from console power on after a given idle delay): only the modes that draw every action, since nothing
+    else is random then."""
+    modes = list(dict.fromkeys((*MENU_ACTS, act)))
+    if fixed_delay:
+        modes = [mode for mode in modes if mode != registry.MODEL_ACT and registry.draws(mode)]
+    labels = {registry.PLAY_ACT: f"{registry.PLAY_ACT} (default)", registry.MODEL_ACT: "each model's own"}
+    return [(mode, labels.get(mode, mode)) for mode in modes]
+
+
 def main(argv=None) -> int:
     parser = build_parser()
     args = parse_args(argv, parser)
@@ -218,20 +238,30 @@ def main(argv=None) -> int:
     # Ctrl-C: quit from the event loop, never from inside a tick (closing the window mid-tick left repaints queued
     # for a destroyed Wayland surface, which segfaults in QtWaylandClient).
     signal.signal(signal.SIGINT, lambda *_: QTimer.singleShot(0, app.quit))
-    try:
-        grid = ReplayGrid(cols * rows, args.fps, args.show, path=args.path, models_dir=args.models_dir,
-                          parallel=args.parallel, capacity=args.capacity, patience=args.patience, act=args.act,
+    settings = {'source': args.show, 'fps': args.fps, 'act': args.act, 'clips': args.clips == 'on',
+                'live': args.live, 'controller': args.controller}
+
+    def make_grid(**changes) -> ReplayGrid:
+        """The grid for ``settings`` after ``changes`` (the window's menus: the act mode, the live cell)."""
+        settings.update(changes)
+        return ReplayGrid(cols * rows, path=args.path, models_dir=args.models_dir,
+                          parallel=args.parallel, capacity=args.capacity, patience=args.patience,
                           power_on=args.power_on, start_from=args.start_from, stop_at=args.stop[0],
                           stop_step=args.stop[1], stall_steps=args.stall_steps or None, first_seed=args.first_seed,
                           attempts=args.attempts, replays=args.replays, streams=args.streams, state=args.state,
-                          keyframe_frames=args.keyframe_frames, controller=args.controller,
-                          clips=args.clips == 'on', live=args.live)
+                          keyframe_frames=args.keyframe_frames, **settings)
+
+    try:
+        grid = make_grid()
     except (ValueError, _native.ReplayError) as error:
         parser.error(str(error))
     # A benchmark is a measurement, often run unattended: it stays silent.  A live cell has no sound: the next one
     # is heard.
     window = Window(grid, cols, rows, args.scale, benchmark=args.benchmark,
                     sound=args.sound and args.benchmark is None, heard=1 if args.live and cols * rows > 1 else 0)
+    fixed_delay = args.power_on is not None and args.power_on['delay'] is not None
+    window.add_menus(remake=None if args.path is not None else make_grid, act=args.act,
+                     acts=menu_acts(args.act, fixed_delay), live=args.live)
     app.aboutToQuit.connect(window.shutdown)
     window.start()
     window.show()

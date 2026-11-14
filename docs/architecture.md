@@ -1191,12 +1191,15 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   win, then the furthest route step, then the most hearts at the end, then the fewest frames from the moment the
   models took over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
   `best` `--parallel` candidate runs per missing entry; `best` hands out runs once it was half full. The feed
-  pauses the pool (`Pool::set_paused`) while no queue wants a run and resumes it when a cell takes one. A queue
-  that would never fill (an ending that hardly happens) does not keep the simulations running: after
+  pauses the pool (`Pool::set_paused`) while no queue wants a run and resumes it when a cell takes one. `stuck`
+  never asks for a run (stuck runs are rare: it holds those that came by, and its cells wait once they are
+  watched), so with `best`, `success`, `died` and `random` full the simulations stop. A queue of the others
+  that would never fill (an ending that hardly happens) does not keep them running either: after
   `--patience` (64) finished runs in a row that no queue took they wait for the next take (0: never).
   `--replays DIR` saves every simulated run. `--from`, `--power-on`, `--stop-at`, `--stall-steps` and `--act`
   shape the runs as in `zelda-headless.py`.
-- **Acting** (`--act`, chosen at startup, for the simulations and the live cell alike): `registry.PLAY_ACT`
+- **Acting** (`--act`, Options > Act mode while watching; the simulations and the live cell alike):
+  `registry.PLAY_ACT`
   (default, `temperature:0.5+relax:16` since round 23: a sharpened draw at every decision, a plain one while Link
   is stalled) draws every action, an act mode applies to every model (`argmax` takes the most likely one; `sample`
   draws from the whole policy), `model` follows each model's registered mode. Runs
@@ -1213,6 +1216,12 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   and how they ended, whether the simulations run, the cells' frame rate and the sound; a cell's strip shows
   the run's seed, the room, the acting specialist and cheated items used. `--benchmark SECONDS` prints
   the frame rate as JSON and quits (silent).
+- **Menus** (`Window.add_menus`): Show (the sources, the next replay, the live cell on or off), Playback (pause,
+  uncapped, faster, slower), Options (clips, the act mode: `play-zelda.py` `MENU_ACTS` and the one given with
+  `--act`), View (sound, the controller drawing: `ReplayGrid.set_controller`, the cells' scale). An item names its
+  key and is not a shortcut: the window's key handling stays the only one, and the check marks are read back
+  from the window after every change. The act mode and the live cell remake the grid (`Window.remake`: the old
+  grid stops, a new one starts on the same source, cap, clips, controller, pause and sound, with empty queues).
 - **Clips** (round 22). `--clips on|off` is the run-time switch the simulations start with (default on); key `c`
   turns it off and on (`ReplayGrid.set_clips`: `EnvPool.set_clips_allowed` on the simulations' pool, so every run
   started afterwards; the runs already queued keep theirs). Each feed entry carries the switch its run was played

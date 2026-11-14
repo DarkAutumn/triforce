@@ -14,10 +14,11 @@
 //! whatever happened to finish first (the quickest deaths), and waiting until it is full keeps a viewer
 //! looking at nothing for too long.  From then on it only gets better.
 //!
-//! [`Queues::wants_more`] is the simulations' on/off switch.  They run while `best` is owed runs or a queue has
-//! room, and stop when everything is full.  A queue for an ending that hardly ever happens would keep them
-//! running for good, so after `patience` finished runs in a row that nothing took, they stop until the next
-//! pop (`patience` 0: never give up).
+//! [`Queues::wants_more`] is the simulations' on/off switch.  They run while `best` is owed runs or `random`,
+//! `success` or `died` has room, and stop when those are full.  `stuck` never keeps them running: stuck runs are
+//! rare, so it holds the ones that happened to come by and a viewer of it waits once they are watched.  A queue
+//! for another ending that hardly ever happens would keep them running for good, so after `patience` finished
+//! runs in a row that nothing took, they stop until the next pop (`patience` 0: never give up).
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -257,7 +258,8 @@ impl Queues {
         if self.budget > 0 || self.room(Queue::Random) {
             return true;
         }
-        let short = [Queue::Best, Queue::Success, Queue::Stuck, Queue::Died].into_iter().any(|q| self.room(q));
+        // Not `stuck`: it takes what comes by, and never asks for more.
+        let short = [Queue::Best, Queue::Success, Queue::Died].into_iter().any(|q| self.room(q));
         short && (self.patience == 0 || self.idle < self.patience)
     }
 }
@@ -366,10 +368,12 @@ mod tests {
         let mut q = Queues::new(1, 1, 0);
         assert!(q.wants_more());
         q.offer(run(1, ENDING_WIN, 3, 6, 10));
-        assert!(q.wants_more(), "stuck and died have room");
-        q.offer(run(2, ENDING_STUCK, 1, 6, 10));
+        assert!(q.wants_more(), "died has room");
         q.offer(run(3, ENDING_DEATH, 1, 0, 10));
-        assert!(!q.wants_more());
+        assert!(!q.wants_more(), "stuck is empty, and that alone does not keep them running");
+        q.offer(run(2, ENDING_STUCK, 1, 6, 10));
+        assert_eq!(q.pop(Queue::Stuck).unwrap().seed, 2);
+        assert!(!q.wants_more(), "a stuck run watched does not start them again");
         assert_eq!(q.pop(Queue::Died).unwrap().seed, 3);
         assert!(q.wants_more());
         q.offer(run(4, ENDING_DEATH, 1, 0, 10));
@@ -385,7 +389,7 @@ mod tests {
     fn an_ending_that_never_comes_does_not_keep_the_simulations_running() {
         let mut q = Queues::new(1, 1, 3);
         q.offer(run(1, ENDING_DEATH, 1, 0, 10));
-        // `success` and `stuck` stay empty: three more runs that nothing takes, then the simulations stop.
+        // `success` stays empty: three more runs that nothing takes, then the simulations stop.
         for seed in 2..4 {
             q.offer(run(seed, ENDING_DEATH, 0, 0, 10));
             assert!(q.wants_more(), "run {seed}");
