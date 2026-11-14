@@ -45,9 +45,10 @@ def standard_mask() -> ActionMask:
 def random_mask(rng: np.random.Generator) -> ActionMask:
     """A random legal mask: at least one kind; directional kinds get ≥1 direction; timed kinds get durations."""
     mask = ActionMask()
-    kinds = [k for k in ActionKind if rng.random() < 0.5] or [ActionKind.MOVE]
+    # Each kind legal with probability 0.3: with 11 kinds a row with exactly one legal kind still turns up often.
+    kinds = [k for k in ActionKind if rng.random() < 0.3] or [ActionKind.MOVE]
     for kind in kinds:
-        if kind == ActionKind.WAIT:
+        if kind in (ActionKind.WAIT, ActionKind.RECORDER):
             mask.allow(kind)
             continue
         dirs = DIRECTIONS if kind == ActionKind.BOOMERANG else CARDINALS

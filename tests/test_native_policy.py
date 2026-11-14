@@ -226,7 +226,7 @@ def test_non_finite_weights_and_bad_actions_are_value_errors(native, observation
     with pytest.raises(ValueError, match='non-finite'):
         poisoned.to_native()
     rows = {k: v[:1] for k, v in observations.items()}
-    for actions in ([[8, 0, 0]], [[-1, 0, 0]], [[0, 8, 0]], [[0, 0, 99]], [[0, -1, 0]]):
+    for actions in ([[NUM_KINDS, 0, 0]], [[-1, 0, 0]], [[0, 8, 0]], [[0, 0, 99]], [[0, -1, 0]]):
         with pytest.raises(ValueError):
             native.evaluate(rows, actions=np.array(actions, np.int64))
     with pytest.raises(ValueError, match='integers'):
