@@ -521,17 +521,21 @@ impl GameView {
         (&self.ram[offset..offset + len]).try_into().unwrap()
     }
 
-    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, and the
-    /// game.yaml W wrap exit's rows).
+    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, the game.yaml W
+    /// wrap exit's rows and its `wrap_in` exit).
     pub fn room(&self) -> &Room {
         self.room.get_or_init(|| {
-            let wrap_exit = self
-                .map
-                .get(self.full_location())
+            let room = self.map.get(self.full_location());
+            let wrap_exit = room
                 .and_then(|r| r.exits.get(Direction::W.name()))
                 .filter(|exit| exit.wrap)
                 .and_then(|exit| exit.span);
-            Room::new(self.full_location(), self.current_tiles(), self.ladder()).with_wrap_exit(wrap_exit)
+            let wrap_in = room.and_then(|r| {
+                r.exits.values().find_map(|e| Some((Direction::from_exit(&e.direction)?, e.wrap_in?)))
+            });
+            Room::new(self.full_location(), self.current_tiles(), self.ladder())
+                .with_wrap_exit(wrap_exit)
+                .with_wrap_in(wrap_in)
         })
     }
 
@@ -781,19 +785,21 @@ impl GameView {
         )
     }
 
-    /// Link on a grid point (the caller's offset test) of a dungeon room with the ladder, out of a doorway, facing
-    /// water: the game lays the ladder one square ahead and walks him onto it (asm:Link_EndMoveAndAnimate@CheckLadder;
-    /// over water wider than one square he stops on it at its distance-0 point). It needs a monster slot, free or the
-    /// one of a ladder out that he is off (`ladder_move` is None there: it is put away first).
+    /// Link on a grid point (the caller's offset test) of a room where the game lays the ladder (a dungeon room, an
+    /// overworld ladder room: `crate::room::lays_ladder_in`) with the ladder, out of a doorway, facing water: the game
+    /// lays the ladder one square ahead and walks him onto it (asm:Link_EndMoveAndAnimate@CheckLadder; over water
+    /// wider than one square he stops on it at its distance-0 point). It needs a monster slot, free or the one of a
+    /// ladder out that he is off (`ladder_move` is None there: it is put away first).
     fn lays_ladder(&self, px: i32, py: i32, direction: Direction) -> bool {
-        if self.level() == 0 || self.in_cellar() || !self.ladder() || self.byte(Var::DoorwayDir) != 0 {
+        let here = self.full_location();
+        if !crate::room::lays_ladder_in(here) || self.in_cellar() || !self.ladder() || self.byte(Var::DoorwayDir) != 0 {
             return false;
         }
         let room = self.room();
         let inside = |c: i32, r: i32| (0..crate::room::COLS).contains(&c) && (0..crate::room::ROWS).contains(&r);
         let water = Room::hotspot_tiles(px, py, direction)
             .into_iter()
-            .all(|(c, r)| inside(c, r) && room.tile(c, r) == crate::room::WATER_TILE);
+            .all(|(c, r)| inside(c, r) && room.is_water(room.tile(c, r)));
         water
             && (self.byte(Var::LadderSlot) != 0
                 || (1..tables::OBJ_ID.1).any(|slot| self.ram[tables::OBJ_ID.0 + slot] == 0))

@@ -12,9 +12,10 @@ from triforce.specialist import list_specialists
 
 
 def test_the_route_and_families():
-    # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12); clips-gauntlet is round 21's
-    # experiment route (two targets per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'd5', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12); d5 and d5leg (round 24) extend it
+    # for scouting (Dungeon 5; the clip way to it); clips-gauntlet is round 21's experiment route (two targets per room
+    # and entry, drawn by a specialist naming it).
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd5', 'd5leg', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
@@ -38,7 +39,8 @@ def test_specialist_tags():
     assert native.specialist_for((0, 0x77)) == 'ow-start'
     assert native.specialist_for((0, 0x77, True)) == 'ow-start'
     assert native.specialist_for('(1, 0x45)') == 'wallmaster'
-    assert native.specialist_for((0, 0x0c)) is None
+    assert native.specialist_for((0, 0x00)) is None
+    assert native.specialist_for((0, 0x0c)) == 'ow-tektite'      # d5leg (round 24)
     assert native.specialist_for((0, 0x2c)) == native.specialist_for((0, 0x2c, True)) == 'ow-tektite'
     for room in [(0, 0x29), (0, 0x39), (0, 0x49), (0, 0x6a), (2, 0x6d), (3, 0x4a)]:     # off the route, untagged
         assert native.specialist_for(room) is None, room

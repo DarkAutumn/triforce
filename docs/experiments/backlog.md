@@ -163,8 +163,15 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   (the Lost Woods for 0x51), drawn by the map's Clips selector.
 - [ ] **Bombs without drops:** seven cheated bombs on a run with none (first-quest.md's table). Later: 5:0x56's
   Dodongos (+4).
-- [ ] **The overworld ladder clip** (next phase, Lee, Nov 14): the clip way's 0x60 into 0x5f arrives on water and
-  needs it; by buttons it is 38 frames from the arrival to the heart container.
+- [x] **The overworld ladder clip** (round 24, branch `r24-leg`; decisions 2026-11-14 "The leg to Dungeon 5: its
+  clip way"): `CLIP W` from 0x5f's water arrival to the heart container (38 frames, 8 -> 9 hearts), the plain
+  overworld ladder, 0x55's wrap onto its W part, 0x1f's wall gap, 0x5f's heart as a room objective, the switch held
+  on 0x5f's water, the scouting route `d5leg`; its clip way played end to end by the objective
+  (`crates/zelda/tests/d5_leg.rs`, 8,739 frames) and built by `entry_states build` (90 states, nothing helped).
+- [ ] **The leg's open items:** its start states installed under the names rule (r24-names: `0_2ds` collides),
+  curricula and trainings for the 14 new family rooms; the plain ways in a full route (with the Lost Hills);
+  0x5f's heart objective appears a few frames into play, so its first decision targets `treasure_tile`; the walker
+  in `d5_leg.rs` lines Link up on cave mouths by single frames (MOVE is 4 or 8 frames), a policy has to learn it.
 - [ ] **Leaving a maze by its sequence** in a route (the plain ways through the Lost Woods and the Lost Hills):
   `routes.yaml` refuses it and the envs don't handle a visit that loops back into its own room.
 - [x] **New action kinds** for the route: the recorder, food, the candle, in one model-incompatible bump (1.4.2.0,

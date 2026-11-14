@@ -2034,3 +2034,32 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Evidence:** `crates/env/tests/critic.rs` `digdogger_recorder_split_pays_once_and_the_small_one_is_the_boss`;
   `tests/test_d5.py::test_the_boss_family_plays_the_recorder` (the family's env in 5:0x24: offered, played, split,
   paid once, masked after, a sword hit on the small one pays `reward-boss-hit`).
+## 2026-11-14 — The leg to Dungeon 5: its clip way (round 24, branch `r24-leg`)
+
+The overworld leg from the Dungeon 4 triforce to Dungeon 5's entrance, the clip way, as the scouting route `d5leg`
+(`{extends: d2first}`, the Dungeon 4 precedent; no stretches, no plain ways: the full route comes with the Lost
+Hills). Decided by the agent building it (the owner away):
+
+- **Round the world is a neighbour.** `MapLocation::direction_to` (and Python `get_direction_to`) follow the game's
+  next-room rule (asm:Room_CalcNextRoomForDoor): out of column 0 W is room id - 1, out of column 15 E id + 1. 0x60's
+  wrap exit into 0x5f is then an ordinary W exit for `route_entry` (entry E), `exit_direction`, `OpenClip`, the
+  harvest names and the stretch check, with no second rule beside it.
+- **0x55's W part is a game.yaml exit key, `wrap_in: [9, 10]`** (an overworld W/E exit reached only by the screen
+  wrap toward it on those rows): the path search gets the wrap as a jump there alone. Elsewhere the overworld wrap
+  stays no jump (round 21).
+- **The overworld ladder** in the game's ladder rooms (asm:Ladder_RoomIdsOW): overworld water (`$8D`-`$98` but the
+  walkable `$8D`/`$91`), crossings and MOVE onto water as in a dungeon, and the ladder clip W/E with the screen
+  bounds, no border band and a lay point allowed on water (0x5f's arrival at X `$F0`).
+- **An overworld room's own item is an objective** (0x5f's heart container, the only one the game makes): taken by
+  default, `treasure: skip` leaves it, the room's item flag says it is gone; `treasure_tile` stands in for the few
+  frames before the game makes it. Not a waypoint: a stretch may not hold one, and both ways take it.
+- **A step leaving through its cave makes the cave the objective** (0x0b into Dungeon 5 on a route with no later
+  triforce step), whatever the milestone target says.
+- **The heart waypoint's baseline resets** when a waypoint is done, so 0x2f's take-any cave is judged on its own.
+- **The clips switch holds where Link would be stranded** (`objectives::stranded`: an overworld room with no exit he
+  can walk to and one he can reach with the skips: 0x5f's water from the wrap exit to the heart's platform). A switch
+  off there waits until he can walk on; the envs' CLIP mask follows `GameCompletion::clips_allowed`. Anywhere else
+  it takes effect at once, as before.
+- **Families by enemy** for the clip way's new rooms (Zoras ow-zora, Moblins ow-moblin, Lynels ow-lynel, Peahats
+  ow-peahat, Tektites ow-tektite, 0x0b's Leever ow-leever, 0x2f/0x0f and their caves ow-start); no start_states
+  until the leg's states are installed.

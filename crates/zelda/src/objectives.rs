@@ -388,6 +388,10 @@ pub struct GameCompletion {
     /// the route's stretches) and no plain-way step takes over where he stands: the objective leads him to the
     /// nearest room of the plain way he can walk to ([`GameCompletion::replan_next_rooms`]).
     replan: Option<usize>,
+    /// The switch was turned off where Link stands stranded without the skips ([`stranded`]: 0x5f's water after
+    /// 0x60's wrap exit, round 24): it stays on, the clip way holds, until he can walk to an exit
+    /// ([`GameCompletion::set_clips_allowed`]).
+    off_pending: bool,
 }
 
 impl GameCompletion {
@@ -441,6 +445,7 @@ impl GameCompletion {
             entry: start.map(|s| s.entry.clone()),
             repick: false,
             replan: None,
+            off_pending: false,
         })
     }
 
@@ -455,11 +460,25 @@ impl GameCompletion {
     ///   (0x31 from E: W instead of N); without one he is off the route and the objective leads him to the nearest
     ///   room of the plain way he can walk to (`replan`: 0x21's island, entered from S, has only its S door);
     /// - turned on on the plain way, the plain way holds until the stretch rejoins (a run that turned back from the
-    ///   island takes the long way round, not back N); anywhere else the clip way is taken at once.
+    ///   island takes the long way round, not back N); anywhere else the clip way is taken at once;
+    /// - (round 24) turned off, for a family with clips, where Link stands stranded without the skips ([`stranded`]:
+    ///   no exit of his overworld room he can walk to, one he can reach with them; 0x5f's water from 0x60's wrap exit
+    ///   to the heart container's platform), it takes effect only once he can walk to an exit: until then the switch
+    ///   stays on and the clip way holds ([`GameCompletion::clips_held`]).
     pub fn set_clips_allowed(&mut self, allowed: bool) {
+        self.off_pending = false;
         if self.clips_allowed == allowed {
             return;
         }
+        if !allowed && self.clips {
+            // Applied by `objectives` where Link isn't stranded (at once, but on 0x5f's water).
+            self.off_pending = true;
+            return;
+        }
+        self.apply_clips_allowed(allowed);
+    }
+
+    fn apply_clips_allowed(&mut self, allowed: bool) {
         self.clips_allowed = allowed;
         self.last_route = None;
         let current = self.step.or(self.last_step).and_then(|i| self.map.routes[&self.route][i].way);
@@ -481,8 +500,15 @@ impl GameCompletion {
         }
     }
 
+    /// The switch in force: on while a switch off is held ([`GameCompletion::clips_held`]). The env's CLIP mask
+    /// follows it.
     pub fn clips_allowed(&self) -> bool {
         self.clips_allowed
+    }
+
+    /// The switch was turned off but stays on where Link stands stranded without the skips (round 24).
+    pub fn clips_held(&self) -> bool {
+        self.off_pending
     }
 
     /// The path search knows the skips: the family's switch and the run-time switch both on.
@@ -648,6 +674,11 @@ impl GameCompletion {
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
         let here = state.full_location();
+        // A switch off turned off now, or held until Link can walk to an exit (round 24).
+        if self.off_pending && (!self.clips || !stranded(state)) {
+            self.off_pending = false;
+            self.apply_clips_allowed(false);
+        }
         let entered = prev.is_some_and(|p| p.full_location() != here);
         if let Some(prev) = prev
             && entered
@@ -676,11 +707,13 @@ impl GameCompletion {
         }
         self.open_raft_crossings(state);
         self.check_cave_waypoint(prev, state);
-        // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first).
+        // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first); the
+        // heart baseline with it, so the next `heart` waypoint (0x2f's cave after 0x2c's) is judged on its own.
         while let Some(i) = self.active_waypoint(state)
             && waypoint_done(&self.waypoints[i], state)
         {
             self.waypoints.remove(i);
+            self.heart_baseline = None;
         }
         if self.missed.is_some() {
             return Objective {
@@ -1016,6 +1049,26 @@ impl GameCompletion {
             .is_some_and(|t| state.full_location() == t)
     }
 
+    /// The overworld room's own item while it lies there untaken and the step's `treasure:` rule wants it (round 24;
+    /// default take, as in a dungeon): 0x5f's heart container, the only one the game makes
+    /// (asm:Room_SetUpItemAndPushBlock), taken on both ways of the leg. The room's item flag says it is gone; the item
+    /// appears a few frames into play (mode 5's entry tasks), so until then the game.yaml `treasure_tile` stands in.
+    fn overworld_treasure(&self, state: &GameView) -> Option<Vec<Target>> {
+        let loc = state.full_location();
+        let room = self.map.get(loc)?;
+        room.treasure.as_ref()?;
+        if state.ram()[ROOM_FLAGS_OW as usize + (loc.value & 0x7F) as usize] & FLAG_ITEM_TAKEN != 0 {
+            return None;
+        }
+        if !self.current_step(loc).is_none_or(|step| step.treasure.wants(state.bombs())) {
+            return None;
+        }
+        match state.treasure() {
+            Some(item) => Some(overlap(item.link_overlap_tiles()).collect()),
+            None => room.treasure_tile.map(|tile| vec![Target::Tile(tile)]),
+        }
+    }
+
     fn room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
         if state.full_location().in_cave {
             return self.subroom_objective(state);
@@ -1023,31 +1076,27 @@ impl GameCompletion {
         if state.level() > 0 {
             return self.dungeon_room_objective(state);
         }
+        if let Some(tiles) = self.overworld_treasure(state) {
+            return (ObjectiveKind::Treasure, tiles, Vec::new());
+        }
         let cave_tiles = self.cave_tiles(state);
+        let here = state.full_location();
+        let cave_exit = self.map.get(here).and_then(|r| r.exits.get("cave"));
         if !cave_tiles.is_empty()
-            && let Some(target) = self.target(state)
+            && let Some(exit) = cave_exit
         {
-            let cave_location = MapLocation::new(state.level(), state.location(), true);
-            let cave_exit = self
-                .map
-                .get(state.full_location())
-                .and_then(|r| r.exits.get("cave"));
-            if let Some(exit) = cave_exit {
-                let dest = exit.destination;
-                // This cave is the target, or a level entrance into the target's level (an overworld cave never
-                // leads to another overworld cave: d2first's white-sword target must not pull Link into 0x2c's).
-                if dest == target || (dest.level != state.level() && dest.level == target.level) {
-                    let next = if dest.level != state.level() {
-                        dest
-                    } else {
-                        cave_location
-                    };
-                    return (
-                        ObjectiveKind::Cave,
-                        cave_tiles.into_iter().map(Target::Tile).collect(),
-                        vec![next],
-                    );
-                }
+            let dest = exit.destination;
+            // The route step Link plays here leaves through the cave (round 24: 0x0b into Dungeon 5 on a route
+            // with no later triforce step), or this cave is the target, or a level entrance into the target's level
+            // (an overworld cave never leads to another overworld cave: d2first's white-sword target must not pull
+            // Link into 0x2c's).
+            let step_cave = self.current_step(here).is_some_and(|step| step.exit == "cave");
+            let target = self.target(state);
+            let wanted = step_cave
+                || target.is_some_and(|t| dest == t || (dest.level != state.level() && dest.level == t.level));
+            if wanted {
+                let next = if dest.level != state.level() { dest } else { MapLocation::new(state.level(), state.location(), true) };
+                return (ObjectiveKind::Cave, cave_tiles.into_iter().map(Target::Tile).collect(), vec![next]);
             }
         }
         (ObjectiveKind::None, Vec::new(), Vec::new())
@@ -1353,6 +1402,24 @@ impl GameCompletion {
         }
         best.1
     }
+}
+
+/// Link stands where only a skip leads on (round 24): in an overworld room, no exit (an edge or the cave mouth) he can
+/// walk to, and one he can reach with the room's skips. 0x5f's water after 0x60's wrap exit until the ladder clip's
+/// platform: without the clip the only move is E, back into 0x60 inside its wall (mechanics.md "Room `$60` to `$5F`
+/// without the ladder is a softlock"; with it, the same loop). The run-time switch off waits there
+/// ([`GameCompletion::set_clips_allowed`]).
+pub fn stranded(state: &GameView) -> bool {
+    let here = state.full_location();
+    if here.level != 0 || here.in_cave {
+        return false;
+    }
+    let room = state.room();
+    let mut targets: Vec<Target> = room.exits.directions().map(Target::Dir).collect();
+    targets.extend(room.cave_tile.map(Target::Tile));
+    let tile = state.link.tile();
+    room.wavefront(&targets, &[], &[], false).get(tile).is_none()
+        && room.wavefront(&targets, &[], &[], true).get(tile).is_some()
 }
 
 /// game.yaml `span` of `location`'s exit in `direction`.

@@ -1157,7 +1157,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let targets = config.items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref());
         self.session.set_bomb_targets(targets.as_deref());
         self.session.set_clips(config.clips.enabled);
-        self.session.set_clips_allowed(self.clips_allowed);
+        // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
+        let allowed = self.objectives.as_ref().map_or(self.clips_allowed, GameCompletion::clips_allowed);
+        self.session.set_clips_allowed(allowed);
         let vetoed = match &self.objective {
             Some(objective) if self.session.clips_effective() => {
                 zelda::objectives::wraps_into_wrong_exits(&self.data.map, self.session.state(), objective)

@@ -1,7 +1,7 @@
 name: ow-leever
-rooms: ['(0, 0x48)', '(0, 0x75)']
+rooms: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)']
 start_states: ['0_48*_[0-9]', '0_75*_[0-9]']
-success: [exit-correct]
+success: [exit-correct, enter-room:5:0x76]
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as the overworld families)

@@ -106,7 +106,8 @@ class MapLocation:
 
     def get_direction_to(self, next_room):
         """The exit direction from this room into the adjacent ``next_room`` (NONE if not adjacent): out of a cave S,
-        out of an underworld cellar N (up its ladder)."""
+        out of an underworld cellar N (up its ladder).  An overworld W or E edge leads to room id - 1 or + 1
+        (asm:Room_CalcNextRoomForDoor): out of column 0 W into the row above's column 15 (0x60 into 0x5f)."""
         if self.in_cave and not next_room.in_cave:
             return Direction.S if self.level == 0 else Direction.N
         if self.level == 0 and next_room.level != 0:
@@ -115,6 +116,11 @@ class MapLocation:
             return Direction.N
         if self.in_cave != next_room.in_cave or self.level != next_room.level:
             return Direction.NONE
+        if self.level == 0:
+            if self.x == 0 and next_room.value == (self.value - 1) & 0xFF:
+                return Direction.W
+            if self.x == 15 and next_room.value == (self.value + 1) & 0xFF:
+                return Direction.E
         if abs(self.x - next_room.x) + abs(self.y - next_room.y) != 1:
             return Direction.NONE
         if self.x != next_room.x:

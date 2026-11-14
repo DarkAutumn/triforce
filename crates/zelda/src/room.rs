@@ -33,9 +33,25 @@ const OW_CAVE_ENTRY_TILES: [u8; 1] = [TOP_CAVE_TILE];
 
 /// Underworld water (asm:RoomLayout_LayOutUWFloor's `W` square): a wall, but for the ladder.
 pub const WATER_TILE: u8 = 0xF4;
+/// Overworld water as the ladder sees it: tiles `$8D`-`$98` the lookup returns, which has already made the walkable
+/// `$8D` and `$91` tile `$26` (asm:Link_EndMoveAndAnimate@CheckWaterOW, asm:Tile_WalkableTilesOW).
+pub const OW_WATER_TILES: std::ops::RangeInclusive<u8> = 0x8D..=0x98;
+/// The only overworld rooms where the ladder is laid (asm:Ladder_RoomIdsOW).
+pub const OW_LADDER_ROOMS: [u8; 6] = [0x17, 0x18, 0x19, 0x27, 0x4F, 0x5F];
+/// Overworld room `$1F`: for Link a vertical test at X `$80` with Y < `$56` reads walkable, the gap in its N wall
+/// into `$0F` (asm:Tile_GetAtObjOffset@SetTile).
+const GAP_ROOM: u8 = 0x1F;
+const GAP_X: i32 = 0x80;
+const GAP_BELOW_Y: i32 = 0x56;
 /// `Room::ladder_axes` bits: a water tile the ladder crosses vertically / horizontally.
 pub const LADDER_V: u8 = 1;
 pub const LADDER_H: u8 = 2;
+
+/// Link holding the ladder can lay it in `location`: every dungeon room but a cellar, the overworld's ladder rooms
+/// (asm:Link_EndMoveAndAnimate@CheckLadderRoom).
+pub fn lays_ladder_in(location: MapLocation) -> bool {
+    !location.in_cave && (location.level != 0 || OW_LADDER_ROOMS.contains(&location.value))
+}
 
 /// Locked door tiles $98-$A7 (N, S, W, E).
 pub fn is_door_tile(tile: u8) -> bool {
@@ -156,15 +172,20 @@ pub struct Room {
     threshold: u8,
     corridor: [bool; CELLS],
     loaded: bool,
-    /// Link holds the ladder (`Room::new`).
+    /// Link holds the ladder (`Room::new`); in an overworld room only where the game lays it ([`lays_ladder_in`]).
     ladder: bool,
     /// Per tile, the axes (`LADDER_V`, `LADDER_H`) along which Link holding the ladder crosses this water tile.
     ladder_axes: [u8; CELLS],
+    /// Overworld room `$1F`'s gap at X `$80` (`GAP_ROOM`).
+    link_gap: bool,
     /// The room's skips as path-search jumps, built on first use (`crate::clips::skip_jumps`).
     jumps: OnceLock<Vec<Jump>>,
     /// Link's tile rows (game.yaml `span`) of the room's W wrap exit (`crate::game_map::RoomExit::wrap`), left only
     /// by `CLIP E` ([`Room::with_wrap_exit`]).
     wrap_exit: Option<(i32, i32)>,
+    /// The tile rows (Link's, game.yaml `wrap_in`) on which a screen wrap reaches the side of the room an exit is on,
+    /// and that exit's direction ([`Room::with_wrap_in`]).
+    wrap_in: Option<(Direction, (i32, i32))>,
     pub exits: Exits,
     pub cave_tile: Option<Tile>,
 }
@@ -178,7 +199,8 @@ fn in_bounds(tc: i32, tr: i32) -> bool {
 }
 
 impl Room {
-    /// `ladder`: Link holds the ladder (`GameView::ladder`); in an underworld room its crossings become passable.
+    /// `ladder`: Link holds the ladder (`GameView::ladder`); in a room where the game lays it ([`lays_ladder_in`])
+    /// its crossings become passable.
     pub fn new(location: MapLocation, tiles: &Tiles, ladder: bool) -> Room {
         let overworld = location.level == 0;
         let threshold = if overworld {
@@ -193,12 +215,14 @@ impl Room {
             threshold,
             corridor: [false; CELLS],
             loaded: false,
-            ladder,
+            ladder: ladder && (!overworld || lays_ladder_in(location)),
             ladder_axes: [0; CELLS],
+            link_gap: location == MapLocation::new(0, GAP_ROOM, false),
             jumps: OnceLock::new(),
             exits: Exits::default(),
             cave_tile: None,
             wrap_exit: None,
+            wrap_in: None,
         };
         room.loaded = tiles
             .iter()
@@ -206,8 +230,7 @@ impl Room {
         if !overworld && !location.in_cave {
             room.compute_corridor_tiles();
         }
-        // The overworld ladder rooms (asm:Ladder_RoomIdsOW) are not modelled: the route never enters them with it.
-        if ladder && !overworld && !location.in_cave {
+        if room.ladder && lays_ladder_in(location) {
             room.compute_ladder_crossings();
         }
         room.exits = room.exit_tiles();
@@ -264,6 +287,25 @@ impl Room {
         self.wrap_exit
     }
 
+    /// The room with its game.yaml `wrap_in` exit (`GameView::room`): the exit `direction`'s side of the room is
+    /// reached from the other side by the screen wrap toward it on `rows` (0x55's W third, cut off by the river: CLIP
+    /// E from the dock side), a jump of the path search with clips ([`Room::skip_jumps`]).
+    pub fn with_wrap_in(mut self, wrap_in: Option<(Direction, (i32, i32))>) -> Room {
+        self.wrap_in = wrap_in;
+        self.jumps = OnceLock::new();
+        self
+    }
+
+    /// The exit direction and Link's tile rows of the room's `wrap_in` exit, if it has one.
+    pub fn wrap_in(&self) -> Option<(Direction, (i32, i32))> {
+        self.wrap_in
+    }
+
+    /// Water the ladder is laid over: `$F4` in a dungeon, [`OW_WATER_TILES`] (bar the walkable ones) overworld.
+    pub fn is_water(&self, tile: u8) -> bool {
+        if self.overworld { OW_WATER_TILES.contains(&tile) && !ow_override(tile) } else { tile == WATER_TILE }
+    }
+
     /// The room's grid-point skips as path-search jumps (`crate::clips::skip_jumps`), built once per room model.
     pub fn skip_jumps(&self) -> &[Jump] {
         self.jumps.get_or_init(|| crate::clips::skip_jumps(self))
@@ -304,7 +346,7 @@ impl Room {
     /// tiles exactly one square (2 tiles) long in a column (row) with a walkable tile at both ends is crossed
     /// vertically (horizontally).  A strip two squares wide can't be crossed.
     fn compute_ladder_crossings(&mut self) {
-        let water = |room: &Room, c: i32, r: i32| in_bounds(c, r) && room.tile(c, r) == WATER_TILE;
+        let water = |room: &Room, c: i32, r: i32| in_bounds(c, r) && room.is_water(room.tile(c, r));
         let mut marks = Vec::new();
         for (axis, (dc, dr), lines, length) in [(LADDER_V, (0, 1), COLS, ROWS), (LADDER_H, (1, 0), ROWS, COLS)] {
             for line in 0..lines {
@@ -344,10 +386,17 @@ impl Room {
         match direction {
             Direction::W => self.passable((px - 8).div_euclid(8), feet_row, LADDER_H),
             Direction::E => self.passable((px + 16).div_euclid(8), feet_row, LADDER_H),
+            Direction::N if self.in_gap(px, py) => true,
+            Direction::S if self.in_gap(px, py) => true,
             Direction::N => self.is_vertical_walkable(px.div_euclid(8), (py - 61).div_euclid(8)),
             Direction::S => self.is_vertical_walkable(px.div_euclid(8), (py - 45).div_euclid(8)),
             _ => false,
         }
+    }
+
+    /// Link at (px, py) is in overworld room `$1F`'s gap column above Y `$56`, where up and down read walkable.
+    fn in_gap(&self, px: i32, py: i32) -> bool {
+        self.link_gap && px == GAP_X && py < GAP_BELOW_Y
     }
 
     fn is_vertical_walkable(&self, col: i32, row: i32) -> bool {
@@ -401,10 +450,15 @@ impl Room {
         match direction {
             Direction::E => tr + 1 < ROWS && self.passable(tc + 2, tr + 1, LADDER_H),
             Direction::W => tr + 1 < ROWS && self.passable(tc - 1, tr + 1, LADDER_H),
-            Direction::S => tc + 1 < COLS && self.check_vertical(tc, tr + 2),
-            Direction::N => tc + 1 < COLS && self.check_vertical(tc, tr),
+            Direction::S => tc + 1 < COLS && (self.tile_in_gap(tc, tr) || self.check_vertical(tc, tr + 2)),
+            Direction::N => tc + 1 < COLS && (self.tile_in_gap(tc, tr) || self.check_vertical(tc, tr)),
             _ => false,
         }
+    }
+
+    /// [`Room::in_gap`] for Link's top-left tile (column `$10`, rows of Y `$3D`-`$55`).
+    fn tile_in_gap(&self, tc: i32, tr: i32) -> bool {
+        self.link_gap && tc == GAP_X / 8 && tr <= (GAP_BELOW_Y - 1 - crate::enums::GAMEPLAY_START_Y) / 8
     }
 
     fn check_vertical(&self, tc: i32, tr: i32) -> bool {
@@ -532,7 +586,12 @@ impl Room {
                     .filter(|&(x, y)| self.is_tile_walkable(x, y + 1))
                     .collect()
             };
-            exits.set(Direction::N, row(0), true);
+            let mut north = row(0);
+            // Room $1F's gap: Link walks through its N wall at X $80.
+            if self.link_gap && !north.contains(&(GAP_X / 8, 0)) {
+                north.push((GAP_X / 8, 0));
+            }
+            exits.set(Direction::N, north, true);
             exits.set(Direction::S, row(ROWS - 2), true);
             exits.set(Direction::E, col(COLS - 1), true);
             exits.set(Direction::W, col(0), true);

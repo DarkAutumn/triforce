@@ -257,6 +257,49 @@ d5:
   - {level: 5, room: '0x25', specialist: pols-voice, entry: E, exit: W}
   - {level: 5, room: '0x24', specialist: boss-digdogger, entry: E, exit: N, bomb_reserve: 0}
   - {level: 5, room: '0x14', specialist: gibdo, entry: S, exit: triforce}
+# d5leg (round 24, scouting; docs/routes/first-quest.md, overworld.md): d2first, then the clip way of the overworld
+# leg from the D4 triforce (its warp to 0x45) to Dungeon 5's entrance, without stretches or plain ways (the full
+# route adds them with the Lost Hills).  The raft back from 0x45's pier to 0x55's dock; CLIP E over 0x55's river (the
+# wrap onto its W part, game.yaml `wrap_in`), W along row 5 and out of 0x51 by its wrap exit; 0x50 S; 0x60 round
+# the world by its wrap exit into 0x5f (room id - 1) onto the water, the overworld ladder clip W to the heart
+# container (9 hearts; the room's own item, taken by the default `treasure` rule), the plain ladder on to land, N;
+# 0x4f N to 0x3f's dock, by raft to 0x2f's take-any cave (its heart container, 10 hearts) and back down to 0x3f;
+# W out of 0x3e by its wrap exit, 0x3d N, 0x2d N, 0x1d E (its E part), 0x1e E, 0x1f N through its wall gap at X $80
+# into 0x0f's open secret cave (100 rupees) and back S, W, 0x1d N, 0x0d W, out of 0x0c by its wrap exit onto the
+# mountain top, 0x0b's cave: Dungeon 5 (5:0x76).
+d5leg:
+  extends: d2first
+  steps:
+  - {level: 0, room: '0x45', specialist: ow-peahat, entry: cave, exit: S}
+  - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: W}
+  - {level: 0, room: '0x54', specialist: ow-zora, entry: E, exit: W}
+  - {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
+  - {level: 0, room: '0x52', specialist: ow-moblin, entry: E, exit: W}
+  - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
+  - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: S}
+  - {level: 0, room: '0x60', specialist: ow-lynel, entry: N, exit: W}
+  - {level: 0, room: '0x5f', specialist: ow-zora, entry: E, exit: N}
+  - {level: 0, room: '0x4f', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x3f', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x2f', specialist: ow-start, entry: S, exit: cave}
+  - {level: 0, room: '0x2f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: heart}
+  - {level: 0, room: '0x2f', specialist: ow-start, entry: cave, exit: S}
+  - {level: 0, room: '0x3f', specialist: ow-zora, entry: N, exit: W}
+  - {level: 0, room: '0x3e', specialist: ow-zora, entry: E, exit: W}
+  - {level: 0, room: '0x3d', specialist: ow-moblin, entry: E, exit: N}
+  - {level: 0, room: '0x2d', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x1d', specialist: ow-peahat, entry: S, exit: E}
+  - {level: 0, room: '0x1e', specialist: ow-tektite, entry: W, exit: E}
+  - {level: 0, room: '0x1f', specialist: ow-peahat, entry: W, exit: N}
+  - {level: 0, room: '0x0f', specialist: ow-start, entry: S, exit: cave}
+  - {level: 0, room: '0x0f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: rupees}
+  - {level: 0, room: '0x0f', specialist: ow-start, entry: cave, exit: S}
+  - {level: 0, room: '0x1f', specialist: ow-peahat, entry: N, exit: W}
+  - {level: 0, room: '0x1e', specialist: ow-tektite, entry: E, exit: W}
+  - {level: 0, room: '0x1d', specialist: ow-peahat, entry: E, exit: N}
+  - {level: 0, room: '0x0d', specialist: ow-tektite, entry: S, exit: W}
+  - {level: 0, room: '0x0c', specialist: ow-tektite, entry: E, exit: W}
+  - {level: 0, room: '0x0b', specialist: ow-leever, entry: E, exit: cave}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -277,17 +320,19 @@ clips-gauntlet:
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
 # Families by enemy (docs/specialists.md): the routes' rooms and the alternate 0x78; 0:0x56, 0:0x57 and 3:0x4b (off
-# the route since round 22) stay tagged, without start states, for a Link who strays into them.  Dungeon 5 (round 24)
-# adds gibdo, pols-voice, dodongo-crossing and boss-digdogger.
+# the route since round 22) stay tagged, without start states, for a Link who strays into them.  Round 24: the rooms
+# of d5leg (Zora rooms ow-zora, Moblins ow-moblin, Lynels ow-lynel, Peahats ow-peahat, Tektites ow-tektite, 0x0b's
+# Leever ow-leever, the caves ow-start), without start states until the leg's states are installed; Dungeon 5 adds
+# gibdo, pols-voice, dodongo-crossing and boss-digdogger.
 families:
-  ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)']
+  ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']
-  ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)']
-  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)']
-  ow-leever: ['(0, 0x48)', '(0, 0x75)']
-  ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)']
-  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)']
-  ow-peahat: ['(0, 0x45)']
+  ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)', '(0, 0x54)', '(0, 0x5f)', '(0, 0x4f)', '(0, 0x3f)', '(0, 0x3e)']
+  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)', '(0, 0x53)', '(0, 0x52)', '(0, 0x51)']
+  ow-leever: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)']
+  ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)']
+  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)']
+  ow-peahat: ['(0, 0x45)', '(0, 0x1d)', '(0, 0x1f)']
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
   stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x01)', '(4, 0x21)', '(4, 0x51)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
