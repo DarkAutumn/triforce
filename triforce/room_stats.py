@@ -9,15 +9,16 @@ per room visit, ``crates/env/src/chain.rs``) and the single-room evaluations of 
 writes one JSON file, ``<chains-dir>/<TAG>-room-stats.json`` (``FORMAT``), with the same per-room fields in every
 scope (``SCOPES``):
 
-- ``full``: the ``full`` file (runs from the game start to the D4 triforce).  ``death_rate`` = runs that died in the
+- ``full``: the ``full`` file (runs from the game start to the D5 triforce).  ``death_rate`` = runs that died in the
   room / runs started: the chance, on a full run, of dying there.
-- ``to-d2``, ``to-d1``, ``to-d3``, ``to-d4`` (segments: the route cut at the dungeon exits): game start -> out of
-  Dungeon 2 (0:0x3c), 0:0x3c -> out of Dungeon 1 (0:0x37), 0:0x37 -> out of Dungeon 3 (0:0x74), 0:0x74 -> the D4
-  triforce.  Each from the file whose runs start at the segment's start (``full``, ``post-d2``, ``post-d1``,
-  ``post-d3``), cut at the first entry into the next segment's start step: the runs play on to the route's end, the
-  segment is the stretch before the cut.  ``death_rate`` = runs that died in the room within the segment / runs
-  started on it.  A room on several segments (overworld 0x38) has an entry in each.
-- ``d2``, ``d1``, ``d3``, ``d4``: the dungeon files (from the dungeon's entrance), cut like the segments.
+- ``to-d2``, ``to-d1``, ``to-d3``, ``to-d4``, ``to-d5`` (segments: the route cut at the dungeon exits): game start ->
+  out of Dungeon 2 (0:0x3c), 0:0x3c -> out of Dungeon 1 (0:0x37), 0:0x37 -> out of Dungeon 3 (0:0x74), 0:0x74 -> out
+  of Dungeon 4 (0:0x45, the triforce's warp), 0:0x45 -> the D5 triforce.  Each from the file whose runs start at the
+  segment's start (``full``, ``post-d2``, ``post-d1``, ``post-d3``, ``post-d4``), cut at the first entry into the
+  next segment's start step: the runs play on to the route's end, the segment is the stretch before the cut.
+  ``death_rate`` = runs that died in the room within the segment / runs started on it.  A room on several segments
+  (overworld 0x38) has an entry in each.
+- ``d2``, ``d1``, ``d3``, ``d4``, ``d5``: the dungeon files (from the dungeon's entrance), cut like the segments.
 - ``room``: the single-room evaluations (``triforce.evaluate``, ``visited_rooms``) of the models the chains played
   (each in its chain act mode), merged per room weighted by visits.  Here a run is an isolated episode that entered
   the room: ``death_rate`` = such episodes that died in it / such episodes.
@@ -108,15 +109,17 @@ class Scope:
 
 
 SCOPES = (
-    Scope('full', 'full', 'Full run: start → the D4 triforce', 'full', 'start', None),
+    Scope('full', 'full', 'Full run: start → the D5 triforce', 'full', 'start', None),
     Scope('to-d2', 'segment', 'To D2: start → out of Dungeon 2 (0:0x3c)', 'full', 'start', '0_3cc_0'),
     Scope('to-d1', 'segment', 'To D1: 0:0x3c → out of Dungeon 1 (0:0x37)', 'post-d2', '0_3cc_0', '0_37c_0'),
     Scope('to-d3', 'segment', 'To D3: 0:0x37 → out of Dungeon 3 (0:0x74)', 'post-d1', '0_37c_0', '0_74c_0'),
-    Scope('to-d4', 'segment', 'To D4: 0:0x74 → the D4 triforce', 'post-d3', '0_74c_0', None),
+    Scope('to-d4', 'segment', 'To D4: 0:0x74 → out of Dungeon 4 (0:0x45)', 'post-d3', '0_74c_0', '0_45c_0'),
+    Scope('to-d5', 'segment', 'To D5: 0:0x45 → the D5 triforce', 'post-d4', '0_45c_0', None),
     Scope('d2', 'dungeon', 'Dungeon 2: 2:0x7d → out (0:0x3c)', 'd2', '2_7ds_0', '0_3cc_0'),
     Scope('d1', 'dungeon', 'Dungeon 1: 1:0x73 → out (0:0x37)', 'd1', '1_73s_0', '0_37c_0'),
     Scope('d3', 'dungeon', 'Dungeon 3: 3:0x7c → out (0:0x74)', 'd3', '3_7cs_0', '0_74c_0'),
-    Scope('d4', 'dungeon', 'Dungeon 4: 4:0x71 → the D4 triforce', 'd4', '4_71s_0', None),
+    Scope('d4', 'dungeon', 'Dungeon 4: 4:0x71 → out (0:0x45)', 'd4', '4_71s_0', '0_45c_0'),
+    Scope('d5', 'dungeon', 'Dungeon 5: 5:0x76 → the D5 triforce', 'd5', '5_76s_0', None),
 )
 ROOM_SCOPE = 'room'
 ROOM_LABEL = 'Room only: isolated single-room evaluations'

@@ -42,8 +42,10 @@
 # Aquamentus (6 hearts) to the D1 triforce (warps Link to 0x37); then east and south to 0x67's secret cave (bomb, 30
 # rupees) and on to Dungeon 3 (0x74) by the wrap exit or along row 6, the raft cellar, Manhandla (7 hearts) and the D3
 # triforce (warps Link to 0x74); then back to 0x65, by raft from 0x55 to the island 0x45 and Dungeon 4
-# (docs/routes/d4.md): the ladder, 0x01's key, Gleeok (8 hearts); the route ends on taking the D4
-# triforce.  Never the fairy.
+# (docs/routes/d4.md): the ladder, 0x01's key, Gleeok (8 hearts) and the D4 triforce (warps Link to 0x45); round 24
+# (docs/routes/d5-leg.md, d5.md): by raft back to 0x55, the coast heart containers of 0x5f (9 hearts) and 0x2f's cave
+# (10), 0x0f's 100 rupees, the mountain to Dungeon 5 (0x0b), the recorder, Digdogger (11 hearts); the route ends on
+# taking the D5 triforce.  Never the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
 - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
@@ -222,56 +224,25 @@ d2first:
 - {level: 4, room: '0x12', specialist: vire, entry: N, exit: E}
 - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
 - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
-# d5 (round 24; docs/routes/d5.md): Dungeon 5 after the D4 triforce, a scouting route (`extends: d2first`; the leg
-# from Dungeon 4 joins it when it is built).  The owner's notes (Nov 14): 0x66 crossed to its W wall on entry (its
-# key not wanted), cleared on the way back (the N shutter), its key taken, N over the water by the ladder; 0x65's
-# four bombs refused westbound and taken eastbound; bombs as a weapon only in the Olive Garden 0x05 (down to 0) and
-# on Digdogger (0x24), the two walls (0x66 W, 0x65 W) one bomb each (gibdo `required`), the 10th kill's bomb allowed
-# (bomb_reserve 8 elsewhere: Link holds at most 8, so a `free` family's BOMB stays masked); 0x64 by the block clip
-# (clips on) or by the fight and the push (off), one step whose objective the clips switch decides; 0x05 cleared,
-# its block pushed, the stairs to the recorder; the rooms after 0x66 crossed, their hidden items skipped, 0x27's key
-# taken; Digdogger by the recorder (the action kind of round 24's `r24-kinds`).  Keys: 6 in, 3 spent (0x06 W, 0x27 W,
-# 0x25 W), 2 taken (0x66, 0x27): 5 out.
-d5:
-  extends: d2first
-  steps:
-  - {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
-  - {level: 5, room: '0x66', specialist: gibdo, entry: S, exit: W, treasure: skip}
-  - {level: 5, room: '0x65', specialist: gibdo, entry: E, exit: W, treasure: refuse}
-  - {level: 5, room: '0x64', specialist: darknut, entry: E, exit: cave}
-  - {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-  - {level: 5, room: '0x06', specialist: darknut, entry: cave, exit: W}
-  - {level: 5, room: '0x05', specialist: darknut, entry: E, exit: cave, bomb_reserve: 0}
-  - {level: 5, room: '0x04', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: recorder}
-  - {level: 5, room: '0x05', specialist: darknut, entry: cave, exit: E, bomb_reserve: 8}
-  - {level: 5, room: '0x06', specialist: darknut, entry: W, exit: cave}
-  - {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-  - {level: 5, room: '0x64', specialist: darknut, entry: cave, exit: E}
-  - {level: 5, room: '0x65', specialist: gibdo, entry: W, exit: E}
-  - {level: 5, room: '0x66', specialist: gibdo, entry: W, exit: N}
-  - {level: 5, room: '0x56', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
-  - {level: 5, room: '0x57', specialist: zol, entry: W, exit: N, treasure: skip}
-  - {level: 5, room: '0x47', specialist: gibdo, entry: S, exit: N, treasure: skip}
-  - {level: 5, room: '0x37', specialist: darknut, entry: S, exit: N, treasure: skip}
-  - {level: 5, room: '0x27', specialist: pols-voice, entry: S, exit: W}
-  - {level: 5, room: '0x26', specialist: gibdo, entry: E, exit: W, treasure: skip}
-  - {level: 5, room: '0x25', specialist: pols-voice, entry: E, exit: W}
-  - {level: 5, room: '0x24', specialist: boss-digdogger, entry: E, exit: N, bomb_reserve: 0}
-  - {level: 5, room: '0x14', specialist: gibdo, entry: S, exit: triforce}
-# d5leg (round 24, scouting; docs/routes/first-quest.md, overworld.md): d2first, then the clip way of the overworld
-# leg from the D4 triforce (its warp to 0x45) to Dungeon 5's entrance, without stretches or plain ways (the full
-# route adds them with the Lost Hills).  The raft back from 0x45's pier to 0x55's dock; CLIP E over 0x55's river (the
-# wrap onto its W part, game.yaml `wrap_in`), W along row 5 and out of 0x51 by its wrap exit; 0x50 S; 0x60 round
-# the world by its wrap exit into 0x5f (room id - 1) onto the water, the overworld ladder clip W to the heart
-# container (9 hearts; the room's own item, taken by the default `treasure` rule), the plain ladder on to land, N;
-# 0x4f N to 0x3f's dock, by raft to 0x2f's take-any cave (its heart container, 10 hearts) and back down to 0x3f;
-# W out of 0x3e by its wrap exit, 0x3d N, 0x2d N, 0x1d E (its E part), 0x1e E, 0x1f N through its wall gap at X $80
-# into 0x0f's open secret cave (100 rupees) and back S, W, 0x1d N, 0x0d W, out of 0x0c by its wrap exit onto the
-# mountain top, 0x0b's cave: Dungeon 5 (5:0x76).
-d5leg:
-  extends: d2first
-  steps:
-  - {level: 0, room: '0x45', specialist: ow-peahat, entry: cave, exit: S}
+# The leg to Dungeon 5 (round 24, the owner, Nov 13-14; docs/routes/d5-leg.md, first-quest.md, overworld.md): from
+# the D4 triforce's warp (0x45) S off the pier, the raft down to 0x55's dock, then three stretches.  `coast-heart`:
+# with clips CLIP E over 0x55's river (the wrap onto its W part, game.yaml `wrap_in`), W along row 5 and out of 0x51
+# by its wrap exit, 0x50 S, 0x60 round the world by its wrap exit into 0x5f (room id - 1) onto the water, the
+# overworld ladder clip W to the heart container (9 hearts; the room's own item, the default `treasure` rule), the
+# plain ladder on to land, N; without clips E along row 5 (d2first's rooms the other way), S at 0x5d (X $C0), E
+# along row 6 and N into 0x5f, whose heart the plain ladder reaches from its land.  Then 0x4f N to 0x3f's dock, by
+# raft to 0x2f's take-any cave (its heart container, 10 hearts) and back down to 0x3f.  `lake-3e`: with clips W out
+# of 0x3e by its wrap exit, 0x3d N, 0x2d N; without N, W through 0x2e, 0x2d N.  0x1d E (its E part), 0x1e E, 0x1f N
+# through its wall gap at X $80 into 0x0f's open secret cave (100 rupees) and back S, W.  `mountain`: with clips 0x1d
+# N, 0x0d W, out of 0x0c by its wrap exit onto the mountain top, 0x0b's cave; without 0x1d S, 0x2d W, 0x2c N, 0x1c
+# W, the Lost Hills 0x1b by its sequence (N four times, `exit: maze`), 0x0b from S into its cave: Dungeon 5.
+# Bomb reserve 2 (as from Dungeon 4's entrance): Dungeon 5's two walls (0x66 W, 0x65 W; 0x65's bombs are refused
+# westbound); no wall on the leg.  Keys: 6 in, none used.
+- {level: 0, room: '0x45', specialist: ow-peahat, entry: cave, exit: S, bomb_reserve: 2}
+- stretch: coast-heart
+  parts: {level: 0, room: '0x55', entry: N}
+  rejoins: {level: 0, room: '0x4f', entry: S}
+  clips:
   - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: W}
   - {level: 0, room: '0x54', specialist: ow-zora, entry: E, exit: W}
   - {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
@@ -280,42 +251,92 @@ d5leg:
   - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: S}
   - {level: 0, room: '0x60', specialist: ow-lynel, entry: N, exit: W}
   - {level: 0, room: '0x5f', specialist: ow-zora, entry: E, exit: N}
-  - {level: 0, room: '0x4f', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x3f', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x2f', specialist: ow-start, entry: S, exit: cave}
-  - {level: 0, room: '0x2f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: heart}
-  - {level: 0, room: '0x2f', specialist: ow-start, entry: cave, exit: S}
-  - {level: 0, room: '0x3f', specialist: ow-zora, entry: N, exit: W}
+  plain:
+  - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: E}
+  - {level: 0, room: '0x56', specialist: ow-zora, entry: W, exit: E}
+  - {level: 0, room: '0x57', specialist: ow-octorok, entry: W, exit: E}
+  - {level: 0, room: '0x58', specialist: ow-octorok, entry: W, exit: E}
+  - {level: 0, room: '0x59', specialist: ow-zora, entry: W, exit: E}
+  - {level: 0, room: '0x5a', specialist: ow-zora, entry: W, exit: E}
+  - {level: 0, room: '0x5b', specialist: ow-moblin, entry: W, exit: E}
+  - {level: 0, room: '0x5c', specialist: ow-moblin, entry: W, exit: E}
+  - {level: 0, room: '0x5d', specialist: ow-moblin, entry: W, exit: S}
+  - {level: 0, room: '0x6d', specialist: ow-moblin, entry: N, exit: E}
+  - {level: 0, room: '0x6e', specialist: ow-moblin, entry: W, exit: E}
+  - {level: 0, room: '0x6f', specialist: ow-zora, entry: W, exit: N}
+  - {level: 0, room: '0x5f', specialist: ow-zora, entry: S, exit: N}
+- {level: 0, room: '0x4f', specialist: ow-zora, entry: S, exit: N}
+- {level: 0, room: '0x3f', specialist: ow-zora, entry: S, exit: N}
+- {level: 0, room: '0x2f', specialist: ow-start, entry: S, exit: cave}
+- {level: 0, room: '0x2f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: heart}
+- {level: 0, room: '0x2f', specialist: ow-start, entry: cave, exit: S}
+- {level: 0, room: '0x3f', specialist: ow-zora, entry: N, exit: W}
+- stretch: lake-3e
+  parts: {level: 0, room: '0x3e', entry: E}
+  rejoins: {level: 0, room: '0x1d', entry: S}
+  clips:
   - {level: 0, room: '0x3e', specialist: ow-zora, entry: E, exit: W}
   - {level: 0, room: '0x3d', specialist: ow-moblin, entry: E, exit: N}
   - {level: 0, room: '0x2d', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x1d', specialist: ow-peahat, entry: S, exit: E}
-  - {level: 0, room: '0x1e', specialist: ow-tektite, entry: W, exit: E}
-  - {level: 0, room: '0x1f', specialist: ow-peahat, entry: W, exit: N}
-  - {level: 0, room: '0x0f', specialist: ow-start, entry: S, exit: cave}
-  - {level: 0, room: '0x0f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: rupees}
-  - {level: 0, room: '0x0f', specialist: ow-start, entry: cave, exit: S}
-  - {level: 0, room: '0x1f', specialist: ow-peahat, entry: N, exit: W}
-  - {level: 0, room: '0x1e', specialist: ow-tektite, entry: E, exit: W}
+  plain:
+  - {level: 0, room: '0x3e', specialist: ow-zora, entry: E, exit: N}
+  - {level: 0, room: '0x2e', specialist: ow-zora, entry: S, exit: W}
+  - {level: 0, room: '0x2d', specialist: ow-zora, entry: E, exit: N}
+- {level: 0, room: '0x1d', specialist: ow-peahat, entry: S, exit: E}
+- {level: 0, room: '0x1e', specialist: ow-tektite, entry: W, exit: E}
+- {level: 0, room: '0x1f', specialist: ow-peahat, entry: W, exit: N}
+- {level: 0, room: '0x0f', specialist: ow-start, entry: S, exit: cave}
+- {level: 0, room: '0x0f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: rupees}
+- {level: 0, room: '0x0f', specialist: ow-start, entry: cave, exit: S}
+- {level: 0, room: '0x1f', specialist: ow-peahat, entry: N, exit: W}
+- {level: 0, room: '0x1e', specialist: ow-tektite, entry: E, exit: W}
+- stretch: mountain
+  parts: {level: 0, room: '0x1d', entry: E}
+  rejoins: {level: 5, room: '0x76', entry: S}
+  clips:
   - {level: 0, room: '0x1d', specialist: ow-peahat, entry: E, exit: N}
   - {level: 0, room: '0x0d', specialist: ow-tektite, entry: S, exit: W}
   - {level: 0, room: '0x0c', specialist: ow-tektite, entry: E, exit: W}
   - {level: 0, room: '0x0b', specialist: ow-leever, entry: E, exit: cave}
-# d5maze (round 24): a scouting route for the plain way up the mountain to Dungeon 5 (docs/routes/first-quest.md;
-# draft_routes.yaml `first-quest` stretch `mountain`, plain way): after the D4 triforce, 0x2d from N, 0x2c, 0x1c, then
-# the Lost Hills: 0x1b entered from E is left by `exit: maze`, its sequence (asm:Maze_CheckStep: N four times in a row;
-# each of the first three loops back into 0x1b, a wrong edge restarts it, W is the free way out to 0x1a), into 0x0b
-# entered from S, and down its stairs into Dungeon 5 (`terminal`: `eval-chain --route d5maze --stop-at 5:0x76`).  The
-# leg from 0x45 to 0x1d is not in it: its runs start from a checkpoint or state on these steps.
-d5maze:
-  extends: d2first
-  steps:
+  plain:
+  - {level: 0, room: '0x1d', specialist: ow-peahat, entry: E, exit: S}
   - {level: 0, room: '0x2d', specialist: ow-zora, entry: N, exit: W}
   - {level: 0, room: '0x2c', specialist: ow-tektite, entry: E, exit: N}
   - {level: 0, room: '0x1c', specialist: ow-start, entry: S, exit: W}
   - {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: maze}
   - {level: 0, room: '0x0b', specialist: ow-leever, entry: S, exit: cave}
-  - {level: 5, room: '0x76', entry: S, exit: terminal}
+# Dungeon 5 (round 24; docs/routes/d5.md).  The owner's notes (Nov 14): 0x66 crossed to its W wall on entry (its
+# key not wanted), cleared on the way back (the N shutter), its key taken, N over the water by the ladder; 0x65's
+# four bombs refused westbound and taken eastbound; bombs as a weapon only in the Olive Garden 0x05 (down to 0) and
+# on Digdogger (0x24), the two walls (0x66 W, 0x65 W) one bomb each (gibdo `required`), the 10th kill's bomb allowed
+# (bomb_reserve 8 elsewhere: Link holds at most 8, so a `free` family's BOMB stays masked); 0x64 by the block clip
+# (clips on) or by the fight and the push (off), one step whose objective the clips switch decides; 0x05 cleared,
+# its block pushed, the stairs to the recorder; the rooms after 0x66 crossed, their hidden items skipped, 0x27's key
+# taken; Digdogger by the recorder (boss-digdogger `items: {recorder: true}`).  Keys: 6 in, 3 spent (0x06 W, 0x27 W,
+# 0x25 W), 2 taken (0x66, 0x27): 5 out.
+- {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
+- {level: 5, room: '0x66', specialist: gibdo, entry: S, exit: W, treasure: skip}
+- {level: 5, room: '0x65', specialist: gibdo, entry: E, exit: W, treasure: refuse}
+- {level: 5, room: '0x64', specialist: darknut, entry: E, exit: cave}
+- {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+- {level: 5, room: '0x06', specialist: darknut, entry: cave, exit: W}
+- {level: 5, room: '0x05', specialist: darknut, entry: E, exit: cave, bomb_reserve: 0}
+- {level: 5, room: '0x04', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: recorder}
+- {level: 5, room: '0x05', specialist: darknut, entry: cave, exit: E, bomb_reserve: 8}
+- {level: 5, room: '0x06', specialist: darknut, entry: W, exit: cave}
+- {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+- {level: 5, room: '0x64', specialist: darknut, entry: cave, exit: E}
+- {level: 5, room: '0x65', specialist: gibdo, entry: W, exit: E}
+- {level: 5, room: '0x66', specialist: gibdo, entry: W, exit: N}
+- {level: 5, room: '0x56', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
+- {level: 5, room: '0x57', specialist: zol, entry: W, exit: N, treasure: skip}
+- {level: 5, room: '0x47', specialist: gibdo, entry: S, exit: N, treasure: skip}
+- {level: 5, room: '0x37', specialist: darknut, entry: S, exit: N, treasure: skip}
+- {level: 5, room: '0x27', specialist: pols-voice, entry: S, exit: W}
+- {level: 5, room: '0x26', specialist: gibdo, entry: E, exit: W, treasure: skip}
+- {level: 5, room: '0x25', specialist: pols-voice, entry: E, exit: W}
+- {level: 5, room: '0x24', specialist: boss-digdogger, entry: E, exit: N, bomb_reserve: 0}
+- {level: 5, room: '0x14', specialist: gibdo, entry: S, exit: triforce}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -335,16 +356,17 @@ clips-gauntlet:
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
-# Families by enemy (docs/specialists.md): the routes' rooms and the alternate 0x78; 0:0x56, 0:0x57 and 3:0x4b (off
-# the route since round 22) stay tagged, without start states, for a Link who strays into them.  Round 24: the rooms
-# of d5leg (Zora rooms ow-zora, Moblins ow-moblin, Lynels ow-lynel, Peahats ow-peahat, Tektites ow-tektite, 0x0b's
-# Leever ow-leever, the caves ow-start), without start states until the leg's states are installed; Dungeon 5 adds
-# gibdo, pols-voice, dodongo-crossing and boss-digdogger.
+# Families by enemy (docs/specialists.md): the route's rooms and the alternate 0x78; 3:0x4b (off the route since
+# round 22) stays tagged, without start states, for a Link who strays into it (0:0x56 and 0:0x57, strays from round
+# 22, are on the coast stretch's plain way since round 24).  Round 24:
+# the leg's rooms (Zora rooms ow-zora, Moblins ow-moblin, Lynels ow-lynel, Peahats ow-peahat, Tektites ow-tektite,
+# 0x0b's Leever ow-leever, the caves ow-start), without start states until the leg's states are installed; Dungeon 5
+# adds gibdo, pols-voice, dodongo-crossing and boss-digdogger.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']
-  ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)', '(0, 0x54)', '(0, 0x5f)', '(0, 0x4f)', '(0, 0x3f)', '(0, 0x3e)']
-  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)', '(0, 0x53)', '(0, 0x52)', '(0, 0x51)']
+  ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)', '(0, 0x54)', '(0, 0x5f)', '(0, 0x4f)', '(0, 0x3f)', '(0, 0x3e)', '(0, 0x2e)', '(0, 0x6f)']
+  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)', '(0, 0x53)', '(0, 0x52)', '(0, 0x51)', '(0, 0x6d)', '(0, 0x6e)']
   ow-leever: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)']
   ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)']
   ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)']

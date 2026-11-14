@@ -1,17 +1,20 @@
 #!/bin/bash
 # Round 16: the chain segments (AGENTS.md "Chain segments") for the promoted team, 120 runs each (seeds 0-119), in one
-# act mode, then the yardstick report. Every segment plays on to the route's end (the D4 triforce); its arrival is
+# act mode, then the yardstick report. Every segment plays on to the route's end (the D5 triforce); its arrival is
 # the first entry into the next segment's start room, so the segments add up along the route:
 #
 #   segment  from      arrival
-#   full     start     the D4 triforce (also reported at each milestone room: d2, post-d2, d1, post-d1, d3, post-d3, d4)
+#   full     start     the D5 triforce (also reported at each milestone room: d2, post-d2, d1, post-d1, d3, post-d3, d4,
+#                      post-d4, d5)
 #   d2       2_7ds_0   0:0x3c (out of Dungeon 2, the post-d2 start)
 #   post-d2  0_3cc_0   1:0x73 (Dungeon 1's entrance)
 #   d1       1_73s_0   0:0x37 (out of Dungeon 1)
 #   post-d1  0_37c_0   3:0x7c (Dungeon 3's entrance)
 #   d3       3_7cs_0   0:0x74 (out of Dungeon 3)
 #   post-d3  0_74c_0   4:0x71 (Dungeon 4's entrance)
-#   d4       4_71s_0   the D4 triforce
+#   d4       4_71s_0   0:0x45 (out of Dungeon 4: the triforce's warp, the post-d4 start)
+#   post-d4  0_45c_0   5:0x76 (Dungeon 5's entrance; round 24: the leg, its three stretches)
+#   d5       5_76s_0   the D5 triforce
 #
 #   [ACT=model] TAG=r73-1k RUNS=1000 scripts/experiments/r56_chains.sh [run|report]
 #
@@ -34,7 +37,7 @@ ACT=${ACT:-model}
 TAG=${TAG:-r56-$ACT}
 RUNS=${RUNS:-120}
 OUT=${OUT:-target/r56-chains}
-SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0"}
+SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0"}
 
 clips=()
 if [ -n "${CLIPS:-}" ]; then clips=(--chain-args "--clips $CLIPS"); fi

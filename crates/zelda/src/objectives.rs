@@ -1787,6 +1787,9 @@ mod tests {
                 (WAYPOINT_RUPEES, MapLocation::new(0, 0x67, true), Some(3)),
                 (WAYPOINT_RAFT, MapLocation::new(3, 0x0f, true), Some(3)),
                 (WAYPOINT_LADDER, MapLocation::new(4, 0x60, true), Some(4)),
+                (WAYPOINT_HEART, MapLocation::new(0, 0x2f, true), Some(5)),
+                (WAYPOINT_RUPEES, MapLocation::new(0, 0x0f, true), Some(5)),
+                (WAYPOINT_RECORDER, MapLocation::new(5, 0x04, true), Some(5)),
             ]
         );
         assert_eq!(w[0].after, [2].into_iter().collect());
@@ -1794,16 +1797,18 @@ mod tests {
         assert_eq!(w[2].after, [2, 1].into_iter().collect());
         assert_eq!(w[3].after, [2, 1].into_iter().collect());
         assert_eq!(w[4].after, [2, 1, 3].into_iter().collect());
+        assert!(w[5..].iter().all(|w| w.after == [2, 1, 3, 4].into_iter().collect()));
     }
 
-    /// d5 (round 24): the recorder from Dungeon 5's cellar 0x04 on (the tunnel cellar's two visits differ by it), a
-    /// `recorder` waypoint between the D4 and D5 triforces; d2first never has it.
+    /// Dungeon 5 (round 24): the recorder from its cellar 0x04 on (the tunnel cellar's two visits differ by it), a
+    /// `recorder` waypoint between the D4 and D5 triforces; nothing before Dungeon 5 has it.
     #[test]
     fn d5_takes_the_recorder_in_the_olive_gardens_cellar() {
         let map = GameMap::builtin();
-        let steps = &map.routes["d5"];
+        let steps = &map.routes["d2first"];
         let progress = route_progress(&map, steps);
-        assert!(route_progress(&map, &map.routes["d2first"]).iter().all(|p| !p.recorder));
+        let d5 = steps.iter().position(|s| s.level == 5).unwrap();
+        assert!(progress[..d5].iter().all(|p| !p.recorder));
         let tunnel: Vec<bool> = steps
             .iter()
             .zip(&progress)

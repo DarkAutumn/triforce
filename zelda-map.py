@@ -48,11 +48,12 @@ every step number, then the notes.
 The scopes come from a room-stats file (``triforce room-stats TAG``, ``triforce.room_stats``; the newest
 ``*-room-stats.json`` in ``target/r56-chains`` unless ``--stats FILE``):
 
-- **Full run**: chain runs from the game start to the D4 triforce; the death rate is the share of all runs that died
+- **Full run**: chain runs from the game start to the D5 triforce; the death rate is the share of all runs that died
   in the room, the chance of dying there on a full run.
 - **Segment** (the second row picks it): the route cut at the dungeon exits, To D2 (start -> out of Dungeon 2), To
-  D1, To D3, To D4, each from chain runs started at its first room; or a dungeon alone (D2 .. D4 alone, from its
-  entrance).  The death rate is per run started on the segment.  Rooms the segment's runs never entered are dimmed.
+  D1, To D3, To D4, To D5, each from chain runs started at its first room; or a dungeon alone (D2 .. D5 alone, from
+  its entrance).  The death rate is per run started on the segment.  Rooms the segment's runs never entered are
+  dimmed.
 - **Room only**: the single-room evaluations of the models that played the chains; the death rate is per isolated
   episode that entered the room.
 
@@ -157,8 +158,8 @@ CLIPS_CHOICES = ((BOTH, 'Both'), ('on', 'On'), ('off', 'Off'))     # the clips s
 WAY_MARKS = {'clips': 'c', 'plain': 'p'}   # route step numbers on a stretch's way when both ways are drawn
 # The segment row: the route cut at the dungeon exits, then each dungeon alone (room_stats.SCOPES).
 SEGMENTS = tuple(scope.name for scope in STAT_SCOPES if scope.kind in ('segment', 'dungeon'))
-SEGMENT_LABELS = {'to-d2': 'To D2', 'to-d1': 'To D1', 'to-d3': 'To D3', 'to-d4': 'To D4',
-                  'd2': 'D2 alone', 'd1': 'D1 alone', 'd3': 'D3 alone', 'd4': 'D4 alone'}
+SEGMENT_LABELS = {'to-d2': 'To D2', 'to-d1': 'To D1', 'to-d3': 'To D3', 'to-d4': 'To D4', 'to-d5': 'To D5',
+                  'd2': 'D2 alone', 'd1': 'D1 alone', 'd3': 'D3 alone', 'd4': 'D4 alone', 'd5': 'D5 alone'}
 SCOPE_TABLE = ('Scope', 'Runs', 'Visits', 'Reach', 'Death', 'Stuck', '♥ ±/v', 'Clips/v')
 ZOOM_STEP = 1.15           # per wheel notch
 MAX_SCALE = 8.0            # 8x the NES pixels
@@ -2168,7 +2169,7 @@ class MapWindow(QMainWindow):
         totals = clips_entry(data, self.clips)
         if totals is None:
             return f'{scope_label(scope)} · no runs{switch}'
-        end = 'reach the D4 triforce' if data.get('cut') is None else f"reach {data['cut']}"
+        end = 'reach the D5 triforce' if data.get('cut') is None else f"reach {data['cut']}"
         return (f"{scope_label(scope)} · {totals['runs']:,} runs{switch} from {data['start']}, "
                 f"{fmt_rate(totals['arrival_rate'])} {end}")
 
