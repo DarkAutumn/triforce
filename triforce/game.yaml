@@ -4528,7 +4528,7 @@ rooms:
   treasure: null
   bomb_walls: [W]
   trigger: push-block-stairs  # attr F & 7 = 5
-  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  push_block: [W]  # the block at ($C0,$90) has blocks N and S of it; pushed W from the E side the stairs (NE corner) are 3 squares up; pushed E (which also makes them) Link is left inside the ring; it needs the room clear (walked Nov 13)
   stairs: [26, 4]
 - level: 7
   location: '0x18'
@@ -4589,6 +4589,7 @@ rooms:
     RedGoriya: 3
   treasure: null
   bomb_walls: [E, W]
+  push_block: [N, S]  # the W block of the diamond (top-left tile (12, 10)); pushed E it walls the stairs in until re-entry; it needs the room clear; a block clip N from under it reaches the stairs without the fight (walked Nov 13)
   stairs: [16, 10]
 - level: 7
   location: '0x1b'
@@ -4652,6 +4653,7 @@ rooms:
     RedGoriya: 3
   treasure: null
   bomb_walls: [E]
+  push_block: [N, S]  # the W block of the diamond (top-left tile (12, 10)), as 0x1a (walked Nov 13); Link comes up from the tunnel outside it
   stairs: [16, 10]
 - level: 7
   location: '0x2a'  # the boss room
@@ -5025,6 +5027,7 @@ rooms:
     RedDarknut: 2
   treasure: null
   trigger: kill-all  # attr F & 7 = 1
+  push_block: [N, S]  # the W block of the diamond round the stairs, at ($60,$90): it moves only when the room is clear; a block clip N from ($A0,$9D) gets in without (walked Nov 13)
   stairs: [16, 10]
 - level: 8
   location: '0x2c'  # the triforce room
@@ -5308,6 +5311,7 @@ rooms:
     RedDarknut: 2
     Gibdo: 3
   treasure: null
+  push_block: [N, S]  # the W block of the diamond round the stairs, as 0x1f (walked Nov 13)
   stairs: [16, 10]
 - level: 8
   location: '0x7d'
@@ -5390,7 +5394,7 @@ rooms:
       level: 9
       location: '0x02'
       locked: true
-    S:  # shutter
+    S:  # shutter with no trigger: never opens from this side (the room is entered through it and left another way)
       level: 9
       location: '0x11'
       shutter: true
@@ -5429,6 +5433,7 @@ rooms:
     LikeLike: 2
   treasure: null
   bomb_walls: [E]
+  push_block: [N, S]  # the ring's W block at (12, 10): N or S opens the way to the stairs, E closes it; it needs the room clear (walked Nov 13)
   stairs: [16, 10]
 - level: 9
   location: '0x04'
@@ -5440,11 +5445,12 @@ rooms:
       level: 9
       location: '0x67'
       in_cave: true
-  enemies:  # 1 x blade traps ($4A)
+  enemies:  # $4A: four blade traps (type $49 on screen), one per corner
     BlueWizzrobe: 2
     RedWizzrobe: 2
   treasure: null
   bomb_walls: [W]
+  push_block: [N, S]  # the ring's W block at (12, 10), as 0x03; Link comes up from the tunnel outside the ring (walked Nov 13)
   stairs: [16, 10]
 - level: 9
   location: '0x05'
@@ -5494,6 +5500,7 @@ rooms:
     RedWizzrobe: 2
   treasure: null
   bomb_walls: [S]
+  push_block: [N, S]  # the ring's W block at (12, 10): N or S opens the way to the stairs, E closes it; it needs the room clear (walked Nov 13)
   stairs: [16, 10]
 - level: 9
   location: '0x10'
@@ -5649,6 +5656,7 @@ rooms:
     RedWizzrobe: 2
   treasure: null
   bomb_walls: [N]
+  push_block: [N, S]  # the ring's W block at (12, 10): N or S opens the way to the stairs, E closes it; it needs the room clear (walked Nov 13)
   stairs: [16, 10]
 - level: 9
   location: '0x21'
@@ -5659,7 +5667,7 @@ rooms:
     E:  # bomb wall
       level: 9
       location: '0x22'
-    S:  # shutter
+    S:  # shutter with no trigger: never opens from this side (walked Nov 13)
       level: 9
       location: '0x31'
       shutter: true
@@ -5799,7 +5807,7 @@ rooms:
       level: 9
       location: '0x67'
       in_cave: true
-  enemies:  # 1 x blade traps ($4A)
+  enemies:  # $4A: four blade traps (type $49 on screen), one per corner
     BlueWizzrobe: 2
     RedWizzrobe: 2
   treasure: null
@@ -5813,7 +5821,7 @@ rooms:
     N:  # open here; a shutter on 0x21's side
       level: 9
       location: '0x21'
-    S:  # shutter
+    S:  # shutter with no trigger: never opens from this side (walked Nov 13): from 0x41 on there is no way back S
       level: 9
       location: '0x41'
       shutter: true
@@ -5834,7 +5842,7 @@ rooms:
       level: 9
       location: '0x42'
       shutter: true
-  enemies:  # $37: a person
+  enemies:  # $37: Zelda, with 4 guard fires ($3F) the list does not hold; reaching her (X $70-$80, Y $95) ends the game
     Unknown_55: 1
   treasure: null
   trigger: kill-all  # attr F & 7 = 1
@@ -5934,11 +5942,11 @@ rooms:
     N:  # open here; a shutter on 0x31's side
       level: 9
       location: '0x31'
-    S:  # shutter
+    S:  # shutter with no trigger: never opens from this side (walked Nov 13): the room is one-way northward
       level: 9
       location: '0x51'
       shutter: true
-  enemies:  # 1 x blade traps ($4A)
+  enemies:  # $4A: four blade traps (type $49 on screen), one per corner
     LikeLike: 4
   treasure: null
   dark: true
@@ -5956,7 +5964,7 @@ rooms:
   enemies:
     Ganon: 1
   treasure: triforce-of-power
-  trigger: boss-dead  # attr F & 7 = 3
+  trigger: boss-dead  # attr F & 7 = 3: the shutters open once the Triforce of Power is taken, not when Ganon dies (asm:Secret_Trigger3PowerTriforce; walked Nov 13)
   dark: true
 - level: 9
   location: '0x43'
@@ -6132,6 +6140,7 @@ rooms:
     RedLamnola: 1
   treasure: null
   bomb_walls: [N, E, S, W]
+  push_block: [N, S]  # the ring's W block at (12, 10): N or S opens the way to the stairs, E closes it; it needs the room clear (walked Nov 13)
   stairs: [16, 10]
 - level: 9
   location: '0x56'
@@ -6183,6 +6192,7 @@ rooms:
   enemies:
     Patra: 1
   treasure: key
+  push_block: [N, S]  # the ring's W block at (12, 10): N or S opens the way to the stairs, E closes it; it needs the room clear (walked Nov 13)
   stairs: [16, 10]
 - level: 9
   location: '0x62'
@@ -6269,7 +6279,7 @@ rooms:
       level: 9
       location: '0x65'
       shutter: true
-  enemies:  # $4B: a person
+  enemies:  # $4B: the old man; with all eight Triforce pieces he is not there and both shutters are open on entry (no trigger; asm:Person_InitUnderworldLevel9)
     Unknown_75: 1
   treasure: null
 - level: 9
@@ -6315,6 +6325,7 @@ rooms:
   enemies:
     BlueLamnola: 1
   treasure: null
+  push_block: [N, S]  # the ring's W block at (12, 10), as 0x03 (same layout; not entered Nov 13)
   stairs: [16, 10]
 - level: 9
   location: '0x76'  # the start room: S leaves to the overworld

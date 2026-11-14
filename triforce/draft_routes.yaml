@@ -1,8 +1,8 @@
 # Draft routes: planned, not played (triforce/draft_routes.py; zelda-map.py --route NAME draws them).
 # Nothing but the map reads this file: routes.yaml stays the route the models play.  A step is a routes.yaml step
 # (level, room, in_cave, entry, exit) and may have `note` (what Link does there), `leg` (the part of the route it
-# starts), `wrap: true` (a screen wrap in this room; with an `exit: W` game.yaml doesn't have: the wrap exit into
-# room - 1), `exit: recorder` / `entry: recorder` (the whirlwind) and `exit: end`.  An overworld cave is not a step
+# starts), `wrap: true` (a screen wrap in this room; required to leave through a game.yaml wrap exit, e.g. 0x60 W
+# into 0x5f), `exit: recorder` / `entry: recorder` (the whirlwind) and `exit: end`.  An overworld cave is not a step
 # of its own here: the room's note says what Link takes or buys in it.
 #
 # first-quest (Nov 13): d2first, then the rest of the first quest.  The overworld legs are Lee's (Nov 13); the
@@ -79,27 +79,29 @@ first-quest:
   - {level: 0, room: '0x53', entry: E, exit: W}
   - {level: 0, room: '0x52', entry: E, exit: N}
   - {level: 0, room: '0x42', entry: S, exit: cave, note: 'one step in from the edge, the recorder drains the pond: Dungeon 7''s stairs at tile (12, 10)'}
-  # Dungeon 7: the red candle, Aquamentus (level-7.md "Route", its way with 3 keys carried: 19 entries, 5 walls)
+  # Dungeon 7: the red candle, Aquamentus (level-7.md's way with three keys).  Walked in the emulator Nov 13
+  # (docs/routes/first-quest.md): 19 entries, 3 keys spent (6 in, 3 out), 5 bombs on walls (8 in, 3 out).  Forced
+  # fights: 0x49, 0x1a (not with clips), 0x1c, 0x0d, Aquamentus.
   - {leg: 'Dungeon 7', level: 7, room: '0x79', entry: S, exit: N}
-  - {level: 7, room: '0x69', entry: S, exit: N, note: 'bomb the N wall'}
-  - {level: 7, room: '0x59', entry: S, exit: N, note: 'Goriyas: cross'}
-  - {level: 7, room: '0x49', entry: S, exit: N, note: 'the ladder over the water row; kill 3 Blue Goriyas and 3 Keese; the N shutter: clear the room'}
-  - {level: 7, room: '0x39', entry: S, exit: W, note: 'the big Digdogger: walk past'}
-  - {level: 7, room: '0x38', entry: E, exit: N, note: 'Goriyas need not die; the N key door'}
-  - {level: 7, room: '0x28', entry: S, exit: N, note: 'the hungry Goriya: put the food down'}
-  - {level: 7, room: '0x18', entry: S, exit: E, note: 'key door instead of the two bomb walls and three rooms of the keyless way; the E key door'}
-  - {level: 7, room: '0x19', entry: W, exit: E, note: 'bomb the E wall'}
-  - {level: 7, room: '0x1a', entry: W, exit: cave, note: 'kill the 6 Goriyas; the stairs'}
+  - {level: 7, room: '0x69', entry: S, exit: N, note: 'Blue Goriyas need not die; bomb the N wall (bomb 1 of 5)'}
+  - {level: 7, room: '0x59', entry: S, exit: N, note: 'Goriyas: straight across'}
+  - {level: 7, room: '0x49', entry: S, exit: N, note: 'the ladder over the water row; FIGHT: 3 Blue Goriyas (one N of the water) and 3 Blue Keese: the N shutter'}
+  - {level: 7, room: '0x39', entry: S, exit: W, note: 'the big Digdogger: round it by the N side; no kill'}
+  - {level: 7, room: '0x38', entry: E, exit: N, note: 'the E shutter shuts behind; up the E side, W along the top row; Goriyas need not die; the N key door (key 1 of 3)'}
+  - {level: 7, room: '0x28', entry: S, exit: N, note: 'the hungry Goriya: the food, one step out of the doorway, B; the way N is free 64 frames later'}
+  - {level: 7, room: '0x18', entry: S, exit: E, note: 'dark; the ladder N to the middle, the ladder E; the E key door (key 2 of 3) saves two bomb walls and three rooms'}
+  - {level: 7, room: '0x19', entry: W, exit: E, note: 'round the middle blocks; Blue Goriyas need not die; bomb the E wall (bomb 2)'}
+  - {level: 7, room: '0x1a', entry: W, exit: cave, note: 'clips: block clip N from under the block, no fight; plain: FIGHT 3 Blue and 3 Red Goriyas, push the block N or S; the stairs'}
   - {level: 7, room: '0x4a', in_cave: true, entry: S, exit: N, note: 'the red candle'}
-  - {level: 7, room: '0x1a', entry: cave, exit: E, note: 'bomb the E wall'}
-  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'the E key door'}
-  - {level: 7, room: '0x1c', entry: W, exit: N, note: 'play the recorder, kill the 3 small Digdoggers; the N shutter: clear the room'}
-  - {level: 7, room: '0x0c', entry: S, exit: E, note: 'Dodongos: walk past; bomb the E wall'}
-  - {level: 7, room: '0x0d', entry: W, exit: cave, note: 'kill the 5 Wallmasters; push the block for the stairs'}
+  - {level: 7, room: '0x1a', entry: cave, exit: E, note: 'bomb the E wall (bomb 3)'}
+  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'Blue Goriyas need not die; the E key door (key 3 of 3)'}
+  - {level: 7, room: '0x1c', entry: W, exit: N, note: 'one step out of the doorway, play the recorder; FIGHT: the 3 small Digdoggers: the N shutter'}
+  - {level: 7, room: '0x0c', entry: S, exit: E, note: 'Dodongos: walk past along the S side; bomb the E wall (bomb 4)'}
+  - {level: 7, room: '0x0d', entry: W, exit: cave, note: 'FIGHT: the 5 Wallmasters (a grab carries Link back to 0x79); round by the N side, push the block W: stairs appear in the NE corner'}
   - {level: 7, room: '0x7b', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x29'}
-  - {level: 7, room: '0x29', entry: cave, exit: E, note: 'bomb the E wall'}
-  - {level: 7, room: '0x2a', entry: W, exit: E, note: 'Aquamentus; the heart container (12 hearts); the E shutter: clear the room'}
-  - {level: 7, room: '0x2b', entry: W, exit: triforce, note: 'the triforce piece'}
+  - {level: 7, room: '0x29', entry: cave, exit: E, note: 'Goriyas need not die; bomb the E wall (bomb 5)'}
+  - {level: 7, room: '0x2a', entry: W, exit: E, note: 'Aquamentus; the heart container (12 hearts); the E shutter opens when it dies'}
+  - {level: 7, room: '0x2b', entry: W, exit: triforce, note: 'round the block ring to its S opening; the triforce piece; out in 0x42'}
   # Dungeon 7 to the magic sword to Dungeon 6 (Lee)
   - {leg: 'Dungeon 7 to the magic sword to Dungeon 6', level: 0, room: '0x42', entry: cave, exit: S}
   - {level: 0, room: '0x52', entry: N, exit: W}
@@ -113,8 +115,9 @@ first-quest:
   - {level: 0, room: '0x32', entry: W, exit: N}
   - {level: 0, room: '0x22', entry: S, exit: cave, note: 'Dungeon 6'}
   # Dungeon 6: Gohma, without the wand.  Walked in the emulator Nov 13 (docs/routes/first-quest.md): this room
-  # sequence is the only shortest one (15 entries).  2 keys spent (0x79 W, 0x1c S), up to 3 found (0x58's with its
-  # forced fight, 0x29's ring key, 0x2d's), 1 bomb, 1 arrow.  Forced fights: 0x58, 0x38, 0x39, 0x3a, Gohma.
+  # sequence is the only shortest one (15 entries).  2 keys in, 2 spent (0x79 W, 0x1c S), 2 found (0x58's with its
+  # forced fight, 0x2d's for level 9; 0x29's ring key is left), 2 out; 1 bomb, 1 arrow.  Forced fights: 0x58, 0x38,
+  # 0x39, 0x3a, Gohma.
   - {leg: 'Dungeon 6', level: 6, room: '0x79', entry: S, exit: W, note: 'statues on the door row: along the row below; the W key door (1 key)'}
   - {level: 6, room: '0x78', entry: E, exit: N, note: '5 Red Wizzrobes, no fight: off the door row at once, round by the row above'}
   - {level: 6, room: '0x68', entry: S, exit: N, note: '5 Zols, no fight: straight up'}
@@ -122,12 +125,12 @@ first-quest:
   - {level: 6, room: '0x48', entry: S, exit: N, note: 'six blade traps: straight up without stopping'}
   - {level: 6, room: '0x38', entry: S, exit: N, note: 'FIGHT (shut in): 3 Like-Likes, 2 Blue and 2 Red Wizzrobes; then push the left block: both shutters open'}
   - {level: 6, room: '0x28', entry: S, exit: E, note: '5 Wizzrobes, no fight: the bottom row to X $D0, bomb the E wall (1 bomb)'}
-  - {level: 6, room: '0x29', entry: W, exit: S, note: 'dark, 5 Wizzrobes, no fight: the key in the water ring by ladder (+1, optional), down the west edge to the S door'}
+  - {level: 6, room: '0x29', entry: W, exit: S, note: 'dark, 5 Wizzrobes, no fight: down the west edge and along the bottom row to the S door (the ring key is left)'}
   - {level: 6, room: '0x39', entry: N, exit: E, note: 'FIGHT (dark, shut in): the 5 Vires (and any Keese they split into): the E shutter; the ladder over the water column'}
   - {level: 6, room: '0x3a', entry: W, exit: cave, note: 'FIGHT: 3 Like-Likes, 2 Blue and 2 Red Wizzrobes; then push the block: stairs in the top right corner'}
   - {level: 6, room: '0x08', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x1d'}
   - {level: 6, room: '0x1d', entry: cave, exit: S, note: 'Like-Likes, Zols, Bubbles, no fight'}
-  - {level: 6, room: '0x2d', entry: N, exit: W, note: 'dark; optional fight: the 3 Vires for a key (+1)'}
+  - {level: 6, room: '0x2d', entry: N, exit: W, note: 'dark; FIGHT for a key level 9 needs (+1): the 3 Vires, one magic sword hit each'}
   - {level: 6, room: '0x2c', entry: E, exit: N, note: 'corner traps and 4 Wizzrobes, no fight: the door row to the middle, up; the N key door (1 key)'}
   - {level: 6, room: '0x1c', entry: S, exit: N, note: 'Gohma: one arrow (1 rupee) up into the open eye from X $78 or $80; the heart container (13 hearts); the N shutter opens'}
   - {level: 6, room: '0x0c', entry: S, exit: triforce, note: 'the triforce piece; out in 0x22'}
@@ -138,17 +141,20 @@ first-quest:
   - {level: 0, room: '0x4d', entry: W, exit: S}
   - {level: 0, room: '0x5d', entry: N, exit: S}
   - {level: 0, room: '0x6d', entry: N, exit: cave, note: 'burn the tree at tile (20, 4): the red candle facing E from X $78-$88 on row Y $5D; Dungeon 8'}
-  # Dungeon 8: Gleeok with four heads (level-8.md "Route" without the book and the magic key: its steps 9-12, 20-25)
+  # Dungeon 8: Gleeok with four heads, without the book and the magic key.  Walked in the emulator Nov 13
+  # (docs/routes/first-quest.md): 9 entries, the fewest; 0x5e's key pays 0x4e's door and 0x4c's key (in the open) is
+  # taken for level 9: 2 keys in, 3 out; 2 bombs.  Forced fights: 0x5e, 0x3e (11 Blue Darknuts), Gleeok.  The magic
+  # key instead would be +8 entries, a Gohma (3 arrows) and 1 bomb.
   - {leg: 'Dungeon 8', level: 8, room: '0x7e', entry: S, exit: N}
-  - {level: 8, room: '0x6e', entry: S, exit: N, note: 'bomb the N wall'}
-  - {level: 8, room: '0x5e', entry: S, exit: N, note: 'kill the 5 Blue Darknuts (a key appears); the N shutter: clear the room'}
-  - {level: 8, room: '0x4e', entry: S, exit: N, note: 'the N key door'}
-  - {level: 8, room: '0x3e', entry: S, exit: E, note: 'kill the 6 Blue Darknuts; the E shutter: clear the room'}
-  - {level: 8, room: '0x3f', entry: W, exit: cave, note: 'straight E to the stairs; the stairs'}
+  - {level: 8, room: '0x6e', entry: S, exit: N, note: 'a Manhandla: need not die; bomb the N wall (bomb 1 of 2)'}
+  - {level: 8, room: '0x5e', entry: S, exit: N, note: 'FIGHT: 5 Blue Darknuts, four statues shoot (kills are kept across a retreat S); the key at the centre (+1); the N shutter'}
+  - {level: 8, room: '0x4e', entry: S, exit: N, note: 'straight N, nothing has to die; the N key door (0x5e''s key)'}
+  - {level: 8, room: '0x3e', entry: S, exit: E, note: 'FIGHT: 6 Blue Darknuts, two statues shoot: the E shutter'}
+  - {level: 8, room: '0x3f', entry: W, exit: cave, note: 'the shutter shuts behind; straight E along the door row to the stairs; optional FIGHT: 3 Darknuts and 3 Gibdos for 4 bombs (level 9 needs them)'}
   - {level: 8, room: '0x2f', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x4c'}
-  - {level: 8, room: '0x4c', entry: cave, exit: N, note: 'out of the block ring; bomb the N wall'}
-  - {level: 8, room: '0x3c', entry: S, exit: N, note: 'Gleeok, four heads; the heart container (14 hearts); the N shutter: clear the room'}
-  - {level: 8, room: '0x2c', entry: S, exit: triforce, note: 'the triforce piece'}
+  - {level: 8, room: '0x4c', entry: cave, exit: N, note: 'up inside the block ring: out by its S side; the key in the top right corner (+1, for level 9); 8 Pols Voices need not die; bomb the N wall (bomb 2)'}
+  - {level: 8, room: '0x3c', entry: S, exit: N, note: 'FIGHT: Gleeok, four heads (9 magic sword hits); the heart container (14 hearts); the N shutter opens'}
+  - {level: 8, room: '0x2c', entry: S, exit: triforce, note: 'the triforce piece; out in 0x6d'}
   # Dungeon 8 to Dungeon 9 (Lee): 0x47's heart container
   - {leg: 'Dungeon 8 to Dungeon 9', level: 0, room: '0x6d', entry: cave, exit: recorder, note: 'the recorder once, facing down: Dungeon 1''s entrance'}
   - {level: 0, room: '0x37', entry: recorder, exit: E}
@@ -163,47 +169,51 @@ first-quest:
   - {level: 0, room: '0x07', entry: S, exit: W}
   - {level: 0, room: '0x06', entry: E, exit: W}
   - {level: 0, room: '0x05', entry: E, exit: cave, note: 'bomb the rock wall at tile (10, 12), facing N from X $48-$58 (1 bomb): Dungeon 9'}
-  # Dungeon 9: the red ring, the silver arrow, Ganon, Zelda (level-9.md "Route" and its red ring detour: 3 keys carried, 8 bombs)
+  # Dungeon 9: the red ring, the silver arrow, Ganon, Zelda.  Walked in the emulator Nov 13 to the end of the game
+  # (docs/routes/first-quest.md).  3 keys carried (3 doors, 1 key found after the last: 1 left).  8 bomb walls
+  # against a bag of 8 less the bomb for 0x05's rock wall: the Patra of 0x16 dies for its 4 bombs (the other way:
+  # the 4 bombs lying in 0x23, from 0x14 by 0x24: no fight, 4 more rooms).  Forced fights: 0x55, 0x07, 0x16 (bombs),
+  # 0x05, 0x61, 0x20, 0x10, 0x30, 0x03, 0x52, Ganon: 24 Wizzrobes, 3 Patras, 2 Lanmolas.
   - {leg: 'Dungeon 9', level: 9, room: '0x76', entry: S, exit: N}
-  - {level: 9, room: '0x66', entry: S, exit: W, note: 'the old man lets Link pass with eight pieces; the W shutter: None'}
-  - {level: 9, room: '0x65', entry: E, exit: N, note: 'the ladder over the water row; bomb the N wall'}
-  - {level: 9, room: '0x55', entry: S, exit: cave, note: 'kill both Red Lanmolas; the stairs'}
+  - {level: 9, room: '0x66', entry: S, exit: W, note: 'with all eight pieces the old man is gone and both shutters are open'}
+  - {level: 9, room: '0x65', entry: E, exit: N, note: 'dark, 5 Wizzrobes, no fight; at X $78 the ladder over the water row; bomb the N wall (bomb 1 of 8)'}
+  - {level: 9, room: '0x55', entry: S, exit: cave, note: 'FIGHT: both Red Lanmolas; push the ring''s W block N; the stairs'}
   - {level: 9, room: '0x60', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x14'}
-  - {level: 9, room: '0x14', entry: cave, exit: E, note: 'out of the spiral of blocks; the E key door'}
-  - {level: 9, room: '0x15', entry: W, exit: E, note: 'round the water ring'}
-  - {level: 9, room: '0x16', entry: W, exit: S, note: 'a Patra; killing it leaves 4 bombs (the detour needs 3 more)'}
-  - {level: 9, room: '0x26', entry: N, exit: E, note: 'the red ring detour (Lee, Nov 13); bomb the E wall'}
-  - {level: 9, room: '0x27', entry: W, exit: N, note: 'a Patra (the map if it dies); bomb the N wall'}
-  - {level: 9, room: '0x17', entry: S, exit: N, note: 'bomb the N wall'}
-  - {level: 9, room: '0x07', entry: S, exit: cave, note: 'kill the 5 Wizzrobes; the stairs'}
-  - {level: 9, room: '0x00', in_cave: true, entry: S, exit: N, note: 'the red ring'}
-  - {level: 9, room: '0x07', entry: cave, exit: S, note: 'back the same way; bomb the S wall'}
-  - {level: 9, room: '0x17', entry: N, exit: S, note: 'bomb the S wall'}
-  - {level: 9, room: '0x27', entry: N, exit: W, note: 'bomb the W wall'}
+  - {level: 9, room: '0x14', entry: cave, exit: E, note: 'out of the spiral of blocks past 5 Like-Likes; the E key door (key 1 of 3)'}
+  - {level: 9, room: '0x15', entry: W, exit: E, note: 'dark; straight E through the water ring on the ladder'}
+  - {level: 9, room: '0x16', entry: W, exit: S, note: 'a Patra: pass it for now'}
+  - {level: 9, room: '0x26', entry: N, exit: E, note: 'the red ring detour (Lee, Nov 13); bomb the E wall (bomb 2)'}
+  - {level: 9, room: '0x27', entry: W, exit: N, note: 'a Patra (the map if it dies): pass it; bomb the N wall (bomb 3)'}
+  - {level: 9, room: '0x17', entry: S, exit: N, note: 'past Like-Likes and Wizzrobes; bomb the N wall (bomb 4)'}
+  - {level: 9, room: '0x07', entry: S, exit: cave, note: 'FIGHT: the 5 Wizzrobes (3 Bubbles); push the ring''s W block N; the stairs'}
+  - {level: 9, room: '0x00', in_cave: true, entry: S, exit: N, note: 'the red ring (damage quartered from here on)'}
+  - {level: 9, room: '0x07', entry: cave, exit: S, note: 'back the same way: the bombed walls stay open'}
+  - {level: 9, room: '0x17', entry: N, exit: S}
+  - {level: 9, room: '0x27', entry: N, exit: W}
   - {level: 9, room: '0x26', entry: E, exit: N}
-  - {level: 9, room: '0x16', entry: S, exit: N, note: 'the N key door'}
-  - {level: 9, room: '0x06', entry: S, exit: W, note: 'bomb the W wall'}
-  - {level: 9, room: '0x05', entry: E, exit: cave, note: 'kill the 5 Wizzrobes; push the block for the stairs'}
+  - {level: 9, room: '0x16', entry: S, exit: N, note: 'FIGHT: the Patra, for its 4 bombs (3 held, 4 walls to go); the N key door (key 2)'}
+  - {level: 9, room: '0x06', entry: S, exit: W, note: 'the old man talks; bomb the W wall (bomb 5)'}
+  - {level: 9, room: '0x05', entry: E, exit: cave, note: 'FIGHT: the 5 Wizzrobes; push the block: stairs appear in the NE corner'}
   - {level: 9, room: '0x70', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x63'}
-  - {level: 9, room: '0x63', entry: cave, exit: W, note: 'the W key door'}
-  - {level: 9, room: '0x62', entry: E, exit: W, note: 'Keese'}
-  - {level: 9, room: '0x61', entry: E, exit: cave, note: 'the key; kill the Patra; the stairs'}
+  - {level: 9, room: '0x63', entry: cave, exit: W, note: 'past 5 Zols; the W key door (key 3)'}
+  - {level: 9, room: '0x62', entry: E, exit: W, note: 'past 8 Keese'}
+  - {level: 9, room: '0x61', entry: E, exit: cave, note: 'the key in the NE corner (+1); FIGHT: the Patra; push the ring''s W block N; the stairs'}
   - {level: 9, room: '0x75', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x20'}
-  - {level: 9, room: '0x20', entry: cave, exit: N, note: 'kill the 5 Wizzrobes now; bomb the N wall'}
-  - {level: 9, room: '0x10', entry: S, exit: cave, note: 'kill the 5 Wizzrobes; push the block for the stairs'}
+  - {level: 9, room: '0x20', entry: cave, exit: N, note: 'FIGHT: the 5 Wizzrobes (now, so the block moves on the way back); bomb the N wall (bomb 6)'}
+  - {level: 9, room: '0x10', entry: S, exit: cave, note: 'FIGHT: the 5 Wizzrobes (3 Bubbles); push the block W: stairs appear in the NE corner'}
   - {level: 9, room: '0x4f', in_cave: true, entry: S, exit: N, note: 'the silver arrow'}
-  - {level: 9, room: '0x10', entry: cave, exit: S, note: 'bomb the S wall'}
-  - {level: 9, room: '0x20', entry: N, exit: cave, note: 'push the block again; the stairs'}
+  - {level: 9, room: '0x10', entry: cave, exit: S, note: 'out of the C of blocks by its W side; the wall is open'}
+  - {level: 9, room: '0x20', entry: N, exit: cave, note: 'still clear: push the ring''s W block N; the stairs'}
   - {level: 9, room: '0x75', in_cave: true, entry: S, exit: E, note: 'the tunnel back to 0x61'}
-  - {level: 9, room: '0x61', entry: cave, exit: N}
-  - {level: 9, room: '0x51', entry: S, exit: N, note: 'between the rows of blocks'}
-  - {level: 9, room: '0x41', entry: S, exit: N, note: 'traps: straight N without stopping; no way back S from here'}
-  - {level: 9, room: '0x31', entry: S, exit: W, note: 'bomb the W wall'}
-  - {level: 9, room: '0x30', entry: E, exit: cave, note: 'traps; kill the 4 Wizzrobes; push the block for the stairs'}
+  - {level: 9, room: '0x61', entry: cave, exit: N, note: 'the Patra stays dead; 2 bombs must be held from here on'}
+  - {level: 9, room: '0x51', entry: S, exit: N, note: 'between the rows of blocks past 6 Like-Likes'}
+  - {level: 9, room: '0x41', entry: S, exit: N, note: 'dark; 4 traps and 4 Like-Likes; the S shutter never opens again: no way back'}
+  - {level: 9, room: '0x31', entry: S, exit: W, note: 'bomb the W wall (bomb 7)'}
+  - {level: 9, room: '0x30', entry: E, exit: cave, note: 'traps; FIGHT: the 4 Wizzrobes; push the block: stairs appear in the NE corner'}
   - {level: 9, room: '0x67', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x04'}
-  - {level: 9, room: '0x04', entry: cave, exit: W, note: 'traps; bomb the W wall'}
-  - {level: 9, room: '0x03', entry: E, exit: cave, note: 'kill the Zols and Like-Likes; the stairs'}
+  - {level: 9, room: '0x04', entry: cave, exit: W, note: 'traps and 4 Wizzrobes: pass along the top or bottom row; bomb the W wall (bomb 8)'}
+  - {level: 9, room: '0x03', entry: E, exit: cave, note: 'FIGHT: 2 Zols and 2 Like-Likes; push the ring''s W block N; the stairs'}
   - {level: 9, room: '0x77', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x52'}
-  - {level: 9, room: '0x52', entry: cave, exit: N, note: 'kill the Patra; the N shutter: clear the room'}
-  - {level: 9, room: '0x42', entry: S, exit: N, note: 'Ganon: the sword while he is invisible, then the silver arrow; the N shutter: kill the boss'}
-  - {level: 9, room: '0x32', entry: S, exit: end, note: 'Zelda'}
+  - {level: 9, room: '0x52', entry: cave, exit: N, note: 'FIGHT: the Patra: the N shutter opens'}
+  - {level: 9, room: '0x42', entry: S, exit: N, note: 'Ganon: 4 magic sword hits while he is invisible, then a silver arrow (1 rupee); the Triforce of Power opens the N shutter'}
+  - {level: 9, room: '0x32', entry: S, exit: end, note: 'Zelda: up the middle to her; the game ends'}

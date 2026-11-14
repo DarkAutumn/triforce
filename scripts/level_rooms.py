@@ -105,6 +105,10 @@ def room_lines(game, level, room_id: int, names: dict[int, str]) -> list[str]:
         stairs = BLOCK_STAIRS
     elif room['block'] and room['secret'] == 4 and shutters:
         lines.append(f'  push_block_opens: {shutters[0]}  # the shutter (trigger 4); the block needs the room clear')
+    elif room['block'] and cellar is not None and stairs:
+        # Stairs in the layout closed in by blocks (the diamond of 1:0x22; every such room of levels 5-9 walked on
+        # Nov 13 has it): the west block is the push block.
+        lines.append('  push_block: [N, S]  # the W block of the ring round the stairs: N or S opens the way, E closes it; it needs the room clear')
     if cellar is not None and stairs:
         lines.append(f'  stairs: [{stairs[0]}, {stairs[1]}]')
     if room['dark']:
