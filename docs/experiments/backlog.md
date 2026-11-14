@@ -72,10 +72,9 @@ watching".
   88%, 4:0x50 off 95% with −1.24 hearts). D4 chains of the r71 team, 20 runs each from `4_71s_0` (act model):
   clips on 13/20, clips off 2/20 (deaths 0x31 5, 0x20 4, 0x13 4, 0x30 2, 0x12 2), `--clips-off-from 4:0x31` 8/20
   (0x20 4 deaths): the plain way (0x31 W, 0x30 N, 0x20) is where an untrained switch-off costs.
-- [ ] **vire's curriculum for the plain way's states.** `4_30e_*` and `4_20s_*` have no Go-Explore tracks
-  (`trajectories/vire`, explored in round 21 before they existed); re-explore them (`python -m triforce.explore
-  --specialist vire --states 4_30e_0,...`). Curriculum starts play with the switch on, so a track from a state that
-  fixes it off needs a decision first.
+- [x] **vire's curriculum for the plain way's states.** Explored on the merged tree with the switch the state fixes
+  (off for `4_30e_*`, `4_20s_*`, and for the overworld plain way's `0_63e`, `0_73n`, `0_65e`); a curriculum start
+  keeps the state's fixed switch (decisions 2026-11-13 "Round 22 route", States and curricula).
 - [ ] **The live cell has no sound and no controller drawing** (its frames come from the chain pool, not a
   `ReplayScreen`). Sound would need the pool's env to feed a `Synth` (`crates/zcore/src/sound.rs`) the way the
   screen's cells do.

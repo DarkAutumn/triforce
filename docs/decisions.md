@@ -1737,3 +1737,37 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
     taken, so the cave's way out was one cell before and after, and the shorter path (without them, `missed`) kept
     it: 52 cells, no success in 3000 iterations. The key now holds the room's item-taken flag and the pickup counts
     as progress; the cave is solved in about 400 iterations (`crates/env/tests/explore_cells.rs`).
+- **States and curricula** (`scripts/experiments/r22_states_curricula.sh`): the states from 0x58 leaving S (step 71)
+  to the D4 triforce were built again, both ways of both stretches (the clip way by `build`, the plain ways by
+  `path`), every crossing on its first attempt; audit 397 states, 0 problems. The curricula were explored again on
+  the merged tree (round 22's per-episode switch: a state the route enters on one way only is explored with that
+  way's switch, every other with it on): 267 tracks in 18 families, 156 new and 111 copied from round 21's
+  (unchanged state files), every state solved; 15 explored with the switch off (ow-moblin `0_63e`, `0_73n`, ow-zora
+  `0_65e`, vire `4_30e`, `4_20s`), none of them clipping. Tracks that clip: ow-leever `0_75e_*` (the wrap exit,
+  `CLIP E`), ow-moblin `0_63s_0`, ow-zora `0_65w_*` (wraps), trap-room's six 1:0x22 tracks and vire `4_50e_*` (block
+  clips).
+
+## 2026-11-13 — Round 22 merged: the clips switch and training mix with the new route; 1.4.1.1
+
+- **What:** `r22` (natural RNG, the run-time clips switch, `clips: {enabled, off_share}`, the evaluation and
+  room-statistics split, `play-zelda.py --clips/--live`) merged into `r22-route` (the wrap exit, the route changes,
+  the BOMB mask, the rebuilt states). Both stretches (`d3-approach`, `d4-island`) are in the one route; Dungeon 4 is
+  steps 112-133.
+- **Proven on the merged tree:** a training reset of each changed family draws the switch and takes the way and next
+  room that fit it (ow-octorok `0_67c`: S with clips, W without; ow-leever `0_75e`: fixed on; vire `4_31e`: N or W;
+  stalfos-keese-gel `4_21s` on, `4_21w` off; `crates/env/tests/clips_switch.rs`); `evaluate --clips both` plays each
+  state in the switch states it allows (`tests/test_evaluate.py`); `room-stats` keeps the recorded step on both ways
+  of both stretches (`tests/test_room_stats.py`, and on the chain checks below); `zelda-map.py --route d2first`
+  draws both ways; `play-zelda.py --live` starts; a smoke training of ow-octorok and stalfos-keese-gel logs both
+  switch states.
+- **Chain checks** (round 21 models, 20 runs each, one `eval-batch`): `--from 0_67c_0 --stop-at 3:0x7c` with clips
+  11/20 (the clip way through 0x77, 0x76, 0x75; 8 stuck bouncing between 0x75 and 0x76: ow-leever never learned the
+  wrap exit), without 20/20 (the plain way, 0x66-0x74 from W); `--from 4_71s_0` with clips 0/20 (17 stuck in 0x11:
+  trap-room bombs its old E wall), without 0/20 (deaths in 0x20, 0x31, 0x32; 3 stuck in 0x11). Every run started
+  on its switch and every room record carries it and its step.
+- **Fixes on the way:** a boomerang press in a doorway is filtered as the game filters it before the leave check
+  (`attack::press_leaves`): round 22's `4_11s_0` starts deeper in the doorway (78,C4) and a diagonal throw walked Link
+  back out. 4:0x02's blocks offer the block clip (4 squares, played in `the_block_clip_in_dungeon_4`).
+- **Version:** REV, 1.4.1.1: the RNG at starts, the switch and its training mix, the BOMB mask and the route change
+  behaviour, not the observation, the actions or the network. Round 21's boss-aquamentus and goriya load and play
+  as before (100% +0.87 hearts; 96.7% -0.17).
