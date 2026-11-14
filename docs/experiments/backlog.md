@@ -175,6 +175,10 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   `$80` where the game has `$78` (`romdata.py`); 5:0x24's monster list names `Digdogger3` and the object on screen
   is type `$38`; `game.yaml` has no key for a shutter that never opens (level 9's 0x41, 0x31, 0x21, 0x01 S: a
   comment today).
+- [x] **State names for a room entered the same way twice** (round 24, `r24-names`; decisions 2026-11-14 "State
+  names for later visits"): `<level>_<room><side>_v<visit>_<chain>` for the route's second, third, ... entry
+  (`zelda::game_map::route_visits`); a state starts the step its name spells (single-room envs, `--from`,
+  room-stats); the audit's hearts count along the stretch way a step is on.
 
 ## Done (Nov 14): round 22 (natural RNG, the clips switch, the route; 1.4.1.1)
 

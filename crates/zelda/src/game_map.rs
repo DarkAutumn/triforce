@@ -444,6 +444,8 @@ pub struct GameMap {
     pub routes: IndexMap<String, Vec<RouteStep>>,
     /// Each route's `stretch:` blocks (round 22), in route order.
     pub stretches: HashMap<String, Vec<Stretch>>,
+    /// Each route's step visits ([`route_visits`]): which visit to its room, entered from its side, a step is.
+    pub visits: HashMap<String, Vec<u32>>,
     /// routes.yaml `alternates`, in file order.
     pub alternates: Vec<Alternate>,
     /// Per (route, clips switch): the ranks of the steps on that way.
@@ -657,6 +659,28 @@ pub fn stretches_of(steps: &[RouteStep]) -> Vec<Stretch> {
         s.rejoin = i + 1;
     }
     out
+}
+
+/// Each step's visit: which visit of the route to the step's room, entered from the step's side, it is (1 the first).
+/// Start-state names spell a later visit (`docs/architecture.md` "Start states"), so the route enters a room the same
+/// way more than once with each visit's own states.  A visit counts the earlier steps entering the room from that
+/// side, except the other way of the step's own stretch (its `parts` step is the same visit on the other way) and a
+/// step right after one entering the room the same way (another target of the same visit: clips-gauntlet).
+pub fn route_visits(steps: &[RouteStep]) -> Vec<u32> {
+    let stretches = stretches_of(steps);
+    (0..steps.len()).map(|i| visit_at(steps, &stretches, i, &steps[i])).collect()
+}
+
+/// The visit `step` is at `index` of `steps` ([`route_visits`]): `step` is the route's step there, or an alternate
+/// standing in for it.
+pub fn visit_at(steps: &[RouteStep], stretches: &[Stretch], index: usize, step: &RouteStep) -> u32 {
+    let same = |s: &RouteStep| s.location() == step.location() && s.entry == step.entry;
+    let begins = |j: usize| j == 0 || !same(&steps[j - 1]);
+    let other_way = |j: usize| {
+        stretches.iter().any(|s| matches!((s.way_of(index), s.way_of(j)), (Some(a), Some(b)) if a != b))
+    };
+    let earlier = (0..index).filter(|&j| same(&steps[j]) && begins(j) && !other_way(j)).count();
+    (earlier + usize::from(begins(index))).max(1) as u32
 }
 
 fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
@@ -998,10 +1022,12 @@ impl GameMap {
         for (route, list) in &stretches {
             check_stretch_ways(route, &routes[route], list, &rooms)?;
         }
+        let visits = routes.iter().map(|(name, steps)| (name.clone(), route_visits(steps))).collect();
         let mut map = GameMap {
             rooms,
             routes,
             stretches,
+            visits,
             alternates,
             route_ranks: HashMap::new(),
         };
@@ -2156,5 +2182,43 @@ mod tests {
             let error = edit(from, to).unwrap_err().0;
             assert!(error.contains(why), "{error}");
         }
+    }
+
+    /// Visits (start-state names): every step of d2first and clips-gauntlet is a first visit (d2first's two stretch
+    /// `parts` are one visit on two ways; the gauntlet's pairs are two targets of one visit), and on every route two
+    /// steps share a room, entry and visit only as the two ways of one stretch or as consecutive targets.  A second
+    /// entry from the same side is visit 2, a step right after it entering the same way another target of visit 2; an
+    /// alternate standing in for a step is numbered there.
+    #[test]
+    fn route_visits_name_each_visit_once() {
+        let map = GameMap::builtin();
+        for route in ["d2first", "clips-gauntlet"] {
+            assert!(map.visits[route].iter().all(|&v| v == 1), "{route}: {:?}", map.visits[route]);
+        }
+        for (route, steps) in &map.routes {
+            let stretches = &map.stretches[route];
+            let visits = &map.visits[route];
+            for j in 0..steps.len() {
+                for i in 0..j {
+                    let (a, b) = (&steps[i], &steps[j]);
+                    if (a.location(), &a.entry, visits[i]) != (b.location(), &b.entry, visits[j]) {
+                        continue;
+                    }
+                    let ways =
+                        stretches.iter().any(|s| matches!((s.way_of(i), s.way_of(j)), (Some(x), Some(y)) if x != y));
+                    let targets = (i..j).all(|k| (steps[k].location(), &steps[k].entry) == (b.location(), &b.entry));
+                    let what = format!("{} {} visit {}", b.location(), b.entry, visits[j]);
+                    assert!(ways || targets, "{route}: steps {i} and {j} share {what}");
+                }
+            }
+        }
+        let text = "r:\n- {level: 1, room: '0x73', entry: S, exit: W}\n- {level: 1, room: '0x72', entry: E, exit: E}\n\
+                    - {level: 1, room: '0x73', entry: W, exit: N}\n- {level: 1, room: '0x73', entry: S, exit: E}\n\
+                    - {level: 1, room: '0x73', entry: S, exit: W}\n";
+        let routes = GameMap::from_yaml(GAME_YAML, text).unwrap();
+        assert_eq!(routes.visits["r"], [1, 1, 1, 2, 2]);
+        let steps = &routes.routes["r"];
+        assert_eq!(visit_at(steps, &[], 3, &steps[0]), 2, "an alternate for step 3: the second visit");
+        assert_eq!(visit_at(steps, &[], 1, &steps[0]), 1, "right after step 0: another target of the first");
     }
 }

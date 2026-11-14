@@ -28,22 +28,24 @@ the route's next room through an objective-correct exit, so it takes the sword, 
 and triforce the objective asks for.  The replay of that path keeps the last frame before the next room's entry,
 with Link's hearts refilled and the room's kill history cleared.  That file is the next step's start state, so
 every state carries the progress (max hearts, keys, items, triforce pieces) the route really has at that point.
-Each chain is seeded differently.  Files are ``<level>_<room><entry>_<chain>.state`` in the states dir: entry is
-the route side n/s/e/w, ``c`` for coming out of a cave or dungeon stairs, ``cave`` for a cave interior.  The route's
-alternate rooms are generated from the step they branch off.  ``entry_states.json`` records the route step,
-specialist and exploration cost of every file.
+Each chain is seeded differently.  Files are ``<level>_<room><entry>[_v<visit>]_<chain>.state`` in the states dir:
+entry is the route side n/s/e/w, ``c`` for coming out of a cave or dungeon stairs, ``cave`` for a cave interior;
+``_v<visit>`` marks the route's second, third, ... entry into the room from that side (``RouteStep.visit``; the
+first visit has none).  The route's alternate rooms are generated from the step they branch off.
+``entry_states.json`` records the route step, specialist and exploration cost of every file.
 
 ``audit`` loads each start state several times the way training does (natural RNG state, spawn draws, fresh room).
 It reports the room each state really loads into, whether it was saved before entry, the monsters spawned versus
 the room's full count (``game.yaml``, Zoras excluded: they are not part of the room's monster list), the number
 of distinct spawn layouts at the first controllable frame, and Link's hearts.  Edge-spawn overworld rooms bring
 their monsters in later from the screen edges (RNG-driven), so they show one layout here but still vary.  It flags
-Lee's start-state rules: a name that isn't ``<level>_<room><entry>_<chain>`` with chain 0-2 (NAME), the wrong room
-(MISNAMED) or entry side (ENTRY, Link's position and facing at the first controllable frame), saved after entry
-(POST-ENTRY), fewer monsters than the room's full count (SHORT), max hearts not the route's at that step or 16
-(HEARTS), less than full health (HP), no route step and no manifest entry (OFFROUTE), a boss room entered other
-than by the route's fight entry (BOSS-ENTRY).  Auditing a whole directory (the default) also lists route states
-missing for a chain 0-2 (MISSING) and files no specialist uses (ORPHAN).  It exits 1 when anything is flagged.
+Lee's start-state rules: a name that isn't ``<level>_<room><entry>[_v<visit>]_<chain>`` with chain 0-2 (NAME), the
+wrong room (MISNAMED) or entry side (ENTRY, Link's position and facing at the first controllable frame), saved after
+entry (POST-ENTRY), fewer monsters than the room's full count (SHORT), max hearts not the route's at that step (counted
+along the stretch way the step is on) or 16 (HEARTS), less than full health (HP), no route step and no manifest entry
+(OFFROUTE), a boss room entered other than by the route's fight entry (BOSS-ENTRY).  Auditing a whole directory (the
+default) also lists route states missing for a chain 0-2 (MISSING) and files no specialist uses (ORPHAN).  It exits 1
+when anything is flagged.
 
 ``idle`` writes the power-on idle states (``<states>/power_on/idle_<frames>.state``: the machine after 2000,
 4000, ..., 30000 idle frames on the file-select screen), which let a power-on run skip most of its delay.
@@ -107,6 +109,7 @@ class RouteStep:
     exit: str
     specialist: str
     way: Optional[str] = None  # 'clips' / 'plain': a step of one way of a routes.yaml stretch (None: both ways')
+    visit: int = 1             # the route's visit to the room from that side (zelda::game_map::route_visits)
 
     @property
     def location(self) -> MapLocation:
@@ -115,13 +118,20 @@ class RouteStep:
 
     def filename(self, chain: int) -> str:
         """Entry-state file name for this step."""
-        side = 'cave' if self.in_cave else ('c' if self.entry == 'cave' else self.entry.lower())
-        return f"{self.level}_{self.room:02x}{side}_{chain}.state"
+        return f"{state_stem(self.level, self.room, self.in_cave, self.entry, self.visit)}_{chain}.state"
+
+
+def state_stem(level: int, room: int, in_cave: bool, entry: str, visit: int = 1) -> str:
+    """A state name without its chain (docs/architecture.md "Start states"): ``<level>_<room><side>[_v<visit>]``,
+    side n/s/e/w, ``c`` out of a cave or dungeon stairs, ``cave`` a cave or cellar interior; a later visit of the
+    route to the room from that side (2, 3, ...) adds ``_v<visit>``, the first has none."""
+    side = 'cave' if in_cave else ('c' if entry == 'cave' else entry.lower())
+    return f"{level}_{room:02x}{side}" + (f"_v{visit}" if visit > 1 else '')
 
 
 def _step(index: int, raw: dict) -> RouteStep:
     return RouteStep(index, raw['level'], raw['room'], bool(raw['in_cave']), raw['entry'], raw['exit'],
-                     raw['specialist'], raw.get('way'))
+                     raw['specialist'], raw.get('way'), raw['visit'])
 
 
 def route_steps(route: str = DEFAULT_ROUTE) -> List[RouteStep]:
@@ -416,15 +426,18 @@ def read_manifest(directory) -> Dict[str, dict]:
         return {entry['file']: entry for entry in json.load(file)}
 
 
-def route_step_index(route: str, location: MapLocation, entry: str) -> Optional[int]:
-    """Index of the first step of ``route`` in ``location`` entered from ``entry`` (N/S/E/W, cave, start)."""
-    return next((s.index for s in route_steps(route) if s.entry == entry and s.location == location), None)
+def route_step_index(route: str, location: MapLocation, entry: str, after: Optional[int] = None) -> Optional[int]:
+    """Index of the first step of ``route`` in ``location`` entered from ``entry`` (N/S/E/W, cave, start); with
+    ``after`` (the step a walk along the route comes from) the first after it, the next visit, when there is one."""
+    matching = [s.index for s in route_steps(route) if s.entry == entry and s.location == location]
+    return next((i for i in matching if after is None or i > after), matching[0] if matching else None)
 
 
-def path_route_fields(route: Optional[str], level: int, room: int, entry: str) -> dict:
-    """Manifest fields for a path-built state: its step on ``route`` (``route_step``; -1 and ``off_route`` when the
-    route doesn't enter that room from that side, or no route is given)."""
-    index = route_step_index(route, MapLocation(level, room, False), entry) if route else None
+def path_route_fields(route: Optional[str], level: int, room: int, entry: str, after: Optional[int] = None) -> dict:
+    """Manifest fields for a path-built state: its step on ``route`` (``route_step``, the first after the step
+    ``after`` the walk comes from: ``route_step_index``; -1 and ``off_route`` when the route doesn't enter that room
+    from that side, or no route is given)."""
+    index = route_step_index(route, MapLocation(level, room, False), entry, after) if route else None
     fields = {'route': route} if route else {}
     return {**fields, 'route_step': -1 if index is None else index, 'off_route': index is None}
 
@@ -463,7 +476,8 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
     """Walks ``rooms`` in order from ``source`` (a state in the room before the first of them), writing each room's
     entry state.  Go-Explore only has to enter the next room, whatever the objective wants, so this works for rooms
     off a route (e.g. Dungeon 1's north rooms toward the bow) and for a route the objective doesn't follow.  With
-    ``route``, manifest entries record their step on it (``path_route_fields``); otherwise ``route_step: -1``.
+    ``route``, manifest entries record their step on it (``path_route_fields``: the next step entering the room from
+    that side after the step the walk comes from, whose visit names the file); otherwise ``route_step: -1``.
     Off-route entries record ``from_step``, the route step they were reached from (for route-progress checks).
     The entry side is ``path_entry``'s (a dungeon's entrance room is entered S, the overworld out of a dungeon
     ``cave``).  Each written file's entry is merged into ``<out>/entry_states.json`` right away.
@@ -475,10 +489,18 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
     game, room_info = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
     sources = [source]
     currents = [MapLocation(*game.load(source, fresh_room=True, seed=0).full_location)]
-    goals = [RouteStep(-1, target.level, target.value, False, path_entry(current, target), '?',
-                       specialist_for(target.as_tuple()) or 'none')
-             for current, target in zip(currents + list(rooms), rooms)]
-    steps = [_manifest_step(out, source, states_dir)]
+    route_list = route_steps(route) if route else []
+    goals, route_fields, after = [], [], _manifest_step(out, source, states_dir)
+    for current, target in zip(currents + list(rooms), rooms):
+        entry = path_entry(current, target)
+        fields = path_route_fields(route, target.level, target.value, entry, after)
+        if fields['off_route'] and after is not None:
+            fields['from_step'] = after
+        visit = 1 if fields['off_route'] else route_list[fields['route_step']].visit
+        goals.append(RouteStep(-1, target.level, target.value, False, entry, '?',
+                               specialist_for(target.as_tuple()) or 'none', visit=visit))
+        route_fields.append(fields)
+        after = after if fields['off_route'] else fields['route_step']
     manifest: List[dict] = []
     retries = [0] * len(rooms)
     os.makedirs(out, exist_ok=True)
@@ -499,15 +521,13 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
                 log(f"{label}: FAILED after {stats['attempts']} attempts ({stats['env_steps']} env steps); "
                     f"re-crossing into 0x{rooms[i - 1].value:02x} with explore seed {chain + 1000 * retries[i - 1]}")
                 i -= 1
-                del sources[i + 1:], currents[i + 1:], steps[i + 1:], manifest[i:]
+                del sources[i + 1:], currents[i + 1:], manifest[i:]
                 continue
             log(f"{label}: FAILED after {stats['attempts']} attempts ({stats['env_steps']} env steps)")
             break
         path = os.path.join(out, goal.filename(chain))
         write_entry_state(game, pre_entry, path, goal.location)
-        fields = path_route_fields(route, goal.level, goal.room, goal.entry)
-        if fields['off_route'] and steps[i] is not None:
-            fields['from_step'] = steps[i]
+        fields = route_fields[i]
         entry = {'file': os.path.basename(path), 'chain': chain, 'from': sources[i],
                  'specialist': goal.specialist, 'level': goal.level, 'room': f"0x{goal.room:02x}", 'in_cave': False,
                  'entry': goal.entry, 'exit': None, 'alternate': False, **fields, **stats, 'explore_seed': seed}
@@ -516,7 +536,6 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
         log(f"{label}: {stats['steps']} steps, {stats['env_steps']} env steps, {time.time() - started:.0f}s")
         sources.append(path)
         currents.append(target)
-        steps.append(fields['route_step'] if fields['route_step'] >= 0 else fields.get('from_step'))
         i += 1
     failed = [goal.filename(chain) for goal in goals[len(manifest):]]
     if failed:
@@ -550,7 +569,7 @@ def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) ->
 
 # --- audit ---
 
-STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|cave)_([0-2])$')
+STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|cave)(?:_v([2-9]|[1-9]\d+))?_([0-2])$')
 HEARTS_NEVER = 16                    # a 16-heart state is never a route state (Lee)
 
 
@@ -568,11 +587,12 @@ def state_label(path: str) -> str:
 
 
 def parse_state_name(label: str) -> Optional[tuple]:
-    """'1_44w_0' -> (1, 0x44, 'w', 0); None unless the name is ``<level>_<room><entry>_<chain>`` with chain 0-2."""
+    """'1_44w_0' -> (1, 0x44, 'w', 0, 1), '0_1be_v2_1' -> (0, 0x1b, 'e', 1, 2): (level, room, side, chain, visit);
+    None unless the name is ``<level>_<room><entry>[_v<visit>]_<chain>`` with chain 0-2 and visit 2 or more."""
     match = STATE_NAME.match(label)
     if match is None:
         return None
-    return int(match[1]), int(match[2], 16), match[3], int(match[4])
+    return int(match[1]), int(match[2], 16), match[3], int(match[5]), int(match[4] or 1)
 
 
 def _named_room(label: str) -> Optional[tuple]:
@@ -606,8 +626,8 @@ def route_hearts(route_step: int, route: str = DEFAULT_ROUTE) -> int:
 
 
 class RouteIndex:
-    """What the audit knows about the route: each state name's step (``<level>_<room><entry>`` of a route step or an
-    alternate), the max hearts per step and the boss rooms."""
+    """What the audit knows about the route: each state name's step (``<level>_<room><entry>[_v<visit>]`` of a route
+    step or an alternate), the max hearts per step and the boss rooms."""
 
     def __init__(self, route: str = DEFAULT_ROUTE):
         self.route = route
@@ -619,13 +639,19 @@ class RouteIndex:
             self.by_name.setdefault(step.filename(0)[:-len('_0.state')], step.index)
         self._containers = [step for step in self.steps
                             if rooms[step.location.as_tuple()]['treasure'] == 'heart-container']
-        self.max_hearts = self.hearts(len(self.steps))
+        self.max_hearts = BASE_HEARTS + len({s.location.as_tuple() for s in self._containers})
         self.boss_rooms = {step.location.as_tuple() for step in self.steps if step.specialist.startswith('boss-')}
         self._manifests: Dict[str, Dict[str, dict]] = {}
 
     def hearts(self, route_step: int) -> int:
-        """Max hearts at ``route_step``."""
-        return BASE_HEARTS + len({s.location.as_tuple() for s in self._containers if s.index < route_step})
+        """Max hearts at ``route_step``: one per heart-container room before it along the way it is on.  A stretch
+        lists its clip way before its plain way, so a plain-way step counts the shared steps and the plain way's, not
+        the clip way's (a heart room on both ways counts once either way); a clip-way or shared step counts the shared
+        steps and the clip way's (both ways give the same hearts by the rejoin)."""
+        way = self.steps[route_step].way if route_step < len(self.steps) else None
+        ways = (None, way or 'clips')
+        return BASE_HEARTS + len({s.location.as_tuple() for s in self._containers
+                                  if s.index < route_step and s.way in ways})
 
     def manifest_entry(self, path: str) -> Optional[dict]:
         """The file's entry in its directory's manifest."""

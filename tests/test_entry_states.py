@@ -3,6 +3,7 @@
 A missing shipped route state fails the tests over it with the command that builds it.
 """
 
+import fnmatch
 import glob
 import json
 import os
@@ -268,6 +269,114 @@ def test_path_route_fields():
     assert path_route_fields(DEFAULT_ROUTE, 0, 0x67, 'N') == {'route': DEFAULT_ROUTE, 'route_step': -1,
                                                               'off_route': True}
     assert path_route_fields(None, 0, 0x67, 'S') == {'route_step': -1, 'off_route': True}
+
+
+# --- later visits (round 24): the test route of crates/env/tests/fixtures/revisit_routes.yaml ---
+
+REVISIT_FIXTURE = REPO_STATES_DIR.parent.parent / 'crates' / 'env' / 'tests' / 'fixtures' / 'revisit_routes.yaml'
+# zelda::game_map::route_visits of the route's own steps (crates/env/tests/state_visits.rs asserts the same list).
+REVISIT_VISITS = [2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2]
+
+
+def _revisit_steps() -> list:
+    """The test route ``revisit`` as ``_native.route_steps`` would list it with the fixture in routes.yaml: d2first's
+    steps, then the fixture's (a stretch's clip way, then its plain way), with their visits."""
+    yaml = pytest.importorskip('yaml')
+    with open(REVISIT_FIXTURE, encoding='utf-8') as file:
+        route = yaml.safe_load(file)['revisit']
+    own = []
+    for element in route['steps']:
+        if 'stretch' not in element:
+            own.append((element, None, None))
+            continue
+        own += [(step, way, element['stretch']) for way in ('clips', 'plain') for step in element[way]]
+    steps = list(native.route_steps(route['extends']))
+    assert len(own) == len(REVISIT_VISITS)
+    for (step, way, stretch), visit in zip(own, REVISIT_VISITS):
+        steps.append({'index': len(steps), 'level': step['level'], 'room': int(step['room'], 16),
+                      'in_cave': bool(step.get('in_cave')), 'entry': step['entry'], 'exit': step['exit'],
+                      'specialist': step['specialist'], 'way': way, 'stretch': stretch, 'visit': visit})
+    return steps
+
+
+@pytest.fixture
+def revisit(monkeypatch):
+    """``route_steps('revisit')`` serves the test route (the other routes stay the native ones)."""
+    steps, native_steps = _revisit_steps(), entry_states.native_route_steps
+    monkeypatch.setattr(entry_states, 'native_route_steps',
+                        lambda route=DEFAULT_ROUTE: steps if route == 'revisit' else native_steps(route))
+    return route_steps('revisit')
+
+
+def test_later_visit_names_round_trip():
+    """Make, parse, glob: the first visit keeps the bare name, a later one adds ``_v<visit>`` before the chain; the
+    audit's parser, the native one (the envs' ``StateName``), the chain's start step and a family's room glob read
+    them alike."""
+    for name, (level, room, side, chain, visit), entry in (
+            ('0_1be_0', (0, 0x1b, 'e', 0, 1), 'E'), ('0_1be_v2_2', (0, 0x1b, 'e', 2, 2), 'E'),
+            ('5_07cave_v2_1', (5, 0x07, 'cave', 1, 2), 'S'), ('0_3cc_v12_0', (0, 0x3c, 'c', 0, 12), 'cave')):
+        assert parse_state_name(name) == (level, room, side, chain, visit)
+        in_cave = side == 'cave'
+        assert entry_states.state_stem(level, room, in_cave, entry, visit) + f'_{chain}' == name
+        assert native.state_name(name) == (level, room, in_cave, entry, visit)
+        assert native.state_name(f'/x/{name[:-2]}_h42_3.state') == (level, room, in_cave, entry, visit)
+        assert fnmatch.fnmatch(f'{name}.state', f'{level}_{room:02x}*_[0-9].state')
+    for bad in ('0_1be_v1_0', '0_1be_v02_0', '0_1be_v_0', '0_1be_v2_3', '0_1be_h3_v2_0'):
+        assert parse_state_name(bad) is None, bad
+    assert native.state_name('0_1be_v1_0') is None and native.state_name('start') is None
+    step = entry_states.RouteStep(7, 5, 0x07, True, 'S', 'E', 'equipment-room', visit=2)
+    assert step.filename(1) == '5_07cave_v2_1.state'
+    assert all(s.visit == 1 for s in route_steps())                      # d2first enters no room twice the same way
+
+
+def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit, tmp_path):
+    """A later visit's name is its own step; a stretch's plain way doesn't count the clip way's heart container room
+    (0x5f, on both ways, listed first on the clip way): 8 hearts up to 0x5f on either way, 9 after the rejoin."""
+    require_rom()
+    steps, first = revisit, len(route_steps())
+    index = entry_states.RouteIndex('revisit')
+    at = {s.filename(0)[:-len('_0.state')]: s.index for s in steps[first:]}
+    assert list(at) == ['0_5cw_v2', '0_5dw_v2', '0_6dn', '0_6ew', '0_6fw', '0_5fs', '0_7fn', '0_6fs', '0_4fs',
+                        '0_6fs_v2', '1_7fcave_v2']
+    assert all(index.by_name[name] == i for name, i in at.items() if name not in ('0_6fw', '0_5fs'))
+    assert index.by_name['0_6fw'] == first + 4 and index.by_name['0_5fs'] == first + 5    # the clip way's step
+    assert index.by_name['0_5dw'] < first and index.by_name['1_7fcave'] < first
+    hearts = [index.hearts(s.index) for s in steps[first:]]
+    assert hearts == [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9]
+    assert [s.way for s in steps[first + 4:first + 10]] == ['clips', 'clips', 'plain', 'plain', 'plain', 'plain']
+    assert index.max_hearts == 9
+    for name in ('0_5dw_0', '0_5dw_v2_0'):
+        shutil.copy(REPO_STATES_DIR / '0_5dw_0.state', tmp_path / f'{name}.state')
+    rows = {r['state']: r for r in entry_states.audit(sorted(glob.glob(str(tmp_path / '*.state'))), loads=1,
+                                                      states_dir=str(REPO_STATES_DIR), route='revisit')}
+    first_visit, second_visit = rows['0_5dw_0'], rows['0_5dw_v2_0']
+    assert (first_visit['route_step'], first_visit['expected_hearts'], audit_problems(first_visit)) == \
+        (index.by_name['0_5dw'], BASE_HEARTS, [])
+    assert (second_visit['route_step'], second_visit['expected_hearts']) == (first + 1, 8)
+    assert audit_problems(second_visit) == ['HEARTS']                   # the first visit's 3 hearts, not the route's 8
+    missing = entry_states.directory_problems(str(tmp_path), 'revisit')
+    assert 'MISSING 0_5dw_v2_1.state' in missing and 'MISSING 1_7fcave_v2_0.state' in missing
+
+
+def test_path_names_a_later_visit_after_the_step_it_comes_from(revisit, monkeypatch, tmp_path):
+    """``path`` walks on from its source's step: from the D4 triforce's step 0x5c and 0x5d from W are the route's
+    second visits (``_v2``), from d2first's 0x5b the first."""
+    require_rom()
+    first = len(route_steps())
+    _fake_crossings(monkeypatch, {})
+    rooms = [MapLocation(0, 0x5c, False), MapLocation(0, 0x5d, False)]
+    d2first = [s.index for s in revisit[:first] if (s.level, s.entry) == (0, 'W') and s.room in (0x5c, 0x5d)]
+    late = (['0_5cw_v2_2.state', '0_5dw_v2_2.state'], [first, first + 1])
+    for out, step, (files, indices) in (('late', first - 1, late),
+                                        ('early', None, (['0_5cw_2.state', '0_5dw_2.state'], d2first))):
+        source, out = tmp_path / f'{out}_0.state', tmp_path / out
+        shutil.copy(REPO_STATES_DIR / '0_5bw_0.state', source)
+        out.mkdir()
+        if step is not None:
+            _merge_manifest(str(out), [{'file': source.name, 'chain': 0, 'route_step': step}])
+        manifest, failed = build_path(str(source), rooms, chain=2, out=str(out), iterations=1, patience=1,
+                                      log=lambda _: None, route='revisit', states_dir=str(REPO_STATES_DIR))
+        assert failed == [] and [(e['file'], e['route_step']) for e in manifest] == list(zip(files, indices))
 
 
 class FakeCrossing:

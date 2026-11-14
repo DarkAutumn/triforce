@@ -137,7 +137,7 @@ LEVELS = range(10)                     # 0 = overworld, 1-9 = dungeons
 GRID_COLS, GRID_ROWS = 16, 8           # room id = row * 16 + col, on every level
 HUD_ROWS = 64                          # the frame is 240x256: HUD on top, then the 176-row playfield
 TILE_W, TILE_H = 256, 176
-STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|cave)_(\d+)$')
+STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|cave)(?:_v([2-9]|[1-9]\d+))?_(\d+)$')
 SCREEN_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(cave)?\.png$')
 SIDE_ORDER = ('s', 'n', 'e', 'w', 'c', 'cave')     # which entry's savestate pictures a room
 ITEM_KINDS = ('heart', 'fairy', 'clock', 'rupee', 'blue_rupee', 'bombs')
@@ -342,13 +342,14 @@ def fmt_exits(exits: dict) -> str:
 Key = tuple[int, int, bool]            # (level, room, in_cave), like game_rooms()
 
 
-def parse_state_name(name: str) -> Optional[tuple[int, int, str, int]]:
-    """'0_4ce_1' -> (level 0, room 0x4c, side 'e', chain 1), also with its subfolder ('d4/4_71s_0'); None for other
-    files (start.state)."""
+def parse_state_name(name: str) -> Optional[tuple[int, int, str, int, int]]:
+    """'0_4ce_1' -> (level 0, room 0x4c, side 'e', chain 1, visit 1), '0_1be_v2_0' -> (0, 0x1b, 'e', 0, 2) (a later
+    visit of the route to the room from that side), also with its subfolder ('d4/4_71s_0'); None for other files
+    (start.state)."""
     match = STATE_NAME.match(name.rsplit('/', 1)[-1])
     if not match:
         return None
-    return int(match[1]), int(match[2], 16), match[3], int(match[4])
+    return int(match[1]), int(match[2], 16), match[3], int(match[5]), int(match[4] or 1)
 
 
 def scan_states(states_dir: Path) -> dict[Key, list[str]]:
@@ -359,16 +360,16 @@ def scan_states(states_dir: Path) -> dict[Key, list[str]]:
     for path in sorted(root.glob('*.state')) + sorted(root.glob('*/*.state')):
         if parse_state_name(path.stem):
             name = path.relative_to(root).with_suffix('').as_posix()
-            level, room, side, _ = parse_state_name(name)
+            level, room, side, _, _ = parse_state_name(name)
             states[(level, room, side == 'cave')].append(name)
     return dict(states)
 
 
 def pick_state(names: list[str]) -> str:
-    """The savestate that pictures a room: the lowest chain, preferring entries in SIDE_ORDER."""
+    """The savestate that pictures a room: the lowest chain, preferring entries in SIDE_ORDER and first visits."""
     def rank(name):
-        _, _, side, chain = parse_state_name(name)
-        return chain, SIDE_ORDER.index(side), name
+        _, _, side, chain, visit = parse_state_name(name)
+        return chain, SIDE_ORDER.index(side), visit, name
     return min(names, key=rank)
 
 

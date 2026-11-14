@@ -20,7 +20,7 @@ use crate::observation::{Observation, ObservationBuilder};
 use crate::reward_track::RewardTrack;
 use crate::rewards::Scored;
 use crate::specialist_env::{decisions_json, linger_json};
-use crate::start_states::{StateStore, harvest_filename, state_entry, state_label};
+use crate::start_states::{StateName, StateStore, harvest_filename, state_entry, state_visit};
 use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
@@ -104,8 +104,8 @@ pub struct Route {
 impl Route {
     /// A routes.yaml route; `stop_at` replaces the route's end with a room to enter and `start_from` (a state such
     /// as `2_7ds_0`, a file under `states_dir` or a path) the game start, for partial chain evals. `start_from` must
-    /// exist and `stop_at` must be the room of a route step after the start state's step (the first step whose
-    /// room and entry the state's name encodes; the game start for other names).
+    /// exist and `stop_at` must be the room of a route step after the start state's step (the step whose room, entry
+    /// and visit the state's name encodes; the game start for other names).
     pub fn load(
         map: &GameMap,
         states_dir: &Path,
@@ -145,7 +145,7 @@ impl Route {
             clips_off_from: None,
         };
         if let Some(stop) = stop_at {
-            let start = start_step(steps, start_state, true);
+            let start = start_step(map, name, start_state, true);
             let after: Vec<MapLocation> = steps[start + 1..].iter().map(|s| s.location()).collect();
             if !after.contains(&stop) {
                 let rooms: Vec<String> = after.iter().map(|l| describe(*l)).collect();
@@ -171,7 +171,7 @@ impl Route {
         match &self.start {
             RunStart::Checkpoint { step, .. } => *step,
             RunStart::PowerOn { .. } => 0,
-            RunStart::State => start_step(&map.routes[&self.name], &self.start_state, self.clips),
+            RunStart::State => start_step(map, &self.name, &self.start_state, self.clips),
         }
     }
 
@@ -311,25 +311,20 @@ fn state_file_path(states_dir: &Path, name: &str) -> PathBuf {
     }
 }
 
-/// The index of the first route step whose room and entry a state's name encodes (`<level>_<room><side>_…`,
-/// harvested `_h<seed>_<n>` alike), of the steps on the way `clips` selects if one of them does (4_31e: N with
-/// clips, W without), else of any; 0 for the game start and names that encode no step.
-fn start_step(steps: &[zelda::game_map::RouteStep], state: &str, clips: bool) -> usize {
-    let label = state_label(state);
-    let encodes = |s: &zelda::game_map::RouteStep| {
-        let side = if s.in_cave {
-            "cave".to_owned()
-        } else if s.entry == "cave" {
-            "c".to_owned()
-        } else {
-            s.entry.to_ascii_lowercase()
-        };
-        label.starts_with(&format!("{}_{:02x}{side}_", s.level, s.room))
+/// The index of the route step a state's name encodes ([`StateName`]: its room, entry and visit; harvested names
+/// alike), of the steps on the way `clips` selects if one of them does (4_31e: N with clips, W without), else of any;
+/// 0 for the game start and names that encode no step of `route`.
+fn start_step(map: &GameMap, route: &str, state: &str, clips: bool) -> usize {
+    let Some(name) = StateName::parse(state) else {
+        return 0;
     };
-    steps
-        .iter()
-        .position(|s| s.on_way(clips) && encodes(s))
-        .or_else(|| steps.iter().position(encodes))
+    let (steps, visits) = (&map.routes[route], &map.visits[route]);
+    let encodes =
+        |i: &usize| steps[*i].location() == name.location && steps[*i].entry == name.entry && visits[*i] == name.visit;
+    (0..steps.len())
+        .filter(encodes)
+        .find(|&i| steps[i].on_way(clips))
+        .or_else(|| (0..steps.len()).find(encodes))
         .unwrap_or(0)
 }
 
@@ -743,7 +738,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     }
 
     /// Harvest handoff states into `dir` (None = off): every correct room entry where the acting specialist changes
-    /// saves its pre-entry savestate as `dir/<new specialist>/<level>_<room><side>_h<seed>_<n>.state`
+    /// saves its pre-entry savestate as `dir/<new specialist>/<level>_<room><side>[_v<visit>]_h<seed>_<n>.state`
     /// ([`harvest_filename`]; `n` = the room's index in the run, a run without a seed counts as seed 0), the true
     /// health, position and items the upstream specialist handed over. The run's first room (the route's start
     /// state) is not a handoff.
@@ -752,7 +747,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.harvest = dir;
     }
 
-    /// Saves the pre-entry state of the room entry just made (a handoff to `name`, room index `n`).
+    /// Saves the pre-entry state of the room entry just made (a handoff to `name`, room index `n`), named for the
+    /// route visit of the step Link plays there.
     fn harvest_entry(&self, name: &str, n: usize) -> Result<(), String> {
         let (Some(dir), Some(change), Some(pre_entry)) = (
             &self.harvest,
@@ -762,9 +758,12 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             return Ok(());
         };
         let seed = self.result.as_ref().and_then(|r| r.seed).unwrap_or(0);
+        let visit = self.objectives.as_ref().and_then(|gc| Some(self.data.map.visits[gc.route()][gc.step()?]));
+        let visit = visit.unwrap_or(1);
         let Some(file) = harvest_filename(
             change.previous.full_location(),
             change.state.full_location(),
+            visit,
             seed,
             n,
         ) else {
@@ -804,6 +803,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             &self.data.map,
             state.full_location(),
             state_entry(start_state),
+            state_visit(start_state),
             rng,
             Some(&self.route.name),
             &state,

@@ -1462,17 +1462,19 @@ pub fn route_bomb_targets(map: &GameMap, state: &GameView, objective: &Objective
     targets
 }
 
-/// The route steps `start_route` would choose among for an episode starting in `location` entered from `entry`
-/// (the steps of `route`, of every route without one, entering the room from `entry` with exactly Link's progress,
-/// any step entering it from `entry` when none has his progress), with their way: (route, step, way).
+/// The route steps `start_route` would choose among for an episode starting in `location` entered from `entry`, the
+/// `visit` a start state's name spells (`game_map::route_visits`; None when no name says): the steps of `route`, of
+/// every route without one, entering the room from `entry`; of those, the visit's when there are any; of those, the
+/// ones with exactly Link's progress when there are any. With their way: (route, step, way).
 fn start_candidates<'a>(
     map: &'a GameMap,
     location: MapLocation,
     entry: &str,
+    visit: Option<u32>,
     route: Option<&str>,
     state: &GameView,
 ) -> Vec<(&'a str, usize, Option<crate::game_map::Way>)> {
-    let mut candidates: Vec<(&str, usize, bool)> = Vec::new();
+    let mut candidates: Vec<(&str, usize, bool, bool)> = Vec::new();
     for (name, steps) in &map.routes {
         if route.is_some_and(|r| r != name) {
             continue;
@@ -1480,27 +1482,33 @@ fn start_candidates<'a>(
         let progress = route_progress(map, steps);
         for (i, step) in steps.iter().enumerate() {
             if step.location() == location && step.entry == entry {
-                candidates.push((name, i, progress[i].matches(state)));
+                let named = visit.is_none_or(|v| map.visits[name][i] == v);
+                candidates.push((name, i, named, progress[i].matches(state)));
             }
         }
     }
     if candidates.iter().any(|c| c.2) {
         candidates.retain(|c| c.2);
     }
-    candidates.into_iter().map(|(name, i, _)| (name, i, map.routes[name][i].way)).collect()
+    if candidates.iter().any(|c| c.3) {
+        candidates.retain(|c| c.3);
+    }
+    candidates.into_iter().map(|(name, i, _, _)| (name, i, map.routes[name][i].way)).collect()
 }
 
-/// The run-time clips switch an episode starting in `location` entered from `entry` must have (round 22): Some when
-/// the route enters the room that way on one way of a stretch only (4:0x21 from S: the clip way; from W, 4:0x30 from
-/// E and 4:0x20 from S: the plain way), None when either switch has a step there or none has.
+/// The run-time clips switch an episode starting in `location` entered from `entry` (the `visit` its start state's
+/// name spells, `start_route`) must have (round 22): Some when the route enters the room that way on one way of a
+/// stretch only (4:0x21 from S: the clip way; from W, 4:0x30 from E and 4:0x20 from S: the plain way), None when
+/// either switch has a step there or none has.
 pub fn start_clips(
     map: &GameMap,
     location: MapLocation,
     entry: Option<&str>,
+    visit: Option<u32>,
     route: Option<&str>,
     state: &GameView,
 ) -> Option<bool> {
-    let candidates = start_candidates(map, location, entry?, route, state);
+    let candidates = start_candidates(map, location, entry?, visit, route, state);
     let on = |clips: bool| candidates.iter().any(|c| c.2.is_none_or(|w| w.clips() == clips));
     match (on(true), on(false)) {
         (true, false) => Some(true),
@@ -1510,15 +1518,18 @@ pub fn start_clips(
 }
 
 /// (route, step) for an episode starting in `location` entered from `entry` (`start_route`) with the run-time clips
-/// switch `clips`: the steps of `route` (of every route without one) entering the room from `entry` with exactly
-/// Link's progress (`StepProgress`: the triforce pieces and sword he holds), any step entering it from `entry` when
-/// none has his progress; of those, the ones on the way `clips` selects when there are any (4:0x31 from E: N with
-/// clips, W without).  Steps leaving the room differently: one at random from `rng` (Python's `random` stream is not
-/// reproduced).  No step: `route` (else the default route) and None.
+/// switch `clips`: the steps of `route` (of every route without one) entering the room from `entry`; of those, the
+/// `visit` its start state's name spells (`game_map::route_visits`: `0_1be_v2_0` is the route's second entry into
+/// 0:0x1b from E) when the route has it; of those, the ones with exactly Link's progress (`StepProgress`: the triforce
+/// pieces and sword he holds), any when none has his progress; of those, the ones on the way `clips` selects when
+/// there are any (4:0x31 from E: N with clips, W without).  Steps leaving the room differently: one at random from
+/// `rng` (Python's `random` stream is not reproduced).  No step: `route` (else the default route) and None.
+#[allow(clippy::too_many_arguments)]
 pub fn start_route<R: Rng + ?Sized>(
     map: &GameMap,
     location: MapLocation,
     entry: Option<&str>,
+    visit: Option<u32>,
     rng: &mut R,
     route: Option<&str>,
     state: &GameView,
@@ -1528,7 +1539,7 @@ pub fn start_route<R: Rng + ?Sized>(
     let Some(entry) = entry else {
         return (fallback.to_owned(), None);
     };
-    let mut candidates = start_candidates(map, location, entry, route, state);
+    let mut candidates = start_candidates(map, location, entry, visit, route, state);
     if candidates.iter().any(|c| c.2.is_none_or(|w| w.clips() == clips)) {
         candidates.retain(|c| c.2.is_none_or(|w| w.clips() == clips));
     }

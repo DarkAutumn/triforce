@@ -1216,6 +1216,7 @@ fn objective_here(s: &S, entry: &str, clips: bool) -> (zelda::objectives::Object
         &map,
         state.full_location(),
         Some(entry),
+        None,
         &mut ChaCha8Rng::seed_from_u64(0),
         Some("d2first"),
         state,
