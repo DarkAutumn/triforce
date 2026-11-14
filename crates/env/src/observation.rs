@@ -806,7 +806,10 @@ impl ObservationBuilder {
             let harmless = monster && (at(OBJ_STUN, i) > 0 || flashing);
             f[e::HURTS_ON_TOUCH] =
                 b(harmful && active && !dying && !clock && !stunned_dodongo && !harmless);
-            f[e::KILLABLE] = b(monster && !gleeok_base && t != object::GUARD_FIRE);
+            // The big Digdogger ($38, $39 before its init): no weapon touches it until the recorder splits it (its
+            // type tells the model, as its 32x32 size: zelda::game::Enemy::is_big_digdogger).
+            let big_digdogger = matches!(t, enemy::DIGDOGGER2 | enemy::DIGDOGGER3);
+            f[e::KILLABLE] = b(monster && !gleeok_base && !big_digdogger && t != object::GUARD_FIRE);
             f[e::PROJECTILE] = b(projectile);
             f[e::BLOCKABLE] = b(matches!(t, 0x53 | 0x5B | 0x5C));
             f[e::SPAWNING] = b(spawning);

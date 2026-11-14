@@ -1941,3 +1941,32 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   sequence); `zelda-map.py`'s Clips selector shows either way whenever the route has a stretch.
 - **The overworld ladder clip and the rest of the movement** are the next phase; this one ends with the draft.
 - **No blue ring:** a different route. No wand, no book.
+
+## 2026-11-14 — Dungeon 5 as route steps (round 24, slice `r24-d5`)
+
+- **Route `d5`** (`{extends: d2first}`; docs/routes/d5.md): the draft's 23 steps with the owner's notes. The leg
+  joins it later; until then a development state from `triforce.probe.write_entry_state` (written inventory, never
+  installed).
+- **The recorder is route progress** (`waypoint: recorder`, `StepProgress::recorder`, `GameView::recorder`): it
+  tells the tunnel cellar 0x07's two visits apart and sends a Link who left the Olive Garden's cellar without it back
+  down. **A tunnel cellar is left by the step's ladder** (game.yaml exits E/W of an in_cave room: X ≥ $80 or not).
+- **`treasure: refuse`** (0x65 westbound, the owner's "never westbound"): no objective, and the pickup (the room's
+  item-taken flag rising) costs `penalty-refused-treasure` (−0.75) instead of paying. `Objective::treasure_refused`
+  carries it to the critic. A new reward term (REWARD_TERMS 56).
+- **Bombed-open walls are open to the path searches** (`seed_from_room_flags` and `update_opened_doors` record bomb
+  walls by their room flag as they did key doors): 0x06's way back down to the tunnel needs 0x64's E wall, bombed
+  from 0x65. Before, a bomb wall outside a `requires_bombs` room was never passable for the Dijkstra though its
+  `bomb_wall` doc said "or once it is open". Changes only an off-route or stairs-step objective behind such a wall.
+- **Bombs room by room:** gibdo `required` (0x66 W and 0x65 W, `requires_bombs`), darknut and boss-digdogger `free`
+  with `bomb_reserve` 8 (Link holds at most 8) except 0 on the Olive Garden's first visit and on Digdogger; zol,
+  pols-voice, dodongo-crossing, equipment-room `tenth`. The 10th kill's bomb stays everywhere.
+- **Families:** darknut (+0x64, 0x05, 0x06, 0x37; `clips: true`, measured: no clip site in its Dungeon 3 rooms, so
+  nothing changes there), gibdo (0x76, 0x66, 0x65, 0x47, 0x26, 0x14: the empty rooms by the dungeon's main family),
+  pols-voice (0x25 and 0x27: its Pols Voices are what 0x27 asks Link to get past), dodongo-crossing (0x56; no `boss-`
+  prefix), boss-digdogger (0x24), zol (+0x57), equipment-room (+0x04, 0x07). The Olive Garden is game.yaml's second
+  room `name:`.
+- **Digdogger:** the big body is 4x4 tiles (`Enemy::dims`) and not killable in the observation; no new feature: its
+  type ($38 → $18) and the killable bit tell the model the room heard the recorder. Its rewards wait for the recorder
+  kind (second pass).
+- **Sword-through needs no reward change:** a hit pays `reward-hit`, walking into the flashing monster costs nothing
+  (tested in 0x47); a parried Darknut hit is a miss, as it gives no flash.

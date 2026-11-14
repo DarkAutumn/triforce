@@ -1,5 +1,5 @@
 name: equipment-room
-rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)']
+rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)']
 start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]']
 success: [exit-correct]
 reward_profile: default
@@ -17,4 +17,7 @@ notes: >-
   at the top of the left ladder, goes down, along the floor, up the right ladder to the bow, and back up the left
   ladder out to 0x22 (success: the bow, then that exit; leaving without it is a wrong exit). Dungeon 3's raft
   cellar 0x0f under 0x69 (Nov 9): the same with the raft (`waypoint: raft`), back up to 0x69. Dungeon 4 (Nov
-  11-12): the ladder cellar 0x60 under the Breakfast Room 0x32 (`waypoint: ladder`).
+  11-12): the ladder cellar 0x60 under the Breakfast Room 0x32 (`waypoint: ladder`). Dungeon 5 (round 24): the
+  recorder cellar 0x04 under the Olive Garden 0x05 (`waypoint: recorder`), and the tunnel cellar 0x07 between 0x64
+  (the left ladder, game.yaml exit W) and 0x06 (the right one, E), crossed twice: E without the recorder, W with it
+  (the step's ladder is the only correct exit).

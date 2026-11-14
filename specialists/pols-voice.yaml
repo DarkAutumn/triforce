@@ -1,0 +1,22 @@
+name: pols-voice
+rooms: ['(5, 0x27)', '(5, 0x25)']
+start_states: []                           # round 24: the second pass adds its states (the leg's played entrance)
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
+items: {bombs: tenth}                      # the owner (Nov 14): no bombs in Dungeon 5 but the Olive Garden and Digdogger; the 10th kill's bomb stays
+curriculum: {enabled: true}             # trajectories/pols-voice (Go-Explore paths per start state)
+one_room: true
+max_steps: 1500
+warm_start: null
+trainable: false                           # round 24: no start states until the second pass (the leg's played entrance)
+notes: >-
+  Pols Voice rooms (Dungeon 5, round 24; docs/routes/d5.md): Pols Voices hop fast and over the block rows, 2 hearts a
+  touch, four white-sword hits (arrows kill them; the route has none). The owner: don't fight them; a sword hit makes
+  one flash about 32 frames and Link walks through it unhurt (works from the front too). 0x25 E to W, the costliest
+  room of the dungeon (rows 0 and 6 are measured the safest, 2 and 4 the worst), through the W key door; the dark
+  0x27 S to W (two Pols Voices, two Gibdos, two Keese): its key just above the S door taken, no fight, through the W
+  key door. 0x27 joins this family rather than gibdo: its Pols Voices are what it asks Link to get past.
+  Copied from zol (one-room, curriculum).

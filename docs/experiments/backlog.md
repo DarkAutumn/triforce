@@ -5,6 +5,12 @@ round docs still call it that.)
 
 ## Next projects (Lee, Nov 11-12; ordered Nov 14 by what the r72 chains lose): top of the list
 
+- [ ] **Dungeon 5, second pass (round 24, `r24-d5`; docs/routes/d5.md):** `items: {recorder: true}` on
+  boss-digdogger once `r24-kinds` lands, and the boss's rewards (the shrink; hits on the small one pay `reward-hit`,
+  not `reward-boss-hit`: $18 is no BOSS_KINDS type); states from the leg's played entrance, curricula, trainings.
+  The explorer doesn't clear the Olive Garden (132,737 env steps, 3 attempts): its curriculum needs another way in.
+  `max_steps` of the new families (1500/600/1000) are guesses until their explored paths are measured. The cheat
+  gives a bomb in 0x66/0x65 on the way back too (`requires_bombs` is per room), unused there.
 - [x] **Act modes (round 23, done Nov 14):** one act mode, `temperature:0.5+relax:16`, for play (the owner's choice),
   evaluation, chains and training (the lead's); `act` files, `eval.json`, `PLAY_ACT`, `DEFAULT_ACT` and the
   training/chain defaults applied (round23.md §10-§11; full route clips on | off 28.7 | 15.3%). Open from it:

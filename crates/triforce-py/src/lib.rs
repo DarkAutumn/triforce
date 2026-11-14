@@ -22,7 +22,7 @@ mod theater;
 use pyo3::prelude::*;
 
 /// The route's room visits as dicts (`index`, `level`, `room`, `in_cave`, `entry`, `exit`, `specialist`,
-/// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip`, `clear` or `if_bombs_below: N`,
+/// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip`, `refuse`, `clear` or `if_bombs_below: N`,
 /// `bomb_reserve`: the step's routes.yaml `bomb_reserve` or None, `way`: 'clips' or 'plain' for a step of one way of
 /// a `stretch:` (None: both ways'), `stretch`: its name). Both ways' steps are listed, numbered in file order.
 #[pyfunction]

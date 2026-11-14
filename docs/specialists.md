@@ -89,6 +89,18 @@ Its rooms are tagged by enemy as everywhere; the existing families train on thei
 | `trap-room` | | + (4,0x11), (4,0x02) | The rupee room: no monsters, no traps, bomb the N wall (round 22; the E wall before; Lee, Nov 12: it stays in this family). 0x02 (round 22): six blade traps in the dark, W→S; its blocks in columns X `$30` and `$C0` offer the block clip N and S of the middle row (4 squares, `crates/zelda/tests/clips.rs` `the_block_clip_in_dungeon_4`). |
 | `equipment-room` | | + (4,0x60 cellar) | The ladder cellar. |
 
+### Dungeon 5 (round 24, route `d5`, no states or models yet; `docs/routes/d5.md`)
+
+| Family | Main threat | Rooms (level, room) | Notes |
+|---|---|---|---|
+| `gibdo` (new) | Gibdos (2 hearts a touch) | (5,0x76), (5,0x66), (5,0x65), (5,0x47), (5,0x26), (5,0x14) | `required` bombs: 0x66 W and 0x65 W, one bomb each. 0x66 crossed on entry, cleared on the way back; 0x65's bombs refused westbound, taken eastbound. Sword-through in 0x47. The empty entrance and triforce room by the dungeon's main family. |
+| `pols-voice` (new) | Pols Voices (fast hops over blocks) | (5,0x25), (5,0x27) | Not fought: sword-through, rows 0 and 6 in 0x25. 0x27's key in the open. `tenth`. |
+| `dodongo-crossing` (new) | Dodongos (the sword does nothing) | (5,0x56) | Walked past (row 6, column 11); no `boss-` prefix (not a boss room). `tenth`. |
+| `boss-digdogger` (new) | Digdogger, statue fireballs | (5,0x24) | The recorder (round 24's action kind), the small one, the heart container. `free` (reserve 0). |
+| `darknut` | Blue and Red Darknuts | + (5,0x64), (5,0x05), (5,0x06), (5,0x37) | `clips: true`: 0x64's block clip (off: the fight and the push). The Olive Garden 0x05: bombs free down to 0. |
+| `zol` | | + (5,0x57) | Along row 3 by the ladder. |
+| `equipment-room` | | + (5,0x04 cellar), (5,0x07 cellar) | The recorder cellar; the tunnel cellar, left by the step's ladder. |
+
 Removed with the reset (Nov 8): `ow-leever-peahat` (0x29, 0x2a, 0x2b: milestone1 only; 0x2c went to `ow-tektite`),
 the fairy pond 0x39 (ow-start), 0x48 (ow-zora; back on the route since Nov 9 as `ow-leever`), 0x49 (ow-octorok) and
 2:0x6d (d2-rope).

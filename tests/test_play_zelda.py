@@ -639,7 +639,7 @@ def test_a_show_reads_what_the_strip_says_from_the_replay(recordings):  # pylint
     first, last = win.status(win.start), win.status(win.frames)
     assert (first['specialist'], first['level'], first['room'], first['rooms']) == ('ow-octorok', 0, 0x3c, 1)
     assert (last['room'], last['rooms'], last['name']) == (0x4c, 2, None)
-    assert play_grid.room_names() == {(4, 0x32, False): 'Breakfast Room'}
+    assert play_grid.room_names() == {(4, 0x32, False): 'Breakfast Room', (5, 0x05, False): 'Olive Garden'}
     assert last['cheated'] == {'bombs': 0, 'keys': 0, 'rupees': 0}
 
     # A run from power on is watched from the moment the models took over; before it there is no room.
