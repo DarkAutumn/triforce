@@ -1,0 +1,204 @@
+# Draft routes: planned, not played (triforce/draft_routes.py; zelda-map.py --route NAME draws them).
+# Nothing but the map reads this file: routes.yaml stays the route the models play.  A step is a routes.yaml step
+# (level, room, in_cave, entry, exit) and may have `note` (what Link does there), `leg` (the part of the route it
+# starts), `wrap: true` (a screen wrap in this room; with an `exit: W` game.yaml doesn't have: the wrap exit into
+# room - 1), `exit: recorder` / `entry: recorder` (the whirlwind) and `exit: end`.  An overworld cave is not a step
+# of its own here: the room's note says what Link takes or buys in it.
+#
+# first-quest (Nov 13): d2first, then the rest of the first quest.  The overworld legs are Lee's (Nov 13); the
+# dungeon paths are the "Route" sections of zelda-asm/levels/level-5.md .. level-9.md (from the ROM, not walked),
+# shortened where carried keys allow (Lee, Nov 13: use them) and without the items the game doesn't need (level 6's
+# wand, level 8's book and magic key); level 9 takes the red ring (Lee, Nov 13).  Order: 5, 7, the magic sword, 6,
+# 8, 9.  Heart containers on entering a dungeon: 5 with 10, 7 with 11, 6 with 12, 8 with 13, 9 with 15.
+first-quest:
+  extends: d2first
+  steps:
+  # Dungeon 4 to Dungeon 5 (Lee, Nov 13): the two coast heart containers and 0x0f's 100 rupees
+  - {leg: 'Dungeon 4 to Dungeon 5', level: 0, room: '0x45', entry: cave, exit: S, note: 'the raft back to the dock'}
+  - {level: 0, room: '0x55', entry: N, exit: W}
+  - {level: 0, room: '0x54', entry: E, exit: W}
+  - {level: 0, room: '0x53', entry: E, exit: W}
+  - {level: 0, room: '0x52', entry: E, exit: W}
+  - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'screen wrap: out of the W edge'}
+  - {level: 0, room: '0x50', entry: E, exit: S}
+  - {level: 0, room: '0x60', entry: N, exit: W, wrap: true, note: 'screen wrap round the world: into 0x5f (room id - 1)'}
+  - {level: 0, room: '0x5f', entry: E, exit: N, note: 'the heart container (ladder clip over the water; 9 hearts)'}
+  - {level: 0, room: '0x4f', entry: S, exit: N}
+  - {level: 0, room: '0x3f', entry: S, exit: N, note: 'the raft from the dock'}
+  - {level: 0, room: '0x2f', entry: S, exit: S, note: 'take-any cave: the heart container (10 hearts); the raft back'}
+  - {level: 0, room: '0x3f', entry: N, exit: W}
+  - {level: 0, room: '0x3e', entry: E, exit: W, wrap: true, note: 'screen wrap: out of the W edge'}
+  - {level: 0, room: '0x3d', entry: E, exit: N}
+  - {level: 0, room: '0x2d', entry: S, exit: N}
+  - {level: 0, room: '0x1d', entry: S, exit: E}
+  - {level: 0, room: '0x1e', entry: W, exit: E}
+  - {level: 0, room: '0x1f', entry: W, exit: N, note: 'the gap in the rock wall at X $80'}
+  - {level: 0, room: '0x0f', entry: S, exit: S, note: 'secret cave: 100 rupees'}
+  - {level: 0, room: '0x1f', entry: N, exit: W}
+  - {level: 0, room: '0x1e', entry: E, exit: W}
+  - {level: 0, room: '0x1d', entry: E, exit: N}
+  - {level: 0, room: '0x0d', entry: S, exit: W}
+  - {level: 0, room: '0x0c', entry: E, exit: W, wrap: true, note: 'screen wrap: out of the W edge onto the mountain top'}
+  - {level: 0, room: '0x0b', entry: E, exit: cave, note: 'Dungeon 5'}
+  # Dungeon 5: the recorder, Digdogger (level-5.md "Route"; keys are carried, so no key fight is needed)
+  - {leg: 'Dungeon 5', level: 5, room: '0x76', entry: S, exit: N}
+  - {level: 5, room: '0x66', entry: S, exit: W, note: 'Gibdos, dark; bomb the W wall'}
+  - {level: 5, room: '0x65', entry: E, exit: W, note: 'the bombs a Gibdo carries (+4); bomb the W wall'}
+  - {level: 5, room: '0x64', entry: E, exit: cave, note: 'kill the 5 Blue Darknuts, push the block up or down; the stairs'}
+  - {level: 5, room: '0x07', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x06'}
+  - {level: 5, room: '0x06', entry: cave, exit: W, note: 'the W key door'}
+  - {level: 5, room: '0x05', entry: E, exit: cave, note: 'kill the 6 Blue Darknuts; push the block for the stairs'}
+  - {level: 5, room: '0x04', in_cave: true, entry: S, exit: N, note: 'the recorder'}
+  - {level: 5, room: '0x05', entry: cave, exit: E, note: 'the E key door'}
+  - {level: 5, room: '0x06', entry: W, exit: cave, note: 'push the block again; the stairs'}
+  - {level: 5, room: '0x07', in_cave: true, entry: S, exit: W, note: 'the tunnel back'}
+  - {level: 5, room: '0x64', entry: cave, exit: E, note: 'bomb the E wall'}
+  - {level: 5, room: '0x65', entry: W, exit: E, note: 'bomb the E wall'}
+  - {level: 5, room: '0x66', entry: W, exit: N, note: 'the ladder over the water row; the N shutter: clear the room'}
+  - {level: 5, room: '0x56', entry: S, exit: E, note: 'Dodongos: walk past'}
+  - {level: 5, room: '0x57', entry: W, exit: N, note: 'Zols, dark'}
+  - {level: 5, room: '0x47', entry: S, exit: N}
+  - {level: 5, room: '0x37', entry: S, exit: N, note: 'Red Darknuts, dark: walk past'}
+  - {level: 5, room: '0x27', entry: S, exit: W, note: 'the W key door'}
+  - {level: 5, room: '0x26', entry: E, exit: W, note: 'round the water ring'}
+  - {level: 5, room: '0x25', entry: E, exit: W, note: 'Pols Voices; the W key door'}
+  - {level: 5, room: '0x24', entry: E, exit: N, note: 'play the recorder, kill the small Digdogger; the heart container (11 hearts); the N shutter: clear the room'}
+  - {level: 5, room: '0x14', entry: S, exit: triforce, note: 'the triforce piece'}
+  # Dungeon 5 to Dungeon 7 (Lee): arrows and food
+  - {leg: 'Dungeon 5 to Dungeon 7', level: 0, room: '0x0b', entry: cave, exit: recorder, note: 'the recorder: the whirlwind to Dungeon 4''s island (facing left or down steps back a level: two plays from here)'}
+  - {level: 0, room: '0x45', entry: recorder, exit: S, note: 'the raft back to the dock'}
+  - {level: 0, room: '0x55', entry: N, exit: W}
+  - {level: 0, room: '0x54', entry: E, exit: N}
+  - {level: 0, room: '0x44', entry: S, exit: N, note: 'shop: wooden arrows, 80 rupees'}
+  - {level: 0, room: '0x34', entry: S, exit: S, note: 'the armos at X $40 hides the shop''s stairs: food, 60 rupees'}
+  - {level: 0, room: '0x44', entry: N, exit: S}
+  - {level: 0, room: '0x54', entry: N, exit: W}
+  - {level: 0, room: '0x53', entry: E, exit: W}
+  - {level: 0, room: '0x52', entry: E, exit: N}
+  - {level: 0, room: '0x42', entry: S, exit: cave, note: 'the recorder drains the pond: Dungeon 7''s stairs'}
+  # Dungeon 7: the red candle, Aquamentus (level-7.md "Route", its way with 3 keys carried: 19 entries, 5 walls)
+  - {leg: 'Dungeon 7', level: 7, room: '0x79', entry: S, exit: N}
+  - {level: 7, room: '0x69', entry: S, exit: N, note: 'bomb the N wall'}
+  - {level: 7, room: '0x59', entry: S, exit: N, note: 'Goriyas: cross'}
+  - {level: 7, room: '0x49', entry: S, exit: N, note: 'the ladder over the water row; kill 3 Blue Goriyas and 3 Keese; the N shutter: clear the room'}
+  - {level: 7, room: '0x39', entry: S, exit: W, note: 'the big Digdogger: walk past'}
+  - {level: 7, room: '0x38', entry: E, exit: N, note: 'Goriyas need not die; the N key door'}
+  - {level: 7, room: '0x28', entry: S, exit: N, note: 'the hungry Goriya: put the food down'}
+  - {level: 7, room: '0x18', entry: S, exit: E, note: 'key door instead of the two bomb walls and three rooms of the keyless way; the E key door'}
+  - {level: 7, room: '0x19', entry: W, exit: E, note: 'bomb the E wall'}
+  - {level: 7, room: '0x1a', entry: W, exit: cave, note: 'kill the 6 Goriyas; the stairs'}
+  - {level: 7, room: '0x4a', in_cave: true, entry: S, exit: N, note: 'the red candle'}
+  - {level: 7, room: '0x1a', entry: cave, exit: E, note: 'bomb the E wall'}
+  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'the E key door'}
+  - {level: 7, room: '0x1c', entry: W, exit: N, note: 'play the recorder, kill the 3 small Digdoggers; the N shutter: clear the room'}
+  - {level: 7, room: '0x0c', entry: S, exit: E, note: 'Dodongos: walk past; bomb the E wall'}
+  - {level: 7, room: '0x0d', entry: W, exit: cave, note: 'kill the 5 Wallmasters; push the block for the stairs'}
+  - {level: 7, room: '0x7b', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x29'}
+  - {level: 7, room: '0x29', entry: cave, exit: E, note: 'bomb the E wall'}
+  - {level: 7, room: '0x2a', entry: W, exit: E, note: 'Aquamentus; the heart container (12 hearts); the E shutter: clear the room'}
+  - {level: 7, room: '0x2b', entry: W, exit: triforce, note: 'the triforce piece'}
+  # Dungeon 7 to the magic sword to Dungeon 6 (Lee)
+  - {leg: 'Dungeon 7 to the magic sword to Dungeon 6', level: 0, room: '0x42', entry: cave, exit: S}
+  - {level: 0, room: '0x52', entry: N, exit: W}
+  - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'screen wrap: out of the W edge'}
+  - {level: 0, room: '0x50', entry: E, exit: N}
+  - {level: 0, room: '0x40', entry: S, exit: E}
+  - {level: 0, room: '0x41', entry: W, exit: N}
+  - {level: 0, room: '0x31', entry: S, exit: N}
+  - {level: 0, room: '0x21', entry: S, exit: S, note: 'push the gravestone at X $90: the magic sword (needs 12 hearts)'}
+  - {level: 0, room: '0x31', entry: N, exit: E}
+  - {level: 0, room: '0x32', entry: W, exit: N}
+  - {level: 0, room: '0x22', entry: S, exit: cave, note: 'Dungeon 6'}
+  # Dungeon 6: Gohma (level-6.md "Route" with one key carried and without the wand: its steps 10-16 left out)
+  - {leg: 'Dungeon 6', level: 6, room: '0x79', entry: S, exit: W, note: 'the W key door'}
+  - {level: 6, room: '0x78', entry: E, exit: N}
+  - {level: 6, room: '0x68', entry: S, exit: N}
+  - {level: 6, room: '0x58', entry: S, exit: N, note: 'kill the 8 Blue Keese (a key appears); the N shutter: clear the room'}
+  - {level: 6, room: '0x48', entry: S, exit: N, note: 'straight up without stopping'}
+  - {level: 6, room: '0x38', entry: S, exit: N, note: 'Like-Likes, Wizzrobes and Bubbles; the N shutter: clear the room, push the block'}
+  - {level: 6, room: '0x28', entry: S, exit: E, note: 'bomb the E wall'}
+  - {level: 6, room: '0x29', entry: W, exit: S, note: 'the key in the water ring (ladder); round the ring to the S door'}
+  - {level: 6, room: '0x39', entry: N, exit: E, note: 'kill the 5 Vires; the E shutter: clear the room'}
+  - {level: 6, room: '0x3a', entry: W, exit: cave, note: 'Like-Likes and Wizzrobes: clear; push the block for the stairs'}
+  - {level: 6, room: '0x08', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x1d'}
+  - {level: 6, room: '0x1d', entry: cave, exit: S}
+  - {level: 6, room: '0x2d', entry: N, exit: W, note: 'kill the 3 Vires (a key appears)'}
+  - {level: 6, room: '0x2c', entry: E, exit: N, note: 'the N key door'}
+  - {level: 6, room: '0x1c', entry: S, exit: N, note: 'Gohma: an arrow into the open eye; the heart container (13 hearts); the N shutter: clear the room'}
+  - {level: 6, room: '0x0c', entry: S, exit: triforce, note: 'the triforce piece'}
+  # Dungeon 6 to Dungeon 8 (Lee)
+  - {leg: 'Dungeon 6 to Dungeon 8', level: 0, room: '0x22', entry: cave, exit: recorder, note: 'the recorder: the whirlwind to Dungeon 2''s entrance'}
+  - {level: 0, room: '0x3c', entry: recorder, exit: S}
+  - {level: 0, room: '0x4c', entry: N, exit: E}
+  - {level: 0, room: '0x4d', entry: W, exit: S}
+  - {level: 0, room: '0x5d', entry: N, exit: S}
+  - {level: 0, room: '0x6d', entry: N, exit: cave, note: 'burn the tree at (20, 4) with the red candle: Dungeon 8'}
+  # Dungeon 8: Gleeok with four heads (level-8.md "Route" without the book and the magic key: its steps 9-12, 20-25)
+  - {leg: 'Dungeon 8', level: 8, room: '0x7e', entry: S, exit: N}
+  - {level: 8, room: '0x6e', entry: S, exit: N, note: 'bomb the N wall'}
+  - {level: 8, room: '0x5e', entry: S, exit: N, note: 'kill the 5 Blue Darknuts (a key appears); the N shutter: clear the room'}
+  - {level: 8, room: '0x4e', entry: S, exit: N, note: 'the N key door'}
+  - {level: 8, room: '0x3e', entry: S, exit: E, note: 'kill the 6 Blue Darknuts; the E shutter: clear the room'}
+  - {level: 8, room: '0x3f', entry: W, exit: cave, note: 'straight E to the stairs; the stairs'}
+  - {level: 8, room: '0x2f', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x4c'}
+  - {level: 8, room: '0x4c', entry: cave, exit: N, note: 'out of the block ring; bomb the N wall'}
+  - {level: 8, room: '0x3c', entry: S, exit: N, note: 'Gleeok, four heads; the heart container (14 hearts); the N shutter: clear the room'}
+  - {level: 8, room: '0x2c', entry: S, exit: triforce, note: 'the triforce piece'}
+  # Dungeon 8 to Dungeon 9 (Lee): 0x47's heart container
+  - {leg: 'Dungeon 8 to Dungeon 9', level: 0, room: '0x6d', entry: cave, exit: recorder, note: 'the recorder: the whirlwind to Dungeon 1''s entrance'}
+  - {level: 0, room: '0x37', entry: recorder, exit: E}
+  - {level: 0, room: '0x38', entry: W, exit: S}
+  - {level: 0, room: '0x48', entry: N, exit: W}
+  - {level: 0, room: '0x47', entry: E, exit: E, note: 'burn the tree at (22, 14): take-any cave, the heart container (15 hearts)'}
+  - {level: 0, room: '0x48', entry: W, exit: N}
+  - {level: 0, room: '0x38', entry: S, exit: N}
+  - {level: 0, room: '0x28', entry: S, exit: W}
+  - {level: 0, room: '0x27', entry: E, exit: N}
+  - {level: 0, room: '0x17', entry: S, exit: N, note: 'the ladder over the water'}
+  - {level: 0, room: '0x07', entry: S, exit: W}
+  - {level: 0, room: '0x06', entry: E, exit: W}
+  - {level: 0, room: '0x05', entry: E, exit: cave, note: 'bomb the rock wall at (10, 12): Dungeon 9'}
+  # Dungeon 9: the red ring, the silver arrow, Ganon, Zelda (level-9.md "Route" and its red ring detour: 3 keys carried, 8 bombs)
+  - {leg: 'Dungeon 9', level: 9, room: '0x76', entry: S, exit: N}
+  - {level: 9, room: '0x66', entry: S, exit: W, note: 'the old man lets Link pass with eight pieces; the W shutter: None'}
+  - {level: 9, room: '0x65', entry: E, exit: N, note: 'the ladder over the water row; bomb the N wall'}
+  - {level: 9, room: '0x55', entry: S, exit: cave, note: 'kill both Red Lanmolas; the stairs'}
+  - {level: 9, room: '0x60', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x14'}
+  - {level: 9, room: '0x14', entry: cave, exit: E, note: 'out of the spiral of blocks; the E key door'}
+  - {level: 9, room: '0x15', entry: W, exit: E, note: 'round the water ring'}
+  - {level: 9, room: '0x16', entry: W, exit: S, note: 'a Patra; killing it leaves 4 bombs (the detour needs 3 more)'}
+  - {level: 9, room: '0x26', entry: N, exit: E, note: 'the red ring detour (Lee, Nov 13); bomb the E wall'}
+  - {level: 9, room: '0x27', entry: W, exit: N, note: 'a Patra (the map if it dies); bomb the N wall'}
+  - {level: 9, room: '0x17', entry: S, exit: N, note: 'bomb the N wall'}
+  - {level: 9, room: '0x07', entry: S, exit: cave, note: 'kill the 5 Wizzrobes; the stairs'}
+  - {level: 9, room: '0x00', in_cave: true, entry: S, exit: N, note: 'the red ring'}
+  - {level: 9, room: '0x07', entry: cave, exit: S, note: 'back the same way; bomb the S wall'}
+  - {level: 9, room: '0x17', entry: N, exit: S, note: 'bomb the S wall'}
+  - {level: 9, room: '0x27', entry: N, exit: W, note: 'bomb the W wall'}
+  - {level: 9, room: '0x26', entry: E, exit: N}
+  - {level: 9, room: '0x16', entry: S, exit: N, note: 'the N key door'}
+  - {level: 9, room: '0x06', entry: S, exit: W, note: 'bomb the W wall'}
+  - {level: 9, room: '0x05', entry: E, exit: cave, note: 'kill the 5 Wizzrobes; push the block for the stairs'}
+  - {level: 9, room: '0x70', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x63'}
+  - {level: 9, room: '0x63', entry: cave, exit: W, note: 'the W key door'}
+  - {level: 9, room: '0x62', entry: E, exit: W, note: 'Keese'}
+  - {level: 9, room: '0x61', entry: E, exit: cave, note: 'the key; kill the Patra; the stairs'}
+  - {level: 9, room: '0x75', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x20'}
+  - {level: 9, room: '0x20', entry: cave, exit: N, note: 'kill the 5 Wizzrobes now; bomb the N wall'}
+  - {level: 9, room: '0x10', entry: S, exit: cave, note: 'kill the 5 Wizzrobes; push the block for the stairs'}
+  - {level: 9, room: '0x4f', in_cave: true, entry: S, exit: N, note: 'the silver arrow'}
+  - {level: 9, room: '0x10', entry: cave, exit: S, note: 'bomb the S wall'}
+  - {level: 9, room: '0x20', entry: N, exit: cave, note: 'push the block again; the stairs'}
+  - {level: 9, room: '0x75', in_cave: true, entry: S, exit: E, note: 'the tunnel back to 0x61'}
+  - {level: 9, room: '0x61', entry: cave, exit: N}
+  - {level: 9, room: '0x51', entry: S, exit: N, note: 'between the rows of blocks'}
+  - {level: 9, room: '0x41', entry: S, exit: N, note: 'traps: straight N without stopping; no way back S from here'}
+  - {level: 9, room: '0x31', entry: S, exit: W, note: 'bomb the W wall'}
+  - {level: 9, room: '0x30', entry: E, exit: cave, note: 'traps; kill the 4 Wizzrobes; push the block for the stairs'}
+  - {level: 9, room: '0x67', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x04'}
+  - {level: 9, room: '0x04', entry: cave, exit: W, note: 'traps; bomb the W wall'}
+  - {level: 9, room: '0x03', entry: E, exit: cave, note: 'kill the Zols and Like-Likes; the stairs'}
+  - {level: 9, room: '0x77', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x52'}
+  - {level: 9, room: '0x52', entry: cave, exit: N, note: 'kill the Patra; the N shutter: clear the room'}
+  - {level: 9, room: '0x42', entry: S, exit: N, note: 'Ganon: the sword while he is invisible, then the silver arrow; the N shutter: kill the boss'}
+  - {level: 9, room: '0x32', entry: S, exit: end, note: 'Zelda'}

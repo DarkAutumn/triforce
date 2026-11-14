@@ -140,8 +140,10 @@ fn families(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
 
 /// game.yaml rooms: `(level, room, in_cave)` -> `{'enemies': {name: count}, 'name': str or None (what people call
 /// the room: "Breakfast Room"), 'treasure': str or None, 'requires_bombs': bool, 'cave': (level, room, in_cave) or
-/// None}`.  `cave` is where the room's cave exit leads: the room's own interior on the overworld, a separate room
-/// id for a dungeon cellar (1:0x22 -> 1:0x7f).
+/// None, 'exits': {key: {'to': (level, room, in_cave), 'locked', 'bomb_wall', 'shutter', 'raft', 'wrap'}},
+/// 'trigger': str or None, 'dark': bool}`.  `cave` is where the room's cave exit leads: the room's own interior on
+/// the overworld, a separate room id for a dungeon cellar (1:0x22 -> 1:0x7f).  `exits` are the room's game.yaml
+/// exits by key ('N', 'S', 'E', 'W', 'cave'; a maze's 'maze') with each door's kind.
 #[pyfunction]
 fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     let data = context::data(py, None)?;
@@ -161,6 +163,21 @@ fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
             (to.level, to.value, to.in_cave)
         });
         info.set_item("cave", cave)?;
+        let exits = pyo3::types::PyDict::new(py);
+        for (key, exit) in &room.exits {
+            let to = &exit.destination;
+            let e = pyo3::types::PyDict::new(py);
+            e.set_item("to", (to.level, to.value, to.in_cave))?;
+            e.set_item("locked", exit.locked)?;
+            e.set_item("bomb_wall", exit.bomb_wall)?;
+            e.set_item("shutter", exit.shutter)?;
+            e.set_item("raft", exit.raft)?;
+            e.set_item("wrap", exit.wrap)?;
+            exits.set_item(key, e)?;
+        }
+        info.set_item("exits", exits)?;
+        info.set_item("trigger", room.trigger.as_deref())?;
+        info.set_item("dark", room.dark)?;
         d.set_item((location.level, location.value, location.in_cave), info)?;
     }
     Ok(d)

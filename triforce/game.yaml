@@ -2485,6 +2485,7 @@ rooms:
     E:
       level: 1
       location: '0x36'
+      shutter: true
     S:
       level: 1
       location: '0x45'
@@ -2523,6 +2524,7 @@ rooms:
     W:  # shutter
       level: 1
       location: '0x41'
+      shutter: true
   enemies:
     BlueGel: 3
   treasure: null
@@ -2590,6 +2592,7 @@ rooms:
     E:  # shutter
       level: 1
       location: '0x53'
+      shutter: true
   enemies:
     BlueKeese: 6
   treasure: null
@@ -2716,6 +2719,7 @@ rooms:
     W:
       level: 2
       location: '0x0d'  # shutter
+      shutter: true
   enemies:
     Dodongo2: 1
   treasure: heart-container
@@ -2726,12 +2730,14 @@ rooms:
     N:
       level: 2
       location: '0x0e'  # shutter
+      shutter: true
     E:  # bomb wall
       level: 2
       location: '0x1f'
     S:
       level: 2
       location: '0x2e'  # shutter
+      shutter: true
   enemies:
     RedGoriya: 5
   treasure: bombs
@@ -2756,6 +2762,7 @@ rooms:
     N:
       level: 2
       location: '0x1e'  # shutter
+      shutter: true
     E:
       level: 2
       location: '0x2f'
@@ -2829,6 +2836,7 @@ rooms:
     S:
       level: 2
       location: '0x5e'  # shutter
+      shutter: true
   enemies:
     Rope: 5
   treasure: key
@@ -2903,6 +2911,7 @@ rooms:
     W:
       level: 2
       location: '0x6c'  # shutter
+      shutter: true
   enemies:
     Rope: 5
   treasure: null
@@ -2977,6 +2986,7 @@ rooms:
     E:  # shutter
       level: 3
       location: '0x2b'
+      shutter: true
   enemies:
     BlueKeese: 8
   treasure: key
@@ -2999,6 +3009,7 @@ rooms:
     N:  # shutter
       level: 3
       location: '0x2b'
+      shutter: true
     S:
       level: 3
       location: '0x4b'
@@ -3099,9 +3110,11 @@ rooms:
     N:  # shutter
       level: 3
       location: '0x3d'
+      shutter: true
     S:  # shutter
       level: 3
       location: '0x5d'
+      shutter: true
     W:  # bomb wall
       level: 3
       location: '0x4c'
@@ -3124,6 +3137,7 @@ rooms:
     S:  # shutter
       level: 3
       location: '0x69'
+      shutter: true
   enemies:
     RedDarknut: 5
   treasure: null
@@ -3177,6 +3191,7 @@ rooms:
     E:  # shutter
       level: 3
       location: '0x5d'
+      shutter: true
     W:  # bomb wall
       level: 3
       location: '0x5b'
@@ -3191,9 +3206,11 @@ rooms:
     N:  # shutter
       level: 3
       location: '0x4d'
+      shutter: true
     W:  # shutter
       level: 3
       location: '0x5c'
+      shutter: true
   enemies:
     Bubble: 3
     Zol: 2
@@ -3328,12 +3345,14 @@ rooms:
     N:  # shutter
       level: 4
       location: '0x00'
+      shutter: true
     E:  # bomb wall
       level: 4
       location: '0x11'
     S:  # shutter
       level: 4
       location: '0x20'
+      shutter: true
   enemies:
     Manhandla: 1
   treasure: null
@@ -3369,6 +3388,7 @@ rooms:
     E:  # shutter
       level: 4
       location: '0x13'
+      shutter: true
     W:  # bomb wall
       level: 4
       location: '0x11'
@@ -3385,9 +3405,11 @@ rooms:
     N:  # shutter
       level: 4
       location: '0x03'
+      shutter: true
     W:  # shutter
       level: 4
       location: '0x12'
+      shutter: true
   enemies:
     Gleeok2: 1
   treasure: heart-container
@@ -3460,6 +3482,7 @@ rooms:
     E:  # shutter
       level: 4
       location: '0x32'
+      shutter: true
     W:
       level: 4
       location: '0x30'
@@ -3590,3 +3613,2760 @@ rooms:
   enemies:  # the cellar's keese (emulator; not the attr C/D list)
     BlueKeese: 4
   treasure: ladder
+# --- Dungeon 5 (level 5) (scripts/level_rooms.py from the ROM; zelda-asm/levels/level-5.md) ---
+- level: 5
+  location: '0x05'
+  exits:
+    E:
+      level: 5
+      location: '0x06'
+      locked: true
+    cave:  # the stairs (they appear when the block is pushed) down to the item cellar 0x04
+      level: 5
+      location: '0x04'
+      in_cave: true
+  enemies:
+    BlueDarknut: 6
+  treasure: null
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 5
+  location: '0x06'
+  exits:
+    S:
+      level: 5
+      location: '0x16'
+      locked: true
+    W:
+      level: 5
+      location: '0x05'
+      locked: true
+    cave:  # the stairs (in the layout) down to the tunnel 0x07
+      level: 5
+      location: '0x07'
+      in_cave: true
+  enemies: null
+  treasure: null
+  stairs: [16, 10]
+- level: 5
+  location: '0x14'  # the triforce room
+  exits:
+    S:  # open here; a shutter on 0x24's side
+      level: 5
+      location: '0x24'
+  enemies: null
+  treasure: triforce
+- level: 5
+  location: '0x15'
+  exits:
+    S:  # bomb wall
+      level: 5
+      location: '0x25'
+  enemies:  # $4D: a person
+    Unknown_77: 1
+  treasure: null
+  bomb_walls: [S]
+- level: 5
+  location: '0x16'
+  exits:
+    N:
+      level: 5
+      location: '0x06'
+      locked: true
+    E:  # bomb wall
+      level: 5
+      location: '0x17'
+  enemies:
+    BlueKeese: 8
+  treasure: key
+  bomb_walls: [E]
+- level: 5
+  location: '0x17'
+  exits:
+    W:  # bomb wall
+      level: 5
+      location: '0x16'
+  enemies:  # $4F: a person
+    Unknown_79: 1
+  treasure: null
+  bomb_walls: [W]
+- level: 5
+  location: '0x24'  # the boss room
+  exits:
+    N:  # shutter
+      level: 5
+      location: '0x14'
+      shutter: true
+    E:
+      level: 5
+      location: '0x25'
+      locked: true
+    S:  # open here; a shutter on 0x34's side
+      level: 5
+      location: '0x34'
+  enemies:
+    Digdogger3: 1
+  treasure: heart-container
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 5
+  location: '0x25'
+  exits:
+    N:  # bomb wall
+      level: 5
+      location: '0x15'
+    E:
+      level: 5
+      location: '0x26'
+    W:
+      level: 5
+      location: '0x24'
+      locked: true
+  enemies:
+    PolsVoice: 5
+  treasure: null
+  bomb_walls: [N]
+- level: 5
+  location: '0x26'
+  exits:
+    E:
+      level: 5
+      location: '0x27'
+      locked: true
+    W:
+      level: 5
+      location: '0x25'
+  enemies:
+    Gibdo: 5
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 5
+  location: '0x27'
+  exits:
+    S:
+      level: 5
+      location: '0x37'
+    W:
+      level: 5
+      location: '0x26'
+      locked: true
+  enemies:
+    PolsVoice: 2
+    Gibdo: 2
+    BlueKeese: 2
+  treasure: key
+  dark: true
+- level: 5
+  location: '0x34'
+  exits:
+    N:  # shutter
+      level: 5
+      location: '0x24'
+      shutter: true
+  enemies:
+    Gibdo: 6
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 5
+  location: '0x37'
+  exits:
+    N:
+      level: 5
+      location: '0x27'
+    S:
+      level: 5
+      location: '0x47'
+  enemies:
+    RedDarknut: 3
+  treasure: compass
+  trigger: kill-all-item  # attr F & 7 = 7
+  dark: true
+- level: 5
+  location: '0x46'
+  exits:
+    E:
+      level: 5
+      location: '0x47'
+    S:
+      level: 5
+      location: '0x56'
+      locked: true
+  enemies: null
+  treasure: map
+  dark: true
+- level: 5
+  location: '0x47'
+  exits:
+    N:
+      level: 5
+      location: '0x37'
+    S:
+      level: 5
+      location: '0x57'
+    W:
+      level: 5
+      location: '0x46'
+  enemies:
+    Gibdo: 5
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 5
+  location: '0x55'
+  exits:
+    E:  # shutter
+      level: 5
+      location: '0x56'
+      shutter: true
+    S:  # open here; a shutter on 0x65's side
+      level: 5
+      location: '0x65'
+  enemies:
+    Zol: 5
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 5
+  location: '0x56'
+  exits:
+    N:
+      level: 5
+      location: '0x46'
+      locked: true
+    E:
+      level: 5
+      location: '0x57'
+    S:  # open here; a shutter on 0x66's side
+      level: 5
+      location: '0x66'
+    W:  # shutter
+      level: 5
+      location: '0x55'
+      shutter: true
+  enemies:
+    Dodongo: 3
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 5
+  location: '0x57'
+  exits:
+    N:
+      level: 5
+      location: '0x47'
+    W:
+      level: 5
+      location: '0x56'
+  enemies:
+    Zol: 5
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+  dark: true
+- level: 5
+  location: '0x64'
+  exits:
+    E:  # bomb wall
+      level: 5
+      location: '0x65'
+    cave:  # the stairs (in the layout) down to the tunnel 0x07
+      level: 5
+      location: '0x07'
+      in_cave: true
+  enemies:
+    BlueDarknut: 5
+  treasure: null
+  bomb_walls: [E]
+  stairs: [16, 10]
+- level: 5
+  location: '0x65'
+  exits:
+    N:  # shutter
+      level: 5
+      location: '0x55'
+      shutter: true
+    E:  # bomb wall
+      level: 5
+      location: '0x66'
+    W:  # bomb wall
+      level: 5
+      location: '0x64'
+  enemies:
+    Gibdo: 5
+  treasure: bombs
+  bomb_walls: [E, W]
+- level: 5
+  location: '0x66'
+  exits:
+    N:  # shutter
+      level: 5
+      location: '0x56'
+      shutter: true
+    E:
+      level: 5
+      location: '0x67'
+      locked: true
+    S:
+      level: 5
+      location: '0x76'
+    W:  # bomb wall
+      level: 5
+      location: '0x65'
+  enemies:
+    Gibdo: 3
+  treasure: key
+  bomb_walls: [W]
+  trigger: kill-all  # attr F & 7 = 1
+  dark: true
+- level: 5
+  location: '0x67'
+  exits:
+    S:  # bomb wall
+      level: 5
+      location: '0x77'
+    W:
+      level: 5
+      location: '0x66'
+      locked: true
+  enemies:  # $4E: a person
+    Unknown_78: 1
+  treasure: null
+  bomb_walls: [S]
+- level: 5
+  location: '0x76'  # the start room: S leaves to the overworld
+  exits:
+    N:
+      level: 5
+      location: '0x66'
+    E:
+      level: 5
+      location: '0x77'
+  enemies: null
+  treasure: null
+- level: 5
+  location: '0x77'
+  exits:
+    N:  # bomb wall
+      level: 5
+      location: '0x67'
+    W:
+      level: 5
+      location: '0x76'
+  enemies:
+    PolsVoice: 5
+  treasure: key
+  bomb_walls: [N]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 5
+  location: '0x07'
+  in_cave: true  # the tunnel between 0x64 and 0x06 (side view)
+  exits:
+    E:  # up the right ladder (attr B = $06)
+      level: 5
+      location: '0x06'
+    W:  # up the left ladder (attr A = $64)
+      level: 5
+      location: '0x64'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 5
+  location: '0x04'
+  in_cave: true  # the item cellar under 0x05 (side view)
+  exits:
+    N:  # up the ladder (attr A = attr B = $05)
+      level: 5
+      location: '0x05'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: recorder
+# --- Dungeon 6 (level 6) (scripts/level_rooms.py from the ROM; zelda-asm/levels/level-6.md) ---
+- level: 6
+  location: '0x09'
+  exits:
+    E:  # bomb wall
+      level: 6
+      location: '0x0a'
+    S:
+      level: 6
+      location: '0x19'
+      locked: true
+    cave:  # the stairs (they appear when the block is pushed) down to the item cellar 0x75
+      level: 6
+      location: '0x75'
+      in_cave: true
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [E]
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 6
+  location: '0x0a'
+  exits:
+    E:  # bomb wall
+      level: 6
+      location: '0x0b'
+    S:  # shutter
+      level: 6
+      location: '0x1a'
+      shutter: true
+    W:  # bomb wall
+      level: 6
+      location: '0x09'
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: null
+  bomb_walls: [E, W]
+  trigger: kill-all  # attr F & 7 = 1
+- level: 6
+  location: '0x0b'
+  exits:
+    S:  # open here; a shutter on 0x1b's side
+      level: 6
+      location: '0x1b'
+    W:  # bomb wall
+      level: 6
+      location: '0x0a'
+  enemies:  # $4C: a person
+    Unknown_76: 1
+  treasure: null
+  bomb_walls: [W]
+- level: 6
+  location: '0x0c'  # the triforce room
+  exits:
+    S:  # open here; a shutter on 0x1c's side
+      level: 6
+      location: '0x1c'
+  enemies: null
+  treasure: triforce
+- level: 6
+  location: '0x18'
+  exits:
+    E:  # shutter
+      level: 6
+      location: '0x19'
+      shutter: true
+    S:  # shutter
+      level: 6
+      location: '0x28'
+      shutter: true
+  enemies:
+    Gleeok3: 1
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 6
+  location: '0x19'
+  exits:
+    N:
+      level: 6
+      location: '0x09'
+      locked: true
+    E:
+      level: 6
+      location: '0x1a'
+    S:
+      level: 6
+      location: '0x29'
+      locked: true
+    W:  # open here; a shutter on 0x18's side
+      level: 6
+      location: '0x18'
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: map
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 6
+  location: '0x1a'
+  exits:
+    N:  # open here; a shutter on 0x0a's side
+      level: 6
+      location: '0x0a'
+    E:
+      level: 6
+      location: '0x1b'
+    W:
+      level: 6
+      location: '0x19'
+  enemies:
+    RedWizzrobe: 6
+  treasure: key
+  dark: true
+- level: 6
+  location: '0x1b'
+  exits:
+    N:  # shutter
+      level: 6
+      location: '0x0b'
+      shutter: true
+    W:
+      level: 6
+      location: '0x1a'
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 6
+  location: '0x1c'  # the boss room
+  exits:
+    N:  # shutter
+      level: 6
+      location: '0x0c'
+      shutter: true
+    S:
+      level: 6
+      location: '0x2c'
+      locked: true
+  enemies:
+    RedGohma: 1
+  treasure: heart-container
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 6
+  location: '0x1d'
+  exits:
+    S:
+      level: 6
+      location: '0x2d'
+    cave:  # the stairs (in the layout) down to the tunnel 0x08
+      level: 6
+      location: '0x08'
+      in_cave: true
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: null
+  stairs: [26, 10]
+- level: 6
+  location: '0x28'
+  exits:
+    N:  # open here; a shutter on 0x18's side
+      level: 6
+      location: '0x18'
+    E:  # bomb wall
+      level: 6
+      location: '0x29'
+    S:  # shutter
+      level: 6
+      location: '0x38'
+      shutter: true
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: 5-rupees
+  bomb_walls: [E]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 6
+  location: '0x29'
+  exits:
+    N:
+      level: 6
+      location: '0x19'
+      locked: true
+    S:  # open here; a shutter on 0x39's side
+      level: 6
+      location: '0x39'
+    W:  # bomb wall
+      level: 6
+      location: '0x28'
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: key
+  bomb_walls: [W]
+  dark: true
+- level: 6
+  location: '0x2c'
+  exits:
+    N:
+      level: 6
+      location: '0x1c'
+      locked: true
+    E:
+      level: 6
+      location: '0x2d'
+    S:  # open here; a shutter on 0x3c's side
+      level: 6
+      location: '0x3c'
+  enemies:  # 1 x blade traps ($4A)
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+- level: 6
+  location: '0x2d'
+  exits:
+    N:
+      level: 6
+      location: '0x1d'
+    W:
+      level: 6
+      location: '0x2c'
+  enemies:
+    Bubble: 2
+    Vire: 3
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+  dark: true
+- level: 6
+  location: '0x38'
+  exits:
+    N:  # shutter
+      level: 6
+      location: '0x28'
+      shutter: true
+    S:  # shutter
+      level: 6
+      location: '0x48'
+      shutter: true
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  trigger: push-block  # attr F & 7 = 4
+  push_block_opens: N  # the shutter (trigger 4); the block needs the room clear
+- level: 6
+  location: '0x39'
+  exits:
+    N:  # shutter
+      level: 6
+      location: '0x29'
+      shutter: true
+    E:  # shutter
+      level: 6
+      location: '0x3a'
+      shutter: true
+  enemies:
+    Vire: 5
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+  dark: true
+- level: 6
+  location: '0x3a'
+  exits:
+    W:  # open here; a shutter on 0x39's side
+      level: 6
+      location: '0x39'
+    cave:  # the stairs (they appear when the block is pushed) down to the tunnel 0x08
+      level: 6
+      location: '0x08'
+      in_cave: true
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 6
+  location: '0x3c'
+  exits:
+    N:  # shutter
+      level: 6
+      location: '0x2c'
+      shutter: true
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+  dark: true
+- level: 6
+  location: '0x48'
+  exits:
+    N:  # open here; a shutter on 0x38's side
+      level: 6
+      location: '0x38'
+    S:  # open here; a shutter on 0x58's side
+      level: 6
+      location: '0x58'
+  enemies: null  # 1 x blade traps ($49)
+  treasure: null
+- level: 6
+  location: '0x58'
+  exits:
+    N:  # shutter
+      level: 6
+      location: '0x48'
+      shutter: true
+    S:
+      level: 6
+      location: '0x68'
+  enemies:
+    BlueKeese: 8
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 6
+  location: '0x68'
+  exits:
+    N:
+      level: 6
+      location: '0x58'
+    S:
+      level: 6
+      location: '0x78'
+  enemies:
+    Zol: 5
+  treasure: compass
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 6
+  location: '0x6a'
+  exits:
+    S:
+      level: 6
+      location: '0x7a'
+      locked: true
+  enemies:  # $4D: a person
+    Unknown_77: 1
+  treasure: null
+- level: 6
+  location: '0x78'
+  exits:
+    N:
+      level: 6
+      location: '0x68'
+    E:
+      level: 6
+      location: '0x79'
+      locked: true
+  enemies:
+    RedWizzrobe: 5
+  treasure: null
+  trigger: ringleader  # attr F & 7 = 2
+- level: 6
+  location: '0x79'  # the start room: S leaves to the overworld
+  exits:
+    E:
+      level: 6
+      location: '0x7a'
+    W:
+      level: 6
+      location: '0x78'
+      locked: true
+  enemies: null
+  treasure: null
+- level: 6
+  location: '0x7a'
+  exits:
+    N:
+      level: 6
+      location: '0x6a'
+      locked: true
+    W:
+      level: 6
+      location: '0x79'
+  enemies:
+    RedWizzrobe: 5
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+  dark: true
+- level: 6
+  location: '0x08'
+  in_cave: true  # the tunnel between 0x3a and 0x1d (side view)
+  exits:
+    E:  # up the right ladder (attr B = $1D)
+      level: 6
+      location: '0x1d'
+    W:  # up the left ladder (attr A = $3A)
+      level: 6
+      location: '0x3a'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 6
+  location: '0x75'
+  in_cave: true  # the item cellar under 0x09 (side view)
+  exits:
+    N:  # up the ladder (attr A = attr B = $09)
+      level: 6
+      location: '0x09'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: wand
+# --- Dungeon 7 (level 7) (scripts/level_rooms.py from the ROM; zelda-asm/levels/level-7.md) ---
+- level: 7
+  location: '0x08'
+  exits:
+    E:  # bomb wall
+      level: 7
+      location: '0x09'
+    S:  # bomb wall
+      level: 7
+      location: '0x18'
+  enemies: null  # 1 x a rupee stash ($35)
+  treasure: null
+  bomb_walls: [E, S]
+- level: 7
+  location: '0x09'
+  exits:
+    E:  # shutter
+      level: 7
+      location: '0x0a'
+      shutter: true
+    S:  # shutter
+      level: 7
+      location: '0x19'
+      shutter: true
+    W:  # bomb wall
+      level: 7
+      location: '0x08'
+  enemies:
+    BlueGoriya: 3
+    RedGoriya: 3
+  treasure: 5-rupees
+  bomb_walls: [W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x0a'
+  exits:
+    W:  # shutter
+      level: 7
+      location: '0x09'
+      shutter: true
+  enemies:
+    BlueGoriya: 5
+  treasure: key
+  trigger: kill-all  # attr F & 7 = 1
+- level: 7
+  location: '0x0b'
+  exits:
+    S:
+      level: 7
+      location: '0x1b'
+      locked: true
+  enemies:
+    Moldorm: 1
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x0c'
+  exits:
+    E:  # bomb wall
+      level: 7
+      location: '0x0d'
+    S:  # open here; a shutter on 0x1c's side
+      level: 7
+      location: '0x1c'
+  enemies:
+    Dodongo: 3
+  treasure: bombs
+  bomb_walls: [E]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x0d'
+  exits:
+    W:  # bomb wall
+      level: 7
+      location: '0x0c'
+    cave:  # the stairs (they appear when the block is pushed) down to the tunnel 0x7b
+      level: 7
+      location: '0x7b'
+      in_cave: true
+  enemies:
+    Bubble: 3
+    Wallmaster: 5
+  treasure: null
+  bomb_walls: [W]
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 7
+  location: '0x18'
+  exits:
+    N:  # bomb wall
+      level: 7
+      location: '0x08'
+    E:
+      level: 7
+      location: '0x19'
+      locked: true
+    S:  # shutter
+      level: 7
+      location: '0x28'
+      shutter: true
+  enemies:
+    Bubble: 2
+    BlueGoriya: 3
+    BlueKeese: 3
+  treasure: map
+  bomb_walls: [N]
+  trigger: kill-all  # attr F & 7 = 1
+  dark: true
+- level: 7
+  location: '0x19'
+  exits:
+    N:  # shutter
+      level: 7
+      location: '0x09'
+      shutter: true
+    E:  # bomb wall
+      level: 7
+      location: '0x1a'
+    W:
+      level: 7
+      location: '0x18'
+      locked: true
+  enemies:
+    BlueGoriya: 6
+  treasure: null
+  bomb_walls: [E]
+  trigger: kill-all  # attr F & 7 = 1
+- level: 7
+  location: '0x1a'
+  exits:
+    E:  # bomb wall
+      level: 7
+      location: '0x1b'
+    W:  # bomb wall
+      level: 7
+      location: '0x19'
+    cave:  # the stairs (in the layout) down to the item cellar 0x4a
+      level: 7
+      location: '0x4a'
+      in_cave: true
+  enemies:
+    BlueGoriya: 3
+    RedGoriya: 3
+  treasure: null
+  bomb_walls: [E, W]
+  stairs: [16, 10]
+- level: 7
+  location: '0x1b'
+  exits:
+    N:
+      level: 7
+      location: '0x0b'
+      locked: true
+    E:
+      level: 7
+      location: '0x1c'
+      locked: true
+    W:  # bomb wall
+      level: 7
+      location: '0x1a'
+  enemies:
+    BlueGoriya: 6
+  treasure: bombs
+  bomb_walls: [W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x1c'
+  exits:
+    N:  # shutter
+      level: 7
+      location: '0x0c'
+      shutter: true
+    W:
+      level: 7
+      location: '0x1b'
+      locked: true
+  enemies:
+    Digdogger2: 1
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 7
+  location: '0x28'
+  exits:
+    N:  # open here; a shutter on 0x18's side
+      level: 7
+      location: '0x18'
+    S:
+      level: 7
+      location: '0x38'
+      locked: true
+  enemies:  # $36: a person
+    Unknown_54: 1
+  treasure: null
+- level: 7
+  location: '0x29'
+  exits:
+    E:  # bomb wall
+      level: 7
+      location: '0x2a'
+    cave:  # the stairs (in the layout) down to the tunnel 0x7b
+      level: 7
+      location: '0x7b'
+      in_cave: true
+  enemies:
+    BlueGoriya: 3
+    RedGoriya: 3
+  treasure: null
+  bomb_walls: [E]
+  stairs: [16, 10]
+- level: 7
+  location: '0x2a'  # the boss room
+  exits:
+    E:  # shutter
+      level: 7
+      location: '0x2b'
+      shutter: true
+    W:  # bomb wall
+      level: 7
+      location: '0x29'
+  enemies:
+    Aquamentus: 1
+  treasure: heart-container
+  bomb_walls: [W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x2b'  # the triforce room
+  exits:
+    W:  # open here; a shutter on 0x2a's side
+      level: 7
+      location: '0x2a'
+  enemies: null
+  treasure: triforce
+- level: 7
+  location: '0x38'
+  exits:
+    N:
+      level: 7
+      location: '0x28'
+      locked: true
+    E:  # shutter
+      level: 7
+      location: '0x39'
+      shutter: true
+  enemies:
+    BlueGoriya: 3
+    RedGoriya: 3
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x39'
+  exits:
+    E:  # bomb wall
+      level: 7
+      location: '0x3a'
+    S:  # open here; a shutter on 0x49's side
+      level: 7
+      location: '0x49'
+    W:  # open here; a shutter on 0x38's side
+      level: 7
+      location: '0x38'
+  enemies:
+    Digdogger2: 1
+  treasure: null
+  bomb_walls: [E]
+- level: 7
+  location: '0x3a'
+  exits:
+    W:  # bomb wall
+      level: 7
+      location: '0x39'
+  enemies:
+    Moldorm: 1
+  treasure: key
+  bomb_walls: [W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x48'
+  exits:
+    S:
+      level: 7
+      location: '0x58'
+      locked: true
+  enemies:  # $4F: a person
+    Unknown_79: 1
+  treasure: null
+- level: 7
+  location: '0x49'
+  exits:
+    N:  # shutter
+      level: 7
+      location: '0x39'
+      shutter: true
+    S:
+      level: 7
+      location: '0x59'
+  enemies:
+    Bubble: 2
+    BlueGoriya: 3
+    BlueKeese: 3
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 7
+  location: '0x58'
+  exits:
+    N:
+      level: 7
+      location: '0x48'
+      locked: true
+    E:
+      level: 7
+      location: '0x59'
+    S:
+      level: 7
+      location: '0x68'
+  enemies:
+    Dodongo: 3
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x59'
+  exits:
+    N:
+      level: 7
+      location: '0x49'
+    E:  # shutter
+      level: 7
+      location: '0x5a'
+      shutter: true
+    S:  # bomb wall
+      level: 7
+      location: '0x69'
+    W:
+      level: 7
+      location: '0x58'
+  enemies:
+    BlueGoriya: 3
+    RedGoriya: 3
+  treasure: null
+  bomb_walls: [S]
+  trigger: kill-all  # attr F & 7 = 1
+- level: 7
+  location: '0x5a'
+  exits:
+    S:  # bomb wall
+      level: 7
+      location: '0x6a'
+    W:  # open here; a shutter on 0x59's side
+      level: 7
+      location: '0x59'
+  enemies:
+    Stalfos: 8
+  treasure: compass
+  bomb_walls: [S]
+  dark: true
+- level: 7
+  location: '0x5b'
+  exits:
+    S:  # open here; a shutter on 0x6b's side
+      level: 7
+      location: '0x6b'
+  enemies:  # $50: a person
+    Unknown_80: 1
+  treasure: null
+- level: 7
+  location: '0x68'
+  exits:
+    N:
+      level: 7
+      location: '0x58'
+    E:  # bomb wall
+      level: 7
+      location: '0x69'
+    S:
+      level: 7
+      location: '0x78'
+  enemies:  # 1 x blade traps ($4A)
+    BlueKeese: 4
+  treasure: bombs
+  bomb_walls: [E]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x69'
+  exits:
+    N:  # bomb wall
+      level: 7
+      location: '0x59'
+    E:
+      level: 7
+      location: '0x6a'
+    S:
+      level: 7
+      location: '0x79'
+    W:  # bomb wall
+      level: 7
+      location: '0x68'
+  enemies:
+    BlueGoriya: 5
+  treasure: bombs
+  bomb_walls: [N, W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x6a'
+  exits:
+    N:  # bomb wall
+      level: 7
+      location: '0x5a'
+    E:
+      level: 7
+      location: '0x6b'
+    S:
+      level: 7
+      location: '0x7a'
+    W:
+      level: 7
+      location: '0x69'
+  enemies:
+    BlueKeese: 8
+  treasure: null
+  bomb_walls: [N]
+  trigger: ringleader  # attr F & 7 = 2
+  dark: true
+- level: 7
+  location: '0x6b'
+  exits:
+    N:  # shutter
+      level: 7
+      location: '0x5b'
+      shutter: true
+    E:
+      level: 7
+      location: '0x6c'
+    W:
+      level: 7
+      location: '0x6a'
+  enemies:
+    BlueGoriya: 6
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 7
+  location: '0x6c'
+  exits:
+    E:
+      level: 7
+      location: '0x6d'
+    W:
+      level: 7
+      location: '0x6b'
+  enemies:
+    Digdogger3: 1
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x6d'
+  exits:
+    W:
+      level: 7
+      location: '0x6c'
+  enemies:
+    Stalfos: 8
+  treasure: key
+- level: 7
+  location: '0x78'
+  exits:
+    N:
+      level: 7
+      location: '0x68'
+  enemies:
+    Rope: 5
+  treasure: key
+- level: 7
+  location: '0x79'  # the start room: S leaves to the overworld
+  exits:
+    N:
+      level: 7
+      location: '0x69'
+    E:
+      level: 7
+      location: '0x7a'
+  enemies: null
+  treasure: null
+- level: 7
+  location: '0x7a'
+  exits:
+    N:
+      level: 7
+      location: '0x6a'
+    W:
+      level: 7
+      location: '0x79'
+  enemies:
+    Moldorm: 1
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 7
+  location: '0x7b'
+  in_cave: true  # the tunnel between 0x29 and 0x0d (side view)
+  exits:
+    E:  # up the right ladder (attr B = $0D)
+      level: 7
+      location: '0x0d'
+    W:  # up the left ladder (attr A = $29)
+      level: 7
+      location: '0x29'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 7
+  location: '0x4a'
+  in_cave: true  # the item cellar under 0x1a (side view)
+  exits:
+    N:  # up the ladder (attr A = attr B = $1A)
+      level: 7
+      location: '0x1a'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: red-candle
+# --- Dungeon 8 (level 8) (scripts/level_rooms.py from the ROM; zelda-asm/levels/level-8.md) ---
+- level: 8
+  location: '0x0e'
+  exits:
+    S:  # shutter
+      level: 8
+      location: '0x1e'
+      shutter: true
+  enemies:
+    RedDarknut: 5
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x1d'
+  exits:
+    E:  # bomb wall
+      level: 8
+      location: '0x1e'
+    S:
+      level: 8
+      location: '0x2d'
+  enemies:
+    PolsVoice: 5
+  treasure: bombs
+  bomb_walls: [E]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x1e'
+  exits:
+    N:  # shutter
+      level: 8
+      location: '0x0e'
+      shutter: true
+    E:  # shutter
+      level: 8
+      location: '0x1f'
+      shutter: true
+    S:
+      level: 8
+      location: '0x2e'
+      locked: true
+    W:  # bomb wall
+      level: 8
+      location: '0x1d'
+  enemies:
+    BlueGohma: 1
+  treasure: null
+  bomb_walls: [W]
+  trigger: kill-all  # attr F & 7 = 1
+- level: 8
+  location: '0x1f'
+  exits:
+    W:  # open here; a shutter on 0x1e's side
+      level: 8
+      location: '0x1e'
+    cave:  # the stairs (in the layout) down to the item cellar 0x0f
+      level: 8
+      location: '0x0f'
+      in_cave: true
+  enemies:
+    PolsVoice: 2
+    BlueDarknut: 2
+    RedDarknut: 2
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+  stairs: [16, 10]
+- level: 8
+  location: '0x2c'  # the triforce room
+  exits:
+    S:  # open here; a shutter on 0x3c's side
+      level: 8
+      location: '0x3c'
+  enemies: null
+  treasure: triforce
+- level: 8
+  location: '0x2d'
+  exits:
+    N:
+      level: 8
+      location: '0x1d'
+    E:  # bomb wall
+      level: 8
+      location: '0x2e'
+  enemies: null  # 1 x a rupee stash ($35)
+  treasure: null
+  bomb_walls: [E]
+- level: 8
+  location: '0x2e'
+  exits:
+    N:
+      level: 8
+      location: '0x1e'
+      locked: true
+    S:  # bomb wall
+      level: 8
+      location: '0x3e'
+    W:  # bomb wall
+      level: 8
+      location: '0x2d'
+  enemies:
+    Manhandla: 1
+  treasure: map
+  bomb_walls: [S, W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x3b'
+  exits:
+    E:  # bomb wall
+      level: 8
+      location: '0x3c'
+    S:
+      level: 8
+      location: '0x4b'
+  enemies:  # $50: a person
+    Unknown_80: 1
+  treasure: null
+  bomb_walls: [E]
+- level: 8
+  location: '0x3c'  # the boss room
+  exits:
+    N:  # shutter
+      level: 8
+      location: '0x2c'
+      shutter: true
+    S:  # bomb wall
+      level: 8
+      location: '0x4c'
+    W:  # bomb wall
+      level: 8
+      location: '0x3b'
+  enemies:
+    Gleeok4: 1
+  treasure: heart-container
+  bomb_walls: [S, W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x3d'
+  exits:
+    S:  # open here; a shutter on 0x4d's side
+      level: 8
+      location: '0x4d'
+  enemies:  # $4F: a person
+    Unknown_79: 1
+  treasure: null
+- level: 8
+  location: '0x3e'
+  exits:
+    N:  # bomb wall
+      level: 8
+      location: '0x2e'
+    E:  # shutter
+      level: 8
+      location: '0x3f'
+      shutter: true
+    S:
+      level: 8
+      location: '0x4e'
+      locked: true
+  enemies:
+    BlueDarknut: 6
+  treasure: null
+  bomb_walls: [N]
+  trigger: kill-all  # attr F & 7 = 1
+- level: 8
+  location: '0x3f'
+  exits:
+    W:  # shutter
+      level: 8
+      location: '0x3e'
+      shutter: true
+    cave:  # the stairs (in the layout) down to the tunnel 0x2f
+      level: 8
+      location: '0x2f'
+      in_cave: true
+  enemies:
+    Bubble: 2
+    BlueDarknut: 1
+    RedDarknut: 2
+    Gibdo: 3
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+  stairs: [26, 10]
+- level: 8
+  location: '0x4b'
+  exits:
+    N:
+      level: 8
+      location: '0x3b'
+    E:  # shutter
+      level: 8
+      location: '0x4c'
+      shutter: true
+  enemies:
+    RedDarknut: 6
+  treasure: key
+  trigger: kill-all  # attr F & 7 = 1
+  dark: true
+- level: 8
+  location: '0x4c'
+  exits:
+    N:  # bomb wall
+      level: 8
+      location: '0x3c'
+    W:  # shutter
+      level: 8
+      location: '0x4b'
+      shutter: true
+    cave:  # the stairs (in the layout) down to the tunnel 0x2f
+      level: 8
+      location: '0x2f'
+      in_cave: true
+  enemies:
+    PolsVoice: 8
+  treasure: key
+  bomb_walls: [N]
+  trigger: kill-all  # attr F & 7 = 1
+  stairs: [18, 8]
+- level: 8
+  location: '0x4d'
+  exits:
+    N:  # shutter
+      level: 8
+      location: '0x3d'
+      shutter: true
+    E:
+      level: 8
+      location: '0x4e'
+      locked: true
+    S:
+      level: 8
+      location: '0x5d'
+  enemies:
+    BlueGohma: 1
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 8
+  location: '0x4e'
+  exits:
+    N:
+      level: 8
+      location: '0x3e'
+      locked: true
+    S:  # open here; a shutter on 0x5e's side
+      level: 8
+      location: '0x5e'
+    W:
+      level: 8
+      location: '0x4d'
+      locked: true
+  enemies:
+    Bubble: 2
+    BlueDarknut: 1
+    RedDarknut: 2
+    Gibdo: 3
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x5c'
+  exits:
+    E:
+      level: 8
+      location: '0x5d'
+  enemies:
+    RedDarknut: 3
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x5d'
+  exits:
+    N:
+      level: 8
+      location: '0x4d'
+    E:  # open here; a shutter on 0x5e's side
+      level: 8
+      location: '0x5e'
+    W:
+      level: 8
+      location: '0x5c'
+  enemies:
+    PolsVoice: 2
+    Gibdo: 2
+    BlueKeese: 2
+  treasure: key
+  dark: true
+- level: 8
+  location: '0x5e'
+  exits:
+    N:  # shutter
+      level: 8
+      location: '0x4e'
+      shutter: true
+    E:
+      level: 8
+      location: '0x5f'
+      locked: true
+    S:  # bomb wall
+      level: 8
+      location: '0x6e'
+    W:  # shutter
+      level: 8
+      location: '0x5d'
+      shutter: true
+  enemies:
+    BlueDarknut: 5
+  treasure: key
+  bomb_walls: [S]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x5f'
+  exits:
+    W:
+      level: 8
+      location: '0x5e'
+      locked: true
+  enemies:
+    PolsVoice: 8
+  treasure: compass
+  dark: true
+- level: 8
+  location: '0x6e'
+  exits:
+    N:  # bomb wall
+      level: 8
+      location: '0x5e'
+    S:
+      level: 8
+      location: '0x7e'
+  enemies:
+    Manhandla: 1
+  treasure: 5-rupees
+  bomb_walls: [N]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x7c'
+  exits:
+    E:  # open here; a shutter on 0x7d's side
+      level: 8
+      location: '0x7d'
+    cave:  # the stairs (in the layout) down to the item cellar 0x6f
+      level: 8
+      location: '0x6f'
+      in_cave: true
+  enemies:
+    Bubble: 2
+    BlueDarknut: 1
+    RedDarknut: 2
+    Gibdo: 3
+  treasure: null
+  stairs: [16, 10]
+- level: 8
+  location: '0x7d'
+  exits:
+    E:
+      level: 8
+      location: '0x7e'
+    W:  # shutter
+      level: 8
+      location: '0x7c'
+      shutter: true
+  enemies:
+    Manhandla: 1
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 8
+  location: '0x7e'  # the start room: S leaves to the overworld
+  exits:
+    N:
+      level: 8
+      location: '0x6e'
+    E:
+      level: 8
+      location: '0x7f'
+    W:
+      level: 8
+      location: '0x7d'
+  enemies: null
+  treasure: null
+- level: 8
+  location: '0x7f'
+  exits:
+    W:
+      level: 8
+      location: '0x7e'
+  enemies:
+    Bubble: 3
+    Zol: 2
+    BlueKeese: 3
+  treasure: key
+  dark: true
+- level: 8
+  location: '0x2f'
+  in_cave: true  # the tunnel between 0x4c and 0x3f (side view)
+  exits:
+    E:  # up the right ladder (attr B = $3F)
+      level: 8
+      location: '0x3f'
+    W:  # up the left ladder (attr A = $4C)
+      level: 8
+      location: '0x4c'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 8
+  location: '0x0f'
+  in_cave: true  # the item cellar under 0x1f (side view)
+  exits:
+    N:  # up the ladder (attr A = attr B = $1F)
+      level: 8
+      location: '0x1f'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: magic-key
+- level: 8
+  location: '0x6f'
+  in_cave: true  # the item cellar under 0x7c (side view)
+  exits:
+    N:  # up the ladder (attr A = attr B = $7C)
+      level: 8
+      location: '0x7c'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: book
+# --- Dungeon 9 (level 9) (scripts/level_rooms.py from the ROM; zelda-asm/levels/level-9.md) ---
+- level: 9
+  location: '0x01'
+  exits:
+    E:
+      level: 9
+      location: '0x02'
+      locked: true
+    S:  # shutter
+      level: 9
+      location: '0x11'
+      shutter: true
+  enemies:
+    Bubble: 3
+    Zol: 2
+    BlueKeese: 3
+  treasure: null
+  dark: true
+- level: 9
+  location: '0x02'
+  exits:
+    S:  # open here; a shutter on 0x12's side
+      level: 9
+      location: '0x12'
+    W:
+      level: 9
+      location: '0x01'
+      locked: true
+  enemies:  # $4E: a person
+    Unknown_78: 1
+  treasure: null
+- level: 9
+  location: '0x03'
+  exits:
+    E:  # bomb wall
+      level: 9
+      location: '0x04'
+    cave:  # the stairs (in the layout) down to the tunnel 0x77
+      level: 9
+      location: '0x77'
+      in_cave: true
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: null
+  bomb_walls: [E]
+  stairs: [16, 10]
+- level: 9
+  location: '0x04'
+  exits:
+    W:  # bomb wall
+      level: 9
+      location: '0x03'
+    cave:  # the stairs (in the layout) down to the tunnel 0x67
+      level: 9
+      location: '0x67'
+      in_cave: true
+  enemies:  # 1 x blade traps ($4A)
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [W]
+  stairs: [16, 10]
+- level: 9
+  location: '0x05'
+  exits:
+    E:  # bomb wall
+      level: 9
+      location: '0x06'
+    cave:  # the stairs (they appear when the block is pushed) down to the tunnel 0x70
+      level: 9
+      location: '0x70'
+      in_cave: true
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [E]
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 9
+  location: '0x06'
+  exits:
+    S:
+      level: 9
+      location: '0x16'
+      locked: true
+    W:  # bomb wall
+      level: 9
+      location: '0x05'
+  enemies:  # $4D: a person
+    Unknown_77: 1
+  treasure: null
+  bomb_walls: [W]
+- level: 9
+  location: '0x07'
+  exits:
+    S:  # bomb wall
+      level: 9
+      location: '0x17'
+    cave:  # the stairs (in the layout) down to the item cellar 0x00
+      level: 9
+      location: '0x00'
+      in_cave: true
+  enemies:
+    Bubble: 3
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [S]
+  stairs: [16, 10]
+- level: 9
+  location: '0x10'
+  exits:
+    S:  # bomb wall
+      level: 9
+      location: '0x20'
+    cave:  # the stairs (they appear when the block is pushed) down to the item cellar 0x4f
+      level: 9
+      location: '0x4f'
+      in_cave: true
+  enemies:
+    Bubble: 3
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [S]
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 9
+  location: '0x11'
+  exits:
+    N:  # open here; a shutter on 0x01's side
+      level: 9
+      location: '0x01'
+    S:  # shutter
+      level: 9
+      location: '0x21'
+      shutter: true
+  enemies:
+    BlueLamnola: 1
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x12'
+  exits:
+    N:  # shutter
+      level: 9
+      location: '0x02'
+      shutter: true
+    E:
+      level: 9
+      location: '0x13'
+      locked: true
+    S:
+      level: 9
+      location: '0x22'
+      locked: true
+  enemies:
+    RedLamnola: 1
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x13'
+  exits:
+    S:
+      level: 9
+      location: '0x23'
+      locked: true
+    W:
+      level: 9
+      location: '0x12'
+      locked: true
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: null
+  dark: true
+- level: 9
+  location: '0x14'
+  exits:
+    E:
+      level: 9
+      location: '0x15'
+      locked: true
+    S:
+      level: 9
+      location: '0x24'
+    cave:  # the stairs (in the layout) down to the tunnel 0x60
+      level: 9
+      location: '0x60'
+      in_cave: true
+  enemies:
+    LikeLike: 5
+  treasure: null
+  stairs: [18, 8]
+- level: 9
+  location: '0x15'
+  exits:
+    E:
+      level: 9
+      location: '0x16'
+    S:  # bomb wall
+      level: 9
+      location: '0x25'
+    W:
+      level: 9
+      location: '0x14'
+      locked: true
+  enemies:
+    BlueWizzrobe: 3
+  treasure: 5-rupees
+  bomb_walls: [S]
+  trigger: kill-all-item  # attr F & 7 = 7
+  dark: true
+- level: 9
+  location: '0x16'
+  exits:
+    N:
+      level: 9
+      location: '0x06'
+      locked: true
+    S:
+      level: 9
+      location: '0x26'
+    W:
+      level: 9
+      location: '0x15'
+  enemies:
+    Patra2: 1
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x17'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x07'
+    S:  # bomb wall
+      level: 9
+      location: '0x27'
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [N, S]
+- level: 9
+  location: '0x20'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x10'
+    cave:  # the stairs (in the layout) down to the tunnel 0x75
+      level: 9
+      location: '0x75'
+      in_cave: true
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [N]
+  stairs: [16, 10]
+- level: 9
+  location: '0x21'
+  exits:
+    N:  # open here; a shutter on 0x11's side
+      level: 9
+      location: '0x11'
+    E:  # bomb wall
+      level: 9
+      location: '0x22'
+    S:  # shutter
+      level: 9
+      location: '0x31'
+      shutter: true
+  enemies:
+    Patra: 1
+  treasure: null
+  bomb_walls: [E]
+- level: 9
+  location: '0x22'
+  exits:
+    N:
+      level: 9
+      location: '0x12'
+      locked: true
+    E:
+      level: 9
+      location: '0x23'
+      locked: true
+    W:  # bomb wall
+      level: 9
+      location: '0x21'
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: null
+  bomb_walls: [W]
+- level: 9
+  location: '0x23'
+  exits:
+    N:
+      level: 9
+      location: '0x13'
+      locked: true
+    E:  # bomb wall
+      level: 9
+      location: '0x24'
+    S:
+      level: 9
+      location: '0x33'
+      locked: true
+    W:
+      level: 9
+      location: '0x22'
+      locked: true
+  enemies:
+    BlueGel: 8
+  treasure: bombs
+  bomb_walls: [E]
+- level: 9
+  location: '0x24'
+  exits:
+    N:
+      level: 9
+      location: '0x14'
+    S:
+      level: 9
+      location: '0x34'
+    W:  # bomb wall
+      level: 9
+      location: '0x23'
+  enemies:
+    Vire: 5
+  treasure: null
+  bomb_walls: [W]
+  dark: true
+- level: 9
+  location: '0x25'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x15'
+    E:
+      level: 9
+      location: '0x26'
+      locked: true
+    S:  # bomb wall
+      level: 9
+      location: '0x35'
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: bombs
+  bomb_walls: [N, S]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x26'
+  exits:
+    N:
+      level: 9
+      location: '0x16'
+    E:  # bomb wall
+      level: 9
+      location: '0x27'
+    S:
+      level: 9
+      location: '0x36'
+      locked: true
+    W:
+      level: 9
+      location: '0x25'
+      locked: true
+  enemies:
+    BlueGel: 8
+  treasure: 5-rupees
+  bomb_walls: [E]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x27'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x17'
+    S:  # bomb wall
+      level: 9
+      location: '0x37'
+    W:  # bomb wall
+      level: 9
+      location: '0x26'
+  enemies:
+    Patra2: 1
+  treasure: map
+  bomb_walls: [N, S, W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x30'
+  exits:
+    E:  # bomb wall
+      level: 9
+      location: '0x31'
+    S:
+      level: 9
+      location: '0x40'
+      locked: true
+    cave:  # the stairs (they appear when the block is pushed) down to the tunnel 0x67
+      level: 9
+      location: '0x67'
+      in_cave: true
+  enemies:  # 1 x blade traps ($4A)
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [E]
+  trigger: push-block-stairs  # attr F & 7 = 5
+  push_block: [N, S, E, W]  # any push reveals the stairs (trigger 5); it needs the room clear
+  stairs: [26, 4]
+- level: 9
+  location: '0x31'
+  exits:
+    N:  # open here; a shutter on 0x21's side
+      level: 9
+      location: '0x21'
+    S:  # shutter
+      level: 9
+      location: '0x41'
+      shutter: true
+    W:  # bomb wall
+      level: 9
+      location: '0x30'
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [W]
+- level: 9
+  location: '0x32'
+  exits:
+    S:  # shutter
+      level: 9
+      location: '0x42'
+      shutter: true
+  enemies:  # $37: a person
+    Unknown_55: 1
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 9
+  location: '0x33'
+  exits:
+    N:
+      level: 9
+      location: '0x23'
+      locked: true
+    E:  # bomb wall
+      level: 9
+      location: '0x34'
+  enemies:
+    BlueGel: 8
+  treasure: null
+  bomb_walls: [E]
+  dark: true
+- level: 9
+  location: '0x34'
+  exits:
+    N:
+      level: 9
+      location: '0x24'
+    W:  # bomb wall
+      level: 9
+      location: '0x33'
+  enemies:
+    BlueKeese: 8
+  treasure: 5-rupees
+  bomb_walls: [W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x35'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x25'
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: compass
+  bomb_walls: [N]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x36'
+  exits:
+    N:
+      level: 9
+      location: '0x26'
+      locked: true
+    E:  # bomb wall
+      level: 9
+      location: '0x37'
+  enemies:
+    Bubble: 3
+    Zol: 2
+    BlueKeese: 3
+  treasure: null
+  bomb_walls: [E]
+- level: 9
+  location: '0x37'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x27'
+    S:
+      level: 9
+      location: '0x47'
+    W:  # bomb wall
+      level: 9
+      location: '0x36'
+  enemies:
+    Vire: 6
+  treasure: bombs
+  bomb_walls: [N, W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x40'
+  exits:
+    N:
+      level: 9
+      location: '0x30'
+      locked: true
+    S:
+      level: 9
+      location: '0x50'
+      locked: true
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x41'
+  exits:
+    N:  # open here; a shutter on 0x31's side
+      level: 9
+      location: '0x31'
+    S:  # shutter
+      level: 9
+      location: '0x51'
+      shutter: true
+  enemies:  # 1 x blade traps ($4A)
+    LikeLike: 4
+  treasure: null
+  dark: true
+- level: 9
+  location: '0x42'  # the boss room
+  exits:
+    N:  # shutter
+      level: 9
+      location: '0x32'
+      shutter: true
+    S:  # shutter
+      level: 9
+      location: '0x52'
+      shutter: true
+  enemies:
+    Ganon: 1
+  treasure: triforce-of-power
+  trigger: boss-dead  # attr F & 7 = 3
+  dark: true
+- level: 9
+  location: '0x43'
+  exits:
+    S:  # bomb wall
+      level: 9
+      location: '0x53'
+  enemies:  # $4C: a person
+    Unknown_76: 1
+  treasure: null
+  bomb_walls: [S]
+- level: 9
+  location: '0x44'
+  exits:
+    E:
+      level: 9
+      location: '0x45'
+    S:
+      level: 9
+      location: '0x54'
+  enemies:
+    RedWizzrobe: 6
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x45'
+  exits:
+    E:
+      level: 9
+      location: '0x46'
+    S:  # bomb wall
+      level: 9
+      location: '0x55'
+    W:
+      level: 9
+      location: '0x44'
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [S]
+- level: 9
+  location: '0x46'
+  exits:
+    S:
+      level: 9
+      location: '0x56'
+    W:
+      level: 9
+      location: '0x45'
+  enemies:
+    BlueWizzrobe: 6
+  treasure: null
+- level: 9
+  location: '0x47'
+  exits:
+    N:
+      level: 9
+      location: '0x37'
+    S:
+      level: 9
+      location: '0x57'
+  enemies:
+    Bubble: 3
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: key
+- level: 9
+  location: '0x50'
+  exits:
+    N:
+      level: 9
+      location: '0x40'
+      locked: true
+    E:  # shutter
+      level: 9
+      location: '0x51'
+      shutter: true
+  enemies:
+    Zol: 5
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+  dark: true
+- level: 9
+  location: '0x51'
+  exits:
+    N:  # open here; a shutter on 0x41's side
+      level: 9
+      location: '0x41'
+    S:
+      level: 9
+      location: '0x61'
+    W:  # shutter
+      level: 9
+      location: '0x50'
+      shutter: true
+  enemies:
+    LikeLike: 6
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 9
+  location: '0x52'
+  exits:
+    N:  # shutter
+      level: 9
+      location: '0x42'
+      shutter: true
+    cave:  # the stairs (in the layout) down to the tunnel 0x77
+      level: 9
+      location: '0x77'
+      in_cave: true
+  enemies:
+    Patra: 1
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+  stairs: [26, 10]
+- level: 9
+  location: '0x53'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x43'
+    S:
+      level: 9
+      location: '0x63'
+      locked: true
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [N]
+- level: 9
+  location: '0x54'
+  exits:
+    N:
+      level: 9
+      location: '0x44'
+    E:  # bomb wall
+      level: 9
+      location: '0x55'
+    S:
+      level: 9
+      location: '0x64'
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [E]
+- level: 9
+  location: '0x55'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x45'
+    E:  # bomb wall
+      level: 9
+      location: '0x56'
+    S:  # bomb wall
+      level: 9
+      location: '0x65'
+    W:  # bomb wall
+      level: 9
+      location: '0x54'
+    cave:  # the stairs (in the layout) down to the tunnel 0x60
+      level: 9
+      location: '0x60'
+      in_cave: true
+  enemies:
+    RedLamnola: 1
+  treasure: null
+  bomb_walls: [N, E, S, W]
+  stairs: [16, 10]
+- level: 9
+  location: '0x56'
+  exits:
+    N:
+      level: 9
+      location: '0x46'
+    S:  # open here; a shutter on 0x66's side
+      level: 9
+      location: '0x66'
+    W:  # bomb wall
+      level: 9
+      location: '0x55'
+  enemies:
+    Bubble: 2
+    Zol: 2
+    LikeLike: 2
+  treasure: key
+  bomb_walls: [W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x57'
+  exits:
+    N:
+      level: 9
+      location: '0x47'
+  enemies:
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+  dark: true
+- level: 9
+  location: '0x61'
+  exits:
+    N:
+      level: 9
+      location: '0x51'
+    E:
+      level: 9
+      location: '0x62'
+    S:
+      level: 9
+      location: '0x71'
+    cave:  # the stairs (in the layout) down to the tunnel 0x75
+      level: 9
+      location: '0x75'
+      in_cave: true
+  enemies:
+    Patra: 1
+  treasure: key
+  stairs: [16, 10]
+- level: 9
+  location: '0x62'
+  exits:
+    E:
+      level: 9
+      location: '0x63'
+      locked: true
+    W:
+      level: 9
+      location: '0x61'
+  enemies:
+    BlueKeese: 8
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 9
+  location: '0x63'
+  exits:
+    N:
+      level: 9
+      location: '0x53'
+      locked: true
+    S:
+      level: 9
+      location: '0x73'
+      locked: true
+    W:
+      level: 9
+      location: '0x62'
+      locked: true
+    cave:  # the stairs (in the layout) down to the tunnel 0x70
+      level: 9
+      location: '0x70'
+      in_cave: true
+  enemies:
+    Zol: 5
+  treasure: null
+  stairs: [26, 10]
+- level: 9
+  location: '0x64'
+  exits:
+    N:
+      level: 9
+      location: '0x54'
+    E:
+      level: 9
+      location: '0x65'
+  enemies:
+    Bubble: 1
+    LikeLike: 3
+    BlueWizzrobe: 2
+    RedWizzrobe: 2
+  treasure: null
+- level: 9
+  location: '0x65'
+  exits:
+    N:  # bomb wall
+      level: 9
+      location: '0x55'
+    E:  # open here; a shutter on 0x66's side
+      level: 9
+      location: '0x66'
+    W:
+      level: 9
+      location: '0x64'
+  enemies:
+    Bubble: 3
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+  bomb_walls: [N]
+  dark: true
+- level: 9
+  location: '0x66'
+  exits:
+    N:  # shutter
+      level: 9
+      location: '0x56'
+      shutter: true
+    S:
+      level: 9
+      location: '0x76'
+    W:  # shutter
+      level: 9
+      location: '0x65'
+      shutter: true
+  enemies:  # $4B: a person
+    Unknown_75: 1
+  treasure: null
+- level: 9
+  location: '0x71'
+  exits:
+    N:
+      level: 9
+      location: '0x61'
+    cave:  # the stairs (in the layout) down to the tunnel 0x72
+      level: 9
+      location: '0x72'
+      in_cave: true
+  enemies: null
+  treasure: null
+  stairs: [26, 10]
+- level: 9
+  location: '0x73'
+  exits:
+    N:
+      level: 9
+      location: '0x63'
+      locked: true
+    E:
+      level: 9
+      location: '0x74'
+      locked: true
+  enemies:
+    Bubble: 3
+    BlueWizzrobe: 3
+    RedWizzrobe: 2
+  treasure: null
+- level: 9
+  location: '0x74'
+  exits:
+    W:
+      level: 9
+      location: '0x73'
+      locked: true
+    cave:  # the stairs (in the layout) down to the tunnel 0x72
+      level: 9
+      location: '0x72'
+      in_cave: true
+  enemies:
+    BlueLamnola: 1
+  treasure: null
+  stairs: [16, 10]
+- level: 9
+  location: '0x76'  # the start room: S leaves to the overworld
+  exits:
+    N:
+      level: 9
+      location: '0x66'
+  enemies: null
+  treasure: null
+- level: 9
+  location: '0x60'
+  in_cave: true  # the tunnel between 0x14 and 0x55 (side view)
+  exits:
+    E:  # up the right ladder (attr B = $55)
+      level: 9
+      location: '0x55'
+    W:  # up the left ladder (attr A = $14)
+      level: 9
+      location: '0x14'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 9
+  location: '0x70'
+  in_cave: true  # the tunnel between 0x63 and 0x05 (side view)
+  exits:
+    E:  # up the right ladder (attr B = $05)
+      level: 9
+      location: '0x05'
+    W:  # up the left ladder (attr A = $63)
+      level: 9
+      location: '0x63'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 9
+  location: '0x72'
+  in_cave: true  # the tunnel between 0x71 and 0x74 (side view)
+  exits:
+    E:  # up the right ladder (attr B = $74)
+      level: 9
+      location: '0x74'
+    W:  # up the left ladder (attr A = $71)
+      level: 9
+      location: '0x71'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 9
+  location: '0x75'
+  in_cave: true  # the tunnel between 0x20 and 0x61 (side view)
+  exits:
+    E:  # up the right ladder (attr B = $61)
+      level: 9
+      location: '0x61'
+    W:  # up the left ladder (attr A = $20)
+      level: 9
+      location: '0x20'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 9
+  location: '0x67'
+  in_cave: true  # the tunnel between 0x30 and 0x04 (side view)
+  exits:
+    E:  # up the right ladder (attr B = $04)
+      level: 9
+      location: '0x04'
+    W:  # up the left ladder (attr A = $30)
+      level: 9
+      location: '0x30'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 9
+  location: '0x77'
+  in_cave: true  # the tunnel between 0x52 and 0x03 (side view)
+  exits:
+    E:  # up the right ladder (attr B = $03)
+      level: 9
+      location: '0x03'
+    W:  # up the left ladder (attr A = $52)
+      level: 9
+      location: '0x52'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: null
+- level: 9
+  location: '0x00'
+  in_cave: true  # the item cellar under 0x07 (side view)
+  exits:
+    N:  # up the ladder (attr A = attr B = $07)
+      level: 9
+      location: '0x07'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: red-ring
+- level: 9
+  location: '0x4f'
+  in_cave: true  # the item cellar under 0x10 (side view)
+  exits:
+    N:  # up the ladder (attr A = attr B = $10)
+      level: 9
+      location: '0x10'
+  enemies:  # the cellar's keese (asm: not the attr C/D list)
+    BlueKeese: 4
+  treasure: silver-arrow

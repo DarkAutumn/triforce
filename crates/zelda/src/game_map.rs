@@ -129,6 +129,9 @@ pub struct RoomExit {
     /// edge, Left there changes the room), and only on the `span` rows, the ones whose arrival in the room to the W
     /// lets Link walk on (round 22: 0x75 into 0x74). The room-to-room search never takes it; a route step may.
     pub wrap: bool,
+    /// `shutter: true` (a dungeon door): this side of the doorway is a shutter (door type 7), shut on entry and
+    /// opened by the room's `trigger`.  For display (`zelda-map.py`); nothing plays by it.
+    pub shutter: bool,
 }
 
 /// A game.yaml room.
@@ -164,6 +167,11 @@ pub struct GameRoom {
     pub push_block_opens: Option<Direction>,
     /// The room's maze ([`MAZES`]; game.yaml `maze:` must describe it).
     pub maze: Option<&'static Maze>,
+    /// `trigger:` the room's secret trigger (attr F & 7: `kill-all`, `kill-all-item`, `push-block`, ...).  For
+    /// display; the game's own state decides what opens.
+    pub trigger: Option<String>,
+    /// `dark: true` (attr E bit 7): black without a candle; the tiles are the same.  For display.
+    pub dark: bool,
 }
 
 /// A `[col, row]` game.yaml tile (absent: None; anything but two integers: an error naming `what`).
@@ -241,7 +249,7 @@ const ROOM_KEYS: [&str; 22] = [
     "stairs",
     "dark",
 ];
-const EXIT_KEYS: [&str; 6] = ["level", "location", "in_cave", "locked", "span", "wrap"];
+const EXIT_KEYS: [&str; 7] = ["level", "location", "in_cave", "locked", "shutter", "span", "wrap"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
 const STEP_KEYS: [&str; 11] = [
@@ -742,6 +750,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         raft: false,
                         dock: None,
                         wrap,
+                        shutter: flag(dest, "shutter", &exit_what)?,
                     },
                 );
             }
@@ -777,6 +786,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         raft: true,
                         dock: tile(get(dest, "dock"), &format!("{exit_what}: dock"))?,
                         wrap: false,
+                        shutter: false,
                     },
                 );
             }
@@ -828,6 +838,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     raft: false,
                     dock: None,
                     wrap: false,
+                    shutter: false,
                 },
             );
         }
@@ -872,6 +883,8 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             },
             push_block_opens,
             maze,
+            trigger: opt_string(entry, "trigger", &what)?,
+            dark: flag(entry, "dark", &what)?,
         };
         // Unknown keys last: a missing required block (`maze:`) gets its own message first.
         check_keys(entry, &ROOM_KEYS, &what)?;
@@ -1633,7 +1646,9 @@ mod tests {
                 .map(|r| r.location)
                 .collect::<Vec<_>>()
         };
-        assert_eq!(set(&locs("triforce")), set(&[D1_TRIFORCE, loc(2, 0x0d), loc(3, 0x3d), loc(4, 0x03)]));
+        // One triforce room per level 1-8 (level 9 holds the Triforce of Power).
+        let pieces = [D1_TRIFORCE, loc(2, 0x0d), loc(3, 0x3d), loc(4, 0x03), loc(5, 0x14), loc(6, 0x0c), loc(7, 0x2b), loc(8, 0x2c)];
+        assert_eq!(set(&locs("triforce")), set(&pieces));
         assert_eq!(locs("ladder"), vec![L::new(4, 0x60, true)]);
         assert_eq!(locs("wood-sword"), vec![L::new(0, 0x77, true)]);
         assert_eq!(locs("white-sword"), vec![L::new(0, 0x0a, true)]);
