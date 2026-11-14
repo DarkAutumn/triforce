@@ -25,18 +25,19 @@ ladder).
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (round 22, `docs/experiments/round22.md` §8),
-with the speedrunners' clips allowed and with them switched off for the whole run:
+Out of 1,000 runs from the start of the game with the current team (round 22's models, round 23's code and act
+mode `temperature:0.5+relax:16`, `docs/experiments/round23.md` §11), with the speedrunners' clips allowed and with
+them switched off for the whole run:
 
 | Link reaches | Clips on | Clips off |
 |---|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 79% | 62% |
-| Dungeon 3 | 60% | 41% |
-| The Dungeon 3 triforce | 20% | 10% |
-| The Dungeon 4 triforce (the end of the route) | 14% | 5% |
+| Dungeon 1 (after Dungeon 2 and the white sword) | 81% | 67% |
+| Dungeon 3 | 64% | 48% |
+| The Dungeon 3 triforce | 34% | 23% |
+| The Dungeon 4 triforce (the end of the route) | 29% | 15% |
 
-The last figure is noisy: fewer than 200 runs reach the last boss, and round 21's team, measured the same way,
-gave 13% (and 15% in a second measurement).
+Round 22's measurement of the same models (each acting by its own sample or argmax mode, before 3:0x5b's route fix)
+gave 14% and 5%.
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.

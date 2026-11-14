@@ -1881,3 +1881,22 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   0.22 hearts lost, Manhandla deaths 157 → 120); 6 bombs 6 hearts 91.2% → 97.4%; 8 bombs 6 hearts 96.8% → 97.0%; 3
   bombs (the rule unchanged) 96.0% / 96.2% and 73.2% / 73.0%. No retraining: darknut's 3_5bw resets now train the
   fight at every bomb count, which a retrain would sharpen.
+
+## 2026-11-14 — One act mode: `temperature:0.5+relax:16` for play, evaluation, chains and training (round 23)
+
+- **What:** every model acts by `temperature:0.5+relax:16` (a temperature-0.5 draw over the joint action at every
+  decision; a plain `sample` from the whole policy once Link has made no progress for 16 decisions, until progress):
+  `registry.ACT_RULE`, which is `PLAY_ACT` (play-zelda and its live cell, zelda-headless, the golden path) and
+  `DEFAULT_ACT` (a run without an `act` file, `train --confirm-act`, `train_round.py --eval-act`); every promoted
+  run's `act` file and canonical `eval.json` (eval-batch `r73-canonical`; the old ones kept as
+  `eval-<old mode>.json`). `ACT=model` (now the default of `r56_chains.sh` and `eval-batch --chains`) resolves to it.
+  Replaces the per-family `sample`/`argmax` choice (rounds 21-22) and the pending 2026-11-13 proposal.
+- **Who:** the play default is the owner's choice among the options of `round23.md` §10; evaluation, chains and
+  training were left to the lead, who chose the same rule (option A).
+- **Why:** on the round 22 team, clips on, 1000 runs per segment (`round23.md` §8): full route 28.7 ± 1.4% against
+  30.2 ± 1.5% for the best evaluation rule `escape:16` (within noise), 19.6% for the per-family act files, 14.1% for
+  `sample`; it draws every action (67.0% distinct action sequences per start state in single rooms against argmax's
+  51.8% and sample's 77.4%), 0.86 moves under 1% per full run (sample 13.6), 3 stuck full runs (plain
+  `temperature:0.5` 11: small but real loops, the failure a watcher sees as broken). One rule: what is measured is
+  what is watched, and per-family tuning lost (the best mode per family, 24.7%).
+- **Version:** 1.4.1.2 (the round's REV): models load unchanged.

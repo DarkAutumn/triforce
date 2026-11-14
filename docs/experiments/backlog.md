@@ -5,12 +5,16 @@ round docs still call it that.)
 
 ## Next projects (Lee, Nov 11-12; ordered Nov 14 by what the r72 chains lose): top of the list
 
-- **Act modes (round 23, pending):** decide the evaluation/chain rule (proposed one global `escape:16`: full route
-  12.8% → 20.5% on the round 21 team) and the play default (proposed `temperature:0.75`; measure
-  `temperature:0.75+escape:16` and `temperature:0.75+relax:16`, the reading that draws every action); rerun the
-  pilot on the round 22 models with clips on and off (`docs/experiments/round23.md` §6, §8). Done at the merge with
-  round 22: the early-stop confirmation follows `train_round.py --eval-act` (`train --confirm-act`); the chain
-  report's "hearts at arrival" reads Link's health entering the triforce room (it read the refilled max hearts).
+- [x] **Act modes (round 23, done Nov 14):** one act mode, `temperature:0.5+relax:16`, for play (the owner's choice),
+  evaluation, chains and training (the lead's); `act` files, `eval.json`, `PLAY_ACT`, `DEFAULT_ACT` and the
+  training/chain defaults applied (round23.md §10-§11; full route clips on | off 28.7 | 15.3%). Open from it:
+  - [ ] **Clips-off act-mode chains not run** (cut for time): only the chosen rule was measured with clips off.
+  - [ ] **The stall threshold N** of `relax:N`: 8 and 16 measured on `temperature:0.75` only (20.2% / 21.5%).
+  - [ ] **Training with the play rule**: rollouts still sample the unmodified policy; a policy trained to be good
+    at temperature 0.5 (or distilled toward its sharpened self) is untested.
+  - [ ] **Lower temperatures**: `temperature:0.35+relax:16` 29.9% with 0 stuck but less variety (62.5% against
+    67.0%); revisit if variety matters less than arrivals.
+  - [ ] **darknut retrain for 3:0x5b's fight at every bomb count** (its resets now train the fight; no retrain yet).
 
 Each is a project of its own. Round 23 (act modes: how an action is picked; branch `r23`) is being landed first.
 The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-1k` | off `r72-1k-noclips`): D2

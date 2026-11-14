@@ -689,17 +689,20 @@ every step, so following an enemy that moves away pays again, and knockback rese
   iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id> [--act MODE]`
   sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`), one line `<mode> <ckpt.pt sha1>`:
-  an act mode (`docs/rust-actor.md` "Act modes"; `sample`, keyed sampling, is the default without the file), chosen
-  by evaluating (better-play §6b, round 23) and set with `promote --act` (`registry.set_act_mode`, atomic;
-  `registry.parse_act` gives the canonical spelling). The mode is bound to the checkpoint: an `act`
-  file of other weights, or one without the hash (old format), means `sample` with a warning until the run is
-  re-measured and set again. `set_act_mode` renames an `eval.json` measured in the other mode to
+  an act mode (`docs/rust-actor.md` "Act modes"; without the file `registry.DEFAULT_ACT`, the project's rule
+  `temperature:0.5+relax:16` since round 23), set with `promote --act` (`registry.set_act_mode`, atomic;
+  `registry.parse_act` gives the canonical spelling). Since round 23 every promoted run carries the rule
+  (`docs/decisions.md` 2026-11-14 "One act mode"; before it a per-family `sample` or `argmax`). The mode is bound to
+  the checkpoint: an `act` file of other weights, or one without the hash (old format), means `DEFAULT_ACT` with a
+  warning until the run is set again. `set_act_mode` renames an `eval.json` measured in another mode to
   `eval-<that mode>.json`, so `eval.json` stays the evaluation in the model's act mode.
   Evaluation, chains and `run` follow it per model; their `--act MODE` forces one mode for every model (`--act
-  model`, their default, follows the registry). The play tools (`play-zelda.py` with its live cell,
-  `zelda-headless.py`, the golden path) default to the one constant `registry.PLAY_ACT` instead (now `sample`),
-  never argmax. The act modes and the run-time clips switch (round 22) are independent: every tool that takes
-  `--act` takes `--clips` beside it, and a record carries both its switch fields and its decision statistics.
+  model`, their default, follows the registry; `eval-batch --chains` and `r56_chains.sh` too). The play tools
+  (`play-zelda.py` with its live cell, `zelda-headless.py`, the golden path) default to the one constant
+  `registry.PLAY_ACT` (the same rule), never argmax. `train --confirm-act` and `train_round.py --eval-act`
+  default to `DEFAULT_ACT`. The act modes and the run-time clips switch (round 22) are independent: every tool
+  that takes `--act` takes `--clips` beside it, and a record carries both its switch fields and its decision
+  statistics.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
   arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
   with its trajectory.json time); `train_summary.json`
@@ -1194,8 +1197,9 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   `--replays DIR` saves every simulated run. `--from`, `--power-on`, `--stop-at`, `--stall-steps` and `--act`
   shape the runs as in `zelda-headless.py`.
 - **Acting** (`--act`, chosen at startup, for the simulations and the live cell alike): `registry.PLAY_ACT`
-  (default) draws every action at random, an act mode applies to every model (`argmax` takes the most likely one;
-  `temperature:T+relax:N` draws every action and breaks loops), `model` follows each model's registered mode. Runs
+  (default, `temperature:0.5+relax:16` since round 23: a sharpened draw at every decision, a plain one while Link
+  is stalled) draws every action, an act mode applies to every model (`argmax` takes the most likely one; `sample`
+  draws from the whole policy), `model` follows each model's registered mode. Runs
   that don't draw every action differ by the game's random numbers alone: those are redrawn from the run
   seed when a start state is loaded (the game start, `--from`) and at a golden path's checkpoints; from power on
   they come from the idle delay, so a mode that doesn't draw (`argmax`, `escape`) with a fixed `--delay` is
