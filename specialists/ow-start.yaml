@@ -15,3 +15,6 @@ notes: >-
   progress (no sword -> cave; in the cave -> S once the sword is taken; with sword -> N, 0x78 E is the tagged
   alternate). 0x1c (from S, leave W) and the mountain maze 0x1b (from E, leave W) after the 0x2c heart cave. Round
   22: 0x77 again on the wrap way to Dungeon 3, from N (out of 0x67) leave W along its open rows (Y $85/$8D).
+  Round 24 (route d5maze): 0x1b from E after the D4 triforce leaves by the Lost Hills' sequence (`exit: maze`, N
+  four times at X $70); each of the first three Ns loops back into 0x1b and is a correct loop (progress, paid as a
+  new room), a wrong edge is exit-wrong. On d2first's 0x1b (leave W) an N loop is exit-wrong too.

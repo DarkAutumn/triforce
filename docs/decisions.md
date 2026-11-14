@@ -1941,3 +1941,30 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   sequence); `zelda-map.py`'s Clips selector shows either way whenever the route has a stretch.
 - **The overworld ladder clip and the rest of the movement** are the next phase; this one ends with the draft.
 - **No blue ring:** a different route. No wand, no book.
+
+## 2026-11-14 — A maze loop is a room transition; routes leave a maze by `exit: maze` (round 24, slice r24-maze)
+
+- **Decision:** a routes.yaml step leaves the Lost Hills (0x1b) or the Lost Woods (0x61) by `exit: maze`, its
+  sequence into the maze's destination; leaving by an edge that loops back is a load error. A loop back into the
+  maze room (`zelda::MazeLoop`, `Change::maze_loop`) is a room transition everywhere a run is followed (endings,
+  rewards, linger, the observation's history, visits, chain records, the heart tracker), though the room id doesn't
+  change. A loop is **correct** when it advanced `MazeStep` ($52F) and the objective leads toward the maze's
+  destination; every other loop is a wrong exit of the room (a training episode ends `exit-wrong`, a chain counts
+  it among the run's wrong exits). Correct loops pay `reward-new-location` once per maze step and count as
+  progress. `RoomRecord.maze_loops` / `maze_wrong_loops` count them; a chain visit goes on through loops (one
+  record per visit, no bounce).
+- **Detection:** same maze room before and after the step, and either `MazeStep` rose (only a matching loop raises
+  it) or the step ended on a room transition (the scroll); the loop's edge is Link's facing, the direction
+  asm:Maze_CheckStep tests. Random play in 0x1b found no other step that matches (`crates/env/tests/maze.rs`).
+- **What a model sees of the maze:** `room_changed` and `entered_from` on each loop now; the sequence's progress
+  itself is to be the room_state feature `maze_step` (MazeStep / 4 in a maze room, 0 elsewhere), added on top of the
+  action-kinds branch whose checkpoint conversion (OBS_SCHEMA 5, `convert.ADDED`) already reserves it.
+- **Changed for `d2first`:** its 0x1b step leaves W, so an N loop there is now a wrong exit (it was invisible
+  before: the episode went on). Nothing changes outside maze rooms: 20 runs `eval-chain --from 0_3cc_0` with the
+  promoted models give the same jsonl as `main` (the two new record keys dropped), and that segment crosses 0x1b.
+- **Scouting route `d5maze`** (`{extends: d2first}`): 0x2d N→W, 0x2c E→N, 0x1c S→W, 0x1b E→maze, 0x0b S→cave,
+  ending on entering 5:0x76 (`exit: terminal`, which needs no family). 0x0b is tagged `ow-leever` (success
+  `enter-room:5:0x76`, the same line as the leg slice). Its tests start from `0_1be_0` with the D4-end progress
+  written in: no played state of the leg exists yet, and `d2first`'s own 0x1b step is picked for the state as it is.
+- **Tooling:** Go-Explore's cell key holds the maze step and a loop that advances it is progress; `entry_states path
+  --route R` now explores under R's objective (so a maze step on R is followed).

@@ -159,8 +159,11 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   Dodongos (+4).
 - [ ] **The overworld ladder clip** (next phase, Lee, Nov 14): the clip way's 0x60 into 0x5f arrives on water and
   needs it; by buttons it is 38 frames from the arrival to the heart container.
-- [ ] **Leaving a maze by its sequence** in a route (the plain ways through the Lost Woods and the Lost Hills):
-  `routes.yaml` refuses it and the envs don't handle a visit that loops back into its own room.
+- [x] **Leaving a maze by its sequence** in a route (round 24, slice r24-maze; decisions 2026-11-14 "A maze loop is a
+  room transition"): `exit: maze`, `zelda::MazeLoop` everywhere a run is followed, the scouting route `d5maze`.
+- [ ] **The maze in training:** 0x1b from E needs played states of the leg (the plain mountain way), a curriculum
+  (`python -m triforce.explore` finds the four Ns unaided) and ow-start trained on it with the `maze_step`
+  observation; the Lost Woods (0x61: N, W, S, W) has monsters and no route step yet.
 - [ ] **New action kinds** for the route: the recorder, food, the candle (and arrows need a state that holds
   them). One model-incompatible bump for all of them.
 - [ ] **What the objective does not know yet:** buying in a shop, a take-any cave's right ware, the armos and the

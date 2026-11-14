@@ -15,7 +15,7 @@ def test_the_route_and_families():
     # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12); clips-gauntlet is round 21's
     # experiment route (two targets per room and entry, drawn by a specialist naming it); d5maze (round 24) scouts the
     # plain way up the mountain through the Lost Hills.
-    assert native.routes() == [native.DEFAULT_ROUTE, 'clips-gauntlet', 'd5maze'] and native.DEFAULT_ROUTE == 'd2first'
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd5maze', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 

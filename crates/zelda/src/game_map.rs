@@ -1733,7 +1733,7 @@ mod tests {
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "clips-gauntlet", "d5maze"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d5maze", "clips-gauntlet"]);
         let played = map.routes.values().flatten().filter(|s| s.exit != "terminal");
         let mut route: BTreeSet<L> = played.map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));

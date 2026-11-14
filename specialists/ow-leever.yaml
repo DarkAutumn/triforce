@@ -19,3 +19,5 @@ notes: >-
   Zora) from E into its E part, cut off by the river: leave W by CLIP E on a row Y $65-$AD (the wrap exit through its
   solid W edge into 0x74; never offered on the softlock rows). Copied from ow-moblin (one-room, 600 steps,
   curriculum).
+  Round 24: 0x0b (one Red Leever, Dungeon 5's entrance at tile (14, 8)) from S out of the Lost Hills (d5maze) or
+  from E by 0x0c's wrap exit (the leg's clip way): down the stairs into 5:0x76 (`enter-room:5:0x76`).

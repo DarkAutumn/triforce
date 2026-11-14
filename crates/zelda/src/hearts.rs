@@ -77,16 +77,38 @@ impl HeartTracker {
         self.open = true;
     }
 
+    /// A maze loop (`Change::maze_loop`) brought Link back into the same room: the game scrolled in a fresh copy of it,
+    /// so the hearts on the floor are gone, counted as left as on leaving any room (the Lost Woods have monsters that
+    /// drop them).
+    pub fn maze_loop(&mut self, state: &HeartView) {
+        if self.open {
+            self.left_room(state);
+        }
+    }
+
+    fn left_room(&mut self, state: &HeartView) {
+        self.left += self.floor.len() as u32;
+        self.floor.clear();
+        self.location = Some(state.location);
+        self.health = state.health;
+    }
+
+    /// [`HeartTracker::update`] after one step's `change`, through [`HeartTracker::maze_loop`] for a maze loop.
+    pub fn follow(&mut self, state: &HeartView, change: &crate::change::Change) {
+        if change.maze_loop().is_some() {
+            self.maze_loop(state);
+        } else {
+            self.update(state, change.frames);
+        }
+    }
+
     /// Follows one step to `state` that took `frames`.
     pub fn update(&mut self, state: &HeartView, frames: u32) {
         if !self.open {
             return;
         }
         if state.game_over || Some(state.location) != self.location {
-            self.left += self.floor.len() as u32;
-            self.floor.clear();
-            self.location = Some(state.location);
-            self.health = state.health;
+            self.left_room(state);
             return;
         }
         let reach = frames / 2 + TIMER_MARGIN;
@@ -342,6 +364,15 @@ mod tests {
         t.update(&state(2.5, &[(3, 0xC0), (4, 0xC8)]), 8);
         t.update(&state(3.0, &[]), 8);
         assert_eq!(t.summary(), summary(2, 2, 0.5, 1.5, 0, 0));
+    }
+
+    #[test]
+    fn a_maze_loop_leaves_the_floors_hearts() {
+        let mut t = tracker_with_heart(1.0, 3, 0xC0);
+        t.maze_loop(&state(1.0, &[]));
+        assert_eq!(t.summary().left, 1);
+        t.update(&state(1.0, &[]), 8);
+        assert_eq!((t.summary().left, t.summary().taken, t.summary().expired), (1, 0, 0));
     }
 
     #[test]

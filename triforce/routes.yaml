@@ -2,8 +2,9 @@
 # entry = side of the room Link enters from (start = game start, cave = emerging from a cave/dungeon stairs/cellar or
 # the triforce's warp); exit = direction Link leaves (cave = enter the cave, dungeon stairs or cellar stairs in this
 # room; triforce = level ends on pickup, asm:Item_Take -> GameMode $12 -> OW; terminal = the route ends on entering
-# this room; a route without a terminal step ends on its last step's triforce).  An exit through an intact bomb wall
-# (game.yaml `bomb_walls`) sends Link to the spot to bomb it from.
+# this room; a route without a terminal step ends on its last step's triforce; maze = leave a maze room by its
+# sequence into the maze's destination, round 24: each earlier direction of it loops back into the room).  An exit
+# through an intact bomb wall (game.yaml `bomb_walls`) sends Link to the spot to bomb it from.
 # The objective follows the steps: in a room the route enters from the side Link came in, with the triforce pieces,
 # sword, bow, raft and ladder the route has there, the step's exit is the correct one (zelda::objectives).
 # `waypoint: heart` (cave step): take the cave's heart container; leaving its room without it is `missed`.
@@ -218,6 +219,21 @@ d2first:
 - {level: 4, room: '0x12', specialist: vire, entry: N, exit: E}
 - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
 - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
+# d5maze (round 24): a scouting route for the plain way up the mountain to Dungeon 5 (docs/routes/first-quest.md;
+# draft_routes.yaml `first-quest` stretch `mountain`, plain way): after the D4 triforce, 0x2d from N, 0x2c, 0x1c, then
+# the Lost Hills: 0x1b entered from E is left by `exit: maze`, its sequence (asm:Maze_CheckStep: N four times in a row;
+# each of the first three loops back into 0x1b, a wrong edge restarts it, W is the free way out to 0x1a), into 0x0b
+# entered from S, and down its stairs into Dungeon 5 (`terminal`: `eval-chain --route d5maze --stop-at 5:0x76`).  The
+# leg from 0x45 to 0x1d is not in it: its runs start from a checkpoint or state on these steps.
+d5maze:
+  extends: d2first
+  steps:
+  - {level: 0, room: '0x2d', specialist: ow-zora, entry: N, exit: W}
+  - {level: 0, room: '0x2c', specialist: ow-tektite, entry: E, exit: N}
+  - {level: 0, room: '0x1c', specialist: ow-start, entry: S, exit: W}
+  - {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: maze}
+  - {level: 0, room: '0x0b', specialist: ow-leever, entry: S, exit: cave}
+  - {level: 5, room: '0x76', entry: S, exit: terminal}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -234,21 +250,6 @@ clips-gauntlet:
 - {level: 0, room: '0x5b', entry: W, exit: S}
 - {level: 0, room: '0x5b', entry: E, exit: W}
 - {level: 0, room: '0x5b', entry: E, exit: S}
-# d5maze (round 24): a scouting route for the plain way up the mountain to Dungeon 5 (docs/routes/first-quest.md;
-# draft_routes.yaml `first-quest` stretch `mountain`, plain way): after the D4 triforce, 0x2d from N, 0x2c, 0x1c, then
-# the Lost Hills: 0x1b entered from E is left by `exit: maze`, its sequence (asm:Maze_CheckStep: N four times in a row;
-# each of the first three loops back into 0x1b, a wrong edge restarts it, W is the free way out to 0x1a), into 0x0b
-# entered from S, and down its stairs into Dungeon 5 (`terminal`: `eval-chain --route d5maze --stop-at 5:0x76`).  The
-# leg from 0x45 to 0x1d is not in it: its runs start from a checkpoint or state on these steps.
-d5maze:
-  extends: d2first
-  steps:
-  - {level: 0, room: '0x2d', specialist: ow-zora, entry: N, exit: W}
-  - {level: 0, room: '0x2c', specialist: ow-tektite, entry: E, exit: N}
-  - {level: 0, room: '0x1c', specialist: ow-start, entry: S, exit: W}
-  - {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: maze}
-  - {level: 0, room: '0x0b', specialist: ow-leever, entry: S, exit: cave}
-  - {level: 5, room: '0x76', entry: S, exit: terminal}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}

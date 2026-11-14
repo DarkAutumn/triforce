@@ -1000,7 +1000,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         );
         self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
-        self.hearts.update(&HeartView::of(&state), change.frames);
+        self.hearts.follow(&HeartView::of(&state), &change);
         let prev_objective = self.objective.take().expect("run started");
         let entered = state.full_location() != change.previous.full_location();
         // A new room: the path search follows its family's `clips:` switch from the objective on.
