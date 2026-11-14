@@ -38,12 +38,16 @@ pub const MAX_OPEN_FRAMES: u32 = 80;
 pub const MAX_SELECT_FRAMES: u32 = 12;
 pub const MAX_CLOSE_FRAMES: u32 = 80;
 
-/// The B item slot an attack uses (`SelectedItemSlot`: 0 boomerang, 1 bombs, 2 arrow).
+/// The B item slot an action uses (`SelectedItemSlot`: 0 boomerang, 1 bombs, 2 arrow, 4 candle, 5 recorder, 6 food;
+/// asm:Link_WieldItem_JumpTable).
 pub fn slot(kind: ActionKind) -> Option<u8> {
     match kind {
         ActionKind::Boomerang => Some(0),
         ActionKind::Bomb => Some(1),
         ActionKind::Arrow => Some(2),
+        ActionKind::Candle => Some(4),
+        ActionKind::Recorder => Some(5),
+        ActionKind::Food => Some(6),
         _ => None,
     }
 }

@@ -1942,6 +1942,27 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **The overworld ladder clip and the rest of the movement** are the next phase; this one ends with the draft.
 - **No blue ring:** a different route. No wand, no book.
 
+## 2026-11-14 — Three item kinds and the model conversion (round 24, 1.4.2.0)
+
+- **What:** RECORDER (8), FOOD (9), CANDLE (10) after CLIP, every older head index kept. Each a B item chosen on
+  the sub-screen by buttons and used with B, no memory written. RECORDER takes no direction and is offered only
+  where `actions::recorder_wanted` (a dungeon room holding a big Digdogger that hasn't heard it; never on the
+  overworld yet); FOOD and CANDLE are cardinal, placed ahead like BOMB, tested in the game and masked for every
+  family (`items: {recorder|food|candle}` default off). `penalty-attack-miss` charges none of them.
+- **The tune's freeze counts as menu frames:** after the recorder's B, 151 frames have no play update (no input,
+  no movement, no hit; only the NMI's frame timers run); like the sub-screen they are out of discounting and frame
+  penalties, in every total of frames played. The split comes on the first play frame (B+152).
+- **Observation:** `history`'s kind one-hot grows to 11; `link` ends in `recorder_usable`, `food_usable`,
+  `candle_usable` (the mask bit, as `bomb_usable`: whether the room heard the recorder or a blue candle burned is
+  visible nowhere else). Schemas: observation 5, action 3; mask 143, joint 352.
+- **Conversion, not retraining:** `triforce convert-model` widens 1.4.1 checkpoints (zero columns by feature name;
+  new kind rows = WAIT's with bias −5, so never preferred while WAIT is legal and drawn at most e^-5 as often when
+  first unmasked; embeddings from BOMB/WAIT; Adam moments zero-padded). The Rust policy drops all-zero first-layer
+  columns and keeps the plain draw's noise columns fixed when kinds are added, so a converted model is bit-identical.
+- **Proof:** the 24 promoted runs, 20 episodes per state, seed 0, original on 1.4.1.2 vs converted on 1.4.2.0, in
+  argmax and `temperature:0.5+relax:16`: every compared pair per-episode identical (outcome, steps, frames, hearts,
+  whole records); the table is in the branch's final report (`target/proof/`).
+
 ## 2026-11-14 — A maze loop is a room transition; routes leave a maze by `exit: maze` (round 24, slice r24-maze)
 
 - **Decision:** a routes.yaml step leaves the Lost Hills (0x1b) or the Lost Woods (0x61) by `exit: maze`, its

@@ -80,6 +80,9 @@ def _two_action_buffer(network, good: Action, bad: Action, steps=64):
 def _good_logprob_gain(sil_coeff: float) -> tuple[float, dict]:
     torch.manual_seed(0)
     network = ZeldaPolicy(synthetic.observation_space(), SMALL)
+    with torch.no_grad():       # V = 0 at the start: the good rows (R = 1) beat it, the bad ones (R = -1) don't
+        network.value_head.weight.zero_()
+        network.value_head.bias.zero_()
     good, bad = Action.parse('MOVE N 16'), Action.parse('WAIT 32')
     buffer = _two_action_buffer(network, good, bad)
     rows = {k: v[0, :1] for k, v in buffer.observation.items()}

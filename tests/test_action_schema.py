@@ -19,7 +19,7 @@ def test_python_schema_is_the_native_schema():
 
 def test_the_head_sets_today():
     assert TIMED_KINDS == {ActionKind.MOVE, ActionKind.WAIT}
-    assert DIRECTIONAL_KINDS == set(ActionKind) - {ActionKind.WAIT}
+    assert DIRECTIONAL_KINDS == set(ActionKind) - {ActionKind.WAIT, ActionKind.RECORDER}
     assert DIAGONAL_KINDS == {ActionKind.BOOMERANG}
 
 

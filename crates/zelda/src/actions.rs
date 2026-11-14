@@ -4,8 +4,9 @@ use crate::enums::{ActionKind, Direction};
 use crate::game::GameView;
 use std::fmt;
 
-/// 2: the CLIP kind (round 21, the grid-point skip macro).
-pub const ACTION_SCHEMA_VERSION: u32 = 2;
+/// 2: the CLIP kind (round 21, the grid-point skip macro). 3: RECORDER, FOOD and CANDLE (round 24; kinds 8-10, the
+/// existing indices kept, so a schema 2 checkpoint is widened by `triforce convert-model`, not retrained).
+pub const ACTION_SCHEMA_VERSION: u32 = 3;
 
 pub const DIRECTIONS: [Direction; 8] = [
     Direction::N,
@@ -20,7 +21,7 @@ pub const DIRECTIONS: [Direction; 8] = [
 pub const CARDINALS: [Direction; 4] = [Direction::N, Direction::S, Direction::W, Direction::E];
 pub const DURATIONS: [u8; 4] = [4, 8, 16, 32];
 
-pub const NUM_KINDS: usize = 8;
+pub const NUM_KINDS: usize = 11;
 pub const NUM_DIRECTIONS: usize = 8;
 pub const NUM_DURATIONS: usize = 4;
 /// Flat mask layout: `[kind (K) | direction (K x D) | duration (K x U)]`.
@@ -39,9 +40,9 @@ pub const fn is_timed(kind: ActionKind) -> bool {
     matches!(kind, ActionKind::Move | ActionKind::Wait)
 }
 
-/// Every kind except WAIT has a direction.
+/// Every kind except WAIT and RECORDER has a direction.
 pub const fn is_directional(kind: ActionKind) -> bool {
-    !matches!(kind, ActionKind::Wait)
+    !matches!(kind, ActionKind::Wait | ActionKind::Recorder)
 }
 
 /// Only the boomerang flies diagonally.
@@ -306,7 +307,9 @@ impl fmt::Display for ActionMask {
 /// Legal actions of a state (`compute_action_mask`). An attack is legal only where the game would start its weapon
 /// ([`GameView::weapon_ready`]) and the buttons can make that strike from here ([`crate::attack::plan`]: the press
 /// or a turn first, inside asm:Link_FilterInput's border bands, no sideways turn the game refuses); a B item that
-/// is not the selected one also needs the item sub-screen to open ([`crate::submenu::can_open`]).
+/// is not the selected one also needs the item sub-screen to open ([`crate::submenu::can_open`]). RECORDER, FOOD and
+/// CANDLE follow the same rules (the item held, the game would use it, the buttons can); RECORDER only where
+/// [`recorder_wanted`]. A family's `items:` switches mask them further (`env::config::ItemsConfig`).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let mut mask = ActionMask::default();
     let available = state.available_actions();
@@ -322,6 +325,11 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let has_items = !state.items.is_empty();
     let has_bomb_walls = !state.bomb_walls().is_empty() || state.ow_bomb_secret_closed();
     let menu_opens = crate::submenu::can_open(state);
+    let usable = |kind: ActionKind| {
+        available[kind.index()]
+            && state.weapon_ready(kind)
+            && !(crate::submenu::needs_selection(state, kind) && !menu_opens)
+    };
 
     for kind in [
         ActionKind::Sword,
@@ -330,7 +338,7 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
         ActionKind::Arrow,
         ActionKind::Bomb,
     ] {
-        if !available[kind.index()] || !state.weapon_ready(kind) {
+        if !usable(kind) {
             continue;
         }
         let pickup = matches!(
@@ -344,12 +352,22 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
         } else if !has_enemies && !(has_items && pickup) {
             continue;
         }
-        if crate::submenu::needs_selection(state, kind) && !menu_opens {
-            continue;
-        }
         for d in state.attack_directions(kind) {
             mask.allow(kind, Some(d));
         }
+    }
+    for kind in [ActionKind::Food, ActionKind::Candle] {
+        if usable(kind) {
+            for d in state.attack_directions(kind) {
+                mask.allow(kind, Some(d));
+            }
+        }
+    }
+    if usable(ActionKind::Recorder)
+        && recorder_wanted(state)
+        && crate::attack::plan(state, ActionKind::Recorder, Direction::None).is_some()
+    {
+        mask.allow(ActionKind::Recorder, None);
     }
 
     if !mask.direction[ActionKind::Move.index()].iter().any(|&b| b) {
@@ -359,6 +377,25 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
     }
     mask
 }
+
+/// Where playing the recorder does something the route wants (round 24): a dungeon room in play (mode 5) that holds
+/// a big Digdogger ($38, $39) and has not heard the recorder since Link came in (`FluteUsedState` $51B = 0; the
+/// game zeroes it on room entry). There the tune starts the Digdogger's shrink and split (asm:Digdogger_HandleFlute,
+/// zelda-asm/enemies.md "Digdogger"); a second play changes nothing. Not offered on the overworld, where it summons
+/// the whirlwind (asm:Whirlwind_Summon) or drains the pond of Q1 room 0x42 (asm:Flute_SecretRoomIdsOW): no route
+/// step uses those yet, and this is the one function a round that does widens.
+pub fn recorder_wanted(state: &GameView) -> bool {
+    use crate::enums::enemy::{DIGDOGGER2, DIGDOGGER3};
+    state.level() != 0
+        && state.peek(ADDR_MODE) == MODE_PLAY
+        && state.peek(ADDR_FLUTE_USED_STATE) == 0
+        && state.enemies.iter().any(|e| matches!(e.id, DIGDOGGER2 | DIGDOGGER3))
+}
+
+const ADDR_MODE: u16 = 0x12;
+const MODE_PLAY: u8 = 5;
+/// asm:FluteUsedState: 0, 1 once the recorder was played in this room, 2 while a Digdogger shrinks.
+const ADDR_FLUTE_USED_STATE: u16 = 0x51B;
 
 #[cfg(test)]
 mod tests {
@@ -377,6 +414,9 @@ mod tests {
             "CLIP W",
             "CLIP N",
             "BEAMS N",
+            "RECORDER",
+            "FOOD W",
+            "CANDLE N",
         ] {
             let a = Action::parse(text).unwrap();
             let [k, d, u] = a.to_indices();
@@ -395,11 +435,15 @@ mod tests {
             Action::from_indices(2, 3, 3).unwrap(),
             Action::parse("SWORD E").unwrap()
         );
+        assert_eq!(Action::from_indices(8, 3, 2).unwrap(), Action::parse("RECORDER").unwrap());
     }
 
     #[test]
     fn invalid_actions_are_rejected() {
-        for text in ["SWORD NW", "MOVE NE 8", "MOVE N 5", "WAIT 3", "BOMB", "CLIP", "CLIP SE", "CLIP W 8"] {
+        for text in [
+            "SWORD NW", "MOVE NE 8", "MOVE N 5", "WAIT 3", "BOMB", "CLIP", "CLIP SE", "CLIP W 8", "RECORDER N",
+            "FOOD", "FOOD NE", "CANDLE", "CANDLE SW", "CANDLE E 8",
+        ] {
             assert!(Action::parse(text).is_err(), "{text}");
         }
     }
@@ -410,14 +454,17 @@ mod tests {
         mask.allow(ActionKind::Move, Some(Direction::N));
         mask.allow(ActionKind::Wait, None);
         mask.allow(ActionKind::Boomerang, Some(Direction::SE));
+        mask.allow(ActionKind::Recorder, None);
         let flat = mask.to_flat();
-        assert_eq!(flat.len(), 8 + 8 * 8 + 8 * 4);
+        assert_eq!(flat.len(), 11 + 11 * 8 + 11 * 4);
         assert_eq!(ActionMask::from_flat(&flat), mask);
         assert!(mask.is_allowed(&Action::parse("MOVE N 32").unwrap()));
         assert!(!mask.is_allowed(&Action::parse("MOVE S 32").unwrap()));
         assert!(mask.is_allowed(&Action::parse("BOOMERANG SE").unwrap()));
+        assert!(mask.is_allowed(&Action::parse("RECORDER").unwrap()));
+        assert!(!mask.is_allowed(&Action::parse("CANDLE N").unwrap()));
         mask.disallow_kind(ActionKind::Boomerang);
         assert!(!mask.is_allowed(&Action::parse("BOOMERANG SE").unwrap()));
-        assert_eq!(mask.to_string(), "MOVE[N] WAIT");
+        assert_eq!(mask.to_string(), "MOVE[N] WAIT RECORDER");
     }
 }

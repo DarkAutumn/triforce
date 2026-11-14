@@ -33,10 +33,18 @@ The learner recomputes `logp_old` and values with its own torch network over the
      accumulation order (fixed lane count, fixed reduction), each batch row computed independently; no runtime
      CPU-feature dispatch that changes results; Rust never contracts mul+add into FMA on its own.
    - No allocation per call (preallocated scratch per worker).
+   - First-layer input columns that no weight of either tower reads (all zero: the inputs `triforce convert-model`
+     and `model.widen_policy` add) are dropped when the policy is built (`Policy::live`): a zero column changes no
+     output, but it would move the later columns into other lanes of the fixed-order dot product, so a widened model
+     computes bit for bit what its source did (round 24).
    - Heads exactly as `model.py`: masked log-softmax (`MASKED_LOGIT`), the forced-kind rule, heads that don't
      apply contribute 0, Gumbel-argmax sampling with noise keyed by (job, decision step) (`keyed_noise`, ported),
-     argmax for deterministic play. Outputs: action, per-head log-probs and entropies, joint log-prob, value, and
-     the full per-head probabilities (for display).
+     argmax for deterministic play. The plain draw's noise columns are the first eight kinds' (`LEAD_KINDS`), then
+     the direction head's and the duration head's, then any later kind's (round 24: RECORDER, FOOD, CANDLE), so
+     adding kinds moves no column: a widened model with its new kinds masked draws the same actions from the same
+     (job, step) (`added_kinds_draw_as_before_while_masked`; `model.split_noise` is the torch twin). Outputs:
+     action, per-head log-probs and entropies, joint log-prob, value, and the full per-head probabilities (for
+     display).
 2. **Rollouts in the pool.** `Pool::rollout(policy, steps)`: every worker drives its envs itself (observation →
    forward → action → step) and writes the rollout buffers (obs, mask, action, log-prob, value, reward, frames,
    dones, bootstrap observations, episode events); Python gets them in one call with the GIL released. GAE stays
@@ -83,7 +91,8 @@ evaluation, chains, the early-stop confirmation, every promoted run's `act` file
 (`registry.DEFAULT_ACT`) and play (`registry.PLAY_ACT`). Measured against the others in
 `docs/experiments/round23.md` §8.
 
-The network is factored: p(kind) · p(direction | kind) · p(duration | kind), 8 × 8 × 4 = 256 joint actions
+The network is factored: p(kind) · p(direction | kind) · p(duration | kind), 11 × 8 × 4 = 352 joint actions (256
+with the 8 kinds before round 24; a new kind's joint actions follow the old ones, so their indices never moved)
 (`joint_log_probs`). `sample` and `argmax` act per head, kind first, as before round 23 (bit for bit); every other
 rule reshapes the **joint** distribution, because "this action as a whole is unlikely" is a joint statement: a 20%
 kind with a 20% direction is a 4% action that no per-head threshold of 5% would remove, and a 3% direction of a
@@ -113,7 +122,7 @@ plays one way until Link has stalled N decisions and another while he stays stal
 
 So `escape` plays greedily and draws only to get unstuck (about 97% argmax in the round 23 pilot), while `relax`
 draws every action (`registry.draws`): sharpened normally, from the whole policy when stalled. It is the reading
-for play that differs every run yet breaks its loops. A rule's draw is Gumbel-argmax over the 256 joint actions
+for play that differs every run yet breaks its loops. A rule's draw is Gumbel-argmax over the 352 joint actions
 with noise keyed by `act::joint_noise_key(job, step)` (`noise::gumbel`), so the reproducibility contract holds for
 every mode: the same
 seed plays the same actions on any env or thread, and a replay records inputs, so it verifies whatever the mode.
@@ -131,7 +140,7 @@ reset it), it is per room visit, and it needs no state in the actor, which is sh
 **What a decision reports** (`pool::rollout::Decision`): `log_prob`/`entropy` stay the unmodified policy's (the
 chosen action's probability under the policy, whatever the mode); `act_log_prob`/`act_entropy` are the chosen
 action's log-prob under q and q's entropy over the joint actions (0 for argmax; `poll_plays` `act_log_prob`,
-`act_entropy`). Plays compute the joint distribution every decision for these (eight kinds' direction and duration
+`act_entropy`). Plays compute the joint distribution every decision for these (every legal kind's direction and duration
 heads: a few percent of a forward); training rollouts don't. A replay (`play(replay=...)`) scores the recorded
 action under `act` too. Every eval room visit and chain room record counts its decisions (`zelda::decisions`,
 `triforce/variety.py`): moves under 1% and 5% under the policy, those followed by a hit or death within 4
@@ -203,8 +212,8 @@ ratio on those rows). Unsearched decisions are exactly a plain rollout's (`fract
 `search=None`). Optional `out` buffers, written whenever present (unsearched rows: false, 0, NaN, -1, 0):
 
 - `search_mask` `[n, steps]` bool: the row was searched.
-- `search_policy` `[n, steps, 256]` float32: the improved policy π' = softmax(log π + σ(completed Q)) over the
-  joint actions, index `kind * 32 + direction * 4 + duration` (8 kinds × 8 directions × 4 durations,
+- `search_policy` `[n, steps, 352]` float32: the improved policy π' = softmax(log π + σ(completed Q)) over the
+  joint actions, index `kind * 32 + direction * 4 + duration` (11 kinds × 8 directions × 4 durations,
   `zelda::actions`); 0 for illegal ones. A kind-conditioned head whose row is all masked (WAIT's direction, attacks'
   duration) has only index 0, as the policy's factorization scores it.
 - `search_q` `[n, steps, k]` float32: each candidate's mean return; NaN where never evaluated (or fewer legal
@@ -213,7 +222,7 @@ ratio on those rows). Unsearched decisions are exactly a plain rollout's (`fract
 - `search_value` `[n, steps]` float32: the search's root value, `mctx`'s mixed value (V(root) mixed with the
   prior-weighted Q of the evaluated candidates); V(root) alone is `logp_ent_val[..., 2]`.
 
-`Policy.joint_log_probs(obs)` → (`[B, 256]` log-probs, `-inf` illegal; `[B]` values): one trunk pass per row, bit
+`Policy.joint_log_probs(obs)` → (`[B, 352]` log-probs, `-inf` illegal; `[B]` values): one trunk pass per row, bit
 for bit what `evaluate(actions=...)` gives each joint action (log p(kind), 0 with one legal kind, + log p(direction |
 kind) + log p(duration | kind)); the learner's torch side computes the same factorization
 (`ZeldaPolicy.joint_log_probs`). Training uses it through `triforce.train --search JSON` (`PPOConfig.search`;

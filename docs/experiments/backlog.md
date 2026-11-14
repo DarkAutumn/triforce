@@ -164,8 +164,11 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
 - [ ] **The maze in training:** 0x1b from E needs played states of the leg (the plain mountain way), a curriculum
   (`python -m triforce.explore` finds the four Ns unaided) and ow-start trained on it with the `maze_step`
   observation; the Lost Woods (0x61: N, W, S, W) has monsters and no route step yet.
-- [ ] **New action kinds** for the route: the recorder, food, the candle (and arrows need a state that holds
-  them). One model-incompatible bump for all of them.
+- [x] **New action kinds** for the route: the recorder, food, the candle, in one model-incompatible bump (1.4.2.0,
+  branch `r24-kinds`; decisions 2026-11-14 "Three item kinds and the model conversion"); the promoted 1.4.1 runs are
+  widened by `triforce convert-model`, not retrained. Left: the recorder on the overworld (the whirlwind, 0x42's
+  pond: `actions::recorder_wanted` widens), route uses of the food (7:0x28's Grumble Goriya, baiting) and the candle
+  (trees, dark rooms), and arrows need a state that holds them.
 - [ ] **What the objective does not know yet:** buying in a shop, a take-any cave's right ware, the armos and the
   gravestone, burning a tree, the whirlwind, tunnels (a cellar with two exits), level 9's one-way shutters, the
   end of the game.

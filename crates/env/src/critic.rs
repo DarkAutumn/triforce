@@ -472,8 +472,17 @@ impl GameplayCritic {
             } else {
                 rewards.add(Outcome::penalty("penalty-attack-cave", -REWARD_MAXIMUM));
             }
-        } else if !matches!(kind, ActionKind::Move | ActionKind::Wait | ActionKind::Bomb | ActionKind::Clip)
-            && change.enemies_stunned.is_empty()
+        } else if !matches!(
+            kind,
+            // No strike of their own: BOMB and CANDLE hit later (the fire moves for 31 frames), RECORDER and FOOD never.
+            ActionKind::Move
+                | ActionKind::Wait
+                | ActionKind::Bomb
+                | ActionKind::Clip
+                | ActionKind::Recorder
+                | ActionKind::Food
+                | ActionKind::Candle
+        ) && change.enemies_stunned.is_empty()
         {
             rewards.add(Outcome::penalty("penalty-attack-miss", -REWARD_MINIMUM));
         }

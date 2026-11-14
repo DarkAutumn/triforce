@@ -169,7 +169,10 @@
   "clip_usable_N",
   "clip_usable_S",
   "clip_usable_W",
-  "clip_usable_E"
+  "clip_usable_E",
+  "recorder_usable",
+  "food_usable",
+  "candle_usable"
  ],
  "ENTITY_FEATURES": [
   "presence",
@@ -216,6 +219,9 @@
   "kind_BOOMERANG",
   "kind_ARROW",
   "kind_CLIP",
+  "kind_RECORDER",
+  "kind_FOOD",
+  "kind_CANDLE",
   "dir_N",
   "dir_S",
   "dir_W",
@@ -268,7 +274,7 @@
  "spaces": {
   "action_mask": {
    "shape": [
-    104
+    143
    ],
    "dtype": "bool",
    "low": 0.0,
@@ -302,7 +308,7 @@
   },
   "history": {
    "shape": [
-    35
+    38
    ],
    "dtype": "float32",
    "low": 0.0,
@@ -310,7 +316,7 @@
   },
   "link": {
    "shape": [
-    84
+    87
    ],
    "dtype": "float32",
    "low": -1.0,

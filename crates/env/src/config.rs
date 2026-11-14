@@ -350,7 +350,8 @@ impl BombUse {
 }
 
 /// `items:` block: inventory items the specialist may use (false = masked out even when Link has it; bombs:
-/// [`BombUse`]).
+/// [`BombUse`]). `recorder`, `food` and `candle` (round 24) are off unless a family turns them on: no family before
+/// Dungeon 5 uses them, and a model that never had them unmasked never learned what they do.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ItemsConfig {
@@ -360,6 +361,12 @@ pub struct ItemsConfig {
     pub boomerang: bool,
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub arrows: bool,
+    #[serde(default, deserialize_with = "de_bool")]
+    pub recorder: bool,
+    #[serde(default, deserialize_with = "de_bool")]
+    pub food: bool,
+    #[serde(default, deserialize_with = "de_bool")]
+    pub candle: bool,
 }
 
 impl Default for ItemsConfig {
@@ -368,6 +375,9 @@ impl Default for ItemsConfig {
             bombs: BombUse::default(),
             boomerang: true,
             arrows: true,
+            recorder: false,
+            food: false,
+            candle: false,
         }
     }
 }
@@ -396,17 +406,25 @@ impl ItemsConfig {
         limited.then(|| objective.map_or_else(Vec::new, |o| zelda::objectives::route_bomb_targets(map, state, o)))
     }
 
-    /// Action kinds masked out whatever the state (`bombs: never`, `boomerang: false`, `arrows: false`).
+    /// Action kinds masked out whatever the state (`bombs: never`, `boomerang: false`, `arrows: false`, and
+    /// `recorder`, `food`, `candle` unless on).
     pub fn fixed_disabled_kinds(&self) -> Vec<ActionKind> {
         self.kinds_off(self.bombs != BombUse::Never)
     }
 
     fn kinds_off(&self, bombs: bool) -> Vec<ActionKind> {
-        [(bombs, ActionKind::Bomb), (self.boomerang, ActionKind::Boomerang), (self.arrows, ActionKind::Arrow)]
-            .into_iter()
-            .filter(|(enabled, _)| !enabled)
-            .map(|(_, kind)| kind)
-            .collect()
+        [
+            (bombs, ActionKind::Bomb),
+            (self.boomerang, ActionKind::Boomerang),
+            (self.arrows, ActionKind::Arrow),
+            (self.recorder, ActionKind::Recorder),
+            (self.food, ActionKind::Food),
+            (self.candle, ActionKind::Candle),
+        ]
+        .into_iter()
+        .filter(|(enabled, _)| !enabled)
+        .map(|(_, kind)| kind)
+        .collect()
     }
 }
 
@@ -1189,10 +1207,16 @@ mod tests {
             assert!(allows(mode, field, 1, 9, 5), "{mode:?}: the 10th kill's bomb goes below the reserve");
         }
         assert!(!allows(BombUse::Never, wall, 4, 9, 0));
-        let items = ItemsConfig { bombs: BombUse::Tenth, boomerang: true, arrows: false };
-        assert_eq!(items.fixed_disabled_kinds(), vec![ActionKind::Arrow]);
-        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 0), 0), vec![ActionKind::Bomb, ActionKind::Arrow]);
-        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 9), 0), vec![ActionKind::Arrow]);
+        let items = ItemsConfig { bombs: BombUse::Tenth, arrows: false, recorder: true, ..Default::default() };
+        let (food, candle) = (ActionKind::Food, ActionKind::Candle);
+        assert_eq!(items.fixed_disabled_kinds(), vec![ActionKind::Arrow, food, candle]);
+        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 0), 0), vec![ActionKind::Bomb, ActionKind::Arrow, food, candle]);
+        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 9), 0), vec![ActionKind::Arrow, food, candle]);
+        // The round 24 kinds are off by default; a family's yaml turns them on.
+        let default: ItemsConfig = serde_yaml_ng::from_str("{}").unwrap();
+        assert!(!(default.recorder || default.food || default.candle));
+        let on: ItemsConfig = serde_yaml_ng::from_str("{recorder: true, food: true, candle: true}").unwrap();
+        assert_eq!(on.fixed_disabled_kinds(), vec![]);
     }
 
     #[test]

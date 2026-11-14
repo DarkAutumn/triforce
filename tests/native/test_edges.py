@@ -78,8 +78,10 @@ def test_env_rejects_unknown_actions_and_screens_without_rendering(states_dir):
     env.reset(seed=0)
     with pytest.raises(native.InvalidActionError, match='unknown kind FLY'):
         env.step('FLY N')
-    with pytest.raises(native.InvalidActionError, match='no action kind 9'):
-        env.step((9, 0, 0))
+    with pytest.raises(native.InvalidActionError, match='no action kind 11'):
+        env.step((11, 0, 0))
+    with pytest.raises(native.InvalidActionError, match='FOOD N is masked'):
+        env.step('FOOD N')
     with pytest.raises(native.RenderDisabledError):
         env.screen()
     _, _, _, _, info = env.step('WAIT 4')                          # the rejected actions didn't count

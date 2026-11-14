@@ -46,7 +46,8 @@ def test_ram_directions_and_b_item_kinds():
     assert [Direction.from_ram_value(v) for v in (1, 2, 4, 8)] == [Direction.E, Direction.W, Direction.S, Direction.N]
     assert Direction.from_ram_value(0) == Direction.from_ram_value(3) == Direction.NONE
     assert Direction.NE.value == Direction.N.value | Direction.E.value
-    assert {k for k in ActionKind if k.is_b_item} == {ActionKind.BOMB, ActionKind.BOOMERANG, ActionKind.ARROW}
+    assert {k for k in ActionKind if k.is_b_item} == {ActionKind.BOMB, ActionKind.BOOMERANG, ActionKind.ARROW,
+                                                      ActionKind.RECORDER, ActionKind.FOOD, ActionKind.CANDLE}
 
 
 def test_python_action_heads_match_the_native_schema():

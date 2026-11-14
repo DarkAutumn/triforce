@@ -22,8 +22,10 @@ use zelda::room_state::{
 use zelda::tiles::{Grid, NUM_TILE_CLASSES, build_grid};
 use zelda::{Action, Change};
 
-/// 4: the CLIP kind in `history` (8 kinds) and `link` `clip_usable_{N,S,W,E}` (round 21).
-pub const OBS_SCHEMA_VERSION: u32 = 4;
+/// 4: the CLIP kind in `history` (8 kinds) and `link` `clip_usable_{N,S,W,E}` (round 21). 5: RECORDER, FOOD and
+/// CANDLE in `history` (11 kinds, after CLIP) and `link` `recorder_usable`, `food_usable`, `candle_usable` (at its end;
+/// round 24). A schema 4 checkpoint is widened by `triforce convert-model` (zero weights on the new columns).
+pub const OBS_SCHEMA_VERSION: u32 = 5;
 
 /// NES object slots 1-$B, then the room item ("treasure").
 pub const NUM_ENTITY_SLOTS: usize = 12;
@@ -37,9 +39,9 @@ pub const ITEM_TYPE_BASE: i64 = 0x80;
 pub const ENTITY_VOCAB: usize = ITEM_TYPE_BASE as usize + NUM_ITEM_IDS as usize;
 
 pub const ROOM_STATE_SIZE: usize = 84;
-pub const LINK_SIZE: usize = 84;
+pub const LINK_SIZE: usize = 87;
 pub const ENTITY_FEATURE_SIZE: usize = 33;
-pub const HISTORY_SIZE: usize = 35;
+pub const HISTORY_SIZE: usize = 38;
 pub const OBJECTIVE_SIZE: usize = 10;
 pub const TARGET_SIZE: usize = 8;
 pub const GRID_ROWS: usize = 22;
@@ -213,6 +215,11 @@ mod l {
     /// CLIP is offered in this direction: the skip is available, the specialist has `clips: true` and the run-time
     /// switch is on, and it is no vetoed wrap (round 21; round 22: the switch and the veto; N, S, W, E).
     pub const CLIP_USABLE: usize = 80;
+    /// RECORDER, FOOD and CANDLE are offered (round 24): what makes them legal is partly hidden from the rest of the
+    /// observation (the room has heard the recorder, a blue candle's fire was used in this room, the family's switch).
+    pub const RECORDER_USABLE: usize = 84;
+    pub const FOOD_USABLE: usize = 85;
+    pub const CANDLE_USABLE: usize = 86;
 }
 
 // entity offsets
@@ -248,12 +255,12 @@ mod e {
 mod h {
     pub const HAS_LAST_ACTION: usize = 0;
     pub const KIND: usize = 1;
-    pub const DIR: usize = 9;
-    pub const DURATION: usize = 17;
-    pub const FRAMES: usize = 21;
-    pub const INTERRUPT: usize = 22;
-    pub const ROOM_CHANGED: usize = 30;
-    pub const ENTERED_FROM: usize = 31;
+    pub const DIR: usize = 12;
+    pub const DURATION: usize = 20;
+    pub const FRAMES: usize = 24;
+    pub const INTERRUPT: usize = 25;
+    pub const ROOM_CHANGED: usize = 33;
+    pub const ENTERED_FROM: usize = 34;
 }
 
 /// Feature names of every vector key, in order.
@@ -393,6 +400,7 @@ fn build_feature_names() -> FeatureNames {
         "fairy_next",
     ]));
     link.extend(DIR_BITS.iter().map(|(d, _)| format!("clip_usable_{}", d.name())));
+    link.extend(s(&["recorder_usable", "food_usable", "candle_usable"]));
 
     let entity = s(&[
         "presence",
@@ -1203,6 +1211,9 @@ fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8) -> [f32; LINK_SIZ
     for (i, (d, _)) in DIR_BITS.iter().enumerate() {
         v[l::CLIP_USABLE + i] = b(zelda::Action::new(ActionKind::Clip, *d, 0).is_ok_and(|a| mask.is_allowed(&a)));
     }
+    v[l::RECORDER_USABLE] = b(mask.kind[ActionKind::Recorder.index()]);
+    v[l::FOOD_USABLE] = b(mask.kind[ActionKind::Food.index()]);
+    v[l::CANDLE_USABLE] = b(mask.kind[ActionKind::Candle.index()]);
     v
 }
 
@@ -1244,11 +1255,16 @@ mod tests {
             (l::BOMB_USABLE, "bomb_usable"),
             (l::FAIRY_NEXT, "fairy_next"),
             (l::CLIP_USABLE, "clip_usable_N"),
+            (l::RECORDER_USABLE, "recorder_usable"),
+            (l::CANDLE_USABLE, "candle_usable"),
         ] {
             assert_eq!(n.link[offset], name);
         }
         assert_eq!(n.entity[e::IMMUNE], "immune_sword");
         assert_eq!(n.entity[e::IS_TILE_OBJECT], "is_tile_object");
+        assert_eq!(n.history[h::KIND + 7], "kind_CLIP");
+        assert_eq!(n.history[h::KIND + 8], "kind_RECORDER");
+        assert_eq!(n.history[h::DIR - 1], "kind_CANDLE");
         assert_eq!(n.history[h::DIR], "dir_N");
         assert_eq!(n.history[h::INTERRUPT], "interrupt_damage");
         assert_eq!(n.history[h::ENTERED_FROM], "entered_from_N");

@@ -37,8 +37,19 @@ from .actions import MASK_SIZE, NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
 
 MASKED_LOGIT = -1e9
 
-# Gumbel noise columns per sample: kind, direction, duration heads.
+# Gumbel noise columns per sample: the first LEAD_KINDS kinds, the direction head, the duration head, then the later
+# kinds (crates/policy `Pick::Sample`): adding kinds moves no column, so a model widened by ``convert.py`` samples
+# exactly as before while its new kinds are masked.
 NOISE_SIZE = NUM_KINDS + NUM_DIRECTIONS + NUM_DURATIONS
+LEAD_KINDS = 8
+
+
+def split_noise(noise: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """(kind, direction, duration) columns of ``[B, NOISE_SIZE]`` noise (the layout above)."""
+    lead = min(NUM_KINDS, LEAD_KINDS)
+    rest = lead + NUM_DIRECTIONS + NUM_DURATIONS
+    kind = torch.cat([noise[..., :lead], noise[..., rest:]], dim=-1)
+    return kind, noise[..., lead:lead + NUM_DIRECTIONS], noise[..., lead + NUM_DIRECTIONS:rest]
 
 
 # Observation keys with special encoders; every other non-mask key is a float vector concatenated directly.
@@ -335,7 +346,7 @@ class ZeldaPolicy(nn.Module):
         kind_noise = dir_noise = dur_noise = None
         if noise is not None:
             noise = torch.as_tensor(noise, device=mask.device)
-            kind_noise, dir_noise, dur_noise = noise.split([NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS], dim=-1)
+            kind_noise, dir_noise, dur_noise = split_noise(noise)
 
         if actions is not None:
             actions = torch.as_tensor(actions, device=mask.device).long().view(batch, 3)
