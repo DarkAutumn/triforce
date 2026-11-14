@@ -122,7 +122,8 @@ impl PyEnv {
     /// raising.
     #[new]
     #[pyo3(signature = (config, start_state=None, strict_actions=true, curriculum=None,
-                        seed=0, states_dir=None, render=false, explicit_starts=false))]
+                        seed=0, states_dir=None, render=false, explicit_starts=false,
+                        staged_kills=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -134,6 +135,7 @@ impl PyEnv {
         states_dir: Option<PathBuf>,
         render: bool,
         explicit_starts: bool,
+        staged_kills: bool,
     ) -> PyResult<Self> {
         let config = extract_config(py, config)?;
         let rom = context::rom(py)?;
@@ -149,6 +151,7 @@ impl PyEnv {
             skip_look_ahead: false,
             shaping: None,
             start_weights: None,
+            staged_kills,
         };
         let store = TfzStore::new(&data, rom.clone());
         let mut env = SpecialistEnv::new(config.clone(), data, ZCore::power_on(rom), store, opts)
@@ -259,6 +262,13 @@ impl PyEnv {
     #[pyo3(signature = (route, step=None))]
     fn set_route(&self, route: &str, step: Option<usize>) {
         self.inner.lock().env.set_route(route, step);
+    }
+
+    /// The kills the last reset banked in its start room (`ram_randomization.room_kills`; only with
+    /// `staged_kills=True`, a training env's staged starts), 0 if none.
+    #[getter]
+    fn banked_kills(&self) -> u8 {
+        self.inner.lock().env.banked_kills
     }
 
     /// The run-time clips switch (round 22): `True`/`False` fixes it from the next decision on (the observation and

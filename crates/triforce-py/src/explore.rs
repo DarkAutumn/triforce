@@ -172,7 +172,11 @@ impl PyExplorer {
 
     /// Searches for a successful path from `start_state` (GIL released); returns the best one found. Ctrl-C stops
     /// it at its next iteration (KeyboardInterrupt).
-    #[pyo3(signature = (start_state, iterations=3000, explore_steps=25, patience=300, accept=None))]
+    /// `room_kills`: [(level, room, kills)] banked before the entry of a pre-entry start into those dungeon rooms (a
+    /// staged start, round 24); kept for later `replay`/`write` until the next `explore`.
+    #[pyo3(signature = (start_state, iterations=3000, explore_steps=25, patience=300, accept=None, room_kills=None,
+                        clips=None))]
+    #[allow(clippy::too_many_arguments)]
     fn explore(
         &self,
         py: Python<'_>,
@@ -181,8 +185,15 @@ impl PyExplorer {
         explore_steps: u32,
         patience: u32,
         accept: Option<PyAcceptSpec>,
+        room_kills: Option<Vec<(u8, u8, u8)>>,
+        clips: Option<bool>,
     ) -> PyResult<PyExploreResult> {
         let accept = accept.map(|a| a.spec());
+        {
+            let mut explorer = self.inner.lock();
+            explorer.set_banked_kills(room_kills.map(|r| r.into_iter().map(|(l, room, k)| ((l, room), k)).collect()));
+            explorer.set_clips_allowed(clips);
+        }
         let stop = Arc::new(AtomicBool::new(false));
         let result = interruptible(
             py,
@@ -263,13 +274,26 @@ fn explore_one(
     budget: (u32, u32, u32),
     seed: u64,
     stop: &Arc<AtomicBool>,
+    room_kills: Option<&[((u8, u8), u8)]>,
+    clips: Option<bool>,
 ) -> Explored {
     let mut explorer = new_explorer(config, data.clone(), rom.clone(), seed)?;
     explorer.set_stop(Some(stop.clone()));
+    explorer.set_banked_kills(room_kills.map(<[_]>::to_vec));
+    explorer.set_clips_allowed(clips);
     let (iterations, explore_steps, patience) = budget;
     let result = explorer.explore(state, iterations, explore_steps, patience, None)?;
+    // A staged start's track is `<state>~k<kills>`, beside the seed state's own (round 24).
+    // A plain-way track (the clips switch off where the start leaves it free) is `<state>~plain`.
+    let mut track = match room_kills.and_then(|r| r.first()) {
+        Some((_, kills)) => format!("{state}~k{kills}"),
+        None => state.to_owned(),
+    };
+    if clips == Some(false) {
+        track.push_str("~plain");
+    }
     let replayed = if result.success {
-        explorer.write(&result, &out.join(state))?
+        explorer.write(&result, &out.join(track))?
     } else {
         false
     };
@@ -279,10 +303,13 @@ fn explore_one(
 /// Explores every seed start state of `specialist` (or `states`), writing each success to
 /// `<out>/<specialist>/<state>` (`out` is the trajectories root). Each state gets a fresh explorer seeded with
 /// `seed`, so results don't depend on `parallel`. Returns [(ExploreResult, replayed)] in state order. Ctrl-C stops
-/// every worker at its next iteration (KeyboardInterrupt; states already written stay written).
+/// every worker at its next iteration (KeyboardInterrupt; states already written stay written). `room_kills`
+/// [(level, room, kills)] explores staged starts (kills banked before the entry, round 24) into
+/// `<out>/<specialist>/<state>~k<kills>`; `clips=False` explores with the run-time clips switch off (a plain-way
+/// track, `<state>[~k<kills>]~plain`).
 #[pyfunction]
 #[pyo3(signature = (specialist, out, states=None, iterations=3000, explore_steps=25, patience=300, parallel=1,
-                    seed=0, states_dir=None))]
+                    seed=0, states_dir=None, room_kills=None, clips=None))]
 #[allow(clippy::too_many_arguments)]
 pub fn explore_states(
     py: Python<'_>,
@@ -295,7 +322,11 @@ pub fn explore_states(
     parallel: usize,
     seed: u64,
     states_dir: Option<PathBuf>,
+    room_kills: Option<Vec<(u8, u8, u8)>>,
+    clips: Option<bool>,
 ) -> PyResult<Vec<(PyExploreResult, bool)>> {
+    let room_kills: Option<Vec<((u8, u8), u8)>> =
+        room_kills.map(|r| r.into_iter().map(|(l, room, k)| ((l, room), k)).collect());
     let config = extract_config(py, specialist)?;
     let data = context::data(py, states_dir.as_deref())?;
     let rom = context::rom(py)?;
@@ -326,7 +357,7 @@ pub fn explore_states(
                         while !stop.load(Ordering::Relaxed) {
                             let i = next.fetch_add(1, Ordering::Relaxed);
                             let Some(state) = states.get(i) else { break };
-                            let r = explore_one(&config, &data, &rom, state, &out, budget, seed, &stop);
+                            let r = explore_one(&config, &data, &rom, state, &out, budget, seed, &stop, room_kills.as_deref(), clips);
                             *results[i].lock() = Some(r);
                         }
                     });

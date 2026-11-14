@@ -4,6 +4,7 @@ state, and install a finished build into the states dir.
     python -m triforce.entry_states start [--out DIR]
     python -m triforce.entry_states build [--chains 0,1,2] [--iterations 3000] [--patience 200] [--out DIR]
                                           [--start-step N --source STATE] [--route NAME]
+                                          [--skip-fights 5:0x05:E,...]
     python -m triforce.entry_states path --source STATE --rooms 1:0x33,1:0x23,1:0x22 [--chain 2] [--route NAME]
                                          [--out DIR]
     python -m triforce.entry_states install DIR [--partial]
@@ -326,16 +327,52 @@ def write_entry_state(game: Game, pre_entry: Snapshot, path: str, expected: MapL
         raise RuntimeError(f"{path} loads into {state.full_location}, expected {expected.as_tuple()}")
 
 
+OBJ_METASTATE = 0x405                # ObjMetastate (asm:Obj_EndMetastate): $10 starts a death sparkle
+DEATH_SPARKLE = 0x10
+FIGHT_SKIP_FRAMES = 600
+
+
+def fight_skipped_source(source: str, out_dir: str, states_dir: str = STATES_DIR) -> str:
+    """A source whose room fight is skipped by the game's own death (round 24, ``build --skip-fights``): loaded from
+    the pre-entry ``source`` (its room fresh), every monster put into its death sparkle as it comes out (ObjMetastate
+    $10, asm:Obj_EndMetastate: the game counts the kill, drops what it drops and clears the room), the hearts kept,
+    until the room is empty; written as ``<out_dir>/<source's name>`` (the same route entry), a controllable state
+    the explorer goes on from.  Stands in for a fight beyond the explorer (the Olive Garden's six Blue Darknuts), so
+    the rooms after it get states now; those states are marked ``fight_skipped`` and are to be replaced by played
+    ones."""
+    game = Game(seed=0, states_dir=str(states_dir))
+    state = game.load(source, randomize_rng=False, fresh_room=True)
+    hearts = (game.read(CONTAINERS_ADDR), game.read(CONTAINERS_ADDR + 1))
+    for _ in range(FIGHT_SKIP_FRAMES):
+        for enemy in state.enemies:
+            if not enemy['dying']:
+                game.write(OBJ_METASTATE + enemy['index'], DEATH_SPARKLE)
+        game.write(CONTAINERS_ADDR, hearts[0])
+        game.write(CONTAINERS_ADDR + 1, hearts[1])
+        state = game.press('NONE', 1)
+        if not state.enemies and game.read(0x34D):           # IsRoomAllDead
+            break
+    else:
+        raise RuntimeError(f"{source}: the room's monsters did not die in {FIGHT_SKIP_FRAMES} frames")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, os.path.basename(source if source.endswith('.state') else f'{source}.state'))
+    game.save_state_file(path)
+    return path
+
+
 def build_chain(chain: int, out: str, iterations: int, patience: int, log: Callable = print, start_step: int = 0,
                 source: str = START_STATE, states_dir: str = STATES_DIR, route: str = DEFAULT_ROUTE,
-                command: Optional[str] = None) -> tuple:
+                command: Optional[str] = None, skip_fights: Optional[set] = None) -> tuple:
     """Plays ``route`` from ``source`` (the entry state of route step ``start_step``; the game's 'start' by
     default), writing the entry state of every later step on the clip way through the route's stretches (and of
     alternates; a plain way's states are built with ``path``, round 22).  Each written file's entry is merged
     into ``<out>/entry_states.json`` right away, so an interrupted build keeps every file it wrote listed.  Returns
-    (manifest entries, the file name of the first on-route step not rebuilt or None)."""
+    (manifest entries, the file name of the first on-route step not rebuilt or None).  ``skip_fights`` (a set of
+    (level, room, entry)) crosses those steps' rooms with their fight skipped (``fight_skipped_source``): the states
+    from there on are marked ``fight_skipped`` in the manifest."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     game, rooms = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
+    skipped = False
     steps = route_steps(route)
     alternates = alternate_steps(steps)
     # The clip way through every stretch (round 22): its steps follow each other.
@@ -346,9 +383,13 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
     for step, target in zip(way[first:], way[first + 1:]):
         jobs = [(target, True)] + [(alt, False) for origin, alt in alternates if origin == step.index]
         next_source = None
+        crossing = source
+        if skip_fights and (step.level, step.room, step.entry) in skip_fights:
+            crossing = fight_skipped_source(source, os.path.join(out, 'fight-skipped', str(chain)), states_dir)
+            skipped = True
         for goal, on_route in jobs:
             started = time.time()
-            pre_entry, stats = cross_room(step, goal, source, chain, iterations, patience, states_dir=states_dir,
+            pre_entry, stats = cross_room(step, goal, crossing, chain, iterations, patience, states_dir=states_dir,
                                           rooms=rooms, objective=on_route, route=route)
             label = f"[chain {chain}] step {step.index} {step.level}:0x{step.room:02x} -> {goal.filename(chain)}"
             if pre_entry is None:
@@ -363,6 +404,8 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
                      'from_step': step.index, 'specialist': goal.specialist, 'level': goal.level,
                      'room': f"0x{goal.room:02x}", 'in_cave': goal.in_cave, 'entry': goal.entry,
                      'exit': goal.exit, 'alternate': not on_route, **stats}
+            if skipped:
+                entry['fight_skipped'] = True
             _merge_manifest(out, [entry], command)
             manifest.append(entry)
             log(f"{label}: {stats['steps']} steps, {stats['env_steps']} env steps, {time.time() - started:.0f}s")
@@ -374,7 +417,7 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
 
 def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_step: int = 0,
           source: str = START_STATE, states_dir: str = STATES_DIR, command: Optional[str] = None,
-          route: str = DEFAULT_ROUTE) -> tuple:
+          route: str = DEFAULT_ROUTE, skip_fights: Optional[set] = None) -> tuple:
     """Runs one route chain per id (one thread each; exploration runs natively without the GIL); every written file
     is merged into ``<out>/entry_states.json`` as it is written (a rebuilt file replaces its old entry; ``command``,
     the invocation, is recorded in each entry).  Returns (manifest entries, the first file not rebuilt per failed
@@ -382,7 +425,8 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def run(chain):
         return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True),
-                           start_step=start_step, source=source, states_dir=states_dir, route=route, command=command)
+                           start_step=start_step, source=source, states_dir=states_dir, route=route, command=command,
+                           skip_fights=skip_fights)
 
     with ThreadPoolExecutor(max_workers=len(chain_ids)) as pool:
         parts = list(pool.map(run, chain_ids))
@@ -790,6 +834,9 @@ def build_parser() -> argparse.ArgumentParser:
     chain_parser.add_argument('--source', default=START_STATE,
                               help="entry state of --start-step (default: 'start')")
     chain_parser.add_argument('--route', default=DEFAULT_ROUTE, help="routes.yaml route to play")
+    chain_parser.add_argument('--skip-fights', default=None, metavar='L:0xRR:ENTRY,...',
+                              help="cross these steps' rooms with their fight skipped by the game's own death state "
+                                   "(round 24: fights beyond the explorer); the states after are marked fight_skipped")
     path_parser = sub.add_parser('path', help="entry states for rooms off the route, entered in order from --source")
     path_parser.add_argument('--source', required=True, help="a state in the room before the first of --rooms")
     path_parser.add_argument('--rooms', required=True, help="comma-separated rooms, e.g. 1:0x33,1:0x23,1:0x22")
@@ -850,9 +897,11 @@ def main(argv=None):
             manifest, failed = build_path(args.source, rooms, args.chain, out, args.iterations, args.patience,
                                           route=args.route, states_dir=states_dir, command=command)
         else:
+            skip = {(int(level), int(room, 16), entry) for level, room, entry in
+                    (text.split(':') for text in args.skip_fights.split(','))} if args.skip_fights else None
             manifest, failed = build([int(c) for c in args.chains.split(',')], out, args.iterations, args.patience,
                                      args.start_step, args.source, states_dir=states_dir, command=command,
-                                     route=args.route)
+                                     route=args.route, skip_fights=skip)
         print(f"{len(manifest)} entry states in {out}")
         if failed:
             print(f"FAILED: not rebuilt from {', '.join(failed)}")

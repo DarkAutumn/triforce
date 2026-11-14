@@ -584,3 +584,71 @@ def test_the_boss_family_plays_the_recorder(probe):
             break
         game.press('NONE', 3)
     assert hit, 'no sword hit on the small Digdogger'
+
+
+# ---- staged starts: kills banked before the entry (ram_randomization.room_kills, training only)
+
+
+def _staged(probe, tmp_path, room_id: int, entry: str) -> str:
+    """A pre-entry state of ``room_id`` (the frame before its entry: its monsters not made yet), as a file."""
+    enter(probe, room_id, entry, walls=WALLS, settle=1)
+    probe.game.restore(probe.pre_entry)
+    path = tmp_path / f'5_{room_id:02x}{entry.lower()}_0.state'
+    probe.game.save_state_file(str(path))
+    return str(path)
+
+
+def test_a_staged_olive_garden_holds_6_minus_k_darknuts_and_clears_as_the_room(probe, tmp_path):
+    """darknut `room_kills: {'(5, 0x05)': [1, 5]}`: a training env banks k kills in `LevelKillCounts` before the entry
+    (asm:RoomHistory_ModifyObjCountUW), and the game makes 6 - k Blue Darknuts; half the resets keep all six
+    (`room_kills_share`). Killing the one left of k = 5 (a real sword kill) clears the room: the block moves, the
+    stairs take Link down to the recorder cellar. An env that is not training (evaluation, chains, play) never
+    stages: six."""
+    from triforce._native import Env
+    path = _staged(probe, tmp_path, 0x05, 'E')
+    env = Env('darknut', explicit_starts=True, staged_kills=True, seed=1)
+    seen = {}
+    for _ in range(60):
+        env.reset(options={'start_state': path})
+        darknuts = sum(e['name'] == 'BlueDarknut' for e in env.state.enemies)
+        seen.setdefault(env.banked_kills, set()).add(darknuts)
+    assert set(seen) == {0, 1, 2, 3, 4, 5} and all(counts == {6 - k} for k, counts in seen.items()), seen
+    plain = Env('darknut', explicit_starts=True, seed=1)
+    for _ in range(10):
+        plain.reset(options={'start_state': path})
+        assert (plain.banked_kills, len(plain.state.enemies)) == (0, 6)
+    # k = 5: one Darknut, killed by the sword from behind (its HP lowered to one hit).
+    while env.banked_kills != 5:
+        env.reset(options={'start_state': path})
+    for _ in range(4):
+        env.step('WAIT 16')
+    game, behind = probe.game, {'N': (0, 16), 'S': (0, -16), 'W': (16, 0), 'E': (-16, 0)}
+    darknut = env.state.enemies[0]
+    slot = darknut['index']
+    for _ in range(40):
+        darknut = next((e for e in env.state.enemies if e['index'] == slot and not e['dying']), None)
+        if darknut is None:
+            break
+        if darknut['direction'] not in behind:
+            env.step('WAIT 4')
+            continue
+        game.restore(env.snapshot())
+        game.write(0x485 + slot, 0x10)
+        dx, dy = behind[darknut['direction']]
+        place(game, darknut['x'] + dx, darknut['y'] + dy, darknut['direction'])
+        env.restore(game.snapshot(), 'kill')
+        env.step('SWORD ' + darknut['direction'])
+    for _ in range(6):
+        env.step('WAIT 16')
+    assert env.state.enemies == [] and env.state.room_kills == 1, 'the one the room made'
+    game.restore(env.snapshot())
+    place(game, 0x70, 0x95, 'N')
+    room = Room('darknut', step_of(0x05, 'E'), game.snapshot())
+    for action in ['MOVE N 16'] * 4 + ['WAIT 16'] * 4:
+        room.act(action)
+    assert room.rewards.get('reward-pushed-block', 0) > 0, 'the block moves: the room is clear'
+    game.restore(room.env.snapshot())
+    place(game, 0xD0, 0x5D, 'N')
+    room = Room('darknut', step_of(0x05, 'E'), game.snapshot())
+    room.until_room_changes('MOVE N 8')
+    assert (room.ending(), tuple(room.info['room'])) == ('exit-correct', (LEVEL, 0x04, True)), 'the stairs'

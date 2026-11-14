@@ -88,3 +88,13 @@ def test_out_must_be_the_trajectories_root(tmp_path):
     (track / 'trajectory.json').write_text('{}')
     with pytest.raises(ValueError, match='track directory'):
         explore_specialist('ow-octorok', str(tmp_path / 'tracks'), states=['0_67s_0'])
+
+
+def test_staged_and_plain_tracks_are_named_beside_the_seed_states():
+    """Round 24: ``--room-kills L:0xRR=K`` writes ``<state>~k<K>``, ``--clips off`` adds ``~plain``."""
+    from triforce.explore import parse_room_kills, track_dir
+    assert parse_room_kills('5:0x05=4') == (5, 0x05, 4)
+    with pytest.raises(ValueError, match='LEVEL:0xRR=K'):
+        parse_room_kills('5:0x05')
+    assert track_dir('t', 'darknut', '5_05e_0', 0, False, 4).name == '5_05e_0~k4'
+    assert track_dir('t', 'darknut', '5_64e_0', 0, False, None, True).name == '5_64e_0~plain'

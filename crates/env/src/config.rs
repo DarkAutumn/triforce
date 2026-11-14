@@ -450,11 +450,37 @@ pub struct RamRandomization {
     pub keys: Option<(i64, i64)>,
     #[serde(default)]
     pub help_count: Option<(i64, i64)>,
+    /// `room_kills: {'(5, 0x05)': [1, 5]}` (round 24): a staged start, training only (`EnvOptions::staged_kills`):
+    /// the room's kills banked before its entry (`LevelKillCounts`, asm:RoomHistory_ModifyObjCountUW), so the game
+    /// itself makes that many fewer monsters (the Olive Garden's 6 Blue Darknuts, beyond the explorer and a new
+    /// model). Drawn per reset from a pre-entry start into that dungeon room; evaluation, chains, exploration and
+    /// state builds never stage.
+    #[serde(default)]
+    pub room_kills: std::collections::BTreeMap<String, (i64, i64)>,
+    /// Share of resets that draw `room_kills` (the rest keep the full room); absent = every reset.
+    #[serde(default)]
+    pub room_kills_share: Option<f64>,
 }
 
 impl RamRandomization {
+    /// `room_kills` by room: ((level, room), (lo, hi)).
+    pub fn staged_rooms(&self) -> Vec<((u8, u8), (u8, u8))> {
+        self.room_kills
+            .iter()
+            .filter_map(|(room, &(lo, hi))| {
+                let at = parse_room(room).ok()?;
+                Some(((at.level, at.value), (lo as u8, hi as u8)))
+            })
+            .collect()
+    }
+
     fn validate(&self) -> Result<(), String> {
-        for (key, value) in [("full_hp", self.full_hp), ("chain_hp", self.chain_hp), ("bombs_share", self.bombs_share)] {
+        for (key, value) in [
+            ("full_hp", self.full_hp),
+            ("chain_hp", self.chain_hp),
+            ("bombs_share", self.bombs_share),
+            ("room_kills_share", self.room_kills_share),
+        ] {
             if let Some(v) = value
                 && !(0.0..=1.0).contains(&v)
             {
@@ -476,6 +502,15 @@ impl RamRandomization {
                 return Err(format!(
                     "{key}: range must satisfy 0 <= lo <= hi <= {max}, got [{lo}, {hi}]"
                 ));
+            }
+        }
+        for (room, &(lo, hi)) in &self.room_kills {
+            let at = parse_room(room).map_err(|e| format!("room_kills: {}", e.0))?;
+            if at.level == 0 || at.in_cave {
+                return Err(format!("room_kills: {room}: only dungeon rooms bank kills (LevelKillCounts)"));
+            }
+            if !(0 <= lo && lo <= hi && hi <= 14) {
+                return Err(format!("room_kills: {room}: range must satisfy 0 <= lo <= hi <= 14, got [{lo}, {hi}]"));
             }
         }
         Ok(())
@@ -1074,6 +1109,23 @@ mod tests {
     fn minimal(extra: &str) -> Result<SpecialistConfig, ConfigError> {
         let text = format!("name: t\nrooms: ['(1, 0x73)']\nsuccess: [exit-correct]\n{extra}");
         SpecialistConfig::from_yaml(&text, "t.yaml", Some(&GameMap::builtin()))
+    }
+
+    /// `ram_randomization.room_kills` (round 24): dungeon rooms only, a range 0-14, a share in [0, 1].
+    #[test]
+    fn room_kills_parse_and_reject_bad_rooms() {
+        let c = minimal("ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}\n").unwrap();
+        assert_eq!(c.ram_randomization.staged_rooms(), [((5, 0x05), (1, 5))]);
+        for (bad, why) in [
+            ("{room_kills: {'(0, 0x77)': [1, 2]}}", "dungeon rooms"),
+            ("{room_kills: {'(5, 0x05)': [3, 2]}}", "0 <= lo <= hi <= 14"),
+            ("{room_kills: {'(5, 0x05)': [1, 15]}}", "0 <= lo <= hi <= 14"),
+            ("{room_kills: {'5:0x05': [1, 2]}}", "Bad room"),
+            ("{room_kills_share: 2}", "probability"),
+        ] {
+            let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
+            assert!(e.contains(why), "{bad}: {e}");
+        }
     }
 
     #[test]

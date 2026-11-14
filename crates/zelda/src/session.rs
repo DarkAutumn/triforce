@@ -28,6 +28,10 @@ pub struct LoadOptions {
     pub controllable: bool,
     /// Variables written after randomization, before gaining control.
     pub overrides: Vec<(Var, u8)>,
+    /// A staged start (round 24, training only): for a pre-entry state whose pending dungeon room is listed
+    /// ((level, room), kills), that many kills banked in `LevelKillCounts` after `fresh_room`, so the game makes that
+    /// many fewer monsters (asm:RoomHistory_ModifyObjCountUW); clearing the rest clears the room.
+    pub banked_kills: Vec<((u8, u8), u8)>,
 }
 
 /// Everything needed to resume a session exactly.
@@ -305,6 +309,12 @@ impl<N: Nes> Session<N> {
             };
             if let Some((level, room)) = pending {
                 make_room_fresh(nes, level, room);
+            }
+            if let Some((level, room)) = pending_room(|a| nes.peek(a))
+                && level > 0
+                && let Some(&(_, kills)) = opts.banked_kills.iter().find(|(at, _)| *at == (level, room))
+            {
+                nes.poke(crate::room_entry::LEVEL_KILL_COUNTS + room as u16, kills);
             }
         }
         for &(var, value) in &opts.overrides {

@@ -304,6 +304,13 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     visits: Option<VisitTracker>,
     /// The decision that chooses the next step, for the visit statistics ([`SpecialistEnv::note_decision`]).
     decision: Option<DecisionNote>,
+    /// Training: `ram_randomization.room_kills` stages partly cleared rooms (`EnvOptions::staged_kills`).
+    staged_kills: bool,
+    /// The kills the last reset banked in its start room (`ram_randomization.room_kills`), 0 if none.
+    pub banked_kills: u8,
+    /// Kills every reset banks, whatever the config draws ([`SpecialistEnv::set_banked_kills`]: exploring a staged
+    /// start).
+    fixed_kills: Option<Vec<((u8, u8), u8)>>,
     pool: Option<StartStatePool>,
     curriculum: Option<SharedCurriculum>,
     critic: GameplayCritic,
@@ -383,6 +390,9 @@ pub struct EnvOptions {
     /// Seed-state weights shared with the other envs of a training pool (prioritized level replay); None or unset =
     /// the start-state pool's own failure-weighted draws.
     pub start_weights: Option<StartWeights>,
+    /// A training env: resets draw the family's `ram_randomization.room_kills` (round 24, staged starts with banked
+    /// kills). Off for evaluation, chains, exploration, state builds and play: they meet the room as the game has it.
+    pub staged_kills: bool,
 }
 
 impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
@@ -433,6 +443,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             left_with: ItemCounts::default(),
             visits: opts.track_visits.then(VisitTracker::default),
             decision: None,
+            staged_kills: opts.staged_kills,
+            banked_kills: 0,
+            fixed_kills: None,
             pool,
             curriculum,
             critic,
@@ -599,13 +612,18 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             },
         };
         let machine = self.store.load(&name)?;
+        // A staged start (training only): the kills banked for the start's pending dungeon room, before its entry.
+        let banked_kills = self.draw_banked_kills();
         let opts = LoadOptions {
             randomize_rng: true,
             fresh_room: self.config.fresh_rooms,
             controllable: self.curriculum_tag.is_some(),
             overrides: Vec::new(),
+            banked_kills,
         };
         let mut state = self.session.load(&machine, &opts, &mut self.rng)?.clone();
+        let here = (state.level(), state.location());
+        self.banked_kills = opts.banked_kills.iter().find(|(at, _)| *at == here && !state.full_location().in_cave).map_or(0, |b| b.1);
         if !self.verified.contains(&name) {
             verify_start_room(
                 &name,
@@ -672,6 +690,30 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.clips_allowed = on;
         }
         self.begin_episode(name.to_owned())
+    }
+
+    /// Every later reset from a pre-entry start into one of these dungeon rooms banks its kills ((level, room),
+    /// kills) before the entry, whatever the config says; None returns to the config's draw. The explorer's staged
+    /// starts (`python -m triforce.explore --room-kills`, round 24): a curriculum track from a partly cleared room.
+    pub fn set_banked_kills(&mut self, kills: Option<Vec<((u8, u8), u8)>>) {
+        self.fixed_kills = kills;
+    }
+
+    /// A reset's staged kills (`ram_randomization.room_kills`, training only, not for a curriculum start): with
+    /// probability `room_kills_share` (absent: always) a count drawn in each listed room's range; empty otherwise
+    /// (and no draw, so families without staged rooms keep their random stream).
+    fn draw_banked_kills(&mut self) -> Vec<((u8, u8), u8)> {
+        if let Some(fixed) = &self.fixed_kills {
+            return fixed.clone();
+        }
+        let spec = &self.config.ram_randomization;
+        if !self.staged_kills || spec.room_kills.is_empty() || self.curriculum_tag.is_some() {
+            return Vec::new();
+        }
+        if spec.room_kills_share.is_some_and(|p| rand::RngExt::random::<f64>(&mut self.rng) >= p) {
+            return Vec::new();
+        }
+        spec.staged_rooms().into_iter().map(|(at, (lo, hi))| (at, rand::RngExt::random_range(&mut self.rng, lo..=hi))).collect()
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
