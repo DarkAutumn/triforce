@@ -14,11 +14,15 @@ class ActionKind(IntEnum):
     BOOMERANG = 5
     ARROW = 6
     CLIP = 7        # the grid-point skip macro (crates/zelda/src/clips.rs)
+    RECORDER = 8    # no direction, no duration; the option waits out the tune's freeze
+    FOOD = 9
+    CANDLE = 10
 
     @property
     def is_b_item(self):
         """True for kinds that use the B button with a selected item."""
-        return self in (ActionKind.BOMB, ActionKind.BOOMERANG, ActionKind.ARROW)
+        return self in (ActionKind.BOMB, ActionKind.BOOMERANG, ActionKind.ARROW, ActionKind.RECORDER, ActionKind.FOOD,
+                        ActionKind.CANDLE)
 
 
 class Direction(Enum):

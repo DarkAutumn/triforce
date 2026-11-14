@@ -24,6 +24,10 @@ use std::fmt;
 pub const MASKED_LOGIT: f32 = -1e9;
 /// Largest head size the fixed output arrays hold.
 pub const MAX_HEAD: usize = 16;
+/// Kinds whose plain-draw noise columns come first (action schema 2's eight). The direction and duration heads'
+/// columns follow them, and any later kind's after those, so adding kinds moves no column: a model widened by
+/// `triforce convert-model` draws exactly as before while its new kinds are masked ([`Pick::Sample`]).
+pub const LEAD_KINDS: usize = 8;
 
 /// The observation keys with their own encoders; every other key but the mask is a float vector.
 const ROOM_KEY: &str = "room_id";
@@ -148,6 +152,22 @@ impl Linear {
     fn apply(&self, x: &[f32], y: &mut [f32]) {
         debug_assert_eq!(x.len(), self.inp);
         linear(&self.w, &self.b, x, &mut y[..self.out]);
+    }
+}
+
+impl Linear {
+    /// The layer without the input columns not in `keep` (ascending), the rest in their order.
+    fn keep_inputs(&mut self, keep: &[usize]) {
+        let mut w = Vec::with_capacity(self.out * keep.len());
+        for row in self.w.chunks_exact(self.inp) {
+            w.extend(keep.iter().map(|&i| row[i]));
+        }
+        (self.w, self.inp) = (w, keep.len());
+    }
+
+    /// Whether every weight of input column `i` is zero.
+    fn reads(&self, i: usize) -> bool {
+        self.w.chunks_exact(self.inp).any(|row| row[i] != 0.0)
     }
 }
 
@@ -315,8 +335,9 @@ impl Tower {
 /// How [`Policy::evaluate`] picks the action.
 #[derive(Clone, Copy, Debug)]
 pub enum Pick<'a> {
-    /// Each head's argmax of log-probs plus this Gumbel noise (kind, direction, duration columns;
-    /// `Policy::noise_size` values, e.g. from [`noise::keyed_noise`]).
+    /// Each head's argmax of log-probs plus this Gumbel noise (`Policy::noise_size` values, e.g. from
+    /// [`noise::keyed_noise`]): columns `0..L` for the first `L` = min(kinds, [`LEAD_KINDS`]) kinds, then the
+    /// directions, the durations, then the remaining kinds.
     Sample(&'a [f32]),
     /// Each head's most likely entry.
     Argmax,
@@ -373,6 +394,8 @@ pub struct Scratch {
     grid_b: Vec<f32>,
     conv_acc: Vec<f32>,
     features: Vec<f32>,
+    /// The features the towers read ([`Policy::live`]), when some are dropped.
+    live: Vec<f32>,
     tower_a: Vec<f32>,
     tower_b: Vec<f32>,
     value_a: Vec<f32>,
@@ -419,6 +442,13 @@ pub struct Policy {
     grid_head: Linear,
     policy_tower: Tower,
     value_tower: Tower,
+    /// The feature count (room, entities, grid, vectors).
+    features: usize,
+    /// The feature columns the towers read, when some are read by neither (all their first-layer weights zero: the
+    /// inputs `triforce convert-model` and `model.widen_policy` add start so). A zero column changes no output, but
+    /// it would shift the later columns into other lanes of the dot product's fixed order (`kernels::dot`) and so
+    /// change the last bits: dropped, a widened model computes bit for bit what the model it was widened from did.
+    live: Option<Vec<usize>>,
     kind_head: Linear,
     kind_condition: Linear,
     kind_embedding: Embedding,
@@ -562,8 +592,16 @@ impl Policy {
                 last_tanh,
             })
         };
-        let policy_tower = tower(&mut w, "policy_net", true)?;
-        let value_tower = tower(&mut w, "value_net", false)?;
+        let mut policy_tower = tower(&mut w, "policy_net", true)?;
+        let mut value_tower = tower(&mut w, "value_net", false)?;
+        let live: Vec<usize> = (0..features)
+            .filter(|&i| policy_tower.layers[0].reads(i) || value_tower.layers[0].reads(i))
+            .collect();
+        let live = (live.len() < features).then(|| {
+            policy_tower.layers[0].keep_inputs(&live);
+            value_tower.layers[0].keep_inputs(&live);
+            live
+        });
 
         let kinds = w.0.get("kind_head.weight").map(|t| t.shape[0]).unwrap_or(0);
         let directions = w.0.get("direction_head.weight").map(|t| t.shape[0]).unwrap_or(0);
@@ -607,6 +645,8 @@ impl Policy {
             grid_head,
             policy_tower,
             value_tower,
+            features,
+            live,
             kind_head,
             kind_condition,
             kind_embedding,
@@ -656,7 +696,7 @@ impl Policy {
     }
 
     /// Values of one decision's whole distribution ([`Policy::evaluate_with_distribution`]): the action mask's
-    /// layout, `kinds + kinds * directions + kinds * durations` (8 + 64 + 32 = 104 for Zelda).
+    /// layout, `kinds + kinds * directions + kinds * durations` (11 + 88 + 44 = 143 for Zelda).
     pub fn distribution_size(&self) -> usize {
         self.kinds + self.kinds * self.directions + self.kinds * self.durations
     }
@@ -683,7 +723,8 @@ impl Policy {
             grid_a: vec![0.0; grid_max],
             grid_b: vec![0.0; grid_max],
             conv_acc: vec![0.0; conv_acc],
-            features: vec![0.0; self.policy_tower.layers[0].inp],
+            features: vec![0.0; self.features],
+            live: vec![0.0; self.live.as_ref().map_or(0, Vec::len)],
             tower_a: vec![0.0; hidden],
             tower_b: vec![0.0; hidden],
             value_a: vec![0.0; hidden],
@@ -722,7 +763,8 @@ impl Policy {
         Ok(())
     }
 
-    /// The concatenated features (room, entities, grid, vectors) into `s.features`.
+    /// The concatenated features (room, entities, grid, vectors) into `s.features`, and the ones the towers read into
+    /// `s.live` when some are dropped ([`Policy::live`]).
     fn features(&self, input: &Input, s: &mut Scratch) {
         let mut at = 0;
         let room = self.room_embedding.row(input.room_id);
@@ -739,6 +781,11 @@ impl Policy {
             at += v.len();
         }
         debug_assert_eq!(at, s.features.len());
+        if let Some(live) = &self.live {
+            for (o, &i) in s.live.iter_mut().zip(live) {
+                *o = s.features[i];
+            }
+        }
     }
 
     /// The entity encoder's output into `s.features[room_embed_dim..]`.
@@ -867,7 +914,8 @@ impl Policy {
     pub fn value(&self, input: &Input, s: &mut Scratch) -> Result<f32, PolicyError> {
         self.check(input)?;
         self.features(input, s);
-        self.value_tower.apply(&s.features, &mut s.value_a, &mut s.value_b);
+        let x = if self.live.is_some() { &s.live } else { &s.features };
+        self.value_tower.apply(x, &mut s.value_a, &mut s.value_b);
         let mut v = [0f32];
         self.value_head.apply(&s.value_a, &mut v);
         finite_output(v[0], 0.0)
@@ -908,8 +956,9 @@ impl Policy {
     /// The trunk, the policy tower (into `s.tower_a`, which the heads read) and the value; returns the value.
     fn towers(&self, input: &Input, s: &mut Scratch) -> f32 {
         self.features(input, s);
-        self.policy_tower.apply(&s.features, &mut s.tower_a, &mut s.tower_b);
-        self.value_tower.apply(&s.features, &mut s.value_a, &mut s.value_b);
+        let x = if self.live.is_some() { &s.live } else { &s.features };
+        self.policy_tower.apply(x, &mut s.tower_a, &mut s.tower_b);
+        self.value_tower.apply(x, &mut s.value_a, &mut s.value_b);
         let mut value = [0f32];
         self.value_head.apply(&s.value_a, &mut value);
         value[0]
@@ -929,9 +978,19 @@ impl Policy {
             head_entropy: [0.0; 3],
             head_log_prob: [0.0; 3],
         };
-        // Kind head.
+        // Kind head (its noise: the lead kinds' columns, then the later kinds' after the other heads').
         self.kind_head.apply(&s.tower_a, &mut s.logits);
-        let kind = head(&s.logits[..kinds], kind_mask, pick, 0, &mut out, 0);
+        let lead = kinds.min(LEAD_KINDS);
+        let mut kind_noise = [0f32; MAX_HEAD];
+        let kind_pick = match pick {
+            Pick::Sample(noise) => {
+                kind_noise[..lead].copy_from_slice(&noise[..lead]);
+                kind_noise[lead..kinds].copy_from_slice(&noise[lead + dirs + durs..]);
+                Pick::Sample(&kind_noise[..kinds])
+            }
+            other => other,
+        };
+        let kind = head(&s.logits[..kinds], kind_mask, kind_pick, 0, &mut out, 0);
         out.head_applies[0] = kind_mask.iter().filter(|&&m| m).count() > 1;
         if !out.head_applies[0] {
             out.head_entropy[0] = 0.0;
@@ -944,11 +1003,11 @@ impl Policy {
         }
         let dir_mask = &input.mask[kinds + kind * dirs..kinds + (kind + 1) * dirs];
         self.direction_head.apply(&s.conditioned, &mut s.logits);
-        sub_head(&s.logits[..dirs], dir_mask, pick, kinds, &mut out, 1);
+        sub_head(&s.logits[..dirs], dir_mask, pick, lead, &mut out, 1);
         let base = kinds + kinds * dirs;
         let dur_mask = &input.mask[base + kind * durs..base + (kind + 1) * durs];
         self.duration_head.apply(&s.conditioned, &mut s.logits);
-        sub_head(&s.logits[..durs], dur_mask, pick, kinds + dirs, &mut out, 2);
+        sub_head(&s.logits[..durs], dur_mask, pick, lead + dirs, &mut out, 2);
 
         out.action[0] = kind;
         out.log_prob = (out.head_log_prob[0] + out.head_log_prob[1]) + out.head_log_prob[2];
@@ -957,7 +1016,7 @@ impl Policy {
         Ok(out)
     }
 
-    /// Joint actions: `kinds * directions * durations` (8 × 8 × 4 = 256 for Zelda).
+    /// Joint actions: `kinds * directions * durations` (11 × 8 × 4 = 352 for Zelda).
     pub fn joint_size(&self) -> usize {
         self.kinds * self.directions * self.durations
     }

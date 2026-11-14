@@ -61,10 +61,10 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 | Item | Contract |
 |---|---|
 | `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
-| `zelda::actions` | `ACTION_SCHEMA_VERSION` (2); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=104] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
-| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG or ARROW whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). A CLIP runs the grid-point skip macro ("Grid-point skip" below; MOVE never does); `clip` reports its `ClipOutcome`. |
+| `zelda::actions` | `ACTION_SCHEMA_VERSION` (3); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP, RECORDER, FOOD, CANDLE (head indices 0-10; round 24 added the last three after CLIP, every older index kept); `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed; `RECORDER` takes no direction and no duration; `FOOD W`, `CANDLE N` are cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=143] = K + K·8 + K·4 (K = 11). A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
+| `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG, ARROW, RECORDER, FOOD or CANDLE whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). RECORDER then presses B and waits out the tune's freeze (`FluteTimer` `$3C`, 151 frames without a play update after the press: also `menu_frames`; "Item kinds" below). A CLIP runs the grid-point skip macro ("Grid-point skip" below; MOVE never does); `clip` reports its `ClipOutcome`. |
 | `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; `randomize_rng` writes a natural RNG state and the spawn draws right after the restore ("Randomness at a start" below), `rng_phase()` reports the phase, `write_rng(phase)` writes one at the current frame (a chain checkpoint's redraw); controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clips` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clips(enabled)`, `skip_available(direction)`, `Change.clip`). |
-| `zelda::Change` | previous/current `GameView`, action, frames, menu_frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. `frames` are the frames that count against the action: the option's minus its item sub-screen frames (`menu_frames`, the game paused). Discounting (`StepInfo.frames`, the pool's `Outcome.frames`, `rollout_buffer.py`), the frame penalty, the observation's history `frames`, heart timers and linger use `frames`; counts of frames played (`Session.total_frames`, `episode_frames`, visits, chain records, the pool's emulated frames, replays) add `menu_frames` back (`StepInfo.menu_frames`, Python `Change.menu_frames`, info `menu_frames`). Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
+| `zelda::Change` | previous/current `GameView`, action, frames, menu_frames, interrupt, health lost/gained, enemies hit/stunned, items gained, changed location, gained triforce, action mask, executed projectile blocks, the skip's `clip` outcome; `observed.enemies_killed`: slots whose monster died in the step, counted by the game's `RoomKills` or not (a Vire's Red Keese, Gleeok's heads), which restart the room-stall count. `frames` are the frames that count against the action: the option's minus its paused or frozen frames (`menu_frames`: the item sub-screen, the recorder's tune). Discounting (`StepInfo.frames`, the pool's `Outcome.frames`, `rollout_buffer.py`), the frame penalty, the observation's history `frames`, heart timers and linger use `frames`; counts of frames played (`Session.total_frames`, `episode_frames`, visits, chain records, the pool's emulated frames, replays) add `menu_frames` back (`StepInfo.menu_frames`, Python `Change.menu_frames`, info `menu_frames`). Look-ahead credit via `FutureCreditLedger` does not add simulated blocks; a weapon that finishes drops its unused predictions; the look-ahead keeps the action's last rendered frame (`Game.screen()` works right after it). |
 | `triforce-py/describe.rs`, `play.py` | Text dumps (`Game.describe_state/describe_change`) and the interactive `python -m triforce.play` tool. |
 
 Objects are classified once (`zelda::enums::ObjectClass::of`, from the game's `Obj_Update` jump table) and
@@ -83,9 +83,33 @@ credited once.
 The action mask (`zelda::actions::compute_action_mask`) offers only what the game would do. An attack is legal
 only where the game would start the weapon (Link's state allows it, the weapon's slot is free, the sword isn't
 blocked: `$4C`/`$52E` mask SWORD and BEAMS) and the buttons can make that strike from where Link stands
-(`GameView::attack_directions(kind)`, `sword_directions()`; `zelda::attack::plan`, below). A BOMB, BOOMERANG or ARROW
-that isn't the selected item also needs the item sub-screen to open (`zelda::submenu::can_open`: a play mode, not
-paused, no flute tune or candle brightening).
+(`GameView::attack_directions(kind)`, `sword_directions()`; `zelda::attack::plan`, below). A B item (BOMB, BOOMERANG,
+ARROW, RECORDER, FOOD, CANDLE) that isn't the selected item also needs the item sub-screen to open
+(`zelda::submenu::can_open`: a play mode, not paused, no flute tune or candle brightening).
+
+### Item kinds: RECORDER, FOOD, CANDLE (round 24, version 1.4.2.0)
+
+Three B items, each chosen on the real sub-screen by buttons (slots 5, 6 and 4) and used with B like a bomb; no
+memory is written (decisions 2026-11-14 "Three item kinds and the model conversion"):
+
+- **RECORDER** (no direction, no duration). Offered where `actions::recorder_wanted`: a dungeon room in play that
+  holds a big Digdogger (`$38`/`$39`) and hasn't heard the recorder since Link came in (`FluteUsedState` `$51B` = 0),
+  with the recorder held (`$65C`), no tune playing, the sub-screen able to open (or the recorder selected) and B
+  surviving Link's facing's border band (no turn: in a doorway it isn't offered). The executor selects it, presses
+  B and waits while `FluteTimer` runs: the big one starts its shrink inside the freeze and splits on the first play
+  frame (B+152, scout D5Boss); the 151 frames without a play update are `menu_frames` (no input, no movement, no
+  hit: only the NMI's frame timers run, so a bomb's fuse burns meanwhile). On the overworld it summons the
+  whirlwind or drains 0x42's pond: not offered yet (the function says so; a round that uses it widens it).
+- **FOOD** `<N|S|W|E>`: the bait in slot `$0F`, `$10` px ahead of Link once he faces the direction (one turn
+  frame, as BOMB). Offered with the food held and slot `$0F` empty (no boomerang out, no bait down); never used up.
+- **CANDLE** `<N|S|W|E>`: a fire in slot `$10`/`$11` ahead of Link that moves on 16 px and stands (about 94
+  frames). Offered with a candle held, a free fire slot and, blue, no fire yet in this room (`HasUsedCandle` `$513`).
+
+Every family has them off: `items: {recorder: true, food: true, candle: true}` (`env::config::ItemsConfig`, default
+false) turns one on. `penalty-attack-miss` charges none of them (CANDLE's fire hits later, like a bomb); no
+look-ahead or other critic term was added. The observation spells their mask bits out (`link`'s
+`recorder_usable`, `food_usable`, `candle_usable`), as `bomb_usable` and `clip_usable_*` do: whether the room heard
+the recorder or a blue candle's fire was used, and the family's switch, are visible nowhere else.
 
 BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, Lee Nov 11; in `SpecialistEnv` and
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
@@ -358,14 +382,14 @@ Python sees the layout as
 |---|---|---|
 | `room_id` | int64 [1] | index < `ROOM_VOCAB` |
 | `room_state` | float32 [84] | per-room flags from `docs/ram-catalog.md` |
-| `link` | float32 [84] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and the specialist has `clips: true`) |
+| `link` | float32 [87] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and the specialist has `clips: true`); schema 5 `recorder_usable`, `food_usable`, `candle_usable` (the mask allows the kind) |
 | `entity_types` | int64 [12] | 0 = empty slot |
 | `entity_features` | float32 [12, 33] | feature 0 = presence |
 | `grid` | int64 [22, 32] | tile class per 8px tile, row-major |
-| `history` | float32 [35] | last action kind/dir/duration, frames since |
+| `history` | float32 [38] | last action kind (11)/dir/duration, frames since |
 | `objective` | float32 [10] | all zeros when `objective` is off |
 | `target` | float32 [8] | all zeros when `obs.target` is off |
-| `action_mask` | bool [104] | flat `ActionMask` |
+| `action_mask` | bool [143] | flat `ActionMask` |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -383,7 +407,10 @@ a `one_room` specialist (also from a room of its own family), as at a training e
 1.3.2.0, Nov 11) replaced `link`'s always-zero `selected_*` slice with the bomb and forced-drop features (the table),
 so schema 1 and 2 checkpoints no longer load (their `link` is 81 wide): every family retrained. Schema 4 (version
 1.3.3.0, Nov 12) added the CLIP kind (`history` one-hots 8 kinds, the mask is 104 wide) and `link`'s
-`clip_usable_*`: no schema 3 checkpoint loads (action schema 2).
+`clip_usable_*`: no schema 3 checkpoint loads (action schema 2). Schema 5 (version 1.4.2.0, Nov 14) added RECORDER,
+FOOD and CANDLE (`history` one-hots 11 kinds, the new ones after `kind_CLIP`; the mask is 143 wide; action schema 3)
+and `link`'s `recorder_usable`, `food_usable`, `candle_usable` at its end. A 1.4.1 checkpoint is widened by
+`triforce convert-model` (`triforce/convert.py`, below), not retrained.
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
 
@@ -687,6 +714,19 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (`model.widen_policy` via `registry.load_model(obs_spec=...)`): every weight is copied and the towers' input
   columns for the new keys start at zero, so it acts exactly as before; the optimizer state starts fresh (the
   iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
+- **Converting a 1.4.1 checkpoint** (round 24): `triforce convert-model RUN_DIR... --out DIR` or `triforce
+  --models-dir MODELS convert-model --promoted --out DIR` (`triforce/convert.py`) writes `DIR/<specialist>/<run>/`, a
+  full copy of the run dir with the widened `ckpt.pt`, the source untouched. The first tower layers get zero columns
+  for the added features (matched by feature name: `convert.ADDED`); `kind_head` rows for the new kinds copy WAIT's
+  with the bias 5 lower (`NEW_KIND_BIAS_BELOW_WAIT`: never above WAIT, which is always legal; drawn at most `e^-5` as
+  often as WAIT when first unmasked); `kind_embedding` rows copy BOMB's (FOOD, CANDLE) or WAIT's (RECORDER); the Adam
+  moments are padded with zeros (so `--load` continues as from the source; the new entries get no gradient while
+  masked). The copy is stamped with this code's version, its `act` file re-bound to the new sha1 (same mode),
+  `promoted` copied, and `convert.json` names the source sha1 and version; `eval.json` stays the source's (bound to
+  its sha1). Anything but exactly the 1.4.1 layout and stamp is refused; loading an unconverted 1.4.1 run says how
+  to convert it. The Rust policy drops first-layer input columns no weight reads (`Policy::live`): a zero column
+  changes no output but would move later columns into other lanes of the fixed-order dot product, so a widened model
+  computes bit for bit what its source did (`zero_input_columns_change_no_bit`).
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id> [--act MODE]`
   sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`), one line `<mode> <ckpt.pt sha1>`:
   an act mode (`docs/rust-actor.md` "Act modes"; without the file `registry.DEFAULT_ACT`, the project's rule
@@ -1114,7 +1154,7 @@ The file layout is in `crates/replay/src/lib.rs`. It holds:
 | STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, so a chain can continue from it |
 | EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary) |
 | REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
-| DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (104 log-probabilities: kind[8], direction[kind][8], duration[kind][4]; META `actions` describes the space, so replays recorded with 7 kinds and 91 still read) |
+| DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read) |
 
 A record at frame `k` applies after input frame `k - 1` and before input frame `k`.
 

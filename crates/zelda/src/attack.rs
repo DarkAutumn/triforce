@@ -220,9 +220,20 @@ fn faces_into_room(s: &Link) -> bool {
     }
 }
 
-/// The next input of an attack of `kind` in `d` for Link in state `s` (not halted, in his normal state).
+/// The next input of an attack of `kind` in `d` for Link in state `s` (not halted, in his normal state). FOOD and
+/// CANDLE are placed ahead of Link like a bomb (asm:Link_PlaceWeaponAhead): face `d`, then B. RECORDER takes no
+/// direction: B as Link faces, where his facing's border band lets B through (no turn: in a dungeon room's floor
+/// the band never drops B, only in a doorway).
 pub fn next(kind: ActionKind, d: Direction, s: &Link) -> Next {
-    let b_item = matches!(kind, ActionKind::Bomb | ActionKind::Arrow | ActionKind::Boomerang);
+    let b_item = matches!(
+        kind,
+        ActionKind::Bomb
+            | ActionKind::Arrow
+            | ActionKind::Boomerang
+            | ActionKind::Food
+            | ActionKind::Candle
+            | ActionKind::Recorder
+    );
     let facing = s.dir;
     let want = d.value();
     let survives = |f: u8| button_survives(s.level, f, s.x, s.y, b_item);
@@ -244,10 +255,13 @@ pub fn next(kind: ActionKind, d: Direction, s: &Link) -> Next {
                 return Next::Press(buttons::B | held);
             }
         }
-        ActionKind::Bomb | ActionKind::Arrow => {
+        ActionKind::Bomb | ActionKind::Arrow | ActionKind::Food | ActionKind::Candle => {
             if facing == want && survives(facing) {
                 return Next::Press(buttons::B);
             }
+        }
+        ActionKind::Recorder => {
+            return if survives(facing) { Next::Press(buttons::B) } else { Next::Impossible };
         }
         ActionKind::Move | ActionKind::Wait | ActionKind::Clip => return Next::Impossible,
     }
@@ -618,6 +632,8 @@ fn simulate(view: &GameView, kind: ActionKind, d: Direction) -> Result<(u32, Lin
                 let target = facing_for(d).value();
                 return Err(if matches!(kind, ActionKind::Move | ActionKind::Wait | ActionKind::Clip) {
                     Refusal::Other
+                } else if kind == ActionKind::Recorder {
+                    Refusal::Band
                 } else if s.paralyzed || s.shoved {
                     Refusal::Held
                 } else if s.dir == target {

@@ -16,7 +16,11 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   0x21's island, plain 0x31 W – 0x30 – 0x20 – 0x21; then 0x11 N → 0x01's key → 0x02 → 0x12 from N, Gleeok), ending
   on the D4 triforce. The actions are MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW and `CLIP <N|S|W|E>` (round
   21: the speedrunners' grid-point skip, played by the executor as a macro; round 22 adds the wrap exit), on per
-  family with `clips`; attacks are played by buttons (no facing or selected-item writes, `menu_frames`). Round 22
+  family with `clips`, and (round 24, 1.4.2.0) `RECORDER`, `FOOD <N|S|W|E>`, `CANDLE <N|S|W|E>` (B items chosen on
+  the sub-screen and used with B; masked unless a family's `items:` turns `recorder`, `food`, `candle` on; RECORDER
+  only where a big Digdogger hasn't heard it, its tune's 151 frozen frames are `menu_frames`); attacks are played by
+  buttons (no facing or selected-item writes, `menu_frames`). 1.4.1 checkpoints are widened, not retrained:
+  `triforce convert-model` (decisions 2026-11-14 "Three item kinds and the model conversion"). Round 22
   (`docs/experiments/round22.md`; decisions 2026-11-13 "Natural RNG at every start", "The run-time clips switch and
   route stretches", "The wrap exit", "Clips in training, evaluation and watching", "Round 22 route", "Round 22
   merged", 2026-11-14 "The r72 retrain"): every start writes a natural RNG state (a phase of the game's cycle; the
@@ -168,7 +172,8 @@ the direction; the standing invitation is to come up with ideas, test them, keep
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.4.1.2`). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.4.2.0`: round 24's action kinds; the
+  lead sets 1.5.0.0 when Dungeon 5 is completed). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
@@ -181,6 +186,8 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   numbers differ from the code's (or that has no stamp) is refused: chains, evaluation, `--load`. Override with
   `--allow-incompatible-models` (or `TRIFORCE_ALLOW_INCOMPATIBLE_MODELS=1`); stamp runs known to be compatible with
   `triforce stamp [SPECIALIST [RUN_ID]] [--version V] [--force]` (default: every promoted run, the code's version).
+  A 1.4.1 model is converted, not stamped: `triforce --models-dir MODELS convert-model --promoted --out DIR` (or
+  `convert-model RUN_DIR... --out DIR`; `triforce/convert.py`) writes widened copies (source untouched).
 - Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; Lee will pick a backup strategy).
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
   independent of the repo version. It is bumped only when an existing replay can no longer be replayed bit-exactly

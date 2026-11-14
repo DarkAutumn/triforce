@@ -68,6 +68,10 @@ const ADDR_PARTIAL_HEARTS: usize = 0x670;
 const TURN_SLACK_FRAMES: u32 = 4;
 /// Frames an attack waits for Link's item-use pose (a boomerang caught during the turn) to end before its press.
 const MAX_POSE_FRAMES: u32 = 32;
+/// asm:FluteTimer: frames left of the recorder's freeze ($98 when played; the NMI counts it down).
+const ADDR_FLUTE_TIMER: usize = 0x3C;
+/// The freeze's length plus slack (a cap, never reached in play).
+const MAX_FREEZE_FRAMES: u32 = 0x98 + 8;
 const ADDR_LADDER_SLOT: usize = 0x64;
 const OBJ_X: usize = 0x70;
 const OBJ_Y: usize = 0x84;
@@ -182,9 +186,10 @@ pub struct OptionResult {
     pub projectile_blocks: Vec<ProjectileBlock>,
     /// The skip a CLIP performed (`crate::clips`).
     pub clip: Option<ClipOutcome>,
-    /// Frames on the item sub-screen choosing the B item (`crate::submenu`), included in `frames`. The game is
-    /// paused for all of them, so they don't count against the action (discounting, frame penalties and the
-    /// observation's history use `frames - menu_frames`).
+    /// Frames the game was paused or frozen (`crate::submenu`, the recorder), included in `frames`: the item
+    /// sub-screen choosing the B item, and the recorder's tune, during which nothing is updated (no input, no
+    /// movement, no hit: asm:Mode5Play_Update; only the NMI's frame timers run). They don't count against the
+    /// action (discounting, frame penalties and the observation's history use `frames - menu_frames`).
     pub menu_frames: u32,
 }
 
@@ -596,9 +601,10 @@ impl<S> Executor<S> {
 
     /// An attack played with the controller alone ([`crate::attack`]; no RAM is written): the item sub-screen
     /// first when the B item isn't the selected one ([`Self::select_item`]), then the turn frames the game needs and
-    /// the press, then the weapon's own frames. An attack the buttons can't make from here (the mask doesn't offer
-    /// it) presses nothing. Returns the interrupt that cut the turn short (a hit, a room change, game over) and the
-    /// sub-screen frames.
+    /// the press, then the weapon's own frames. RECORDER's press freezes the game for the tune ($98 frames), which
+    /// the option waits out: those frozen frames are menu frames too. An attack the buttons can't make from here (the
+    /// mask doesn't offer it) presses nothing. Returns the interrupt that cut the turn short (a hit, a room change,
+    /// game over) and the paused or frozen frames.
     fn run_attack<N: Nes>(&mut self, m: &mut Machine<N>, action: &Action, state: &GameView) -> (Option<Interrupt>, u32) {
         let (kind, d) = (action.kind, action.direction);
         let Some(turn_frames) = attack::plan(state, kind, d) else {
@@ -651,6 +657,25 @@ impl<S> Executor<S> {
         };
         // In a busy room the game skips input on lag frames: a one-frame press can go unread. Hold the buttons one
         // more frame when nothing started (holding is no new press once the game has read it).
+        if kind == ActionKind::Recorder {
+            // asm:Flute_Wield sets FluteTimer and leaves Link's state at 0. Every frame that ends with the timer
+            // still running had no play update (asm:Mode5Play_Update): those are the freeze's frames; the frame
+            // that counts it to 0 plays again.
+            self.step(m, press, 1);
+            if m.read(ADDR_FLUTE_TIMER) == 0 {
+                self.step(m, press, 1);
+            }
+            for _ in 0..MAX_FREEZE_FRAMES {
+                if m.read(ADDR_FLUTE_TIMER) == 0 {
+                    break;
+                }
+                self.step(m, 0, 1);
+                if m.read(ADDR_FLUTE_TIMER) != 0 {
+                    menu_frames += 1;
+                }
+            }
+            return (None, menu_frames);
+        }
         self.step(m, press, 1);
         if m.read(ADDR_LINK_STATUS) == 0 && m.read(ADDR_SWORD_ANIMATION) == 0 {
             self.step(m, press, 1);

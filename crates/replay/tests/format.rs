@@ -9,7 +9,7 @@ use replay::{
 };
 use serde_json::json;
 
-const DIST: usize = 8 + 8 * 8 + 8 * 4;
+const DIST: usize = 11 + 11 * 8 + 11 * 4;
 
 /// A stand-in state blob: the TFZSTATE magic and version, a ROM hash, then `tag`.
 fn blob(tag: u8) -> Vec<u8> {
@@ -162,7 +162,8 @@ fn a_recording_reads_back_every_stream() {
     assert_eq!(meta["cheat_items"], json!(["bombs", "keys", "rupees"]));
     assert_eq!(meta["reward_terms"], json!(["move", "time", "hit"]));
     assert_eq!(meta["actions"]["distribution"], DIST);
-    assert_eq!(meta["actions"]["kinds"].as_array().unwrap().len(), 8);
+    assert_eq!(meta["actions"]["kinds"].as_array().unwrap().len(), 11);
+    assert_eq!(meta["actions"]["kind_buttons"].as_array().unwrap().len(), 11);
     assert!(!meta.contains_key("segments"));
 
     let inputs = replay.inputs();
