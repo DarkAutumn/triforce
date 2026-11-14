@@ -88,6 +88,38 @@ def test_a_tunnel_joins_its_two_rooms(tmp_path):
         """) == []
 
 
+def test_both_ways_of_a_stretch_are_followed(tmp_path):
+    """Lee's Lost Woods way (Nov 14): with clips 0x51's wrap exit into 0x50; without, S into the Lost Woods and out
+    by its sequence into 0x60 from E, then N into 0x50; both rejoin in 0x40 from S.  Each way is checked on its own."""
+    stretch = """\
+        - {level: 0, room: '0x52', entry: N, exit: W}
+        - stretch: woods
+          parts: {level: 0, room: '0x51', entry: E}
+          rejoins: {level: 0, room: '0x40', entry: S}
+          clips:
+          - {level: 0, room: '0x51', entry: E, exit: W, wrap: true}
+          - {level: 0, room: '0x50', entry: E, exit: N}
+          plain:
+          - {level: 0, room: '0x51', entry: E, exit: S}
+          - {level: 0, room: '0x61', entry: N, exit: maze}
+          - {level: 0, room: '0x60', entry: E, exit: N}
+          - {level: 0, room: '0x50', entry: S, exit: N}
+        - {level: 0, room: '0x40', entry: S, exit: end}
+        """
+    from triforce import draft_routes
+    plan = draft_routes.steps('draft', write_draft(tmp_path, stretch))
+    assert [(s['room'], s['way']) for s in plan] == [
+        (0x52, None), (0x51, 'clips'), (0x50, 'clips'), (0x51, 'plain'), (0x61, 'plain'), (0x60, 'plain'),
+        (0x50, 'plain'), (0x40, None)]
+    assert draft_routes.problems(plan) == []
+    # The plain way entering 0x60 from N (the maze leaves it from E) is wrong on the plain way alone.
+    found = problems_of(tmp_path, stretch.replace("'0x60', entry: E", "'0x60', entry: N"))
+    assert len(found) == 1 and '0x60' in found[0] and 'entered from E' in found[0], found
+    # A way that doesn't lead into the rejoin is named.
+    found = problems_of(tmp_path, stretch.replace("{level: 0, room: '0x40', entry: S}", "{level: 0, room: '0x40', entry: W}"))
+    assert any('does not lead into where it rejoins' in line for line in found), found
+
+
 @pytest.mark.parametrize('step, why', [
     ("{level: 0, room: '0x52', entry: N, exit: W, takes: [hart-container]}", 'takes is a list of'),
     ("{level: 0, room: '0x52', entry: N, exit: W, notes: 'a typo'}", 'the keys are'),

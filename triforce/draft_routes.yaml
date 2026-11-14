@@ -2,51 +2,91 @@
 # Nothing but the map reads this file: routes.yaml stays the route the models play.  A step is a routes.yaml step
 # (level, room, in_cave, entry, exit) and may have `note` (what Link does there), `leg` (the part of the route it
 # starts), `wrap: true` (a screen wrap in this room; required to leave through a game.yaml wrap exit, e.g. 0x60 W
-# into 0x5f), `exit: recorder` / `entry: recorder` (the whirlwind) and `exit: end`.  An overworld cave is not a step
-# of its own here: the room's note says what Link takes or buys in it.
+# into 0x5f), `takes` (what Link takes in the room's overworld cave), `exit: recorder` / `entry: recorder` (the
+# whirlwind), `exit: maze` (out of a maze room by its sequence) and `exit: end`.  A `stretch:` block holds the clip
+# way and the plain way where they differ, as in routes.yaml: the map's Clips selector shows one or both.
 #
-# first-quest (Nov 13): d2first, then the rest of the first quest.  The overworld legs are Lee's (Nov 13); the
-# dungeon paths are the "Route" sections of zelda-asm/levels/level-5.md .. level-9.md (from the ROM, not walked),
-# shortened where carried keys allow (Lee, Nov 13: use them) and without the items the game doesn't need (level 6's
-# wand, level 8's book and magic key); level 9 takes the red ring (Lee, Nov 13).  Order: 5, 7, the magic sword, 6,
-# 8, 9.  Heart containers on entering a dungeon: 5 with 10, 7 with 11, 6 with 12, 8 with 13, 9 with 15.
+# first-quest (Nov 13-14): d2first, then the rest of the first quest.  The overworld legs are Lee's (Nov 13), their
+# plain ways (clips off) Lee's (Nov 14: the same heart containers, the recorder allowed).  The dungeon paths are the
+# shortest through game.yaml that take what the game needs, with the keys the route finds (Lee, Nov 14: take them;
+# a cheated key ends no run but the aim is a run with no cheats), without level 6's wand and level 8's book and
+# magic key; level 9 takes the red ring.  Order: 5, 7, the magic sword, 6, 8, 9.  Bombs come only from the rooms and
+# drops on the way (Lee, Nov 14: no shop; this is the speedrun route): 5:0x65's Gibdo, 7:0x1b when the bag isn't
+# full, 9:0x16's Patra; anything short is a cheated bomb for now.  Every step was walked in the emulator (fights
+# skipped; docs/routes/first-quest.md) but for the plain ways added Nov 14.
 first-quest:
   extends: d2first
   steps:
-  # Dungeon 4 to Dungeon 5 (Lee, Nov 13): the two coast heart containers and 0x0f's 100 rupees.  Every overworld leg
-  # was walked in the emulator Nov 13 (docs/routes/first-quest.md); the four wrap exits are in game.yaml now.
+  # Dungeon 4 to Dungeon 5 (Lee, Nov 13): the two coast heart containers (0x5f, 0x2f) and 0x0f's 100 rupees.
   - {leg: 'Dungeon 4 to Dungeon 5', level: 0, room: '0x45', entry: cave, exit: S, note: 'S off the pier at X $80: the raft back to the dock'}
-  - {level: 0, room: '0x55', entry: N, exit: W, wrap: true, note: 'the river cuts the dock off from the W edge: screen wrap E on row Y $85 or $8D, then W (plain: S, 0x65 W, 0x64 N into 0x54)'}
-  - {level: 0, room: '0x54', entry: E, exit: W, note: 'optional (bombs): N to 0x44''s shop and back, 4 bombs for 20 rupees: Dungeon 5 needs one bomb brought in'}
-  - {level: 0, room: '0x53', entry: E, exit: W}
-  - {level: 0, room: '0x52', entry: E, exit: W}
-  - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $75-$9D)'}
-  - {level: 0, room: '0x50', entry: E, exit: S}
-  - {level: 0, room: '0x60', entry: N, exit: W, wrap: true, note: 'wrap exit round the world on row Y $85 or $8D: into 0x5f (room id - 1), arriving on water; a softlock without the ladder'}
-  - {level: 0, room: '0x5f', entry: E, exit: N, note: 'ladder clip W from the arrival to the heart container (9 hearts; NOT BUILT: no overworld ladder clip yet); the ladder twice more to land, then N'}
+  - stretch: coast-heart
+    parts: {level: 0, room: '0x55', entry: N}
+    rejoins: {level: 0, room: '0x4f', entry: S}
+    clips:
+    - {level: 0, room: '0x55', entry: N, exit: W, wrap: true, note: 'the river cuts the dock off from the W edge: screen wrap E on row Y $85 or $8D, then W'}
+    - {level: 0, room: '0x54', entry: E, exit: W}
+    - {level: 0, room: '0x53', entry: E, exit: W}
+    - {level: 0, room: '0x52', entry: E, exit: W}
+    - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $75-$9D)'}
+    - {level: 0, room: '0x50', entry: E, exit: S}
+    - {level: 0, room: '0x60', entry: N, exit: W, wrap: true, note: 'wrap exit round the world on row Y $85 or $8D: into 0x5f (room id - 1), arriving on water; a softlock without the ladder'}
+    - {level: 0, room: '0x5f', entry: E, exit: N, note: 'the overworld ladder clip W from the arrival (to be built) to the heart container (9 hearts); the ladder twice more to land, then N'}
+    plain:
+    - {level: 0, room: '0x55', entry: N, exit: E, note: 'E along row 5 (d2first''s rooms the other way)'}
+    - {level: 0, room: '0x56', entry: W, exit: E}
+    - {level: 0, room: '0x57', entry: W, exit: E}
+    - {level: 0, room: '0x58', entry: W, exit: E}
+    - {level: 0, room: '0x59', entry: W, exit: E}
+    - {level: 0, room: '0x5a', entry: W, exit: E}
+    - {level: 0, room: '0x5b', entry: W, exit: E}
+    - {level: 0, room: '0x5c', entry: W, exit: E}
+    - {level: 0, room: '0x5d', entry: W, exit: S}
+    - {level: 0, room: '0x6d', entry: N, exit: E}
+    - {level: 0, room: '0x6e', entry: W, exit: E}
+    - {level: 0, room: '0x6f', entry: W, exit: N}
+    - {level: 0, room: '0x5f', entry: S, exit: N, note: 'the heart container with the plain ladder from the S side (9 hearts), then N'}
   - {level: 0, room: '0x4f', entry: S, exit: N}
   - {level: 0, room: '0x3f', entry: S, exit: N, note: 'the raft leaves from the dock at (X $60, Y $7D)'}
   - {level: 0, room: '0x2f', entry: S, exit: S, takes: [heart-container], note: 'take-any cave: the heart container is the right ware (10 hearts); S off the pier: the raft back'}
   - {level: 0, room: '0x3f', entry: N, exit: W}
-  - {level: 0, room: '0x3e', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $85-$BD)'}
-  - {level: 0, room: '0x3d', entry: E, exit: N, note: 'optional (rupees are tight): the armos at tile (18, 8) touched from the side: a cave with 30 rupees, 505 frames'}
-  - {level: 0, room: '0x2d', entry: S, exit: N}
+  - stretch: lake-3e
+    parts: {level: 0, room: '0x3e', entry: E}
+    rejoins: {level: 0, room: '0x1d', entry: S}
+    clips:
+    - {level: 0, room: '0x3e', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $85-$BD)'}
+    - {level: 0, room: '0x3d', entry: E, exit: N}
+    - {level: 0, room: '0x2d', entry: S, exit: N}
+    plain:
+    - {level: 0, room: '0x3e', entry: E, exit: N}
+    - {level: 0, room: '0x2e', entry: S, exit: W}
+    - {level: 0, room: '0x2d', entry: E, exit: N}
   - {level: 0, room: '0x1d', entry: S, exit: E}
   - {level: 0, room: '0x1e', entry: W, exit: E}
   - {level: 0, room: '0x1f', entry: W, exit: N, note: 'the gap in the rock wall: N at X $80 only'}
   - {level: 0, room: '0x0f', entry: S, exit: S, note: 'secret cave: 100 rupees, walking up at X $78'}
   - {level: 0, room: '0x1f', entry: N, exit: W}
   - {level: 0, room: '0x1e', entry: E, exit: W}
-  - {level: 0, room: '0x1d', entry: E, exit: N, note: 'N at X $D0 only'}
-  - {level: 0, room: '0x0d', entry: S, exit: W}
-  - {level: 0, room: '0x0c', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge onto the mountain top (rows Y $65-$AD)'}
-  - {level: 0, room: '0x0b', entry: E, exit: cave, note: 'Dungeon 5'}
-  # Dungeon 5: the recorder, Digdogger.  Walked in the emulator Nov 13 (docs/routes/first-quest.md): 6 keys in, 3
-  # spent, 2 picked up, 5 out; 8 bombs in, 2 spent, +4, 8 out.  Forced fights: 0x05, 0x66 on the way back, the small
-  # Digdogger, and without clips 0x64.
+  - stretch: mountain
+    parts: {level: 0, room: '0x1d', entry: E}
+    rejoins: {level: 5, room: '0x76', entry: S}
+    clips:
+    - {level: 0, room: '0x1d', entry: E, exit: N, note: 'N at X $D0 only'}
+    - {level: 0, room: '0x0d', entry: S, exit: W}
+    - {level: 0, room: '0x0c', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge onto the mountain top (rows Y $65-$AD)'}
+    - {level: 0, room: '0x0b', entry: E, exit: cave, note: 'Dungeon 5'}
+    plain:
+    - {level: 0, room: '0x1d', entry: E, exit: S, note: 'the E part''s S lanes (X $70-$80): its W edge is cut off'}
+    - {level: 0, room: '0x2d', entry: N, exit: W}
+    - {level: 0, room: '0x2c', entry: E, exit: N}
+    - {level: 0, room: '0x1c', entry: S, exit: W}
+    - {level: 0, room: '0x1b', entry: E, exit: maze, note: 'the Lost Hills: N, N, N, N'}
+    - {level: 0, room: '0x0b', entry: S, exit: cave, note: 'Dungeon 5'}
+  # Dungeon 5: the recorder, Digdogger.  Walked in the emulator Nov 13 (docs/routes/first-quest.md).  Keys: 6 in, 3
+  # spent, 2 picked up, 5 out.  Bombs: 0x66's wall needs one brought in (a drop, else cheated), then 0x65's Gibdo
+  # carries 4; 2 walls.  Forced fights: 0x05, 0x66 on the way back, the small Digdogger, and without clips 0x64.
   - {leg: 'Dungeon 5', level: 5, room: '0x76', entry: S, exit: N}
   - {level: 5, room: '0x66', entry: S, exit: W, note: '3 Gibdos, dark: leave them (killed now, all three are back on the return); bomb the W wall'}
-  - {level: 5, room: '0x65', entry: E, exit: W, note: '5 Gibdos; bomb the W wall first, then the bombs the Gibdo carries (+4)'}
+  - {level: 5, room: '0x65', entry: E, exit: W, note: '5 Gibdos; the bombs a Gibdo carries (+4: kill it and walk over the spot, or touch it for 2 hearts); bomb the W wall (with a bomb in hand, bomb first: a full bag caps the pickup)'}
   - {level: 5, room: '0x64', entry: E, exit: cave, note: 'clips: CLIP N from ($A0,$9D) into the block diamond, no fight; plain: kill the 5 Blue Darknuts, push the W block N or S'}
   - {level: 5, room: '0x07', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x06'}
   - {level: 5, room: '0x06', entry: cave, exit: W, note: 'the W key door (1st key)'}
@@ -67,11 +107,20 @@ first-quest:
   - {level: 5, room: '0x25', entry: E, exit: W, note: '5 Pols Voices, the costliest room; the W key door (3rd key)'}
   - {level: 5, room: '0x24', entry: E, exit: N, note: 'play the recorder, kill the small Digdogger (forced); the heart container (11 hearts); the N shutter opens'}
   - {level: 5, room: '0x14', entry: S, exit: triforce, note: 'the triforce piece; out in 0x0b'}
-  # Dungeon 5 to Dungeon 7 (Lee): arrows and food
+  # Dungeon 5 to Dungeon 7 (Lee): arrows and food (0x0f's 100 rupees pay for both)
   - {leg: 'Dungeon 5 to Dungeon 7', level: 0, room: '0x0b', entry: cave, exit: recorder, note: 'the recorder twice, facing down as Link comes out, the second play before the whirlwind arrives: Dungeon 4''s island'}
   - {level: 0, room: '0x45', entry: recorder, exit: S, note: 'S off the pier at X $80: the raft back to the dock'}
-  - {level: 0, room: '0x55', entry: N, exit: W, wrap: true, note: 'screen wrap E on row Y $85 or $8D over the river, then W (plain: S, 0x65 W, 0x64 N into 0x54)'}
-  - {level: 0, room: '0x54', entry: E, exit: N}
+  - stretch: dock-44
+    parts: {level: 0, room: '0x55', entry: N}
+    rejoins: {level: 0, room: '0x44', entry: S}
+    clips:
+    - {level: 0, room: '0x55', entry: N, exit: W, wrap: true, note: 'screen wrap E on row Y $85 or $8D over the river, then W'}
+    - {level: 0, room: '0x54', entry: E, exit: N}
+    plain:
+    - {level: 0, room: '0x55', entry: N, exit: S}
+    - {level: 0, room: '0x65', entry: N, exit: W, note: 'across the ford rows'}
+    - {level: 0, room: '0x64', entry: E, exit: N}
+    - {level: 0, room: '0x54', entry: S, exit: N}
   - {level: 0, room: '0x44', entry: S, exit: N, takes: [wood-arrow], note: 'shop: the wooden arrow is the right ware, 80 rupees'}
   - {level: 0, room: '0x34', entry: S, exit: S, takes: [food], note: 'touch the armos at tile (8, 8) from the side (from below it costs a heart): stairs to the shop; food is the right ware, 60 rupees'}
   - {level: 0, room: '0x44', entry: N, exit: S}
@@ -80,8 +129,8 @@ first-quest:
   - {level: 0, room: '0x52', entry: E, exit: N}
   - {level: 0, room: '0x42', entry: S, exit: cave, note: 'one step in from the edge, the recorder drains the pond: Dungeon 7''s stairs at tile (12, 10)'}
   # Dungeon 7: the red candle, Aquamentus (level-7.md's way with three keys).  Walked in the emulator Nov 13
-  # (docs/routes/first-quest.md): 19 entries, 3 keys spent (6 in, 3 out), 5 bombs on walls (8 in, 3 out).  Forced
-  # fights: 0x49, 0x1a (not with clips), 0x1c, 0x0d, Aquamentus.
+  # (docs/routes/first-quest.md): 19 entries; keys 5 in, 3 spent, 2 out; 5 bomb walls, 0x1b's 4 bombs when the bag
+  # isn't full.  Forced fights: 0x49, 0x1a (not with clips), 0x1c, 0x0d, Aquamentus; 0x1b for bombs.
   - {leg: 'Dungeon 7', level: 7, room: '0x79', entry: S, exit: N}
   - {level: 7, room: '0x69', entry: S, exit: N, note: 'Blue Goriyas need not die; bomb the N wall (bomb 1 of 5)'}
   - {level: 7, room: '0x59', entry: S, exit: N, note: 'Goriyas: straight across'}
@@ -94,7 +143,7 @@ first-quest:
   - {level: 7, room: '0x1a', entry: W, exit: cave, note: 'clips: block clip N from under the block, no fight; plain: FIGHT 3 Blue and 3 Red Goriyas, push the block N or S; the stairs'}
   - {level: 7, room: '0x4a', in_cave: true, entry: S, exit: N, note: 'the red candle'}
   - {level: 7, room: '0x1a', entry: cave, exit: E, note: 'bomb the E wall (bomb 3)'}
-  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'optional (bombs): kill the 6 Blue Goriyas for the room''s 4 bombs; the E key door (key 3 of 3)'}
+  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'FIGHT when the bag isn''t full: the 6 Blue Goriyas for the room''s 4 bombs; the E key door (key 3 of 3)'}
   - {level: 7, room: '0x1c', entry: W, exit: N, note: 'one step out of the doorway, play the recorder; FIGHT: the 3 small Digdoggers: the N shutter'}
   - {level: 7, room: '0x0c', entry: S, exit: E, note: 'Dodongos: walk past along the S side; bomb the E wall (bomb 4)'}
   - {level: 7, room: '0x0d', entry: W, exit: cave, note: 'FIGHT: the 5 Wallmasters (a grab carries Link back to 0x79); round by the N side, push the block W: stairs appear in the NE corner'}
@@ -105,8 +154,17 @@ first-quest:
   # Dungeon 7 to the magic sword to Dungeon 6 (Lee)
   - {leg: 'Dungeon 7 to the magic sword to Dungeon 6', level: 0, room: '0x42', entry: cave, exit: S}
   - {level: 0, room: '0x52', entry: N, exit: W}
-  - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $75-$9D)'}
-  - {level: 0, room: '0x50', entry: E, exit: N, note: 'N at X $E0, the corridor the wrap arrives in'}
+  - stretch: woods
+    parts: {level: 0, room: '0x51', entry: E}
+    rejoins: {level: 0, room: '0x40', entry: S}
+    clips:
+    - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $75-$9D)'}
+    - {level: 0, room: '0x50', entry: E, exit: N, note: 'N at X $E0, the corridor the wrap arrives in'}
+    plain:
+    - {level: 0, room: '0x51', entry: E, exit: S}
+    - {level: 0, room: '0x61', entry: N, exit: maze, note: 'the Lost Woods: N, W, S, W'}
+    - {level: 0, room: '0x60', entry: E, exit: N}
+    - {level: 0, room: '0x50', entry: S, exit: N}
   - {level: 0, room: '0x40', entry: S, exit: E}
   - {level: 0, room: '0x41', entry: W, exit: N}
   - {level: 0, room: '0x31', entry: S, exit: N}
@@ -150,7 +208,7 @@ first-quest:
   - {level: 8, room: '0x5e', entry: S, exit: N, note: 'FIGHT: 5 Blue Darknuts, four statues shoot (kills are kept across a retreat S); the key at the centre (+1); the N shutter'}
   - {level: 8, room: '0x4e', entry: S, exit: N, note: 'straight N, nothing has to die; the N key door (0x5e''s key)'}
   - {level: 8, room: '0x3e', entry: S, exit: E, note: 'FIGHT: 6 Blue Darknuts, two statues shoot: the E shutter'}
-  - {level: 8, room: '0x3f', entry: W, exit: cave, note: 'the shutter shuts behind; straight E along the door row to the stairs; optional FIGHT: 3 Darknuts and 3 Gibdos for 4 bombs (level 9 needs them)'}
+  - {level: 8, room: '0x3f', entry: W, exit: cave, note: 'the shutter shuts behind; straight E along the door row to the stairs; Darknuts and Gibdos need not die'}
   - {level: 8, room: '0x2f', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x4c'}
   - {level: 8, room: '0x4c', entry: cave, exit: N, note: 'up inside the block ring: out by its S side; the key in the top right corner (+1, for level 9); 8 Pols Voices need not die; bomb the N wall (bomb 2)'}
   - {level: 8, room: '0x3c', entry: S, exit: N, note: 'FIGHT: Gleeok, four heads (9 magic sword hits); the heart container (14 hearts); the N shutter opens'}
@@ -170,10 +228,10 @@ first-quest:
   - {level: 0, room: '0x06', entry: E, exit: W}
   - {level: 0, room: '0x05', entry: E, exit: cave, note: 'bomb the rock wall at tile (10, 12), facing N from X $48-$58 (1 bomb): Dungeon 9'}
   # Dungeon 9: the red ring, the silver arrow, Ganon, Zelda.  Walked in the emulator Nov 13 to the end of the game
-  # (docs/routes/first-quest.md).  3 keys carried (3 doors, 1 key found after the last: 1 left).  8 bomb walls
-  # against a bag of 8 less the bomb for 0x05's rock wall: the Patra of 0x16 dies for its 4 bombs (the other way:
-  # the 4 bombs lying in 0x23, from 0x14 by 0x24: no fight, 4 more rooms).  Forced fights: 0x55, 0x07, 0x16 (bombs),
-  # 0x05, 0x61, 0x20, 0x10, 0x30, 0x03, 0x52, Ganon: 24 Wizzrobes, 3 Patras, 2 Lanmolas.
+  # (docs/routes/first-quest.md).  3 keys carried (3 doors, 1 key found after the last: 1 left).  8 bomb walls; the
+  # Patra of 0x16 dies for its 4 bombs (Lee, Nov 14: no more rooms for bombs); what is short is a drop or cheated.
+  # Forced fights: 0x55, 0x07, 0x16 (bombs), 0x05, 0x61, 0x20, 0x10, 0x30, 0x03, 0x52, Ganon: 24 Wizzrobes, 3 Patras,
+  # 2 Lanmolas.
   - {leg: 'Dungeon 9', level: 9, room: '0x76', entry: S, exit: N}
   - {level: 9, room: '0x66', entry: S, exit: W, note: 'with all eight pieces the old man is gone and both shutters are open'}
   - {level: 9, room: '0x65', entry: E, exit: N, note: 'dark, 5 Wizzrobes, no fight; at X $78 the ladder over the water row; bomb the N wall (bomb 1 of 8)'}

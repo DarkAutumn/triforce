@@ -747,6 +747,8 @@ def route_segments(plan: list[dict], level: int, clips: str = BOTH) -> list[tupl
                 continue
             elif a['exit'] == 'recorder':
                 found.append((a['room'], b['room'], 'recorder'))
+            elif a['exit'] == 'maze':       # a draft's way out of a maze by its sequence, into the room beside it
+                found.append((a['room'], b['room'], 'walk'))
             elif a['exit'] in WALK_EXITS:
                 found.append((a['room'], b['room'], 'edge' if neighbour(a['room'], a['exit']) != b['room']
                               else 'wrap' if a.get('wrap') else 'walk'))
@@ -2018,13 +2020,10 @@ class MapWindow(QMainWindow):
             self.scope = next(kind for kind, _ in SCOPE_KINDS if available[kind] or kind == ROOM_SCOPE)
         if self.segment not in self.scopes:
             self.segment = next((name for name in SEGMENTS if name in self.scopes), SEGMENTS[0])
-        # The switch states with data (an entry from before the switch played on); a missing one can't be picked.
-        switches = {BOTH} | {switch for rooms in self.scopes.values() for entry in rooms.values()
-                             for switch in entry.get('by_clips') or ('on',)}
-        for index, (switch, _) in enumerate(CLIPS_CHOICES):
-            self.clips_group.button(index).setEnabled(switch in switches)
-        if self.clips not in switches:
-            self.clips = BOTH
+        # The switch states with data (an entry from before the switch played on); update_clips_choices adds the
+        # route's ways.
+        self.data_switches = {BOTH} | {switch for rooms in self.scopes.values() for entry in rooms.values()
+                                       for switch in entry.get('by_clips') or ('on',)}
         self.data_status = (f'{stats_status(self.stats_data, self.stats_file, problem)} · '
                             f'{eval_status(self.sources)}')
         self.show_status()
@@ -2035,7 +2034,6 @@ class MapWindow(QMainWindow):
                else f" ({s['file']})" if not s['mode'] else '')
             for s in self.sources) or f'no promoted specialists in {self.models_dir}')
         self.check_scope_buttons()
-        self.clips_group.button([switch for switch, _ in CLIPS_CHOICES].index(self.clips)).setChecked(True)
         self.set_route(self.route)
 
     def show_status(self):
@@ -2055,6 +2053,7 @@ class MapWindow(QMainWindow):
                              if any(step.get('draft') for step in self.plan) else [])
         except (ValueError, OSError, yaml.YAMLError) as error:      # a draft half edited: say so
             self.plan, self.problems = [], [f'unreadable ({error})']
+        self.update_clips_choices()
         self.shown = step_rooms(self.plan, self.cellars)
         for line in self.problems:
             print(f'zelda-map: route {route}: {line}', file=sys.stderr)
@@ -2063,6 +2062,18 @@ class MapWindow(QMainWindow):
                             + (f' · route {route}' if route else ''))
         self.show_status()
         self.show_level(self.level, keep_view=True)
+
+    def update_clips_choices(self):
+        """Enables the switch states with data, and both whenever the route has a stretch (the selector also picks
+        the route's way); a missing one can't be picked and falls back to Both."""
+        switches = set(self.data_switches)
+        if any(step.get('way') for step in self.plan):
+            switches |= {'on', 'off'}
+        for index, (switch, _) in enumerate(CLIPS_CHOICES):
+            self.clips_group.button(index).setEnabled(switch in switches)
+        if self.clips not in switches:
+            self.clips = BOTH
+        self.clips_group.button([switch for switch, _ in CLIPS_CHOICES].index(self.clips)).setChecked(True)
 
     def cave_key(self, level: int, room: int) -> Key:
         """The key of a room's cave: its own id in a cave, or its dungeon cellar (1:0x22 -> (1, 0x7f, True))."""

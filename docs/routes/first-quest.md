@@ -22,6 +22,21 @@ level 6's wand and level 8's book and magic key.
 - No screen wrap in 0x17: the ladder crosses its river.
 - The first route through Dungeons 5-9 is the agent's to find; Lee reviews it on the map and adjusts.
 
+Nov 14, Lee's answers to the first review:
+
+- **Bombs come from the rooms on the way, never a shop: this is the speedrun route.** 5:0x65's Gibdo carries 4;
+  7:0x1b's 6 Blue Goriyas are fought for the room's 4 bombs when the bag isn't full (not 7:0x0c's Dodongos); 9:0x16's
+  Patra dies for its 4 (no extra rooms for bombs). Otherwise the route lives on drops, on conserving bombs, or on a
+  cheated bomb. 5:0x56's Dodongos (4 bombs) may be added later, not now.
+- **No rupee detours** (0x3d, the trees): with no bombs bought, 0x0f's 100 pay for the arrows and the food.
+- **Keys: take the ones the route has.** Cheated keys end no run, but the aim is a clean run with no cheats, so the
+  route picks up every key it needs (it does: the ledger below). No magic key.
+- **Every overworld leg has a plain way (clips off) through the same heart containers:** 0x5f, 0x2f, then Dungeon
+  5. The recorder's whirlwind is allowed with clips off. 0x51 without the wrap goes S into the Lost Woods (N, W, S,
+  W) and comes out in 0x60, then N to 0x50 (Lee).
+- **The overworld ladder clip is wanted;** building the movement (clips, wraps, the new actions) is the next phase.
+- **No blue ring:** that is a different route.
+
 ## The legs
 
 Step numbers are `zelda-map.py`'s (the draft continues `d2first`'s numbering). "Wrap exit": `CLIP E` wraps Link
@@ -41,7 +56,8 @@ into the room's solid W edge and Left changes the room (`game.yaml` `wrap: true`
 | Dungeon 9 | 76, 66, 65, 55, tunnel 60, 14, 15, 16, [26, 27, 17, 07, cellar 00, 07, 17, 27, 26, 16], 06, 05, tunnel 70, 63, 62, 61, tunnel 75, 20, 10, cellar 4f, 10, 20, tunnel 75, 61, 51, 41, 31, 30, tunnel 67, 04, 03, tunnel 77, 52, 42, 32 | the red ring detour in brackets; eight bomb walls, three key doors, six tunnel passages, the silver arrow, Ganon, Zelda |
 
 Heart containers: 8 after Dungeon 4, 9 after 0x5f, 10 after 0x2f, 11 after Dungeon 5, 12 after Dungeon 7 (the
-magic sword's cave refuses 11 and gives at 12), 13 after Dungeon 6, 14 after Dungeon 8, 15 after 0x47.
+magic sword's cave refuses 11 and gives at 12), 13 after Dungeon 6, 14 after Dungeon 8, 15 after 0x47. The plain
+ways (clips off, Nov 14; "What is not built") reach the same caves, so the counts are the same with clips off.
 
 ## What was walked, and how
 
@@ -88,33 +104,29 @@ room, a boss). Everything else on the route is crossed.
 
 **Keys** (6 leave Dungeon 4, `d4.md`): Dungeon 5 spends 3 and picks up 2 on the way (5 out); Dungeon 7 spends 3
 (2 out); Dungeon 6 spends 2 and takes 0x58's and 0x2d's (2 out); Dungeon 8 takes 0x5e's and 0x4c's and spends 1 (3
-out); Dungeon 9 has three key doors before its only key (1 out). So level 9 is entered with exactly the 3 it needs,
-because of two pickups made for it: 6:0x2d's (a fight with 3 Vires) and 8:0x4c's (in the open). The magic key
-instead costs level 8 eight more room entries, a Gohma (3 arrows) and a bomb.
+out); Dungeon 9 has three key doors before its only key (1 out). No cheated key is needed anywhere: level 9 is
+entered with the 3 it needs because of 6:0x2d's (a fight with 3 Vires) and 8:0x4c's (in the open).
 
-**Bombs** (the bag holds 8). Walls: Dungeon 5 two, 7 five, 6 one, 8 two, 0x05's rock wall one, 9 eight: 19. Room
-items on the path: 5:0x65 (+4, in the way), 9:0x16 (+4, its Patra must die). **Without drops this does not add
-up:** leaving Dungeon 5 with a full bag, Link has 3 after Dungeon 7, 2 after 6, 0 after 8, none for 0x05, and
-level 9 needs 4 on entry. And Dungeon 5 itself needs one bomb brought in, where today's chains leave Dungeon 4
-with none. What can fill the gap, none of it in the draft yet:
+**Bombs** (the bag holds 8; Lee, Nov 14: room bombs and drops only). Walls: Dungeon 5 two, 7 five, 6 one, 8 two,
+0x05's rock wall one, 9 eight: 19. Room bombs on the path: 5:0x65 (+4, carried by a Gibdo), 7:0x1b (+4, fought for
+when the bag isn't full), 9:0x16 (+4, its Patra). Leaving Dungeon 4 with none (what today's chains show) and with
+no drop at all:
 
-| Source | Gives | Costs |
+| Where | Bombs | Cheated |
 |---|---|---|
-| 7:0x1b's room bombs | +4 (up to the bag's 8) | a fight with 6 Blue Goriyas |
-| 8:0x3f's room bombs | +4 | a fight with 3 Darknuts and 3 Gibdos in a room with no way back |
-| 0x6f's shop (two rooms E of Dungeon 8's entrance), or 0x44's (already visited for the arrows) | +4 per 20 rupees | rooms and rupees (see below) |
-| drops | bombs from Gibdos, Red Goriyas, Vires, Red Wizzrobes, Red Darknuts and Blue Moblins (the drop table's bomb row); the forced drop of a tenth damage-free kill made with a bomb | not counted here |
+| 5:0x66 wall, 0x65 (+4), its wall | 0 → 3 | 1 (0x66) |
+| 7: 0x69, 0x19, 0x1a walls, 0x1b (+4), 0x0c, 0x29 walls | 3 → 0 → 4 → 2 | 0 |
+| 6: 0x28 wall | 2 → 1 | 0 |
+| 8: 0x6e, 0x4c walls | 1 → 0 | 1 (0x4c) |
+| 0x05's rock wall | 0 | 1 |
+| 9: 0x65, 0x26, 0x27, 0x17 walls, 0x16 (+4), 0x06, 0x20, 0x31, 0x04 walls | 0 → 4 → 0 | 4 (before the Patra) |
 
-One plan that adds up with no drop at all (Link leaves Dungeon 4 with no bombs), written into the draft's notes
-as optional: buy 4 at 0x44 on leg 1 (one room N of 0x54 and back; 20 rupees, which then needs 0x3d's 30 for the
-arrows and the food); Dungeon 5: 4, two walls, +4 = 6; Dungeon 7: three walls (3), 0x1b's room bombs (7), two
-walls: 5; Dungeon 6: 4; Dungeon 8: 2, and 0x3f's room bombs: 6; 0x05's wall: 5; level 9: four walls (1), the
-Patra's bombs (5), four walls: 1 left. Three fights (7:0x1b, 8:0x3f, 9:0x16) and one shop stop.
+Seven cheated bombs on a run with no drops; every bomb a Gibdo, Goriya, Vire, Wizzrobe, Darknut or Moblin drops
+on the way (the drop table's bomb row), and every forced drop of a tenth damage-free kill made with a bomb, saves
+one. The route has to keep bombs for walls: no bomb spent as a weapon outside a fight that needs it.
 
 **Rupees:** 42-54 after `d2first`'s 0x67 cave, +100 at 0x0f, -80 (arrows), -60 (food) leaves **2-14**, and each
-arrow shot costs one (one for level 6's Gohma, one for Ganon). Both purchases go through even at the low end; there
-is nothing for bombs. On the route: 0x3d's armos hides a cave with 30 rupees (505 frames, in the draft's note as
-optional); 0x51's tree 10 (needs the candle: leg 3 only); 0x48's and 0x28's trees 30 each (leg 5).
+arrow shot costs one (one for level 6's Gohma, one for Ganon). Both purchases go through even at the low end.
 
 **Hearts:** no refill is on the route but the triforce pieces (each fills the hearts) and drops. The walks' blind
 crossings took about 20 hearts of contact in level 5, 11 in level 7, 12-22 in level 6: the fights and the
@@ -152,10 +164,12 @@ Nothing of this route can be played by the agent yet. What it needs beyond rooms
   ARROW exists but no state has held arrows. Each new action kind makes every trained model unusable: decide them
   together (the version rule's COMPAT bump).
 - **The overworld ladder clip** (0x5f's heart container from the wrap arrival): `zelda::clips` offers ladder clips
-  in dungeons only. Without it 0x5f's heart is reached the plain way from 0x4f or 0x6f.
-- **Clips off:** Lee's rule is that the plain way stays trained. The wrap exits have plain ways of very different
-  cost: 0x3e (N, 0x2e, 0x2d: the same room count), 0x0c (the Lost Hills, 1,962 frames against 726), 0x55 (S, 0x65,
-  0x64, 0x54), but 0x51 into 0x50 is 23 rooms round the north coast and 0x60 into 0x5f 16 rooms along the south.
+  in dungeons only. Next phase (Lee, Nov 14). The plain way takes the heart from 0x6f with the plain ladder.
+- **Plain ways (clips off)** are in the draft as `stretch:` blocks, as in `d2first` (the map's Clips selector shows
+  either): coast-heart (row 5 E, 0x5d S, row 6 E, 0x6f N into 0x5f), lake-3e (0x3e N, 0x2e W), mountain (0x1d S,
+  0x2d, 0x2c, 0x1c, the Lost Hills), dock-44 (0x55 S, 0x65 W, 0x64 N), woods (0x51 S, the Lost Woods, 0x60 N). The
+  objective has no way out of a maze by its sequence yet (`routes.yaml` refuses one), and Lost Woods and Lost Hills
+  steps need it.
 - **Route steps the objective does not know:** buying in a shop, the take-any caves' right ware, the armos and the
   gravestone, burning a tree, the whirlwind as an exit, a tunnel (a cellar with two exits), a room left by the door
   it was entered by, the end of the game.
@@ -165,19 +179,11 @@ Nothing of this route can be played by the agent yet. What it needs beyond rooms
 
 ## Open questions for Lee
 
-1. **Bombs** (the ledger above): which of the sources goes into the route? The cheapest in rooms is to clear
-   7:0x1b and 8:0x3f; the cheapest in fights is a shop, which needs rupees the route does not have.
-2. **Rupees:** take 0x3d's 30 in leg 1 (and 0x48's or 0x28's 30 in leg 5)?
-3. **Level 9's keys:** two pickups (6:0x2d's Vires, 8:0x4c in the open) or level 8's magic key?
-4. **Level 9's bombs:** the Patra of 0x16 (the draft), or the four bombs lying in 0x23 (from 0x14 by 0x24: no
-   fight, four more rooms)?
-5. **0x60 into 0x5f** needs the overworld ladder clip built (Link arrives on water), and the only other way to
-   0x5f's heart is to enter it from 0x4f or 0x6f: 16 rooms along the south coast from 0x60. Build the clip?
-6. **Clips off** on legs 1 and 3 (0x51's 23-room plain way): is a clips-off run allowed to be that much longer, or
-   do those legs want another route without wraps?
-7. **No ring and no magic shield before level 9.** Level 8's eleven Blue Darknuts (2 hearts a touch) and level 6's
-   Red Wizzrobes (4 hearts a shot) are fought at full damage. The blue ring is 250 rupees.
-8. The wand, the book and the magic key are left out; say if any should come back.
+The Nov 13 questions are answered above. Left:
+
+1. The wand, the book and the magic key are left out; say if any should come back.
+2. Without drops the route cheats seven bombs (the table above); 5:0x56's Dodongos (+4) is the one source named
+   for later.
 
 ## Tools made for this
 

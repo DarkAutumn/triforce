@@ -56,22 +56,22 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
 
 ## The first-quest draft route (Lee, Nov 13; branch `routes-5-9`)
 
-`docs/routes/first-quest.md`, decisions 2026-11-13 "The rest of the first quest: a draft route".
+`docs/routes/first-quest.md`, decisions 2026-11-13 "The rest of the first quest: a draft route" and 2026-11-14
+"The first-quest draft, Lee's first review".
 
 - [x] **Levels 5-9 in game.yaml** (`scripts/level_rooms.py`), pictured in `zelda-map.py` (`triforce/probe.py`),
   door marks and labels on every dungeon level.
 - [x] **The draft** (`triforce/draft_routes.yaml`, `first-quest`): Lee's overworld legs and a path through
   Dungeons 5, 7, 6, 8, 9; every step walked in the emulator with the fights skipped.
-- [ ] **Lee's review on the map**, and his answers to the eight questions at the end of `first-quest.md`.
-- [ ] **Bombs don't add up without drops:** 19 walls after Dungeon 4 against a bag of 8 and two room pickups on
-  the path; Dungeon 5 needs one brought in, level 9 four. Sources not in the draft: 7:0x1b's and 8:0x3f's room
-  bombs (a fight each), a shop (0x44, 0x6f: 20 rupees for 4).
-- [ ] **Rupees:** 2-14 left after the arrows (80) and the food (60); one per arrow shot. 0x3d's armos cave (30) is
-  on leg 1.
-- [ ] **The overworld ladder clip** (already open from round 21): the draft's 0x60 into 0x5f arrives on water and
+- [x] **Lee's first review** (Nov 14): room bombs only (5:0x65, 7:0x1b when not full, 9:0x16), no shops or rupee
+  detours, take the route's keys, no magic key, no blue ring; plain ways for every overworld leg (the Lost Woods
+  for 0x51), drawn by the map's Clips selector.
+- [ ] **Bombs without drops:** seven cheated bombs on a run with none (first-quest.md's table). Later: 5:0x56's
+  Dodongos (+4).
+- [ ] **The overworld ladder clip** (next phase, Lee, Nov 14): the clip way's 0x60 into 0x5f arrives on water and
   needs it; by buttons it is 38 frames from the arrival to the heart container.
-- [ ] **Clips off on the wrap exits:** 0x51 into 0x50 has a 23-room plain way, 0x60 into 0x5f a 16-room one; Lee's
-  rule is that the plain way stays trained.
+- [ ] **Leaving a maze by its sequence** in a route (the plain ways through the Lost Woods and the Lost Hills):
+  `routes.yaml` refuses it and the envs don't handle a visit that loops back into its own room.
 - [ ] **New action kinds** for the route: the recorder, food, the candle (and arrows need a state that holds
   them). One model-incompatible bump for all of them.
 - [ ] **What the objective does not know yet:** buying in a shop, a take-any cave's right ware, the armos and the

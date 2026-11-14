@@ -1798,3 +1798,17 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   (`tests/test_draft_routes.py`). The level documents carry the traces.
 - **Open:** `first-quest.md` "Open questions for Lee" (bombs, rupees, keys or the magic key, the overworld ladder
   clip, clips off on the wrap exits, rings).
+
+## 2026-11-14 — The first-quest draft, Lee's first review: bombs, keys, plain ways (Lee)
+
+- **Bombs:** the speedrun route buys none. Room bombs on the way only: 5:0x65's Gibdo, 7:0x1b's Blue Goriyas
+  (fought when the bag isn't full; not 7:0x0c's Dodongos), 9:0x16's Patra (no extra rooms for bombs); otherwise
+  drops, conserving bombs, or a cheated bomb. 5:0x56's Dodongos maybe later. No rupee detours.
+- **Keys:** a cheated key ends no run, but the aim is a clean run with no cheats: the route takes the keys it has
+  (6:0x2d's, 8:0x4c's for level 9). No magic key.
+- **Clips off:** every overworld leg has a plain way through the same heart containers (0x5f, 0x2f, Dungeon 5); the
+  recorder is allowed with clips off. 0x51 without its wrap exit: S into the Lost Woods, N W S W, out in 0x60, N.
+  The draft holds them as `stretch:` blocks like `d2first` (`triforce/draft_routes.py`, `exit: maze` for a maze's
+  sequence); `zelda-map.py`'s Clips selector shows either way whenever the route has a stretch.
+- **The overworld ladder clip and the rest of the movement** are the next phase; this one ends with the draft.
+- **No blue ring:** a different route.
