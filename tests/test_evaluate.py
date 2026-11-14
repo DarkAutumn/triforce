@@ -276,6 +276,49 @@ def test_a_clip_family_is_evaluated_with_the_switch_on_and_off(states_dir, tmp_p
     assert plain['clips'] == 'on' and plain['episodes'] == 2
 
 
+def test_an_escape_evaluation_of_both_switch_states(states_dir, tmp_path):
+    """Rounds 22 and 23 merged: ``evaluate --act escape:16 --clips both`` plays every start state with the switch on
+    and off in the act mode, which reads the eval env's no-progress count: each episode plays argmax's first 16
+    decisions (the count can't reach 16 before), and draws once Link has stalled 16 decisions.  The result, every
+    switch state's summary and the recordings name the mode; every record carries its switch and its decisions; the
+    recordings verify."""
+    checkpoint = save_checkpoint('ow-start', 'escape', seeded_network(7, SMALL), root=tmp_path)
+    config = tmp_path / 'ow-start.yaml'
+    config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 60\nclips: true\n")
+
+    def run(act):
+        output, folder = tmp_path / f'{act}.json', tmp_path / act
+        assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--no-log', '--act', act,
+                              '--clips', 'both', '--episodes-per-state', '2', '--parallel', '2',
+                              '--replays', str(folder), '--output', str(output)]) == 0
+        return json.loads(output.read_text()), sorted(folder.iterdir())
+
+    escape, files = run('escape:16')
+    argmax, _ = run('argmax')
+    assert (escape['act'], escape['clips'], escape['episodes']) == ('escape:16', 'both', 4)
+    assert [r['clips_allowed'] for r in escape['records']] == [True, True, False, False]
+    assert set(escape['by_clips']) == {'on', 'off'} and escape['risk']['episodes'] == 4
+    assert all(escape['by_clips'][s]['risk']['episodes'] == 2 for s in ('on', 'off'))
+    assert eval_event(escape)['act'] == 'escape:16' and eval_event(escape)['risk'] == escape['risk']
+
+    def actions(record):
+        return ''.join(v['decisions']['actions'] for v in record['visits'])
+    stalled = 0
+    for mine, greedy in zip(escape['records'], argmax['records']):
+        assert mine['clips_allowed'] == greedy['clips_allowed'] and mine['seed'] == greedy['seed']
+        assert actions(mine)[:32] == actions(greedy)[:32], "the first 16 decisions are argmax's"
+        drawn = sum(v['decisions']['act_entropy'] for v in mine['visits'])
+        stalled += drawn > 0
+        if drawn == 0:
+            assert actions(mine) == actions(greedy), "never stalled: argmax throughout"
+    assert stalled, "an untrained model stalls within 60 steps and escape then draws"
+    recordings = [_native.Replay(f.read_bytes()) for f in files]
+    assert {r.meta['models'][0]['act'] for r in recordings} == {'escape:16'}
+    for f in files:
+        assert _native.replay_verify(f.read_bytes(), states_dir=str(states_dir))['frames'] > 0
+
+
 def test_the_route_families_play_each_start_state_in_the_switch_states_it_allows(states_dir):
     """Round 22's route: ``--clips both`` plays a start state in both switch states where both ways of a stretch
     enter its room that way (or neither: a room off the stretches), and only in its way's switch state where one way

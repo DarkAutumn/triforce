@@ -65,10 +65,12 @@ controller in the top right of every cell (over -LIFE-), the buttons held on eac
 The title shows the queues, the runs simulated and how they ended, how fast the cells play ("36 fps of 60.1
 max", ∞ when uncapped) and the sound.  --replays DIR also saves every simulated run.
 
-How the models act is chosen at startup: --act MODE for every model (default registry.PLAY_ACT, which draws every
-action at random so every run differs; argmax takes each model's most likely action, a rule such as floor:0.03
-draws but never takes an action under 3%: docs/rust-actor.md "Act modes") or --act model (each model's registered
-act mode).  A run whose models don't all draw (argmax, escape) is decided by the game's random numbers alone,
+How the models act is chosen at startup, for the simulations and the live cell alike: --act MODE for every model
+(default registry.PLAY_ACT, which draws every action at random so every run differs; argmax takes each model's
+most likely action, a rule such as floor:0.03 draws but never takes an action under 3%, temperature:0.75+relax:16
+draws sharpened and from the whole policy once Link stalls: docs/rust-actor.md "Act modes") or --act model (each
+model's registered act mode).  A run whose models don't all draw (argmax, escape) is decided by the game's random
+numbers alone,
 so those are redrawn from the run's seed whenever a start state is loaded (the game start, --from, and each
 checkpoint of a golden path); a run from console power on gets them from its idle delay instead, which must
 then be random.

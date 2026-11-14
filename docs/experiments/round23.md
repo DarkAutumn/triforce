@@ -5,14 +5,16 @@ don't want it randomly walking into a fireball because we make 1000s of decision
 will be 1% moves. [...] By default I want playing the game to not be argmax, but training and eval are up to you."
 Earlier he suggested a threshold (actions under about 10% removed). Branch `r23`; decision pending
 (`docs/decisions.md` 2026-11-13 "Act modes"). Code: `1f2368c` (modes, decision statistics), `490f18c` (base rates,
-pilot scripts).
+pilot scripts), then merged with round 22 (§6). **The pilot (§1-§5) was measured on the round 21 team** (`r71`);
+the rerun on the round 22 team is §8, pending its retrain.
 
-## Summary
+## Summary (the pilot, on the round 21 team)
 
 - **Act modes** (`docs/rust-actor.md` "Act modes"): `sample`, `argmax` (unchanged, bit for bit), and rules over the
   **joint** action (kind × direction × duration, 256 actions): `temperature:T`, `floor:P`, `minp:R`, `topp:P`,
   `escape:N` (argmax until the env's linger count reaches N decisions without progress, then a draw until progress),
-  combined with `+`. Spelled the same in every tool, the `act` file and replays (META `models[].act`).
+  combined with `+`; after the merge also `relax:N` (the other rules' draw until stalled, then plain `sample`: §6).
+  Spelled the same in every tool, the `act` file and replays (META `models[].act`).
 - **Risk and variety measures** in every evaluation and chain record: per decision the chosen action's probability
   under the unmodified policy is counted per room visit (moves under 1% and 5%, those followed by a hit or death
   within 4 decisions, and the same for every move as the base rate), the acting entropy, and the actions themselves
@@ -166,23 +168,61 @@ action sequences of the segment's first room (every run from the same state; ful
 - **Play default (play-zelda, zelda-headless, the golden path): `temperature:0.75`.** It must not be argmax and must
   show variety, which rules out `escape` (it plays argmax 97% of the time). Of the drawing modes it is the best that
   doesn't loop: full route 15.0% (above the r71 per-family 12.8% and sample's 8.7%), 17 stuck runs against floor:0.1's
-  113, about 1 move under 1% per D2 run instead of 3.9. `floor:0.1` reaches 16.0% but loops. Untested and the likely
-  better play default: `temperature:0.75+escape:16`. `registry.PLAY_ACT` is still `sample`: one line once decided.
-- **Training-time evaluation and early stopping: `escape:16`**, the chain rule (`train_round.py --eval-act`; the
-  early-stop confirmation in `best_of_n.success_by_state` still samples and needs a flag).
+  113, about 1 move under 1% per D2 run instead of 3.9. `floor:0.1` reaches 16.0% but loops. Untested then:
+  `temperature:0.75+escape:16` (but it is argmax until stalled, so it shows argmax's variety) and, added at the
+  merge, `temperature:0.75+relax:16` (a temperature draw until stalled, then plain sample: every action drawn).
+  `registry.PLAY_ACT` is still `sample`: one line once decided.
+- **Training-time evaluation and early stopping: `escape:16`**, the chain rule (`train_round.py --eval-act
+  escape:16`, which since the merge also makes the early-stop confirmation act that way: `train --confirm-act`).
 - **Weak points:** single-room differences among sharpened modes are within 1-1.5 SE; the escape threshold (16) was
   measured against 48 only in the quick pass; the hit-after-a-rare-move window (4 decisions) is a choice, not a
-  measured cause; `temperature:0.75+escape:16` and `floor:0.1+escape:16` were not run; the chain report's "hearts at
-  arrival" column reads the arrival room's `health_in`, which is the max hearts (4.00, 7.00, 8.00) and should be fixed
-  before it is quoted.
+  measured cause; `temperature:0.75+escape:16` and `floor:0.1+escape:16` were not run.
+- **Hearts at arrival, corrected (merge, Nov 13).** The report's column read the arrival record's `health_in`, which
+  out of a dungeon is the max hearts (the triforce refills them on the way out). It now reads Link's health on
+  entering the dungeon's triforce room (`r23_act_report.arrival_hearts`, checked by hand against
+  `r23-escape:16-*.jsonl`: D2 3.36, D3 3.40, D4 3.67, full 3.70). On these chains: D2 3.27-3.36 hearts in every
+  mode, D3 3.24-3.43, D4 3.43 (sample) to 3.77 (floor:0.1), full 3.21 (floor:0.03) to 3.82 (floor:0.1); `model`
+  3.27 / 3.34 / 3.64 / 3.58, `escape:16` 3.36 / 3.40 / 3.67 / 3.70.
 
-## 6. Re-measuring on the round 22 models
+## 6. Merged with round 22 (Nov 13): what changed for the rerun
 
-One command, on a merged tree with the round 22 team promoted:
+Everything above was measured **on the round 21 team** (`r71`, promoted in the main checkout) with code `r23` on
+1.4.1.0, before round 22's RNG, route, states and clips switch. The branch is now merged with `main` (round 22,
+1.4.1.1):
 
-    TRIFORCE_MODELS_DIR=<round 22 models> OUT=target/r23-on-r22 CHAIN_MODES="model escape:16 temperature:0.75 temperature:0.75+escape:16" \
-        scripts/experiments/r23_act_pilot.sh all
+- Every tool that plays takes the act mode and round 22's `--clips` side by side (`evaluate --act MODE --clips
+  on|off|both`, `eval-chain --act MODE --clips on|off [--clips-off-from ...]`, `eval-batch --acts ... --clips`,
+  `play-zelda.py --act MODE --clips on|off [--live]`, `zelda-headless.py`, the golden path). Records carry both the
+  switch fields (`clips_allowed`, `clips_flips`) and `decisions`; `by_clips` summaries and room statistics carry
+  `risk` per switch state. The live cell plays in the `--act` mode; `escape` and `relax` read the chain's
+  no-progress count there too, and a switch flip is no progress.
+- **The two readings of a rule with a stall count** (`docs/rust-actor.md` "Act modes"): `temperature:T+escape:N` is
+  argmax until Link has made no progress for N decisions, then a temperature draw until progress; the new
+  `temperature:T+relax:N` is a temperature draw at every decision until stalled, then a plain `sample` from the
+  whole policy until progress. `relax` draws every action (the owner's variety) and still breaks loops; it is the
+  candidate play default the pilot did not have.
+- `train_round.py --eval-act MODE` also sets the early-stop confirmation's act mode (`train --confirm-act`);
+  rollouts always sample.
+- `r23_act_pilot.sh` takes `CLIPS=on|off` (OUT defaults to `target/r23-pilot-clips<CLIPS>`), and its default
+  `CHAIN_MODES` is the rerun's: `model escape:16 escape:8 temperature:0.75 temperature:0.5 temperature:0.75+escape:16
+  temperature:0.5+escape:16 floor:0.1+escape:16 temperature:0.75+relax:16`.
+- A 20-run check per segment start with the round 21 team in `escape:16` (one `eval-batch`): §7.
 
-(rooms in every mode of the grid, then the chains, then the tables). Add `temperature:0.75` and
-`temperature:0.75+escape:16` to `CHAIN_MODES` to settle the play default. Every new checkpoint changes the answer per
-family (argmax is fragile per checkpoint), so this is to be rerun after every retrain.
+The rerun after the round 22 retrain, once with the switch on and once off:
+
+    TRIFORCE_MODELS_DIR=<round 22 models> CLIPS=on scripts/experiments/r23_act_pilot.sh all
+    TRIFORCE_MODELS_DIR=<round 22 models> CLIPS=off scripts/experiments/r23_act_pilot.sh all
+
+(rooms in every mode of the grid, then the chains, then the tables, into `target/r23-pilot-clipson` and
+`target/r23-pilot-clipsoff`). Every new checkpoint changes the answer per family (argmax is fragile per
+checkpoint), so this is to be rerun after every retrain.
+
+## 7. Merge check: the round 21 team in `escape:16` on the merged tree
+
+<!-- r23: merge check -->
+
+## 8. On the round 22 team
+
+<!-- r23: on the round 22 team -->
+
+Not measured yet: the commands of §6, after the round 22 retrain.

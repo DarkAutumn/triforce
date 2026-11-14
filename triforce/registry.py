@@ -76,18 +76,18 @@ def act_argument(allow_model: bool = True):
     return parse
 
 
-ACT_HELP = ("act mode: sample, argmax, temperature:T, floor:P, minp:R, topp:P, escape:N or a '+' combination "
-            "(docs/rust-actor.md \"Act modes\")")
+ACT_HELP = ("act mode: sample, argmax, temperature:T, floor:P, minp:R, topp:P, escape:N, relax:N or a '+' "
+            "combination (docs/rust-actor.md \"Act modes\")")
 
 
-# How the play tools (play-zelda.py, zelda-headless.py, the golden path) act by default: never argmax, so every
-# run differs (round 23, docs/experiments/round23.md).
+# How the play tools (play-zelda.py with its live cell, zelda-headless.py, the golden path) act by default: never
+# argmax, so every run differs (round 23, docs/experiments/round23.md). Every play tool reads this one constant.
 PLAY_ACT = 'sample'
 
 
 def draws(mode: str) -> bool:
-    """Whether act mode ``mode`` draws every decision at random (``sample`` and the rules), unlike ``argmax`` and
-    ``escape`` (argmax until stuck)."""
+    """Whether act mode ``mode`` draws every decision at random (``sample``, the rules, and ``relax``: a rule's draw,
+    a plain one when stalled), unlike ``argmax`` and ``escape`` (argmax until stalled)."""
     mode = parse_act(mode)
     return mode != 'argmax' and 'escape:' not in mode
 

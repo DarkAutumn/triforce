@@ -19,7 +19,7 @@ from PySide6.QtGui import QColor  # noqa: E402  pylint: disable=wrong-import-pos
 from PySide6.QtTest import QTest  # noqa: E402  pylint: disable=wrong-import-position
 from PySide6.QtWidgets import QApplication  # noqa: E402  pylint: disable=wrong-import-position
 
-from triforce import _native, play_grid, play_view, replay  # noqa: E402  pylint: disable=wrong-import-position
+from triforce import _native, play_grid, play_view, registry, replay  # noqa: E402  pylint: disable=wrong-import-position
 from triforce._native import FRAME_SHAPE  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.play_grid import FileSource, GoldenSource, ReplayGrid, Show  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.runner import Policies, Route, Runner, chain_meta  # noqa: E402  pylint: disable=wrong-import-position
@@ -712,6 +712,31 @@ def test_a_live_cell_plays_while_watched_takes_the_clips_key_and_files_its_runs(
     assert grid.stopped and grid.frame(0, 0) is None
     with pytest.raises(ValueError, match='live cell plays the models'):
         ReplayGrid(2, 0, path=tmp_path, live=True)
+
+
+def test_a_live_cell_plays_in_the_act_mode_it_was_given(scripted_models, states_dir, tmp_path, monkeypatch):
+    """Rounds 22 and 23 merged (offscreen): ``--live --act MODE`` plays the live run and the simulations in MODE (here
+    a rule with ``relax``, not ``registry.PLAY_ACT``); their recordings name it and replay bit for bit."""
+    monkeypatch.setattr(play_grid, 'RESULT_PAUSE', 0.05)
+    mode = 'temperature:0.75+relax:16'
+    assert mode != registry.PLAY_ACT and registry.draws(mode)
+    saved = tmp_path / 'saved'
+    grid = _segment_grid(scripted_models, states_dir, source='success', live=True, replays=saved, act=mode)
+    assert grid.act == mode
+    try:
+        grid.start()
+        messages = _collect(grid, lambda m: len(_events(m, 'end', 0)) >= 2)
+        live = [m for m in messages if m['cell'] == 0]
+        assert {m['source'] for m in _events(live, 'start')} == {'live'}
+        assert all((m['result'], m['outcome']) == ('success', 'milestone') for m in _events(live, 'end'))
+        files = _wait(lambda: [p for p in saved.iterdir() if int(p.name.split('-')[0]) >= play_grid.SEEDS],
+                      lambda found: found)
+    finally:
+        grid.stop()
+    for path in files:
+        recording = _native.Replay(path.read_bytes())
+        assert {m['act'] for m in recording.meta['models']} == {mode}
+        assert _native.replay_verify(path.read_bytes(), states_dir=str(states_dir))['frames'] == recording.frames
 
 
 def test_a_team_without_its_first_model_crashes_every_cell_with_the_reason(states_dir, tmp_path):

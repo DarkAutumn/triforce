@@ -223,7 +223,8 @@ def test_each_policy_acts_in_its_own_mode_across_a_handoff(states_dir, flags):
     assert sampled_not_argmax > 0, "the sampled policy's decisions tell sampling from argmax"
 
 
-@pytest.mark.parametrize('mode', ['floor:0.2', 'temperature:0.5+minp:0.3', 'topp:0.5', 'escape:3+floor:0.1'])
+@pytest.mark.parametrize('mode', ['floor:0.2', 'temperature:0.5+minp:0.3', 'topp:0.5', 'escape:3+floor:0.1',
+                                  'floor:0.2+relax:3'])
 def test_act_modes_draw_from_their_rule_and_reproduce(states_dir, mode):
     """Round 23: a rule draws only joint actions it keeps (``_native.act_probabilities`` of the policy's joint
     log-probs), reports the policy's own log-prob and the acting distribution's, the eval records count the
@@ -253,10 +254,19 @@ def test_act_modes_draw_from_their_rule_and_reproduce(states_dir, mode):
             if 'escape' in mode and play_['act_entropy'][step] == 0 and play_['act_log_prob'][step] == 0:
                 stalled += 1        # an argmax decision (not stalled yet)
                 continue
+            if 'relax' in mode:
+                # Stalled: a plain draw from the policy (the act log-prob is the policy's), else the rule's.
+                plain = native.act_probabilities(mode, joint[step].tolist(), stall=10**6)
+                if q[index] <= 0 or play_['act_log_prob'][step] != pytest.approx(np.log(q[index]), abs=1e-4):
+                    assert play_['act_log_prob'][step] == pytest.approx(np.log(plain[index]), abs=1e-4)
+                    stalled += 1
+                    continue
             assert q[index] > 0, f"{mode}: decision {step} drew a joint action the rule removed"
             assert play_['act_log_prob'][step] == pytest.approx(np.log(q[index]), abs=1e-4)
         if 'escape' in mode:
             assert stalled >= min(3, len(play_['actions']))
+        if 'relax' in mode:
+            assert stalled < len(play_['actions']), "the rule draws until Link stalls"
         visits = records[job]['visits']
         assert sum(v['decisions']['n'] for v in visits) == len(play_['actions'])
         assert ''.join(v['decisions']['actions'] for v in visits) == ''.join(
@@ -268,9 +278,16 @@ def test_act_mode_spellings():
     """``_native.act_mode`` gives the canonical spelling and refuses anything else."""
     assert native.act_mode('floor:0.02+temperature:0.70') == 'temperature:0.7+floor:0.02'
     assert native.act_mode('escape:16') == 'escape:16'
-    for bad in ('model', 'greedy', 'floor:2', 'sample+floor:0.1', 'escape:0'):
+    assert native.act_mode('relax:16+temperature:0.75') == 'temperature:0.75+relax:16'
+    for bad in ('model', 'greedy', 'floor:2', 'sample+floor:0.1', 'escape:0', 'relax:16',
+                'floor:0.1+escape:4+relax:4'):
         with pytest.raises(ValueError):
             native.act_mode(bad)
+    # relax: the rule until stalled, the policy itself from N decisions without progress on.
+    p = np.log([0.5, 0.3, 0.1, 0.1]).tolist()
+    np.testing.assert_allclose(native.act_probabilities('floor:0.15+relax:4', p, stall=3), [0.625, 0.375, 0, 0])
+    np.testing.assert_allclose(native.act_probabilities('floor:0.15+relax:4', p, stall=4), [0.5, 0.3, 0.1, 0.1])
+    np.testing.assert_allclose(native.act_probabilities('floor:0.15+escape:4', p, stall=3), [1, 0, 0, 0])
     q = native.act_probabilities('floor:0.15', np.log([0.5, 0.3, 0.1, 0.1]).tolist())
     np.testing.assert_allclose(q, [0.625, 0.375, 0, 0])
     np.testing.assert_allclose(native.act_probabilities('argmax', [-1.0, -0.5, float('-inf')]), [0, 1, 0])

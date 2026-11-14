@@ -93,21 +93,35 @@ kind with a 20% direction is a 4% action that no per-head threshold of 5% would 
 | `minp:R` | actions with q < R · max q removed, renormalised (0 < R ≤ 1) |
 | `topp:P` | the fewest most probable actions whose q sum to at least P (ties: lower joint index first), renormalised |
 | `escape:N` | argmax while the env's linger count (decisions in a row without progress) is below N; from N on a draw by the other rules of the mode (plain `sample` without any) until progress resets the count |
+| `relax:N` | a draw by the other rules of the mode while the linger count is below N; from N on plain `sample` (q = p) until progress resets the count; needs another rule (alone it would be `sample`) |
 
 Rules combine with `+`, each at most once, applied in the table's order to the previous one's result
 (`temperature:0.7+floor:0.02`: sharpen, then drop what is under 2% of the sharpened distribution); `sample` and
-`argmax` stand alone. A rule's draw is Gumbel-argmax over the 256 joint actions with noise keyed by
-`act::joint_noise_key(job, step)` (`noise::gumbel`), so the reproducibility contract holds for every mode: the same
+`argmax` stand alone, and a mode has at most one of `escape` and `relax` (the stall rules). With a stall rule a mode
+plays one way until Link has stalled N decisions and another while he stays stalled:
+
+| Spelling | not stalled (linger count < N) | stalled (from N on, until progress) |
+|---|---|---|
+| `escape:N` | argmax | `sample` |
+| `temperature:T+escape:N` | argmax | a `temperature:T` draw |
+| `temperature:T+relax:N` | a `temperature:T` draw | `sample` |
+
+So `escape` plays greedily and draws only to get unstuck (about 97% argmax in the round 23 pilot), while `relax`
+draws every action (`registry.draws`): sharpened normally, from the whole policy when stalled. It is the reading
+for play that differs every run yet breaks its loops. A rule's draw is Gumbel-argmax over the 256 joint actions
+with noise keyed by `act::joint_noise_key(job, step)` (`noise::gumbel`), so the reproducibility contract holds for
+every mode: the same
 seed plays the same actions on any env or thread, and a replay records inputs, so it verifies whatever the mode.
 Masks hold by construction (illegal joint actions have probability 0 and are never kept).
 
-**The stall signal of `escape`** is the env's linger count (`zelda::linger`, `LingerTracker::tail_steps`): steps
-since the last hit, kill, pickup, heal, room change or new best approach to the objective on a frozen wavefront,
-the same count the `no-room-progress` ending and the chain's stall check read. The pool asks the env for it
-before every decision (`PoolEnv::stall`; eval envs: the specialist env's tracker; chains: the acting room's). It was
-chosen over a repeated-state detector kept by the actor because it already defines "progress" for this project
-(walking in a loop or a moving monster can't reset it), it is per room visit, and it needs no state in the actor,
-which is shared by every env of a pool.
+**The stall signal of `escape` and `relax`** is the env's linger count (`zelda::linger`,
+`LingerTracker::tail_steps`): steps since the last hit, kill, pickup, heal, room change or new best approach to the
+objective on a frozen wavefront, the same count the `no-room-progress` ending and the chain's stall check read. The
+pool asks the env for it before every decision (`PoolEnv::stall`; eval envs: the specialist env's tracker; chains,
+the live cell of `play-zelda.py --live` included: the acting room's). A flip of the run-time clips switch (round
+22) re-plans the objective but is no progress: the count goes on. It was chosen over a repeated-state detector kept
+by the actor because it already defines "progress" for this project (walking in a loop or a moving monster can't
+reset it), it is per room visit, and it needs no state in the actor, which is shared by every env of a pool.
 
 **What a decision reports** (`pool::rollout::Decision`): `log_prob`/`entropy` stay the unmodified policy's (the
 chosen action's probability under the policy, whatever the mode); `act_log_prob`/`act_entropy` are the chosen

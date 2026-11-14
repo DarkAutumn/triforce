@@ -453,6 +453,21 @@ def test_a_clip_familys_evaluation_shows_each_switch_state():
     assert 'clips on 75% / off 25%' in gui.describe(progress)
 
 
+def test_an_evaluations_act_mode_and_decision_statistics_show():
+    """Round 23 on the merged tree: the ``eval`` event's ``act`` and ``risk`` (``variety.risk`` per episode)."""
+    assert gui.decisions_section({'act': 'sample'}) == []      # an evaluation from before the decision records
+    ev = {'act': 'temperature:0.75+relax:16',
+          'risk': {'decisions': 400, 'episodes': 4, 'decisions_per_episode': 100.0, 'low1_per_episode': 0.25,
+                   'low1_hit_rate': 0.5, 'low1_death_rate': None, 'low5_per_episode': 1.5, 'low5_hit_rate': 0.1,
+                   'hit_rate': 0.05, 'act_entropy_per_decision': 0.42}}
+    (kind, title, lines), = gui.decisions_section(ev)
+    assert (kind, title) == ('text', 'Decisions · act temperature:0.75+relax:16')
+    assert [text for text, _ in lines] == [
+        'moves <1% 0.25/episode · followed by a hit 50%, a death –',
+        'moves <5% 1.50/episode · followed by a hit 10% (every move 5%)',
+        'acting entropy 0.42 per decision · 100 decisions/episode']
+
+
 def write_batch(folder, pid, created):
     """A batch folder: d3 (chain) finished, family running, d4 (chain) and goriya pending."""
     import json

@@ -6,12 +6,12 @@ import shutil
 import pytest
 
 import triforce
-from triforce import cli, registry
+from triforce import _native, cli, registry
 from triforce.model import ModelConfig
 from triforce.runner import Policies, RunnerError
 from triforce.specialist import list_specialists
 
-from .conftest import REPO_STATES_DIR, seeded_network
+from .conftest import REPO_STATES_DIR, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network
 
 SMALL = ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
 
@@ -156,6 +156,31 @@ def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir,
     assert [json.loads(line)['seed'] for line in output.read_text().splitlines()] == [0, 1, 5]
     assert json.loads(cli.meta_path(output).read_text())['batches'][1] == {'first_seed': 5, 'runs': 1,
                                                                             'finished': True}
+
+
+def test_eval_chain_in_an_act_mode_with_the_switch_off(scripted_models, states_dir, tmp_path):
+    """Rounds 22 and 23 merged: ``eval-chain --act temperature:0.75 --clips off``: every model acts by the rule,
+    every run and room record plays with the switch off and counts its decisions, the provenance and the
+    recordings name both, and the recordings replay bit for bit."""
+    output, folder = tmp_path / 'chain.jsonl', tmp_path / 'replays'
+    assert cli.main(['--models-dir', str(scripted_models), 'eval-chain', '--from', str(require_state(SEGMENT_STATE)),
+                     '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--act', 'temperature:0.75', '--clips', 'off',
+                     '--runs', '2', '--parallel', '2', '--no-log', '--output', str(output),
+                     '--replays', str(folder)]) == 0
+    runs = [json.loads(line) for line in output.read_text().splitlines()]
+    assert [(r['seed'], r['result'], r['clips']) for r in runs] == [(0, 'success', False), (1, 'success', False)]
+    for run in runs:
+        assert all(room['clips_allowed'] is False and room['clips_flips'] == [] for room in run['rooms'])
+        played = [room for room in run['rooms'] if room['outcome'] != 'milestone']
+        assert played and all(room['decisions']['n'] == room['steps'] > 0 for room in played)
+    provenance = json.loads(cli.meta_path(output).read_text())['provenance']
+    assert {m['act'] for m in provenance['models']} == {'temperature:0.75'} and provenance['clips'] is False
+    files = sorted(folder.iterdir())
+    assert len(files) == 2
+    for path in files:
+        recording = _native.Replay(path.read_bytes())
+        assert {m['act'] for m in recording.meta['models']} == {'temperature:0.75'}
+        assert _native.replay_verify(path.read_bytes(), states_dir=str(states_dir))['frames'] == recording.frames
 
 
 def test_eval_chain_events_into_a_folder_with_or_without_a_plan(models_dir, tmp_path):

@@ -6,9 +6,11 @@ round docs still call it that.)
 ## Next projects (Lee, Nov 11-12; ordered Nov 13 by what the r71 chains lose): top of the list
 
 - **Act modes (round 23, pending):** decide the evaluation/chain rule (proposed one global `escape:16`: full route
-  12.8% → 20.5%) and the play default (proposed `temperature:0.75`; measure `temperature:0.75+escape:16`), whether
-  early-stop confirmation uses it (needs a flag in `best_of_n.success_by_state`); rerun the pilot on the round 22
-  models (`docs/experiments/round23.md` §6). Fix the chain report's "hearts at arrival" column (reads max hearts).
+  12.8% → 20.5% on the round 21 team) and the play default (proposed `temperature:0.75`; measure
+  `temperature:0.75+escape:16` and `temperature:0.75+relax:16`, the reading that draws every action); rerun the
+  pilot on the round 22 models with clips on and off (`docs/experiments/round23.md` §6, §8). Done at the merge with
+  round 22: the early-stop confirmation follows `train_round.py --eval-act` (`train --confirm-act`); the chain
+  report's "hearts at arrival" reads Link's health entering the triforce room (it read the refilled max hearts).
 
 Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 runs per segment, final team
 `r71-1k-dks`): D2 85.6%, D1 99.1%, D3 46.5%, D4 56.4%, the full route 12.8% (15.4% in `r71-1k`: within noise).

@@ -168,8 +168,9 @@ def test_the_fastest_winner_of_a_poll_becomes_the_next_checkpoint(stitchable, mo
         4, 3, registry.PLAY_ACT, {'record': True})
 
     # Unless every model draws its actions, the games of the next segment could be one game: their random numbers
-    # are redrawn at the checkpoint.
-    for act, redraw in (('argmax', True), ('escape:8', True), (None, True), ('floor:0.05', False)):
+    # are redrawn at the checkpoint.  relax draws every action (a rule's draw, a plain one when stalled).
+    for act, redraw in (('argmax', True), ('escape:8', True), (None, True), ('floor:0.05', False),
+                        ('temperature:0.75+relax:8', False)):
         FakePool.built = []
         golden.golden_path(FakePolicies(), 'd2first', 4, 0, {}, start_from=str(require_state(SEGMENT_STATE)),
                            stops=[SEGMENT_STOP_STEP, None], attempts=20, act=act)

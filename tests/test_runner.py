@@ -223,6 +223,38 @@ def test_a_run_ends_on_its_stop_step_and_another_continues_from_its_end(states_d
     assert _native.replay_verify(joined.data)['frames'] == joined.frames
 
 
+def test_a_run_in_an_act_mode_with_the_switch_flipped_mid_run_replays_bit_exactly(states_dir, models_dir):
+    """Rounds 22 and 23 merged: a chain run recorded in a non-default act mode (a rule with ``relax``, which reads the
+    chain's no-progress count) whose clips switch is turned off while it plays (``clips_live``, as the live cell's
+    key) records the flip inside its first room, names its act mode, and replays bit for bit."""
+    mode = 'temperature:0.75+relax:4'
+    runner = Runner(models_dir=models_dir, max_steps=40, states_dir=states_dir, act=mode,
+                    networks={'ow-octorok': scripted('MOVE S 16')})
+    route = Route.load('d2first', start_from=str(require_state('0_3cc_0')), stop_step=25)
+    record = replay.record_options(runner.record_meta(route))
+    events, flipped = [], False
+    # Paced at 60 frames a second, the run is still in its first room when its room event arrives.
+    with runner.pool(route, [0], record=record, num_envs=1, threads=1, fps=60.0, clips_live=True) as chain:
+        chain.play()
+        idle = False
+        while not idle:
+            idle = chain.pool.wait_idle(timeout=0.02)
+            new = chain.poll_events()
+            events += new
+            if not flipped and any(e['type'] == 'room' for e in new):
+                chain.pool.set_clips_allowed(False)
+                flipped = True
+    (_, result), = chain.results(events)
+    assert (result.result, result.clips) == ('success', True)
+    first = result.rooms[0]
+    assert first.room == '0x3c' and first.clips_allowed is True
+    (flip,) = first.clips_flips
+    assert flip['clips'] is False and 0 < flip['step'] <= first.steps
+    assert result.rooms[-1].clips_allowed is False
+    recording, = [_native.Replay(e['data']) for e in events if e['type'] == 'replay']
+    assert {m['act'] for m in recording.meta['models']} == {mode}
+    assert _native.replay_verify(recording.data, states_dir=str(states_dir))['frames'] == recording.frames
+
 
 def test_missing_promoted_model_is_an_error(states_dir, tmp_path):
     result = Runner(models_dir=tmp_path, states_dir=states_dir).run(Route.load('d2first'), seed=0)

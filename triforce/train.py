@@ -21,8 +21,9 @@ SIGTERM from the command line) still saves its checkpoint and summary but exits 
 a finished fixed-budget run.  ``--stop-success`` proposes a stop once the start-state-balanced success rate of the
 per-start cohorts (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for
 ``--stop-patience`` consecutive iterations (never before a budget failure could have been counted), and stops only
-if an evaluation of the current weights (``CONFIRM_EPISODES`` sampled episodes per seed start state on an
-``EvalTask`` pool, seed = pool seed + iteration) also reaches it; every check is an ``early_stop_check`` event.  The
+if an evaluation of the current weights (``CONFIRM_EPISODES`` episodes per seed start state on an ``EvalTask`` pool,
+seed = pool seed + iteration, acting by ``--confirm-act``, default ``sample``; the rollouts always sample from the
+unmodified policy) also reaches it; every check is an ``early_stop_check`` event (with its ``act``).  The
 evaluation ends early once its failures rule the threshold out (``aborted``, with the partial ``rate``, ``failures``
 and ``rate_upper_bound``, the best rate it could still have reached): the decision is the full evaluation's.
 A confirmed check also measures the hearts lost per episode (``hearts_lost``, start minus end health, with its SE)
@@ -315,6 +316,9 @@ def parse_args(argv=None):
                              "than max(this, 2 SE) above every earlier confirmed check's trains on; 0: no bombs rule")
     parser.add_argument('--stop-check-gap', type=int, default=50,
                         help="iterations between two confirmed checks (of the hearts lost and the bomb value)")
+    parser.add_argument('--confirm-act', type=registry.act_argument(allow_model=False), default=registry.DEFAULT_ACT,
+                        help=f"how the early-stop confirmation evaluation acts ({registry.ACT_HELP}; default "
+                             f"{registry.DEFAULT_ACT}); the rollouts always sample from the unmodified policy")
     parser.add_argument('--curriculum', default=None,
                         help="trajectories dir from triforce.explore: backward-curriculum starts "
                              "(crates/env/src/curriculum.rs); default: the specialist's curriculum config")
@@ -684,7 +688,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
 
         by_state = success_by_state(config, network.to_native(), CONFIRM_EPISODES, seed=seed,
                                     parallel=args.parallel, threads=args.threads, states_dir=args.states_dir,
-                                    stop=hopeless)
+                                    act=args.confirm_act, stop=hopeless)
         successes = sum(s for s, _ in by_state.values())
         episodes = sum(e for _, e in by_state.values())
         rate = successes / episodes if episodes else 0.0
@@ -711,6 +715,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
               + (" (hearts still improving)" if hearts_improved else '')
               + (" (bombs still improving)" if bombs_improved else '') + f" -> {decision}", flush=True)
         events.emit('early_stop_check', iteration=start_iteration + iteration, rate=rate, episodes=episodes,
+                    act=args.confirm_act,
                     planned=planned, failures=episodes - successes, aborted=aborted, rate_upper_bound=upper,
                     hearts_lost=hearts, hearts_lost_se=se, hearts_improving=hearts_improved,
                     bomb_value=bombs, bomb_value_se=bombs_se, bombs_improving=bombs_improved,

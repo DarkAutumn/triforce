@@ -15,11 +15,20 @@
 //! | `minp:R` | drop actions with q < R · max q |
 //! | `topp:P` | keep the fewest most probable actions whose q sum to at least P (ties: lower index first) |
 //! | `escape:N` | argmax while the env reports fewer than N decisions in a row without progress (its linger count); from N on, sample with the other rules (plain `sample` without any) until progress resets the count |
+//! | `relax:N` | the other rules' draw while the env reports fewer than N decisions in a row without progress; from N on, plain `sample` (the policy itself) until progress resets the count; needs another rule |
 //!
-//! Rules combine with `+` (`temperature:0.7+floor:0.02`, `escape:16+floor:0.05`); each at most once; `sample` and
-//! `argmax` stand alone. [`ActMode::to_string`] is the canonical spelling (rules in the table's order). A rule's draw is
-//! Gumbel-argmax over the joint actions with noise keyed by (job, decision) ([`joint_noise_key`]), so a mode plays
-//! the same for the same seed wherever it runs.
+//! So with a stall rule a mode plays one way until stalled and another while stalled:
+//!
+//! | Spelling | not stalled | stalled (N on) |
+//! |---|---|---|
+//! | `escape:N` | argmax | `sample` |
+//! | `temperature:T+escape:N` | argmax | a `temperature:T` draw |
+//! | `temperature:T+relax:N` | a `temperature:T` draw | `sample` |
+//!
+//! Rules combine with `+` (`temperature:0.7+floor:0.02`, `escape:16+floor:0.05`); each at most once, and at most one
+//! of `escape` and `relax`; `sample` and `argmax` stand alone. [`ActMode::to_string`] is the canonical spelling (rules
+//! in the table's order). A rule's draw is Gumbel-argmax over the joint actions with noise keyed by (job, decision)
+//! ([`joint_noise_key`]), so a mode plays the same for the same seed wherever it runs.
 
 use std::fmt;
 use std::str::FromStr;
@@ -159,6 +168,9 @@ pub enum ActMode {
     Sample(Rule),
     /// Argmax until `after` decisions in a row without progress, then a draw by the rule until progress.
     Escape { after: u32, rule: Rule },
+    /// A draw by the rule (not plain) until `after` decisions in a row without progress, then a draw from the policy
+    /// itself (`sample`) until progress.
+    Relax { after: u32, rule: Rule },
 }
 
 /// How one decision is taken: by argmax, or drawn by a rule.
@@ -188,6 +200,7 @@ impl ActMode {
                     Choose::Argmax
                 }
             }
+            ActMode::Relax { after, rule } => Choose::Draw(if stall >= after { Rule::default() } else { rule }),
         }
     }
 }
@@ -209,6 +222,10 @@ impl fmt::Display for ActMode {
                 rule.fmt_parts(&mut parts);
                 parts.push(format!("escape:{after}"));
             }
+            ActMode::Relax { after, rule } => {
+                rule.fmt_parts(&mut parts);
+                parts.push(format!("relax:{after}"));
+            }
         }
         f.write_str(&parts.join("+"))
     }
@@ -226,7 +243,8 @@ impl FromStr for ActMode {
             _ => {}
         }
         let mut rule = Rule::default();
-        let mut escape = None;
+        // The stall rule: ("escape" | "relax", N).
+        let mut stall: Option<(&str, u32)> = None;
         for part in text.split('+') {
             let (name, value) = part
                 .split_once(':')
@@ -250,23 +268,27 @@ impl FromStr for ActMode {
                 "floor" => &mut rule.floor,
                 "minp" => &mut rule.minp,
                 "topp" => &mut rule.topp,
-                "escape" => {
-                    if escape.is_some() {
-                        return Err(format!("act mode {text:?}: escape given twice"));
+                "escape" | "relax" => {
+                    if let Some((given, _)) = stall {
+                        return Err(if given == name {
+                            format!("act mode {text:?}: {name} given twice")
+                        } else {
+                            format!("act mode {text:?}: escape and relax exclude each other")
+                        });
                     }
                     let n: u32 = value
                         .parse()
-                        .map_err(|_| format!("act mode {text:?}: escape needs a whole number, got {value:?}"))?;
+                        .map_err(|_| format!("act mode {text:?}: {name} needs a whole number, got {value:?}"))?;
                     if n == 0 {
-                        return Err(format!("act mode {text:?}: escape must be at least 1"));
+                        return Err(format!("act mode {text:?}: {name} must be at least 1"));
                     }
-                    escape = Some(n);
+                    stall = Some((name, n));
                     continue;
                 }
                 _ => {
                     return Err(format!(
                         "act mode {text:?}: unknown rule {name:?} (sample, argmax, temperature:T, floor:P, minp:R, \
-                         topp:P, escape:N)"
+                         topp:P, escape:N, relax:N)"
                     ));
                 }
             };
@@ -279,8 +301,14 @@ impl FromStr for ActMode {
                 _ => number(0.0, 1.0, true)?,
             });
         }
-        Ok(match escape {
-            Some(after) => ActMode::Escape { after, rule },
+        Ok(match stall {
+            Some(("escape", after)) => ActMode::Escape { after, rule },
+            Some((_, after)) if rule.is_plain() => {
+                return Err(format!(
+                    "act mode {text:?}: relax:{after} needs another rule (alone it is sample at every decision)"
+                ));
+            }
+            Some((_, after)) => ActMode::Relax { after, rule },
             None => ActMode::Sample(rule),
         })
     }
@@ -404,6 +432,7 @@ mod tests {
             ("topp:1", "topp:1"),
             ("escape:16", "escape:16"),
             ("escape:8+floor:0.05", "floor:0.05+escape:8"),
+            ("relax:16+temperature:0.75", "temperature:0.75+relax:16"),
         ] {
             let mode: ActMode = text.parse().unwrap();
             assert_eq!(mode.to_string(), canonical, "{text}");
@@ -412,7 +441,8 @@ mod tests {
         for bad in [
             "", "model", "sample+floor:0.1", "argmax+escape:3", "floor", "floor:0", "floor:1", "floor:x",
             "temperature:0", "temperature:-1", "temperature:inf", "minp:1.5", "topp:0", "escape:0", "escape:1.5",
-            "floor:0.1+floor:0.2", "escape:3+escape:4", "greedy:1",
+            "floor:0.1+floor:0.2", "escape:3+escape:4", "greedy:1", "relax:16", "relax:0+floor:0.1",
+            "temperature:0.5+escape:4+relax:4", "relax:3+relax:4+floor:0.1", "argmax+relax:3",
         ] {
             assert!(bad.parse::<ActMode>().is_err(), "{bad:?} parsed");
         }
@@ -425,5 +455,10 @@ mod tests {
         assert_eq!(mode.choose(4), Choose::Draw(Rule { floor: Some(0.1), ..Rule::default() }));
         assert_eq!(ActMode::Argmax.choose(1000), Choose::Argmax);
         assert_eq!(ActMode::SAMPLE.choose(0), Choose::Draw(Rule::default()));
+        // relax: the rule until stalled, then the policy itself.
+        let mode: ActMode = "temperature:0.75+relax:4".parse().unwrap();
+        assert_eq!(mode.choose(3), Choose::Draw(Rule { temperature: Some(0.75), ..Rule::default() }));
+        assert_eq!(mode.choose(4), Choose::Draw(Rule::default()));
+        assert_eq!(mode.choose(1000), Choose::Draw(Rule::default()));
     }
 }

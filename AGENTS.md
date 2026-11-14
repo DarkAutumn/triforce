@@ -40,6 +40,13 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the bombs stalfos-keese-gel wastes in 4:0x21 (3.8 per visit, one needed), wallmaster heart gathering, goriya heart
   loss. Every new checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per
   checkpoint).
+- **Round 23 (act modes, Nov 13; `docs/experiments/round23.md`, decisions 2026-11-13 "Act modes"):** act modes over
+  the joint action (`temperature:T`, `floor:P`, `minp:R`, `topp:P`, the stall rules `escape:N` and `relax:N`, `+`
+  combinations) in every tool that plays, beside round 22's `--clips`; every evaluation and chain room record
+  counts its decisions (moves under 1%/5% and what followed them, the actions). The pilot on the round 21 team: one
+  global `escape:16` took the full route from 12.8% to 20.5% (1000 runs per segment). Pending: the rerun on the
+  round 22 team with clips on and off (`scripts/experiments/r23_act_pilot.sh`, `CLIPS=on|off`), then the lead's
+  choice of the evaluation rule and the play default (`registry.PLAY_ACT`, still `sample`).
 - **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
   `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
   earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`
@@ -160,9 +167,12 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
-  refusing it (replays embed states). Play (play-zelda, zelda-headless, the golden path) is stochastic by default
-  (`--act sample`, `registry.PLAY_ACT`; `--act model` or any act mode: `argmax`, `floor:0.1`, `temperature:0.75`,
-  `escape:16`, ... `docs/rust-actor.md` "Act modes", round 23); evaluation follows each model's act mode.
+  refusing it (replays embed states). Play (play-zelda with its live cell, zelda-headless, the golden path) is
+  stochastic by default (one constant, `registry.PLAY_ACT`, now `sample`); `--act model` or any act mode
+  (`argmax`, `floor:0.1`, `temperature:0.75`, `escape:16`, `temperature:0.75+relax:16`, ...: `docs/rust-actor.md`
+  "Act modes", round 23) beside `--clips on|off`; evaluation follows each model's act mode. `escape:N` plays argmax
+  until Link has made no progress for N decisions, then draws; `relax:N` draws by the other rules until then, then
+  from the plain policy (so `temperature:T+escape:N` is mostly argmax, `temperature:T+relax:N` draws every action).
 - **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",
   "Watching"): `triforce eval-chain|evaluate --replays DIR`, `zelda-headless.py OUT [COUNT]
   [--wins-only|--deaths-only|--stuck-only] [--golden] [--clips on|off]`; optional streams `--streams
@@ -176,8 +186,9 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   buttons. Clips (round 22): `--clips on|off` starts the runs with the run-time clips switch on or off, key `c`
   turns it off and on for every run started afterwards (the title says where it stands; a cell's strip says "no
   clips" for a run played without). `--live` makes the top left cell a live game the models play while it is
-  watched: `c` acts on that run from its next decision and the route re-plans from where Link stands ("rest of
-  the run no clips"); its finished runs join the queues. The keys are in `--help`. `create-video.py OUT [GRID]
+  watched (in the `--act` mode, as the simulations): `c` acts on that run from its next decision and the route
+  re-plans from where Link stands ("rest of the run no clips"); its finished runs join the queues. The keys are
+  in `--help`. `create-video.py OUT [GRID]
   REPLAY... [--sound] [--controller]` films replays the same way into a video file (`ffmpeg`).
 - **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
   "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and

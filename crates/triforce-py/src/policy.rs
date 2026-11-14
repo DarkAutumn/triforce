@@ -313,7 +313,7 @@ pub fn parse_act_mode(text: &str) -> PyResult<policy::ActMode> {
 }
 
 /// The canonical spelling of act mode `text` (`sample`, `argmax`, `temperature:T`, `floor:P`, `minp:R`, `topp:P`,
-/// `escape:N` and their `+` combinations); raises ValueError for anything else.
+/// `escape:N`, `relax:N` and their `+` combinations); raises ValueError for anything else.
 #[pyfunction]
 pub fn act_mode(text: &str) -> PyResult<String> {
     Ok(parse_act_mode(text)?.to_string())

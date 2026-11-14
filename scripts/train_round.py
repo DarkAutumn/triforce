@@ -9,8 +9,9 @@ Specialists (trainable, with seed start states; route order of the route, ``d2fi
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
 ``<models>/<name>/<round>/train.log``.  Each trained run is evaluated with ``triforce.evaluate`` in its act mode
 (``eval.json`` in the run dir, ``evaluate.default_output``), or in ``--eval-act MODE`` (any act mode,
-docs/rust-actor.md "Act modes"; ``eval-<mode>.json`` unless it is the run's own).  Training itself always samples
-from the unmodified policy.  Nothing is promoted unless ``--promote`` is given:
+docs/rust-actor.md "Act modes"; ``eval-<mode>.json`` unless it is the run's own); with a MODE the training's
+early-stop confirmation acts by it too (``triforce.train --confirm-act MODE``; with ``model``, the default, it samples).
+Training's rollouts always sample from the unmodified policy.  Nothing is promoted unless ``--promote`` is given:
 then each run whose evaluation succeeded is promoted (pointer only; the run's own act mode).  The specialists'
 promoted run ids and act modes from before the round are kept in the summary (``previous_promoted``) so a
 promotion can be undone.  Then ``eval-chain`` runs the route: with ``--promote`` on the promoted models, else on
@@ -133,7 +134,8 @@ def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
                '--iterations', str(iterations_for(args)), '--steps-per-update', str(args.steps_per_update),
                '--parallel', str(args.parallel), '--device', args.device, '--models-dir', str(models),
                '--stop-success', str(STOP_SUCCESS), '--stop-patience', str(STOP_PATIENCE),
-               '--events', str(log_dir / f'{name}.jsonl')]
+               '--events', str(log_dir / f'{name}.jsonl'),
+               *(['--confirm-act', args.eval_act] if args.eval_act != registry.MODEL_ACT else [])]
     command += shlex.split(args.train_args.replace('{name}', name))
     run_dir.mkdir(parents=True, exist_ok=True)
     say(f"[round] training {name}: {' '.join(command)}")
