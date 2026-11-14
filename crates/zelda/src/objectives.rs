@@ -674,11 +674,28 @@ impl GameCompletion {
             .flatten()
     }
 
+    /// Link plays a clip-way step after the stretch's step that leaves through a `wrap_in` exit (game.yaml: 0x55's
+    /// W part, cut off by the river; round 24): no walk leads back to the plain way from there (the map's room graph
+    /// treats 0x55 as one room, so a re-plan would send him E into 0x55's W part and back), so a switch off waits
+    /// for the rejoin.
+    fn past_wrap_in(&self) -> bool {
+        let Some(i) = self.step.or(self.last_step) else { return false };
+        let steps = &self.map.routes[&self.route];
+        let Some(stretch) = self.map.stretches[&self.route].iter().find(|s| s.clips.contains(&i)) else {
+            return false;
+        };
+        stretch.clips.clone().take_while(|&j| j < i).any(|j| {
+            let step = &steps[j];
+            self.map.get(step.location()).and_then(|r| r.exits.get(&step.exit)).is_some_and(|e| e.wrap_in.is_some())
+        })
+    }
+
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
         let here = state.full_location();
-        // A switch off turned off now, or held until Link can walk to an exit (round 24).
-        if self.off_pending && (!self.clips || !stranded(state)) {
+        // A switch off turned off now, or held until Link can walk to an exit (round 24), or, past a wrap into a room
+        // part only the wrap reaches (0x55's river), until the stretch rejoins.
+        if self.off_pending && (!self.clips || (!stranded(state) && !self.past_wrap_in())) {
             self.off_pending = false;
             self.apply_clips_allowed(false);
         }

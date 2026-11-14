@@ -1,5 +1,5 @@
-//! The Lost Hills (overworld 0x1b, asm:Maze_CheckStep) played through the route (round 24): the scouting route
-//! `d5maze` leaves 0x1b entered from E by `exit: maze`, N four times in a row into 0x0b entered from S. Each of the
+//! The Lost Hills (overworld 0x1b, asm:Maze_CheckStep) played through the route (round 24): `d2first`'s mountain
+//! stretch (plain way) leaves 0x1b entered from E by `exit: maze`, N four times in a row into 0x0b entered from S. Each of the
 //! first three Ns loops back into 0x1b (`zelda::MazeLoop`), a room transition for the objective, the endings, the
 //! rewards, the observation, linger and the chain's records, though the room id never changes; a wrong edge resets
 //! the sequence and is a wrong exit of the room; W is the free edge out to 0x1a.
@@ -44,11 +44,10 @@ fn leg_state(dir: &Path, name: &str) -> PathBuf {
     path
 }
 
-/// The index of `d5maze`'s step in `room` entered from `entry`.
+/// The index of `d2first`'s last step in `room` entered from `entry` (the leg's plain mountain way).
 fn d5maze_step(data: &GameData, room: MapLocation, entry: &str) -> usize {
-    let steps = &data.map.routes["d5maze"];
-    let first = steps.len() - 6;
-    first + steps[first..].iter().position(|s| s.location() == room && s.entry == entry).unwrap()
+    let steps = &data.map.routes["d2first"];
+    steps.iter().rposition(|s| s.location() == room && s.entry == entry).unwrap()
 }
 
 /// MOVEs a best-first search over Link's positions finds from the session's state to `done` (positions nearer
@@ -111,9 +110,9 @@ fn maze_feature(obs: &Observation) -> f32 {
 
 type Chain = ChainEnv<ZCore, TfzStore>;
 
-/// A `d5maze` chain run from `start` to Dungeon 5's first room, reset with seed 0.
+/// A `d2first` chain run from `start` to Dungeon 5's first room, reset with seed 0.
 fn chain(nes: ZCore, data: &Arc<GameData>, start: &Path) -> Chain {
-    let route = Route::load(&data.map, &data.states_dir, "d5maze", Some(D5), Some(start.to_str().unwrap())).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", Some(D5), Some(start.to_str().unwrap())).unwrap();
     let mut c = ChainEnv::new(data.clone(), nes, TfzStore::new(), route);
     let status = c.reset(Some(0), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
     assert!(matches!(status, ChainStatus::Act { .. }), "{status:?}");
@@ -133,7 +132,7 @@ fn play(c: &mut Chain, actions: &[Action]) -> ChainStatus {
     last.expect("an action")
 }
 
-/// The four Ns from 0x1b entered from E (MOVE actions only), in a chain of `d5maze`: each of the first three is a
+/// The four Ns from 0x1b entered from E (MOVE actions only), in a chain of `d2first`: each of the first three is a
 /// correct loop (the objective still leads N into 0x0b, the observation says the room changed and Link came in from
 /// S, the visit's record counts it), the fourth enters 0x0b from S (the record's exit is correct, ow-leever takes
 /// over), and down 0x0b's cave mouth the run reaches Dungeon 5 (its stop room). Whether 0x0b's own objective leads
@@ -247,7 +246,7 @@ fn a_one_room_episode_on_0x1b_ends_correct_only_after_the_fourth_north() {
     let mut env = hills_env(nes, &data);
     let (obs, _) = env.reset(Some(0), Some(start)).unwrap();
     assert_eq!(maze_feature(&obs), 0.0, "entered from E: step 0");
-    assert_eq!(env.route(), ("d5maze", Some(d5maze_step(&data, HILLS, "E"))));
+    assert_eq!(env.route(), ("d2first", Some(d5maze_step(&data, HILLS, "E"))));
     for k in 1..=4 {
         let walk = walk_out(env.session_mut(), Direction::N);
         let (last, steps) = walk.split_last().unwrap();

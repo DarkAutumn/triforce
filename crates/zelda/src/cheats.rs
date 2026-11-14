@@ -4,7 +4,9 @@
 //! Counts stay natural except where a room *needs* an item ([`needs`]); there, whenever Link holds fewer than the
 //! need (at the start in the room, on entering it and after every action) the count is topped up to it, and the
 //! top-up is *granted* (outstanding).  The needs:
-//! - bombs: 1 in a game.yaml `requires_bombs` room (Dodongo, the 0x2c rock wall);
+//! - bombs: 1 in a game.yaml `requires_bombs` room (Dodongo, the 0x2c rock wall), but none once what the room is
+//!   bombed for is open (round 24: an overworld rock wall's secret, every bomb wall of a dungeon room: 0x2c on the
+//!   leg's plain mountain way, 5:0x66 and 5:0x65 on Dungeon 5's way back; [`bomb_need`]);
 //! - keys: 1 in a dungeon room whose route step leaves through a door that is still locked (the game's door tiles,
 //!   not being opened), unless Link has the magic key or the room's treasure is a key he hasn't taken yet (that key
 //!   comes first: the cheated one only appears once it is taken, and spent, bringing him back to 0);
@@ -127,10 +129,26 @@ pub fn needs(
     let room = state.full_location();
     let rupees_pending = state.var(Var::RupeesToAdd) != 0 || state.var(Var::RupeesToSubtract) != 0;
     ItemCounts {
-        bombs: map.requires_bombs(room) as i32,
+        bombs: bomb_need(map, state),
         keys: key_need(map, completion, prev, state),
         rupees: if rupees_pending { 0 } else { map.requires_rupees(room) as i32 },
     }
+}
+
+/// 1 in a `requires_bombs` room while it still has something the route bombs: an overworld room's secret rock wall
+/// still closed, a dungeon room's bomb walls not all open (a room with none, Dodongo's, always needs its bomb).
+fn bomb_need(map: &GameMap, state: &GameView) -> i32 {
+    let room = state.full_location();
+    if !map.requires_bombs(room) {
+        return 0;
+    }
+    let Some(info) = map.get(room) else { return 1 };
+    let open = if room.level == 0 {
+        info.bomb_secret.is_some() && !state.ow_bomb_secret_closed()
+    } else {
+        info.exits.values().any(|e| e.bomb_wall) && state.bomb_walls().is_empty()
+    };
+    (!open) as i32
 }
 
 /// 1 when the route step leaves Link's dungeon room through a door that is still locked and no key treasure of

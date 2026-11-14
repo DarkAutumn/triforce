@@ -290,7 +290,7 @@ def write_clips_room_stats(path):
     from triforce import room_stats  # pylint: disable=import-outside-toplevel
     plan = list(zelda_map.native_route_steps('d2first'))
     common = list(range(112, 122))
-    clip_way, plain_way, rest = [122, 123], [124, 125, 126, 127], list(range(128, 134))
+    clip_way, plain_way, rest = [122, 123], [124, 125, 126, 127], list(range(128, 135))   # 134: 0x45, out of D4
     runs = ([d4_run(plan, common + clip_way + rest, True) for _ in range(3)]
             + [d4_run(plan, common + clip_way, True, death=True)]
             + [d4_run(plan, common + plain_way + rest, False) for _ in range(2)]
@@ -313,7 +313,7 @@ def test_the_clips_selector_splits_rooms_and_the_route(qapp, models, tmp_path):
     window.tabs.setCurrentIndex(4)
     window.set_overlay('deaths')
     assert window.view.badges[0x20][0] == '25%' and window.view.badges[0x21][0] == '12%'      # of 8 runs
-    assert 'D4 alone · 8 runs from 4_71s_0, 62% reach the D4 triforce' == window.scope_info.text()
+    assert 'D4 alone · 8 runs from 4_71s_0, 62% reach 0_45c_0' == window.scope_info.text()
     # Both ways drawn, the clip way's step numbers marked.
     assert window.view.route_rooms[0x31] == [118, 122, 124] and 0x20 in window.view.route_rooms
     assert window.view.route_marks and window.view.route_ways[122] == 'clips'
