@@ -26,10 +26,10 @@
 ; CONTENTS: (generated; L = line in this file)
 ;   L0042 Zelda_Update               code  Draws Zelda and, once Link stands in front of her, halts him and starts the fanfare.
 ;   L0081 Zelda_Update_Return        code  Shared return of Zelda_Update and Zelda_State1WaitForEnding.
-;   L0090 Zelda_State1WaitForEnding  code  Zelda state 1: keeps drawing Link for $80 frames, then switches the game to mode $13.
-;   L0120 GuardFire_Update           code  Animates a guard fire and checks it against Link and his weapons; a killed fire becomes type $5D.
-;   L0130 DeadDummy_SetObjType       code  Changes the object in slot X to type $5D (dead dummy); its dying metastate carries on.
-;   L0135 GuardFire_Update_Return    code  Shared return of GuardFire_Update (also used by Lanmola_Update).
+;   L0093 Zelda_State1WaitForEnding  code  Zelda state 1: draws Link once, then switches the game to mode $13.  The code reads Zelda's timer after
+;   L0123 GuardFire_Update           code  Animates a guard fire and checks it against Link and his weapons; a killed fire becomes type $5D.
+;   L0133 DeadDummy_SetObjType       code  Changes the object in slot X to type $5D (dead dummy); its dying metastate carries on.
+;   L0138 GuardFire_Update_Return    code  Shared return of GuardFire_Update (also used by Lanmola_Update).
 ; ============================================================================
 
 ; ----------------------------------------------------------------------------
@@ -73,7 +73,7 @@ Zelda_Update:
     LDA #$06
     STA SongRequest
 
-    ; State 1 waits $80 frames.
+    ; State 1 is meant to wait $80 frames; in play the wait never happens (see Zelda_State1WaitForEnding).
     LDA #$80
     STA ObjTimer, X
 
@@ -82,13 +82,16 @@ Zelda_Update_Return:
     RTS
 
 ; ----------------------------------------------------------------------------
-; Zelda state 1: keeps drawing Link for $80 frames, then switches the game to mode $13.
+; Zelda state 1: draws Link once, then switches the game to mode $13.  The code reads Zelda's timer after
+; the call that draws Link, which does not preserve X (0, 1 or 5 on return), so the timer read is not
+; Zelda's and is 0: mode $13 comes one frame after the trigger, with Zelda's own timer still at $7F
+; (trace, Nov 13: levels/level-9.md).
 ; IN:   X = Zelda's object slot.
-; OUT:  when ObjTimer,X is 0: GameMode = $13, GameSubmode = 0, IsUpdatingMode = 0, Link's ObjState
+; OUT:  when the timer read is 0: GameMode = $13, GameSubmode = 0, IsUpdatingMode = 0, Link's ObjState
 ;       = 0, ObjX+12 = $20, ObjX+13 = 1, tile map filled with tile $24.
 ; ----------------------------------------------------------------------------
 Zelda_State1WaitForEnding:
-    ; Link is halted, so draw him from here. Return until Zelda's timer runs out.
+    ; Link is halted, so draw him from here. Return until the timer reads 0 (X is no longer Zelda's slot).
     JSR Link_EndMoveAndDraw_ReturnToBank4
     LDA ObjTimer, X
     BNE Zelda_Update_Return

@@ -1629,10 +1629,10 @@ Patra_Init	code	4	src/bank4/patra-ganon-inits.asm	42	InitPatra	Sets up Patra and
 Ganon_Init	code	4	src/bank4/patra-ganon-inits.asm	96	InitGanon	Sets up Ganon and starts the opening scene of his room by halting Link.
 Zelda_Update	code	4	src/bank4/zelda-guard-fire.asm	42	UpdateZelda	Draws Zelda and, once Link stands in front of her, halts him and starts the fanfare.
 Zelda_Update_Return	code	4	src/bank4/zelda-guard-fire.asm	81	L129B7_Exit	Shared return of Zelda_Update and Zelda_State1WaitForEnding.
-Zelda_State1WaitForEnding	code	4	src/bank4/zelda-guard-fire.asm	90	UpdateZelda_State1	Zelda state 1: keeps drawing Link for $80 frames, then switches the game to mode $13.
-GuardFire_Update	code	4	src/bank4/zelda-guard-fire.asm	120	UpdateGuardFire	Animates a guard fire and checks it against Link and his weapons; a killed fire becomes type $5D.
-DeadDummy_SetObjType	code	4	src/bank4/zelda-guard-fire.asm	130	SetDeadDummyObjType	Changes the object in slot X to type $5D (dead dummy); its dying metastate carries on.
-GuardFire_Update_Return	code	4	src/bank4/zelda-guard-fire.asm	135	L129EA_Exit	Shared return of GuardFire_Update (also used by Lanmola_Update).
+Zelda_State1WaitForEnding	code	4	src/bank4/zelda-guard-fire.asm	93	UpdateZelda_State1	Zelda state 1: draws Link once, then switches the game to mode $13.  The code reads Zelda's timer after
+GuardFire_Update	code	4	src/bank4/zelda-guard-fire.asm	123	UpdateGuardFire	Animates a guard fire and checks it against Link and his weapons; a killed fire becomes type $5D.
+DeadDummy_SetObjType	code	4	src/bank4/zelda-guard-fire.asm	133	SetDeadDummyObjType	Changes the object in slot X to type $5D (dead dummy); its dying metastate carries on.
+GuardFire_Update_Return	code	4	src/bank4/zelda-guard-fire.asm	138	L129EA_Exit	Shared return of GuardFire_Update (also used by Lanmola_Update).
 Lanmola_Update	code	4	src/bank4/lanmola.asm	43	UpdateLamnola	Updates one Lanmola segment: moves it, draws it, takes weapon hits and shortens the worm on a kill.
 Lanmola_Update@DrawAndCheckCollisions	cheap	4	src/bank4/lanmola.asm	62	@DrawAndCheckCollisions	
 Lanmola_Update@Draw	cheap	4	src/bank4/lanmola.asm	85	@Draw	

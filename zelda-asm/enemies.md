@@ -1609,7 +1609,7 @@ A slow flyer circled by eight children. The body cannot be hit by any weapon unt
 - The children have no spawn cloud. [`Obj_Init_JumpTable`](src/bank7/object-init-table.asm#L177) [`Obj_ResetMetastateAndTimer`](src/bank7/flute-secret-pond.asm#L69)
 
 **Drops**
-- A killed child becomes a dead dummy (type `$5D`): no drop, no `WorldKillCycle` step, no `RoomKillCount`. [`DeadDummy_SetObjType`](src/bank4/zelda-guard-fire.asm#L130) [`Obj_EndMetastate`](src/bank7/object-update-table.asm#L308)
+- A killed child becomes a dead dummy (type `$5D`): no drop, no `WorldKillCycle` step, no `RoomKillCount`. [`DeadDummy_SetObjType`](src/bank4/zelda-guard-fire.asm#L133) [`Obj_EndMetastate`](src/bank7/object-update-table.asm#L308)
 - Each child kill still adds to `WorldKillCount` and `HelpDropCount` (up to `$0A`). [`Damage_KillMonster`](src/bank1/weapon-damage-death.asm#L216)
 - Patra itself dies as an ordinary monster in drop group 3 (rate `$68`/256). [`Drop_SetUpItem`](src/bank4/drop-items.asm#L157)
 
@@ -1884,8 +1884,8 @@ The four killable flames in front of Zelda.
 - None: it is not a shot (type below `$53`). [`Link_CheckMonsterTouch_NoReset`](src/bank1/link-collision-harm.asm#L73)
 
 **Behaviour**
-- Does not move and is never knocked back. Unlike the standing fire it runs the full collision pass: HP `$10`, no invincibility mask, so one hit of any damaging weapon kills it (the boomerang only stuns it). [`GuardFire_Update`](src/bank4/zelda-guard-fire.asm#L120) [`Obj_TypeHpPairs`](src/bank7/object-update-table.asm#L105)
-- A killed fire turns into a dead dummy (type `$5D`): no drop, no `WorldKillCycle` step, no `RoomKillCount`; `WorldKillCount` and `HelpDropCount` still rise. [`DeadDummy_SetObjType`](src/bank4/zelda-guard-fire.asm#L130) [`Obj_EndMetastate`](src/bank7/object-update-table.asm#L308) [`Damage_KillMonster`](src/bank1/weapon-damage-death.asm#L216)
+- Does not move and is never knocked back. Unlike the standing fire it runs the full collision pass: HP `$10`, no invincibility mask, so one hit of any damaging weapon kills it (the boomerang only stuns it). [`GuardFire_Update`](src/bank4/zelda-guard-fire.asm#L123) [`Obj_TypeHpPairs`](src/bank7/object-update-table.asm#L105)
+- A killed fire turns into a dead dummy (type `$5D`): no drop, no `WorldKillCycle` step, no `RoomKillCount`; `WorldKillCount` and `HelpDropCount` still rise. [`DeadDummy_SetObjType`](src/bank4/zelda-guard-fire.asm#L133) [`Obj_EndMetastate`](src/bank7/object-update-table.asm#L308) [`Damage_KillMonster`](src/bank1/weapon-damage-death.asm#L216)
 
 **Created by**
 - Zelda's init (type `$37`, slot 1); each fire is then initialized as an ordinary type `$3F` object on its own first update. [`Zelda_Init`](src/bank4/zelda-lanmola-inits.asm#L45)
@@ -1908,11 +1908,11 @@ The goal object of level 9. She is scenery with one trigger; the four fires arou
 
 **Effect**
 - On the trigger Link is halted (`ObjState` = `$40`), moved to (`$88`, `$88`) facing left, song request `$06` is made and Zelda's timer is set to `$80` frames. [`Zelda_Update`](src/bank4/zelda-guard-fire.asm#L42)
-- When the `$80` frames end: `GameMode` = `$13` (win game), `GameSubmode` = 0, Link's state 0, and the tile map is filled with blank tile `$24`. [`Zelda_State1WaitForEnding`](src/bank4/zelda-guard-fire.asm#L90)
+- On the next frame: `GameMode` = `$13` (win game), `GameSubmode` = 0, Link's state 0, and the tile map is filled with blank tile `$24`. The `$80`-frame wait never happens: the timer is read after a call that does not preserve X, so the value read is not Zelda's and is 0 (trace: Zelda's timer still `$7F` when the mode changes). [`Zelda_State1WaitForEnding`](src/bank4/zelda-guard-fire.asm#L93)
 
 **Notes**
 - Zelda's update draws her and runs no collision check: weapons and contact do nothing. [`Zelda_Update`](src/bank4/zelda-guard-fire.asm#L42)
-- A guard fire is an ordinary collision target; when it dies its type becomes `$5D` (dead dummy), so the death steps neither the kill cycle nor the room kill count. [`GuardFire_Update`](src/bank4/zelda-guard-fire.asm#L120), [`DeadDummy_SetObjType`](src/bank4/zelda-guard-fire.asm#L130)
+- A guard fire is an ordinary collision target; when it dies its type becomes `$5D` (dead dummy), so the death steps neither the kill cycle nor the room kill count. [`GuardFire_Update`](src/bank4/zelda-guard-fire.asm#L123), [`DeadDummy_SetObjType`](src/bank4/zelda-guard-fire.asm#L133)
 
 # Old men and shopkeepers (cave and dungeon persons)
 

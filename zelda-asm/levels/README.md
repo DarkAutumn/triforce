@@ -22,7 +22,8 @@ Each document has the same headings, so an agent can search them: `# At a glance
 
 The blocks between `<!-- generated:... -->` markers (facts table, door map, room table, floor plans) are written from
 the ROM by `tools/romdata.py`; edit the text around them, never inside. The rest was written from the code and the
-data, and walked in the running game where a section says so (`(trace)`). Levels 1-4 were walked; levels 5-9 come
-from the data and the code only.
+data, and walked in the running game where a section says so (`(trace)`). Levels 1-4 were walked room by room;
+of levels 5-9 the rooms of the first-quest draft route were walked on Nov 13, 2026 (level 9 to the end of the
+game), with the fights skipped; each document says which rooms were not entered.
 
 The second quest uses other level blocks (`data/levelblock-uw-*-q2.md`); these documents do not cover it.

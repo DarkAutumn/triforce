@@ -17,20 +17,20 @@ Contents (generated; `L` = line in this file):
 - L280 Boomerang (wooden, magic)
 - L327 Candle (blue, red)
 - L373 Recorder (flute, whistle)
-- L433 Food (bait, meat)
-- L473 Potion (blue, red) and Letter
-- L523 Magic Rod and Book
-- L574 Raft
-- L610 Ladder
-- L653 Keys and Magic Key
-- L689 Power Bracelet
-- L719 Ring (blue, red)
-- L744 Shield (small, magic)
-- L787 Hearts, Heart Containers and Fairies
-- L832 Rupees
-- L872 Clock
-- L911 Map and Compass
-- L944 Triforce pieces and the Triforce of Power
+- L434 Food (bait, meat)
+- L474 Potion (blue, red) and Letter
+- L524 Magic Rod and Book
+- L575 Raft
+- L611 Ladder
+- L654 Keys and Magic Key
+- L690 Power Bracelet
+- L720 Ring (blue, red)
+- L745 Shield (small, magic)
+- L788 Hearts, Heart Containers and Fairies
+- L833 Rupees
+- L873 Clock
+- L912 Map and Compass
+- L945 Triforce pieces and the Triforce of Power
 <!-- /toc -->
 
 # Weapon object slots and limits
@@ -416,6 +416,7 @@ On the overworld, the whirlwind:
 - Destination: each use steps `TeleportingLevelIndex` by +1 when Link faces right or up, by -1 when he faces left or down. [`Whirlwind_StepLevelIndex`](src/bank1/whirlwind.asm#L314)
 - It then keeps stepping the same way, wrapping within levels 1-8, past levels whose piece Link lacks (bit level - 1 of `InvTriforce`). [`Whirlwind_Summon@TestLevelPiece`](src/bank1/whirlwind.asm#L258) [`InvTriforce`](src/Variables.inc#L597)
 - The index is kept between rooms and steps on every overworld use that reaches the summon, even when no whirlwind is made. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L243)
+- So a second play before the pickup steps the index again without making a whirlwind, and the whirlwind already out carries Link to where the index then points (trace, Nov 13: from room `$0B` with pieces 1-5 and the index at 0, two plays facing down, the second on the first free frame after the 152-frame freeze: set down in room `$45`, 625 frames after the first play; one play: room `$0B` itself, 477 frames). The index does not step on a play inside a dungeon or in room `$42`. [`Whirlwind_Summon`](src/bank1/whirlwind.asm#L243)
 - The whirlwind (type `$2E`) is created at X = 0 on Link's Y, plays a spawn cloud if its slot was unused, then moves right 2 pixels per frame and is destroyed at X >= `$F0` (its 120th update). [`Whirlwind_SetUp`](src/bank1/whirlwind.asm#L66) [`Whirlwind_Update_Full`](src/bank1/whirlwind.asm#L99)
 - Pickup is the ordinary monster touch test, which reports nothing while Link's invincibility timer or stun timer is nonzero, he holds the clock, he is halted (state `$40`) or a Like-Like holds him; a missed whirlwind leaves at the right edge and the room allows no second one. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L145) [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
 - On pickup Link faces right, is halted (state `$40`) and hidden, and rides to the right edge; then the game leaves the room (mode 6) and scrolls right. [`Whirlwind_Update_Full@CheckCollision`](src/bank1/whirlwind.asm#L145) [`Whirlwind_Update_Full@CheckRightEdge`](src/bank1/whirlwind.asm#L188)
