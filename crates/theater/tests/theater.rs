@@ -98,17 +98,22 @@ fn the_feed_fills_the_queues_and_pauses_the_simulations_while_nothing_is_wanted(
 
     let win = recording(&rom, 60, 0, 10, &[Some(5)], ENDING_WIN);
     send.send(finished(3, win.clone(), Some(true))).unwrap();
-    send.send(finished(4, recording(&rom, 40, 0, 10, &[Some(2)], ENDING_DEATH), Some(false))).unwrap();
+    send.send(finished(5, recording(&rom, 30, 0, 10, &[Some(1)], ENDING_STUCK), None)).unwrap();
     wait_for("two runs", || feed.stats().runs == 2);
     let stats = feed.stats();
-    assert_eq!((stats.len, stats.capacity, stats.endings), ([1, 1, 0, 1, 1], 1, [0, 1, 1, 0, 0, 0]));
-    // The death was played with the clips switch off: `died` holds it; `random` and `best` took the win.
-    assert_eq!(stats.without_clips, [0, 0, 0, 1, 0]);
-    assert!(stats.running && !paused.load(Ordering::Acquire), "stuck has room");
-    send.send(finished(5, recording(&rom, 30, 0, 10, &[Some(1)], ENDING_STUCK), None)).unwrap();
+    assert_eq!((stats.len, stats.capacity, stats.endings), ([1, 1, 1, 0, 1], 1, [0, 1, 0, 1, 0, 0]));
+    assert!(stats.running && !paused.load(Ordering::Acquire), "died has room");
+    send.send(finished(4, recording(&rom, 40, 0, 10, &[Some(2)], ENDING_DEATH), Some(false))).unwrap();
     wait_for("the pause", || paused.load(Ordering::Acquire));
     let stats = feed.stats();
     assert_eq!((stats.len, stats.running, stats.budget, stats.primed), ([1, 1, 1, 1, 1], false, 0, true));
+    // The death was played with the clips switch off: `died` holds it; `random` and `best` took the win.
+    assert_eq!(stats.without_clips, [0, 0, 0, 1, 0]);
+
+    // The stuck queue never asks for a run: watching its one run leaves the simulations paused.
+    assert_eq!(feed.pop(Queue::Stuck).unwrap().seed, 5);
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(paused.load(Ordering::Acquire) && !feed.stats().running);
 
     // Every run was saved under its seed and ending, whatever the queues did with it.
     let mut saved: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
