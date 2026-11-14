@@ -16,7 +16,70 @@ round docs still call it that.)
     67.0%); revisit if variety matters less than arrivals.
   - [ ] **darknut retrain for 3:0x5b's fight at every bomb count** (its resets now train the fight; no retrain yet).
 
-Each is a project of its own. Round 23 (act modes: how an action is picked; branch `r23`) is being landed first.
+### Next: leave rooms with more hearts (the owner, Nov 14)
+
+"We beat the room with 1 heart and died in the next." Find out how to train the models to value health for what
+it is worth to the run. Not by changing the route and not by buying potions.
+
+**What the reward does today** (`crates/env/src/rewards.rs`, `critic.rs`): health is rewarded, but flatly.
+
+- Leaving the room: success pays 20 × ((1 − w) + w × hearts / max hearts), w = `reward.exit_health_weight` 0.5.
+  One heart is worth 3.3 with 3 max hearts (Dungeon 2) and 1.4 with 7 (Dungeon 4).
+- A hit: `penalty-lost-health` −0.25 per half heart at any health, `penalty-lost-beams` −0.25 on leaving full
+  health; the step's `reward-gained-*` are halved.
+- A heart picked up: `reward-gained-health` 0.25 to 0.75, more when hurt (`fixed_pickup_reward`: 1.0).
+- Starts: half at full health, half spread over `hp: [0.15, max]` (boss-gleeok `[0.5, max]`).
+- Models are ranked by success, then `mean_health_change`; the early stop waits for hearts lost to settle.
+
+So a heart is worth about 2 against a success of 20 and a death of −20, the same heart whether Link holds six or
+one, and it is paid in boss rooms too, where the triforce refills him straight afterwards.
+
+**What a heart is worth to the run.** Share of visits that end in death by hearts on arrival (Gleeok: fights not
+won), from the round 23 chains (`r73-1k` and `r73-1k-noclips`: the D2, D3 and D4 segments and the full route,
+1000 runs each; `RoomRecord.health_in` and `outcome` per room visit):
+
+| hearts on arrival | Gleeok 4:0x13 (lost) | Manhandla 3:0x4d | 2:0x5e | 3:0x5b |
+|---|---:|---:|---:|---:|
+| under 1 | 85% (98 fights) | 58% (205) | 54% (26) | 38% (200) |
+| 1 to 2 | 66% (258) | 40% (481) | 31% (224) | 20% (510) |
+| 2 to 3 | 30% (474) | 16% (493) | 5% (673) | 10% (661) |
+| 3 to 4 | 11% (522) | 8% (382) | 1% (2043; 3 is full there) | 1% (746) |
+| 4 or more | 3% at 4-5 (477), 0% from 5 (513) | 2% (339) | – | 0% (2834) |
+
+- Of the 709 deaths of the full route (clips on) 446 entered the room they died in with one heart or less, 577
+  with two or less (median 1.0).
+- A room left with one heart or less (3837 of 83,859 exits) is followed by a death within the next two rooms 21%
+  of the time, against 1.7% for any exit.
+- The value is steeply curved: from 1-2 to 2-3 hearts at Gleeok is worth 36 points of his fight, from 5 to 6
+  nothing; the reward pays about 1.9 for either.
+- 2.07 dropped hearts per full run are left on the floor (`hearts_left`; not yet split by whether Link was hurt).
+
+**Options** (none run yet):
+
+| # | option | what changes | retrain | risk and what is known |
+|---|---|---|---|---|
+| 1 | the exit priced by the route's own odds | fit "chance of finishing from this route step with this many hearts" from the chain files; the exit bonus uses it instead of the linear fraction | yes (continue) | the principled one; moves when the downstream models change; noisy for rare states; also stops paying for hearts before a triforce refill |
+| 2 | a curved exit bonus | by absolute hearts: steep below 3, flat above 4 | yes | option 1 without the data; knows nothing of the room |
+| 3 | damage costs more at low health | the hit penalty scaled by the hearts left | yes | at 1 heart the goriya model already turns passive (33% WAIT) and dies to contact (round 6): a steeper penalty could make that worse; needs the stall penalty to hold |
+| 4 | exit weight per family | raise `exit_health_weight` for the rooms that feed Gleeok, Manhandla and 2:0x5e; 0 before a triforce | yes | weight 1.0 on the rushing Wallmaster model (`r64-ehw1b`) did not bring gathering back; untested from scratch |
+| 5 | more pickups | a larger pickup reward when hurt; hearts as targets | yes | heart targets worked in round 10 (healed per run 0.45 → 1.2-2.0) |
+| 6 | a longer horizon | a discount nearer 1 where a fast exit beats gathering | yes | untried; the Wallmaster rush is the case for it |
+| 7 | careful play at low health | at two hearts or fewer a sharper act mode | no | the cheapest test; argmax takes fewer hits per move (4.2% against 4.9%) but can loop |
+| 8 | train the arrivals | start states drawn from what the chains deliver | yes | helps to survive at low health, not to leave with more |
+
+Tried before and dropped: a flat damage penalty for rooms Link only crosses (round 6, twice: no chain gain), a
+"collect hearts" objective (round 6 §10: more pickups on d2-rope, no chain gain).
+
+**Proposed order:** (a) option 7, one chain set with a health-aware act rule against the standing one (no
+training); (b) option 1 with option 3 folded in, on the families that feed the four rooms of the table (vire,
+like-like, trap-room and stalfos-keese-gel in Dungeon 4; darknut and zol in Dungeon 3; d2-rope and goriya in
+Dungeon 2), judged by chains, since single rooms cannot see it; (c) option 5 for wallmaster (item 7 below), where
+gathering was lost. Items 2 (Gleeok at low health), 4 (the plain way's heart cost), 7 and 8 below are cases of
+this one.
+
+### The rest, ordered by what the r72 chains lose
+
+Each is a project of its own. Round 23 (act modes: how an action is picked) landed first (above).
 The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-1k` | off `r72-1k-noclips`): D2
 87.2 | 87.2%, D1 98.9 | 99.5%, D3 50.4 | 50.4%, D4 73.6 | 56.8%, to the D3 triforce 19.5 | 10.2%, the full route
 13.6 | 4.8% (round 21 `r71-1k-dks`: 24.8% and 12.8%). Where full runs end with clips on: 3:0x5b 145 per 1000,
