@@ -1735,6 +1735,11 @@ rooms:
     S:
       level: 0
       location: '0x6d'
+      # Two openings (X $30 and X $C0).  The left one enters 0x6d W of its tree, from where only N and W lead;
+      # the right one reaches 0x6d's E edge, and the tree burns from there too (red candle facing W from X
+      # $B8-$C0 on row Y $5D: stairs 92 frames later; walked Nov 14).  Only the right one counts.  No d2first
+      # step leaves 0x5d S: the first-quest draft's plain way and Dungeon 8 approach do.
+      span: [24, 25]
     W:
       level: 0
       location: '0x5c'

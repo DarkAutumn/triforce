@@ -167,7 +167,9 @@ Nothing of this route can be played by the agent yet. What it needs beyond rooms
   in dungeons only. Next phase (Lee, Nov 14). The plain way takes the heart from 0x6f with the plain ladder.
 - **Plain ways (clips off)** are in the draft as `stretch:` blocks, as in `d2first` (the map's Clips selector shows
   either): coast-heart (row 5 E, 0x5d S, row 6 E, 0x6f N into 0x5f), lake-3e (0x3e N, 0x2e W), mountain (0x1d S,
-  0x2d, 0x2c, 0x1c, the Lost Hills), dock-44 (0x55 S, 0x65 W, 0x64 N), woods (0x51 S, the Lost Woods, 0x60 N). The
+  0x2d, 0x2c, 0x1c, the Lost Hills), dock-44 (0x55 S, 0x65 W, 0x64 N), woods (0x51 S, the Lost Woods, 0x60 N). All
+  five were walked by button presses on Nov 14: legs 1-3 take 20,421 frames by them against 15,930 by clips
+  (coast-heart alone +1,569); 0x5d must be left S at X `$C0` (`game.yaml` span), and 0x5b E on its upper rows. The
   objective has no way out of a maze by its sequence yet (`routes.yaml` refuses one), and Lost Woods and Lost Hills
   steps need it.
 - **Route steps the objective does not know:** buying in a shop, the take-any caves' right ware, the armos and the

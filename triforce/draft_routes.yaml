@@ -13,7 +13,7 @@
 # magic key; level 9 takes the red ring.  Order: 5, 7, the magic sword, 6, 8, 9.  Bombs come only from the rooms and
 # drops on the way (Lee, Nov 14: no shop; this is the speedrun route): 5:0x65's Gibdo, 7:0x1b when the bag isn't
 # full, 9:0x16's Patra; anything short is a cheated bomb for now.  Every step was walked in the emulator (fights
-# skipped; docs/routes/first-quest.md) but for the plain ways added Nov 14.
+# skipped; docs/routes/first-quest.md); the plain ways of the overworld legs on Nov 14.
 first-quest:
   extends: d2first
   steps:
@@ -32,19 +32,19 @@ first-quest:
     - {level: 0, room: '0x60', entry: N, exit: W, wrap: true, note: 'wrap exit round the world on row Y $85 or $8D: into 0x5f (room id - 1), arriving on water; a softlock without the ladder'}
     - {level: 0, room: '0x5f', entry: E, exit: N, note: 'the overworld ladder clip W from the arrival (to be built) to the heart container (9 hearts); the ladder twice more to land, then N'}
     plain:
-    - {level: 0, room: '0x55', entry: N, exit: E, note: 'E along row 5 (d2first''s rooms the other way)'}
+    - {level: 0, room: '0x55', entry: N, exit: E, note: 'E along row 5 (d2first''s rooms the other way); from the dock only E (rows Y $85, $8D) and S are reachable'}
     - {level: 0, room: '0x56', entry: W, exit: E}
     - {level: 0, room: '0x57', entry: W, exit: E}
     - {level: 0, room: '0x58', entry: W, exit: E}
     - {level: 0, room: '0x59', entry: W, exit: E}
     - {level: 0, room: '0x5a', entry: W, exit: E}
-    - {level: 0, room: '0x5b', entry: W, exit: E}
+    - {level: 0, room: '0x5b', entry: W, exit: E, note: 'E on the upper rows (Y $55, $5D): the lower opening leads into a pocket of 0x5c'}
     - {level: 0, room: '0x5c', entry: W, exit: E}
-    - {level: 0, room: '0x5d', entry: W, exit: S}
+    - {level: 0, room: '0x5d', entry: W, exit: S, note: 'S at X $C0: the opening at X $30 enters 0x6d W of its tree, cut off from its E edge'}
     - {level: 0, room: '0x6d', entry: N, exit: E}
     - {level: 0, room: '0x6e', entry: W, exit: E}
     - {level: 0, room: '0x6f', entry: W, exit: N}
-    - {level: 0, room: '0x5f', entry: S, exit: N, note: 'the heart container with the plain ladder from the S side (9 hearts), then N'}
+    - {level: 0, room: '0x5f', entry: S, exit: N, note: 'the heart container (9 hearts): E from the land on row Y $85 or $8D, the ladder twice, taken at X $B8; back W over both, then N'}
   - {level: 0, room: '0x4f', entry: S, exit: N}
   - {level: 0, room: '0x3f', entry: S, exit: N, note: 'the raft leaves from the dock at (X $60, Y $7D)'}
   - {level: 0, room: '0x2f', entry: S, exit: S, takes: [heart-container], note: 'take-any cave: the heart container is the right ware (10 hearts); S off the pier: the raft back'}
@@ -79,8 +79,8 @@ first-quest:
     - {level: 0, room: '0x2d', entry: N, exit: W}
     - {level: 0, room: '0x2c', entry: E, exit: N}
     - {level: 0, room: '0x1c', entry: S, exit: W}
-    - {level: 0, room: '0x1b', entry: E, exit: maze, note: 'the Lost Hills: N, N, N, N'}
-    - {level: 0, room: '0x0b', entry: S, exit: cave, note: 'Dungeon 5'}
+    - {level: 0, room: '0x1b', entry: E, exit: maze, note: 'the Lost Hills: N at X $70, four times'}
+    - {level: 0, room: '0x0b', entry: S, exit: cave, note: 'straight up at X $70: Dungeon 5'}
   # Dungeon 5: the recorder, Digdogger.  Walked in the emulator Nov 13 (docs/routes/first-quest.md).  Keys: 6 in, 3
   # spent, 2 picked up, 5 out.  Bombs: 0x66's wall needs one brought in (a drop, else cheated), then 0x65's Gibdo
   # carries 4; 2 walls.  Forced fights: 0x05, 0x66 on the way back, the small Digdogger, and without clips 0x64.
@@ -161,10 +161,10 @@ first-quest:
     - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $75-$9D)'}
     - {level: 0, room: '0x50', entry: E, exit: N, note: 'N at X $E0, the corridor the wrap arrives in'}
     plain:
-    - {level: 0, room: '0x51', entry: E, exit: S}
-    - {level: 0, room: '0x61', entry: N, exit: maze, note: 'the Lost Woods: N, W, S, W'}
+    - {level: 0, room: '0x51', entry: E, exit: S, note: 'S at X $A0-$B0'}
+    - {level: 0, room: '0x61', entry: N, exit: maze, note: 'the Lost Woods: N (at once, on the arrival row), W, S, W'}
     - {level: 0, room: '0x60', entry: E, exit: N}
-    - {level: 0, room: '0x50', entry: S, exit: N}
+    - {level: 0, room: '0x50', entry: S, exit: N, note: 'N at X $E0 only, the corridor on the E side'}
   - {level: 0, room: '0x40', entry: S, exit: E}
   - {level: 0, room: '0x41', entry: W, exit: N}
   - {level: 0, room: '0x31', entry: S, exit: N}
@@ -197,8 +197,8 @@ first-quest:
   - {level: 0, room: '0x3c', entry: recorder, exit: S}
   - {level: 0, room: '0x4c', entry: N, exit: E}
   - {level: 0, room: '0x4d', entry: W, exit: S}
-  - {level: 0, room: '0x5d', entry: N, exit: S}
-  - {level: 0, room: '0x6d', entry: N, exit: cave, note: 'burn the tree at tile (20, 4): the red candle facing E from X $78-$88 on row Y $5D; Dungeon 8'}
+  - {level: 0, room: '0x5d', entry: N, exit: S, note: 'S at X $C0 (the right opening reaches 0x6d''s E side)'}
+  - {level: 0, room: '0x6d', entry: N, exit: cave, note: 'burn the tree at tile (20, 4): the red candle facing W from X $B8-$C0 on row Y $5D; Dungeon 8'}
   # Dungeon 8: Gleeok with four heads, without the book and the magic key.  Walked in the emulator Nov 13
   # (docs/routes/first-quest.md): 9 entries, the fewest; 0x5e's key pays 0x4e's door and 0x4c's key (in the open) is
   # taken for level 9: 2 keys in, 3 out; 2 bombs.  Forced fights: 0x5e, 0x3e (11 Blue Darknuts), Gleeok.  The magic
