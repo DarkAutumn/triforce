@@ -5,11 +5,10 @@ round docs still call it that.)
 
 ## Next projects (Lee, Nov 11-12; ordered Nov 13 by what the r71 chains lose): top of the list
 
-- **Act modes (round 23, pending):** decide the play default (proposed `floor:0.1`), the evaluation/chain rule
-  (proposed one global `floor:0.1`) and whether early-stop confirmation uses it (needs a flag in
-  `best_of_n.success_by_state`); finish the chain comparison (`scripts/experiments/r23_act_pilot.sh report`) and
-  rerun the pilot on the round 22 models (`docs/experiments/round23.md` §6). Check the chain report's "hearts at
-  arrival" column.
+- **Act modes (round 23, pending):** decide the evaluation/chain rule (proposed one global `escape:16`: full route
+  12.8% → 20.5%) and the play default (proposed `temperature:0.75`; measure `temperature:0.75+escape:16`), whether
+  early-stop confirmation uses it (needs a flag in `best_of_n.success_by_state`); rerun the pilot on the round 22
+  models (`docs/experiments/round23.md` §6). Fix the chain report's "hearts at arrival" column (reads max hearts).
 
 Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 runs per segment, final team
 `r71-1k-dks`): D2 85.6%, D1 99.1%, D3 46.5%, D4 56.4%, the full route 12.8% (15.4% in `r71-1k`: within noise).

@@ -28,11 +28,12 @@ pilot scripts).
 - **Variety:** share of distinct action sequences from the same start state: sample 76%, floor:0.03 74%,
   temperature:0.75 72%, floor:0.1 70%, minp:0.2 68%, temperature:0.5 65%, the r71 per-family choice 60%, argmax and
   every `escape` mode 51% (what remains is the game's random numbers).
-- **Recommendation (pending):** play default `floor:0.1` (the owner's own threshold; never a move under 10%, 70% of
-  episodes distinct, 326 failures against sample's 397); evaluation and chains one global rule, `floor:0.1` (or
-  `floor:0.03+escape:16` where variety doesn't matter: 317, the fewest); training-time evaluation and early-stop
-  confirmation in the same mode. Chains: see §4 (the baseline is measured; the other modes were still running when
-  this was written: `scripts/experiments/r23_act_pilot.sh report` adds them).
+- **Chains (1000 runs per segment):** `escape:16` for every family takes the full route from 12.8% (the r71
+  per-family choice) to 20.5% (D2 89.5%, D3 49.6%, D4 69.5%); `sample` for all 8.7%, `argmax` 14.0% with 179 stuck
+  runs, `floor:0.1` 16.0% with 113 stuck, `temperature:0.75` 15.0% with 17.
+- **Recommendation (pending):** evaluation, chains and training-time evaluation: one global `escape:16`. Play default:
+  `temperature:0.75` (draws every action, beats the r71 choice in chains, does not loop);
+  `temperature:0.75+escape:16` is the untested likely improvement.
 
 ## 1. Setup
 
@@ -123,42 +124,65 @@ Loops: `stuck`, `no-damage`, `no-room-progress` and `max-steps` endings. Full pe
   per family on this very data, overfit) 274. So one global sharpened rule recovers most of what is to be had; a
   per-family split adds ~10-15 failures of 36,400, within noise.
 
-## 4. Chains (1000 runs per segment)
+## 4. Chains (1000 runs per segment, one mode for every family)
 
 The baseline (`ACT=model`) on this code reproduces round 21's `r71-1k-dks` exactly (same seeds, same actions:
-`sample` and `argmax` are bit for bit the old ones): full 12.8% ± 1.1, D2 85.6% ± 1.1, D3 46.5% ± 1.6, D4 56.4% ±
-1.6. Moves per run under 1% (r71 per family): D2 3.1, D3 3.1, D4 6.7, full 8.6; followed by a hit 5.6-7.8% against
-4.3-5.9% for any move, by a death 0.1-0.3% (same as any move). The first room's action sequences are distinct in
-23.5% of D2/D3 runs (argmax families start those segments; the RNG is the only spread) and 4.7% of D4 runs.
+`sample` and `argmax` are bit for bit the old ones). Arrivals ± SE; deaths and stuck runs before arriving; moves
+under 1% per run and the share followed by a hit within 4 decisions against any move's; distinct: share of distinct
+action sequences of the segment's first room (every run from the same state; full: the power-on/start room).
 
-The other modes (`floor:0.1`, `floor:0.03`, `temperature:0.75`, `floor:0.03+escape:16`, `escape:16`, `sample`,
-`argmax`) were still running when this was written (about 25 minutes per mode); their files land in
-`target/r23-pilot/chains/r23-<mode>-<segment>.jsonl` and `r23_act_pilot.sh report` tabulates them. **Not decided
-by this document:** whether a global rule beats the per-family choice in chains, where single-room differences of
-0.1-0.2 points compound over ~25 rooms.
+| mode | D2 | D3 | D4 | full route | full: deaths / stuck | full: <1% per run, then hit % (any move %) | full: entropy | D2 first room distinct |
+|---|---:|---:|---:|---:|---|---|---:|---:|
+| model (r71 per family) | 85.6 ± 1.1 | 46.5 ± 1.6 | 56.4 ± 1.6 | 12.8 ± 1.1 | 857 / 11 | 8.6, 6.8 (5.2) | 0.51 | 23.5% |
+| sample | 85.1 ± 1.1 | 44.7 ± 1.6 | 51.0 ± 1.6 | 8.7 ± 0.9 | 889 / 10 | 13.3, 7.7 (5.2) | 0.86 | 23.5% |
+| argmax | 79.0 ± 1.3 | 38.3 ± 1.5 | 65.6 ± 1.5 | 14.0 ± 1.1 | 676 / 179 | 0 | 0 | 0.1% |
+| temperature:0.75 | 86.7 ± 1.1 | 48.7 ± 1.6 | 59.9 ± 1.5 | 15.0 ± 1.1 | 823 / 17 | 3.2, 7.2 (5.0) | 0.67 | 11.3% |
+| floor:0.03 | 85.4 ± 1.1 | 45.3 ± 1.6 | 57.9 ± 1.6 | 13.1 ± 1.1 | 836 / 20 | 0 | 0.73 | 19.7% |
+| floor:0.1 | 86.6 ± 1.1 | 47.2 ± 1.6 | 65.0 ± 1.5 | 16.0 ± 1.2 | 717 / 113 | 0 | 0.57 | 3.4% |
+| **escape:16** | **89.5 ± 1.0** | **49.6 ± 1.6** | **69.5 ± 1.5** | **20.5 ± 1.3** | 781 / 7 | 0.7, 4.6 (4.9) | 0.03 | 0.1% |
+| floor:0.03+escape:16 | 90.2 ± 0.9 | 46.4 ± 1.6 | 67.4 ± 1.5 | 19.1 ± 1.2 | 777 / 24 | 0 | 0.04 | 0.1% |
+
+- **The chains separate what single rooms could not.** Small per-room gains compound over ~60 rooms: `escape:16`
+  takes the full route from 12.8% to 20.5% (+7.7 points, ≈ 4.5 SE), with every segment better than the baseline
+  (D4 +13.1). `sample` for everyone is the worst (8.7%): the dungeon families' sampling is what costs D4 most.
+- **argmax kills fewer runs but loops**: full 676 deaths and 179 stuck; D2 115 stuck, D3 192. `escape:16` keeps
+  argmax's low death count (D4 305 deaths against argmax's 308) and removes almost all its loops (7 stuck in full).
+- **floor:0.1 also loops in chains** (110 stuck in D3, 113 in full): when the model's mass sits on one action a
+  floor is argmax, without the escape. In single rooms that cost little (19 loops in 36,400 episodes).
+- **Variety in chains:** whole runs differ in every drawing mode (98-100% of full runs distinct by the first room),
+  but within a dungeon's first room the sharpened modes repeat more (D2: 23.5% distinct by sample, 11.3% by
+  temperature:0.75, 3.4% by floor:0.1). Under argmax and escape runs differ only by the game's random numbers.
+- **Rare moves:** a full run by sample makes 13 moves under 1%; they are followed by a hit 7.7% of the time against
+  5.2% for any move, and by a death 0.3%, like any move. They are a small part of what separates the modes; argmax's
+  greed (fewer hits) and loops are the larger part.
 
 ## 5. Recommendation (pending the lead's decision)
 
-- **Play default (play-zelda, zelda-headless, the golden path): `floor:0.1`.** Never argmax (the owner's
-  constraint), 70% distinct episodes against argmax's 51% and sample's 76%, no move under 10% ever, and in single
-  rooms the fewest failures of the drawing modes (326, with temperature:0.75 327). `registry.PLAY_ACT` is still
-  `sample`: switching it is one line once decided. If more variety is wanted, `floor:0.03` (74%, 347).
-- **Evaluation and chains: one global rule, `floor:0.1`**, unless the chains show otherwise; `floor:0.03+escape:16`
-  is the single-room best (317) but plays like argmax. A per-family split is not worth its bookkeeping on these
-  numbers. The promoted `act` files were not changed (read-only models).
-- **Training-time evaluation and early stopping: the same rule.** `train_round.py --eval-act MODE` exists; the
-  early-stop confirmation (`best_of_n.success_by_state`) still samples and would need a flag.
-- **Weak points:** single-room differences among sharpened modes are within 1-1.5 SE; the per-family winners are
-  picked on the same data they are judged on; the hit-after-a-rare-move window (4 decisions) is a choice, not a
-  measurement of cause; chains other than the baseline are not in this document; the chain report's "hearts at
-  arrival" column reads `health_in` of the arrival room and should be checked before it is quoted.
+- **Evaluation and chains: one global `escape:16`.** Full route 20.5% against the per-family choice's 12.8%, every
+  segment better, the fewest loops of any mode, and in single rooms 329 failures (within noise of the best). It
+  replaces the per-family sample/argmax choice; per-family tuning is not worth it on these numbers. The promoted
+  `act` files were not changed (read-only models): `triforce promote F RUN --act escape:16` per family, after the
+  round 22 rerun.
+- **Play default (play-zelda, zelda-headless, the golden path): `temperature:0.75`.** It must not be argmax and must
+  show variety, which rules out `escape` (it plays argmax 97% of the time). Of the drawing modes it is the best that
+  doesn't loop: full route 15.0% (above the r71 per-family 12.8% and sample's 8.7%), 17 stuck runs against floor:0.1's
+  113, about 1 move under 1% per D2 run instead of 3.9. `floor:0.1` reaches 16.0% but loops. Untested and the likely
+  better play default: `temperature:0.75+escape:16`. `registry.PLAY_ACT` is still `sample`: one line once decided.
+- **Training-time evaluation and early stopping: `escape:16`**, the chain rule (`train_round.py --eval-act`; the
+  early-stop confirmation in `best_of_n.success_by_state` still samples and needs a flag).
+- **Weak points:** single-room differences among sharpened modes are within 1-1.5 SE; the escape threshold (16) was
+  measured against 48 only in the quick pass; the hit-after-a-rare-move window (4 decisions) is a choice, not a
+  measured cause; `temperature:0.75+escape:16` and `floor:0.1+escape:16` were not run; the chain report's "hearts at
+  arrival" column reads the arrival room's `health_in`, which is the max hearts (4.00, 7.00, 8.00) and should be fixed
+  before it is quoted.
 
 ## 6. Re-measuring on the round 22 models
 
 One command, on a merged tree with the round 22 team promoted:
 
-    TRIFORCE_MODELS_DIR=<round 22 models> OUT=target/r23-on-r22 CHAIN_MODES="model floor:0.1 floor:0.03+escape:16" \
+    TRIFORCE_MODELS_DIR=<round 22 models> OUT=target/r23-on-r22 CHAIN_MODES="model escape:16 temperature:0.75 temperature:0.75+escape:16" \
         scripts/experiments/r23_act_pilot.sh all
 
-(rooms in every mode of the grid, then the chains, then the tables). Every new checkpoint changes the answer per
+(rooms in every mode of the grid, then the chains, then the tables). Add `temperature:0.75` and
+`temperature:0.75+escape:16` to `CHAIN_MODES` to settle the play default. Every new checkpoint changes the answer per
 family (argmax is fragile per checkpoint), so this is to be rerun after every retrain.

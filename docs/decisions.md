@@ -1583,10 +1583,11 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **What:** act modes beyond `sample`/`argmax`: `temperature:T`, `floor:P`, `minp:R`, `topp:P`, `escape:N` and `+`
   combinations, applied to the joint action (256 actions), not per head; `escape` reads the env's linger count.
   Every evaluation and chain record counts low-probability moves and what followed them, and the actions (variety).
-  Proposed: play default `floor:0.1`; evaluation/chains one global `floor:0.1`; training-time evaluation the same.
+  Proposed: evaluation, chains and training-time evaluation one global `escape:16`; play default `temperature:0.75`.
 - **Why:** the owner wants variety in play without rare bad moves. Joint, because "this action is unlikely" is a
   joint statement (two 20% heads make a 4% action). Linger, because it already defines progress for the project.
 - **Evidence:** `docs/experiments/round23.md`: 36,400 single-room episodes per mode; every sharpened mode has
   317-352 failures against sample 397 and argmax 402 (92 loops); rare moves are followed by a hit 1.4× as often as
-  any move. Chains beyond the baseline pending. Status: **pending**; `registry.PLAY_ACT` and the promoted `act` files
-  are unchanged.
+  any move. Chains (1000 runs): full route 12.8% (r71 per family) → 20.5% with `escape:16` for all; sample 8.7%,
+  argmax 14.0% (179 stuck), temperature:0.75 15.0%. Status: **pending**; `registry.PLAY_ACT` and the promoted `act`
+  files are unchanged.
