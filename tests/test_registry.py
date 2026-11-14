@@ -248,18 +248,20 @@ def test_registry_cli_lists_runs_marking_the_promoted_one_and_its_act_mode(tmp_p
     registry.save_checkpoint('d1-test', 'b', network, root=tmp_path)
     registry.main(['--models-dir', str(tmp_path), 'list', 'd1-test'])
     lines = capsys.readouterr().out.splitlines()
-    assert [line[:5] for line in lines] == ['  a  ', '  b  '] and all(line.endswith('act=sample') for line in lines)
+    assert [line[:5] for line in lines] == ['  a  ', '  b  ']
+    assert all(line.endswith(f'act={registry.DEFAULT_ACT}') for line in lines)
     registry.main(['--models-dir', str(tmp_path), 'promote', 'd1-test', 'a', '--act', 'argmax'])
     assert capsys.readouterr().out.strip() == str(tmp_path / 'd1-test' / 'promoted')
     registry.main(['--models-dir', str(tmp_path), 'list', 'd1-test'])
     lines = capsys.readouterr().out.splitlines()
     assert [line[0] for line in lines] == ['*', ' ']
-    assert lines[0].endswith('act=argmax') and lines[1].endswith('act=sample')
+    assert lines[0].endswith('act=argmax') and lines[1].endswith(f'act={registry.DEFAULT_ACT}')
     assert registry.act_mode(tmp_path / 'd1-test' / 'a') == 'argmax'
 
 
 def test_act_mode_belongs_to_the_weights_it_was_set_for(tmp_path):
-    """F064: retraining into a run dir whose act file says argmax leaves an unmeasured checkpoint that samples."""
+    """F064: retraining into a run dir whose act file says argmax leaves an unmeasured checkpoint that acts by the
+    default."""
     registry.save_checkpoint('d1-test', 'a', _trained(0)[0], root=tmp_path)
     run = tmp_path / 'd1-test' / 'a'
     registry.promote('d1-test', 'a', root=tmp_path, act='argmax')
@@ -267,11 +269,21 @@ def test_act_mode_belongs_to_the_weights_it_was_set_for(tmp_path):
     assert registry.act_mode(run) == 'argmax'
     registry.save_checkpoint('d1-test', 'a', _trained(1)[0], root=tmp_path)
     with pytest.warns(UserWarning, match='other weights'):
-        assert registry.act_mode(run) == 'sample'
+        assert registry.act_mode(run) == registry.DEFAULT_ACT
     (run / 'act').write_text('argmax\n')
     with pytest.warns(UserWarning, match='old format'):
-        assert registry.act_mode(run / 'ckpt.pt') == 'sample'
+        assert registry.act_mode(run / 'ckpt.pt') == registry.DEFAULT_ACT
     assert [p.name for p in run.iterdir() if p.name.startswith('.')] == []
+
+
+def test_one_act_mode_for_the_project(tmp_path):
+    """Round 23: evaluation, chains, the confirmation, a run without an act file and play all act by one rule."""
+    assert registry.PLAY_ACT == registry.DEFAULT_ACT == registry.ACT_RULE == 'temperature:0.5+relax:16'
+    assert registry.draws(registry.ACT_RULE)
+    registry.save_checkpoint('d1-test', 'a', _trained()[0], root=tmp_path)
+    run = tmp_path / 'd1-test' / 'a'
+    assert not (run / 'act').exists()
+    assert registry.act_mode(run) == registry.act_mode(run / 'ckpt.pt') == registry.ACT_RULE
 
 
 def test_set_act_mode_moves_an_evaluation_of_the_other_mode_aside(tmp_path):

@@ -22,7 +22,7 @@ a finished fixed-budget run.  ``--stop-success`` proposes a stop once the start-
 per-start cohorts (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for
 ``--stop-patience`` consecutive iterations (never before a budget failure could have been counted), and stops only
 if an evaluation of the current weights (``CONFIRM_EPISODES`` episodes per seed start state on an ``EvalTask`` pool,
-seed = pool seed + iteration, acting by ``--confirm-act``, default ``sample``; the rollouts always sample from the
+seed = pool seed + iteration, acting by ``--confirm-act``, default ``DEFAULT_ACT``; rollouts always sample from the
 unmodified policy) also reaches it; every check is an ``early_stop_check`` event (with its ``act``).  The
 evaluation ends early once its failures rule the threshold out (``aborted``, with the partial ``rate``, ``failures``
 and ``rate_upper_bound``, the best rate it could still have reached): the decision is the full evaluation's.

@@ -374,8 +374,12 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
                                **({f'start{train.OFF_LABEL}': rate(outcomes[50:played])} if played > 50 else {})}
     assert check['rate_upper_bound'] == (100 - (played - successes)) / 100
     assert check['aborted'] == (check['rate_upper_bound'] < 0.5)
-    assert calls[0] == (train.CONFIRM_EPISODES, 5 + 1, 2, 'sample')
+    assert calls[0] == (train.CONFIRM_EPISODES, 5 + 1, 2, registry.DEFAULT_ACT)
     assert ('early_stop' in [e['event'] for e in events]) == stops
+
+
+def test_the_confirmation_acts_by_the_project_act_mode_by_default():
+    assert train.parse_args(['--specialist', SPECIALIST]).confirm_act == registry.DEFAULT_ACT
 
 
 def _plateau_checks(states_dir, tmp_path, logs_dir, monkeypatch, run_id, outcomes, flags):

@@ -81,7 +81,7 @@ def test_only_the_canonical_evaluation_is_written_to_eval_json(states_dir, tmp_p
     canonical = (run / 'eval.json').read_text()
     assert json.loads(canonical)['episodes'] == 100
     assert main('--act', 'argmax', '--episodes-per-state', '1') == 0
-    assert main('--act', 'sample', '--seed', '2', '--episodes-per-state', '1') == 0
+    assert main('--act', registry.DEFAULT_ACT, '--seed', '2', '--episodes-per-state', '1') == 0
     assert main('--specialist', str(_short_config(tmp_path, 'ow-zora')), '--episodes-per-state', '1') == 0
     assert (run / 'eval.json').read_text() == canonical
     assert sorted(p.name for p in run.glob('eval*.json')) == [
@@ -113,6 +113,7 @@ def test_read_evaluation_finds_the_evaluation_in_the_act_mode_of_the_current_wei
     checkpoint = save_checkpoint('ow-start', 'r', seeded_network(4, SMALL), root=tmp_path)
     run = checkpoint.parent
     sha1 = registry.checkpoint_sha1(run)
+    registry.set_act_mode(run, 'sample')
     write_result({'deterministic': False, 'success_rate': 0.5}, run / 'eval.json')       # an old file, no sha1
     assert read_evaluation(run) == (run / 'eval.json', {'deterministic': False, 'success_rate': 0.5})
     with pytest.raises(LookupError, match='eval.json was measured by sample'):
@@ -191,7 +192,9 @@ def test_evaluation_acts_the_way_the_run_is_registered_unless_told(states_dir, t
     floor = play('floor', 'floor:0.2')
     assert floor[:2] == ('floor:0.2', 'floor:0.2') and floor == play('floor-again', 'floor:0.2')
     assert floor == cli('floor-cli', 'floor:0.20')
-    assert play('unregistered', None) == sampled == cli('model-sample', 'model')
+    default = play('default', registry.DEFAULT_ACT)
+    assert default[:2] == (registry.DEFAULT_ACT, registry.DEFAULT_ACT)
+    assert play('unregistered', None) == default == cli('model-default', 'model')
     registry.set_act_mode(checkpoint.parent, 'argmax')
     assert play('registered', None) == argmax == cli('model-argmax', 'model')
     assert cli('sample', 'sample') == sampled

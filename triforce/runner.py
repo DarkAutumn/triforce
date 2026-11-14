@@ -295,8 +295,8 @@ class Policies:
     ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model; ``networks``
     (name -> a ``ZeldaPolicy``) supplies a model directly; ``specialist_configs`` (name -> config) replaces a
     specialist's canonical YAML at runtime.  ``checkpoints`` afterwards maps each loaded name to its file and
-    ``acts`` holds, per policy, its model's act mode (the run's, ``registry.act_mode``; a given network
-    samples)."""
+    ``acts`` holds, per policy, its model's act mode (the run's, ``registry.act_mode``; a given network acts by
+    ``registry.DEFAULT_ACT``)."""
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,

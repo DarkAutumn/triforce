@@ -2,15 +2,15 @@
 """Train every specialist once, evaluate each on its own rooms, then evaluate the route.
 
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
-        [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100] [--eval-act model]
+        [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100] [--eval-act MODE]
         [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--promote] [--train-args '...{name}...']
 
 Specialists (trainable, with seed start states; route order of the route, ``d2first``) train one at a time as
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
-``<models>/<name>/<round>/train.log``.  Each trained run is evaluated with ``triforce.evaluate`` in its act mode
-(``eval.json`` in the run dir, ``evaluate.default_output``), or in ``--eval-act MODE`` (any act mode,
-docs/rust-actor.md "Act modes"; ``eval-<mode>.json`` unless it is the run's own); with a MODE the training's
-early-stop confirmation acts by it too (``triforce.train --confirm-act MODE``; with ``model``, the default, it samples).
+``<models>/<name>/<round>/train.log``.  Each trained run is evaluated with ``triforce.evaluate`` in ``--eval-act
+MODE`` (default ``registry.DEFAULT_ACT``, the project's rule, which is also a new run's own act mode: ``eval.json``
+in the run dir, ``evaluate.default_output``; another act mode writes ``eval-<mode>.json``; ``model``: the run's own),
+and the training's early-stop confirmation acts by the same mode (``triforce.train --confirm-act MODE``).
 Training's rollouts always sample from the unmodified policy.  Nothing is promoted unless ``--promote`` is given:
 then each run whose evaluation succeeded is promoted (pointer only; the run's own act mode).  The specialists'
 promoted run ids and act modes from before the round are kept in the summary (``previous_promoted``) so a
@@ -90,9 +90,9 @@ def parse_args(argv=None):
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: all trainable)")
     parser.add_argument('--episodes-per-state', type=int, default=100)
-    parser.add_argument('--eval-act', type=registry.act_argument(), default=registry.MODEL_ACT,
-                        help=f"act mode of each run's evaluation: model (the run's own, default) or an "
-                             f"{registry.ACT_HELP}")
+    parser.add_argument('--eval-act', type=registry.act_argument(), default=registry.DEFAULT_ACT,
+                        help=f"act mode of each run's evaluation and early-stop confirmation (default "
+                             f"{registry.DEFAULT_ACT}): model (the run's own) or an {registry.ACT_HELP}")
     parser.add_argument('--chain-runs', type=int, default=20)
     parser.add_argument('--chain-parallel', type=int, default=10)
     parser.add_argument('--skip-existing', action='store_true',

@@ -422,6 +422,27 @@ fn rng_start(replay: &tfreplay::Replay, meta: &serde_json::Map<String, serde_jso
     }
 }
 
+/// How the models of a recording acted (META `models[].act`; before round 23 `deterministic`: argmax or sample):
+/// one mode for all ("sample (every model, 24)"), else each mode with its models ("argmax: ow-start, trap-room;
+/// sample: goriya"); None when no model says.
+fn act_summary(meta: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    let models = meta.get("models")?.as_array()?;
+    let mut modes: std::collections::BTreeMap<&str, Vec<&str>> = std::collections::BTreeMap::new();
+    for model in models {
+        let act = model.get("act").and_then(serde_json::Value::as_str).or_else(|| {
+            model.get("deterministic").and_then(serde_json::Value::as_bool).map(|d| if d { "argmax" } else { "sample" })
+        });
+        if let Some(act) = act {
+            modes.entry(act).or_default().push(model.get("name").and_then(serde_json::Value::as_str).unwrap_or("?"));
+        }
+    }
+    match modes.len() {
+        0 => None,
+        1 => modes.iter().next().map(|(act, names)| format!("{act} (every model, {})", names.len())),
+        _ => Some(modes.iter().map(|(act, names)| format!("{act}: {}", names.join(", "))).collect::<Vec<_>>().join("; ")),
+    }
+}
+
 fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
     match cmd {
         ReplayCmd::Info { file } => {
@@ -441,6 +462,9 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
             println!("source:   {source}");
             println!("rom:      {}", rom::hex(&replay.rom_sha1()));
             println!("triforce: {}", meta.get("triforce").and_then(|v| v.as_str()).unwrap_or("?"));
+            if let Some(act) = act_summary(&meta) {
+                println!("act:      {act}");
+            }
             if let Some(ending) = meta.get("ending") {
                 println!("result:   {ending}");
             }

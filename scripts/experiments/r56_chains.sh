@@ -13,9 +13,10 @@
 #   post-d3  0_74c_0   4:0x71 (Dungeon 4's entrance)
 #   d4       4_71s_0   the D4 triforce
 #
-#   ACT=sample TAG=r56-sample scripts/experiments/r56_chains.sh [run|report]
+#   [ACT=model] TAG=r73-1k RUNS=1000 scripts/experiments/r56_chains.sh [run|report]
 #
-# ACT: model (each model's act file) or an act mode (sample, argmax, floor:0.03, ...: docs/rust-actor.md "Act modes").
+# ACT: model (the default: each model's act file, round 23's rule `temperature:0.5+relax:16` on the promoted team) or
+# an act mode for every model (sample, argmax, escape:16, ...: docs/rust-actor.md "Act modes").
 # Output: target/r56-chains/<TAG>-<segment>.jsonl (console output in <TAG>-<segment>.log),
 # target/r56-chains/<TAG>-yardstick.json and target/r56-chains/<TAG>-room-stats.json
 # (`triforce room-stats`: per-room statistics by scope, full run, the segments cut at the dungeon exits, each dungeon,
@@ -29,7 +30,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
-ACT=${ACT:-sample}
+ACT=${ACT:-model}
 TAG=${TAG:-r56-$ACT}
 RUNS=${RUNS:-120}
 OUT=${OUT:-target/r56-chains}

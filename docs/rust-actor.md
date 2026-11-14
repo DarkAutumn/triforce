@@ -78,6 +78,11 @@ everywhere: the `act` file, `--act` of `evaluate`, `eval-chain`, `run`, `eval-ba
 (`ACT=`), `play-zelda.py`, `zelda-headless.py`, `promote --act`, `train_round.py --eval-act`; `_native.act_mode`
 gives the canonical spelling). Training rollouts always sample from the unmodified policy (PPO needs it).
 
+**The project's mode (decided Nov 14, `docs/decisions.md` "One act mode"): `temperature:0.5+relax:16`** for
+evaluation, chains, the early-stop confirmation, every promoted run's `act` file, a run without one
+(`registry.DEFAULT_ACT`) and play (`registry.PLAY_ACT`). Measured against the others in
+`docs/experiments/round23.md` §8.
+
 The network is factored: p(kind) · p(direction | kind) · p(duration | kind), 8 × 8 × 4 = 256 joint actions
 (`joint_log_probs`). `sample` and `argmax` act per head, kind first, as before round 23 (bit for bit); every other
 rule reshapes the **joint** distribution, because "this action as a whole is unlikely" is a joint statement: a 20%

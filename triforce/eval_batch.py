@@ -755,8 +755,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--families', action=_Ordered, metavar='all|a,b,c',
                         help="the evaluation of each family's promoted run (or --run-id)")
     chains = parser.add_argument_group('--chains')
-    chains.add_argument('--act', type=registry.act_argument(), default='sample',
-                        help="act mode of the segments (model or an act mode; default sample, as r56_chains.sh)")
+    chains.add_argument('--act', type=registry.act_argument(), default=registry.MODEL_ACT,
+                        help="act mode of the segments (model, the default: each model's act file; or an act mode)")
     chains.add_argument('--runs', type=int, default=120, help="runs per segment (seeds 0..N-1)")
     chains.add_argument('--segments', default=SEGMENTS, help="NAME:START ... (START a state or 'start')")
     chains.add_argument('--chains-dir', type=Path, default=None, help="default <repo>/target/r56-chains")

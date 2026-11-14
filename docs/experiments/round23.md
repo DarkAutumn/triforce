@@ -3,10 +3,32 @@
 The owner (Nov 13): "I WANT variance in play, I do NOT want the model to play the same every time. However, I also
 don't want it randomly walking into a fireball because we make 1000s of decisions per game and 10s of them by nature
 will be 1% moves. [...] By default I want playing the game to not be argmax, but training and eval are up to you."
-Earlier he suggested a threshold (actions under about 10% removed). Branch `r23`; decision pending
-(`docs/decisions.md` 2026-11-13 "Act modes"). Code: `1f2368c` (modes, decision statistics), `490f18c` (base rates,
-pilot scripts), then merged with round 22 (§6). **The pilot (§1-§5) was measured on the round 21 team** (`r71`);
-the rerun on the round 22 team is §8, pending its retrain.
+Earlier he suggested a threshold (actions under about 10% removed). On `main` since Nov 14 (1.4.1.2). **Decided
+(Nov 14): one act mode, `temperature:0.5+relax:16`, for play (the owner's choice) and for evaluation, chains and
+training (the lead's)**: §10, §11; `docs/decisions.md` 2026-11-14 "One act mode".
+Code: `1f2368c` (modes, decision statistics), `490f18c` (base rates, pilot scripts), then merged with round 22 (§6).
+**The pilot (§1-§5) was measured on the round 21 team** (`r71`); the measurement on the round 22 team is §8.
+
+## Summary (on the round 22 team, §8; clips on; 1000 runs per segment)
+
+- **Every sharpened rule beats the per-family choice and both ends.** Full route: `model` (each family's `act`
+  file) 19.6 ± 1.3%, `sample` 14.1%, `argmax` 24.3% (140 stuck); `escape:16` 30.2 ± 1.5%,
+  `temperature:0.75+escape:16` 31.3%, `temperature:0.5` 30.0% (11 stuck), `temperature:0.35+relax:16` 29.9% (0
+  stuck), `temperature:0.5+relax:16` 28.7% (3 stuck): within one standard error of each other.
+- **New since the pilot: a rule that draws every action now matches `escape:16`.** `temperature:0.5` and
+  `temperature:0.35+relax:16` reach what the argmax-based rules reach; `relax` removes the low temperatures' loops.
+  `temperature:0.75` (the pilot's play proposal) stays at 21.5%.
+- **Variety costs arrivals at higher temperatures.** Distinct action sequences from one start state in single rooms:
+  argmax and every `escape` 51.8% (the game's random numbers alone), `temperature:0.35` 62.5%, `temperature:0.5`
+  67.0%, `temperature:0.75` 73.0%, `sample` 77.4%.
+- **Per-family mixes lose**: each family's best mode in single rooms (`mixall`) 24.7%, against 30.2% for one global
+  rule: single-room differences per family are noise, and picking on them overfits.
+- **The two fixes (§9) on the team's own act modes:** full route 13.6% (`r72-1k`) → 19.6%, D3 50.4% → 54.7%; every
+  run that changed first diverged in 3:0x5b, 3:0x4c, 4:0x21 or 4:0x11, and the gains are 3:0x5b's.
+- **Not run (cut for time):** the act modes' chains with clips off, and the drawing mix's D3 and D4 segments.
+- **Decided and applied (§10, §11): `temperature:0.5+relax:16` everywhere.** Standing numbers, 1000 runs per
+  segment, clips on | off: D2 89.9 | 89.9%, D3 60.1 | 60.1%, D4 78.6 | 64.7%, to the D3 triforce 33.5 | 22.7%, to the
+  D4 triforce 28.7 | 15.3% (`r72-1k`: 13.6 | 4.8%).
 
 ## Summary (the pilot, on the round 21 team)
 
@@ -246,11 +268,153 @@ trained round 22's new rooms (0x67 and its cave, the stretches, 3:0x5c, 4:0x01/0
 - Hearts at arrival are the corrected ones (the yardstick shares `eval_batch.arrival_hearts`): out of Dungeon 1,
   5.22 is Link's health entering its triforce room; the old reading said 6.00, the max.
 
-## 8. On the round 22 team
+## 8. On the round 22 team (Nov 14, 1.4.1.2)
 
 <!-- r23: on the round 22 team -->
 
-Not measured yet: the commands of §6, after the round 22 retrain.
+Code `main` at 1.4.1.2 (`2c67638`: act modes, one bomb per wall, 3:0x5b's last pass, §9), the promoted round 22
+team (`r72-*` and the kept `r71-*`, read-only), clips on for everything. Every output is in the main checkout's
+`target/r23-pilot-clipson/` (`report.md`, `report.json`: `r23_act_report.py`).
+
+    TRIFORCE_MODELS_DIR=<models> CLIPS=on ROOM_MODES="sample argmax escape:16 escape:8 temperature:0.75 \
+        temperature:0.5 temperature:0.75+escape:16 temperature:0.5+escape:16 floor:0.1+escape:16 \
+        temperature:0.75+relax:16 temperature:0.5+relax:16 temperature:0.75+relax:8 temperature:0.35 \
+        temperature:0.35+relax:16" CHAIN_MODES="model <the same modes>" scripts/experiments/r23_act_pilot.sh all
+
+- Single rooms: 24 families × 14 modes, 100 episodes per start state, seed 0, 37,000 episodes per mode (`model` is
+  each family's sample or argmax row by its `act` file).
+- Chains: 1000 runs (seeds 0-999) of the full route, D2, D3 and D4 per mode; `model` also the other four segments
+  (`chains-extra/`). Per-family mixes: run dirs linked into a temporary models dir with their own `act` files (the
+  promoted ones untouched): `mixall`, each family's mode with the fewest single-room failures (ties: more hearts,
+  then `escape:16`), and `mixdraw`, the same among the drawing modes (full route and D2 only).
+- **Not run:** the act modes' chains with clips off (cut for time: the owner found the measurement too long); the
+  clips-off numbers stay `r72-1k-noclips`'s (each family's own mode, before the two fixes).
+
+### 8.1 The two fixes on the team's own act modes (`model` against `r72-1k`)
+
+Same seeds, same models, same act files; only §9 differs. Arrivals ± SE:
+
+| segment | `r71-1k-dks` (round 21) | `r72-1k` (round 22) | `model`, 1.4.1.2 | runs gained / lost (first divergence) |
+|---|---:|---:|---:|---|
+| D2 | 85.6 | 87.2 ± 1.1 | 87.2 ± 1.1 | 0 / 0 |
+| after D2 | 88.6 | 91.0 ± 0.9 | 91.0 ± 0.9 | 0 / 0 |
+| D1 | 99.1 | 98.9 ± 0.3 | 98.9 ± 0.3 | 0 / 0 |
+| after D1 | 99.4 | 99.9 ± 0.1 | 99.9 ± 0.1 | 0 / 0 |
+| D3 | 46.5 | 50.4 ± 1.6 | 54.7 ± 1.6 | 74 / 31 (3:0x5b 63 / 18, 3:0x4c 11 / 13) |
+| after D3 | 100 | 100 | 100 | 0 / 0 |
+| D4 | 56.4 | 73.6 ± 1.4 | 74.3 ± 1.4 | 68 / 61 (4:0x21 68 / 60, 4:0x11 0 / 1) |
+| full: Dungeon 3's triforce (4:0x71) | 24.8 | 19.5 ± 1.3 | 27.5 ± 1.4 | |
+| full: the D4 triforce | 12.8 | 13.6 ± 1.1 | 19.6 ± 1.3 | 86 / 26 (3:0x5b 80 / 11, 4:0x21 3 / 10, 3:0x4c 3 / 5) |
+
+- Every run identical to `r72-1k` up to its first room record that differs, and every first difference is in a room
+  the fixes touch (3:0x5b; the bomb walls 3:0x4c, 4:0x21, 4:0x11; the rock walls 0x2c and 0x67 never differ: the
+  game refuses a second bomb there in time). Segments that end before those rooms are bit for bit the same.
+- **The fix is 3:0x5b's**: D3 +4.3 points, full +6.0 (80 of 86 gained runs first diverged there). The bomb rule's
+  rooms move runs both ways in equal numbers (4:0x21 68 / 60 in D4, 3:0x4c 11 / 13 in D3): noise. `model` with clips
+  on is the new baseline of the team's own act modes.
+
+### 8.2 Chains per mode (1000 runs per segment, one mode for every family)
+
+Arrivals; full route ± SE; deaths / stuck runs of the full route; moves under 1% per full run, the share followed
+by a hit within 4 decisions (any move's in brackets); acting entropy per decision; distinct: share of distinct
+action sequences in the segment's first room (D2 / D3 / D4; every run from the same state); hearts at arrival (D2 /
+D3 / D4 / full).
+
+| mode | D2 | D3 | D4 | full route | deaths / stuck | <1% per run | then hit % (any) | entropy | distinct 1st room % | hearts at arrival |
+|---|---:|---:|---:|---:|---|---:|---|---:|---|---|
+| model (per family) | 87.2 | 54.7 | 74.3 | 19.6 ± 1.3 | 796 / 6 | 7.79 | 6.4 (4.9) | 0.45 | 23.5 / 26.4 / 3.0 | 3.24 / 3.45 / 3.98 / 3.91 |
+| sample | 85.1 | 52.9 | 63.8 | 14.1 ± 1.1 | 855 / 3 | 13.56 | 6.5 (5.0) | 0.85 | 23.5 / 26.4 / 3.0 | 3.28 / 3.34 / 3.82 / 3.99 |
+| argmax | 76.2 | 62.1 | 79.2 | 24.3 ± 1.4 | 617 / 140 | 0 | – (3.7) | 0 | 0.1 / 0.1 / 0.1 | 3.34 / 3.46 / 4.27 / 4.26 |
+| **escape:16** | 89.2 | 62.6 | 79.9 | **30.2 ± 1.5** | 695 / 3 | 0.67 | 3.9 (4.6) | 0.03 | 0.1 / 0.1 / 0.1 | 3.36 / 3.42 / 4.17 / 4.36 |
+| escape:8 | 88.7 | 61.5 | 80.9 | 28.6 ± 1.4 | 714 / 0 | 1.13 | 7.2 (4.6) | 0.04 | 0.1 / 0.1 / 0.1 | 3.39 / 3.41 / 4.31 / 4.30 |
+| temperature:0.75+escape:16 | 89.6 | 61.8 | 79.6 | **31.3 ± 1.5** | 682 / 4 | 0.20 | 4.6 (4.6) | 0.02 | 0.1 / 0.1 / 0.1 | 3.37 / 3.38 / 4.25 / 4.43 |
+| temperature:0.5+escape:16 | 88.9 | 62.6 | 80.1 | 29.5 ± 1.4 | 693 / 11 | 0.03 | 4.0 (4.5) | 0.02 | 0.1 / 0.1 / 0.1 | 3.38 / 3.40 / 4.21 / 4.38 |
+| floor:0.1+escape:16 | 87.8 | 61.6 | 79.7 | 28.2 ± 1.4 | 661 / 57 | 0 | – (4.2) | 0.05 | 0.1 / 0.1 / 0.1 | 3.36 / 3.42 / 4.26 / 4.46 |
+| temperature:0.75 | 86.1 | 59.5 | 73.8 | 21.5 ± 1.3 | 783 / 2 | 3.12 | 6.9 (4.9) | 0.65 | 11.3 / 11.3 / 1.7 | 3.34 / 3.43 / 4.10 / 4.07 |
+| temperature:0.75+relax:16 | 87.0 | 60.1 | 73.1 | 21.5 ± 1.3 | 782 / 3 | 3.44 | 6.9 (4.9) | 0.66 | 11.3 / 11.3 / 1.7 | 3.33 / 3.43 / 4.06 / 4.19 |
+| temperature:0.75+relax:8 | 87.0 | 57.2 | 71.5 | 20.2 ± 1.3 | 792 / 5 | 3.87 | 6.4 (4.9) | 0.66 | 11.3 / 11.3 / 1.7 | 3.31 / 3.39 / 4.11 / 3.92 |
+| **temperature:0.5** | 89.0 | 61.8 | 76.6 | **30.0 ± 1.4** | 689 / 11 | 0.15 | 7.4 (4.6) | 0.45 | 3.6 / 2.7 / 0.8 | 3.39 / 3.56 / 4.18 / 4.24 |
+| **temperature:0.5+relax:16** | 89.9 | 60.1 | 78.6 | **28.7 ± 1.4** | 709 / 3 | 0.86 | 4.1 (4.7) | 0.46 | 3.6 / 2.7 / 0.8 | 3.37 / 3.59 / 4.25 / 4.21 |
+| temperature:0.35 | 89.6 | 65.0 | 80.8 | 27.9 ± 1.4 | 701 / 20 | 0.01 | 14.3 (4.4) | 0.32 | 1.3 / 0.9 / 0.4 | 3.37 / 3.55 / 4.27 / 4.40 |
+| **temperature:0.35+relax:16** | 90.8 | 64.2 | 83.4 | **29.9 ± 1.4** | 701 / 0 | 0.67 | 4.7 (4.7) | 0.34 | 1.3 / 0.9 / 0.4 | 3.34 / 3.58 / 4.31 / 4.17 |
+| mixall (best per family) | 90.4 | 58.7 | 79.8 | 24.7 ± 1.4 | 746 / 5 | 2.37 | 6.8 (4.7) | 0.24 | 0.1 / 0.1 / 0.1 | 3.33 / 3.43 / 4.26 / 4.34 |
+| mixdraw (best drawing per family) | 89.0 | not run | not run | 23.8 ± 1.3 | 757 / 3 | 3.31 | 6.0 (4.8) | 0.58 | 3.6 / – / – | 3.33 / – / – / 4.15 |
+
+- **Five rules are within one standard error of the best** (31.3, 30.2, 30.0, 29.9, 29.5; 28.7 just outside): the
+  stall rules on argmax, and `temperature:0.5` or lower. Two of them draw every action: `temperature:0.5` and
+  `temperature:0.35+relax:16` (plus `temperature:0.5+relax:16` at 28.7).
+- **Loops**: argmax 140 stuck full runs, `floor:0.1+escape:16` 57 (a floor is argmax where one action holds the
+  mass), `temperature:0.35` 20, `temperature:0.5` 11; `relax:16` takes each to 0-3, at no measurable cost.
+- **`relax:8` against `relax:16`** (both on `temperature:0.75`): 20.2% / 21.5%, 5 / 3 stuck: no gain from the
+  earlier switch; 16 stays.
+- **Rare moves**: `sample` makes 13.6 moves under 1% per full run, `model` 7.8, `temperature:0.75` 3.1, the
+  `relax` rules 0.7-0.9 (their plain draws while stalled), `temperature:0.5` 0.15. Followed by a hit 6.5-7.4% of the
+  time against 4.6-5.0% for any move (`temperature:0.35`'s 14.3% is of 10 moves in 1000 runs).
+- **Hearts at arrival** follow arrivals: the sharpened rules bring Link to Gleeok's dungeon's end with 4.2-4.5
+  hearts, `model` 3.91, `sample` 3.99.
+- **Variety in chains**: whole runs differ in every mode (natural RNG per seed); in a segment's first room only the
+  drawing modes differ beyond the game's numbers: D2's first room 23.5% distinct by `sample`, 11.3% by
+  `temperature:0.75`, 3.6% by `temperature:0.5`, 1.3% by `temperature:0.35`, 0.1% by argmax and every `escape`.
+
+### 8.3 Single rooms per mode (24 families, 37,000 episodes each)
+
+| mode | failures | deaths | loops | hearts/ep | <1% per ep | then hit % (any) | entropy | distinct % | diverge |
+|---|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| model (per family) | 295 | 280 | 3 | −0.035 | 0.10 | 6.5 (4.7) | 0.34 | 60.2 | 3 |
+| sample | 330 | 312 | 2 | −0.048 | 0.20 | 7.4 (4.9) | 0.81 | 77.4 | 2 |
+| argmax | 351 | 262 | 84 | −0.024 | 0 | – (4.2) | 0 | 51.8 | 4 |
+| escape:16 | 272 | 265 | 1 | −0.024 | 0.01 | 5.4 (4.4) | 0.01 | 51.8 | 4 |
+| escape:8 | 276 | 269 | 1 | −0.024 | 0.01 | 5.8 (4.5) | 0.03 | 52.3 | 4 |
+| temperature:0.75+escape:16 | 274 | 265 | 4 | −0.024 | 0.00 | 3.3 (4.4) | 0.01 | 51.8 | 4 |
+| temperature:0.5+escape:16 | 283 | 269 | 9 | −0.023 | 0.00 | – (4.4) | 0.01 | 51.8 | 4 |
+| floor:0.1+escape:16 | 280 | 265 | 10 | −0.024 | 0 | – (4.4) | 0.01 | 51.8 | 4 |
+| temperature:0.75 | 302 | 286 | 11 | −0.033 | 0.04 | 6.5 (4.6) | 0.62 | 73.0 | 2 |
+| temperature:0.75+relax:16 | 285 | 271 | 10 | −0.031 | 0.05 | 5.9 (4.6) | 0.63 | 73.0 | 2 |
+| temperature:0.75+relax:8 | 296 | 283 | 6 | −0.031 | 0.05 | 6.2 (4.6) | 0.63 | 73.0 | 2 |
+| temperature:0.5 | 306 | 282 | 20 | −0.028 | 0.00 | 1.5 (4.5) | 0.42 | 67.0 | 2 |
+| temperature:0.5+relax:16 | 288 | 276 | 8 | −0.027 | 0.01 | 3.0 (4.5) | 0.43 | 67.0 | 2 |
+| temperature:0.35 | 289 | 258 | 27 | −0.023 | 0.00 | – (4.3) | 0.29 | 62.5 | 3 |
+| temperature:0.35+relax:16 | 274 | 264 | 4 | −0.023 | 0.01 | 4.2 (4.4) | 0.30 | 62.5 | 3 |
+
+Distinct: share of distinct action sequences among the episodes of one start state (averaged over states; under
+argmax only the game's random numbers make them differ); diverge: the first differing decision of two episodes.
+Single rooms barely separate the sharpened rules (272-306 failures, a failure count's SE ≈ 17); `sample` and `argmax`
+are worst, argmax by its loops (84).
+
+### 8.4 Families fragile to the mode
+
+Single rooms, failures (hearts per episode), `escape:16` against the others; listed where the difference reaches 2
+standard errors in failures or hearts:
+
+| family | escape:16 | argmax | sample | temperature:0.5 | temperature:0.5+relax:16 | temperature:0.75+relax:16 | model |
+|---|---|---|---|---|---|---|---|
+| d2-rope (sample) | 20 (+0.25) | **38** (+0.25) | 24 (+0.24) | 25 (+0.25) | 23 (+0.25) | 26 (+0.24) | 24 (+0.24) |
+| stalfos-keese-gel (sample) | 7 (+0.03) | **18** (+0.03) | 7 (+0.01) | 7 (+0.02) | 7 (+0.02) | 7 (+0.02) | 7 (+0.01) |
+| vire (sample) | 14 (+0.07) | **36** (+0.07) | 17 (+0.03) | 22 (+0.07) | 17 (+0.07) | 18 (+0.05) | 17 (+0.03) |
+| goriya (sample) | 44 (−0.09) | 55 (−0.09) | **63 (−0.18)** | 51 (−0.12) | 48 (−0.12) | 55 (−0.14) | **63 (−0.18)** |
+| ow-moblin (argmax) | 30 (−0.08) | 31 (−0.08) | **37 (−0.10)** | 31 (−0.08) | 30 (−0.08) | 32 (−0.09) | 31 (−0.08) |
+| trap-room (argmax) | 0 (−0.03) | 0 (−0.03) | **3 (−0.09)** | 0 (−0.04) | 0 (−0.04) | **1 (−0.05)** | 0 (−0.03) |
+| equipment-room (argmax) | 3 (−0.17) | 3 (−0.17) | **6 (−0.21)** | 3 (−0.17) | 3 (−0.17) | 6 (−0.18) | 3 (−0.17) |
+
+- **Good drawing, poor under argmax** (fragile to the evaluation rule if it were argmax): d2-rope, stalfos-keese-gel,
+  vire (and darknut 51 against 31-38, 1.7 SE); in chains argmax ends runs in 2:0x2e (68 against 15 by `escape:16`),
+  2:0x5e (96 / 45), 1:0x53 (64 / 21), 4:0x31 (59 / 13). `escape` removes all of it.
+- **Good under argmax, poor drawing plainly** (fragile to a `sample` play default): goriya, ow-moblin, trap-room,
+  equipment-room, also ow-lynel (16 / 7), boss-manhandla (21, −0.57 / 15, −0.38) and boss-gleeok (−0.03 / +0.16
+  hearts) below 2 SE; in chains `sample` ends more runs at Gleeok 4:0x13 (474 against 340), darknut 3:0x59 (320 /
+  244), moldorm 2:0x3e (68 / 40) and 4:0x02 (30 / 0).
+- **At `temperature:0.5` or below no family is fragile**: the worst room against `escape:16` in chains is 3:0x69 (152
+  and 141 by `temperature:0.5` and `+relax:16`, against 112), and 0:0x0a goes the other way (35-40 against 78).
+
+### 8.5 Against the round 21 pilot (§4)
+
+- The order holds and the gaps grew: `escape:16` over the team's own modes +7.7 points then (12.8 → 20.5), +10.6 now
+  (19.6 → 30.2); `sample` stays last (8.7, 14.1); argmax still loops (179 stuck then, 140 now).
+- **Lower temperatures are new** and change the play question: the pilot measured only `temperature:0.75` in chains
+  (15.0% then, 21.5% now, 9 points under `escape:16`), so a drawing rule looked costly. `temperature:0.5` (30.0%)
+  and `temperature:0.35+relax:16` (29.9%) are within noise of `escape:16`.
+- **Per-family choices lose in chains here too**: the pilot's per-family hybrids were within noise in single rooms;
+  the measured mix (`mixall`) is 5.5 points under the global rule.
 
 ## 9. Two round 22 problems fixed before the rerun (Nov 14)
 
@@ -277,3 +441,60 @@ code after `git merge main` (`13c1636`); details and every number in `docs/decis
 | `3_5bw_0` at 6 bombs, 3 hearts (500 runs): 0x5b deaths, out of D3 | 27.0%, 42.6% | 5.0%, 69.0% |
 | `3_5bw_0` at 8 bombs, 3 hearts: 0x5b deaths, out of D3 | 5.2%, 60.2% | 5.2%, 68.6% |
 | `3_5bw_0` at 3 bombs, 3 hearts (rule unchanged) | 5.8%, 73.2% | 4.8%, 73.0% |
+
+## 10. Options (put to the owner; option A chosen)
+
+Each option sets the evaluation and chain rule (evaluation, chains, the `act` files), the training-time
+evaluation (`train_round.py --eval-act`, which also sets the early-stop confirmation) and the play default
+(`registry.PLAY_ACT`: play-zelda and its live cell, zelda-headless, the golden path). Every tool also takes `--act
+MODE`, and a replay names its mode (`tf replay info` `act:`, play-zelda's strip "goriya (sample)"). Numbers: §8.2
+and §8.3, clips on (clips off not measured per mode; `r72-1k-noclips`: 4.8% full on the old act modes).
+
+| option | evaluation, chains, training | play default | full route: eval / play | D2 / D3 / D4 (eval) | stuck (full, eval / play) | variety in rooms (play; argmax 51.8, sample 77.4) | drawback |
+|---|---|---|---|---|---|---|---|
+| **A. one rule (chosen)** | `temperature:0.5+relax:16` | the same | 28.7 ± 1.4 / same | 89.9 / 60.1 / 78.6 | 3 | 67.0% | 1.5 points under `escape:16` (within 1 SE); less variety than `temperature:0.75` |
+| A'. one rule, sharper | `temperature:0.35+relax:16` | the same | 29.9 ± 1.4 / same | 90.8 / 64.2 / 83.4 | 0 | 62.5% | variety barely above argmax's (D2's first room 1.3% distinct) |
+| B. split | `escape:16` | `temperature:0.5+relax:16` | 30.2 ± 1.5 / 28.7 | 89.2 / 62.6 / 79.9 | 3 / 3 | 67.0% | two rules: watched play is measured only by the play rule's own chains |
+| C. split, more variety | `escape:16` | `temperature:0.75+relax:16` | 30.2 / 21.5 ± 1.3 | 89.2 / 62.6 / 79.9 | 3 / 3 | 73.0% | play reaches the end 9 points less often; 3.4 moves under 1% per run |
+| D. before round 23 | each family's `act` file | `sample` | 19.6 ± 1.3 / 14.1 ± 1.1 | 87.2 / 54.7 / 74.3 | 6 / 3 | 77.4% | the lowest on both counts |
+
+- `temperature:0.75+escape:16` (31.3%) is the highest evaluation rule but within noise of `escape:16` and longer to
+  say; `temperature:0.5` alone (30.0%) loops (11 stuck) where `+relax:16` does not.
+- **The choice (Nov 14).** The owner chose the play default, `temperature:0.5+relax:16`; he left evaluation and
+  training to the lead, who chose the same rule (option A): within noise of the best rule (28.7% against `escape:16`'s
+  30.2%, ± 1.4-1.5 each), reported numbers then describe what is watched, and no per-family act tuning (the
+  per-family mix lost 5.5 points). Runner-up: B (`escape:16` for evaluation, the same play rule).
+- **Why `+relax:16` over plain `temperature:0.5`** (30.0%, 1.3 points more): plain 0.5 ended 11 full runs stuck
+  against 3, and 20 loop endings against 8 in single rooms. Small (about 1% of runs) but real: those are runs that
+  stand in a room until the runner's budget ends them, the one failure a watcher sees as broken rather than unlucky;
+  `relax` removes it for a difference in arrivals well inside the noise.
+
+## 11. Applied (Nov 14)
+
+- `registry.ACT_RULE = 'temperature:0.5+relax:16'` is `PLAY_ACT` and `DEFAULT_ACT` (a run without an `act` file,
+  a given network, `train --confirm-act`, `train_round.py --eval-act`); `eval-batch --chains` and `r56_chains.sh`
+  default to `ACT=model`, which resolves to the rule through the `act` files. Version stays 1.4.1.2.
+- Every promoted run's `act` file set to the rule (`triforce promote F RUN --act ...`); previous modes: argmax for
+  boss-gleeok, boss-manhandla, equipment-room, like-like, moldorm, ow-boulder, ow-leever, ow-lynel, ow-moblin, ow-octorok, ow-peahat, ow-start, ow-tektite, ow-zora, trap-room, wallmaster; sample for boss-aquamentus, boss-dodongo, d2-rope, darknut, goriya, stalfos-keese-gel, vire, zol. Their old
+  `eval.json` is now `eval-<old mode>.json` beside the new one.
+- Canonical `eval.json` in the rule (eval-batch `r73-canonical`: 100 episodes per state, seed 0, `--clips both` for
+  clip families): every family 91.7-100%; moldorm 91.7% −0.21, boss-manhandla 93.3% −0.42, goriya 96.8% −0.12,
+  the rest 98.4-100%.
+- **Standing chains** (1000 runs per segment, seeds 0-999). Clips on: the `temperature:0.5+relax:16` files of §8
+  (measured before the `act` files changed, with the same rule on the same code: `ACT=model` now plays exactly
+  that), linked as `target/r56-chains/r73-1k-{full,d2,d3,d4}.jsonl`. Clips off: `r73-1k-noclips` (`ACT=
+  temperature:0.5+relax:16 CLIPS=off`, full, D2, D3, D4 only; the other four segments not run).
+
+| segment | `r71-1k-dks` | `r72-1k` (on) | `r72-1k-noclips` | **`r73-1k` (on)** | **`r73-1k-noclips`** |
+|---|---:|---:|---:|---:|---:|
+| D2 | 85.6 | 87.2 | 87.2 | 89.9 ± 1.0 | 89.9 ± 1.0 |
+| D3 | 46.5 | 50.4 | 50.4 | 60.1 ± 1.5 | 60.1 ± 1.5 |
+| D4 | 56.4 | 73.6 | 56.8 | 78.6 ± 1.3 | 64.7 ± 1.5 |
+| full: Dungeon 1 | 75.6 | 79.3 | 62.0 | 81.4 ± 1.2 | 66.5 ± 1.5 |
+| full: Dungeon 3 | 56.7 | 59.5 | 41.0 | 63.8 ± 1.5 | 48.1 ± 1.6 |
+| full: the D3 triforce | 24.8 | 19.5 | 10.2 | 33.5 ± 1.5 | 22.7 ± 1.3 |
+| full: the D4 triforce | 12.8 | 13.6 | 4.8 | 28.7 ± 1.4 | 15.3 ± 1.1 |
+
+D2 and D3 have no clip rooms, so their runs are the same either way. Full runs that failed: clips on 709 deaths, 3
+stuck, 1 wrong exit; clips off 838 deaths, 4 stuck, 5 wrong exits.
+

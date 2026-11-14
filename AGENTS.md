@@ -28,27 +28,31 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   87.2%, after D2 91.0 | 89.5%, D1 98.9 | 99.5%, after D1 99.9 | 98.9%, D3 50.4 | 50.4%, after D3 100 | 100%, D4
   73.6 | 56.8%; from the start to Dungeon 3 59.5 | 41.0%, to the D3 triforce 19.5 | 10.2%, to the D4 triforce
   13.6 | 4.8% (round 21 `r71-1k-dks`: D4 56.4%, to the D3 triforce 24.8%, full 12.8%; within noise of 13.6%).
-  Promoted runs and the ones they replaced: round22.md §10. Act mode per model (`<run dir>/act`, bound to the
-  checkpoint's sha1): argmax for the nine overworld families, moldorm, wallmaster, trap-room, equipment-room,
-  boss-manhandla, boss-gleeok and like-like; sample for goriya, d2-rope, boss-dodongo, stalfos-keese-gel,
-  boss-aquamentus, zol, vire and darknut. Measure chains with 1000 runs per segment as one batch, both switch
+  Promoted runs and the ones they replaced: round22.md §10. **One act mode since round 23** (decisions 2026-11-14
+  "One act mode"): every model plays `temperature:0.5+relax:16` (`registry.ACT_RULE`: play default `PLAY_ACT`,
+  every promoted run's `act` file and `eval.json`, `DEFAULT_ACT` for new runs, the early-stop confirmation and
+  `train_round.py --eval-act`); before it argmax for the overworld families, moldorm, wallmaster, trap-room,
+  equipment-room, boss-manhandla, boss-gleeok and like-like, sample for the rest. Measure chains with 1000 runs per segment as one batch, both switch
   states: `RUNS=1000 ACT=model TAG=<tag> scripts/experiments/r56_chains.sh` and `CLIPS=off TAG=<tag>-noclips ...`
   (`triforce eval-batch TAG --chains TAG`: the eight segments into `target/r56-chains/<TAG>-<segment>.jsonl`, then
   the yardstick and `<TAG>-room-stats.json`; `triforce room-stats <tag> --noclips` for both). Tags are `<run
   prefix>-1k` (`r72-1k`); a variant team adds a suffix (`r71-1k-dks`) and may measure only some segments
-  (`SEGMENTS=...`), the rest linked from the base tag. Round 23 (1.4.1.2; act modes, one bomb per wall, 3:0x5b's
-  last pass fights first) is on `main`: next bullet. <!-- r23 --> Then (backlog "Next projects", by what the r72
+  (`SEGMENTS=...`), the rest linked from the base tag. Round 23 (1.4.1.2; `docs/experiments/round23.md`): act modes, one bomb per wall, 3:0x5b's last pass fights
+  first, one act mode for everything. Chains under it, 1000 runs per segment, clips on (`r73-1k`) | off
+  (`r73-1k-noclips`): D2 89.9 | 89.9%, D3 60.1 | 60.1%, D4 78.6 | 64.7%; from the start to Dungeon 3 63.8 | 48.1%,
+  to the D3 triforce 33.5 | 22.7%, to the D4 triforce 28.7 | 15.3% (`r72-1k` 13.6 | 4.8%; the team's old act modes
+  on this code 19.6% clips on, the 3:0x5b fix's gain). <!-- r23 --> Then (backlog "Next projects", by what the r72
   chains lose): 3:0x5b's last pass at 6 or more bombs (darknut; 145 deaths per 1000 full runs), Gleeok below 3.5
   hearts (192 per 1000 D4 runs), the rest of Dungeon 3 (Manhandla 168 per 1000 D3 runs, 3:0x59 80), the plain
-  way's heart cost (clips off), Dungeon 2. Every new checkpoint needs its act mode re-measured, in single rooms and
-  in chains (argmax is fragile per checkpoint).
-- **Round 23 (act modes, Nov 13; `docs/experiments/round23.md`, decisions 2026-11-13 "Act modes"):** act modes over
-  the joint action (`temperature:T`, `floor:P`, `minp:R`, `topp:P`, the stall rules `escape:N` and `relax:N`, `+`
-  combinations) in every tool that plays, beside round 22's `--clips`; every evaluation and chain room record
-  counts its decisions (moves under 1%/5% and what followed them, the actions). The pilot on the round 21 team: one
-  global `escape:16` took the full route from 12.8% to 20.5% (1000 runs per segment). Pending: the rerun on the
-  round 22 team with clips on and off (`scripts/experiments/r23_act_pilot.sh`, `CLIPS=on|off`), then the lead's
-  choice of the evaluation rule and the play default (`registry.PLAY_ACT`, still `sample`).
+  way's heart cost (clips off), Dungeon 2. A new checkpoint acts by the one rule; re-measure it in single rooms and chains like any change.
+- **Round 23 (act modes, Nov 13-14; `docs/experiments/round23.md`, decisions 2026-11-13 "Act modes", 2026-11-14
+  "One act mode"):** act modes over the joint action (`temperature:T`, `floor:P`, `minp:R`, `topp:P`, the stall rules
+  `escape:N` and `relax:N`, `+` combinations) in every tool that plays, beside `--clips`; every evaluation and chain
+  room record counts its decisions; a replay names its mode (`tf replay info` `act:`, play-zelda's strip). On the
+  round 22 team (clips on, full route): `escape:16` 30.2%, `temperature:0.5+relax:16` 28.7% (within noise; draws
+  every action, 3 stuck runs), per-family act files 19.6%, `sample` 14.1%, argmax 24.3% (140 stuck); the owner chose
+  `temperature:0.5+relax:16` for play, the lead the same rule for evaluation and training. Act-mode chains with
+  clips off were not run per mode (cut for time).
 - **The rest of the first quest is drafted, not built (Nov 13; `docs/routes/first-quest.md`):** `game.yaml` holds
   every room of Dungeons 5-9 (written by `scripts/level_rooms.py` from the ROM's level data; door kinds checked
   against the running game), and `triforce/draft_routes.yaml` holds `first-quest`: `d2first`, then Lee's overworld
@@ -185,9 +189,10 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
   refusing it (replays embed states). Play (play-zelda with its live cell, zelda-headless, the golden path) is
-  stochastic by default (one constant, `registry.PLAY_ACT`, now `sample`); `--act model` or any act mode
+  stochastic by default (one constant, `registry.PLAY_ACT`, since round 23 `temperature:0.5+relax:16`, the same
+  rule as every `act` file); `--act model` or any act mode
   (`argmax`, `floor:0.1`, `temperature:0.75`, `escape:16`, `temperature:0.75+relax:16`, ...: `docs/rust-actor.md`
-  "Act modes", round 23) beside `--clips on|off`; evaluation follows each model's act mode. `escape:N` plays argmax
+  "Act modes", round 23) beside `--clips on|off`; evaluation follows each model's act mode (the same rule). `escape:N` plays argmax
   until Link has made no progress for N decisions, then draws; `relax:N` draws by the other rules until then, then
   from the plain policy (so `temperature:T+escape:N` is mostly argmax, `temperature:T+relax:N` draws every action).
 - **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",

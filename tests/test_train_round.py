@@ -51,7 +51,7 @@ def fixture_round(monkeypatch):
 
 def _result(success_rate):
     stats = {'success_rate': success_rate, 'episodes': 2, 'failures': {}}
-    return {'format': 2, 'specialist': SPECIALIST, 'act': 'sample', 'deterministic': False,
+    return {'format': 2, 'specialist': SPECIALIST, 'act': registry.DEFAULT_ACT, 'deterministic': False,
             'success_rate': success_rate, 'episodes': 2, 'mean_health_fraction': 0.5,
             'mean_start_health_fraction': 0.6, 'mean_health_change': -0.5, 'mean_health_change_total': -0.5,
             'hearts_dropped': 0.0, 'hearts_taken': 0.0, 'hearts_left': 0.0, 'by_room': {'1:0x23': stats},
@@ -92,7 +92,7 @@ def test_without_promote_the_promoted_model_stays(round_, tmp_path, monkeypatch)
     assert registry.promoted_run(SPECIALIST, tmp_path) == 'old'
     assert summary['previous_promoted'] == {SPECIALIST: {'run': 'old', 'act': 'argmax'}}
     record = summary['specialists'][SPECIALIST]
-    assert record['status'] == 'ok' and not record.get('promoted') and record['eval_act'] == 'sample'
+    assert record['status'] == 'ok' and not record.get('promoted') and record['eval_act'] == registry.DEFAULT_ACT
     assert json.loads(Path(record['eval_path']).read_text())['success_rate'] == 0.75
     assert Path(record['eval_path']) == registry.run_dir(SPECIALIST, 'r', tmp_path) / 'eval.json'
 
@@ -149,6 +149,10 @@ def test_train_args_expand_only_the_name_placeholder(round_, tmp_path, monkeypat
     args = round_.parse_args(['--round', 'r', '--train-args', '--load /x/{name} --search \'{"candidates": 4}\''])
     assert round_.real_train(SPECIALIST, args, tmp_path, tmp_path / 'run', tmp_path) == 0
     assert commands[0][-4:] == ['--load', '/x/goriya', '--search', '{"candidates": 4}']
+
+
+def test_runs_are_evaluated_in_the_project_act_mode_by_default(round_):
+    assert round_.parse_args(['--round', 'r']).eval_act == registry.DEFAULT_ACT
 
 
 def test_unknown_specialists_stop_the_round_before_anything_trains(round_, tmp_path, monkeypatch, capsys):

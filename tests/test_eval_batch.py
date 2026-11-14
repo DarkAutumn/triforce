@@ -248,6 +248,12 @@ def test_chains_tag_is_the_eight_segments_then_the_report(tmp_path):
     assert room_stats[-4:] == ['room-stats', 'r71', '--chains-dir', str(tmp_path)]
 
 
+def test_chains_act_by_each_models_act_file_by_default():
+    """Round 23: ``--chains`` and r56_chains.sh measure the team as registered (``model``), not in one forced mode."""
+    assert eval_batch.build_parser().parse_args(['b', '--chains', 't']).act == 'model'
+    assert 'ACT=${ACT:-model}\n' in (ROOT / 'scripts' / 'experiments' / 'r56_chains.sh').read_text()
+
+
 def test_same_measurement_needs_every_field():
     expected = {'specialist': 'goriya', 'act': 'sample', 'episodes_per_state': 100, 'seed': 0,
                 'checkpoint_sha1': 'abc', 'code': 'v1', 'data': 'd1'}

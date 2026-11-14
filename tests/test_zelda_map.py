@@ -53,18 +53,19 @@ def write_eval(models, specialist, data, act=None):
 
 @pytest.fixture
 def models(tmp_path):
-    """goriya (samples) and d2-rope (argmax) both visited 1:0x44; ow-zora has an old-format eval; ow-start has no
-    eval.json; ow-octorok's eval.json was measured by argmax but the model samples; d1-melee is a retired family
-    (not in specialists/)."""
+    """goriya (samples) and d2-rope (argmax) both visited 1:0x44; ow-zora (samples) has an old-format eval; ow-start
+    has no eval.json; ow-octorok's eval.json was measured by argmax but the model has no act file (it acts by
+    ``registry.DEFAULT_ACT``); d1-melee is a retired family (not in specialists/)."""
     models = tmp_path / 'models'
     write_eval(models, 'goriya', {'format': 2, 'act': 'sample', 'visited_rooms': {
         '1:0x44': room_stats('goriya', 1, 0x44, 30, deaths=3, change=-1.0, hits=2.0, drops={'heart': 0.5},
                              exits={'n': 20, 'w': 7, 'death': 3}),
-        '1:0x35': room_stats('goriya', 1, 0x35, 10)}})
+        '1:0x35': room_stats('goriya', 1, 0x35, 10)}}, act='sample')
     write_eval(models, 'd2-rope', {'format': 2, 'act': 'argmax', 'visited_rooms': {
         '1:0x44': room_stats('d2-rope', 1, 0x44, 10, change=1.0, hits=0.0, drops={'rupee': 1.0},
                              exits={'n': 10})}}, act='argmax')
-    write_eval(models, 'ow-zora', {'specialist': 'ow-zora', 'success_rate': 0.9, 'deterministic': False})
+    write_eval(models, 'ow-zora', {'specialist': 'ow-zora', 'success_rate': 0.9, 'deterministic': False},
+               act='sample')
     write_eval(models, 'ow-start', None)
     write_eval(models, 'ow-octorok', {'format': 2, 'deterministic': True, 'visited_rooms': {
         '0:0x37': room_stats('ow-octorok', 0, 0x37, 10)}})
@@ -101,7 +102,7 @@ def test_load_evals_merges_rooms_by_visits(models):
         ('d2-rope', 'detailed', 'argmax'), ('goriya', 'detailed', 'sample'), ('ow-zora', 'old format', 'sample'),
         ('ow-start', 'no eval', None), ('ow-octorok', 'no eval', None)}
     octorok = next(s for s in sources if s['specialist'] == 'ow-octorok')
-    assert 'eval.json was measured by argmax' in octorok['file']      # the model samples: not its evaluation
+    assert 'eval.json was measured by argmax' in octorok['file']      # the model acts by the default: not its eval
     room = stats[(1, 0x44, False)]
     assert (room['visits'], room['episodes'], room['deaths']) == (40, 40, 3)
     assert room['death_rate'] == pytest.approx(3 / 40)
@@ -121,11 +122,12 @@ def test_load_evals_run_id_needs_an_evaluation_in_the_act_mode(models):
     (run2 / 'ckpt.pt').write_bytes(b'other weights')
     (run2 / 'eval.json').write_text(json.dumps({'format': 2, 'act': 'argmax', 'visited_rooms': {}}))
     _, sources = zelda_map.load_evals_by_clips(models, 'run2')
-    assert next(s for s in sources if s['specialist'] == 'goriya')['run'] == 'run1'    # run2 samples: no eval
-    (run2 / 'eval-sample.json').write_text(json.dumps({'format': 2, 'act': 'sample', 'visited_rooms': {}}))
+    assert next(s for s in sources if s['specialist'] == 'goriya')['run'] == 'run1'    # run2: default act, no eval
+    default = zelda_map.registry.DEFAULT_ACT
+    (run2 / f'eval-{default}.json').write_text(json.dumps({'format': 2, 'act': default, 'visited_rooms': {}}))
     _, sources = zelda_map.load_evals_by_clips(models, 'run2')
     goriya = next(s for s in sources if s['specialist'] == 'goriya')
-    assert (goriya['run'], goriya['mode'], goriya['file']) == ('run2', 'sample', 'eval-sample.json')
+    assert (goriya['run'], goriya['mode'], goriya['file']) == ('run2', default, f'eval-{default}.json')
 
 
 def test_level_bounds_and_badges():
