@@ -1960,8 +1960,9 @@ mod tests {
         assert!(e.contains("listed twice"), "{e}");
     }
 
-    /// Every overworld room is mapped; edge exits lead to the neighbouring room (a maze's loops to itself); each
-    /// dungeon has its entrance cave; 0x1f's gap in the north wall reaches 0x0f.
+    /// Every overworld room is mapped; edge exits lead to the neighbouring room (a maze's loops to itself; a wrap
+    /// exit out of column 0 to room id - 1, the last room of the row above: 0x60 into 0x5f); each dungeon has its
+    /// entrance cave; 0x1f's gap in the north wall reaches 0x0f.
     #[test]
     fn whole_overworld_is_mapped() {
         let map = GameMap::builtin();
@@ -1977,7 +1978,8 @@ mod tests {
                     continue;
                 };
                 let neighbour = at.direction_to(exit.destination) == d;
-                assert!(neighbour || (r.maze.is_some() && exit.destination == at), "{at} {d:?}");
+                let round_the_world = exit.wrap && room % 16 == 0 && exit.destination == loc(0, room - 1);
+                assert!(neighbour || round_the_world || (r.maze.is_some() && exit.destination == at), "{at} {d:?}");
                 assert!(map.contains(exit.destination), "{at} {d:?}");
             }
         }

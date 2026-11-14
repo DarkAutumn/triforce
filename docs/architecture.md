@@ -1269,6 +1269,38 @@ This preserves intended off-route traversal without accepting premature key-room
 `step_config` turns bombs on only in `requires_bombs` rooms and masks them everywhere else. Route changes still require rebuilding and auditing
 downstream inventories and refreshing affected curriculum snapshots; old filenames alone do not prove progress.
 
+## Draft routes, the dungeon probe and a level's rooms from the ROM (`draft_routes.py`, `probe.py`, `scripts/level_rooms.py`)
+
+For planning a part of the game before any of it is built (Nov 13; `docs/routes/first-quest.md`).
+
+- **`scripts/level_rooms.py LEVEL... [--append-to triforce/game.yaml]`** writes a dungeon's `game.yaml` rooms from
+  the ROM's level data as `zelda-asm/tools/romdata.py` decodes it: exits from the door types toward the level's
+  own rooms (`locked`, `bomb_walls`, `shutter: true` on the side that is a shutter), the stairs' cellar as the
+  `cave` exit, monsters, the room item, `trigger`, push blocks, `dark`. A treasure cellar is an in-cave room with
+  `N` up to its room; a tunnel cellar has `W` (the left ladder) and `E` (the right ladder) to the two rooms it
+  joins, each of which has a `cave` exit to it. Levels 5-9 were written by it. `_native.game_rooms()` returns each
+  room's `exits` with their kind, its `trigger` and `dark` (for display: nothing plays by `shutter`, `trigger` or
+  `dark`).
+- **`triforce/probe.py`** (`Probe(states_dir)`): `enter_level(n)` loads `start.state`, sets the room id to the
+  level's overworld entrance and walks Link into 0x77's cave mouth, so the game loads level n and he stands in its
+  start room; `enter_room(level, room[, entry])` leaves the room on screen through an open doorway with the room id
+  set to the target's neighbour (whose door type is opened in the level block's RAM copy first), so the game
+  scrolls into the target and draws it; a hop through another room turns Link when the start room has no open door
+  on the needed side. `playfield(level, room)` is the room's picture, lit, monsters out. `door_type` / `doors` read
+  the level block in RAM. `tests/test_draft_routes.py` holds every `game.yaml` dungeon door (levels 1-9) against
+  it. It writes RAM: it is for looking and checking, never for play.
+- **`triforce/draft_routes.yaml`, `draft_routes.py`:** a draft is `{extends: <routes.yaml route>, steps}`; a step
+  is a routes.yaml step plus `note`, `leg`, `wrap: true` (a screen wrap in the room; required to leave through a
+  `game.yaml` wrap exit), `takes` (what an overworld cave gives), `exit: recorder` / `entry: recorder` (the
+  whirlwind) and `exit: end`. `steps(name)` returns `route_steps`-shaped dicts, `problems(steps)` checks them
+  against `game.yaml` (the room exists, the exit is one of its exits and leads into the next step's room from the
+  side that step says). Only `zelda-map.py` reads drafts.
+- **`zelda-map.py`** draws a draft like a route (`--route NAME`, the Route selector), a wrap step dashed, the
+  whirlwind as a dotted curve, a tunnel as a link between its two rooms; door marks on every dungeon level (open,
+  key door, bomb wall, shutter on its side, stairs with what the cellar holds or where the tunnel leads); the
+  Labels overlay (each room's id, flags, monsters, treasure and the selected route's notes); dungeon rooms without
+  a savestate are pictured through the probe.
+
 ## Emulator verification (`tf`, `corpus/`)
 
 `cargo run --release -p triforce-tools --bin tf -- <command>` (`--rom` defaults to `$TRIFORCE_ROM`, else

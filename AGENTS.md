@@ -40,6 +40,17 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the bombs stalfos-keese-gel wastes in 4:0x21 (3.8 per visit, one needed), wallmaster heart gathering, goriya heart
   loss. Every new checkpoint needs its act mode re-measured, in single rooms and in chains (argmax is fragile per
   checkpoint).
+- **The rest of the first quest is drafted, not built (Nov 13; `docs/routes/first-quest.md`):** `game.yaml` holds
+  every room of Dungeons 5-9 (written by `scripts/level_rooms.py` from the ROM's level data; door kinds checked
+  against the running game), and `triforce/draft_routes.yaml` holds `first-quest`: `d2first`, then Lee's overworld
+  legs and a path through Dungeons 5, 7, (the magic sword), 6, 8 and 9 to Zelda. A draft is read only by
+  `zelda-map.py --route first-quest` (Route selector; the Labels overlay shows each step's note; door marks on every
+  dungeon level); `routes.yaml`, the objective and training know nothing of it, and its rooms have no family, no
+  states and no model. Every draft step was walked in the emulator with the fights skipped (`triforce/probe.py`
+  puts Link into any dungeon room without a savestate). Open before any of it is built: the bomb and rupee
+  ledgers do not add up without drops, new action kinds (recorder, food, candle), the overworld ladder clip, and
+  Lee's answers to the questions at the end of `first-quest.md`. When a stretch is built its steps move from the
+  draft into `routes.yaml`.
 - **The repository (Nov 12):** public on GitHub, `DarkAutumn/triforce`. `main` is this project (v3), developed as
   `triforce2` until Nov 12 and merged in with its whole history (commit hashes cited in the docs resolve). The two
   earlier Python versions are on `v1-original-design` (stable-retro and stable-baselines3) and `v2-stable-retro`

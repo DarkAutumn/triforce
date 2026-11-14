@@ -88,6 +88,22 @@ def test_a_tunnel_joins_its_two_rooms(tmp_path):
         """) == []
 
 
+@pytest.mark.parametrize('step, why', [
+    ("{level: 0, room: '0x52', entry: N, exit: W, takes: [hart-container]}", 'takes is a list of'),
+    ("{level: 0, room: '0x52', entry: N, exit: W, notes: 'a typo'}", 'the keys are'),
+    ("{level: 0, room: '0x52', entry: N, exit: whirlwind}", 'exit one of'),
+    ("{level: 0, room: 82, entry: N, exit: W}", None),          # an unquoted room reads as 0x82: no such room
+])
+def test_a_typo_in_a_draft_step_is_refused(tmp_path, step, why):
+    from triforce import draft_routes
+    path = write_draft(tmp_path, f'- {step}\n')
+    if why is None:
+        assert 'no such room' in draft_routes.problems(draft_routes.steps('draft', path))[0]
+    else:
+        with pytest.raises(draft_routes.DraftError, match=why):
+            draft_routes.steps('draft', path)
+
+
 @pytest.fixture(scope='module')
 def probe():
     require_rom()

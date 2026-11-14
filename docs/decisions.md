@@ -1771,3 +1771,30 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Version:** REV, 1.4.1.1: the RNG at starts, the switch and its training mix, the BOMB mask and the route change
   behaviour, not the observation, the actions or the network. Round 21's boss-aquamentus and goriya load and play
   as before (100% +0.87 hearts; 96.7% -0.17).
+
+## 2026-11-13 — The rest of the first quest: a draft route, drawn on the map before anything is built (Lee)
+
+- **What:** `triforce/draft_routes.yaml` `first-quest` extends `d2first` with Lee's overworld legs and a path
+  through Dungeons 5, 7, 6, 8 and 9 to Zelda (`docs/routes/first-quest.md`). A draft is read only by
+  `zelda-map.py`; `routes.yaml`, the objective, the chain runner and training are untouched, and no version number
+  moves. `game.yaml` got every room of levels 5-9 from the ROM (`scripts/level_rooms.py`), four overworld wrap
+  exits, and `shutter: true` on shutter sides (for display).
+- **Lee's decisions:** the order 5, 7, the magic sword (after Dungeon 7's heart makes twelve), 6, 8, 9; the
+  overworld legs room for room, with screen wraps (0x51, 0x60 round the world into 0x5f, 0x3e, 0x0c) and the
+  recorder's whirlwind (0x0b to 0x45, 0x22 to 0x3c, 0x6d to 0x37); the heart containers of 0x5f, 0x2f and 0x47;
+  arrows at 0x44 and food at 0x34; carried keys are used for the shorter dungeon ways; the red ring is taken in
+  level 9; 0x17 is crossed with the ladder, not a wrap. "I think those routes are solvable for you without me
+  needing to walk you through every room. I will make some adjustments then": the agent routes the dungeons and
+  presents them on the map.
+- **The agent's choices, open to Lee's adjustment:** the shortest path through each level's room graph that takes
+  what the game needs; without level 6's wand and level 8's book and magic key; level 9's three key doors paid with
+  carried keys (6:0x2d's and 8:0x4c's keys are picked up for them); level 9's bombs from the Patra of 0x16.
+- **Why a draft and not a route:** a routes.yaml route needs every room tagged with a family that has a config,
+  and its steps feed the objective; five dungeons with unbuilt mechanics (the recorder, food, the candle, shops,
+  the whirlwind) cannot meet that, and Lee wanted to see and correct the route first.
+- **Evidence:** every draft step was walked in the emulator, one continuous game per dungeon and for the
+  overworld, fights skipped (monsters put into the game's own death state), level 9 to the end of the game.
+  `game.yaml`'s door kinds equal the level blocks in RAM for all 236 dungeon rooms
+  (`tests/test_draft_routes.py`). The level documents carry the traces.
+- **Open:** `first-quest.md` "Open questions for Lee" (bombs, rupees, keys or the magic key, the overworld ladder
+  clip, clips off on the wrap exits, rings).

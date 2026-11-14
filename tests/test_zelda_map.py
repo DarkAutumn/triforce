@@ -1,5 +1,5 @@
 """zelda-map.py: savestate names, merging evals' per-room stats, room-stats scopes, the window (Qt offscreen),
-screenshot rendering."""
+screenshot rendering, routes and drafts, door marks, labels."""
 
 import importlib.util
 import json
@@ -311,7 +311,8 @@ def test_the_clips_selector_splits_rooms_and_the_route(qapp, models, tmp_path):
     # Both ways drawn, the clip way's step numbers marked.
     assert window.view.route_rooms[0x31] == [118, 122, 124] and 0x20 in window.view.route_rooms
     assert window.view.route_marks and window.view.route_ways[122] == 'clips'
-    assert {(0x31, 0x21, 'clips'), (0x31, 0x30, 'plain'), (0x21, 0x11, None)} <= set(window.view.route_segments)
+    assert {(0x31, 0x21, 'clips', 'walk'), (0x31, 0x30, 'plain', 'walk'),
+            (0x21, 0x11, None, 'walk')} <= set(window.view.route_segments)
     assert 'clip way dashed' in window.legend.text()
     window.view.repaint()
 
@@ -320,8 +321,9 @@ def test_the_clips_selector_splits_rooms_and_the_route(qapp, models, tmp_path):
     assert window.view.badges[0x20][0] == '50%' and 0x21 in window.view.badges and window.view.badges[0x21][0] == '0%'
     assert 'D4 alone · 4 runs with clips off from 4_71s_0, 50% reach' in window.scope_info.text()
     assert window.view.route_rooms[0x31] == [118, 124] and not window.view.route_marks
-    assert (0x31, 0x21, 'clips') not in window.view.route_segments
-    assert (0x31, 0x30, 'plain') in window.view.route_segments and window.legend.text().endswith('the plain way')
+    assert (0x31, 0x21, 'clips', 'walk') not in window.view.route_segments
+    assert (0x31, 0x30, 'plain', 'walk') in window.view.route_segments
+    assert window.legend.text().endswith('the plain way')
     window.set_overlay('hits')                                     # chain records count hits now
     assert window.view.badges[0x20][0] == '2.50'
     window.select_room(0x21)
@@ -335,8 +337,8 @@ def test_the_clips_selector_splits_rooms_and_the_route(qapp, models, tmp_path):
     window.set_overlay('deaths')
     assert 0x20 not in window.view.badges and 0x20 in window.view.dimmed and window.view.badges[0x21][0] == '25%'
     assert 0x30 in window.view.route_rooms and 0x20 not in window.view.route_rooms
-    assert (0x31, 0x21, 'clips') in window.view.route_segments
-    assert not any(way == 'plain' for _, _, way in window.view.route_segments)
+    assert (0x31, 0x21, 'clips', 'walk') in window.view.route_segments
+    assert not any(way == 'plain' for _, _, way, _ in window.view.route_segments)
     window.close()
 
 
@@ -386,10 +388,11 @@ def test_route_plan_and_overlay(qapp, models):
     skip = next(s for s in plan if (s['level'], s['room'], s['entry']) == (3, 0x69, 'N'))
     assert 'treasure skip' in zelda_map.step_text(skip)
     walks = zelda_map.route_segments(plan, 0)
-    assert (0x1a, 0x0a, None) in walks and (0x0a, 0x1a, None) in walks
+    assert (0x1a, 0x0a, None, 'walk') in walks and (0x0a, 0x1a, None, 'walk') in walks
     assert (0x3c, 0x2c) not in {walk[:2] for walk in walks}               # walls between them: the route goes round
     # Round 22's d3-approach: S from 0x67 to the wrap exit 0x75 -> 0x74 with clips, W along row 6 and 0x73 without.
-    assert {(0x67, 0x77, 'clips'), (0x75, 0x74, 'clips'), (0x67, 0x66, 'plain'), (0x73, 0x74, 'plain')} <= set(walks)
+    assert {(0x67, 0x77, 'clips', 'walk'), (0x75, 0x74, 'clips', 'walk'), (0x67, 0x66, 'plain', 'walk'),
+            (0x73, 0x74, 'plain', 'walk')} <= set(walks)
     assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x67, 0x74, 0x45}
     rooms = zelda_map.route_rooms(plan, 0)
     assert len(rooms[0x2c]) == 3 and len(rooms[0x1a]) == 2
@@ -400,7 +403,7 @@ def test_route_plan_and_overlay(qapp, models):
     window.show()
     qapp.processEvents()
     assert 'route d2first' in window.windowTitle()
-    assert window.view.route_rooms[0x0a] and (0x0a, 0x1a, None) in window.view.route_segments
+    assert window.view.route_rooms[0x0a] and (0x0a, 0x1a, None, 'walk') in window.view.route_segments
     window.view.repaint()
     html = window.room_html(0, 0x2c)
     assert 'Route d2first' in html and 'waypoint heart' in html
@@ -413,7 +416,10 @@ def test_route_plan_and_overlay(qapp, models):
 
 def test_dungeon_cellars_are_drawn_with_their_entrance(qapp, models):
     rooms = zelda_map.game_rooms()
-    assert zelda_map.cellar_entrances(rooms) == {(1, 0x7f, True): 0x22, (3, 0x0f, True): 0x69, (4, 0x60, True): 0x32}
+    cellars = zelda_map.cellar_entrances(rooms)
+    assert (cellars[(1, 0x7f, True)], cellars[(3, 0x0f, True)], cellars[(4, 0x60, True)]) == ([0x22], [0x69], [0x32])
+    assert cellars[(5, 0x07, True)] == [0x06, 0x64]                 # a tunnel has the two rooms it joins
+    assert all(key[0] > 0 and key[2] and 1 <= len(ends) <= 2 for key, ends in cellars.items())
     states = {(1, 0x22, False): ['1_22e_0'], (1, 0x7f, True): ['1_7fcave_0']}
     window = zelda_map.MapWindow(models, {}, states)
     assert 0x7f not in window.level_rooms(1) and 0x0f not in window.level_rooms(3)
@@ -500,3 +506,251 @@ def test_a_failed_rerender_keeps_the_cache(tmp_path, monkeypatch):
     monkeypatch.undo()
     zelda_map.render_screens(states, tmp_path / 'screens', states_dir, rerender=True)
     assert path.is_file() and not stray.exists()
+
+
+def step(index, level, room, entry, exit_, **more):
+    """A draft route step (the draft_routes.steps contract)."""
+    return {'index': index, 'level': level, 'room': room, 'in_cave': False, 'entry': entry, 'exit': exit_,
+            'specialist': None, 'waypoint': None, 'retreat': None, 'treasure': None, 'bomb_reserve': None,
+            'way': None, 'stretch': None, 'note': None, 'leg': None, 'wrap': False, 'takes': [], 'draft': True,
+            **more}
+
+
+def sketch():
+    """A draft of what a draft adds, on game.yaml's rooms: a screen wrap, a wrap exit out of column 0 (0x20 into
+    0x1f, on the far edge), overworld caves Link takes things in, the recorder, level 6's wand cellar 0x75 under
+    0x09 and its tunnel 0x08 between 0x3a and 0x1d, there and back."""
+    steps = [(0, 0x21, 'E', 'W', {'wrap': True, 'leg': 'Leg one'}),
+             (0, 0x20, 'E', 'W', {'wrap': True, 'note': 'far', 'takes': ['heart-container', 'food']}),
+             (0, 0x1f, 'E', 'recorder', {'takes': ['magic-sword', 'food']}), (0, 0x22, 'recorder', 'cave', {}),
+             (6, 0x09, 'S', 'cave', {'leg': 'Leg two'}), (6, 0x75, 'S', 'N', {'in_cave': True, 'note': 'the wand'}),
+             (6, 0x09, 'cave', 'E', {}), (6, 0x0a, 'W', 'S', {}), (6, 0x1a, 'N', 'S', {}), (6, 0x2a, 'N', 'S', {}),
+             (6, 0x3a, 'N', 'cave', {'note': 'down <the> stairs'}),
+             (6, 0x08, 'S', 'E', {'in_cave': True, 'note': 'through'}), (6, 0x1d, 'cave', 'cave', {}),
+             (6, 0x08, 'S', 'W', {'in_cave': True}), (6, 0x3a, 'cave', 'end', {})]
+    return [step(index, level, room, entry, exit_, **more)
+            for index, (level, room, entry, exit_, more) in enumerate(steps)]
+
+
+def test_a_drafts_moves_tunnels_and_cellars(monkeypatch):
+    monkeypatch.setattr(zelda_map.draft_routes, 'names', lambda: ['sketch'])
+    monkeypatch.setattr(zelda_map.draft_routes, 'steps', lambda name: sketch())
+    assert zelda_map.route_names() == [*zelda_map.routes(), 'sketch']
+    plan = zelda_map.route_plan('sketch')
+    assert 'wand' not in plan[5]['items'] and plan[6]['items'][-1] == 'wand'      # taken by the step in its cellar
+    # What a step takes in its overworld cave counts from the step after: a heart, the sword, an item once.
+    assert [(s['hearts'], s['sword'], s['items']) for s in plan[1:4]] == [
+        (3, 'none', []), (4, 'none', ['food']), (4, 'magic', ['food'])]
+    # The overworld: a screen wrap into the room beside it, a wrap exit to the far edge, the whirlwind.
+    assert zelda_map.route_segments(plan, 0) == [(0x21, 0x20, None, 'wrap'), (0x20, 0x1f, None, 'edge'),
+                                                 (0x1f, 0x22, None, 'recorder')]
+    # Level 6: the item cellar is no move; through the tunnel and back are moves between its two rooms.
+    assert zelda_map.route_segments(plan, 6) == [
+        (0x09, 0x0a, None, 'walk'), (0x0a, 0x1a, None, 'walk'), (0x1a, 0x2a, None, 'walk'),
+        (0x2a, 0x3a, None, 'walk'), (0x3a, 0x1d, None, 'tunnel'), (0x1d, 0x3a, None, 'tunnel')]
+    cellars = zelda_map.cellar_entrances(zelda_map.game_rooms())
+    shown = zelda_map.step_rooms(plan, cellars)
+    assert (shown[5], shown[11], shown[13]) == ([0x09], [0x3a], [0x1d])    # under the stairs Link came down
+    assert zelda_map.step_rooms(plan[11:12], cellars) == {11: [0x1d, 0x3a]}        # no step before: both ends
+    rooms = zelda_map.route_rooms(plan, 6, cellars)
+    assert rooms[0x09] == [4, 5, 6] and rooms[0x3a] == [10, 11, 14] and rooms[0x1d] == [12, 13]
+    assert 0x08 not in rooms and 0x75 not in rooms
+    assert zelda_map.route_caves(plan, 6) == {0x09, 0x3a, 0x1d}
+    legs = zelda_map.step_legs(plan)
+    assert legs == {**{i: 'Leg one' for i in range(4)}, **{i: 'Leg two' for i in range(4, 15)}}
+    listed = zelda_map.steps_html(plan[10:13], legs, rooms=True)
+    assert listed.index('Leg two') < listed.index('0x3a') and 'Leg one' not in listed    # the leg of the first shown
+    assert 'down &lt;the&gt; stairs' in listed and listed.count('with 4 ♥') == 1         # carried: once, unchanged
+    assert ' · 4 ♥, magic sword, food' in zelda_map.step_text(plan[4]) and ' · none' not in zelda_map.step_text(plan[4])
+
+
+ROOMS = {       # a level 1 of three rooms and a cellar, entered from overworld 0x10; 0x11 has a raft exit
+    (0, 0x10, False): {'enemies': {}, 'name': None, 'treasure': None, 'cave': (1, 0x21, False), 'trigger': None,
+                       'dark': False, 'exits': {'E': {'to': (0, 0x11, False)}, 'cave': {'to': (1, 0x21, False)}}},
+    (0, 0x11, False): {'enemies': {'Zora': 1}, 'name': None, 'treasure': None, 'cave': None, 'trigger': None,
+                       'dark': False, 'exits': {'W': {'to': (0, 0x10, False)},
+                                                'N': {'to': (0, 0x01, False), 'raft': True}}},
+    (1, 0x21, False): {'enemies': {}, 'name': 'Hall', 'treasure': None, 'cave': None, 'trigger': None, 'dark': False,
+                       'exits': {'N': {'to': (1, 0x11, False), 'locked': True},
+                                 'E': {'to': (1, 0x22, False), 'bomb_wall': True}}},
+    (1, 0x11, False): {'enemies': {'Gleeok2': 1, 'Bubble': 2}, 'name': None, 'treasure': 'heart-container',
+                       'cave': (1, 0x30, True), 'trigger': 'push-block-stairs', 'dark': True,
+                       'exits': {'S': {'to': (1, 0x21, False), 'locked': True},
+                                 'E': {'to': (1, 0x12, False), 'shutter': True}, 'cave': {'to': (1, 0x30, True)}}},
+    (1, 0x12, False): {'enemies': {}, 'name': None, 'treasure': 'triforce', 'cave': None, 'trigger': None,
+                       'dark': False, 'exits': {'W': {'to': (1, 0x11, False)}}},
+    (1, 0x30, True): {'enemies': {'BlueKeese': 4}, 'name': None, 'treasure': 'bow', 'cave': None, 'trigger': None,
+                      'dark': False, 'exits': {'N': {'to': (1, 0x11, False)}}},
+}
+
+
+def test_door_marks_stairs_and_exit_lines():
+    cellars = zelda_map.cellar_entrances(ROOMS)
+    assert cellars == {(1, 0x30, True): [0x11]}
+    # Each side has its own kind: the shutter is on 0x11's side of the doorway, 0x12's side is an open door.
+    assert zelda_map.door_marks(ROOMS, 1) == {0x21: {'N': 'key', 'E': 'bomb'}, 0x11: {'S': 'key', 'E': 'shutter'},
+                                              0x12: {'W': 'open'}}
+    assert zelda_map.door_marks(ROOMS, 0) == {0x11: {'N': 'raft'}}           # the overworld: no open sides
+    assert zelda_map.stairs_marks(ROOMS, 1, cellars) == {0x11: ('cellar', 'bow')}
+    assert zelda_map.stairs_marks(ROOMS, 0, cellars) == {0x10: ('level', 'D1')}
+    assert zelda_map.exit_lines((1, 0x11, False), ROOMS, cellars) == [
+        'S: key door → 0x21', 'E: shutter → 0x12', 'cave: stairs → cellar 0x30 (bow)']
+    assert zelda_map.exit_lines((1, 0x12, False), ROOMS, cellars) == ['W: open door → 0x11']
+    assert zelda_map.exit_lines((0, 0x11, False), ROOMS, cellars) == ['W: → 0x10', 'N: raft → 0x01']
+    assert zelda_map.exit_lines((0, 0x10, False), ROOMS, cellars) == ['E: → 0x11', 'cave: → Dungeon 1 0x21']
+    assert zelda_map.exit_lines((1, 0x30, True), ROOMS, cellars) == ['N: → 0x11']
+    # The game's tunnels: each end's stairs name the other end, and the two are linked once.
+    rooms = zelda_map.game_rooms()
+    cellars = zelda_map.cellar_entrances(rooms)
+    marks = zelda_map.stairs_marks(rooms, 5, cellars)
+    assert (marks[0x64], marks[0x06], marks[0x05]) == (('tunnel', '06'), ('tunnel', '64'), ('cellar', 'recorder'))
+    assert zelda_map.tunnel_links(cellars, 5) == [(0x06, 0x64)] and zelda_map.tunnel_links(cellars, 1) == []
+    assert 'cave: stairs → tunnel 0x07 to 0x06' in zelda_map.exit_lines((5, 0x64, False), rooms, cellars)
+
+
+def test_room_labels():
+    assert zelda_map.start_rooms(ROOMS) == {1: 0x21}
+    assert zelda_map.room_flags((1, 0x21, False), ROOMS) == ['start']
+    assert zelda_map.room_flags((1, 0x11, False), ROOMS) == ['boss', 'dark', 'push block stairs']
+    assert zelda_map.room_flags((1, 0x12, False), ROOMS) == ['triforce']
+    assert zelda_map.room_label((1, 0x21, False), ROOMS) == [('id', '21', 'Hall · start')]
+    assert zelda_map.room_label((1, 0x12, False), ROOMS) == [('id', '12', 'triforce')]      # a flag, not a treasure
+    steps = [step(7, 1, 0x11, 'S', 'cave', note='kill it', way='clips'), step(8, 1, 0x30, 'S', 'N', in_cave=True),
+             step(9, 1, 0x11, 'cave', 'E'), step(12, 1, 0x11, 'E', 'S', note='back')]
+    # The steps before the room's contents (the end is what a small room cuts); steps without a note run together.
+    assert zelda_map.room_label((1, 0x11, False), ROOMS, steps) == [
+        ('id', '11', 'boss · dark · push block stairs'), ('step', '#7', 'kill it'), ('step', '#8', '(cellar)'),
+        ('step', '#9', ''), ('step', '#12', 'back'), ('enemies', '', '1 Gleeok2, 2 Bubble'),
+        ('treasure', '', 'heart-container')]
+    # A small tile: every step number first, then the notes with theirs.
+    brief = zelda_map.room_label((1, 0x11, False), ROOMS, steps, brief=True, marks=True)
+    assert brief == [('id', '11', ''), ('step', '#7c #8 #9 #12', ''), ('note', '#7c', 'kill it'),
+                     ('note', '#12', 'back')]
+    assert zelda_map.room_label((1, 0x11, False), ROOMS, steps[:1], brief=True)[1:] == [
+        ('step', '#7', ''), ('note', '', 'kill it')]
+    runs = zelda_map.label_runs(zelda_map.room_label((1, 0x11, False), ROOMS, steps[2:3]))
+    assert [''.join(text for text, _, _ in paragraph) for paragraph in runs] == [
+        '11 boss · dark · push block stairs', '#9', '1 Gleeok2, 2 Bubble · heart-container']
+    flow = zelda_map.label_runs(brief, flow=True)
+    assert [''.join(text for text, _, _ in paragraph) for paragraph in flow] == [
+        '11 #7c #8 #9 #12 #7c kill it #12 back']
+    # A note that starts with FIGHT has that word stand out (in a label also after its '(cellar)'); the text stays.
+    assert zelda_map.note_parts('FIGHT: 5 Zols') == ('', 'FIGHT:', ' 5 Zols')
+    assert zelda_map.note_parts('(cellar) FIGHT them') == ('(cellar) ', 'FIGHT', ' them')
+    assert zelda_map.note_parts('no FIGHT here') == ('', '', 'no FIGHT here')
+    assert zelda_map.note_parts('FIGHTERS wait') == ('', '', 'FIGHTERS wait')
+    fight = zelda_map.label_runs([('step', '#7', 'FIGHT: 5 Zols')])[0]
+    assert ''.join(text for text, _, _ in fight) == '#7 FIGHT: 5 Zols' and ('FIGHT:', zelda_map.C.warn, True) in fight
+
+
+def test_label_lines_flow_round_the_marks():
+    assert zelda_map.free_span(5, 100, []) == (5, 100)
+    assert zelda_map.free_span(5, 100, [(40, 60)]) == (5, 40)                    # the leftmost
+    assert zelda_map.free_span(5, 100, [(40, 60)], need=38) == (60, 100)         # the leftmost wide enough
+    assert zelda_map.free_span(5, 100, [(40, 70), (90, 140)], need=50) == (5, 40)        # none is: the widest
+    assert zelda_map.free_span(5, 100, [(45, 60)], need=50) == (5, 45)           # of equals the leftmost
+    assert zelda_map.free_span(5, 100, [(45, 60), (0, 30), (20, 40)], need=30) == (60, 100)   # blocks overlap
+    assert zelda_map.free_span(5, 100, [(0, 50), (40, 120)]) == (5, 5)           # nothing free
+    assert zelda_map.wrap_tokens(['#1', '#22', '#333', 'cave'], 7, len) == ['#1 #22', '#333', 'cave']
+    assert zelda_map.wrap_tokens(['#12345678'], 3, len) == ['#12345678']
+
+
+def test_window_draws_a_draft(qapp, models, monkeypatch, capsys):
+    monkeypatch.setattr(zelda_map.draft_routes, 'names', lambda: ['sketch'])
+    monkeypatch.setattr(zelda_map.draft_routes, 'steps', lambda name: sketch())
+    assert zelda_map.build_parser().parse_args(['--route', 'sketch', '--overlay', 'labels']).route == 'sketch'
+    window = zelda_map.MapWindow(models, {}, {}, route='sketch')
+    window.resize(1200, 800)
+    window.show()
+    qapp.processEvents()
+    assert window.route_choices == [None, *zelda_map.routes(), 'sketch'] and 'route sketch' in window.windowTitle()
+    assert window.route_group.checkedId() == window.route_choices.index('sketch')
+    # The sketch doesn't hold against game.yaml (its rooms aren't joined as it walks): said, and counted.
+    assert window.problems and f'route sketch: {len(window.problems)} problem' in window.status.text()
+    assert capsys.readouterr().err.count('zelda-map: route sketch:') == len(window.problems)
+    assert (0x20, 0x1f, None, 'edge') in window.view.route_segments
+    assert 'Leg one' in window.details.text() and 'far' in window.details.text()     # no room selected: the level
+    window.view.repaint()
+    window.tabs.setCurrentIndex(6)
+    assert window.view.doors[0x39]['E'] == 'shutter' and window.view.stairs[0x09] == ('cellar', 'wand')
+    assert window.view.tunnels == [(0x1d, 0x3a)] and window.view.route_rooms[0x1d] == [12, 13]
+    window.view.repaint()
+    window.set_overlay('labels')
+    assert window.overlay_group.checkedId() == len(zelda_map.OVERLAYS) - 1 and not window.view.badges
+    brief, full, must = window.view.labels[0x3a]
+    assert ''.join(text for text, _, _ in brief[0]) == (
+        '3a #10 #11 #14 #10 down <the> stairs #11 (cellar) through')
+    assert must == 4 and len(full) == 5                     # the id and three step lines, then the room's contents
+    assert set(window.view.labels) == window.level_rooms(6) | {0x2a}       # game.yaml's rooms and the route's
+    window.view.repaint()                                   # lays every label out round the marks
+    assert all(lines for _, lines, _, _ in window.view._laid.values())    # pylint: disable=protected-access
+    # Either end of the tunnel shows it, with the steps Link took down those stairs.
+    for room, far, steps in ((0x3a, 0x1d, ('#11 (cave)',)), (0x1d, 0x3a, ('#13 (cave)',))):
+        html = window.room_html(6, room)
+        assert f'tunnel 0x08 to 0x{far:02x}' in html and all(text in html for text in steps)
+    html = window.room_html(6, 0x09)
+    assert 'cellar 0x75' in html and 'the wand' in html and 'Leg two' in html and 'push-block-stairs' in html
+    assert 'cave: stairs → cellar 0x75 (wand)' in html
+    window.set_route(None)
+    assert not window.view.route_rooms and window.route is None and 'problem' not in window.status.text()
+    assert window.view.labels[0x3a][2] == 1 and 'route' not in window.windowTitle()
+
+    def broken(name):
+        raise zelda_map.draft_routes.DraftError('half edited')
+    monkeypatch.setattr(zelda_map.draft_routes, 'steps', broken)
+    window.set_route('sketch')                              # a draft that can't be read: no route, and why
+    assert not window.plan and 'route sketch: 1 problem' in window.status.text()
+    window.close()
+
+
+def test_the_shipped_drafts_are_drawn_whole(qapp, models):
+    """Every step of every draft in draft_routes.yaml (read now: the file changes) has its number in a label."""
+    for name in zelda_map.draft_routes.names():
+        window = zelda_map.MapWindow(models, {}, {}, route=name)
+        window.resize(1200, 800)
+        window.show()
+        window.set_overlay('labels')
+        assert len(window.plan) == len(zelda_map.draft_routes.steps(name))
+        for level in zelda_map.LEVELS:
+            window.tabs.setCurrentIndex(level)
+            window.view.repaint()
+            written = ' '.join(text for brief, _, _ in window.view.labels.values() for text, _, _ in brief[0])
+            numbers = {int(number) for number in re.findall(r'#(\d+)', written)}
+            assert {s['index'] for s in window.plan if s['level'] == level} <= numbers, (name, level)
+        window.close()
+
+
+def test_dungeon_rooms_without_a_savestate_are_probed(tmp_path, monkeypatch, capsys):
+    states_dir = tmp_path / 'states'
+    states_dir.mkdir()
+    for name in ('start', '1_73s_0'):
+        shutil.copy(require_state(name), states_dir)
+    states = zelda_map.scan_states(states_dir)
+    probed = zelda_map.probe_rooms(zelda_map.game_rooms(), states)
+    assert (1, 0x73, False) not in probed and (1, 0x7f, True) not in probed       # a savestate; a cellar
+    assert {(1, 0x74, False), (9, 0x42, False)} <= set(probed) and all(level > 0 for level, _, _ in probed)
+    monkeypatch.setattr(zelda_map, 'walk_in_rooms', lambda states: [])             # not the 128 overworld rooms
+    rooms = [(1, 0x74, False), (5, 0x76, False)]
+    screens, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir, False, rooms)
+    assert rendered == {1: 2, 5: 1} and set(screens) == {(1, 0x73, False), *rooms}
+    from PIL import Image  # pylint: disable=import-outside-toplevel
+    with Image.open(screens[(5, 0x76, False)]) as image:
+        assert image.size == (zelda_map.TILE_W, zelda_map.TILE_H) and image.getbbox()     # a picture, not black
+    assert zelda_map.screen_source(screens[(5, 0x76, False)]) == 'probe'
+    _, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir, False, rooms)
+    assert not rendered
+
+    class Stuck(zelda_map.Probe):
+        def playfield(self, level, room):
+            if room == 0x74:
+                raise zelda_map.ProbeError('no way in')
+            return super().playfield(level, room)
+    monkeypatch.setattr(zelda_map, 'Probe', Stuck)
+    # A room the probe can't get into: said, its cached picture kept; a new one stays without.
+    screens, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir, True,
+                                                 [*rooms, (1, 0x63, False)])
+    assert 'no picture of 1:0x74 (no way in)' in capsys.readouterr().err
+    assert rendered == {1: 2, 5: 1} and (1, 0x74, False) in screens and (1, 0x63, False) in screens
+    os.remove(screens[(1, 0x74, False)])
+    screens, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir, False, rooms)
+    assert not rendered and (1, 0x74, False) not in screens

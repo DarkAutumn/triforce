@@ -26,7 +26,7 @@ first-quest:
   - {level: 0, room: '0x5f', entry: E, exit: N, note: 'ladder clip W from the arrival to the heart container (9 hearts; NOT BUILT: no overworld ladder clip yet); the ladder twice more to land, then N'}
   - {level: 0, room: '0x4f', entry: S, exit: N}
   - {level: 0, room: '0x3f', entry: S, exit: N, note: 'the raft leaves from the dock at (X $60, Y $7D)'}
-  - {level: 0, room: '0x2f', entry: S, exit: S, note: 'take-any cave: the heart container is the right ware (10 hearts); S off the pier: the raft back'}
+  - {level: 0, room: '0x2f', entry: S, exit: S, takes: [heart-container], note: 'take-any cave: the heart container is the right ware (10 hearts); S off the pier: the raft back'}
   - {level: 0, room: '0x3f', entry: N, exit: W}
   - {level: 0, room: '0x3e', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $85-$BD)'}
   - {level: 0, room: '0x3d', entry: E, exit: N, note: 'optional (rupees are tight): the armos at tile (18, 8) touched from the side: a cave with 30 rupees, 505 frames'}
@@ -72,8 +72,8 @@ first-quest:
   - {level: 0, room: '0x45', entry: recorder, exit: S, note: 'S off the pier at X $80: the raft back to the dock'}
   - {level: 0, room: '0x55', entry: N, exit: W, wrap: true, note: 'screen wrap E on row Y $85 or $8D over the river, then W (plain: S, 0x65 W, 0x64 N into 0x54)'}
   - {level: 0, room: '0x54', entry: E, exit: N}
-  - {level: 0, room: '0x44', entry: S, exit: N, note: 'shop: the wooden arrow is the right ware, 80 rupees'}
-  - {level: 0, room: '0x34', entry: S, exit: S, note: 'touch the armos at tile (8, 8) from the side (from below it costs a heart): stairs to the shop; food is the right ware, 60 rupees'}
+  - {level: 0, room: '0x44', entry: S, exit: N, takes: [wood-arrow], note: 'shop: the wooden arrow is the right ware, 80 rupees'}
+  - {level: 0, room: '0x34', entry: S, exit: S, takes: [food], note: 'touch the armos at tile (8, 8) from the side (from below it costs a heart): stairs to the shop; food is the right ware, 60 rupees'}
   - {level: 0, room: '0x44', entry: N, exit: S}
   - {level: 0, room: '0x54', entry: N, exit: W}
   - {level: 0, room: '0x53', entry: E, exit: W}
@@ -110,7 +110,7 @@ first-quest:
   - {level: 0, room: '0x40', entry: S, exit: E}
   - {level: 0, room: '0x41', entry: W, exit: N}
   - {level: 0, room: '0x31', entry: S, exit: N}
-  - {level: 0, room: '0x21', entry: S, exit: S, note: 'push the gravestone at tile (18, 10) down from above: stairs; the magic sword is the middle ware (needs 12 heart containers)'}
+  - {level: 0, room: '0x21', entry: S, exit: S, takes: [magic-sword], note: 'push the gravestone at tile (18, 10) down from above: stairs; the magic sword is the middle ware (needs 12 heart containers)'}
   - {level: 0, room: '0x31', entry: N, exit: E}
   - {level: 0, room: '0x32', entry: W, exit: N}
   - {level: 0, room: '0x22', entry: S, exit: cave, note: 'Dungeon 6'}
@@ -160,7 +160,7 @@ first-quest:
   - {level: 0, room: '0x37', entry: recorder, exit: E}
   - {level: 0, room: '0x38', entry: W, exit: S}
   - {level: 0, room: '0x48', entry: N, exit: W}
-  - {level: 0, room: '0x47', entry: E, exit: E, note: 'burn the tree at tile (22, 14), facing S from X $A8-$B8: take-any cave, the heart container is the right ware (15 hearts)'}
+  - {level: 0, room: '0x47', entry: E, exit: E, takes: [heart-container], note: 'burn the tree at tile (22, 14), facing S from X $A8-$B8: take-any cave, the heart container is the right ware (15 hearts)'}
   - {level: 0, room: '0x48', entry: W, exit: N}
   - {level: 0, room: '0x38', entry: S, exit: N}
   - {level: 0, room: '0x28', entry: S, exit: W}

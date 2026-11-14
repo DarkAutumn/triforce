@@ -54,6 +54,39 @@ Each is a project of its own. The r71 team's chains (round21.md §8-§10; 1000 r
      (`death_rate_entered`), comparing two tags (r70 vs r71) room by room; `eval_batch.report_commands` doesn't
      write the `-both` file of a tag measured with and without clips (run `triforce room-stats TAG --noclips`).
 
+## The first-quest draft route (Lee, Nov 13; branch `routes-5-9`)
+
+`docs/routes/first-quest.md`, decisions 2026-11-13 "The rest of the first quest: a draft route".
+
+- [x] **Levels 5-9 in game.yaml** (`scripts/level_rooms.py`), pictured in `zelda-map.py` (`triforce/probe.py`),
+  door marks and labels on every dungeon level.
+- [x] **The draft** (`triforce/draft_routes.yaml`, `first-quest`): Lee's overworld legs and a path through
+  Dungeons 5, 7, 6, 8, 9; every step walked in the emulator with the fights skipped.
+- [ ] **Lee's review on the map**, and his answers to the eight questions at the end of `first-quest.md`.
+- [ ] **Bombs don't add up without drops:** 19 walls after Dungeon 4 against a bag of 8 and two room pickups on
+  the path; Dungeon 5 needs one brought in, level 9 four. Sources not in the draft: 7:0x1b's and 8:0x3f's room
+  bombs (a fight each), a shop (0x44, 0x6f: 20 rupees for 4).
+- [ ] **Rupees:** 2-14 left after the arrows (80) and the food (60); one per arrow shot. 0x3d's armos cave (30) is
+  on leg 1.
+- [ ] **The overworld ladder clip** (already open from round 21): the draft's 0x60 into 0x5f arrives on water and
+  needs it; by buttons it is 38 frames from the arrival to the heart container.
+- [ ] **Clips off on the wrap exits:** 0x51 into 0x50 has a 23-room plain way, 0x60 into 0x5f a 16-room one; Lee's
+  rule is that the plain way stays trained.
+- [ ] **New action kinds** for the route: the recorder, food, the candle (and arrows need a state that holds
+  them). One model-incompatible bump for all of them.
+- [ ] **What the objective does not know yet:** buying in a shop, a take-any cave's right ware, the armos and the
+  gravestone, burning a tree, the whirlwind, tunnels (a cellar with two exits), level 9's one-way shutters, the
+  end of the game.
+- [ ] **Families for levels 5-9** (by enemy; none assigned): Gibdo, Pols Voice, Digdogger, Blue Darknut, Blue
+  Goriya, Wallmasters with a push block, Wizzrobes, Gohma, Lanmola, Patra, Gleeok with four heads, Ganon.
+- [ ] **Block clips that skip a forced fight:** 5:0x64, 7:0x1a and 8:0x1f's stairs are reached with `CLIP N` from
+  beside the ring with the monsters alive (played with the agent's actions in 5:0x64 and 8:0x1f, 9 of 10 blind
+  timings in 7:0x1a); the monsters are then still there on the way back.
+- [ ] **Found on the way, not acted on:** the generated rooms table of level-5.md gives the triforce piece at X
+  `$80` where the game has `$78` (`romdata.py`); 5:0x24's monster list names `Digdogger3` and the object on screen
+  is type `$38`; `game.yaml` has no key for a shutter that never opens (level 9's 0x41, 0x31, 0x21, 0x01 S: a
+  comment today).
+
 ## Round 22: the run-time clips switch (Lee, Nov 13; branch `r22`)
 
 Decisions 2026-11-13 "The run-time clips switch and route stretches" and "Clips in training, evaluation and

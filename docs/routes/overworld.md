@@ -40,9 +40,10 @@ Quest 1 throughout. The ROM is `roms/zelda.nes`; disassembly tables are at file 
   object secrets carry a quest gate (attr F >> 6: 0 both, 1 Q1, 2 Q2); Q2-only ones are left out (a comment says so).
   **Every entrance was walked into in the emulator** (room flag $80 set first so bombed walls and burned trees show
   their opening; rocks pushed with the bracelet; armos touched; the recorder blown at 0x42) and the game went where the
-  index says: the dungeon's start room, or cave mode $B with the right dweller. Not walked: the 0x21 gravestone
-  (magic sword; Ghinis kept knocking Link off it) and 0x4e's armos stairs (they appear, the stand didn't enter) — both
-  from the ROM only.
+  index says: the dungeon's start room, or cave mode $B with the right dweller. Not walked then: the 0x21 gravestone
+  (magic sword; Ghinis kept knocking Link off it) and 0x4e's armos stairs (they appear, the stand didn't enter).
+  0x21 was walked on Nov 13 (`first-quest.md`): only the stone at tile (18, 10) moves, pushed up or down; the sword
+  is the middle ware and is refused under 12 heart containers. 0x4e's is still from the ROM only.
 
 ## game.yaml keys (level 0)
 
@@ -71,7 +72,8 @@ Existing entries are kept verbatim (data, comments, tags); new keys are appended
   in the water at the top of 0x3f/0x55 without the raft, so those are `raft_exits` only. 0x2f has no walkable exit.
   The route (`d2first`, after the D3 triforce) sails 0x55 → 0x45 (`docs/routes/d4.md`).
 - **Wrap-around:** the game doesn't stop E/W at the map edge (E from column 15 is the next row's column 0), but no
-  column-0/15 room has an open outer edge.
+  column-0/15 room has an open outer edge to walk through. By a screen wrap 0x60 leaves W into 0x5f (room id - 1):
+  a wrap exit in game.yaml since Nov 13, with 0x51 into 0x50, 0x3e into 0x3d and 0x0c into 0x0b (`first-quest.md`).
 
 ## The mazes
 
@@ -144,7 +146,7 @@ Q2-only secrets seen in the data and left out: 0x00 (bomb → level 9), 0x6c (bu
 | 0x1d | `0x14` | any-road | push rock (bracelet) | [10, 6] | |
 | 0x1e | `0x17` | door-repair | bomb | [24, 2] | costs 20 |
 | 0x1f | `0x16` | money-game | open | [12, 8] | |
-| 0x21 | `0x13` | magic-sword | push gravestone | | needs 12 hearts (ROM only) |
+| 0x21 | `0x13` | magic-sword | push gravestone | [18, 10] | needs 12 hearts |
 | 0x23 | `0x14` | any-road | push rock (bracelet) | [8, 10] | |
 | 0x25 | `0x1d` | shop | open | [20, 2] | magic-shield 130, bombs 20, wood-arrow 80 |
 | 0x26 | `0x1f` | shop | bomb | [6, 2] | magic-shield 90, food 100, heart 10 |
@@ -236,7 +238,8 @@ here; the route tests are `crates/zelda/tests/route_ways.rs` (monsters removed, 
 
 ## Open questions
 
-- Ladder crossings inside rooms (water one tile wide) and the coast heart's reach weren't mapped; no edge needs the
-  ladder.
-- 0x4e's armos stairs and 0x21's gravestone cave are ROM-only (see above).
+- Ladder crossings inside rooms (water one tile wide): no edge needs the ladder, but 0x17 and 0x27 are each two
+  parts that only the ladder joins (the river), 0x1d and 0x55 two parts that nothing joins but a screen wrap
+  (game.yaml comments, Nov 13), and 0x5f's heart container needs it.
+- 0x4e's armos stairs are ROM-only (see above).
 - Hint texts (0x1c, 0x75, 0x70) aren't decoded.

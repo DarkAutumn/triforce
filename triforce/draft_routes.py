@@ -14,6 +14,8 @@ has ``level``, ``room`` (quoted hex), ``in_cave``, ``entry`` and ``exit`` as in 
 - ``wrap: true``: the room is crossed by a screen wrap (``CLIP E`` / ``CLIP W``).  It is required on a step that
   leaves through one of game.yaml's wrap exits (a W exit with ``wrap: true``: 0x51 into 0x50, 0x60 into 0x5f), which
   nothing but the wrap gets out of;
+- ``takes: [heart-container]``: what Link takes in the room's overworld cave (``TAKES``; a draft has no cave steps,
+  and game.yaml's ``treasure`` covers only what lies in the room itself), so the map can count hearts and items;
 - ``note``: what Link does here, shown on the map; ``leg``: a name for the part of the route this step starts.
 
 ``problems`` checks a draft against game.yaml: every room exists, every exit is one of the room's and leads into the
@@ -30,7 +32,8 @@ from triforce._native import game_rooms, route_steps
 DRAFTS_PATH = Path(__file__).with_name('draft_routes.yaml')
 ENTRIES = ('start', 'N', 'S', 'E', 'W', 'cave', 'recorder')
 EXITS = ('N', 'S', 'E', 'W', 'cave', 'triforce', 'recorder', 'end')
-STEP_KEYS = {'level', 'room', 'in_cave', 'entry', 'exit', 'wrap', 'note', 'leg'}
+STEP_KEYS = {'level', 'room', 'in_cave', 'entry', 'exit', 'wrap', 'note', 'leg', 'takes'}
+TAKES = ('heart-container', 'magic-sword', 'wood-arrow', 'food')      # what an overworld cave on a draft gives
 OPPOSITE = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 WHIRLWIND_ROOMS = (0x37, 0x3C, 0x74, 0x45, 0x0B, 0x22, 0x42, 0x6D)     # where it sets Link down, levels 1-8
 
@@ -55,21 +58,24 @@ def names(path: Path = DRAFTS_PATH) -> list[str]:
 
 def steps(name: str, path: Path = DRAFTS_PATH) -> list[dict]:
     """The draft's steps as ``route_steps`` dicts: the route it extends, then its own, each also with ``note``,
-    ``leg``, ``wrap`` and ``draft`` (False for the extended route's steps)."""
+    ``leg``, ``wrap``, ``takes`` and ``draft`` (False for the extended route's steps)."""
     drafts = read(path)
     if name not in drafts:
         raise DraftError(f'{path}: no draft {name!r} (it has {list(drafts)})')
     draft = drafts[name]
     if not isinstance(draft, dict) or set(draft) - {'extends', 'steps'} or not isinstance(draft.get('steps'), list):
         raise DraftError(f'{path}: {name}: needs `steps:` (a list) and may have `extends:`, nothing else')
-    plan = [{**step, 'note': None, 'leg': None, 'wrap': False, 'draft': False}
+    plan = [{**step, 'note': None, 'leg': None, 'wrap': False, 'takes': [], 'draft': False}
             for step in (route_steps(draft['extends']) if draft.get('extends') else [])]
     for number, step in enumerate(draft['steps']):
         what = f'{path}: {name}: step {number} {step!r}'
         if not isinstance(step, dict) or set(step) - STEP_KEYS:
             raise DraftError(f'{what}: the keys are {sorted(STEP_KEYS)}')
+        takes = step.get('takes', [])
         if step.get('entry') not in ENTRIES or step.get('exit') not in EXITS:
             raise DraftError(f'{what}: entry is one of {ENTRIES}, exit one of {EXITS}')
+        if not isinstance(takes, list) or set(takes) - set(TAKES):
+            raise DraftError(f'{what}: takes is a list of {TAKES}')
         try:
             room = int(str(step['room']), 16)
         except (KeyError, ValueError) as error:
@@ -78,7 +84,7 @@ def steps(name: str, path: Path = DRAFTS_PATH) -> list[dict]:
                      'in_cave': bool(step.get('in_cave', False)), 'entry': step['entry'], 'exit': step['exit'],
                      'specialist': None, 'waypoint': None, 'retreat': None, 'treasure': None, 'bomb_reserve': None,
                      'way': None, 'stretch': None, 'note': step.get('note'), 'leg': step.get('leg'),
-                     'wrap': bool(step.get('wrap', False)), 'draft': True})
+                     'wrap': bool(step.get('wrap', False)), 'takes': list(takes), 'draft': True})
     return plan
 
 
