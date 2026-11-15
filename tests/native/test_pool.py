@@ -312,9 +312,15 @@ def test_act_mode_spellings():
     assert native.act_mode('relax:16+temperature:0.5+low:2:relax:16+temperature:0.25') == (
         'temperature:0.5+relax:16+low:2:temperature:0.25+relax:16')
     assert native.act_mode('argmax+low:40%:sample') == 'argmax+low:40%:sample'
+    # Round 25: foresight, last in its part: against the game's own future, or S redrawn futures (share R, default 0).
+    assert native.act_mode('guard:8+temperature:0.5+relax:16') == 'temperature:0.5+relax:16+guard:8'
+    assert native.act_mode('temperature:0.5+relax:16+plan:8:4:0.50') == 'temperature:0.5+relax:16+plan:8:4:0.5'
+    assert native.act_mode('temperature:0.5+relax:16+low:2:plan:8:1+temperature:0.5+relax:16') == (
+        'temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+plan:8:1')
     for bad in ('model', 'greedy', 'floor:2', 'sample+floor:0.1', 'escape:0', 'relax:16',
                 'floor:0.1+escape:4+relax:4', 'low:2:argmax', 'argmax+low:2', 'argmax+low:1.2:sample',
-                'argmax+low:2:sample+low:1:argmax'):
+                'argmax+low:2:sample+low:1:argmax', 'guard:8', 'argmax+guard:0', 'argmax+guard:4+plan:4:2',
+                'argmax+plan:4', 'argmax+plan:4:2:1'):
         with pytest.raises(ValueError):
             native.act_mode(bad)
     # relax: the rule until stalled, the policy itself from N decisions without progress on.
@@ -333,3 +339,103 @@ def test_act_mode_spellings():
     np.testing.assert_allclose(native.act_probabilities(mode, p, stall=4, health=(3.0, 3)), [0.5, 0.3, 0.1, 0.1])
     np.testing.assert_allclose(native.act_probabilities('argmax+low:50%:floor:0.15+relax:4', p, stall=4,
                                                         health=(1.5, 3)), [0.5, 0.3, 0.1, 0.1])
+
+
+def _foresight_runs(states_dir, mode, seeds=(0, 3, 5)):
+    """Chain runs from 0x5a W (ow-zora, then ow-moblin: Link is hit) acted on by two random networks in ``mode``:
+    the run results and the plays (observations recorded) by seed."""
+    names = ['ow-moblin', 'ow-zora']
+    policies = [random_network(1).to_native(), random_network(4).to_native()]
+    task = native.ChainTask(names, 'd2first', seeds=list(seeds), start_from=str(require_state('0_5aw_0')),
+                            max_steps=80, states_dir=str(states_dir))
+    with native.EnvPool(task, num_envs=3, seed=0) as pool:
+        events = play_to_the_end(pool, policies, act=mode, record='observations')
+        plays = {p['job']: p for p in pool.poll_plays()}
+    return {e['result']['seed']: e['result'] for e in events if e['type'] == 'run'}, plays
+
+
+def _without_foresight(run):
+    run = {k: v for k, v in run.items() if k != 'provenance'}
+    run['rooms'] = [{**room, 'decisions': {k: v for k, v in room['decisions'].items() if k != 'foresight'}}
+                    for room in run['rooms']]
+    return run
+
+
+def _foresight(run):
+    """The run's foresight summed over its rooms: outcomes, trials, replaced entries (room index, entry)."""
+    outcomes, trials, replaced = np.zeros(3, int), 0, []
+    for i, room in enumerate(run['rooms']):
+        f = room['decisions'].get('foresight')
+        if f:
+            outcomes += f['outcomes']
+            trials += f['trials']
+            replaced += [(i, r) for r in f['replaced']]
+    return outcomes, trials, replaced
+
+
+@pytest.mark.parametrize('foresight', ['guard:1', 'plan:1:3'])
+def test_foresight_that_never_replaces_plays_as_without_it(states_dir, foresight):
+    """Round 25: a foresight of one candidate tries every decision's action (``guard:1`` against the game's own
+    future, ``plan:1:3`` against three redrawn ones) and never replaces it, so the runs equal the runs without it
+    decision for decision, room record for room record (every counter of the env and the chain): the trials leave
+    nothing behind. Only the visits' ``foresight`` counts tell them apart."""
+    base = 'temperature:0.75+relax:16'
+    runs, plays = _foresight_runs(states_dir, base)
+    tried, tried_plays = _foresight_runs(states_dir, f'{base}+{foresight}')
+    lost = 0
+    for seed, run in runs.items():
+        np.testing.assert_array_equal(tried_plays[seed]['actions'], plays[seed]['actions'])
+        for key in ('log_prob', 'act_log_prob', 'value'):
+            np.testing.assert_array_equal(tried_plays[seed][key], plays[seed][key])
+        assert _without_foresight(tried[seed]) == _without_foresight(run)
+        assert all('foresight' not in room['decisions'] for room in run['rooms'])
+        outcomes, trials, replaced = _foresight(tried[seed])
+        assert outcomes.sum() == len(plays[seed]['actions']) and outcomes[1] == 0 and not replaced
+        assert trials >= outcomes.sum()
+        lost += outcomes[2]
+    assert lost > 0, 'some trials lose health (the foresight would have acted on them)'
+
+
+def test_a_guard_replaces_the_actions_that_lose_health_in_the_games_own_future(states_dir):
+    """Round 25: ``guard:K`` plays like the mode without it up to its first replaced decision; the action it refuses
+    there is the one the unguarded run took, and that run's step lost health (the trial is the game's real future);
+    the visit records name the refused and the taken actions."""
+    base = 'temperature:0.75+relax:16'
+    runs, plays = _foresight_runs(states_dir, base)
+    guarded, guarded_plays = _foresight_runs(states_dir, f'{base}+guard:4')
+    replaced_runs = 0
+    for seed, play in plays.items():
+        _, _, replaced = _foresight(guarded[seed])
+        if not replaced:
+            continue
+        replaced_runs += 1
+        # The first replaced decision's index in the run: the decisions of the rooms before it, plus its own index.
+        room, (index, refused, refused_lp, rank, taken, taken_lp, hearts) = replaced[0]
+        first = sum(r['decisions']['n'] for r in guarded[seed]['rooms'][:room]) + index
+        joint = lambda a: (a[0] * 8 + a[1]) * 4 + a[2]  # noqa: E731
+        np.testing.assert_array_equal(guarded_plays[seed]['actions'][:first], play['actions'][:first])
+        assert refused == joint(play['actions'][first]) != taken == joint(guarded_plays[seed]['actions'][first])
+        assert refused_lp == pytest.approx(play['log_prob'][first], abs=1e-5)
+        assert taken_lp == pytest.approx(guarded_plays[seed]['log_prob'][first], abs=1e-5)
+        assert rank >= 0
+        hp = np.round(play['obs']['link'][:, 10] * 16 * 2) / 2      # observation.rs l::HP: hearts / 16
+        assert hearts == pytest.approx(hp[first], abs=0.25)
+        if first + 1 < len(hp):
+            assert hp[first + 1] < hp[first], f'run {seed}: the refused action lost health in the real run'
+        else:
+            assert runs[seed]['rooms'][-1]['health_out'] < hp[first], f'run {seed}: the refused action lost health'
+    assert replaced_runs > 0
+
+
+def test_a_foresight_runs_in_single_room_evaluation(states_dir):
+    """Round 25: evaluation envs try actions too; their visit records count the foresight."""
+    config = native.SpecialistConfig.load('ow-zora').replace(max_steps=60)
+    task = native.EvalTask(config, [(str(require_state('0_5aw_0')), seed) for seed in (0, 1)],
+                           states_dir=str(states_dir))
+    with native.EnvPool(task, num_envs=2, seed=0) as pool:
+        events = play_to_the_end(pool, [random_network(4).to_native()], act='temperature:0.75+relax:16+plan:4:2')
+    records = [e['record'] for e in events if e['type'] == 'eval']
+    assert len(records) == 2
+    for record in records:
+        n = sum(v['decisions']['n'] for v in record['visits'])
+        assert sum(sum(v['decisions']['foresight']['outcomes']) for v in record['visits']) == n

@@ -529,3 +529,66 @@ fn doorway_turns_match_the_game() {
         assert!(offered_on_edge > 0 && (masked_in_doorway > 0 || !deep_doorway), "{name}: {offered_on_edge} {masked_in_doorway}");
     }
 }
+
+/// Everything a session continues from, comparable: the machine state as a state file (RAM, the game's random numbers,
+/// CPU, PPU, APU, frame and cycle counts), the frame and step counters, the cave flags, the RNG phase, the credit
+/// ledger, the state (the same `Arc`), the mask, the open clip, the last pre-entry snapshot, simulation mode and the
+/// look-ahead setting.
+fn whole(s: &Session<ZCore>) -> impl PartialEq + std::fmt::Debug + use<> {
+    let encode = |m: &zcore::MachineState| zcore::state_file::encode(s.nes().rom(), m, 0);
+    (
+        encode(&s.nes().snapshot()),
+        (s.frame(), s.total_frames, s.steps, s.was_in_cave(), s.just_exited_cave(), s.rng_phase()),
+        format!("{:?}", s.ledger()),
+        Arc::as_ptr(s.state()) as usize,
+        (*s.mask(), s.open_clip(), s.simulating(), s.look_ahead),
+        s.last_pre_entry().map(|p| (encode(&p.machine), p.total_frames, p.steps)),
+    )
+}
+
+/// Round 25 (act modes' foresight, `policy::act::Foresight`): `Session::trial` leaves the session exactly as it was,
+/// trying the game's own future or a redrawn one, an action that loses health, wins nothing or leaves the room; and a
+/// session that tries several actions before every step plays frame for frame as its twin that never tries any.
+#[test]
+fn a_trial_leaves_the_session_exactly_as_it_was() {
+    let (Some(nes), Some(twin)) = (open_core(), open_core()) else { return };
+    let map = Arc::new(GameMap::builtin());
+    let (mut s, mut t) = (Session::new(nes, map.clone()), Session::new(twin, map));
+    // The Dungeon 2 Goriya room: hits come quickly.
+    let machine = common::load_named_state("2_5es_0");
+    let opts = LoadOptions { randomize_rng: true, fresh_room: true, ..LoadOptions::default() };
+    for session in [&mut s, &mut t] {
+        session.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(3)).unwrap();
+        session.set_capture_pre_entry(true);
+    }
+    let mut rng = ChaCha8Rng::seed_from_u64(5);
+    let (mut lost, mut redrawn_differs) = (0, 0);
+    for step in 0..300 {
+        if s.state().game_over() {
+            break;
+        }
+        let action = random_action(s.mask(), &mut rng);
+        let before = whole(&s);
+        let own = s.trial(action, None).unwrap();
+        assert_eq!(whole(&s), before, "step {step}: the game's own future");
+        for phase in [rng.random_range(0..32767), rng.random_range(0..32767)] {
+            let other = s.trial(action, Some(phase)).unwrap();
+            assert_eq!(whole(&s), before, "step {step}: a redrawn future");
+            redrawn_differs += (other != own) as u32;
+        }
+        let other_action = random_action(s.mask(), &mut rng);
+        s.trial(other_action, None).unwrap();
+        assert_eq!(whole(&s), before, "step {step}: another action");
+        let (real, twin) = (s.act(action).unwrap(), t.act(action).unwrap());
+        assert_eq!(s.nes().ram(), t.nes().ram(), "step {step}");
+        assert_eq!((s.frame(), s.total_frames), (t.frame(), t.total_frames), "step {step}");
+        let frames = |c: &zelda::Change| c.frames + c.menu_frames;
+        assert_eq!((real.health_lost, frames(&real)), (twin.health_lost, frames(&twin)), "step {step}");
+        // The trial of the game's own future is the step itself.
+        assert_eq!((own.health_lost, own.frames), (real.health_lost, frames(&real)), "step {step}");
+        lost += own.lost() as u32;
+    }
+    assert!(lost >= 3, "trials that lose health ({lost})");
+    assert!(redrawn_differs > 0, "a redrawn future plays differently");
+    assert_eq!(s.last_pre_entry().is_some(), t.last_pre_entry().is_some());
+}

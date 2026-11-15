@@ -296,6 +296,33 @@ def test_a_run_in_a_low_health_act_mode_replays_bit_exactly(states_dir, models_d
     assert _native.replay_verify(recording.data, states_dir=str(states_dir))['frames'] == recording.frames
 
 
+@pytest.mark.parametrize('foresight', ['guard:4', 'plan:4:2'])
+def test_a_run_with_foresight_replays_bit_exactly(states_dir, models_dir, foresight):
+    """Round 25: a chain run recorded with foresight (each decision's action tried in the emulator, the game's random
+    numbers redrawn for ``plan``, and replaced when it would lose health) records only the frames it played: it names
+    its act mode, replays bit for bit, and its records count the replaced decisions."""
+    mode = f'temperature:0.75+relax:16+{foresight}'
+    runner = Runner(models_dir=models_dir, max_steps=80, states_dir=states_dir, act=mode)
+    route = Route.load('d2first', start_from=str(require_state('0_5aw_0')))
+    record = replay.record_options(runner.record_meta(route))
+    events = []
+    with runner.pool(route, [3, 4], record=record, num_envs=2, threads=2) as chain:
+        chain.play()
+        while not chain.pool.wait_idle(timeout=0.05):
+            events += chain.poll_events()
+        events += chain.poll_events()
+    results = chain.results(events)
+    foreseen = [room.decisions['foresight'] for _, result in results for room in result.rooms
+                if room.decisions.get('n')]
+    assert foreseen and sum(f['outcomes'][1] for f in foreseen) > 0, 'decisions were replaced'
+    assert all(f['trials'] >= sum(f['outcomes']) for f in foreseen)
+    recordings = [_native.Replay(e['data']) for e in events if e['type'] == 'replay']
+    assert len(recordings) == 2
+    for recording in recordings:
+        assert {m['act'] for m in recording.meta['models']} == {mode}
+        assert _native.replay_verify(recording.data, states_dir=str(states_dir))['frames'] == recording.frames
+
+
 def test_missing_promoted_model_is_an_error(states_dir, tmp_path):
     result = Runner(models_dir=tmp_path, states_dir=states_dir).run(Route.load('d2first'), seed=0)
     assert result.result == 'error' and result.steps == 0

@@ -1,13 +1,14 @@
 //! The policy network as the pool's [`Actor`]: `policy::Policy` per specialist index, reading the Zelda
 //! observation layout. Each policy acts by its [`ActMode`] (docs/rust-actor.md "Act modes"): sampling with keyed
 //! Gumbel noise (job, decision step), argmax, or a rule over the joint distribution; `escape` and `relax` read the
-//! env's count of decisions without progress, `low` Link's health ([`crate::rollout::Situation`]). A replaying actor
-//! takes each decision's action from a recorded play instead and scores it.
+//! env's count of decisions without progress, `low` Link's health ([`crate::rollout::Situation`]); a mode's foresight
+//! (`guard`, `plan`) ranks the alternatives ([`Actor::alternatives`]). A replaying actor takes each decision's action
+//! from a recorded play instead and scores it (a replay has no foresight: its actions are the ones taken).
 
 use super::ZeldaAction;
 use crate::layout::{ObsData, ObsLayout};
-use crate::rollout::{Actor, Decision, Situation};
-use policy::act::joint_noise_key;
+use crate::rollout::{Actor, Decision, Refused, Situation};
+use policy::act::{Foresight, joint_noise_key};
 use policy::noise::gumbel;
 use policy::noise::keyed_noise;
 use policy::{ActMode, Choose, Input, Pick, Policy};
@@ -234,7 +235,7 @@ impl Actor<ZeldaAction> for PolicyActor {
                 value: out.value,
                 act_log_prob: acting.log_prob,
                 act_entropy: acting.entropy,
-                guard: 0,
+                foresee: None,
             },
         ))
     }
@@ -250,15 +251,16 @@ impl Actor<ZeldaAction> for PolicyActor {
         (s.dist_len > 0).then(|| &s.dist[..s.dist_len])
     }
 
-    fn guard(&self, policy: i64, situation: Situation) -> usize {
+    fn foresight(&self, policy: i64, situation: Situation) -> Option<Foresight> {
         match (&self.replay, self.policy(policy)) {
-            (None, Ok(p)) => self.modes[p].guard(situation.health) as usize,
-            _ => 0,
+            (None, Ok(p)) => self.modes[p].foresight(situation.health),
+            _ => None,
         }
     }
 
     /// Ranked as the decision's own rule ranks: argmax by the policy's joint log-prob, a draw by ln q + the Gumbel
-    /// noise of the decision's key (the order in which Gumbel-argmax would have drawn them).
+    /// noise of the decision's key (the order in which Gumbel-argmax would have drawn them). `first`'s record: its
+    /// joint index, log-prob and rank among the legal joint actions by the policy's log-prob.
     fn alternatives(
         &self,
         obs: &ObsData,
@@ -270,7 +272,7 @@ impl Actor<ZeldaAction> for PolicyActor {
         k: usize,
         s: &mut ActorScratch,
         out: &mut Vec<(ZeldaAction, Decision)>,
-    ) -> Result<(), String> {
+    ) -> Result<Option<Refused>, String> {
         let p = self.policy(policy)?;
         let net = &self.policies[p];
         let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
@@ -300,6 +302,8 @@ impl Actor<ZeldaAction> for PolicyActor {
         let bad = || format!("bad first action {first:?}");
         let head = |i: i64| usize::try_from(i).map_err(|_| bad());
         let skip = net.joint_index([head(first[0])?, head(first[1])?, head(first[2])?]);
+        let first_lp = s.joint[skip];
+        let rank = s.joint[..n].iter().filter(|&&lp| lp > first_lp).count();
         let score = &s.score;
         s.order.clear();
         s.order.extend((0..n).filter(|&i| i != skip && score[i].is_finite()));
@@ -317,10 +321,14 @@ impl Actor<ZeldaAction> for PolicyActor {
                     value: o.value,
                     act_log_prob: acting.log_prob,
                     act_entropy: acting.entropy,
-                    guard: 0,
+                    foresee: None,
                 },
             ));
         }
-        Ok(())
+        Ok(Some(Refused {
+            index: skip as u16,
+            log_prob: first_lp,
+            rank: rank as u16,
+        }))
     }
 }

@@ -12,8 +12,9 @@ The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, `
 How a run's model acts (better-play §6b) is ``<run dir>/act``: ``<mode> <sha1 of ckpt.pt>``, ``mode`` being an act
 mode spelling (docs/rust-actor.md "Act modes": ``sample``, the default when the file is absent, ``argmax``,
 ``temperature:T``, ``floor:P``, ``minp:R``, ``topp:P``, ``escape:N``, ``relax:N`` and ``+`` combinations, optionally
-followed by ``+low:H:MODE`` for low health; ``parse_act`` gives
-the canonical spelling), chosen by evaluating and set with ``promote --act``.  The mode belongs to the weights it was measured for: when ``ckpt.pt`` no longer has that
+with a foresight part ``+guard:K`` or ``+plan:K:S[:R]`` and followed by ``+low:H:MODE`` for low health;
+``parse_act`` gives the canonical spelling), chosen by evaluating and set with ``promote --act``.  The mode belongs to
+the weights it was measured for: when ``ckpt.pt`` no longer has that
 hash (retrained or replaced in place) or the file is the old one-word format, ``act_mode`` warns and returns
 ``sample``.  Chains, the watch player and evaluation follow it unless told otherwise.
 
@@ -82,8 +83,11 @@ def act_argument(allow_model: bool = True):
 
 # ``%%``: argparse formats help strings.
 ACT_HELP = ("act mode: sample, argmax, temperature:T, floor:P, minp:R, topp:P, escape:N, relax:N or a '+' "
-            "combination, optionally followed by +low:H:MODE (MODE while Link holds H hearts or fewer, or H%% of his "
-            "maximum) (docs/rust-actor.md \"Act modes\")")
+            "combination, optionally with foresight (+guard:K: try the action against the game's own future and take "
+            "the next of the K best that loses no health; +plan:K:S[:R]: the same against S futures with the game's "
+            "random numbers redrawn, refused when it loses health in more than the share R of them) and followed by "
+            "+low:H:MODE (MODE while Link holds H hearts or fewer, or H%% of his maximum) (docs/rust-actor.md \"Act "
+            "modes\")")
 
 
 # How the play tools (play-zelda.py with its live cell, zelda-headless.py, the golden path) act by default: never

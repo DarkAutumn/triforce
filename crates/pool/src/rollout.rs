@@ -16,22 +16,49 @@ pub struct Decision {
     /// the joint actions (0 for argmax; 0 too where the actor doesn't report them: rollouts and replays).
     pub act_log_prob: f32,
     pub act_entropy: f32,
-    /// A guarded decision ([`Actor::guard`]): [`Guard`] as a number (0: not guarded).
-    pub guard: u8,
+    /// What the act mode's foresight did ([`Foresee`]; None: it has none at this decision).
+    pub foresee: Option<Foresee>,
 }
 
-/// What the guard of a decision did ([`Decision::guard`]; `PlayWork`).
+/// What a decision's foresight did (`PlayWork`; [`Actor::foresight`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Foresee {
+    pub outcome: Foreseen,
+    /// Trials run ([`crate::PoolEnv::trial`]) and the frames they emulated.
+    pub trials: u32,
+    pub frames: u32,
+    /// The refused action of a replaced decision ([`Foreseen::Replaced`]).
+    pub refused: Option<Refused>,
+}
+
+/// What a decision's foresight found.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Guard {
-    /// The decision was not guarded (or the env can't probe).
-    Off = 0,
+pub enum Foreseen {
     /// The actor's choice would not lose health: kept.
     Safe = 1,
     /// It would: replaced by the first alternative that would not.
     Replaced = 2,
     /// It and every alternative would: the actor's choice kept.
     Unsafe = 3,
+}
+
+/// The action a foresight refused ([`Actor::alternatives`]): its index among the actor's actions (Zelda: the joint
+/// index), its log-prob under the policy and its rank among the policy's actions (0: the most likely).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Refused {
+    pub index: u16,
+    pub log_prob: f32,
+    pub rank: u16,
+}
+
+/// One trial of an action ([`crate::PoolEnv::trial`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Trial {
+    /// The action lost health (or the game).
+    pub lost: bool,
+    /// Frames the trial emulated.
+    pub frames: u32,
 }
 
 /// What the env reports about the moment of a decision ([`crate::PoolEnv::situation`]); act modes read it.
@@ -69,14 +96,15 @@ pub trait Actor<A>: Send + Sync {
         None
     }
 
-    /// How many candidates a decision of policy `policy` in `situation` may probe ([`crate::PoolEnv::probe`]) before
-    /// it is taken (`guard:K`); 0 or 1: the decision is not guarded. Plays only.
-    fn guard(&self, _policy: i64, _situation: Situation) -> usize {
-        0
+    /// The foresight of a decision of policy `policy` in `situation` (`guard:K`, `plan:K:S[:R]`); None: the decision
+    /// is taken as the actor chose it. Plays only.
+    fn foresight(&self, _policy: i64, _situation: Situation) -> Option<policy::act::Foresight> {
+        None
     }
 
     /// The decision's next candidates after `first` (the action [`Actor::act`] chose with the same arguments), best
-    /// first, at most `k - 1`, each with its [`Decision`], appended to `out`.
+    /// first, at most `k - 1`, each with its [`Decision`], appended to `out`; returns what the policy thinks of
+    /// `first` (for the record of a replaced decision).
     #[allow(clippy::too_many_arguments)]
     fn alternatives(
         &self,
@@ -89,8 +117,8 @@ pub trait Actor<A>: Send + Sync {
         _k: usize,
         _scratch: &mut Self::Scratch,
         _out: &mut Vec<(A, Decision)>,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> Result<Option<Refused>, String> {
+        Ok(None)
     }
 
     /// The value estimate of `obs` for policy `policy` (bootstrapping a truncation).

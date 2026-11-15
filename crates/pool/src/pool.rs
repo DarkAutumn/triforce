@@ -2,7 +2,9 @@
 
 use crate::control::EnvControl;
 use crate::layout::{ObsData, ObsLayout, ObsRow, Staged};
-use crate::rollout::{Actor, Decision, EnvRollout, Guard, Play, PlanError, Planner, Record, SearchRow, Situation};
+use crate::rollout::{
+    Actor, Decision, EnvRollout, Foresee, Foreseen, Play, PlanError, Planner, Record, SearchRow, Situation, Trial,
+};
 use parking_lot::{Condvar, Mutex};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
@@ -51,10 +53,11 @@ pub trait PoolEnv: Send + 'static {
         crate::rollout::Situation::default()
     }
 
-    /// Guarded plays ([`Actor::guard`]): whether executing `action` now would lose health, found by executing it
-    /// and returning to exactly where the env stood, with no side effect (no frame published, nothing recorded);
-    /// None for an env that can't probe.
-    fn probe(&mut self, _action: &Self::Action) -> Result<Option<bool>, Self::Error> {
+    /// Act modes' foresight ([`Actor::foresight`]): executes `action` from the current state as a trial and returns to
+    /// exactly where the env stood, with no side effect (no frame published, nothing recorded, no counter of the env
+    /// moved). `future`: redraw the env's hidden randomness from this key first (a future of the env's model; None:
+    /// its own future). None for an env that can't try actions.
+    fn trial(&mut self, _action: &Self::Action, _future: Option<u64>) -> Result<Option<Trial>, Self::Error> {
         Ok(None)
     }
 
@@ -919,48 +922,105 @@ struct PlayWork<E: PoolEnv, Ac: Actor<E::Action>> {
     record: Record,
     /// The episode being recorded.
     play: Option<Play<E::Action>>,
-    /// A guarded decision's alternatives (kept for its allocation).
+    /// A foreseen decision's alternatives (kept for its allocation).
     alternatives: Vec<(E::Action, Decision)>,
 }
 
+/// Key tag of a plan's redrawn futures (`plan:K:S`).
+const TAG_FUTURE: u64 = 0x504C_414E_4655_5452;
+
 impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
-    /// Guards the decision (`action`, `decision`) of `slot` (`k` candidates): keeps it when the env's probe says it
-    /// won't lose health, else takes the first of the actor's alternatives that won't (none: keeps it).
+    /// Whether `action` is refused by `foresight` (its trials in the env), counting the trials and their frames into
+    /// `foresee`; None: the env can't try actions. Future `f` of decision `step` of job `job` is keyed by the three
+    /// alone, so every candidate of a decision meets the same futures.
+    fn refused(
+        env: &mut E,
+        id: usize,
+        slot: &Staged,
+        foresight: &policy::act::Foresight,
+        action: &E::Action,
+        foresee: &mut Foresee,
+    ) -> Res<Option<bool>, E> {
+        let mut losses = 0;
+        for f in 0..foresight.trials() {
+            let future = (foresight.futures > 0)
+                .then(|| policy::noise::key_of(&[TAG_FUTURE, slot.job as u64, slot.step as u64, f as u64]));
+            let Some(Trial { lost, frames }) = env.trial(action, future).map_err(|error| PoolError::Env { env: id, error })?
+            else {
+                return Ok(None);
+            };
+            foresee.trials += 1;
+            foresee.frames += frames;
+            losses += lost as u32;
+            if foresight.decided(losses, f + 1) {
+                break;
+            }
+        }
+        Ok(Some(foresight.refuses(losses)))
+    }
+
+    /// The foresight of the decision (`action`, `decision`) of `slot`: keeps it when its trials don't refuse it, else
+    /// takes the first of the actor's alternatives they don't refuse (none: keeps it). None: the env can't try
+    /// actions (the decision stands as taken).
     #[allow(clippy::too_many_arguments)]
-    fn guard(
+    fn foresee(
         &mut self,
         env: &mut E,
         id: usize,
         slot: &Staged,
         situation: Situation,
-        k: usize,
+        foresight: &policy::act::Foresight,
         action: &mut E::Action,
         decision: &mut Decision,
-    ) -> Res<Guard, E> {
-        let env_err = |error| PoolError::Env { env: id, error };
-        match env.probe(action).map_err(env_err)? {
-            None => return Ok(Guard::Off),
-            Some(false) => return Ok(Guard::Safe),
-            Some(true) => {}
+    ) -> Res<Option<Foresee>, E> {
+        let mut foresee = Foresee {
+            outcome: Foreseen::Safe,
+            trials: 0,
+            frames: 0,
+            refused: None,
+        };
+        match Self::refused(env, id, slot, foresight, action, &mut foresee)? {
+            None => return Ok(None),
+            Some(false) => return Ok(Some(foresee)),
+            Some(true) => foresee.outcome = Foreseen::Unsafe,
         }
-        self.alternatives.clear();
+        if foresight.candidates < 2 {
+            return Ok(Some(foresee));
+        }
         let mut alternatives = std::mem::take(&mut self.alternatives);
-        let found = self
-            .actor
-            .alternatives(&slot.obs, slot.policy, slot.job, slot.step, situation, action, k, &mut self.scratch, &mut alternatives)
-            .map_err(|e| PoolError::Usage(format!("env {id}: {e}")));
-        let mut guard = Guard::Unsafe;
-        if found.is_ok() {
-            for (a, d) in alternatives.drain(..) {
-                if env.probe(&a).map_err(env_err)? == Some(false) {
-                    (*action, *decision) = (a, d);
-                    guard = Guard::Replaced;
+        alternatives.clear();
+        let first = self.actor.alternatives(
+            &slot.obs,
+            slot.policy,
+            slot.job,
+            slot.step,
+            situation,
+            action,
+            foresight.candidates as usize,
+            &mut self.scratch,
+            &mut alternatives,
+        );
+        let result = match first {
+            Err(e) => Err(PoolError::Usage(format!("env {id}: {e}"))),
+            Ok(first) => {
+                let mut result = Ok(());
+                for (a, d) in alternatives.drain(..) {
+                    match Self::refused(env, id, slot, foresight, &a, &mut foresee) {
+                        Ok(Some(true)) => continue,
+                        Ok(_) => {
+                            (*action, *decision) = (a, d);
+                            foresee.outcome = Foreseen::Replaced;
+                            foresee.refused = first;
+                        }
+                        Err(e) => result = Err(e),
+                    }
                     break;
                 }
+                result
             }
-        }
+        };
         self.alternatives = alternatives;
-        found.map(|()| guard)
+        result.map(|()| Some(foresee))
     }
 }
 
@@ -974,9 +1034,8 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
             .actor
             .act(&slot.obs, slot.policy, slot.job, slot.step, situation, &mut self.scratch)
             .map_err(|e| PoolError::Usage(format!("env {id}: {e}")))?;
-        let k = self.actor.guard(slot.policy, situation);
-        if k > 1 {
-            decision.guard = self.guard(env, id, slot, situation, k, &mut action, &mut decision)? as u8;
+        if let Some(foresight) = self.actor.foresight(slot.policy, situation) {
+            decision.foresee = self.foresee(env, id, slot, situation, &foresight, &mut action, &mut decision)?;
         }
         if self.record != Record::Off {
             let layout = (self.record == Record::Observations).then(|| slot.obs.layout());

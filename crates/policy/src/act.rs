@@ -30,9 +30,11 @@
 //! followed by `+low:H:STYLE`, the style it plays instead while Link holds H hearts or fewer (`low:2`; halves allowed)
 //! or H percent of his maximum or less (`low:40%`), read before every decision: `temperature:0.5+relax:16+low:2:
 //! temperature:0.25+relax:16`. The low part comes last (everything after `low:H:` is its style) and has its own stall
-//! rule. [`ActMode::to_string`] is the canonical spelling (rules in the table's order). A rule's draw is
-//! Gumbel-argmax over the joint actions with noise keyed by (job, decision) ([`joint_noise_key`]), so a mode plays the
-//! same for the same seed wherever it runs.
+//! rule. Either style may end with one foresight part, `+guard:K` or `+plan:K:S[:R]` ([`Foresight`]: the env tries
+//! the decision's action, and when it would lose health the next of the style's K best that would not).
+//! [`ActMode::to_string`] is the canonical spelling (rules in the table's order, the foresight part last). A rule's
+//! draw is Gumbel-argmax over the joint actions with noise keyed by (job, decision) ([`joint_noise_key`]), so a mode
+//! plays the same for the same seed wherever it runs.
 
 use std::fmt;
 use std::str::FromStr;
@@ -184,21 +186,59 @@ pub enum Threshold {
     Percent(f32),
 }
 
-/// The low-health part of a mode (`+low:H:STYLE`): `style` (and `guard`) while Link's health is at or under `at`.
+/// Foresight before a decision (round 25): the env tries candidates in turn, the decision's own action first, then
+/// the style's next best (its ranking: argmax by the policy's joint log-prob, a draw by ln q + the decision's own
+/// Gumbel noise), at most `candidates` in all, each against `futures` futures, and takes the first that loses no
+/// health ([`Foresight::refuses`]); when every candidate would, the decision's own action. A trial executes the action
+/// and returns to exactly where the env stood: nothing of it reaches the game, the run's counters or a recording.
+///
+/// - `guard:K` (`futures` 0): each candidate is tried once against the game's own future (its random numbers as they
+///   stand). The run is a valid sequence of button presses, chosen with knowledge a player doesn't have.
+/// - `plan:K:S[:R]` (`futures` S ≥ 1): the game's random numbers are redrawn before every trial (a natural RNG state of
+///   a phase keyed by the job, the decision and the future, the same S futures for every candidate), and a candidate
+///   is refused when it loses health in more than the share R of them (default 0: in any). Planning with a model of
+///   the game, not peeking at its future.
+///
+/// K = 1 tries only the decision's own action: play is unchanged, the trials are only counted.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Foresight {
+    pub candidates: u32,
+    pub futures: u32,
+    pub share: f32,
+}
+
+impl Foresight {
+    /// Trials of one candidate: one against the game's own future, else one per redrawn future.
+    pub fn trials(&self) -> u32 {
+        self.futures.max(1)
+    }
+
+    /// Whether a candidate that lost health in `losses` of its [`Foresight::trials`] is refused.
+    pub fn refuses(&self, losses: u32) -> bool {
+        losses as f64 > self.share as f64 * self.trials() as f64
+    }
+
+    /// Whether `losses` of `done` trials already decide [`Foresight::refuses`] (the rest can't change it).
+    pub fn decided(&self, losses: u32, done: u32) -> bool {
+        self.refuses(losses) || !self.refuses(losses + (self.trials() - done))
+    }
+}
+
+/// The low-health part of a mode (`+low:H:STYLE`): `style` (and its foresight) while Link's health is at or under
+/// `at`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Low {
     pub at: Threshold,
     pub style: Style,
-    pub guard: u32,
+    pub foresight: Option<Foresight>,
 }
 
-/// How a policy acts outside training: `style`, and `low.style` instead while Link is at low health. `guard` (`guard:K`,
-/// 0: none): the env probes the decision's action and, when it would lose health, the next of the style's `K` best
-/// candidates that would not (docs/rust-actor.md "Act modes").
+/// How a policy acts outside training: `style` with its `foresight`, and `low`'s instead while Link is at low health
+/// (docs/rust-actor.md "Act modes").
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ActMode {
     pub style: Style,
-    pub guard: u32,
+    pub foresight: Option<Foresight>,
     pub low: Option<Low>,
 }
 
@@ -246,20 +286,20 @@ impl ActMode {
             minp: None,
             topp: None,
         }),
-        guard: 0,
+        foresight: None,
         low: None,
     };
     pub const ARGMAX: ActMode = ActMode {
         style: Style::Argmax,
-        guard: 0,
+        foresight: None,
         low: None,
     };
 
-    /// The style and guard for Link's `health` (hearts held, maximum; None where the env has none: never low).
-    fn part(&self, health: Option<(f32, f32)>) -> (Style, u32) {
+    /// The style and foresight for Link's `health` (hearts held, maximum; None where the env has none: never low).
+    fn part(&self, health: Option<(f32, f32)>) -> (Style, Option<Foresight>) {
         match (self.low, health) {
-            (Some(low), Some((hearts, max))) if low.at.holds(hearts, max) => (low.style, low.guard),
-            _ => (self.style, self.guard),
+            (Some(low), Some((hearts, max))) if low.at.holds(hearts, max) => (low.style, low.foresight),
+            _ => (self.style, self.foresight),
         }
     }
 
@@ -268,8 +308,8 @@ impl ActMode {
         self.part(health).0
     }
 
-    /// The candidates a guarded decision may probe at Link's `health` (0: the decision is not guarded).
-    pub fn guard(&self, health: Option<(f32, f32)>) -> u32 {
+    /// The foresight of a decision at Link's `health` (None: the decision is taken as the style chooses it).
+    pub fn foresight(&self, health: Option<(f32, f32)>) -> Option<Foresight> {
         self.part(health).1
     }
 
@@ -315,16 +355,29 @@ impl fmt::Display for Threshold {
     }
 }
 
+impl fmt::Display for Foresight {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (k, s, r) = (self.candidates, self.futures, self.share);
+        if s == 0 {
+            write!(f, "guard:{k}")
+        } else if r == 0.0 {
+            write!(f, "plan:{k}:{s}")
+        } else {
+            write!(f, "plan:{k}:{s}:{r}")
+        }
+    }
+}
+
 impl fmt::Display for ActMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.style)?;
-        if self.guard > 0 {
-            write!(f, "+guard:{}", self.guard)?;
+        if let Some(foresight) = &self.foresight {
+            write!(f, "+{foresight}")?;
         }
         if let Some(low) = &self.low {
             write!(f, "+low:{}:{}", low.at, low.style)?;
-            if low.guard > 0 {
-                write!(f, "+guard:{}", low.guard)?;
+            if let Some(foresight) = &low.foresight {
+                write!(f, "+{foresight}")?;
             }
         }
         Ok(())
@@ -335,7 +388,7 @@ impl FromStr for ActMode {
     type Err = String;
 
     /// `STYLE` or `STYLE+low:H:STYLE` (the low part last: everything after `low:H:` is its style); either style may
-    /// carry `+guard:K`.
+    /// carry one foresight part, `+guard:K` or `+plan:K:S[:R]`.
     fn from_str(text: &str) -> Result<ActMode, String> {
         let text = text.trim();
         let (normal, low) = match text.find("low:") {
@@ -346,7 +399,7 @@ impl FromStr for ActMode {
             }
             Some(i) => (&text[..i - 1], Some(&text[i + "low:".len()..])),
         };
-        let (style, guard) = parse_guarded(text, normal)?;
+        let (style, foresight) = parse_foresight(text, normal)?;
         let low = match low {
             None => None,
             Some(rest) => {
@@ -356,39 +409,70 @@ impl FromStr for ActMode {
                 if style.contains("low:") {
                     return Err(format!("act mode {text:?}: low given twice"));
                 }
-                let (style, guard) = parse_guarded(text, style)?;
+                let (style, foresight) = parse_foresight(text, style)?;
                 Some(Low {
                     at: parse_threshold(text, at)?,
                     style,
-                    guard,
+                    foresight,
                 })
             }
         };
-        Ok(ActMode { style, guard, low })
+        Ok(ActMode { style, foresight, low })
     }
 }
 
-/// A style with an optional `guard:K` part (K ≥ 2 candidates; 0 without one); `text` is the whole mode.
-fn parse_guarded(text: &str, part: &str) -> Result<(Style, u32), String> {
-    let mut guard = 0;
+/// A style with an optional foresight part (`guard:K`, `plan:K:S[:R]`; K ≥ 1 candidates, S ≥ 1 futures, 0 ≤ R < 1);
+/// `text` is the whole mode.
+fn parse_foresight(text: &str, part: &str) -> Result<(Style, Option<Foresight>), String> {
+    let mut foresight = None;
     let mut rest = Vec::new();
     for item in part.split('+') {
-        match item.strip_prefix("guard:") {
-            None => rest.push(item),
-            Some(_) if guard > 0 => return Err(format!("act mode {text:?}: guard given twice")),
-            Some(k) => {
-                guard = k
-                    .parse()
-                    .ok()
-                    .filter(|&k: &u32| k >= 2)
-                    .ok_or_else(|| format!("act mode {text:?}: guard needs a whole number of candidates, 2 or more"))?;
+        let (name, args) = match item.split_once(':') {
+            Some((name @ ("guard" | "plan"), args)) => (name, args),
+            _ => {
+                rest.push(item);
+                continue;
             }
+        };
+        if foresight.is_some() {
+            return Err(format!("act mode {text:?}: one foresight part (guard or plan) per mode"));
         }
+        let whole = |what: &str, v: &str| {
+            v.parse::<u32>()
+                .ok()
+                .filter(|&n| n >= 1)
+                .ok_or_else(|| format!("act mode {text:?}: {name} needs a whole number of {what}, 1 or more, got {v:?}"))
+        };
+        let args: Vec<&str> = args.split(':').collect();
+        foresight = Some(match (name, args.as_slice()) {
+            ("guard", [k]) => Foresight {
+                candidates: whole("candidates", k)?,
+                futures: 0,
+                share: 0.0,
+            },
+            ("plan", [k, s, r @ ..]) if r.len() <= 1 => {
+                let share = match r {
+                    [] => 0.0,
+                    [r] => r
+                        .parse::<f32>()
+                        .ok()
+                        .filter(|r| (0.0..1.0).contains(r))
+                        .ok_or_else(|| format!("act mode {text:?}: plan's share must be in [0, 1), got {r:?}"))?,
+                    _ => unreachable!(),
+                };
+                Foresight {
+                    candidates: whole("candidates", k)?,
+                    futures: whole("futures", s)?,
+                    share,
+                }
+            }
+            _ => return Err(format!("act mode {text:?}: {item:?} is not guard:K or plan:K:S[:R]")),
+        });
     }
-    if guard > 0 && rest.is_empty() {
-        return Err(format!("act mode {text:?}: guard:{guard} needs a mode to guard"));
+    if foresight.is_some() && rest.is_empty() {
+        return Err(format!("act mode {text:?}: foresight needs a mode to act by"));
     }
-    Ok((parse_style(text, &rest.join("+"))?, guard))
+    Ok((parse_style(text, &rest.join("+"))?, foresight))
 }
 
 /// `H` (hearts: a positive multiple of a half) or `P%` (a share of the maximum, 0 < P < 100).
@@ -470,7 +554,7 @@ fn parse_style(text: &str, part: &str) -> Result<Style, String> {
             _ => {
                 return Err(format!(
                     "act mode {text:?}: unknown rule {name:?} (sample, argmax, temperature:T, floor:P, minp:R, \
-                     topp:P, escape:N, relax:N, low:H:MODE)"
+                     topp:P, escape:N, relax:N, guard:K, plan:K:S[:R], low:H:MODE)"
                 ));
             }
         };
@@ -623,7 +707,13 @@ mod tests {
             ("temperature:0.5+relax:16+low:2:guard:8+temperature:0.5+relax:16",
              "temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+guard:8"),
             ("argmax+guard:2", "argmax+guard:2"),
+            ("argmax+guard:1", "argmax+guard:1"),
             ("sample+guard:3+low:1:argmax+guard:5", "sample+guard:3+low:1:argmax+guard:5"),
+            ("plan:8:4+temperature:0.5+relax:16", "temperature:0.5+relax:16+plan:8:4"),
+            ("temperature:0.5+relax:16+plan:8:4:0", "temperature:0.5+relax:16+plan:8:4"),
+            ("temperature:0.5+relax:16+plan:8:4:0.50", "temperature:0.5+relax:16+plan:8:4:0.5"),
+            ("temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+plan:8:1",
+             "temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+plan:8:1"),
         ] {
             let mode: ActMode = text.parse().unwrap();
             assert_eq!(mode.to_string(), canonical, "{text}");
@@ -638,8 +728,10 @@ mod tests {
             "argmax+low:1.25:sample", "argmax+low:100%:sample", "argmax+low:0%:sample", "argmax+low:x:sample",
             "argmax+low:2:relax:4", "argmax+low:2:sample+low:1:argmax", "argmax+low:2:argmax+low:1:sample",
             "argmaxlow:2:sample", "+low:2:sample", "argmax+low:inf:sample",
-            "guard:4", "argmax+guard:1", "argmax+guard:0", "argmax+guard:x", "argmax+guard:2+guard:3",
-            "argmax+low:2:guard:4",
+            "guard:4", "argmax+guard:0", "argmax+guard:x", "argmax+guard:2+guard:3", "argmax+guard:2:1",
+            "argmax+low:2:guard:4", "argmax+guard:4+plan:4:2", "argmax+plan:4", "argmax+plan:4:0",
+            "argmax+plan:0:4", "argmax+plan:4:2:1", "argmax+plan:4:2:-0.1", "argmax+plan:4:2:0.5:1", "plan:4:2",
+            "argmax+plan:4:2:x",
         ] {
             assert!(bad.parse::<ActMode>().is_err(), "{bad:?} parsed");
         }
@@ -660,13 +752,26 @@ mod tests {
     }
 
     #[test]
-    fn guard_follows_the_health_part() {
+    fn foresight_follows_the_health_part_and_refuses_by_its_share() {
         let mode: ActMode = "temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+guard:8".parse().unwrap();
-        assert_eq!(mode.guard(Some((2.5, 5.0))), 0);
-        assert_eq!(mode.guard(Some((2.0, 5.0))), 8);
-        assert_eq!(mode.guard(None), 0);
+        let guard = Foresight { candidates: 8, futures: 0, share: 0.0 };
+        assert_eq!(mode.foresight(Some((2.5, 5.0))), None);
+        assert_eq!(mode.foresight(Some((2.0, 5.0))), Some(guard));
+        assert_eq!(mode.foresight(None), None);
         assert_eq!(mode.choose(0, Some((2.0, 5.0))), mode.choose(0, Some((3.0, 5.0))));
-        assert_eq!("argmax+guard:3".parse::<ActMode>().unwrap().guard(None), 3);
+        let plan = "argmax+plan:3:4:0.5".parse::<ActMode>().unwrap().foresight(None).unwrap();
+        assert_eq!(plan, Foresight { candidates: 3, futures: 4, share: 0.5 });
+        // The game's own future: one trial, refused on a loss.
+        assert_eq!(guard.trials(), 1);
+        assert!(!guard.refuses(0) && guard.refuses(1));
+        // Four redrawn futures, refused when more than half lose: 3 of 4.
+        assert_eq!(plan.trials(), 4);
+        assert_eq!((0..=4).map(|l| plan.refuses(l)).collect::<Vec<_>>(), [false, false, false, true, true]);
+        // Decided early: 3 losses refuse whatever follows; 1 loss in 3 trials can reach only 2 of 4.
+        assert!(plan.decided(3, 3) && plan.decided(1, 3) && !plan.decided(2, 3) && !plan.decided(0, 1));
+        // "Any" (share 0): the first loss decides.
+        let any = Foresight { share: 0.0, ..plan };
+        assert!(any.decided(1, 1) && !any.decided(0, 3) && any.decided(0, 4));
     }
 
     #[test]
