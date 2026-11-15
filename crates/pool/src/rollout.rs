@@ -16,6 +16,22 @@ pub struct Decision {
     /// the joint actions (0 for argmax; 0 too where the actor doesn't report them: rollouts and replays).
     pub act_log_prob: f32,
     pub act_entropy: f32,
+    /// A guarded decision ([`Actor::guard`]): [`Guard`] as a number (0: not guarded).
+    pub guard: u8,
+}
+
+/// What the guard of a decision did ([`Decision::guard`]; `PlayWork`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Guard {
+    /// The decision was not guarded (or the env can't probe).
+    Off = 0,
+    /// The actor's choice would not lose health: kept.
+    Safe = 1,
+    /// It would: replaced by the first alternative that would not.
+    Replaced = 2,
+    /// It and every alternative would: the actor's choice kept.
+    Unsafe = 3,
 }
 
 /// What the env reports about the moment of a decision ([`crate::PoolEnv::situation`]); act modes read it.
@@ -51,6 +67,30 @@ pub trait Actor<A>: Send + Sync {
     /// (the layout is the actor's: the Zelda policy's is `policy::Policy::evaluate_with_distribution`).
     fn distribution<'a>(&self, _scratch: &'a Self::Scratch) -> Option<&'a [f32]> {
         None
+    }
+
+    /// How many candidates a decision of policy `policy` in `situation` may probe ([`crate::PoolEnv::probe`]) before
+    /// it is taken (`guard:K`); 0 or 1: the decision is not guarded. Plays only.
+    fn guard(&self, _policy: i64, _situation: Situation) -> usize {
+        0
+    }
+
+    /// The decision's next candidates after `first` (the action [`Actor::act`] chose with the same arguments), best
+    /// first, at most `k - 1`, each with its [`Decision`], appended to `out`.
+    #[allow(clippy::too_many_arguments)]
+    fn alternatives(
+        &self,
+        _obs: &ObsData,
+        _policy: i64,
+        _job: i64,
+        _step: i64,
+        _situation: Situation,
+        _first: &A,
+        _k: usize,
+        _scratch: &mut Self::Scratch,
+        _out: &mut Vec<(A, Decision)>,
+    ) -> Result<(), String> {
+        Ok(())
     }
 
     /// The value estimate of `obs` for policy `policy` (bootstrapping a truncation).

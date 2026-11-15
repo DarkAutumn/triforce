@@ -2,7 +2,7 @@
 
 use crate::control::EnvControl;
 use crate::layout::{ObsData, ObsLayout, ObsRow, Staged};
-use crate::rollout::{Actor, Decision, EnvRollout, Play, PlanError, Planner, Record, SearchRow};
+use crate::rollout::{Actor, Decision, EnvRollout, Guard, Play, PlanError, Planner, Record, SearchRow, Situation};
 use parking_lot::{Condvar, Mutex};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
@@ -49,6 +49,13 @@ pub trait PoolEnv: Send + 'static {
     /// env's own measure; `escape` and `relax`) and the agent's health (`low`). Default: neither.
     fn situation(&self) -> crate::rollout::Situation {
         crate::rollout::Situation::default()
+    }
+
+    /// Guarded plays ([`Actor::guard`]): whether executing `action` now would lose health, found by executing it
+    /// and returning to exactly where the env stood, with no side effect (no frame published, nothing recorded);
+    /// None for an env that can't probe.
+    fn probe(&mut self, _action: &Self::Action) -> Result<Option<bool>, Self::Error> {
+        Ok(None)
     }
 
     /// [`Pool::play`] only: policy `policy` decided `action` on the current observation (`decision`; with its
@@ -542,6 +549,7 @@ impl<E: PoolEnv> Pool<E> {
                 shared: self.shared.clone(),
                 record,
                 play: None,
+                alternatives: Vec::new(),
             };
             self.dispatch(Cmd::Run(id, Box::new(job)), id);
         }
@@ -911,6 +919,49 @@ struct PlayWork<E: PoolEnv, Ac: Actor<E::Action>> {
     record: Record,
     /// The episode being recorded.
     play: Option<Play<E::Action>>,
+    /// A guarded decision's alternatives (kept for its allocation).
+    alternatives: Vec<(E::Action, Decision)>,
+}
+
+impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
+    /// Guards the decision (`action`, `decision`) of `slot` (`k` candidates): keeps it when the env's probe says it
+    /// won't lose health, else takes the first of the actor's alternatives that won't (none: keeps it).
+    #[allow(clippy::too_many_arguments)]
+    fn guard(
+        &mut self,
+        env: &mut E,
+        id: usize,
+        slot: &Staged,
+        situation: Situation,
+        k: usize,
+        action: &mut E::Action,
+        decision: &mut Decision,
+    ) -> Res<Guard, E> {
+        let env_err = |error| PoolError::Env { env: id, error };
+        match env.probe(action).map_err(env_err)? {
+            None => return Ok(Guard::Off),
+            Some(false) => return Ok(Guard::Safe),
+            Some(true) => {}
+        }
+        self.alternatives.clear();
+        let mut alternatives = std::mem::take(&mut self.alternatives);
+        let found = self
+            .actor
+            .alternatives(&slot.obs, slot.policy, slot.job, slot.step, situation, action, k, &mut self.scratch, &mut alternatives)
+            .map_err(|e| PoolError::Usage(format!("env {id}: {e}")));
+        let mut guard = Guard::Unsafe;
+        if found.is_ok() {
+            for (a, d) in alternatives.drain(..) {
+                if env.probe(&a).map_err(env_err)? == Some(false) {
+                    (*action, *decision) = (a, d);
+                    guard = Guard::Replaced;
+                    break;
+                }
+            }
+        }
+        self.alternatives = alternatives;
+        found.map(|()| guard)
+    }
 }
 
 impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
@@ -918,10 +969,15 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
         if slot.finished {
             return Ok(Flow::Done);
         }
-        let (action, decision) = self
+        let situation = env.situation();
+        let (mut action, mut decision) = self
             .actor
-            .act(&slot.obs, slot.policy, slot.job, slot.step, env.situation(), &mut self.scratch)
+            .act(&slot.obs, slot.policy, slot.job, slot.step, situation, &mut self.scratch)
             .map_err(|e| PoolError::Usage(format!("env {id}: {e}")))?;
+        let k = self.actor.guard(slot.policy, situation);
+        if k > 1 {
+            decision.guard = self.guard(env, id, slot, situation, k, &mut action, &mut decision)? as u8;
+        }
         if self.record != Record::Off {
             let layout = (self.record == Record::Observations).then(|| slot.obs.layout());
             let play = self.play.get_or_insert_with(|| Play::new(slot.job, layout));

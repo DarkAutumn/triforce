@@ -7,6 +7,8 @@
 use super::ZeldaAction;
 use crate::layout::{ObsData, ObsLayout};
 use crate::rollout::{Actor, Decision, Situation};
+use policy::act::joint_noise_key;
+use policy::noise::gumbel;
 use policy::noise::keyed_noise;
 use policy::{ActMode, Choose, Input, Pick, Policy};
 use std::collections::HashMap;
@@ -40,6 +42,13 @@ pub struct ActorScratch {
     /// The last decision's distribution (`dist[..dist_len]`; `dist_len` 0: not kept).
     dist: Vec<f32>,
     dist_len: usize,
+    /// A guarded decision's ranking ([`Actor::alternatives`]): joint log-probs, acting probabilities, Gumbel noise,
+    /// scores and order (grown on first use).
+    joint: Vec<f32>,
+    q: Vec<f64>,
+    g: Vec<f32>,
+    score: Vec<f64>,
+    order: Vec<usize>,
 }
 
 impl PolicyActor {
@@ -149,6 +158,11 @@ impl Actor<ZeldaAction> for PolicyActor {
             noise: vec![0.0; size],
             dist: vec![0.0; if self.distributions { dist } else { 0 }],
             dist_len: 0,
+            joint: Vec::new(),
+            q: Vec::new(),
+            g: Vec::new(),
+            score: Vec::new(),
+            order: Vec::new(),
         }
     }
 
@@ -220,6 +234,7 @@ impl Actor<ZeldaAction> for PolicyActor {
                 value: out.value,
                 act_log_prob: acting.log_prob,
                 act_entropy: acting.entropy,
+                guard: 0,
             },
         ))
     }
@@ -233,5 +248,79 @@ impl Actor<ZeldaAction> for PolicyActor {
 
     fn distribution<'a>(&self, s: &'a ActorScratch) -> Option<&'a [f32]> {
         (s.dist_len > 0).then(|| &s.dist[..s.dist_len])
+    }
+
+    fn guard(&self, policy: i64, situation: Situation) -> usize {
+        match (&self.replay, self.policy(policy)) {
+            (None, Ok(p)) => self.modes[p].guard(situation.health) as usize,
+            _ => 0,
+        }
+    }
+
+    /// Ranked as the decision's own rule ranks: argmax by the policy's joint log-prob, a draw by ln q + the Gumbel
+    /// noise of the decision's key (the order in which Gumbel-argmax would have drawn them).
+    fn alternatives(
+        &self,
+        obs: &ObsData,
+        policy: i64,
+        job: i64,
+        step: i64,
+        situation: Situation,
+        first: &ZeldaAction,
+        k: usize,
+        s: &mut ActorScratch,
+        out: &mut Vec<(ZeldaAction, Decision)>,
+    ) -> Result<(), String> {
+        let p = self.policy(policy)?;
+        let net = &self.policies[p];
+        let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
+        let input = input(self, p, obs, &mut vectors);
+        let n = net.joint_size();
+        s.joint.resize(n, 0.0);
+        s.q.resize(n, 0.0);
+        s.g.resize(n, 0.0);
+        s.score.resize(n, 0.0);
+        s.order.resize(n, 0);
+        net.joint_log_probs(&input, &mut s.scratches[p], &mut s.joint[..n]).map_err(|e| e.0)?;
+        let choose = self.modes[p].choose(situation.stall, situation.health);
+        match choose {
+            Choose::Argmax => {
+                for (score, &lp) in s.score.iter_mut().zip(&s.joint) {
+                    *score = lp as f64;
+                }
+            }
+            Choose::Draw(rule) => {
+                rule.probabilities(&s.joint[..n], &mut s.q[..n], &mut s.order[..n]);
+                gumbel(joint_noise_key(job, step), &mut s.g[..n]);
+                for ((score, &q), &g) in s.score.iter_mut().zip(&s.q).zip(&s.g) {
+                    *score = if q > 0.0 { q.ln() + g as f64 } else { f64::NEG_INFINITY };
+                }
+            }
+        }
+        let bad = || format!("bad first action {first:?}");
+        let head = |i: i64| usize::try_from(i).map_err(|_| bad());
+        let skip = net.joint_index([head(first[0])?, head(first[1])?, head(first[2])?]);
+        let score = &s.score;
+        s.order.clear();
+        s.order.extend((0..n).filter(|&i| i != skip && score[i].is_finite()));
+        s.order.sort_by(|&a, &b| score[b].total_cmp(&score[a]).then(a.cmp(&b)));
+        for &i in s.order.iter().take(k.saturating_sub(1)) {
+            let action = net.joint_action(i);
+            let (o, acting) = net
+                .act(&input, choose, job, step, Some(action), &mut s.scratches[p], None)
+                .map_err(|e| e.0)?;
+            out.push((
+                action.map(|v| v as i64),
+                Decision {
+                    log_prob: o.log_prob,
+                    entropy: o.entropy,
+                    value: o.value,
+                    act_log_prob: acting.log_prob,
+                    act_entropy: acting.entropy,
+                    guard: 0,
+                },
+            ));
+        }
+        Ok(())
     }
 }

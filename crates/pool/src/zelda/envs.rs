@@ -78,6 +78,25 @@ fn link_health<M: Nes>(session: &Session<M>) -> Option<(f32, f32)> {
     session.try_state().map(|s| (s.health() as f32, s.max_health() as f32))
 }
 
+/// [`PoolEnv::probe`] on `session`: executes `action` in simulation mode and returns to the exact checkpoint before
+/// it (a recording is cut back to it, nothing is published); whether Link lost health or the game ended. A masked
+/// action counts as losing health (never taken).
+fn probe<M: Nes>(session: &mut Session<M>, action: &ZeldaAction) -> Result<Option<bool>, EnvError> {
+    let [kind, direction, duration] = head_indices(*action)?;
+    let action = Action::from_indices(kind, direction, duration).map_err(|e| EnvError::InvalidAction(e.0))?;
+    if session.try_state().is_none() || !session.mask().is_allowed(&action) {
+        return Ok(Some(true));
+    }
+    let checkpoint = session.checkpoint();
+    let simulating = session.simulating();
+    session.set_simulating(true);
+    let result = session.act(action);
+    session.resume(&checkpoint);
+    session.set_simulating(simulating);
+    let change = result?;
+    Ok(Some(change.health_lost > 0.0 || change.state.game_over()))
+}
+
 /// Renders every real frame of `session` (gated by the pool's render flag in [`PoolNes`]), publishes rendered
 /// frames with `rgb` and paces.
 fn watch<N: Nes + Send + 'static>(
@@ -354,6 +373,7 @@ fn decision_note(action: &ZeldaAction, decision: &Decision, health: Option<(f32,
         act_entropy: decision.act_entropy,
         action: u8::try_from(index).unwrap_or(u8::MAX),
         health: health.map(|(hearts, _)| hearts),
+        guard: decision.guard,
     }
 }
 
@@ -674,6 +694,10 @@ where
             stall: self.env.linger.tail_steps(),
             health: link_health(self.env.session()),
         }
+    }
+
+    fn probe(&mut self, action: &ZeldaAction) -> Result<Option<bool>, EnvError> {
+        probe(self.env.session_mut(), action)
     }
 
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
@@ -1020,6 +1044,10 @@ where
         }
     }
 
+    fn probe(&mut self, action: &ZeldaAction) -> Result<Option<bool>, EnvError> {
+        probe(self.chain.session_mut(), action)
+    }
+
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
         let health = link_health(self.chain.session());
         self.chain.note_decision(decision_note(action, decision, health));
@@ -1117,6 +1145,14 @@ where
             TaskEnv::Train(e) => e.situation(),
             TaskEnv::Eval(e) => e.situation(),
             TaskEnv::Chain(e) => e.situation(),
+        }
+    }
+
+    fn probe(&mut self, action: &ZeldaAction) -> Result<Option<bool>, EnvError> {
+        match self {
+            TaskEnv::Train(_) => Ok(None),
+            TaskEnv::Eval(e) => e.probe(action),
+            TaskEnv::Chain(e) => e.probe(action),
         }
     }
 

@@ -30,6 +30,9 @@ pub struct DecisionNote {
     pub action: u8,
     /// Link's health (hearts) when the decision was taken; None where the env has none.
     pub health: Option<f32>,
+    /// What the decision's guard did (`pool::rollout::Guard`: 0 not guarded, 1 kept as safe, 2 replaced, 3 nothing
+    /// safe found).
+    pub guard: u8,
 }
 
 /// A visit's decisions.
@@ -52,6 +55,9 @@ pub struct DecisionStats {
     /// By Link's health at the decision in half hearts (index 5: 2.5 hearts): decisions, and those whose own step
     /// lost health. Only as long as the highest health seen.
     pub by_health: Vec<[u32; 2]>,
+    /// Guarded decisions by what the guard did ([`DecisionNote::guard`] 1, 2, 3): kept as safe, replaced, nothing
+    /// safe found.
+    pub guard: [u32; 3],
     /// The last [`FOLLOW`] steps' decisions: bit i below `LOW_PROBS[i]`, bit [`ANY`] a decision; most recent first.
     recent: [u8; FOLLOW],
     /// Whether a hit, a death was already counted for each of `recent`.
@@ -81,6 +87,9 @@ impl DecisionStats {
                 }
                 self.by_health[half][0] += 1;
                 self.by_health[half][1] += hit as u32;
+            }
+            if (1..=3).contains(&note.guard) {
+                self.guard[note.guard as usize - 1] += 1;
             }
             self.recent[0] |= 1 << ANY;
             for (i, &p) in LOW_PROBS.iter().enumerate() {
@@ -140,6 +149,7 @@ mod tests {
             act_entropy: 0.5,
             action,
             health: None,
+            guard: 0,
         })
     }
 
@@ -153,6 +163,11 @@ mod tests {
         s.update(None, true, false); // no decision: nothing by health
         s.update(at(0.5), true, true);
         assert_eq!(s.by_health, vec![[0, 0], [1, 1], [0, 0], [0, 0], [0, 0], [1, 0], [2, 1]]);
+        assert_eq!(s.guard, [0, 0, 0]);
+        for guard in [1, 2, 2, 3, 0] {
+            s.update(Some(DecisionNote { guard, ..note(0.5, 0).unwrap() }), false, false);
+        }
+        assert_eq!(s.guard, [1, 2, 1]);
     }
 
     #[test]

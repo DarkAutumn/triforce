@@ -184,17 +184,21 @@ pub enum Threshold {
     Percent(f32),
 }
 
-/// The low-health part of a mode (`+low:H:STYLE`): `style` while Link's health is at or under `at`.
+/// The low-health part of a mode (`+low:H:STYLE`): `style` (and `guard`) while Link's health is at or under `at`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Low {
     pub at: Threshold,
     pub style: Style,
+    pub guard: u32,
 }
 
-/// How a policy acts outside training: `style`, and `low.style` instead while Link is at low health.
+/// How a policy acts outside training: `style`, and `low.style` instead while Link is at low health. `guard` (`guard:K`,
+/// 0: none): the env probes the decision's action and, when it would lose health, the next of the style's `K` best
+/// candidates that would not (docs/rust-actor.md "Act modes").
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ActMode {
     pub style: Style,
+    pub guard: u32,
     pub low: Option<Low>,
 }
 
@@ -242,19 +246,31 @@ impl ActMode {
             minp: None,
             topp: None,
         }),
+        guard: 0,
         low: None,
     };
     pub const ARGMAX: ActMode = ActMode {
         style: Style::Argmax,
+        guard: 0,
         low: None,
     };
 
+    /// The style and guard for Link's `health` (hearts held, maximum; None where the env has none: never low).
+    fn part(&self, health: Option<(f32, f32)>) -> (Style, u32) {
+        match (self.low, health) {
+            (Some(low), Some((hearts, max))) if low.at.holds(hearts, max) => (low.style, low.guard),
+            _ => (self.style, self.guard),
+        }
+    }
+
     /// The style for Link's `health` (hearts held, maximum; None where the env has none: never low).
     pub fn style(&self, health: Option<(f32, f32)>) -> Style {
-        match (self.low, health) {
-            (Some(low), Some((hearts, max))) if low.at.holds(hearts, max) => low.style,
-            _ => self.style,
-        }
+        self.part(health).0
+    }
+
+    /// The candidates a guarded decision may probe at Link's `health` (0: the decision is not guarded).
+    pub fn guard(&self, health: Option<(f32, f32)>) -> u32 {
+        self.part(health).1
     }
 
     /// How the decision after `stall` decisions in a row without progress, with Link's `health` (hearts held,
@@ -302,8 +318,14 @@ impl fmt::Display for Threshold {
 impl fmt::Display for ActMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.style)?;
+        if self.guard > 0 {
+            write!(f, "+guard:{}", self.guard)?;
+        }
         if let Some(low) = &self.low {
             write!(f, "+low:{}:{}", low.at, low.style)?;
+            if low.guard > 0 {
+                write!(f, "+guard:{}", low.guard)?;
+            }
         }
         Ok(())
     }
@@ -312,7 +334,8 @@ impl fmt::Display for ActMode {
 impl FromStr for ActMode {
     type Err = String;
 
-    /// `STYLE` or `STYLE+low:H:STYLE` (the low part last: everything after `low:H:` is its style).
+    /// `STYLE` or `STYLE+low:H:STYLE` (the low part last: everything after `low:H:` is its style); either style may
+    /// carry `+guard:K`.
     fn from_str(text: &str) -> Result<ActMode, String> {
         let text = text.trim();
         let (normal, low) = match text.find("low:") {
@@ -323,7 +346,7 @@ impl FromStr for ActMode {
             }
             Some(i) => (&text[..i - 1], Some(&text[i + "low:".len()..])),
         };
-        let style = parse_style(text, normal)?;
+        let (style, guard) = parse_guarded(text, normal)?;
         let low = match low {
             None => None,
             Some(rest) => {
@@ -333,14 +356,39 @@ impl FromStr for ActMode {
                 if style.contains("low:") {
                     return Err(format!("act mode {text:?}: low given twice"));
                 }
+                let (style, guard) = parse_guarded(text, style)?;
                 Some(Low {
                     at: parse_threshold(text, at)?,
-                    style: parse_style(text, style)?,
+                    style,
+                    guard,
                 })
             }
         };
-        Ok(ActMode { style, low })
+        Ok(ActMode { style, guard, low })
     }
+}
+
+/// A style with an optional `guard:K` part (K ≥ 2 candidates; 0 without one); `text` is the whole mode.
+fn parse_guarded(text: &str, part: &str) -> Result<(Style, u32), String> {
+    let mut guard = 0;
+    let mut rest = Vec::new();
+    for item in part.split('+') {
+        match item.strip_prefix("guard:") {
+            None => rest.push(item),
+            Some(_) if guard > 0 => return Err(format!("act mode {text:?}: guard given twice")),
+            Some(k) => {
+                guard = k
+                    .parse()
+                    .ok()
+                    .filter(|&k: &u32| k >= 2)
+                    .ok_or_else(|| format!("act mode {text:?}: guard needs a whole number of candidates, 2 or more"))?;
+            }
+        }
+    }
+    if guard > 0 && rest.is_empty() {
+        return Err(format!("act mode {text:?}: guard:{guard} needs a mode to guard"));
+    }
+    Ok((parse_style(text, &rest.join("+"))?, guard))
 }
 
 /// `H` (hearts: a positive multiple of a half) or `P%` (a share of the maximum, 0 < P < 100).
@@ -571,6 +619,11 @@ mod tests {
             ("argmax+low:40%:escape:16", "argmax+low:40%:escape:16"),
             ("sample+low:3:argmax", "sample+low:3:argmax"),
             ("escape:16+low:25%:sample", "escape:16+low:25%:sample"),
+            ("guard:4+temperature:0.5+relax:16", "temperature:0.5+relax:16+guard:4"),
+            ("temperature:0.5+relax:16+low:2:guard:8+temperature:0.5+relax:16",
+             "temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+guard:8"),
+            ("argmax+guard:2", "argmax+guard:2"),
+            ("sample+guard:3+low:1:argmax+guard:5", "sample+guard:3+low:1:argmax+guard:5"),
         ] {
             let mode: ActMode = text.parse().unwrap();
             assert_eq!(mode.to_string(), canonical, "{text}");
@@ -585,6 +638,8 @@ mod tests {
             "argmax+low:1.25:sample", "argmax+low:100%:sample", "argmax+low:0%:sample", "argmax+low:x:sample",
             "argmax+low:2:relax:4", "argmax+low:2:sample+low:1:argmax", "argmax+low:2:argmax+low:1:sample",
             "argmaxlow:2:sample", "+low:2:sample", "argmax+low:inf:sample",
+            "guard:4", "argmax+guard:1", "argmax+guard:0", "argmax+guard:x", "argmax+guard:2+guard:3",
+            "argmax+low:2:guard:4",
         ] {
             assert!(bad.parse::<ActMode>().is_err(), "{bad:?} parsed");
         }
@@ -602,6 +657,16 @@ mod tests {
         assert_eq!(mode.choose(3, None), Choose::Draw(Rule { temperature: Some(0.75), ..Rule::default() }));
         assert_eq!(mode.choose(4, None), Choose::Draw(Rule::default()));
         assert_eq!(mode.choose(1000, None), Choose::Draw(Rule::default()));
+    }
+
+    #[test]
+    fn guard_follows_the_health_part() {
+        let mode: ActMode = "temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+guard:8".parse().unwrap();
+        assert_eq!(mode.guard(Some((2.5, 5.0))), 0);
+        assert_eq!(mode.guard(Some((2.0, 5.0))), 8);
+        assert_eq!(mode.guard(None), 0);
+        assert_eq!(mode.choose(0, Some((2.0, 5.0))), mode.choose(0, Some((3.0, 5.0))));
+        assert_eq!("argmax+guard:3".parse::<ActMode>().unwrap().guard(None), 3);
     }
 
     #[test]
