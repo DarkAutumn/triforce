@@ -317,6 +317,8 @@ test them, keep what helps, and log everything.
   `.venv/bin/maturin develop --release`.
 - Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (on an idle
   machine about 2.5 and 1.5 minutes after the build; next to a training round 2-3x that, from oversubscription).
+  Every Python test fails after 15 minutes (`$TRIFORCE_TEST_TIMEOUT` seconds, `tests/conftest.py`), so a hang ends
+  as a failure with its traceback; run long suites and smoke runs under a timeout too (`timeout 3600 ...`).
   Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
 - Training GUI: `uv run training-gui.py` (PEP 723 script; it also serves a read-only web view of the current runs on
@@ -354,12 +356,23 @@ test them, keep what helps, and log everything.
   argmax'`. A failed entry is marked and the batch goes on (exit 1); SIGTERM marks the rest `interrupted`; running
   the same batch again skips what is done (an existing chain output, an evaluation file holding the same
   measurement; `--redo` measures again).
-- **Training and evaluation run at nice 15** (Lee, Nov 13): `scripts/train_round.py`, `triforce train`, `triforce
-  evaluate`, `triforce eval-chain` and `triforce eval-batch` lower their own CPU priority at start (`--nice N`, 0
-  leaves it alone; `$TRIFORCE_NICE` changes the default machine-wide; never raised, recorded in the plan and
-  `run.json`) and what they start inherits it. Play and replay tools (`play-zelda.py`, `zelda-headless.py`,
-  `create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority. I/O priority is left
-  alone.
+- **Training and evaluation jobs lower their own priority and wait their turn: you do nothing** (Lee, Nov 13 and
+  Nov 15). `scripts/train_round.py`, `triforce train`, `triforce evaluate`, `triforce eval-chain` and `triforce
+  eval-batch` set their own CPU priority to nice 15 at start (never raised; recorded in the plan and `run.json`;
+  what they start inherits it), and at most two of them run at once on the machine: a third waits until one ends,
+  then they start first come, first served (`triforce/jobs.py`; two at once is a bit faster than one, more is not:
+  load averages of 120). A job that has to wait prints `triforce: NAME is paused until resources are available: 2
+  jobs are running (A, B). It starts by itself; next update in 5 minutes.`, repeats it every 5 minutes and prints
+  `triforce: NAME starts after waiting N minutes` when it starts; the training GUI lists it as waiting with its
+  place in line. **Seeing that line, wait** (check back as for any long job): don't kill it or the jobs it waits
+  for, don't stagger or nice jobs by hand, don't restart it with `--no-wait`. A job that dies, running or waiting,
+  stops counting by itself (liveness comes from `/proc`, nothing has to report in). The opt-outs exist for the
+  owner: `--nice N` (0 leaves the priority alone; `$TRIFORCE_NICE` changes the default), `--no-wait` (start now;
+  still counts as running for the others; `$TRIFORCE_NO_WAIT=1` for a wrapper), `$TRIFORCE_MAX_JOBS` (default 2, 0
+  = no limit). A round or batch waits once as one job; its own trainings, evaluations and chains don't wait again.
+  Play, replay and build tools (`play-zelda.py`, `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf
+  replay`, explore, entry_states) keep normal priority and never wait: they are interactive, short, or build data
+  that a job waits on. I/O priority is left alone.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
@@ -368,10 +381,12 @@ test them, keep what helps, and log everything.
   trainings without `--events`"). Each plan (`train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`,
   from any worktree or `--logs-dir`) registers itself in `$HOME/.local/state/triforce/jobs/` (`$XDG_STATE_HOME`;
   `$TRIFORCE_JOBS_DIR` overrides; `triforce/jobs.py`) with its folder, checkout, branch and commit, and marks the
-  entry when it ends, so `training-gui.py`'s [currently running] lists every job on the machine with its checkout,
-  and those that ended in the last 24 hours under "finished". `--events FILE` into a folder without a
-  `training.json` now writes a plan there (a driver's folder with a plan keeps owning the stream). Still invisible:
-  a job that writes neither (`--no-log`), or a second `--events` job into a folder whose plan is someone else's.
+  entry when it ends, so `training-gui.py`'s [currently running] lists every job on the machine with its checkout
+  (waiting ones as queued), and those that ended in the last 24 hours under "finished". The registry is also the
+  line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
+  folder with a plan keeps owning the stream). Not shown by the GUI (but still waiting its turn and counted): a job
+  that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a
+  folder whose plan is someone else's (it is taken for that plan's child, as a round's trainings are).
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd2:
   --from 2_7ds_0 --runs 40' --chain ...`, or all ten with `--chains TAG`): full `triforce eval-chain --runs 20
   --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
@@ -418,8 +433,10 @@ test them, keep what helps, and log everything.
 Nothing is promoted unless `--promote` is given (then only after a successful evaluation; `<round>-summary.json`
 `previous_promoted` keeps the replaced run ids and act modes). Exit 0 completed, 1 failed (any specialist not ok,
 or a chain error), 2 unknown or untrainable `--specialists`. One SIGTERM stops training and evaluations and ends
-open runs `interrupted`. `--train-args` expands only `{name}`; `--models-dir` defaults to `$TRIFORCE_MODELS_DIR`
-or `<repo>/models`. Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input). `--parallel 16` is the
+open runs `interrupted` (also while it waits its turn). `--train-args` expands only `{name}`; `--models-dir` defaults
+to `$TRIFORCE_MODELS_DIR` or `<repo>/models`. Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input).
+With two trainings or evaluations already running, the round waits its turn before anything starts (the "paused
+until resources are available" line; Working rules): start it as usual and let it wait. `--parallel 16` is the
 measured best for a run alone; two rounds at once take `--parallel 8` each (20 hardware threads;
 `docs/performance.md` "How many envs"). Then compare, `triforce promote <specialist> <run-id>`, run the chain
 segments, write the results into the round doc, commit.

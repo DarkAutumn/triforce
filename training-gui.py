@@ -20,10 +20,13 @@ Picking a folder in the dropdown stops the automatic switching; picking [current
 writes to: every job registers its plan in the machine's job registry (``triforce/jobs.py``; ``jobs_dir``:
 ``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``), and the
 roots of the running triforce processes (``process_log_roots``) are scanned too, for jobs of older code.  Folders
-from elsewhere are listed with their checkout and branch.  Below the live folders, under a 'finished' heading: the
-folders whose training ended while shown, and the registered jobs (any checkout) that ended in the last 24 hours
-(``RECENT_SECONDS``; a job whose process died without ending its plan shows as 'process gone').  'Clear finished'
-hides those, leaving the live ones, and trainings that start later still appear.
+from elsewhere are listed with their checkout and branch.  A job waiting its turn (``$TRIFORCE_MAX_JOBS`` run at
+once, the rest queue first come first served) is listed below the running ones as 'queued', with its place in line,
+the jobs it waits for and how long it has waited; the GUI only reads the registry, it controls nothing.  Below the
+live folders, under a 'finished' heading: the folders whose training ended while shown, and the registered jobs (any
+checkout) that ended in the last 24 hours (``RECENT_SECONDS``; a job whose process died without ending its plan, a
+waiting one too, shows as 'process gone').  'Clear finished' hides those, leaving the live ones, and trainings that
+start later still appear.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
@@ -90,6 +93,7 @@ class C:
 # status -> (color, label)
 STATUS = {
     'pending': (C.idle, 'pending'),
+    'queued': (C.warn, 'queued'),           # waiting its turn in the job queue (purple: in between)
     'starting': (C.accent, 'starting'),
     'training': (C.accent, 'training'),
     'evaluating': (C.eval, 'evaluating'),
@@ -754,10 +758,13 @@ def process_started(pid: int, proc: Path = Path('/proc')) -> float | None:
 PID_START_SLACK = 2.0   # seconds; the plan is written by its process after it started, never before
 
 
+LIVE_STATUSES = ('queued', 'running')   # a plan's (and a registry entry's) status while its process should be there
+
+
 def plan_alive(plan: dict) -> bool | None:
-    """Is a 'running' plan's training process still there?  None when unknown (finished, other host).  A process
-    that started after the plan was created has reused the pid: the plan's process is gone."""
-    if plan.get('status') != 'running':
+    """Is a 'running' (or 'queued': waiting its turn) plan's process still there?  None when unknown (finished, other
+    host).  A process that started after the plan was created has reused the pid: the plan's process is gone."""
+    if plan.get('status') not in LIVE_STATUSES:
         return None
     pid = plan.get('pid')
     if not pid or plan.get('host') != socket.gethostname():
@@ -777,9 +784,9 @@ def plan_alive(plan: dict) -> bool | None:
 
 
 def plan_is_live(plan: dict) -> bool:
-    """A training is going on: the plan says running and its process isn't known to be dead (another host's
-    plan can't be checked, so it counts)."""
-    return plan.get('status') == 'running' and plan_alive(plan) is not False
+    """A training is going on or waits its turn: the plan says running (or queued) and its process isn't known to be
+    dead (another host's plan can't be checked, so it counts)."""
+    return plan.get('status') in LIVE_STATUSES and plan_alive(plan) is not False
 
 
 class Training:
@@ -852,7 +859,7 @@ class Training:
 
     def status(self) -> str:
         status = self.plan.get('status') or 'pending'
-        if status == 'running' and self.live is False:
+        if status in LIVE_STATUSES and self.live is False:
             return 'lost'
         return status
 
@@ -870,7 +877,10 @@ class Training:
         return parse_time(self.plan.get('finished'))
 
     def run_status(self, run: 'Run') -> str:
-        """The run's status under this plan: a finished plan's unfinished runs are not active."""
+        """The run's status under this plan: a finished plan's unfinished runs are not active; a queued plan (waiting
+        its turn) has started none."""
+        if self.plan.get('status') == 'queued':
+            return 'pending'
         return run.status(self.live, self.plan.get('status') or 'running')
 
     def statuses(self) -> list[str]:
@@ -993,7 +1003,7 @@ class Training:
         elif start is not None:
             status = {'running': 'running', 'lost': 'lost'}.get(self.status(), 'interrupted')
         else:
-            status = 'pending' if self.plan.get('status') == 'running' else 'skipped'
+            status = 'pending' if self.plan.get('status') in LIVE_STATUSES else 'skipped'
         return {'status': status, 'runs': (start or {}).get('runs') or runs, 'parallel': (start or {}).get('parallel'),
                 'start': start, 'result': result, 'error': error, 'progress': progress}
 
@@ -1212,7 +1222,8 @@ def jobs_dir() -> Path:
 
 
 def read_registry(directory: Path | None = None) -> list[dict]:
-    """Every readable job of the registry."""
+    """Every readable job of the registry, each with ``path`` (its file).  A job without a log folder (``--no-log``)
+    is among them: it is never shown, but it holds its place in the queue."""
     directory = jobs_dir() if directory is None else directory
     jobs = []
     try:
@@ -1224,15 +1235,15 @@ def read_registry(directory: Path | None = None) -> list[dict]:
             data = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, ValueError):
             continue
-        if isinstance(data, dict) and data.get('log_dir'):
-            jobs.append(data)
+        if isinstance(data, dict):
+            jobs.append({**data, 'path': str(path)})
     return jobs
 
 
 def job_alive(job: dict, proc: Path = Path('/proc')) -> bool | None:
-    """Is a registered job running?  False once it ended or its process is gone (a pid now used by a process that
-    started at another time counts as gone); None for another host's unfinished job."""
-    if job.get('status') != 'running':
+    """Is a registered job running or waiting its turn ('queued')?  False once it ended or its process is gone (a pid
+    now used by a process that started at another time counts as gone); None for another host's unfinished job."""
+    if job.get('status') not in LIVE_STATUSES:
         return False
     if job.get('host') != socket.gethostname():
         return None
@@ -1244,10 +1255,13 @@ def job_alive(job: dict, proc: Path = Path('/proc')) -> bool | None:
 
 
 def registry_folders(jobs: list[dict], now: float, proc: Path = Path('/proc')) -> tuple[list[Path], list[Path]]:
-    """(log folders of running jobs, of jobs that ended in the last ``RECENT_SECONDS``: finished, or their process
-    gone without a final status), each with its plan, newest first."""
+    """(log folders of live jobs (running or queued), of jobs that ended in the last ``RECENT_SECONDS``: finished, or
+    their process gone without a final status), each with its plan, newest first.  Jobs without a folder are left
+    out."""
     live, recent = [], []
     for job in jobs:
+        if not job.get('log_dir'):
+            continue
         folder = Path(job['log_dir'])
         if not (folder / PLAN_FILE).is_file():
             continue
@@ -1260,6 +1274,61 @@ def registry_folders(jobs: list[dict], now: float, proc: Path = Path('/proc')) -
             recent.append(folder)
     order = lambda paths: sorted(dict.fromkeys(paths), key=log_dir_key, reverse=True)  # noqa: E731
     return order(live), order(recent)
+
+
+def job_label(job: dict) -> str:
+    """A registry entry as a queue names it (as ``triforce.jobs.label``): its log folder and kind,
+    '261115_001_r25-a (round)'; a job without a folder by its name."""
+    name = Path(job['log_dir']).name if job.get('log_dir') else job.get('name') or f"pid {job.get('pid')}"
+    return f"{name} ({job['kind']})" if job.get('kind') else name
+
+
+def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('/proc')) -> dict:
+    """A queued plan's place in the job queue: {'place': 1-based or None, 'running': labels of the jobs it waits for,
+    'ahead': labels of the queued jobs before it, 'limit': jobs run at once or None, 'since': Unix seconds it joined
+    the line or None}.  From the registry while the plan's entry is there and queued on this host: the line is this
+    host's live queued entries by (``queued_ts``, file name), what it waits for the live running ones of other
+    processes.  Otherwise (no entry, another host, an entry already admitted) the plan's own ``queue`` says it, as of
+    its last rewrite."""
+    recorded = plan.get('queue') or {}
+    state = {'place': recorded.get('place'), 'running': list(recorded.get('running') or []),
+             'ahead': list(recorded.get('ahead') or []), 'limit': recorded.get('limit'),
+             'since': parse_time(recorded.get('queued'))}
+    host, target = socket.gethostname(), log_dir.resolve()
+    entry = next((job for job in jobs if job.get('status') == 'queued' and job.get('host') == host
+                  and job.get('log_dir') and Path(job['log_dir']).resolve() == target), None)
+    if entry is None:
+        return state
+    live = [job for job in jobs if job.get('host') == host and job_alive(job, proc)]
+    line = sorted((job for job in live if job.get('status') == 'queued'),
+                  key=lambda job: (job.get('queued_ts') or 0.0, Path(job.get('path') or '').name))
+    if entry not in line:
+        return state
+    place = line.index(entry)
+    state.update(place=place + 1, ahead=[job_label(job) for job in line[:place]],
+                 running=[job_label(job) for job in live
+                          if job.get('status') == 'running' and job.get('pid') != entry.get('pid')])
+    if entry.get('queued_ts') is not None:
+        state['since'] = entry['queued_ts']
+    return state
+
+
+def ordinal(number: int) -> str:
+    """1 -> '1st', 2 -> '2nd', 11 -> '11th'."""
+    suffix = 'th' if 10 <= number % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(number % 10, 'th')
+    return f"{number}{suffix}"
+
+
+def waiting_text(state: dict, now: float) -> str:
+    """A queued plan's line: 'waiting · 2nd in line · for r25-a (round), eval-b (eval) · 12m 05s'."""
+    parts = ['waiting']
+    if state.get('place'):
+        parts.append(f"{ordinal(state['place'])} in line")
+    if state.get('running'):
+        parts.append('for ' + ', '.join(state['running']))
+    if state.get('since') is not None:
+        parts.append(fmt_duration(now - state['since']))
+    return ' · '.join(parts)
 
 
 def checkout_label(plan: dict) -> str:
@@ -1979,16 +2048,31 @@ class Header(Clickable):
         fraction = model.fraction(now)
         paint_bar_label(p, bar, f'{fraction:.0%}', 9.5)
 
+        x, y = left, bar.bottom() + 22
+        waiting = self.waiting(now)
+        if waiting:
+            p.setFont(font(9.5, QFont.Weight.Bold))
+            p.setPen(STATUS['queued'][0])
+            p.drawText(QPointF(x, y), waiting)
+            x += p.fontMetrics().horizontalAdvance(waiting) + 18
         summary = plan_counts(model, statuses)
         p.setFont(font(9.5))
         p.setPen(C.muted)
-        p.drawText(QPointF(left, bar.bottom() + 22), '   ·   '.join(summary))
+        p.drawText(QPointF(x, y), '   ·   '.join(summary))
         eta = model.eta(now)
         if eta is not None:
             p.setFont(font(10, QFont.Weight.Bold))
             p.setPen(C.text)
             p.drawText(QRectF(left, bar.bottom() + 8, right - left, 18), Qt.AlignmentFlag.AlignRight,
                        f"≈ {fmt_duration(eta)} left")
+
+    def waiting(self, now: float) -> str:
+        """A queued plan's waiting line ('' for any other plan): its place in line, what it waits for, how long."""
+        model = self.view.model
+        if model is None or model.status() != 'queued':
+            return ''
+        queue = self.view.owner.queues.get(model.dir) or queue_state(model.dir, model.plan, [])
+        return waiting_text(queue, now)
 
 
 def chain_sections(result: dict) -> list:
@@ -2931,6 +3015,7 @@ class Window(QMainWindow):
         self.recent: list[Path] = []        # registered jobs (any checkout) that ended in the last RECENT_SECONDS
         self.cleared: set[Path] = set()     # finished folders 'Clear finished' hid (they don't come back)
         self._heading_at: int | None = None
+        self.queues: dict[Path, dict] = {}  # live queued folders -> queue_state (refreshed by each scan)
         self.scanner = LiveScanner()
         self.selection: tuple[Path | None, object] | None = None    # (folder, run index | 'round')
         self.auto_selection = True
@@ -3029,17 +3114,21 @@ class Window(QMainWindow):
         """Lists the log folders (dropdown) and finds the live ones; [currently running] can always be picked.
         Besides the root's folders: the folders of the jobs in the machine's job registry (every checkout's: the
         live ones and those that ended in the last ``RECENT_SECONDS``), and the live folders of the other logs roots
-        running processes use (jobs of code from before the registry)."""
+        running processes use (jobs of code from before the registry).  A live folder whose plan is queued gets its
+        place in the job queue (``queues``)."""
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
         others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
-        registered, recent = registry_folders(read_registry(), time.time())
+        jobs = read_registry()
+        registered, recent = registry_folders(jobs, time.time())
         dirs += [path for path in self.scanner.live(registered + others) if path not in dirs]
         self.recent = [path for path in recent if path not in self.cleared]
         dirs += [path for path in self.recent if path not in dirs]
         if not self.live_mode:
             dirs += [shown for shown in self._shown_dirs() if shown not in dirs]   # a folder outside root
         self.live_dirs = self.scanner.live(dirs)
+        self.queues = {path: queue_state(path, self.scanner.plan(path), jobs) for path in self.live_dirs
+                       if self.scanner.plan(path).get('status') == 'queued'}
         if dirs != self.dirs or self.combo.count() == 0:
             self.dirs = dirs
             self.combo.blockSignals(True)
@@ -3099,8 +3188,12 @@ class Window(QMainWindow):
                       key=log_dir_key, reverse=True)
 
     def _show_live(self):
-        """[currently running]: the live folders, newest first, then the 'finished' heading and the finished ones."""
+        """[currently running]: the live folders, newest first, the queued ones (waiting their turn) last in their
+        order in line, then the 'finished' heading and the finished ones."""
         live = sorted((path for path in self.kept if path in self.live_dirs), key=log_dir_key, reverse=True)
+        waiting = sorted((path for path in live if path in self.queues),
+                         key=lambda path: self.queues[path].get('place') or math.inf)
+        live = [path for path in live if path not in self.queues] + waiting
         finished = self._finished()
         heading = len(live) if finished else None
         if live + finished != self._shown_dirs() or heading != self._heading_at or not self.views:
@@ -3472,14 +3565,17 @@ class MachineSampler:
 
 
 class WebState:
-    """What the page shows: the runs going on now, newest start first, and each live plan's queue.
+    """What the page shows: the runs going on now, newest start first, each live plan's queue, and the jobs waiting
+    their turn in the job queue.
 
     Its folders are found as [currently running] finds them (the logs root, the job registry, the running triforce
     processes' roots), each read by its own ``Training``.  A card is a training run of a round, an evaluation of a
-    batch, or a plan's eval-chain; pending runs are only listed in their plan's line.  A run that ended stays
-    ``expire`` seconds after its end (the time its events or plan record; a run seen running that ended without one,
-    e.g. its process died, from when it was seen ended), so runs that ended before the server started never show.
-    ``clock`` is the time source (tests inject one); ``machine`` returns the machine line."""
+    batch, or a plan's eval-chain; pending runs are only listed in their plan's line.  A queued plan (waiting its turn)
+    has no cards and no plan line: it is a 'waiting' line (its place in line, what it waits for, since when) until it
+    runs, or until its process is gone.  A run that ended stays ``expire`` seconds after its end (the time its events
+    or plan record; a run seen running that ended without one, e.g. its process died, from when it was seen ended), so
+    runs that ended before the server started never show.  ``clock`` is the time source (tests inject one);
+    ``machine`` returns the machine line."""
 
     def __init__(self, root: Path, *, clock=time.time, expire: float = WEB_EXPIRE, machine=None,
                  scan_every: float = WEB_SCAN):
@@ -3495,9 +3591,10 @@ class WebState:
         self.ended: dict[str, float] = {}     # cards seen active that ended without a time of their own
         self.first_seen: dict[str, float] = {}
         self._scanned = None
+        self.jobs: list[dict] = []            # the job registry as of the last scan
         self._lock = threading.Lock()
         self.snapshot: dict = {}
-        self._body = json.dumps({'loading': True, 'cards': [], 'plans': []}).encode()
+        self._body = json.dumps({'loading': True, 'cards': [], 'plans': [], 'waiting': []}).encode()
 
     def body(self) -> bytes:
         """The latest snapshot as JSON."""
@@ -3510,11 +3607,13 @@ class WebState:
         return ended is not None and now - ended < self.expire
 
     def scan(self, now: float):
-        """Finds the folders to read: every live plan, and plans that ended within ``expire`` seconds."""
+        """Finds the folders to read: every live plan (running or queued), and plans that ended within ``expire``
+        seconds; keeps the registry for the queued plans' places in line."""
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
         others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
-        registered, recent = registry_folders(read_registry(), now)
+        self.jobs = read_registry()
+        registered, recent = registry_folders(self.jobs, now)
         candidates = list(dict.fromkeys(dirs + registered + others + recent))
         live = set(self.scanner.live(candidates))
         self.dropped -= live
@@ -3579,6 +3678,18 @@ class WebState:
                 else '', 'meta': plan_meta(model, now), 'counts': plan_counts(model, statuses), 'queued': queued,
                 'created_ts': model.created_ts}
 
+    def _waiting_line(self, model: Training, now: float) -> dict:
+        """A queued plan's line: its place in line, name, kind, what it waits for and for how long."""
+        queue = queue_state(model.dir, model.plan, self.jobs)
+        color, label = STATUS['queued']
+        place = queue['place']
+        return {'id': str(model.dir), **plan_fields(model), 'status': 'queued', 'status_label': label,
+                'color': color.name(), 'place': place, 'place_label': f"{ordinal(place)} in line" if place else '',
+                'running': queue['running'], 'ahead': queue['ahead'], 'limit': queue['limit'],
+                'waits': ('for ' + ', '.join(queue['running'])) if queue['running'] else '',
+                'waited': fmt_duration(now - queue['since']) if queue['since'] is not None else '',
+                'text': waiting_text(queue, now), 'created_ts': model.created_ts}
+
     def refresh(self) -> dict:
         """Reads what changed and builds a new snapshot; returns it (the server's thread calls this)."""
         now = self.clock()
@@ -3586,9 +3697,12 @@ class WebState:
         if self._scanned is None or tick - self._scanned >= self.scan_every:
             self._scanned = tick
             self.scan(now)
-        cards, plans = [], []
+        cards, plans, waiting = [], [], []
         for path, model in list(self.models.items()):
             model.poll()
+            if model.status() == 'queued':
+                waiting.append(self._waiting_line(model, now))
+                continue
             shown = self._cards(model, now)
             cards += shown
             if model.status() == 'running':
@@ -3598,8 +3712,10 @@ class WebState:
                 self.dropped.add(path)
         cards.sort(key=lambda card: (-card['started_ts'], card['id']))
         plans.sort(key=lambda plan: (-(plan['created_ts'] or 0), plan['id']))
+        waiting.sort(key=lambda line: (line['place'] or math.inf, line['created_ts'] or 0, line['id']))
         snapshot = json_safe({'now': now, 'clock': fmt_clock(now), 'host': socket.gethostname(),
-                              'machine': self.machine(), 'expire': self.expire, 'plans': plans, 'cards': cards})
+                              'machine': self.machine(), 'expire': self.expire, 'plans': plans, 'waiting': waiting,
+                              'cards': cards})
         body = json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         with self._lock:
             self.snapshot, self._body = snapshot, body
@@ -3645,6 +3761,11 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .muted{color:var(--muted)}.faint{color:var(--faint)}
 .queued{color:var(--muted);flex-basis:100%}
 .queued b{color:var(--faint);font-weight:600}
+#waiting{display:flex;flex-direction:column;gap:6px;margin:-8px 0 14px}
+#waiting:empty{display:none}
+.plan.waiting{border-style:dashed;border-color:var(--c)}
+.plan.waiting .dot{animation:none}
+.plan.waiting .wl{color:var(--c);font-weight:700}
 #empty{color:var(--muted);text-align:center;padding:70px 10px;font-size:16px}
 #empty small{display:block;color:var(--faint);font-size:13px;margin-top:6px}
 #cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,640px),1fr));gap:14px;align-items:start}
@@ -3728,7 +3849,7 @@ pre.log{margin:6px 0 0;background:#11141a;border-radius:8px;padding:8px 10px;col
 <body>
 <header><span class="brand">&#9650; Triforce<small>training monitor &middot; currently running</small></span>
 <span class="machine" id="machine"></span><span class="conn" id="conn">connecting…</span></header>
-<main><div id="plans"></div><div id="empty" hidden></div><div id="cards"></div></main>
+<main><div id="plans"></div><div id="waiting"></div><div id="empty" hidden></div><div id="cards"></div></main>
 <script>
 'use strict';
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -3937,6 +4058,14 @@ function render(state) {
       `<span class="muted">${esc(plan.counts.join('  ·  '))}</span>` +
       `<span class="faint">${esc(plan.meta.join('  ·  '))}</span>${queued}</div>`;
   }).join(''));
+  // Jobs waiting their turn in the job queue: a line each, in their order in line (no cards until they run).
+  setHTML($('#waiting'), (state.waiting || []).map(job =>
+    `<div class="plan waiting" style="--c:${job.color}"><span class="dot"></span><span class="wl">waiting` +
+    (job.place_label ? ` · ${esc(job.place_label)}` : '') + `</span><span class="pname">${esc(job.plan)}</span>` +
+    `<span class="pill" style="color:var(--muted)">${esc(job.plan_kind)}</span>` +
+    (job.checkout ? `<span class="pill" style="color:var(--faint)">${esc(job.checkout)}</span>` : '') +
+    (job.waits ? `<span class="muted">${esc(job.waits)}</span>` : '') +
+    (job.waited ? `<span>${esc(job.waited)}</span>` : '') + '</div>').join(''));
   const container = $('#cards'), seen = new Set();
   let previous = null;
   for (const card of state.cards || []) {
@@ -3956,6 +4085,7 @@ function render(state) {
   const empty = $('#empty');
   empty.hidden = !!(state.cards || []).length || state.loading;
   setHTML(empty, (state.plans || []).length ? 'Nothing is running right now; the plans above have runs queued.' :
+    (state.waiting || []).length ? 'Nothing is running right now; the jobs above wait their turn.' :
     'Nothing is running.<small>Trainings and evaluations that start appear here by themselves.</small>');
   const active = (state.cards || []).filter(card => card.active).length;
   document.title = active ? `${active} running — Triforce training` : 'Triforce training';
