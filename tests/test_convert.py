@@ -143,7 +143,7 @@ def test_new_rows_optimizer_and_files(converted):
 
 def test_anything_but_the_source_layout_is_refused(converted, tmp_path):
     run, target = converted
-    with pytest.raises(convert.ConvertError, match='version stamp 1.4.2'):
+    with pytest.raises(convert.ConvertError, match=f'version stamp {_native.VERSION}'):
         convert.convert_run(target, tmp_path / 'again')
     with pytest.raises(convert.ConvertError, match='exists'):
         convert.convert_run(run, target.parent.parent)
