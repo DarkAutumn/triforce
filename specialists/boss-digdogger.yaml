@@ -9,7 +9,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: free, recorder: true}       # the owner (Nov 14): bombs on the boss (the route's reserve is 0 here); the recorder splits him
 curriculum: {enabled: true}             # trajectories/boss-digdogger (Go-Explore paths per start state)
 one_room: true
-max_steps: 1000
+max_steps: 600                             # round 24: explored tracks 91-142 steps (the recorder, the kill, the heart, N)
 warm_start: null
 notes: >-
   Digdogger (Dungeon 5, round 24; docs/routes/d5.md): the big body (32x32, object $38) can't be hurt; the recorder

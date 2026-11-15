@@ -897,6 +897,13 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
   Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
   over).
+- Staged starts (round 24; darknut): `ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}`
+  banks k kills in `LevelKillCounts` before a pre-entry start's dungeon room is entered (`LoadOptions::banked_kills`,
+  asm:RoomHistory_ModifyObjCountUW), so the game makes k fewer monsters and clearing the rest clears the room. Only a
+  training env draws it (`EnvOptions::staged_kills`, set by the training pool; Python `Env(..., staged_kills=True)`,
+  `Env.banked_kills`); evaluation, chains, exploration, state builds and play never stage. The explorer stages by
+  request: `python -m triforce.explore --room-kills 5:0x05=K` writes the track `<state>~k<K>`; `--clips off` explores
+  with the run-time switch off (`<state>~plain`, 5:0x64's plain way).
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
   act=None, on_episode=None, *, threads=None, states_dir=None, events=None, replays=None, streams=(),
   state='embed', keyframe_frames=600)` plays every seed start state N
@@ -1401,7 +1408,11 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
 Start states are `TFZSTATE` files in `triforce/states/` (`paths.STATES_DIR`, `$TRIFORCE_STATES_DIR`), listed in
 `triforce/states/entry_states.json`. `python -m triforce.entry_states start` writes `start.state` from the base
 movie `corpus/movies/power_on_to_start.tfmovie` at its first controllable frame; `build [--chains 0,1,2]
-[--start-step N --source STATE]` follows the route; `path --source STATE --rooms 1:0x33,... [--chain C]
+[--start-step N --source STATE] [--attempts N] [--skip-fights L:0xRR:ENTRY,...]` follows the route (round 24:
+`--skip-fights` crosses those steps' rooms with every monster put into its death sparkle, the game's own kill, and
+marks the states after it `fight_skipped` in the manifest: placeholders for a fight beyond the explorer, to be
+replaced by harvested ones; a step's skipped key is not required and a refused treasure taken fails the crossing);
+`path --source STATE --rooms 1:0x33,... [--chain C]
 [--route R]` enters off-route rooms in order. `start`, `build` and `path` write into a staging directory (`--out`,
 default `target/entry-states/<yymmdd-HHMMSS>`), merging each file's manifest entry into `<out>/entry_states.json`
 (atomically) as soon as the file is written, and exit 1 when a crossing failed; `install DIR [--partial]` copies a

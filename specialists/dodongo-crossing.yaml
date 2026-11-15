@@ -9,7 +9,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: tenth}                      # the owner (Nov 14): the Dodongos' bombs are no objective, a pass-through is fine; the 10th kill's bomb stays
 curriculum: {enabled: true}             # trajectories/dodongo-crossing (Go-Explore paths per start state)
 one_room: true
-max_steps: 600
+max_steps: 300                             # round 24: explored tracks 25-42 steps
 warm_start: null
 notes: >-
   The Dodongo crossing (Dungeon 5, round 24; docs/routes/d5.md): 5:0x56, three Dodongos, S to E, walked past (the

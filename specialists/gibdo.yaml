@@ -9,7 +9,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: required}                   # its requires_bombs rooms 0x66 and 0x65: one bomb at each W wall (offered only in reach of it); else the 10th kill
 curriculum: {enabled: true}             # trajectories/gibdo (Go-Explore paths per start state)
 one_room: true
-max_steps: 1500
+max_steps: 600                             # round 24: explored tracks 2-195 steps (docs/routes/d5.md)
 warm_start: null
 notes: >-
   Gibdo rooms (Dungeon 5, round 24; docs/routes/d5.md): Gibdos are slow mummies, 2 hearts a touch, four white-sword

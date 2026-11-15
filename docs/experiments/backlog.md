@@ -5,12 +5,16 @@ round docs still call it that.)
 
 ## Next projects (Lee, Nov 11-12; ordered Nov 14 by what the r72 chains lose): top of the list
 
-- [ ] **Dungeon 5, second pass (round 24, `r24-d5`; docs/routes/d5.md):** states from the leg's played entrance,
-  curricula, trainings. (Done at the integration: `items: {recorder: true}` on boss-digdogger, the recorder that
-  splits him pays `reward-recorder-split` once, the small one's hits pay `reward-boss-hit`: $18 is in BOSS_KINDS.)
-  The explorer doesn't clear the Olive Garden (132,737 env steps, 3 attempts): its curriculum needs another way in.
-  `max_steps` of the new families (1500/600/1000) are guesses until their explored paths are measured. (Fixed at
-  the route's merge: no cheated bomb in 0x66/0x65 on the way back, their walls are open: `cheats::bomb_need`.)
+- [x] **Dungeon 5, second pass (round 24, `r24-d5b`; docs/routes/d5.md "States", "Staged starts and curricula"):**
+  69 states (chains 0-2) from the leg's entrance, curricula for every D5 family, the Olive Garden staged
+  (`room_kills`) and explored with 1-2 Darknuts; `max_steps` from the tracks. Open from it:
+  - [ ] **Replace the 48 `fight_skipped` states** (5_04cave on; the Olive Garden's fight skipped by the game's death
+    sparkle) by states harvested from chain runs once a model clears the Olive Garden.
+  - [ ] **Rooms the route left cleared spawn full from their state files** (`make_snapshot_fresh`): 5_05c and the
+    plain way's 5_64c meet their Darknuts again in training (chains find them dead). Covered in part by darknut's
+    staged starts; a state that keeps the route's kills (or harvested states) would be exact.
+  - [ ] Trainings: gibdo, pols-voice, dodongo-crossing, boss-digdogger from scratch; darknut, zol and equipment-room
+    from their converted runs.
 - [x] **Act modes (round 23, done Nov 14):** one act mode, `temperature:0.5+relax:16`, for play (the owner's choice),
   evaluation, chains and training (the lead's); `act` files, `eval.json`, `PLAY_ACT`, `DEFAULT_ACT` and the
   training/chain defaults applied (round23.md §10-§11; full route clips on | off 28.7 | 15.3%). Open from it:
