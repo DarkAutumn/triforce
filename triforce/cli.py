@@ -1,5 +1,6 @@
 """The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play/evaluate/eval-batch/
-room-stats/convert-model.  ``eval-chain`` lowers its own priority (``--nice``, ``triforce.jobs``)."""
+room-stats/convert-model.  ``eval-chain`` lowers its own priority and waits its turn (``--nice``, ``--no-wait``,
+``triforce.jobs``)."""
 
 import argparse
 import json
@@ -170,11 +171,11 @@ def _cmd_eval_chain(args):
     from contextlib import nullcontext
     from . import replay
     from .events import EventLog, has_plan, logged_job
-    from .jobs import lower_priority
+    from .jobs import begin_job
     from .registry import act_override
     from .runner import RunnerError, parse_overrides, power_on_options
     from .specialist import load_specialist
-    nice = lower_priority(args.nice)
+    nice = begin_job(args)
     configs = [load_specialist(path) for path in args.specialist_config]
     overrides = parse_overrides(args.checkpoint)
     output = args.output or os.path.join('runs', f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl")
@@ -192,9 +193,10 @@ def _cmd_eval_chain(args):
             + ('-power-on' if args.power_on else ''))
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
     # into a folder without one: this chain writes a plan there (the stream is the plan's), so the GUI lists it.
+    # Every chain but a driver's child waits its turn (triforce.jobs), a --no-log one too.
     stream = Path(args.events) if args.events else None
-    log = nullcontext() if args.no_log or (stream is not None and has_plan(stream)) else logged_job(
-        what, 'chain', [], args.logs_dir, directory=None if stream is None else stream.parent,
+    log = nullcontext() if stream is not None and has_plan(stream) else logged_job(
+        what, 'chain', [], args.logs_dir, directory=None if stream is None else stream.parent, log=not args.no_log,
         events=stream.name if stream else 'round.jsonl', chain_runs=args.runs, nice=nice)
     with log as plan:
         events = (EventLog(stream) if stream is not None else
@@ -387,7 +389,7 @@ def add_eval_chain_arguments(chain):
     chain entries with them)."""
     # pylint: disable=import-outside-toplevel
     from ._native import DEFAULT_ROUTE
-    from .jobs import add_nice_argument
+    from .jobs import add_job_arguments
     from .paths import HARVESTED_DIR
     from .registry import ACT_HELP, MODEL_ACT, act_argument
     from .replay import add_arguments as replay_arguments
@@ -429,7 +431,7 @@ def add_eval_chain_arguments(chain):
     chain.add_argument('--events', default=None, metavar='JSONL',
                        help="write the chain_* events to this stream: in a folder with a plan its driver (e.g. "
                             "triforce eval-batch) owns it; else this chain writes the plan beside it")
-    add_nice_argument(chain)
+    add_job_arguments(chain)
     chain.add_argument('--allow-incompatible-models', action='store_true', default=argparse.SUPPRESS,
                        help=ALLOW_HELP)
 
