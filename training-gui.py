@@ -3121,7 +3121,8 @@ class Window(QMainWindow):
         others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
         jobs = read_registry()
         registered, recent = registry_folders(jobs, time.time())
-        dirs += [path for path in self.scanner.live(registered + others) if path not in dirs]
+        # A job of another checkout is found twice (its registry entry, its process's logs root): listed once.
+        dirs += [path for path in dict.fromkeys(self.scanner.live(registered + others)) if path not in dirs]
         self.recent = [path for path in recent if path not in self.cleared]
         dirs += [path for path in self.recent if path not in dirs]
         if not self.live_mode:

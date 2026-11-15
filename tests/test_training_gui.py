@@ -613,8 +613,9 @@ def test_registry_folders_tell_live_recent_and_old_jobs_apart(tmp_path):
 
 def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeypatch):
     """Jobs registered from two other worktrees: the live one in [currently running] with its checkout, the
-    finished one under the 'finished' heading; 'Clear finished' hides it."""
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    finished one under the 'finished' heading; 'Clear finished' hides it.  The live one is found twice, by its
+    registry entry and by its process's logs root, and is listed once."""
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: {(tmp_path / 'triforce-a' / 'logs').resolve()})
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     registry = tmp_path / 'jobs'
     monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
