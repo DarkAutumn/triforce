@@ -1,6 +1,6 @@
 name: pols-voice
 rooms: ['(5, 0x27)', '(5, 0x25)']
-start_states: []                           # round 24: the second pass adds its states (the leg's played entrance)
+start_states: ['5_27*_[0-9]', '5_25*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
@@ -9,9 +9,8 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: tenth}                      # the owner (Nov 14): no bombs in Dungeon 5 but the Olive Garden and Digdogger; the 10th kill's bomb stays
 curriculum: {enabled: true}             # trajectories/pols-voice (Go-Explore paths per start state)
 one_room: true
-max_steps: 1500
+max_steps: 600                             # round 24: explored tracks 66-136 steps
 warm_start: null
-trainable: false                           # round 24: no start states until the second pass (the leg's played entrance)
 notes: >-
   Pols Voice rooms (Dungeon 5, round 24; docs/routes/d5.md): Pols Voices hop fast and over the block rows, 2 hearts a
   touch, four white-sword hits (arrows kill them; the route has none). The owner: don't fight them; a sword hit makes

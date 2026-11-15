@@ -1,6 +1,6 @@
 name: dodongo-crossing
 rooms: ['(5, 0x56)']
-start_states: []                           # round 24: the second pass adds its states (the leg's played entrance)
+start_states: ['5_56*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
@@ -9,9 +9,8 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: tenth}                      # the owner (Nov 14): the Dodongos' bombs are no objective, a pass-through is fine; the 10th kill's bomb stays
 curriculum: {enabled: true}             # trajectories/dodongo-crossing (Go-Explore paths per start state)
 one_room: true
-max_steps: 600
+max_steps: 300                             # round 24: explored tracks 25-42 steps
 warm_start: null
-trainable: false                           # round 24: no start states until the second pass (the leg's played entrance)
 notes: >-
   The Dodongo crossing (Dungeon 5, round 24; docs/routes/d5.md): 5:0x56, three Dodongos, S to E, walked past (the
   room's bombs, shown when they die, skipped: `treasure: skip`). The sword does nothing to a Dodongo; row 6, then up

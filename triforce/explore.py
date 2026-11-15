@@ -1,7 +1,8 @@
 """Go-Explore phase A: find one successful path per seed start state by restoring savestates.
 
     python -m triforce.explore --specialist NAME [--states 0_38s_0,0_48s_0] [--iterations 3000]
-        [--explore-steps 25] [--patience 300] [--parallel N] [--seed 0] [--variant] [--out trajectories]
+        [--explore-steps 25] [--patience 300] [--parallel N] [--seed 0] [--variant] [--room-kills 5:0x05=4]
+        [--out trajectories]
 
 Plain PPO only learns what a random-ish policy stumbles into.  Here the emulator is a simulator we can rewind
 (Ecoffet et al., Go-Explore): keep an archive of *cells*, coarse summaries of the game state, each holding the
@@ -24,6 +25,12 @@ explorer seeded with ``--seed``, so results don't depend on ``--parallel`` (thre
 ``--variant`` writes ``<out>/<specialist>/<state>~s<seed>`` instead: an extra track from the same seed state.
 The seed also draws the reset's RNG and spawn, so another seed is another room (for Dodongo, another movement
 pattern); the curriculum keeps every track directory as its own track.
+
+``--room-kills LEVEL:0xRR=K`` (round 24) explores a staged start: K kills are banked in that dungeon room before its
+entry (``LevelKillCounts``), so the game makes K fewer monsters, and the track is ``<state>~k<K>`` (the Olive
+Garden's six Blue Darknuts are beyond the explorer; training stages the same rooms with ``ram_randomization:
+room_kills``).  ``--clips off`` explores with the run-time clips switch off: ``<state>~plain`` (5:0x64's fight and
+push, a room whose one route step both ways share).
 """
 
 import argparse
@@ -48,14 +55,27 @@ def check_out(specialist: str, out) -> None:
                          f"tracks are written to <out>/{specialist}/<state>")
 
 
-def track_dir(out, specialist: str, state: str, seed: int, variant: bool) -> Path:
+def track_dir(out, specialist: str, state: str, seed: int, variant: bool, kills: Optional[int] = None,
+              plain: bool = False) -> Path:
     """Where the track of ``state`` is written."""
-    return Path(out).absolute() / specialist / (f'{state}~s{seed}' if variant else state)
+    name = (state if kills is None else f'{state}~k{kills}') + ('~plain' if plain else '')
+    return Path(out).absolute() / specialist / (f'{name}~s{seed}' if variant else name)
+
+
+def parse_room_kills(text: str) -> tuple:
+    """'5:0x05=4' -> (5, 0x05, 4)."""
+    room, _, kills = text.partition('=')
+    level, _, number = room.partition(':')
+    try:
+        return int(level), int(number, 16), int(kills)
+    except ValueError as error:
+        raise ValueError(f"--room-kills {text!r}: expected LEVEL:0xRR=K") from error
 
 
 def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = None, iterations: int = 3000,
                        explore_steps: int = 25, patience: int = 300, parallel: int = 1, seed: int = 0,
-                       states_dir: Optional[str] = None, variant: bool = False) -> list:
+                       states_dir: Optional[str] = None, variant: bool = False,
+                       room_kills: Optional[tuple] = None, clips: Optional[bool] = None) -> list:
     """Explores every seed start state (or ``states``) of ``specialist``, writing successes under
     ``<out>/<specialist>/<state>`` (``<state>~s<seed>`` with ``variant``); returns [(ExploreResult, replayed)] in
     state order.  ``out`` must be the trajectories root (``check_out``)."""
@@ -65,7 +85,8 @@ def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = 
     def run(root: str) -> list:
         return explore_states(specialist, root, states=states, iterations=iterations, explore_steps=explore_steps,
                               patience=patience, parallel=parallel, seed=seed,
-                              states_dir=None if states_dir is None else str(states_dir))
+                              states_dir=None if states_dir is None else str(states_dir),
+                              room_kills=None if room_kills is None else [room_kills], clips=clips)
 
     if not variant:
         return run(str(out))
@@ -94,6 +115,11 @@ def main(argv=None):
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--variant', action='store_true',
                         help="write <state>~s<seed>: an extra track beside the seed state's own")
+    parser.add_argument('--clips', choices=('on', 'off'), default=None,
+                        help="the run-time clips switch (default: the start state's way, else on); off writes "
+                             "<state>~plain, a plain-way track of a room both ways share (5:0x64)")
+    parser.add_argument('--room-kills', default=None, metavar='LEVEL:0xRR=K',
+                        help="a staged start: K kills banked in that dungeon room before its entry (track <state>~k<K>)")
     parser.add_argument('--out', default=str(TRAJECTORIES_DIR),
                         help="trajectories root (<out>/<specialist>/<state> is written; not <specialist>'s own dir)")
     args = parser.parse_args(argv)
@@ -102,14 +128,21 @@ def main(argv=None):
     except ValueError as error:
         parser.error(str(error))
 
+    try:
+        room_kills = parse_room_kills(args.room_kills) if args.room_kills else None
+    except ValueError as error:
+        parser.error(str(error))
     results = explore_specialist(args.specialist, args.out, args.states.split(',') if args.states else None,
                                  args.iterations, args.explore_steps, args.patience, args.parallel, args.seed,
-                                 variant=args.variant)
+                                 variant=args.variant, room_kills=room_kills,
+                                 clips=None if args.clips is None else args.clips == 'on')
     for result, replayed in results:
         status = (f"success in {len(result.actions)} steps, health {result.health}"
                   + ("" if replayed else " (REPLAY MISMATCH)")) if result.success else "no success"
-        written = (f"  -> {track_dir(args.out, args.specialist, result.start_state, args.seed, args.variant)}"
-                   if result.success and replayed else '')
+        kills = room_kills[2] if room_kills else None
+        track = track_dir(args.out, args.specialist, result.start_state, args.seed, args.variant, kills,
+                          args.clips == 'off')
+        written = f"  -> {track}" if result.success and replayed else ''
         print(f"{result.start_state:8} {status:40} iterations={result.iterations} env_steps={result.env_steps} "
               f"cells={result.cells} {result.seconds:.0f}s{written}")
     total = sum(r.env_steps for r, _ in results)

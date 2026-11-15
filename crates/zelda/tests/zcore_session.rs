@@ -77,6 +77,7 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         fresh_room: true,
         controllable: true,
         overrides: Vec::new(),
+        banked_kills: Vec::new(),
     };
     // A Darknut well inside the room, so Link fits on either side of him, and on a grid point: one caught between two
     // squares walks on to the next and turns, stunned or not, and the stab lands on his side. The state's layout
@@ -155,7 +156,7 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
 fn boulders_are_hazards_and_waiting_hits_nothing() {
     let Some(nes) = open_core() else { return };
     let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
-    let opts = LoadOptions { randomize_rng: true, fresh_room: true, controllable: true, overrides: Vec::new() };
+    let opts = LoadOptions { randomize_rng: true, fresh_room: true, controllable: true, ..LoadOptions::default() };
     s.load(&common::load_named_state("0_18e_0"), &opts, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
     let wait = Action::parse("WAIT 32").unwrap();
     let mut boulders = 0;

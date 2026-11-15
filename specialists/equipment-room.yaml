@@ -1,6 +1,6 @@
 name: equipment-room
 rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)']
-start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]']
+start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]', '5_04*_[0-9]', '5_07*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as the dungeon families (round 10 §8): dropped items are shaping targets

@@ -56,6 +56,7 @@ class Probe:
     def __init__(self, states_dir):
         self.states_dir = Path(states_dir)
         self.game = Game(render=True, states_dir=str(self.states_dir))
+        self.pre_entry = None             # the last room entry's pre-entry snapshot (`_walk_into`)
         rooms = game_rooms()
         self.entrances = {info['cave'][0]: room for (level, room, in_cave), info in rooms.items()
                           if level == 0 and not in_cave and info['cave'] and info['cave'][0]}
@@ -118,14 +119,18 @@ class Probe:
         raise ProbeError(f'no way into {level}:0x{target:02x}' + (f' from {entry}' if entry else ''))
 
     def _walk_into(self, level: int, room: int, entry: str):
-        """From the room on screen out of its doorway opposite ``entry`` and into ``room``."""
+        """From the room on screen out of its doorway opposite ``entry`` and into ``room``; ``pre_entry`` is the
+        snapshot of the frame before the room's entry (an entry state's moment: its monsters not made yet)."""
+        from triforce.entry_states import is_pre_entry      # pylint: disable=import-outside-toplevel
         game, leave = self.game, OPPOSITE[entry]
         source = self._source(room, entry)
         address, shift = DOOR_SHIFT[leave]
         game.write(address + source, game.read(address + source) & ~(7 << shift) & 0xFF)
         game.apply_ram({'location': source, 'link_x': DOOR_SPOT[leave][0], 'link_y': DOOR_SPOT[leave][1]})
-        left = False
+        left, self.pre_entry = False, None
         for _ in range(WALK_FRAMES):
+            if left and is_pre_entry(game.read):
+                self.pre_entry = game.snapshot()
             game.press(BUTTON[leave], 1)
             mode = game.read(MODE)
             left = left or mode != PLAY

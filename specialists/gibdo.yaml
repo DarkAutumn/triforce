@@ -1,6 +1,6 @@
 name: gibdo
 rooms: ['(5, 0x76)', '(5, 0x66)', '(5, 0x65)', '(5, 0x47)', '(5, 0x26)', '(5, 0x14)']
-start_states: []                           # round 24: the second pass adds its states (the leg's played entrance)
+start_states: ['5_76*_[0-9]', '5_66*_[0-9]', '5_65*_[0-9]', '5_47*_[0-9]', '5_26*_[0-9]', '5_14*_[0-9]']
 success: [exit-correct, triforce-collected]   # 0x14 ends on the D5 triforce
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
@@ -9,9 +9,8 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: required}                   # its requires_bombs rooms 0x66 and 0x65: one bomb at each W wall (offered only in reach of it); else the 10th kill
 curriculum: {enabled: true}             # trajectories/gibdo (Go-Explore paths per start state)
 one_room: true
-max_steps: 1500
+max_steps: 600                             # round 24: explored tracks 2-195 steps (docs/routes/d5.md)
 warm_start: null
-trainable: false                           # round 24: no start states until the second pass (the leg's played entrance)
 notes: >-
   Gibdo rooms (Dungeon 5, round 24; docs/routes/d5.md): Gibdos are slow mummies, 2 hearts a touch, four white-sword
   hits; a hit one flashes about 32 frames, and Link walks through a flashing monster unhurt (the owner's

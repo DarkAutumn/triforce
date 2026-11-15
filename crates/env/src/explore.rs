@@ -252,6 +252,18 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
         })
     }
 
+    /// Kills banked before the entry of every later start into these dungeon rooms ((level, room), kills; round
+    /// 24): exploring a staged start, the room with that many fewer monsters (`SpecialistEnv::set_banked_kills`).
+    pub fn set_banked_kills(&mut self, kills: Option<Vec<((u8, u8), u8)>>) {
+        self.env.set_banked_kills(kills);
+    }
+
+    /// The run-time clips switch of every later start (None: the start state's, else on; round 24: a plain-way
+    /// track of a room whose one step both ways share, 5:0x64's fight and push).
+    pub fn set_clips_allowed(&mut self, allowed: Option<bool>) {
+        self.env.set_clips_allowed(allowed);
+    }
+
     /// A flag that, once set, ends the running or next `explore` at its next iteration with an "interrupted"
     /// error (the caller's thread handles the signal; the search runs elsewhere).
     pub fn set_stop(&mut self, stop: Option<Arc<AtomicBool>>) {
