@@ -11,9 +11,12 @@ before.  Named route states (``1_44w_0``, ...) live in ``triforce/states``; test
 This module imports ``triforce`` only inside functions: ``triforce.paths`` reads ``TRIFORCE_STATES_DIR`` at import.
 """
 
+import faulthandler
 import os
 import shutil
+import signal
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -78,10 +81,13 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     they made saving and loading the test team 20-40x slower (backlog, Nov 11).  ``TRIFORCE_NICE=0``: the training
     and evaluation entry points the tests call in-process don't lower the test runner's priority (an explicit value
     is kept; tests of the niceness set their own).  ``TRIFORCE_JOBS_DIR``: the plans the tests write register in a
-    session directory, never in the user's job registry (the training GUI would list them)."""
+    session directory, never in the user's job registry (the training GUI would list them, and the tests' jobs would
+    wait for the machine's).  ``TRIFORCE_MAX_JOBS=0``: inside the session nothing waits its turn either (plans the
+    tests leave unfinished in this process stay alive for the session); tests of the line set their own limit."""
     os.environ.setdefault('OMP_NUM_THREADS', '1')
     os.environ.setdefault('TRIFORCE_NICE', '0')
     os.environ['TRIFORCE_JOBS_DIR'] = tempfile.mkdtemp(prefix='triforce-jobs-')
+    os.environ['TRIFORCE_MAX_JOBS'] = '0'
     _session['old_env'] = os.environ.get(STATES_DIR_ENV)
     _session['states_dir'] = Path(tempfile.mkdtemp(prefix='triforce-states-'))
     os.environ[STATES_DIR_ENV] = str(_session['states_dir'])
@@ -116,6 +122,34 @@ def logs_dir(tmp_path, monkeypatch):
     path = tmp_path / 'logs'
     monkeypatch.setenv(LOGS_DIR_ENV, str(path))
     return path
+
+
+TEST_TIMEOUT_ENV = 'TRIFORCE_TEST_TIMEOUT'
+DEFAULT_TEST_TIMEOUT = 900      # seconds per test; the slowest take about a minute on a loaded machine
+
+
+@pytest.fixture(autouse=True)
+def test_timeout():
+    """Fails a test that runs longer than ``$TRIFORCE_TEST_TIMEOUT`` seconds (default ``DEFAULT_TEST_TIMEOUT``; 0
+    turns it off), so a hang (a job waiting its turn forever, a child that never answers) ends as a failure with its
+    traceback instead of a suite that never ends.  SIGALRM interrupts Python code; a hang inside native code that
+    never returns to Python is caught 60 s later by faulthandler, which prints every thread's stack and exits."""
+    limit = float(os.environ.get(TEST_TIMEOUT_ENV) or DEFAULT_TEST_TIMEOUT)
+    if limit <= 0 or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def expired(_signum, _frame):
+        raise TimeoutError(f"the test ran longer than {limit:.0f} s (${TEST_TIMEOUT_ENV})")
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, limit)
+    faulthandler.dump_traceback_later(limit + 60, exit=True)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        faulthandler.cancel_dump_traceback_later()
+        signal.signal(signal.SIGALRM, previous)
 
 
 @pytest.fixture(scope='session')

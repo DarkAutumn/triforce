@@ -4,6 +4,7 @@
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
         [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100] [--eval-act MODE]
         [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--promote] [--train-args '...{name}...']
+        [--nice N] [--no-wait]
 
 Specialists (trainable, with seed start states; route order of the route, ``d2first``) train one at a time as
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
@@ -32,8 +33,10 @@ with ``training.json`` (every specialist in run order with its status), ``<speci
 (training progress from ``triforce.train --events``, then ``eval`` and a final ``end``), ``<specialist>.log``
 console output, and ``round.jsonl`` / ``round.log`` for the round itself (chain results, errors, final ``end``).
 
-Priority: the round lowers its own CPU priority at start (``--nice N``, default ``$TRIFORCE_NICE`` else 15; 0 leaves
-it alone; ``triforce.jobs``), recorded in ``training.json`` (``nice``); the trainings and evaluations inherit it.
+Priority and turn: the round lowers its own CPU priority at start (``--nice N``, default ``$TRIFORCE_NICE`` else 15;
+0 leaves it alone; ``triforce.jobs``), recorded in ``training.json`` (``nice``); the trainings and evaluations inherit
+it.  It then waits its turn among the machine's trainings and evaluations as one job (``--no-wait`` starts it at
+once): its own trainings, evaluations and chain don't wait again.
 """
 
 import argparse
@@ -56,7 +59,7 @@ from triforce import _native, registry
 from triforce.cli import chain_progress_events, eval_chain, meta_path
 from triforce.evaluate import default_output, eval_event, evaluate_specialist, write_result
 from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir, write_json_atomic
-from triforce.jobs import add_nice_argument, child_env, lower_priority
+from triforce.jobs import add_job_arguments, begin_job, child_env
 from triforce.metrics import read_jsonl
 from triforce.specialist import list_specialists, load_specialist
 from triforce.train import interrupt_on_sigterm, run_status
@@ -105,7 +108,7 @@ def parse_args(argv=None):
                         help="extra arguments for triforce.train (one string; {name} expands to the specialist, "
                              "everything else, braces included, is passed as is)")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
-    add_nice_argument(parser)
+    add_job_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -384,12 +387,12 @@ def main(argv=None):
         print(f"train_round: {problem}", file=sys.stderr)
         return 2
     models.mkdir(parents=True, exist_ok=True)
-    args.nice = lower_priority(args.nice)      # from here on: the niceness the round runs at
+    args.nice = begin_job(args)      # from here on: the niceness the round runs at
 
     log_dir = new_log_dir(args.round, args.logs_dir)
     _CONSOLE['file'] = open(log_dir / 'round.log', 'a', encoding='utf-8')  # pylint: disable=consider-using-with
     iterations = iterations_for(args)
-    plan = TrainingPlan(log_dir, args.round, 'round', [
+    plan = TrainingPlan(log_dir, args.round, 'round', [     # waits its turn (triforce.jobs)
         {'specialist': name, 'run_id': args.round, 'events': f'{name}.jsonl', 'log': f'{name}.log',
          'run_dir': str(registry.run_dir(name, args.round, models)), 'target_iterations': iterations,
          'target_steps': iterations * args.steps_per_update} for name in names],
