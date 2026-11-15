@@ -160,6 +160,8 @@ pub struct GameplayCritic {
     pub fixed_pickup_reward: bool,
     /// `reward.boss_ate_bomb_penalty`: `penalty-boss-ate-bomb` per swallowed bomb (positive magnitude).
     pub boss_ate_bomb_penalty: f64,
+    /// `reward.left_drop_penalty`: `penalty-left-drop` per wanted drop left on the floor (positive magnitude; 0 off).
+    pub left_drop_penalty: f64,
     /// The `retreat` ending is neutral (the default; `endings: {retreat: ...}` can make it a failure): leaving through
     /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
     pub neutral_retreat: bool,
@@ -180,6 +182,7 @@ impl GameplayCritic {
             quiet_enemy_penalty,
             fixed_pickup_reward: false,
             boss_ate_bomb_penalty: REWARD_MEDIUM,
+            left_drop_penalty: 0.0,
             neutral_retreat: true,
             correct_locations: HashSet::new(),
             correct_loops: HashSet::new(),
@@ -205,6 +208,7 @@ impl GameplayCritic {
         );
         critic.fixed_pickup_reward = config.reward.fixed_pickup_reward;
         critic.boss_ate_bomb_penalty = config.reward.boss_ate_bomb_penalty;
+        critic.left_drop_penalty = config.reward.left_drop_penalty;
         critic.neutral_retreat = config.endings.get(RETREAT).is_none_or(|outcome| outcome == NEUTRAL);
         Ok(critic)
     }
@@ -594,6 +598,19 @@ impl GameplayCritic {
         );
         if prev == curr || change.gained_triforce() {
             return;
+        }
+        // Leaving wanted drops behind (round 25: Manhandla's bombs): those not about to expire (16+ lifetime ticks,
+        // about 32 frames).
+        if self.left_drop_penalty > 0.0 {
+            let left = change
+                .previous
+                .items
+                .iter()
+                .filter(|it| it.timer >= 16 && crate::objective::wanted_drop(&change.previous, it.id))
+                .count();
+            if left > 0 {
+                rewards.add(Outcome::penalty("penalty-left-drop", -self.left_drop_penalty * left as f64));
+            }
         }
         if exit_is_correct(c.map, &change.previous, c.prev_objective, curr) {
             if self.correct_locations.contains(&curr) {

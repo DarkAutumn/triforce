@@ -85,6 +85,20 @@ pub struct BombStats {
     pub armed: u32,
     /// Bomb pickups (Link's count went up within a step: a cheated bomb is granted outside the step).
     pub picked_up: u32,
+    /// Dropped bombs (item `$00`) that appeared in the room (round 25: a boss's forced drop, the 10th kill's).
+    pub dropped: u32,
+    /// Dropped bombs taken: gone from the floor while their lifetime was not running out, or with Link's count up
+    /// (taken at the bomb maximum counts too: the drop was spent).
+    pub drop_taken: u32,
+    /// Dropped bombs still on the floor when Link left the room (the exit step, or a maze loop's fresh copy).
+    pub drop_left: u32,
+    /// Dropped bombs whose lifetime ran out on the floor (asm:Drop_UpdateItem, about 510 frames).
+    pub drop_expired: u32,
+}
+
+/// (slot, lifetime) of the dropped bombs lying in `state`'s room.
+fn bomb_drops(state: &GameView) -> impl Iterator<Item = (i8, u8)> + '_ {
+    state.items.iter().filter(|i| i.id == crate::enums::item::BOMBS).map(|i| (i.index, i.timer))
 }
 
 impl BombStats {
@@ -104,10 +118,38 @@ impl BombStats {
             change.previous.full_location() == change.state.full_location()
                 && change.state.bombs() > change.previous.bombs(),
         );
+        self.update_drops(change);
     }
 
-    /// `{placed, hits, misses, damage, tenth_kills, tenth_tries, armed, picked_up}`.
-    pub fn fields(&self) -> [(&'static str, u32); 8] {
+    /// The dropped bombs of one step (the way `crate::hearts::HeartTracker` follows hearts, from the step alone): a
+    /// slot that holds a bomb drop it didn't hold (or holds a younger one) is a drop; one that is gone is taken when
+    /// its lifetime could not have run out within the step or Link's count rose, else it expired; leaving the room
+    /// leaves the ones on its floor.
+    fn update_drops(&mut self, change: &Change) {
+        let (prev, curr) = (&change.previous, &change.state);
+        if change.entered_room() {
+            self.drop_left += bomb_drops(prev).count() as u32;
+            return;
+        }
+        let now = |slot: i8| bomb_drops(curr).find(|&(s, _)| s == slot).map(|(_, t)| t);
+        let was = |slot: i8| bomb_drops(prev).find(|&(s, _)| s == slot).map(|(_, t)| t);
+        let reach = change.frames / 2 + crate::hearts::TIMER_MARGIN;
+        let gained = curr.bombs() > prev.bombs();
+        for (slot, timer) in bomb_drops(prev) {
+            if now(slot).is_none_or(|t| t > timer) {
+                if u32::from(timer) > reach || gained {
+                    self.drop_taken += 1;
+                } else {
+                    self.drop_expired += 1;
+                }
+            }
+        }
+        self.dropped += bomb_drops(curr).filter(|&(s, t)| was(s).is_none_or(|old| t > old)).count() as u32;
+    }
+
+    /// `{placed, hits, misses, damage, tenth_kills, tenth_tries, armed, picked_up, dropped, drop_taken, drop_left,
+    /// drop_expired}`.
+    pub fn fields(&self) -> [(&'static str, u32); 12] {
         [
             ("placed", self.placed),
             ("hits", self.hits),
@@ -117,6 +159,10 @@ impl BombStats {
             ("tenth_tries", self.tenth_tries),
             ("armed", self.armed),
             ("picked_up", self.picked_up),
+            ("dropped", self.dropped),
+            ("drop_taken", self.drop_taken),
+            ("drop_left", self.drop_left),
+            ("drop_expired", self.drop_expired),
         ]
     }
 }
@@ -131,5 +177,9 @@ impl AddAssign for BombStats {
         self.tenth_tries += o.tenth_tries;
         self.armed += o.armed;
         self.picked_up += o.picked_up;
+        self.dropped += o.dropped;
+        self.drop_taken += o.drop_taken;
+        self.drop_left += o.drop_left;
+        self.drop_expired += o.drop_expired;
     }
 }

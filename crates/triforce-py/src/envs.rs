@@ -119,11 +119,12 @@ pub struct PyEnv {
 impl PyEnv {
     /// `config`: a `SpecialistConfig` or name. `start_state` pins every reset; `explicit_starts` builds no
     /// start-state pool (every reset names its state); `strict_actions=False` executes masked actions instead of
-    /// raising.
+    /// raising; `staged_kills` / `forced_drops` draw the training-only `ram_randomization.room_kills` /
+    /// `drop_bombs`.
     #[new]
     #[pyo3(signature = (config, start_state=None, strict_actions=true, curriculum=None,
                         seed=0, states_dir=None, render=false, explicit_starts=false,
-                        staged_kills=false))]
+                        staged_kills=false, forced_drops=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -136,6 +137,7 @@ impl PyEnv {
         render: bool,
         explicit_starts: bool,
         staged_kills: bool,
+        forced_drops: bool,
     ) -> PyResult<Self> {
         let config = extract_config(py, config)?;
         let rom = context::rom(py)?;
@@ -152,6 +154,7 @@ impl PyEnv {
             shaping: None,
             start_weights: None,
             staged_kills,
+            forced_drops,
         };
         let store = TfzStore::new(&data, rom.clone());
         let mut env = SpecialistEnv::new(config.clone(), data, ZCore::power_on(rom), store, opts)
@@ -269,6 +272,13 @@ impl PyEnv {
     #[getter]
     fn banked_kills(&self) -> u8 {
         self.inner.lock().env.banked_kills
+    }
+
+    /// The last reset forced the room's next drop to bombs (`ram_randomization.drop_bombs`; only with
+    /// `forced_drops=True`, a training env).
+    #[getter]
+    fn drop_bombs(&self) -> bool {
+        self.inner.lock().env.drop_bombs
     }
 
     /// The run-time clips switch (round 22): `True`/`False` fixes it from the next decision on (the observation and

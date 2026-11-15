@@ -100,7 +100,8 @@ PROGRESS_METRICS += tuple(f'{prefix}/{key}' for prefix in ('linger', 'curriculum
                                       'worst_steps', 'worst_frames'))
 # `bombs/<stat>` for `_native.BOMB_STATS` (spelled out: this module doesn't load the native module, the GUI reads it).
 PROGRESS_METRICS += tuple(f'bombs/{stat}' for stat in ('placed', 'hits', 'misses', 'damage', 'tenth_kills',
-                                                       'tenth_tries', 'armed', 'picked_up'))
+                                                       'tenth_tries', 'armed', 'picked_up', 'dropped', 'drop_taken',
+                                                       'drop_left', 'drop_expired'))
 # `clips/<stat>` for `_native.CLIP_STATS` (spelled out likewise), and the run-time switch's share and per-state
 # numbers (round 22, `metrics.RolloutMetrics`).
 PROGRESS_METRICS += tuple(f'clips/{stat}' for stat in ('done', 'aborted', 'done_n', 'done_s', 'done_w', 'done_e',

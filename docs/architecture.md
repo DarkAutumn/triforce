@@ -521,9 +521,11 @@ Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, Lee Nov 11): `placed`
 step: every session looks ahead for bombs), `misses` (placed, no hit), `damage` (dealt by those hits, in wood-sword
 hits: an enemy's HP lost, a kill's remaining HP), `tenth_kills` (`$50` 9 → 10, any weapon),
 `tenth_tries` (placed while the next kill was the 10th), `armed` (the 10th kill made with a bomb: a forced bomb drop),
-`picked_up` (bomb pickups). Terminal `info['bombs']` holds them next to `used` → training `bombs/<stat>` per episode
+`picked_up` (bomb pickups), and (round 25) the dropped bombs: `dropped` (bomb drops that appeared), `drop_taken`
+(gone with lifetime left, or with Link's count up), `drop_left` (on the floor when Link left the room),
+`drop_expired`. Terminal `info['bombs']` holds them next to `used` → training `bombs/<stat>` per episode
 (progress events too); eval `mean_bomb_<stat>` and per-visit `bomb_<stat>` / `bomb_<stat>_per_visit`; chain
-`RoomRecord.bomb_<stat>`.
+`RoomRecord.bomb_<stat>`. Chain records also carry `bombs_in` / `bombs_out` (natural bombs on entering and leaving).
 
 Boss fights (`crates/env/src/critic.rs` `BossTransitions`): a Dodongo whose ObjState ($AC+slot) enters 2 was
 *stunned* by a bomb's smoke (the sword can kill him then; a stun timer that goes up is a new stun); a rise in
@@ -584,6 +586,12 @@ not change. This is not the old heart-only objective.
 treasure) a PBRS target the same way, hearts and fairies only while Link is below max health (they only heal).
 `reward.fixed_pickup_reward` (default false) pays `reward-gained-health` a flat `REWARD_MAXIMUM` for any health
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
+`reward.drops_first` (round 25, boss-manhandla; default false): once the objective is no fight, the wanted drops
+(bombs below Link's bomb maximum, a heart or fairy below max health; `objective::wanted_drop`) replace the
+objective's PBRS and `target` destinations until they are taken or gone, so Link takes them before the treasure and
+the exits (chains build the `target` wavefront the same way); with it, dropped bombs at the maximum are no target.
+`reward.left_drop_penalty` (default 0) is `penalty-left-drop` per wanted drop with 16+ lifetime ticks left on the
+floor when Link leaves the room.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
@@ -897,6 +905,11 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
   Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
   over).
+- A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
+  bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
+  after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's
+  last hand) is 4 bombs, unless it is the 16th damage-free kill (a fairy). Only a training env draws it
+  (`EnvOptions::forced_drops`, set by the training pool; Python `Env(..., forced_drops=True)`, `Env.drop_bombs`).
 - Staged starts (round 24; darknut): `ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}`
   banks k kills in `LevelKillCounts` before a pre-entry start's dungeon room is entered (`LoadOptions::banked_kills`,
   asm:RoomHistory_ModifyObjCountUW), so the game makes k fewer monsters and clearing the rest clears the room. Only a

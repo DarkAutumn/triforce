@@ -346,6 +346,9 @@ pub struct RoomRecord {
     /// `keys_in` is the Dodongo arrival's key count).
     pub keys_in: i32,
     pub keys_out: i32,
+    /// Bombs Link carried on entering the room, and on leaving it, without cheated ones (round 25).
+    pub bombs_in: i32,
+    pub bombs_out: i32,
     /// in-progress, exit-correct, exit-wrong, retreat (the route step's `retreat` exit), retreat-limit (one retreat
     /// more than `MAX_RETREATS`: the run ends), missed (a route `heart` waypoint missed), death, stuck, milestone,
     /// error.
@@ -393,17 +396,18 @@ pub struct RoomRecord {
 }
 
 impl RoomRecord {
-    /// `keys`: Link's natural keys (`CheatLedger::natural`); `clips_allowed`: the run-time clips switch now (the
-    /// milestone record's too: the switch the run ended with).
+    /// `carried`: Link's natural keys and bombs (`CheatLedger::natural`); `clips_allowed`: the run-time clips switch
+    /// now (the milestone record's too: the switch the run ended with).
     fn new(
         index: usize,
         location: MapLocation,
         specialist: &str,
         state: &GameView,
-        keys: i32,
+        carried: (i32, i32),
         outcome: &str,
         clips_allowed: bool,
     ) -> Self {
+        let (keys, bombs) = carried;
         RoomRecord {
             index,
             level: location.level,
@@ -417,6 +421,8 @@ impl RoomRecord {
             max_health: state.max_health(),
             keys_in: keys,
             keys_out: keys,
+            bombs_in: bombs,
+            bombs_out: bombs,
             outcome: outcome.to_owned(),
             hearts_dropped: 0,
             hearts_taken: 0,
@@ -455,7 +461,7 @@ impl RoomRecord {
             "index": self.index, "level": self.level, "room": self.room, "in_cave": self.in_cave,
             "specialist": self.specialist, "steps": self.steps, "frames": self.frames,
             "health_in": self.health_in, "health_out": self.health_out, "max_health": self.max_health,
-            "keys_in": self.keys_in, "keys_out": self.keys_out,
+            "keys_in": self.keys_in, "keys_out": self.keys_out, "bombs_in": self.bombs_in, "bombs_out": self.bombs_out,
             "outcome": self.outcome, "hearts_dropped": self.hearts_dropped, "hearts_taken": self.hearts_taken,
             "hearts_healed": self.hearts_healed, "hearts_wasted": self.hearts_wasted,
             "hearts_left": self.hearts_left, "hearts_expired": self.hearts_expired,
@@ -1094,7 +1100,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         {
             self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "exit-correct".into();
             self.finish_record(&state);
-            let keys = self.cheats.natural(CheatItem::Keys, &state);
+            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
             let result = self.result.as_mut().unwrap();
             result.result = "success".into();
             result.reason = format!("took the level {level} triforce");
@@ -1145,6 +1151,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             state.health()
         };
         record.keys_out = self.cheats.natural(CheatItem::Keys, state);
+        record.bombs_out = self.cheats.natural(CheatItem::Bombs, state);
         record.hearts_dropped = h.dropped;
         record.hearts_taken = h.taken;
         record.hearts_left = h.left;
@@ -1261,7 +1268,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     return Ok(ChainStatus::Done(result.clone()));
                 }
             }
-            let keys = self.cheats.natural(CheatItem::Keys, &state);
+            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
             let on_step = self.objectives.as_ref().and_then(GameCompletion::step);
             let result = self.result.as_mut().unwrap();
             // The stop room, or the stop step's room entered by the route's own exit from the room before it
