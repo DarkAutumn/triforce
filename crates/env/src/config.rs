@@ -243,6 +243,10 @@ pub struct RewardConfig {
     /// leaves the room (positive magnitude; 0 = off).
     #[serde(default)]
     pub left_drop_penalty: f64,
+    /// Dropped hearts and fairies alone are PBRS targets while Link is below max health (round 25: the overworld
+    /// families, where `item_targets`' rupees and bombs pulled Link into fights); `item_targets` includes them.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub heal_targets: bool,
     /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
     #[serde(default = "half")]
     pub boss_ate_bomb_penalty: f64,
@@ -270,6 +274,7 @@ impl Default for RewardConfig {
             item_targets: false,
             drops_first: false,
             left_drop_penalty: 0.0,
+            heal_targets: false,
             boss_ate_bomb_penalty: 0.5,
             shaping_scale: 1.0,
             frame_penalty: 0.0,

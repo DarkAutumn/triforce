@@ -484,6 +484,18 @@ and `keys_in/keys_out` (Link's natural keys carried into and out of the room, ch
 `arrival_keys` counts milestone arrivals by keys carried, so full key carriage is reported separately from reaching
 Dodongo).
 
+### Supply (`crates/zelda/src/supply.rs`, round 25)
+
+`SupplyTracker` follows the same room visit for the chain's `RoomRecord`: `kills` (increments of `$627`
+WorldKillCount; a step whose hit to Link cleared it counts what remains), `streak_in` / `streak_max` (`$627` on
+entering and its highest value in the visit; the game drops a fairy for a drop-capable death that ends while it
+reads 16, `zelda-asm/enemies.md` "Drop tables"), `fairies_dropped` / `fairies_taken`, and `drops`: one entry per
+heart or fairy that fell during the visit (`kind`, `step` into the visit, `deficit` = max − health then,
+`to_drop` / `to_objective` = Link's walking distance in tiles to it and to the route objective's targets then, None
+when unreachable, `fate` taken | expired | left | death, `after` = actions until then, `hits` = actions in that
+time that cost health). Drops already on the floor on entry are not followed. Fates follow the hearts rule above
+(lifetime timer, else a health rise).
+
 ### Cheated items (`crates/zelda/src/cheats.rs`)
 
 Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
@@ -594,6 +606,9 @@ objective's PBRS and `target` destinations until they are taken or gone, so Link
 the exits (chains build the `target` wavefront the same way); with it, dropped bombs at the maximum are no target.
 `reward.left_drop_penalty` (default 0) is `penalty-left-drop` per wanted drop with 16+ lifetime ticks left on the
 floor when Link leaves the room.
+`reward.heal_targets` (default false; round 25) makes dropped hearts and fairies alone PBRS targets while Link is
+below max health (`item_targets` includes them): for the overworld families, whose rupees and bombs `item_targets`
+would chase.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,

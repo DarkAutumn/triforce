@@ -258,6 +258,12 @@ fn run_records_rooms_and_ends_cleanly(nes: ZCore, data: &Arc<GameData>) -> ZCore
         n("hearts_dropped"),
         n("hearts_taken") + n("hearts_left") + n("hearts_expired")
     );
+    // Round 25's supply fields: the streak never falls below its entry value within the record's maximum, and every
+    // followed drop has a fate.
+    assert!(n("streak_max") >= n("streak_in"));
+    for d in room["drops"].as_array().unwrap() {
+        assert!(["taken", "expired", "left", "death"].contains(&d["fate"].as_str().unwrap()), "{d}");
+    }
     c.into_parts().0.into_nes()
 }
 

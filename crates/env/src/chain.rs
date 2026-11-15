@@ -38,6 +38,7 @@ use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linge
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
 use zelda::power_on;
 use zelda::room::Wavefront;
+use zelda::supply::{DropNote, SupplyStats, SupplyTracker};
 use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
 
 /// Default run cap.
@@ -393,6 +394,11 @@ pub struct RoomRecord {
     /// on through both; leaving by the sequence's last edge is the visit's exit.
     pub maze_loops: u32,
     pub maze_wrong_loops: u32,
+    /// Kills, the damage-free kill streak and fairies in the visit, and every dropped heart and fairy with its fate
+    /// (`zelda::supply`; JSON `kills`, `streak_in`, `streak_max`, `fairies_dropped`, `fairies_taken`, `drops`; round
+    /// 25).
+    pub supply: SupplyStats,
+    pub drops: Vec<DropNote>,
 }
 
 impl RoomRecord {
@@ -447,6 +453,8 @@ impl RoomRecord {
             clips_flips: Vec::new(),
             maze_loops: 0,
             maze_wrong_loops: 0,
+            supply: SupplyStats::default(),
+            drops: Vec::new(),
         }
     }
 
@@ -474,6 +482,9 @@ impl RoomRecord {
             "clips_flips": self.clips_flips.iter().map(|(steps, on)| json!({"step": steps, "clips": on}))
                 .collect::<Vec<_>>(),
             "maze_loops": self.maze_loops, "maze_wrong_loops": self.maze_wrong_loops,
+            "kills": self.supply.kills, "streak_in": self.supply.streak_in, "streak_max": self.supply.streak_max,
+            "fairies_dropped": self.supply.fairies_dropped, "fairies_taken": self.supply.fairies_taken,
+            "drops": self.drops.iter().map(drop_json).collect::<Vec<_>>(),
         });
         let o = m.as_object_mut().expect("object");
         for item in CheatItem::ALL {
@@ -487,6 +498,13 @@ impl RoomRecord {
         }
         m
     }
+}
+
+/// One dropped heart or fairy of a visit (`zelda::supply::DropNote`).
+fn drop_json(d: &DropNote) -> Value {
+    json!({"kind": if d.fairy { "fairy" } else { "heart" }, "step": d.step, "deficit": d.deficit,
+           "to_drop": d.to_drop, "to_objective": d.to_objective, "fate": d.fate.name(), "after": d.after,
+           "hits": d.hits})
 }
 
 /// Everything one run produced.
@@ -600,6 +618,7 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     change: Option<Change>,
     prev_objective: Option<Objective>,
     hearts: HeartTracker,
+    supply: SupplyTracker,
     linger: LingerTracker,
     /// The run's cheated bombs, keys and rupees (`zelda::cheats`).
     cheats: CheatLedger,
@@ -654,6 +673,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             change: None,
             prev_objective: None,
             hearts: HeartTracker::default(),
+            supply: SupplyTracker::default(),
             linger: LingerTracker::default(),
             cheats: CheatLedger::default(),
             left_with: ItemCounts::default(),
@@ -1032,6 +1052,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             gc.set_clips_allowed(false);
             objective = gc.objectives(None, &state);
         }
+        self.supply.update(&change, &state, &objective);
         self.linger.update(
             &LingerState::of(&change.previous, &prev_objective),
             &LingerState::of(&state, &objective),
@@ -1138,6 +1159,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     fn finish_record(&mut self, state: &GameView) {
         self.hearts.finish(Some(&HeartView::of(state)));
         let h = self.hearts.summary();
+        let supply = self.supply.finish(state.game_over());
         let record = self
             .result
             .as_mut()
@@ -1158,6 +1180,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.hearts_healed = h.healed;
         record.hearts_wasted = h.wasted;
         record.hearts_expired = h.expired;
+        if let Some((stats, drops)) = supply {
+            record.supply = stats;
+            record.drops = drops;
+        }
     }
 
     /// The session's disabled kinds for the acting specialist's `items` in Link's state, with the route's bomb
@@ -1340,6 +1366,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             record.clips_flips.extend(self.entry_flip.take().map(|on| (0, on)));
             result.rooms.push(record);
             self.hearts.reset(&HeartView::of(&state));
+            self.supply.reset(&state);
             self.no_damage = 0;
             self.linger.reset(&LingerState::of(&state, &objective), || {
                 linger_wavefront(&state, &objective, None)

@@ -64,6 +64,18 @@ won), from the round 23 chains (`r73-1k` and `r73-1k-noclips`: the D2, D3 and D4
 Tried before and dropped: a flat damage penalty for rooms Link only crosses (round 6, twice: no chain gain), a
 "collect hearts" objective (round 6 §10: more pickups on d2-rope, no chain gain).
 
+**Supply (round 25, `Pickups`; measured with the chain's new supply fields, 1000 full runs clips on, r74 team with
+darknut5):** the supply is nearly used. 102 kills a run; 8.2 hearts and 1.06 fairies drop, 0.52 fairies are taken
+(healing about 0.76 hearts a run); 93% of runs make a 10-kill damage-free streak somewhere (3.3 a run), 74% a
+16-kill one (1.4 a run; Manhandla's reviving base, moldorm, D2's ropes and Goriyas, vire 4:0x12). Hearts left while
+Link is hurt are the overworld families' (no item targets): the heart lies 2 tiles away and the exit 9-17, and the
+model walks past it; the dungeon families take nearly all. `reward.heal_targets` on ow-tektite, ow-octorok and
+ow-zora, untrained (the pointer alone), 300 paired runs from `0_3cc_0` to the D1 triforce: +0.12 ± 0.04 hearts at
+Dungeon 1's entrance, no frame cost, 253 = 253 arrivals. Not pursued: the drop order (needs `$52A` in the
+observation, a schema change, for a few tenths of a heart), streak protection (fairies already fall often; a
+fairy left while hurt is 0.12 hearts a run outside Aquamentus' room), wallmaster gathering (Aquamentus kills only
+arrivals under 1 heart: 17 of 39, 0 of 1645 at 1 or more; at most the 16 Aquamentus deaths per 1000 full runs).
+
 **Proposed order:** (a) option 7, one chain set with a health-aware act rule against the standing one (no
 training); (b) option 1 with option 3 folded in, on the families that feed the four rooms of the table (vire,
 like-like, trap-room and stalfos-keese-gel in Dungeon 4; darknut and zol in Dungeon 3; d2-rope and goriya in

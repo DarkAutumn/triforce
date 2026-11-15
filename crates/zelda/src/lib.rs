@@ -26,6 +26,7 @@ pub mod room_entry;
 pub mod room_state;
 pub mod session;
 pub mod submenu;
+pub mod supply;
 pub mod tables;
 pub mod tiles;
 pub mod vars;

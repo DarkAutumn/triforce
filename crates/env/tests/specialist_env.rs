@@ -1529,6 +1529,24 @@ fn forced_bomb_drop_arms_the_help_drop_in_training_envs_only() {
     }
 }
 
+/// `reward.heal_targets` (round 25): a heart pulls while Link is hurt, not at full health; a rupee never does.
+#[test]
+fn heal_targets_take_only_healing_drops_while_hurt() {
+    let Some(nes) = open_core() else { return };
+    let heal = RewardConfig {
+        heal_targets: true,
+        ..Default::default()
+    };
+    let heart = [(item::HEART, 152, 157)];
+    let (mut env, _) = placed_env_with(nes, &heart, 157, heal.clone(), 0x21);
+    let hurt = movement_reward(&mut env, "E");
+    let (mut env, _) = placed_env_with(release(env), &heart, 157, heal.clone(), 0x22);
+    let full = movement_reward(&mut env, "E");
+    let (mut env, _) = placed_env_with(release(env), &[(item::RUPEE, 152, 157)], 157, heal, 0x21);
+    let rupee = movement_reward(&mut env, "E");
+    assert!(hurt > 0.0 && full < 0.0 && rupee < 0.0, "hurt {hurt}, full {full}, rupee {rupee}");
+}
+
 // --- tests/test_rewards.py (emulator parts) ---
 
 #[test]

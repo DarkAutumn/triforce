@@ -239,6 +239,15 @@ class RoomRecord:
     # edge, the visit goes on) and wrong ones (each one of the run's wrong exits).  0 in older records.
     maze_loops: int = 0
     maze_wrong_loops: int = 0
+    # Round 25 (crates/zelda/src/supply.rs; 0/[] in older records): kills in the visit, the damage-free kill streak
+    # ($627) on entering and its highest value, fairies dropped and taken, and every dropped heart or fairy
+    # ({kind, step, deficit, to_drop, to_objective, fate: taken|expired|left|death, after, hits}).
+    kills: int = 0
+    streak_in: int = 0
+    streak_max: int = 0
+    fairies_dropped: int = 0
+    fairies_taken: int = 0
+    drops: List[dict] = field(default_factory=list)
 
 
 @dataclass

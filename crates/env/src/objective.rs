@@ -18,18 +18,22 @@ pub struct Attached {
 
 /// Whether the dropped item `id` is a PBRS target under `reward` with Link at `state`'s health:
 /// `nearby_items` takes hearts and clocks; `item_targets` every dropped item, hearts and fairies only below max
-/// health (and with `drops_first`, bombs only below the bomb maximum). The room's own treasure is never one (it is
+/// health (and with `drops_first`, bombs only below the bomb maximum); `heal_targets` hearts and fairies alone,
+/// below max health. The room's own treasure is never one (it is
 /// the objective's business).
 fn is_item_target(reward: &RewardConfig, state: &GameView, id: i16) -> bool {
     if id < 0 {
         return false;
     }
+    let heals = id == item::HEART || id == item::FAIRY;
     if reward.item_targets {
         if reward.drops_first && id == item::BOMBS {
             return state.bombs() < state.bomb_max();
         }
-        let heals = id == item::HEART || id == item::FAIRY;
         return !heals || !state.is_health_full();
+    }
+    if reward.heal_targets && heals && !state.is_health_full() {
+        return true;
     }
     reward.nearby_items && (id == item::HEART || id == item::CLOCK)
 }
