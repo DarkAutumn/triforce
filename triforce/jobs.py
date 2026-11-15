@@ -349,18 +349,20 @@ class JobRecord:
                     waited = now - began
                     if current.admitted:
                         if update is not None:
-                            print(f"triforce: {name} starts after waiting {_duration(waited)}", flush=True)
                             if report is not None:
                                 report('admitted', current, waited)
+                            print(f"triforce: {name} starts after waiting {_duration(waited)}", flush=True)
                         return waited if update is not None else 0.0
+                    # Recorded first, said second: whoever reads the line can already read the plan.
                     event = None
                     if update is None or now >= update:
-                        print(f"triforce: {name} is paused until resources are available: {current.reason()}. It "
-                              f"starts by itself; next update in {_duration(UPDATE_SECONDS)}.", flush=True)
                         event = 'queued' if update is None else 'waiting'
                         update = now + UPDATE_SECONDS
                     if report is not None and (event is not None or current.fields() != shown):
                         report(event, current, waited)
+                    if event is not None:
+                        print(f"triforce: {name} is paused until resources are available: {current.reason()}. It "
+                              f"starts by itself; next update in {_duration(UPDATE_SECONDS)}.", flush=True)
                     shown = current.fields()
                     time.sleep(POLL_SECONDS)
         except OSError as error:
