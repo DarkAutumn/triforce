@@ -2092,3 +2092,28 @@ Hills). Decided by the agent building it (the owner away):
   written in: no played state of the leg exists yet, and `d2first`'s own 0x1b step is picked for the state as it is.
 - **Tooling:** Go-Explore's cell key holds the maze step and a loop that advances it is progress; `entry_states path
   --route R` now explores under R's objective (so a maze step on R is followed).
+
+## 2026-11-14 — The leg and Dungeon 5 in `d2first` (round 24, integration)
+
+- **One route:** `d2first` goes on from the D4 triforce (step 133) through the leg (134-185: stretches
+  `coast-heart`, `lake-3e`, `mountain`, each with a clip way and a plain way) and Dungeon 5 (186-208, ending on its
+  triforce); the scouting routes `d5`, `d5leg`, `d5maze` are gone and `draft_routes.yaml` starts at Dungeon 5's exit
+  (docs/routes/d5-leg.md, d5.md).
+- **The coast stretch's switch off waits for the rejoin** once Link is past 0x55's river: on its clip way after the
+  `wrap_in` step, and on that step itself once he stands where he can walk to its W exit (0x55's W part).
+  Measured in the running game for every clip-way room (0x55's W part, 0x54, 0x53, 0x52, 0x51, 0x50, 0x60, 0x5f):
+  each reaches 0x4f by the clip way, the switch off there, and goes on by the shared steps into the lake's plain
+  way; turned off in 0x55 on the dock side, the plain way takes over at once. Without the W-part rule a switch off
+  there left Link stuck in the W part (the plain way's E exit, which he can't walk to); with it, but the hold asked
+  with the step of the room before, it let go on entering 0x54 and he bounced between 0x55 and 0x54. Now the step
+  of a room just entered is picked before the hold is asked, so the switch is also off from the rejoin's first frame.
+- **No cheated bomb where the wall is open** (`cheats::bomb_need`): 0x2c on the plain mountain way, 5:0x66 and
+  5:0x65 on the way back. The F148 harvest test moved to 3:0x5b's first visit (its E wall still closed).
+- **`--stop-at` a room only the other way plays** is refused up front (exit 2), as the native route already refused
+  it (with clips on, 0:0x59 is the coast plain way's).
+- **zelda-map's route plan** follows each way: a stretch's plain way starts from what Link carried where the
+  stretch parts (0x5f's container, on both ways, counted once: 11 hearts at the D5 triforce, not 12).
+- **The audit lists the new steps' states as MISSING (216 lines, 72 names x 3 chains, steps 134-208) until they are
+  built:** round 22 built its states on the route branch before merging (`7e2a865` before `90c5d13`), so there is
+  no precedent for hiding them; the route goes into `r24` now because the state builds and Dungeon 5's second pass
+  build on it. Every other audit line is clean (397 states, 0 problems), and no test needs a new state.

@@ -51,7 +51,7 @@ def test_d2_then_the_heart_and_white_sword_then_the_d1_triforce():
     steps = native.route_steps()
     rooms = [(s['level'], s['room'], s['in_cave']) for s in steps]
     assert [(s['level'], s['room']) for s in steps if s['exit'] == 'triforce'] == [(2, 0x0d), (1, 0x36), (3, 0x3d),
-                                                                                   (4, 0x03)]
+                                                                                   (4, 0x03), (5, 0x14)]
     order = [rooms.index(r) for r in [(2, 0x0e, False), (0, 0x2c, True), (0, 0x0a, True), (1, 0x72, False),
                                       (1, 0x74, False), (1, 0x44, False)]]
     assert order == sorted(order)
@@ -94,11 +94,14 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
                     (0x4c, False, 'S', 'E', 'trap-room'), (0x4d, False, 'W', 'N', 'boss-manhandla'),
                     (0x3d, False, 'S', 'triforce', 'zol')]
     assert steps[start + 9]['waypoint'] == 'raft'
-    # 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14).
-    assert [(s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
-        (0x5e, 'S', 'clear'), (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip')]
+    # 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14).  Dungeon 5's rules
+    # (round 24): 0x66 is passed on entry, 0x65's bombs are refused westbound.
+    assert [(s['level'], s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
+        (2, 0x5e, 'S', 'clear'), (3, 0x5b, 'S', 'skip'), (3, 0x69, 'N', 'skip'), (3, 0x69, 'cave', 'skip'),
+        (5, 0x66, 'S', 'skip'), (5, 0x65, 'E', 'refuse'), (5, 0x56, 'S', 'skip'), (5, 0x57, 'W', 'skip'),
+        (5, 0x47, 'S', 'skip'), (5, 0x37, 'S', 'skip'), (5, 0x26, 'E', 'skip')]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps if s['bomb_reserve'] is not None] == [
-        (3, 0x7c, 6), (4, 0x71, 2)]
+        (3, 0x7c, 6), (4, 0x71, 2), (0, 0x45, 2), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0)]
     assert steps[start - 1]['room'] == 0x74 and steps[start - 1]['exit'] == 'cave'
     rooms_info = native.game_rooms()
     assert all(rooms_info[(3, room, False)]['requires_bombs'] for room in (0x5b, 0x4c, 0x4d))
@@ -107,7 +110,9 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
 def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_directions():
     steps = native.route_steps('d2first')
     after_d3 = next(i for i, s in enumerate(steps) if (s['level'], s['room']) == (3, 0x3d)) + 1
-    tail = [(s['level'], s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in steps[after_d3:]]
+    d4 = next(i for i, s in enumerate(steps) if (s['level'], s['exit']) == (4, 'triforce'))
+    tail = [(s['level'], s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist'])
+            for s in steps[after_d3:d4 + 1]]
     # Back from Dungeon 3's mouth to the dock of 0x55, by raft to the island 0x45, into the dungeon.
     assert tail[:7] == [(0, 0x74, False, 'cave', 'W', 'ow-tektite'), (0, 0x73, False, 'E', 'N', 'ow-moblin'),
                         (0, 0x63, False, 'S', 'E', 'ow-moblin'), (0, 0x64, False, 'W', 'E', 'ow-octorok'),
@@ -134,9 +139,11 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
     first = after_d3 + 17
     assert stretch == {'name': 'd4-island', 'clips': [first, first + 1], 'plain': list(range(first + 2, first + 6)),
                        'rejoin': first + 6}
-    assert [(s['room'], s['waypoint']) for s in steps[after_d3:] if s['waypoint']] == [(0x60, 'ladder')]
+    assert [(s['room'], s['waypoint']) for s in steps[after_d3:d4 + 1] if s['waypoint']] == [(0x60, 'ladder')]
     # Both keys in the open (0x51, 0x40) are taken (Lee, Nov 12): no treasure rule in Dungeon 4.
-    assert [(s['room'], s['treasure']) for s in steps[after_d3:] if s['treasure']] == []
+    assert [(s['room'], s['treasure']) for s in steps[after_d3:d4 + 1] if s['treasure']] == []
+    # Round 24: the leg to Dungeon 5 goes on from the triforce's warp to 0x45, down by raft.
+    assert (steps[d4 + 1]['room'], steps[d4 + 1]['entry'], steps[d4 + 1]['exit']) == (0x45, 'cave', 'S')
     rooms = native.game_rooms()
     assert rooms[(4, 0x32, False)]['name'] == 'Breakfast Room' and rooms[(4, 0x32, False)]['cave'] == (4, 0x60, True)
     assert rooms[(4, 0x60, True)]['treasure'] == 'ladder' and rooms[(4, 0x13, False)]['treasure'] == 'heart-container'

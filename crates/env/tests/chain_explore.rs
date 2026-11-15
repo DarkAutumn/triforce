@@ -72,7 +72,7 @@ fn route_definition() {
     let (map, states) = (&data.map, &data.states_dir);
     let route = Route::load(map, states, "d2first", None, None).unwrap();
     assert_eq!(route.start_state, "start");
-    assert_eq!((route.terminal, route.final_triforce), (None, Some(4)));
+    assert_eq!((route.terminal, route.final_triforce), (None, Some(5)));
     let stop = MapLocation::new(1, 0x73, false);
     assert_eq!(
         Route::load(map, states, "d2first", Some(stop), None)
@@ -808,29 +808,40 @@ fn walk_to<St: StateStore<MachineState>>(c: &mut ChainEnv<ZCore, St>, target: Ma
     panic!("no walk to {target:?} ({} positions reached)", seen.len());
 }
 
-/// F148: leaving 0x2c (a `requires_bombs` room) with a granted bomb outstanding: the harvested pre-entry state of
-/// 0x1c holds the bombs the run really carried (0), not the granted one the live run takes back afterwards.
+/// F148: leaving a `requires_bombs` room with a granted bomb outstanding: the harvested pre-entry state of the next
+/// room holds the bombs the run really carried (0), not the granted one the live run takes back afterwards.  The
+/// room is Dungeon 3's central Darknut room 3:0x5b on its first visit (S → W; its E bomb wall is still closed).
+/// Round 24: a room whose wall is already open grants none (0x2c out of its heart cave, `cheats::bomb_need`).
 fn harvested_states_hold_no_granted_bomb(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let dir = tempfile::tempdir().unwrap();
-    let mut source = common::read_state_file(&common::state_path("0_2cc_0")).unwrap();
+    let mut opened = common::read_state_file(&common::state_path("0_2cc_0")).unwrap();
+    opened.machine.poke(0x658, 0);
+    let opened_path = dir.path().join("0_2cc_0.state");
+    TfzStore::new().save(&opened_path, &opened).unwrap();
+    let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some(opened_path.to_str().unwrap())).unwrap();
+    let mut c = chain(nes, data, route);
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+    assert_eq!(c.session().state().bombs(), 0, "0x2c's wall is open: no granted bomb");
+    let nes = c.into_parts().0.into_nes();
+
+    let mut source = common::read_state_file(&common::state_path("3_5bs_0")).unwrap();
     source.machine.poke(0x658, 0);
-    let start = dir.path().join("0_2cc_0.state");
+    let start = dir.path().join("3_5bs_0.state");
     TfzStore::new().save(&start, &source).unwrap();
     let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some(start.to_str().unwrap())).unwrap();
     let mut c = chain(nes, data, route);
     let harvest = dir.path().join("harvested");
     c.set_harvest(Some(harvest.clone()));
-    let mut rng = ChaCha8Rng::seed_from_u64(0);
     let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
     assert_eq!(c.session().state().bombs(), 1, "the room's granted bomb");
-    let n1c = MapLocation::new(0, 0x1c, false);
-    for a in walk_to(&mut c, n1c) {
+    let west = MapLocation::new(3, 0x5a, false);
+    for a in walk_to(&mut c, west) {
         if let ChainStatus::Done(r) = c.step(a).unwrap() {
             panic!("run ended on the walk: {r:?}");
         }
     }
-    assert_eq!(c.session().state().full_location(), n1c);
-    assert_eq!(c.session().state().bombs(), 0, "taken back on leaving");
+    assert_eq!(c.session().state().full_location(), west);
     let files: Vec<_> = glob_files(&harvest);
     assert_eq!(files.len(), 1, "{files:?}");
     let saved = common::read_state_file(&files[0]).unwrap();

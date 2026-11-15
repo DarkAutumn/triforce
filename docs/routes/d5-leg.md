@@ -62,7 +62,7 @@ decisions "A maze loop is a room transition") and `r24-names` (a later visit's s
 | 179 | 0x0b | E → cave | clips | ow-leever | Dungeon 5's mouth (14, 8) |
 | 180 | 0x1d | E → S | mountain, plain (parts) | ow-peahat | the S lanes (X `$70`-`$80`) |
 | 181 | 0x2d | N → W | plain | ow-zora | |
-| 182 | 0x2c | E → N | plain | ow-tektite | its rock wall open since d2first (`requires_bombs`: the cheat grants a bomb here, taken back unused); `0_2ce_v2` |
+| 182 | 0x2c | E → N | plain | ow-tektite | its rock wall open since d2first's heart cave (`requires_bombs`, but no cheated bomb once the wall is open: `cheats::bomb_need`; BOMB masked, no bomb target); `0_2ce_v2` |
 | 183 | 0x1c | S → W | plain | ow-start | `0_1cs_v2` |
 | 184 | 0x1b | E → maze | plain | ow-start | the Lost Hills: N four times at X `$70` (`exit: maze`); `0_1be_v2` |
 | 185 | 0x0b | S → cave | plain | ow-leever | straight up at X `$70` into the mouth |
@@ -74,14 +74,15 @@ first visits keep the bare name (`0_45c`, `0_55n`, `0_54e`, ...). Both ways of a
 
 ## Ledgers
 
-- **Hearts (max):** 8 out of Dungeon 4; 9 after 0x5f (either way); 10 after 0x2f's cave; 11 after Digdogger (the
-  audit counts heart containers along the way a step is on).
-- **Rupees:** 42-54 in (after d2first's 0x67 cave; nothing in Dungeons 3 and 4 is taken), +100 at 0x0f: 142-154 out.
-- **Keys:** 6 in (out of Dungeon 4), none used or found on the leg: 6 into Dungeon 5.
-- **Bombs:** `bomb_reserve: 2` from step 134 (the value Dungeon 4's entrance set): BOMB stays masked while Link holds
-  2 or fewer outside `requires_bombs` rooms, but for the 10th damage-free kill; those two are Dungeon 5's walls (0x66
-  W, 0x65 W; 0x65's own bombs are refused westbound). No wall on the leg; 0x2c (plain mountain way) is a
-  `requires_bombs` room whose wall is already open. Dungeon 5 sets 8 at 0x76.
+Measured on the three `4_03s_<c>` states (the D4 triforce's room, step 133) and by the running-game walks of
+`crates/zelda/tests/d5_leg.rs`.
+
+| | In (step 133) | Along the leg | Out (5:0x76, step 186) |
+|---|---|---|---|
+| Hearts (max) | 8 | 0x5f's container on either way (9; the audit counts it once), 0x2f's take-any cave's right ware (10) | 10; 11 after Digdogger |
+| Rupees | 68, 57, 63 (chains 0-2: Dungeon 4's rupee room 4:0x11 and drops) | +100 in 0x0f's cave (walking up at X `$78`); nothing bought (0x2f's take-any cave costs nothing, the potion is never taken) | 157-168 plus drops |
+| Keys | 6 | none used, none found | 6 into Dungeon 5 (spent at 5:0x06 W, 0x27 W, 0x25 W) |
+| Bombs | 0, 2, 6 (of 8) | `bomb_reserve: 2` from step 134 (Dungeon 4's value): BOMB masked at 2 or fewer outside `requires_bombs` rooms but for the 10th damage-free kill; no wall on the leg; 0x2c (plain mountain way) grants no bomb, its wall is open | as in; Dungeon 5 sets `bomb_reserve: 8` at 0x76, and an empty bag gets a cheated bomb for each of 0x66 W and 0x65 W |
 
 ## Building the states
 
@@ -102,6 +103,9 @@ first visits keep the bare name (`0_45c`, `0_55n`, `0_54e`, ...). Both ways of a
 `crates/zelda/tests/d5_leg.rs` plays the assembled route in the running game: the clip way by the objective from
 `4_03s_0` through every clip-way step into 5:0x76, where Dungeon 5's first step takes over; the plain way the same
 way (row 5 and 6, the plain ladder at 0x5f, 0x2e, the Lost Hills by their sequence into 0x0b from S and on into
-Dungeon 5), each stretch's rejoin reached as its shared step; the clips switch turned off inside each stretch's clip
-way (the plain way from the nearest room) and on 0x5f's water (held until the heart's platform). Maze loops:
-`crates/env/tests/maze.rs`.
+Dungeon 5), each stretch's rejoin reached as its shared step. The clips switch turned off inside each stretch's clip
+way: lake and mountain re-plan to their plain way from the nearest room; the coast stretch past 0x55's river (0x55's
+W part, 0x54, 0x53, 0x52, 0x51, 0x50, 0x60, 0x5f's water, each tried) holds the clip way to the rejoin 0x4f, never
+turning back, and goes on by the shared steps (0x3f, 0x2f's cave, 0x3f) into the lake's plain way; turned off in
+0x55 on the dock side the plain way takes over at once. On 0x5f's water and its platform the switch stays held
+until 0x4f. Maze loops: `crates/env/tests/maze.rs`.

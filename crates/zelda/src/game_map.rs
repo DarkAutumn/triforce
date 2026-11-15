@@ -2148,7 +2148,8 @@ mod tests {
             assert_eq!(steps, rooms, "clips {on}");
         }
         let stretches = &map.stretches[DEFAULT_ROUTE];
-        assert_eq!(stretches.len(), 2);
+        let names: Vec<&str> = stretches.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["d3-approach", "d4-island", "coast-heart", "lake-3e", "mountain"]);
         let s = &stretches[1];
         let steps = &map.routes[DEFAULT_ROUTE];
         assert_eq!((s.name.as_str(), s.clips.len(), s.plain.len(), s.plain.end), ("d4-island", 2, 4, s.rejoin));
@@ -2253,17 +2254,39 @@ mod tests {
         }
     }
 
-    /// Visits (start-state names): every step of d2first and clips-gauntlet is a first visit (d2first's two stretch
-    /// `parts` are one visit on two ways; the gauntlet's pairs are two targets of one visit), and on every route two
-    /// steps share a room, entry and visit only as the two ways of one stretch or as consecutive targets.  A second
-    /// entry from the same side is visit 2, a step right after it entering the same way another target of visit 2; an
-    /// alternate standing in for a step is numbered there.
+    /// Visits (start-state names): every step of clips-gauntlet is a first visit (the gauntlet's pairs are two
+    /// targets of one visit); d2first's later visits are the leg to Dungeon 5's (round 24): the coast stretch's plain
+    /// way along row 5 again (0x59-0x5d from W), the lake stretch's clip way N into 0x2d, the plain mountain way
+    /// (0x2c from E, 0x1c from S, 0x1b from E) and Dungeon 5's tunnel cellar on the way back; its stretch `parts`
+    /// are one visit on two ways.  On every route two steps share a room, entry and visit only as the two ways of
+    /// one stretch or as consecutive targets.  A second entry from the same side is visit 2, a step right after it
+    /// entering the same way another target of visit 2; an alternate standing in for a step is numbered there.
     #[test]
     fn route_visits_name_each_visit_once() {
         let map = GameMap::builtin();
-        for route in ["d2first", "clips-gauntlet"] {
-            assert!(map.visits[route].iter().all(|&v| v == 1), "{route}: {:?}", map.visits[route]);
-        }
+        assert!(map.visits["clips-gauntlet"].iter().all(|&v| v == 1), "{:?}", map.visits["clips-gauntlet"]);
+        let later: Vec<(L, &str, u32)> = map.routes[DEFAULT_ROUTE]
+            .iter()
+            .zip(&map.visits[DEFAULT_ROUTE])
+            .filter(|&(_, &v)| v > 1)
+            .map(|(s, &v)| (s.location(), s.entry.as_str(), v as u32))
+            .collect();
+        let ow = |room: u8, entry| (loc(0, room), entry, 2);
+        assert_eq!(
+            later,
+            [
+                ow(0x59, "W"),
+                ow(0x5a, "W"),
+                ow(0x5b, "W"),
+                ow(0x5c, "W"),
+                ow(0x5d, "W"),
+                ow(0x2d, "S"),
+                ow(0x2c, "E"),
+                ow(0x1c, "S"),
+                ow(0x1b, "E"),
+                (L::new(5, 0x07, true), "S", 2),
+            ]
+        );
         for (route, steps) in &map.routes {
             let stretches = &map.stretches[route];
             let visits = &map.visits[route];

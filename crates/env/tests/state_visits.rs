@@ -1,9 +1,11 @@
 //! Later visits (round 24): a route that enters a room from the same side more than once names each visit's start
 //! states apart (`<level>_<room><side>_v<visit>_<chain>`, `zelda::game_map::route_visits`), and a state starts the
-//! step its name spells. The test route `revisit` (`fixtures/revisit_routes.yaml`) goes on from the D4 triforce
-//! through 0x5c and 0x5d from W a second time; d2first leaves 0x5d N, `revisit` S. The states below are made from
-//! `0_5dw_0` (the first visit): `0_5dw_v2_0` with the second visit's progress written into it (four triforce pieces,
-//! the white sword, bow, raft and ladder), `0_5dw_v2_1` a plain copy, whose name alone says the second visit.
+//! step its name spells. d2first itself enters 0x5c and 0x5d from W a second time (the coast stretch's plain way to
+//! Dungeon 5, leaving 0x5d S where the first visit leaves N); the test route `revisit`
+//! (`fixtures/revisit_routes.yaml`) goes on from the D5 triforce through them a third time. The states below are
+//! made from `0_5dw_0` (the first visit): `0_5dw_v2_0`/`_v3_0` with their visit's progress written into them
+//! (triforce pieces, the white sword, bow, raft and ladder), `0_5dw_v3_1` a plain copy, whose name alone says the
+//! third visit.
 
 mod common;
 
@@ -30,25 +32,26 @@ fn ow(room: u8) -> MapLocation {
 }
 
 /// The visits of the test route's own steps (`tests/test_entry_states.py` uses the same list): 0x5c and 0x5d from W
-/// a second time; the stretch's two 0x6f-from-W parts and two 0x5f-from-S steps are each one visit on two ways; 0x6f
-/// from S, first entered on the plain way, again on a shared step; D1's bow cellar a second time.
+/// a third time, 0x6d from N and 0x6e from W a second (d2first's coast plain way had the first); the stretch's two
+/// 0x6f-from-W parts and two 0x5f-from-S steps are each one visit (the second) on two ways; 0x6f from S, first
+/// entered on the plain way, again on a shared step; 0x4f from S and D1's bow cellar a second time.
 #[test]
 fn the_test_route_numbers_its_visits() {
     let map = map();
     let first = map.routes["d2first"].len();
     let visits = &map.visits[ROUTE];
-    assert!(visits[..first].iter().all(|&v| v == 1));
     assert_eq!(visits[..first], map.visits["d2first"][..]);
-    assert_eq!(visits[first..], [2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2]);
+    assert_eq!(visits[first..], [3, 3, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2]);
 }
 
-/// Writes `0_5dw_0` into `dir` as each of `names`; a name of the second visit gets that visit's progress (route
-/// step `step`) unless it is in `copies`.
-fn make_states(map: &GameMap, dir: &Path, step: usize, names: &[&str], copies: &[&str]) {
-    let progress = route_progress(map, &map.routes[ROUTE])[step];
-    for name in names {
+/// Writes `0_5dw_0` into `dir` as each of `names`; a name `(name, Some(step))` gets the progress of route step
+/// `step` (its visit's: triforce pieces, sword, bow, raft, ladder, recorder), `(name, None)` stays a plain copy.
+fn make_states(map: &GameMap, dir: &Path, names: &[(&str, Option<usize>)]) {
+    let progress = route_progress(map, &map.routes[ROUTE]);
+    for &(name, step) in names {
         let mut snap = common::read_state_file(&common::state_path("0_5dw_0")).unwrap();
-        if name.contains("_v2_") && !copies.contains(name) {
+        if let Some(step) = step {
+            let progress = progress[step];
             let triforces = (1..=8u8).filter(|l| progress.triforces & 1 << (l - 1) != 0).map(level_bit).sum::<u32>();
             for (var, value) in [
                 (Var::Triforce, triforces as u8),
@@ -56,6 +59,7 @@ fn make_states(map: &GameMap, dir: &Path, step: usize, names: &[&str], copies: &
                 (Var::Bow, progress.bow as u8),
                 (Var::Raft, progress.raft as u8),
                 (Var::StepLadder, progress.ladder as u8),
+                (Var::Whistle, progress.recorder as u8),
             ] {
                 <ZCore as Nes>::poke_state(&mut snap.machine, var.addr(), value);
             }
@@ -65,8 +69,9 @@ fn make_states(map: &GameMap, dir: &Path, step: usize, names: &[&str], copies: &
 }
 
 /// A single-room env (the real game) starts the step the state's name spells, on every reset: the bare name the
-/// first visit's (out N, towards 0x4d), `_v2` the second's (out S, towards 0x6d).  The second visit's state plays
-/// that step's objective; the plain copy (the first visit's progress) starts on it too, its name decides.
+/// first visit's (out N, towards 0x4d), `_v2` d2first's second (out S, towards 0x6d, the coast plain way), `_v3`
+/// the test route's third (out S again).  A later visit's state plays that step's objective; the plain copy (the
+/// first visit's progress) starts on the third visit's step too, its name decides.
 #[test]
 fn a_later_visit_state_starts_its_own_step() {
     let Some(nes) = open_core() else { return };
@@ -76,14 +81,23 @@ fn a_later_visit_state_starts_its_own_step() {
     config.route = Some(ROUTE.into());
     config.ram_randomization = RamRandomization::default();
     let steps = &map.routes[ROUTE];
-    let second = (0..steps.len()).find(|&i| map.visits[ROUTE][i] == 2 && steps[i].location() == ow(0x5d)).unwrap();
+    let visit = |v| (0..steps.len()).find(|&i| map.visits[ROUTE][i] == v && steps[i].location() == ow(0x5d)).unwrap();
+    let (second, third) = (visit(2), visit(3));
+    assert!(second < map.routes["d2first"].len() && third >= map.routes["d2first"].len());
     let dir = tempfile::tempdir().unwrap();
-    make_states(&map, dir.path(), second, &["0_5dw_0", "0_5dw_v2_0", "0_5dw_v2_1"], &["0_5dw_v2_1"]);
+    make_states(
+        &map,
+        dir.path(),
+        &[("0_5dw_0", None), ("0_5dw_v2_0", Some(second)), ("0_5dw_v3_0", Some(third)), ("0_5dw_v3_1", None)],
+    );
     let mut env = SpecialistEnv::new(Arc::new(config), data, nes, TfzStore::new(), EnvOptions::default()).unwrap();
     let progress = route_progress(&map, steps);
-    for (name, visit, exit, next) in
-        [("0_5dw_0", 1, "N", Some(0x4d)), ("0_5dw_v2_0", 2, "S", Some(0x6d)), ("0_5dw_v2_1", 2, "S", None)]
-    {
+    for (name, visit, exit, next) in [
+        ("0_5dw_0", 1, "N", Some(0x4d)),
+        ("0_5dw_v2_0", 2, "S", Some(0x6d)),
+        ("0_5dw_v3_0", 3, "S", Some(0x6d)),
+        ("0_5dw_v3_1", 3, "S", None),
+    ] {
         let path = dir.path().join(format!("{name}.state"));
         for seed in 0..8 {
             env.reset(Some(seed), Some(path.to_str().unwrap())).unwrap();
@@ -100,17 +114,18 @@ fn a_later_visit_state_starts_its_own_step() {
     }
 }
 
-/// A chain's `--from` reads the visit too: from the second visit of 0x5d there is no 0x5c left to stop at, from the
-/// first there is (the second visit's).
+/// A chain's `--from` reads the visit too: from the third visit of 0x5d there is no 0x5c left to stop at, from the
+/// first and the second there is (the next visit's).
 #[test]
 fn a_chain_from_a_later_visit_starts_after_the_first() {
     let map = map();
     let dir = tempfile::tempdir().unwrap();
-    for name in ["0_5dw_0", "0_5dw_v2_0"] {
+    for name in ["0_5dw_0", "0_5dw_v2_0", "0_5dw_v3_0"] {
         std::fs::copy(common::state_path("0_5dw_0"), dir.path().join(format!("{name}.state"))).unwrap();
     }
     assert!(Route::load(&map, dir.path(), ROUTE, Some(ow(0x5c)), Some("0_5dw_0")).is_ok());
-    let err = Route::load(&map, dir.path(), ROUTE, Some(ow(0x5c)), Some("0_5dw_v2_0")).unwrap_err();
+    assert!(Route::load(&map, dir.path(), ROUTE, Some(ow(0x5c)), Some("0_5dw_v2_0")).is_ok());
+    let err = Route::load(&map, dir.path(), ROUTE, Some(ow(0x5c)), Some("0_5dw_v3_0")).unwrap_err();
     assert!(err.contains("not a room of route 'revisit' after the start step"), "{err}");
-    assert!(Route::load(&map, dir.path(), ROUTE, Some(ow(0x6d)), Some("0_5dw_v2_0")).is_ok());
+    assert!(Route::load(&map, dir.path(), ROUTE, Some(ow(0x6d)), Some("0_5dw_v3_0")).is_ok());
 }

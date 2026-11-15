@@ -275,7 +275,7 @@ def test_path_route_fields():
 
 REVISIT_FIXTURE = REPO_STATES_DIR.parent.parent / 'crates' / 'env' / 'tests' / 'fixtures' / 'revisit_routes.yaml'
 # zelda::game_map::route_visits of the route's own steps (crates/env/tests/state_visits.rs asserts the same list).
-REVISIT_VISITS = [2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2]
+REVISIT_VISITS = [3, 3, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2]
 
 
 def _revisit_steps() -> list:
@@ -326,49 +326,67 @@ def test_later_visit_names_round_trip():
     assert native.state_name('0_1be_v1_0') is None and native.state_name('start') is None
     step = entry_states.RouteStep(7, 5, 0x07, True, 'S', 'E', 'equipment-room', visit=2)
     assert step.filename(1) == '5_07cave_v2_1.state'
-    assert all(s.visit == 1 for s in route_steps())                      # d2first enters no room twice the same way
+    later = [(s.index, s.filename(0)) for s in route_steps() if s.visit > 1]   # d2first: the leg and Dungeon 5's
+    assert later == [(147, '0_59w_v2_0.state'), (148, '0_5aw_v2_0.state'), (149, '0_5bw_v2_0.state'),
+                     (150, '0_5cw_v2_0.state'), (151, '0_5dw_v2_0.state'), (164, '0_2ds_v2_0.state'),
+                     (182, '0_2ce_v2_0.state'), (183, '0_1cs_v2_0.state'), (184, '0_1be_v2_0.state'),
+                     (196, '5_07cave_v2_0.state')]
 
 
 def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit, tmp_path):
-    """A later visit's name is its own step; a stretch's plain way doesn't count the clip way's heart container room
-    (0x5f, on both ways, listed first on the clip way): 8 hearts up to 0x5f on either way, 9 after the rejoin."""
+    """A later visit's name is its own step (d2first's second visit of 0x5d from W, the test route's third); a
+    room and side on both ways of a stretch is one visit, named for the clip way's step.  A stretch's plain way
+    doesn't count the clip way's heart container room (d2first's coast stretch: 0x5f on both ways): 8 hearts up to
+    0x5f on either way, 9 from the rejoin 0x4f, 10 after 0x2f's cave."""
     require_rom()
     steps, first = revisit, len(route_steps())
     index = entry_states.RouteIndex('revisit')
     at = {s.filename(0)[:-len('_0.state')]: s.index for s in steps[first:]}
-    assert list(at) == ['0_5cw_v2', '0_5dw_v2', '0_6dn', '0_6ew', '0_6fw', '0_5fs', '0_7fn', '0_6fs', '0_4fs',
-                        '0_6fs_v2', '1_7fcave_v2']
-    assert all(index.by_name[name] == i for name, i in at.items() if name not in ('0_6fw', '0_5fs'))
-    assert index.by_name['0_6fw'] == first + 4 and index.by_name['0_5fs'] == first + 5    # the clip way's step
-    assert index.by_name['0_5dw'] < first and index.by_name['1_7fcave'] < first
-    hearts = [index.hearts(s.index) for s in steps[first:]]
-    assert hearts == [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9]
+    assert list(at) == ['0_5cw_v3', '0_5dw_v3', '0_6dn_v2', '0_6ew_v2', '0_6fw_v2', '0_5fs_v2', '0_7fn', '0_6fs',
+                        '0_4fs_v2', '0_6fs_v2', '1_7fcave_v2']
+    assert all(index.by_name[name] == i for name, i in at.items() if name not in ('0_6fw_v2', '0_5fs_v2'))
+    assert index.by_name['0_6fw_v2'] == first + 4 and index.by_name['0_5fs_v2'] == first + 5   # the clip way's step
+    assert index.by_name['0_5dw'] < index.by_name['0_5dw_v2'] < first and index.by_name['1_7fcave'] < first
     assert [s.way for s in steps[first + 4:first + 10]] == ['clips', 'clips', 'plain', 'plain', 'plain', 'plain']
-    assert index.max_hearts == 9
-    for name in ('0_5dw_0', '0_5dw_v2_0'):
+    coast = next(s for s in native.route_stretches(DEFAULT_ROUTE) if s['name'] == 'coast-heart')
+    hearts = {way: [index.hearts(i) for i in coast[way]] for way in ('clips', 'plain')}
+    assert hearts == {'clips': [8] * len(coast['clips']), 'plain': [8] * len(coast['plain'])}
+    assert [steps[i].room for i in (coast['clips'][-1], coast['plain'][-1], coast['rejoin'])] == [0x5f, 0x5f, 0x4f]
+    assert index.hearts(coast['rejoin']) == 9
+    cave = next(s.index for s in steps if (s.level, s.room, s.in_cave) == (0, 0x2f, True))
+    assert (index.hearts(cave), index.hearts(cave + 1), index.max_hearts) == (9, 10, 11)
+    assert {index.hearts(s.index) for s in steps[first:]} == {11}                   # after Digdogger's container
+    for name in ('0_5dw_0', '0_5dw_v2_0', '0_5dw_v3_0'):
         shutil.copy(REPO_STATES_DIR / '0_5dw_0.state', tmp_path / f'{name}.state')
     rows = {r['state']: r for r in entry_states.audit(sorted(glob.glob(str(tmp_path / '*.state'))), loads=1,
                                                       states_dir=str(REPO_STATES_DIR), route='revisit')}
-    first_visit, second_visit = rows['0_5dw_0'], rows['0_5dw_v2_0']
+    first_visit, second_visit, third_visit = rows['0_5dw_0'], rows['0_5dw_v2_0'], rows['0_5dw_v3_0']
     assert (first_visit['route_step'], first_visit['expected_hearts'], audit_problems(first_visit)) == \
         (index.by_name['0_5dw'], BASE_HEARTS, [])
-    assert (second_visit['route_step'], second_visit['expected_hearts']) == (first + 1, 8)
-    assert audit_problems(second_visit) == ['HEARTS']                   # the first visit's 3 hearts, not the route's 8
+    assert (second_visit['route_step'], second_visit['expected_hearts']) == (index.by_name['0_5dw_v2'], 8)
+    assert (third_visit['route_step'], third_visit['expected_hearts']) == (first + 1, 11)
+    for row in (second_visit, third_visit):                             # the first visit's 3 hearts, not the route's
+        assert audit_problems(row) == ['HEARTS'], row
     missing = entry_states.directory_problems(str(tmp_path), 'revisit')
-    assert 'MISSING 0_5dw_v2_1.state' in missing and 'MISSING 1_7fcave_v2_0.state' in missing
+    assert 'MISSING 0_5dw_v2_1.state' in missing and 'MISSING 0_5dw_v3_1.state' in missing
+    assert 'MISSING 1_7fcave_v2_0.state' in missing
 
 
 def test_path_names_a_later_visit_after_the_step_it_comes_from(revisit, monkeypatch, tmp_path):
-    """``path`` walks on from its source's step: from the D4 triforce's step 0x5c and 0x5d from W are the route's
-    second visits (``_v2``), from d2first's 0x5b the first."""
+    """``path`` walks on from its source's step: from the D5 triforce's step 0x5c and 0x5d from W are the test
+    route's third visits (``_v3``), from d2first's coast plain way (0x5b from W, its second visit) the second, from
+    d2first's first 0x5b the first."""
     require_rom()
     first = len(route_steps())
     _fake_crossings(monkeypatch, {})
     rooms = [MapLocation(0, 0x5c, False), MapLocation(0, 0x5d, False)]
-    d2first = [s.index for s in revisit[:first] if (s.level, s.entry) == (0, 'W') and s.room in (0x5c, 0x5d)]
-    late = (['0_5cw_v2_2.state', '0_5dw_v2_2.state'], [first, first + 1])
-    for out, step, (files, indices) in (('late', first - 1, late),
-                                        ('early', None, (['0_5cw_2.state', '0_5dw_2.state'], d2first))):
+    visits = {v: [s.index for s in revisit[:first]
+                  if (s.level, s.entry, s.visit) == (0, 'W', v) and s.room in (0x5c, 0x5d)] for v in (1, 2)}
+    plain_5b = next(s.index for s in revisit[:first] if (s.level, s.room, s.entry, s.visit) == (0, 0x5b, 'W', 2))
+    for out, step, (files, indices) in (
+            ('late', first - 1, (['0_5cw_v3_2.state', '0_5dw_v3_2.state'], [first, first + 1])),
+            ('coast', plain_5b, (['0_5cw_v2_2.state', '0_5dw_v2_2.state'], visits[2])),
+            ('early', None, (['0_5cw_2.state', '0_5dw_2.state'], visits[1]))):
         source, out = tmp_path / f'{out}_0.state', tmp_path / out
         shutil.copy(REPO_STATES_DIR / '0_5bw_0.state', source)
         out.mkdir()

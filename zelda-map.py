@@ -660,11 +660,18 @@ def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
     ``wrap``, ``takes`` and ``draft``) each with what Link carries on entering it: ``hearts`` (heart containers),
     ``sword``, ``items`` and ``triforce`` (levels).  Progress follows what each step gains: the treasure of its room
     (``game.yaml``) when that is a heart container, a sword or an item he keeps (``ROUTE_ITEMS``), and all a draft
-    step ``takes`` in the room's overworld cave; a ``triforce`` exit adds its piece."""
+    step ``takes`` in the room's overworld cave; a ``triforce`` exit adds its piece.  A stretch's plain way starts
+    from what Link carried where the stretch parts, not from the end of its clip way (the coast stretch's 0x5f, a
+    heart container on both ways, counts once)."""
     rooms = game_rooms() if rooms is None else rooms
     hearts, sword, items, triforce = 3, 'none', [], []
-    plan = []
+    plan, parted, way = [], None, None
     for step in native_route_steps(route) if route in routes() else draft_routes.steps(route):
+        if step.get('way') == 'clips' and way != 'clips':
+            parted = (hearts, sword, list(items), list(triforce))
+        elif step.get('way') == 'plain' and way == 'clips':
+            hearts, sword, items, triforce = parted[0], parted[1], list(parted[2]), list(parted[3])
+        way = step.get('way')
         plan.append({**step, 'hearts': hearts, 'sword': sword, 'items': list(items), 'triforce': list(triforce)})
         treasure = (rooms.get((step['level'], step['room'], step['in_cave'])) or {}).get('treasure')
         for gain, kept in [(treasure, treasure in ROUTE_ITEMS), *((take, True) for take in step.get('takes') or ())]:
