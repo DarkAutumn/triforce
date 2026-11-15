@@ -1,6 +1,7 @@
 #!/bin/bash
 # Long-haul profile of one real training run: py-spy over the whole run (Python threads, idle waits included),
-# perf over every thread of the python process (not py-spy) for PERF_SECONDS from WARMUP seconds in.
+# perf over every thread of the python process (not py-spy) for PERF_SECONDS from WARMUP seconds in (counted from
+# when the training starts: it may first wait its turn behind other trainings and evaluations, triforce/jobs.py).
 #   scripts/profile_train.sh LABEL [ITERATIONS] [WARMUP] [PERF_SECONDS]
 cd "$(dirname "$0")/.."
 OUT=target/perf/profile-${1:-baseline}
@@ -11,6 +12,7 @@ s=ow-zora; p=16
   --iterations ${2:-120} --steps-per-update 4096 --device cuda --seed 1 --models-dir $OUT/models \
   --logs-dir $OUT/logs --run-id prof > $OUT/train.log 2>&1 &
 SPY=$!
+until grep -qs '"status": "running"' $OUT/logs/*/training.json || ! kill -0 $SPY 2>/dev/null; do sleep 5; done
 sleep ${3:-600}
 PID=$(pgrep -P $SPY -f triforce.train | head -1)
 echo "perf on $PID"
