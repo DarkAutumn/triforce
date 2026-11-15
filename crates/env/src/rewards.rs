@@ -4,6 +4,7 @@ use crate::config::SpecialistConfig;
 use crate::critic::{Critique, GameplayCritic};
 use crate::end_conditions::{EndConditions, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, StepView, classify_ending};
 use crate::error::EnvError;
+use crate::heart_value::HeartContext;
 use zelda::game::GameView;
 
 pub const REWARD_MINIMUM: f64 = 0.01;
@@ -26,9 +27,16 @@ pub const OUTCOMES: [&str; 4] = [SUCCESS, HARD_FAILURE, SOFT_FAILURE, NEUTRAL];
 
 pub const REWARD_TERMINAL_SUCCESS: &str = "reward-terminal-success";
 pub const PENALTY_TERMINAL_FAILURE: &str = "penalty-terminal-failure";
+/// The hearts priced by `reward.heart_value` (`env::heart_value`): outside the step's ±`REWARD_MAXIMUM` clamp.
+pub const REWARD_HEART_VALUE: &str = "reward-heart-value";
+pub const PENALTY_HEART_VALUE: &str = "penalty-heart-value";
+
+fn is_heart_value(name: &str) -> bool {
+    name == REWARD_HEART_VALUE || name == PENALTY_HEART_VALUE
+}
 
 /// Every reward and penalty term name the critic and terminal rewards can produce, rewards first (metrics).
-pub const REWARD_TERMS: [&str; 57] = [
+pub const REWARD_TERMS: [&str; 59] = [
     "reward-gained-sword",
     "reward-gained-arrows",
     "reward-gained-bow",
@@ -70,6 +78,7 @@ pub const REWARD_TERMS: [&str; 57] = [
     "reward-moved-off-wallmaster",
     "reward-block-projectile",
     "reward-pbrs-movement",
+    REWARD_HEART_VALUE,
     REWARD_TERMINAL_SUCCESS,
     "penalty-attack-miss",
     "penalty-attack-cave",
@@ -84,6 +93,7 @@ pub const REWARD_TERMS: [&str; 57] = [
     "penalty-lost-beams",
     "penalty-room-stalling",
     "penalty-pbrs-movement",
+    PENALTY_HEART_VALUE,
     "penalty-frames",
     PENALTY_TERMINAL_FAILURE,
 ];
@@ -163,18 +173,33 @@ impl StepRewards {
         self.outcomes.iter().map(|o| (o.name, o.value))
     }
 
-    /// The total, clamped to ±REWARD_MAXIMUM except for terminal rewards (Python `sum` order).
+    /// The total, clamped to ±REWARD_MAXIMUM except for terminal rewards (Python `sum` order); the heart-value
+    /// terms (`reward.heart_value`) are added after the clamp.
     pub fn value(&self) -> f64 {
-        let total = self.outcomes.iter().fold(0.0, |acc, o| o.value + acc);
-        if self.outcome == Some(SUCCESS) && self.contains(REWARD_TERMINAL_SUCCESS) {
-            return clamp(total, -REWARD_MAXIMUM, TERMINAL_SUCCESS_REWARD_VALUE);
-        }
-        if matches!(self.outcome, Some(HARD_FAILURE | SOFT_FAILURE))
+        let heart: Option<f64> = self
+            .outcomes
+            .iter()
+            .filter(|o| is_heart_value(o.name))
+            .map(|o| o.value)
+            .reduce(|a, b| a + b);
+        let total = self
+            .outcomes
+            .iter()
+            .filter(|o| !is_heart_value(o.name))
+            .fold(0.0, |acc, o| o.value + acc);
+        let clamped = if self.outcome == Some(SUCCESS) && self.contains(REWARD_TERMINAL_SUCCESS) {
+            clamp(total, -REWARD_MAXIMUM, TERMINAL_SUCCESS_REWARD_VALUE)
+        } else if matches!(self.outcome, Some(HARD_FAILURE | SOFT_FAILURE))
             && self.contains(PENALTY_TERMINAL_FAILURE)
         {
-            return clamp(total, TERMINAL_REWARD_MIN, REWARD_MAXIMUM);
+            clamp(total, TERMINAL_REWARD_MIN, REWARD_MAXIMUM)
+        } else {
+            clamp(total, -REWARD_MAXIMUM, REWARD_MAXIMUM)
+        };
+        match heart {
+            Some(heart) => clamped + heart,
+            None => clamped,
         }
-        clamp(total, -REWARD_MAXIMUM, REWARD_MAXIMUM)
     }
 
     /// Adds an outcome; panics on a duplicate name (a critic bug).
@@ -276,11 +301,13 @@ pub struct Scored {
     pub truncated: bool,
 }
 
-/// Scores one step of `config`'s specialist: the critic's terms (scaled by `scale`, the shaping scale), the
-/// frame penalty, the end conditions (a `no-room-progress`, `no-damage` or `max-steps` ending truncates) and
-/// the terminal reward.  `c.quiet_steps` is the linger tail after the step; `steps` the actions of the episode
-/// including this one; `state` the state the step ended in.  Training (`SpecialistEnv`) and a chain's reward
-/// recording (`RewardTrack`) both score with this.
+/// Scores one step of `config`'s specialist: the critic's terms and the heart-value terms (scaled by `scale`, the
+/// shaping scale), the frame penalty, the end conditions (a `no-room-progress`, `no-damage` or `max-steps` ending
+/// truncates) and the terminal reward.  `c.quiet_steps` is the linger tail after the step; `steps` the actions of
+/// the episode including this one; `state` the state the step ended in; `heart` where on the route the step was
+/// played, for `reward.heart_value`.  Training (`SpecialistEnv`) and a chain's reward recording (`RewardTrack`)
+/// both score with this.
+#[allow(clippy::too_many_arguments)]
 pub fn score_step(
     config: &SpecialistConfig,
     critic: &mut GameplayCritic,
@@ -289,9 +316,11 @@ pub fn score_step(
     scale: f64,
     steps: u64,
     state: &GameView,
+    heart: &HeartContext,
 ) -> Result<Scored, EnvError> {
     let mut rewards = StepRewards::default();
     critic.critique(c, &mut rewards);
+    add_heart_value(config, c, heart, &mut rewards);
     if scale != 1.0 {
         rewards.scale_all(scale);
     }
@@ -316,13 +345,16 @@ pub fn score_step(
     let mut outcome = None;
     if let Some(ending) = &ending {
         let class = classify_ending(ending, &config.success, &config.endings)?;
+        // `reward.heart_value.exit`: the health part is V(next step, hearts) / V(next step, max) (as hp 1 of max 1).
+        let exit = config.reward.heart_value.exit.then(|| heart.exit_fraction(state.health())).flatten();
+        let (health, max_health) = exit.map_or((state.health(), state.max_health() as f64), |f| (f, 1.0));
         apply_terminal_rewards(
             &mut rewards,
             ending,
             class,
             terminated,
-            state.health(),
-            state.max_health() as f64,
+            health,
+            max_health,
             config.reward.exit_health_weight,
         );
         outcome = Some(class);
@@ -334,4 +366,34 @@ pub fn score_step(
         terminated,
         truncated,
     })
+}
+
+/// `reward.heart_value`'s in-room terms, one `reward-heart-value` / `penalty-heart-value` of their sum:
+/// `potential` × (V(step, hearts after) − V(step, hearts before)) for any change of hearts but a refill by the
+/// triforce or a heart container, and `low_health` × (1 − hearts after / max) × the step's `penalty-lost-health`.
+fn add_heart_value(config: &SpecialistConfig, c: &Critique, heart: &HeartContext, rewards: &mut StepRewards) {
+    let hv = &config.reward.heart_value;
+    let change = c.change;
+    let (prev, curr) = (&change.previous, &change.state);
+    let mut value = 0.0;
+    if hv.potential > 0.0
+        && (change.health_lost != 0.0 || change.health_gained != 0.0)
+        && !change.gained_triforce()
+        && prev.max_health() == curr.max_health()
+        && let Some(delta) = heart.change(prev.health(), curr.health())
+    {
+        value += hv.potential * delta;
+    }
+    if hv.low_health > 0.0
+        && let Some(hit) = rewards.get("penalty-lost-health")
+    {
+        let max = curr.max_health() as f64;
+        let left = if max > 0.0 { (curr.health() / max).clamp(0.0, 1.0) } else { 0.0 };
+        value += hv.low_health * (1.0 - left) * hit.value;
+    }
+    if value > 0.0 {
+        rewards.add(Outcome::reward(REWARD_HEART_VALUE, value));
+    } else if value < 0.0 {
+        rewards.add(Outcome::penalty(PENALTY_HEART_VALUE, value));
+    }
 }

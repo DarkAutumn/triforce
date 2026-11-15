@@ -10,6 +10,7 @@ pub mod curriculum;
 pub mod end_conditions;
 pub mod error;
 pub mod explore;
+pub mod heart_value;
 pub mod objective;
 pub mod observation;
 pub mod reward_track;

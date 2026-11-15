@@ -22,6 +22,7 @@ use crate::end_conditions::{
     NO_ROOM_PROGRESS, RETREAT,
 };
 use crate::error::EnvError;
+use crate::heart_value::HeartContext;
 use crate::objective::{Attached, attach, needs_wavefront};
 use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{SUCCESS, Scored, score_step};
@@ -908,6 +909,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(&state), &change);
         let prev = self.attached.take().expect("episode started");
+        let route_step = self.objectives.as_ref().and_then(GameCompletion::step);
         let curr = attach(
             self.objectives.as_mut().expect("episode started"),
             Some(&change.previous),
@@ -929,6 +931,13 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.bomb_stats.update(&change);
         self.clip_stats.update(&change);
         let scale = self.shaping.as_ref().map_or(self.config.reward.shaping_scale, ShapingDial::get);
+        let gc = self.objectives.as_ref().expect("episode started");
+        let heart = HeartContext {
+            values: self.data.heart_values_for(&self.config, gc.route()),
+            step: route_step,
+            next: gc.step(),
+            clips: gc.clips_allowed(),
+        };
         let Scored { rewards, ending, outcome, terminated, truncated } = score_step(
             &self.config,
             &mut self.critic,
@@ -944,6 +953,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             scale,
             self.session.steps,
             &state,
+            &heart,
         )?;
 
         self.episode_steps += 1;

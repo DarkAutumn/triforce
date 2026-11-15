@@ -15,6 +15,7 @@
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::BossTransitions;
 use crate::error::EnvError;
+use crate::heart_value::HeartContext;
 use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::reward_track::RewardTrack;
@@ -1002,6 +1003,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(&state), &change);
         let prev_objective = self.objective.take().expect("run started");
+        let route_step = self.objectives.as_ref().and_then(GameCompletion::step);
         let entered = state.full_location() != change.previous.full_location();
         // A new room: the path search follows its family's `clips:` switch from the objective on.
         let clips = entered.then(|| self.clips_in(state.full_location()));
@@ -1034,7 +1036,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             || linger_wavefront(&state, &objective, None),
         );
         self.scored = match &mut self.track {
-            Some(track) => Some(track.step(&self.data.map, &change, &state, &objective)?),
+            Some(track) => {
+                let gc = self.objectives.as_ref().expect("run started");
+                let config = &self.current.as_ref().expect("run started").config;
+                let heart = HeartContext {
+                    values: self.data.heart_values_for(config, gc.route()),
+                    step: route_step,
+                    next: gc.step(),
+                    clips: gc.clips_allowed(),
+                };
+                Some(track.step(&self.data.map, &change, &state, &objective, &heart)?)
+            }
             None => None,
         };
         let summary = self.linger.summary();
