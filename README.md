@@ -142,9 +142,11 @@ gives each outcome its share (`108× (10.8%)` of a chain's runs or of a family e
 Trainings and evaluations look after the machine by themselves; you pass nothing. `train_round.py` and `triforce
 train|evaluate|eval-chain|eval-batch` lower their own priority to nice 15 (`--nice N`, 0 leaves it alone,
 `$TRIFORCE_NICE` sets the default; the jobs they start inherit it), and at most two of them run at once on the
-machine (`$TRIFORCE_MAX_JOBS`): a third waits, first come first served, printing `triforce: NAME is paused until
-resources are available: ... It starts by itself; next update in 5 minutes.`, and starts when one of the two ends or
-dies. The training GUI lists it as waiting with its place in line. There is no controller: the per-user job registry
+machine (`$TRIFORCE_MAX_JOBS`), plus one short job (estimated at most 10 minutes) beside them. The others wait,
+printing `triforce: NAME is paused until resources are available: estimated 40 minutes; ... It starts by itself; next
+update in 5 minutes.`: the line drains the fastest jobs first (each job estimates its run time from its work and how
+long such work took lately), and a long job moves up as it waits, so it is never starved. The training GUI lists
+the waiting jobs in the order they will start. There is no controller: the per-user job registry
 (`triforce/jobs.py`, read through `/proc`, shared by every worktree) is the queue. `--no-wait` starts a job at once
 (it still counts for the others). Play, replay and build tools (`play-zelda.py`, `zelda-headless.py`,
 `create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority and never wait.

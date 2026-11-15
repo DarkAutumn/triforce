@@ -107,7 +107,7 @@ from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
-from .jobs import add_job_arguments, begin_job
+from .jobs import add_job_arguments, begin_job, work
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
@@ -438,7 +438,8 @@ def open_events(args, specialist: str, run_id: str, run_dir: Path, argv: list[st
     plan = TrainingPlan(stream.parent, specialist, 'train', [{
         'specialist': specialist, 'run_id': run_id, 'events': stream.name, 'run_dir': str(run_dir),
         'target_iterations': args.iterations, 'target_steps': args.iterations * steps_per_iteration(args)}],
-                        command=['python', '-m', 'triforce.train', *argv], nice=os.nice(0))
+                        command=['python', '-m', 'triforce.train', *argv], nice=os.nice(0),
+                        work=work(train_steps=args.iterations * steps_per_iteration(args)))
     plan.update_run(0, status='running')
     print(f"[train] events: {stream}")
     return EventLog(stream, **context), plan

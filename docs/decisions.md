@@ -2247,3 +2247,33 @@ Hills). Decided by the agent building it (the owner away):
   segment arrivals 62.9% → 75.8% (+12.9 ± 1.7, paired seeds), full route D3 exit 36.9% → 45.4% (+8.5 ± 1.4), out of
   Dungeon 4 49.7 → 60.2% clips on, 44.2 → 51.9% clips off (docs/routes/d3.md "Manhandla's drop"). It enters Dungeon 4
   with fewer bombs (3.64 against 4.15: sword kills arm no bomb drop).
+
+## 2026-11-15 — The line drains the fastest jobs first; an express place for short ones (Lee)
+
+The first-come line (above) let long jobs hog it: a three-minute chain queued behind two waiting rounds waited for
+hours. Lee: "fast jobs run sooner than later ... the time waited check will EVENTUALLY bring them to the front."
+
+- **Every job estimates its run time.** It names its work in three coarse units (training steps asked for,
+  evaluation episodes, chain route steps: runs x the steps from its start to its stop, so a full-route run counts ~9x
+  a Dungeon 5 run); a batch sums its entries not measured yet. The estimate is work x rates, a rate the median of the
+  last 20 completed jobs that did that work (each records the seconds it ran), defaults measured from this
+  machine's logs. A mixed job (a round: training and evaluation) teaches a rate with its other work taken off at the
+  other units' rates; without that no round would ever teach the training rate (no job trains without evaluating).
+  Estimates are coarse and may be wrong (early stops, load, envs); the ordering only needs short vs long right, and
+  the history corrects the rates.
+- **Why a score, `estimate - 0.5 x waited`.** Shortest-first alone starves long jobs; first-come alone lets them hog
+  the line. The score is Lee's rule: a short job goes first, and a long one gains half a second per second waited,
+  so it passes fresh short jobs after waiting about twice its own length. Long jobs may wait long; they always start.
+- **Why an express place.** Ordering the line does little when both places are held by hour-long trainings: the
+  short job is first in line and still waits an hour. So one more place exists for a job estimated at most 10
+  minutes (one at a time; it never holds a regular place): two regular jobs and one short one at most. The machine
+  takes a third, short job; it can't take a third round.
+- **Why the fallback to first come first served.** Jobs of the previous code (no estimate) wait by join order and
+  can't be changed. If new jobs used the score while such a job waits, three jobs could wait for each other in a
+  cycle (old waits for an earlier new job, which waits for a later shorter one, which waits for the old one). So
+  while any job without an estimate waits, everyone uses the old rule; the score and the express place apply from
+  the moment none waits. More than two may run in that transition (an express job beside two old ones); nothing
+  hangs, and once the old jobs have drained the line is fully scored. Tested with real processes running a copy of
+  the old rule in every join order.
+- Still no controller, no new knob: `--no-wait` and `--nice` are the only opt-outs; `$TRIFORCE_MAX_JOBS` keeps
+  meaning the regular places.

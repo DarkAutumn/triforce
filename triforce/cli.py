@@ -171,7 +171,7 @@ def _cmd_eval_chain(args):
     from contextlib import nullcontext
     from . import replay
     from .events import EventLog, has_plan, logged_job
-    from .jobs import begin_job
+    from .jobs import begin_job, work
     from .registry import act_override
     from .runner import RunnerError, parse_overrides, power_on_options
     from .specialist import load_specialist
@@ -197,6 +197,7 @@ def _cmd_eval_chain(args):
     stream = Path(args.events) if args.events else None
     log = nullcontext() if stream is not None and has_plan(stream) else logged_job(
         what, 'chain', [], args.logs_dir, directory=None if stream is None else stream.parent, log=not args.no_log,
+        work=work(chain_steps=args.runs * route.steps_played()),
         events=stream.name if stream else 'round.jsonl', chain_runs=args.runs, nice=nice)
     with log as plan:
         events = (EventLog(stream) if stream is not None else

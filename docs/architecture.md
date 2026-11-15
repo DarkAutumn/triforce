@@ -870,38 +870,69 @@ every step, so following an enemy that moves away pays again, and knockback rese
   <process start>-<log folder>.json`: `host`, `pid`, `pid_start` (the process start from `/proc`, so a reused pid is
   told apart), `started`, `command`, `cwd`, `checkout`, `branch`, `commit`, `log_dir`, `plan`, `name`, `kind`,
   `status` (`queued`, then `running`, then the plan's final status from `finish`), `queued` / `queued_ts` (when it
-  joined the line), `admitted` (when it started running), `no_wait` and `finished`. A `--no-log` evaluation or chain
-  registers too, without a folder (`log_dir`, `plan` null; `events.logged_job(log=False)`), named after its job.
+  joined the line), `admitted` / `admitted_ts` (when it started running), `lane` (`regular` or `express`),
+  `no_wait`, `work`, `estimate`, `finished` and `ran` (seconds from admitted to finished). A `--no-log` evaluation or
+  chain registers too, without a folder (`log_dir`, `plan` null; `events.logged_job(log=False)`), named after its job.
   A top-level job counts once: a round's or batch's trainings, evaluations and chains write into their owner's
   folder (`--events` into a folder with a plan) and have no entry. Writes are atomic; a registry that can't be
   written warns once and the job goes on (no coordination: it starts). Each registration deletes entries that ended
   (or whose process is gone) more than 7 days ago (`PRUNE_SECONDS`). The tests register in a session directory and
   never wait (`tests/conftest.py`: `$TRIFORCE_MAX_JOBS=0`; the line's own tests set their limit).
-- The line (`jobs.py`, Nov 15): at most `$TRIFORCE_MAX_JOBS` (default 2; 0 = no limit) trainings and evaluations run
-  at once on a host (two at a time is a bit faster than one, more are not: load averages of 120 when they piled
-  up); the others wait, first come first served. No controller: the registry is the queue and every job decides for
-  itself (`JobRecord.wait_turn`). Admission (`jobs.turn`): a job may start when fewer than the limit of the other
-  live jobs on this host are `running` and no other live `queued` job joined the line before it (by `queued_ts`,
-  ties by file name); entries of other hosts and of its own process are ignored; an old entry (code from before the
-  line: `running`, no queue fields) counts as running. Liveness is read from `/proc` (pid and process start time,
-  `job_alive`), never from a job reporting in: a job that dies, running or queued, simply stops counting and
-  nothing has to be cleaned up for the line to move. Registration (the `queued_ts` stamp) and each check with its
-  change to `running` happen under an exclusive `flock` on `<jobs_dir>/.lock`, held only for that moment (the
-  kernel drops it if the holder dies), so two jobs starting at the same instant for one free place can't both take
-  it. `TrainingPlan.__init__` registers and blocks until its turn: a job that starts at once never shows as queued;
-  one that has to wait saves its plan with status `queued` and a `queue` object (`queued`, `place`, `running`,
-  `ahead`, `limit`, `checked`, then `admitted`, `waited`), writes `queue.jsonl` in its folder (`queued`, `waiting`
-  every 5 minutes, then `admitted` with `waited`, or `interrupted`), polls every 5 s (`POLL_SECONDS`) and prints on
-  stdout, at first and every 5 minutes (`UPDATE_SECONDS`), `triforce: NAME is paused until resources are
-  available: 2 jobs are running (A (round), B (eval)); 1 job is ahead in line (C (chain)). It starts by itself; next
-  update in 5 minutes.`, then `triforce: NAME starts after waiting 12 minutes`. Ctrl-C or SIGTERM while it waits
-  ends the plan and its entry `interrupted`. The work a job does before its plan (argument and checkpoint checks)
-  runs before it waits, so a wrong command fails at once. `--no-wait` (every training and evaluation command;
-  `$TRIFORCE_NO_WAIT=1` for wrappers) starts the job at once; it still counts as running for the others. The
-  training GUI is a reader: [currently running] lists a queued plan after the running ones as `queued` (purple),
-  with its place in line (from the registry, else the plan's `queue`), what it waits for and for how long, `process
-  gone` when its process died; the web view shows queued plans as dashed "waiting" lines under the running plans,
-  with no cards; the window title and the web's running count count running jobs only.
+- Work and estimates (`jobs.py`, Nov 15): every job names its `work` when it creates its plan (`TrainingPlan(...,
+  work=jobs.work(...))`), in three coarse units: `train_steps` (the training steps asked for: a round's
+  specialists x iterations x steps per update, a training's iterations x steps per iteration), `eval_episodes` (an
+  evaluation's `evaluate.episode_count`; a round's evaluation of each specialist, seed states x episodes per state x
+  the clips switch states it plays, counted without loading a state; a batch's evaluation entries) and
+  `chain_steps` (runs x the route steps a run plays from its start to its stop, `runner.steps_played`: a full-route
+  run is ~200 steps, a Dungeon 5 run 23); a batch sums its entries that an earlier run hasn't measured yet (their
+  `resume`); a report counts nothing. Its `estimate` (seconds) is amount x rate summed; a rate (seconds per unit,
+  `jobs.rates`) is the median over the 20 latest `completed` jobs in the registry that did some of that unit, each
+  giving its `ran` less its other work at the other units' rates (those of jobs that did only that unit) per amount
+  of the unit, so a round (training and evaluation) teaches the training rate; without history `DEFAULT_RATES`,
+  measured on the training machine on Nov 15 from every checkout's log folders: 0.00044 s per training step (259
+  round runs: training wall seconds per target step, early stops included), 0.046 s per evaluation episode (801 batch
+  family evaluations), 0.0026 s per chain run-step (168 batch chains, mostly `--parallel 20`). An estimate may be
+  wrong (early stops, load, fewer envs); the history corrects the rates.
+- The line (`jobs.py`, Nov 15): no controller: the registry is the queue and every job decides for itself
+  (`JobRecord.wait_turn`, `jobs.turn`). Fast jobs drain first: waiting jobs are ordered by their score, `estimate −
+  AGING × seconds waited` (`AGING` 0.5; lowest first; ties by `queued_ts`, then file name): a short job goes before a
+  long one, and a long one moves up as it waits, passing fresh short jobs once it has waited about twice its own
+  estimate, so nothing starves. In that order they take the free places: `$TRIFORCE_MAX_JOBS` regular places
+  (default 2; 0 = no limit; two at a time is a bit faster than one, more are not: load averages of 120 when they
+  piled up) and `EXPRESS_JOBS` (1) express place for a job estimated at most `EXPRESS_SECONDS` (10 minutes), so a
+  short chain doesn't wait for the hour-long trainings that usually hold both regular places: at most two regular
+  jobs and one short one. A short job takes the express place when it is free, else a regular one; express jobs
+  count only against the express place; a job that gets no place waits, and a later one may take a place it can use
+  (a short job passes long ones blocked on the regular places). Old and new code in one line: while any live queued
+  entry has no `estimate` (code from before the scored line), every job uses the old rule exactly (first come first
+  served by `queued_ts`, any running job counting against the limit, no express place); the score and the express
+  place apply again once no such entry waits. Without that a cycle is possible (an old job waits for a new one that
+  joined before it, which waits for a shorter new one that joined later, which waits for the old one); with it,
+  everyone agrees on one order while old jobs wait (`tests/test_job_queue.py` runs every join order of an old job, a
+  long and a short one). Entries of other hosts and of a job's own process are ignored; an old running entry (no
+  `lane`) is regular. Liveness is read from `/proc` (pid and process start time, `job_alive`), never from a job
+  reporting in: a job that dies, running or queued, simply stops counting and nothing has to be cleaned up for the
+  line to move. Registration (the `queued_ts` stamp) and each check with its change to `running` (and its `lane`)
+  happen under an exclusive `flock` on `<jobs_dir>/.lock`, held only for that moment (the kernel drops it if the
+  holder dies), so two jobs starting at the same instant for one free place can't both take it.
+  `TrainingPlan.__init__` registers and blocks until its turn: a job that starts at once never shows as queued; one
+  that has to wait saves its plan with status `queued` and a `queue` object (`queued`, `place`, `running`, `ahead`,
+  `limit`, `mode` (`score` or `legacy`), `estimate`, `work`, `score`, `lane`, `checked`, then `admitted`, `waited`),
+  writes `queue.jsonl` in its folder (`queued`, `waiting` every 5 minutes, then `admitted` with `waited` and its
+  lane, or `interrupted`), polls every 5 s (`POLL_SECONDS`) and prints on stdout, at first and every 5 minutes
+  (`UPDATE_SECONDS`), `triforce: NAME is paused until resources are available: estimated 40 minutes; 2 jobs are
+  running (A (round), B (eval)); 1 job is ahead in line (C (chain)). It starts by itself; next update in 5
+  minutes.`, then `triforce: NAME starts after waiting 12 minutes`. Every plan has `work`, `estimate` and, once it
+  runs, `lane`. Ctrl-C or SIGTERM while it waits ends the plan and its entry `interrupted`. The work a job does
+  before its plan (argument and checkpoint checks, counting its work) runs before it waits, so a wrong command fails
+  at once. `--no-wait` (every training and evaluation command; `$TRIFORCE_NO_WAIT=1` for wrappers) starts the job
+  at once in a regular place; it still counts as running for the others. The training GUI is a reader: [currently
+  running] lists the queued plans after the running ones in the order they will start (its own copy of the score
+  and the legacy rule) as `queued` (purple), with their place, what they wait for, the estimate and the wait (`short
+  ~5 min · waited 12m`; `short` for express-sized jobs), `process gone` when the process died; running jobs show
+  their `express` lane and `est ~40 min · ran 12m`; the web view shows queued plans as dashed "waiting" lines under
+  the running plans, in the same order, with no cards; the window title and the web's running count count running
+  jobs only.
 - CPU priority and the start of a job (`jobs.py`): every training and evaluation entry point
   (`scripts/train_round.py`, `triforce.train` `cli`, `triforce.evaluate` `main`, `cli._cmd_eval_chain`,
   `eval_batch.main`) adds `jobs.add_job_arguments` (`--nice N`, `--no-wait`) and calls `jobs.begin_job(args)` at

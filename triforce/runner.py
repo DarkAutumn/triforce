@@ -119,6 +119,42 @@ class Route:
                               f"{start}; steps: {start + 1}..={len(steps) - 1}")
         return Route(name, start_from or 'start', stop_at, stop_step, power_on, checkpoint, start, clips, clips_off_from)
 
+    def steps_played(self) -> int:
+        """How many route steps a run that gets to the end plays (an estimate's chain work, ``jobs.work``)."""
+        return steps_played(self.name, self.start_step, self.terminal, self.stop_step)
+
+
+def steps_played(route_name: str, start_step: int = 0, stop_room: Optional[MapLocation] = None,
+                 stop_step: Optional[int] = None) -> int:
+    """The route steps from ``start_step`` to a run's end (``stop_step``, the first later step in ``stop_room``,
+    else the route's last step), at least 1; both ways of a stretch count, so this is an upper bound."""
+    steps = _native.route_steps(route_name)
+    if stop_step is not None:
+        return max(1, stop_step - start_step)
+    if stop_room is not None:
+        room = (stop_room.level, stop_room.value, stop_room.in_cave)
+        found = next((step['index'] for step in steps[start_step + 1:]
+                      if (step['level'], step['room'], step['in_cave']) == room), None)
+        if found is not None:
+            return max(1, found - start_step)
+    return max(1, len(steps) - start_step)
+
+
+def chain_steps(route_name: str, runs: int, start_from: Optional[str] = None, stop_at: Optional[str] = None) -> int:
+    """A chain's work in route steps (``jobs.work`` ``chain_steps``): ``runs`` x the steps each plays from the start
+    state ``start_from`` (a route entry state name or path; None: the game start) to ``stop_at`` (``--stop-at``);
+    without checking either (a malformed one counts the whole route)."""
+    try:
+        steps = _native.route_steps(route_name)
+        start = _start_step(steps, Path(start_from).stem) if start_from and start_from != 'start' else 0
+        stop_room, stop_step = parse_stop(stop_at)
+        return runs * steps_played(route_name, start, stop_room, stop_step)
+    except (RunnerError, ValueError, _native.ConfigError):
+        try:
+            return runs * len(_native.route_steps(route_name))
+        except _native.ConfigError:
+            return 0
+
 
 def _power_on(options: dict) -> dict:
     """A power-on start's ``{'name', 'delay', 'max_delay'}`` checked and filled in (name LINK, a random delay over
