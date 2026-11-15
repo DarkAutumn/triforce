@@ -4016,14 +4016,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4968,
+  "env_steps": 0,
   "attempts": 1,
-  "seconds": 10.161642133,
-  "steps": 23,
-  "health": 10.0,
+  "seconds": 0.0,
+  "steps": 0,
+  "health": 5.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "triforce eval-chain --from 5_76s_0 --runs 40 --act model --stop-at step:194 --harvest DIR (round 24, r74 models, darknut r74-darknut3): run seed 2's Olive Garden cleared by play, its harvested 5_04cave_h2_7.state"
  },
  {
   "file": "5_05c_0.state",
@@ -4038,14 +4037,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 17340,
+  "env_steps": 9771,
   "attempts": 1,
-  "seconds": 30.176418115,
-  "steps": 100,
-  "health": 9.5,
+  "seconds": 23.888276054,
+  "steps": 131,
+  "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_06w_0.state",
@@ -4060,14 +4058,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 4059,
+  "env_steps": 3374,
   "attempts": 1,
-  "seconds": 10.802714904,
-  "steps": 55,
-  "health": 6.0,
+  "seconds": 12.995396486,
+  "steps": 35,
+  "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_07cave_v2_0.state",
@@ -4084,12 +4081,11 @@
   "alternate": false,
   "env_steps": 5893,
   "attempts": 1,
-  "seconds": 11.117589606,
+  "seconds": 15.487138002,
   "steps": 26,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_64c_0.state",
@@ -4104,14 +4100,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 4689,
+  "env_steps": 4645,
   "attempts": 1,
-  "seconds": 8.684465303,
-  "steps": 61,
+  "seconds": 11.478437424,
+  "steps": 68,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_65w_0.state",
@@ -4126,14 +4121,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6176,
+  "env_steps": 6005,
   "attempts": 1,
-  "seconds": 15.356336564,
-  "steps": 56,
-  "health": 4.0,
+  "seconds": 20.369933996,
+  "steps": 84,
+  "health": 2.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_66w_0.state",
@@ -4148,14 +4142,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4090,
+  "env_steps": 4743,
   "attempts": 1,
-  "seconds": 9.635370488,
-  "steps": 33,
-  "health": 6.0,
+  "seconds": 15.224013904,
+  "steps": 56,
+  "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_56s_0.state",
@@ -4170,14 +4163,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 62652,
-  "attempts": 1,
-  "seconds": 139.981984248,
-  "steps": 137,
-  "health": 4.0,
+  "env_steps": 284183,
+  "attempts": 5,
+  "seconds": 818.2666625080001,
+  "steps": 303,
+  "health": 3.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_57w_0.state",
@@ -4192,14 +4184,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6042,
+  "env_steps": 6967,
   "attempts": 1,
-  "seconds": 15.515776754000001,
-  "steps": 77,
+  "seconds": 21.714230544,
+  "steps": 55,
   "health": 8.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_47s_0.state",
@@ -4214,14 +4205,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5445,
+  "env_steps": 5046,
   "attempts": 1,
-  "seconds": 11.372719715,
-  "steps": 76,
-  "health": 7.0,
+  "seconds": 15.188605232,
+  "steps": 38,
+  "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_37s_0.state",
@@ -4236,14 +4226,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6689,
+  "env_steps": 4566,
   "attempts": 1,
-  "seconds": 16.708866514,
-  "steps": 21,
-  "health": 6.0,
+  "seconds": 15.863251586,
+  "steps": 49,
+  "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_27s_0.state",
@@ -4258,14 +4247,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4763,
+  "env_steps": 4759,
   "attempts": 1,
-  "seconds": 10.800807004,
-  "steps": 14,
+  "seconds": 15.139493815,
+  "steps": 17,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_26e_0.state",
@@ -4280,14 +4268,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 8739,
+  "env_steps": 8444,
   "attempts": 1,
-  "seconds": 19.923525165,
-  "steps": 91,
+  "seconds": 25.370286503,
+  "steps": 63,
   "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_25e_0.state",
@@ -4302,14 +4289,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4672,
+  "env_steps": 4239,
   "attempts": 1,
-  "seconds": 11.771470433,
-  "steps": 101,
+  "seconds": 14.603181441,
+  "steps": 25,
   "health": 6.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_24e_0.state",
@@ -4324,14 +4310,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 13284,
+  "env_steps": 16787,
   "attempts": 1,
-  "seconds": 30.936422968,
-  "steps": 88,
+  "seconds": 58.313648222,
+  "steps": 113,
   "health": 2.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_14s_0.state",
@@ -4346,14 +4331,13 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 11505,
+  "env_steps": 10948,
   "attempts": 1,
-  "seconds": 21.071551326,
-  "steps": 178,
-  "health": 4.0,
+  "seconds": 31.738142957,
+  "steps": 125,
+  "health": 5.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_0.state --chains 0 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_0.state --chains 0 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "0_77cave_1.state",
@@ -8372,14 +8356,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4826,
+  "env_steps": 0,
   "attempts": 1,
-  "seconds": 9.598382339,
-  "steps": 31,
-  "health": 10.0,
+  "seconds": 0.0,
+  "steps": 0,
+  "health": 6.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "triforce eval-chain --from 5_76s_1 --runs 40 --act model --stop-at step:194 --harvest DIR (round 24, r74 models, darknut r74-darknut3): run seed 11's Olive Garden cleared by play, its harvested 5_04cave_h11_7.state"
  },
  {
   "file": "5_05c_1.state",
@@ -8394,14 +8377,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 8486,
+  "env_steps": 12261,
   "attempts": 1,
-  "seconds": 15.868002446,
-  "steps": 184,
-  "health": 8.0,
+  "seconds": 28.709769946,
+  "steps": 114,
+  "health": 5.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_06w_1.state",
@@ -8416,14 +8398,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 4020,
+  "env_steps": 3271,
   "attempts": 1,
-  "seconds": 11.227341688,
-  "steps": 28,
-  "health": 6.0,
+  "seconds": 11.421269809,
+  "steps": 51,
+  "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_07cave_v2_1.state",
@@ -8440,12 +8421,11 @@
   "alternate": false,
   "env_steps": 4956,
   "attempts": 1,
-  "seconds": 9.179539342,
+  "seconds": 12.898028906,
   "steps": 33,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_64c_1.state",
@@ -8462,12 +8442,11 @@
   "alternate": false,
   "env_steps": 4675,
   "attempts": 1,
-  "seconds": 8.082509772,
+  "seconds": 12.234547099,
   "steps": 48,
   "health": 9.5,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_65w_1.state",
@@ -8484,12 +8463,11 @@
   "alternate": false,
   "env_steps": 5013,
   "attempts": 1,
-  "seconds": 12.923439733,
+  "seconds": 17.37031466,
   "steps": 64,
   "health": 6.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_66w_1.state",
@@ -8504,14 +8482,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4919,
+  "env_steps": 4853,
   "attempts": 1,
-  "seconds": 12.303233637,
-  "steps": 95,
-  "health": 4.0,
+  "seconds": 14.855475217,
+  "steps": 37,
+  "health": 6.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_56s_1.state",
@@ -8526,14 +8503,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 145830,
-  "attempts": 3,
-  "seconds": 320.919119594,
-  "steps": 262,
-  "health": 3.0,
+  "env_steps": 306954,
+  "attempts": 5,
+  "seconds": 879.472903886,
+  "steps": 188,
+  "health": 2.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_57w_1.state",
@@ -8548,14 +8524,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7041,
+  "env_steps": 4954,
   "attempts": 1,
-  "seconds": 17.241260731,
-  "steps": 47,
-  "health": 7.0,
+  "seconds": 15.013966696,
+  "steps": 26,
+  "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_47s_1.state",
@@ -8570,14 +8545,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4973,
+  "env_steps": 4941,
   "attempts": 1,
-  "seconds": 10.351740821,
+  "seconds": 14.463249483,
   "steps": 14,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_37s_1.state",
@@ -8592,14 +8566,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4213,
+  "env_steps": 6740,
   "attempts": 1,
-  "seconds": 10.739074531,
-  "steps": 27,
-  "health": 8.0,
+  "seconds": 22.669575989,
+  "steps": 119,
+  "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_27s_1.state",
@@ -8614,14 +8587,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4627,
+  "env_steps": 4878,
   "attempts": 1,
-  "seconds": 10.235824987,
-  "steps": 13,
+  "seconds": 17.867077426,
+  "steps": 24,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_26e_1.state",
@@ -8636,14 +8608,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 6506,
+  "env_steps": 9323,
   "attempts": 1,
-  "seconds": 15.354500714,
-  "steps": 54,
-  "health": 10.0,
+  "seconds": 34.185993455,
+  "steps": 92,
+  "health": 7.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_25e_1.state",
@@ -8658,14 +8629,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4930,
+  "env_steps": 6986,
   "attempts": 1,
-  "seconds": 12.258486078,
-  "steps": 83,
-  "health": 4.0,
+  "seconds": 28.276827039,
+  "steps": 91,
+  "health": 8.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_24e_1.state",
@@ -8680,14 +8650,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4874,
+  "env_steps": 9220,
   "attempts": 1,
-  "seconds": 11.106092326,
-  "steps": 72,
-  "health": 2.0,
+  "seconds": 33.108245409,
+  "steps": 130,
+  "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_14s_1.state",
@@ -8702,14 +8671,13 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 6451,
+  "env_steps": 14837,
   "attempts": 1,
-  "seconds": 11.120234435,
-  "steps": 98,
-  "health": 5.0,
+  "seconds": 42.058402367,
+  "steps": 118,
+  "health": 2.5,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_1.state --chains 1 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_1.state --chains 1 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "0_77cave_2.state",
@@ -12728,14 +12696,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6744,
+  "env_steps": 0,
   "attempts": 1,
-  "seconds": 12.785038458,
-  "steps": 37,
-  "health": 10.0,
+  "seconds": 0.0,
+  "steps": 0,
+  "health": 7.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "triforce eval-chain --from 5_76s_2 --runs 40 --act model --stop-at step:194 --harvest DIR (round 24, r74 models, darknut r74-darknut3): run seed 17's Olive Garden cleared by play, its harvested 5_04cave_h17_7.state"
  },
  {
   "file": "5_05c_2.state",
@@ -12750,14 +12717,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 8420,
+  "env_steps": 10397,
   "attempts": 1,
-  "seconds": 14.952755646,
-  "steps": 141,
-  "health": 9.5,
+  "seconds": 22.378350131,
+  "steps": 138,
+  "health": 5.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_06w_2.state",
@@ -12772,14 +12738,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 2594,
+  "env_steps": 3440,
   "attempts": 1,
-  "seconds": 6.812985712,
-  "steps": 12,
-  "health": 8.0,
+  "seconds": 11.455982988,
+  "steps": 45,
+  "health": 2.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_07cave_v2_2.state",
@@ -12796,12 +12761,11 @@
   "alternate": false,
   "env_steps": 4623,
   "attempts": 1,
-  "seconds": 8.741375486,
+  "seconds": 10.481936328,
   "steps": 12,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_64c_2.state",
@@ -12816,14 +12780,13 @@
   "entry": "cave",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5079,
+  "env_steps": 5114,
   "attempts": 1,
-  "seconds": 9.174943144,
-  "steps": 63,
+  "seconds": 9.723685132,
+  "steps": 57,
   "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_65w_2.state",
@@ -12838,14 +12801,13 @@
   "entry": "W",
   "exit": "E",
   "alternate": false,
-  "env_steps": 7275,
+  "env_steps": 4329,
   "attempts": 1,
-  "seconds": 18.623157303,
-  "steps": 41,
-  "health": 2.0,
+  "seconds": 11.713717201,
+  "steps": 43,
+  "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_66w_2.state",
@@ -12860,14 +12822,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 8163,
+  "env_steps": 4593,
   "attempts": 1,
-  "seconds": 20.423691738,
-  "steps": 52,
+  "seconds": 11.496792646,
+  "steps": 55,
   "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_56s_2.state",
@@ -12882,14 +12843,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 268929,
+  "env_steps": 296858,
   "attempts": 5,
-  "seconds": 578.299709746,
-  "steps": 272,
+  "seconds": 753.705166428,
+  "steps": 167,
   "health": 1.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_57w_2.state",
@@ -12904,14 +12864,13 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7156,
+  "env_steps": 5728,
   "attempts": 1,
-  "seconds": 17.729579791,
-  "steps": 46,
+  "seconds": 26.472833442,
+  "steps": 64,
   "health": 9.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_47s_2.state",
@@ -12926,14 +12885,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5917,
+  "env_steps": 6153,
   "attempts": 1,
-  "seconds": 13.326632698,
-  "steps": 93,
-  "health": 8.0,
+  "seconds": 25.068830119,
+  "steps": 91,
+  "health": 7.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_37s_2.state",
@@ -12948,14 +12906,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4794,
+  "env_steps": 4618,
   "attempts": 1,
-  "seconds": 12.273654347,
-  "steps": 46,
-  "health": 8.0,
+  "seconds": 21.658761751,
+  "steps": 44,
+  "health": 4.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_27s_2.state",
@@ -12970,14 +12927,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5029,
+  "env_steps": 4405,
   "attempts": 1,
-  "seconds": 11.028631422,
-  "steps": 35,
+  "seconds": 17.091223445,
+  "steps": 32,
   "health": 8.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_26e_2.state",
@@ -12992,14 +12948,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5010,
+  "env_steps": 7333,
   "attempts": 1,
-  "seconds": 11.871364122,
-  "steps": 60,
-  "health": 8.0,
+  "seconds": 24.665598703,
+  "steps": 58,
+  "health": 7.5,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_25e_2.state",
@@ -13014,14 +12969,13 @@
   "entry": "E",
   "exit": "W",
   "alternate": false,
-  "env_steps": 9547,
+  "env_steps": 5212,
   "attempts": 1,
-  "seconds": 23.215648402,
-  "steps": 116,
-  "health": 4.0,
+  "seconds": 24.813765916,
+  "steps": 58,
+  "health": 6.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_24e_2.state",
@@ -13036,14 +12990,13 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 6401,
+  "env_steps": 6087,
   "attempts": 1,
-  "seconds": 13.799147954,
-  "steps": 141,
-  "health": 8.0,
+  "seconds": 24.630642272,
+  "steps": 78,
+  "health": 10.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  },
  {
   "file": "5_14s_2.state",
@@ -13058,13 +13011,12 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 20237,
+  "env_steps": 19162,
   "attempts": 1,
-  "seconds": 36.202359288,
-  "steps": 108,
-  "health": 9.5,
+  "seconds": 62.335027591,
+  "steps": 137,
+  "health": 5.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d2first --start-step 188 --source triforce/states/5_65e_2.state --chains 2 --attempts 10 --skip-fights 5:0x05:E --out target/entry-states/d5-2"
+  "command": "python -m triforce.entry_states build --route d2first --start-step 193 --source triforce/states/5_04cave_2.state --chains 2 --attempts 10 (round 24, r74: played states after the Olive Garden)"
  }
 ]
