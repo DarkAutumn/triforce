@@ -138,6 +138,36 @@ of the current state; eval envs and chains, the live cell of `play-zelda.py --li
 happens on the first decision after the hit that crosses the threshold, and back on the first after a heal. An env
 without health (none in the Zelda pool) is never low. `registry.draws` holds when both parts draw.
 
+**Foresight (round 25): `MODE+guard:K` and `MODE+plan:K:S[:R]`.** A style (the normal one or the low part's) may
+end with one foresight part (`policy::act::Foresight`): before the decision is taken, the env tries its action in
+the emulator (`PoolEnv::trial`, `Session::trial`) and comes back; if the action would lose health (or Link's life),
+the next of the style's K best is tried, and the first that would not is taken instead (none: the decision's own
+action). The candidates are ranked as the style ranks them (argmax: the policy's joint log-prob; a draw: ln q + the
+decision's own Gumbel noise, the order in which Gumbel-argmax would have drawn them).
+
+| Spelling | Tried against | Refused when it loses health in | What the numbers claim |
+|---|---|---|---|
+| `guard:K` | the game's own future (its random numbers as they stand) | that future | a valid run of button presses, chosen with knowledge of the future a player doesn't have |
+| `plan:K:S` | S futures, the game's random numbers redrawn before each trial (a natural RNG state of a phase keyed by job, decision and future: `zelda::rng::draw_phase`, as the search's `perturb_rng`; the same S futures for every candidate) | any of them | planning with a model of the game: the agent knows the rules and the room as it stands, not the dice |
+| `plan:K:S:R` | the same | more than the share R of them (0 ≤ R < 1; `plan:8:4:0.5`: 3 or 4 of 4) | the same |
+
+K = 1 (`guard:1`, `plan:1:S`) tries only the decision's own action and never replaces it: play is the plain mode's,
+decision for decision, and the visit records count how often the action would have lost health. A trial leaves
+everything as it was (`Session::trial`: machine state, the game's random numbers, frame and step counters, the
+credit ledger, the state and mask, the open clip, the last pre-entry snapshot; simulation mode, so nothing is
+rendered, published or paced, and a recording is cut back to the restore point; the weapon look-ahead is off,
+only health is wanted) and touches no counter of the env or the chain (`zcore_session.rs`
+`a_trial_leaves_the_session_exactly_as_it_was`; `test_pool.py` `test_foresight_that_never_replaces_plays_as_without_it`):
+a run with foresight is a sequence of button presses like any other and replays bit for bit (`test_runner.py`
+`test_a_run_with_foresight_replays_bit_exactly`). A replaying actor has no foresight (its actions are given), and
+training rollouts never try actions. Trials of a candidate stop once the rest can't change its verdict. Each eval
+room visit and chain room record with foresight carries `decisions.foresight`: `outcomes` (kept as safe, replaced,
+nothing safe found), `trials`, `trial_frames` (the cost: emulated frames beside the run's own) and `replaced` (per
+replaced decision: its index in the visit, the refused action's joint index, log-prob under the policy and rank
+among the policy's actions, 0 its first choice, the taken action's joint index and log-prob, Link's hearts). With
+`low:H` the foresight belongs to its part: `temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+guard:8` guards
+only at 2 hearts or fewer.
+
 **The stall signal of `escape` and `relax`** is the env's linger count (`zelda::linger`,
 `LingerTracker::tail_steps`): steps since the last hit, kill, pickup, heal, room change or new best approach to the
 objective on a frozen wavefront, the same count the `no-room-progress` ending and the chain's stall check read. The
