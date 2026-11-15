@@ -1,6 +1,6 @@
 name: ow-tektite
 rooms: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)']
-start_states: ['0_1a*_[0-9]', '0_2c*_[0-9]', '0_74*_[0-9]', '0_76*_[0-9]']
+start_states: ['0_1a*_[0-9]', '0_2c*_[0-9]', '0_74*_[0-9]', '0_76*_[0-9]', '0_1e*_[0-9]', '0_0d*_[0-9]', '0_0c*_[0-9]']
 success: [exit-correct, enter-room:3:0x7c]
 reward_profile: default
 reward: {pbrs: true}
@@ -19,4 +19,7 @@ notes: >-
   `missed`), then N out of the room. 0x74 (one Red Tektite; Nov 9): from W into Dungeon 3's open entrance
   (enter-room 3:0x7c); round 22 (the wrap way, clips): also from E, where CLIP E's wrap exit out of 0x75 lands Link at
   X $F0 inside its tree columns, and 0x76 (four Red Tektites) from E (0x77's lane) leaves W; its rock wall (the money
-  game) is not bombed.
+  game) is not bombed. Round 24, the leg to Dungeon 5 (docs/routes/d5-leg.md): 0x1e (six Red Tektites, a Zora) W→E
+  and E→W; on the mountain's clip way 0x0d S→W and 0x0c from E W by its wrap exit (CLIP E on Y $65-$AD) onto the
+  mountain top; on its plain way 0x2c from E (`0_2ce_v2`) N, its wall open since the heart cave (no cheated bomb,
+  BOMB only for the 10th kill). No curriculum: each crossing is a walk or a single CLIP from the arrival.

@@ -752,7 +752,8 @@ fn start_state_outside_rooms_is_rejected() {
 #[test]
 fn sword_cave_objective_and_exit() {
     let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "ow-start", Some("0_77cave_0"), |_| {});
+    // The whole visit (sword, out S, on N) in one episode: ow-start is one-room since round 24.
+    let mut env = make_env(nes, "ow-start", Some("0_77cave_0"), |c| c.one_room = false);
     env.reset(Some(0), None).unwrap();
     assert_eq!(objective(&env).kind, ObjectiveKind::Treasure);
     assert!(next_rooms(&env).is_empty());

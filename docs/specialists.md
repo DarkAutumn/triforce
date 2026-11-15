@@ -19,13 +19,13 @@ Grouping rule (design §3.1, revised by Lee on Nov 3, 2026):
 
 | Family | Main threat | Rooms (level, room) | Success (§3.3) | Rationale |
 |---|---|---|---|---|
-| `ow-start` | none | (0,0x77), (0,0x77 cave), (0,0x1c), (0,0x1b) | exit-correct. The correct exit depends on progress: no sword → cave; in the cave → S; with sword → N; round 22, after Dungeon 1 on the clip way, from N → W. 0x1c from S and the mountain maze 0x1b from E leave W. | Rooms without enemies: walking to a spot is this family's skill. v1 treats the cave interior as its own `MapLocation` (`in_cave`). |
+| `ow-start` | none | (0,0x77), (0,0x77 cave), (0,0x1c), (0,0x1b) | exit-correct. The correct exit depends on progress: no sword → cave; in the cave → S; with sword → N; round 22, after Dungeon 1 on the clip way, from N → W. 0x1c from S and the mountain maze 0x1b from E leave W. Round 24: one-room episodes and a curriculum (the leg's caves and the Lost Hills). | Rooms without enemies: walking to a spot is this family's skill. v1 treats the cave interior as its own `MapLocation` (`in_cave`). |
 | `ow-octorok` | Octorok (Red/Blue, slow/fast) | (0,0x67), (0,0x67 cave), (0,0x68), (0,0x58), (0,0x66), (0,0x4c), (0,0x3c), (0,0x37), (0,0x57), (0,0x64); alt (0,0x78) | exit-correct. At 0x3c (from S) and 0x37 the correct exit is the dungeon stairs: enter-room (2,0x7d) / (1,0x73). Round 22 after Dungeon 1: 0x58 N→S, 0x68 N→W, 0x67 E→cave (bomb the rock wall), the cave (`waypoint: rupees`, X `$78`), 0x67 cave→S (clips) or →W, 0x66 E→W and 0x64 E→W (plain). `items: {bombs: required}` since round 22. | Octoroks are the most numerous enemy in every one of these rooms. 0x64's potion shop and 0x66's shop mouths are open (wrong exits). 0x57 off the route since round 22. |
 | `ow-zora` | Zora (fireball) | (0,0x59), (0,0x5a), (0,0x2d), (0,0x27), (0,0x28), (0,0x38), (0,0x56), (0,0x55), (0,0x65) | exit-correct. 0x38 twice (to D1 from N, toward D3 from W). 0x65 E→W (round 22's plain way, across its ford) and W→N (to the raft). | The single Zora and its fireball are the main threat on these screens, alongside Peahats (0x27, 0x28, 0x59) and Octoroks (0x38, 0x2d, 0x5a, 0x55, 0x56, 0x65). 0x56 off the route since round 22. |
 | `ow-moblin` | Moblin | (0,0x5b), (0,0x5c), (0,0x5d), (0,0x4d), (0,0x3d), (0,0x63), (0,0x73) | exit-correct | Moblin rooms of row 5 on the way to Dungeon 2, 0x4d/0x3d after it, 0x63/0x73 on the plain way to Dungeon 3 and back from it. |
 | `ow-leever` | Leever | (0,0x48), (0,0x75) | exit-correct. 0x48 N to S. 0x75 (round 22, the clip way) from E W by `CLIP E`, the wrap exit through its solid W edge into 0x74 (the only way out of its E part). | Nov 9: Leevers burrow and surface by Link, unlike any other route enemy; 0x48 (Red Leever ×4, Zora) is forced on the way from D1 to D3; 0x75 holds 3 Leevers, Peahats and a Zora. |
 | `ow-tektite` | Tektite | (0,0x1a), (0,0x2c), (0,0x2c cave), (0,0x74), (0,0x76) | exit-correct. 0x1a: from E N to 0x0a, from N W (from N without the white sword: back N). 0x2c: bomb the rock wall, take the heart container in the take-any cave, out N. 0x74: into Dungeon 3 (enter-room (3,0x7c)) from W or (round 22, by the wrap exit) from E; out of Dungeon 3 W. 0x76 E→W (round 22's clip way). | Lee (Nov 8): Tektites' jump patterns are their own. 0x1a RedTektite×6 and a Zora; 0x2c RedTektite×4 (moved here from `ow-leever-peahat`, Lee Nov 8); 0x74 RedTektite×1; 0x76 RedTektite×4. 0x2c is `requires_bombs`, so the family has bombs. |
-| `ow-lynel` | Lynel | (0,0x0a), (0,0x0a cave) | exit-correct: into the white-sword cave, take the sword (5 hearts), out S. Leaving S before the sword is a `retreat` (neutral by default; ow-lynel ships `endings: {retreat: soft-failure}` for the baseline). | Lee (Nov 8): Lynels are very hard and the main enemy of many later rooms. |
+| `ow-lynel` | Lynel | (0,0x0a), (0,0x0a cave) | exit-correct: into the white-sword cave, take the sword (5 hearts), out S. Leaving S before the sword is a `retreat` (neutral by default; ow-lynel ships `endings: {retreat: soft-failure}` for the baseline). Round 24: a curriculum (0x60's wrap rows). | Lee (Nov 8): Lynels are very hard and the main enemy of many later rooms. |
 | `ow-boulder` | Falling boulders | (0,0x19), (0,0x18), (0,0x17) | exit-correct | Lee (Nov 8): boulders are hard to predict and can't be blocked. A boulder generator ($1F), its boulders ($20; both hazards, not enemies) and a Zora. |
 | `stalfos-keese-gel` | Stalfos / Keese / Gel | (1,0x73), (1,0x72), (1,0x74), (1,0x63), (1,0x53), (1,0x52), (1,0x42), (1,0x43), (1,0x33), (1,0x36) | exit-correct. 0x73 three times: W (key room 0x72), then E (key room 0x74), then N. 0x43 twice: from W N (the bow detour), from N E. 0x33 twice: from S N, from N S. At 0x36 the "exit" is triforce-collected (the D1 triforce; the route goes on from 0x37). | Was `d1-melee`. Includes the key rooms and all D1 locked doors on the way except 0x45 N. 0x36 (triforce room) and 0x73 (entrance hall) have no enemies and go to the nearest family. 0x33 (Stalfos×3, key) is north of 0x43, on the bow detour. |
 | `goriya` | Red Goriya | (2,0x5e), (2,0x1e), (1,0x44), (1,0x23) | exit-correct. 0x23 twice: from S W (to the trap room), from W S. | Every Red Goriya room, whatever the dungeon. 0x5e (×5) has the ringleader trigger; 0x1e (×5) needs kill-all to open the N shutter into Dodongo's room; 0x44 (×3) drops the boomerang when all are dead; 0x23 (×3) drops its key when all are dead, north of 0x33 on the bow detour. |
@@ -66,7 +66,8 @@ run-time switch off (CLIP masked, the objective and the path search without skip
 stretch), half with it on; `off_share` sets another share. A start state the route enters on one way only fixes the
 switch (the plain ways: 0x66, 0x65, 0x64 and 0x63 from E, 0x73 from N, 0x74 from W, 4:0x30 from E, 4:0x20 from S,
 4:0x21 from W off; the clip ways: 0x77 from N, 0x76, 0x75 and 0x74 from E, 4:0x21 from S on; ow-leever's 0x75 is
-therefore always played with clips); curriculum starts keep it on unless the state fixes it (a plain-only state's
+therefore always played with clips; the leg's, round 24: `docs/routes/d5-leg.md` "States"); curriculum starts keep
+it on unless the state fixes it (a plain-only state's
 track is explored with it off). Training logs `clips/on|off/success_rate` (and episodes, health) per switch state,
 the early stop needs both, and the evaluation plays both (`--clips both`, the default for a clip family;
 `eval.json`'s headline figure is over both, `by_clips` per state). Families without clips play with the switch on
@@ -105,7 +106,9 @@ The leg to Dungeon 5 (round 24, `d2first` steps 134-185, `docs/routes/d5-leg.md`
 enemy: Zora rooms (0x54, 0x5f, 0x4f, 0x3f, 0x3e, 0x2e, 0x6f) `ow-zora`, Moblin rooms (0x53, 0x52, 0x51, 0x6d, 0x6e)
 `ow-moblin`, Lynel rooms (0x50, 0x60) `ow-lynel`, Peahat rooms (0x1d, 0x1f) `ow-peahat`, Tektite rooms (0x1e, 0x0d,
 0x0c) `ow-tektite`, 0x0b's Leever `ow-leever`, 0x2f, 0x0f and their caves `ow-start`; 0x56 and 0x57 (plain coast
-way) are back on the route. No states or models yet.
+way) are back on the route. Their 150 states (both ways, chains 0-2) are built and the families' `start_states`
+take them; `ow-start` and `ow-lynel` have a curriculum since (0x2f's take-any cave, the rafts, 0x0f's rupees, the
+Lost Hills; 0x60's wrap rows), and `ow-start` plays one room per episode like every other family. No models yet.
 
 Removed with the reset (Nov 8): `ow-leever-peahat` (0x29, 0x2a, 0x2b: milestone1 only; 0x2c went to `ow-tektite`),
 the fairy pond 0x39 (ow-start), 0x48 (ow-zora; back on the route since Nov 9 as `ow-leever`), 0x49 (ow-octorok) and
@@ -129,4 +132,6 @@ under `target/entry-states/<ts>` and copied in with `entry_states install <dir>`
 detour's (Nov 9) were built from `1_43w_N` with `--start-step 55`, the way on to and through Dungeon 3 (Nov 9)
 from `1_36w_N` with `--start-step 67` (then `0_56e_N`, `--start-step 73`). The Dungeon 4 states (Nov 11:
 `--route d2first-d4 --start-step 97` from `3_3ds_N`, then a route of its own) moved into the states dir with the
-route merge (Nov 12; `docs/routes/d4.md`, "Start states").
+route merge (Nov 12; `docs/routes/d4.md`, "Start states"). The leg to Dungeon 5 (round 24) was built with
+`--start-step 133` from `4_03s_N` (one chain each) and its plain ways by `entry_states path`
+(`docs/routes/d5-leg.md`, "States").

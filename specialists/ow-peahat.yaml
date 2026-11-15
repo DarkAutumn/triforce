@@ -1,6 +1,6 @@
 name: ow-peahat
 rooms: ['(0, 0x45)', '(0, 0x1d)', '(0, 0x1f)']
-start_states: ['0_45*_[0-9]']
+start_states: ['0_45*_[0-9]', '0_1d*_[0-9]', '0_1f*_[0-9]']
 success: [exit-correct, enter-room:4:0x71]
 reward_profile: default
 reward: {pbrs: true}
@@ -15,4 +15,8 @@ warm_start: null
 notes: >-
   Peahat rooms (Dungeon 4, Nov 11-12): a Peahat flies and can only be hit while it rests. 0x45,
   the island of Dungeon 4 (one Peahat): Link lands on the pier at the bottom, by raft from the dock of 0x55, and
-  walks N into the dungeon's mouth. Copied from ow-leever (one-room, 600 steps, curriculum).
+  walks N into the dungeon's mouth. Copied from ow-leever (one-room, 600 steps, curriculum). Round 24, the leg to
+  Dungeon 5 (docs/routes/d5-leg.md): 0x45 from its cave (the D4 triforce's warp) S off the pier (the raft down to
+  0x55); 0x1d (six Peahats) from S (either lake way) into its E part and E, from E N at X $D0 (clips) or S along its
+  lanes X $70-$80 (plain); 0x1f (six Peahats) from W N through the wall gap at X $80 only, and from N (out of 0x0f)
+  back through the gap and W.

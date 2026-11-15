@@ -168,17 +168,27 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   overworld ladder, 0x55's wrap onto its W part, 0x1f's wall gap, 0x5f's heart as a room objective, the switch held
   on 0x5f's water, the scouting route `d5leg`; its clip way played end to end by the objective
   (`crates/zelda/tests/d5_leg.rs`, 8,739 frames) and built by `entry_states build` (90 states, nothing helped).
-- [ ] **The leg's open items:** its start states (in `d2first` since the route's merge, round 24 integration: the
-  audit lists the 216 MISSING names of steps 134-208 until they are built; commands in docs/routes/d5-leg.md),
-  curricula and trainings for the new family rooms; 0x5f's heart objective appears a few frames into play, so its
-  first decision targets `treasure_tile`; the walker in `d5_leg.rs` lines Link up on cave mouths by single frames
-  (MOVE is 4 or 8 frames), a policy has to learn it. Done: the plain ways in the full route (with the Lost Hills),
-  the switch off held past 0x55's river to the rejoin (each clip-way room tested).
+- [ ] **The leg's open items:** trainings for the new family rooms (states and curricula done: below); 0x5f's heart
+  objective appears a few frames into play, so its first decision targets `treasure_tile`; the walker in
+  `d5_leg.rs` lines Link up on cave mouths by single frames (MOVE is 4 or 8 frames), a policy has to learn it.
+  Done: the plain ways in the full route (with the Lost Hills), the switch off held past 0x55's river to the rejoin
+  (each clip-way room tested); BOMB in the plain way's 0x2c only for the 10th kill (measured, `$50` = 9).
+- [x] **The leg's states and curricula** (round 24, branch `r24-legstates`; decisions 2026-11-14 "The leg's states
+  and curricula"; docs/routes/d5-leg.md "States", "Families and curricula"): 150 states (both ways, chains 0-2,
+  chain `c` from `4_03s_<c>`), audited clean; the families' globs; 151 tracks (ow-zora, ow-moblin, ow-peahat,
+  ow-leever on their new states; ow-lynel and ow-start, curricula new, on all of theirs); ow-start one-room.
+- [ ] **The explorer and the curriculum restart a room's step from the seed state's entry** (round 24): a cell or
+  frame after Link left a room and came back into it (out of a cave) gets the step of the walk in, so a track like
+  that is judged wrongly (ow-start's first `0_0fs` explore: REPLAY MISMATCH). One-room families can't hit it; a
+  multi-room family with a curriculum would need the step (or the waypoints done) saved with each cell and frame.
+- [ ] **Watch in the leg's trainings:** 0x58 W→E and the plain 0x2c E→N (no curriculum; random play never crossed
+  them in 900 steps), 0x5f from S (tracks 120-208 steps: the plain ladder twice), 0x0f's cave (the explored track
+  is 111 steps for a walk to the rupees and out), ow-zora's 0x3f from N (random play ends it by a wrong exit within
+  about 5 steps, likely riding the raft back up).
 - [x] **Leaving a maze by its sequence** in a route (round 24, slice r24-maze; decisions 2026-11-14 "A maze loop is a
   room transition"): `exit: maze`, `zelda::MazeLoop` everywhere a run is followed, the scouting route `d5maze`.
-- [ ] **The maze in training:** 0x1b from E needs played states of the leg (the plain mountain way), a curriculum
-  (`python -m triforce.explore` finds the four Ns unaided) and ow-start trained on it with the `maze_step`
-  observation; the Lost Woods (0x61: N, W, S, W) has monsters and no route step yet.
+- [ ] **The maze in training:** ow-start trained on 0x1b from E (`0_1be_v2`, its curriculum tracks 45-55 steps) with
+  the `maze_step` observation; the Lost Woods (0x61: N, W, S, W) has monsters and no route step yet.
 - [x] **New action kinds** for the route: the recorder, food, the candle, in one model-incompatible bump (1.4.2.0,
   branch `r24-kinds`; decisions 2026-11-14 "Three item kinds and the model conversion"); the promoted 1.4.1 runs are
   widened by `triforce convert-model`, not retrained. Left: the recorder on the overworld (the whirlwind, 0x42's

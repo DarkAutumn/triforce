@@ -1,6 +1,6 @@
 name: ow-start
 rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x1c)', '(0, 0x1b)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
-start_states: ['start', '0_77*_[0-9]', '0_1c*_[0-9]', '0_1b*_[0-9]']
+start_states: ['start', '0_77*_[0-9]', '0_1c*_[0-9]', '0_1b*_[0-9]', '0_2f*_[0-9]', '0_0f*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
@@ -8,13 +8,23 @@ obs: {objective: true, target: true}       # schema 2 pointer, no item targets (
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 clips: true                               # round 21: the screen wrap (W/E)
-max_steps: 1000
+curriculum: {enabled: true}             # round 24: the take-any cave's right ware, 0x2f's raft, the Lost Hills' four Ns
+one_room: true                          # round 24: per-room episodes (a curriculum frame takes its seed state's entry)
+max_steps: 600                        # explored one-room paths are 3-140 steps
 warm_start: null
 notes: >-
   Rooms without enemies where Link walks to a spot. Start screen + sword cave: the correct exit depends on
   progress (no sword -> cave; in the cave -> S once the sword is taken; with sword -> N, 0x78 E is the tagged
   alternate). 0x1c (from S, leave W) and the mountain maze 0x1b (from E, leave W) after the 0x2c heart cave. Round
   22: 0x77 again on the wrap way to Dungeon 3, from N (out of 0x67) leave W along its open rows (Y $85/$8D).
-  Round 24 (route d5maze): 0x1b from E after the D4 triforce leaves by the Lost Hills' sequence (`exit: maze`, N
-  four times at X $70); each of the first three Ns loops back into 0x1b and is a correct loop (progress, paid as a
-  new room), a wrong edge is exit-wrong. On d2first's 0x1b (leave W) an N loop is exit-wrong too.
+  Round 24 (the leg to Dungeon 5, docs/routes/d5-leg.md): 0x2f from S (off the raft from 0x3f) into the take-any
+  cave, the heart container (the right ware; the potion is `missed`), out of the cave and S off the pier (the raft
+  down to 0x3f); 0x0f from S (through 0x1f's wall gap) into its open secret cave, the 100 rupees (walking up at X
+  $78), out and S. On the plain mountain way 0x1c from S (`0_1cs_v2`) leaves W and 0x1b from E (`0_1be_v2`) by the
+  Lost Hills' sequence (`exit: maze`, N four times at X $70) into 0x0b; each of the first three Ns loops back into
+  0x1b and is a correct loop (progress, paid as a new room), a wrong edge is exit-wrong. On d2first's first 0x1b
+  (leave W) an N loop is exit-wrong too. Curriculum since round 24: the cave's ware, the raft's pier and the maze's
+  sequence are walks a random policy rarely finishes. One-room since round 24 (the last family whose episodes ran on
+  across its rooms):
+  a curriculum frame and an explored cell start the step of their seed state's entry, so a track that leaves a cave
+  back into its room (0x77, 0x2f, 0x0f) would be judged on the way in; every room entry has its own start state.

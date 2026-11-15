@@ -95,7 +95,8 @@ def test_train_with_plr_logs_start_weights(tmp_path):
     assert len(records) == 3
     for record in records:
         weights = {k[len('plr/weight/'):]: v for k, v in record.items() if k.startswith('plr/weight/')}
-        assert len(weights) == 9 and sum(weights.values()) == pytest.approx(1.0)
+        # 0_38n, 0_38w, 0_59w and the leg's 0_59w_v2 (round 24), chains 0-2
+        assert len(weights) == 12 and sum(weights.values()) == pytest.approx(1.0)
         assert all(state.startswith(('0_38', '0_59')) for state in weights)
         assert 0.0 < record['plr/entropy'] <= math.log(len(weights)) + 1e-9
         assert record['plr/top_state'] == pytest.approx(max(weights.values()))

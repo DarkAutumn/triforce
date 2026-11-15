@@ -2117,3 +2117,27 @@ Hills). Decided by the agent building it (the owner away):
   built:** round 22 built its states on the route branch before merging (`7e2a865` before `90c5d13`), so there is
   no precedent for hiding them; the route goes into `r24` now because the state builds and Dungeon 5's second pass
   build on it. Every other audit line is clean (397 states, 0 problems), and no test needs a new state.
+
+## 2026-11-14 — The leg's states and curricula (round 24, branch `r24-legstates`)
+
+- **Chain `c` of the leg is played from `4_03s_<c>`**, not all three chains from `4_03s_0` as the leg slice's
+  scouting build did: the three Dungeon 4 runs carry different rupees (68/57/63) and bombs (0/2/6), and Dungeon 5
+  spends bombs (two walls, the Olive Garden, Digdogger), so its entrance states should keep the three histories
+  (`docs/routes/d5-leg.md` ledger). Three builds, one chain each; chain 0 is bit-identical to the single-source build.
+- **A stretch's rejoin and Dungeon 5's entrance keep the clip way's states** (`0_4fs`, `0_1ds`, `5_76s` are reached
+  on both ways under one name; `path` builds the plain way's copies, which stay staged). The plain way's entrance
+  from `0_0bs` was played the same way (into 5:0x76 in 12-78 steps).
+- **ow-start plays one room per episode** (`one_room: true`, `max_steps` 1000 → 600), the last family whose
+  episodes ran on across its rooms. A curriculum frame starts the step its track's seed state enters by, and an
+  explored cell restarts its route step at the seed's: a track that leaves a cave back into its room (0x2f, 0x0f,
+  0x77) is judged as if Link were walking in. The first explore of `0_0fs` showed it: the explorer scored a second
+  walk into 0x0f's cave as correct, and the replay ended there as a wrong exit (`REPLAY MISMATCH`, no track). Every
+  room entry of the family has its own start state, so nothing is lost.
+- **Curricula:** ow-start (0x2f's take-any cave and its pier, 0x0f's rupees, the Lost Hills' four Ns) and ow-lynel
+  (0x60's wrap exit on two rows only) get `curriculum: {enabled: true}`, explored on every state of the family so
+  the curriculum's half of the resets covers all of it; ow-zora, ow-moblin, ow-peahat and ow-leever had one and got
+  tracks for their new states. ow-tektite and ow-octorok stay without: their leg rooms are walks (0x0c's wrap is one
+  CLIP from the arrival).
+- **ow-lynel `clips: {enabled: true, off_share: 0.5}`** written out: its leg rooms (0x50, 0x60) are on the clip way
+  only, so their states fix the switch on; 0x0a has no CLIP to mask. ow-zora keeps `off_share: 0.75` (0x55 from N,
+  0x3f, 0x4f draw the switch; 0x5f has a state per way).

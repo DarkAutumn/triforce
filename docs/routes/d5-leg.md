@@ -84,19 +84,111 @@ Measured on the three `4_03s_<c>` states (the D4 triforce's room, step 133) and 
 | Keys | 6 | none used, none found | 6 into Dungeon 5 (spent at 5:0x06 W, 0x27 W, 0x25 W) |
 | Bombs | 0, 2, 6 (of 8) | `bomb_reserve: 2` from step 134 (Dungeon 4's value): BOMB masked at 2 or fewer outside `requires_bombs` rooms but for the 10th damage-free kill; no wall on the leg; 0x2c (plain mountain way) grants no bomb, its wall is open | as in; Dungeon 5 sets `bomb_reserve: 8` at 0x76, and an empty bag gets a cheated bomb for each of 0x66 W and 0x65 W |
 
-## Building the states
+## States (built, round 24)
 
-- The clip way and the shared steps: `python -m triforce.entry_states build --route d2first --start-step 133
-  --source 4_03s_0 --chains 0,1,2` (the build follows the clip way; it writes `0_45c` through `0_0be`, then
-  `5_76s`). The leg slice staged the same 90 states on `d5leg`'s numbering (identical steps 133-163 of its clip way)
-  in its worktree (`target/entry-states/d5leg-1`, not installed).
-- The plain ways by `path` from the clip way's states (each source's manifest `route_step` gives the walk its step):
-  - coast-heart: from `0_55n_<c>` through 0x56 .. 0x5d, 0x6d, 0x6e, 0x6f to 0x5f (from S), and on to 0x4f;
-  - lake-3e: from `0_3ee_<c>` to 0x2e, 0x2d (from E), 0x1d (from S);
-  - mountain: from `0_1de_<c>` to 0x2d (from N), 0x2c, 0x1c, 0x1b, 0x0b (from S) and 5:0x76 (`path` explores under
-    `--route d2first`, so the maze loops follow 0x1b's `exit: maze`).
-- Then `entry_states audit`, `install`, the families' `start_states` globs (the existing `0_<rr>*_[0-9]` globs pick
-  up `_v2` names), curricula (`python -m triforce.explore --specialist NAME --states ...`) and trainings.
+150 states in `triforce/states/`, chains 0-2: 93 from the clip way's build (31 a chain: `0_45c` .. `0_0be`, then
+`5_76s`) and 57 from the plain ways' walks (19 a chain). Audit: every one clean (hearts 8 to 0x5f on either way, 9
+after it, 10 after 0x2f's cave). Chain `c` is played from `4_03s_<c>`, its own Dungeon 4 run (rupees 68/57/63,
+bombs 0/2/6, as the ledger above), not all three from `4_03s_0`.
+
+- **Clip way and shared steps**, one build a chain (13 min each, three at once):
+  `python -m triforce.entry_states build --route d2first --start-step 133 --source 4_03s_<c> --chains <c>`. The
+  build plays on into Dungeon 5 and stops at the Olive Garden (5:0x05, 3 attempts); only the leg and `5_76s` were
+  installed (Dungeon 5's states are its second pass's).
+- **Plain ways**, by `path` from the installed clip-way sources (their manifest `route_step` names the later
+  visits `_v2`): `--source 0_55n_<c> --rooms 0:0x56,0:0x57,0:0x58,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x6d,0:0x6e,
+  0:0x6f,0:0x5f,0:0x4f`, `--source 0_3ee_<c> --rooms 0:0x2e,0:0x2d,0:0x1d`, `--source 0_1de_<c> --rooms
+  0:0x2d,0:0x2c,0:0x1c,0:0x1b,0:0x0b,5:0x76` (all `--route d2first --chain <c>`). Each way reaches its rejoin
+  (`0_4fs`, `0_1ds`, `5_76s`) under the clip way's name; the clip way's are installed, the plain way's stay staged.
+  So `5_76s_0..2` are the clip way's (from `0_0be_<c>`); the plain way enters 5:0x76 from `0_0bs_<c>` the same way
+  (12-78 steps).
+
+Explorer effort, env steps of the crossing into each state (chains 0 / 1 / 2; one attempt each unless noted):
+
+| Step | State | Env steps | | Step | State | Env steps |
+|---|---|---|---|---|---|---|
+| 134 | `0_45c` | 4467 / 4166 / 4241 | | 160 | `0_2fc` | **63380 / 21735 / 5807** |
+| 135 | `0_55n` | 4807 / 5347 / 4896 | | 161 | `0_3fn` | 4751 / 5699 / 5438 |
+| 136 | `0_54e` | 4128 / 3357 / 3550 | | 162 | `0_3ee` | 3602 / 3528 / 3307 |
+| 137 | `0_53e` | 4803 / 4153 / 4400 | | 163 | `0_3de` | 4360 / 4020 / 3815 |
+| 138 | `0_52e` | 4451 / 5907 / 4909 | | 164 | `0_2ds_v2` | 7524 / 4676 / 5472 |
+| 139 | `0_51e` | 4808 / 3971 / 5362 | | 166 | `0_2es` | 3741 / 4821 / 4292 |
+| 140 | `0_50e` | 4348 / 4414 / 4552 | | 167 | `0_2de` | 3387 / 3439 / 3032 |
+| 141 | `0_60n` | 3131 / 3750 / 3686 | | 168 | `0_1ds` | 5006 / 4638 / 4606 |
+| 142 | `0_5fe` | 4386 / 4500 / 4162 | | 169 | `0_1ew` | 3510 / 3563 / 3964 |
+| 144 | `0_56w` | 3698 / 3364 / 3292 | | 170 | `0_1fw` | 3470 / 3385 / 3832 |
+| 145 | `0_57w` | 4253 / 4110 / 4847 | | 171 | `0_0fs` | 6637 / 5140 / 5109 |
+| 146 | `0_58w` | 4086 / 3689 / 3743 | | 172 | `0_0fcave` | 4748 / 6267 / 5543 |
+| 147 | `0_59w_v2` | 4104 / 3978 / 4424 | | 173 | `0_0fc` | **18669 / 8875 / 15168** |
+| 148 | `0_5aw_v2` | 3780 / 3859 / 4369 | | 174 | `0_1fn` | 4769 / 5255 / 6691 |
+| 149 | `0_5bw_v2` | 4130 / 4057 / 4155 | | 175 | `0_1ee` | 4305 / 4744 / 5305 |
+| 150 | `0_5cw_v2` | 4114 / 4408 / 4998 (crossed again 1 / 3 / 1 times) | | 176 | `0_1de` | 4380 / 5332 / 4236 |
+| 151 | `0_5dw_v2` | 4357 / 5903 / 4862 (after 1 / 3 / 1 failed crossings) | | 177 | `0_0ds` | 5229 / 5391 / 6078 |
+| 152 | `0_6dn` | 5361 / 4246 / 6428 (crossed again 1 / 0 / 3 times) | | 178 | `0_0ce` | 4842 / 4986 / 5054 |
+| 153 | `0_6ew` | 3073 / 2671 / 2658 (after 1 / 0 / 3 failed crossings) | | 179 | `0_0be` | 4130 / 3984 / 3990 |
+| 154 | `0_6fw` | 4800 / 4888 / 4399 | | 181 | `0_2dn` | 3934 / 3701 / 3505 |
+| 155 | `0_5fs` | 3871 / 3525 / 3922 | | 182 | `0_2ce_v2` | 4109 / 3835 / 4373 |
+| 156 | `0_4fs` | 4919 / 5053 / 4689 | | 183 | `0_1cs_v2` | 4239 / 5025 / 4802 |
+| 157 | `0_3fs` | 4261 / 4606 / 4493 | | 184 | `0_1be_v2` | 2741 / 4316 / 3818 |
+| 158 | `0_2fs` | 3771 / 3496 / 3803 | | 185 | `0_0bs` | **5444 / 9126 / 15150** (the Lost Hills) |
+| 159 | `0_2fcave` | 4754 / 4807 / 5282 | | 186 | `5_76s` | 4764 / 4466 / 4532 |
+
+Every clip-way step was found in one attempt with no help; the slowest crossings are the way out of the two caves.
+On the plain coast way `path`'s backtracking was needed twice a chain at most: 0x5c's E exit can't be reached from
+the lane 0x5b's lower opening leads into (one failed crossing is 3 attempts, about 120,000 env steps), so 0x5b → 0x5c
+was crossed again with a new explore seed (once, three times, once); 0x6d's E exit likewise from some of 0x5d's S
+lanes (0x6d crossed again once and three times in chains 0 and 2, about 165,000 env steps a failure).
+
+**The clips switch per state** (`objectives::start_clips`, measured on every state by the families' envs): on (clip
+way only) `0_54e`, `0_53e`, `0_52e`, `0_51e`, `0_50e`, `0_60n`, `0_5fe`, `0_3de`, `0_2ds_v2`, `0_0ds`, `0_0ce`,
+`0_0be`; off (plain way only) `0_56w`, `0_57w`, `0_58w`, `0_59w_v2`, `0_5aw_v2`, `0_5bw_v2`, `0_5cw_v2`,
+`0_5dw_v2`, `0_6dn`, `0_6ew`, `0_6fw`, `0_5fs`, `0_2es`, `0_2de`, `0_2dn`, `0_2ce_v2`, `0_1cs_v2`, `0_1be_v2`,
+`0_0bs`; drawn (both ways, or shared) the rest: `0_45c`, `0_55n`, `0_4fs`, `0_3fs`, `0_2fs`, `0_2fcave`, `0_2fc`,
+`0_3fn`, `0_3ee`, `0_1ds`, `0_1ew`, `0_1fw`, `0_0fs`, `0_0fcave`, `0_0fc`, `0_1fn`, `0_1ee`, `0_1de`. Each changed
+family's env played every new state for 3 × 300 random legal steps: every reset worked, CLIP was never offered with
+the switch off, every episode ended (exit-correct, `enter-room:5:0x76` out of 0x0b, exit-wrong, death), and BOMB
+in the plain way's 0x2c is offered only for the 10th kill (`$50` = 9).
+
+## Families and curricula
+
+`start_states` globs: ow-zora `0_56*`, `0_54*`, `0_5f*`, `0_4f*`, `0_3f*`, `0_3e*`, `0_2e*`, `0_6f*` (its `0_2d*`,
+`0_59*`, `0_5a*`, `0_55*` take the rest); ow-moblin `0_53*`, `0_52*`, `0_51*`, `0_6d*`, `0_6e*`; ow-lynel `0_50*`,
+`0_60*`; ow-octorok `0_57*`; ow-peahat `0_1d*`, `0_1f*`; ow-tektite `0_1e*`, `0_0d*`, `0_0c*`; ow-leever `0_0b*`;
+ow-start `0_2f*`, `0_0f*`. Success endings were already right (0x0b's `enter-room:5:0x76`; every other leg exit,
+cave mouths included, is an `exit-correct`). `max_steps` holds the new rooms' explored lengths (at most 208 steps,
+0x5f's plain ladder, against ow-zora's 2000; elsewhere at most 185 against 600).
+
+Curricula (`python -m triforce.explore --specialist NAME --states ... --parallel 8 --out trajectories`; gitignored,
+so they live with the states' builder until copied), every state solved, one track a state; lengths in steps
+(chains 0 / 1 / 2):
+
+- **ow-zora** (48 tracks): `0_55n` 54/58/39, `0_54e` 75/87/12, `0_5fe` 69/67/35 (the ladder clip and the heart),
+  `0_4fs` 37/99/43, `0_3fs` 41/24/40 (onto the dock), `0_3fn` 35/30/23, `0_3ee` 21/3/5, `0_2ds_v2` 71/34/55, `0_56w`
+  64/42/73, `0_59w_v2` 17/12/49, `0_5aw_v2` 44/55/42, `0_6fw` 72/15/36, `0_5fs` 120/126/208 (the plain ladder twice
+  and the heart), `0_2es` 16/42/39, `0_2de` 58/22/66, `0_2dn` 72/40/58.
+- **ow-moblin** (27): `0_53e` 62/41/52, `0_52e` 105/67/57, `0_51e` 24/72/29 (the wrap exit), `0_3de` 91/22/44,
+  `0_5bw_v2` 64/38/56, `0_5cw_v2` 47/48/106, `0_5dw_v2` 185/78/71, `0_6dn` 9/11/22, `0_6ew` 52/91/71.
+- **ow-peahat** (15): `0_45c` 4/3/4 (off the pier), `0_1ds` 13/27/156, `0_1fw` 72/41/42 (the wall gap), `0_1fn`
+  29/98/18, `0_1de` 29/33/98.
+- **ow-leever** (6): `0_0be` 12/12/16, `0_0bs` 17/17/17.
+- **ow-lynel** (15; curriculum new): `0_50e` 26/41/29, `0_60n` 73/47/139 (CLIP E on Y `$85`/`$8D` only: random play
+  offered it 0-2 times in 900 steps a chain), and its first states `0_0as` 83/50/73, `0_0acave` 12, `0_0ac`
+  124/109/127 (the white sword cave's entry, inside and exit).
+- **ow-start** (40; curriculum new, and one-room episodes): `0_2fs` 6, `0_2fcave` 17 (the heart container, never the
+  potion), `0_2fc` 4 (off the pier: the raft), `0_0fs` 7, `0_0fcave` 111 (the rupees and the way out), `0_0fc` 6,
+  `0_1cs_v2` 14/33/33, `0_1be_v2` 49/55/45 (the Lost Hills' four Ns), and its first states `start` 7, `0_77n`
+  13/8/13, `0_77cave` 12, `0_77c` 10, `0_1cs` 18/17/18, `0_1be` 4/4/3. The cave tracks and the Lost Hills' were
+  explored again with `--iterations 8000 --patience 3000` (shorter: 23 → 17, 121 → 111, 78-122 → 45-55).
+- **No curriculum** for ow-tektite (0x1e a walk each way, 0x0d a walk, 0x0c's wrap exit one CLIP from the arrival,
+  0x2c's plain crossing a walk) and ow-octorok (0x57, 0x58 W → E walks): no step or item order to find, the kind
+  of crossing both families learned without tracks. Random play (900 steps a state) crossed 0x1e, 0x0c (68-108
+  times), 0x0d and 0x57, but neither 0x58 nor the plain 0x2c: watch those two in training.
+
+Both-ways states are explored with the switch on (their tracks follow the clip way: `0_3ee` wraps W, `0_55n` wraps
+onto 0x55's W part); plain-only states with it off. A curriculum frame and an explored cell take the step of their
+seed state's entry, so tracks must not leave a room and come back into it: that is why ow-start, whose episodes ran
+on across its rooms (0x2f → its cave → 0x2f → the raft), is one-room now (the first explore of `0_0fs` replayed into
+the cave a second time, a wrong exit, after the explorer had scored it as correct).
 
 ## Tests
 

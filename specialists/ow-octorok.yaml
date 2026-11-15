@@ -1,6 +1,6 @@
 name: ow-octorok
 rooms: ['(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x58)', '(0, 0x37)', '(0, 0x4c)', '(0, 0x3c)', '(0, 0x78)', '(0, 0x57)', '(0, 0x64)', '(0, 0x66)']
-start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c*_[0-9]', '0_3c*_[0-9]', '0_78*_[0-9]', '0_64*_[0-9]', '0_66*_[0-9]']
+start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c*_[0-9]', '0_3c*_[0-9]', '0_78*_[0-9]', '0_64*_[0-9]', '0_66*_[0-9]', '0_57*_[0-9]']
 success: [exit-correct, enter-room:1:0x73, enter-room:2:0x7d]
 reward_profile: default
 reward: {pbrs: true}
@@ -20,4 +20,5 @@ notes: >-
   offered only where the bomb opens it; a cheated bomb if Link has none) and enter the secret cave, take the 30
   rupees (walking up at X $78; leaving the room without them is `missed`), then out of the cave S (clips: the wrap
   way through 0x77) or W (without clips: 0x66 from E leaves W, past its shop's open mouth; 0x64 from E leaves W, past
-  its potion shop's). 0x57 is off the route since round 22 (tagged, no start state).
+  its potion shop's). Round 24 (the coast stretch's plain way to 0x5f, docs/routes/d5-leg.md): 0x57 and 0x58 from W
+  leave E; their states fix the switch off.
