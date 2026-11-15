@@ -31,7 +31,7 @@ flowchart LR
 | `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -791,6 +791,15 @@ every step, so following an enemy that moves away pays again, and knockback rese
   default to `DEFAULT_ACT`. The act modes and the run-time clips switch (round 22) are independent: every tool
   that takes `--act` takes `--clips` beside it, and a record carries both its switch fields and its decision
   statistics.
+- **Numbered checkpoints** (round 25): `train --checkpoint-every N` (`train_round.py --checkpoint-every N`, passed
+  to every training; off by default) also keeps the checkpoint of every Nth iteration of the run as
+  `<run dir>/checkpoints/it<iteration:06d>/` (`registry.snapshot_checkpoint`, `snapshot_dir`, `list_snapshots`):
+  a byte copy of `ckpt.pt` as saved at that iteration, with its own `version` and an `act` bound to the copy's sha1
+  (the run's mode), so the dir goes wherever a run dir does (`eval-chain --checkpoint FAMILY=DIR`, `evaluate
+  --checkpoint DIR`, `--load DIR`). `--checkpoint-keep K` keeps the newest K. A run without the option trains as
+  before; with it the weights, optimizer and metrics are the same for the same seed (tested on the CPU). Provenance
+  records a numbered checkpoint as `<family>/<run>/checkpoints/it<N>/ckpt.pt`. A new training into the run dir sets
+  `checkpoints/` and `selection.json` aside with the rest (`PREVIOUS_RUN_FILES`).
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
   arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
   with its trajectory.json time); `train_summary.json`
@@ -1063,6 +1072,23 @@ every step, so following an enemy that moves away pays again, and knockback rese
   batch can't run (a bad entry, nothing to run). A rerun skips what is done: a chain whose output exists, an
   evaluation whose result file is the same measurement (`eval_batch.same_measurement`: specialist, act mode,
   episodes per state, seed, checkpoint sha1, code and data versions); `--redo` measures those again.
+- `triforce select-checkpoint FAMILY RUN (--segment NAME | --from STATE [--stop-at X] [--target L:0xRR]) [--runs
+  1000] [--clips on|off] [--confirm 1000] [--confirm-top K] [--only LABELS] [--apply]` (`select_checkpoint.py`,
+  round 25): a run's numbered checkpoints (`it<N>`), its `ckpt.pt` (`last`) and the family's promoted run
+  (`promoted`, the reference) each play the same chain seeds in place of the family's promoted model, the rest of
+  the team as promoted, as one `eval-batch` job (`run_batch`; entries `screen-<label>`, then `confirm-top<k>`,
+  `confirm-last`, `confirm-promoted`, whose candidate is picked from the screen when they start). The screen ranks
+  the run's checkpoints by arrivals (a segment's: the next segment's start room, `eval_batch.TARGETS`; the last
+  segment's: the route's end), then hearts on arrival, with standard errors and paired differences (same seeds)
+  against `last` and `promoted`; the winner, the next K-1 best other than `last`, `last` and `promoted` are played
+  again on fresh seeds (`--confirm` runs after the screen's), and that is the number to report (the best of N noisy
+  measurements is biased up). `chosen` is the winner if its confirmed paired arrival difference against `last` is
+  above zero, else `last`. `<run>/selection.json` holds every candidate's training metrics of its iteration, both
+  scores and the differences; chains go to `target/select/<family>-<run>-<segment>[...]-clips<on|off>/` and are
+  reused by a rerun when played by the same weights (sha1), act mode, start, clips switch and seeds.
+  `--apply` makes `chosen` the run's `ckpt.pt`: the old file and its `eval*.json` move into its own numbered dir,
+  the chosen bytes are copied in as a new file (never through a hard link), `version` and `act` (the run's mode)
+  follow; the run then needs a new canonical evaluation.
 
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
 
@@ -1219,8 +1245,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   / `clips_flips`); `CLIPS=on|off` passes `--clips` in `scripts/experiments/r56_chains.sh`.
   `--checkpoint` must name a known specialist and an existing checkpoint. Exit 2 on a bad `--from`, `--stop-at` or
   `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
-  `triforce train|run|play|evaluate|eval-batch|room-stats ...` forward to the module CLIs (`triforce --models-dir DIR
-  train|run|evaluate|eval-batch|room-stats` forwards the models dir). `eval-chain --events FILE` appends its events to a
+  `triforce train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint ...` forward to the module
+  CLIs (`triforce --models-dir DIR ...` forwards the models dir to all but `play`). `eval-chain --events FILE` appends its events to a
   caller's stream (no folder of its own); `--nice N` (CPU priority), `--no-wait` (start without waiting its turn;
   both above).
 - `scripts/yardstick.py report --run RUN [--mode sample|argmax] [--chain NAME=PATH[@L:0xRR] ...] --output OUT.json`

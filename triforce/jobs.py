@@ -3,7 +3,8 @@ its line (at most ``max_jobs()`` jobs run at once, the others wait their turn). 
 it: every job lowers its own priority and waits its own turn.
 
 Start.  Every training and evaluation entry point (``scripts/train_round.py``, ``python -m triforce.train``,
-``triforce evaluate``, ``triforce eval-chain``, ``triforce eval-batch``) adds ``add_job_arguments`` to its parser
+``triforce evaluate``, ``triforce eval-chain``, ``triforce eval-batch``, ``triforce select-checkpoint``) adds
+``add_job_arguments`` to its parser
 (``--nice N``, ``--no-wait``) and calls ``begin_job(args)`` at start, which lowers the priority and records the
 ``--no-wait`` choice for the job's plan.  Library code never calls it, so play, replay and build tools
 (play-zelda, zelda-headless, create-video, zelda-map, ``tf replay``, explore, entry_states) that share the

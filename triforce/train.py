@@ -72,6 +72,10 @@ the policy from before the phase (C = ``--ppg-clone-coeff``; ``ppg/value_loss``,
 iterations that run one).
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
+``--checkpoint-every N`` (round 25) also keeps the checkpoint of every Nth iteration of this run as
+``<run dir>/checkpoints/it<iteration:06d>/`` (``registry.snapshot_checkpoint``: ``ckpt.pt`` as saved then, with its
+``version`` and ``act``), for choosing a checkpoint by the chain (``triforce select-checkpoint``);
+``--checkpoint-keep K`` keeps only the newest K.  Without it nothing differs.
 
 Live progress goes to an event stream (``events.py``): ``--events FILE`` appends to a caller-owned stream
 (``scripts/train_round.py``); otherwise the run gets its own ``logs/<yymmdd>_<NNN>_<specialist>/`` folder with
@@ -258,6 +262,12 @@ def parse_args(argv=None):
     parser.add_argument('--models-dir', default=None,
                         help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
     parser.add_argument('--save-every', type=int, default=10, help="checkpoint every N iterations (and at the end)")
+    parser.add_argument('--checkpoint-every', type=int, default=0, metavar='N',
+                        help="also keep a numbered checkpoint every N iterations of this run in <run>/checkpoints/"
+                             "it<iteration>/ (each loadable like ckpt.pt; registry.snapshot_checkpoint; 0 = none, "
+                             "the default)")
+    parser.add_argument('--checkpoint-keep', type=int, default=0, metavar='K',
+                        help="keep only the newest K numbered checkpoints (0 = all)")
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
     parser.add_argument('--ent-anneal', type=float, default=PPOConfig.ent_anneal,
                         help="share of the iterations, at the end, over which the entropy bonus falls to 0")
@@ -526,7 +536,8 @@ def main(argv=None) -> Path:
 
 # A run dir's files from an earlier training (``set_aside_previous``); train.log belongs to the caller
 # (scripts/train_round.py tees the current run's output into it).
-PREVIOUS_RUN_FILES = ('ckpt.pt', 'metrics.jsonl', 'train_summary.json', 'act', 'curriculum.json', 'run.json', 'tb')
+PREVIOUS_RUN_FILES = ('ckpt.pt', 'metrics.jsonl', 'train_summary.json', 'act', 'curriculum.json', 'run.json', 'tb',
+                      registry.SNAPSHOTS_NAME, 'selection.json')
 
 
 def set_aside_previous(out_dir: Path, continuing: bool) -> Optional[Path]:
@@ -764,6 +775,10 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                              or k.startswith('linger/room/')})
         if result.iteration % args.save_every == 0:
             save()
+        if args.checkpoint_every > 0 and result.iteration % args.checkpoint_every == 0:
+            if state['saved'] != state['iteration']:
+                save()
+            registry.snapshot_checkpoint(ckpt, state['iteration'], args.checkpoint_keep)
         if stop:
             print(f"[train] early stop: balanced success_rate >= {args.stop_success} for {args.stop_patience} "
                   "iterations, confirmed by an evaluation", flush=True)

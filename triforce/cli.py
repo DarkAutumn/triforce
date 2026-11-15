@@ -1,6 +1,6 @@
 """The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play/evaluate/eval-batch/
-room-stats/convert-model.  ``eval-chain`` lowers its own priority and waits its turn (``--nice``, ``--no-wait``,
-``triforce.jobs``)."""
+room-stats/convert-model/select-checkpoint.  ``eval-chain`` lowers its own priority and waits its turn (``--nice``,
+``--no-wait``, ``triforce.jobs``)."""
 
 import argparse
 import json
@@ -308,9 +308,10 @@ def main(argv=None):
     passthrough = {'train': ('triforce.train', 'cli'), 'run': ('triforce.run', 'main'),
                    'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main'),
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
-                   'convert-model': ('triforce.convert', 'main')}
+                   'convert-model': ('triforce.convert', 'main'),
+                   'select-checkpoint': ('triforce.select_checkpoint', 'main')}
     # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate|eval-batch|room-stats|
-    # convert-model ...` forwards the rest to the module's own CLI.
+    # convert-model|select-checkpoint ...` forwards the rest to the module's own CLI.
     models_dir, allow, rest = None, False, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
@@ -350,6 +351,8 @@ def main(argv=None):
                                       "by scope: full run, segments, room only)")
     sub.add_parser('convert-model', help="python -m triforce.convert RUN_DIR... | --promoted --out DIR (widen 1.4.1 "
                                          "checkpoints to this code's action kinds and observation)")
+    sub.add_parser('select-checkpoint', help="python -m triforce.select_checkpoint FAMILY RUN ... (choose a run's "
+                                             "numbered checkpoint by a chain segment, confirmed on fresh seeds)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")

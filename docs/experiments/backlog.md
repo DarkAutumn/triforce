@@ -602,9 +602,18 @@ Left open by round 21 (round21.md §10):
   2:0x1e was not taken (overall 94.7% −0.12 by argmax, 14 loops; it plays sample): take it first.
 - [ ] **Clips for levels 5-9.** Only levels 1 and 4 were scanned for skips; level 5's Blue Darknut rooms (`$05`,
   `$64`: blocks round their stairs; `zelda-asm/levels/level-5.md`) are the first to check when the route gets there.
-- [ ] **The final PPO update can change a model after its last logged iteration** (round21-trap-room.md §4:
+- [x] **The final PPO update can change a model after its last logged iteration** (round21-trap-room.md §4:
   `kind-nocur` s1 fell from 100% to 75% training success in its last two iterations; `long-north` s1 logged 100% for
-  10 iterations, its checkpoint scores 75-82%). There is no best-checkpoint selection.
+  10 iterations, its checkpoint scores 75-82%). There is no best-checkpoint selection. **Done (round 25, `r25-ckpt`):**
+  `train --checkpoint-every N` keeps numbered checkpoints and `triforce select-checkpoint` chooses one by a chain
+  segment, confirmed on fresh seeds (decisions 2026-11-15 "Checkpoints are chosen by the chain"). On darknut's 4M
+  continuation of r74-darknut5 the 17 checkpoints differ on the D5 segment by no more than noise (42.4-47.7%, SE
+  1.6); selection gained +0.4 ± 2.2 points over the promoted run after confirmation.
+- [ ] **Darknut loses the Olive Garden's hearts as it trains on** (round 25, `r75-ck-darknut`): hearts out of the
+  Garden in the D5 chain were 6.43 with r74-darknut5, 6.2-6.4 in the first 600 of 977 more iterations (5.96 once) and
+  5.9-6.1 in the last 300 (SD 0.17 across checkpoints, SE 0.08 each) while its training metrics stayed level; the
+  D5 arrivals follow it (correlation 0.69). A longer darknut training is no free gain; what to train against (hearts
+  out of the Garden as the measure, a hearts term) is open.
 - [ ] **`triforce.explore --variant` loses its tracks when `--specialist` is a YAML path** (it looks under the path,
   the explorer writes under the config name, and still prints "solved" with the wrong path; round21-trap-room.md
   §4). `1_22e_0` and `1_22e_1` give identical explore tracks for every seed.

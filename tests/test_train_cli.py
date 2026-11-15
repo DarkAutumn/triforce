@@ -148,6 +148,56 @@ def test_seeded_training_repeats_gameplay_for_any_thread_count(states_dir, tmp_p
         torch.set_num_threads(torch_threads)
 
 
+def test_numbered_checkpoints_change_nothing_and_load_like_the_run(states_dir, tmp_path):
+    """Round 25: --checkpoint-every keeps the checkpoint of every Nth iteration in <run>/checkpoints/it<N>/ (a copy
+    of ckpt.pt as saved then, with its version and act bound to it), --checkpoint-keep the newest K; the run itself
+    trains exactly as without (same seed, CPU, one torch thread: same weights, optimizer and metrics)."""
+    torch_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        common = _common(states_dir, tmp_path, '--parallel', '2', '--iterations', '5', '--steps-per-update', '24',
+                         '--no-curriculum', '--seed', '13')
+        plain = train.main(common + ['--run-id', 'plain'])
+        numbered = train.main(common + ['--run-id', 'numbered', '--checkpoint-every', '2'])
+        capped = train.main(common + ['--run-id', 'capped', '--checkpoint-every', '1', '--checkpoint-keep', '2'])
+    finally:
+        torch.set_num_threads(torch_threads)
+    assert not (plain / registry.SNAPSHOTS_NAME).exists()
+    final = {name: registry.load_checkpoint(run) for name, run in
+             (('plain', plain), ('numbered', numbered), ('capped', capped))}
+    for name in ('numbered', 'capped'):
+        for key, tensor in final['plain']['state_dict'].items():
+            assert torch.equal(tensor, final[name]['state_dict'][key]), (name, key)
+        assert final[name]['iterations'] == 5 and final[name]['steps'] == final['plain']['steps']
+        mine = final[name]['optimizer']['state']
+        for param, entry in final['plain']['optimizer']['state'].items():
+            assert all(torch.equal(value, mine[param][key]) for key, value in entry.items()), (name, param)
+    learner = [{k: v for k, v in r.items() if k.startswith(('losses/', 'entropy/'))}
+               for r in read_jsonl(str(plain / 'metrics.jsonl'))]
+    for run in (numbered, capped):
+        assert _gameplay(run) == _gameplay(plain)
+        assert [{k: v for k, v in r.items() if k.startswith(('losses/', 'entropy/'))}
+                for r in read_jsonl(str(run / 'metrics.jsonl'))] == learner
+
+    assert [it for it, _ in registry.list_snapshots(numbered)] == [2, 4]
+    assert [it for it, _ in registry.list_snapshots(capped)] == [4, 5]
+    last = registry.snapshot_dir(capped, 5)
+    assert (last / 'ckpt.pt').read_bytes() == (capped / 'ckpt.pt').read_bytes()
+    for _, path in registry.list_snapshots(numbered) + registry.list_snapshots(capped):
+        checkpoint = registry.load_checkpoint(path)
+        assert checkpoint['iterations'] == int(path.name[2:]) and checkpoint['specialist'] == SPECIALIST
+        assert registry.model_version(path) == registry.model_version(numbered)
+        assert registry.act_mode(path) == registry.DEFAULT_ACT
+        assert (path / 'act').read_text().split()[1] == registry.checkpoint_sha1(path)
+    # An early numbered checkpoint is its own weights, not the final ones.
+    early = registry.load_checkpoint(registry.snapshot_dir(numbered, 2))['state_dict']
+    assert any(not torch.equal(tensor, early[key]) for key, tensor in final['numbered']['state_dict'].items())
+    # A label for provenance names the run and the numbered checkpoint.
+    from triforce.provenance import checkpoint_label  # pylint: disable=import-outside-toplevel
+    assert checkpoint_label(registry.snapshot_dir(numbered, 2)) == f'{SPECIALIST}/numbered/checkpoints/it000002/ckpt.pt'
+    assert checkpoint_label(numbered) == f'{SPECIALIST}/numbered/ckpt.pt'
+
+
 def test_early_stop_balances_start_states():
     """An oversampled failing state counts as one state; an iteration that finished no entry episode resets."""
     early = train.EarlyStop(0.75, 2, window=4, min_episodes=2)

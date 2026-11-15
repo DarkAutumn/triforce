@@ -322,7 +322,7 @@ def test_child_env_passes_the_niceness_on():
 # explore, entry_states); only ``begin_job`` lowers the priority.
 ENTRY_POINTS = {('triforce/train.py', 'cli'), ('triforce/evaluate.py', 'main'),
                 ('triforce/cli.py', '_cmd_eval_chain'), ('triforce/eval_batch.py', 'main'),
-                ('scripts/train_round.py', 'main')}
+                ('triforce/select_checkpoint.py', 'main'), ('scripts/train_round.py', 'main')}
 
 
 def test_only_the_training_and_evaluation_entry_points_begin_a_job():

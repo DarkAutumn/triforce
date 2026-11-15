@@ -2277,3 +2277,30 @@ hours. Lee: "fast jobs run sooner than later ... the time waited check will EVEN
   the old rule in every join order.
 - Still no controller, no new knob: `--no-wait` and `--nice` are the only opt-outs; `$TRIFORCE_MAX_JOBS` keeps
   meaning the regular places.
+
+## 2026-11-15 — Checkpoints are chosen by the chain and confirmed on fresh seeds (round 25, `r25-ckpt`)
+
+- **What:** `train --checkpoint-every N` (`train_round.py --checkpoint-every N`) keeps numbered checkpoints in the
+  run dir (`checkpoints/it<N>/`, each loadable like the run); `triforce select-checkpoint FAMILY RUN --segment NAME`
+  plays every one, the run's last and the promoted run on the same chain seeds as one batch job, ranks them by
+  arrivals then hearts on arrival, and plays the winner, the next best, the last and the promoted again on fresh
+  seeds; `--apply` makes the choice the run's `ckpt.pt` (architecture.md "Numbered checkpoints", eval-batch list).
+- **Why:** single-room evaluations can't see what the route needs (round 24: r74-darknut4 and r74-darknut5 both 97%
+  in single rooms, 34.9% and 46.4% on the Dungeon 5 segment), and the best of N noisy chain measurements is biased
+  up, so the number reported is the confirmation's.
+- **The darknut curve** (`r75-ck-darknut`: r74-darknut5 + 977 iterations with `--sil-coeff 0.1`, a checkpoint every
+  61; D5 segment, clips on, 1000 runs each): the 17 checkpoints span 42.4-47.7% (SD 1.6 points, the binomial
+  standard error 1.6), the promoted run 46.4%; on 1000 fresh seeds the screen's winner (it009831, 61 iterations in)
+  47.4%, the promoted 47.0%, the last 43.7%. Selection gains nothing over the promoted run (+0.4 ± 2.2 points
+  paired); the run's last checkpoint is the worst of the three (−3.3 ± 2.2). What does vary beyond noise is the
+  hearts Link carries out of the Olive Garden (6.43 promoted, 5.9-6.4 across the run; SD 0.17 against a standard
+  error of 0.08), and it moves the arrivals (correlation 0.69 across checkpoints). Training success, value loss and
+  entropy say nothing about it; the Garden alone (300 episodes, 2 bombs) follows it weakly (0.5). Clips off (the
+  same fresh seeds): it009831 36.9%, it010014 36.4%, the last 35.6%, it010746 34.1%, the promoted 34.3% (all
+  within 2.1 points of noise of each other).
+- **Outcome:** darknut stays r74-darknut5; nothing of `r75-ck-darknut` is to be promoted, and gibdo was not run (the
+  selection's condition, a confirmed gain, was not met). A model change is judged by 1000-run chains on fresh seeds:
+  the paired difference of two models on the same 1000 seeds has a standard error of 2.2 points (the same seeds
+  don't make two different models' runs alike), so one arm against another needs about 5 points to be a result,
+  3 points need about 2200 runs an arm and 2 points 5000; for darknut, the hearts out of the Garden (step 194's
+  `health_in`) is the sharper secondary.

@@ -4,7 +4,7 @@
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
         [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100] [--eval-act MODE]
         [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--promote] [--train-args '...{name}...']
-        [--nice N] [--no-wait]
+        [--checkpoint-every N [--checkpoint-keep K]] [--nice N] [--no-wait]
 
 Specialists (trainable, with seed start states; route order of the route, ``d2first``) train one at a time as
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
@@ -24,7 +24,9 @@ recorded for that specialist and the round moves on; the round then ends 'failed
 fails), else 'completed' with exit 0.  Only finished trainings play in the chain.  Rerun with ``--skip-existing``
 to resume (finished runs, train_summary.json status completed/early_stop, are only re-evaluated, and promoted with
 ``--promote``; an unfinished run dir is renamed ``<run>.partial-N`` and trained fresh).
-``--train-args`` passes extra training arguments (``{name}`` expands to the specialist).  ``--chain-runs 0`` skips
+``--train-args`` passes extra training arguments (``{name}`` expands to the specialist).  ``--checkpoint-every N``
+and ``--checkpoint-keep K`` go to every training (numbered checkpoints, ``triforce.train``; for ``triforce
+select-checkpoint``).  ``--chain-runs 0`` skips
 the chain.  One SIGTERM/Ctrl-C stops the trainer and every evaluation (at its next episode) and ends every open
 run 'interrupted'.
 
@@ -109,6 +111,10 @@ def parse_args(argv=None):
     parser.add_argument('--train-args', default='',
                         help="extra arguments for triforce.train (one string; {name} expands to the specialist, "
                              "everything else, braces included, is passed as is)")
+    parser.add_argument('--checkpoint-every', type=int, default=0, metavar='N',
+                        help="every training keeps a numbered checkpoint every N iterations (triforce.train; 0 = none)")
+    parser.add_argument('--checkpoint-keep', type=int, default=0, metavar='K',
+                        help="only the newest K numbered checkpoints are kept (0 = all)")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     add_job_arguments(parser)
     return parser.parse_args(argv)
@@ -140,7 +146,9 @@ def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
                '--parallel', str(args.parallel), '--device', args.device, '--models-dir', str(models),
                '--stop-success', str(STOP_SUCCESS), '--stop-patience', str(STOP_PATIENCE),
                '--events', str(log_dir / f'{name}.jsonl'),
-               *(['--confirm-act', args.eval_act] if args.eval_act != registry.MODEL_ACT else [])]
+               *(['--confirm-act', args.eval_act] if args.eval_act != registry.MODEL_ACT else []),
+               *(['--checkpoint-every', str(args.checkpoint_every)] if args.checkpoint_every > 0 else []),
+               *(['--checkpoint-keep', str(args.checkpoint_keep)] if args.checkpoint_keep > 0 else [])]
     command += shlex.split(args.train_args.replace('{name}', name))
     run_dir.mkdir(parents=True, exist_ok=True)
     say(f"[round] training {name}: {' '.join(command)}")
