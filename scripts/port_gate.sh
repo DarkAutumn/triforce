@@ -5,8 +5,9 @@
 #   scripts/port_gate.sh LABEL [SEED]
 #
 # Writes target/gate/LABEL/{eval/<specialist>.json, chains/<segment>.jsonl, summary.json}, replacing anything an
-# earlier run with the same label left there. About 15 minutes on 20 cores. Rebuild the module first
-# (.venv/bin/maturin develop --release) so the gate measures the change.
+# earlier run with the same label left there. About 15 minutes on 20 cores, plus any time its evaluations wait their
+# turn behind other trainings and evaluations (triforce/jobs.py; no timeout, so a wait doesn't fail the gate). Rebuild
+# the module first (.venv/bin/maturin develop --release) so the gate measures the change.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 LABEL=${1:?label}
@@ -21,13 +22,13 @@ mkdir -p "$OUT/eval" "$OUT/chains"
 # Every specialist with a promoted model.
 SPECIALISTS=$(for f in specialists/*.yaml; do s=$(basename "$f" .yaml); if [ -f "models/$s/promoted" ]; then echo "$s"; fi; done)
 for s in $SPECIALISTS; do
-  timeout 1h $PY -m triforce.evaluate --specialist "$s" --models-dir models --episodes-per-state 20 --parallel 16 \
+  $PY -m triforce.evaluate --specialist "$s" --models-dir models --episodes-per-state 20 --parallel 16 \
     --threads 16 --seed "$SEED" --output "$OUT/eval/$s.json" > "$OUT/eval/$s.log" 2>&1
 done
 
 chain() {
   local name=$1; shift
-  timeout 2h $PY -m triforce.cli eval-chain --runs "$RUNS" --parallel 20 --first-seed "$SEED" \
+  $PY -m triforce.cli eval-chain --runs "$RUNS" --parallel 20 --first-seed "$SEED" \
     --output "$OUT/chains/$name.jsonl" "$@" > "$OUT/chains/$name.log" 2>&1
 }
 chain full
