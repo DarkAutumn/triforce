@@ -1021,7 +1021,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   "toward the destination" into the sequence's next direction for `MazeStep` ($52F), used by the objective's exit
   targets (no route cache in a maze room) and the observation's objective direction.
 - **Routes through a maze** (round 24): a routes.yaml step leaves a maze room by `exit: maze` (its sequence, into the
-  destination: `d5maze`'s 0x1b entered from E, then 0x0b entered from S) or by its free edge; a step leaving through a
+  destination: `d2first`'s 0x1b entered from E on the mountain stretch's plain way, then 0x0b entered from S) or by its free edge; a step leaving through a
   looping edge, or `exit: maze` on a room that is no maze, is a load error. A **maze loop** (`zelda::MazeLoop`,
   `Change::maze_loop`: Link stays in the maze room and either `MazeStep` rose or the step ended on a room
   transition; its edge is Link's facing, the direction the game tests) is a room transition though the room id
@@ -1035,10 +1035,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   stands at, fresh velocities, and `room_state` `maze_step` (`MazeStep` / 4 in a maze room, else 0; schema 5). Visits and chain records go on through a loop; `RoomRecord.maze_loops` /
   `maze_wrong_loops` count them and each wrong loop is one of the run's wrong exits (`wrong-exit-limit`); the heart
   tracker counts the floor's hearts as left. Go-Explore's cell key holds the maze step (`env::explore::maze_step`)
-  and a loop that advances it is progress, so `explore`, `entry_states build --route d5maze` and `path --route R`
+  and a loop that advances it is progress, so `explore`, `entry_states build --route R` and `path --route R`
   (whose explored objective now follows R) cross the maze. Tests: `crates/env/tests/maze.rs`.
 - **Terminal steps**: `exit: terminal` (a scouting route's last room, run with `--stop-at`) is only entered, so its
-  room needs no family (`d5maze` ends on 5:0x76).
+  room needs no family.
+- **The leg's clips switch** (round 24): a switch off on a stretch's clip way past its `wrap_in` step (0x55's river:
+  0x54 .. 0x5f of `coast-heart`) waits for the rejoin (`GameCompletion::past_wrap_in`): from W of the river no walk
+  leads back to the plain way, and the map's room graph, which treats 0x55 as one room, would send Link E into
+  0x55's W part and back. Elsewhere it re-plans to the plain way from the nearest room (`crates/zelda/tests/
+  d5_leg.rs` `the_switch_off_in_*`). Cheated bombs (`zelda::cheats::bomb_need`): none in a `requires_bombs` room
+  once what it is bombed for is open (0x2c's rock wall on the leg, 5:0x66 and 5:0x65 on the way back).
 - `Route.load(name, stop_at=None, start_from=None, states_dir=None, *, stop_step=None, power_on=None,
   checkpoint=None, clips=True, clips_off_from=None)` reads `triforce/routes.yaml` (`clips`: the run-time switch a
   run starts with; `clips_off_from`: a route step (int) or room where it turns off; "The run-time clips switch"

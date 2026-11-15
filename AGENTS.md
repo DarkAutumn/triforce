@@ -13,8 +13,11 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the stretch `d3-approach` (clips: 0x77, 0x76, 0x75 and the wrap exit `CLIP E` into 0x74; plain: 0x66, 0x65, 0x64,
   0x63, 0x73, 0x74 from W) → Dungeon 3 (the raft; 0x5b E through its bomb wall → 0x5c → 0x4c from S,
   Manhandla) → by raft to Dungeon 4 (the ladder; the stretch `d4-island`: clips 0x31 N and the ladder clip off
-  0x21's island, plain 0x31 W – 0x30 – 0x20 – 0x21; then 0x11 N → 0x01's key → 0x02 → 0x12 from N, Gleeok), ending
-  on the D4 triforce. The actions are MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW and `CLIP <N|S|W|E>` (round
+  0x21's island, plain 0x31 W – 0x30 – 0x20 – 0x21; then 0x11 N → 0x01's key → 0x02 → 0x12 from N, Gleeok) → the D4
+  triforce → (round 24, `docs/routes/d5-leg.md`, steps 134-185) the leg: the raft back to 0x55, the stretches
+  `coast-heart` (0x5f's heart container), `lake-3e` and `mountain` (plain way through the Lost Hills), 0x2f's heart
+  cave, 0x0f's 100 rupees → Dungeon 5 (`docs/routes/d5.md`, steps 186-208: the recorder, Digdogger), ending on the
+  D5 triforce. The actions are MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW and `CLIP <N|S|W|E>` (round
   21: the speedrunners' grid-point skip, played by the executor as a macro; round 22 adds the wrap exit), on per
   family with `clips`, and (round 24, 1.4.2.0) `RECORDER`, `FOOD <N|S|W|E>`, `CANDLE <N|S|W|E>` (B items chosen on
   the sub-screen and used with B; masked unless a family's `items:` turns `recorder`, `food`, `candle` on; RECORDER
@@ -110,7 +113,8 @@ Specialist PPO models (one per room family) that carry the `d2first` chain (`tri
 start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow), then S to 0x67's secret
 cave (bomb its wall, 30 rupees) and on to Dungeon 3 by the wrap exit through 0x75 (clips on) or along row 6 (clips
 off) (the raft; 0x5b E → 0x5c → 0x4c S, Manhandla), then by raft to Dungeon 4 (the ladder, 0x21's island by the
-ladder clip or round by 0x30 and 0x20, 0x01's key, Gleeok) and its triforce (the route ends on taking it). Lee owns
+ladder clip or round by 0x30 and 0x20, 0x01's key, Gleeok) and its triforce, then (round 24) the leg to Dungeon 5
+and Dungeon 5 (the recorder, Digdogger) and its triforce (the route ends on taking it). Lee owns
 the direction; the standing invitation is to come up with ideas, test them, keep what helps, and log everything.
 
 ## Lee's standing rules
@@ -127,7 +131,9 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   (4:0x01 since round 22), goriya, trap-room (1:0x22, 3:0x5a, 3:0x4c, the rupee room 4:0x11, 4:0x02), equipment-room
   (the item cellars 1:0x7f, 3:0x0f, 4:0x60), wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo,
   zol, darknut (3:0x5c since round 22), boss-manhandla, vire, like-like (4:0x32), boss-gleeok, ow-peahat (0x45).
-  0:0x56, 0:0x57 and 3:0x4b left the route in round 22 but stay tagged (no start states).
+  Round 24 adds the leg's rooms to the overworld families and gibdo, pols-voice, dodongo-crossing, boss-digdogger
+  for Dungeon 5 (`routes.yaml` `families`). 3:0x4b left the route in round 22 but stays tagged (no start states);
+  0:0x56 and 0:0x57 are back on the route (the coast stretch's plain way).
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
@@ -329,11 +335,13 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   `training.json` now writes a plan there (a driver's folder with a plan keeps owning the stream). Still invisible:
   a job that writes neither (`--no-log`), or a second `--events` job into a folder whose plan is someone else's.
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd2:
-  --from 2_7ds_0 --runs 40' --chain ...`, or all eight with `--chains TAG`): full `triforce eval-chain --runs 20
+  --from 2_7ds_0 --runs 40' --chain ...`, or all ten with `--chains TAG`): full `triforce eval-chain --runs 20
   --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
   Dungeon 1 `--from 1_73s_0`; after Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3
-  `--from 0_74c_0`; Dungeon 4 `--from 4_71s_0` (round 22: the same names; `3_7cs`, `0_74c` and `4_71s` rebuilt).
-  The two stretches (`d3-approach` after Dungeon 1, `d4-island` in Dungeon 4) follow the run-time switch: `--clips
+  `--from 0_74c_0`; Dungeon 4 `--from 4_71s_0` (round 22: the same names; `3_7cs`, `0_74c` and `4_71s` rebuilt);
+  after Dungeon 4 (the leg) `--from 0_45c_0`; Dungeon 5 `--from 5_76s_0` (round 24: both wait for their states).
+  The five stretches (`d3-approach` after Dungeon 1, `d4-island` in Dungeon 4, `coast-heart`, `lake-3e`, `mountain`
+  on the leg) follow the run-time switch: `--clips
   on|off` measures each way (`--clips-off-from ROOM|step:N` flips it mid-run). `--from`/`--stop-at` are checked
   before any run
   (`--stop-at` must be a route room after the start step, or `step:N`, a later route step, reached only by the

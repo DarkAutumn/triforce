@@ -89,7 +89,7 @@ Its rooms are tagged by enemy as everywhere; the existing families train on thei
 | `trap-room` | | + (4,0x11), (4,0x02) | The rupee room: no monsters, no traps, bomb the N wall (round 22; the E wall before; Lee, Nov 12: it stays in this family). 0x02 (round 22): six blade traps in the dark, W→S; its blocks in columns X `$30` and `$C0` offer the block clip N and S of the middle row (4 squares, `crates/zelda/tests/clips.rs` `the_block_clip_in_dungeon_4`). |
 | `equipment-room` | | + (4,0x60 cellar) | The ladder cellar. |
 
-### Dungeon 5 (round 24, route `d5`, no states or models yet; `docs/routes/d5.md`)
+### Dungeon 5 (round 24, `d2first` steps 186-208, no states or models yet; `docs/routes/d5.md`)
 
 | Family | Main threat | Rooms (level, room) | Notes |
 |---|---|---|---|
@@ -100,6 +100,12 @@ Its rooms are tagged by enemy as everywhere; the existing families train on thei
 | `darknut` | Blue and Red Darknuts | + (5,0x64), (5,0x05), (5,0x06), (5,0x37) | `clips: true`: 0x64's block clip (off: the fight and the push). The Olive Garden 0x05: bombs free down to 0. |
 | `zol` | | + (5,0x57) | Along row 3 by the ladder. |
 | `equipment-room` | | + (5,0x04 cellar), (5,0x07 cellar) | The recorder cellar; the tunnel cellar, left by the step's ladder. |
+
+The leg to Dungeon 5 (round 24, `d2first` steps 134-185, `docs/routes/d5-leg.md`) joins the overworld families by
+enemy: Zora rooms (0x54, 0x5f, 0x4f, 0x3f, 0x3e, 0x2e, 0x6f) `ow-zora`, Moblin rooms (0x53, 0x52, 0x51, 0x6d, 0x6e)
+`ow-moblin`, Lynel rooms (0x50, 0x60) `ow-lynel`, Peahat rooms (0x1d, 0x1f) `ow-peahat`, Tektite rooms (0x1e, 0x0d,
+0x0c) `ow-tektite`, 0x0b's Leever `ow-leever`, 0x2f, 0x0f and their caves `ow-start`; 0x56 and 0x57 (plain coast
+way) are back on the route. No states or models yet.
 
 Removed with the reset (Nov 8): `ow-leever-peahat` (0x29, 0x2a, 0x2b: milestone1 only; 0x2c went to `ow-tektite`),
 the fairy pond 0x39 (ow-start), 0x48 (ow-zora; back on the route since Nov 9 as `ow-leever`), 0x49 (ow-octorok) and

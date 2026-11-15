@@ -674,11 +674,28 @@ impl GameCompletion {
             .flatten()
     }
 
+    /// Link plays a clip-way step after the stretch's step that leaves through a `wrap_in` exit (game.yaml: 0x55's
+    /// W part, cut off by the river; round 24): no walk leads back to the plain way from there (the map's room graph
+    /// treats 0x55 as one room, so a re-plan would send him E into 0x55's W part and back), so a switch off waits
+    /// for the rejoin.
+    fn past_wrap_in(&self) -> bool {
+        let Some(i) = self.step.or(self.last_step) else { return false };
+        let steps = &self.map.routes[&self.route];
+        let Some(stretch) = self.map.stretches[&self.route].iter().find(|s| s.clips.contains(&i)) else {
+            return false;
+        };
+        stretch.clips.clone().take_while(|&j| j < i).any(|j| {
+            let step = &steps[j];
+            self.map.get(step.location()).and_then(|r| r.exits.get(&step.exit)).is_some_and(|e| e.wrap_in.is_some())
+        })
+    }
+
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
         let here = state.full_location();
-        // A switch off turned off now, or held until Link can walk to an exit (round 24).
-        if self.off_pending && (!self.clips || !stranded(state)) {
+        // A switch off turned off now, or held until Link can walk to an exit (round 24), or, past a wrap into a room
+        // part only the wrap reaches (0x55's river), until the stretch rejoins.
+        if self.off_pending && (!self.clips || (!stranded(state) && !self.past_wrap_in())) {
             self.off_pending = false;
             self.apply_clips_allowed(false);
         }
@@ -1787,6 +1804,9 @@ mod tests {
                 (WAYPOINT_RUPEES, MapLocation::new(0, 0x67, true), Some(3)),
                 (WAYPOINT_RAFT, MapLocation::new(3, 0x0f, true), Some(3)),
                 (WAYPOINT_LADDER, MapLocation::new(4, 0x60, true), Some(4)),
+                (WAYPOINT_HEART, MapLocation::new(0, 0x2f, true), Some(5)),
+                (WAYPOINT_RUPEES, MapLocation::new(0, 0x0f, true), Some(5)),
+                (WAYPOINT_RECORDER, MapLocation::new(5, 0x04, true), Some(5)),
             ]
         );
         assert_eq!(w[0].after, [2].into_iter().collect());
@@ -1794,16 +1814,18 @@ mod tests {
         assert_eq!(w[2].after, [2, 1].into_iter().collect());
         assert_eq!(w[3].after, [2, 1].into_iter().collect());
         assert_eq!(w[4].after, [2, 1, 3].into_iter().collect());
+        assert!(w[5..].iter().all(|w| w.after == [2, 1, 3, 4].into_iter().collect()));
     }
 
-    /// d5 (round 24): the recorder from Dungeon 5's cellar 0x04 on (the tunnel cellar's two visits differ by it), a
-    /// `recorder` waypoint between the D4 and D5 triforces; d2first never has it.
+    /// Dungeon 5 (round 24): the recorder from its cellar 0x04 on (the tunnel cellar's two visits differ by it), a
+    /// `recorder` waypoint between the D4 and D5 triforces; nothing before Dungeon 5 has it.
     #[test]
     fn d5_takes_the_recorder_in_the_olive_gardens_cellar() {
         let map = GameMap::builtin();
-        let steps = &map.routes["d5"];
+        let steps = &map.routes["d2first"];
         let progress = route_progress(&map, steps);
-        assert!(route_progress(&map, &map.routes["d2first"]).iter().all(|p| !p.recorder));
+        let d5 = steps.iter().position(|s| s.level == 5).unwrap();
+        assert!(progress[..d5].iter().all(|p| !p.recorder));
         let tunnel: Vec<bool> = steps
             .iter()
             .zip(&progress)

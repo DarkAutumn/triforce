@@ -12,19 +12,18 @@ from triforce.specialist import list_specialists
 
 
 def test_the_route_and_families():
-    # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12); d5, d5leg and d5maze (round 24)
-    # extend it for scouting (Dungeon 5; the clip way to it; the plain way up the mountain through the Lost Hills);
+    # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12; the leg and Dungeon 5, round 24);
     # clips-gauntlet is round 21's experiment route (two targets per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'd5', 'd5leg', 'd5maze', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    assert native.routes() == [native.DEFAULT_ROUTE, 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
-def test_the_route_runs_from_the_start_to_the_d4_triforce():
+def test_the_route_runs_from_the_start_to_the_d5_triforce():
     steps = native.route_steps()
     assert [s['index'] for s in steps] == list(range(len(steps)))
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], first['specialist']) == (0, 0x77, 'start', 'ow-start')
-    assert (last['level'], last['room'], last['exit']) == (4, 0x03, 'triforce')
+    assert (last['level'], last['room'], last['exit']) == (5, 0x14, 'triforce')
 
 
 def test_every_route_room_is_in_its_family():
@@ -40,7 +39,7 @@ def test_specialist_tags():
     assert native.specialist_for((0, 0x77, True)) == 'ow-start'
     assert native.specialist_for('(1, 0x45)') == 'wallmaster'
     assert native.specialist_for((0, 0x00)) is None
-    assert native.specialist_for((0, 0x0c)) == 'ow-tektite'      # d5leg (round 24)
+    assert native.specialist_for((0, 0x0c)) == 'ow-tektite'      # the leg (round 24)
     assert native.specialist_for((0, 0x2c)) == native.specialist_for((0, 0x2c, True)) == 'ow-tektite'
     for room in [(0, 0x29), (0, 0x39), (0, 0x49), (0, 0x6a), (2, 0x6d), (3, 0x4a)]:     # off the route, untagged
         assert native.specialist_for(room) is None, room

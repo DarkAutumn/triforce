@@ -1,6 +1,6 @@
-//! Round 24: the clip way of the overworld leg from the Dungeon 4 triforce to Dungeon 5 in the real game
-//! (`triforce/routes.yaml` route `d5leg`; `docs/routes/overworld.md`, `zelda-asm/mechanics.md` "Overworld: room
-//! `$5F`").
+//! Round 24: the overworld leg from the Dungeon 4 triforce to Dungeon 5 in the real game (`triforce/routes.yaml`
+//! `d2first` steps 134-185, its stretches `coast-heart`, `lake-3e` and `mountain`; `docs/routes/d5-leg.md`,
+//! `zelda-asm/mechanics.md` "Overworld: room `$5F`").
 //!
 //! - The whole clip way played by the route's objective (`GameCompletion`): from `4_03s_0` a walker takes, at every
 //!   decision, the move or the skip (`CLIP`) down the objective's path search (the PBRS wavefront, clips on), from
@@ -27,16 +27,16 @@ use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
 use zelda::clips::{SkipKind, skip_available, skip_target};
 use zelda::executor::direction_buttons;
-use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, stranded};
+use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route, stranded};
 use zelda::room::Target;
 use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLocation, Session, Var};
 
 type S = Session<Counted>;
 
-const ROUTE: &str = "d5leg";
+const ROUTE: &str = "d2first";
 const OBJ_TYPE: u16 = 0x34F;
 const ROOM_ID: u16 = 0xEB;
-/// The D4 triforce step of `d5leg` (d2first's last step).
+/// The D4 triforce step of `d2first`.
 const TRIFORCE_STEP: usize = 133;
 
 fn ow(room: u8) -> MapLocation {
@@ -244,9 +244,6 @@ fn walk_by_objective(s: &mut S, gc: &mut GameCompletion, done: impl Fn(&S) -> bo
     let mut since = s.frame();
     let (mut last_tile, mut still) = (None, 0u32);
     for _ in 0..limit {
-        if done(s) {
-            break;
-        }
         clear_room(s);
         let state = s.state().clone();
         let before = objective.clone();
@@ -268,6 +265,10 @@ fn walk_by_objective(s: &mut S, gc: &mut GameCompletion, done: impl Fn(&S) -> bo
             visits.push(Visit { room: state.full_location(), step: gc.step(), frames: 0, max_health: 0, rupees: 0 });
         }
         assert!(gc.missed().is_none(), "{:?} at {}", gc.missed(), describe(s));
+        // Done once the objective has seen the room (its visit records the step Link plays there).
+        if done(s) {
+            break;
+        }
         let tile = (state.full_location(), state.link.position.x, state.link.position.y);
         still = if last_tile == Some(tile) { still + 1 } else { 0 };
         last_tile = Some(tile);
@@ -299,9 +300,10 @@ fn walk_by_objective(s: &mut S, gc: &mut GameCompletion, done: impl Fn(&S) -> bo
     visits
 }
 
-/// The clip way of `d5leg` from the D4 triforce to Dungeon 5, played by the route's objective. Every room change is
-/// a correct exit into the route's next room; the heart containers of 0x5f (the ladder clip) and 0x2f (its cave's
-/// right ware) take Link from 8 to 10 hearts, 0x0f's cave pays 100 rupees, and the walk ends in level 5 room 0x76.
+/// The clip way of `d2first`'s leg from the D4 triforce to Dungeon 5, played by the route's objective. Every room
+/// change is a correct exit into the clip way's next room; the heart containers of 0x5f (the ladder clip) and 0x2f
+/// (its cave's right ware) take Link from 8 to 10 hearts, 0x0f's cave pays 100 rupees, and the walk ends in level 5
+/// room 0x76, where Dungeon 5's first step (N) takes over.
 #[test]
 fn the_clip_way_is_played_by_the_objective_from_the_d4_triforce_to_dungeon_5() {
     let Some(mut s) = start("4_03s_0") else { return };
@@ -314,13 +316,29 @@ fn the_clip_way_is_played_by_the_objective_from_the_d4_triforce_to_dungeon_5() {
     for v in &visits {
         println!("{} step {:?}: {} frames, out with {} hearts, {} rupees", v.room, v.step, v.frames, v.max_health, v.rupees);
     }
-    let steps = &map.routes[ROUTE];
-    let want: Vec<MapLocation> = steps[TRIFORCE_STEP..].iter().map(|s| s.location()).chain([MapLocation::new(5, 0x76, false)]).collect();
+    let d5 = MapLocation::new(5, 0x76, false);
+    let way: Vec<(usize, MapLocation)> = map
+        .way_steps(ROUTE, true)
+        .map(|(i, st)| (i, st.location()))
+        .filter(|&(i, _)| i >= TRIFORCE_STEP)
+        .take_while(|&(_, l)| l != d5)
+        .collect();
+    let want: Vec<MapLocation> = way.iter().map(|&(_, l)| l).chain([d5]).collect();
     let got: Vec<MapLocation> = visits.iter().map(|v| v.room).collect();
     assert_eq!(got, want, "the rooms of the clip way");
     let route_steps: Vec<Option<usize>> = visits[..visits.len() - 1].iter().map(|v| v.step).collect();
-    let want_steps: Vec<Option<usize>> = (TRIFORCE_STEP..steps.len()).map(Some).collect();
+    let want_steps: Vec<Option<usize>> = way.iter().map(|&(i, _)| Some(i)).collect();
     assert_eq!(route_steps, want_steps, "each room is the route's step");
+    // Where the slices meet: the clip way's last step (0x0b E -> cave) into Dungeon 5's first step (0x76 S -> N).
+    let steps = &map.routes[ROUTE];
+    let last = way.last().unwrap().0;
+    assert_eq!((steps[last].location(), steps[last].exit.as_str()), (ow(0x0b), "cave"));
+    let (route, first) = start_route(&map, d5, Some("S"), None, &mut ChaCha8Rng::seed_from_u64(0), Some(ROUTE), s.state(), true);
+    let first = first.expect("Dungeon 5's first step");
+    assert_eq!((route.as_str(), steps[first].exit.as_str(), steps[first].way), (ROUTE, "N", None));
+    assert_eq!(steps[first - 1].location(), ow(0x0b), "the mountain stretch rejoins on 0x76");
+    let objective = GameCompletion::new(map.clone(), ROUTE, Some(first)).unwrap().objectives(None, s.state());
+    assert_eq!(objective.next_rooms, [MapLocation::new(5, 0x66, false)].into());
     let out = |room: MapLocation| visits.iter().find(|v| v.room == room).unwrap();
     assert_eq!(out(ow(0x60)).max_health, 8, "8 hearts out of Dungeon 4");
     assert_eq!(out(ow(0x5f)).max_health, 9, "0x5f's heart container by the ladder clip");
@@ -615,4 +633,106 @@ fn the_wall_gap_of_0x1f_leads_n_at_x_80_only() {
     assert_eq!(link(&s).0, 0x80);
     press_until(&mut s, direction_buttons(Direction::S), |s| s.state().full_location() == ow(0x1f) && s.state().mode() == 5);
     walk(&mut s, Direction::S, 0x6D);
+}
+
+const D5: MapLocation = MapLocation::new(5, 0x76, false);
+
+/// `4_03s_0` with a `d2first` completion at the D4 triforce, the run-time clips switch `on` (the session's CLIP mask
+/// follows it).
+fn leg(on: bool) -> Option<(S, GameCompletion)> {
+    let mut s = start("4_03s_0")?;
+    let mut gc = GameCompletion::new(s.game_map().clone(), ROUTE, Some(TRIFORCE_STEP)).unwrap();
+    gc.set_clips(true);
+    if !on {
+        s.set_clips(false);
+        gc.set_clips_allowed(false);
+    }
+    Some((s, gc))
+}
+
+/// The steps of `d2first`'s `clips` way from the D4 triforce up to (not including) Dungeon 5's first room.
+fn way(map: &GameMap, clips: bool) -> Vec<(usize, MapLocation)> {
+    map.way_steps(ROUTE, clips)
+        .map(|(i, st)| (i, st.location()))
+        .filter(|&(i, _)| i >= TRIFORCE_STEP)
+        .take_while(|&(_, l)| l != D5)
+        .collect()
+}
+
+fn in_room(room: MapLocation) -> impl Fn(&S) -> bool {
+    move |s| s.state().full_location() == room && s.state().mode() == 5
+}
+
+/// The plain way of the leg (clips off from the D4 triforce on), played by the route's objective: E along row 5, S
+/// at 0x5d, row 6, N into 0x5f and its heart container by the plain ladder (9 hearts), 0x2f's (10), 0x3e N, 0x2e,
+/// 0x2d, 0x0f's rupees, then the plain mountain way: 0x1d S, 0x2d W, 0x2c N, 0x1c W, the Lost Hills by their
+/// sequence (four Ns, three loops back into 0x1b) into 0x0b from S and down into Dungeon 5, whose first step takes
+/// over. Every room is the plain way's step; each stretch's rejoin (0x4f, 0x1d, 5:0x76) is its shared step.
+#[test]
+fn the_plain_way_is_played_by_the_objective_from_the_d4_triforce_to_dungeon_5() {
+    let Some((mut s, mut gc)) = leg(false) else { return };
+    let map = s.game_map().clone();
+    let visits = walk_by_objective(&mut s, &mut gc, in_room(D5), 40_000);
+    for v in &visits {
+        println!("{} step {:?}: {} frames, out with {} hearts, {} rupees", v.room, v.step, v.frames, v.max_health, v.rupees);
+    }
+    let way = way(&map, false);
+    let got: Vec<MapLocation> = visits.iter().map(|v| v.room).collect();
+    let want: Vec<MapLocation> = way.iter().map(|&(_, l)| l).chain([D5]).collect();
+    assert_eq!(got, want, "the rooms of the plain way");
+    let steps: Vec<Option<usize>> = visits.iter().map(|v| v.step).collect();
+    let d5_first = map.routes[ROUTE].iter().position(|st| st.location() == D5).unwrap();
+    let want_steps: Vec<Option<usize>> = way.iter().map(|&(i, _)| Some(i)).chain([Some(d5_first)]).collect();
+    assert_eq!(steps, want_steps, "each room is the plain way's step, the rejoins the shared ones");
+    let route = &map.routes[ROUTE];
+    for stretch in map.stretches[ROUTE].iter().filter(|st| st.rejoin > TRIFORCE_STEP) {
+        let rejoin = visits.iter().position(|v| v.step == Some(stretch.rejoin)).expect("the rejoin");
+        assert_eq!(route[visits[rejoin - 1].step.unwrap()].way, Some(zelda::game_map::Way::Plain));
+    }
+    let maze = visits.iter().position(|v| v.room == ow(0x1b)).unwrap();
+    assert_eq!(route[visits[maze].step.unwrap()].exit, "maze");
+    assert_eq!((visits[maze + 1].room, route[visits[maze + 1].step.unwrap()].entry.as_str()), (ow(0x0b), "S"));
+    let out = |room: MapLocation| visits.iter().find(|v| v.room == room).unwrap();
+    assert_eq!(out(ow(0x5f)).max_health, 9, "0x5f's heart container by the plain ladder");
+    assert_eq!(out(MapLocation::new(0, 0x2f, true)).max_health, 10, "0x2f's heart container");
+    assert_eq!(s.state().max_health(), 10);
+}
+
+/// The run-time switch turned off inside a stretch's clip way (at `off`, on entry; the walker's skips follow the
+/// objective's switch): the walk reaches the stretch's rejoin as its shared step, every room change a correct exit.
+fn switched_off_inside(off: MapLocation, rejoin: MapLocation) -> Option<(Arc<GameMap>, Vec<Visit>)> {
+    let (mut s, mut gc) = leg(true)?;
+    walk_by_objective(&mut s, &mut gc, in_room(off), 20_000);
+    assert!(gc.step().is_some_and(|i| s.game_map().routes[ROUTE][i].way == Some(zelda::game_map::Way::Clips)));
+    gc.set_clips_allowed(false);
+    let visits = walk_by_objective(&mut s, &mut gc, in_room(rejoin), 20_000);
+    for v in &visits {
+        println!("{} step {:?}: {} frames", v.room, v.step, v.frames);
+    }
+    let map = s.game_map().clone();
+    let last = visits.last().unwrap().step.expect("the rejoin is a step");
+    assert!(map.stretches[ROUTE].iter().any(|st| st.rejoin == last), "{:?}", visits.last());
+    Some((map, visits))
+}
+
+/// coast-heart: off in 0x53, W of 0x55's river (the wrap is behind Link). No walk leads back to the plain way from
+/// there (E is 0x55's W part, cut off by the river), so the switch off waits for the rejoin (`past_wrap_in`): the
+/// clip way holds through 0x51's and 0x60's wrap exits and the ladder clip to 0x4f.
+#[test]
+fn the_switch_off_in_the_coast_stretch_holds_the_clip_way_past_the_river() {
+    let Some((map, visits)) = switched_off_inside(ow(0x53), ow(0x4f)) else { return };
+    let ways: Vec<_> = visits[..visits.len() - 1].iter().map(|v| v.step.map(|i| map.routes[ROUTE][i].way)).collect();
+    assert!(ways.iter().all(|w| *w == Some(Some(zelda::game_map::Way::Clips))), "{ways:?}");
+}
+
+/// lake-3e: off in 0x3d, after 0x3e's wrap exit.
+#[test]
+fn the_switch_off_in_the_lake_stretch_leads_to_its_plain_way() {
+    switched_off_inside(ow(0x3d), ow(0x1d));
+}
+
+/// mountain: off in 0x0d, before 0x0c's wrap exit.
+#[test]
+fn the_switch_off_in_the_mountain_stretch_leads_to_its_plain_way() {
+    switched_off_inside(ow(0x0d), D5);
 }

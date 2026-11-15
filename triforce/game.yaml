@@ -912,6 +912,7 @@ rooms:
     rupees: 30
 - level: 0
   location: '0x2e'
+  specialist: ow-zora  # round 24: the plain way of the leg's lake stretch (0x3e N, W to 0x2d)
   exits:
     S:
       level: 0
@@ -2163,6 +2164,7 @@ rooms:
   # No entrance in quest 1: the tree (burn it) secret is quest 2 only (attr F >> 6 = 2).
 - level: 0
   location: '0x6d'
+  specialist: ow-moblin  # round 24: the plain way of the leg's coast stretch (from 0x5d S, E)
   exits:
     N:
       level: 0
@@ -2187,6 +2189,7 @@ rooms:
     tile: [20, 4]
 - level: 0
   location: '0x6e'
+  specialist: ow-moblin  # round 24: the coast stretch's plain way (mostly Moblins)
   exits:
     E:
       level: 0
@@ -2201,6 +2204,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x6f'
+  specialist: ow-zora  # round 24: the coast stretch's plain way (W, N into 0x5f from S)
   exits:
     N:
       level: 0

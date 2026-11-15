@@ -26,7 +26,7 @@ def probe():
 
 def steps():
     from triforce._native import route_steps
-    return route_steps('d5')
+    return route_steps('d2first')
 
 
 def step_of(room: int, entry: str, in_cave: bool = False, visit: int = 0) -> int:
@@ -74,7 +74,7 @@ class Room:
     def __init__(self, family: str, step: int, snapshot, clips=None):
         from triforce._native import Env
         self.env = Env(family, explicit_starts=True, strict_actions=False)
-        self.env.set_route('d5', step)
+        self.env.set_route('d2first', step)
         if clips is not None:
             self.env.set_clips_allowed(clips)
         self.obs, self.info = self.env.restore(snapshot, f'5_{step}')
@@ -136,12 +136,13 @@ def kill_monsters(game, frames: int = 64):
 # ---- the route
 
 
-def test_d5_extends_d2first_and_ends_on_the_d5_triforce():
-    """`d5` is d2first, then the draft's 23 Dungeon 5 steps (routes.yaml); its families and treasure rules are the
-    owner's notes (docs/routes/d5.md)."""
-    from triforce._native import route_steps
-    base, d5 = route_steps('d2first'), steps()
-    assert [s for s in d5[:len(base)]] == base
+def test_d2first_ends_with_dungeon_5_and_its_triforce():
+    """d2first's last 23 steps are the draft's Dungeon 5 (routes.yaml, round 24: after the leg); their families and
+    treasure rules are the owner's notes (docs/routes/d5.md)."""
+    all_steps = steps()
+    first = next(i for i, s in enumerate(all_steps) if s['level'] == LEVEL)
+    assert first == len(all_steps) - 23 and all(s['level'] == LEVEL for s in all_steps[first:])
+    d5, base = all_steps, all_steps[:first]
     own = [(s['room'], s['in_cave'], s['entry'], s['exit']) for s in d5[len(base):]]
     assert own == [
         (0x76, False, 'S', 'N'), (0x66, False, 'S', 'W'), (0x65, False, 'E', 'W'), (0x64, False, 'E', 'cave'),

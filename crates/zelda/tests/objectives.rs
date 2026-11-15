@@ -1177,7 +1177,7 @@ fn d5_the_recorder_tells_the_tunnel_cellar_visits_and_the_way_back_apart() {
     for (recorder, exit, next) in [(false, "E", loc(5, 0x06)), (true, "W", loc(5, 0x64))] {
         let state = d5_view(&map, &images[0], 0x07, 9, recorder);
         assert_eq!(state.full_location(), tunnel);
-        let (route, step) = start_route(&map, tunnel, Some("S"), None, &mut rng, Some("d5"), &state, true);
+        let (route, step) = start_route(&map, tunnel, Some("S"), None, &mut rng, Some("d2first"), &state, true);
         let step = step.expect("a d5 step");
         assert_eq!(map.routes[&route][step].exit, exit, "recorder {recorder}");
         let objective = GameCompletion::new(map.clone(), &route, Some(step)).unwrap().objectives(None, &state);
@@ -1186,7 +1186,7 @@ fn d5_the_recorder_tells_the_tunnel_cellar_visits_and_the_way_back_apart() {
     for (recorder, next) in [(false, recorder_cellar), (true, loc(5, 0x06))] {
         let below = d5_view(&map, &images[0], 0x04, 9, recorder);
         let out = d5_view(&map, &images[0], 0x05, 5, recorder);
-        let (route, step) = start_route(&map, recorder_cellar, Some("S"), None, &mut rng, Some("d5"), &below, true);
+        let (route, step) = start_route(&map, recorder_cellar, Some("S"), None, &mut rng, Some("d2first"), &below, true);
         let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
         gc.objectives(None, &below);
         let objective = gc.objectives(Some(&below), &out);
