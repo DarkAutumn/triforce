@@ -2147,9 +2147,11 @@ Hills). Decided by the agent building it (the owner away):
   scouting build did: the three Dungeon 4 runs carry different rupees (68/57/63) and bombs (0/2/6), and Dungeon 5
   spends bombs (two walls, the Olive Garden, Digdogger), so its entrance states should keep the three histories
   (`docs/routes/d5-leg.md` ledger). Three builds, one chain each; chain 0 is bit-identical to the single-source build.
-- **A stretch's rejoin and Dungeon 5's entrance keep the clip way's states** (`0_4fs`, `0_1ds`, `5_76s` are reached
-  on both ways under one name; `path` builds the plain way's copies, which stay staged). The plain way's entrance
-  from `0_0bs` was played the same way (into 5:0x76 in 12-78 steps).
+- **A stretch's rejoin keeps the clip way's states** (`0_4fs`, `0_1ds` are reached on both ways under one name;
+  `path` builds the plain way's copies, which stay staged). Dungeon 5's entrance `5_76s_0..2` is `r24`'s (Dungeon
+  5's second pass built its 66 later states from it, all three chains descending from `4_03s_0`); this build's
+  `5_76s_0` is bit-identical, its `_1`/`_2` stay staged. The plain way's entrance from `0_0bs` was played the same
+  way (into 5:0x76 in 12-78 steps).
 - **ow-start plays one room per episode** (`one_room: true`, `max_steps` 1000 → 600), the last family whose
   episodes ran on across its rooms. A curriculum frame starts the step its track's seed state enters by, and an
   explored cell restarts its route step at the seed's: a track that leaves a cave back into its room (0x2f, 0x0f,

@@ -100,8 +100,11 @@ bombs 0/2/6, as the ledger above), not all three from `4_03s_0`.
   0:0x6f,0:0x5f,0:0x4f`, `--source 0_3ee_<c> --rooms 0:0x2e,0:0x2d,0:0x1d`, `--source 0_1de_<c> --rooms
   0:0x2d,0:0x2c,0:0x1c,0:0x1b,0:0x0b,5:0x76` (all `--route d2first --chain <c>`). Each way reaches its rejoin
   (`0_4fs`, `0_1ds`, `5_76s`) under the clip way's name; the clip way's are installed, the plain way's stay staged.
-  So `5_76s_0..2` are the clip way's (from `0_0be_<c>`); the plain way enters 5:0x76 from `0_0bs_<c>` the same way
-  (12-78 steps).
+  The plain way enters 5:0x76 from `0_0bs_<c>` the same way (12-78 steps). `5_76s_0..2` are Dungeon 5's second
+  pass's (`r24`; its 66 later states were built from them, played from a staged clip way whose three chains all
+  came from `4_03s_0`): `5_76s_0` is bit-identical to this build's, `_1` and `_2` differ (this build's,
+  from the chain 1 and 2 histories, stay staged), so Dungeon 5's chains 1 and 2 carry chain 0's Dungeon 4 history
+  (its bombs and rupees, plus the leg's drops).
 
 Explorer effort, env steps of the crossing into each state (chains 0 / 1 / 2; one attempt each unless noted):
 
