@@ -81,14 +81,20 @@ def _on_way(step: dict, way: str) -> bool:
     return step['way'] is None or step['way'] == way
 
 
-def fit_way(steps: List[dict], visits: Dict[int, List[dict]], way: str) -> Dict[int, dict]:
-    """step index -> {max_hearts, values (V at 0, 0.5, ... max hearts), visits} for the steps on ``way``."""
+def fit_way(steps: List[dict], visits: Dict[int, List[dict]], way: str,
+             max_hearts_seen: Optional[Dict[int, int]] = None) -> Dict[int, dict]:
+    """step index -> {max_hearts, values (V at 0, 0.5, ... max hearts), visits} for the steps on ``way``.  A step
+    with no visits on this way takes its max hearts from ``max_hearts_seen`` (either way's visits), else the step
+    before's."""
     on_way = [k for k, s in enumerate(steps) if _on_way(s, way)]
     max_hearts: Dict[int, int] = {}
     last = 3
     for k in on_way:
         counts = collections.Counter(v['max_health'] for v in visits.get(k, []))
-        last = counts.most_common(1)[0][0] if counts else last
+        if counts:
+            last = counts.most_common(1)[0][0]
+        elif max_hearts_seen and k in max_hearts_seen:
+            last = max_hearts_seen[k]
         max_hearts[k] = last
     table: Dict[int, dict] = {}
     following: Optional[List[float]] = None
@@ -141,7 +147,12 @@ def read_visits(paths: Iterable[str]) -> Dict[str, Dict[int, List[dict]]]:
 def build_table(steps: List[dict], paths: List[str], route: str) -> dict:
     """The table ``env::heart_value`` reads: per route step its identity (checked against the route) and V per way."""
     visits = read_visits(paths)
-    fitted = {way: fit_way(steps, visits[way], way) for way in WAYS}
+    seen: Dict[int, int] = {}
+    for k in range(len(steps)):
+        counts = collections.Counter(v['max_health'] for way in WAYS for v in visits[way].get(k, []))
+        if counts:
+            seen[k] = counts.most_common(1)[0][0]
+    fitted = {way: fit_way(steps, visits[way], way, seen) for way in WAYS}
     rows = []
     for k, step in enumerate(steps):
         row = {'step': k, 'room': room_key(step), 'entry': step['entry'], 'exit': step['exit'], 'visit': step['visit'],
