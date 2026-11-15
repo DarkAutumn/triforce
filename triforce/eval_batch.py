@@ -6,7 +6,7 @@
                                            [--episodes-per-state N] [--seed S] [--clips on|off|both]
                                            [--output-dir DIR]]
                              [--chain '[ENTRY:] EVAL-CHAIN ARGS' ...] [--evaluate '[ENTRY:] EVALUATE ARGS' ...]
-                             [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--redo]
+                             [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--no-wait] [--redo]
                              [--logs-dir DIR] [--models-dir DIR] [--allow-incompatible-models]
 
 A batch is a named list of evaluations, in command-line order:
@@ -35,7 +35,8 @@ with ``--events <batch folder>/<entry>.jsonl``), its console output in ``<entry>
 log).  One at a time by default: a chain takes ``--parallel`` envs (default: every core) unless its ARGS set
 ``--parallel``, an evaluation ``--eval-parallel`` (default 4).  ``--jobs N`` runs up to N family evaluations side by
 side as long as their envs fit in ``--parallel``; chains and the report always run alone.  The batch lowers its
-priority first (``--nice``, default ``$TRIFORCE_NICE`` else 15, ``triforce.jobs``) and its evaluations inherit it.
+priority first (``--nice``, default ``$TRIFORCE_NICE`` else 15, ``triforce.jobs``) and its evaluations inherit it;
+it waits its turn among the machine's trainings and evaluations as one job (``--no-wait``), its evaluations don't.
 
 Log folder ``logs/<yymmdd>_<NNN>_<NAME>/`` (``triforce/events.py``): ``training.json`` (kind ``eval-batch``, every
 entry listed up front as pending, then ``evaluating`` and its final status ``ok`` / ``failed`` / ``interrupted``
@@ -68,7 +69,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
-from .jobs import add_nice_argument, child_env, lower_priority
+from .jobs import add_job_arguments, begin_job, child_env
 
 ROOT = Path(__file__).resolve().parents[1]
 KIND = 'eval-batch'
@@ -614,10 +615,15 @@ def run_batch(name: str, entries: list[Entry], *, logs_dir=None, cores: int = 1,
 
     streams = [log_dir / f"{_safe(entry.name)}.jsonl" for entry in entries]
     logs = [entry.log or log_dir / f"{_safe(entry.name)}.log" for entry in entries]
-    plan = TrainingPlan(log_dir, name, KIND, [entry.plan_entry(stream.name, log, log_dir)
-                                              for entry, stream, log in zip(entries, streams, logs)],
-                        command=command, nice=nice, cores=cores, jobs=jobs, events='round.jsonl', log='round.log',
-                        **(extra or {}))
+    try:            # waits its turn (triforce.jobs)
+        plan = TrainingPlan(log_dir, name, KIND, [entry.plan_entry(stream.name, log, log_dir)
+                                                  for entry, stream, log in zip(entries, streams, logs)],
+                            command=command, nice=nice, cores=cores, jobs=jobs, events='round.jsonl',
+                            log='round.log', **(extra or {}))
+    except KeyboardInterrupt:       # stopped while it waited: the plan ended interrupted
+        tell(f"[batch] {name}: stopped before it started")
+        console.close()
+        return EXIT_INTERRUPTED
     events = EventLog(log_dir / 'round.jsonl', batch=name)
     events.emit('start', entries=names, nice=nice, cores=cores, jobs=jobs, log_dir=str(log_dir), pid=os.getpid())
     tell(f"[batch] {name}: {len(entries)} evaluations, nice {nice} (logs: {log_dir})")
@@ -780,7 +786,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--jobs', type=int, default=1,
                         help="family evaluations side by side (within --parallel envs); chains always run alone")
     parser.add_argument('--redo', action='store_true', help="measure entries again that an earlier run measured")
-    add_nice_argument(parser)
+    add_job_arguments(parser)
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--models-dir', default=None)
     parser.add_argument('--allow-incompatible-models', action='store_true',
@@ -832,7 +838,7 @@ def main(argv=None) -> int:
     if args.parallel < 1 or args.eval_parallel < 1 or args.jobs < 1:
         print("triforce eval-batch: error: --parallel, --eval-parallel and --jobs must be >= 1", file=sys.stderr)
         return 2
-    nice = lower_priority(args.nice)
+    nice = begin_job(args)
     try:
         entries = build_entries(args)
         return run_batch(args.name, entries, logs_dir=args.logs_dir, cores=args.parallel, jobs=args.jobs, nice=nice,

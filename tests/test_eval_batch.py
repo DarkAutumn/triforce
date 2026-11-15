@@ -317,15 +317,16 @@ def test_child_env_passes_the_niceness_on():
     assert jobs.child_env(None, {})[jobs.NICE_ENV] == str(os.nice(0))
 
 
-# Only the training and evaluation entry points lower the priority, never library code that play and replay tools
-# share (play-zelda, zelda-headless, create-video, zelda-map, tf replay, explore, entry_states).
+# Only the training and evaluation entry points start a job (``jobs.begin_job``: the priority and the turn), never
+# library code that play and replay tools share (play-zelda, zelda-headless, create-video, zelda-map, tf replay,
+# explore, entry_states); only ``begin_job`` lowers the priority.
 ENTRY_POINTS = {('triforce/train.py', 'cli'), ('triforce/evaluate.py', 'main'),
                 ('triforce/cli.py', '_cmd_eval_chain'), ('triforce/eval_batch.py', 'main'),
                 ('scripts/train_round.py', 'main')}
 
 
-def test_only_the_training_and_evaluation_entry_points_call_lower_priority():
-    calls = set()
+def test_only_the_training_and_evaluation_entry_points_begin_a_job():
+    calls = {'begin_job': set(), 'lower_priority': set()}
     files = [*ROOT.glob('triforce/*.py'), *ROOT.glob('scripts/**/*.py'), *ROOT.glob('*.py')]
     for path in files:
         tree = ast.parse(path.read_text(encoding='utf-8'))
@@ -333,10 +334,12 @@ def test_only_the_training_and_evaluation_entry_points_call_lower_priority():
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             for node in ast.walk(function):
-                if isinstance(node, ast.Call) and getattr(node.func, 'id', getattr(node.func, 'attr', None)) == \
-                        'lower_priority':
-                    calls.add((str(path.relative_to(ROOT)), function.name))
-    assert calls == ENTRY_POINTS
+                if not isinstance(node, ast.Call):
+                    continue
+                name = getattr(node.func, 'id', getattr(node.func, 'attr', None))
+                if name in calls:
+                    calls[name].add((str(path.relative_to(ROOT)), function.name))
+    assert calls == {'begin_job': ENTRY_POINTS, 'lower_priority': {('triforce/jobs.py', 'begin_job')}}
 
 
 PLAY_PROBE = r'''

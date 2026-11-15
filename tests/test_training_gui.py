@@ -880,3 +880,144 @@ def test_web_only_runs_without_a_display(tmp_path):
     finally:
         child.terminate()
         child.wait(timeout=10)
+
+
+# ---------------------------------------------------------------------------------------------------- the job queue
+
+def queue_job(registry, root, name, *, kind, pid, status, queued_ts, created, run_status='pending', events=None):
+    """A job's log folder (its plan: one ow-start run) and its registry entry (``<host>-<pid>-<start>-<name>.json``),
+    queued since ``queued_ts`` and, unless ``status`` is 'queued', admitted now."""
+    import json
+    import socket
+    folder = web_plan(root, name, created=created, pid=pid, status=status, kind=kind,
+                      runs=[({'specialist': 'ow-start', 'status': run_status}, events)])
+    registry.mkdir(exist_ok=True)
+    start = gui.process_started(pid)
+    (registry / f"{socket.gethostname()}-{pid}-{int(start)}-{name}.json").write_text(json.dumps({
+        'schema': 1, 'host': socket.gethostname(), 'pid': pid, 'pid_start': start, 'started': iso(queued_ts),
+        'name': name, 'kind': kind, 'log_dir': str(folder), 'plan': str(folder / gui.PLAN_FILE), 'status': status,
+        'finished': None, 'queued': iso(queued_ts), 'queued_ts': queued_ts,
+        'admitted': None if status == 'queued' else iso(time_now()), 'no_wait': False}))
+    return folder
+
+
+def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_path):
+    import json
+    import socket
+    now = time_now()
+    assert [gui.ordinal(n) for n in (1, 2, 3, 4, 11, 12, 13, 21, 22, 111)] == [
+        '1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '111th']
+    queued = {**running_plan(os.getpid(), now), 'status': 'queued'}
+    assert gui.plan_alive(queued) is True and gui.plan_is_live(queued)
+    me = gui.process_started(os.getpid())
+    entry = {'host': socket.gethostname(), 'pid': os.getpid(), 'pid_start': me, 'status': 'queued'}
+    assert gui.job_alive(entry) is True and gui.job_alive({**entry, 'status': 'completed'}) is False
+    assert gui.job_alive({**entry, 'pid_start': me - 3600}) is False
+    # no registry entry: the plan's own queue (as of its last rewrite)
+    plan = {**queued, 'queue': {'queued': iso(now - 90), 'place': 3, 'running': ['r25-a (round)'],
+                                'ahead': ['x (eval)', 'y (round)'], 'limit': 2, 'checked': iso(now), 'admitted': None,
+                                'waited': None}}
+    state = gui.queue_state(tmp_path / 'job', plan, [])
+    assert state == {'place': 3, 'running': ['r25-a (round)'], 'ahead': ['x (eval)', 'y (round)'], 'limit': 2,
+                     'since': pytest.approx(now - 90, abs=1)}
+    assert gui.waiting_text(state, state['since'] + 61) == 'waiting · 3rd in line · for r25-a (round) · 1m 01s'
+    assert gui.waiting_text(gui.queue_state(tmp_path / 'job', queued, []), now) == 'waiting'
+    # in the registry: a job without a log folder (--no-log) ahead of it holds its place
+    registry = tmp_path / 'jobs'
+    registry.mkdir()
+    (registry / 'a.json').write_text(json.dumps({**entry, 'name': 'quiet', 'kind': 'eval', 'log_dir': None,
+                                                 'queued_ts': now - 200}))
+    (registry / 'b.json').write_text(json.dumps({**entry, 'name': 'job', 'kind': 'round',
+                                                 'log_dir': str(tmp_path / 'job'), 'queued_ts': now - 100}))
+    (registry / 'c.json').write_text(json.dumps({**entry, 'name': 'old', 'kind': 'round', 'status': 'completed',
+                                                 'log_dir': str(tmp_path / 'old'), 'queued_ts': now - 300}))
+    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry))
+    assert state['place'] == 2 and state['ahead'] == ['quiet (eval)'] and state['since'] == now - 100
+    assert state['running'] == [] and state['limit'] == 2       # the test's own process: not waited for
+
+
+def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_path, monkeypatch):
+    """Two jobs run, two wait (separate processes): [currently running] lists the waiting ones after the running ones
+    with their place in line and what they wait for, the web view as 'waiting' lines without cards; the window title
+    and the cards count only the running jobs.  Admitted, a job runs like any other; its process gone, it is lost."""
+    import subprocess
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    registry, root = tmp_path / 'jobs', tmp_path / 'logs'
+    root.mkdir()
+    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
+    now, me = time_now(), gui.process_started(os.getpid())
+    a = queue_job(registry, root, '261115_001_r25-a', kind='round', pid=os.getpid(), status='running',
+                  queued_ts=now - 3600, created=me, run_status='running', events=training_events(now - 20, 4))
+    b = queue_job(registry, root, '261115_002_eval-b', kind='eval', pid=os.getpid(), status='running',
+                  queued_ts=now - 1800, created=me + 0.5, run_status='running', events=training_events(now - 10, 2))
+    first, second = subprocess.Popen(['sleep', '600']), subprocess.Popen(['sleep', '600'])
+    window = None
+    try:
+        q1_ts, q2_ts = now - 900, now - 725
+        q1 = queue_job(registry, root, '261115_003_q1', kind='round', pid=first.pid, status='queued', queued_ts=q1_ts,
+                       created=time_now())
+        q2_created = time_now()
+        q2 = queue_job(registry, root, '261115_004_q2', kind='round', pid=second.pid, status='queued',
+                       queued_ts=q2_ts, created=q2_created)
+        running = '261115_001_r25-a (round), 261115_002_eval-b (eval)'
+        window = gui.Window(root, None)
+        assert window.live_mode and window._shown_dirs() == [b, a, q1, q2]     # running first, then in line
+        views = {view.dir: view for view in window.views}
+        assert views[q2].model.status() == 'queued' and gui.STATUS['queued'] == (gui.C.warn, 'queued')
+        assert views[q2].model.statuses() == ['pending']
+        assert views[q2].header.waiting(q2_ts + 725) == f'waiting · 2nd in line · for {running} · 12m 05s'
+        assert views[q1].header.waiting(q1_ts + 5) == f'waiting · 1st in line · for {running} · 5s'
+        assert views[a].header.waiting(now) == ''
+        title = window.windowTitle()
+        assert a.name in title and b.name in title and 'q1' not in title and 'q2' not in title
+        assert title.count('·') == 1                                            # two plans
+
+        clock = [q2_ts + 725]
+        state = gui.WebState(root, clock=lambda: clock[0], machine=lambda: '', scan_every=0)
+        snapshot = state.refresh()
+        assert sorted(card['plan'] for card in snapshot['cards']) == [a.name, b.name]
+        assert sum(card['active'] for card in snapshot['cards']) == 2
+        assert [plan['plan'] for plan in snapshot['plans']] == [b.name, a.name]
+        assert [(line['plan'], line['place_label']) for line in snapshot['waiting']] == [
+            (q1.name, '1st in line'), (q2.name, '2nd in line')]
+        line = snapshot['waiting'][1]
+        assert line['status'] == 'queued' and line['color'] == gui.C.warn.name() and line['plan_kind'] == 'round'
+        assert line['waits'] == f'for {running}' and line['waited'] == '12m 05s'
+        assert line['ahead'] == ['261115_003_q1 (round)'] and line['place'] == 2
+        assert line['text'] == f'waiting · 2nd in line · for {running} · 12m 05s'
+
+        # admitted: the plan and its entry say running, its run starts
+        queue_job(registry, root, q2.name, kind='round', pid=second.pid, status='running', queued_ts=q2_ts,
+                  created=q2_created, run_status='running', events=training_events(time_now(), 2))
+        window._scan_and_update()
+        window.poll(force=True)
+        assert window._shown_dirs() == [q2, b, a, q1]
+        views = {view.dir: view for view in window.views}
+        assert views[q2].model.status() == 'running' and views[q2].header.waiting(now) == ''
+        assert window.queues[q1]['place'] == 1 and '261115_004_q2 (round)' in window.queues[q1]['running']
+        assert q2.name in window.windowTitle() and 'q1' not in window.windowTitle()
+        snapshot = state.refresh()
+        assert [line['plan'] for line in snapshot['waiting']] == [q1.name]
+        assert snapshot['waiting'][0]['place_label'] == '1st in line'
+        assert sum(card['active'] for card in snapshot['cards']) == 3 and len(snapshot['plans']) == 3
+
+        # the waiting job's process is gone: lost, under the finished heading; off the web view's waiting lines
+        first.kill()
+        first.wait()
+        window._scan_and_update()
+        window.poll(force=True)
+        assert window._shown_dirs() == [q2, b, a, q1] and window._heading_at == 3
+        views = {view.dir: view for view in window.views}
+        assert views[q1].model.status() == 'lost' and gui.STATUS['lost'][1] == 'process gone'
+        assert views[q1].header.waiting(now) == '' and q1 not in window.queues
+        snapshot = state.refresh()
+        assert snapshot['waiting'] == [] and q1.name not in [plan['plan'] for plan in snapshot['plans']]
+        assert q1.name not in [card['plan'] for card in snapshot['cards']]
+    finally:
+        if window is not None:
+            window.close()
+            window.deleteLater()
+        for child in (first, second):
+            child.kill()
+            child.wait()

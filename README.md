@@ -137,10 +137,17 @@ another port).
 
 Evaluations go through `triforce eval-batch NAME` (`triforce/eval_batch.py`): one log folder, every evaluation
 listed up front, shown in the training GUI as one group named NAME with a progress bar per evaluation; its Eval tab
-gives each outcome its share (`108× (10.8%)` of a chain's runs or of a family evaluation's episodes). Training and
-evaluation (`train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`) run at nice 15 by default (`--nice N`,
-0 leaves the priority alone, `$TRIFORCE_NICE` sets the default; the jobs they start inherit it); play and replay
-tools (`play-zelda.py`, `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf replay`) keep normal priority.
+gives each outcome its share (`108× (10.8%)` of a chain's runs or of a family evaluation's episodes).
+
+Trainings and evaluations look after the machine by themselves; you pass nothing. `train_round.py` and `triforce
+train|evaluate|eval-chain|eval-batch` lower their own priority to nice 15 (`--nice N`, 0 leaves it alone,
+`$TRIFORCE_NICE` sets the default; the jobs they start inherit it), and at most two of them run at once on the
+machine (`$TRIFORCE_MAX_JOBS`): a third waits, first come first served, printing `triforce: NAME is paused until
+resources are available: ... It starts by itself; next update in 5 minutes.`, and starts when one of the two ends or
+dies. The training GUI lists it as waiting with its place in line. There is no controller: the per-user job registry
+(`triforce/jobs.py`, read through `/proc`, shared by every worktree) is the queue. `--no-wait` starts a job at once
+(it still counts for the others). Play, replay and build tools (`play-zelda.py`, `zelda-headless.py`,
+`create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority and never wait.
 
 `zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
 first playable frames; an overworld room without a savestate is walked into from the game start, so the overworld
