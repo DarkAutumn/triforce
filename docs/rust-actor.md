@@ -128,10 +128,20 @@ every mode: the same
 seed plays the same actions on any env or thread, and a replay records inputs, so it verifies whatever the mode.
 Masks hold by construction (illegal joint actions have probability 0 and are never kept).
 
+**Low health (round 25): `MODE+low:H:LOW`.** A mode may end with a low-health part: `LOW` (any mode above, with its
+own stall rule) at every decision where Link holds `H` hearts or fewer (`low:2`; halves allowed: `low:1.5`) or `H`
+percent of his maximum or less (`low:40%`), `MODE` at every other (`policy::act::{Style, Low, Threshold}`). The
+low part comes last: everything after `low:H:` is its mode, so `temperature:0.5+relax:16+low:2:temperature:0.25+
+relax:16` sharpens to 0.25 from two hearts down and keeps `relax:16` in both states. The health is read before
+every decision from the env (`PoolEnv::situation`: `Situation { stall, health }`, Link's hearts and heart containers
+of the current state; eval envs and chains, the live cell of `play-zelda.py --live` included), so the switch
+happens on the first decision after the hit that crosses the threshold, and back on the first after a heal. An env
+without health (none in the Zelda pool) is never low. `registry.draws` holds when both parts draw.
+
 **The stall signal of `escape` and `relax`** is the env's linger count (`zelda::linger`,
 `LingerTracker::tail_steps`): steps since the last hit, kill, pickup, heal, room change or new best approach to the
 objective on a frozen wavefront, the same count the `no-room-progress` ending and the chain's stall check read. The
-pool asks the env for it before every decision (`PoolEnv::stall`; eval envs: the specialist env's tracker; chains,
+pool asks the env for it before every decision (`PoolEnv::situation` `stall`; eval envs: the specialist env's tracker; chains,
 the live cell of `play-zelda.py --live` included: the acting room's). A flip of the run-time clips switch (round
 22) re-plans the objective but is no progress: the count goes on. It was chosen over a repeated-state detector kept
 by the actor because it already defines "progress" for this project (walking in a loop or a moving monster can't
@@ -144,7 +154,9 @@ action's log-prob under q and q's entropy over the joint actions (0 for argmax; 
 heads: a few percent of a forward); training rollouts don't. A replay (`play(replay=...)`) scores the recorded
 action under `act` too. Every eval room visit and chain room record counts its decisions (`zelda::decisions`,
 `triforce/variety.py`): moves under 1% and 5% under the policy, those followed by a hit or death within 4
-decisions, the acting entropy and the actions themselves (for variety across runs).
+decisions, the acting entropy, the actions themselves (for variety across runs) and, since round 25, `health`: the
+decisions and the hits their own step took by Link's health at the decision (half hearts), for hits per decision at
+low and at normal health.
 
 ## Tests (beyond each component's unit tests)
 

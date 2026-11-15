@@ -18,6 +18,15 @@ pub struct Decision {
     pub act_entropy: f32,
 }
 
+/// What the env reports about the moment of a decision ([`crate::PoolEnv::situation`]); act modes read it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Situation {
+    /// Decisions in a row without progress before the current observation (the env's own measure; 0 without one).
+    pub stall: u32,
+    /// The agent's health and its maximum (Zelda: Link's hearts and heart containers); None for envs without one.
+    pub health: Option<(f32, f32)>,
+}
+
 /// Decides actions inside the pool. Shared by every worker; each worker keeps its own [`Actor::Scratch`].
 pub trait Actor<A>: Send + Sync {
     type Scratch: Send;
@@ -25,8 +34,8 @@ pub trait Actor<A>: Send + Sync {
     fn scratch(&self) -> Self::Scratch;
 
     /// The action for `obs`, acted on by policy `policy`, decision `step` of the episode keyed `job` (keyed
-    /// randomness: the same (job, step) draws the same noise wherever and whenever it runs), after `stall`
-    /// decisions in a row without progress ([`crate::PoolEnv::stall`]).
+    /// randomness: the same (job, step) draws the same noise wherever and whenever it runs), in `situation`
+    /// ([`crate::PoolEnv::situation`]: the stall count and the agent's health).
     #[allow(clippy::too_many_arguments)]
     fn act(
         &self,
@@ -34,7 +43,7 @@ pub trait Actor<A>: Send + Sync {
         policy: i64,
         job: i64,
         step: i64,
-        stall: u32,
+        situation: Situation,
         scratch: &mut Self::Scratch,
     ) -> Result<(A, Decision), String>;
 

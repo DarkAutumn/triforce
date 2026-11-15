@@ -1,12 +1,12 @@
 //! The policy network as the pool's [`Actor`]: `policy::Policy` per specialist index, reading the Zelda
 //! observation layout. Each policy acts by its [`ActMode`] (docs/rust-actor.md "Act modes"): sampling with keyed
-//! Gumbel noise (job, decision step), argmax, or a rule over the joint distribution; `escape` reads the env's count
-//! of decisions without progress. A replaying actor takes each decision's action from a recorded play instead and
-//! scores it.
+//! Gumbel noise (job, decision step), argmax, or a rule over the joint distribution; `escape` and `relax` read the
+//! env's count of decisions without progress, `low` Link's health ([`crate::rollout::Situation`]). A replaying actor
+//! takes each decision's action from a recorded play instead and scores it.
 
 use super::ZeldaAction;
 use crate::layout::{ObsData, ObsLayout};
-use crate::rollout::{Actor, Decision};
+use crate::rollout::{Actor, Decision, Situation};
 use policy::noise::keyed_noise;
 use policy::{ActMode, Choose, Input, Pick, Policy};
 use std::collections::HashMap;
@@ -158,7 +158,7 @@ impl Actor<ZeldaAction> for PolicyActor {
         policy: i64,
         job: i64,
         step: i64,
-        stall: u32,
+        situation: Situation,
         s: &mut ActorScratch,
     ) -> Result<(ZeldaAction, Decision), String> {
         let p = self.policy(policy)?;
@@ -166,7 +166,7 @@ impl Actor<ZeldaAction> for PolicyActor {
         let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
         let input = input(self, p, obs, &mut vectors);
         s.dist_len = if self.distributions { net.distribution_size() } else { 0 };
-        let choose = self.modes[p].choose(stall);
+        let choose = self.modes[p].choose(situation.stall, situation.health);
         let plain = match choose {
             Choose::Argmax => true,
             Choose::Draw(rule) => rule.is_plain(),

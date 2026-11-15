@@ -226,7 +226,8 @@ class RoomRecord:
     clips_flips: List[dict] = field(default_factory=list)
     # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
-    # within 4 decisions), surprisal, act_entropy and actions (hex, two digits per decision).  {} in older records.
+    # within 4 decisions), surprisal, act_entropy, actions (hex, two digits per decision) and health ([decisions,
+    # hits on their own step] by Link's half hearts at the decision; round 25).  {} in older records.
     decisions: dict = field(default_factory=dict)
     # Maze loops during the visit (round 24, crates/zelda/src/change.rs MazeLoop): correct ones (the sequence's next
     # edge, the visit goes on) and wrong ones (each one of the run's wrong exits).  0 in older records.

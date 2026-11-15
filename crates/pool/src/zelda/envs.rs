@@ -8,7 +8,7 @@ use crate::control::EnvControl;
 use crate::jobs::Jobs;
 use crate::layout::{ObsLayout, ObsRow};
 use crate::pool::{EnvInit, Outcome, PoolEnv, SearchEnv, Start};
-use crate::rollout::Decision;
+use crate::rollout::{Decision, Situation};
 use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
 use env::end_conditions::{DEATH, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, STUCK};
@@ -71,6 +71,11 @@ impl ClipsSwitch {
         };
         (value >> 2, on)
     }
+}
+
+/// Link's hearts and heart containers in `session`'s current state (None before the first load), for `low` act modes.
+fn link_health<M: Nes>(session: &Session<M>) -> Option<(f32, f32)> {
+    session.try_state().map(|s| (s.health() as f32, s.max_health() as f32))
 }
 
 /// Renders every real frame of `session` (gated by the pool's render flag in [`PoolNes`]), publishes rendered
@@ -340,14 +345,15 @@ fn chain_ending(result: &RunResult) -> Ending {
     }
 }
 
-/// A decision as the room visit statistics keep it (`zelda::decisions`).
-fn decision_note(action: &ZeldaAction, decision: &Decision) -> DecisionNote {
+/// A decision as the room visit statistics keep it (`zelda::decisions`), taken at Link's `health`.
+fn decision_note(action: &ZeldaAction, decision: &Decision, health: Option<(f32, f32)>) -> DecisionNote {
     let [kind, direction, duration] = *action;
     let index = (kind * NUM_DIRECTIONS as i64 + direction) * NUM_DURATIONS as i64 + duration;
     DecisionNote {
         log_prob: decision.log_prob,
         act_entropy: decision.act_entropy,
         action: u8::try_from(index).unwrap_or(u8::MAX),
+        health: health.map(|(hearts, _)| hearts),
     }
 }
 
@@ -477,8 +483,11 @@ where
         obs_layout()
     }
 
-    fn stall(&self) -> u32 {
-        self.env.linger.tail_steps()
+    fn situation(&self) -> Situation {
+        Situation {
+            stall: self.env.linger.tail_steps(),
+            health: link_health(self.env.session()),
+        }
     }
 
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
@@ -660,12 +669,16 @@ where
         obs_layout()
     }
 
-    fn stall(&self) -> u32 {
-        self.env.linger.tail_steps()
+    fn situation(&self) -> Situation {
+        Situation {
+            stall: self.env.linger.tail_steps(),
+            health: link_health(self.env.session()),
+        }
     }
 
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
-        self.env.note_decision(decision_note(action, decision));
+        let health = link_health(self.env.session());
+        self.env.note_decision(decision_note(action, decision, health));
         record_decision(self.env.session_mut().nes_mut(), policy, action, decision, distribution);
     }
 
@@ -1000,12 +1013,16 @@ where
         obs_layout()
     }
 
-    fn stall(&self) -> u32 {
-        self.chain.quiet_steps()
+    fn situation(&self) -> Situation {
+        Situation {
+            stall: self.chain.quiet_steps(),
+            health: link_health(self.chain.session()),
+        }
     }
 
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
-        self.chain.note_decision(decision_note(action, decision));
+        let health = link_health(self.chain.session());
+        self.chain.note_decision(decision_note(action, decision, health));
         record_decision(self.chain.session_mut().nes_mut(), policy, action, decision, distribution);
     }
 
@@ -1095,11 +1112,11 @@ where
         obs_layout()
     }
 
-    fn stall(&self) -> u32 {
+    fn situation(&self) -> Situation {
         match self {
-            TaskEnv::Train(e) => e.stall(),
-            TaskEnv::Eval(e) => e.stall(),
-            TaskEnv::Chain(e) => e.stall(),
+            TaskEnv::Train(e) => e.situation(),
+            TaskEnv::Eval(e) => e.situation(),
+            TaskEnv::Chain(e) => e.situation(),
         }
     }
 

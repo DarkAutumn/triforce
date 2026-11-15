@@ -387,7 +387,7 @@ fn act_modes_follow_evaluate_and_their_rules() {
         let mut noise = vec![0f32; p.noise_size()];
         keyed_noise(9, step, &mut noise);
         let sampled = p.evaluate(&inp, Pick::Sample(&noise), &mut s).unwrap();
-        let (out, acting) = p.act(&inp, ActMode::SAMPLE.choose(0), 9, step, None, &mut s, None).unwrap();
+        let (out, acting) = p.act(&inp, ActMode::SAMPLE.choose(0, None), 9, step, None, &mut s, None).unwrap();
         assert_eq!(out, sampled);
         assert_eq!(acting.log_prob.to_bits(), out.log_prob.to_bits());
         assert_eq!(acting.entropy.to_bits(), entropy.to_bits());
@@ -395,16 +395,16 @@ fn act_modes_follow_evaluate_and_their_rules() {
     let mut dist = vec![0f32; p.distribution_size()];
     for mode in ["floor:0.05", "temperature:0.5+minp:0.3", "topp:0.6", "escape:1+floor:0.1"] {
         let mode: ActMode = mode.parse().unwrap();
-        let Choose::Draw(rule) = mode.choose(5) else { panic!("{mode} draws when stalled") };
+        let Choose::Draw(rule) = mode.choose(5, None) else { panic!("{mode} draws when stalled") };
         let mut q = vec![0f64; p.joint_size()];
         rule.probabilities(&joint, &mut q, &mut vec![0; p.joint_size()]);
         let mut seen = vec![false; p.joint_size()];
         for step in 0..200 {
-            let (out, acting) = p.act(&inp, mode.choose(5), 4, step, None, &mut s, Some(&mut dist)).unwrap();
-            let again = p.act(&inp, mode.choose(5), 4, step, None, &mut p.scratch(), None).unwrap();
+            let (out, acting) = p.act(&inp, mode.choose(5, None), 4, step, None, &mut s, Some(&mut dist)).unwrap();
+            let again = p.act(&inp, mode.choose(5, None), 4, step, None, &mut p.scratch(), None).unwrap();
             assert_eq!((out, acting), again, "{mode} step {step}");
             // Replaying the action scores it the same.
-            let scored = p.act(&inp, mode.choose(5), 4, step, Some(out.action), &mut s, None).unwrap();
+            let scored = p.act(&inp, mode.choose(5, None), 4, step, Some(out.action), &mut s, None).unwrap();
             assert_eq!(scored, (out, acting), "{mode} step {step} replayed");
             let index = p.joint_index(out.action);
             assert!(joint[index].is_finite() && q[index] > 0.0, "{mode} drew {:?}", out.action);
@@ -502,12 +502,12 @@ fn added_kinds_draw_as_before_while_masked() {
         }
         let v = [&o.history[..], &o.link[..]];
         o.mask = m8;
-        let a = p8.act(&input(&o, &v), policy::ActMode::SAMPLE.choose(0), seed as i64, 4, None, &mut p8.scratch(), None);
+        let a = p8.act(&input(&o, &v), policy::ActMode::SAMPLE.choose(0, None), seed as i64, 4, None, &mut p8.scratch(), None);
         let rule: policy::ActMode = "temperature:0.5".parse().unwrap();
-        let ra = p8.act(&input(&o, &v), rule.choose(0), seed as i64, 4, None, &mut p8.scratch(), None).unwrap();
+        let ra = p8.act(&input(&o, &v), rule.choose(0, None), seed as i64, 4, None, &mut p8.scratch(), None).unwrap();
         o.mask = m11;
-        let b = p11.act(&input(&o, &v), policy::ActMode::SAMPLE.choose(0), seed as i64, 4, None, &mut p11.scratch(), None);
-        let rb = p11.act(&input(&o, &v), rule.choose(0), seed as i64, 4, None, &mut p11.scratch(), None).unwrap();
+        let b = p11.act(&input(&o, &v), policy::ActMode::SAMPLE.choose(0, None), seed as i64, 4, None, &mut p11.scratch(), None);
+        let rb = p11.act(&input(&o, &v), rule.choose(0, None), seed as i64, 4, None, &mut p11.scratch(), None).unwrap();
         let (a, b) = (a.unwrap(), b.unwrap());
         assert_eq!(bits(&a.0), bits(&b.0), "seed {seed}: sample");
         assert_eq!((a.1.log_prob.to_bits(), a.1.entropy.to_bits()), (b.1.log_prob.to_bits(), b.1.entropy.to_bits()));

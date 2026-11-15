@@ -39,7 +39,8 @@ Everything runs in one process. Each env owns its own `ZCore`; `Pool` pins envs 
 threads and steps them without the GIL. The agent acts inside the pool (`docs/rust-actor.md`): each worker picks its
 envs' actions with the Rust copy of the network (`crates/policy`, one per specialist; `ZeldaPolicy.to_native()`),
 by its act mode (`docs/rust-actor.md` "Act modes": `sample`, `argmax`, or a rule over the joint distribution such
-as `floor:0.03`; every draw uses Gumbel noise keyed to (episode job, decision)). The job is an eval job's
+as `floor:0.03`, optionally another for low health, `+low:H:MODE`, read from Link's hearts before each decision;
+every draw uses Gumbel noise keyed to (episode job, decision)). The job is an eval job's
 or chain run's seed, or a per-episode key in training, so an episode plays the same on any env or thread.
 Training makes one `rollout(policies, T, buffers)` call per rollout: every env steps `T` decisions and the buffers
 get, per env, the `T + 1` observations, the actions, the Rust policy's log-prob/entropy/value, rewards, frames,

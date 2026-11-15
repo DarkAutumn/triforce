@@ -45,10 +45,10 @@ pub trait PoolEnv: Send + 'static {
         events: &mut Vec<Self::Event>,
     ) -> Result<Outcome, Self::Error>;
 
-    /// Decisions in a row without progress before the current observation (the env's own measure; act modes
-    /// with `escape` read it). 0 for envs without one.
-    fn stall(&self) -> u32 {
-        0
+    /// What act modes read before a decision on the current observation: decisions in a row without progress (the
+    /// env's own measure; `escape` and `relax`) and the agent's health (`low`). Default: neither.
+    fn situation(&self) -> crate::rollout::Situation {
+        crate::rollout::Situation::default()
     }
 
     /// [`Pool::play`] only: policy `policy` decided `action` on the current observation (`decision`; with its
@@ -875,7 +875,7 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
                     out.search.push(None);
                 }
                 actor
-                    .act(&slot.obs, slot.policy, slot.job, slot.step, env.stall(), &mut scratch)
+                    .act(&slot.obs, slot.policy, slot.job, slot.step, env.situation(), &mut scratch)
                     .map_err(usage)?
             }
         };
@@ -920,7 +920,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
         }
         let (action, decision) = self
             .actor
-            .act(&slot.obs, slot.policy, slot.job, slot.step, env.stall(), &mut self.scratch)
+            .act(&slot.obs, slot.policy, slot.job, slot.step, env.situation(), &mut self.scratch)
             .map_err(|e| PoolError::Usage(format!("env {id}: {e}")))?;
         if self.record != Record::Off {
             let layout = (self.record == Record::Observations).then(|| slot.obs.layout());

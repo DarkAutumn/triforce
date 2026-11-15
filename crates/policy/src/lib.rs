@@ -13,7 +13,7 @@ pub mod act;
 pub mod kernels;
 pub mod noise;
 
-pub use act::{ActMode, Choose, Rule};
+pub use act::{ActMode, Choose, Low, Rule, Style, Threshold};
 
 use kernels::{argmax, axpy, dot, layer_norm, linear, masked_log_softmax, relu, tanh};
 use serde::Deserialize;

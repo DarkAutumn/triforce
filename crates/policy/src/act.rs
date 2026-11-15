@@ -26,9 +26,13 @@
 //! | `temperature:T+relax:N` | a `temperature:T` draw | `sample` |
 //!
 //! Rules combine with `+` (`temperature:0.7+floor:0.02`, `escape:16+floor:0.05`); each at most once, and at most one
-//! of `escape` and `relax`; `sample` and `argmax` stand alone. [`ActMode::to_string`] is the canonical spelling (rules
-//! in the table's order). A rule's draw is Gumbel-argmax over the joint actions with noise keyed by (job, decision)
-//! ([`joint_noise_key`]), so a mode plays the same for the same seed wherever it runs.
+//! of `escape` and `relax`; `sample` and `argmax` stand alone. That is a [`Style`]. A mode is a style, optionally
+//! followed by `+low:H:STYLE`, the style it plays instead while Link holds H hearts or fewer (`low:2`; halves allowed)
+//! or H percent of his maximum or less (`low:40%`), read before every decision: `temperature:0.5+relax:16+low:2:
+//! temperature:0.25+relax:16`. The low part comes last (everything after `low:H:` is its style) and has its own stall
+//! rule. [`ActMode::to_string`] is the canonical spelling (rules in the table's order). A rule's draw is
+//! Gumbel-argmax over the joint actions with noise keyed by (job, decision) ([`joint_noise_key`]), so a mode plays the
+//! same for the same seed wherever it runs.
 
 use std::fmt;
 use std::str::FromStr;
@@ -159,9 +163,9 @@ fn first_max(q: &[f64]) -> usize {
     best
 }
 
-/// How a policy acts outside training.
+/// One way of acting: what a mode does at normal health, or its low-health part.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ActMode {
+pub enum Style {
     /// Each head's most likely entry.
     Argmax,
     /// A draw from the policy reshaped by the rule (plain: the policy itself, per head as in training).
@@ -173,6 +177,27 @@ pub enum ActMode {
     Relax { after: u32, rule: Rule },
 }
 
+/// Where low health starts: Link holds this many hearts or fewer, or this share (percent) of his maximum or less.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Threshold {
+    Hearts(f32),
+    Percent(f32),
+}
+
+/// The low-health part of a mode (`+low:H:STYLE`): `style` while Link's health is at or under `at`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Low {
+    pub at: Threshold,
+    pub style: Style,
+}
+
+/// How a policy acts outside training: `style`, and `low.style` instead while Link is at low health.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ActMode {
+    pub style: Style,
+    pub low: Option<Low>,
+}
+
 /// How one decision is taken: by argmax, or drawn by a rule.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Choose {
@@ -180,28 +205,62 @@ pub enum Choose {
     Draw(Rule),
 }
 
-impl ActMode {
-    pub const SAMPLE: ActMode = ActMode::Sample(Rule {
-        temperature: None,
-        floor: None,
-        minp: None,
-        topp: None,
-    });
-
+impl Style {
     /// How the decision after `stall` decisions in a row without progress is taken.
     pub fn choose(&self, stall: u32) -> Choose {
         match *self {
-            ActMode::Argmax => Choose::Argmax,
-            ActMode::Sample(rule) => Choose::Draw(rule),
-            ActMode::Escape { after, rule } => {
+            Style::Argmax => Choose::Argmax,
+            Style::Sample(rule) => Choose::Draw(rule),
+            Style::Escape { after, rule } => {
                 if stall >= after {
                     Choose::Draw(rule)
                 } else {
                     Choose::Argmax
                 }
             }
-            ActMode::Relax { after, rule } => Choose::Draw(if stall >= after { Rule::default() } else { rule }),
+            Style::Relax { after, rule } => Choose::Draw(if stall >= after { Rule::default() } else { rule }),
         }
+    }
+}
+
+impl Threshold {
+    /// Whether `hearts` of `max` is at or under the threshold.
+    pub fn holds(&self, hearts: f32, max: f32) -> bool {
+        match *self {
+            Threshold::Hearts(h) => hearts <= h,
+            // In hundredths: exact for half hearts and whole percents.
+            Threshold::Percent(p) => hearts as f64 * 100.0 <= p as f64 * max as f64,
+        }
+    }
+}
+
+impl ActMode {
+    pub const SAMPLE: ActMode = ActMode {
+        style: Style::Sample(Rule {
+            temperature: None,
+            floor: None,
+            minp: None,
+            topp: None,
+        }),
+        low: None,
+    };
+    pub const ARGMAX: ActMode = ActMode {
+        style: Style::Argmax,
+        low: None,
+    };
+
+    /// The style for Link's `health` (hearts held, maximum; None where the env has none: never low).
+    pub fn style(&self, health: Option<(f32, f32)>) -> Style {
+        match (self.low, health) {
+            (Some(low), Some((hearts, max))) if low.at.holds(hearts, max) => low.style,
+            _ => self.style,
+        }
+    }
+
+    /// How the decision after `stall` decisions in a row without progress, with Link's `health` (hearts held,
+    /// maximum), is taken.
+    pub fn choose(&self, stall: u32, health: Option<(f32, f32)>) -> Choose {
+        self.style(health).choose(stall)
     }
 }
 
@@ -211,18 +270,18 @@ impl Default for ActMode {
     }
 }
 
-impl fmt::Display for ActMode {
+impl fmt::Display for Style {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = Vec::new();
         match self {
-            ActMode::Argmax => return f.write_str("argmax"),
-            ActMode::Sample(rule) if rule.is_plain() => return f.write_str("sample"),
-            ActMode::Sample(rule) => rule.fmt_parts(&mut parts),
-            ActMode::Escape { after, rule } => {
+            Style::Argmax => return f.write_str("argmax"),
+            Style::Sample(rule) if rule.is_plain() => return f.write_str("sample"),
+            Style::Sample(rule) => rule.fmt_parts(&mut parts),
+            Style::Escape { after, rule } => {
                 rule.fmt_parts(&mut parts);
                 parts.push(format!("escape:{after}"));
             }
-            ActMode::Relax { after, rule } => {
+            Style::Relax { after, rule } => {
                 rule.fmt_parts(&mut parts);
                 parts.push(format!("relax:{after}"));
             }
@@ -231,87 +290,161 @@ impl fmt::Display for ActMode {
     }
 }
 
+impl fmt::Display for Threshold {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Threshold::Hearts(h) => write!(f, "{h}"),
+            Threshold::Percent(p) => write!(f, "{p}%"),
+        }
+    }
+}
+
+impl fmt::Display for ActMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.style)?;
+        if let Some(low) = &self.low {
+            write!(f, "+low:{}:{}", low.at, low.style)?;
+        }
+        Ok(())
+    }
+}
+
 impl FromStr for ActMode {
     type Err = String;
 
+    /// `STYLE` or `STYLE+low:H:STYLE` (the low part last: everything after `low:H:` is its style).
     fn from_str(text: &str) -> Result<ActMode, String> {
         let text = text.trim();
-        match text {
-            "sample" => return Ok(ActMode::SAMPLE),
-            "argmax" => return Ok(ActMode::Argmax),
-            "" => return Err("empty act mode".to_owned()),
-            _ => {}
-        }
-        let mut rule = Rule::default();
-        // The stall rule: ("escape" | "relax", N).
-        let mut stall: Option<(&str, u32)> = None;
-        for part in text.split('+') {
-            let (name, value) = part
-                .split_once(':')
-                .ok_or_else(|| format!("act mode {text:?}: {part:?} is not sample, argmax or NAME:VALUE"))?;
-            let number = |lo_open: f32, hi: f32, inclusive_hi: bool| -> Result<f32, String> {
-                let v: f32 = value
-                    .parse()
-                    .map_err(|_| format!("act mode {text:?}: {name} needs a number, got {value:?}"))?;
-                let ok = v.is_finite() && v > lo_open && (v < hi || (inclusive_hi && v == hi));
-                if ok {
-                    Ok(v)
-                } else {
-                    Err(format!(
-                        "act mode {text:?}: {name} must be in ({lo_open}, {hi}{}",
-                        if inclusive_hi { "]" } else { ")" }
-                    ))
-                }
-            };
-            let slot = match name {
-                "temperature" => &mut rule.temperature,
-                "floor" => &mut rule.floor,
-                "minp" => &mut rule.minp,
-                "topp" => &mut rule.topp,
-                "escape" | "relax" => {
-                    if let Some((given, _)) = stall {
-                        return Err(if given == name {
-                            format!("act mode {text:?}: {name} given twice")
-                        } else {
-                            format!("act mode {text:?}: escape and relax exclude each other")
-                        });
-                    }
-                    let n: u32 = value
-                        .parse()
-                        .map_err(|_| format!("act mode {text:?}: {name} needs a whole number, got {value:?}"))?;
-                    if n == 0 {
-                        return Err(format!("act mode {text:?}: {name} must be at least 1"));
-                    }
-                    stall = Some((name, n));
-                    continue;
-                }
-                _ => {
-                    return Err(format!(
-                        "act mode {text:?}: unknown rule {name:?} (sample, argmax, temperature:T, floor:P, minp:R, \
-                         topp:P, escape:N, relax:N)"
-                    ));
-                }
-            };
-            if slot.is_some() {
-                return Err(format!("act mode {text:?}: {name} given twice"));
+        let (normal, low) = match text.find("low:") {
+            None => (text, None),
+            Some(0) => return Err(format!("act mode {text:?}: low:H:MODE follows the mode for normal health")),
+            Some(i) if !text[..i].ends_with('+') => {
+                return Err(format!("act mode {text:?}: low:H:MODE must be its own '+' part"));
             }
-            *slot = Some(match name {
-                "temperature" => number(0.0, f32::INFINITY, false)?,
-                "floor" => number(0.0, 1.0, false)?,
-                _ => number(0.0, 1.0, true)?,
-            });
-        }
-        Ok(match stall {
-            Some(("escape", after)) => ActMode::Escape { after, rule },
-            Some((_, after)) if rule.is_plain() => {
+            Some(i) => (&text[..i - 1], Some(&text[i + "low:".len()..])),
+        };
+        let style = parse_style(text, normal)?;
+        let low = match low {
+            None => None,
+            Some(rest) => {
+                let (at, style) = rest
+                    .split_once(':')
+                    .ok_or_else(|| format!("act mode {text:?}: low needs a threshold and a mode (low:H:MODE)"))?;
+                if style.contains("low:") {
+                    return Err(format!("act mode {text:?}: low given twice"));
+                }
+                Some(Low {
+                    at: parse_threshold(text, at)?,
+                    style: parse_style(text, style)?,
+                })
+            }
+        };
+        Ok(ActMode { style, low })
+    }
+}
+
+/// `H` (hearts: a positive multiple of a half) or `P%` (a share of the maximum, 0 < P < 100).
+fn parse_threshold(text: &str, at: &str) -> Result<Threshold, String> {
+    let bad = || {
+        format!(
+            "act mode {text:?}: low's threshold {at:?} is neither hearts (a positive multiple of 0.5) nor a percent \
+             of the maximum (0 < P < 100, e.g. 40%)"
+        )
+    };
+    if let Some(p) = at.strip_suffix('%') {
+        let p: f32 = p.parse().map_err(|_| bad())?;
+        return if p.is_finite() && p > 0.0 && p < 100.0 {
+            Ok(Threshold::Percent(p))
+        } else {
+            Err(bad())
+        };
+    }
+    let h: f32 = at.parse().map_err(|_| bad())?;
+    if h.is_finite() && h > 0.0 && (h * 2.0).fract() == 0.0 {
+        Ok(Threshold::Hearts(h))
+    } else {
+        Err(bad())
+    }
+}
+
+/// One style's spelling `part` (`sample`, `argmax`, or rules joined by `+`); `text` is the whole mode, for messages.
+fn parse_style(text: &str, part: &str) -> Result<Style, String> {
+    match part {
+        "sample" => return Ok(Style::Sample(Rule::default())),
+        "argmax" => return Ok(Style::Argmax),
+        "" if text.is_empty() => return Err("empty act mode".to_owned()),
+        "" => return Err(format!("act mode {text:?}: an empty mode")),
+        _ => {}
+    }
+    let mut rule = Rule::default();
+    // The stall rule: ("escape" | "relax", N).
+    let mut stall: Option<(&str, u32)> = None;
+    for part in part.split('+') {
+        let (name, value) = part
+            .split_once(':')
+            .ok_or_else(|| format!("act mode {text:?}: {part:?} is not sample, argmax or NAME:VALUE"))?;
+        let number = |lo_open: f32, hi: f32, inclusive_hi: bool| -> Result<f32, String> {
+            let v: f32 = value
+                .parse()
+                .map_err(|_| format!("act mode {text:?}: {name} needs a number, got {value:?}"))?;
+            let ok = v.is_finite() && v > lo_open && (v < hi || (inclusive_hi && v == hi));
+            if ok {
+                Ok(v)
+            } else {
+                Err(format!(
+                    "act mode {text:?}: {name} must be in ({lo_open}, {hi}{}",
+                    if inclusive_hi { "]" } else { ")" }
+                ))
+            }
+        };
+        let slot = match name {
+            "temperature" => &mut rule.temperature,
+            "floor" => &mut rule.floor,
+            "minp" => &mut rule.minp,
+            "topp" => &mut rule.topp,
+            "escape" | "relax" => {
+                if let Some((given, _)) = stall {
+                    return Err(if given == name {
+                        format!("act mode {text:?}: {name} given twice")
+                    } else {
+                        format!("act mode {text:?}: escape and relax exclude each other")
+                    });
+                }
+                let n: u32 = value
+                    .parse()
+                    .map_err(|_| format!("act mode {text:?}: {name} needs a whole number, got {value:?}"))?;
+                if n == 0 {
+                    return Err(format!("act mode {text:?}: {name} must be at least 1"));
+                }
+                stall = Some((name, n));
+                continue;
+            }
+            _ => {
                 return Err(format!(
-                    "act mode {text:?}: relax:{after} needs another rule (alone it is sample at every decision)"
+                    "act mode {text:?}: unknown rule {name:?} (sample, argmax, temperature:T, floor:P, minp:R, \
+                     topp:P, escape:N, relax:N, low:H:MODE)"
                 ));
             }
-            Some((_, after)) => ActMode::Relax { after, rule },
-            None => ActMode::Sample(rule),
-        })
+        };
+        if slot.is_some() {
+            return Err(format!("act mode {text:?}: {name} given twice"));
+        }
+        *slot = Some(match name {
+            "temperature" => number(0.0, f32::INFINITY, false)?,
+            "floor" => number(0.0, 1.0, false)?,
+            _ => number(0.0, 1.0, true)?,
+        });
     }
+    Ok(match stall {
+        Some(("escape", after)) => Style::Escape { after, rule },
+        Some((_, after)) if rule.is_plain() => {
+            return Err(format!(
+                "act mode {text:?}: relax:{after} needs another rule (alone it is sample at every decision)"
+            ));
+        }
+        Some((_, after)) => Style::Relax { after, rule },
+        None => Style::Sample(rule),
+    })
 }
 
 /// The key of decision `step` of job `job`'s joint-action noise (a rule's draw; `noise::gumbel` over the joint
@@ -433,6 +566,11 @@ mod tests {
             ("escape:16", "escape:16"),
             ("escape:8+floor:0.05", "floor:0.05+escape:8"),
             ("relax:16+temperature:0.75", "temperature:0.75+relax:16"),
+            ("relax:16+temperature:0.5+low:2:temperature:0.25+relax:16", "temperature:0.5+relax:16+low:2:temperature:0.25+relax:16"),
+            ("temperature:0.5+relax:16+low:1.5:relax:8+floor:0.1", "temperature:0.5+relax:16+low:1.5:floor:0.1+relax:8"),
+            ("argmax+low:40%:escape:16", "argmax+low:40%:escape:16"),
+            ("sample+low:3:argmax", "sample+low:3:argmax"),
+            ("escape:16+low:25%:sample", "escape:16+low:25%:sample"),
         ] {
             let mode: ActMode = text.parse().unwrap();
             assert_eq!(mode.to_string(), canonical, "{text}");
@@ -443,6 +581,10 @@ mod tests {
             "temperature:0", "temperature:-1", "temperature:inf", "minp:1.5", "topp:0", "escape:0", "escape:1.5",
             "floor:0.1+floor:0.2", "escape:3+escape:4", "greedy:1", "relax:16", "relax:0+floor:0.1",
             "temperature:0.5+escape:4+relax:4", "relax:3+relax:4+floor:0.1", "argmax+relax:3",
+            "low:2:argmax", "argmax+low:2", "argmax+low:2:", "argmax+low:0:sample", "argmax+low:-1:sample",
+            "argmax+low:1.25:sample", "argmax+low:100%:sample", "argmax+low:0%:sample", "argmax+low:x:sample",
+            "argmax+low:2:relax:4", "argmax+low:2:sample+low:1:argmax", "argmax+low:2:argmax+low:1:sample",
+            "argmaxlow:2:sample", "+low:2:sample", "argmax+low:inf:sample",
         ] {
             assert!(bad.parse::<ActMode>().is_err(), "{bad:?} parsed");
         }
@@ -451,14 +593,45 @@ mod tests {
     #[test]
     fn escape_switches_on_the_stall_count() {
         let mode: ActMode = "escape:4+floor:0.1".parse().unwrap();
-        assert_eq!(mode.choose(3), Choose::Argmax);
-        assert_eq!(mode.choose(4), Choose::Draw(Rule { floor: Some(0.1), ..Rule::default() }));
-        assert_eq!(ActMode::Argmax.choose(1000), Choose::Argmax);
-        assert_eq!(ActMode::SAMPLE.choose(0), Choose::Draw(Rule::default()));
+        assert_eq!(mode.choose(3, None), Choose::Argmax);
+        assert_eq!(mode.choose(4, None), Choose::Draw(Rule { floor: Some(0.1), ..Rule::default() }));
+        assert_eq!(ActMode::ARGMAX.choose(1000, None), Choose::Argmax);
+        assert_eq!(ActMode::SAMPLE.choose(0, None), Choose::Draw(Rule::default()));
         // relax: the rule until stalled, then the policy itself.
         let mode: ActMode = "temperature:0.75+relax:4".parse().unwrap();
-        assert_eq!(mode.choose(3), Choose::Draw(Rule { temperature: Some(0.75), ..Rule::default() }));
-        assert_eq!(mode.choose(4), Choose::Draw(Rule::default()));
-        assert_eq!(mode.choose(1000), Choose::Draw(Rule::default()));
+        assert_eq!(mode.choose(3, None), Choose::Draw(Rule { temperature: Some(0.75), ..Rule::default() }));
+        assert_eq!(mode.choose(4, None), Choose::Draw(Rule::default()));
+        assert_eq!(mode.choose(1000, None), Choose::Draw(Rule::default()));
+    }
+
+    #[test]
+    fn low_switches_on_the_health_both_ways_and_keeps_each_stall_rule() {
+        let t = |v: f32| Choose::Draw(Rule { temperature: Some(v), ..Rule::default() });
+        let mode: ActMode = "temperature:0.5+relax:16+low:2:temperature:0.25+relax:8".parse().unwrap();
+        // Hearts as Link loses them, then as he heals: the low style from 2 hearts down, the normal one above.
+        let max = 5.0;
+        for (hearts, want) in [(5.0, t(0.5)), (2.5, t(0.5)), (2.0, t(0.25)), (0.5, t(0.25)), (2.0, t(0.25)), (2.5, t(0.5))]
+        {
+            assert_eq!(mode.choose(0, Some((hearts, max))), want, "{hearts} hearts");
+        }
+        // Each state keeps its own stall rule: relax:16 above the threshold, relax:8 at or under it.
+        assert_eq!(mode.choose(8, Some((3.0, max))), t(0.5));
+        assert_eq!(mode.choose(16, Some((3.0, max))), Choose::Draw(Rule::default()));
+        assert_eq!(mode.choose(7, Some((1.0, max))), t(0.25));
+        assert_eq!(mode.choose(8, Some((1.0, max))), Choose::Draw(Rule::default()));
+        // An env without health is never low.
+        assert_eq!(mode.choose(0, None), t(0.5));
+        // A share of the maximum: 40% of 5 hearts is 2, of 8 is 3.2.
+        let mode: ActMode = "temperature:0.5+relax:16+low:40%:escape:16".parse().unwrap();
+        assert_eq!(mode.choose(0, Some((2.0, 5.0))), Choose::Argmax);
+        assert_eq!(mode.choose(0, Some((2.5, 5.0))), t(0.5));
+        assert_eq!(mode.choose(0, Some((3.0, 8.0))), Choose::Argmax);
+        assert_eq!(mode.choose(0, Some((3.5, 8.0))), t(0.5));
+        assert_eq!(mode.choose(16, Some((1.0, 8.0))), Choose::Draw(Rule::default()));
+        // 25% of 4 and of 8 hearts, exactly on the line.
+        let mode: ActMode = "sample+low:25%:argmax".parse().unwrap();
+        assert_eq!(mode.choose(0, Some((1.0, 4.0))), Choose::Argmax);
+        assert_eq!(mode.choose(0, Some((2.0, 8.0))), Choose::Argmax);
+        assert_eq!(mode.choose(0, Some((2.5, 8.0))), Choose::Draw(Rule::default()));
     }
 }

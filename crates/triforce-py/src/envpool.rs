@@ -1098,7 +1098,7 @@ impl PyEnvPool {
         self.check_policies(policies.len())?;
         let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
         // Training samples from the unmodified policy (PPO needs it); act modes are for plays.
-        let mode = if deterministic { ActMode::Argmax } else { ActMode::SAMPLE };
+        let mode = if deterministic { ActMode::ARGMAX } else { ActMode::SAMPLE };
         let modes = vec![mode; nets.len()];
         let actor = Arc::new(PolicyActor::new(&LAYOUT, nets, modes).map_err(PyValueError::new_err)?);
         let search = search.map(search_config).transpose()?;
@@ -1131,7 +1131,8 @@ impl PyEnvPool {
     /// after decision on the worker threads, until the task's jobs run out (eval jobs, chain seeds). Each policy
     /// acts by its act mode (`act`: one spelling for every policy or one per policy; default `sample`;
     /// `act_mode` parses them, docs/rust-actor.md "Act modes"): sampled with keyed noise (job, decision), argmax,
-    /// or a rule over the joint distribution; `escape` reads the env's count of decisions without progress.
+    /// or a rule over the joint distribution; `escape` and `relax` read the env's count of decisions without
+    /// progress, `low` Link's health.
     /// Returns at once; follow it with `poll_events`,
     /// `poll_plays`, `active` and `wait_idle`. A chain run that ends with `hold_finished_frame` parks its env
     /// until `set_hold(env, False)`. `record`: None, 'actions' or 'observations' (see `poll_plays`).

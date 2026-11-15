@@ -1,7 +1,7 @@
 //! The pool on a fake env whose rows depend only on its seeded generator and its actions, acting with a test
 //! actor whose actions depend only on the observation.
 
-use pool::rollout::{Actor, Decision, EnvRollout, Play, Record};
+use pool::rollout::{Actor, Decision, EnvRollout, Play, Record, Situation};
 use pool::{
     Dtype, EnvControl, EnvInit, KeySpec, ObsData, ObsLayout, ObsRow, Outcome, Pool, PoolEnv, PoolError,
     PoolOptions, Start,
@@ -218,7 +218,7 @@ impl Actor<i64> for TestActor {
         policy: i64,
         job: i64,
         step: i64,
-        _: u32,
+        _: Situation,
         _: &mut (),
     ) -> Result<(i64, Decision), String> {
         let id = obs.i64(ID);
@@ -595,7 +595,7 @@ fn an_actor_error_fails_the_call_not_the_env() {
     impl Actor<i64> for Refuses {
         type Scratch = ();
         fn scratch(&self) {}
-        fn act(&self, _: &ObsData, policy: i64, _: i64, _: i64, _: u32, _: &mut ()) -> Result<(i64, Decision), String> {
+        fn act(&self, _: &ObsData, policy: i64, _: i64, _: i64, _: Situation, _: &mut ()) -> Result<(i64, Decision), String> {
             if policy == 1 { Err("no policy 1".into()) } else { Ok((0, Decision::default())) }
         }
         fn value(&self, _: &ObsData, _: i64, _: &mut ()) -> Result<f32, String> {

@@ -313,29 +313,32 @@ pub fn parse_act_mode(text: &str) -> PyResult<policy::ActMode> {
 }
 
 /// The canonical spelling of act mode `text` (`sample`, `argmax`, `temperature:T`, `floor:P`, `minp:R`, `topp:P`,
-/// `escape:N`, `relax:N` and their `+` combinations); raises ValueError for anything else.
+/// `escape:N`, `relax:N` and their `+` combinations, optionally followed by `+low:H:MODE`); raises ValueError for
+/// anything else.
 #[pyfunction]
 pub fn act_mode(text: &str) -> PyResult<String> {
     Ok(parse_act_mode(text)?.to_string())
 }
 
 /// The probabilities act mode `mode` draws from over joint log-probs `log_probs` (`-inf`: illegal), after `stall`
-/// decisions without progress: the rule's reshaped distribution, the policy's own for `sample`, one-hot at the
-/// first maximum for argmax (whose heads pick the kind first; a joint argmax can differ only on near ties).
+/// decisions without progress and with Link's `health` (hearts, maximum; None: never low): the rule's reshaped
+/// distribution, the policy's own for `sample`, one-hot at the first maximum for argmax (whose heads pick the kind
+/// first; a joint argmax can differ only on near ties).
 #[pyfunction]
-#[pyo3(signature = (mode, log_probs, stall=0))]
+#[pyo3(signature = (mode, log_probs, stall=0, health=None))]
 pub fn act_probabilities<'py>(
     py: Python<'py>,
     mode: &str,
     log_probs: Vec<f32>,
     stall: u32,
+    health: Option<(f32, f32)>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     if !log_probs.iter().any(|v| v.is_finite()) {
         return Err(PyValueError::new_err("no legal action"));
     }
     let n = log_probs.len();
     let mut q = vec![0f64; n];
-    match parse_act_mode(mode)?.choose(stall) {
+    match parse_act_mode(mode)?.choose(stall, health) {
         policy::Choose::Argmax => {
             let best = (0..n).fold(0, |b, i| if log_probs[i] > log_probs[b] { i } else { b });
             q[best] = 1.0;

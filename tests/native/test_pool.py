@@ -275,13 +275,46 @@ def test_act_modes_draw_from_their_rule_and_reproduce(states_dir, mode):
     assert records == again
 
 
+@pytest.mark.parametrize('mode', ['temperature:0.75+low:2.5:argmax', 'temperature:0.75+low:85%:argmax'])
+def test_a_low_health_mode_switches_on_the_decision_health_crosses_its_threshold(states_dir, mode):
+    """Round 25: ``+low:H:MODE`` acts by MODE at every decision whose observation has Link at H hearts or fewer (or
+    H% of his maximum: 85% of 3 hearts is 2.55) and by the normal mode at every other, reading the health before
+    each decision: the first decision after a hit is already the low mode's. The visit records count the decisions
+    and their hits by health."""
+    names = ['ow-moblin', 'ow-zora']
+    policies = [random_network(1).to_native(), random_network(4).to_native()]
+    task = native.ChainTask(names, 'd2first', seeds=[0, 3, 5], start_from=str(require_state('0_5aw_0')),
+                            max_steps=80, states_dir=str(states_dir))
+    with native.EnvPool(task, num_envs=3, seed=0) as pool:
+        events = play_to_the_end(pool, policies, act=mode, record='observations')
+        plays = {p['job']: p for p in pool.poll_plays()}
+    runs = {e['result']['seed']: e['result'] for e in events if e['type'] == 'run'}
+    crossed = 0
+    for job, play_ in plays.items():
+        hearts = np.round(play_['obs']['link'][:, 10] * 16 * 2) / 2      # observation.rs l::HP: hearts / 16
+        low = hearts <= 2.5
+        argmax = (play_['act_entropy'] == 0) & (play_['act_log_prob'] == 0)
+        np.testing.assert_array_equal(argmax, low, err_msg=f'run {job}')
+        crossed += int(np.any(low[1:] & ~low[:-1]))
+        by_health = np.zeros((7, 2), dtype=int)
+        for room in runs[job]['rooms']:
+            for half, counts in enumerate(room['decisions']['health']):
+                by_health[half] += counts
+        np.testing.assert_array_equal(by_health[:, 0], [np.sum(hearts * 2 == h) for h in range(7)])
+    assert crossed >= 2, "Link loses health in the runs and the mode switches"
+
+
 def test_act_mode_spellings():
     """``_native.act_mode`` gives the canonical spelling and refuses anything else."""
     assert native.act_mode('floor:0.02+temperature:0.70') == 'temperature:0.7+floor:0.02'
     assert native.act_mode('escape:16') == 'escape:16'
     assert native.act_mode('relax:16+temperature:0.75') == 'temperature:0.75+relax:16'
+    assert native.act_mode('relax:16+temperature:0.5+low:2:relax:16+temperature:0.25') == (
+        'temperature:0.5+relax:16+low:2:temperature:0.25+relax:16')
+    assert native.act_mode('argmax+low:40%:sample') == 'argmax+low:40%:sample'
     for bad in ('model', 'greedy', 'floor:2', 'sample+floor:0.1', 'escape:0', 'relax:16',
-                'floor:0.1+escape:4+relax:4'):
+                'floor:0.1+escape:4+relax:4', 'low:2:argmax', 'argmax+low:2', 'argmax+low:1.2:sample',
+                'argmax+low:2:sample+low:1:argmax'):
         with pytest.raises(ValueError):
             native.act_mode(bad)
     # relax: the rule until stalled, the policy itself from N decisions without progress on.
@@ -292,3 +325,11 @@ def test_act_mode_spellings():
     q = native.act_probabilities('floor:0.15', np.log([0.5, 0.3, 0.1, 0.1]).tolist())
     np.testing.assert_allclose(q, [0.625, 0.375, 0, 0])
     np.testing.assert_allclose(native.act_probabilities('argmax', [-1.0, -0.5, float('-inf')]), [0, 1, 0])
+    # low: the low mode at or under the threshold (with its own stall rule), the normal one above it or without health.
+    mode = 'floor:0.15+relax:4+low:2:argmax'
+    np.testing.assert_allclose(native.act_probabilities(mode, p, health=(2.5, 3)), [0.625, 0.375, 0, 0])
+    np.testing.assert_allclose(native.act_probabilities(mode, p, health=(2.0, 3)), [1, 0, 0, 0])
+    np.testing.assert_allclose(native.act_probabilities(mode, p), [0.625, 0.375, 0, 0])
+    np.testing.assert_allclose(native.act_probabilities(mode, p, stall=4, health=(3.0, 3)), [0.5, 0.3, 0.1, 0.1])
+    np.testing.assert_allclose(native.act_probabilities('argmax+low:50%:floor:0.15+relax:4', p, stall=4,
+                                                        health=(1.5, 3)), [0.5, 0.3, 0.1, 0.1])

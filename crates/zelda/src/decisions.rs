@@ -8,6 +8,9 @@
 //! `FOLLOW - 1` steps of the same visit ([`FOLLOW`] decisions in all, about half a second of play), and *followed by
 //! a death* when the episode or run ends in death within them. Each decision counts at most once per kind. The
 //! same is counted for every decision (`hit`, `death`): the base rate a low decision's is compared with.
+//!
+//! Decisions are also counted by Link's health when they were taken ([`DecisionStats::by_health`], half hearts), with
+//! the hits their own step took: hits per decision at low and at normal health (round 25, `low` act modes).
 
 use std::fmt::Write;
 
@@ -25,6 +28,8 @@ pub struct DecisionNote {
     pub act_entropy: f32,
     /// The joint action index (`kind * 32 + direction * 4 + duration`).
     pub action: u8,
+    /// Link's health (hearts) when the decision was taken; None where the env has none.
+    pub health: Option<f32>,
 }
 
 /// A visit's decisions.
@@ -44,6 +49,9 @@ pub struct DecisionStats {
     pub act_entropy: f64,
     /// The joint action of every decision, in order.
     pub actions: Vec<u8>,
+    /// By Link's health at the decision in half hearts (index 5: 2.5 hearts): decisions, and those whose own step
+    /// lost health. Only as long as the highest health seen.
+    pub by_health: Vec<[u32; 2]>,
     /// The last [`FOLLOW`] steps' decisions: bit i below `LOW_PROBS[i]`, bit [`ANY`] a decision; most recent first.
     recent: [u8; FOLLOW],
     /// Whether a hit, a death was already counted for each of `recent`.
@@ -66,6 +74,14 @@ impl DecisionStats {
             self.surprisal -= note.log_prob as f64;
             self.act_entropy += note.act_entropy as f64;
             self.actions.push(note.action);
+            if let Some(hearts) = note.health {
+                let half = (hearts * 2.0).round().max(0.0) as usize;
+                if self.by_health.len() <= half {
+                    self.by_health.resize(half + 1, [0, 0]);
+                }
+                self.by_health[half][0] += 1;
+                self.by_health[half][1] += hit as u32;
+            }
             self.recent[0] |= 1 << ANY;
             for (i, &p) in LOW_PROBS.iter().enumerate() {
                 if note.log_prob < p.ln() {
@@ -123,7 +139,20 @@ mod tests {
             log_prob: p.ln(),
             act_entropy: 0.5,
             action,
+            health: None,
         })
+    }
+
+    #[test]
+    fn decisions_by_health_count_their_own_steps_hits() {
+        let mut s = DecisionStats::default();
+        let at = |hearts: f32| Some(DecisionNote { health: Some(hearts), ..note(0.5, 0).unwrap() });
+        s.update(at(3.0), false, false);
+        s.update(at(3.0), true, false);
+        s.update(at(2.5), false, false);
+        s.update(None, true, false); // no decision: nothing by health
+        s.update(at(0.5), true, true);
+        assert_eq!(s.by_health, vec![[0, 0], [1, 1], [0, 0], [0, 0], [0, 0], [1, 0], [2, 1]]);
     }
 
     #[test]

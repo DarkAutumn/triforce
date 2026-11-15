@@ -280,6 +280,10 @@ def test_one_act_mode_for_the_project(tmp_path):
     """Round 23: evaluation, chains, the confirmation, a run without an act file and play all act by one rule."""
     assert registry.PLAY_ACT == registry.DEFAULT_ACT == registry.ACT_RULE == 'temperature:0.5+relax:16'
     assert registry.draws(registry.ACT_RULE)
+    # Round 25: a low-health part draws only if both parts do.
+    assert registry.draws(f'{registry.ACT_RULE}+low:2:temperature:0.25+relax:16')
+    assert not registry.draws(f'{registry.ACT_RULE}+low:40%:escape:16')
+    assert not registry.draws('argmax+low:2:sample')
     registry.save_checkpoint('d1-test', 'a', _trained()[0], root=tmp_path)
     run = tmp_path / 'd1-test' / 'a'
     assert not (run / 'act').exists()

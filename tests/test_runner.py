@@ -275,6 +275,27 @@ def test_a_run_in_an_act_mode_with_the_switch_flipped_mid_run_replays_bit_exactl
     assert _native.replay_verify(recording.data, states_dir=str(states_dir))['frames'] == recording.frames
 
 
+def test_a_run_in_a_low_health_act_mode_replays_bit_exactly(states_dir, models_dir):
+    """Round 25: a chain run recorded in a mode with a low-health part (``+low:H:MODE``, read before every decision
+    from Link's hearts) that switches mid-run names its act mode and replays bit for bit."""
+    mode = 'temperature:0.75+relax:16+low:2.5:temperature:0.25+relax:4'
+    runner = Runner(models_dir=models_dir, max_steps=80, states_dir=states_dir, act=mode)
+    route = Route.load('d2first', start_from=str(require_state('0_5aw_0')))
+    record = replay.record_options(runner.record_meta(route))
+    events = []
+    with runner.pool(route, [3], record=record, num_envs=1, threads=1) as chain:
+        chain.play()
+        while not chain.pool.wait_idle(timeout=0.05):
+            events += chain.poll_events()
+        events += chain.poll_events()
+    (_, result), = chain.results(events)
+    assert result.rooms[0].health_in == 3.0
+    assert min(room.health_out for room in result.rooms) <= 2.5, "Link drops to the low part's threshold"
+    recording, = [_native.Replay(e['data']) for e in events if e['type'] == 'replay']
+    assert {m['act'] for m in recording.meta['models']} == {mode}
+    assert _native.replay_verify(recording.data, states_dir=str(states_dir))['frames'] == recording.frames
+
+
 def test_missing_promoted_model_is_an_error(states_dir, tmp_path):
     result = Runner(models_dir=tmp_path, states_dir=states_dir).run(Route.load('d2first'), seed=0)
     assert result.result == 'error' and result.steps == 0
