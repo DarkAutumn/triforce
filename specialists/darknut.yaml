@@ -1,6 +1,6 @@
 name: darknut
 rooms: ['(3, 0x5b)', '(3, 0x59)', '(3, 0x69)', '(3, 0x5c)', '(5, 0x64)', '(5, 0x06)', '(5, 0x05)', '(5, 0x37)']
-start_states: ['3_5b*_[0-9]', '3_59*_[0-9]', '3_69*_[0-9]', '3_5c*_[0-9]']
+start_states: ['3_5b*_[0-9]', '3_59*_[0-9]', '3_69*_[0-9]', '3_5c*_[0-9]', '5_64*_[0-9]', '5_06*_[0-9]', '5_05*_[0-9]', '5_37*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
@@ -8,9 +8,10 @@ obs: {objective: true, target: true}       # schema 2: direction/distance to the
 # hp as every dungeon family; bombs drawn 0-8: Link reaches these rooms with any count, and they are a weapon above
 # the reserve; help_count drawn 0-9 so the 10th damage-free kill's forced bomb drop comes at any point.
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9],
-                    room_kills: {'(5, 0x05)': [1, 5], '(5, 0x64)': [1, 4]}, room_kills_share: 0.5}
-# room_kills (round 24): half the resets into the Olive Garden (6 Blue Darknuts) and 0x64 (5) bank 1-5 / 1-4 kills before
-# the entry, so the game itself makes fewer Darknuts (training only; the explorer and a new model can't clear the full rooms).
+                    room_kills: {'(5, 0x05)': [1, 5], '(5, 0x64)': [1, 5]}, room_kills_share: 0.5}
+# room_kills (round 24): half the resets into the Olive Garden (6 Blue Darknuts) and 0x64 (5) bank 1-5 kills before
+# the entry, so the game itself makes fewer Darknuts (training only; the explorer clears the full Olive Garden only with 8
+# bombs). 0x64 at 5 is its plain way back (the fight done on the way in: its kills stay in the room history).
 items: {bombs: free}                       # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve (Dungeon 5: 0 in the Olive Garden, 8 elsewhere)
 clips: true                                # round 24: 5:0x64's block clip to the stairs (half the episodes without: the fight and the push)
 curriculum: {enabled: true}             # trajectories/darknut (Go-Explore paths per start state)

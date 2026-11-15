@@ -2092,3 +2092,26 @@ Hills). Decided by the agent building it (the owner away):
   written in: no played state of the leg exists yet, and `d2first`'s own 0x1b step is picked for the state as it is.
 - **Tooling:** Go-Explore's cell key holds the maze step and a loop that advances it is progress; `entry_states path
   --route R` now explores under R's objective (so a maze step on R is followed).
+
+## 2026-11-14 — Dungeon 5's states and curricula: staged starts, skipped fights (round 24, `r24-d5b`)
+
+- **Staged starts by the game's room history:** `ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]},
+  room_kills_share: 0.5}` banks k kills in `LevelKillCounts` before a dungeon room's entry
+  (asm:RoomHistory_ModifyObjCountUW), so the game itself makes k fewer monsters, and clearing the rest clears the
+  room (its push block moves, the Olive Garden's stairs appear; tested with a real sword kill). Training envs only
+  (`EnvOptions::staged_kills`, set by the training pool): evaluation, chains, exploration, state builds and play
+  meet the room as the game has it. darknut stages the Olive Garden 1-5 and 0x64 1-5 (5 = 0x64's plain way back,
+  whose kills stay in the room history), half the resets each. Chosen over a share of hand-made states: the game's
+  own mechanism, no file per count, and the full room stays half the resets.
+- **The explorer on staged starts:** `python -m triforce.explore --room-kills 5:0x05=K` (track `<state>~k<K>`),
+  `--clips off` (track `<state>~plain`: 0x64's fight and push, a room whose one step both ways share). Measured on
+  the Olive Garden (3000 iterations; 8000 for 4-6 alive): with no bombs it clears 1-2 Darknuts (3 not), with 4
+  bombs 1-5 (6 not), with 8 bombs all 6 (178 steps, 4 hearts left).
+- **Skipped fights in state builds:** `entry_states build --skip-fights 5:0x05:E` crosses that step's room with
+  every monster put into its death sparkle as it comes out (ObjMetastate `$10`, asm:Obj_EndMetastate: the game counts
+  the kills and drops what it drops), so the rooms after it get states now; their manifest entries say
+  `fight_skipped: true` and they are to be replaced by states harvested from chain runs once a model clears the
+  Olive Garden.
+- **Builds keep the route's rules:** a step's skipped key is not required (`treasure: skip`, 0x47, 0x26), a
+  refused treasure taken fails the crossing (0x65 westbound), and the step task gives the family's recorder, food
+  and candle (Digdogger).

@@ -1,6 +1,6 @@
 name: boss-digdogger
 rooms: ['(5, 0x24)']
-start_states: []                           # round 24: the second pass adds its states (the leg's played entrance)
+start_states: ['5_24*_[0-9]']
 success: [exit-correct]                    # the recorder, kill the small one, take the heart container, leave N to 0x14
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
@@ -11,7 +11,6 @@ curriculum: {enabled: true}             # trajectories/boss-digdogger (Go-Explor
 one_room: true
 max_steps: 1000
 warm_start: null
-trainable: false                           # round 24: no start states until the second pass (the leg's played entrance)
 notes: >-
   Digdogger (Dungeon 5, round 24; docs/routes/d5.md): the big body (32x32, object $38) can't be hurt; the recorder
   played in the room shrinks it inside the recorder's freeze, and at the freeze's end (152 frames after the B press)
