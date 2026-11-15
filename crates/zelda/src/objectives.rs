@@ -674,56 +674,85 @@ impl GameCompletion {
             .flatten()
     }
 
-    /// Link plays a clip-way step after the stretch's step that leaves through a `wrap_in` exit (game.yaml: 0x55's
-    /// W part, cut off by the river; round 24): no walk leads back to the plain way from there (the map's room graph
-    /// treats 0x55 as one room, so a re-plan would send him E into 0x55's W part and back), so a switch off waits
-    /// for the rejoin.
-    fn past_wrap_in(&self) -> bool {
+    /// Link plays a clip-way step past the stretch's `wrap_in` exit (game.yaml: 0x55's W part, cut off by the river;
+    /// round 24): a later step of the stretch, or the wrap's own step once Link stands in the part the wrap leads to
+    /// (he can walk to its exit without the skips; on the dock side he can't). No walk leads back to the plain way
+    /// from there (the map's room graph treats 0x55 as one room, so a re-plan would send him E into 0x55's W part
+    /// and back, or leave him in the W part with an exit E he can't reach), so a switch off waits for the rejoin.
+    fn past_wrap_in(&self, state: &GameView) -> bool {
         let Some(i) = self.step.or(self.last_step) else { return false };
         let steps = &self.map.routes[&self.route];
         let Some(stretch) = self.map.stretches[&self.route].iter().find(|s| s.clips.contains(&i)) else {
             return false;
         };
-        stretch.clips.clone().take_while(|&j| j < i).any(|j| {
+        let wraps = |j: usize| {
             let step = &steps[j];
             self.map.get(step.location()).and_then(|r| r.exits.get(&step.exit)).is_some_and(|e| e.wrap_in.is_some())
-        })
+        };
+        if stretch.clips.clone().take_while(|&j| j < i).any(wraps) {
+            return true;
+        }
+        let step = &steps[i];
+        wraps(i)
+            && state.full_location() == step.location()
+            && Direction::from_exit(&step.exit).is_some_and(|d| {
+                state.room().wavefront(&[Target::Dir(d)], &[], &[], false).get(state.link.tile()).is_some()
+            })
+    }
+
+    /// Applies a pending switch off ([`GameCompletion::set_clips_allowed`]) unless it is held where Link stands;
+    /// true if it was applied.
+    fn apply_off_pending(&mut self, state: &GameView) -> bool {
+        if !self.off_pending || (self.clips && (stranded(state) || self.past_wrap_in(state))) {
+            return false;
+        }
+        self.off_pending = false;
+        self.apply_clips_allowed(false);
+        true
+    }
+
+    /// Picks the route step Link plays in `state`'s room from his entry (a re-plan adopts the plain way's).
+    fn pick_step(&mut self, state: &GameView) {
+        self.repick = false;
+        self.step = self.entry.clone().and_then(|entry| self.route_step_at(state, &entry));
+        if self.step.is_none()
+            && let Some(stretch) = self.replan
+        {
+            self.step = self.adopt_plain_step(state, stretch);
+        }
+        match self.step.map(|i| self.map.routes[&self.route][i].way) {
+            // A shared step: the route takes the switch's way from here (the rejoin ends a held plain way).
+            Some(None) => {
+                self.way = self.clips_allowed;
+                self.replan = None;
+            }
+            Some(Some(_)) => self.replan = None,
+            None => {}
+        }
+        self.last_step = self.step.or(self.last_step);
+        self.last_route = None;
     }
 
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
         let here = state.full_location();
-        // A switch off turned off now, or held until Link can walk to an exit (round 24), or, past a wrap into a room
-        // part only the wrap reaches (0x55's river), until the stretch rejoins.
-        if self.off_pending && (!self.clips || (!stranded(state) && !self.past_wrap_in())) {
-            self.off_pending = false;
-            self.apply_clips_allowed(false);
-        }
         let entered = prev.is_some_and(|p| p.full_location() != here);
+        // A switch off turned off now, or held until Link can walk to an exit (round 24), or, past a wrap into a room
+        // part only the wrap reaches (0x55's river), until the stretch rejoins. On entering a room the step Link plays
+        // there is picked first: the hold asks where that step is (0x54's, past the wrap; 0x4f's, the rejoin).
+        if !entered {
+            self.apply_off_pending(state);
+        }
         if let Some(prev) = prev
             && entered
         {
             self.entry = route_entry(prev.full_location(), here).map(str::to_owned);
         }
         if entered || self.repick {
-            self.repick = false;
-            self.step = self.entry.clone().and_then(|entry| self.route_step_at(state, &entry));
-            if self.step.is_none()
-                && let Some(stretch) = self.replan
-            {
-                self.step = self.adopt_plain_step(state, stretch);
-            }
-            match self.step.map(|i| self.map.routes[&self.route][i].way) {
-                // A shared step: the route takes the switch's way from here (the rejoin ends a held plain way).
-                Some(None) => {
-                    self.way = self.clips_allowed;
-                    self.replan = None;
-                }
-                Some(Some(_)) => self.replan = None,
-                None => {}
-            }
-            self.last_step = self.step.or(self.last_step);
-            self.last_route = None;
+            self.pick_step(state);
+        }
+        if entered && self.apply_off_pending(state) && self.repick {
+            self.pick_step(state);
         }
         self.open_raft_crossings(state);
         self.check_cave_waypoint(prev, state);

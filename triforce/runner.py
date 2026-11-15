@@ -109,6 +109,11 @@ class Route:
                 rooms = sorted(set(later), key=later.index)
                 raise RunnerError(f"--stop-at {location_text(stop_at)} is not a room of route '{name}' after the start "
                                   f"step; rooms: {[location_text(MapLocation(*room)) for room in rooms]}")
+            way = 'clips' if clips else 'plain'
+            if clips_off_from is None and (stop_at.level, stop_at.value, stop_at.in_cave) not in [
+                    (s['level'], s['room'], s['in_cave']) for s in steps[start + 1:] if s['way'] in (None, way)]:
+                raise RunnerError(f"--stop-at {location_text(stop_at)} is not a room of the {way} way of route "
+                                  f"'{name}' after the start step (the run stays on the {way} way)")
         if stop_step is not None and not start < stop_step < len(steps):
             raise RunnerError(f"--stop-at step:{stop_step} is not a step of route '{name}' after the start step "
                               f"{start}; steps: {start + 1}..={len(steps) - 1}")

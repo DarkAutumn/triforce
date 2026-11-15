@@ -1039,12 +1039,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (whose explored objective now follows R) cross the maze. Tests: `crates/env/tests/maze.rs`.
 - **Terminal steps**: `exit: terminal` (a scouting route's last room, run with `--stop-at`) is only entered, so its
   room needs no family.
-- **The leg's clips switch** (round 24): a switch off on a stretch's clip way past its `wrap_in` step (0x55's river:
-  0x54 .. 0x5f of `coast-heart`) waits for the rejoin (`GameCompletion::past_wrap_in`): from W of the river no walk
-  leads back to the plain way, and the map's room graph, which treats 0x55 as one room, would send Link E into
-  0x55's W part and back. Elsewhere it re-plans to the plain way from the nearest room (`crates/zelda/tests/
-  d5_leg.rs` `the_switch_off_in_*`). Cheated bombs (`zelda::cheats::bomb_need`): none in a `requires_bombs` room
-  once what it is bombed for is open (0x2c's rock wall on the leg, 5:0x66 and 5:0x65 on the way back).
+- **The leg's clips switch** (round 24): a switch off on a stretch's clip way past its `wrap_in` exit (0x55's river:
+  in 0x55's W part, which Link can walk to the W exit from, and 0x54 .. 0x5f of `coast-heart`) waits for the
+  rejoin 0x4f (`GameCompletion::past_wrap_in`): from W of the river no walk leads back to the plain way, and the
+  map's room graph, which treats 0x55 as one room, would send Link E into 0x55's W part and back. On entering a
+  room the step he plays there is picked before the hold is asked, so the switch is off from the rejoin's first
+  frame. Turned off in 0x55 on the dock side (before the wrap) the plain way takes over at once; elsewhere it
+  re-plans to the plain way from the nearest room (`crates/zelda/tests/d5_leg.rs` `the_switch_off_in_*`: the coast
+  stretch turned off in each of its clip-way rooms). Cheated bombs (`zelda::cheats::bomb_need`): none in a
+  `requires_bombs` room once what it is bombed for is open (0x2c's rock wall on the leg, 5:0x66 and 5:0x65 on the
+  way back). `eval-chain --stop-at` refuses a room only the other way plays (exit 2; 0:0x59 with clips on).
 - `Route.load(name, stop_at=None, start_from=None, states_dir=None, *, stop_step=None, power_on=None,
   checkpoint=None, clips=True, clips_off_from=None)` reads `triforce/routes.yaml` (`clips`: the run-time switch a
   run starts with; `clips_off_from`: a route step (int) or room where it turns off; "The run-time clips switch"

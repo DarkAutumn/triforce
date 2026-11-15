@@ -492,7 +492,9 @@ fn the_plain_ladder_takes_0x5f_s_heart_container_from_the_s_side() {
 }
 
 /// The run-time switch turned off on 0x5f's water waits (the clip way holds: CLIP W stays the objective's way,
-/// `clips_allowed` stays on) and takes effect once the ladder clip has put Link where he can walk on.
+/// `clips_allowed` stays on), and it still waits once the ladder clip has put Link on the platform: past 0x55's
+/// river the coast stretch's clip way holds until its rejoin (`past_wrap_in`), so Link goes N to 0x4f by the clip
+/// way's step and the switch is off there.
 #[test]
 fn the_clips_switch_holds_on_0x5f_s_water() {
     let Some(mut s) = start("4_03s_0") else { return };
@@ -500,7 +502,7 @@ fn the_clips_switch_holds_on_0x5f_s_water() {
     into_0x60_at(&mut s, 0x8D);
     let map = s.game_map().clone();
     let step = map.routes[ROUTE].iter().position(|st| st.location() == ow(0x60)).unwrap();
-    let mut gc = GameCompletion::new(map, ROUTE, Some(step)).unwrap();
+    let mut gc = GameCompletion::new(map.clone(), ROUTE, Some(step)).unwrap();
     gc.set_clips(true);
     gc.objectives(None, s.state());
     let prev = s.state().clone();
@@ -514,9 +516,24 @@ fn the_clips_switch_holds_on_0x5f_s_water() {
     act(&mut s, "CLIP W");
     assert_eq!(s.state().max_health(), 9);
     let objective = gc.objectives(Some(&prev), s.state());
-    assert!(!gc.clips_held() && !gc.clips_allowed() && !objective.clips, "off on the platform: {objective:?}");
-    assert_eq!(objective.next_rooms, [ow(0x4f)].into_iter().collect(), "on N by the plain ladder");
-    // Off anywhere Link can walk: at once.
+    assert!(gc.clips_held() && gc.clips_allowed() && objective.clips, "held on the platform: {objective:?}");
+    assert_eq!(gc.step(), Some(step + 1), "the clip way's 0x5f");
+    assert_eq!(objective.next_rooms, [ow(0x4f)].into_iter().collect(), "on N to the rejoin");
+    // W over the single squares by the plain ladder to land (as `round_the_world_...`): still held there.
+    for _ in 0..12 {
+        if link(&s).0 <= 0x88 {
+            break;
+        }
+        act(&mut s, "MOVE W 8");
+    }
+    walk(&mut s, Direction::W, 0x80);
+    let objective = gc.objectives(None, s.state());
+    assert!(gc.clips_held() && objective.clips && !stranded(s.state()), "held on 0x5f's land: {}", describe(&s));
+    let visits = walk_by_objective(&mut s, &mut gc, in_room(ow(0x4f)), 2_000);
+    let rejoin = map.stretches[ROUTE].iter().find(|st| st.clips.contains(&step)).unwrap().rejoin;
+    assert_eq!(visits.last().unwrap().step, Some(rejoin), "{visits:?}");
+    assert!(!gc.clips_held() && !gc.clips_allowed(), "off at 0x4f");
+    // Off the route's stretches (no step), where Link can walk: at once.
     let mut gc = GameCompletion::new(s.game_map().clone(), ROUTE, None).unwrap();
     gc.set_clips(true);
     gc.objectives(None, s.state());
@@ -715,14 +732,52 @@ fn switched_off_inside(off: MapLocation, rejoin: MapLocation) -> Option<(Arc<Gam
     Some((map, visits))
 }
 
-/// coast-heart: off in 0x53, W of 0x55's river (the wrap is behind Link). No walk leads back to the plain way from
-/// there (E is 0x55's W part, cut off by the river), so the switch off waits for the rejoin (`past_wrap_in`): the
-/// clip way holds through 0x51's and 0x60's wrap exits and the ladder clip to 0x4f.
+/// coast-heart: the switch turned off anywhere on the clip way past 0x55's river: in 0x55's W part (right after the
+/// wrap, X < `$50`: tile columns 10-13 are the river), on entering 0x54, 0x53, 0x52, 0x51, 0x50, 0x60 and 0x5f (on
+/// its water). No walk leads back to the plain way from there (E is 0x55's W part, cut off by the river), so the
+/// switch off waits for the rejoin (`past_wrap_in`; on 0x5f's water `stranded` holds it too): the clip way holds
+/// through 0x51's and 0x60's wrap exits and the ladder clip, Link never turns back, and from 0x4f (the rejoin) on
+/// the switch is off and he goes on by the shared steps (0x3f, 0x2f's heart cave, 0x3f) into the lake stretch's
+/// plain way at 0x3e.  Turned off on entering 0x55 (on the dock side, before the wrap), the plain way takes over at
+/// once (0x55 from N leaves E).
 #[test]
 fn the_switch_off_in_the_coast_stretch_holds_the_clip_way_past_the_river() {
-    let Some((map, visits)) = switched_off_inside(ow(0x53), ow(0x4f)) else { return };
-    let ways: Vec<_> = visits[..visits.len() - 1].iter().map(|v| v.step.map(|i| map.routes[ROUTE][i].way)).collect();
-    assert!(ways.iter().all(|w| *w == Some(Some(zelda::game_map::Way::Clips))), "{ways:?}");
+    let Some((s, _)) = leg(true) else { return };
+    let map = s.game_map().clone();
+    let stretch = map.stretches[ROUTE].iter().find(|st| st.name == "coast-heart").unwrap().clone();
+    let route = &map.routes[ROUTE];
+    let lake = map.stretches[ROUTE].iter().find(|st| st.name == "lake-3e").unwrap();
+    let shared: Vec<usize> = (stretch.rejoin..lake.clips.start).chain([lake.plain.start]).collect();
+    assert_eq!(
+        shared.iter().map(|&i| route[i].location()).collect::<Vec<_>>(),
+        [ow(0x4f), ow(0x3f), ow(0x2f), MapLocation::new(0, 0x2f, true), ow(0x2f), ow(0x3f), ow(0x3e)]
+    );
+    let w_part = |s: &S| in_room(ow(0x55))(s) && s.state().link.position.x < 0x50;
+    let rooms = [0x54u8, 0x53, 0x52, 0x51, 0x50, 0x60, 0x5f];
+    let offs: Vec<(String, Box<dyn Fn(&S) -> bool>)> = std::iter::once(("0x55's W part".to_owned(), Box::new(w_part) as Box<dyn Fn(&S) -> bool>))
+        .chain(rooms.iter().map(|&r| (format!("{}", ow(r)), Box::new(in_room(ow(r))) as Box<dyn Fn(&S) -> bool>)))
+        .collect();
+    for (name, off) in &offs {
+        let (mut s, mut gc) = leg(true).unwrap();
+        walk_by_objective(&mut s, &mut gc, off, 20_000);
+        let at = gc.step().unwrap_or_else(|| panic!("{name}: no step"));
+        assert!(stretch.clips.contains(&at), "{name}: step {at}");
+        gc.set_clips_allowed(false);
+        let visits = walk_by_objective(&mut s, &mut gc, in_room(ow(0x3e)), 20_000);
+        let steps: Vec<Option<usize>> = visits.iter().map(|v| v.step).collect();
+        let want: Vec<Option<usize>> = (at..stretch.clips.end).chain(shared.iter().copied()).map(Some).collect();
+        assert_eq!(steps, want, "{name}: the clip way to 0x4f, then the shared steps ({visits:?})");
+        assert!(!gc.clips_allowed() && !gc.clips_held(), "{name}: off from the rejoin on");
+    }
+    // Before the wrap (0x55 on the dock side, its parts step): the plain way at once, E along row 5.
+    let (mut s, mut gc) = leg(true).unwrap();
+    walk_by_objective(&mut s, &mut gc, in_room(ow(0x55)), 20_000);
+    assert_eq!(gc.step(), Some(stretch.clips.start));
+    gc.set_clips_allowed(false);
+    let visits = walk_by_objective(&mut s, &mut gc, in_room(ow(0x4f)), 20_000);
+    let steps: Vec<Option<usize>> = visits.iter().map(|v| v.step).collect();
+    let want: Vec<Option<usize>> = stretch.plain.clone().chain([stretch.rejoin]).map(Some).collect();
+    assert_eq!(steps, want, "the plain way from 0x55's dock side");
 }
 
 /// lake-3e: off in 0x3d, after 0x3e's wrap exit.
