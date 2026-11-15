@@ -25,26 +25,39 @@ their owner's folder and have no entry of their own, so a job counts once.  One 
 ``started`` (registration), ``command``, ``cwd``, ``checkout`` (the root of the code that runs), ``branch``,
 ``commit``, ``log_dir`` and ``plan`` (None for a ``--no-log`` job), ``name``, ``kind``, ``status`` (``queued``, then
 ``running``, then the plan's final status), ``queued`` (ISO) and ``queued_ts`` (Unix seconds) when it joined the
-line, ``admitted`` (when it started running), ``no_wait`` and ``finished``.  The plan's ``finish`` marks it
-(``JobRecord.finish``); a job killed before that keeps its status with its process gone (``job_alive`` False).
-Entries of code from before the line say ``running`` from the start and have no queue fields: they count as
-running.  Each ``register`` deletes the entries that ended (or whose process is gone) more than ``PRUNE_SECONDS``
-ago.  A registry that can't be written is warned about once and otherwise ignored (no coordination: the job
-starts).  ``training-gui.py`` reads it (its own copy of ``jobs_dir`` and ``job_alive``).
+line, ``admitted`` / ``admitted_ts`` (when it started running), ``lane`` (``regular`` or ``express``), ``no_wait``,
+``work`` (``{unit: amount}``: training steps, evaluation episodes, chain route steps; ``work``), ``estimate``
+(seconds, ``estimate``), ``finished`` and ``ran`` (seconds from admitted to finished).  The plan's ``finish`` marks
+it (``JobRecord.finish``); a job killed before that keeps its status with its process gone (``job_alive`` False).
+Entries of code from before the line say ``running`` from the start and have no queue fields; entries of code from
+before the scored line have no ``estimate``.  Each ``register`` deletes the entries that ended (or whose process is
+gone) more than ``PRUNE_SECONDS`` ago.  A registry that can't be written is warned about once and otherwise ignored
+(no coordination: the job starts).  ``training-gui.py`` reads it (its own copy of ``jobs_dir``, ``job_alive`` and
+the line's order).
 
-The line.  No controller: the registry is the queue and every job decides for itself (``JobRecord.wait_turn``).  A
-job may start when fewer than ``max_jobs()`` (``$TRIFORCE_MAX_JOBS``, default ``DEFAULT_MAX_JOBS``; 0 = no limit)
-of the other live jobs on this host are ``running`` and no other live ``queued`` job joined the line before it
-(first come, first served; ties by file name): ``turn``.  Liveness comes from ``/proc`` (pid and process start
-time), never from a job reporting in, so a job that dies, running or queued, simply stops counting: nothing has to
-be cleaned up for the line to move.  The check and the change to ``running`` happen under an exclusive ``flock``
-on ``<jobs_dir>/.lock``, held only for that moment (the kernel drops it if the holder dies), so two jobs starting
-at the same instant for one free place can't both take it.  A job never waits for entries of its own process.  A
-waiting job polls every ``POLL_SECONDS`` and prints (stdout), when it first has to wait and then every
-``UPDATE_SECONDS``, ``triforce: NAME is paused until resources are available: ... It starts by itself; next update
-in 5 minutes.``, and when it starts ``triforce: NAME starts after waiting 12 minutes``.  SIGTERM or Ctrl-C while it
-waits raise KeyboardInterrupt (the plan ends ``interrupted``).  ``--no-wait`` (``begin_job``) or ``$TRIFORCE_NO_WAIT=1``
-starts the job at once; it still counts as running for the others.
+Estimates.  A job's estimate is its work at the rates the registry's history gives (``rates``: per unit the median
+over the ``RATE_HISTORY`` latest completed jobs that did some of it, their other work taken off at the other units'
+rates; ``DEFAULT_RATES`` without history).  It is allowed to be wrong (early stops, load); the history corrects it.
+
+The line.  No controller: the registry is the queue and every job decides for itself (``JobRecord.wait_turn``,
+``turn``).  Fast jobs drain first: the waiting jobs are ordered by their score, ``estimate - AGING x seconds
+waited`` (lowest first; ties by join time, then file name), so a short job goes before a long one, and a long one
+moves up as it waits, passing fresh short jobs once it has waited about twice its own estimate.  They take the free
+places in that order: up to ``max_jobs()`` (``$TRIFORCE_MAX_JOBS``, default ``DEFAULT_MAX_JOBS``; 0 = no limit)
+regular places, and ``EXPRESS_JOBS`` express place for a job estimated at most ``EXPRESS_SECONDS``, so a short job
+doesn't wait for the hour-long ones that hold the regular places.  While any live waiting job has no estimate (code
+from before), every job keeps the old rule (first come, first served, any running job counting against the limit),
+so old and new code agree on one order and can't wait for each other in a cycle; the score applies again once no
+such job waits.  Liveness comes from ``/proc`` (pid and process start time), never from a job reporting in, so a
+job that dies, running or queued, simply stops counting: nothing has to be cleaned up for the line to move.  The
+check and the change to ``running`` happen under an exclusive ``flock`` on ``<jobs_dir>/.lock``, held only for that
+moment (the kernel drops it if the holder dies), so two jobs starting at the same instant for one free place can't
+both take it.  A job never waits for entries of its own process.  A waiting job polls every ``POLL_SECONDS`` and
+prints (stdout), when it first has to wait and then every ``UPDATE_SECONDS``, ``triforce: NAME is paused until
+resources are available: estimated 40 minutes; 2 jobs are running (...); 1 job is ahead in line (...). It starts by
+itself; next update in 5 minutes.``, and when it starts ``triforce: NAME starts after waiting 12 minutes``.  SIGTERM
+or Ctrl-C while it waits raise KeyboardInterrupt (the plan ends ``interrupted``).  ``--no-wait`` (``begin_job``) or
+``$TRIFORCE_NO_WAIT=1`` starts the job at once in a regular place; it still counts as running for the others.
 """
 
 import fcntl
@@ -52,6 +65,7 @@ import json
 import os
 import signal
 import socket
+import statistics
 import subprocess
 import sys
 import threading
@@ -73,9 +87,21 @@ MAX_JOBS_ENV = 'TRIFORCE_MAX_JOBS'
 DEFAULT_MAX_JOBS = 2
 POLL_SECONDS = 5.0                   # how often a waiting job checks the line
 UPDATE_SECONDS = 300.0               # how often it says it still waits (stdout, queue.jsonl)
+AGING = 0.5                          # the line's score: estimate - AGING * seconds waited (lowest starts first)
+EXPRESS_SECONDS = 600.0              # a job estimated at most this long may run in the express place
+EXPRESS_JOBS = 1                     # express places beside the regular ones (0: none)
 NO_WAIT_HELP = (f"start at once instead of waiting while {DEFAULT_MAX_JOBS} other trainings or evaluations run "
                 f"(${MAX_JOBS_ENV}); the job still counts as running for the others (also ${NO_WAIT_ENV}=1)")
 _START = {'no_wait': False}          # begin(): this process's --no-wait
+
+# Work and estimates.  A job's ``work`` is how much it asked for in a few coarse units; its ``estimate`` (seconds) is
+# the sum of amount x rate, a rate (seconds per unit) learned from the registry's history (``rates``), else these
+# defaults, measured on the training machine (Nov 15) from the log folders of every checkout: 259 round runs (the
+# training's wall seconds per target step, early stops included: 0.00044), 801 batch family evaluations (wall per
+# episode: 0.046) and 168 batch chains (wall per run per route step played: 0.0026).
+UNITS = ('train_steps', 'eval_episodes', 'chain_steps')
+DEFAULT_RATES = {'train_steps': 0.00044, 'eval_episodes': 0.046, 'chain_steps': 0.0026}
+RATE_HISTORY = 20                    # finished jobs a rate is the median of
 
 
 def default_nice() -> int:
@@ -241,14 +267,83 @@ def _duration(seconds: float) -> str:
     return unit(hours, 'hour') + (f" {unit(minutes, 'minute')}" if minutes else '')
 
 
+def work(**amounts) -> dict:
+    """A job's work, ``{unit: amount}`` (``UNITS``), without the units it has none of."""
+    unknown = sorted(set(amounts) - set(UNITS))
+    if unknown:
+        raise ValueError(f"unknown work units {unknown} (known: {', '.join(UNITS)})")
+    return {unit: amount for unit, amount in amounts.items() if amount}
+
+
+def _finished_ts(job: dict) -> float:
+    try:
+        return datetime.fromisoformat(job['finished']).timestamp()
+    except (KeyError, TypeError, ValueError):
+        return 0.0
+
+
+def rates(history: list[dict]) -> dict:
+    """Seconds per unit of work, from the registry entries ``history`` (``read_jobs``): for each unit the median
+    over the ``RATE_HISTORY`` latest ``completed`` jobs that did some of it, each giving the seconds it ran
+    (``ran``: admitted to finished) less what its other work takes by the other units' rates (those of jobs that did
+    only that unit, else ``DEFAULT_RATES``), per amount of the unit.  A job that did only that unit gives its seconds
+    per amount as they are.  ``DEFAULT_RATES`` where nothing finished yet."""
+    done = sorted((job for job in history if job.get('status') == 'completed' and (job.get('ran') or 0) > 0
+                   and isinstance(job.get('work'), dict) and job['work']
+                   and set(job['work']) <= set(UNITS) and all((a or 0) > 0 for a in job['work'].values())),
+                  key=_finished_ts, reverse=True)
+
+    def median(values: list, default: float) -> float:
+        return statistics.median(values) if values else default
+    pure = {unit: median([job['ran'] / job['work'][unit] for job in done if set(job['work']) == {unit}]
+                         [:RATE_HISTORY], DEFAULT_RATES[unit]) for unit in UNITS}
+    result = {}
+    for unit in UNITS:
+        samples = []
+        for job in (job for job in done if unit in job['work']):
+            rest = sum(amount * pure[other] for other, amount in job['work'].items() if other != unit)
+            if job['ran'] > rest:
+                samples.append((job['ran'] - rest) / job['work'][unit])
+            if len(samples) == RATE_HISTORY:
+                break
+        result[unit] = median(samples, DEFAULT_RATES[unit])
+    return result
+
+
+def estimate(amounts: Optional[dict], unit_rates: Optional[dict] = None) -> float:
+    """Seconds ``amounts`` (a job's ``work``) are expected to take at ``unit_rates`` (default: ``rates`` of the
+    registry); 0 for a job that names no work."""
+    if not amounts:
+        return 0.0
+    unit_rates = rates(read_jobs()) if unit_rates is None else unit_rates
+    return float(sum(amount * unit_rates[unit] for unit, amount in amounts.items()))
+
+
+def score(job: dict, now: float) -> float:
+    """A waiting job's score in the line, lowest first: its estimate less ``AGING`` x the seconds it has waited."""
+    return (job.get('estimate') or 0.0) - AGING * max(0.0, now - (job.get('queued_ts') or now))
+
+
+def express_sized(job: dict) -> bool:
+    """Short enough for the express place."""
+    return job.get('estimate') is not None and job['estimate'] <= EXPRESS_SECONDS
+
+
 @dataclass
 class Turn:
-    """A job's turn (``turn``): whether it may start, the other live ``running`` jobs and the live ``queued`` jobs
-    ahead of it (registry entries, in line order), and the limit."""
+    """A job's turn (``turn``): whether it may start and in which place (``lane``: regular or express), the live
+    ``running`` jobs it waits for (in the scored line, a job too long for the express place doesn't wait for the job
+    there) and the live ``queued`` jobs ahead of it in the line (registry entries, in line order), the regular limit,
+    how the line was ordered (``mode``: score, or legacy first come first served), the job's own estimate and its
+    score now."""
     admitted: bool
     running: list = field(default_factory=list)
     ahead: list = field(default_factory=list)
     limit: int = DEFAULT_MAX_JOBS
+    mode: str = 'score'
+    lane: Optional[str] = None
+    estimate: Optional[float] = None
+    score: Optional[float] = None
 
     @property
     def place(self) -> int:
@@ -256,37 +351,77 @@ class Turn:
         return len(self.ahead) + 1
 
     def fields(self) -> dict:
-        """What it waits for, as the plan and ``queue.jsonl`` record it."""
+        """What it waits for, as the plan and ``queue.jsonl`` record it (a change of these is reported)."""
         return {'place': self.place, 'running': [label(job) for job in self.running],
-                'ahead': [label(job) for job in self.ahead], 'limit': self.limit}
+                'ahead': [label(job) for job in self.ahead], 'limit': self.limit, 'mode': self.mode}
+
+    def details(self) -> dict:
+        """``fields`` with the estimate, the score and the lane."""
+        return {**self.fields(), 'estimate': None if self.estimate is None else round(self.estimate, 1),
+                'score': None if self.score is None else round(self.score, 1), 'lane': self.lane}
 
     def reason(self) -> str:
-        """``2 jobs are running (A, B); 1 job is ahead in line (C)``."""
+        """``estimated 40 minutes; 2 jobs are running (A, B); 1 job is ahead in line (C)``."""
         def jobs(entries: list, verb: str) -> str:
             names = ', '.join(label(job) for job in entries)
             return f"{len(entries)} job{' is' if len(entries) == 1 else 's are'} {verb} ({names})"
-        parts = [jobs(self.running, 'running')] if self.running else []
+        parts = [f"estimated {_duration(self.estimate)}"] if self.estimate is not None else []
+        if self.running:
+            parts.append(jobs(self.running, 'running'))
         if self.ahead:
             parts.append(jobs(self.ahead, 'ahead in line'))
         return '; '.join(parts)
 
 
-def turn(job: dict, others: list[dict], limit: int, proc: Path = Path('/proc')) -> Turn:
-    """``job``'s turn among the registry entries ``others`` (``read_jobs``; ``job`` itself may be among them): it may
-    start when ``limit`` is 0, or fewer than ``limit`` of the other live jobs on this host are running and no other
-    live queued job joined the line before it.  Entries of another host and of ``job``'s own process are ignored."""
+def turn(job: dict, others: list[dict], limit: int, proc: Path = Path('/proc'), now: Optional[float] = None,
+         express: Optional[int] = None) -> Turn:
+    """``job``'s turn among the registry entries ``others`` (``read_jobs``; ``job`` itself may be among them).
+    Entries of another host, of ``job``'s own process and those not alive are ignored.
+
+    While any live queued entry has no ``estimate`` (code from before the scored line; ``job`` too), the line is
+    the old one exactly, so old and new code agree on one order: ``job`` may start when ``limit`` is 0, or fewer
+    than ``limit`` of the others run (any place) and no other queued job joined the line before it.
+
+    Otherwise the line is ordered by ``score`` (lowest first; ties by join time, then file name) and its jobs take
+    the free places in that order: an express-sized job the express place while one of ``express`` is free (running
+    jobs there count only against it), else a regular place while fewer than ``limit`` (0: no limit) run outside
+    it; a job that gets neither waits, and a later job may still get a place it can use.  ``job`` may start when it
+    gets a place.  ``now``: the time scores are taken at (default now); ``express``: the express places (default
+    ``EXPRESS_JOBS``)."""
     host, mine = socket.gethostname(), _order(job)
-    running, ahead = [], []
+    now = time.time() if now is None else now
+    express = EXPRESS_JOBS if express is None else express
+    running, waiting = [], []
     for other in others:
         if other.get('host') != host or other.get('pid') == job.get('pid') or job_alive(other, proc) is not True:
             continue
-        if other.get('status') == 'running':
-            running.append(other)
-        elif _order(other) < mine:
-            ahead.append(other)
+        (running if other.get('status') == 'running' else waiting).append(other)
     running.sort(key=_order)
-    ahead.sort(key=_order)
-    return Turn(limit <= 0 or (len(running) < limit and not ahead), running, ahead, limit)
+    mine_score = None if job.get('estimate') is None else score(job, now)
+    if job.get('estimate') is None or any(other.get('estimate') is None for other in waiting):
+        ahead = sorted((other for other in waiting if _order(other) < mine), key=_order)
+        admitted = limit <= 0 or (len(running) < limit and not ahead)
+        return Turn(admitted, running, ahead, limit, 'legacy', 'regular' if admitted else None, job.get('estimate'),
+                    mine_score)
+    line = sorted([*waiting, job], key=lambda entry: (score(entry, now), *_order(entry)))
+    regular = float('inf') if limit <= 0 else limit - sum(other.get('lane') != 'express' for other in running)
+    spare = express - sum(other.get('lane') == 'express' for other in running)
+    lane = None
+    for entry in line:
+        if limit > 0 and spare > 0 and express_sized(entry):
+            spare, lane = spare - 1, 'express'
+        elif regular > 0:
+            regular, lane = regular - 1, 'regular'
+        else:
+            lane = None
+        if entry is job:
+            break
+    ahead = line[:next(index for index, entry in enumerate(line) if entry is job)]
+    # what it waits for: the jobs holding places it could take (a job too long for the express place doesn't wait
+    # for the one there)
+    blocking = running if limit > 0 and express_sized(job) else [
+        other for other in running if other.get('lane') != 'express']
+    return Turn(lane is not None, blocking, ahead, limit, 'score', lane, job['estimate'], mine_score)
 
 
 @contextmanager
@@ -322,12 +457,14 @@ class JobRecord:
         _write(self.path, self.data)
 
     def check(self, proc: Path = Path('/proc')) -> Turn:
-        """This job's turn now (``turn``, ``max_jobs()``); when it may start, its entry turns ``running`` under the
-        same hold of the lock.  OSError when the registry can't be read or written."""
+        """This job's turn now (``turn``, ``max_jobs()``); when it may start, its entry turns ``running`` in its
+        place (``lane``) under the same hold of the lock.  OSError when the registry can't be read or written."""
         with _locked(self.path.parent):
-            current = turn({**self.data, 'path': str(self.path)}, read_jobs(self.path.parent), max_jobs(), proc)
+            now = time.time()
+            current = turn({**self.data, 'path': str(self.path)}, read_jobs(self.path.parent), max_jobs(), proc,
+                           now)
             if current.admitted:
-                self._save(status='running', admitted=_iso(time.time()))
+                self._save(status='running', admitted=_iso(now), admitted_ts=now, lane=current.lane)
         return current
 
     def wait_turn(self, report: Optional[Report] = None) -> float:
@@ -339,7 +476,8 @@ class JobRecord:
         began = time.monotonic()
         try:
             if no_wait():
-                self._save(status='running', admitted=_iso(time.time()), no_wait=True)
+                now = time.time()
+                self._save(status='running', admitted=_iso(now), admitted_ts=now, lane='regular', no_wait=True)
                 return 0.0
             with _interruptible():
                 shown, update = None, None
@@ -370,28 +508,35 @@ class JobRecord:
             return time.monotonic() - began
 
     def finish(self, status: str):
-        """Marks the job ended with ``status`` (the plan's final status)."""
+        """Marks the job ended with ``status`` (the plan's final status) and the seconds it ran (``ran``: from its
+        admission, the time ``rates`` learn from)."""
+        now = time.time()
+        admitted = self.data.get('admitted_ts')
         try:
-            self._save(status=status, finished=_iso(time.time()))
+            self._save(status=status, finished=_iso(now), ran=None if admitted is None else round(now - admitted, 1))
         except OSError as error:
             _warn(error)
 
 
-def register(log_dir, plan, name: str, kind: str, directory: Optional[Path] = None) -> Optional[JobRecord]:
-    """Records a job (this process, its log folder and plan: None for a job without one) in the registry as
-    ``queued``, joining the line now, and prunes old entries; None when the registry can't be written (warned
-    once).  ``JobRecord.wait_turn`` then waits for its turn."""
+def register(log_dir, plan, name: str, kind: str, directory: Optional[Path] = None,
+             amounts: Optional[dict] = None) -> Optional[JobRecord]:
+    """Records a job (this process, its log folder and plan: None for a job without one, its ``work`` ``amounts``
+    and the ``estimate`` of them by the registry's ``rates``) in the registry as ``queued``, joining the line now,
+    and prunes old entries; None when the registry can't be written (warned once).  ``JobRecord.wait_turn`` then
+    waits for its turn."""
     directory = jobs_dir() if directory is None else Path(directory)
     pid, now = os.getpid(), time.time()
     started = process_start(pid)
     log_dir = None if log_dir is None else Path(log_dir).resolve()
     safe = ''.join(c if c.isalnum() or c in '-_.' else '-' for c in (name if log_dir is None else log_dir.name))
+    amounts = dict(amounts or {})
     data = {'schema': JOB_SCHEMA, 'host': socket.gethostname(), 'pid': pid, 'pid_start': started,
             'started': _iso(now), 'command': [sys.executable, *sys.argv], 'cwd': os.getcwd(), **checkout(),
             'log_dir': None if log_dir is None else str(log_dir),
             'plan': None if plan is None else str(Path(plan).resolve()), 'name': name, 'kind': kind,
-            'status': 'queued', 'queued': None, 'queued_ts': None, 'admitted': None, 'no_wait': False,
-            'finished': None}
+            'status': 'queued', 'queued': None, 'queued_ts': None, 'admitted': None, 'admitted_ts': None,
+            'lane': None, 'no_wait': False, 'work': amounts,
+            'estimate': round(estimate(amounts, rates(read_jobs(directory))), 1), 'finished': None, 'ran': None}
     path = directory / f"{data['host']}-{pid}-{int(started or now)}-{safe}.json"
     try:
         directory.mkdir(parents=True, exist_ok=True)

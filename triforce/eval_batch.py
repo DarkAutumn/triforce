@@ -69,7 +69,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
-from .jobs import add_job_arguments, begin_job, child_env
+from .jobs import add_job_arguments, begin_job, child_env, work
 
 ROOT = Path(__file__).resolve().parents[1]
 KIND = 'eval-batch'
@@ -597,6 +597,24 @@ def _fits(entry: Entry, running: list[Entry], cores: int, jobs: int) -> bool:
     return len(running) < jobs and sum(other.parallel for other in running) + entry.parallel <= cores
 
 
+def batch_work(entries: list[Entry]) -> dict:
+    """The batch's work (``triforce.jobs``): the sum of its entries' that an earlier run hasn't measured yet (their
+    ``resume``): a chain's route steps (``runner.chain_steps``), an evaluation's episodes; a report counts nothing."""
+    # pylint: disable=import-outside-toplevel
+    from ._native import DEFAULT_ROUTE
+    from .runner import chain_steps
+    chains = episodes = 0
+    for entry in entries:
+        if entry.resume is not None and entry.resume() is not None:
+            continue
+        if entry.kind == 'chain':
+            chains += chain_steps(entry.fields.get('route') or DEFAULT_ROUTE, entry.total or 0,
+                                  entry.fields.get('start_from'), entry.fields.get('stop_at'))
+        elif entry.kind == 'eval':
+            episodes += entry.total or 0
+    return work(chain_steps=chains, eval_episodes=episodes)
+
+
 def run_batch(name: str, entries: list[Entry], *, logs_dir=None, cores: int = 1, jobs: int = 1, nice: int = 0,
               command: Optional[list] = None, say: Callable[[str], None] = print, extra: Optional[dict] = None) -> int:
     """Runs ``entries`` under one log folder (module doc); returns 0 (all ok), 1 (any failed) or 130 (stopped)."""
@@ -619,7 +637,7 @@ def run_batch(name: str, entries: list[Entry], *, logs_dir=None, cores: int = 1,
         plan = TrainingPlan(log_dir, name, KIND, [entry.plan_entry(stream.name, log, log_dir)
                                                   for entry, stream, log in zip(entries, streams, logs)],
                             command=command, nice=nice, cores=cores, jobs=jobs, events='round.jsonl',
-                            log='round.log', **(extra or {}))
+                            log='round.log', work=batch_work(entries), **(extra or {}))
     except KeyboardInterrupt:       # stopped while it waited: the plan ended interrupted
         tell(f"[batch] {name}: stopped before it started")
         console.close()

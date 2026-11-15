@@ -359,20 +359,24 @@ test them, keep what helps, and log everything.
 - **Training and evaluation jobs lower their own priority and wait their turn: you do nothing** (Lee, Nov 13 and
   Nov 15). `scripts/train_round.py`, `triforce train`, `triforce evaluate`, `triforce eval-chain` and `triforce
   eval-batch` set their own CPU priority to nice 15 at start (never raised; recorded in the plan and `run.json`;
-  what they start inherits it), and at most two of them run at once on the machine: a third waits until one ends,
-  then they start first come, first served (`triforce/jobs.py`; two at once is a bit faster than one, more is not:
-  load averages of 120). A job that has to wait prints `triforce: NAME is paused until resources are available: 2
-  jobs are running (A, B). It starts by itself; next update in 5 minutes.`, repeats it every 5 minutes and prints
-  `triforce: NAME starts after waiting N minutes` when it starts; the training GUI lists it as waiting with its
-  place in line. **Seeing that line, wait** (check back as for any long job): don't kill it or the jobs it waits
-  for, don't stagger or nice jobs by hand, don't restart it with `--no-wait`. A job that dies, running or waiting,
-  stops counting by itself (liveness comes from `/proc`, nothing has to report in). The opt-outs exist for the
-  owner: `--nice N` (0 leaves the priority alone; `$TRIFORCE_NICE` changes the default), `--no-wait` (start now;
-  still counts as running for the others; `$TRIFORCE_NO_WAIT=1` for a wrapper), `$TRIFORCE_MAX_JOBS` (default 2, 0
-  = no limit). A round or batch waits once as one job; its own trainings, evaluations and chains don't wait again.
-  Play, replay and build tools (`play-zelda.py`, `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf
-  replay`, explore, entry_states) keep normal priority and never wait: they are interactive, short, or build data
-  that a job waits on. I/O priority is left alone.
+  what they start inherits it), and at most two of them run at once on the machine, plus one short job (estimated
+  at most 10 minutes) in an express place beside them. The others wait, the shortest first: each job estimates its
+  own run time from what it will do (training steps, evaluation episodes, chain route steps) and how long such work
+  took lately (the registry's finished jobs), and the line is ordered by estimate minus half the time waited, so a
+  long job moves up as it waits and is never starved (`triforce/jobs.py`; two at once is a bit faster than one,
+  more is not: load averages of 120). A job that has to wait prints `triforce: NAME is paused until resources are
+  available: estimated 40 minutes; 2 jobs are running (A, B); 1 job is ahead in line (C). It starts by itself; next
+  update in 5 minutes.`, repeats it every 5 minutes and prints `triforce: NAME starts after waiting N minutes` when
+  it starts; the training GUI lists it as waiting in the order the line will drain, with its estimate. **Seeing
+  that line, wait** (check back as for any long job; a long job can wait for hours behind short ones, that is by
+  design): don't kill it or the jobs it waits for, don't stagger, split or nice jobs by hand, don't restart it with
+  `--no-wait`. A job that dies, running or waiting, stops counting by itself (liveness comes from `/proc`, nothing
+  has to report in). The opt-outs exist for the owner: `--nice N` (0 leaves the priority alone; `$TRIFORCE_NICE`
+  changes the default), `--no-wait` (start now; still counts as running for the others; `$TRIFORCE_NO_WAIT=1` for a
+  wrapper), `$TRIFORCE_MAX_JOBS` (regular places, default 2, 0 = no limit). A round or batch waits once as one job;
+  its own trainings, evaluations and chains don't wait again. Play, replay and build tools (`play-zelda.py`,
+  `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority
+  and never wait: they are interactive, short, or build data that a job waits on. I/O priority is left alone.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:

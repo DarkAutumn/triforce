@@ -204,23 +204,29 @@ class EventLog:
 class TrainingPlan:
     """``training.json``: what this log folder is running, in order, and the status of each run.  Every plan names
     the checkout whose code runs it (``checkout``, ``branch``, ``commit``) and is recorded in the machine's job
-    registry (``jobs.register``) until ``finish`` marks it there too.  Creating a plan waits for the job's turn
-    (``jobs.JobRecord.wait_turn``: at most ``jobs.max_jobs()`` jobs run at once): while it waits the plan says
-    ``queued`` with what it waits for (``queue``) and ``queue.jsonl`` gets ``queued``, ``waiting`` and ``admitted``;
-    a job that starts at once never shows as queued and writes no queue file.  Interrupted while it waits (Ctrl-C,
-    SIGTERM), the plan ends ``interrupted`` and KeyboardInterrupt goes on."""
+    registry (``jobs.register``) until ``finish`` marks it there too.  ``work`` (``jobs.work``: what the job will
+    do) gives the plan and the entry its ``estimate`` (seconds, ``jobs.estimate``).  Creating a plan waits for the
+    job's turn (``jobs.JobRecord.wait_turn``: the line ``jobs.turn`` orders): while it waits the plan says ``queued``
+    with what it waits for (``queue``) and ``queue.jsonl`` gets ``queued``, ``waiting`` and ``admitted``; a job that
+    starts at once never shows as queued and writes no queue file.  Once it runs, ``lane`` says which place it took
+    (regular or express).  Interrupted while it waits (Ctrl-C, SIGTERM), the plan ends ``interrupted`` and
+    KeyboardInterrupt goes on."""
 
-    def __init__(self, directory: str | os.PathLike, name: str, kind: str, runs: list[dict], **extra):
+    def __init__(self, directory: str | os.PathLike, name: str, kind: str, runs: list[dict], *,
+                 work: Optional[dict] = None, **extra):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / PLAN_FILE
         self.data = {'schema': SCHEMA_VERSION, 'name': name, 'kind': kind, 'log_dir': str(self.directory),
                      'status': 'running', 'created': _now()['time'], 'updated': None, 'finished': None,
                      'host': socket.gethostname(), 'pid': os.getpid(), **jobs.checkout(), **extra,
+                     'work': dict(work or {}), 'estimate': None, 'lane': None,
                      'runs': [{'index': i, 'status': 'pending', 'started': None, 'finished': None, **run}
                               for i, run in enumerate(runs)]}
         self._lock = threading.RLock()
-        self.job = jobs.register(self.directory, self.path, name, kind)
+        self.job = jobs.register(self.directory, self.path, name, kind, amounts=work)
+        self.data['estimate'] = (self.job.data['estimate'] if self.job is not None
+                                 else round(jobs.estimate(work, jobs.DEFAULT_RATES), 1))
         if self.job is not None:
             try:
                 self.job.wait_turn(self._report_turn)
@@ -230,22 +236,26 @@ class TrainingPlan:
                         key: self.data['queue'][key] for key in ('place', 'running', 'ahead', 'limit')})
                 self.finish('interrupted')
                 raise
+            self.data['lane'] = self.job.data.get('lane')
         self.data['status'] = 'running'         # also when the registry failed mid-wait (jobs: the job starts)
         self.save()
 
     def _report_turn(self, event: Optional[str], turn: jobs.Turn, waited: float):
-        """``jobs.Report`` of the wait: the plan says ``queued`` and what it waits for (``queue``), then ``running``
-        once admitted; ``event`` goes into ``queue.jsonl``."""
+        """``jobs.Report`` of the wait: the plan says ``queued`` and what it waits for (``queue``: also its work,
+        estimate, score and, once admitted, its lane), then ``running`` once admitted; ``event`` goes into
+        ``queue.jsonl``."""
+        details = {**turn.details(), 'work': self.data['work']}
         with self._lock:
             queue = self.data.setdefault('queue', {'queued': self.job.data['queued'], 'admitted': None,
                                                    'waited': None})
-            queue.update(turn.fields(), checked=_now()['time'])
+            queue.update(details, checked=_now()['time'])
             if event == 'admitted':
                 queue.update(admitted=self.job.data['admitted'], waited=round(waited, 1))
+                self.data['lane'] = turn.lane
             self.data['status'] = 'running' if event == 'admitted' else 'queued'
             self.save()
         if event is not None:
-            EventLog(self.directory / QUEUE_FILE).emit(event, **turn.fields(),
+            EventLog(self.directory / QUEUE_FILE).emit(event, **details,
                                                        **({'waited': round(waited, 1)} if event == 'admitted' else {}))
 
     def save(self):
@@ -282,14 +292,16 @@ def has_plan(events_path) -> bool:
 
 
 @contextmanager
-def logged_job(what: str, kind: str, runs: list[dict], root=None, *, directory=None, log: bool = True, **extra):
+def logged_job(what: str, kind: str, runs: list[dict], root=None, *, directory=None, log: bool = True,
+               work: Optional[dict] = None, **extra):
     """A log folder (``new_log_dir(what, root)``, or ``directory``: the folder of an ``--events`` stream that has
     no plan yet) with its ``training.json`` plan for a job outside a training round, e.g. a standalone evaluation
     (``kind`` 'eval') or eval-chain ('chain'), so the training GUI shows it while it runs.  Yields the
     ``TrainingPlan`` once the job's turn has come (``TrainingPlan``); the plan finishes ``completed``,
     ``interrupted`` (Ctrl-C, or SIGTERM, which the block turns into KeyboardInterrupt when it runs in the main
-    thread) or ``failed`` with the block.  ``log=False`` (``--no-log``): no folder and no plan (yields None), but the
-    job still waits its turn and counts in the job registry under ``what``."""
+    thread) or ``failed`` with the block.  ``work``: the plan's (``TrainingPlan``).  ``log=False`` (``--no-log``): no
+    folder and no plan (yields None), but the job still waits its turn and counts in the job registry under
+    ``what``."""
     installed = threading.current_thread() is threading.main_thread()
     if installed:
         def interrupt(signum, _frame):
@@ -300,10 +312,10 @@ def logged_job(what: str, kind: str, runs: list[dict], root=None, *, directory=N
             if directory is not None:
                 Path(directory).mkdir(parents=True, exist_ok=True)
             plan = TrainingPlan(new_log_dir(what, root) if directory is None else directory, what, kind, runs,
-                                **extra)
+                                work=work, **extra)
             finish = plan.finish
         else:
-            plan, job = None, jobs.register(None, None, what, kind)
+            plan, job = None, jobs.register(None, None, what, kind, amounts=work)
 
             def finish(status: str, **_fields):
                 if job is not None:
