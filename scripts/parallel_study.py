@@ -53,7 +53,10 @@ def train(run: Path, specialist: str, parallel: int, seed: int, extra: list[str]
         code = subprocess.call(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
     if code != 0:
         raise SystemExit(f'{run}: triforce.train exited {code}')
-    return time.monotonic() - start
+    # Minus the time the run waited for its turn (triforce.jobs: queue.jsonl's 'admitted' when it had to wait).
+    waited = sum(e.get('waited', 0) for f in glob.glob(f'{run}/logs/*/queue.jsonl') for e in map(json.loads, open(f))
+                 if e.get('event') == 'admitted')
+    return time.monotonic() - start - waited
 
 
 def run_throughput(out: Path, args) -> None:

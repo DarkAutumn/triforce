@@ -107,7 +107,7 @@ from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
-from .jobs import add_nice_argument, lower_priority
+from .jobs import add_job_arguments, begin_job
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
@@ -331,7 +331,7 @@ def parse_args(argv=None):
                              "owns the stream and writes its final 'end', else this run writes a plan beside it; "
                              "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
     parser.add_argument('--logs-dir', default=None, help=f"default ${LOGS_DIR_ENV} or <repo>/logs")
-    add_nice_argument(parser)
+    add_job_arguments(parser)
     parser.add_argument('--allow-incompatible-models', action='store_true',
                         help="--load / warm-start from a model whose version differs from this code's in its first "
                              "three numbers")
@@ -360,11 +360,17 @@ def run_status(run_dir) -> Optional[str]:
 
 
 def cli(argv=None) -> int:
-    """``python -m triforce.train`` / ``triforce train``: lowers its priority (``--nice``, ``triforce.jobs``), trains,
-    then exits 0, or ``EXIT_INTERRUPTED`` if the run was interrupted (its checkpoint and summary are still saved)."""
+    """``python -m triforce.train`` / ``triforce train``: lowers its priority and waits its turn (``--nice``,
+    ``--no-wait``, ``triforce.jobs``), trains, then exits 0, or ``EXIT_INTERRUPTED`` if the run was interrupted (its
+    checkpoint and summary are still saved) or stopped while it waited (nothing trained)."""
     interrupt_on_sigterm()
-    lower_priority(parse_args(argv).nice)
-    return EXIT_INTERRUPTED if run_status(main(argv)) == 'interrupted' else 0
+    begin_job(parse_args(argv))
+    try:
+        run_dir = main(argv)
+    except KeyboardInterrupt:
+        print("[train] stopped before training started", flush=True)
+        return EXIT_INTERRUPTED
+    return EXIT_INTERRUPTED if run_status(run_dir) == 'interrupted' else 0
 
 
 def resolve_warm_start(value: str, root) -> Path:
@@ -498,8 +504,8 @@ def main(argv=None) -> Path:
     root = registry.models_root(args.models_dir)
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(specialist, run_id, root)
+    events, plan = open_events(args, specialist, run_id, out_dir, argv)     # waits its turn (triforce.jobs)
     out_dir.mkdir(parents=True, exist_ok=True)
-    events, plan = open_events(args, specialist, run_id, out_dir, argv)
     try:
         summary = _train(args, specialist, run_id, root, out_dir, events)
     except Exception as error:

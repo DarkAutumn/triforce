@@ -2214,3 +2214,18 @@ Hills). Decided by the agent building it (the owner away):
   kinds, 1.4.2.0), so COMPAT and REV are 0. The promoted runs (stamped 1.4.2.0, the same observation, action space
   and network) are stamped 1.5.0.0 by `triforce stamp --force` (a different stamp is only overwritten with
   `--force`); other 1.4.2 runs need the same or `--allow-incompatible-models`.
+
+## 2026-11-15 — Trainings and evaluations wait their turn, two at a time (Lee)
+
+- **At most two trainings or evaluations run at once on the machine** (`$TRIFORCE_MAX_JOBS`, default 2): two side by
+  side is a bit more efficient than one, more are not (a load average of 120 when they piled up). A third waits,
+  first come first served, and says so (`triforce: NAME is paused until resources are available: ... It starts by
+  itself; next update in 5 minutes.`); the training GUI lists it as waiting with its place in line.
+- **No controller:** the per-user job registry (`triforce/jobs.py`) is the queue; each job checks its turn under a
+  `flock` on the registry, and liveness comes from `/proc` (pid and process start time), never from a job
+  reporting in, so a crashed job stops counting by itself. The GUI only reads.
+- **Nothing for the caller to do:** every training and evaluation command waits its turn and lowers its own
+  priority (nice 15) by default; a round or batch waits once as one job, its children don't. The only knobs are
+  the opt-outs: `--no-wait` (start now, still counted; `$TRIFORCE_NO_WAIT=1`) and `--nice N`. `--no-log` jobs wait
+  and count too. Play, replay and build tools never wait.
+- Jobs already running when this came in are counted (their entries say `running`) but didn't wait themselves.
