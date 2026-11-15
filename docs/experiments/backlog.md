@@ -71,6 +71,14 @@ Dungeon 2), judged by chains, since single rooms cannot see it; (c) option 5 for
 gathering was lost. Items 2 (Gleeok at low health), 4 (the plain way's heart cost), 7 and 8 below are cases of
 this one.
 
+### 1b. Manhandla (round 25, `r25-manhandla`)
+
+Done: his dropped bombs are taken (`drops_first`, `left_drop_penalty`, the drop forced in training), and the fight is
+won more (r75-mh-fight; docs/routes/d3.md "Manhandla's drop"). Open: the fight's gain is the bomb range 2-8 and a
+second million steps together (no control arm); the new model kills with the sword more often, which arms no bomb
+drop, so Link enters Dungeon 4 with 0.5 bombs fewer and its walls take more cheated bombs; at 1 heart the fight is
+still lost half the time.
+
 ### 2. The way back after the Olive Garden at low hearts (round 24)
 
 Nothing refills Link between the Olive Garden and Digdogger. In the Dungeon 5 segment (`r74-1k`, from `5_76s_0`
