@@ -344,8 +344,9 @@ the direction; the standing invitation is to come up with ideas, test them, keep
   on the leg) follow the run-time switch: `--clips
   on|off` measures each way (`--clips-off-from ROOM|step:N` flips it mid-run). `--from`/`--stop-at` are checked
   before any run
-  (`--stop-at` must be a route room after the start step, or `step:N`, a later route step, reached only by the
-  route's own exit: `step:24` is back on the overworld with Dungeon 2's triforce; exit 2 otherwise). Step numbers
+  (`--stop-at` must be a route room after the start step on the way the run plays, or `step:N`, a later route step,
+  reached only by the route's own exit: `step:24` is back on the overworld with Dungeon 2's triforce; with clips on
+  0:0x59, a room of the coast plain way only, is refused; exit 2 otherwise). Step numbers
   move whenever the route changes: list them (with each step's `way` and `stretch`) with `.venv/bin/python -c
   "from triforce import _native; [print(s) for s in _native.route_steps('d2first')]"` rather than trusting a
   number in a doc. `--clips on|off` starts every run with the run-time clips switch on or off (off: the plain way

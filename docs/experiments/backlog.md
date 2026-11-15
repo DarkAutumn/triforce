@@ -9,8 +9,8 @@ round docs still call it that.)
   curricula, trainings. (Done at the integration: `items: {recorder: true}` on boss-digdogger, the recorder that
   splits him pays `reward-recorder-split` once, the small one's hits pay `reward-boss-hit`: $18 is in BOSS_KINDS.)
   The explorer doesn't clear the Olive Garden (132,737 env steps, 3 attempts): its curriculum needs another way in.
-  `max_steps` of the new families (1500/600/1000) are guesses until their explored paths are measured. The cheat
-  gives a bomb in 0x66/0x65 on the way back too (`requires_bombs` is per room), unused there.
+  `max_steps` of the new families (1500/600/1000) are guesses until their explored paths are measured. (Fixed at
+  the route's merge: no cheated bomb in 0x66/0x65 on the way back, their walls are open: `cheats::bomb_need`.)
 - [x] **Act modes (round 23, done Nov 14):** one act mode, `temperature:0.5+relax:16`, for play (the owner's choice),
   evaluation, chains and training (the lead's); `act` files, `eval.json`, `PLAY_ACT`, `DEFAULT_ACT` and the
   training/chain defaults applied (round23.md §10-§11; full route clips on | off 28.7 | 15.3%). Open from it:
@@ -168,10 +168,12 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   overworld ladder, 0x55's wrap onto its W part, 0x1f's wall gap, 0x5f's heart as a room objective, the switch held
   on 0x5f's water, the scouting route `d5leg`; its clip way played end to end by the objective
   (`crates/zelda/tests/d5_leg.rs`, 8,739 frames) and built by `entry_states build` (90 states, nothing helped).
-- [ ] **The leg's open items:** its start states installed under the names rule (r24-names: `0_2ds` collides),
-  curricula and trainings for the 14 new family rooms; the plain ways in a full route (with the Lost Hills);
-  0x5f's heart objective appears a few frames into play, so its first decision targets `treasure_tile`; the walker
-  in `d5_leg.rs` lines Link up on cave mouths by single frames (MOVE is 4 or 8 frames), a policy has to learn it.
+- [ ] **The leg's open items:** its start states (in `d2first` since the route's merge, round 24 integration: the
+  audit lists the 216 MISSING names of steps 134-208 until they are built; commands in docs/routes/d5-leg.md),
+  curricula and trainings for the new family rooms; 0x5f's heart objective appears a few frames into play, so its
+  first decision targets `treasure_tile`; the walker in `d5_leg.rs` lines Link up on cave mouths by single frames
+  (MOVE is 4 or 8 frames), a policy has to learn it. Done: the plain ways in the full route (with the Lost Hills),
+  the switch off held past 0x55's river to the rejoin (each clip-way room tested).
 - [x] **Leaving a maze by its sequence** in a route (round 24, slice r24-maze; decisions 2026-11-14 "A maze loop is a
   room transition"): `exit: maze`, `zelda::MazeLoop` everywhere a run is followed, the scouting route `d5maze`.
 - [ ] **The maze in training:** 0x1b from E needs played states of the leg (the plain mountain way), a curriculum
