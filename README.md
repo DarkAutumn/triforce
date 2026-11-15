@@ -1,9 +1,9 @@
 # Triforce: a deep learning agent for The Legend of Zelda (NES)
 
 Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES. The agents play from the
-start of the game through Dungeon 2, go get the white sword, clear Dungeon 1 and Dungeon 3, and finish on the
-triforce piece at the end of Dungeon 4, with a few detours along the way (a heart container, the bow, the raft, the
-ladder).
+start of the game through Dungeon 2, go get the white sword, clear Dungeons 1, 3 and 4, cross the overworld to the
+mountain (two heart containers, 100 rupees, the Lost Hills), and finish on the triforce piece at the end of Dungeon
+5, with a few detours along the way (heart containers, the bow, the raft, the ladder, the recorder).
 
 ![Six runs by the trained models, played back with play-zelda.py](docs/images/play-zelda.png)
 
@@ -11,7 +11,7 @@ ladder).
 
 - **No pixels.** The networks never see the screen. Every observation is built from the game's RAM: Link, the
   enemies, projectiles and items, the room's tiles, and a pointer to the current objective.
-- **One model per kind of room.** There are 24 specialist PPO models, grouped by the enemies they face (Goriyas,
+- **One model per kind of room.** There are 28 specialist PPO models, grouped by the enemies they face (Goriyas,
   Darknuts, the Moldorm, each boss, and so on). A runner follows a fixed route through the game and hands each
   room to its specialist.
 - **Actions that mean something.** Each action is a short move (eight directions), a sword swing, an item, or a
@@ -25,19 +25,22 @@ ladder).
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (round 22's models, round 23's code and act
-mode `temperature:0.5+relax:16`, `docs/experiments/round23.md` §11), with the speedrunners' clips allowed and with
-them switched off for the whole run:
+Out of 1,000 runs from the start of the game with the current team (round 24's models, act mode
+`temperature:0.5+relax:16`, `docs/experiments/round24.md` §10), with the speedrunners' clips allowed and with them
+switched off for the whole run:
 
 | Link reaches | Clips on | Clips off |
 |---|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 81% | 67% |
-| Dungeon 3 | 64% | 48% |
-| The Dungeon 3 triforce | 34% | 23% |
-| The Dungeon 4 triforce (the end of the route) | 29% | 15% |
+| Dungeon 1 (after Dungeon 2 and the white sword) | 81% | 65% |
+| Dungeon 3 | 67% | 47% |
+| The Dungeon 3 triforce | 42% | 28% |
+| The Dungeon 4 triforce | 33% | 19% |
+| Dungeon 5 | 33% | 18% |
+| The Dungeon 5 triforce (the end of the route) | 5% | 0.3% |
 
-Round 22's measurement of the same models (each acting by its own sample or argmax mode, before 3:0x5b's route fix)
-gave 14% and 5%.
+Dungeon 5 is the hard part: of 1,000 runs started at its entrance, 35% reach its triforce with clips on and 22%
+without with this team, and 46% and 34% with the Darknut model promoted after it. Round 23's team, on the route
+that ended in Dungeon 4, reached the D4 triforce in 29% and 15%.
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.

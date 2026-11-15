@@ -2166,3 +2166,51 @@ Hills). Decided by the agent building it (the owner away):
 - **ow-lynel `clips: {enabled: true, off_share: 0.5}`** written out: its leg rooms (0x50, 0x60) are on the clip way
   only, so their states fix the switch on; 0x0a has no CLIP to mask. ow-zora keeps `off_share: 0.75` (0x55 from N,
   0x3f, 0x4f draw the switch; 0x5f has a state per way).
+
+## 2026-11-15 — Round 24's training and promotions (round 24, `r74`)
+
+- **Continue, don't retrain:** every family that gained rooms (darknut, zol, equipment-room and the eight overworld
+  families of the leg) continued its converted promoted run (`--load`, `--stop-success 0.99 --sil-coeff 0.1`), 4M
+  steps a run at most; the four new families (gibdo, pols-voice, boss-digdogger, dodongo-crossing) from scratch. None
+  failed to learn its new rooms, so none was restarted from scratch.
+- **Three streams of `--parallel 6`** (18 of the 20 threads, evaluations beside them) instead of one round of 16:
+  darknut alone needed most of the night, and the other families could finish beside it.
+- **darknut five times, with staged curriculum tracks added between runs:** the explorer cleared the Olive Garden
+  with 3 Darknuts alive (3 of 3 states), 4 (3 of 3) and 5 (1 of 3), never with 6; each solved track went into
+  `trajectories/darknut` at the next run's start. The Garden rose 39 → 73% with no bombs held, 59 → 87% with 8.
+- **Promoted by the standing rule** (success, then hearts, over the old rooms on today's states and over the new
+  ones; act `temperature:0.5+relax:16`): 15 families at 02:30, every continued family equal or better on its old
+  rooms but ow-moblin `0_3ds` with clips off (94.3% against 97.7%, 1.4 standard errors), accepted for the leg's
+  rooms it gained. The chains were measured on this team (darknut r74-darknut4).
+- **Not used:** `ow-tektite/r74-leg` (a duplicate trained by a stream stopped by hand) and the interrupted
+  `ow-leever/r74-leg`.
+
+## 2026-11-15 — darknut r74-darknut5 promoted on the Olive Garden's hearts (round 24)
+
+- **What:** r74-darknut5 (r74-darknut4 + 4M) replaces r74-darknut4 after the 1000-run chains were measured.
+- **Why:** in the Olive Garden by bombs held (0 / 2 / 4 / 8, 300 episodes each, 1200 pooled) it wins 80.9 ± 1.1%
+  against 78.6 ± 1.2% (within noise) and loses 2.92 ± 0.08 hearts a fight against 3.54 ± 0.08 (about 5 standard
+  errors); its canonical evaluation is no worse anywhere (97.3% −0.55 against 97.0% −0.62; old rooms 99.5% −0.20
+  against −0.21; 0x64's plain way 69.7% against 67.0%). The rule ranks by success, then hearts, and the hearts Link
+  carries out of the Garden are what the way back lacks (round24.md §11).
+- The Dungeon 5 segment was measured again under it, clips on and off (tag `r74b-1k`, round24.md §9).
+
+## 2026-11-15 — The played states after the Olive Garden (round 24)
+
+- **What:** the 48 `fight_skipped` states (`5_04cave` to `5_14s`, chains 0-2) are replaced by played ones. Chain
+  runs from `5_76s_<c>` (40 a chain, `--stop-at step:194 --harvest`, darknut r74-darknut3) gave 99 harvested
+  `5_04cave` states; the source of each chain is a run whose hearts out of the Garden were about the chain's median
+  (5 / 6 / 7 hearts: seeds 2, 11, 17; chain 2's median run, seed 10, failed the build at 0x66 W→N's fight), and the
+  rest of each chain was built from it (`entry_states build --start-step 193 --chains c`).
+- **Hearts refilled** in the three `5_04cave_<c>` the way every entry state is written (`write_entry_state`:
+  `refill_hearts`, `make_snapshot_fresh`, the load check): entry states are full-health and training draws the hp;
+  the manifest's `health` keeps the walk's own value, as in every built entry.
+- Installed with nothing running; the manifest entries are the played builds' (no `fight_skipped` left); audit 613
+  states, 0 problems. The curricula of the seven families whose states changed were explored again.
+
+## 2026-11-15 — 1.5.0.0 (round 24)
+
+- MINOR 5: the route completes five dungeons. The version carries round 24's model-incompatible change (the action
+  kinds, 1.4.2.0), so COMPAT and REV are 0. The promoted runs (stamped 1.4.2.0, the same observation, action space
+  and network) are stamped 1.5.0.0 by `triforce stamp --force` (a different stamp is only overwritten with
+  `--force`); other 1.4.2 runs need the same or `--allow-incompatible-models`.

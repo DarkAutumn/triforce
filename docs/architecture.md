@@ -1411,7 +1411,9 @@ movie `corpus/movies/power_on_to_start.tfmovie` at its first controllable frame;
 [--start-step N --source STATE] [--attempts N] [--skip-fights L:0xRR:ENTRY,...]` follows the route (round 24:
 `--skip-fights` crosses those steps' rooms with every monster put into its death sparkle, the game's own kill, and
 marks the states after it `fight_skipped` in the manifest: placeholders for a fight beyond the explorer, to be
-replaced by harvested ones; a step's skipped key is not required and a refused treasure taken fails the crossing);
+replaced by harvested ones (round 24's 48 after the Olive Garden were: `eval-chain --harvest` sources, `build
+--start-step` from them, the source's hearts refilled by `write_entry_state`); a step's skipped key is not required
+and a refused treasure taken fails the crossing);
 `path --source STATE --rooms 1:0x33,... [--chain C]
 [--route R]` enters off-route rooms in order. `start`, `build` and `path` write into a staging directory (`--out`,
 default `target/entry-states/<yymmdd-HHMMSS>`), merging each file's manifest entry into `<out>/entry_states.json`

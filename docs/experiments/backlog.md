@@ -3,30 +3,14 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
-## Next projects (Lee, Nov 11-12; ordered Nov 14 by what the r72 chains lose): top of the list
+## Next projects (the owner, Nov 11-12; ordered Nov 15 after round 24): top of the list
 
-- [x] **Dungeon 5, second pass (round 24, `r24-d5b`; docs/routes/d5.md "States", "Staged starts and curricula"):**
-  69 states (chains 0-2) from the leg's entrance, curricula for every D5 family, the Olive Garden staged
-  (`room_kills`) and explored with 1-2 Darknuts; `max_steps` from the tracks. Open from it:
-  - [ ] **Replace the 48 `fight_skipped` states** (5_04cave on; the Olive Garden's fight skipped by the game's death
-    sparkle) by states harvested from chain runs once a model clears the Olive Garden.
-  - [ ] **Rooms the route left cleared spawn full from their state files** (`make_snapshot_fresh`): 5_05c and the
-    plain way's 5_64c meet their Darknuts again in training (chains find them dead). Covered in part by darknut's
-    staged starts; a state that keeps the route's kills (or harvested states) would be exact.
-  - [ ] Trainings: gibdo, pols-voice, dodongo-crossing, boss-digdogger from scratch; darknut, zol and equipment-room
-    from their converted runs.
-- [x] **Act modes (round 23, done Nov 14):** one act mode, `temperature:0.5+relax:16`, for play (the owner's choice),
-  evaluation, chains and training (the lead's); `act` files, `eval.json`, `PLAY_ACT`, `DEFAULT_ACT` and the
-  training/chain defaults applied (round23.md §10-§11; full route clips on | off 28.7 | 15.3%). Open from it:
-  - [ ] **Clips-off act-mode chains not run** (cut for time): only the chosen rule was measured with clips off.
-  - [ ] **The stall threshold N** of `relax:N`: 8 and 16 measured on `temperature:0.75` only (20.2% / 21.5%).
-  - [ ] **Training with the play rule**: rollouts still sample the unmodified policy; a policy trained to be good
-    at temperature 0.5 (or distilled toward its sharpened self) is untested.
-  - [ ] **Lower temperatures**: `temperature:0.35+relax:16` 29.9% with 0 stuck but less variety (62.5% against
-    67.0%); revisit if variety matters less than arrivals.
-  - [ ] **darknut retrain for 3:0x5b's fight at every bomb count** (its resets now train the fight; no retrain yet).
+Round 24 (round24.md) completed Dungeon 5: from its entrance 34.9 | 22.0% of runs (clips on | off) reach the D5
+triforce (46.4 | 34.0% with darknut r74-darknut5, promoted after the chains), from the D4 triforce 15.2 | 2.9%, from
+the game start 4.8 | 0.3%. The order: the hearts item first, where the owner placed it (Nov 14), then what the round
+24 chains lose in Dungeon 5 (items 2-6, measured with r74-darknut4 unless said), then the r72 list.
 
-### Next: leave rooms with more hearts (the owner, Nov 14)
+### 1. Next: leave rooms with more hearts (the owner, Nov 14)
 
 "We beat the room with 1 heart and died in the next." Find out how to train the models to value health for what
 it is worth to the run. Not by changing the route and not by buying potions.
@@ -87,9 +71,45 @@ Dungeon 2), judged by chains, since single rooms cannot see it; (c) option 5 for
 gathering was lost. Items 2 (Gleeok at low health), 4 (the plain way's heart cost), 7 and 8 below are cases of
 this one.
 
+### 2. The way back after the Olive Garden at low hearts (round 24)
+
+Nothing refills Link between the Olive Garden and Digdogger. In the Dungeon 5 segment (`r74-1k`, from `5_76s_0`
+with 10 hearts, clips on) he enters the Garden with 9.2 hearts, 0x64 on the way back with 5.6 and Digdogger with 3.4;
+from the D4 triforce (`post-d4`) the Garden with 5.9 and Digdogger with 2.7. Deaths per 1000 D5 runs on the way
+back: 0x66 W→N 140 (the forced fight), 0x64 cave→E 104, 0x37 94, 0x47 80, 0x65 W→E 39; single rooms say they should
+survive (0x66 W 99.3%, 0x47 99.3%, 0x37 100%). Training's hp floor is 0.15 × 10 = 1.5 hearts while chain arrivals
+come in at 0.5-1 (0x37: one hit within about 40 frames of entry). Ideas: `hp: [0.05, max]` for the post-Garden rooms,
+`chain_hp` with a profile from the D5 chains, starts harvested with their real hearts (`harvested_fraction`), item 1.
+
+### 3. The Olive Garden (round 24)
+
+r74-darknut5: 80.3 | 80.7% in single rooms (clips on | off), 73 / 81 / 82 / 87% with 0 / 2 / 4 / 8 bombs held, 2.9
+hearts lost a fight; in the chains 87% from Dungeon 5's entrance (2 bombs, 9.2 hearts) but 56% from the D4 triforce
+(0 bombs in 736 of 927 arrivals, 412 of them won). Still gaining (1-6 points a 4M run). Ideas: curriculum tracks from
+the model's own clears (the explorer never cleared all six), more steps, the arrivals' bombs and hearts in training.
+
+### 4. 0x65's westbound bombs (round 24)
+
+`treasure: refuse` is not absolute: the bombs were taken westbound in 156 of 1000 D5 runs (194 of 998 from the D4
+triforce); the pickup costs only `penalty-refused-treasure` (−0.75). Ideas: a larger penalty, or the refused pickup
+as an ending in training.
+
+### 5. 0x37's column (round 24)
+
+The models cross at X `$78` (the probe's median), not the owner's `$70` (one ladder crossing; D5Paths: 0 hits in 54
+of 54 at `$70` swinging, hit in 17-30 of 54 at `$78`); 94 deaths per 1000 D5 runs. Ideas: the objective's path on
+column `$70`, a curriculum track there.
+
+### 6. The plain 0x64 (round 24, clips off)
+
+Five Blue Darknuts, the fight, then the push: 67-70% in single rooms; 261 deaths per 1000 D5 runs with clips off
+(5.15 hearts a visit) and 639 of 815 visits from the D4 triforce, where the plain ways bring Link in with 3.1
+hearts. Ideas: more training on `5_64e` with the switch off (the `~k3~plain` track and the staged 1-4 kills are
+there), the leg's plain-way heart cost (item 1).
+
 ### The rest, ordered by what the r72 chains lose
 
-Each is a project of its own. Round 23 (act modes: how an action is picked) landed first (above).
+Each is a project of its own. Round 23 (act modes: how an action is picked) landed first ("Done (Nov 14): round 23").
 The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-1k` | off `r72-1k-noclips`): D2
 87.2 | 87.2%, D1 98.9 | 99.5%, D3 50.4 | 50.4%, D4 73.6 | 56.8%, to the D3 triforce 19.5 | 10.2%, the full route
 13.6 | 4.8% (round 21 `r71-1k-dks`: 24.8% and 12.8%). Where full runs end with clips on: 3:0x5b 145 per 1000,
@@ -172,11 +192,13 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   overworld ladder, 0x55's wrap onto its W part, 0x1f's wall gap, 0x5f's heart as a room objective, the switch held
   on 0x5f's water, the scouting route `d5leg`; its clip way played end to end by the objective
   (`crates/zelda/tests/d5_leg.rs`, 8,739 frames) and built by `entry_states build` (90 states, nothing helped).
-- [ ] **The leg's open items:** trainings for the new family rooms (states and curricula done: below); 0x5f's heart
-  objective appears a few frames into play, so its first decision targets `treasure_tile`; the walker in
-  `d5_leg.rs` lines Link up on cave mouths by single frames (MOVE is 4 or 8 frames), a policy has to learn it.
-  Done: the plain ways in the full route (with the Lost Hills), the switch off held past 0x55's river to the rejoin
-  (each clip-way room tested); BOMB in the plain way's 0x2c only for the 10th kill (measured, `$50` = 9).
+- [x] **The leg's open items** (round 24): the new family rooms trained (`r74`, round24.md §8) and the leg crossed in
+  the chains (998 of 1000 runs by the clip way, 920 of 1000 by the plain ways, round24.md §5). Not seen to cost a run
+  there: 0x5f's heart objective appearing a few frames into play (its first decision targets `treasure_tile`), and
+  the cave mouths the `d5_leg.rs` walker lines up by single frames (0x2f's and 0x0f's caves: no failure in 3908
+  visits, clips on and off). Done earlier: the plain ways in the full route (with the Lost Hills), the switch off
+  held past 0x55's river to the rejoin (each clip-way room tested); BOMB in the plain way's 0x2c only for the 10th
+  kill.
 - [x] **The leg's states and curricula** (round 24, branch `r24-legstates`; decisions 2026-11-14 "The leg's states
   and curricula"; docs/routes/d5-leg.md "States", "Families and curricula"): 150 states (both ways, chains 0-2,
   chain `c` from `4_03s_<c>`), audited clean; the families' globs; 151 tracks (ow-zora, ow-moblin, ow-peahat,
@@ -185,27 +207,29 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   frame after Link left a room and came back into it (out of a cave) gets the step of the walk in, so a track like
   that is judged wrongly (ow-start's first `0_0fs` explore: REPLAY MISMATCH). One-room families can't hit it; a
   multi-room family with a curriculum would need the step (or the waypoints done) saved with each cell and frame.
-- [ ] **Watch in the leg's trainings:** 0x58 W→E and the plain 0x2c E→N (no curriculum; random play never crossed
-  them in 900 steps), 0x5f from S (tracks 120-208 steps: the plain ladder twice), 0x0f's cave (the explored track
-  is 111 steps for a walk to the rupees and out), ow-zora's 0x3f from N (random play ends it by a wrong exit within
-  about 5 steps, likely riding the raft back up).
+- [x] **Watch in the leg's trainings** (round 24, the chains with clips off, 1000 runs from the D4 triforce): 0x58
+  W→E 0 deaths in 1000 visits; the plain 0x2c E→N 16 deaths and 8 wrong exits in 941; 0x5f from S 2 deaths in 991;
+  0x0f's cave no failure; 0x3f from N 12 wrong exits in 1001 (4 in 937 with clips on).
 - [x] **Leaving a maze by its sequence** in a route (round 24, slice r24-maze; decisions 2026-11-14 "A maze loop is a
   room transition"): `exit: maze`, `zelda::MazeLoop` everywhere a run is followed, the scouting route `d5maze`.
-- [ ] **The maze in training:** ow-start trained on 0x1b from E (`0_1be_v2`, its curriculum tracks 45-55 steps) with
-  the `maze_step` observation; the Lost Woods (0x61: N, W, S, W) has monsters and no route step yet.
+- [x] **The maze in training** (round 24): ow-start `r74-leg2` with the `maze_step` observation crosses the Lost
+  Hills in 925 of 925 chain visits (1048 frames). Left: the Lost Woods (0x61: N, W, S, W) has monsters and no route
+  step yet.
 - [x] **New action kinds** for the route: the recorder, food, the candle, in one model-incompatible bump (1.4.2.0,
   branch `r24-kinds`; decisions 2026-11-14 "Three item kinds and the model conversion"); the promoted 1.4.1 runs are
   widened by `triforce convert-model`, not retrained. Left: the recorder on the overworld (the whirlwind, 0x42's
   pond: `actions::recorder_wanted` widens), route uses of the food (7:0x28's Grumble Goriya, baiting) and the candle
   (trees, dark rooms), and arrows need a state that holds them.
-- [ ] **What the objective does not know yet:** buying in a shop, a take-any cave's right ware, the armos and the
-  gravestone, burning a tree, the whirlwind, tunnels (a cellar with two exits), level 9's one-way shutters, the
-  end of the game.
-- [ ] **Families for levels 5-9** (by enemy; none assigned): Gibdo, Pols Voice, Digdogger, Blue Darknut, Blue
-  Goriya, Wallmasters with a push block, Wizzrobes, Gohma, Lanmola, Patra, Gleeok with four heads, Ganon.
-- [ ] **Block clips that skip a forced fight:** 5:0x64, 7:0x1a and 8:0x1f's stairs are reached with `CLIP N` from
-  beside the ring with the monsters alive (played with the agent's actions in 5:0x64 and 8:0x1f, 9 of 10 blind
-  timings in 7:0x1a); the monsters are then still there on the way back.
+- [ ] **What the objective does not know yet:** buying in a shop, the armos and the gravestone, burning a tree, the
+  whirlwind, level 9's one-way shutters, the end of the game. (Round 24: a take-any cave's right ware is a route
+  `waypoint: heart`, 0x2f; a tunnel cellar is left by the step's own ladder, 5:0x07.)
+- [ ] **Families for levels 5-9** (by enemy): round 24 assigned Gibdo (`gibdo`), Pols Voice (`pols-voice`), Digdogger
+  (`boss-digdogger`), Blue Darknut (`darknut`) and level 5's Dodongos (`dodongo-crossing`); open: Blue Goriya,
+  Wallmasters with a push block, Wizzrobes, Gohma, Lanmola, Patra, Gleeok with four heads, Ganon.
+- [ ] **Block clips that skip a forced fight:** 7:0x1a and 8:0x1f's stairs are reached with `CLIP N` from beside
+  the ring with the monsters alive (played with the agent's actions in 8:0x1f, 9 of 10 blind timings in 7:0x1a).
+  5:0x64 is trained (round 24: 1.00 clips a visit, no hearts lost); its Darknuts are then alive on the way back,
+  where 104 of 1000 Dungeon 5 runs die (round24.md §11).
 - [ ] **Found on the way, not acted on:** the generated rooms table of level-5.md gives the triforce piece at X
   `$80` where the game has `$78` (`romdata.py`); 5:0x24's monster list names `Digdogger3` and the object on screen
   is type `$38`; `game.yaml` has no key for a shutter that never opens (level 9's 0x41, 0x31, 0x21, 0x01 S: a
@@ -214,6 +238,85 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
   names for later visits"): `<level>_<room><side>_v<visit>_<chain>` for the route's second, third, ... entry
   (`zelda::game_map::route_visits`); a state starts the step its name spells (single-room envs, `--from`,
   room-stats); the audit's hearts count along the stretch way a step is on.
+
+## Done (Nov 15): round 24 (the leg and Dungeon 5; 1.5.0.0)
+
+Round 24 (round24.md; decisions 2026-11-14 and 2026-11-15), built on `r24-kinds`, `r24-names`, `r24-d5`, `r24-leg`,
+`r24-maze`, `r24-route-wip`, `r24-d5b` and `r24-legstates` (merged at `a75e40c`, 1.4.2.0), trained as `r74`,
+versioned 1.5.0.0. The owner's asks (Nov 14), item by item:
+
+- [x] **"We want d5 completed"**: `d2first` runs to the D5 triforce (209 steps); 34.9 | 22.0% of the runs from its
+  entrance reach it (clips on | off), 4.8 | 0.3% from the game start (round24.md §10).
+- [x] **The leg first, so Dungeon 5's states are played** (answer 1): the leg's 52 steps in three stretches with both
+  ways, its mechanics (round the world, 0x55's wrap over the river, the overworld ladder and its clip, 0x1f's gap,
+  0x5f's heart, the caves, the Lost Hills), 150 states, 151 tracks; Dungeon 5's 69 states built from its played
+  entrance, and (this round's end) the 48 after the Olive Garden replaced by states harvested from chain runs.
+- [x] **The kinds added and the models converted** (answer 2): RECORDER, FOOD, CANDLE (1.4.2.0); the 24 promoted
+  runs widened, every evaluated episode identical before and after.
+- [x] **0x65's bombs never westbound** (answer 3): `treasure: refuse`; a cheated bomb for each wall when the bag is
+  empty; the four bombs taken eastbound. (Not absolute in play: next project 4.)
+- [x] **The Dungeon 5 notes** (round24.md §6): bombs only in 0x05 and 0x24 (`bomb_reserve`), 0x66 crossed on entry
+  and fought on the way back, 0x64 by the block clip (and its plain way), the Olive Garden with bombs down to 0,
+  0x56 / 0x57 / 0x47 / 0x37 / 0x26 crossed (`treasure: skip`), sword-through measured and left to the models, 0x37's
+  column, 0x25 without a fight, Digdogger by the recorder (bomb, recorder, sword; `reward-recorder-split`).
+- [x] **Blue Darknuts with the red ones** (`darknut`), new families `gibdo`, `pols-voice`, `boss-digdogger`,
+  `dodongo-crossing`; zol and equipment-room took 5:0x57 and the cellars.
+- [x] **Dungeon 5, second pass** (`r24-d5b`): 69 states, curricula for every D5 family, the Olive Garden staged
+  (`room_kills`); trainings of the four new families from scratch and darknut, zol, equipment-room from their
+  converted runs (round24.md §8).
+- [x] **Replace the 48 `fight_skipped` states** by played ones (round24.md §12).
+- [x] **Run everything overnight, then tag and push** (answer 4): the 1000-run chains clips on and off, the round
+  document, 1.5.0.0, `v1.5.0.0`.
+
+### Left open by round 24
+
+Next projects 2-6 above (the way back at low hearts, the Olive Garden, 0x65's westbound bombs, 0x37's column, the
+plain 0x64) and:
+
+- [ ] **ow-peahat `0_1ds_2` with clips off can't be finished** (0 of 100; the explorer finds no way, 4000
+  iterations): chain 2's clip way enters 0x1d from S at X `$20`, a pocket only a CLIP leaves, but step 168 (0x1d S→E)
+  is shared by both ways, so the switch is drawn there. Fixing it on for that one state needs code (the switch comes
+  from the route step, `objectives::start_clips`; a per-state override in the manifest, say), not YAML; or rebuild
+  the state from the plain way's 0x2d E.
+- [ ] **The yardstick refuses the converted runs** (`r56_chains.sh report`): the ten families kept on round 21-22 runs
+  carry their source checkpoint's `eval.json` (the conversion keeps it, bound to the source sha1). Re-evaluate them
+  canonically, or let the yardstick accept an evaluation of `convert.json`'s `source_sha1`; until then
+  `--allow-mode-mismatch`.
+- [ ] **ow-zora `0_55n` with clips on:** 94.3% in single rooms (16 wrong exits in 300); 91 wrong exits in 1024 chain
+  visits of 0x55 N→W.
+- [ ] **ow-moblin `0_3ds` with clips off** 94.3% against round 22's 97.7% (about 1.4 standard errors; accepted).
+- [ ] **Dungeon 5's chains 1 and 2 descend from chain 0's Dungeon 4 history** (0 bombs at the entrance where the
+  leg's own chains 1 and 2 arrive with 2 and 6); rebuild them from the leg's `0_0be_1`/`_2` (staged).
+- [ ] **The leg's plain ways cost hearts:** Link reaches Dungeon 5 with 3.1 hearts by them, 6.6 by the clip way.
+- [ ] **Rooms the route left cleared spawn full from their state files** (`make_snapshot_fresh`): 5_05c and 5_64c
+  meet their Darknuts again in training where chains find them dead (or, 0x64's clip way, alive). Covered in part
+  by darknut's staged starts.
+- [ ] **The explorer never cleared the full Olive Garden** (6 alive: 16000 iterations, no bombs); its staged tracks
+  stop at 5 alive (1 of 3 states).
+- [ ] **`level-5.md` against the measurements** (D5Paths, round24.md §1): 0x37 at X `$70`, not `$78`; 0x25 rows 0 or
+  6, not row 2; 0x56 row 6 then column 11, not row 3; Gibdo knockback 15-16 px against water or blocks.
+- [ ] **Hearts on the floor before a maze loop** vanish without being counted as left (matters in the Lost Woods).
+- [ ] **The `d5_leg.rs` walker** finds no move on 0x5f's heart platform after a hand-played `CLIP W` (the test walks
+  the ladder squares by hand first); not investigated.
+- [ ] **Dungeon 4 with clips off fell 5 points** (64.7% in round 23 → 59.7%, about 2.3 standard errors) with the same
+  D4 models but zol: Link reaches 4:0x30 with 3.40 hearts (3.57) and Gleeok with 2.90 (3.04), Gleeok kills 269 of
+  1000 (236). Clips on it rose (78.6 → 81.3%). Not explained (round24.md §10).
+- [ ] **The full route and the leg segment with r74-darknut5** were not measured (the D5 segment rose 34.9 → 46.4%
+  with clips on, 22.0 → 34.0% off).
+
+## Done (Nov 14): round 23 (act modes)
+
+- [x] **Act modes (round 23, done Nov 14):** one act mode, `temperature:0.5+relax:16`, for play (the owner's choice),
+  evaluation, chains and training (the lead's); `act` files, `eval.json`, `PLAY_ACT`, `DEFAULT_ACT` and the
+  training/chain defaults applied (round23.md §10-§11; full route clips on | off 28.7 | 15.3%). Open from it:
+  - [ ] **Clips-off act-mode chains not run** (cut for time): only the chosen rule was measured with clips off.
+  - [ ] **The stall threshold N** of `relax:N`: 8 and 16 measured on `temperature:0.75` only (20.2% / 21.5%).
+  - [ ] **Training with the play rule**: rollouts still sample the unmodified policy; a policy trained to be good
+    at temperature 0.5 (or distilled toward its sharpened self) is untested.
+  - [ ] **Lower temperatures**: `temperature:0.35+relax:16` 29.9% with 0 stuck but less variety (62.5% against
+    67.0%); revisit if variety matters less than arrivals.
+  - [x] **darknut retrain for 3:0x5b's fight at every bomb count**: round 24's five darknut runs (`r74`) trained it
+    with the new rooms; the D3 segment rose from 60.1% to 67.3% (clips on, round24.md §10).
 
 ## Done (Nov 14): round 22 (natural RNG, the clips switch, the route; 1.4.1.1)
 
