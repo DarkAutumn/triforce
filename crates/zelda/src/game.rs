@@ -913,6 +913,11 @@ impl GameView {
         self.var(Var::Bombs)
     }
 
+    /// Link's bomb maximum (`InvMaxBombs`: 8, more with the bomb bag upgrades).
+    pub fn bomb_max(&self) -> i32 {
+        self.var(Var::BombMax)
+    }
+
     /// Damage-free kills toward the forced drop (`$50` HelpDropCount, 0-10; asm:Damage_KillMonster).  Any hit to
     /// Link clears it; the next drop-capable death after the 10th takes the forced drop and clears it.
     pub fn help_drop_count(&self) -> i32 {

@@ -234,6 +234,15 @@ pub struct RewardConfig {
     /// hearts and fairies only while Link is below max health (they only heal).
     #[serde(default, deserialize_with = "de_bool")]
     pub item_targets: bool,
+    /// Round 25 (Manhandla's bombs): once the room's fight is over, the wanted drops (bombs below Link's bomb
+    /// maximum, a heart or fairy below max health) are the only PBRS and `target` destinations until taken or gone,
+    /// before the treasure and the exits (`objective::is_wanted_drop`); dropped bombs at the maximum are no target.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub drops_first: bool,
+    /// `penalty-left-drop` per wanted drop (as `drops_first` says, still takeable for a while) on the floor when Link
+    /// leaves the room (positive magnitude; 0 = off).
+    #[serde(default)]
+    pub left_drop_penalty: f64,
     /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
     #[serde(default = "half")]
     pub boss_ate_bomb_penalty: f64,
@@ -259,6 +268,8 @@ impl Default for RewardConfig {
             quiet_enemy_penalty: 0.0,
             fixed_pickup_reward: false,
             item_targets: false,
+            drops_first: false,
+            left_drop_penalty: 0.0,
             boss_ate_bomb_penalty: 0.5,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
@@ -460,6 +471,13 @@ pub struct RamRandomization {
     /// Share of resets that draw `room_kills` (the rest keep the full room); absent = every reset.
     #[serde(default)]
     pub room_kills_share: Option<f64>,
+    /// `drop_bombs: P` (round 25, Manhandla's bombs): the share of training resets whose next drop is bombs, by
+    /// the game's own help drop (asm:Drop_SetUpItem): `HelpDropCount` ($50) = $0A and `IsHelpDropBomb` ($51) set at
+    /// the reset and again after every step while a monster is left, so the death that drops next (Manhandla's last
+    /// hand) drops bombs unless it is the 16th kill (a fairy). Training envs only (`EnvOptions::forced_drops`):
+    /// evaluation, chains, exploration and state builds keep the natural drop.
+    #[serde(default)]
+    pub drop_bombs: Option<f64>,
 }
 
 impl RamRandomization {
@@ -480,6 +498,7 @@ impl RamRandomization {
             ("chain_hp", self.chain_hp),
             ("bombs_share", self.bombs_share),
             ("room_kills_share", self.room_kills_share),
+            ("drop_bombs", self.drop_bombs),
         ] {
             if let Some(v) = value
                 && !(0.0..=1.0).contains(&v)
@@ -1122,6 +1141,7 @@ mod tests {
             ("{room_kills: {'(5, 0x05)': [1, 15]}}", "0 <= lo <= hi <= 14"),
             ("{room_kills: {'5:0x05': [1, 2]}}", "Bad room"),
             ("{room_kills_share: 2}", "probability"),
+            ("{drop_bombs: 2}", "probability"),
         ] {
             let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
             assert!(e.contains(why), "{bad}: {e}");

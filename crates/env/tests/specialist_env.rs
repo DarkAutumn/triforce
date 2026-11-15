@@ -1437,6 +1437,98 @@ fn item_targets_skip_healing_drops_at_full_health() {
     assert!(hurt > 0.0 && full < 0.0, "hurt {hurt}, full {full}");
 }
 
+fn drops_first(left_drop_penalty: f64) -> RewardConfig {
+    RewardConfig {
+        item_targets: true,
+        drops_first: true,
+        left_drop_penalty,
+        ..Default::default()
+    }
+}
+
+/// The env restored with Link holding `bombs` of 8.
+fn with_bombs(mut env: Env, bombs: u8) -> Env {
+    env.session_mut().apply_ram(&[(Var::Bombs, bombs), (Var::BombMax, 8)]);
+    let snapshot = env.session().snapshot();
+    env.restore(&snapshot, "1_73e_0").unwrap();
+    env
+}
+
+/// Round 25 (Manhandla's bombs): with `reward.drops_first` dropped bombs Link has room for are the only target once
+/// the room's fight is over, before a nearer exit; at the bomb maximum they are no target at all.
+#[test]
+fn drops_first_puts_wanted_bombs_before_a_nearer_exit() {
+    let Some(nes) = open_core() else { return };
+    // Link near the N exit, the bombs far SE: item targets alone head N (the nearer target).
+    let drops = [(item::BOMBS, 200, 189)];
+    let (env, _) = placed_env_with(nes, &drops, 125, item_targets(), 0x22);
+    let mut env = with_bombs(env, 2);
+    assert_eq!(objective(&env).kind, ObjectiveKind::Move);
+    let nearest = movement_reward(&mut env, "N");
+    let (env, _) = placed_env_with(release(env), &drops, 125, drops_first(0.0), 0x22);
+    let mut env = with_bombs(env, 2);
+    let first = movement_reward(&mut env, "N");
+    let (env, _) = placed_env_with(release(env), &drops, 125, drops_first(0.0), 0x22);
+    let mut env = with_bombs(env, 8);
+    let full = movement_reward(&mut env, "N");
+    assert!(nearest > 0.0 && first < 0.0 && full > 0.0, "nearest {nearest}, first {first}, full {full}");
+}
+
+/// The walker under `drops_first` takes the bombs, then leaves (`BombStats` counts the drop taken); item targets
+/// alone leave by the nearer exit, the bombs left on the floor, which `left_drop_penalty` charges on the exit step.
+#[test]
+fn drops_first_takes_the_bombs_and_leaving_them_costs() {
+    let Some(nes) = open_core() else { return };
+    let drops = [(item::BOMBS, 200, 189)];
+    let (env, _) = placed_env_with(nes, &drops, 125, drops_first(2.0), 0x22);
+    let mut env = with_bombs(env, 2);
+    let info = finish(&mut env);
+    let t = info.terminal.as_ref().unwrap();
+    assert_eq!(t.ending, "exit-correct");
+    let b = t.bomb_stats;
+    assert_eq!((b.drop_taken, b.drop_left, b.picked_up), (1, 0, 1), "{b:?}");
+    assert_eq!(state(&env).bombs(), 6);
+    assert!(!has_term(&info, "penalty-left-drop"));
+
+    let reward = RewardConfig { left_drop_penalty: 2.0, ..item_targets() };
+    let (env, _) = placed_env_with(release(env), &drops, 125, reward, 0x22);
+    let mut env = with_bombs(env, 2);
+    let info = finish(&mut env);
+    let t = info.terminal.as_ref().unwrap();
+    assert_eq!(t.ending, "exit-correct");
+    assert_eq!((t.bomb_stats.drop_taken, t.bomb_stats.drop_left), (0, 1), "{:?}", t.bomb_stats);
+    assert_eq!(term(&info, "penalty-left-drop"), Some(-2.0));
+}
+
+/// `ram_randomization.drop_bombs` (training envs only, `EnvOptions::forced_drops`): while Manhandla is in the room
+/// the game's help drop stays armed as bombs (`$50` = $0A, `$51` set), so his last hand drops bombs; an evaluation
+/// env with the same config never draws it.
+#[test]
+fn forced_bomb_drop_arms_the_help_drop_in_training_envs_only() {
+    let Some(nes) = open_core() else { return };
+    let mut nes = Some(nes);
+    for training in [true, false] {
+        let opts = EnvOptions { start_state: Some("3_4dw_0".to_owned()), forced_drops: training, ..Default::default() };
+        let mut env = make_env_with(nes.take().unwrap(), "boss-manhandla", opts, |c| {
+            c.ram_randomization.drop_bombs = Some(1.0);
+        });
+        env.reset(Some(1), None).unwrap();
+        assert_eq!(env.drop_bombs, training);
+        let mut seen = 0;
+        for _ in 0..6 {
+            act(&mut env, "MOVE E 8");
+            let s = state(&env);
+            if !s.enemies.is_empty() {
+                seen += 1;
+                let armed = s.help_drop_count() == 10 && s.help_drop_is_bombs();
+                assert_eq!(armed, training, "$50 {} $51 {}", s.help_drop_count(), s.help_drop_is_bombs());
+            }
+        }
+        assert!(seen > 0, "Manhandla in the room");
+        nes = Some(release(env));
+    }
+}
+
 // --- tests/test_rewards.py (emulator parts) ---
 
 #[test]

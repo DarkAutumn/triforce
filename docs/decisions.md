@@ -2229,3 +2229,21 @@ Hills). Decided by the agent building it (the owner away):
   the opt-outs: `--no-wait` (start now, still counted; `$TRIFORCE_NO_WAIT=1`) and `--nice N`. `--no-log` jobs wait
   and count too. Play, replay and build tools never wait.
 - Jobs already running when this came in are counted (their entries say `running`) but didn't wait themselves.
+
+## 2026-11-15 — Manhandla's dropped bombs first; his drop forced to bombs in training (round 25, `r25-manhandla`)
+
+- **What:** `reward.drops_first` (once the objective is no fight, the wanted drops, bombs below the maximum and a
+  heart or fairy below max health, are the only PBRS and `target` destinations; chains build the `target` wavefront
+  the same way), `reward.left_drop_penalty` (`penalty-left-drop` per wanted drop left on the floor, REWARD_TERMS 58)
+  and `ram_randomization.drop_bombs` (training envs only, `EnvOptions::forced_drops`: the game's help drop armed as
+  bombs, `$50` = $0A and `$51` = 1, at reset and after every step while a monster is in the room). boss-manhandla sets
+  all three (0.75, 3.0) and draws bombs 2-8. `BombStats` counts dropped bombs (`dropped`, `drop_taken`, `drop_left`,
+  `drop_expired`); chain records carry `bombs_in` / `bombs_out`.
+- **Why:** the owner: "the agent often leaves without taking bombs if dropped ... force manhandla to always drop
+  bombs in training and make it a primary objective to pick them up on win". The game's own mechanism, not a written
+  item id: the last hand's group has no bombs, only the help drop gives them. Measured before: 15 of 344 dropped
+  bombs left in the d3 segment, 23 of 246 on the full route; after: none.
+- **Models:** r75-mh-drop (r71-e + 1M) and r75-mh-fight (+1M, bombs 2-8). r75-mh-fight is the run to promote: d3
+  segment arrivals 62.9% → 75.8% (+12.9 ± 1.7, paired seeds), full route D3 exit 36.9% → 45.4% (+8.5 ± 1.4), out of
+  Dungeon 4 49.7 → 60.2% clips on, 44.2 → 51.9% clips off (docs/routes/d3.md "Manhandla's drop"). It enters Dungeon 4
+  with fewer bombs (3.64 against 4.15: sword kills arm no bomb drop).
