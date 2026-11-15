@@ -186,6 +186,9 @@ pub struct Room {
     /// The tile rows (Link's, game.yaml `wrap_in`) on which a screen wrap reaches the side of the room an exit is on,
     /// and that exit's direction ([`Room::with_wrap_in`]).
     wrap_in: Option<(Direction, (i32, i32))>,
+    /// Per tile, the extra cost of a path-search step onto it (game.yaml `path_costs`, [`Room::with_path_costs`]);
+    /// empty: none.
+    path_cost: Vec<u8>,
     pub exits: Exits,
     pub cave_tile: Option<Tile>,
 }
@@ -223,6 +226,7 @@ impl Room {
             cave_tile: None,
             wrap_exit: None,
             wrap_in: None,
+            path_cost: Vec::new(),
         };
         room.loaded = tiles
             .iter()
@@ -299,6 +303,36 @@ impl Room {
     /// The exit direction and Link's tile rows of the room's `wrap_in` exit, if it has one.
     pub fn wrap_in(&self) -> Option<(Direction, (i32, i32))> {
         self.wrap_in
+    }
+
+    /// The room with its game.yaml `path_costs` (`GameView::room`): every step of the path search onto a tile of one
+    /// of `costs`' rectangles costs `1 + cost` tiles instead of 1, so the objective's way (PBRS, the `target`
+    /// observation, linger) goes round them when that is shorter (Dungeon 5's 0x37: the X `$70` column, one ladder
+    /// crossing, instead of the straight `$78` one; docs/routes/d5.md).  Walkability and the action mask are
+    /// unchanged, and every tile keeps a distance.
+    pub fn with_path_costs(mut self, costs: &[crate::game_map::PathCost]) -> Room {
+        if costs.is_empty() {
+            return self;
+        }
+        let mut grid = vec![0u8; CELLS];
+        for c in costs {
+            for tc in c.cols.0.max(0)..=c.cols.1.min(COLS - 1) {
+                for tr in c.rows.0.max(0)..=c.rows.1.min(ROWS - 1) {
+                    let cell = &mut grid[index(tc, tr)];
+                    *cell = cell.saturating_add(c.cost);
+                }
+            }
+        }
+        self.path_cost = grid;
+        self
+    }
+
+    /// The extra cost of a path-search step onto tile (column, row): 0 off screen and without `path_costs`.
+    pub fn path_cost(&self, tc: i32, tr: i32) -> i32 {
+        if self.path_cost.is_empty() || !in_bounds(tc, tr) {
+            return 0;
+        }
+        i32::from(self.path_cost[index(tc, tr)])
     }
 
     /// Water the ladder is laid over: `$F4` in a dungeon, [`OW_WATER_TILES`] (bar the walkable ones) overworld.
@@ -715,7 +749,7 @@ impl Wavefront {
                 open.then_some((nx, ny))
             })
         };
-        if jumps.is_empty() {
+        if jumps.is_empty() && room.path_cost.is_empty() {
             // Unit steps: breadth first.
             let mut todo: VecDeque<(Tile, i32)> = starts.into_iter().map(|t| (t, 0)).collect();
             while let Some((tile, dist)) = todo.pop_front() {
@@ -726,8 +760,9 @@ impl Wavefront {
             }
             return Wavefront { grid, offscreen, jumps: Vec::new() };
         }
-        // Jumps cost more than a step: Dijkstra, a jump relaxing its start from its end (the search runs from the
-        // targets back toward Link). `best` holds tentative distances; `grid` the settled ones.
+        // Jumps cost more than a step, and a `path_costs` tile more than a plain one: Dijkstra, a jump relaxing its
+        // start from its end (the search runs from the targets back toward Link, so the step relaxed from `tile` is
+        // Link's step onto it and pays its path cost). `best` holds tentative distances; `grid` the settled ones.
         let mut best = vec![i32::MAX; CELLS];
         let mut todo: BinaryHeap<Reverse<(i32, Tile)>> = starts.into_iter().map(|t| Reverse((0, t))).collect();
         let mut by_end: Vec<&Jump> = jumps.iter().filter(|j| in_bounds(j.from.0, j.from.1)).collect();
@@ -741,9 +776,10 @@ impl Wavefront {
                 }
                 grid[i] = dist;
             }
-            let next = neighbours(&grid, tile).into_iter().flatten().map(|t| (t, 1));
+            let onto = room.path_cost(tile.0, tile.1);
+            let next = neighbours(&grid, tile).into_iter().flatten().map(|t| (t, 1 + onto));
             let first = by_end.partition_point(|j| j.to < tile);
-            let jumped = by_end[first..].iter().take_while(|j| j.to == tile).map(|j| (j.from, j.cost));
+            let jumped = by_end[first..].iter().take_while(|j| j.to == tile).map(|j| (j.from, j.cost + onto));
             for ((nx, ny), cost) in next.chain(jumped) {
                 let i = index(nx, ny);
                 if grid[i] >= 0 || impassible.contains(&(nx, ny)) || dist + cost >= best[i] {
@@ -850,5 +886,24 @@ mod tests {
         let mut tiles = [FLOOR; CELLS];
         square.iter().for_each(|&(c, r)| tiles[index(c, r)] = WATER_TILE);
         assert!(!Room::new(MapLocation::new(4, 0x60, true), &tiles, true).can_move(8, 8, Direction::E));
+    }
+
+    /// `path_costs`: a step onto a costed tile counts 1 + cost.  Straight N from (15, 16) to (15, 2) is 14 steps; a
+    /// band of cost 1 on columns 15-16, rows 6-15 makes the way one column W (2 steps longer) cheaper, and every tile
+    /// keeps a distance (Link standing in the band included).
+    #[test]
+    fn path_costs_turn_the_way_round_a_band() {
+        let open = room([], false);
+        let band = [crate::game_map::PathCost { cols: (15, 16), rows: (6, 15), cost: 1 }];
+        let costed = room([], false).with_path_costs(&band);
+        let north = [Target::Tile((15, 2))];
+        let (plain, round) = (open.wavefront(&north, &[], &[], false), costed.wavefront(&north, &[], &[], false));
+        assert_eq!(plain.get((15, 16)), Some(14));
+        assert_eq!(round.get((15, 16)), Some(16), "W, up column 14, back E");
+        assert_eq!(round.get((14, 15)), Some(14));
+        assert_eq!(round.get((15, 10)), Some(10), "in the band: W onto column 14, then up");
+        assert_eq!((costed.path_cost(15, 6), costed.path_cost(15, 5), costed.path_cost(14, 10)), (1, 0, 0));
+        let twice = room([], false).with_path_costs(&[band[0], band[0]]);
+        assert_eq!(twice.path_cost(16, 15), 2, "overlapping rectangles add up");
     }
 }

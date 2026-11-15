@@ -320,7 +320,8 @@ from the family of the room Link is in) offers the CLIP kind in every direction 
 the executor); MOVE never performs a skip. With clips on, the path search behind PBRS, linger and the `target`
 observation (`Room::wavefront(..., clips)`, `clips::skip_jumps`) treats every block clip and ladder clip as a jump
 from each rest position of its zone to its end, at its frames converted to tiles (1.5 pixels a frame, 8 a tile); the
-search becomes Dijkstra only when a room has jumps, and the `target` direction follows a jump on the shortest way.
+search becomes Dijkstra only when a room has jumps or `path_costs` (below), and the `target` direction follows a
+jump on the shortest way.
 The overworld wrap is no jump (it ends one MOVE from the opposite edge: a jump would point the way to that edge's
 exit out of the entry edge; the round-21 policies learned the wrap without one). The wrap exit is one: the wrap
 rows' W edge tiles are W exit tiles of the room (`Room::with_wrap_exit`; solid, walking never reaches them) and its
@@ -411,8 +412,9 @@ the builder.
 Schema v2 added `target` (`TARGET_FEATURES`), filled only with `obs.target: true` (default false; the key always
 exists, so every specialist shares one layout). It reads the PBRS wavefront, which the env computes whenever
 `reward.pbrs` or `obs.target` is on (dropped items are targets as `reward.item_targets`/`nearby_items` say):
-`target_N/S/W/E` is a one-hot of the neighbour of Link's tile with the lowest distance below his own, over legal
-steps only (ties N, S, W, E; all 0 on a target tile, when unreachable or when no legal step goes lower), `target_distance` is Link's wavefront distance / 32 clamped
+`target_N/S/W/E` is a one-hot of the neighbour of Link's tile whose distance plus the step's cost (1, plus the
+room's `path_costs` on that tile) is lowest and no more than his own, over legal steps only (ties N, S, W, E; all 0
+on a target tile, when unreachable or when no legal step goes lower), `target_distance` is Link's wavefront distance / 32 clamped
 to 1 (1 when unreachable or without a wavefront), `target_dx`/`target_dy` are the pixel offset from Link to the
 target tile the steepest descent reaches (/256, /176; 0 if none) and `target_is_item` says whether that tile
 belongs to a dropped item. Chains rebuild the same wavefront (the acting specialist's `reward` decides the item
@@ -1054,6 +1056,14 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `push_block_opens: E` for a shutter on the step's exit side (Dungeon 4's 0x12: any way). A block moves only once
   the room's monsters are dead (`IsRoomAllDead` $34D; Bubbles don't count), so until then the objective is to fight.
   `reward-pushed-block` pays for a push in a listed direction.
+- **Path costs** (round 25): game.yaml `path_costs: [{cols: [c0, c1], rows: [r0, r1], cost: N}]` on a room
+  (`GameRoom::path_costs`, `Room::with_path_costs` in `GameView::room`) charges every step of the path search onto
+  one of those Link tiles (inclusive rectangles, the wavefront's tile grid: X / 8, (Y - `$3D`) / 8, his feet on the
+  row below) `1 + N` instead of 1, so the objective's way (PBRS, the `target` observation, linger) goes round them
+  when that is cheaper; every tile keeps a distance (a Link standing in the band is led out of it), and walkability,
+  the action mask and the executor don't change. Dungeon 5's 0x37 charges columns 15-16 (X `$78`-`$87`) in rows
+  6-15: its S-to-N way goes up X `$70` (one ladder crossing, the owner's column) instead of `$78` (two crossings,
+  through the middle pocket where the way back's Darknuts spawn; `docs/routes/d5.md`).
 - **Room names**: game.yaml `name:` (`GameRoom::name`, `_native.game_rooms()[...]['name']`) is what people call a
   room (4:0x32 is the Breakfast Room); the viewer's strip shows it. `dark: true` (attr E bit 7) is recorded and
   read by nothing.
