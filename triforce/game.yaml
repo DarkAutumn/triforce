@@ -3907,6 +3907,12 @@ rooms:
   treasure: compass
   trigger: kill-all-item  # attr F & 7 = 7
   dark: true
+  # The owner's column (round 25): S to N at X $70 (Link's tile column 14), one ladder crossing (block row 4), not the
+  # straight X $78 (two crossings) or $80: the Darknuts that spawn in the middle pocket (block row 3) hit every chain
+  # crossing at $78 (round 24: 1.20 hearts a visit, all hit); scripted from the chain's own entries $70 with a swing on
+  # the ladder is never hit (docs/routes/d5.md).  Steps onto Link's tile columns 15-16 (X $78-$87) in tile rows 6-15
+  # cost the path search one tile more, so the objective's way (2 tiles longer) goes up column 14.
+  path_costs: [{cols: [15, 16], rows: [6, 15], cost: 1}]
 - level: 5
   location: '0x46'
   exits:
