@@ -85,7 +85,7 @@ from typing import Callable, Optional
 from . import __version__, _native, registry, replay
 from .clips import MODES as CLIPS_MODES, default_mode as default_clips_mode, episode_jobs, name as switch_name
 from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
-from .jobs import add_job_arguments, begin_job
+from .jobs import add_job_arguments, begin_job, work
 from .metrics import heart_change_total
 from .provenance import code_version, data_hash, models_header
 from .replay import ReplayDir
@@ -588,6 +588,15 @@ def resolve_checkpoint(name: str, checkpoint=None, run_id: Optional[str] = None,
     return path
 
 
+def episode_count(config: SpecialistConfig, episodes_per_state: int, clips: Optional[str] = None) -> int:
+    """The episodes an evaluation of ``config`` plays (``episode_jobs``; 0 when it has no start state for the mode:
+    the evaluation then fails on its own)."""
+    try:
+        return len(episode_jobs(config, episodes_per_state, 0, clips))
+    except ValueError:
+        return 0
+
+
 def main(argv=None):
     """Command line."""
     parser = build_parser()
@@ -613,7 +622,8 @@ def main(argv=None):
         f'eval-{name}', 'eval', [{'specialist': name, 'run_id': run_id,
                                   'events': stream.name if stream else f'{name}.jsonl',
                                   'run_dir': str(checkpoint.parent), 'status': 'evaluating'}], args.logs_dir,
-        directory=None if stream is None else stream.parent, log=not args.no_log, nice=nice)
+        directory=None if stream is None else stream.parent, log=not args.no_log, nice=nice,
+        work=work(eval_episodes=episode_count(config, args.episodes_per_state, args.clips)))
     with log as plan:
         events = (EventLog(stream, specialist=name, run_id=run_id) if stream is not None else
                   None if plan is None else EventLog(plan.directory / f'{name}.jsonl', specialist=name, run_id=run_id))

@@ -21,12 +21,14 @@ writes to: every job registers its plan in the machine's job registry (``triforc
 ``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``), and the
 roots of the running triforce processes (``process_log_roots``) are scanned too, for jobs of older code.  Folders
 from elsewhere are listed with their checkout and branch.  A job waiting its turn (``$TRIFORCE_MAX_JOBS`` run at
-once, the rest queue first come first served) is listed below the running ones as 'queued', with its place in line,
-the jobs it waits for and how long it has waited; the GUI only reads the registry, it controls nothing.  Below the
-live folders, under a 'finished' heading: the folders whose training ended while shown, and the registered jobs (any
-checkout) that ended in the last 24 hours (``RECENT_SECONDS``; a job whose process died without ending its plan, a
-waiting one too, shows as 'process gone').  'Clear finished' hides those, leaving the live ones, and trainings that
-start later still appear.
+once, plus an express place for a short one) is listed below the running ones as 'queued', in the order the jobs
+will start: shortest estimate first, older ones moving up as they wait (first come first served while a job of older
+code, without an estimate, waits).  Each shows its place in line, the jobs it waits for, its estimate and how long it
+has waited; a running job shows its estimate beside how long it has run, and 'express' when it took the express
+place.  The GUI only reads the registry, it controls nothing.  Below the live folders, under a 'finished' heading:
+the folders whose training ended while shown, and the registered jobs (any checkout) that ended in the last 24 hours
+(``RECENT_SECONDS``; a job whose process died without ending its plan, a waiting one too, shows as 'process gone').
+'Clear finished' hides those, leaving the live ones, and trainings that start later still appear.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
@@ -184,6 +186,27 @@ def fmt_duration(seconds) -> str:
     if minutes:
         return f'{minutes}m {secs:02d}s'
     return f'{secs}s'
+
+
+def fmt_coarse(seconds) -> str:
+    """Seconds -> 1h 02m / 12m / 42s (a wait, a run's time so far: no seconds once it is minutes)."""
+    seconds = max(0, int(seconds))
+    hours, rest = divmod(seconds, 3600)
+    if hours:
+        return f'{hours}h {rest // 60:02d}m'
+    return f'{rest // 60}m' if rest >= 60 else f'{rest}s'
+
+
+def fmt_estimate(seconds) -> str:
+    """An estimate, rounded as far as it can be trusted: ~40 s (5 s steps), ~3 min, ~1 h 20 min (10 min steps)."""
+    rounded = round(seconds / 5) * 5
+    if rounded < 60:
+        return f'~{max(5, rounded)} s'
+    minutes = round(seconds / 60)
+    if minutes < 60:
+        return f'~{minutes} min'
+    hours, minutes = divmod(round(seconds / 600) * 10, 60)
+    return f'~{hours} h {minutes} min' if minutes else f'~{hours} h'
 
 
 def fmt_pct(value) -> str:
@@ -1210,6 +1233,12 @@ def process_log_roots(proc: Path = Path('/proc')) -> set[Path]:
 # The machine's job registry (``triforce/jobs.py``): every plan any checkout's jobs started, one JSON file each.
 JOBS_DIR_ENV = 'TRIFORCE_JOBS_DIR'
 RECENT_SECONDS = 24 * 3600     # finished registered jobs stay in [currently running] (under 'finished') this long
+# The line's order (as ``triforce.jobs``): a queued job's score is its estimate (seconds) minus AGING seconds per
+# second it has waited, lowest first; a job estimated at EXPRESS_SECONDS or less may also take one of EXPRESS_JOBS
+# express places besides the ``$TRIFORCE_MAX_JOBS`` regular ones.
+AGING = 0.5
+EXPRESS_SECONDS = 600
+EXPRESS_JOBS = 1
 
 
 def jobs_dir() -> Path:
@@ -1283,34 +1312,83 @@ def job_label(job: dict) -> str:
     return f"{name} ({job['kind']})" if job.get('kind') else name
 
 
-def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('/proc')) -> dict:
+def job_entry(log_dir: Path, jobs: list[dict], status: str) -> dict | None:
+    """The registry entry of this host with ``status`` whose log folder is ``log_dir``, None if there is none."""
+    host, target = socket.gethostname(), log_dir.resolve()
+    return next((job for job in jobs if job.get('status') == status and job.get('host') == host
+                 and job.get('log_dir') and Path(job['log_dir']).resolve() == target), None)
+
+
+def known(*values):
+    """The first value that is not None (None if all are)."""
+    return next((value for value in values if value is not None), None)
+
+
+def queue_order(queued: list[dict], now: float) -> tuple[list[dict], str]:
+    """The live queued entries in the order they will start, and how they are ordered (as ``triforce.jobs``):
+    'score' (estimate - AGING * seconds waited, lowest first, ties by join time and file name), or 'legacy' (first
+    come first served by join time and file name) while any of them has no estimate (code from before)."""
+    def joined(job):
+        return job.get('queued_ts') or 0.0, Path(job.get('path') or '').name
+    if any(job.get('estimate') is None for job in queued):
+        return sorted(queued, key=joined), 'legacy'
+
+    def score(job):
+        return job['estimate'] - AGING * max(0.0, now - (job.get('queued_ts') or now)), *joined(job)
+    return sorted(queued, key=score), 'score'
+
+
+def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('/proc'),
+                now: float | None = None) -> dict:
     """A queued plan's place in the job queue: {'place': 1-based or None, 'running': labels of the jobs it waits for,
     'ahead': labels of the queued jobs before it, 'limit': jobs run at once or None, 'since': Unix seconds it joined
-    the line or None}.  From the registry while the plan's entry is there and queued on this host: the line is this
-    host's live queued entries by (``queued_ts``, file name), what it waits for the live running ones of other
-    processes.  Otherwise (no entry, another host, an entry already admitted) the plan's own ``queue`` says it, as of
-    its last rewrite."""
+    the line or None, 'estimate': seconds it is expected to run or None, 'lane': 'regular' | 'express' | None,
+    'mode': 'score' | 'legacy' | None}.  From the registry while the plan's entry is there and queued on this host:
+    the line is this host's live queued entries in the order they will start (``queue_order`` at ``now``), what it
+    waits for the live running ones of other processes.  Otherwise (no entry, another host, an entry already
+    admitted) the plan's own ``queue`` says it, as of its last rewrite."""
     recorded = plan.get('queue') or {}
     state = {'place': recorded.get('place'), 'running': list(recorded.get('running') or []),
              'ahead': list(recorded.get('ahead') or []), 'limit': recorded.get('limit'),
-             'since': parse_time(recorded.get('queued'))}
-    host, target = socket.gethostname(), log_dir.resolve()
-    entry = next((job for job in jobs if job.get('status') == 'queued' and job.get('host') == host
-                  and job.get('log_dir') and Path(job['log_dir']).resolve() == target), None)
+             'since': parse_time(recorded.get('queued')), 'estimate': known(plan.get('estimate'),
+                                                                            recorded.get('estimate')),
+             'lane': plan.get('lane') or recorded.get('lane'), 'mode': recorded.get('mode')}
+    entry = job_entry(log_dir, jobs, 'queued')
     if entry is None:
         return state
+    host = socket.gethostname()
     live = [job for job in jobs if job.get('host') == host and job_alive(job, proc)]
-    line = sorted((job for job in live if job.get('status') == 'queued'),
-                  key=lambda job: (job.get('queued_ts') or 0.0, Path(job.get('path') or '').name))
+    line, mode = queue_order([job for job in live if job.get('status') == 'queued'],
+                             time.time() if now is None else now)
     if entry not in line:
         return state
     place = line.index(entry)
     state.update(place=place + 1, ahead=[job_label(job) for job in line[:place]],
                  running=[job_label(job) for job in live
-                          if job.get('status') == 'running' and job.get('pid') != entry.get('pid')])
+                          if job.get('status') == 'running' and job.get('pid') != entry.get('pid')
+                          and not (mode == 'score' and job.get('lane') == 'express'
+                                   and (entry.get('estimate') or 0) > EXPRESS_SECONDS)],
+                 estimate=known(entry.get('estimate'), state['estimate']), lane=entry.get('lane') or state['lane'],
+                 mode=mode)
     if entry.get('queued_ts') is not None:
         state['since'] = entry['queued_ts']
     return state
+
+
+def run_facts(log_dir: Path, plan: dict, jobs: list[dict], now: float) -> dict:
+    """A running plan's lane and timing: {'express': in the express lane (its registry entry's or its plan's
+    ``lane``), 'est': 'est ~40 min · ran 12m' (ran: since it was admitted, else since the plan was created), '' without
+    an estimate (code from before)}."""
+    entry = job_entry(log_dir, jobs, 'running') or {}
+    recorded = plan.get('queue') or {}
+    lane = entry.get('lane') or plan.get('lane') or recorded.get('lane')
+    estimate = known(entry.get('estimate'), plan.get('estimate'), recorded.get('estimate'))
+    est = ''
+    if estimate is not None:
+        start = known(parse_time(entry.get('admitted')), parse_time(recorded.get('admitted')),
+                      parse_time(plan.get('created')))
+        est = f"est {fmt_estimate(estimate)}" + (f" · ran {fmt_coarse(now - start)}" if start is not None else '')
+    return {'express': lane == 'express', 'est': est}
 
 
 def ordinal(number: int) -> str:
@@ -1319,15 +1397,27 @@ def ordinal(number: int) -> str:
     return f"{number}{suffix}"
 
 
+def queue_times(state: dict, now: float) -> tuple[str, str]:
+    """A queued plan's (estimate, wait): ('~3 min', 'waited 12m'), the estimate 'short ~3 min' when it is short
+    enough for the express place; ('', '12m 05s') for a job of older code (no estimate)."""
+    since, estimate = state.get('since'), state.get('estimate')
+    if estimate is None:
+        return '', fmt_duration(now - since) if since is not None else ''
+    label = fmt_estimate(estimate)
+    if EXPRESS_JOBS and estimate <= EXPRESS_SECONDS:
+        label = f"short {label}"
+    return label, f"waited {fmt_coarse(now - since)}" if since is not None else ''
+
+
 def waiting_text(state: dict, now: float) -> str:
-    """A queued plan's line: 'waiting · 2nd in line · for r25-a (round), eval-b (eval) · 12m 05s'."""
+    """A queued plan's line: 'waiting · 2nd in line · for r25-a (round), eval-b (eval) · ~40 min · waited 12m'
+    ('waiting · ... · 12m 05s' for a job of older code, without an estimate)."""
     parts = ['waiting']
     if state.get('place'):
         parts.append(f"{ordinal(state['place'])} in line")
     if state.get('running'):
         parts.append('for ' + ', '.join(state['running']))
-    if state.get('since') is not None:
-        parts.append(fmt_duration(now - state['since']))
+    parts += [part for part in queue_times(state, now) if part]
     return ' · '.join(parts)
 
 
@@ -2014,6 +2104,9 @@ class Header(Clickable):
         color, label = STATUS.get(status, (C.muted, status))
         x += paint_pill(p, x, rect.top() + 17, label.upper(), color) + 6
         x += paint_pill(p, x, rect.top() + 17, str(model.plan.get('kind', '')), C.muted) + 6
+        facts = self.facts(now)
+        if facts['express']:
+            x += paint_pill(p, x, rect.top() + 17, 'express', C.warn) + 6
         where = checkout_label(model.plan)
         if where:
             paint_pill(p, x, rect.top() + 17, where, C.faint)
@@ -2055,7 +2148,7 @@ class Header(Clickable):
             p.setPen(STATUS['queued'][0])
             p.drawText(QPointF(x, y), waiting)
             x += p.fontMetrics().horizontalAdvance(waiting) + 18
-        summary = plan_counts(model, statuses)
+        summary = plan_counts(model, statuses) + ([facts['est']] if facts['est'] else [])
         p.setFont(font(9.5))
         p.setPen(C.muted)
         p.drawText(QPointF(x, y), '   ·   '.join(summary))
@@ -2067,12 +2160,20 @@ class Header(Clickable):
                        f"≈ {fmt_duration(eta)} left")
 
     def waiting(self, now: float) -> str:
-        """A queued plan's waiting line ('' for any other plan): its place in line, what it waits for, how long."""
+        """A queued plan's waiting line ('' for any other plan): its place in line, what it waits for, its estimate
+        and how long it has waited."""
         model = self.view.model
         if model is None or model.status() != 'queued':
             return ''
-        queue = self.view.owner.queues.get(model.dir) or queue_state(model.dir, model.plan, [])
+        queue = self.view.owner.queues.get(model.dir) or queue_state(model.dir, model.plan, [], now=now)
         return waiting_text(queue, now)
+
+    def facts(self, now: float) -> dict:
+        """A running plan's ``run_facts`` (its express lane, 'est ~40 min · ran 12m'); nothing for any other plan."""
+        model = self.view.model
+        if model is None or model.status() != 'running':
+            return {'express': False, 'est': ''}
+        return run_facts(model.dir, model.plan, self.view.owner.jobs, now)
 
 
 def chain_sections(result: dict) -> list:
@@ -3016,6 +3117,7 @@ class Window(QMainWindow):
         self.cleared: set[Path] = set()     # finished folders 'Clear finished' hid (they don't come back)
         self._heading_at: int | None = None
         self.queues: dict[Path, dict] = {}  # live queued folders -> queue_state (refreshed by each scan)
+        self.jobs: list[dict] = []          # the job registry as of the last scan (running jobs' lanes, estimates)
         self.scanner = LiveScanner()
         self.selection: tuple[Path | None, object] | None = None    # (folder, run index | 'round')
         self.auto_selection = True
@@ -3119,15 +3221,17 @@ class Window(QMainWindow):
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
         others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
-        jobs = read_registry()
-        registered, recent = registry_folders(jobs, time.time())
-        dirs += [path for path in self.scanner.live(registered + others) if path not in dirs]
+        jobs, now = read_registry(), time.time()
+        registered, recent = registry_folders(jobs, now)
+        # A job of another checkout is found twice (its registry entry, its process's logs root): listed once.
+        dirs += [path for path in dict.fromkeys(self.scanner.live(registered + others)) if path not in dirs]
         self.recent = [path for path in recent if path not in self.cleared]
         dirs += [path for path in self.recent if path not in dirs]
         if not self.live_mode:
             dirs += [shown for shown in self._shown_dirs() if shown not in dirs]   # a folder outside root
         self.live_dirs = self.scanner.live(dirs)
-        self.queues = {path: queue_state(path, self.scanner.plan(path), jobs) for path in self.live_dirs
+        self.jobs = jobs
+        self.queues = {path: queue_state(path, self.scanner.plan(path), jobs, now=now) for path in self.live_dirs
                        if self.scanner.plan(path).get('status') == 'queued'}
         if dirs != self.dirs or self.combo.count() == 0:
             self.dirs = dirs
@@ -3188,8 +3292,8 @@ class Window(QMainWindow):
                       key=log_dir_key, reverse=True)
 
     def _show_live(self):
-        """[currently running]: the live folders, newest first, the queued ones (waiting their turn) last in their
-        order in line, then the 'finished' heading and the finished ones."""
+        """[currently running]: the live folders, newest first, the queued ones (waiting their turn) last in the
+        order they will start (their place in line), then the 'finished' heading and the finished ones."""
         live = sorted((path for path in self.kept if path in self.live_dirs), key=log_dir_key, reverse=True)
         waiting = sorted((path for path in live if path in self.queues),
                          key=lambda path: self.queues[path].get('place') or math.inf)
@@ -3571,11 +3675,12 @@ class WebState:
     Its folders are found as [currently running] finds them (the logs root, the job registry, the running triforce
     processes' roots), each read by its own ``Training``.  A card is a training run of a round, an evaluation of a
     batch, or a plan's eval-chain; pending runs are only listed in their plan's line.  A queued plan (waiting its turn)
-    has no cards and no plan line: it is a 'waiting' line (its place in line, what it waits for, since when) until it
-    runs, or until its process is gone.  A run that ended stays ``expire`` seconds after its end (the time its events
-    or plan record; a run seen running that ended without one, e.g. its process died, from when it was seen ended), so
-    runs that ended before the server started never show.  ``clock`` is the time source (tests inject one);
-    ``machine`` returns the machine line."""
+    has no cards and no plan line: it is a 'waiting' line (its place in line, what it waits for, its estimate, since
+    when; in the order they will start) until it runs, or until its process is gone; a running plan in the express
+    lane says so, and one with an estimate shows it beside its time run.  A run that ended stays ``expire`` seconds
+    after its end (the time its events or plan record; a run seen running that ended without one, e.g. its process
+    died, from when it was seen ended), so runs that ended before the server started never show.  ``clock`` is the
+    time source (tests inject one); ``machine`` returns the machine line."""
 
     def __init__(self, root: Path, *, clock=time.time, expire: float = WEB_EXPIRE, machine=None,
                  scan_every: float = WEB_SCAN):
@@ -3657,15 +3762,22 @@ class WebState:
                 started = (chain['start'] or {}).get('ts') or self.first_seen.setdefault(key, now)
                 cards.append({'id': key, 'started_ts': started, 'status': chain['status'], 'expires_in': left,
                               **chain_card(model, chain, now)})
+        facts = self._facts(model, now)
         for card in cards:
             color, label = STATUS.get(card['status'], (C.muted, card['status']))
             card.update(status_label=label, color=color.name(), active=card['status'] in ACTIVE,
-                        started=fmt_clock(card['started_ts']))
+                        started=fmt_clock(card['started_ts']), **facts)
         return cards
 
-    @staticmethod
-    def _plan_line(model: Training, now: float) -> dict:
-        """A live plan's line: its header's facts and the runs it has queued."""
+    def _facts(self, model: Training, now: float) -> dict:
+        """A running plan's ``run_facts`` (express lane, 'est ~40 min · ran 12m'); nothing for any other plan."""
+        if model.status() != 'running':
+            return {'express': False, 'est': ''}
+        return run_facts(model.dir, model.plan, self.jobs, now)
+
+    def _plan_line(self, model: Training, now: float) -> dict:
+        """A live plan's line: its header's facts (its express lane, estimate and time run) and the runs it has
+        queued."""
         statuses = model.statuses()
         queued = [run.name for run, status in zip(model.runs, statuses) if status == 'pending']
         chain = model.chain()
@@ -3676,18 +3788,20 @@ class WebState:
         return {'id': str(model.dir), **plan_fields(model), 'status': model.status(), 'status_label': label,
                 'color': color.name(), 'fraction': model.fraction(now), 'eta': fmt_duration(eta) if eta is not None
                 else '', 'meta': plan_meta(model, now), 'counts': plan_counts(model, statuses), 'queued': queued,
-                'created_ts': model.created_ts}
+                'created_ts': model.created_ts, **self._facts(model, now)}
 
     def _waiting_line(self, model: Training, now: float) -> dict:
-        """A queued plan's line: its place in line, name, kind, what it waits for and for how long."""
-        queue = queue_state(model.dir, model.plan, self.jobs)
+        """A queued plan's line: its place in line (the order they will start), name, kind, what it waits for, its
+        estimate and for how long it has waited."""
+        queue = queue_state(model.dir, model.plan, self.jobs, now=now)
         color, label = STATUS['queued']
         place = queue['place']
+        estimate, waited = queue_times(queue, now)
         return {'id': str(model.dir), **plan_fields(model), 'status': 'queued', 'status_label': label,
                 'color': color.name(), 'place': place, 'place_label': f"{ordinal(place)} in line" if place else '',
                 'running': queue['running'], 'ahead': queue['ahead'], 'limit': queue['limit'],
                 'waits': ('for ' + ', '.join(queue['running'])) if queue['running'] else '',
-                'waited': fmt_duration(now - queue['since']) if queue['since'] is not None else '',
+                'estimate': estimate, 'waited': waited, 'mode': queue['mode'],
                 'text': waiting_text(queue, now), 'created_ts': model.created_ts}
 
     def refresh(self) -> dict:
@@ -3783,6 +3897,7 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .pill:empty{display:none}
 .pill.status{color:var(--c);text-transform:uppercase}
 .pill.kind,.pill.ends{color:var(--muted)}
+.pill.express{color:var(--warn)}
 .badge{margin-left:auto;display:flex;gap:6px;align-items:baseline;font-weight:700;font-size:13px}
 .badge .note{color:var(--faint);font-size:11px;font-weight:600}
 .badge .pill{font-size:12px}
@@ -3953,7 +4068,8 @@ function skeleton() {
   const el = document.createElement('article');
   el.className = 'card';
   el.innerHTML = '<div class="top"><span class="dot"></span><span class="name"></span><span class="family"></span>' +
-    '<span class="pill status"></span><span class="pill kind"></span><span class="pill ends"></span>' +
+    '<span class="pill status"></span><span class="pill kind"></span><span class="pill express"></span>' +
+    '<span class="pill ends"></span>' +
     '<span class="badge"></span></div><div class="sub"></div><div class="where"></div><div class="phase"></div>' +
     '<div class="bar"><div class="fill"></div><div class="blocks"></div><div class="label"></div></div>' +
     '<div class="facts"></div><div class="lines"></div>' +
@@ -3974,6 +4090,7 @@ function update(el, card) {
   setText($('.family', el), card.family && card.family !== card.name ? card.family : '');
   setText($('.pill.status', el), card.status_label);
   setText($('.pill.kind', el), card.kind);
+  setText($('.pill.express', el), card.express ? 'express' : '');
   setText($('.pill.ends', el), card.active || card.expires_in == null ? '' :
     `ended · gone in ${Math.max(0, Math.ceil(card.expires_in))}s`);
   const badge = card.badge;
@@ -3981,7 +4098,7 @@ function update(el, card) {
     `<span class="pill" style="color:${color}">${esc(text)}</span>` : `<span style="color:${color}">${esc(text)}</span>`)
     .join('') + (badge.note ? `<span class="note">${esc(badge.note)}</span>` : ''));
   setText($('.sub', el), [card.plan + (card.plan_kind ? ` (${card.plan_kind})` : ''), card.checkout,
-    card.act ? `act ${card.act}` : '', `started ${card.started}`].filter(Boolean).join('  ·  '));
+    card.act ? `act ${card.act}` : '', `started ${card.started}`, card.est].filter(Boolean).join('  ·  '));
   setText($('.where', el), card.where);
   const phase = $('.phase', el);
   setText(phase, card.phase);
@@ -4052,19 +4169,22 @@ function render(state) {
     const queued = plan.queued.length ? `<span class="queued"><b>queued</b> ${esc(plan.queued.join(', '))}</span>` : '';
     return `<div class="plan" style="--c:${plan.color}"><span class="dot"></span><span class="pname">` +
       `${esc(plan.plan)}</span><span class="pill" style="color:var(--muted)">${esc(plan.plan_kind)}</span>` +
+      (plan.express ? '<span class="pill express">express</span>' : '') +
       (plan.checkout ? `<span class="pill" style="color:var(--faint)">${esc(plan.checkout)}</span>` : '') +
       `<span class="mini"><span style="width:${pct(plan.fraction)}%"></span></span><b>` +
       `${Math.floor(pct(plan.fraction))}%</b>` + (plan.eta ? `<span>≈ ${esc(plan.eta)} left</span>` : '') +
+      (plan.est ? `<span>${esc(plan.est)}</span>` : '') +
       `<span class="muted">${esc(plan.counts.join('  ·  '))}</span>` +
       `<span class="faint">${esc(plan.meta.join('  ·  '))}</span>${queued}</div>`;
   }).join(''));
-  // Jobs waiting their turn in the job queue: a line each, in their order in line (no cards until they run).
+  // Jobs waiting their turn in the job queue: a line each, in the order they will start (no cards until they run).
   setHTML($('#waiting'), (state.waiting || []).map(job =>
     `<div class="plan waiting" style="--c:${job.color}"><span class="dot"></span><span class="wl">waiting` +
     (job.place_label ? ` · ${esc(job.place_label)}` : '') + `</span><span class="pname">${esc(job.plan)}</span>` +
     `<span class="pill" style="color:var(--muted)">${esc(job.plan_kind)}</span>` +
     (job.checkout ? `<span class="pill" style="color:var(--faint)">${esc(job.checkout)}</span>` : '') +
     (job.waits ? `<span class="muted">${esc(job.waits)}</span>` : '') +
+    (job.estimate ? `<span>${esc(job.estimate)}</span>` : '') +
     (job.waited ? `<span>${esc(job.waited)}</span>` : '') + '</div>').join(''));
   const container = $('#cards'), seen = new Set();
   let previous = null;

@@ -57,10 +57,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # pylint: disable=wrong-import-position
 from triforce import _native, registry
 from triforce.cli import chain_progress_events, eval_chain, meta_path
+from triforce.clips import default_mode, switches
 from triforce.evaluate import default_output, eval_event, evaluate_specialist, write_result
 from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir, write_json_atomic
-from triforce.jobs import add_job_arguments, begin_job, child_env
+from triforce.jobs import add_job_arguments, begin_job, child_env, work
 from triforce.metrics import read_jsonl
+from triforce.runner import steps_played
 from triforce.specialist import list_specialists, load_specialist
 from triforce.train import interrupt_on_sigterm, run_status
 
@@ -375,6 +377,17 @@ def check_names(names: list[str]) -> Optional[str]:
     return '; '.join(problems) + f" (trainable: {', '.join(default_specialists())})"
 
 
+def round_work(args, names: list[str], iterations: int) -> dict:
+    """The round's work (``triforce.jobs``): every specialist's training steps and evaluation episodes (seed states
+    x episodes per state x the clips switch states its evaluation plays: no state is loaded to count them), and the
+    chain's route steps."""
+    configs = [load_specialist(name) for name in names]
+    episodes = sum(len(config.resolve_start_states()) * args.episodes_per_state * len(switches(default_mode(config)))
+                   for config in configs)
+    return work(train_steps=len(names) * iterations * args.steps_per_update, eval_episodes=episodes,
+                chain_steps=args.chain_runs * steps_played(_native.DEFAULT_ROUTE))
+
+
 def main(argv=None):
     """Runs the round with a log folder: training.json (plan), round.jsonl/round.log and per-specialist streams.
     Returns 0 when every specialist trained and evaluated and the chain (if any) ran, 1 otherwise, 2 for unknown
@@ -397,7 +410,8 @@ def main(argv=None):
          'run_dir': str(registry.run_dir(name, args.round, models)), 'target_iterations': iterations,
          'target_steps': iterations * args.steps_per_update} for name in names],
                         command=[sys.executable, *sys.argv], models_dir=str(models), steps_budget=args.steps,
-                        events='round.jsonl', log='round.log', chain_runs=args.chain_runs, nice=args.nice)
+                        events='round.jsonl', log='round.log', chain_runs=args.chain_runs, nice=args.nice,
+                        work=round_work(args, names, iterations))
     events = EventLog(log_dir / 'round.jsonl', round=args.round)
     events.emit('start', specialists=names, steps_budget=args.steps, models_dir=str(models), log_dir=str(log_dir),
                 promote=args.promote, train_args=args.train_args, pid=os.getpid(), nice=args.nice)

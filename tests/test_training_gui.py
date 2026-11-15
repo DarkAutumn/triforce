@@ -613,8 +613,9 @@ def test_registry_folders_tell_live_recent_and_old_jobs_apart(tmp_path):
 
 def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeypatch):
     """Jobs registered from two other worktrees: the live one in [currently running] with its checkout, the
-    finished one under the 'finished' heading; 'Clear finished' hides it."""
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    finished one under the 'finished' heading; 'Clear finished' hides it.  The live one is found twice, by its
+    registry entry and by its process's logs root, and is listed once."""
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: {(tmp_path / 'triforce-a' / 'logs').resolve()})
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     registry = tmp_path / 'jobs'
     monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
@@ -659,8 +660,9 @@ def training_events(start, iterations, *, end=None):
     return events
 
 
-def web_plan(root, name, *, created, pid=None, status='running', finished=None, runs=(), kind='round'):
-    """A log folder: its plan (``runs``: (entry, events) pairs, each run's events in ``<name>.jsonl``)."""
+def web_plan(root, name, *, created, pid=None, status='running', finished=None, runs=(), kind='round', extra=None):
+    """A log folder: its plan (``runs``: (entry, events) pairs, each run's events in ``<name>.jsonl``; ``extra``: more
+    top-level plan keys)."""
     import json
     folder = root / name
     folder.mkdir(exist_ok=True)
@@ -670,7 +672,7 @@ def web_plan(root, name, *, created, pid=None, status='running', finished=None, 
         if events is not None:
             write_events(folder / f"{entry.get('name') or entry['specialist']}.jsonl", events)
     plan = {**running_plan(pid or os.getpid(), created), 'status': status, 'name': name, 'kind': kind,
-            'finished': iso(finished) if finished else None, 'runs': entries}
+            'finished': iso(finished) if finished else None, 'runs': entries, **(extra or {})}
     (folder / gui.PLAN_FILE).write_text(json.dumps(plan))
     return folder
 
@@ -884,12 +886,15 @@ def test_web_only_runs_without_a_display(tmp_path):
 
 # ---------------------------------------------------------------------------------------------------- the job queue
 
-def queue_job(registry, root, name, *, kind, pid, status, queued_ts, created, run_status='pending', events=None):
+def queue_job(registry, root, name, *, kind, pid, status, queued_ts, created, run_status='pending', events=None,
+              estimate=None, lane=None, admitted=None):
     """A job's log folder (its plan: one ow-start run) and its registry entry (``<host>-<pid>-<start>-<name>.json``),
-    queued since ``queued_ts`` and, unless ``status`` is 'queued', admitted now."""
+    queued since ``queued_ts`` and, unless ``status`` is 'queued', admitted at ``admitted`` (default now).  With an
+    ``estimate`` (seconds) entry and plan are new code's (``work``, ``estimate``, ``lane``); without, older code's."""
     import json
     import socket
-    folder = web_plan(root, name, created=created, pid=pid, status=status, kind=kind,
+    new = {} if estimate is None else {'work': {'train_steps': 1000}, 'estimate': estimate, 'lane': lane}
+    folder = web_plan(root, name, created=created, pid=pid, status=status, kind=kind, extra=new,
                       runs=[({'specialist': 'ow-start', 'status': run_status}, events)])
     registry.mkdir(exist_ok=True)
     start = gui.process_started(pid)
@@ -897,7 +902,7 @@ def queue_job(registry, root, name, *, kind, pid, status, queued_ts, created, ru
         'schema': 1, 'host': socket.gethostname(), 'pid': pid, 'pid_start': start, 'started': iso(queued_ts),
         'name': name, 'kind': kind, 'log_dir': str(folder), 'plan': str(folder / gui.PLAN_FILE), 'status': status,
         'finished': None, 'queued': iso(queued_ts), 'queued_ts': queued_ts,
-        'admitted': None if status == 'queued' else iso(time_now()), 'no_wait': False}))
+        'admitted': None if status == 'queued' else iso(admitted or time_now()), 'no_wait': False, **new}))
     return folder
 
 
@@ -919,8 +924,17 @@ def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_pat
                                 'waited': None}}
     state = gui.queue_state(tmp_path / 'job', plan, [])
     assert state == {'place': 3, 'running': ['r25-a (round)'], 'ahead': ['x (eval)', 'y (round)'], 'limit': 2,
-                     'since': pytest.approx(now - 90, abs=1)}
+                     'since': pytest.approx(now - 90, abs=1), 'estimate': None, 'lane': None, 'mode': None}
     assert gui.waiting_text(state, state['since'] + 61) == 'waiting · 3rd in line · for r25-a (round) · 1m 01s'
+    # a new-code plan's queue: its estimate (top-level, else the queue's) and the wait, coarse
+    new = {**plan, 'queue': {**plan['queue'], 'estimate': 2400.0, 'work': {'train_steps': 10 ** 6},
+                             'score': 2355.0, 'mode': 'score', 'lane': None}}
+    state = gui.queue_state(tmp_path / 'job', new, [])
+    assert state['estimate'] == 2400.0 and state['mode'] == 'score' and state['lane'] is None
+    assert gui.waiting_text(state, state['since'] + 725) == \
+        'waiting · 3rd in line · for r25-a (round) · ~40 min · waited 12m'
+    state = gui.queue_state(tmp_path / 'job', {**new, 'estimate': 40.0}, [])
+    assert gui.queue_times(state, state['since'] + 42) == ('short ~40 s', 'waited 42s')
     assert gui.waiting_text(gui.queue_state(tmp_path / 'job', queued, []), now) == 'waiting'
     # in the registry: a job without a log folder (--no-log) ahead of it holds its place
     registry = tmp_path / 'jobs'
@@ -934,6 +948,38 @@ def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_pat
     state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry))
     assert state['place'] == 2 and state['ahead'] == ['quiet (eval)'] and state['since'] == now - 100
     assert state['running'] == [] and state['limit'] == 2       # the test's own process: not waited for
+    assert state['mode'] == 'legacy' and state['estimate'] is None
+    # new code: by score (estimate - AGING * seconds waited), the short job before the long one that joined first
+    (registry / 'a.json').write_text(json.dumps({**entry, 'name': 'quiet', 'kind': 'eval', 'log_dir': None,
+                                                 'queued_ts': now - 200, 'estimate': 3000.0, 'lane': None}))
+    (registry / 'b.json').write_text(json.dumps({**entry, 'name': 'job', 'kind': 'round', 'estimate': 60.0,
+                                                 'log_dir': str(tmp_path / 'job'), 'queued_ts': now - 100}))
+    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
+    assert state['place'] == 1 and state['ahead'] == [] and state['mode'] == 'score' and state['estimate'] == 60.0
+    # a long job that has waited long enough goes first: 2400 - 0.5 * 6000 = -600 < 60 - 0.5 * 100 = 10
+    (registry / 'd.json').write_text(json.dumps({**entry, 'name': 'patient', 'kind': 'round', 'log_dir': None,
+                                                 'queued_ts': now - 6000, 'estimate': 2400.0}))
+    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
+    assert state['place'] == 2 and state['ahead'] == ['patient (round)']
+
+
+def test_estimates_and_run_times_read_coarsely():
+    assert [gui.fmt_estimate(s) for s in (3, 40, 42, 59, 180, 2400, 3599, 3600, 4800, 7290)] == [
+        '~5 s', '~40 s', '~40 s', '~1 min', '~3 min', '~40 min', '~1 h', '~1 h', '~1 h 20 min', '~2 h']
+    assert [gui.fmt_coarse(s) for s in (0, 42, 725, 3725)] == ['0s', '42s', '12m', '1h 02m']
+    now = time_now()
+    folder = Path('/nonexistent/261115_009_x')
+    # an old plan (no estimate, no lane): nothing; the plan's own lane and estimate (ran since it was created)
+    assert gui.run_facts(folder, running_plan(os.getpid(), now), [], now) == {'express': False, 'est': ''}
+    plan = {**running_plan(os.getpid(), now - 30), 'lane': 'express', 'estimate': 40.0}
+    assert gui.run_facts(folder, plan, [], now) == {'express': True, 'est': 'est ~40 s · ran 30s'}
+    # the registry entry's lane, estimate and admission win (an entry without a lane runs in the regular lane)
+    import socket
+    entry = {'host': socket.gethostname(), 'pid': os.getpid(), 'status': 'running', 'log_dir': str(folder),
+             'estimate': 2400.0, 'admitted': iso(now - 725)}
+    assert gui.run_facts(folder, plan, [entry], now) == {'express': True, 'est': 'est ~40 min · ran 12m'}
+    assert gui.run_facts(folder, {**plan, 'lane': None}, [entry], now) == {'express': False,
+                                                                           'est': 'est ~40 min · ran 12m'}
 
 
 def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_path, monkeypatch):
@@ -969,6 +1015,10 @@ def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_pa
         assert views[q2].header.waiting(q2_ts + 725) == f'waiting · 2nd in line · for {running} · 12m 05s'
         assert views[q1].header.waiting(q1_ts + 5) == f'waiting · 1st in line · for {running} · 5s'
         assert views[a].header.waiting(now) == ''
+        # older code's jobs (no estimate, no lane): no express marker, no estimate
+        assert views[a].header.facts(now) == {'express': False, 'est': ''}
+        assert window.queues[q1]['mode'] == 'legacy' and window.queues[q1]['estimate'] is None
+        views[a].header.grab()
         title = window.windowTitle()
         assert a.name in title and b.name in title and 'q1' not in title and 'q2' not in title
         assert title.count('·') == 1                                            # two plans
@@ -986,6 +1036,9 @@ def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_pa
         assert line['waits'] == f'for {running}' and line['waited'] == '12m 05s'
         assert line['ahead'] == ['261115_003_q1 (round)'] and line['place'] == 2
         assert line['text'] == f'waiting · 2nd in line · for {running} · 12m 05s'
+        assert line['estimate'] == '' and line['mode'] == 'legacy'
+        assert all(not plan['express'] and plan['est'] == '' for plan in snapshot['plans'])
+        assert all(not card['express'] and card['est'] == '' for card in snapshot['cards'])
 
         # admitted: the plan and its entry say running, its run starts
         queue_job(registry, root, q2.name, kind='round', pid=second.pid, status='running', queued_ts=q2_ts,
@@ -1019,5 +1072,102 @@ def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_pa
             window.close()
             window.deleteLater()
         for child in (first, second):
+            child.kill()
+            child.wait()
+
+
+def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estimate(qapp, tmp_path, monkeypatch):
+    """New code's jobs: the waiting ones listed (window and web view) in the order they will start, by score (a long
+    job that joined first after a short one; a long one that has waited long enough before it), with their estimate
+    and wait; first come first served while a job of older code (no estimate) waits.  A running job shows its
+    estimate and time run, and 'express' in the express lane."""
+    import subprocess
+    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    registry, root = tmp_path / 'jobs', tmp_path / 'logs'
+    root.mkdir()
+    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
+    now, me = time_now(), gui.process_started(os.getpid())
+    a = queue_job(registry, root, '261115_001_r26-a', kind='round', pid=os.getpid(), status='running',
+                  queued_ts=now - 800, created=me, run_status='running', events=training_events(now - 20, 4),
+                  estimate=300.0, lane='express', admitted=now - 725)
+    b = queue_job(registry, root, '261115_002_eval-b', kind='eval', pid=os.getpid(), status='running',
+                  queued_ts=now - 3800, created=me + 0.5, run_status='running', events=training_events(now - 10, 2),
+                  estimate=2400.0, lane='regular', admitted=now - 3725)
+    children = [subprocess.Popen(['sleep', '600']) for _ in range(4)]
+    window = None
+    try:
+        # scores at now: long 4800 - 0.5 * 600 = 4500, short 300 - 30 = 270, patient 2400 - 3000 = -600
+        long_ts, short_ts, patient_ts, legacy_ts = now - 600, now - 60, now - 6000, now - 300
+        long = queue_job(registry, root, '261115_003_long', kind='round', pid=children[0].pid, status='queued',
+                         queued_ts=long_ts, created=time_now(), estimate=4800.0)
+        short = queue_job(registry, root, '261115_004_short', kind='eval', pid=children[1].pid, status='queued',
+                          queued_ts=short_ts, created=time_now(), estimate=300.0)
+        patient = queue_job(registry, root, '261115_005_patient', kind='round', pid=children[2].pid,
+                            status='queued', queued_ts=patient_ts, created=time_now(), estimate=2400.0)
+        running = '261115_001_r26-a (round), 261115_002_eval-b (eval)'
+        regular = '261115_002_eval-b (eval)'        # a job too long for the express place doesn't wait for a's
+        window = gui.Window(root, None)
+        assert window._shown_dirs() == [b, a, patient, short, long]       # running, then in the order they start
+        assert {window.queues[path]['mode'] for path in (patient, short, long)} == {'score'}
+        views = {view.dir: view for view in window.views}
+        assert views[patient].header.waiting(patient_ts + 6000) == \
+            f'waiting · 1st in line · for {regular} · ~40 min · waited 1h 40m'
+        assert views[short].header.waiting(short_ts + 725) == \
+            f'waiting · 2nd in line · for {running} · short ~5 min · waited 12m'
+        assert views[long].header.waiting(long_ts + 600) == \
+            f'waiting · 3rd in line · for {regular} · ~1 h 20 min · waited 10m'
+        assert views[a].header.facts(now) == {'express': True, 'est': 'est ~5 min · ran 12m'}
+        assert views[b].header.facts(now) == {'express': False, 'est': 'est ~40 min · ran 1h 02m'}
+        assert views[short].header.facts(now) == {'express': False, 'est': ''}
+        for path in (a, b, short):
+            views[path].header.grab()
+
+        state = gui.WebState(root, clock=lambda: now, machine=lambda: '', scan_every=0)
+        snapshot = state.refresh()
+        assert [(line['plan'], line['place_label'], line['estimate'], line['waited'], line['mode'])
+                for line in snapshot['waiting']] == [
+            (patient.name, '1st in line', '~40 min', 'waited 1h 40m', 'score'),
+            (short.name, '2nd in line', 'short ~5 min', 'waited 1m', 'score'),
+            (long.name, '3rd in line', '~1 h 20 min', 'waited 10m', 'score')]
+        assert snapshot['waiting'][2]['ahead'] == ['261115_005_patient (round)', '261115_004_short (eval)']
+        plans = {plan['plan']: plan for plan in snapshot['plans']}
+        assert (plans[a.name]['express'], plans[a.name]['est']) == (True, 'est ~5 min · ran 12m')
+        assert (plans[b.name]['express'], plans[b.name]['est']) == (False, 'est ~40 min · ran 1h 02m')
+        cards = {card['plan']: card for card in snapshot['cards']}
+        assert (cards[a.name]['express'], cards[a.name]['est']) == (True, 'est ~5 min · ran 12m')
+        assert (cards[b.name]['express'], cards[b.name]['est']) == (False, 'est ~40 min · ran 1h 02m')
+        page = gui.web_page().decode()
+        assert '.pill.express{color:var(--warn)}' in page and 'card.est]' in page and 'job.estimate' in page
+
+        # a job of older code (no estimate) waits: first come first served for every waiting job
+        legacy = queue_job(registry, root, '261115_006_legacy', kind='round', pid=children[3].pid,
+                           status='queued', queued_ts=legacy_ts, created=time_now())
+        window._scan_and_update()
+        window.poll(force=True)
+        assert window._shown_dirs() == [b, a, patient, long, legacy, short]
+        assert {window.queues[path]['mode'] for path in (patient, long, legacy, short)} == {'legacy'}
+        views = {view.dir: view for view in window.views}
+        assert views[legacy].header.waiting(legacy_ts + 300) == f'waiting · 3rd in line · for {running} · 5m 00s'
+        assert views[short].header.waiting(short_ts + 725) == \
+            f'waiting · 4th in line · for {running} · short ~5 min · waited 12m'
+        snapshot = state.refresh()
+        assert [(line['plan'], line['estimate'], line['waited']) for line in snapshot['waiting']] == [
+            (patient.name, '~40 min', 'waited 1h 40m'), (long.name, '~1 h 20 min', 'waited 10m'),
+            (legacy.name, '', '5m 00s'), (short.name, 'short ~5 min', 'waited 1m')]
+
+        # it is gone: back to the score
+        children[3].kill()
+        children[3].wait()
+        window._scan_and_update()
+        window.poll(force=True)
+        assert window._shown_dirs()[:5] == [b, a, patient, short, long] and legacy not in window.queues
+        snapshot = state.refresh()
+        assert [line['plan'] for line in snapshot['waiting']] == [patient.name, short.name, long.name]
+    finally:
+        if window is not None:
+            window.close()
+            window.deleteLater()
+        for child in children:
             child.kill()
             child.wait()
