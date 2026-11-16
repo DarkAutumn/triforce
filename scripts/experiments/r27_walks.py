@@ -61,7 +61,7 @@ def hearts_bytes(hearts: float, containers: int = 12) -> dict:
 
 def load(path, seed: int) -> Walk:
     """A trial: the saved state with the game's own randomness for `seed`."""
-    w = Walk(seed=seed)
+    w = StagingWalk(seed=seed)
     w.game.load(str(path), randomize_rng=True, seed=seed)
     return w
 
@@ -85,10 +85,11 @@ class Tally:
     def press(self, buttons='NONE', frames: int = 1):
         for _ in range(frames):
             h = self.w.hearts()
+            near = nearest(self.w)                               # before the frame: a shot ends on the frame it hits
             self.w.press(buttons, 1)
             self.frames += 1
             if self.w.hearts() < h:
-                self.by[nearest(self.w)] += h - self.w.hearts()
+                self.by[near] += h - self.w.hearts()
 
     def go(self, axis: str, value: int, limit: int = 600) -> bool:
         """Walks along `axis` to `value`; a knockback off the line is walked back.  False: not there in `limit`
@@ -249,8 +250,9 @@ LEG_WALK = [
 def leg_states(out: Path, inventory: dict = None) -> dict:
     """Walks the leg once from the D7 piece with the monster slots emptied every frame (`StagingWalk`) and saves
     every room's pre-entry state into `out`: {name: path}, plus '0_42c' (Link's first playable frame in 0x42 after
-    the piece, its Moblin already made) and '6_79s' (level 6's start room as the leg delivers him: white sword;
-    load it with `ram_overrides={'sword': 3}` for the magic sword)."""
+    the piece, its Moblin already made), '0_50e' (0x50 as the wrap exit out of 0x51 arrives in it) and '6_79s' (level
+    6's start room as the leg delivers him).  The states up to 0x21 hold the white sword, those after it the magic
+    sword."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     w = out_of_d7(inventory)
@@ -258,6 +260,8 @@ def leg_states(out: Path, inventory: dict = None) -> dict:
     w.game.save_state_file(str(paths['0_42c']))
     w.staging = True
     for state, points, button in LEG_WALK:
+        if state == '0_31n':
+            w.game.write(INV_SWORD, 3)                           # the states after 0x21's cave hold the magic sword
         for x, y in points:
             if w.goto(x=x) < 0 or w.goto(y=y) < 0:
                 raise RuntimeError(f'staging walk to {state}: stopped at {w.where()} on the way to ({x:#x},{y:#x})')
@@ -277,6 +281,20 @@ def leg_states(out: Path, inventory: dict = None) -> dict:
         raise RuntimeError(f'staging walk: 0x22 did not lead into level 6: {w.where()}')
     w.game.restore(snapshot)
     w.game.save_state_file(str(paths['6_79s']))
+    # the clip way's 0x50: the wrap exit out of 0x51 by the agent's CLIP E, its pre-entry frame kept by the session
+    v = Walk()
+    v.game.load(str(paths['0_51e']), randomize_rng=False)
+    for s in range(1, 0x0C):
+        v.game.write(OBJ_TYPE + s, 0)
+    v.game.set_clips(True)
+    v.game.capture_pre_entry = True
+    v.game.act('CLIP E')
+    snapshot = v.game.last_pre_entry
+    if v.room != 0x50 or snapshot is None:
+        raise RuntimeError(f'staging walk: CLIP E out of 0x51 did not arrive in 0x50: {v.where()}')
+    v.game.restore(snapshot)
+    paths['0_50e'] = out / '0_50e.state'
+    v.game.save_state_file(str(paths['0_50e']))
     return paths
 
 
@@ -315,7 +333,9 @@ def stage_d6(room: int, entry: str = None, hearts: float = None, sword: int = 3,
     from triforce.probe import Probe          # pylint: disable=import-outside-toplevel
     inv = dict(D6_INVENTORY, sword=sword)
     flags = {}
-    if on_route and (room, entry) in D6_ROUTE:
+    if room == 0x79 and entry == 'S':
+        entry = None                                             # the level entry itself
+    elif on_route and (room, entry) in D6_ROUTE:
         flags, inv['keys'], inv['bombs'] = d6_ledger(room, entry)
     if hearts is not None:
         inv.update(hearts_bytes(hearts))
@@ -331,7 +351,7 @@ def stage_d6(room: int, entry: str = None, hearts: float = None, sword: int = 3,
             game.write(addr, value)
 
     side = probe.enter_room(6, room, entry, lit=lit, setup=setup)
-    return Walk(game=probe.game), side, probe
+    return StagingWalk(game=probe.game), side, probe
 
 
 def d6_state(room: int, entry: str = None, path=None, **kwargs) -> str:
@@ -339,7 +359,8 @@ def d6_state(room: int, entry: str = None, path=None, **kwargs) -> str:
     w, side, probe = stage_d6(room, entry, **kwargs)
     tag = '-'.join(f'{k}{v}' for k, v in sorted(kwargs.items()) if k in ('hearts', 'sword'))
     path = path or TMP / f'6_{room:02x}{side.lower()}_{tag or "route"}.state'
-    probe.game.restore(probe.pre_entry)
+    if probe.pre_entry is not None:                              # the start room: its first frame (no monsters)
+        probe.game.restore(probe.pre_entry)
     probe.game.save_state_file(str(path))
     return str(path)
 
