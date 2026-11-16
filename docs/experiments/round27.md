@@ -397,9 +397,14 @@ a scratch models directory holding each family's `promoted` file and a link to t
     --train-args "--load {name} --iterations 2 --sil-coeff 0.1 --stop-success 1.01"
 ```
 
-**Started, not finished when this was written** (it waits its turn behind two rounds); its result is not in this
-document. wizzrobe is not in it: its staged tracks were still being written. Not run at all: a training with
-`--demos`.
+**All ten trained and evaluated** (exit 0; states, tracks and masks load). Each `run.json` `curriculum_tracks`
+lists the stretch's tracks of §8 beside the old ones: ow-moblin 80 tracks (14 of the stretch: the twelve states less
+`0_61n_1`, and the three `~plain`), ow-lynel 30 (15), ow-ghini 21 (21), boss-gohma 3 (3), vire 36 (6), zol 24 (3),
+trap-room 24 (3), like-like 9 (3), equipment-room 27 (3); stalfos-keese-gel has no `curriculum:` in its yaml and
+loads none (its nine Dungeon 6 tracks exist and are unused, as its old rooms'). Two iterations train nothing: the
+round's evaluations (2 episodes a state) only show that the rooms run (ow-ghini 100%, boss-gohma 50%, ow-lynel 74%
+with 0x50 at 33%). **Not in the round: wizzrobe** (its block rooms' tracks were not written yet). **Not run at
+all: a training with `--demos`.**
 
 ## 11. The baseline: today's models on the stretch
 
