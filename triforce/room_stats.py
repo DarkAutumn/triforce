@@ -9,16 +9,18 @@ per room visit, ``crates/env/src/chain.rs``) and the single-room evaluations of 
 writes one JSON file, ``<chains-dir>/<TAG>-room-stats.json`` (``FORMAT``), with the same per-room fields in every
 scope (``SCOPES``):
 
-- ``full``: the ``full`` file (runs from the game start to the D5 triforce).  ``death_rate`` = runs that died in the
+- ``full``: the ``full`` file (runs from the game start to the D7 triforce).  ``death_rate`` = runs that died in the
   room / runs started: the chance, on a full run, of dying there.
-- ``to-d2``, ``to-d1``, ``to-d3``, ``to-d4``, ``to-d5`` (segments: the route cut at the dungeon exits): game start ->
-  out of Dungeon 2 (0:0x3c), 0:0x3c -> out of Dungeon 1 (0:0x37), 0:0x37 -> out of Dungeon 3 (0:0x74), 0:0x74 -> out
-  of Dungeon 4 (0:0x45, the triforce's warp), 0:0x45 -> the D5 triforce.  Each from the file whose runs start at the
-  segment's start (``full``, ``post-d2``, ``post-d1``, ``post-d3``, ``post-d4``), cut at the first entry into the
-  next segment's start step: the runs play on to the route's end, the segment is the stretch before the cut.
+- ``to-d2``, ``to-d1``, ``to-d3``, ``to-d4``, ``to-d5``, ``to-d7`` (segments: the route cut at the dungeon exits):
+  game start -> out of Dungeon 2 (0:0x3c), 0:0x3c -> out of Dungeon 1 (0:0x37), 0:0x37 -> out of Dungeon 3 (0:0x74),
+  0:0x74 -> out of Dungeon 4 (0:0x45, the triforce's warp), 0:0x45 -> out of Dungeon 5 (0:0x0b), 0:0x0b -> the D7
+  triforce.  Each from the file whose runs start at the
+  segment's start (``full``, ``post-d2``, ``post-d1``, ``post-d3``, ``post-d4``, ``post-d5``), cut at the first entry
+  into the next segment's start step: the runs play on to the route's end, the segment is the stretch before the cut.
   ``death_rate`` = runs that died in the room within the segment / runs started on it.  A room on several segments
   (overworld 0x38) has an entry in each.
-- ``d2``, ``d1``, ``d3``, ``d4``, ``d5``: the dungeon files (from the dungeon's entrance), cut like the segments.
+- ``d2``, ``d1``, ``d3``, ``d4``, ``d5``, ``d7``: the dungeon files (from the dungeon's entrance), cut like the
+  segments.
 - ``room``: the single-room evaluations (``triforce.evaluate``, ``visited_rooms``) of the models the chains played
   (each in its chain act mode), merged per room weighted by visits.  Here a run is an isolated episode that entered
   the room: ``death_rate`` = such episodes that died in it / such episodes.
@@ -30,7 +32,8 @@ A chain room entry (``chain_entry``): ``runs`` (of the scope), ``entered`` (runs
 runs: survival out of it), per visit ``hearts_lost`` (``max(0, health_in - health_out)``), ``hearts_gained``,
 ``hearts_change``, ``hearts_healed``, ``hits`` (actions that lost health: the records' ``hits``, round 22; None in
 files from before it), ``steps``, ``frames``, ``clips`` (``clip_done``; None in files from before clips), ``bombs``
-(placed) and ``cheated_bombs``, then ``wrong_exits`` (visits that left by a wrong exit), ``outcomes`` (visits by
+(placed) and ``cheated_bombs``, ``cheated_keys``, ``cheated_rupees`` (the cheat ledger's items the visit was handed:
+each per visit and, ``cheated``, summed), then ``wrong_exits`` (visits that left by a wrong exit), ``outcomes`` (visits by
 outcome), ``specialists`` (visits by specialist), ``risk`` (the visits' decision statistics, round 23:
 ``variety.risk`` per visit) and ``variety`` (the visits' action sequences) and ``steps`` (the same fields per route
 step through the room: ``"44"``, or ``"off"`` for visits off the route).  A chain scope also has ``risk`` per run.
@@ -93,6 +96,7 @@ PLAYING_OUTCOMES = ('exit-correct', 'exit-wrong', 'retreat', 'milestone', 'in-pr
 STEP_BACK, STEP_AHEAD = 2, 8            # assign_steps: how far from the route cursor a visit may match a step
 DIGITS = 5
 SWITCHES = ('on', 'off')               # the run-time clips switch (triforce.clips.name)
+CHEATED = ('cheated_bombs', 'cheated_keys', 'cheated_rupees')      # RoomRecord: the cheat ledger's items per visit
 BOTH = 'both'                          # load_evals_by_clips: every visit, both switch states together
 
 
@@ -109,17 +113,19 @@ class Scope:
 
 
 SCOPES = (
-    Scope('full', 'full', 'Full run: start → the D5 triforce', 'full', 'start', None),
+    Scope('full', 'full', 'Full run: start → the D7 triforce', 'full', 'start', None),
     Scope('to-d2', 'segment', 'To D2: start → out of Dungeon 2 (0:0x3c)', 'full', 'start', '0_3cc_0'),
     Scope('to-d1', 'segment', 'To D1: 0:0x3c → out of Dungeon 1 (0:0x37)', 'post-d2', '0_3cc_0', '0_37c_0'),
     Scope('to-d3', 'segment', 'To D3: 0:0x37 → out of Dungeon 3 (0:0x74)', 'post-d1', '0_37c_0', '0_74c_0'),
     Scope('to-d4', 'segment', 'To D4: 0:0x74 → out of Dungeon 4 (0:0x45)', 'post-d3', '0_74c_0', '0_45c_0'),
-    Scope('to-d5', 'segment', 'To D5: 0:0x45 → the D5 triforce', 'post-d4', '0_45c_0', None),
+    Scope('to-d5', 'segment', 'To D5: 0:0x45 → out of Dungeon 5 (0:0x0b)', 'post-d4', '0_45c_0', '0_0bc_0'),
+    Scope('to-d7', 'segment', 'To D7: 0:0x0b → the D7 triforce', 'post-d5', '0_0bc_0', None),
     Scope('d2', 'dungeon', 'Dungeon 2: 2:0x7d → out (0:0x3c)', 'd2', '2_7ds_0', '0_3cc_0'),
     Scope('d1', 'dungeon', 'Dungeon 1: 1:0x73 → out (0:0x37)', 'd1', '1_73s_0', '0_37c_0'),
     Scope('d3', 'dungeon', 'Dungeon 3: 3:0x7c → out (0:0x74)', 'd3', '3_7cs_0', '0_74c_0'),
     Scope('d4', 'dungeon', 'Dungeon 4: 4:0x71 → out (0:0x45)', 'd4', '4_71s_0', '0_45c_0'),
-    Scope('d5', 'dungeon', 'Dungeon 5: 5:0x76 → the D5 triforce', 'd5', '5_76s_0', None),
+    Scope('d5', 'dungeon', 'Dungeon 5: 5:0x76 → out (0:0x0b)', 'd5', '5_76s_0', '0_0bc_0'),
+    Scope('d7', 'dungeon', 'Dungeon 7: 7:0x79 → the D7 triforce', 'd7', '7_79s_0', None),
 )
 ROOM_SCOPE = 'room'
 ROOM_LABEL = 'Room only: isolated single-room evaluations'
@@ -241,7 +247,8 @@ class _Visits:
         self.sums['steps'] += record.get('steps') or 0
         self.sums['frames'] += record.get('frames') or 0
         self.sums['bombs'] += record.get('bombs_used') or 0
-        self.sums['cheated_bombs'] += record.get('cheated_bombs') or 0
+        for item in CHEATED:
+            self.sums[item] += record.get(item) or 0
         if 'clip_done' in record:
             self.clips = True
             self.sums['clips'] += record['clip_done'] or 0
@@ -274,7 +281,8 @@ class _Visits:
             'frames_per_visit': per_visit('frames'),
             'clips_per_visit': per_visit('clips') if self.clips else None,
             'bombs_per_visit': per_visit('bombs'),
-            'cheated_bombs_per_visit': per_visit('cheated_bombs'),
+            **{f'{item}_per_visit': per_visit(item) for item in CHEATED},
+            'cheated': {item.removeprefix('cheated_'): int(self.sums[item]) for item in CHEATED},
             'wrong_exits': self.outcomes['exit-wrong'],
             'outcomes': dict(self.outcomes),
             'specialists': dict(self.specialists),
@@ -544,7 +552,8 @@ def eval_entry(merged: dict) -> dict:
         'frames_per_visit': None,
         'clips_per_visit': _round(merged.get('clip_done_per_visit')),
         'bombs_per_visit': _round(merged.get('bombs_used_per_visit')),
-        'cheated_bombs_per_visit': _round(merged.get('cheated_bombs_per_visit')),
+        **{f'{item}_per_visit': _round(merged.get(f'{item}_per_visit')) for item in CHEATED},
+        'cheated': None,
         'wrong_exits': None,
         'outcomes': dict(exits),
         'specialists': dict(merged.get('specialists') or []),

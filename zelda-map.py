@@ -159,7 +159,8 @@ WAY_MARKS = {'clips': 'c', 'plain': 'p'}   # route step numbers on a stretch's w
 # The segment row: the route cut at the dungeon exits, then each dungeon alone (room_stats.SCOPES).
 SEGMENTS = tuple(scope.name for scope in STAT_SCOPES if scope.kind in ('segment', 'dungeon'))
 SEGMENT_LABELS = {'to-d2': 'To D2', 'to-d1': 'To D1', 'to-d3': 'To D3', 'to-d4': 'To D4', 'to-d5': 'To D5',
-                  'd2': 'D2 alone', 'd1': 'D1 alone', 'd3': 'D3 alone', 'd4': 'D4 alone', 'd5': 'D5 alone'}
+                  'to-d7': 'To D7', 'd2': 'D2 alone', 'd1': 'D1 alone', 'd3': 'D3 alone', 'd4': 'D4 alone',
+                  'd5': 'D5 alone', 'd7': 'D7 alone'}
 SCOPE_TABLE = ('Scope', 'Runs', 'Visits', 'Reach', 'Death', 'Stuck', '♥ ±/v', 'Clips/v')
 ZOOM_STEP = 1.15           # per wheel notch
 MAX_SCALE = 8.0            # 8x the NES pixels

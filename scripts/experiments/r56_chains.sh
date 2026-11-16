@@ -1,11 +1,11 @@
 #!/bin/bash
 # Round 16: the chain segments (AGENTS.md "Chain segments") for the promoted team, 120 runs each (seeds 0-119), in one
-# act mode, then the yardstick report. Every segment plays on to the route's end (the D5 triforce); its arrival is
+# act mode, then the yardstick report. Every segment plays on to the route's end (the D7 triforce); its arrival is
 # the first entry into the next segment's start room, so the segments add up along the route:
 #
 #   segment  from      arrival
-#   full     start     the D5 triforce (also reported at each milestone room: d2, post-d2, d1, post-d1, d3, post-d3, d4,
-#                      post-d4, d5)
+#   full     start     the D7 triforce (also reported at each milestone room: d2, post-d2, d1, post-d1, d3, post-d3, d4,
+#                      post-d4, d5, post-d5, d7)
 #   d2       2_7ds_0   0:0x3c (out of Dungeon 2, the post-d2 start)
 #   post-d2  0_3cc_0   1:0x73 (Dungeon 1's entrance)
 #   d1       1_73s_0   0:0x37 (out of Dungeon 1)
@@ -14,10 +14,12 @@
 #   post-d3  0_74c_0   4:0x71 (Dungeon 4's entrance)
 #   d4       4_71s_0   0:0x45 (out of Dungeon 4: the triforce's warp, the post-d4 start)
 #   post-d4  0_45c_0   5:0x76 (Dungeon 5's entrance; round 24: the leg, its three stretches)
-#   d5       5_76s_0   the D5 triforce
-#   (round 26, the scouting route d7: ROUTE=d7 SEGMENTS="post-d5:0_0bc_0 d7:7_79s_0")
-#   post-d5  0_0bc_0   7:0x79 (Dungeon 7's entrance: the whirlwind, the shops, the pond)
+#   d5       5_76s_0   0:0x0b after 5:0x14 (out of Dungeon 5 with its triforce, the post-d5 start)
+#   post-d5  0_0bc_0   7:0x79 (Dungeon 7's entrance; round 26: the whirlwind, the shops, the pond)
 #   d7       7_79s_0   the D7 triforce
+#
+# The route ended on the D5 triforce until round 26: a full run to there is the milestone `full→post-d5` of the
+# report, or a chain of its own, `triforce eval-chain --stop-at step:209 ...` (0:0x0b out of Dungeon 5).
 #
 #   [ACT=model] TAG=r73-1k RUNS=1000 scripts/experiments/r56_chains.sh [run|report]
 #
@@ -40,11 +42,10 @@ ACT=${ACT:-model}
 TAG=${TAG:-r56-$ACT}
 RUNS=${RUNS:-120}
 OUT=${OUT:-target/r56-chains}
-SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0"}
+SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0 post-d5:0_0bc_0 d7:7_79s_0"}
 
 chain_args=()
 [ -n "${CLIPS:-}" ] && chain_args+=("--clips $CLIPS")
-[ -n "${ROUTE:-}" ] && chain_args+=("--route $ROUTE")
 clips=()
 if [ ${#chain_args[@]} -gt 0 ]; then clips=(--chain-args "${chain_args[*]}"); fi
 

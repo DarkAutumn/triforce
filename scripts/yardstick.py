@@ -19,7 +19,8 @@ markdown tables:
 - per chain segment: arrivals (Wilson interval) and hearts at arrival: with `@L:0xRR` the runs that entered that
   room (the segment's end, e.g. the next segment's start room), else the successful runs, and Link's health on
   arriving (`eval_batch.arrival_hearts`: out of a dungeon, the health he entered its triforce room with, since the
-  triforce refills his hearts); plus the five rooms where the other runs ended.
+  triforce refills his hearts); the cheated bombs, keys and rupees the runs were handed up to the arrival, with the
+  number of runs handed any (`cheated`, `runs_with_cheats`); plus the five rooms where the other runs ended.
 
 `compare` prints, per row, both values and whether the intervals separate (`better` / `worse` / `~` overlapping).
 Specialist rows measured in different act modes are not compared (exit 1) unless `--allow-mode-mismatch`.
@@ -39,6 +40,7 @@ from triforce.evaluate import read_evaluation
 from triforce.events import write_json_atomic
 
 Z = 1.96
+CHEAT_ITEMS = _native.CHEAT_ITEMS
 # t(0.975, df) for df 1..30; beyond 30 the Cornish-Fisher expansion around Z (error < 1e-4).
 T_975 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131,
          2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042)
@@ -137,10 +139,18 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
                                  f"of route {route!r}")
     arrived = [(r, room) for r, room in ((r, arrival(r, target)) for r in runs) if room is not None]
     ends = Counter()
+    cheated, cheating_runs = Counter(), 0
     for r in runs:
-        if arrival(r, target) is None and r['rooms']:
+        there = arrival(r, target)
+        if there is None and r['rooms']:
             room = r['rooms'][-1]
             ends[f"{room['level']}:{room['room']}{':cave' if room['in_cave'] else ''} {room['outcome']}"] += 1
+        # The cheat ledger up to the arrival (the whole run when it never arrived or has no target).
+        played = r['rooms'] if there is None or target is None else r['rooms'][:next(
+            i for i, room in enumerate(r['rooms']) if room is there)]
+        used = Counter({item: sum(room.get(f'cheated_{item}') or 0 for room in played) for item in CHEAT_ITEMS})
+        cheated.update(used)
+        cheating_runs += any(used.values())
     return {
         'segment': name,
         'target': target,
@@ -149,6 +159,8 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
         'arrivals': wilson(len(arrived), len(runs)),
         'hearts_at_arrival': mean_ci([eval_batch.arrival_hearts(r, room) for r, room in arrived]),
         'where_runs_end': ends.most_common(5),
+        'cheated': {item: cheated[item] for item in CHEAT_ITEMS},
+        'runs_with_cheats': cheating_runs,
     }
 
 
@@ -234,12 +246,13 @@ def report(args) -> int:
     if skipped:
         print(f"\nno run {args.run!r}: {', '.join(skipped)}")
     if chains:
-        print('\n| segment | runs | arrivals | hearts at arrival | where runs end |')
-        print('|---|---:|---|---|---|')
+        print('\n| segment | runs | arrivals | hearts at arrival | cheated bombs / keys / rupees (runs) | where runs end |')
+        print('|---|---:|---|---|---|---|')
         for row in chains:
             ends = ', '.join(f"{k} ×{n}" for k, n in row['where_runs_end'])
+            cheats = ' / '.join(str(row['cheated'][item]) for item in CHEAT_ITEMS) + f" ({row['runs_with_cheats']})"
             print(f"| {row['segment']} | {row['runs']} | {row['arrived']}: {fmt(row['arrivals'], True)} | "
-                  f"{fmt(row['hearts_at_arrival'])} | {ends} |")
+                  f"{fmt(row['hearts_at_arrival'])} | {cheats} | {ends} |")
     return 0
 
 
