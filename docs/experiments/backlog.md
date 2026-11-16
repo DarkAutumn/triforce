@@ -43,6 +43,36 @@ answers `docs/decisions.md` 2026-11-17.
 - [ ] **A scripted fight for 0x38 and 0x3a** does not exist (the walks' doorway script fails); a teacher for the
   wizzrobe family would have to be the planner.
 
+## Round 26 (the leg to Dungeon 7 and Dungeon 7): found while building states, curricula and the baseline (Nov 17)
+
+round26.md §7-11. Nothing is trained yet; these are open.
+
+- [ ] **The first team.** The baseline `r76-base` is 0 of 200 on both segments, clips on and off (round26.md §11):
+  0x0b's model walks back into Dungeon 5, and every run dies in 7:0x49 at the latest. New skills nobody has: the
+  whirlwind (0x0b), both shops, the Armos stairs, the pond, FOOD for the Grumble; fights lost: 7:0x49, 0x19, 0x1a,
+  0x1b, 0x39, 0x1c, 0x0d.
+- [ ] **7:0x1b has no full-fight track.** The explorer does not clear six Blue Goriyas (9000 iterations, 190k env
+  steps a state, twice); the staged starts with kills banked (`--room-kills`) are solved. The family trains the
+  full room from `room_kills` staging only. Its 21 states after it are `fight_skipped`: rebuild them from harvested
+  chain states once a model clears the room (`eval-chain --harvest`, as round 24's after the Olive Garden).
+- [ ] **`clips:` has no room list.** goriya's `clips: true` (for 7:0x1a) also offers CLIP in 7:0x29, 7:0x18 and
+  7:0x2b (`scripts/experiments/r26_clip_scan.py`; nowhere in its Dungeon 1 and 2 rooms, where today's model plays
+  the same episodes with the switch on, off or `clips: false`). Scoping needs `rooms:` in `env::config::ClipsConfig`,
+  read where the family's switch is set (`SpecialistEnv`, `ChainEnv`, `GameCompletion::set_clips`). Decide after the
+  first goriya training: does the model waste steps on the skips of those three rooms?
+- [ ] **The explorer turns a cheat grant into Link's own item.** `SpecialistEnv::restore` begins the cheat ledger
+  anew, so a bomb granted for a wall and not yet placed is Link's after the next cell restore: chain 2's states
+  from `7_4acave_2` on held one bomb too many and were rebuilt by hand (`r26_d7_states.py bombs`). The ledger's
+  grants should be part of what a cell saves and restores.
+- [ ] **`heart_value.json` has no curve for steps 209-247** (no chain has reached the D7 triforce). goriya and
+  equipment-room price hearts there by the plain health terms. Refit when a team arrives: `python -m
+  triforce.heart_value <chain jsonl>...`.
+- [ ] **0x34 back out of its cave costs 2.5 hearts a visit** with today's ow-leever (the woken Armos walks off its
+  square onto the stairs' exit; 15 deaths in 120 episodes).
+- [ ] **7:0x1c's leave-and-return shortcut** (one small Digdogger dead, out W and back in: the room is empty,
+  `d7-walks.md` §5) is not in the route; the explorer needs 161-300 steps for the three small ones (boss-digdogger
+  `max_steps` 900).
+
 ## Done (Nov 16): round 25 (leave rooms with more hearts; 1.5.0.1)
 
 round25.md. From the game start to the D5 triforce 4.8 | 0.3% → 19.7 | 2.6% (clips on | off, models alone); the
