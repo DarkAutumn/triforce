@@ -262,6 +262,37 @@ impl Room {
         self.threshold
     }
 
+    /// The game's own limit (`RoomFirstUnwalkableTile` `$34A`) where it is above the overworld default (round 26):
+    /// the drained pond of Q1 room 0x42, whose water asm:FluteSecret_CuePondPaletteRow makes walkable by raising the
+    /// limit to `$99` (its stairs lie in that water). Every start state holds the defaults (`$89` overworld, `$78`
+    /// underworld), so no other room changes.
+    pub fn with_first_unwalkable(mut self, limit: u8) -> Room {
+        if !self.overworld || limit <= self.threshold {
+            return self;
+        }
+        self.threshold = limit;
+        self.exits = self.exit_tiles();
+        self
+    }
+
+    /// Opened bombable walls (round 26, 7:0x69 N): the game lets Link through an opened bomb hole by its door type
+    /// (asm:Doorway_CheckLink, [`crate::GameView::is_bomb_door_open`]), whatever tile its rim shows (the N and W rims
+    /// are unwalkable tiles), so the hole is a doorway corridor and an exit as an open door is. A dungeon room's
+    /// doors only; a door whose tile already reads walkable is left as it is.
+    pub fn with_open_doorways(mut self, directions: &[Direction]) -> Room {
+        if self.overworld || self.location.in_cave {
+            return self;
+        }
+        for &direction in directions {
+            if self.is_door_tile_walkable(direction) {
+                continue;
+            }
+            self.add_locked_door_corridor(direction);
+            self.exits.set(direction, vec![Self::door_exit_tile(direction)], true);
+        }
+        self
+    }
+
     pub fn is_loaded(&self) -> bool {
         self.loaded
     }
@@ -905,5 +936,52 @@ mod tests {
         assert_eq!((costed.path_cost(15, 6), costed.path_cost(15, 5), costed.path_cost(14, 10)), (1, 0, 0));
         let twice = room([], false).with_path_costs(&[band[0], band[0]]);
         assert_eq!(twice.path_cost(16, 15), 2, "overlapping rectangles add up");
+    }
+
+    /// Round 26: 0x42's drained pond. The pond's water ($90/$95) blocks Link until the game raises its walkable limit
+    /// to `$99` (asm:FluteSecret_CuePondPaletteRow); the room model follows the game's limit when it is above the
+    /// overworld default and ignores a lower one (every start state holds `$89`) and the underworld's.
+    #[test]
+    fn a_raised_walkable_limit_opens_the_drained_pond() {
+        let mut tiles = [0x24u8; CELLS];
+        for r in 8..=13 {
+            tiles[index(12, r)] = 0x90;
+            tiles[index(13, r)] = 0x95;
+        }
+        let pond = Room::new(MapLocation::new(0, 0x42, false), &tiles, false);
+        assert!(!pond.is_tile_walkable(12, 10) && !pond.can_move(12, 13, Direction::N));
+        let drained = pond.clone().with_first_unwalkable(0x99);
+        assert!(drained.is_tile_walkable(12, 10) && drained.can_move(12, 13, Direction::N));
+        assert_eq!(drained.threshold(), 0x99);
+        assert_eq!(pond.clone().with_first_unwalkable(0x89).threshold(), OW_FIRST_UNWALKABLE);
+        assert_eq!(pond.with_first_unwalkable(0).threshold(), OW_FIRST_UNWALKABLE);
+        let floor = room([], false).with_first_unwalkable(0x99);
+        assert_eq!(floor.threshold(), UW_FIRST_UNWALKABLE, "the underworld keeps its own");
+    }
+
+    /// Round 26 (7:0x69, also 4:0x21 and 4:0x11): an opened N bomb hole's rim is an unwalkable tile ($8C/$8D at the
+    /// door position), yet the game lets Link through by the door's type. Given as open, the hole is an exit the path
+    /// search reaches; without it the N side is a wall; a door already walkable is not touched.
+    #[test]
+    fn an_opened_bomb_hole_is_a_doorway() {
+        let mut tiles = [FLOOR; CELLS];
+        for c in 0..COLS {
+            for r in 0..4 {
+                tiles[index(c, r)] = 0xF6;
+            }
+        }
+        tiles[index(15, 2)] = 0x8C;
+        tiles[index(16, 2)] = 0x8D;
+        tiles[index(15, 3)] = 0x24;
+        tiles[index(16, 3)] = 0x24;
+        let shut = Room::new(MapLocation::new(7, 0x69, false), &tiles, false);
+        assert!(!shut.exits.contains(Direction::N));
+        assert!(shut.wavefront(&[Target::Dir(Direction::N)], &[], &[], false).get((15, 10)).is_none());
+        let open = shut.with_open_doorways(&[Direction::N]);
+        assert_eq!(open.exits.get(Direction::N), Some(&[(15, 0)][..]));
+        assert!(open.wavefront(&[Target::Dir(Direction::N)], &[], &[], false).get((15, 10)).is_some());
+        let floor = room([], false);
+        let before = floor.exits.get(Direction::N).map(<[Tile]>::to_vec);
+        assert_eq!(floor.with_open_doorways(&[Direction::N]).exits.get(Direction::N).map(<[Tile]>::to_vec), before);
     }
 }

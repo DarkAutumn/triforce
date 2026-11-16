@@ -21,6 +21,8 @@ pub const MODE_DYING: u8 = 17;
 
 const OBJ_BLOCK_ID: u8 = 0x68;
 const PUSH_BLOCK_SLOT: usize = 11;
+/// asm:RoomFirstUnwalkableTile: tiles at or above it block movement.
+const ADDR_FIRST_UNWALKABLE: u16 = 0x34A;
 
 const ANIMATION_BEAMS_ACTIVE: u8 = 16;
 const ANIMATION_BEAMS_HIT: u8 = 17;
@@ -521,8 +523,9 @@ impl GameView {
         (&self.ram[offset..offset + len]).try_into().unwrap()
     }
 
-    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, the game.yaml W
-    /// wrap exit's rows, its `wrap_in` exit and its `path_costs`).
+    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, the game's walkable
+    /// limit where a drained pond raised it, opened bomb holes as doorways, the game.yaml W wrap exit's rows, its
+    /// `wrap_in` exit and its `path_costs`).
     pub fn room(&self) -> &Room {
         self.room.get_or_init(|| {
             let room = self.map.get(self.full_location());
@@ -533,7 +536,11 @@ impl GameView {
             let wrap_in = room.and_then(|r| {
                 r.exits.values().find_map(|e| Some((Direction::from_exit(&e.direction)?, e.wrap_in?)))
             });
+            let holes: Vec<Direction> =
+                [Direction::N, Direction::S, Direction::W, Direction::E].into_iter().filter(|&d| self.is_bomb_door_open(d)).collect();
             Room::new(self.full_location(), self.current_tiles(), self.ladder())
+                .with_first_unwalkable(self.peek(ADDR_FIRST_UNWALKABLE))
+                .with_open_doorways(&holes)
                 .with_wrap_exit(wrap_exit)
                 .with_wrap_in(wrap_in)
                 .with_path_costs(room.map_or(&[], |r| r.path_costs.as_slice()))
@@ -1084,7 +1091,8 @@ impl GameView {
 
     /// The game would start `kind`'s weapon now (Link_HandleInput and the *_Wield routines): Link is in his normal
     /// state ($AC = 0), the sword is not blocked and its slot ($B9) is free for SWORD/BEAMS, the boomerang ($BB) and
-    /// arrow ($BE) slots are free or returning (bit 7), and Bomb_Wield finds a bomb slot ($BC/$BD). The food needs
+    /// arrow ($BE) slots are free or hold a state with bit 7 (in $0F food, which a throw replaces; never in $12;
+    /// asm:Boomerang_Wield, asm:Arrow_Wield), and Bomb_Wield finds a bomb slot ($BC/$BD). The food needs
     /// slot $0F empty (asm:Food_Wield: no boomerang out, no food down); the candle an empty $10 or $11 and, blue, no
     /// fire yet in this room (asm:Candle_Wield, `HasUsedCandle` $513); the recorder no tune playing (`FluteTimer`
     /// $3C; asm:Flute_Wield leaves Link's state at 0).

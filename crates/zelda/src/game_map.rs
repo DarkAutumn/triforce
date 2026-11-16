@@ -41,7 +41,8 @@ pub enum Secret {
     /// the statue's top-left tile.
     Armos(Tile),
     /// The pond the recorder drains (asm:FluteSecret_Update, Q1 room 0x42): the stairs appear on `Tile` 81-88
-    /// frames after the tune's freeze; room flag `$80` keeps them.
+    /// frames after the tune's freeze (B+232); the pond fills again on every visit, whatever room flag `$80` says
+    /// (Walks26, Nov 16), so every visit plays it again.
     Recorder(Tile),
 }
 

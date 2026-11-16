@@ -1176,7 +1176,8 @@ impl GameCompletion {
     /// The tiles that enter this room's sub-room.  Overworld: the cave mouth, else the game.yaml `bomb_secret` rock
     /// wall (2x2 tiles: bombed open, the opening is the entrance), else (round 26) a [`Secret`]'s: its stairs once
     /// they show, before that the tiles Link wakes the Armos from (beside the statue, W and E: from below it costs a
-    /// heart) or the pond's stairs tile (the recorder drains it from anywhere).  Underworld: the stairs down to the
+    /// heart) or the pond's shore ([`pond_shore`]: the recorder drains it from anywhere out of the border band, and
+    /// its stairs lie in the water, out of the path search's reach until then).  Underworld: the stairs down to the
     /// cellar (the top-left tile of each stairs square).
     fn cave_tiles(&self, state: &GameView) -> Vec<Tile> {
         if state.level() > 0 {
@@ -1198,7 +1199,7 @@ impl GameCompletion {
         }
         match secret {
             Secret::Armos((c, r)) => vec![(c - 2, r), (c + 2, r)],
-            Secret::Recorder(tile) => vec![tile],
+            Secret::Recorder(tile) => pond_shore(&state.room(), tile),
         }
     }
 
@@ -1670,6 +1671,31 @@ const SECRET_COLOR_CYCLE: u16 = 0x51A;
 /// route goes down its stairs.
 pub fn pond_full(state: &GameView, tile: Tile) -> bool {
     state.peek(SECRET_COLOR_CYCLE) == 0 && !state.room().stairs_tiles().contains(&tile)
+}
+
+/// The pond's shore (round 26, the objective while its stairs don't show): the walkable tiles beside the water that
+/// holds `tile` (the stairs' tile; the unwalkable tiles 4-connected to it). The recorder plays from anywhere out of
+/// the border band, so Link heads for the pond, and once it drains he stands beside its stairs.
+pub fn pond_shore(room: &crate::room::Room, tile: Tile) -> Vec<Tile> {
+    use crate::room::{COLS, ROWS};
+    let inside = |(c, r): Tile| (0..COLS).contains(&c) && (0..ROWS).contains(&r);
+    let mut water = BTreeSet::from([tile]);
+    let mut queue = vec![tile];
+    let mut shore = BTreeSet::new();
+    while let Some((c, r)) = queue.pop() {
+        for next in [(c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)] {
+            if !inside(next) || water.contains(&next) {
+                continue;
+            }
+            if room.is_tile_walkable(next.0, next.1) {
+                shore.insert(next);
+            } else {
+                water.insert(next);
+                queue.push(next);
+            }
+        }
+    }
+    shore.into_iter().collect()
 }
 
 /// Link stands where only a skip leads on (round 24): in an overworld room, no exit (an edge or the cave mouth) he can
@@ -2154,5 +2180,33 @@ mod tests {
         assert_eq!((reserves[217], reserves[218], reserves[247]), (0, 2, 2));
         let bombs = per_step(reserve_ways(steps, bomb_reserve_of));
         assert_eq!((bombs[227], bombs[228], bombs[240], bombs[246]), (0, 3, 2, 0));
+    }
+
+    /// Round 26: while 0x42's pond is full its stairs tile lies in water no path reaches, so the objective's target
+    /// is the pond's shore: the walkable tiles 4-adjacent to the water around the stairs tile, not a separate rock.
+    #[test]
+    fn the_pond_s_target_is_its_shore() {
+        use crate::room::{COLS, ROWS, Room};
+        let mut tiles = [0x24u8; (COLS * ROWS) as usize];
+        let mut set = |c: i32, r: i32, t: u8| tiles[(c * ROWS + r) as usize] = t;
+        // The pond: columns 10-13, rows 8-11 (water $90); a rock apart at (5, 5).
+        for c in 10..=13 {
+            for r in 8..=11 {
+                set(c, r, 0x90);
+            }
+        }
+        set(5, 5, 0x90);
+        let room = Room::new(MapLocation::new(0, 0x42, false), &tiles, false);
+        let shore = pond_shore(&room, (12, 10));
+        let mut want: Vec<Tile> = Vec::new();
+        for c in 10..=13 {
+            want.extend([(c, 7), (c, 12)]);
+        }
+        for r in 8..=11 {
+            want.extend([(9, r), (14, r)]);
+        }
+        want.sort_unstable();
+        assert_eq!(shore, want);
+        assert!(!shore.contains(&(5, 4)), "a separate rock's side is no shore");
     }
 }
