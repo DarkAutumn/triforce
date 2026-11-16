@@ -101,8 +101,10 @@ DEFAULT_GRID = '4x3'
 DEFAULT_SCALE = 2
 DEFAULT_PARALLEL = 8
 DEFAULT_STALL_STEPS = 300   # actions in a room without damage either way (round 10 §6)
-# The Options menu's act modes beside the one given with --act (docs/experiments/round23.md).
-MENU_ACTS = (registry.PLAY_ACT, 'sample', 'temperature:0.75+relax:16', 'escape:16', 'argmax', registry.MODEL_ACT)
+# The Options menu's act modes beside the one given with --act (docs/experiments/round23.md; round 25: the honest
+# planner, registry.PLAN_ACT).
+MENU_ACTS = (registry.PLAY_ACT, registry.PLAN_ACT, 'sample', 'temperature:0.75+relax:16', 'escape:16', 'argmax',
+             registry.MODEL_ACT)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -221,7 +223,8 @@ def menu_acts(act: str, fixed_delay: bool) -> list:
     modes = list(dict.fromkeys((*MENU_ACTS, act)))
     if fixed_delay:
         modes = [mode for mode in modes if mode != registry.MODEL_ACT and registry.draws(mode)]
-    labels = {registry.PLAY_ACT: f"{registry.PLAY_ACT} (default)", registry.MODEL_ACT: "each model's own"}
+    labels = {registry.PLAY_ACT: f"{registry.PLAY_ACT} (default)", registry.PLAN_ACT: "honest planner (plan:16:1)",
+              registry.MODEL_ACT: "each model's own"}
     return [(mode, labels.get(mode, mode)) for mode in modes]
 
 

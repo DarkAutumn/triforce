@@ -58,6 +58,11 @@ VERSION_NAME = 'version'
 # chains, the early-stop confirmation, a run without an ``act`` file, and play (``PLAY_ACT``).
 ACT_RULE = 'temperature:0.5+relax:16'
 DEFAULT_ACT = ACT_RULE
+# The honest planner (round 25, the owner's decision of Nov 16; docs/decisions.md "The honest planner beside the
+# models"): the project's rule with one-step foresight against one future whose random numbers are redrawn
+# (docs/rust-actor.md "Foresight"). A second, labelled act mode beside the models alone (chain reports, the golden
+# path, play, a teacher to try); never a default.
+PLAN_ACT = f'{ACT_RULE}+plan:16:1'
 # ``--act model``: each model acts by its own act mode.
 MODEL_ACT = 'model'
 

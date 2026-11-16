@@ -168,6 +168,13 @@ among the policy's actions, 0 its first choice, the taken action's joint index a
 `low:H` the foresight belongs to its part: `temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+guard:8` guards
 only at 2 hearts or fewer.
 
+**The honest planner (the owner, Nov 16; `docs/decisions.md` "The honest planner beside the models"):
+`temperature:0.5+relax:16+plan:16:1`** (`registry.PLAN_ACT`) is a second, labelled act mode beside the models alone:
+reported beside them in chain reports, for the golden path and play (`play-zelda.py`'s Options menu lists it as
+"honest planner"), and a teacher to try. It is never a default (`ACT_RULE`, `DEFAULT_ACT`, `PLAY_ACT` and the `act`
+files stay the rule alone). Its cost is one extra emulation of each decision's action (about 2x a run's frames).
+`guard:K` stays a comparison only.
+
 **The stall signal of `escape` and `relax`** is the env's linger count (`zelda::linger`,
 `LingerTracker::tail_steps`): steps since the last hit, kill, pickup, heal, room change or new best approach to the
 objective on a frozen wavefront, the same count the `no-room-progress` ending and the chain's stall check read. The

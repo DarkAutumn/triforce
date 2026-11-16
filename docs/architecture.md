@@ -765,7 +765,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
   Evaluation, chains and `run` follow it per model; their `--act MODE` forces one mode for every model (`--act
   model`, their default, follows the registry; `eval-batch --chains` and `r56_chains.sh` too). The play tools
   (`play-zelda.py` with its live cell, `zelda-headless.py`, the golden path) default to the one constant
-  `registry.PLAY_ACT` (the same rule), never argmax. `train --confirm-act` and `train_round.py --eval-act`
+  `registry.PLAY_ACT` (the same rule), never argmax. `registry.PLAN_ACT` (`temperature:0.5+relax:16+plan:16:1`,
+  the honest planner; the owner, Nov 16) is the labelled second mode beside the models alone, for chain reports, the
+  golden path, play and teaching, never a default. `train --confirm-act` and `train_round.py --eval-act`
   default to `DEFAULT_ACT`. The act modes and the run-time clips switch (round 22) are independent: every tool
   that takes `--act` takes `--clips` beside it, and a record carries both its switch fields and its decision
   statistics.

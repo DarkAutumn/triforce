@@ -296,7 +296,7 @@ def test_a_run_in_a_low_health_act_mode_replays_bit_exactly(states_dir, models_d
     assert _native.replay_verify(recording.data, states_dir=str(states_dir))['frames'] == recording.frames
 
 
-@pytest.mark.parametrize('foresight', ['guard:4', 'plan:4:2'])
+@pytest.mark.parametrize('foresight', ['guard:4', 'plan:4:2', 'plan:16:1'])
 def test_a_run_with_foresight_replays_bit_exactly(states_dir, models_dir, foresight):
     """Round 25: a chain run recorded with foresight (each decision's action tried in the emulator, the game's random
     numbers redrawn for ``plan``, and replaced when it would lose health) records only the frames it played: it names

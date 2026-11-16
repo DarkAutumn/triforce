@@ -2259,3 +2259,30 @@ hours. Lee: "fast jobs run sooner than later ... the time waited check will EVEN
   the old rule in every join order.
 - Still no controller, no new knob: `--no-wait` and `--nice` are the only opt-outs; `$TRIFORCE_MAX_JOBS` keeps
   meaning the regular places.
+
+## 2026-11-16 — The honest planner beside the models (the owner, round 25)
+
+The owner, Nov 16, from the round 25 foresight screens: "the honest planner (`plan:K:S`, redrawn random numbers)
+runs beside the models. Models alone stay the primary number and what training optimises; the honest planner is a
+second, labelled act mode: reported beside it in every chain report, used for the golden path and for play, and to
+be tried as a teacher. The full guard (real future) was not chosen: keep its numbers as the comparison, but it is
+not to become a default anywhere."
+
+- **The setting: `temperature:0.5+relax:16+plan:16:1`** (`registry.PLAN_ACT`; docs/rust-actor.md "Foresight"). Before
+  each decision the env tries the drawn action against one future whose random numbers are redrawn (a natural RNG
+  phase keyed by the run, the decision and the future), and when Link would lose health takes the first of the
+  rule's 16 best that wouldn't. On the 300-run screens (clips on, the rule's seeds) it matched the full guard within
+  noise (D5 91.0 vs 92.0%, D3 78.7 vs 77.3%, D4 99.7 vs 99.3%, D2 98.7 vs 99.7%; the rule alone 47.7, 64.7, 83.3,
+  88.3); more futures (S = 4, 8) or refusing only on more than half of them changed nothing beyond noise, at 5-9x the
+  emulation, and K = 16 beat K = 4 and 8. Cost: one extra emulation of each decision's action (about 2x the frames of
+  a run, 1.7-2.4x the wall time measured).
+- **Exact.** A trial comes back to exactly where the run stood (machine, random numbers, every counter of the env
+  and the chain, the recording cut back), so a run with the planner is a sequence of button presses like any other
+  and its replay verifies on the emulator alone; `guard:1`, a trial before every decision that never replaces, plays
+  every one of 1200 screen runs record for record as the rule alone.
+- **Where.** Any `--act` (`eval-chain`, `eval-batch`, `r56_chains.sh ACT=`, `zelda-headless.py` and its `--golden`
+  path, `play-zelda.py` and its Options menu); never a default: `ACT_RULE`, `DEFAULT_ACT`, `PLAY_ACT` and every
+  model's `act` file stay the rule alone, and training never tries actions. Chain reports give the models alone
+  first and the planner beside them, labelled.
+- **Not chosen: `guard:K`** (the game's real future): a valid run of button presses chosen with knowledge a player
+  doesn't have. It stays a spelling for comparison only.
