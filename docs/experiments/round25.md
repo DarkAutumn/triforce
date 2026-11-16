@@ -460,6 +460,10 @@ deaths against 76), c4 55.2% (+2.9 ± 2.2; 0x37 0.15 a visit, 10 deaths; Garden 
 0.20 a visit, 80% clean, 28 deaths against 1.19, 0%, 91; Garden 79, 0x64 back 45 deaths as before)**, ctl 49.7%
 (c5 − ctl +5.8 ± 2.1). The remaining 0x37 hits are swings the clone misses where its own path leaves the rule's (the
 rule is hit in 1 of 300 single-room episodes, c5 in 27). Recipe: `scripts/experiments/r25_d5_37_tracks.py --demos`.
+Fresh seeds 1000-1999, paired with `fresh-B75-on|off-d5`: clips on 59.9% against 50.7% (+9.2 ± 2.1; 0x37 0.18 a
+visit, 18 deaths against 1.18, 89; the Garden 82 deaths against 54), clips off 46.8% against 41.6% (+5.2 ± 2.2; 0x37
+0.14, 8 deaths against 0.95, 54; the plain 0x64 fight 159 deaths against 123). The Blue Darknut rooms are the thing
+to watch when this recipe is used again.
 
 **The other rooms are real fights** (no mechanical cause found):
 
