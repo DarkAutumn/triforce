@@ -33,11 +33,14 @@ KINDS, DIRECTIONS, DURATIONS = 11, 8, 4
 # Traces whose last observation the round 26 route vocabulary changed (docs/experiments/round26.md §5), with their
 # hashes on the merged code.  Five end on a wrong exit into a room through its opened bomb hole (4:0x11 and 4:0x21
 # from N, 5:0x66 from W), which is a doorway of the room view since then (`Room::with_open_doorways`): the path search
-# finds the way, so `target` points instead of reading "no path".  `5_14s_0` ends on the triforce, out on 0:0x0b
-# after `d2first`'s last step: `objective` and `target` name the room to the S there, where they named nothing.
+# finds the way, so `target` points instead of reading "no path".  `5_14s_0` ends on the triforce, out on 0:0x0b:
+# since the route merge (round26.md §7) that is `d2first`'s step 209, the whirlwind's, so the last observation names
+# that step's objective.  With `d2first` cut after the D5 triforce (routes.yaml and heart_value.json in a copy of the
+# data) this code computes the hash the vocabulary's merge had pinned (`8064edbd...`, where `objective` and `target`
+# named the room to the S): the route going on is the trace's only change.
 ROUTE_CHANGES = {
     'gibdo': {
-        '5_14s_0.state': '8064edbde8c4c56f5ef0d7feb21975b24528e4c3a790dd6ac62951fed839db66',
+        '5_14s_0.state': '0afea6fca7134dad9326bf3081f3bc5ad1b435973d1ed055e782daf9974cea09',
         '5_65e_2.state': 'd6903e85ede43b79310de7f68134c2a0f92543cf2c4f7a01825833c8e9860502',
     },
     'stalfos-keese-gel': {
@@ -79,11 +82,16 @@ def _action(mask, rng) -> list:
     return [kind, int(rng.choice(dirs)) if len(dirs) else 0, int(rng.choice(durs)) if len(durs) else 0]
 
 
-def family_hashes(name: str) -> dict:
-    """{start state file name: sha256 of the schema 5 columns of the reset and ``STEPS`` steps from it}."""
+def family_hashes(name: str, recorded=None) -> dict:
+    """{start state file name: sha256 of the schema 5 columns of the reset and ``STEPS`` steps from it}, over every
+    start state of the family or only the ``recorded`` ones (file names): a state's seed is its place in the sorted
+    list, so states added after the record (round 26: Dungeon 7's) must not shift the recorded ones."""
     env = _native.Env(name, states_dir=str(REPO_STATES_DIR), seed=0, strict_actions=False)
     out = {}
-    for index, path in enumerate(sorted(env.config.resolve_start_states(str(REPO_STATES_DIR)))):
+    paths = sorted(env.config.resolve_start_states(str(REPO_STATES_DIR)))
+    if recorded is not None:
+        paths = [path for path in paths if Path(path).name in recorded]
+    for index, path in enumerate(paths):
         rng = np.random.default_rng(index)
         sha = hashlib.sha256()
         obs, _ = env.reset(seed=index, options={'start_state': path})
@@ -106,7 +114,8 @@ def test_schema5_columns_are_unchanged(name):
     golden = json.loads(GOLDEN.read_text(encoding='utf-8'))
     if name not in golden['families']:
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
-    assert family_hashes(name) == golden['families'][name] | ROUTE_CHANGES.get(name, {})
+    recorded = golden['families'][name]
+    assert family_hashes(name, recorded) == recorded | ROUTE_CHANGES.get(name, {})
 
 
 def main(argv=None) -> int:

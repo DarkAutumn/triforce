@@ -138,7 +138,7 @@ Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen 
 reads the tile under him (no look-ahead at X >= `$F0`), and N/S there read column `$1F` and the bytes after the tile
 map (`$67F0` on) as column `$20`, as the game does.
 
-### The leg to Dungeon 7 (round 26; `docs/routes/d7.md` §11, scouting route `d7`)
+### The leg to Dungeon 7 (round 26; `docs/routes/d7.md` §11; steps 209-247 of `d2first`)
 
 The whirlwind, the shops, the Armos and the pond are no executor macros: the model presses the buttons through its
 own actions (MOVE, RECORDER, FOOD), and the rules live in the mask (an action is offered only where and when the
@@ -176,8 +176,19 @@ route step wants it) and in the objective (targets, outcomes).
   path search and so the `target` input and PBRS after a bomb in every N or W bomb wall (7:0x69 N; on `d2first`
   4:0x21 N, 4:0x11 N).
 - **States and segments.** The entry side `r` names a state entered by the whirlwind (`0_45r_<chain>`,
-  `entry_states.ENTRY_SIDES`, `StateName`). `eval_batch.D7_SEGMENTS`: `post-d5` from `0_0bc_0` (target 7:0x79) and
-  `d7` from `7_79s_0` (the D7 triforce); `r56_chains.sh` takes them with `ROUTE=d7 SEGMENTS=...`.
+  `entry_states.ENTRY_SIDES`, `StateName`). The stretch is part of `d2first` (decisions 2026-11-17: the scouting
+  route `d7` was merged before any state was built), so its segments are two more of `eval_batch.SEGMENTS`:
+  `post-d5` from `0_0bc_0` (arrival: 7:0x79) and `d7` from `7_79s_0` (the D7 triforce, the route's end); `d5` arrives
+  at 0:0x0b entered after 5:0x14, and a run of round 25's full route is `--stop-at step:209`. Room-stats has the
+  scopes `to-d7` and `d7`. The start states of steps 209-247 (114: 38 a chain) come from
+  `scripts/experiments/r26_d7_states.py sources` (the D5 triforce-room states with the bombs a run brings: 3, 4
+  and none) and `entry_states build --start-step 208 --source ... --skip-fights 7:0x1b:W` (the one fight the
+  explorer cannot clear; the 21 states after it are `fight_skipped`), the plain way of `dock-44` by `entry_states
+  path`; their curriculum tracks from `scripts/experiments/r26_d7_curricula.sh` (`docs/experiments/round26.md` §7-8).
+- **goriya's clips.** `clips: true` on goriya is for 7:0x1a's block clip to the candle cellar's stairs. `clips:`
+  has no room list, so CLIP is offered wherever `zelda::clips::skip_target` finds a skip in the family's rooms: by
+  `scripts/experiments/r26_clip_scan.py` nowhere in its Dungeon 1 and 2 rooms, and in 7:0x1a, 7:0x29 (the same
+  diamond), 7:0x18 (ladder clips over its water) and 7:0x2b (round26.md §9).
 - **Walked** (`crates/zelda/tests/d7.rs`, from `5_14s_0`, monsters removed): every step and its rule asserted, to the
   D7 triforce; beside it a wrong ware is `missed`, the rupee top-up, the whirlwind mask for seven counter and piece
   cases, the Armos from either side.
@@ -1208,7 +1219,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `--parallel` envs, chains and the report alone. `--chain` takes everything `eval-chain` does but `--append`
   (its output is written as `<output>.tmp` and moved into place when it succeeded; a segment start without
   `--stop-at` also counts arrivals at the next segment's start room); `--evaluate` everything `evaluate` does.
-  `--chains TAG` is `r56_chains.sh`: the eight segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
+  `--chains TAG` is `r56_chains.sh`: the twelve segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
   then the report entry (`scripts/yardstick.py report`, `triforce room-stats TAG`); `--families` the evaluation of
   each family's promoted (or `--run-id`) run in each of `--acts` (`model` or act mode spellings; `--clips` for
   every one; `--output-dir DIR` writes `DIR/<family>-<act>[-clips<mode>].json` instead of into the run dir). A
