@@ -349,8 +349,8 @@ def main(argv=None):
                                       "one log folder, one after another, niced)")
     sub.add_parser('room-stats', help="python -m triforce.room_stats TAG ... (per-room chain and eval statistics "
                                       "by scope: full run, segments, room only)")
-    sub.add_parser('convert-model', help="python -m triforce.convert RUN_DIR... | --promoted --out DIR (widen 1.4.1 "
-                                         "checkpoints to this code's action kinds and observation)")
+    sub.add_parser('convert-model', help="python -m triforce.convert RUN_DIR... | --promoted --out DIR (widen 1.5.0 "
+                                         "checkpoints to this code's observation)")
     sub.add_parser('select-checkpoint', help="python -m triforce.select_checkpoint FAMILY RUN ... (choose a run's "
                                              "numbered checkpoint by a chain segment, confirmed on fresh seeds)")
     sub.add_parser('list', help="specialists, their promoted run and run count")

@@ -282,7 +282,8 @@ def test_a_low_health_mode_switches_on_the_decision_health_crosses_its_threshold
     each decision: the first decision after a hit is already the low mode's. The visit records count the decisions
     and their hits by health."""
     names = ['ow-moblin', 'ow-zora']
-    policies = [random_network(1).to_native(), random_network(4).to_native()]
+    # Random networks whose ow-zora loses health in these runs (seed 6 since schema 6 widened the inputs).
+    policies = [random_network(1).to_native(), random_network(6).to_native()]
     task = native.ChainTask(names, 'd2first', seeds=[0, 3, 5], start_from=str(require_state('0_5aw_0')),
                             max_steps=80, states_dir=str(states_dir))
     with native.EnvPool(task, num_envs=3, seed=0) as pool:
@@ -345,7 +346,7 @@ def _foresight_runs(states_dir, mode, seeds=(0, 3, 5)):
     """Chain runs from 0x5a W (ow-zora, then ow-moblin: Link is hit) acted on by two random networks in ``mode``:
     the run results and the plays (observations recorded) by seed."""
     names = ['ow-moblin', 'ow-zora']
-    policies = [random_network(1).to_native(), random_network(4).to_native()]
+    policies = [random_network(1).to_native(), random_network(6).to_native()]
     task = native.ChainTask(names, 'd2first', seeds=list(seeds), start_from=str(require_state('0_5aw_0')),
                             max_steps=80, states_dir=str(states_dir))
     with native.EnvPool(task, num_envs=3, seed=0) as pool:

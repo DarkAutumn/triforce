@@ -1225,6 +1225,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         };
         self.session.set_vetoed_wraps(&vetoed);
         self.builder.bomb_reserve = reserve;
+        self.builder.rupee_reserve = rupees;
     }
 
     /// The `clips:` switch of the family `location` is tagged with in game.yaml (false for an untagged room or a
@@ -1404,7 +1405,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 if exit_correct {
                     self.harvest_entry(&name, index)?;
                 }
-                self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target);
+                self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target)
+                    .with_hidden_positions(config.obs.hidden_positions);
                 self.track = match self.rewards {
                     true => Some(RewardTrack::new(config.clone(), &state, &objective).map_err(|e| e.0)?),
                     false => None,

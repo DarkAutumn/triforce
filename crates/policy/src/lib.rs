@@ -389,6 +389,8 @@ pub struct Scratch {
     ff: Vec<f32>,
     scores: Vec<f32>,
     token_in: Vec<f32>,
+    /// The token inputs `input_proj` reads ([`Policy::entity_live`]), when some are dropped.
+    token_live: Vec<f32>,
     pooled: Vec<f32>,
     grid_a: Vec<f32>,
     grid_b: Vec<f32>,
@@ -435,6 +437,10 @@ pub struct Policy {
     room_embedding: Embedding,
     type_embedding: Embedding,
     input_proj: Linear,
+    /// The entity token columns (features, then the type embedding) `input_proj` reads, when some are read by no
+    /// weight: the same drop as [`Policy::live`], for entity features added with zero weights (`triforce
+    /// convert-model`, schema 6).
+    entity_live: Option<Vec<usize>>,
     layers: Vec<EncoderLayer>,
     output_proj: Linear,
     tile_embedding: Embedding,
@@ -516,7 +522,12 @@ impl Policy {
             dim: config.entity_embed_dim,
             vocab: type_vocab,
         };
-        let input_proj = w.linear("entity_encoder.input_proj", d, entity_features + config.entity_embed_dim)?;
+        let mut input_proj = w.linear("entity_encoder.input_proj", d, entity_features + config.entity_embed_dim)?;
+        let entity_live: Vec<usize> = (0..input_proj.inp).filter(|&i| input_proj.reads(i)).collect();
+        let entity_live = (entity_live.len() < input_proj.inp).then(|| {
+            input_proj.keep_inputs(&entity_live);
+            entity_live
+        });
         let mut layers = Vec::new();
         for i in 0..config.entity_layers {
             let p = format!("entity_encoder.transformer.layers.{i}");
@@ -638,6 +649,7 @@ impl Policy {
             room_embedding,
             type_embedding,
             input_proj,
+            entity_live,
             layers,
             output_proj,
             tile_embedding,
@@ -681,6 +693,17 @@ impl Policy {
         sizes
     }
 
+    /// How many input columns the build dropped because no weight reads them: the towers' first layers'
+    /// ([`Policy::live`]) and the entity encoder's `input_proj`'s ([`Policy::entity_live`]). A model trained from
+    /// scratch has none; a converted one has its added columns.
+    pub fn dropped_inputs(&self) -> [usize; 2] {
+        let dropped = |live: &Option<Vec<usize>>, n: usize| live.as_ref().map_or(0, |l| n - l.len());
+        [
+            dropped(&self.live, self.features),
+            dropped(&self.entity_live, self.entity_features + self.config.entity_embed_dim),
+        ]
+    }
+
     /// A hash of the config and every weight's name, shape and bits: identifies the model in replay records.
     pub fn hash(&self) -> u64 {
         self.hash
@@ -719,6 +742,7 @@ impl Policy {
             ff: vec![0.0; self.config.entity_ff_dim],
             scores: vec![0.0; self.slots],
             token_in: vec![0.0; self.entity_features + self.config.entity_embed_dim],
+            token_live: vec![0.0; self.entity_live.as_ref().map_or(0, Vec::len)],
             pooled: vec![0.0; d],
             grid_a: vec![0.0; grid_max],
             grid_b: vec![0.0; grid_max],
@@ -803,7 +827,15 @@ impl Policy {
         for i in 0..slots {
             s.token_in[..nf].copy_from_slice(&input.entity_features[i * nf..(i + 1) * nf]);
             s.token_in[nf..].copy_from_slice(self.type_embedding.row(input.entity_types[i]));
-            self.input_proj.apply(&s.token_in, &mut s.tokens[i * d..(i + 1) * d]);
+            let token = if let Some(live) = &self.entity_live {
+                for (o, &k) in s.token_live.iter_mut().zip(live) {
+                    *o = s.token_in[k];
+                }
+                &s.token_live
+            } else {
+                &s.token_in
+            };
+            self.input_proj.apply(token, &mut s.tokens[i * d..(i + 1) * d]);
         }
         let heads = self.config.entity_heads;
         let hd = d / heads;

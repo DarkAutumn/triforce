@@ -4691,7 +4691,7 @@ rooms:
   treasure: null
   bomb_walls: [W]
   trigger: push-block-stairs  # attr F & 7 = 5
-  push_block: [W]  # the block at ($C0,$90) has blocks N and S of it; pushed W from the E side the stairs (NE corner) are 3 squares up; pushed E (which also makes them) Link is left inside the ring; it needs the room clear (walked Nov 13)
+  push_block: [W]  # the block at ($C0,$90) has blocks N and S of it; pushed W from the E side the stairs (NE corner) are 3 squares up; pushed E from inside the C of blocks (which also makes them) Link walks out the C's open W side and round the top to the stairs, a detour of about 300 frames, not a dead end (walked Nov 16, docs/routes/d7-walks.md §7); it needs the room clear (walked Nov 13)
   stairs: [26, 4]
 - level: 7
   location: '0x18'

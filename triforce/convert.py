@@ -1,37 +1,38 @@
-"""Widens checkpoints of the previous action and observation layout to the current one: ``triforce convert-model``.
+"""Widens checkpoints of the previous observation layout to the current one: ``triforce convert-model``.
 
     triforce [--models-dir DIR] convert-model (RUN_DIR... | --promoted) [--out DIR]
 
-Round 24 (1.4.2.0) added the action kinds RECORDER, FOOD and CANDLE (kind-head indices 8-10, after CLIP; every
-existing index kept) and their observation: the ``history`` kind one-hot grew from 8 to 11 (``kind_RECORDER``,
-``kind_FOOD``, ``kind_CANDLE`` after ``kind_CLIP``) and ``link`` ends in ``recorder_usable``, ``food_usable``,
-``candle_usable``. A 1.4.1 checkpoint (action schema 2, observation schema 4) is widened, not retrained:
+Round 26 (1.5.1.0, observation schema 6; decisions 2026-11-16 "Schema 6: the one observation change for the rest of
+the game") added inputs to three blocks and changed no existing column: 8 entity features after the 33 of schema 5
+(``touch_harms``, ``weapon_target``, ``touch_damage``, ``visible``, ``phase``, ``phase_time``, ``in_line``,
+``ringleader``), 6 at the end of ``link`` (``sword_blocked``, ``sword_blocked_time``, ``arrow_usable``,
+``rupee_reserve``, ``rupees_spare``, ``rupees_few``) and 4 at the end of ``room_state`` (``frame_phase_32``,
+``frame_phase_64``, ``wallmaster_cooldown``, ``wallmaster_lure``). A 1.5.0 checkpoint (observation schema 5, action
+schema 3) is widened, not retrained:
 
-- ``mlp_extractor.policy_net.0.weight`` and ``mlp_extractor.value_net.0.weight``: every old feature column moves to
-  its feature name's new column; the added features' columns are zero (the network ignores them; the Rust policy
-  drops all-zero columns, so it computes bit for bit what the source did).
-- ``kind_head.weight`` / ``kind_head.bias``: the old rows kept; each new kind's row is WAIT's with the bias
-  ``NEW_KIND_BIAS_BELOW_WAIT`` lower, so its logit is WAIT's minus 5 in every state. WAIT is legal in every state,
-  so a new kind is never the argmax and is drawn at most ``e^-5`` (0.7%) as often as WAIT when a family first
-  unmasks it, little enough not to disturb the model, enough for PPO to try it and learn from there.
-- ``kind_embedding.weight`` (the kind's conditioning of the direction and duration heads): the old rows kept; FOOD
-  and CANDLE start as BOMB's (placed ahead of Link in a cardinal direction, as a bomb is), RECORDER as WAIT's (it has
-  neither head).
-- ``model_config.obs_spec`` takes the current shapes (history 38, link 87, action_mask 143); the schema versions
-  become the current ones; every other weight is copied unchanged.
-- The Adam state (``optimizer``) is padded, not dropped: the changed tensors' ``exp_avg`` and ``exp_avg_sq`` get
-  zeros where the weights got new rows or columns. ``train --load`` of a converted run so continues exactly as from
-  the source; the new entries get no gradient while their kinds are masked (masked logits are filled, the new
-  inputs are zero), and once a family unmasks them their first Adam steps are up to ~3x the learning rate (no second
-  moment yet, the step count already high), settling within a few dozen updates.
+- ``entity_encoder.input_proj.weight`` (the per-slot token: the entity features, then the type embedding): every old
+  feature column moves to its feature name's new column, the type embedding's columns follow the new features; the
+  added features' columns are zero.
+- ``mlp_extractor.policy_net.0.weight`` and ``mlp_extractor.value_net.0.weight``: every old vector feature column
+  moves to its feature name's new column; the added ones are zero.
+- The Rust policy drops all-zero input columns of all three layers (``Policy::live``, ``Policy::entity_live``), so a
+  converted model computes bit for bit what the source did whatever the new columns hold (in torch the zero columns
+  add exact zeros too).
+- ``model_config.obs_spec`` takes the current shapes; the observation schema becomes the current one; every other
+  weight is copied unchanged.
+- The Adam state (``optimizer``) is padded, not dropped: the widened tensors' ``exp_avg`` and ``exp_avg_sq`` get zeros
+  in the new columns. ``train --load`` of a converted run so continues exactly as from the source; a new column gets
+  gradient as soon as its input is non-zero, and its first Adam steps are up to ~3x the learning rate (no second
+  moment yet, the step count already high), settling within a few dozen updates (as round 24's).
 
 The source run dir is left untouched: each converted run is a full copy, ``<out>/<specialist>/<run>/``, with the new
 ``ckpt.pt``, its ``version`` stamped with this code's, its ``act`` file re-bound to the new sha1 (same mode: the
 converted model acts as the source did), the specialist's ``promoted`` pointer when it names the run, and
-``convert.json`` (source sha1 and version). ``eval.json`` stays the source's (bound to the source sha1: measure the
-converted run again for a canonical evaluation of its own). A checkpoint that is not exactly the old layout (schemas,
-shapes, the feature names it implies, its version stamp) is refused. A widened layout added elsewhere in the same
-release joins ``ADDED`` (names are matched; a name the current observation doesn't have is ignored).
+``convert.json`` (source sha1 and version, the added features). ``eval.json`` stays the source's (bound to the source
+sha1: measure the converted run again for a canonical evaluation of its own). A checkpoint that is not exactly the old
+layout (version stamp, schemas, shapes, the feature names it implies, the action heads) is refused. Inputs added
+elsewhere in the same release join ``ADDED`` (names are matched; a name the current observation doesn't have is
+ignored).
 """
 
 import argparse
@@ -45,27 +46,25 @@ import torch
 
 from . import __version__, registry
 from ._native import ACTION_KINDS, ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
-from .observation import HISTORY_FEATURES, LINK_FEATURES, OBJECTIVE_FEATURES, ROOM_STATE_FEATURES, TARGET_FEATURES
+from .observation import (ENTITY_FEATURES, HISTORY_FEATURES, LINK_FEATURES, OBJECTIVE_FEATURES, ROOM_STATE_FEATURES,
+                          TARGET_FEATURES)
 
 # What the convertible checkpoints were saved with.
 SOURCE_VERSION = registry.CONVERTIBLE_VERSION
-SOURCE_ACTION_SCHEMA = 2
-SOURCE_OBS_SCHEMA = 4
-SOURCE_KINDS = ('MOVE', 'WAIT', 'SWORD', 'BEAMS', 'BOMB', 'BOOMERANG', 'ARROW', 'CLIP')
-# The observation features added since (per vector key, by name).
+SOURCE_ACTION_SCHEMA = 3
+SOURCE_OBS_SCHEMA = registry.CONVERTIBLE_OBS_SCHEMA
+# The observation features added since (per key, by name).
 ADDED = {
-    'history': ('kind_RECORDER', 'kind_FOOD', 'kind_CANDLE'),
-    'link': ('recorder_usable', 'food_usable', 'candle_usable'),
-    'room_state': ('maze_step',),
+    'entity_features': ('touch_harms', 'weapon_target', 'touch_damage', 'visible', 'phase', 'phase_time', 'in_line',
+                        'ringleader'),
+    'link': ('sword_blocked', 'sword_blocked_time', 'arrow_usable', 'rupee_reserve', 'rupees_spare', 'rupees_few'),
+    'room_state': ('frame_phase_32', 'frame_phase_64', 'wallmaster_cooldown', 'wallmaster_lure'),
 }
-# A new kind's logit starts at WAIT's minus this.
-NEW_KIND_BIAS_BELOW_WAIT = 5.0
-# The kind whose embedding row each new kind starts from.
-NEW_KIND_EMBEDDING_FROM = {'RECORDER': 'WAIT', 'FOOD': 'BOMB', 'CANDLE': 'BOMB'}
 FIRST_LAYERS = ('mlp_extractor.policy_net.0.weight', 'mlp_extractor.value_net.0.weight')
-KIND_ROWS = ('kind_head.weight', 'kind_head.bias', 'kind_embedding.weight')
-FEATURE_NAMES = {'history': HISTORY_FEATURES, 'link': LINK_FEATURES, 'objective': OBJECTIVE_FEATURES,
-                 'room_state': ROOM_STATE_FEATURES, 'target': TARGET_FEATURES}
+ENTITY_LAYER = 'entity_encoder.input_proj.weight'
+ENTITY_KEY = 'entity_features'
+FEATURE_NAMES = {ENTITY_KEY: ENTITY_FEATURES, 'history': HISTORY_FEATURES, 'link': LINK_FEATURES,
+                 'objective': OBJECTIVE_FEATURES, 'room_state': ROOM_STATE_FEATURES, 'target': TARGET_FEATURES}
 SPECIAL_KEYS = ('room_id', 'entity_types', 'entity_features', 'grid', 'action_mask')
 SKIP_NAMES = (registry.CHECKPOINT_NAME, registry.ACT_NAME, registry.VERSION_NAME)
 
@@ -75,7 +74,7 @@ class ConvertError(ValueError):
 
 
 def old_names(key: str) -> list[str]:
-    """The source layout's feature names of vector key ``key``: the current ones without the added ones."""
+    """The source layout's feature names of key ``key``: the current ones without the added ones."""
     added = set(ADDED.get(key, ()))
     return [name for name in FEATURE_NAMES[key] if name not in added]
 
@@ -84,11 +83,24 @@ def _spec(shape) -> list:
     return [int(n) for n in shape]
 
 
+def source_shape(key: str) -> list:
+    """The shape of observation key ``key`` in the source layout."""
+    current = _spec(OBS_SPEC[key]['shape'])
+    if key == ENTITY_KEY:
+        return [current[0], len(old_names(key))]
+    if key in FEATURE_NAMES:
+        return [len(old_names(key))]
+    return current
+
+
 def check_source(checkpoint: dict, version) -> None:
     """Raises ConvertError unless ``checkpoint`` (and its run's ``version`` stamp) is exactly the source layout."""
     problems = []
     if version is None or version.split('.')[:3] != SOURCE_VERSION.split('.'):
         problems.append(f"version stamp {version or 'missing'} is not {SOURCE_VERSION}.x")
+    if ACTION_SCHEMA_VERSION != SOURCE_ACTION_SCHEMA:
+        problems.append(f"this code's action schema {ACTION_SCHEMA_VERSION} is not the source's {SOURCE_ACTION_SCHEMA}"
+                        " (this converter widens observations only)")
     if checkpoint.get('action_schema_version') != SOURCE_ACTION_SCHEMA:
         problems.append(f"action_schema_version {checkpoint.get('action_schema_version')} != {SOURCE_ACTION_SCHEMA}")
     if checkpoint.get('obs_schema_version') != SOURCE_OBS_SCHEMA:
@@ -97,30 +109,23 @@ def check_source(checkpoint: dict, version) -> None:
     if set(spec) != set(OBS_SPEC):
         problems.append(f"observation keys {sorted(spec)} != {sorted(OBS_SPEC)}")
     for key, entry in spec.items():
-        current = OBS_SPEC.get(key)
-        if current is None:
+        if key not in OBS_SPEC:
             continue
-        if key in FEATURE_NAMES:
-            want = [len(old_names(key))]
-        elif key == 'action_mask':
-            want = [len(SOURCE_KINDS) * (1 + 8 + 4)]
-        else:
-            want = _spec(current['shape'])
-        if _spec(entry.get('shape', ())) != want or entry.get('vocab') != current['vocab']:
-            problems.append(f"'{key}' is {entry}, the source layout has shape {want} vocab {current['vocab']}")
+        want, vocab = source_shape(key), OBS_SPEC[key]['vocab']
+        if _spec(entry.get('shape', ())) != want or entry.get('vocab') != vocab:
+            problems.append(f"'{key}' is {entry}, the source layout has shape {want} vocab {vocab}")
     state = checkpoint.get('state_dict') or {}
-    kinds = len(SOURCE_KINDS)
-    for name in KIND_ROWS:
-        if name not in state or state[name].shape[0] != kinds:
-            problems.append(f"{name} has {None if name not in state else tuple(state[name].shape)}, not {kinds} rows")
+    kinds, bias = len(ACTION_KINDS), state.get('kind_head.bias')
+    if bias is None or bias.shape[0] != kinds:
+        problems.append(f"kind_head.bias has {None if bias is None else tuple(bias.shape)}, not {kinds} rows")
     if problems:
         raise ConvertError('; '.join(problems))
 
 
 def feature_columns(prefix: int, spec: dict) -> tuple[int, list[int]]:
-    """(the current feature count, where each source feature column lands among the current ones): the ``prefix``
-    columns (room, entities, grid) stay first; the vector keys (sorted, as ``model.py`` concatenates them) map by
-    feature name."""
+    """(the current tower feature count, where each source feature column lands among the current ones): the
+    ``prefix`` columns (room, entities, grid) stay first; the vector keys (sorted, as ``model.py`` concatenates them)
+    map by feature name."""
     keys = sorted(k for k in spec if k not in SPECIAL_KEYS)
     new_at, at = {}, prefix
     for key in keys:
@@ -133,33 +138,32 @@ def feature_columns(prefix: int, spec: dict) -> tuple[int, list[int]]:
     return at, columns
 
 
-def widen_state(state: dict, prefix: int, spec: dict) -> tuple[dict, dict]:
+def entity_columns(embed: int) -> tuple[int, list[int]]:
+    """(the current entity token width, where each source token column lands): the features by name, then the
+    ``embed`` type embedding columns after the current features (``model.EntityEncoder`` concatenates them so)."""
+    names = FEATURE_NAMES[ENTITY_KEY]
+    at = {name: i for i, name in enumerate(names)}
+    return len(names) + embed, [at[name] for name in old_names(ENTITY_KEY)] + [len(names) + j for j in range(embed)]
+
+
+def _widen_columns(old: torch.Tensor, width: int, columns: list[int], name: str) -> torch.Tensor:
+    if old.shape[1] != len(columns):
+        raise ConvertError(f"{name} has {old.shape[1]} input columns, the source layout {len(columns)}")
+    wide = torch.zeros(old.shape[0], width, dtype=old.dtype)
+    wide[:, columns] = old
+    return wide
+
+
+def widen_state(state: dict, prefix: int, spec: dict, embed: int) -> tuple[dict, dict]:
     """(the widened ``state_dict``, name -> (dim, positions of the source entries)) for every changed tensor."""
-    width, columns = feature_columns(prefix, spec)
-    kinds = list(ACTION_KINDS)
-    old_rows = [kinds.index(k) for k in SOURCE_KINDS]
-    if old_rows != list(range(len(SOURCE_KINDS))):
-        raise ConvertError(f"the current kinds {kinds} don't keep the source's indices {SOURCE_KINDS}")
     new = dict(state)
     placed = {}
+    width, columns = feature_columns(prefix, spec)
     for name in FIRST_LAYERS:
-        old = state[name]
-        if old.shape[1] != len(columns):
-            raise ConvertError(f"{name} has {old.shape[1]} input columns, the source layout {len(columns)}")
-        wide = torch.zeros(old.shape[0], width, dtype=old.dtype)
-        wide[:, columns] = old
-        new[name], placed[name] = wide, (1, columns)
-    wait, rows = kinds.index('WAIT'), list(range(len(SOURCE_KINDS)))
-    for name in KIND_ROWS:
-        old = state[name]
-        wide = torch.empty((len(kinds), *old.shape[1:]), dtype=old.dtype)
-        wide[:len(SOURCE_KINDS)] = old
-        for k in range(len(SOURCE_KINDS), len(kinds)):
-            source = wait if name.startswith('kind_head') else kinds.index(NEW_KIND_EMBEDDING_FROM[kinds[k]])
-            wide[k] = old[source]
-            if name == 'kind_head.bias':
-                wide[k] -= NEW_KIND_BIAS_BELOW_WAIT
-        new[name], placed[name] = wide, (0, rows)
+        new[name], placed[name] = _widen_columns(state[name], width, columns, name), (1, columns)
+    width, columns = entity_columns(embed)
+    new[ENTITY_LAYER], placed[ENTITY_LAYER] = _widen_columns(state[ENTITY_LAYER], width, columns, ENTITY_LAYER), \
+        (1, columns)
     return new, placed
 
 
@@ -198,12 +202,11 @@ def convert_checkpoint(checkpoint: dict, version) -> dict:
     spec = {key: {'shape': _spec(entry['shape']), 'vocab': entry['vocab']} for key, entry in OBS_SPEC.items()}
     network = ZeldaPolicy(config={**checkpoint['model_config'], 'obs_spec': spec})
     prefix = network.feature_dim - sum(spec[key]['shape'][0] for key in network.vector_keys)
-    state, placed = widen_state(checkpoint['state_dict'], prefix, spec)
+    state, placed = widen_state(checkpoint['state_dict'], prefix, spec, network.config.entity_embed_dim)
     network.load_state_dict(state)
     names = [name for name, _ in network.named_parameters()]
     return {**checkpoint,
             'obs_schema_version': OBS_SCHEMA_VERSION,
-            'action_schema_version': ACTION_SCHEMA_VERSION,
             'model_config': network.config.to_dict(),
             'state_dict': {name: value.contiguous() for name, value in state.items()},
             'optimizer': widen_optimizer(checkpoint.get('optimizer'), checkpoint['state_dict'], state, placed, names)}
@@ -252,8 +255,8 @@ def convert_run(run_dir, out_root) -> Path:
     (target / 'convert.json').write_text(json.dumps({
         'source_sha1': _sha1(source), 'source_version': found, 'version': __version__,
         'sha1': _sha1(checkpoint_out), 'action_schema_version': ACTION_SCHEMA_VERSION,
-        'obs_schema_version': OBS_SCHEMA_VERSION, 'new_kind_bias_below_wait': NEW_KIND_BIAS_BELOW_WAIT,
-        'added_features': {key: [n for n in names if n in FEATURE_NAMES.get(key, ())] for key, names in ADDED.items()},
+        'source_obs_schema_version': SOURCE_OBS_SCHEMA, 'obs_schema_version': OBS_SCHEMA_VERSION,
+        'added_features': {key: [n for n in names if n in FEATURE_NAMES[key]] for key, names in ADDED.items()},
     }, indent=2) + '\n', encoding='utf-8')
     return target
 

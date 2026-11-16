@@ -448,7 +448,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             config.max_steps as u32,
         );
         Ok(SpecialistEnv {
-            builder: ObservationBuilder::new(config.obs.objective, config.obs.target),
+            builder: ObservationBuilder::new(config.obs.objective, config.obs.target)
+                .with_hidden_positions(config.obs.hidden_positions),
             specialist: Arc::from(config.name.as_str()),
             config,
             data,
@@ -788,6 +789,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         };
         self.session.set_vetoed_wraps(&vetoed);
         self.builder.bomb_reserve = reserve;
+        self.builder.rupee_reserve = rupees;
     }
 
     /// Starts an episode from the session's state (loaded or restored).

@@ -5,6 +5,7 @@
 //! every key's shape, vocabulary and dtype.  Scalars are computed in f64 and rounded to f32 as numpy assigns
 //! them; entity positions and velocities use f32 arithmetic as numpy's float32 arrays do.
 
+use crate::config::HiddenPositions;
 use std::sync::LazyLock;
 use zelda::actions::{
     ActionMask, DIRECTIONS, DURATIONS, MASK_SIZE, direction_index, duration_index, is_directional,
@@ -14,19 +15,22 @@ use zelda::enums::{ActionKind, Direction, GAMEPLAY_START_Y, ObjectClass, enemy, 
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::objectives::{Objective, ObjectiveKind};
+use zelda::object_rules::{HIDDEN_POSITION_TYPES, Legacy, Rules, in_line, object_rules, touch_damage};
 use zelda::room::Wavefront;
 use zelda::room_state::{
     DOOR_DIRECTIONS, DOOR_KINDS, ITEM_COMPASS, ITEM_HEART_CONTAINER, ITEM_KEY, ITEM_MAP,
-    ITEM_TRIFORCE, NUM_ITEM_IDS, PUSH_BLOCK_STATES, RoomState, decode_room_state,
+    ITEM_TRIFORCE, NUM_ITEM_IDS, PUSH_BLOCK_STATES, RoomState, SecretTrigger, decode_room_state,
 };
 use zelda::tiles::{Grid, NUM_TILE_CLASSES, build_grid};
 use zelda::{Action, Change};
 
 /// 4: the CLIP kind in `history` (8 kinds) and `link` `clip_usable_{N,S,W,E}` (round 21). 5: RECORDER, FOOD and
 /// CANDLE in `history` (11 kinds, after CLIP) and `link` `recorder_usable`, `food_usable`, `candle_usable` (at its end;
-/// round 24), and `room_state` `maze_step` (at its end; round 24). A schema 4 checkpoint is widened by `triforce
-/// convert-model` (zero weights on the new columns).
-pub const OBS_SCHEMA_VERSION: u32 = 5;
+/// round 24), and `room_state` `maze_step` (at its end; round 24). 6 (round 26, the one change for the rest of the
+/// game): 8 entity features after the 33 (`touch_harms` .. `ringleader`), 6 at `link`'s end (`sword_blocked` ..
+/// `rupees_few`), 4 at `room_state`'s end (`frame_phase_32` .. `wallmaster_lure`); no existing column changes
+/// meaning. A schema 5 checkpoint is widened by `triforce convert-model` (zero weights on the new columns).
+pub const OBS_SCHEMA_VERSION: u32 = 6;
 
 /// NES object slots 1-$B, then the room item ("treasure").
 pub const NUM_ENTITY_SLOTS: usize = 12;
@@ -39,9 +43,9 @@ pub const ITEM_TYPE_BASE: i64 = 0x80;
 /// 0 = empty, 1-$7F = ObjType, $80+ = item kinds.
 pub const ENTITY_VOCAB: usize = ITEM_TYPE_BASE as usize + NUM_ITEM_IDS as usize;
 
-pub const ROOM_STATE_SIZE: usize = 85;
-pub const LINK_SIZE: usize = 87;
-pub const ENTITY_FEATURE_SIZE: usize = 33;
+pub const ROOM_STATE_SIZE: usize = 89;
+pub const LINK_SIZE: usize = 93;
+pub const ENTITY_FEATURE_SIZE: usize = 41;
 pub const HISTORY_SIZE: usize = 38;
 pub const OBJECTIVE_SIZE: usize = 10;
 pub const TARGET_SIZE: usize = 8;
@@ -84,6 +88,14 @@ const SLOT_BOMB2: usize = 0xBD;
 const SLOT_ARROW: usize = 0xBE;
 const OBJ_DROPPED_ITEM: u8 = 0x60;
 const CAVE_FLAG_PAY: u8 = 0x02;
+const FRAME_COUNTER: usize = 0x15;
+/// SwordBlockedLongTimer: $10 on a Bubble's touch, one down every 10 frames (asm:Bubble_Update, asm:Nmi_Isr).
+const SWORD_BLOCKED_LONG_TIMER: usize = 0x4C;
+/// ObjTimer of NES slot 1: every Wallmaster waits for it (one hand per $60 frames, asm:Wallmaster_Update).
+const WALLMASTER_TIMER: usize = 0x29;
+const WALLMASTER_SPACING: f64 = 96.0;
+/// `rupee_reserve`, `rupees_spare`, `rupees_few`: rupees that map to 1.
+const RUPEE_SCALE: f64 = 16.0;
 
 /// (direction, bit) in feature order.
 const DIR_BITS: [(Direction, u8); 4] = [
@@ -149,6 +161,13 @@ mod r {
     pub const IS_TRIFORCE_ROOM: usize = 83;
     /// `MazeStep` / the sequence's length in a maze room (0, 1/4, 2/4, 3/4 through the Lost Hills), 0 elsewhere.
     pub const MAZE_STEP: usize = 84;
+    /// Schema 6 (round 26): (FrameCounter & $1F) / 32 and (& $3F) / 64, the Blue Wizzrobes' and Ganon's shot beats.
+    pub const FRAME_PHASE_32: usize = 85;
+    pub const FRAME_PHASE_64: usize = 86;
+    /// With a Wallmaster in the room: slot 1's ObjTimer / $60 (the next hand waits for 0), and Link standing where
+    /// one comes out (asm:Wallmaster_Update@CheckLinkAtWall) with one waiting in the wall.
+    pub const WALLMASTER_COOLDOWN: usize = 87;
+    pub const WALLMASTER_LURE: usize = 88;
 }
 
 // link offsets
@@ -223,6 +242,15 @@ mod l {
     pub const RECORDER_USABLE: usize = 84;
     pub const FOOD_USABLE: usize = 85;
     pub const CANDLE_USABLE: usize = 86;
+    /// Schema 6 (round 26): a Bubble's touch blocks the sword (`GameView::is_sword_blocked`), for
+    /// SwordBlockedLongTimer / 16 (1 = 151-160 frames).
+    pub const SWORD_BLOCKED: usize = 87;
+    pub const SWORD_BLOCKED_TIME: usize = 88;
+    /// The mask's ARROW bit; the route's rupee reserve / 16, the rupees above it / 16, min(rupees, 16) / 16.
+    pub const ARROW_USABLE: usize = 89;
+    pub const RUPEE_RESERVE: usize = 90;
+    pub const RUPEES_SPARE: usize = 91;
+    pub const RUPEES_FEW: usize = 92;
 }
 
 // entity offsets
@@ -252,6 +280,16 @@ mod e {
     pub const CARRIED: usize = 25;
     pub const IS_TILE_OBJECT: usize = 26;
     pub const IMMUNE: usize = 27;
+    /// Schema 6 (round 26): `zelda::object_rules` (the per-type rules), the touch's hearts after the ring / 4, Link
+    /// in its line of fire, NES slot 1's living monster in a ringleader room.
+    pub const TOUCH_HARMS: usize = 33;
+    pub const WEAPON_TARGET: usize = 34;
+    pub const TOUCH_DAMAGE: usize = 35;
+    pub const VISIBLE: usize = 36;
+    pub const PHASE: usize = 37;
+    pub const PHASE_TIME: usize = 38;
+    pub const IN_LINE: usize = 39;
+    pub const RINGLEADER: usize = 40;
 }
 
 // history offsets
@@ -334,6 +372,10 @@ fn build_feature_names() -> FeatureNames {
         "is_boss_room",
         "is_triforce_room",
         "maze_step",
+        "frame_phase_32",
+        "frame_phase_64",
+        "wallmaster_cooldown",
+        "wallmaster_lure",
     ]));
 
     let mut link = s(&["x", "y", "grid_offset", "sub_x", "sub_y"]);
@@ -405,6 +447,14 @@ fn build_feature_names() -> FeatureNames {
     ]));
     link.extend(DIR_BITS.iter().map(|(d, _)| format!("clip_usable_{}", d.name())));
     link.extend(s(&["recorder_usable", "food_usable", "candle_usable"]));
+    link.extend(s(&[
+        "sword_blocked",
+        "sword_blocked_time",
+        "arrow_usable",
+        "rupee_reserve",
+        "rupees_spare",
+        "rupees_few",
+    ]));
 
     let entity = s(&[
         "presence",
@@ -440,6 +490,14 @@ fn build_feature_names() -> FeatureNames {
         "immune_bomb",
         "immune_rod",
         "immune_fire",
+        "touch_harms",
+        "weapon_target",
+        "touch_damage",
+        "visible",
+        "phase",
+        "phase_time",
+        "in_line",
+        "ringleader",
     ]);
 
     let mut history = vec!["has_last_action".to_string()];
@@ -625,6 +683,20 @@ fn b(v: bool) -> f32 {
     v as u8 as f32
 }
 
+/// The schema 6 per-type rules into an entity's features.
+fn set_rules(f: &mut [f32; ENTITY_FEATURE_SIZE], rules: Rules) {
+    f[e::TOUCH_HARMS] = rules.touch_harms;
+    f[e::WEAPON_TARGET] = rules.weapon_target;
+    f[e::VISIBLE] = rules.visible;
+    f[e::PHASE] = rules.phase;
+    f[e::PHASE_TIME] = rules.phase_time;
+}
+
+/// `touch_damage`: the hearts a touch of `obj_type` costs with ring grade `ring`, / 4, clamped.
+fn touch_damage_feature(obj_type: u8, ring: u8) -> f32 {
+    (touch_damage(obj_type, ring) / 4.0).min(1.0)
+}
+
 /// Which room edge Link stands at (seeds `entered_from` on reset).
 fn entry_side_from_position(level: u8, x: i32, y: i32) -> Option<Direction> {
     let (up, down, left, right) = if level == 0 {
@@ -655,9 +727,19 @@ pub struct ObservationBuilder {
     /// The route's bomb reserve at the step Link plays (`GameCompletion::bomb_reserve`), for the `link` block;
     /// the env sets it before every observation.
     pub bomb_reserve: u8,
+    /// The route's rupee reserve at the step Link plays (`GameCompletion::rupee_reserve`), for the `link` block;
+    /// the env sets it before every observation (0 until the route carries one).
+    pub rupee_reserve: u8,
+    /// What positions show for a hidden object of a `zelda::object_rules::HIDDEN_POSITION_TYPES` type
+    /// (`obs.hidden_positions`).
+    pub hidden_positions: HiddenPositions,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
+    /// `last_seen`: where each slot's object was at its last visible observation in this room, if ever.
+    last_seen: [Option<[f32; 2]>; NUM_ENTITY_SLOTS],
+    /// The slot's object was shown hidden (not at its RAM position) in the previous observation.
+    was_hidden: [bool; NUM_ENTITY_SLOTS],
     entered_from: Option<Direction>,
 }
 
@@ -667,11 +749,21 @@ impl ObservationBuilder {
             objective,
             target,
             bomb_reserve: 0,
+            rupee_reserve: 0,
+            hidden_positions: HiddenPositions::Ram,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
+            last_seen: [None; NUM_ENTITY_SLOTS],
+            was_hidden: [false; NUM_ENTITY_SLOTS],
             entered_from: None,
         }
+    }
+
+    /// The builder with `obs.hidden_positions` = `mode`.
+    pub fn with_hidden_positions(mut self, mode: HiddenPositions) -> ObservationBuilder {
+        self.hidden_positions = mode;
+        self
     }
 
     /// The first observation of an episode (no previous action; velocities zero).  `wavefront` is the PBRS
@@ -740,7 +832,7 @@ impl ObservationBuilder {
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs, state),
-            link: link(state, mask, self.bomb_reserve),
+            link: link(state, mask, self.bomb_reserve, self.rupee_reserve),
             entity_types,
             entity_features,
             grid: build_grid(state, &rs),
@@ -769,6 +861,8 @@ impl ObservationBuilder {
         let at = |base: usize, i: usize| ram[base + i + 1];
         let (link_x, link_y) = (ram[OBJ_X] as f32, ram[OBJ_Y] as f32);
         let clock = rs.clock_active;
+        let ring = state.var(zelda::Var::Ring).clamp(0, 2) as u8;
+        let ringleader_room = rs.secret_trigger == SecretTrigger::Ringleader;
         let mut types = [0i64; NUM_ENTITY_SLOTS];
         let mut feats = [[0f32; ENTITY_FEATURE_SIZE]; NUM_ENTITY_SLOTS];
         let mut xy = [[0f32; 2]; NUM_ENTITY_SLOTS];
@@ -842,6 +936,18 @@ impl ObservationBuilder {
             for bit in 0..6 {
                 f[e::IMMUNE + bit] = b(m & (1 << bit) != 0);
             }
+            // Schema 6: the per-type rules over the frozen schema 5 answers.
+            let legacy = Legacy {
+                touch: f[e::HURTS_ON_TOUCH] != 0.0,
+                target: f[e::KILLABLE] != 0.0 && active && !dying && !spawning,
+                active: active && !dying,
+                settled: !dying && !spawning,
+            };
+            let rules = object_rules(ram, i + 1, clock, legacy);
+            set_rules(f, rules);
+            f[e::TOUCH_DAMAGE] = touch_damage_feature(t, ring);
+            f[e::IN_LINE] = b(rules.visible > 0.0 && in_line(ram, i + 1));
+            f[e::RINGLEADER] = b(i == 0 && ringleader_room && monster && !dying);
         }
         // Gleeok's attached heads have no object slot of their own (slots 2-6 are type 0): one entity per living
         // neck in slot 2 + neck, at its head, with the HP byte and invincibility timer they share (slot 5's).
@@ -857,6 +963,8 @@ impl ObservationBuilder {
             f[e::HURTS_ON_TOUCH] = b(timer == 0 && !clock);
             f[e::KILLABLE] = 1.0;
             f[e::ACTIVE] = 1.0;
+            set_rules(&mut f, Rules::gleeok_head(timer == 0 && !clock));
+            f[e::TOUCH_DAMAGE] = touch_damage_feature(0, ring);
             feats[i] = f;
         }
 
@@ -871,23 +979,47 @@ impl ObservationBuilder {
             f[e::ACTIVE] = b(rs.item_visible);
             f[e::HIDDEN] = b(!rs.item_visible);
             f[e::CARRIED] = b(rs.item_carried);
+            set_rules(f, Rules::treasure(rs.item_visible));
         }
 
         let track = same_room && frames > 0;
         let scale = frames as f32 * VELOCITY_SCALE;
         for i in 0..NUM_ENTITY_SLOTS {
+            if !same_room || types[i] != self.prev_types[i] {
+                (self.last_seen[i], self.was_hidden[i]) = (None, false);
+            }
             if types[i] == 0 {
                 continue;
             }
-            let [x, y] = xy[i];
             let f = &mut feats[i];
+            // `obs.hidden_positions` (default `ram`: every position as RAM holds it): a hidden object of the types
+            // the owner's question names shows where it was last seen, or nowhere; its velocity is 0 while hidden and
+            // on its first visible observation after.
+            if self.hidden_positions != HiddenPositions::Ram
+                && f[e::VISIBLE] == 0.0
+                && HIDDEN_POSITION_TYPES.iter().any(|&t| i64::from(t) == types[i])
+            {
+                if let (HiddenPositions::LastSeen, Some([x, y])) = (self.hidden_positions, self.last_seen[i]) {
+                    f[e::X] = (x / 255.0).clamp(0.0, 1.0);
+                    f[e::Y] = ((y - PLAY_Y0 as f32) / PLAY_H as f32).clamp(0.0, 1.0);
+                    f[e::DX] = ((x - link_x) / 255.0).clamp(-1.0, 1.0);
+                    f[e::DY] = ((y - link_y) / PLAY_H as f32).clamp(-1.0, 1.0);
+                }
+                self.was_hidden[i] = true;
+                continue;
+            }
+            let [x, y] = xy[i];
             f[e::X] = (x / 255.0).clamp(0.0, 1.0);
             f[e::Y] = ((y - PLAY_Y0 as f32) / PLAY_H as f32).clamp(0.0, 1.0);
             f[e::DX] = ((x - link_x) / 255.0).clamp(-1.0, 1.0);
             f[e::DY] = ((y - link_y) / PLAY_H as f32).clamp(-1.0, 1.0);
-            if track && types[i] == self.prev_types[i] {
+            if track && types[i] == self.prev_types[i] && !self.was_hidden[i] {
                 f[e::VX] = ((x - self.prev_xy[i][0]) / scale).clamp(-1.0, 1.0);
                 f[e::VY] = ((y - self.prev_xy[i][1]) / scale).clamp(-1.0, 1.0);
+            }
+            self.was_hidden[i] = false;
+            if f[e::VISIBLE] > 0.0 {
+                self.last_seen[i] = Some([x, y]);
             }
         }
         self.prev_types = types;
@@ -1121,10 +1253,24 @@ fn room_state(rs: &RoomState, state: &GameView) -> [f32; ROOM_STATE_SIZE] {
     if let Some(maze) = zelda::game_map::Maze::at(state.full_location()) {
         v[r::MAZE_STEP] = (state.peek(zelda::game_map::MAZE_STEP) as f64 / maze.sequence.len() as f64) as f32;
     }
+    // Schema 6 (round 26): the frame counter's beats, and the Wallmasters' shared wait and lure.
+    let ram = state.ram();
+    let frame = ram[FRAME_COUNTER];
+    v[r::FRAME_PHASE_32] = (f64::from(frame & 0x1F) / 32.0) as f32;
+    v[r::FRAME_PHASE_64] = (f64::from(frame & 0x3F) / 64.0) as f32;
+    let (mut hands, mut waiting) = (false, false);
+    for s in (1..0xC).filter(|&s| ram[OBJ_TYPE + s] == enemy::WALLMASTER) {
+        hands = true;
+        waiting |= ram[OBJ_STATE + s] == 0;
+    }
+    if hands {
+        v[r::WALLMASTER_COOLDOWN] = (f64::from(ram[WALLMASTER_TIMER]) / WALLMASTER_SPACING).min(1.0) as f32;
+        v[r::WALLMASTER_LURE] = b(waiting && zelda::object_rules::wallmaster_lets_one_out(ram[OBJ_X], ram[OBJ_Y]));
+    }
     v
 }
 
-fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8) -> [f32; LINK_SIZE] {
+fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8, rupee_reserve: u8) -> [f32; LINK_SIZE] {
     use zelda::Var;
     let ram = state.ram();
     let info = |v: Var| state.var(v);
@@ -1229,6 +1375,14 @@ fn link(state: &GameView, mask: &ActionMask, bomb_reserve: u8) -> [f32; LINK_SIZ
     v[l::RECORDER_USABLE] = b(mask.kind[ActionKind::Recorder.index()]);
     v[l::FOOD_USABLE] = b(mask.kind[ActionKind::Food.index()]);
     v[l::CANDLE_USABLE] = b(mask.kind[ActionKind::Candle.index()]);
+    // Schema 6 (round 26): the Bubbles' sword block, ARROW and the rupees it costs (rupees/255 can't tell 1 from 0).
+    v[l::SWORD_BLOCKED] = b(state.is_sword_blocked());
+    v[l::SWORD_BLOCKED_TIME] = (f64::from(ram[SWORD_BLOCKED_LONG_TIMER]) / 16.0).min(1.0) as f32;
+    v[l::ARROW_USABLE] = b(mask.kind[ActionKind::Arrow.index()]);
+    let rupees = info(Var::Rupees);
+    v[l::RUPEE_RESERVE] = (f64::from(rupee_reserve) / RUPEE_SCALE).min(1.0) as f32;
+    v[l::RUPEES_SPARE] = ((rupees - i32::from(rupee_reserve)).max(0) as f64 / RUPEE_SCALE).min(1.0) as f32;
+    v[l::RUPEES_FEW] = (rupees.clamp(0, 16) as f64 / RUPEE_SCALE) as f32;
     v
 }
 
@@ -1256,6 +1410,10 @@ mod tests {
             (r::ENEMIES_REMAINING, "enemies_remaining"),
             (r::IS_TRIFORCE_ROOM, "is_triforce_room"),
             (r::MAZE_STEP, "maze_step"),
+            (r::FRAME_PHASE_32, "frame_phase_32"),
+            (r::FRAME_PHASE_64, "frame_phase_64"),
+            (r::WALLMASTER_COOLDOWN, "wallmaster_cooldown"),
+            (r::WALLMASTER_LURE, "wallmaster_lure"),
         ] {
             assert_eq!(n.room_state[offset], name);
         }
@@ -1273,11 +1431,29 @@ mod tests {
             (l::CLIP_USABLE, "clip_usable_N"),
             (l::RECORDER_USABLE, "recorder_usable"),
             (l::CANDLE_USABLE, "candle_usable"),
+            (l::SWORD_BLOCKED, "sword_blocked"),
+            (l::SWORD_BLOCKED_TIME, "sword_blocked_time"),
+            (l::ARROW_USABLE, "arrow_usable"),
+            (l::RUPEE_RESERVE, "rupee_reserve"),
+            (l::RUPEES_SPARE, "rupees_spare"),
+            (l::RUPEES_FEW, "rupees_few"),
         ] {
             assert_eq!(n.link[offset], name);
         }
         assert_eq!(n.entity[e::IMMUNE], "immune_sword");
         assert_eq!(n.entity[e::IS_TILE_OBJECT], "is_tile_object");
+        for (offset, name) in [
+            (e::TOUCH_HARMS, "touch_harms"),
+            (e::WEAPON_TARGET, "weapon_target"),
+            (e::TOUCH_DAMAGE, "touch_damage"),
+            (e::VISIBLE, "visible"),
+            (e::PHASE, "phase"),
+            (e::PHASE_TIME, "phase_time"),
+            (e::IN_LINE, "in_line"),
+            (e::RINGLEADER, "ringleader"),
+        ] {
+            assert_eq!(n.entity[offset], name);
+        }
         assert_eq!(n.history[h::KIND + 7], "kind_CLIP");
         assert_eq!(n.history[h::KIND + 8], "kind_RECORDER");
         assert_eq!(n.history[h::DIR - 1], "kind_CANDLE");
@@ -1327,5 +1503,212 @@ mod tests {
         assert_eq!(entity_type_id(0x60, 0x22), 0x80 + 0x22);
         assert_eq!(entity_type_id(0x60, 0x30), 0x60);
         assert_eq!(entity_type_id(0x90, 0), 0x7F);
+    }
+
+    // --- schema 6 (round 26): the new columns on RAM fixtures ---
+
+    use std::sync::Arc;
+    use zelda::GameMap;
+    use zelda::tables::{RAM_SIZE, SRAM_OFFSET};
+
+    const LEVEL: usize = 0x10;
+    const ROOM_ID: usize = 0xEB;
+    const GAME_MODE: usize = 0x12;
+    /// LevelBlockAttrsF: the secret trigger in bits 0-2.
+    const ATTRS_F: usize = 0x6AFE;
+    const IS_SWORD_BLOCKED: usize = 0x52E;
+
+    static MAP: LazyLock<Arc<GameMap>> = LazyLock::new(|| Arc::new(GameMap::builtin()));
+
+    /// A playable dungeon room (6:0x78, five Red Wizzrobes in the game) with Link at (`x`, `y`) and nothing else.
+    fn room(x: u8, y: u8) -> [u8; RAM_SIZE] {
+        let mut ram = [0u8; RAM_SIZE];
+        (ram[LEVEL], ram[ROOM_ID], ram[GAME_MODE]) = (6, 0x78, 5);
+        (ram[OBJ_X], ram[OBJ_Y]) = (x, y);
+        ram
+    }
+
+    fn put(ram: &mut [u8; RAM_SIZE], slot: usize, t: u8, s: u8, (x, y): (u8, u8)) {
+        (ram[OBJ_TYPE + slot], ram[OBJ_STATE + slot], ram[OBJ_X + slot], ram[OBJ_Y + slot]) = (t, s, x, y);
+    }
+
+    fn view(ram: &[u8; RAM_SIZE]) -> GameView {
+        GameView::new(ram, 0, false, MAP.clone())
+    }
+
+    fn none() -> Objective {
+        Objective {
+            kind: ObjectiveKind::None,
+            targets: Default::default(),
+            next_rooms: Default::default(),
+            pbrs_targets: Default::default(),
+            retreats: Default::default(),
+            clips: false,
+            treasure_refused: false,
+        }
+    }
+
+    /// The first observation of `ram`, then one per later image, each `frames` = 4 after the one before.
+    fn observe(builder: &mut ObservationBuilder, rams: &[[u8; RAM_SIZE]]) -> Vec<Observation> {
+        let mask = ActionMask::default();
+        rams.iter()
+            .enumerate()
+            .map(|(i, ram)| match i {
+                0 => builder.reset(&view(ram), &none(), None, &mask),
+                _ => builder.build_state(&view(ram), &none(), None, &mask, None, 4, None, false),
+            })
+            .collect()
+    }
+
+    fn once(ram: &[u8; RAM_SIZE]) -> Observation {
+        observe(&mut ObservationBuilder::new(false, false), std::slice::from_ref(ram)).remove(0)
+    }
+
+    /// `obs.hidden_positions` on a Red Wizzrobe (slot 1): solid at (112,109), hidden ($20, $1F) with RAM at (120,101)
+    /// for two observations, fading in ($C0) there, then solid at (122,101). A Wallmaster in the wall (slot 3,
+    /// `visible` 0, not a hidden-position type) keeps its RAM position in every mode.
+    #[test]
+    fn hidden_positions_ram_last_seen_zero() {
+        let mut rams = Vec::new();
+        for (s, xy) in [(0xBF, (112, 109)), (0x20, (120, 101)), (0x1F, (120, 101)), (0xC0, (120, 101)), (0xBF, (122, 101))] {
+            let mut ram = room(120, 141);
+            put(&mut ram, 1, enemy::RED_WIZZROBE, s, xy);
+            put(&mut ram, 3, enemy::WALLMASTER, 0, (0, 177));
+            rams.push(ram);
+        }
+        let run = |mode| observe(&mut ObservationBuilder::new(false, false).with_hidden_positions(mode), &rams);
+        let (ram, last, zero) = (run(HiddenPositions::Ram), run(HiddenPositions::LastSeen), run(HiddenPositions::Zero));
+        let pos = |o: &Observation| {
+            let f = &o.entity_features[0];
+            [f[e::X], f[e::Y], f[e::DX], f[e::DY], f[e::VX], f[e::VY]]
+        };
+        let at = |x: f32, y: f32| [x / 255.0, (y - 64.0) / 176.0, (x - 120.0) / 255.0, (y - 141.0) / 176.0];
+        let with_v = |p: [f32; 4], vx: f32, vy: f32| [p[0], p[1], p[2], p[3], vx, vy];
+        let v = |d: f32| d / (4.0 * VELOCITY_SCALE);
+        // `ram`: today's values, the RAM position whether drawn or not.
+        assert_eq!(pos(&ram[0]), with_v(at(112.0, 109.0), 0.0, 0.0));
+        assert_eq!(pos(&ram[1]), with_v(at(120.0, 101.0), v(8.0), v(-8.0)));
+        assert_eq!(pos(&ram[2]), with_v(at(120.0, 101.0), 0.0, 0.0));
+        assert_eq!(pos(&ram[4]), with_v(at(122.0, 101.0), v(2.0), 0.0));
+        // `last_seen`: the last visible spot, relative to Link now, velocity 0 while hidden and on the first visible
+        // observation after; `zero`: nowhere.
+        for i in 1..3 {
+            assert_eq!(pos(&last[i]), with_v(at(112.0, 109.0), 0.0, 0.0), "last_seen {i}");
+            assert_eq!(pos(&zero[i]), [0.0; 6], "zero {i}");
+        }
+        for o in [&last, &zero] {
+            assert_eq!(pos(&o[0]), pos(&ram[0]));
+            assert_eq!(pos(&o[3]), with_v(at(120.0, 101.0), 0.0, 0.0), "fading in: visible 0.5, velocity 0");
+            assert_eq!(pos(&o[4]), pos(&ram[4]));
+        }
+        // Everything else is the same in every mode: the Wizzrobe's other columns, the Wallmaster, the other blocks.
+        for i in 0..rams.len() {
+            for o in [&last[i], &zero[i]] {
+                assert_eq!(o.entity_features[2], ram[i].entity_features[2], "the Wallmaster, {i}");
+                assert_eq!(o.entity_features[0][e::HP..], ram[i].entity_features[0][e::HP..]);
+                assert_eq!(o.entity_features[0][e::PRESENCE], 1.0);
+                assert_eq!((o.link, o.room_state, o.entity_types), (ram[i].link, ram[i].room_state, ram[i].entity_types));
+            }
+        }
+        assert_eq!([1, 2, 3].map(|i| ram[i].entity_features[0][e::VISIBLE]), [0.0, 0.0, 0.5]);
+        assert_eq!(ram[1].entity_features[2][e::VISIBLE], 0.0);
+        assert_eq!(ram[1].entity_features[2][e::X], 0.0);
+        assert_eq!(ram[1].entity_features[2][e::Y], (177.0 - 64.0) / 176.0);
+    }
+
+    /// `ringleader`: the living monster in NES slot 1 of a room whose secret trigger is 2, nothing else.
+    #[test]
+    fn ringleader_is_slot_one_in_a_trigger_2_room() {
+        let mut ram = room(120, 141);
+        put(&mut ram, 1, enemy::RED_WIZZROBE, 0xBF, (60, 100));
+        put(&mut ram, 2, enemy::RED_WIZZROBE, 0xBF, (180, 100));
+        let ringleader = |ram: &[u8; RAM_SIZE]| once(ram).entity_features.map(|f| f[e::RINGLEADER]);
+        assert_eq!(ringleader(&ram), [0.0; NUM_ENTITY_SLOTS], "trigger 0");
+        ram[ATTRS_F + 0x78 - SRAM_OFFSET] = 2;
+        let mut want = [0.0; NUM_ENTITY_SLOTS];
+        want[0] = 1.0;
+        assert_eq!(ringleader(&ram), want);
+        ram[OBJ_METASTATE + 1] = 0x10;
+        assert_eq!(ringleader(&ram), [0.0; NUM_ENTITY_SLOTS], "slot 1 dying");
+        ram[OBJ_METASTATE + 1] = 0;
+        ram[OBJ_TYPE + 1] = OBJ_DROPPED_ITEM;
+        assert_eq!(ringleader(&ram), [0.0; NUM_ENTITY_SLOTS], "no monster in slot 1");
+    }
+
+    /// `touch_damage` per type and ring, and `in_line` on the observation (a hidden shooter has no line).
+    #[test]
+    fn touch_damage_and_in_line_in_the_observation() {
+        let mut ram = room(100, 150);
+        put(&mut ram, 1, enemy::BLUE_GORIYA, 0, (100, 100));
+        ram[OBJ_DIR + 1] = 4;
+        put(&mut ram, 2, enemy::RED_WIZZROBE, 0x20, (100, 200));
+        ram[OBJ_DIR + 2] = 8;
+        put(&mut ram, 3, enemy::GANON, 0, (30, 100));
+        for (ring, goriya, ganon) in [(0, 0.25, 1.0), (1, 0.125, 0.5), (2, 0.0625, 0.25)] {
+            ram[zelda::Var::Ring.addr() as usize] = ring;
+            let f = once(&ram).entity_features;
+            assert_eq!((f[0][e::TOUCH_DAMAGE], f[2][e::TOUCH_DAMAGE]), (goriya, ganon), "ring {ring}");
+        }
+        let f = once(&ram).entity_features;
+        assert_eq!(f[0][e::IN_LINE], 1.0, "the Goriya faces down at Link");
+        assert_eq!(f[1][e::IN_LINE], 0.0, "the Wizzrobe faces up at Link, hidden");
+        ram[OBJ_STATE + 2] = 0xBF;
+        assert_eq!(once(&ram).entity_features[1][e::IN_LINE], 1.0, "solid");
+        ram[OBJ_DIR + 1] = 8;
+        assert_eq!(once(&ram).entity_features[0][e::IN_LINE], 0.0, "facing away");
+    }
+
+    /// The `link` block's schema 6 columns: the Bubbles' sword block, ARROW, the rupees and the route's reserve.
+    #[test]
+    fn link_schema6_columns() {
+        let link_of = |ram: &[u8; RAM_SIZE], reserve: u8, mask: &ActionMask| {
+            let mut builder = ObservationBuilder::new(false, false);
+            builder.rupee_reserve = reserve;
+            let v = builder.reset(&view(ram), &none(), None, mask).link;
+            [l::SWORD_BLOCKED, l::SWORD_BLOCKED_TIME, l::ARROW_USABLE, l::RUPEE_RESERVE, l::RUPEES_SPARE, l::RUPEES_FEW]
+                .map(|i| v[i])
+        };
+        let none_mask = ActionMask::default();
+        let mut ram = room(120, 141);
+        assert_eq!(link_of(&ram, 0, &none_mask), [0.0; 6]);
+        ram[SWORD_BLOCKED_LONG_TIMER] = 0x10;
+        assert_eq!(link_of(&ram, 0, &none_mask)[..2], [1.0, 1.0]);
+        ram[SWORD_BLOCKED_LONG_TIMER] = 0x0F;
+        assert_eq!(link_of(&ram, 0, &none_mask)[..2], [1.0, 0.9375]);
+        (ram[SWORD_BLOCKED_LONG_TIMER], ram[IS_SWORD_BLOCKED]) = (0, 1);
+        assert_eq!(link_of(&ram, 0, &none_mask)[..2], [1.0, 0.0], "the Q2 Bubble's block has no timer");
+        ram[IS_SWORD_BLOCKED] = 0;
+        let mut arrow = ActionMask::default();
+        arrow.kind[ActionKind::Arrow.index()] = true;
+        assert_eq!(link_of(&ram, 0, &arrow)[2], 1.0);
+        let rupees = zelda::Var::Rupees.addr() as usize;
+        ram[rupees] = 3;
+        assert_eq!(link_of(&ram, 5, &none_mask)[3..], [5.0 / 16.0, 0.0, 3.0 / 16.0]);
+        ram[rupees] = 12;
+        assert_eq!(link_of(&ram, 5, &none_mask)[3..], [5.0 / 16.0, 7.0 / 16.0, 12.0 / 16.0]);
+        ram[rupees] = 200;
+        assert_eq!(link_of(&ram, 40, &none_mask)[3..], [1.0, 1.0, 1.0]);
+    }
+
+    /// The `room_state` block's schema 6 columns: the frame counter's beats, the Wallmasters' wait and lure.
+    #[test]
+    fn room_state_schema6_columns() {
+        let cols = |ram: &[u8; RAM_SIZE]| {
+            let v = once(ram).room_state;
+            [r::FRAME_PHASE_32, r::FRAME_PHASE_64, r::WALLMASTER_COOLDOWN, r::WALLMASTER_LURE].map(|i| v[i])
+        };
+        let mut ram = room(0x20, 0x8D);
+        ram[FRAME_COUNTER] = 0x47;
+        ram[WALLMASTER_TIMER] = 0x30;
+        assert_eq!(cols(&ram), [7.0 / 32.0, 7.0 / 64.0, 0.0, 0.0], "no Wallmaster: no wait, no lure");
+        put(&mut ram, 4, enemy::WALLMASTER, 0, (0, 177));
+        assert_eq!(cols(&ram)[2..], [0.5, 1.0]);
+        ram[WALLMASTER_TIMER] = 0xC0;
+        assert_eq!(cols(&ram)[2], 1.0, "clamped");
+        ram[OBJ_X] = 0x21;
+        assert_eq!(cols(&ram)[3], 0.0, "one pixel off the wall (walked: no hand comes out)");
+        ram[OBJ_X] = 0x20;
+        ram[OBJ_STATE + 4] = 1;
+        assert_eq!(cols(&ram)[3], 0.0, "every hand out of the wall");
     }
 }
