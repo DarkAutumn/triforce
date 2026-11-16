@@ -2445,6 +2445,7 @@ as built: `docs/architecture.md` "Observation".
   row they reached (`docs/observation-next.md` §9); Gohma's eye with real arrows, Ganon's phases with real hits,
   `in_line` against each shooter's own test and a Red Wizzrobe's `phase_time` with retries are code only until
   their rounds walk them.
+
 ## 2026-11-17 — One line, one rule: the fallback for older code is gone (Lee)
 
 The machine was restarted on Nov 17 with every job stopped, so no process of the code from before the scored line

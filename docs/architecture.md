@@ -501,7 +501,7 @@ tests or draws the object on every other frame only. `hurts_on_touch` (14), `kil
 | entity 40 | `ringleader` | the living monster in NES slot 1 of a room whose secret trigger is 2 (killing it kills every monster, asm:Secret_Trigger2Ringleader) |
 | link 87, 88 | `sword_blocked`, `sword_blocked_time` | `GameView::is_sword_blocked` (`$4C` ≠ 0 or `$52E` ≠ 0); `$4C` / 16 (a Bubble's touch loads `$10`, one down every 10 frames) |
 | link 89 | `arrow_usable` | the mask's ARROW bit |
-| link 90-92 | `rupee_reserve`, `rupees_spare`, `rupees_few` | the route step's rupee reserve / 16, rupees above it / 16, min(rupees, 16) / 16 (all clamped; the reserve is 0 until routes.yaml carries one) |
+| link 90-92 | `rupee_reserve`, `rupees_spare`, `rupees_few` | the route step's rupee reserve / 16, rupees above it / 16, min(rupees, 16) / 16 (all clamped; the reserve is `GameCompletion::rupee_reserve`, set beside the bomb reserve in both envs' `update_disabled_kinds`: 0 on all of `d2first`, 2 from the arrow shop on along `d7`) |
 | room_state 85, 86 | `frame_phase_32`, `frame_phase_64` | (FrameCounter `$15` & `$1F`) / 32, (& `$3F`) / 64: the Blue Wizzrobes' and Ganon's shot beats |
 | room_state 87 | `wallmaster_cooldown` | with a `$27` in the room: min(ObjTimer of slot 1 `$29` / `$60`, 1) (one hand per `$60` frames, the timer shared whatever slot 1 holds); else 0 |
 | room_state 88 | `wallmaster_lure` | a `$27` waits in the wall (state 0) and Link stands where asm:Wallmaster_Update lets one out: X `$20` or `$D0` with Y in `$6D-$B4`, or Y `$5D` or `$BD` with X in `$29-$C7` (the shared timer and Link not halted are the game's other conditions) |

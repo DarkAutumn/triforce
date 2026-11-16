@@ -480,8 +480,10 @@ For walks (none is needed before commit 3 can be built; each can change a row of
    the model needs the narrower per-type test.
 8. 7:0x0d: standing still at ($20,$8D) with hearts held, no capture in 300 frames while three hands came out
    (level-7.md: captured after 161 frames); told to Walks26.
-9. `rupee_reserve` values per step come from the route builder (Steps26); the observation reads whatever the route
-   carries.
+9. `rupee_reserve` values per step come from the route (`triforce/routes.yaml`; on the scouting route `d7` 2 from
+   the arrow shop's cave on, 0 before and on all of `d2first`); both envs hand the step's value to the builder
+   beside the bomb reserve (`update_disabled_kinds`; `crates/env/tests/specialist_env.rs`
+   `the_link_block_reads_the_routes_rupee_reserve`), since the merge of the round 26 branches.
 
 ## 9. As built (round 26, 1.5.1.0, branch `r26-obsbuild`)
 

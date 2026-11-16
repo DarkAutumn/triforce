@@ -4,9 +4,26 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 15)
+## Where things stand (Nov 17)
 
-- **Now (Nov 15, round 24, 1.5.0.0):** `d2first` runs from the game start to the **D5 triforce** (209 steps;
+- **Round 26, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round26.md`; the plan for the rest of the game:
+  `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. Built so far, nothing trained:
+  (1) **the walks** of the running game (`docs/routes/d7-walks.md`: rupees and bombs at 0x0b, the whirlwind, the
+  shops, the pond, every forced room of level 7 with today's models, which cannot play the Blue Goriya rooms); (2)
+  **the route vocabulary** (`docs/architecture.md` "The leg to Dungeon 7", `docs/routes/d7.md` §11): the scouting
+  route `d7` = `d2first` plus steps 209-247 (`{extends: d2first}`), `exit`/`entry: recorder` (the whirlwind, state
+  side `r`), `waypoint: arrows|food|candle`, overworld secrets as targets (game.yaml `entrance: {how:
+  armos|recorder}`), `rupee_reserve` (as `bomb_reserve`), shop caves with `requires_rupees`, **ARROW off in every
+  family unless its `items: {arrows: true}`**, RECORDER/FOOD/BOOMERANG masks by the route step, an opened bomb hole
+  a doorway of the room view (`Room::with_open_doorways`, every N or W bomb wall; 300 paired full-route runs: the
+  round 25 models play those rooms the same), the scripted walk `crates/zelda/tests/d7.rs` to the D7 triforce; (3)
+  **observation schema 6** (the one input change for Dungeon 7 to Ganon, `docs/observation-next.md`, decisions
+  2026-11-16): columns added at the end of `entity_features` (33 → 41), `link` (87 → 93) and `room_state` (85 →
+  89), no schema 5 column changed; the 28 promoted 1.5.0 runs converted (`triforce convert-model`), proven identical
+  (38,360 of 38,360 episodes in both act modes). Not built yet: the stretch's start states, curricula, family
+  rooms' training, any D7 chain number. Round 25 (`docs/experiments/round25.md`, `round25-planner-teacher.md`):
+  hearts priced by what they are worth to the run, the honest planner beside the models (`registry.PLAN_ACT`).
+- **Round 24 (Nov 15, 1.5.0.0):** `d2first` runs from the game start to the **D5 triforce** (209 steps;
   `docs/experiments/round24.md`, decisions 2026-11-14 and 2026-11-15). After the D4 triforce comes the leg (steps
   134-185, `docs/routes/d5-leg.md`): the raft back to 0x55, the stretches `coast-heart` (0x5f's heart container,
   round the world and the overworld ladder clip, or the plain coast), `lake-3e` and `mountain` (the plain way through
