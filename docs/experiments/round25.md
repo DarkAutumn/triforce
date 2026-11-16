@@ -463,7 +463,9 @@ rule is hit in 1 of 300 single-room episodes, c5 in 27). Recipe: `scripts/experi
 Fresh seeds 1000-1999, paired with `fresh-B75-on|off-d5`: clips on 59.9% against 50.7% (+9.2 ± 2.1; 0x37 0.18 a
 visit, 18 deaths against 1.18, 89; the Garden 82 deaths against 54), clips off 46.8% against 41.6% (+5.2 ± 2.2; 0x37
 0.14, 8 deaths against 0.95, 54; the plain 0x64 fight 159 deaths against 123). The Blue Darknut rooms are the thing
-to watch when this recipe is used again.
+to watch when this recipe is used again. A c7 at `--demo-coeff 0.1` sat between c4 and c5 in 0x37 (0.18 a pocket
+visit; chain 0.17 a visit, 14 deaths) but lost the Garden again (105 deaths, single-room 0x64 −1.65): 54.2%
+(+1.9 ± 2.1), below c5.
 
 **The other rooms are real fights** (no mechanical cause found):
 
