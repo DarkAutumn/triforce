@@ -156,3 +156,10 @@ things only the merge could settle:
 Suites on the merged code: `cargo test --release --workspace --features zelda/zcore` 984 passed, 1 ignored (with the
 scripted walk `d7.rs` under schema 6); pytest 813 passed, 3 skipped; `tf replay verify` the three corpus replays ok;
 `entry_states audit` 613 states, no problem; `asm.py check --final` ok.
+
+**The trained team after the merge.** One full-route chain on the merged code with the converted models (`triforce
+eval-chain --runs 300 --parallel 10 --act model`, seeds 0-299) against the same chain on the vocabulary's code before
+schema 6 with the round 25 models unconverted: **300 of 300 runs identical**, every field of every room record (the
+recorded action probabilities included), 67 of 300 to the D5 triforce in both. So on `d2first` the merged code and
+the converted team play exactly as the round 25 team did on the vocabulary's code, whose only difference from round
+25's is §4's doorway.
