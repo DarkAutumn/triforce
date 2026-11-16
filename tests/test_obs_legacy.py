@@ -5,7 +5,13 @@ bit for bit, over every family's start states and 50 seeded steps each, against 
 before the change, and must never be rerun to make this test pass).
 
 The steps are drawn from the legal actions by a seeded generator, so they follow the mask, which schema 6 did not
-change either (it is hashed too)."""
+change either (it is hashed too).
+
+Six traces differ from the record since the round 26 route vocabulary was merged beside schema 6 (`ROUTE_CHANGES`):
+no column's computation, but what the room view and the objective say in the trace's last, terminal observation.
+Each was compared key by key against the schema 6 code without the vocabulary (same actions, same length; only the
+`target` block, in one also `objective`, and only in that last observation) and against the vocabulary's code
+without schema 6 (`objective`, `target`, `grid`, `history` and the mask equal at every step)."""
 
 import argparse
 import hashlib
@@ -24,6 +30,25 @@ from .conftest import REPO_STATES_DIR
 GOLDEN = Path(__file__).parent / 'fixtures' / 'obs_schema5_golden.json'
 STEPS = 50
 KINDS, DIRECTIONS, DURATIONS = 11, 8, 4
+# Traces whose last observation the round 26 route vocabulary changed (docs/experiments/round26.md §5), with their
+# hashes on the merged code.  Five end on a wrong exit into a room through its opened bomb hole (4:0x11 and 4:0x21
+# from N, 5:0x66 from W), which is a doorway of the room view since then (`Room::with_open_doorways`): the path search
+# finds the way, so `target` points instead of reading "no path".  `5_14s_0` ends on the triforce, out on 0:0x0b
+# after `d2first`'s last step: `objective` and `target` name the room to the S there, where they named nothing.
+ROUTE_CHANGES = {
+    'gibdo': {
+        '5_14s_0.state': '8064edbde8c4c56f5ef0d7feb21975b24528e4c3a790dd6ac62951fed839db66',
+        '5_65e_2.state': 'd6903e85ede43b79310de7f68134c2a0f92543cf2c4f7a01825833c8e9860502',
+    },
+    'stalfos-keese-gel': {
+        '4_01s_0.state': '055db5efbf1c930ce9eb7f45fd635034073e173f62fc979c68831fbafc309fed',
+        '4_01s_1.state': '2dc87b7d7b8d982e8e7ec3a4978984ed9b2fcebf0907ad5dc0d41ae2fd0990b8',
+    },
+    'trap-room': {
+        '4_11s_0.state': '35acba5965e5af01b2cf344ba7dd0c8a8e6f34df52890898da6cec9d04de2f20',
+        '4_11s_2.state': '624e980fe5d876ced673767812234e36b2b2f5035cd3bf5be8628e1669a36ad9',
+    },
+}
 
 
 def _old_columns(obs: dict) -> dict:
@@ -81,7 +106,7 @@ def test_schema5_columns_are_unchanged(name):
     golden = json.loads(GOLDEN.read_text(encoding='utf-8'))
     if name not in golden['families']:
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
-    assert family_hashes(name) == golden['families'][name]
+    assert family_hashes(name) == golden['families'][name] | ROUTE_CHANGES.get(name, {})
 
 
 def main(argv=None) -> int:
