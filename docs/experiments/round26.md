@@ -559,6 +559,9 @@ settings are the base: `--load {name} --iterations 244 --seed 75 --stop-success 
   replaces the promoted one.
 - **7:0x1b** has no full-fight track; if staging alone does not teach the six-Goriya room, the next means are a
   scripted rule cloned by `train --demos` (as 5:0x37's column) or states harvested from chain runs.
+  The owner's rule for the room (Nov 17, decisions): fought only at 4 bombs or fewer (`treasure: {if_bombs_below:
+  5}`, it was 8), else crossed to the E key door; with the usual 0-1 bombs on arrival the fight stays the usual case.
+  The first team's trainings (`r76-goriya`) were started under the old rule; continuations run under the new one.
 
 Suites on this tier's code and states: `cargo test --release --workspace --features zelda/zcore` 985 passed, 1
 ignored; pytest 818 passed, 3 skipped (five tests that pinned the route's end at the D5 triforce follow the merge;

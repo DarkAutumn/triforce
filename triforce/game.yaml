@@ -4761,7 +4761,7 @@ rooms:
   stairs: [16, 10]
 - level: 7
   location: '0x1b'
-  specialist: goriya  # Dungeon 7 (round 26): fought for its 4 bombs while the bag isn't full
+  specialist: goriya  # Dungeon 7 (round 26): fought for its 4 bombs at 4 bombs or fewer, else crossed (the owner, Nov 17)
   exits:
     N:
       level: 7

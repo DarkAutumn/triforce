@@ -2546,3 +2546,22 @@ scouted the leg and Dungeon 5. Before any state was built it was merged into the
   often enough to fit one (`python -m triforce.heart_value <chain jsonl>...`).
 - **No version bump:** no trained model reads the route's length; on steps 0-208 the chains play as before
   (round26.md §5).
+
+## 2026-11-17 — 7:0x1b is fought only at 4 bombs or fewer; clips off is not a concern (Lee)
+
+Lee, on the room the explorer could not clear: "as long as you bomb into it, that room IS clearable. You do so to
+grab the bombs. Only grab bombs at 4 or less, otherwise traverse the room and get out asap." And: "Clips-off is not
+a problem. We might even drop it in the future."
+
+- **7:0x1b** (six Blue Goriyas; the four bombs appear when all are dead; E is a key door, so the room can be
+  crossed with the Goriyas alive): the route step is `treasure: {if_bombs_below: 5}` (it was `8`, "when the bag
+  isn't full", 2026-11-14). By the ledger a run arrives with 0-1 bombs (three walls before it), so the fight stays
+  the usual case and it is the room's bombs that open 0x0c's and 0x29's walls; a run that cannot win it and leaves
+  has those two bombs cheated and counted.
+- **What stays open in the room** (not rules, work): no full-fight track (the explorer's search does not find 18
+  white-sword hits under six boomerangs; staged starts with 2-5 kills banked exist on all chains); today's goriya
+  model wins 4%, the honest planner 5 of 10; the rule is read live, so a Link crossing with 5 who throws a bomb as a
+  weapon turns the crossing into the fight (round 23's 3:0x5b problem); the N key door spends a key if touched (to
+  be vetoed with round 27's `keep_out` doorways when that branch is merged).
+- **Clips off:** still built (a plain way for every stretch) and measured in the chains of record, but no work is
+  spent on it: no tuning, no scoping of a clip family's switch to single rooms, and its numbers gate nothing.

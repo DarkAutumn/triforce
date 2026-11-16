@@ -1771,7 +1771,7 @@ mod tests {
         );
         // 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14); Dungeon 5's
         // crossed rooms skip their items, 0x66 on entry too, and 0x65 refuses its bombs westbound (round 24); Dungeon
-        // 7 leaves 0x69's bombs, 0x38's rupees and 0x0c's item and takes 0x1b's bombs while the bag isn't full.
+        // 7 leaves 0x69's bombs, 0x38's rupees and 0x0c's item and takes 0x1b's bombs at 4 bombs or fewer (the owner, Nov 17).
         let rules: Vec<_> = steps
             .iter()
             .filter(|s| s.treasure != TreasureRule::Take)
@@ -1793,7 +1793,7 @@ mod tests {
                 (loc(5, 0x26), "E", TreasureRule::Skip),
                 (loc(7, 0x69), "S", TreasureRule::Skip),
                 (loc(7, 0x38), "E", TreasureRule::Skip),
-                (loc(7, 0x1b), "W", TreasureRule::IfBombsBelow(8)),
+                (loc(7, 0x1b), "W", TreasureRule::IfBombsBelow(5)),
                 (loc(7, 0x0c), "S", TreasureRule::Skip),
             ]
         );
