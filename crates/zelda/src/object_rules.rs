@@ -8,7 +8,7 @@
 //! The schema 5 rules (`hurts_on_touch`, `killable`, `active`, frozen) come in as [`Legacy`]: a row that does not
 //! correct them passes them on.
 
-use crate::enums::{ObjectClass, enemy, object};
+use crate::enums::{ObjectClass, Position, Tile, enemy, object};
 
 const OBJ_TYPE: usize = 0x34F;
 const OBJ_X: usize = 0x70;
@@ -213,6 +213,22 @@ pub fn object_rules(ram: &[u8], slot: usize, clock: bool, legacy: Legacy) -> Rul
 pub fn wallmaster_lets_one_out(x: u8, y: u8) -> bool {
     let corner = !(0x29..0xC8).contains(&x) && !(0x6D..0xB5).contains(&y);
     !corner && (matches!(x, 0x20 | 0xD0) || matches!(y, 0x5D | 0xBD))
+}
+
+/// Link's tiles ([`Position::tile`]) on the grid points where a waiting Wallmaster comes out
+/// ([`wallmaster_lets_one_out`]; Link stops on the 8-pixel grid, X a multiple of 8 and Y `$3D` + a multiple of 8):
+/// column 4 or 26 in rows 6-14 (X `$20`/`$D0`, Y `$6D`-`$AD`), row 4 or 16 in columns 6-24 (Y `$5D`/`$BD`, X
+/// `$30`-`$C0`).  The Fight objective's targets while every Wallmaster of the room is in the wall (round 26, 7:0x0d).
+pub fn wallmaster_lure_tiles() -> Vec<Tile> {
+    let mut tiles = Vec::new();
+    for x in (0x00..=0xF0u8).step_by(8) {
+        for y in (0x3D..=0xDDu8).step_by(8) {
+            if wallmaster_lets_one_out(x, y) {
+                tiles.push(Position::new(i32::from(x), i32::from(y)).tile());
+            }
+        }
+    }
+    tiles
 }
 
 /// Ganon (asm:Ganon_ScenePhase2_Fight and its handlers).
@@ -431,6 +447,19 @@ mod tests {
         assert!(wallmaster_lets_one_out(0x29, 0x5D) && wallmaster_lets_one_out(0xC7, 0xBD));
         assert!(!wallmaster_lets_one_out(0x28, 0x5D) && !wallmaster_lets_one_out(0xC8, 0xBD), "corners");
         assert!(!wallmaster_lets_one_out(0x21, 0x8D) && !wallmaster_lets_one_out(0x78, 0x8D), "off the wall");
+    }
+
+    #[test]
+    fn wallmaster_lure_tiles_are_the_wall_lines_without_the_corners() {
+        let tiles = wallmaster_lure_tiles();
+        assert_eq!(tiles.len(), 2 * 9 + 2 * 19);
+        // Link's tile at ($20,$8D), the W door row of 7:0x0d; the four lines' ends.
+        for tile in [(4, 10), (4, 6), (4, 14), (26, 6), (26, 14), (6, 4), (24, 4), (6, 16), (24, 16)] {
+            assert!(tiles.contains(&tile), "{tile:?}");
+        }
+        for tile in [(4, 4), (5, 4), (4, 5), (4, 15), (4, 16), (25, 16), (26, 15), (26, 4), (12, 10)] {
+            assert!(!tiles.contains(&tile), "{tile:?}");
+        }
     }
 
     #[test]

@@ -1272,3 +1272,82 @@ fn d5_the_big_digdogger_covers_four_by_four_tiles() {
     let big = state.enemies.iter().find(|e| e.is_big_digdogger()).expect("the big Digdogger");
     assert_eq!((big.dims(), big.link_overlap_tiles().len()), ((4, 4), 25));
 }
+
+/// Dungeon 7's Wallmaster room (0x0d, round 26; docs/routes/d7-walks.md §7): the block that makes the stairs moves
+/// only once the five Wallmasters are dead, and one comes out of its wall only while Link stands against a wall.
+/// So with every hand in the wall the fight's targets are the spots that bring one out (not the hidden hands' RAM
+/// positions, spawn spots in the middle of the room the game never uses: there Link waited for ever, round 26);
+/// with a hand out, the hand; with all dead, the tile E of the block (pushed W), then the stairs.
+#[test]
+fn d7_wallmaster_room_lures_fights_pushes_and_takes_the_stairs() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((mut s, mut gc)) = dungeon_room(&map, "7_0dw_0", 7, 0x0d, "W") else { return };
+    let cellar = MapLocation::new(7, 0x7b, true);
+    let wallmasters = |state: &GameView| state.enemies.iter().filter(|e| e.id == zelda::enums::enemy::WALLMASTER).count();
+
+    // Off the wall, the hand the entry brought out goes back in: all five wait.
+    s.apply_ram(&[(Var::LinkX, 0x60), (Var::LinkY, 0x8D)]);
+    for _ in 0..16 {
+        if !s.state().has_active_enemies() {
+            break;
+        }
+        act(&mut s, "WAIT 32");
+        s.apply_ram(&[(Var::LinkX, 0x60), (Var::LinkY, 0x8D)]);
+    }
+    let hidden = s.state().clone();
+    assert!(!hidden.has_active_enemies() && hidden.push_block_pending());
+    assert_eq!((wallmasters(&hidden), hidden.enemies.len()), (5, 5), "the Bubbles aren't monsters");
+    let objective = gc.objectives(None, &hidden);
+    let mut lure: Vec<(i32, i32)> = (6..=14).flat_map(|row| [(4, row), (26, row)]).collect();
+    lure.extend((6..=24).flat_map(|col| [(col, 4), (col, 16)]));
+    assert_eq!((objective.kind, objective.next_rooms.clone()), (ObjectiveKind::Fight, [].into()));
+    assert_eq!(objective.pbrs_targets, tiles(&lure), "against a wall, outside the corners");
+    let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
+    let wavefront = hidden.room().wavefront(&targets, &[], &[], objective.clips);
+    assert_eq!(wavefront.get(hidden.link.tile()), Some(8), "from inside the C of blocks: out its W side to the wall");
+
+    // Against the W wall one comes out: it is the target.
+    s.apply_ram(&[(Var::LinkX, 0x20), (Var::LinkY, 0x9D)]);
+    for _ in 0..16 {
+        if s.state().has_active_enemies() {
+            break;
+        }
+        act(&mut s, "WAIT 4");
+    }
+    let out = s.state().clone();
+    let hands: Vec<_> = out.active_enemies().collect();
+    assert_eq!(hands.len(), 1, "one hand at a time");
+    let objective = gc.objectives(Some(&hidden), &out);
+    let hand: Vec<(i32, i32)> = hands[0].link_overlap_tiles();
+    assert_eq!((objective.kind, objective.pbrs_targets), (ObjectiveKind::Fight, tiles(&hand)));
+
+    // All dead: the push spot E of the block (game.yaml `push_block: [W]`), then the stairs it makes.
+    kill_monsters(&mut s);
+    let clear = s.state().clone();
+    assert!(clear.enemies.is_empty() && clear.push_block_pending() && clear.room().stairs_tiles().is_empty());
+    let objective = gc.objectives(Some(&out), &clear);
+    assert_eq!((objective.kind, objective.next_rooms.clone()), (ObjectiveKind::Move, [cellar].into()));
+    assert_eq!(objective.pbrs_targets, tiles(&[(26, 10)]));
+    // (The Bubbles go too, and a touch's knock is waited out: either moves Link off the spot.)
+    for slot in 1..11usize {
+        zelda::Nes::poke(s.nes_mut(), (tables::OBJ_ID.0 + slot) as u16, 0);
+    }
+    for _ in 0..3 {
+        act(&mut s, "WAIT 32");
+    }
+    s.apply_ram(&[(Var::LinkX, 0xD0), (Var::LinkY, 0x8D)]);
+    assert!(s.state().is_push_block_direction(Direction::W) && !s.state().is_push_block_direction(Direction::E));
+    for _ in 0..2 {
+        if s.state().push_block_pending() {
+            act(&mut s, "MOVE W 16");
+        }
+    }
+    for _ in 0..6 {
+        act(&mut s, "WAIT 16");
+    }
+    let pushed = s.state().clone();
+    assert!(!pushed.push_block_pending());
+    assert_eq!(pushed.room().stairs_tiles(), [(26, 4)], "the stairs appear in the top right");
+    let objective = gc.objectives(Some(&clear), &pushed);
+    assert_eq!((objective.pbrs_targets, objective.next_rooms), (tiles(&[(26, 4)]), [cellar].into()));
+}
