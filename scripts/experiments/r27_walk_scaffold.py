@@ -12,8 +12,8 @@ Nothing in the checkout changes.
 `--wizzrobe` names the family that plays the six Wizzrobe rooms (0x78, 0x28, 0x29, 0x2c crossed; 0x38, 0x3a fought):
 one scaffold per candidate (goriya, darknut, like-like, vire, zol, ...).  The route, tags and family yamls here are
 the walk's guesses, not round 27's decisions.  What the engine cannot say yet is left out or played without it: 0x21
-is entered and left S (no gravestone push, no cave), Gohma's room has no arrow rule, 0x38's block is the engine's
-`push_block_opens`."""
+is entered and left S (no gravestone push, no cave), Gohma's room has no arrow rule (ARROW is turned on for the boss
+family, nothing aims it), 0x38's block is the engine's `push_block_opens`."""
 
 import argparse
 import re
@@ -176,6 +176,8 @@ def main():
             data['ram_randomization'] = {}
             data['curriculum'] = {'enabled': False}
             data['start_states'] = [f'{state}_[0-9]' for state in names[name]]
+            if name == args.boss:
+                data.setdefault('items', {})['arrows'] = True    # Gohma dies to an arrow only (off by default)
         (out / 'specialists' / f.name).write_text(yaml.safe_dump(data, sort_keys=False))
     print(f'scaffold in {out}: ' + '; '.join(f'{k}: {v}' for k, v in names.items()), file=sys.stderr)
     print(f'evaluate with TRIFORCE_STATES_DIR={states} PYTHONPATH={out}', file=sys.stderr)
