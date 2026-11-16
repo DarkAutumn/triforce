@@ -56,6 +56,10 @@ class PatraBot(Bot):
 
     touch = 12
     stab_safe = 34        # a child comes round every 9-11 frames: time to step away after the stab
+    drift = 0.0           # pixels a frame added to the berth of a place ahead (0.15 was tried: more walking, more hits)
+
+    def spread(self, s, k):
+        return self.drift * k if self.prev[s][0] in (self.child, self.kind) else 0
 
     def __init__(self, w, freeze=True):
         self.kind = w.r(OBJ_TYPE + 1)
@@ -66,7 +70,7 @@ class PatraBot(Bot):
         self.body = collections.deque(maxlen=33)
         super().__init__(w, {self.child, self.kind})
         self.nodes = np.array(sorted(self.graph))
-        self.waits = 0
+        self.waits, self.when, self.index = 0, None, {}
 
     def _track(self):
         super()._track()
@@ -151,11 +155,17 @@ class PatraBot(Bot):
         those the ones from which a target child crosses the sword's box."""
         w = self.w
         ks = range(0, self.period + 1, 2)
-        harm = np.array([self.future(s, k) for s in self.prev if self.prev[s][0] in (self.child, self.kind)
-                         for k in ks])
-        dx = np.abs(harm[None, :, 0] - self.nodes[:, None, 0])
-        dy = np.abs(harm[None, :, 1] - self.nodes[:, None, 1])
-        unsafe = ((dx < self.touch) & (dy < self.touch)).any(axis=1)
+        harm = np.array([[self.future(s, k) for k in ks] for s in self.prev
+                         if self.prev[s][0] in (self.child, self.kind)])              # (objects, samples, 2)
+        dx = np.abs(harm[None, :, :, 0] - self.nodes[:, None, None, 0])
+        dy = np.abs(harm[None, :, :, 1] - self.nodes[:, None, None, 1])
+        near = ((dx < self.touch) & (dy < self.touch)).any(axis=1)                    # (nodes, samples)
+        unsafe = near.any(axis=1)
+        near = ((dx < self.touch + 3) & (dy < self.touch + 3)).any(axis=1)            # walking past: a wider berth
+        # when[n, k]: something is within touch of node n between samples k - 3 and k + 5 (frames 2k - 6 .. 2k + 10)
+        pad = np.pad(near, ((0, 0), (3, 5)))
+        self.when = np.stack([pad[:, i:i + near.shape[1]] for i in range(9)]).any(axis=0)
+        self.index = {tuple(n): i for i, n in enumerate(self.nodes.tolist())}
         targets = [s for s in self.prev if self.prev[s][0] == self.child and self.is_target(s)]
         useful = np.zeros(len(self.nodes), dtype=int)
         if targets:
@@ -169,6 +179,31 @@ class PatraBot(Bot):
         safe = {tuple(n) for n, u in zip(self.nodes.tolist(), unsafe) if not u}
         good = {tuple(n) for n, u, c in zip(self.nodes.tolist(), unsafe, useful) if not u and c > 0}
         return safe, good
+
+    def plan(self, goals):
+        """As `Bot.plan`, but a square on the way is dangerous by the frame Link would stand on it (a step is 5.4
+        frames): the children are somewhere else by then."""
+        import heapq                          # pylint: disable=import-outside-toplevel
+        start = self.node()
+        if not children(self.w) or self.when is None:
+            return super().plan(goals)
+        if start is None or start in goals or not goals:
+            return None
+        last = self.when.shape[1] - 1
+        seen, heap = {start: 0}, [(0, 0, start, None)]
+        while heap:
+            cost, steps, node, first = heapq.heappop(heap)
+            if cost > seen.get(node, 1e9):
+                continue
+            if node in goals:
+                return first
+            for button, nxt in self.graph[node].items():
+                k = min(last, int((steps + 1) * 5.4 / 2))
+                c = cost + 1 + (40 if self.when[self.index[nxt], k] else 0)
+                if c < seen.get(nxt, 1e9):
+                    seen[nxt] = c
+                    heapq.heappush(heap, (c, steps + 1, nxt, first or button))
+        return None
 
     def move(self):
         if not children(self.w):
