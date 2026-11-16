@@ -994,7 +994,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
   `training-gui.py`'s [currently running] shows every live job on the machine, wherever it writes: the registry's
   running and queued jobs (pid alive with the recorded start time) and its own logs root's. Folders from another checkout
-  are labelled with its directory and branch. Under a "finished" heading below the live ones: folders whose
+  are labelled with its directory and branch. Order (window and web view, Nov 17): what runs now is on top, the job
+  that began to run last first (`run_start`: when it was admitted, else its plan's creation; never the folder's
+  name, each checkout numbers its own), so a job that starts is added at the top and pushes the others down; then
+  the waiting ones in the order they will start; then what ended, the last to end first (`plan_ended`), so a job
+  that ends joins that list at its top and nothing below the running ones changes places. Under a "finished"
+  heading below the live ones: folders whose
   training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
   registry's jobs that ended in the last 24 hours (`RECENT_SECONDS`; one whose process died without ending its plan
   shows "process gone"); the "Clear finished" button hides those for the rest of the session, and trainings that
@@ -1011,8 +1016,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
   snapshot a second from its own `Training` models, found as [currently running] finds folders, so the window and
   the server never wait for each other; the window's widgets and the page share the Qt-free presentation code
   (`plan_meta`, `row_phase`, `row_badge`, `chain_bar`, `CHARTS`/`run_chart_data`/`chart_bounds`,
-  `run_eval_sections`). No selection: a card per active run (training run, batch evaluation, eval-chain), newest
-  start first; pending runs only in their live plan's queue line; a run that ended stays 60 s after its end
+  `run_eval_sections`). No selection: a card per run (training run, batch evaluation, eval-chain), the running
+  ones on top (newest start first), the ended ones below them (newest end first); pending runs only in their live
+  plan's queue line; a run that ended stays 60 s after its end
   (`WEB_EXPIRE`; a run seen running whose process died, from when that was seen), so runs that ended before the
   server started never show. A taken port (a second training-gui) is an error: one line on stderr and exit 1, with
   or without a window; `--no-web` is the only way to run without the web view.

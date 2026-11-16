@@ -130,7 +130,8 @@ the "no change" reference appears only when zero is within that range.
 The training GUI also serves a read-only web view of what runs now, for a phone or another machine:
 `http://<host>:22222/` (`--web-port N`; `--web-host HOST`, default `0.0.0.0`, every interface: anyone on the network
 can watch; `--no-web` turns it off, `--web-only` runs it without a window or display). No picking: one card per
-training run, evaluation and eval-chain going on, newest start on top, with the window's row and detail tabs (bar,
+training run, evaluation and eval-chain, what runs now on top (the newest start first; a run that starts pushes the
+others down), the runs that just ended below (the newest end first), with the window's row and detail tabs (bar,
 steps or episodes, speed, elapsed, time left, success, the charts, the evaluation, the last 15 console lines), one
 line per live plan with its progress and queue, and the machine line. A run that ends stays 60 seconds with its
 final figures. The page asks for `/api/state` (JSON) every second; nothing else is served. The web view is on unless
