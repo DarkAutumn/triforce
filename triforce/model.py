@@ -466,12 +466,15 @@ _FIRST_LAYERS = ('mlp_extractor.policy_net.0.weight', 'mlp_extractor.value_net.0
 def widen_policy(network: ZeldaPolicy, obs_spec: dict) -> ZeldaPolicy:
     """``network`` rebuilt for the larger layout ``obs_spec``: its own layout plus new float vector keys.  Every
     weight is copied; the tower inputs of the new keys' features start at zero, so the widened network computes
-    exactly what ``network`` does whatever the new keys hold, and training can grow them from there."""
+    exactly what ``network`` does whatever the new keys hold, and training can grow them from there.  A key whose
+    shape changed (features added to ``entity_features``, ``link``, ``room_state``) is refused: that is a new
+    observation schema, widened by name by ``triforce convert-model``."""
     old_spec = network.config.obs_spec
     for key, entry in old_spec.items():
         if obs_spec.get(key) != entry:
             raise ValueError(f"Can't widen: observation key '{key}' is {entry}, the new layout has "
-                             f"{obs_spec.get(key)}")
+                             f"{obs_spec.get(key)} (features added to a key are widened by name by `triforce "
+                             "convert-model`)")
     added = set(obs_spec) - set(old_spec)
     bad = sorted(k for k in added if k in _SPECIAL_KEYS or obs_spec[k]['vocab'] is not None
                  or len(obs_spec[k]['shape']) != 1)

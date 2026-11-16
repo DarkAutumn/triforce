@@ -276,10 +276,12 @@ def set_allow_incompatible(on: bool) -> None:
         os.environ[ALLOW_INCOMPATIBLE_ENV] = '1'
 
 
-# Models of this version prefix `triforce convert-model` widens to this code's layout (triforce/convert.py).
-CONVERTIBLE_VERSION = '1.4.1'
-CONVERT_HINT = ("a 1.4.1 model is widened to this code's action kinds and observation by `triforce convert-model "
-                "RUN_DIR... --out DIR` (or `triforce --models-dir MODELS convert-model --promoted --out DIR`)")
+# Models of this version prefix and observation schema `triforce convert-model` widens to this code's layout
+# (triforce/convert.py).
+CONVERTIBLE_VERSION = '1.5.0'
+CONVERTIBLE_OBS_SCHEMA = 5
+CONVERT_HINT = ("a 1.5.0 model is widened to this code's observation by `triforce convert-model RUN_DIR... --out DIR` "
+                "(or `triforce --models-dir MODELS convert-model --promoted --out DIR`)")
 
 
 def require_compatible(checkpoint) -> None:
@@ -354,16 +356,16 @@ def load_checkpoint(path, check_schema: bool = True) -> dict:
     if check_schema:
         action = checkpoint.get('action_schema_version')
         if action != ACTION_SCHEMA_VERSION:
-            hint = f"; {CONVERT_HINT}" if action == 2 else ""
             raise SchemaMismatchError(f"{path}: action_schema_version is {action}, "
-                                      f"code expects {ACTION_SCHEMA_VERSION}{hint}")
+                                      f"code expects {ACTION_SCHEMA_VERSION}")
         obs = checkpoint.get('obs_schema_version')
         if obs != obs_schema_version():
             problem = (_obs_layout_problem(checkpoint) if isinstance(obs, int) and obs < obs_schema_version()
                        else "not an older schema")
             if problem is not None:
+                hint = f"; {CONVERT_HINT}" if obs == CONVERTIBLE_OBS_SCHEMA else ""
                 raise SchemaMismatchError(f"{path}: obs_schema_version is {obs}, code expects "
-                                          f"{obs_schema_version()} ({problem})")
+                                          f"{obs_schema_version()} ({problem}){hint}")
     return checkpoint
 
 

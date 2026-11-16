@@ -789,19 +789,20 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (`model.widen_policy` via `registry.load_model(obs_spec=...)`): every weight is copied and the towers' input
   columns for the new keys start at zero, so it acts exactly as before; the optimizer state starts fresh (the
   iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
-- **Converting a 1.4.1 checkpoint** (round 24): `triforce convert-model RUN_DIR... --out DIR` or `triforce
-  --models-dir MODELS convert-model --promoted --out DIR` (`triforce/convert.py`) writes `DIR/<specialist>/<run>/`, a
-  full copy of the run dir with the widened `ckpt.pt`, the source untouched. The first tower layers get zero columns
-  for the added features (matched by feature name: `convert.ADDED`); `kind_head` rows for the new kinds copy WAIT's
-  with the bias 5 lower (`NEW_KIND_BIAS_BELOW_WAIT`: never above WAIT, which is always legal; drawn at most `e^-5` as
-  often as WAIT when first unmasked); `kind_embedding` rows copy BOMB's (FOOD, CANDLE) or WAIT's (RECORDER); the Adam
-  moments are padded with zeros (so `--load` continues as from the source; the new entries get no gradient while
-  masked). The copy is stamped with this code's version, its `act` file re-bound to the new sha1 (same mode),
-  `promoted` copied, and `convert.json` names the source sha1 and version; `eval.json` stays the source's (bound to
-  its sha1). Anything but exactly the 1.4.1 layout and stamp is refused; loading an unconverted 1.4.1 run says how
-  to convert it. The Rust policy drops first-layer input columns no weight reads (`Policy::live`): a zero column
-  changes no output but would move later columns into other lanes of the fixed-order dot product, so a widened model
-  computes bit for bit what its source did (`zero_input_columns_change_no_bit`).
+- **Converting a 1.5.0 checkpoint** (round 26; round 24 converted 1.4.1 runs to its new action kinds the same
+  way): `triforce convert-model RUN_DIR... --out DIR` or `triforce --models-dir MODELS convert-model --promoted --out
+  DIR` (`triforce/convert.py`) writes `DIR/<specialist>/<run>/`, a full copy of the run dir with the widened
+  `ckpt.pt`, the source untouched. Schema 6's added features (`convert.ADDED`, matched by feature name) get zero
+  columns in the first tower layers (`link`, `room_state`) and in the entity encoder's `input_proj` (the entity
+  features, before the type embedding's columns); the Adam moments are padded with zeros (so `--load` continues as
+  from the source). The copy is stamped with this code's version, its `act` file re-bound to the new sha1 (same
+  mode), `promoted` copied, and `convert.json` names the source sha1 and version and the added features; `eval.json`
+  stays the source's (bound to its sha1). Anything but exactly the 1.5.0 layout and stamp is refused; loading an
+  unconverted 1.5.0 run says how to convert it, and `model.widen_policy` (new vector keys only) refuses a changed
+  key with the same pointer. The Rust policy drops input columns no weight reads, of the towers' first layers
+  (`Policy::live`) and of `input_proj` (`Policy::entity_live`): a zero column changes no output but would move later
+  columns into other lanes of the fixed-order dot product, so a widened model computes bit for bit what its source
+  did (`zero_input_columns_change_no_bit`, `zero_entity_columns_change_no_bit`, `tests/test_convert.py`).
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id> [--act MODE]`
   sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`), one line `<mode> <ckpt.pt sha1>`:
   an act mode (`docs/rust-actor.md` "Act modes"; without the file `registry.DEFAULT_ACT`, the project's rule
