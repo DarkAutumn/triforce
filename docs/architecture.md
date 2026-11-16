@@ -239,7 +239,7 @@ MOVE ends.
   `requires_rupees: 2` (`cheats::rupee_need`: in a dungeon room the need lasts while its Gohma lives). Reserves
   (routes.yaml): bombs 2 from 0x42, 1 from 6:0x29; rupees 2, 1 from 6:0x1c.
 - **Families**: new `ow-ghini` (the graveyard and the sword cave), `wizzrobe` (6:0x78, 0x28, 0x29, 0x2c, 0x38,
-  0x3a), `boss-gohma` (6:0x1c), each `trainable: false` with no start states until the stretch's states exist; the
+  0x3a), `boss-gohma` (6:0x1c), with start states since the states step (round27.md §5-6); the
   stretch's other rooms joined ow-moblin, ow-lynel, stalfos-keese-gel, zol, trap-room, vire, like-like and
   equipment-room.
 - **Walked** (`crates/zelda/tests/d6.rs`, from `7_2bw_0`, monsters removed but Gohma): to the D6 triforce by the

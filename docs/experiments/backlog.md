@@ -23,13 +23,25 @@ answers `docs/decisions.md` 2026-11-17.
 - [x] **The route vocabulary** (Nov 17): the scouting route `d6` (steps 248-280), the gravestone, `waypoint: sword`,
   `keep_out` doorways, Gohma's ARROW facing and stand tile, families ow-ghini, wizzrobe, boss-gohma, the scripted
   walk `crates/zelda/tests/d6.rs` to the D6 triforce.
-- [ ] **Start states** of steps 248-280, chains 0-2, both ways of `woods` (round27.md §5 names them); then the three
-  new families' `start_states` and `trainable`, and patterns for the rooms added to the eight old families.
-- [ ] **Merge `d6` into `d2first`** when the owner fixes the route (as round 26 did with `d7`), and refit
-  `triforce/heart_value.json`: wizzrobe's yaml already asks for `reward.heart_value`, which reads the table of the
-  family's route.
-- [ ] **Curricula and a first team**: wizzrobe from like-like's promoted run, ow-ghini from ow-moblin's, boss-gohma
-  new, ow-lynel retrained (0x50 from E and S, 0x60 E → N, 0x32, 0x22).
+- [x] **Start states** of steps 248-280, chains 0-2, both ways of `woods` (round27.md §5: 96 states, what each
+  holds); the three new families' `start_states` and `warm_start`, patterns for the eight old families (§6).
+- [ ] **States after a skipped fight** (26: `6_28s` on for chains 1 and 2, `6_08cave` on for chain 0): rebuild from
+  chain harvests once a model clears 0x38 and 0x3a (`eval-chain --harvest`).
+- [ ] **Merge `d6` into `d2first`** when the owner fixes the route (as round 26 did with `d7`), then refit
+  `triforce/heart_value.json` and move `eval_batch.D6_SEGMENTS`, `MILESTONES`, the `d7` target and the room-stats
+  cuts (round27.md §7). No family yaml names a route, so none has to change.
+- [ ] **Left by the states step** (round27.md §8-10): the demonstration files (`r27_d6_rules.py demos`), the proof
+  round `r77-proof` read (`run.json` `curriculum_tracks`) and wizzrobe's proof training, a training with `--demos`,
+  the staged tracks of 6:0x38 and 6:0x3a (`SKIP_DONE=1 scripts/experiments/r27_d6_curricula.sh`), `0_61n_1`'s
+  track, `max_steps` near the track lengths.
+- [ ] **6:0x28's objective path runs along the Blue Wizzrobes' row**: a rule walking by `target` loses 1.75 hearts
+  and 9 of 60 runs there, the walked path (bottom row, then column X `$D0`) 0.95 and none. Give the room
+  `path_costs` (and re-pin `crates/zelda/tests/d6.rs`).
+- [ ] **The state build's Gohma spends 5, 1 and 6 arrows** (the explorer shoots at random; the script 1-2): `6_0cs`
+  holds 36 / 32 / 26 rupees. Rewrite with `r27_d6_states.py write --rupees` if Dungeon 8's ledger needs it.
+- [ ] **A first team**: baseline `r77-base` is 0 of 100 on both segments (round27.md §11). ow-lynel first (no run
+  passes 0x50), then wizzrobe (0x28 0%, 0x29 3%, 0x38 12%, 0x3a 32%, 0x2c 65%), boss-gohma (28% zero-shot),
+  ow-ghini (0x21 75% at 3.6 hearts).
 - [ ] **The main risk: the survival budget does not close** (round27.md §3): the best plays seen cost 21 hearts of
   12 with 0x38 and 0x3a in, 10.3 without them. Nothing built in the vocabulary step changes that.
 - [ ] **Armos statues are still pressed** by a MOVE that arrives on the grid point before one (0x22: 41 hearts in 40
