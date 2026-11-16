@@ -157,7 +157,9 @@ def test_search_settings_reach_the_search(states_dir, tmp_path):
     """Without RNG redraws every future is the same (futures 4 == futures 1 bit for bit); redraws change some Q;
     gamma and depth change the Qs, c_scale the improved policy.  Only every env's first decision is compared (the
     same root everywhere), so each rollout is one step long."""
-    policy = network().to_native()
+    # A network whose depth-2 and depth-4 futures differ from the start state (seed 0's all end the same since
+    # schema 6 widened the inputs).
+    policy = network(3).to_native()
     base = dict(candidates=3, simulations=6, futures=1, depth=2, perturb_rng=False, fraction=1.0)
     variants = {'base': base, 'futures': dict(base, futures=4), 'gamma': dict(base, gamma=0.5),
                 'depth': dict(base, depth=4), 'c_scale': dict(base, c_scale=5.0)}
