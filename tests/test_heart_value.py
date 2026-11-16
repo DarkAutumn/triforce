@@ -47,9 +47,25 @@ def test_fit_prices_hearts_by_the_rooms_ahead(tmp_path):
     # The safe room before it inherits the danger; the triforce room after it is flat.
     assert rows[0]['clips']['values'] == danger
     assert set(rows[3]['clips']['values'][1:]) == {1.0}
-    # The plain way: no visits with the switch off, so no damage known, and no curve for the clip-only step.
+    # The plain way: no visit with the switch off up to the triforce, so no curve at all (not "nothing costs a heart").
     assert rows[2]['plain'] is None and rows[2]['clips'] is not None
-    assert rows[1]['plain']['values'][1:] == [1.0] * 8 and rows[1]['plain']['visits'] == 0
+    assert [rows[k]['plain'] for k in (0, 1, 3)] == [None, None, None]
+
+
+def test_a_stretch_no_chain_played_gets_no_curve(tmp_path):
+    """Round 26: the route grown by a dungeon: the steps after the fitted triforce have no visits and no curve, the
+    steps before it are fitted as without them; a visit anywhere in the new stretch fits all of it."""
+    longer = STEPS + [_step(4, 0x14, 'N'), _step(5, 0x15, 'triforce')]
+    chain = tmp_path / 'chain.jsonl'
+    chain.write_text(''.join(json.dumps(r) + '\n' for r in _runs()))
+    before = heart_value.build_table(STEPS, [str(chain)], 'toy')['steps']
+    rows = heart_value.build_table(longer, [str(chain)], 'toy')['steps']
+    assert rows[:4] == before
+    assert [(r['clips'], r['plain']) for r in rows[4:]] == [(None, None), (None, None)]
+    played = tmp_path / 'played.jsonl'
+    played.write_text(json.dumps({'rooms': [_visit(4, 4.0, 4.0)]}) + '\n')
+    rows = heart_value.build_table(longer, [str(chain), str(played)], 'toy')['steps']
+    assert rows[4]['clips']['visits'] == 1 and rows[5]['clips']['visits'] == 0 and rows[:4] == before
 
 
 def test_rare_arrivals_follow_the_damage_prior():

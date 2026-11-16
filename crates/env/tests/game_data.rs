@@ -52,6 +52,20 @@ fn an_unmodified_copy_loads() {
     assert_eq!(data.states_dir, tmp.path().join("triforce/states"));
 }
 
+/// Round 26: a heart-value table fitted for the route before it changed (here: another exit at one step) does not
+/// stop the data from loading (the fitter reads the route through it to refit), but a family that prices hearts by
+/// it is refused when it is handed out; a family that reads no table is not.
+#[test]
+fn a_stale_heart_value_table_stops_only_the_families_that_read_it() {
+    let tmp = copy_data();
+    edit(tmp.path(), "triforce/heart_value.json", "\"exit\": \"triforce\"", "\"exit\": \"N\"");
+    let data = GameData::load(tmp.path()).unwrap();
+    let error = data.specialist("goriya").unwrap_err().to_string();
+    assert!(error.contains("does not match route") && error.contains("refit"), "{error}");
+    assert!(!data.specialists["ow-start"].reward.heart_value.uses_table());
+    data.specialist("ow-start").unwrap();
+}
+
 #[test]
 fn a_family_without_a_config_is_rejected() {
     let tmp = copy_data();

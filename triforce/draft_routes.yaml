@@ -14,54 +14,11 @@
 # drops on the way (Lee, Nov 14: no shop; this is the speedrun route): 5:0x65's Gibdo, 7:0x1b when the bag isn't
 # full, 9:0x16's Patra; anything short is a cheated bomb for now.  Every step was walked in the emulator (fights
 # skipped; docs/routes/first-quest.md); the plain ways of the overworld legs on Nov 14.  Round 24: the leg from
-# Dungeon 4 and Dungeon 5 moved into routes.yaml (d2first ends on the D5 triforce), so this starts at its exit.
+# Dungeon 4 and Dungeon 5 moved into routes.yaml; round 26: the leg from Dungeon 5 (the whirlwind, the arrows and
+# the food, 0x42's pond) and Dungeon 7 (d2first ends on the D7 triforce), so this starts at Dungeon 7's exit.
 first-quest:
   extends: d2first
   steps:
-  # Dungeon 5 to Dungeon 7 (Lee): arrows and food (0x0f's 100 rupees pay for both)
-  - {leg: 'Dungeon 5 to Dungeon 7', level: 0, room: '0x0b', entry: cave, exit: recorder, note: 'the recorder twice, facing down as Link comes out, the second play before the whirlwind arrives: Dungeon 4''s island'}
-  - {level: 0, room: '0x45', entry: recorder, exit: S, note: 'S off the pier at X $80: the raft back to the dock'}
-  - stretch: dock-44
-    parts: {level: 0, room: '0x55', entry: N}
-    rejoins: {level: 0, room: '0x44', entry: S}
-    clips:
-    - {level: 0, room: '0x55', entry: N, exit: W, wrap: true, note: 'screen wrap E on row Y $85 or $8D over the river, then W'}
-    - {level: 0, room: '0x54', entry: E, exit: N}
-    plain:
-    - {level: 0, room: '0x55', entry: N, exit: S}
-    - {level: 0, room: '0x65', entry: N, exit: W, note: 'across the ford rows'}
-    - {level: 0, room: '0x64', entry: E, exit: N}
-    - {level: 0, room: '0x54', entry: S, exit: N}
-  - {level: 0, room: '0x44', entry: S, exit: N, takes: [wood-arrow], note: 'shop: the wooden arrow is the right ware, 80 rupees'}
-  - {level: 0, room: '0x34', entry: S, exit: S, takes: [food], note: 'touch the armos at tile (8, 8) from the side (from below it costs a heart): stairs to the shop; food is the right ware, 60 rupees'}
-  - {level: 0, room: '0x44', entry: N, exit: S}
-  - {level: 0, room: '0x54', entry: N, exit: W}
-  - {level: 0, room: '0x53', entry: E, exit: W}
-  - {level: 0, room: '0x52', entry: E, exit: N}
-  - {level: 0, room: '0x42', entry: S, exit: cave, note: 'one step in from the edge, the recorder drains the pond: Dungeon 7''s stairs at tile (12, 10)'}
-  # Dungeon 7: the red candle, Aquamentus (level-7.md's way with three keys).  Walked in the emulator Nov 13
-  # (docs/routes/first-quest.md): 19 entries; keys 5 in, 3 spent, 2 out; 5 bomb walls, 0x1b's 4 bombs when the bag
-  # isn't full.  Forced fights: 0x49, 0x1a (not with clips), 0x1c, 0x0d, Aquamentus; 0x1b for bombs.
-  - {leg: 'Dungeon 7', level: 7, room: '0x79', entry: S, exit: N}
-  - {level: 7, room: '0x69', entry: S, exit: N, note: 'Blue Goriyas need not die; bomb the N wall (bomb 1 of 5)'}
-  - {level: 7, room: '0x59', entry: S, exit: N, note: 'Goriyas: straight across'}
-  - {level: 7, room: '0x49', entry: S, exit: N, note: 'the ladder over the water row; FIGHT: 3 Blue Goriyas (one N of the water) and 3 Blue Keese: the N shutter'}
-  - {level: 7, room: '0x39', entry: S, exit: W, note: 'the big Digdogger: round it by the N side; no kill'}
-  - {level: 7, room: '0x38', entry: E, exit: N, note: 'the E shutter shuts behind; up the E side, W along the top row; Goriyas need not die; the N key door (key 1 of 3)'}
-  - {level: 7, room: '0x28', entry: S, exit: N, note: 'the hungry Goriya: the food, one step out of the doorway, B; the way N is free 64 frames later'}
-  - {level: 7, room: '0x18', entry: S, exit: E, note: 'dark; the ladder N to the middle, the ladder E; the E key door (key 2 of 3) saves two bomb walls and three rooms'}
-  - {level: 7, room: '0x19', entry: W, exit: E, note: 'round the middle blocks; Blue Goriyas need not die; bomb the E wall (bomb 2)'}
-  - {level: 7, room: '0x1a', entry: W, exit: cave, note: 'clips: block clip N from under the block, no fight; plain: FIGHT 3 Blue and 3 Red Goriyas, push the block N or S; the stairs'}
-  - {level: 7, room: '0x4a', in_cave: true, entry: S, exit: N, note: 'the red candle'}
-  - {level: 7, room: '0x1a', entry: cave, exit: E, note: 'bomb the E wall (bomb 3)'}
-  - {level: 7, room: '0x1b', entry: W, exit: E, note: 'FIGHT when the bag isn''t full: the 6 Blue Goriyas for the room''s 4 bombs; the E key door (key 3 of 3)'}
-  - {level: 7, room: '0x1c', entry: W, exit: N, note: 'one step out of the doorway, play the recorder; FIGHT: the 3 small Digdoggers: the N shutter'}
-  - {level: 7, room: '0x0c', entry: S, exit: E, note: 'Dodongos: walk past along the S side; bomb the E wall (bomb 4)'}
-  - {level: 7, room: '0x0d', entry: W, exit: cave, note: 'FIGHT: the 5 Wallmasters (a grab carries Link back to 0x79); round by the N side, push the block W: stairs appear in the NE corner'}
-  - {level: 7, room: '0x7b', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x29'}
-  - {level: 7, room: '0x29', entry: cave, exit: E, note: 'Goriyas need not die; bomb the E wall (bomb 5)'}
-  - {level: 7, room: '0x2a', entry: W, exit: E, note: 'Aquamentus; the heart container (12 hearts); the E shutter opens when it dies'}
-  - {level: 7, room: '0x2b', entry: W, exit: triforce, note: 'round the block ring to its S opening; the triforce piece; out in 0x42'}
   # Dungeon 7 to the magic sword to Dungeon 6 (Lee)
   - {leg: 'Dungeon 7 to the magic sword to Dungeon 6', level: 0, room: '0x42', entry: cave, exit: S}
   - {level: 0, room: '0x52', entry: N, exit: W}

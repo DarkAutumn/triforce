@@ -85,7 +85,9 @@ def fit_way(steps: List[dict], visits: Dict[int, List[dict]], way: str,
              max_hearts_seen: Optional[Dict[int, int]] = None) -> Dict[int, dict]:
     """step index -> {max_hearts, values (V at 0, 0.5, ... max hearts), visits} for the steps on ``way``.  A step
     with no visits on this way takes its max hearts from ``max_hearts_seen`` (either way's visits), else the step
-    before's."""
+    before's.  The steps up to a triforce none of which has a visit on this way (round 26: a stretch of the route
+    no chain has played yet) get no curve at all rather than the prior's "nothing here costs a heart": a family
+    that prices hearts by the table then falls back to the plain health terms there (``env::heart_value``)."""
     on_way = [k for k, s in enumerate(steps) if _on_way(s, way)]
     max_hearts: Dict[int, int] = {}
     last = 3
@@ -98,9 +100,15 @@ def fit_way(steps: List[dict], visits: Dict[int, List[dict]], way: str,
         max_hearts[k] = last
     table: Dict[int, dict] = {}
     following: Optional[List[float]] = None
+    played = False
     for k in reversed(on_way):
-        if steps[k]['exit'] == 'triforce':
+        if steps[k]['exit'] == 'triforce' or k == on_way[-1]:
             following = None
+            stretch = [j for j in on_way if j <= k]
+            previous = next((j for j in reversed(stretch[:-1]) if steps[j]['exit'] == 'triforce'), -1)
+            played = any(visits.get(j) for j in stretch if j > previous)
+        if not played:
+            continue
 
         def after(half_hearts: int, nxt=following) -> float:
             if nxt is None:

@@ -702,7 +702,7 @@ fn the_plain_way_is_played_by_the_objective_from_the_d4_triforce_to_dungeon_5() 
     let want_steps: Vec<Option<usize>> = way.iter().map(|&(i, _)| Some(i)).chain([Some(d5_first)]).collect();
     assert_eq!(steps, want_steps, "each room is the plain way's step, the rejoins the shared ones");
     let route = &map.routes[ROUTE];
-    for stretch in map.stretches[ROUTE].iter().filter(|st| st.rejoin > TRIFORCE_STEP) {
+    for stretch in map.stretches[ROUTE].iter().filter(|st| st.rejoin > TRIFORCE_STEP && st.rejoin <= d5_first) {
         let rejoin = visits.iter().position(|v| v.step == Some(stretch.rejoin)).expect("the rejoin");
         assert_eq!(route[visits[rejoin - 1].step.unwrap()].way, Some(zelda::game_map::Way::Plain));
     }

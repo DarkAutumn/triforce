@@ -326,11 +326,14 @@ def test_later_visit_names_round_trip():
     assert native.state_name('0_1be_v1_0') is None and native.state_name('start') is None
     step = entry_states.RouteStep(7, 5, 0x07, True, 'S', 'E', 'equipment-room', visit=2)
     assert step.filename(1) == '5_07cave_v2_1.state'
-    later = [(s.index, s.filename(0)) for s in route_steps() if s.visit > 1]   # d2first: the leg and Dungeon 5's
+    later = [(s.index, s.filename(0)) for s in route_steps() if s.visit > 1]   # d2first: the legs and Dungeon 5's
     assert later == [(147, '0_59w_v2_0.state'), (148, '0_5aw_v2_0.state'), (149, '0_5bw_v2_0.state'),
                      (150, '0_5cw_v2_0.state'), (151, '0_5dw_v2_0.state'), (164, '0_2ds_v2_0.state'),
                      (182, '0_2ce_v2_0.state'), (183, '0_1cs_v2_0.state'), (184, '0_1be_v2_0.state'),
-                     (196, '5_07cave_v2_0.state')]
+                     (196, '5_07cave_v2_0.state'),
+                     # Round 26, the leg to Dungeon 7: 0x55 from N again on either way of dock-44 (one name).
+                     (211, '0_55n_v2_0.state'), (212, '0_54e_v2_0.state'), (213, '0_55n_v2_0.state'),
+                     (215, '0_64e_v2_0.state'), (225, '0_53e_v2_0.state'), (226, '0_52e_v2_0.state')]
 
 
 def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit, tmp_path):
@@ -354,8 +357,8 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
     assert [steps[i].room for i in (coast['clips'][-1], coast['plain'][-1], coast['rejoin'])] == [0x5f, 0x5f, 0x4f]
     assert index.hearts(coast['rejoin']) == 9
     cave = next(s.index for s in steps if (s.level, s.room, s.in_cave) == (0, 0x2f, True))
-    assert (index.hearts(cave), index.hearts(cave + 1), index.max_hearts) == (9, 10, 11)
-    assert {index.hearts(s.index) for s in steps[first:]} == {11}                   # after Digdogger's container
+    assert (index.hearts(cave), index.hearts(cave + 1), index.max_hearts) == (9, 10, 12)
+    assert {index.hearts(s.index) for s in steps[first:]} == {12}                   # after Dungeon 7's container
     for name in ('0_5dw_0', '0_5dw_v2_0', '0_5dw_v3_0'):
         shutil.copy(REPO_STATES_DIR / '0_5dw_0.state', tmp_path / f'{name}.state')
     rows = {r['state']: r for r in entry_states.audit(sorted(glob.glob(str(tmp_path / '*.state'))), loads=1,
@@ -364,7 +367,7 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
     assert (first_visit['route_step'], first_visit['expected_hearts'], audit_problems(first_visit)) == \
         (index.by_name['0_5dw'], BASE_HEARTS, [])
     assert (second_visit['route_step'], second_visit['expected_hearts']) == (index.by_name['0_5dw_v2'], 8)
-    assert (third_visit['route_step'], third_visit['expected_hearts']) == (first + 1, 11)
+    assert (third_visit['route_step'], third_visit['expected_hearts']) == (first + 1, 12)
     for row in (second_visit, third_visit):                             # the first visit's 3 hearts, not the route's
         assert audit_problems(row) == ['HEARTS'], row
     missing = entry_states.directory_problems(str(tmp_path), 'revisit')

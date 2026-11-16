@@ -1,4 +1,5 @@
-//! Round 26: the scouting route `d7` played in the real game by the route's objective, from `5_14s_0` (the D5
+//! Round 26: the route's leg to Dungeon 7 and Dungeon 7 (steps 209-247 of `d2first`, scouted as the route `d7` and
+//! merged) played in the real game by the route's objective, from `5_14s_0` (the D5
 //! triforce step) to the D7 triforce (the route's end): the agent's own actions (MOVE, BOMB, RECORDER, FOOD) through
 //! the session's masks with the env's per-step rules mirrored (family `items:`/`clips:`, the route's recorder facings,
 //! vetoed wraps), the cheat ledger settling after every action, every room change judged by `exit_is_correct`, and
@@ -36,7 +37,7 @@ use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLo
 
 type S = Session<Counted>;
 
-const ROUTE: &str = "d7";
+const ROUTE: &str = zelda::game_map::DEFAULT_ROUTE;
 const OBJ_TYPE: u16 = 0x34F;
 
 fn map() -> Arc<GameMap> {
@@ -387,7 +388,7 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
 }
 
 impl Walk {
-    /// `5_14s_0` with a `d7` completion on the D5 triforce step (the last of `d2first`) and the ledger begun;
+    /// `5_14s_0` with a completion on the D5 triforce step (208) and the ledger begun;
     /// `rupees` overrides Link's 171 rupees first.
     fn start(rupees: Option<u8>) -> Option<Walk> {
         let core = open_core()?;
@@ -397,7 +398,7 @@ impl Walk {
         if let Some(r) = rupees {
             s.apply_ram(&[(Var::Rupees, r)]);
         }
-        let first = map.routes["d2first"].len() - 1;
+        let first = map.routes[ROUTE].iter().position(|s| s.level == 5 && s.exit == "triforce").unwrap();
         let gc = GameCompletion::new(map.clone(), ROUTE, Some(first)).unwrap();
         let mut w = Walk { s, gc, ledger: CheatLedger::default(), families: BTreeMap::new(), ticks: Vec::new() };
         w.ledger.begin(&mut w.s, &w.gc);

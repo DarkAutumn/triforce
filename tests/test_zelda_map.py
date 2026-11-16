@@ -393,11 +393,14 @@ def test_route_plan_and_overlay(qapp, models):
     d4 = next(s for s in plan if (s['level'], s['exit']) == (4, 'triforce'))
     assert d4['hearts'] == 8
     # The leg to Dungeon 5 (round 24): 0x5f's container on either way of the coast stretch (8 on entering, once),
-    # 0x2f's, Digdogger's: 11 on entering the D5 triforce's room.
+    # 0x2f's, Digdogger's: 11 on entering the D5 triforce's room; Dungeon 7's Aquamentus (round 26): 12 on entering
+    # the D7 triforce's room, the route's end.
     assert [s['hearts'] for s in plan if (s['level'], s['room'], s['in_cave']) == (0, 0x5f, False)] == [8, 8]
     assert next(s for s in plan if (s['level'], s['room']) == (0, 0x4f))['hearts'] == 9
+    d5 = next(s for s in plan if (s['level'], s['exit']) == (5, 'triforce'))
+    assert (d5['hearts'], d5['triforce'], 'recorder' in d5['items']) == (11, [2, 1, 3, 4], True)
     assert (plan[-1]['level'], plan[-1]['exit'], plan[-1]['hearts'], plan[-1]['triforce']) == \
-        (5, 'triforce', 11, [2, 1, 3, 4])
+        (7, 'triforce', 12, [2, 1, 3, 4, 5])
     assert 'recorder' in plan[-1]['items']
     skip = next(s for s in plan if (s['level'], s['room'], s['entry']) == (3, 0x69, 'N'))
     assert 'treasure skip' in zelda_map.step_text(skip)
@@ -407,7 +410,8 @@ def test_route_plan_and_overlay(qapp, models):
     # Round 22's d3-approach: S from 0x67 to the wrap exit 0x75 -> 0x74 with clips, W along row 6 and 0x73 without.
     assert {(0x67, 0x77, 'clips', 'walk'), (0x75, 0x74, 'clips', 'walk'), (0x67, 0x66, 'plain', 'walk'),
             (0x73, 0x74, 'plain', 'walk')} <= set(walks)
-    assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x67, 0x74, 0x45, 0x2f, 0x0f, 0x0b}
+    assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37, 0x67, 0x74, 0x45, 0x2f, 0x0f, 0x0b,
+                                              0x44, 0x34, 0x42}
     rooms = zelda_map.route_rooms(plan, 0)
     assert len(rooms[0x2c]) == 4 and len(rooms[0x1a]) == 2       # 0x2c: the heart cave's three, the mountain's
     assert '#' in zelda_map.step_text(heart) and 'waypoint heart' in zelda_map.step_text(heart)

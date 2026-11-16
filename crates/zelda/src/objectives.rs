@@ -2081,6 +2081,9 @@ mod tests {
                 (WAYPOINT_HEART, MapLocation::new(0, 0x2f, true), Some(5)),
                 (WAYPOINT_RUPEES, MapLocation::new(0, 0x0f, true), Some(5)),
                 (WAYPOINT_RECORDER, MapLocation::new(5, 0x04, true), Some(5)),
+                (WAYPOINT_ARROWS, MapLocation::new(0, 0x44, true), Some(7)),
+                (WAYPOINT_FOOD, MapLocation::new(0, 0x34, true), Some(7)),
+                (WAYPOINT_CANDLE, MapLocation::new(7, 0x4a, true), Some(7)),
             ]
         );
         assert_eq!(w[0].after, [2].into_iter().collect());
@@ -2088,7 +2091,8 @@ mod tests {
         assert_eq!(w[2].after, [2, 1].into_iter().collect());
         assert_eq!(w[3].after, [2, 1].into_iter().collect());
         assert_eq!(w[4].after, [2, 1, 3].into_iter().collect());
-        assert!(w[5..].iter().all(|w| w.after == [2, 1, 3, 4].into_iter().collect()));
+        assert!(w[5..8].iter().all(|w| w.after == [2, 1, 3, 4].into_iter().collect()));
+        assert!(w[8..].iter().all(|w| w.after == [2, 1, 3, 4, 5].into_iter().collect()));
     }
 
     /// Dungeon 5 (round 24): the recorder from its cellar 0x04 on (the tunnel cellar's two visits differ by it), a
@@ -2110,7 +2114,7 @@ mod tests {
         let first = progress.iter().position(|p| p.recorder).unwrap();
         assert_eq!(steps[first - 1].location(), MapLocation::new(5, 0x04, true));
         let w = route_waypoints(steps);
-        let last = w.last().unwrap();
+        let last = w.iter().rfind(|w| w.before == Some(5)).unwrap();
         assert_eq!((last.kind.as_str(), last.location, last.before), (WAYPOINT_RECORDER, steps[first - 1].location(), Some(5)));
         assert_eq!(last.after, [2, 1, 3, 4].into_iter().collect());
     }
@@ -2152,12 +2156,12 @@ mod tests {
         assert_eq!(route_entry(MapLocation::new(7, 0x0d, false), MapLocation::new(7, 0x79, false)), None);
     }
 
-    /// Round 26: the scouting route d7's waypoints after the D5 triforce, before the D7 one: the arrows and the food
-    /// (purchases, done by the inventory) and the red candle (a cellar's); the arrows' step sets the rupee reserve.
+    /// Round 26: the route's waypoints after the D5 triforce, before the D7 one: the arrows and the food (purchases,
+    /// done by the inventory) and the red candle (a cellar's); the arrows' step sets the rupee reserve.
     #[test]
-    fn d7_buys_arrows_and_food_and_takes_the_candle() {
+    fn the_leg_buys_arrows_and_food_and_dungeon_7_holds_the_candle() {
         let map = Arc::new(GameMap::builtin());
-        let steps = &map.routes["d7"];
+        let steps = &map.routes[crate::game_map::DEFAULT_ROUTE];
         let w: Vec<_> = route_waypoints(steps).into_iter().filter(|w| w.after.contains(&5)).collect();
         let kinds: Vec<_> = w.iter().map(|w| (w.kind.as_str(), w.location, w.before)).collect();
         assert_eq!(

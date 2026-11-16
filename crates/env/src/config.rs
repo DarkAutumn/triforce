@@ -1064,6 +1064,9 @@ impl GameData {
     }
 
     /// Configs == game.yaml tags == routes.yaml families; every route step's room is tagged with its specialist.
+    /// `triforce/heart_value.json` is not checked here but where a specialist is handed out ([`Self::specialist`]):
+    /// after a route change the data, the route and the fitter (`python -m triforce.heart_value`, which reads the
+    /// route through this) must still load to refit it (round 26).
     fn cross_check(&self) -> Result<(), ConfigError> {
         let mut families: Vec<&String> = self.families.keys().collect();
         families.sort();
@@ -1075,7 +1078,6 @@ impl GameData {
         }
         for (name, config) in &self.specialists {
             self.check_chain_hp(config)?;
-            self.check_heart_values(config)?;
             let rooms: BTreeSet<MapLocation> = config.rooms.iter().copied().collect();
             let tagged: BTreeSet<MapLocation> =
                 self.map.rooms_for_specialist(name).into_iter().collect();
@@ -1125,6 +1127,7 @@ impl GameData {
     /// A specialist by name, or a config loaded from a `.yaml` path.
     pub fn specialist(&self, name_or_path: &str) -> Result<Arc<SpecialistConfig>, ConfigError> {
         if let Some(config) = self.specialists.get(name_or_path) {
+            self.check_heart_values(config)?;
             return Ok(config.clone());
         }
         if name_or_path.ends_with(".yaml") && Path::new(name_or_path).exists() {

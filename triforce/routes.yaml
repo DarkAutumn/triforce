@@ -52,8 +52,10 @@
 # triforce (warps Link to 0x74); then back to 0x65, by raft from 0x55 to the island 0x45 and Dungeon 4
 # (docs/routes/d4.md): the ladder, 0x01's key, Gleeok (8 hearts) and the D4 triforce (warps Link to 0x45); round 24
 # (docs/routes/d5-leg.md, d5.md): by raft back to 0x55, the coast heart containers of 0x5f (9 hearts) and 0x2f's cave
-# (10), 0x0f's 100 rupees, the mountain to Dungeon 5 (0x0b), the recorder, Digdogger (11 hearts); the route ends on
-# taking the D5 triforce.  Never the fairy.
+# (10), 0x0f's 100 rupees, the mountain to Dungeon 5 (0x0b), the recorder, Digdogger (11 hearts) and the D5 triforce
+# (warps Link to 0x0b); round 26 (docs/routes/d7.md): the whirlwind to 0x45, the shops 0x44 (arrows) and 0x34 (food),
+# 0x42's pond, Dungeon 7: the red candle, Aquamentus (12 hearts); the route ends on taking the D7 triforce.  Never
+# the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
 - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
@@ -345,8 +347,8 @@ d2first:
 - {level: 5, room: '0x25', specialist: pols-voice, entry: E, exit: W}
 - {level: 5, room: '0x24', specialist: boss-digdogger, entry: E, exit: N, bomb_reserve: 0}
 - {level: 5, room: '0x14', specialist: gibdo, entry: S, exit: triforce}
-# d7 (round 26, scouting; docs/routes/d7.md): d2first, then the leg from the D5 triforce to Dungeon 7 and Dungeon 7
-# to its triforce (steps 209-247).  Out of Dungeon 5 at 0x0b the recorder calls the whirlwind (`exit: recorder`: the
+# The leg to Dungeon 7 and Dungeon 7 (round 26, steps 209-247; docs/routes/d7.md; scouted as the route `d7`, merged
+# here Nov 16).  Out of Dungeon 5 at 0x0b the recorder calls the whirlwind (`exit: recorder`: the
 # plays and Link's facing come from the game's index $523, the mask offers RECORDER only so), which sets Link down
 # on 0x45's pier (`entry: recorder`); the raft to 0x55, the stretch `dock-44` (clips: 0x55's wrap onto its W part,
 # 0x54 N; plain: 0x55 S, 0x65 across the ford, 0x64 N, 0x54 N) to 0x44's shop (`waypoint: arrows`, the wood arrow
@@ -361,53 +363,50 @@ d2first:
 # walls before 0x1b's bombs), 2 from 0x1b (0x0c, 0x29), 0 in the boss room.  Rupee reserve 2 from the arrows on
 # (Gohma's arrow, Ganon's silver one).  Room bombs: 0x1b only (the owner, Nov 14); 0x69's, 0x38's rupees and 0x0c's
 # skipped.
-d7:
-  extends: d2first
-  steps:
-  - {level: 0, room: '0x0b', specialist: ow-leever, entry: cave, exit: recorder}
-  - {level: 0, room: '0x45', specialist: ow-peahat, entry: recorder, exit: S}
-  - stretch: dock-44
-    parts: {level: 0, room: '0x55', entry: N}
-    rejoins: {level: 0, room: '0x44', entry: S}
-    clips:
-    - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: W}
-    - {level: 0, room: '0x54', specialist: ow-zora, entry: E, exit: N}
-    plain:
-    - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: S}
-    - {level: 0, room: '0x65', specialist: ow-zora, entry: N, exit: W}
-    - {level: 0, room: '0x64', specialist: ow-octorok, entry: E, exit: N}
-    - {level: 0, room: '0x54', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x44', specialist: ow-zora, entry: S, exit: cave}
-  - {level: 0, room: '0x44', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: arrows, rupee_reserve: 2}
-  - {level: 0, room: '0x44', specialist: ow-zora, entry: cave, exit: N}
-  - {level: 0, room: '0x34', specialist: ow-leever, entry: S, exit: cave}
-  - {level: 0, room: '0x34', in_cave: true, specialist: ow-leever, entry: S, exit: S, waypoint: food}
-  - {level: 0, room: '0x34', specialist: ow-leever, entry: cave, exit: S}
-  - {level: 0, room: '0x44', specialist: ow-zora, entry: N, exit: S}
-  - {level: 0, room: '0x54', specialist: ow-zora, entry: N, exit: W}
-  - {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
-  - {level: 0, room: '0x52', specialist: ow-moblin, entry: E, exit: N}
-  - {level: 0, room: '0x42', specialist: ow-moblin, entry: S, exit: cave}
-  - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 3}
-  - {level: 7, room: '0x69', specialist: goriya, entry: S, exit: N, treasure: skip}
-  - {level: 7, room: '0x59', specialist: goriya, entry: S, exit: N}
-  - {level: 7, room: '0x49', specialist: goriya, entry: S, exit: N}
-  - {level: 7, room: '0x39', specialist: boss-digdogger, entry: S, exit: W}
-  - {level: 7, room: '0x38', specialist: goriya, entry: E, exit: N, treasure: skip}
-  - {level: 7, room: '0x28', specialist: goriya, entry: S, exit: N}
-  - {level: 7, room: '0x18', specialist: goriya, entry: S, exit: E}
-  - {level: 7, room: '0x19', specialist: goriya, entry: W, exit: E}
-  - {level: 7, room: '0x1a', specialist: goriya, entry: W, exit: cave}
-  - {level: 7, room: '0x4a', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: candle}
-  - {level: 7, room: '0x1a', specialist: goriya, entry: cave, exit: E}
-  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 8}, bomb_reserve: 2}
-  - {level: 7, room: '0x1c', specialist: boss-digdogger, entry: W, exit: N}
-  - {level: 7, room: '0x0c', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
-  - {level: 7, room: '0x0d', specialist: wallmaster, entry: W, exit: cave}
-  - {level: 7, room: '0x7b', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-  - {level: 7, room: '0x29', specialist: goriya, entry: cave, exit: E}
-  - {level: 7, room: '0x2a', specialist: boss-aquamentus, entry: W, exit: E, bomb_reserve: 0}
-  - {level: 7, room: '0x2b', specialist: goriya, entry: W, exit: triforce}
+- {level: 0, room: '0x0b', specialist: ow-leever, entry: cave, exit: recorder}
+- {level: 0, room: '0x45', specialist: ow-peahat, entry: recorder, exit: S}
+- stretch: dock-44
+  parts: {level: 0, room: '0x55', entry: N}
+  rejoins: {level: 0, room: '0x44', entry: S}
+  clips:
+  - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: W}
+  - {level: 0, room: '0x54', specialist: ow-zora, entry: E, exit: N}
+  plain:
+  - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: S}
+  - {level: 0, room: '0x65', specialist: ow-zora, entry: N, exit: W}
+  - {level: 0, room: '0x64', specialist: ow-octorok, entry: E, exit: N}
+  - {level: 0, room: '0x54', specialist: ow-zora, entry: S, exit: N}
+- {level: 0, room: '0x44', specialist: ow-zora, entry: S, exit: cave}
+- {level: 0, room: '0x44', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: arrows, rupee_reserve: 2}
+- {level: 0, room: '0x44', specialist: ow-zora, entry: cave, exit: N}
+- {level: 0, room: '0x34', specialist: ow-leever, entry: S, exit: cave}
+- {level: 0, room: '0x34', in_cave: true, specialist: ow-leever, entry: S, exit: S, waypoint: food}
+- {level: 0, room: '0x34', specialist: ow-leever, entry: cave, exit: S}
+- {level: 0, room: '0x44', specialist: ow-zora, entry: N, exit: S}
+- {level: 0, room: '0x54', specialist: ow-zora, entry: N, exit: W}
+- {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
+- {level: 0, room: '0x52', specialist: ow-moblin, entry: E, exit: N}
+- {level: 0, room: '0x42', specialist: ow-moblin, entry: S, exit: cave}
+- {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 3}
+- {level: 7, room: '0x69', specialist: goriya, entry: S, exit: N, treasure: skip}
+- {level: 7, room: '0x59', specialist: goriya, entry: S, exit: N}
+- {level: 7, room: '0x49', specialist: goriya, entry: S, exit: N}
+- {level: 7, room: '0x39', specialist: boss-digdogger, entry: S, exit: W}
+- {level: 7, room: '0x38', specialist: goriya, entry: E, exit: N, treasure: skip}
+- {level: 7, room: '0x28', specialist: goriya, entry: S, exit: N}
+- {level: 7, room: '0x18', specialist: goriya, entry: S, exit: E}
+- {level: 7, room: '0x19', specialist: goriya, entry: W, exit: E}
+- {level: 7, room: '0x1a', specialist: goriya, entry: W, exit: cave}
+- {level: 7, room: '0x4a', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: candle}
+- {level: 7, room: '0x1a', specialist: goriya, entry: cave, exit: E}
+- {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 8}, bomb_reserve: 2}
+- {level: 7, room: '0x1c', specialist: boss-digdogger, entry: W, exit: N}
+- {level: 7, room: '0x0c', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
+- {level: 7, room: '0x0d', specialist: wallmaster, entry: W, exit: cave}
+- {level: 7, room: '0x7b', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+- {level: 7, room: '0x29', specialist: goriya, entry: cave, exit: E}
+- {level: 7, room: '0x2a', specialist: boss-aquamentus, entry: W, exit: E, bomb_reserve: 0}
+- {level: 7, room: '0x2b', specialist: goriya, entry: W, exit: triforce}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -432,11 +431,11 @@ alternates:
 # 22, are on the coast stretch's plain way since round 24).  Round 24:
 # the leg's rooms (Zora rooms ow-zora, Moblins ow-moblin, Lynels ow-lynel, Peahats ow-peahat, Tektites ow-tektite,
 # 0x0b's Leever ow-leever, the caves ow-start), without start states until the leg's states are installed; Dungeon 5
-# adds gibdo, pols-voice, dodongo-crossing and boss-digdogger.  Round 26 (the scouting route d7, the lead's answer
-# 6): the shops 0x44 (ow-zora) and 0x34 (ow-leever) with their caves (a cave takes its room's family, as 0x2c's and
-# 0x67's), the pond 0x42 (ow-moblin); Dungeon 7's Blue Goriya rooms, the Grumble's 0x28, the entrance and the triforce
-# room in goriya, 0x0d wallmaster, 0x1c and 0x39 boss-digdogger, 0x0c dodongo-crossing, 0x2a boss-aquamentus, the
-# cellars 0x4a and 0x7b equipment-room; without start states until they are built.
+# adds gibdo, pols-voice, dodongo-crossing and boss-digdogger.  Round 26 (the leg to Dungeon 7 and Dungeon 7, the
+# lead's answer 6): the shops 0x44 (ow-zora) and 0x34 (ow-leever) with their caves (a cave takes its room's family, as
+# 0x2c's and 0x67's), the pond 0x42 (ow-moblin); Dungeon 7's Blue Goriya rooms, the Grumble's 0x28, the entrance and
+# the triforce room in goriya, 0x0d wallmaster, 0x1c and 0x39 boss-digdogger, 0x0c dodongo-crossing, 0x2a
+# boss-aquamentus, the cellars 0x4a and 0x7b equipment-room.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']
