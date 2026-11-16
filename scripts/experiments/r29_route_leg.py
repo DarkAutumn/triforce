@@ -2,7 +2,7 @@
 Every trial loads a room's pre-entry state (`r29_route_walks.route_states`: the route walked once from the D8 piece
 with the monsters pinned) with the game's own randomness for its seed; the monsters are live and the hearts real.
 
-    python scripts/experiments/r29_route_leg.py rooms [--seeds N]      # every crossing by a scripted straight walk
+    python scripts/experiments/r29_route_leg.py rooms [--seeds N] [--guard]  # every crossing by a scripted walk
     python scripts/experiments/r29_route_leg.py whirlwind [--seeds N]  # the count, the pickup among Moblins, a miss
     python scripts/experiments/r29_route_leg.py tree                   # 0x47: where the candle burns it, the wares
     python scripts/experiments/r29_route_leg.py wall                   # 0x05: where the bomb opens it, 0x07's cave
@@ -13,7 +13,7 @@ import collections
 
 from r26_walks import BOMBS, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, RUPEES, TELEPORT_INDEX, TRIFORCE, WHIRLWIND_SUMMONED
 from r27_walks import TMP, Tally, load, name, summary
-from r29_route_walks import CAVE, NAMES29, route_states
+from r29_route_walks import CAVE, NAMES29, guard_class, route_states
 
 RECORDER, BOMB_SLOT, CANDLE_SLOT = 5, 1, 4     # SelectedItemSlot values
 TREE, ROCK_WALL, WHIRLWIND = 0x64, 0x63, 0x2E  # tile objects in slot $0B; the whirlwind's object type
@@ -149,10 +149,11 @@ CROSSINGS = [
 ]
 
 
-def crossing(path, seed, points, button, line, limit=900):
+def crossing(path, seed, points, button, line, limit=900, guard=False):
     w = load(path, seed)
     w.wait_play()
-    t = Tally(w)
+    t = guard_class(Tally)(w)
+    t.guard = guard
     start = (w.level, w.room, w.x, w.y)
     if callable(points):
         ok = points(t)
@@ -169,7 +170,8 @@ def rooms(args):
     for label, state, points, button, line in CROSSINGS:
         rows, ends = [], collections.Counter()
         for seed in range(args.seeds):
-            ok, lost, frames, by, start, end, _ = crossing(paths[state], seed, points, button, line)
+            ok, lost, frames, by, start, end, _ = crossing(paths[state], seed, points, button, line,
+                                                           guard=args.guard)
             rows.append((ok, lost, frames, by))
             ends[f'{end[0]}:0x{end[1]:02x} (${end[2]:02X},${end[3]:02X})'] += 1
         total += sum(r[1] for r in rows) / len(rows)
@@ -439,5 +441,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('what', choices=['rooms', 'whirlwind', 'tree', 'wall'])
     parser.add_argument('--seeds', type=int, default=30)
+    parser.add_argument('--guard', action='store_true', help='rooms: stab what stands in the way')
     arguments = parser.parse_args()
     {'rooms': rooms, 'whirlwind': whirlwind, 'tree': tree, 'wall': wall}[arguments.what](arguments)

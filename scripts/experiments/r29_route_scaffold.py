@@ -124,6 +124,7 @@ def main():
     parser.add_argument('--zol', default='zol', help='plays 0x63 and 0x03')
     parser.add_argument('--no-ring', action='store_true', help='the way without the red ring detour')
     parser.add_argument('--hearts', type=float, default=None, help="the states' hearts (default: as staged, full)")
+    parser.add_argument('--extends', default='d6', help='the route d9walk is appended to (d6, d2first)')
     args = parser.parse_args()
     out = args.out.resolve()
     sub = {'WIZZROBE': args.wizzrobe, 'LIKELIKE': args.likelike, 'TRAP': args.trap, 'PEAHAT': args.peahat,
@@ -153,7 +154,7 @@ def main():
     (out / 'triforce' / 'game.yaml').write_text(yaml.safe_dump(game, sort_keys=False, width=200))
     # routes.yaml: the route and the families' room lists
     lines = ['', '# d9walk (round 29 walks, docs/routes/d9-walks.md): a scaffold, never committed.', 'd9walk:',
-             '  extends: d6', '  steps:']
+             f'  extends: {args.extends}', '  steps:']
     rooms_of = {}
     for level, room, in_cave, entry, exit_, family, _, extra in steps:
         family = sub.get(family, family)

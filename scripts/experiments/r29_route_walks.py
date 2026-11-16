@@ -437,3 +437,74 @@ def route_states(out: Path, ring: bool = True, bombs: int = 0, level9_only: bool
     walk((0x60, 0x9D), (0x60, 0x5D), (0x78, 0x5D))
     go('UP', '9_42s')
     return paths, rows, cheats
+
+
+def _names():
+    from r27_walks import NAMES               # pylint: disable=import-outside-toplevel
+    NAMES.update(NAMES29)
+
+
+_names()
+
+
+# ---- a walk that stabs what stands in its way -----------------------------------------------------------------------
+
+STABBED = {0x01, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A, 0x0F, 0x10, 0x13, 0x14, 0x15, 0x17, 0x1B, 0x1C}
+AHEAD = {'RIGHT': (1, 0), 'LEFT': (-1, 0), 'DOWN': (0, 1), 'UP': (0, -1)}
+
+
+def precise_hearts(w: Walk) -> float:
+    """Link's hearts from the bytes (asm:HeartValues low nibble + asm:HeartPartial / 256): the red ring's quarter
+    and eighth hearts, which the half-heart reading rounds away."""
+    return (w.r(0x66F) & 0x0F) + (w.r(0x670) + 1) / 256
+
+
+def guard_class(base):
+    """`base` (a Tally) whose presses stab: while a Like-Like holds Link (one A every 12 frames, the way he faces),
+    and, with `guard` set, when a monster the sword hurts (Lynel, Moblin, Octorok, Leever, Zol, Gel, Like-Like,
+    Keese) stands within `reach` px ahead in the lane he walks (`beam_reach` with full hearts: the sword beam).  The
+    sword is not swung while a Bubble has it off; `budget` frames of standing to fight per trial, then he walks on."""
+
+    class Guard(base):
+        guard, reach, beam_reach, lane, budget = False, 40, 112, 12, 600
+
+        def __init__(self, w):
+            super().__init__(w)
+            self.held = self.cool = self.fought = 0
+
+        def threat(self, button) -> bool:
+            w = self.w
+            dx, dy = AHEAD[button]
+            full = precise_hearts(w) >= w.max_hearts() - 0.5
+            reach = self.beam_reach if full and not w.r(0xAC + 0x0E) else self.reach
+            for o in w.objects():
+                if o[1] not in STABBED or o[5] != 0:
+                    continue
+                along = (o[2] - w.x) * dx + (o[3] - w.y) * dy
+                across = abs((o[2] - w.x) * dy) + abs((o[3] - w.y) * dx)
+                if 0 < along <= reach and across <= self.lane:
+                    return True
+            return False
+
+        def press(self, buttons='NONE', frames: int = 1):
+            for _ in range(frames):
+                w = self.w
+                if w.mode == PLAY and w.r(0x512):                # asm:IsLinkParalyzed
+                    self.held += 1
+                    base.press(self, 'A' if self.held % 12 == 1 else 'NONE', 1)
+                elif self.cool:
+                    self.cool -= 1
+                    base.press(self, 'NONE', 1)
+                elif (self.guard and buttons in AHEAD and w.mode == PLAY and self.fought < self.budget
+                      and not w.r(0x4C) and self.threat(buttons)):
+                    facing = {1: 'RIGHT', 2: 'LEFT', 4: 'DOWN', 8: 'UP'}.get(w.r(0x98))
+                    if facing != buttons:
+                        base.press(self, buttons, 1)
+                    else:
+                        base.press(self, 'A', 1)
+                        self.cool = 11
+                    self.fought += 12
+                else:
+                    base.press(self, buttons, 1)
+
+    return Guard
