@@ -132,7 +132,8 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
     assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False), (4, 0x02, False),
                                               (4, 0x11, False), (6, 0x48, False)]
     assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True), (5, 0x04, True),
-                                                   (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True), (6, 0x08, True)]
+                                                   (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True), (6, 0x08, True),
+                                                   (8, 0x2f, True)]
 
 
 def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
