@@ -752,6 +752,47 @@ impl GameView {
             && self.link.position.x == c * 8
     }
 
+    /// The room's burnable-tree secret (round 28; game.yaml `entrance: {how: burn}` in a room whose `cave` exit a
+    /// route can take: 0x6d, Dungeon 8's stairs) while the tree still stands (no stairs tile in the room yet): its
+    /// top-left tile.
+    pub fn secret_burn(&self) -> Option<Tile> {
+        if self.level() != 0 || self.in_cave() {
+            return None;
+        }
+        let room = self.map.get(self.full_location())?;
+        match room.secret.filter(|_| room.exits.contains_key("cave"))? {
+            crate::game_map::Secret::Burn(tile) if self.room().stairs_tiles().is_empty() => Some(tile),
+            _ => None,
+        }
+    }
+
+    /// The facings ([`Direction::value`] bits) from which a candle fire made where Link stands burns the room's
+    /// secret tree ([`GameView::secret_burn`]; 0: none, or no tree left). The fire is made `$10` pixels ahead of Link
+    /// and comes to rest `$20` ahead (asm:Candle_Wield, asm:Link_PlaceWeaponAhead); the tree burns when it rests
+    /// within `$10` pixels of the tree. Walked (docs/routes/d8-walks.md §1.3; every X tried, 24 of 24 each): W from
+    /// the tree's X + `$18` to + `$2F`, E from its X − `$28` to − `$11`, on its row (Link's Y within 8 pixels of
+    /// the row's; the walk burned it from 13 above to 18 below). From above and below is not walked and not offered.
+    pub fn burn_facings(&self) -> u8 {
+        let Some((c, r)) = self.secret_burn() else {
+            return 0;
+        };
+        let (dx, dy) = (self.link.position.x - c * 8, self.link.position.y - (r * 8 + 0x3D));
+        if dy.abs() > 8 {
+            return 0;
+        }
+        match dx {
+            0x18..=0x2F => Direction::W.value(),
+            -0x28..=-0x11 => Direction::E.value(),
+            _ => 0,
+        }
+    }
+
+    /// One of Link's candle fires burns (object slots `$10`/`$11` in a fire state, `$21` moving or `$22` standing;
+    /// asm:Candle_Wield).
+    pub fn link_fire_burning(&self) -> bool {
+        [0xBC, 0xBD].into_iter().any(|slot| self.peek(slot) & 0xF0 == 0x20)
+    }
+
     /// Link stands at the mouth of his dungeon room's doorway in `direction`, on the grid point from which one more
     /// frame of that direction walks him into it ([`at_doorway_mouth`]).
     pub fn at_doorway_mouth(&self, direction: Direction) -> bool {
@@ -1138,6 +1179,12 @@ impl GameView {
     /// ignores the A button meanwhile (asm:Link_HandleInput).
     pub fn is_sword_blocked(&self) -> bool {
         self.byte(Var::SwordBlockedLongTimer) != 0 || self.byte(Var::SwordBlocked) != 0
+    }
+
+    /// A Like-Like holds Link (`IsLinkParalyzed` `$512`, asm:LikeLike_Update: set on the capture, cleared when that
+    /// Like-Like dies): the game discards his directions, so he cannot move.
+    pub fn link_held(&self) -> bool {
+        self.peek(0x512) != 0
     }
 
     /// The game would start `kind`'s weapon now (Link_HandleInput and the *_Wield routines): Link is in his normal

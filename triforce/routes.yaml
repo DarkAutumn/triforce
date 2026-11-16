@@ -24,6 +24,11 @@
 # An exit `cave` behind a pushed gravestone (game.yaml `entrance: {how: push}` in a room with a `cave` exit, round 27:
 # 0x21) sends Link to the square under the stone, MOVE N from there pushes it, and the MOVE ends on the stairs.
 # A game.yaml dungeon exit with `keep_out: true` (round 27) is masked for MOVE unless the step leaves through it.
+# An exit `cave` behind a tree the candle burns (game.yaml `entrance: {how: burn}` in a room with a `cave` exit, round
+# 28: 0x6d) sends Link to a stand tile on the tree's row (three tiles E of it, facing W; three W of it, facing E);
+# CANDLE is offered there only, toward the tree, while it stands and no fire of Link's burns; then its stairs.
+# `bombs: never|tenth|required|free` (round 28): on this step the family's `items: {bombs:}` mode is this one
+# (8:0x6e: boss-manhandla, `free`, crosses to the bomb wall by the BOMB mask of `required`).
 # A route is a list of steps, or `{extends: <a route above>, steps: [...]}`: that route's steps, then these.
 # An exit that is a game.yaml raft crossing (`raft_exits`) sends Link to its dock; the raft does the rest.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
@@ -468,6 +473,39 @@ d6:
   - {level: 6, room: '0x2c', specialist: wizzrobe, entry: E, exit: N}
   - {level: 6, room: '0x1c', specialist: boss-gohma, entry: S, exit: N, rupee_reserve: 1}
   - {level: 6, room: '0x0c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
+# d8 (round 28, scouting; docs/routes/d8.md §15, d8-walks.md): d6, then from Dungeon 6's triforce (the game sets Link
+# down at its entrance, 0x22) to Dungeon 8's.  The leg: the recorder twice out of 0x22 (facing down from the index
+# $FB with seven pieces: Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its right opening, 0x6d: the
+# tree burned by CANDLE W from the window E of it (game.yaml `how: burn`), the stairs.  The leg has no clip and
+# Dungeon 8 none on this way: one way, no stretch.  Dungeon 8 with the two keys and the one bomb Link brings
+# (level-8.md, the short route): 0x7e N, the Manhandla of 0x6e crossed to its N bomb wall (requires_bombs; `bombs:
+# required` for boss-manhandla; its rupees skipped), 0x5e fought for its key and the N shutter (its E key door is
+# `keep_out`), 0x4e crossed to its N key door (its rupees skipped; its W key door `keep_out`), 0x3e fought for the E
+# shutter, the one-way 0x3f: fought for its four bombs at 4 bombs or fewer (the owner's rule for 7:0x1b), else
+# crossed to the stairs, the tunnel 0x2f by its left ladder (the right one leads back), 0x4c: out of the block ring,
+# the corner key, the N bomb wall (requires_bombs; ARROW for pols-voice), Gleeok with four heads 0x3c (the heart
+# container: 14), the triforce 0x2c.  Bomb reserve 1 to 0x6e's wall, 2 from 0x5e (0x4c's wall and 0:0x05's rock wall
+# on the way to Dungeon 9), 1 after 0x4c's.  Rupee reserve 8 from 8:0x4c: its arrows are paid from what Link holds
+# above 8, and 8 shots stay for Ganon's silver arrow.
+d8:
+  extends: d6
+  steps:
+  - {level: 0, room: '0x22', specialist: ow-lynel, entry: cave, exit: recorder, bomb_reserve: 1}
+  - {level: 0, room: '0x3c', specialist: ow-octorok, entry: recorder, exit: S}
+  - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
+  - {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: S}
+  - {level: 0, room: '0x5d', specialist: ow-moblin, entry: N, exit: S}
+  - {level: 0, room: '0x6d', specialist: ow-moblin, entry: N, exit: cave}
+  - {level: 8, room: '0x7e', specialist: stalfos-keese-gel, entry: S, exit: N}
+  - {level: 8, room: '0x6e', specialist: boss-manhandla, entry: S, exit: N, treasure: skip, bombs: required}
+  - {level: 8, room: '0x5e', specialist: darknut, entry: S, exit: N, bomb_reserve: 2}
+  - {level: 8, room: '0x4e', specialist: darknut, entry: S, exit: N, treasure: skip}
+  - {level: 8, room: '0x3e', specialist: darknut, entry: S, exit: E}
+  - {level: 8, room: '0x3f', specialist: darknut, entry: W, exit: cave, treasure: {if_bombs_below: 5}}
+  - {level: 8, room: '0x2f', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  - {level: 8, room: '0x4c', specialist: pols-voice, entry: cave, exit: N, rupee_reserve: 8}
+  - {level: 8, room: '0x3c', specialist: boss-gleeok, entry: S, exit: N, bomb_reserve: 1}
+  - {level: 8, room: '0x2c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -501,7 +539,12 @@ alternates:
 # the new ow-ghini (the graveyard 0x40, 0x41, 0x31, 0x21 and its sword cave), the new wizzrobe (6:0x78, 0x28, 0x29,
 # 0x2c crossed, 0x38 and 0x3a fought), the new boss-gohma (6:0x1c), stalfos-keese-gel 6:0x58 with the entrance 0x79
 # and the triforce room 0x0c, zol 6:0x68, trap-room 6:0x48, vire 6:0x39 and 0x2d, like-like 6:0x1d, the tunnel 6:0x08
-# equipment-room; none of the stretch's rooms has start states yet.
+# equipment-room; none of the stretch's rooms has start states yet.  Round 28 (the leg to Dungeon 8 and Dungeon 8;
+# docs/decisions.md 2026-11-17 "Round 28's working answers"): the leg's rooms were their families' already (0x22
+# ow-lynel, 0x3c and 0x4c ow-octorok, 0x4d, 0x5d and 0x6d ow-moblin); darknut 8:0x5e and 0x3e (fought) and the mixed
+# rooms 0x4e and 0x3f (Darknuts, Gibdos, Bubbles), boss-manhandla 8:0x6e (crossed), pols-voice 8:0x4c, boss-gleeok
+# 8:0x3c (four heads), stalfos-keese-gel the entrance 8:0x7e and the triforce room 8:0x2c, the tunnel 8:0x2f
+# equipment-room; no start states yet.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']
@@ -512,23 +555,23 @@ families:
   ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)']
   ow-peahat: ['(0, 0x45)', '(0, 0x1d)', '(0, 0x1f)']
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
-  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x01)', '(4, 0x21)', '(4, 0x51)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)']
+  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x01)', '(4, 0x21)', '(4, 0x51)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)', '(8, 0x7e)', '(8, 0x2c)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)', '(7, 0x79)', '(7, 0x69)', '(7, 0x59)', '(7, 0x49)', '(7, 0x38)', '(7, 0x28)', '(7, 0x18)', '(7, 0x19)', '(7, 0x1a)', '(7, 0x1b)', '(7, 0x29)', '(7, 0x2b)']
   trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)', '(4, 0x02)', '(4, 0x11)', '(6, 0x48)']
-  equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)', '(7, 0x4a, cave)', '(7, 0x7b, cave)', '(6, 0x08, cave)']
+  equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)', '(7, 0x4a, cave)', '(7, 0x7b, cave)', '(6, 0x08, cave)', '(8, 0x2f, cave)']
   wallmaster: ['(1, 0x45)', '(7, 0x0d)']
   boss-aquamentus: ['(1, 0x35)', '(7, 0x2a)']
   d2-rope: ['(2, 0x0d)', '(2, 0x2e)', '(2, 0x4e)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
   moldorm: ['(2, 0x3e)']
   boss-dodongo: ['(2, 0x0e)']
   zol: ['(3, 0x3d)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x6b)', '(3, 0x7b)', '(3, 0x7c)', '(4, 0x40)', '(5, 0x57)', '(6, 0x68)']
-  darknut: ['(3, 0x59)', '(3, 0x5b)', '(3, 0x5c)', '(3, 0x69)', '(5, 0x05)', '(5, 0x06)', '(5, 0x37)', '(5, 0x64)']
-  boss-manhandla: ['(3, 0x4d)']
+  darknut: ['(3, 0x59)', '(3, 0x5b)', '(3, 0x5c)', '(3, 0x69)', '(5, 0x05)', '(5, 0x06)', '(5, 0x37)', '(5, 0x64)', '(8, 0x5e)', '(8, 0x4e)', '(8, 0x3e)', '(8, 0x3f)']
+  boss-manhandla: ['(3, 0x4d)', '(8, 0x6e)']
   vire: ['(4, 0x03)', '(4, 0x12)', '(4, 0x20)', '(4, 0x30)', '(4, 0x31)', '(4, 0x50)', '(4, 0x61)', '(4, 0x71)', '(6, 0x39)', '(6, 0x2d)']
   like-like: ['(4, 0x32)', '(6, 0x1d)']
-  boss-gleeok: ['(4, 0x13)']
+  boss-gleeok: ['(4, 0x13)', '(8, 0x3c)']
   gibdo: ['(5, 0x14)', '(5, 0x26)', '(5, 0x47)', '(5, 0x65)', '(5, 0x66)', '(5, 0x76)']
-  pols-voice: ['(5, 0x25)', '(5, 0x27)']
+  pols-voice: ['(5, 0x25)', '(5, 0x27)', '(8, 0x4c)']
   dodongo-crossing: ['(5, 0x56)', '(7, 0x0c)']
   boss-digdogger: ['(5, 0x24)', '(7, 0x1c)', '(7, 0x39)']
   ow-ghini: ['(0, 0x40)', '(0, 0x41)', '(0, 0x31)', '(0, 0x21)', '(0, 0x21, cave)']

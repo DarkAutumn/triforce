@@ -275,6 +275,8 @@ impl Walk {
         let facings = self.gc.recorder_facings(self.s.state());
         self.s.set_recorder_facings(Some(facings));
         self.s.set_arrow_facings(self.gc.arrow_facings(&state));
+        // Round 28: CANDLE's facings by the route (ow-moblin has `candle: true` for 0x6d's tree: nowhere here).
+        self.s.set_candle_facings(self.gc.candle_facings(&state));
         self.s.set_vetoed_doorways(doorways_kept_out(&map, &state, objective));
         let wraps = if self.s.clips_effective() { wraps_into_wrong_exits(&map, self.s.state(), objective) } else { Vec::new() };
         self.s.set_vetoed_wraps(&wraps);
@@ -699,7 +701,7 @@ fn the_d6_route_is_walked_from_the_d7_triforce_to_the_d6_triforce() {
     // Reserves: bombs 2 through 0x28, 1 from 0x29; rupees 2, and 1 from Gohma's room.
     assert_eq!((first(0x28).bomb_reserve, first(0x29).bomb_reserve, first(0x2c).rupee_reserve, first(0x1c).rupee_reserve), (2, 1, 2, 1));
 
-    // CANDLE is never offered (no family of the stretch turns it on), nor ARROW outside Gohma's room.
+    // CANDLE is never offered (ow-moblin's is kept to the tree of 0x6d, round 28), nor ARROW outside Gohma's room.
     assert!(t.iter().all(|k| !k.candle));
     assert!(t.iter().all(|k| k.arrows.is_empty() || k.room == uw(0x1c)));
 

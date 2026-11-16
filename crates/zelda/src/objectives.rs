@@ -662,7 +662,7 @@ impl GameCompletion {
         }
         let pond = self.map.get(here).and_then(|r| r.secret).and_then(|s| match s {
             Secret::Recorder(tile) => Some(tile),
-            Secret::Armos(_) | Secret::Push(_) => None,
+            Secret::Armos(_) | Secret::Push(_) | Secret::Burn(_) => None,
         });
         match pond {
             Some(tile) if self.last_kind == ObjectiveKind::Cave && pond_full(state, tile) => ANY,
@@ -802,6 +802,28 @@ impl GameCompletion {
     /// are observation columns; a miss costs its rupee: the lead's working answer 6, docs/decisions.md).
     pub fn arrow_facings(&self, state: &GameView) -> Option<u8> {
         (state.level() != 0 && gohma(state).is_some()).then_some(Direction::N.value())
+    }
+
+    /// The facings ([`Direction::value`] bits) CANDLE is kept to in `state` by the route (round 28; None: no rule,
+    /// wherever the family and the game allow it: every dungeon room), after [`GameCompletion::objectives`] for
+    /// `state`. On the overworld the candle is played only where a route step burns a tree: in a room with a
+    /// burnable-tree secret ([`Secret::Burn`]: 0x6d's, over Dungeon 8's stairs) while the objective heads for its
+    /// stairs, the tree stands, none of Link's fires burns (the red candle makes a second one after 20 frames, which
+    /// only stands in his way) and a fire made here would burn it ([`GameView::burn_facings`]: W from the window E
+    /// of the tree, E from the one W of it). Nowhere else: the shop tree of 0x4d is two rooms before on the same
+    /// family's way.
+    pub fn candle_facings(&self, state: &GameView) -> Option<u8> {
+        if state.level() != 0 {
+            return None;
+        }
+        let burns = self.last_kind == ObjectiveKind::Cave && !state.in_cave() && !state.link_fire_burning();
+        Some(if burns { state.burn_facings() } else { 0 })
+    }
+
+    /// The bomb mode of the route step Link plays in `state`'s room (routes.yaml `bombs:`, round 28), instead of his
+    /// family's `items: {bombs:}`; None: the family's own (no such step, or Link is not in its room).
+    pub fn step_bombs(&self, state: &GameView) -> Option<&str> {
+        self.current_step(state.full_location())?.bombs.as_deref()
     }
 
     /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through: the step
@@ -1254,6 +1276,9 @@ impl GameCompletion {
             Secret::Recorder(tile) => pond_shore(&state.room(), tile),
             // The square under the stone: MOVE N from there pushes it (`GameView::is_secret_push_direction`).
             Secret::Push((c, r)) => vec![(c, r + 2)],
+            // The tree's two windows on its row (`GameView::burn_facings`): every X of these tiles burns it, facing
+            // W from the three E of it, E from the three W of it; the path search takes the one Link can reach.
+            Secret::Burn((c, r)) => [3, 4, 5, -5, -4, -3].into_iter().map(|d| (c + d, r)).collect(),
         }
     }
 

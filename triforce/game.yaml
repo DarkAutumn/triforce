@@ -1879,10 +1879,11 @@ rooms:
     S:
       level: 0
       location: '0x6d'
-      # Two openings (X $30 and X $C0).  The left one enters 0x6d W of its tree, from where only N and W lead;
-      # the right one reaches 0x6d's E edge, and the tree burns from there too (red candle facing W from X
-      # $B8-$C0 on row Y $5D: stairs 92 frames later; walked Nov 14).  Only the right one counts.  No d2first
-      # step leaves 0x5d S: the first-quest draft's plain way and Dungeon 8 approach do.
+      # Two openings (X $30 and X $C0).  The left one enters 0x6d W of its tree, the right one E of it; the tree
+      # burns from both sides (walked Nov 17, docs/routes/d8-walks.md §1.3: the red candle facing W from X $B8-$CF
+      # or facing E from X $78-$8F on row Y $5D, stairs 92 frames later, 30 of 30 each).  The route's exit is the
+      # right one: from it the tree is one room's width of walking nearer.  No d2first step leaves 0x5d S: the
+      # scouting route d8 (round 28) does.
       span: [24, 25]
     W:
       level: 0
@@ -2273,7 +2274,7 @@ rooms:
     RedMoblin: 4  # attr C $44: object $04, FoeCounts[1]
   treasure: null
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
-  entrance:  # cave index $08 (OW attr B >> 2); tree (burn it) at x=160 y=96
+  entrance:  # cave index $08 (OW attr B >> 2); tree (burn it) at x=160 y=96. Round 28: `how: burn` in a room with a `cave` exit is the route's `Secret::Burn`: the stand tiles are the row's three E of the tree (facing W) and three W of it (facing E), CANDLE is offered there only, the stairs show 92 frames after B and the room flag keeps them
     cave: '0x08'
     contents: level-8
     how: burn
@@ -5262,6 +5263,7 @@ rooms:
   stairs: [16, 10]
 - level: 8
   location: '0x2c'  # the triforce room
+  specialist: stalfos-keese-gel
   exits:
     S:  # open here; a shutter on 0x3c's side
       level: 8
@@ -5313,6 +5315,7 @@ rooms:
   bomb_walls: [E]
 - level: 8
   location: '0x3c'  # the boss room
+  specialist: boss-gleeok
   exits:
     N:  # shutter
       level: 8
@@ -5340,6 +5343,7 @@ rooms:
   treasure: null
 - level: 8
   location: '0x3e'
+  specialist: darknut
   exits:
     N:  # bomb wall
       level: 8
@@ -5359,6 +5363,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 8
   location: '0x3f'
+  specialist: darknut
   exits:
     W:  # shutter
       level: 8
@@ -5373,7 +5378,7 @@ rooms:
     BlueDarknut: 1
     RedDarknut: 2
     Gibdo: 3
-  treasure: bombs
+  treasure: bombs  # 4, at (X $78, Y $8D) once its six are dead (the Bubbles do not count; walked Nov 17). The route's step takes them only at 4 bombs or fewer (`treasure: {if_bombs_below: 5}`), else Link crosses
   trigger: kill-all-item  # attr F & 7 = 7
   stairs: [26, 10]
 - level: 8
@@ -5393,6 +5398,7 @@ rooms:
   dark: true
 - level: 8
   location: '0x4c'
+  specialist: pols-voice
   exits:
     N:  # bomb wall
       level: 8
@@ -5407,8 +5413,9 @@ rooms:
       in_cave: true
   enemies:
     PolsVoice: 8
-  treasure: key
+  treasure: key  # in the open from the first frame, at (X $D0, Y $60) in the NE corner behind the long way round (walked Nov 17: with arrows 30 of 30 at 0.40 hearts)
   bomb_walls: [N]
+  requires_bombs: true  # round 28: the route's only way on is the N wall (one bomb from (X $78, Y $5D) facing up); BOMB for the `required` pols-voice family only in reach of it
   trigger: kill-all  # attr F & 7 = 1
   stairs: [18, 8]
 - level: 8
@@ -5431,6 +5438,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 8
   location: '0x4e'
+  specialist: darknut
   exits:
     N:
       level: 8
@@ -5439,10 +5447,11 @@ rooms:
     S:  # open here; a shutter on 0x5e's side
       level: 8
       location: '0x5e'
-    W:
+    W:  # one frame of Left at its mouth spends a key (walked Nov 17), off the route: a Gohma's room
       level: 8
       location: '0x4d'
       locked: true
+      keep_out: true
   enemies:
     Bubble: 2
     BlueDarknut: 1
@@ -5480,15 +5489,17 @@ rooms:
   dark: true
 - level: 8
   location: '0x5e'
+  specialist: darknut
   exits:
     N:  # shutter
       level: 8
       location: '0x4e'
       shutter: true
-    E:
+    E:  # a key is taken on the frame Link reaches its door spot (walked Nov 17; with no key and the shutters opening he passes unpaid and the door stays open), off the route: a dead end
       level: 8
       location: '0x5f'
       locked: true
+      keep_out: true
     S:  # bomb wall
       level: 8
       location: '0x6e'
@@ -5514,6 +5525,7 @@ rooms:
   dark: true
 - level: 8
   location: '0x6e'
+  specialist: boss-manhandla
   exits:
     N:  # bomb wall
       level: 8
@@ -5525,6 +5537,7 @@ rooms:
     Manhandla: 1
   treasure: 5-rupees
   bomb_walls: [N]
+  requires_bombs: true  # round 28: crossed to the N wall with the route's one bomb (from (X $78, Y $5D) facing up; walked 60 of 60); the route's step is `bombs: required`, so BOMB is offered only in reach of the wall
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 8
   location: '0x7c'
@@ -5560,6 +5573,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 8
   location: '0x7e'  # the start room: S leaves to the overworld
+  specialist: stalfos-keese-gel
   exits:
     N:
       level: 8
@@ -5587,6 +5601,7 @@ rooms:
 - level: 8
   location: '0x2f'
   in_cave: true  # the tunnel between 0x4c and 0x3f (side view)
+  specialist: equipment-room
   exits:
     E:  # up the right ladder (attr B = $3F)
       level: 8

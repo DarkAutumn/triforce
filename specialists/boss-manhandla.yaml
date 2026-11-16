@@ -1,5 +1,5 @@
 name: boss-manhandla
-rooms: ['(3, 0x4d)']
+rooms: ['(3, 0x4d)', '(8, 0x6e)']
 start_states: ['3_4d*_[0-9]']
 success: [exit-correct]                    # kill, take the heart container, leave N to the triforce room 0x3d
 reward_profile: default
@@ -27,3 +27,8 @@ notes: >-
   heart (hurt) the only target after the kill, before the heart container and the N exit, and leaving one on the
   floor costs `penalty-left-drop` 3.0 each. Bombs drawn 2-8 (the route arrives with 2-8; at 0-1 the old model
   never won). r75-mh-drop (r71-e + 1M) then r75-mh-fight (+1M with bombs 2-8): docs/routes/d3.md "Manhandla's drop".
+  Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15; no start state yet): 0x6e's Manhandla is not fought. Link
+  crosses S to the N bomb wall with the route's one bomb (the step's `treasure: skip` and `bombs: required`: on
+  that step BOMB is offered only where it lands in reach of the wall, whatever `items.bombs` says here). Families
+  are by enemy, so the room is this family's; walked zero-shot with this family `free` it fought with 4.3 bombs a
+  run, 3.15 of them cheated, and trap-room and gibdo (`required`) crossed 60 of 60 with exactly one bomb.
