@@ -2524,6 +2524,48 @@ no leftover 'in case the old version of the code' is running."
 - **Rule from here:** a new worktree branches from a branch that has this commit; a branch from before it is
   merged with `main` before anything is trained or evaluated in its worktree.
 
+## 2026-11-17 — The leg to Dungeon 7 and Dungeon 7 are `d2first` (round 26)
+
+Round 26 first carried the stretch as a scouting route `d7` (`{extends: d2first}`, steps 209-247), as round 24 had
+scouted the leg and Dungeon 5. Before any state was built it was merged into the trained route, for the reason round
+24 gave: the route is the owner's and fixed, and two routes mean two sets of states, chains and step numbers.
+
+- **`d2first` has 248 steps** and ends on taking the D7 triforce in 7:0x2b (steps 0-208 unchanged: the game start to
+  the D5 triforce; 209-247 the leg from 0:0x0b and Dungeon 7). The route `d7` is gone; the draft `first-quest`
+  starts at Dungeon 7's exit.
+- **Comparing with round 25.** A full run now plays on after the D5 triforce, so "the full route" of round 25 is
+  `--stop-at step:209` (the first step after the triforce, reached only by the route's own exit) or the yardstick's
+  milestone `full→post-d5`; the segment `d5` arrives at 0:0x0b entered after 5:0x14 (`eval_batch.TARGETS`). The new
+  segments are `post-d5` (from `0_0bc_0`) and `d7` (from `7_79s_0`); room-stats has the scopes `to-d7` and `d7`.
+- **`heart_value.json`** has a row per route step, so the merge made the table stale and `GameData::load` failed in
+  every tool, the fitter included. The length is now checked where a specialist is handed out
+  (`GameData::specialist`, the Python config build); the fitter gives the steps up to a triforce that no chain has
+  played no curve at all (not the prior's flat 1), and the env prices hearts there by the plain health terms. The
+  table was refit from its own r74 chains: rows 0-208 are identical, 209-247 have no curve. So the eleven
+  `heart_value` families train Dungeon 7's rooms without the heart price until a team reaches the D7 triforce
+  often enough to fit one (`python -m triforce.heart_value <chain jsonl>...`).
+- **No version bump:** no trained model reads the route's length; on steps 0-208 the chains play as before
+  (round26.md §5).
+
+## 2026-11-17 — 7:0x1b is fought only at 4 bombs or fewer; clips off is not a concern (Lee)
+
+Lee, on the room the explorer could not clear: "as long as you bomb into it, that room IS clearable. You do so to
+grab the bombs. Only grab bombs at 4 or less, otherwise traverse the room and get out asap." And: "Clips-off is not
+a problem. We might even drop it in the future."
+
+- **7:0x1b** (six Blue Goriyas; the four bombs appear when all are dead; E is a key door, so the room can be
+  crossed with the Goriyas alive): the route step is `treasure: {if_bombs_below: 5}` (it was `8`, "when the bag
+  isn't full", 2026-11-14). By the ledger a run arrives with 0-1 bombs (three walls before it), so the fight stays
+  the usual case and it is the room's bombs that open 0x0c's and 0x29's walls; a run that cannot win it and leaves
+  has those two bombs cheated and counted.
+- **What stays open in the room** (not rules, work): no full-fight track (the explorer's search does not find 18
+  white-sword hits under six boomerangs; staged starts with 2-5 kills banked exist on all chains); today's goriya
+  model wins 4%, the honest planner 5 of 10; the rule is read live, so a Link crossing with 5 who throws a bomb as a
+  weapon turns the crossing into the fight (round 23's 3:0x5b problem); the N key door spends a key if touched (to
+  be vetoed with round 27's `keep_out` doorways when that branch is merged).
+- **Clips off:** still built (a plain way for every stretch) and measured in the chains of record, but no work is
+  spent on it: no tuning, no scoping of a clip family's switch to single rooms, and its numbers gate nothing.
+
 ## 2026-11-17 — Round 27's working answers: the magic sword and Dungeon 6 (the lead; Lee may overrule any of them)
 
 `docs/routes/d6-walks.md` §10 ends with nine questions that are Lee's. Round 27's route vocabulary (the scouting

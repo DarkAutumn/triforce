@@ -405,7 +405,7 @@ d2first:
 - {level: 7, room: '0x1a', specialist: goriya, entry: W, exit: cave}
 - {level: 7, room: '0x4a', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: candle}
 - {level: 7, room: '0x1a', specialist: goriya, entry: cave, exit: E}
-- {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 8}, bomb_reserve: 2}
+- {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 5}, bomb_reserve: 2}
 - {level: 7, room: '0x1c', specialist: boss-digdogger, entry: W, exit: N}
 - {level: 7, room: '0x0c', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
 - {level: 7, room: '0x0d', specialist: wallmaster, entry: W, exit: cave}

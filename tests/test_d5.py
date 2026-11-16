@@ -136,14 +136,15 @@ def kill_monsters(game, frames: int = 64):
 # ---- the route
 
 
-def test_d2first_holds_dungeon_5_and_its_triforce():
-    """Dungeon 5's 23 steps of d2first are the draft's (routes.yaml, round 24: after the leg; since round 26 the leg
-    to Dungeon 7 follows them); their families and treasure rules are the owner's notes (docs/routes/d5.md)."""
+def test_d2first_plays_dungeon_5_to_its_triforce():
+    """Dungeon 5 is 23 steps of d2first in a row, the draft's (routes.yaml, round 24: after the leg; round 26: the
+    route goes on from its triforce to Dungeon 7); their families and treasure rules are the owner's notes
+    (docs/routes/d5.md)."""
     all_steps = steps()
     first = next(i for i, s in enumerate(all_steps) if s['level'] == LEVEL)
-    assert all(s['level'] == LEVEL for s in all_steps[first:first + 23]) and all_steps[first + 23]['level'] == 0
-    d5, base = all_steps[:first + 23], all_steps[:first]
-    own = [(s['room'], s['in_cave'], s['entry'], s['exit']) for s in d5[len(base):]]
+    d5 = all_steps[first:first + 23]
+    assert all(s['level'] == LEVEL for s in d5) and all(s['level'] != LEVEL for s in all_steps[first + 23:])
+    own = [(s['room'], s['in_cave'], s['entry'], s['exit']) for s in d5]
     assert own == [
         (0x76, False, 'S', 'N'), (0x66, False, 'S', 'W'), (0x65, False, 'E', 'W'), (0x64, False, 'E', 'cave'),
         (0x07, True, 'S', 'E'), (0x06, False, 'cave', 'W'), (0x05, False, 'E', 'cave'), (0x04, True, 'S', 'N'),
@@ -151,11 +152,11 @@ def test_d2first_holds_dungeon_5_and_its_triforce():
         (0x65, False, 'W', 'E'), (0x66, False, 'W', 'N'), (0x56, False, 'S', 'E'), (0x57, False, 'W', 'N'),
         (0x47, False, 'S', 'N'), (0x37, False, 'S', 'N'), (0x27, False, 'S', 'W'), (0x26, False, 'E', 'W'),
         (0x25, False, 'E', 'W'), (0x24, False, 'E', 'N'), (0x14, False, 'S', 'triforce')]
-    rules = {(s['room'], s['entry']): s['treasure'] for s in d5[len(base):] if s['treasure']}
+    rules = {(s['room'], s['entry']): s['treasure'] for s in d5 if s['treasure']}
     assert rules == {(0x66, 'S'): 'skip', (0x65, 'E'): 'refuse', (0x56, 'S'): 'skip', (0x57, 'W'): 'skip',
                      (0x47, 'S'): 'skip', (0x37, 'S'): 'skip', (0x26, 'E'): 'skip'}
-    assert [s['waypoint'] for s in d5[len(base):] if s['waypoint']] == ['recorder']
-    families = {s['room']: s['specialist'] for s in d5[len(base):]}
+    assert [s['waypoint'] for s in d5 if s['waypoint']] == ['recorder']
+    families = {s['room']: s['specialist'] for s in d5}
     assert families == {0x76: 'gibdo', 0x66: 'gibdo', 0x65: 'gibdo', 0x64: 'darknut', 0x07: 'equipment-room',
                         0x06: 'darknut', 0x05: 'darknut', 0x04: 'equipment-room', 0x56: 'dodongo-crossing',
                         0x57: 'zol', 0x47: 'gibdo', 0x37: 'darknut', 0x27: 'pols-voice', 0x26: 'gibdo',
