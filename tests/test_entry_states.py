@@ -523,3 +523,24 @@ def test_audit_cli_reports_rows_and_writes_json(states_dir, tmp_path, capsys):
     row, = json.loads(out.read_text())
     assert (row['state'], row['level'], row['room'], row['in_cave']) == ('start', 0, '0x77', False)
     assert not audit_problems(row)                  # the game start has no entry before it and no monsters
+
+
+def test_entry_side_tells_the_whirlwind_from_a_walk_in_from_the_west():
+    """Round 26: a built ``0_45r`` state's first playable frame has Link at X 0 facing E, as a walk in from the W
+    has, but carried by the whirlwind (object $2E in a slot); released, he stands at X $80."""
+    class State:
+        def __init__(self, x, objects=(), direction='E', level=0):
+            self.full_location = (level, 0x45, False)
+            self.link = {'direction': direction, 'x': x, 'y': 0x8D}
+            self._types = dict(objects)
+
+        def read(self, address):
+            return self._types.get(address - entry_states.OBJ_TYPE, 0)
+
+    side = entry_states.entry_side
+    assert side(State(0)) == 'w'
+    assert side(State(0, {1: 0x0A})) == 'w'                          # a monster is no whirlwind
+    assert side(State(0, {3: entry_states.OBJ_WHIRLWIND})) == 'r'
+    assert side(State(entry_states.WHIRLWIND_RELEASE_X)) == 'r'
+    assert side(State(0xF0, {3: entry_states.OBJ_WHIRLWIND}, direction='W')) == 'e'
+    assert side(State(0, {3: entry_states.OBJ_WHIRLWIND}, level=7)) == 'w'

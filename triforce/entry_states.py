@@ -665,18 +665,22 @@ def _named_room(label: str) -> Optional[tuple]:
 
 
 WHIRLWIND_RELEASE_X = 0x80          # the whirlwind sets Link down here, facing E (asm:Whirlwind_Update_Full)
+OBJ_TYPE, OBJ_WHIRLWIND = 0x34F, 0x2E   # object types by slot; the whirlwind's (`zelda::whirlwind::OBJ_WHIRLWIND`)
 
 
 def entry_side(state) -> str:
     """The side Link entered his room from, as a file name spells it (n/s/e/w, ``c`` out of a cave, cellar or
     level, ``r`` set down by the whirlwind, ``cave`` inside one), read at the first controllable frame: Link faces into
     the room from the edge he came through; coming out of a cave or cellar he faces S away from the top edge; the
-    whirlwind lets him go facing E at X $80 (round 26; from the W edge he is controllable at its rim)."""
+    whirlwind brings him in from the W edge facing E, as a walk in from the W does, but with the whirlwind in the
+    room (a built ``r`` state's first playable frame: X 0, carried for 87 more frames), and lets him go at X $80."""
     level, _, in_cave = state.full_location
     if in_cave:
         return 'cave'
     link = state.link
-    if level == 0 and link['direction'] == 'E' and link['x'] == WHIRLWIND_RELEASE_X:
+    if level == 0 and link['direction'] == 'E' and (
+            link['x'] == WHIRLWIND_RELEASE_X
+            or any(state.read(OBJ_TYPE + slot) == OBJ_WHIRLWIND for slot in range(1, 12))):
         return 'r'
     facing = {'E': 'w', 'W': 'e', 'N': 's'}.get(link['direction'])
     if facing is not None:
