@@ -18,12 +18,11 @@ one for 60 s.  A second training-gui on the same port does not start: it says so
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
 [currently running] covers every live training and evaluation on this machine, whatever checkout or logs root it
 writes to: every job registers its plan in the machine's job registry (``triforce/jobs.py``; ``jobs_dir``:
-``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``), and the
-roots of the running triforce processes (``process_log_roots``) are scanned too, for jobs of older code.  Folders
+``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``).  Folders
 from elsewhere are listed with their checkout and branch.  A job waiting its turn (``$TRIFORCE_MAX_JOBS`` run at
 once, plus an express place for a short one) is listed below the running ones as 'queued', in the order the jobs
-will start: shortest estimate first, older ones moving up as they wait (first come first served while a job of older
-code, without an estimate, waits).  Each shows its place in line, the jobs it waits for, its estimate and how long it
+will start: shortest estimate first, older ones moving up as they wait.  Each shows its place in line, the jobs it
+waits for, its estimate and how long it
 has waited; a running job shows its estimate beside how long it has run, and 'express' when it took the express
 place.  The GUI only reads the registry, it controls nothing.  Below the live folders, under a 'finished' heading:
 the folders whose training ended while shown, and the registered jobs (any checkout) that ended in the last 24 hours
@@ -1156,80 +1155,6 @@ def find_log_dirs(root: Path) -> list[Path]:
         return []
 
 
-TRIFORCE_ARGS = ('triforce.', 'train_round.py')
-
-
-def is_checkout(path: Path) -> bool:
-    """A triforce checkout (its ``logs/`` is the default logs root of the code it holds)."""
-    return (path / 'triforce' / 'events.py').is_file()
-
-
-def process_log_roots(proc: Path = Path('/proc')) -> set[Path]:
-    """Where the triforce Python processes running on this machine write their event logs (Linux ``/proc``; empty
-    elsewhere).  A process counts when it runs ``-m triforce...``, a ``triforce...``/``train_round.py`` script or
-    the ``triforce`` console script.  Its roots: each ``--logs-dir``, a non-empty ``$TRIFORCE_LOGS_DIR``, ``logs/``
-    of its working directory, ``logs/`` of the ``.py`` script's checkout, and ``logs/`` of every checkout its code
-    comes from (the console script's or the venv python's checkout, ``$VIRTUAL_ENV/..``): a ``python -m
-    triforce.X`` started outside a checkout writes to the venv's checkout.  Only existing directories."""
-    roots: set[Path] = set()
-    try:
-        entries = [entry for entry in proc.iterdir() if entry.name.isdigit()]
-    except OSError:
-        return roots
-    for entry in entries:
-        try:
-            args = [arg.decode(errors='replace') for arg in (entry / 'cmdline').read_bytes().split(b'\0') if arg]
-            if not args or not Path(args[0]).name.startswith('python'):
-                continue
-            console = len(args) > 1 and Path(args[1]).name == 'triforce'
-            if not console and not any(key in arg for arg in args[1:] for key in TRIFORCE_ARGS):
-                continue
-            cwd = Path(os.readlink(entry / 'cwd'))
-        except OSError:
-            continue
-        try:
-            environ = (entry / 'environ').read_bytes().split(b'\0')
-        except OSError:
-            environ = []
-        found = [cwd / 'logs']
-        checkouts = []
-        for index, arg in enumerate(args):
-            value = args[index + 1] if index + 1 < len(args) else None
-            if arg == '--logs-dir' and value:
-                found.append(cwd / value)
-            elif arg.startswith('--logs-dir='):
-                found.append(cwd / arg.split('=', 1)[1])
-            elif arg.endswith('.py') and not arg.startswith('-'):
-                script = (cwd / arg).parent
-                found.append((script.parent if script.name == 'scripts' else script) / 'logs')
-        if console:
-            checkouts.append((cwd / args[1], 'resolve'))
-        python = cwd / args[0]
-        if python.parent.name == 'bin' and python.parent.parent.name == '.venv':
-            checkouts.append((python, 'plain'))
-        for item in environ:
-            name, _, value = item.decode(errors='replace').partition('=')
-            if name == LOGS_DIR_ENV and value:
-                found.append(cwd / value)
-            elif name == 'VIRTUAL_ENV' and value:
-                checkouts.append((cwd / value / 'bin' / 'python', 'plain'))
-        for path, how in checkouts:
-            try:
-                path = path.resolve() if how == 'resolve' else path
-            except OSError:
-                continue
-            if len(path.parents) > 2 and is_checkout(path.parents[2]):
-                found.append(path.parents[2] / 'logs')
-        for path in found:
-            try:
-                path = path.resolve()
-            except OSError:
-                continue
-            if path.is_dir():
-                roots.add(path)
-    return roots
-
-
 # The machine's job registry (``triforce/jobs.py``): every plan any checkout's jobs started, one JSON file each.
 JOBS_DIR_ENV = 'TRIFORCE_JOBS_DIR'
 RECENT_SECONDS = 24 * 3600     # finished registered jobs stay in [currently running] (under 'finished') this long
@@ -1324,26 +1249,21 @@ def known(*values):
     return next((value for value in values if value is not None), None)
 
 
-def queue_order(queued: list[dict], now: float) -> tuple[list[dict], str]:
-    """The live queued entries in the order they will start, and how they are ordered (as ``triforce.jobs``):
-    'score' (estimate - AGING * seconds waited, lowest first, ties by join time and file name), or 'legacy' (first
-    come first served by join time and file name) while any of them has no estimate (code from before)."""
-    def joined(job):
-        return job.get('queued_ts') or 0.0, Path(job.get('path') or '').name
-    if any(job.get('estimate') is None for job in queued):
-        return sorted(queued, key=joined), 'legacy'
-
+def queue_order(queued: list[dict], now: float) -> list[dict]:
+    """The live queued entries in the order they will start (as ``triforce.jobs``): by score, estimate - AGING *
+    seconds waited, lowest first, ties by join time and file name (an entry without an estimate counts as 0)."""
     def score(job):
-        return job['estimate'] - AGING * max(0.0, now - (job.get('queued_ts') or now)), *joined(job)
-    return sorted(queued, key=score), 'score'
+        return ((job.get('estimate') or 0.0) - AGING * max(0.0, now - (job.get('queued_ts') or now)),
+                job.get('queued_ts') or 0.0, Path(job.get('path') or '').name)
+    return sorted(queued, key=score)
 
 
 def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('/proc'),
                 now: float | None = None) -> dict:
     """A queued plan's place in the job queue: {'place': 1-based or None, 'running': labels of the jobs it waits for,
     'ahead': labels of the queued jobs before it, 'limit': jobs run at once or None, 'since': Unix seconds it joined
-    the line or None, 'estimate': seconds it is expected to run or None, 'lane': 'regular' | 'express' | None,
-    'mode': 'score' | 'legacy' | None}.  From the registry while the plan's entry is there and queued on this host:
+    the line or None, 'estimate': seconds it is expected to run or None, 'lane': 'regular' | 'express' | None}.
+    From the registry while the plan's entry is there and queued on this host:
     the line is this host's live queued entries in the order they will start (``queue_order`` at ``now``), what it
     waits for the live running ones of other processes.  Otherwise (no entry, another host, an entry already
     admitted) the plan's own ``queue`` says it, as of its last rewrite."""
@@ -1352,24 +1272,22 @@ def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('
              'ahead': list(recorded.get('ahead') or []), 'limit': recorded.get('limit'),
              'since': parse_time(recorded.get('queued')), 'estimate': known(plan.get('estimate'),
                                                                             recorded.get('estimate')),
-             'lane': plan.get('lane') or recorded.get('lane'), 'mode': recorded.get('mode')}
+             'lane': plan.get('lane') or recorded.get('lane')}
     entry = job_entry(log_dir, jobs, 'queued')
     if entry is None:
         return state
     host = socket.gethostname()
     live = [job for job in jobs if job.get('host') == host and job_alive(job, proc)]
-    line, mode = queue_order([job for job in live if job.get('status') == 'queued'],
-                             time.time() if now is None else now)
+    line = queue_order([job for job in live if job.get('status') == 'queued'], time.time() if now is None else now)
     if entry not in line:
         return state
     place = line.index(entry)
     state.update(place=place + 1, ahead=[job_label(job) for job in line[:place]],
                  running=[job_label(job) for job in live
                           if job.get('status') == 'running' and job.get('pid') != entry.get('pid')
-                          and not (mode == 'score' and job.get('lane') == 'express'
+                          and not (job.get('lane') == 'express'
                                    and (entry.get('estimate') or 0) > EXPRESS_SECONDS)],
-                 estimate=known(entry.get('estimate'), state['estimate']), lane=entry.get('lane') or state['lane'],
-                 mode=mode)
+                 estimate=known(entry.get('estimate'), state['estimate']), lane=entry.get('lane') or state['lane'])
     if entry.get('queued_ts') is not None:
         state['since'] = entry['queued_ts']
     return state
@@ -1377,8 +1295,8 @@ def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('
 
 def run_facts(log_dir: Path, plan: dict, jobs: list[dict], now: float) -> dict:
     """A running plan's lane and timing: {'express': in the express lane (its registry entry's or its plan's
-    ``lane``), 'est': 'est ~40 min · ran 12m' (ran: since it was admitted, else since the plan was created), '' without
-    an estimate (code from before)}."""
+    ``lane``), 'est': 'est ~40 min · ran 12m' (ran: since it was admitted, else since the plan was created), '' for
+    a plan that records no estimate}."""
     entry = job_entry(log_dir, jobs, 'running') or {}
     recorded = plan.get('queue') or {}
     lane = entry.get('lane') or plan.get('lane') or recorded.get('lane')
@@ -1399,7 +1317,7 @@ def ordinal(number: int) -> str:
 
 def queue_times(state: dict, now: float) -> tuple[str, str]:
     """A queued plan's (estimate, wait): ('~3 min', 'waited 12m'), the estimate 'short ~3 min' when it is short
-    enough for the express place; ('', '12m 05s') for a job of older code (no estimate)."""
+    enough for the express place; ('', '12m 05s') for a plan that records no estimate."""
     since, estimate = state.get('since'), state.get('estimate')
     if estimate is None:
         return '', fmt_duration(now - since) if since is not None else ''
@@ -1411,7 +1329,7 @@ def queue_times(state: dict, now: float) -> tuple[str, str]:
 
 def waiting_text(state: dict, now: float) -> str:
     """A queued plan's line: 'waiting · 2nd in line · for r25-a (round), eval-b (eval) · ~40 min · waited 12m'
-    ('waiting · ... · 12m 05s' for a job of older code, without an estimate)."""
+    ('waiting · ... · 12m 05s' for a plan that records no estimate)."""
     parts = ['waiting']
     if state.get('place'):
         parts.append(f"{ordinal(state['place'])} in line")
@@ -3215,16 +3133,13 @@ class Window(QMainWindow):
     def _scan(self):
         """Lists the log folders (dropdown) and finds the live ones; [currently running] can always be picked.
         Besides the root's folders: the folders of the jobs in the machine's job registry (every checkout's: the
-        live ones and those that ended in the last ``RECENT_SECONDS``), and the live folders of the other logs roots
-        running processes use (jobs of code from before the registry).  A live folder whose plan is queued gets its
+        live ones and those that ended in the last ``RECENT_SECONDS``).  A live folder whose plan is queued gets its
         place in the job queue (``queues``)."""
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
-        others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
         jobs, now = read_registry(), time.time()
         registered, recent = registry_folders(jobs, now)
-        # A job of another checkout is found twice (its registry entry, its process's logs root): listed once.
-        dirs += [path for path in dict.fromkeys(self.scanner.live(registered + others)) if path not in dirs]
+        dirs += [path for path in self.scanner.live(registered) if path not in dirs]
         self.recent = [path for path in recent if path not in self.cleared]
         dirs += [path for path in self.recent if path not in dirs]
         if not self.live_mode:
@@ -3715,11 +3630,9 @@ class WebState:
         """Finds the folders to read: every live plan (running or queued), and plans that ended within ``expire``
         seconds; keeps the registry for the queued plans' places in line."""
         dirs = find_log_dirs(self.root)
-        root = self.root.resolve()
-        others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
         self.jobs = read_registry()
         registered, recent = registry_folders(self.jobs, now)
-        candidates = list(dict.fromkeys(dirs + registered + others + recent))
+        candidates = list(dict.fromkeys(dirs + registered + recent))
         live = set(self.scanner.live(candidates))
         self.dropped -= live
         for path in candidates:
@@ -3801,7 +3714,7 @@ class WebState:
                 'color': color.name(), 'place': place, 'place_label': f"{ordinal(place)} in line" if place else '',
                 'running': queue['running'], 'ahead': queue['ahead'], 'limit': queue['limit'],
                 'waits': ('for ' + ', '.join(queue['running'])) if queue['running'] else '',
-                'estimate': estimate, 'waited': waited, 'mode': queue['mode'],
+                'estimate': estimate, 'waited': waited,
                 'text': waiting_text(queue, now), 'created_ts': model.created_ts}
 
     def refresh(self) -> dict:
