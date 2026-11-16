@@ -1,11 +1,12 @@
 """Round 29: the rooms of Dungeon 9 that must be emptied before their block moves, by rule in the running game
 (docs/routes/d9-fights-walks.md item 3): 0x05, 0x20, 0x10 (three Blue and two Red Wizzrobes; 0x10 with three
-Bubbles), 0x30 (two and two among four Traps), 0x03 (two Zols, two Like-Likes, two Bubbles).  Link comes in as the
-route does (0x05, 0x30, 0x03 by the E bomb wall, 0x10 by the S one; 0x20 by its N wall, the second visit's side);
+Bubbles), 0x30 (two and two among four Traps), 0x03 (two Zols, two Like-Likes, two Bubbles), and 0x07 (as 0x10: the
+red ring's room, fought before the ring).  Link comes in as the route does (0x05, 0x30, 0x03 by the E bomb wall,
+0x10 and 0x07 by the S one; 0x20 by its N wall, the second visit's side);
 every trial loads the room's pre-entry state with the game's own randomness for its seed.
 
     python scripts/experiments/r29_fight_rooms.py look                     # what each room holds, who counts
-    python scripts/experiments/r29_fight_rooms.py clear [--seeds N] [--rooms 05,20,10,30,03]
+    python scripts/experiments/r29_fight_rooms.py clear [--seeds N] [--rooms 07,05,20,10,30,03]
     python scripts/experiments/r29_fight_rooms.py bubbles [--seeds N]      # the three kinds of Bubble (two WRITTEN)
 """
 
@@ -22,7 +23,8 @@ IS_SWORD_BLOCKED = 0x52E                      # IsSwordBlocked (the red Bubble's
 GEL = (0x14, 0x15)
 VEC = {1: (1, 0), 2: (-1, 0), 4: (0, 1), 8: (0, -1)}
 # room: (entry, the square to push from, the push, the squares to walk after it (the last one is the stairs))
-ROOMS = {0x05: ('E', (0x60, 0x9D), 'UP', [(0xD0, 0x5D)]),
+ROOMS = {0x07: ('S', (0x60, 0x9D), 'UP', [(0x60, 0x8D), (0x80, 0x8D)]),      # the red ring's room: before the ring
+         0x05: ('E', (0x60, 0x9D), 'UP', [(0xD0, 0x5D)]),
          0x20: ('N', (0x60, 0x9D), 'UP', [(0x60, 0x8D), (0x80, 0x8D)]),
          0x10: ('S', (0xD0, 0x8D), 'LEFT', [(0xD0, 0x5D)]),
          0x30: ('E', (0x60, 0x9D), 'UP', [(0xD0, 0x5D)]),
@@ -233,7 +235,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('what', choices=['look', 'clear', 'bubbles'])
     parser.add_argument('--seeds', type=int, default=20)
-    parser.add_argument('--rooms', default='05,20,10,30,03')
+    parser.add_argument('--rooms', default='07,05,20,10,30,03')
     args = parser.parse_args()
     globals()[args.what](args)
 

@@ -399,7 +399,10 @@ Voice harmless ~32 frames (the family's learned trick, pols-voice.yaml).
   after a death. Mechanics: the room's list count is 1 (ids `$32`-`$61` count 1, asm:Room_EnterCommon) and
   `RoomObjCount` is set to 8, while kills bank as 2 in `LevelKillCounts`; the entry rule "count minus banked kills"
   would give none while the room is in the history, and CONTINUE keeps `LevelKillCounts` (mechanics.md "Death")
-  (inferred). One of the two readings is wrong.
+  (inferred). One of the two readings is wrong. **Walked (round 29, `d9-fights-walks.md` §1): the mechanics
+  reading is right.** One worm killed, out by the S wall and back: the room is empty and `IsRoomAllDead` is set (20
+  of 20); cleared and written out of the room history: still empty (20 of 20); three segments killed, no head:
+  ten segments again. After a death it was not walked.
 
 ### 3.16 Patra (`$47`/`$48`) and its eight children (`$25`/`$26`) — 9:0x16, 0x61, 0x52 (0x27 crossed)
 
@@ -417,12 +420,18 @@ Voice harmless ~32 frames (the family's learned trick, pols-voice.yaml).
   detour). Not fought in any walk (level-9.md).
 - **Eyes.** Missing: whether children are live (Patra's state) (G5/G2); body `killable` 1 while children live (G6);
   orbit phase and pattern index (positions and velocities show the orbit; the next flip is hidden).
+- **Walked (round 29, `d9-fights-walks.md` §2).** Children live from frame 66 (`$47`) / 77 (`$48`); the second
+  pattern is eight flat ellipses passing through the body (`$47`) or a ring that swells 21 → 85 px every orbit
+  (`$48`), and both fights begin in it; **the child in slot 3 dead: no flip ever again**; arrows, bombs, boomerang 0
+  of 390; the beam hurts the children. By rule: 0x52 20 of 20 at 0.70 hearts, 0x61 20 of 20 at 2.50, 0x16 17 of 20 at
+  8.65 without the ring and 20 of 20 at 2.33 with it. Every model family: no kill.
 - **Reward.** `PATRA` (`$47`) is in the boss list, **`PATRA2` (`$48`) is not** (enums.rs:333-352): 0x16's body hits
   pay `reward-hit` 0.25 where 0x61's pay `reward-boss-hit` 0.75 (repo). Children are never bosses.
 
 ### 3.17 Ganon (`$3E`) — 9:0x42
 
-- **Code.** Entry scene: Link halted `$40` + `$C0` frames (~270, trace); Ganon then at (`$50`,`$5D`); both shutters
+- **Code.** Entry scene: Link halted `$40` + `$C0` frames (~270, trace); Ganon then at (`$50`,`$5D`) (walked, round 29: on the room's
+  spawn spot, one of seven seen in 20 entries; `d9-fights-walks.md` §4.1); both shutters
   shut until the Triforce of Power is taken (asm:Secret_Trigger3PowerTriforce). **Blue phase:** not drawn, moves 1
   px/frame with the Blue Wizzrobe's step routine (passes blocks), fireball `$56` every 64 frames (1 heart,
   unblockable). Only the sword (slot `$0D`, state 2) and an arrow (slot `$12`) are tested — **beam, bombs, rod,

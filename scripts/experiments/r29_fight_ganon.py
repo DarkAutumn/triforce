@@ -339,7 +339,6 @@ def moves(args):
             now, nd = (w.r(OBJ_X + G), w.r(OBJ_Y + G)), w.r(OBJ_DIR + G)
             step = abs(now[0] - pos[0]) + abs(now[1] - pos[1])
             steps[step] += 1
-            shown[drawn(w) > 0] += 1
             if step and moved is None:
                 moved = f
                 first[(f, {1: 'E', 2: 'W', 4: 'S', 8: 'N'}.get(nd, nd))] += 1
@@ -375,8 +374,7 @@ def moves(args):
                     del balls[s]
         span.append((min(xs), max(xs), min(ys), max(ys)))
     print(f'Ganon while hidden, Link still at the door spot, hearts held ({args.seeds} seeds x 1500 frames of fight):')
-    print(f'   first step (frame of the fight, direction): {dict(first)}; px moved per frame {dict(steps)}; frames '
-          f'with a sprite of his drawn: {dict(shown)}')
+    print(f'   first step (frame of the fight, direction): {dict(first)}; px moved per frame {dict(steps)}')
     print(f'   direction changes: {dict(counter)}; frames between turns {dict(turn_gaps)}; a turn is on the '
           f'{dict(axes)}; his X {min(s[0] for s in span):02X}-{max(s[1] for s in span):02X}, Y '
           f'{min(s[2] for s in span):02X}-{max(s[3] for s in span):02X}')
@@ -393,9 +391,7 @@ def moves(args):
                 h = hp(w)
                 w.press('NONE', 1)
                 if hp(w) < h:
-                    near = min(((abs(w.r(OBJ_X + s) - w.x) + abs(w.r(OBJ_Y + s) - w.y), w.r(OBJ_TYPE + s))
-                                for s in range(1, 0x0C) if w.r(OBJ_TYPE + s)), default=(0, 0))[1]
-                    (ball if near == FIREBALL else touch)[round(h - hp(w), 3)] += 1
+                    ball[round(h - hp(w), 3)] += 1               # the smaller loss is a fireball, the larger his touch
                     hold(w)
             for label in ('hidden', 'shown'):
                 w = load(state(ring=ring), seed)
@@ -409,8 +405,9 @@ def moves(args):
                 put(w, w.r(OBJ_X + G) + 8, w.r(OBJ_Y + G) + 8)
                 w.press('NONE', 2)
                 touch[(label, round(h - hp(w), 3))] += 1
-        print(f'   ring {ring} ({("none", "blue", "red")[ring]}): fireball on a still Link, hearts a hit {dict(ball)}; '
-              f'his touch {dict(touch)}')
+        print(f'   ring {ring} ({("none", "blue", "red")[ring]}): a still Link, 600 frames of fight x {args.seeds} '
+              f'seeds, hearts lost a hit (fireballs and his touch) {dict(sorted(ball.items()))}; his touch, Link '
+              f'WRITTEN onto his middle {dict(touch)}')
 
 
 FACE = ('RIGHT', 'LEFT', 'UP', 'DOWN')
@@ -518,7 +515,12 @@ def to_brown(w, seed_limit=8000):
             bot.move_shown()
         else:
             bot.fight_frame()
-    return bot if phase(w) == 'brown' and bot.alive() else None
+    if phase(w) != 'brown' or not bot.alive():
+        return None
+    for _ in range(20):                                          # the fourth stab ends: A and B are read again
+        w.game.write(LINK_INVINC, 0x10)
+        w.press('NONE', 1)
+    return bot
 
 
 def brown(args):
@@ -540,7 +542,7 @@ def brown(args):
             w.press('NONE', 1)
         sword_hp[f'state ${w.r(OBJ_STATE + G) & 0xF0:02X}+, HP ${w.r(OBJ_HP + G):02X}, dying {w.r(DYING)}'] += 1
         put(w, 0x20 if spot[0] > 0x78 else 0xD0, 0x65 if spot[1] > 0x8D else 0xB5)
-        n, moved, first_flicker, born = 14, False, None, 0
+        n, moved, first_flicker, born = 34, False, None, 0
         while phase(w) == 'brown' and n < 700:
             hold(w)
             w.game.write(LINK_INVINC, 2)
@@ -627,18 +629,32 @@ def after_death(bot, limit=1500):
     out['doors before the item is taken'] = f'${w.r(OPEN_DOORS):02X}'
     ix, iy = w.r(OBJ_X + ITEM_SLOT), w.r(OBJ_Y + ITEM_SLOT)
     node = min(bot.graph, key=lambda n: abs(n[0] - ix) + abs(n[1] - iy))
-    t1 = bot.frames
-    bot.walk_to(node, 600)
-    bot.hold('NONE', lambda w: w.r(OBJ_STATE) == 0x40 or w.r(LIFT_ITEM), 30)
+    t1, h1 = bot.frames, hp(w)
+    for _ in range(600):                                         # to the ashes; the item is taken on touch
+        if w.r(OBJ_STATE) == 0x40 or (w.x, w.y) == node:
+            break
+        if not bot.can_act():
+            bot.press('NONE')
+        elif bot.node() is None:
+            bot.heading = bot.off_grid()
+            bot.press(bot.heading)
+        else:
+            step = bot.plan({node}) or 'NONE'
+            if step != 'NONE':
+                bot.heading = step
+            bot.press(step)
+    bot.hold('NONE', lambda w: w.r(OBJ_STATE) == 0x40, 30)
     out['walk to the item'] = bot.frames - t1
+    out['Link when he is halted'] = f'(${w.x:02X},${w.y:02X})'
     t2 = bot.frames
     bot.hold('NONE', lambda w: w.r(INV_POWER_TRIFORCE) == 1, 400)
-    out['fanfare (Link halted)'] = bot.frames - t2
+    out['fanfare (Link halted) until InvPowerTriforce is 1'] = bot.frames - t2
+    out['doors when InvPowerTriforce turns 1'] = f'${w.r(OPEN_DOORS):02X}'
     t3 = bot.frames
     bot.hold('NONE', lambda w: w.r(OPEN_DOORS) & 0x0C == 0x0C, 200)
     out['shutters open after the fanfare'] = bot.frames - t3
     out['doors'] = f'${w.r(OPEN_DOORS):02X}'
-    out['hearts before/after the fanfare'] = None
+    out['hearts gained by the fanfare'] = round(hp(w) - h1, 2)
     t4 = bot.frames
     ok = bot.walk_to((0x78, 0x5D), 600)
     bot.hold('UP', lambda w: w.room == 0x32 and w.mode == PLAY, 400)
@@ -652,8 +668,13 @@ def zelda_room(bot, way='stab'):
     the two fires of the middle path, then up; 'walk' = straight up at X $78."""
     w = bot.w
     t0, h0 = bot.frames, bot.lost()
-    fires0 = sorted((w.r(OBJ_X + s), w.r(OBJ_Y + s)) for s in range(1, 0x0C) if w.r(OBJ_TYPE + s) == GUARD_FIRE)
-    bot.hold('NONE', lambda w: (w.x, w.y) == (w.x, w.y) and w.r(OBJ_STATE) == 0 and w.y <= 0xBD, 60)
+    def fires():
+        return sorted((w.r(OBJ_X + s), w.r(OBJ_Y + s)) for s in range(1, 0x0C)
+                      if w.r(OBJ_TYPE + s) == GUARD_FIRE and w.r(OBJ_META + s) == 0)
+
+    bot.hold('NONE', lambda w: len(fires()) == 4, 60)            # Zelda's init makes them in the room's first frames
+    fires0 = fires()
+    first = (w.x, w.y)
     stabs = 0
     if way == 'stab':
         for _ in range(200):
@@ -661,12 +682,12 @@ def zelda_room(bot, way='stab'):
                 break
             bot.press('UP')
         for _ in range(3):
-            if not any(w.r(OBJ_TYPE + s) == GUARD_FIRE and w.r(OBJ_META + s) == 0 and w.r(OBJ_Y + s) == 0x9D
-                       for s in range(1, 0x0C)):
+            if not any(y == 0x9D for _, y in fires()):
                 break
             bot.press('A')
             stabs += 1
             bot.press('NONE', 16)
+    left = [f for f in fires() if f[1] == 0x9D]
     for _ in range(400):
         if w.mode != PLAY:
             break
@@ -675,7 +696,7 @@ def zelda_room(bot, way='stab'):
         else:
             bot.press('UP')
     return {'mode': w.mode, 'frames': bot.frames - t0, 'lost': round(bot.lost() - h0, 3), 'fires': fires0,
-            'stabs': stabs, 'at': (w.x, w.y)}
+            'stabs': stabs, 'at': (w.x, w.y), 'first': first, 'left': len(left)}
 
 
 def end(args):
@@ -698,8 +719,10 @@ def end(args):
                 done = {'mode': None}
                 if out['in 0x32']:
                     done = zelda_room(bot, way)
-                    zel[f"fires at {[f'${x:02X},${y:02X}' for x, y in done['fires']]}, {done['stabs']} stab(s), hearts "
-                        f"lost in the room {done['lost']}, mode ${done['mode']:02X} with Link at "
+                    zel[f"Link in at (${done['first'][0]:02X},${done['first'][1]:02X}), fires at "
+                        f"{[f'${x:02X},${y:02X}' for x, y in done['fires']]}, {done['stabs']} stab(s) up from "
+                        f"($78,$AD), {done['left']} of the two fires of the path left, hearts lost in the room "
+                        f"{done['lost']}, mode ${done['mode']:02X} with Link at "
                         f"(${done['at'][0]:02X},${done['at'][1]:02X})"] += 1
                     parts['0x32 door to mode $13'].append(done['frames'])
                 parts['his death to mode $13'].append(bot.frames - t_kill)
