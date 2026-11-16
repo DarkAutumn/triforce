@@ -473,3 +473,34 @@ class Bot(Fight):
             self.press('NONE')
         elif not self.try_stab():
             self.move()
+
+    def walk_to(self, node, limit: int = 600, fight: bool = False) -> bool:
+        """Walks the grid to `node` (keeping off dangerous squares; stabbing on the way when `fight`); False when
+        not there in `limit` frames or the room or mode changed."""
+        w, start = self.w, (self.w.level, self.w.room)
+        for _ in range(limit):
+            if (w.level, w.room) != start or w.mode != PLAY:
+                return False
+            if (w.x, w.y) == node:
+                return True
+            if not self.can_act():
+                self.press('NONE')
+            elif fight and self.try_stab():
+                pass
+            elif self.node() is None:
+                self.heading = self.off_grid()
+                self.press(self.heading)
+            else:
+                step = self.plan({node}) or 'NONE'
+                if step != 'NONE':
+                    self.heading = step
+                self.press(step)
+        return False
+
+    def hold(self, button: str, until, limit: int = 600) -> int:
+        """Holds `button` until `until(w)`; the frames, -1 at the limit."""
+        for i in range(limit):
+            if until(self.w):
+                return i
+            self.press(button)
+        return -1
