@@ -153,31 +153,136 @@ which passes
 unchanged, and by construction: none of the new rules can fire there (no gravestone tile, no `Secret::Push`, no
 `keep_out` exit, no Gohma, no sword cave with a waypoint on `d2first`).
 
-## 5. What the next step must build
+## 5. The start states (steps 248-280, chains 0-2, installed)
 
-**Start states** (chains 0-2 each; names by `docs/architecture.md` "State names", visits as
-`_native.route_steps('d6')` counts them):
+96 states, 32 a chain (29 on the clip way by `build`, 3 on the plain way of `woods` by `path`), in `triforce/states`;
+`entry_states audit`: 823 states, no problem, with `--route d6` and without (a state built on a scouting route is
+now audited by the route its manifest entry names).
 
-| Family | States |
-|---|---|
-| ow-moblin | `0_42c`, `0_52n`, `0_51e_v2` (one state, both ways of `woods`), `0_61n` |
-| ow-lynel | `0_50e_v2`, `0_60e`, `0_50s`, `0_32w`, `0_22s` |
-| ow-ghini | `0_40s`, `0_41w`, `0_31s`, `0_21s`, `0_21cave`, `0_21c`, `0_31n` |
-| stalfos-keese-gel | `6_79s`, `6_58s`, `6_0cs` |
-| wizzrobe | `6_78e`, `6_38s`, `6_28s`, `6_29w`, `6_3aw`, `6_2ce` |
-| zol, trap-room, like-like | `6_68s`; `6_48s`; `6_1dc` |
-| vire | `6_39n`, `6_2dn` |
-| equipment-room | `6_08cave` |
-| boss-gohma | `6_1cs` |
+```bash
+D=target/entry-states/r27-d6        # sources: the installed 7_2bw_0, 7_2bw_1, 7_2bw_2 (chain 2's is round 26's corrected one)
+python -m triforce.entry_states build --route d6 --start-step 247 --chains 0,1,2 --source "$D/sources/7_2bw_{chain}.state" --out $D/c
+python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --attempts 12 \
+    --source "$D/c/6_38s_{chain}.state" --skip-fights 6:0x38:S,6:0x3a:W --out $D/c12      # chain 0 cleared 0x38 itself
+python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source $D/c/6_3aw_0.state --skip-fights 6:0x3a:W --out $D/c0b
+for c in 0 1 2; do
+  TRIFORCE_STATES_DIR=$D/c python -m triforce.entry_states path --source 0_51e_v2_$c \
+      --rooms 0:0x61,0:0x60,0:0x50 --route d6 --chain $c --out $D/plain$c
+done
+for d in plain0 plain1 plain2; do python -m triforce.entry_states install $D/$d; done
+python -m triforce.entry_states install $D/c --partial; python -m triforce.entry_states install $D/c12; python -m triforce.entry_states install $D/c0b
+python -m triforce.entry_states audit --route d6
+python scripts/experiments/r27_d6_states.py table --markdown      # the table below
+```
 
-0x38 and 0x3a are fights the explorer will not clear: the states after them (`6_28s`, and `6_08cave` on) come from
-`build --skip-fights` first and from chain harvests once a model clears the rooms, as the Olive Garden's did.
+(As run, the first build was three builds side by side, one a chain, and chain 2's tail was built twice; `build
+--source` takes `{chain}` since, so one build runs a thread a chain.)
 
-**Then**: the three new families' `start_states` and `trainable: true`; start-state patterns for the rooms added to
-the eight old families; the route merged into `d2first` when the owner fixes it (wizzrobe's `reward.heart_value`
-reads the table fitted for the family's route: refit `triforce/heart_value.json` then), or `route: d6` in the new
-yamls until then; curricula; ow-lynel's retraining; chain segments for the stretch (`eval_batch` has none yet).
+- **What the explorer did by the objective alone**: the leg, the wrap exit, the Lost Woods' four turns (140-274
+  steps), the gravestone (64-94 steps to the cave: the stand square, MOVE N), the cave and the sword, 0x22's mouth,
+  0x79's key door, 0x58's eight Keese and its key, 0x28's bomb (one, at the E wall), 0x39 and 0x2d's Vires and key,
+  the tunnel, **and Gohma, on all three chains** (34-147 steps; the build's step config now takes the family's
+  `arrows`, without which the explorer had no weapon against it).
+- **0x38**: the explorer cleared it on chain 0 (218 steps, the third attempt, 146k env steps) and failed on chains
+  1 and 2 (three attempts each, 158k and 177k env steps), where the fight is skipped. **0x3a**: failed on chain 0
+  (three attempts, 171k env steps) and is skipped on all three chains. So 26 states are marked `fight_skipped`
+  (`6_28s` on for chains 1 and 2, `6_08cave` on for chain 0), to be replaced by states harvested from chain runs
+  once a model clears the rooms.
+- **What a state after a skipped fight holds**, checked against a run that fought: nothing of the two rooms is
+  owed to a run but what it fights for (neither has a treasure; the skip removes the drops), and everything after
+  them was played: the bomb at 0x28 (spent on every chain), 0x2d's key (taken: keys 2 → 3), the heart container
+  (13 containers in `6_0cs`), the magic sword from `0_21c` on.
+- **One state set was wrong and is rebuilt.** Chain 2's explorer took 6:0x29's key in passing (the step has
+  `treasure: skip`: the ring key is left), so every state after it held 3 keys where a run holds 2. `cross_room`
+  now rejects a crossing that takes a treasure its step leaves (`skip` as `refuse`), and chain 2 was rebuilt from
+  `6_38s_2` (`--attempts 12`: three seeds in a row walk over the key).
+- **Where the states differ from what `d6-walks.md` says a run brings** (12 containers, the white sword until the
+  cave, 2 keys, 2 bombs, 31 rupees of 28-40): chain 0 is that run until 0x38, where its real fight left a drop of
+  four bombs (2 → 6; 5 after the wall, where the ledger has 1); chains 1 and 2 come out of Dungeon 7 with 7 and 5
+  bombs (round 26's states: 0x1b's four and a drop), chain 1 takes one more from a drop in 0x78. Rupees 30-41 on
+  the way in. **Gohma took the explorer 5, 1 and 6 arrows** (36, 32 and 26 rupees in `6_0cs`) where the walks'
+  script spends 1-3: the explorer shoots at random, and nothing in the build prefers the cheaper kill. A training
+  draws bombs 0-8 in half its resets anyway; the states' own counts matter for the chain segments (chain 0) and for
+  what Dungeon 8's states inherit.
 
+What each state holds at its first playable frame, chains 0 / 1 / 2 where they differ (hearts are full; arrows 1 is
+the wooden arrow; pieces 6 are Dungeons 1-5 and 7):
+
+| Step | State | Way | Family | Sword | Hearts / containers | Bombs | Keys | Rupees | Arrows | Pieces | After a skipped fight |
+|---:|---|---|---|---|---|---|---|---|---|---|---|
+| 248 | `0_42c` |  | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 249 | `0_52n` |  | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 250 | `0_51e_v2` | clips | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 251 | `0_50e_v2` | clips | ow-lynel | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 252 | `0_51e_v2` | plain | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 253 | `0_61n` | plain | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 254 | `0_60e` | plain | ow-lynel | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 255 | `0_50s` | plain | ow-lynel | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 256 | `0_40s` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 257 | `0_41w` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 258 | `0_31s` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 259 | `0_21s` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 260 | `0_21cave` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 261 | `0_21c` |  | ow-ghini | magic | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 262 | `0_31n` |  | ow-ghini | magic | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 263 | `0_32w` |  | ow-lynel | magic | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 264 | `0_22s` |  | ow-lynel | magic | 12 / 12 | 2 / 7 / 5 | 2 | 38 / 32 / 30 | 1 | 6 |  |
+| 265 | `6_79s` |  | stalfos-keese-gel | magic | 12 / 12 | 2 / 7 / 5 | 2 | 38 / 32 / 30 | 1 | 6 |  |
+| 266 | `6_78e` |  | wizzrobe | magic | 12 / 12 | 2 / 7 / 5 | 1 | 38 / 32 / 30 | 1 | 6 |  |
+| 267 | `6_68s` |  | zol | magic | 12 / 12 | 2 / 8 / 5 | 1 | 39 / 32 / 30 | 1 | 6 |  |
+| 268 | `6_58s` |  | stalfos-keese-gel | magic | 12 / 12 | 2 / 8 / 5 | 1 | 39 / 32 / 30 | 1 | 6 |  |
+| 269 | `6_48s` |  | trap-room | magic | 12 / 12 | 2 / 8 / 5 | 2 | 39 / 32 / 30 | 1 | 6 |  |
+| 270 | `6_38s` |  | wizzrobe | magic | 12 / 12 | 2 / 8 / 5 | 2 | 39 / 32 / 30 | 1 | 6 |  |
+| 271 | `6_28s` |  | wizzrobe | magic | 12 / 12 | 6 / 8 / 5 | 2 | 39 / 32 / 30 | 1 | 6 | some |
+| 272 | `6_29w` |  | wizzrobe | magic | 12 / 12 | 5 / 7 / 4 | 2 | 39 / 32 / 30 | 1 | 6 | some |
+| 273 | `6_39n` |  | vire | magic | 12 / 12 | 5 / 7 / 4 | 2 | 40 / 32 / 30 | 1 | 6 | some |
+| 274 | `6_3aw` |  | wizzrobe | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 31 | 1 | 6 | some |
+| 275 | `6_08cave` |  | equipment-room | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 31 | 1 | 6 | yes |
+| 276 | `6_1dc` |  | like-like | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 31 | 1 | 6 | yes |
+| 277 | `6_2dn` |  | vire | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 32 | 1 | 6 | yes |
+| 278 | `6_2ce` |  | wizzrobe | magic | 12 / 12 | 5 / 7 / 4 | 3 | 41 / 33 / 32 | 1 | 6 | yes |
+| 279 | `6_1cs` |  | boss-gohma | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 33 / 32 | 1 | 6 | yes |
+| 280 | `6_0cs` |  | stalfos-keese-gel | magic | 13 / 13 | 5 / 7 / 4 | 2 | 36 / 32 / 26 | 1 | 6 | yes |
+
+Keys along Dungeon 6 are the walks' 2 → 1 (0x79 W) → 2 (0x58) → 3 (0x2d) → 2 (0x2c N) on every chain.
+
+## 6. Family files
+
+- **Start states**: `ow-ghini` (`0_40*`, `0_41*`, `0_31*`, `0_21*`), `wizzrobe` (`6_78*`, `6_38*`, `6_28*`, `6_29*`,
+  `6_3a*`, `6_2c*`) and `boss-gohma` (`6_1c*`) have them and are trainable; patterns were added to ow-moblin
+  (`0_61*`; its `0_42*`, `0_52*`, `0_51*` already match the new states), ow-lynel (`0_32*`, `0_22*`; `0_50*` and
+  `0_60*` match), stalfos-keese-gel (`6_79*`, `6_58*`, `6_0c*`), zol (`6_68*`), trap-room (`6_48*`), like-like
+  (`6_1d*`), vire (`6_39*`, `6_2d*`) and equipment-room (`6_08*`).
+- **No yaml needs `route: d6`.** A start state's route step is looked up on every route when the family names none
+  (`zelda::objectives::start_route`), and steps 0-247 are the same step on both routes with `d2first` preferred. So
+  an episode from an old state plays on `d2first` and one from a new state on `d6` (checked for every new stem:
+  `Env.route` reads `('d6', 248..280)`, and `('d2first', n)` for the old ones), in one family, with nothing to
+  undo when the route is merged.
+- **`reward.heart_value`** therefore needs no change either: the fitted table is `d2first`'s and
+  `GameData::heart_values_for` hands it out only for a step played on that route, so the seven table families of
+  the stretch (stalfos-keese-gel, zol, trap-room, like-like, vire, equipment-room, wizzrobe) price hearts in
+  Dungeon 6 by the plain health terms, as round 26's do in Dungeon 7, until chains reach the D6 triforce and a
+  table is fitted for the merged route.
+- **Staging**: wizzrobe `room_kills: {'(6, 0x38)': [1, 6], '(6, 0x3a)': [1, 6]}`, `room_kills_share: 0.5`. The
+  rooms' list is a Bubble, three Like-Likes, two Blue and two Red Wizzrobes; the game leaves out the end of the list
+  first, so 1-2 banked kills remove the Reds, 3-4 the Blues, 5-6 Like-Likes (7 would leave the Bubble alone and the
+  block free).
+- **Initialisation**: `warm_start: like-like` (wizzrobe), `ow-moblin` (ow-ghini), `boss-digdogger` (boss-gohma): a
+  training of a new family without `--load` starts from that family's promoted run (weights only; round 24's new
+  families were all trained from scratch, so this is the first use of `warm_start` for a new family).
+
+## 7. Chain tooling
+
+- `eval_batch.D6_SEGMENTS`: `post-d7` from `0_42c_0` (arrival 6:0x79) and `d6` from `6_79s_0` (to the D6
+  triforce), beside `SEGMENTS` until the route is merged (`ALL_SEGMENTS`; `segment_starts` knows both, so a chain
+  from `0_42c_0` reports its arrivals at Dungeon 6's entrance). `ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0"
+  TAG=<tag> scripts/experiments/r56_chains.sh` runs them as a batch.
+- `triforce room-stats`: the scopes `to-d6` (file `post-d7`) and `d6`; `zelda-map.py` labels them.
+- Left for the merge: `MILESTONES` (the full run reported at 0:0x42 after 7:0x2b and at 6:0x79), the `d7`
+  segment's target (0:0x42 entered after 7:0x2b) and the cut of the scopes `to-d7` and `d7`, which all assume
+  today that `d2first` ends on the D7 triforce.
+
+## 12. Left open by the vocabulary step
 ## 6. Left open by the vocabulary step
 
 - Armos statues are still pressed by a MOVE that arrives before one (0x22). The gravestone stop would cover them; an

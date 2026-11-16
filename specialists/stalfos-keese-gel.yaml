@@ -20,6 +20,7 @@ notes: >-
   clip N; bomb the N wall into the rupee room: BOMB is offered only where the bomb opens it). Round 22: the dark
   Keese room 0x01 (eight Blue Keese over water) S in through the wall bombed from 0x11, take the key in the middle
   (the ladder crosses one water square), E out across the single square at X $B0.
-  Dungeon 6 (round 27, route `d6`; no start states yet): the empty entrance 0x79 (S to its W key door), 0x58 (eight
+  Dungeon 6 (round 27, route `d6`; states `6_79s`, `6_58s`, `6_0cs`): the empty entrance 0x79 (S to its W key door),
+  0x58 (eight
   Blue Keese and four statues that shoot: kill them for the key and the N shutter; walked zero-shot 40 of 40, 1.8
   hearts lost) and the triforce room 0x0c.

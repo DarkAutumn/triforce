@@ -22,7 +22,8 @@ notes: >-
   (docs/routes/d2first.md). Round 24, the leg's clip way (docs/routes/d5-leg.md): 0x50 (five Red Lynels) from E
   leaves S; 0x60 (two Red and two Blue Lynels, two Peahats) from N leaves W by CLIP E round the world into 0x5f
   (room id - 1), offered on Y $85/$8D only. Both are on the clip way only, so their states fix the switch on.
-  Round 27, the leg from Dungeon 7 to Dungeon 6 (route `d6`, docs/routes/d6.md §14; no start states yet): 0x50 E→N
+  Round 27, the leg from Dungeon 7 to Dungeon 6 (route `d6`, docs/routes/d6.md §14; states `0_50e_v2`, `0_60e`,
+  `0_50s`, `0_32w`, `0_22s`): 0x50 E→N
   (out of 0x51's wrap, up the corridor at X $E0) and S→N (plain), 0x60 E→N (plain), 0x32 W→N, 0x22 S into Dungeon 6
   past its Armos statues. Walked zero-shot with the round 25 run: 0x50 0 of 40, 0x60 5 of 20, 0x32 7 of 40, 0x22 35
   of 40: the family must be trained on them (docs/decisions.md 2026-11-17).

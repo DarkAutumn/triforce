@@ -19,5 +19,5 @@ notes: >-
   room. Copied from stalfos-keese-gel/goriya (one-room, curriculum, 2000 steps). Dungeon 4 (Nov 11-12): its dark
   Zol room 0x40 (five Zols, the key in the open from the start: take it, S to N). Dungeon 5 (round 24): the dark 0x57
   (five Zols) W to N along row 3 by the ladder, not stopping for the 5 rupees its kills show (`treasure: skip`).
-  Dungeon 6 (round 27, route `d6`; no start state yet): 0x68 (five Zols) S to N straight up, its compass left
+  Dungeon 6 (round 27, route `d6`; state `6_68s`): 0x68 (five Zols) S to N straight up, its compass left
   (`treasure: skip`; walked zero-shot 20 of 20).

@@ -17,5 +17,5 @@ notes: >-
   Likes and Zols (the Bubbles don't count), push the block (any way; it moves only once the room is clear) so the
   stairs appear at tiles (26-27, 4-5), and go down to the ladder cellar 0x60; back up, leave W. Copied from zol
   (one-room, curriculum, 2000 steps).
-  Dungeon 6 (round 27, route `d6`; no start state yet): 0x1d (two Like-Likes, two Zols, two Bubbles) out of the
+  Dungeon 6 (round 27, route `d6`; state `6_1dc`): 0x1d (two Like-Likes, two Zols, two Bubbles) out of the
   tunnel's stairs, crossed to the S door without a fight.

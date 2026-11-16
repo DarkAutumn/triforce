@@ -20,6 +20,7 @@ notes: >-
   its wrap exit (CLIP E on Y $75-$9D), and 0x3d from E (after 0x3e's wrap) N; the plain way's 0x5b, 0x5c W→E and
   0x5d W→S (`_v2`: the route's second visit from W; 0x5b's upper opening, 0x5d's S at X $C0), 0x6d N→E, 0x6e W→E.
   Each of these is on one way only, so its state fixes the switch.
-  Round 27, the leg from Dungeon 7 to the magic sword (route `d6`, docs/routes/d6.md §14; no start states yet): 0x42
+  Round 27, the leg from Dungeon 7 to the magic sword (route `d6`, docs/routes/d6.md §14; states `0_42c`, `0_52n`,
+  `0_51e_v2` (one state, both ways of `woods`), `0_61n`): 0x42
   out of Dungeon 7 leaves S, 0x52 N→W, 0x51 E→W by its wrap exit again (clips) or E→S (plain), and the Lost Woods
   0x61 (`exit: maze`: N, W, S, W). Walked zero-shot with the round 25 run: 100% in all of them.

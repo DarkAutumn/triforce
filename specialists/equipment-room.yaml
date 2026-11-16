@@ -21,5 +21,5 @@ notes: >-
   recorder cellar 0x04 under the Olive Garden 0x05 (`waypoint: recorder`), and the tunnel cellar 0x07 between 0x64
   (the left ladder, game.yaml exit W) and 0x06 (the right one, E), crossed twice: E without the recorder, W with it
   (the step's ladder is the only correct exit).
-  Dungeon 6 (round 27, route `d6`; no start state yet): the tunnel 0x08 from 0x3a's stairs (the left ladder) to 0x1d
+  Dungeon 6 (round 27, route `d6`; state `6_08cave`): the tunnel 0x08 from 0x3a's stairs (the left ladder) to 0x1d
   (the right one, E); back up the left ladder is a wrong exit into 0x3a with its block back.
