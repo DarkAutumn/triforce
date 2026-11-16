@@ -1,0 +1,26 @@
+name: boss-gohma
+rooms: ['(6, 0x1c)']
+start_states: []                           # round 27: the stretch's states are the next step (6_1cs)
+trainable: false                           # until it has start states
+success: [exit-correct]                    # the arrow, the heart container, leave N to 0x0c
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8), as boss-digdogger
+obs: {objective: true, target: true}       # schema 2
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as boss-digdogger (round 25)
+items: {bombs: tenth, arrows: true}        # round 27: the only family with arrows; ARROW is offered facing N while Gohma lives and Link holds more rupees than the route's reserve (1 here)
+curriculum: {enabled: true}             # trajectories/boss-gohma, once explored
+one_room: true
+max_steps: 900
+warm_start: null
+notes: >-
+  Gohma (Dungeon 6's 0x1c, round 27, route `d6`; docs/routes/d6.md §14, d6-walks.md §6): only an arrow into its open
+  eye kills it, one arrow, a rupee a shot. The eye is fully open on frames 19-114 of the room and again every 386-510
+  frames for 96; an arrow shot up kills when it arrives with the eye open and Link's X − Gohma's X in [−10, +5]. A
+  fireball every 65 frames (1 heart; none reaches the S doorway), touch 2 hearts. The objective's target while it
+  lives is the tile under it on the row Y $AD that lies inside that window (`zelda::objectives::gohma_stand`); the
+  mask offers ARROW facing N only (the lead's working answer, docs/decisions.md 2026-11-17: not only when the shot
+  would kill; a miss costs its rupee, and the model reads the eye and the offset from schema 6's columns). Then the
+  heart container (13 hearts) and N through the shutter, which opens 27 frames after the kill. A scripted play: 40 of
+  40, 75 frames to the kill, 1-3 rupees, 1.45 hearts lost; five boss families zero-shot: 0 of 20 each. A Link who
+  comes with no more rupees than the reserve is topped up to 2 while Gohma lives (game.yaml `requires_rupees`,
+  cheated and counted). Settings copied from boss-digdogger (one room, 900 steps) without its recorder and bombs.

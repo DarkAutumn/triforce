@@ -650,6 +650,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x21'
+  specialist: ow-ghini
   exits:
     S:
       level: 0
@@ -657,10 +658,19 @@ rooms:
     W:
       level: 0
       location: '0x20'
+    cave:  # the magic sword's cave under the pushed gravestone (round 27; walked, docs/routes/d6-walks.md §2)
+      level: 0
+      location: '0x21'
+      in_cave: true
   enemies:
     Ghini: 1
   treasure: null
-  entrance:  # cave index $13 (OW attr B >> 2); the gravestone at x=144 y=144 (the third of the middle row): push it up or down (no bracelet); walked Nov 13: stairs where it stood, the sword is the middle ware, refused under 12 heart containers
+  # Out of the cave Link stands at (X $50, Y $6D) and the room's Ghini is made anew at ($50, $BD), under him (29 of
+  # 29): the path leaves by row Y $7D and column X $20 (walked: 0.07 hearts; straight down 1.65).  The costs lie E
+  # of X $20 between the rows Y $7D and Y $9D and E of X $28 below the stand row Y $9D, so both free rows and the
+  # way in to the stone (up X $20, E along Y $9D) cost nothing.
+  path_costs: [{cols: [5, 27], rows: [9, 11], cost: 3}, {cols: [6, 27], rows: [13, 21], cost: 3}]
+  entrance:  # cave index $13 (OW attr B >> 2); the gravestone at x=144 y=144 (the third of the middle row): push it up or down (no bracelet); walked Nov 13 and Nov 16: stairs where it stood, the sword is the middle ware, refused under 12 heart containers. The route pushes it from below (Link at X $90, Y $9D, Up: `Secret::Push`) and stops on the stairs square; the stairs are NOT kept: on every later entry (and out of the cave) the stone is back, whatever flag $20 says
     cave: '0x13'
     contents: magic-sword
     how: push
@@ -668,7 +678,18 @@ rooms:
     wares: [magic-sword]
     needs_hearts: 12
 - level: 0
+  location: '0x21'
+  in_cave: true
+  specialist: ow-ghini
+  exits:
+    S:
+      level: 0
+      location: '0x21'
+  enemies: null
+  treasure: magic-sword  # middle ware (X $78, taken at Y $9D walking up); the old man hands it over only at 12+ heart containers (walked at 11: nothing is taken, he stays)
+- level: 0
   location: '0x22'
+  specialist: ow-lynel
   exits:
     S:
       level: 0
@@ -679,7 +700,7 @@ rooms:
   enemies:
     RedLynel: 1
   treasure: null
-  entrance:  # cave index $06 (OW attr B >> 2); the armos at x=48 y=128 also hides stairs to the same place (emulator-checked)
+  entrance:  # cave index $06 (OW attr B >> 2); the armos at x=48 y=128 also hides stairs to the same place (emulator-checked). Walked Nov 16: Link's X $70, $78 and $80 all enter (11-12 frames of Up from Y $8D), $88 does not
     cave: '0x06'
     contents: level-6
     how: open
@@ -986,6 +1007,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x31'
+  specialist: ow-ghini
   exits:
     N:
       level: 0
@@ -1004,6 +1026,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x32'
+  specialist: ow-lynel
   exits:
     N:
       level: 0
@@ -1259,6 +1282,7 @@ rooms:
       dock: [12, 8]  # Link at x = $60, y = $7D
 - level: 0
   location: '0x40'
+  specialist: ow-ghini
   exits:
     N:
       level: 0
@@ -1274,6 +1298,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x41'
+  specialist: ow-ghini
   exits:
     N:
       level: 0
@@ -1929,6 +1954,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x61'
+  specialist: ow-moblin
   exits:
     N:  # maze: loops back into the room (and restarts the sequence)
       level: 0
@@ -4246,6 +4272,7 @@ rooms:
   bomb_walls: [W]
 - level: 6
   location: '0x0c'  # the triforce room
+  specialist: stalfos-keese-gel
   exits:
     S:  # open here; a shutter on 0x1c's side
       level: 6
@@ -4325,6 +4352,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 6
   location: '0x1c'  # the boss room
+  specialist: boss-gohma
   exits:
     N:  # shutter
       level: 6
@@ -4338,8 +4366,10 @@ rooms:
     RedGohma: 1
   treasure: heart-container
   trigger: kill-all-item  # attr F & 7 = 7
+  requires_rupees: 2  # round 27: Gohma dies only to an arrow (a rupee a shot); topped up (cheated, counted) while it lives: the route's reserve of 1 and a shot
 - level: 6
   location: '0x1d'
+  specialist: like-like
   exits:
     S:
       level: 6
@@ -4356,10 +4386,12 @@ rooms:
   stairs: [26, 10]
 - level: 6
   location: '0x28'
+  specialist: wizzrobe
   exits:
-    N:  # open here; a shutter on 0x18's side
+    N:  # open here; a shutter on 0x18's side: Gleeok's room shuts Link in (walked Nov 16), off the route
       level: 6
       location: '0x18'
+      keep_out: true
     E:  # bomb wall
       level: 6
       location: '0x29'
@@ -4372,14 +4404,17 @@ rooms:
     RedWizzrobe: 2
   treasure: 5-rupees
   bomb_walls: [E]
+  requires_bombs: true  # round 27: the route's only way on is the E wall (one bomb from the door spot, walked 40 of 40)
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 6
   location: '0x29'
+  specialist: wizzrobe
   exits:
-    N:
+    N:  # one frame of Up at its mouth spends a key (walked Nov 16), off the route
       level: 6
       location: '0x19'
       locked: true
+      keep_out: true
     S:  # open here; a shutter on 0x39's side
       level: 6
       location: '0x39'
@@ -4394,6 +4429,7 @@ rooms:
   dark: true
 - level: 6
   location: '0x2c'
+  specialist: wizzrobe
   exits:
     N:
       level: 6
@@ -4402,15 +4438,17 @@ rooms:
     E:
       level: 6
       location: '0x2d'
-    S:  # open here; a shutter on 0x3c's side
+    S:  # open here; a shutter on 0x3c's side: five Wizzrobes shut Link in (walked Nov 16), off the route
       level: 6
       location: '0x3c'
+      keep_out: true
   enemies:  # 1 x blade traps ($4A)
     BlueWizzrobe: 2
     RedWizzrobe: 2
   treasure: null
 - level: 6
   location: '0x2d'
+  specialist: vire
   exits:
     N:
       level: 6
@@ -4426,6 +4464,7 @@ rooms:
   dark: true
 - level: 6
   location: '0x38'
+  specialist: wizzrobe
   exits:
     N:  # shutter
       level: 6
@@ -4442,9 +4481,10 @@ rooms:
     RedWizzrobe: 2
   treasure: null
   trigger: push-block  # attr F & 7 = 4
-  push_block_opens: N  # the shutter (trigger 4); the block needs the room clear
+  push_block_opens: N  # the shutter (trigger 4); the block needs the room clear (the Bubble does not count). Walked Nov 16: the push opens BOTH shutters (N 55 frames after it starts, S 9 frames later); the key names the route's
 - level: 6
   location: '0x39'
+  specialist: vire
   exits:
     N:  # shutter
       level: 6
@@ -4461,6 +4501,7 @@ rooms:
   dark: true
 - level: 6
   location: '0x3a'
+  specialist: wizzrobe
   exits:
     W:  # open here; a shutter on 0x39's side
       level: 6
@@ -4493,6 +4534,7 @@ rooms:
   dark: true
 - level: 6
   location: '0x48'
+  specialist: trap-room
   exits:
     N:  # open here; a shutter on 0x38's side
       level: 6
@@ -4504,6 +4546,7 @@ rooms:
   treasure: null
 - level: 6
   location: '0x58'
+  specialist: stalfos-keese-gel
   exits:
     N:  # shutter
       level: 6
@@ -4518,6 +4561,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 6
   location: '0x68'
+  specialist: zol
   exits:
     N:
       level: 6
@@ -4541,6 +4585,7 @@ rooms:
   treasure: null
 - level: 6
   location: '0x78'
+  specialist: wizzrobe
   exits:
     N:
       level: 6
@@ -4555,6 +4600,7 @@ rooms:
   trigger: ringleader  # attr F & 7 = 2
 - level: 6
   location: '0x79'  # the start room: S leaves to the overworld
+  specialist: stalfos-keese-gel
   exits:
     E:
       level: 6
@@ -4583,11 +4629,12 @@ rooms:
 - level: 6
   location: '0x08'
   in_cave: true  # the tunnel between 0x3a and 0x1d (side view)
+  specialist: equipment-room
   exits:
     E:  # up the right ladder (attr B = $1D)
       level: 6
       location: '0x1d'
-    W:  # up the left ladder (attr A = $3A)
+    W:  # up the left ladder (attr A = $3A), where Link comes down: back up it is 0x3a with its block back and the stairs gone (walked Nov 16), a wrong exit on the route
       level: 6
       location: '0x3a'
   enemies:  # the cellar's keese (asm: not the attr C/D list)

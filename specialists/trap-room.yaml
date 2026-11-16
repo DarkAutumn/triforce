@@ -1,5 +1,5 @@
 name: trap-room
-rooms: ['(1, 0x22)', '(3, 0x5a)', '(3, 0x4c)', '(4, 0x11)', '(4, 0x02)']
+rooms: ['(1, 0x22)', '(3, 0x5a)', '(3, 0x4c)', '(4, 0x11)', '(4, 0x02)', '(6, 0x48)']
 start_states: ['1_22*_[0-9]', '3_5a*_[0-9]', '3_4c*_[0-9]', '4_11*_[0-9]', '4_02*_[0-9]']
 success: [exit-correct]
 reward_profile: default
@@ -26,3 +26,5 @@ notes: >-
   through the S wall, bomb the N wall into the Keese room 0x01, round 22), the nearest thing to it, a room Link
   crosses through a bomb wall (Lee, Nov 12: it stays here); round 22: the dark 0x02 (six blade traps, no monsters)
   from W leave S into the Vire room 0x12 (level-4.md's recipe: wait in the doorway for the traps to pass).
+  Dungeon 6 (round 27, route `d6`; no start state yet): 0x48 (six blade traps, no monsters) straight up the middle
+  without stopping (walked zero-shot 40 of 40).

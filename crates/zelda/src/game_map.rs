@@ -33,7 +33,7 @@ pub fn whirlwind_level(location: MapLocation) -> Option<u8> {
 }
 
 /// An overworld secret over a room's stairs that a route step opens without a bomb (game.yaml `entrance:` with
-/// `how: armos` or `how: recorder` and its `tile`; a rock wall is `bomb_secret`).
+/// `how: armos`, `how: recorder` or `how: push` and its `tile`; a rock wall is `bomb_secret`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Secret {
     /// The room's secret Armos statue (asm:Spawn_CheckTouchedArmosOrGravestone): Link pressing into it from a side
@@ -44,12 +44,19 @@ pub enum Secret {
     /// frames after the tune's freeze (B+232); the pond fills again on every visit, whatever room flag `$80` says
     /// (Walks26, Nov 16), so every visit plays it again.
     Recorder(Tile),
+    /// The pushed gravestone of Q1 room 0x21 (round 27; tile object `$65` in slot `$0B`, the magic sword's cave):
+    /// `Tile` is the stone's top-left tile, where the stairs show once it has slid a square (32 frames from the first
+    /// frame Link presses into it on its column; walked, docs/routes/d6-walks.md §2). The route pushes it from below
+    /// (Link's tile two rows under it, MOVE N: [`crate::GameView::is_secret_push_direction`]) and Link stops on the
+    /// stairs square: pressing on into the moved stone releases a flying Ghini. The stairs last until the room is
+    /// left (the stone is back on every entry, whatever room flag `$20` says).
+    Push(Tile),
 }
 
 impl Secret {
     pub fn tile(self) -> Tile {
         match self {
-            Secret::Armos(t) | Secret::Recorder(t) => t,
+            Secret::Armos(t) | Secret::Recorder(t) | Secret::Push(t) => t,
         }
     }
 }
@@ -174,6 +181,11 @@ pub struct RoomExit {
     /// `shutter: true` (a dungeon door): this side of the doorway is a shutter (door type 7), shut on entry and
     /// opened by the room's `trigger`.  For display (`zelda-map.py`); nothing plays by it.
     pub shutter: bool,
+    /// `keep_out: true` (round 27; a dungeon doorway): MOVE into this doorway is offered only while the objective
+    /// leaves through it (`crate::objectives::doorways_kept_out`), and a MOVE along its lane ends at its mouth
+    /// (`crate::Session::set_vetoed_doorways`). For a key door off the route, where one frame of pressing spends a
+    /// key (6:0x29 N), and an open doorway into a room that shuts Link in off the route (6:0x28 N: Gleeok; 6:0x2c S).
+    pub keep_out: bool,
 }
 
 /// A game.yaml room.
@@ -338,7 +350,8 @@ const ROOM_KEYS: [&str; 23] = [
     "dark",
     "path_costs",
 ];
-const EXIT_KEYS: [&str; 8] = ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in"];
+const EXIT_KEYS: [&str; 9] =
+    ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in", "keep_out"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
 const STEP_KEYS: [&str; 12] = [
@@ -350,7 +363,8 @@ const STEP_ENTRIES: [&str; 7] = ["start", "N", "S", "E", "W", "cave", RECORDER];
 /// `maze` ([`MAZE_EXIT`]): a maze room left by its sequence, into the maze's destination; `recorder` ([`RECORDER`]):
 /// carried off by the whirlwind.
 const STEP_EXITS: [&str; 9] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT, RECORDER];
-const WAYPOINTS: [&str; 9] = ["heart", "rupees", "bow", "raft", "ladder", "recorder", "arrows", "food", "candle"];
+const WAYPOINTS: [&str; 10] =
+    ["heart", "rupees", "bow", "raft", "ladder", "recorder", "arrows", "food", "candle", "sword"];
 /// The ware a purchase waypoint (`waypoint: arrows` / `food`) buys: the game.yaml treasure of its shop's cave room.
 pub const PURCHASES: [(&str, &str); 2] = [("arrows", "wood-arrow"), ("food", "food")];
 const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];
@@ -883,6 +897,10 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         "{exit_what}: wrap_in needs an overworld room's W or E exit that isn't a wrap exit"
                     ));
                 }
+                let keep_out = flag(dest, "keep_out", &exit_what)?;
+                if keep_out && (level == 0 || loc.in_cave || dir == "cave") {
+                    return err(format!("{exit_what}: keep_out is a dungeon room's doorway (N, S, E, W)"));
+                }
                 exits.insert(
                     dir.clone(),
                     RoomExit {
@@ -896,6 +914,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         wrap,
                         wrap_in,
                         shutter: flag(dest, "shutter", &exit_what)?,
+                        keep_out,
                     },
                 );
             }
@@ -933,6 +952,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         wrap: false,
                         wrap_in: None,
                         shutter: false,
+                        keep_out: false,
                     },
                 );
             }
@@ -986,6 +1006,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     wrap: false,
                     wrap_in: None,
                     shutter: false,
+                    keep_out: false,
                 },
             );
         }
@@ -1044,8 +1065,9 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
     Ok(rooms)
 }
 
-/// The [`Secret`] of a game.yaml room's `entrance:` block (`how: armos` or `how: recorder`, with its `tile`); None for
-/// the other ways in (open, bomb: `bomb_secret`, burn, push: not built yet) and for rooms without the block.
+/// The [`Secret`] of a game.yaml room's `entrance:` block (`how: armos`, `how: recorder` or, in a room with a `cave`
+/// exit, `how: push`: 0x21's gravestone, round 27; with its `tile`); None for the other ways in (open, bomb:
+/// `bomb_secret`, burn, the pushed rocks of rooms no route enters) and for rooms without the block.
 fn secret(entry: &Value, loc: MapLocation, what: &str) -> Result<Option<Secret>, MapError> {
     let Some(entrance) = get(entry, "entrance") else {
         return Ok(None);
@@ -1054,6 +1076,7 @@ fn secret(entry: &Value, loc: MapLocation, what: &str) -> Result<Option<Secret>,
     let make: fn(Tile) -> Secret = match how.as_deref() {
         Some("armos") => Secret::Armos,
         Some("recorder") => Secret::Recorder,
+        Some("push") if get(entry, "exits").is_some_and(|e| get(e, "cave").is_some()) => Secret::Push,
         _ => return Ok(None),
     };
     if loc.level != 0 || loc.in_cave {
@@ -1156,6 +1179,14 @@ impl GameMap {
                 {
                     return err(format!(
                         "{at}: waypoint {kind} buys {ware} in an overworld cave whose treasure it is (game.yaml has {:?})",
+                        room.treasure
+                    ));
+                }
+                if kind == "sword"
+                    && (step.level != 0 || !step.in_cave || !room.treasure.as_deref().is_some_and(|t| t.ends_with("-sword")))
+                {
+                    return err(format!(
+                        "{at}: waypoint sword takes a sword in an overworld cave whose treasure it is (game.yaml has {:?})",
                         room.treasure
                     ));
                 }
@@ -1659,6 +1690,8 @@ mod tests {
                 loc(4, 0x21),
                 loc(5, 0x65),
                 loc(5, 0x66),
+                // Round 27: Dungeon 6's one bomb wall on the way (0x28 E).
+                loc(6, 0x28),
                 // Round 26: Dungeon 7's five bomb walls on the way with three keys (level-7.md "Walked with three keys").
                 loc(7, 0x0c),
                 loc(7, 0x19),
@@ -1682,13 +1715,14 @@ mod tests {
     }
 
     /// `requires_rupees: N` parses as a byte; round 26 sets it on the two shops the route buys from (0x44's arrows
-    /// 80, 0x34's food 60, their caves); an unknown or untagged room needs none.
+    /// 80, 0x34's food 60, their caves), round 27 on Gohma's room (2: the reserve and a shot, while it lives); an
+    /// unknown or untagged room needs none.
     #[test]
     fn requires_rupees_is_an_optional_byte() {
         let map = GameMap::builtin();
         let tagged: Vec<(L, u8)> =
             map.rooms().values().filter_map(|r| Some((r.location, r.requires_rupees?))).collect();
-        assert_eq!(tagged, [(L::new(0, 0x34, true), 60), (L::new(0, 0x44, true), 80)]);
+        assert_eq!(tagged, [(L::new(0, 0x34, true), 60), (L::new(0, 0x44, true), 80), (L::new(6, 0x1c, false), 2)]);
         assert_eq!(map.requires_rupees(loc(0, 0x2c)), 0);
         assert_eq!(map.requires_rupees(loc(0, 0x44)), 0, "the room outside the shop needs none");
         let tagged = GAME_YAML.replacen("  requires_bombs: true", "  requires_rupees: 80\n  requires_bombs: true", 1);
@@ -2012,7 +2046,7 @@ mod tests {
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "clips-gauntlet"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d6", "clips-gauntlet"]);
         let played = map.routes.values().flatten().filter(|s| s.exit != "terminal");
         let mut route: BTreeSet<L> = played.map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
@@ -2024,10 +2058,16 @@ mod tests {
         assert!(route.is_disjoint(&strays));
         assert_eq!(tagged, route.union(&strays).copied().collect());
         // Beyond the default route's own rooms: the alternate (4:0x20 is on the D4 stretch's plain way since round
-        // 22).
+        // 22) and round 27's scouting route `d6` (steps 248 on): the Lost Woods, the graveyard's four rooms with the
+        // sword cave, 0x32, 0x22 and Dungeon 6's sixteen.
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         let beyond: BTreeSet<L> = route.difference(&default).copied().collect();
-        assert_eq!(beyond, [loc(0, 0x78)].into());
+        let d6: BTreeSet<L> =
+            map.routes["d6"][map.routes[DEFAULT_ROUTE].len()..].iter().map(RouteStep::location).collect();
+        let new: BTreeSet<L> = d6.difference(&default).copied().collect();
+        assert_eq!(new.len(), 24, "{new:?}");
+        assert!(new.iter().all(|l| l.level == 6 || [0x61, 0x40, 0x41, 0x31, 0x21, 0x32, 0x22].contains(&l.value)), "{new:?}");
+        assert_eq!(beyond, new.union(&[loc(0, 0x78)].into()).copied().collect());
         // Round 26's steps (209 on) add 24 rooms: the shops and the pond with the shops' caves, and Dungeon 7's way.
         let before: BTreeSet<L> = map.routes[DEFAULT_ROUTE][..209].iter().map(RouteStep::location).collect();
         let d7: BTreeSet<L> =
@@ -2469,6 +2509,49 @@ mod tests {
         // Visits: 0x55 from N is the leg's second (d2first's coast stretch first), 0x44 from S the first.
         assert_eq!(map.visits[DEFAULT_ROUTE][211], 2);
         assert_eq!(map.visits[DEFAULT_ROUTE][217], 1);
+    }
+
+    /// Round 27's scouting route `d6`: `d2first`, then steps 248-280: the stretch `woods`, the pushed gravestone
+    /// (`Secret::Push`, only in a room with a `cave` exit), `waypoint: sword` on its cave, Dungeon 6's reserves and
+    /// `keep_out` doorways; the loader refuses `keep_out` off a dungeon doorway and `waypoint: sword` off a sword cave.
+    #[test]
+    fn the_d6_route_speaks_the_new_vocabulary() {
+        let map = GameMap::builtin();
+        let (base, steps) = (map.routes[DEFAULT_ROUTE].len(), &map.routes["d6"]);
+        assert_eq!((base, steps.len()), (248, 281));
+        assert_eq!(steps[..base], map.routes[DEFAULT_ROUTE][..]);
+        let at = |i: usize| (steps[i].location(), steps[i].entry.as_str(), steps[i].exit.as_str());
+        assert_eq!(at(248), (loc(0, 0x42), "cave", "S"));
+        assert_eq!(at(253), (loc(0, 0x61), "N", MAZE_EXIT));
+        assert_eq!(at(259), (loc(0, 0x21), "S", "cave"));
+        assert_eq!((at(260), steps[260].waypoint.as_deref()), ((L::new(0, 0x21, true), "S", "S"), Some("sword")));
+        assert_eq!(at(275), (L::new(6, 0x08, true), "S", "E"));
+        assert_eq!(at(280), (loc(6, 0x0c), "S", "triforce"));
+        let woods = map.stretches["d6"].last().unwrap();
+        assert_eq!((woods.name.as_str(), woods.clips.clone(), woods.plain.clone(), woods.rejoin), ("woods", 250..252, 252..256, 256));
+        let reserves: Vec<(usize, Option<u8>, Option<u8>)> = steps[base..]
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.bomb_reserve.is_some() || s.rupee_reserve.is_some())
+            .map(|(i, s)| (base + i, s.bomb_reserve, s.rupee_reserve))
+            .collect();
+        assert_eq!(reserves, [(248, Some(2), None), (272, Some(1), None), (279, None, Some(1))]);
+        assert_eq!(map.get(loc(0, 0x21)).unwrap().secret, Some(Secret::Push((18, 10))));
+        assert_eq!(map.get(loc(0, 0x1e)).unwrap().secret, None, "a pushed rock no route enters");
+        assert_eq!(map.get(L::new(0, 0x21, true)).unwrap().treasure.as_deref(), Some("magic-sword"));
+        let kept_out: Vec<(L, &str)> = map
+            .rooms()
+            .values()
+            .flat_map(|r| r.exits.values().filter(|e| e.keep_out).map(|e| (r.location, e.direction.as_str())))
+            .collect();
+        assert_eq!(kept_out, [(loc(6, 0x28), "N"), (loc(6, 0x29), "N"), (loc(6, 0x2c), "S")]);
+        let load = |game: &str, routes: &str| GameMap::from_yaml(game, routes).map(|_| ()).map_err(|e| e.0);
+        let overworld = GAME_YAML.replacen("      location: '0x01'\n", "      location: '0x01'\n      keep_out: true\n", 1);
+        assert_ne!(overworld, GAME_YAML);
+        assert!(load(&overworld, ROUTES_YAML).unwrap_err().contains("keep_out is a dungeon room's doorway"));
+        let cellar = ROUTES_YAML.replacen("exit: N, waypoint: bow", "exit: N, waypoint: sword", 1);
+        assert_ne!(cellar, ROUTES_YAML);
+        assert!(load(GAME_YAML, &cellar).unwrap_err().contains("waypoint sword takes a sword"));
     }
 
     /// The loader refuses whirlwind steps that don't pair up, a whirlwind into a room it never lands in, and a

@@ -20,6 +20,8 @@ pub const MODE_CAVE: u8 = 11;
 pub const MODE_DYING: u8 = 17;
 
 const OBJ_BLOCK_ID: u8 = 0x68;
+/// The pushed gravestone's tile object (Q1 room 0x21, in the push block's slot).
+const OBJ_GRAVESTONE_ID: u8 = 0x65;
 const PUSH_BLOCK_SLOT: usize = 11;
 /// asm:RoomFirstUnwalkableTile: tiles at or above it block movement.
 const ADDR_FIRST_UNWALKABLE: u16 = 0x34A;
@@ -707,6 +709,55 @@ impl GameView {
             && Room::hotspot_tiles(x, y, direction).iter().any(|t| statue.contains(t))
     }
 
+    /// The room's pushed-gravestone secret (round 27; game.yaml `entrance: {how: push}` in a room whose `cave` exit a
+    /// route can take: 0x21): its top-left tile.
+    pub fn secret_push(&self) -> Option<Tile> {
+        if self.level() != 0 || self.in_cave() {
+            return None;
+        }
+        let room = self.map.get(self.full_location())?;
+        match room.secret.filter(|_| room.exits.contains_key("cave"))? {
+            crate::game_map::Secret::Push(tile) => Some(tile),
+            _ => None,
+        }
+    }
+
+    /// Whether a MOVE in `direction` pushes the room's secret gravestone ([`GameView::secret_push`]) the way the route
+    /// does, from below: the stone still stands on its square (tiles `$BC`-`$BF`), Link is on the grid point under
+    /// it on its column and presses N (walked, d6-walks.md §2.1: the slide starts on the first frame and the stairs
+    /// show where the stone stood). The stone is a wall to [`GameView::can_link_move`], so the mask offers this MOVE
+    /// only through here; from above it moves too, but the way there passes under the room's Ghini (round 27's
+    /// decision: from below), and every other gravestone square releases a flying Ghini when pressed
+    /// (asm:Spawn_CheckTouchedArmosOrGravestone).
+    pub fn is_secret_push_direction(&self, direction: Direction) -> bool {
+        let Some((c, r)) = self.secret_push().filter(|_| direction == Direction::N) else {
+            return false;
+        };
+        let tiles = self.current_tiles();
+        let stone = [(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)];
+        stone.iter().all(|&(x, y)| is_gravestone_tile(tiles[(x * crate::room::ROWS + y) as usize]))
+            && self.var(Var::LinkGridOffset) == 0
+            && self.link.position.tile() == (c, r + 2)
+            && self.link.position.x == c * 8
+    }
+
+    /// The room's secret gravestone is sliding (its tile object `$65` in slot `$0B` has left its square) and Link is
+    /// on its column: a MOVE N goes on behind it.
+    pub fn secret_push_sliding(&self) -> bool {
+        let Some((c, r)) = self.secret_push() else {
+            return false;
+        };
+        table(&self.ram, tables::OBJ_ID, PUSH_BLOCK_SLOT) == OBJ_GRAVESTONE_ID
+            && i32::from(table(&self.ram, tables::OBJ_POS_Y, PUSH_BLOCK_SLOT)) < r * 8 + 0x40
+            && self.link.position.x == c * 8
+    }
+
+    /// Link stands at the mouth of his dungeon room's doorway in `direction`, on the grid point from which one more
+    /// frame of that direction walks him into it ([`at_doorway_mouth`]).
+    pub fn at_doorway_mouth(&self, direction: Direction) -> bool {
+        at_doorway_mouth(&self.ram[..0x800], direction)
+    }
+
     pub fn is_door_locked(&self, direction: Direction) -> bool {
         self.level() != 0 && Room::is_door_locked(direction, self.current_tiles())
     }
@@ -1197,4 +1248,27 @@ pub(crate) fn at_dungeon_bound(px: i32, py: i32, direction: Direction) -> bool {
         Direction::E => px >= UW_BOUND_R,
         _ => false,
     }
+}
+
+/// Gravestone square tiles (`$BC`-`$BF`, asm:Spawn_CheckTouchedArmosOrGravestone): Link pressing into one on a grid
+/// point releases a flying Ghini.
+pub fn is_gravestone_tile(tile: u8) -> bool {
+    (0xBC..=0xBF).contains(&tile)
+}
+
+/// From the CPU RAM: Link stands in a dungeon room (mode 5, not in a doorway already) at the mouth of its doorway in
+/// `direction`: at the room's bound on that side, on the doorway's line (X `$78` for N and S, Y `$8D` for E and W)
+/// and on a grid point. One frame of `direction` there walks him into the doorway when it is open, and spends a key
+/// on a locked door (asm:Doorway_CheckLink; walked, d6-walks.md §4.2: 6:0x29 N).
+pub fn at_doorway_mouth(ram: &[u8], direction: Direction) -> bool {
+    let (px, py) = (i32::from(ram[Var::LinkX.addr() as usize]), i32::from(ram[Var::LinkY.addr() as usize]));
+    ram[Var::Level.addr() as usize] != 0
+        && ram[Var::Mode.addr() as usize] == 5
+        && ram[Var::DoorwayDir.addr() as usize] == 0
+        && ram[Var::LinkGridOffset.addr() as usize] == 0
+        && at_dungeon_bound(px, py, direction)
+        && match direction {
+            Direction::N | Direction::S => px == DOORWAY_REQUIRED_X,
+            _ => py == DOORWAY_REQUIRED_Y,
+        }
 }

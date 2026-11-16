@@ -18,6 +18,12 @@
 # `waypoint: arrows` / `food` (round 26, shop cave step): buy the ware (the cave's game.yaml treasure); done once Link
 # holds it; leaving the room without it or buying another ware is `missed`.  The cave's game.yaml `requires_rupees`
 # tops a short purse up (cheated and counted).
+# `waypoint: sword` (round 27, the magic sword's cave step): take the cave's sword (its game.yaml treasure); done once
+# Link holds it; leaving its overworld room without it, or standing in the cave with fewer heart containers than the
+# old man asks (he refuses: 12 for the magic sword), is `missed`.
+# An exit `cave` behind a pushed gravestone (game.yaml `entrance: {how: push}` in a room with a `cave` exit, round 27:
+# 0x21) sends Link to the square under the stone, MOVE N from there pushes it, and the MOVE ends on the stairs.
+# A game.yaml dungeon exit with `keep_out: true` (round 27) is masked for MOVE unless the step leaves through it.
 # A route is a list of steps, or `{extends: <a route above>, steps: [...]}`: that route's steps, then these.
 # An exit that is a game.yaml raft crossing (`raft_exits`) sends Link to its dock; the raft does the rest.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
@@ -407,6 +413,61 @@ d2first:
 - {level: 7, room: '0x29', specialist: goriya, entry: cave, exit: E}
 - {level: 7, room: '0x2a', specialist: boss-aquamentus, entry: W, exit: E, bomb_reserve: 0}
 - {level: 7, room: '0x2b', specialist: goriya, entry: W, exit: triforce}
+# d6 (round 27, scouting; docs/routes/d6.md §14, d6-walks.md): d2first, then from Dungeon 7's triforce (the game sets
+# Link down at its entrance, 0x42) to the magic sword and through Dungeon 6 to its triforce.  The leg: 0x42 S, 0x52
+# W, the stretch `woods` (clips: the wrap exit out of 0x51's W edge into 0x50's corridor; plain: 0x51 S, the Lost
+# Woods 0x61 by `exit: maze` (N, W, S, W), 0x60 N, 0x50 from S), the graveyard 0x40 E, 0x41 N, 0x31 N, 0x21: its
+# gravestone pushed from below (game.yaml `how: push`), the cave's magic sword (`waypoint: sword`, 12 heart
+# containers), out S by column X $20 (path_costs: the room's Ghini is made under the cave's exit), 0x31 E, 0x32 N,
+# 0x22's open entrance.  Dungeon 6 with the two keys Link brings (level-6.md): the key door 0x79 W, 0x78 and 0x68
+# crossed, 0x58 fought for its key, the traps of 0x48, 0x38 emptied (but its Bubble) and its block pushed (both
+# shutters), 0x28's E wall bombed from its door spot (requires_bombs; the room's rupees skipped), 0x29 crossed dark
+# (its key left; its N key door and 0x28 N, 0x2c S are `keep_out`), 0x39 fought, the ladder, 0x3a emptied and its
+# block pushed for the stairs, the tunnel 0x08 by its right ladder (the left one leads back), 0x1d crossed, 0x2d
+# fought for its key, 0x2c crossed to its N key door, Gohma 0x1c (ARROW facing N, a rupee a shot; the heart
+# container: 13), the triforce 0x0c.  Bomb reserve 2 from Dungeon 7's exit (0x28's wall and one owed to Dungeon 8), 1
+# after 0x28.  Rupee reserve 2 as before, 1 in Gohma's room and after (Ganon's arrow).
+d6:
+  extends: d2first
+  steps:
+  - {level: 0, room: '0x42', specialist: ow-moblin, entry: cave, exit: S, bomb_reserve: 2}
+  - {level: 0, room: '0x52', specialist: ow-moblin, entry: N, exit: W}
+  - stretch: woods
+    parts: {level: 0, room: '0x51', entry: E}
+    rejoins: {level: 0, room: '0x40', entry: S}
+    clips:
+    - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
+    - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: N}
+    plain:
+    - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: S}
+    - {level: 0, room: '0x61', specialist: ow-moblin, entry: N, exit: maze}
+    - {level: 0, room: '0x60', specialist: ow-lynel, entry: E, exit: N}
+    - {level: 0, room: '0x50', specialist: ow-lynel, entry: S, exit: N}
+  - {level: 0, room: '0x40', specialist: ow-ghini, entry: S, exit: E}
+  - {level: 0, room: '0x41', specialist: ow-ghini, entry: W, exit: N}
+  - {level: 0, room: '0x31', specialist: ow-ghini, entry: S, exit: N}
+  - {level: 0, room: '0x21', specialist: ow-ghini, entry: S, exit: cave}
+  - {level: 0, room: '0x21', in_cave: true, specialist: ow-ghini, entry: S, exit: S, waypoint: sword}
+  - {level: 0, room: '0x21', specialist: ow-ghini, entry: cave, exit: S}
+  - {level: 0, room: '0x31', specialist: ow-ghini, entry: N, exit: E}
+  - {level: 0, room: '0x32', specialist: ow-lynel, entry: W, exit: N}
+  - {level: 0, room: '0x22', specialist: ow-lynel, entry: S, exit: cave}
+  - {level: 6, room: '0x79', specialist: stalfos-keese-gel, entry: S, exit: W}
+  - {level: 6, room: '0x78', specialist: wizzrobe, entry: E, exit: N}
+  - {level: 6, room: '0x68', specialist: zol, entry: S, exit: N, treasure: skip}
+  - {level: 6, room: '0x58', specialist: stalfos-keese-gel, entry: S, exit: N}
+  - {level: 6, room: '0x48', specialist: trap-room, entry: S, exit: N}
+  - {level: 6, room: '0x38', specialist: wizzrobe, entry: S, exit: N}
+  - {level: 6, room: '0x28', specialist: wizzrobe, entry: S, exit: E, treasure: skip}
+  - {level: 6, room: '0x29', specialist: wizzrobe, entry: W, exit: S, treasure: skip, bomb_reserve: 1}
+  - {level: 6, room: '0x39', specialist: vire, entry: N, exit: E}
+  - {level: 6, room: '0x3a', specialist: wizzrobe, entry: W, exit: cave}
+  - {level: 6, room: '0x08', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+  - {level: 6, room: '0x1d', specialist: like-like, entry: cave, exit: S}
+  - {level: 6, room: '0x2d', specialist: vire, entry: N, exit: W}
+  - {level: 6, room: '0x2c', specialist: wizzrobe, entry: E, exit: N}
+  - {level: 6, room: '0x1c', specialist: boss-gohma, entry: S, exit: N, rupee_reserve: 1}
+  - {level: 6, room: '0x0c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -435,33 +496,41 @@ alternates:
 # lead's answer 6): the shops 0x44 (ow-zora) and 0x34 (ow-leever) with their caves (a cave takes its room's family, as
 # 0x2c's and 0x67's), the pond 0x42 (ow-moblin); Dungeon 7's Blue Goriya rooms, the Grumble's 0x28, the entrance and
 # the triforce room in goriya, 0x0d wallmaster, 0x1c and 0x39 boss-digdogger, 0x0c dodongo-crossing, 0x2a
-# boss-aquamentus, the cellars 0x4a and 0x7b equipment-room.
+# boss-aquamentus, the cellars 0x4a and 0x7b equipment-room.  Round 27 (the leg to the magic sword and Dungeon 6;
+# docs/decisions.md 2026-11-17): ow-moblin 0x61 (the Lost Woods; 0x42, 0x52, 0x51 were its), ow-lynel 0x32 and 0x22,
+# the new ow-ghini (the graveyard 0x40, 0x41, 0x31, 0x21 and its sword cave), the new wizzrobe (6:0x78, 0x28, 0x29,
+# 0x2c crossed, 0x38 and 0x3a fought), the new boss-gohma (6:0x1c), stalfos-keese-gel 6:0x58 with the entrance 0x79
+# and the triforce room 0x0c, zol 6:0x68, trap-room 6:0x48, vire 6:0x39 and 0x2d, like-like 6:0x1d, the tunnel 6:0x08
+# equipment-room; none of the stretch's rooms has start states yet.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']
   ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)', '(0, 0x54)', '(0, 0x5f)', '(0, 0x4f)', '(0, 0x3f)', '(0, 0x3e)', '(0, 0x2e)', '(0, 0x6f)', '(0, 0x44)', '(0, 0x44, cave)']
-  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)', '(0, 0x53)', '(0, 0x52)', '(0, 0x51)', '(0, 0x6d)', '(0, 0x6e)', '(0, 0x42)']
+  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)', '(0, 0x53)', '(0, 0x52)', '(0, 0x51)', '(0, 0x6d)', '(0, 0x6e)', '(0, 0x42)', '(0, 0x61)']
   ow-leever: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)', '(0, 0x34)', '(0, 0x34, cave)']
-  ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)']
+  ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)', '(0, 0x32)', '(0, 0x22)']
   ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)']
   ow-peahat: ['(0, 0x45)', '(0, 0x1d)', '(0, 0x1f)']
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
-  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x01)', '(4, 0x21)', '(4, 0x51)']
+  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(4, 0x01)', '(4, 0x21)', '(4, 0x51)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)', '(7, 0x79)', '(7, 0x69)', '(7, 0x59)', '(7, 0x49)', '(7, 0x38)', '(7, 0x28)', '(7, 0x18)', '(7, 0x19)', '(7, 0x1a)', '(7, 0x1b)', '(7, 0x29)', '(7, 0x2b)']
-  trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)', '(4, 0x02)', '(4, 0x11)']
-  equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)', '(7, 0x4a, cave)', '(7, 0x7b, cave)']
+  trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)', '(4, 0x02)', '(4, 0x11)', '(6, 0x48)']
+  equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)', '(7, 0x4a, cave)', '(7, 0x7b, cave)', '(6, 0x08, cave)']
   wallmaster: ['(1, 0x45)', '(7, 0x0d)']
   boss-aquamentus: ['(1, 0x35)', '(7, 0x2a)']
   d2-rope: ['(2, 0x0d)', '(2, 0x2e)', '(2, 0x4e)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
   moldorm: ['(2, 0x3e)']
   boss-dodongo: ['(2, 0x0e)']
-  zol: ['(3, 0x3d)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x6b)', '(3, 0x7b)', '(3, 0x7c)', '(4, 0x40)', '(5, 0x57)']
+  zol: ['(3, 0x3d)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x6b)', '(3, 0x7b)', '(3, 0x7c)', '(4, 0x40)', '(5, 0x57)', '(6, 0x68)']
   darknut: ['(3, 0x59)', '(3, 0x5b)', '(3, 0x5c)', '(3, 0x69)', '(5, 0x05)', '(5, 0x06)', '(5, 0x37)', '(5, 0x64)']
   boss-manhandla: ['(3, 0x4d)']
-  vire: ['(4, 0x03)', '(4, 0x12)', '(4, 0x20)', '(4, 0x30)', '(4, 0x31)', '(4, 0x50)', '(4, 0x61)', '(4, 0x71)']
-  like-like: ['(4, 0x32)']
+  vire: ['(4, 0x03)', '(4, 0x12)', '(4, 0x20)', '(4, 0x30)', '(4, 0x31)', '(4, 0x50)', '(4, 0x61)', '(4, 0x71)', '(6, 0x39)', '(6, 0x2d)']
+  like-like: ['(4, 0x32)', '(6, 0x1d)']
   boss-gleeok: ['(4, 0x13)']
   gibdo: ['(5, 0x14)', '(5, 0x26)', '(5, 0x47)', '(5, 0x65)', '(5, 0x66)', '(5, 0x76)']
   pols-voice: ['(5, 0x25)', '(5, 0x27)']
   dodongo-crossing: ['(5, 0x56)', '(7, 0x0c)']
   boss-digdogger: ['(5, 0x24)', '(7, 0x1c)', '(7, 0x39)']
+  ow-ghini: ['(0, 0x40)', '(0, 0x41)', '(0, 0x31)', '(0, 0x21)', '(0, 0x21, cave)']
+  wizzrobe: ['(6, 0x78)', '(6, 0x38)', '(6, 0x28)', '(6, 0x29)', '(6, 0x3a)', '(6, 0x2c)']
+  boss-gohma: ['(6, 0x1c)']

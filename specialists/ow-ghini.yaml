@@ -1,0 +1,26 @@
+name: ow-ghini
+rooms: ['(0, 0x40)', '(0, 0x41)', '(0, 0x31)', '(0, 0x21)', '(0, 0x21, cave)']
+start_states: []                           # round 27: the stretch's states are the next step (0_40s, 0_41w, 0_31s, 0_21s, 0_21cave, 0_21c, 0_31n)
+trainable: false                           # until it has start states
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as ow-moblin (round 25)
+items: {bombs: tenth}                      # only the 10th damage-free kill's bomb
+curriculum: {enabled: true}             # trajectories/ow-ghini, once explored
+one_room: true
+max_steps: 600
+warm_start: null
+notes: >-
+  The graveyard (round 27, route `d6`; docs/routes/d6.md §14, d6-walks.md §1-2; families are by enemy: its Ghinis are
+  nothing ow-moblin's rooms hold). One Ghini a room (5 white or 3 magic sword hits, touch 1 heart) and 13 scenery
+  gravestones: pressing into one on a grid point releases a flying Ghini every 72 frames, so a MOVE ends on the grid
+  point before a gravestone square and the mask never offers one into it. 0x40 S→E, 0x41 W→N, 0x31 S→N and N→E are
+  crossings. 0x21: up X $20 to the row Y $9D, E to the square under the third stone of the middle row, MOVE N (the
+  one stone that moves: it slides a square in 32 frames and the MOVE ends on the stairs it uncovers), the cave's
+  magic sword (`waypoint: sword`; the old man asks 12 heart containers, which the route has after Dungeon 7), out at
+  (X $50, Y $6D) with the room's Ghini made anew under the exit: leave by row Y $7D and column X $20 (game.yaml
+  `path_costs`). The stairs are not kept: after the cave the stone is back. To be initialised from ow-moblin's
+  promoted run, which crossed all four rooms 100% zero-shot (walked, Nov 16); settings copied from ow-moblin without
+  its recorder and clips (no wrap is on the graveyard's way).

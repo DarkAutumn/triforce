@@ -110,6 +110,14 @@ pub struct Session<N: Nes> {
     /// (`crate::objectives::GameCompletion::recorder_facings`: the whirlwind's count, the pond, a Digdogger fought);
     /// None: the game state's alone ([`crate::actions::recorder_wanted`]).  The env sets it every step.
     recorder_facings: Option<u8>,
+    /// ARROW only facing these ways ([`Direction::value`] bits), round 27: the route's rule
+    /// (`crate::objectives::GameCompletion::arrow_facings`: N in Gohma's room, whose eye an arrow reaches only from
+    /// below); None: every way the game allows.  The env sets it every step.
+    arrow_facings: Option<u8>,
+    /// Dungeon doorways MOVE is not offered into from their mouth ([`Direction::value`] bits), round 27: the route's
+    /// rule (`crate::objectives::doorways_kept_out`: game.yaml `keep_out` doorways the objective does not leave
+    /// through); the executor ends a MOVE there too (`Executor::vetoed_doorways`).  The env sets it every step.
+    vetoed_doorways: u8,
     /// The skip a CLIP of this room left cut short ([`OpenClip`]), until a MOVE finishes it (`Change::
     /// clip_finished_by_move`), Link leaves the room or another CLIP starts.
     open_clip: Option<OpenClip>,
@@ -138,6 +146,8 @@ impl<N: Nes> Session<N> {
             vetoed_wraps: Vec::new(),
             bomb_targets: None,
             recorder_facings: None,
+            arrow_facings: None,
+            vetoed_doorways: 0,
             open_clip: None,
             look_ahead: LookAhead::All,
             stash: None,
@@ -294,6 +304,26 @@ impl<N: Nes> Session<N> {
             return;
         }
         self.recorder_facings = facings;
+        self.refresh_mask();
+    }
+
+    /// The facings ARROW is kept to (None: wherever the game shoots); the mask is recomputed when they change.
+    pub fn set_arrow_facings(&mut self, facings: Option<u8>) {
+        if self.arrow_facings == facings {
+            return;
+        }
+        self.arrow_facings = facings;
+        self.refresh_mask();
+    }
+
+    /// The dungeon doorways MOVE keeps out of ([`Direction::value`] bits; 0: none): not offered from a doorway's
+    /// mouth, and a MOVE toward one ends there. The mask is recomputed when they change.
+    pub fn set_vetoed_doorways(&mut self, doorways: u8) {
+        if self.vetoed_doorways == doorways {
+            return;
+        }
+        self.vetoed_doorways = doorways;
+        self.executor.vetoed_doorways = doorways;
         self.refresh_mask();
     }
 
@@ -574,6 +604,18 @@ impl<N: Nes> Session<N> {
         }
         for &kind in &self.disabled_kinds {
             mask.disallow_kind(kind);
+        }
+        if let Some(facings) = self.arrow_facings {
+            for d in mask.directions(ActionKind::Arrow) {
+                if facings & d.value() == 0 {
+                    mask.disallow(ActionKind::Arrow, d);
+                }
+            }
+        }
+        for d in crate::actions::CARDINALS {
+            if self.vetoed_doorways & d.value() != 0 && state.at_doorway_mouth(d) {
+                mask.disallow(ActionKind::Move, d);
+            }
         }
         if let Some(targets) = &self.bomb_targets {
             // A target one of Link's bombs already reaches takes no other until that bomb is gone.

@@ -312,13 +312,19 @@ impl fmt::Display for ActionMask {
 /// [`recorder_wanted`] (a route narrows it per step: `crate::Session::set_recorder_facings`), FOOD only where a
 /// Grumble waits for it ([`food_wanted`]), and no BOOMERANG while placed food lies (round 26: the boomerang shares its
 /// slot and would take it away, asm:Boomerang_Wield). MOVE also presses into a secret Armos from its side
-/// ([`GameView::is_secret_armos_direction`]). A family's `items:` switches mask them further
-/// (`env::config::ItemsConfig`).
+/// ([`GameView::is_secret_armos_direction`]) and into the secret gravestone from below (round 27,
+/// [`GameView::is_secret_push_direction`]). A family's `items:` switches mask them further
+/// (`env::config::ItemsConfig`), and a route narrows ARROW and MOVE (`crate::Session::set_arrow_facings`,
+/// `crate::Session::set_vetoed_doorways`).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let mut mask = ActionMask::default();
 
     for d in CARDINALS {
-        if state.can_link_move(d) || state.is_push_block_direction(d) || state.is_secret_armos_direction(d) {
+        if state.can_link_move(d)
+            || state.is_push_block_direction(d)
+            || state.is_secret_armos_direction(d)
+            || state.is_secret_push_direction(d)
+        {
             mask.allow(ActionKind::Move, Some(d));
         }
     }

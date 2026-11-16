@@ -1213,6 +1213,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // The facings the route plays the recorder with (round 26: the whirlwind's count, the pond, a Digdogger fought).
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
+        // Round 27: ARROW's facings by the route (N under a Gohma) and the doorways MOVE keeps out of.
+        let arrows = self.objectives.as_ref().and_then(|gc| gc.arrow_facings(self.session.state()));
+        self.session.set_arrow_facings(arrows);
+        let doorways = self.objective.as_ref().map_or(0, |objective| {
+            zelda::objectives::doorways_kept_out(&self.data.map, self.session.state(), objective)
+        });
+        self.session.set_vetoed_doorways(doorways);
         self.session.set_clips(config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
         let allowed = self.objectives.as_ref().map_or(self.clips_allowed, GameCompletion::clips_allowed);

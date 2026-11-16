@@ -1,5 +1,5 @@
 name: vire
-rooms: ['(4, 0x71)', '(4, 0x61)', '(4, 0x50)', '(4, 0x30)', '(4, 0x31)', '(4, 0x20)', '(4, 0x12)', '(4, 0x03)']
+rooms: ['(4, 0x71)', '(4, 0x61)', '(4, 0x50)', '(4, 0x30)', '(4, 0x31)', '(4, 0x20)', '(4, 0x12)', '(4, 0x03)', '(6, 0x39)', '(6, 0x2d)']
 start_states: ['4_71*_[0-9]', '4_61*_[0-9]', '4_50*_[0-9]', '4_30*_[0-9]', '4_31*_[0-9]', '4_20*_[0-9]', '4_12*_[0-9]', '4_03*_[0-9]']
 success: [exit-correct, triforce-collected]   # 0x03 ends on the D4 triforce (the route's end)
 reward_profile: default
@@ -23,3 +23,8 @@ notes: >-
   them, push the block to open the E shutter into Gleeok's room; round 22: in from N, out of the trap room 0x02). Bombs are free above the route's reserve of 2 (Lee,
   Nov 12: 0x31 and 0x12 are good places, a Vire killed outright can drop bombs). Copied from zol (one-room,
   curriculum, 2000 steps).
+  Dungeon 6 (round 27, route `d6`; no start states yet): the dark 0x39 (five Vires, shut in: kill them for the E
+  shutter, then the ladder over the water column) and the dark 0x2d (three Vires, two Bubbles: kill the Vires for the
+  key, leave W). Bombs stay `free`, but the route's reserve there is 1 and Link holds 1 after 0x28's wall, so BOMB is
+  offered only on a drop above it (walked with no reserve: about one bomb spent a room, which the route owes to
+  Dungeon 8).

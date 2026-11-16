@@ -7,11 +7,11 @@ use crate::clips::{
     ClipAbort, ClipOutcome, Controller, Decision, Input, MAX_SKIP_FRAMES, MAX_STILL_FRAMES, Phase, SkipKind, SkipTarget,
     skip_target,
 };
-use crate::enums::{ActionKind, Direction, ObjectClass};
+use crate::enums::{ActionKind, Direction, ObjectClass, Tile};
 use crate::game::GameView;
 use crate::nes::Nes;
 use crate::room_entry::is_pre_entry;
-use crate::tables::{RAM_SIZE, SRAM_OFFSET};
+use crate::tables::{RAM_SIZE, SRAM_OFFSET, TILE_LAYOUT};
 use crate::submenu;
 use crate::vars::Var;
 use std::fmt;
@@ -57,6 +57,7 @@ const ADDR_LOCATION: usize = 0xEB;
 const ADDR_IS_UPDATING_MODE: usize = 0x11;
 const ADDR_LINK_X: usize = 0x70;
 const ADDR_LINK_Y: usize = 0x84;
+const ADDR_GRID_OFFSET: usize = 0x394;
 const ADDR_LINK_STATUS: usize = 0xAC;
 const ADDR_SWORD_ANIMATION: usize = 0xB9;
 const ADDR_TREASURE_FLAG: usize = 0xBF;
@@ -364,6 +365,9 @@ pub struct Executor<S> {
     pub capture_pre_entry: bool,
     pub last_pre_entry: Option<S>,
     blocks: Option<Vec<ProjectileBlock>>,
+    /// Dungeon doorways a MOVE may not walk into ([`Direction::value`] bits; round 27, kept by `Session`: the
+    /// route's `keep_out` doorways the objective does not leave through): a MOVE toward one ends at its mouth.
+    pub vetoed_doorways: u8,
 }
 
 impl<S> Default for Executor<S> {
@@ -374,6 +378,7 @@ impl<S> Default for Executor<S> {
             capture_pre_entry: false,
             last_pre_entry: None,
             blocks: None,
+            vetoed_doorways: 0,
         }
     }
 }
@@ -462,7 +467,47 @@ impl<S> Executor<S> {
         state: &GameView,
     ) -> Option<Interrupt> {
         let is_move = action.kind == ActionKind::Move;
-        let pushing = is_move && state.is_push_block_direction(action.direction);
+        // The secret gravestone (round 27): pushed from below it slides for 32 frames with Link behind it at half
+        // speed, so the press is held as for a push block; the MOVE ends on the stairs square it uncovers.
+        let stone = if is_move { state.secret_push() } else { None };
+        let pushing_stone = is_move
+            && action.direction == Direction::N
+            && (state.is_secret_push_direction(Direction::N) || state.secret_push_sliding());
+        let pushing = is_move && (state.is_push_block_direction(action.direction) || pushing_stone);
+        let mut first = true;
+        // Where a MOVE ends without another frame of its direction (round 27): on a grid point facing a gravestone
+        // square (one frame of pressing releases a flying Ghini, asm:Spawn_CheckTouchedArmosOrGravestone; the
+        // route's own stone from below excepted), on the stairs the pushed stone uncovered (walking on leaves them
+        // and presses into the moved stone), and at the mouth of a doorway the route keeps out of.
+        let stops = |m: &Machine<N>, first: bool, vetoed: u8| -> bool {
+            let ram = m.ram();
+            if vetoed & action.direction.value() != 0 && crate::game::at_doorway_mouth(ram, action.direction) {
+                return true;
+            }
+            if ram[ADDR_LEVEL] != 0 || ram[ADDR_MODE] != MODE_GAMEPLAY || ram[ADDR_GRID_OFFSET] != 0 {
+                return false;
+            }
+            let (px, py) = (i32::from(ram[ADDR_LINK_X]), i32::from(ram[ADDR_LINK_Y]));
+            let tiles = &m.nes.prg_ram()[TILE_LAYOUT.0 - 0x800..][..TILE_LAYOUT.1];
+            let tile = |(c, r): Tile| {
+                let inside = (0..crate::room::COLS).contains(&c) && (0..crate::room::ROWS).contains(&r);
+                if inside { tiles[(c * crate::room::ROWS + r) as usize] } else { 0 }
+            };
+            if let Some((c, r)) = stone
+                && (!first || action.direction == Direction::N)
+                && tile((c, r)) == crate::room::STAIRS_TOP_LEFT_TILE
+                && (px, py) == (c * 8, r * 8 + 0x3D)
+            {
+                return true;
+            }
+            !(first && pushing_stone)
+                && crate::room::Room::hotspot_tiles(px, py, action.direction)
+                    .into_iter()
+                    .any(|t| crate::game::is_gravestone_tile(tile(t)))
+        };
+        if is_move && stops(m, first, self.vetoed_doorways) {
+            return Some(Interrupt::Wall);
+        }
         if is_move && !pushing && !state.can_link_move(action.direction) {
             // A move into a wall costs one frame.
             self.step(m, direction_buttons(action.direction), 1);
@@ -477,6 +522,10 @@ impl<S> Executor<S> {
         let start_near = before.near;
         let mut stalled = 0;
         for _ in 0..action.duration {
+            if is_move && !first && stops(m, first, self.vetoed_doorways) {
+                return Some(Interrupt::Wall);
+            }
+            first = false;
             self.step(m, buttons, 1);
             let after = FrameWatch::new(m.ram());
             if let Some(i) = detect_interrupt(&before, &after, start_near) {

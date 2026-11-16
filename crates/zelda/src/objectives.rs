@@ -52,6 +52,13 @@ pub const WAYPOINT_FOOD: &str = "food";
 /// routes.yaml `waypoint: candle` (round 26, Dungeon 7's cellar 0x4a under 0x1a): take the cellar's red candle, as the
 /// bow (no route step needs it to tell visits apart).
 pub const WAYPOINT_CANDLE: &str = "candle";
+/// routes.yaml `waypoint: sword` (round 27, on the magic sword's cave step under 0x21's gravestone): take the cave's
+/// sword (its game.yaml treasure, the middle ware); done once Link holds it. Leaving the overworld room without it is
+/// `missed`, and so is standing in the cave with fewer heart containers than the old man asks ([`SWORD_UPGRADES`]:
+/// the cave refuses, nothing is taken, the run would go on with the white sword; on the route Link has 12 after
+/// Dungeon 7). With the waypoint the cave is the route's stop in route order (after the pieces before it); a sword
+/// cave step without one (the wood and white swords of `d2first`) stays the target as soon as Link may take it.
+pub const WAYPOINT_SWORD: &str = "sword";
 /// A cellar's ladders at X >= $80 (tile column 16) lead to the room in its attribute B, the rest to attribute A's
 /// (asm:Warp_CheckSubroomExit): the game.yaml exits `E` and `W` of a tunnel cellar.
 const CELLAR_EAST_COLUMN: i32 = 16;
@@ -325,12 +332,23 @@ pub fn route_waypoints(steps: &[RouteStep]) -> Vec<Waypoint> {
 /// The heart waypoint's stop is over: the cave's item was taken (the take-any cave sets its overworld room's item
 /// flag on either pick; the objective points at the heart container).  Overworld room flags stay in RAM in every
 /// level, so a Dungeon 1 state knows the heart was taken.  A purchase (round 26) is over once Link holds the ware:
-/// any ware sets the flag, and a shop sells again on every visit.
-fn waypoint_done(waypoint: &Waypoint, state: &GameView) -> bool {
+/// any ware sets the flag, and a shop sells again on every visit.  A sword (round 27) once Link holds it or a better.
+fn waypoint_done(map: &GameMap, waypoint: &Waypoint, state: &GameView) -> bool {
     if let Some(held) = purchase_held(&waypoint.kind, state) {
         return held;
     }
+    if waypoint.kind == WAYPOINT_SWORD {
+        let sword = map.get(waypoint.location).and_then(|r| r.treasure.as_deref()).and_then(sword_treasure);
+        return sword.is_some_and(|sword| state.sword() >= sword);
+    }
     item_taken(waypoint.location, state)
+}
+
+/// The heart containers the old man of `cave` asks before he hands its sword over ([`SWORD_UPGRADES`]); 0 for any
+/// other room.
+fn sword_cave_hearts(map: &GameMap, cave: MapLocation) -> i32 {
+    let treasure = map.get(cave).and_then(|r| r.treasure.as_deref());
+    SWORD_UPGRADES.iter().find(|(_, t, _)| Some(*t) == treasure).map_or(0, |u| u.2)
 }
 
 /// The item-taken flag of `room` (its overworld room's for a cave), when Link is where it can be read.
@@ -417,6 +435,12 @@ pub struct GameCompletion {
     /// The shop's item-taken flag on entering the active purchase waypoint's cave (round 26): set during the visit
     /// without the ware held, another ware was bought.
     shop_baseline: Option<bool>,
+    /// The sword caves the sword milestone leads to ([`GameCompletion::sword_target`]): the route's cave steps
+    /// without a waypoint whose room's treasure is a sword (`d2first`: the wood sword's 0x77, the white sword's
+    /// 0x0a). A sword cave with `waypoint: sword` (round 27, the magic sword's) is that waypoint's stop instead, and
+    /// one the route never enters is no target (on `d2first`, which ends on the D7 triforce, the magic sword's cave
+    /// would otherwise pull a Link with 12 containers out of Dungeon 7 before its piece).
+    sword_caves: Vec<MapLocation>,
     /// The kind of the last objective (`objectives`): the recorder rules ask whether Link fights in his room or
     /// heads for its stairs ([`GameCompletion::recorder_facings`]).
     last_kind: ObjectiveKind,
@@ -493,6 +517,12 @@ impl GameCompletion {
             waypoints,
             heart_baseline: None,
             shop_baseline: None,
+            sword_caves: steps
+                .iter()
+                .filter(|s| s.in_cave && s.waypoint.is_none())
+                .map(RouteStep::location)
+                .filter(|&l| map.get(l).and_then(|r| r.treasure.as_deref()).and_then(sword_treasure).is_some())
+                .collect(),
             last_kind: ObjectiveKind::None,
             missed: None,
             rafts_open: false,
@@ -632,7 +662,7 @@ impl GameCompletion {
         }
         let pond = self.map.get(here).and_then(|r| r.secret).and_then(|s| match s {
             Secret::Recorder(tile) => Some(tile),
-            Secret::Armos(_) => None,
+            Secret::Armos(_) | Secret::Push(_) => None,
         });
         match pond {
             Some(tile) if self.last_kind == ObjectiveKind::Cave && pond_full(state, tile) => ANY,
@@ -764,6 +794,16 @@ impl GameCompletion {
         self.missed.as_deref()
     }
 
+    /// The facings ([`Direction::value`] bits) ARROW is kept to in `state` by the route (round 27; None: no rule,
+    /// wherever the family and the game allow it): N in a room where a Gohma lives. Its eye is hit only by an arrow
+    /// flying up into it (asm:Gohma_Update; walked, d6-walks.md §6: 1746 of 1746 kills from below with the eye open
+    /// and Link's X − Gohma's X in [−10, +5], none otherwise), and every shot costs a rupee, so the three other
+    /// facings only waste them. Which moment to shoot at is left to the model (the eye's state and Gohma's offset
+    /// are observation columns; a miss costs its rupee: the lead's working answer 6, docs/decisions.md).
+    pub fn arrow_facings(&self, state: &GameView) -> Option<u8> {
+        (state.level() != 0 && gohma(state).is_some()).then_some(Direction::N.value())
+    }
+
     /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through: the step
     /// [`GameCompletion::objectives`] picks for `state` coming from `prev` (None, or the same room: the current
     /// step), without updating anything.  None off the route, in a sub-room, for steps leaving through a cave, stairs
@@ -879,7 +919,7 @@ impl GameCompletion {
         // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first); the
         // heart and shop baselines with it, so the next waypoint (0x2f's cave after 0x2c's) is judged on its own.
         while let Some(i) = self.active_waypoint(state)
-            && waypoint_done(&self.waypoints[i], state)
+            && waypoint_done(&self.map, &self.waypoints[i], state)
         {
             self.waypoints.remove(i);
             self.heart_baseline = None;
@@ -999,10 +1039,12 @@ impl GameCompletion {
         })
     }
 
-    /// An active `heart`, `rupees`, `arrows` or `food` waypoint is missed when Link leaves its overworld room other than
-    /// into the cave before the item is taken; a `heart` one also when he takes the cave's item without gaining a heart
-    /// container (the potion), a purchase (round 26) when the shop's item flag is set during the visit without the ware
-    /// held (another ware bought: the shield or the bombs at 0x44, the key at 0x34).
+    /// An active `heart`, `rupees`, `arrows`, `food` or `sword` waypoint is missed when Link leaves its overworld room
+    /// other than into the cave before the item is taken; a `heart` one also when he takes the cave's item without
+    /// gaining a heart container (the potion), a purchase (round 26) when the shop's item flag is set during the
+    /// visit without the ware held (another ware bought: the shield or the bombs at 0x44, the key at 0x34), a `sword`
+    /// one (round 27) when Link stands in its cave with fewer heart containers than the old man asks (the cave
+    /// refuses; walked, d6-walks.md §2.3: nothing is taken at 11).
     fn check_cave_waypoint(&mut self, prev: Option<&GameView>, state: &GameView) {
         if self.missed.is_some() {
             return;
@@ -1016,6 +1058,7 @@ impl GameCompletion {
             WAYPOINT_RUPEES => "the rupees",
             WAYPOINT_ARROWS => "the arrows",
             WAYPOINT_FOOD => "the food",
+            WAYPOINT_SWORD => "the sword",
             _ => return,
         };
         let heart = waypoint.kind == WAYPOINT_HEART;
@@ -1029,11 +1072,19 @@ impl GameCompletion {
         if purchase && here == cave && self.shop_baseline.is_none() {
             self.shop_baseline = Some(item_taken(cave, state));
         }
-        if waypoint_done(waypoint, state) {
+        if waypoint_done(&self.map, waypoint, state) {
             if heart && self.heart_baseline.is_some_and(|b| state.max_health() <= b) {
                 self.missed = Some(format!("took the other ware in {cave}, not the heart container"));
             }
             return;
+        }
+        if waypoint.kind == WAYPOINT_SWORD && here == cave {
+            let asked = sword_cave_hearts(&self.map, cave);
+            if state.max_health() < asked {
+                self.missed =
+                    Some(format!("{cave} refuses the sword: {} heart containers of {asked}", state.max_health()));
+                return;
+            }
         }
         if purchase && self.shop_baseline == Some(false) && item_taken(cave, state) {
             self.missed = Some(format!("bought another ware in {cave}, not {what}"));
@@ -1136,6 +1187,7 @@ impl GameCompletion {
                     .find_rooms_with_treasure(treasure)
                     .iter()
                     .map(|r| r.location)
+                    .filter(|l| self.sword_caves.contains(l))
                     .collect();
                 if !rooms.is_empty() {
                     return self.closest_room(state, &rooms);
@@ -1200,6 +1252,8 @@ impl GameCompletion {
         match secret {
             Secret::Armos((c, r)) => vec![(c - 2, r), (c + 2, r)],
             Secret::Recorder(tile) => pond_shore(&state.room(), tile),
+            // The square under the stone: MOVE N from there pushes it (`GameView::is_secret_push_direction`).
+            Secret::Push((c, r)) => vec![(c, r + 2)],
         }
     }
 
@@ -1442,7 +1496,9 @@ impl GameCompletion {
                 || self.push_requires_combat(state))
         {
             kind = ObjectiveKind::Fight;
-            let enemy_tiles: Vec<Tile> = if state.has_active_enemies() {
+            let enemy_tiles: Vec<Tile> = if let Some(tile) = gohma_stand(state) {
+                vec![tile]
+            } else if state.has_active_enemies() {
                 state
                     .active_enemies()
                     .flat_map(|e| e.link_overlap_tiles())
@@ -1829,6 +1885,45 @@ pub fn wraps_into_wrong_exits(map: &GameMap, state: &GameView, objective: &Objec
             }
         })
         .collect()
+}
+
+/// The dungeon doorways of `state`'s room MOVE keeps out of (round 27; [`Direction::value`] bits for
+/// `crate::Session::set_vetoed_doorways`): its game.yaml `keep_out` exits whose room the objective neither leaves
+/// toward nor counts as a retreat. 6:0x29's N key door (one frame of pressing at its mouth spends a key the route
+/// needs for 0x2c N), 6:0x28 N (Gleeok's room, which shuts) and 6:0x2c S (five Wizzrobes, shut in): by the
+/// precedent that a mask offers only what the route step uses (the BOMB mask of `required` families), and only on
+/// doorways game.yaml names, so no other room's mask changes.
+pub fn doorways_kept_out(map: &GameMap, state: &GameView, objective: &Objective) -> u8 {
+    let here = state.full_location();
+    if here.level == 0 || here.in_cave {
+        return 0;
+    }
+    let Some(room) = map.get(here) else { return 0 };
+    room.exits
+        .values()
+        .filter(|e| e.keep_out)
+        .filter(|e| !objective.next_rooms.contains(&e.destination) && !objective.retreats.contains(&e.destination))
+        .filter_map(|e| Direction::from_exit(&e.direction))
+        .fold(0, |bits, d| bits | d.value())
+}
+
+/// The Gohma of `state`'s room while it lives (types `$33`, `$34`).
+pub fn gohma(state: &GameView) -> Option<&crate::game::Enemy> {
+    use crate::enums::enemy::{BLUE_GOHMA, RED_GOHMA};
+    state.enemies.iter().find(|e| matches!(e.id, BLUE_GOHMA | RED_GOHMA) && !e.is_dying())
+}
+
+/// Link's row under Gohma for the arrow (Y `$AD`: three squares below it; walked, d6-walks.md §6: 6-11 frames from B
+/// to the kill, out of its touch).
+const GOHMA_ARROW_Y: i32 = 0xAD;
+
+/// Where Link stands to shoot a living Gohma (round 27, the fight objective's target in its room instead of the
+/// monster's own tiles, whose touch costs 2 hearts): on the row [`GOHMA_ARROW_Y`] the tile holding X = Gohma's X − 3.
+/// An arrow shot up kills when it arrives with the eye open and Link's X − Gohma's X in [−10, +5] (walked, 1746 of
+/// 1746); a tile is 8 pixels wide, so every X of the one holding Gohma's X − 3 is inside that window. Gohma walks, the
+/// target follows it.
+pub fn gohma_stand(state: &GameView) -> Option<Tile> {
+    gohma(state).map(|g| Position::new(g.position.x - 3, GOHMA_ARROW_Y).tile())
 }
 
 /// What a bomb should open in `state` (round 22): the intact game.yaml bomb walls the objective leaves through (a

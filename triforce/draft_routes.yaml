@@ -36,7 +36,7 @@ first-quest:
   - {level: 0, room: '0x40', entry: S, exit: E}
   - {level: 0, room: '0x41', entry: W, exit: N}
   - {level: 0, room: '0x31', entry: S, exit: N}
-  - {level: 0, room: '0x21', entry: S, exit: S, takes: [magic-sword], note: 'push the gravestone at tile (18, 10) down from above: stairs; the magic sword is the middle ware (needs 12 heart containers)'}
+  - {level: 0, room: '0x21', entry: S, exit: S, takes: [magic-sword], note: 'push the gravestone at tile (18, 10) up from below (X $90, Y $9D; round 27: the scouting route d6 in routes.yaml) and stop on the stairs; the magic sword is the middle ware (needs 12 heart containers); out by column X $20'}
   - {level: 0, room: '0x31', entry: N, exit: E}
   - {level: 0, room: '0x32', entry: W, exit: N}
   - {level: 0, room: '0x22', entry: S, exit: cave, note: 'Dungeon 6'}

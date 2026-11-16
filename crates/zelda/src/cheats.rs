@@ -12,7 +12,8 @@
 //!   comes first: the cheated one only appears once it is taken, and spent, bringing him back to 0);
 //! - rupees: the game.yaml `requires_rupees` amount (round 26: the shops the route buys from, 0x44's and 0x34's
 //!   caves) until a ware is bought there, not while a rupee change is pending ($67D/$67E: the game adds and takes
-//!   rupees one per frame; [`rupee_need`]).
+//!   rupees one per frame; [`rupee_need`]); in a dungeon room (round 27: Gohma's 6:0x1c, an arrow a shot) while its
+//!   Gohma lives.
 //!
 //! One rule for every item, in [`CheatLedger::settle`] order:
 //! - every fall of the count is a use (`used`); a fall while some of the count is granted uses the grant first:
@@ -137,13 +138,19 @@ pub fn needs(
 /// The game.yaml `requires_rupees` of Link's room (a shop's cave the route buys in, round 26: 0x44's arrows 80,
 /// 0x34's food 60) until a ware is bought there (the overworld room's item flag `$10`, set by any purchase,
 /// asm:Cave_State2TalkOrShopOrDoorCharge), and not while a rupee change is pending ($67D/$67E: the game adds and
-/// takes rupees one per frame, so the price is still being taken).
+/// takes rupees one per frame, so the price is still being taken). In a dungeon room (round 27: Gohma's, whose only
+/// weakness is an arrow at a rupee a shot, asm:Arrow_Wield) the need lasts while its Gohma lives: a Link who comes
+/// with no more rupees than the route's reserve could never shoot.
 fn rupee_need(map: &GameMap, state: &GameView) -> i32 {
     let room = state.full_location();
     let pending = state.var(Var::RupeesToAdd) != 0 || state.var(Var::RupeesToSubtract) != 0;
     let flags = crate::room_entry::ROOM_FLAGS_OW as usize + usize::from(room.value & 0x7F);
-    let bought = room.level == 0 && state.ram()[flags] & FLAG_ITEM_TAKEN != 0;
-    if pending || bought { 0 } else { i32::from(map.requires_rupees(room)) }
+    let done = if room.level == 0 {
+        state.ram()[flags] & FLAG_ITEM_TAKEN != 0
+    } else {
+        crate::objectives::gohma(state).is_none()
+    };
+    if pending || done { 0 } else { i32::from(map.requires_rupees(room)) }
 }
 
 /// 1 in a `requires_bombs` room while it still has something the route bombs: an overworld room's secret rock wall
