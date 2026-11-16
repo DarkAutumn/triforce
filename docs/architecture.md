@@ -102,9 +102,12 @@ memory is written (decisions 2026-11-14 "Three item kinds and the model conversi
   B and waits while `FluteTimer` runs: the big one starts its shrink inside the freeze and splits on the first play
   frame (B+152, scout D5Boss); the 151 frames without a play update are `menu_frames` (no input, no movement, no
   hit: only the NMI's frame timers run, so a bomb's fuse burns meanwhile). On the overworld it summons the
-  whirlwind or drains 0x42's pond: not offered yet (the function says so; a round that uses it widens it).
+  whirlwind or drains 0x42's pond: there only a route step offers it (round 26, "The leg to Dungeon 7" below).
 - **FOOD** `<N|S|W|E>`: the bait in slot `$0F`, `$10` px ahead of Link once he faces the direction (one turn
-  frame, as BOMB). Offered with the food held and slot `$0F` empty (no boomerang out, no bait down); never used up.
+  frame, as BOMB). Offered with the food held, slot `$0F` empty (no boomerang out, no bait down) and (round 26) a
+  Grumble waiting for it (`actions::food_wanted`: slot 1 type `$36` in its state 1, its text typed); never used up.
+  While placed food lies (slot `$0F`'s state bit 7, `actions::food_lies`) BOOMERANG is not offered: the throw would
+  take the food away (asm:Boomerang_Wield).
 - **CANDLE** `<N|S|W|E>`: a fire in slot `$10`/`$11` ahead of Link that moves on 16 px and stands (about 94
   frames). Offered with a candle held, a free fire slot and, blue, no fire yet in this room (`HasUsedCandle` `$513`).
 
@@ -134,6 +137,50 @@ an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MO
 Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen wrap or an aborted one leaves Link)
 reads the tile under him (no look-ahead at X >= `$F0`), and N/S there read column `$1F` and the bytes after the tile
 map (`$67F0` on) as column `$20`, as the game does.
+
+### The leg to Dungeon 7 (round 26; `docs/routes/d7.md` §11, scouting route `d7`)
+
+The whirlwind, the shops, the Armos and the pond are no executor macros: the model presses the buttons through its
+own actions (MOVE, RECORDER, FOOD), and the rules live in the mask (an action is offered only where and when the
+route step wants it) and in the objective (targets, outcomes).
+
+- **Step types** (routes.yaml): `exit: recorder` (0x0b, out of Dungeon 5) and the next step's `entry: recorder`
+  (0x45, where the whirlwind sets Link down; `game_map::WHIRLWIND_LANDINGS`, `check_whirlwinds`). Its target is
+  Link's own tile on the coming whirlwind's row, the landing room the correct exit; a whirlwind that came and went
+  (`zelda::whirlwind::Plan::Missed`) comes again only on a new room entry, so then the room's edges are retreats.
+  `waypoint: arrows` / `waypoint: food` on a shop's cave step: buy the cave room's game.yaml `treasure` at its
+  `treasure_tile` (the target; `path_costs` keep the path off the other wares' squares, which a walk across buys);
+  done once Link holds it (`InvArrow` `$659`, `InvFood` `$65D`), `missed` on leaving the room without it or when the
+  shop's flag is set during the visit without it (another ware bought). `waypoint: candle` (7:0x4a's cellar) as the
+  bow. game.yaml `entrance: {how: armos|recorder, tile}` is the room's `Secret`: an `exit: cave` there targets the
+  Armos statue's W and E stand tiles (tile ± 2 columns), or the pond's shore (`objectives::pond_shore`: its stairs lie
+  in the water, out of the path search's reach), until the stairs show, then the stairs.
+- **Masks.** RECORDER (`Session::set_recorder_facings`, set every step from `GameCompletion::recorder_facings`):
+  on the whirlwind step only facing the way the next play must step the game's counter (`TeleportingLevelIndex`
+  `$523`: +1 facing right or up, -1 left or down, then on past the levels whose piece Link lacks; only the first play
+  of a room entry makes a whirlwind, `$508`), while plays remain (`whirlwind::plan`, computed from the counter, never
+  assumed: out of Dungeon 5 with the counter at 0, two plays facing down); at the pond while the objective heads for
+  its stairs and the pond is full (it fills again on every visit); in a dungeon only while the objective fights a big
+  Digdogger that hasn't heard it (5:0x24, 7:0x1c; never 7:0x39, which Link only crosses). FOOD and BOOMERANG as in
+  "Item kinds" above. MOVE E or W into a secret Armos (`GameView::is_secret_armos_direction`: a room with a `cave`
+  exit, the statue's tiles `$C0`-`$C3` still standing, Link on a grid point pressing into it from its side; from
+  above it wakes too but costs a heart, and the statue is a wall to `can_link_move`). ARROW is off in every family
+  (`items: {arrows: false}` default, `env::config::ItemsConfig`); a family that turns it on shoots only while Link
+  holds more rupees than the route's `rupee_reserve`.
+- **Reserves.** routes.yaml `rupee_reserve: N` (as `bomb_reserve`; `GameCompletion::rupee_reserve`): rupees kept
+  for the route's arrows, 2 from the arrow shop on.
+- **The room view** (`GameView::room`): the game's raised walkable limit (`RoomFirstUnwalkableTile` `$34A` = `$99`
+  after 0x42's drain, `Room::with_first_unwalkable`; every start state holds the defaults) makes the drained pond
+  walkable; an opened bomb hole is a doorway whatever its rim tile (`Room::with_open_doorways`: the game lets Link
+  through by its door type, asm:Doorway_CheckLink; the N and W rims are unwalkable tiles). The doorway changes the
+  path search and so the `target` input and PBRS after a bomb in every N or W bomb wall (7:0x69 N; on `d2first`
+  4:0x21 N, 4:0x11 N).
+- **States and segments.** The entry side `r` names a state entered by the whirlwind (`0_45r_<chain>`,
+  `entry_states.ENTRY_SIDES`, `StateName`). `eval_batch.D7_SEGMENTS`: `post-d5` from `0_0bc_0` (target 7:0x79) and
+  `d7` from `7_79s_0` (the D7 triforce); `r56_chains.sh` takes them with `ROUTE=d7 SEGMENTS=...`.
+- **Walked** (`crates/zelda/tests/d7.rs`, from `5_14s_0`, monsters removed): every step and its rule asserted, to the
+  D7 triforce; beside it a wrong ware is `missed`, the rupee top-up, the whirlwind mask for seven counter and piece
+  cases, the Armos from either side.
 
 ### Randomness at a start (`crates/zelda/src/rng.rs`, `room_entry.rs`; round 22)
 
@@ -513,8 +560,10 @@ action, and BOMB is masked outside `requires_bombs` rooms anyway) except where t
   the cheated one only appears once it is taken and spent (back to 0). The step is the one
   `GameCompletion::route_edge_exit` picks for the state before the objective follows it, so one-room training (the
   start state's step) and chains (the step of every room entered) agree; off the route there is no key need;
-- **rupees:** the game.yaml `requires_rupees: N` amount (a shop the route buys from; no room sets it yet), not while
-  a rupee change is pending (`$67D`/`$67E`: the game adds and takes rupees one per frame).
+- **rupees:** the game.yaml `requires_rupees: N` amount of a shop's cave the route buys from (round 26: 0x44's cave
+  80 for the wood arrow, 0x34's cave 60 for the food), until a ware is bought there (the overworld room's item flag
+  `$10`, set by any purchase) and not while a rupee change is pending (`$67D`/`$67E`: the game adds and takes rupees
+  one per frame). Walked (`crates/zelda/tests/d7.rs`): from 30 rupees the two shops cheat 50 and 60.
 
 `CheatLedger`, shared by `SpecialistEnv` and `ChainEnv` (one per episode or run), runs at episode/run start and after
 every action with one rule for every item, writes any change with `Session::apply_ram` and carries the rebuilt state
@@ -1594,12 +1643,14 @@ This preserves intended off-route traversal without accepting premature key-room
 downstream inventories and refreshing affected curriculum snapshots; old filenames alone do not prove progress.
 
 **State names** (round 24). A start state is `<level>_<room><side>[_v<visit>]_<chain>.state`: `room` two lower-case
-hex digits, `side` the routes.yaml entry (`n`/`s`/`e`/`w`; `c` out of a cave, cellar or dungeon stairs; `cave` a cave
-or cellar interior, entered from S), `chain` 0-2. `visit` is the route's visit to that room from that side
-(`zelda::game_map::route_visits`, `GameMap.visits`, the `visit` of `_native.route_steps()`): 1 + the earlier steps
-entering the room from that side, not counting the other way of the step's own stretch (its `parts` step is the same
-visit on the other way: `0_55n` for both) nor a step right after one entering the room the same way (another target
-of the same visit: clips-gauntlet). The first visit has no `_v` field, so every name from before round 24 is its
+hex digits, `side` the routes.yaml entry (`n`/`s`/`e`/`w`; `c` out of a cave, cellar or dungeon stairs; `r` set down by
+the whirlwind, round 26; `cave` a cave or cellar interior, entered from S), `chain` 0-2. `visit` is the route's visit
+to that room from that side (`zelda::game_map::route_visits`, `GameMap.visits`, the `visit` of
+`_native.route_steps()`): 1 + the earlier steps entering the room from that side, not counting the other way of the
+step's own stretch (its `parts` step is the same visit on the other way: `0_55n` for both), a step right after one
+entering the room the same way (another target of the same visit: clips-gauntlet), nor (round 26) the plain way's
+step of an earlier stretch whose clip way enters the room that way too (a run takes one of them: `d7`'s 0x55 from N
+is `0_55n_v2`). The first visit has no `_v` field, so every name from before round 24 is its
 first visit and stays valid; a later one is `_v2`, `_v3`, ... without leading zeros (`0_1be_v2_0`, the leg to
 Dungeon 5 entering 0x1b from E again; `5_07cave_v2_1`, Dungeon 5's tunnel cellar from the 0x06 side). The number
 changes only when a step entering the same room from the same side is added earlier on the route, never with the
