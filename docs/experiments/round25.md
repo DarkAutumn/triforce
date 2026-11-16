@@ -1443,14 +1443,22 @@ one. Clips on, paired with `r75-1k`:
 | Full route | 19.7 (19.7) | **82.6** (82.6) | +62.9 ± 1.8 |
 | D2 | 88.2 (22.2) | 99.3 (85.6) | +11.1 ± 1.0 |
 | After D2 | 96.2 (25.4) | 98.8 (86.7) | +2.6 ± 0.7 |
+| D1 | 99.7 (27.8) | 99.9 (84.9) | +0.2 ± 0.2 |
+| After D1 | 100.0 (29.4) | 100.0 (86.2) | 0.0 |
+| D3 | 81.0 (30.6) | 96.7 (86.1) | +15.7 ± 1.4 |
+| After D3 | 100.0 (36.9) | 100.0 (90.6) | 0.0 |
+| D4 | 92.3 (43.2) | 99.9 (89.9) | +7.6 ± 0.9 |
+| After D4 | 99.9 (45.7) | 99.7 (89.9) | -0.2 ± 0.2 |
+| D5 | 68.0 (68.0) | **97.7** (97.7) | +29.7 ± 1.5 |
 
 The planner's full route with the round 24 team was 60.9% (§12): the round's models are worth 22 points under the
 planner too. Its 174 failed runs of 1000: 5:0x64 on the way back 69, the Olive Garden 33, Manhandla 27, 2:0x1e 5,
 5:0x37 5, 0:0x0a 4; four runs end `darknut exceeded 2000 steps` and three leave the route into 0x1a's cave. Hearts on
 entering, models alone → planner: Manhandla 3.43 → 5.23, Gleeok 4.73 → 6.54, the Olive Garden 6.70 → 8.95, 5:0x64 on
 the way back 5.45 → 8.38, Digdogger 3.95 → 7.28; hearts lost a visit in the Garden 3.86 → 1.96, at Manhandla 0.68 →
-0.46. Cheated bombs a run 2.32 → 3.78 (more runs reach Dungeon 5). The other segments and clips off were cut by a
-restart of the machine on Nov 17 and are measured after this commit; they are appended below when done.
+0.46. Cheated bombs a run 2.32 → 3.78 (more runs reach Dungeon 5). The segments from D1 on were measured on Nov 17
+after a restart of the machine. The planner's chains with clips off were not measured: on Nov 17 the owner asked for
+the remaining dungeons to be prepared in parallel, and the job places went to that (backlog).
 
 ## 14. Version 1.5.0.1
 

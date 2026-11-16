@@ -41,6 +41,9 @@ Dungeon 5 segment 34.9 → 68.0 | 22.0 → 47.5%.
 - [ ] **The planner's stuck runs** (round25.md §12): more than the models' (6 → 33 on the full route with the round
   24 team; `darknut exceeded 2000 steps`, a cave beside the route). To be looked at before the planner is the golden
   path's mode.
+- [ ] **The planner's chains with clips off for the round 25 team** (`CLIPS=off TAG=r75-1k-plan-noclips`, segments
+  full, d4, d5): not measured; given up on Nov 17 for the parallel preparation of Dungeons 6-9 (decisions 2026-11-17).
+  The clips-on set is complete (round25.md §13: D3 96.7%, D4 99.9%, D5 97.7% arrivals, full route 82.6%).
 - [ ] **The planner as a teacher** (`round25-planner-teacher.md`): analysed, not trained. Proposed order: a penalty
   on the refused action labelled by `plan:1:1` during rollouts, then a cross-entropy target, on darknut and ow-peahat
   first.

@@ -2446,3 +2446,29 @@ triforce and pushed. I really want to be able to do play-zelda and see the progr
   after the first complete game lands the same way.
 - **In between:** work in progress is watched from the line's worktree with its own models
   (`TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py`).
+
+## 2026-11-17 — The remaining dungeons are prepared in parallel; training is the serial resource (Lee)
+
+Lee: "You KNOW we are doing d7 d6 d8 d9. Why do it sequentially when you could do it in parallel? Do your best to
+parallelize this, and at the end you can always clean up, refine, like you would have done anyway. I mean look at
+the retraining you would do... that all can be front loaded looking at the dungeons first anyway."
+
+- **Lanes.** Each stretch (Dungeon 7, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon) has its own
+  lane of work that needs no GPU: walk the running game, build the route vocabulary (steps, masks, objectives,
+  families), build start states and curricula (fights the explorer cannot clear are skipped or staged; inventories
+  staged from the ledgers, rebuilt from chain runs' harvested states later), write the family files. The lanes run
+  at once, one worktree each; a lane's next step starts when its previous one reports.
+- **The serial resource** is the job line's two places (trainings, evaluations, chains): preparation exists to keep
+  it fed. Order: the next landing's families first (Dungeon 7), then whichever lane has states ready.
+- **A family is trained once on all its rooms.** A family whose monsters are in several of the remaining dungeons
+  (Wizzrobes in 6 and 9, Blue Darknuts in 8 beside Dungeon 5's, Like-Likes, Zols, Gibdos, Pols Voices) waits for
+  those rooms' states and trains on them together, instead of being continued once per dungeon. A scripted rule
+  that wins a room in the walks becomes demonstration rows (`train --demos`) during preparation.
+- **Integration.** The vocabulary branches of Dungeons 8 and 9 start from Dungeon 6's and are merged in route order
+  by one integration step with the suites and a full-route identity chain, as round 26's three branches were.
+- **Landing is unchanged:** each stretch lands on `main` when its team takes its segment (the entry above); the
+  clean-up and tuning round comes after the first complete game.
+- **Given up for it:** the honest planner's 1000-run chains with clips off for round 25 (the clips-on set is in
+  round25.md §13); they are measured when the line is idle.
+- **Agents' priority:** builds, suites and explorers run under `nice -n 10`, explorers on 4 threads, so the owner's
+  player and the queued jobs keep working beside five or six agents.
