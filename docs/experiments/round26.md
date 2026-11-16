@@ -133,3 +133,26 @@ take another path. Paired in 4:0x21: frames −0.8 ± 0.8, hearts, deaths and wr
 evaluations of the three families (100 episodes per state): success and health identical; 4:0x21's worst linger 48 →
 8 steps from S. **Kept everywhere, one convention**: the models play those rooms the same. It counts as a behaviour
 change of the merge to re-measure with the next chains, not as a break.
+
+## 5. The merge of the three branches
+
+The walks, the route vocabulary and schema 6 were built in three branches and merged in that order. One conflict
+(`docs/decisions.md`: the schema 6 entry beside the entries before it, both kept); the code merged without one. Two
+things only the merge could settle:
+
+- **The rupee reserve reaches the observation** (§3, "At the merge").
+- **Six of schema 5's 613 recorded traces differ** (`tests/test_obs_legacy.py`: every schema 5 column over every
+  family's start states and 50 seeded steps). Schema 6 alone reproduces all of them; the vocabulary alone had no such
+  record. Compared key by key with the schema 6 code without the vocabulary, each of the six has the same actions and
+  length and differs in its last, terminal observation only, in `target` (one also in `objective`); compared with the
+  vocabulary's code without schema 6, `objective`, `target`, `grid`, `history` and the mask are equal at every step.
+  Five end on a wrong exit into a room through its opened bomb hole (`4_01s_0`, `4_01s_1` into 4:0x11 from N;
+  `4_11s_0`, `4_11s_2` into 4:0x21 from N; `5_65e_2` into 5:0x66 from W): §4's doorway, the target now points where
+  it read "no path". The sixth, `5_14s_0`, ends on the D5 triforce, out on 0:0x0b after `d2first`'s last step: the
+  objective and the target name the room to the S there, where they named nothing (the vocabulary's step lookup; no
+  decision is made from that observation, the run has ended). The six are pinned beside the record
+  (`ROUTE_CHANGES`); the record itself is untouched.
+
+Suites on the merged code: `cargo test --release --workspace --features zelda/zcore` 984 passed, 1 ignored (with the
+scripted walk `d7.rs` under schema 6); pytest 813 passed, 3 skipped; `tf replay verify` the three corpus replays ok;
+`entry_states audit` 613 states, no problem; `asm.py check --final` ok.
