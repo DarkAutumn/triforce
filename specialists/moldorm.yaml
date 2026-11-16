@@ -3,7 +3,7 @@ rooms: ['(2, 0x3e)']
 start_states: ['2_3e*_[0-9]']
 success: [exit-correct]
 reward_profile: default
-reward: {pbrs: true, item_targets: true}   # dungeon family: dropped items are shaping targets (round 10 §8)
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family: dropped items are shaping targets (round 10 §8); round 25: hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5); about 40% of chain runs bring bombs from 0x5e (round 19)
 items: {bombs: free}                       # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve

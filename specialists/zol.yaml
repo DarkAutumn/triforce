@@ -3,7 +3,7 @@ rooms: ['(3, 0x7c)', '(3, 0x7b)', '(3, 0x6b)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x
 start_states: ['3_7c*_[0-9]', '3_7b*_[0-9]', '3_6b*_[0-9]', '3_49*_[0-9]', '3_3d*_[0-9]', '4_40*_[0-9]', '5_57*_[0-9]']
 success: [exit-correct, triforce-collected]   # 0x3d ends on the D3 triforce
 reward_profile: default
-reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)

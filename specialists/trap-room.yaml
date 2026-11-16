@@ -3,7 +3,7 @@ rooms: ['(1, 0x22)', '(3, 0x5a)', '(3, 0x4c)', '(4, 0x11)', '(4, 0x02)']
 start_states: ['1_22*_[0-9]', '3_5a*_[0-9]', '3_4c*_[0-9]', '4_11*_[0-9]', '4_02*_[0-9]']
 success: [exit-correct]
 reward_profile: default
-reward: {pbrs: true, item_targets: true}   # as the dungeon families (round 10 §8): dropped items are shaping targets
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as the dungeon families (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: required}                   # their requires_bombs rooms (3:0x4c's and 4:0x11's walls; offered only in reach of the wall); else the 10th kill

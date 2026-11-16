@@ -1183,7 +1183,7 @@ fn score(config: &SpecialistConfig, change: &Change, heart: &HeartContext) -> en
 fn heart_value_off_is_todays_reward() {
     let data = common::game_data();
     let values = data.heart_values.as_deref().expect("triforce/heart_value.json ships with the route");
-    let config = (*data.specialist("goriya").unwrap()).clone();
+    let config = heart_config(false, 0.0, 0.0);
     assert_eq!(config.reward.heart_value, env::config::HeartValueConfig::default());
     assert!(data.heart_values_for(&config, "d2first").is_none(), "off reads no table");
     let full = Ram::new();
