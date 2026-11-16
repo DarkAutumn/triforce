@@ -182,6 +182,59 @@ route step wants it) and in the objective (targets, outcomes).
   D7 triforce; beside it a wrong ware is `missed`, the rupee top-up, the whirlwind mask for seven counter and piece
   cases, the Armos from either side.
 
+### The magic sword and Dungeon 6 (round 27; `docs/routes/d6.md` §14, scouting route `d6`)
+
+The same rule as for the leg to Dungeon 7: no macros. The gravestone, the sword, the doorways and Gohma's arrow are
+played by MOVE, BOMB and ARROW; what is new lives in the objective (targets, outcomes), in the mask, and in where a
+MOVE ends.
+
+- **Route** (routes.yaml): `d6` = `{extends: d2first}` plus steps 248-280 (the stretch `woods`: the wrap exit out of
+  0x51 into 0x50, or 0x51 S, the Lost Woods by `exit: maze`, 0x60, 0x50 from S; the graveyard; 0x21 and its cave;
+  0x31, 0x32, 0x22; Dungeon 6's sixteen steps). `waypoint: sword` on the magic sword's cave step
+  (`objectives::WAYPOINT_SWORD`): done once Link holds the cave's sword, `missed` on leaving the overworld room
+  without it or on standing in the cave with fewer heart containers than `SWORD_UPGRADES` asks (the old man refuses
+  under 12). `GameCompletion::sword_target` (the sword milestone that leads a Link who may take a better sword to its
+  cave from anywhere) keeps to sword caves the route enters by a step without a waypoint (`sword_caves`: the wood and
+  white swords); a waypoint cave is a stop in route order, and a sword cave the route never enters is no target.
+- **The pushed gravestone** (`game_map::Secret::Push(tile)`, game.yaml `entrance: {how: push, tile}` in a room with a
+  `cave` exit: 0:0x21). `GameCompletion::cave_tiles`: the stairs once they show, before that Link's tile two rows
+  under the stone. `GameView::is_secret_push_direction(N)` (the stone's four tiles `$BC`-`$BF` still there, Link on
+  the grid point under it on its column) makes the mask offer MOVE N there. `Executor::run_timed` holds the press as
+  for a push block while the stone slides (`GameView::secret_push_sliding`: tile object `$65` in slot `$0B` off its
+  square) and **ends the MOVE when Link stands on the uncovered stairs square** (a MOVE N from the stairs presses
+  nothing either): two frames later the game takes him down. The stairs are not kept by the game (the stone is back
+  on every entry, room flag `$20` notwithstanding), and nothing here remembers them.
+- **Where a MOVE ends without another frame of its direction** (`Executor::run_timed`, before every frame of a MOVE):
+  (1) on an overworld grid point whose next tiles in that direction are gravestone tiles (`game::is_gravestone_tile`;
+  one frame of pressing there releases a flying Ghini, asm:Spawn_CheckTouchedArmosOrGravestone; the secret stone
+  from below is the one exception, on the action's first frame); (2) on the stone's stairs; (3) at the mouth of a
+  dungeon doorway the session vetoes (`Executor::vetoed_doorways`, `game::at_doorway_mouth`: at the room's bound on
+  the doorway's line, on a grid point, not in a doorway). The interrupt is `Wall`. None of the three can happen in a
+  room of `d2first` before step 248 (no gravestone tiles, no Push secret, no `keep_out` exit).
+- **Masks** (`Session::compute_mask`; the env sets both every step in `update_disabled_kinds`, training and chains):
+  `set_vetoed_doorways(objectives::doorways_kept_out(map, state, objective))`: game.yaml exits with `keep_out: true`
+  (6:0x28 N into Gleeok's room, 6:0x29 N, a key door that takes a key on one frame of pressing, 6:0x2c S into a room
+  of five Wizzrobes that shuts) whose room the objective neither leaves toward nor counts as a retreat: no MOVE into
+  them from the mouth. `set_arrow_facings(GameCompletion::arrow_facings(state))`: N while a Gohma lives
+  (`objectives::gohma`), None elsewhere; the family switch (`items.arrows`, on for boss-gohma only) and the rupee
+  reserve apply as before. Which frame to shoot on is the model's (the eye's state and Gohma's offset are schema 6
+  columns); a miss costs its rupee.
+- **Gohma's target** (`objectives::gohma_stand`, used by `dungeon_room_objective`'s fight): the tile on the row Y
+  `$AD` that holds X = Gohma's X − 3, every X of which is inside the walked kill window (Link's X − Gohma's X in
+  [−10, +5]); it follows Gohma. After the kill the heart container and the N shutter by the room's `treasure` rule.
+- **Data** (game.yaml): 0:0x21's `cave` exit, its cave room with `treasure: magic-sword`, and `path_costs` (out of
+  the cave by row Y `$7D` and column X `$20`: the room's Ghini is made under the exit spot); 6:0x28
+  `requires_bombs` (BOMB for the `required` wizzrobe family only in reach of its E wall); 6:0x1c
+  `requires_rupees: 2` (`cheats::rupee_need`: in a dungeon room the need lasts while its Gohma lives). Reserves
+  (routes.yaml): bombs 2 from 0x42, 1 from 6:0x29; rupees 2, 1 from 6:0x1c.
+- **Families**: new `ow-ghini` (the graveyard and the sword cave), `wizzrobe` (6:0x78, 0x28, 0x29, 0x2c, 0x38,
+  0x3a), `boss-gohma` (6:0x1c), each `trainable: false` with no start states until the stretch's states exist; the
+  stretch's other rooms joined ow-moblin, ow-lynel, stalfos-keese-gel, zol, trap-room, vire, like-like and
+  equipment-room.
+- **Walked** (`crates/zelda/tests/d6.rs`, from `7_2bw_0`, monsters removed but Gohma): to the D6 triforce by the
+  objective and the masks, each step's rule asserted; beside it the plain way of `woods`, the cave's refusal, a
+  gravestone never pressed, the three doorways.
+
 ### Randomness at a start (`crates/zelda/src/rng.rs`, `room_entry.rs`; round 22)
 
 The game's only random source is the 13-byte shift register `$18-$24` (`zelda-asm/mechanics.md` "# Random

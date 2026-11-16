@@ -6,6 +6,21 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 17)
 
+- **Round 27, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round27.md`):** the magic sword and Dungeon 6. Built so
+  far, nothing trained: (1) **the walks** (`docs/routes/d6-walks.md`: the leg, the gravestone and the cave, every
+  room of level 6, Wizzrobes and Gohma measured; today's models cannot play 0x28, 0x38, 0x3a, Gohma, or ow-lynel's
+  0x50 and 0x32); (2) **the route vocabulary** (`docs/routes/d6.md` §14, `docs/architecture.md` "The magic sword and
+  Dungeon 6"): the scouting route `d6` = `d2first` plus steps 248-280 (`{extends: d2first}`; the stretch `woods`),
+  0x21's gravestone as a pushed secret (game.yaml `entrance: {how: push}`: the square under it is the target, MOVE N
+  pushes it, the MOVE ends on the stairs; **a MOVE ends before any gravestone square**), `waypoint: sword` (the
+  cave's refusal under 12 containers is `missed`), game.yaml exits with `keep_out: true` (6:0x28 N, 6:0x29 N, 6:0x2c
+  S: no MOVE into them unless the step leaves there), Gohma (ARROW only facing N while it lives, the stand tile under
+  it as the fight's target, `requires_rupees` in its room), families ow-ghini, wizzrobe, boss-gohma (no start
+  states yet, `trainable: false`), the scripted walk `crates/zelda/tests/d6.rs` to the D6 triforce, and 300 paired
+  full-route runs showing `d2first` plays the same (round27.md §4). The lead's working answers to the walks' nine
+  questions are in `docs/decisions.md` 2026-11-17, the owner's to overrule. **The main risk** (round27.md §3): the
+  best plays seen of the stretch cost 21 hearts of 12; without 0x38 and 0x3a, 10.3. Not built yet: the stretch's
+  start states (round27.md §5 names them), curricula, training, chains.
 - **Round 26, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round26.md`; the plan for the rest of the game:
   `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. Built so far, nothing trained:
   (1) **the walks** of the running game (`docs/routes/d7-walks.md`: rupees and bombs at 0x0b, the whirlwind, the

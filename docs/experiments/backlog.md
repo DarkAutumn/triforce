@@ -14,6 +14,35 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
+### Round 27 (begun Nov 17): the magic sword and Dungeon 6
+
+round27.md; the walks `docs/routes/d6-walks.md`; the route as built `docs/routes/d6.md` §14; the lead's working
+answers `docs/decisions.md` 2026-11-17.
+
+- [x] **The walks** (Nov 16): every room of the stretch in the running game.
+- [x] **The route vocabulary** (Nov 17): the scouting route `d6` (steps 248-280), the gravestone, `waypoint: sword`,
+  `keep_out` doorways, Gohma's ARROW facing and stand tile, families ow-ghini, wizzrobe, boss-gohma, the scripted
+  walk `crates/zelda/tests/d6.rs` to the D6 triforce.
+- [ ] **Start states** of steps 248-280, chains 0-2, both ways of `woods` (round27.md §5 names them); then the three
+  new families' `start_states` and `trainable`, and patterns for the rooms added to the eight old families.
+- [ ] **Merge `d6` into `d2first`** when the owner fixes the route (as round 26 did with `d7`), and refit
+  `triforce/heart_value.json`: wizzrobe's yaml already asks for `reward.heart_value`, which reads the table of the
+  family's route.
+- [ ] **Curricula and a first team**: wizzrobe from like-like's promoted run, ow-ghini from ow-moblin's, boss-gohma
+  new, ow-lynel retrained (0x50 from E and S, 0x60 E → N, 0x32, 0x22).
+- [ ] **The main risk: the survival budget does not close** (round27.md §3): the best plays seen cost 21 hearts of
+  12 with 0x38 and 0x3a in, 10.3 without them. Nothing built in the vocabulary step changes that.
+- [ ] **Armos statues are still pressed** by a MOVE that arrives on the grid point before one (0x22: 41 hearts in 40
+  ow-lynel runs). The gravestone stop in the executor would cover them, but an Armos room (0x34) is on `d2first`:
+  extending it is a behaviour change to measure on the chains.
+- [ ] **The pushed stone after the cave**: MOVE N is offered again on the stand square (the stone is back) and would
+  open the stairs a second time; the objective leads away from it. If a trained ow-ghini goes back in, mask it by
+  the route step.
+- [ ] **0x29's key** (the ring key) is left; 0x7a's key is never fought for (a run without a key at 0x79 gets a
+  cheated one).
+- [ ] **A scripted fight for 0x38 and 0x3a** does not exist (the walks' doorway script fails); a teacher for the
+  wizzrobe family would have to be the planner.
+
 ## Done (Nov 16): round 25 (leave rooms with more hearts; 1.5.0.1)
 
 round25.md. From the game start to the D5 triforce 4.8 | 0.3% → 19.7 | 2.6% (clips on | off, models alone); the

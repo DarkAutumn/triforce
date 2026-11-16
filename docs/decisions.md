@@ -2523,3 +2523,42 @@ no leftover 'in case the old version of the code' is running."
   worktrees that were behind `main` with nothing of their own were fast-forwarded to it.
 - **Rule from here:** a new worktree branches from a branch that has this commit; a branch from before it is
   merged with `main` before anything is trained or evaluated in its worktree.
+
+## 2026-11-17 — Round 27's working answers: the magic sword and Dungeon 6 (the lead; Lee may overrule any of them)
+
+`docs/routes/d6-walks.md` §10 ends with nine questions that are Lee's. Round 27's route vocabulary (the scouting
+route `d6`, `docs/routes/d6.md` §14) had to be built before he answered, so the lead gave each a **working answer**.
+They are not Lee's decisions: each is the cheapest thing to undo that the walks support, and each names what
+changes if he says otherwise.
+
+1. **0x38 and 0x3a, and the 30% bar.** Keep the aim (a first team at about 30% on its segment, decision 2 of Nov
+   16) and report honestly. The walks' best plays of the two rooms multiply to 20% from full hearts before any other
+   room is counted, and the stretch's survival budget does not close (`docs/experiments/round27.md` §3): if the
+   first trained team stays under the bar, the report says so with the rooms' numbers, and the bar is Lee's to move.
+2. **Hidden positions for Red Wizzrobes.** The wizzrobe family trains on `obs.hidden_positions: ram` (today's
+   default). The walk shows `ram`, `last_seen` and `zero` tell a model the same about where a Red will appear
+   (nothing: the spot is drawn on the frame it starts to fade in). The question stays open for Ganon, whose hidden
+   position is live in RAM.
+3. **The phase counter.** `phase` and `phase_time` stay (schema 6): a Red's frames to its shot are what a player
+   reads from the fade. Removing them would be a second model-breaking change, which Lee ruled out.
+4. **Bombs in Dungeon 6.** `required` at 0x28's door spot (the room is `requires_bombs`; BOMB only in reach of its
+   E wall) and `tenth` everywhere else for the wizzrobe family; no counted cheats for bombs as weapons. vire keeps
+   `free`, held by the route's reserve (2 until 0x28, 1 after: Link holds exactly the reserve, so only a dropped
+   bomb is free). If Lee prefers `free` with counted cheats, it is one line of the family's yaml.
+5. **The doorways into 0x18 and 0x3c, and 0x29's key door.** Masked: game.yaml `keep_out: true` on 6:0x28 N, 6:0x29
+   N and 6:0x2c S; no MOVE into them is offered while the route does not leave through them, and a MOVE toward one
+   ends at its mouth. By the precedent that a mask offers only what the route step uses (the BOMB mask of `required`
+   families). Only doorways game.yaml names are masked: wrong exits elsewhere stay endings.
+6. **Rupees and Gohma's arrow.** ARROW is offered in Gohma's room facing N while Link holds more rupees than the
+   reserve (1 there), **not** only when the shot would kill: a miss costs a rupee, and the model learns the eye's
+   window from schema 6's columns. Runs arrive with 28-40 rupees; a purse at or under the reserve is topped up to 2
+   while Gohma lives (cheated and counted). The aimed mask (a miss impossible) remains the alternative if a trained
+   boss-gohma wastes the purse.
+7. **The gravestone.** Pushed from below (the walk: 40 of 40 at 0.07 hearts, no flying Ghini; the draft said from
+   above), and Link stops on the stairs square. The cave's refusal under 12 containers ends the run as `missed`:
+   on this route Link has 12 after Dungeon 7, and a run that went on with the white sword has no measurable chance
+   in 0x38 and 0x3a.
+8. **The graveyard's family.** `ow-ghini`, its own (families are by enemy), initialised from ow-moblin's promoted
+   run, which crossed all four rooms 100% zero-shot.
+9. **ow-lynel's 0x50.** Retrained for the corridor N from both entries (the wrap's E and the plain way's S), with
+   0x60 E → N, 0x32 and 0x22; the clip way keeps its own 0x50 step. Neither way is played today (0 of 40).

@@ -13,9 +13,10 @@ from triforce.specialist import list_specialists
 
 def test_the_route_and_families():
     # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12; the leg and Dungeon 5, round 24;
-    # the leg to Dungeon 7 and Dungeon 7, round 26: scouted as the route d7, merged Nov 16); clips-gauntlet is round
-    # 21's experiment route (two targets per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    # the leg to Dungeon 7 and Dungeon 7, round 26: scouted as the route d7, merged Nov 16); d6 is round 27's scouting
+    # route (d2first, then the magic sword and Dungeon 6); clips-gauntlet is round 21's experiment route (two targets
+    # per room and entry, drawn by a specialist naming it).
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd6', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
@@ -25,6 +26,28 @@ def test_the_route_runs_from_the_start_to_the_d7_triforce():
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], first['specialist']) == (0, 0x77, 'start', 'ow-start')
     assert (last['level'], last['room'], last['exit']) == (7, 0x2b, 'triforce') and len(steps) == 248
+
+
+def test_the_scouting_route_d6_goes_on_to_the_d6_triforce():
+    """Round 27: d6 is d2first and steps 248-280: the stretch woods (both ways), the graveyard, the sword cave's
+    waypoint, Dungeon 6 with its tunnel and Gohma; every room is in its step's family."""
+    base, steps = native.route_steps(), native.route_steps('d6')
+    assert steps[:len(base)] == base and len(steps) == 281
+    own = steps[len(base):]
+    assert [(s['room'], s['way']) for s in own if s['stretch'] == 'woods'] == [
+        (0x51, 'clips'), (0x50, 'clips'), (0x51, 'plain'), (0x61, 'plain'), (0x60, 'plain'), (0x50, 'plain')]
+    assert [(s['index'], s['room'], s['in_cave'], s['waypoint']) for s in own if s['waypoint']] == [
+        (260, 0x21, True, 'sword')]
+    assert [(s['index'], s['bomb_reserve']) for s in own if s['bomb_reserve'] is not None] == [(248, 2), (272, 1)]
+    last = steps[-1]
+    assert (last['level'], last['room'], last['exit'], last['specialist']) == (6, 0x0c, 'triforce', 'stalfos-keese-gel')
+    families = native.families()
+    for step in own:
+        room = (step['level'], step['room'], step['in_cave'])
+        assert room in [tuple(r) for r in families[step['specialist']]], step
+    assert {s['specialist'] for s in own} == {
+        'ow-moblin', 'ow-lynel', 'ow-ghini', 'stalfos-keese-gel', 'wizzrobe', 'zol', 'trap-room', 'vire',
+        'equipment-room', 'like-like', 'boss-gohma'}
 
 
 def test_every_route_room_is_in_its_family():
@@ -77,9 +100,9 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
     assert steps[start + 4]['waypoint'] == 'bow'
     assert native.game_rooms()[(1, 0x7f, True)]['treasure'] == 'bow'
     assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False), (4, 0x02, False),
-                                              (4, 0x11, False)]
+                                              (4, 0x11, False), (6, 0x48, False)]
     assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True), (5, 0x04, True),
-                                                   (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True)]
+                                                   (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True), (6, 0x08, True)]
 
 
 def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
