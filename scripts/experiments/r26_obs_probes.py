@@ -311,12 +311,12 @@ class Touch:
         key = (phase(g), features(g, self.s))
 
         def onto(game):
+            if self.before:
+                self.before(game)
             game.write(X, game.read(X + self.s))
             game.write(Y, game.read(Y + self.s))
             for addr in (INV, SHOVE_DIR, SHOVE_DIST):
                 game.write(addr, 0)
-            if self.before:
-                self.before(game)
         self.w.step(before=onto)
         # Link_HarmByObjType starts his knockback (Shove_Begin); his invincibility timer is no test under the clock
         # (Mode5Play_UpdateWorld adds $10 to it every frame then).
@@ -372,21 +372,55 @@ def blue_wizzrobe_touch(probe):
     Touch(probe, s, flash).run(500, phase)
 
 
+def park(g, s, objs):
+    """Moves slot ``s`` (WRITE) to a floor spot at least 40 px (Chebyshev) from every object of ``objs`` (slots) unless
+    it is already: its own spot first, then four fixed candidates."""
+    def far(x, y):
+        return all(max(abs(x - g.read(X + o)), abs(y - g.read(Y + o))) >= 40 for o in objs)
+    if far(g.read(X + s), g.read(Y + s)):
+        return
+    for x, y in ((0x30, 0x60), (0xC0, 0x60), (0x30, 0xB0), (0xC0, 0xB0)):
+        if far(x, y):
+            g.write(X + s, x)
+            g.write(Y + s, y)
+            return
+    raise RuntimeError('no spot 40 px from every object')
+
+
 def patra_touch(probe):
-    """9:0x61: Link held on the last Patra child (slot 9) from the room's first frame: harm and drawing waiting, out
-    before Patra's state 1, and after."""
-    probe.enter_room(9, 0x61)
-    Touch(probe, 9).run(120, lambda g: f'child state {g.read(STATE + 9)} patra state {g.read(STATE + 1)}')
-    print('  the first child (slot 2):')
-    probe.enter_room(9, 0x61)
-    Touch(probe, 2).run(120, lambda g: f'child state {g.read(STATE + 2)} patra state {g.read(STATE + 1)}')
+    """9:0x61: Link held on one Patra child per run (slots 9 and 2) from the frame the children are made: harm and
+    drawing waiting (state 0), out before Patra's state 1, and after. A waiting child's position is read by nothing
+    (asm:Patra_UpdateChild sets it on appearing), so it is WRITTEN, if needed, to a spot 40 px from Patra and the
+    orbiting children each frame: a harm there is the waiting child's own; an orbiting child is $18-$2C px from
+    Patra's middle."""
+    for slot in (9, 2):
+        print(f'  child in slot {slot}:')
+        probe.enter_room(9, 0x61)
+        g = probe.game
+        t = Touch(probe, slot)
+        while g.read(TYPE + slot) not in (0x25, 0x26):
+            t.w.step()
+
+        def hold(game, slot=slot):
+            if game.read(STATE + slot) == 0:
+                park(game, slot, [o for o in range(1, 10) if o != slot and (
+                    game.read(TYPE + o) in (0x47, 0x48) or game.read(STATE + o) == 1)])
+        t.before = hold
+        t.run(160, lambda g, slot=slot: f'child state {g.read(STATE + slot)} patra state {g.read(STATE + 1)}')
 
 
 def lanmola_touch(probe):
-    """9:0x55: Link held on a Lanmola tail (slot 1) from the first frame: harm and drawing before and after it
-    moves (ObjDir 0 = not yet)."""
+    """9:0x55: Link held on a Lanmola tail (slot 1, the last segment set in motion) from the first frame: harm and
+    drawing before and after it moves (ObjDir 0 = not yet). A segment in direction 0 is read by nothing
+    (asm:Lanmola_Update returns at once) and starts from its own position, so it is WRITTEN, if needed, to a spot 40
+    px from the moving segments each frame: a harm there is the waiting segment's own; once it moves, Link stays on
+    it."""
     probe.enter_room(9, 0x55)
-    Touch(probe, 1).run(60, lambda g: f'dir {"0" if g.read(DIR + 1) == 0 else "set"}')
+
+    def hold(g):
+        if g.read(DIR + 1) == 0:
+            park(g, 1, [o for o in range(2, 0xB) if g.read(DIR + o) != 0])
+    Touch(probe, 1, hold).run(90, lambda g: f'dir {"0" if g.read(DIR + 1) == 0 else "set"}')
 
 
 def ganon_dying(probe):
@@ -416,18 +450,28 @@ def ringleader(probe):
 
 
 def wallmaster_lure(probe):
-    """7:0x0d: Link held still one pixel off the W wall ($21,$8D), then on it ($20,$8D): which hands come out."""
+    """7:0x0d: Link walked in from W stands at ($20,$8D) still, or is walked one pixel on (Right 2 frames: ($21,$8D),
+    grid offset 1) and stands there: per spot, frames by (Link after the frame, observed `wallmaster_lure`, slot 1's
+    shared timer was 0 before the frame, a hand came out). (Writing Link's X without his grid offset $394 does not
+    hold: the game moves him back onto the wall, so the spot is walked, not written.)"""
     from triforce._native import ROOM_STATE_FEATURES, observe  # pylint: disable=import-outside-toplevel
-    for x in (0x21, 0x20):
+    lure_at = ROOM_STATE_FEATURES.index('wallmaster_lure')
+    for presses in (0, 2):
         probe.enter_room(7, 0x0D, entry='W')
         w = Watch(probe)
         g = w.game
-        out, lure = 0, set()
-        for _ in range(200):
-            w.step(before=lambda game, x=x: (game.write(X, x), game.write(Y, 0x8D)))
-            lure.add(float(observe(g.state)['room_state'][ROOM_STATE_FEATURES.index('wallmaster_lure')]))
-            out = max(out, sum(1 for s in slots(g, {0x27}) if g.read(STATE + s) == 1))
-        print(f'  Link at (${x:02X},$8D): observed wallmaster_lure {sorted(lure)}, hands out at once {out}')
+        rows = {}
+        for frame in range(300):
+            before = {s for s in slots(g, {0x27}) if g.read(STATE + s) == 1}
+            timer = g.read(TIMER + 1)
+            w.step('RIGHT' if frame < presses else 'NONE')
+            out = {s for s in slots(g, {0x27}) if g.read(STATE + s) == 1} - before
+            lure = float(observe(g.state)['room_state'][lure_at])
+            key = (f'(${g.read(X):02X},${g.read(Y):02X})', lure, timer == 0, bool(out))
+            rows[key] = rows.get(key, 0) + 1
+        print(f'  Right {presses} frames: (Link after the frame, observed lure, timer was 0, a hand came out) -> frames')
+        for key, n in sorted(rows.items()):
+            print(f'    {key} -> {n}')
 
 
 def bubble_block(probe):
