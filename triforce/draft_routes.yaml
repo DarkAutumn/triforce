@@ -66,7 +66,7 @@ first-quest:
   - {level: 0, room: '0x4c', entry: N, exit: E}
   - {level: 0, room: '0x4d', entry: W, exit: S}
   - {level: 0, room: '0x5d', entry: N, exit: S, note: 'S at X $C0 (the right opening reaches 0x6d''s E side)'}
-  - {level: 0, room: '0x6d', entry: N, exit: cave, note: 'burn the tree at tile (20, 4): the red candle facing W from X $B8-$C0 on row Y $5D; Dungeon 8'}
+  - {level: 0, room: '0x6d', entry: N, exit: cave, note: 'burn the tree at tile (20, 4): the red candle facing W from X $B8-$CF on row Y $5D (walked Nov 17; round 28: the scouting route d8 in routes.yaml offers CANDLE there only); Dungeon 8'}
   # Dungeon 8: Gleeok with four heads, without the book and the magic key.  Walked in the emulator Nov 13
   # (docs/routes/first-quest.md): 9 entries, the fewest; 0x5e's key pays 0x4e's door and 0x4c's key (in the open) is
   # taken for level 9: 2 keys in, 3 out; 2 bombs.  Forced fights: 0x5e, 0x3e (11 Blue Darknuts), Gleeok.  The magic
