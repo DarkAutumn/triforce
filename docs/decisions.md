@@ -2304,3 +2304,23 @@ hours. Lee: "fast jobs run sooner than later ... the time waited check will EVEN
   don't make two different models' runs alike), so one arm against another needs about 5 points to be a result,
   3 points need about 2200 runs an arm and 2 points 5000; for darknut, the hearts out of the Garden (step 194's
   `health_in`) is the sharper secondary.
+
+## 2026-11-15 — Hearts priced by what they are worth to the run: `reward.heart_value` (round 25, `r25-value`)
+
+- **What:** `triforce/heart_value.json` ships beside `routes.yaml`: V(step, hearts), the chance that a run entering a
+  route step's room with that many hearts is alive when it takes the next triforce, per way (clips on / off), at
+  every half heart. `python -m triforce.heart_value <chain jsonl>...` fits it (round 24's `r74-1k` and `r74b-1k-d5`,
+  clips on and off, the full route with the segments). A family's `reward.heart_value` turns on `exit` (the success
+  terminal's health part V(next step, h) / V(next step, max) instead of h / max), `potential: S` (every change of
+  hearts in a room pays S × ΔV at the room's step, beside the flat hit and pickup terms, outside the step's ±1 clamp)
+  and `low_health: F` (the hit penalty × 1 + F × (1 − h / max)). All off by default: today's reward bit for bit
+  (tested); a family that reads the table refuses to load when its steps no longer match the route.
+- **Why:** the reward paid about 2 per heart anywhere (20 × w × h / max and 0.25 per half heart) while a heart's worth
+  is steep and local: Gleeok 1 / 2 / 3 / 4 hearts V = 0.22 / 0.59 / 0.86 / 0.95, 5:0x37 0.00 / 0.58 / 0.81 / 0.93, flat
+  above 3 at Manhandla and after any boss (the triforce refills). The fit agrees with `Hearts`' independent table
+  (round 25) within 0.01-0.04. A potential term gives the price at the hit, not 100 steps later at a discounted exit.
+- **The table is data, not a model:** refit it after a round that changes the team or the route (the route check
+  enforces the second).
+- **Results:** round25.md (the darknut screen: base continued against `{exit: true, potential: 20}`, three seeds,
+  1000 paired D5 runs each). Continuations of a round 24 model must pass `--sil-coeff 0.1` as round 24 did (the
+  train.py default is 0; the first screen without it lost 12 points of D5 in both arms).

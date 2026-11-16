@@ -9,6 +9,7 @@ use crate::config::{ConfigError, SpecialistConfig};
 use crate::critic::{Critique, GameplayCritic};
 use crate::end_conditions::EndConditions;
 use crate::error::EnvError;
+use crate::heart_value::HeartContext;
 use crate::objective::{Attached, attach_objective, needs_wavefront};
 use crate::rewards::{Scored, score_step};
 use std::sync::Arc;
@@ -83,13 +84,15 @@ impl RewardTrack {
     }
 
     /// Scores the step `change` that ended in `state` (cheated items applied), whose route objective is now
-    /// `objective`.
+    /// `objective`; `heart` is where on the route it was played (its `values` only if this specialist's
+    /// `reward.heart_value` reads the table: [`crate::GameData::heart_values_for`]).
     pub fn step(
         &mut self,
         map: &GameMap,
         change: &Change,
         state: &GameView,
         objective: &Objective,
+        heart: &HeartContext,
     ) -> Result<Scored, EnvError> {
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(state), change);
@@ -119,6 +122,7 @@ impl RewardTrack {
             self.config.reward.shaping_scale,
             self.steps,
             state,
+            heart,
         )?;
         self.ended = scored.ending.is_some();
         Ok(scored)

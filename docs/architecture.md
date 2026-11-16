@@ -31,7 +31,7 @@ flowchart LR
 | `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -635,6 +635,24 @@ its confirmation evaluation plays both.
 `reward.exit_health_weight` w (default 0.5, in [0, 1]; better-play §1b) sets how much of the success terminal rides
 on the health Link leaves with: `reward-terminal-success` = 20 × ((1 − w) + w × hp/max_hp) (`success_reward_value`;
 0.5 is the long-standing 20 × (0.5 + 0.5 × hp/max_hp), bit for bit; 1.0 pays 20 × hp/max_hp, 0 a flat 20).
+`reward.heart_value` (round 25; `crates/env/src/heart_value.rs`; all off by default, today's reward exactly) prices
+hearts by what they are worth to the run. `triforce/heart_value.json` holds V(step, hearts) for every route step at
+every half heart, per way (`clips`: the run-time clips switch on, `plain`: off; a step on one way only has no curve
+on the other): the chance that a run entering the step's room with that many hearts is alive when it takes the next
+triforce (which refills him). `python -m triforce.heart_value <chain jsonl>...` fits it from chain runs, clips on and
+off, the full route's with the segments' (each arrival bin's own transitions mixed with 20 pseudo-visits of a prior
+that assumes the damage a room deals does not depend on the hearts brought, a Kaplan-Meier estimate over the step's
+visits; backwards from each triforce; made non-decreasing in hearts); refit it after a round that changes the team
+or the route. The table names each step's room, entry, exit and visit, and a family that reads it refuses to load
+when they no longer match the route (`GameData::check_heart_values`); a family that doesn't read it ignores it. The
+terms: `exit: true` makes the success terminal's health part V(next step, hearts out) / V(next step, max hearts)
+instead of hp/max_hp (still weighted by w); `potential: S` pays S × (V(step, after) − V(step, before)) for every
+change of hearts in a room (a hit or a pickup; not the triforce's refill or a heart container) at the room's route
+step, as `reward-heart-value` / `penalty-heart-value`, beside the flat `penalty-lost-health` /
+`reward-gained-health`; `low_health: F` adds F × (1 − hearts after / max) × the step's `penalty-lost-health` to the
+same term. The heart-value term is added after the step's ±1 clamp (so it can price a heart at more than 1), and
+scaled by `shaping_scale` like the critic's terms. Training and a chain's reward recording build the same
+`HeartContext` (the route step before and after the action, the clips switch) for `score_step`.
 `reward.shaping_scale` (default 1.0, in [0, 1]) multiplies every term the critic produces each step, rewards and
 penalties alike; the terminal terms (`reward-terminal-success`, already health-scaled, and
 `penalty-terminal-failure`) are never scaled. `reward.frame_penalty` (default 0, ≥ 0; e.g. 0.001/8) adds an unscaled
