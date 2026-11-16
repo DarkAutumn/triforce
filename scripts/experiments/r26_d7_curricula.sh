@@ -20,7 +20,7 @@ PY=.venv/bin/python
 OUT=${1:-trajectories}
 CHAINS=${CHAINS:-"0 1 2"}
 ONLY=${ONLY:-}
-PARALLEL=${PARALLEL:-6}
+PARALLEL=${PARALLEL:-4}                 # explorer threads: four at most on this machine (the owner, Nov 17)
 SKIP_DONE=${SKIP_DONE:-}
 FIGHT_ITERATIONS=${FIGHT_ITERATIONS:-9000}
 
