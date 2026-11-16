@@ -1,7 +1,7 @@
 """Jobs waiting their turn (``triforce.jobs``), with real processes and a registry of the test's own: two run, the
 others wait (by score: shortest estimate first, older ones moving up; equal estimates are first come first served), a
-short job runs beside two long ones in the express place, jobs of the old code in the same line keep everyone on
-the old rule until they are gone, and nothing has to report in for the line to move (a killed job simply stops
+short job runs beside two long ones in the express place, and nothing has to report in for the line to move (a
+killed job simply stops
 counting).  Then the five training and evaluation entry points: each lowers its own priority (niceness 15 by
 default, the caller's with ``--nice 0``, read back from ``/proc``), waits in a full registry before any work, starts
 when it empties, and ``--no-wait`` starts it at once."""
@@ -57,59 +57,6 @@ with events.logged_job(args.name, 'chain', [], args.logs, work=work):
 print('done', flush=True)
 '''
 
-# A job of the code before the scored line (main at 82a66d8): its entry has no estimate, and it waits by the old rule,
-# a copy of that code's ``jobs.turn``: fewer than the limit of the others running, nobody who joined earlier waiting.
-OLD_JOB = r'''
-import fcntl, json, os, socket, sys, time
-from pathlib import Path
-from triforce import jobs
-logs, name = Path(sys.argv[1]), sys.argv[2]
-directory = jobs.jobs_dir()
-directory.mkdir(parents=True, exist_ok=True)
-pid = os.getpid()
-
-def locked():
-    handle = open(directory / '.lock', 'a')
-    fcntl.flock(handle, fcntl.LOCK_EX)
-    return handle
-
-def order(job):
-    return job.get('queued_ts') or 0.0, Path(job.get('path') or '').name
-
-def old_turn(job, others, limit):
-    host, mine = socket.gethostname(), order(job)
-    running, ahead = [], []
-    for other in others:
-        if other.get('host') != host or other.get('pid') == job.get('pid') or jobs.job_alive(other) is not True:
-            continue
-        if other.get('status') == 'running':
-            running.append(other)
-        elif order(other) < mine:
-            ahead.append(other)
-    return limit <= 0 or (len(running) < limit and not ahead)
-
-path = directory / f"{socket.gethostname()}-{pid}-old-{name}.json"
-data = {'schema': 1, 'host': socket.gethostname(), 'pid': pid, 'pid_start': jobs.process_start(pid),
-        'started': jobs._iso(time.time()), 'name': name, 'kind': 'chain', 'log_dir': None, 'plan': None,
-        'status': 'queued', 'queued': None, 'queued_ts': None, 'admitted': None, 'no_wait': False, 'finished': None}
-with locked():
-    data.update(queued_ts=time.time(), queued=jobs._iso(time.time()))
-    path.write_text(json.dumps(data))
-while True:
-    with locked():
-        if old_turn({**data, 'path': str(path)}, jobs.read_jobs(directory), jobs.max_jobs()):
-            data.update(status='running', admitted=jobs._iso(time.time()))
-            path.write_text(json.dumps(data))
-            break
-    time.sleep(0.1)
-print(f'started {time.time()}', flush=True)
-while not (logs / 'stop').exists():
-    time.sleep(0.05)
-data.update(status='completed', finished=jobs._iso(time.time()))
-path.write_text(json.dumps(data))
-print('done', flush=True)
-'''
-
 
 def environment(registry: Path, **extra) -> dict:
     """The tests' jobs: their own registry, two at a time, no niceness or no-wait from the caller."""
@@ -130,15 +77,14 @@ def wait_until(condition, timeout: float, what: str):
 class Job:
     """One process of the line, its console output in a file."""
 
-    def __init__(self, root: Path, registry: Path, name: str, *args: str, env: dict | None = None,
-                 old: bool = False):
+    def __init__(self, root: Path, registry: Path, name: str, *args: str, env: dict | None = None):
         self.name, self.registry = name, registry
         self.logs = root / 'logs' / name
         self.logs.mkdir(parents=True)
         self.out = root / f'{name}.out'
         with open(self.out, 'w', encoding='utf-8') as out:
             self.process = subprocess.Popen(  # pylint: disable=consider-using-with
-                [sys.executable, '-c', OLD_JOB if old else JOB, str(self.logs), name, *args], stdout=out,
+                [sys.executable, '-c', JOB, str(self.logs), name, *args], stdout=out,
                 stderr=subprocess.STDOUT, env=environment(registry, **(env or {})), cwd=ROOT)
 
     def output(self) -> str:
@@ -190,8 +136,8 @@ def line(tmp_path):
     registry = tmp_path / 'jobs'
     started: list[Job] = []
 
-    def start(name: str, *args: str, env: dict | None = None, root: Path = tmp_path, old: bool = False) -> Job:
-        job = Job(root, registry, name, *args, env=env, old=old)
+    def start(name: str, *args: str, env: dict | None = None, root: Path = tmp_path) -> Job:
+        job = Job(root, registry, name, *args, env=env)
         started.append(job)
         return job
     yield start
@@ -332,7 +278,7 @@ def test_a_short_job_passes_a_long_one_in_the_line(line):
     assert 'estimated 15 minutes; 2 jobs are running' in short.output()
     wait_until(lambda: long.plan()['queue']['ahead'] == [short.label], 10, "long to see short ahead")
     queue = short.plan()['queue']
-    assert queue['place'] == 1 and queue['ahead'] == [] and queue['mode'] == 'score' and queue['estimate'] == 900.0
+    assert queue['place'] == 1 and queue['ahead'] == [] and queue['estimate'] == 900.0
     assert queue['work'] == short.plan()['work'] and queue['score'] <= 900.0 and queue['lane'] is None
     first.stop()
     short.wait_for('started', timeout=10)
@@ -382,84 +328,6 @@ def test_a_long_job_is_not_starved_by_a_stream_of_short_ones(line):
     passed = [short for short in shorts if short.started() and short.started_at() < long.started_at()]
     waited = long.queue()[-1]['waited']
     assert len(passed) >= 3 and 10 < waited < 60, (len(passed), waited)
-
-
-# ------------------------------------------------------------------------------------------ old and new code
-
-def simulate(joined: list[tuple[str, bool, float]]) -> list[str]:
-    """The start order of jobs (name, old, estimate) that joined in this order behind one running job, one place
-    freeing at a time: first come first served while an old job waits, shortest estimate first otherwise."""
-    waiting, order = list(joined), []
-    while waiting:
-        pick = waiting[0] if any(old for _, old, _ in waiting) else min(waiting, key=lambda job: job[2])
-        waiting.remove(pick)
-        order.append(pick[0])
-    return order
-
-
-def drain(holder, jobs_: dict, expected_count: int) -> list[str]:
-    """Stops the running job, waits for the next one to start (exactly one), and so on; returns the start order."""
-    order, running = [], holder
-    for _ in range(expected_count):
-        running.stop()
-        wait_until(lambda: sum(job.started() for job in jobs_.values()) > len(order), 30, "the next job to start")
-        time.sleep(1.0)
-        started = [name for name, job in jobs_.items() if job.started() and name not in order]
-        assert len(started) == 1, started                  # one place: exactly one starts
-        order.append(started[0])
-        running = jobs_[started[0]]
-    running.stop()
-    return order
-
-
-JOINS = [('A', False, 3000.0), ('B', False, 700.0), ('O', True, None)]   # new long, new short, old
-
-
-@pytest.mark.parametrize('joins', [list(p) for p in __import__('itertools').permutations(JOINS)],
-                         ids=lambda joins: ''.join(name for name, _, _ in joins))
-def test_old_and_new_jobs_in_one_line_never_wait_for_each_other(line, joins):
-    """Every join order of a new long job A, a new short job B and an old-code job O behind one running job (one
-    place).  A-O-B is the cycle the score alone would make: O waits for A (joined first), A for B (shorter), B for
-    O.  While O waits everyone keeps the old order, so every job starts; once O has started, the score orders the
-    rest."""
-    env = {jobs.MAX_JOBS_ENV: '1'}
-    holder = line('holder', env=env)
-    holder.wait_for('started')
-    started = {}
-    for name, old, estimate in joins:
-        started[name] = line(name, *([] if old else ['--estimate', str(estimate)]), env=env, old=old)
-        wait_until(started[name].queued, 30, f"{name} to join the line")
-    assert drain(holder, started, len(joins)) == simulate([(n, o, e or 0.0) for n, o, e in joins])
-
-
-def test_an_old_job_waiting_turns_the_express_place_off_until_it_starts(line):
-    first, second = running_pair(line)
-    old = line('old', old=True)
-    wait_until(old.queued, 30, "the old job to join")
-    short = line('short', '--estimate', '60')
-    short.wait_for(PAUSED)                                 # the old rule: no express place, first come first served
-    assert short.plan()['queue']['mode'] == 'legacy' and short.plan()['queue']['ahead'] == ['old (chain)']
-    first.stop()
-    old.wait_for('started', timeout=10)
-    short.wait_for('started', timeout=10)                  # nobody old waits: the express place again
-    assert short.entry()['lane'] == 'express'
-    second.stop()
-    old.stop()
-
-
-def test_an_old_job_counts_the_express_job_and_still_starts(line):
-    first, second = running_pair(line)
-    short = line('short', '--estimate', '60')
-    short.wait_for('started', timeout=60)
-    old = line('old', old=True)
-    wait_until(old.queued, 30, "the old job to join")
-    first.stop()                                           # the old rule counts every running job: still 2
-    time.sleep(1.0)
-    assert not old.started()
-    short.stop()
-    old.wait_for('started', timeout=10)
-    second.stop()
-    old.stop()
 
 
 # ------------------------------------------------------------------------------------------------- entry points
