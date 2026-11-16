@@ -40,10 +40,12 @@ raft, boomerang, the food used, 2 keys, 2 bombs, 31 rupees (the median of 28-40,
 2. **The survival budget does not close.** A scripted or best-model play of everything but 0x38 and 0x3a costs about
    10.3 hearts from Dungeon 7's piece to Dungeon 6's (leg 2.2, Dungeon 6's other rooms 8.2), of 12, with drops giving
    back under 0.3 hearts a room. The two block rooms then need to be won nearly without a hit.
-3. **A doorway is out of every shot's reach.** Red Wizzrobe shots (0 of 320) and Gohma's fireballs (0 in 150 frames ×
-   20) end at the room's bound; Link standing in the door he came in by is not hit. 0x78 is crossed with no damage
-   by walking off the door row at once (40 of 40); waiting in the doorway first changes nothing there and costs more
-   in 0x2c (traps).
+3. **A doorway is out of every shot's reach, but it is no fort.** Red Wizzrobe shots (0 of 320) and Gohma's fireballs
+   (0 in 150 frames × 20) end at the room's bound; Link standing in the door he came in by is not hit by them. 0x78 is
+   crossed with no damage by walking off the door row at once (40 of 40); waiting in the doorway first changes
+   nothing there and costs more in 0x2c (traps). **A is not read in a doorway (no swing until X `$19`), and a Blue
+   Wizzrobe walks into the doorway's mouth and touches him there**: a script that fought 0x3a from its W doorway
+   cleared it 0 of 6 times (§4.7).
 4. **0x28 kills every model and costs a script half a heart.** Bottom row to X `$D0`, up to the door spot, one bomb
    facing E, through: 40 of 40, 0.50 hearts, 467 frames. goriya, like-like, vire, zol 0%, darknut 25%, trap-room
    22.5% from 12 hearts: they stay in the room (median death at frame 526-664) under three Blue Wizzrobes.
@@ -325,6 +327,22 @@ darknut with the white sword: 0x38 4/40, 0x3a 7/40 (it bombs: 0.9-1.7 a run). A 
 would lose about 2.6 hearts more in 0x58, 0x39 and 0x2d together and has, with today's models, no measurable chance
 in 0x38 and 0x3a.
 
+### 4.7 0x3a fought from its doorway: an attempt that fails (`sentry`)
+
+0x3a is entered by an open doorway and Link stands in it at (`$10`,`$8D`). A is ignored there (no sword at X `$13`,
+`$16`; a swing and, at full hearts, a beam from X `$19` on). The script waits in the doorway, steps in to X `$20`
+when a monster stands on the door row beyond X `$58` with no shot due (no Red at `ObjState` `$B0`-`$D4` on the row, no
+shot in flight, no Blue facing him unless the frame counter has just passed a multiple of 32, nothing within three
+squares), swings facing E for the beam and steps back.
+
+- **0 of 6 rooms cleared in 12000 frames; 10-11.3 hearts lost, all to Blue Wizzrobes.** In the first version (targets
+  from X `$40`) the best run killed all but one Blue (32 sorties, 24 swings); with the wider safety margins it made
+  1-4 sorties a run and still died.
+- Why: standing still in the doorway is not safe from touch. One run that never left it for 2000 frames lost 2
+  hearts twice to a Blue Wizzrobe at (`$18`,`$8D`), in the doorway's mouth, Link at (`$10`,`$8D`). (One seed stood
+  3000 frames there untouched: it is chance.) And the beam is gone with the first hit.
+- So 0x3a has no safe corner either; what is left is the fight itself.
+
 ## 5. Wizzrobes, the Like-Like's hold, the Bubble's timer (walked)
 
 `r27_wizzrobe.py`. Rooms 0x78 (Reds) and 0x28 (Blues, the Reds put away).
@@ -545,8 +563,9 @@ probes did that for the types).
 
 ## 9. Not walked, and why
 
-- **A scripted fight in 0x38 and 0x3a.** Not written: a bot that reads Red phases, Blue rows and the Bubble is the
-  size of the problem itself; the models' runs are the only real plays of these rooms (§4.1, §4.6).
+- **A scripted fight in 0x38, and one that wins in 0x3a.** Not written for 0x38; the doorway script for 0x3a fails
+  (§4.7). A bot that reads Red phases, Blue rows and the Bubble is the size of the problem itself; the models' runs
+  are the only real plays of these rooms (§4.1, §4.6).
 - **0x38 and 0x3a from chain arrivals**: no chain reaches them; states were staged at 12 and 8 full hearts.
 - **0x7a's fight for the first key** (a run with no carried key), **0x18 (Gleeok) and 0x3c fought**: entered only to
   see that they shut (0x18, 0x3c) or not (0x7a).
@@ -554,7 +573,8 @@ probes did that for the types).
   does not go down stairs), no monsters (0x79, 0x0c), or no objective (0x21).
 - **The Lost Woods' second to fourth turn and 0x60, 0x50 after them under a model**: one state per room; the
   buttons' walk is in §1.
-- **The magic shield** against a Red shot (not ours), **flying Ghinis attacked** (code says immune).
+- **The magic shield** against a Red shot (not ours), **flying Ghinis attacked** (code says immune), **0x21 with the
+  room's Ghini killed first** (5 swings under its touch for a push that already costs 0.07 hearts).
 - **Whether the fight models took 0x58's and 0x2d's keys**: not read from the replays.
 - **Schema 6's column values in these rooms**: taken from `observation-next.md`, not re-probed.
 - **A whole run of the stretch end to end**: every room here starts from a staged state at full hearts.

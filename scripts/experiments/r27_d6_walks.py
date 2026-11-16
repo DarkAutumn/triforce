@@ -9,6 +9,7 @@ keys, bombs and opened doors), every trial loaded with the game's own randomness
     python scripts/experiments/r27_d6_walks.py ladder               # 0x39's water column, 0x29's ring
     python scripts/experiments/r27_d6_walks.py dark                 # the dark rooms and the candle
     python scripts/experiments/r27_d6_walks.py keys                 # the keys of 0x58 and 0x2d, the shut-in rooms
+    python scripts/experiments/r27_d6_walks.py sentry [--seeds N]   # 0x3a fought from its W doorway
 """
 
 import argparse
@@ -456,9 +457,71 @@ def keys(args):
               f'${w.r(UW_FLAGS_1TO6 + room):02X}')
 
 
+# ---- 0x3a from its doorway ------------------------------------------------------------------------------------------
+
+def sentry_run(path, seed, limit=12000):
+    """0x3a fought from its W doorway.  Link waits in the doorway ($10,$8D), where nothing reaches him and A is not
+    read; when a monster is on the door row and no shot is due he steps one square in ($20,$8D), swings facing E
+    (the beam, while his hearts are full) and steps back.  Returns (cleared, Tally, sorties, swings)."""
+    w = load(path, seed)
+    t = Tally(w)
+    sorties = swings = 0
+    row = 0x8D
+    while t.frames < limit and w.mode == PLAY and w.hearts() > 0:
+        mons = alive(w)
+        if t.frames > 60 and not mons:
+            return True, t, sorties, swings
+        full = w.hearts() >= w.max_hearts()
+        phase = w.r(0x15) & 0x1F
+        shots = [o for o in w.objects() if o[1] in (0x58, 0x59) and abs(o[3] - row) < 0x10]
+        red_due = any(o[1] == WIZZROBE_RED and abs(o[3] - row) < 0x10 and 0xB0 <= o[4] <= 0xD4 for o in mons)
+        blue_aim = any(o[1] == WIZZROBE_BLUE and abs(o[3] - row) < 0x10 and w.r(OBJ_DIR + o[0]) == 2 for o in mons)
+        near = any((o[2] < 0x58 and abs(o[3] - row) < 0x30) or
+                   (o[1] == WIZZROBE_BLUE and w.r(0x394 + o[0]) and o[2] < 0x78) for o in w.objects() if o[1] < 0x40)
+        targets = [o for o in mons if abs(o[3] - row) <= 4 and o[2] >= 0x58 and full and
+                   (o[1] != WIZZROBE_RED or 0x80 <= o[4] < 0xB0 or 0xD5 <= o[4] <= 0xF0) and
+                   (o[1] != WIZZROBE_BLUE or not w.r(0x394 + o[0]))]
+        danger = bool(shots) or red_due or near or w.r(0x4C) or (blue_aim and phase > 2)
+        busy = w.r(0xAC + 0x0D) or w.r(0xAC + 0x0E)                # the sword or its beam is out
+        if w.x == 0x10 and w.y == row:
+            if targets and not danger and not busy:
+                sorties += 1
+                t.press('RIGHT')
+            else:
+                t.press('NONE')
+        elif w.y != row:
+            t.press('DOWN' if w.y < row else 'UP')
+        elif w.x > 0x20:
+            t.press('LEFT')
+        elif w.x < 0x20 and not danger and targets and w.r(OBJ_DIR) == 1:
+            t.press('RIGHT')
+        elif w.x == 0x20 and targets and not danger and not busy and w.r(OBJ_DIR) == 1:
+            t.press('A')
+            swings += 1
+        elif w.x == 0x20 and busy and not danger and w.r(0xAC + 0x0D):
+            t.press('NONE')                                        # the swing is still out
+        else:
+            t.press('LEFT')
+    return False, t, sorties, swings
+
+
+def sentry(args):
+    path = d6_state(0x3A, 'W')
+    rows, extra = [], []
+    for seed in range(args.seeds):
+        ok, t, sorties, swings = sentry_run(path, seed)
+        w = t.w
+        left = collections.Counter(name(o[1]) for o in alive(w))
+        rows.append((ok, t.lost(), t.frames, t.by))
+        extra.append((sorties, swings, dict(left)))
+    print(f'0x3a from its W doorway (step in, beam, step back), {args.seeds} seeds, 12000 frames at most: '
+          f'{summary(rows)}')
+    print('   sorties, swings, left alive per run: ' + '; '.join(f'{a}/{b}/{c or "-"}' for a, b, c in extra))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('what', choices=['crossings', 'doors', 'blocks', 'tunnel', 'ladder', 'dark', 'keys'])
+    parser.add_argument('what', choices=['crossings', 'doors', 'blocks', 'tunnel', 'ladder', 'dark', 'keys', 'sentry'])
     parser.add_argument('--seeds', type=int, default=40)
     parser.add_argument('--sword', type=int, default=3)
     args = parser.parse_args()

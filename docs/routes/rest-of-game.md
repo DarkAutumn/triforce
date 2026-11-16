@@ -39,7 +39,7 @@ no damage but block the sword 151-160 frames and zero the 10/16-kill counters (`
 |---|---|---|---|---|---|---|
 | D5 → D7 leg (0x0b ... 0x42) | 11; the D5 piece | white `$20` | none forced; crossed: 0x34's 4 Blue Leevers (1 a touch) and the secret Armos (`$30`, 2 hits; 1 a touch; from below 1, from the side 0) | ~1-2 (inferred from d2first visit costs) | 11 one-heart touches | `d7.md` §1, §4; `late-mechanics.md` §2.5 |
 | Dungeon 7 | 11, 12 after Aquamentus; the D5 piece | white | 0x49: 3 Blue Goriyas (3 hits; touch 1, boomerang 1, parryable), 3 Keese (1; ½), 2 Bubbles; 0x1a plain way only: 3 Blue + 3 Red Goriyas (15 hits; red touch ½); 0x1b for its bombs: 6 Blue Goriyas (18 hits, six boomerangs); 0x1c: 3 small Digdoggers (4 hits each, 12; touch 2; 1.25-1.5 px/frame), 4 statues (½); 0x0d: 5 Wallmasters (1 hit, only on a trip; ½ + capture), 3 Bubbles; 0x2a Aquamentus (3 hits or 2 bombs; touch 1, three fireballs ½ each) | ~11 over the dungeon (trace), 2-3 each in 0x69 and 0x19 | 6 two-heart Digdogger touches; 11 one-heart; 22 half-heart | `d7.md` §2, §4; `late-monsters.md` §3.1-§3.6, §4 |
-| D7 → sword → D6 leg (0x42 ... 0x22) | 12; the D7 piece | white until 0x21's cave, then magic `$40` | none forced; crossed: 0x50 5 red Lynels (2 white; touch 1, shot 2) on a slow corridor; 0x40/0x41/0x31/0x21 Ghinis (5 white, 3 magic; touch 1) and immortal flying Ghinis (1); 0x32 2 blue Lynels (2 magic; touch 2, shot 2), 2 red; 0x22 red Lynel | not measured | 6 blue-Lynel shots; 12 one-heart | `d6.md` §1.1-§1.4; `late-monsters.md` §3.22 |
+| D7 → sword → D6 leg (0x42 ... 0x22) | 12; the D7 piece | white until 0x21's cave, then magic `$40` | none forced; crossed: 0x50 5 red Lynels (2 white; touch 1, shot 2) on a slow corridor; 0x40/0x41/0x31/0x21 Ghinis (5 white, 3 magic; touch 1) and immortal flying Ghinis (1); 0x32 2 blue Lynels (2 magic; touch 2, shot 2), 2 red; 0x22 red Lynel | **2.2 by a straight scripted walk, clip way, the sword stop included (walked, `d6-walks.md` §1-§2)** | 6 blue-Lynel shots; 12 one-heart | `d6.md` §1.1-§1.4; `late-monsters.md` §3.22; `d6-walks.md` |
 | Dungeon 6 | 12 minus the leg, 13 after Gohma; the D7 piece | magic | 0x58: 8 Keese (any hit; ½), 4 statues (½); 0x38: 2 Red Wizzrobes (1 hit; touch 1, **shot 4**), 2 Blue (3 hits; touch 2 even while flashing, shot 2), 3 Like-Likes (3 hits; 1 + hold), 1 Bubble, then the push; 0x39: 5 Vires (1 hit; 1), dark; 0x3a: as 0x38; 0x2d (for level 9's key): 3 Vires, 2 Bubbles; 0x1c Gohma: one arrow into the open eye (touch 2, fireball 1 every 65 frames) | 12-22 (draft); 0x48 traps 2 hearts in 30 frames on the door row (trace) | **3 Red Wizzrobe shots from full**; 2 Red + 1 Blue at 9-10 | `d6.md` §2, §4.5, §5, §6; `late-monsters.md` §3.7-§3.10, §4 |
 | D6 → D8 leg (0x22 ... 0x6d) | 13; the D6 piece | magic | none forced; 0x22 red Lynel (touch 1, shot 2: a hit costs the whirlwind); Octoroks, Moblins ½; own candle fire ½ | none given | 13 one-heart | `d8.md` §2.3, §7.2 |
 | Dungeon 8 | 13, 14 after Gleeok; the D6 piece | magic | 0x6e crossed with Manhandla (hands 1 hit or a bomb; touch 1, fireball 1) while bombing its wall; 0x5e: 5 Blue Darknuts (2 hits, not from the front; touch 2), 4 statues (½); 0x4e, 0x3f crossed (Blue Darknut 2, Red 1, Gibdos 2, Bubbles); 0x4c crossed among 8 Pols Voices (3 hits; touch 2); 0x3e: 6 Blue Darknuts, statue fire; 0x3c Gleeok, four heads: 9 hits (3+2+2+2), up to 3 immortal flying heads (1), neck base 1, attached head 3/8, fireball 1 | none (hearts written back); 0x3f "1-2 touches" a crossing (trace) | 7 two-heart touches | `d8.md` §4-§6, §7.1-§7.2; `late-monsters.md` §3.11-§3.14 |
@@ -51,6 +51,13 @@ Clips change the forced list: the block clip skips 7:0x1a's fight (`d7.md` §2),
 0x61, 0x20, 0x03) share the clippable layout `$1A`: 14 forced Wizzrobes and 2 Patras with clips, 24 and 3 without
 (inferred, not walked; `d9.md` §3.4). Every fight cost in this table is from the code: no fight of Dungeons 7 or 9
 except Ganon, and in Dungeon 6 only Gohma, one Vire and one Like-Like, was played (`late-monsters.md` §8, `d6.md` §12).
+
+**Walked in round 27 (`d6-walks.md` §7), the leg to Dungeon 6 and Dungeon 6 with live monsters:** the leg costs a
+straight walk 2.2 hearts; Dungeon 6 without 0x38 and 0x3a costs 8.2 by the best plays seen (blind walks in the
+crossings, today's models in 0x58, 0x39, 0x2d, a script for Gohma): 10.3 of 12 before the two block rooms, which
+cost 4.75 and 6.1 hearts in their best wins (like-like zero-shot: 4 of 10 with the planner, 10 of 20) and are lost
+outright from 8 hearts (2 of 20, 0 of 20). The table's "12-22 (draft)" for Dungeon 6 is of that order. A doorway is
+out of reach of Wizzrobe shots and Gohma's fireballs (0 of 320; 0 in 3000 frames).
 
 **Rooms a 11-15 heart Link cannot be expected to cross the way today's models cross rooms**, ranked (synthesis; each
 dossier's own ranking is in its section):
@@ -374,6 +381,11 @@ chain states), with live monsters and real hearts unless said.
     ranges (`late-monsters.md` §11.7).
 
 **Round 27 (the magic sword and Dungeon 6)**
+
+*Walked Nov 16: `d6-walks.md` answers items 1 and 3-7 (the stairs are not kept and no flying Ghini appears when Link
+pushes from below and stops on the stairs; killing the Ghini first was not tried; slow tiles 0.77 px a frame; 0x22 at
+X `$70`/`$78`/`$80`; every fight and crossing; the touch during immunity hurts; the safe column holds; shots pass a
+held Link; 0x2d first at (`$78`,`$4D`); 0x18 and 0x3c shut). Item 2 only by buttons and one model state.*
 
 1. 0x21: push from above and from below; does a flying Ghini fade in on the stairs; does killing the room's Ghini first
    make it safe; does the stairs square come back after the cave (asm:Secret_RestoreStairsOW); the cave's exit spot
