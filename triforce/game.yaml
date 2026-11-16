@@ -630,6 +630,11 @@ rooms:
     how: open
     tile: [12, 8]
     stakes: 10
+  # Round 25: entered from W (facing right) the Peahats spawn on ($50, $5D) and ($80, $7D) (asm:Spawn_AssignPositions):
+  # one on the top strip the way N-then-E walked, one rising up X $80, the gap's column. That way met both on every
+  # visit (2 hits, 1.00 hearts). Steps onto Link's tile rows 2-6 W of column 15 cost 2 tiles more, so the objective's
+  # way goes E along the middle (Y $85) and then N up X $80.
+  path_costs: [{cols: [0, 14], rows: [2, 6], cost: 2}]
 - level: 0
   location: '0x20'
   exits:
