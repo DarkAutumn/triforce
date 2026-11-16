@@ -15271,11 +15271,11 @@
   "alternate": false,
   "env_steps": 10110,
   "attempts": 1,
-  "seconds": 18.424565614,
+  "seconds": 17.877779793,
   "steps": 139,
   "health": 10.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_1bw_2.state",
@@ -15292,11 +15292,11 @@
   "alternate": false,
   "env_steps": 6436,
   "attempts": 1,
-  "seconds": 15.615954536,
+  "seconds": 15.293708643,
   "steps": 142,
   "health": 5.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_1cw_2.state",
@@ -15313,12 +15313,12 @@
   "alternate": false,
   "env_steps": 14271,
   "attempts": 2,
-  "seconds": 25.832720606000002,
+  "seconds": 25.431087985,
   "steps": 82,
   "health": 11.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_0cs_2.state",
@@ -15335,12 +15335,12 @@
   "alternate": false,
   "env_steps": 438877,
   "attempts": 8,
-  "seconds": 1366.252521412,
+  "seconds": 1404.514907574,
   "steps": 202,
   "health": 1.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_0dw_2.state",
@@ -15357,12 +15357,12 @@
   "alternate": false,
   "env_steps": 8443,
   "attempts": 1,
-  "seconds": 25.112198665,
+  "seconds": 38.154849125,
   "steps": 85,
   "health": 3.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_7bcave_2.state",
@@ -15379,12 +15379,12 @@
   "alternate": false,
   "env_steps": 15203,
   "attempts": 1,
-  "seconds": 38.117732574,
+  "seconds": 70.459055481,
   "steps": 185,
   "health": 11.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_29c_2.state",
@@ -15401,12 +15401,12 @@
   "alternate": false,
   "env_steps": 5133,
   "attempts": 1,
-  "seconds": 12.905387991,
+  "seconds": 16.993929316,
   "steps": 76,
   "health": 10.5,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_2aw_2.state",
@@ -15423,12 +15423,12 @@
   "alternate": false,
   "env_steps": 5950,
   "attempts": 1,
-  "seconds": 17.945862035,
+  "seconds": 26.721944977,
   "steps": 103,
   "health": 7.5,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  },
  {
   "file": "7_2bw_2.state",
@@ -15445,11 +15445,11 @@
   "alternate": false,
   "env_steps": 8631,
   "attempts": 1,
-  "seconds": 31.811630917,
+  "seconds": 30.660532838,
   "steps": 80,
   "health": 10.5,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --start-step 231 --source target/entry-states/r26-d7/c2/7_49s_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2"
+  "command": "python -m triforce.entry_states build --start-step 238 --source target/entry-states/r26-d7/c2-fix/7_4acave_2.state --chains 2 --skip-fights 7:0x1b:W --attempts 8 --out target/entry-states/r26-d7/c2-fix"
  }
 ]
