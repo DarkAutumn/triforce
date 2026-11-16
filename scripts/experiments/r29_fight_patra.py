@@ -227,6 +227,174 @@ def kill(args):
                   f'swings median {int(statistics.median(swings))}; 60 frames after the kill: {dict(after)}')
 
 
+# ---- the facts -------------------------------------------------------------------------------------------------------
+
+def hold(w):
+    w.game.write(HEARTS, 0xEE)
+    w.game.write(0x670, 0xFF)
+    w.game.write(LINK_INVINC, 2)
+
+
+def put(w, x, y, facing=None):
+    w.game.apply_ram({'link_x': max(0x10, min(0xE0, int(x))), 'link_y': max(0x45, min(0xCD, int(y)))})
+    w.game.write(0x394, 0)
+    if facing:
+        w.game.write(OBJ_DIR, DIR_OF[facing])
+
+
+def facts(args):
+    for room in (0x61, 0x16):
+        kind = None
+        out_at, flips, radius, period, body_speed, start = (collections.Counter(), collections.Counter(),
+                                                            collections.defaultdict(list), collections.Counter(),
+                                                            [], collections.Counter())
+        for seed in range(args.seeds):
+            w = enter(room, seed)
+            kind = None
+            live, last_man, last_flip, wraps, last_a = None, 0, None, [], None
+            bpos = []
+            for f in range(1300):
+                hold(w)
+                put(w, 0x20, 0xBD)                               # WRITTEN: Link kept in a corner, out of the way
+                if f == 5:
+                    kind = w.r(OBJ_TYPE + 1)
+                    start[f'(${w.r(OBJ_X + 1):02X},${w.r(OBJ_Y + 1):02X})'] += 1
+                if live is None and w.r(OBJ_STATE + 1) == 1:
+                    live = f
+                    out_at[f] += 1
+                man = w.r(MANEUVER)
+                if man != last_man:
+                    flips[('first flip at frame', f) if last_flip is None else ('frames to the next flip', f - last_flip)] += 1
+                    last_flip, last_man = f, man
+                if live is not None and f > live + 5:
+                    bx, by = w.r(OBJ_X + 1), w.r(OBJ_Y + 1)
+                    for s in children(w):
+                        radius[man].append(math.hypot(signed(w.r(OBJ_X + s), bx), signed(w.r(OBJ_Y + s), by)))
+                    a = w.r(ANGLE_WHOLE + 2)
+                    if last_a is not None and a > last_a:
+                        wraps.append(f)
+                    last_a = a
+                    bpos.append((bx, by))
+                w.press('NONE', 1)
+            for a, b in zip(wraps, wraps[1:]):
+                period[b - a] += 1
+            body_speed.append(sum(abs(a[0] - b[0]) + abs(a[1] - b[1]) for a, b in zip(bpos, bpos[1:])) / len(bpos))
+        print(f'0x{room:02x}, Patra ${kind:02X} ({args.seeds} seeds x 1300 frames, Link WRITTEN into a corner): it starts '
+              f'at {dict(start)}; its state 1 (every child out: they hit and can be hit) at frame {dict(out_at)}; '
+              f'pattern flips: {dict(sorted(flips.items()))}')
+        print(f'   frames an orbit {dict(period)}; children\'s distance from the body, first pattern (index 0) '
+              f'{min(radius[0]):.0f}-{max(radius[0]):.0f} px, second (index 1) {min(radius[1]):.0f}-'
+              f'{max(radius[1]):.0f} px; the body moves {statistics.mean(body_speed):.2f} px a frame')
+    # touch: Link written onto a child and onto the body
+    for ring in (0, 2):
+        res = collections.Counter()
+        for seed in range(args.seeds):
+            for target in ('child', 'body'):
+                w = enter(0x61, seed, ring=ring, hearts=14.5)
+                w.press('NONE', 100)
+                s = 2 if target == 'child' else 1
+                h = hp(w)
+                w.game.write(LINK_INVINC, 0)
+                put(w, w.r(OBJ_X + s), w.r(OBJ_Y + s))
+                w.press('NONE', 2)
+                res[(target, round(h - hp(w), 3))] += 1
+        print(f'touch, ring {ring}: hearts lost {dict(res)}')
+    # the body while children live, and after: Link WRITTEN beside it, one stab
+    res = collections.Counter()
+    for seed in range(args.seeds):
+        for label in ('8 children alive', 'the last child alive', 'no child (their slots emptied, WRITTEN)'):
+            w = enter(0x61, seed, hearts=14.5)
+            w.press('NONE', 100)
+            keep = {'8 children alive': 8, 'the last child alive': 1}.get(label, 0)
+            for s in range(2 + keep, 10):
+                w.game.write(OBJ_TYPE + s, 0)
+            hp0 = w.r(OBJ_HP + 1)
+            n = 0
+            while n < 6 and w.r(OBJ_META + 1) == 0 and w.r(OBJ_TYPE + 1) in (PATRA_A, PATRA_B):
+                put(w, w.r(OBJ_X + 1) - 16, w.r(OBJ_Y + 1), 'RIGHT')
+                w.press('A', 1)
+                for _ in range(40):
+                    hold(w)
+                    w.press('NONE', 1)
+                n += 1
+                if w.r(OBJ_HP + 1) == hp0 and n >= 2:
+                    break
+            dead_now = w.r(OBJ_META + 1) != 0 or w.r(OBJ_TYPE + 1) not in (PATRA_A, PATRA_B)
+            res[f'{label}: ' + (f'dead after {n} stabs' if dead_now else
+                                f'HP ${hp0:02X} -> ${w.r(OBJ_HP + 1):02X} after {n} stabs')] += 1
+    print(f'the body, Link WRITTEN beside it, stabs 41 frames apart ({args.seeds} seeds): {dict(res)}')
+    # the other weapons on the children: Link WRITTEN outside the ring, held unhurt; 400 frames of each
+    for room in (0x61, 0x16):
+        res = {}
+        for weapon, slot in (('magic sword', None), ('magic beam', None), ('silver arrow', 2), ('bomb', 1),
+                             ('boomerang', 0)):
+            drops, kills, used, stunned = 0, 0, 0, 0
+            for seed in range(min(args.seeds, 10)):
+                w = enter(room, seed, extra={'rupees': 255, 'bombs': 8})
+                w.press('NONE', 100)
+                bot = PatraBot(w)
+                r = bot.orbit['r']
+                gap = {'magic sword': r + 20, 'magic beam': r + 44, 'bomb': r + 20}.get(weapon, r + 44)
+                if slot is not None:
+                    w.game.write(0x656, slot)
+                before = {s: w.r(OBJ_HP + s) for s in children(w)}
+                for f in range(400):
+                    hold(w)
+                    w.game.write(HEARTS, 0xEE if weapon == 'magic beam' else 0xED)
+                    put(w, w.r(OBJ_X + 1) + 6 + gap, w.r(OBJ_Y + 1), 'LEFT')
+                    if f % 24 == 0 and (weapon != 'bomb' or f % 96 == 0):
+                        bot.press('A' if slot is None else 'B')
+                        used += 1
+                    else:
+                        bot.press('NONE')
+                    stunned += sum(1 for s in children(w) if w.r(0x3D + s))
+                    for s in list(before):
+                        if s not in children(w):
+                            kills += 1
+                            del before[s]
+                        elif w.r(OBJ_HP + s) < before[s]:
+                            drops += 1
+                            before[s] = w.r(OBJ_HP + s)
+            res[weapon] = f'{used} uses: {drops + kills} hits, {kills} children dead, stunned frames {stunned}'
+        print(f'0x{room:02x}: weapons on the children, Link WRITTEN beside the ring facing it, 400 frames x '
+              f'{min(args.seeds, 10)} seeds: {res}')
+
+
+def freeze(args):
+    """The pattern flips only when slot 3's whole angle is 0 (asm:Patra_Update@TryChangeManeuver): with that child
+    dead the angle stands still.  Each child in turn is put into its death state (ObjMetastate $10, WRITTEN: what a
+    kill sets) at frame 400 or 700, and the flips of the next 1500 frames are counted."""
+    for room in (0x61, 0x16):
+        for when in (('first pattern (index 0)', 0), ('second pattern (index 1)', 1)):
+            res = collections.defaultdict(collections.Counter)
+            for seed in range(min(args.seeds, 10)):
+                for slot in (None, 2, 3, 4, 9):
+                    w = enter(room, seed)
+                    w.press('NONE', 120)
+                    for _ in range(700):
+                        if w.r(MANEUVER) == when[1] and w.r(OBJ_TIMER + 2) > 60:
+                            break
+                        hold(w)
+                        put(w, 0x20, 0xBD)
+                        w.press('NONE', 1)
+                    w.press('NONE', 30)
+                    if slot:
+                        w.game.write(OBJ_META + slot, 0x10)
+                    man, n, first = w.r(MANEUVER), 0, None
+                    for f in range(1500):
+                        hold(w)
+                        put(w, 0x20, 0xBD)
+                        w.press('NONE', 1)
+                        if w.r(MANEUVER) != man:
+                            man, n = w.r(MANEUVER), n + 1
+                            first = first if first is not None else f
+                    res['no child killed' if slot is None else f'slot {slot} killed'][
+                        f'{n} flips' + (f', the first after {first // 50 * 50}-{first // 50 * 50 + 49} frames'
+                                        if first is not None else '')] += 1
+            print(f'0x{room:02x}, a child put into its death state in the {when[0]}, flips in the next 1500 frames '
+                  f'({min(args.seeds, 10)} seeds): ' + '; '.join(f'{k}: {dict(v)}' for k, v in res.items()))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('what', choices=['facts', 'freeze', 'kill'])

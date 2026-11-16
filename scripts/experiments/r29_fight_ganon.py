@@ -7,7 +7,7 @@ randomness for its seed.  The B item is set by RAM (SelectedItemSlot: what the s
     python scripts/experiments/r29_fight_ganon.py moves [--seeds N]     # his walk while invisible, the fireballs, the touch
     python scripts/experiments/r29_fight_ganon.py sword [--seeds N]     # where a stab finds him, the four hits, the jump
     python scripts/experiments/r29_fight_ganon.py brown [--seeds N]     # the brown phase: its length, the arrow, a miss
-    python scripts/experiments/r29_fight_ganon.py kill [--seeds N] [--eyes ram|screen|sweep]   # the scripted kills
+    python scripts/experiments/r29_fight_ganon.py kill [--seeds N] [--eyes ram|screen|tells|sweep]   # the scripted kills
     python scripts/experiments/r29_fight_ganon.py end [--seeds N]       # from his room's door to game mode $13
     python scripts/experiments/r29_fight_ganon.py death                 # Link dies in the room: what follows
 """
@@ -57,14 +57,15 @@ class GanonBot(Bot):
     on both axes (his middle is +16, asm:Ganon_CheckCollisions).  `eyes` says what the bot knows of him while he is
     not drawn: 'ram' his position every frame (ObjX/ObjY, his direction and turn counter); 'screen' only what a
     player sees: where he stood when he was last drawn, where each fireball is born (4 pixels right of him) and the
-    two spots he jumps to after a hit; 'sweep' the same without the fireballs' births."""
+    two spots he jumps to after a hit ('screen' walks to every birth; 'tells' stays by the spot it believes in
+    and takes a birth for his place for 12 frames only); 'sweep' the same without the fireballs' births."""
 
     touch = 12
 
     def __init__(self, w, eyes='ram'):
         self.eyes = eyes
         self.belief, self.belief_age, self.seen_balls, self.tried = None, 0, set(), 0
-        self.last_phase, self.guess, self.aim = None, 0, None
+        self.last_phase, self.guess, self.aim, self.tell, self.tell_age = None, 0, None, None, 99
         super().__init__(w, {GANON})
 
     # ---- what the bot knows of him
@@ -83,11 +84,15 @@ class GanonBot(Bot):
             near = sorted(JUMP_SPOTS, key=lambda s: abs(s[0] - w.x) + abs(s[1] - w.y))
             self.belief, self.belief_age, self.guess, self.tried = near[0], 0, 0, 0
             self.spots = near
-        if self.eyes == 'screen':
+        self.tell_age += 1
+        if self.eyes in ('screen', 'tells'):
             for s in range(2, 0x0C):
                 if w.r(OBJ_TYPE + s) == FIREBALL and s not in self.seen_balls:
-                    self.belief, self.belief_age = (w.r(OBJ_X + s) - 4, w.r(OBJ_Y + s)), 0
-                    self.spots = None
+                    birth = (w.r(OBJ_X + s) - 4, w.r(OBJ_Y + s))
+                    if self.eyes == 'screen':                    # the chaser: the belief moves to every birth
+                        self.belief, self.belief_age, self.spots = birth, 0, None
+                    else:                                        # the waiter: a birth is believed for 12 frames
+                        self.tell, self.tell_age = birth, 0
             self.seen_balls = {s for s in range(2, 0x0C) if w.r(OBJ_TYPE + s) == FIREBALL}
         self.last_phase = ph
 
@@ -95,6 +100,8 @@ class GanonBot(Bot):
         """His position as the bot knows it."""
         if self.eyes == 'ram':
             return self.w.r(OBJ_X + G), self.w.r(OBJ_Y + G)
+        if self.eyes == 'tells' and self.tell_age <= 12 and phase(self.w) == 'hidden':
+            return self.tell
         return self.belief
 
     def future(self, s, k):
@@ -131,7 +138,8 @@ class GanonBot(Bot):
             return super().try_stab()
         # by belief: stab when the believed spot is in the sword's box; a stale belief is swept every 20 frames
         w = self.w
-        if self.belief_age > 12 and self.frames % 20:
+        fresh = self.belief_age <= 12 or (self.eyes == 'tells' and self.tell_age <= 12)
+        if not fresh and self.frames % 20:
             return False
         ok = super().try_stab()
         if ok and self.w.r(SWORD_STATE):
@@ -754,7 +762,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('what', choices=['scene', 'moves', 'sword', 'brown', 'kill', 'end', 'death'])
     parser.add_argument('--seeds', type=int, default=20)
-    parser.add_argument('--eyes', default='ram,screen,sweep')
+    parser.add_argument('--eyes', default='ram,screen,tells,sweep')
     parser.add_argument('--fine', action='store_true', help='sword: every pixel of X instead of every fourth')
     args = parser.parse_args()
     globals()[args.what](args)
