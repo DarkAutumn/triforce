@@ -417,6 +417,15 @@ test them, keep what helps, and log everything.
   its own trainings, evaluations and chains don't wait again. Play, replay and build tools (`play-zelda.py`,
   `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority
   and never wait: they are interactive, short, or build data that a job waits on. I/O priority is left alone.
+- **The owner's player comes first: an agent's builds, suites and explorers run under `nice -n 10`** (Nov 17).
+  `play-zelda.py` simulates on `--parallel` (8) threads at the priority it was started with, and a `cmd &` from
+  zsh starts at nice 5 (zsh's `BG_NICE`; the nice limit is 0, so the player cannot raise itself). Next to an
+  agent's `cargo test`, two explorers and a chain it got 1.8 cores for its 8 games (load average 60 on 20 threads)
+  and its queues filled slowly. So everything heavy an agent starts that is not a queued job (`cargo`, `maturin`,
+  pytest, `triforce.explore`, `entry_states build`, walk scripts) gets `nice -n 10`: above the jobs' 15, below the
+  player. For the fastest start of the player: `.venv/bin/python play-zelda.py 3x3` in the foreground or with `&!`
+  after `setopt nobgnice`; `uv run play-zelda.py` also works but rebuilds the module (40 s or more) the first time
+  after `pyproject.toml` changed, which is every landing.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
