@@ -338,8 +338,8 @@ squares), swings facing E for the beam and steps back.
 - **0 of 6 rooms cleared in 12000 frames; 10-11.3 hearts lost, all to Blue Wizzrobes.** In the first version (targets
   from X `$40`) the best run killed all but one Blue (32 sorties, 24 swings); with the wider safety margins it made
   1-4 sorties a run and still died.
-- Why: standing still in the doorway is not safe from touch. One run that never left it for 2000 frames lost 2
-  hearts twice to a Blue Wizzrobe at (`$18`,`$8D`), in the doorway's mouth, Link at (`$10`,`$8D`). (One seed stood
+- Why: standing still in the doorway is not safe from touch. In one run Link, standing at (`$10`,`$8D`), lost 2
+  hearts at frame 1021 and again at 2251 to a Blue Wizzrobe at (`$18`,`$8D`), in the doorway's mouth. (One seed stood
   3000 frames there untouched: it is chance.) And the beam is gone with the first hit.
 - So 0x3a has no safe corner either; what is left is the fight itself.
 

@@ -14,7 +14,8 @@ name=${1:?usage: worktree.sh NAME}
 here=$(git rev-parse --show-toplevel)
 base=$(git -C "$here" rev-parse --abbrev-ref HEAD)
 from=$(cd "${FROM:-$here}" && pwd)
-main=$(git -C "$here" worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+# (no `exit` in the awk: under pipefail a git cut short by the closed pipe ends the script without a word)
+main=$(git -C "$here" worktree list --porcelain | awk '/^worktree / && !seen++ {print $2}')
 dest=$(dirname "$here")/triforce-$base-$name
 git -C "$here" worktree add -q "$dest" -b "$base-$name" "$base"
 ln -s "$main/roms" "$dest/roms"
