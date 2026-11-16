@@ -145,8 +145,7 @@ def fake_proc(root: Path, processes: dict) -> Path:
 def entry(name: str, pid: int, status: str = 'running', queued: float | None = None, host: str = HOST,
           start: float = 10.0, kind: str = 'chain', path: str | None = None, estimate: float | None = None,
           lane: str | None = None) -> dict:
-    """A registry entry as ``read_jobs`` returns it; ``queued`` None: one written by code from before the line,
-    ``estimate`` None: by code from before the scored line."""
+    """A registry entry as ``read_jobs`` returns it (``queued``, ``estimate`` and ``lane`` only when given)."""
     data = {'host': host, 'pid': pid, 'pid_start': BOOT + start, 'name': name, 'kind': kind, 'status': status,
             'path': f'/jobs/{path or name}.json'}
     if queued is not None:
@@ -168,33 +167,18 @@ def proc(tmp_path):
     return fake_proc(tmp_path / 'proc', {pid: 10.0 for pid in range(1, 10)})
 
 
-# ---------------------------------------------------------------------------------- the old rule (legacy entries)
+# ---------------------------------------------------------------------------------------------------- the limit
 
-def test_legacy_two_running_jobs_hold_a_third_and_one_running_lets_it_start(proc):
-    me = entry('me', 9, 'queued', queued=100.0)                  # no estimate: the old rule
+def test_two_running_jobs_hold_a_third_and_one_running_lets_it_start(proc):
+    me = entry('me', 9, 'queued', queued=NOW - 100, estimate=2400.0)
     a, b = entry('a', 1, queued=50.0), entry('b', 2, queued=60.0)
-    held = jobs.turn(me, [b, a, me], 2, proc)
+    held = jobs.turn(me, [b, a, me], 2, proc, NOW)
     assert not held.admitted and names(held.running) == ['a', 'b'] and held.ahead == [] and held.place == 1
-    assert held.mode == 'legacy' and held.reason() == '2 jobs are running (a (chain), b (chain))'
-    assert held.fields() == {'place': 1, 'running': ['a (chain)', 'b (chain)'], 'ahead': [], 'limit': 2,
-                             'mode': 'legacy'}
-    assert jobs.turn(me, [a, me], 2, proc).admitted
-    assert not jobs.turn(me, [a, me], 1, proc).admitted                     # the limit is the caller's
-    assert jobs.turn(me, [a, b, me], 0, proc).admitted                      # 0: no limit
-
-
-def test_legacy_first_come_first_served_ties_by_file_name(proc):
-    me = entry('me', 9, 'queued', queued=100.0, path='m')
-    running = entry('a', 1, queued=50.0)
-    earlier = entry('early', 3, 'queued', queued=90.0)
-    later = entry('late', 4, 'queued', queued=110.0)
-    current = jobs.turn(me, [running, earlier, later, me], 2, proc)
-    assert not current.admitted and names(current.ahead) == ['early'] and current.place == 2   # a place is free
-    assert current.reason() == '1 job is running (a (chain)); 1 job is ahead in line (early (chain))'
-    assert jobs.turn(me, [running, later, me], 2, proc).admitted                # a later one doesn't count
-    same_a = entry('tie-a', 3, 'queued', queued=100.0, path='a')               # same instant: by file name
-    same_z = entry('tie-z', 4, 'queued', queued=100.0, path='z')
-    assert names(jobs.turn(me, [same_a, same_z, me], 2, proc).ahead) == ['tie-a']
+    assert held.reason() == 'estimated 40 minutes; 2 jobs are running (a (chain), b (chain))'
+    assert held.fields() == {'place': 1, 'running': ['a (chain)', 'b (chain)'], 'ahead': [], 'limit': 2}
+    assert jobs.turn(me, [a, me], 2, proc, NOW).admitted
+    assert not jobs.turn(me, [a, me], 1, proc, NOW).admitted                # the limit is the caller's
+    assert jobs.turn(me, [a, b, me], 0, proc, NOW).admitted                 # 0: no limit
 
 
 def test_other_hosts_own_process_and_dead_jobs_are_ignored(tmp_path):
@@ -207,11 +191,10 @@ def test_other_hosts_own_process_and_dead_jobs_are_ignored(tmp_path):
                   entry('reused', 1, start=500.0), entry('reused-queued', 2, 'queued', 1.0, start=500.0),
                   entry('ended', 1, 'completed'), entry('ended-queued', 2, 'interrupted', queued=1.0)]
         current = jobs.turn(me, [*others, me], 1, proc, NOW)
-        assert current.admitted and current.running == [] and current.ahead == []
-        assert current.mode == ('legacy' if estimate is None else 'score')    # the dead ones don't count either
+        assert current.admitted and current.running == [] and current.ahead == []     # the dead ones don't count
 
 
-def test_an_old_running_entry_counts_as_regular_and_a_queued_one_is_alive(proc):
+def test_a_running_entry_without_a_lane_counts_as_regular_and_a_queued_one_is_alive(proc):
     me = entry('me', 9, 'queued', queued=100.0, estimate=5000.0)
     old = [entry('old-a', 1), entry('old-b', 2)]                     # running, no queue fields, no lane
     assert not jobs.turn(me, [*old, me], 2, proc, NOW).admitted
@@ -226,7 +209,7 @@ def test_a_short_job_goes_before_a_long_one(proc):
     short = entry('short', 4, 'queued', queued=NOW - 10, estimate=1200.0)
     everyone = [running, long, short]
     first = jobs.turn(short, everyone, 2, proc, NOW, express=0)
-    assert first.admitted and first.lane == 'regular' and first.mode == 'score' and first.ahead == []
+    assert first.admitted and first.lane == 'regular' and first.ahead == []
     assert first.score == 1200.0 - jobs.AGING * 10
     held = jobs.turn(long, everyone, 2, proc, NOW, express=0)
     assert not held.admitted and names(held.ahead) == ['short'] and held.place == 2
@@ -293,20 +276,13 @@ def test_the_express_place(proc):
     assert unlimited.admitted and unlimited.lane == 'regular'
 
 
-def test_a_waiting_entry_without_estimate_forces_first_come_first_served(proc):
-    regular = [entry('a', 1, lane='regular')]
-    old = entry('old', 3, 'queued', queued=NOW - 50)                         # waiting, code from before
+def test_a_waiting_entry_without_an_estimate_counts_as_estimate_zero(proc):
+    regular = [entry('a', 1, lane='regular'), entry('b', 2, lane='regular')]
+    bare = entry('bare', 3, 'queued', queued=NOW - 50)
     short = entry('short', 4, 'queued', queued=NOW, estimate=60.0)
-    long = entry('long', 5, 'queued', queued=NOW - 100, estimate=9000.0)
-    everyone = [*regular, old, short, long]
-    assert jobs.turn(long, everyone, 2, proc, NOW).admitted                  # it joined first
-    held = jobs.turn(short, everyone, 2, proc, NOW)
-    assert not held.admitted and held.mode == 'legacy' and names(held.ahead) == ['long', 'old']
-    # the old rule counts every running job, express ones too, and has no express place
-    express = entry('fast', 6, lane='express', estimate=100.0)
-    assert not jobs.turn(long, [*regular, express, old, long], 2, proc, NOW).admitted
-    # a running entry without an estimate changes nothing: only a waiting one does
-    assert jobs.turn(short, [*regular, entry('old-running', 7), short], 2, proc, NOW).lane == 'express'
+    held = jobs.turn(short, [*regular, bare, short], 2, proc, NOW, express=0)
+    assert not held.admitted and names(held.ahead) == ['bare']               # 0 - 25 < 60
+    assert jobs.turn(short, [*regular, bare, short], 2, proc, NOW).lane == 'express'
 
 
 def test_check_starts_the_entry_under_the_lock_and_wait_turn_honours_no_wait(registry, tmp_path, monkeypatch):

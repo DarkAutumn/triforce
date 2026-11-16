@@ -77,70 +77,6 @@ def test_chart_range_updates_when_switching_runs(qapp):
     assert chart.y_bounds() == (0.90, 1.0)
 
 
-def fake_process(proc: Path, pid: int, args: list[str], cwd: Path, environ: dict | None = None):
-    entry = proc / str(pid)
-    entry.mkdir(parents=True)
-    (entry / 'cmdline').write_bytes(b''.join(arg.encode() + b'\0' for arg in args))
-    (entry / 'cwd').symlink_to(cwd)
-    if environ is None:
-        (entry / 'environ').mkdir()     # unreadable as a file
-    else:
-        (entry / 'environ').write_bytes(b''.join(f'{k}={v}'.encode() + b'\0' for k, v in environ.items()))
-
-
-@pytest.fixture
-def checkout(tmp_path):
-    """A checkout with logs/ and a venv, plus an unrelated working directory with logs/ of its own."""
-    repo = tmp_path / 'repo'
-    (repo / 'triforce').mkdir(parents=True)
-    (repo / 'triforce' / 'events.py').write_text('')
-    (repo / 'logs').mkdir()
-    (repo / '.venv' / 'bin').mkdir(parents=True)
-    (repo / '.venv' / 'bin' / 'triforce').write_text('#!python\n')
-    elsewhere = tmp_path / 'elsewhere'
-    (elsewhere / 'logs').mkdir(parents=True)
-    (elsewhere / 'rel').mkdir()
-    (elsewhere / 'envlogs').mkdir()
-    (tmp_path / 'abs').mkdir()
-    (tmp_path / 'link').symlink_to(repo)
-    return tmp_path
-
-
-@pytest.mark.parametrize('case', [
-    'module', 'logs-dir-rel', 'logs-dir-abs', 'console', 'console-logs-dir', 'env-empty', 'env-rel', 'symlink',
-    'empty-cmdline', 'no-environ', 'module-outside', 'not-triforce'])
-def test_process_log_roots_finds_every_triforce_entry_point(checkout, case):
-    repo, elsewhere, absdir = checkout / 'repo', checkout / 'elsewhere', checkout / 'abs'
-    python, console = str(repo / '.venv/bin/python'), str(repo / '.venv/bin/triforce')
-    env = {'HOME': '/home/x'}
-    shapes = {
-        'module': (['python3', '-m', 'triforce.train'], repo, env, {repo / 'logs'}),
-        'logs-dir-rel': (['python', '-m', 'triforce.train', '--logs-dir', 'rel'], elsewhere, env,
-                         {elsewhere / 'logs', elsewhere / 'rel'}),
-        'logs-dir-abs': (['python', '-m', 'triforce.train', f'--logs-dir={absdir}'], elsewhere, env,
-                         {elsewhere / 'logs', absdir}),
-        'console': ([python, console, 'eval-chain', '--runs', '20'], elsewhere, env,
-                    {elsewhere / 'logs', repo / 'logs'}),
-        'console-logs-dir': ([python, console, 'eval-chain', '--logs-dir', str(absdir)], elsewhere, env,
-                             {elsewhere / 'logs', repo / 'logs', absdir}),
-        'env-empty': (['python', '-m', 'triforce.evaluate'], elsewhere, {**env, gui.LOGS_DIR_ENV: ''},
-                      {elsewhere / 'logs'}),
-        'env-rel': (['python', '-m', 'triforce.evaluate'], elsewhere, {**env, gui.LOGS_DIR_ENV: 'envlogs'},
-                    {elsewhere / 'logs', elsewhere / 'envlogs'}),
-        'symlink': (['python', '-m', 'triforce.train'], checkout / 'link', env, {repo / 'logs'}),
-        'empty-cmdline': ([], repo, env, set()),
-        'no-environ': (['python', '-m', 'triforce.train'], repo, None, {repo / 'logs'}),
-        'module-outside': ([python, '-m', 'triforce.evaluate'], elsewhere, {**env, 'VIRTUAL_ENV': str(repo / '.venv')},
-                           {elsewhere / 'logs', repo / 'logs'}),
-        'not-triforce': (['python', '-m', 'http.server'], repo, env, set()),
-    }
-    args, cwd, environ, expected = shapes[case]
-    proc = checkout / 'proc'
-    fake_process(proc, 4242, args, cwd, environ)
-    (proc / 'self').mkdir()                 # non-pid entries are skipped
-    assert gui.process_log_roots(proc) == {path.resolve() for path in expected}
-
-
 def iso(ts):
     from datetime import datetime, timezone
     return datetime.fromtimestamp(ts, timezone.utc).isoformat()
@@ -264,19 +200,14 @@ def test_plan_alive_is_unknown_for_finished_and_other_host_plans():
     assert gui.plan_is_live(running_plan(os.getpid(), now))
 
 
-def test_a_real_triforce_process_its_log_roots_and_liveness(tmp_path):
-    """A child whose argv looks like a triforce run: process_log_roots on the real /proc finds its roots, its plan
-    is live while it runs and not once it is killed; unreadable and non-object plans are skipped."""
+def test_a_real_process_and_its_plans_liveness(tmp_path):
+    """A plan is live while its process runs and not once it is killed; unreadable and non-object plans are
+    skipped."""
     import json
     import subprocess
     import sys
     import time
-    work = tmp_path / 'work'
-    for folder in ('logs', 'out', 'envlogs'):
-        (work / folder).mkdir(parents=True)
-    env = {**os.environ, gui.LOGS_DIR_ENV: 'envlogs'}
-    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)', '-m', 'triforce.train',
-                              '--logs-dir', 'out'], cwd=work, env=env)
+    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
     try:
         plan_dir, broken, listed = tmp_path / 'run', tmp_path / 'broken', tmp_path / 'listed'
         for folder in (plan_dir, broken, listed):
@@ -284,12 +215,6 @@ def test_a_real_triforce_process_its_log_roots_and_liveness(tmp_path):
         (plan_dir / gui.PLAN_FILE).write_text(json.dumps(running_plan(child.pid, time.time())))
         (broken / gui.PLAN_FILE).write_text('{"status": "running", ')
         (listed / gui.PLAN_FILE).write_text('[1, 2]')
-        deadline = time.monotonic() + 10
-        while (work / 'logs').resolve() not in gui.process_log_roots() and time.monotonic() < deadline:
-            time.sleep(0.05)                    # until the child's cwd and environ are set up
-        base = tmp_path.resolve()
-        roots = {root for root in gui.process_log_roots() if root == base or base in root.parents}
-        assert roots == {(work / folder).resolve() for folder in ('logs', 'out', 'envlogs')}
         scanner = gui.LiveScanner()
         assert scanner.live([broken, plan_dir, listed, tmp_path / 'missing']) == [plan_dir]
         assert gui.plan_alive(json.loads((plan_dir / gui.PLAN_FILE).read_text())) is True
@@ -353,7 +278,6 @@ def test_clear_finished_keeps_only_live_folders(qapp, tmp_path, monkeypatch):
     ones, and a training that starts later still appears."""
     import json
     import time
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())      # only tmp_path's folders
     monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
 
@@ -392,7 +316,6 @@ def test_currently_running_stays_selected_while_nothing_runs(qapp, tmp_path, mon
     folders not cleared yet), and a training that starts later appears in it."""
     import json
     import time
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
     monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
 
@@ -549,7 +472,6 @@ def test_a_batch_plan_becomes_one_row_per_evaluation(qapp, tmp_path):
 
 def test_a_batch_shows_in_the_window(qapp, tmp_path, monkeypatch):
     import time
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
     monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     folder = tmp_path / '261113_001_r71-evals'
@@ -613,9 +535,7 @@ def test_registry_folders_tell_live_recent_and_old_jobs_apart(tmp_path):
 
 def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeypatch):
     """Jobs registered from two other worktrees: the live one in [currently running] with its checkout, the
-    finished one under the 'finished' heading; 'Clear finished' hides it.  The live one is found twice, by its
-    registry entry and by its process's logs root, and is listed once."""
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: {(tmp_path / 'triforce-a' / 'logs').resolve()})
+    finished one under the 'finished' heading; 'Clear finished' hides it."""
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     registry = tmp_path / 'jobs'
     monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
@@ -679,8 +599,7 @@ def web_plan(root, name, *, created, pid=None, status='running', finished=None, 
 
 @pytest.fixture
 def web_env(monkeypatch):
-    """Only the test's own logs root: no other process's roots, no job registry."""
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
+    """Only the test's own logs root: no job registry."""
     monkeypatch.setattr(gui, 'read_registry', lambda: [])
 
 
@@ -890,7 +809,7 @@ def queue_job(registry, root, name, *, kind, pid, status, queued_ts, created, ru
               estimate=None, lane=None, admitted=None):
     """A job's log folder (its plan: one ow-start run) and its registry entry (``<host>-<pid>-<start>-<name>.json``),
     queued since ``queued_ts`` and, unless ``status`` is 'queued', admitted at ``admitted`` (default now).  With an
-    ``estimate`` (seconds) entry and plan are new code's (``work``, ``estimate``, ``lane``); without, older code's."""
+    ``estimate`` (seconds) entry and plan carry ``work``, ``estimate`` and ``lane``; without, they record none."""
     import json
     import socket
     new = {} if estimate is None else {'work': {'train_steps': 1000}, 'estimate': estimate, 'lane': lane}
@@ -924,13 +843,13 @@ def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_pat
                                 'waited': None}}
     state = gui.queue_state(tmp_path / 'job', plan, [])
     assert state == {'place': 3, 'running': ['r25-a (round)'], 'ahead': ['x (eval)', 'y (round)'], 'limit': 2,
-                     'since': pytest.approx(now - 90, abs=1), 'estimate': None, 'lane': None, 'mode': None}
+                     'since': pytest.approx(now - 90, abs=1), 'estimate': None, 'lane': None}
     assert gui.waiting_text(state, state['since'] + 61) == 'waiting · 3rd in line · for r25-a (round) · 1m 01s'
-    # a new-code plan's queue: its estimate (top-level, else the queue's) and the wait, coarse
+    # a plan's queue with an estimate (top-level, else the queue's) and the wait, coarse
     new = {**plan, 'queue': {**plan['queue'], 'estimate': 2400.0, 'work': {'train_steps': 10 ** 6},
-                             'score': 2355.0, 'mode': 'score', 'lane': None}}
+                             'score': 2355.0, 'lane': None}}
     state = gui.queue_state(tmp_path / 'job', new, [])
-    assert state['estimate'] == 2400.0 and state['mode'] == 'score' and state['lane'] is None
+    assert state['estimate'] == 2400.0 and state['lane'] is None
     assert gui.waiting_text(state, state['since'] + 725) == \
         'waiting · 3rd in line · for r25-a (round) · ~40 min · waited 12m'
     state = gui.queue_state(tmp_path / 'job', {**new, 'estimate': 40.0}, [])
@@ -948,14 +867,14 @@ def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_pat
     state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry))
     assert state['place'] == 2 and state['ahead'] == ['quiet (eval)'] and state['since'] == now - 100
     assert state['running'] == [] and state['limit'] == 2       # the test's own process: not waited for
-    assert state['mode'] == 'legacy' and state['estimate'] is None
-    # new code: by score (estimate - AGING * seconds waited), the short job before the long one that joined first
+    assert state['estimate'] is None
+    # by score (estimate - AGING * seconds waited), the short job before the long one that joined first
     (registry / 'a.json').write_text(json.dumps({**entry, 'name': 'quiet', 'kind': 'eval', 'log_dir': None,
                                                  'queued_ts': now - 200, 'estimate': 3000.0, 'lane': None}))
     (registry / 'b.json').write_text(json.dumps({**entry, 'name': 'job', 'kind': 'round', 'estimate': 60.0,
                                                  'log_dir': str(tmp_path / 'job'), 'queued_ts': now - 100}))
     state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
-    assert state['place'] == 1 and state['ahead'] == [] and state['mode'] == 'score' and state['estimate'] == 60.0
+    assert state['place'] == 1 and state['ahead'] == [] and state['estimate'] == 60.0
     # a long job that has waited long enough goes first: 2400 - 0.5 * 6000 = -600 < 60 - 0.5 * 100 = 10
     (registry / 'd.json').write_text(json.dumps({**entry, 'name': 'patient', 'kind': 'round', 'log_dir': None,
                                                  'queued_ts': now - 6000, 'estimate': 2400.0}))
@@ -987,7 +906,6 @@ def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_pa
     with their place in line and what they wait for, the web view as 'waiting' lines without cards; the window title
     and the cards count only the running jobs.  Admitted, a job runs like any other; its process gone, it is lost."""
     import subprocess
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     registry, root = tmp_path / 'jobs', tmp_path / 'logs'
     root.mkdir()
@@ -1015,9 +933,9 @@ def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_pa
         assert views[q2].header.waiting(q2_ts + 725) == f'waiting · 2nd in line · for {running} · 12m 05s'
         assert views[q1].header.waiting(q1_ts + 5) == f'waiting · 1st in line · for {running} · 5s'
         assert views[a].header.waiting(now) == ''
-        # older code's jobs (no estimate, no lane): no express marker, no estimate
+        # plans that record no estimate and no lane: no express marker, no estimate
         assert views[a].header.facts(now) == {'express': False, 'est': ''}
-        assert window.queues[q1]['mode'] == 'legacy' and window.queues[q1]['estimate'] is None
+        assert window.queues[q1]['estimate'] is None
         views[a].header.grab()
         title = window.windowTitle()
         assert a.name in title and b.name in title and 'q1' not in title and 'q2' not in title
@@ -1036,7 +954,7 @@ def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_pa
         assert line['waits'] == f'for {running}' and line['waited'] == '12m 05s'
         assert line['ahead'] == ['261115_003_q1 (round)'] and line['place'] == 2
         assert line['text'] == f'waiting · 2nd in line · for {running} · 12m 05s'
-        assert line['estimate'] == '' and line['mode'] == 'legacy'
+        assert line['estimate'] == ''
         assert all(not plan['express'] and plan['est'] == '' for plan in snapshot['plans'])
         assert all(not card['express'] and card['est'] == '' for card in snapshot['cards'])
 
@@ -1077,12 +995,11 @@ def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_pa
 
 
 def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estimate(qapp, tmp_path, monkeypatch):
-    """New code's jobs: the waiting ones listed (window and web view) in the order they will start, by score (a long
+    """The waiting jobs are listed (window and web view) in the order they will start, by score (a long
     job that joined first after a short one; a long one that has waited long enough before it), with their estimate
-    and wait; first come first served while a job of older code (no estimate) waits.  A running job shows its
+    and wait.  A running job shows its
     estimate and time run, and 'express' in the express lane."""
     import subprocess
-    monkeypatch.setattr(gui, 'process_log_roots', lambda: set())
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     registry, root = tmp_path / 'jobs', tmp_path / 'logs'
     root.mkdir()
@@ -1098,7 +1015,7 @@ def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estima
     window = None
     try:
         # scores at now: long 4800 - 0.5 * 600 = 4500, short 300 - 30 = 270, patient 2400 - 3000 = -600
-        long_ts, short_ts, patient_ts, legacy_ts = now - 600, now - 60, now - 6000, now - 300
+        long_ts, short_ts, patient_ts = now - 600, now - 60, now - 6000
         long = queue_job(registry, root, '261115_003_long', kind='round', pid=children[0].pid, status='queued',
                          queued_ts=long_ts, created=time_now(), estimate=4800.0)
         short = queue_job(registry, root, '261115_004_short', kind='eval', pid=children[1].pid, status='queued',
@@ -1109,7 +1026,6 @@ def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estima
         regular = '261115_002_eval-b (eval)'        # a job too long for the express place doesn't wait for a's
         window = gui.Window(root, None)
         assert window._shown_dirs() == [b, a, patient, short, long]       # running, then in the order they start
-        assert {window.queues[path]['mode'] for path in (patient, short, long)} == {'score'}
         views = {view.dir: view for view in window.views}
         assert views[patient].header.waiting(patient_ts + 6000) == \
             f'waiting · 1st in line · for {regular} · ~40 min · waited 1h 40m'
@@ -1125,11 +1041,11 @@ def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estima
 
         state = gui.WebState(root, clock=lambda: now, machine=lambda: '', scan_every=0)
         snapshot = state.refresh()
-        assert [(line['plan'], line['place_label'], line['estimate'], line['waited'], line['mode'])
+        assert [(line['plan'], line['place_label'], line['estimate'], line['waited'])
                 for line in snapshot['waiting']] == [
-            (patient.name, '1st in line', '~40 min', 'waited 1h 40m', 'score'),
-            (short.name, '2nd in line', 'short ~5 min', 'waited 1m', 'score'),
-            (long.name, '3rd in line', '~1 h 20 min', 'waited 10m', 'score')]
+            (patient.name, '1st in line', '~40 min', 'waited 1h 40m'),
+            (short.name, '2nd in line', 'short ~5 min', 'waited 1m'),
+            (long.name, '3rd in line', '~1 h 20 min', 'waited 10m')]
         assert snapshot['waiting'][2]['ahead'] == ['261115_005_patient (round)', '261115_004_short (eval)']
         plans = {plan['plan']: plan for plan in snapshot['plans']}
         assert (plans[a.name]['express'], plans[a.name]['est']) == (True, 'est ~5 min · ran 12m')
@@ -1139,31 +1055,6 @@ def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estima
         assert (cards[b.name]['express'], cards[b.name]['est']) == (False, 'est ~40 min · ran 1h 02m')
         page = gui.web_page().decode()
         assert '.pill.express{color:var(--warn)}' in page and 'card.est]' in page and 'job.estimate' in page
-
-        # a job of older code (no estimate) waits: first come first served for every waiting job
-        legacy = queue_job(registry, root, '261115_006_legacy', kind='round', pid=children[3].pid,
-                           status='queued', queued_ts=legacy_ts, created=time_now())
-        window._scan_and_update()
-        window.poll(force=True)
-        assert window._shown_dirs() == [b, a, patient, long, legacy, short]
-        assert {window.queues[path]['mode'] for path in (patient, long, legacy, short)} == {'legacy'}
-        views = {view.dir: view for view in window.views}
-        assert views[legacy].header.waiting(legacy_ts + 300) == f'waiting · 3rd in line · for {running} · 5m 00s'
-        assert views[short].header.waiting(short_ts + 725) == \
-            f'waiting · 4th in line · for {running} · short ~5 min · waited 12m'
-        snapshot = state.refresh()
-        assert [(line['plan'], line['estimate'], line['waited']) for line in snapshot['waiting']] == [
-            (patient.name, '~40 min', 'waited 1h 40m'), (long.name, '~1 h 20 min', 'waited 10m'),
-            (legacy.name, '', '5m 00s'), (short.name, 'short ~5 min', 'waited 1m')]
-
-        # it is gone: back to the score
-        children[3].kill()
-        children[3].wait()
-        window._scan_and_update()
-        window.poll(force=True)
-        assert window._shown_dirs()[:5] == [b, a, patient, short, long] and legacy not in window.queues
-        snapshot = state.refresh()
-        assert [line['plan'] for line in snapshot['waiting']] == [patient.name, short.name, long.name]
     finally:
         if window is not None:
             window.close()
