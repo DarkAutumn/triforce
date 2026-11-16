@@ -1,28 +1,29 @@
 """Round 26: today's models in the new start states of steps 209-247, one row per state stem (chains 0-2 together),
 in Markdown (docs/experiments/round26.md "The baseline").
 
-    python scripts/experiments/r26_room_baseline.py EVAL.json [EVAL.json ...]
+    python scripts/experiments/r26_room_baseline.py EVAL.json [EVAL.json ...] [--route d2first] [--first-step 209]
+        [--last-step 247]
 
 Each EVAL.json is a `triforce evaluate` output of one family (every start state of the family).  Only the states of
-route steps 209-247 are listed, in route order: episodes, successes, deaths, wrong exits, timeouts (`max-steps`),
-stuck endings, other endings and the mean health change in hearts.
+the route's steps from the first to the last are listed, in route order: episodes, successes, deaths, wrong exits,
+timeouts (`max-steps`), stuck endings, other endings and the mean health change in hearts.  Round 27 reads its
+stretch with ``--route d6 --first-step 248 --last-step 280``.
 """
 
+import argparse
 import collections
 import json
-import sys
 
 from triforce._native import route_steps
 from triforce.entry_states import state_stem
 
-FIRST_STEP = 209
 KNOWN = ('exit-correct', 'triforce-collected', 'death', 'exit-wrong', 'max-steps', 'stuck')
 
 
-def stems() -> dict:
-    """State stem -> (first route step, room label) for the steps from FIRST_STEP on."""
+def stems(route: str, first: int, last: int) -> dict:
+    """State stem -> (first route step, room label) for the route's steps ``first`` to ``last``."""
     out = {}
-    for step in route_steps('d2first')[FIRST_STEP:]:
+    for step in route_steps(route)[first:last + 1]:
         stem = state_stem(step['level'], step['room'], step['in_cave'], step['entry'], step.get('visit', 1))
         out.setdefault(stem, (step['index'], f"{step['level']}:0x{step['room']:02x}" + (' cave' if step['in_cave'] else ''),
                               f"{step['entry']} → {step['exit']}", step['way'] or ''))
@@ -30,8 +31,14 @@ def stems() -> dict:
 
 
 def main():
-    wanted, rows = stems(), {}
-    for path in sys.argv[1:]:
+    parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    parser.add_argument('evals', nargs='+')
+    parser.add_argument('--route', default='d2first')
+    parser.add_argument('--first-step', type=int, default=209)
+    parser.add_argument('--last-step', type=int, default=247)
+    args = parser.parse_args()
+    wanted, rows = stems(args.route, args.first_step, args.last_step), {}
+    for path in args.evals:
         data = json.load(open(path, encoding='utf-8'))
         for state, entry in data['by_state'].items():
             stem = state.rsplit('_', 1)[0]

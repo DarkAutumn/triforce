@@ -445,12 +445,14 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
           route: str = DEFAULT_ROUTE, skip_fights: Optional[set] = None, attempts: int = 3) -> tuple:
     """Runs one route chain per id (one thread each; exploration runs natively without the GIL); every written file
     is merged into ``<out>/entry_states.json`` as it is written (a rebuilt file replaces its old entry; ``command``,
-    the invocation, is recorded in each entry).  Returns (manifest entries, the first file not rebuilt per failed
-    chain); ``<out>/build.json`` records both."""
+    the invocation, is recorded in each entry).  ``source`` may hold ``{chain}`` (round 27: each chain goes on from
+    its own state of ``start_step``, ``DIR/7_2bw_{chain}.state``).  Returns (manifest entries, the first file not
+    rebuilt per failed chain); ``<out>/build.json`` records both."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def run(chain):
         return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True),
-                           start_step=start_step, source=source, states_dir=states_dir, route=route, command=command,
+                           start_step=start_step, source=source.replace('{chain}', str(chain)),
+                           states_dir=states_dir, route=route, command=command,
                            skip_fights=skip_fights, attempts=attempts)
 
     with ThreadPoolExecutor(max_workers=len(chain_ids)) as pool:
@@ -867,7 +869,7 @@ def build_parser() -> argparse.ArgumentParser:
     chain_parser.add_argument('--out', default=None, help=out_help)
     chain_parser.add_argument('--start-step', type=int, default=0, help="route step index to start from")
     chain_parser.add_argument('--source', default=START_STATE,
-                              help="entry state of --start-step (default: 'start')")
+                              help="entry state of --start-step (default: 'start'); '{chain}' in it is each chain's id")
     chain_parser.add_argument('--route', default=DEFAULT_ROUTE, help="routes.yaml route to play")
     chain_parser.add_argument('--attempts', type=int, default=3, help="explorer attempts per room (seeds)")
     chain_parser.add_argument('--skip-fights', default=None, metavar='L:0xRR:ENTRY,...',
