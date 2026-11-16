@@ -21,8 +21,35 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   2026-11-16): columns added at the end of `entity_features` (33 → 41), `link` (87 → 93) and `room_state` (85 →
   89), no schema 5 column changed; the 28 promoted 1.5.0 runs converted (`triforce convert-model`), proven identical
   (38,360 of 38,360 episodes in both act modes). Not built yet: the stretch's start states, curricula, family
-  rooms' training, any D7 chain number. Round 25 (`docs/experiments/round25.md`, `round25-planner-teacher.md`):
-  hearts priced by what they are worth to the run, the honest planner beside the models (`registry.PLAN_ACT`).
+  rooms' training, any D7 chain number.
+- **Round 25 (Nov 16, 1.5.0.1):** the route is unchanged (`d2first`, game start to the D5 triforce, 209 steps);
+  the round was "leave rooms with more hearts" (`docs/experiments/round25.md`, decisions 2026-11-15 and 2026-11-16).
+  Chains, 1000 runs per segment, models alone, clips on (`r75-1k`) | off (`r75-1k-noclips`), round 24 → 25: D2 89.9 →
+  88.2 | 89.9 → 88.2%, D3 67.3 → 81.0 | 67.3 → 81.0%, D4 81.3 → 92.3 | 59.7 → 79.9%, the leg 99.8 → 99.9 | 92.0 →
+  97.0%, D5 34.9 → **68.0** | 22.0 → 47.5%, from the start to the D5 triforce 4.8 → **19.7** | 0.3 → 2.6%. What did
+  it: `reward.heart_value` (hearts priced by V(route step, hearts) = the chance to reach the next triforce alive,
+  `triforce/heart_value.json`, fitted by `python -m triforce.heart_value <chain jsonl>...`; on for eleven dungeon
+  families: darknut, gibdo, goriya, vire, stalfos-keese-gel, moldorm, zol, like-like, d2-rope, trap-room,
+  equipment-room, continued 244 iterations with `--sil-coeff 0.1`); Manhandla (`ram_randomization.drop_bombs`,
+  `reward.drops_first`, `left_drop_penalty`); `path_costs` in game.yaml (the objective's path off the monsters' spawn
+  spots: 0:0x27, 0:0x1f, 5:0x37); `train --demos` (a scripted rule's clean runs cloned during PPO: 5:0x37's column,
+  `scripts/experiments/r25_d5_37_tracks.py --demos`); `reward.heal_targets` on ow-tektite, ow-octorok, ow-zora.
+  **The honest planner** (the owner, Nov 16): act mode `temperature:0.5+relax:16+plan:16:1` (`registry.PLAN_ACT`;
+  before each action the emulator tries it on redrawn random numbers and takes another if Link is hit) runs BESIDE
+  the models, never as a default: models alone are the primary number and what training optimises; the planner is
+  reported beside them (the full route 82.6% with clips on), and is for the golden path, play and as a teacher.
+  **Measuring** (round25.md §7, §9): a 1000-run chain has a standard error of 1.6 points; separate trainings of one
+  family differ by more than checkpoints of one training, so an arm needs seeds (three) and a comparison with the
+  promoted model on the chain; continuations of round 24-25 models pass `--sil-coeff 0.1`; `train
+  --checkpoint-every N` and `triforce select-checkpoint` choose a checkpoint by a chain segment with fresh-seed
+  confirmation. **Jobs** (trainings, evaluations, chains) wait their turn in one line for the machine by themselves:
+  two regular places, shortest estimate first with waiting counted, and an express place for jobs under ten
+  minutes; never `--no-wait`, never kill a waiting job. **Next** (the owner, Nov 16): the rest of the game, Dungeons
+  7, 6, 8, 9 with the magic sword after 7, breadth first to Ganon (`docs/routes/rest-of-game.md`: the survival
+  budget, everything the engine lacks, the gap list of what must be walked, the order of work; `d7.md`, `d6.md`,
+  `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`). Left open by round 25 (backlog): the Olive Garden (143
+  of 1000 full runs), Manhandla (16% of his visits), Dungeon 2 (no gain), clips off (the plain 0x64), the planner's
+  stuck runs, the planner as a teacher.
 - **Round 24 (Nov 15, 1.5.0.0):** `d2first` runs from the game start to the **D5 triforce** (209 steps;
   `docs/experiments/round24.md`, decisions 2026-11-14 and 2026-11-15). After the D4 triforce comes the leg (steps
   134-185, `docs/routes/d5-leg.md`): the raft back to 0x55, the stretches `coast-heart` (0x5f's heart container,

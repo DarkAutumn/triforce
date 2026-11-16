@@ -3,14 +3,73 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
-## Next projects (the owner, Nov 11-12; ordered Nov 15 after round 24): top of the list
+## Next (the owner, Nov 16): the rest of the game
+
+"Now d7 d6 d8 d9. You have the scouting runs for the route, to get the magic sword." And: "It's going to be harder
+than you think." The order is Dungeon 7, the magic sword, Dungeons 6, 8 and 9 (Ganon, Zelda), breadth first: each
+stretch gets rooms, states, families and a first trained team at a working rate, then the next; one optimisation
+round over the whole route after the first complete run. The plan and everything known about the stretch are in
+`docs/routes/rest-of-game.md` (the survival budget, the ledgers, everything the engine lacks, softlocks, families,
+the gap list of what must be walked in the game first, where the documents disagree, the open questions, the order
+of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
+The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
+
+## Done (Nov 16): round 25 (leave rooms with more hearts; 1.5.0.1)
+
+round25.md. From the game start to the D5 triforce 4.8 | 0.3% → 19.7 | 2.6% (clips on | off, models alone); the
+Dungeon 5 segment 34.9 → 68.0 | 22.0 → 47.5%.
+
+- [x] **Hearts priced by what they are worth to the run** (`reward.heart_value`; item 1 below): eleven dungeon
+  families continued with it.
+- [x] **Manhandla's bombs** (item 1b below): `boss-manhandla/r75-mh-fight`.
+- [x] **0x37's column** (item 5 below): `path_costs` and the scripted rule cloned (`train --demos`),
+  `darknut/r75-d537-c5`.
+- [x] **Spawn spots on the objective's path**: `path_costs` in 0:0x27 and 0:0x1f, `ow-peahat/r75-bow-ow`.
+- [x] **The job line** for trainings and evaluations; **checkpoints chosen by the chain**; **the honest planner** as a
+  second act mode.
+
+### Left open by round 25
+
+- [ ] **The Olive Garden** (item 3 below) is the route's largest loss with clips on: 143 of 1000 full runs die there
+  and a visit costs 3.86 hearts; hearts' price did not shorten the fight.
+- [ ] **3:0x59 N→S** still costs 1.28 hearts a visit (the largest bleed before Manhandla).
+- [ ] **Manhandla** kills 16% of his visits (108 of 1000 full runs), and is the planner's largest loss too. Sword
+  kills arm no bomb drop (fewer bombs into Dungeon 4); the fairy on a 16th kill overrides the forced drop.
+- [ ] **Dungeon 2 gained nothing** (88.2%): at three containers the Goriya rooms and Moldorm lose 0.6-0.8 hearts a
+  visit; 2:0x1e and 2:0x5e end 75 of 1000 full runs.
+- [ ] **Clips off:** 2.6% from the start. The plain 0x64 fight (item 6 below) ends 220 of 1000 full runs.
+- [ ] **The planner's stuck runs** (round25.md §12): more than the models' (6 → 33 on the full route with the round
+  24 team; `darknut exceeded 2000 steps`, a cave beside the route). To be looked at before the planner is the golden
+  path's mode.
+- [ ] **The planner as a teacher** (`round25-planner-teacher.md`): analysed, not trained. Proposed order: a penalty
+  on the refused action labelled by `plan:1:1` during rollouts, then a cross-entropy target, on darknut and ow-peahat
+  first.
+- [ ] **Refit `heart_value.json`** from `r75-1k` when the families are next retrained (Link now carries about one
+  heart more into the late rooms than the table was fitted on).
+- [ ] **Heart value's untried arms:** the exit term alone (`r25-value-a`), the low-health multiplier
+  (`r25-value-c`), scales other than 20; the overworld families and the bosses were not retrained with it.
+- [ ] **Spawn hazards as a general rule** (`reward.spawn_cost`, branch `r25-spawns`, not landed): untrained it hurts
+  or does nothing and does not reproduce the hand-placed 0x27 gain (a hazard is given up 16 px off its spot, and the
+  risen Peahat is then in the corridor); variants `follow` and `spot` were not measured. Its one trained lead,
+  ow-octorok (0x37 out of the cave 0.24 → 0.00 hearts a visit; +0.39 ± 0.04 hearts after Dungeon 1 but −2.3 ± 1.7
+  points of arrivals after Dungeon 2 at 300 runs), was not confirmed at 1000 runs. Hand-placed `path_costs` with a
+  retrain are what worked (0x27, 0x1f): candidates 0:0x2d, 0:0x38, 0:0x37 out of the cave, 3:0x49, 3:0x69.
+- [ ] **The ladder clip's landing in 4:0x21** (`clips: {clear_landing: true}`, same branch, not landed): CLIP
+  withheld while a monster stands within 24 px of the landing; 0x21 0.234 → 0.180 hearts a visit, +32 frames, +0.05
+  ± 0.01 hearts at 4:0x11 at 300 runs; no 1000-run check.
+- [ ] **ow-tektite's wrap out of 0x1a** (`wrap_in`, branch `r25-bleedow-tr`, not landed): 0x1a 0.41 → 0.29 hearts a
+  visit but its deaths 9 → 16 and arrivals −0.7 ± 0.9 at 1000 runs.
+- [ ] **Low-health act rules** (branch `r25-act`, rejected): seven variants, no effect beyond noise; hits per
+  decision at 2 hearts or fewer never drop.
+
+## The list before round 25 (the owner, Nov 11-12; ordered Nov 15 after round 24)
 
 Round 24 (round24.md) completed Dungeon 5: from its entrance 34.9 | 22.0% of runs (clips on | off) reach the D5
 triforce (46.4 | 34.0% with darknut r74-darknut5, promoted after the chains), from the D4 triforce 15.2 | 2.9%, from
 the game start 4.8 | 0.3%. The order: the hearts item first, where the owner placed it (Nov 14), then what the round
 24 chains lose in Dungeon 5 (items 2-6, measured with r74-darknut4 unless said), then the r72 list.
 
-### 1. Next: leave rooms with more hearts (the owner, Nov 14)
+### 1. Done in round 25: leave rooms with more hearts (the owner, Nov 14)
 
 "We beat the room with 1 heart and died in the next." Find out how to train the models to value health for what
 it is worth to the run. Not by changing the route and not by buying potions.
