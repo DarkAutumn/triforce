@@ -381,7 +381,8 @@ test on the standing rule's seeds (0-19):
 | guard on every decision (`temperature:0.5+relax:16+guard:8`) | 16/20 | 8/20 | 9 / 1 | 369 of 12366 |
 
 Guarding every decision does better than guarding only when low: the lever is not being hit at any health, so Link
-reaches low health less often. Twenty runs are a lead, not a result. The guard is carried on as its own experiment.
+reaches low health less often. Twenty runs are a lead, not a result. The guard is carried on as its own experiment
+(§12).
 
 ## 5. Rooms that bleed, Dungeon 5: room 5:0x37 and `path_costs`
 
@@ -544,8 +545,8 @@ bit-identical up to 0x27):
 Link reaches Dungeon 1 with about 0.3 hearts more, clips on and off. The D1 triforce is taken 2.4 points more often
 clips on (80.5 → 82.9%) and 4.0 points more clips off (71.8 → 75.8%). As independent samples each rate has a standard
 error of about 1.8 points. The runs are paired and diverge only from 0x27 on, so the true error is smaller, but it
-was not computed. The cost is 105 frames a visit, under 2 seconds. `03cd333` is not on `r25` yet; it needs the
-`path_costs` code, which reached `r25` with §5's merge.
+was not computed. The cost is 105 frames a visit, under 2 seconds. `03cd333` reached `r25` with the merge of
+`r25-bleed-ow` (`09b3136`), after the `path_costs` code had come with §5's merge.
 
 **Tweaks that failed zero-shot and were reverted:**
 
@@ -598,26 +599,133 @@ before the clip; this was noted, not tried.
 - The suites had not been run on `r25-bleed-ow`.
 - The other rooms of the diagnosis are left to training.
 
-## 7. Checkpoint noise (preliminary)
+## 7. Checkpoint noise, and choosing a checkpoint by the chain
 
-First result; the selection tool and the fresh-seed protocol are reported when that work ends.
+Branch `r25-ckpt`, squashed into `r25` as `3d6bfaa`. Decisions 2026-11-15 "Checkpoints are chosen by the chain and
+confirmed on fresh seeds"; `docs/architecture.md` "Numbered checkpoints" and `triforce select-checkpoint`.
 
-The question was whether a darknut checkpoint can be picked by its Dungeon 5 arrivals. The test: a darknut continued
-from `r74-darknut5` with `--sil-coeff 0.1` for 977 iterations, saving 17 checkpoints, one every 61 iterations. Each
-checkpoint played the D5 segment, clips on, 1000 runs, seeds 0-999, with the promoted team otherwise.
+The question was whether a checkpoint can be picked by its arrivals on a chain segment. Single-room evaluations
+cannot see what the route needs: in round 24, `r74-darknut4` and `r74-darknut5` both scored 97% in single rooms,
+yet 34.9% and 46.4% on the Dungeon 5 segment. And the best of N noisy chain measurements is biased upward, so
+whatever is chosen has to be measured again on fresh seeds.
 
-- **No checkpoint differs beyond noise.** Arrivals ranged 42.4-47.7%, mean 45.2, SD 1.6, equal to the binomial
-  standard error of 1.6. The trend was −1.7 points per 1000 iterations, not significant.
-- The promoted `r74-darknut5` re-measured 46.4%, identical to round 24's `r74b-1k`.
-- **On fresh seeds 1000-1999:** the best-screened checkpoint (iteration 9831) 47.4%, the promoted 47.0%, the last
-  43.7%.
-- Paired differences between two models on the same 1000 seeds have a standard error of 2.2 points: pairing gains
-  nothing here.
-- Training success, value loss and entropy do not correlate with D5 arrivals across checkpoints.
+**The tool:**
 
-**The consequence.** A 34-35% darknut is far outside this range, so a continuation that fell to 34% lost it to the
-missing SIL term, not to checkpoint luck. The baseline trained without `--sil-coeff 0.1` (`r75-v1-base`, §5) measured
-102 of 300 = 34.0% on seeds 0-299, where the promoted model measured 143 of 300 = 47.7%.
+- **Numbered checkpoints:** `train --checkpoint-every N [--checkpoint-keep K]`, passed through by `train_round.py`.
+  It saves `<run dir>/checkpoints/it<iteration>/`: a byte copy of `ckpt.pt` as saved at that iteration, with its own
+  `version` and an `act` bound to the copy's sha1. A numbered checkpoint therefore loads anywhere a run dir does.
+  The option changes nothing else. A test shows it: the same seed on the CPU gives identical weights, optimizer state
+  and metrics with and without it.
+- **Selection:** `triforce select-checkpoint FAMILY RUN --segment NAME --runs 1000 --confirm 1000 [--confirm-top K]
+  [--clips off] [--only …] [--apply]` runs as one batch job.
+  - Every numbered checkpoint, the run's last (`ckpt.pt`) and the family's promoted run play the same chain seeds,
+    with the rest of the team as promoted.
+  - They are ranked by arrivals, then hearts on arrival, with paired differences against the last and the promoted.
+  - The winner, the next best K − 1, the last and the promoted then play again on fresh seeds. That confirmation is
+    the number to report.
+  - It writes `selection.json` in the run dir and chooses the winner only if its confirmed paired difference against
+    the run's last checkpoint is above zero. It does not test against the promoted run.
+  - `--apply` makes the chosen checkpoint the run's `ckpt.pt`. The old file and its evaluations move to their own
+    numbered folder, and the run then needs a fresh canonical evaluation.
+
+**The darknut curve.** The run `r75-ck-darknut` continued `r74-darknut5` with `--sil-coeff 0.1` and `--parallel 8`
+for 977 iterations (iterations 9771-10747, 4.0M steps) and kept a checkpoint every 61 iterations. Its canonical
+evaluation scored 97% over 9000 episodes, the worst room 5:0x05 at 91%. Every checkpoint played the D5 segment, clips
+on, 1000 runs on seeds 0-999, with the promoted team otherwise. Each D5 figure has a standard error of ±1.6.
+
+- "Garden alone" is the Olive Garden by itself with 2 bombs, hp drawn as in training, 300 episodes.
+- "Hearts out of the Garden" is the health Link carries into the next room (route step 194's `health_in`) in the
+  chain.
+- The training metrics are averaged over the 30 iterations before each checkpoint.
+
+| checkpoint | D5 % | hearts out of the Garden | Garden alone: success % / hearts | train success | value loss | entropy |
+|---|---:|---:|---|---:|---:|---:|
+| promoted `r74-darknut5` | 46.4 | 6.43 | 81.3 / −3.04 | – | – | – |
+| it009831 (+61) | **47.7** | 6.35 | 80.0 / −2.86 | .968 | 1.90 | .800 |
+| it009892 | 43.1 | 6.18 | 79.7 / −3.11 | .971 | 1.59 | .785 |
+| it009953 | 45.3 | 6.21 | 83.3 / −2.98 | .973 | 1.55 | .799 |
+| it010014 | 47.2 | 6.21 | 82.7 / −2.93 | .970 | 1.55 | .788 |
+| it010075 | 46.1 | 6.31 | 79.0 / −3.23 | .974 | 1.54 | .809 |
+| it010136 | 44.9 | 5.96 | 81.0 / −3.33 | .971 | 1.60 | .796 |
+| it010197 | 45.5 | 6.29 | 82.3 / −3.06 | .974 | 1.53 | .838 |
+| it010258 | 45.7 | 6.36 | 83.3 / −2.81 | .969 | 1.61 | .808 |
+| it010319 | 46.3 | 6.38 | 83.7 / −2.79 | .972 | 1.45 | .767 |
+| it010380 | 46.6 | 6.36 | 83.7 / −2.79 | .982 | 1.29 | .754 |
+| it010441 | 44.3 | 6.11 | 83.3 / −3.00 | .975 | 1.37 | .759 |
+| it010502 | 43.4 | 6.07 | 83.0 / −3.05 | .972 | 1.82 | .754 |
+| it010563 | 43.2 | 5.93 | 82.7 / −3.11 | .976 | 1.47 | .783 |
+| it010624 | 42.4 | 5.92 | 81.3 / −3.12 | .972 | 1.56 | .836 |
+| it010685 | 44.1 | 6.03 | 80.7 / −3.08 | .971 | 1.54 | .821 |
+| it010746 | 47.1 | 6.09 | 82.3 / −3.00 | .976 | 1.33 | .820 |
+| last (10747) | 45.1 | 6.07 | 78.7 / −3.18 | .977 | 1.32 | .819 |
+
+The promoted run's 46.4% is round 24's `r74b-1k` figure exactly (464 of 1000).
+
+**Fresh seeds 1000-1999** (1000 runs each; the screen's first, second and third, the last and the promoted). Clips
+off played only these five, on the same fresh seeds:
+
+| checkpoint | screen, seeds 0-999 (on) | confirmed, clips on | confirmed, clips off |
+|---|---:|---:|---:|
+| it009831 | 47.7 | 47.4 | 36.9 ± 1.5 |
+| it010014 | 47.2 | 45.3 | 36.4 |
+| it010746 | 47.1 | 42.4 | 34.1 |
+| last | 45.1 | 43.7 | 35.6 |
+| promoted | 46.4 | 47.0 | 34.3 |
+
+The screen's second and third fell on fresh seeds (47.2 → 45.3, 47.1 → 42.4). This is the upward bias of the best of
+N, and it is why the confirmation is the number reported. Paired differences on the fresh seeds:
+
+- it009831 − promoted: +0.4 ± 2.2 clips on, +2.6 ± 2.1 clips off;
+- it009831 − last: +3.7 ± 2.2. The tool's rule therefore chose it009831;
+- promoted − last: +3.3 ± 2.2. The run's own last checkpoint was the worst of the three.
+
+The promoted run measured 34.0% clips off on seeds 0-999 in round 24 (`r74b-1k-noclips`).
+
+**The noise floor:**
+
+- One model on 1000 runs has a binomial standard error of 1.6 points. The 17 checkpoints spread 42.4-47.7% (mean
+  45.2) with an SD of 1.6, so no checkpoint differs from another beyond noise. The trend over the run, −1.7 points per
+  1000 iterations, is not significant (residual SD 1.54).
+- The paired difference of two models on the same 1000 seeds has a standard error of 2.2 points. The same seeds do not
+  make two different models' runs alike, so pairing gains nothing here.
+
+**What makes a checkpoint good.** One thing varies beyond noise: the hearts Link carries out of the Olive Garden.
+Across checkpoints it has an SD of 0.165 against a standard error of 0.084. It slides from 6.43 (the promoted run) to
+5.92-6.11 over the last seven checkpoints. Correlations across the 17 checkpoints:
+
+| signal | correlation with D5 arrivals |
+|---|---:|
+| hearts out of the Garden (in the chain) | 0.69 |
+| hearts into 0x64 on the way back (the same runs, partly mechanical) | 0.72 |
+| the Garden alone: hearts a fight | 0.51 (detrended 0.49) |
+| the Garden alone: success | 0.09 |
+| the way back at low health (`5_64c` and `5_37s`, hp 0.15-0.5, 300 episodes): success / hearts | −0.40 / −0.12 |
+| training: success / value loss / entropy / hearts | 0.04 / −0.07 / 0.0 / 0.30 |
+
+The chain's Garden hearts also correlate 0.62 with the Garden-alone hearts. The way-back evaluations sat at 91.0-93.7%
+and −0.74 to −0.89 hearts for every checkpoint. The training signals say nothing. A darknut trained longer loses Garden
+hearts while its training metrics stay flat; this went to the backlog as a new item.
+
+**Verdict.** No checkpoint of `r75-ck-darknut` is promoted: it009831 is at best equal to the promoted run. Darknut
+stayed `r74-darknut5` until the final retrain (§11). Selection was to be run on gibdo next only after a confirmed
+gain on darknut, so it was not run on gibdo.
+
+**What it explains.** A 34-35% darknut is far outside this range. So the continuations that fell to 34-36% lost it to
+the missing SIL term, not to checkpoint luck. The value-reward experiment's first screen ran without `--sil-coeff
+0.1` (§9), and that run's baseline, `r75-v1-base`, measured 102 of 300 = 34.0% on seeds 0-299 (§5) where the promoted
+model measured 143 of 300 = 47.7%. The value-reward experiment confirmed that it had run without SIL, on otherwise the
+same code.
+
+**The measurement rules it leaves** (decisions 2026-11-15; applied in §9 and §11):
+
+- **Runs per arm:** 1000 runs per arm per chain, on seeds not used to choose the model. One arm against another needs
+  about 5 points to be a result. 3 points need about 2200 runs an arm and 2 points about 5000. A 300-run screen sees
+  only effects of 8 points or more.
+- **Seeds per arm:** inside one continuation the checkpoint barely matters, but separate trainings can differ by 10
+  points or more (darknut4 against darknut5; with and without SIL). So an arm gets 2-3 training seeds, each judged by
+  its last checkpoint at 1000 runs, and darknut baselines keep SIL on.
+- **A darknut secondary:** for darknut changes, also report the hearts out of the Olive Garden (step 194's
+  `health_in`, standard error 0.08 on 1000 runs). It moves where arrivals cannot show it.
 
 ## 8. Job coordination (tooling, landed on `main` during the round)
 
@@ -639,3 +747,563 @@ both merged into `r25`, settled it:
   behind two trainings.
 - **The fallback.** While any job from the earlier code (no estimate) waits, everyone keeps the first-come rule, so
   old and new jobs cannot wait for each other in a cycle.
+
+## 9. Hearts priced by what they are worth to the run (`reward.heart_value`)
+
+Branch `r25-value` (`c2aa3eb` mechanism, `423738b` tests and docs; merged into `r25` at `fda107f`); the arm's yaml on
+branch `r25-value-ab`. Decisions 2026-11-15 "Hearts priced by what they are worth to the run"; `docs/architecture.md`
+on `reward.heart_value`.
+
+**Why.** The reward paid about 2 per heart anywhere: 20 × w × h / max at the exit, and 0.25 per half heart on a hit or
+pickup. A heart's worth to the run is steep and local (§1). At Gleeok V is 0.22 / 0.59 / 0.86 / 0.95 at 1 / 2 / 3 / 4
+hearts, and at 5:0x37 it is 0.00 / 0.58 / 0.81 / 0.93. It is flat above 3 hearts at Manhandla and after any boss,
+where the triforce refills Link. A potential term also prices the heart at the hit, not 100 steps later at a
+discounted exit.
+
+**The table.** `triforce/heart_value.json` sits beside `routes.yaml`. It holds V(step, hearts): the chance that a run
+entering a route step's room with that many hearts is alive when it takes the next triforce. It has an entry for
+every route step at every half heart, per way (`clips` for clips on, `plain` for off). `python -m triforce.heart_value
+<chain jsonl>...` fits it from chain runs. The shipped table is fitted from round 24's chains (`r74-1k` clips on and
+off, the full route with the segments, and `r74b-1k-d5`).
+
+- Each arrival bin's own transitions are mixed with 20 pseudo-visits of a prior, a Kaplan-Meier estimate over the
+  step's visits that assumes a room's damage does not depend on the hearts brought.
+- The fit runs backwards from each triforce and is made non-decreasing in hearts.
+
+It agrees with §1's independently fitted table within 0.01-0.04: Gleeok 0.22 / 0.59 / 0.86 / 0.95 against 0.23 / 0.60
+/ 0.87 / 0.95, and 5:0x37 0.00 / 0.58 / 0.81 / 0.93 against 0.04 / 0.55 / 0.82 / 0.94. In Dungeon 5, V jumps at full
+health because full health means sword beams: at the D5 entrance (step 186) it is 0.30 at 9 hearts and 0.43 at 10.
+
+The table is data, not a model, and is to be refit after a round that changes the team or the route. It names each
+step's room, entry, exit and visit, and a family that reads it refuses to load when they no longer match the route.
+
+**The three terms** (`reward: {heart_value: {exit, potential, low_health}}`; all off by default; off is today's
+reward bit for bit, tested):
+
+- **`exit: true`:** the success terminal's health part becomes V(next step, hearts out) / V(next step, max hearts)
+  instead of hp / max, still weighted by w.
+- **`potential: S`:** every change of hearts in a room (a hit or a pickup, not a refill or a heart container) pays S ×
+  (V(step, after) − V(step, before)) at the room's route step. It is paid beside the flat hit and pickup terms, added
+  after the step's ±1 clamp (so a heart can be priced above 1), and scaled by `shaping_scale`.
+- **`low_health: F`:** adds F × (1 − hearts after / max) × the step's hit penalty.
+
+**The first screen is void.** Darknut and gibdo were continued 244 iterations (1M steps) from their promoted runs,
+seed 75, `--parallel 5`: a base arm (`r75-v1-base`, heart value off) and an arm with `{exit: true, potential: 20}`
+(`r75-v1-ab`). Both ran with `--sil-coeff 0` by mistake. Round 24 trained with `--sil-coeff 0.1`, and the default
+of `train.py` is 0. Darknut-only D5 chains, 300 runs paired, clips on:
+
+| darknut | arrive | Garden deaths a visit | hearts into 0x64 back | 0x66 W→N | 0x37 | darknut hearts lost a visit | frames a visit | WAIT |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| promoted `r74-darknut5` | 47.7 ± 2.9 | 0.084 | 6.06 | 4.66 | 4.03 | 0.86 | 524 | 1.3% |
+| `r75-v1-base` | 35.3 ± 2.8 | 0.137 | 5.56 | 4.43 | 3.94 | 0.96 | 536 | 0.7% |
+| `r75-v1-ab` | 36.0 ± 2.8 | 0.094 | 5.91 | 4.62 | 3.94 | 0.88 | 557 | 1.5% |
+
+The promoted model re-measured on this code gave 143/300, identical to round 24's seeds 0-299. The two arms do not
+differ in arrivals. The priced arm kept 0.35 hearts more out of the Garden and died there less (0.094 against 0.137 a
+visit), but the later rooms ate it. Both arms lost 12 points against the promoted model, and that is why the screen is
+void: the missing SIL term, not the reward (§7). On different code, §5's control measured `r75-v1-base` at 102/300 =
+34.0% on the same seeds. The gibdo runs of this screen were trained, not chained. The rule since then: continuations
+of a round 24 model pass `--sil-coeff 0.1`.
+
+**The darknut result.** Two arms, darknut only, continued from `r74-darknut5` for 244 iterations with `--sil-coeff
+0.1`, `--parallel 8`, seeds 75 / 76 / 77 per arm:
+
+- plain: `r75-v2-base-s75/76/77`, heart value off;
+- priced: `r75-v2-ab-s75/76/77`, `{exit: true, potential: 20}`.
+
+Each checkpoint ran the D5 segment, 1000 runs, seeds 0-999, clips on, with only darknut swapped and the act mode
+`temperature:0.5+relax:16`. The other columns are hearts on entering each way-back room, darknut's hearts lost and
+deaths a visit, frames a visit, and the share of WAIT decisions. All runs entered the Garden with 9.22 hearts.
+
+| darknut | D5 arrival | vs promoted (paired) | hearts in: 0x64 back | 0x65 | 0x66 N | 0x47 | 0x37 | Digdogger | darknut hearts lost / deaths a visit | frames a visit | WAIT |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|
+| promoted `r74-darknut5` | 46.4 ± 1.6 | | 6.33 | 5.17 | 4.89 | 4.47 | 4.04 | 3.35 | 0.85 / 0.040 | 522 | 1.2% |
+| priced, seed 75 | 50.9 ± 1.6 | +4.5 ± 2.2 | 6.43 | 5.52 | 5.20 | 4.79 | 4.37 | 3.57 | 0.80 / 0.037 | 523 | 1.4% |
+| priced, seed 76 | 49.9 | +3.5 ± 2.2 | 6.31 | 5.40 | 5.02 | 4.56 | 4.21 | 3.44 | 0.80 / 0.035 | 532 | 1.9% |
+| **priced, seed 77** | **51.3** | **+4.9 ± 2.2** | 6.59 | 5.68 | 5.41 | 4.82 | 4.49 | 3.79 | 0.76 / 0.036 | 529 | 0.8% |
+| plain, seed 75 | 44.3 ± 1.6 | −2.1 ± 2.2 | 6.06 | 5.26 | 4.91 | 4.50 | 4.14 | 3.58 | 0.86 / 0.045 | 511 | 1.3% |
+| plain, seed 76 | 48.5 | +2.1 ± 2.2 | 6.48 | 5.40 | 5.05 | 4.59 | 4.27 | 3.44 | 0.79 / 0.032 | 524 | 1.7% |
+| plain, seed 77 | 41.5 | −4.9 ± 2.1 | 5.96 | 4.96 | 4.69 | 4.32 | 3.90 | 3.22 | 0.90 / 0.044 | 530 | 2.5% |
+
+- **Arm means:** priced 50.7% (49.9-51.3, SD over seeds 0.7), plain 44.8% (41.5-48.5, SD over seeds 3.5).
+- **Priced minus plain, per seed:** +6.6, +1.4 and +9.8 points. The mean of +5.9 has a standard error of about 2.4
+  across seeds and is larger than the plain arm's seed spread, so it passes the rule set for the round (§7).
+- **Steadier as well as better:** the priced arm's three seeds lie within 1.4 points of each other, the plain arm's
+  within 7.
+- **Against the promoted model:** every priced seed beats it, pooled +4.3 points over 3000 paired runs, about 3
+  standard errors.
+- **Where it comes from:** Link enters every room of the way back with about 0.3 hearts more (0x65, 0x66, 0x47, 0x37),
+  and darknut loses fewer hearts a visit (0.76-0.80 against 0.85).
+- **It does not play slower or more passively:** frames a visit and the WAIT share are within the plain arm's range.
+
+The canonical single-room evaluation (9000 episodes) agrees. The priced runs keep 0.03-0.05 hearts more per room at
+equal or better success:
+
+| run | success | mean hearts change |
+|---|---:|---:|
+| `r74-darknut5` (promoted) | 97.29% | −0.548 |
+| `r75-v1-base` (no SIL) | 96.93% | −0.610 |
+| `r75-v1-ab` (no SIL) | 97.12% | −0.581 |
+| `r75-v2-base-s75` | 97.32% | −0.558 |
+| `r75-v2-ab-s75` | 97.52% | −0.529 |
+| `r75-v2-ab-s76` | 97.50% | −0.511 |
+
+**What was kept.** `{exit: true, potential: 20}` became the setting of every dungeon fight family (`fd7cc6e`: darknut,
+gibdo, goriya, vire, stalfos-keese-gel, moldorm, zol, like-like, d2-rope, trap-room, equipment-room), and the final
+retrain trained them with it (§11). The candidate `r75-v2-ab-s77` was not promoted itself: the final retrain's darknut
+replaced it.
+
+**Built and not run:**
+
+- `exit` alone (branch `r25-value-a`) and `low_health: 3` (branch `r25-value-c`). The plan ran them only if the pair
+  showed an effect. It did, but neither was started, so which term carries the gain is not known.
+- Another scale for the potential (10 or 40).
+- The premium the table puts on Dungeon 5's last heart (beams) on its own.
+- Clips-off chains of these arms, and the gibdo arm. Gibdo and the other nine families got the setting only through
+  the final retrain, with no arm of their own (§11).
+
+## 10. Spawn spots as a general rule, the trained arms, and the ladder clip's landing (rejected and kept apart)
+
+This continues §6. It closes the arm left open there, tries a general spawn rule in place of hand-placed path
+costs, and tries a mask on Dungeon 4's ladder clip. Branches `r25-spawns` (the rule `7b786c4`, 0x27's hand costs out
+`cbeeb62`, the clear-landing mask `54c7a6e`, docs `b8029fd`), `r25-spawnstr` (the trained arm), `r25-spawnsclip`
+(the mask's screen).
+
+**Closing §6.** The suites ran on `r25-bleed-ow` (`path_costs` and the 0x27 costs) and were all green: cargo, pytest
+(750 passed, 4 skipped), replay verify (3 ok), the state audit (613 states, 0 problems), `asm.py check --final`. The
+training arm `r75-bow-ow` was continued with `--load {name} --iterations 250 --seed 75 --stop-success 1.01`, without
+`--sil-coeff 0.1`. It was judged against the promoted models on the same seeds:
+
+- **ow-tektite with 0x1a's `wrap_in`: not promoted.**
+  - Screen (post-d2, 300 paired, against the promoted ow-tektite with the 0x27 costs): 0x1a N→W 0.39 → 0.27 hearts a
+    visit, 422 → 329 frames, deaths there 1 → 3. One run went E into 0x1b twice and recovered. D1's entrance 97.3 →
+    96.0% (−1.3 ± 1.5), hearts there 3.55 → 3.67.
+  - 1000 runs paired, clips on: arrivals at D1's entrance 96.3 → 95.6% (−0.7 ± 0.9), hearts there +0.21 ± 0.05,
+    0x1a 0.41 → 0.29 a visit, but deaths in 0x1a 9 → 16.
+  - 1000 runs paired, clips off: arrivals 93.2 → 94.3%, hearts −0.01 ± 0.05, 0x1a 0.47 → 0.51.
+  - Fewer hearts lost in 0x1a with clips on are paid for with more deaths there, and clips off gains nothing.
+- **ow-peahat trained with the 0x1f path costs: promoted.** The costs are §6's zero-shot failure, cost 2 on Link-tile
+  rows 2-6 west of column 15 (columns 0-14). Entered from W, the Peahats spawn on (`$50`,`$5D`) and (`$80`,`$7D`), so
+  the old way N-then-E met both on every visit. With the costs the way goes E along the middle (Y `$85`) and then N up
+  X `$80`. Trained with them, the model follows them, and the cave the zero-shot model walked into stays a wrong exit
+  it avoids.
+  - Screen (the leg, 300 paired): 0x1f 1.00 → 0.28 hearts a visit, 0x1d 0.15 → 0.00, arrivals 100 → 100%, no wrong
+    exit into the cave, hearts at Dungeon 5's entrance 6.55 → 7.47 (+0.92 ± 0.10).
+  - 1000 runs, the leg (`0_45c_0` → 5:0x76), paired with `r74-1k-post-d4` and `r74-1k-noclips-post-d4`:
+
+| the leg, 1000 runs | clips on | clips off |
+|---|---|---|
+| arrivals at 5:0x76 | 99.8 → 99.9% | 92.0 → 96.8% (+4.8 ± 1.0) |
+| hearts at Dungeon 5's entrance (paired) | 6.57 → 7.48 (+0.91 ± 0.05) | +0.71 ± 0.07 |
+| 0:0x1f hearts lost a visit | 1.02 → 0.27 | 0.96 → 0.27 (deaths 15 → 3) |
+| 0:0x1d hearts lost a visit | 0.14 → 0.00 | |
+
+The 0x1f costs are on `r25` as `70027cd`, and `ow-peahat/r75-bow-ow` is in the promoted team (§11's "old" team).
+
+**The general rule, as built** (`reward.spawn_cost`, a u8, default 0 = off). It tries to find the spawn spots of §6
+without placing costs by hand.
+
+- **What counts as a hazard** (`zelda::spawns::SpawnWatch`, in `GameCompletion`; `Objective::spawn_hazards`, a
+  position and a heading). On a visit's first playable frame (mode 5), every monster in slots 1-9 standing within 8 px
+  of a spot of the game's spawn list for Link's facing counts (asm:Spawn_AssignPositions; the game has already skipped
+  the unsafe spots). Excluded: caves and cellars, overworld rooms whose monsters come in from the edges
+  (asm:RoomAttrsF bit 3), and Zoras. A hazard lasts while the monster is alive in its slot and within 16 px of its
+  spot. Once it moves off, it never counts again that visit.
+- **The cost shape** (`env::objective::spawn_costs`). The rule charges 2 × cost on the 3 × 3 Link tiles that touch the
+  monster (under 9 px between middles, as asm:Link_CheckMonsterTouch_NoReset tests) and 1 × cost on the ring round
+  them. The cost is placed at the monster's position and 16 px along its heading, taking the larger of the two. It
+  does not apply while the objective is a fight. `Room::wavefront_with` adds the costs to the room's `path_costs`, and
+  the target's descent reads the wavefront's step costs. With the rule off the wavefront is the room's own, byte for
+  byte (tested).
+- **Why the heading.** With a plain 5 × 5 square, the cheapest way through 0x27's strip (four of Link's rows) went over
+  the X `$A0` Peahat. That Peahat rises, heading N from frame 1, into exactly that corridor, where §6 found the hits at
+  Y 96-111. With the heading the way goes down the middle and along the strip's bottom row, the way of the hand-placed
+  costs.
+- To measure the rule alone, 0x27's hand-placed costs were taken out on this branch (`cbeeb62`).
+
+**Untrained, it hurts.** `spawn_cost: 3` on every overworld family, zol and darknut, with the promoted models; 300
+runs paired, clips on (baselines: §6's diagnosis chains, or the first 300 seeds of round 24's `r74-1k` files):
+
+| segment (baseline) | arrivals | hearts on arrival (paired) | rooms that moved (hearts lost a visit) |
+|---|---|---|---|
+| start → D2 (`r74-1k` full route) | 100 → 100% | −0.02 ± 0.02 | none |
+| post-d2 (diagnosis) | 95.7 → 96.3% (+0.7 ± 1.5) | −0.21 ± 0.06 | 0x27 0.50 → 0.58; 20 more returns into 0x17 (wrong exits) |
+| post-d1 (diagnosis) | 100 → 100% | +0.04 ± 0.04 | 0x38 0.32 → 0.21, 0x37 0.24 → 0.21, 0x48 0.05 → 0.11 |
+| d3 to Manhandla (diagnosis) | 94.3 → 92.0% (−2.3 ± 1.7) | −0.25 ± 0.10 | 3:0x49 0.15 → 0.21, 3:0x69 0.62 → 0.85 (deaths 4 → 9) |
+| post-d3 (`r74-1k`) | 100 → 100% | −0.05 ± 0.03 | 0x65 0.08 → 0.14; 8 wrong-exit returns |
+| post-d4, the leg (diagnosis) | 100 → 99.7% | −0.10 ± 0.09 | 0x3d 0.06 → 0.20, 0x1d 0.15 → 0.10, 0x4f 0.19 → 0.14; 1 wrong exit |
+| d5 (the rule off on this code) | 46.0 → 39.0% | | |
+
+In 0x27 alone (ow-zora `r74-leg`, 100 episodes × 3 states) the room lost 0.34 hearts an episode without costs, 0.49
+with the rule, and 0.14 with §6's hand-placed costs.
+
+**Why it fails in 0x27.** A hazard is given up once its monster is 16 px off its spot, which for a Peahat is around
+frame 75. The risen Peahat is then in the corridor the path snaps back to. At frame 0 the monster has no heading yet,
+so the way first goes over the Peahat and then flips. Two variants that keep the cost after the monster leaves its spot
+were built as an experiment switch and never measured: `follow` (the cost follows the live monster) and `spot` (a
+static square on the spot for the whole visit).
+
+**Trained, it is uneven.** The arm `r75-sp` trained ow-peahat, ow-zora and ow-octorok with `spawn_cost: 3`, 250
+iterations, `--sil-coeff 0.1` (seed 75; ow-peahat also seeds 76 and 77). Each trained checkpoint then played alone
+with the rule on, the other families promoted with the rule off. 300 runs paired against the promoted team, clips on:
+
+| run | segment | arrivals | hearts on arrival (paired) | rooms (hearts lost a visit) |
+|---|---|---|---|---|
+| ow-peahat s75 | the leg | 100 → 100% | +0.57 ± 0.07 | 0x1f 1.00 → 0.61, 0x1d 0.15 → 0.00 |
+| ow-peahat s76 | the leg | 100 → 100% | +0.17 ± 0.06 | 0x1f 1.00 → 1.02, 0x1d 0.15 → 0.00 |
+| ow-peahat s77 | the leg | 100 → 98.3% | −0.02 ± 0.06 | 0x1f 1.00 → 1.07, 0x1d 0.15 → 0.06; 5 runs failed in Dungeon 4's 0x71/0x61 (the leg starts at 0x45) |
+| ow-octorok s75 | after D1 | 100 → 100% | **+0.39 ± 0.04** | 0x37 0.24 → 0.00, 0x38 0.32 → 0.18 |
+| ow-octorok s75 | after D2 | 95.7 → 93.3% (−2.3 ± 1.7) | −0.14 ± 0.09 | its own 0x4c unchanged (0.10 → 0.08); the losses are in other families' rooms (0x0a, 0x1a) after the runs diverge |
+| ow-zora s75 | after D2 | 95.7 → 96.0% | −0.22 ± 0.07 | 0x27 0.50 → 0.51, 0x38 0.17 → 0.22 |
+| ow-zora s75 | after D1 | 100 → 100% | −0.05 ± 0.04 | 0x38 0.32 → 0.38 |
+| ow-zora s75 | the leg | 100 → 100% | +0.13 ± 0.10 | 0x2d 0.56 → 0.69, 0x4f 0.19 → 0.04 |
+| ow-zora s75 | after D3 | 100 → 100% | +0.06 ± 0.03 | 0x55 0.19 → 0.13 |
+
+- **ow-peahat:** the three seeds spread widely. 0x1f costs 0.61, 1.02 or 1.07 hearts a visit, and the leg gains
+  +0.57, +0.17 or −0.02 hearts. The hand-placed 0x1f costs (`r75-bow-ow`) beat every seed: 0x1f 0.27, +0.91 hearts at
+  1000 runs.
+- **ow-zora:** 0x27 is not fixed (0.50 → 0.51), and 0x38 gets worse.
+- **ow-octorok:** the one trained case where the rule pays. Out of 0:0x37's cave the room drops to no loss (0.24 →
+  0.00), and Link arrives after Dungeon 1 with 0.39 hearts more. After Dungeon 2 its own room is unchanged and arrivals
+  fall 2.3 ± 1.7 points, within noise. The lead was to be checked with 1000 runs after Dungeon 1 and after Dungeon 2,
+  clips on and off. That check was not run.
+
+**The ladder clip's landing (4:0x21 S→N).** From 295 visits of the diagnosis chain (300 runs, promoted team, clips
+on), 0x21 cost 0.224 hearts a visit, and 41 of the 66 hearts lost there were lost on `CLIP N`.
+
+- At the CLIP N decision a monster was within 24 px of the landing (Link's X, Y `$55`) in 127 of 295 visits. Those
+  visits lost 0.232 hearts within 90 frames of the clip (47% hit), against 0.068 (14%) with the landing clear. If
+  every occupied clip went like a clear one, the saving would be at most 0.07 hearts a visit.
+- Waiting does not clear the landing. Of 18,051 island frames with the landing occupied before the first clip, 16,435
+  fall in the last occupied stretch before the clip: the Gels follow Link's X and stay. Where the landing did clear,
+  the wait averaged 56 frames (median 38). So a rule must make Link kill (the boomerang kills Gels) or move along.
+- Built: `clips: {clear_landing: true}` (`54c7a6e`; `zelda::clips::landing`, `landing_occupied`). The CLIP action is
+  not offered while a live monster is within 24 px of the clip's landing.
+- Screen: stalfos-keese-gel with `clear_landing`, post-d3 → 4:0x11, 300 runs paired, untrained. 0x21 went from 0.234
+  to 0.180 hearts a visit and from 506 to 538 frames, deaths 3 → 2, arrivals 95.3 → 95.7%, hearts at 4:0x11 +0.05 ±
+  0.01. No 1000-run check was run.
+
+**The decision: neither lands in round 25.**
+
+- **The general spawn rule** (branch `r25-spawns`) failed its own check. It does not reproduce the hand-placed 0x27
+  gain (0.49 against 0.14 hearts in the room alone), and untrained it hurts (D3 −0.25 ± 0.10 hearts, post-d2 −0.21 ±
+  0.06, D5 46.0 → 39.0%). Its one trained lead is ambiguous: ow-octorok gains +0.39 ± 0.04 hearts after Dungeon 1 but
+  loses 2.3 ± 1.7 points of arrivals after Dungeon 2, at 300 runs.
+- **The clear-landing mask** gains little: +0.05 ± 0.01 hearts at 4:0x11 at 300 runs, for 32 more frames a visit.
+- Both stay on their branch and go to the backlog.
+
+**Landed from this work and §6:** the 0x27 path costs, the 0x1f path costs, and ow-peahat `r75-bow-ow`.
+
+## 11. The final retrain and the team
+
+**What was trained.** Eleven dungeon families were continued from their promoted runs with the round's heart pricing
+(`reward.heart_value: {exit: true, potential: 20}`, §9). Each ran 244 iterations (999,424 steps) with `--sil-coeff
+0.1`, `--parallel 8`, `--stop-success 1.01` and seed 75. They trained as four rounds:
+
+- `r75-f-a`: gibdo, goriya, vire;
+- `r75-f-b`: stalfos-keese-gel, moldorm, zol;
+- `r75-f-c`: like-like, d2-rope, trap-room, equipment-room;
+- darknut three times, seeds 75 / 76 / 77 (`r75-f-dk-s75/76/77`). Its curriculum included the six hand-made 0x37
+  tracks of §5 (X `$70` and SWORD N at a Darknut ahead).
+
+The canonical evaluation is from each round's own table:
+
+| family | run | continued from | train wall | train success (last 5) | eval success | worst room (rate) |
+|---|---|---|---:|---:|---:|---|
+| gibdo | `r75-f-a` | `r74-d5new` | 1654 s | 99% | 99% | 5:0x47 (98%) |
+| goriya | `r75-f-a` | `r71-goriya-cont` | 846 s | 95% | 97% | 2:0x5e (91%) |
+| vire | `r75-f-a` | `r72-vire-cont` | 1402 s | 100% | 100% | 4:0x50 (99%) |
+| stalfos-keese-gel | `r75-f-b` | `r72-skg` | 963 s | 100% | 100% | 1:0x53 (99%) |
+| moldorm | `r75-f-b` | `r71-c` | 1014 s | 90% | 91% | 2:0x3e (91%) |
+| zol | `r75-f-b` | `r74-d5cont` | 1444 s | 100% | 100% | 4:0x40 (99%) |
+| like-like | `r75-f-c` | `r72-likelike2` | 1291 s | 100% | 100% | 4:0x32 (100%) |
+| d2-rope | `r75-f-c` | `r71-a` | 1429 s | 99% | 99% | 2:0x4e (98%) |
+| trap-room | `r75-f-c` | `r72-trap` | 1871 s | 100% | 100% | 3:0x4c (100%) |
+| equipment-room | `r75-f-c` | `r74-d5cont` | 1446 s | 100% | 100% | 1:0x7f cave (99%) |
+| darknut | `r75-f-dk-s75` / `s76` / `s77` | `r74-darknut5` | 1279 / 1333 / 1382 s | 98% each | 98% each | 5:0x05 (91%) each |
+
+**Darknut on the Dungeon 5 segment.** Each candidate played 1000 runs, seeds 0-999, clips on, with the act mode
+`temperature:0.5+relax:16` and the other families as promoted before the retrain. The chains ran on `r25` at
+`fd7cc6e`, which has 0x37's path costs. Three groups were compared:
+
+- `ref`: `r74-darknut5`, the promoted darknut;
+- `A-s75/76/77`: §9's priced runs `r75-v2-ab-s75/76/77`, trained without the tracks;
+- `B-s75/76/77`: `r75-f-dk-s75/76/77`, trained with the tracks.
+
+Arrival ± is the paired difference against `ref`. The room cells give hearts on entry / hearts lost a visit / deaths
+(per 1000 runs).
+
+| darknut | D5 arrival | vs ref (paired) | the Olive Garden | 0x64 back | 0x66 W→N | 0x47 | 0x37 | Digdogger |
+|---|---:|---|---|---|---|---|---|---|
+| ref | 46.8 | | 9.22 / 4.62 / 92 | 6.33 / 1.55 / 68 | 4.89 / 1.20 / 109 | 4.47 / 0.79 / 62 | 4.04 / 1.20 / 94 | 3.39 / 0.07 / 18 |
+| A-s75 | 50.8 | +4.0 ± 2.2 | 9.22 / 4.45 / 88 | 6.43 / 1.27 / 59 | 5.20 / 1.23 / 108 | 4.79 / 0.77 / 56 | 4.37 / 1.21 / 86 | 3.61 / 0.06 / 16 |
+| A-s76 | 50.8 | +4.0 ± 2.2 | 9.22 / 4.45 / 81 | 6.31 / 1.26 / 60 | 5.02 / 1.20 / 105 | 4.56 / 0.83 / 81 | 4.21 / 1.17 / 84 | 3.45 / 0.04 / 17 |
+| A-s77 | 50.5 | +3.7 ± 2.1 | 9.22 / 4.18 / 80 | 6.59 / 1.25 / 55 | 5.41 / 1.33 / 99 | 4.82 / 0.74 / 65 | 4.49 / 1.21 / 99 | 3.77 / 0.08 / 23 |
+| **B-s75** | **52.3** | **+5.5 ± 2.2** | 9.22 / 4.06 / 76 | 6.73 / 1.23 / 44 | 5.46 / 1.21 / 93 | 4.96 / 0.81 / 63 | 4.53 / 1.19 / 91 | 3.85 / 0.10 / 29 |
+| B-s76 | 51.0 | +4.2 ± 2.1 | 9.22 / 4.15 / 71 | 6.59 / 1.25 / 42 | 5.20 / 1.24 / 106 | 4.70 / 0.87 / 81 | 4.30 / 1.19 / 92 | 3.60 / 0.06 / 20 |
+| B-s77 | 50.1 | +3.3 ± 2.2 | 9.22 / 4.13 / 76 | 6.58 / 1.24 / 54 | 5.37 / 1.39 / 112 | 4.76 / 0.83 / 68 | 4.34 / 1.19 / 94 | 3.60 / 0.07 / 24 |
+
+- **The re-measurements differ slightly.** On these seeds, round 24 and §7 measured `ref` at 46.4%, and §9 measured
+  the A runs at 50.9 / 49.9 / 51.3% on their own branch's code. Here they read 46.8% and 50.8 / 50.8 / 50.5%. The
+  differences are inside the noise (§7).
+- **The arms.** Every priced continuation beats `ref` by 3.3-5.5 points, each about 1.5-2.5 standard errors. A ranges
+  50.5-50.8% and B 50.1-52.3%. The tracks give no difference between the arms beyond noise.
+- **The tracks changed nothing in 0x37:** 1.19 hearts a visit and 91 / 92 / 94 deaths for B, against 1.21 / 1.17 /
+  1.21 and 86 / 84 / 99 for A and 1.20 and 94 for `ref`. §5's follow-up gives the cause (the policy never tries the
+  column) and the fix that worked: behaviour cloning of the scripted rule, `r75-d537-c5`, continued from
+  `r75-f-dk-s75`.
+- **Where B differs from `ref`:** fewer deaths in the Garden (71-76 against 92) and in 0x64 on the way back (42-54
+  against 68), and more hearts into every room after.
+
+`r75-f-dk-s75`, the best of B, was confirmed on fresh seeds 1000-1999 (1000 runs, paired with `ref`; the files
+`fresh-ref-on|off-d5` and `fresh-B75-on|off-d5`):
+
+| fresh seeds 1000-1999 | ref | `r75-f-dk-s75` | paired difference | the Garden: hearts lost a visit, deaths | 0x37: hearts lost a visit, deaths |
+|---|---:|---:|---|---|---|
+| clips on | 478 (47.8%) | 507 (50.7%) | +2.9 ± 2.2 | 4.54, 75 → 4.07, 54 | 1.20, 87 → 1.18, 89 |
+| clips off | 333 (33.3%) | 416 (41.6%) | +8.3 ± 2.1 | 3.35, 288 → 3.17, 234 | 0.93, 32 → 0.95, 54 |
+
+Clips on, the confirmed gain (+2.9 ± 2.2) is smaller than the screen's (+5.5 ± 2.2), as §7 predicts for the best of
+three. Clips off it is +8.3 ± 2.1. Clips off, Link also reaches the Garden more often (874 visits against 807) and
+with more hearts (6.88 against 6.23). §7 measured the promoted model on these seeds at 47.0 | 34.3% on its branch's
+code; here it reads 47.8 | 33.3%.
+
+**The team.** The promoted team before the retrain ("old") played 1000 runs per segment and the full route against the
+same team with the eleven retrained families ("new", darknut `r75-f-dk-s75`). Both ran clips on, seeds 0-999, act mode
+`temperature:0.5+relax:16`, on `r25` at `70027cd`. The old team already had `boss-manhandla/r75-mh-fight` (§3),
+`ow-peahat/r75-bow-ow` (§10) and the 0x27 and 0x1f path costs (§6, §10). Arrivals at each segment's end, ± the paired
+difference:
+
+| segment (from → arrives at) | old | new | difference (paired) |
+|---|---:|---:|---|
+| d2 (`2_7ds_0` → 0:0x3c) | 89.9 | 88.2 | −1.7 ± 1.4 |
+| d1 (`1_73s_0` → 0:0x37) | 99.7 | 99.7 | +0.0 ± 0.2 |
+| d3 (`3_7cs_0` → 0:0x74) | 75.8 | 81.0 | +5.2 ± 1.8 |
+| d4 (`4_71s_0` → 0:0x45) | 81.3 | 92.3 | +11.0 ± 1.5 |
+| d5 (`5_76s_0` → the D5 triforce) | 46.8 | 60.3 | +13.5 ± 2.2 |
+
+The full route from the game start, 1000 runs each, seeds 0-999 (the share of runs that reach each point):
+
+| Link reaches | old | new | difference (paired) |
+|---|---:|---:|---|
+| Dungeon 1 (1:0x73) | 81.5 | 83.9 | +2.4 ± 1.6 |
+| Dungeon 4 (4:0x71) | 45.2 | 59.2 | +14.0 ± 2.2 |
+| Dungeon 5 (5:0x76) | 36.6 | 53.9 | +17.3 ± 2.2 |
+| **the D5 triforce** | **9.5** | **18.6** | **+9.1 ± 1.6** |
+
+**Dungeon 2 did not gain.** It is the one segment that lost (−1.7 ± 1.4, within noise). The deaths in its two Goriya
+rooms moved in opposite directions in the segment pair and the full-route pair. Counted per room from the four files
+(deaths per 1000 runs; hearts on entry):
+
+| room | D2 segment: old → new | full route: old → new |
+|---|---|---|
+| 2:0x5e S→N (goriya) | 14 → 28 (2.94 hearts in both) | 42 → 36 (2.75 → 2.76) |
+| 2:0x1e S→N (goriya) | 46 → 52 (2.72 → 2.69) | 47 → 38 (2.69 → 2.69) |
+| 2:0x3e S→N (moldorm) | 25 → 13 | 20 → 20 |
+
+In the full-route files, Link took the D2 triforce (reached route step 24) in 854 → 876 runs (+2.2 ± 1.5, paired).
+So the segment's loss does not appear on the full route, where the same families gained a little, and neither change
+is outside the noise.
+
+**The decision: the whole team is adopted.** The eleven retrained families are adopted and promoted in the round's
+models, with darknut as `r75-d537-c5` (§5's follow-up, continued from `r75-f-dk-s75`) instead of `r75-f-dk-s75`.
+`ow-peahat/r75-bow-ow` (§10) and `boss-manhandla/r75-mh-fight` (§3) are promoted likewise. Every one of these runs
+plays with the act mode `temperature:0.5+relax:16`. The chains of record with the final team, models alone and with
+the planner of §12, are in §13.
+
+## 12. One action of foresight: the guard and the honest planner
+
+Branch `r25-actguard` (`e0d62b2` code and tests, `c10239a` docs, `f3a5b0a` merge of `main`, `34484cb` the planner as
+a labelled act mode, the decisions entry and the teacher document). `docs/rust-actor.md` "Foresight" and "The honest
+planner"; decisions 2026-11-16 "The honest planner beside the models".
+
+**Where it came from.** §4's low-health rules did not get Link hit less, and none was adopted. The lead they left was
+a one-step lookahead: in a 20-run Dungeon 5 smoke test, `guard:8` on every decision reached the D5 triforce in 16 of
+20 runs against the standing rule's 8. Guarding only at 2 hearts or fewer reached it in 10. This section made the
+guard exact, built an honest version beside it, screened the settings of both and measured the best of each in
+1000-run chains.
+
+**The mechanism.** An act mode may end with one foresight part. Before a decision is taken, the env tries the
+decision's action in the emulator (`PoolEnv::trial`, `Session::trial`) and comes back. If the action would lose health
+(or Link's life), the next of the mode's K best actions is tried, and the first that would not is taken instead. If
+none would be safe, Link takes the decision's own action. The candidates are ranked as the mode draws them: ln q plus
+the decision's own Gumbel noise. There are two kinds:
+
+| spelling | the action is tried against | refused when it loses health in | what the numbers claim |
+|---|---|---|---|
+| `guard:K` (the full guard) | the game's real future: its random numbers as they stand | that future | a valid run of button presses, chosen with knowledge of the future that a player does not have |
+| `plan:K:S` (the honest planner) | S futures, the game's random numbers redrawn before each trial (a natural RNG state of a phase keyed by run, decision and future, as the search's `perturb_rng`; the same S futures for every candidate) | any of them | planning with a model of the game: the rules and the room as it stands, not the dice |
+| `plan:K:S:R` | the same | more than the share R of them | the same |
+
+The honest planner never sees the real future: its trials play the room on with different random numbers. K = 1
+(`guard:1`, `plan:1:S`) only tries the decision's own action and never replaces it. With `low:H:` (§4) the foresight
+belongs to the low-health part and applies only at H hearts or fewer.
+
+**Exactness and replays:**
+
+- A Rust test shows that a trial, with the game's own future or a redrawn one, leaves everything as it was: the
+  machine-state bytes, the game's random numbers, the counters, the credit ledger, the state and mask, the open clip
+  and the pre-entry snapshot. A session that tries actions before every step plays frame for frame like a twin that
+  never does (300 steps).
+- pytest: `guard:1` and `plan:1:3` give plays and room records identical to the mode without foresight. `guard:4`
+  refuses exactly the action the unguarded run took on a step where that run lost health.
+- At scale: `guard:1` gave records identical to the standing rule on all 1200 screen runs (about 530k trials).
+- A run with foresight is a sequence of button presses like any other, and its replay verifies on the emulator alone.
+  pytest records chain runs with `guard:4`, `plan:4:2` and `plan:16:1` and verifies each replay bit for bit. Two
+  replays recorded by `zelda-headless.py` with the planner also pass `tf replay verify`. A replaying actor has no
+  foresight, and training rollouts never try actions.
+- Every room record with foresight carries `decisions.foresight`: kept, replaced and nothing-safe counts, the trials,
+  their emulated frames, and per replaced decision the refused and the taken action with their probabilities.
+- Suites on the branch: cargo, `tf replay verify`, the state audit and `asm.py check --final` green. The full pytest
+  run had one failure, an estimate assertion in `tests/test_training_gui.py` from the job line's code; that file
+  passed 56 of 56 run alone.
+
+**The cost.** Emulated frames per run: the full guard about 2.0× the standing rule's, `plan:K:S` about (1 + S)×, the
+variants restricted to 2 hearts or fewer 1.1-1.2×. Wall time of the four screen segments on the shared machine (noisy
+under load): standing rule 419 s, `guard:8` 701 s (1.7×), `plan:8:1` 989 s (2.4×), `plan:8:4` 1493 s (3.6×),
+`plan:8:8` 3866 s (9.2×).
+
+**The screen.** 300 runs per candidate, clips on, on §4's seeds; the standing rule here played record for record like
+§4's baseline files. Arrivals in %, with the paired difference ± SE against the standing rule where the report gives
+it:
+
+| mode | D5 | D3 | D4 | D2 | emulated frames |
+|---|---|---|---|---|---|
+| standing rule | 47.7 | 64.7 | 83.3 | 88.3 | 1× |
+| `guard:4` | 80.3 (+32.7 ± 3.5) | 73.3 | 97.3 | 97.3 | 2.0× |
+| `guard:8` | 89.7 (+42.0 ± 3.1) | 75.3 (+10.7 ± 3.6) | 99.3 (+16.0 ± 2.2) | 98.3 (+10.0 ± 1.9) | 2.0× |
+| **`guard:16`** | **92.0** | **77.3** | 99.3 | **99.7** | 2.1× |
+| `plan:8:1` | 89.7 | 72.3 | 99.7 | 97.0 | 2.0× |
+| `plan:8:4` | 89.0 | 76.3 | 99.7 | 98.7 | 5.0× |
+| `plan:8:8` | 88.3 | 76.0 | 99.7 | 98.0 | 9.0× |
+| `plan:8:4:0.5` | 89.7 | 74.0 | 99.3 | 97.3 | 3.1× |
+| `plan:8:8:0.5` | 89.0 | 73.3 | 99.7 | 97.0 | 5.2× |
+| **`plan:16:1`** | 91.0 | **78.7** | 99.7 | 98.7 | about 2× |
+| `guard:8` at ≤ 2 hearts | 54.0 (+6.3 ± 1.9) | 68.3 | 93.7 | 96.0 | 1.1-1.2× |
+| `plan:8:1` at ≤ 2 hearts | 53.3 | 67.7 | 93.0 | 96.0 | 1.1-1.2× |
+| `guard:4` / `plan:8:4` / `plan:8:8` at ≤ 2 hearts | 49.7 / 52.7 / 52.0 | 67.0 / 67.7 / 68.0 | 91.0 / 93.7 / 93.0 | 94.3 / 95.0 / 95.0 | 1.0-2.3× |
+
+- **K matters; S and R do not.** `guard:4` is clearly below `guard:8`. `guard:16` is above `guard:8` on D5 by +2.3 ±
+  2.0 (not significant), with more hearts at every D5 room. More futures and the "half" share change nothing beyond
+  noise, at 3-9× the emulation. `guard:16` and `plan:16:1` went to the chains.
+- **Honest equals full within noise.** Over one action (4 to 32 frames) the redrawn random numbers rarely change the
+  outcome: what decides a hit is the visible state.
+- **Foresight only at low health helps far less.** Guarding every decision means Link reaches low health less often.
+
+For `guard:8` against the standing rule:
+
+| | D5 | D3 | D4 | D2 |
+|---|---|---|---|---|
+| hits per decision above 2 hearts | 1.44 → 0.68% | 1.44 → 0.75% | 1.18 → 0.42% | 0.90 → 0.49% |
+| hits per decision at 2 hearts or fewer | 1.42 → 0.57% | 1.87 → 2.16% | 1.20 → 1.06% | 1.20 → 0.79% |
+| deaths | 154 → 24 | 106 → 74 | 50 → 1 | 34 → 5 |
+| stuck runs | 3 → 7 | 0 → 0 | 0 → 1 | 1 → 0 |
+| decisions replaced | 2.8% | 2.1% | 1.6% | 0.9% |
+| nothing safe found | 0.7% | 0.8% | 0.4% | 0.5% |
+
+D3 at 2 hearts or fewer gets worse because that is Manhandla. Variety holds: acting entropy per decision went 0.45 →
+0.48 on D5 and 0.50 → 0.58 on D3. All 50-decision prefixes were distinct in every mode, and two runs from the same
+start parted after about 5 decisions on average in every mode.
+
+**The 1000-run chains.** These tables were measured with the team as it stood before the final retrain of §11: the
+round 24 team, with darknut `r74-darknut5`, Manhandla `r71-e` and ow-peahat `r74-leg` (the chain files' provenance).
+They ran on the branch's own code, which came from `main` and has none of the round's path costs (0x27, 0x1f, 0x37)
+or heart pricing. All runs are 1000 runs on seeds 0-999.
+
+- **The "models alone" column:** D3 and the full route were re-measured, because round 24's `r74-1k` D3 and full-route
+  files used darknut4; clips off D3, D4, D5 and the full route were re-measured too.
+- **Reused round 24 files:** D2, post-d2, D1, post-d1, post-d3, D4 and post-d4 come from `r74-1k`, and D5 from
+  `r74b-1k`. Before reuse, the branch's code was shown to play the standing rule record for record like `r74b-1k` D5
+  (300 seeds) and like `r74-1k` D2 and D4 up to the arrival room. Clips off, the re-measured D4 and D5 equal round
+  24's 59.7% and 34.0%.
+
+Clips on. Arrivals, with the paired difference against the models alone, and deaths (d) and stuck runs (s) per 1000:
+
+| segment | models alone | honest planner (`plan:16:1`) | full guard (`guard:16`) |
+|---|---|---|---|
+| D2 | 89.9% (d100 s1) | 98.9% (+9.0 ± 1.0; d11 s0) | 99.7% (+9.8 ± 1.0; d3 s0) |
+| post-d2 | 95.2% (d48) | 98.4% (+3.2 ± 0.7; d14 s2) | 98.6% (+3.4 ± 0.7; d12 s2) |
+| D1 | 99.7% | 99.9% (+0.2 ± 0.2) | 99.9% (+0.2 ± 0.2) |
+| post-d1 | 100% | 100% | 100% |
+| D3 | 62.9% (d371) | 77.6% (+14.7 ± 1.9; d223) | 75.8% (+12.9 ± 2.0; d241) |
+| post-d3 | 100% | 100% | 100% |
+| D4 | 81.3% (d186) | 99.5% (+18.2 ± 1.2; d1 s4) | 99.4% (+18.1 ± 1.3; d0 s6) |
+| post-d4 (the leg) | 99.8% | 99.4% (−0.4 ± 0.2; d3 s3) | 99.4% (−0.4 ± 0.2; d3 s3) |
+| D5 | 46.4% (d529 s7) | 93.5% (+47.1 ± 1.7; d39 s26) | 94.1% (+47.7 ± 1.7; d29 s30) |
+| **full route** | **6.1%** (d933 s6) | **60.9%** (+54.8 ± 1.7; d358 s33) | **62.6%** (+56.5 ± 1.7; d335 s39) |
+
+Hearts on entering the killer rooms, full route, clips on:
+
+| room | models alone | honest planner | full guard |
+|---|---:|---:|---:|
+| 2:0x5e | 2.74 | 2.92 | 2.92 |
+| 2:0x1e | 2.69 | 2.92 | 2.92 |
+| 1:0x23 | 2.92 | 4.26 | 4.33 |
+| 3:0x59 N→S | 4.54 | 5.60 | 5.62 |
+| 3:0x5b W→E | 3.02 | 5.03 | 5.12 |
+| Manhandla | 3.23 | 5.24 | 5.29 |
+| Gleeok | 3.84 | 6.33 | 6.40 |
+| the Olive Garden | 5.81 | 8.93 | 9.03 |
+| 5:0x64 on the way back | 4.89 | 8.10 | 8.40 |
+| 5:0x66 W→N | 3.74 | 7.26 | 7.57 |
+| 5:0x47 | 3.98 | 7.25 | 7.65 |
+| 5:0x37 | 3.62 | 6.97 | 7.37 |
+| Digdogger | 3.07 | 6.11 | 6.49 |
+
+Clips off:
+
+| segment | models alone | honest planner | full guard |
+|---|---|---|---|
+| D3 | 62.9% | 77.6% (+14.7 ± 1.9) | 75.8% (+12.9 ± 2.0) |
+| D4 | 59.7% (d401) | 99.8% (+40.1 ± 1.6; d0 s2) | 99.7% (+40.0 ± 1.5; d1 s2) |
+| D5 | 34.0% (d655 s5) | 90.2% (+56.2 ± 1.8; d64 s34) | 91.3% (+57.3 ± 1.7; d58 s29) |
+| **full route** | **0.8%** (d990 s2) | **51.4%** (+50.6 ± 1.6; d402 s84) | **53.6%** (+52.8 ± 1.6; d375 s89) |
+
+D3 is the same clips on and off, run for run: no clip way passes through Dungeon 3. Clips off, the hearts rise with
+foresight from 2.90 to 6.10 at Gleeok on the D4 segment, and on the full route from 3.82 to 6.98 at the Olive Garden
+and from 3.56 to 6.35 at Digdogger.
+
+**What the numbers say:**
+
+- **The honest planner is within about one standard error of the full guard.** It is within about 2 points
+  everywhere and slightly ahead on D3. The full guard is ahead by 1.7 points on the full route clips on and 2.2 clips
+  off, both about one standard error of the paired difference, so not a clear difference.
+- **What still stops it is Manhandla and Dungeon 3.** D3 reaches only 77.6% although Link now arrives at Manhandla
+  with 5.24 hearts instead of 3.23. This fits §1 and §3: Manhandla is a bombs problem, not a hearts problem. In the
+  screen's bleeding-room counts, Manhandla went from 1.26 to 1.44 hearts lost a visit under the guard, with nothing
+  safe for 2.4% of its decisions, and its deaths went from 89 to 74 only.
+- **Stuck runs rise with foresight.** On the full route they go from 6 to 33 clips on and from 2 to 84 clips off. On
+  the clips-off full route about one in six of the planner's failures is a stuck run, not a death: the planner keeps
+  refusing hits and Link stops making progress. This needs a look before the planner becomes the golden-path or play
+  mode.
+- **The leg loses a little:** −0.4 ± 0.2 on post-d4 with either mode (3 deaths and 3 stuck runs each).
+
+**The decision (the owner, Nov 16; decisions 2026-11-16 "The honest planner beside the models").** "The honest
+planner (`plan:K:S`, redrawn random numbers) runs beside the models. Models alone stay the primary number and what
+training optimises; the honest planner is a second, labelled act mode: reported beside it in every chain report, used
+for the golden path and for play, and to be tried as a teacher. The full guard (real future) was not chosen: keep its
+numbers as the comparison, but it is not to become a default anywhere."
+
+- The setting is `temperature:0.5+relax:16+plan:16:1`, `registry.PLAN_ACT`.
+- It can be selected by any `--act`: `eval-chain`, `eval-batch`, `r56_chains.sh ACT=`, `zelda-headless.py` and its
+  `--golden` path, and `play-zelda.py`, whose Options menu lists it as "honest planner".
+- It is no default: `ACT_RULE`, `DEFAULT_ACT`, `PLAY_ACT` and every model's `act` file stay the models alone, and
+  training never tries actions.
+- The full guard is kept for comparison only and is no default anywhere.
+
+The planner's chains with the final team of §11 are in §13.
+
+**The planner as a teacher** (`docs/experiments/round25-planner-teacher.md`; analysis only, no training). Where the
+planner's choice differs from the model's is a label a training could learn from, and every room record of a planner
+run already carries it (`decisions.foresight.replaced`).
+
+- **How often:** the planner replaces 0.5-6.6% of a family's decisions (ow-peahat 6.6%, darknut and ow-zora 5.4%,
+  Manhandla 4.5%, Gleeok 3.4%).
+- **What it replaces:** the refused action is the model's own first choice in 55-87% of cases, and the safe action
+  taken instead has a median probability under the model well below 0.1.
+- **Where:** most in 5:0x37 (15.4% of its decisions), 0:0x2d, 5:0x64, 3:0x69 and 0:0x1f.
+- **The typical correction is small:** a shorter move or a wait, a step back or sideways instead of swinging into a
+  touching Darknut, or the boomerang before a CLIP.
+- **The proposed order of trials, simplest first:** a penalty on the refused action, labelled during ordinary
+  rollouts by `plan:1:1` (which tries but never changes play); then a cross-entropy target toward the planner's action;
+  a mask during rollouts only as a curriculum aid. It proposes to start with darknut and ow-peahat.
