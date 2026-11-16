@@ -2351,3 +2351,90 @@ not to become a default anywhere."
   first and the planner beside them, labelled.
 - **Not chosen: `guard:K`** (the game's real future): a valid run of button presses chosen with knowledge a player
   doesn't have. It stays a spelling for comparison only.
+
+## 2026-11-16 — Schema 6: the one input change for Dungeon 7 to Ganon, every model converted (round 26, 1.5.1.0)
+
+The owner, Nov 16 (decision 6): "A change that breaks trained models is allowed when a family cannot be trained
+without it: convert where the models stay identical, else retrain; reported with the COMPAT bump. All input changes
+are to be made in ONE break." Design: `docs/observation-next.md` (its §9 is what was built and walked); the tables
+as built: `docs/architecture.md` "Observation".
+
+- **What changed.** `OBS_SCHEMA_VERSION` 6, version 1.5.1.0 (COMPAT +1). Columns added at the end of three blocks,
+  nothing else: 8 entity features (33 → 41: `touch_harms`, `weapon_target`, `touch_damage`, `visible`, `phase`,
+  `phase_time`, `in_line`, `ringleader`), 6 `link` (87 → 93: `sword_blocked`, `sword_blocked_time`,
+  `arrow_usable`, `rupee_reserve`, `rupees_spare`, `rupees_few`), 4 `room_state` (85 → 89: `frame_phase_32`,
+  `frame_phase_64`, `wallmaster_cooldown`, `wallmaster_lure`). The per-type rules are one function,
+  `zelda::object_rules`. A per-family switch `obs.hidden_positions: ram | last_seen | zero` (default `ram`, today's)
+  decides what a hidden Red Wizzrobe's or Ganon's position shows: the owner's later answer is a yaml value, not a
+  second break. No schema 5 column changes meaning or value: the corrections the late monsters need (a boomerang
+  coming home harms nothing, Patra's body can't be hit while a child lives, Manhandla's base never dies, a
+  Wallmaster in the wall is not on the floor) are new columns beside the frozen `hurts_on_touch`, `killable`,
+  `active`, `hidden`; `tests/test_obs_legacy.py` pins every schema 5 column (hashes over every family's start states
+  and 50 seeded steps each, recorded on 1.5.0.0) and passes on 1.5.1.0.
+- **Why one break, and why now.** Every input Dungeons 7-9 and Ganon need (`docs/routes/rest-of-game.md` (a), (b),
+  (d), `late-monsters.md` §2-§6) is in this one layout, so rounds 26-29 add families and rules, never another
+  layout. Correcting the old columns in place instead would have forced goriya (Red Goriyas' boomerangs coming
+  home), boss-manhandla (the base) and wallmaster (hands in the wall) to retrain; new columns force none.
+- **Plan A (chosen) against plan B.** A: extend `triforce convert-model` to the entity features (zero
+  `input_proj` columns by feature name, beside round 24's tower widening) and make the Rust policy drop
+  `input_proj`'s all-zero columns as it drops the towers' (`Policy::entity_live`): a zero column adds nothing, but
+  it moves the later columns into other lanes of the fixed-order dot product (without the drop one extra column
+  changed the last bits in 224 of 240 decisions). About a day of one builder, no training. B: retrain all 28
+  families from scratch: their summed lineage is 178.2M env steps (darknut 41.2M, ow-moblin 20.0M, goriya 13.0M,
+  boss-manhandla 10.0M, ...), 66 stream-hours, about 33 hours in the machine's two training places before
+  evaluations, act checks and chains, with no assurance of getting back to the chain numbers rounds 15-25 reached
+  (round 22's ow-moblin from scratch was no better than continuing; the Olive Garden needed 20M of continuation).
+  A's cost: four redundant legacy columns, which the optimisation round after the first complete run can drop
+  when every family retrains anyway.
+- **The conversion.** `triforce --models-dir MODELS convert-model --promoted --out DIR` converted the 28 promoted
+  1.5.0 runs of the current families (copies; the sources untouched), stamped 1.5.1.0, `act` files re-bound to the
+  new sha1s. The four retired families that still have a promoted run but no yaml (d1-melee, d1-wallmaster,
+  d2-goriya, ow-leever-peahat) were skipped.
+- **The proof.** Every promoted run, 20 episodes per state, seed 0, in both act modes: the originals on 1.5.0.0
+  (`triforce eval-batch --families all --acts argmax,temperature:0.5+relax:16 --episodes-per-state 20 --seed 0
+  --parallel 10 --jobs 2 --eval-parallel 5`, branch `r26-obsref` at 34acf55) against the converted copies on
+  1.5.1.0 (the same command with `--models-dir` the converted copies, branch `r26-obsbuild`), compared episode by
+  episode by `scripts/experiments/r26_obs_proof_compare.py` (matched by start state and seed; the whole record:
+  outcome, ending, steps, frames, health, hearts, linger, bombs, visits; and every summary field but the model's
+  path, sha1, hash, version and the code's git description; the new config key `obs.hidden_positions` must be
+  `ram`). **38,360 of 38,360 episodes identical, every summary equal:**
+
+| Family | Episodes per act | `argmax` identical | `temperature:0.5+relax:16` identical | Success (argmax / temperature) |
+|---|---:|---:|---:|---|
+| boss-aquamentus | 60 | 60 | 60 | 100.0% / 100.0% |
+| boss-digdogger | 60 | 60 | 60 | 100.0% / 100.0% |
+| boss-dodongo | 60 | 60 | 60 | 100.0% / 100.0% |
+| boss-gleeok | 60 | 60 | 60 | 98.3% / 100.0% |
+| boss-manhandla | 60 | 60 | 60 | 91.7% / 95.0% |
+| d2-rope | 360 | 360 | 360 | 97.8% / 98.1% |
+| darknut | 1800 | 1800 | 1800 | 97.4% / 97.8% |
+| dodongo-crossing | 60 | 60 | 60 | 100.0% / 100.0% |
+| equipment-room | 360 | 360 | 360 | 99.7% / 100.0% |
+| gibdo | 480 | 480 | 480 | 98.8% / 99.6% |
+| goriya | 300 | 300 | 300 | 94.7% / 95.0% |
+| like-like | 120 | 120 | 120 | 100.0% / 99.2% |
+| moldorm | 60 | 60 | 60 | 93.3% / 91.7% |
+| ow-boulder | 360 | 360 | 360 | 100.0% / 100.0% |
+| ow-leever | 300 | 300 | 300 | 100.0% / 100.0% |
+| ow-lynel | 480 | 480 | 480 | 98.5% / 99.4% |
+| ow-moblin | 1620 | 1620 | 1620 | 99.2% / 99.1% |
+| ow-octorok | 2160 | 2160 | 2160 | 98.8% / 98.9% |
+| ow-peahat | 720 | 720 | 720 | 97.2% / 97.2% |
+| ow-start | 1420 | 1420 | 1420 | 97.9% / 99.9% |
+| ow-tektite | 1320 | 1320 | 1320 | 99.5% / 99.8% |
+| ow-zora | 2400 | 2400 | 2400 | 99.6% / 99.6% |
+| pols-voice | 120 | 120 | 120 | 100.0% / 100.0% |
+| stalfos-keese-gel | 2040 | 2040 | 2040 | 99.8% / 100.0% |
+| trap-room | 840 | 840 | 840 | 99.8% / 99.9% |
+| vire | 1080 | 1080 | 1080 | 98.5% / 99.5% |
+| wallmaster | 60 | 60 | 60 | 100.0% / 100.0% |
+| zol | 420 | 420 | 420 | 99.8% / 100.0% |
+
+- **What a model meets now.** A converted model reads exactly its schema 5 inputs; the new columns carry values from
+  the first step but weigh nothing until a family trains on (a continuation from the converted run, as each round
+  extends a family). Training on them changes those models' behaviour: a REV bump and a re-measure, not this break.
+- **Walked, and still to walk.** The probes of the build (Wizzrobes, Ganon's death, the ringleader, the Bubble's
+  block, Patra's children, Lanmola's waiting segments, the Wallmaster lure one pixel off the wall) confirmed every
+  row they reached (`docs/observation-next.md` §9); Gohma's eye with real arrows, Ganon's phases with real hits,
+  `in_line` against each shooter's own test and a Red Wizzrobe's `phase_time` with retries are code only until
+  their rounds walk them.

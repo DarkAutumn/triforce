@@ -220,8 +220,8 @@ test them, keep what helps, and log everything.
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.5.0.0`: five dungeons, round 24; it
-  carries round 24's action kinds, 1.4.2.0). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.5.1.0`: five dungeons; round 26's
+  schema 6 observation, the one input change for Dungeon 7 to Ganon, decisions 2026-11-16). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
@@ -234,8 +234,9 @@ test them, keep what helps, and log everything.
   numbers differ from the code's (or that has no stamp) is refused: chains, evaluation, `--load`. Override with
   `--allow-incompatible-models` (or `TRIFORCE_ALLOW_INCOMPATIBLE_MODELS=1`); stamp runs known to be compatible with
   `triforce stamp [SPECIALIST [RUN_ID]] [--version V] [--force]` (default: every promoted run, the code's version).
-  A 1.4.1 model is converted, not stamped: `triforce --models-dir MODELS convert-model --promoted --out DIR` (or
-  `convert-model RUN_DIR... --out DIR`; `triforce/convert.py`) writes widened copies (source untouched).
+  A 1.5.0 model is converted, not stamped: `triforce --models-dir MODELS convert-model --promoted --out DIR` (or
+  `convert-model RUN_DIR... --out DIR`; `triforce/convert.py`) writes widened copies (source untouched); the
+  converted models act bit for bit as their sources (round 26's proof, decisions 2026-11-16).
 - Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; Lee will pick a backup strategy).
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
   independent of the repo version. It is bumped only when an existing replay can no longer be replayed bit-exactly

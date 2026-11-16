@@ -389,8 +389,11 @@ kept); a wrap whose landing edge the objective doesn't use (it goes S) stays.
 
 ## Observation (`crates/env/src/observation.rs`)
 
-`ObservationBuilder::new(objective, target)`, `reset(state, objective, wavefront, mask)`,
-`build(change, state, objective, wavefront, mask)` (`state` = `change.state`, or the state a cheat grant rebuilt).
+`ObservationBuilder::new(objective, target)` (`.with_hidden_positions(mode)`, `obs.hidden_positions`, below),
+`reset(state, objective, wavefront, mask)`, `build(change, state, objective, wavefront, mask)` (`state` =
+`change.state`, or the state a cheat grant rebuilt); the env sets `bomb_reserve` and `rupee_reserve` (the route
+step's) before each. `_native.observe(state, rupee_reserve=0)` is one observation of a probe's state from a fresh
+builder (no objective, mask or previous action), for probes and tests.
 Python sees the layout as
 `triforce._native.OBS_SPEC` (`key → {shape, vocab, dtype}`) plus `OBS_SCHEMA_VERSION`, `ROOM_VOCAB`,
 `ENTITY_VOCAB`, `NUM_TILE_CLASSES`, `NUM_ENTITY_SLOTS = 12` and the feature-name tuples;
@@ -399,10 +402,10 @@ Python sees the layout as
 | Key | dtype / shape | Notes |
 |---|---|---|
 | `room_id` | int64 [1] | index < `ROOM_VOCAB` |
-| `room_state` | float32 [85] | per-room flags from `docs/ram-catalog.md`; schema 5 ends with `maze_step` (`MazeStep` / 4 in a maze room, else 0: which loop of the Lost Hills this is) |
-| `link` | float32 [87] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and the specialist has `clips: true`); schema 5 `recorder_usable`, `food_usable`, `candle_usable` (the mask allows the kind) |
+| `room_state` | float32 [89] | per-room flags from `docs/ram-catalog.md`; schema 5 ends with `maze_step` (`MazeStep` / 4 in a maze room, else 0: which loop of the Lost Hills this is); schema 6 adds 4 at its end (below) |
+| `link` | float32 [93] | schema 3 ends with `bomb_usable` (the mask allows BOMB: the mask is no network input), `bomb_reserve`, `bombs_spare` (bombs above it), `help_count` (`$50`/10), `next_kill_arms`, `drop_armed`, `drop_is_bombs`, `fairy_next` (`$627` = 15); schema 4 adds `clip_usable_N/S/W/E` (the skip is available and the specialist has `clips: true`); schema 5 `recorder_usable`, `food_usable`, `candle_usable` (the mask allows the kind); schema 6 adds 6 at its end (below) |
 | `entity_types` | int64 [12] | 0 = empty slot |
-| `entity_features` | float32 [12, 33] | feature 0 = presence |
+| `entity_features` | float32 [12, 41] | feature 0 = presence; schema 6 adds 33-40 (below) |
 | `grid` | int64 [22, 32] | tile class per 8px tile, row-major |
 | `history` | float32 [38] | last action kind (11)/dir/duration, frames since |
 | `objective` | float32 [10] | all zeros when `objective` is off |
@@ -429,8 +432,70 @@ so schema 1 and 2 checkpoints no longer load (their `link` is 81 wide): every fa
 `clip_usable_*`: no schema 3 checkpoint loads (action schema 2). Schema 5 (version 1.4.2.0, Nov 14) added RECORDER,
 FOOD and CANDLE (`history` one-hots 11 kinds, the new ones after `kind_CLIP`; the mask is 143 wide; action schema 3)
 and `link`'s `recorder_usable`, `food_usable`, `candle_usable` at its end, and `room_state`'s `maze_step` at its end
-(round 24, the maze slice). A 1.4.1 checkpoint is widened by
+(round 24, the maze slice). Schema 6 (version 1.5.1.0, Nov 16, round 26: the one input change for Dungeon 7 to
+Ganon, `docs/observation-next.md`, decisions 2026-11-16) adds columns only, each at the end of its block; no
+schema 5 column changes its meaning or its value (`tests/test_obs_legacy.py` hashes every schema 5 column over
+every family's start states and 50 seeded steps each, recorded on 1.5.0.0). A 1.5.0 checkpoint is widened by
 `triforce convert-model` (`triforce/convert.py`, below), not retrained.
+
+**Schema 6's columns.** The per-type rules are `zelda::object_rules` (one function, beside `ObjectClass`, so that
+`GameView`, the objective and the critic can use the same answers); values are 1, 0 or 0.5, 0.5 where the game
+tests or draws the object on every other frame only. `hurts_on_touch` (14), `killable` (15), `active` (20) and
+`hidden` (24) keep their schema 5 computation, frozen; the corrections are the new columns.
+
+| Block, index | Name | Value |
+|---|---|---|
+| entity 33 | `touch_harms` | it harms Link when they overlap this frame (Link's own invincibility, halt and Like-Like hold are in `link`); per-type table below |
+| entity 34 | `weapon_target` | some weapon can damage it in its current phase (which one: `immune_*`; its post-hit flash is `invincibility`) |
+| entity 35 | `touch_damage` | hearts a touch costs after the ring, / 4, clamped: asm:Damage_ObjTypeDamageToLink (low nibble hearts, high nibble sixteenths) halved per ring grade (`$662`); Gleeok's synthesized heads the type-0 entry (3/8 heart); 0 for types `$5D` and up, items, the treasure |
+| entity 36 | `visible` | the game draws it every frame 1, every other frame 0.5, not at all 0 |
+| entity 37, 38 | `phase`, `phase_time` | the type's phase, normalised, and frames to its next event / 512, clamped (table below; 0 elsewhere) |
+| entity 39 | `in_line` | Link's 16×16 box is in the 16-px lane ahead of a shooter (Lynels, Moblins, Goriyas, Octoroks `$01-$0A`, Wizzrobes `$23/$24`) along its cardinal ObjDir, or of a flying straight shot (`$53`, `$57-$59`, `$5B`, `$5C` in ObjState `$10-$1F`) along its direction; 0 when `visible` is 0 |
+| entity 40 | `ringleader` | the living monster in NES slot 1 of a room whose secret trigger is 2 (killing it kills every monster, asm:Secret_Trigger2Ringleader) |
+| link 87, 88 | `sword_blocked`, `sword_blocked_time` | `GameView::is_sword_blocked` (`$4C` ≠ 0 or `$52E` ≠ 0); `$4C` / 16 (a Bubble's touch loads `$10`, one down every 10 frames) |
+| link 89 | `arrow_usable` | the mask's ARROW bit |
+| link 90-92 | `rupee_reserve`, `rupees_spare`, `rupees_few` | the route step's rupee reserve / 16, rupees above it / 16, min(rupees, 16) / 16 (all clamped; the reserve is 0 until routes.yaml carries one) |
+| room_state 85, 86 | `frame_phase_32`, `frame_phase_64` | (FrameCounter `$15` & `$1F`) / 32, (& `$3F`) / 64: the Blue Wizzrobes' and Ganon's shot beats |
+| room_state 87 | `wallmaster_cooldown` | with a `$27` in the room: min(ObjTimer of slot 1 `$29` / `$60`, 1) (one hand per `$60` frames, the timer shared whatever slot 1 holds); else 0 |
+| room_state 88 | `wallmaster_lure` | a `$27` waits in the wall (state 0) and Link stands where asm:Wallmaster_Update lets one out: X `$20` or `$D0` with Y in `$6D-$B4`, or Y `$5D` or `$BD` with X in `$29-$C7` (the shared timer and Link not halted are the game's other conditions) |
+
+The per-type rows of `touch_harms` / `weapon_target` / `visible` / `phase` / `phase_time` (first match;
+`legacy_touch` = `hurts_on_touch`, `legacy_target` = `killable` ∧ `active` ∧ ¬dying ∧ ¬spawning; `s` = ObjState;
+walked = seen in the game by `scripts/experiments/r26_obs_probes.py`, Nov 16):
+
+| Types | `touch_harms` | `weapon_target` | `visible` | `phase` | `phase_time` (frames) |
+|---|---|---|---|---|---|
+| Red Wizzrobe `$24`, clock held | 0 | 1 | 1 | s/255 | 0 |
+| Red Wizzrobe `$24` | solid `$80-$BF` 1, fading `$40-$7F`/`$C0-$FE` 0.5, hidden `$00-$3F`/`$FF` 0 (walked) | as `touch_harms` | as `touch_harms` | s/255 | to its shot at `$B0` (a lower bound: a rejected spot repeats `$00`) |
+| Blue Wizzrobe `$23` | teleporting (ObjRemDistance `$394` ≠ 0) 0.5, else 1, also flashing (walked); 0 under the clock | teleporting and no clock 0.5, else 1 | as `weapon_target` | teleporting 1, standing (ObjTimer < `$10`) 0.5, walking 0 | ObjRemDistance or ObjTimer |
+| Gohma `$33/$34` | `legacy_touch` | eye state (`$46B`) = 3 | 1 | eye / 3 | open timer `$444`, else 2 × `$42C` |
+| Ganon `$3E`, `$445` < 2 (the entry scene) | 0 | 0 | 1 | 0 | 0 |
+| Ganon dying (`$42C` ≠ 0) | 0 (walked) | 0 | count < `$50` 1, else 0 | 1 | `$A0` − count |
+| Ganon brown (s ≠ 0) | 1 | 1 (silver arrow) | s ≥ `$30` 1, else 0.5 | 0.75 | 2·s |
+| Ganon blue, shown after a hit (ObjTimer ≠ 0) | 1 | 0 | 1 | 0.5 | ObjTimer |
+| Ganon blue, invisible | 1 | 1 (sword) | 0 | 0.25 | 0 |
+| Patra `$47/$48` | `legacy_touch` | 0 while a `$25/$26` is in slots 2-9, else `legacy_target` | 1 | min(s, 1) | 0 |
+| Patra child `$25/$26` | `legacy_touch` once Patra's s ≠ 0, else 0 (walked) | the same with `legacy_target` | own s ≠ 0 (walked) | min(s, 1) | 0 |
+| Lanmola `$3A/$3B` with ObjDir 0 | 0 (walked) | 0 | 0 | 0 | 0 |
+| Wallmaster `$27` | `legacy_touch` | s = 1 | s = 1 | min(s, 1) | 0 |
+| Manhandla `$3C` in slot 5 (the base) | `legacy_touch` | 0 | 1 | 0 | 0 |
+| Gleeok's neck base (slot 1, `$42-$45`), big Digdogger `$38/$39`, flying Ghini `$22` | `legacy_touch` | 0 | 1 | 0 | 0 |
+| Goriya `$05/$06` | `legacy_touch` | `legacy_target` | 1 | 1 while s bit 7 (waiting for its boomerang) | 0 |
+| Leever `$0F/$10`, Zora `$11` | `legacy_touch` | `legacy_target` | `active` | 0 | 0 |
+| shots `$53-$5C` | s & `$F0` = `$10` and no clock (a boomerang coming home harms nothing) | 0 | 1 | 0 | 0 |
+| guard fire `$3F` | `legacy_touch` | `active` ∧ ¬dying ∧ ¬spawning | 1 | 0 | 0 |
+| other monsters; Gleeok's synthesized heads (`legacy_target` 1) | `legacy_touch` | `legacy_target` | 1 | 0 | 0 |
+| hazards (the boulder spawner `$1F`: `visible` 0) | `legacy_touch` | 0 | 1 | 0 | 0 |
+| items, the treasure (`visible` = its `active`), persons, other, tile objects | 0 | 0 | 1 | 0 | 0 |
+
+**Hidden positions** (`obs: {hidden_positions: ram | last_seen | zero}`, default `ram`,
+`env::config::HiddenPositions`): for an entity of `zelda::object_rules::HIDDEN_POSITION_TYPES` (a Red Wizzrobe,
+Ganon) whose `visible` is 0, `ram` shows the RAM position (more than a player sees), `last_seen` where it was at
+its last observation with a nonzero `visible` in this room (0 if never) with `dx`/`dy` relative to Link now, `zero`
+nothing; in both, its velocity is 0 while hidden and on its first visible observation after. Every other type and
+column is the same in every mode. The owner chooses the mode when round 27 (Wizzrobes) starts; no promoted family
+meets these types.
+
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
 

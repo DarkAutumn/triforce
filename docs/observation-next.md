@@ -483,6 +483,39 @@ For walks (none is needed before commit 3 can be built; each can change a row of
 9. `rupee_reserve` values per step come from the route builder (Steps26); the observation reads whatever the route
    carries.
 
+## 9. As built (round 26, 1.5.1.0, branch `r26-obsbuild`)
+
+Built as §2-§3 describe; the reference is now `docs/architecture.md` "Observation" (the tables as built) and the
+proof `docs/decisions.md` 2026-11-16 "Schema 6". Deviations from §2.3:
+
+- **Patra's children:** `visible` is the child's own state 1 (asm:Patra_UpdateChild_State1Orbit draws it from its
+  state 1 on; only the collisions wait for Patra's state 1), not "Patra's s = 1".
+- **The boulder spawner `$1F`:** `visible` 0 (an invisible generator, asm:Boulder_UpdateSpawner).
+- **A Blue Wizzrobe under the clock:** `weapon_target` 1, `visible` 1 (drawn and hittable every frame), `touch_harms` 0.
+- **The VERSION bump** went into the observation commit (AGENTS.md: a bump goes in the commit that causes it).
+- Open point 5 (Patra's spawn cloud) is the game's: asm:Patra_Update notes Patra's spawn cloud ends on frame 13.
+
+Walked on the 1.5.1.0 build (`scripts/experiments/r26_obs_probes.py`, Nov 16; Link held on the object every frame,
+his invincibility timer and knockback cleared before each frame and his hearts held; "harmed" = the game started his
+knockback that frame, "drawn" = sprites of the OAM buffer in the object's box; the observation is read before the
+frame, so a phase change inside a frame shows as one harmed frame of the phase before):
+
+| Probe | Result | Verdict |
+|---|---|---|
+| `red-wizzrobe-touch` (6:0x78, slot 1) | hidden 0 of 132 frames harmed, 0 drawn; fading in 64/126 harmed and drawn; solid 127/128; fading out 15/32; with the clock 0/119 harmed, 119/119 drawn, observed (0, 1, 1) | the rows confirmed (0.5 on fading) |
+| `blue-wizzrobe-touch` (9:0x15, its invincibility timer held at `$10`) | walking 320/320 harmed, standing 18/20, teleporting 80/160 harmed and drawn | a flash does not stop its touch; 0.5 teleporting confirmed |
+| `ganon-dying` (dying count WRITTEN 1) | no harm through `$C0`; observed `visible` 1 below `$50`, 0 from `$50` (sprites drawn there are the ashes) | `touch_harms` 0 confirmed |
+| `ringleader` (6:0x78) | `ringleader` 1 on slot 1 only; slot 1 emptied: every other Red Wizzrobe's death (metastate `$10`) began the next frame | confirmed |
+| `bubble-block` (7:0x49) | `sword_blocked_time` 1.0 at the touch, 0.9375 two frames later, then −1/16 every 10 frames; a second touch at +47 reloads 1.0 | confirmed |
+| `patra-touch` (9:0x61; a waiting child moved, WRITTEN, 40 px from Patra and the orbiting children) | slot 9 waiting 0/65 harmed, 0 drawn, then out with Patra's state 1: 95/95; slot 2 waiting 0/2, out before Patra's state 1 0/63 harmed (the 1 harmed frame is the one Patra's state turned 1), 63/63 drawn, after 95/95 | confirmed: a child is drawn from its own state 1 and harms only from Patra's |
+| `lanmola-touch` (9:0x55, the tail, slot 1, moved WRITTEN 40 px from the moving segments while its ObjDir is 0) | ObjDir 0: 0 of 33 frames harmed (the 34th is the frame its direction arrives), 0 drawn; moving 56/56 | confirmed |
+| `wallmaster-lure` (7:0x0d from W) | standing at (`$20`,`$8D`): lure 1, a hand came out each time the shared timer ran out; walked one pixel on (Right 2 frames: (`$21`,`$8D`), grid offset 1): lure 0, 116 frames with the timer at 0 and no hand. (A written X without the grid offset `$394` does not hold: the game moves Link back to `$20` the next frame, which is why the first probe saw hands at "`$21`") | confirmed |
+
+Still code only (a later round walks them before relying on them): Gohma's eye row with real arrows (round 27);
+Ganon's brown and shown phases with real hits, and his dying sequence entered by a real silver arrow (round 29);
+`in_line` against each shooter's own test (open point 7); `phase_time` of a Red Wizzrobe with retries (6);
+`touch_damage` of the late types (a constant table; a ring walk would close it).
+
 ## Appendix A: the entity zero-column drop (the PoC's patch to `crates/policy/src/lib.rs`)
 
 ```rust
