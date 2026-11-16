@@ -65,8 +65,8 @@ rupees (31 in, one arrow for Gohma), pieces 1-7, no ring, the small shield.
    the env as built: RECORDER, RECORDER, WAIT lands in 0x3c as `exit-correct` (20 of 20 seeds); MOVE to the window,
    CANDLE W, WAIT, MOVE W enters Dungeon 8 as `exit-correct` (19 of 20). The tree has no objective target yet.
 9. **0x3f's four bombs come almost for free with a fighting crossing** (12 of 20 crossings that fight what comes near
-   end with the room cleared and the bombs taken), and they are the only honest bombs for 0x4c's wall and for
-   0:0x05's rock wall on the way to Dungeon 9.
+   end with the room cleared, and 12 leave with four bombs or more), and they are the only honest bombs for 0x4c's
+   wall and for 0:0x05's rock wall on the way to Dungeon 9.
 10. **The keyless pass cannot strand Link.** With keys it takes a key (a wrong exit that costs one of Dungeon 9's);
     with none it opens the door for good.
 
@@ -110,7 +110,7 @@ Lynel is made at one of a dozen spots on rows `$AD`-`$BD` (20 seeds).
 |---|---|
 | 0 | B: index `$FB` → `$FA`; the whirlwind is made at X 0 on Link's row and stands; everything is frozen for the tune |
 | 152-216 | the window of the second play; B on 153: `$FA` → `$F9`, a second freeze of 152 frames |
-| 305 | the whirlwind starts to move (2 px a frame) |
+| about 310 | the second tune ends; the whirlwind starts to move (2 px a frame) |
 | 363 | it picks Link up |
 | 623 | Link is set down and free in 0x3c at (`$80`,`$AD`), facing right |
 
@@ -526,17 +526,19 @@ with the planner 0/10 (9 deaths, median 3917 frames); from 5 hearts 0/20; with t
 ## 7. Ledgers and the survival budget (walked numbers, added up)
 
 **Bombs.** In 1 (`d6-walks.md` §7). 0x6e's wall takes it (60 of 60 by a `required` family or the script). 0x4c's wall
-needs one more: cheated on a no-drop run, as the draft says, **unless 0x3f is fought**: its 4 bombs were taken in 12
-of 20 crossings that fight what comes near and in 15 of 20 deliberate clears (mean 1.10 hearts). Then 0x4c's wall
-leaves 3, and 0:0x05's rock wall on the way to Dungeon 9 leaves 2 for level 9. Without 0x3f's bombs both walls are
-cheats (2 bombs). Drops: Blue Darknuts drop no bombs (group 3); the Red ones and Gibdos of 0x4e and 0x3f do (two
-crossings ended with 8 bombs: the room's four and a dropped four).
+needs one more: cheated on a no-drop run, as the draft says, **unless 0x3f is fought**. Of 20 crossings that fight
+what comes near, 12 ended with 0x3f cleared and 12 left with four bombs or more (three with eight); of 20 deliberate
+clears, 16 cleared it (four ran out of time), 15 went on down the stairs, 18 left with four bombs or more, at 1.10
+hearts lost. (The script counts a pickup, not which: a Red Darknut's or Gibdo's dropped bombs are four as well, and
+it does not always walk to the room's own.) With four, 0x4c's wall leaves 3 and 0:0x05's rock wall on the way to
+Dungeon 9 leaves 2 for level 9. Without them both walls are cheats (2 bombs). Blue Darknuts drop no bombs (group 3).
 
-**Keys.** In 2. 0x5e +1 (taken in 59 of 60 clears), 0x4e N −1, 0x4c's corner +1 (30 of 30 with arrows): out 3, never
-below 2. Without the corner key 2. 0x5e E and 0x4e W take a key on the first frame of pressing into them.
+**Keys.** In 2. 0x5e +1 (taken in 29 of the 30 clears from 13 hearts), 0x4e N −1, 0x4c's corner +1 (30 of 30 with
+arrows): out 3, never below 2. Without the corner key 2. 0x5e E and 0x4e W take a key on the first frame of
+pressing into them.
 
-**Rupees.** In 30. 0x4c: 1 for the wall alone, 2.8 (max 5) with the key. 0x4e's 5 rupees come only with a clear
-(taken in 13 of 17 clears). Out about 25-29.
+**Rupees.** In 30. 0x4c: 1 for the wall alone, 2.8 (max 5) with the key. 0x4e's 5 rupees come only with a clear (8 of
+17 clears left with 5 rupees or more; the script does not always walk to the item). Out about 25-29.
 
 **Hearts.** No refill between Dungeon 6's piece and Dungeon 8's; **Dungeon 8's piece is the last refill of the game.**
 
@@ -652,8 +654,8 @@ by count).
 
 ## 10. Questions only the owner can answer
 
-1. **0x3f's four bombs.** Fight 0x3f (a clear costs the script 1.1 hearts and wins 15 of 20 as written) and have
-   honest bombs for 0x4c's wall and 0:0x05's rock wall, or cross it and cheat two bombs?
+1. **0x3f's four bombs.** Fight 0x3f (a clear costs the script 1.1 hearts and gets through 15 of 20 as written) and
+   have honest bombs for 0x4c's wall and 0:0x05's rock wall, or cross it and cheat two bombs?
 2. **Arrows in 0x4c.** May pols-voice shoot (1 rupee for the wall, about 3 with the key), and should ARROW be offered
    only with a Pols Voice on Link's line, as Gohma's question 6 of round 27 asked for the aimed mask?
 3. **0x4c's corner key.** Worth 0.4 hearts and 3 rupees with arrows (30 of 30); without arrows 9 of 30 survive it.
