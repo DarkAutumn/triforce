@@ -423,7 +423,10 @@ test them, keep what helps, and log everything.
   agent's `cargo test`, two explorers and a chain it got 1.8 cores for its 8 games (load average 60 on 20 threads)
   and its queues filled slowly. So everything heavy an agent starts that is not a queued job (`cargo`, `maturin`,
   pytest, `triforce.explore`, `entry_states build`, walk scripts) gets `nice -n 10`: above the jobs' 15, below the
-  player. For the fastest start of the player: `.venv/bin/python play-zelda.py 3x3` in the foreground or with `&!`
+  player. **The CPU, not the GPU, is what runs out** (Lee, Nov 17): the job line carries everything that plays
+  models; outside it an agent runs one heavy thing at a time, explorers with `--parallel 4`, cargo and maturin with
+  `CARGO_BUILD_JOBS=4`, full suites once at the end of its task, and starts nothing heavy while the load average is
+  above 30. For the fastest start of the player: `.venv/bin/python play-zelda.py 3x3` in the foreground or with `&!`
   after `setopt nobgnice`; `uv run play-zelda.py` also works but rebuilds the module (40 s or more) the first time
   after `pyproject.toml` changed, which is every landing.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before

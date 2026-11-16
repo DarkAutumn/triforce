@@ -2454,7 +2454,7 @@ parallelize this, and at the end you can always clean up, refine, like you would
 the retraining you would do... that all can be front loaded looking at the dungeons first anyway."
 
 - **Lanes.** Each stretch (Dungeon 7, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon) has its own
-  lane of work that needs no GPU: walk the running game, build the route vocabulary (steps, masks, objectives,
+  lane of work that needs no job place: walk the running game, build the route vocabulary (steps, masks, objectives,
   families), build start states and curricula (fights the explorer cannot clear are skipped or staged; inventories
   staged from the ledgers, rebuilt from chain runs' harvested states later), write the family files. The lanes run
   at once, one worktree each; a lane's next step starts when its previous one reports.
@@ -2470,5 +2470,10 @@ the retraining you would do... that all can be front loaded looking at the dunge
   clean-up and tuning round comes after the first complete game.
 - **Given up for it:** the honest planner's 1000-run chains with clips off for round 25 (the clips-on set is in
   round25.md §13); they are measured when the line is idle.
-- **Agents' priority:** builds, suites and explorers run under `nice -n 10`, explorers on 4 threads, so the owner's
-  player and the queued jobs keep working beside five or six agents.
+- **The CPU is the scarce resource, not the GPU** (Lee, the same day: "the CPU load is the problem not the gpu
+  load... You are constantly overloading the cpu. Optimize for that. But really, just let the cpu queueing handle
+  most of this... Just make sure training and evals go into the queue (as they already do!)"). The job line stays
+  as it is and carries everything that plays models. What agents start outside it is capped: one heavy thing at a
+  time per agent (an explorer, a state build, cargo, pytest or a many-trial walk script), explorers on 4 threads,
+  `CARGO_BUILD_JOBS=4`, all under `nice -n 10`, full suites once at the end of a task, and nothing heavy started
+  while the load average is above 30. The GPU has not been a limit in any round.
