@@ -502,7 +502,7 @@ def fake_job(registry, checkout, branch, name, *, pid, pid_start, status='runnin
     folder = checkout / 'logs' / name
     folder.mkdir(parents=True)
     plan = {**running_plan(pid, time_now()), 'status': status, 'name': name, 'kind': 'train', 'runs': [],
-            'checkout': str(checkout), 'branch': branch}
+            'finished': finished, 'checkout': str(checkout), 'branch': branch}
     (folder / gui.PLAN_FILE).write_text(json.dumps(plan))
     registry.mkdir(exist_ok=True)
     (registry / f'{name}.json').write_text(json.dumps({
@@ -560,6 +560,32 @@ def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeyp
         window.deleteLater()
 
 
+def test_currently_running_orders_by_run_start_and_by_end_not_by_folder_name(qapp, tmp_path, monkeypatch):
+    """The job that began to run last is on top whatever its folder is called (each checkout numbers its own
+    folders); the finished ones follow in the order they ended, the last one first."""
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    registry = tmp_path / 'jobs'
+    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
+    me = gui.process_started(os.getpid())
+    first = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_009_first', pid=os.getpid(), pid_start=me)
+    second = fake_job(registry, tmp_path / 'triforce-b', 'clips', '261113_001_second', pid=os.getpid(), pid_start=me)
+    early = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_007_ended-early', pid=os.getpid(),
+                     pid_start=me, status='completed', finished=iso(time_now() - 600))
+    late = fake_job(registry, tmp_path / 'triforce-b', 'clips', '261113_003_ended-late', pid=os.getpid(),
+                    pid_start=me, status='completed', finished=iso(time_now() - 60))
+    (tmp_path / 'gui-root').mkdir()
+    window = gui.Window(tmp_path / 'gui-root', None)
+    try:
+        assert window._shown_dirs() == [second, first, late, early] and window._heading_at == 2
+        # a job that starts now is added at the top; the rest keeps its order
+        third = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_005_third', pid=os.getpid(), pid_start=me)
+        window._scan_and_update()
+        assert window._shown_dirs() == [third, second, first, late, early] and window._heading_at == 3
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 # ------------------------------------------------------------------------------------------------------- the web view
 
 def write_events(path, events):
@@ -603,7 +629,7 @@ def web_env(monkeypatch):
     monkeypatch.setattr(gui, 'read_registry', lambda: [])
 
 
-def test_web_snapshot_shows_current_runs_newest_first_and_expires_finished_ones(tmp_path, web_env):
+def test_web_snapshot_shows_running_runs_on_top_and_expires_finished_ones(tmp_path, web_env):
     import subprocess
     import time
     now = time.time()
@@ -618,12 +644,14 @@ def test_web_snapshot_shows_current_runs_newest_first_and_expires_finished_ones(
         ({'specialist': 'ow-octorok', 'status': 'running'}, training_events(now - 20, 4)),
         ({'specialist': 'goriya', 'status': 'pending'}, None)])
     (round_dir / 'ow-octorok.log').write_text(''.join(f'line {i}\n' for i in range(20)))
-    # an evaluation batch started 5 s ago
+    # an evaluation batch: zol evaluated from 4 s to 2 s ago, darknut running since 5 s ago
     web_plan(tmp_path, '261114_002_batch', created=me + 0.5, kind='eval-batch', runs=[
         ({'name': 'darknut', 'kind': 'eval', 'specialist': 'darknut', 'events': 'darknut.jsonl', 'total': 400,
           'status': 'evaluating'},
          [{'event': 'eval_start', 'ts': now - 5, 'episodes': 400},
-          {'event': 'eval_progress', 'ts': now - 1, 'done': 100, 'episodes': 400, 'success_rate': 0.9}])])
+          {'event': 'eval_progress', 'ts': now - 1, 'done': 100, 'episodes': 400, 'success_rate': 0.9}]),
+        ({'name': 'zol', 'kind': 'eval', 'specialist': 'zol', 'events': 'zol.jsonl', 'total': 400, 'status': 'ok',
+          'started': iso(now - 4), 'finished': iso(now - 2)}, None)])
     # a round that ended an hour ago, and one whose process is about to die
     web_plan(tmp_path, '261113_009_old', created=now - 7200, status='completed', finished=now - 3600, runs=[
         ({'specialist': 'zol', 'status': 'ok'}, training_events(now - 7200, 10, end=now - 3600))])
@@ -632,11 +660,15 @@ def test_web_snapshot_shows_current_runs_newest_first_and_expires_finished_ones(
         web_plan(tmp_path, '261114_003_dies', created=max(time.time(), me + 1), pid=child.pid, runs=[
             ({'specialist': 'vire', 'status': 'running'}, training_events(now - 50, 3))])
         snapshot = state.refresh()
+        # the running ones on top, newest start first; then the ended ones, newest end first (zol started after
+        # everything else, and ended: below every running card)
         ids = [card['id'] for card in snapshot['cards']]
         assert ids == [f"{tmp_path}/261114_002_batch#0", f"{tmp_path}/261114_001_round#1",
-                       f"{tmp_path}/261114_003_dies#0", f"{tmp_path}/261114_001_round#0"]
-        batch, octorok, vire, start = snapshot['cards']
-        assert [card['active'] for card in snapshot['cards']] == [True, True, True, False]
+                       f"{tmp_path}/261114_003_dies#0", f"{tmp_path}/261114_002_batch#1",
+                       f"{tmp_path}/261114_001_round#0"]
+        batch, octorok, vire, zol, start = snapshot['cards']
+        assert [card['active'] for card in snapshot['cards']] == [True, True, True, False, False]
+        assert zol['status'] == 'ok' and zol['expires_in'] == pytest.approx(58)
         assert start['status'] == 'ok' and start['expires_in'] == pytest.approx(30)
         assert octorok['status'] == 'training' and octorok['expires_in'] is None
         assert octorok['numbers'] == '400 / 1.0k' and octorok['phase'] == 'training · it 4/10'
@@ -1025,7 +1057,8 @@ def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estima
         running = '261115_001_r26-a (round), 261115_002_eval-b (eval)'
         regular = '261115_002_eval-b (eval)'        # a job too long for the express place doesn't wait for a's
         window = gui.Window(root, None)
-        assert window._shown_dirs() == [b, a, patient, short, long]       # running, then in the order they start
+        # running (a was admitted after b: on top), then the waiting ones in the order they start
+        assert window._shown_dirs() == [a, b, patient, short, long]
         views = {view.dir: view for view in window.views}
         assert views[patient].header.waiting(patient_ts + 6000) == \
             f'waiting · 1st in line · for {regular} · ~40 min · waited 1h 40m'

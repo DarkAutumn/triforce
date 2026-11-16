@@ -12,8 +12,9 @@ evaluations (``triforce eval-batch``: one group per batch, a row per evaluation;
     uv run training-gui.py --web-only               # no window: only the web view (no display needed)
 
 Beside the window it serves a read-only web view of the runs going on now at http://<host>:22222/ (``--web-port``,
-``--web-host``: default every interface; ``--no-web`` to go without): one card per run, newest first, a finished
-one for 60 s.  A second training-gui on the same port does not start: it says so and exits 1.
+``--web-host``: default every interface; ``--no-web`` to go without): one card per run, the running ones on top (the
+one that started last first), below them the ended ones (the one that ended last first; each for 60 s).  A second
+training-gui on the same port does not start: it says so and exits 1.
 
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
 [currently running] covers every live training and evaluation on this machine, whatever checkout or logs root it
@@ -24,9 +25,12 @@ once, plus an express place for a short one) is listed below the running ones as
 will start: shortest estimate first, older ones moving up as they wait.  Each shows its place in line, the jobs it
 waits for, its estimate and how long it
 has waited; a running job shows its estimate beside how long it has run, and 'express' when it took the express
-place.  The GUI only reads the registry, it controls nothing.  Below the live folders, under a 'finished' heading:
-the folders whose training ended while shown, and the registered jobs (any checkout) that ended in the last 24 hours
-(``RECENT_SECONDS``; a job whose process died without ending its plan, a waiting one too, shows as 'process gone').
+place.  The GUI only reads the registry, it controls nothing.  The running folders are on top, the one that began to
+run last first: a job that starts is added at the top and pushes the others down.  Then the waiting ones, in the
+order they will start.  Below the live folders, under a 'finished' heading: the folders whose training ended while
+shown, and the registered jobs (any checkout) that ended in the last 24 hours (``RECENT_SECONDS``; a job whose
+process died without ending its plan, a waiting one too, shows as 'process gone'), the one that ended last first:
+a folder that ends joins that list at its top, so nothing below the running folders ever changes places.
 'Clear finished' hides those, leaving the live ones, and trainings that start later still appear.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
@@ -1293,18 +1297,30 @@ def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('
     return state
 
 
+def run_start(log_dir: Path, plan: dict, jobs: list[dict]) -> float | None:
+    """When a plan began to run (Unix seconds): when it was admitted (its registry entry's stamp, else its plan's),
+    else when the plan was created."""
+    entry = job_entry(log_dir, jobs, 'running') or {}
+    return known(parse_time(entry.get('admitted')), parse_time((plan.get('queue') or {}).get('admitted')),
+                 parse_time(plan.get('created')))
+
+
+def plan_ended(plan: dict) -> float | None:
+    """When a plan ended (Unix seconds): its ``finished`` stamp, else (its process gone without one) its last
+    rewrite, else its creation."""
+    return known(parse_time(plan.get('finished')), parse_time(plan.get('updated')), parse_time(plan.get('created')))
+
+
 def run_facts(log_dir: Path, plan: dict, jobs: list[dict], now: float) -> dict:
     """A running plan's lane and timing: {'express': in the express lane (its registry entry's or its plan's
-    ``lane``), 'est': 'est ~40 min · ran 12m' (ran: since it was admitted, else since the plan was created), '' for
-    a plan that records no estimate}."""
+    ``lane``), 'est': 'est ~40 min · ran 12m' (ran: since ``run_start``), '' for a plan that records no estimate}."""
     entry = job_entry(log_dir, jobs, 'running') or {}
     recorded = plan.get('queue') or {}
     lane = entry.get('lane') or plan.get('lane') or recorded.get('lane')
     estimate = known(entry.get('estimate'), plan.get('estimate'), recorded.get('estimate'))
     est = ''
     if estimate is not None:
-        start = known(parse_time(entry.get('admitted')), parse_time(recorded.get('admitted')),
-                      parse_time(plan.get('created')))
+        start = run_start(log_dir, plan, jobs)
         est = f"est {fmt_estimate(estimate)}" + (f" · ran {fmt_coarse(now - start)}" if start is not None else '')
     return {'express': lane == 'express', 'est': est}
 
@@ -3200,19 +3216,24 @@ class Window(QMainWindow):
         self._sync_combo()
 
     def _finished(self) -> list[Path]:
-        """[currently running]'s finished folders, newest first: kept ones whose training ended and the registry's
-        recently ended jobs, minus what 'Clear finished' hid."""
+        """[currently running]'s finished folders, the one that ended last first (``plan_ended``; a folder that ends
+        joins at the top, the others keep their order): kept ones whose training ended and the registry's recently
+        ended jobs, minus what 'Clear finished' hid."""
         paths = {path for path in self.kept if path not in self.live_dirs} | set(self.recent)
         return sorted((path for path in paths if path not in self.live_dirs and path not in self.cleared),
-                      key=log_dir_key, reverse=True)
+                      key=lambda path: (plan_ended(self.scanner.plan(path)) or 0.0, log_dir_key(path)), reverse=True)
 
     def _show_live(self):
-        """[currently running]: the live folders, newest first, the queued ones (waiting their turn) last in the
-        order they will start (their place in line), then the 'finished' heading and the finished ones."""
-        live = sorted((path for path in self.kept if path in self.live_dirs), key=log_dir_key, reverse=True)
+        """[currently running]: the running folders, the one that began to run last on top (``run_start``: a job
+        that starts is added at the top and pushes the others down), the queued ones (waiting their turn) after them
+        in the order they will start (their place in line), then the 'finished' heading and the finished ones."""
+        live = [path for path in self.kept if path in self.live_dirs]
+        running = sorted((path for path in live if path not in self.queues), reverse=True,
+                         key=lambda path: (run_start(path, self.scanner.plan(path), self.jobs) or 0.0,
+                                           log_dir_key(path)))
         waiting = sorted((path for path in live if path in self.queues),
-                         key=lambda path: self.queues[path].get('place') or math.inf)
-        live = [path for path in live if path not in self.queues] + waiting
+                         key=lambda path: (self.queues[path].get('place') or math.inf, log_dir_key(path)))
+        live = running + waiting
         finished = self._finished()
         heading = len(live) if finished else None
         if live + finished != self._shown_dirs() or heading != self._heading_at or not self.views:
@@ -3584,8 +3605,10 @@ class MachineSampler:
 
 
 class WebState:
-    """What the page shows: the runs going on now, newest start first, each live plan's queue, and the jobs waiting
-    their turn in the job queue.
+    """What the page shows: the runs going on now on top, the one that started last first (a run that starts is added
+    at the top and pushes the others down), below them the runs that ended, the one that ended last first (a run that
+    ends joins them at their top, so below the running cards nothing changes places); each live plan's queue, the
+    plan that began to run last first; and the jobs waiting their turn in the job queue.
 
     Its folders are found as [currently running] finds them (the logs root, the job registry, the running triforce
     processes' roots), each read by its own ``Training``.  A card is a training run of a round, an evaluation of a
@@ -3641,18 +3664,18 @@ class WebState:
             if path in live or self._recent(self.scanner.plan(path), now):
                 self.models[path] = Training(path)
 
-    def _visible(self, key: str, active: bool, ended, now: float) -> tuple[bool, float | None]:
-        """(shown, seconds left on the page) of a card: active ones always, ended ones ``expire`` seconds after
-        ``ended`` (or after they were seen ended)."""
+    def _visible(self, key: str, active: bool, ended, now: float) -> tuple[bool, float | None, float | None]:
+        """(shown, seconds left on the page, when it ended) of a card: active ones always, ended ones ``expire``
+        seconds after ``ended`` (or after they were seen ended)."""
         if active:
             self.seen_active.add(key)
             self.ended.pop(key, None)
-            return True, None
+            return True, None, None
         if ended is None and key in self.seen_active:
             ended = self.ended.setdefault(key, now)
         if ended is None or now - ended >= self.expire:
-            return False, None
-        return True, self.expire - (now - ended)
+            return False, None, None
+        return True, self.expire - (now - ended), ended
 
     def _cards(self, model: Training, now: float) -> list[dict]:
         cards = []
@@ -3661,20 +3684,20 @@ class WebState:
             if status in ('pending', 'skipped'):
                 continue
             key = f"{model.dir}#{run.index}"
-            shown, left = self._visible(key, status in ACTIVE, run.finished_ts or model.finished_ts, now)
+            shown, left, ended = self._visible(key, status in ACTIVE, run.finished_ts or model.finished_ts, now)
             if shown:
                 started = run.started_ts or self.first_seen.setdefault(key, now)
-                cards.append({'id': key, 'started_ts': started, 'status': status, 'expires_in': left,
-                              **run_card(model, run, status, now)})
+                cards.append({'id': key, 'started_ts': started, 'ended_ts': ended, 'status': status,
+                              'expires_in': left, **run_card(model, run, status, now)})
         chain = model.chain()
         if chain is not None and chain['status'] not in ('pending', 'skipped'):
             key = f"{model.dir}#chain"
             ended = (chain['result'] or chain['error'] or {}).get('ts') or model.finished_ts
-            shown, left = self._visible(key, chain['status'] == 'running', ended, now)
+            shown, left, ended = self._visible(key, chain['status'] == 'running', ended, now)
             if shown:
                 started = (chain['start'] or {}).get('ts') or self.first_seen.setdefault(key, now)
-                cards.append({'id': key, 'started_ts': started, 'status': chain['status'], 'expires_in': left,
-                              **chain_card(model, chain, now)})
+                cards.append({'id': key, 'started_ts': started, 'ended_ts': ended, 'status': chain['status'],
+                              'expires_in': left, **chain_card(model, chain, now)})
         facts = self._facts(model, now)
         for card in cards:
             color, label = STATUS.get(card['status'], (C.muted, card['status']))
@@ -3701,7 +3724,8 @@ class WebState:
         return {'id': str(model.dir), **plan_fields(model), 'status': model.status(), 'status_label': label,
                 'color': color.name(), 'fraction': model.fraction(now), 'eta': fmt_duration(eta) if eta is not None
                 else '', 'meta': plan_meta(model, now), 'counts': plan_counts(model, statuses), 'queued': queued,
-                'created_ts': model.created_ts, **self._facts(model, now)}
+                'created_ts': model.created_ts, 'started_ts': run_start(model.dir, model.plan, self.jobs),
+                **self._facts(model, now)}
 
     def _waiting_line(self, model: Training, now: float) -> dict:
         """A queued plan's line: its place in line (the order they will start), name, kind, what it waits for, its
@@ -3737,8 +3761,10 @@ class WebState:
             elif not shown and not self._recent(model.plan, now):
                 del self.models[path]
                 self.dropped.add(path)
-        cards.sort(key=lambda card: (-card['started_ts'], card['id']))
-        plans.sort(key=lambda plan: (-(plan['created_ts'] or 0), plan['id']))
+        # Running cards first, newest start on top; then the ended ones, newest end on top.
+        cards.sort(key=lambda card: (not card['active'], -(card['started_ts'] if card['active'] else card['ended_ts']),
+                                     card['id']))
+        plans.sort(key=lambda plan: (-(plan['started_ts'] or 0), plan['id']))
         waiting.sort(key=lambda line: (line['place'] or math.inf, line['created_ts'] or 0, line['id']))
         snapshot = json_safe({'now': now, 'clock': fmt_clock(now), 'host': socket.gethostname(),
                               'machine': self.machine(), 'expire': self.expire, 'plans': plans, 'waiting': waiting,
