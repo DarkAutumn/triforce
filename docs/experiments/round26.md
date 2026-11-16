@@ -163,3 +163,28 @@ schema 6 with the round 25 models unconverted: **300 of 300 runs identical**, ev
 recorded action probabilities included), 67 of 300 to the D5 triforce in both. So on `d2first` the merged code and
 the converted team play exactly as the round 25 team did on the vocabulary's code, whose only difference from round
 25's is §4's doorway.
+
+## 6. A first trial of the stretch's states (chain 0, not installed)
+
+To hand the next tier commands that are known to run, the stretch's states were built once for chain 0 into a
+staging directory (nothing installed; the stretch still has no start states in `triforce/states`):
+
+- `python -m triforce.entry_states build --route d7 --start-step 208 --source 5_14s_0 --chains 0 --out DIR` wrote 25
+  states in 8 minutes, from `0_0bc_0` through the whirlwind (`0_45r_0`), both shops, the Armos, the pond and Dungeon
+  7's first eight rooms to `7_1aw_0`: the explorer (it restores savestates, so it is no measure of a model) clears
+  0x69, 0x49, 0x18 and 0x19. It failed at **7:0x1a from W** (the six Goriyas, then the push; 3 attempts, 207k env
+  steps).
+- With `--skip-fights 7:0x1a:W` (from step 237) it went on to `7_1bw_0` and failed at **7:0x1b from W** (six Blue
+  Goriyas; 192k env steps); with `--skip-fights 7:0x1b:W` (from step 240) it reached `7_2bw_0`, the triforce room:
+  0x1c (168k env steps, 6 minutes), 0x0c, 0x0d's five Wallmasters and the push, the tunnel, 0x29 and Aquamentus
+  were all explored. So two fights need skipping (their states marked `fight_skipped` until played states replace
+  them), not the five the plan feared.
+- The plain way of `dock-44`: `python -m triforce.entry_states path --source 0_55n_v2_0 --rooms
+  0:0x65,0:0x64,0:0x54,0:0x44 --route d7 --chain 0 --out DIR` (the staged states visible through
+  `$TRIFORCE_STATES_DIR`): 4 states in a minute.
+- A curriculum track: `python -m triforce.explore --specialist ow-leever --states 0_0bc_0 --out DIR` solved 0x0b in
+  22 s: 27 actions with two RECORDER plays, the whirlwind taken (`exit-correct`).
+- `entry_states audit --dir DIR --route d7` flagged one state, `0_45r_0`, `ENTRY`: at its first playable frame Link
+  is at X 0 facing E, still carried, which the audit read as a walk in from the W. Fixed (`entry_side`: side `r`
+  with the whirlwind in the room). The remaining directory problems are the expected ones: `MISSING` for chains 1
+  and 2, `ORPHAN` for every new room no family's `start_states` lists yet.
