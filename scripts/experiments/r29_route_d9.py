@@ -16,15 +16,13 @@ are live and the hearts real.
 import argparse
 import collections
 
-from r26_walks import BOMBS, CUR_OPENED_DOORS, KEYS, OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, RUPEES, SWORD_BLOCKED
-from r27_walks import LINK_PARALYZED, OBJ_INVINC, TMP, Tally, hearts_bytes, load, name, summary
+from r26_walks import BOMBS, CUR_OPENED_DOORS, KEYS, OBJ_STATE, OBJ_X, OBJ_Y, PLAY, RUPEES
+from r27_walks import LINK_PARALYZED, TMP, Tally, hearts_bytes, load, name, summary
 from r29_route_walks import (CELLAR, INV_ARROW, INV_RING, INV_TRIFORCE, Stager, counting, guard_class,
                               precise_hearts, route_states)
 
 BOMB_SLOT, ARROW_SLOT = 1, 2                  # SelectedItemSlot values
 DOOR_BIT = {'RIGHT': 1, 'LEFT': 2, 'DOWN': 4, 'UP': 8}
-UW_FLAGS = 0x77F                              # asm:WorldFlags, levels 7-9
-LEVEL_KILLS = 0x34E                           # asm:RoomKillCount is elsewhere; see `history`
 
 
 def states(ring=True):

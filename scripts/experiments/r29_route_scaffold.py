@@ -1,7 +1,8 @@
 """A throwaway data root for playing today's models on the leg from Dungeon 8 to Dungeon 9 and on the crossed rooms
 of Dungeon 9 before round 29 builds the route (docs/routes/d9-walks.md): a copy of the checkout's data with a
-scouting route `d9walk` (the draft's steps from Dungeon 8's exit to Ganon's door, appended to `d6`; Dungeon 8 itself
-is not in it), the rooms tagged with the families that would take them, the families' yamls pointed at entry states
+scouting route `d9walk` (the draft's steps from Dungeon 8's exit to Ganon's door, appended to `d6`; of Dungeon 8
+only the piece's room is in it, so that the route's progress holds eight pieces: a step is matched by exactly what
+Link holds, and without it every room is off the route), the rooms tagged with the families that would take them, the families' yamls pointed at entry states
 made by the walks' staging (`r29_route_walks.route_states`: 15 hearts, the magic sword, the route's keys, bombs and
 doors, the red ring after cellar 0x00; `ram_randomization: {}`).  Nothing in the checkout changes.
 
@@ -31,6 +32,7 @@ from r29_route_walks import route_states
 
 # (level, room, in_cave, entry, exit, family key, the staged state that enters it (None: not played), extra step keys)
 STEPS = [
+    (8, 0x2C, False, 'S', 'triforce', 'stalfos-keese-gel', None, {}),   # Dungeon 8's piece: the route's progress
     (0, 0x6D, False, 'cave', 'recorder', 'ow-moblin', '0_6dc', {'bomb_reserve': 8}),   # bombs for the walls only
     (0, 0x37, False, 'recorder', 'E', 'ow-octorok', '0_37r', {}),
     (0, 0x38, False, 'W', 'S', 'ow-zora', '0_38w', {}),
