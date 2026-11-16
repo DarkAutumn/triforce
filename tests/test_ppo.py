@@ -217,6 +217,31 @@ def test_demo_regularization_pulls_policy_toward_demo():
     assert stats['charts/demo_bc_accuracy'] == pytest.approx(1.0)
 
 
+def test_demo_rows_with_any_duration_leave_the_duration_head_alone():
+    """A demo duration of -1 (``demos.ANY_DURATION``) clones kind and direction; the duration head gets no gradient
+    from those rows, and any predicted duration matches them."""
+    _seed()
+    network = ZeldaPolicy(synthetic.observation_space(), SMALL)
+    obs, masks, targets = _demo_batch()
+    out = network.evaluate(obs, masks, targets)
+    assert torch.allclose(out.log_prob, sum(out.head_log_prob.values()))
+    free = targets.clone()
+    free[:, 2] = -1
+    durations = network.duration_head.weight.detach().clone()
+    ppo = PPO(PPOConfig(learning_rate=1e-3, num_epochs=4, target_kl=None, demo_bc_coeff=1.0, vf_coeff=0.0,
+                        ent_coeff=0.0), demo_batch=(obs, masks, free))
+    buffer = _filled_buffer(network)
+    buffer.advantages.zero_()                  # no policy-gradient term: the demos alone move the weights
+    for _ in range(3):
+        stats = ppo.optimize(network, buffer)
+    assert stats['charts/demo_bc_accuracy'] == pytest.approx(1.0)
+    assert torch.equal(network.duration_head.weight, durations)
+    other = targets.clone()
+    other[:, 2] = (other[:, 2] + 1) % 4
+    assert compute_demo_accuracy(other, free) == 1.0
+    assert compute_demo_accuracy(other, targets) < 1.0
+
+
 class _ReversedEvents:
     """A pool whose ``poll_events`` returns the envs' episodes in another order (another thread finished first)."""
 

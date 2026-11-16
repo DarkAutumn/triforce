@@ -661,11 +661,17 @@ penalties alike; the terminal terms (`reward-terminal-success`, already health-s
 `triforce.train --shaping-anneal N` (`PPOConfig.shaping_anneal`) lowers it linearly to 0 over the first N iterations
 (iteration k rolls out at start × max(0, 1 − (k−1)/N)) and reports it as `charts/shaping_scale` (better-play §1a
 outcome fine-tuning: after normal training, the policy optimizes the true outcome).
-`triforce.train --ent-anneal SHARE` (`PPOConfig.ent_anneal`) lowers the entropy bonus linearly to 0 over the last
+`triforce.train --ent-coeff C` sets the entropy bonus (`PPOConfig.ent_coeff`, default 0.01); `--ent-anneal SHARE`
+(`PPOConfig.ent_anneal`) lowers it linearly to 0 over the last
 SHARE of a run's iterations (`charts/ent_coeff`; §6b). `--best-of-n RUNS` (`best_of_n.collect_best`; §3) replaces the
 demo-regularization batch, at the start and every `--best-every` iterations, with the current policy's best
 `--best-keep` successful runs per seed start state out of RUNS (ranked by success, hearts lost, frames; played on a
 separate `EvalTask` pool), weighted `--best-coeff`; a batch larger than a minibatch is sampled per minibatch.
+`--demos FILE... [--demo-coeff C]` (`triforce/demos.py`; not with best-of-N) fills the same term for the whole run
+with demonstration rows a scripted rule recorded through the env (`DemoRecorder`: observation, action mask, action;
+`.npz`; a rare decision can be written several times to weigh more). A row whose duration is `demos.ANY_DURATION`
+(-1) leaves the duration head's term out (`ppo.demo_log_prob`, `PolicyOutput.head_log_prob`): kind and direction are
+cloned, the pace stays the policy's. Round 25 §5: `scripts/experiments/r25_d5_37_tracks.py --demos` for 5:0x37.
 `--sil-coeff C` (`PPOConfig.sil_coeff`, self-imitation learning, Oh et al. 2018; §3) is the alternative to best-of-N:
 after each rollout `ppo.SilReplay` keeps the rows whose λ = 1 return R (`RolloutBuffer.monte_carlo_returns`:
 frame-aware discount to the episode end, bootstrapped exactly like GAE, against the learner's recomputed values)
