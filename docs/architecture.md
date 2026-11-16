@@ -246,6 +246,45 @@ MOVE ends.
   objective and the masks, each step's rule asserted; beside it the plain way of `woods`, the cave's refusal, a
   gravestone never pressed, the three doorways.
 
+### The leg to Dungeon 8 and Dungeon 8 (round 28; `docs/routes/d8.md` §15, scouting route `d8`)
+
+The same rule again: no macros. The whirlwind, the tree and the walls are played by RECORDER, CANDLE and BOMB; what
+is new lives in the objective (targets), in the mask, and in which bomb mode a step plays under.
+
+- **Route** (routes.yaml): `d8` = `{extends: d6}` plus steps 281-296, one way (no stretch). A step may carry
+  `bombs: never|tenth|required|free` (`game_map::STEP_BOMBS`, `RouteStep::bombs`): its own bomb mode, see below.
+- **The burned tree** (`game_map::Secret::Burn(tile)`, game.yaml `entrance: {how: burn, tile}` in a room with a
+  `cave` exit: 0:0x6d). `GameCompletion::cave_tiles`: the stairs once they show, before that the three tiles E and
+  the three W of the tree on its row. `GameView::secret_burn` is the tree while it stands (no stairs tile in the
+  room); `GameView::burn_facings` the facing a fire made where Link stands would burn it from (W from the tree's X
+  + `$18`..`$2F`, E from − `$28`..− `$11`, within 8 pixels of its row; walked, `d8-walks.md` §1.3);
+  `GameView::link_fire_burning` whether a fire of his is out (slots `$10`/`$11`, state `$2x`). The room flag keeps
+  the stairs; nothing here remembers them.
+- **Masks** (`Session::compute_mask`; the env sets them every step in `update_disabled_kinds`, training and chains).
+  `set_candle_facings(GameCompletion::candle_facings(state))`: on the overworld `burn_facings` while the objective
+  heads for the stairs (`ObjectiveKind::Cave`) and no fire of Link's burns, else nothing; in a dungeon None (the
+  family's `items.candle` alone). The bomb mode in force is `ItemsConfig::on_step(GameCompletion::step_bombs(state))`:
+  the step's `bombs:` while Link is in the step's room, else the family's; `disabled_kinds` and `bomb_targets` read
+  that (8:0x6e: boss-manhandla, `free`, plays the room under `required`: BOMB only in reach of the N wall).
+  RECORDER at 0x22, ARROW in 8:0x4c and the two `keep_out` key doors (8:0x5e E, 8:0x4e W) are the rules of rounds
+  26 and 27 with new data.
+- **`stuck` under a hold** (`env::end_conditions::EndCondition::Timeout`, single-room episodes): a decision made or
+  ended while a Like-Like holds Link (`GameView::link_held`: `IsLinkParalyzed` `$512`) neither counts toward the 50
+  decisions in one place nor starts the count anew. `ChainEnv` has no position limit (a chain room ends by its step
+  count or its family's no-progress limit; the stall budget is the player's), so chains are untouched.
+- **Data** (game.yaml): level 8's ten rooms tagged; `requires_bombs` on 8:0x6e and 8:0x4c; `keep_out` on 8:0x5e E
+  and 8:0x4e W; the note on 0:0x5d's S exit corrected (both openings reach the tree; the `span` stays the right
+  one). Reserves (routes.yaml): bombs 1 from 0:0x22, 2 from 8:0x5e, 1 from 8:0x3c; rupees 8 from 8:0x4c.
+- **Families**: no new one. darknut +8:0x5e, 0x4e, 0x3e, 0x3f; boss-manhandla +8:0x6e; pols-voice +8:0x4c with
+  `items: {bombs: required, arrows: true}`; boss-gleeok +8:0x3c; stalfos-keese-gel +8:0x7e, 0x2c; equipment-room
+  +8:0x2f; ow-lynel `recorder: true`; ow-moblin `candle: true`. None of the stretch's rooms has start states yet.
+- **Walked** (`crates/zelda/tests/d8.rs`): from the D6 triforce (staged by walking round 27's steps from
+  `7_2bw_0`) to the D8 triforce by the objective and the masks, each step's rule asserted, Gleeok's heads cut by
+  the walk's own swings; beside it CANDLE at both trees, 0x3f at 5 and 4 bombs, the two key doors, 0x6e's BOMB mask,
+  0x4c's ARROW at the rupee reserve.
+- **Demonstrations** (`scripts/experiments/r28_demos.py`): the walks' scripts as rules over env actions, with a
+  scaffold of staged states under `d8` until the stretch has its own (`docs/experiments/round28.md` §5).
+
 ### Randomness at a start (`crates/zelda/src/rng.rs`, `room_entry.rs`; round 22)
 
 The game's only random source is the 13-byte shift register `$18-$24` (`zelda-asm/mechanics.md` "# Random

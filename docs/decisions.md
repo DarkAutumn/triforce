@@ -2655,7 +2655,7 @@ names what changes if he says otherwise.
    Like-Like cannot move. Decisions made or ended while he is held (`IsLinkParalyzed` `$512`) no longer count toward
    the 50; the count neither grows nor starts anew, and `max-steps` still ends a hold that never does. The rule lives
    in the single-room env (`env::end_conditions`, the `Timeout` condition); a chain run has no such limit (it ends a
-   room by its step count or by actions without damage either way), so chains play as before.
+   room by its step count or its family's no-progress limit), so chains play as before.
 8. **Demonstrations.** The walks' winning scripts are rules over the env's own actions in
    `scripts/experiments/r28_demos.py` (one rule a room: the whirlwind, the tree, 0x5e, 0x3e, 0x4c, Gleeok), each with
    the share of runs it wins through the env from staged states (`docs/experiments/round28.md` §5). They are for

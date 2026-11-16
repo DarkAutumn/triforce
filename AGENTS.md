@@ -6,6 +6,23 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 17)
 
+- **Round 28, begun (Nov 17, 1.5.1.0; `docs/experiments/round28.md`):** the leg from Dungeon 6 and Dungeon 8, on
+  round 27's branch (Dungeons 6, 8 and 9 are prepared side by side). Built so far, nothing trained: (1) **the
+  walks** (`docs/routes/d8-walks.md`: today's models cannot play the whirlwind out of 0x22, the tree of 0x6d, the
+  Blue Darknut rooms 8:0x5e and 0x3e, 8:0x4c or the four-headed Gleeok; a script wins each); (2) **the route
+  vocabulary** (`docs/routes/d8.md` §15, `docs/architecture.md` "The leg to Dungeon 8 and Dungeon 8"): the scouting
+  route `d8` = `d6` plus steps 281-296 (one way, no stretch), 0x6d's tree as a burned secret (game.yaml `entrance:
+  {how: burn}`: the stand tiles of its row are the target, **CANDLE is offered on the overworld only where a fire
+  burns the route's tree**), a route step's own bomb mode (`bombs: required` on 8:0x6e: boss-manhandla's room,
+  crossed by the BOMB mask of `required`), `keep_out` on 8:0x5e E and 8:0x4e W, pols-voice with `bombs: required`
+  and `arrows: true`, 0x3f's bombs at 4 or fewer (`treasure: {if_bombs_below: 5}`), **decisions made while a
+  Like-Like holds Link no longer count toward `stuck`** (single-room episodes), the scripted walk
+  `crates/zelda/tests/d8.rs` to the D8 triforce, the walks' scripts as rules over env actions
+  (`scripts/experiments/r28_demos.py`, for `train --demos`), and 300 paired full-route `d2first` runs (round28.md
+  §4). The lead's working answers are in `docs/decisions.md` 2026-11-17 ("Round 28's working answers"), the owner's
+  to overrule. **The main risk** (round28.md §3): the best plays seen leave about four hearts after Gleeok, and
+  Dungeon 8's piece is the last refill of the game. Not built yet: the stretch's start states (round28.md §6 names
+  them), curricula, training, chains.
 - **Round 27, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round27.md`):** the magic sword and Dungeon 6. Built so
   far, nothing trained: (1) **the walks** (`docs/routes/d6-walks.md`: the leg, the gravestone and the cave, every
   room of level 6, Wizzrobes and Gohma measured; today's models cannot play 0x28, 0x38, 0x3a, Gohma, or ow-lynel's
