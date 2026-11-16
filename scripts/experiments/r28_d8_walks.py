@@ -17,11 +17,11 @@ import argparse
 import collections
 import statistics
 
-from r28_walks import (ALL_DEAD, BOMBS, BUBBLE, CELLAR, CUR_OPENED_DOORS, D8_ROUTE, DARKNUT_BLUE, DARKNUT_RED,
-                       FIREBALL_STATUE, GIBDO, HEARTS, KEYS, LEVEL_KILL_COUNTS, OBJ_DIR, OBJ_META, OBJ_STATE,
-                       OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, ROOM_HISTORY, ROOM_KILL_COUNT, ROOM_OBJ_COUNT, RUPEES,
-                       SWORD_BLOCKED, TRIFORCE, UW_FLAGS_7TO9, Dodger, StagingWalk, Tally28, alive,
-                       d8_cellar_states, d8_state, hop, kill_all, load, name, stage_d8, summary)
+from r28_walks import (ALL_DEAD, BOMBS, CELLAR, CUR_OPENED_DOORS, D8_ROUTE, DARKNUT_BLUE, DARKNUT_RED,
+                       FIREBALL_STATUE, GIBDO, HEARTS, KEYS, LEVEL_KILL_COUNTS, OBJ_DIR, OBJ_META, OBJ_TYPE, PLAY,
+                       ROOM_HISTORY, ROOM_KILL_COUNT, ROOM_OBJ_COUNT, SWORD_BLOCKED, TRIFORCE, UW_FLAGS_7TO9,
+                       Dodger, StagingWalk, Tally28, alive, d8_cellar_states, d8_state, hop, kill_all, load, name,
+                       stage_d8, summary)
 
 DOOR_BITS = {'N': 8, 'S': 4, 'W': 2, 'E': 1}
 

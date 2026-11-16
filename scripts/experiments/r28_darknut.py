@@ -272,10 +272,10 @@ class Fighter:
         or under `leave_at` ('low')."""
         w = self.w
         for _ in range(limit):
-            if w.mode != PLAY:
-                return 'left'
             if w.hearts() <= 0:
                 return 'dead'
+            if w.mode != PLAY:
+                return 'left'
             if not [o for o in w.objects() if o[1] in self.TARGETS]:
                 return 'clear'
             if self.through is not None and (w.x, w.y) == tuple(self.through):
@@ -323,10 +323,11 @@ def fight_room(room, seed, hearts=None, limit=9000):
 def clear(args):
     for room in (0x5E, 0x3E):
         for hearts in (None, 8.0):
-            rows, ends, swings, keys, fought = [], collections.Counter(), [], collections.Counter(), []
+            rows, ends, swings, keys, fought, net = [], collections.Counter(), [], collections.Counter(), [], []
             for seed in range(args.seeds):
                 r = fight_room(room, seed, hearts)
                 rows.append((r['ok'], r['lost'], r['frames'], r['by']))
+                net.append((hearts or 13.0) - r['hearts'])
                 ends[r['end']] += 1
                 swings.append(r['swings'])
                 keys[f'{r["keys"][0]} -> {r["keys"][1]}'] += 1
@@ -335,7 +336,8 @@ def clear(args):
             print(f'8:0x{room:02x} scripted fight from {hearts or 13.0} hearts: {summary(rows)}; fights ended '
                   f'{dict(ends)}; frames to the last kill (median, wins) '
                   f'{int(statistics.median(fought)) if fought else None}; swings mean {statistics.mean(swings):.1f}; '
-                  f'keys {dict(keys)}')
+                  f'keys {dict(keys)}; hearts down on leaving (losses less the drops taken) mean '
+                  f'{statistics.mean(net):.2f}')
 
 
 def parts(args):

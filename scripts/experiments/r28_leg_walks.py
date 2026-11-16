@@ -12,9 +12,9 @@ import argparse
 import collections
 import statistics
 
-from r28_walks import (CANDLE_SLOT, FIRE, HEARTS, LegWalk, OBJ_DIR, OBJ_STATE, OBJ_TIMER, OBJ_TYPE, OBJ_X, OBJ_Y,
-                       OW_FLAGS, PLAY, RECORDER_SLOT, SECOND_PLAY, STAIRS_TILES, TELEPORT_INDEX, TMP, TREE_TILE,
-                       TRIFORCE, WHIRLWIND, WHIRLWIND_SUMMONED, Tally28, leg_states, load, name, ride, summary)
+from r28_walks import (CANDLE_SLOT, LegWalk, OBJ_DIR, OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, OW_FLAGS, PLAY,
+                       RECORDER_SLOT, SECOND_PLAY, STAIRS_TILES, TELEPORT_INDEX, TMP, TREE_TILE, TRIFORCE,
+                       WHIRLWIND_SUMMONED, Tally28, leg_states, load, name, ride, summary)
 
 DIRS = {'RIGHT': 1, 'LEFT': 2, 'DOWN': 4, 'UP': 8}
 

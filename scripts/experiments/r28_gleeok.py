@@ -14,7 +14,7 @@ import collections
 import statistics
 
 from r28_walks import (ALL_DEAD, CUR_OPENED_DOORS, FIREBALL_BOSS, FLYING_HEAD, GLEEOK4, HEARTS, OBJ_DIR, OBJ_HP,
-                       OBJ_INVINC, OBJ_META, OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, ROOM_KILL_COUNT, TRIFORCE,
+                       OBJ_INVINC, OBJ_META, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, ROOM_KILL_COUNT, TRIFORCE,
                        UW_FLAGS_7TO9, LEVEL_KILL_COUNTS, Dodger, Tally28, d8_state, hearts_bytes, load, name, summary)
 
 NECK_X, NECK_Y = (0x438, 0x452, 0x46C, 0x395), (0x445, 0x45F, 0x479, 0x3BD)
@@ -315,10 +315,10 @@ class GleeokFighter:
     def fight(self, limit=12000):
         w = self.w
         for _ in range(limit):
-            if w.mode != PLAY:
-                return 'left'
             if w.hearts() <= 0:
                 return 'dead'
+            if w.mode != PLAY:
+                return 'left'
             if not heads(w):
                 return 'killed'
             self.frame()
@@ -326,12 +326,13 @@ class GleeokFighter:
 
 
 def kill(args):
-    rows, ends, swings, fights, got = [], collections.Counter(), [], [], collections.Counter()
+    rows, ends, swings, fights, got, left_after = [], collections.Counter(), [], [], collections.Counter(), []
     for seed in range(args.seeds):
         w = enter(seed, args.hearts)
         f = GleeokFighter(w, args.row)
         end = f.fight()
         fought, lost_fight = f.t.frames, f.t.lost()
+        left_after.append(w.hearts())
         ok = False
         if end == 'killed':
             containers = w.max_hearts()
@@ -357,7 +358,8 @@ def kill(args):
         ends[end] += 1
         swings.append(f.swings)
     print(f'8:0x3c scripted fight from {args.hearts or 13.0} hearts, standing row ${args.row:02X}: {summary(rows)}; '
-          f'fights ended {dict(ends)}; swings mean {statistics.mean(swings):.1f}')
+          f'fights ended {dict(ends)}; swings mean {statistics.mean(swings):.1f}; hearts when the fight ended mean '
+          f'{statistics.mean(left_after):.2f}')
     if fights:
         print(f'   wins: frames to the kill median {int(statistics.median(f[0] for f in fights))}, hearts lost in '
               f'the fight mean {statistics.mean(f[1] for f in fights):.2f}; {dict(got)}')

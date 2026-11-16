@@ -356,7 +356,8 @@ def hop(w: Walk, room: int, entry: str, clear: bool = True):
     `room` (the level's room history, kill counts and flags are the game's own).  With `clear` the monsters of the
     room on screen are emptied on the way out (they would knock him off the door spot).  Returns the pre-entry
     snapshot."""
-    from triforce.probe import BUTTON, DELTA, DOOR_SHIFT, DOOR_SPOT, OPPOSITE   # pylint: disable=import-outside-toplevel
+    from triforce.probe import (BUTTON, DELTA, DOOR_SHIFT, DOOR_SPOT,     # pylint: disable=import-outside-toplevel
+                                OPPOSITE)
     game, leave, level = w.game, OPPOSITE[entry], w.level
     source = room + DELTA[entry]
     address, shift = DOOR_SHIFT[leave]
@@ -439,7 +440,7 @@ SHOTS = (FIREBALL_STATUE, FIREBALL_BOSS, 0x53, 0x5B, 0x57, 0x58, 0x59)
 
 class Dodger:
     """Walks a Tally's Link toward a point a frame at a time and steps aside from what would touch him: every
-    object's position is carried forward `horizon` frames along its last frame's motion, each of Link's moves (the
+    object's position is carried forward `horizon` frames along its last frames' motion, each of Link's moves (the
     four directions the mask allows, or none) along his 1.5 px a frame, and the move with the fewest predicted
     overlaps wins, ties by the distance left.  It reads positions only (no look-ahead in the emulator): what a
     player sees.  `harmless` object types are ignored."""
@@ -453,8 +454,8 @@ class Dodger:
 
     def threats(self):
         """[(x, y, vx, vy, radius)] of what can hurt: the motion is the mean of the last frames seen (up to 6); a
-        shot that has not moved yet (a fireball waits 15 frames) is taken to fly at 1.5 px a frame toward where
-        Link stood when it appeared (they are aimed once)."""
+        shot that has not moved yet (a boss fireball waits 18 frames) is taken to fly at 1.5 px a frame toward
+        where Link stood when it appeared (they are aimed once)."""
         out, now = [], {}
         for s, t, x, y, _state, meta, _hp in self.w.objects():
             old = self.prev.get(s)
