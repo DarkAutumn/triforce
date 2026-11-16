@@ -2433,6 +2433,13 @@ as built: `docs/architecture.md` "Observation".
 - **What a model meets now.** A converted model reads exactly its schema 5 inputs; the new columns carry values from
   the first step but weigh nothing until a family trains on (a continuation from the converted run, as each round
   extends a family). Training on them changes those models' behaviour: a REV bump and a re-measure, not this break.
+- **Outside this break: the opened bomb holes (branch `r26-steps`, a2c8f4f).** `Room::with_open_doorways` makes an
+  opened N or W bomb hole a doorway of the room view, so after a bomb the `target` block and the PBRS change in
+  4:0x21 N, 4:0x11 N, 5:0x25 N and 7:0x69 N: an input-meaning change in those rooms, which this proof (run without
+  it) does not cover. Measured by its builder on `d2first` (300 runs, the models' act modes): the round 25 models
+  play it the same (172 of 177 differing runs differ only in action probabilities, with identical moves; arrivals
+  at D4 160 against 160, at D5 68 against 67). Counted as a behaviour change of the merge (REV, re-measure), not a
+  COMPAT break.
 - **Walked, and still to walk.** The probes of the build (Wizzrobes, Ganon's death, the ringleader, the Bubble's
   block, Patra's children, Lanmola's waiting segments, the Wallmaster lure one pixel off the wall) confirmed every
   row they reached (`docs/observation-next.md` §9); Gohma's eye with real arrows, Ganon's phases with real hits,
