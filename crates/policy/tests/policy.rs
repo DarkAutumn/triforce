@@ -52,6 +52,11 @@ fn weights(seed: u64) -> HashMap<String, Tensor> {
 
 /// [`weights`] for `kinds` action kinds and a `link` vector of `link` values.
 fn weights_for(seed: u64, kinds: usize, link: usize) -> HashMap<String, Tensor> {
+    weights_with(seed, kinds, link, FEATURES)
+}
+
+/// [`weights_for`] with `features` entity features per slot.
+fn weights_with(seed: u64, kinds: usize, link: usize, features: usize) -> HashMap<String, Tensor> {
     let mut w = HashMap::new();
     let mut add = |name: &str, shape: &[usize]| {
         let n: usize = shape.iter().product();
@@ -67,7 +72,7 @@ fn weights_for(seed: u64, kinds: usize, link: usize) -> HashMap<String, Tensor> 
     };
     add("room_embedding.weight", &[10, 4]);
     add("entity_encoder.type_embedding.weight", &[7, 4]);
-    add("entity_encoder.input_proj.weight", &[8, FEATURES + 4]);
+    add("entity_encoder.input_proj.weight", &[8, features + 4]);
     add("entity_encoder.input_proj.bias", &[8]);
     let l = "entity_encoder.transformer.layers.0";
     add(&format!("{l}.self_attn.in_proj_weight"), &[24, 8]);
@@ -463,6 +468,69 @@ fn zero_input_columns_change_no_bit() {
             let a = narrow.evaluate(&input(&o, &vn), pick, &mut narrow.scratch()).unwrap();
             let b = wide.evaluate(&input(&o, &vw), pick, &mut wide.scratch()).unwrap();
             assert_eq!(bits(&a), bits(&b), "seed {seed} {pick:?}");
+        }
+    }
+}
+
+/// Entity features added with zero `input_proj` columns (schema 6, `triforce convert-model`) are dropped as the
+/// towers' columns are (`Policy::entity_live`): the widened model computes bit for bit what the narrow one does,
+/// whatever the new columns hold, for 1, 3 or 8 features added after a slot's features (before the type embedding,
+/// where the converter puts them) or among them. Without the drop the later columns sum in other lanes of
+/// `kernels::dot` and the last bits move (round 26: one added column changed 224 of 240 decisions of goriya).
+#[test]
+fn zero_entity_columns_change_no_bit() {
+    let narrow = policy();
+    assert_eq!(narrow.dropped_inputs(), [0, 0], "a model without zero columns drops none");
+    let source = weights(1);
+    let old = &source["entity_encoder.input_proj.weight"].data;
+    for (k, at) in [(1, FEATURES), (3, FEATURES), (8, FEATURES), (1, 2), (3, 1)] {
+        let features = FEATURES + k;
+        let (n_old, n_new) = (FEATURES + 4, features + 4);
+        let mut w = weights_with(1, KINDS, 3, features);
+        let proj = w.get_mut("entity_encoder.input_proj.weight").unwrap();
+        for (r, row) in proj.data.chunks_exact_mut(n_new).enumerate() {
+            let src = &old[r * n_old..(r + 1) * n_old];
+            row[..at].copy_from_slice(&src[..at]);
+            row[at..at + k].fill(0.0);
+            row[at + k..].copy_from_slice(&src[at..]);
+        }
+        let shape = |n: usize| format!(r#""shape": [{SLOTS}, {n}]"#);
+        let config = config_json(&[(&shape(FEATURES), &shape(features))]);
+        let wide = Policy::new(ModelConfig::from_json(&config).unwrap(), w).unwrap();
+        assert_eq!(wide.dropped_inputs(), [0, k], "{k} at {at}");
+        for seed in 0..20 {
+            let o = obs(seed);
+            let new = |i: usize| {
+                ((policy::noise::mix(seed * 7919 + i as u64) >> 40) as f32 / (1u64 << 24) as f32) * 2.0 - 1.0
+            };
+            let mut wide_features = Vec::with_capacity(SLOTS * features);
+            for (slot, row) in o.features.chunks_exact(FEATURES).enumerate() {
+                wide_features.extend_from_slice(&row[..at]);
+                wide_features.extend((0..k).map(|j| new(slot * 16 + j)));
+                wide_features.extend_from_slice(&row[at..]);
+            }
+            let ow = Obs {
+                types: o.types.clone(),
+                features: wide_features,
+                grid: o.grid.clone(),
+                history: o.history.clone(),
+                link: o.link.clone(),
+                mask: o.mask.clone(),
+            };
+            let v = [&o.history[..], &o.link[..]];
+            let mut noise = vec![0f32; narrow.noise_size()];
+            keyed_noise(seed as i64, 2, &mut noise);
+            for pick in [Pick::Argmax, Pick::Sample(&noise)] {
+                let a = narrow.evaluate(&input(&o, &v), pick, &mut narrow.scratch()).unwrap();
+                let b = wide.evaluate(&input(&ow, &v), pick, &mut wide.scratch()).unwrap();
+                assert_eq!(bits(&a), bits(&b), "{k} at {at}, seed {seed} {pick:?}");
+            }
+            let (mut ja, mut jb) = (vec![0f32; narrow.joint_size()], vec![0f32; wide.joint_size()]);
+            let va = narrow.joint_log_probs(&input(&o, &v), &mut narrow.scratch(), &mut ja).unwrap();
+            let vb = wide.joint_log_probs(&input(&ow, &v), &mut wide.scratch(), &mut jb).unwrap();
+            assert_eq!(va.to_bits(), vb.to_bits(), "{k} at {at}, seed {seed}: value");
+            let joint_bits = |j: &[f32]| j.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+            assert_eq!(joint_bits(&ja), joint_bits(&jb), "{k} at {at}, seed {seed}: joint log-probs");
         }
     }
 }

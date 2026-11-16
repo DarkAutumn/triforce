@@ -36,7 +36,9 @@ The learner recomputes `logp_old` and values with its own torch network over the
    - First-layer input columns that no weight of either tower reads (all zero: the inputs `triforce convert-model`
      and `model.widen_policy` add) are dropped when the policy is built (`Policy::live`): a zero column changes no
      output, but it would move the later columns into other lanes of the fixed-order dot product, so a widened model
-     computes bit for bit what its source did (round 24).
+     computes bit for bit what its source did (round 24). The entity encoder's `input_proj` drops its all-zero token
+     columns the same way (`Policy::entity_live`, round 26: the entity features schema 6 added);
+     `Policy::dropped_inputs` counts both.
    - Heads exactly as `model.py`: masked log-softmax (`MASKED_LOGIT`), the forced-kind rule, heads that don't
      apply contribute 0, Gumbel-argmax sampling with noise keyed by (job, decision step) (`keyed_noise`, ported),
      argmax for deterministic play. The plain draw's noise columns are the first eight kinds' (`LEAD_KINDS`), then
