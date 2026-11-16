@@ -254,7 +254,7 @@ mod _native {
     #[pymodule_export]
     use crate::explore::{PyAcceptSpec, PyExploreResult, PyExplorer, explore_states};
     #[pymodule_export]
-    use crate::game::{PyChange, PyGame, PyGameState, PySnapshot, power_on_idle_states, power_on_name};
+    use crate::game::{PyChange, PyGame, PyGameState, PySnapshot, observe, power_on_idle_states, power_on_name};
     #[pymodule_export]
     use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};
     #[pymodule_export]

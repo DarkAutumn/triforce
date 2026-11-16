@@ -84,7 +84,11 @@
   "is_start_room",
   "is_boss_room",
   "is_triforce_room",
-  "maze_step"
+  "maze_step",
+  "frame_phase_32",
+  "frame_phase_64",
+  "wallmaster_cooldown",
+  "wallmaster_lure"
  ],
  "LINK_FEATURES": [
   "x",
@@ -173,7 +177,13 @@
   "clip_usable_E",
   "recorder_usable",
   "food_usable",
-  "candle_usable"
+  "candle_usable",
+  "sword_blocked",
+  "sword_blocked_time",
+  "arrow_usable",
+  "rupee_reserve",
+  "rupees_spare",
+  "rupees_few"
  ],
  "ENTITY_FEATURES": [
   "presence",
@@ -208,7 +218,15 @@
   "immune_arrow",
   "immune_bomb",
   "immune_rod",
-  "immune_fire"
+  "immune_fire",
+  "touch_harms",
+  "weapon_target",
+  "touch_damage",
+  "visible",
+  "phase",
+  "phase_time",
+  "in_line",
+  "ringleader"
  ],
  "HISTORY_FEATURES": [
   "has_last_action",
@@ -284,7 +302,7 @@
   "entity_features": {
    "shape": [
     12,
-    33
+    41
    ],
    "dtype": "float32",
    "low": -1.0,
@@ -317,7 +335,7 @@
   },
   "link": {
    "shape": [
-    87
+    93
    ],
    "dtype": "float32",
    "low": -1.0,
@@ -341,7 +359,7 @@
   },
   "room_state": {
    "shape": [
-    85
+    89
    ],
    "dtype": "float32",
    "low": 0.0,

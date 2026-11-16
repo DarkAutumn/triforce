@@ -674,6 +674,27 @@ pub fn power_on_idle_states(py: Python<'_>) -> PyResult<Vec<(String, Bound<'_, P
     Ok(states)
 }
 
+/// One observation of `state` from a fresh `ObservationBuilder` (no objective, target, mask or previous action, so
+/// the `*_usable` bits and velocities are 0; `rupee_reserve` the route's): what the observation's features read in a
+/// state a probe built (`triforce.probe`, `scripts/experiments/r26_obs_probes.py`, tests).
+#[pyfunction]
+#[pyo3(signature = (state, rupee_reserve=0))]
+pub fn observe<'py>(py: Python<'py>, state: &PyGameState, rupee_reserve: u8) -> PyResult<Bound<'py, PyDict>> {
+    let mut builder = env::observation::ObservationBuilder::new(false, false);
+    builder.rupee_reserve = rupee_reserve;
+    let objective = zelda::objectives::Objective {
+        kind: zelda::objectives::ObjectiveKind::None,
+        targets: Default::default(),
+        next_rooms: Default::default(),
+        pbrs_targets: Default::default(),
+        retreats: Default::default(),
+        clips: false,
+        treasure_refused: false,
+    };
+    let obs = builder.reset(&state.view, &objective, None, &zelda::actions::ActionMask::default());
+    crate::convert::obs_to_dict(py, &obs)
+}
+
 /// The name a power-on start registers for `name`: upper-cased.  ValueError if it can't be registered (1 to 8
 /// of A-Z, 0-9 and space, not all spaces) or starts the second quest (ZELDA).
 #[pyfunction]

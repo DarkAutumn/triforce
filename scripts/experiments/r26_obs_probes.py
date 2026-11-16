@@ -270,8 +270,198 @@ def wallmaster(probe):
         last = key
 
 
+# ------------------------------------------------------------------ round 26 build: the code-only rows, walked
+# Each holds Link on one object every frame (his invincibility timer and knockback cleared before the frame, his
+# hearts held), counts the frames the game harmed him (Shove_Begin sets his invincibility timer: nonzero after the
+# frame) and the frames the object was drawn (sprites of the OAM buffer $200 in its 16x16 box), and prints them per
+# phase beside what the schema 6 observation says (`_native.observe`: touch_harms, weapon_target, visible, phase).
+
+INV_CLOCK, SHOVE_DIR, SHOVE_DIST, OAM = 0x66C, 0xC0, 0xD3, 0x200
+
+
+def drawn(g, s):
+    """Sprites in the OAM buffer within slot ``s``'s 16x16 box (Y on screen is the OAM byte + 1), Link's (sprite
+    palette 0, where Link is held) left out."""
+    x, y = g.read(X + s), g.read(Y + s)
+    n = 0
+    for i in range(64):
+        sy, attr, sx = g.read(OAM + 4 * i) + 1, g.read(OAM + 4 * i + 2), g.read(OAM + 4 * i + 3)
+        if sy < 0xF0 and attr & 3 and x - 1 <= sx <= x + 16 and y - 2 <= sy <= y + 16:
+            n += 1
+    return n
+
+
+def features(g, s):
+    """(touch_harms, weapon_target, visible) of slot ``s`` in the schema 6 observation."""
+    from triforce._native import ENTITY_FEATURES, observe  # pylint: disable=import-outside-toplevel
+    row = observe(g.state)['entity_features'][s - 1]
+    return tuple(round(float(row[ENTITY_FEATURES.index(n)]), 3)
+                 for n in ('touch_harms', 'weapon_target', 'visible'))
+
+
+class Touch:
+    """Holds Link on slot ``s`` frame by frame; ``run`` tallies harm and drawing per ``phase(game)`` key."""
+
+    def __init__(self, probe, s, before=None):
+        self.w, self.s, self.before = Watch(probe), s, before
+        self.rows = {}
+
+    def frame(self, phase):
+        g = self.w.game
+        key = (phase(g), features(g, self.s))
+
+        def onto(game):
+            game.write(X, game.read(X + self.s))
+            game.write(Y, game.read(Y + self.s))
+            for addr in (INV, SHOVE_DIR, SHOVE_DIST):
+                game.write(addr, 0)
+            if self.before:
+                self.before(game)
+        self.w.step(before=onto)
+        # Link_HarmByObjType starts his knockback (Shove_Begin); his invincibility timer is no test under the clock
+        # (Mode5Play_UpdateWorld adds $10 to it every frame then).
+        harmed = g.read(SHOVE_DIR) != 0 or g.read(SHOVE_DIST) != 0
+        seen = drawn(g, self.s) > 0
+        row = self.rows.setdefault(key, [0, 0, 0])
+        row[0] += 1
+        row[1] += harmed
+        row[2] += seen
+
+    def run(self, frames, phase):
+        for _ in range(frames):
+            if self.w.game.read(TYPE + self.s) == 0:
+                break
+            self.frame(phase)
+        print('  phase | observed (touch_harms, weapon_target, visible) | frames | harmed | drawn')
+        for (key, obs), (n, harmed, seen) in self.rows.items():
+            print(f'  {key} | {obs} | {n} | {harmed} | {seen}')
+
+
+def no_shots(g):
+    """Clears magic shots and fireballs, so that a harm is the object's touch."""
+    for s in range(1, 0xC):
+        if g.read(TYPE + s) in (0x56, 0x58, 0x59):
+            g.write(TYPE + s, 0)
+
+
+def red_wizzrobe_touch(probe):
+    """6:0x78: Link held on a Red Wizzrobe through two cycles: harm and drawing per state group (solid, fading in
+    and out, hidden, choosing); then the same with the clock held (InvClock := 1)."""
+    probe.enter_room(6, 0x78)
+    s = slots(probe.game, {0x24})[0]
+    groups = {0: 'hidden', 1: 'fade-out', 2: 'solid', 3: 'fade-in'}
+    t = Touch(probe, s, no_shots)
+    t.run(420, lambda g: 'choosing $FF' if g.read(STATE + s) == 0xFF else groups[g.read(STATE + s) >> 6])
+    print('  clock held:')
+    t = Touch(probe, s, lambda g: (no_shots(g), g.write(INV_CLOCK, 1)))
+    t.run(120, lambda g: groups[g.read(STATE + s) >> 6])
+
+
+def blue_wizzrobe_touch(probe):
+    """9:0x15: Link held on a Blue Wizzrobe flashing (its invincibility timer held at $10): harm and drawing walking,
+    standing and teleporting."""
+    probe.enter_room(9, 0x15)
+    s = slots(probe.game, {0x23})[0]
+
+    def flash(g):
+        no_shots(g)
+        g.write(INV + s, 0x10)
+
+    def phase(g):
+        return 'teleport' if g.read(REM + s) else ('stand' if g.read(TIMER + s) < 0x10 else 'walk')
+    Touch(probe, s, flash).run(500, phase)
+
+
+def patra_touch(probe):
+    """9:0x61: Link held on the last Patra child (slot 9) from the room's first frame: harm and drawing waiting, out
+    before Patra's state 1, and after."""
+    probe.enter_room(9, 0x61)
+    Touch(probe, 9).run(120, lambda g: f'child state {g.read(STATE + 9)} patra state {g.read(STATE + 1)}')
+    print('  the first child (slot 2):')
+    probe.enter_room(9, 0x61)
+    Touch(probe, 2).run(120, lambda g: f'child state {g.read(STATE + 2)} patra state {g.read(STATE + 1)}')
+
+
+def lanmola_touch(probe):
+    """9:0x55: Link held on a Lanmola tail (slot 1) from the first frame: harm and drawing before and after it
+    moves (ObjDir 0 = not yet)."""
+    probe.enter_room(9, 0x55)
+    Touch(probe, 1).run(60, lambda g: f'dir {"0" if g.read(DIR + 1) == 0 else "set"}')
+
+
+def ganon_dying(probe):
+    """9:0x42: the fight, then Ganon_ObjDyingCount := 1 (WRITE: what the silver arrow sets) with Link held on him:
+    harm and drawing while the count runs to $A0, and when the room item appears."""
+    probe.enter_room(9, 0x42, lit=False)
+    g = probe.game
+    s = slots(g, {0x3E})[0]
+    w = Watch(probe)
+    while g.read(0x445) < 2:
+        w.step()
+    w.run(10, lambda g: '')
+    g.write(0x42C + s, 1)
+    Touch(probe, s).run(200, lambda g: f'dying ${g.read(0x42C + s) & 0xF0:02X}+ item {g.read(0x34F + 0x13)}')
+
+
+def ringleader(probe):
+    """6:0x78 (secret trigger 2): slot 1 emptied (WRITE: its death's end); the other Red Wizzrobes' metastate."""
+    from triforce._native import observe  # pylint: disable=import-outside-toplevel
+    probe.enter_room(6, 0x78)
+    g = probe.game
+    w = Watch(probe)
+    w.run(20, lambda g: '')
+    print('  observed ringleader by slot 1-6:', [float(r[-1]) for r in observe(g.state)['entity_features'][:6]])
+    g.write(TYPE + 1, 0)
+    w.run(4, lambda g: [(s, g.read(META + s)) for s in slots(g, {0x24})], every=True)
+
+
+def wallmaster_lure(probe):
+    """7:0x0d: Link held still one pixel off the W wall ($21,$8D), then on it ($20,$8D): which hands come out."""
+    from triforce._native import ROOM_STATE_FEATURES, observe  # pylint: disable=import-outside-toplevel
+    for x in (0x21, 0x20):
+        probe.enter_room(7, 0x0D, entry='W')
+        w = Watch(probe)
+        g = w.game
+        out, lure = 0, set()
+        for _ in range(200):
+            w.step(before=lambda game, x=x: (game.write(X, x), game.write(Y, 0x8D)))
+            lure.add(float(observe(g.state)['room_state'][ROOM_STATE_FEATURES.index('wallmaster_lure')]))
+            out = max(out, sum(1 for s in slots(g, {0x27}) if g.read(STATE + s) == 1))
+        print(f'  Link at (${x:02X},$8D): observed wallmaster_lure {sorted(lure)}, hands out at once {out}')
+
+
+def bubble_block(probe):
+    """7:0x49: the Bubble's touch, then `sword_blocked` and `sword_blocked_time` each frame until the sword is back."""
+    from triforce._native import LINK_FEATURES, observe  # pylint: disable=import-outside-toplevel
+    probe.enter_room(7, 0x49)
+    w = Watch(probe)
+    g = w.game
+    for _ in range(120):
+        w.step()
+        if slots(g, {0x2B}):
+            break
+    s = slots(g, {0x2B})[0]
+    for _ in range(300):
+        w.step(before=lambda game: (game.write(X, game.read(X + s)), game.write(Y, game.read(Y + s))))
+        if g.read(SWORD_LONG):
+            break
+    touched, last = w.frame, None
+    for _ in range(200):
+        link = observe(g.state)['link']
+        now = (g.read(SWORD_LONG), float(link[LINK_FEATURES.index('sword_blocked')]),
+               round(float(link[LINK_FEATURES.index('sword_blocked_time')]), 4))
+        if now != last:
+            print(f'  +{w.frame - touched:3d}  $4C {now[0]:2d}  sword_blocked {now[1]}  sword_blocked_time {now[2]}')
+        last = now
+        if now[0] == 0:
+            break
+        w.step()
+
+
 PROBES = {f.__name__.replace('_', '-'): f for f in
-          (red_wizzrobe, blue_wizzrobe, gohma, bubble, patra, ganon, lanmola, goriya_boomerang, manhandla, wallmaster)}
+          (red_wizzrobe, blue_wizzrobe, gohma, bubble, patra, ganon, lanmola, goriya_boomerang, manhandla, wallmaster,
+           red_wizzrobe_touch, blue_wizzrobe_touch, patra_touch, lanmola_touch, ganon_dying, ringleader,
+           wallmaster_lure, bubble_block)}
 
 
 def main(argv):

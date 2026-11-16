@@ -324,6 +324,11 @@ pub struct ObsConfig {
     /// Fill the `target` observation block: the walk to the nearest PBRS wavefront target (exit or item).
     #[serde(default, deserialize_with = "de_bool")]
     pub target: bool,
+    /// What the entity positions show for a hidden object of the types whose position the game keeps while it is
+    /// not drawn (`zelda::object_rules::HIDDEN_POSITION_TYPES`: a Red Wizzrobe between appearances, Ganon while
+    /// invisible; round 26). Default `ram`.
+    #[serde(default)]
+    pub hidden_positions: HiddenPositions,
 }
 
 impl Default for ObsConfig {
@@ -331,8 +336,21 @@ impl Default for ObsConfig {
         ObsConfig {
             objective: true,
             target: false,
+            hidden_positions: HiddenPositions::Ram,
         }
     }
+}
+
+/// `obs.hidden_positions`: `ram` the position RAM holds (more than a player sees), `last_seen` where it was at its
+/// last visible observation in the room (what a player remembers), `zero` none (that it exists and its phase only).
+/// Velocities are 0 while it is hidden and on its first visible observation after (`last_seen`, `zero`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HiddenPositions {
+    #[default]
+    Ram,
+    LastSeen,
+    Zero,
 }
 
 /// `curriculum:` block: the backward curriculum over `trajectories/<name>` (off unless enabled).

@@ -19,6 +19,7 @@ pub mod ledger;
 pub mod linger;
 pub mod nes;
 pub mod objectives;
+pub mod object_rules;
 pub mod power_on;
 pub mod rng;
 pub mod room;
