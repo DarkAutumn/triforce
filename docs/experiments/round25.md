@@ -460,7 +460,9 @@ the cause of the drop). Not done: the arm, a committed track maker, and a 1000-r
 Branch `r25-bleed-ow`. Diagnosis chains were 300 runs each, clips on, with replays. Every frame where Link's health
 fell was logged with his position, the action and the nearest objects.
 
-**Spawn spots.** Each entry direction has nine fixed spawn spots (asm:Spawn_PosListFacing*), and unsafe ones are
+**Spawn spots.** Each entry direction has nine fixed spawn spots (asm:Spawn_AssignPositions; the four lists are
+asm:Spawn_PosListFacingRight, asm:Spawn_PosListFacingLeft, asm:Spawn_PosListFacingDown and
+asm:Spawn_PosListFacingUp), and unsafe ones are
 skipped. Several of them sit right on the route's entry lines:
 
 - (`$80`,`$8D`) straight ahead of an S entry: 0x2d, and in dungeons right in front of the S door (3:0x49's Keese);
