@@ -2445,3 +2445,18 @@ as built: `docs/architecture.md` "Observation".
   row they reached (`docs/observation-next.md` §9); Gohma's eye with real arrows, Ganon's phases with real hits,
   `in_line` against each shooter's own test and a Red Wizzrobe's `phase_time` with retries are code only until
   their rounds walk them.
+## 2026-11-17 — One line, one rule: the fallback for older code is gone (Lee)
+
+The machine was restarted on Nov 17 with every job stopped, so no process of the code from before the scored line
+was left. Lee: "make sure all worktrees including the main branch have the cooperative scheduling/queueing now, and
+no leftover 'in case the old version of the code' is running."
+
+- **Removed:** the first-come-first-served fallback while an entry without an estimate waits (`jobs.turn`'s
+  `legacy` mode, the `mode` field of a turn, the plan's `queue` object and `queue.jsonl`), its tests (the copy of
+  the old rule run as real processes in every join order), the training GUI's copy of it, and the GUI's scan of
+  `/proc` for the logs roots of processes that never registered (`process_log_roots`: it existed for code from
+  before the registry). An entry without an estimate, which no code writes any more, counts as estimate 0.
+- **Every checkout carries the line:** `main` was merged into every worktree that had commits of its own, and the
+  worktrees that were behind `main` with nothing of their own were fast-forwarded to it.
+- **Rule from here:** a new worktree branches from a branch that has this commit; a branch from before it is
+  merged with `main` before anything is trained or evaluated in its worktree.
